@@ -1,0 +1,16 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+require_once __DIR__ . '/../vendor/autoload.php';
+
+use Symfony\Component\Console\Application;
+
+$app = new Application('Shipard Server Management', '0.1.0');
+$app->add(new \Shipard\Command\Server\VersionCommand());
+$app->add(new \Shipard\Command\Server\HelpCommand());
+$app->add(new \Shipard\Command\Server\ServerInitCommand());
+$app->add(new \Shipard\Command\Server\DsCreateCommand());
+$app->setDefaultCommand('help');
+$app->run();

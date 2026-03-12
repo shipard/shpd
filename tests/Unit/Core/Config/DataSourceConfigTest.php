@@ -1,0 +1,77 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Shipard\Tests\Unit\Core\Config;
+
+use PHPUnit\Framework\TestCase;
+use Shipard\Core\Config\DataSourceConfig;
+
+class DataSourceConfigTest extends TestCase
+{
+    private string $tempDir;
+
+    protected function setUp(): void
+    {
+        $this->tempDir = sys_get_temp_dir() . '/shipard_ds_test_' . uniqid();
+        mkdir($this->tempDir . '/config', 0755, true);
+    }
+
+    protected function tearDown(): void
+    {
+        $configFile = $this->tempDir . '/config/main.json';
+        if (file_exists($configFile)) {
+            unlink($configFile);
+        }
+        rmdir($this->tempDir . '/config');
+        rmdir($this->tempDir);
+    }
+
+    private function createConfig(array $data): void
+    {
+        file_put_contents($this->tempDir . '/config/main.json', json_encode($data));
+    }
+
+    public function testLoadValidConfig(): void
+    {
+        $this->createConfig([
+            'id'                => 'abcd-efgh-ijkl-mnop',
+            'name'              => 'Test DS',
+            'database_name'     => 'abcd_efgh_ijkl_mnop',
+            'database_user'     => 'shpd_abcdefgh',
+            'database_password' => 'supersecret',
+            'created'           => '2026-03-12T10:00:00+01:00',
+        ]);
+
+        $config = new DataSourceConfig($this->tempDir);
+
+        $this->assertSame('abcd-efgh-ijkl-mnop', $config->getId());
+        $this->assertSame('Test DS', $config->getName());
+        $this->assertSame('abcd_efgh_ijkl_mnop', $config->getDatabaseName());
+        $this->assertSame('shpd_abcdefgh', $config->getDatabaseUser());
+        $this->assertSame('supersecret', $config->getDatabasePassword());
+        $this->assertSame('2026-03-12T10:00:00+01:00', $config->getCreated());
+    }
+
+    public function testMissingConfigFileThrowsException(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/not found/i');
+
+        new DataSourceConfig($this->tempDir . '/nonexistent');
+    }
+
+    public function testMissingRequiredFieldThrowsException(): void
+    {
+        $this->createConfig([
+            'id'   => 'abcd-efgh-ijkl-mnop',
+            'name' => 'Test DS',
+            // missing other required fields
+        ]);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/missing required/i');
+
+        new DataSourceConfig($this->tempDir);
+    }
+}

@@ -67,4 +67,9 @@ class DataSourceConfig
     {
         return $this->data['created'];
     }
+
+    public function getModules(): array
+    {
+        return $this->data['modules'] ?? [];
+    }
 }

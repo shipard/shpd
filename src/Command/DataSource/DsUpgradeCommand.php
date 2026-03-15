@@ -1,0 +1,201 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Shipard\Command\DataSource;
+
+use Shipard\Core\Config\ConfigCompiler;
+use Shipard\Core\Config\DataSourceConfig;
+use Shipard\Core\Database\DataSourceConnection;
+use Shipard\Core\Database\ExtensionDefinition;
+use Shipard\Core\Database\SchemaComparator;
+use Shipard\Core\Database\SchemaValidator;
+use Shipard\Core\Database\SqlGenerator;
+use Shipard\Core\Database\TableDefinition;
+use Shipard\Core\Database\TableMerger;
+use Shipard\Core\Module\ModuleLoader;
+use Shipard\Core\Module\ModuleResolver;
+use Shipard\Core\Utils\JsoncParser;
+use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Output\OutputInterface;
+
+class DsUpgradeCommand extends Command
+{
+    public function __construct(
+        private readonly ?DataSourceConfig $dsConfig = null,
+        private readonly ?DataSourceConnection $dsConnection = null,
+    ) {
+        parent::__construct();
+    }
+
+    protected function configure(): void
+    {
+        $this->setName('ds-upgrade')
+             ->setDescription('Upgrade the data source schema and configuration');
+    }
+
+    protected function getDataSourceDir(): string
+    {
+        return getcwd();
+    }
+
+    protected function getModulesBasePath(): string
+    {
+        return dirname(__DIR__, 3) . '/modules';
+    }
+
+    protected function execute(InputInterface $input, OutputInterface $output): int
+    {
+        $dsDir = $this->getDataSourceDir();
+        $modulesBasePath = $this->getModulesBasePath();
+
+        $dsConfig = $this->dsConfig ?? new DataSourceConfig($dsDir);
+        $dsConnection = $this->dsConnection ?? new DataSourceConnection($dsConfig);
+
+        $output->writeln('<info>Shipard Data Source Upgrade v0.1.0</info>');
+        $output->writeln('Data source: ' . $dsConfig->getName() . ' (' . $dsConfig->getId() . ')');
+        $output->writeln('');
+
+        // Step 2: Resolve modules
+        $output->writeln('Resolving modules...');
+        $allModules = ModuleLoader::loadAllModules($modulesBasePath);
+        $errors = [];
+        $resolvedModules = ModuleResolver::resolve($allModules, $dsConfig->getModules(), $errors);
+
+        foreach ($errors as $error) {
+            $output->writeln('<error>' . $error . '</error>');
+        }
+
+        $directCount = count($dsConfig->getModules());
+        $totalCount = count($resolvedModules);
+        $depCount = $totalCount - $directCount;
+        $output->writeln('  Active modules: ' . $totalCount . ' (' . $directCount . ' direct + ' . $depCount . ' dependencies)');
+        $output->writeln('  Module order: ' . implode(', ', array_map(fn($m) => $m->id, $resolvedModules)));
+        $output->writeln('');
+
+        // Step 3: Load table definitions and apply extensions
+        $rawTables = [];
+        $tableDefs = [];
+
+        foreach ($resolvedModules as $module) {
+            [$group, $name] = explode('.', $module->id, 2);
+            $modulePath = $modulesBasePath . '/' . $group . '/' . $name;
+
+            foreach ($module->tables as $tableFile) {
+                $filePath = $modulePath . '/tables/' . $tableFile . '.jsonc';
+                $raw = JsoncParser::parseFile($filePath);
+                $rawTables[$tableFile] = $raw;
+                $tableDefs[$tableFile] = TableDefinition::fromArray($raw);
+            }
+        }
+
+        foreach ($resolvedModules as $module) {
+            [$group, $name] = explode('.', $module->id, 2);
+            $modulePath = $modulesBasePath . '/' . $group . '/' . $name;
+
+            foreach ($module->extensions as $extFile) {
+                $filePath = $modulePath . '/extensions/' . $extFile . '.jsonc';
+                $extData = JsoncParser::parseFile($filePath);
+                $ext = ExtensionDefinition::fromArray($extData);
+
+                if (isset($tableDefs[$ext->table])) {
+                    $tableDefs[$ext->table] = TableMerger::merge($tableDefs[$ext->table], $ext);
+                }
+            }
+        }
+
+        // Step 4: Validate
+        $validation = SchemaValidator::validate(array_values($rawTables));
+        if (!empty($validation['errors'])) {
+            foreach ($validation['errors'] as $error) {
+                $output->writeln('<error>' . $error . '</error>');
+            }
+            return Command::FAILURE;
+        }
+        foreach ($validation['warnings'] as $warning) {
+            $output->writeln('<comment>' . $warning . '</comment>');
+        }
+
+        // Step 5: Compile configuration
+        $output->writeln('Compiling configuration...');
+        $languages = ['cs', 'en'];
+        $outputPath = $dsDir . '/config/configuration';
+        ConfigCompiler::compile($resolvedModules, $modulesBasePath, $languages, $outputPath);
+
+        $configItemCount = 0;
+        foreach ($resolvedModules as $module) {
+            $configItemCount += count($module->config);
+        }
+
+        $output->writeln('  Config items: ' . $configItemCount);
+        $output->writeln('  Languages: ' . implode(', ', $languages));
+        foreach ($languages as $lang) {
+            $output->writeln('  Written to: config/configuration/compiled.' . $lang . '.json');
+        }
+        $output->writeln('');
+
+        // Step 6: Sync database schema
+        $output->writeln('Checking database...');
+        $created = 0;
+        $altered = 0;
+        $unchanged = 0;
+
+        foreach ($tableDefs as $tableName => $tableDef) {
+            $existingColumns = $dsConnection->getTableColumns($tableName);
+            $existingIndexes = $dsConnection->getTableIndexes($tableName);
+            $ops = SchemaComparator::compare($tableDef, $existingColumns, $existingIndexes);
+
+            if (empty($ops)) {
+                $output->writeln('  [OK]     ' . $tableName);
+                $unchanged++;
+                continue;
+            }
+
+            $hasCreate = false;
+            foreach ($ops as $op) {
+                if ($op['op'] === 'create_table') {
+                    $hasCreate = true;
+                    break;
+                }
+            }
+
+            if ($hasCreate) {
+                $sql = SqlGenerator::generateCreateTable($tableName, $tableDef);
+                $dsConnection->executeSQL($sql);
+
+                foreach ($tableDef->indexes as $index) {
+                    $idxSql = SqlGenerator::generateCreateIndex($tableName, $index);
+                    $dsConnection->executeSQL($idxSql);
+                }
+
+                $output->writeln('  [CREATE] ' . $tableName);
+                $created++;
+            } else {
+                $changes = [];
+                foreach ($ops as $op) {
+                    if ($op['op'] === 'add_column') {
+                        $sql = SqlGenerator::generateAddColumn($tableName, $op['column']);
+                        $dsConnection->executeSQL($sql);
+                        $changes[] = 'added column: ' . $op['column']->id . ' (' . $op['column']->type . ')';
+                    } elseif ($op['op'] === 'modify_column') {
+                        $sql = SqlGenerator::generateModifyColumn($tableName, $op['column']);
+                        $dsConnection->executeSQL($sql);
+                        $changes[] = 'modified column: ' . $op['column']->id;
+                    } elseif ($op['op'] === 'create_index') {
+                        $sql = SqlGenerator::generateCreateIndex($tableName, $op['index']);
+                        $dsConnection->executeSQL($sql);
+                        $changes[] = 'added index: ' . $op['index']->id;
+                    }
+                }
+                $output->writeln('  [ALTER]  ' . $tableName . ' — ' . implode(', ', $changes));
+                $altered++;
+            }
+        }
+
+        $output->writeln('');
+        $output->writeln('Upgrade complete. ' . $created . ' tables created, ' . $altered . ' tables altered, ' . $unchanged . ' tables unchanged.');
+
+        return Command::SUCCESS;
+    }
+}

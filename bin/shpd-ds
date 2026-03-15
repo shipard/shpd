@@ -10,5 +10,6 @@ use Symfony\Component\Console\Application;
 $app = new Application('Shipard Data Source Tool', '0.1.0');
 $app->add(new \Shipard\Command\DataSource\VersionCommand());
 $app->add(new \Shipard\Command\DataSource\HelpCommand());
+$app->add(new \Shipard\Command\DataSource\DsUpgradeCommand());
 $app->setDefaultCommand('help');
 $app->run();

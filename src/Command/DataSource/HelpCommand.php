@@ -26,6 +26,7 @@ class HelpCommand extends Command
         $output->writeln('<comment>Available commands:</comment>');
         $output->writeln('  <info>version</info>      Show Shipard data source tool version');
         $output->writeln('  <info>help</info>         Show this help message');
+        $output->writeln('  <info>ds-upgrade</info>   Upgrade data source schema and configuration');
         $output->writeln('');
         $output->writeln('<comment>Usage:</comment>');
         $output->writeln('  shpd-ds <command> [options]');

@@ -1,0 +1,94 @@
+{
+    "tableId": 1,
+    "name": "Users",
+    "name:cs": "Uživatelé",
+    "name:en": "Users",
+
+    "columnGroups": [
+        {
+            "id": "credentials",
+            "name": "Credentials",
+            "name:cs": "Přihlašovací údaje",
+            "name:en": "Credentials"
+        },
+        {
+            "id": "personal",
+            "name": "Personal information",
+            "name:cs": "Osobní údaje",
+            "name:en": "Personal information"
+        }
+    ],
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+        {
+            "id": "login",
+            "name": "Login",
+            "name:cs": "Přihlašovací jméno",
+            "name:en": "Login",
+            "type": "varchar",
+            "length": 100,
+            "nullable": false,
+            "group": "credentials"
+        },
+        {
+            "id": "password_hash",
+            "name": "Password hash",
+            "name:cs": "Hash hesla",
+            "name:en": "Password hash",
+            "type": "varchar",
+            "length": 255,
+            "nullable": false,
+            "group": "credentials"
+        },
+        {
+            "id": "full_name",
+            "name": "Full name",
+            "name:cs": "Celé jméno",
+            "name:en": "Full name",
+            "type": "varchar",
+            "length": 200,
+            "nullable": false,
+            "group": "personal"
+        },
+        {
+            "id": "email",
+            "name": "E-mail",
+            "type": "varchar",
+            "length": 200,
+            "nullable": true,
+            "group": "personal"
+        },
+        {
+            "id": "is_active",
+            "name": "Active",
+            "name:cs": "Aktivní",
+            "name:en": "Active",
+            "type": "boolean",
+            "default": 1
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "unq_login",
+            "type": "unique",
+            "columns": [
+                {"column": "login"}
+            ]
+        },
+        {
+            "id": "idx_email",
+            "type": "index",
+            "columns": [
+                {"column": "email"}
+            ]
+        }
+    ]
+}

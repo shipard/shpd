@@ -1,0 +1,14 @@
+{
+    "id": "core.system",
+    "name": "System",
+    "name:cs": "Systém",
+    "name:en": "System",
+    "description": "Core system tables — users, sessions, settings",
+    "description:cs": "Základní systémové tabulky — uživatelé, relace, nastavení",
+    "description:en": "Core system tables — users, sessions, settings",
+    "tables": [
+        "core_system_users",
+        "core_system_sessions",
+        "core_system_settings"
+    ]
+}

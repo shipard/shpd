@@ -26,6 +26,7 @@ class HelpCommand extends Command
         $output->writeln('  <info>help</info>           Show this help message');
         $output->writeln('  <info>server-init</info>    Initialize the Shipard server configuration');
         $output->writeln('  <info>ds-create</info>      Create a new data source');
+        $output->writeln('  <info>next-table-id</info>  Print the next available table ID');
         $output->writeln('');
         $output->writeln('<comment>Usage:</comment>');
         $output->writeln('  shpd-server <command> [options]');

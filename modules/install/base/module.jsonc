@@ -1,0 +1,12 @@
+{
+    "id": "install.base",
+    "name": "Base installation",
+    "name:cs": "Základní instalace",
+    "name:en": "Base installation",
+    "description": "Base set of modules for system operation",
+    "description:cs": "Základní sada modulů pro provoz systému",
+    "description:en": "Base set of modules for system operation",
+    "dependencies": [
+        "core.system"
+    ]
+}

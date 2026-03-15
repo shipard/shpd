@@ -1,0 +1,80 @@
+{
+    "tableId": 2,
+    "name": "Sessions",
+    "name:cs": "Relace",
+    "name:en": "Sessions",
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+        {
+            "id": "user_id",
+            "name": "User",
+            "name:cs": "Uživatel",
+            "name:en": "User",
+            "type": "int",
+            "nullable": false
+        },
+        {
+            "id": "token",
+            "name": "Token",
+            "type": "varchar",
+            "length": 128,
+            "nullable": false
+        },
+        {
+            "id": "ip_address",
+            "name": "IP address",
+            "name:cs": "IP adresa",
+            "name:en": "IP address",
+            "type": "varchar",
+            "length": 45,
+            "nullable": true
+        },
+        {
+            "id": "created",
+            "name": "Created",
+            "name:cs": "Vytvořeno",
+            "name:en": "Created",
+            "type": "datetime",
+            "nullable": false
+        },
+        {
+            "id": "expires",
+            "name": "Expires",
+            "name:cs": "Expirace",
+            "name:en": "Expires",
+            "type": "datetime",
+            "nullable": false
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "unq_token",
+            "type": "unique",
+            "columns": [
+                {"column": "token"}
+            ]
+        },
+        {
+            "id": "idx_user_id",
+            "type": "index",
+            "columns": [
+                {"column": "user_id"}
+            ]
+        },
+        {
+            "id": "idx_expires",
+            "type": "index",
+            "columns": [
+                {"column": "expires"}
+            ]
+        }
+    ]
+}

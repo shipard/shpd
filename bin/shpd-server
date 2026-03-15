@@ -12,5 +12,6 @@ $app->add(new \Shipard\Command\Server\VersionCommand());
 $app->add(new \Shipard\Command\Server\HelpCommand());
 $app->add(new \Shipard\Command\Server\ServerInitCommand());
 $app->add(new \Shipard\Command\Server\DsCreateCommand());
+$app->add(new \Shipard\Command\Server\NextTableIdCommand());
 $app->setDefaultCommand('help');
 $app->run();

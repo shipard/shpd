@@ -1,0 +1,51 @@
+{
+    "tableId": 3,
+    "name": "Settings",
+    "name:cs": "Nastavení",
+    "name:en": "Settings",
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+        {
+            "id": "key",
+            "name": "Key",
+            "name:cs": "Klíč",
+            "name:en": "Key",
+            "type": "varchar",
+            "length": 200,
+            "nullable": false
+        },
+        {
+            "id": "value",
+            "name": "Value",
+            "name:cs": "Hodnota",
+            "name:en": "Value",
+            "type": "json",
+            "nullable": true
+        },
+        {
+            "id": "modified",
+            "name": "Modified",
+            "name:cs": "Změněno",
+            "name:en": "Modified",
+            "type": "datetime",
+            "nullable": true
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "unq_key",
+            "type": "unique",
+            "columns": [
+                {"column": "key"}
+            ]
+        }
+    ]
+}

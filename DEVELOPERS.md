@@ -41,8 +41,8 @@ composer install
 ## 4. Ověření instalace
 
 ```bash
-php bin/shpd-server version
-php bin/shpd-server help
+shpd-server version
+shpd-server help
 ```
 
 Výstup první příkazu by měl být `Shipard v0.1.0`.
@@ -59,11 +59,11 @@ Spouštěj odkudkoliv.
 
 | Příkaz | Popis |
 |--------|-------|
-| `php bin/shpd-server version` | Verze aplikace |
-| `php bin/shpd-server help` | Nápověda |
-| `php bin/shpd-server ds-create --name <název>` | Vytvoří nový datový zdroj |
-| `php bin/shpd-server server-init` | Inicializuje server (generuje server config) |
-| `php bin/shpd-server next-table-id` | Vrátí další volné tableId |
+| `shpd-server version` | Verze aplikace |
+| `shpd-server help` | Nápověda |
+| `shpd-server ds-create --name <název>` | Vytvoří nový datový zdroj |
+| `shpd-server server-init` | Inicializuje server (generuje server config) |
+| `shpd-server next-table-id` | Vrátí další volné tableId |
 
 ### `shpd-ds` — správa datového zdroje
 
@@ -71,9 +71,9 @@ Spouštěj z adresáře datového zdroje (musí obsahovat `config/main.json`).
 
 | Příkaz | Popis |
 |--------|-------|
-| `php bin/shpd-ds version` | Verze aplikace |
-| `php bin/shpd-ds help` | Nápověda |
-| `php bin/shpd-ds ds-upgrade` | Synchronizuje databázové schéma podle modulů |
+| `shpd-ds version` | Verze aplikace |
+| `shpd-ds help` | Nápověda |
+| `shpd-ds ds-upgrade` | Synchronizuje databázové schéma podle modulů |
 
 ---
 

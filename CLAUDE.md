@@ -8,6 +8,35 @@ Modulární multi-tenant SaaS účetní systém. Backend + CLI utility, bez fron
 - **PHP 8.5+**, strict_types povinně, PSR-4 autoloading
 - **Závislosti:** `dibi/dibi` (DB vrstva), `symfony/console` (CLI), `phpunit/phpunit` (dev)
 
+## Dokumentace
+
+Podrobné specifikace jsou v adresáři `docs/`. Přečti příslušný dokument PŘED implementací.
+
+| Dokument | Obsah |
+|----------|-------|
+| `docs/architecture.md` | Mapa tříd, vrstvy, závislosti, tok dat — přečti pokud potřebuješ pochopit jak komponenty spolupracují |
+| `docs/modules.md` | Modulový systém — struktura modulů, závislosti, JSONC formát, vícejazyčnost (i18n), kompilace konfigurace, CLI příkaz `ds-upgrade` |
+| `docs/table-definitions.md` | Formát definice databázových tabulek — datové typy, sloupce, indexy, extensions, validace, bezpečné změny |
+
+## Architektura — rychlý přehled
+
+```
+src/
+├── Command/                    # CLI příkazy (Symfony Console)
+│   ├── Server/                 # shpd-server: ds-create, server-init, next-table-id
+│   └── DataSource/             # shpd-ds: ds-upgrade
+├── Core/
+│   ├── Config/                 # ServerConfig, DataSourceConfig, ConfigCompiler, ConfigRuntime
+│   ├── Database/               # TableDefinition, ColumnDefinition, IndexDefinition,
+│   │                           # ExtensionDefinition, TableMerger, SchemaComparator,
+│   │                           # SchemaValidator, SqlGenerator, DatabaseManager
+│   ├── I18n/                   # LocalizedFieldResolver, ConfigLocalizer
+│   ├── Module/                 # ModuleDefinition, ModuleLoader, ModuleResolver
+│   └── Utils/                  # JsoncParser, IdGenerator
+```
+
+Závislosti tečou shora dolů: Command → Module/Config/Database → I18n/Utils.
+
 ## Klíčové konvence
 
 ### Konfigurace na serveru
@@ -18,38 +47,60 @@ Modulární multi-tenant SaaS účetní systém. Backend + CLI utility, bez fron
 - Formát: `xxxx-xxxx-xxxx-xxxx` (a-z0-9, 4 skupiny po 4)
 - DB name: pomlčky → podtržítka (`abcd_efgh_ijkl_mnop`)
 - DB user: `shpd_` + první 2 skupiny bez pomlček (`shpd_abcdefgh`)
-- Unikátnost: kontrola existence adresáře v data-sources dir
 
 ### Databáze
 - MariaDB přes Dibi (`driver: mysqli`)
 - `CHARACTER SET utf8mb4 COLLATE utf8mb4_czech_ci`
-- Admin účet (ze server.json) slouží jen pro CREATE DATABASE / CREATE USER
-- Každý data source má vlastního DB uživatele s právy jen na svou databázi
+- Žádné FOREIGN KEY — referenční integrita na aplikační úrovni
+- Admin účet jen pro CREATE DATABASE / CREATE USER, runtime přes DS uživatele
+
+### Modulový systém
+- Moduly v `modules/{skupina}/{modul}/`, ID v tečkové notaci (`economy.docs`)
+- Definiční soubory: `.jsonc` (ručně psané), `.json` (generované)
+- Vícejazyčnost: suffix `:lang` (`"name:cs": "Název"`), holé pole povinné jako fallback
+- Fallback: požadovaný jazyk → `en` → holé pole
+- Závislosti: jednoduché (bez verzí), tranzitivní, cyklické = chyba
+- Extensions: jen přidávání sloupců/indexů do cizích tabulek
+
+### Databázové tabulky
+- Pojmenování: `{skupina}_{modul}_{tabulka}` (snake_case)
+- Každá tabulka má `tableId` (unikátní SMALLINT, globálně)
+- PK: vždy `id INT AUTO_INCREMENT`
+- `enumInt` → SMALLINT, `enumString` → CHAR(len) CHARACTER SET ascii
+- `numeric(precision, scale)` pro finance
+- `ds-upgrade`: CREATE/ADD/bezpečný MODIFY, nikdy nesmaže
+
+### Kódové konvence
+- Datové třídy (*Definition): readonly, factory `fromArray()`, validace v konstruktoru
+- Příkazy: Symfony Console, testovatelné přes subclassing
+- Žádná business logika v datových třídách
 
 ### CLI příkazy
-- `shpd-server`: správa serveru (spustit odkudkoli)
-- `shpd-ds`: správa data source (spouštět z adresáře data source, vyžaduje `config/main.json` v CWD)
+- `shpd-server`: `version`, `help`, `ds-create --name`, `server-init`, `next-table-id`
+- `shpd-ds` (z adresáře DS): `version`, `help`, `ds-upgrade`
 
 ## Příkazy pro vývoj
 
 ```bash
 composer install
-vendor/bin/phpunit          # všechny testy musí projít
-php bin/shpd-server version # → Shipard v0.1.0
+vendor/bin/phpunit              # všechny testy musí projít
+php bin/shpd-server version     # → Shipard v0.1.0
 php bin/shpd-server help
-php bin/shpd-ds version     # vyžaduje CWD s config/main.json
+php bin/shpd-ds version         # vyžaduje CWD s config/main.json
 ```
 
 ## Testování
 
 - Testy v `tests/Unit/`, zrcadlí strukturu `src/`
-- `DatabaseManager` testovat přes reflexi (bez reálného DB připojení)
-- Subclassing příkazů pro testování (viz `TestableDsCreateCommand` v `DsCreateCommandTest`, `TestableServerInitCommand` v `ServerInitCommandTest`)
+- DB testy: mockování přes reflexi nebo subclassing (viz `TestableDsCreateCommand`)
 - void metody v mocku: jen `->method('foo')` bez `willReturn`
+- JSONC parser: testovat komentáře v řetězcích, trailing čárky
+- I18n: testovat fallback chain (cs → en → holé pole)
 
-## Otevřené úkoly (budoucí fáze)
+## Otevřené úkoly
 
-- PostgreSQL driver v `DatabaseManager`
+- PostgreSQL driver v DatabaseManager/SqlGenerator
 - `ds-delete`, `ds-list` příkazy
-- Migrace DB schématu
 - Webové API + frontend
+- Detekce chybějících překladů (validační nástroj)
+- Servisní chod pro výmaz nepotřebných tabulek/sloupců

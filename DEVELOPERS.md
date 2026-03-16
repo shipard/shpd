@@ -7,25 +7,25 @@ Vítej v projektu Shipard! Tenhle dokument tě provede od nuly k funkčnímu vý
 ## Požadavky
 
 - **Ubuntu LTS** — 22.04 nebo 24.04
-- **git** (obvykle předinstalovaný)
+- **git** (obvykle předinstalovaný - pokud není, proveď `sudo apt install git`)
 
 ---
 
-## 1. Instalace systémových balíčků
+## 1. Stažení repozitáře
+
+```bash
+git clone git@github.com:shipard/shpd.git
+cd shpd
+```
+
+---
+
+## 2. Instalace systémových balíčků
 
 Skript nainstaluje PHP 8.5, MariaDB, nginx, composer a potřebná rozšíření:
 
 ```bash
 sudo bash scripts/install-packages.sh
-```
-
----
-
-## 2. Stažení repozitáře
-
-```bash
-git clone git@github.com:shipard/shpd.git
-cd shpd
 ```
 
 ---
@@ -45,7 +45,7 @@ shpd-server version
 shpd-server help
 ```
 
-Výstup první příkazu by měl být `Shipard v0.1.0`.
+Výstup první příkazu by měl být `Shipard <číslo-verze>`.
 
 ---
 

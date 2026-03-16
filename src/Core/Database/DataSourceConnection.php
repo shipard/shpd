@@ -67,4 +67,56 @@ class DataSourceConnection
     {
         $this->connection->query($sql);
     }
+
+    /** Fetch one row as associative array, or null if not found. */
+    public function fetchRow(mixed ...$args): ?array
+    {
+        $row = $this->connection->fetch(...$args);
+        if ($row === null) {
+            return null;
+        }
+        $result = [];
+        foreach ($row as $key => $value) {
+            $result[$key] = $value;
+        }
+        return $result;
+    }
+
+    /** Fetch all rows as array of associative arrays. */
+    public function fetchAll(mixed ...$args): array
+    {
+        $rows = $this->connection->fetchAll(...$args);
+        return array_map(function ($row): array {
+            $result = [];
+            foreach ($row as $key => $value) {
+                $result[$key] = $value;
+            }
+            return $result;
+        }, $rows);
+    }
+
+    /** Execute a query (INSERT/UPDATE/DELETE) without returning rows. */
+    public function execute(mixed ...$args): void
+    {
+        $this->connection->query(...$args);
+    }
+
+    /** Insert a row and return the auto-increment ID. */
+    public function insertRow(string $table, array $data): int
+    {
+        $this->connection->insert($table, $data)->execute();
+        return (int) $this->connection->getInsertId();
+    }
+
+    /** Update rows matching $where (Dibi format, e.g. 'id = %i', 5). */
+    public function updateWhere(string $table, array $data, string $where, mixed ...$whereParams): void
+    {
+        $this->connection->update($table, $data)->where($where, ...$whereParams)->execute();
+    }
+
+    /** Delete rows matching $where (Dibi format). */
+    public function deleteWhere(string $table, string $where, mixed ...$whereParams): void
+    {
+        $this->connection->delete($table)->where($where, ...$whereParams)->execute();
+    }
 }

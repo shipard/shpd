@@ -1,0 +1,123 @@
+{
+    "tableId": 103,
+    "name": "API Keys",
+    "name:cs": "API klíče",
+    "name:en": "API Keys",
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+        {
+            "id": "user_id",
+            "name": "User",
+            "name:cs": "Uživatel",
+            "name:en": "User",
+            "type": "int",
+            "nullable": false
+        },
+        {
+            "id": "name",
+            "name": "Name",
+            "name:cs": "Název",
+            "name:en": "Name",
+            "type": "varchar",
+            "length": 100,
+            "nullable": false
+        },
+        {
+            "id": "key_hash",
+            "name": "Key hash",
+            "name:cs": "Hash klíče",
+            "name:en": "Key hash",
+            "type": "varchar",
+            "length": 64,
+            "nullable": false
+        },
+        {
+            "id": "key_prefix",
+            "name": "Key prefix",
+            "name:cs": "Prefix klíče",
+            "name:en": "Key prefix",
+            "type": "varchar",
+            "length": 12,
+            "nullable": false
+        },
+        {
+            "id": "expires_at",
+            "name": "Expires at",
+            "name:cs": "Expirace",
+            "name:en": "Expires at",
+            "type": "datetime",
+            "nullable": true
+        },
+        {
+            "id": "allowed_ips",
+            "name": "Allowed IPs",
+            "name:cs": "Povolené IP",
+            "name:en": "Allowed IPs",
+            "type": "text",
+            "nullable": true
+        },
+        {
+            "id": "is_active",
+            "name": "Active",
+            "name:cs": "Aktivní",
+            "name:en": "Active",
+            "type": "boolean",
+            "default": 1
+        },
+        {
+            "id": "last_used_at",
+            "name": "Last used at",
+            "name:cs": "Naposledy použito",
+            "name:en": "Last used at",
+            "type": "datetime",
+            "nullable": true
+        },
+        {
+            "id": "created",
+            "name": "Created",
+            "name:cs": "Vytvořeno",
+            "name:en": "Created",
+            "type": "datetime",
+            "nullable": false
+        },
+        {
+            "id": "modified",
+            "name": "Modified",
+            "name:cs": "Změněno",
+            "name:en": "Modified",
+            "type": "datetime",
+            "nullable": false
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "idx_key_prefix",
+            "type": "index",
+            "columns": [
+                {"column": "key_prefix"}
+            ]
+        },
+        {
+            "id": "unq_key_hash",
+            "type": "unique",
+            "columns": [
+                {"column": "key_hash"}
+            ]
+        },
+        {
+            "id": "idx_user_id",
+            "type": "index",
+            "columns": [
+                {"column": "user_id"}
+            ]
+        }
+    ]
+}

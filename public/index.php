@@ -1,0 +1,183 @@
+<?php
+declare(strict_types=1);
+
+require __DIR__ . '/../vendor/autoload.php';
+
+use Shipard\Api\AuthContext;
+use Shipard\Api\Controller\AuthController;
+use Shipard\Api\Controller\CrudController;
+use Shipard\Api\Controller\MetaController;
+use Shipard\Api\Controller\OpenApiController;
+use Shipard\Api\DataSourceResolver;
+use Shipard\Api\Exception\UnknownHostException;
+use Shipard\Api\Middleware\AuthMiddleware;
+use Shipard\Api\Middleware\CorsMiddleware;
+use Shipard\Api\Middleware\RateLimitMiddleware;
+use Shipard\Api\Request;
+use Shipard\Api\Response;
+use Shipard\Api\Route;
+use Shipard\Api\Router;
+use Shipard\Api\TableLoader;
+use Shipard\Core\Config\ServerConfig;
+
+$request        = Request::fromGlobals();
+$corsMiddleware = new CorsMiddleware();
+
+// ── 1. CORS preflight ────────────────────────────────────────────────────────
+$corsResult = $corsMiddleware->handle($request);
+if ($corsResult !== null) {
+	$corsResult->send();
+	exit;
+}
+
+$serverConfig = null;
+
+try {
+	// ── 2. Server config ─────────────────────────────────────────────────────
+	$serverConfig = new ServerConfig();
+	$serverConfig->load();
+
+	// ── 3. Resolve data source ────────────────────────────────────────────────
+	$resolver = new DataSourceResolver($serverConfig->getDomainsFile());
+	$resolved = $resolver->resolve($request->getHost());
+
+	// ── 4. Load table definitions (localized) ─────────────────────────────────
+	$language = resolveLanguage($request);
+	$modulesBasePath = dirname(__DIR__) . '/modules';
+	$tables = TableLoader::load($resolved->config, $modulesBasePath, $language);
+
+	// ── 5. Route ──────────────────────────────────────────────────────────────
+	$router      = new Router();
+	$routeResult = $router->resolve($request);
+	if ($routeResult instanceof Response) {
+		$corsMiddleware->applyTo($routeResult)->send();
+		exit;
+	}
+	/** @var Route $route */
+	$route = $routeResult;
+
+	// ── 6. Auth ───────────────────────────────────────────────────────────────
+	$openApiPublic  = (bool) ($resolved->config->getModules()['api']['openApiPublic'] ?? true);
+	$authMiddleware = new AuthMiddleware();
+	$authResult     = $authMiddleware->handle($request, $route, $resolved->connection, $openApiPublic);
+	if ($authResult instanceof Response) {
+		$corsMiddleware->applyTo($authResult)->send();
+		exit;
+	}
+	/** @var AuthContext $auth */
+	$auth = $authResult;
+
+	// ── 7. Rate limiting ──────────────────────────────────────────────────────
+	$rateLimiter = new RateLimitMiddleware();
+	$rateResult  = $rateLimiter->handle($request, $auth, $route, $resolved->connection);
+	if ($rateResult instanceof Response) {
+		applyAllHeaders($corsMiddleware, $rateLimiter, $rateResult)->send();
+		exit;
+	}
+
+	// ── 8. Dispatch to controller ─────────────────────────────────────────────
+	$response = dispatch($route, $request, $auth, $tables, $resolved->connection, $openApiPublic, $request->getHost());
+
+	// ── 9. Apply headers and send ─────────────────────────────────────────────
+	applyAllHeaders($corsMiddleware, $rateLimiter, $response)->send();
+
+} catch (UnknownHostException) {
+	$corsMiddleware->applyTo(
+		Response::error('UNKNOWN_HOST', 'Unknown host', 404),
+	)->send();
+} catch (\Throwable $e) {
+	$isDev    = $serverConfig !== null && $serverConfig->getMode() === 'development';
+	$details  = $isDev
+		? [['field' => '_exception', 'code' => get_class($e), 'message' => $e->getMessage()]]
+		: [];
+	$corsMiddleware->applyTo(
+		Response::error('INTERNAL_ERROR', 'Internal server error', 500, $details),
+	)->send();
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function resolveLanguage(Request $request): string
+{
+	$header = $request->getHeader('Accept-Language');
+	if ($header === null) {
+		return 'en';
+	}
+	// Parse first language tag: "cs-CZ,cs;q=0.9,en;q=0.8" → "cs"
+	$first = explode(',', $header)[0];
+	$first = explode(';', $first)[0];
+	$first = explode('-', trim($first))[0];
+	return $first !== '' ? strtolower($first) : 'en';
+}
+
+function applyAllHeaders(CorsMiddleware $cors, RateLimitMiddleware $rateLimit, Response $response): Response
+{
+	$response = $cors->applyTo($response);
+	foreach ($rateLimit->getHeaders() as $name => $value) {
+		$response = $response->withHeader($name, $value);
+	}
+	return $response;
+}
+
+function dispatch(
+	Route $route,
+	Request $request,
+	AuthContext $auth,
+	array $tables,
+	\Shipard\Core\Database\DataSourceConnection $db,
+	bool $openApiPublic,
+	string $host,
+): Response {
+	return match ($route->controller) {
+		'auth' => dispatchAuth($route->action, $request, $auth, $db),
+		'crud' => dispatchCrud($route, $request, $tables, $db),
+		'meta' => dispatchMeta($route->action, $route->table, $tables, resolveLanguage($request)),
+		'openapi' => (new OpenApiController())->spec($auth, $openApiPublic, $tables, 'https://' . $host),
+		default => Response::error('INTERNAL_ERROR', "Unknown controller: {$route->controller}", 500),
+	};
+}
+
+function dispatchAuth(
+	string $action,
+	Request $request,
+	AuthContext $auth,
+	\Shipard\Core\Database\DataSourceConnection $db,
+): Response {
+	$ctrl = new AuthController();
+	return match ($action) {
+		'login'   => $ctrl->login($request, $db),
+		'refresh' => $ctrl->refresh($request, $auth, $db),
+		'logout'  => $ctrl->logout($request, $auth, $db),
+		default   => Response::error('INTERNAL_ERROR', "Unknown auth action: {$action}", 500),
+	};
+}
+
+function dispatchCrud(
+	Route $route,
+	Request $request,
+	array $tables,
+	\Shipard\Core\Database\DataSourceConnection $db,
+): Response {
+	$ctrl  = new CrudController($db, $tables);
+	$table = $route->table ?? '';
+	$id    = $route->id;
+	return match ($route->action) {
+		'list'   => $ctrl->list($table, $request),
+		'show'   => $ctrl->show($table, (int) $id, $request),
+		'create' => $ctrl->create($table, $request),
+		'update' => $ctrl->update($table, (int) $id, $request),
+		'patch'  => $ctrl->patch($table, (int) $id, $request),
+		'delete' => $ctrl->delete($table, (int) $id),
+		default  => Response::error('INTERNAL_ERROR', "Unknown CRUD action: {$route->action}", 500),
+	};
+}
+
+function dispatchMeta(string $action, ?string $tableName, array $tables, string $language): Response
+{
+	$ctrl = new MetaController();
+	return match ($action) {
+		'tables' => $ctrl->tables($tables, $language),
+		'table'  => $ctrl->table((string) $tableName, $tables, $language),
+		default  => Response::error('INTERNAL_ERROR', "Unknown meta action: {$action}", 500),
+	};
+}

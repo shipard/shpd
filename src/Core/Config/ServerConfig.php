@@ -59,4 +59,9 @@ class ServerConfig
     {
         return $this->data['mode'];
     }
+
+    public function getDomainsFile(): string
+    {
+        return $this->data['domainsFile'] ?? '/etc/shipard/domains.json';
+    }
 }

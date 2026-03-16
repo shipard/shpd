@@ -4,6 +4,9 @@
 
 ```
 ┌─────────────────────────────────────────────────┐
+│  REST API vrstva (public/index.php)             │
+│  src/Api/                                       │
+├─────────────────────────────────────────────────┤
 │  CLI vrstva (bin/shpd-server, bin/shpd-ds)      │
 │  src/Command/                                   │
 ├─────────────────────────────────────────────────┤
@@ -22,7 +25,91 @@ Závislosti tečou shora dolů. Nižší vrstvy nikdy nezávisí na vyšších.
 
 ---
 
-## 2. Utility (`src/Core/Utils/`)
+---
+
+## 2. REST API vrstva (`src/Api/`)
+
+Zpracovává HTTP požadavky příchozí na `public/index.php`. Každá subdoména je mapována na jeden zdroj dat přes `domains.json`.
+
+### Pipeline požadavku
+
+```
+HTTP request
+  → Request::fromGlobals()
+  → CorsMiddleware (OPTIONS → 204, ostatní pokračují)
+  → ServerConfig + DataSourceResolver (subdoména → DS)
+  → TableLoader (načtení definic tabulek pro DS)
+  → Router (path + method → Route)
+  → AuthMiddleware (Bearer token → AuthContext)
+  → RateLimitMiddleware (kontrola limitu, X-RateLimit-* hlavičky)
+  → Controller dispatch
+  → CorsMiddleware.applyTo() + rate-limit hlavičky
+  → Response.send()
+```
+
+### HTTP abstrakce
+
+| Třída | Účel |
+|-------|------|
+| `Request` | Immutabilní obal HTTP požadavku. Factory `fromGlobals()` a `fromArray()` pro testování. `getHeader()` case-insensitive, `getClientIp()` respektuje `X-Forwarded-For`. |
+| `Response` | JSON obálka `{success, data/error, meta}`. Immutabilní — `withHeader()` vrací novou instanci. `send()` nastaví HTTP kód, Content-Type a vypíše tělo (přeskočí pro 204). |
+| `Route` | Readonly datová třída: `controller`, `action`, `?table`, `?id`. |
+| `Router` | Mapuje path + metodu na `Route`. Speciální endpointy (`_meta`, `_openapi`, `_auth`) před generickým `{table}`. Neznámá URL → 404, nepovolená metoda → 405. |
+
+### Resolvery
+
+| Třída | Účel |
+|-------|------|
+| `DataSourceResolver` | Načte `domains.json`, přeloží hostname na `DataSourceConfig` + `DataSourceConnection`. Hází `UnknownHostException` pro neznámou subdoménu. |
+| `ResolvedDataSource` | Readonly dvojice `DataSourceConfig` + `DataSourceConnection`. |
+| `TableLoader` | Z `DataSourceConfig` a `modulesBasePath` sestaví `array<string, TableDefinition>` pro všechny aktivní moduly DS (s extensions, lokalizovaný). |
+
+### Middleware
+
+| Třída | Účel |
+|-------|------|
+| `CorsMiddleware` | OPTIONS → 204 s CORS hlavičkami. `applyTo(Response)` přidá hlavičky k libovolné odpovědi. Povolená doména: `https://*.shipard.cz`. |
+| `AuthMiddleware` | Ověřuje Bearer token. API klíče (`shpd_ak_`): SHA-256 lookup v DB, kontrola expirace, is_active, IP allowlist, update last_used_at. Session tokeny (`shpd_st_`): kontrola expirace. Vrací `AuthContext`. |
+| `RateLimitMiddleware` | Okno 60 s. Limity: 1000 (api_key), 300 (session), 10 (login per IP), 60 (anon). Ukládá do `core_system_rate_limits`. Nastavuje `X-RateLimit-Limit/Remaining/Reset`. |
+
+### Kontrolery
+
+| Třída | Účel |
+|-------|------|
+| `AuthController` | `login` (password_verify → session token), `refresh` (nový token), `logout` (204). Session TTL 86400 s. |
+| `CrudController` | Univerzální CRUD pro libovolnou tabulku. `list` (filtry, řazení, stránkování), `show`, `create`, `update`, `patch`, `delete`. Filtrovací operátory: eq/neq/gt/gte/lt/lte/like/in/null/notnull. Password sloupce jsou odstraněny z výstupu. |
+| `MetaController` | `tables` (seznam tabulek s metadaty), `table` (detail sloupců + indexů). Lokalizovaný výstup. |
+| `OpenApiController` | `spec` → OpenAPI 3.1 JSON generovaný ze `SpecGenerator`. Podmíněný přístup dle `openApiPublic`. |
+
+### Validace
+
+| Třída | Účel |
+|-------|------|
+| `InputValidator` | Validuje vstupní data oproti `TableDefinition`. Mód `create` — kontroluje povinná pole. Mód `patch` — validuje jen přítomná pole. Automatické sloupce (`id`, `created`, `modified`) ignorovány. |
+
+### Generátory
+
+| Třída | Účel |
+|-------|------|
+| `SpecGenerator` | Generuje OpenAPI 3.1 spec ze `TableDefinition[]`. Fixní cesty (auth, meta, openapi) + 6 CRUD cest per tabulku. 4 schémata per tabulku (`_item`, `_create`, `_list_response`, `_single_response`). |
+
+**Tok dat pro CRUD požadavek:**
+```
+GET /api/v1/economy_docs_invoices?filter[status][eq]=open
+  → Router → Route(crud, list, table=economy_docs_invoices)
+  → AuthMiddleware → AuthContext(isAuthenticated=true, tokenType=api_key)
+  → RateLimitMiddleware → null (pokračuje)
+  → CrudController.list()
+    → InputValidator (query params)
+    → DataSourceConnection.fetchAll()
+  → Response::success(data, 200, meta{total, limit, offset})
+  → applyAllHeaders (CORS + X-RateLimit-*)
+  → send()
+```
+
+---
+
+## 3. Utility (`src/Core/Utils/`)
 
 Bezstavové pomocné třídy bez závislostí na zbytku systému.
 
@@ -33,7 +120,7 @@ Bezstavové pomocné třídy bez závislostí na zbytku systému.
 
 ---
 
-## 3. I18n (`src/Core/I18n/`)
+## 4. I18n (`src/Core/I18n/`)
 
 Vícejazyčnost — rozbalení polí se suffixem `:lang`.
 
@@ -51,7 +138,7 @@ JSONC soubor s "name", "name:cs", "name:en"
 
 ---
 
-## 4. Konfigurace (`src/Core/Config/`)
+## 5. Konfigurace (`src/Core/Config/`)
 
 | Třída | Účel |
 |-------|------|
@@ -74,7 +161,7 @@ compiled.cs.json → ConfigRuntime::load() → cfgItem('economy.docs.vatRates')
 
 ---
 
-## 5. Modulový systém (`src/Core/Module/`)
+## 6. Modulový systém (`src/Core/Module/`)
 
 | Třída | Účel |
 |-------|------|
@@ -92,7 +179,7 @@ modules/{skupina}/{modul}/module.jsonc
 
 ---
 
-## 6. Databázová vrstva (`src/Core/Database/`)
+## 7. Databázová vrstva (`src/Core/Database/`)
 
 ### Definice schématu
 
@@ -126,7 +213,7 @@ TableDefinition + ExtensionDefinition
 
 ---
 
-## 7. CLI příkazy (`src/Command/`)
+## 8. CLI příkazy (`src/Command/`)
 
 ### Server (`src/Command/Server/`)
 
@@ -137,6 +224,9 @@ TableDefinition + ExtensionDefinition
 | `shpd-server ds-create` | `DsCreateCommand` | Vytvoří nový zdroj dat (adresář, DB, uživatel, config) |
 | `shpd-server server-init` | `ServerInitCommand` | Inicializace serveru |
 | `shpd-server next-table-id` | `NextTableIdCommand` | Projde moduly, vypíše další volné tableId |
+| `shpd-server domain-add` | `DomainAddCommand` | Přidá mapování host → DS ID do `domains.json` |
+| `shpd-server domain-list` | `DomainListCommand` | Vypíše tabulku host → DS ID → DS name |
+| `shpd-server domain-remove` | `DomainRemoveCommand` | Odstraní mapování z `domains.json` |
 
 ### Data Source (`src/Command/DataSource/`)
 
@@ -157,7 +247,7 @@ TableDefinition + ExtensionDefinition
 
 ---
 
-## 8. Mapa závislostí mezi třídami
+## 9. Mapa závislostí mezi třídami
 
 ```
 JsoncParser ←── ModuleLoader
@@ -169,7 +259,7 @@ LocalizedFieldResolver ←── ConfigLocalizer ←── ConfigCompiler
 ModuleDefinition ←── ModuleLoader ←── ModuleResolver
 
 ColumnDefinition ─┐
-IndexDefinition  ─┼── TableDefinition ←── TableMerger
+IndexDefinition  ─┼── TableDefinition ←── TableMerger ←── TableLoader
                   │                    ←── SchemaComparator
 ExtensionDefinition ──── TableMerger
 
@@ -182,13 +272,23 @@ ModuleLoader     ─┘
 
 ServerConfig ←── DsCreateCommand, ServerInitCommand
 DataSourceConfig ←── DsUpgradeCommand
+             ←── DataSourceConnection ←── DataSourceResolver ←── index.php
+             ←── TableLoader ←── index.php
 DatabaseManager ←── DsCreateCommand
-DataSourceConnection ←── DsUpgradeCommand
+
+Request ──────────────────────────────────┐
+AuthContext ←── AuthMiddleware            │
+Route ←── Router ←── index.php ──────────┤
+Response ←── Controller/* ←── index.php  │
+                                          ↓
+CorsMiddleware, RateLimitMiddleware ←── index.php
+InputValidator ←── CrudController
+SpecGenerator  ←── OpenApiController
 ```
 
 ---
 
-## 9. Konvence v kódu
+## 10. Konvence v kódu
 
 ### Datové třídy (Definition)
 - Readonly properties nebo gettery

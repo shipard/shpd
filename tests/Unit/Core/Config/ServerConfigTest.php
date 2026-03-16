@@ -50,6 +50,24 @@ class ServerConfigTest extends TestCase
         $this->assertSame('root', $config->getAdminUser());
         $this->assertSame('secret', $config->getAdminPassword());
         $this->assertSame('production', $config->getMode());
+        $this->assertSame('/etc/shipard/domains.json', $config->getDomainsFile());
+    }
+
+    public function testGetDomainsFileCustomPath(): void
+    {
+        $path = $this->createConfig([
+            'host'           => '127.0.0.1',
+            'port'           => 3306,
+            'admin_user'     => 'root',
+            'admin_password' => 'secret',
+            'mode'           => 'production',
+            'domainsFile'    => '/custom/path/domains.json',
+        ]);
+
+        $config = new ServerConfig($path);
+        $config->load();
+
+        $this->assertSame('/custom/path/domains.json', $config->getDomainsFile());
     }
 
     public function testLoadMissingFileThrowsException(): void

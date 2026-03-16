@@ -13,5 +13,8 @@ $app->add(new \Shipard\Command\Server\HelpCommand());
 $app->add(new \Shipard\Command\Server\ServerInitCommand());
 $app->add(new \Shipard\Command\Server\DsCreateCommand());
 $app->add(new \Shipard\Command\Server\NextTableIdCommand());
+$app->add(new \Shipard\Command\Server\DomainAddCommand());
+$app->add(new \Shipard\Command\Server\DomainListCommand());
+$app->add(new \Shipard\Command\Server\DomainRemoveCommand());
 $app->setDefaultCommand('help');
 $app->run();

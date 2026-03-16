@@ -9,6 +9,8 @@
     "tables": [
         "core_system_users",
         "core_system_sessions",
-        "core_system_settings"
+        "core_system_settings",
+        "core_system_api_keys",
+        "core_system_rate_limits"
     ]
 }

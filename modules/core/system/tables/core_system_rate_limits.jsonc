@@ -1,0 +1,69 @@
+{
+    "tableId": 104,
+    "name": "Rate limits",
+    "name:cs": "Limity požadavků",
+    "name:en": "Rate limits",
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+        {
+            "id": "rate_key",
+            "name": "Key",
+            "name:cs": "Klíč",
+            "name:en": "Key",
+            "type": "varchar",
+            "length": 64,
+            "nullable": false
+        },
+        {
+            "id": "rate_type",
+            "name": "Type",
+            "name:cs": "Typ",
+            "name:en": "Type",
+            "type": "varchar",
+            "length": 20,
+            "nullable": false
+        },
+        {
+            "id": "window_start",
+            "name": "Window start",
+            "name:cs": "Začátek okna",
+            "name:en": "Window start",
+            "type": "int",
+            "nullable": false
+        },
+        {
+            "id": "count",
+            "name": "Count",
+            "name:cs": "Počet",
+            "name:en": "Count",
+            "type": "int",
+            "nullable": false,
+            "default": 1
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "idx_rate_key_window",
+            "type": "index",
+            "columns": [
+                {"column": "rate_key"},
+                {"column": "window_start"}
+            ]
+        },
+        {
+            "id": "idx_window_start",
+            "type": "index",
+            "columns": [
+                {"column": "window_start"}
+            ]
+        }
+    ]
+}

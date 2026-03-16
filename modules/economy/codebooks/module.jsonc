@@ -1,0 +1,14 @@
+{
+    "id": "economy.codebooks",
+    "name": "Codebooks",
+    "name:cs": "Číselníky",
+    "name:en": "Codebooks",
+    "description": "Warehouses, cost centers and other codebooks",
+    "description:cs": "Sklady, střediska a další číselníky",
+    "description:en": "Warehouses, cost centers and other codebooks",
+    "dependencies": ["core.system"],
+    "tables": [
+        "economy_codebooks_warehouses",
+        "economy_codebooks_cost_centers"
+    ]
+}

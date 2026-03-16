@@ -1,0 +1,78 @@
+{
+    "tableId": 102,
+    "displayPattern": "{code} — {name}",
+    "name": "Cost centers",
+    "name:cs": "Střediska",
+    "name:en": "Cost centers",
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+        {
+            "id": "code",
+            "name": "Code",
+            "name:cs": "Kód",
+            "name:en": "Code",
+            "type": "varchar",
+            "length": 10,
+            "nullable": false
+        },
+        {
+            "id": "name",
+            "name": "Name",
+            "name:cs": "Název",
+            "name:en": "Name",
+            "type": "varchar",
+            "length": 150,
+            "nullable": false
+        },
+        {
+            "id": "valid_from",
+            "name": "Valid from",
+            "name:cs": "Platnost od",
+            "name:en": "Valid from",
+            "type": "date",
+            "nullable": true
+        },
+        {
+            "id": "valid_to",
+            "name": "Valid to",
+            "name:cs": "Platnost do",
+            "name:en": "Valid to",
+            "type": "date",
+            "nullable": true
+        },
+        {
+            "id": "sort_order",
+            "name": "Sort order",
+            "name:cs": "Pořadí",
+            "name:en": "Sort order",
+            "type": "smallint",
+            "nullable": false,
+            "default": 0
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "unq_code",
+            "type": "unique",
+            "columns": [
+                {"column": "code"}
+            ]
+        },
+        {
+            "id": "idx_sort_order",
+            "type": "index",
+            "columns": [
+                {"column": "sort_order", "order": "ASC"},
+                {"column": "name", "order": "ASC"}
+            ]
+        }
+    ]
+}

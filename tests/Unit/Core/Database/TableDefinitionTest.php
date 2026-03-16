@@ -16,6 +16,7 @@ class TableDefinitionTest extends TestCase
         return [
             'tableId' => 1,
             'name' => 'Users',
+            'displayPattern' => '{full_name} ({login})',
             'name:cs' => 'Uživatelé',
             'name:en' => 'Users',
             'columnGroups' => [
@@ -112,6 +113,7 @@ class TableDefinitionTest extends TestCase
 
         $this->assertSame(1, $table->tableId);
         $this->assertSame('Users', $table->name);
+        $this->assertSame('{full_name} ({login})', $table->displayPattern);
         $this->assertCount(6, $table->columns);
         $this->assertCount(2, $table->indexes);
         $this->assertCount(2, $table->columnGroups);
@@ -122,6 +124,14 @@ class TableDefinitionTest extends TestCase
         $pk = array_values($primaryCols)[0];
         $this->assertSame('id', $pk->id);
         $this->assertTrue($pk->autoIncrement);
+    }
+
+    public function testDisplayPatternDefaultsToNull(): void
+    {
+        $data = $this->coreSystemUsersData();
+        unset($data['displayPattern']);
+        $table = TableDefinition::fromArray($data);
+        $this->assertNull($table->displayPattern);
     }
 
     public function testMissingTableId(): void

@@ -9,6 +9,7 @@ class TableDefinition
     public function __construct(
         public readonly int $tableId,
         public readonly string $name,
+        public readonly ?string $displayPattern,
         public readonly array $columnGroups,
         public readonly array $columns,
         public readonly array $indexes,
@@ -49,6 +50,9 @@ class TableDefinition
         return new self(
             tableId: $data['tableId'],
             name: $data['name'],
+            displayPattern: isset($data['displayPattern']) && is_string($data['displayPattern'])
+                ? $data['displayPattern']
+                : null,
             columnGroups: $data['columnGroups'] ?? [],
             columns: $columns,
             indexes: $indexes,

@@ -1,5 +1,6 @@
 {
     "tableId": 1,
+    "displayPattern": "{full_name} ({login})",
     "name": "Users",
     "name:cs": "Uživatelé",
     "name:en": "Users",

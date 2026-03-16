@@ -29,6 +29,7 @@ class ColumnDefinition
         public readonly ?string $group,
         public readonly ?string $collation,
         public readonly ?string $cfgItem,
+        public readonly ?string $reference,
     ) {}
 
     public static function fromArray(array $data): self
@@ -91,6 +92,9 @@ class ColumnDefinition
             group: $data['group'] ?? null,
             collation: $data['collation'] ?? null,
             cfgItem: $data['cfgItem'] ?? null,
+            reference: isset($data['reference']) && is_string($data['reference']) && $data['reference'] !== ''
+                ? $data['reference']
+                : null,
         );
     }
 }

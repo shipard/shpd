@@ -34,6 +34,9 @@ Název souboru (bez přípony) odpovídá názvu tabulky v databázi.
     "name:cs": "Hlavičky dokladů",
     "name:en": "Document heads",
 
+    // Šablona pro zobrazení záznamu, když na tuto tabulku odkazuje jiná tabulka
+    "displayPattern": "{doc_number} — {issue_date}",
+
     // Logické skupiny sloupců pro UI
     "columnGroups": [
         {
@@ -95,6 +98,16 @@ Název souboru (bez přípony) odpovídá názvu tabulky v databázi.
             "name:cs": "Datum vystavení",
             "name:en": "Issue date",
             "type": "date",
+            "group": "basic"
+        },
+        {
+            "id": "customer_id",
+            "name": "Customer",
+            "name:cs": "Odběratel",
+            "name:en": "Customer",
+            "type": "int",
+            "nullable": true,
+            "reference": "base_persons_contacts",
             "group": "basic"
         },
         {
@@ -164,6 +177,7 @@ Název souboru (bez přípony) odpovídá názvu tabulky v databázi.
 |------|-----|---------|-------------|-------|
 | `tableId` | int | Ano | Ne | Unikátní numerické ID tabulky (globálně přes celý systém) |
 | `name` | string | Ano | Ano | Název tabulky pro UI |
+| `displayPattern` | string | Ne | Ne | Šablona pro zobrazení záznamu při referenci z jiné tabulky |
 | `columnGroups` | object[] | Ne | — | Definice logických skupin sloupců |
 | `columns` | object[] | Ano | — | Definice sloupců |
 | `indexes` | object[] | Ne | — | Definice indexů |
@@ -190,6 +204,25 @@ Nepovinné seskupení sloupců pro přehlednost v UI (formuláře, detailní zob
 
 Sloupce, které nemají nastavené `group`, nejsou zařazeny do žádné skupiny — UI je může zobrazit samostatně nebo v implicitní skupině.
 
+### `displayPattern` — šablona zobrazení záznamu
+
+Nepovinná šablona, která určuje, jak se záznam z této tabulky zobrazí, když na něj odkazuje sloupec s `reference` z jiné tabulky (např. ve výběrovém seznamu nebo prokliku).
+
+Šablona používá placeholdery `{column_id}`, které se za běhu nahradí hodnotami:
+
+```jsonc
+// Zobrazí např. "FV-2026-001 — 2026-03-15"
+"displayPattern": "{doc_number} — {issue_date}"
+
+// Zobrazí např. "Jan Novák (jan@firma.cz)"
+"displayPattern": "{full_name} ({email})"
+```
+
+Pravidla:
+- Placeholdery odkazují na ID sloupců v téže tabulce
+- Pokud tabulka nemá `displayPattern`, UI použije fallback — zobrazí hodnotu sloupce `id`
+- Šablona není vícejazyčná — obsahuje pouze reference na sloupce, jejichž hodnoty jsou v datech
+
 ---
 
 ## 5. Definice sloupců
@@ -205,6 +238,7 @@ Sloupce, které nemají nastavené `group`, nejsou zařazeny do žádné skupiny
 | `default` | mixed | Ne | Ne | Výchozí hodnota (konstanta) |
 | `group` | string | Ne | Ne | ID skupiny sloupců (`columnGroups`) |
 | `collation` | string | Ne | Ne | Collation pro tento sloupec (přetíží globální nastavení DB) |
+| `reference` | string | Ne | Ne | ID cílové tabulky pro referenční vazbu (jen pro UI, žádná DB constraint) |
 
 ### Speciální pole pro primární klíč
 
@@ -214,6 +248,28 @@ Sloupce, které nemají nastavené `group`, nejsou zařazeny do žádné skupiny
 | `autoIncrement` | bool | Automatický inkrement |
 
 Primární klíč je vždy jeden sloupec typu `int` s `autoIncrement: true`. Každá tabulka musí mít právě jeden sloupec s `primaryKey: true`.
+
+### Reference na jinou tabulku
+
+Nepovinné pole `reference` u sloupce typu `int` označuje, že hodnota sloupce odkazuje na `id` (primární klíč) záznamu v cílové tabulce.
+
+```jsonc
+{
+    "id": "customer_id",
+    "name": "Customer",
+    "name:cs": "Odběratel",
+    "type": "int",
+    "nullable": true,
+    "reference": "base_persons_contacts"
+}
+```
+
+Pravidla:
+- `reference` je čistě metadata pro UI — žádná databázová FOREIGN KEY constraint se nevytváří
+- Smysluplné pouze u sloupců typu `int` (odkazuje se přes PK cílové tabulky)
+- Cílová tabulka by měla mít definovaný `displayPattern` pro smysluplné zobrazení v UI
+- UI použije referenci pro: výběrové seznamy, prokliky na detail, zobrazení názvu místo ID
+- Validace referenční integrity se řeší na aplikační úrovni
 
 ---
 
@@ -562,6 +618,8 @@ Před provedením změn v databázi se provede validace:
     "name": "Users",
     "name:cs": "Uživatelé",
     "name:en": "Users",
+
+    "displayPattern": "{full_name} ({login})",
 
     "columnGroups": [
         {

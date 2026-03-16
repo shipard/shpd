@@ -49,6 +49,7 @@ class TableMerger
         return new TableDefinition(
             tableId: $base->tableId,
             name: $base->name,
+            displayPattern: $base->displayPattern,
             columnGroups: $columnGroups,
             columns: $columns,
             indexes: $indexes,

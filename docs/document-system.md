@@ -15,20 +15,20 @@ Dokumentový systém je vrstva nad databázovými tabulkami, která zajišťuje 
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  REST API / CLI                                          │
+│  REST API / CLI                                         │
 ├─────────────────────────────────────────────────────────┤
-│  TableGateway                                            │
-│  - loadRecord(), saveDocument(), deleteDocument()        │
-│  - najde správnou Document třídu podle typu              │
+│  TableGateway                                           │
+│  - loadRecord(), saveDocument(), deleteDocument()       │
+│  - najde správnou Document třídu podle typu             │
 ├─────────────────────────────────────────────────────────┤
-│  Document (abstraktní)                                   │
-│  - validate(), beforeSave(), afterSave()                 │
-│  - beforeDelete(), afterDelete(), onLoad()               │
+│  Document (abstraktní)                                  │
+│  - validate(), beforeSave(), afterSave()                │
+│  - beforeDelete(), afterDelete(), onLoad()              │
 ├──────────────────────┬──────────────────────────────────┤
-│  PersonDocument       │  IssuedInvoiceDocument           │
-│  (base.persons)       │  (economy.docs, doc_type=inv_i)  │
+│  PersonDocument      │  IssuedInvoiceDocument           │
+│  (base.persons)      │  (economy.docs, doc_type=inv_i)  │
 ├──────────────────────┼──────────────────────────────────┤
-│  Dibi (SQL)           │  TableDefinition (metadata)      │
+│  Dibi (SQL)          │  TableDefinition (metadata)      │
 └──────────────────────┴──────────────────────────────────┘
 ```
 
@@ -495,7 +495,55 @@ Namespace konvence: `Shipard\Module\{Skupina}\{Modul}\` → `modules/{skupina}/{
 
 ---
 
-## 10. Příklad — PersonDocument
+## 10. PHP Enum pro enumInt sloupce
+
+Pro sloupce typu `enumInt` se v PHP používají nativní backed enum typy. Každý enum je samostatný soubor v `src/` adresáři modulu.
+
+### Konvence
+
+- Soubor: `modules/{skupina}/{modul}/src/{EnumName}.php`
+- Backed enum s `int` hodnotami odpovídajícími hodnotám v DB
+- Hodnoty musí odpovídat klíčům v konfigurační položce (`cfgItem`)
+- Hodnota `0` = neurčeno / nevalidní stav (pokud je to relevantní)
+
+### Příklad — PersonType
+
+```php
+<?php
+declare(strict_types=1);
+
+namespace Shipard\Module\Base\Persons;
+
+/**
+ * Typ osoby — backed enum s int hodnotami odpovídajícími DB sloupci person_type (enumInt).
+ */
+enum PersonType: int
+{
+    case Undefined = 0;
+    case Person = 1;
+    case Company = 2;
+}
+```
+
+Použití:
+```php
+// Z DB hodnoty na enum
+$type = PersonType::tryFrom((int) $data['person_type']); // null pro neznámou hodnotu
+$type = PersonType::from((int) $data['person_type']);     // výjimka pro neznámou hodnotu
+
+// Porovnání
+if ($type === PersonType::Company) { ... }
+
+// Do DB
+$data['person_type'] = PersonType::Company->value; // 2
+
+// Všechny hodnoty
+$allTypes = PersonType::cases(); // [Undefined, Person, Company]
+```
+
+---
+
+## 11. Příklad — PersonDocument
 
 ```php
 <?php
@@ -512,17 +560,18 @@ class PersonDocument extends Document
     {
         $result = new ValidationResult();
 
-        $personType = $data['person_type'] ?? null;
+        $personType = PersonType::tryFrom((int) ($data['person_type'] ?? 0));
 
-        if ($personType === null) {
+        if ($personType === null || $personType === PersonType::Undefined) {
             $result->addError('person_type', 'Typ osoby je povinný', 'required');
+            return $result;
         }
 
-        if ($personType === 'company' && empty($data['full_name'])) {
+        if ($personType === PersonType::Company && empty($data['full_name'])) {
             $result->addError('full_name', 'Název firmy je povinný', 'required');
         }
 
-        if ($personType === 'person') {
+        if ($personType === PersonType::Person) {
             if (empty($data['last_name'])) {
                 $result->addError('last_name', 'Příjmení je povinné', 'required');
             }
@@ -536,15 +585,15 @@ class PersonDocument extends Document
 
     public function beforeSave(array &$data): void
     {
-        $personType = $data['person_type'] ?? null;
+        $personType = PersonType::tryFrom((int) ($data['person_type'] ?? 0));
 
-        if ($personType === 'company') {
+        if ($personType === PersonType::Company) {
             // Firma: firstName prázdné, lastName = fullName (pro řazení)
             $data['first_name'] = '';
             $data['last_name'] = $data['full_name'] ?? '';
         }
 
-        if ($personType === 'person') {
+        if ($personType === PersonType::Person) {
             // Člověk: fullName = firstName + lastName
             $data['full_name'] = trim(
                 ($data['first_name'] ?? '') . ' ' . ($data['last_name'] ?? '')
@@ -556,7 +605,7 @@ class PersonDocument extends Document
 
 ---
 
-## 11. Příklad — IssuedInvoiceDocument
+## 12. Příklad — IssuedInvoiceDocument
 
 ```php
 <?php
@@ -624,7 +673,7 @@ class IssuedInvoiceDocument extends Document
 
 ---
 
-## 12. Tok dat — saveDocument
+## 13. Tok dat — saveDocument
 
 ```
 API volání: saveDocument({customer_id: 42, rows: [...]})

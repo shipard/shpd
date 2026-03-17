@@ -85,6 +85,26 @@ class AuthMiddlewareTest extends TestCase
 		$this->assertFalse($result->isAuthenticated);
 	}
 
+	// --- Empty token ---
+
+	public function testEmptyBearerTokenReturnsAnonymousContext(): void
+	{
+		$req = $this->req(server: ['HTTP_AUTHORIZATION' => 'Bearer ']);
+		$result = $this->middleware->handle($req, $this->route(), $this->db);
+
+		$this->assertInstanceOf(AuthContext::class, $result);
+		$this->assertFalse($result->isAuthenticated);
+	}
+
+	public function testWhitespaceBearerTokenReturnsAnonymousContext(): void
+	{
+		$req = $this->req(server: ['HTTP_AUTHORIZATION' => 'Bearer   ']);
+		$result = $this->middleware->handle($req, $this->route(), $this->db);
+
+		$this->assertInstanceOf(AuthContext::class, $result);
+		$this->assertFalse($result->isAuthenticated);
+	}
+
 	// --- Exempt endpoints ---
 
 	public function testLoginEndpointIsExemptFromAuth(): void

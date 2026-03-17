@@ -32,7 +32,11 @@ class AuthMiddleware
 			return Response::error('UNAUTHORIZED', 'Invalid authorization header', 401);
 		}
 
-		$token = substr($header, 7);
+		$token = trim(substr($header, 7));
+
+		if ($token === '') {
+			return AuthContext::anonymous();
+		}
 
 		if (str_starts_with($token, 'shpd_ak_')) {
 			return $this->handleApiKey($token, $request->getClientIp(), $db);

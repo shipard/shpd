@@ -26,6 +26,6 @@ class OpenApiController
 		$generator = new SpecGenerator();
 		$spec      = $generator->generate($tableDefinitions, $baseUrl);
 
-		return Response::success($spec);
+		return Response::raw($spec);
 	}
 }

@@ -9,7 +9,7 @@ class Response
 
 	private function __construct(
 		private int $status,
-		private array $payload,
+		private mixed $payload,
 	) {}
 
 	public static function success(mixed $data, int $status = 200, ?array $meta = null): self
@@ -19,6 +19,11 @@ class Response
 			$payload['meta'] = $meta;
 		}
 		return new self($status, $payload);
+	}
+
+	public static function raw(mixed $data, int $status = 200): self
+	{
+		return new self($status, $data);
 	}
 
 	public static function error(string $code, string $message, int $status, array $details = []): self
@@ -37,7 +42,7 @@ class Response
 		return $clone;
 	}
 
-	public function getPayload(): array
+	public function getPayload(): mixed
 	{
 		return $this->payload;
 	}

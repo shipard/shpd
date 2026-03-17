@@ -29,7 +29,7 @@ class OpenApiControllerTest extends TestCase
 		$resp = $this->ctrl->spec($auth, true, [], 'https://demo.shipard.cz');
 
 		$this->assertSame(200, $this->getStatus($resp));
-		$this->assertTrue($resp->getPayload()['success']);
+		$this->assertArrayNotHasKey('success', $resp->getPayload());
 	}
 
 	public function testPrivateAccessWithoutTokenReturns401(): void
@@ -47,17 +47,17 @@ class OpenApiControllerTest extends TestCase
 		$resp = $this->ctrl->spec($auth, false, [], 'https://demo.shipard.cz');
 
 		$this->assertSame(200, $this->getStatus($resp));
-		$this->assertTrue($resp->getPayload()['success']);
+		$this->assertArrayNotHasKey('success', $resp->getPayload());
 	}
 
 	public function testResponseContainsOpenApiSpec(): void
 	{
 		$auth = AuthContext::anonymous();
 		$resp = $this->ctrl->spec($auth, true, [], 'https://demo.shipard.cz');
-		$data = $resp->getPayload()['data'];
+		$spec = $resp->getPayload();
 
-		$this->assertSame('3.1.0', $data['openapi']);
-		$this->assertArrayHasKey('paths',      $data);
-		$this->assertArrayHasKey('components', $data);
+		$this->assertSame('3.1.0', $spec['openapi']);
+		$this->assertArrayHasKey('paths',      $spec);
+		$this->assertArrayHasKey('components', $spec);
 	}
 }

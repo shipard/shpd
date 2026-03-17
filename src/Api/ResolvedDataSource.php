@@ -11,5 +11,12 @@ readonly class ResolvedDataSource
 	public function __construct(
 		public DataSourceConfig $config,
 		public DataSourceConnection $connection,
+		public string $normalizedPath,
+		private bool $devMode = false,
 	) {}
+
+	public function isDevMode(): bool
+	{
+		return $this->devMode;
+	}
 }

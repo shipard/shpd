@@ -9,6 +9,7 @@ use Shipard\Api\Controller\CrudController;
 use Shipard\Api\Controller\MetaController;
 use Shipard\Api\Controller\OpenApiController;
 use Shipard\Api\DataSourceResolver;
+use Shipard\Api\Exception\UnknownDataSourceException;
 use Shipard\Api\Exception\UnknownHostException;
 use Shipard\Api\Middleware\AuthMiddleware;
 use Shipard\Api\Middleware\CorsMiddleware;
@@ -39,7 +40,7 @@ try {
 
 	// ── 3. Resolve data source ────────────────────────────────────────────────
 	$resolver = new DataSourceResolver($serverConfig->getDomainsFile());
-	$resolved = $resolver->resolve($request->getHost());
+	$resolved = $resolver->resolve($request->getHost(), $request->getPath());
 
 	// ── 4. Load table definitions (localized) ─────────────────────────────────
 	$language = resolveLanguage($request);
@@ -48,7 +49,7 @@ try {
 
 	// ── 5. Route ──────────────────────────────────────────────────────────────
 	$router      = new Router();
-	$routeResult = $router->resolve($request);
+	$routeResult = $router->resolve($resolved->normalizedPath, $request->getMethod());
 	if ($routeResult instanceof Response) {
 		$corsMiddleware->applyTo($routeResult)->send();
 		exit;
@@ -76,11 +77,16 @@ try {
 	}
 
 	// ── 8. Dispatch to controller ─────────────────────────────────────────────
-	$response = dispatch($route, $request, $auth, $tables, $resolved->connection, $openApiPublic, $request->getHost());
+	$host = $request->getHost();
+	$response = dispatch($route, $request, $auth, $tables, $resolved->connection, $openApiPublic, $host, $resolved);
 
 	// ── 9. Apply headers and send ─────────────────────────────────────────────
 	applyAllHeaders($corsMiddleware, $rateLimiter, $response)->send();
 
+} catch (UnknownDataSourceException $e) {
+	$corsMiddleware->applyTo(
+		Response::error('UNKNOWN_DATASOURCE', "Unknown data source: {$e->dsId}", 404),
+	)->send();
 } catch (UnknownHostException) {
 	$corsMiddleware->applyTo(
 		Response::error('UNKNOWN_HOST', 'Unknown host', 404),
@@ -127,12 +133,17 @@ function dispatch(
 	\Shipard\Core\Database\DataSourceConnection $db,
 	bool $openApiPublic,
 	string $host,
+	\Shipard\Api\ResolvedDataSource $resolved,
 ): Response {
+	$baseUrl = $resolved->isDevMode()
+		? 'http://' . $host . '/' . $resolved->config->getId()
+		: 'https://' . $host;
+
 	return match ($route->controller) {
 		'auth' => dispatchAuth($route->action, $request, $auth, $db),
 		'crud' => dispatchCrud($route, $request, $tables, $db),
 		'meta' => dispatchMeta($route->action, $route->table, $tables, resolveLanguage($request)),
-		'openapi' => (new OpenApiController())->spec($auth, $openApiPublic, $tables, 'https://' . $host),
+		'openapi' => (new OpenApiController())->spec($auth, $openApiPublic, $tables, $baseUrl),
 		default => Response::error('INTERNAL_ERROR', "Unknown controller: {$route->controller}", 500),
 	};
 }

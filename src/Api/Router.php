@@ -7,10 +7,8 @@ class Router
 {
 	private const string PREFIX = '/api/v1';
 
-	public function resolve(Request $request): Route|Response
+	public function resolve(string $path, string $method): Route|Response
 	{
-		$path = $request->getPath();
-		$method = $request->getMethod();
 
 		if (!str_starts_with($path, self::PREFIX)) {
 			return Response::error('NOT_FOUND', 'Not found', 404);

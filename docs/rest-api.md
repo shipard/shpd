@@ -19,6 +19,8 @@ https://firma1.shipard.cz/api/v1/...  →  data source "firma1"
 https://demo.shipard.cz/api/v1/...    →  data source "demo"
 ```
 
+### Produkční mód — subdoména
+
 Subdoména se mapuje na ID zdroje dat přes konfigurační soubor `/etc/shipard/domains.json`:
 
 ```json
@@ -28,11 +30,35 @@ Subdoména se mapuje na ID zdroje dat přes konfigurační soubor `/etc/shipard/
 }
 ```
 
+URL: `https://demo.shipard.cz/api/v1/{tabulka}`
+
+### Development mód — IP adresa + DS ID v URL
+
+Pro snazší onboarding vývojářů bez nutnosti konfigurovat domény a SSL certifikáty. DS ID je první segment cesty, zbytek je standardní API cesta:
+
+```
+http://10.12.100.1/abcd-efgh-ijkl-mnop/api/v1/{tabulka}
+                   ├── DS ID ──────────┤├── API cesta ──┤
+```
+
+V dev módu není potřeba `domains.json` — DS ID je přímo v URL a resolver ověří existenci adresáře v `data-sources/`.
+
+### Porovnání módů
+
+| | Produkce | Development |
+|---|---|---|
+| URL | `https://demo.shipard.cz/api/v1/users` | `http://10.12.100.1/abcd-efgh-ijkl-mnop/api/v1/users` |
+| Resolve DS | Subdoména → `domains.json` → DS ID | První segment URL = DS ID → přímo `data-sources/{id}/` |
+| SSL | Vyžadováno | Volitelné (HTTP) |
+| Doména | Nutná | Není potřeba |
+| `domains.json` | Nutný | Nepotřebný |
+
 ### Nginx konfigurace
 
-Jeden nginx server block s wildcard doménou směřuje všechny requesty na společný entry point:
+Dva server blocky — produkční a development:
 
 ```nginx
+# Produkce — subdoména + SSL
 server {
     listen 443 ssl;
     server_name *.shipard.cz;
@@ -48,29 +74,69 @@ server {
         fastcgi_pass unix:/run/php/php-fpm.sock;
         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
         fastcgi_param HTTP_HOST $host;
+        fastcgi_param REQUEST_URI $request_uri;
+        include fastcgi_params;
+    }
+}
+
+# Development — IP adresa + DS ID v URL
+server {
+    listen 80;
+    server_name ~^(\d+\.\d+\.\d+\.\d+)$;
+
+    root /opt/shipard/shpd/public;
+    index index.php;
+
+    location / {
+        try_files $uri /index.php$is_args$args;
+    }
+
+    location ~ \.php$ {
+        fastcgi_pass unix:/run/php/php-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_param HTTP_HOST $host;
+        fastcgi_param REQUEST_URI $request_uri;
         include fastcgi_params;
     }
 }
 ```
 
+V dev prostředí stačí aktivovat pouze druhý block. V produkci typicky jen první. Lze mít oba současně.
+
+### Detekce módu v `DataSourceResolver`
+
+Resolver rozhodne automaticky podle `HTTP_HOST`:
+
+1. Host je IP adresa (regex `^\d+\.\d+\.\d+\.\d+$`) → **dev mód**:
+   - Vezme první segment z URL cesty jako DS ID
+   - Ověří existenci `data-sources/{id}/config/main.json`
+   - Odstraní DS ID prefix z cesty a předá zbytek routeru
+2. Host je doménové jméno → **produkční mód**:
+   - Vyhledá host v `domains.json`
+   - Celá cesta jde do routeru beze změny
+
 ### Entry point
 
-Soubor `/opt/shipard/shpd/public/index.php` — společný pro všechny zdroje dat:
+Soubor `/opt/shipard/shpd/public/index.php` — společný pro všechny zdroje dat i oba módy:
 
-1. Přečte `HTTP_HOST` z requestu
-2. Vyhledá ID zdroje dat v `domains.json`
+1. Přečte `HTTP_HOST` a `REQUEST_URI` z requestu
+2. `DataSourceResolver` detekuje mód a resolve DS ID
 3. Načte `config/main.json` daného zdroje dat
 4. Připojí se k databázi zdroje dat
-5. Zpracuje API request
+5. Zpracuje API request (s normalizovanou cestou bez DS ID prefixu)
 
-Pozn.: Původně jsme uvažovali o www-root v `/opt/shipard/data-sources/{id}/www/`, ale pro API je efektivnější jeden společný entry point v codebase — eliminuje duplicitu a zjednodušuje deploy. Adresář `data-sources/{id}/www/` zůstává k dispozici pro budoucí statické soubory specifické pro zdroj dat (loga, exporty apod.).
+Pozn.: Adresář `data-sources/{id}/www/` zůstává k dispozici pro budoucí statické soubory specifické pro zdroj dat (loga, exporty apod.).
 
 ---
 
 ## 3. URL struktura
 
 ```
+# Produkce
 https://{subdomena}.shipard.cz/api/v1/{tabulka}
+
+# Development
+http://{ip-adresa}/{ds-id}/api/v1/{tabulka}
 ```
 
 ### Konvence
@@ -509,9 +575,17 @@ info:
   version: "1.0.0"
 servers:
   - url: "https://{subdomain}.shipard.cz/api/v1"
+    description: "Produkce (subdoména)"
     variables:
       subdomain:
         default: "demo"
+  - url: "http://{host}/{dsId}/api/v1"
+    description: "Development (IP + DS ID)"
+    variables:
+      host:
+        default: "10.12.100.1"
+      dsId:
+        default: "abcd-efgh-ijkl-mnop"
 
 paths:
   /core_system_users:
@@ -843,6 +917,10 @@ Tyto funkce se implementují později, ale architektura by je měla umožnit:
 ---
 
 ## 17. Příklad kompletní interakce
+
+Příklady ukazují produkční mód (subdoména). V dev módu nahraď base URL:
+- Produkce: `https://demo.shipard.cz/api/v1/...`
+- Development: `http://10.12.100.1/abcd-efgh-ijkl-mnop/api/v1/...`
 
 ### 1. Přihlášení
 

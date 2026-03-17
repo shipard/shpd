@@ -5,6 +5,7 @@ namespace Shipard\Tests\Unit\Api;
 
 use PHPUnit\Framework\TestCase;
 use Shipard\Api\DataSourceResolver;
+use Shipard\Api\Exception\UnknownDataSourceException;
 use Shipard\Api\Exception\UnknownHostException;
 use Shipard\Api\ResolvedDataSource;
 use Shipard\Core\Config\DataSourceConfig;
@@ -88,6 +89,16 @@ class DataSourceResolverTest extends TestCase
 		);
 	}
 
+	private function makeResolverNoDomains(): TestableDataSourceResolver
+	{
+		return new TestableDataSourceResolver(
+			$this->tempDir . '/nonexistent-domains.json',
+			$this->tempDir . '/data-sources',
+		);
+	}
+
+	// ── Production mode (existing tests) ────────────────────────────────────
+
 	public function testResolveKnownHost(): void
 	{
 		$dsId = 'a3f2-b8c1-d4e7-f9a0';
@@ -95,7 +106,7 @@ class DataSourceResolverTest extends TestCase
 		$this->writeDsConfig($dsId);
 
 		$resolver = $this->makeResolver($domainsFile);
-		$result = $resolver->resolve('demo.shipard.cz');
+		$result = $resolver->resolve('demo.shipard.cz', '/api/v1/users');
 
 		$this->assertInstanceOf(ResolvedDataSource::class, $result);
 		$this->assertSame($dsId, $result->config->getId());
@@ -108,7 +119,7 @@ class DataSourceResolverTest extends TestCase
 		$resolver = $this->makeResolver($domainsFile);
 
 		$this->expectException(UnknownHostException::class);
-		$resolver->resolve('unknown.shipard.cz');
+		$resolver->resolve('unknown.shipard.cz', '/api/v1/users');
 	}
 
 	public function testResolveMultipleEntries(): void
@@ -126,7 +137,7 @@ class DataSourceResolverTest extends TestCase
 		$resolver = $this->makeResolver($domainsFile);
 
 		foreach ($map as $host => $dsId) {
-			$result = $resolver->resolve($host);
+			$result = $resolver->resolve($host, '/api/v1/users');
 			$this->assertSame($dsId, $result->config->getId(), "Failed for host: {$host}");
 		}
 	}
@@ -138,7 +149,7 @@ class DataSourceResolverTest extends TestCase
 		$this->expectException(\RuntimeException::class);
 		$this->expectExceptionMessageMatches('/not found/i');
 
-		$resolver->resolve('demo.shipard.cz');
+		$resolver->resolve('demo.shipard.cz', '/api/v1/users');
 	}
 
 	public function testInvalidJsonInDomainsFileThrows(): void
@@ -151,6 +162,119 @@ class DataSourceResolverTest extends TestCase
 		$this->expectException(\RuntimeException::class);
 		$this->expectExceptionMessageMatches('/invalid json/i');
 
-		$resolver->resolve('demo.shipard.cz');
+		$resolver->resolve('demo.shipard.cz', '/api/v1/users');
+	}
+
+	// ── Mode detection ───────────────────────────────────────────────────────
+
+	public function testDomainHostUsesProductionMode(): void
+	{
+		$dsId = 'a3f2-b8c1-d4e7-f9a0';
+		$domainsFile = $this->writeDomains(['demo.shipard.cz' => $dsId]);
+		$this->writeDsConfig($dsId);
+
+		$resolver = $this->makeResolver($domainsFile);
+		$result = $resolver->resolve('demo.shipard.cz', '/api/v1/users');
+
+		$this->assertFalse($result->isDevMode());
+		$this->assertSame('/api/v1/users', $result->normalizedPath);
+	}
+
+	public function testIpHostUsesDevMode(): void
+	{
+		$dsId = 'abcd-efgh-ijkl-mnop';
+		$this->writeDsConfig($dsId);
+
+		$resolver = $this->makeResolverNoDomains();
+		$result = $resolver->resolve('192.168.1.1', '/abcd-efgh-ijkl-mnop/api/v1/users');
+
+		$this->assertTrue($result->isDevMode());
+	}
+
+	public function testLocalhostIpUsesDevMode(): void
+	{
+		$dsId = 'abcd-efgh-ijkl-mnop';
+		$this->writeDsConfig($dsId);
+
+		$resolver = $this->makeResolverNoDomains();
+		$result = $resolver->resolve('127.0.0.1', '/abcd-efgh-ijkl-mnop/api/v1/users');
+
+		$this->assertTrue($result->isDevMode());
+	}
+
+	// ── Dev mode ─────────────────────────────────────────────────────────────
+
+	public function testDevModeResolvesValidDsId(): void
+	{
+		$dsId = 'abcd-efgh-ijkl-mnop';
+		$this->writeDsConfig($dsId);
+
+		$resolver = $this->makeResolverNoDomains();
+		$result = $resolver->resolve('10.12.100.1', '/abcd-efgh-ijkl-mnop/api/v1/users');
+
+		$this->assertSame($dsId, $result->config->getId());
+		$this->assertSame('/api/v1/users', $result->normalizedPath);
+	}
+
+	public function testDevModeNormalizesPath(): void
+	{
+		$dsId = 'abcd-efgh-ijkl-mnop';
+		$this->writeDsConfig($dsId);
+
+		$resolver = $this->makeResolverNoDomains();
+		// Query string is not part of the path; the path passed in does not include it
+		$result = $resolver->resolve('10.12.100.1', '/abcd-efgh-ijkl-mnop/api/v1/users');
+
+		$this->assertSame('/api/v1/users', $result->normalizedPath);
+	}
+
+	public function testDevModeRootPath(): void
+	{
+		$dsId = 'abcd-efgh-ijkl-mnop';
+		$this->writeDsConfig($dsId);
+
+		$resolver = $this->makeResolverNoDomains();
+		$result = $resolver->resolve('10.12.100.1', '/abcd-efgh-ijkl-mnop/');
+
+		$this->assertSame('/', $result->normalizedPath);
+	}
+
+	public function testDevModeInvalidDsIdFormat(): void
+	{
+		$resolver = $this->makeResolverNoDomains();
+
+		$this->expectException(UnknownDataSourceException::class);
+		$resolver->resolve('10.12.100.1', '/not-a-valid-id/api/v1/users');
+	}
+
+	public function testDevModeNonexistentDsId(): void
+	{
+		// DS config file does NOT exist on disk
+		$resolver = $this->makeResolverNoDomains();
+
+		$this->expectException(UnknownDataSourceException::class);
+		$resolver->resolve('10.12.100.1', '/abcd-efgh-ijkl-mnop/api/v1/users');
+	}
+
+	public function testDevModeMissingDsId(): void
+	{
+		// Path starts with 'api' which does not match DS ID format
+		$resolver = $this->makeResolverNoDomains();
+
+		$this->expectException(UnknownDataSourceException::class);
+		$resolver->resolve('10.12.100.1', '/api/v1/users');
+	}
+
+	public function testDevModeDoesNotRequireDomainsFile(): void
+	{
+		$dsId = 'abcd-efgh-ijkl-mnop';
+		$this->writeDsConfig($dsId);
+
+		// domains.json does not exist — should still succeed in dev mode
+		$resolver = $this->makeResolverNoDomains();
+		$result = $resolver->resolve('10.12.100.1', '/abcd-efgh-ijkl-mnop/api/v1/users');
+
+		$this->assertInstanceOf(ResolvedDataSource::class, $result);
+		$this->assertSame($dsId, $result->config->getId());
 	}
 }

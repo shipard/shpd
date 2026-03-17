@@ -1,11 +1,16 @@
 {
-    // Typy osob
-    "person": {
+    // Hodnoty odpovídají PHP enum PersonType
+    "0": {
+        "name": "Undefined",
+        "name:cs": "Neurčeno",
+        "name:en": "Undefined"
+    },
+    "1": {
         "name": "Natural person",
         "name:cs": "Fyzická osoba",
         "name:en": "Natural person"
     },
-    "company": {
+    "2": {
         "name": "Company",
         "name:cs": "Firma",
         "name:en": "Company"

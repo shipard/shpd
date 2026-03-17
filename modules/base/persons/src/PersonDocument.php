@@ -13,17 +13,17 @@ class PersonDocument extends Document
     {
         $result = new ValidationResult();
 
-        $personType = $data['person_type'] ?? null;
+        $personType = PersonType::tryFrom((int) ($data['person_type'] ?? 0));
 
-        if ($personType === null) {
+        if ($personType === null || $personType === PersonType::Undefined) {
             $result->addError('person_type', 'Typ osoby je povinný', 'required');
         }
 
-        if ($personType === 'company' && empty($data['full_name'])) {
+        if ($personType === PersonType::Company && empty($data['full_name'])) {
             $result->addError('full_name', 'Název firmy je povinný', 'required');
         }
 
-        if ($personType === 'person') {
+        if ($personType === PersonType::Person) {
             if (empty($data['last_name'])) {
                 $result->addError('last_name', 'Příjmení je povinné', 'required');
             }
@@ -37,14 +37,14 @@ class PersonDocument extends Document
 
     public function beforeSave(array &$data): void
     {
-        $personType = $data['person_type'] ?? null;
+        $personType = PersonType::tryFrom((int) ($data['person_type'] ?? 0));
 
-        if ($personType === 'company') {
+        if ($personType === PersonType::Company) {
             $data['first_name'] = '';
             $data['last_name'] = $data['full_name'] ?? '';
         }
 
-        if ($personType === 'person') {
+        if ($personType === PersonType::Person) {
             $data['full_name'] = trim(
                 ($data['first_name'] ?? '') . ' ' . ($data['last_name'] ?? '')
             );

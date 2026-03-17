@@ -28,8 +28,8 @@
             "name": "Person type",
             "name:cs": "Typ osoby",
             "name:en": "Person type",
-            "type": "enumString",
-            "length": 10,
+            "type": "enumInt",
+            "default": 0,
             "cfgItem": "base.persons.personTypes",
             "group": "identity"
         },

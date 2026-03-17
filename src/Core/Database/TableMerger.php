@@ -53,6 +53,7 @@ class TableMerger
             columnGroups: $columnGroups,
             columns: $columns,
             indexes: $indexes,
+            childTables: $base->childTables,
         );
     }
 }

@@ -1,0 +1,85 @@
+{
+    "tableId": 201,
+    "name": "Persons",
+    "name:cs": "Osoby",
+    "name:en": "Persons",
+
+    "displayPattern": "{full_name}",
+
+    "columnGroups": [
+        {
+            "id": "identity",
+            "name": "Identity",
+            "name:cs": "Identifikace",
+            "name:en": "Identity"
+        }
+    ],
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+        {
+            "id": "person_type",
+            "name": "Person type",
+            "name:cs": "Typ osoby",
+            "name:en": "Person type",
+            "type": "enumString",
+            "length": 10,
+            "cfgItem": "base.persons.personTypes",
+            "group": "identity"
+        },
+        {
+            "id": "full_name",
+            "name": "Full name",
+            "name:cs": "Celý název",
+            "name:en": "Full name",
+            "type": "varchar",
+            "length": 200,
+            "nullable": false,
+            "group": "identity"
+        },
+        {
+            "id": "first_name",
+            "name": "First name",
+            "name:cs": "Jméno",
+            "name:en": "First name",
+            "type": "varchar",
+            "length": 100,
+            "nullable": false,
+            "group": "identity"
+        },
+        {
+            "id": "last_name",
+            "name": "Last name",
+            "name:cs": "Příjmení",
+            "name:en": "Last name",
+            "type": "varchar",
+            "length": 100,
+            "nullable": false,
+            "group": "identity"
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "idx_full_name",
+            "type": "index",
+            "columns": [
+                {"column": "full_name"}
+            ]
+        },
+        {
+            "id": "idx_last_name",
+            "type": "index",
+            "columns": [
+                {"column": "last_name", "order": "ASC"},
+                {"column": "first_name", "order": "ASC"}
+            ]
+        }
+    ]
+}

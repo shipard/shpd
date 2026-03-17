@@ -71,5 +71,51 @@ class ModuleDefinitionTest extends TestCase
         $this->assertSame([], $def->tables);
         $this->assertSame([], $def->extensions);
         $this->assertSame([], $def->config);
+        $this->assertSame([], $def->documentClasses);
+    }
+
+    public function testDocumentClassesSingleClass(): void
+    {
+        $documentClasses = [
+            ['table' => 'base_persons_persons', 'class' => 'Shipard\\Module\\Base\\Persons\\PersonDocument'],
+        ];
+
+        $def = ModuleDefinition::fromArray([
+            'id' => 'base.persons',
+            'name' => 'Persons',
+            'documentClasses' => $documentClasses,
+        ]);
+
+        $this->assertSame($documentClasses, $def->documentClasses);
+    }
+
+    public function testDocumentClassesWithTypeColumn(): void
+    {
+        $documentClasses = [
+            [
+                'table' => 'economy_docs_heads',
+                'typeColumn' => 'doc_type',
+                'classes' => [
+                    'inv_issued' => 'Shipard\\Module\\Economy\\Docs\\IssuedInvoiceDocument',
+                    'inv_received' => 'Shipard\\Module\\Economy\\Docs\\ReceivedInvoiceDocument',
+                ],
+                'defaultClass' => 'Shipard\\Module\\Economy\\Docs\\GenericDocDocument',
+            ],
+        ];
+
+        $def = ModuleDefinition::fromArray([
+            'id' => 'economy.docs',
+            'name' => 'Documents',
+            'documentClasses' => $documentClasses,
+        ]);
+
+        $this->assertSame($documentClasses, $def->documentClasses);
+    }
+
+    public function testWithoutDocumentClassesDefaultsToEmpty(): void
+    {
+        $def = ModuleDefinition::fromArray(['id' => 'economy.docs', 'name' => 'Documents']);
+
+        $this->assertSame([], $def->documentClasses);
     }
 }

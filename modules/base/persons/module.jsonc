@@ -1,0 +1,31 @@
+{
+    "id": "base.persons",
+    "name": "Persons",
+    "name:cs": "Osoby",
+    "name:en": "Persons",
+    "description": "Suppliers, customers, employees and other persons",
+    "description:cs": "Dodavatelé, odběratelé, zaměstnanci a další osoby",
+    "description:en": "Suppliers, customers, employees and other persons",
+
+    "dependencies": [
+        "core.system"
+    ],
+
+    "tables": [
+        "base_persons_persons"
+    ],
+
+    "documentClasses": [
+        {
+            "table": "base_persons_persons",
+            "class": "Shipard\\Module\\Base\\Persons\\PersonDocument"
+        }
+    ],
+
+    "config": [
+        {
+            "id": "base.persons.personTypes",
+            "file": "config/personTypes.jsonc"
+        }
+    ]
+}

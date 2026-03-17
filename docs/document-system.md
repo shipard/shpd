@@ -1,0 +1,747 @@
+# Shipard — Dokumentový systém
+
+## 1. Přehled
+
+Dokumentový systém je vrstva nad databázovými tabulkami, která zajišťuje business logiku při práci s daty. Poskytuje:
+
+- **Životní cyklus dokumentu** — hooky pro validaci, transformaci a reakci na události (uložení, smazání, načtení)
+- **Polymorfní chování** — různé PHP třídy pro různé typy dokumentů v téže tabulce (např. přijatá vs. vydaná faktura)
+- **Dokumentové API** — jednoduché rozhraní pro ukládání dat, kde stačí předat klíčové údaje a systém dopočítá zbytek
+- **Hlavička + řádky** — podpora pro dokumenty s podřízenými záznamy (faktura s řádky), vždy v DB transakci
+
+---
+
+## 2. Architektura
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  REST API / CLI                                          │
+├─────────────────────────────────────────────────────────┤
+│  TableGateway                                            │
+│  - loadRecord(), saveDocument(), deleteDocument()        │
+│  - najde správnou Document třídu podle typu              │
+├─────────────────────────────────────────────────────────┤
+│  Document (abstraktní)                                   │
+│  - validate(), beforeSave(), afterSave()                 │
+│  - beforeDelete(), afterDelete(), onLoad()               │
+├──────────────────────┬──────────────────────────────────┤
+│  PersonDocument       │  IssuedInvoiceDocument           │
+│  (base.persons)       │  (economy.docs, doc_type=inv_i)  │
+├──────────────────────┼──────────────────────────────────┤
+│  Dibi (SQL)           │  TableDefinition (metadata)      │
+└──────────────────────┴──────────────────────────────────┘
+```
+
+### Klíčové třídy
+
+| Třída | Umístění | Účel |
+|-------|----------|------|
+| `TableGateway` | `src/Core/Document/TableGateway.php` | Vstupní bod pro práci s tabulkou — CRUD operace, orchestrace dokumentového lifecycle |
+| `Document` | `src/Core/Document/Document.php` | Abstraktní třída s hooky. Pracuje s daty jako `array` |
+| `DefaultDocument` | `src/Core/Document/DefaultDocument.php` | Výchozí implementace bez business logiky (pro tabulky bez vlastní třídy) |
+| `DocumentRegistry` | `src/Core/Document/DocumentRegistry.php` | Registr mapování tabulka/typ → PHP třída. Načítá se z JSONC konfigurace |
+| `ValidationResult` | `src/Core/Document/ValidationResult.php` | Strukturovaná chybová zpráva z validace |
+
+---
+
+## 3. Třída `Document`
+
+### Abstraktní třída
+
+```php
+<?php
+declare(strict_types=1);
+
+namespace Shipard\Core\Document;
+
+abstract class Document
+{
+    protected array $data = [];
+    protected array $originalData = [];
+    protected ?TableGateway $tableGateway = null;
+
+    /**
+     * Validace dat před uložením.
+     * Vrací ValidationResult — pokud obsahuje chyby, uložení se neprovede.
+     */
+    public function validate(array &$data): ValidationResult
+    {
+        return new ValidationResult();
+    }
+
+    /**
+     * Transformace dat před uložením.
+     * Volá se PO úspěšné validaci. Může modifikovat data (dopočítat pole atd.).
+     */
+    public function beforeSave(array &$data): void
+    {
+    }
+
+    /**
+     * Akce po uložení dokumentu.
+     * Data již obsahují ID (u nového záznamu).
+     */
+    public function afterSave(array $data): void
+    {
+    }
+
+    /**
+     * Akce před smazáním dokumentu.
+     */
+    public function beforeDelete(array $data): void
+    {
+    }
+
+    /**
+     * Akce po smazání dokumentu.
+     */
+    public function afterDelete(array $data): void
+    {
+    }
+
+    /**
+     * Akce po načtení dokumentu z DB.
+     * Může doplnit computed/virtuální pole.
+     */
+    public function onLoad(array &$data): void
+    {
+    }
+}
+```
+
+### Pravidla
+
+- Všechny hooky mají výchozí prázdnou implementaci — přetěžuje se jen to, co je potřeba
+- Data jsou vždy PHP `array` — žádné property per sloupec (kvůli extensions)
+- `validate()` a `beforeSave()` dostávají data referencí (`&$data`) — mohou modifikovat
+- `validate()` se volá PŘED `beforeSave()` — pokud validace selže, `beforeSave` se nevolá
+- `afterSave()` a `onLoad()` dostávají data bez reference (jen čtení) / s referencí (může doplnit)
+
+---
+
+## 4. Třída `ValidationResult`
+
+```php
+<?php
+declare(strict_types=1);
+
+namespace Shipard\Core\Document;
+
+class ValidationResult
+{
+    /** @var ValidationError[] */
+    private array $errors = [];
+
+    public function addError(string $column, string $message, string $code = ''): self
+    {
+        $this->errors[] = new ValidationError($column, $message, $code);
+        return $this;
+    }
+
+    public function isValid(): bool
+    {
+        return empty($this->errors);
+    }
+
+    /** @return ValidationError[] */
+    public function getErrors(): array
+    {
+        return $this->errors;
+    }
+
+    public function toArray(): array
+    {
+        return array_map(fn(ValidationError $e) => $e->toArray(), $this->errors);
+    }
+}
+```
+
+```php
+<?php
+declare(strict_types=1);
+
+namespace Shipard\Core\Document;
+
+class ValidationError
+{
+    public function __construct(
+        public readonly string $column,
+        public readonly string $message,
+        public readonly string $code = '',
+    ) {}
+
+    public function toArray(): array
+    {
+        return [
+            'column' => $this->column,
+            'message' => $this->message,
+            'code' => $this->code,
+        ];
+    }
+}
+```
+
+Příklad použití v UI — API vrátí:
+```json
+{
+    "success": false,
+    "errors": [
+        {"column": "customer_id", "message": "Odběratel je povinný", "code": "required"},
+        {"column": "rows.0.unit_price", "message": "Cena musí být kladná", "code": "positive"}
+    ]
+}
+```
+
+Pole `column` umožňuje UI nastavit focus na konkrétní pole. Pro chyby v řádcích se použije tečková notace `rows.{index}.{column}`.
+
+---
+
+## 5. Třída `TableGateway`
+
+Vstupní bod pro všechny operace s tabulkou.
+
+### Základní metody
+
+```php
+<?php
+declare(strict_types=1);
+
+namespace Shipard\Core\Document;
+
+class TableGateway
+{
+    public function __construct(
+        private string $tableId,           // ID tabulky (economy_docs_heads)
+        private DataSourceConnection $db,
+        private DocumentRegistry $registry,
+        private TableDefinition $definition,
+    ) {}
+
+    /**
+     * Načte jeden záznam podle ID. Vrací surová data z DB.
+     */
+    public function loadRecord(int $id): ?array
+    {
+        // SELECT * FROM table WHERE id = $id
+        // → return row as array, or null
+    }
+
+    /**
+     * Načte dokument — záznam + child záznamy + zavolá onLoad hook.
+     */
+    public function loadDocument(int $id): ?array
+    {
+        // 1. Načíst hlavní záznam
+        // 2. Pro každou childTable načíst podřízené záznamy
+        // 3. Najít Document třídu (z registry)
+        // 4. Zavolat document->onLoad($data)
+        // 5. Vrátit data včetně child záznamů
+    }
+
+    /**
+     * Uloží dokument (insert nebo update).
+     * Vrací uložená data (s ID, dopočítanými poli) nebo chybu.
+     */
+    public function saveDocument(array $inputData): DocumentResult
+    {
+        // 1. Najít Document třídu (z registry, podle typu pokud existuje)
+        // 2. Zavolat document->validate($data)
+        //    → pokud chyby, vrátit DocumentResult s chybami
+        // 3. Zavolat document->beforeSave($data)
+        // 4. BEGIN TRANSACTION
+        // 5. INSERT/UPDATE hlavní záznam
+        // 6. Pro každou childTable: sync řádky (insert/update/delete)
+        // 7. COMMIT
+        // 8. Zavolat document->afterSave($data)
+        // 9. Vrátit DocumentResult s uloženými daty
+    }
+
+    /**
+     * Smaže dokument (hlavní záznam + child záznamy).
+     */
+    public function deleteDocument(int $id): DocumentResult
+    {
+        // 1. Načíst stávající data
+        // 2. Najít Document třídu
+        // 3. Zavolat document->beforeDelete($data)
+        // 4. BEGIN TRANSACTION
+        // 5. Smazat child záznamy
+        // 6. Smazat hlavní záznam
+        // 7. COMMIT
+        // 8. Zavolat document->afterDelete($data)
+    }
+}
+```
+
+### `DocumentResult`
+
+```php
+<?php
+declare(strict_types=1);
+
+namespace Shipard\Core\Document;
+
+class DocumentResult
+{
+    public function __construct(
+        private bool $success,
+        private ?array $data = null,
+        private ?ValidationResult $validation = null,
+        private ?string $errorMessage = null,
+    ) {}
+
+    public static function ok(array $data): self { /* ... */ }
+    public static function validationFailed(ValidationResult $validation): self { /* ... */ }
+    public static function error(string $message): self { /* ... */ }
+
+    public function isSuccess(): bool { return $this->success; }
+    public function getData(): ?array { return $this->data; }
+    public function getValidation(): ?ValidationResult { return $this->validation; }
+    public function getErrorMessage(): ?string { return $this->errorMessage; }
+}
+```
+
+---
+
+## 6. Child tabulky (hlavička + řádky)
+
+### Definice v JSONC
+
+V definici tabulky se přidá nepovinné pole `childTables`:
+
+```jsonc
+{
+    "tableId": 201,
+    "name": "Document heads",
+    "name:cs": "Hlavičky dokladů",
+
+    // Podřízené tabulky
+    "childTables": [
+        {
+            "table": "economy_docs_rows",       // ID child tabulky
+            "foreignKey": "head_id",             // FK sloupec v child tabulce
+            "dataKey": "rows"                    // klíč v API datech
+        }
+    ],
+
+    "columns": [ /* ... */ ]
+}
+```
+
+| Pole | Typ | Povinné | Popis |
+|------|-----|---------|-------|
+| `childTables[].table` | string | Ano | ID podřízené tabulky |
+| `childTables[].foreignKey` | string | Ano | Název FK sloupce v child tabulce (odkazuje na `id` hlavičky) |
+| `childTables[].dataKey` | string | Ano | Klíč, pod kterým se child záznamy předávají v API datech |
+
+### Chování při ukládání
+
+```
+saveDocument({
+    doc_type: "inv_issued",
+    customer_id: 42,
+    rows: [                          ← dataKey = "rows"
+        {item: "A", qty: 1},        ← row bez "id" = INSERT
+        {id: 5, item: "B", qty: 2}, ← row s "id" = UPDATE
+    ]
+})
+```
+
+1. **Nový řádek** (bez `id`) → `INSERT INTO economy_docs_rows (..., head_id) VALUES (..., $headId)`
+2. **Existující řádek** (s `id`) → `UPDATE economy_docs_rows SET ... WHERE id = $id AND head_id = $headId`
+3. **Smazaný řádek** (existuje v DB, ale chybí ve vstupních datech) → `DELETE FROM economy_docs_rows WHERE id = $id AND head_id = $headId`
+
+Při smazání dokumentu se nejprve smažou všechny child záznamy, pak hlavička.
+
+### Transakce
+
+Celá operace (hlavička + všechny child tabulky) probíhá v jedné DB transakci. Pokud cokoliv selže, provede se ROLLBACK.
+
+---
+
+## 7. Registrace Document tříd — JSONC konfigurace
+
+### Jedna třída pro celou tabulku
+
+V `module.jsonc` se přidá pole `documentClasses`:
+
+```jsonc
+{
+    "id": "base.persons",
+    "name": "Persons",
+    "name:cs": "Osoby",
+
+    "tables": ["base_persons_persons"],
+
+    // Registrace Document tříd
+    "documentClasses": [
+        {
+            "table": "base_persons_persons",
+            "class": "Shipard\\Module\\Base\\Persons\\PersonDocument"
+        }
+    ]
+}
+```
+
+### Více tříd podle typu dokumentu
+
+```jsonc
+{
+    "id": "economy.docs",
+    "name": "Documents",
+    "name:cs": "Doklady",
+
+    "tables": ["economy_docs_heads", "economy_docs_rows"],
+
+    "documentClasses": [
+        {
+            "table": "economy_docs_heads",
+            "typeColumn": "doc_type",
+            "classes": {
+                "inv_issued": "Shipard\\Module\\Economy\\Docs\\IssuedInvoiceDocument",
+                "inv_received": "Shipard\\Module\\Economy\\Docs\\ReceivedInvoiceDocument",
+                "order_issued": "Shipard\\Module\\Economy\\Docs\\IssuedOrderDocument"
+            },
+            "defaultClass": "Shipard\\Module\\Economy\\Docs\\GenericDocDocument"
+        }
+    ]
+}
+```
+
+| Pole | Typ | Povinné | Popis |
+|------|-----|---------|-------|
+| `table` | string | Ano | ID tabulky |
+| `class` | string | Podmíněně | PHP třída — pro tabulky s jednou Document třídou |
+| `typeColumn` | string | Podmíněně | Sloupec určující typ dokumentu — pro tabulky s více třídami |
+| `classes` | object | Podmíněně | Mapování hodnota typeColumn → PHP třída |
+| `defaultClass` | string | Ne | Výchozí třída, pokud hodnota typeColumn nemá mapování |
+
+Pokud tabulka nemá žádnou registraci v `documentClasses`, použije se `DefaultDocument` (prázdné hooky).
+
+---
+
+## 8. Třída `DocumentRegistry`
+
+Načítá mapování z kompilované konfigurace a poskytuje správnou Document třídu.
+
+```php
+<?php
+declare(strict_types=1);
+
+namespace Shipard\Core\Document;
+
+class DocumentRegistry
+{
+    /**
+     * Vrátí Document instanci pro danou tabulku a data.
+     *
+     * Logika:
+     * 1. Najdi registraci pro $tableId
+     * 2. Pokud registrace má typeColumn:
+     *    a. Přečti hodnotu typeColumn z $data
+     *    b. Najdi třídu v classes mapě
+     *    c. Pokud nenalezena → defaultClass → DefaultDocument
+     * 3. Pokud registrace má class → použij ji
+     * 4. Pokud žádná registrace → DefaultDocument
+     */
+    public function getDocument(string $tableId, array $data = []): Document
+    {
+        // ...
+    }
+}
+```
+
+---
+
+## 9. Umístění PHP tříd modulů
+
+Document třídy žijí v adresáři modulu, ale v PHP namespace:
+
+```
+modules/base/persons/
+├── module.jsonc
+├── tables/
+│   └── base_persons_persons.jsonc
+└── src/
+    └── PersonDocument.php          ← Shipard\Module\Base\Persons\PersonDocument
+
+modules/economy/docs/
+├── module.jsonc
+├── tables/
+│   ├── economy_docs_heads.jsonc
+│   └── economy_docs_rows.jsonc
+└── src/
+    ├── IssuedInvoiceDocument.php   ← Shipard\Module\Economy\Docs\IssuedInvoiceDocument
+    ├── ReceivedInvoiceDocument.php
+    └── GenericDocDocument.php
+```
+
+### PSR-4 autoloading
+
+V `composer.json` se přidá mapování pro moduly:
+
+```json
+{
+    "autoload": {
+        "psr-4": {
+            "Shipard\\": "src/",
+            "Shipard\\Module\\": "modules/"
+        }
+    }
+}
+```
+
+Namespace konvence: `Shipard\Module\{Skupina}\{Modul}\` → `modules/{skupina}/{modul}/src/`
+
+---
+
+## 10. Příklad — PersonDocument
+
+```php
+<?php
+declare(strict_types=1);
+
+namespace Shipard\Module\Base\Persons;
+
+use Shipard\Core\Document\Document;
+use Shipard\Core\Document\ValidationResult;
+
+class PersonDocument extends Document
+{
+    public function validate(array &$data): ValidationResult
+    {
+        $result = new ValidationResult();
+
+        $personType = $data['person_type'] ?? null;
+
+        if ($personType === null) {
+            $result->addError('person_type', 'Typ osoby je povinný', 'required');
+        }
+
+        if ($personType === 'company' && empty($data['full_name'])) {
+            $result->addError('full_name', 'Název firmy je povinný', 'required');
+        }
+
+        if ($personType === 'person') {
+            if (empty($data['last_name'])) {
+                $result->addError('last_name', 'Příjmení je povinné', 'required');
+            }
+            if (empty($data['first_name'])) {
+                $result->addError('first_name', 'Jméno je povinné', 'required');
+            }
+        }
+
+        return $result;
+    }
+
+    public function beforeSave(array &$data): void
+    {
+        $personType = $data['person_type'] ?? null;
+
+        if ($personType === 'company') {
+            // Firma: firstName prázdné, lastName = fullName (pro řazení)
+            $data['first_name'] = '';
+            $data['last_name'] = $data['full_name'] ?? '';
+        }
+
+        if ($personType === 'person') {
+            // Člověk: fullName = firstName + lastName
+            $data['full_name'] = trim(
+                ($data['first_name'] ?? '') . ' ' . ($data['last_name'] ?? '')
+            );
+        }
+    }
+}
+```
+
+---
+
+## 11. Příklad — IssuedInvoiceDocument
+
+```php
+<?php
+declare(strict_types=1);
+
+namespace Shipard\Module\Economy\Docs;
+
+use Shipard\Core\Document\Document;
+use Shipard\Core\Document\ValidationResult;
+
+class IssuedInvoiceDocument extends Document
+{
+    public function validate(array &$data): ValidationResult
+    {
+        $result = new ValidationResult();
+
+        if (empty($data['customer_id'])) {
+            $result->addError('customer_id', 'Odběratel je povinný', 'required');
+        }
+
+        if (empty($data['issue_date'])) {
+            $result->addError('issue_date', 'Datum vystavení je povinné', 'required');
+        }
+
+        $rows = $data['rows'] ?? [];
+        if (empty($rows)) {
+            $result->addError('rows', 'Faktura musí mít alespoň jeden řádek', 'required');
+        }
+
+        foreach ($rows as $i => $row) {
+            if (empty($row['unit_price']) || $row['unit_price'] <= 0) {
+                $result->addError("rows.{$i}.unit_price", 'Cena musí být kladná', 'positive');
+            }
+        }
+
+        return $result;
+    }
+
+    public function beforeSave(array &$data): void
+    {
+        $totalAmount = 0;
+        $rows = $data['rows'] ?? [];
+
+        foreach ($rows as $i => &$row) {
+            // Dopočítat celkovou cenu řádku
+            $qty = $row['quantity'] ?? 0;
+            $price = $row['unit_price'] ?? 0;
+            $row['total_price'] = round($qty * $price, 2);
+            $totalAmount += $row['total_price'];
+        }
+        unset($row);
+
+        $data['rows'] = $rows;
+
+        // Celková částka hlavičky
+        $data['total_amount'] = round($totalAmount, 2);
+
+        // Dopočítat DPH (zjednodušeně)
+        $vatRate = $data['vat_rate'] ?? 21;
+        $data['vat_amount'] = round($totalAmount * $vatRate / 100, 2);
+        $data['total_with_vat'] = round($totalAmount + $data['vat_amount'], 2);
+    }
+}
+```
+
+---
+
+## 12. Tok dat — saveDocument
+
+```
+API volání: saveDocument({customer_id: 42, rows: [...]})
+│
+├─ 1. DocumentRegistry.getDocument('economy_docs_heads', data)
+│     → IssuedInvoiceDocument (podle doc_type)
+│
+├─ 2. document.validate(data)
+│     → ValidationResult
+│     → pokud chyby → return DocumentResult::validationFailed(...)
+│
+├─ 3. document.beforeSave(data)
+│     → modifikuje data (dopočítá total_amount, DPH atd.)
+│
+├─ 4. BEGIN TRANSACTION
+│
+├─ 5. INSERT/UPDATE economy_docs_heads
+│     → $headId = lastInsertId nebo existující ID
+│
+├─ 6. Sync child tabulky:
+│     ├─ economy_docs_rows:
+│     │   ├─ rows bez "id" → INSERT (head_id = $headId)
+│     │   ├─ rows s "id" → UPDATE
+│     │   └─ rows v DB ale ne ve vstupu → DELETE
+│
+├─ 7. COMMIT
+│
+├─ 8. document.afterSave(data)
+│
+└─ 9. return DocumentResult::ok(data)
+```
+
+---
+
+## 13. Tok dat — loadDocument
+
+```
+API volání: loadDocument(42)
+│
+├─ 1. SELECT * FROM economy_docs_heads WHERE id = 42
+│
+├─ 2. Pro každou childTable:
+│     SELECT * FROM economy_docs_rows WHERE head_id = 42
+│     → data['rows'] = [...]
+│
+├─ 3. DocumentRegistry.getDocument('economy_docs_heads', data)
+│     → IssuedInvoiceDocument
+│
+├─ 4. document.onLoad(data)
+│     → může doplnit computed pole
+│
+└─ 5. return data
+```
+
+---
+
+## 14. Implementační plán pro Claude Code
+
+### Fáze 1 — Základní třídy
+
+**Soubory:**
+- `src/Core/Document/Document.php` — abstraktní třída s hooky
+- `src/Core/Document/DefaultDocument.php` — výchozí prázdná implementace
+- `src/Core/Document/ValidationResult.php` — výsledek validace
+- `src/Core/Document/ValidationError.php` — jedna chyba
+- `src/Core/Document/DocumentResult.php` — výsledek operace
+
+**Testy:**
+- ValidationResult: přidání chyb, isValid(), toArray()
+- DocumentResult: ok, validationFailed, error
+
+### Fáze 2 — DocumentRegistry
+
+**Soubory:**
+- `src/Core/Document/DocumentRegistry.php` — registr tříd
+
+**Testy:**
+- Jedna třída pro tabulku
+- Více tříd podle typeColumn
+- defaultClass fallback
+- Tabulka bez registrace → DefaultDocument
+
+### Fáze 3 — TableGateway
+
+**Soubory:**
+- `src/Core/Document/TableGateway.php` — CRUD operace s lifecycle hooky
+
+**Testy:**
+- loadRecord (jednoduchý SELECT)
+- saveDocument — insert nového záznamu (bez child)
+- saveDocument — update existujícího
+- saveDocument — s child tabulkou (insert/update/delete řádků)
+- saveDocument — validace selže → vrátí chyby
+- deleteDocument — s child záznamy
+- Transakce — rollback při chybě
+
+### Fáze 4 — Příklady Document tříd
+
+- `modules/base/persons/src/PersonDocument.php`
+- Aktualizace `modules/base/persons/module.jsonc` s `documentClasses`
+
+### Fáze 5 — PSR-4 autoloading pro moduly
+
+- Aktualizace `composer.json` s namespace `Shipard\Module\`
+
+---
+
+## 15. Rozšíření JSONC definic
+
+### `module.jsonc` — nové pole `documentClasses`
+
+Viz sekce 7. Přidává se do `module.jsonc`.
+
+### Definice tabulky — nové pole `childTables`
+
+Viz sekce 6. Přidává se do definice tabulky (`.jsonc`).
+
+Tyto změny je nutné promítnout do:
+- `ModuleDefinition.php` — nové pole `documentClasses`
+- `TableDefinition.php` — nové pole `childTables`

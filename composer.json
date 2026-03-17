@@ -10,7 +10,11 @@
     },
     "autoload": {
         "psr-4": {
-            "Shipard\\": "src/"
+            "Shipard\\": "src/",
+            "Shipard\\Module\\Base\\Persons\\": "modules/base/persons/src/",
+            "Shipard\\Module\\Core\\System\\": "modules/core/system/src/",
+            "Shipard\\Module\\Economy\\Codebooks\\": "modules/economy/codebooks/src/",
+            "Shipard\\Module\\Install\\Base\\": "modules/install/base/src/"
         }
     },
     "autoload-dev": {

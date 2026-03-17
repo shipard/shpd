@@ -8,6 +8,7 @@
     "description:en": "Base set of modules for system operation",
     "dependencies": [
         "core.system",
+        "base.persons",
         "economy.codebooks"
     ]
 }

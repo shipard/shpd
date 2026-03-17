@@ -1,0 +1,13 @@
+{
+    // Typy osob
+    "person": {
+        "name": "Natural person",
+        "name:cs": "Fyzická osoba",
+        "name:en": "Natural person"
+    },
+    "company": {
+        "name": "Company",
+        "name:cs": "Firma",
+        "name:en": "Company"
+    }
+}

@@ -13,6 +13,7 @@ class TableDefinition
         public readonly array $columnGroups,
         public readonly array $columns,
         public readonly array $indexes,
+        public readonly array $childTables,
     ) {}
 
     public static function fromArray(array $data): self
@@ -56,6 +57,7 @@ class TableDefinition
             columnGroups: $data['columnGroups'] ?? [],
             columns: $columns,
             indexes: $indexes,
+            childTables: $data['childTables'] ?? [],
         );
     }
 }

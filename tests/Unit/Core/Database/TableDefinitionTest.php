@@ -238,4 +238,26 @@ class TableDefinitionTest extends TestCase
             'columns' => [],
         ]);
     }
+
+    public function testChildTablesPresent(): void
+    {
+        $data = $this->coreSystemUsersData();
+        $data['childTables'] = [
+            ['table' => 'economy_docs_rows', 'foreignKey' => 'head_id', 'dataKey' => 'rows'],
+        ];
+
+        $table = TableDefinition::fromArray($data);
+
+        $this->assertCount(1, $table->childTables);
+        $this->assertSame('economy_docs_rows', $table->childTables[0]['table']);
+        $this->assertSame('head_id', $table->childTables[0]['foreignKey']);
+        $this->assertSame('rows', $table->childTables[0]['dataKey']);
+    }
+
+    public function testWithoutChildTablesDefaultsToEmpty(): void
+    {
+        $table = TableDefinition::fromArray($this->coreSystemUsersData());
+
+        $this->assertSame([], $table->childTables);
+    }
 }

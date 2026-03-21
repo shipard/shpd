@@ -1,0 +1,146 @@
+{
+    // =========================================================================
+    // Obchodní unie (Trade Unions)
+    //
+    // Nadnárodní ekonomická/daňová uskupení, která mají vliv na pravidla
+    // fakturace, DPH, cla a obchodu mezi členskými státy.
+    //
+    // Klíč = identifikátor unie (krátký, lowercase)
+    // =========================================================================
+
+    "eu": {
+        "name": "European Union",
+        "name:cs": "Evropská unie",
+        "name:en": "European Union",
+        "shortName": "EU",
+
+        // Typ daně používaný v rámci unie
+        "taxType": "vat",
+
+        // -----------------------------------------------------------------
+        // Členské země
+        //
+        // Klíč = ISO 3166-1 alpha-2 kód země (malými písmeny)
+        // joinedAt = datum vstupu do unie (null = zakládající člen)
+        // leftAt   = datum odchodu z unie (null = stále člen)
+        // -----------------------------------------------------------------
+        "members": {
+            "at": {"joinedAt": null, "leftAt": null},
+            "be": {"joinedAt": null, "leftAt": null},
+            "bg": {"joinedAt": "2007-01-01", "leftAt": null},
+            "cy": {"joinedAt": "2004-05-01", "leftAt": null},
+            "cz": {"joinedAt": "2004-05-01", "leftAt": null},
+            "de": {"joinedAt": null, "leftAt": null},
+            "dk": {"joinedAt": null, "leftAt": null},
+            "ee": {"joinedAt": "2004-05-01", "leftAt": null},
+            "es": {"joinedAt": null, "leftAt": null},
+            "fi": {"joinedAt": null, "leftAt": null},
+            "fr": {"joinedAt": null, "leftAt": null},
+            "gr": {"joinedAt": null, "leftAt": null},
+            "hr": {"joinedAt": "2013-07-01", "leftAt": null},
+            "hu": {"joinedAt": "2004-05-01", "leftAt": null},
+            "ie": {"joinedAt": null, "leftAt": null},
+            "it": {"joinedAt": null, "leftAt": null},
+            "lt": {"joinedAt": "2004-05-01", "leftAt": null},
+            "lu": {"joinedAt": null, "leftAt": null},
+            "lv": {"joinedAt": "2004-05-01", "leftAt": null},
+            "mt": {"joinedAt": "2004-05-01", "leftAt": null},
+            "nl": {"joinedAt": null, "leftAt": null},
+            "pl": {"joinedAt": "2004-05-01", "leftAt": null},
+            "pt": {"joinedAt": null, "leftAt": null},
+            "ro": {"joinedAt": "2007-01-01", "leftAt": null},
+            "se": {"joinedAt": null, "leftAt": null},
+            "si": {"joinedAt": "2004-05-01", "leftAt": null},
+            "sk": {"joinedAt": "2004-05-01", "leftAt": null},
+
+            // Velká Británie — člen do Brexitu
+            "gb": {"joinedAt": null, "leftAt": "2020-12-31"},
+        },
+
+        // -----------------------------------------------------------------
+        // Daňové prefixy (Tax Prefixes)
+        //
+        // Prefixy používané ve VAT-ID. Většinou se mapují 1:1 na ISO kód
+        // země, ale existují výjimky (EL pro Řecko, XI pro Severní Irsko).
+        //
+        // Klíč = prefix velkými písmeny (tak jak se reálně používá ve VAT-ID)
+        // country  = ISO kód země, ke které prefix patří
+        // region   = (volitelné) sub-národní oblast, pokud prefix není celostátní
+        // validFrom/validTo = platnost prefixu v EU VAT systému (null = od začátku / bez konce)
+        // -----------------------------------------------------------------
+        "taxPrefixes": {
+            "AT": {"country": "at", "validFrom": null, "validTo": null},
+            "BE": {"country": "be", "validFrom": null, "validTo": null},
+            "BG": {"country": "bg", "validFrom": "2007-01-01", "validTo": null},
+            "CY": {"country": "cy", "validFrom": "2004-05-01", "validTo": null},
+            "CZ": {"country": "cz", "validFrom": "2004-05-01", "validTo": null},
+            "DE": {"country": "de", "validFrom": null, "validTo": null},
+            "DK": {"country": "dk", "validFrom": null, "validTo": null},
+            "EE": {"country": "ee", "validFrom": "2004-05-01", "validTo": null},
+
+            // Řecko — VAT prefix je EL, ISO kód země je GR
+            "EL": {"country": "gr", "validFrom": null, "validTo": null},
+
+            "ES": {"country": "es", "validFrom": null, "validTo": null},
+            "FI": {"country": "fi", "validFrom": null, "validTo": null},
+            "FR": {"country": "fr", "validFrom": null, "validTo": null},
+            "HR": {"country": "hr", "validFrom": "2013-07-01", "validTo": null},
+            "HU": {"country": "hu", "validFrom": "2004-05-01", "validTo": null},
+            "IE": {"country": "ie", "validFrom": null, "validTo": null},
+            "IT": {"country": "it", "validFrom": null, "validTo": null},
+            "LT": {"country": "lt", "validFrom": "2004-05-01", "validTo": null},
+            "LU": {"country": "lu", "validFrom": null, "validTo": null},
+            "LV": {"country": "lv", "validFrom": "2004-05-01", "validTo": null},
+            "MT": {"country": "mt", "validFrom": "2004-05-01", "validTo": null},
+            "NL": {"country": "nl", "validFrom": null, "validTo": null},
+            "PL": {"country": "pl", "validFrom": "2004-05-01", "validTo": null},
+            "PT": {"country": "pt", "validFrom": null, "validTo": null},
+            "RO": {"country": "ro", "validFrom": "2007-01-01", "validTo": null},
+            "SE": {"country": "se", "validFrom": null, "validTo": null},
+            "SI": {"country": "si", "validFrom": "2004-05-01", "validTo": null},
+            "SK": {"country": "sk", "validFrom": "2004-05-01", "validTo": null},
+
+            // Velká Británie — prefix GB platil do Brexitu
+            "GB": {"country": "gb", "validFrom": null, "validTo": "2020-12-31"},
+
+            // Severní Irsko — speciální post-Brexit režim (Windsor Framework)
+            // Firmy ze Severního Irska mohou nadále používat EU VAT systém pro zboží
+            "XI": {
+                "country": "gb",
+                "region": "Northern Ireland",
+                "region:cs": "Severní Irsko",
+                "region:en": "Northern Ireland",
+                "validFrom": "2021-01-01",
+                "validTo": null,
+                "note": "Northern Ireland Protocol / Windsor Framework — applies to goods only",
+            },
+        },
+    },
+
+    // =========================================================================
+    // GCC — Gulf Cooperation Council
+    //
+    // Společný VAT framework zavedený od 2018. Jednotlivé státy GCC jej
+    // implementují postupně s vlastními sazbami. Zatím pro informaci,
+    // podrobnosti doplníme podle potřeby.
+    // =========================================================================
+    "gcc": {
+        "name": "Gulf Cooperation Council",
+        "name:cs": "Rada pro spolupráci arabských států v Zálivu",
+        "name:en": "Gulf Cooperation Council",
+        "shortName": "GCC",
+        "taxType": "vat",
+
+        "members": {
+            "sa": {"joinedAt": null, "leftAt": null},
+            "ae": {"joinedAt": null, "leftAt": null},
+            "bh": {"joinedAt": null, "leftAt": null},
+            "kw": {"joinedAt": null, "leftAt": null},
+            "om": {"joinedAt": null, "leftAt": null},
+            "qa": {"joinedAt": null, "leftAt": null},
+        },
+
+        // GCC nemá společné VAT prefixy jako EU — každý stát má vlastní systém
+        "taxPrefixes": {},
+    },
+}

@@ -1,0 +1,13 @@
+{
+    "id": "world.trade",
+    "name": "Trade Unions",
+    "name:cs": "Obchodní unie",
+    "name:en": "Trade Unions",
+    "description": "Trade unions, memberships and tax prefix definitions (EU, GCC, ...)",
+    "description:cs": "Obchodní unie, členství zemí a definice daňových prefixů (EU, GCC, …)",
+    "description:en": "Trade unions, memberships and tax prefix definitions (EU, GCC, ...)",
+    "dependencies": ["world.base"],
+    "config": [
+        {"id": "world.trade.unions", "file": "config/tradeUnions.jsonc"},
+    ],
+}

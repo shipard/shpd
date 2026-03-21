@@ -4,7 +4,7 @@
     "name:cs": "Osoby",
     "name:en": "Persons",
 
-    "displayPattern": "{full_name}",
+    "displayPattern": "{person_id} — {full_name}",
 
     "columnGroups": [
         {
@@ -12,6 +12,30 @@
             "name": "Identity",
             "name:cs": "Identifikace",
             "name:en": "Identity"
+        },
+        {
+            "id": "name",
+            "name": "Name",
+            "name:cs": "Jméno",
+            "name:en": "Name"
+        },
+        {
+            "id": "personal",
+            "name": "Personal details",
+            "name:cs": "Osobní údaje",
+            "name:en": "Personal details"
+        },
+        {
+            "id": "contact",
+            "name": "Contact details",
+            "name:cs": "Kontaktní údaje",
+            "name:en": "Contact details"
+        },
+        {
+            "id": "status",
+            "name": "Status",
+            "name:cs": "Stav",
+            "name:en": "Status"
         }
     ],
 
@@ -22,6 +46,19 @@
             "type": "int",
             "autoIncrement": true,
             "primaryKey": true
+        },
+
+        // --- identity ---
+
+        {
+            "id": "person_id",
+            "name": "Person code",
+            "name:cs": "Kód osoby",
+            "name:en": "Person code",
+            "type": "varchar",
+            "length": 10,
+            "nullable": false,
+            "group": "identity"
         },
         {
             "id": "person_type",
@@ -34,6 +71,39 @@
             "group": "identity"
         },
         {
+            "id": "company_id",
+            "name": "Company ID",
+            "name:cs": "IČO",
+            "name:en": "Company ID",
+            "type": "varchar",
+            "length": 30,
+            "nullable": true,
+            "group": "identity"
+        },
+        {
+            "id": "tax_id",
+            "name": "Tax ID",
+            "name:cs": "DIČ",
+            "name:en": "Tax ID",
+            "type": "varchar",
+            "length": 30,
+            "nullable": true,
+            "group": "identity"
+        },
+        {
+            "id": "vat_id",
+            "name": "VAT ID",
+            "name:cs": "DIČ pro DPH",
+            "name:en": "VAT ID",
+            "type": "varchar",
+            "length": 30,
+            "nullable": true,
+            "group": "identity"
+        },
+
+        // --- name ---
+
+        {
             "id": "full_name",
             "name": "Full name",
             "name:cs": "Celý název",
@@ -41,7 +111,26 @@
             "type": "varchar",
             "length": 200,
             "nullable": false,
-            "group": "identity"
+            "group": "name"
+        },
+        {
+            "id": "complex_name",
+            "name": "Complex name",
+            "name:cs": "Komplikované jméno",
+            "name:en": "Complex name",
+            "type": "boolean",
+            "default": 0,
+            "group": "name"
+        },
+        {
+            "id": "title_before",
+            "name": "Title before name",
+            "name:cs": "Tituly před jménem",
+            "name:en": "Title before name",
+            "type": "varchar",
+            "length": 50,
+            "nullable": true,
+            "group": "name"
         },
         {
             "id": "first_name",
@@ -51,7 +140,17 @@
             "type": "varchar",
             "length": 100,
             "nullable": false,
-            "group": "identity"
+            "group": "name"
+        },
+        {
+            "id": "middle_name",
+            "name": "Middle name",
+            "name:cs": "Prostřední jméno",
+            "name:en": "Middle name",
+            "type": "varchar",
+            "length": 100,
+            "nullable": true,
+            "group": "name"
         },
         {
             "id": "last_name",
@@ -61,11 +160,114 @@
             "type": "varchar",
             "length": 100,
             "nullable": false,
-            "group": "identity"
+            "group": "name"
+        },
+        {
+            "id": "title_after",
+            "name": "Title after name",
+            "name:cs": "Tituly za jménem",
+            "name:en": "Title after name",
+            "type": "varchar",
+            "length": 50,
+            "nullable": true,
+            "group": "name"
+        },
+
+        // --- personal ---
+
+        {
+            "id": "birth_date",
+            "name": "Date of birth",
+            "name:cs": "Datum narození",
+            "name:en": "Date of birth",
+            "type": "date",
+            "nullable": true,
+            "group": "personal"
+        },
+        {
+            "id": "national_id",
+            "name": "National ID number",
+            "name:cs": "Rodné číslo",
+            "name:en": "National ID number",
+            "type": "varchar",
+            "length": 30,
+            "nullable": true,
+            "group": "personal"
+        },
+        {
+            "id": "id_card_number",
+            "name": "ID card number",
+            "name:cs": "Číslo osobního dokladu",
+            "name:en": "ID card number",
+            "type": "varchar",
+            "length": 30,
+            "nullable": true,
+            "group": "personal"
+        },
+
+        // --- contact ---
+
+        {
+            "id": "email",
+            "name": "E-mail",
+            "name:cs": "E-mail",
+            "name:en": "E-mail",
+            "type": "varchar",
+            "length": 200,
+            "nullable": true,
+            "group": "contact"
+        },
+        {
+            "id": "phone",
+            "name": "Phone",
+            "name:cs": "Telefon",
+            "name:en": "Phone",
+            "type": "varchar",
+            "length": 30,
+            "nullable": true,
+            "group": "contact"
+        },
+        {
+            "id": "web",
+            "name": "Website",
+            "name:cs": "Webová stránka",
+            "name:en": "Website",
+            "type": "varchar",
+            "length": 200,
+            "nullable": true,
+            "group": "contact"
+        },
+
+        // --- status ---
+
+        {
+            "id": "is_closed",
+            "name": "Closed",
+            "name:cs": "Uzavřeno",
+            "name:en": "Closed",
+            "type": "boolean",
+            "default": 0,
+            "group": "status"
+        },
+        {
+            "id": "closed_date",
+            "name": "Closed date",
+            "name:cs": "Datum uzavření",
+            "name:en": "Closed date",
+            "type": "date",
+            "nullable": true,
+            "group": "status"
         }
     ],
 
     "indexes": [
+        {
+            "id": "unq_person_id",
+            "type": "unique",
+            "columns": [
+                {"column": "person_id"}
+            ]
+        },
         {
             "id": "idx_full_name",
             "type": "index",
@@ -79,6 +281,27 @@
             "columns": [
                 {"column": "last_name", "order": "ASC"},
                 {"column": "first_name", "order": "ASC"}
+            ]
+        },
+        {
+            "id": "idx_company_id",
+            "type": "index",
+            "columns": [
+                {"column": "company_id"}
+            ]
+        },
+        {
+            "id": "idx_email",
+            "type": "index",
+            "columns": [
+                {"column": "email"}
+            ]
+        },
+        {
+            "id": "ft_full_name",
+            "type": "fulltext",
+            "columns": [
+                {"column": "full_name"}
             ]
         }
     ]

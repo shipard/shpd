@@ -17,33 +17,29 @@ Podrobné specifikace jsou v adresáři `docs/`. Přečti příslušný dokument
 | `docs/architecture.md` | Mapa tříd, vrstvy, závislosti, tok dat — přečti pokud potřebuješ pochopit jak komponenty spolupracují |
 | `docs/modules.md` | Modulový systém — struktura modulů, závislosti, JSONC formát, vícejazyčnost (i18n), kompilace konfigurace, CLI příkaz `ds-upgrade` |
 | `docs/table-definitions.md` | Formát definice databázových tabulek — datové typy, sloupce, indexy, extensions, validace, bezpečné změny |
+| `docs/document-system.md` | Dokumentový systém — Document třídy, hooky, validace, TableGateway, child tabulky, DocumentRegistry |
 
 ## Architektura — rychlý přehled
 
 ```
 src/
-├── Api/                        # REST API vrstva
-│   ├── Controller/             # AuthController, CrudController, MetaController, OpenApiController
-│   ├── Exception/              # UnknownHostException
-│   ├── Middleware/             # AuthMiddleware, CorsMiddleware, RateLimitMiddleware
-│   ├── OpenApi/                # SpecGenerator
-│   ├── Validation/             # InputValidator
-│   └── ...                     # Request, Response, Router, Route, AuthContext,
-│                               # DataSourceResolver, ResolvedDataSource, TableLoader
 ├── Command/                    # CLI příkazy (Symfony Console)
-│   ├── Server/                 # shpd-server: ds-create, domain-add/list/remove, ...
+│   ├── Server/                 # shpd-server: ds-create, server-init, next-table-id
 │   └── DataSource/             # shpd-ds: ds-upgrade
 ├── Core/
 │   ├── Config/                 # ServerConfig, DataSourceConfig, ConfigCompiler, ConfigRuntime
 │   ├── Database/               # TableDefinition, ColumnDefinition, IndexDefinition,
 │   │                           # ExtensionDefinition, TableMerger, SchemaComparator,
 │   │                           # SchemaValidator, SqlGenerator, DatabaseManager
+│   ├── Document/               # Document, DefaultDocument, TableGateway, DocumentRegistry,
+│   │                           # ValidationResult, ValidationError, DocumentResult
 │   ├── I18n/                   # LocalizedFieldResolver, ConfigLocalizer
 │   ├── Module/                 # ModuleDefinition, ModuleLoader, ModuleResolver
 │   └── Utils/                  # JsoncParser, IdGenerator
+modules/{skupina}/{modul}/src/  # Document třídy modulů (PersonDocument, IssuedInvoiceDocument...)
 ```
 
-Závislosti tečou shora dolů: Api/Command → Core/Module/Config/Database → I18n/Utils.
+Závislosti tečou shora dolů: Command → Document → Module/Config/Database → I18n/Utils.
 
 ## Klíčové konvence
 
@@ -78,23 +74,23 @@ Závislosti tečou shora dolů: Api/Command → Core/Module/Config/Database → 
 - `numeric(precision, scale)` pro finance
 - `ds-upgrade`: CREATE/ADD/bezpečný MODIFY, nikdy nesmaže
 
-### REST API
-- Entry point: `public/index.php` (front controller pro všechny DS)
-- Subdoména → DS: mapování přes `/etc/shipard/domains.json`
-- Architektura: `src/Api/` — Router, Request, Response, Controller/, Middleware/, Validation/
-- Univerzální CRUD: jeden CrudController pro všechny tabulky
-- Autentizace: API klíče (`shpd_ak_`) a session tokeny (`shpd_st_`) přes Bearer header
-- Formát odpovědí: obálka `{success, data/error, meta}`
-- Dokumentace API: `docs/rest-api.md`
-
 ### Kódové konvence
 - Datové třídy (*Definition): readonly, factory `fromArray()`, validace v konstruktoru
 - Příkazy: Symfony Console, testovatelné přes subclassing
 - Žádná business logika v datových třídách
 
+### Dokumentový systém
+- Data vždy jako PHP `array` — žádné property per sloupec (kvůli extensions)
+- Hooky: `validate()` → `beforeSave()` → DB → `afterSave()`, `beforeDelete()` → DB → `afterDelete()`, `onLoad()`
+- `validate()` vrací `ValidationResult` s chybami (column + message + code), pro UI focus
+- Chyby v řádcích: tečková notace `rows.0.unit_price`
+- Hlavička + řádky: vždy v jedné DB transakci
+- Child tabulky sync: bez `id` = INSERT, s `id` = UPDATE, chybějící = DELETE
+- Document třídy: registrace v `module.jsonc` (`documentClasses`), polymorfismus přes `typeColumn`
+- PHP třídy modulů: `modules/{skupina}/{modul}/src/`, namespace `Shipard\Module\{Skupina}\{Modul}\`
+
 ### CLI příkazy
 - `shpd-server`: `version`, `help`, `ds-create --name`, `server-init`, `next-table-id`
-- `shpd-server`: `domain-add --host --ds`, `domain-list`, `domain-remove --host`
 - `shpd-ds` (z adresáře DS): `version`, `help`, `ds-upgrade`
 
 ## Příkazy pro vývoj
@@ -119,6 +115,6 @@ php bin/shpd-ds version         # vyžaduje CWD s config/main.json
 
 - PostgreSQL driver v DatabaseManager/SqlGenerator
 - `ds-delete`, `ds-list` příkazy
-- Frontend (SPA)
+- Webové API + frontend
 - Detekce chybějících překladů (validační nástroj)
 - Servisní chod pro výmaz nepotřebných tabulek/sloupců

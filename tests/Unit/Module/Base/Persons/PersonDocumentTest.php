@@ -19,7 +19,7 @@ class PersonDocumentTest extends TestCase
     public function testValidateCompanyWithoutFullNameFails(): void
     {
         $doc = $this->doc();
-        $data = ['person_type' => 'company', 'full_name' => ''];
+        $data = ['person_type' => 2, 'full_name' => ''];
 
         $result = $doc->validate($data);
 
@@ -31,7 +31,7 @@ class PersonDocumentTest extends TestCase
     public function testValidatePersonWithoutLastNameFails(): void
     {
         $doc = $this->doc();
-        $data = ['person_type' => 'person', 'first_name' => 'Jan', 'last_name' => ''];
+        $data = ['person_type' => 1, 'first_name' => 'Jan', 'last_name' => ''];
 
         $result = $doc->validate($data);
 
@@ -43,7 +43,7 @@ class PersonDocumentTest extends TestCase
     public function testValidatePersonWithoutFirstNameFails(): void
     {
         $doc = $this->doc();
-        $data = ['person_type' => 'person', 'first_name' => '', 'last_name' => 'Novák'];
+        $data = ['person_type' => 1, 'first_name' => '', 'last_name' => 'Novák'];
 
         $result = $doc->validate($data);
 
@@ -64,10 +64,22 @@ class PersonDocumentTest extends TestCase
         $this->assertContains('person_type', $columns);
     }
 
+    public function testValidateUndefinedPersonTypeFails(): void
+    {
+        $doc = $this->doc();
+        $data = ['person_type' => 0, 'full_name' => 'Test'];
+
+        $result = $doc->validate($data);
+
+        $this->assertFalse($result->isValid());
+        $columns = array_column($result->toArray(), 'column');
+        $this->assertContains('person_type', $columns);
+    }
+
     public function testValidateValidCompany(): void
     {
         $doc = $this->doc();
-        $data = ['person_type' => 'company', 'full_name' => 'Acme s.r.o.'];
+        $data = ['person_type' => 2, 'full_name' => 'Acme s.r.o.'];
 
         $result = $doc->validate($data);
 
@@ -77,7 +89,7 @@ class PersonDocumentTest extends TestCase
     public function testValidateValidPerson(): void
     {
         $doc = $this->doc();
-        $data = ['person_type' => 'person', 'first_name' => 'Jan', 'last_name' => 'Novák'];
+        $data = ['person_type' => 1, 'first_name' => 'Jan', 'last_name' => 'Novák'];
 
         $result = $doc->validate($data);
 
@@ -89,7 +101,7 @@ class PersonDocumentTest extends TestCase
     public function testBeforeSaveCompanyClearsFirstNameAndSetsLastName(): void
     {
         $doc = $this->doc();
-        $data = ['person_type' => 'company', 'full_name' => 'Acme s.r.o.', 'first_name' => 'ignored'];
+        $data = ['person_type' => 2, 'full_name' => 'Acme s.r.o.', 'first_name' => 'ignored'];
 
         $doc->beforeSave($data);
 
@@ -100,7 +112,7 @@ class PersonDocumentTest extends TestCase
     public function testBeforeSavePersonCombinesFullName(): void
     {
         $doc = $this->doc();
-        $data = ['person_type' => 'person', 'first_name' => 'Jan', 'last_name' => 'Novák'];
+        $data = ['person_type' => 1, 'first_name' => 'Jan', 'last_name' => 'Novák'];
 
         $doc->beforeSave($data);
 
@@ -110,7 +122,7 @@ class PersonDocumentTest extends TestCase
     public function testBeforeSavePersonTrimsFullName(): void
     {
         $doc = $this->doc();
-        $data = ['person_type' => 'person', 'first_name' => '', 'last_name' => 'Novák'];
+        $data = ['person_type' => 1, 'first_name' => '', 'last_name' => 'Novák'];
 
         $doc->beforeSave($data);
 

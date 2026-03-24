@@ -1,0 +1,34 @@
+/**
+ * Detect the data source ID and API base URL from the current page URL.
+ *
+ * In development mode the app is served at:
+ *   http://{ip}/{ds-id}/app/
+ * and the API lives at:
+ *   http://{ip}/{ds-id}/api/v1/
+ *
+ * In production mode the app is served at:
+ *   https://{subdomain}.shipard.cz/app/
+ * and the API lives at:
+ *   https://{subdomain}.shipard.cz/api/v1/
+ *
+ * We detect the DS ID by checking whether the URL path starts with a
+ * segment matching the DS ID format (xxxx-xxxx-xxxx-xxxx).
+ */
+
+const DS_ID_PATTERN = /^\/([a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4})\//;
+
+function detectDsId() {
+  const match = window.location.pathname.match(DS_ID_PATTERN);
+  return match ? match[1] : null;
+}
+
+const dsId = detectDsId();
+
+/** DS ID prefix for API requests, e.g. '/4l3j-z0bz-kz39-echj' or '' */
+export const DS_PREFIX = dsId ? `/${dsId}` : '';
+
+/** Full base URL for API requests, e.g. '/4l3j-z0bz-kz39-echj/api/v1' or '/api/v1' */
+export const API_BASE_URL = `${DS_PREFIX}/api/v1`;
+
+/** The detected data source ID, or null in production mode */
+export const DATA_SOURCE_ID = dsId;

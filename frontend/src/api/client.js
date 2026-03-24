@@ -1,4 +1,5 @@
-const BASE_URL = '/api/v1';
+import { API_BASE_URL } from './config.js';
+
 const TOKEN_KEY = 'shpd_token';
 
 function getToken() {
@@ -22,7 +23,7 @@ async function tryRefresh() {
   if (!token) return false;
 
   try {
-    const response = await fetch(`${BASE_URL}/_auth/refresh`, {
+    const response = await fetch(`${API_BASE_URL}/_auth/refresh`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -48,7 +49,7 @@ async function tryRefresh() {
 /**
  * Core request function. Retries once after a successful token refresh on 401.
  * @param {string} method
- * @param {string} path
+ * @param {string} path - relative to /api/v1, e.g. '/_auth/login' or '/core_system_users'
  * @param {object|null} body
  * @param {boolean} isRetry - true when this call is already a retry after refresh
  * @returns {Promise<object|null>}
@@ -66,7 +67,7 @@ async function apiRequest(method, path, body = null, isRetry = false) {
 
   let response;
   try {
-    response = await fetch(`${BASE_URL}${path}`, {
+    response = await fetch(`${API_BASE_URL}${path}`, {
       method,
       headers,
       body: body !== null ? JSON.stringify(body) : null,

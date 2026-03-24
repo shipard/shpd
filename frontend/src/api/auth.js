@@ -3,7 +3,8 @@
  * (client.js calls tryRefresh internally, so auth endpoints must bypass the wrapper).
  */
 
-const BASE_URL = '/api/v1';
+import { API_BASE_URL } from './config.js';
+
 const TOKEN_KEY = 'shpd_token';
 
 function getToken() {
@@ -17,7 +18,7 @@ function getToken() {
  * @returns {Promise<object>} API envelope {success, data, error?}
  */
 export async function login(loginName, password) {
-  const response = await fetch(`${BASE_URL}/_auth/login`, {
+  const response = await fetch(`${API_BASE_URL}/_auth/login`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -36,7 +37,7 @@ export async function login(loginName, password) {
 export async function refresh() {
   const token = getToken();
 
-  const response = await fetch(`${BASE_URL}/_auth/refresh`, {
+  const response = await fetch(`${API_BASE_URL}/_auth/refresh`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -55,7 +56,7 @@ export async function refresh() {
 export async function logout() {
   const token = getToken();
 
-  const response = await fetch(`${BASE_URL}/_auth/logout`, {
+  const response = await fetch(`${API_BASE_URL}/_auth/logout`, {
     method: 'DELETE',
     headers: {
       'Content-Type': 'application/json',

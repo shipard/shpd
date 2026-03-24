@@ -1,0 +1,67 @@
+# Tabulka: Kontakty (base_persons_contacts)
+
+## Účel
+
+Tabulka eviduje kontaktní osoby a kontaktní místa přiřazená k osobám
+a firmám v tabulce `base_persons_persons`. Jeden záznam v tabulce Osoby
+může mít libovolný počet kontaktů — jak u firem (oddělení, zaměstnanci),
+tak u fyzických osob (asistentka, manželka).
+
+Kontakt je „lehký" záznam — slouží pro rychlé dohledání e-mailu nebo
+telefonu, ne pro plnohodnotnou evidenci osob.
+
+## Struktura
+
+Tabulka nemá skupiny sloupců — všechny sloupce jsou v jedné ploché
+struktuře.
+
+| Sloupec | Typ | Nullable | Popis |
+|---|---|---|---|
+| `id` | int, PK | — | Primární klíč |
+| `person` | int | ne | Vazba na osobu/firmu (`base_persons_persons`) |
+| `name` | varchar(200) | ne | Název kontaktu — jméno osoby („Jan Novák") nebo funkční označení („Účtárna", „Reklamační oddělení") |
+| `role` | varchar(100) | ano | Funkce nebo role — volný text: „Obchodní ředitel", „IT správce", „Fakturantka" |
+| `email` | varchar(200) | ano | E-mailová adresa |
+| `phone` | varchar(30) | ano | Telefonní číslo |
+| `note` | text | ano | Volná poznámka |
+| `order_pos` | smallint | ne (default 0) | Pořadí zobrazení — nižší hodnota = vyšší priorita. Kontakt s `order_pos = 0` se považuje za primární |
+| `valid_from` | date | ano | Datum začátku platnosti kontaktu |
+| `valid_to` | date | ano | Datum konce platnosti — kontakt s vyplněným `valid_to` v minulosti se v UI přestane nabízet jako aktivní, ale zůstane v historii |
+
+## Obchodní logika
+
+### Platnost kontaktu
+
+Sloupce `valid_from` a `valid_to` umožňují vést historii kontaktních
+osob. Kontakt s vyplněným `valid_to` v minulosti:
+
+- Se nezobrazuje v aktivních výběrových seznamech.
+- Zůstává v historických vazbách (např. kontaktní osoba na starší faktuře).
+- Je dohledatelný v detailu osoby přes filtr „zobrazit i neplatné".
+
+### Pořadí a primární kontakt
+
+Sloupec `order_pos` určuje pořadí kontaktů v UI. Kontakt s nejnižší
+hodnotou se zobrazí jako první a může sloužit jako výchozí volba
+při vystavování dokladů.
+
+### Vztah name vs role
+
+Sloupec `name` je povinný a nese hlavní identifikaci kontaktu. Sloupec
+`role` je doplňkový — typicky se vyplňuje, pokud `name` obsahuje jméno
+osoby a je užitečné vědět, jakou funkci ve firmě zastává. Pokud `name`
+obsahuje funkční označení (např. „Účtárna"), `role` se obvykle nevyplňuje.
+
+## Indexy
+
+| Index | Typ | Sloupce | Účel |
+|---|---|---|---|
+| `idx_person` | index | `person`, `order_pos` ASC | Hlavní přístupová cesta — rychlé načtení kontaktů osoby seřazených podle priority. Kompozitní index obslouží dotaz i řazení bez dalšího třídění |
+| `idx_name` | index | `name` | Vyhledávání kontaktu podle jména napříč osobami |
+
+## Návaznosti
+
+- **Rodičovská tabulka:** `base_persons_persons` — přes sloupec `person`
+- **Rozšíření:** Tabulku mohou rozšiřovat moduly, které potřebují na kontakt
+  navázat další informaci (např. modul komunikace by mohl přidat sloupec
+  `preferred_channel`).

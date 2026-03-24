@@ -1,0 +1,113 @@
+{
+    "tableId": 202,
+    "name": "Contacts",
+    "name:cs": "Kontakty",
+    "name:en": "Contacts",
+
+    "displayPattern": "{name}",
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+        {
+            "id": "person",
+            "name": "Person",
+            "name:cs": "Osoba",
+            "name:en": "Person",
+            "type": "int",
+            "nullable": false,
+            "reference": "base_persons_persons"
+        },
+        {
+            "id": "name",
+            "name": "Name",
+            "name:cs": "Název",
+            "name:en": "Name",
+            "type": "varchar",
+            "length": 200,
+            "nullable": false
+        },
+        {
+            "id": "role",
+            "name": "Role",
+            "name:cs": "Funkce",
+            "name:en": "Role",
+            "type": "varchar",
+            "length": 100,
+            "nullable": true
+        },
+        {
+            "id": "email",
+            "name": "E-mail",
+            "name:cs": "E-mail",
+            "name:en": "E-mail",
+            "type": "varchar",
+            "length": 200,
+            "nullable": true
+        },
+        {
+            "id": "phone",
+            "name": "Phone",
+            "name:cs": "Telefon",
+            "name:en": "Phone",
+            "type": "varchar",
+            "length": 30,
+            "nullable": true
+        },
+        {
+            "id": "note",
+            "name": "Note",
+            "name:cs": "Poznámka",
+            "name:en": "Note",
+            "type": "text",
+            "nullable": true
+        },
+        {
+            "id": "order_pos",
+            "name": "Order",
+            "name:cs": "Pořadí",
+            "name:en": "Order",
+            "type": "smallint",
+            "default": 0
+        },
+        {
+            "id": "valid_from",
+            "name": "Valid from",
+            "name:cs": "Platnost od",
+            "name:en": "Valid from",
+            "type": "date",
+            "nullable": true
+        },
+        {
+            "id": "valid_to",
+            "name": "Valid to",
+            "name:cs": "Platnost do",
+            "name:en": "Valid to",
+            "type": "date",
+            "nullable": true
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "idx_person",
+            "type": "index",
+            "columns": [
+                {"column": "person"},
+                {"column": "order_pos", "order": "ASC"}
+            ]
+        },
+        {
+            "id": "idx_name",
+            "type": "index",
+            "columns": [
+                {"column": "name"}
+            ]
+        }
+    ]
+}

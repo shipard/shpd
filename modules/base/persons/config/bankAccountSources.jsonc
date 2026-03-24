@@ -1,0 +1,17 @@
+{
+    "0": {
+        "name": "Manual entry",
+        "name:cs": "Ruční pořízení",
+        "name:en": "Manual entry"
+    },
+    "1": {
+        "name": "Bank transaction",
+        "name:cs": "Bankovní transakce",
+        "name:en": "Bank transaction"
+    },
+    "2": {
+        "name": "VAT register API",
+        "name:cs": "Registr DPH (API)",
+        "name:en": "VAT register API"
+    }
+}

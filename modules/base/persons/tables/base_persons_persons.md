@@ -64,10 +64,14 @@ hooky `validate` a `beforeSave`, které řídí chování podle typu osoby.
 - `first_name`, `last_name`, `title_before`, `middle_name`, `title_after` se při uložení automaticky vyprázdní.
 - Nastaví se jen `last_name` = `full_name`.
 - Validace vyžaduje vyplněný `full_name`.
+- Skupina `personal` (datum narození, rodné číslo, číslo dokladu) se v UI
+  nezobrazuje — tyto sloupce nemají u firmy smysl.
 
 ### Fyzická osoba (person_type = 1)
 
 - Validace vyžaduje vyplněné `first_name` i `last_name`.
+- Skupina `personal` se zobrazuje — sloupce jsou nepovinné, vyplňují se
+  dle potřeby (např. zaměstnanci, kde je potřeba rodné číslo).
 - Chování při uložení závisí na hodnotě `complex_name`:
 
 **complex_name = 0 (výchozí):**
@@ -86,6 +90,10 @@ hooky `validate` a `beforeSave`, které řídí chování podle typu osoby.
 
 - Sloupec `person_type` je vždy povinný — hodnota `Undefined` (0) neprojde
   validací.
+- Sloupec `person_id` se generuje automaticky při prvním uložení záznamu —
+  krátký alfanumerický hash (písmena + číslice, cca 5 znaků). Slouží
+  k jednoznačné identifikaci na tištěných sestavách (faktury, dodací listy),
+  kde může dojít k záměně u duplicitních jmen.
 
 ## Indexy
 
@@ -100,6 +108,7 @@ hooky `validate` a `beforeSave`, které řídí chování podle typu osoby.
 
 ## Návaznosti
 
-_Zatím bez vazeb na další tabulky — budou doplněny při rozšiřování systému
-(adresy, bankovní účty, kontaktní osoby firmy apod.)._
-
+| Tabulka | Vazba | Popis |
+|---|---|---|
+| [base_persons_contacts](base_persons_contacts.md) | `contacts.person` → `persons.id` | Kontaktní osoby a kontaktní místa přiřazená k osobě/firmě |
+| [base_persons_bank_accounts](base_persons_bank_accounts.md) | `bank_accounts.person` → `persons.id` | Bankovní účty osoby/firmy |

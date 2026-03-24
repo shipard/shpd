@@ -12,7 +12,9 @@
     ],
 
     "tables": [
-        "base_persons_persons"
+        "base_persons_persons",
+        "base_persons_contacts",
+        "base_persons_bank_accounts"
     ],
 
     "documentClasses": [
@@ -26,6 +28,10 @@
         {
             "id": "base.persons.personTypes",
             "file": "config/personTypes.jsonc"
+        },
+        {
+            "id": "base.persons.bankAccountSources",
+            "file": "config/bankAccountSources.jsonc"
         }
     ]
 }

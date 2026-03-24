@@ -1,0 +1,19 @@
+{
+    "id": "world.divisions",
+    "name": "Administrative Divisions",
+    "name:cs": "Administrativní členění",
+    "name:en": "Administrative Divisions",
+    "description": "Hierarchical administrative divisions of countries — regions, counties, districts, municipalities",
+    "description:cs": "Hierarchické administrativní členění zemí — regiony, kraje, okresy, obce",
+    "description:en": "Hierarchical administrative divisions of countries — regions, counties, districts, municipalities",
+    "dependencies": [
+        "world.base",
+        "base.persons",
+    ],
+    "tables": [
+        "world_divisions",
+    ],
+    "config": [
+        {"id": "world.divisions.adminLevels", "file": "config/adminLevels.jsonc"},
+    ],
+}

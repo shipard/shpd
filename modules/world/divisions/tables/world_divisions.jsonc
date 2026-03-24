@@ -1,0 +1,230 @@
+{
+    "tableId": 301,
+    "name": "Administrative Divisions",
+    "name:cs": "Administrativní členění",
+    "name:en": "Administrative Divisions",
+
+    "displayPattern": "{name} ({code})",
+
+    "columnGroups": [
+        {
+            "id": "classification",
+            "name": "Classification",
+            "name:cs": "Zařazení",
+            "name:en": "Classification",
+        },
+        {
+            "id": "hierarchy",
+            "name": "Hierarchy",
+            "name:cs": "Hierarchie",
+            "name:en": "Hierarchy",
+        },
+        {
+            "id": "detail",
+            "name": "Detail",
+            "name:cs": "Detail",
+            "name:en": "Detail",
+        },
+        {
+            "id": "geo",
+            "name": "Geolocation",
+            "name:cs": "Geolokace",
+            "name:en": "Geolocation",
+        },
+        {
+            "id": "validity",
+            "name": "Validity",
+            "name:cs": "Platnost",
+            "name:en": "Validity",
+        },
+    ],
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true,
+        },
+
+        // --- classification ---
+
+        {
+            "id": "country",
+            "name": "Country",
+            "name:cs": "Země",
+            "name:en": "Country",
+            "type": "varchar",
+            "length": 2,
+            "nullable": false,
+            "group": "classification",
+        },
+        {
+            "id": "level",
+            "name": "Level",
+            "name:cs": "Úroveň",
+            "name:en": "Level",
+            "type": "smallint",
+            "nullable": false,
+            "group": "classification",
+        },
+        {
+            "id": "code",
+            "name": "Code",
+            "name:cs": "Kód",
+            "name:en": "Code",
+            "type": "varchar",
+            "length": 20,
+            "nullable": false,
+            "group": "classification",
+        },
+        {
+            "id": "name",
+            "name": "Name",
+            "name:cs": "Název",
+            "name:en": "Name",
+            "type": "varchar",
+            "length": 200,
+            "nullable": false,
+            "group": "classification",
+        },
+
+        // --- hierarchy ---
+
+        {
+            "id": "parent_id",
+            "name": "Parent division",
+            "name:cs": "Nadřazená jednotka",
+            "name:en": "Parent division",
+            "type": "int",
+            "nullable": true,
+            "reference": "world_divisions.id",
+            "group": "hierarchy",
+        },
+        {
+            "id": "path",
+            "name": "Materialized path",
+            "name:cs": "Materializovaná cesta",
+            "name:en": "Materialized path",
+            "type": "varchar",
+            "length": 500,
+            "nullable": false,
+            "group": "hierarchy",
+        },
+
+        // --- detail ---
+
+        {
+            "id": "person_id",
+            "name": "Legal entity",
+            "name:cs": "Právnická osoba",
+            "name:en": "Legal entity",
+            "type": "int",
+            "nullable": true,
+            "reference": "base_persons_persons.id",
+            "group": "detail",
+        },
+
+        // --- geo ---
+
+        {
+            "id": "latitude",
+            "name": "Latitude",
+            "name:cs": "Zeměpisná šířka",
+            "name:en": "Latitude",
+            "type": "decimal",
+            "precision": 9,
+            "scale": 6,
+            "nullable": true,
+            "group": "geo",
+        },
+        {
+            "id": "longitude",
+            "name": "Longitude",
+            "name:cs": "Zeměpisná délka",
+            "name:en": "Longitude",
+            "type": "decimal",
+            "precision": 9,
+            "scale": 6,
+            "nullable": true,
+            "group": "geo",
+        },
+
+        // --- validity ---
+
+        {
+            "id": "valid_from",
+            "name": "Valid from",
+            "name:cs": "Platnost od",
+            "name:en": "Valid from",
+            "type": "date",
+            "nullable": true,
+            "group": "validity",
+        },
+        {
+            "id": "valid_to",
+            "name": "Valid to",
+            "name:cs": "Platnost do",
+            "name:en": "Valid to",
+            "type": "date",
+            "nullable": true,
+            "group": "validity",
+        },
+    ],
+
+    "indexes": [
+        {
+            "id": "idx_country_level",
+            "type": "index",
+            "columns": [
+                {"column": "country"},
+                {"column": "level"},
+            ],
+        },
+        {
+            "id": "unq_country_code",
+            "type": "unique",
+            "columns": [
+                {"column": "country"},
+                {"column": "code"},
+            ],
+        },
+        {
+            "id": "idx_parent_id",
+            "type": "index",
+            "columns": [
+                {"column": "parent_id"},
+            ],
+        },
+        {
+            "id": "idx_path",
+            "type": "index",
+            "columns": [
+                {"column": "path"},
+            ],
+        },
+        {
+            "id": "idx_person_id",
+            "type": "index",
+            "columns": [
+                {"column": "person_id"},
+            ],
+        },
+        {
+            "id": "idx_country_name",
+            "type": "index",
+            "columns": [
+                {"column": "country"},
+                {"column": "name"},
+            ],
+        },
+        {
+            "id": "ft_name",
+            "type": "fulltext",
+            "columns": [
+                {"column": "name"},
+            ],
+        },
+    ],
+}

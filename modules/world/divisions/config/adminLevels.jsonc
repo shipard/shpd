@@ -1,0 +1,253 @@
+{
+    // =========================================================================
+    // Definice úrovní administrativního členění per země
+    //
+    // Klíč = ISO 3166-1 alpha-2 kód země (malými písmeny)
+    //
+    // Čísla úrovní (level) jsou specifická pro každou zemi. V rámci jedné
+    // země platí: nižší číslo = vyšší (nadřazená) úroveň.
+    // Čísla nemusí být po sobě jdoucí — Česko používá 0–2 pro hlavní
+    // hierarchii a 10–11 pro speciální úrovně (ORP, ZUJ).
+    // =========================================================================
+
+    // -----------------------------------------------------------------
+    // Česko
+    //
+    // Hierarchie: Region → Kraj → Okres → ORP → ZUJ
+    // Zdroj: ČSÚ (Český statistický úřad)
+    // -----------------------------------------------------------------
+    "cz": {
+        "name": "Czech Administrative Divisions",
+        "name:cs": "Administrativní členění Česka",
+        "name:en": "Czech Administrative Divisions",
+        "source": "ČSÚ",
+        "levels": [
+            {
+                "level": 0,
+                "name": "Region",
+                "name:cs": "Region",
+                "name:en": "Region",
+                "note": "Region soudržnosti (NUTS 2)",
+                "note:cs": "Region soudržnosti (NUTS 2)",
+                "note:en": "Cohesion region (NUTS 2)",
+            },
+            {
+                "level": 1,
+                "name": "County",
+                "name:cs": "Kraj",
+                "name:en": "County",
+                "note": "Vyšší územní samosprávný celek (NUTS 3)",
+                "note:cs": "Vyšší územní samosprávný celek (NUTS 3)",
+                "note:en": "Higher territorial self-governing unit (NUTS 3)",
+            },
+            {
+                "level": 2,
+                "name": "District",
+                "name:cs": "Okres",
+                "name:en": "District",
+                "note": "LAU 1",
+                "note:cs": "LAU 1",
+                "note:en": "LAU 1",
+            },
+            {
+                "level": 10,
+                "name": "Municipality with Extended Powers",
+                "name:cs": "ORP",
+                "name:en": "Municipality with Extended Powers",
+                "note": "Obec s rozšířenou působností",
+                "note:cs": "Obec s rozšířenou působností",
+                "note:en": "Municipality with extended powers (delegated state administration)",
+            },
+            {
+                "level": 11,
+                "name": "Basic Territorial Unit",
+                "name:cs": "ZUJ",
+                "name:en": "Basic Territorial Unit",
+                "note": "Základní územní jednotka (obec)",
+                "note:cs": "Základní územní jednotka (obec)",
+                "note:en": "Basic territorial unit (municipality, LAU 2)",
+            },
+        ],
+    },
+
+    // -----------------------------------------------------------------
+    // Slovensko
+    //
+    // Hierarchie: Kraj → Okres → Obec
+    // -----------------------------------------------------------------
+    "sk": {
+        "name": "Slovak Administrative Divisions",
+        "name:cs": "Administrativní členění Slovenska",
+        "name:en": "Slovak Administrative Divisions",
+        "source": "ŠÚ SR",
+        "levels": [
+            {
+                "level": 0,
+                "name": "County",
+                "name:cs": "Kraj",
+                "name:en": "County",
+            },
+            {
+                "level": 1,
+                "name": "District",
+                "name:cs": "Okres",
+                "name:en": "District",
+            },
+            {
+                "level": 2,
+                "name": "Municipality",
+                "name:cs": "Obec",
+                "name:en": "Municipality",
+            },
+        ],
+    },
+
+    // -----------------------------------------------------------------
+    // Německo
+    //
+    // Hierarchie: Bundesland → Regierungsbezirk → Kreis → Gemeinde
+    // -----------------------------------------------------------------
+    "de": {
+        "name": "German Administrative Divisions",
+        "name:cs": "Administrativní členění Německa",
+        "name:en": "German Administrative Divisions",
+        "source": "Destatis",
+        "levels": [
+            {
+                "level": 0,
+                "name": "Federal State",
+                "name:cs": "Spolková země",
+                "name:en": "Federal State",
+                "note": "Bundesland",
+            },
+            {
+                "level": 1,
+                "name": "Government Region",
+                "name:cs": "Vládní obvod",
+                "name:en": "Government Region",
+                "note": "Regierungsbezirk",
+            },
+            {
+                "level": 2,
+                "name": "District",
+                "name:cs": "Okres",
+                "name:en": "District",
+                "note": "Kreis / kreisfreie Stadt",
+            },
+            {
+                "level": 3,
+                "name": "Municipality",
+                "name:cs": "Obec",
+                "name:en": "Municipality",
+                "note": "Gemeinde",
+            },
+        ],
+    },
+
+    // -----------------------------------------------------------------
+    // Rakousko
+    //
+    // Hierarchie: Bundesland → Bezirk → Gemeinde
+    // -----------------------------------------------------------------
+    "at": {
+        "name": "Austrian Administrative Divisions",
+        "name:cs": "Administrativní členění Rakouska",
+        "name:en": "Austrian Administrative Divisions",
+        "source": "Statistik Austria",
+        "levels": [
+            {
+                "level": 0,
+                "name": "Federal State",
+                "name:cs": "Spolková země",
+                "name:en": "Federal State",
+                "note": "Bundesland",
+            },
+            {
+                "level": 1,
+                "name": "District",
+                "name:cs": "Okres",
+                "name:en": "District",
+                "note": "Bezirk",
+            },
+            {
+                "level": 2,
+                "name": "Municipality",
+                "name:cs": "Obec",
+                "name:en": "Municipality",
+                "note": "Gemeinde",
+            },
+        ],
+    },
+
+    // -----------------------------------------------------------------
+    // Polsko
+    //
+    // Hierarchie: Województwo → Powiat → Gmina
+    // -----------------------------------------------------------------
+    "pl": {
+        "name": "Polish Administrative Divisions",
+        "name:cs": "Administrativní členění Polska",
+        "name:en": "Polish Administrative Divisions",
+        "source": "GUS",
+        "levels": [
+            {
+                "level": 0,
+                "name": "Voivodeship",
+                "name:cs": "Vojvodství",
+                "name:en": "Voivodeship",
+                "note": "Województwo",
+            },
+            {
+                "level": 1,
+                "name": "County",
+                "name:cs": "Okres",
+                "name:en": "County",
+                "note": "Powiat",
+            },
+            {
+                "level": 2,
+                "name": "Municipality",
+                "name:cs": "Gmina",
+                "name:en": "Municipality",
+                "note": "Gmina",
+            },
+        ],
+    },
+
+    // -----------------------------------------------------------------
+    // Francie
+    //
+    // Hierarchie: Région → Département → Commune
+    // -----------------------------------------------------------------
+    "fr": {
+        "name": "French Administrative Divisions",
+        "name:cs": "Administrativní členění Francie",
+        "name:en": "French Administrative Divisions",
+        "source": "INSEE",
+        "levels": [
+            {
+                "level": 0,
+                "name": "Region",
+                "name:cs": "Region",
+                "name:en": "Region",
+                "note": "Région",
+            },
+            {
+                "level": 1,
+                "name": "Department",
+                "name:cs": "Departement",
+                "name:en": "Department",
+                "note": "Département",
+            },
+            {
+                "level": 2,
+                "name": "Municipality",
+                "name:cs": "Obec",
+                "name:en": "Municipality",
+                "note": "Commune",
+            },
+        ],
+    },
+
+    // Další země budou doplněny podle potřeby
+}

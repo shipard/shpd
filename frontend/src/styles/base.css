@@ -1,0 +1,49 @@
+/* Base typography and layout */
+
+html,
+body {
+  height: 100%;
+}
+
+#app {
+  height: 100%;
+}
+
+body {
+  font-family: var(--shpd-font-family);
+  font-size: var(--shpd-font-size-base);
+  color: var(--shpd-color-text);
+  background-color: var(--shpd-color-bg);
+}
+
+h1 {
+  font-size: 1.875rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+h3 {
+  font-size: var(--shpd-font-size-xl);
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+h4 {
+  font-size: var(--shpd-font-size-lg);
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+a {
+  color: var(--shpd-color-primary);
+}
+
+a:hover {
+  color: var(--shpd-color-primary-hover);
+}

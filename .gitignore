@@ -2,3 +2,5 @@
 /tasks/
 /composer.lock
 /.phpunit.result.cache
+/frontend/node_modules/
+/public/app/

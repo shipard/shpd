@@ -1,0 +1,46 @@
+/* Design system CSS custom properties */
+
+:root {
+  /* Colors */
+  --shpd-color-primary: #2563eb;
+  --shpd-color-primary-hover: #1d4ed8;
+  --shpd-color-danger: #dc2626;
+  --shpd-color-success: #16a34a;
+  --shpd-color-warning: #d97706;
+  --shpd-color-bg: #ffffff;
+  --shpd-color-bg-secondary: #f8fafc;
+  --shpd-color-bg-sidebar: #1e293b;
+  --shpd-color-text: #0f172a;
+  --shpd-color-text-secondary: #64748b;
+  --shpd-color-text-sidebar: #e2e8f0;
+  --shpd-color-border: #e2e8f0;
+  --shpd-color-border-focus: #2563eb;
+
+  /* Spacing */
+  --shpd-space-xs: 4px;
+  --shpd-space-sm: 8px;
+  --shpd-space-md: 16px;
+  --shpd-space-lg: 24px;
+  --shpd-space-xl: 32px;
+
+  /* Typography */
+  --shpd-font-family: Inter, system-ui, sans-serif;
+  --shpd-font-size-sm: 0.875rem;
+  --shpd-font-size-base: 1rem;
+  --shpd-font-size-lg: 1.125rem;
+  --shpd-font-size-xl: 1.25rem;
+
+  /* Border radius */
+  --shpd-radius-sm: 4px;
+  --shpd-radius-md: 6px;
+  --shpd-radius-lg: 8px;
+
+  /* Shadows */
+  --shpd-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shpd-shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shpd-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+
+  /* Layout */
+  --shpd-sidebar-width: 260px;
+  --shpd-header-height: 56px;
+}

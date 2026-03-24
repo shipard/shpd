@@ -8,13 +8,16 @@
     "description:en": "Suppliers, customers, employees and other persons",
 
     "dependencies": [
-        "core.system"
+        "core.system",
+        "core.world",
+        "world.divisions"
     ],
 
     "tables": [
         "base_persons_persons",
         "base_persons_contacts",
-        "base_persons_bank_accounts"
+        "base_persons_bank_accounts",
+        "base_persons_addresses"
     ],
 
     "documentClasses": [
@@ -32,6 +35,14 @@
         {
             "id": "base.persons.bankAccountSources",
             "file": "config/bankAccountSources.jsonc"
-        }
+        },
+        {
+            "id": "base.persons.addressTypes",
+            "file": "config/addressTypes.jsonc"
+        },
+        {
+            "id": "base.persons.placeRegTypes",
+            "file": "config/placeRegTypes.jsonc"
+        },
     ]
 }

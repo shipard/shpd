@@ -1,0 +1,15 @@
+{
+    // Typy registrů míst — identifikátory přiřazené provozovnám,
+    // zařízením apod. z externích registrů.
+
+    "ICP": {
+        "name": "Business premises ID",
+        "name:cs": "IČP — Identifikační číslo provozovny",
+        "name:en": "IČP — Business premises identification number"
+    },
+    "ICZ": {
+        "name": "Facility ID",
+        "name:cs": "IČZ — Identifikační číslo zařízení",
+        "name:en": "IČZ — Waste facility identification number"
+    }
+}

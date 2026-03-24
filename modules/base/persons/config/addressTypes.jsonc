@@ -1,0 +1,27 @@
+{
+    "0": {
+        "name": "Undefined",
+        "name:cs": "Neurčeno",
+        "name:en": "Undefined"
+    },
+    "1": {
+        "name": "Registered office",
+        "name:cs": "Sídlo",
+        "name:en": "Registered office"
+    },
+    "2": {
+        "name": "Delivery address",
+        "name:cs": "Doručovací adresa",
+        "name:en": "Delivery address"
+    },
+    "3": {
+        "name": "Business premises",
+        "name:cs": "Provozovna",
+        "name:en": "Business premises"
+    },
+    "4": {
+        "name": "Facility",
+        "name:cs": "Zařízení",
+        "name:en": "Facility"
+    }
+}

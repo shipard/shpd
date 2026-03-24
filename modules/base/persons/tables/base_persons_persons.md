@@ -112,3 +112,4 @@ hooky `validate` a `beforeSave`, které řídí chování podle typu osoby.
 |---|---|---|
 | [base_persons_contacts](base_persons_contacts.md) | `contacts.person` → `persons.id` | Kontaktní osoby a kontaktní místa přiřazená k osobě/firmě |
 | [base_persons_bank_accounts](base_persons_bank_accounts.md) | `bank_accounts.person` → `persons.id` | Bankovní účty osoby/firmy |
+| [base_persons_addresses](base_persons_addresses.md) | `addresses.person` → `persons.id` | Adresy — sídla, doručovací, provozovny, zařízení |

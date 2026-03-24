@@ -9,6 +9,6 @@
     "dependencies": [
         "core.system",
         "base.persons",
-        "economy.codebooks"
+        "economy.codebooks",
     ]
 }

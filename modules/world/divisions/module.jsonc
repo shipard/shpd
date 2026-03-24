@@ -8,7 +8,6 @@
     "description:en": "Hierarchical administrative divisions of countries — regions, counties, districts, municipalities",
     "dependencies": [
         "world.base",
-        "base.persons",
     ],
     "tables": [
         "world_divisions",

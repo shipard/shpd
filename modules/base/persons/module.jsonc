@@ -9,8 +9,8 @@
 
     "dependencies": [
         "core.system",
-        "core.world",
-        "world.divisions"
+        "world.divisions",
+        "world.trade",
     ],
 
     "tables": [

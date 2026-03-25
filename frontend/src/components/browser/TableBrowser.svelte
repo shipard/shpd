@@ -1,7 +1,13 @@
 <script>
   import { get } from '../../api/client.js';
+  import Button from '../ui/Button.svelte';
+  import FormDialog from '../form/FormDialog.svelte';
 
   let { tab } = $props();
+
+  // --- Form dialog state ---
+  let formOpen = $state(false);
+  let editRecordId = $state(null);
 
   // --- State ---
   let columns = $state([]);
@@ -120,6 +126,28 @@
     await fetchData();
   }
 
+  // --- Form dialog handlers ---
+
+  function openCreate() {
+    editRecordId = null;
+    formOpen = true;
+  }
+
+  function openEdit(row) {
+    editRecordId = row.id ?? null;
+    formOpen = true;
+  }
+
+  function handleFormClose() {
+    formOpen = false;
+    editRecordId = null;
+  }
+
+  function handleFormSaved() {
+    // Refresh the current page after a successful save
+    fetchData();
+  }
+
   // --- Interaction handlers ---
 
   function handleSort(colId) {
@@ -162,7 +190,19 @@
   });
 </script>
 
+<FormDialog
+  table={tab.table}
+  recordId={editRecordId}
+  open={formOpen}
+  onClose={handleFormClose}
+  onSaved={handleFormSaved}
+/>
+
 <div class="shpd-browser">
+  <div class="shpd-browser__toolbar">
+    <Button label="Nový záznam" variant="primary" onclick={openCreate} />
+  </div>
+
   {#if loading && columns.length === 0}
     <!-- Initial load spinner -->
     <div class="shpd-browser__loading">
@@ -217,7 +257,7 @@
             </tr>
           {:else}
             {#each rows as row}
-              <tr class="shpd-browser__row">
+              <tr class="shpd-browser__row" ondblclick={() => openEdit(row)}>
                 {#each columns as col (col.id)}
                   <td
                     class="shpd-browser__td"
@@ -275,6 +315,16 @@
     flex-direction: column;
     height: 100%;
     overflow: hidden;
+  }
+
+  /* Toolbar */
+  .shpd-browser__toolbar {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    padding: var(--shpd-space-sm) var(--shpd-space-md);
+    border-bottom: 1px solid var(--shpd-color-border);
+    flex-shrink: 0;
   }
 
   /* Loading — initial full-area spinner */
@@ -373,6 +423,10 @@
   }
 
   /* Data rows */
+  .shpd-browser__row {
+    cursor: pointer;
+  }
+
   .shpd-browser__row:hover {
     background-color: var(--shpd-color-bg-secondary);
   }

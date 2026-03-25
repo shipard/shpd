@@ -6,10 +6,10 @@ Shipard frontend je single-page aplikace (SPA) postavená na **Svelte 5**, kter�
 
 ### Principy
 
-- **Server-driven UI** — server definuje strukturu (sloupce tabulek, pole formulářů), klient renderuje podle schémat
+- **Server-driven UI** — server definuje strukturu (sloupce tabulek, pole formulářů, navigaci), klient renderuje podle schémat
 - **Definovat, ne programovat** — nový modul = nová definice na serveru, zero práce na klientovi
 - **Konzistentní UX** — uživatel se naučí prohlížeč tabulek a formuláře → umí celou aplikaci
-- **Minimální klientská logika** — silná JS knihovna s ~20 základními komponentami, inteligentní renderery
+- **Minimální klientská logika** — silná JS knihovna se základními komponentami, inteligentní renderery
 - **Žádné URL routing** — stav navigace interně (sidebar, taby, dialogy), ne přes URL
 
 ### Technologický stack
@@ -18,7 +18,7 @@ Shipard frontend je single-page aplikace (SPA) postavená na **Svelte 5**, kter�
 |------------|------------|-------|
 | UI framework | Svelte 5 | Kompiluje do čistého JS (žádný runtime), reaktivita bez boilerplate, blízké vanilla HTML/JS |
 | Build tool | Vite | Nativní podpora Svelte, rychlý HMR pro vývoj |
-| CSS | Vlastní (bez frameworku) | Plná kontrola, žádný overhead z nepoužívaných stylů, ~20 komponent zvládneme sami |
+| CSS | Vlastní (bez frameworku) | Plná kontrola, žádný overhead z nepoužívaných stylů |
 | HTTP klient | Fetch API | Nativní v moderních prohlížečích, nepotřebujeme knihovnu |
 | State management | Svelte stores (runes) | Vestavěný v Svelte 5, nepotřebujeme externí knihovnu |
 
@@ -26,268 +26,131 @@ Shipard frontend je single-page aplikace (SPA) postavená na **Svelte 5**, kter�
 
 Chrome, Firefox, Edge — poslední 2 roky. Žádná podpora IE nebo starších verzí.
 
+### Jazyk
+
+- **UI texty:** čeština (výchozí jazyk aplikace), s podporou vícejazyčnosti přes existující i18n systém
+- **Kód a komentáře:** angličtina
+
 ---
 
 ## 2. Adresářová struktura
 
 ```
-frontend/                           # Root frontendového projektu
+frontend/
 ├── package.json
 ├── vite.config.js
 ├── svelte.config.js
-├── index.html                      # Entry point (Vite)
+├── index.html
 ├── src/
-│   ├── main.js                     # Bootstrap — mount Svelte app
-│   ├── App.svelte                  # Root komponenta — routing login/app
+│   ├── main.js                         # Bootstrap — mount Svelte app
+│   ├── App.svelte                      # Root — přepíná login/app shell
 │   ├── api/
-│   │   ├── client.js               # HTTP klient (fetch wrapper s auth)
-│   │   └── auth.js                 # Login, refresh, logout
+│   │   ├── config.js                   # Detekce DS ID z URL, API_BASE_URL
+│   │   ├── client.js                   # HTTP klient (fetch wrapper s auth, refresh, retry)
+│   │   └── auth.js                     # Login, refresh, logout (raw fetch)
 │   ├── stores/
-│   │   ├── auth.svelte.js          # Auth stav (token, user, isAuthenticated)
-│   │   ├── navigation.svelte.js    # Navigační stav (aktivní panel, otevřené taby)
-│   │   └── notifications.svelte.js # Toast notifikace
+│   │   ├── auth.svelte.js              # Auth stav (token, user, isAuthenticated)
+│   │   └── navigation.svelte.js        # Taby (otevřené, aktivní, open/close/activate)
 │   ├── components/
-│   │   ├── ui/                     # Základní UI prvky (~20 komponent)
+│   │   ├── ui/                         # Základní UI prvky
 │   │   │   ├── Button.svelte
 │   │   │   ├── Input.svelte
-│   │   │   ├── Select.svelte
-│   │   │   ├── Checkbox.svelte
-│   │   │   ├── DatePicker.svelte
 │   │   │   ├── NumberInput.svelte
 │   │   │   ├── TextArea.svelte
-│   │   │   ├── Modal.svelte
-│   │   │   ├── Toast.svelte
-│   │   │   ├── Spinner.svelte
-│   │   │   ├── Badge.svelte
-│   │   │   ├── Toggle.svelte
-│   │   │   ├── Dropdown.svelte
-│   │   │   ├── Tabs.svelte
-│   │   │   ├── Pagination.svelte
-│   │   │   ├── Table.svelte
-│   │   │   ├── Icon.svelte
-│   │   │   ├── FileUpload.svelte
-│   │   │   └── index.js            # Re-export všech komponent
-│   │   ├── layout/                 # Aplikační shell
-│   │   │   ├── AppShell.svelte     # Hlavní layout (sidebar + obsah)
-│   │   │   ├── Sidebar.svelte      # Levý sidebar s navigací
-│   │   │   ├── Header.svelte       # Horní lišta (user menu, notifikace)
-│   │   │   └── ContentArea.svelte  # Oblast pro zobrazení obsahu
-│   │   ├── auth/                   # Přihlašovací obrazovka
-│   │   │   └── LoginScreen.svelte
-│   │   ├── browser/                # Prohlížeč tabulek (generický)
-│   │   │   ├── TableBrowser.svelte # Hlavní prohlížeč — renderuje tabulku podle schématu
-│   │   │   ├── BrowserToolbar.svelte
-│   │   │   ├── BrowserFilters.svelte
-│   │   │   └── BrowserPagination.svelte
-│   │   └── form/                   # Editační formuláře (generické)
-│   │   │   ├── FormRenderer.svelte # Renderuje formulář podle schématu
-│   │   │   ├── FormField.svelte    # Dynamický field renderer
-│   │   │   └── FormDialog.svelte   # Wrapper: modal + form renderer
+│   │   │   ├── Select.svelte
+│   │   │   ├── Checkbox.svelte
+│   │   │   ├── DateInput.svelte
+│   │   │   └── Modal.svelte
+│   │   ├── layout/
+│   │   │   ├── AppShell.svelte         # Hlavní layout (header + sidebar + tabs + content)
+│   │   │   ├── Header.svelte           # Horní lišta (logo, user, odhlášení)
+│   │   │   ├── Sidebar.svelte          # Navigace — načítá strom ze serveru
+│   │   │   ├── TabBar.svelte           # Lišta otevřených tabů
+│   │   │   └── ContentArea.svelte      # Hlavní oblast — renderuje aktivní tab
+│   │   ├── auth/
+│   │   │   └── LoginScreen.svelte      # Přihlašovací obrazovka
+│   │   ├── browser/
+│   │   │   └── TableBrowser.svelte     # Generický prohlížeč tabulek
+│   │   └── form/
+│   │       ├── FormField.svelte        # Dynamický field renderer (typ → komponenta)
+│   │       ├── FormRenderer.svelte     # Generický formulář z metadat
+│   │       └── FormDialog.svelte       # Modal wrapper pro FormRenderer
 │   └── styles/
-│       ├── variables.css           # CSS custom properties (barvy, spacing, typography)
-│       ├── reset.css               # CSS reset
-│       ├── base.css                # Základní typografie a layout
-│       └── components.css          # Styly pro UI komponenty
+│       ├── variables.css               # CSS custom properties (barvy, spacing, typography)
+│       ├── reset.css                   # CSS reset
+│       └── base.css                    # Základní typografie a layout
 ```
 
 ### Build a nasazení
 
-Vite buildne frontend do statických souborů. Ty se servírují přes nginx:
-
-```
-public/
-├── index.php                       # API entry point (existující)
-└── app/                            # Frontend build output
-    ├── index.html
-    ├── assets/
-    │   ├── app-[hash].js
-    │   └── app-[hash].css
+```bash
+cd frontend
+npm install
+npm run build     # → výstup do ../public/app/
 ```
 
-Kompletní nginx konfigurace je v `docs/nginx/app.conf`. Klíčové body:
+Nginx konfigurace: viz `docs/nginx/app.conf`.
 
-```nginx
-# Redirect root to the app
-location = / {
-    return 301 /app/;
-}
+### Dev mód — DS ID v URL
 
-# Frontend SPA — static files, SPA fallback
-location /app/ {
-    alias /opt/shipard/shpd/public/app/;
-    try_files $uri $uri/ /app/index.html;
-}
+V dev módu (IP adresa) se aplikace otevírá na `http://{ip}/{ds-id}/app/`. Frontend automaticky detekuje DS ID z URL a přidává ho jako prefix ke všem API voláním (`/{ds-id}/api/v1/...`). Logika je v `api/config.js`.
 
-location = /app {
-    return 301 /app/;
-}
-
-# API → PHP
-location /api/ {
-    try_files $uri /index.php$is_args$args;
-}
-```
-
-### Dev mód a DS ID
-
-V dev módu nginx jsou API cesty ve tvaru `/{ds-id}/api/v1/...` (PHP resolver čte DS ID z URL prefixu). Frontend SPA používá relativní cesty `/api/v1/...`.
-
-**Možnosti:**
-
-1. **`npm run dev` (Vite dev server)** — proxy v `vite.config.js` přeposílá `/api/*` na `localhost:80`. PHP dostane request s cestou `/api/v1/...` bez DS ID prefixu → je potřeba dev-mode resolver, který DS ID čte z jiného zdroje (config, env, hlavička).
-
-2. **Přístup přes `/{ds-id}/app/`** — nginx obsluhuje SPA i pod DS-ID prefixem (viz `docs/nginx/app.conf`). Frontend pak musí DS ID prefix přidat do API volání (zatím neimplementováno).
-
-3. **Produkční mód lokálně** — přidat DS ID do `domains.json` namapovaný na `localhost` nebo `127.0.0.1` a přistupovat přes doménové jméno.
+V produkčním módu (subdoména) se DS ID nepoužívá — API je na `/api/v1/...`.
 
 ---
 
 ## 3. Přihlášení a autentizace
 
-### Existující API endpointy
-
-API už podporuje kompletní autentizaci:
+### API endpointy
 
 ```
-POST /api/v1/_auth/login      # login + password → token
+POST /api/v1/_auth/login      # login + password → session token
 POST /api/v1/_auth/refresh    # starý token → nový token
 DELETE /api/v1/_auth/logout   # invalidace tokenu
 ```
 
-Token má prefix `shpd_st_`, expirace je uložena v `core_system_sessions`.
+Token má prefix `shpd_st_`, expirace 24h, uložen v `core_system_sessions`.
 
-### Flow přihlášení
+### Flow
 
-```
-1. Uživatel otevře /app → App.svelte
-2. App kontroluje auth store → není přihlášen
-3. Zobrazí LoginScreen
-4. Uživatel zadá login + heslo
-5. POST /api/v1/_auth/login
-6. Úspěch → uloží token + user do auth store (+ localStorage pro persistence)
-7. App přepne na AppShell
-```
-
-### Auth store (`stores/auth.svelte.js`)
-
-```javascript
-// Stav
-let token = $state(localStorage.getItem('shpd_token'));
-let user = $state(JSON.parse(localStorage.getItem('shpd_user') || 'null'));
-let isAuthenticated = $derived(token !== null);
-
-// Akce
-function login(loginResponse) {
-    token = loginResponse.data.token;
-    user = loginResponse.data.user;
-    localStorage.setItem('shpd_token', token);
-    localStorage.setItem('shpd_user', JSON.stringify(user));
-}
-
-function logout() {
-    // Volá API, pak vyčistí stav
-    token = null;
-    user = null;
-    localStorage.removeItem('shpd_token');
-    localStorage.removeItem('shpd_user');
-}
-```
-
-### HTTP klient (`api/client.js`)
-
-Wrapper kolem fetch, který automaticky:
-- Přidává `Authorization: Bearer {token}` ke každému requestu
-- Přidává `Content-Type: application/json`
-- Parsuje JSON odpovědi
-- Při `401` zavolá refresh; pokud refresh selže → logout
-- Při síťové chybě zobrazí notifikaci
-
-```javascript
-async function apiRequest(method, path, body = null) {
-    const headers = {
-        'Content-Type': 'application/json',
-        'Accept-Language': 'cs',
-    };
-
-    if (authStore.token) {
-        headers['Authorization'] = `Bearer ${authStore.token}`;
-    }
-
-    const response = await fetch(`/api/v1${path}`, {
-        method,
-        headers,
-        body: body ? JSON.stringify(body) : null,
-    });
-
-    if (response.status === 401 && authStore.token) {
-        // Pokus o refresh
-        const refreshed = await tryRefresh();
-        if (refreshed) {
-            return apiRequest(method, path, body); // Retry
-        }
-        authStore.logout();
-        return null;
-    }
-
-    return response.json();
-}
-```
-
-### LoginScreen — design
-
-Jednoduchá přihlašovací obrazovka na středu stránky:
-- Logo Shipard
-- Pole: Login, Heslo
-- Tlačítko "Přihlásit se"
-- Chybová hláška při neúspěchu
-- Loading stav při komunikaci se serverem
-- Bez registrace (uživatele zakládá admin)
+1. `App.svelte` kontroluje auth store → není přihlášen → `LoginScreen`
+2. Uživatel zadá login + heslo → `POST /_auth/login`
+3. Úspěch → token + user do auth store + `localStorage`
+4. App přepne na `AppShell`
 
 ### Bezpečnost
 
-- Token se ukládá do `localStorage` (přijatelné pro session token s expirací)
-- Automatický refresh před expirací
+- Token v `localStorage` (přijatelné pro session token s expirací)
+- Automatický refresh při 401 s retry původního requestu
 - Logout vyčistí `localStorage`
-- Všechna API komunikace přes HTTPS (v produkci)
+- HTTPS v produkci
 
 ---
 
 ## 4. Aplikační shell
 
-Po přihlášení se zobrazí hlavní layout aplikace.
-
-### Struktura
-
 ```
 ┌─────────────────────────────────────────────────────┐
-│  Header (logo, název DS, user menu)                 │
+│  Header (logo, user menu, odhlášení)                │
 ├──────────┬──────────────────────────────────────────┤
+│          │  TabBar (otevřené taby)                  │
+│ Sidebar  ├──────────────────────────────────────────┤
+│ (server) │                                          │
+│          │  ContentArea                             │
+│ ─ Systém │  ┌─ TableBrowser ─────────────────────┐ │
+│   Users  │  │  [Toolbar: Nový záznam]             │ │
+│   Sett.  │  │  ┌─ Tabulka s daty ──────────────┐ │ │
+│ ─ Základ │  │  │  (sloupce z metadat, řazení)   │ │ │
+│   Osoby  │  │  └────────────────────────────────┘ │ │
+│   Kontak │  │  [Stránkování]                      │ │
+│   ...    │  └─────────────────────────────────────┘ │
 │          │                                          │
-│ Sidebar  │  Content Area                            │
-│          │                                          │
-│ ─ Osoby  │  ┌─ Tab: Faktury vydané ──────────────┐ │
-│ ─ Doklady│  │                                     │ │
-│   ─ FV   │  │  [Toolbar: filtr, hledání, nový]    │ │
-│   ─ FP   │  │  ┌───────────────────────────────┐  │ │
-│ ─ ...    │  │  │  Tabulka s daty                │  │ │
-│          │  │  │                                 │  │ │
-│          │  │  │                                 │  │ │
-│          │  │  └───────────────────────────────┘  │ │
-│          │  │  [Stránkování]                      │ │
-│          │  └─────────────────────────────────────┘ │
-│          │                                          │
-├──────────┴──────────────────────────────────────────┤
-│  Status bar (volitelně)                             │
-└─────────────────────────────────────────────────────┘
+└──────────┴──────────────────────────────────────────┘
 ```
 
-### Sidebar
+### Sidebar — dynamická navigace ze serveru
 
-Sidebar je strom navigace generovaný z modulového systému. Server poskytne strukturu přes nový API endpoint:
-
-```
-GET /api/v1/_meta/navigation
-```
+Sidebar načítá navigační strom z `GET /_ui/navigation`. Server generuje strom automaticky z aktivních modulů a jejich tabulek:
 
 ```json
 {
@@ -296,219 +159,148 @@ GET /api/v1/_meta/navigation
         {
             "id": "core",
             "label": "Systém",
-            "icon": "settings",
             "children": [
-                {"id": "core_system_users", "label": "Uživatelé", "type": "table"}
+                {"id": "core_system_users", "label": "Uživatelé", "type": "table", "table": "core_system_users"},
+                {"id": "core_system_settings", "label": "Nastavení", "type": "table", "table": "core_system_settings"}
             ]
         },
         {
-            "id": "economy",
-            "label": "Ekonomika",
-            "icon": "file-text",
+            "id": "base",
+            "label": "Základní",
             "children": [
-                {
-                    "id": "economy_docs",
-                    "label": "Doklady",
-                    "children": [
-                        {"id": "economy_docs_heads:INV", "label": "Faktury vydané", "type": "table", "filter": {"doc_type": "eq:INV"}},
-                        {"id": "economy_docs_heads:REC", "label": "Faktury přijaté", "type": "table", "filter": {"doc_type": "eq:REC"}}
-                    ]
-                }
+                {"id": "base_persons_persons", "label": "Osoby", "type": "table", "table": "base_persons_persons"}
             ]
         }
     ]
 }
 ```
 
-Klik na položku v sidebar otevře prohlížeč tabulky v Content Area (nebo přepne na existující tab).
+Interní tabulky (sessions, api_keys, rate_limits) se v navigaci nezobrazují.
 
-### Navigační model
+### Tabový model
 
-Aplikace používá **tabový model** — klik v sidebar otevře nový tab (nebo aktivuje existující). Uživatel může mít otevřeno více prohlížečů současně a přepínat mezi nimi.
-
-Navigační stav (`stores/navigation.svelte.js`):
-
-```javascript
-let tabs = $state([]);        // Otevřené taby [{id, label, type, table, filter}]
-let activeTabId = $state(null); // ID aktivního tabu
-```
+Klik v sidebar otevře nový tab (nebo aktivuje existující). `navigation.svelte.js` spravuje pole tabů a aktivní tab. `TabBar` zobrazuje lištu s taby — klik přepne, × zavře.
 
 ---
 
 ## 5. Prohlížeč tabulek (TableBrowser)
 
-Generická komponenta, která dostane název tabulky a vykreslí prohlížeč.
+Generická komponenta — dostane název tabulky a vykreslí prohlížeč s daty z API.
 
 ### Flow
 
-```
-1. Uživatel klikne v sidebar na "Faktury vydané"
-2. Otevře se nový tab s TableBrowser(table="economy_docs_heads", filter={doc_type: "eq:INV"})
-3. TableBrowser:
-   a) GET /api/v1/_meta/tables/economy_docs_heads → metadata (sloupce, typy)
-   b) GET /api/v1/economy_docs_heads?filter[doc_type]=eq:INV&limit=20 → data
-   c) Vykreslí tabulku podle metadat
-```
+1. Fetch metadata: `GET /_meta/tables/{table}` → sloupce, typy, groups
+2. Fetch data: `GET /{table}?limit=20&offset=0` → záznamy
+3. Vykreslí tabulku podle metadat
 
-### Funkce prohlížeče
+### Funkce
 
-- **Zobrazení dat** — tabulka s dynamickými sloupci podle metadat
-- **Řazení** — klik na hlavičku sloupce
-- **Stránkování** — offset-based (20/50/100 na stránku)
-- **Filtrování** — toolbar s filtry podle typu sloupce
-- **Akce nad řádkem** — dvojklik otevře editační formulář (budoucnost)
+- **Dynamické sloupce** — z metadat, filtrované (bez id, password_hash, json)
+- **Formátování podle typu** — varchar→text, int→číslo vpravo, boolean→Ano/Ne, date→dd.mm.yyyy, datetime→dd.mm.yyyy hh:mm, numeric→desetinná místa
+- **Řazení** — klik na hlavičku, toggle asc/desc, API sort parametr
+- **Stránkování** — offset-based, 20/50/100 na stránku, předchozí/další
+- **Filtry z navigace** — tab může mít `filter` objekt (budoucí: filtrované pohledy)
+- **Tlačítko "Nový záznam"** — otevře FormDialog pro vytvoření
+- **Dvojklik na řádek** — otevře FormDialog pro editaci
 
-### Renderování sloupců podle typu
+---
 
-| Typ sloupce | Zobrazení |
+## 6. Editační formuláře
+
+Generický renderer — `FormRenderer` dostane tabulku a volitelně ID záznamu, stáhne metadata a vykreslí formulář.
+
+### Flow
+
+1. Fetch metadata: `GET /_meta/tables/{table}` → sloupce, typy, groups, nullable
+2. Pokud editace: fetch záznamu `GET /{table}/{id}`
+3. Vykreslí formulář — `FormField` mapuje typ sloupce na UI komponentu
+4. Uložení: `POST /{table}` (nový) nebo `PUT /{table}/{id}` (editace)
+5. Validační chyby ze serveru se mapují na pole formuláře
+
+### Mapování typ → komponenta (FormField)
+
+| Typ sloupce | Komponenta |
 |-------------|-----------|
-| `varchar`, `text` | Text |
-| `int`, `smallint`, `bigint` | Číslo (zarovnání vpravo) |
-| `numeric` | Formátované číslo s desetinami |
-| `boolean` | Ikona (check/cross) |
-| `date` | Formátované datum (dd.mm.yyyy) |
-| `datetime` | Datum + čas |
-| `enumInt`, `enumString` | Popisek z konfigurace (budoucnost) |
+| varchar | Input (text) |
+| text, longtext | TextArea |
+| int, smallint, bigint | NumberInput (step=1) |
+| numeric | NumberInput (step z scale) |
+| boolean | Checkbox |
+| date | DateInput |
+| datetime | Input (datetime-local) |
+| enumInt, enumString | Select (budoucí: options z konfigurace) |
+
+### Layout
+
+- Pole seskupené podle `columnGroups` z metadat
+- Dvousloupcový grid (responzivní → 1 sloupec na úzkých obrazovkách)
+- Auto-managed pole (id, created, modified) se nezobrazují
+- password_hash se nezobrazuje v editaci
+
+### FormDialog
+
+Modal wrapper — otevírá se z TableBrowser (tlačítko / dvojklik). Po uložení se prohlížeč automaticky refreshuje.
 
 ---
 
-## 6. Editační formuláře (budoucnost)
+## 7. UI API endpointy
 
-Generický renderer, který dostane definici formuláře ze serveru a vykreslí ho.
+### Implementované
 
-### Koncept
+| Endpoint | Popis |
+|----------|-------|
+| `GET /_ui/navigation` | Navigační strom ze serveru (moduly → skupiny → tabulky) |
 
-Server vrátí JSON popis formuláře:
+### Budoucí
 
-```json
-{
-    "table": "core_system_users",
-    "layout": [
-        {
-            "group": "credentials",
-            "label": "Přihlašovací údaje",
-            "fields": [
-                {"column": "login", "type": "varchar", "length": 100, "required": true},
-                {"column": "password", "type": "password", "required": true}
-            ]
-        },
-        {
-            "group": "personal",
-            "label": "Osobní údaje",
-            "fields": [
-                {"column": "full_name", "type": "varchar", "length": 200, "required": true},
-                {"column": "email", "type": "varchar", "length": 200}
-            ]
-        }
-    ]
-}
-```
+| Endpoint | Popis |
+|----------|-------|
+| `GET /_ui/browser/{table}` | UI-specifická metadata prohlížeče (viditelné sloupce, výchozí řazení, akce) |
+| `GET /_ui/form/{table}` | Rozšířená definice formuláře (custom layout, widgety, závislosti mezi poli) |
 
-Klient to vykreslí jako formulář se skupinami polí, validací, tlačítky Uložit/Zrušit.
+Zatím prohlížeč i formuláře fungují čistě z `_meta/tables/{table}` — UI endpointy přidají vrstvu přizpůsobení.
 
 ---
 
-## 7. UI API — server-side endpointy (nové)
+## 8. Konvence
 
-Pro podporu frontend aplikace je potřeba rozšířit API o tyto endpointy:
-
-### 7.1 Navigace
-
-```
-GET /api/v1/_ui/navigation
-```
-
-Vrátí stromovou strukturu sidebar navigace (generovanou z modulů a oprávnění uživatele).
-
-### 7.2 Definice prohlížeče tabulky
-
-```
-GET /api/v1/_ui/browser/{table}
-```
-
-Vrátí kompletní definici prohlížeče — viditelné sloupce, výchozí řazení, dostupné filtry, akce. Nadstavba nad `_meta/tables/{table}` — přidává UI-specifické informace.
-
-### 7.3 Definice formuláře
-
-```
-GET /api/v1/_ui/form/{table}
-GET /api/v1/_ui/form/{table}/{id}   # s předvyplněnými daty
-```
-
-Vrátí layout formuláře a (volitelně) data záznamu.
-
-Tyto endpointy budou implementovány postupně, podle potřeby.
-
----
-
-## 8. Fáze implementace
-
-### Fáze 1: Přihlášení a shell
-
-1. **Inicializace Svelte projektu** — `frontend/` adresář, Vite, Svelte 5
-2. **CSS základ** — variables, reset, base typography
-3. **API klient** — fetch wrapper s auth
-4. **Auth store** — token management, localStorage persistence
-5. **LoginScreen** — přihlašovací obrazovka
-6. **AppShell** — layout (sidebar + content area + header)
-7. **Nginx konfigurace** — servírování frontend buildu
-8. **Build pipeline** — `npm run build` → `public/app/`
-
-### Fáze 2: Prohlížeč tabulek
-
-9. **Navigační store** — taby, aktivní tab
-10. **Sidebar** — statická navigace (hardcoded pro začátek)
-11. **TableBrowser** — generický prohlížeč tabulek
-12. **Základní UI komponenty** — Table, Button, Spinner, Pagination
-13. **Napojení na _meta API** — dynamické sloupce
-
-### Fáze 3: UI API a rozšířená navigace
-
-14. **Server: `_ui/navigation` endpoint** — generování navigace z modulů
-15. **Server: `_ui/browser/{table}` endpoint** — UI-specifická metadata
-16. **Sidebar dynamický** — generovaný ze serveru
-17. **Filtrování a řazení** v prohlížeči
-
-### Fáze 4: Editační formuláře
-
-18. **Server: `_ui/form/{table}` endpoint** — definice formuláře
-19. **FormRenderer** — generický renderer
-20. **FormField** — dynamický field renderer (podle typu)
-21. **FormDialog** — modální okno s formulářem
-22. **Validace** — client-side (z metadat) + server-side
-23. **Rozšířené komponenty** — DatePicker, Select, Dropdown
-24. **Inline editace** — editace přímo v tabulce
-25. **Drag & drop** — řazení řádků
-
----
-
-## 9. Konvence pro Claude Code
-
-### Svelte komponenty
+### Svelte
 
 - Svelte 5 syntax (runes: `$state`, `$derived`, `$effect`)
 - Jedna komponenta na soubor
-- Props přes `let { prop1, prop2 } = $props()`
+- Props přes `$props()`
 - Události přes callback props, ne custom events
-- Žádné TypeScript v první fázi (plain JS)
 
 ### CSS
 
-- CSS custom properties pro theming (`--color-primary`, `--spacing-md`)
+- CSS custom properties pro theming (`--shpd-color-primary`, `--shpd-space-md`)
 - BEM-like naming: `.shpd-button`, `.shpd-button--primary`, `.shpd-button__icon`
-- Scoped styles v Svelte komponentách kde to dává smysl
-- Globální proměnné v `variables.css`
+- Scoped styles v Svelte komponentách
 
 ### API komunikace
 
-- Vždy přes `api/client.js` (nikdy přímý fetch)
-- Všechny requesty s `Authorization` hlavičkou
+- Vždy přes `api/client.js` (nikdy přímý fetch, kromě auth.js)
+- `api/config.js` řeší DS ID prefix automaticky
 - Automatický 401 → refresh → retry
-- Chyby propagovat přes return value, ne exceptions
+- Chyby přes return value, ne exceptions
 
 ### Pojmenování
 
 - Soubory komponent: PascalCase (`LoginScreen.svelte`)
 - Soubory utilit/stores: camelCase (`auth.svelte.js`)
 - CSS třídy: `shpd-{component}` prefix
-- API funkce: `getUsers()`, `createInvoice()`, `loginUser()`
+
+---
+
+## 9. Budoucí rozšíření
+
+- **Filtrování v prohlížeči** — toolbar s filtry podle typu sloupce
+- **Hledání** — fulltext přes toolbar
+- **Mazání záznamů** — tlačítko v řádku nebo hromadně
+- **Inline editace** — editace přímo v tabulce
+- **Drag & drop** — řazení řádků
+- **Enum hodnoty** — Select s options z konfigurační položky (cfgItem)
+- **Navigace s filtry** — položky sidebar s předdefinovaným filtrem (Faktury vydané = doc_type:INV)
+- **Výběr sloupců** — uživatel si vybere které sloupce vidí
+- **Export** — CSV/Excel export z prohlížeče
+- **Oprávnění** — skrývání položek navigace podle uživatelských práv

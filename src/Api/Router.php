@@ -42,6 +42,13 @@ class Router
 			return new Route('meta', 'table', $table);
 		}
 
+		if ($subpath === '/_ui/navigation') {
+			if ($method !== 'GET') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('ui', 'navigation');
+		}
+
 		if ($subpath === '/_auth/login') {
 			if ($method !== 'POST') {
 				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);

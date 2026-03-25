@@ -7,6 +7,7 @@ use Shipard\Api\AuthContext;
 use Shipard\Api\Controller\AuthController;
 use Shipard\Api\Controller\CrudController;
 use Shipard\Api\Controller\MetaController;
+use Shipard\Api\Controller\NavigationController;
 use Shipard\Api\Controller\OpenApiController;
 use Shipard\Api\DataSourceResolver;
 use Shipard\Api\Exception\UnknownDataSourceException;
@@ -78,7 +79,7 @@ try {
 
 	// ── 8. Dispatch to controller ─────────────────────────────────────────────
 	$host = $request->getHost();
-	$response = dispatch($route, $request, $auth, $tables, $resolved->connection, $openApiPublic, $host, $resolved);
+	$response = dispatch($route, $request, $auth, $tables, $resolved->connection, $openApiPublic, $host, $resolved, $modulesBasePath);
 
 	// ── 9. Apply headers and send ─────────────────────────────────────────────
 	applyAllHeaders($corsMiddleware, $rateLimiter, $response)->send();
@@ -134,6 +135,7 @@ function dispatch(
 	bool $openApiPublic,
 	string $host,
 	\Shipard\Api\ResolvedDataSource $resolved,
+	string $modulesBasePath,
 ): Response {
 	$baseUrl = $resolved->isDevMode()
 		? 'http://' . $host . '/' . $resolved->config->getId()
@@ -143,6 +145,7 @@ function dispatch(
 		'auth' => dispatchAuth($route->action, $request, $auth, $db),
 		'crud' => dispatchCrud($route, $request, $tables, $db),
 		'meta' => dispatchMeta($route->action, $route->table, $tables, resolveLanguage($request)),
+		'ui' => dispatchUi($route->action, $resolved->config, $modulesBasePath, resolveLanguage($request)),
 		'openapi' => (new OpenApiController())->spec($auth, $openApiPublic, $tables, $baseUrl),
 		default => Response::error('INTERNAL_ERROR', "Unknown controller: {$route->controller}", 500),
 	};
@@ -190,5 +193,14 @@ function dispatchMeta(string $action, ?string $tableName, array $tables, string 
 		'tables' => $ctrl->tables($tables, $language),
 		'table'  => $ctrl->table((string) $tableName, $tables, $language),
 		default  => Response::error('INTERNAL_ERROR', "Unknown meta action: {$action}", 500),
+	};
+}
+
+function dispatchUi(string $action, \Shipard\Core\Config\DataSourceConfig $config, string $modulesBasePath, string $language): Response
+{
+	$ctrl = new NavigationController();
+	return match ($action) {
+		'navigation' => $ctrl->navigation($config, $modulesBasePath, $language),
+		default      => Response::error('INTERNAL_ERROR', "Unknown UI action: {$action}", 500),
 	};
 }

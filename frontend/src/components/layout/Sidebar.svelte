@@ -1,27 +1,37 @@
 <script>
+  import { get } from '../../api/client.js';
+  import { onMount } from 'svelte';
+
   let { onNavigate, activeId = null } = $props();
 
-  // Hardcoded navigation tree — will be replaced with server-driven data later
-  const navTree = [
-    {
-      id: 'system',
-      label: 'Systém',
-      children: [
-        { id: 'core_system_users', label: 'Uživatelé', type: 'table', table: 'core_system_users' },
-        { id: 'core_system_settings', label: 'Nastavení', type: 'table', table: 'core_system_settings' },
-      ],
-    },
-    {
-      id: 'base',
-      label: 'Základní',
-      children: [
-        { id: 'base_persons_persons', label: 'Osoby', type: 'table', table: 'base_persons_persons' },
-      ],
-    },
-  ];
+  // Navigation tree loaded from server API
+  let navTree = $state([]);
+  let loading = $state(true);
+  let error = $state(null);
 
   // Track expanded state per group id
-  let expanded = $state(new Set(['system', 'base']));
+  let expanded = $state(new Set());
+
+  onMount(async () => {
+    try {
+      const response = await get('/_ui/navigation');
+      if (response === null) {
+        error = 'Nepřihlášen';
+        return;
+      }
+      if (!response.success) {
+        error = response.error?.message ?? 'Nepodařilo se načíst navigaci';
+        return;
+      }
+      navTree = response.data;
+      // Expand all top-level groups by default
+      expanded = new Set(navTree.map(g => g.id));
+    } catch {
+      error = 'Nepodařilo se načíst navigaci';
+    } finally {
+      loading = false;
+    }
+  });
 
   function toggleGroup(id) {
     if (expanded.has(id)) {
@@ -39,6 +49,12 @@
 </script>
 
 <nav class="shpd-sidebar">
+  {#if loading}
+    <div class="shpd-sidebar__status">Načítám…</div>
+  {:else if error}
+    <div class="shpd-sidebar__status shpd-sidebar__status--error">{error}</div>
+  {/if}
+
   {#each navTree as group}
     <div class="shpd-sidebar__group">
       <button
@@ -194,5 +210,15 @@
 
   .shpd-sidebar__item--active:hover {
     background-color: var(--shpd-color-primary-hover);
+  }
+
+  .shpd-sidebar__status {
+    padding: var(--shpd-space-md);
+    font-size: var(--shpd-font-size-sm);
+    color: rgb(148 163 184);
+  }
+
+  .shpd-sidebar__status--error {
+    color: var(--shpd-color-danger, #ef4444);
   }
 </style>

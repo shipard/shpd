@@ -23,16 +23,19 @@
     error = null,
     placeholder,
   }: Props = $props();
+
+  const inputId = `shpd-select-${Math.random().toString(36).slice(2)}`;
 </script>
 
 <div class="shpd-select">
   {#if label}
-    <label class="shpd-select__label">
+    <label class="shpd-select__label" for={inputId}>
       {label}{#if required}<span class="shpd-select__required" aria-hidden="true">*</span>{/if}
     </label>
   {/if}
   <div class="shpd-select__wrapper">
     <select
+      id={inputId}
       class="shpd-select__field"
       class:shpd-select__field--error={!!error}
       bind:value

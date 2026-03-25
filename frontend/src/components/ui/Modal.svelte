@@ -44,7 +44,7 @@
 
 {#if open}
   <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-  <div class="shpd-modal" onclick={handleOverlayClick} role="dialog" aria-modal="true" aria-label={title}>
+  <div class="shpd-modal" onclick={handleOverlayClick} role="dialog" aria-modal="true" aria-label={title} tabindex="-1">
     <div class="shpd-modal__overlay"></div>
     <div class="shpd-modal__card" style="width: {width}">
       <div class="shpd-modal__header">

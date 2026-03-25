@@ -54,14 +54,7 @@
   const isEdit = $derived(recordId !== null);
 
   // Columns that should appear in the form
-  const visibleColumns = $derived(
-    (meta?.columns ?? []).filter(col => {
-      if (AUTO_MANAGED.includes(col.id)) return false;
-      // Never show password fields when editing an existing record
-      if (isEdit && col.id.includes('password')) return false;
-      return true;
-    })
-  );
+  const visibleColumns = $derived(computeVisibleColumns(meta?.columns ?? [], isEdit));
 
   // Build group sections: defined groups in order, then ungrouped fields as "Ostatní"
   const groupSections = $derived.by(() => {
@@ -122,6 +115,14 @@
     return data;
   }
 
+  function computeVisibleColumns(columns: ColumnMeta[], editing: boolean): ColumnMeta[] {
+    return columns.filter(col => {
+      if (AUTO_MANAGED.includes(col.id)) return false;
+      if (editing && col.id.includes('password')) return false;
+      return true;
+    });
+  }
+
   async function loadData() {
     loadError = null;
 
@@ -130,18 +131,25 @@
       loadError = metaRes?.error?.message ?? 'Nepodařilo se načíst metadata tabulky.';
       return;
     }
-    meta = metaRes.data as TableMeta;
 
-    if (recordId !== null) {
+    const loadedMeta = metaRes.data as TableMeta;
+    const editing = recordId !== null;
+    const cols = computeVisibleColumns(loadedMeta.columns ?? [], editing);
+
+    if (editing) {
       const recRes = await get(`/${table}/${recordId}`);
       if (!recRes?.success) {
         loadError = recRes?.error?.message ?? 'Nepodařilo se načíst záznam.';
         return;
       }
-      formData = buildRecordFormData(visibleColumns, recRes.data as Record<string, unknown>);
+      formData = buildRecordFormData(cols, recRes.data as Record<string, unknown>);
     } else {
-      formData = buildEmptyFormData(visibleColumns);
+      formData = buildEmptyFormData(cols);
     }
+
+    // Set meta last — the template guards on `meta !== null`, so fields only
+    // render once formData is already populated (avoids undefined prop values).
+    meta = loadedMeta;
   }
 
   async function handleSave() {

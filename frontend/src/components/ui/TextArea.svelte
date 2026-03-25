@@ -18,15 +18,18 @@
     error = null,
     rows = 4,
   }: Props = $props();
+
+  const inputId = `shpd-textarea-${Math.random().toString(36).slice(2)}`;
 </script>
 
 <div class="shpd-textarea">
   {#if label}
-    <label class="shpd-textarea__label">
+    <label class="shpd-textarea__label" for={inputId}>
       {label}{#if required}<span class="shpd-textarea__required" aria-hidden="true">*</span>{/if}
     </label>
   {/if}
   <textarea
+    id={inputId}
     class="shpd-textarea__field"
     class:shpd-textarea__field--error={!!error}
     bind:value

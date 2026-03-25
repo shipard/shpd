@@ -20,15 +20,18 @@
     max,
     step,
   }: Props = $props();
+
+  const inputId = `shpd-input-${Math.random().toString(36).slice(2)}`;
 </script>
 
 <div class="shpd-input">
   {#if label}
-    <label class="shpd-input__label">
+    <label class="shpd-input__label" for={inputId}>
       {label}{#if required}<span class="shpd-input__required" aria-hidden="true">*</span>{/if}
     </label>
   {/if}
   <input
+    id={inputId}
     class="shpd-input__field"
     class:shpd-input__field--error={!!error}
     type="number"

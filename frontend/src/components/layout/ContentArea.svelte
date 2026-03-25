@@ -1,10 +1,17 @@
 <script>
-  let { children } = $props();
+  import TableBrowser from '../browser/TableBrowser.svelte';
+
+  let { activeTab = null } = $props();
 </script>
 
 <main class="shpd-content">
-  {#if children}
-    {@render children()}
+  {#if activeTab?.type === 'table'}
+    <TableBrowser tab={activeTab} />
+  {:else if activeTab}
+    <!-- Placeholder for future tab types (form, dashboard, …) -->
+    <div class="shpd-content__empty">
+      <p class="shpd-content__empty-text">Nepodporovaný typ panelu: {activeTab.type}</p>
+    </div>
   {:else}
     <div class="shpd-content__empty">
       <p class="shpd-content__empty-text">Vyberte položku v menu</p>
@@ -30,4 +37,5 @@
     font-size: var(--shpd-font-size-lg);
     color: var(--shpd-color-text-secondary);
   }
+
 </style>

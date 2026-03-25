@@ -8,26 +8,20 @@
       label: 'Systém',
       children: [
         { id: 'core_system_users', label: 'Uživatelé', type: 'table', table: 'core_system_users' },
+        { id: 'core_system_settings', label: 'Nastavení', type: 'table', table: 'core_system_settings' },
       ],
     },
     {
-      id: 'economy',
-      label: 'Ekonomika',
+      id: 'base',
+      label: 'Základní',
       children: [
-        {
-          id: 'economy_docs',
-          label: 'Doklady',
-          children: [
-            { id: 'economy_docs_heads:INV', label: 'Faktury vydané', type: 'table', table: 'economy_docs_heads', filter: { doc_type: 'eq:INV' } },
-            { id: 'economy_docs_heads:REC', label: 'Faktury přijaté', type: 'table', table: 'economy_docs_heads', filter: { doc_type: 'eq:REC' } },
-          ],
-        },
+        { id: 'base_persons_persons', label: 'Osoby', type: 'table', table: 'base_persons_persons' },
       ],
     },
   ];
 
   // Track expanded state per group id
-  let expanded = $state(new Set(['system', 'economy', 'economy_docs']));
+  let expanded = $state(new Set(['system', 'base']));
 
   function toggleGroup(id) {
     if (expanded.has(id)) {

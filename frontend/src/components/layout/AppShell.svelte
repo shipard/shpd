@@ -1,15 +1,14 @@
 <script>
   import Header from './Header.svelte';
   import Sidebar from './Sidebar.svelte';
+  import TabBar from './TabBar.svelte';
   import ContentArea from './ContentArea.svelte';
+  import { navigationStore } from '../../stores/navigation.svelte.js';
 
   let { onLogout } = $props();
 
-  let activeNavId = $state(null);
-
   function handleNavigate(item) {
-    activeNavId = item.id;
-    // Future: open tab in ContentArea
+    navigationStore.openTab(item);
   }
 </script>
 
@@ -17,8 +16,12 @@
   <Header {onLogout} />
 
   <div class="shpd-shell__body">
-    <Sidebar onNavigate={handleNavigate} activeId={activeNavId} />
-    <ContentArea />
+    <Sidebar onNavigate={handleNavigate} activeId={navigationStore.activeTabId} />
+
+    <div class="shpd-shell__main">
+      <TabBar />
+      <ContentArea activeTab={navigationStore.activeTab} />
+    </div>
   </div>
 </div>
 
@@ -32,6 +35,13 @@
 
   .shpd-shell__body {
     display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .shpd-shell__main {
+    display: flex;
+    flex-direction: column;
     flex: 1;
     overflow: hidden;
   }

@@ -17,7 +17,7 @@ function openTab(item) {
     activeTabId = item.id;
     return;
   }
-  tabs = [...tabs, { id: item.id, label: item.label, type: item.type, table: item.table, filter: item.filter ?? null }];
+  tabs = [...tabs, { id: item.id, label: item.label, type: item.type, table: item.table, viewerId: item.viewerId, filter: item.filter ?? null }];
   activeTabId = item.id;
 }
 

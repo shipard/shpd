@@ -1,11 +1,14 @@
 <script>
   import TableBrowser from '../browser/TableBrowser.svelte';
+  import Viewer from '../viewer/Viewer.svelte';
 
   let { activeTab = null } = $props();
 </script>
 
 <main class="shpd-content">
-  {#if activeTab?.type === 'table'}
+  {#if activeTab?.type === 'viewer'}
+    <Viewer tab={activeTab} />
+  {:else if activeTab?.type === 'table'}
     <TableBrowser tab={activeTab} />
   {:else if activeTab}
     <!-- Placeholder for future tab types (form, dashboard, …) -->

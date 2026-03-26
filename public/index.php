@@ -9,6 +9,7 @@ use Shipard\Api\Controller\CrudController;
 use Shipard\Api\Controller\MetaController;
 use Shipard\Api\Controller\NavigationController;
 use Shipard\Api\Controller\OpenApiController;
+use Shipard\Api\Controller\ViewerController;
 use Shipard\Api\DataSourceResolver;
 use Shipard\Api\Exception\UnknownDataSourceException;
 use Shipard\Api\Exception\UnknownHostException;
@@ -20,7 +21,9 @@ use Shipard\Api\Response;
 use Shipard\Api\Route;
 use Shipard\Api\Router;
 use Shipard\Api\TableLoader;
+use Shipard\Api\ViewerLoader;
 use Shipard\Core\Config\ServerConfig;
+use Shipard\Core\Viewer\ViewerRegistry;
 
 $request        = Request::fromGlobals();
 $corsMiddleware = new CorsMiddleware();
@@ -47,6 +50,9 @@ try {
 	$language = resolveLanguage($request);
 	$modulesBasePath = dirname(__DIR__) . '/modules';
 	$tables = TableLoader::load($resolved->config, $modulesBasePath, $language);
+
+	// ── 4b. Build viewer registry ────────────────────────────────────────────
+	$viewerRegistry = ViewerLoader::load($resolved->config, $modulesBasePath, $language);
 
 	// ── 5. Route ──────────────────────────────────────────────────────────────
 	$router      = new Router();
@@ -79,7 +85,7 @@ try {
 
 	// ── 8. Dispatch to controller ─────────────────────────────────────────────
 	$host = $request->getHost();
-	$response = dispatch($route, $request, $auth, $tables, $resolved->connection, $openApiPublic, $host, $resolved, $modulesBasePath);
+	$response = dispatch($route, $request, $auth, $tables, $resolved->connection, $openApiPublic, $host, $resolved, $modulesBasePath, $viewerRegistry);
 
 	// ── 9. Apply headers and send ─────────────────────────────────────────────
 	applyAllHeaders($corsMiddleware, $rateLimiter, $response)->send();
@@ -136,6 +142,7 @@ function dispatch(
 	string $host,
 	\Shipard\Api\ResolvedDataSource $resolved,
 	string $modulesBasePath,
+	ViewerRegistry $viewerRegistry,
 ): Response {
 	$baseUrl = $resolved->isDevMode()
 		? 'http://' . $host . '/' . $resolved->config->getId()
@@ -146,6 +153,7 @@ function dispatch(
 		'crud' => dispatchCrud($route, $request, $tables, $db),
 		'meta' => dispatchMeta($route->action, $route->table, $tables, resolveLanguage($request)),
 		'ui' => dispatchUi($route->action, $resolved->config, $modulesBasePath, resolveLanguage($request)),
+		'viewer' => dispatchViewer($route, $request, $viewerRegistry, $db),
 		'openapi' => (new OpenApiController())->spec($auth, $openApiPublic, $tables, $baseUrl),
 		default => Response::error('INTERNAL_ERROR', "Unknown controller: {$route->controller}", 500),
 	};
@@ -202,5 +210,21 @@ function dispatchUi(string $action, \Shipard\Core\Config\DataSourceConfig $confi
 	return match ($action) {
 		'navigation' => $ctrl->navigation($config, $modulesBasePath, $language),
 		default      => Response::error('INTERNAL_ERROR', "Unknown UI action: {$action}", 500),
+	};
+}
+
+function dispatchViewer(
+	Route $route,
+	Request $request,
+	ViewerRegistry $registry,
+	\Shipard\Core\Database\DataSourceConnection $db,
+): Response {
+	$ctrl     = new ViewerController();
+	$viewerId = $route->table ?? '';
+	return match ($route->action) {
+		'meta'   => $ctrl->meta($viewerId, $registry, $db),
+		'rows'   => $ctrl->rows($viewerId, $request, $registry, $db),
+		'detail' => $ctrl->detail($viewerId, (int) $route->id, $registry, $db),
+		default  => Response::error('INTERNAL_ERROR', "Unknown viewer action: {$route->action}", 500),
 	};
 }

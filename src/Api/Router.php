@@ -49,6 +49,13 @@ class Router
 			return new Route('ui', 'navigation');
 		}
 
+		if (str_starts_with($subpath, '/_ui/viewer/')) {
+			if ($method !== 'GET') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return $this->resolveViewerRoute($subpath);
+		}
+
 		if ($subpath === '/_auth/login') {
 			if ($method !== 'POST') {
 				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
@@ -106,5 +113,45 @@ class Router
 		}
 
 		return Response::error('NOT_FOUND', 'Not found', 404);
+	}
+
+	private function resolveViewerRoute(string $subpath): Route|Response
+	{
+		// Strip prefix: "/_ui/viewer/" → remaining path
+		$rest = substr($subpath, strlen('/_ui/viewer/'));
+
+		// Find the last "/" to split viewerId from action segment
+		$lastSlash = strrpos($rest, '/');
+		if ($lastSlash === false || $lastSlash === 0) {
+			return Response::error('NOT_FOUND', 'Not found', 404);
+		}
+
+		$tail = substr($rest, $lastSlash + 1);
+
+		// /_ui/viewer/{viewerId}/detail/{id}
+		// Check if this is a detail route: the segment before the last "/" ends with /detail
+		$beforeTail = substr($rest, 0, $lastSlash);
+		$detailSlash = strrpos($beforeTail, '/');
+
+		if ($detailSlash !== false) {
+			$segment = substr($beforeTail, $detailSlash + 1);
+			if ($segment === 'detail') {
+				$viewerId = substr($beforeTail, 0, $detailSlash);
+				if ($viewerId === '' || !ctype_digit($tail) || (int) $tail <= 0) {
+					return Response::error('NOT_FOUND', 'Not found', 404);
+				}
+				return new Route('viewer', 'detail', $viewerId, (int) $tail);
+			}
+		}
+
+		// /_ui/viewer/{viewerId}/meta or /_ui/viewer/{viewerId}/rows
+		$viewerId = substr($rest, 0, $lastSlash);
+		$action = $tail;
+
+		if ($viewerId === '' || !in_array($action, ['meta', 'rows'], true)) {
+			return Response::error('NOT_FOUND', 'Not found', 404);
+		}
+
+		return new Route('viewer', $action, $viewerId);
 	}
 }

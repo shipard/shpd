@@ -20,6 +20,17 @@
         "base_persons_addresses"
     ],
 
+    "viewers": [
+        {
+            "id": "base.persons",
+            "name": "Persons",
+            "name:cs": "Osoby",
+            "name:en": "Persons",
+            "table": "base_persons_persons",
+            "class": "Shipard\\Module\\Base\\Persons\\PersonsViewer"
+        }
+    ],
+
     "documentClasses": [
         {
             "table": "base_persons_persons",

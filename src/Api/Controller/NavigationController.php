@@ -96,9 +96,30 @@ class NavigationController
 		[$group, $name] = explode('.', $module->id, 2);
 		$modulePath = $modulesBasePath . '/' . $group . '/' . $name;
 
+		// Build a map of tables covered by viewers: table => viewer data
+		$viewerByTable = [];
+		foreach ($module->viewers as $viewer) {
+			$viewerName = $viewer['name:' . $language]
+				?? $viewer['name:en']
+				?? $viewer['name']
+				?? $viewer['id'];
+			$viewerByTable[$viewer['table']] = [
+				'id'       => 'viewer:' . $viewer['id'],
+				'label'    => $viewerName,
+				'type'     => 'viewer',
+				'viewerId' => $viewer['id'],
+			];
+		}
+
 		$items = [];
 		foreach ($module->tables as $tableName) {
 			if ($this->shouldSkip($tableName)) {
+				continue;
+			}
+
+			// If a viewer covers this table, use the viewer item instead
+			if (isset($viewerByTable[$tableName])) {
+				$items[] = $viewerByTable[$tableName];
 				continue;
 			}
 

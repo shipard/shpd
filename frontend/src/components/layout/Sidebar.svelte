@@ -44,7 +44,7 @@
   }
 
   function handleItemClick(item) {
-    onNavigate?.({ id: item.id, label: item.label, type: item.type, table: item.table, filter: item.filter });
+    onNavigate?.({ id: item.id, label: item.label, type: item.type, table: item.table, viewerId: item.viewerId, filter: item.filter });
   }
 </script>
 

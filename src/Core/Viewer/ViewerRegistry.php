@@ -1,0 +1,86 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Shipard\Core\Viewer;
+
+use Shipard\Core\Database\DataSourceConnection;
+use Shipard\Core\Module\ModuleDefinition;
+
+class ViewerRegistry
+{
+    /** @var ViewerDefinition[] indexed by viewer ID */
+    private array $viewers = [];
+
+    /**
+     * Load viewer definitions from resolved modules.
+     * Each module can have a "viewers" array in its definition.
+     *
+     * @param ModuleDefinition[] $modules Resolved modules
+     * @param string $language For localized names
+     */
+    public function loadFromModules(array $modules, string $language): void
+    {
+        foreach ($modules as $module) {
+            foreach ($module->viewers as $viewer) {
+                $name = $viewer['name:' . $language]
+                    ?? $viewer['name:en']
+                    ?? $viewer['name']
+                    ?? $viewer['id'];
+
+                $def = new ViewerDefinition(
+                    id: $viewer['id'],
+                    name: $name,
+                    table: $viewer['table'],
+                    class: $viewer['class'],
+                    moduleId: $module->id,
+                );
+
+                $this->viewers[$def->id] = $def;
+            }
+        }
+    }
+
+    /**
+     * Register a viewer definition directly.
+     */
+    public function register(ViewerDefinition $def): void
+    {
+        $this->viewers[$def->id] = $def;
+    }
+
+    /**
+     * Get all registered viewer definitions.
+     * @return ViewerDefinition[]
+     */
+    public function getAll(): array
+    {
+        return $this->viewers;
+    }
+
+    /**
+     * Get a specific viewer definition by ID.
+     */
+    public function get(string $id): ?ViewerDefinition
+    {
+        return $this->viewers[$id] ?? null;
+    }
+
+    /**
+     * Instantiate a TableViewer object for the given viewer ID.
+     */
+    public function createViewer(string $id, DataSourceConnection $db): ?TableViewer
+    {
+        $def = $this->viewers[$id] ?? null;
+        if ($def === null) {
+            return null;
+        }
+
+        $class = $def->class;
+        if (!class_exists($class)) {
+            return null;
+        }
+
+        return new $class($db, $def->table);
+    }
+}

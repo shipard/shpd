@@ -24,13 +24,20 @@ class HelpCommand extends Command
         $output->writeln('<info>Shipard Data Source Tool v0.1.0</info>');
         $output->writeln('');
         $output->writeln('<comment>Available commands:</comment>');
-        $output->writeln('  <info>version</info>      Show Shipard data source tool version');
-        $output->writeln('  <info>help</info>         Show this help message');
-        $output->writeln('  <info>ds-upgrade</info>   Upgrade data source schema and configuration');
-        $output->writeln('  <info>user-create</info>  Create a new user in the data source');
+        $output->writeln('  <info>version</info>        Show Shipard data source tool version');
+        $output->writeln('  <info>help</info>           Show this help message');
+        $output->writeln('  <info>ds-upgrade</info>     Upgrade data source schema and configuration');
+        $output->writeln('  <info>user-create</info>    Create a new user in the data source');
+        $output->writeln('  <info>seed-persons</info>   Generate fake persons with contacts and bank accounts');
+        $output->writeln('  <info>seed-clear</info>     Remove all seeded test data (TEST- prefix)');
         $output->writeln('');
         $output->writeln('<comment>Usage:</comment>');
         $output->writeln('  shpd-ds <command> [options]');
+        $output->writeln('');
+        $output->writeln('<comment>Seeding examples:</comment>');
+        $output->writeln('  shpd-ds seed-persons --count=100 --with-contacts --with-bank-accounts');
+        $output->writeln('  shpd-ds seed-persons -c 20 --company-ratio=60');
+        $output->writeln('  shpd-ds seed-clear');
         $output->writeln('');
         $output->writeln('<comment>Note:</comment>');
         $output->writeln('  Run from within a data source directory (must contain config/main.json)');
@@ -43,7 +50,7 @@ class HelpCommand extends Command
     {
         $configFile = getcwd() . '/config/main.json';
         if (!file_exists($configFile)) {
-            $output->writeln('<error>Not a Shipard data source directory (config/main.json not found)</error>');
+            $output->writeln('<e>Not a Shipard data source directory (config/main.json not found)</e>');
             exit(Command::FAILURE);
         }
     }

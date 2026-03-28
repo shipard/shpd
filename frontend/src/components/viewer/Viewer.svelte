@@ -17,7 +17,9 @@
   let loadingRows = $state(false);
   let loadingMore = $state(false);
   let pageNumber = $state(0);
-  let search = $state('');
+
+  // Active search term used for API calls (updated after debounce)
+  let activeSearch = $state('');
 
   // --- Detail state ---
   let selectedRowId = $state(null);
@@ -32,8 +34,9 @@
   // --- Search debounce ---
   let searchTimer = null;
 
-  // --- Scroll container ref ---
+  // --- Refs ---
   let listEl = $state(null);
+  let searchInputEl = $state(null);
 
   // --- Derived ---
   let toolbarActions = $derived(
@@ -42,23 +45,27 @@
 
   // --- Data fetching ---
 
-  async function fetchMeta() {
+  async function fetchMeta(viewerId) {
     loadingMeta = true;
-    const result = await get(`/_ui/viewer/${tab.viewerId}/meta`);
+    const result = await get(`/_ui/viewer/${viewerId}/meta`);
     if (result?.success) {
       meta = result.data;
     }
     loadingMeta = false;
   }
 
-  async function fetchRows(append = false) {
+  /**
+   * Fetch rows from the API.
+   * Takes explicit parameters to avoid reading $state inside $effect.
+   */
+  async function fetchRowsExplicit(viewerId, search, page, append = false) {
     if (append) {
       loadingMore = true;
     } else {
       loadingRows = true;
     }
 
-    let path = `/_ui/viewer/${tab.viewerId}/rows?page=${pageNumber}`;
+    let path = `/_ui/viewer/${viewerId}/rows?page=${page}`;
     if (search) {
       path += `&search=${encodeURIComponent(search)}`;
     }
@@ -76,6 +83,11 @@
 
     loadingRows = false;
     loadingMore = false;
+  }
+
+  /** Convenience wrapper that reads current state — call from event handlers, NOT from $effect */
+  function fetchRows(append = false) {
+    fetchRowsExplicit(tab.viewerId, activeSearch, pageNumber, append);
   }
 
   async function fetchDetail(id) {
@@ -99,12 +111,25 @@
     const value = e.target.value;
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => {
-      search = value;
+      activeSearch = value;
       selectedRowId = null;
       detail = null;
       pageNumber = 0;
-      fetchRows();
+      // Use explicit params to fetch — this runs outside $effect
+      fetchRowsExplicit(tab.viewerId, value, 0);
     }, 300);
+  }
+
+  function handleSearchClear() {
+    if (searchInputEl) {
+      searchInputEl.value = '';
+    }
+    clearTimeout(searchTimer);
+    activeSearch = '';
+    selectedRowId = null;
+    detail = null;
+    pageNumber = 0;
+    fetchRowsExplicit(tab.viewerId, '', 0);
   }
 
   function handleRowClick(row) {
@@ -117,7 +142,7 @@
     const { scrollTop, scrollHeight, clientHeight } = listEl;
     if (scrollHeight - scrollTop - clientHeight < 100) {
       pageNumber += 1;
-      fetchRows(true);
+      fetchRowsExplicit(tab.viewerId, activeSearch, pageNumber, true);
     }
   }
 
@@ -137,31 +162,37 @@
   }
 
   function handleFormSaved() {
-    // Refresh rows after save
     pageNumber = 0;
-    fetchRows();
-    // Refresh detail if we were editing the selected row
+    fetchRowsExplicit(tab.viewerId, activeSearch, 0);
     if (selectedRowId != null) {
       fetchDetail(selectedRowId);
     }
   }
 
-  // Re-initialize when tab changes
+  // Re-initialize ONLY when the viewer tab changes.
+  // IMPORTANT: this $effect must not read any $state other than tab.viewerId,
+  // otherwise it will re-fire when those states change (e.g. on search).
+  // That's why we pass explicit values to fetchRowsExplicit instead of calling fetchRows().
   $effect(() => {
-    const _viewerId = tab.viewerId;
+    const viewerId = tab.viewerId;
 
-    // Reset state
+    // Reset all state
     meta = null;
     rows = [];
     selectedRowId = null;
     detail = null;
     detailToolbar = [];
-    search = '';
+    activeSearch = '';
     pageNumber = 0;
     hasMore = false;
 
-    fetchMeta();
-    fetchRows();
+    // Clear search input if it exists
+    if (searchInputEl) {
+      searchInputEl.value = '';
+    }
+
+    fetchMeta(viewerId);
+    fetchRowsExplicit(viewerId, '', 0);
   });
 </script>
 
@@ -186,9 +217,12 @@
           class="shpd-viewer__search-input"
           type="text"
           placeholder="Hledat..."
-          value={search}
           oninput={handleSearchInput}
+          bind:this={searchInputEl}
         />
+        {#if activeSearch}
+          <button class="shpd-viewer__search-clear" onclick={handleSearchClear} aria-label="Vymazat hledání">×</button>
+        {/if}
       </div>
 
       <div
@@ -266,6 +300,7 @@
   }
 
   .shpd-viewer__search {
+    position: relative;
     padding: var(--shpd-space-sm) var(--shpd-space-md);
     border-bottom: 1px solid var(--shpd-color-border);
     flex-shrink: 0;
@@ -274,6 +309,7 @@
   .shpd-viewer__search-input {
     width: 100%;
     padding: var(--shpd-space-xs) var(--shpd-space-sm);
+    padding-right: 28px;
     font-family: inherit;
     font-size: var(--shpd-font-size-sm);
     border: 1px solid var(--shpd-color-border);
@@ -287,6 +323,30 @@
   .shpd-viewer__search-input:focus {
     border-color: var(--shpd-color-border-focus);
     box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+  }
+
+  .shpd-viewer__search-clear {
+    position: absolute;
+    right: calc(var(--shpd-space-md) + 4px);
+    top: 50%;
+    transform: translateY(-50%);
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: none;
+    background: none;
+    font-size: 1rem;
+    color: var(--shpd-color-text-secondary);
+    cursor: pointer;
+    border-radius: var(--shpd-radius-sm);
+  }
+
+  .shpd-viewer__search-clear:hover {
+    color: var(--shpd-color-text);
+    background-color: var(--shpd-color-bg-secondary);
   }
 
   .shpd-viewer__rows {

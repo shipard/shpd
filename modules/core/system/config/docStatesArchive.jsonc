@@ -1,0 +1,83 @@
+{
+    // core.system.docStatesArchive
+    //
+    // Standardní sada stavů dokumentů pro tabulky s archivačním modelem.
+    // Používá se pro osoby, číselníky, nastavení a podobné tabulky.
+    //
+    // Stavový automat:
+    //   Koncept → V pořádku | V archívu | Smazáno
+    //   V pořádku → V opravě | V archívu | Smazáno
+    //   V opravě → V pořádku | V archívu | Smazáno
+    //   V archívu → V opravě
+    //   Smazáno → V opravě
+
+    "10": {
+        "stateName": "Koncept",
+        "stateName:cs": "Koncept",
+        "stateName:en": "Draft",
+        "actionName": "Uložit jako koncept",
+        "actionName:cs": "Uložit jako koncept",
+        "actionName:en": "Save as draft",
+        "stateStyle": "concept",
+        "mainState": 1,
+        "viewGroup": "active",
+        "goto": [40, 70, 90]
+    },
+
+    "80": {
+        "stateName": "V opravě",
+        "stateName:cs": "V opravě",
+        "stateName:en": "Being edited",
+        "actionName": "Opravit",
+        "actionName:cs": "Opravit",
+        "actionName:en": "Edit",
+        "stateStyle": "edit",
+        "mainState": 2,
+        "viewGroup": "active",
+        "goto": [40, 70, 90]
+    },
+
+    "40": {
+        "stateName": "V pořádku",
+        "stateName:cs": "V pořádku",
+        "stateName:en": "Confirmed",
+        "actionName": "V pořádku",
+        "actionName:cs": "V pořádku",
+        "actionName:en": "Confirm",
+        "stateStyle": "done",
+        "mainState": 3,
+        "viewGroup": "active",
+        "readOnly": 1,
+        "enablePrint": 1,
+        "goto": [80, 70, 90]
+    },
+
+    "70": {
+        "stateName": "V archívu",
+        "stateName:cs": "V archívu",
+        "stateName:en": "Archived",
+        "actionName": "Ukončit platnost",
+        "actionName:cs": "Ukončit platnost",
+        "actionName:en": "Archive",
+        "stateStyle": "archive",
+        "mainState": 4,
+        "viewGroup": "archive",
+        "readOnly": 1,
+        "enablePrint": 1,
+        "goto": [80]
+    },
+
+    "90": {
+        "stateName": "Smazáno",
+        "stateName:cs": "Smazáno",
+        "stateName:en": "Deleted",
+        "actionName": "Smazat",
+        "actionName:cs": "Smazat",
+        "actionName:en": "Delete",
+        "stateStyle": "trash",
+        "mainState": 5,
+        "viewGroup": "trash",
+        "readOnly": 1,
+        "goto": [80]
+    }
+}

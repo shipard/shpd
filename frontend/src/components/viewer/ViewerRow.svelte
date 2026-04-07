@@ -1,6 +1,13 @@
 <script>
   let { row, selected = false, onclick } = $props();
 
+  // Compute row CSS class including optional docState style
+  let rowClass = $derived(
+    'shpd-viewer-row' +
+    (selected ? ' shpd-viewer-row--selected' : '') +
+    (row.stateStyle ? ` docState_${row.stateStyle}` : '')
+  );
+
   /**
    * Normalize a field value into an array of span objects.
    * Handles: null, string, object {text, class?, icon?}, or array of those.
@@ -15,8 +22,7 @@
 </script>
 
 <button
-  class="shpd-viewer-row"
-  class:shpd-viewer-row--selected={selected}
+  class={rowClass}
   {onclick}
   type="button"
 >
@@ -103,6 +109,22 @@
     background-color: #dbeafe;
   }
 
+  /* Doc state row backgrounds */
+  :global(.docState_concept)        { background-color: #fefce8; }
+  :global(.docState_concept:hover)  { background-color: #fef9c3; }
+  :global(.docState_edit)           { background-color: #fff7ed; }
+  :global(.docState_edit:hover)     { background-color: #ffedd5; }
+  :global(.docState_confirmed)      { background-color: #eff6ff; }
+  :global(.docState_archive)        { background-color: #f8fafc; color: #64748b; }
+  :global(.docState_trash)          { background-color: #f8fafc; color: #94a3b8; text-decoration: line-through; }
+  :global(.docState_cancelled)      { background-color: #fff1f2; color: #be123c; }
+
+  /* Selected state always wins over docState background */
+  :global(.shpd-viewer-row--selected.docState_concept)   { background-color: #eff6ff; }
+  :global(.shpd-viewer-row--selected.docState_edit)      { background-color: #eff6ff; }
+  :global(.shpd-viewer-row--selected.docState_archive)   { background-color: #eff6ff; color: inherit; }
+  :global(.shpd-viewer-row--selected.docState_cancelled) { background-color: #eff6ff; color: inherit; }
+
   .shpd-viewer-row__icon {
     width: 32px;
     flex-shrink: 0;
@@ -156,41 +178,16 @@
     white-space: nowrap;
   }
 
-  .shpd-viewer-row__i2 {
-    flex-shrink: 0;
-  }
+  .shpd-viewer-row__i2 { flex-shrink: 0; }
 
-  .shpd-viewer-row__sep {
-    color: var(--shpd-color-border);
-  }
+  .shpd-viewer-row__sep { color: var(--shpd-color-border); }
 
   /* Styled span variants */
-  .shpd-viewer-row__span--amount {
-    font-variant-numeric: tabular-nums;
-    font-weight: 600;
-  }
-
-  .shpd-viewer-row__span--muted {
-    opacity: 0.6;
-  }
-
-  .shpd-viewer-row__span--bold {
-    font-weight: 600;
-  }
-
-  .shpd-viewer-row__span--primary {
-    color: var(--shpd-color-primary);
-  }
-
-  .shpd-viewer-row__span--success {
-    color: var(--shpd-color-success);
-  }
-
-  .shpd-viewer-row__span--warning {
-    color: var(--shpd-color-warning);
-  }
-
-  .shpd-viewer-row__span--danger {
-    color: var(--shpd-color-danger);
-  }
+  .shpd-viewer-row__span--amount   { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .shpd-viewer-row__span--muted    { opacity: 0.6; }
+  .shpd-viewer-row__span--bold     { font-weight: 600; }
+  .shpd-viewer-row__span--primary  { color: var(--shpd-color-primary); }
+  .shpd-viewer-row__span--success  { color: var(--shpd-color-success); }
+  .shpd-viewer-row__span--warning  { color: var(--shpd-color-warning); }
+  .shpd-viewer-row__span--danger   { color: var(--shpd-color-danger); }
 </style>

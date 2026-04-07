@@ -11,6 +11,25 @@
   let meta = $state(null);
   let loadingMeta = $state(true);
 
+  // --- Doc state tabs ---
+  let activeViewGroup = $state('active'); // 'active' | 'archive' | 'trash' | 'all'
+
+  const VIEW_GROUP_LABELS = {
+    active:  'Aktivní',
+    archive: 'Archív',
+    trash:   'Koš',
+  };
+
+  // Tabs to display: viewGroups from meta + always "Vše"
+  let viewTabs = $derived(() => {
+    const groups = meta?.viewGroups ?? [];
+    const tabs = groups.map(vg => ({ id: vg, label: VIEW_GROUP_LABELS[vg] ?? vg }));
+    tabs.push({ id: 'all', label: 'Vše' });
+    return tabs;
+  });
+
+  let hasViewGroups = $derived((meta?.viewGroups ?? []).length > 0);
+
   // --- Row list state ---
   let rows = $state([]);
   let hasMore = $state(false);
@@ -58,7 +77,7 @@
    * Fetch rows from the API.
    * Takes explicit parameters to avoid reading $state inside $effect.
    */
-  async function fetchRowsExplicit(viewerId, search, page, append = false) {
+  async function fetchRowsExplicit(viewerId, search, viewGroup, page, append = false) {
     if (append) {
       loadingMore = true;
     } else {
@@ -68,6 +87,10 @@
     let path = `/_ui/viewer/${viewerId}/rows?page=${page}`;
     if (search) {
       path += `&search=${encodeURIComponent(search)}`;
+    }
+    // Send viewGroup filter unless "all" is selected
+    if (viewGroup && viewGroup !== 'all') {
+      path += `&filter[viewGroup]=${encodeURIComponent(viewGroup)}`;
     }
 
     const result = await get(path);
@@ -85,9 +108,9 @@
     loadingMore = false;
   }
 
-  /** Convenience wrapper that reads current state — call from event handlers, NOT from $effect */
+  /** Convenience wrapper — call from event handlers, NOT from $effect */
   function fetchRows(append = false) {
-    fetchRowsExplicit(tab.viewerId, activeSearch, pageNumber, append);
+    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, pageNumber, append);
   }
 
   async function fetchDetail(id) {
@@ -107,6 +130,15 @@
 
   // --- Handlers ---
 
+  function handleTabClick(viewGroup) {
+    if (viewGroup === activeViewGroup) return;
+    activeViewGroup = viewGroup;
+    selectedRowId = null;
+    detail = null;
+    pageNumber = 0;
+    fetchRowsExplicit(tab.viewerId, activeSearch, viewGroup, 0);
+  }
+
   function handleSearchInput(e) {
     const value = e.target.value;
     clearTimeout(searchTimer);
@@ -115,8 +147,7 @@
       selectedRowId = null;
       detail = null;
       pageNumber = 0;
-      // Use explicit params to fetch — this runs outside $effect
-      fetchRowsExplicit(tab.viewerId, value, 0);
+      fetchRowsExplicit(tab.viewerId, value, activeViewGroup, 0);
     }, 300);
   }
 
@@ -129,7 +160,7 @@
     selectedRowId = null;
     detail = null;
     pageNumber = 0;
-    fetchRowsExplicit(tab.viewerId, '', 0);
+    fetchRowsExplicit(tab.viewerId, '', activeViewGroup, 0);
   }
 
   function handleRowClick(row) {
@@ -142,7 +173,7 @@
     const { scrollTop, scrollHeight, clientHeight } = listEl;
     if (scrollHeight - scrollTop - clientHeight < 100) {
       pageNumber += 1;
-      fetchRowsExplicit(tab.viewerId, activeSearch, pageNumber, true);
+      fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, pageNumber, true);
     }
   }
 
@@ -163,16 +194,14 @@
 
   function handleFormSaved() {
     pageNumber = 0;
-    fetchRowsExplicit(tab.viewerId, activeSearch, 0);
+    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, 0);
     if (selectedRowId != null) {
       fetchDetail(selectedRowId);
     }
   }
 
   // Re-initialize ONLY when the viewer tab changes.
-  // IMPORTANT: this $effect must not read any $state other than tab.viewerId,
-  // otherwise it will re-fire when those states change (e.g. on search).
-  // That's why we pass explicit values to fetchRowsExplicit instead of calling fetchRows().
+  // IMPORTANT: this $effect must not read any $state other than tab.viewerId.
   $effect(() => {
     const viewerId = tab.viewerId;
 
@@ -183,16 +212,16 @@
     detail = null;
     detailToolbar = [];
     activeSearch = '';
+    activeViewGroup = 'active';
     pageNumber = 0;
     hasMore = false;
 
-    // Clear search input if it exists
     if (searchInputEl) {
       searchInputEl.value = '';
     }
 
     fetchMeta(viewerId);
-    fetchRowsExplicit(viewerId, '', 0);
+    fetchRowsExplicit(viewerId, '', 'active', 0);
   });
 </script>
 
@@ -210,8 +239,26 @@
   <ViewerToolbar actions={toolbarActions} onAction={handleToolbarAction} />
 
   <div class="shpd-viewer__body">
-    <!-- Left panel: search + row list -->
+    <!-- Left panel: tabs + search + row list -->
     <div class="shpd-viewer__list-panel">
+
+      <!-- Doc state tab bar (only shown when viewer supports viewGroups) -->
+      {#if hasViewGroups && viewTabs().length > 0}
+        <div class="shpd-viewer__tabs">
+          {#each viewTabs() as vt (vt.id)}
+            <button
+              class="shpd-viewer__tab"
+              class:shpd-viewer__tab--active={activeViewGroup === vt.id}
+              onclick={() => handleTabClick(vt.id)}
+              type="button"
+            >
+              {vt.label}
+            </button>
+          {/each}
+        </div>
+      {/if}
+
+      <!-- Search -->
       <div class="shpd-viewer__search">
         <input
           class="shpd-viewer__search-input"
@@ -225,6 +272,7 @@
         {/if}
       </div>
 
+      <!-- Row list -->
       <div
         class="shpd-viewer__rows"
         bind:this={listEl}
@@ -299,6 +347,38 @@
     overflow: hidden;
   }
 
+  /* Doc state tabs */
+  .shpd-viewer__tabs {
+    display: flex;
+    border-bottom: 1px solid var(--shpd-color-border);
+    background-color: var(--shpd-color-bg);
+    flex-shrink: 0;
+  }
+
+  .shpd-viewer__tab {
+    padding: var(--shpd-space-xs) var(--shpd-space-md);
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: none;
+    font-family: inherit;
+    font-size: var(--shpd-font-size-sm);
+    color: var(--shpd-color-text-secondary);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color 0.12s, border-color 0.12s;
+  }
+
+  .shpd-viewer__tab:hover {
+    color: var(--shpd-color-text);
+  }
+
+  .shpd-viewer__tab--active {
+    color: var(--shpd-color-primary);
+    border-bottom-color: var(--shpd-color-primary);
+    font-weight: 600;
+  }
+
+  /* Search */
   .shpd-viewer__search {
     position: relative;
     padding: var(--shpd-space-sm) var(--shpd-space-md);

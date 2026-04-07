@@ -72,4 +72,9 @@ class DataSourceConfig
     {
         return $this->data['modules'] ?? [];
     }
+
+    public function getDataSourceDir(): string
+    {
+        return $this->dataSourceDir;
+    }
 }

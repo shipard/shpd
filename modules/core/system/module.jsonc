@@ -12,5 +12,11 @@
         "core_system_settings",
         "core_system_api_keys",
         "core_system_rate_limits"
+    ],
+    "config": [
+        {
+            "id": "core.system.docStatesArchive",
+            "file": "config/docStatesArchive.jsonc"
+        }
     ]
 }

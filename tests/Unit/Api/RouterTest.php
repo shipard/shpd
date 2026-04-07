@@ -175,4 +175,25 @@ class RouterTest extends TestCase
 		$this->assertInstanceOf(Route::class, $result);
 		$this->assertSame('economy_codebooks_warehouses', $result->table);
 	}
+
+	public function testDocStateOptions(): void
+	{
+		$result = $this->router->resolve('/api/v1/base_persons_persons/42/doc-state-options', 'GET');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'crud', 'docStateOptions', 'base_persons_persons', 42);
+	}
+
+	public function testDocStateOptionsMethodNotAllowed(): void
+	{
+		$result = $this->router->resolve('/api/v1/base_persons_persons/42/doc-state-options', 'POST');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
+	}
+
+	public function testUnknownSubResource(): void
+	{
+		$result = $this->router->resolve('/api/v1/users/5/unknown-action', 'GET');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('NOT_FOUND', $result->getPayload()['error']['code']);
+	}
 }

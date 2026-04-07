@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Shipard\Core\Viewer;
 
+use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Module\ModuleDefinition;
 
@@ -69,7 +70,7 @@ class ViewerRegistry
     /**
      * Instantiate a TableViewer object for the given viewer ID.
      */
-    public function createViewer(string $id, DataSourceConnection $db): ?TableViewer
+    public function createViewer(string $id, DataSourceConnection $db, ?ConfigRuntime $config = null): ?TableViewer
     {
         $def = $this->viewers[$id] ?? null;
         if ($def === null) {
@@ -81,6 +82,10 @@ class ViewerRegistry
             return null;
         }
 
-        return new $class($db, $def->table);
+        $viewer = new $class($db, $def->table);
+        if ($config !== null) {
+            $viewer->setConfig($config);
+        }
+        return $viewer;
     }
 }

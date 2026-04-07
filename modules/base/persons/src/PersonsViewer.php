@@ -3,30 +3,51 @@ declare(strict_types=1);
 
 namespace Shipard\Module\Base\Persons;
 
+use Shipard\Core\Document\DocStateConfig;
 use Shipard\Core\Viewer\TableViewer;
 
 class PersonsViewer extends TableViewer
 {
+	protected ?string $docStatesCfgItem = 'core.system.docStatesArchive';
+
+	/** Maps stateStyle to a span class for the state badge in t2. */
+	private const STATE_SPAN_CLASS = [
+		'concept'   => 'warning',
+		'confirmed' => 'primary',
+		'done'      => 'success',
+		'edit'      => 'warning',
+		'archive'   => 'muted',
+		'trash'     => 'muted',
+		'cancelled' => 'danger',
+	];
+
 	public function selectRows(?string $search, array $filters, int $pageNumber): array
 	{
-		$sql = 'SELECT `id`, `person_id`, `person_type`, `full_name`, `company_id`, `tax_id`, `email`, `phone`, `is_closed`'
+		$sql = 'SELECT `id`, `person_id`, `person_type`, `full_name`, `company_id`, `tax_id`,'
+			. ' `email`, `phone`, `docState`, `docStateMain`'
 			. ' FROM `' . $this->table . '`';
 
 		$conditions = [];
-		$params = [];
+		$params     = [];
 
-		// Default: hide closed records unless filter is active
-		$showClosed = false;
+		// viewGroup filter drives which doc-state tab is active.
+		// Default: 'active' — show Koncept, V opravě and V pořádku.
+		$viewGroup = 'active';
 		foreach ($filters as $filter) {
-			if ($filter['id'] === 'is_closed' && $filter['value']) {
-				$showClosed = true;
+			if ($filter['id'] === 'viewGroup') {
+				$viewGroup = (string) $filter['value'];
 			}
 		}
-		if (!$showClosed) {
-			$conditions[] = '`is_closed` = 0';
+
+		if ($viewGroup !== 'all') {
+			[$vgSql, $vgParams] = $this->buildViewGroupFilter($this->docStatesCfgItem, $viewGroup);
+			if ($vgSql !== '') {
+				$conditions[] = $vgSql;
+				$params       = array_merge($params, $vgParams);
+			}
 		}
 
-		// Search
+		// Fulltext search across key columns
 		if ($search !== null && $search !== '') {
 			[$searchSql, $searchParams] = $this->buildSearchCondition(
 				['full_name', 'company_id', 'email', 'person_id'],
@@ -34,7 +55,7 @@ class PersonsViewer extends TableViewer
 			);
 			if ($searchSql !== '') {
 				$conditions[] = $searchSql;
-				$params = array_merge($params, $searchParams);
+				$params       = array_merge($params, $searchParams);
 			}
 		}
 
@@ -42,7 +63,8 @@ class PersonsViewer extends TableViewer
 			$sql .= ' WHERE ' . implode(' AND ', $conditions);
 		}
 
-		$sql .= ' ORDER BY `last_name` ASC, `first_name` ASC, `id` ASC';
+		// docStateMain first: Koncepty nahoře, pak V opravě, pak V pořádku; within each group, alphabetically
+		$sql .= ' ORDER BY `docStateMain` ASC, `last_name` ASC, `first_name` ASC, `id` ASC';
 
 		[$offset, $limit] = $this->buildPaginationLimit($pageNumber);
 		$sql .= ' LIMIT ' . $offset . ', ' . $limit;
@@ -58,7 +80,7 @@ class PersonsViewer extends TableViewer
 			'i1' => $rowData['person_id'] ?? null,
 		];
 
-		// Build t2 spans
+		// Line 2: IČO, DIČ, plus state badge for non-default states
 		$t2 = [];
 		if (!empty($rowData['company_id'])) {
 			$t2[] = ['text' => 'IČO: ' . $rowData['company_id']];
@@ -66,15 +88,29 @@ class PersonsViewer extends TableViewer
 		if (!empty($rowData['tax_id'])) {
 			$t2[] = ['text' => 'DIČ: ' . $rowData['tax_id']];
 		}
-		if (!empty($rowData['is_closed'])) {
-			$t2[] = ['text' => 'Uzavřeno', 'class' => 'danger'];
+
+		$docState  = (int) ($rowData['docState'] ?? 10);
+		$cfg       = DocStateConfig::fromCfgItem($this->config?->cfgItem($this->docStatesCfgItem));
+		$stateData = $cfg->getState($docState);
+		$stateStyle = $stateData['stateStyle'] ?? 'concept';
+
+		// Badge non-default states so the user sees them at a glance
+		if ($docState !== 10) {
+			$t2[] = [
+				'text'  => $stateData['stateName'] ?? '',
+				'class' => self::STATE_SPAN_CLASS[$stateStyle] ?? 'muted',
+			];
 		}
+
 		$row['t2'] = $t2 !== [] ? $t2 : null;
 
-		// Build t3: email or phone
+		// Line 3: e-mail or phone
 		$row['t3'] = !empty($rowData['email'])
 			? $rowData['email']
 			: (!empty($rowData['phone']) ? $rowData['phone'] : null);
+
+		// Row-level state style for CSS coloring in the viewer list
+		$row['stateStyle'] = $stateStyle;
 
 		return $row;
 	}
@@ -94,8 +130,8 @@ class PersonsViewer extends TableViewer
 
 		// Tab 1: Overview
 		$tabs[] = [
-			'id' => 'overview',
-			'label' => 'Přehled',
+			'id'      => 'overview',
+			'label'   => 'Přehled',
 			'content' => $this->buildOverviewContent($record),
 		];
 
@@ -105,13 +141,13 @@ class PersonsViewer extends TableViewer
 			$recordId,
 		);
 		$tabs[] = [
-			'id' => 'contacts',
+			'id'    => 'contacts',
 			'label' => 'Kontakty',
 			'content' => [
-				'type' => 'table',
+				'type'    => 'table',
 				'columns' => [
-					['id' => 'name', 'label' => 'Název'],
-					['id' => 'role', 'label' => 'Funkce'],
+					['id' => 'name',  'label' => 'Název'],
+					['id' => 'role',  'label' => 'Funkce'],
 					['id' => 'email', 'label' => 'E-mail'],
 					['id' => 'phone', 'label' => 'Telefon'],
 				],
@@ -125,12 +161,12 @@ class PersonsViewer extends TableViewer
 			$recordId,
 		);
 		$tabs[] = [
-			'id' => 'addresses',
+			'id'    => 'addresses',
 			'label' => 'Adresy',
 			'content' => [
-				'type' => 'table',
+				'type'    => 'table',
 				'columns' => [
-					['id' => 'name', 'label' => 'Název'],
+					['id' => 'name',         'label' => 'Název'],
 					['id' => 'display_line', 'label' => 'Adresa'],
 				],
 				'rows' => $addresses,
@@ -153,12 +189,7 @@ class PersonsViewer extends TableViewer
 		return $actions;
 	}
 
-	public function getFilters(): array
-	{
-		return [
-			['id' => 'is_closed', 'label' => 'Zobrazit uzavřené', 'type' => 'checkbox'],
-		];
-	}
+	// -------------------------------------------------------------------------
 
 	private function buildOverviewContent(array $record): array
 	{
@@ -191,15 +222,10 @@ class PersonsViewer extends TableViewer
 			$groups[] = ['title' => 'Osobní údaje', 'items' => $personalItems];
 		}
 
-		return [
-			'type' => 'properties',
-			'groups' => $groups,
-		];
+		return ['type' => 'properties', 'groups' => $groups];
 	}
 
-	/**
-	 * @param array<int, array{label: string, value: string}> $items
-	 */
+	/** @param array<int, array{label: string, value: string}> $items */
 	private function addItem(array &$items, string $label, mixed $value): void
 	{
 		if ($value !== null && $value !== '') {

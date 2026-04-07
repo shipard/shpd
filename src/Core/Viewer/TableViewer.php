@@ -4,17 +4,79 @@ declare(strict_types=1);
 
 namespace Shipard\Core\Viewer;
 
+use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Database\DataSourceConnection;
+use Shipard\Core\Document\DocStateConfig;
 
 abstract class TableViewer
 {
     /** Default number of rows per page. Subclasses can override. */
     protected int $pageSize = 50;
 
+    /**
+     * Compiled config runtime — injected via setConfig() after construction.
+     * Available if the data source has a compiled configuration.
+     */
+    protected ?ConfigRuntime $config = null;
+
+    /**
+     * Set by subclass to enable automatic viewGroup tab support.
+     * Must match the cfgItem ID of a docStates config (e.g. 'core.system.docStatesArchive').
+     */
+    protected ?string $docStatesCfgItem = null;
+
     public function __construct(
         protected DataSourceConnection $db,
         protected string $table,
     ) {}
+
+    /** Inject compiled config — called by ViewerRegistry after construction. */
+    public function setConfig(ConfigRuntime $config): void
+    {
+        $this->config = $config;
+    }
+
+    /**
+     * Returns available viewGroup identifiers for this viewer's tab bar.
+     * Derived automatically from $docStatesCfgItem if set.
+     * Returns empty array when docStates are not supported.
+     *
+     * @return string[]  e.g. ['active', 'archive', 'trash']
+     */
+    public function getViewGroups(): array
+    {
+        if ($this->docStatesCfgItem === null || $this->config === null) {
+            return [];
+        }
+        $cfg = DocStateConfig::fromCfgItem($this->config->cfgItem($this->docStatesCfgItem));
+        $groups = [];
+        foreach (['active', 'archive', 'trash'] as $vg) {
+            if (!empty($cfg->getViewGroupStates($vg))) {
+                $groups[] = $vg;
+            }
+        }
+        return $groups;
+    }
+
+    /**
+     * Build a WHERE fragment that restricts rows to the given viewGroup.
+     * Use inside selectRows() when handling a 'viewGroup' filter.
+     *
+     * @return array{0: string, 1: array}  [sql_fragment, params]
+     */
+    protected function buildViewGroupFilter(string $cfgItemId, string $viewGroup): array
+    {
+        if ($this->config === null) {
+            return ['', []];
+        }
+        $cfg    = DocStateConfig::fromCfgItem($this->config->cfgItem($cfgItemId));
+        $states = $cfg->getViewGroupStates($viewGroup);
+        if (empty($states)) {
+            return ['1=0', []];
+        }
+        $placeholders = implode(', ', array_fill(0, count($states), '%i'));
+        return ['`docState` IN (' . $placeholders . ')', $states];
+    }
 
     /**
      * Get the page size for this viewer.

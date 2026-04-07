@@ -10,6 +10,7 @@ use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Database\ColumnDefinition;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Database\TableDefinition;
+use Shipard\Core\Document\DocStateConfig;
 
 class CrudController
 {
@@ -121,6 +122,9 @@ class CrudController
 			$data['modified'] = $now;
 		}
 
+		// Set docState + docStateMain for new records
+		$this->initDocState($body, $def, $data);
+
 		$newId = $this->insertRecord($table, $data);
 
 		$row = $this->fetchById($table, $newId, $this->allReadableColumns($def));
@@ -154,6 +158,13 @@ class CrudController
 		}
 
 		$data = $this->filterWritableFields($body, $def);
+
+		// Validate and apply doc state transition
+		$stateErr = $this->processDocState($table, $id, $body, $def, $data);
+		if ($stateErr !== null) {
+			return $stateErr;
+		}
+
 		if ($this->tableHasColumn($def, 'modified')) {
 			$data['modified'] = date('Y-m-d H:i:s');
 		}
@@ -187,6 +198,13 @@ class CrudController
 		}
 
 		$data = $this->filterWritableFields($body, $def);
+
+		// Validate and apply doc state transition
+		$stateErr = $this->processDocState($table, $id, $body, $def, $data);
+		if ($stateErr !== null) {
+			return $stateErr;
+		}
+
 		if ($data === []) {
 			// Nothing to update; just return current state
 			$row = $this->fetchById($table, $id, $this->allReadableColumns($def));
@@ -218,6 +236,133 @@ class CrudController
 		$this->deleteRecord($table, $id);
 
 		return Response::success(null, 204);
+	}
+
+	/**
+	 * Returns the available doc state transitions for a given record.
+	 * GET /{table}/{id}/doc-state-options
+	 */
+	public function docStateOptions(string $table, int $id): Response
+	{
+		$def = $this->tables[$table] ?? null;
+		if ($def === null) {
+			return Response::error('TABLE_NOT_FOUND', "Table '{$table}' not found", 404);
+		}
+
+		$dsDef = $def->docStates;
+		if ($dsDef === null) {
+			return Response::error('NO_DOC_STATES', "Table '{$table}' does not support document states", 404);
+		}
+
+		$stateCol = $dsDef->stateColumn;
+		$row      = $this->fetchById($table, $id, [$stateCol]);
+		if ($row === null) {
+			return Response::error('NOT_FOUND', 'Record not found', 404);
+		}
+
+		$cfg          = $this->loadDocStateConfig($dsDef->cfgItem);
+		$currentState = (int) ($row[$stateCol] ?? 10);
+		$stateData    = $cfg->getState($currentState);
+
+		return Response::success([
+			'currentState' => $currentState,
+			'stateName'    => $stateData['stateName']  ?? '',
+			'stateStyle'   => $stateData['stateStyle']  ?? '',
+			'readOnly'     => $cfg->isReadOnly($currentState),
+			'transitions'  => $cfg->getAvailableTransitions($currentState),
+		]);
+	}
+
+	// -------------------------------------------------------------------------
+	// Doc state helpers (private)
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Sets docState and docStateMain when creating a new record.
+	 * Uses docState from $rawBody if provided, otherwise defaults to 10 (Koncept).
+	 */
+	private function initDocState(array $rawBody, TableDefinition $def, array &$data): void
+	{
+		$dsDef = $def->docStates;
+		if ($dsDef === null || $this->config === null) {
+			return;
+		}
+
+		$stateCol = $dsDef->stateColumn;
+		$mainCol  = $dsDef->mainColumn;
+		$cfg      = $this->loadDocStateConfig($dsDef->cfgItem);
+
+		$newState        = isset($rawBody[$stateCol]) ? (int) $rawBody[$stateCol] : 10;
+		$data[$stateCol] = $newState;
+		$data[$mainCol]  = $cfg->getMainState($newState);
+	}
+
+	/**
+	 * Validates and applies a doc state transition on update/patch.
+	 *
+	 * Rules:
+	 * - If current state is readOnly and body contains non-system fields → error
+	 * - If docState is in the body, validate that the transition is in goto[] → error if not
+	 * - On valid transition: set docState + docStateMain in $data
+	 *
+	 * Returns a Response on error, null on success.
+	 */
+	private function processDocState(
+		string $table,
+		int $id,
+		array $rawBody,
+		TableDefinition $def,
+		array &$data,
+	): ?Response {
+		$dsDef = $def->docStates;
+		if ($dsDef === null || $this->config === null) {
+			return null;
+		}
+
+		$stateCol = $dsDef->stateColumn;
+		$mainCol  = $dsDef->mainColumn;
+		$cfg      = $this->loadDocStateConfig($dsDef->cfgItem);
+
+		// Load current state from DB
+		$currentRow   = $this->fetchById($table, $id, [$stateCol]);
+		$currentState = (int) ($currentRow[$stateCol] ?? 10);
+		$isReadOnly   = $cfg->isReadOnly($currentState);
+
+		$hasStateChange = isset($rawBody[$stateCol]);
+
+		// readOnly + non-system fields being written → refuse
+		if ($isReadOnly && $data !== []) {
+			return Response::error(
+				'DOCUMENT_READONLY',
+				"Document is read-only in state {$currentState}. Switch to edit state first (e.g. V opravě).",
+				422,
+			);
+		}
+
+		if ($hasStateChange) {
+			$newState = (int) $rawBody[$stateCol];
+
+			if (!$cfg->isTransitionAllowed($currentState, $newState)) {
+				return Response::error(
+					'INVALID_STATE_TRANSITION',
+					"Transition from state {$currentState} to {$newState} is not allowed.",
+					422,
+				);
+			}
+
+			$data[$stateCol] = $newState;
+			$data[$mainCol]  = $cfg->getMainState($newState);
+		}
+
+		return null;
+	}
+
+	/** Loads and wraps the docStates cfgItem from ConfigRuntime. */
+	private function loadDocStateConfig(string $cfgItemId): DocStateConfig
+	{
+		return DocStateConfig::fromCfgItem(
+			$this->config !== null ? $this->config->cfgItem($cfgItemId) : null,
+		);
 	}
 
 	// -------------------------------------------------------------------------
@@ -503,20 +648,23 @@ class CrudController
 		return $result;
 	}
 
+	/**
+	 * Returns fields from $data that are writable: defined in the table, not auto-managed, not system.
+	 * System columns (docState, docStateMain, …) are handled explicitly by initDocState / processDocState.
+	 */
 	private function filterWritableFields(array $data, TableDefinition $def): array
 	{
-		$auto   = ['id', 'created', 'modified'];
-		$colMap = [];
+		$excluded = ['id', 'created', 'modified'];
+		$colMap   = [];
 		foreach ($def->columns as $col) {
-			$colMap[$col->id] = true;
+			if (!in_array($col->id, $excluded, true) && !$col->system) {
+				$colMap[$col->id] = true;
+			}
 		}
 
 		$result = [];
 		foreach ($data as $k => $v) {
 			$k = (string) $k;
-			if (in_array($k, $auto, true)) {
-				continue;
-			}
 			if (isset($colMap[$k])) {
 				$result[$k] = $v;
 			}

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Shipard\Core\Database;
 
+use Shipard\Core\Document\DocStatesDefinition;
+
 class TableDefinition
 {
     public function __construct(
@@ -14,6 +16,7 @@ class TableDefinition
         public readonly array $columns,
         public readonly array $indexes,
         public readonly array $childTables,
+        public readonly ?DocStatesDefinition $docStates,
     ) {}
 
     public static function fromArray(array $data): self
@@ -58,6 +61,9 @@ class TableDefinition
             columns: $columns,
             indexes: $indexes,
             childTables: $data['childTables'] ?? [],
+            docStates: isset($data['docStates']) && is_array($data['docStates'])
+                ? DocStatesDefinition::fromArray($data['docStates'])
+                : null,
         );
     }
 }

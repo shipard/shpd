@@ -47,11 +47,11 @@ try {
 	$resolved = $resolver->resolve($request->getHost(), $request->getPath());
 
 	// ── 4. Load table definitions (localized) ─────────────────────────────────
-	$language = resolveLanguage($request);
+	$language        = resolveLanguage($request);
 	$modulesBasePath = dirname(__DIR__) . '/modules';
-	$tables = TableLoader::load($resolved->config, $modulesBasePath, $language);
+	$tables          = TableLoader::load($resolved->config, $modulesBasePath, $language);
 
-	// ── 4b. Build viewer registry ────────────────────────────────────────────
+	// ── 4b. Build viewer registry ─────────────────────────────────────────────
 	$viewerRegistry = ViewerLoader::load($resolved->config, $modulesBasePath, $language);
 
 	// ── 5. Route ──────────────────────────────────────────────────────────────
@@ -83,11 +83,27 @@ try {
 		exit;
 	}
 
-	// ── 8. Dispatch to controller ─────────────────────────────────────────────
-	$host = $request->getHost();
-	$response = dispatch($route, $request, $auth, $tables, $resolved->connection, $openApiPublic, $host, $resolved, $modulesBasePath, $viewerRegistry);
+	// ── 8. Load compiled config (best-effort) ────────────────────────────────
+	$configRuntime = null;
+	try {
+		$configRuntime = \Shipard\Core\Config\ConfigRuntime::load(
+			$resolved->config->getDataSourceDir(),
+			$language,
+		);
+	} catch (\Throwable) {
+		// Config may not be compiled yet — doc state and enum features degrade gracefully
+	}
 
-	// ── 9. Apply headers and send ─────────────────────────────────────────────
+	// ── 9. Dispatch to controller ─────────────────────────────────────────────
+	$host     = $request->getHost();
+	$response = dispatch(
+		$route, $request, $auth, $tables,
+		$resolved->connection, $openApiPublic,
+		$host, $resolved, $modulesBasePath,
+		$viewerRegistry, $configRuntime,
+	);
+
+	// ── 10. Apply headers and send ────────────────────────────────────────────
 	applyAllHeaders($corsMiddleware, $rateLimiter, $response)->send();
 
 } catch (UnknownDataSourceException $e) {
@@ -99,8 +115,8 @@ try {
 		Response::error('UNKNOWN_HOST', 'Unknown host', 404),
 	)->send();
 } catch (\Throwable $e) {
-	$isDev    = $serverConfig !== null && $serverConfig->getMode() === 'development';
-	$details  = $isDev
+	$isDev   = $serverConfig !== null && $serverConfig->getMode() === 'development';
+	$details = $isDev
 		? [['field' => '_exception', 'code' => get_class($e), 'message' => $e->getMessage()]]
 		: [];
 	$corsMiddleware->applyTo(
@@ -143,19 +159,20 @@ function dispatch(
 	\Shipard\Api\ResolvedDataSource $resolved,
 	string $modulesBasePath,
 	ViewerRegistry $viewerRegistry,
+	?\Shipard\Core\Config\ConfigRuntime $configRuntime = null,
 ): Response {
 	$baseUrl = $resolved->isDevMode()
 		? 'http://' . $host . '/' . $resolved->config->getId()
 		: 'https://' . $host;
 
 	return match ($route->controller) {
-		'auth' => dispatchAuth($route->action, $request, $auth, $db),
-		'crud' => dispatchCrud($route, $request, $tables, $db),
-		'meta' => dispatchMeta($route->action, $route->table, $tables, resolveLanguage($request)),
-		'ui' => dispatchUi($route->action, $resolved->config, $modulesBasePath, resolveLanguage($request)),
-		'viewer' => dispatchViewer($route, $request, $viewerRegistry, $db),
+		'auth'    => dispatchAuth($route->action, $request, $auth, $db),
+		'crud'    => dispatchCrud($route, $request, $tables, $db, $configRuntime),
+		'meta'    => dispatchMeta($route->action, $route->table, $tables, resolveLanguage($request)),
+		'ui'      => dispatchUi($route->action, $resolved->config, $modulesBasePath, resolveLanguage($request)),
+		'viewer'  => dispatchViewer($route, $request, $viewerRegistry, $db, $configRuntime),
 		'openapi' => (new OpenApiController())->spec($auth, $openApiPublic, $tables, $baseUrl),
-		default => Response::error('INTERNAL_ERROR', "Unknown controller: {$route->controller}", 500),
+		default   => Response::error('INTERNAL_ERROR', "Unknown controller: {$route->controller}", 500),
 	};
 }
 
@@ -179,18 +196,20 @@ function dispatchCrud(
 	Request $request,
 	array $tables,
 	\Shipard\Core\Database\DataSourceConnection $db,
+	?\Shipard\Core\Config\ConfigRuntime $configRuntime = null,
 ): Response {
-	$ctrl  = new CrudController($db, $tables);
+	$ctrl  = new CrudController($db, $tables, $configRuntime);
 	$table = $route->table ?? '';
 	$id    = $route->id;
 	return match ($route->action) {
-		'list'   => $ctrl->list($table, $request),
-		'show'   => $ctrl->show($table, (int) $id, $request),
-		'create' => $ctrl->create($table, $request),
-		'update' => $ctrl->update($table, (int) $id, $request),
-		'patch'  => $ctrl->patch($table, (int) $id, $request),
-		'delete' => $ctrl->delete($table, (int) $id),
-		default  => Response::error('INTERNAL_ERROR', "Unknown CRUD action: {$route->action}", 500),
+		'list'            => $ctrl->list($table, $request),
+		'show'            => $ctrl->show($table, (int) $id, $request),
+		'create'          => $ctrl->create($table, $request),
+		'update'          => $ctrl->update($table, (int) $id, $request),
+		'patch'           => $ctrl->patch($table, (int) $id, $request),
+		'delete'          => $ctrl->delete($table, (int) $id),
+		'docStateOptions' => $ctrl->docStateOptions($table, (int) $id),
+		default           => Response::error('INTERNAL_ERROR', "Unknown CRUD action: {$route->action}", 500),
 	};
 }
 
@@ -218,13 +237,14 @@ function dispatchViewer(
 	Request $request,
 	ViewerRegistry $registry,
 	\Shipard\Core\Database\DataSourceConnection $db,
+	?\Shipard\Core\Config\ConfigRuntime $config = null,
 ): Response {
 	$ctrl     = new ViewerController();
 	$viewerId = $route->table ?? '';
 	return match ($route->action) {
-		'meta'   => $ctrl->meta($viewerId, $registry, $db),
-		'rows'   => $ctrl->rows($viewerId, $request, $registry, $db),
-		'detail' => $ctrl->detail($viewerId, (int) $route->id, $registry, $db),
+		'meta'   => $ctrl->meta($viewerId, $registry, $db, $config),
+		'rows'   => $ctrl->rows($viewerId, $request, $registry, $db, $config),
+		'detail' => $ctrl->detail($viewerId, (int) $route->id, $registry, $db, $config),
 		default  => Response::error('INTERNAL_ERROR', "Unknown viewer action: {$route->action}", 500),
 	};
 }

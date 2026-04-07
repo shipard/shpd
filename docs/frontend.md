@@ -49,7 +49,7 @@ frontend/
 │   │   ├── config.js                   # Detekce DS ID z URL, API_BASE_URL
 │   │   ├── client.js                   # HTTP klient (fetch wrapper s auth, refresh, retry)
 │   │   └── auth.js                     # Login, refresh, logout (raw fetch)
-│   ├── icons.js                         # Centrální registr ikon (importy, mapování, resolveIcon)
+│   ├── icons.js                        # Centrální registr ikon (importy, mapování, resolveIcon)
 │   ├── stores/
 │   │   ├── auth.svelte.js              # Auth stav (token, user, isAuthenticated)
 │   │   └── navigation.svelte.js        # Aktivní položka navigace
@@ -65,15 +65,18 @@ frontend/
 │   │   │   ├── Icon.svelte             # Univerzální ikona (inline SVG z FA definition)
 │   │   │   └── Modal.svelte
 │   │   ├── layout/
-│   │   │   ├── AppShell.svelte         # Hlavní layout (sidebar + tabs + content)
-│   │   │   ├── Header.svelte           # (nepoužívá se — logo a user info přesunuty do Sidebar)
+│   │   │   ├── AppShell.svelte         # Hlavní layout (sidebar + content)
 │   │   │   ├── Sidebar.svelte          # Navigace, logo, user info — kolapsibilní s hover rozbalením
-│   │   │   ├── TabBar.svelte           # (nepoužívá se — taby zrušeny, sidebar naviguje přímo)
 │   │   │   └── ContentArea.svelte      # Hlavní oblast — renderuje aktivní položku
 │   │   ├── auth/
 │   │   │   └── LoginScreen.svelte      # Přihlašovací obrazovka
 │   │   ├── browser/
 │   │   │   └── TableBrowser.svelte     # Generický prohlížeč tabulek
+│   │   ├── viewer/
+│   │   │   ├── Viewer.svelte           # Viewer shell (tab bar, search, infinite scroll, detail)
+│   │   │   ├── ViewerRow.svelte        # Jeden řádek seznamu (t1/t2/t3, stateStyle)
+│   │   │   ├── ViewerDetail.svelte     # Detail panel s taby (properties, table, html)
+│   │   │   └── ViewerToolbar.svelte    # Toolbar akcí (Přidat, Otevřít, …)
 │   │   └── form/
 │   │       ├── FormField.svelte        # Dynamický field renderer (typ → komponenta)
 │   │       ├── FormRenderer.svelte     # Generický formulář z metadat
@@ -138,17 +141,17 @@ Layout je bez horní lišty — logo a uživatelské info jsou integrovány v si
 ┌──────────┬──────────────────────────────────────────┐
 │ Shipard  │                                          │
 │ [◀]      │  ContentArea                             │
-├──────────┤  ┌─ TableBrowser ─────────────────────┐ │
-│ Sidebar  │  │  [Toolbar: Nový záznam]             │ │
-│ (server) │  │  ┌─ Tabulka s daty ──────────────┐ │ │
-│          │  │  │  (sloupce z metadat, řazení)   │ │ │
-│ ─ Systém │  │  └────────────────────────────────┘ │ │
-│   Users  │  │  [Stránkování]                      │ │
-│   Sett.  │  └─────────────────────────────────────┘ │
-│ ─ Základ │                                          │
-│   Osoby  │                                          │
-│   ...    │                                          │
 ├──────────┤                                          │
+│ Sidebar  │  ┌─ Viewer ───────────────────────────┐ │
+│ (server) │  │  [Přidat]  [Otevřít]               │ │
+│          │  │  [Aktivní][Archív][Vše][Koš]        │ │
+│ ─ Systém │  │  [🔍 Hledat...]                    │ │
+│   Users  │  │  ┌─ Seznam ──────┐ ┌─ Detail ────┐ │ │
+│   Sett.  │  │  │  Řádek 1      │ │  Tab 1 Tab2 │ │ │
+│ ─ Základ │  │  │  Řádek 2      │ │  ...obsah...│ │ │
+│   Osoby  │  │  │  ...          │ │             │ │ │
+│   ...    │  │  └───────────────┘ └─────────────┘ │ │
+├──────────┤  └───────────────────────────────────────┘ │
 │ J. Novák │                                          │
 │ Odhlásit │                                          │
 └──────────┴──────────────────────────────────────────┘
@@ -158,24 +161,24 @@ Layout je bez horní lišty — logo a uživatelské info jsou integrovány v si
 
 Sidebar je flex column se třemi sekcemi:
 
-- **Header** (fixní) — logo "Shipard" + tlačítko pro sbalení/rozbalení
+- **Header** (fixní) — logo „Shipard" + tlačítko pro sbalení/rozbalení
 - **Nav** (scrollovatelný, `flex: 1`) — navigační strom ze serveru
 - **Footer** (fixní) — jméno uživatele + tlačítko Odhlásit
 
 ### Sidebar — kolapsibilní
 
-Sidebar je kolapsibilní na úzký proužek (48px, CSS proměnná `--shpd-sidebar-width-collapsed`). Ve sbaleném stavu:
+Sidebar je kolapsibilní na úzký proužek (48px). Ve sbaleném stavu:
 
 - Navigační strom a logo jsou skryté
 - Ve footeru se zobrazí kruhový avatar s iniciálou uživatele
 - Při hoveru myší se sidebar rozbalí jako overlay (`position: absolute`, `z-index: 100`) na plnou šířku, aniž by posouval hlavní obsah
 - Po odjetí myší se sidebar zase sbalí
 
-Stav řídí Svelte runes: `collapsed` (toggle tlačítkem), `hovered` (mouseenter/mouseleave), `expanded_sidebar = !collapsed || hovered`.
+Stav řídí Svelte runes: `collapsed` (toggle tlačítkem), `hovered` (mouseenter/mouseleave).
 
 ### Sidebar — dynamická navigace ze serveru
 
-Sidebar načítá navigační strom z `GET /_ui/navigation`. Server generuje strom automaticky z aktivních modulů a jejich tabulek:
+Sidebar načítá navigační strom z `GET /_ui/navigation`. Server generuje strom automaticky z aktivních modulů:
 
 ```json
 {
@@ -185,8 +188,7 @@ Sidebar načítá navigační strom z `GET /_ui/navigation`. Server generuje str
             "id": "core",
             "label": "Systém",
             "children": [
-                {"id": "core_system_users", "label": "Uživatelé", "type": "table", "table": "core_system_users"},
-                {"id": "core_system_settings", "label": "Nastavení", "type": "table", "table": "core_system_settings"}
+                {"id": "core_system_users", "label": "Uživatelé", "type": "table", "table": "core_system_users"}
             ]
         },
         {
@@ -200,11 +202,7 @@ Sidebar načítá navigační strom z `GET /_ui/navigation`. Server generuje str
 }
 ```
 
-Interní tabulky (sessions, api_keys, rate_limits) se v navigaci nezobrazují.
-
-### Navigace
-
-Klik v sidebaru přímo nahradí obsah hlavní oblasti (bez tabů). `navigation.svelte.js` spravuje jedinou aktivní položku (`activeItem`). `ContentArea` renderuje obsah podle typu položky (`table`, `viewer`, …).
+Klik v sidebaru přímo nahradí obsah hlavní oblasti. `navigation.svelte.js` spravuje jedinou aktivní položku (`activeItem`). `ContentArea` renderuje obsah podle typu (`table` → `TableBrowser`, `viewer` → `Viewer`).
 
 ---
 
@@ -224,8 +222,7 @@ Generická komponenta — dostane název tabulky a vykreslí prohlížeč s daty
 - **Formátování podle typu** — varchar→text, int→číslo vpravo, boolean→Ano/Ne, date→dd.mm.yyyy, datetime→dd.mm.yyyy hh:mm, numeric→desetinná místa
 - **Řazení** — klik na hlavičku, toggle asc/desc, API sort parametr
 - **Stránkování** — offset-based, 20/50/100 na stránku, předchozí/další
-- **Filtry z navigace** — tab může mít `filter` objekt (budoucí: filtrované pohledy)
-- **Tlačítko "Nový záznam"** — otevře FormDialog pro vytvoření
+- **Tlačítko „Nový záznam"** — otevře FormDialog pro vytvoření
 - **Dvojklik na řádek** — otevře FormDialog pro editaci
 
 ---
@@ -259,7 +256,7 @@ Generický renderer — `FormRenderer` dostane tabulku a volitelně ID záznamu,
 
 - Pole seskupené podle `columnGroups` z metadat
 - Dvousloupcový grid (responzivní → 1 sloupec na úzkých obrazovkách)
-- Auto-managed pole (id, created, modified) se nezobrazují
+- Auto-managed pole (id, created, modified) a systémové pole (`system: true`) se nezobrazují
 - password_hash se nezobrazuje v editaci
 
 ### FormDialog
@@ -268,13 +265,126 @@ Modal wrapper — otevírá se z TableBrowser (tlačítko / dvojklik). Po ulože
 
 ---
 
-## 7. UI API endpointy
+## 7. Viewer systém
+
+Viewer je specializovaný prohlížeč pro složitější tabulky — na rozdíl od generického `TableBrowser` (který funguje čistě z metadat) viewer implementuje vlastní renderování řádků, filtrování a detail panel. Každý viewer je PHP třída dědící `TableViewer`.
+
+### Architektura
+
+```
+Viewer.svelte          (frontend — tab bar, search, infinite scroll, detail panel)
+  ↕ REST API
+ViewerController       (PHP — meta, rows, detail)
+  ↕
+TableViewer (abstract) (PHP — bázová třída se všemi helpers)
+  ↕
+PersonsViewer          (PHP — konkrétní viewer pro base.persons)
+```
+
+### API endpointy vieweru
+
+| Endpoint | Popis |
+|----------|-------|
+| `GET /_ui/viewer/{id}/meta` | Metadata: name, table, filters, toolbar, viewGroups |
+| `GET /_ui/viewer/{id}/rows` | Záznamy (stránkované, fulltext, viewGroup filter) |
+| `GET /_ui/viewer/{id}/detail/{recordId}` | Detail vybraného záznamu (tabs) |
+
+Parametry pro `rows`:
+- `page=0` — číslo stránky (0-based), server vrátí pageSize+1 pro detekci `hasMore`
+- `search=text` — fulltext hledání
+- `filter[viewGroup]=active` — filtr skupiny stavů (active / archive / trash; bez = vše)
+
+### Tab bar (doc state taby)
+
+Pokud viewer vrací neprázdné `viewGroups` v meta odpovědi, `Viewer.svelte` zobrazí tab bar:
+
+| Tab | Filtr | Popis |
+|-----|-------|-------|
+| **Aktivní** | `filter[viewGroup]=active` | Koncepty, V opravě, V pořádku |
+| **Archív** | `filter[viewGroup]=archive` | Archivované záznamy |
+| **Koš** | `filter[viewGroup]=trash` | Smazané záznamy |
+| **Vše** | bez filtru | Všechny záznamy |
+
+Přepnutí tabu resetuje stránku a výběr záznamu. Výchozí tab: Aktivní.
+
+### Formát řádku (`renderRow()`)
+
+```json
+{
+    "id": 42,
+    "stateStyle": "done",
+    "t1": "Název záznamu",
+    "i1": "#kód",
+    "t2": [{"text": "IČO: 12345"}, {"text": "V pořádku", "class": "success"}],
+    "t3": "email@example.com"
+}
+```
+
+Pole `t1`, `i1`, `t2`, `i2`, `t3` přijímají string, objekt `{text, class?}` nebo pole objektů. `stateStyle` se mapuje na CSS třídu `docState_{stateStyle}` na řádku. Dostupné span třídy: `amount`, `muted`, `bold`, `primary`, `success`, `warning`, `danger`.
+
+### Formát detail panelu (`renderDetail()`)
+
+Vrací taby s obsahem jednoho ze tří typů:
+
+```json
+{"tabs": [
+    {"id": "overview", "label": "Přehled", "content": {
+        "type": "properties",
+        "groups": [{"title": "Identifikace", "items": [{"label": "IČO", "value": "12345"}]}]
+    }},
+    {"id": "contacts", "label": "Kontakty", "content": {
+        "type": "table",
+        "columns": [{"id": "name", "label": "Název"}, {"id": "email", "label": "E-mail"}],
+        "rows": [{"name": "Jan Novák", "email": "jan@example.com"}]
+    }}
+]}
+```
+
+Typy obsahu: `properties` (label/value grid), `table` (tabulka), `html` (surové HTML).
+
+### Registrace vieweru
+
+V `module.jsonc`:
+
+```jsonc
+"viewers": [
+    {
+        "id": "base.persons",
+        "name:cs": "Osoby",
+        "icon": "user",
+        "table": "base_persons_persons",
+        "class": "Shipard\\Module\\Base\\Persons\\PersonsViewer"
+    }
+]
+```
+
+PHP třída vieweru žije v `modules/{skupina}/{modul}/src/` a dědí `TableViewer`. Pro podporu stavů dokumentů nastaví `$docStatesCfgItem`:
+
+```php
+class PersonsViewer extends TableViewer
+{
+    protected ?string $docStatesCfgItem = 'core.system.docStatesArchive';
+
+    public function selectRows(?string $search, array $filters, int $pageNumber): array { /* ... */ }
+    public function renderRow(array $rowData): array { /* ... */ }
+    public function renderDetail(int $recordId): array { /* ... */ }
+}
+```
+
+Viz také `docs/doc-states.md` — sekce Viewer systém.
+
+---
+
+## 8. UI API endpointy
 
 ### Implementované
 
 | Endpoint | Popis |
 |----------|-------|
-| `GET /_ui/navigation` | Navigační strom ze serveru (moduly → skupiny → tabulky) |
+| `GET /_ui/navigation` | Navigační strom ze serveru (moduly → skupiny → tabulky/viewery) |
+| `GET /_ui/viewer/{id}/meta` | Metadata vieweru (name, table, filters, toolbar, viewGroups) |
+| `GET /_ui/viewer/{id}/rows` | Záznamy vieweru (page, search, filter) |
+| `GET /_ui/viewer/{id}/detail/{recordId}` | Detail panel záznamu (tabs) |
 
 ### Budoucí
 
@@ -287,7 +397,7 @@ Zatím prohlížeč i formuláře fungují čistě z `_meta/tables/{table}` — 
 
 ---
 
-## 8. Konvence
+## 9. Konvence
 
 ### Svelte
 
@@ -295,12 +405,14 @@ Zatím prohlížeč i formuláře fungují čistě z `_meta/tables/{table}` — 
 - Jedna komponenta na soubor
 - Props přes `$props()`
 - Události přes callback props, ne custom events
+- `$effect` nesmí synchronně číst `$state` proměnné, které nemají být sledovány jako závislosti — funkce pro fetch přijímají explicitní parametry
 
 ### CSS
 
 - CSS custom properties pro theming (`--shpd-color-primary`, `--shpd-space-md`)
 - BEM-like naming: `.shpd-button`, `.shpd-button--primary`, `.shpd-button__icon`
 - Scoped styles v Svelte komponentách
+- `:global()` pro třídy aplikované dynamicky (např. `docState_concept` na řádcích vieweru)
 
 ### API komunikace
 
@@ -317,9 +429,9 @@ Zatím prohlížeč i formuláře fungují čistě z `_meta/tables/{table}` — 
 
 ---
 
-## 9. Ikony
+## 10. Ikony
 
-Aplikace používá **Font Awesome** (SVG/JS varianta) pro ikony napříč celým UI. Díky tree-shakingu se do bundle zahrnou jen skutečně použité ikony.
+Aplikace používá **Font Awesome** (SVG/JS varianta) pro ikony napříč celým UI.
 
 ### Balíčky
 
@@ -328,55 +440,13 @@ Aplikace používá **Font Awesome** (SVG/JS varianta) pro ikony napříč celý
 
 ### Architektura
 
-Ikony se řídí třemi soubory/komponentami:
-
-- **`src/icons.js`** — centrální registr. Všechny ikony se importují a re-exportují z jednoho místa. Pojmenování podle *významu* (ne podle vzhledu): `iconAdd`, `iconEdit`, `iconSave`, `iconUser`. Obsahuje `iconMap` pro překlad řetězců z API a funkci `resolveIcon(name, fallback)`.
-- **`components/ui/Icon.svelte`** — univerzální komponenta. Přijímá FA icon definition a vykreslí inline SVG. Podporuje velikosti (`xs`/`sm`/`md`/`lg`/`xl`), animaci `spin` a accessibility (`aria-label` / `aria-hidden`).
-- **`components/ui/Button.svelte`** — rozšířený o prop `icon` (volitelný), `iconOnly` pro tlačítka pouze s ikonou a variantu `ghost`.
-
-### Použití v komponentách
-
-```svelte
-<script>
-  import Icon from '../ui/Icon.svelte';
-  import Button from '../ui/Button.svelte';
-  import { iconAdd, iconEdit, iconUser } from '../../icons.js';
-</script>
-
-<!-- Samostatná ikona -->
-<Icon icon={iconUser} size="lg" />
-
-<!-- Tlačítko s ikonou a textem -->
-<Button icon={iconAdd} label="Nový záznam" />
-
-<!-- Tlačítko jen s ikonou -->
-<Button icon={iconEdit} label="Upravit" iconOnly />
-```
+- **`src/icons.js`** — centrální registr. Všechny ikony se importují a re-exportují z jednoho místa. Pojmenování podle *významu* (ne podle vzhledu): `iconAdd`, `iconEdit`, `iconUser`. Obsahuje `iconMap` pro překlad řetězců z API a funkci `resolveIcon(name, fallback)`.
+- **`components/ui/Icon.svelte`** — univerzální komponenta. Přijímá FA icon definition a vykreslí inline SVG. Podporuje velikosti (`xs`/`sm`/`md`/`lg`/`xl`) a animaci `spin`.
+- **`components/ui/Button.svelte`** — rozšířený o prop `icon`, `iconOnly` a variantu `ghost`.
 
 ### Ikony v navigaci (server-driven)
 
-Navigační položky mohou mít volitelnou ikonu definovanou na serveru:
-
-- **Viewery**: pole `"icon"` v `module.jsonc` v definici vieweru
-- **Tabulky**: pole `"icon"` v `.jsonc` definici tabulky
-
-`NavigationController` přenáší ikonu do navigačního JSON. Frontend používá `resolveIcon(item.icon)` s fallbackem na `iconTable` (generická ikona).
-
-Příklad v `module.jsonc`:
-```jsonc
-"viewers": [
-    {
-        "id": "base.persons",
-        "name:cs": "Osoby",
-        "icon": "user",
-        "table": "base_persons_persons"
-    }
-]
-```
-
-### Dostupné klíče pro `iconMap`
-
-Akce: `add`, `edit`, `delete`, `save`, `search`, `filter`, `refresh`. Navigace: `user`, `users`, `company`, `invoice`, `document`, `warehouse`, `tag`, `tags`, `folder`, `table`, `settings`, `logout`.
+Navigační položky mohou mít volitelnou ikonu definovanou na serveru v `module.jsonc`. Frontend používá `resolveIcon(item.icon)` s fallbackem na `iconTable`.
 
 ### Přidání nové ikony
 
@@ -384,21 +454,16 @@ Akce: `add`, `edit`, `delete`, `save`, `search`, `filter`, `refresh`. Navigace: 
 2. Pokud ji server posílá jako string: přidat záznam do `iconMap`
 3. V komponentě: importovat z `icons.js` a předat do `<Icon>` nebo `<Button>`
 
-### Ikony v toolbaru
-
-`ViewerToolbar` automaticky mapuje známé akce na ikony (např. `id: 'add'` → `iconAdd`). Akce může přinest vlastní `icon` prop, který má přednost.
-
 ---
 
-## 10. Budoucí rozšíření
+## 11. Budoucí rozšíření
 
 - **Filtrování v prohlížeči** — toolbar s filtry podle typu sloupce
-- **Hledání** — fulltext přes toolbar
 - **Mazání záznamů** — tlačítko v řádku nebo hromadně
 - **Inline editace** — editace přímo v tabulce
-- **Drag & drop** — řazení řádků
 - **Enum hodnoty** — Select s options z konfigurační položky (cfgItem)
 - **Navigace s filtry** — položky sidebar s předdefinovaným filtrem (Faktury vydané = doc_type:INV)
 - **Výběr sloupců** — uživatel si vybere které sloupce vidí
 - **Export** — CSV/Excel export z prohlížeče
 - **Oprávnění** — skrývání položek navigace podle uživatelských práv
+- **Editační formuláře pro doc states** — stavová tlačítka, zamčení readOnly formuláře, badge stavu v hlavičce (Fáze 4 stavů dokumentů)

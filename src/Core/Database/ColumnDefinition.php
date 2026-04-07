@@ -30,6 +30,7 @@ class ColumnDefinition
         public readonly ?string $collation,
         public readonly ?string $cfgItem,
         public readonly ?string $reference,
+        public readonly bool $system,
     ) {}
 
     public static function fromArray(array $data): self
@@ -95,6 +96,7 @@ class ColumnDefinition
             reference: isset($data['reference']) && is_string($data['reference']) && $data['reference'] !== ''
                 ? $data['reference']
                 : null,
+            system: (bool) ($data['system'] ?? false),
         );
     }
 }

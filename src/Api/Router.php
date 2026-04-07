@@ -94,6 +94,25 @@ class Router
 			};
 		}
 
+		if (count($parts) === 3 && $parts[0] !== '' && $parts[1] !== '' && $parts[2] !== '') {
+			$table  = $parts[0];
+			$rawId  = $parts[1];
+			$action = $parts[2];
+
+			if (!ctype_digit($rawId) || (int) $rawId <= 0) {
+				return Response::error('NOT_FOUND', 'Not found', 404);
+			}
+
+			if ($action === 'doc-state-options') {
+				if ($method !== 'GET') {
+					return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+				}
+				return new Route('crud', 'docStateOptions', $table, (int) $rawId);
+			}
+
+			return Response::error('NOT_FOUND', 'Not found', 404);
+		}
+
 		if (count($parts) === 2 && $parts[0] !== '' && $parts[1] !== '') {
 			$table = $parts[0];
 			$rawId = $parts[1];

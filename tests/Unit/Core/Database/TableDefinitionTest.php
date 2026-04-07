@@ -260,4 +260,46 @@ class TableDefinitionTest extends TestCase
 
         $this->assertSame([], $table->childTables);
     }
+
+    public function testDocStatesPresent(): void
+    {
+        $data = $this->coreSystemUsersData();
+        $data['docStates'] = [
+            'stateColumn' => 'docState',
+            'mainColumn'  => 'docStateMain',
+            'cfgItem'     => 'core.system.docStatesArchive',
+        ];
+
+        $table = TableDefinition::fromArray($data);
+
+        $this->assertNotNull($table->docStates);
+        $this->assertSame('docState', $table->docStates->stateColumn);
+        $this->assertSame('docStateMain', $table->docStates->mainColumn);
+        $this->assertSame('core.system.docStatesArchive', $table->docStates->cfgItem);
+    }
+
+    public function testDocStatesAbsentDefaultsToNull(): void
+    {
+        $table = TableDefinition::fromArray($this->coreSystemUsersData());
+
+        $this->assertNull($table->docStates);
+    }
+
+    public function testSystemColumnFlagTrue(): void
+    {
+        $col = ColumnDefinition::fromArray([
+            'id' => 'docState', 'name' => 'Doc State', 'type' => 'tinyint', 'system' => true,
+        ]);
+
+        $this->assertTrue($col->system);
+    }
+
+    public function testSystemColumnFlagDefaultsFalse(): void
+    {
+        $col = ColumnDefinition::fromArray([
+            'id' => 'x', 'name' => 'X', 'type' => 'tinyint',
+        ]);
+
+        $this->assertFalse($col->system);
+    }
 }

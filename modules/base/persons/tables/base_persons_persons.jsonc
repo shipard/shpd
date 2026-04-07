@@ -6,6 +6,12 @@
 
     "displayPattern": "{person_id} — {full_name}",
 
+    "docStates": {
+        "stateColumn": "docState",
+        "mainColumn": "docStateMain",
+        "cfgItem": "core.system.docStatesArchive"
+    },
+
     "columnGroups": [
         {
             "id": "identity",
@@ -257,6 +263,27 @@
             "type": "date",
             "nullable": true,
             "group": "status"
+        },
+
+        // --- doc state (systémové, bez skupiny) ---
+
+        {
+            "id": "docState",
+            "name": "Document state",
+            "name:cs": "Stav dokumentu",
+            "name:en": "Document state",
+            "type": "tinyint",
+            "default": 10,
+            "system": true
+        },
+        {
+            "id": "docStateMain",
+            "name": "Document state (sort)",
+            "name:cs": "Stav dokumentu (řazení)",
+            "name:en": "Document state (sort)",
+            "type": "tinyint",
+            "default": 1,
+            "system": true
         }
     ],
 
@@ -295,6 +322,14 @@
             "type": "index",
             "columns": [
                 {"column": "email"}
+            ]
+        },
+        {
+            "id": "idx_doc_state",
+            "type": "index",
+            "columns": [
+                {"column": "docStateMain", "order": "ASC"},
+                {"column": "full_name", "order": "ASC"}
             ]
         },
         {

@@ -5,35 +5,37 @@ namespace Shipard\Api\Controller;
 
 use Shipard\Api\Request;
 use Shipard\Api\Response;
+use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Viewer\ViewerRegistry;
 
 class ViewerController
 {
-	public function meta(string $viewerId, ViewerRegistry $registry, DataSourceConnection $db): Response
+	public function meta(string $viewerId, ViewerRegistry $registry, DataSourceConnection $db, ?ConfigRuntime $config = null): Response
 	{
 		$def = $registry->get($viewerId);
 		if ($def === null) {
 			return Response::error('VIEWER_NOT_FOUND', "Viewer '{$viewerId}' not found", 404);
 		}
 
-		$viewer = $registry->createViewer($viewerId, $db);
+		$viewer = $registry->createViewer($viewerId, $db, $config);
 		if ($viewer === null) {
 			return Response::error('VIEWER_CLASS_NOT_FOUND', "Viewer class for '{$viewerId}' not found", 500);
 		}
 
 		return Response::success([
-			'id'      => $def->id,
-			'name'    => $def->name,
-			'table'   => $def->table,
-			'filters' => $viewer->getFilters(),
-			'toolbar' => $viewer->getToolbarActions(null),
+			'id'         => $def->id,
+			'name'       => $def->name,
+			'table'      => $def->table,
+			'filters'    => $viewer->getFilters(),
+			'toolbar'    => $viewer->getToolbarActions(null),
+			'viewGroups' => $viewer->getViewGroups(),
 		]);
 	}
 
-	public function rows(string $viewerId, Request $request, ViewerRegistry $registry, DataSourceConnection $db): Response
+	public function rows(string $viewerId, Request $request, ViewerRegistry $registry, DataSourceConnection $db, ?ConfigRuntime $config = null): Response
 	{
-		$viewer = $registry->createViewer($viewerId, $db);
+		$viewer = $registry->createViewer($viewerId, $db, $config);
 		if ($viewer === null) {
 			return Response::error('VIEWER_NOT_FOUND', "Viewer '{$viewerId}' not found", 404);
 		}
@@ -68,14 +70,14 @@ class ViewerController
 		]);
 	}
 
-	public function detail(string $viewerId, int $recordId, ViewerRegistry $registry, DataSourceConnection $db): Response
+	public function detail(string $viewerId, int $recordId, ViewerRegistry $registry, DataSourceConnection $db, ?ConfigRuntime $config = null): Response
 	{
 		$def = $registry->get($viewerId);
 		if ($def === null) {
 			return Response::error('VIEWER_NOT_FOUND', "Viewer '{$viewerId}' not found", 404);
 		}
 
-		$viewer = $registry->createViewer($viewerId, $db);
+		$viewer = $registry->createViewer($viewerId, $db, $config);
 		if ($viewer === null) {
 			return Response::error('VIEWER_CLASS_NOT_FOUND', "Viewer class for '{$viewerId}' not found", 500);
 		}

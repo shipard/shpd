@@ -62,9 +62,9 @@ frontend/
 │   │   │   ├── DateInput.svelte
 │   │   │   └── Modal.svelte
 │   │   ├── layout/
-│   │   │   ├── AppShell.svelte         # Hlavní layout (header + sidebar + tabs + content)
-│   │   │   ├── Header.svelte           # Horní lišta (logo, user, odhlášení)
-│   │   │   ├── Sidebar.svelte          # Navigace — načítá strom ze serveru
+│   │   │   ├── AppShell.svelte         # Hlavní layout (sidebar + tabs + content)
+│   │   │   ├── Header.svelte           # (nepoužívá se — logo a user info přesunuty do Sidebar)
+│   │   │   ├── Sidebar.svelte          # Navigace, logo, user info — kolapsibilní s hover rozbalením
 │   │   │   ├── TabBar.svelte           # Lišta otevřených tabů
 │   │   │   └── ContentArea.svelte      # Hlavní oblast — renderuje aktivní tab
 │   │   ├── auth/
@@ -129,24 +129,46 @@ Token má prefix `shpd_st_`, expirace 24h, uložen v `core_system_sessions`.
 
 ## 4. Aplikační shell
 
+Layout je bez horní lišty — logo a uživatelské info jsou integrovány v sidebaru:
+
 ```
-┌─────────────────────────────────────────────────────┐
-│  Header (logo, user menu, odhlášení)                │
-├──────────┬──────────────────────────────────────────┤
-│          │  TabBar (otevřené taby)                  │
-│ Sidebar  ├──────────────────────────────────────────┤
-│ (server) │                                          │
-│          │  ContentArea                             │
-│ ─ Systém │  ┌─ TableBrowser ─────────────────────┐ │
-│   Users  │  │  [Toolbar: Nový záznam]             │ │
-│   Sett.  │  │  ┌─ Tabulka s daty ──────────────┐ │ │
-│ ─ Základ │  │  │  (sloupce z metadat, řazení)   │ │ │
-│   Osoby  │  │  └────────────────────────────────┘ │ │
-│   Kontak │  │  [Stránkování]                      │ │
-│   ...    │  └─────────────────────────────────────┘ │
-│          │                                          │
+┌──────────┬──────────────────────────────────────────┐
+│ Shipard  │  TabBar (otevřené taby)                  │
+│ [◀]      ├──────────────────────────────────────────┤
+├──────────┤                                          │
+│ Sidebar  │  ContentArea                             │
+│ (server) │  ┌─ TableBrowser ─────────────────────┐ │
+│          │  │  [Toolbar: Nový záznam]             │ │
+│ ─ Systém │  │  ┌─ Tabulka s daty ──────────────┐ │ │
+│   Users  │  │  │  (sloupce z metadat, řazení)   │ │ │
+│   Sett.  │  │  └────────────────────────────────┘ │ │
+│ ─ Základ │  │  [Stránkování]                      │ │
+│   Osoby  │  └─────────────────────────────────────┘ │
+│   ...    │                                          │
+├──────────┤                                          │
+│ J. Novák │                                          │
+│ Odhlásit │                                          │
 └──────────┴──────────────────────────────────────────┘
 ```
+
+### Sidebar — struktura
+
+Sidebar je flex column se třemi sekcemi:
+
+- **Header** (fixní) — logo "Shipard" + tlačítko pro sbalení/rozbalení
+- **Nav** (scrollovatelný, `flex: 1`) — navigační strom ze serveru
+- **Footer** (fixní) — jméno uživatele + tlačítko Odhlásit
+
+### Sidebar — kolapsibilní
+
+Sidebar je kolapsibilní na úzký proužek (48px, CSS proměnná `--shpd-sidebar-width-collapsed`). Ve sbaleném stavu:
+
+- Navigační strom a logo jsou skryté
+- Ve footeru se zobrazí kruhový avatar s iniciálou uživatele
+- Při hoveru myší se sidebar rozbalí jako overlay (`position: absolute`, `z-index: 100`) na plnou šířku, aniž by posouval hlavní obsah
+- Po odjetí myší se sidebar zase sbalí
+
+Stav řídí Svelte runes: `collapsed` (toggle tlačítkem), `hovered` (mouseenter/mouseleave), `expanded_sidebar = !collapsed || hovered`.
 
 ### Sidebar — dynamická navigace ze serveru
 

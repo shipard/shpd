@@ -1,8 +1,17 @@
 <script>
   import { get } from '../../api/client.js';
+  import { logout } from '../../api/auth.js';
+  import { authStore } from '../../stores/auth.svelte.js';
   import { onMount } from 'svelte';
 
-  let { onNavigate, activeId = null } = $props();
+  let { onNavigate, activeId = null, onLogout } = $props();
+
+  // Collapsed state
+  let collapsed = $state(false);
+  let hovered = $state(false);
+
+  // Sidebar is visually expanded when not collapsed OR when hovered
+  let expanded_sidebar = $derived(!collapsed || hovered);
 
   // Navigation tree loaded from server API
   let navTree = $state([]);
@@ -46,16 +55,51 @@
   function handleItemClick(item) {
     onNavigate?.({ id: item.id, label: item.label, type: item.type, table: item.table, viewerId: item.viewerId, filter: item.filter });
   }
+
+  async function handleLogout() {
+    await logout();
+    authStore.clearAuth();
+    onLogout?.();
+  }
+  function toggleCollapse() {
+    collapsed = !collapsed;
+    // Reset hover when expanding manually
+    if (!collapsed) hovered = false;
+  }
+
+  function handleMouseEnter() {
+    if (collapsed) hovered = true;
+  }
+
+  function handleMouseLeave() {
+    if (collapsed) hovered = false;
+  }
 </script>
 
-<nav class="shpd-sidebar">
+<nav
+  class="shpd-sidebar"
+  class:shpd-sidebar--collapsed={collapsed}
+  class:shpd-sidebar--hover-expanded={collapsed && hovered}
+  onmouseenter={handleMouseEnter}
+  onmouseleave={handleMouseLeave}
+>
+  <div class="shpd-sidebar__header">
+    {#if expanded_sidebar}
+      <span class="shpd-sidebar__logo">Shipard</span>
+    {/if}
+    <button class="shpd-sidebar__toggle" onclick={toggleCollapse} title={collapsed ? 'Rozbalit menu' : 'Sbalit menu'}>
+      {collapsed ? '\u25B6' : '\u25C0'}
+    </button>
+  </div>
+
+  <div class="shpd-sidebar__nav">
   {#if loading}
     <div class="shpd-sidebar__status">Načítám…</div>
   {:else if error}
     <div class="shpd-sidebar__status shpd-sidebar__status--error">{error}</div>
   {/if}
 
-  {#each navTree as group}
+    {#each navTree as group}
     <div class="shpd-sidebar__group">
       <button
         class="shpd-sidebar__group-header"
@@ -110,17 +154,144 @@
         </ul>
       {/if}
     </div>
-  {/each}
+    {/each}
+  </div>
+
+  <div class="shpd-sidebar__footer">
+    {#if expanded_sidebar}
+      <span class="shpd-sidebar__username">{authStore.user?.full_name ?? ''}</span>
+      <button class="shpd-sidebar__logout" onclick={handleLogout}>Odhl\u00e1sit</button>
+    {:else}
+      <span class="shpd-sidebar__avatar" title={authStore.user?.full_name ?? ''}>
+        {(authStore.user?.full_name ?? '?').charAt(0)}
+      </span>
+    {/if}
+  </div>
 </nav>
 
 <style>
   .shpd-sidebar {
+    display: flex;
+    flex-direction: column;
     width: var(--shpd-sidebar-width);
     height: 100%;
     background-color: var(--shpd-color-bg-sidebar);
     color: var(--shpd-color-text-sidebar);
-    overflow-y: auto;
     flex-shrink: 0;
+    transition: width 0.2s ease;
+    overflow: hidden;
+  }
+
+  .shpd-sidebar--collapsed {
+    width: var(--shpd-sidebar-width-collapsed);
+  }
+
+  .shpd-sidebar--hover-expanded {
+    width: var(--shpd-sidebar-width);
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 100;
+    box-shadow: var(--shpd-shadow-lg);
+  }
+
+  .shpd-sidebar__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: var(--shpd-header-height);
+    padding: 0 var(--shpd-space-md);
+    flex-shrink: 0;
+    border-bottom: 1px solid rgb(255 255 255 / 0.08);
+  }
+
+  .shpd-sidebar--collapsed:not(.shpd-sidebar--hover-expanded) .shpd-sidebar__header {
+    justify-content: center;
+    padding: 0;
+  }
+
+  .shpd-sidebar__logo {
+    font-size: var(--shpd-font-size-lg);
+    font-weight: 700;
+    color: var(--shpd-color-text-sidebar);
+  }
+
+  .shpd-sidebar__nav {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+  }
+
+  .shpd-sidebar--collapsed:not(.shpd-sidebar--hover-expanded) .shpd-sidebar__nav {
+    display: none;
+  }
+
+  .shpd-sidebar__footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--shpd-space-md);
+    flex-shrink: 0;
+    border-top: 1px solid rgb(255 255 255 / 0.08);
+  }
+
+  .shpd-sidebar--collapsed:not(.shpd-sidebar--hover-expanded) .shpd-sidebar__footer {
+    justify-content: center;
+    padding: var(--shpd-space-sm);
+  }
+
+  .shpd-sidebar__toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    font-size: 0.7rem;
+    color: rgb(148 163 184);
+    border-radius: var(--shpd-radius-sm);
+    transition: color 0.15s, background-color 0.15s;
+    flex-shrink: 0;
+  }
+
+  .shpd-sidebar__toggle:hover {
+    color: var(--shpd-color-text-sidebar);
+    background-color: rgb(255 255 255 / 0.07);
+  }
+
+  .shpd-sidebar__avatar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    font-size: var(--shpd-font-size-sm);
+    font-weight: 600;
+    color: var(--shpd-color-text-sidebar);
+    background-color: rgb(255 255 255 / 0.12);
+    border-radius: 50%;
+  }
+
+  .shpd-sidebar__username {
+    font-size: var(--shpd-font-size-sm);
+    color: rgb(148 163 184);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .shpd-sidebar__logout {
+    padding: var(--shpd-space-xs) var(--shpd-space-sm);
+    font-size: var(--shpd-font-size-sm);
+    color: rgb(148 163 184);
+    border: 1px solid rgb(255 255 255 / 0.15);
+    border-radius: var(--shpd-radius-sm);
+    transition: color 0.15s, border-color 0.15s;
+    flex-shrink: 0;
+  }
+
+  .shpd-sidebar__logout:hover {
+    color: var(--shpd-color-danger);
+    border-color: var(--shpd-color-danger);
   }
 
   .shpd-sidebar__group {

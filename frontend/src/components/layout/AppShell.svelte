@@ -1,5 +1,4 @@
 <script>
-  import Header from './Header.svelte';
   import Sidebar from './Sidebar.svelte';
   import TabBar from './TabBar.svelte';
   import ContentArea from './ContentArea.svelte';
@@ -13,30 +12,20 @@
 </script>
 
 <div class="shpd-shell">
-  <Header {onLogout} />
+  <Sidebar onNavigate={handleNavigate} activeId={navigationStore.activeTabId} {onLogout} />
 
-  <div class="shpd-shell__body">
-    <Sidebar onNavigate={handleNavigate} activeId={navigationStore.activeTabId} />
-
-    <div class="shpd-shell__main">
-      <TabBar />
-      <ContentArea activeTab={navigationStore.activeTab} />
-    </div>
+  <div class="shpd-shell__main">
+    <TabBar />
+    <ContentArea activeTab={navigationStore.activeTab} />
   </div>
 </div>
 
 <style>
   .shpd-shell {
     display: flex;
-    flex-direction: column;
     height: 100vh;
     overflow: hidden;
-  }
-
-  .shpd-shell__body {
-    display: flex;
-    flex: 1;
-    overflow: hidden;
+    position: relative;
   }
 
   .shpd-shell__main {

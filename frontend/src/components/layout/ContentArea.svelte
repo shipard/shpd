@@ -2,18 +2,18 @@
   import TableBrowser from '../browser/TableBrowser.svelte';
   import Viewer from '../viewer/Viewer.svelte';
 
-  let { activeTab = null } = $props();
+  let { activeItem = null } = $props();
 </script>
 
 <main class="shpd-content">
-  {#if activeTab?.type === 'viewer'}
-    <Viewer tab={activeTab} />
-  {:else if activeTab?.type === 'table'}
-    <TableBrowser tab={activeTab} />
-  {:else if activeTab}
-    <!-- Placeholder for future tab types (form, dashboard, …) -->
+  {#if activeItem?.type === 'viewer'}
+    <Viewer tab={activeItem} />
+  {:else if activeItem?.type === 'table'}
+    <TableBrowser tab={activeItem} />
+  {:else if activeItem}
+    <!-- Placeholder for future content types (form, dashboard, …) -->
     <div class="shpd-content__empty">
-      <p class="shpd-content__empty-text">Nepodporovaný typ panelu: {activeTab.type}</p>
+      <p class="shpd-content__empty-text">Nepodporovaný typ panelu: {activeItem.type}</p>
     </div>
   {:else}
     <div class="shpd-content__empty">

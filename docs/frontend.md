@@ -50,7 +50,7 @@ frontend/
 │   │   └── auth.js                     # Login, refresh, logout (raw fetch)
 │   ├── stores/
 │   │   ├── auth.svelte.js              # Auth stav (token, user, isAuthenticated)
-│   │   └── navigation.svelte.js        # Taby (otevřené, aktivní, open/close/activate)
+│   │   └── navigation.svelte.js        # Aktivní položka navigace
 │   ├── components/
 │   │   ├── ui/                         # Základní UI prvky
 │   │   │   ├── Button.svelte
@@ -65,8 +65,8 @@ frontend/
 │   │   │   ├── AppShell.svelte         # Hlavní layout (sidebar + tabs + content)
 │   │   │   ├── Header.svelte           # (nepoužívá se — logo a user info přesunuty do Sidebar)
 │   │   │   ├── Sidebar.svelte          # Navigace, logo, user info — kolapsibilní s hover rozbalením
-│   │   │   ├── TabBar.svelte           # Lišta otevřených tabů
-│   │   │   └── ContentArea.svelte      # Hlavní oblast — renderuje aktivní tab
+│   │   │   ├── TabBar.svelte           # (nepoužívá se — taby zrušeny, sidebar naviguje přímo)
+│   │   │   └── ContentArea.svelte      # Hlavní oblast — renderuje aktivní položku
 │   │   ├── auth/
 │   │   │   └── LoginScreen.svelte      # Přihlašovací obrazovka
 │   │   ├── browser/
@@ -133,17 +133,17 @@ Layout je bez horní lišty — logo a uživatelské info jsou integrovány v si
 
 ```
 ┌──────────┬──────────────────────────────────────────┐
-│ Shipard  │  TabBar (otevřené taby)                  │
-│ [◀]      ├──────────────────────────────────────────┤
-├──────────┤                                          │
-│ Sidebar  │  ContentArea                             │
-│ (server) │  ┌─ TableBrowser ─────────────────────┐ │
-│          │  │  [Toolbar: Nový záznam]             │ │
-│ ─ Systém │  │  ┌─ Tabulka s daty ──────────────┐ │ │
-│   Users  │  │  │  (sloupce z metadat, řazení)   │ │ │
-│   Sett.  │  │  └────────────────────────────────┘ │ │
-│ ─ Základ │  │  [Stránkování]                      │ │
-│   Osoby  │  └─────────────────────────────────────┘ │
+│ Shipard  │                                          │
+│ [◀]      │  ContentArea                             │
+├──────────┤  ┌─ TableBrowser ─────────────────────┐ │
+│ Sidebar  │  │  [Toolbar: Nový záznam]             │ │
+│ (server) │  │  ┌─ Tabulka s daty ──────────────┐ │ │
+│          │  │  │  (sloupce z metadat, řazení)   │ │ │
+│ ─ Systém │  │  └────────────────────────────────┘ │ │
+│   Users  │  │  [Stránkování]                      │ │
+│   Sett.  │  └─────────────────────────────────────┘ │
+│ ─ Základ │                                          │
+│   Osoby  │                                          │
 │   ...    │                                          │
 ├──────────┤                                          │
 │ J. Novák │                                          │
@@ -199,9 +199,9 @@ Sidebar načítá navigační strom z `GET /_ui/navigation`. Server generuje str
 
 Interní tabulky (sessions, api_keys, rate_limits) se v navigaci nezobrazují.
 
-### Tabový model
+### Navigace
 
-Klik v sidebar otevře nový tab (nebo aktivuje existující). `navigation.svelte.js` spravuje pole tabů a aktivní tab. `TabBar` zobrazuje lištu s taby — klik přepne, × zavře.
+Klik v sidebaru přímo nahradí obsah hlavní oblasti (bez tabů). `navigation.svelte.js` spravuje jedinou aktivní položku (`activeItem`). `ContentArea` renderuje obsah podle typu položky (`table`, `viewer`, …).
 
 ---
 

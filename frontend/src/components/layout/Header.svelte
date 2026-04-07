@@ -1,6 +1,8 @@
 <script>
   import { logout } from '../../api/auth.js';
   import { authStore } from '../../stores/auth.svelte.js';
+  import Icon from '../ui/Icon.svelte';
+  import { iconLogout } from '../../icons.js';
 
   let { onLogout } = $props();
 
@@ -16,7 +18,10 @@
 
   <div class="shpd-header__user">
     <span class="shpd-header__username">{authStore.user?.full_name ?? ''}</span>
-    <button class="shpd-header__logout" onclick={handleLogout}>Odhlásit</button>
+    <button class="shpd-header__logout" onclick={handleLogout}>
+      <Icon icon={iconLogout} size="sm" />
+      <span>Odhlásit</span>
+    </button>
   </div>
 </header>
 
@@ -50,6 +55,9 @@
   }
 
   .shpd-header__logout {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--shpd-space-xs);
     padding: var(--shpd-space-xs) var(--shpd-space-md);
     font-size: var(--shpd-font-size-sm);
     color: var(--shpd-color-text-secondary);

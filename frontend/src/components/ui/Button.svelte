@@ -1,7 +1,12 @@
 <script lang="ts">
+  import Icon from './Icon.svelte';
+
   interface Props {
     label?: string;
-    variant?: 'primary' | 'secondary' | 'danger';
+    icon?: object;
+    iconOnly?: boolean;
+    variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
+    size?: 'sm' | 'md';
     disabled?: boolean;
     loading?: boolean;
     type?: 'button' | 'submit' | 'reset';
@@ -10,7 +15,10 @@
 
   let {
     label,
+    icon = undefined,
+    iconOnly = false,
     variant = 'primary',
+    size = 'md',
     disabled = false,
     loading = false,
     type = 'button',
@@ -21,16 +29,20 @@
 </script>
 
 <button
-  class="shpd-btn shpd-btn--{variant}"
+  class="shpd-btn shpd-btn--{variant} shpd-btn--{size}"
   class:shpd-btn--loading={loading}
+  class:shpd-btn--icon-only={iconOnly}
   {type}
   disabled={isDisabled}
+  title={iconOnly ? label : undefined}
   {onclick}
 >
   {#if loading}
     <span class="shpd-btn__spinner" aria-hidden="true"></span>
+  {:else if icon}
+    <Icon {icon} size={size === 'sm' ? 'sm' : 'md'} />
   {/if}
-  {#if label}
+  {#if label && !iconOnly}
     <span class="shpd-btn__label">{label}</span>
   {/if}
 </button>
@@ -50,6 +62,21 @@
     border: 1px solid transparent;
     transition: background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
     white-space: nowrap;
+    line-height: 1;
+  }
+
+  .shpd-btn--sm {
+    padding: var(--shpd-space-xs) var(--shpd-space-md);
+    font-size: var(--shpd-font-size-sm);
+  }
+
+  .shpd-btn--icon-only {
+    padding: var(--shpd-space-sm);
+    aspect-ratio: 1;
+  }
+
+  .shpd-btn--icon-only.shpd-btn--sm {
+    padding: var(--shpd-space-xs);
   }
 
   .shpd-btn:disabled {
@@ -90,6 +117,19 @@
   .shpd-btn--danger:hover:not(:disabled) {
     background-color: #b91c1c;
     border-color: #b91c1c;
+  }
+
+  /* Ghost — bez pozadí, jen ikona/text */
+  .shpd-btn--ghost {
+    background-color: transparent;
+    color: var(--shpd-color-text-secondary);
+    border-color: transparent;
+    padding: var(--shpd-space-xs);
+  }
+
+  .shpd-btn--ghost:hover:not(:disabled) {
+    background-color: var(--shpd-color-bg-secondary);
+    color: var(--shpd-color-text);
   }
 
   /* Spinner */

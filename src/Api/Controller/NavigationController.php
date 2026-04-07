@@ -103,12 +103,16 @@ class NavigationController
 				?? $viewer['name:en']
 				?? $viewer['name']
 				?? $viewer['id'];
-			$viewerByTable[$viewer['table']] = [
+			$viewerItem = [
 				'id'       => 'viewer:' . $viewer['id'],
 				'label'    => $viewerName,
 				'type'     => 'viewer',
 				'viewerId' => $viewer['id'],
 			];
+			if (isset($viewer['icon'])) {
+				$viewerItem['icon'] = $viewer['icon'];
+			}
+			$viewerByTable[$viewer['table']] = $viewerItem;
 		}
 
 		$items = [];
@@ -123,30 +127,34 @@ class NavigationController
 				continue;
 			}
 
-			$label = $this->loadTableLabel($modulePath, $tableName, $language);
+			$tableData = $this->loadTableMeta($modulePath, $tableName, $language);
 
-			$items[] = [
+			$item = [
 				'id'    => $tableName,
-				'label' => $label,
+				'label' => $tableData['name'] ?? $tableName,
 				'type'  => 'table',
 				'table' => $tableName,
 			];
+			if (isset($tableData['icon'])) {
+				$item['icon'] = $tableData['icon'];
+			}
+			$items[] = $item;
 		}
 
 		return $items;
 	}
 
-	private function loadTableLabel(string $modulePath, string $tableName, string $language): string
+	private function loadTableMeta(string $modulePath, string $tableName, string $language): array
 	{
 		$filePath = $modulePath . '/tables/' . $tableName . '.jsonc';
 		if (!file_exists($filePath)) {
-			return $tableName;
+			return ['name' => $tableName];
 		}
 
 		$raw       = JsoncParser::parseFile($filePath);
 		$localized = ConfigLocalizer::localize($raw, $language);
 
-		return $localized['name'] ?? $tableName;
+		return $localized;
 	}
 
 	private function localizeModuleName(ModuleDefinition $module, string $modulesBasePath, string $language): string

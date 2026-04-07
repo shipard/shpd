@@ -26,6 +26,7 @@
             "name": "Persons",
             "name:cs": "Osoby",
             "name:en": "Persons",
+            "icon": "user",
             "table": "base_persons_persons",
             "class": "Shipard\\Module\\Base\\Persons\\PersonsViewer"
         }

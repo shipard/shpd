@@ -19,6 +19,7 @@ Shipard frontend je single-page aplikace (SPA) postavená na **Svelte 5**, kter�
 | UI framework | Svelte 5 | Kompiluje do čistého JS (žádný runtime), reaktivita bez boilerplate, blízké vanilla HTML/JS |
 | Build tool | Vite | Nativní podpora Svelte, rychlý HMR pro vývoj |
 | CSS | Vlastní (bez frameworku) | Plná kontrola, žádný overhead z nepoužívaných stylů |
+| Ikony | Font Awesome (SVG/JS) | Tree-shakeable, jen použité ikony v bundle, inline SVG |
 | HTTP klient | Fetch API | Nativní v moderních prohlížečích, nepotřebujeme knihovnu |
 | State management | Svelte stores (runes) | Vestavěný v Svelte 5, nepotřebujeme externí knihovnu |
 
@@ -48,6 +49,7 @@ frontend/
 │   │   ├── config.js                   # Detekce DS ID z URL, API_BASE_URL
 │   │   ├── client.js                   # HTTP klient (fetch wrapper s auth, refresh, retry)
 │   │   └── auth.js                     # Login, refresh, logout (raw fetch)
+│   ├── icons.js                         # Centrální registr ikon (importy, mapování, resolveIcon)
 │   ├── stores/
 │   │   ├── auth.svelte.js              # Auth stav (token, user, isAuthenticated)
 │   │   └── navigation.svelte.js        # Aktivní položka navigace
@@ -60,6 +62,7 @@ frontend/
 │   │   │   ├── Select.svelte
 │   │   │   ├── Checkbox.svelte
 │   │   │   ├── DateInput.svelte
+│   │   │   ├── Icon.svelte             # Univerzální ikona (inline SVG z FA definition)
 │   │   │   └── Modal.svelte
 │   │   ├── layout/
 │   │   │   ├── AppShell.svelte         # Hlavní layout (sidebar + tabs + content)
@@ -190,7 +193,7 @@ Sidebar načítá navigační strom z `GET /_ui/navigation`. Server generuje str
             "id": "base",
             "label": "Základní",
             "children": [
-                {"id": "base_persons_persons", "label": "Osoby", "type": "table", "table": "base_persons_persons"}
+                {"id": "viewer:base.persons", "label": "Osoby", "type": "viewer", "viewerId": "base.persons", "icon": "user"}
             ]
         }
     ]
@@ -314,7 +317,80 @@ Zatím prohlížeč i formuláře fungují čistě z `_meta/tables/{table}` — 
 
 ---
 
-## 9. Budoucí rozšíření
+## 9. Ikony
+
+Aplikace používá **Font Awesome** (SVG/JS varianta) pro ikony napříč celým UI. Díky tree-shakingu se do bundle zahrnou jen skutečně použité ikony.
+
+### Balíčky
+
+- `@fortawesome/fontawesome-svg-core` — základní knihovna
+- `@fortawesome/free-solid-svg-icons` — sada solid ikon
+
+### Architektura
+
+Ikony se řídí třemi soubory/komponentami:
+
+- **`src/icons.js`** — centrální registr. Všechny ikony se importují a re-exportují z jednoho místa. Pojmenování podle *významu* (ne podle vzhledu): `iconAdd`, `iconEdit`, `iconSave`, `iconUser`. Obsahuje `iconMap` pro překlad řetězců z API a funkci `resolveIcon(name, fallback)`.
+- **`components/ui/Icon.svelte`** — univerzální komponenta. Přijímá FA icon definition a vykreslí inline SVG. Podporuje velikosti (`xs`/`sm`/`md`/`lg`/`xl`), animaci `spin` a accessibility (`aria-label` / `aria-hidden`).
+- **`components/ui/Button.svelte`** — rozšířený o prop `icon` (volitelný), `iconOnly` pro tlačítka pouze s ikonou a variantu `ghost`.
+
+### Použití v komponentách
+
+```svelte
+<script>
+  import Icon from '../ui/Icon.svelte';
+  import Button from '../ui/Button.svelte';
+  import { iconAdd, iconEdit, iconUser } from '../../icons.js';
+</script>
+
+<!-- Samostatná ikona -->
+<Icon icon={iconUser} size="lg" />
+
+<!-- Tlačítko s ikonou a textem -->
+<Button icon={iconAdd} label="Nový záznam" />
+
+<!-- Tlačítko jen s ikonou -->
+<Button icon={iconEdit} label="Upravit" iconOnly />
+```
+
+### Ikony v navigaci (server-driven)
+
+Navigační položky mohou mít volitelnou ikonu definovanou na serveru:
+
+- **Viewery**: pole `"icon"` v `module.jsonc` v definici vieweru
+- **Tabulky**: pole `"icon"` v `.jsonc` definici tabulky
+
+`NavigationController` přenáší ikonu do navigačního JSON. Frontend používá `resolveIcon(item.icon)` s fallbackem na `iconTable` (generická ikona).
+
+Příklad v `module.jsonc`:
+```jsonc
+"viewers": [
+    {
+        "id": "base.persons",
+        "name:cs": "Osoby",
+        "icon": "user",
+        "table": "base_persons_persons"
+    }
+]
+```
+
+### Dostupné klíče pro `iconMap`
+
+Akce: `add`, `edit`, `delete`, `save`, `search`, `filter`, `refresh`. Navigace: `user`, `users`, `company`, `invoice`, `document`, `warehouse`, `tag`, `tags`, `folder`, `table`, `settings`, `logout`.
+
+### Přidání nové ikony
+
+1. V `icons.js`: import z `@fortawesome/free-solid-svg-icons`, pojmenovaný export (`iconNěco`)
+2. Pokud ji server posílá jako string: přidat záznam do `iconMap`
+3. V komponentě: importovat z `icons.js` a předat do `<Icon>` nebo `<Button>`
+
+### Ikony v toolbaru
+
+`ViewerToolbar` automaticky mapuje známé akce na ikony (např. `id: 'add'` → `iconAdd`). Akce může přinest vlastní `icon` prop, který má přednost.
+
+---
+
+## 10. Budoucí rozšíření
 
 - **Filtrování v prohlížeči** — toolbar s filtry podle typu sloupce
 - **Hledání** — fulltext přes toolbar

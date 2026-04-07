@@ -18,6 +18,7 @@ Podrobné specifikace jsou v adresáři `docs/`. Přečti příslušný dokument
 | `docs/modules.md` | Modulový systém — struktura modulů, závislosti, JSONC formát, vícejazyčnost (i18n), kompilace konfigurace, CLI příkaz `ds-upgrade` |
 | `docs/table-definitions.md` | Formát definice databázových tabulek — datové typy, sloupce, indexy, extensions, validace, bezpečné změny |
 | `docs/document-system.md` | Dokumentový systém — Document třídy, hooky, validace, TableGateway, child tabulky, DocumentRegistry |
+| `docs/frontend.md` | Frontend architektura — Svelte 5, komponenty, ikony (Font Awesome), API komunikace |
 
 ## Architektura — rychlý přehled
 
@@ -92,6 +93,13 @@ Závislosti tečou shora dolů: Command → Document → Module/Config/Database 
 ### CLI příkazy
 - `shpd-server`: `version`, `help`, `ds-create --name`, `server-init`, `next-table-id`
 - `shpd-ds` (z adresáře DS): `version`, `help`, `ds-upgrade`
+
+### Frontend — ikony
+- Font Awesome SVG/JS, tree-shaking přes Vite
+- Centrální registr: `frontend/src/icons.js` — pojmenování podle významu (`iconAdd`, `iconUser`), ne vzhledu
+- Komponenta: `Icon.svelte` (inline SVG), rozšířený `Button.svelte` (prop `icon`)
+- Navigace: server posílá `"icon": "klíč"` v JSON, frontend překládá přes `resolveIcon()` s fallbackem `iconTable`
+- Nová ikona: import v `icons.js` + export + záznam v `iconMap`
 
 ## Příkazy pro vývoj
 

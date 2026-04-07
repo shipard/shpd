@@ -3,6 +3,16 @@
   import { logout } from '../../api/auth.js';
   import { authStore } from '../../stores/auth.svelte.js';
   import { onMount } from 'svelte';
+  import Icon from '../ui/Icon.svelte';
+  import {
+    iconCollapse,
+    iconExpand,
+    iconLogout,
+    iconChevronDown,
+    iconChevronRight,
+    iconSpinner,
+    resolveIcon,
+  } from '../../icons.js';
 
   let { onNavigate, activeId = null, onLogout } = $props();
 
@@ -61,9 +71,9 @@
     authStore.clearAuth();
     onLogout?.();
   }
+
   function toggleCollapse() {
     collapsed = !collapsed;
-    // Reset hover when expanding manually
     if (!collapsed) hovered = false;
   }
 
@@ -88,13 +98,16 @@
       <span class="shpd-sidebar__logo">Shipard</span>
     {/if}
     <button class="shpd-sidebar__toggle" onclick={toggleCollapse} title={collapsed ? 'Rozbalit menu' : 'Sbalit menu'}>
-      {collapsed ? '\u25B6' : '\u25C0'}
+      <Icon icon={collapsed ? iconExpand : iconCollapse} size="sm" />
     </button>
   </div>
 
   <div class="shpd-sidebar__nav">
   {#if loading}
-    <div class="shpd-sidebar__status">Načítám…</div>
+    <div class="shpd-sidebar__status">
+      <Icon icon={iconSpinner} spin size="sm" />
+      {#if expanded_sidebar}<span>Načítám…</span>{/if}
+    </div>
   {:else if error}
     <div class="shpd-sidebar__status shpd-sidebar__status--error">{error}</div>
   {/if}
@@ -106,7 +119,9 @@
         onclick={() => toggleGroup(group.id)}
       >
         <span class="shpd-sidebar__group-label">{group.label}</span>
-        <span class="shpd-sidebar__chevron" class:shpd-sidebar__chevron--open={expanded.has(group.id)}>›</span>
+        <span class="shpd-sidebar__chevron">
+          <Icon icon={expanded.has(group.id) ? iconChevronDown : iconChevronRight} size="xs" />
+        </span>
       </button>
 
       {#if expanded.has(group.id)}
@@ -120,7 +135,9 @@
                   onclick={() => toggleGroup(child.id)}
                 >
                   <span>{child.label}</span>
-                  <span class="shpd-sidebar__chevron" class:shpd-sidebar__chevron--open={expanded.has(child.id)}>›</span>
+                  <span class="shpd-sidebar__chevron">
+                    <Icon icon={expanded.has(child.id) ? iconChevronDown : iconChevronRight} size="xs" />
+                  </span>
                 </button>
 
                 {#if expanded.has(child.id)}
@@ -132,7 +149,8 @@
                           class:shpd-sidebar__item--active={activeId === leaf.id}
                           onclick={() => handleItemClick(leaf)}
                         >
-                          {leaf.label}
+                          <Icon icon={resolveIcon(leaf.icon)} size="sm" />
+                          <span>{leaf.label}</span>
                         </button>
                       </li>
                     {/each}
@@ -146,7 +164,8 @@
                   class:shpd-sidebar__item--active={activeId === child.id}
                   onclick={() => handleItemClick(child)}
                 >
-                  {child.label}
+                  <Icon icon={resolveIcon(child.icon)} size="sm" />
+                  <span>{child.label}</span>
                 </button>
               </li>
             {/if}
@@ -160,7 +179,10 @@
   <div class="shpd-sidebar__footer">
     {#if expanded_sidebar}
       <span class="shpd-sidebar__username">{authStore.user?.full_name ?? ''}</span>
-      <button class="shpd-sidebar__logout" onclick={handleLogout}>Odhl\u00e1sit</button>
+      <button class="shpd-sidebar__logout" onclick={handleLogout} title="Odhlásit">
+        <Icon icon={iconLogout} size="sm" />
+        <span>Odhlásit</span>
+      </button>
     {:else}
       <span class="shpd-sidebar__avatar" title={authStore.user?.full_name ?? ''}>
         {(authStore.user?.full_name ?? '?').charAt(0)}
@@ -246,7 +268,6 @@
     justify-content: center;
     width: 28px;
     height: 28px;
-    font-size: 0.7rem;
     color: rgb(148 163 184);
     border-radius: var(--shpd-radius-sm);
     transition: color 0.15s, background-color 0.15s;
@@ -280,6 +301,9 @@
   }
 
   .shpd-sidebar__logout {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--shpd-space-xs);
     padding: var(--shpd-space-xs) var(--shpd-space-sm);
     font-size: var(--shpd-font-size-sm);
     color: rgb(148 163 184);
@@ -322,16 +346,10 @@
   }
 
   .shpd-sidebar__chevron {
-    display: inline-block;
-    font-style: normal;
-    transform: rotate(90deg);
-    transition: transform 0.2s;
-    font-size: 1rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     line-height: 1;
-  }
-
-  .shpd-sidebar__chevron--open {
-    transform: rotate(270deg);
   }
 
   .shpd-sidebar__list {
@@ -358,7 +376,9 @@
   }
 
   .shpd-sidebar__item {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: var(--shpd-space-sm);
     width: 100%;
     padding: var(--shpd-space-xs) var(--shpd-space-md);
     font-size: var(--shpd-font-size-sm);
@@ -384,6 +404,9 @@
   }
 
   .shpd-sidebar__status {
+    display: flex;
+    align-items: center;
+    gap: var(--shpd-space-sm);
     padding: var(--shpd-space-md);
     font-size: var(--shpd-font-size-sm);
     color: rgb(148 163 184);

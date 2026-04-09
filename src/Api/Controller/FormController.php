@@ -83,16 +83,27 @@ class FormController
             return Response::error('BAD_REQUEST', 'Request body must be a JSON object', 400);
         }
 
-        // Filter out system/auto fields from input
+        $dsDef    = $def->docStates;
+        $stateCol = $dsDef?->stateColumn ?? 'docState';
+        $mainCol  = $dsDef?->mainColumn  ?? 'docStateMain';
+
+        // ── Detekce přechodu stavu ────────────────────────────────────────────
+        // Přechod stavu = tělo obsahuje pouze docState (žádná běžná data).
+        // Prochází přímým UPDATE bez Document lifecycle.
+        $bodyKeys = array_keys($body);
+        $isStateTransition = $id !== null
+            && $dsDef !== null
+            && count($bodyKeys) === 1
+            && $bodyKeys[0] === $stateCol;
+
+        if ($isStateTransition) {
+            return $this->applyStateTransition($table, $id, $body, $def, $db, $config);
+        }
+
+        // ── Běžné uložení přes TableGateway + Document lifecycle ──────────────
         $inputData = $this->filterWritableFields($body, $def);
         if ($id !== null) {
             $inputData['id'] = $id;
-        }
-
-        // Handle docState separately (system field but allowed via state transitions)
-        if (isset($body[$def->docStates?->stateColumn ?? 'docState'])) {
-            $stateCol = $def->docStates?->stateColumn ?? 'docState';
-            $inputData[$stateCol] = $body[$stateCol];
         }
 
         // Auto-manage timestamps — only add if column exists in table definition
@@ -104,17 +115,11 @@ class FormController
             $inputData['modified'] = $now;
         }
 
-        // Init/process docState (sets docState + docStateMain)
+        // Init docState for new records
         if ($id === null) {
             $this->initDocState($body, $def, $inputData, $config);
-        } else {
-            $stateErr = $this->processDocState($table, $id, $body, $def, $inputData, $db, $config);
-            if ($stateErr !== null) {
-                return $stateErr;
-            }
         }
 
-        // Run through TableGateway + Document lifecycle if registry available
         $registry = $documentRegistry ?? new DocumentRegistry();
         $gateway  = new TableGateway($table, $db->getDibiConnection(), $registry);
         $result   = $gateway->saveDocument($inputData);
@@ -131,11 +136,9 @@ class FormController
             return Response::error('INTERNAL_ERROR', $result->getErrorMessage() ?? 'Save failed', 500);
         }
 
-        $saved = $result->getData();
+        $saved   = $result->getData();
         $savedId = $saved['id'] ?? $id;
-
-        // Reload fresh record from DB
-        $record = $db->fetchRow("SELECT * FROM `{$table}` WHERE `id` = %i", $savedId);
+        $record  = $db->fetchRow("SELECT * FROM `{$table}` WHERE `id` = %i", $savedId);
 
         $httpStatus = ($id === null) ? 201 : 200;
         return Response::success(['id' => $savedId, 'data' => $record], $httpStatus);
@@ -351,6 +354,47 @@ class FormController
         }
 
         return null;
+    }
+
+    private function applyStateTransition(
+        string $table,
+        int $id,
+        array $body,
+        TableDefinition $def,
+        DataSourceConnection $db,
+        ?ConfigRuntime $config,
+    ): Response {
+        $dsDef = $def->docStates;
+        if ($dsDef === null || $config === null) {
+            return Response::error('BAD_REQUEST', 'Table does not support doc states', 400);
+        }
+
+        $stateCol = $dsDef->stateColumn;
+        $mainCol  = $dsDef->mainColumn;
+        $cfg      = DocStateConfig::fromCfgItem($config->cfgItem($dsDef->cfgItem));
+
+        $currentRow   = $db->fetchRow("SELECT `{$stateCol}` FROM `{$table}` WHERE `id` = %i", $id);
+        if ($currentRow === null) {
+            return Response::error('NOT_FOUND', 'Record not found', 404);
+        }
+        $currentState = (int) $currentRow[$stateCol];
+        $newState     = (int) $body[$stateCol];
+
+        if ($newState !== $currentState && !$cfg->isTransitionAllowed($currentState, $newState)) {
+            return Response::error(
+                'INVALID_STATE_TRANSITION',
+                "Transition from state {$currentState} to {$newState} is not allowed.",
+                422,
+            );
+        }
+
+        $db->updateWhere($table, [
+            $stateCol => $newState,
+            $mainCol  => $cfg->getMainState($newState),
+        ], 'id = %i', $id);
+
+        $record = $db->fetchRow("SELECT * FROM `{$table}` WHERE `id` = %i", $id);
+        return Response::success(['id' => $id, 'data' => $record]);
     }
 
     private function hasColumn(TableDefinition $def, string $colId): bool

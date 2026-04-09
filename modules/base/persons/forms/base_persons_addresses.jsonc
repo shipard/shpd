@@ -1,0 +1,44 @@
+{
+    "title": "Adresa",
+    "titleNew": "Nová adresa",
+    "fullSize": false,
+
+    "tabs": [
+        {
+            "id": "address",
+            "label": "Adresa",
+            "elements": [
+                {"type": "select", "column": "address_type", "cols": 1},
+                {"type": "input", "column": "name", "cols": 2},
+
+                {"type": "separator", "label": "Adresa"},
+                {"type": "input", "column": "street", "cols": 2},
+                {"type": "input", "column": "house_number", "cols": 1},
+                {"type": "input", "column": "orientation_number", "cols": 1},
+                {"type": "input", "column": "city", "cols": 2},
+                {"type": "input", "column": "city_part", "cols": 1},
+                {"type": "input", "column": "zip", "cols": 1},
+                {"type": "input", "column": "country", "cols": 1},
+
+                {"type": "separator", "label": "Platnost"},
+                {"type": "input", "column": "valid_from", "cols": 1},
+                {"type": "input", "column": "valid_to", "cols": 1},
+                {"type": "input", "column": "order_pos", "cols": 1},
+                {"type": "input", "column": "note", "cols": 4},
+            ]
+        },
+        {
+            "id": "detail",
+            "label": "Upřesnění",
+            "elements": [
+                {"type": "select", "column": "place_reg_type", "cols": 1},
+                {"type": "input", "column": "place_reg_id", "cols": 1},
+
+                {"type": "separator", "label": "Geolokace"},
+                {"type": "input", "column": "latitude", "cols": 1},
+                {"type": "input", "column": "longitude", "cols": 1},
+                {"type": "input", "column": "manual_gps", "cols": 1},
+            ]
+        }
+    ]
+}

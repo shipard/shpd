@@ -54,6 +54,7 @@ class TableMerger
             columns: $columns,
             indexes: $indexes,
             childTables: $base->childTables,
+            docStates: $base->docStates,
         );
     }
 }

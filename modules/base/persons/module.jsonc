@@ -32,6 +32,25 @@
         }
     ],
 
+    "forms": [
+        {
+            "table": "base_persons_persons",
+            "class": "Shipard\\Module\\Base\\Persons\\PersonsForm"
+        },
+        {
+            "table": "base_persons_contacts",
+            "id": "base.persons.contacts"
+        },
+        {
+            "table": "base_persons_addresses",
+            "id": "base.persons.addresses"
+        },
+        {
+            "table": "base_persons_bank_accounts",
+            "id": "base.persons.bank_accounts"
+        },
+    ],
+
     "documentClasses": [
         {
             "table": "base_persons_persons",

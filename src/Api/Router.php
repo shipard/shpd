@@ -56,6 +56,10 @@ class Router
 			return $this->resolveViewerRoute($subpath);
 		}
 
+		if (str_starts_with($subpath, '/_ui/form/')) {
+			return $this->resolveFormRoute($subpath, $method);
+		}
+
 		if ($subpath === '/_auth/login') {
 			if ($method !== 'POST') {
 				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
@@ -129,6 +133,70 @@ class Router
 				'DELETE' => new Route('crud', 'delete', $table, $id),
 				default  => Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405),
 			};
+		}
+
+		return Response::error('NOT_FOUND', 'Not found', 404);
+	}
+
+	private function resolveFormRoute(string $subpath, string $method): Route|Response
+	{
+		$rest = substr($subpath, strlen('/_ui/form/'));
+		$parts = explode('/', $rest);
+		$count = count($parts);
+
+		if ($count < 2 || $parts[0] === '') {
+			return Response::error('NOT_FOUND', 'Not found', 404);
+		}
+
+		$table = $parts[0];
+		$action = $parts[1];
+
+		// GET /_ui/form/{table}/meta
+		if ($count === 2 && $action === 'meta') {
+			if ($method !== 'GET') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('form', 'meta', $table);
+		}
+
+		// GET /_ui/form/{table}/meta/{id}
+		if ($count === 3 && $action === 'meta') {
+			if ($method !== 'GET') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			$rawId = $parts[2];
+			if (!ctype_digit($rawId) || (int) $rawId <= 0) {
+				return Response::error('NOT_FOUND', 'Not found', 404);
+			}
+			return new Route('form', 'meta', $table, (int) $rawId);
+		}
+
+		// POST /_ui/form/{table}/save
+		if ($count === 2 && $action === 'save') {
+			if ($method !== 'POST') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('form', 'save', $table);
+		}
+
+		// PUT /_ui/form/{table}/save/{id}
+		if ($count === 3 && $action === 'save') {
+			if ($method !== 'PUT') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			$rawId = $parts[2];
+			if (!ctype_digit($rawId) || (int) $rawId <= 0) {
+				return Response::error('NOT_FOUND', 'Not found', 404);
+			}
+			return new Route('form', 'save', $table, (int) $rawId);
+		}
+
+		// POST /_ui/form/{table}/recalculate
+		if ($count === 2 && $action === 'recalculate') {
+			if ($method !== 'POST') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('form', 'recalculate', $table);
 		}
 
 		return Response::error('NOT_FOUND', 'Not found', 404);

@@ -16,6 +16,7 @@ class ModuleDefinition
         public readonly array $config,
         public readonly array $documentClasses,
         public readonly array $viewers,
+        public readonly array $forms,
     ) {}
 
     public static function fromArray(array $data): self
@@ -42,6 +43,7 @@ class ModuleDefinition
             config: $data['config'] ?? [],
             documentClasses: $data['documentClasses'] ?? [],
             viewers: $data['viewers'] ?? [],
+            forms: $data['forms'] ?? [],
         );
     }
 }

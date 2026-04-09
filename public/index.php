@@ -9,8 +9,10 @@ use Shipard\Api\Controller\CrudController;
 use Shipard\Api\Controller\MetaController;
 use Shipard\Api\Controller\NavigationController;
 use Shipard\Api\Controller\OpenApiController;
+use Shipard\Api\Controller\FormController;
 use Shipard\Api\Controller\ViewerController;
 use Shipard\Api\DataSourceResolver;
+use Shipard\Api\FormLoader;
 use Shipard\Api\Exception\UnknownDataSourceException;
 use Shipard\Api\Exception\UnknownHostException;
 use Shipard\Api\Middleware\AuthMiddleware;
@@ -23,6 +25,7 @@ use Shipard\Api\Router;
 use Shipard\Api\TableLoader;
 use Shipard\Api\ViewerLoader;
 use Shipard\Core\Config\ServerConfig;
+use Shipard\Core\Form\FormRegistry;
 use Shipard\Core\Viewer\ViewerRegistry;
 
 $request        = Request::fromGlobals();
@@ -53,6 +56,9 @@ try {
 
 	// ── 4b. Build viewer registry ─────────────────────────────────────────────
 	$viewerRegistry = ViewerLoader::load($resolved->config, $modulesBasePath, $language);
+
+	// ── 4c. Build form registry ───────────────────────────────────────────────
+	$formRegistry = FormLoader::load($resolved->config, $modulesBasePath);
 
 	// ── 5. Route ──────────────────────────────────────────────────────────────
 	$router      = new Router();
@@ -100,7 +106,7 @@ try {
 		$route, $request, $auth, $tables,
 		$resolved->connection, $openApiPublic,
 		$host, $resolved, $modulesBasePath,
-		$viewerRegistry, $configRuntime,
+		$viewerRegistry, $configRuntime, $formRegistry,
 	);
 
 	// ── 10. Apply headers and send ────────────────────────────────────────────
@@ -160,6 +166,7 @@ function dispatch(
 	string $modulesBasePath,
 	ViewerRegistry $viewerRegistry,
 	?\Shipard\Core\Config\ConfigRuntime $configRuntime = null,
+	?FormRegistry $formRegistry = null,
 ): Response {
 	$baseUrl = $resolved->isDevMode()
 		? 'http://' . $host . '/' . $resolved->config->getId()
@@ -170,6 +177,7 @@ function dispatch(
 		'crud'    => dispatchCrud($route, $request, $tables, $db, $configRuntime),
 		'meta'    => dispatchMeta($route->action, $route->table, $tables, resolveLanguage($request)),
 		'ui'      => dispatchUi($route->action, $resolved->config, $modulesBasePath, resolveLanguage($request)),
+		'form'    => dispatchForm($route, $request, $tables, $db, $formRegistry ?? new FormRegistry(), $configRuntime, $modulesBasePath),
 		'viewer'  => dispatchViewer($route, $request, $viewerRegistry, $db, $configRuntime),
 		'openapi' => (new OpenApiController())->spec($auth, $openApiPublic, $tables, $baseUrl),
 		default   => Response::error('INTERNAL_ERROR', "Unknown controller: {$route->controller}", 500),
@@ -246,5 +254,24 @@ function dispatchViewer(
 		'rows'   => $ctrl->rows($viewerId, $request, $registry, $db, $config),
 		'detail' => $ctrl->detail($viewerId, (int) $route->id, $registry, $db, $config),
 		default  => Response::error('INTERNAL_ERROR', "Unknown viewer action: {$route->action}", 500),
+	};
+}
+
+function dispatchForm(
+	Route $route,
+	Request $request,
+	array $tables,
+	\Shipard\Core\Database\DataSourceConnection $db,
+	FormRegistry $formRegistry,
+	?\Shipard\Core\Config\ConfigRuntime $configRuntime = null,
+	string $modulesBasePath = '',
+): Response {
+	$ctrl  = new FormController();
+	$table = $route->table ?? '';
+	return match ($route->action) {
+		'meta'        => $ctrl->meta($table, $route->id, $tables, $db, $formRegistry, $configRuntime, $modulesBasePath),
+		'save'        => $ctrl->save($table, $route->id, $request, $tables, $db, $configRuntime),
+		'recalculate' => $ctrl->recalculate($table, $request, $tables, $db, $formRegistry, $configRuntime, $modulesBasePath),
+		default       => Response::error('INTERNAL_ERROR', "Unknown form action: {$route->action}", 500),
 	};
 }

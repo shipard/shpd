@@ -196,4 +196,83 @@ class RouterTest extends TestCase
 		$this->assertInstanceOf(Response::class, $result);
 		$this->assertSame('NOT_FOUND', $result->getPayload()['error']['code']);
 	}
+
+	// Form routes
+
+	public function testFormMetaNew(): void
+	{
+		$result = $this->router->resolve('/api/v1/_ui/form/core_system_users/meta', 'GET');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'form', 'meta', 'core_system_users');
+	}
+
+	public function testFormMetaWithId(): void
+	{
+		$result = $this->router->resolve('/api/v1/_ui/form/base_persons_persons/meta/42', 'GET');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'form', 'meta', 'base_persons_persons', 42);
+	}
+
+	public function testFormSaveCreate(): void
+	{
+		$result = $this->router->resolve('/api/v1/_ui/form/core_system_users/save', 'POST');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'form', 'save', 'core_system_users');
+	}
+
+	public function testFormSaveUpdate(): void
+	{
+		$result = $this->router->resolve('/api/v1/_ui/form/core_system_users/save/5', 'PUT');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'form', 'save', 'core_system_users', 5);
+	}
+
+	public function testFormRecalculate(): void
+	{
+		$result = $this->router->resolve('/api/v1/_ui/form/core_system_users/recalculate', 'POST');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'form', 'recalculate', 'core_system_users');
+	}
+
+	public function testFormMetaMethodNotAllowed(): void
+	{
+		$result = $this->router->resolve('/api/v1/_ui/form/core_system_users/meta', 'POST');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
+	}
+
+	public function testFormSaveGetNotAllowed(): void
+	{
+		$result = $this->router->resolve('/api/v1/_ui/form/core_system_users/save', 'GET');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
+	}
+
+	public function testFormSaveUpdatePostNotAllowed(): void
+	{
+		$result = $this->router->resolve('/api/v1/_ui/form/core_system_users/save/5', 'POST');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
+	}
+
+	public function testFormRecalculateGetNotAllowed(): void
+	{
+		$result = $this->router->resolve('/api/v1/_ui/form/core_system_users/recalculate', 'GET');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
+	}
+
+	public function testFormMetaInvalidId(): void
+	{
+		$result = $this->router->resolve('/api/v1/_ui/form/core_system_users/meta/0', 'GET');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('NOT_FOUND', $result->getPayload()['error']['code']);
+	}
+
+	public function testFormUnknownAction(): void
+	{
+		$result = $this->router->resolve('/api/v1/_ui/form/core_system_users/unknown', 'GET');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('NOT_FOUND', $result->getPayload()['error']['code']);
+	}
 }

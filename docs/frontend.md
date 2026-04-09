@@ -420,6 +420,7 @@ Zatím prohlížeč i formuláře fungují čistě z `_meta/tables/{table}` — 
 - `api/config.js` řeší DS ID prefix automaticky
 - Automatický 401 → refresh → retry
 - Chyby přes return value, ne exceptions
+- **Envelope konvence:** všechny odpovědi mají tvar `{ success, data, meta? }` nebo `{ success, error }`. Data jsou vždy v `res.data`, nikdy přímo v `res`. Např. `res.data.formDefinition`, ne `res.formDefinition`.
 
 ### Pojmenování
 

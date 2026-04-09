@@ -145,7 +145,7 @@
             "name:en": "First name",
             "type": "varchar",
             "length": 100,
-            "nullable": false,
+            "nullable": true,
             "group": "name"
         },
         {
@@ -165,7 +165,7 @@
             "name:en": "Last name",
             "type": "varchar",
             "length": 100,
-            "nullable": false,
+            "nullable": true,
             "group": "name"
         },
         {

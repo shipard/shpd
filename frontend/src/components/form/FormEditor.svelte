@@ -72,7 +72,7 @@
     const res = await post(`/_ui/form/${table}/recalculate`, {
       id: recordId ?? null,
       changedColumn: columnId,
-      data: formData,
+      data: sanitizeFormData(formData),
     });
     if (res?.success) {
       formDef = res.data.formDefinition;
@@ -91,8 +91,8 @@
     loadError = null;
     const isNew = recordId == null;
     const res = isNew
-      ? await post(`/_ui/form/${table}/save`, formData)
-      : await put(`/_ui/form/${table}/save/${recordId}`, formData);
+      ? await post(`/_ui/form/${table}/save`, sanitizeFormData(formData))
+      : await put(`/_ui/form/${table}/save/${recordId}`, sanitizeFormData(formData));
 
     if (res?.success) {
       onSaved?.(res.data);
@@ -152,6 +152,53 @@
     return elements.flatMap(el =>
       el.type === 'group' ? flatElements(el.elements ?? []) : [el]
     );
+  }
+
+  // Sestaví mapu column → element pro všechna pole ve všech tabech
+  function buildElementMap() {
+    const map = {};
+    for (const tab of formDef?.tabs ?? []) {
+      for (const el of flatElements(tab.elements ?? [])) {
+        if (el.column) map[el.column] = el;
+      }
+    }
+    return map;
+  }
+
+  // Sanitizuje data před odesláním:
+  // - prázdný string → null pro non-varchar typy (date, number...)
+  // - prázdný string → null pro nullable varchar pole
+  // - string → number pro select s numerickými options
+  function sanitizeFormData(data) {
+    const elMap = buildElementMap();
+    const result = {};
+    for (const [key, value] of Object.entries(data)) {
+      const el = elMap[key];
+      if (el === undefined) {
+        result[key] = value;
+        continue;
+      }
+      // Select s numerickými options: převeď string na number
+      if (el.type === 'select' && value !== null && value !== '') {
+        const firstOpt = el.options?.[0];
+        if (firstOpt && typeof firstOpt.value === 'number') {
+          result[key] = Number(value);
+          continue;
+        }
+      }
+      // Prázdný string: pro non-text input_type a pro nullable pole → null
+      if (value === '') {
+        const isText = el.type === 'input' && (el.input_type === 'text' || el.input_type == null);
+        if (!isText) {
+          result[key] = null;
+          continue;
+        }
+        // nullable varchar: prázdný string také jako null
+        // (server akceptuje oba, ale null je čistší)
+      }
+      result[key] = value;
+    }
+    return result;
   }
 </script>
 

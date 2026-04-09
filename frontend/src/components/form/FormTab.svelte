@@ -12,7 +12,7 @@
 </script>
 
 <div class="shpd-form-tab">
-  {#each tab.elements as element (element.column ?? element.label ?? Math.random())}
+  {#each tab.elements as element, i (element.column ?? `${element.type}-${i}`)}
     <FormElement
       {element}
       bind:formData

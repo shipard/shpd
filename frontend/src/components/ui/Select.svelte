@@ -12,6 +12,7 @@
     disabled?: boolean;
     error?: string | null;
     placeholder?: string;
+    onchange?: () => void;
   }
 
   let {
@@ -22,6 +23,7 @@
     disabled = false,
     error = null,
     placeholder,
+    onchange,
   }: Props = $props();
 
   const inputId = `shpd-select-${Math.random().toString(36).slice(2)}`;
@@ -41,6 +43,7 @@
       bind:value
       {required}
       {disabled}
+      {onchange}
     >
       {#if !required || placeholder}
         <option value={null}>{placeholder ?? ''}</option>

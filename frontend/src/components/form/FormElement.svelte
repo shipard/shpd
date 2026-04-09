@@ -54,7 +54,7 @@
       <div class="shpd-form-group__label">{element.label}</div>
     {/if}
     <div class="shpd-form-group__grid">
-      {#each element.elements ?? [] as child (child.column ?? Math.random())}
+      {#each element.elements ?? [] as child, i (child.column ?? `${child.type}-${i}`)}
         <Self
           element={child}
           bind:formData

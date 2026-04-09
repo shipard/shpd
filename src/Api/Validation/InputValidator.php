@@ -210,11 +210,14 @@ class InputValidator
 		if ($config === null || $col->cfgItem === null) {
 			return []; // Cannot validate without config
 		}
-		$allowed = $config->cfgItem($col->cfgItem);
-		if (!is_array($allowed)) {
+		$cfgData = $config->cfgItem($col->cfgItem);
+		if (!is_array($cfgData)) {
 			return [];
 		}
-		if (!in_array($value, $allowed, true)) {
+		// cfgItem je mapa klíč → objekt (např. {"0": {...}, "1": {...}})
+		// Porovnáváme hodnotu proti klíčům, s přetypováním dle typu sloupce
+		$strValue = (string) $value;
+		if (!array_key_exists($strValue, $cfgData)) {
 			return [['field' => $col->id, 'code' => 'INVALID_ENUM', 'message' => "Field '{$col->id}' contains an invalid value"]];
 		}
 		return [];

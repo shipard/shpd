@@ -39,6 +39,11 @@ class PersonDocument extends Document
     {
         $personType = PersonType::tryFrom((int) ($data['person_type'] ?? 0));
 
+        // Auto-generate person_id if empty
+        if (empty($data['person_id']) && $this->db !== null) {
+            $data['person_id'] = $this->generatePersonId($personType);
+        }
+
         if ($personType === PersonType::Company) {
             $data['first_name'] = '';
             $data['last_name'] = $data['full_name'] ?? '';
@@ -49,5 +54,26 @@ class PersonDocument extends Document
                 ($data['first_name'] ?? '') . ' ' . ($data['last_name'] ?? '')
             );
         }
+    }
+
+    private function generatePersonId(?PersonType $personType): string
+    {
+        $prefix = match ($personType) {
+            PersonType::Company => 'F',
+            PersonType::Person  => 'O',
+            default             => 'X',
+        };
+
+        // Find the highest existing numeric suffix for this prefix
+        $row = $this->db->fetch(
+            'SELECT MAX(CAST(SUBSTRING(person_id, %i) AS UNSIGNED)) AS max_num
+             FROM base_persons_persons
+             WHERE person_id LIKE %s',
+            strlen($prefix) + 1,
+            $prefix . '%',
+        );
+
+        $next = ((int) ($row['max_num'] ?? 0)) + 1;
+        return $prefix . str_pad((string) $next, 5, '0', STR_PAD_LEFT);
     }
 }

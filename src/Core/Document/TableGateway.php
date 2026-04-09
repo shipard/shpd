@@ -38,6 +38,7 @@ class TableGateway
     public function saveDocument(array $inputData): DocumentResult
     {
         $doc = $this->registry->getDocument($this->tableId, $inputData);
+        $doc->setDb($this->db);
         $data = $inputData;
 
         $validation = $doc->validate($data);

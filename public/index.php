@@ -12,6 +12,7 @@ use Shipard\Api\Controller\OpenApiController;
 use Shipard\Api\Controller\FormController;
 use Shipard\Api\Controller\ViewerController;
 use Shipard\Api\DataSourceResolver;
+use Shipard\Api\DocumentLoader;
 use Shipard\Api\FormLoader;
 use Shipard\Api\Exception\UnknownDataSourceException;
 use Shipard\Api\Exception\UnknownHostException;
@@ -60,6 +61,9 @@ try {
 	// ── 4c. Build form registry ───────────────────────────────────────────────
 	$formRegistry = FormLoader::load($resolved->config, $modulesBasePath);
 
+	// ── 4d. Build document registry ───────────────────────────────────────────
+	$documentRegistry = DocumentLoader::load($resolved->config, $modulesBasePath);
+
 	// ── 5. Route ──────────────────────────────────────────────────────────────
 	$router      = new Router();
 	$routeResult = $router->resolve($resolved->normalizedPath, $request->getMethod());
@@ -106,7 +110,7 @@ try {
 		$route, $request, $auth, $tables,
 		$resolved->connection, $openApiPublic,
 		$host, $resolved, $modulesBasePath,
-		$viewerRegistry, $configRuntime, $formRegistry,
+		$viewerRegistry, $configRuntime, $formRegistry, $documentRegistry,
 	);
 
 	// ── 10. Apply headers and send ────────────────────────────────────────────
@@ -123,7 +127,7 @@ try {
 } catch (\Throwable $e) {
 	$isDev   = $serverConfig !== null && $serverConfig->getMode() === 'development';
 	$details = $isDev
-		? [['field' => '_exception', 'code' => get_class($e), 'message' => $e->getMessage()]]
+		? [['field' => '_exception', 'code' => get_class($e), 'message' => $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine()]]
 		: [];
 	$corsMiddleware->applyTo(
 		Response::error('INTERNAL_ERROR', 'Internal server error', 500, $details),
@@ -167,6 +171,7 @@ function dispatch(
 	ViewerRegistry $viewerRegistry,
 	?\Shipard\Core\Config\ConfigRuntime $configRuntime = null,
 	?FormRegistry $formRegistry = null,
+	?\Shipard\Core\Document\DocumentRegistry $documentRegistry = null,
 ): Response {
 	$baseUrl = $resolved->isDevMode()
 		? 'http://' . $host . '/' . $resolved->config->getId()
@@ -177,7 +182,7 @@ function dispatch(
 		'crud'    => dispatchCrud($route, $request, $tables, $db, $configRuntime),
 		'meta'    => dispatchMeta($route->action, $route->table, $tables, resolveLanguage($request)),
 		'ui'      => dispatchUi($route->action, $resolved->config, $modulesBasePath, resolveLanguage($request)),
-		'form'    => dispatchForm($route, $request, $tables, $db, $formRegistry ?? new FormRegistry(), $configRuntime, $modulesBasePath),
+		'form'    => dispatchForm($route, $request, $tables, $db, $formRegistry ?? new FormRegistry(), $configRuntime, $modulesBasePath, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'viewer'  => dispatchViewer($route, $request, $viewerRegistry, $db, $configRuntime),
 		'openapi' => (new OpenApiController())->spec($auth, $openApiPublic, $tables, $baseUrl),
 		default   => Response::error('INTERNAL_ERROR', "Unknown controller: {$route->controller}", 500),
@@ -265,12 +270,13 @@ function dispatchForm(
 	FormRegistry $formRegistry,
 	?\Shipard\Core\Config\ConfigRuntime $configRuntime = null,
 	string $modulesBasePath = '',
+	?\Shipard\Core\Document\DocumentRegistry $documentRegistry = null,
 ): Response {
 	$ctrl  = new FormController();
 	$table = $route->table ?? '';
 	return match ($route->action) {
 		'meta'        => $ctrl->meta($table, $route->id, $tables, $db, $formRegistry, $configRuntime, $modulesBasePath),
-		'save'        => $ctrl->save($table, $route->id, $request, $tables, $db, $configRuntime),
+		'save'        => $ctrl->save($table, $route->id, $request, $tables, $db, $configRuntime, $documentRegistry),
 		'recalculate' => $ctrl->recalculate($table, $request, $tables, $db, $formRegistry, $configRuntime, $modulesBasePath),
 		default       => Response::error('INTERNAL_ERROR', "Unknown form action: {$route->action}", 500),
 	};

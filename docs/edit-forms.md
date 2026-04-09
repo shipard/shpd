@@ -966,6 +966,48 @@ Klient při otevírání formuláře zkontroluje tento flag:
 
 ## 20. Otevřené otázky (k řešení při implementaci)
 
+## 21. Implementační poznámky a pastči
+
+### `dispatch()` a sdílené proměnné v `index.php`
+
+Funkce `dispatch()` je globální PHP funkce — nemá přístup k lokálním proměnným z `try` bloku. Každý kontext (registry, config...) musí být explicitně předán jako parametr jak voláním, tak signatůřou funkce.
+
+```php
+// Špatně — $documentRegistry existuje v try bloku, ale dispatch() ho nevidí
+dispatch($route, ..., $formRegistry);
+
+// Správně
+dispatch($route, ..., $formRegistry, $documentRegistry);
+function dispatch(..., ?DocumentRegistry $documentRegistry = null): Response { ... }
+```
+
+### `{#each}` klíče ve Svelte 5
+
+`Math.random()` jako klíč způsobuje destrukci a znovuvytvoření komponent při každém re-renderu. Pro elementy bez unikátního ID:
+```js
+{#each tab.elements as element, i (element.column ?? `${element.type}-${i}`)}
+```
+
+### `Select` a callback props ve Svelte 5
+
+Svelte 5 komponenty nepředávají DOM eventy automaticky na rootečnou komponentu. `onchange` callback musí být explicitní prop v interface + předán na interní `<select>`.
+
+### Validace `enumInt` v `InputValidator`
+
+cfgItem je mapa klíčů `{"0": {...}, "1": {...}}`. Správná validace:
+```php
+array_key_exists((string) $value, $cfgData)  // ✓
+in_array($value, $cfgData)                    // ✗ hodnoty jsou objekty
+```
+
+### Business logika vs. DB constraints
+
+`InputValidator` validuje pouze DB constraints. Sloupce které se automaticky vyplňují v `beforeSave` musí být v DB `nullable` — jinak validace zabání uložení dřív než se `beforeSave` zavolá.
+
+### `Document` má přístup k DB
+
+`TableGateway` volá `$doc->setDb($this->db)` před každým hookem. Document subclassy používají `$this->db` pro vlastní dotazy (např. generování unikátních kódů jako `person_id`).
+
 1. **Full-size overlay z nested kontextu** — pokud je Faktura otevřena jako dialog a z ní se otevře výběr Osoby (fullSize), jak přesně se má full-size overlay zobrazit? Možnosti: (a) nad celou aplikací (z-index přes vše), (b) pouze nad ContentArea. Doporučení: nad celou aplikací — jednodušší implementace.
 
 2. **Auto-save draft** — má formulář automaticky ukládat rozpracovaný stav do localStorage pro případ nechtěného zavření? Zatím ne — zbytečná komplexita.

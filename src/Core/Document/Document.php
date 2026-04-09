@@ -8,6 +8,12 @@ abstract class Document
 {
     protected array $data = [];
     protected array $originalData = [];
+    protected ?\Dibi\Connection $db = null;
+
+    public function setDb(\Dibi\Connection $db): void
+    {
+        $this->db = $db;
+    }
 
     public function validate(array &$data): ValidationResult
     {

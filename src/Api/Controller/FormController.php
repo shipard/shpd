@@ -6,7 +6,6 @@ namespace Shipard\Api\Controller;
 
 use Shipard\Api\Request;
 use Shipard\Api\Response;
-use Shipard\Api\Validation\InputValidator;
 use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Database\TableDefinition;
@@ -17,6 +16,8 @@ use Shipard\Core\Form\JsoncFormLoader;
 use Shipard\Core\Form\RecalculateResult;
 use Shipard\Core\Form\TableForm;
 use Shipard\Core\Document\DocStateConfig;
+use Shipard\Core\Document\DocumentRegistry;
+use Shipard\Core\Document\TableGateway;
 
 class FormController
 {
@@ -63,9 +64,6 @@ class FormController
         ]);
     }
 
-    /**
-     * @param array<string, TableDefinition> $tables
-     */
     public function save(
         string $table,
         ?int $id,
@@ -73,6 +71,7 @@ class FormController
         array $tables,
         DataSourceConnection $db,
         ?ConfigRuntime $config,
+        ?DocumentRegistry $documentRegistry = null,
     ): Response {
         $def = $tables[$table] ?? null;
         if ($def === null) {
@@ -84,53 +83,62 @@ class FormController
             return Response::error('BAD_REQUEST', 'Request body must be a JSON object', 400);
         }
 
-        // Validate
-        $validator = new InputValidator();
-        $mode = $id === null ? 'create' : 'patch';
-        $errors = $validator->validate($body, $def, $mode, $config);
-        if ($errors !== []) {
-            return Response::error('VALIDATION_ERROR', 'Validation failed', 422, $errors);
+        // Filter out system/auto fields from input
+        $inputData = $this->filterWritableFields($body, $def);
+        if ($id !== null) {
+            $inputData['id'] = $id;
         }
 
-        // Filter writable fields
-        $data = $this->filterWritableFields($body, $def);
-
-        if ($id === null) {
-            // CREATE
-            $now = date('Y-m-d H:i:s');
-            if ($this->hasColumn($def, 'created')) {
-                $data['created'] = $now;
-            }
-            if ($this->hasColumn($def, 'modified')) {
-                $data['modified'] = $now;
-            }
-            $this->initDocState($body, $def, $data, $config);
-
-            $newId = $db->insertRow($table, $data);
-            $record = $db->fetchRow("SELECT * FROM `{$table}` WHERE `id` = %i", $newId);
-
-            return Response::success(['id' => $newId, 'data' => $record], 201);
+        // Handle docState separately (system field but allowed via state transitions)
+        if (isset($body[$def->docStates?->stateColumn ?? 'docState'])) {
+            $stateCol = $def->docStates?->stateColumn ?? 'docState';
+            $inputData[$stateCol] = $body[$stateCol];
         }
 
-        // UPDATE
-        $existing = $db->fetchRow("SELECT * FROM `{$table}` WHERE `id` = %i", $id);
-        if ($existing === null) {
-            return Response::error('NOT_FOUND', 'Record not found', 404);
+        // Auto-manage timestamps — only add if column exists in table definition
+        $now = date('Y-m-d H:i:s');
+        if ($id === null && $this->hasColumn($def, 'created')) {
+            $inputData['created'] = $now;
         }
-
-        $stateErr = $this->processDocState($table, $id, $body, $def, $data, $db, $config);
-        if ($stateErr !== null) {
-            return $stateErr;
-        }
-
         if ($this->hasColumn($def, 'modified')) {
-            $data['modified'] = date('Y-m-d H:i:s');
+            $inputData['modified'] = $now;
         }
 
-        $db->updateWhere($table, $data, 'id = %i', $id);
-        $record = $db->fetchRow("SELECT * FROM `{$table}` WHERE `id` = %i", $id);
+        // Init/process docState (sets docState + docStateMain)
+        if ($id === null) {
+            $this->initDocState($body, $def, $inputData, $config);
+        } else {
+            $stateErr = $this->processDocState($table, $id, $body, $def, $inputData, $db, $config);
+            if ($stateErr !== null) {
+                return $stateErr;
+            }
+        }
 
-        return Response::success(['id' => $id, 'data' => $record]);
+        // Run through TableGateway + Document lifecycle if registry available
+        $registry = $documentRegistry ?? new DocumentRegistry();
+        $gateway  = new TableGateway($table, $db->getDibiConnection(), $registry);
+        $result   = $gateway->saveDocument($inputData);
+
+        if (!$result->isSuccess()) {
+            $validation = $result->getValidation();
+            if ($validation !== null) {
+                $errors = array_map(
+                    fn($e) => ['field' => $e->column, 'code' => $e->code ?: 'INVALID', 'message' => $e->message],
+                    $validation->getErrors(),
+                );
+                return Response::error('VALIDATION_ERROR', 'Validation failed', 422, $errors);
+            }
+            return Response::error('INTERNAL_ERROR', $result->getErrorMessage() ?? 'Save failed', 500);
+        }
+
+        $saved = $result->getData();
+        $savedId = $saved['id'] ?? $id;
+
+        // Reload fresh record from DB
+        $record = $db->fetchRow("SELECT * FROM `{$table}` WHERE `id` = %i", $savedId);
+
+        $httpStatus = ($id === null) ? 201 : 200;
+        return Response::success(['id' => $savedId, 'data' => $record], $httpStatus);
     }
 
     /**

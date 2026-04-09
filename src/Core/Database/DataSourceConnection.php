@@ -22,6 +22,11 @@ class DataSourceConnection
         ]);
     }
 
+    public function getDibiConnection(): Connection
+    {
+        return $this->connection;
+    }
+
     private function tableExists(string $table): bool
     {
         $result = $this->connection->query('SHOW TABLES LIKE %s', $table);

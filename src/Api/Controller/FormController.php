@@ -339,7 +339,7 @@ class FormController
 
         if ($hasStateChange) {
             $newState = (int) $rawBody[$stateCol];
-            if (!$cfg->isTransitionAllowed($currentState, $newState)) {
+            if ($newState !== $currentState && !$cfg->isTransitionAllowed($currentState, $newState)) {
                 return Response::error(
                     'INVALID_STATE_TRANSITION',
                     "Transition from state {$currentState} to {$newState} is not allowed.",

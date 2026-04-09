@@ -267,7 +267,7 @@ class FormController
             'currentState' => $currentState,
             'stateName'    => $stateData['stateName'] ?? '',
             'stateStyle'   => $stateData['stateStyle'] ?? '',
-            'readOnly'     => $cfg->isReadOnly($currentState),
+            'read_only'    => $cfg->isReadOnly($currentState),
             'transitions'  => $cfg->getAvailableTransitions($currentState),
         ];
     }

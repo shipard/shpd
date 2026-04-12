@@ -12,10 +12,15 @@ class TabBuilder
     /** @var array{label: string, cols: int}[] Metadata for each open group */
     private array $groupMeta = [];
 
+    /** @var array<string, string> column_id => label pro auto-doplnění */
+    private array $colLabels;
+
     public function __construct(
         private readonly string $id,
         private readonly string $label,
+        array $colLabels = [],
     ) {
+        $this->colLabels  = $colLabels;
         $this->elementStack = [[]];
     }
 
@@ -35,7 +40,7 @@ class TabBuilder
             type: 'input',
             cols: $cols,
             column: $column,
-            label: $label,
+            label: $this->resolveLabel($column, $label),
             placeholder: $placeholder,
             required: $required,
             readOnly: $readOnly,
@@ -61,7 +66,7 @@ class TabBuilder
             type: 'select',
             cols: $cols,
             column: $column,
-            label: $label,
+            label: $this->resolveLabel($column, $label),
             required: $required,
             readOnly: $readOnly,
             hidden: $hidden,
@@ -189,5 +194,10 @@ class TabBuilder
     private function push(FormElement $element): void
     {
         $this->elementStack[count($this->elementStack) - 1][] = $element;
+    }
+
+    private function resolveLabel(string $column, ?string $label): ?string
+    {
+        return $label ?? $this->colLabels[$column] ?? null;
     }
 }

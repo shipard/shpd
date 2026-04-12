@@ -175,6 +175,7 @@ class FormController
         // Try PHP class form first
         $tableForm = $formRegistry->createForm($table, $db, $config);
         if ($tableForm !== null) {
+            $tableForm->setTableDef($def);
             $result = $tableForm->recalculate($changedColumn, $data);
         } else {
             // JSONC or Auto — no custom recalculate logic, just rebuild definition
@@ -216,6 +217,7 @@ class FormController
         // 1. PHP class from registry
         $tableForm = $formRegistry->createForm($table, $db, $config);
         if ($tableForm !== null) {
+            $tableForm->setTableDef($def);
             return $tableForm->buildFormDefinition($data, $isNew);
         }
 

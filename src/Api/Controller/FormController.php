@@ -53,8 +53,10 @@ class FormController
         );
 
         // Enrich with docStates if applicable
-        if ($def->docStates !== null && $config !== null && !$isNew) {
-            $docStatesInfo = $this->buildDocStatesInfo($def, $data, $config);
+        if ($def->docStates !== null && $config !== null) {
+            // Pro nový záznam použij výchozí stav (10 = Koncept)
+            $docData = $isNew ? [$def->docStates->stateColumn => 10] : $data;
+            $docStatesInfo = $this->buildDocStatesInfo($def, $docData, $config);
             $formDefinition = $formDefinition->withDocStates($docStatesInfo);
         }
 
@@ -182,8 +184,19 @@ class FormController
             $result = new RecalculateResult($formDefinition, $data);
         }
 
+        // Doplň doc_states stejně jako v meta endpointu
+        $formDefinition = $result->formDefinition;
+        if ($def->docStates !== null && $config !== null) {
+            $docData = $isNew
+                ? [$def->docStates->stateColumn => ($data[$def->docStates->stateColumn] ?? 10)]
+                : $data;
+            $formDefinition = $formDefinition->withDocStates(
+                $this->buildDocStatesInfo($def, $docData, $config)
+            );
+        }
+
         return Response::success([
-            'formDefinition' => $result->formDefinition->toArray(),
+            'formDefinition' => $formDefinition->toArray(),
             'data'           => $result->data,
         ]);
     }

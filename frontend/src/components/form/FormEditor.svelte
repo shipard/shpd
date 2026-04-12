@@ -19,9 +19,11 @@
   let saving = $state(false);
   let recalculating = $state(false);
   let loadError = $state(null);
+  // currentId sleduje aktuální ID záznamu — může se změnit po uložení nového záznamu
+  let currentId = $state(null);
 
   const formTitle = $derived(
-    recordId != null
+    currentId != null
       ? (formDef?.title ?? '')
       : (formDef?.title_new ?? 'Nový záznam')
   );
@@ -62,6 +64,7 @@
   $effect(() => {
     const tbl = table;
     const id = recordId;
+    currentId = id;
     loadForm(tbl, id);
   });
 
@@ -70,7 +73,7 @@
   async function handleTrigger(columnId) {
     recalculating = true;
     const res = await post(`/_ui/form/${table}/recalculate`, {
-      id: recordId ?? null,
+      id: currentId ?? null,
       changedColumn: columnId,
       data: sanitizeFormData(formData),
     });
@@ -89,14 +92,15 @@
     saving = true;
     fieldErrors = {};
     loadError = null;
-    const isNew = recordId == null;
+    const isNew = currentId == null;
     const res = isNew
       ? await post(`/_ui/form/${table}/save`, sanitizeFormData(formData))
-      : await put(`/_ui/form/${table}/save/${recordId}`, sanitizeFormData(formData));
+      : await put(`/_ui/form/${table}/save/${currentId}`, sanitizeFormData(formData));
 
     if (res?.success) {
       onSaved?.(res.data);
-      await loadForm(table, res.id ?? recordId);
+      currentId = res.data?.id ?? currentId;
+      await loadForm(table, currentId);
     } else if (res?.error?.code === 'VALIDATION_ERROR' && res?.error?.details) {
       const errs = {};
       for (const e of res.error.details) {
@@ -115,12 +119,35 @@
   async function handleTransition(targetState) {
     saving = true;
     loadError = null;
-    const res = await put(`/_ui/form/${table}/save/${recordId}`, { docState: targetState });
-    if (res?.success) {
-      await loadForm(table, recordId);
+
+    if (currentId == null) {
+      // Nový záznam: ulož celý formulář s požadovaným stavem
+      const data = { ...sanitizeFormData(formData), docState: targetState };
+      const res = await post(`/_ui/form/${table}/save`, data);
+      if (res?.success) {
+        onSaved?.(res.data);
+        currentId = res.data?.id ?? null;
+        await loadForm(table, currentId);
+      } else if (res?.error?.code === 'VALIDATION_ERROR' && res?.error?.details) {
+        const errs = {};
+        for (const e of res.error.details) {
+          if (e.field) errs[e.field] = e.message;
+        }
+        fieldErrors = errs;
+        switchToErrorTab(errs);
+      } else {
+        loadError = res?.error?.message ?? 'Nepodařilo se uložit záznam.';
+      }
     } else {
-      loadError = res?.error?.message ?? 'Nepodařilo se změnit stav.';
+      // Existující záznam: pouze přechod stavu
+      const res = await put(`/_ui/form/${table}/save/${currentId}`, { docState: targetState });
+      if (res?.success) {
+        await loadForm(table, currentId);
+      } else {
+        loadError = res?.error?.message ?? 'Nepodařilo se změnit stav.';
+      }
     }
+
     saving = false;
   }
 
@@ -249,7 +276,7 @@
             {fieldErrors}
             disabled={isDisabled}
             onTrigger={handleTrigger}
-            parentId={recordId}
+            parentId={currentId}
           />
         </div>
       {/each}

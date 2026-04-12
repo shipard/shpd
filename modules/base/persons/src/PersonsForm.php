@@ -28,19 +28,19 @@ class PersonsForm extends TableForm
                 readOnly: $isPerson,
             )
             // Identifikace firmy
-            ->addSeparator('Identifikace firmy')
+            ->addSeparator('Identifikace firmy', hidden: $isPerson || $isUndefined)
             ->addInput('company_id', cols: 1, hidden: $isPerson || $isUndefined)
             ->addInput('tax_id', cols: 1, hidden: $isPerson || $isUndefined)
             ->addInput('vat_id', cols: 1, hidden: $isPerson || $isUndefined)
             // Jméno
-            ->addSeparator('Jméno')
+            ->addSeparator('Jméno', hidden: $isCompany || $isUndefined)
             ->addInput('title_before', cols: 1, hidden: $isCompany || $isUndefined)
             ->addInput('first_name', cols: 1, hidden: $isCompany || $isUndefined, required: $isPerson)
             ->addInput('middle_name', cols: 1, hidden: $isCompany || $isUndefined)
             ->addInput('last_name', cols: 1, hidden: $isCompany || $isUndefined, required: $isPerson)
             ->addInput('title_after', cols: 1, hidden: $isCompany || $isUndefined)
             // Osobní údaje
-            ->addSeparator('Osobní údaje')
+            ->addSeparator('Osobní údaje', hidden: $isCompany || $isUndefined)
             ->addInput('birth_date', cols: 1, hidden: $isCompany || $isUndefined, inputType: 'date')
             ->addInput('national_id', cols: 1, hidden: $isCompany || $isUndefined)
             ->addInput('id_card_number', cols: 1, hidden: $isCompany || $isUndefined)

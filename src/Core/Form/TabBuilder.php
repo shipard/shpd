@@ -71,12 +71,13 @@ class TabBuilder
         return $this;
     }
 
-    public function addSeparator(?string $label = null): static
+    public function addSeparator(?string $label = null, bool $hidden = false): static
     {
         $this->push(new FormElement(
             type: 'separator',
             cols: 4,
             label: $label,
+            hidden: $hidden,
         ));
         return $this;
     }
@@ -140,7 +141,49 @@ class TabBuilder
             throw new \LogicException('Unclosed group in TabBuilder');
         }
 
-        return new FormTab($this->id, $this->label, $this->elementStack[0]);
+        return new FormTab($this->id, $this->label, $this->autoHideSeparators($this->elementStack[0]));
+    }
+
+    /**
+     * Automatically hides a separator if all elements following it
+     * (until the next separator or end of list) are also hidden.
+     *
+     * @param FormElement[] $elements
+     * @return FormElement[]
+     */
+    private function autoHideSeparators(array $elements): array
+    {
+        $result = $elements;
+        $count  = count($result);
+
+        for ($i = 0; $i < $count; $i++) {
+            if ($result[$i]->type !== 'separator') {
+                continue;
+            }
+            // Collect elements until next separator or end
+            $allHidden = true;
+            for ($j = $i + 1; $j < $count; $j++) {
+                if ($result[$j]->type === 'separator') {
+                    break;
+                }
+                if (!$result[$j]->hidden) {
+                    $allHidden = false;
+                    break;
+                }
+            }
+            if ($allHidden) {
+                // Replace with a hidden copy
+                $sep = $result[$i];
+                $result[$i] = new FormElement(
+                    type: $sep->type,
+                    cols: $sep->cols,
+                    label: $sep->label,
+                    hidden: true,
+                );
+            }
+        }
+
+        return $result;
     }
 
     private function push(FormElement $element): void

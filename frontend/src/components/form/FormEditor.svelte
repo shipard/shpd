@@ -100,7 +100,7 @@
     if (res?.success) {
       onSaved?.(res.data);
       currentId = res.data?.id ?? currentId;
-      await loadForm(table, currentId);
+      await loadForm(table, currentId);  // Reload bez zavření
     } else if (res?.error?.code === 'VALIDATION_ERROR' && res?.error?.details) {
       const errs = {};
       for (const e of res.error.details) {
@@ -116,7 +116,7 @@
 
   // ── Doc state transition ────────────────────────────────────────────────────
 
-  async function handleTransition(targetState) {
+  async function handleTransition(targetState, closeForm = false) {
     saving = true;
     loadError = null;
 
@@ -126,8 +126,12 @@
       const res = await post(`/_ui/form/${table}/save`, data);
       if (res?.success) {
         onSaved?.(res.data);
-        currentId = res.data?.id ?? null;
-        await loadForm(table, currentId);
+        if (closeForm) {
+          onClose?.();
+        } else {
+          currentId = res.data?.id ?? null;
+          await loadForm(table, currentId);
+        }
       } else if (res?.error?.code === 'VALIDATION_ERROR' && res?.error?.details) {
         const errs = {};
         for (const e of res.error.details) {
@@ -158,7 +162,12 @@
       // Přechod stavu
       const res = await put(`/_ui/form/${table}/save/${currentId}`, { docState: targetState });
       if (res?.success) {
-        await loadForm(table, currentId);
+        onSaved?.(res.data);
+        if (closeForm) {
+          onClose?.();
+        } else {
+          await loadForm(table, currentId);
+        }
       } else {
         loadError = res?.error?.message ?? 'Nepodařilo se změnit stav.';
       }

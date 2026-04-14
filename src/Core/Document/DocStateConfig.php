@@ -80,6 +80,7 @@ class DocStateConfig
                     'stateName'  => $s['stateName']  ?? (string) $target,
                     'actionName' => $s['actionName'] ?? (string) $target,
                     'stateStyle' => $s['stateStyle'] ?? '',
+                    'closeForm'  => (bool) ($s['closeForm'] ?? false),
                 ];
             }
         }

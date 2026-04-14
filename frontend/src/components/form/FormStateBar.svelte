@@ -34,7 +34,7 @@
       label={tr.actionName}
       variant={variantForStyle(tr.stateStyle)}
       disabled={saving}
-      onclick={() => onTransition?.(tr.state)}
+      onclick={() => onTransition?.(tr.state, tr.close_form ?? false)}
     />
   {/each}
 </div>

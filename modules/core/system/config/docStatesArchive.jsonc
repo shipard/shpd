@@ -10,6 +10,9 @@
     //   V opravě → V pořádku | V archívu | Smazáno
     //   V archívu → V opravě
     //   Smazáno → V opravě
+    //
+    // closeForm: 1 = po přechodu do tohoto stavu se formulář zavře
+    //            0 = formulář zůstane otevřený (výchozí)
 
     "10": {
         "stateName": "Koncept",
@@ -21,6 +24,7 @@
         "stateStyle": "concept",
         "mainState": 1,
         "viewGroup": "active",
+        "closeForm": 0,
         "goto": [40, 70, 90]
     },
 
@@ -34,6 +38,7 @@
         "stateStyle": "edit",
         "mainState": 2,
         "viewGroup": "active",
+        "closeForm": 0,
         "goto": [40, 70, 90]
     },
 
@@ -49,6 +54,7 @@
         "viewGroup": "active",
         "readOnly": 1,
         "enablePrint": 1,
+        "closeForm": 1,
         "goto": [80, 70, 90]
     },
 
@@ -64,6 +70,7 @@
         "viewGroup": "archive",
         "readOnly": 1,
         "enablePrint": 1,
+        "closeForm": 1,
         "goto": [80]
     },
 
@@ -78,6 +85,7 @@
         "mainState": 5,
         "viewGroup": "trash",
         "readOnly": 1,
+        "closeForm": 1,
         "goto": [80]
     }
 }

@@ -22,7 +22,7 @@ class PersonsForm extends TableForm
         // ── Tab: Základní údaje ──────────────────────────────────────────────
         $basic = $this->tab('basic', 'Základní údaje')
             ->addInput('person_id', cols: 1, required: true)
-            ->addSelect('person_type', cols: 1, options: $personTypeOptions, triggers: 'reload')
+            ->addSelect('person_type', cols: 1, options: $personTypeOptions, triggers: 'reload', required: true)
             ->addInput('full_name', cols: 2,
                 required: $isCompany,
                 readOnly: $isPerson,

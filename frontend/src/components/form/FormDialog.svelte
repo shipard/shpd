@@ -50,7 +50,8 @@
 
   function handleSaved(record: Record<string, unknown>) {
     onSaved?.(record);
-    handleClose();
+    // Nezavíráme formulář zde — o zavření rozhoduje FormEditor sám
+    // na základě closeForm flagu nebo akce uživatele
   }
 </script>
 

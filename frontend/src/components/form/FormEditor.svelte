@@ -139,7 +139,23 @@
         loadError = res?.error?.message ?? 'Nepodařilo se uložit záznam.';
       }
     } else {
-      // Existující záznam: pouze přechod stavu
+      // Existující záznam: nejdřív ulož data, pak přechod stavu
+      const saveRes = await put(`/_ui/form/${table}/save/${currentId}`, sanitizeFormData(formData));
+      if (!saveRes?.success) {
+        if (saveRes?.error?.code === 'VALIDATION_ERROR' && saveRes?.error?.details) {
+          const errs = {};
+          for (const e of saveRes.error.details) {
+            if (e.field) errs[e.field] = e.message;
+          }
+          fieldErrors = errs;
+          switchToErrorTab(errs);
+        } else {
+          loadError = saveRes?.error?.message ?? 'Nepodařilo se uložit záznam.';
+        }
+        saving = false;
+        return;
+      }
+      // Přechod stavu
       const res = await put(`/_ui/form/${table}/save/${currentId}`, { docState: targetState });
       if (res?.success) {
         await loadForm(table, currentId);

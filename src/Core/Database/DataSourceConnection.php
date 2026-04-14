@@ -82,7 +82,7 @@ class DataSourceConnection
         }
         $result = [];
         foreach ($row as $key => $value) {
-            $result[$key] = $value;
+            $result[$key] = $this->normalizeValue($value);
         }
         return $result;
     }
@@ -94,10 +94,32 @@ class DataSourceConnection
         return array_map(function ($row): array {
             $result = [];
             foreach ($row as $key => $value) {
-                $result[$key] = $value;
+                $result[$key] = $this->normalizeValue($value);
             }
             return $result;
         }, $rows);
+    }
+
+    /**
+     * Normalize a value from Dibi for JSON serialization.
+     * Converts DateTime objects to ISO strings.
+     */
+    private function normalizeValue(mixed $value): mixed
+    {
+        if ($value instanceof \DateTime || $value instanceof \DateTimeInterface) {
+            // Dibi\DateTime for DATE columns has time 00:00:00 — detect by checking
+            // whether the time portion is midnight and format accordingly.
+            $h = (int) $value->format('H');
+            $m = (int) $value->format('i');
+            $s = (int) $value->format('s');
+            if ($h === 0 && $m === 0 && $s === 0) {
+                // Likely a DATE column — return YYYY-MM-DD
+                return $value->format('Y-m-d');
+            }
+            // DATETIME column — return ISO 8601
+            return $value->format('Y-m-d\TH:i:s');
+        }
+        return $value;
     }
 
     /** Execute a query (INSERT/UPDATE/DELETE) without returning rows. */

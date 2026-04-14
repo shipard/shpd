@@ -72,7 +72,7 @@
             "name:cs": "Typ osoby",
             "name:en": "Person type",
             "type": "enumInt",
-            "default": 0,
+            "default": 1,
             "cfgItem": "base.persons.personTypes",
             "group": "identity"
         },

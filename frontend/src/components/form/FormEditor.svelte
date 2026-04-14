@@ -45,7 +45,10 @@
       return;
     }
     formDef = res.data.formDefinition;
-    formData = res.data.data ?? buildDefaultData(res.data.formDefinition);
+    // Sestav výchozí data: nejdřív prázdné stringy pro všechna pole,
+    // pak přepiš skuteČnými daty ze serveru (včetně defaultů pro nový záznam)
+    const defaults = buildDefaultData(res.data.formDefinition);
+    formData = res.data.data ? { ...defaults, ...res.data.data } : defaults;
     activeTabId = formDef.tabs[0]?.id ?? null;
   }
 

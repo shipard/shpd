@@ -46,6 +46,16 @@ class FormController
             if ($data === null) {
                 return Response::error('RECORD_NOT_FOUND', "Record {$id} not found", 404);
             }
+        } else {
+            // Pro nový záznam sestav výchozí data z defaultů sloupců
+            foreach ($def->columns as $col) {
+                if ($col->primaryKey || $col->system) {
+                    continue;
+                }
+                if ($col->default !== null) {
+                    $data[$col->id] = $col->default;
+                }
+            }
         }
 
         $formDefinition = $this->resolveFormDefinition(
@@ -62,7 +72,7 @@ class FormController
 
         return Response::success([
             'formDefinition' => $formDefinition->toArray(),
-            'data'           => $data ?: null,
+            'data'           => $isNew ? ($data ?: null) : $data,
         ]);
     }
 

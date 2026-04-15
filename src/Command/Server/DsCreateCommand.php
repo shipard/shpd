@@ -66,6 +66,11 @@ class DsCreateCommand extends Command
 
         // Create database and user
         $dbManager = $this->databaseManager ?? new DatabaseManager($config);
+
+        // Create writable directories for attachments and cache
+        @mkdir($dataSourceDir . '/att', 0755);
+        @mkdir($dataSourceDir . '/cache/thumbnails', 0755, true);
+
         $password = $dbManager->generatePassword();
 
         try {

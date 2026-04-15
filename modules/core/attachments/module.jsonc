@@ -1,0 +1,24 @@
+{
+    "id": "core.attachments",
+    "name": "Attachments",
+    "name:cs": "Přílohy",
+    "name:en": "Attachments",
+    "description": "Document attachments — file upload, thumbnails, storage",
+    "description:cs": "Přílohy dokumentů — nahrávání souborů, náhledy, úložiště",
+    "description:en": "Document attachments — file upload, thumbnails, storage",
+
+    "dependencies": [
+        "core.system"
+    ],
+
+    "tables": [
+        "core_attachments_files"
+    ],
+
+    "documentClasses": [
+        {
+            "table": "core_attachments_files",
+            "class": "Shipard\\Module\\Core\\Attachments\\AttachmentDocument"
+        }
+    ]
+}

@@ -44,6 +44,15 @@ import {
   faTriangleExclamation,
   faCircleInfo,
   faCircleCheck,
+  faPaperclip,
+  faDownload,
+  faUpload,
+  faFile,
+  faFilePdf,
+  faFileImage,
+  faFileWord,
+  faFileExcel,
+  faFileZipper,
 } from '@fortawesome/free-solid-svg-icons';
 
 // ── Akce (toolbary, tlačítka) ──────────────────────────────────
@@ -88,6 +97,17 @@ export const iconSpinner = faCircleNotch;
 export const iconWarning = faTriangleExclamation;
 export const iconInfo = faCircleInfo;
 export const iconSuccess = faCircleCheck;
+
+// ── Přílohy / soubory ─────────────────────────────────────────────
+export const iconAttachment = faPaperclip;
+export const iconDownload = faDownload;
+export const iconUpload = faUpload;
+export const iconFile = faFile;
+export const iconFilePdf = faFilePdf;
+export const iconFileImage = faFileImage;
+export const iconFileWord = faFileWord;
+export const iconFileExcel = faFileExcel;
+export const iconFileZip = faFileZipper;
 
 /**
  * Mapování názvů ikon z API (string) → ikonový objekt.

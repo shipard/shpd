@@ -60,6 +60,10 @@ class Router
 			return $this->resolveFormRoute($subpath, $method);
 		}
 
+		if (str_starts_with($subpath, '/_attachments')) {
+			return $this->resolveAttachmentRoute($subpath, $method);
+		}
+
 		if ($subpath === '/_auth/login') {
 			if ($method !== 'POST') {
 				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
@@ -138,8 +142,75 @@ class Router
 		return Response::error('NOT_FOUND', 'Not found', 404);
 	}
 
+	private function resolveAttachmentRoute(string $subpath, string $method): Route|Response
+	{
+		$rest = substr($subpath, strlen('/_attachments'));
+
+		// GET /_attachments (list)
+		if ($rest === '' || $rest === '/') {
+			if ($method !== 'GET') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('attachment', 'list');
+		}
+
+		// POST /_attachments/upload
+		if ($rest === '/upload') {
+			if ($method !== 'POST') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('attachment', 'upload');
+		}
+
+		// Routes with {id}: /_attachments/{id}/...
+		if (preg_match('#^/(\d+)(/(.+))?$#', $rest, $m)) {
+			$id = (int) $m[1];
+			if ($id <= 0) {
+				return Response::error('NOT_FOUND', 'Not found', 404);
+			}
+			$action = $m[3] ?? '';
+
+			// GET /_attachments/{id}/download
+			if ($action === 'download') {
+				if ($method !== 'GET') {
+					return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+				}
+				return new Route('attachment', 'download', null, $id);
+			}
+
+			// GET /_attachments/{id}/thumbnail
+			if ($action === 'thumbnail') {
+				if ($method !== 'GET') {
+					return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+				}
+				return new Route('attachment', 'thumbnail', null, $id);
+			}
+
+			// POST /_attachments/{id}/restore
+			if ($action === 'restore') {
+				if ($method !== 'POST') {
+					return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+				}
+				return new Route('attachment', 'restore', null, $id);
+			}
+
+			// PATCH /_attachments/{id}
+			if ($action === '' && $method === 'PATCH') {
+				return new Route('attachment', 'patch', null, $id);
+			}
+
+			// DELETE /_attachments/{id}
+			if ($action === '' && $method === 'DELETE') {
+				return new Route('attachment', 'delete', null, $id);
+			}
+		}
+
+		return Response::error('NOT_FOUND', 'Not found', 404);
+	}
+
 	private function resolveFormRoute(string $subpath, string $method): Route|Response
 	{
+
 		$rest = substr($subpath, strlen('/_ui/form/'));
 		$parts = explode('/', $rest);
 		$count = count($parts);

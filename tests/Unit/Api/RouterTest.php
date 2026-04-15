@@ -275,4 +275,104 @@ class RouterTest extends TestCase
 		$this->assertInstanceOf(Response::class, $result);
 		$this->assertSame('NOT_FOUND', $result->getPayload()['error']['code']);
 	}
+
+	// Attachment routes
+
+	public function testAttachmentUpload(): void
+	{
+		$result = $this->router->resolve('/api/v1/_attachments/upload', 'POST');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'attachment', 'upload');
+	}
+
+	public function testAttachmentUploadMethodNotAllowed(): void
+	{
+		$result = $this->router->resolve('/api/v1/_attachments/upload', 'GET');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
+	}
+
+	public function testAttachmentList(): void
+	{
+		$result = $this->router->resolve('/api/v1/_attachments', 'GET');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'attachment', 'list');
+	}
+
+	public function testAttachmentListWithTrailingSlash(): void
+	{
+		$result = $this->router->resolve('/api/v1/_attachments/', 'GET');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'attachment', 'list');
+	}
+
+	public function testAttachmentListMethodNotAllowed(): void
+	{
+		$result = $this->router->resolve('/api/v1/_attachments', 'POST');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
+	}
+
+	public function testAttachmentDownload(): void
+	{
+		$result = $this->router->resolve('/api/v1/_attachments/42/download', 'GET');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'attachment', 'download', null, 42);
+	}
+
+	public function testAttachmentDownloadMethodNotAllowed(): void
+	{
+		$result = $this->router->resolve('/api/v1/_attachments/42/download', 'POST');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
+	}
+
+	public function testAttachmentThumbnail(): void
+	{
+		$result = $this->router->resolve('/api/v1/_attachments/42/thumbnail', 'GET');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'attachment', 'thumbnail', null, 42);
+	}
+
+	public function testAttachmentPatch(): void
+	{
+		$result = $this->router->resolve('/api/v1/_attachments/42', 'PATCH');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'attachment', 'patch', null, 42);
+	}
+
+	public function testAttachmentDelete(): void
+	{
+		$result = $this->router->resolve('/api/v1/_attachments/42', 'DELETE');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'attachment', 'delete', null, 42);
+	}
+
+	public function testAttachmentRestore(): void
+	{
+		$result = $this->router->resolve('/api/v1/_attachments/42/restore', 'POST');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'attachment', 'restore', null, 42);
+	}
+
+	public function testAttachmentRestoreMethodNotAllowed(): void
+	{
+		$result = $this->router->resolve('/api/v1/_attachments/42/restore', 'GET');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
+	}
+
+	public function testAttachmentUnknownAction(): void
+	{
+		$result = $this->router->resolve('/api/v1/_attachments/42/unknown', 'GET');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('NOT_FOUND', $result->getPayload()['error']['code']);
+	}
+
+	public function testAttachmentZeroIdReturns404(): void
+	{
+		$result = $this->router->resolve('/api/v1/_attachments/0/download', 'GET');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('NOT_FOUND', $result->getPayload()['error']['code']);
+	}
 }

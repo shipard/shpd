@@ -57,6 +57,14 @@ class DsUpgradeCommand extends Command
         $output->writeln('Data source: ' . $dsConfig->getName() . ' (' . $dsConfig->getId() . ')');
         $output->writeln('');
 
+        // Ensure writable directories exist (att, cache)
+        foreach (['att', 'cache/thumbnails'] as $subdir) {
+            $dirPath = $dsDir . '/' . $subdir;
+            if (!is_dir($dirPath)) {
+                @mkdir($dirPath, 0755, true);
+            }
+        }
+
         // Step 2: Resolve modules
         $output->writeln('Resolving modules...');
         $allModules = ModuleLoader::loadAllModules($modulesBasePath);

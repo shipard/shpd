@@ -72,7 +72,7 @@ class PersonsForm extends TableForm
             table: $this->table,
             title: 'Osoba',
             titleNew: 'Nová osoba',
-            tabs: [$basic, $contact, $contacts, $addresses, $bankAccounts],
+            tabs: [$basic, $contact, $contacts, $addresses, $bankAccounts, $this->attachmentsTab()],
             fullSize: true,
         );
     }

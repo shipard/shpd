@@ -1,6 +1,7 @@
 <script>
   import { get, post, put } from '../../api/client.js';
   import FormTab from './FormTab.svelte';
+  import AttachmentPanel from './AttachmentPanel.svelte';
   import FormStateBadge from './FormStateBadge.svelte';
   import FormStateBar from './FormStateBar.svelte';
 
@@ -298,14 +299,22 @@
     {:else}
       {#each formDef.tabs as tab (tab.id)}
         <div class="shpd-form-editor__tab-content" hidden={tab.id !== activeTabId}>
-          <FormTab
-            {tab}
-            bind:formData
-            {fieldErrors}
-            disabled={isDisabled}
-            onTrigger={handleTrigger}
-            parentId={currentId}
-          />
+          {#if tab.type === 'attachments'}
+            <AttachmentPanel
+              tableId={tab.table_id}
+              recordId={currentId}
+              disabled={isDisabled}
+            />
+          {:else}
+            <FormTab
+              {tab}
+              bind:formData
+              {fieldErrors}
+              disabled={isDisabled}
+              onTrigger={handleTrigger}
+              parentId={currentId}
+            />
+          {/if}
         </div>
       {/each}
     {/if}

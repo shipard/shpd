@@ -1,0 +1,215 @@
+{
+    "tableId": 110,
+    "name": "Attachments",
+    "name:cs": "Přílohy",
+    "name:en": "Attachments",
+
+    "displayPattern": "{name}",
+
+    "columnGroups": [
+        {
+            "id": "target",
+            "name": "Target record",
+            "name:cs": "Cílový záznam",
+            "name:en": "Target record"
+        },
+        {
+            "id": "file",
+            "name": "File details",
+            "name:cs": "Údaje o souboru",
+            "name:en": "File details"
+        },
+        {
+            "id": "status",
+            "name": "Status",
+            "name:cs": "Stav",
+            "name:en": "Status"
+        }
+    ],
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+
+        // --- target record ---
+
+        {
+            "id": "table_id",
+            "name": "Table ID",
+            "name:cs": "ID tabulky",
+            "name:en": "Table ID",
+            "type": "smallint",
+            "nullable": false,
+            "group": "target"
+        },
+        {
+            "id": "record_id",
+            "name": "Record ID",
+            "name:cs": "ID záznamu",
+            "name:en": "Record ID",
+            "type": "int",
+            "nullable": false,
+            "group": "target"
+        },
+
+        // --- file details ---
+
+        {
+            "id": "name",
+            "name": "Name",
+            "name:cs": "Název",
+            "name:en": "Name",
+            "type": "varchar",
+            "length": 500,
+            "nullable": false,
+            "group": "file"
+        },
+        {
+            "id": "file_name",
+            "name": "File name",
+            "name:cs": "Název souboru",
+            "name:en": "File name",
+            "type": "varchar",
+            "length": 500,
+            "nullable": false,
+            "group": "file"
+        },
+        {
+            "id": "file_path",
+            "name": "File path",
+            "name:cs": "Cesta k souboru",
+            "name:en": "File path",
+            "type": "varchar",
+            "length": 200,
+            "nullable": false,
+            "group": "file"
+        },
+        {
+            "id": "file_size",
+            "name": "File size",
+            "name:cs": "Velikost souboru",
+            "name:en": "File size",
+            "type": "bigint",
+            "nullable": false,
+            "group": "file"
+        },
+        {
+            "id": "mime_type",
+            "name": "MIME type",
+            "name:cs": "MIME typ",
+            "name:en": "MIME type",
+            "type": "varchar",
+            "length": 100,
+            "nullable": false,
+            "group": "file"
+        },
+        {
+            "id": "checksum",
+            "name": "Checksum",
+            "name:cs": "Kontrolní součet",
+            "name:en": "Checksum",
+            "type": "varchar",
+            "length": 64,
+            "nullable": false,
+            "group": "file"
+        },
+        {
+            "id": "metadata",
+            "name": "Metadata",
+            "name:cs": "Metadata",
+            "name:en": "Metadata",
+            "type": "json",
+            "nullable": true,
+            "group": "file"
+        },
+
+        // --- status ---
+
+        {
+            "id": "att_order",
+            "name": "Order",
+            "name:cs": "Pořadí",
+            "name:en": "Order",
+            "type": "smallint",
+            "default": 0,
+            "group": "status"
+        },
+        {
+            "id": "is_deleted",
+            "name": "Deleted",
+            "name:cs": "Smazáno",
+            "name:en": "Deleted",
+            "type": "boolean",
+            "default": 0,
+            "group": "status"
+        },
+        {
+            "id": "created",
+            "name": "Created",
+            "name:cs": "Vytvořeno",
+            "name:en": "Created",
+            "type": "datetime",
+            "nullable": false,
+            "group": "status"
+        },
+        {
+            "id": "created_by",
+            "name": "Created by",
+            "name:cs": "Vytvořil",
+            "name:en": "Created by",
+            "type": "int",
+            "nullable": true,
+            "reference": "core_system_users",
+            "group": "status"
+        },
+        {
+            "id": "modified",
+            "name": "Modified",
+            "name:cs": "Změněno",
+            "name:en": "Modified",
+            "type": "datetime",
+            "nullable": false,
+            "group": "status"
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "idx_table_record",
+            "type": "index",
+            "columns": [
+                {"column": "table_id"},
+                {"column": "record_id"},
+                {"column": "is_deleted"},
+                {"column": "att_order", "order": "ASC"},
+                {"column": "name", "order": "ASC"}
+            ]
+        },
+        {
+            "id": "idx_checksum",
+            "type": "index",
+            "columns": [
+                {"column": "checksum"}
+            ]
+        },
+        {
+            "id": "idx_created",
+            "type": "index",
+            "columns": [
+                {"column": "created", "order": "DESC"}
+            ]
+        },
+        {
+            "id": "ft_name",
+            "type": "fulltext",
+            "columns": [
+                {"column": "name"}
+            ]
+        }
+    ]
+}

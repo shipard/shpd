@@ -55,4 +55,20 @@ abstract class TableForm
         }
         return new TabBuilder($id, $label, $colLabels);
     }
+
+    /**
+     * Create an attachments tab for the current table.
+     * The tableId is taken from the table definition.
+     */
+    protected function attachmentsTab(string $id = 'attachments', string $label = 'Přílohy'): FormTab
+    {
+        $tableId = $this->tableDef?->tableId ?? 0;
+        return new FormTab(
+            id: $id,
+            label: $label,
+            elements: [],
+            type: 'attachments',
+            tableId: $tableId,
+        );
+    }
 }

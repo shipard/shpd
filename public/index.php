@@ -11,6 +11,7 @@ use Shipard\Api\Controller\NavigationController;
 use Shipard\Api\Controller\OpenApiController;
 use Shipard\Api\Controller\FormController;
 use Shipard\Api\Controller\ViewerController;
+use Shipard\Api\Controller\AttachmentController;
 use Shipard\Api\DataSourceResolver;
 use Shipard\Api\DocumentLoader;
 use Shipard\Api\FormLoader;
@@ -179,7 +180,8 @@ function dispatch(
 
 	return match ($route->controller) {
 		'auth'    => dispatchAuth($route->action, $request, $auth, $db),
-		'crud'    => dispatchCrud($route, $request, $tables, $db, $configRuntime),
+		'crud'       => dispatchCrud($route, $request, $tables, $db, $configRuntime),
+		'attachment'  => dispatchAttachment($route, $request, $auth, $tables, $db, $resolved),
 		'meta'    => dispatchMeta($route->action, $route->table, $tables, resolveLanguage($request)),
 		'ui'      => dispatchUi($route->action, $resolved->config, $modulesBasePath, resolveLanguage($request)),
 		'form'    => dispatchForm($route, $request, $tables, $db, $formRegistry ?? new FormRegistry(), $configRuntime, $modulesBasePath, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
@@ -201,6 +203,28 @@ function dispatchAuth(
 		'refresh' => $ctrl->refresh($request, $auth, $db),
 		'logout'  => $ctrl->logout($request, $auth, $db),
 		default   => Response::error('INTERNAL_ERROR', "Unknown auth action: {$action}", 500),
+	};
+}
+
+function dispatchAttachment(
+	Route $route,
+	Request $request,
+	AuthContext $auth,
+	array $tables,
+	\Shipard\Core\Database\DataSourceConnection $db,
+	\Shipard\Api\ResolvedDataSource $resolved,
+): Response {
+	$dsPath = $resolved->config->getDataSourceDir();
+	$ctrl   = new AttachmentController($db, $dsPath, $tables);
+	return match ($route->action) {
+		'upload'    => $ctrl->upload($auth),
+		'download'  => $ctrl->download((int) $route->id),
+		'thumbnail' => $ctrl->thumbnail((int) $route->id, $request),
+		'list'      => $ctrl->list($request),
+		'patch'     => $ctrl->patch((int) $route->id, $request),
+		'delete'    => $ctrl->delete((int) $route->id),
+		'restore'   => $ctrl->restore((int) $route->id),
+		default     => Response::error('INTERNAL_ERROR', "Unknown attachment action: {$route->action}", 500),
 	};
 }
 

@@ -1,0 +1,357 @@
+{
+    "tableId": 303,
+    "name": "Incoming messages",
+    "name:cs": "Došlé zprávy",
+    "name:en": "Incoming messages",
+
+    "displayPattern": "{message_id} — {subject}",
+
+    "docStates": {
+        "stateColumn": "docState",
+        "mainColumn": "docStateMain",
+        "cfgItem": "core.mail.docStatesIncoming"
+    },
+
+    "columnGroups": [
+        {
+            "id": "identity",
+            "name": "Identity",
+            "name:cs": "Identifikace",
+            "name:en": "Identity"
+        },
+        {
+            "id": "headers",
+            "name": "Headers",
+            "name:cs": "Hlavičky",
+            "name:en": "Headers"
+        },
+        {
+            "id": "body",
+            "name": "Body",
+            "name:cs": "Tělo zprávy",
+            "name:en": "Body"
+        },
+        {
+            "id": "routing",
+            "name": "Routing",
+            "name:cs": "Směrování",
+            "name:en": "Routing"
+        },
+        {
+            "id": "source",
+            "name": "Source",
+            "name:cs": "Zdroj",
+            "name:en": "Source"
+        },
+        {
+            "id": "status",
+            "name": "Status",
+            "name:cs": "Stav",
+            "name:en": "Status"
+        }
+    ],
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+
+        // --- identity ---
+
+        {
+            "id": "message_id",
+            "name": "Message code",
+            "name:cs": "Kód zprávy",
+            "name:en": "Message code",
+            "type": "varchar",
+            "length": 30,
+            "nullable": false,
+            "group": "identity"
+        },
+        {
+            "id": "mailbox",
+            "name": "Mailbox",
+            "name:cs": "Schránka",
+            "name:en": "Mailbox",
+            "type": "int",
+            "nullable": false,
+            "reference": "core_mail_mailboxes",
+            "group": "identity"
+        },
+        {
+            "id": "primary_type",
+            "name": "Primary type",
+            "name:cs": "Primární typ",
+            "name:en": "Primary type",
+            "type": "enumString",
+            "length": 30,
+            "nullable": false,
+            "cfgItem": "core.mail.primaryTypes",
+            "default": "other",
+            "group": "identity"
+        },
+
+        // --- headers (RFC822 hlavičky) ---
+
+        {
+            "id": "subject",
+            "name": "Subject",
+            "name:cs": "Předmět",
+            "name:en": "Subject",
+            "type": "text",
+            "nullable": false,
+            "group": "headers"
+        },
+        {
+            "id": "sender_email",
+            "name": "Sender e-mail",
+            "name:cs": "E-mail odesílatele",
+            "name:en": "Sender e-mail",
+            "type": "varchar",
+            "length": 200,
+            "nullable": false,
+            "group": "headers"
+        },
+        {
+            "id": "sender_name",
+            "name": "Sender name",
+            "name:cs": "Jméno odesílatele",
+            "name:en": "Sender name",
+            "type": "varchar",
+            "length": 200,
+            "nullable": true,
+            "group": "headers"
+        },
+        {
+            "id": "sender_person",
+            "name": "Sender person",
+            "name:cs": "Odesílatel (osoba)",
+            "name:en": "Sender person",
+            "type": "int",
+            "nullable": true,
+            "reference": "base_persons_persons",
+            "group": "headers"
+        },
+        {
+            "id": "received_at",
+            "name": "Received at",
+            "name:cs": "Datum doručení",
+            "name:en": "Received at",
+            "type": "datetime",
+            "nullable": false,
+            "group": "headers"
+        },
+        {
+            "id": "external_message_id",
+            "name": "External Message-ID",
+            "name:cs": "RFC822 Message-ID",
+            "name:en": "External Message-ID",
+            "type": "varchar",
+            "length": 255,
+            "nullable": true,
+            "group": "headers"
+        },
+        {
+            "id": "in_reply_to",
+            "name": "In-Reply-To",
+            "name:cs": "In-Reply-To",
+            "name:en": "In-Reply-To",
+            "type": "varchar",
+            "length": 255,
+            "nullable": true,
+            "group": "headers"
+        },
+        {
+            "id": "reply_references",
+            "name": "References header",
+            "name:cs": "Hlavička References",
+            "name:en": "References header",
+            "type": "text",
+            "nullable": true,
+            "group": "headers"
+        },
+
+        // --- body ---
+
+        {
+            "id": "body_plain",
+            "name": "Body (plain text)",
+            "name:cs": "Tělo (prostý text)",
+            "name:en": "Body (plain text)",
+            "type": "longtext",
+            "nullable": true,
+            "group": "body"
+        },
+        {
+            "id": "body_html",
+            "name": "Body (HTML)",
+            "name:cs": "Tělo (HTML)",
+            "name:en": "Body (HTML)",
+            "type": "longtext",
+            "nullable": true,
+            "group": "body"
+        },
+        {
+            "id": "raw_source_attachment",
+            "name": "Raw source (.eml)",
+            "name:cs": "Originál (.eml)",
+            "name:en": "Raw source (.eml)",
+            "type": "int",
+            "nullable": true,
+            "reference": "core_attachments_files",
+            "group": "body"
+        },
+
+        // --- routing / target ---
+
+        {
+            "id": "target_table_id",
+            "name": "Target table",
+            "name:cs": "Cílová tabulka",
+            "name:en": "Target table",
+            "type": "varchar",
+            "length": 100,
+            "nullable": true,
+            "group": "routing"
+        },
+        {
+            "id": "target_row",
+            "name": "Target record",
+            "name:cs": "Cílový záznam",
+            "name:en": "Target record",
+            "type": "int",
+            "nullable": true,
+            "group": "routing"
+        },
+
+        // --- source ---
+
+        {
+            "id": "source_type",
+            "name": "Source",
+            "name:cs": "Zdroj",
+            "name:en": "Source",
+            "type": "tinyint",
+            "default": 1,
+            "nullable": false,
+            "group": "source"
+        },
+
+        // --- audit ---
+
+        {
+            "id": "created",
+            "name": "Created",
+            "name:cs": "Vytvořeno",
+            "name:en": "Created",
+            "type": "datetime",
+            "nullable": false,
+            "group": "status"
+        },
+        {
+            "id": "created_by",
+            "name": "Created by",
+            "name:cs": "Vytvořil",
+            "name:en": "Created by",
+            "type": "int",
+            "nullable": true,
+            "reference": "core_system_users",
+            "group": "status"
+        },
+        {
+            "id": "modified",
+            "name": "Modified",
+            "name:cs": "Změněno",
+            "name:en": "Modified",
+            "type": "datetime",
+            "nullable": false,
+            "group": "status"
+        },
+
+        // --- doc state (systémové) ---
+
+        {
+            "id": "docState",
+            "name": "Document state",
+            "name:cs": "Stav dokumentu",
+            "name:en": "Document state",
+            "type": "tinyint",
+            "default": 10,
+            "system": true
+        },
+        {
+            "id": "docStateMain",
+            "name": "Document state (sort)",
+            "name:cs": "Stav dokumentu (řazení)",
+            "name:en": "Document state (sort)",
+            "type": "tinyint",
+            "default": 1,
+            "system": true
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "unq_message_id",
+            "type": "unique",
+            "columns": [
+                {"column": "message_id"}
+            ]
+        },
+        {
+            "id": "idx_mailbox",
+            "type": "index",
+            "columns": [
+                {"column": "mailbox"}
+            ]
+        },
+        {
+            "id": "idx_received_at",
+            "type": "index",
+            "columns": [
+                {"column": "received_at", "order": "DESC"}
+            ]
+        },
+        {
+            "id": "idx_external_message_id",
+            "type": "index",
+            "columns": [
+                {"column": "external_message_id"}
+            ]
+        },
+        {
+            "id": "idx_doc_state",
+            "type": "index",
+            "columns": [
+                {"column": "docStateMain", "order": "ASC"},
+                {"column": "received_at", "order": "DESC"}
+            ]
+        },
+        {
+            "id": "idx_target",
+            "type": "index",
+            "columns": [
+                {"column": "target_table_id"},
+                {"column": "target_row"}
+            ]
+        },
+        {
+            "id": "idx_sender_email",
+            "type": "index",
+            "columns": [
+                {"column": "sender_email"}
+            ]
+        },
+        {
+            "id": "idx_sender_person",
+            "type": "index",
+            "columns": [
+                {"column": "sender_person"}
+            ]
+        }
+    ]
+}

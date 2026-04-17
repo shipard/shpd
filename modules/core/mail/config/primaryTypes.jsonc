@@ -1,0 +1,61 @@
+{
+    // core.mail.primaryTypes
+    //
+    // Primární typy došlých zpráv. Hodnota se ukládá do sloupce
+    // `primary_type` (enumString). Nové záznamy dostávají typ buď z
+    // výchozí hodnoty schránky (`mail_mailboxes.default_primary_type`),
+    // nebo ruční volbou ve formuláři.
+    //
+    // `enabled: false` označuje typy připravené pro budoucí fáze —
+    // ve Fázi 1 se v UI nenabízejí.
+
+    "invoiceReceived": {
+        "name": "Received invoice",
+        "name:cs": "Přijatá faktura",
+        "name:en": "Received invoice",
+        "enabled": true,
+        "order": 10
+    },
+    "other": {
+        "name": "Other",
+        "name:cs": "Ostatní",
+        "name:en": "Other",
+        "enabled": true,
+        "order": 999
+    },
+    "creditNote": {
+        "name": "Credit note",
+        "name:cs": "Dobropis",
+        "name:en": "Credit note",
+        "enabled": false,
+        "order": 20
+    },
+    "order": {
+        "name": "Order",
+        "name:cs": "Objednávka",
+        "name:en": "Order",
+        "enabled": false,
+        "order": 30
+    },
+    "quotation": {
+        "name": "Quotation",
+        "name:cs": "Nabídka",
+        "name:en": "Quotation",
+        "enabled": false,
+        "order": 40
+    },
+    "statement": {
+        "name": "Statement",
+        "name:cs": "Výpis / Saldo",
+        "name:en": "Statement",
+        "enabled": false,
+        "order": 50
+    },
+    "complaint": {
+        "name": "Complaint",
+        "name:cs": "Reklamace",
+        "name:en": "Complaint",
+        "enabled": false,
+        "order": 60
+    }
+}

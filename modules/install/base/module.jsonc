@@ -9,6 +9,7 @@
     "dependencies": [
         "core.system",
         "core.attachments",
+        "core.mail",
         "base.persons",
         "economy.codebooks",
     ]

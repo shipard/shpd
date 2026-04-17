@@ -28,8 +28,10 @@ class HelpCommand extends Command
         $output->writeln('  <info>help</info>           Show this help message');
         $output->writeln('  <info>ds-upgrade</info>     Upgrade data source schema and configuration');
         $output->writeln('  <info>user-create</info>    Create a new user in the data source');
-        $output->writeln('  <info>seed-persons</info>   Generate fake persons with contacts and bank accounts');
-        $output->writeln('  <info>seed-clear</info>     Remove all seeded test data (TEST- prefix)');
+        $output->writeln('  <info>seed-persons</info>     Generate fake persons with contacts and bank accounts');
+        $output->writeln('  <info>seed-clear</info>       Remove all seeded test persons (TEST- prefix)');
+        $output->writeln('  <info>seed-mail</info>        Generate fake mailboxes and incoming messages');
+        $output->writeln('  <info>seed-mail-clear</info>  Remove all seeded mail data (TEST- / TEST-MSG- prefix)');
         $output->writeln('');
         $output->writeln('<comment>Usage:</comment>');
         $output->writeln('  shpd-ds <command> [options]');
@@ -38,6 +40,8 @@ class HelpCommand extends Command
         $output->writeln('  shpd-ds seed-persons --count=100 --with-contacts --with-bank-accounts');
         $output->writeln('  shpd-ds seed-persons -c 20 --company-ratio=60');
         $output->writeln('  shpd-ds seed-clear');
+        $output->writeln('  shpd-ds seed-mail -c 60');
+        $output->writeln('  shpd-ds seed-mail-clear');
         $output->writeln('');
         $output->writeln('<comment>Note:</comment>');
         $output->writeln('  Run from within a data source directory (must contain config/main.json)');

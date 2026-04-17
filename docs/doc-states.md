@@ -227,6 +227,27 @@ Doklady (faktury, objednávky, …) přidávají stavy Potvrzeno a Storno:
 
 ---
 
+## 8.1 Došlá pošta — `core.mail.docStatesIncoming`
+
+Stavy životního cyklu došlé zprávy (tabulka `core_mail_incoming_messages`). Pipeline: **Nová → V analýze → Analyzovaná → Zpracovaná**, s možností archivace nebo přesunu do koše z kteréhokoli aktivního stavu.
+
+| docState | Název | mainState | viewGroup | readOnly | Přechody do |
+|----------|-------|-----------|-----------|----------|-------------|
+| 10 | Nová | 1 | active | — | 20, 40, 80, 90 |
+| 20 | V analýze | 2 | active | 1 | 30, 10 |
+| 30 | Analyzovaná | 3 | active | — | 40, 10, 80, 90 |
+| 40 | Zpracovaná | 4 | active | 1 | 80, 90 |
+| 80 | Archiv | 5 | archive | 1 | 10, 90 |
+| 90 | Smazáno | 6 | trash | 1 | 10 |
+
+**V analýze (20):** stav nastavuje výhradně AI pipeline (Fáze 3 modulu `core.mail`). Z UI manuálně nedostupný — `goto` z jiných stavů nikam do 20 vede z běžného workflow (jen ze 10 při zařazení do analýzy přes fronton, ale to je rovněž automatické).
+
+**Zpracovaná (40):** z došlé zprávy již vznikla business entita (přijatá faktura apod.) — odkaz je držen ve sloupcích `target_table_id` / `target_row` na `core_mail_incoming_messages`.
+
+Konfigurační soubor: `modules/core/mail/config/docStatesIncoming.jsonc`
+
+---
+
 ## 9. Backend — klíčové třídy a chování
 
 ### `DocStatesDefinition` (`src/Core/Document/DocStatesDefinition.php`)

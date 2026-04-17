@@ -16,6 +16,16 @@ Technické specifikace projektu Shipard.
 
 Nginx konfigurace jsou v [`nginx/`](nginx/) (app.conf, development.conf, production.conf).
 
+## Dokumenty k jednotlivým modulům
+
+| Modul | Dokument | Obsah |
+|-------|----------|-------|
+| `core.mail` | [`mail/api-contract.md`](mail/api-contract.md) | Kontrakt HTTP endpointu `/_mail/incoming` pro externí mail-router (Fáze 2) |
+
+Dokumentace konkrétního modulu žije obvykle v jeho adresáři
+(`modules/{skupina}/{modul}/docs/`) — zde v `docs/` jsou pouze ty,
+které přesahují hranice modulu (integrace s externími službami, API kontrakty).
+
 ---
 
 [← README.md](../README.md) · [Průvodce vývojáře](../DEVELOPERS.md)

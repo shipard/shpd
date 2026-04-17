@@ -1,0 +1,110 @@
+{
+    // core.mail.docStatesIncoming
+    //
+    // Stavová mapa došlých zpráv (core_mail_incoming_messages).
+    //
+    // Stavový automat:
+    //   Nová         → V analýze | Zpracovaná | Archiv | Trash
+    //   V analýze    → Analyzovaná | Nová  (nastavuje jen AI služba ve Fázi 3)
+    //   Analyzovaná  → Zpracovaná | Nová | Archiv | Trash
+    //   Zpracovaná   → Archiv | Trash
+    //   Archiv       → Nová | Trash
+    //   Trash        → Nová
+    //
+    // Mapování na stávající stateStyle (viz docs/doc-states.md §6):
+    //   concept   — žlutá  — Nová
+    //   edit      — oranžová — V analýze (zpráva je dočasně zamčená pro AI pipeline)
+    //   confirmed — modrá  — Analyzovaná (čeká na manuální potvrzení)
+    //   done      — zelená — Zpracovaná
+    //   archive   — šedá   — Archiv
+    //   trash     — černá  — Trash
+
+    "10": {
+        "stateName": "New",
+        "stateName:cs": "Nová",
+        "stateName:en": "New",
+        "actionName": "Mark as new",
+        "actionName:cs": "Vrátit na Novou",
+        "actionName:en": "Mark as new",
+        "stateStyle": "concept",
+        "mainState": 1,
+        "viewGroup": "active",
+        "closeForm": 0,
+        "goto": [20, 40, 80, 90]
+    },
+
+    "20": {
+        "stateName": "Analyzing",
+        "stateName:cs": "V analýze",
+        "stateName:en": "Analyzing",
+        "actionName": "Send to analysis",
+        "actionName:cs": "Poslat do analýzy",
+        "actionName:en": "Send to analysis",
+        "stateStyle": "edit",
+        "mainState": 2,
+        "viewGroup": "active",
+        "readOnly": 1,
+        "closeForm": 1,
+        // Přechody nastavuje pouze AI pipeline (Fáze 3). Z UI manuálně nepřístupné.
+        "goto": [30, 10]
+    },
+
+    "30": {
+        "stateName": "Analyzed",
+        "stateName:cs": "Analyzovaná",
+        "stateName:en": "Analyzed",
+        "actionName": "Mark as analyzed",
+        "actionName:cs": "Označit jako analyzovanou",
+        "actionName:en": "Mark as analyzed",
+        "stateStyle": "confirmed",
+        "mainState": 3,
+        "viewGroup": "active",
+        "closeForm": 0,
+        "goto": [40, 10, 80, 90]
+    },
+
+    "40": {
+        "stateName": "Processed",
+        "stateName:cs": "Zpracovaná",
+        "stateName:en": "Processed",
+        "actionName": "Mark as processed",
+        "actionName:cs": "Označit jako zpracovanou",
+        "actionName:en": "Mark as processed",
+        "stateStyle": "done",
+        "mainState": 4,
+        "viewGroup": "active",
+        "readOnly": 1,
+        "closeForm": 1,
+        "goto": [80, 90]
+    },
+
+    "80": {
+        "stateName": "Archived",
+        "stateName:cs": "Archiv",
+        "stateName:en": "Archived",
+        "actionName": "Archive",
+        "actionName:cs": "Archivovat",
+        "actionName:en": "Archive",
+        "stateStyle": "archive",
+        "mainState": 5,
+        "viewGroup": "archive",
+        "readOnly": 1,
+        "closeForm": 1,
+        "goto": [10, 90]
+    },
+
+    "90": {
+        "stateName": "Deleted",
+        "stateName:cs": "Smazáno",
+        "stateName:en": "Deleted",
+        "actionName": "Delete",
+        "actionName:cs": "Smazat",
+        "actionName:en": "Delete",
+        "stateStyle": "trash",
+        "mainState": 6,
+        "viewGroup": "trash",
+        "readOnly": 1,
+        "closeForm": 1,
+        "goto": [10]
+    }
+}

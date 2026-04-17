@@ -1,0 +1,58 @@
+{
+    "id": "core.mail",
+    "name": "Mail",
+    "name:cs": "Pošta",
+    "name:en": "Mail",
+    "description": "Incoming and outgoing e-mail messages (Phase 1: incoming only)",
+    "description:cs": "Došlá a odeslaná pošta (Fáze 1: pouze došlá)",
+    "description:en": "Incoming and outgoing e-mail messages (Phase 1: incoming only)",
+
+    "dependencies": [
+        "core.system",
+        "core.attachments",
+        "base.persons"
+    ],
+
+    "tables": [
+        "core_mail_mailboxes",
+        "core_mail_incoming_messages",
+        "core_mail_message_analyses"
+    ],
+
+    "viewers": [
+        {
+            "id": "core.mail.incoming",
+            "name": "Incoming messages",
+            "name:cs": "Došlá pošta",
+            "name:en": "Incoming messages",
+            "icon": "mail",
+            "table": "core_mail_incoming_messages",
+            "class": "Shipard\\Module\\Core\\Mail\\IncomingMessagesViewer"
+        }
+    ],
+
+    "forms": [
+        {
+            "table": "core_mail_incoming_messages",
+            "class": "Shipard\\Module\\Core\\Mail\\IncomingMessagesForm"
+        }
+    ],
+
+    "documentClasses": [
+        {
+            "table": "core_mail_incoming_messages",
+            "class": "Shipard\\Module\\Core\\Mail\\IncomingMessageDocument"
+        }
+    ],
+
+    "config": [
+        {
+            "id": "core.mail.primaryTypes",
+            "file": "config/primaryTypes.jsonc"
+        },
+        {
+            "id": "core.mail.docStatesIncoming",
+            "file": "config/docStatesIncoming.jsonc"
+        }
+    ]
+}

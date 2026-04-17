@@ -373,6 +373,15 @@ class PersonsViewer extends TableViewer
 
 Viz také `docs/doc-states.md` — sekce Viewer systém.
 
+### Existující viewery
+
+| Viewer ID | Modul | Třída | Zvláštnosti |
+|---|---|---|---|
+| `base.persons` | `base.persons` | `PersonsViewer` | Archivační docStates, fulltext search přes full_name/company_id/email/person_id |
+| `core.mail.incoming` | `core.mail` | `IncomingMessagesViewer` | Vlastní docStates (`core.mail.docStatesIncoming`), JOIN na schránku, relativní formátování received_at, 4 detail taby (Obsah / Přílohy / Analýzy / Originál) |
+
+Nové viewery přidávají moduly přes `module.jsonc.viewers[]` — jakmile je viewer registrován, automaticky se objeví v navigaci (ikona z `iconMap`, fallback `iconTable`).
+
 ---
 
 ## 8. UI API endpointy

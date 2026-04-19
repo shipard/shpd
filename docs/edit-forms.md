@@ -120,7 +120,9 @@ Formulář má vždy alespoň jeden tab. Je-li tab jen jeden, tab bar se nezobra
 }
 ```
 
-`input_type` určuje typ UI komponenty: `text` (výchozí), `number`, `date`, `datetime`, `time`, `textarea`, `checkbox`. Odvozuje se automaticky z DB typu sloupce.
+`input_type` určuje typ UI komponenty: `text` (výchozí), `email`, `tel`, `url`, `password`, `number`, `date`, `datetime`, `time`, `textarea`, `checkbox`. Odvozuje se automaticky z DB typu sloupce.
+
+Hodnota je validována v konstruktoru `FormElement` proti whitelistu — neplatný řetězec (např. `datetime-local`) vyhodí `InvalidArgumentException`. Platí pro PHP builder i pro JSONC (`JsoncFormLoader` předává hodnotu do stejného konstruktoru, whitelist se aplikuje automaticky).
 
 | Pole | Výchozí | Popis |
 |------|---------|-------|
@@ -358,6 +360,19 @@ abstract class TableForm
 
 ### TabBuilder API
 
+`addInput()` je jen pro **text varianty** (`text`, `email`, `tel`, `url`, `password`). Pro všechno ostatní jsou **dedikované metody** — jsou sebedokumentující a builder se nedá tiše rozbít překlepem v `inputType`. Pokus o `addInput(..., inputType: 'textarea')` vyhodí `InvalidArgumentException`.
+
+| Metoda | `inputType` | Použití pro DB typ |
+|--------|-------------|--------------------|
+| `addInput` | `null`/`text`/`email`/`tel`/`url`/`password` | `char`, `varchar` (krátký text, kontaktní údaje) |
+| `addTextArea` | `textarea` | `text`, `longtext` |
+| `addDate` | `date` | `date` |
+| `addDateTime` | `datetime` | `datetime` |
+| `addTime` | `time` | `time` |
+| `addNumber` | `number` | `int`, `smallint`, `bigint`, `tinyint`, `numeric`, `float` |
+| `addCheckbox` | `checkbox` | `boolean` |
+| `addSelect` | — | `enumInt`, `enumString` (options z cfgItem) |
+
 ```php
 $tab->addInput(
     string $column,
@@ -369,8 +384,16 @@ $tab->addInput(
     bool $hidden = false,
     ?string $placeholder = null,
     ?string $hint = null,
-    ?string $inputType = null,  // 'date', 'checkbox', 'number'... null = auto z DB typu
+    ?string $inputType = null,  // jen text varianty: null, text, email, tel, url, password
 ): static
+
+// Dedikované widgety — konzistentní signatura (bez placeholder/triggers)
+$tab->addTextArea(string $column, int $cols = 4, ?string $label = null, bool $required = false, bool $readOnly = false, bool $hidden = false, ?string $hint = null): static
+$tab->addDate(string $column, int $cols = 1, ...): static
+$tab->addDateTime(string $column, int $cols = 1, ...): static
+$tab->addTime(string $column, int $cols = 1, ...): static
+$tab->addNumber(string $column, int $cols = 1, ...): static
+$tab->addCheckbox(string $column, int $cols = 1, ...): static
 
 $tab->addSelect(
     string $column,

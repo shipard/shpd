@@ -32,10 +32,7 @@ class IncomingMessagesForm extends TableForm
                 required: true,
                 triggers: 'reload',
             )
-            ->addInput('received_at', cols: 1,
-                required: true,
-                inputType: 'datetime',
-            )
+            ->addDateTime('received_at', cols: 1, required: true)
             ->addSelect('primary_type', cols: 1,
                 options: $primaryTypeOptions,
                 required: true,
@@ -47,8 +44,7 @@ class IncomingMessagesForm extends TableForm
 
             ->addSeparator('Obsah')
             ->addInput('subject', cols: 4, required: true)
-            ->addInput('body_plain', cols: 4,
-                inputType: 'textarea',
+            ->addTextArea('body_plain', cols: 4,
                 hint: 'Prostý text zprávy. HTML varianta se v Fázi 1 neupravuje ručně — vzniká jen přes import.',
             )
             ->build();

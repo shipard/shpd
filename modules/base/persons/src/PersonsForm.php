@@ -41,7 +41,7 @@ class PersonsForm extends TableForm
             ->addInput('title_after', cols: 1, hidden: $isCompany || $isUndefined)
             // Osobní údaje
             ->addSeparator('Osobní údaje', hidden: $isCompany || $isUndefined)
-            ->addInput('birth_date', cols: 1, hidden: $isCompany || $isUndefined, inputType: 'date')
+            ->addDate('birth_date', cols: 1, hidden: $isCompany || $isUndefined)
             ->addInput('national_id', cols: 1, hidden: $isCompany || $isUndefined)
             ->addInput('id_card_number', cols: 1, hidden: $isCompany || $isUndefined)
             ->build();

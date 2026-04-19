@@ -24,6 +24,8 @@ class TabBuilder
         $this->elementStack = [[]];
     }
 
+    private const ADD_INPUT_ALLOWED_TYPES = [null, 'text', 'email', 'tel', 'url', 'password'];
+
     public function addInput(
         string $column,
         int $cols = 1,
@@ -36,6 +38,14 @@ class TabBuilder
         ?string $hint = null,
         ?string $inputType = null,
     ): static {
+        if (!in_array($inputType, self::ADD_INPUT_ALLOWED_TYPES, true)) {
+            throw new \InvalidArgumentException(sprintf(
+                'addInput() accepts only text variants (null, text, email, tel, url, password); got "%s". '
+                . 'Use a dedicated builder method (addTextArea, addDate, addDateTime, addTime, addNumber, addCheckbox).',
+                $inputType,
+            ));
+        }
+
         $this->push(new FormElement(
             type: 'input',
             cols: $cols,
@@ -46,6 +56,102 @@ class TabBuilder
             readOnly: $readOnly,
             hidden: $hidden,
             triggers: $triggers,
+            hint: $hint,
+            inputType: $inputType,
+        ));
+        return $this;
+    }
+
+    public function addTextArea(
+        string $column,
+        int $cols = 4,
+        ?string $label = null,
+        bool $required = false,
+        bool $readOnly = false,
+        bool $hidden = false,
+        ?string $hint = null,
+    ): static {
+        return $this->pushWidget($column, $cols, $label, $required, $readOnly, $hidden, $hint, 'textarea');
+    }
+
+    public function addDate(
+        string $column,
+        int $cols = 1,
+        ?string $label = null,
+        bool $required = false,
+        bool $readOnly = false,
+        bool $hidden = false,
+        ?string $hint = null,
+    ): static {
+        return $this->pushWidget($column, $cols, $label, $required, $readOnly, $hidden, $hint, 'date');
+    }
+
+    public function addDateTime(
+        string $column,
+        int $cols = 1,
+        ?string $label = null,
+        bool $required = false,
+        bool $readOnly = false,
+        bool $hidden = false,
+        ?string $hint = null,
+    ): static {
+        return $this->pushWidget($column, $cols, $label, $required, $readOnly, $hidden, $hint, 'datetime');
+    }
+
+    public function addTime(
+        string $column,
+        int $cols = 1,
+        ?string $label = null,
+        bool $required = false,
+        bool $readOnly = false,
+        bool $hidden = false,
+        ?string $hint = null,
+    ): static {
+        return $this->pushWidget($column, $cols, $label, $required, $readOnly, $hidden, $hint, 'time');
+    }
+
+    public function addNumber(
+        string $column,
+        int $cols = 1,
+        ?string $label = null,
+        bool $required = false,
+        bool $readOnly = false,
+        bool $hidden = false,
+        ?string $hint = null,
+    ): static {
+        return $this->pushWidget($column, $cols, $label, $required, $readOnly, $hidden, $hint, 'number');
+    }
+
+    public function addCheckbox(
+        string $column,
+        int $cols = 1,
+        ?string $label = null,
+        bool $required = false,
+        bool $readOnly = false,
+        bool $hidden = false,
+        ?string $hint = null,
+    ): static {
+        return $this->pushWidget($column, $cols, $label, $required, $readOnly, $hidden, $hint, 'checkbox');
+    }
+
+    private function pushWidget(
+        string $column,
+        int $cols,
+        ?string $label,
+        bool $required,
+        bool $readOnly,
+        bool $hidden,
+        ?string $hint,
+        string $inputType,
+    ): static {
+        $this->push(new FormElement(
+            type: 'input',
+            cols: $cols,
+            column: $column,
+            label: $this->resolveLabel($column, $label),
+            required: $required,
+            readOnly: $readOnly,
+            hidden: $hidden,
             hint: $hint,
             inputType: $inputType,
         ));

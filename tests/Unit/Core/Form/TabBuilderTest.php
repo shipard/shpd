@@ -138,4 +138,99 @@ class TabBuilderTest extends TestCase
         $el = $tab->elements[0];
         $this->assertSame('reload', $el->triggers);
     }
+
+    public function testAddTextArea(): void
+    {
+        $tab = (new TabBuilder('t', 'T'))
+            ->addTextArea('body', cols: 4, required: true, hint: 'Plain text')
+            ->build();
+
+        $el = $tab->elements[0];
+        $this->assertSame('input', $el->type);
+        $this->assertSame('textarea', $el->inputType);
+        $this->assertSame('body', $el->column);
+        $this->assertSame(4, $el->cols);
+        $this->assertTrue($el->required);
+        $this->assertSame('Plain text', $el->hint);
+    }
+
+    public function testAddDate(): void
+    {
+        $tab = (new TabBuilder('t', 'T'))
+            ->addDate('birth_date', hidden: true)
+            ->build();
+
+        $el = $tab->elements[0];
+        $this->assertSame('input', $el->type);
+        $this->assertSame('date', $el->inputType);
+        $this->assertTrue($el->hidden);
+    }
+
+    public function testAddDateTime(): void
+    {
+        $tab = (new TabBuilder('t', 'T'))
+            ->addDateTime('received_at', required: true)
+            ->build();
+
+        $el = $tab->elements[0];
+        $this->assertSame('input', $el->type);
+        $this->assertSame('datetime', $el->inputType);
+        $this->assertTrue($el->required);
+    }
+
+    public function testAddTime(): void
+    {
+        $tab = (new TabBuilder('t', 'T'))
+            ->addTime('opens_at')
+            ->build();
+
+        $el = $tab->elements[0];
+        $this->assertSame('input', $el->type);
+        $this->assertSame('time', $el->inputType);
+    }
+
+    public function testAddNumber(): void
+    {
+        $tab = (new TabBuilder('t', 'T'))
+            ->addNumber('quantity')
+            ->build();
+
+        $el = $tab->elements[0];
+        $this->assertSame('input', $el->type);
+        $this->assertSame('number', $el->inputType);
+    }
+
+    public function testAddCheckbox(): void
+    {
+        $tab = (new TabBuilder('t', 'T'))
+            ->addCheckbox('active')
+            ->build();
+
+        $el = $tab->elements[0];
+        $this->assertSame('input', $el->type);
+        $this->assertSame('checkbox', $el->inputType);
+    }
+
+    public function testAddInputRejectsNonTextVariant(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('addInput() accepts only text variants');
+
+        (new TabBuilder('t', 'T'))->addInput('body', inputType: 'textarea');
+    }
+
+    public function testAddInputRejectsDatetime(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        (new TabBuilder('t', 'T'))->addInput('received_at', inputType: 'datetime');
+    }
+
+    public function testAddInputAcceptsEmail(): void
+    {
+        $tab = (new TabBuilder('t', 'T'))
+            ->addInput('email', inputType: 'email')
+            ->build();
+
+        $this->assertSame('email', $tab->elements[0]->inputType);
+    }
 }

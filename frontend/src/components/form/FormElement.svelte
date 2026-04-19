@@ -139,6 +139,50 @@
         {error}
       />
 
+    {:else if element.input_type === 'email'}
+      <Input
+        label={element.label}
+        type="email"
+        bind:value={formData[element.column]}
+        placeholder={element.placeholder}
+        required={element.required ?? false}
+        disabled={elDisabled}
+        {error}
+      />
+
+    {:else if element.input_type === 'tel'}
+      <Input
+        label={element.label}
+        type="tel"
+        bind:value={formData[element.column]}
+        placeholder={element.placeholder}
+        required={element.required ?? false}
+        disabled={elDisabled}
+        {error}
+      />
+
+    {:else if element.input_type === 'url'}
+      <Input
+        label={element.label}
+        type="url"
+        bind:value={formData[element.column]}
+        placeholder={element.placeholder}
+        required={element.required ?? false}
+        disabled={elDisabled}
+        {error}
+      />
+
+    {:else if element.input_type === 'password'}
+      <Input
+        label={element.label}
+        type="password"
+        bind:value={formData[element.column]}
+        placeholder={element.placeholder}
+        required={element.required ?? false}
+        disabled={elDisabled}
+        {error}
+      />
+
     {:else}
       <Input
         label={element.label}

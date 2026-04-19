@@ -6,6 +6,21 @@ namespace Shipard\Core\Form;
 
 class FormElement
 {
+    public const ALLOWED_INPUT_TYPES = [
+        null,
+        'text',
+        'email',
+        'tel',
+        'url',
+        'password',
+        'number',
+        'checkbox',
+        'date',
+        'datetime',
+        'time',
+        'textarea',
+    ];
+
     public function __construct(
         public readonly string $type,
         public readonly int $cols = 1,
@@ -24,7 +39,15 @@ class FormElement
         public readonly ?string $formId = null,
         public readonly ?string $content = null,
         public readonly ?string $inputType = null,
-    ) {}
+    ) {
+        if ($type === 'input' && !in_array($inputType, self::ALLOWED_INPUT_TYPES, true)) {
+            throw new \InvalidArgumentException(sprintf(
+                'Invalid inputType "%s". Allowed: %s',
+                $inputType,
+                implode(', ', array_map(fn($t) => $t ?? 'null', self::ALLOWED_INPUT_TYPES)),
+            ));
+        }
+    }
 
     public function toArray(): array
     {

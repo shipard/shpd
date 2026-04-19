@@ -38,13 +38,13 @@ class PersonsFormTest extends TestCase
 
     // ── Company ──────────────────────────────────────────────────────────────
 
-    public function testCompanyFormHasFiveTabs(): void
+    public function testCompanyFormHasSixTabs(): void
     {
         $form = $this->createForm();
         $def = $form->buildFormDefinition(['person_type' => 2], false);
 
         $this->assertSame(
-            ['basic', 'contact', 'contacts', 'addresses', 'bank_accounts'],
+            ['basic', 'contact', 'contacts', 'addresses', 'bank_accounts', 'attachments'],
             $this->getTabIds($def),
         );
     }

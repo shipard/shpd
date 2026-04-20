@@ -16,6 +16,7 @@ use Shipard\Core\Database\TableMerger;
 use Shipard\Core\Module\ModuleLoader;
 use Shipard\Core\Module\ModuleResolver;
 use Shipard\Core\Utils\JsoncParser;
+use Shipard\Module\Core\Mail\MailRouterProvisioner;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -204,6 +205,34 @@ class DsUpgradeCommand extends Command
         $output->writeln('');
         $output->writeln('Upgrade complete. ' . $created . ' tables created, ' . $altered . ' tables altered, ' . $unchanged . ' tables unchanged.');
 
+        $this->provisionMailRouter($dsConfig, $dsConnection, $output);
+
         return Command::SUCCESS;
+    }
+
+    private function provisionMailRouter(
+        DataSourceConfig $dsConfig,
+        DataSourceConnection $dsConnection,
+        OutputInterface $output,
+    ): void {
+        $output->writeln('');
+        $output->writeln('Provisioning mail router...');
+
+        $provisioner = new MailRouterProvisioner($dsConnection);
+        $result = $provisioner->provision($dsConfig->getId());
+
+        $user = $result['user'];
+        $mailbox = $result['mailbox'];
+
+        $userTag = $user['created'] ? '[CREATE]' : '[OK]    ';
+        $output->writeln("  {$userTag} user '_mail_router' (id={$user['id']})");
+
+        if ($mailbox['created']) {
+            $output->writeln("  [CREATE] mailbox 'default' (id={$mailbox['id']})");
+        } elseif (isset($mailbox['skipped_reason'])) {
+            $output->writeln("  <comment>[SKIP]   mailbox 'default' — {$mailbox['skipped_reason']}</comment>");
+        } else {
+            $output->writeln("  [OK]     mailbox 'default' (id={$mailbox['id']})");
+        }
     }
 }

@@ -12,6 +12,7 @@ use Shipard\Api\Controller\OpenApiController;
 use Shipard\Api\Controller\FormController;
 use Shipard\Api\Controller\ViewerController;
 use Shipard\Api\Controller\AttachmentController;
+use Shipard\Api\Controller\MailController;
 use Shipard\Api\DataSourceResolver;
 use Shipard\Api\DocumentLoader;
 use Shipard\Api\FormLoader;
@@ -186,8 +187,26 @@ function dispatch(
 		'ui'      => dispatchUi($route->action, $resolved->config, $modulesBasePath, resolveLanguage($request)),
 		'form'    => dispatchForm($route, $request, $tables, $db, $formRegistry ?? new FormRegistry(), $configRuntime, $modulesBasePath, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'viewer'  => dispatchViewer($route, $request, $viewerRegistry, $db, $configRuntime),
+		'mail'    => dispatchMail($route, $request, $auth, $tables, $db, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'openapi' => (new OpenApiController())->spec($auth, $openApiPublic, $tables, $baseUrl),
 		default   => Response::error('INTERNAL_ERROR', "Unknown controller: {$route->controller}", 500),
+	};
+}
+
+function dispatchMail(
+	Route $route,
+	Request $request,
+	AuthContext $auth,
+	array $tables,
+	\Shipard\Core\Database\DataSourceConnection $db,
+	\Shipard\Api\ResolvedDataSource $resolved,
+	\Shipard\Core\Document\DocumentRegistry $documentRegistry,
+): Response {
+	$dsPath = $resolved->config->getDataSourceDir();
+	$ctrl = new MailController($db, $dsPath, $tables, $documentRegistry);
+	return match ($route->action) {
+		'receiveIncoming' => $ctrl->receiveIncoming($auth, $request),
+		default           => Response::error('INTERNAL_ERROR', "Unknown mail action: {$route->action}", 500),
 	};
 }
 

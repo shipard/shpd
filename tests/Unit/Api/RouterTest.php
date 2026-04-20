@@ -375,4 +375,20 @@ class RouterTest extends TestCase
 		$this->assertInstanceOf(Response::class, $result);
 		$this->assertSame('NOT_FOUND', $result->getPayload()['error']['code']);
 	}
+
+	// Mail routes
+
+	public function testMailIncomingPost(): void
+	{
+		$result = $this->router->resolve('/api/v1/_mail/incoming', 'POST');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'mail', 'receiveIncoming');
+	}
+
+	public function testMailIncomingGetNotAllowed(): void
+	{
+		$result = $this->router->resolve('/api/v1/_mail/incoming', 'GET');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
+	}
 }

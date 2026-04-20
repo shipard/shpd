@@ -73,6 +73,14 @@
             "name:en": "Active",
             "type": "boolean",
             "default": 1
+        },
+        {
+            "id": "is_system",
+            "name": "System user",
+            "name:cs": "Systémový uživatel",
+            "name:en": "System user",
+            "type": "boolean",
+            "default": 0
         }
     ],
 

@@ -1,188 +1,195 @@
-# `core.mail` — API kontrakt pro mail-router (Fáze 2)
+# `core.mail` — API kontrakt pro mail-router
 
-> **Status:** Návrh — kontrakt je zafixovaný ve Fázi 1, endpoint se implementuje
-> ve Fázi 2. Tento dokument slouží autorům externí mail-router služby a
-> autorovi Fáze 2 jako závazná specifikace, aby se schéma nemuselo měnit.
+**Status:** Stabilní od Fáze 2a.
+**Implementace:** `src/Api/Controller/MailController.php`, `src/Api/Router.php`,
+idempotence přes `core_mail_incoming_idempotency`.
 
 ## 1. Přehled
 
-Mail-router je **samostatná služba** v samostatném repozitáři. Přijímá e-maily
-přes SMTP/IMAP, parsuje `.eml`, a každou zprávu odešle do Shipardu přes
-**interní HTTP API endpoint**. Shipard zprávu validuje, uloží a vrací ID
-nového záznamu.
+Mail-router je samostatná služba v samostatném repozitáři. Přijímá e-maily přes
+SMTP/IMAP, parsuje `.eml`, a každou zprávu odešle do Shipardu přes HTTP endpoint
+`POST /_mail/incoming`. Shipard zprávu zvaliduje, uloží spolu s přílohami do
+jedné transakce a vrací ID nového záznamu.
 
 ### Separace zodpovědností
 
 | Vrstva | Odpovědnost |
 |---|---|
-| Mail-router | Příjem SMTP/IMAP, parsing MIME, deduplikace na úrovni doručování, retry queue |
-| Shipard `/_mail/incoming` | Validace, uložení do DB, uložení attachmentů, vrácení `message_id` |
-| Shipard `IncomingMessageDocument` | Generování `message_id`, audit pole, cascade delete |
-
-Mail-router **netuší nic** o business modelech Shipardu — posílá data ve
-definovaném kontraktu.
+| Mail-router | Příjem SMTP/IMAP, parsing MIME, antivir, persistent queue + retry, idempotency key generation |
+| Shipard `/_mail/incoming` | Auth, validace, atomické uložení zprávy + příloh, idempotency cache |
+| Shipard `IncomingMessageDocument` | Generování `message_id`, normalizace sender_email, cascade delete |
 
 ## 2. Endpoint
 
 ```
-POST /{ds-id}/_mail/incoming
-Content-Type: multipart/form-data
-Authorization: Bearer <per-ds-token>
+POST /api/v1/_mail/incoming
+Host: {ds-host}
+Authorization: Bearer shpd_ak_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+X-Idempotency-Key: <hex sha256>  // volitelné
+Content-Type: multipart/form-data; boundary=...
 ```
 
 ### 2.1 Autentizace
 
-Per-DS bearer token definovaný v konfiguraci data sourcu:
+- **API klíč** typu `shpd_ak_` vydaný přes `bin/shpd-ds mail-router-setup`.
+- Kontroluje se existence klíče (hash v `core_system_api_keys`), platnost a
+  optional IP whitelist.
+- Controller navíc vynucuje, aby uživatel klíče byl systémový `_mail_router`
+  (jiné API klíče tento endpoint nesmějí používat → **403 FORBIDDEN**).
 
-```jsonc
-// /opt/shipard/data-sources/{ds-id}/config/main.json
-{
-    "id": "a3f2-b8c1-d4e7-f9a0",
-    "mail": {
-        "incomingApiToken": "<náhodných 64 znaků>"
-    }
-}
-```
+### 2.2 Pole požadavku (multipart/form-data)
 
-Token je long-lived (ne session). Rotace manuální přes admin (mimo scope Fáze 2).
-
-### 2.2 Pole požadavku
-
-| Pole | Typ | Povinné | Popis |
+| Pole | Typ | Pov.? | Popis |
 |---|---|---|---|
-| `mailbox` | string | ✓ | `core_mail_mailboxes.mailbox_id` — lidský kód schránky |
-| `received_at` | ISO 8601 | ✓ | Čas doručení s TZ, např. `2026-04-17T10:23:00+02:00` |
-| `subject` | string | ✓ | Předmět zprávy (UTF-8, libovolná délka) |
-| `sender_email` | string | ✓ | E-mailová adresa z `From:` (pouze email, bez display name) |
-| `sender_name` | string |  | Display name z `From:` — nullable |
-| `external_message_id` | string |  | RFC822 `Message-ID` — používá se v budoucnosti pro dedup |
-| `in_reply_to` | string |  | RFC822 `In-Reply-To` header |
-| `references` | string |  | RFC822 `References` header (čárkou nebo mezerou oddělený seznam) |
-| `body_plain` | string |  | Tělo v plain textu |
-| `body_html` | string |  | Tělo v HTML (preferováno pro UI renderování) |
-| `raw_source` | file | ✓ | Originální `.eml` (MIME `message/rfc822`) |
-| `attachments[]` | file |  | Obsahové přílohy — 0..N |
-
-### 2.3 Validace
-
-Server provádí:
-
-1. Ověření bearer tokenu (401 při neshodě).
-2. Schránka s `mailbox_id = {mailbox}` existuje a není ve stavu `archive` / `trash` (404 jinak).
-3. `sender_email` projde `FILTER_VALIDATE_EMAIL` (422 jinak).
-4. `received_at` je validní ISO 8601 datetime (422 jinak).
-5. Velikost `raw_source` a všech `attachments[]` ≤ DS limit (413 jinak).
-6. Neduplicitní `external_message_id` pro danou schránku — **pouze warning** ve Fázi 2,
-   deduplikace se implementuje až ve Fázi 4.
+| `mailbox` | string | | `mailbox_id` (např. `invoices`). Prázdné / chybějící → použije se schránka s `is_default = 1`. |
+| `external_message_id` | string | | RFC822 `Message-ID` — ukládá se pro pozdější dedup |
+| `received_at` | ISO 8601 | ✓ | Čas doručení s TZ, např. `2026-04-18T14:32:00+02:00` |
+| `subject` | string | | Předmět. Prázdné → `(bez předmětu)` |
+| `sender_email` | string | ✓ | Musí projít `FILTER_VALIDATE_EMAIL` |
+| `sender_name` | string | | Display name z `From:` hlavičky |
+| `body_plain` | text | | Tělo v plain textu |
+| `body_html` | text | | Tělo v HTML |
+| `in_reply_to` | string | | RFC822 `In-Reply-To` header |
+| `reply_references` | string | | RFC822 `References` header (whitespace-separated) |
+| `source_type` | int | | Default `2` (email). Router nemění. |
+| `raw_source` | file | ✓ | Originální `.eml` — ukládá se jako attachment a propojuje přes `raw_source_attachment` FK |
+| `attachments[]` | file | | 0..N obsahových příloh |
 
 ## 3. Odpověď
 
-### 3.1 Success — 201 Created
+### 3.1 Úspěch — 201 Created
 
 ```json
 {
     "success": true,
     "data": {
-        "id": 12345,
-        "message_id": "MSG-20260417-0023",
-        "docState": 10
+        "ndx": 12345,
+        "message_id": "MSG-20260418-0001",
+        "idempotent_replay": false
     }
 }
 ```
+
+Při retry se stejným `X-Idempotency-Key` během TTL vrátí server uloženou odpověď
+s `idempotent_replay: true`. Status code zůstává **201**.
 
 ### 3.2 Chybové odpovědi
 
 | Kód | Error code | Situace |
 |---|---|---|
-| 400 | `INVALID_REQUEST` | Chybí povinné pole nebo neparsovatelný multipart |
-| 401 | `UNAUTHORIZED` | Chybí / neplatný bearer token |
-| 404 | `UNKNOWN_MAILBOX` | Schránka s `mailbox_id = {mailbox}` neexistuje nebo je v archive/trash |
-| 413 | `PAYLOAD_TOO_LARGE` | Attachment překračuje limit |
-| 422 | `VALIDATION_FAILED` | `sender_email` / `received_at` ve špatném formátu |
-| 500 | `INTERNAL_ERROR` | Neočekávaná chyba (např. DB výpadek) |
+| 401 | `UNAUTHORIZED` | Chybí / neplatný / expirovaný API klíč nebo session token |
+| 403 | `FORBIDDEN` | API klíč patří jinému uživateli než `_mail_router` |
+| 422 | `VALIDATION_ERROR` | Chybí povinné pole, neplatný formát, neznámá/chybějící default schránka |
+| 500 | `INTERNAL_ERROR` | Neočekávaná chyba (rollback proběhl, uploaded soubory se smažou) |
 
-Tělo chyby odpovídá standardní Shipard chybové struktuře (viz [`docs/rest-api.md`](../rest-api.md)):
+Mail-router **retryuje jen 5xx**, při 4xx putuje zpráva do DLQ.
+
+Tělo chyby:
 
 ```json
 {
     "success": false,
     "error": {
-        "code": "UNKNOWN_MAILBOX",
-        "message": "Schránka 'invoices' neexistuje nebo není aktivní",
-        "details": []
+        "code": "VALIDATION_ERROR",
+        "message": "Schránka 'foo' neexistuje v tomto DS",
+        "details": [{"field": "mailbox"}]
     }
 }
 ```
 
-## 4. Idempotence a retry
+## 4. Idempotence
 
-### 4.1 Retry na straně klienta
+### 4.1 Generování klíče
 
-Mail-router má vlastní persistent queue. Při 5xx nebo síťové chybě:
-1. Exponential backoff (1s, 5s, 30s, 2min, …).
-2. Po 10 neúspěšných pokusech se zpráva přesune do DLQ a odešle alert.
+Klient generuje `X-Idempotency-Key` deterministicky:
 
-### 4.2 Idempotence na straně serveru
-
-Server **není** idempotentní per se — každý request vygeneruje nový `message_id`.
-Pokud mail-router odešle duplicitní request (např. po timeout + retry), vzniknou
-**dvě zprávy v DB**.
-
-Ve Fázi 4 implementujeme dedup na `external_message_id` + `mailbox` — pokud
-takový záznam už existuje, server vrátí 200 s existujícím ID:
-
-```json
-{
-    "success": true,
-    "data": {
-        "id": 12345,
-        "message_id": "MSG-20260417-0023",
-        "docState": 10,
-        "duplicate": true
-    }
-}
+```
+sha256(ds_domain + "/" + local_part + "/" + external_message_id)
 ```
 
-Dokud dedup neexistuje, mail-router musí mít vlastní lokální dedup (hash
-`Message-ID` v jeho persistent queue).
+Pokud `external_message_id` chybí, klient **nesmí** posílat idempotency key
+(nebo ho vygeneruje náhodně) — server v tom případě idempotenci nevynucuje.
+
+### 4.2 Serverová logika
+
+1. Při příjmu requestu lookup v `core_mail_incoming_idempotency`.
+2. **Match + ≤ 7 dní** → server vrátí uloženou odpověď s `idempotent_replay: true`
+   a zprávu **nevytvoří znovu**.
+3. **No match / expired** → pokračuje ve zpracování. Po commitu tx zapíše key +
+   response body do tabulky.
+
+TTL: **7 dní**. Cleanup: `bin/shpd-ds mail-idempotency-prune --days 7` (cron 1×/den).
 
 ## 5. Flow na straně Shipardu
 
-Při přijetí requestu:
+```
+Router POSTs multipart
+  → AuthMiddleware validuje shpd_ak_ token → AuthContext(user=_mail_router)
+  → MailController::receiveIncoming
+    → verify auth + scope (musí být _mail_router, jinak 403)
+    → Idempotency lookup (pokud X-Idempotency-Key)
+    → Parse & validate form fields (422 při chybě)
+    → Resolve mailbox (explicitní nebo default)
+    → BEGIN transaction
+      → Insert core_mail_incoming_messages (IncomingMessageDocument::beforeSave
+        vygeneruje message_id a normalizuje pole)
+      → AttachmentService::upload(raw_source) → UPDATE message.raw_source_attachment
+      → Pro každou attachments[]: AttachmentService::upload(file, message_id)
+      → IdempotencyStore::store() pokud key existuje
+    → COMMIT
+  → Response 201
+```
 
-1. Middleware ověří bearer token.
-2. Controller parsuje multipart, mapuje pole na data array.
-3. Ukládá `raw_source` do `core_attachments_files` (table_id = 303, record_id = 0 placeholder).
-4. Ukládá obsahové `attachments[]` do `core_attachments_files`.
-5. `IncomingMessageDocument::beforeSave()` generuje `message_id`, audit pole.
-6. `INSERT INTO core_mail_incoming_messages` (v transakci).
-7. Aktualizuje `raw_source_attachment` na ID z kroku 3 + přemapuje `record_id`
-   attachmentů z kroku 4 na nové `message.id`.
-8. Commit transakce → 201.
+Při jakékoli výjimce uvnitř transakce: rollback + unlink orphaned files z disku.
 
-## 6. Bezpečnost
+## 6. Auto-provisioning
 
-- **HTTPS povinné** v produkci (v development módu HTTP přípustné pro localhost).
-- Bearer token je per-DS — kompromitace tokenu ohrozí pouze jednu DS.
-- Attachmenty jsou naskenovány na MIME podle obsahu (ne jen podle
-  Content-Type hlavičky) — viz `AttachmentService::detectMimeType()`.
-- Velikost single-request limitovaná nginx / PHP konfigurací.
-- `body_html` se při zobrazení sanituje — nikdy se nerenderuje jako `innerHTML`
-  bez izolace (sandboxovaný iframe nebo prefiltrace).
+Výchozí schránku a systémového uživatele `_mail_router` vytváří provisioner
+automaticky na konci `bin/shpd-ds ds-upgrade` (idempotentně). Pro existující DS
+založené před Fází 2a lze spustit samostatně:
 
-## 7. Kompatibilita
+```bash
+bin/shpd-ds mail-router-bootstrap
+```
 
-Tento kontrakt je **stable** od Fáze 2. Breaking změny vyžadují:
+Default schránka má:
+- `mailbox_id = 'default'`
+- `email_address = '{ds-id}@shipard.email'`
+- `is_default = 1`
+- `docState = 40` (V pořádku)
+
+Per-DS smí existovat nejvýš jedna `is_default = 1` schránka — vynuceno
+aplikačně v `MailboxDocument::validate()` (MariaDB neumí filtrovaný unikátní
+index).
+
+## 7. Bezpečnost
+
+- **HTTPS povinné** v produkci.
+- API klíče se ukládají pouze jako sha256 hash, plaintext se zobrazí jen při
+  vytvoření.
+- IP whitelist volitelný přes `mail-router-setup --ip=<address>`.
+- `body_html` se v UI renderuje sandboxovaně (iframe nebo prefiltrace) — raw
+  HTML se v DB ukládá beze změny.
+- Antivir scan **neproběhne v Shipardu** — očekává se na straně mail-routeru
+  před odesláním.
+- Rate limit na `/_mail/incoming` zatím není — mail-router je trusted. Pojistka
+  přes `RateLimitMiddleware` může přijít jako follow-up.
+
+## 8. Kompatibilita
+
+Kontrakt je **stable**. Breaking změny vyžadují:
 
 1. Nový versioning přes hlavičku (`X-Mail-Api-Version`), nebo
 2. Nový endpoint (`/_mail/v2/incoming`).
 
 Přidávání **volitelných polí** je vždy zpětně kompatibilní.
 
-## 8. Otevřené otázky (k dořešení před Fází 2)
+## 9. Známé limity
 
-- [ ] Jak mail-router získá bearer token? (Sdílený config adresář? Tooling?)
-- [ ] Preferujeme multipart nebo JSON + base64 attachments?
-  (multipart víc streamovací, JSON snadnější debug)
-- [ ] Jak mapujeme emoji / non-UTF-8 kódování z originálního `.eml`?
-- [ ] Timeout pro upload velkých attachmentů — per-DS nebo global?
+- **Velikost message:** v Shipardu žádný tvrdý limit. Postfix v mail-routeru
+  odřízne 25 MB dřív. Pro lokální konfiguraci nginx/PHP zvýšit `client_max_body_size`
+  a `upload_max_filesize` dle potřeby.
+- **Per-request timeout:** PHP-FPM default (typicky 30 s). Pro 20 MB request
+  může být těsný — konfigurovat v deploymentu, ne v kódu.
+- **Scope restrictions** na API klíče (omezit klíč jen na `/_mail/incoming`)
+  zatím neexistuje — follow-up.

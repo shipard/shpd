@@ -1,0 +1,64 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Shipard\Tests\Integration;
+
+use PHPUnit\Framework\TestCase;
+use Shipard\Api\TableLoader;
+use Shipard\Core\Config\DataSourceConfig;
+use Shipard\Core\Database\DataSourceConnection;
+
+abstract class IntegrationTestCase extends TestCase
+{
+    /** Path used by file storage during the test (isolated temp dir, not the real DS att/). */
+    protected string $dsPath;
+    /** Real DS path as configured by the env var (for DB + config access). */
+    protected string $realDsPath;
+    protected DataSourceConfig $dsConfig;
+    protected DataSourceConnection $db;
+    /** @var array<string, \Shipard\Core\Database\TableDefinition> */
+    protected array $tables;
+
+    protected function setUp(): void
+    {
+        $path = getenv('SHIPARD_INTEGRATION_DS_PATH');
+        if ($path === false || $path === '' || !is_dir($path . '/config')) {
+            $this->markTestSkipped(
+                'Integration tests require SHIPARD_INTEGRATION_DS_PATH env var pointing to a valid data source directory.',
+            );
+        }
+
+        $this->realDsPath = $path;
+        // Isolate file storage into a temp dir so tests don't collide with files
+        // owned by www-data or root in the real DS's att/ folder.
+        $this->dsPath = sys_get_temp_dir() . '/shpd_it_' . uniqid('', true);
+        mkdir($this->dsPath . '/att', 0755, true);
+        mkdir($this->dsPath . '/cache/thumbnails', 0755, true);
+
+        $this->dsConfig = new DataSourceConfig($path);
+        $this->db = new DataSourceConnection($this->dsConfig);
+
+        $modulesBasePath = dirname(__DIR__, 2) . '/modules';
+        $this->tables = TableLoader::load($this->dsConfig, $modulesBasePath, 'cs');
+    }
+
+    protected function tearDown(): void
+    {
+        if (isset($this->dsPath) && is_dir($this->dsPath)) {
+            $this->rmTree($this->dsPath);
+        }
+    }
+
+    private function rmTree(string $dir): void
+    {
+        foreach (scandir($dir) as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            $path = $dir . '/' . $entry;
+            is_dir($path) && !is_link($path) ? $this->rmTree($path) : @unlink($path);
+        }
+        @rmdir($dir);
+    }
+}

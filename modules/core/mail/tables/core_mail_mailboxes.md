@@ -23,6 +23,7 @@ Sloupce jsou organizovány do skupin:
 | Sloupec | Typ | Popis |
 |---|---|---|
 | `default_primary_type` | enumString(30) | Výchozí primární typ nově doručených zpráv — viz [primaryTypes.jsonc](../config/primaryTypes.jsonc). Nullable, při prázdné hodnotě se použije `other`. |
+| `is_default` | boolean | Příznak výchozí schránky DS. Došlá pošta bez explicitního `mailbox` pole půjde do ní. Smí být `true` pro nejvýš jednu schránku per DS (vynuceno aplikačně v `MailboxDocument::validate`). |
 
 ### Stav (status)
 
@@ -41,6 +42,7 @@ Sloupce jsou organizovány do skupin:
 | `unq_mailbox_id` | unique | `mailbox_id` | Lidský kód schránky musí být v DS unikátní |
 | `unq_email_address` | unique | `email_address` | E-mailová adresa je unikátní per DS |
 | `idx_doc_state` | index | `docStateMain` ASC, `name` ASC | Řazení pro viewer |
+| `idx_is_default` | index | `is_default` | Rychlé vyhledání výchozí schránky při příjmu došlé pošty |
 
 ## Návaznosti
 

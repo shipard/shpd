@@ -1,0 +1,74 @@
+{
+    "tableId": 305,
+    "name": "Incoming mail idempotency keys",
+    "name:cs": "Idempotency klíče pro došlou poštu",
+    "name:en": "Incoming mail idempotency keys",
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+        {
+            "id": "idempotency_key",
+            "name": "Idempotency key",
+            "name:cs": "Idempotency klíč",
+            "name:en": "Idempotency key",
+            "type": "varchar",
+            "length": 64,
+            "nullable": false
+        },
+        {
+            "id": "message",
+            "name": "Incoming message",
+            "name:cs": "Došlá zpráva",
+            "name:en": "Incoming message",
+            "type": "int",
+            "nullable": false,
+            "reference": "core_mail_incoming_messages"
+        },
+        {
+            "id": "response_body",
+            "name": "Response body",
+            "name:cs": "Tělo odpovědi",
+            "name:en": "Response body",
+            "type": "text",
+            "nullable": false
+        },
+        {
+            "id": "created",
+            "name": "Created",
+            "name:cs": "Vytvořeno",
+            "name:en": "Created",
+            "type": "datetime",
+            "nullable": false
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "unq_idempotency_key",
+            "type": "unique",
+            "columns": [
+                {"column": "idempotency_key"}
+            ]
+        },
+        {
+            "id": "idx_created",
+            "type": "index",
+            "columns": [
+                {"column": "created"}
+            ]
+        },
+        {
+            "id": "idx_message",
+            "type": "index",
+            "columns": [
+                {"column": "message"}
+            ]
+        }
+    ]
+}

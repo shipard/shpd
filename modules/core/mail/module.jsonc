@@ -16,7 +16,8 @@
     "tables": [
         "core_mail_mailboxes",
         "core_mail_incoming_messages",
-        "core_mail_message_analyses"
+        "core_mail_message_analyses",
+        "core_mail_incoming_idempotency"
     ],
 
     "viewers": [
@@ -39,6 +40,10 @@
     ],
 
     "documentClasses": [
+        {
+            "table": "core_mail_mailboxes",
+            "class": "Shipard\\Module\\Core\\Mail\\MailboxDocument"
+        },
         {
             "table": "core_mail_incoming_messages",
             "class": "Shipard\\Module\\Core\\Mail\\IncomingMessageDocument"

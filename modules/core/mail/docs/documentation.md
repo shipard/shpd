@@ -1,8 +1,9 @@
 # Modul `core.mail` — dokumentace
 
 Modul spravuje e-mailovou komunikaci. **Fáze 1** implementuje evidenci došlé pošty:
-datový model, ruční pořízení, prohlížeč, fake data. Externí služby (mail-router,
-AI analyzátor) jsou samostatné fáze.
+datový model, ruční pořízení, prohlížeč, fake data. **Fáze 2a** přidává HTTP
+endpoint pro příjem pošty z externí služby `shipard-mail-router` (samostatný
+repozitář). Fáze 3+ přidává AI analyzátor a odeslanou poštu.
 
 ## 1. Rozsah Fáze 1
 
@@ -14,9 +15,19 @@ AI analyzátor) jsou samostatné fáze.
 - CLI: `seed-mail`, `seed-mail-clear`
 - Kontrakt pro API endpoint (Fáze 2) — viz [`docs/mail/api-contract.md`](../../../../docs/mail/api-contract.md)
 
+**Fáze 2a — přidáno:**
+
+- Sloupec `core_mail_mailboxes.is_default` (boolean) s aplikační validací "max 1 per DS"
+- Nová tabulka `core_mail_incoming_idempotency` pro deduplikaci requestů z mail-routeru
+- Sloupec `core_system_users.is_system` pro označení systémových účtů
+- PHP třídy: `MailboxDocument`, `MailRouterProvisioner`, `IdempotencyStore`
+- Controller: [`src/Api/Controller/MailController.php`](../../../../src/Api/Controller/MailController.php)
+- Endpoint `POST /api/v1/_mail/incoming` — viz [`docs/mail/api-contract.md`](../../../../docs/mail/api-contract.md)
+- CLI: `mail-router-bootstrap` (automaticky z `ds-upgrade`), `mail-router-setup`, `mail-idempotency-prune`
+
 **Mimo rozsah:**
 
-- Mail-router (SMTP/IMAP příjem, parsing `.eml`) — Fáze 2
+- Mail-router daemon samotný (SMTP/IMAP příjem, parsing `.eml`) — **samostatný repozitář**, nasazuje se nezávisle
 - AI analyzátor — Fáze 3
 - Threading (`In-Reply-To`, `References`) — ukládáme, nezpracováváme
 - Deduplikace dle `external_message_id` — ukládáme, nevyužíváme
@@ -172,16 +183,50 @@ Příklady:
 
 Ve Fázi 1 žádný jiný modul tabulky `core.mail` nerozšiřuje.
 
-## 9. Bezpečnost (výhled pro Fázi 2)
+## 9. Mail-router integrace (Fáze 2a)
 
-- API endpoint pro příjem zpráv bude chráněn **per-DS bearer tokenem** v konfiguraci.
-- Rate limiting (shodný s ostatními API endpointy).
-- Sanitace HTML těla při zobrazení (klient: trustované rendering nebo oriframe).
-- Validace velikosti attachmentů (MAX_UPLOAD_SIZE v DS konfiguraci).
+### 9.1 Auto-provisioning
 
-## 10. Odkazy
+Při každém `ds-upgrade` se zajistí existence:
+
+- Systémového uživatele `_mail_router` (`is_system = 1`, nelogovatelný heslem)
+- Výchozí schránky `default` s `is_default = 1` a `email_address = {ds-id}@shipard.email`
+
+Implementace: [`MailRouterProvisioner`](../src/MailRouterProvisioner.php). Pro
+existující DS založené před Fází 2a lze spustit ručně přes
+`bin/shpd-ds mail-router-bootstrap`.
+
+### 9.2 API klíče
+
+Endpoint `/_mail/incoming` se autentizuje přes `shpd_ak_` klíč. Klíč se generuje
+přes `bin/shpd-ds mail-router-setup` (viz [api-contract.md §6](../../../../docs/mail/api-contract.md)).
+
+Controller navíc vynucuje, aby volající uživatel byl `_mail_router` — klíče
+vydané ostatním uživatelům tento endpoint nesmí volat (403).
+
+### 9.3 Idempotence
+
+Mail-router posílá `X-Idempotency-Key` hlavičku (sha256 z `domain/local_part/Message-ID`).
+Shipard drží 7denní cache v `core_mail_incoming_idempotency` — při retry vrátí
+identickou odpověď s `idempotent_replay: true`. Cleanup přes cron:
+`bin/shpd-ds mail-idempotency-prune`.
+
+### 9.4 Atomicita
+
+Uložení zprávy + raw `.eml` + přílohy proběhne v jedné DB transakci. Při selhání
+uprostřed se provede rollback a orphan soubory na disku se vyčistí.
+
+## 10. Bezpečnost (výhled)
+
+- Rate limiting pro `/_mail/incoming` (zatím nevynuceno — router je trusted).
+- Sanitace HTML těla při zobrazení (klient: trustované rendering nebo iframe).
+- Per-request size limit na úrovni nginx / PHP.
+- Scope restrictions na API klíče (jen vybrané endpointy) — follow-up.
+
+## 11. Odkazy
 
 - PRD Fáze 1: [`tasks/mail-phase1.md`](../../../../tasks/mail-phase1.md)
-- API kontrakt Fáze 2: [`docs/mail/api-contract.md`](../../../../docs/mail/api-contract.md)
+- PRD Fáze 2a: [`tasks/mail-phase2a.md`](../../../../tasks/mail-phase2a.md)
+- API kontrakt: [`docs/mail/api-contract.md`](../../../../docs/mail/api-contract.md)
 - docStates specifikace: [`docs/doc-states.md`](../../../../docs/doc-states.md)
 - Attachments systém: [`docs/attachments.md`](../../../../docs/attachments.md)

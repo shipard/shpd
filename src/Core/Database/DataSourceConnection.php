@@ -128,6 +128,12 @@ class DataSourceConnection
         $this->connection->query(...$args);
     }
 
+    /** Number of rows affected by the last INSERT/UPDATE/DELETE query. */
+    public function getAffectedRows(): int
+    {
+        return (int) $this->connection->getAffectedRows();
+    }
+
     /** Insert a row and return the auto-increment ID. */
     public function insertRow(string $table, array $data): int
     {

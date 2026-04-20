@@ -64,6 +64,13 @@ class Router
 			return $this->resolveAttachmentRoute($subpath, $method);
 		}
 
+		if ($subpath === '/_mail/incoming') {
+			if ($method !== 'POST') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('mail', 'receiveIncoming');
+		}
+
 		if ($subpath === '/_auth/login') {
 			if ($method !== 'POST') {
 				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);

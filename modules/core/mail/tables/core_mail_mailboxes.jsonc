@@ -97,6 +97,15 @@
             "cfgItem": "core.mail.primaryTypes",
             "group": "config"
         },
+        {
+            "id": "is_default",
+            "name": "Default mailbox",
+            "name:cs": "Výchozí schránka",
+            "name:en": "Default mailbox",
+            "type": "boolean",
+            "default": 0,
+            "group": "config"
+        },
 
         // --- audit ---
 
@@ -172,6 +181,13 @@
             "columns": [
                 {"column": "docStateMain", "order": "ASC"},
                 {"column": "name", "order": "ASC"}
+            ]
+        },
+        {
+            "id": "idx_is_default",
+            "type": "index",
+            "columns": [
+                {"column": "is_default"}
             ]
         }
     ]

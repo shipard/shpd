@@ -13,6 +13,7 @@ class ColumnDefinition
         'date', 'datetime', 'time',
         'boolean', 'json',
         'enumInt', 'enumString',
+        'encrypted_text',
     ];
 
     public function __construct(

@@ -25,6 +25,7 @@ class SqlGenerator
             'json'       => 'JSON',
             'enumInt'    => 'SMALLINT',
             'enumString' => "CHAR({$col->length}) CHARACTER SET ascii",
+            'encrypted_text' => 'TEXT',
             default      => throw new \InvalidArgumentException("Unknown column type: '{$col->type}'"),
         };
     }

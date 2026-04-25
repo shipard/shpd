@@ -73,6 +73,21 @@ class DataSourceConnection
         $this->connection->query($sql);
     }
 
+    public function begin(): void
+    {
+        $this->connection->begin();
+    }
+
+    public function commit(): void
+    {
+        $this->connection->commit();
+    }
+
+    public function rollback(): void
+    {
+        $this->connection->rollback();
+    }
+
     /** Fetch one row as associative array, or null if not found. */
     public function fetchRow(mixed ...$args): ?array
     {

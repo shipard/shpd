@@ -21,3 +21,4 @@ Technické specifikace, architektura a formáty konfigurace: [docs/](docs/)
 - **Symfony Console** — CLI příkazy
 - **Dibi** — databázová vrstva (mysqli driver)
 - **nginx** — webový server (pro budoucí API a frontend)
+- **libsodium AES-256-GCM** — per-DS šifrování citlivých dat (`encrypted_text` sloupce); viz [docs/operations/secrets.md](docs/operations/secrets.md)

@@ -9,79 +9,23 @@ use PHPUnit\Framework\MockObject\MockObject;
 use Shipard\Command\Server\DsCreateCommand;
 use Shipard\Core\Config\ServerConfig;
 use Shipard\Core\Database\DatabaseManager;
-use Shipard\Core\Utils\IdGenerator;
+use Shipard\Core\Security\DsSecretCipher;
 use Symfony\Component\Console\Application;
-use Symfony\Component\Console\Input\InputInterface;
-use Symfony\Component\Console\Input\InputOption;
-use Symfony\Component\Console\Output\OutputInterface;
-use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
 
-/**
- * Testable subclass with overrideable data-sources directory.
- */
 class TestableDsCreateCommand extends DsCreateCommand
 {
-    public string $dataSourcesDir;
-
     public function __construct(
-        private ServerConfig $mockConfig,
-        private DatabaseManager $mockDbManager,
-        string $dataSourcesDir,
+        ServerConfig $mockConfig,
+        DatabaseManager $mockDbManager,
+        private readonly string $dataSourcesDir,
     ) {
         parent::__construct($mockConfig, $mockDbManager);
-        $this->dataSourcesDir = $dataSourcesDir;
     }
 
-    protected function execute(InputInterface $input, OutputInterface $output): int
+    protected function getDataSourcesDir(): string
     {
-        $name = $input->getOption('name');
-
-        if (empty($name)) {
-            $output->writeln('<error>Option --name is required</error>');
-            return Command::FAILURE;
-        }
-
-        $generator = new IdGenerator();
-        $id = $generator->generate($this->dataSourcesDir);
-
-        $dbName = IdGenerator::toDatabaseName($id);
-        $dbUser = IdGenerator::toDatabaseUser($id);
-
-        $dataSourceDir = $this->dataSourcesDir . '/' . $id;
-        $configDir = $dataSourceDir . '/config';
-
-        if (!mkdir($configDir, 0755, true)) {
-            $output->writeln('<error>Failed to create data source directory</error>');
-            return Command::FAILURE;
-        }
-
-        $password = $this->mockDbManager->generatePassword();
-        $this->mockDbManager->createDatabase($dbName);
-        $this->mockDbManager->createUser($dbUser, $password, $dbName);
-
-        $mainConfig = [
-            'id'                => $id,
-            'name'              => $name,
-            'database_name'     => $dbName,
-            'database_user'     => $dbUser,
-            'database_password' => $password,
-            'created'           => date('c'),
-        ];
-
-        $configFile = $configDir . '/main.json';
-        file_put_contents($configFile, json_encode($mainConfig, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
-        chmod($configFile, 0600);
-
-        $output->writeln('');
-        $output->writeln('<info>Data source created successfully</info>');
-        $output->writeln("  ID:            <comment>{$id}</comment>");
-        $output->writeln("  Name:          <comment>{$name}</comment>");
-        $output->writeln("  Database:      <comment>{$dbName}</comment>");
-        $output->writeln("  DB User:       <comment>{$dbUser}</comment>");
-        $output->writeln("  Directory:     <comment>{$dataSourceDir}</comment>");
-
-        return Command::SUCCESS;
+        return $this->dataSourcesDir;
     }
 }
 
@@ -175,6 +119,28 @@ class DsCreateCommandTest extends TestCase
         $dirName = basename($dirs[0]);
 
         $this->assertMatchesRegularExpression('/^[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}$/', $dirName);
+    }
+
+    public function testDsCreateGeneratesSecretsKey(): void
+    {
+        DsSecretCipher::resetCache();
+        $tester = $this->createCommandTester();
+        $exitCode = $tester->execute(['--name' => 'Secrets Test']);
+        $this->assertSame(0, $exitCode);
+
+        $dirs = glob($this->tempDir . '/*', GLOB_ONLYDIR);
+        $this->assertCount(1, $dirs);
+        $dsDir = $dirs[0];
+
+        $secretsDir = $dsDir . '/secrets';
+        $keyFile = $secretsDir . '/secrets.key';
+
+        $this->assertDirectoryExists($secretsDir);
+        $this->assertFileExists($keyFile);
+
+        $this->assertSame(0700, fileperms($secretsDir) & 0777);
+        $this->assertSame(0600, fileperms($keyFile) & 0777);
+        $this->assertSame(DsSecretCipher::KEY_BYTES, filesize($keyFile));
     }
 
     private function rmdirRecursive(string $dir): void

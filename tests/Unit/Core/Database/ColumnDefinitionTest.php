@@ -31,4 +31,18 @@ class ColumnDefinitionTest extends TestCase
 
         $this->assertNull($col->reference);
     }
+
+    public function testEncryptedTextTypeIsAccepted(): void
+    {
+        $col = ColumnDefinition::fromArray([
+            'id' => 'api_key',
+            'name' => 'API key',
+            'type' => 'encrypted_text',
+            'nullable' => true,
+            'group' => 'credentials',
+        ]);
+
+        $this->assertSame('encrypted_text', $col->type);
+        $this->assertTrue($col->nullable);
+    }
 }

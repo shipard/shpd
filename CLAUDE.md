@@ -19,6 +19,8 @@ Podrobné specifikace jsou v adresáři `docs/`. Přečti příslušný dokument
 | `docs/table-definitions.md` | Formát definice databázových tabulek — datové typy, sloupce, indexy, extensions, validace, bezpečné změny |
 | `docs/document-system.md` | Dokumentový systém — Document třídy, hooky, validace, TableGateway, child tabulky, DocumentRegistry |
 | `docs/frontend.md` | Frontend architektura — Svelte 5, komponenty, ikony (Font Awesome), API komunikace |
+| `docs/operations/secrets.md` | Per-DS šifrování `encrypted_text` sloupců — `DsSecretCipher`, klíčový soubor, rotace, health check, threat model |
+| `docs/migration-guide.md` | Backup a přenos DS na jiný server — tarball, DB dump, perms, ověření |
 
 ## Architektura — rychlý přehled
 
@@ -90,9 +92,19 @@ Závislosti tečou shora dolů: Command → Document → Module/Config/Database 
 - Document třídy: registrace v `module.jsonc` (`documentClasses`), polymorfismus přes `typeColumn`
 - PHP třídy modulů: `modules/{skupina}/{modul}/src/`, namespace `Shipard\Module\{Skupina}\{Modul}\`
 
+### Citlivá data (encrypted_text)
+- Pro nové citlivé sloupce (API klíče, hesla, tokeny) **vždy** typ `encrypted_text` v JSONC schema. Nikdy plain `text`/`varchar`.
+- Encrypt/decrypt se **nedělá automaticky v TableGateway** — Document class odpovídá za:
+  - `beforeSave()`: pokud je pole dirty a non-null/non-empty, `DsSecretCipher::forConfig($cfg)->encrypt(...)`
+  - Controller: `$cipher->decrypt($row['col'])` až těsně před použitím
+- Vzor: `tests/Fixtures/Module/Test/Secrets/TestSecretDocument.php`
+- **Anti-patterny:** necachuj plaintext (session/cookie/log), neposílej ho do view/template, nepřenášej v URL/query
+- Form pro editaci citlivého pole: prázdné pole + placeholder `●●●●●● (zadat pro změnu)`, prázdný submit nemění hodnotu
+- Backup, migrace, rotace, troubleshooting: `docs/operations/secrets.md`
+
 ### CLI příkazy
 - `shpd-server`: `version`, `help`, `ds-create --name`, `server-init`, `next-table-id`
-- `shpd-ds` (z adresáře DS): `version`, `help`, `ds-upgrade`
+- `shpd-ds` (z adresáře DS): `version`, `help`, `ds-upgrade`, `ds-secrets-health`, `ds-secrets-rotate [--dry-run]`
 
 ### Frontend — ikony
 - Font Awesome SVG/JS, tree-shaking přes Vite

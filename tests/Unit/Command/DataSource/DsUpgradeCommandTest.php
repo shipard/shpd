@@ -9,6 +9,7 @@ use PHPUnit\Framework\TestCase;
 use Shipard\Command\DataSource\DsUpgradeCommand;
 use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Database\DataSourceConnection;
+use Shipard\Core\Security\DsSecretCipher;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
@@ -60,12 +61,16 @@ class DsUpgradeCommandTest extends TestCase
         $this->dsConfig->method('getDatabaseName')->willReturn('test_db');
         $this->dsConfig->method('getDatabaseUser')->willReturn('shpd_test0001');
         $this->dsConfig->method('getDatabasePassword')->willReturn('secret');
+        $this->dsConfig->method('getDataSourceDir')->willReturn($this->dsDir);
 
         $this->dsConnection = $this->createMock(DataSourceConnection::class);
+
+        DsSecretCipher::resetCache();
     }
 
     protected function tearDown(): void
     {
+        DsSecretCipher::resetCache();
         $this->rmdirRecursive($this->tempDir);
     }
 
@@ -235,6 +240,7 @@ class DsUpgradeCommandTest extends TestCase
         $this->dsConfig->method('getDatabaseName')->willReturn('test_db');
         $this->dsConfig->method('getDatabaseUser')->willReturn('shpd_test0001');
         $this->dsConfig->method('getDatabasePassword')->willReturn('secret');
+        $this->dsConfig->method('getDataSourceDir')->willReturn($this->dsDir);
 
         $this->dsConnection->method('getTableColumns')->willReturn([]);
         $this->dsConnection->method('getTableIndexes')->willReturn([]);
@@ -261,6 +267,88 @@ class DsUpgradeCommandTest extends TestCase
             '/Upgrade complete\. \d+ tables? created, \d+ tables? altered, \d+ tables? unchanged\./',
             $display
         );
+    }
+
+    public function testUpgradeGeneratesMissingSecretsKey(): void
+    {
+        $this->dsConnection->method('getTableColumns')->willReturn([]);
+        $this->dsConnection->method('getTableIndexes')->willReturn([]);
+        $this->dsConnection->method('executeSQL');
+
+        $keyFile = $this->dsDir . '/secrets/secrets.key';
+        $this->assertFileDoesNotExist($keyFile);
+
+        $tester = $this->createCommandTester();
+        $exitCode = $tester->execute([]);
+
+        $this->assertSame(Command::SUCCESS, $exitCode);
+        $this->assertFileExists($keyFile);
+        $this->assertSame(0600, fileperms($keyFile) & 0777);
+        $this->assertSame(0700, fileperms($this->dsDir . '/secrets') & 0777);
+        $this->assertStringContainsString('Created secrets/secrets.key', $tester->getDisplay());
+    }
+
+    public function testUpgradeLeavesExistingSecretsKeyAlone(): void
+    {
+        // Pre-create a key
+        DsSecretCipher::generateKey($this->dsDir);
+        $keyFile = $this->dsDir . '/secrets/secrets.key';
+        $original = file_get_contents($keyFile);
+        $originalMtime = filemtime($keyFile);
+
+        $this->dsConnection->method('getTableColumns')->willReturn([]);
+        $this->dsConnection->method('getTableIndexes')->willReturn([]);
+        $this->dsConnection->method('executeSQL');
+
+        clearstatcache();
+        sleep(1); // ensure mtime would change if rewritten
+
+        $tester = $this->createCommandTester();
+        $exitCode = $tester->execute([]);
+
+        $this->assertSame(Command::SUCCESS, $exitCode);
+        $this->assertSame($original, file_get_contents($keyFile));
+        $this->assertSame($originalMtime, filemtime($keyFile));
+        $this->assertStringNotContainsString('Created secrets/secrets.key', $tester->getDisplay());
+    }
+
+    public function testUpgradeLogsInfoForEncryptedColumnAdd(): void
+    {
+        // Override the fixture: drop the existing module and create one with an encrypted_text column
+        $this->rmdirRecursive($this->modulesPath);
+        $moduleDir = $this->modulesPath . '/test/unit';
+        mkdir($moduleDir . '/tables', 0755, true);
+
+        file_put_contents($moduleDir . '/module.jsonc', json_encode([
+            'id'           => 'test.unit',
+            'name'         => 'Test Unit Module',
+            'dependencies' => [],
+            'tables'       => ['test_unit_secret'],
+            'extensions'   => [],
+            'config'       => [],
+        ]));
+
+        file_put_contents($moduleDir . '/tables/test_unit_secret.jsonc', json_encode([
+            'tableId' => 1,
+            'name'    => 'test_unit_secret',
+            'columns' => [
+                ['id' => 'id', 'name' => 'ID', 'type' => 'int', 'primaryKey' => true, 'autoIncrement' => true, 'nullable' => false],
+                ['id' => 'api_key', 'name' => 'API key', 'type' => 'encrypted_text', 'nullable' => true],
+            ],
+            'indexes' => [],
+        ]));
+
+        $this->dsConnection->method('getTableColumns')->willReturn([]);
+        $this->dsConnection->method('getTableIndexes')->willReturn([]);
+        $this->dsConnection->method('executeSQL');
+
+        $tester = $this->createCommandTester();
+        $exitCode = $tester->execute([]);
+
+        $this->assertSame(Command::SUCCESS, $exitCode);
+        $display = $tester->getDisplay();
+        $this->assertStringContainsString("[INFO] Adding encrypted_text column 'test_unit_secret.api_key'", $display);
+        $this->assertStringContainsString('Application layer must use DsSecretCipher', $display);
     }
 
     public function testUpgradeWritesCompiledConfig(): void

@@ -19,5 +19,7 @@ $app->add(new \Shipard\Command\DataSource\SeedMailClearCommand());
 $app->add(new \Shipard\Command\DataSource\MailRouterBootstrapCommand());
 $app->add(new \Shipard\Command\DataSource\MailRouterSetupCommand());
 $app->add(new \Shipard\Command\DataSource\MailIdempotencyPruneCommand());
+$app->add(new \Shipard\Command\DataSource\DsSecretsHealthCommand());
+$app->add(new \Shipard\Command\DataSource\DsSecretsRotateCommand());
 $app->setDefaultCommand('help');
 $app->run();

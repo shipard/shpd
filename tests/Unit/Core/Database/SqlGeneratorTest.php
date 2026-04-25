@@ -92,11 +92,18 @@ class SqlGeneratorTest extends TestCase
 
     public function testTextTypes(): void
     {
-        foreach (['text' => 'TEXT', 'longtext' => 'LONGTEXT', 'json' => 'JSON', 'date' => 'DATE', 'datetime' => 'DATETIME', 'time' => 'TIME'] as $phpType => $sqlType) {
+        foreach (['text' => 'TEXT', 'longtext' => 'LONGTEXT', 'json' => 'JSON', 'date' => 'DATE', 'datetime' => 'DATETIME', 'time' => 'TIME', 'encrypted_text' => 'TEXT'] as $phpType => $sqlType) {
             $col = $this->makeCol(['id' => 'x', 'type' => $phpType]);
             $sql = SqlGenerator::generateAddColumn('t', $col);
             $this->assertStringContainsString($sqlType, $sql, "Expected {$sqlType} for type {$phpType}");
         }
+    }
+
+    public function testEncryptedTextNullable(): void
+    {
+        $col = $this->makeCol(['id' => 'api_key', 'type' => 'encrypted_text', 'nullable' => true]);
+        $sql = SqlGenerator::generateAddColumn('core_mail_ai_backends', $col);
+        $this->assertStringContainsString('`api_key` TEXT NULL', $sql);
     }
 
     public function testAutoIncrement(): void

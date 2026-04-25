@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Shipard\Command\Server;
 
+use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Config\ServerConfig;
 use Shipard\Core\Database\DatabaseManager;
+use Shipard\Core\Security\DsSecretCipher;
 use Shipard\Core\Utils\IdGenerator;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -14,8 +16,6 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 class DsCreateCommand extends Command
 {
-    private const DATA_SOURCES_DIR = '/opt/shipard/data-sources';
-
     public function __construct(
         private readonly ?ServerConfig $serverConfig = null,
         private readonly ?DatabaseManager $databaseManager = null,
@@ -28,6 +28,11 @@ class DsCreateCommand extends Command
         $this->setName('ds-create')
              ->setDescription('Create a new data source')
              ->addOption('name', null, InputOption::VALUE_REQUIRED, 'Name of the data source');
+    }
+
+    protected function getDataSourcesDir(): string
+    {
+        return '/opt/shipard/data-sources';
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -50,13 +55,14 @@ class DsCreateCommand extends Command
 
         // Generate unique ID
         $generator = new IdGenerator();
-        $id = $generator->generate(self::DATA_SOURCES_DIR);
+        $dataSourcesDir = $this->getDataSourcesDir();
+        $id = $generator->generate($dataSourcesDir);
 
         $dbName = IdGenerator::toDatabaseName($id);
         $dbUser = IdGenerator::toDatabaseUser($id);
 
         // Create directory structure
-        $dataSourceDir = self::DATA_SOURCES_DIR . '/' . $id;
+        $dataSourceDir = $dataSourcesDir . '/' . $id;
         $configDir = $dataSourceDir . '/config';
 
         if (!mkdir($configDir, 0755, true)) {
@@ -94,6 +100,18 @@ class DsCreateCommand extends Command
         $configFile = $configDir . '/main.json';
         file_put_contents($configFile, json_encode($mainConfig, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
         chmod($configFile, 0600);
+
+        // Generate per-DS secrets key for encrypted_text columns
+        try {
+            DsSecretCipher::generateKey($dataSourceDir);
+            $warnings = DsSecretCipher::healthCheck(new DataSourceConfig($dataSourceDir));
+            foreach ($warnings as $warning) {
+                $output->writeln('<comment>  [WARN] ' . $warning . '</comment>');
+            }
+        } catch (\RuntimeException $e) {
+            $output->writeln('<error>Failed to initialise secrets key: ' . $e->getMessage() . '</error>');
+            return Command::FAILURE;
+        }
 
         // Output summary
         $output->writeln('');

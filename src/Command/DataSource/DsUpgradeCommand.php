@@ -15,6 +15,7 @@ use Shipard\Core\Database\TableDefinition;
 use Shipard\Core\Database\TableMerger;
 use Shipard\Core\Module\ModuleLoader;
 use Shipard\Core\Module\ModuleResolver;
+use Shipard\Core\Security\DsSecretCipher;
 use Shipard\Core\Utils\JsoncParser;
 use Shipard\Module\Core\Mail\MailRouterProvisioner;
 use Symfony\Component\Console\Command\Command;
@@ -63,6 +64,20 @@ class DsUpgradeCommand extends Command
             $dirPath = $dsDir . '/' . $subdir;
             if (!is_dir($dirPath)) {
                 @mkdir($dirPath, 0755, true);
+            }
+        }
+
+        // Step 1.5: Ensure per-DS secrets key exists (generated for legacy DS
+        // upgraded from before encrypted_text was introduced).
+        $secretsKeyFile = DsSecretCipher::keyFilePath($dsDir);
+        if (!is_file($secretsKeyFile)) {
+            try {
+                DsSecretCipher::generateKey($dsDir);
+                $output->writeln('  [INFO] Created secrets/secrets.key — no data migration needed');
+                $output->writeln('         (no encrypted columns existed in this DS yet).');
+            } catch (\RuntimeException $e) {
+                $output->writeln('<error>Failed to initialise secrets key: ' . $e->getMessage() . '</error>');
+                return Command::FAILURE;
             }
         }
 
@@ -179,14 +194,23 @@ class DsUpgradeCommand extends Command
                 }
 
                 $output->writeln('  [CREATE] ' . $tableName);
+                foreach ($tableDef->columns as $col) {
+                    if ($col->type === 'encrypted_text') {
+                        $this->logEncryptedColumnAdded($output, $tableName, $col->id);
+                    }
+                }
                 $created++;
             } else {
                 $changes = [];
+                $newEncryptedColumns = [];
                 foreach ($ops as $op) {
                     if ($op['op'] === 'add_column') {
                         $sql = SqlGenerator::generateAddColumn($tableName, $op['column']);
                         $dsConnection->executeSQL($sql);
                         $changes[] = 'added column: ' . $op['column']->id . ' (' . $op['column']->type . ')';
+                        if ($op['column']->type === 'encrypted_text') {
+                            $newEncryptedColumns[] = $op['column']->id;
+                        }
                     } elseif ($op['op'] === 'modify_column') {
                         $sql = SqlGenerator::generateModifyColumn($tableName, $op['column']);
                         $dsConnection->executeSQL($sql);
@@ -198,6 +222,9 @@ class DsUpgradeCommand extends Command
                     }
                 }
                 $output->writeln('  [ALTER]  ' . $tableName . ' — ' . implode(', ', $changes));
+                foreach ($newEncryptedColumns as $columnId) {
+                    $this->logEncryptedColumnAdded($output, $tableName, $columnId);
+                }
                 $altered++;
             }
         }
@@ -207,7 +234,19 @@ class DsUpgradeCommand extends Command
 
         $this->provisionMailRouter($dsConfig, $dsConnection, $output);
 
+        $secretsWarnings = DsSecretCipher::healthCheck($dsConfig);
+        foreach ($secretsWarnings as $warning) {
+            $output->writeln('<comment>  [WARN] ' . $warning . '</comment>');
+        }
+
         return Command::SUCCESS;
+    }
+
+    private function logEncryptedColumnAdded(OutputInterface $output, string $table, string $column): void
+    {
+        $output->writeln(sprintf("  [INFO] Adding encrypted_text column '%s.%s'.", $table, $column));
+        $output->writeln('         Application layer must use DsSecretCipher for read/write.');
+        $output->writeln('         Plaintext values will not be readable from DB directly.');
     }
 
     private function provisionMailRouter(

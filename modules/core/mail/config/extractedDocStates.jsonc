@@ -1,0 +1,83 @@
+{
+    // core.mail.extractedDocStates
+    //
+    // Stavy review extrahovaných dokumentů (core_mail_extracted_documents.status).
+    // Používá enumInt — hodnoty jsou tinyint kódy.
+    //
+    // Auto-transition pravidlo: když status přechází na `applied`, `rejected`
+    // nebo `superseded`, hook `ExtractedDocumentDocument::afterSave()` zkontroluje
+    // všechny sourozence; pokud žádný není ve stavu `ready_to_apply`,
+    // `pending_review` ani `low_confidence`, zpráva přechází z `docState=30`
+    // (Analyzovaná) na `docState=40` (Zpracovaná).
+
+    "10": {
+        "name": "Ready to apply",
+        "name:cs": "K použití",
+        "name:en": "Ready to apply",
+        "stateStyle": "done",
+        "icon": "check",
+        "description:cs": "Confidence ≥ 0.9 — UI nabízí jen 'Použít'",
+        "description:en": "Confidence ≥ 0.9 — UI offers only 'Apply'",
+        "order": 10
+    },
+    "20": {
+        "name": "Pending review",
+        "name:cs": "Čeká na review",
+        "name:en": "Pending review",
+        "stateStyle": "confirmed",
+        "icon": "question",
+        "description:cs": "0.6 ≤ confidence < 0.9 — výchozí stav po extrakci",
+        "description:en": "0.6 ≤ confidence < 0.9 — default after extraction",
+        "order": 20
+    },
+    "30": {
+        "name": "Low confidence",
+        "name:cs": "Nízká jistota",
+        "name:en": "Low confidence",
+        "stateStyle": "edit",
+        "icon": "warning",
+        "description:cs": "Confidence < 0.6 — vyžaduje pečlivou kontrolu",
+        "description:en": "Confidence < 0.6 — needs careful review",
+        "order": 30
+    },
+    "40": {
+        "name": "Applied",
+        "name:cs": "Použito",
+        "name:en": "Applied",
+        "stateStyle": "archive",
+        "icon": "check",
+        "description:cs": "Uživatel potvrdil, entita vznikla",
+        "description:en": "User confirmed, target entity created",
+        "order": 40
+    },
+    "50": {
+        "name": "Rejected",
+        "name:cs": "Zamítnuto",
+        "name:en": "Rejected",
+        "stateStyle": "archive",
+        "icon": "cross",
+        "description:cs": "Uživatel zamítl jako false positive",
+        "description:en": "User rejected as false positive",
+        "order": 50
+    },
+    "60": {
+        "name": "Superseded",
+        "name:cs": "Nahrazeno",
+        "name:en": "Superseded",
+        "stateStyle": "archive",
+        "icon": "refresh",
+        "description:cs": "Nahrazeno novou analýzou",
+        "description:en": "Superseded by new analysis",
+        "order": 60
+    },
+    "70": {
+        "name": "AI failed",
+        "name:cs": "Chyba AI",
+        "name:en": "AI failed",
+        "stateStyle": "error",
+        "icon": "cross",
+        "description:cs": "AI nemohla extrahovat — typicky nečitelné PDF",
+        "description:en": "AI could not extract — typically unreadable PDF",
+        "order": 70
+    }
+}

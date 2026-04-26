@@ -1,0 +1,256 @@
+{
+    "tableId": 307,
+    "name": "AI backends",
+    "name:cs": "AI backendy",
+    "name:en": "AI backends",
+
+    "displayPattern": "{name}",
+
+    "docStates": {
+        "stateColumn": "docState",
+        "mainColumn": "docStateMain",
+        "cfgItem": "core.system.docStatesArchive"
+    },
+
+    "columnGroups": [
+        {
+            "id": "identity",
+            "name": "Identity",
+            "name:cs": "Identifikace",
+            "name:en": "Identity"
+        },
+        {
+            "id": "provider",
+            "name": "Provider",
+            "name:cs": "Provider",
+            "name:en": "Provider"
+        },
+        {
+            "id": "credentials",
+            "name": "Credentials",
+            "name:cs": "Přístup",
+            "name:en": "Credentials"
+        },
+        {
+            "id": "tuning",
+            "name": "Tuning",
+            "name:cs": "Ladění",
+            "name:en": "Tuning"
+        },
+        {
+            "id": "flags",
+            "name": "Flags",
+            "name:cs": "Příznaky",
+            "name:en": "Flags"
+        },
+        {
+            "id": "status",
+            "name": "Status",
+            "name:cs": "Stav",
+            "name:en": "Status"
+        }
+    ],
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+
+        // --- identity ---
+
+        {
+            "id": "backend_id",
+            "name": "Backend code",
+            "name:cs": "Kód backendu",
+            "name:en": "Backend code",
+            "type": "varchar",
+            "length": 50,
+            "nullable": false,
+            "group": "identity"
+        },
+        {
+            "id": "name",
+            "name": "Name",
+            "name:cs": "Název",
+            "name:en": "Name",
+            "type": "varchar",
+            "length": 100,
+            "nullable": false,
+            "group": "identity"
+        },
+
+        // --- provider ---
+
+        {
+            "id": "provider",
+            "name": "Provider",
+            "name:cs": "Provider",
+            "name:en": "Provider",
+            "type": "varchar",
+            "length": 30,
+            "nullable": false,
+            "default": "anthropic",
+            "group": "provider"
+        },
+        {
+            "id": "model",
+            "name": "Model",
+            "name:cs": "Model",
+            "name:en": "Model",
+            "type": "varchar",
+            "length": 100,
+            "nullable": false,
+            "group": "provider"
+        },
+        {
+            "id": "base_url",
+            "name": "Base URL",
+            "name:cs": "Base URL",
+            "name:en": "Base URL",
+            "type": "varchar",
+            "length": 200,
+            "nullable": true,
+            "group": "provider"
+        },
+
+        // --- credentials ---
+
+        {
+            "id": "api_key",
+            "name": "API key",
+            "name:cs": "API klíč",
+            "name:en": "API key",
+            "type": "encrypted_text",
+            "nullable": true,
+            "group": "credentials"
+        },
+
+        // --- tuning ---
+
+        {
+            "id": "max_tokens",
+            "name": "Max tokens",
+            "name:cs": "Max. tokenů",
+            "name:en": "Max tokens",
+            "type": "int",
+            "nullable": false,
+            "default": 4096,
+            "group": "tuning"
+        },
+        {
+            "id": "temperature",
+            "name": "Temperature",
+            "name:cs": "Teplota",
+            "name:en": "Temperature",
+            "type": "numeric",
+            "precision": 3,
+            "scale": 2,
+            "nullable": false,
+            "default": 0,
+            "group": "tuning"
+        },
+
+        // --- flags ---
+
+        {
+            "id": "is_default",
+            "name": "Default backend",
+            "name:cs": "Výchozí backend",
+            "name:en": "Default backend",
+            "type": "boolean",
+            "nullable": false,
+            "default": false,
+            "group": "flags"
+        },
+        {
+            "id": "is_active",
+            "name": "Active",
+            "name:cs": "Aktivní",
+            "name:en": "Active",
+            "type": "boolean",
+            "nullable": false,
+            "default": false,
+            "group": "flags"
+        },
+
+        // --- audit ---
+
+        {
+            "id": "created",
+            "name": "Created",
+            "name:cs": "Vytvořeno",
+            "name:en": "Created",
+            "type": "datetime",
+            "nullable": false,
+            "group": "status"
+        },
+        {
+            "id": "created_by",
+            "name": "Created by",
+            "name:cs": "Vytvořil",
+            "name:en": "Created by",
+            "type": "int",
+            "nullable": true,
+            "reference": "core_system_users",
+            "group": "status"
+        },
+        {
+            "id": "modified",
+            "name": "Modified",
+            "name:cs": "Změněno",
+            "name:en": "Modified",
+            "type": "datetime",
+            "nullable": false,
+            "group": "status"
+        },
+
+        // --- doc state (systémové) ---
+
+        {
+            "id": "docState",
+            "name": "Document state",
+            "name:cs": "Stav dokumentu",
+            "name:en": "Document state",
+            "type": "tinyint",
+            "default": 40,
+            "system": true
+        },
+        {
+            "id": "docStateMain",
+            "name": "Document state (sort)",
+            "name:cs": "Stav dokumentu (řazení)",
+            "name:en": "Document state (sort)",
+            "type": "tinyint",
+            "default": 3,
+            "system": true
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "unq_backend_id",
+            "type": "unique",
+            "columns": [
+                {"column": "backend_id"}
+            ]
+        },
+        {
+            "id": "idx_is_default",
+            "type": "index",
+            "columns": [
+                {"column": "is_default"}
+            ]
+        },
+        {
+            "id": "idx_is_active",
+            "type": "index",
+            "columns": [
+                {"column": "is_active"}
+            ]
+        }
+    ]
+}

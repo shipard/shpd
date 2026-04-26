@@ -1,0 +1,33 @@
+{
+    // core.mail.extractedDocTypes
+    //
+    // Typy extrahovaných dokumentů, které AI rozpoznává v došlé poště.
+    // Hodnota se ukládá do sloupce `core_mail_extracted_documents.doc_type`
+    // (enumString). Sada se postupně rozšiřuje o další druhy.
+    //
+    // Pozn.: keys odpovídají `core.mail.primaryTypes` — záměrně, aby
+    // primary_type zprávy a doc_type extrahovaného dokumentu mohly být
+    // párovány bez další translation tabulky.
+
+    "invoiceReceived": {
+        "name": "Received invoice",
+        "name:cs": "Přijatá faktura",
+        "name:en": "Received invoice",
+        "enabled": true,
+        "order": 10
+    },
+    "creditNote": {
+        "name": "Credit note",
+        "name:cs": "Dobropis",
+        "name:en": "Credit note",
+        "enabled": true,
+        "order": 20
+    },
+    "other": {
+        "name": "Other",
+        "name:cs": "Ostatní",
+        "name:en": "Other",
+        "enabled": true,
+        "order": 999
+    }
+}

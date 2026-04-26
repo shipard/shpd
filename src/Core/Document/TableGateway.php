@@ -78,6 +78,8 @@ class TableGateway
                 $data[$ct['dataKey']] = $childDataByKey[$ct['dataKey']];
             }
 
+            $doc->afterPersist($data);
+
             $this->commitTransaction();
         } catch (\Throwable $e) {
             $this->rollbackTransaction();

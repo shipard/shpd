@@ -1,0 +1,103 @@
+{
+    // Výchozí AI profil pro extrakci českých přijatých faktur z došlé pošty.
+    // Tento soubor slouží jako šablona — `AIAnalyzerProvisioner` z něj vytvoří
+    // řádek v `core_mail_ai_profiles` při prvním ds-upgrade. Pozdější editace
+    // probíhá přímo v DB / UI a tento soubor se nepoužívá pro upsert.
+    //
+    // Prompt je cíleně jednoduchý a konzervativní; budeme ho iterativně ladit.
+
+    "profile_id": "czech_invoices",
+    "name": "České faktury (default)",
+    "name:cs": "České faktury (default)",
+    "name:en": "Czech invoices (default)",
+    "language": "cs",
+    "prompt_version": "v1.0.0",
+    "supported_doc_types": ["invoiceReceived", "creditNote", "other"],
+    "confidence_thresholds": { "ready": 0.9, "review": 0.6 },
+
+    "prompt_template": "Jsi asistent pro zpracování došlé pošty českých firem. Pro každou přílohu zprávy rozhodni, zda jde o přijatou fakturu, dobropis nebo jiný dokument. U faktury extrahuj hlavičku (dodavatel, IČO, DIČ, č. faktury, var. symbol, data, celková částka, měna, způsob platby, č. účtu) a položky (popis, množství, MJ, cena, sazba DPH). U dobropisu navíc odkaz na opravovanou fakturu. Pole, která nelze určit, vynech (neuhaduj). Vrať JSON podle output_schema. confidence 0–1 vyjadřuje tvou jistotu kvality extrakce.",
+
+    "output_schema": {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "required": ["overall_confidence", "documents"],
+        "properties": {
+            "overall_confidence": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+            },
+            "documents": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "required": ["doc_type", "source_attachment_ndxs", "confidence", "fields"],
+                    "properties": {
+                        "doc_type": {
+                            "type": "string",
+                            "enum": ["invoiceReceived", "creditNote", "other"]
+                        },
+                        "source_attachment_ndxs": {
+                            "type": "array",
+                            "items": { "type": "integer" }
+                        },
+                        "confidence": {
+                            "type": "number",
+                            "minimum": 0,
+                            "maximum": 1
+                        },
+                        "fields": {
+                            "type": "object",
+                            "properties": {
+                                "supplier": {
+                                    "type": "object",
+                                    "properties": {
+                                        "name":    { "type": "string" },
+                                        "ico":     { "type": "string" },
+                                        "dic":     { "type": "string" },
+                                        "address": { "type": "string" }
+                                    }
+                                },
+                                "invoice_number":  { "type": "string" },
+                                "variable_symbol": { "type": "string" },
+                                "issue_date":      { "type": "string", "format": "date" },
+                                "due_date":        { "type": "string", "format": "date" },
+                                "tax_date":        { "type": "string", "format": "date" },
+                                "total_amount":    { "type": "number" },
+                                "currency":        { "type": "string" },
+                                "payment_method":  { "type": "string" },
+                                "account_number":  { "type": "string" },
+                                "iban":            { "type": "string" },
+                                "vat_breakdown": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "rate":    { "type": "number" },
+                                            "base":    { "type": "number" },
+                                            "vat":     { "type": "number" }
+                                        }
+                                    }
+                                },
+                                "line_items": {
+                                    "type": "array",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "description": { "type": "string" },
+                                            "quantity":    { "type": "number" },
+                                            "unit":        { "type": "string" },
+                                            "unit_price":  { "type": "number" },
+                                            "vat_rate":    { "type": "number" }
+                                        }
+                                    }
+                                },
+                                "notes": { "type": "string" }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

@@ -178,7 +178,14 @@ class IncomingMessagesViewer extends TableViewer
             'content' => $this->buildAnalysesTab((int) $record['id']),
         ];
 
-        // Tab 4 — Originál (raw .eml)
+        // Tab 4 — Extrahované dokumenty (Fáze 3a)
+        $tabs[] = [
+            'id'      => 'extracted',
+            'label'   => 'Extrahované dokumenty',
+            'content' => $this->buildExtractedDocumentsTab((int) $record['id']),
+        ];
+
+        // Tab 5 — Originál (raw .eml)
         $tabs[] = [
             'id'      => 'raw',
             'label'   => 'Originál',
@@ -198,6 +205,36 @@ class IncomingMessagesViewer extends TableViewer
             array_splice($actions, 1, 0, [
                 ['id' => 'edit', 'label' => 'Otevřít', 'variant' => 'secondary'],
             ]);
+
+            // Spec §5.3 — "Znova analyzovat" je viditelné jen když docState ∈ {30, 70}.
+            $docState = (int) ($selectedRow['docState'] ?? 0);
+            if ($docState === 30 || $docState === 70) {
+                // Inject seznam aktivních profilů → frontend dropdown bez další API
+                // round-trip. Spec §5.3 chce dropdown s profily, ne číselné ID.
+                $profiles = $this->db->fetchAll(
+                    'SELECT `id`, `profile_id`, `name` FROM `core_mail_ai_profiles`'
+                    . ' WHERE `is_active` = %i ORDER BY `is_default` DESC, `name` ASC',
+                    1,
+                );
+                $profileOptions = [];
+                foreach ($profiles as $p) {
+                    $profileOptions[] = [
+                        'ndx' => (int) $p['id'],
+                        'profile_id' => (string) $p['profile_id'],
+                        'name' => (string) $p['name'],
+                    ];
+                }
+
+                $actions[] = [
+                    'id' => 'reanalyze',
+                    'label' => 'Znova analyzovat',
+                    'variant' => 'secondary',
+                    'meta' => [
+                        'messageNdx' => (int) $selectedRow['id'],
+                        'profiles' => $profileOptions,
+                    ],
+                ];
+            }
         }
 
         return $actions;
@@ -315,7 +352,8 @@ class IncomingMessagesViewer extends TableViewer
     private function buildAnalysesTab(int $messageId): array
     {
         $analyses = $this->db->fetchAll(
-            'SELECT `id`, `analyzed_at`, `status`, `model_name`, `model_version`, `prompt_version`, `confidence`'
+            'SELECT `id`, `analyzed_at`, `status`, `model_name`, `model_version`, `prompt_version`,'
+            . ' `confidence`, `cost_usd`, `duration_ms`, `extracted_document_count`, `error_message`'
             . ' FROM `core_mail_message_analyses`'
             . ' WHERE `message` = %i'
             . ' ORDER BY `analyzed_at` DESC',
@@ -329,12 +367,21 @@ class IncomingMessagesViewer extends TableViewer
         $statusLabels = [1 => 'Probíhá', 2 => 'Úspěch', 3 => 'Selhala'];
         $rows = [];
         foreach ($analyses as $a) {
+            $confidence = $a['confidence'] !== null ? number_format((float) $a['confidence'], 3) : '—';
+            $cost = $a['cost_usd'] !== null ? '$' . number_format((float) $a['cost_usd'], 4) : '—';
+            $duration = $a['duration_ms'] !== null
+                ? number_format((int) $a['duration_ms'] / 1000, 1) . ' s'
+                : '—';
+
             $rows[] = [
                 'analyzed_at' => $this->formatDateTime($a['analyzed_at'] ?? null),
                 'status'      => $statusLabels[(int) ($a['status'] ?? 1)] ?? '—',
                 'model'       => trim(($a['model_name'] ?? '') . ' ' . ($a['model_version'] ?? '')),
                 'prompt'      => $a['prompt_version'] ?? '',
-                'confidence'  => $a['confidence'] !== null ? (string) $a['confidence'] : '—',
+                'confidence'  => $confidence,
+                'extracted'   => (string) ($a['extracted_document_count'] ?? 0),
+                'cost'        => $cost,
+                'duration'    => $duration,
             ];
         }
 
@@ -346,9 +393,158 @@ class IncomingMessagesViewer extends TableViewer
                 ['id' => 'model',       'label' => 'Model'],
                 ['id' => 'prompt',      'label' => 'Prompt'],
                 ['id' => 'confidence',  'label' => 'Jistota'],
+                ['id' => 'extracted',   'label' => 'Doc.'],
+                ['id' => 'cost',        'label' => 'Cena'],
+                ['id' => 'duration',    'label' => 'Trvání'],
             ],
             'rows' => $rows,
         ];
+    }
+
+    /**
+     * Spec §5.2 — Tab "Extrahované dokumenty". Vrací custom content type
+     * `extracted-documents`, který frontend renderuje s badge typu, status
+     * badge (barva + ikona), confidence a per-row akce "Použít" / "Zamítnout".
+     *
+     * Status mapping na barvy/ikony viz config/extractedDocStates.jsonc.
+     */
+    private function buildExtractedDocumentsTab(int $messageId): array
+    {
+        $rows = $this->db->fetchAll(
+            'SELECT `id`, `doc_type`, `source_attachments`, `confidence`, `status`,'
+            . ' `extracted_json`, `rejected_reason`, `applied_at`, `created`'
+            . ' FROM `core_mail_extracted_documents`'
+            . ' WHERE `message` = %i'
+            . ' ORDER BY `created` DESC, `id` DESC',
+            $messageId,
+        );
+
+        if ($rows === []) {
+            return [
+                'type' => 'html',
+                'html' => '<p class="muted">Pro tuto zprávu zatím nebyly extrahovány žádné dokumenty.</p>',
+            ];
+        }
+
+        $stateMap = $this->loadExtractedDocStates();
+        $typeMap = $this->loadExtractedDocTypes();
+
+        $documents = [];
+        foreach ($rows as $r) {
+            $statusKey = (int) $r['status'];
+            $state = $stateMap[$statusKey] ?? null;
+            $docType = (string) $r['doc_type'];
+            $typeMeta = $typeMap[$docType] ?? null;
+
+            $sourceNdxs = [];
+            if (!empty($r['source_attachments'])) {
+                $decoded = json_decode((string) $r['source_attachments'], true);
+                if (is_array($decoded)) {
+                    $sourceNdxs = array_values(array_map('intval', $decoded));
+                }
+            }
+
+            $summary = $this->summarizeExtractedJson($r['extracted_json'] ?? null);
+
+            $documents[] = [
+                'ndx' => (int) $r['id'],
+                'doc_type' => $docType,
+                'doc_type_label' => $typeMeta['name'] ?? $docType,
+                'confidence' => $r['confidence'] !== null
+                    ? round((float) $r['confidence'], 3)
+                    : null,
+                'status' => $statusKey,
+                'status_label' => $state['name'] ?? (string) $statusKey,
+                'status_style' => $state['stateStyle'] ?? 'concept',
+                'status_icon' => $state['icon'] ?? null,
+                'source_attachment_ndxs' => $sourceNdxs,
+                'summary' => $summary,
+                'extracted_json' => $r['extracted_json'] ?? null,
+                'applied_at' => $this->formatDateTime($r['applied_at'] ?? null),
+                'rejected_reason' => $r['rejected_reason'] ?? null,
+                'can_apply' => in_array($statusKey, [10, 20, 30], true),
+                'can_reject' => in_array($statusKey, [10, 20, 30], true),
+            ];
+        }
+
+        return [
+            'type' => 'extracted-documents',
+            'documents' => $documents,
+        ];
+    }
+
+    /**
+     * @return array<int, array{name: string, stateStyle: string, icon: ?string}>
+     */
+    private function loadExtractedDocStates(): array
+    {
+        if ($this->config === null) {
+            return [];
+        }
+        $cfg = $this->config->cfgItem('core.mail.extractedDocStates');
+        if ($cfg === null) {
+            return [];
+        }
+        $out = [];
+        foreach ($cfg as $key => $entry) {
+            $out[(int) $key] = [
+                'name' => (string) ($entry['name'] ?? $key),
+                'stateStyle' => (string) ($entry['stateStyle'] ?? 'concept'),
+                'icon' => $entry['icon'] ?? null,
+            ];
+        }
+        return $out;
+    }
+
+    /**
+     * @return array<string, array{name: string}>
+     */
+    private function loadExtractedDocTypes(): array
+    {
+        if ($this->config === null) {
+            return [];
+        }
+        $cfg = $this->config->cfgItem('core.mail.extractedDocTypes');
+        if ($cfg === null) {
+            return [];
+        }
+        $out = [];
+        foreach ($cfg as $key => $entry) {
+            $out[(string) $key] = ['name' => (string) ($entry['name'] ?? $key)];
+        }
+        return $out;
+    }
+
+    /**
+     * Krátké shrnutí extrahovaného JSON pro list view ("Faktura č. X, 12 500 Kč, dodavatel Y").
+     */
+    private function summarizeExtractedJson(mixed $raw): ?string
+    {
+        if ($raw === null || $raw === '') {
+            return null;
+        }
+        $decoded = json_decode((string) $raw, true);
+        if (!is_array($decoded)) {
+            return null;
+        }
+        // Common path z faktury default profilu
+        $fields = $decoded['fields'] ?? $decoded;
+        if (!is_array($fields)) {
+            return null;
+        }
+        $parts = [];
+        if (!empty($fields['invoice_number'])) {
+            $parts[] = 'č. ' . (string) $fields['invoice_number'];
+        }
+        if (!empty($fields['total_amount'])) {
+            $currency = (string) ($fields['currency'] ?? 'Kč');
+            $parts[] = number_format((float) $fields['total_amount'], 2, ',', ' ') . ' ' . $currency;
+        }
+        $supplier = $fields['supplier']['name'] ?? null;
+        if (is_string($supplier) && $supplier !== '') {
+            $parts[] = $supplier;
+        }
+        return $parts === [] ? null : implode(', ', $parts);
     }
 
     private function buildRawSourceTab(array $record): array

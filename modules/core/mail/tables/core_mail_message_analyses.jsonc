@@ -61,6 +61,26 @@
             "group": "identity"
         },
         {
+            "id": "profile",
+            "name": "Profile",
+            "name:cs": "Profil",
+            "name:en": "Profile",
+            "type": "int",
+            "nullable": true,
+            "reference": "core_mail_ai_profiles",
+            "group": "identity"
+        },
+        {
+            "id": "backend",
+            "name": "Backend",
+            "name:cs": "Backend",
+            "name:en": "Backend",
+            "type": "int",
+            "nullable": true,
+            "reference": "core_mail_ai_backends",
+            "group": "identity"
+        },
+        {
             "id": "analyzed_at",
             "name": "Analyzed at",
             "name:cs": "Čas analýzy",
@@ -172,6 +192,27 @@
             "name:en": "Duration (ms)",
             "type": "int",
             "nullable": true,
+            "group": "telemetry"
+        },
+        {
+            "id": "cost_usd",
+            "name": "Cost (USD)",
+            "name:cs": "Cena (USD)",
+            "name:en": "Cost (USD)",
+            "type": "numeric",
+            "precision": 10,
+            "scale": 6,
+            "nullable": true,
+            "group": "telemetry"
+        },
+        {
+            "id": "extracted_document_count",
+            "name": "Extracted documents",
+            "name:cs": "Extrahovaných dokumentů",
+            "name:en": "Extracted documents",
+            "type": "int",
+            "nullable": false,
+            "default": 0,
             "group": "telemetry"
         },
 

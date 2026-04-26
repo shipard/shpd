@@ -17,6 +17,7 @@ use Shipard\Core\Module\ModuleLoader;
 use Shipard\Core\Module\ModuleResolver;
 use Shipard\Core\Security\DsSecretCipher;
 use Shipard\Core\Utils\JsoncParser;
+use Shipard\Module\Core\Mail\AIAnalyzerProvisioner;
 use Shipard\Module\Core\Mail\MailRouterProvisioner;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -233,6 +234,7 @@ class DsUpgradeCommand extends Command
         $output->writeln('Upgrade complete. ' . $created . ' tables created, ' . $altered . ' tables altered, ' . $unchanged . ' tables unchanged.');
 
         $this->provisionMailRouter($dsConfig, $dsConnection, $output);
+        $this->provisionAiAnalyzer($dsConfig, $dsConnection, $output);
 
         $secretsWarnings = DsSecretCipher::healthCheck($dsConfig);
         foreach ($secretsWarnings as $warning) {
@@ -272,6 +274,42 @@ class DsUpgradeCommand extends Command
             $output->writeln("  <comment>[SKIP]   mailbox 'default' — {$mailbox['skipped_reason']}</comment>");
         } else {
             $output->writeln("  [OK]     mailbox 'default' (id={$mailbox['id']})");
+        }
+    }
+
+    private function provisionAiAnalyzer(
+        DataSourceConfig $dsConfig,
+        DataSourceConnection $dsConnection,
+        OutputInterface $output,
+    ): void {
+        $output->writeln('');
+        $output->writeln('Provisioning AI analyzer...');
+
+        $provisioner = new AIAnalyzerProvisioner($dsConnection);
+        $result = $provisioner->provision();
+
+        $user = $result['user'];
+        $backend = $result['backend'];
+        $profile = $result['profile'];
+
+        $userTag = $user['created'] ? '[CREATE]' : '[OK]    ';
+        $output->writeln("  {$userTag} user '_ai_analyzer' (id={$user['id']})");
+
+        if ($backend['created']) {
+            $output->writeln("  [CREATE] backend 'default' (id={$backend['id']})");
+            $output->writeln("           <comment>API key not set — run 'bin/shpd-ds ai-analyzer-set-key' to enable.</comment>");
+        } elseif (isset($backend['skipped_reason'])) {
+            $output->writeln("  <comment>[SKIP]   backend 'default' — {$backend['skipped_reason']}</comment>");
+        } else {
+            $output->writeln("  [OK]     backend 'default' (id={$backend['id']})");
+        }
+
+        if ($profile['created']) {
+            $output->writeln("  [CREATE] profile 'czech_invoices' (id={$profile['id']})");
+        } elseif (isset($profile['skipped_reason'])) {
+            $output->writeln("  <comment>[SKIP]   profile 'czech_invoices' — {$profile['skipped_reason']}</comment>");
+        } else {
+            $output->writeln("  [OK]     profile 'czech_invoices' (id={$profile['id']})");
         }
     }
 }

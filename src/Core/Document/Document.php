@@ -24,6 +24,23 @@ abstract class Document
     {
     }
 
+    /**
+     * Hook běžící uvnitř save transakce, PO INSERT/UPDATE hlavičky i child rows,
+     * ale PŘED commitem. Použít, když má vedlejší efekt (např. UPDATE jiné
+     * tabulky odvozené z nově uloženého stavu) zůstat atomický s persistem —
+     * pokud zde dojde k výjimce, TableGateway transakci roluje zpět.
+     *
+     * Stav DB v tomto okamžiku obsahuje právě uložené řádky, takže lze
+     * spolehlivě dotazovat sourozence vč. tohoto.
+     */
+    public function afterPersist(array $data): void
+    {
+    }
+
+    /**
+     * Hook běžící PO commitu. Vhodné pro idempotentní vedlejší efekty, které
+     * nemají závislost na atomicitě (logování, posílání notifikací, atd.).
+     */
     public function afterSave(array $data): void
     {
     }

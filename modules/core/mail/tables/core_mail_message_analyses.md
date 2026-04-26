@@ -4,8 +4,8 @@ Historie AI analýz došlých zpráv. Vztah 1:N na [core_mail_incoming_messages]
 — každá zpráva může mít více pokusů o analýzu (první pokus selhal, druhý uspěl
 s upraveným promptem; znovu analyzováno po upgradu modelu apod.).
 
-**Fáze 1 tabulku pouze zakládá** — CRUD funguje z CLI a testů, AI služba ještě
-neexistuje (přijde ve Fázi 3).
+**Fáze 1** tabulku pouze zakládá. **Fáze 3a** přidává `profile`, `backend`,
+`cost_usd`, `extracted_document_count` — viz níže.
 
 ## Struktura
 
@@ -14,6 +14,8 @@ neexistuje (přijde ve Fázi 3).
 | Sloupec | Typ | Popis |
 |---|---|---|
 | `message` | int → `core_mail_incoming_messages`, NOT NULL | Zpráva, ke které analýza patří |
+| `profile` | int → `core_mail_ai_profiles` | Profil použitý při běhu (NULL u legacy záznamů z Fáze 1) |
+| `backend` | int → `core_mail_ai_backends` | Backend použitý při běhu (NULL u legacy záznamů z Fáze 1) |
 | `analyzed_at` | datetime, NOT NULL | Čas dokončení analýzy (start nebo konec — nastavuje AI pipeline) |
 | `status` | tinyint, default 1 | `1` = pending, `2` = success, `3` = failed |
 
@@ -40,6 +42,8 @@ neexistuje (přijde ve Fázi 3).
 | `tokens_input` | int | Počet vstupních tokenů (cost tracking) |
 | `tokens_output` | int | Počet výstupních tokenů |
 | `duration_ms` | int | Trvání volání v milisekundách |
+| `cost_usd` | numeric(10,6) | Self-reported cena volání v USD (analyzer ji počítá z provider price-listu) |
+| `extracted_document_count` | int, default 0 | Počet `core_mail_extracted_documents` vzniklých z tohoto běhu |
 
 ### Auditní pole (status)
 

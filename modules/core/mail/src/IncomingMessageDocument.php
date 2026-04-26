@@ -99,6 +99,12 @@ class IncomingMessageDocument extends Document
 
         $messageId = (int) $data['id'];
 
+        // Cascade: extracted documents (Fáze 3a — spec §2.1)
+        $this->db->query('DELETE FROM %n WHERE %n = %i', 'core_mail_extracted_documents', 'message', $messageId);
+
+        // Cascade: analysis claims (Fáze 3a — spec §2.4)
+        $this->db->query('DELETE FROM %n WHERE %n = %i', 'core_mail_analysis_claims', 'message', $messageId);
+
         // Cascade: smažeme analýzy (FK message → messages.id)
         $this->db->query('DELETE FROM %n WHERE %n = %i', 'core_mail_message_analyses', 'message', $messageId);
 

@@ -13,6 +13,7 @@ use Shipard\Api\Controller\FormController;
 use Shipard\Api\Controller\ViewerController;
 use Shipard\Api\Controller\AttachmentController;
 use Shipard\Api\Controller\MailController;
+use Shipard\Api\Controller\AnalysisController;
 use Shipard\Api\DataSourceResolver;
 use Shipard\Api\DocumentLoader;
 use Shipard\Api\FormLoader;
@@ -188,6 +189,7 @@ function dispatch(
 		'form'    => dispatchForm($route, $request, $tables, $db, $formRegistry ?? new FormRegistry(), $configRuntime, $modulesBasePath, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'viewer'  => dispatchViewer($route, $request, $viewerRegistry, $db, $configRuntime),
 		'mail'    => dispatchMail($route, $request, $auth, $tables, $db, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
+		'analysis' => dispatchAnalysis($route, $request, $auth, $tables, $db, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'openapi' => (new OpenApiController())->spec($auth, $openApiPublic, $tables, $baseUrl),
 		default   => Response::error('INTERNAL_ERROR', "Unknown controller: {$route->controller}", 500),
 	};
@@ -207,6 +209,31 @@ function dispatchMail(
 	return match ($route->action) {
 		'receiveIncoming' => $ctrl->receiveIncoming($auth, $request),
 		default           => Response::error('INTERNAL_ERROR', "Unknown mail action: {$route->action}", 500),
+	};
+}
+
+function dispatchAnalysis(
+	Route $route,
+	Request $request,
+	AuthContext $auth,
+	array $tables,
+	\Shipard\Core\Database\DataSourceConnection $db,
+	\Shipard\Api\ResolvedDataSource $resolved,
+	\Shipard\Core\Document\DocumentRegistry $documentRegistry,
+): Response {
+	$dsPath = $resolved->config->getDataSourceDir();
+	$ctrl = new AnalysisController($db, $resolved->config, $dsPath, $tables, $documentRegistry);
+	return match ($route->action) {
+		'queue'             => $ctrl->queue($auth, $request),
+		'claim'             => $ctrl->claim($auth, $request, (int) $route->id),
+		'payload'           => $ctrl->payload($auth, $request, (int) $route->id),
+		'attachmentContent' => $ctrl->attachmentContent($auth, $request, (int) $route->id, (int) $route->secondaryId),
+		'result'            => $ctrl->result($auth, $request, (int) $route->id),
+		'failed'            => $ctrl->failed($auth, $request, (int) $route->id),
+		'reanalyze'         => $ctrl->reanalyze($auth, $request, (int) $route->id),
+		'applyExtracted'    => $ctrl->applyExtracted($auth, $request, (int) $route->id),
+		'rejectExtracted'   => $ctrl->rejectExtracted($auth, $request, (int) $route->id),
+		default             => Response::error('INTERNAL_ERROR', "Unknown analysis action: {$route->action}", 500),
 	};
 }
 

@@ -44,6 +44,12 @@
             "name:en": "Source"
         },
         {
+            "id": "ai",
+            "name": "AI analysis",
+            "name:cs": "AI analýza",
+            "name:en": "AI analysis"
+        },
+        {
             "id": "status",
             "name": "Status",
             "name:cs": "Stav",
@@ -239,6 +245,38 @@
             "default": 1,
             "nullable": false,
             "group": "source"
+        },
+
+        // --- AI analysis ---
+
+        {
+            "id": "ai_analysis_enabled",
+            "name": "AI analysis enabled",
+            "name:cs": "AI analýza povolena",
+            "name:en": "AI analysis enabled",
+            "type": "boolean",
+            "nullable": true,
+            "group": "ai"
+        },
+        {
+            "id": "needs_reanalysis",
+            "name": "Needs re-analysis",
+            "name:cs": "Vyžaduje znovu-analýzu",
+            "name:en": "Needs re-analysis",
+            "type": "boolean",
+            "nullable": false,
+            "default": false,
+            "group": "ai"
+        },
+        {
+            "id": "profile_override",
+            "name": "Profile override",
+            "name:cs": "Override profilu",
+            "name:en": "Profile override",
+            "type": "int",
+            "nullable": true,
+            "reference": "core_mail_ai_profiles",
+            "group": "ai"
         },
 
         // --- audit ---

@@ -391,4 +391,123 @@ class RouterTest extends TestCase
 		$this->assertInstanceOf(Response::class, $result);
 		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
 	}
+
+	// Analysis routes (Fáze 3a)
+
+	public function testAnalysisQueueGet(): void
+	{
+		$result = $this->router->resolve('/api/v1/_mail/analysis/queue', 'GET');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'analysis', 'queue');
+	}
+
+	public function testAnalysisQueuePostNotAllowed(): void
+	{
+		$result = $this->router->resolve('/api/v1/_mail/analysis/queue', 'POST');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
+	}
+
+	public function testAnalysisClaimPost(): void
+	{
+		$result = $this->router->resolve('/api/v1/_mail/analysis/12345/claim', 'POST');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertSame('analysis', $result->controller);
+		$this->assertSame('claim', $result->action);
+		$this->assertSame(12345, $result->id);
+	}
+
+	public function testAnalysisClaimZeroNdxReturns404(): void
+	{
+		$result = $this->router->resolve('/api/v1/_mail/analysis/0/claim', 'POST');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('NOT_FOUND', $result->getPayload()['error']['code']);
+	}
+
+	public function testAnalysisPayloadGet(): void
+	{
+		$result = $this->router->resolve('/api/v1/_mail/analysis/42/payload', 'GET');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertSame('payload', $result->action);
+		$this->assertSame(42, $result->id);
+	}
+
+	public function testAnalysisAttachmentContentGet(): void
+	{
+		$result = $this->router->resolve('/api/v1/_mail/analysis/42/attachments/7/content', 'GET');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertSame('attachmentContent', $result->action);
+		$this->assertSame(42, $result->id);
+		$this->assertSame(7, $result->secondaryId);
+	}
+
+	public function testAnalysisResultPost(): void
+	{
+		$result = $this->router->resolve('/api/v1/_mail/analysis/42/result', 'POST');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertSame('result', $result->action);
+		$this->assertSame(42, $result->id);
+	}
+
+	public function testAnalysisFailedPost(): void
+	{
+		$result = $this->router->resolve('/api/v1/_mail/analysis/42/failed', 'POST');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertSame('failed', $result->action);
+		$this->assertSame(42, $result->id);
+	}
+
+	public function testAnalysisUnknownActionReturns404(): void
+	{
+		$result = $this->router->resolve('/api/v1/_mail/analysis/42/whatever', 'POST');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('NOT_FOUND', $result->getPayload()['error']['code']);
+	}
+
+	public function testMailMessagesReanalyzePost(): void
+	{
+		$result = $this->router->resolve('/api/v1/_mail/messages/42/reanalyze', 'POST');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertSame('analysis', $result->controller);
+		$this->assertSame('reanalyze', $result->action);
+		$this->assertSame(42, $result->id);
+	}
+
+	public function testMailMessagesReanalyzeGetNotAllowed(): void
+	{
+		$result = $this->router->resolve('/api/v1/_mail/messages/42/reanalyze', 'GET');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
+	}
+
+	public function testExtractedDocumentApplyPost(): void
+	{
+		$result = $this->router->resolve('/api/v1/_mail/extracted-documents/55/apply', 'POST');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertSame('analysis', $result->controller);
+		$this->assertSame('applyExtracted', $result->action);
+		$this->assertSame(55, $result->id);
+	}
+
+	public function testExtractedDocumentRejectPost(): void
+	{
+		$result = $this->router->resolve('/api/v1/_mail/extracted-documents/55/reject', 'POST');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertSame('rejectExtracted', $result->action);
+		$this->assertSame(55, $result->id);
+	}
+
+	public function testExtractedDocumentUnknownActionReturns404(): void
+	{
+		$result = $this->router->resolve('/api/v1/_mail/extracted-documents/55/whatever', 'POST');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('NOT_FOUND', $result->getPayload()['error']['code']);
+	}
+
+	public function testExtractedDocumentApplyGetNotAllowed(): void
+	{
+		$result = $this->router->resolve('/api/v1/_mail/extracted-documents/55/apply', 'GET');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
+	}
 }

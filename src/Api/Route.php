@@ -10,5 +10,6 @@ readonly class Route
 		public string $action,
 		public ?string $table = null,
 		public ?int $id = null,
+		public ?int $secondaryId = null,
 	) {}
 }

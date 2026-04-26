@@ -1,0 +1,271 @@
+{
+    "tableId": 308,
+    "name": "AI profiles",
+    "name:cs": "AI profily",
+    "name:en": "AI profiles",
+
+    "displayPattern": "{name}",
+
+    "docStates": {
+        "stateColumn": "docState",
+        "mainColumn": "docStateMain",
+        "cfgItem": "core.system.docStatesArchive"
+    },
+
+    "columnGroups": [
+        {
+            "id": "identity",
+            "name": "Identity",
+            "name:cs": "Identifikace",
+            "name:en": "Identity"
+        },
+        {
+            "id": "scope",
+            "name": "Scope",
+            "name:cs": "Záběr",
+            "name:en": "Scope"
+        },
+        {
+            "id": "prompt",
+            "name": "Prompt",
+            "name:cs": "Prompt",
+            "name:en": "Prompt"
+        },
+        {
+            "id": "schema",
+            "name": "Output schema",
+            "name:cs": "Výstupní schéma",
+            "name:en": "Output schema"
+        },
+        {
+            "id": "thresholds",
+            "name": "Thresholds",
+            "name:cs": "Prahy",
+            "name:en": "Thresholds"
+        },
+        {
+            "id": "flags",
+            "name": "Flags",
+            "name:cs": "Příznaky",
+            "name:en": "Flags"
+        },
+        {
+            "id": "status",
+            "name": "Status",
+            "name:cs": "Stav",
+            "name:en": "Status"
+        }
+    ],
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+
+        // --- identity ---
+
+        {
+            "id": "profile_id",
+            "name": "Profile code",
+            "name:cs": "Kód profilu",
+            "name:en": "Profile code",
+            "type": "varchar",
+            "length": 50,
+            "nullable": false,
+            "group": "identity"
+        },
+        {
+            "id": "name",
+            "name": "Name",
+            "name:cs": "Název",
+            "name:en": "Name",
+            "type": "varchar",
+            "length": 100,
+            "nullable": false,
+            "group": "identity"
+        },
+        {
+            "id": "backend",
+            "name": "Backend",
+            "name:cs": "Backend",
+            "name:en": "Backend",
+            "type": "int",
+            "nullable": false,
+            "reference": "core_mail_ai_backends",
+            "group": "identity"
+        },
+
+        // --- scope ---
+
+        {
+            "id": "supported_doc_types",
+            "name": "Supported doc types",
+            "name:cs": "Podporované typy dokumentů",
+            "name:en": "Supported doc types",
+            "type": "text",
+            "nullable": false,
+            "group": "scope"
+        },
+        {
+            "id": "language",
+            "name": "Language",
+            "name:cs": "Jazyk",
+            "name:en": "Language",
+            "type": "varchar",
+            "length": 5,
+            "nullable": false,
+            "default": "cs",
+            "group": "scope"
+        },
+
+        // --- prompt ---
+
+        {
+            "id": "prompt_version",
+            "name": "Prompt version",
+            "name:cs": "Verze promptu",
+            "name:en": "Prompt version",
+            "type": "varchar",
+            "length": 50,
+            "nullable": false,
+            "default": "v1.0.0",
+            "group": "prompt"
+        },
+        {
+            "id": "prompt_template",
+            "name": "Prompt template",
+            "name:cs": "Šablona promptu",
+            "name:en": "Prompt template",
+            "type": "longtext",
+            "nullable": false,
+            "group": "prompt"
+        },
+
+        // --- schema ---
+
+        {
+            "id": "output_schema",
+            "name": "Output schema",
+            "name:cs": "Výstupní schéma",
+            "name:en": "Output schema",
+            "type": "longtext",
+            "nullable": false,
+            "group": "schema"
+        },
+
+        // --- thresholds ---
+
+        {
+            "id": "confidence_thresholds",
+            "name": "Confidence thresholds",
+            "name:cs": "Prahy jistoty",
+            "name:en": "Confidence thresholds",
+            "type": "text",
+            "nullable": false,
+            "group": "thresholds"
+        },
+
+        // --- flags ---
+
+        {
+            "id": "is_default",
+            "name": "Default profile",
+            "name:cs": "Výchozí profil",
+            "name:en": "Default profile",
+            "type": "boolean",
+            "nullable": false,
+            "default": false,
+            "group": "flags"
+        },
+        {
+            "id": "is_active",
+            "name": "Active",
+            "name:cs": "Aktivní",
+            "name:en": "Active",
+            "type": "boolean",
+            "nullable": false,
+            "default": true,
+            "group": "flags"
+        },
+
+        // --- audit ---
+
+        {
+            "id": "created",
+            "name": "Created",
+            "name:cs": "Vytvořeno",
+            "name:en": "Created",
+            "type": "datetime",
+            "nullable": false,
+            "group": "status"
+        },
+        {
+            "id": "created_by",
+            "name": "Created by",
+            "name:cs": "Vytvořil",
+            "name:en": "Created by",
+            "type": "int",
+            "nullable": true,
+            "reference": "core_system_users",
+            "group": "status"
+        },
+        {
+            "id": "modified",
+            "name": "Modified",
+            "name:cs": "Změněno",
+            "name:en": "Modified",
+            "type": "datetime",
+            "nullable": false,
+            "group": "status"
+        },
+
+        // --- doc state (systémové) ---
+
+        {
+            "id": "docState",
+            "name": "Document state",
+            "name:cs": "Stav dokumentu",
+            "name:en": "Document state",
+            "type": "tinyint",
+            "default": 40,
+            "system": true
+        },
+        {
+            "id": "docStateMain",
+            "name": "Document state (sort)",
+            "name:cs": "Stav dokumentu (řazení)",
+            "name:en": "Document state (sort)",
+            "type": "tinyint",
+            "default": 3,
+            "system": true
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "unq_profile_id",
+            "type": "unique",
+            "columns": [
+                {"column": "profile_id"}
+            ]
+        },
+        {
+            "id": "idx_backend",
+            "type": "index",
+            "columns": [
+                {"column": "backend"}
+            ]
+        },
+        {
+            "id": "idx_is_default",
+            "type": "index",
+            "columns": [
+                {"column": "is_default"}
+            ]
+        }
+    ]
+}

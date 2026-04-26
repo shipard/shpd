@@ -102,6 +102,16 @@ class DataSourceConnection
         return $result;
     }
 
+    /** Fetch a single scalar value (first column of first row), or null. */
+    public function fetchSingle(mixed ...$args): mixed
+    {
+        $value = $this->connection->fetchSingle(...$args);
+        if ($value === false) {
+            return null;
+        }
+        return $this->normalizeValue($value);
+    }
+
     /** Fetch all rows as array of associative arrays. */
     public function fetchAll(mixed ...$args): array
     {

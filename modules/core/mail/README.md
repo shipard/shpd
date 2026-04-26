@@ -1,15 +1,21 @@
 # Modul: Pošta (core.mail)
 
-Modul spravuje e-mailovou komunikaci. Fáze 1 implementuje evidenci došlé pošty —
-schránky, příchozí zprávy a strukturu pro AI analýzy. Fáze 2a přidává HTTP
-endpoint pro příjem pošty z externí služby `shipard-mail-router`. Pozdější fáze
-přidají AI analyzátor a odeslanou poštu.
+Modul spravuje e-mailovou komunikaci.
+
+- **Fáze 1** — evidence došlé pošty (schránky, zprávy, struktura pro analýzy).
+- **Fáze 2a** — HTTP endpoint `POST /_mail/incoming` pro externí mail-router.
+- **Fáze 3a** — AI analýza došlých zpráv (extrakce dokumentů, pull-based protokol
+  pro externí analyzer, UI pro review extrahovaných dokumentů, akce "Znova
+  analyzovat").
+
+Pozdější fáze: aplikace extrahovaných dokumentů na cílové entity (Fáze 3c),
+další providers (Ollama, ...), odeslaná pošta.
 
 ## Závislosti
 
 - `core.system` — docState set (archivační), uživatelé
 - `core.attachments` — přílohy zpráv a uložený originál (`.eml`)
-- `base.persons` — budoucí matching odesílatele na osobu (Fáze 3)
+- `base.persons` — budoucí matching odesílatele na osobu
 
 ## Tabulky
 
@@ -19,39 +25,74 @@ přidají AI analyzátor a odeslanou poštu.
 | [core_mail_incoming_messages](tables/core_mail_incoming_messages.md) | Došlé zprávy |
 | [core_mail_message_analyses](tables/core_mail_message_analyses.md) | Historie AI analýz zpráv |
 | [core_mail_incoming_idempotency](tables/core_mail_incoming_idempotency.md) | Idempotency klíče pro `POST /_mail/incoming` (TTL 7 dní) |
+| [core_mail_extracted_documents](tables/core_mail_extracted_documents.md) | Kandidáti na business entity z AI analýzy (Fáze 3a) |
+| [core_mail_ai_backends](tables/core_mail_ai_backends.md) | Konfigurace AI providerů — `api_key` jako `encrypted_text` (Fáze 3a) |
+| [core_mail_ai_profiles](tables/core_mail_ai_profiles.md) | Prompty + JSON schémata + thresholdy per use-case (Fáze 3a) |
+| [core_mail_analysis_claims](tables/core_mail_analysis_claims.md) | Lease mechanismus pro pull protocol (Fáze 3a) |
 
 ## Zdrojové soubory
 
 | Soubor | Popis |
 |---|---|
-| [IncomingMessageDocument.php](src/IncomingMessageDocument.php) | Document třída pro došlé zprávy — validace, generování ID |
-| [MailboxDocument.php](src/MailboxDocument.php) | Document třída pro schránky — validace + invariant "max 1 `is_default` per DS" |
-| [IncomingMessagesForm.php](src/IncomingMessagesForm.php) | Formulář pro ruční pořízení a úpravu došlé zprávy |
-| [IncomingMessagesViewer.php](src/IncomingMessagesViewer.php) | Viewer pro seznam došlých zpráv |
-| [MailRouterProvisioner.php](src/MailRouterProvisioner.php) | Idempotentní bootstrap systémového uživatele `_mail_router` + default schránky |
-| [IdempotencyStore.php](src/IdempotencyStore.php) | Lookup/store pro idempotency klíče endpointu `/_mail/incoming` |
+| [IncomingMessageDocument.php](src/IncomingMessageDocument.php) | Document třída pro došlé zprávy — validace, generování ID, cascade delete |
+| [MailboxDocument.php](src/MailboxDocument.php) | Schránky — invariant "max 1 `is_default` per DS" |
+| [IncomingMessagesForm.php](src/IncomingMessagesForm.php) | Formulář pro ruční pořízení a úpravu zprávy |
+| [IncomingMessagesViewer.php](src/IncomingMessagesViewer.php) | Viewer pro seznam došlých zpráv + tab "Extrahované dokumenty" |
+| [MailRouterProvisioner.php](src/MailRouterProvisioner.php) | Bootstrap `_mail_router` + default schránky |
+| [IdempotencyStore.php](src/IdempotencyStore.php) | Lookup/store idempotency klíčů |
+| [AIBackendDocument.php](src/AIBackendDocument.php) | AI backend — šifrování `api_key` přes `DsSecretCipher` |
+| [AIProfileDocument.php](src/AIProfileDocument.php) | AI profil — JSON validace, `is_default` invariant |
+| [ExtractedDocumentDocument.php](src/ExtractedDocumentDocument.php) | Extrahovaný dokument — atomický auto-transition zprávy 30→40 v `afterPersist` |
+| [AIAnalyzerProvisioner.php](src/AIAnalyzerProvisioner.php) | Bootstrap `_ai_analyzer` + default backend + default profil |
+| [AnalysisClaimReaper.php](src/AnalysisClaimReaper.php) | Reaper expirovaných claimů |
 
 ## Konfigurace
 
 | Klíč | Soubor | Popis |
 |---|---|---|
-| `core.mail.primaryTypes` | [config/primaryTypes.jsonc](config/primaryTypes.jsonc) | Primární typy došlých zpráv (faktura, objednávka, …) |
-| `core.mail.docStatesIncoming` | [config/docStatesIncoming.jsonc](config/docStatesIncoming.jsonc) | Stavy životního cyklu došlé zprávy |
+| `core.mail.primaryTypes` | [config/primaryTypes.jsonc](config/primaryTypes.jsonc) | Primární typy došlých zpráv |
+| `core.mail.docStatesIncoming` | [config/docStatesIncoming.jsonc](config/docStatesIncoming.jsonc) | Stavy zprávy (10/20/30/40/70/80/90) |
+| `core.mail.extractedDocStates` | [config/extractedDocStates.jsonc](config/extractedDocStates.jsonc) | Stavy review extrahovaných dokumentů |
+| `core.mail.extractedDocTypes` | [config/extractedDocTypes.jsonc](config/extractedDocTypes.jsonc) | Typy extrahovaných dokumentů |
+
+## Default AI profil
+
+[profiles/default_czech_invoices.jsonc](profiles/default_czech_invoices.jsonc) — šablona, ze které
+`AIAnalyzerProvisioner` při `ds-upgrade` vytvoří první profil `czech_invoices`.
 
 ## API endpointy
 
 | Endpoint | Popis |
 |---|---|
-| `POST /api/v1/_mail/incoming` | Příjem došlé pošty z externí služby `shipard-mail-router`. Multipart upload (zpráva + raw `.eml` + 0..N příloh), autentizace přes `shpd_ak_` klíč systémového uživatele `_mail_router`, idempotence přes `X-Idempotency-Key` (TTL 7 dní). Kontrakt: [docs/mail/api-contract.md](../../../docs/mail/api-contract.md) |
+| `POST /api/v1/_mail/incoming` | Příjem došlé pošty z mail-routeru. Auth: `_mail_router`. |
+| `GET /api/v1/_mail/analysis/queue` | Fronta zpráv k analýze. Auth: `_ai_analyzer`. |
+| `POST /api/v1/_mail/analysis/{ndx}/claim` | Atomic claim. Vrací plaintext API klíč backendu (Cache-Control no-store). |
+| `GET /api/v1/_mail/analysis/{ndx}/payload` | Subject/body/sender + metadata příloh. Auth: claim token. |
+| `GET /api/v1/_mail/analysis/{ndx}/attachments/{att_ndx}/content` | Streamuje obsah přílohy. |
+| `POST /api/v1/_mail/analysis/{ndx}/result` | Uloží výsledek + extracted documents. |
+| `POST /api/v1/_mail/analysis/{ndx}/failed` | Failed analysis. retryable=true → 10, false → 70. |
+| `POST /api/v1/_mail/messages/{ndx}/reanalyze` | UI akce "Znova analyzovat". Auth: běžný uživatel. |
+| `POST /api/v1/_mail/extracted-documents/{ndx}/apply` | UI akce "Použít" — prochází přes `ExtractedDocumentDocument` hooky (auto-transition zprávy 30→40). |
+| `POST /api/v1/_mail/extracted-documents/{ndx}/reject` | UI akce "Zamítnout" — povinný `reason` v body. |
+
+Kontrakty: [docs/mail/api-contract.md](../../../docs/mail/api-contract.md).
 
 ## CLI příkazy
 
 | Příkaz | Popis |
 |---|---|
-| `bin/shpd-ds mail-router-bootstrap` | Idempotentně založí systémového uživatele `_mail_router` + výchozí schránku `default`. Volá se automaticky z `ds-upgrade`. |
-| `bin/shpd-ds mail-router-setup [--force] [--ip=X]` | Vygeneruje (nebo zrotuje) API klíč pro mail-router. |
-| `bin/shpd-ds mail-idempotency-prune [--days N]` | Vymaže idempotency klíče starší N dní (default 7). Spouštět z cronu 1×/den. |
+| `bin/shpd-ds mail-router-bootstrap` | Bootstrap `_mail_router` + default schránky. |
+| `bin/shpd-ds mail-router-setup [--force] [--ip=X]` | API klíč pro mail-router. |
+| `bin/shpd-ds mail-idempotency-prune [--days N]` | Prune idempotency klíčů (cron 1×/den). |
+| `bin/shpd-ds ai-analyzer-bootstrap` | Bootstrap `_ai_analyzer` + default backend + default profile. |
+| `bin/shpd-ds ai-analyzer-setup [--force] [--ip=X]` | API klíč pro AI analyzer. |
+| `bin/shpd-ds ai-analyzer-set-key --backend default --api-key sk-ant-...` | Nastaví/zrotuje API klíč backendu (šifruje přes `DsSecretCipher`). |
+| `bin/shpd-ds mail-analysis-reap` | Reaper expirovaných claimů (cron 1×/min). |
+
+`ai-analyzer-bootstrap` a `mail-router-bootstrap` se volají automaticky z `ds-upgrade`.
 
 ## Dokumentace
 
-- [docs/documentation.md](docs/documentation.md) — architektura modulu, datový tok, vztah k externím službám
+- [docs/documentation.md](docs/documentation.md) — Fáze 1+2a architektura
+- [docs/ai-analysis.md](docs/ai-analysis.md) — Fáze 3a: AI analýza, pull protokol, životní cyklus
+- [docs/ai-prompts.md](docs/ai-prompts.md) — Default prompt + guidelines pro customizaci

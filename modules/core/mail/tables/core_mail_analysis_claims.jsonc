@@ -1,0 +1,150 @@
+{
+    "tableId": 309,
+    "name": "Analysis claims",
+    "name:cs": "Rezervace analýz",
+    "name:en": "Analysis claims",
+
+    "displayPattern": "{message} — {analyzer_id}",
+
+    "columnGroups": [
+        {
+            "id": "identity",
+            "name": "Identity",
+            "name:cs": "Identifikace",
+            "name:en": "Identity"
+        },
+        {
+            "id": "lease",
+            "name": "Lease",
+            "name:cs": "Rezervace",
+            "name:en": "Lease"
+        },
+        {
+            "id": "release",
+            "name": "Release",
+            "name:cs": "Uvolnění",
+            "name:en": "Release"
+        }
+    ],
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+
+        // --- identity ---
+
+        {
+            "id": "message",
+            "name": "Message",
+            "name:cs": "Zpráva",
+            "name:en": "Message",
+            "type": "int",
+            "nullable": false,
+            "reference": "core_mail_incoming_messages",
+            "group": "identity"
+        },
+        {
+            "id": "analyzer_id",
+            "name": "Analyzer ID",
+            "name:cs": "ID analyzeru",
+            "name:en": "Analyzer ID",
+            "type": "varchar",
+            "length": 64,
+            "nullable": false,
+            "group": "identity"
+        },
+        {
+            "id": "claim_token",
+            "name": "Claim token",
+            "name:cs": "Token rezervace",
+            "name:en": "Claim token",
+            "type": "varchar",
+            "length": 64,
+            "nullable": false,
+            "group": "identity"
+        },
+
+        // --- lease ---
+
+        {
+            "id": "claimed_at",
+            "name": "Claimed at",
+            "name:cs": "Zamluveno",
+            "name:en": "Claimed at",
+            "type": "datetime",
+            "nullable": false,
+            "group": "lease"
+        },
+        {
+            "id": "expires_at",
+            "name": "Expires at",
+            "name:cs": "Platnost do",
+            "name:en": "Expires at",
+            "type": "datetime",
+            "nullable": false,
+            "group": "lease"
+        },
+
+        // --- release ---
+
+        {
+            "id": "released",
+            "name": "Released",
+            "name:cs": "Uvolněno",
+            "name:en": "Released",
+            "type": "boolean",
+            "nullable": false,
+            "default": false,
+            "group": "release"
+        },
+        {
+            "id": "released_at",
+            "name": "Released at",
+            "name:cs": "Uvolněno v",
+            "name:en": "Released at",
+            "type": "datetime",
+            "nullable": true,
+            "group": "release"
+        },
+        {
+            "id": "release_reason",
+            "name": "Release reason",
+            "name:cs": "Důvod uvolnění",
+            "name:en": "Release reason",
+            "type": "varchar",
+            "length": 30,
+            "nullable": true,
+            "group": "release"
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "unq_claim_token",
+            "type": "unique",
+            "columns": [
+                {"column": "claim_token"}
+            ]
+        },
+        {
+            "id": "idx_message_active",
+            "type": "index",
+            "columns": [
+                {"column": "message"},
+                {"column": "released"}
+            ]
+        },
+        {
+            "id": "idx_expires_at",
+            "type": "index",
+            "columns": [
+                {"column": "expires_at"}
+            ]
+        }
+    ]
+}

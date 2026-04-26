@@ -184,7 +184,220 @@ Kontrakt je **stable**. Breaking změny vyžadují:
 
 Přidávání **volitelných polí** je vždy zpětně kompatibilní.
 
-## 9. Známé limity
+## 9. Pull-based AI analyzer protokol (Fáze 3a)
+
+Druhá sada endpointů `/_mail/analysis/*` slouží externímu AI analyzeru
+(samostatný daemon, viz Fáze 3b). Auth: `Bearer shpd_ak_…` token systémového
+uživatele `_ai_analyzer` (vygeneruje `ai-analyzer-setup`). Endpointy modifikující
+state pak vyžadují navíc hlavičku `X-Claim-Token: ct_…`.
+
+### 9.1 `GET /_mail/analysis/queue`
+
+Query: `?limit=5&profile_id=czech_invoices` (oba volitelné, default `limit=5`).
+
+Response 200:
+```json
+{
+  "success": true,
+  "data": {
+    "messages": [
+      {
+        "ndx": 12345,
+        "received_at": "2026-04-26T10:00:00",
+        "subject": "Faktura č. 2026000123",
+        "sender_email": "accounts@example.com",
+        "attachment_count": 2,
+        "recommended_profile_ndx": 17,
+        "has_raw_source": true
+      }
+    ],
+    "total_available": 23
+  }
+}
+```
+
+Filtruje `docState=10`, `ai_analysis_enabled NOT FALSE`, bez aktivní claim.
+
+### 9.2 `POST /_mail/analysis/{ndx}/claim`
+
+Request body:
+```json
+{
+  "analyzer_id": "uuid-of-this-analyzer-instance",
+  "profile_ndx": 17,
+  "lease_seconds": 300
+}
+```
+
+`lease_seconds` se clampuje do rozsahu 60–900 s (default 300). Atomicky:
+`SELECT … FOR UPDATE` na zprávu, ověř docState=10 a žádná aktivní claim,
+INSERT claims, UPDATE docState→20, decrypt `backend.api_key`.
+
+Response 200:
+```json
+{
+  "success": true,
+  "data": {
+    "claim_token": "ct_abc123…",
+    "expires_at": "2026-04-26T10:05:00",
+    "profile": {
+      "profile_ndx": 17,
+      "profile_id": "czech_invoices",
+      "prompt_version": "v1.0.0",
+      "prompt_template": "…",
+      "output_schema": { },
+      "supported_doc_types": ["invoiceReceived", "creditNote"],
+      "language": "cs",
+      "confidence_thresholds": { "ready": 0.9, "review": 0.6 }
+    },
+    "backend": {
+      "backend_ndx": 5,
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-5",
+      "api_key": "sk-ant-…",
+      "base_url": null,
+      "max_tokens": 4096,
+      "temperature": 0.0
+    }
+  }
+}
+```
+
+Response headers: `Cache-Control: no-store, no-cache, must-revalidate`,
+`Pragma: no-cache`. Plaintext API klíč žije v paměti analyzeru jen po dobu
+zpracování zprávy.
+
+Chybové kódy: `404 NOT_FOUND`, `409 INVALID_STATE` (docState != 10),
+`409 ALREADY_CLAIMED`, `409 NO_PROFILE`, `409 NO_BACKEND`, `409 BACKEND_KEY_MISSING`,
+`500 SECRETS_UNAVAILABLE`, `500 BACKEND_KEY_CORRUPTED`, `500 INTERNAL_ERROR`
+(generická hláška, detail jen v server-side logu — spec §10 dec.2).
+
+### 9.3 `GET /_mail/analysis/{ndx}/payload`
+
+Headers: `X-Claim-Token: ct_…`.
+
+Response: `subject`, `sender_email`, `sender_name`, `body_plain`, `body_html`,
+`received_at` + pole `attachments[]` s metadaty (bez obsahu). `raw_source_attachment`
+je z listu vyloučen — analyzer pracuje s rozparsovanými přílohami, ne se .eml.
+
+### 9.4 `GET /_mail/analysis/{ndx}/attachments/{att_ndx}/content`
+
+Headers: `X-Claim-Token`. Streamuje binární obsah jedné přílohy.
+Response headers: `Content-Type` z attachment metadat, `Content-Disposition: attachment`,
+`Cache-Control: no-store`. `raw_source_attachment` je explicitně blokovaný (404).
+
+### 9.5 `POST /_mail/analysis/{ndx}/result`
+
+Headers: `X-Claim-Token`. Request body:
+```json
+{
+  "model_name": "claude-sonnet-4-5",
+  "model_version": "20260101",
+  "prompt_version": "v1.0.0",
+  "profile_ndx": 17,
+  "backend_ndx": 5,
+  "tokens_input": 4500,
+  "tokens_output": 1200,
+  "duration_ms": 12340,
+  "cost_usd": 0.0234,
+  "overall_confidence": 0.92,
+  "analysis_json": { },
+  "extracted_documents": [
+    {
+      "doc_type": "invoiceReceived",
+      "source_attachment_ndxs": [456],
+      "extracted_json": { },
+      "confidence": 0.94
+    }
+  ]
+}
+```
+
+Server transakčně:
+
+1. INSERT `core_mail_message_analyses` (status=2 success).
+2. Pro každý extracted dokument: INSERT `core_mail_extracted_documents` se
+   `status` určeným z `confidence` vs `profile.confidence_thresholds`.
+3. UPDATE claims SET `released=1, release_reason='result'`.
+4. UPDATE messages SET `docState=30` (Analyzovaná) — nebo `docState=40` (Zpracovaná),
+   pokud `extracted_documents` je prázdný list.
+5. Vynuluj `needs_reanalysis`.
+
+Response 201: `{ analysis_ndx, extracted_document_ndxs: [...] }`.
+
+### 9.6 `POST /_mail/analysis/{ndx}/failed`
+
+Headers: `X-Claim-Token`. Request body:
+```json
+{
+  "error_type": "ai_error | mime_error | timeout | config_error",
+  "error_message": "…",
+  "tokens_used": 123,
+  "retryable": true,
+  "model_name": "claude-sonnet-4-5",
+  "prompt_version": "v1.0.0"
+}
+```
+
+Server: INSERT failed `message_analyses` (status=3), uvolni claim
+(`release_reason='failed'`), přepni zprávu:
+
+- `retryable=true` → `docState=10` (vrátí se do queue)
+- `retryable=false` → `docState=70` (Chyba AI, manuální zásah)
+
+### 9.7 `POST /_mail/messages/{ndx}/reanalyze`
+
+UI akce, **jiný auth** — vyžaduje běžný uživatelský token (`shpd_st_…` nebo
+admin `shpd_ak_…`), ne `_ai_analyzer`. Request body:
+```json
+{
+  "profile_override_ndx": 42
+}
+```
+
+`profile_override_ndx` je volitelné. Server validuje:
+
+- Zpráva existuje a je v `docState ∈ {30, 70}` (jinak 409 INVALID_STATE).
+- Profile override (pokud zadán) existuje a `is_active=1`.
+
+Server v transakci:
+
+1. UPDATE `extracted_documents` SET `status=60 (superseded)` WHERE
+   `message=ndx AND status IN (10, 20, 30)`.  
+   Statusy 40 (applied) a 50 (rejected) zůstávají beze změny.
+2. UPDATE `messages` SET `docState=10`, `needs_reanalysis=1`, `profile_override`.
+
+Analyzer při dalším GET /queue zprávu uvidí včetně override profilu.
+
+### 9.8 `POST /_mail/extracted-documents/{ndx}/apply`
+
+UI akce "Použít" na extrahovaném dokumentu. Auth: běžný uživatelský token.
+Atomicky:
+
+1. Validuje, že dokument existuje a je v pending stavu (10/20/30).
+2. Prochází přes `ExtractedDocumentDocument::beforeSave` (audit pole) a
+   `afterPersist` (auto-transition zprávy 30→40 když všichni sourozenci
+   jsou applied/rejected/superseded).
+3. Vrací `{ ndx, status, message_ndx }`.
+
+Generický `PATCH /core_mail_extracted_documents/{id}` Document hooky obchází
+a tudíž **nesmí** být použit pro tuto akci — auto-transition by se nespustil.
+
+### 9.9 `POST /_mail/extracted-documents/{ndx}/reject`
+
+UI akce "Zamítnout". Request body: `{ "reason": "…" }` — povinné, neprázdné.
+Stejný transakční flow jako apply, navíc nastaví `rejected_reason`.
+
+### 9.10 Reaper expirovaných claimů
+
+CLI `bin/shpd-ds mail-analysis-reap` (cron 1×/min) vyčistí stale claimy:
+
+- Najde `released=0 AND expires_at < now()`.
+- Označí `released=1, release_reason='expired'`.
+- UPDATE messages SET `docState=10` WHERE `id=msg AND docState=20` (manuální
+  override admin má přednost).
+
+## 10. Známé limity
 
 - **Velikost message:** v Shipardu žádný tvrdý limit. Postfix v mail-routeru
   odřízne 25 MB dřív. Pro lokální konfiguraci nginx/PHP zvýšit `client_max_body_size`
@@ -193,3 +406,7 @@ Přidávání **volitelných polí** je vždy zpětně kompatibilní.
   může být těsný — konfigurovat v deploymentu, ne v kódu.
 - **Scope restrictions** na API klíče (omezit klíč jen na `/_mail/incoming`)
   zatím neexistuje — follow-up.
+- **Race condition při claim:** invariant "max jedna aktivní claim per zpráva"
+  vynucuje aplikační kód v `claim()` přes `SELECT … FOR UPDATE`. MariaDB neumí
+  partial unique index `(message) WHERE released=0`. Aktuální implementace
+  serializuje souběžné claim() přes řádek zprávy.

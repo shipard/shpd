@@ -1,6 +1,6 @@
 # Modul `mail` — Fáze 3a: AI analýza (shpd strana)
 
-**Status:** Draft k odsouhlasení
+**Status:** Odsouhlaseno (rozhodnutí v §10 potvrzena)
 **Cíl fáze:** Rozšířit shpd o podporu AI analýzy došlých zpráv. Nové
 tabulky pro extrahované dokumenty a AI konfiguraci, pull-based API
 endpointy pro externí analyzer, UI integraci (nový tab + akce "Znova
@@ -810,33 +810,68 @@ End-to-end v `tests/Integration/AnalysisEndpointTest.php`:
 
 ---
 
-## 10. Otevřené otázky
+## 10. Rozhodnutí k designu (potvrzená)
 
-1. **Per-attachment endpoint (§3.4) vs. vše v claim response.** Doporučuji
-   per-attachment (streamability, selective download). Potvrzení?
+1. ✓ **Per-attachment endpoint (§3.4)** — analyzer si stahuje přílohy
+   jednotlivě přes `GET /{ndx}/attachments/{att_ndx}/content`.
+   Streamable, selective download. Vše v claim response by bylo příliš
+   těžké.
 
-2. **API key v claim response (§3.2).** Alternativa: analyzer má vlastní
-   klíč v configu, shpd posílá jen provider/model name. Výhoda alternativy:
-   klíč necestuje v každém requestu. Nevýhoda: per-DS klíč nutí mít víc
-   klíčů na analyzeru (complication). Doporučuji: **zatím klíč v response**,
-   v pozdější verzi přejít na analyzer-side config s mapping DS → key alias.
+2. ✓ **API key v claim response (§3.2)** — MVP. Analyzer dostane plaintext
+   API key v každé claim response, drží ho v paměti pouze po dobu
+   zpracování zprávy.
 
-3. **Profile output_schema je v DB** — long JSON. Alternativa: v DB jen
-   reference na JSONC soubor v repo, schema se načítá z disku. Výhoda
-   alternativy: schema versioning v gitu, bez bolesti s upgrade DB.
-   Doporučuji: **v DB**, admin si může upravit per-DS bez git commitu.
+   **Bezpečnostní požadavky:**
+   - Claim endpoint MUSÍ vyžadovat HTTPS (nebo jen lokální HTTP, pokud
+     je analyzer na stejném hostu — vyžaduje konfigurační check)
+   - `AnalysisController::claim()` přidává hlavičky:
+     `Cache-Control: no-store, no-cache, must-revalidate`
+     `Pragma: no-cache`
+   - Plaintext klíč nesmí být v žádném log výstupu (ani DEBUG level)
 
-4. **Auto-transition 30 → 40** když poslední extracted doc zaplikován —
-   příjemné UX, ale spojený efekt. Alternativa: ruční přechod. Doporučuji
-   auto.
+   V pozdější verzi: analyzer-side config s mapping DS → key alias.
 
-5. **Claim lease default 300s (5 min).** Analyzer může žádat vyšší, ale
-   není to oboustranná dohoda — server má max (10 min?). Limit chce
-   přemýšlet (na velké maily se 20 PDFkami bude AI volání delší).
-   Doporučuji max 15 min, default 5 min, analyzer žádá vyšší při velkých
-   mailech.
+3. ✓ **Profile output_schema je v DB.** Admin může upravit per-DS bez git
+   commit. Žádné schema verzování v gitu — historie přes
+   `prompt_version` v `core_mail_message_analyses`.
 
-6. **UI pro editaci API klíče.** V MVP žádné UI (pouze CLI). Hodí se tam
-   mít placeholder v backend editoru? Ukázat "●●●●" se správným
-   dlouhodobým patternem pro password fields? Pro MVP **odložit** — je
-   to samostatný UX úkol.
+4. ✓ **Auto-transition 30 → 40.**
+
+   **Implementační detail:** trigger je explicitní hook
+   v `ExtractedDocumentDocument::afterSave()`. Když se status mění
+   na `applied`, `rejected`, nebo `superseded`, hook:
+   1. Načte všechny sourozence (extracted docs téže zprávy)
+   2. Pokud žádný není ve stavu `ready_to_apply`, `pending_review` ani
+      `low_confidence` → zpráva přechází 30 → 40
+   3. Přechod proběhne ve stejné transakci jako save (atomic)
+
+   Stav `ai_failed` (status 70) nebrání přechodu — admin se může
+   rozhodnout zprávu uzavřít i s neúspěšnou analýzou.
+
+5. ✓ **Claim lease 5/15 min.** Server akceptuje `lease_seconds` v rozsahu
+   60–900 s (1–15 min). Default 300 s (5 min). Analyzer si žádá delší
+   pro velké maily — konkrétní logika v PRD 3b.
+
+6. ✓ **UI pro editaci API klíče** — odloženo. V MVP pouze CLI
+   `ai-analyzer-set-key`. UI pattern pro password fields je samostatný
+   UX úkol, který přijde s editací backends z UI.
+
+---
+
+## 11. Prerekvizita — `ds-encrypted-secrets`
+
+Task `tasks/ds-encrypted-secrets.md` musí být dokončen **před** každým
+DS, ve kterém běží `mail-phase3a` migrace. Konkrétně každý DS musí mít:
+
+- `{ds_path}/secrets/secrets.key` existuje s permissions 0600
+- `DsSecretCipher` třída funkční
+- `encrypted_text` sloupcový typ registrovaný v schema parseru
+
+Ověření před spuštěním Task 1:
+
+```bash
+bin/shpd-ds ds-secrets-health
+```
+
+Pokud check selže, spustit `bin/shpd-ds ds-upgrade` pro existující DS
+(vytvoří chybějící secrets.key idempotentně).

@@ -5,19 +5,21 @@
     //
     // Stavový automat:
     //   Nová         → V analýze | Zpracovaná | Archiv | Trash
-    //   V analýze    → Analyzovaná | Nová  (nastavuje jen AI služba ve Fázi 3)
+    //   V analýze    → Analyzovaná | Nová | Chyba AI  (nastavuje pouze AI pipeline)
     //   Analyzovaná  → Zpracovaná | Nová | Archiv | Trash
     //   Zpracovaná   → Archiv | Trash
+    //   Chyba AI     → Nová (retry) | Zpracovaná | Archiv | Trash
     //   Archiv       → Nová | Trash
     //   Trash        → Nová
     //
     // Mapování na stávající stateStyle (viz docs/doc-states.md §6):
-    //   concept   — žlutá  — Nová
+    //   concept   — žlutá   — Nová
     //   edit      — oranžová — V analýze (zpráva je dočasně zamčená pro AI pipeline)
-    //   confirmed — modrá  — Analyzovaná (čeká na manuální potvrzení)
-    //   done      — zelená — Zpracovaná
-    //   archive   — šedá   — Archiv
-    //   trash     — černá  — Trash
+    //   confirmed — modrá   — Analyzovaná (čeká na manuální potvrzení)
+    //   done      — zelená  — Zpracovaná
+    //   error     — červená — Chyba AI (analyzer permanentně selhal)
+    //   archive   — šedá    — Archiv
+    //   trash     — černá   — Trash
 
     "10": {
         "stateName": "New",
@@ -76,6 +78,22 @@
         "readOnly": 1,
         "closeForm": 1,
         "goto": [80, 90]
+    },
+
+    "70": {
+        "stateName": "AI error",
+        "stateName:cs": "Chyba AI",
+        "stateName:en": "AI error",
+        "actionName": "Mark as AI error",
+        "actionName:cs": "Označit jako chybu AI",
+        "actionName:en": "Mark as AI error",
+        "stateStyle": "error",
+        "mainState": 7,
+        "viewGroup": "active",
+        "closeForm": 0,
+        // Permanentní chyba AI analyzeru (např. corrupted PDF). Vyžaduje manuální
+        // zásah — admin může restartovat (10), zpracovat ručně (40) nebo archivovat.
+        "goto": [10, 40, 80, 90]
     },
 
     "80": {

@@ -17,7 +17,11 @@
         "core_mail_mailboxes",
         "core_mail_incoming_messages",
         "core_mail_message_analyses",
-        "core_mail_incoming_idempotency"
+        "core_mail_incoming_idempotency",
+        "core_mail_extracted_documents",
+        "core_mail_ai_backends",
+        "core_mail_ai_profiles",
+        "core_mail_analysis_claims"
     ],
 
     "viewers": [
@@ -47,6 +51,18 @@
         {
             "table": "core_mail_incoming_messages",
             "class": "Shipard\\Module\\Core\\Mail\\IncomingMessageDocument"
+        },
+        {
+            "table": "core_mail_ai_backends",
+            "class": "Shipard\\Module\\Core\\Mail\\AIBackendDocument"
+        },
+        {
+            "table": "core_mail_ai_profiles",
+            "class": "Shipard\\Module\\Core\\Mail\\AIProfileDocument"
+        },
+        {
+            "table": "core_mail_extracted_documents",
+            "class": "Shipard\\Module\\Core\\Mail\\ExtractedDocumentDocument"
         }
     ],
 
@@ -58,6 +74,14 @@
         {
             "id": "core.mail.docStatesIncoming",
             "file": "config/docStatesIncoming.jsonc"
+        },
+        {
+            "id": "core.mail.extractedDocStates",
+            "file": "config/extractedDocStates.jsonc"
+        },
+        {
+            "id": "core.mail.extractedDocTypes",
+            "file": "config/extractedDocTypes.jsonc"
         }
     ]
 }

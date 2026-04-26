@@ -55,6 +55,14 @@ Pár (`target_table_id`, `target_row`) je polymorfní FK — aplikační kód ho
 |---|---|---|
 | `source_type` | tinyint, default 1 | Způsob vzniku zprávy: `1` = manuální pořízení, `2` = e-mail (mail-router), `3` = API, `4` = scan. Ve Fázi 1 jsou všechny testovací i ručně pořízené zprávy `source_type = 1`. |
 
+### AI analýza (ai)
+
+| Sloupec | Typ | Popis |
+|---|---|---|
+| `ai_analysis_enabled` | boolean (nullable) | Override per zpráva. `NULL` = zděděno z DS-default (zpracovat); `true`/`false` = explicitní přepis. |
+| `needs_reanalysis` | boolean, default false | Příznak nastavený akcí "Znova analyzovat" — zapne se po reanalyze hooku, vypne se při dalším úspěšném `result`. |
+| `profile_override` | int → `core_mail_ai_profiles` | Pro ad-hoc znovu-analýzu s jiným profilem. NULL = použít default profil DS. |
+
 ### Stav (status)
 
 | Sloupec | Typ | Popis |

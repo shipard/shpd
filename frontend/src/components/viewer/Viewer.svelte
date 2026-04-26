@@ -1,5 +1,5 @@
 <script>
-  import { get } from '../../api/client.js';
+  import { get, post } from '../../api/client.js';
   import ViewerRow from './ViewerRow.svelte';
   import ViewerDetail from './ViewerDetail.svelte';
   import ViewerToolbar from './ViewerToolbar.svelte';
@@ -177,6 +177,12 @@
     }
   }
 
+  // --- Reanalyze dialog state ---
+  let reanalyzeDialogOpen = $state(false);
+  let reanalyzeProfileNdx = $state('');
+  let reanalyzeProfiles = $state([]);
+  let reanalyzeSubmitting = $state(false);
+
   function handleToolbarAction(actionId) {
     if (actionId === 'create') {
       editRecordId = null;
@@ -184,6 +190,49 @@
     } else if (actionId === 'edit' && selectedRowId != null) {
       editRecordId = selectedRowId;
       formOpen = true;
+    } else if (actionId === 'reanalyze' && selectedRowId != null) {
+      // Najdi action a vytáhni z meta.profiles seznam profilů.
+      const action = (toolbarActions ?? []).find(a => a.id === 'reanalyze');
+      reanalyzeProfiles = action?.meta?.profiles ?? [];
+      reanalyzeProfileNdx = '';
+      reanalyzeDialogOpen = true;
+    }
+  }
+
+  async function submitReanalyze() {
+    if (selectedRowId == null || reanalyzeSubmitting) return;
+    reanalyzeSubmitting = true;
+    try {
+      const body = {};
+      if (reanalyzeProfileNdx !== '' && Number(reanalyzeProfileNdx) > 0) {
+        body.profile_override_ndx = Number(reanalyzeProfileNdx);
+      }
+      const result = await post(`/_mail/messages/${selectedRowId}/reanalyze`, body);
+      if (result?.success) {
+        reanalyzeDialogOpen = false;
+        // Refresh detail i list — zpráva mohla změnit stav
+        pageNumber = 0;
+        fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, 0);
+        fetchDetail(selectedRowId);
+      } else {
+        alert('Nepodařilo se restartovat analýzu: ' + (result?.error?.message ?? 'neznámá chyba'));
+      }
+    } finally {
+      reanalyzeSubmitting = false;
+    }
+  }
+
+  function closeReanalyzeDialog() {
+    if (reanalyzeSubmitting) return;
+    reanalyzeDialogOpen = false;
+  }
+
+  function handleDetailRefresh() {
+    if (selectedRowId != null) {
+      fetchDetail(selectedRowId);
+      // Také refresh list — apply/reject mohlo přepnout stav zprávy 30→40
+      pageNumber = 0;
+      fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, 0);
     }
   }
 
@@ -313,7 +362,7 @@
     <!-- Right panel: detail -->
     <div class="shpd-viewer__detail-panel">
       {#if selectedRowId != null}
-        <ViewerDetail {detail} loading={detailLoading} />
+        <ViewerDetail {detail} loading={detailLoading} onRefresh={handleDetailRefresh} />
       {:else}
         <div class="shpd-viewer__detail-empty">
           Vyberte záznam
@@ -322,6 +371,46 @@
     </div>
   </div>
 </div>
+
+<!-- Reanalyze dialog -->
+{#if reanalyzeDialogOpen}
+  <div class="shpd-modal-overlay" onclick={closeReanalyzeDialog} role="presentation">
+    <div
+      class="shpd-modal"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => e.key === 'Escape' && closeReanalyzeDialog()}
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+    >
+      <div class="shpd-modal__header">
+        <h3>Znovu analyzovat zprávu</h3>
+        <button type="button" class="shpd-modal__close" onclick={closeReanalyzeDialog} aria-label="Zavřít">×</button>
+      </div>
+      <div class="shpd-modal__body">
+        <p>Spustit AI analýzu znovu? Existující extrahované dokumenty ve stavech
+        <em>K použití / Čeká na review / Nízká jistota</em> budou označeny jako nahrazené.
+        Dokumenty, které jste již použili nebo zamítli, zůstanou beze změny.</p>
+
+        <label class="shpd-reanalyze__label">
+          Profil (volitelné — výchozí ponechá DS-default):
+          <select class="shpd-reanalyze__input" bind:value={reanalyzeProfileNdx}>
+            <option value="">— výchozí profil DS —</option>
+            {#each reanalyzeProfiles as p (p.ndx)}
+              <option value={String(p.ndx)}>{p.name} ({p.profile_id})</option>
+            {/each}
+          </select>
+        </label>
+      </div>
+      <div class="shpd-modal__footer">
+        <button type="button" onclick={closeReanalyzeDialog} disabled={reanalyzeSubmitting}>Zrušit</button>
+        <button type="button" class="shpd-reanalyze__submit" onclick={submitReanalyze} disabled={reanalyzeSubmitting}>
+          {reanalyzeSubmitting ? 'Spouštím…' : 'Spustit analýzu'}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   .shpd-viewer {
@@ -464,6 +553,114 @@
   .shpd-viewer__status--end {
     opacity: 0.6;
     font-style: italic;
+  }
+
+  /* Reanalyze dialog */
+  .shpd-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  }
+
+  .shpd-modal {
+    background: var(--shpd-color-bg);
+    border-radius: var(--shpd-radius-md);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    max-width: 520px;
+    width: calc(100% - 40px);
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .shpd-modal__header {
+    padding: var(--shpd-space-md);
+    border-bottom: 1px solid var(--shpd-color-border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .shpd-modal__header h3 {
+    margin: 0;
+    font-size: var(--shpd-font-size-md);
+    font-weight: 600;
+  }
+
+  .shpd-modal__close {
+    border: none;
+    background: none;
+    font-size: 1.4rem;
+    cursor: pointer;
+    color: var(--shpd-color-text-secondary);
+    padding: 0;
+    width: 24px;
+    height: 24px;
+  }
+
+  .shpd-modal__body {
+    padding: var(--shpd-space-md);
+    overflow-y: auto;
+    flex: 1;
+    font-size: var(--shpd-font-size-sm);
+    line-height: 1.5;
+  }
+
+  .shpd-modal__footer {
+    padding: var(--shpd-space-md);
+    border-top: 1px solid var(--shpd-color-border);
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--shpd-space-sm);
+  }
+
+  .shpd-modal__footer button {
+    padding: 6px 14px;
+    border: 1px solid var(--shpd-color-border);
+    border-radius: var(--shpd-radius-sm);
+    background: var(--shpd-color-bg);
+    color: var(--shpd-color-text);
+    cursor: pointer;
+    font-size: var(--shpd-font-size-sm);
+  }
+
+  .shpd-modal__footer button:hover:not(:disabled) {
+    background: var(--shpd-color-bg-secondary);
+  }
+
+  .shpd-modal__footer button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .shpd-reanalyze__submit {
+    background: var(--shpd-color-primary) !important;
+    color: white !important;
+    border-color: var(--shpd-color-primary) !important;
+  }
+
+  .shpd-reanalyze__label {
+    display: block;
+    margin-top: var(--shpd-space-md);
+    font-weight: 500;
+  }
+
+  .shpd-reanalyze__input {
+    display: block;
+    margin-top: 6px;
+    padding: 6px 10px;
+    border: 1px solid var(--shpd-color-border);
+    border-radius: var(--shpd-radius-sm);
+    min-width: 280px;
+    max-width: 100%;
+    font-family: inherit;
+    font-size: var(--shpd-font-size-sm);
+    background: var(--shpd-color-bg);
+    color: var(--shpd-color-text);
   }
 
   /* Spinner */

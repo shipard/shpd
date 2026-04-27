@@ -94,14 +94,33 @@ analýz.
 
 ### Iterativní ladění promptu
 
-1. Nech analyzer projet existující sadu zpráv s aktuálním promptem (read-only,
-   neaplikuj výsledky).
-2. Manuálně review confidence + extracted fields proti groundtruth.
-3. Uprav `prompt_template`, bumpni `prompt_version`.
-4. V UI klikni "Znova analyzovat" na vybraných zprávách — vznikne nový run,
-   staré extracted_documents se označí `superseded`, applied/rejected zůstávají.
-5. Porovnej kvalitu před / po (`message_analyses.prompt_version` umožňuje
+Workflow pro ladění promptu z JSONC šablony v repu (zdroj pravdy pro
+default profil):
+
+1. Uprav `modules/core/mail/profiles/default_czech_invoices.jsonc` —
+   `prompt_template`, případně `output_schema`, `confidence_thresholds`,
+   `supported_doc_types`, `language`.
+2. Bumpni `prompt_version` (semver, např. `v1.1.0` → `v1.2.0`).
+3. Commit do gitu, deploy.
+4. Z DS adresáře spusť reload do DB:
+   ```
+   bin/shpd-ds ai-profile-reload [--dry-run]
+   ```
+   - `--dry-run` ukáže, co se změní, bez zápisu.
+   - Bez `--force` příkaz odmítne stejnou nebo nižší verzi šablony než v DB
+     (ochrana proti náhodnému downgrade nebo přepisu admin tweaků se
+     zapomenutým bumpem).
+   - `--force` přepíše i při stejné/nižší verzi.
+   - Reload **nepřepisuje** `name`, `is_default`, `is_active`, `backend` —
+     admin si je může lokálně upravit.
+5. V UI klikni "Znova analyzovat" na vybraných zprávách — vznikne nový run,
+   staré `extracted_documents` se označí `superseded`, applied/rejected
+   zůstávají. Případně re-queue přes SQL.
+6. Porovnej kvalitu před / po (`message_analyses.prompt_version` umožňuje
    filtrovat).
+
+Analyzer čte prompt z DB při každém claimu, takže reload neovlivní právě
+běžící zpracování — promítne se až do nových claimů po reload.
 
 ### Jinak vybraný backend per profil
 

@@ -21,7 +21,7 @@ class AIAnalyzerProvisioner
     public const ANALYZER_LOGIN = '_ai_analyzer';
     public const DEFAULT_BACKEND_ID = 'default';
     public const DEFAULT_PROFILE_ID = 'czech_invoices';
-    private const DEFAULT_PROFILE_TEMPLATE = __DIR__ . '/../profiles/default_czech_invoices.jsonc';
+    public const DEFAULT_PROFILE_TEMPLATE = __DIR__ . '/../profiles/default_czech_invoices.jsonc';
 
     public function __construct(
         private readonly DataSourceConnection $db,
@@ -158,7 +158,7 @@ class AIAnalyzerProvisioner
             ];
         }
 
-        $template = $this->loadProfileTemplate();
+        $template = self::loadProfileTemplate();
         $now = date('Y-m-d H:i:s');
 
         $id = $this->db->insertRow('core_mail_ai_profiles', [
@@ -203,8 +203,8 @@ class AIAnalyzerProvisioner
      *     confidence_thresholds: array<string, float>
      * }
      */
-    protected function loadProfileTemplate(): array
+    public static function loadProfileTemplate(?string $templatePath = null): array
     {
-        return JsoncParser::parseFile(self::DEFAULT_PROFILE_TEMPLATE);
+        return JsoncParser::parseFile($templatePath ?? self::DEFAULT_PROFILE_TEMPLATE);
     }
 }

@@ -3,19 +3,17 @@
     // Tento soubor slouží jako šablona — `AIAnalyzerProvisioner` z něj vytvoří
     // řádek v `core_mail_ai_profiles` při prvním ds-upgrade. Pozdější editace
     // probíhá přímo v DB / UI a tento soubor se nepoužívá pro upsert.
-    //
-    // Prompt je cíleně jednoduchý a konzervativní; budeme ho iterativně ladit.
 
     "profile_id": "czech_invoices",
     "name": "České faktury (default)",
     "name:cs": "České faktury (default)",
     "name:en": "Czech invoices (default)",
     "language": "cs",
-    "prompt_version": "v1.0.0",
+    "prompt_version": "v1.1.0",
     "supported_doc_types": ["invoiceReceived", "creditNote", "other"],
     "confidence_thresholds": { "ready": 0.9, "review": 0.6 },
 
-    "prompt_template": "Jsi asistent pro zpracování došlé pošty českých firem. Pro každou přílohu zprávy rozhodni, zda jde o přijatou fakturu, dobropis nebo jiný dokument. U faktury extrahuj hlavičku (dodavatel, IČO, DIČ, č. faktury, var. symbol, data, celková částka, měna, způsob platby, č. účtu) a položky (popis, množství, MJ, cena, sazba DPH). U dobropisu navíc odkaz na opravovanou fakturu. Pole, která nelze určit, vynech (neuhaduj). Vrať JSON podle output_schema. confidence 0–1 vyjadřuje tvou jistotu kvality extrakce.",
+    "prompt_template": "Jsi asistent pro zpracování došlé pošty českých firem. Tvým úkolem je analyzovat přílohy e-mailové zprávy a extrahovat z nich strukturovaná data o přijatých dokladech (faktury, dobropisy).\n\nKONTEXT ZPRÁVY:\n- Předmět: {{ message.subject }}\n- Odesílatel: {{ message.sender_email }}{% if message.sender_name %} ({{ message.sender_name }}){% endif %}\n- Tělo zprávy: {{ message.body_plain }}\n\nPŘÍLOHY ({{ attachments|length }}):\n{% for att in attachments %}- #{{ att.ndx }}: {{ att.filename }} ({{ att.mime_type }}, {{ att.size_human }})\n{% endfor %}\n\nÚKOL:\nPro každou přílohu rozhodni, zda jde o přijatou fakturu (invoiceReceived), dobropis (creditNote) nebo jiný dokument (other). Z faktury/dobropisu extrahuj všechna pole, která jsi schopen identifikovat.\n\nPRAVIDLA:\n- Pole, která nelze určit, VYNECHEJ (neuhaduj, neimprovizuj). Lepší je chybějící pole než špatná hodnota.\n- Položky faktury (line_items) extrahuj pokud jsou na faktuře viditelné.\n- VAT breakdown (vat_breakdown) extrahuj pokud je rozpis DPH na faktuře uveden.\n- source_attachment_ndxs uvádí, ze kterých příloh dokument pochází (typicky jedna, ale ZIP může obsahovat více faktur).\n- confidence 0.0–1.0 vyjadřuje tvoji jistotu kvalitou extrakce. Použij vyšší hodnoty (0.9+) pro čisté, dobře čitelné dokumenty; nižší (0.5–0.8) pro skenované nebo poškozené.\n- Pokud žádná příloha není dokladem, vrať prázdné pole documents.\n- Reklamní e-maily, newslettery, potvrzení objednávek a jiné NE-doklady označ jako 'other' (nebo úplně vynech).\n\nFORMÁT ODPOVĚDI:\nVRAŤ POUZE JSON, žádný úvodní text, žádné markdown bloky. Struktura:\n\n{\n  \"overall_confidence\": 0.92,\n  \"documents\": [\n    {\n      \"doc_type\": \"invoiceReceived\",\n      \"source_attachment_ndxs\": [123],\n      \"confidence\": 0.95,\n      \"fields\": {\n        \"supplier\": {\n          \"name\": \"Dodavatel s.r.o.\",\n          \"ico\": \"12345678\",\n          \"dic\": \"CZ12345678\",\n          \"address\": \"Hlavní 1, 110 00 Praha 1\"\n        },\n        \"invoice_number\": \"2026000123\",\n        \"variable_symbol\": \"2026000123\",\n        \"issue_date\": \"2026-04-15\",\n        \"due_date\": \"2026-04-29\",\n        \"tax_date\": \"2026-04-15\",\n        \"total_amount\": 12500.00,\n        \"currency\": \"CZK\",\n        \"payment_method\": \"převodem\",\n        \"account_number\": \"1234567890/0100\",\n        \"iban\": \"CZ6508000000001234567890\",\n        \"vat_breakdown\": [\n          { \"rate\": 21, \"base\": 10330.58, \"vat\": 2169.42 }\n        ],\n        \"line_items\": [\n          { \"description\": \"Konzultace\", \"quantity\": 10, \"unit\": \"h\", \"unit_price\": 1033.06, \"vat_rate\": 21 }\n        ],\n        \"notes\": \"\"\n      }\n    }\n  ]\n}\n\nPole 'overall_confidence' a 'documents' JSOU VŽDY POVINNÁ na top-level, i když je documents prázdný seznam. Pokud žádný doklad neexistuje:\n\n{\n  \"overall_confidence\": 1.0,\n  \"documents\": []\n}\n\nNyní analyzuj přiložené dokumenty a vrať JSON.",
 
     "output_schema": {
         "$schema": "http://json-schema.org/draft-07/schema#",

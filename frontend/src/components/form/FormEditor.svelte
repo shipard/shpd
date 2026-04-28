@@ -2,7 +2,6 @@
   import { get, post, put } from '../../api/client.js';
   import FormTab from './FormTab.svelte';
   import AttachmentPanel from './AttachmentPanel.svelte';
-  import FormStateBadge from './FormStateBadge.svelte';
   import FormStateBar from './FormStateBar.svelte';
 
   let {
@@ -10,6 +9,8 @@
     recordId = null,
     onClose,
     onSaved,
+    onFormLoaded,
+    onDirtyChange,
     defaultData = {},
   } = $props();
 
@@ -22,6 +23,8 @@
   let loadError = $state(null);
   // currentId sleduje aktuální ID záznamu — může se změnit po uložení nového záznamu
   let currentId = $state(null);
+  // Snapshot dat po posledním načtení/uložení — slouží k detekci dirty stavu
+  let loadedDataSnapshot = $state(null);
 
   const formTitle = $derived(
     currentId != null
@@ -32,6 +35,49 @@
   const isDisabled = $derived(
     saving || recalculating || (formDef?.doc_states?.read_only ?? false)
   );
+
+  // Notifikuje rodiče (FormDialog) o aktuálním titulku a stavu — header modalu
+  // tak může zobrazit titulek a FormStateBadge.
+  $effect(() => {
+    if (formDef) {
+      onFormLoaded?.({
+        title: formTitle,
+        docStates: formDef.doc_states ?? null,
+      });
+    }
+  });
+
+  // Detekce dirty stavu — porovnání aktuálních dat se snapshotem po posledním
+  // načtení / uložení. ReadOnly formuláře nikdy nejsou dirty (uživatel nemůže nic změnit).
+  // Recalculate NEAKTUALIZUJE snapshot — přepočítaná data nejsou uložená v DB,
+  // takže změna spuštěná triggerem zachová dirty stav (uživatel musí Uložit).
+  const isDirty = $derived.by(() => {
+    if (!loadedDataSnapshot) return false;
+    if (formDef?.doc_states?.read_only) return false;
+    return !shallowEqual(formData, loadedDataSnapshot);
+  });
+
+  // Propagace dirty stavu do rodiče (FormDialog) — používá se při pokusu o zavření.
+  $effect(() => {
+    onDirtyChange?.(isDirty);
+  });
+
+  function shallowEqual(a, b) {
+    if (a === b) return true;
+    if (!a || !b) return false;
+    const keysA = Object.keys(a);
+    const keysB = Object.keys(b);
+    if (keysA.length !== keysB.length) return false;
+    for (const k of keysA) {
+      if (a[k] !== b[k]) {
+        // Speciální případ: null vs '' z formuláře — nepovažujeme za změnu.
+        // Server vrací null u nullable polí, formulář je interně reprezentuje jako ''.
+        if ((a[k] == null || a[k] === '') && (b[k] == null || b[k] === '')) continue;
+        return false;
+      }
+    }
+    return true;
+  }
 
   // ── Load ────────────────────────────────────────────────────────────────────
 
@@ -50,6 +96,8 @@
     // pak přepiš skuteČnými daty ze serveru (včetně defaultů pro nový záznam)
     const defaults = buildDefaultData(res.data.formDefinition);
     formData = res.data.data ? { ...defaults, ...res.data.data } : defaults;
+    // Snapshot dat — po načtení formulář není dirty
+    loadedDataSnapshot = { ...formData };
     activeTabId = formDef.tabs[0]?.id ?? null;
   }
 
@@ -84,6 +132,8 @@
     if (res?.success) {
       formDef = res.data.formDefinition;
       formData = res.data.data;
+      // Snapshot se NEAKTUALIZUJE — recalculate neukládá do DB, takže přepočítaná data
+      // jsou stále neuložená změna. Dirty stav zůstává true a uživatel musí explicitně Uložit.
       const tabIds = formDef.tabs.map(t => t.id);
       if (!tabIds.includes(activeTabId)) activeTabId = tabIds[0] ?? null;
     }
@@ -131,7 +181,10 @@
       if (res?.success) {
         onSaved?.(res.data);
         if (closeForm) {
-          onClose?.();
+          // Zavření obejde dirty check — data byla právě uložena. Bypass je nutný,
+          // protože Svelte 5 reaktivita je asynchronní a FormDialog ještě nevidí
+          // aktualizovaný isDirty stav.
+          onClose?.({ force: true });
         } else {
           currentId = res.data?.id ?? null;
           await loadForm(table, currentId);
@@ -168,7 +221,8 @@
       if (res?.success) {
         onSaved?.(res.data);
         if (closeForm) {
-          onClose?.();
+          // Zavření obejde dirty check — data byla právě uložena.
+          onClose?.({ force: true });
         } else {
           await loadForm(table, currentId);
         }
@@ -260,15 +314,6 @@
 
 <div class="shpd-form-editor">
 
-  <!-- Header -->
-  <div class="shpd-form-editor__header">
-    <button class="shpd-form-editor__back" onclick={onClose} aria-label="Zpět">←</button>
-    <h2 class="shpd-form-editor__title">{formTitle}</h2>
-    {#if formDef?.doc_states}
-      <FormStateBadge docStates={formDef.doc_states} />
-    {/if}
-  </div>
-
   <!-- Tab bar -->
   {#if formDef && formDef.tabs.length > 1}
     <div class="shpd-form-editor__tab-bar">
@@ -336,39 +381,12 @@
   .shpd-form-editor {
     display: flex;
     flex-direction: column;
-    height: 100%;
+    /* Vyplní celý dostupný prostor v Modal body. min-height: 0 je nutné,
+       aby se flex children mohly správně přepočítat při overflow. */
+    flex: 1;
+    min-height: 0;
     overflow: hidden;
     background: var(--shpd-color-bg);
-  }
-
-  .shpd-form-editor__header {
-    display: flex;
-    align-items: center;
-    gap: var(--shpd-space-md);
-    padding: var(--shpd-space-sm) var(--shpd-space-lg);
-    border-bottom: 1px solid var(--shpd-color-border);
-    flex-shrink: 0;
-  }
-
-  .shpd-form-editor__back {
-    background: none;
-    border: none;
-    font-size: var(--shpd-font-size-lg);
-    cursor: pointer;
-    color: var(--shpd-color-text-secondary);
-    padding: var(--shpd-space-xs);
-    border-radius: var(--shpd-radius-sm);
-  }
-  .shpd-form-editor__back:hover {
-    background: var(--shpd-color-bg-secondary);
-    color: var(--shpd-color-text);
-  }
-
-  .shpd-form-editor__title {
-    flex: 1;
-    font-size: var(--shpd-font-size-lg);
-    font-weight: 600;
-    margin: 0;
   }
 
   /* Tab bar */

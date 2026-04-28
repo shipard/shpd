@@ -84,7 +84,7 @@ Server vrací `FormDefinition` z endpointu `/_ui/form/{table}/meta`. Klient ji r
 | `table` | string | DB název tabulky |
 | `title` | string | Nadpis pro editaci existujícího záznamu |
 | `title_new` | string | Nadpis pro nový záznam |
-| `full_size` | bool | true = otevřít jako fullscreen overlay, false = modální dialog |
+| `full_size` | bool | true = velký modal (1200×900px) pro hlavní entity, false = malý modal (720px, výška dle obsahu) pro sub-záznamy |
 | `tabs` | Tab[] | Seznam tabů (min. 1) |
 | `doc_states` | DocStatesInfo \| null | Info o stavech; přítomno i pro nový záznam (výchozí stav 10) |
 
@@ -309,13 +309,42 @@ Klient zobrazí chyby u příslušných polí. Pokud je chybné pole na neaktivn
 
 ---
 
-## 9. fullSize flag — otevření formuláře
+## 9. fullSize flag — velikost modalu
 
-`FormDialog.svelte` nejdříve načte meta formuláře a zkontroluje `full_size`:
-- `true` → formulář se otevře jako fullscreen fixed overlay (`z-index: 500`)
-- `false` → formulář se otevře jako modální dialog
+`FormDialog.svelte` vždy renderuje formulář v Modal komponentě (centrovaný popup nad tmavým overlayem). `full_size` určuje pouze **velikost** modalu:
 
-Velké formuláře hlavních entit (Osoby, Faktury…) mají `full_size: true`. Sub-záznamy (Kontakt, Adresa…) mají `full_size: false`.
+- `true` → velký modal: šířka `1200px`, výška `min(900px, 90vh)`. Pro hlavní entity (Osoby, Faktury…).
+- `false` → malý modal: šířka `720px`, výška dle obsahu (max `90vh`). Pro sub-záznamy (Kontakt, Adresa…).
+
+### Chování modalu
+
+- **Header** — Modal vlastní header s titulkem (`formDef.title` / `formDef.title_new`), `FormStateBadge` (přes `headerExtra` snippet) a tlačítkem `×` vpravo nahoře. FormEditor vlastní header nemá.
+- **Body skroluje** — header a `FormStateBar` zůstávají fixní, skroluje pouze tělo formuláře.
+- **Zavření** — `Esc` nebo klik na overlay (mimo kartu modalu) nebo tlačítko `×`. Všechny tři způsoby volají stejný `onClose` callback.
+- **Body scroll lock** — modal blokuje scrollování stránky pod sebou.
+
+### Detekce neuložených změn (dirty state)
+
+FormEditor sleduje změny dat oproti snapshotu pořízenému při posledním načtení nebo uložení. Stav propaguje do FormDialogu přes `onDirtyChange` callback. Když je formulář dirty a uživatel se ho pokusí zavřít (Esc, klik na overlay, tlačítko `×`), zobrazí se nativní `window.confirm` s textem „Máte neuložené změny. Opravdu chcete zavřít formulář?". Tlačítka Uložit a stavová tlačítka kontrolu obcházejí — ta změny ukládají, ne ztrácejí.
+
+- **ReadOnly formuláře nikdy nejsou dirty** — uživatel nemůže nic změnit.
+- **Recalculate NEaktualizuje snapshot** — recalculate neukládá do DB, takže přepočítaná data jsou stále neuložená změna. Po triggeru je formulář dirty (server typicky přepočítá hodnoty) a uživatel musí změnu explicitně uložit. Pokud zavře bez uložení, confirm dialog ho upozorní.
+- **`null` vs `''`** — porovnání tyto dvě hodnoty považuje za rovné (server vrací `null` u nullable polí, formulář je interně reprezentuje jako `''`).
+- **Subtables** — každá instance FormDialogu (Osoba, Kontakt v Osobě) má vlastní dirty check. Otevřený subdialog Kontaktu sleduje změny svých polí nezávisle na rodičovské Osobě.
+
+### Force close — bypass dirty kontroly
+
+`FormDialog.handleClose` přijímá volitelný parametr `{ force?: boolean }`. Když je `force: true`, dirty kontrola se přeskočí. Používá se po úspěšném save + closeForm v stavovém přechodu (např. „V pořádku" u nového záznamu): FormEditor sám ví, že data jsou uložená, a confirm dialog je nežádoucí.
+
+Důvod existence tohoto mechanismu je timing Svelte reaktivity. Když FormEditor po uspěšném save aktualizuje snapshot, `isDirty` derived state se přepočítá až v dalším mikrotasku. Pokud by FormEditor okamžitě synchronně zavolal `onClose()`, FormDialog by ještě viděl starý `isDirty: true` a zobrazil by zbytečný confirm. `force: true` to obchází bez závislosti na pořadí reaktivních updatů.
+
+Modal komponenta (Esc, klik na overlay, `×`) volá `onClose()` bez parametru — tyto akce **mají** procházet dirty kontrolou. `force: true` posílá pouze FormEditor po vlastním úspěšném uložení.
+
+### Vrstvení modalů (Esc handling)
+
+`Modal.svelte` používá module-level stack otevřených modalů. Esc handler reaguje pouze na modal na vrcholu stacku. Bez tohoto by Esc v subdialogu Kontaktu zavřel současně Kontakt i nadřazenou Osobu (oba modaly poslouchají window keydown).
+
+Klik na overlay tento problém nemá — overlay každého modalu zachytí jen kliky na vlastní plochu. Tlačítko `×` je per-modal element. Esc je ale globální event, proto vyžaduje stack.
 
 ---
 
@@ -499,13 +528,14 @@ Labely a typy inputů se doplní z TableDefinition pokud chybí.
 
 | Komponenta | Popis |
 |------------|-------|
-| `FormDialog.svelte` | Orchestrátor — načte meta, rozhodne fullSize vs modal |
-| `FormEditor.svelte` | Hlavní shell: záhlaví + badge stavu, tab bar, obsah, toolbar |
+| `Modal.svelte` (ui/) | Generický modal: header s titulkem a `×`, tělo, overlay, body scroll lock, modal stack pro Esc handling. Volitelný `headerExtra` snippet pro badge, `width` a `height` props. |
+| `FormDialog.svelte` | Orchestrátor — načte meta, vybere velikost modalu (large/small), poskytuje header (titulek + badge), drží dirty stav, zobrazí confirm při zavření |
+| `FormEditor.svelte` | Hlavní shell: tab bar, obsah, toolbar (header je v Modal). Sleduje dirty stav (snapshot vs aktuální data), propaguje titulek/doc_states/dirty zpět do FormDialog přes callbacky `onFormLoaded` a `onDirtyChange` |
 | `FormTab.svelte` | Jeden tab — CSS Grid 4 sloupce |
 | `FormElement.svelte` | Renderer elementu; rekurzivní pro `group` |
 | `FormSubTable.svelte` | Editor sub-tabulky s CRUD |
 | `FormStateBar.svelte` | Spodní toolbar: Uložit + přechodová tlačítka |
-| `FormStateBadge.svelte` | Badge stavu v záhlaví |
+| `FormStateBadge.svelte` | Badge stavu v záhlaví Modalu |
 
 ---
 

@@ -163,14 +163,16 @@ Sidebar je flex column se třemi sekcemi:
 
 - **Header** (fixní) — logo „Shipard" + tlačítko pro sbalení/rozbalení
 - **Nav** (scrollovatelný, `flex: 1`) — navigační strom ze serveru
-- **Footer** (fixní) — jméno uživatele + tlačítko Odhlásit
+- **Footer** (fixní) — uživatelský panel s avatarem a jménem; klik otevře
+  dropdown s položkami **Nastavení účtu** a **Odhlásit**
 
 ### Sidebar — kolapsibilní
 
 Sidebar je kolapsibilní na úzký proužek (48px). Ve sbaleném stavu:
 
 - Navigační strom a logo jsou skryté
-- Ve footeru se zobrazí kruhový avatar s iniciálou uživatele
+- V patce zůstává jen kruhový avatar uzivatele; klik otevře dropdown menu
+  jako overlay vpravo od sidebaru
 - Při hoveru myší se sidebar rozbalí jako overlay (`position: absolute`, `z-index: 100`) na plnou šířku, aniž by posouval hlavní obsah
 - Po odjetí myší se sidebar zase sbalí
 
@@ -439,6 +441,93 @@ focus stavy) je v [`design-system.md`](design-system.md).
 - Soubory komponent: PascalCase (`LoginScreen.svelte`)
 - Soubory utilit/stores: camelCase (`auth.svelte.js`)
 - CSS třídy: `shpd-{component}` prefix
+
+### Dropdown / popover komponenty
+
+Dropdown menu (např. user menu v patce sidebaru) typicky implementují dva
+kódové vzorce: **toggle při kliku na trigger** a **close-on-outside přes
+document click listener registrovaný v `$effect`**. Tyhle dva vzorce spolu
+mají jednu nepříjemnou interakci, na které se dá lehce spálit.
+
+#### Past: zavírání menu z handleru položky uvnitř menu
+
+Nechci zavírat menu pomocí `closeMenu()` v handleru položky, která spouští
+asynchronní akci (logout, navigace, fetch). Špatně:
+
+```js
+function handleLogoutFromMenu() {
+  closeUserMenu();        // ❌ synchronně nastaví userMenuOpen = false
+  handleLogout();         // ...sem se může nedostat, viz níže
+}
+```
+
+Sekvence událostí:
+
+1. Click na položku v menu spustí handler.
+2. `closeUserMenu()` synchronně nastaví `userMenuOpen = false` a Svelte
+   reaktivně odmontuje `{#if userMenuOpen}` blok — položka (target eventu)
+   se stává detached elementem.
+3. Click event pokračuje bublat k document listeneru.
+4. Listener testírá `menuRoot.contains(e.target)` — detached element není
+   v DOMu, `contains()` vrátí **false**, listener spadne do větve
+   „klik mimo menu“.
+5. `$effect` cleanup během stejného microtasku odregistruje listener
+   a může zasáhnout do běhu následující asynchronní akce.
+
+Výsledek: menu zmizí, ale akce problému docálu z prvního kliku se ztratí.
+Druhý klik už funguje, protože běží s novým `$effect` cyklem.
+
+#### Řešení
+
+Pokud akce stejně změní kontext tak, že menu přestane existovat (logout,
+navigace pryč), `closeMenu()` se vůbec nevolá — celý sidebar / komponenta
+zmizí sám:
+
+```js
+function handleLogoutFromMenu() {
+  // Záměrně nezavíráme menu — sidebar zmizí sám,
+  // jakmile authStore.clearAuth() přepne na LoginScreen.
+  handleLogout();
+}
+```
+
+Pokud akce kontext nezmění (běžný případ), zavírám menu **až po dokončení
+akce**, ne předem:
+
+```js
+async function handleAction() {
+  await doSomething();
+  closeMenu();
+}
+```
+
+Nebo zavři menu **a počkej jeden tick** než spustíš další akci, aby se
+stihl render flush a click bubbling dokončily:
+
+```js
+function handleAction() {
+  closeMenu();
+  setTimeout(doSomething, 0);  // nebo queueMicrotask
+}
+```
+
+#### Robustní logout / fetch v handleru
+
+Asynchronní akce volané z handlerů, které změní auth state, by měly přežít
+i pád API volání. Příklad: `logout` musí úspět z perspektivy uživatele i když
+backend fetch selhal (token už neplatný, síť nedostupná atd.):
+
+```js
+async function handleLogout() {
+  try {
+    await logout();
+  } catch (err) {
+    console.warn('Logout API call failed (continuing):', err);
+  }
+  authStore.clearAuth();
+  onLogout?.();
+}
+```
 
 ---
 

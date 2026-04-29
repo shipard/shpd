@@ -39,9 +39,10 @@
   /* Sidebar — tmavá modrá ladící s brand primary
    * (Tmavší a sytější než #005089 samotná, aby aktivní položka
    *  v primary modré měla dostatek kontrastu vůči pozadí.) */
-  --shpd-color-bg-sidebar:        #00345c;
-  --shpd-color-bg-sidebar-hover:  rgb(255 255 255 / 0.08);
-  --shpd-color-bg-sidebar-border: rgb(255 255 255 / 0.10);
+  --shpd-color-bg-sidebar:          #00345c;
+  --shpd-color-bg-sidebar-elevated: #014b80; /* dropdown / popover nad sidebarem */
+  --shpd-color-bg-sidebar-hover:    rgb(255 255 255 / 0.08);
+  --shpd-color-bg-sidebar-border:   rgb(255 255 255 / 0.10);
 
   /* Výběr záznamu v seznamu (vieweru)
    * Sytost „o stupeň výš“ než primary-soft, aby vybraný řádek

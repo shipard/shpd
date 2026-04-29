@@ -9,8 +9,10 @@
     iconExpand,
     iconLogout,
     iconChevronDown,
+    iconChevronUp,
     iconChevronRight,
     iconSpinner,
+    iconSettings,
     resolveIcon,
   } from '../../icons.js';
 
@@ -67,7 +69,11 @@
   }
 
   async function handleLogout() {
-    await logout();
+    try {
+      await logout();
+    } catch (err) {
+      console.warn('Logout API call failed (continuing):', err);
+    }
     authStore.clearAuth();
     onLogout?.();
   }
@@ -84,6 +90,62 @@
   function handleMouseLeave() {
     if (collapsed) hovered = false;
   }
+
+  // --- User menu (dropdown nad uživatelským jménem v patce) ---
+  let userMenuOpen = $state(false);
+  let userMenuRoot = $state(null);
+
+  function toggleUserMenu() {
+    userMenuOpen = !userMenuOpen;
+  }
+
+  function closeUserMenu() {
+    userMenuOpen = false;
+  }
+
+  function handleSettings() {
+    closeUserMenu();
+    // TODO: implementovat navigaci na nastavení účtu, až bude stránka existovat
+  }
+
+  function handleLogoutFromMenu() {
+    // Záměrně nezavíráme menu předem — celý sidebar zmizí sám,
+    // jakmile authStore.clearAuth() přepne aplikaci na LoginScreen.
+    //
+    // Proč ne dříve: closeUserMenu() v kombinaci s document click
+    // listenerem způsobovalo, že click na "Odhlásit" se po render
+    // flushi probublal jako klik mimo menu (target byl detached element,
+    // contains() vrátilo false), listener z effectu se odregistroval
+    // dříve než doběhl logout flow, a výsledek byl: menu se zavře,
+    // logout se ztratí v půl cesty.
+    handleLogout();
+  }
+
+  // Zavři menu při kliknutí mimo něj nebo při Escape.
+  $effect(() => {
+    if (!userMenuOpen) return;
+
+    function onDocClick(e) {
+      if (userMenuRoot && !userMenuRoot.contains(e.target)) {
+        closeUserMenu();
+      }
+    }
+    function onKeyDown(e) {
+      if (e.key === 'Escape') closeUserMenu();
+    }
+
+    document.addEventListener('click', onDocClick);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('click', onDocClick);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  });
+
+  // Při sbalení sidebaru zavři otevřené menu (jinak by zůstalo viset).
+  $effect(() => {
+    if (collapsed && !hovered) closeUserMenu();
+  });
 </script>
 
 <nav
@@ -176,17 +238,43 @@
     {/each}
   </div>
 
-  <div class="shpd-sidebar__footer">
-    {#if expanded_sidebar}
-      <span class="shpd-sidebar__username">{authStore.user?.full_name ?? ''}</span>
-      <button class="shpd-sidebar__logout" onclick={handleLogout} title="Odhlásit">
-        <Icon icon={iconLogout} size="sm" />
-        <span>Odhlásit</span>
-      </button>
-    {:else}
-      <span class="shpd-sidebar__avatar" title={authStore.user?.full_name ?? ''}>
+  <div class="shpd-sidebar__footer" bind:this={userMenuRoot}>
+    <button
+      class="shpd-sidebar__user-button"
+      class:shpd-sidebar__user-button--collapsed={!expanded_sidebar}
+      class:shpd-sidebar__user-button--open={userMenuOpen}
+      onclick={toggleUserMenu}
+      title={authStore.user?.full_name ?? ''}
+      aria-haspopup="menu"
+      aria-expanded={userMenuOpen}
+    >
+      <span class="shpd-sidebar__avatar">
         {(authStore.user?.full_name ?? '?').charAt(0)}
       </span>
+      {#if expanded_sidebar}
+        <span class="shpd-sidebar__username">{authStore.user?.full_name ?? ''}</span>
+        <span class="shpd-sidebar__user-chevron">
+          <Icon icon={userMenuOpen ? iconChevronDown : iconChevronUp} size="xs" />
+        </span>
+      {/if}
+    </button>
+
+    {#if userMenuOpen}
+      <div
+        class="shpd-sidebar__user-menu"
+        class:shpd-sidebar__user-menu--side={!expanded_sidebar}
+        role="menu"
+      >
+        <button class="shpd-sidebar__user-menu-item" onclick={handleSettings} role="menuitem">
+          <Icon icon={iconSettings} size="sm" />
+          <span>Nastavení účtu</span>
+        </button>
+        <div class="shpd-sidebar__user-menu-divider"></div>
+        <button class="shpd-sidebar__user-menu-item" onclick={handleLogoutFromMenu} role="menuitem">
+          <Icon icon={iconLogout} size="sm" />
+          <span>Odhlásit</span>
+        </button>
+      </div>
     {/if}
   </div>
 </nav>
@@ -249,17 +337,99 @@
   }
 
   .shpd-sidebar__footer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: var(--shpd-space-md);
+    position: relative; /* anchor pro user menu dropdown */
+    padding: var(--shpd-space-sm);
     flex-shrink: 0;
     border-top: 1px solid var(--shpd-color-bg-sidebar-border);
   }
 
-  .shpd-sidebar--collapsed:not(.shpd-sidebar--hover-expanded) .shpd-sidebar__footer {
+  /* User button — celá řádka v patce sidebaru je klikatelná.
+   * Otevírá dropdown s položkami Nastavení účtu / Odhlásit.
+   * Layout: avatar (32px) | jméno (flex 1) | chevron. */
+  .shpd-sidebar__user-button {
+    display: flex;
+    align-items: center;
+    gap: var(--shpd-space-sm);
+    width: 100%;
+    padding: var(--shpd-space-xs) var(--shpd-space-sm);
+    background: transparent;
+    border: none;
+    border-radius: var(--shpd-radius-sm);
+    color: var(--shpd-color-text-sidebar);
+    cursor: pointer;
+    text-align: left;
+    transition: background-color 0.15s;
+  }
+
+  .shpd-sidebar__user-button:hover,
+  .shpd-sidebar__user-button--open {
+    background-color: var(--shpd-color-bg-sidebar-hover);
+  }
+
+  .shpd-sidebar__user-button--collapsed {
     justify-content: center;
-    padding: var(--shpd-space-sm);
+    padding: var(--shpd-space-xs);
+  }
+
+  .shpd-sidebar__user-chevron {
+    display: inline-flex;
+    align-items: center;
+    color: var(--shpd-color-text-sidebar-muted);
+    flex-shrink: 0;
+  }
+
+  /* Dropdown menu — otevírá se nahoru z patky.
+   * V rozbaleném sidebaru: full width nad tlačítkem.
+   * Ve sbaleném: vedle sidebaru vpravo (varianta --side).
+   *
+   * Barva pozadí navazuje na sidebar (modrá), aby dropdown
+   * vizuálně patřil k němu — jen o stupeň světlejší, aby šlo
+   * poznat kde sidebar končí a dropdown začíná. */
+  .shpd-sidebar__user-menu {
+    position: absolute;
+    bottom: calc(100% - 1px);
+    left: var(--shpd-space-sm);
+    right: var(--shpd-space-sm);
+    background-color: var(--shpd-color-bg-sidebar-elevated);
+    color: var(--shpd-color-text-sidebar);
+    border: 1px solid var(--shpd-color-bg-sidebar-border);
+    border-radius: var(--shpd-radius-md);
+    box-shadow: var(--shpd-shadow-md);
+    padding: var(--shpd-space-xs);
+    z-index: 200;
+  }
+
+  .shpd-sidebar__user-menu--side {
+    bottom: var(--shpd-space-sm);
+    left: calc(100% - 4px);
+    right: auto;
+    min-width: 200px;
+  }
+
+  .shpd-sidebar__user-menu-item {
+    display: flex;
+    align-items: center;
+    gap: var(--shpd-space-sm);
+    width: 100%;
+    padding: var(--shpd-space-xs) var(--shpd-space-sm);
+    background: transparent;
+    border: none;
+    border-radius: var(--shpd-radius-sm);
+    color: var(--shpd-color-text-sidebar);
+    font-size: var(--shpd-font-size-sm);
+    text-align: left;
+    cursor: pointer;
+    transition: background-color 0.12s;
+  }
+
+  .shpd-sidebar__user-menu-item:hover {
+    background-color: var(--shpd-color-bg-sidebar-hover);
+  }
+
+  .shpd-sidebar__user-menu-divider {
+    height: 1px;
+    margin: var(--shpd-space-xs) 0;
+    background-color: var(--shpd-color-bg-sidebar-border);
   }
 
   .shpd-sidebar__toggle {
@@ -290,32 +460,16 @@
     color: var(--shpd-color-text-sidebar);
     background-color: var(--shpd-color-accent);
     border-radius: 50%;
-  }
-
-  .shpd-sidebar__username {
-    font-size: var(--shpd-font-size-sm);
-    color: var(--shpd-color-text-sidebar-muted);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .shpd-sidebar__logout {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--shpd-space-xs);
-    padding: var(--shpd-space-xs) var(--shpd-space-sm);
-    font-size: var(--shpd-font-size-sm);
-    color: var(--shpd-color-text-sidebar-muted);
-    border: 1px solid var(--shpd-color-bg-sidebar-border);
-    border-radius: var(--shpd-radius-sm);
-    transition: color 0.15s, border-color 0.15s;
     flex-shrink: 0;
   }
 
-  .shpd-sidebar__logout:hover {
-    color: var(--shpd-color-danger);
-    border-color: var(--shpd-color-danger);
+  .shpd-sidebar__username {
+    flex: 1;
+    font-size: var(--shpd-font-size-sm);
+    color: var(--shpd-color-text-sidebar);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .shpd-sidebar__group {

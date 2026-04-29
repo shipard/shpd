@@ -66,6 +66,7 @@ Když se rozhoduje o nové barvě, vždy nejdřív sáhni do `variables.css`.
 | Token | Hodnota | Použití |
 |---|---|---|
 | `--shpd-color-bg-sidebar` | `#00345c` | Pozadí sidebaru — tmavá varianta brand modré |
+| `--shpd-color-bg-sidebar-elevated` | `#014b80` | Dropdown / popover nad sidebarem (o stupeň světlejší, aby šlo poznat hranice) |
 | `--shpd-color-bg-sidebar-hover` | `rgb(255 255 255 / 0.08)` | Hover na položce sidebaru |
 | `--shpd-color-bg-sidebar-border` | `rgb(255 255 255 / 0.10)` | Děliče v sidebaru |
 
@@ -251,6 +252,18 @@ Pokud `row.avatar` chybí, fallback na `row.icon` (emoji nebo unicode glyph).
 - Aktivní položka má oranžový **3px proužek vlevo** (`::before`) + plné modré
   pozadí (`var(--shpd-color-primary)`)
 - Neaktivní položky mají hover s lehkou bílou (`var(--shpd-color-bg-sidebar-hover)`)
+
+### User dropdown v patce sidebaru
+
+Uživatelské menu (avatar + jméno, klik otevře dropdown s položkami
+Nastavení účtu / Odhlásit) používá `--shpd-color-bg-sidebar-elevated`
+ladící se sidebarem — dropdown vizuálně patří k němu, ne k „bílé části
+stránky".
+
+Implementační past s `closeMenu()` před asynchronní akcí (zaveření menu
+zasahuje do click bubbling cesty a může zrušit právě spuštěnou akci) je
+popsaná v [`frontend.md` — sekce Konvence](frontend.md#9-konvence)
+v pod-sekci *Dropdown / popover komponenty*.
 
 ### Viewer (seznam + detail)
 

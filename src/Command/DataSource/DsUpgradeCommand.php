@@ -22,6 +22,7 @@ use Shipard\Module\Core\Mail\AIAnalyzerProvisioner;
 use Shipard\Module\Core\Mail\MailRouterProvisioner;
 use Shipard\Module\Core\Units\UnitsProvisioner;
 use Shipard\Module\Economy\Codebooks\FiscalYearsProvisioner;
+use Shipard\Module\Economy\Codebooks\VatPeriodsProvisioner;
 use Shipard\Module\Economy\Items\ItemKindsProvisioner;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -240,6 +241,7 @@ class DsUpgradeCommand extends Command
         $this->provisionUnits($resolvedModules, $dsConnection, $output);
         $this->provisionItemKinds($resolvedModules, $dsConnection, $output);
         $this->provisionFiscalYears($resolvedModules, $dsDir, $dsConnection, $output);
+        $this->provisionVatPeriods($resolvedModules, $dsConnection, $output);
         $this->provisionMailRouter($dsConfig, $dsConnection, $output);
         $this->provisionAiAnalyzer($dsConfig, $dsConnection, $output);
 
@@ -408,6 +410,33 @@ class DsUpgradeCommand extends Command
             '  [OK]    fiscal years — created: %d, existing: %d',
             $years['created'],
             $years['existing'],
+        ));
+    }
+
+    /**
+     * @param list<\Shipard\Core\Module\ModuleDefinition> $resolvedModules
+     */
+    private function provisionVatPeriods(
+        array $resolvedModules,
+        DataSourceConnection $dsConnection,
+        OutputInterface $output,
+    ): void {
+        $output->writeln('');
+        $output->writeln('Provisioning economy.codebooks vat periods...');
+
+        if (!$this->isModuleActive($resolvedModules, 'economy.codebooks')) {
+            $output->writeln('  <comment>[SKIP] economy.codebooks module not active</comment>');
+            return;
+        }
+
+        $provisioner = new VatPeriodsProvisioner($dsConnection);
+        $result = $provisioner->provision();
+
+        $periods = $result['vatPeriods'];
+        $output->writeln(sprintf(
+            '  [OK]    vat periods — created: %d, existing: %d',
+            $periods['created'],
+            $periods['existing'],
         ));
     }
 

@@ -1,0 +1,184 @@
+{
+    "tableId": 315,
+    "name": "VAT registrations",
+    "name:cs": "Registrace DPH",
+    "name:en": "VAT registrations",
+
+    "displayPattern": "{name}",
+
+    "docStates": {
+        "stateColumn": "docState",
+        "mainColumn": "docStateMain",
+        "cfgItem": "core.system.docStatesArchive"
+    },
+
+    "columnGroups": [
+        {
+            "id": "identity",
+            "name": "Identity",
+            "name:cs": "Identifikace",
+            "name:en": "Identity"
+        },
+        {
+            "id": "period",
+            "name": "Period",
+            "name:cs": "Období",
+            "name:en": "Period"
+        }
+    ],
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+
+        // --- identity ---
+
+        {
+            "id": "name",
+            "name": "Name",
+            "name:cs": "Název",
+            "name:en": "Name",
+            "type": "varchar",
+            "length": 50,
+            "nullable": false,
+            "group": "identity"
+        },
+        {
+            "id": "region",
+            "name": "Region",
+            "name:cs": "Region",
+            "name:en": "Region",
+            "type": "enumString",
+            "length": 10,
+            "nullable": false,
+            "default": "eu",
+            "cfgItem": "world.trade.unions",
+            "group": "identity"
+        },
+        {
+            "id": "country",
+            "name": "Country",
+            "name:cs": "Země",
+            "name:en": "Country",
+            "type": "enumString",
+            "length": 2,
+            "nullable": false,
+            "default": "cz",
+            "cfgItem": "world.base.countries",
+            "group": "identity"
+        },
+        {
+            "id": "taxpayer_kind",
+            "name": "Taxpayer kind",
+            "name:cs": "Druh plátce",
+            "name:en": "Taxpayer kind",
+            "type": "enumInt",
+            "default": 0,
+            "cfgItem": "economy.codebooks.vatTaxpayerKinds",
+            "group": "identity"
+        },
+        {
+            "id": "vat_id",
+            "name": "VAT ID",
+            "name:cs": "DIČ",
+            "name:en": "VAT ID",
+            "type": "varchar",
+            "length": 30,
+            "nullable": true,
+            "group": "identity"
+        },
+
+        // --- period ---
+
+        {
+            "id": "tax_period_kind",
+            "name": "Tax period kind",
+            "name:cs": "Frekvence přiznání DPH",
+            "name:en": "Tax period kind",
+            "type": "enumInt",
+            "default": 1,
+            "cfgItem": "economy.codebooks.vatPeriodKinds",
+            "group": "period"
+        },
+        {
+            "id": "report_period_kind",
+            "name": "Control statement period kind",
+            "name:cs": "Frekvence kontrolního hlášení",
+            "name:en": "Control statement period kind",
+            "type": "enumInt",
+            "default": 1,
+            "cfgItem": "economy.codebooks.vatPeriodKinds",
+            "group": "period"
+        },
+        {
+            "id": "valid_from",
+            "name": "Valid from",
+            "name:cs": "Platí od",
+            "name:en": "Valid from",
+            "type": "date",
+            "nullable": false,
+            "group": "period"
+        },
+        {
+            "id": "valid_to",
+            "name": "Valid to",
+            "name:cs": "Platí do",
+            "name:en": "Valid to",
+            "type": "date",
+            "nullable": true,
+            "group": "period"
+        },
+
+        // --- doc state (systémové, bez skupiny) ---
+
+        {
+            "id": "docState",
+            "name": "Document state",
+            "name:cs": "Stav dokumentu",
+            "name:en": "Document state",
+            "type": "tinyint",
+            "default": 10,
+            "system": true
+        },
+        {
+            "id": "docStateMain",
+            "name": "Document state (sort)",
+            "name:cs": "Stav dokumentu (řazení)",
+            "name:en": "Document state (sort)",
+            "type": "tinyint",
+            "default": 1,
+            "system": true
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "idx_country",
+            "type": "index",
+            "columns": [
+                {"column": "country"}
+            ]
+        },
+        {
+            "id": "idx_validity",
+            "type": "index",
+            "columns": [
+                {"column": "valid_from"},
+                {"column": "valid_to"}
+            ]
+        },
+        {
+            "id": "idx_doc_state",
+            "type": "index",
+            "columns": [
+                {"column": "docStateMain", "order": "ASC"},
+                {"column": "name", "order": "ASC"}
+            ]
+        }
+    ]
+}

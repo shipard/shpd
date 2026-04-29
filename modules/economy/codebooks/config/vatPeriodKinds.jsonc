@@ -1,0 +1,15 @@
+{
+    // Hodnoty odpovídají enumInt tax_period_kind / report_period_kind
+    // v economy_codebooks_vat_registrations.
+    // Pozor: hodnota 0 se nepoužívá (rezervováno do budoucna).
+    "1": {
+        "name": "Monthly",
+        "name:cs": "Měsíční",
+        "name:en": "Monthly"
+    },
+    "2": {
+        "name": "Quarterly",
+        "name:cs": "Čtvrtletní",
+        "name:en": "Quarterly"
+    }
+}

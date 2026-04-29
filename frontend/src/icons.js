@@ -57,6 +57,7 @@ import {
   faRulerCombined,
   faCube,
   faCalendarDays,
+  faPercent,
 } from '@fortawesome/free-solid-svg-icons';
 
 // ── Akce (toolbary, tlačítka) ──────────────────────────────────
@@ -99,6 +100,7 @@ export const iconMail = faEnvelope;
 export const iconRuler = faRulerCombined;
 export const iconBox = faCube;
 export const iconCalendar = faCalendarDays;
+export const iconVat = faPercent;
 
 // ── Stav / feedback ─────────────────────────────────────────────
 export const iconSpinner = faCircleNotch;
@@ -145,6 +147,7 @@ export const iconMap = {
   'ruler': iconRuler,
   'box': iconBox,
   'calendar': iconCalendar,
+  'vat': iconVat,
   'logout': iconLogout,
 };
 

@@ -3,17 +3,19 @@
     "name": "Codebooks",
     "name:cs": "Číselníky",
     "name:en": "Codebooks",
-    "description": "Warehouses, cost centers, fiscal periods and other codebooks",
-    "description:cs": "Sklady, střediska, fiskální období a další číselníky",
-    "description:en": "Warehouses, cost centers, fiscal periods and other codebooks",
+    "description": "Warehouses, cost centers, fiscal periods, VAT registrations and other codebooks",
+    "description:cs": "Sklady, střediska, fiskální období, registrace DPH a další číselníky",
+    "description:en": "Warehouses, cost centers, fiscal periods, VAT registrations and other codebooks",
 
-    "dependencies": ["core.system", "world.base"],
+    "dependencies": ["core.system", "world.base", "world.trade"],
 
     "tables": [
         "economy_codebooks_warehouses",
         "economy_codebooks_cost_centers",
         "economy_codebooks_fiscal_years",
-        "economy_codebooks_fiscal_months"
+        "economy_codebooks_fiscal_months",
+        "economy_codebooks_vat_registrations",
+        "economy_codebooks_vat_periods"
     ],
 
     "viewers": [
@@ -25,6 +27,15 @@
             "icon": "calendar",
             "table": "economy_codebooks_fiscal_years",
             "class": "Shipard\\Module\\Economy\\Codebooks\\FiscalYearsViewer"
+        },
+        {
+            "id": "economy.codebooks.vatRegistrations",
+            "name": "VAT registrations",
+            "name:cs": "Registrace DPH",
+            "name:en": "VAT registrations",
+            "icon": "vat",
+            "table": "economy_codebooks_vat_registrations",
+            "class": "Shipard\\Module\\Economy\\Codebooks\\VatRegistrationsViewer"
         }
     ],
 
@@ -36,6 +47,14 @@
         {
             "table": "economy_codebooks_fiscal_months",
             "id": "economy.codebooks.fiscal_months"
+        },
+        {
+            "table": "economy_codebooks_vat_registrations",
+            "class": "Shipard\\Module\\Economy\\Codebooks\\VatRegistrationsForm"
+        },
+        {
+            "table": "economy_codebooks_vat_periods",
+            "id": "economy.codebooks.vat_periods"
         }
     ],
 
@@ -47,6 +66,14 @@
         {
             "table": "economy_codebooks_fiscal_months",
             "class": "Shipard\\Module\\Economy\\Codebooks\\FiscalMonthDocument"
+        },
+        {
+            "table": "economy_codebooks_vat_registrations",
+            "class": "Shipard\\Module\\Economy\\Codebooks\\VatRegistrationDocument"
+        },
+        {
+            "table": "economy_codebooks_vat_periods",
+            "class": "Shipard\\Module\\Economy\\Codebooks\\VatPeriodDocument"
         }
     ],
 
@@ -58,6 +85,14 @@
         {
             "id": "economy.codebooks.fiscalConfig",
             "file": "config/fiscalConfig.jsonc"
+        },
+        {
+            "id": "economy.codebooks.vatTaxpayerKinds",
+            "file": "config/vatTaxpayerKinds.jsonc"
+        },
+        {
+            "id": "economy.codebooks.vatPeriodKinds",
+            "file": "config/vatPeriodKinds.jsonc"
         }
     ]
 }

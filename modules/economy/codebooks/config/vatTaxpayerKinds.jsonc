@@ -1,0 +1,13 @@
+{
+    // Hodnoty odpovídají enumInt taxpayer_kind v economy_codebooks_vat_registrations
+    "0": {
+        "name": "Standard taxpayer",
+        "name:cs": "Klasický plátce",
+        "name:en": "Standard taxpayer"
+    },
+    "1": {
+        "name": "OSS",
+        "name:cs": "OSS",
+        "name:en": "OSS"
+    }
+}

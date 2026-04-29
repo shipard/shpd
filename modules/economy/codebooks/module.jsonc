@@ -3,12 +3,61 @@
     "name": "Codebooks",
     "name:cs": "Číselníky",
     "name:en": "Codebooks",
-    "description": "Warehouses, cost centers and other codebooks",
-    "description:cs": "Sklady, střediska a další číselníky",
-    "description:en": "Warehouses, cost centers and other codebooks",
-    "dependencies": ["core.system"],
+    "description": "Warehouses, cost centers, fiscal periods and other codebooks",
+    "description:cs": "Sklady, střediska, fiskální období a další číselníky",
+    "description:en": "Warehouses, cost centers, fiscal periods and other codebooks",
+
+    "dependencies": ["core.system", "world.base"],
+
     "tables": [
         "economy_codebooks_warehouses",
-        "economy_codebooks_cost_centers"
+        "economy_codebooks_cost_centers",
+        "economy_codebooks_fiscal_years",
+        "economy_codebooks_fiscal_months"
+    ],
+
+    "viewers": [
+        {
+            "id": "economy.codebooks.fiscalYears",
+            "name": "Fiscal periods",
+            "name:cs": "Fiskální období",
+            "name:en": "Fiscal periods",
+            "icon": "calendar",
+            "table": "economy_codebooks_fiscal_years",
+            "class": "Shipard\\Module\\Economy\\Codebooks\\FiscalYearsViewer"
+        }
+    ],
+
+    "forms": [
+        {
+            "table": "economy_codebooks_fiscal_years",
+            "class": "Shipard\\Module\\Economy\\Codebooks\\FiscalYearsForm"
+        },
+        {
+            "table": "economy_codebooks_fiscal_months",
+            "id": "economy.codebooks.fiscal_months"
+        }
+    ],
+
+    "documentClasses": [
+        {
+            "table": "economy_codebooks_fiscal_years",
+            "class": "Shipard\\Module\\Economy\\Codebooks\\FiscalYearDocument"
+        },
+        {
+            "table": "economy_codebooks_fiscal_months",
+            "class": "Shipard\\Module\\Economy\\Codebooks\\FiscalMonthDocument"
+        }
+    ],
+
+    "config": [
+        {
+            "id": "economy.codebooks.fiscalPeriodTypes",
+            "file": "config/fiscalPeriodTypes.jsonc"
+        },
+        {
+            "id": "economy.codebooks.fiscalConfig",
+            "file": "config/fiscalConfig.jsonc"
+        }
     ]
 }

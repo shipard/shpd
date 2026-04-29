@@ -1,0 +1,150 @@
+{
+    "tableId": 313,
+    "name": "Fiscal years",
+    "name:cs": "Fiskální roky",
+    "name:en": "Fiscal years",
+
+    "displayPattern": "{name}",
+
+    "docStates": {
+        "stateColumn": "docState",
+        "mainColumn": "docStateMain",
+        "cfgItem": "core.system.docStatesArchive"
+    },
+
+    "columnGroups": [
+        {
+            "id": "identity",
+            "name": "Identity",
+            "name:cs": "Identifikace",
+            "name:en": "Identity"
+        },
+        {
+            "id": "period",
+            "name": "Period",
+            "name:cs": "Období",
+            "name:en": "Period"
+        }
+    ],
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+
+        // --- identity ---
+
+        {
+            "id": "name",
+            "name": "Name",
+            "name:cs": "Název",
+            "name:en": "Name",
+            "type": "varchar",
+            "length": 20,
+            "nullable": false,
+            "group": "identity"
+        },
+        {
+            "id": "doc_number_prefix",
+            "name": "Document number prefix",
+            "name:cs": "Prefix čísla dokladu",
+            "name:en": "Document number prefix",
+            "type": "varchar",
+            "length": 10,
+            "nullable": false,
+            "group": "identity"
+        },
+
+        // --- period ---
+
+        {
+            "id": "date_begin",
+            "name": "Begin date",
+            "name:cs": "Začátek období",
+            "name:en": "Begin date",
+            "type": "date",
+            "nullable": false,
+            "group": "period"
+        },
+        {
+            "id": "date_end",
+            "name": "End date",
+            "name:cs": "Konec období",
+            "name:en": "End date",
+            "type": "date",
+            "nullable": false,
+            "group": "period"
+        },
+        {
+            "id": "currency",
+            "name": "Currency",
+            "name:cs": "Měna",
+            "name:en": "Currency",
+            "type": "varchar",
+            "length": 3,
+            "nullable": false,
+            "default": "czk",
+            "group": "period"
+        },
+        {
+            "id": "locked",
+            "name": "Locked",
+            "name:cs": "Uzamčeno",
+            "name:en": "Locked",
+            "type": "boolean",
+            "default": 0,
+            "group": "period"
+        },
+
+        // --- doc state (systémové, bez skupiny) ---
+
+        {
+            "id": "docState",
+            "name": "Document state",
+            "name:cs": "Stav dokumentu",
+            "name:en": "Document state",
+            "type": "tinyint",
+            "default": 10,
+            "system": true
+        },
+        {
+            "id": "docStateMain",
+            "name": "Document state (sort)",
+            "name:cs": "Stav dokumentu (řazení)",
+            "name:en": "Document state (sort)",
+            "type": "tinyint",
+            "default": 1,
+            "system": true
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "unq_name",
+            "type": "unique",
+            "columns": [
+                {"column": "name"}
+            ]
+        },
+        {
+            "id": "idx_dates",
+            "type": "index",
+            "columns": [
+                {"column": "date_begin"},
+                {"column": "date_end"}
+            ]
+        },
+        {
+            "id": "idx_doc_state",
+            "type": "index",
+            "columns": [
+                {"column": "docStateMain", "order": "ASC"},
+                {"column": "date_begin", "order": "DESC"}
+            ]
+        }
+    ]
+}

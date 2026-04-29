@@ -1,0 +1,87 @@
+{
+    "tableId": 314,
+    "name": "Fiscal months",
+    "name:cs": "Fiskální měsíce",
+    "name:en": "Fiscal months",
+
+    "displayPattern": "{calendar_year}-{calendar_month}",
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+        {
+            "id": "fiscal_year",
+            "name": "Fiscal year",
+            "name:cs": "Fiskální rok",
+            "name:en": "Fiscal year",
+            "type": "int",
+            "nullable": false,
+            "reference": "economy_codebooks_fiscal_years"
+        },
+        {
+            "id": "date_begin",
+            "name": "Begin date",
+            "name:cs": "Začátek období",
+            "name:en": "Begin date",
+            "type": "date",
+            "nullable": false
+        },
+        {
+            "id": "date_end",
+            "name": "End date",
+            "name:cs": "Konec období",
+            "name:en": "End date",
+            "type": "date",
+            "nullable": false
+        },
+        {
+            "id": "period_type",
+            "name": "Period type",
+            "name:cs": "Typ období",
+            "name:en": "Period type",
+            "type": "enumInt",
+            "default": 1,
+            "cfgItem": "economy.codebooks.fiscalPeriodTypes"
+        },
+        {
+            "id": "calendar_year",
+            "name": "Calendar year",
+            "name:cs": "Kalendářní rok",
+            "name:en": "Calendar year",
+            "type": "int",
+            "nullable": false
+        },
+        {
+            "id": "calendar_month",
+            "name": "Calendar month",
+            "name:cs": "Kalendářní měsíc",
+            "name:en": "Calendar month",
+            "type": "smallint",
+            "nullable": false
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "idx_fiscal_year",
+            "type": "index",
+            "columns": [
+                {"column": "fiscal_year"},
+                {"column": "date_begin"}
+            ]
+        },
+        {
+            "id": "idx_dates",
+            "type": "index",
+            "columns": [
+                {"column": "date_begin"},
+                {"column": "date_end"}
+            ]
+        }
+    ]
+}

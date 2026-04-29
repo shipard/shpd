@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Shipard\Command\DataSource;
 
 use Shipard\Core\Config\ConfigCompiler;
+use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Database\ExtensionDefinition;
@@ -20,6 +21,7 @@ use Shipard\Core\Utils\JsoncParser;
 use Shipard\Module\Core\Mail\AIAnalyzerProvisioner;
 use Shipard\Module\Core\Mail\MailRouterProvisioner;
 use Shipard\Module\Core\Units\UnitsProvisioner;
+use Shipard\Module\Economy\Codebooks\FiscalYearsProvisioner;
 use Shipard\Module\Economy\Items\ItemKindsProvisioner;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -237,6 +239,7 @@ class DsUpgradeCommand extends Command
 
         $this->provisionUnits($resolvedModules, $dsConnection, $output);
         $this->provisionItemKinds($resolvedModules, $dsConnection, $output);
+        $this->provisionFiscalYears($resolvedModules, $dsDir, $dsConnection, $output);
         $this->provisionMailRouter($dsConfig, $dsConnection, $output);
         $this->provisionAiAnalyzer($dsConfig, $dsConnection, $output);
 
@@ -370,6 +373,41 @@ class DsUpgradeCommand extends Command
             '  [OK]    item kinds — created: %d, existing: %d',
             $kinds['created'],
             $kinds['existing'],
+        ));
+    }
+
+    /**
+     * @param list<\Shipard\Core\Module\ModuleDefinition> $resolvedModules
+     */
+    private function provisionFiscalYears(
+        array $resolvedModules,
+        string $dsDir,
+        DataSourceConnection $dsConnection,
+        OutputInterface $output,
+    ): void {
+        $output->writeln('');
+        $output->writeln('Provisioning economy.codebooks fiscal years...');
+
+        if (!$this->isModuleActive($resolvedModules, 'economy.codebooks')) {
+            $output->writeln('  <comment>[SKIP] economy.codebooks module not active</comment>');
+            return;
+        }
+
+        $compiledFile = $dsDir . '/config/configuration/compiled.cs.json';
+        if (!is_file($compiledFile)) {
+            $output->writeln('  <comment>[SKIP] config not compiled yet</comment>');
+            return;
+        }
+
+        $config = ConfigRuntime::load($dsDir, 'cs');
+        $provisioner = new FiscalYearsProvisioner($dsConnection, $config);
+        $result = $provisioner->provision();
+
+        $years = $result['fiscalYears'];
+        $output->writeln(sprintf(
+            '  [OK]    fiscal years — created: %d, existing: %d',
+            $years['created'],
+            $years['existing'],
         ));
     }
 

@@ -24,7 +24,8 @@
     if (parentId == null) return;
     loading = true;
     const fk = element.foreign_key;
-    const res = await get(`/${element.table}?filter[${fk}]=eq:${parentId}&sort=order_pos:asc`);
+    const sort = element.sort ?? 'order_pos:asc';
+    const res = await get(`/${element.table}?filter[${fk}]=eq:${parentId}&sort=${encodeURIComponent(sort)}`);
     if (res?.success) {
       rows = res.data ?? [];
       deriveColumns();

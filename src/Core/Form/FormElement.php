@@ -39,6 +39,7 @@ class FormElement
         public readonly ?string $formId = null,
         public readonly ?string $content = null,
         public readonly ?string $inputType = null,
+        public readonly ?string $sort = null,
     ) {
         if ($type === 'input' && !in_array($inputType, self::ALLOWED_INPUT_TYPES, true)) {
             throw new \InvalidArgumentException(sprintf(
@@ -103,6 +104,9 @@ class FormElement
         }
         if ($this->inputType !== null) {
             $result['input_type'] = $this->inputType;
+        }
+        if ($this->sort !== null) {
+            $result['sort'] = $this->sort;
         }
 
         return $result;

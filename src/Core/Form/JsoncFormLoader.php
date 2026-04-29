@@ -96,6 +96,7 @@ class JsoncFormLoader
             formId: $elData['formId'] ?? null,
             content: $elData['content'] ?? null,
             inputType: $inputType,
+            sort: $elData['sort'] ?? null,
         );
     }
 

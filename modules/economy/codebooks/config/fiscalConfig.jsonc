@@ -1,0 +1,6 @@
+{
+    // První měsíc fiskálního roku (1 = leden, 7 = červenec, …).
+    // Pro CZ/SK je výchozí leden. Per-DS override přijde v budoucnu
+    // (mechanismus zatím není implementován).
+    "yearStartMonth": 1
+}

@@ -224,6 +224,7 @@ class TabBuilder
         ?string $formId = null,
         ?string $label = null,
         int $cols = 4,
+        ?string $sort = null,
     ): static {
         $this->push(new FormElement(
             type: 'subtable',
@@ -232,6 +233,7 @@ class TabBuilder
             table: $table,
             foreignKey: $foreignKey,
             formId: $formId,
+            sort: $sort,
         ));
         return $this;
     }

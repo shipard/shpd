@@ -1,0 +1,18 @@
+{
+    // Hodnoty odpovídají enumInt period_type v economy_codebooks_fiscal_months
+    "0": {
+        "name": "Opening",
+        "name:cs": "Otevření",
+        "name:en": "Opening"
+    },
+    "1": {
+        "name": "Regular period",
+        "name:cs": "Běžné období",
+        "name:en": "Regular period"
+    },
+    "2": {
+        "name": "Closing",
+        "name:cs": "Uzavření",
+        "name:en": "Closing"
+    }
+}

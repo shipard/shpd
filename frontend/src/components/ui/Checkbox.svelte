@@ -81,7 +81,7 @@
   .shpd-checkbox__native:focus-visible + .shpd-checkbox__box {
     outline: none;
     border-color: var(--shpd-color-border-focus);
-    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+    box-shadow: 0 0 0 2px var(--shpd-color-focus-ring);
   }
 
   .shpd-checkbox__label {

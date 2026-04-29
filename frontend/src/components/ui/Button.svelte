@@ -5,7 +5,7 @@
     label?: string;
     icon?: object;
     iconOnly?: boolean;
-    variant?: 'primary' | 'secondary' | 'danger' | 'ghost';
+    variant?: 'primary' | 'secondary' | 'danger' | 'success' | 'ghost';
     size?: 'sm' | 'md';
     disabled?: boolean;
     loading?: boolean;
@@ -115,8 +115,22 @@
   }
 
   .shpd-btn--danger:hover:not(:disabled) {
-    background-color: #b91c1c;
-    border-color: #b91c1c;
+    background-color: var(--shpd-color-danger-hover);
+    border-color: var(--shpd-color-danger-hover);
+  }
+
+  /* Success — použito pro "Přidat / Použít / Potvrdit" akce, kde se chce
+   * od uživatele odlišit pozitivní očekávaný výsledek od neutrálního.
+   * Záměrně málo častý — většina akcí jsou primary nebo secondary. */
+  .shpd-btn--success {
+    background-color: var(--shpd-color-success);
+    color: #ffffff;
+    border-color: var(--shpd-color-success);
+  }
+
+  .shpd-btn--success:hover:not(:disabled) {
+    background-color: var(--shpd-color-success-hover);
+    border-color: var(--shpd-color-success-hover);
   }
 
   /* Ghost — bez pozadí, jen ikona/text */

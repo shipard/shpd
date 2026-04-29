@@ -224,7 +224,7 @@
     height: var(--shpd-header-height);
     padding: 0 var(--shpd-space-md);
     flex-shrink: 0;
-    border-bottom: 1px solid rgb(255 255 255 / 0.08);
+    border-bottom: 1px solid var(--shpd-color-bg-sidebar-border);
   }
 
   .shpd-sidebar--collapsed:not(.shpd-sidebar--hover-expanded) .shpd-sidebar__header {
@@ -254,7 +254,7 @@
     justify-content: space-between;
     padding: var(--shpd-space-md);
     flex-shrink: 0;
-    border-top: 1px solid rgb(255 255 255 / 0.08);
+    border-top: 1px solid var(--shpd-color-bg-sidebar-border);
   }
 
   .shpd-sidebar--collapsed:not(.shpd-sidebar--hover-expanded) .shpd-sidebar__footer {
@@ -268,7 +268,7 @@
     justify-content: center;
     width: 28px;
     height: 28px;
-    color: rgb(148 163 184);
+    color: var(--shpd-color-text-sidebar-muted);
     border-radius: var(--shpd-radius-sm);
     transition: color 0.15s, background-color 0.15s;
     flex-shrink: 0;
@@ -276,7 +276,7 @@
 
   .shpd-sidebar__toggle:hover {
     color: var(--shpd-color-text-sidebar);
-    background-color: rgb(255 255 255 / 0.07);
+    background-color: var(--shpd-color-bg-sidebar-hover);
   }
 
   .shpd-sidebar__avatar {
@@ -288,13 +288,13 @@
     font-size: var(--shpd-font-size-sm);
     font-weight: 600;
     color: var(--shpd-color-text-sidebar);
-    background-color: rgb(255 255 255 / 0.12);
+    background-color: var(--shpd-color-accent);
     border-radius: 50%;
   }
 
   .shpd-sidebar__username {
     font-size: var(--shpd-font-size-sm);
-    color: rgb(148 163 184);
+    color: var(--shpd-color-text-sidebar-muted);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -306,8 +306,8 @@
     gap: var(--shpd-space-xs);
     padding: var(--shpd-space-xs) var(--shpd-space-sm);
     font-size: var(--shpd-font-size-sm);
-    color: rgb(148 163 184);
-    border: 1px solid rgb(255 255 255 / 0.15);
+    color: var(--shpd-color-text-sidebar-muted);
+    border: 1px solid var(--shpd-color-bg-sidebar-border);
     border-radius: var(--shpd-radius-sm);
     transition: color 0.15s, border-color 0.15s;
     flex-shrink: 0;
@@ -332,7 +332,7 @@
     font-weight: 600;
     letter-spacing: 0.05em;
     text-transform: uppercase;
-    color: rgb(148 163 184);
+    color: var(--shpd-color-text-sidebar-muted);
     transition: color 0.15s;
   }
 
@@ -367,7 +367,7 @@
     width: 100%;
     padding: var(--shpd-space-xs) var(--shpd-space-md);
     font-size: var(--shpd-font-size-sm);
-    color: rgb(148 163 184);
+    color: var(--shpd-color-text-sidebar-muted);
     transition: color 0.15s;
   }
 
@@ -376,6 +376,7 @@
   }
 
   .shpd-sidebar__item {
+    position: relative;
     display: flex;
     align-items: center;
     gap: var(--shpd-space-sm);
@@ -385,22 +386,36 @@
     color: var(--shpd-color-text-sidebar);
     text-align: left;
     border-radius: var(--shpd-radius-sm);
-    transition: background-color 0.15s;
-    opacity: 0.8;
+    transition: background-color 0.15s, opacity 0.15s;
+    opacity: 0.85;
   }
 
   .shpd-sidebar__item:hover {
-    background-color: rgb(255 255 255 / 0.07);
+    background-color: var(--shpd-color-bg-sidebar-hover);
     opacity: 1;
   }
 
   .shpd-sidebar__item--active {
     background-color: var(--shpd-color-primary);
     opacity: 1;
+    font-weight: 500;
   }
 
   .shpd-sidebar__item--active:hover {
     background-color: var(--shpd-color-primary-hover);
+  }
+
+  /* Levý oranžový proužek u aktivní položky — zvýrazňuje pozici
+     uživatele a propojuje sidebar s brand accent barvou. */
+  .shpd-sidebar__item--active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 4px;
+    bottom: 4px;
+    width: 3px;
+    border-radius: 0 2px 2px 0;
+    background-color: var(--shpd-color-accent);
   }
 
   .shpd-sidebar__status {
@@ -409,7 +424,7 @@
     gap: var(--shpd-space-sm);
     padding: var(--shpd-space-md);
     font-size: var(--shpd-font-size-sm);
-    color: rgb(148 163 184);
+    color: var(--shpd-color-text-sidebar-muted);
   }
 
   .shpd-sidebar__status--error {

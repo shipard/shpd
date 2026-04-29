@@ -4,6 +4,7 @@
   import ViewerDetail from './ViewerDetail.svelte';
   import ViewerToolbar from './ViewerToolbar.svelte';
   import FormDialog from '../form/FormDialog.svelte';
+  import Button from '../ui/Button.svelte';
 
   let { tab } = $props();
 
@@ -403,10 +404,14 @@
         </label>
       </div>
       <div class="shpd-modal__footer">
-        <button type="button" onclick={closeReanalyzeDialog} disabled={reanalyzeSubmitting}>Zrušit</button>
-        <button type="button" class="shpd-reanalyze__submit" onclick={submitReanalyze} disabled={reanalyzeSubmitting}>
-          {reanalyzeSubmitting ? 'Spouštím…' : 'Spustit analýzu'}
-        </button>
+        <Button label="Zrušit" variant="secondary" size="sm" disabled={reanalyzeSubmitting} onclick={closeReanalyzeDialog} />
+        <Button
+          label={reanalyzeSubmitting ? 'Spouštím…' : 'Spustit analýzu'}
+          variant="primary"
+          size="sm"
+          disabled={reanalyzeSubmitting}
+          onclick={submitReanalyze}
+        />
       </div>
     </div>
   </div>
@@ -491,7 +496,7 @@
 
   .shpd-viewer__search-input:focus {
     border-color: var(--shpd-color-border-focus);
-    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+    box-shadow: 0 0 0 2px var(--shpd-color-focus-ring);
   }
 
   .shpd-viewer__search-clear {
@@ -559,7 +564,7 @@
   .shpd-modal-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.4);
+    background: var(--shpd-color-overlay);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -618,30 +623,9 @@
     gap: var(--shpd-space-sm);
   }
 
-  .shpd-modal__footer button {
-    padding: 6px 14px;
-    border: 1px solid var(--shpd-color-border);
-    border-radius: var(--shpd-radius-sm);
-    background: var(--shpd-color-bg);
-    color: var(--shpd-color-text);
-    cursor: pointer;
-    font-size: var(--shpd-font-size-sm);
-  }
-
-  .shpd-modal__footer button:hover:not(:disabled) {
-    background: var(--shpd-color-bg-secondary);
-  }
-
-  .shpd-modal__footer button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .shpd-reanalyze__submit {
-    background: var(--shpd-color-primary) !important;
-    color: white !important;
-    border-color: var(--shpd-color-primary) !important;
-  }
+  /* Pozn.: tlačítkové styly v patkě modálu byly dříve hardcoded
+     přes !important. Teď používáme <Button variant="primary|secondary">,
+     který čerpá z brand palety v variables.css. */
 
   .shpd-reanalyze__label {
     display: block;

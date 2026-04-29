@@ -241,7 +241,7 @@
 
   .shpd-form__error-banner {
     padding: var(--shpd-space-sm) var(--shpd-space-md);
-    background-color: #fef2f2;
+    background-color: var(--shpd-color-danger-soft);
     border: 1px solid var(--shpd-color-danger);
     border-radius: var(--shpd-radius-md);
     color: var(--shpd-color-danger);

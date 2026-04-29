@@ -139,7 +139,7 @@
 
   .shpd-login__input:focus {
     border-color: var(--shpd-color-border-focus);
-    box-shadow: 0 0 0 3px rgb(37 99 235 / 0.1);
+    box-shadow: 0 0 0 3px var(--shpd-color-focus-ring);
   }
 
   .shpd-login__input:disabled {
@@ -152,8 +152,8 @@
     padding: var(--shpd-space-sm) var(--shpd-space-md);
     font-size: var(--shpd-font-size-sm);
     color: var(--shpd-color-danger);
-    background-color: rgb(220 38 38 / 0.05);
-    border: 1px solid rgb(220 38 38 / 0.2);
+    background-color: var(--shpd-color-danger-soft);
+    border: 1px solid var(--shpd-color-danger);
     border-radius: var(--shpd-radius-md);
   }
 

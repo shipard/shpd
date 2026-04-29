@@ -423,6 +423,9 @@ Zatím prohlížeč i formuláře fungují čistě z `_meta/tables/{table}` — 
 - Scoped styles v Svelte komponentách
 - `:global()` pro třídy aplikované dynamicky (např. `docState_concept` na řádcích vieweru)
 
+Detailní dokumentace barevného systému (paleta, doc-state konvence, badge varianty,
+focus stavy) je v [`design-system.md`](design-system.md).
+
 ### API komunikace
 
 - Vždy přes `api/client.js` (nikdy přímý fetch, kromě auth.js)

@@ -447,7 +447,7 @@
   .shpd-form-editor__error-banner {
     margin: var(--shpd-space-md);
     padding: var(--shpd-space-sm) var(--shpd-space-md);
-    background: #fef2f2;
+    background: var(--shpd-color-danger-soft);
     border: 1px solid var(--shpd-color-danger);
     border-radius: var(--shpd-radius-md);
     color: var(--shpd-color-danger);

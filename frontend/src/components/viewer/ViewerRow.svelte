@@ -26,7 +26,9 @@
   {onclick}
   type="button"
 >
-  {#if row.icon}
+  {#if row.avatar}
+    <span class="shpd-viewer-row__avatar">{row.avatar}</span>
+  {:else if row.icon}
     <span class="shpd-viewer-row__icon">{row.icon}</span>
   {/if}
 
@@ -81,6 +83,7 @@
 
 <style>
   .shpd-viewer-row {
+    position: relative;
     display: flex;
     align-items: flex-start;
     gap: var(--shpd-space-sm);
@@ -97,33 +100,57 @@
     transition: background-color 0.1s;
   }
 
+  /* Levý stavový / accent proužek (4px, plný v celé výšce řádku).
+   *
+   * Barva se řídí CSS proměnnou --shpd-row-bar, kterou nastavují
+   * docState_* třídy níže. Pokud proměnná není nastavená
+   * (= confirmed nebo neznámý stav), proužek je průhledný — nic
+   * se nezobrazí. Tím dostáváme „confirmed = klid“ chování.
+   *
+   * Při výběru se proměnná přepíše na brand accent (oranžová),
+   * takže proužek funguje současně jako indikátor výběru. */
+  .shpd-viewer-row::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 6px;
+    background-color: var(--shpd-row-bar, transparent);
+  }
+
   .shpd-viewer-row:hover {
     background-color: var(--shpd-color-bg-secondary);
   }
 
   .shpd-viewer-row--selected {
-    background-color: #eff6ff;
+    background-color: var(--shpd-color-bg-selected);
+    --shpd-row-bar: var(--shpd-color-accent);
   }
 
   .shpd-viewer-row--selected:hover {
-    background-color: #dbeafe;
+    background-color: var(--shpd-color-bg-selected-hover);
   }
 
-  /* Doc state row backgrounds */
-  :global(.docState_concept)        { background-color: #fefce8; }
-  :global(.docState_concept:hover)  { background-color: #fef9c3; }
-  :global(.docState_edit)           { background-color: #fff7ed; }
-  :global(.docState_edit:hover)     { background-color: #ffedd5; }
-  :global(.docState_confirmed)      { background-color: #eff6ff; }
-  :global(.docState_archive)        { background-color: #f8fafc; color: #64748b; }
-  :global(.docState_trash)          { background-color: #f8fafc; color: #94a3b8; text-decoration: line-through; }
-  :global(.docState_cancelled)      { background-color: #fff1f2; color: #be123c; }
-
-  /* Selected state always wins over docState background */
-  :global(.shpd-viewer-row--selected.docState_concept)   { background-color: #eff6ff; }
-  :global(.shpd-viewer-row--selected.docState_edit)      { background-color: #eff6ff; }
-  :global(.shpd-viewer-row--selected.docState_archive)   { background-color: #eff6ff; color: inherit; }
-  :global(.shpd-viewer-row--selected.docState_cancelled) { background-color: #eff6ff; color: inherit; }
+  /* Doc-state stavové proužky (jen barva pruhu, pozadí zůstává bílé).
+   *
+   * Konvence:
+   *   confirmed → žádný proužek ("OK = klid")
+   *   concept   → žlutý       (rozpracováno)
+   *   edit      → fialový      (právě se edituje)
+   *   archive   → šedý         (tichý archiv)
+   *   trash     → tmavší šedá + line-through
+   *   cancelled → červený     (pozor!)
+   *
+   * Používáme child selectory místo :global(.docState_*) — :global
+   * by se chytlo i na stejnojmenné třídy v jiných komponentách
+   * (FormStateBadge atd.). docState_done schválně není — "V pořádku"
+   * je default stav, neěrěží pozornost. */
+  .shpd-viewer-row.docState_concept   { --shpd-row-bar: #facc15; }
+  .shpd-viewer-row.docState_edit      { --shpd-row-bar: #a78bfa; }
+  .shpd-viewer-row.docState_archive   { --shpd-row-bar: #cbd5e1; color: #64748b; }
+  .shpd-viewer-row.docState_trash     { --shpd-row-bar: #94a3b8; color: #94a3b8; text-decoration: line-through; }
+  .shpd-viewer-row.docState_cancelled { --shpd-row-bar: #ef4444; }
 
   .shpd-viewer-row__icon {
     width: 32px;
@@ -131,6 +158,27 @@
     text-align: center;
     font-size: var(--shpd-font-size-lg);
     line-height: 1.4;
+  }
+
+  /* Avatar (kruhový, s iniciálami).
+   * Stejná sloupcová šířka jako __icon, aby řádky bez avataru
+   * a s avatarem byly horizontálně zarovnané. Neutrální barva
+   * — nemá v seznamu konkurovat stavovému pruhu ani výběru. */
+  .shpd-viewer-row__avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    border-radius: 50%;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0.02em;
+    color: var(--shpd-color-primary);
+    background-color: var(--shpd-color-primary-soft);
+    text-transform: uppercase;
   }
 
   .shpd-viewer-row__body {

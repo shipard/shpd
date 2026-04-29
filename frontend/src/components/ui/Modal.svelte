@@ -113,7 +113,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0, 0, 0, 0.5);
+    background: var(--shpd-color-overlay);
     animation: shpd-modal-fade-in 0.15s ease;
   }
 

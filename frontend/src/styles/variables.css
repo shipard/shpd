@@ -1,20 +1,73 @@
 /* Design system CSS custom properties */
 
 :root {
-  /* Colors */
-  --shpd-color-primary: #2563eb;
-  --shpd-color-primary-hover: #1d4ed8;
-  --shpd-color-danger: #dc2626;
-  --shpd-color-success: #16a34a;
-  --shpd-color-warning: #d97706;
-  --shpd-color-bg: #ffffff;
-  --shpd-color-bg-secondary: #f8fafc;
-  --shpd-color-bg-sidebar: #1e293b;
-  --shpd-color-text: #0f172a;
-  --shpd-color-text-secondary: #64748b;
-  --shpd-color-text-sidebar: #e2e8f0;
-  --shpd-color-border: #e2e8f0;
-  --shpd-color-border-focus: #2563eb;
+  /* Brand colors
+   * Primary  = Shipard blue   (#005089)
+   * Accent   = Shipard orange (#EB6507)
+   * Použití:
+   *   primary  → základní akce, aktivní stav navigace, odkazy
+   *   accent   → drobné upozornění (VIP badge, focus indikátor,
+   *              levý proužek u aktivního menu/řádku)
+   */
+
+  /* Primary (modrá) */
+  --shpd-color-primary:        #005089;
+  --shpd-color-primary-hover:  #003e6b;
+  --shpd-color-primary-soft:   #e6eef5; /* světlé pozadí pro výběr/hover */
+  --shpd-color-primary-soft-2: #cfdcea; /* o stupeň silnější varianta */
+
+  /* Accent (oranžová) */
+  --shpd-color-accent:         #eb6507;
+  --shpd-color-accent-hover:   #c45405;
+  --shpd-color-accent-soft:    #fdebdc; /* světlé pozadí pro accent badge */
+
+  /* Stavové (s hover variantou pro tlačítka) */
+  --shpd-color-danger:        #dc2626;
+  --shpd-color-danger-hover:  #b91c1c;
+  --shpd-color-success:       #16a34a;
+  --shpd-color-success-hover: #15803d;
+  --shpd-color-warning:       #d97706;
+  --shpd-color-warning-hover: #b45309;
+
+  /* Soft "chyby" pozadí — např. error notice ramp-up v formálři */
+  --shpd-color-danger-soft:   #fef2f2;
+
+  /* Plochy */
+  --shpd-color-bg:           #ffffff;
+  --shpd-color-bg-secondary: #f6f8fa; /* lehce teplejší šedá než předtím */
+
+  /* Sidebar — tmavá modrá ladící s brand primary
+   * (Tmavší a sytější než #005089 samotná, aby aktivní položka
+   *  v primary modré měla dostatek kontrastu vůči pozadí.) */
+  --shpd-color-bg-sidebar:        #00345c;
+  --shpd-color-bg-sidebar-hover:  rgb(255 255 255 / 0.08);
+  --shpd-color-bg-sidebar-border: rgb(255 255 255 / 0.10);
+
+  /* Výběr záznamu v seznamu (vieweru)
+   * Sytost „o stupeň výš“ než primary-soft, aby vybraný řádek
+   * šel zetelně vidět i vedle barevných doc-state pozadí.
+   * Hover je ještě o stupeň sytější. */
+  --shpd-color-bg-selected:       #d4e2ee;
+  --shpd-color-bg-selected-hover: #bdd1e3;
+
+  /* Text */
+  --shpd-color-text:           #0f172a;
+  --shpd-color-text-secondary: #5b6878;
+  --shpd-color-text-sidebar:   #e6eef5;
+  --shpd-color-text-sidebar-muted: #9bb4cc;
+
+  /* Borders */
+  --shpd-color-border:        #e2e8f0;
+  --shpd-color-border-strong: #cbd5e1;
+  --shpd-color-border-focus:  var(--shpd-color-primary);
+
+  /* Focus rings — jemné záře kolem inputu při focusu / chybě.
+   * Používají se v Input/Checkbox/Select/atd. jako box-shadow. */
+  --shpd-color-focus-ring:    rgb(0 80 137 / 0.18);   /* primary glow */
+  --shpd-color-error-ring:    rgb(220 38 38 / 0.15);  /* danger glow */
+
+  /* Overlay pro modální dialogy */
+  --shpd-color-overlay:       rgb(0 0 0 / 0.4);
 
   /* Spacing */
   --shpd-space-xs: 4px;

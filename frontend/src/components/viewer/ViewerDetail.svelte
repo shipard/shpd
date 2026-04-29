@@ -1,5 +1,6 @@
 <script>
   import { post } from '../../api/client.js';
+  import Button from '../ui/Button.svelte';
 
   let { detail = null, loading = false, onRefresh } = $props();
 
@@ -100,6 +101,25 @@
       <span>Načítám...</span>
     </div>
   {:else if detail?.tabs?.length > 0}
+    {#if detail.title}
+      <!-- Header (title + badges) — zobrazuje se jen pokud backend
+           posílá detail.title. Bez něj se hlavička přeskočí a layout
+           je stejný jako předtím. -->
+      <div class="shpd-detail__header">
+        <div class="shpd-detail__title-row">
+          <h2 class="shpd-detail__title">{detail.title}</h2>
+          {#each detail.badges ?? [] as badge}
+            <span class="shpd-detail__badge shpd-detail__badge--{badge.style ?? 'neutral'}">
+              {badge.label}
+            </span>
+          {/each}
+        </div>
+        {#if detail.subtitle}
+          <div class="shpd-detail__subtitle">{detail.subtitle}</div>
+        {/if}
+      </div>
+    {/if}
+
     <!-- Tab bar -->
     <div class="shpd-detail__tabs">
       {#each detail.tabs as tab (tab.id)}
@@ -195,28 +215,29 @@
                 {/if}
 
                 <div class="shpd-extracted__actions">
-                  <button type="button" onclick={() => openDetailModal(doc)}>
-                    Zobrazit detail
-                  </button>
+                  <Button
+                    label="Zobrazit detail"
+                    variant="secondary"
+                    size="sm"
+                    onclick={() => openDetailModal(doc)}
+                  />
                   {#if doc.can_apply}
-                    <button
-                      type="button"
-                      class="shpd-extracted__btn-apply"
+                    <Button
+                      label="Použít"
+                      variant="success"
+                      size="sm"
                       disabled={actionInFlightNdx === doc.ndx}
                       onclick={() => applyDocument(doc)}
-                    >
-                      Použít
-                    </button>
+                    />
                   {/if}
                   {#if doc.can_reject}
-                    <button
-                      type="button"
-                      class="shpd-extracted__btn-reject"
+                    <Button
+                      label="Zamítnout"
+                      variant="danger"
+                      size="sm"
                       disabled={actionInFlightNdx === doc.ndx}
                       onclick={() => openRejectDialog(doc)}
-                    >
-                      Zamítnout
-                    </button>
+                    />
                   {/if}
                 </div>
               </div>
@@ -274,15 +295,14 @@
             ></textarea>
           </div>
           <div class="shpd-modal__footer">
-            <button type="button" onclick={closeRejectDialog}>Zrušit</button>
-            <button
-              type="button"
-              class="shpd-extracted__btn-reject"
+            <Button label="Zrušit" variant="secondary" size="sm" onclick={closeRejectDialog} />
+            <Button
+              label={rejectSubmitting ? 'Ukládám…' : 'Zamítnout'}
+              variant="danger"
+              size="sm"
               disabled={rejectSubmitting || rejectReason.trim() === ''}
               onclick={submitReject}
-            >
-              {rejectSubmitting ? 'Ukládám…' : 'Zamítnout'}
-            </button>
+            />
           </div>
         </div>
       </div>
@@ -325,6 +345,61 @@
   @keyframes shpd-detail-spin {
     to { transform: rotate(360deg); }
   }
+
+  /* Header (title + badges) — zobrazuje se jen když backend
+     pošle detail.title. Drobný panel nad taby. */
+  .shpd-detail__header {
+    padding: var(--shpd-space-sm) var(--shpd-space-md);
+    border-bottom: 1px solid var(--shpd-color-border);
+    background-color: var(--shpd-color-bg);
+    flex-shrink: 0;
+  }
+
+  .shpd-detail__title-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--shpd-space-sm);
+  }
+
+  .shpd-detail__title {
+    margin: 0;
+    font-size: var(--shpd-font-size-lg);
+    font-weight: 600;
+    color: var(--shpd-color-text);
+    line-height: 1.3;
+  }
+
+  .shpd-detail__subtitle {
+    margin-top: 2px;
+    font-size: var(--shpd-font-size-sm);
+    color: var(--shpd-color-text-secondary);
+  }
+
+  .shpd-detail__badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    line-height: 1.4;
+    white-space: nowrap;
+  }
+
+  /* Stylové varianty badge.
+     Sjednoceno s doc-state škálou v ViewerRow + accent pro brand. */
+  .shpd-detail__badge--neutral   { background: #f1f5f9; color: #475569; }
+  .shpd-detail__badge--primary   { background: var(--shpd-color-primary-soft); color: var(--shpd-color-primary); }
+  .shpd-detail__badge--accent    { background: var(--shpd-color-accent-soft); color: var(--shpd-color-accent-hover); }
+  .shpd-detail__badge--success   { background: #dcfce7; color: #166534; }
+  .shpd-detail__badge--warning   { background: #fef3c7; color: #854d0e; }
+  .shpd-detail__badge--danger    { background: #fecaca; color: #991b1b; }
+  .shpd-detail__badge--concept   { background: #fef3c7; color: #854d0e; }
+  .shpd-detail__badge--edit      { background: #ede9fe; color: #5b21b6; }
+  .shpd-detail__badge--confirmed { background: #f1f5f9; color: #475569; }
+  .shpd-detail__badge--archive   { background: #e5e7eb; color: #374151; }
+  .shpd-detail__badge--trash     { background: #e5e7eb; color: #6b7280; text-decoration: line-through; }
+  .shpd-detail__badge--cancelled { background: #fecaca; color: #991b1b; }
 
   /* Tabs */
   .shpd-detail__tabs {
@@ -488,8 +563,8 @@
   }
 
   .shpd-extracted__badge--done   { background: #dcfce7; color: #166534; }
-  .shpd-extracted__badge--confirmed { background: #dbeafe; color: #1e40af; }
-  .shpd-extracted__badge--edit { background: #fed7aa; color: #9a3412; }
+  .shpd-extracted__badge--confirmed { background: #dcfce7; color: #166534; }
+  .shpd-extracted__badge--edit { background: #ede9fe; color: #5b21b6; }
   .shpd-extracted__badge--archive { background: #e5e7eb; color: #374151; }
   .shpd-extracted__badge--error { background: #fecaca; color: #991b1b; }
   .shpd-extracted__badge--concept { background: #fef3c7; color: #854d0e; }
@@ -519,44 +594,9 @@
     flex-wrap: wrap;
   }
 
-  .shpd-extracted__actions button {
-    padding: 4px 10px;
-    border: 1px solid var(--shpd-color-border);
-    border-radius: var(--shpd-radius-sm);
-    background: var(--shpd-color-bg);
-    color: var(--shpd-color-text);
-    cursor: pointer;
-    font-size: var(--shpd-font-size-sm);
-  }
-
-  .shpd-extracted__actions button:hover:not(:disabled) {
-    background: var(--shpd-color-bg-secondary);
-  }
-
-  .shpd-extracted__actions button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .shpd-extracted__btn-apply {
-    background: #16a34a !important;
-    color: white !important;
-    border-color: #16a34a !important;
-  }
-
-  .shpd-extracted__btn-apply:hover:not(:disabled) {
-    background: #15803d !important;
-  }
-
-  .shpd-extracted__btn-reject {
-    background: #dc2626 !important;
-    color: white !important;
-    border-color: #dc2626 !important;
-  }
-
-  .shpd-extracted__btn-reject:hover:not(:disabled) {
-    background: #b91c1c !important;
-  }
+  /* Tlačítkové styly tady byly dříve hardcoded přes !important.
+     Teď používáme <Button variant="success|danger|secondary"> komponentu,
+     která čerpá z brand palety v variables.css. */
 
   .shpd-extracted__json {
     background: var(--shpd-color-bg-secondary);
@@ -589,7 +629,7 @@
   .shpd-modal-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.4);
+    background: var(--shpd-color-overlay);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -646,24 +686,5 @@
     display: flex;
     justify-content: flex-end;
     gap: var(--shpd-space-sm);
-  }
-
-  .shpd-modal__footer button {
-    padding: 6px 14px;
-    border: 1px solid var(--shpd-color-border);
-    border-radius: var(--shpd-radius-sm);
-    background: var(--shpd-color-bg);
-    color: var(--shpd-color-text);
-    cursor: pointer;
-    font-size: var(--shpd-font-size-sm);
-  }
-
-  .shpd-modal__footer button:hover:not(:disabled) {
-    background: var(--shpd-color-bg-secondary);
-  }
-
-  .shpd-modal__footer button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
   }
 </style>

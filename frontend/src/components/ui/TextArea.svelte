@@ -80,7 +80,7 @@
   .shpd-textarea__field:focus {
     outline: none;
     border-color: var(--shpd-color-border-focus);
-    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+    box-shadow: 0 0 0 2px var(--shpd-color-focus-ring);
   }
 
   .shpd-textarea__field--error {
@@ -88,7 +88,7 @@
   }
 
   .shpd-textarea__field--error:focus {
-    box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.15);
+    box-shadow: 0 0 0 2px var(--shpd-color-error-ring);
   }
 
   .shpd-textarea__field:disabled {

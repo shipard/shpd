@@ -1,0 +1,293 @@
+# Shipard — Design system
+
+## 1. Přehled
+
+Vizuální systém aplikace — paleta barev, doc-state konvence, stavové badge,
+focus/hover stavy. Tento dokument je referenční — popisuje **co která barva
+znamená** a **kde se používá**, ne jak se kompiluje CSS.
+
+Veškeré barevné rozhodnutí je centralizováno v `frontend/src/styles/variables.css`
+jako CSS custom properties (tokeny). Komponenty používají tokeny, ne hex hodnoty.
+Když se rozhoduje o nové barvě, vždy nejdřív sáhni do `variables.css`.
+
+### Filozofie
+
+- **Brand má dvě barvy** — modrou (`#005089`) a oranžovou (`#EB6507`). Zbytek
+  je servisní paleta (stavy, neutrály, hovery).
+- **Modrá = primary akce a navigace.** Aktivní položka v sidebaru, primary
+  tlačítka, odkazy, focus indikátor.
+- **Oranžová = brand accent, „kde jsem".** Levý proužek u aktivní položky
+  v sidebaru a u vybraného řádku v seznamu, accent badge (VIP).
+  **Oranžová není stav** — žádný doc-state ji nesmí používat.
+- **Confirmed/done = klid.** Většina záznamů je v pořádku. UI je nemá
+  zdůrazňovat. Žádný proužek, žádné křiklavé pozadí, tichá šedá u badge.
+- **Stavy mimo „v pořádku" mají barvu pruhu** (žlutá, fialová, červená, šedá).
+  Pozadí řádku zůstává bílé — barevné pozadí je vyhrazené pro výběr.
+- **Méně je více.** Když uživatel otevře seznam 200 záznamů, většina je
+  bílá. Barvu mají jen položky, které stojí za pozornost.
+
+---
+
+## 2. Paleta — brand barvy
+
+### Primary (modrá)
+
+| Token | Hodnota | Použití |
+|---|---|---|
+| `--shpd-color-primary` | `#005089` | Primary tlačítka, aktivní stav navigace, odkazy, ikony stavu |
+| `--shpd-color-primary-hover` | `#003e6b` | Hover na primary tlačítku |
+| `--shpd-color-primary-soft` | `#e6eef5` | Světlé pozadí pro primary badge a jemné zvýraznění |
+| `--shpd-color-primary-soft-2` | `#cfdcea` | O stupeň silnější varianta |
+
+### Accent (oranžová)
+
+| Token | Hodnota | Použití |
+|---|---|---|
+| `--shpd-color-accent` | `#eb6507` | Levý proužek aktivní položky/výběru, avatar VIP, focus přízvuky |
+| `--shpd-color-accent-hover` | `#c45405` | Hover na accent prvcích |
+| `--shpd-color-accent-soft` | `#fdebdc` | Pozadí accent badge |
+
+---
+
+## 3. Paleta — servisní
+
+### Plochy
+
+| Token | Hodnota | Použití |
+|---|---|---|
+| `--shpd-color-bg` | `#ffffff` | Hlavní pozadí (panely, řádky) |
+| `--shpd-color-bg-secondary` | `#f6f8fa` | Hover stavy, sekundární plochy |
+| `--shpd-color-bg-selected` | `#d4e2ee` | Vybraný řádek v seznamu |
+| `--shpd-color-bg-selected-hover` | `#bdd1e3` | Vybraný řádek, hover |
+| `--shpd-color-overlay` | `rgb(0 0 0 / 0.4)` | Modální overlay |
+
+### Sidebar
+
+| Token | Hodnota | Použití |
+|---|---|---|
+| `--shpd-color-bg-sidebar` | `#00345c` | Pozadí sidebaru — tmavá varianta brand modré |
+| `--shpd-color-bg-sidebar-hover` | `rgb(255 255 255 / 0.08)` | Hover na položce sidebaru |
+| `--shpd-color-bg-sidebar-border` | `rgb(255 255 255 / 0.10)` | Děliče v sidebaru |
+
+### Text
+
+| Token | Hodnota | Použití |
+|---|---|---|
+| `--shpd-color-text` | `#0f172a` | Primární text |
+| `--shpd-color-text-secondary` | `#5b6878` | Sekundární text (popisky, meta) |
+| `--shpd-color-text-sidebar` | `#e6eef5` | Text v sidebaru |
+| `--shpd-color-text-sidebar-muted` | `#9bb4cc` | Tlumený text v sidebaru (nadpisy skupin) |
+
+### Borders & focus
+
+| Token | Hodnota | Použití |
+|---|---|---|
+| `--shpd-color-border` | `#e2e8f0` | Standardní hranice |
+| `--shpd-color-border-strong` | `#cbd5e1` | Silnější hranice |
+| `--shpd-color-border-focus` | `var(--primary)` | Hranice focusovaného inputu |
+| `--shpd-color-focus-ring` | `rgb(0 80 137 / 0.18)` | Glow okolo focusovaného inputu |
+| `--shpd-color-error-ring` | `rgb(220 38 38 / 0.15)` | Glow okolo chybného inputu |
+
+### Stavové (semantické)
+
+| Token | Hodnota | Hover token | Soft token | Použití |
+|---|---|---|---|---|
+| `--shpd-color-danger` | `#dc2626` | `--shpd-color-danger-hover` (`#b91c1c`) | `--shpd-color-danger-soft` (`#fef2f2`) | Mazání, error, zamítnutí |
+| `--shpd-color-success` | `#16a34a` | `--shpd-color-success-hover` (`#15803d`) | — | Použít, potvrdit pozitivní akci |
+| `--shpd-color-warning` | `#d97706` | `--shpd-color-warning-hover` (`#b45309`) | — | Varování (mimo doc-state systém) |
+
+---
+
+## 4. Doc-state systém
+
+Záznamy v aplikaci procházejí stavy (koncept → v pořádku → archív → koš atd.).
+Stav záznamu se kreslí na **dvou místech**:
+
+1. **V seznamu** (`ViewerRow.svelte`) — barevný **levý proužek 6px**, pozadí
+   řádku zůstává bílé.
+2. **V detailu / formuláři** (`ViewerDetail.svelte`, `FormStateBadge.svelte`)
+   — **barevný badge** se jménem stavu.
+
+Backend posílá `stateStyle` (např. `"edit"`) v API odpovědích. Frontend ho
+mapuje na CSS třídy `docState_{stateStyle}` (pro pruh řádku) a CSS třídy
+badge (`shpd-detail__badge--{stateStyle}` resp. `shpd-form-state-badge.docState_{stateStyle}`).
+
+### Tabulka stavů
+
+| stateStyle | Pruh v seznamu | Badge v detailu | Význam |
+|---|---|---|---|
+| `confirmed` | žádný | tichá šedá | „V pořádku" — default stav, neruší |
+| `done` | žádný | zelená | „Hotovo" — pozitivní cílový stav (např. extracted document applied) |
+| `concept` | žlutá `#facc15` | žlutá | Rozpracováno, dopiš to |
+| `edit` | fialová `#a78bfa` | fialová | Právě se edituje (v opravě) |
+| `archive` | šedá `#cbd5e1` | šedá | Archív — tichý, mimo aktivní práci |
+| `trash` | tmavší šedá `#94a3b8` + line-through | šedá + line-through | V koši |
+| `cancelled` | červená `#ef4444` | červená | Zrušeno, pozor |
+| `error` | — | červená | Chyba (např. AI selhala) |
+
+### Konvence
+
+- **`confirmed` / `done` nemá pruh.** Záměrné. Většina záznamů je v tomto stavu;
+  proužek by jen šuměl. Badge ve formuláři má smysl (uživatel chce vidět,
+  že je vše OK), ale tichou šedou — ne zelenou, ne modrou.
+- **Když přidáváš nový stav**, drž se palety. Žádné nové barvy nezavádět
+  bez aktualizace tohoto dokumentu.
+- **`edit` ≠ oranžová.** Oranžová je rezervovaná pro brand accent. `edit`
+  je fialový. Před touto úpravou byla oranžová a kolizovala s aktivní/výběr
+  proužkem.
+
+### Při výběru řádku
+
+Když uživatel označí řádek v seznamu:
+
+- Pruh se přepíše na **oranžový** (brand accent) — výběr přebije stav.
+  Stav vidíš pak v detailu vedle title (badge).
+- Pozadí řádku zezelená lehce na `--shpd-color-bg-selected`.
+
+Logika je v `ViewerRow.svelte` přes CSS proměnnou `--shpd-row-bar`, kterou
+nastavují `docState_*` třídy. `--selected` ji přepisuje.
+
+---
+
+## 5. Badge systém
+
+Frontend má **tři vrstvy badge** s podobnou paletou:
+
+| Komponenta | CSS prefix | Účel |
+|---|---|---|
+| `ViewerDetail.svelte` (hlavička) | `.shpd-detail__badge--*` | Badge v hlavičce detailu (typ záznamu, stav, VIP atd.) |
+| `ViewerDetail.svelte` (extracted docs) | `.shpd-extracted__badge--*` | Badge stavu u extrahovaných dokumentů |
+| `FormStateBadge.svelte` | `.shpd-form-state-badge.docState_*` | Stavový badge v hlavičce editačního formuláře |
+
+Všechny tři používají **stejnou doc-state paletu** (concept, edit, confirmed,
+archive, trash, cancelled). Plus mají vlastní **typové varianty** mimo doc-state:
+
+### Typové varianty (jen `__badge--*`)
+
+| Třída | Pozadí / text | Použití |
+|---|---|---|
+| `--neutral` | šedá | Default, typový badge bez významu (např. „Fyzická osoba") |
+| `--primary` | modrá soft | Důležitá info (typ záznamu, kód) |
+| `--accent` | oranžová soft | „VIP klient", důležité, „za pozornost" |
+| `--success` | zelená | Úspěch (mimo doc-state) |
+| `--warning` | žlutá | Varování |
+| `--danger` | červená | Chyba |
+
+### API kontrakt pro backend
+
+Backend posílá v `data.detail`:
+
+```json
+{
+    "title": "Petra Benešová",
+    "subtitle": "TEST-0074",
+    "badges": [
+        { "label": "Fyzická osoba", "style": "primary" },
+        { "label": "VIP klient",    "style": "accent"  }
+    ],
+    "tabs": [ ... ]
+}
+```
+
+`title` je povinný pokud se má hlavička detailu vykreslit. Bez něj se
+hlavička přeskočí (graceful fallback — backend nemusí být upraven).
+
+---
+
+## 6. CSS proměnné — best practices
+
+### Pravidla
+
+1. **Žádné hardcoded hex hodnoty v komponentách.** Pokud potřebuješ barvu,
+   která není v `variables.css`, přidej ji tam jako token a použij přes
+   `var(--shpd-color-...)`.
+2. **Nepoužívej `:global(.docState_*)`** — kolizuje napříč komponentami,
+   které mají stejné `docState_*` třídy. Místo toho použij child selectory
+   (`.shpd-component-name.docState_edit`).
+3. **Tlačítka řeš přes `<Button>`** komponentu, ne přes vlastní hardcoded
+   styly s `!important`. `Button` má varianty `primary | secondary |
+   danger | success | ghost`.
+
+### Anti-patterny
+
+- ❌ `.shpd-extracted__btn-apply { background: #16a34a !important; }` — vlastní
+  tlačítka mimo `<Button>` systém. ✅ Použij `<Button variant="success">`.
+- ❌ `:global(.docState_edit) { background: #ffedd5 }` v `FormStateBadge.svelte`
+  přebíjí `.docState_edit` v `ViewerRow.svelte`. ✅ Použij child selektor
+  `.shpd-form-state-badge.docState_edit`.
+- ❌ `box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15)` (stará Tailwind modrá)
+  ve focus stavech inputů. ✅ Použij `var(--shpd-color-focus-ring)`.
+
+---
+
+## 7. Avatary v seznamu
+
+Komponenta `ViewerRow.svelte` podporuje volitelné kruhové avatary s iniciálami.
+Vykreslí se kdykoli backend pošle `row.avatar` jako string s iniciálami.
+Pokud `row.avatar` chybí, fallback na `row.icon` (emoji nebo unicode glyph).
+
+### Konvence
+
+| Typ entity | Co posílat |
+|---|---|
+| Fyzická osoba | `avatar`: iniciály z `first_name + last_name` (např. `"PB"`) |
+| Právnická osoba (firma) | `avatar`: iniciály z názvu (`"BG"` pro Beta Gastro) **nebo** `icon`: `"🏢"` |
+| Faktura, dokument | `icon` (emoji), bez avataru |
+| Došlá pošta | `icon` (emoji), bez avataru |
+
+### Vzhled
+
+- 32×32 px kruh (stejná sloupcová šířka jako `__icon`, ať se řádky bez
+  a s avatarem zarovnají)
+- Pozadí `--shpd-color-primary-soft`, text `--shpd-color-primary`
+- `text-transform: uppercase` (z `"pb"` udělá `"PB"`)
+
+---
+
+## 8. Layout konvence
+
+### Sidebar
+
+- Aktivní položka má oranžový **3px proužek vlevo** (`::before`) + plné modré
+  pozadí (`var(--shpd-color-primary)`)
+- Neaktivní položky mají hover s lehkou bílou (`var(--shpd-color-bg-sidebar-hover)`)
+
+### Viewer (seznam + detail)
+
+- Vybraný řádek má oranžový **6px proužek vlevo** + sytější modré pozadí
+  (`var(--shpd-color-bg-selected)`)
+- Detail má volitelnou hlavičku (title + subtitle + badges) — vykreslí se
+  jen pokud backend pošle `detail.title`
+
+### Modální dialogy
+
+- Overlay `var(--shpd-color-overlay)` (40% černá)
+- Tlačítka v patce přes `<Button>` komponentu (nikdy hardcoded styly)
+
+---
+
+## 9. Soubory
+
+| Soubor | Obsah |
+|---|---|
+| `frontend/src/styles/variables.css` | **Centrum pravdy** — všechny barvy, spacing, typografie, layout tokeny |
+| `frontend/src/styles/base.css` | Základní typografie a layout |
+| `frontend/src/styles/reset.css` | CSS reset |
+| `frontend/src/components/ui/Button.svelte` | Tlačítkový primitiv s variantami |
+| `frontend/src/components/viewer/ViewerRow.svelte` | Řádek seznamu se stavovým pruhem |
+| `frontend/src/components/viewer/ViewerDetail.svelte` | Detail s hlavičkou, taby, badge |
+| `frontend/src/components/form/FormStateBadge.svelte` | Stavový badge ve formuláři |
+
+---
+
+## 10. Plánovaná rozšíření
+
+- **Dark mode** — palety přes `[data-theme="dark"]` selektor v `variables.css`.
+  Až bude light mode pevný a neměnný.
+- **Doc-state palety jako tokeny** — doc-state barvy (`#facc15`,
+  `#a78bfa` atd.) jsou hardcoded v `ViewerRow`, `FormStateBadge`
+  a `ViewerDetail`. Stálo by za to je vytáhnout do `variables.css`
+  jako `--shpd-color-state-edit-bar` atd.
+- **Modal sjednocení** — modaly jsou definované 3× (`Modal.svelte` + inline
+  v `Viewer.svelte` a `ViewerDetail.svelte`). Stálo by za refaktor přes
+  jednu sdílenou `Modal.svelte` komponentu.

@@ -1,0 +1,69 @@
+{
+    "id": "economy.items",
+    "name": "Items",
+    "name:cs": "Položky",
+    "name:en": "Items",
+    "description": "Catalog of items (goods, services, accounting items, …) and their kinds",
+    "description:cs": "Katalog položek (zboží, služby, účetní položky, …) a jejich druhů",
+    "description:en": "Catalog of items (goods, services, accounting items, …) and their kinds",
+
+    "dependencies": [
+        "core.system",
+        "core.units"
+    ],
+
+    "tables": [
+        "economy_items",
+        "economy_items_kinds"
+    ],
+
+    "viewers": [
+        {
+            "id": "economy.items",
+            "name": "Items",
+            "name:cs": "Položky",
+            "name:en": "Items",
+            "icon": "box",
+            "table": "economy_items",
+            "class": "Shipard\\Module\\Economy\\Items\\ItemsViewer"
+        },
+        {
+            "id": "economy.items.kinds",
+            "name": "Item kinds",
+            "name:cs": "Druhy položek",
+            "name:en": "Item kinds",
+            "icon": "tags",
+            "table": "economy_items_kinds",
+            "class": "Shipard\\Module\\Economy\\Items\\ItemKindsViewer"
+        }
+    ],
+
+    "forms": [
+        {
+            "table": "economy_items",
+            "class": "Shipard\\Module\\Economy\\Items\\ItemsForm"
+        },
+        {
+            "table": "economy_items_kinds",
+            "class": "Shipard\\Module\\Economy\\Items\\ItemKindsForm"
+        }
+    ],
+
+    "documentClasses": [
+        {
+            "table": "economy_items",
+            "class": "Shipard\\Module\\Economy\\Items\\ItemDocument"
+        },
+        {
+            "table": "economy_items_kinds",
+            "class": "Shipard\\Module\\Economy\\Items\\ItemKindDocument"
+        }
+    ],
+
+    "config": [
+        {
+            "id": "economy.items.itemTypes",
+            "file": "config/itemTypes.jsonc"
+        }
+    ]
+}

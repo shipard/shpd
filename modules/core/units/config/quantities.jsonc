@@ -1,0 +1,16 @@
+{
+    // core.units.quantities
+    //
+    // Veličiny pro `enumString` sloupec `core_units.quantity`. Klíče jsou
+    // lowercase ASCII identifikátory (max 10 znaků), aby se vešly do
+    // sloupce `enumString(10)`.
+
+    "weight":  {"name": "Weight",   "name:cs": "Hmotnost",  "name:en": "Weight"},
+    "volume":  {"name": "Volume",   "name:cs": "Objem",     "name:en": "Volume"},
+    "length":  {"name": "Length",   "name:cs": "Délka",     "name:en": "Length"},
+    "area":    {"name": "Area",     "name:cs": "Plocha",    "name:en": "Area"},
+    "time":    {"name": "Time",     "name:cs": "Čas",       "name:en": "Time"},
+    "energy":  {"name": "Energy",   "name:cs": "Energie",   "name:en": "Energy"},
+    "count":   {"name": "Count",    "name:cs": "Počet",     "name:en": "Count"},
+    "other":   {"name": "Other",    "name:cs": "Ostatní",   "name:en": "Other"}
+}

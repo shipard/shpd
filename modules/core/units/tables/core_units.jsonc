@@ -1,0 +1,153 @@
+{
+    "tableId": 310,
+    "name": "Units of measure",
+    "name:cs": "Měrné jednotky",
+    "name:en": "Units of measure",
+
+    "displayPattern": "{name} ({shortcut})",
+
+    "docStates": {
+        "stateColumn": "docState",
+        "mainColumn": "docStateMain",
+        "cfgItem": "core.system.docStatesArchive"
+    },
+
+    "columnGroups": [
+        {
+            "id": "identity",
+            "name": "Identity",
+            "name:cs": "Identifikace",
+            "name:en": "Identity"
+        },
+        {
+            "id": "quantity",
+            "name": "Quantity",
+            "name:cs": "Veličina",
+            "name:en": "Quantity"
+        }
+    ],
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+
+        // --- identity ---
+
+        {
+            "id": "name",
+            "name": "Name",
+            "name:cs": "Název",
+            "name:en": "Name",
+            "type": "varchar",
+            "length": 50,
+            "nullable": false,
+            "group": "identity"
+        },
+        {
+            "id": "shortcut",
+            "name": "Shortcut",
+            "name:cs": "Zkratka",
+            "name:en": "Shortcut",
+            "type": "varchar",
+            "length": 20,
+            "nullable": false,
+            "group": "identity"
+        },
+        {
+            "id": "system_code",
+            "name": "System code",
+            "name:cs": "Systémový kód",
+            "name:en": "System code",
+            "type": "varchar",
+            "length": 25,
+            "nullable": true,
+            "group": "identity"
+        },
+
+        // --- quantity ---
+
+        {
+            "id": "quantity",
+            "name": "Quantity",
+            "name:cs": "Veličina",
+            "name:en": "Quantity",
+            "type": "enumString",
+            "length": 10,
+            "nullable": false,
+            "cfgItem": "core.units.quantities",
+            "group": "quantity"
+        },
+        {
+            "id": "coefficient",
+            "name": "Coefficient",
+            "name:cs": "Koeficient",
+            "name:en": "Coefficient",
+            "type": "numeric",
+            "precision": 20,
+            "scale": 10,
+            "nullable": true,
+            "group": "quantity"
+        },
+        {
+            "id": "is_base",
+            "name": "Base unit",
+            "name:cs": "Základní jednotka",
+            "name:en": "Base unit",
+            "type": "boolean",
+            "default": 0,
+            "group": "quantity"
+        },
+
+        // --- doc state (systémové, bez skupiny) ---
+
+        {
+            "id": "docState",
+            "name": "Document state",
+            "name:cs": "Stav dokumentu",
+            "name:en": "Document state",
+            "type": "tinyint",
+            "default": 10,
+            "system": true
+        },
+        {
+            "id": "docStateMain",
+            "name": "Document state (sort)",
+            "name:cs": "Stav dokumentu (řazení)",
+            "name:en": "Document state (sort)",
+            "type": "tinyint",
+            "default": 1,
+            "system": true
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "unq_system_code",
+            "type": "unique",
+            "columns": [
+                {"column": "system_code"}
+            ]
+        },
+        {
+            "id": "idx_quantity",
+            "type": "index",
+            "columns": [
+                {"column": "quantity", "order": "ASC"},
+                {"column": "is_base", "order": "DESC"}
+            ]
+        },
+        {
+            "id": "idx_doc_state",
+            "type": "index",
+            "columns": [
+                {"column": "docStateMain", "order": "ASC"},
+                {"column": "name", "order": "ASC"}
+            ]
+        }
+    ]
+}

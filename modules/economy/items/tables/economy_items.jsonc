@@ -1,0 +1,220 @@
+{
+    "tableId": 311,
+    "name": "Items",
+    "name:cs": "Položky",
+    "name:en": "Items",
+
+    "displayPattern": "{code} — {name}",
+
+    "docStates": {
+        "stateColumn": "docState",
+        "mainColumn": "docStateMain",
+        "cfgItem": "core.system.docStatesArchive"
+    },
+
+    "columnGroups": [
+        {
+            "id": "identity",
+            "name": "Identity",
+            "name:cs": "Identifikace",
+            "name:en": "Identity"
+        },
+        {
+            "id": "classification",
+            "name": "Classification",
+            "name:cs": "Klasifikace",
+            "name:en": "Classification"
+        },
+        {
+            "id": "details",
+            "name": "Details",
+            "name:cs": "Detaily",
+            "name:en": "Details"
+        },
+        {
+            "id": "pricing",
+            "name": "Pricing",
+            "name:cs": "Cena",
+            "name:en": "Pricing"
+        }
+    ],
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+
+        // --- identity ---
+
+        {
+            "id": "code",
+            "name": "Code",
+            "name:cs": "Kód",
+            "name:en": "Code",
+            "type": "varchar",
+            "length": 25,
+            "nullable": false,
+            "group": "identity"
+        },
+        {
+            "id": "name",
+            "name": "Name",
+            "name:cs": "Název",
+            "name:en": "Name",
+            "type": "varchar",
+            "length": 200,
+            "nullable": false,
+            "group": "identity"
+        },
+
+        // --- classification ---
+
+        {
+            "id": "item_kind",
+            "name": "Item kind",
+            "name:cs": "Druh položky",
+            "name:en": "Item kind",
+            "type": "int",
+            "nullable": false,
+            "reference": "economy_items_kinds",
+            "group": "classification"
+        },
+        {
+            "id": "item_type",
+            "name": "Item type",
+            "name:cs": "Typ položky",
+            "name:en": "Item type",
+            "type": "enumInt",
+            "default": 3,
+            "cfgItem": "economy.items.itemTypes",
+            "group": "classification"
+        },
+
+        // --- details ---
+
+        {
+            "id": "description",
+            "name": "Description",
+            "name:cs": "Popis",
+            "name:en": "Description",
+            "type": "varchar",
+            "length": 200,
+            "nullable": true,
+            "group": "details"
+        },
+        {
+            "id": "valid_from",
+            "name": "Valid from",
+            "name:cs": "Platnost od",
+            "name:en": "Valid from",
+            "type": "date",
+            "nullable": true,
+            "group": "details"
+        },
+        {
+            "id": "valid_to",
+            "name": "Valid to",
+            "name:cs": "Platnost do",
+            "name:en": "Valid to",
+            "type": "date",
+            "nullable": true,
+            "group": "details"
+        },
+
+        // --- pricing ---
+
+        {
+            "id": "sales_price_no_vat",
+            "name": "Sales price (no VAT)",
+            "name:cs": "Prodejní cena bez DPH",
+            "name:en": "Sales price (no VAT)",
+            "type": "numeric",
+            "precision": 15,
+            "scale": 4,
+            "nullable": true,
+            "group": "pricing"
+        },
+        {
+            "id": "unit",
+            "name": "Unit",
+            "name:cs": "Jednotka",
+            "name:en": "Unit",
+            "type": "int",
+            "nullable": false,
+            "reference": "core_units",
+            "group": "pricing"
+        },
+
+        // --- doc state (systémové, bez skupiny) ---
+
+        {
+            "id": "docState",
+            "name": "Document state",
+            "name:cs": "Stav dokumentu",
+            "name:en": "Document state",
+            "type": "tinyint",
+            "default": 10,
+            "system": true
+        },
+        {
+            "id": "docStateMain",
+            "name": "Document state (sort)",
+            "name:cs": "Stav dokumentu (řazení)",
+            "name:en": "Document state (sort)",
+            "type": "tinyint",
+            "default": 1,
+            "system": true
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "unq_code",
+            "type": "unique",
+            "columns": [
+                {"column": "code"}
+            ]
+        },
+        {
+            "id": "idx_item_kind",
+            "type": "index",
+            "columns": [
+                {"column": "item_kind"}
+            ]
+        },
+        {
+            "id": "idx_item_type",
+            "type": "index",
+            "columns": [
+                {"column": "item_type"}
+            ]
+        },
+        {
+            "id": "idx_unit",
+            "type": "index",
+            "columns": [
+                {"column": "unit"}
+            ]
+        },
+        {
+            "id": "idx_doc_state",
+            "type": "index",
+            "columns": [
+                {"column": "docStateMain", "order": "ASC"},
+                {"column": "name", "order": "ASC"}
+            ]
+        },
+        {
+            "id": "ft_name",
+            "type": "fulltext",
+            "columns": [
+                {"column": "name"},
+                {"column": "description"}
+            ]
+        }
+    ]
+}

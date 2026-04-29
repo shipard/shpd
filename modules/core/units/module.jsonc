@@ -1,0 +1,50 @@
+{
+    "id": "core.units",
+    "name": "Units of measure",
+    "name:cs": "Měrné jednotky",
+    "name:en": "Units of measure",
+    "description": "Catalog of units of measure (weight, volume, length, time, …) with conversion coefficients within each quantity",
+    "description:cs": "Číselník měrných jednotek (hmotnost, objem, délka, čas, …) s koeficienty pro převody v rámci jedné veličiny",
+    "description:en": "Catalog of units of measure (weight, volume, length, time, …) with conversion coefficients within each quantity",
+
+    "dependencies": [
+        "core.system"
+    ],
+
+    "tables": [
+        "core_units"
+    ],
+
+    "viewers": [
+        {
+            "id": "core.units",
+            "name": "Units",
+            "name:cs": "Měrné jednotky",
+            "name:en": "Units",
+            "icon": "ruler",
+            "table": "core_units",
+            "class": "Shipard\\Module\\Core\\Units\\UnitsViewer"
+        }
+    ],
+
+    "forms": [
+        {
+            "table": "core_units",
+            "class": "Shipard\\Module\\Core\\Units\\UnitsForm"
+        }
+    ],
+
+    "documentClasses": [
+        {
+            "table": "core_units",
+            "class": "Shipard\\Module\\Core\\Units\\UnitDocument"
+        }
+    ],
+
+    "config": [
+        {
+            "id": "core.units.quantities",
+            "file": "config/quantities.jsonc"
+        }
+    ]
+}

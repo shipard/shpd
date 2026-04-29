@@ -1,0 +1,39 @@
+// Seed dat pro systémové jednotky (UnitsProvisioner).
+//
+// Pole 18 záznamů — každý má:
+//   - system_code  string  unikátní identifikátor (NOT NULL = systémový záznam)
+//   - name:cs      string  český název (použije se jako `name` při INSERTu)
+//   - name:en      string  anglický název (pro budoucí použití)
+//   - shortcut     string  zkratka zobrazovaná v UI
+//   - quantity     string  veličina, klíč v cfgItem `core.units.quantities`
+//   - coefficient  number|null  koeficient k základní jednotce ve stejné veličině;
+//                               null = nepřevoditelná jednotka
+//   - is_base      bool    true = základní jednotka pro danou veličinu
+//
+// Provisioner při INSERTu nastaví: docState = 40, docStateMain = 3.
+[
+    {"system_code": "pcs",  "name:cs": "Kus",             "name:en": "Piece",         "shortcut": "ks",    "quantity": "count",  "coefficient": 1,             "is_base": true},
+
+    {"system_code": "hr",   "name:cs": "Hodina",          "name:en": "Hour",          "shortcut": "hod",   "quantity": "time",   "coefficient": null,          "is_base": false},
+    {"system_code": "hr_2", "name:cs": "Půlhodina",       "name:en": "Half hour",     "shortcut": "30min", "quantity": "time",   "coefficient": null,          "is_base": false},
+    {"system_code": "hr_4", "name:cs": "Čtvrthodina",     "name:en": "Quarter hour",  "shortcut": "15min", "quantity": "time",   "coefficient": null,          "is_base": false},
+    {"system_code": "day",  "name:cs": "Den",             "name:en": "Day",           "shortcut": "den",   "quantity": "time",   "coefficient": null,          "is_base": false},
+    {"system_code": "mnth", "name:cs": "Měsíc",           "name:en": "Month",         "shortcut": "měs",   "quantity": "time",   "coefficient": null,          "is_base": false},
+    {"system_code": "year", "name:cs": "Rok",             "name:en": "Year",          "shortcut": "rok",   "quantity": "time",   "coefficient": null,          "is_base": false},
+
+    {"system_code": "m",    "name:cs": "Metr",            "name:en": "Meter",         "shortcut": "m",     "quantity": "length", "coefficient": 1,             "is_base": true},
+    {"system_code": "km",   "name:cs": "Kilometr",        "name:en": "Kilometer",     "shortcut": "km",    "quantity": "length", "coefficient": 1000,          "is_base": false},
+
+    {"system_code": "m2",   "name:cs": "Metr čtvereční",  "name:en": "Square meter",  "shortcut": "m²",    "quantity": "area",   "coefficient": 1,             "is_base": true},
+
+    {"system_code": "m3",   "name:cs": "Metr krychlový",  "name:en": "Cubic meter",   "shortcut": "m³",    "quantity": "volume", "coefficient": 1000,          "is_base": false},
+    {"system_code": "l",    "name:cs": "Litr",            "name:en": "Liter",         "shortcut": "l",     "quantity": "volume", "coefficient": 1,             "is_base": true},
+
+    {"system_code": "kg",   "name:cs": "Kilogram",        "name:en": "Kilogram",      "shortcut": "kg",    "quantity": "weight", "coefficient": 1,             "is_base": true},
+    {"system_code": "g",    "name:cs": "Gram",            "name:en": "Gram",          "shortcut": "g",     "quantity": "weight", "coefficient": 0.001,         "is_base": false},
+    {"system_code": "t",    "name:cs": "Tuna",            "name:en": "Tonne",         "shortcut": "t",     "quantity": "weight", "coefficient": 1000,          "is_base": false},
+
+    {"system_code": "kwh",  "name:cs": "Kilowatthodina",  "name:en": "Kilowatt-hour", "shortcut": "kWh",   "quantity": "energy", "coefficient": 1,             "is_base": true},
+    {"system_code": "mwh",  "name:cs": "Megawatthodina",  "name:en": "Megawatt-hour", "shortcut": "MWh",   "quantity": "energy", "coefficient": 1000,          "is_base": false},
+    {"system_code": "gj",   "name:cs": "Gigajoule",       "name:en": "Gigajoule",     "shortcut": "GJ",    "quantity": "energy", "coefficient": 277.7777777778, "is_base": false}
+]

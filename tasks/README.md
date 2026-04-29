@@ -14,22 +14,19 @@ kódu, věř kódu (kód je živý, task je momentka).
 
 Tasky, které jsou rozpracované nebo na řadě.
 
-### Modul `mail` — AI analýza
+### Modul `economy.items` + `core.units`
 
-Závislost: **Fáze 1 a 2a hotové**.
+Příprava na dokladový systém — katalog položek, číselník druhů, měrné
+jednotky. Bez těchto třech tabulek nemá smysl začínat s fakturami nebo
+objednávkami.
 
-| Task                          | Stav    | Závislosti                          |
-|-------------------------------|---------|-------------------------------------|
-| `ds-encrypted-secrets.md`     | připrav. | žádné — generický fundament         |
-| `mail-phase3a.md`             | připrav. | `ds-encrypted-secrets` (dokončené)  |
+| Task                       | Stav     | Závislosti                                |
+|----------------------------|----------|-------------------------------------------|
+| `economy-items-phase1.md`  | připrav. | edit-forms (hotové), doc-states (hotové)  |
 
-**Doporučené pořadí:** nejdřív celý `ds-encrypted-secrets`, ověřit
-v praxi (kanárková tabulka, rotation, migrace), **pak** teprve
-`mail-phase3a`. Důvod: secrets infrastruktura je cross-cutting concern
-a chybí-li, AI tasky se musí vracet.
-
-Po `mail-phase3a` následuje `ai_analyzer/tasks/phase1.md` (samostatný
-repozitář — Python daemon).
+Po dokončení této fáze bude možné začít plánovat samotné doklady (faktury,
+objednávky). V navazujících fázích modulu položek se bude řešit: VAT sazby
+per země a cena s DPH, skladová evidence, ceníkový mechanismus.
 
 ---
 
@@ -40,13 +37,18 @@ něco postavené tak, jak je, často to najde v původním PRD.
 
 ### Modul `mail`
 
-| Task                  | Co řeší                                                |
-|-----------------------|--------------------------------------------------------|
-| `mail-phase1.md`      | Tabulky, viewer, editor, fake data — evidence došlé pošty |
-| `mail-phase2a.md`     | API endpoint `/api/v1/_mail/incoming`, idempotency, auto-provisioning |
+| Task                       | Co řeší                                                |
+|----------------------------|--------------------------------------------------------|
+| `mail-phase1.md`           | Tabulky, viewer, editor, fake data — evidence došlé pošty |
+| `mail-phase2a.md`          | API endpoint `/api/v1/_mail/incoming`, idempotency, auto-provisioning |
+| `ds-encrypted-secrets.md`  | Šifrování citlivých sloupců — `encrypted_text` typ, `DsSecretCipher`, kanárková tabulka, rotace klíčů |
+| `mail-phase3a.md`          | AI analýza došlé pošty — backendy, profily, claims, extrahované dokumenty, integrace s `ai_analyzer` daemonem |
 
 `mail_router/tasks/phase1.md` (Fáze 2b) žije v jiném repozitáři a
-implementuje samotný daemon, který tento endpoint volá.
+implementuje samotný daemon, který volá endpoint `/api/v1/_mail/incoming`.
+
+`ai_analyzer:tasks/phase1.md` (Python daemon) implementuje samotnou AI
+analýzu, která konzumuje claims a vrací výsledky do tabulek z `mail-phase3a`.
 
 ### Editační formuláře
 

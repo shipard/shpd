@@ -54,6 +54,8 @@ import {
   faFileExcel,
   faFileZipper,
   faEnvelope,
+  faRulerCombined,
+  faCube,
 } from '@fortawesome/free-solid-svg-icons';
 
 // ── Akce (toolbary, tlačítka) ──────────────────────────────────
@@ -93,6 +95,8 @@ export const iconTags = faTags;
 export const iconFolder = faFolderOpen;
 export const iconTable = faTable;
 export const iconMail = faEnvelope;
+export const iconRuler = faRulerCombined;
+export const iconBox = faCube;
 
 // ── Stav / feedback ─────────────────────────────────────────────
 export const iconSpinner = faCircleNotch;
@@ -136,6 +140,8 @@ export const iconMap = {
   'folder': iconFolder,
   'table': iconTable,
   'mail': iconMail,
+  'ruler': iconRuler,
+  'box': iconBox,
   'logout': iconLogout,
 };
 

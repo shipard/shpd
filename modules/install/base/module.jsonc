@@ -10,7 +10,9 @@
         "core.system",
         "core.attachments",
         "core.mail",
+        "core.units",
         "base.persons",
         "economy.codebooks",
+        "economy.items",
     ]
 }

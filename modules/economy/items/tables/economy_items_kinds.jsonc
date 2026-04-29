@@ -1,0 +1,117 @@
+{
+    "tableId": 312,
+    "name": "Item kinds",
+    "name:cs": "Druhy položek",
+    "name:en": "Item kinds",
+
+    "displayPattern": "{name}",
+
+    "docStates": {
+        "stateColumn": "docState",
+        "mainColumn": "docStateMain",
+        "cfgItem": "core.system.docStatesArchive"
+    },
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+        {
+            "id": "name",
+            "name": "Name",
+            "name:cs": "Název",
+            "name:en": "Name",
+            "type": "varchar",
+            "length": 100,
+            "nullable": false
+        },
+        {
+            "id": "item_type",
+            "name": "Item type",
+            "name:cs": "Typ položky",
+            "name:en": "Item type",
+            "type": "enumInt",
+            "default": 3,
+            "cfgItem": "economy.items.itemTypes"
+        },
+        {
+            "id": "valid_from",
+            "name": "Valid from",
+            "name:cs": "Platnost od",
+            "name:en": "Valid from",
+            "type": "date",
+            "nullable": true
+        },
+        {
+            "id": "valid_to",
+            "name": "Valid to",
+            "name:cs": "Platnost do",
+            "name:en": "Valid to",
+            "type": "date",
+            "nullable": true
+        },
+        {
+            "id": "system_code",
+            "name": "System code",
+            "name:cs": "Systémový kód",
+            "name:en": "System code",
+            "type": "varchar",
+            "length": 25,
+            "nullable": true
+        },
+        {
+            "id": "docState",
+            "name": "Document state",
+            "name:cs": "Stav dokumentu",
+            "name:en": "Document state",
+            "type": "tinyint",
+            "default": 10,
+            "system": true
+        },
+        {
+            "id": "docStateMain",
+            "name": "Document state (sort)",
+            "name:cs": "Stav dokumentu (řazení)",
+            "name:en": "Document state (sort)",
+            "type": "tinyint",
+            "default": 1,
+            "system": true
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "unq_system_code",
+            "type": "unique",
+            "columns": [
+                {"column": "system_code"}
+            ]
+        },
+        {
+            "id": "idx_item_type",
+            "type": "index",
+            "columns": [
+                {"column": "item_type"}
+            ]
+        },
+        {
+            "id": "idx_doc_state",
+            "type": "index",
+            "columns": [
+                {"column": "docStateMain", "order": "ASC"},
+                {"column": "name", "order": "ASC"}
+            ]
+        },
+        {
+            "id": "ft_name",
+            "type": "fulltext",
+            "columns": [
+                {"column": "name"}
+            ]
+        }
+    ]
+}

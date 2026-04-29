@@ -1,0 +1,12 @@
+{
+    // economy.items.itemTypes
+    //
+    // Hodnoty pro `enumInt` sloupce:
+    //   - economy_items_kinds.item_type
+    //   - economy_items.item_type (denormalizace z item_kind)
+
+    "0": {"name": "Service",     "name:cs": "Služba",          "name:en": "Service"},
+    "1": {"name": "Stock",       "name:cs": "Zásoba",          "name:en": "Stock"},
+    "2": {"name": "Accounting",  "name:cs": "Účetní položka",  "name:en": "Accounting item"},
+    "3": {"name": "Other",       "name:cs": "Ostatní",         "name:en": "Other"}
+}

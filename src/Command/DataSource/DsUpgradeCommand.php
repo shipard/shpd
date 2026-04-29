@@ -19,6 +19,8 @@ use Shipard\Core\Security\DsSecretCipher;
 use Shipard\Core\Utils\JsoncParser;
 use Shipard\Module\Core\Mail\AIAnalyzerProvisioner;
 use Shipard\Module\Core\Mail\MailRouterProvisioner;
+use Shipard\Module\Core\Units\UnitsProvisioner;
+use Shipard\Module\Economy\Items\ItemKindsProvisioner;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -233,6 +235,8 @@ class DsUpgradeCommand extends Command
         $output->writeln('');
         $output->writeln('Upgrade complete. ' . $created . ' tables created, ' . $altered . ' tables altered, ' . $unchanged . ' tables unchanged.');
 
+        $this->provisionUnits($resolvedModules, $dsConnection, $output);
+        $this->provisionItemKinds($resolvedModules, $dsConnection, $output);
         $this->provisionMailRouter($dsConfig, $dsConnection, $output);
         $this->provisionAiAnalyzer($dsConfig, $dsConnection, $output);
 
@@ -311,5 +315,74 @@ class DsUpgradeCommand extends Command
         } else {
             $output->writeln("  [OK]     profile 'czech_invoices' (id={$profile['id']})");
         }
+    }
+
+    /**
+     * @param list<\Shipard\Core\Module\ModuleDefinition> $resolvedModules
+     */
+    private function provisionUnits(
+        array $resolvedModules,
+        DataSourceConnection $dsConnection,
+        OutputInterface $output,
+    ): void {
+        $output->writeln('');
+        $output->writeln('Provisioning units...');
+
+        if (!$this->isModuleActive($resolvedModules, 'core.units')) {
+            $output->writeln('  <comment>[SKIP] core.units module not active</comment>');
+            return;
+        }
+
+        $seedFile = $this->getModulesBasePath() . '/core/units/config/unitsSeed.jsonc';
+        $provisioner = new UnitsProvisioner($dsConnection, $seedFile);
+        $result = $provisioner->provision();
+
+        $units = $result['units'];
+        $output->writeln(sprintf(
+            '  [OK]    units — created: %d, existing: %d',
+            $units['created'],
+            $units['existing'],
+        ));
+    }
+
+    /**
+     * @param list<\Shipard\Core\Module\ModuleDefinition> $resolvedModules
+     */
+    private function provisionItemKinds(
+        array $resolvedModules,
+        DataSourceConnection $dsConnection,
+        OutputInterface $output,
+    ): void {
+        $output->writeln('');
+        $output->writeln('Provisioning economy.items kinds...');
+
+        if (!$this->isModuleActive($resolvedModules, 'economy.items')) {
+            $output->writeln('  <comment>[SKIP] economy.items module not active</comment>');
+            return;
+        }
+
+        $seedFile = $this->getModulesBasePath() . '/economy/items/config/itemKindsSeed.jsonc';
+        $provisioner = new ItemKindsProvisioner($dsConnection, $seedFile);
+        $result = $provisioner->provision();
+
+        $kinds = $result['kinds'];
+        $output->writeln(sprintf(
+            '  [OK]    item kinds — created: %d, existing: %d',
+            $kinds['created'],
+            $kinds['existing'],
+        ));
+    }
+
+    /**
+     * @param list<\Shipard\Core\Module\ModuleDefinition> $resolvedModules
+     */
+    private function isModuleActive(array $resolvedModules, string $moduleId): bool
+    {
+        foreach ($resolvedModules as $module) {
+            if ($module->id === $moduleId) {
+                return true;
+            }
+        }
+        return false;
     }
 }

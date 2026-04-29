@@ -1,0 +1,10 @@
+// Seed dat pro systémové druhy položek (ItemKindsProvisioner).
+//
+// Pole 4 záznamů — jeden per `item_type`. Provisioner při INSERTu nastaví:
+//   docState = 40 (V pořádku), docStateMain = 3
+[
+    {"system_code": "service",    "name:cs": "Služba",         "name:en": "Service",         "item_type": 0},
+    {"system_code": "stock",      "name:cs": "Zásoba",         "name:en": "Stock",           "item_type": 1},
+    {"system_code": "accounting", "name:cs": "Účetní položka", "name:en": "Accounting item", "item_type": 2},
+    {"system_code": "other",      "name:cs": "Ostatní",        "name:en": "Other",           "item_type": 3}
+]

@@ -3,7 +3,10 @@
 Modul sdružuje ekonomické číselníky používané dokladovým a skladovým
 systémem. Klíčovou náplní jsou **fiskální období** (roky a měsíce, na
 které se mapují účetní data dokladů) a **registrace DPH s obdobími**
-(přiznání DPH, kontrolní hlášení).
+(přiznání DPH, kontrolní hlášení). Modul dále spravuje **pokladny**
+a **vlastní bankovní spojení**, které budou referencovány z hlaviček
+dokladů (pokladní lístky, bankovní výpisy, faktury s předkontací na
+bankovní účet).
 
 Tabulky `economy_codebooks_warehouses` a `economy_codebooks_cost_centers`
 jsou v této fázi placeholdery (schémata existují, UI a Document logika
@@ -27,6 +30,8 @@ přijde s dokladovým systémem).
 | [economy_codebooks_fiscal_months](tables/economy_codebooks_fiscal_months.md) | Fiskální měsíce navázané na rok |
 | [economy_codebooks_vat_registrations](tables/economy_codebooks_vat_registrations.md) | Registrace k DPH (různé země, OSS, diskontinuity) |
 | [economy_codebooks_vat_periods](tables/economy_codebooks_vat_periods.md) | Období DPH navázaná na registraci (měsíční / čtvrtletní) |
+| [economy_codebooks_cash_desks](tables/economy_codebooks_cash_desks.md) | Pokladny pro hotovostní operace |
+| [economy_codebooks_bank_accounts](tables/economy_codebooks_bank_accounts.md) | Vlastní bankovní účty (firma) |
 
 ## Zdrojové soubory
 
@@ -42,6 +47,8 @@ přijde s dokladovým systémem).
 | [VatRegistrationsForm.php](src/VatRegistrationsForm.php) | Formulář registrace se sub-tabulkou Období DPH |
 | [VatRegistrationsViewer.php](src/VatRegistrationsViewer.php) | Viewer registrací s tabem seznamu období |
 | [VatPeriodsProvisioner.php](src/VatPeriodsProvisioner.php) | Idempotentní generátor období pro aktivní registrace |
+| [CashDeskDocument.php](src/CashDeskDocument.php) | Validace pokladny (povinná pole, formát měny) + default-per-currency uniqueness v `afterPersist` |
+| [BankAccountDocument.php](src/BankAccountDocument.php) | Validace bankovního účtu (account_number nebo iban povinný, regex IBAN/BIC) + default-per-currency uniqueness v `afterPersist` |
 
 ## Konfigurace
 

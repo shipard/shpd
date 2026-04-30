@@ -3,9 +3,9 @@
     "name": "Codebooks",
     "name:cs": "Číselníky",
     "name:en": "Codebooks",
-    "description": "Warehouses, cost centers, fiscal periods, VAT registrations and other codebooks",
-    "description:cs": "Sklady, střediska, fiskální období, registrace DPH a další číselníky",
-    "description:en": "Warehouses, cost centers, fiscal periods, VAT registrations and other codebooks",
+    "description": "Warehouses, cost centers, fiscal periods, VAT registrations, cash desks, bank accounts and other codebooks",
+    "description:cs": "Sklady, střediska, fiskální období, registrace DPH, pokladny, bankovní spojení a další číselníky",
+    "description:en": "Warehouses, cost centers, fiscal periods, VAT registrations, cash desks, bank accounts and other codebooks",
 
     "dependencies": ["core.system", "world.base", "world.trade"],
 
@@ -15,7 +15,9 @@
         "economy_codebooks_fiscal_years",
         "economy_codebooks_fiscal_months",
         "economy_codebooks_vat_registrations",
-        "economy_codebooks_vat_periods"
+        "economy_codebooks_vat_periods",
+        "economy_codebooks_cash_desks",
+        "economy_codebooks_bank_accounts"
     ],
 
     "viewers": [
@@ -36,6 +38,22 @@
             "icon": "vat",
             "table": "economy_codebooks_vat_registrations",
             "class": "Shipard\\Module\\Economy\\Codebooks\\VatRegistrationsViewer"
+        },
+        {
+            "id": "economy.codebooks.cashDesks",
+            "name": "Cash desks",
+            "name:cs": "Pokladny",
+            "name:en": "Cash desks",
+            "icon": "wallet",
+            "table": "economy_codebooks_cash_desks"
+        },
+        {
+            "id": "economy.codebooks.bankAccounts",
+            "name": "Bank accounts",
+            "name:cs": "Bankovní spojení",
+            "name:en": "Bank accounts",
+            "icon": "bank",
+            "table": "economy_codebooks_bank_accounts"
         }
     ],
 
@@ -55,6 +73,14 @@
         {
             "table": "economy_codebooks_vat_periods",
             "id": "economy.codebooks.vat_periods"
+        },
+        {
+            "table": "economy_codebooks_cash_desks",
+            "id": "economy.codebooks.cash_desks"
+        },
+        {
+            "table": "economy_codebooks_bank_accounts",
+            "id": "economy.codebooks.bank_accounts"
         }
     ],
 
@@ -74,6 +100,14 @@
         {
             "table": "economy_codebooks_vat_periods",
             "class": "Shipard\\Module\\Economy\\Codebooks\\VatPeriodDocument"
+        },
+        {
+            "table": "economy_codebooks_cash_desks",
+            "class": "Shipard\\Module\\Economy\\Codebooks\\CashDeskDocument"
+        },
+        {
+            "table": "economy_codebooks_bank_accounts",
+            "class": "Shipard\\Module\\Economy\\Codebooks\\BankAccountDocument"
         }
     ],
 

@@ -58,6 +58,8 @@ import {
   faCube,
   faCalendarDays,
   faPercent,
+  faWallet,
+  faBuildingColumns,
   faSun,
   faMoon,
   faDesktop,
@@ -104,6 +106,8 @@ export const iconRuler = faRulerCombined;
 export const iconBox = faCube;
 export const iconCalendar = faCalendarDays;
 export const iconVat = faPercent;
+export const iconWallet = faWallet;
+export const iconBank = faBuildingColumns;
 
 // ── Vzhled / theme ─────────────────────────────────────────────
 export const iconThemeLight = faSun;
@@ -156,6 +160,8 @@ export const iconMap = {
   'box': iconBox,
   'calendar': iconCalendar,
   'vat': iconVat,
+  'wallet': iconWallet,
+  'bank': iconBank,
   'logout': iconLogout,
 };
 

@@ -1,0 +1,24 @@
+{
+    "title": "Pokladna",
+    "titleNew": "Nová pokladna",
+    "fullSize": false,
+
+    "tabs": [
+        {
+            "id": "basic",
+            "label": "Pokladna",
+            "elements": [
+                {"type": "input", "column": "code", "cols": 1, "required": true},
+                {"type": "input", "column": "name", "cols": 2, "required": true},
+                {"type": "input", "column": "currency", "cols": 1, "required": true},
+                {"type": "input", "column": "notice", "cols": 4},
+
+                {"type": "separator", "label": "Nastavení"},
+                {"type": "input", "column": "is_default", "cols": 1},
+                {"type": "input", "column": "sort_order", "cols": 1},
+                {"type": "input", "column": "valid_from", "cols": 1},
+                {"type": "input", "column": "valid_to", "cols": 1}
+            ]
+        }
+    ]
+}

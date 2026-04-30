@@ -33,7 +33,7 @@ class ViewerRegistry
                     id: $viewer['id'],
                     name: $name,
                     table: $viewer['table'],
-                    class: $viewer['class'],
+                    class: $viewer['class'] ?? null,
                     moduleId: $module->id,
                 );
 
@@ -78,7 +78,7 @@ class ViewerRegistry
         }
 
         $class = $def->class;
-        if (!class_exists($class)) {
+        if ($class === null || !class_exists($class)) {
             return null;
         }
 

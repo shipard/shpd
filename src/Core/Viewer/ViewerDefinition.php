@@ -10,7 +10,7 @@ class ViewerDefinition
         public readonly string $id,
         public readonly string $name,
         public readonly string $table,
-        public readonly string $class,
+        public readonly ?string $class,
         public readonly string $moduleId,
     ) {}
 }

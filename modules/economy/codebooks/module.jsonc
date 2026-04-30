@@ -45,7 +45,8 @@
             "name:cs": "Pokladny",
             "name:en": "Cash desks",
             "icon": "wallet",
-            "table": "economy_codebooks_cash_desks"
+            "table": "economy_codebooks_cash_desks",
+            "class": "Shipard\\Module\\Economy\\Codebooks\\CashDesksViewer"
         },
         {
             "id": "economy.codebooks.bankAccounts",
@@ -53,7 +54,8 @@
             "name:cs": "Bankovní spojení",
             "name:en": "Bank accounts",
             "icon": "bank",
-            "table": "economy_codebooks_bank_accounts"
+            "table": "economy_codebooks_bank_accounts",
+            "class": "Shipard\\Module\\Economy\\Codebooks\\BankAccountsViewer"
         }
     ],
 

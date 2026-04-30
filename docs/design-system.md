@@ -126,6 +126,22 @@ badge (`shpd-detail__badge--{stateStyle}` resp. `shpd-form-state-badge.docState_
 | `cancelled` | červená `#ef4444` | červená | Zrušeno, pozor |
 | `error` | — | červená | Chyba (např. AI selhala) |
 
+### Tokeny
+
+Každý stav má až tři tokeny:
+
+- `--shpd-color-state-{name}-bar` — barva levého proužku v `ViewerRow`
+- `--shpd-color-state-{name}-bg` — pozadí badge v hlavičce detailu / formuláři
+- `--shpd-color-state-{name}-text` — text uvnitř badge
+
+Plus speciální `--shpd-color-state-archive-row` pro tlumený text řádku
+v archive stavu (jiný kontext než badge text). Confirmed a done nemají
+`-bar` token, protože jejich proužek je záměrně absent.
+
+Všechny tokeny jsou definované v `frontend/src/styles/variables.css`.
+Komponenty (`ViewerRow`, `ViewerDetail`, `FormStateBadge`) je sdílí,
+takže změna barvy stavu v jednom místě se projeví všude.
+
 ### Konvence
 
 - **`confirmed` / `done` nemá pruh.** Záměrné. Většina záznamů je v tomto stavu;
@@ -297,10 +313,6 @@ v pod-sekci *Dropdown / popover komponenty*.
 
 - **Dark mode** — palety přes `[data-theme="dark"]` selektor v `variables.css`.
   Až bude light mode pevný a neměnný.
-- **Doc-state palety jako tokeny** — doc-state barvy (`#facc15`,
-  `#a78bfa` atd.) jsou hardcoded v `ViewerRow`, `FormStateBadge`
-  a `ViewerDetail`. Stálo by za to je vytáhnout do `variables.css`
-  jako `--shpd-color-state-edit-bar` atd.
 - **Modal sjednocení** — modaly jsou definované 3× (`Modal.svelte` + inline
   v `Viewer.svelte` a `ViewerDetail.svelte`). Stálo by za refaktor přes
   jednu sdílenou `Modal.svelte` komponentu.

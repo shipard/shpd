@@ -388,18 +388,26 @@
 
   /* Stylové varianty badge.
      Sjednoceno s doc-state škálou v ViewerRow + accent pro brand. */
-  .shpd-detail__badge--neutral   { background: #f1f5f9; color: #475569; }
+  /* Typové varianty (mimo doc-state) — mají vlastní barevnou logiku.
+   * neutral, primary, accent, success, warning, danger se používají pro
+   * libovolné typové badge (typ záznamu, VIP, atd.). Sdílí paletu
+   * s doc-state tokeny tam, kde to barevně sedí. */
+  .shpd-detail__badge--neutral   { background: var(--shpd-color-state-confirmed-bg); color: var(--shpd-color-state-confirmed-text); }
   .shpd-detail__badge--primary   { background: var(--shpd-color-primary-soft); color: var(--shpd-color-primary); }
   .shpd-detail__badge--accent    { background: var(--shpd-color-accent-soft); color: var(--shpd-color-accent-hover); }
-  .shpd-detail__badge--success   { background: #dcfce7; color: #166534; }
-  .shpd-detail__badge--warning   { background: #fef3c7; color: #854d0e; }
-  .shpd-detail__badge--danger    { background: #fecaca; color: #991b1b; }
-  .shpd-detail__badge--concept   { background: #fef3c7; color: #854d0e; }
-  .shpd-detail__badge--edit      { background: #ede9fe; color: #5b21b6; }
-  .shpd-detail__badge--confirmed { background: #f1f5f9; color: #475569; }
-  .shpd-detail__badge--archive   { background: #e5e7eb; color: #374151; }
-  .shpd-detail__badge--trash     { background: #e5e7eb; color: #6b7280; text-decoration: line-through; }
-  .shpd-detail__badge--cancelled { background: #fecaca; color: #991b1b; }
+  .shpd-detail__badge--success   { background: var(--shpd-color-state-done-bg); color: var(--shpd-color-state-done-text); }
+  .shpd-detail__badge--warning   { background: var(--shpd-color-state-concept-bg); color: var(--shpd-color-state-concept-text); }
+  .shpd-detail__badge--danger    { background: var(--shpd-color-state-cancelled-bg); color: var(--shpd-color-state-cancelled-text); }
+
+  /* Doc-state varianty — sdílejí tokeny s ostatními badge
+   * (FormStateBadge, extracted__badge), aby stejný stav vypadal
+   * všude stejně. */
+  .shpd-detail__badge--concept   { background: var(--shpd-color-state-concept-bg);   color: var(--shpd-color-state-concept-text); }
+  .shpd-detail__badge--edit      { background: var(--shpd-color-state-edit-bg);      color: var(--shpd-color-state-edit-text); }
+  .shpd-detail__badge--confirmed { background: var(--shpd-color-state-confirmed-bg); color: var(--shpd-color-state-confirmed-text); }
+  .shpd-detail__badge--archive   { background: var(--shpd-color-state-archive-bg);   color: var(--shpd-color-state-archive-text); }
+  .shpd-detail__badge--trash     { background: var(--shpd-color-state-trash-bg);     color: var(--shpd-color-state-trash-text); text-decoration: line-through; }
+  .shpd-detail__badge--cancelled { background: var(--shpd-color-state-cancelled-bg); color: var(--shpd-color-state-cancelled-text); }
 
   /* Tabs */
   .shpd-detail__tabs {
@@ -562,12 +570,15 @@
     font-weight: 500;
   }
 
-  .shpd-extracted__badge--done   { background: #dcfce7; color: #166534; }
-  .shpd-extracted__badge--confirmed { background: #dcfce7; color: #166534; }
-  .shpd-extracted__badge--edit { background: #ede9fe; color: #5b21b6; }
-  .shpd-extracted__badge--archive { background: #e5e7eb; color: #374151; }
-  .shpd-extracted__badge--error { background: #fecaca; color: #991b1b; }
-  .shpd-extracted__badge--concept { background: #fef3c7; color: #854d0e; }
+  /* Stejné tokeny jako shpd-detail__badge — stejný stav, stejná barva.
+   * Pozn.: confirmed je tady tichá šedá (sjednoceno se zbytkem systému),
+   * dříve byla zelená — oprava při přechodu na tokeny. */
+  .shpd-extracted__badge--done      { background: var(--shpd-color-state-done-bg);      color: var(--shpd-color-state-done-text); }
+  .shpd-extracted__badge--confirmed { background: var(--shpd-color-state-confirmed-bg); color: var(--shpd-color-state-confirmed-text); }
+  .shpd-extracted__badge--edit      { background: var(--shpd-color-state-edit-bg);      color: var(--shpd-color-state-edit-text); }
+  .shpd-extracted__badge--archive   { background: var(--shpd-color-state-archive-bg);   color: var(--shpd-color-state-archive-text); }
+  .shpd-extracted__badge--error     { background: var(--shpd-color-state-error-bg);     color: var(--shpd-color-state-error-text); }
+  .shpd-extracted__badge--concept   { background: var(--shpd-color-state-concept-bg);   color: var(--shpd-color-state-concept-text); }
 
   .shpd-extracted__confidence {
     margin-left: auto;

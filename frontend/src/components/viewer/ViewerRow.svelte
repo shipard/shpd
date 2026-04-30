@@ -146,11 +146,11 @@
    * by se chytlo i na stejnojmenné třídy v jiných komponentách
    * (FormStateBadge atd.). docState_done schválně není — "V pořádku"
    * je default stav, neěrěží pozornost. */
-  .shpd-viewer-row.docState_concept   { --shpd-row-bar: #facc15; }
-  .shpd-viewer-row.docState_edit      { --shpd-row-bar: #a78bfa; }
-  .shpd-viewer-row.docState_archive   { --shpd-row-bar: #cbd5e1; color: #64748b; }
-  .shpd-viewer-row.docState_trash     { --shpd-row-bar: #94a3b8; color: #94a3b8; text-decoration: line-through; }
-  .shpd-viewer-row.docState_cancelled { --shpd-row-bar: #ef4444; }
+  .shpd-viewer-row.docState_concept   { --shpd-row-bar: var(--shpd-color-state-concept-bar); }
+  .shpd-viewer-row.docState_edit      { --shpd-row-bar: var(--shpd-color-state-edit-bar); }
+  .shpd-viewer-row.docState_archive   { --shpd-row-bar: var(--shpd-color-state-archive-bar); color: var(--shpd-color-state-archive-row); }
+  .shpd-viewer-row.docState_trash     { --shpd-row-bar: var(--shpd-color-state-trash-bar); color: var(--shpd-color-state-trash-bar); text-decoration: line-through; }
+  .shpd-viewer-row.docState_cancelled { --shpd-row-bar: var(--shpd-color-state-cancelled-bar); }
 
   .shpd-viewer-row__icon {
     width: 32px;

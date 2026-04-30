@@ -37,12 +37,12 @@
    *   cancelled → červená
    *   error     → červená
    */
-  .shpd-form-state-badge.docState_concept   { background: #fef3c7; color: #854d0e; }
-  .shpd-form-state-badge.docState_done      { background: #dcfce7; color: #166534; }
-  .shpd-form-state-badge.docState_edit      { background: #ede9fe; color: #5b21b6; }
-  .shpd-form-state-badge.docState_confirmed { background: #f1f5f9; color: #475569; }
-  .shpd-form-state-badge.docState_archive   { background: #e5e7eb; color: #374151; }
-  .shpd-form-state-badge.docState_trash     { background: #e5e7eb; color: #6b7280; text-decoration: line-through; }
-  .shpd-form-state-badge.docState_cancelled { background: #fecaca; color: #991b1b; }
-  .shpd-form-state-badge.docState_error     { background: #fecaca; color: #991b1b; }
+  .shpd-form-state-badge.docState_concept   { background: var(--shpd-color-state-concept-bg);   color: var(--shpd-color-state-concept-text); }
+  .shpd-form-state-badge.docState_done      { background: var(--shpd-color-state-done-bg);      color: var(--shpd-color-state-done-text); }
+  .shpd-form-state-badge.docState_edit      { background: var(--shpd-color-state-edit-bg);      color: var(--shpd-color-state-edit-text); }
+  .shpd-form-state-badge.docState_confirmed { background: var(--shpd-color-state-confirmed-bg); color: var(--shpd-color-state-confirmed-text); }
+  .shpd-form-state-badge.docState_archive   { background: var(--shpd-color-state-archive-bg);   color: var(--shpd-color-state-archive-text); }
+  .shpd-form-state-badge.docState_trash     { background: var(--shpd-color-state-trash-bg);     color: var(--shpd-color-state-trash-text); text-decoration: line-through; }
+  .shpd-form-state-badge.docState_cancelled { background: var(--shpd-color-state-cancelled-bg); color: var(--shpd-color-state-cancelled-text); }
+  .shpd-form-state-badge.docState_error     { background: var(--shpd-color-state-error-bg);     color: var(--shpd-color-state-error-text); }
 </style>

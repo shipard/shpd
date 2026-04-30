@@ -32,6 +32,49 @@
   /* Soft "chyby" pozadí — např. error notice ramp-up v formálři */
   --shpd-color-danger-soft:   #fef2f2;
 
+  /* Doc-state palette — barvy stavů dokumentů (concept, edit, atd.).
+   *
+   * Každý stav má až tři tokeny:
+   *   -bar  → barva levého proužku v ViewerRow (silnice, sytec)
+   *   -bg   → pozadí badge v hlavičce detailu / formuláři (jemné)
+   *   -text → text uvnitř badge (kontrastní vůči -bg)
+   *
+   * Stavy bez -bar (confirmed, done) záměrně nemají proužek v seznamu —
+   * jsou to default/cílové stavy a většina záznamů je v nich, proužek
+   * by jen šuměl. Badge ve formuláři je tichá šedá (confirmed) nebo
+   * zelená (done = pozitivní výsledek extracted document apply).
+   *
+   * Viz docs/design-system.md — sekce Doc-state systém. */
+  --shpd-color-state-concept-bar:    #facc15;
+  --shpd-color-state-concept-bg:     #fef3c7;
+  --shpd-color-state-concept-text:   #854d0e;
+
+  --shpd-color-state-edit-bar:       #a78bfa;
+  --shpd-color-state-edit-bg:        #ede9fe;
+  --shpd-color-state-edit-text:      #5b21b6;
+
+  --shpd-color-state-confirmed-bg:   #f1f5f9;
+  --shpd-color-state-confirmed-text: #475569;
+
+  --shpd-color-state-done-bg:        #dcfce7;
+  --shpd-color-state-done-text:      #166534;
+
+  --shpd-color-state-archive-bar:    #cbd5e1;
+  --shpd-color-state-archive-bg:     #e5e7eb;
+  --shpd-color-state-archive-text:   #374151;
+  --shpd-color-state-archive-row:    #64748b; /* tlumený text řádku v ViewerRow */
+
+  --shpd-color-state-trash-bar:      #94a3b8;
+  --shpd-color-state-trash-bg:       #e5e7eb;
+  --shpd-color-state-trash-text:     #6b7280;
+
+  --shpd-color-state-cancelled-bar:  #ef4444;
+  --shpd-color-state-cancelled-bg:   #fecaca;
+  --shpd-color-state-cancelled-text: #991b1b;
+
+  --shpd-color-state-error-bg:       #fecaca;
+  --shpd-color-state-error-text:     #991b1b;
+
   /* Plochy */
   --shpd-color-bg:           #ffffff;
   --shpd-color-bg-secondary: #f6f8fa; /* lehce teplejší šedá než předtím */

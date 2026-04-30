@@ -75,9 +75,17 @@
   --shpd-color-state-error-bg:       #fecaca;
   --shpd-color-state-error-text:     #991b1b;
 
-  /* Plochy */
+  /* Plochy.
+   *   bg            = obsah (hlavička s tlačítky, seznam, detail panel)
+   *   bg-secondary  = "podloží" pod a kolem prohlížeče
+   *   bg-hover      = hover stavy nad obsahem (vždy o stupeň světlejší než bg)
+   *
+   * V light módu jsou bg-secondary a bg-hover shodou okolností
+   * stejné — ale v dark se rozcházejí (secondary musí být tmavší
+   * než bg, hover světlejší). Proto dva tokeny. */
   --shpd-color-bg:           #ffffff;
   --shpd-color-bg-secondary: #f6f8fa; /* lehce teplejší šedá než předtím */
+  --shpd-color-bg-hover:     #f6f8fa;
 
   /* Sidebar — tmavá modrá ladící s brand primary
    * (Tmavší a sytější než #005089 samotná, aby aktivní položka
@@ -141,4 +149,119 @@
   --shpd-sidebar-width: 260px;
   --shpd-sidebar-width-collapsed: 48px;
   --shpd-header-height: 56px;
+}
+
+/* ============================================================
+ * Dark mode
+ * ============================================================
+ *
+ * Dark mód se aktivuje atributem `data-theme="dark"` na <html>.
+ * Aplikuje se v `theme.svelte.js` na základě uživatelské volby:
+ *   - 'light' → force light (žádný atribut)
+ *   - 'dark'  → force dark   (data-theme="dark")
+ *   - 'auto'  → podle prefers-color-scheme media query
+ *
+ * Pro dark mód předefinujeme jen barevné tokeny. Spacing,
+ * typografie a layout zůstávají stejné.
+ *
+ * Designová rozhodnutí:
+ *   - Pozadí je tmavá šedá s lehkým modrým nádechem (ne čistá
+ *     černá) — ladit se sidebarem.
+ *   - Sidebar je SVĚTLEJŠÍ než obsah — obsah dominuje, sidebar
+ *     je „rámec kolem". Naopak než v light módu.
+ *   - Brand modrá je posunutá světlejší (z #005089 na světlejší
+ *     odstín) — aby fungovala na tmavém pozadí jako akcent.
+ *   - Brand oranžová zůstává podobná — funguje na obou.
+ *   - Doc-state barvy zůstávají pro pruhy stejné (žlutá, fialová
+ *     atd. fungujou na tmavém). Badge bg je o stupeň tmavší,
+ *     badge text světlejší — invertovaná logika.
+ */
+[data-theme="dark"] {
+  /* Brand: primary modrá — ztlumená verze brand modré.
+   * Světlejší než v light (#005089), aby fungovala na tmavém,
+   * ale ne tak světlá jako předtím (#5a9bcf bila do očí na
+   * aktivní položce sidebaru). */
+  --shpd-color-primary:        #2d6890;
+  --shpd-color-primary-hover:  #3a7aa3;
+  --shpd-color-primary-soft:   #1a2f44;
+  --shpd-color-primary-soft-2: #234562;
+
+  /* Brand: accent oranžová — zůstává podobná, jen lehce světlejší */
+  --shpd-color-accent:         #ff7a26;
+  --shpd-color-accent-hover:   #ff9555;
+  --shpd-color-accent-soft:    #3d2415;
+
+  /* Stavové barvy — světlejší varianty pro dark */
+  --shpd-color-danger:        #ef4444;
+  --shpd-color-danger-hover:  #f87171;
+  --shpd-color-success:       #22c55e;
+  --shpd-color-success-hover: #4ade80;
+  --shpd-color-warning:       #f59e0b;
+  --shpd-color-warning-hover: #fbbf24;
+  --shpd-color-danger-soft:   #2d1414;
+
+  /* Plochy — tmavá šedá s lehkým modrým nádechem (ne černá).
+   *   bg            = obsah (hlavička, seznam, detail panel)
+   *   bg-secondary  = "podloží" pod a kolem prohlížeče (tmavší)
+   *   bg-hover      = hover nad obsahem (světlejší než bg)
+   * V dark se secondary a hover rozcházejí — secondary musí být
+   * tmavší (vystupuje obsah), hover světlejší (rozjasnění). */
+  --shpd-color-bg:           #232730;
+  --shpd-color-bg-secondary: #1a1d23;
+  --shpd-color-bg-hover:     #2d3340;
+
+  /* Sidebar — SVĚTLEJŠÍ než obsah, obsah dominuje */
+  --shpd-color-bg-sidebar:          #2a2e38;
+  --shpd-color-bg-sidebar-elevated: #353a47;
+  --shpd-color-bg-sidebar-hover:    rgb(255 255 255 / 0.06);
+  --shpd-color-bg-sidebar-border:   rgb(255 255 255 / 0.08);
+
+  /* Výběr záznamu v seznamu */
+  --shpd-color-bg-selected:       #2c3850;
+  --shpd-color-bg-selected-hover: #364463;
+
+  /* Text */
+  --shpd-color-text:               #e6e8eb;
+  --shpd-color-text-secondary:     #9ba3af;
+  --shpd-color-text-sidebar:       #e6e8eb;
+  --shpd-color-text-sidebar-muted: #8a92a0;
+
+  /* Borders */
+  --shpd-color-border:        #3a3f4a;
+  --shpd-color-border-strong: #4a4f5c;
+
+  /* Focus rings */
+  --shpd-color-focus-ring:    rgb(90 155 207 / 0.30);
+  --shpd-color-error-ring:    rgb(239 68 68 / 0.25);
+
+  /* Overlay — tmavší v dark módu */
+  --shpd-color-overlay:       rgb(0 0 0 / 0.65);
+
+  /* Doc-state palette — dark variants.
+   * Pruhy (-bar) zůstávají stejné (jasné barvy fungujou na tmavém).
+   * Badge -bg je tmavá saturovaná, -text světlý pro kontrast. */
+  --shpd-color-state-concept-bg:     #3d3214;
+  --shpd-color-state-concept-text:   #fde047;
+
+  --shpd-color-state-edit-bg:        #2d1f4d;
+  --shpd-color-state-edit-text:      #c4b5fd;
+
+  --shpd-color-state-confirmed-bg:   #2a2f38;
+  --shpd-color-state-confirmed-text: #cbd5e1;
+
+  --shpd-color-state-done-bg:        #14321f;
+  --shpd-color-state-done-text:      #86efac;
+
+  --shpd-color-state-archive-bg:     #2a2e38;
+  --shpd-color-state-archive-text:   #9ca3af;
+  --shpd-color-state-archive-row:    #8a92a0;
+
+  --shpd-color-state-trash-bg:       #2a2e38;
+  --shpd-color-state-trash-text:     #6b7280;
+
+  --shpd-color-state-cancelled-bg:   #3d1414;
+  --shpd-color-state-cancelled-text: #fca5a5;
+
+  --shpd-color-state-error-bg:       #3d1414;
+  --shpd-color-state-error-text:     #fca5a5;
 }

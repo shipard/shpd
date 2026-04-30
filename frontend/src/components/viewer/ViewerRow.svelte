@@ -120,7 +120,7 @@
   }
 
   .shpd-viewer-row:hover {
-    background-color: var(--shpd-color-bg-secondary);
+    background-color: var(--shpd-color-bg-hover);
   }
 
   .shpd-viewer-row--selected {

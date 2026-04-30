@@ -295,7 +295,64 @@ v pod-sekci *Dropdown / popover komponenty*.
 
 ---
 
-## 9. Soubory
+## 9. Dark mode
+
+Aplikace podporuje tři režimy vzhledu:
+
+- **Light** (default v light tokens v `:root`)
+- **Dark** — aktivuje se atributem `data-theme="dark"` na `<html>`,
+  v `variables.css` jsou pod selektorem `[data-theme="dark"]` předefinované
+  všechny barevné tokeny
+- **Auto** — sleduje OS preferenci přes `prefers-color-scheme` media query
+
+Uživatel volbu přepíná v dropdownu sidebaru (Vzhled: Světlý / Tmavý / Auto).
+Volba se persistuje do `localStorage` pod klíčem `shpd_theme`.
+
+Implementace store + bootstrap je v [`frontend.md`](frontend.md)
+(sekce *Theme management*).
+
+### Designové principy dark módu
+
+- **Pozadí je tmavá šedá, ne čistá černá** (`#232730` pro obsah,
+  `#1a1d23` pro "podloží"). Černé pozadí je příliš ostré a unavuje oči.
+- **Sidebar je SVĚTLEJŠÍ než obsah** (`#2a2e38` vs `#232730`) — obsah
+  dominuje, sidebar ustupuje. Naopak než v light módu, kde je sidebar
+  tmavší než obsah.
+- **Brand modrá je posunutá ztlumeným směrem** (z `#005089` na `#2d6890`)
+  — aby fungovala na tmavém pozadí jako akcent, ale nebila do očí
+  na aktivní položce sidebaru.
+- **Brand oranžová zůstává podobná** (jen lehce světlejší `#ff7a26`) —
+  funguje na obou módech.
+- **Doc-state pruhy zůstávají stejné** — jasné barvy (žlutá, fialová,
+  červená) fungujou na tmavém pozadí bez úpravy.
+- **Doc-state badge mají invertovanou logiku** — bg je tmavá saturovaná
+  varianta barvy, text je světlý. Např. `concept` v light má
+  bg `#fef3c7` / text `#854d0e`, v dark bg `#3d3214` / text `#fde047`.
+
+### bg-secondary vs bg-hover
+
+V light módu jsou tyto dva tokeny shodou okolností stejné (`#f6f8fa`).
+V dark se rozcházejí:
+
+- `--shpd-color-bg-secondary` (`#1a1d23`) — "podloží" pod prohlížečem,
+  TabBar, header okolí. **Tmavší než bg.**
+- `--shpd-color-bg-hover` (`#2d3340`) — hover stavy nad obsahem.
+  **Světlejší než bg.**
+
+Když implementuješ hover, používej `bg-hover` (rozjasní). Když implementuješ
+ trvalou sekundární plochu, používej `bg-secondary` (utlumí).
+
+### Anti-flash bootstrap
+
+Dark mód se aplikuje před prvním renderem inline `<script>` v `index.html`
+— jinak by uživatel s uloženou `dark` volbou viděl flash bílé stranky
+před načtením Svelte. Bootstrap čte stejný `localStorage` klíč jako
+store (`shpd_theme`). Pokud někdy měníš klíč nebo logiku, musíš to upravit
+na obou místech.
+
+---
+
+## 10. Soubory
 
 | Soubor | Obsah |
 |---|---|
@@ -309,10 +366,8 @@ v pod-sekci *Dropdown / popover komponenty*.
 
 ---
 
-## 10. Plánovaná rozšíření
+## 11. Plánovaná rozšíření
 
-- **Dark mode** — palety přes `[data-theme="dark"]` selektor v `variables.css`.
-  Až bude light mode pevný a neměnný.
 - **Modal sjednocení** — modaly jsou definované 3× (`Modal.svelte` + inline
   v `Viewer.svelte` a `ViewerDetail.svelte`). Stálo by za refaktor přes
   jednu sdílenou `Modal.svelte` komponentu.

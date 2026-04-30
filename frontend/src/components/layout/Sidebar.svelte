@@ -2,6 +2,7 @@
   import { get } from '../../api/client.js';
   import { logout } from '../../api/auth.js';
   import { authStore } from '../../stores/auth.svelte.js';
+  import { themeStore } from '../../stores/theme.svelte.js';
   import { onMount } from 'svelte';
   import Icon from '../ui/Icon.svelte';
   import {
@@ -13,6 +14,10 @@
     iconChevronRight,
     iconSpinner,
     iconSettings,
+    iconThemeLight,
+    iconThemeDark,
+    iconThemeAuto,
+    iconConfirm,
     resolveIcon,
   } from '../../icons.js';
 
@@ -106,6 +111,18 @@
   function handleSettings() {
     closeUserMenu();
     // TODO: implementovat navigaci na nastavení účtu, až bude stránka existovat
+  }
+
+  // Položky vzhledu — záměrně nezavíráme menu po kliku, aby si uživatel
+  // mohl rychle vyzkoušet více variant. Menu se zavře žě kliknutím mimo.
+  const themeOptions = [
+    { value: 'light', label: 'Světlý', icon: iconThemeLight },
+    { value: 'dark',  label: 'Tmavý',  icon: iconThemeDark },
+    { value: 'auto',  label: 'Auto',    icon: iconThemeAuto },
+  ];
+
+  function handleThemeChange(value) {
+    themeStore.setMode(value);
   }
 
   function handleLogoutFromMenu() {
@@ -269,6 +286,27 @@
           <Icon icon={iconSettings} size="sm" />
           <span>Nastavení účtu</span>
         </button>
+
+        <div class="shpd-sidebar__user-menu-divider"></div>
+        <div class="shpd-sidebar__user-menu-label">Vzhled</div>
+        {#each themeOptions as opt}
+          <button
+            class="shpd-sidebar__user-menu-item"
+            class:shpd-sidebar__user-menu-item--active={themeStore.mode === opt.value}
+            onclick={() => handleThemeChange(opt.value)}
+            role="menuitemradio"
+            aria-checked={themeStore.mode === opt.value}
+          >
+            <Icon icon={opt.icon} size="sm" />
+            <span class="shpd-sidebar__user-menu-item-label">{opt.label}</span>
+            {#if themeStore.mode === opt.value}
+              <span class="shpd-sidebar__user-menu-item-check">
+                <Icon icon={iconConfirm} size="xs" />
+              </span>
+            {/if}
+          </button>
+        {/each}
+
         <div class="shpd-sidebar__user-menu-divider"></div>
         <button class="shpd-sidebar__user-menu-item" onclick={handleLogoutFromMenu} role="menuitem">
           <Icon icon={iconLogout} size="sm" />
@@ -424,6 +462,33 @@
 
   .shpd-sidebar__user-menu-item:hover {
     background-color: var(--shpd-color-bg-sidebar-hover);
+  }
+
+  /* Aktivní varianta položky (zatím používá jen sekce Vzhled).
+   * Lehké zvýraznění pozadí + zatžítko vpravo říká "toto je vybraná volba". */
+  .shpd-sidebar__user-menu-item--active {
+    background-color: var(--shpd-color-bg-sidebar-hover);
+  }
+
+  .shpd-sidebar__user-menu-item-label {
+    flex: 1;
+  }
+
+  .shpd-sidebar__user-menu-item-check {
+    display: inline-flex;
+    align-items: center;
+    color: var(--shpd-color-accent);
+    flex-shrink: 0;
+  }
+
+  /* Sekce label — nadpis skupiny položek v dropdownu ("Vzhled"). */
+  .shpd-sidebar__user-menu-label {
+    padding: var(--shpd-space-xs) var(--shpd-space-sm);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--shpd-color-text-sidebar-muted);
   }
 
   .shpd-sidebar__user-menu-divider {

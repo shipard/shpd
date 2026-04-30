@@ -520,7 +520,7 @@
 
   .shpd-viewer__search-clear:hover {
     color: var(--shpd-color-text);
-    background-color: var(--shpd-color-bg-secondary);
+    background-color: var(--shpd-color-bg-hover);
   }
 
   .shpd-viewer__rows {

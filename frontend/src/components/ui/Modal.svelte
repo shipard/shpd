@@ -183,7 +183,7 @@
   }
 
   .shpd-modal__close:hover {
-    background-color: var(--shpd-color-bg-secondary);
+    background-color: var(--shpd-color-bg-hover);
     color: var(--shpd-color-text);
   }
 

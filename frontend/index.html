@@ -4,6 +4,21 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Shipard</title>
+    <script>
+      // Theme bootstrap — běží před prvním renderem, aby se zabránilo
+      // "flash of unstyled content" v dark módu. Čte volbu z localStorage
+      // (light/dark/auto), pro 'auto' čte prefers-color-scheme.
+      // Synchronizované s logikou v stores/theme.svelte.js — pokud se
+      // někdy mění klic localStorage nebo media query, měň obě místa.
+      (function () {
+        try {
+          var pref = localStorage.getItem('shpd_theme') || 'auto';
+          var dark = pref === 'dark' ||
+            (pref === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (dark) document.documentElement.setAttribute('data-theme', 'dark');
+        } catch (e) { /* private mode / disabled storage — fallback na light */ }
+      })();
+    </script>
   </head>
   <body>
     <div id="app"></div>

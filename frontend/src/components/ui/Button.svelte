@@ -104,7 +104,7 @@
   }
 
   .shpd-btn--secondary:hover:not(:disabled) {
-    background-color: var(--shpd-color-bg-secondary);
+    background-color: var(--shpd-color-bg-hover);
   }
 
   /* Danger */
@@ -142,7 +142,7 @@
   }
 
   .shpd-btn--ghost:hover:not(:disabled) {
-    background-color: var(--shpd-color-bg-secondary);
+    background-color: var(--shpd-color-bg-hover);
     color: var(--shpd-color-text);
   }
 

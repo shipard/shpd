@@ -401,7 +401,7 @@
   }
 
   .shpd-browser__th:hover {
-    background-color: var(--shpd-color-bg-secondary);
+    background-color: var(--shpd-color-bg-hover);
   }
 
   .shpd-browser__th--sorted {
@@ -428,7 +428,7 @@
   }
 
   .shpd-browser__row:hover {
-    background-color: var(--shpd-color-bg-secondary);
+    background-color: var(--shpd-color-bg-hover);
   }
 
   .shpd-browser__td {
@@ -491,7 +491,7 @@
   }
 
   .shpd-browser__pagination-btn:hover:not(:disabled) {
-    background-color: var(--shpd-color-bg-secondary);
+    background-color: var(--shpd-color-bg-hover);
     border-color: var(--shpd-color-primary);
   }
 

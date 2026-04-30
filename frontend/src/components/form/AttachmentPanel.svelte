@@ -410,7 +410,7 @@
   }
 
   .shpd-attachments__action-btn:hover {
-    background: var(--shpd-color-bg-secondary);
+    background: var(--shpd-color-bg-hover);
     color: var(--shpd-color-text);
   }
 

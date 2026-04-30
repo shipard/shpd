@@ -58,6 +58,9 @@ import {
   faCube,
   faCalendarDays,
   faPercent,
+  faSun,
+  faMoon,
+  faDesktop,
 } from '@fortawesome/free-solid-svg-icons';
 
 // ── Akce (toolbary, tlačítka) ──────────────────────────────────
@@ -101,6 +104,11 @@ export const iconRuler = faRulerCombined;
 export const iconBox = faCube;
 export const iconCalendar = faCalendarDays;
 export const iconVat = faPercent;
+
+// ── Vzhled / theme ─────────────────────────────────────────────
+export const iconThemeLight = faSun;
+export const iconThemeDark = faMoon;
+export const iconThemeAuto = faDesktop;
 
 // ── Stav / feedback ─────────────────────────────────────────────
 export const iconSpinner = faCircleNotch;

@@ -188,7 +188,7 @@
   }
 
   .shpd-form-subtable__table tbody tr:hover {
-    background: var(--shpd-color-bg-secondary);
+    background: var(--shpd-color-bg-hover);
   }
 
   .shpd-form-subtable__actions-th {
@@ -211,7 +211,7 @@
   }
 
   .shpd-form-subtable__btn:hover {
-    background: var(--shpd-color-bg-secondary);
+    background: var(--shpd-color-bg-hover);
     color: var(--shpd-color-text);
   }
 

@@ -290,8 +290,27 @@ v pod-sekci *Dropdown / popover komponenty*.
 
 ### Modální dialogy
 
-- Overlay `var(--shpd-color-overlay)` (40% černá)
-- Tlačítka v patce přes `<Button>` komponentu (nikdy hardcoded styly)
+Všechny modální dialogy v aplikaci používají sdílenou `Modal.svelte` komponentu —
+včetně vnořených dialogů (modál nad modálem). Modal má vlastní stack management,
+takže Esc reaguje jen na top modál a body scroll lock se uvolňuje až při zavření
+posledního.
+
+**Konvence**:
+- Overlay `var(--shpd-color-overlay)` (40 % černá v light, 65 % v dark)
+- Tlačítka v patce přes snippet `footer` + `<Button>` komponentu
+- Title + volitelný `headerExtra` snippet pro badge/stav v hlavičce
+- Width default 640px, lze předělat (`width="800px"`, `width="480px"` atd.)
+
+**Použití**:
+```svelte
+<Modal title="Zamítnout dokument" {open} onClose={close} width="480px">
+  <p>Obsah dialogu</p>
+  {#snippet footer()}
+    <Button label="Zrušit" variant="secondary" onclick={close} />
+    <Button label="Zamítnout" variant="danger" onclick={submit} />
+  {/snippet}
+</Modal>
+```
 
 ---
 
@@ -367,7 +386,3 @@ na obou místech.
 ---
 
 ## 11. Plánovaná rozšíření
-
-- **Modal sjednocení** — modaly jsou definované 3× (`Modal.svelte` + inline
-  v `Viewer.svelte` a `ViewerDetail.svelte`). Stálo by za refaktor přes
-  jednu sdílenou `Modal.svelte` komponentu.

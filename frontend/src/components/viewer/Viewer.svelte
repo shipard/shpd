@@ -4,6 +4,7 @@
   import ViewerDetail from './ViewerDetail.svelte';
   import ViewerToolbar from './ViewerToolbar.svelte';
   import FormDialog from '../form/FormDialog.svelte';
+  import Modal from '../ui/Modal.svelte';
   import Button from '../ui/Button.svelte';
 
   let { tab } = $props();
@@ -373,49 +374,38 @@
   </div>
 </div>
 
-<!-- Reanalyze dialog -->
-{#if reanalyzeDialogOpen}
-  <div class="shpd-modal-overlay" onclick={closeReanalyzeDialog} role="presentation">
-    <div
-      class="shpd-modal"
-      onclick={(e) => e.stopPropagation()}
-      onkeydown={(e) => e.key === 'Escape' && closeReanalyzeDialog()}
-      role="dialog"
-      aria-modal="true"
-      tabindex="-1"
-    >
-      <div class="shpd-modal__header">
-        <h3>Znovu analyzovat zprávu</h3>
-        <button type="button" class="shpd-modal__close" onclick={closeReanalyzeDialog} aria-label="Zavřít">×</button>
-      </div>
-      <div class="shpd-modal__body">
-        <p>Spustit AI analýzu znovu? Existující extrahované dokumenty ve stavech
-        <em>K použití / Čeká na review / Nízká jistota</em> budou označeny jako nahrazené.
-        Dokumenty, které jste již použili nebo zamítli, zůstanou beze změny.</p>
+<!-- Reanalyze dialog — sdílená Modal komponenta (../ui/Modal.svelte). -->
+<Modal
+  title="Znovu analyzovat zprávu"
+  open={reanalyzeDialogOpen}
+  onClose={closeReanalyzeDialog}
+  width="520px"
+>
+  <p>Spustit AI analýzu znovu? Existující extrahované dokumenty ve stavech
+  <em>K použití / Čeká na review / Nízká jistota</em> budou označeny jako nahrazené.
+  Dokumenty, které jste již použili nebo zamítli, zůstanou beze změny.</p>
 
-        <label class="shpd-reanalyze__label">
-          Profil (volitelné — výchozí ponechá DS-default):
-          <select class="shpd-reanalyze__input" bind:value={reanalyzeProfileNdx}>
-            <option value="">— výchozí profil DS —</option>
-            {#each reanalyzeProfiles as p (p.ndx)}
-              <option value={String(p.ndx)}>{p.name} ({p.profile_id})</option>
-            {/each}
-          </select>
-        </label>
-      </div>
-      <div class="shpd-modal__footer">
-        <Button label="Zrušit" variant="secondary" size="sm" disabled={reanalyzeSubmitting} onclick={closeReanalyzeDialog} />
-        <Button
-          label={reanalyzeSubmitting ? 'Spouštím…' : 'Spustit analýzu'}
-          variant="primary"
-          size="sm"
-          disabled={reanalyzeSubmitting}
-          onclick={submitReanalyze}
-        />
-      </div>
-    </div>
-  </div>
-{/if}
+  <label class="shpd-reanalyze__label">
+    Profil (volitelné — výchozí ponechá DS-default):
+    <select class="shpd-reanalyze__input" bind:value={reanalyzeProfileNdx}>
+      <option value="">— výchozí profil DS —</option>
+      {#each reanalyzeProfiles as p (p.ndx)}
+        <option value={String(p.ndx)}>{p.name} ({p.profile_id})</option>
+      {/each}
+    </select>
+  </label>
+
+  {#snippet footer()}
+    <Button label="Zrušit" variant="secondary" size="sm" disabled={reanalyzeSubmitting} onclick={closeReanalyzeDialog} />
+    <Button
+      label={reanalyzeSubmitting ? 'Spouštím…' : 'Spustit analýzu'}
+      variant="primary"
+      size="sm"
+      disabled={reanalyzeSubmitting}
+      onclick={submitReanalyze}
+    />
+  {/snippet}
+</Modal>
 
 <style>
   .shpd-viewer {
@@ -560,73 +550,8 @@
     font-style: italic;
   }
 
-  /* Reanalyze dialog */
-  .shpd-modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: var(--shpd-color-overlay);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-  }
-
-  .shpd-modal {
-    background: var(--shpd-color-bg);
-    border-radius: var(--shpd-radius-md);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-    max-width: 520px;
-    width: calc(100% - 40px);
-    max-height: 80vh;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .shpd-modal__header {
-    padding: var(--shpd-space-md);
-    border-bottom: 1px solid var(--shpd-color-border);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .shpd-modal__header h3 {
-    margin: 0;
-    font-size: var(--shpd-font-size-md);
-    font-weight: 600;
-  }
-
-  .shpd-modal__close {
-    border: none;
-    background: none;
-    font-size: 1.4rem;
-    cursor: pointer;
-    color: var(--shpd-color-text-secondary);
-    padding: 0;
-    width: 24px;
-    height: 24px;
-  }
-
-  .shpd-modal__body {
-    padding: var(--shpd-space-md);
-    overflow-y: auto;
-    flex: 1;
-    font-size: var(--shpd-font-size-sm);
-    line-height: 1.5;
-  }
-
-  .shpd-modal__footer {
-    padding: var(--shpd-space-md);
-    border-top: 1px solid var(--shpd-color-border);
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--shpd-space-sm);
-  }
-
-  /* Pozn.: tlačítkové styly v patkě modálu byly dříve hardcoded
-     přes !important. Teď používáme <Button variant="primary|secondary">,
-     který čerpá z brand palety v variables.css. */
-
+  /* Reanalyze dialog — jen styly form polí uvnitř.
+     Modální shell (overlay, header, body, footer) je ve sdílené Modal komponentě. */
   .shpd-reanalyze__label {
     display: block;
     margin-top: var(--shpd-space-md);

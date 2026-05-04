@@ -1,5 +1,6 @@
 <script>
   import { post } from '../../api/client.js';
+  import Modal from '../ui/Modal.svelte';
   import Button from '../ui/Button.svelte';
 
   let { detail = null, loading = false, onRefresh } = $props();
@@ -247,66 +248,45 @@
       {/if}
     </div>
 
-    <!-- Detail modal with extracted JSON -->
-    {#if detailModalDoc}
-      <div class="shpd-modal-overlay" onclick={closeDetailModal} role="presentation">
-        <div
-          class="shpd-modal"
-          onclick={(e) => e.stopPropagation()}
-          onkeydown={(e) => e.key === 'Escape' && closeDetailModal()}
-          role="dialog"
-          aria-modal="true"
-          tabindex="-1"
-        >
-          <div class="shpd-modal__header">
-            <h3>{detailModalDoc.doc_type_label}</h3>
-            <button type="button" class="shpd-modal__close" onclick={closeDetailModal} aria-label="Zavřít">×</button>
-          </div>
-          <div class="shpd-modal__body">
-            <pre class="shpd-extracted__json">{formatJson(detailModalDoc.extracted_json)}</pre>
-          </div>
-        </div>
-      </div>
-    {/if}
+    <!-- Detail modal with extracted JSON — sdílená Modal komponenta. -->
+    <Modal
+      title={detailModalDoc?.doc_type_label ?? ''}
+      open={detailModalDoc !== null}
+      onClose={closeDetailModal}
+      width="800px"
+    >
+      {#if detailModalDoc}
+        <pre class="shpd-extracted__json">{formatJson(detailModalDoc.extracted_json)}</pre>
+      {/if}
+    </Modal>
 
-    <!-- Reject reason dialog -->
-    {#if rejectDialogDoc}
-      <div class="shpd-modal-overlay" onclick={closeRejectDialog} role="presentation">
-        <div
-          class="shpd-modal shpd-modal--small"
-          onclick={(e) => e.stopPropagation()}
-          onkeydown={(e) => e.key === 'Escape' && closeRejectDialog()}
-          role="dialog"
-          aria-modal="true"
-          tabindex="-1"
-        >
-          <div class="shpd-modal__header">
-            <h3>Zamítnout dokument</h3>
-            <button type="button" class="shpd-modal__close" onclick={closeRejectDialog} aria-label="Zavřít">×</button>
-          </div>
-          <div class="shpd-modal__body">
-            <label for="reject-reason" class="shpd-extracted__field-label">Důvod zamítnutí (povinné):</label>
-            <textarea
-              id="reject-reason"
-              class="shpd-extracted__textarea"
-              bind:value={rejectReason}
-              rows="3"
-              placeholder="Např. False positive, špatně rozpoznaný typ..."
-            ></textarea>
-          </div>
-          <div class="shpd-modal__footer">
-            <Button label="Zrušit" variant="secondary" size="sm" onclick={closeRejectDialog} />
-            <Button
-              label={rejectSubmitting ? 'Ukládám…' : 'Zamítnout'}
-              variant="danger"
-              size="sm"
-              disabled={rejectSubmitting || rejectReason.trim() === ''}
-              onclick={submitReject}
-            />
-          </div>
-        </div>
-      </div>
-    {/if}
+    <!-- Reject reason dialog — sdílená Modal komponenta. -->
+    <Modal
+      title="Zamítnout dokument"
+      open={rejectDialogDoc !== null}
+      onClose={closeRejectDialog}
+      width="480px"
+    >
+      <label for="reject-reason" class="shpd-extracted__field-label">Důvod zamítnutí (povinné):</label>
+      <textarea
+        id="reject-reason"
+        class="shpd-extracted__textarea"
+        bind:value={rejectReason}
+        rows="3"
+        placeholder="Např. False positive, špatně rozpoznaný typ..."
+      ></textarea>
+
+      {#snippet footer()}
+        <Button label="Zrušit" variant="secondary" size="sm" onclick={closeRejectDialog} />
+        <Button
+          label={rejectSubmitting ? 'Ukládám…' : 'Zamítnout'}
+          variant="danger"
+          size="sm"
+          disabled={rejectSubmitting || rejectReason.trim() === ''}
+          onclick={submitReject}
+        />
+      {/snippet}
+    </Modal>
   {:else}
     <div class="shpd-detail__empty">
       Žádné detaily
@@ -636,66 +616,6 @@
     font-size: var(--shpd-font-size-sm);
   }
 
-  /* Modal */
-  .shpd-modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: var(--shpd-color-overlay);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-  }
-
-  .shpd-modal {
-    background: var(--shpd-color-bg);
-    border-radius: var(--shpd-radius-md);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-    max-width: 800px;
-    width: calc(100% - 40px);
-    max-height: 80vh;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .shpd-modal--small { max-width: 480px; }
-
-  .shpd-modal__header {
-    padding: var(--shpd-space-md);
-    border-bottom: 1px solid var(--shpd-color-border);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .shpd-modal__header h3 {
-    margin: 0;
-    font-size: var(--shpd-font-size-md);
-    font-weight: 600;
-  }
-
-  .shpd-modal__close {
-    border: none;
-    background: none;
-    font-size: 1.4rem;
-    cursor: pointer;
-    color: var(--shpd-color-text-secondary);
-    padding: 0;
-    width: 24px;
-    height: 24px;
-  }
-
-  .shpd-modal__body {
-    padding: var(--shpd-space-md);
-    overflow-y: auto;
-    flex: 1;
-  }
-
-  .shpd-modal__footer {
-    padding: var(--shpd-space-md);
-    border-top: 1px solid var(--shpd-color-border);
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--shpd-space-sm);
-  }
+  /* Modální shell (overlay, header, body, footer) je ve sdílené Modal komponentě
+     (../ui/Modal.svelte). Tady jsou jen styly form polí uvnitř modálu. */
 </style>

@@ -29,6 +29,9 @@
     /** Optional content rendered in the header between title and close button.
      *  Useful for badges or other status indicators. */
     headerExtra?: Snippet;
+    /** Optional content rendered in a footer strip below the body.
+     *  Useful for action buttons (Save, Cancel, etc.). */
+    footer?: Snippet;
     /** Modal width, e.g. '720px' or '1200px'. Default '640px'. */
     width?: string;
     /** Modal height. If set, the card uses this fixed height (capped at 90vh).
@@ -42,6 +45,7 @@
     onClose,
     children,
     headerExtra,
+    footer,
     width = '640px',
     height,
   }: Props = $props();
@@ -101,6 +105,11 @@
       <div class="shpd-modal__body">
         {@render children()}
       </div>
+      {#if footer}
+        <div class="shpd-modal__footer">
+          {@render footer()}
+        </div>
+      {/if}
     </div>
   </div>
 {/if}
@@ -193,5 +202,14 @@
     overflow-y: auto;
     display: flex;
     flex-direction: column;
+  }
+
+  .shpd-modal__footer {
+    padding: var(--shpd-space-md) var(--shpd-space-lg);
+    border-top: 1px solid var(--shpd-color-border);
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--shpd-space-sm);
+    flex-shrink: 0;
   }
 </style>

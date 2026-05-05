@@ -11,7 +11,7 @@
 </script>
 
 <div class="shpd-shell">
-  <Sidebar onNavigate={handleNavigate} activeId={navigationStore.activeId} {onLogout} />
+  <Sidebar onNavigate={handleNavigate} {onLogout} />
 
   <div class="shpd-shell__main">
     <ContentArea activeItem={navigationStore.activeItem} />

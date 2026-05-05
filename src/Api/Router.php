@@ -49,6 +49,13 @@ class Router
 			return new Route('ui', 'navigation');
 		}
 
+		if ($subpath === '/_ui/settings/navigation') {
+			if ($method !== 'GET') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('settings', 'navigation');
+		}
+
 		if (str_starts_with($subpath, '/_ui/viewer/')) {
 			if ($method !== 'GET') {
 				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);

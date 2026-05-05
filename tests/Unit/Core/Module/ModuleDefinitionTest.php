@@ -118,4 +118,69 @@ class ModuleDefinitionTest extends TestCase
 
         $this->assertSame([], $def->documentClasses);
     }
+
+    public function testSettingsItemsParsedCorrectly(): void
+    {
+        $def = ModuleDefinition::fromArray([
+            'id'   => 'economy.codebooks',
+            'name' => 'Codebooks',
+            'settingsItems' => [
+                ['viewer' => 'economy.codebooks.cashDesks', 'section' => 'accounting'],
+                ['viewer' => 'economy.codebooks.warehouses', 'section' => 'warehouses', 'order' => 5],
+            ],
+        ]);
+
+        $this->assertCount(2, $def->settingsItems);
+        $this->assertSame('economy.codebooks.cashDesks', $def->settingsItems[0]['viewer']);
+        $this->assertNull($def->settingsItems[0]['table']);
+        $this->assertSame('accounting', $def->settingsItems[0]['section']);
+        $this->assertNull($def->settingsItems[0]['order']);
+        $this->assertSame(5, $def->settingsItems[1]['order']);
+    }
+
+    public function testSettingsItemsMissingSectionIgnored(): void
+    {
+        $def = ModuleDefinition::fromArray([
+            'id'   => 'economy.codebooks',
+            'name' => 'Codebooks',
+            'settingsItems' => [
+                ['viewer' => 'economy.codebooks.cashDesks'],
+            ],
+        ]);
+
+        $this->assertSame([], $def->settingsItems);
+    }
+
+    public function testSettingsItemsBothViewerAndTableIgnored(): void
+    {
+        $def = ModuleDefinition::fromArray([
+            'id'   => 'economy.codebooks',
+            'name' => 'Codebooks',
+            'settingsItems' => [
+                ['viewer' => 'economy.codebooks.cashDesks', 'table' => 'some_table', 'section' => 'accounting'],
+            ],
+        ]);
+
+        $this->assertSame([], $def->settingsItems);
+    }
+
+    public function testSettingsItemsNeitherViewerNorTableIgnored(): void
+    {
+        $def = ModuleDefinition::fromArray([
+            'id'   => 'economy.codebooks',
+            'name' => 'Codebooks',
+            'settingsItems' => [
+                ['section' => 'accounting'],
+            ],
+        ]);
+
+        $this->assertSame([], $def->settingsItems);
+    }
+
+    public function testSettingsItemsAbsentDefaultsToEmpty(): void
+    {
+        $def = ModuleDefinition::fromArray(['id' => 'economy.docs', 'name' => 'Documents']);
+
+        $this->assertSame([], $def->settingsItems);
+    }
 }

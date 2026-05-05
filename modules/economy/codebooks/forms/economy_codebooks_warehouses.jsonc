@@ -1,0 +1,20 @@
+{
+    "title": "Sklad",
+    "titleNew": "Nový sklad",
+    "fullSize": false,
+    "tabs": [
+        {
+            "id": "basic",
+            "label": "Sklad",
+            "elements": [
+                {"type": "input", "column": "code", "cols": 1, "required": true},
+                {"type": "input", "column": "name", "cols": 3, "required": true},
+
+                {"type": "separator", "label": "Nastavení"},
+                {"type": "input", "column": "sort_order", "cols": 1},
+                {"type": "input", "column": "valid_from", "cols": 1},
+                {"type": "input", "column": "valid_to", "cols": 1}
+            ]
+        }
+    ]
+}

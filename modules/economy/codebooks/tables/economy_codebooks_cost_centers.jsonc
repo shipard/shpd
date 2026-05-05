@@ -5,6 +5,27 @@
     "name:cs": "Střediska",
     "name:en": "Cost centers",
 
+    "docStates": {
+        "stateColumn": "docState",
+        "mainColumn": "docStateMain",
+        "cfgItem": "core.system.docStatesArchive"
+    },
+
+    "columnGroups": [
+        {
+            "id": "identity",
+            "name": "Identity",
+            "name:cs": "Identifikace",
+            "name:en": "Identity"
+        },
+        {
+            "id": "settings",
+            "name": "Settings",
+            "name:cs": "Nastavení",
+            "name:en": "Settings"
+        }
+    ],
+
     "columns": [
         {
             "id": "id",
@@ -20,7 +41,8 @@
             "name:en": "Code",
             "type": "varchar",
             "length": 10,
-            "nullable": false
+            "nullable": false,
+            "group": "identity"
         },
         {
             "id": "name",
@@ -29,7 +51,8 @@
             "name:en": "Name",
             "type": "varchar",
             "length": 150,
-            "nullable": false
+            "nullable": false,
+            "group": "identity"
         },
         {
             "id": "valid_from",
@@ -37,7 +60,8 @@
             "name:cs": "Platnost od",
             "name:en": "Valid from",
             "type": "date",
-            "nullable": true
+            "nullable": true,
+            "group": "settings"
         },
         {
             "id": "valid_to",
@@ -45,7 +69,8 @@
             "name:cs": "Platnost do",
             "name:en": "Valid to",
             "type": "date",
-            "nullable": true
+            "nullable": true,
+            "group": "settings"
         },
         {
             "id": "sort_order",
@@ -54,7 +79,31 @@
             "name:en": "Sort order",
             "type": "smallint",
             "nullable": false,
-            "default": 0
+            "default": 0,
+            "group": "settings"
+        },
+
+        // --- doc state (systémové, bez skupiny) ---
+
+        {
+            "id": "docState",
+            "name": "Document state",
+            "name:cs": "Stav dokumentu",
+            "name:en": "Document state",
+            "type": "tinyint",
+            "nullable": false,
+            "default": 10,
+            "system": true
+        },
+        {
+            "id": "docStateMain",
+            "name": "Document state (sort)",
+            "name:cs": "Stav dokumentu (řazení)",
+            "name:en": "Document state (sort)",
+            "type": "tinyint",
+            "nullable": false,
+            "default": 1,
+            "system": true
         }
     ],
 
@@ -72,6 +121,14 @@
             "columns": [
                 {"column": "sort_order", "order": "ASC"},
                 {"column": "name", "order": "ASC"}
+            ]
+        },
+        {
+            "id": "idx_doc_state",
+            "type": "index",
+            "columns": [
+                {"column": "docStateMain", "order": "ASC"},
+                {"column": "sort_order", "order": "ASC"}
             ]
         }
     ]

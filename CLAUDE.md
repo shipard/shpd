@@ -113,6 +113,16 @@ Závislosti tečou shora dolů: Command → Document → Module/Config/Database 
 - Navigace: server posílá `"icon": "klíč"` v JSON, frontend překládá přes `resolveIcon()` s fallbackem `iconTable`
 - Nová ikona: import v `icons.js` + export + záznam v `iconMap`
 
+### Frontend — Settings mód
+
+- Aplikace má dva navigační módy: `app` (běžná práce) a `settings` (Nastavení)
+- Mode drží `navigation.svelte.js`, oba módy mají vlastní `activeItem`
+- Sidebar mode-aware načítá `/_ui/navigation` (app) nebo `/_ui/settings/navigation` (settings)
+- Číselníky určené do Nastavení mají `settingsItems[]` v `module.jsonc`,
+  sekce v `modules/install/base/config/settingsSections.jsonc`
+- Položky uvedené v `settingsItems[]` se automaticky skrývají z hlavního
+  navigačního stromu
+
 ## Příkazy pro vývoj
 
 ```bash

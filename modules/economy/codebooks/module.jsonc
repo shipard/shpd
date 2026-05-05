@@ -20,6 +20,15 @@
         "economy_codebooks_bank_accounts"
     ],
 
+    "settingsItems": [
+        { "viewer": "economy.codebooks.fiscalYears",      "section": "accounting" },
+        { "viewer": "economy.codebooks.vatRegistrations", "section": "accounting" },
+        { "viewer": "economy.codebooks.cashDesks",        "section": "accounting" },
+        { "viewer": "economy.codebooks.bankAccounts",     "section": "accounting" },
+        { "viewer": "economy.codebooks.warehouses",       "section": "warehouses" },
+        { "viewer": "economy.codebooks.costCenters",      "section": "warehouses" }
+    ],
+
     "viewers": [
         {
             "id": "economy.codebooks.fiscalYears",
@@ -56,6 +65,24 @@
             "icon": "bank",
             "table": "economy_codebooks_bank_accounts",
             "class": "Shipard\\Module\\Economy\\Codebooks\\BankAccountsViewer"
+        },
+        {
+            "id": "economy.codebooks.warehouses",
+            "name": "Warehouses",
+            "name:cs": "Sklady",
+            "name:en": "Warehouses",
+            "icon": "warehouse",
+            "table": "economy_codebooks_warehouses",
+            "class": "Shipard\\Module\\Economy\\Codebooks\\WarehousesViewer"
+        },
+        {
+            "id": "economy.codebooks.costCenters",
+            "name": "Cost centers",
+            "name:cs": "Střediska",
+            "name:en": "Cost centers",
+            "icon": "folder",
+            "table": "economy_codebooks_cost_centers",
+            "class": "Shipard\\Module\\Economy\\Codebooks\\CostCentersViewer"
         }
     ],
 
@@ -83,7 +110,9 @@
         {
             "table": "economy_codebooks_bank_accounts",
             "id": "economy.codebooks.bank_accounts"
-        }
+        },
+        { "table": "economy_codebooks_warehouses",   "id": "economy.codebooks.warehouses" },
+        { "table": "economy_codebooks_cost_centers", "id": "economy.codebooks.cost_centers" }
     ],
 
     "documentClasses": [
@@ -110,7 +139,9 @@
         {
             "table": "economy_codebooks_bank_accounts",
             "class": "Shipard\\Module\\Economy\\Codebooks\\BankAccountDocument"
-        }
+        },
+        { "table": "economy_codebooks_warehouses",   "class": "Shipard\\Module\\Economy\\Codebooks\\WarehouseDocument" },
+        { "table": "economy_codebooks_cost_centers", "class": "Shipard\\Module\\Economy\\Codebooks\\CostCenterDocument" }
     ],
 
     "config": [

@@ -8,6 +8,7 @@ use Shipard\Api\Controller\AuthController;
 use Shipard\Api\Controller\CrudController;
 use Shipard\Api\Controller\MetaController;
 use Shipard\Api\Controller\NavigationController;
+use Shipard\Api\Controller\SettingsController;
 use Shipard\Api\Controller\OpenApiController;
 use Shipard\Api\Controller\FormController;
 use Shipard\Api\Controller\ViewerController;
@@ -186,6 +187,7 @@ function dispatch(
 		'attachment'  => dispatchAttachment($route, $request, $auth, $tables, $db, $resolved),
 		'meta'    => dispatchMeta($route->action, $route->table, $tables, resolveLanguage($request)),
 		'ui'      => dispatchUi($route->action, $resolved->config, $modulesBasePath, resolveLanguage($request)),
+		'settings' => dispatchSettings($route->action, $resolved->config, $modulesBasePath, resolveLanguage($request), $configRuntime),
 		'form'    => dispatchForm($route, $request, $tables, $db, $formRegistry ?? new FormRegistry(), $configRuntime, $modulesBasePath, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'viewer'  => dispatchViewer($route, $request, $viewerRegistry, $db, $configRuntime),
 		'mail'    => dispatchMail($route, $request, $auth, $tables, $db, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
@@ -312,6 +314,20 @@ function dispatchUi(string $action, \Shipard\Core\Config\DataSourceConfig $confi
 	return match ($action) {
 		'navigation' => $ctrl->navigation($config, $modulesBasePath, $language),
 		default      => Response::error('INTERNAL_ERROR', "Unknown UI action: {$action}", 500),
+	};
+}
+
+function dispatchSettings(
+	string $action,
+	\Shipard\Core\Config\DataSourceConfig $config,
+	string $modulesBasePath,
+	string $language,
+	?\Shipard\Core\Config\ConfigRuntime $configRuntime,
+): Response {
+	$ctrl = new SettingsController();
+	return match ($action) {
+		'navigation' => $ctrl->navigation($config, $modulesBasePath, $language, $configRuntime),
+		default      => Response::error('INTERNAL_ERROR', "Unknown settings action: {$action}", 500),
 	};
 }
 

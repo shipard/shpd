@@ -27,6 +27,8 @@ import {
   faEllipsisVertical,
   faArrowRightFromBracket,
   faGear,
+  faGears,
+  faCalculator,
   faUser,
   faUsers,
   faBuilding,
@@ -89,6 +91,8 @@ export const iconMore = faEllipsisVertical;
 // ── Auth / uživatelé ────────────────────────────────────────────
 export const iconLogout = faArrowRightFromBracket;
 export const iconSettings = faGear;
+export const iconAppSettings = faGears;
+export const iconCalculator = faCalculator;
 export const iconUser = faUser;
 export const iconUsers = faUsers;
 
@@ -163,6 +167,8 @@ export const iconMap = {
   'wallet': iconWallet,
   'bank': iconBank,
   'logout': iconLogout,
+  'calculator': iconCalculator,
+  'app-settings': iconAppSettings,
 };
 
 /**

@@ -17,6 +17,10 @@
         "economy_items_kinds"
     ],
 
+    "settingsItems": [
+        { "viewer": "economy.items.kinds", "section": "items" }
+    ],
+
     "viewers": [
         {
             "id": "economy.items",

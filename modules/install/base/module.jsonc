@@ -14,5 +14,9 @@
         "base.persons",
         "economy.codebooks",
         "economy.items",
+    ],
+
+    "config": [
+        { "id": "global.settingsSections", "file": "config/settingsSections.jsonc" }
     ]
 }

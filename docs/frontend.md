@@ -158,6 +158,29 @@ Layout je bez horní lišty — logo a uživatelské info jsou integrovány v si
 └──────────┴──────────────────────────────────────────┘
 ```
 
+### Mode systém — App vs. Settings
+
+Aplikace má dva navigační módy: `'app'` (běžná práce) a `'settings'`
+(Nastavení aplikace). Mode drží `navigation.svelte.js` ve `$state`.
+
+- **Vstup do Nastavení**: dropdown v patce sidebaru → položka „Nastavení
+  aplikace" → `navigationStore.enterSettings()`
+- **Výstup**: tlačítko „← Zpět do aplikace" v hlavičce sidebaru pod
+  logem → `navigationStore.exitSettings()`
+- **Stav per mode**: každý mode si pamatuje vlastní `activeItem`. Přepnutí
+  app→settings→app vrátí uživatele na poslední položku v app módu
+
+Sidebar reaguje na `navigationStore.mode` přes `$effect`:
+- `'app'` → načítá z `GET /_ui/navigation`
+- `'settings'` → načítá z `GET /_ui/settings/navigation`
+
+V režimu `'settings'` jsou v hlavičce sidebaru navíc tlačítko „Zpět do
+aplikace" (pod logem) a v dropdownu patky se skrývá položka „Nastavení
+aplikace".
+
+Žádné URL routing — mode se nepamatuje napříč reloady (po F5 se vrátí
+do `'app'` módu). Persistence módu je out of scope této fáze.
+
 ### Sidebar — struktura
 
 Sidebar je flex column se třemi sekcemi:
@@ -394,6 +417,7 @@ Nové viewery přidávají moduly přes `module.jsonc.viewers[]` — jakmile je 
 | Endpoint | Popis |
 |----------|-------|
 | `GET /_ui/navigation` | Navigační strom ze serveru (moduly → skupiny → tabulky/viewery) |
+| `GET /_ui/settings/navigation` | Navigační strom režimu Nastavení (sekce + položky podle `settingsItems[]` napříč moduly) |
 | `GET /_ui/viewer/{id}/meta` | Metadata vieweru (name, table, filters, toolbar, viewGroups) |
 | `GET /_ui/viewer/{id}/rows` | Záznamy vieweru (page, search, filter) |
 | `GET /_ui/viewer/{id}/detail/{recordId}` | Detail panel záznamu (tabs) |

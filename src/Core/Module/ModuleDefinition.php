@@ -17,6 +17,7 @@ class ModuleDefinition
         public readonly array $documentClasses,
         public readonly array $viewers,
         public readonly array $forms,
+        public readonly array $settingsItems,
     ) {}
 
     public static function fromArray(array $data): self
@@ -33,6 +34,22 @@ class ModuleDefinition
             throw new \InvalidArgumentException("Invalid module id format: '{$data['id']}'");
         }
 
+        $settingsItems = [];
+        if (isset($data['settingsItems']) && is_array($data['settingsItems'])) {
+            foreach ($data['settingsItems'] as $item) {
+                if (!is_array($item)) continue;
+                if (!isset($item['section'])) continue;
+                if (!isset($item['viewer']) && !isset($item['table'])) continue;
+                if (isset($item['viewer']) && isset($item['table'])) continue;
+                $settingsItems[] = [
+                    'viewer'  => $item['viewer'] ?? null,
+                    'table'   => $item['table']  ?? null,
+                    'section' => (string) $item['section'],
+                    'order'   => isset($item['order']) ? (int) $item['order'] : null,
+                ];
+            }
+        }
+
         return new self(
             id: $data['id'],
             name: $data['name'],
@@ -44,6 +61,7 @@ class ModuleDefinition
             documentClasses: $data['documentClasses'] ?? [],
             viewers: $data['viewers'] ?? [],
             forms: $data['forms'] ?? [],
+            settingsItems: $settingsItems,
         );
     }
 }

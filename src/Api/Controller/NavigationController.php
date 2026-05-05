@@ -32,7 +32,20 @@ class NavigationController
 		$errors          = [];
 		$resolvedModules = ModuleResolver::resolve($allModules, $config->getModules(), $errors);
 
-		$groups = $this->buildTree($resolvedModules, $modulesBasePath, $language);
+		$hiddenViewers = [];
+		$hiddenTables  = [];
+		foreach ($resolvedModules as $module) {
+			foreach ($module->settingsItems as $item) {
+				if ($item['viewer'] !== null) {
+					$hiddenViewers[$item['viewer']] = true;
+				}
+				if ($item['table'] !== null) {
+					$hiddenTables[$item['table']] = true;
+				}
+			}
+		}
+
+		$groups = $this->buildTree($resolvedModules, $modulesBasePath, $language, $hiddenViewers, $hiddenTables);
 
 		return Response::success($groups);
 	}
@@ -41,7 +54,7 @@ class NavigationController
 	 * @param  ModuleDefinition[]  $resolvedModules
 	 * @return array<int, array>
 	 */
-	private function buildTree(array $resolvedModules, string $modulesBasePath, string $language): array
+	private function buildTree(array $resolvedModules, string $modulesBasePath, string $language, array $hiddenViewers = [], array $hiddenTables = []): array
 	{
 		// Group modules by their group prefix
 		$grouped = [];
@@ -56,11 +69,11 @@ class NavigationController
 
 			if (count($modules) === 1) {
 				// Single module — tables go directly as children of the group
-				$children = $this->buildTableItems($modules[0], $modulesBasePath, $language);
+				$children = $this->buildTableItems($modules[0], $modulesBasePath, $language, $hiddenViewers, $hiddenTables);
 			} else {
 				// Multiple modules — create sub-group per module
 				foreach ($modules as $module) {
-					$tableItems = $this->buildTableItems($module, $modulesBasePath, $language);
+					$tableItems = $this->buildTableItems($module, $modulesBasePath, $language, $hiddenViewers, $hiddenTables);
 					if ($tableItems === []) {
 						continue;
 					}
@@ -91,7 +104,7 @@ class NavigationController
 	/**
 	 * @return array<int, array>
 	 */
-	private function buildTableItems(ModuleDefinition $module, string $modulesBasePath, string $language): array
+	private function buildTableItems(ModuleDefinition $module, string $modulesBasePath, string $language, array $hiddenViewers = [], array $hiddenTables = []): array
 	{
 		[$group, $name] = explode('.', $module->id, 2);
 		$modulePath = $modulesBasePath . '/' . $group . '/' . $name;
@@ -99,6 +112,9 @@ class NavigationController
 		// Build a map of tables covered by viewers: table => viewer data
 		$viewerByTable = [];
 		foreach ($module->viewers as $viewer) {
+			if (isset($hiddenViewers[$viewer['id']])) {
+				continue;
+			}
 			$viewerName = $viewer['name:' . $language]
 				?? $viewer['name:en']
 				?? $viewer['name']
@@ -118,6 +134,9 @@ class NavigationController
 		$items = [];
 		foreach ($module->tables as $tableName) {
 			if ($this->shouldSkip($tableName)) {
+				continue;
+			}
+			if (isset($hiddenTables[$tableName])) {
 				continue;
 			}
 

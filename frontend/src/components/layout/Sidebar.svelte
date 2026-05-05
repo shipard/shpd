@@ -3,7 +3,7 @@
   import { logout } from '../../api/auth.js';
   import { authStore } from '../../stores/auth.svelte.js';
   import { themeStore } from '../../stores/theme.svelte.js';
-  import { onMount } from 'svelte';
+  import { navigationStore } from '../../stores/navigation.svelte.js';
   import Icon from '../ui/Icon.svelte';
   import {
     iconCollapse,
@@ -12,8 +12,10 @@
     iconChevronDown,
     iconChevronUp,
     iconChevronRight,
+    iconChevronLeft,
     iconSpinner,
     iconSettings,
+    iconAppSettings,
     iconThemeLight,
     iconThemeDark,
     iconThemeAuto,
@@ -21,7 +23,7 @@
     resolveIcon,
   } from '../../icons.js';
 
-  let { onNavigate, activeId = null, onLogout } = $props();
+  let { onNavigate, onLogout } = $props();
 
   // Collapsed state
   let collapsed = $state(false);
@@ -30,33 +32,36 @@
   // Sidebar is visually expanded when not collapsed OR when hovered
   let expanded_sidebar = $derived(!collapsed || hovered);
 
-  // Navigation tree loaded from server API
+  // Navigation tree loaded from server API — reloads when mode changes
   let navTree = $state([]);
   let loading = $state(true);
-  let error = $state(null);
+  let error   = $state(null);
 
   // Track expanded state per group id
   let expanded = $state(new Set());
 
-  onMount(async () => {
-    try {
-      const response = await get('/_ui/navigation');
-      if (response === null) {
-        error = 'Nepřihlášen';
-        return;
+  $effect(() => {
+    const url = navigationStore.mode === 'settings'
+      ? '/_ui/settings/navigation'
+      : '/_ui/navigation';
+
+    loading = true;
+    error   = null;
+    navTree = [];
+
+    (async () => {
+      try {
+        const response = await get(url);
+        if (response === null) { error = 'Nepřihlášen'; return; }
+        if (!response.success) { error = response.error?.message ?? 'Nepodařilo se načíst navigaci'; return; }
+        navTree = response.data;
+        expanded = new Set(navTree.map(g => g.id));
+      } catch {
+        error = 'Nepodařilo se načíst navigaci';
+      } finally {
+        loading = false;
       }
-      if (!response.success) {
-        error = response.error?.message ?? 'Nepodařilo se načíst navigaci';
-        return;
-      }
-      navTree = response.data;
-      // Expand all top-level groups by default
-      expanded = new Set(navTree.map(g => g.id));
-    } catch {
-      error = 'Nepodařilo se načíst navigaci';
-    } finally {
-      loading = false;
-    }
+    })();
   });
 
   function toggleGroup(id) {
@@ -70,6 +75,7 @@
   }
 
   function handleItemClick(item) {
+    navigationStore.navigate({ id: item.id, label: item.label, type: item.type, table: item.table, viewerId: item.viewerId, filter: item.filter });
     onNavigate?.({ id: item.id, label: item.label, type: item.type, table: item.table, viewerId: item.viewerId, filter: item.filter });
   }
 
@@ -113,8 +119,19 @@
     // TODO: implementovat navigaci na nastavení účtu, až bude stránka existovat
   }
 
+  function handleAppSettings() {
+    navigationStore.enterSettings();
+    // Menu se zavře přes $effect níže při změně módu
+  }
+
+  // Při změně módu zavři user menu
+  $effect(() => {
+    void navigationStore.mode;
+    closeUserMenu();
+  });
+
   // Položky vzhledu — záměrně nezavíráme menu po kliku, aby si uživatel
-  // mohl rychle vyzkoušet více variant. Menu se zavře žě kliknutím mimo.
+  // mohl rychle vyzkoušet více variant. Menu se zavře kliknutím mimo.
   const themeOptions = [
     { value: 'light', label: 'Světlý', icon: iconThemeLight },
     { value: 'dark',  label: 'Tmavý',  icon: iconThemeDark },
@@ -128,13 +145,6 @@
   function handleLogoutFromMenu() {
     // Záměrně nezavíráme menu předem — celý sidebar zmizí sám,
     // jakmile authStore.clearAuth() přepne aplikaci na LoginScreen.
-    //
-    // Proč ne dříve: closeUserMenu() v kombinaci s document click
-    // listenerem způsobovalo, že click na "Odhlásit" se po render
-    // flushi probublal jako klik mimo menu (target byl detached element,
-    // contains() vrátilo false), listener z effectu se odregistroval
-    // dříve než doběhl logout flow, a výsledek byl: menu se zavře,
-    // logout se ztratí v půl cesty.
     handleLogout();
   }
 
@@ -163,6 +173,8 @@
   $effect(() => {
     if (collapsed && !hovered) closeUserMenu();
   });
+
+  let activeId = $derived(navigationStore.activeId);
 </script>
 
 <nav
@@ -180,6 +192,15 @@
       <Icon icon={collapsed ? iconExpand : iconCollapse} size="sm" />
     </button>
   </div>
+
+  {#if navigationStore.mode === 'settings' && expanded_sidebar}
+    <div class="shpd-sidebar__back-bar">
+      <button class="shpd-sidebar__back-button" onclick={() => navigationStore.exitSettings()}>
+        <Icon icon={iconChevronLeft} size="sm" />
+        <span>Zpět do aplikace</span>
+      </button>
+    </div>
+  {/if}
 
   <div class="shpd-sidebar__nav">
   {#if loading}
@@ -287,6 +308,13 @@
           <span>Nastavení účtu</span>
         </button>
 
+        {#if navigationStore.mode === 'app'}
+          <button class="shpd-sidebar__user-menu-item" onclick={handleAppSettings} role="menuitem">
+            <Icon icon={iconAppSettings} size="sm" />
+            <span>Nastavení aplikace</span>
+          </button>
+        {/if}
+
         <div class="shpd-sidebar__user-menu-divider"></div>
         <div class="shpd-sidebar__user-menu-label">Vzhled</div>
         {#each themeOptions as opt}
@@ -362,6 +390,32 @@
     font-size: var(--shpd-font-size-lg);
     font-weight: 700;
     color: var(--shpd-color-text-sidebar);
+  }
+
+  .shpd-sidebar__back-bar {
+    padding: var(--shpd-space-sm);
+    border-bottom: 1px solid var(--shpd-color-bg-sidebar-border);
+    flex-shrink: 0;
+  }
+
+  .shpd-sidebar__back-button {
+    display: flex;
+    align-items: center;
+    gap: var(--shpd-space-sm);
+    width: 100%;
+    padding: var(--shpd-space-xs) var(--shpd-space-sm);
+    background: transparent;
+    border: none;
+    border-radius: var(--shpd-radius-sm);
+    color: var(--shpd-color-text-sidebar);
+    font-size: var(--shpd-font-size-sm);
+    cursor: pointer;
+    text-align: left;
+    transition: background-color 0.15s;
+  }
+
+  .shpd-sidebar__back-button:hover {
+    background-color: var(--shpd-color-bg-sidebar-hover);
   }
 
   .shpd-sidebar__nav {

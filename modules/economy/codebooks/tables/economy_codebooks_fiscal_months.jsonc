@@ -4,6 +4,11 @@
     "name:cs": "Fiskální měsíce",
     "name:en": "Fiscal months",
 
+    // Fiscal months are managed exclusively as a sub-table of fiscal years
+    // (parent record). They have no standalone navigation entry — neither in
+    // the main sidebar nor in app settings.
+    "hideFromNavigation": true,
+
     "displayPattern": "{calendar_year}-{calendar_month}",
 
     "columns": [

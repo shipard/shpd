@@ -95,6 +95,20 @@ class SettingsController
                         continue;
                     }
 
+                    // Respect hideFromNavigation on the viewer's target table —
+                    // a designer marking a table as hidden should not have to
+                    // separately remove it from settingsItems[]. Mismatch is a
+                    // configuration error worth logging.
+                    $targetTable = $viewerDef['table'] ?? null;
+                    if ($targetTable !== null) {
+                        [$group, $name] = explode('.', $module->id, 2);
+                        $modulePath = $modulesBasePath . '/' . $group . '/' . $name;
+                        if ($this->isTableHiddenFromNavigation($modulePath, $targetTable)) {
+                            error_log("SettingsController: viewer '{$viewerId}' targets table '{$targetTable}' marked hideFromNavigation, skipping");
+                            continue;
+                        }
+                    }
+
                     $seenViewers[$viewerId] = true;
                     $label = $this->localizeViewerName($viewerDef, $language);
 
@@ -123,9 +137,15 @@ class SettingsController
                         continue;
                     }
 
-                    $seenTables[$tableName] = true;
                     [$group, $name] = explode('.', $module->id, 2);
                     $modulePath = $modulesBasePath . '/' . $group . '/' . $name;
+
+                    if ($this->isTableHiddenFromNavigation($modulePath, $tableName)) {
+                        error_log("SettingsController: table '{$tableName}' is marked hideFromNavigation, skipping");
+                        continue;
+                    }
+
+                    $seenTables[$tableName] = true;
                     $tableData  = $this->loadTableMeta($modulePath, $tableName, $language);
 
                     $navItem = [
@@ -174,5 +194,15 @@ class SettingsController
         $raw       = JsoncParser::parseFile($filePath);
         $localized = ConfigLocalizer::localize($raw, $language);
         return $localized;
+    }
+
+    private function isTableHiddenFromNavigation(string $modulePath, string $tableName): bool
+    {
+        $filePath = $modulePath . '/tables/' . $tableName . '.jsonc';
+        if (!file_exists($filePath)) {
+            return false;
+        }
+        $raw = JsoncParser::parseFile($filePath);
+        return !empty($raw['hideFromNavigation']);
     }
 }

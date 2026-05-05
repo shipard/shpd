@@ -181,6 +181,7 @@ Název souboru (bez přípony) odpovídá názvu tabulky v databázi.
 | `columnGroups` | object[] | Ne | — | Definice logických skupin sloupců |
 | `columns` | object[] | Ano | — | Definice sloupců |
 | `indexes` | object[] | Ne | — | Definice indexů |
+| `hideFromNavigation` | bool | Ne | Ne | Skrýt tabulku ze sidebaru (hlavního i Nastavení). Používá se pro sub-tabulky spravované jen přes parent záznam (např. fiskální měsíce). Výchozí: `false` |
 
 ### `tableId` — unikátní numerické ID
 
@@ -222,6 +223,28 @@ Pravidla:
 - Placeholdery odkazují na ID sloupců v téže tabulce
 - Pokud tabulka nemá `displayPattern`, UI použije fallback — zobrazí hodnotu sloupce `id`
 - Šablona není vícejazyčná — obsahuje pouze reference na sloupce, jejichž hodnoty jsou v datech
+
+### `hideFromNavigation` — skrytí tabulky ze sidebaru
+
+Nepovinný boolean flag. Pokud `true`, tabulka se nezobrazí v hlavním sidebaru ani v navigaci Nastavení aplikace — až to navigace skládá strom z modulů, tuhle tabulku přeskočí.
+
+Typické použití: sub-tabulky, které jsou spravované výhradně přes parent záznam a samostatný vstup do nich nemá v UI smysl. Například `economy_codebooks_fiscal_months` (fiskální měsíce) jsou vytvářeny při uložení fiskálního roku, neexistují samostatně.
+
+```jsonc
+{
+    "tableId": 314,
+    "name": "Fiscal months",
+    "name:cs": "Fiskální měsíce",
+    "hideFromNavigation": true
+    // ...
+}
+```
+
+Pravidla a chování:
+- Flag přeskočí tabulku v `NavigationController` (hlavní menu) i v `SettingsController` (Nastavení)
+- Pokud na tabulku odkazuje viewer (`module.jsonc` → `viewers[].table`), je skrytý i ten viewer — jinak by se viewer zobrazoval pro tabulku, kterou designér označil jako skrytou
+- Pokud tabulka s `hideFromNavigation: true` figuruje současně v `module.jsonc` → `settingsItems[]`, je to konfigurační chyba a položka se přeskočí s warningem v logu
+- Flag se výslovně netýká `_meta` ani `_ui/form` API — tabulka zůstává běžně dostupná pro CRUD a editaci, jen ji nezobrazujíme jako vstupní bod v sidebaru
 
 ---
 

@@ -34,6 +34,9 @@ class NavigationController
 
 		$hiddenViewers = [];
 		$hiddenTables  = [];
+
+		// (1) Tables and viewers explicitly listed in any module's settingsItems
+		// are managed via Settings UI — hide them from the main navigation.
 		foreach ($resolvedModules as $module) {
 			foreach ($module->settingsItems as $item) {
 				if ($item['viewer'] !== null) {
@@ -41,6 +44,41 @@ class NavigationController
 				}
 				if ($item['table'] !== null) {
 					$hiddenTables[$item['table']] = true;
+				}
+			}
+		}
+
+		// (2) Tables marked `hideFromNavigation: true` in their JSONC definition
+		// (typically sub-tables of a parent record — fiscal_months, vat_periods,
+		// etc.) should not appear in any navigation surface.
+		foreach ($resolvedModules as $module) {
+			[$group, $name] = explode('.', $module->id, 2);
+			$modulePath = $modulesBasePath . '/' . $group . '/' . $name;
+			foreach ($module->tables as $tableName) {
+				if ($this->isTableHiddenFromNavigation($modulePath, $tableName)) {
+					$hiddenTables[$tableName] = true;
+				}
+			}
+		}
+
+		// (3) Cross-propagate hidden state between viewers and their tables:
+		//   - a hidden viewer hides its target table (otherwise the table would
+		//     fall back to a generic type="table" item with the table's own label),
+		//   - a hidden table hides any viewer that targets it (otherwise the
+		//     viewer would still appear as a navigation entry for a table the
+		//     designer asked us to hide).
+		foreach ($resolvedModules as $module) {
+			foreach ($module->viewers as $viewer) {
+				$viewerId = $viewer['id'] ?? null;
+				$tableName = $viewer['table'] ?? null;
+				if ($viewerId === null || $tableName === null) {
+					continue;
+				}
+				if (isset($hiddenViewers[$viewerId])) {
+					$hiddenTables[$tableName] = true;
+				}
+				if (isset($hiddenTables[$tableName])) {
+					$hiddenViewers[$viewerId] = true;
 				}
 			}
 		}
@@ -174,6 +212,16 @@ class NavigationController
 		$localized = ConfigLocalizer::localize($raw, $language);
 
 		return $localized;
+	}
+
+	private function isTableHiddenFromNavigation(string $modulePath, string $tableName): bool
+	{
+		$filePath = $modulePath . '/tables/' . $tableName . '.jsonc';
+		if (!file_exists($filePath)) {
+			return false;
+		}
+		$raw = JsoncParser::parseFile($filePath);
+		return !empty($raw['hideFromNavigation']);
 	}
 
 	private function localizeModuleName(ModuleDefinition $module, string $modulesBasePath, string $language): string

@@ -122,6 +122,9 @@ Závislosti tečou shora dolů: Command → Document → Module/Config/Database 
   sekce v `modules/install/base/config/settingsSections.jsonc`
 - Položky uvedené v `settingsItems[]` se automaticky skrývají z hlavního
   navigačního stromu
+- Sub-tabulky spravované výhradně přes parent záznam (např. `economy_codebooks_fiscal_months`)
+  mají v JSONC definici `"hideFromNavigation": true` — nezobrazují se ani v hlavním
+  sidebaru, ani v Nastavení
 
 ## Příkazy pro vývoj
 

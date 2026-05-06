@@ -1,0 +1,15 @@
+{
+    "id": "world.vat",
+    "name": "VAT rules",
+    "name:cs": "Pravidla DPH",
+    "name:en": "VAT rules",
+    "description": "VAT rates and codes per country",
+    "description:cs": "Sazby DPH a kódy DPH per stát (CZ, později další státy EU)",
+    "description:en": "VAT rates and codes per country (CZ, later other EU countries)",
+
+    "dependencies": ["world.base", "world.trade"],
+
+    "config": [
+        {"id": "world.vat.cz", "file": "config/vat-cz.jsonc"},
+    ],
+}

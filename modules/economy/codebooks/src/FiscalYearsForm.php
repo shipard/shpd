@@ -15,7 +15,7 @@ class FiscalYearsForm extends TableForm
             $data['currency'] = 'czk';
         }
 
-        $basic = $this->tab('basic', 'Obecné')
+        $basic = $this->tab('basic', $this->defaultGeneralTabLabel())
             ->addInput('name', cols: 1, required: true)
             ->addInput('doc_number_prefix', cols: 1, required: true)
             ->addInput('currency', cols: 1, required: true, placeholder: 'czk')

@@ -34,7 +34,7 @@ class VatRegistrationsForm extends TableForm
         $taxpayerKindOptions = $this->resolveIntOptions('economy.codebooks.vatTaxpayerKinds');
         $periodKindOptions = $this->resolveIntOptions('economy.codebooks.vatPeriodKinds');
 
-        $basic = $this->tab('basic', 'Obecné')
+        $basic = $this->tab('basic', $this->defaultGeneralTabLabel())
             ->addInput('name', cols: 2, required: true)
             ->addInput('vat_id', cols: 2)
             ->addSelect('region', cols: 1, options: $regionOptions, required: true)

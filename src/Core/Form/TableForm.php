@@ -57,6 +57,18 @@ abstract class TableForm
     }
 
     /**
+     * Localized label for the generic "General" tab — same source as
+     * AutoFormBuilder, so every form (PHP / JSONC / auto) shows the same
+     * label. Subclasses use this for their basic / overview tab to avoid
+     * hardcoded Czech strings.
+     */
+    protected function defaultGeneralTabLabel(): string
+    {
+        $defaults = $this->config?->cfgItem('core.system.formDefaults');
+        return $defaults['generalTabLabel']['name'] ?? 'General';
+    }
+
+    /**
      * Create an attachments tab for the current table.
      * The tableId is taken from the table definition.
      */

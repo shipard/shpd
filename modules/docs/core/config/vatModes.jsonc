@@ -1,0 +1,24 @@
+{
+    // docs.core.vatModes
+    //
+    // Sloučený flag DPH + způsob výpočtu na hlavičce dokladu.
+    //   0 = bez DPH (řádky neobsahují DPH, výpočet vynechán)
+    //   1 = ze základu (cena na řádku je BEZ DPH, DPH se připočítává)
+    //   2 = z ceny celkem (cena na řádku je VČETNĚ DPH, DPH se vypočte zpětně)
+
+    "0": {
+        "name": "No VAT",
+        "name:cs": "Bez DPH",
+        "name:en": "No VAT"
+    },
+    "1": {
+        "name": "From base",
+        "name:cs": "Ze základu",
+        "name:en": "From base"
+    },
+    "2": {
+        "name": "From total",
+        "name:cs": "Z ceny celkem",
+        "name:en": "From total"
+    }
+}

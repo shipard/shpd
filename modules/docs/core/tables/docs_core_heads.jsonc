@@ -1,0 +1,601 @@
+{
+    "tableId": 401,
+    "name": "Document headers",
+    "name:cs": "Hlavičky dokladů",
+    "name:en": "Document headers",
+
+    "displayPattern": "{doc_number} — {doc_text}",
+
+    "docStates": {
+        "stateColumn": "docState",
+        "mainColumn": "docStateMain",
+        "cfgItem": "docs.core.docStates"
+    },
+
+    "childTables": [
+        { "table": "docs_core_rows",      "foreignKey": "doc_head", "dataKey": "rows" },
+        { "table": "docs_core_vat_recap", "foreignKey": "doc_head", "dataKey": "vatRecap" }
+    ],
+
+    "columnGroups": [
+        {"id": "identity",   "name": "Identity",      "name:cs": "Identifikace",      "name:en": "Identity"},
+        {"id": "partner",    "name": "Partner",       "name:cs": "Partner",           "name:en": "Partner"},
+        {"id": "dates",      "name": "Dates",         "name:cs": "Datumy",            "name:en": "Dates"},
+        {"id": "accounting", "name": "Accounting",    "name:cs": "Účetní zařazení",   "name:en": "Accounting"},
+        {"id": "vat",        "name": "VAT",           "name:cs": "DPH",               "name:en": "VAT"},
+        {"id": "currency",   "name": "Currency",      "name:cs": "Měna",              "name:en": "Currency"},
+        {"id": "rounding",   "name": "Rounding",      "name:cs": "Zaokrouhlení",      "name:en": "Rounding"},
+        {"id": "totals",     "name": "Totals",        "name:cs": "Součty",            "name:en": "Totals"},
+        {"id": "payment",    "name": "Payment",       "name:cs": "Platba",            "name:en": "Payment"},
+        {"id": "snapshots",  "name": "Snapshots",     "name:cs": "Snapshoty",         "name:en": "Snapshots"},
+        {"id": "notes",      "name": "Notes",         "name:cs": "Poznámky",          "name:en": "Notes"}
+    ],
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+
+        // --- identity ---
+
+        {
+            "id": "doc_type",
+            "name": "Document type",
+            "name:cs": "Typ dokladu",
+            "name:en": "Document type",
+            "type": "enumString",
+            "length": 20,
+            "cfgItem": "docs.core.docTypes",
+            "nullable": false,
+            "system": true,
+            "group": "identity"
+        },
+        {
+            "id": "number_series",
+            "name": "Number series",
+            "name:cs": "Číselná řada",
+            "name:en": "Number series",
+            "type": "int",
+            "nullable": false,
+            "reference": "docs_core_number_series",
+            "group": "identity"
+        },
+        {
+            "id": "sequence_number",
+            "name": "Sequence number",
+            "name:cs": "Pořadové číslo",
+            "name:en": "Sequence number",
+            "type": "int",
+            "nullable": true,
+            "system": true,
+            "group": "identity"
+        },
+        {
+            "id": "doc_number",
+            "name": "Document number",
+            "name:cs": "Číslo dokladu",
+            "name:en": "Document number",
+            "type": "varchar",
+            "length": 40,
+            "nullable": false,
+            "default": "",
+            "system": true,
+            "group": "identity"
+        },
+        {
+            "id": "doc_text",
+            "name": "Document text",
+            "name:cs": "Text dokladu",
+            "name:en": "Document text",
+            "type": "varchar",
+            "length": 200,
+            "nullable": true,
+            "group": "identity"
+        },
+
+        // --- partner ---
+
+        {
+            "id": "partner",
+            "name": "Partner",
+            "name:cs": "Partner",
+            "name:en": "Partner",
+            "type": "int",
+            "nullable": true,
+            "reference": "base_persons_persons",
+            "group": "partner"
+        },
+        {
+            "id": "partner_address",
+            "name": "Partner address",
+            "name:cs": "Adresa partnera",
+            "name:en": "Partner address",
+            "type": "int",
+            "nullable": true,
+            "reference": "base_persons_addresses",
+            "group": "partner"
+        },
+        {
+            "id": "partner_bank",
+            "name": "Partner bank account",
+            "name:cs": "Bankovní účet partnera",
+            "name:en": "Partner bank account",
+            "type": "int",
+            "nullable": true,
+            "reference": "base_persons_bank_accounts",
+            "group": "partner"
+        },
+        {
+            "id": "partner_bank_account",
+            "name": "Bank account (text)",
+            "name:cs": "Číslo účtu (text)",
+            "name:en": "Bank account (text)",
+            "type": "varchar",
+            "length": 50,
+            "nullable": true,
+            "group": "partner"
+        },
+        {
+            "id": "partner_bank_iban",
+            "name": "IBAN",
+            "name:cs": "IBAN",
+            "name:en": "IBAN",
+            "type": "varchar",
+            "length": 34,
+            "nullable": true,
+            "group": "partner"
+        },
+        {
+            "id": "partner_bank_bic",
+            "name": "BIC/SWIFT",
+            "name:cs": "BIC/SWIFT",
+            "name:en": "BIC/SWIFT",
+            "type": "varchar",
+            "length": 11,
+            "nullable": true,
+            "group": "partner"
+        },
+
+        // --- dates ---
+
+        {
+            "id": "issue_date",
+            "name": "Issue date",
+            "name:cs": "Datum vystavení",
+            "name:en": "Issue date",
+            "type": "date",
+            "nullable": false,
+            "group": "dates"
+        },
+        {
+            "id": "due_date",
+            "name": "Due date",
+            "name:cs": "Datum splatnosti",
+            "name:en": "Due date",
+            "type": "date",
+            "nullable": true,
+            "group": "dates"
+        },
+        {
+            "id": "accounting_date",
+            "name": "Accounting date",
+            "name:cs": "Účetní datum",
+            "name:en": "Accounting date",
+            "type": "date",
+            "nullable": false,
+            "group": "dates"
+        },
+        {
+            "id": "vat_duzp",
+            "name": "Tax point date (DUZP)",
+            "name:cs": "Datum uskutečnění zdan. plnění (DUZP)",
+            "name:en": "Tax point date (DUZP)",
+            "type": "date",
+            "nullable": true,
+            "group": "dates"
+        },
+        {
+            "id": "vat_dppd",
+            "name": "VAT obligation date (DPPD)",
+            "name:cs": "Datum povinnosti přiznat daň (DPPD)",
+            "name:en": "VAT obligation date (DPPD)",
+            "type": "date",
+            "nullable": true,
+            "group": "dates"
+        },
+        {
+            "id": "period_from",
+            "name": "Period from",
+            "name:cs": "Začátek období",
+            "name:en": "Period from",
+            "type": "date",
+            "nullable": true,
+            "group": "dates"
+        },
+        {
+            "id": "period_to",
+            "name": "Period to",
+            "name:cs": "Konec období",
+            "name:en": "Period to",
+            "type": "date",
+            "nullable": true,
+            "group": "dates"
+        },
+
+        // --- accounting ---
+
+        {
+            "id": "fiscal_year",
+            "name": "Fiscal year",
+            "name:cs": "Fiskální rok",
+            "name:en": "Fiscal year",
+            "type": "int",
+            "nullable": true,
+            "reference": "economy_codebooks_fiscal_years",
+            "system": true,
+            "group": "accounting"
+        },
+        {
+            "id": "fiscal_month",
+            "name": "Fiscal month",
+            "name:cs": "Fiskální měsíc",
+            "name:en": "Fiscal month",
+            "type": "int",
+            "nullable": true,
+            "reference": "economy_codebooks_fiscal_months",
+            "system": true,
+            "group": "accounting"
+        },
+        {
+            "id": "vat_registration",
+            "name": "VAT registration",
+            "name:cs": "Registrace DPH",
+            "name:en": "VAT registration",
+            "type": "int",
+            "nullable": true,
+            "reference": "economy_codebooks_vat_registrations",
+            "group": "accounting"
+        },
+        {
+            "id": "vat_period",
+            "name": "VAT period",
+            "name:cs": "Období DPH",
+            "name:en": "VAT period",
+            "type": "int",
+            "nullable": true,
+            "reference": "economy_codebooks_vat_periods",
+            "system": true,
+            "group": "accounting"
+        },
+
+        // --- vat ---
+
+        {
+            "id": "vat_mode",
+            "name": "VAT mode",
+            "name:cs": "Režim DPH",
+            "name:en": "VAT mode",
+            "type": "enumInt",
+            "default": 1,
+            "cfgItem": "docs.core.vatModes",
+            "group": "vat"
+        },
+        {
+            "id": "vat_calc_source",
+            "name": "VAT calc source",
+            "name:cs": "DPH počítat z",
+            "name:en": "VAT calc source",
+            "type": "enumInt",
+            "default": 0,
+            "cfgItem": "docs.core.vatCalcSources",
+            "group": "vat"
+        },
+        {
+            "id": "vat_place",
+            "name": "VAT place",
+            "name:cs": "Místo plnění",
+            "name:en": "VAT place",
+            "type": "enumInt",
+            "default": 0,
+            "cfgItem": "docs.core.vatPlaces",
+            "group": "vat"
+        },
+
+        // --- currency ---
+
+        {
+            "id": "doc_currency",
+            "name": "Document currency",
+            "name:cs": "Měna dokladu",
+            "name:en": "Document currency",
+            "type": "enumString",
+            "length": 3,
+            "default": "czk",
+            "cfgItem": "world.base.currencies",
+            "nullable": false,
+            "group": "currency"
+        },
+        {
+            "id": "home_currency",
+            "name": "Home currency",
+            "name:cs": "Domácí měna",
+            "name:en": "Home currency",
+            "type": "enumString",
+            "length": 3,
+            "default": "czk",
+            "cfgItem": "world.base.currencies",
+            "nullable": false,
+            "system": true,
+            "group": "currency"
+        },
+        {
+            "id": "exchange_rate",
+            "name": "Exchange rate",
+            "name:cs": "Kurz",
+            "name:en": "Exchange rate",
+            "type": "numeric",
+            "precision": 15,
+            "scale": 6,
+            "nullable": true,
+            "group": "currency"
+        },
+
+        // --- rounding ---
+
+        {
+            "id": "total_rounding_mode",
+            "name": "Total rounding",
+            "name:cs": "Zaokrouhlení částky",
+            "name:en": "Total rounding",
+            "type": "enumInt",
+            "default": 0,
+            "cfgItem": "docs.core.roundingModes",
+            "group": "rounding"
+        },
+        {
+            "id": "vat_rounding_mode",
+            "name": "VAT rounding",
+            "name:cs": "Zaokrouhlení DPH",
+            "name:en": "VAT rounding",
+            "type": "enumInt",
+            "default": 0,
+            "cfgItem": "docs.core.roundingModes",
+            "group": "rounding"
+        },
+
+        // --- totals (system, plněné v beforeSave ve Fázi 2) ---
+
+        {
+            "id": "total_base",
+            "name": "Total base",
+            "name:cs": "Základ",
+            "name:en": "Total base",
+            "type": "numeric", "precision": 15, "scale": 2,
+            "default": 0, "system": true, "group": "totals"
+        },
+        {
+            "id": "total_vat",
+            "name": "Total VAT",
+            "name:cs": "DPH",
+            "name:en": "Total VAT",
+            "type": "numeric", "precision": 15, "scale": 2,
+            "default": 0, "system": true, "group": "totals"
+        },
+        {
+            "id": "total_amount",
+            "name": "Total amount",
+            "name:cs": "Celkem",
+            "name:en": "Total amount",
+            "type": "numeric", "precision": 15, "scale": 2,
+            "default": 0, "system": true, "group": "totals"
+        },
+        {
+            "id": "total_rounding",
+            "name": "Rounding diff",
+            "name:cs": "Rozdíl zaokrouhlení",
+            "name:en": "Rounding diff",
+            "type": "numeric", "precision": 15, "scale": 2,
+            "default": 0, "system": true, "group": "totals"
+        },
+        {
+            "id": "total_base_dom",
+            "name": "Total base (home)",
+            "name:cs": "Základ (domácí)",
+            "name:en": "Total base (home)",
+            "type": "numeric", "precision": 15, "scale": 2,
+            "default": 0, "system": true, "group": "totals"
+        },
+        {
+            "id": "total_vat_dom",
+            "name": "Total VAT (home)",
+            "name:cs": "DPH (domácí)",
+            "name:en": "Total VAT (home)",
+            "type": "numeric", "precision": 15, "scale": 2,
+            "default": 0, "system": true, "group": "totals"
+        },
+        {
+            "id": "total_amount_dom",
+            "name": "Total amount (home)",
+            "name:cs": "Celkem (domácí)",
+            "name:en": "Total amount (home)",
+            "type": "numeric", "precision": 15, "scale": 2,
+            "default": 0, "system": true, "group": "totals"
+        },
+
+        // --- payment ---
+
+        {
+            "id": "payment_method",
+            "name": "Payment method",
+            "name:cs": "Způsob platby",
+            "name:en": "Payment method",
+            "type": "enumInt",
+            "default": 1,
+            "cfgItem": "docs.core.paymentMethods",
+            "group": "payment"
+        },
+        {
+            "id": "bank_account",
+            "name": "Our bank account",
+            "name:cs": "Náš bankovní účet",
+            "name:en": "Our bank account",
+            "type": "int",
+            "nullable": true,
+            "reference": "economy_codebooks_bank_accounts",
+            "group": "payment"
+        },
+        {
+            "id": "variable_symbol",
+            "name": "Variable symbol",
+            "name:cs": "Variabilní symbol",
+            "name:en": "Variable symbol",
+            "type": "varchar", "length": 20,
+            "nullable": true, "group": "payment"
+        },
+        {
+            "id": "specific_symbol",
+            "name": "Specific symbol",
+            "name:cs": "Specifický symbol",
+            "name:en": "Specific symbol",
+            "type": "varchar", "length": 20,
+            "nullable": true, "group": "payment"
+        },
+        {
+            "id": "constant_symbol",
+            "name": "Constant symbol",
+            "name:cs": "Konstantní symbol",
+            "name:en": "Constant symbol",
+            "type": "varchar", "length": 10,
+            "nullable": true, "group": "payment"
+        },
+
+        // --- snapshots ---
+
+        {
+            "id": "supplier_snapshot",
+            "name": "Supplier snapshot",
+            "name:cs": "Snapshot dodavatele",
+            "name:en": "Supplier snapshot",
+            "type": "json",
+            "nullable": true,
+            "system": true,
+            "group": "snapshots"
+        },
+        {
+            "id": "customer_snapshot",
+            "name": "Customer snapshot",
+            "name:cs": "Snapshot odběratele",
+            "name:en": "Customer snapshot",
+            "type": "json",
+            "nullable": true,
+            "system": true,
+            "group": "snapshots"
+        },
+
+        // --- notes ---
+
+        {
+            "id": "notice",
+            "name": "Internal notice",
+            "name:cs": "Interní poznámka",
+            "name:en": "Internal notice",
+            "type": "text",
+            "nullable": true,
+            "group": "notes"
+        },
+        {
+            "id": "doc_notice",
+            "name": "Document notice",
+            "name:cs": "Poznámka na doklad",
+            "name:en": "Document notice",
+            "type": "text",
+            "nullable": true,
+            "group": "notes"
+        },
+
+        // --- system ---
+
+        {
+            "id": "docState",
+            "name": "Document state",
+            "name:cs": "Stav dokumentu",
+            "name:en": "Document state",
+            "type": "tinyint",
+            "default": 10,
+            "system": true
+        },
+        {
+            "id": "docStateMain",
+            "name": "Document state (sort)",
+            "name:cs": "Stav dokumentu (řazení)",
+            "name:en": "Document state (sort)",
+            "type": "tinyint",
+            "default": 1,
+            "system": true
+        }
+    ],
+
+    "indexes": [
+        // primary access path — viewer per series
+        {
+            "id": "idx_series_seq",
+            "type": "index",
+            "columns": [
+                {"column": "number_series"},
+                {"column": "fiscal_year"},
+                {"column": "sequence_number", "order": "DESC"}
+            ]
+        },
+
+        // safety net against duplicate doc numbers within a series
+        {
+            "id": "unq_series_seq",
+            "type": "unique",
+            "columns": [
+                {"column": "number_series"},
+                {"column": "fiscal_year"},
+                {"column": "sequence_number"}
+            ]
+        },
+
+        // doc state ordering
+        {
+            "id": "idx_doc_state",
+            "type": "index",
+            "columns": [
+                {"column": "docStateMain"},
+                {"column": "doc_number", "order": "DESC"}
+            ]
+        },
+
+        // partner lookups
+        {
+            "id": "idx_partner",
+            "type": "index",
+            "columns": [{"column": "partner"}]
+        },
+
+        // dates for reports
+        {
+            "id": "idx_accounting_date",
+            "type": "index",
+            "columns": [{"column": "accounting_date"}]
+        },
+        {
+            "id": "idx_vat_duzp",
+            "type": "index",
+            "columns": [{"column": "vat_duzp"}]
+        },
+
+        // fulltext on doc_text
+        {
+            "id": "ft_doc_text",
+            "type": "fulltext",
+            "columns": [{"column": "doc_text"}]
+        }
+    ]
+}

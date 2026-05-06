@@ -1,0 +1,73 @@
+{
+    "id": "docs.core",
+    "name": "Document core",
+    "name:cs": "Doklady — jádro",
+    "name:en": "Document core",
+    "description": "Polymorphic core for all document types (invoices, …)",
+    "description:cs": "Polymorfní jádro pro všechny typy dokladů (faktury, …)",
+    "description:en": "Polymorphic core for all document types (invoices, …)",
+
+    "dependencies": [
+        "core.system",
+        "core.units",
+        "core.attachments",
+        "base.persons",
+        "world.base",
+        "world.vat",
+        "economy.codebooks",
+        "economy.items"
+    ],
+
+    "tables": [
+        "docs_core_heads",
+        "docs_core_rows",
+        "docs_core_vat_recap",
+        "docs_core_number_series",
+        "docs_core_number_counters"
+    ],
+
+    "settingsItems": [
+        { "viewer": "docs.core.numberSeries", "section": "accounting" }
+    ],
+
+    "viewers": [
+        {
+            "id": "docs.core.numberSeries",
+            "name": "Document number series",
+            "name:cs": "Číselné řady dokladů",
+            "name:en": "Document number series",
+            "icon": "hash",
+            "table": "docs_core_number_series",
+            "class": "Shipard\\Module\\Docs\\Core\\NumberSeriesViewer"
+        }
+    ],
+
+    "forms": [
+        {
+            "table": "docs_core_number_series",
+            "class": "Shipard\\Module\\Docs\\Core\\NumberSeriesForm"
+        }
+    ],
+
+    "documentClasses": [
+        {
+            "table": "docs_core_number_series",
+            "class": "Shipard\\Module\\Docs\\Core\\NumberSeriesDocument"
+        }
+        // docs_core_heads document class arrives in Phase 6
+        // (IssuedInvoiceDocument, ReceivedInvoiceDocument)
+    ],
+
+    "config": [
+        { "id": "docs.core.docTypes",        "file": "config/docTypes.jsonc" },
+        { "id": "docs.core.docStates",       "file": "config/docStates.jsonc" },
+        { "id": "docs.core.vatModes",        "file": "config/vatModes.jsonc" },
+        { "id": "docs.core.vatCalcSources",  "file": "config/vatCalcSources.jsonc" },
+        { "id": "docs.core.vatPlaces",       "file": "config/vatPlaces.jsonc" },
+        { "id": "docs.core.priceCalcModes",  "file": "config/priceCalcModes.jsonc" },
+        { "id": "docs.core.rowKinds",        "file": "config/rowKinds.jsonc" },
+        { "id": "docs.core.roundingModes",   "file": "config/roundingModes.jsonc" },
+        { "id": "docs.core.paymentMethods",  "file": "config/paymentMethods.jsonc" },
+        { "id": "docs.core.resetScopes",     "file": "config/resetScopes.jsonc" }
+    ]
+}

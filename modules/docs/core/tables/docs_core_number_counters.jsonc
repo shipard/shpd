@@ -1,0 +1,56 @@
+{
+    "tableId": 405,
+    "name": "Document number counters",
+    "name:cs": "Počítadla čísel dokladů",
+    "name:en": "Document number counters",
+
+    "displayPattern": "{number_series}/{fiscal_year}",
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+        {
+            "id": "number_series",
+            "name": "Number series",
+            "name:cs": "Číselná řada",
+            "name:en": "Number series",
+            "type": "int",
+            "nullable": false,
+            "reference": "docs_core_number_series"
+        },
+        {
+            "id": "fiscal_year",
+            "name": "Fiscal year",
+            "name:cs": "Fiskální rok",
+            "name:en": "Fiscal year",
+            "type": "int",
+            "nullable": true,
+            "reference": "economy_codebooks_fiscal_years"
+        },
+        {
+            "id": "last_assigned",
+            "name": "Last assigned",
+            "name:cs": "Poslední přidělené",
+            "name:en": "Last assigned",
+            "type": "int",
+            "nullable": false,
+            "default": 0
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "unq_series_year",
+            "type": "unique",
+            "columns": [
+                {"column": "number_series"},
+                {"column": "fiscal_year"}
+            ]
+        }
+    ]
+}

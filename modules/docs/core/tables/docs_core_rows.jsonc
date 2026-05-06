@@ -1,0 +1,224 @@
+{
+    "tableId": 402,
+    "name": "Document rows",
+    "name:cs": "Řádky dokladů",
+    "name:en": "Document rows",
+
+    "displayPattern": "{description}",
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+        {
+            "id": "doc_head",
+            "name": "Document",
+            "name:cs": "Doklad",
+            "name:en": "Document",
+            "type": "int",
+            "nullable": false,
+            "reference": "docs_core_heads"
+        },
+
+        {
+            "id": "row_kind",
+            "name": "Row kind",
+            "name:cs": "Typ řádku",
+            "name:en": "Row kind",
+            "type": "enumInt",
+            "default": 1,
+            "cfgItem": "docs.core.rowKinds"
+        },
+
+        {
+            "id": "sort_order",
+            "name": "Sort order",
+            "name:cs": "Pořadí",
+            "name:en": "Sort order",
+            "type": "smallint",
+            "default": 0
+        },
+
+        // --- identification ---
+
+        {
+            "id": "item",
+            "name": "Item",
+            "name:cs": "Položka",
+            "name:en": "Item",
+            "type": "int",
+            "nullable": true,
+            "reference": "economy_items"
+        },
+        {
+            "id": "description",
+            "name": "Description",
+            "name:cs": "Popis",
+            "name:en": "Description",
+            "type": "varchar",
+            "length": 500,
+            "nullable": true
+        },
+
+        // --- quantity & price ---
+
+        {
+            "id": "unit",
+            "name": "Unit",
+            "name:cs": "Jednotka",
+            "name:en": "Unit",
+            "type": "int",
+            "nullable": true,
+            "reference": "core_units"
+        },
+        {
+            "id": "quantity",
+            "name": "Quantity",
+            "name:cs": "Množství",
+            "name:en": "Quantity",
+            "type": "numeric",
+            "precision": 15,
+            "scale": 4,
+            "nullable": true
+        },
+        {
+            "id": "unit_price",
+            "name": "Unit price",
+            "name:cs": "Cena/jednotka",
+            "name:en": "Unit price",
+            "type": "numeric",
+            "precision": 15,
+            "scale": 4,
+            "nullable": true
+        },
+        {
+            "id": "total_price",
+            "name": "Total price",
+            "name:cs": "Cena celkem",
+            "name:en": "Total price",
+            "type": "numeric",
+            "precision": 15,
+            "scale": 2,
+            "nullable": true
+        },
+        {
+            "id": "price_calc_mode",
+            "name": "Price calculation mode",
+            "name:cs": "Způsob výpočtu",
+            "name:en": "Price calculation mode",
+            "type": "enumInt",
+            "default": 0,
+            "cfgItem": "docs.core.priceCalcModes"
+        },
+
+        // --- discount ---
+
+        {
+            "id": "discount_pct",
+            "name": "Discount (%)",
+            "name:cs": "Sleva (%)",
+            "name:en": "Discount (%)",
+            "type": "numeric",
+            "precision": 5,
+            "scale": 2,
+            "nullable": true
+        },
+        {
+            "id": "discount_amount",
+            "name": "Discount (amount)",
+            "name:cs": "Sleva (částka)",
+            "name:en": "Discount (amount)",
+            "type": "numeric",
+            "precision": 15,
+            "scale": 2,
+            "nullable": true
+        },
+
+        // --- VAT ---
+        // vat_code is a free string in Phase 1; the cfgItem (vatCodes) is
+        // resolved per-country dynamically at runtime, not at column level.
+        // Will become enumString in Phase 5 once the framework supports
+        // runtime-resolved cfgItem.
+
+        {
+            "id": "vat_code",
+            "name": "VAT code",
+            "name:cs": "Kód DPH",
+            "name:en": "VAT code",
+            "type": "varchar",
+            "length": 20,
+            "nullable": true
+        },
+        {
+            "id": "vat_pct",
+            "name": "VAT %",
+            "name:cs": "DPH %",
+            "name:en": "VAT %",
+            "type": "numeric",
+            "precision": 5,
+            "scale": 2,
+            "nullable": true
+        },
+
+        // --- calculated (system) ---
+
+        {
+            "id": "vat_base",
+            "name": "VAT base",
+            "name:cs": "Základ DPH",
+            "name:en": "VAT base",
+            "type": "numeric",
+            "precision": 15,
+            "scale": 2,
+            "nullable": true,
+            "system": true
+        },
+        {
+            "id": "vat_amount",
+            "name": "VAT amount",
+            "name:cs": "DPH",
+            "name:en": "VAT amount",
+            "type": "numeric",
+            "precision": 15,
+            "scale": 2,
+            "nullable": true,
+            "system": true
+        },
+        {
+            "id": "vat_total",
+            "name": "VAT total",
+            "name:cs": "Celkem s DPH",
+            "name:en": "VAT total",
+            "type": "numeric",
+            "precision": 15,
+            "scale": 2,
+            "nullable": true,
+            "system": true
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "idx_doc_head",
+            "type": "index",
+            "columns": [
+                {"column": "doc_head"},
+                {"column": "sort_order"}
+            ]
+        },
+        {
+            "id": "idx_item",
+            "type": "index",
+            "columns": [{"column": "item"}]
+        },
+        {
+            "id": "idx_vat_code",
+            "type": "index",
+            "columns": [{"column": "vat_code"}]
+        }
+    ]
+}

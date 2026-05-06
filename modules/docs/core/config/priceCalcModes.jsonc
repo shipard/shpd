@@ -1,0 +1,18 @@
+{
+    // docs.core.priceCalcModes
+    //
+    // Způsob výpočtu na řádku dokladu:
+    //   0 = z ceny za jednotku (quantity * unit_price = total_price)
+    //   1 = z celkové ceny (total_price / quantity = unit_price)
+
+    "0": {
+        "name": "From unit price",
+        "name:cs": "Z ceny za jednotku",
+        "name:en": "From unit price"
+    },
+    "1": {
+        "name": "From total price",
+        "name:cs": "Z ceny celkem",
+        "name:en": "From total price"
+    }
+}

@@ -29,17 +29,16 @@ přijatá), kompletní DPH model pro **CZ** (vč. PDP, EU intracom, dovozu/vývo
 
 | Task                              | Fáze v MVP | Stav     | Závislosti                                          |
 |-----------------------------------|-----------|----------|-----------------------------------------------------|
-| `persons-is-own-extension.md`     | 1         | připrav. | base.persons (existuje)                             |
-| `world-vat-cz.md`                 | 2         | připrav. | world.base, world.trade (existují)                  |
-| `docs-core-phase1.md` (skeleton)  | 3         | TODO     | persons-extension, world.vat, economy.codebooks, items |
+| `persons-is-own-extension.md`     | 1         | hotovo   | base.persons (existuje)                             |
+| `world-vat-cz.md`                 | 2         | hotovo   | world.base, world.trade (existují)                  |
+| `docs-core-phase1.md` (skeleton)  | 3         | hotovo   | persons-extension, world.vat, economy.codebooks, items |
 | `docs-core-phase2.md` (výpočty)   | 4         | TODO     | docs-core-phase1                                    |
 | `docs-core-phase3.md` (UI)        | 5         | TODO     | docs-core-phase2                                    |
 | `docs-invoices.md`                | 6         | TODO     | docs-core-phase3                                    |
 
-Fáze 1 (`persons-is-own-extension.md`) a 2 (`world-vat-cz.md`) jsou nezávislé
-a lze je dělat paralelně. Tasky pro fáze 3-6 vzniknou postupně po dokončení
-předchozích — designové detaily se mohou v reakci na zjištění z předchozí fáze
-upravit.
+Fáze 1 a 2 byly nezávislé a hotové. Tasky pro fáze 4-6 vzniknou postupně
+po dokončení Fáze 3 — designové detaily se mohou v reakci na zjištění
+z předchozí fáze upravit.
 
 ### Modul `economy.items` + `core.units`
 

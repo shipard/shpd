@@ -1,0 +1,179 @@
+{
+    "tableId": 403,
+    "name": "VAT recapitulation",
+    "name:cs": "Rekapitulace DPH",
+    "name:en": "VAT recapitulation",
+
+    "displayPattern": "{vat_code} {vat_pct}%",
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+        {
+            "id": "doc_head",
+            "name": "Document",
+            "name:cs": "Doklad",
+            "name:en": "Document",
+            "type": "int",
+            "nullable": false,
+            "reference": "docs_core_heads"
+        },
+
+        // vat_code: same reasoning as docs_core_rows.vat_code — free string
+        // in Phase 1; cfgItem resolved per-country at runtime.
+
+        {
+            "id": "vat_code",
+            "name": "VAT code",
+            "name:cs": "Kód DPH",
+            "name:en": "VAT code",
+            "type": "varchar",
+            "length": 20,
+            "nullable": false
+        },
+        {
+            "id": "vat_pct",
+            "name": "VAT %",
+            "name:cs": "DPH %",
+            "name:en": "VAT %",
+            "type": "numeric",
+            "precision": 5,
+            "scale": 2,
+            "nullable": false
+        },
+
+        // --- amounts in document currency ---
+
+        {
+            "id": "base",
+            "name": "Base",
+            "name:cs": "Základ",
+            "name:en": "Base",
+            "type": "numeric",
+            "precision": 15,
+            "scale": 2,
+            "default": 0
+        },
+        {
+            "id": "tax",
+            "name": "Tax",
+            "name:cs": "Daň",
+            "name:en": "Tax",
+            "type": "numeric",
+            "precision": 15,
+            "scale": 2,
+            "default": 0
+        },
+        {
+            "id": "total",
+            "name": "Total",
+            "name:cs": "Celkem",
+            "name:en": "Total",
+            "type": "numeric",
+            "precision": 15,
+            "scale": 2,
+            "default": 0
+        },
+
+        // --- amounts in home currency ---
+
+        {
+            "id": "base_dom",
+            "name": "Base (home)",
+            "name:cs": "Základ (domácí)",
+            "name:en": "Base (home)",
+            "type": "numeric",
+            "precision": 15,
+            "scale": 2,
+            "default": 0
+        },
+        {
+            "id": "tax_dom",
+            "name": "Tax (home)",
+            "name:cs": "Daň (domácí)",
+            "name:en": "Tax (home)",
+            "type": "numeric",
+            "precision": 15,
+            "scale": 2,
+            "default": 0
+        },
+        {
+            "id": "total_dom",
+            "name": "Total (home)",
+            "name:cs": "Celkem (domácí)",
+            "name:en": "Total (home)",
+            "type": "numeric",
+            "precision": 15,
+            "scale": 2,
+            "default": 0
+        },
+
+        // --- flags from vatCode ---
+
+        {
+            "id": "sum_base",
+            "name": "Sum base",
+            "name:cs": "Sčítat základ",
+            "name:en": "Sum base",
+            "type": "boolean",
+            "default": 1
+        },
+        {
+            "id": "sum_tax",
+            "name": "Sum tax",
+            "name:cs": "Sčítat daň",
+            "name:en": "Sum tax",
+            "type": "boolean",
+            "default": 1
+        },
+        {
+            "id": "sum_total",
+            "name": "Sum total",
+            "name:cs": "Sčítat celkem",
+            "name:en": "Sum total",
+            "type": "boolean",
+            "default": 1
+        },
+
+        // --- marker for reverse charge pair ---
+
+        {
+            "id": "is_reverse_pair",
+            "name": "Reverse charge pair",
+            "name:cs": "Druhá strana reverse charge páru",
+            "name:en": "Reverse charge pair",
+            "type": "boolean",
+            "default": 0
+        },
+
+        {
+            "id": "sort_order",
+            "name": "Sort order",
+            "name:cs": "Pořadí",
+            "name:en": "Sort order",
+            "type": "smallint",
+            "default": 0
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "idx_doc_head",
+            "type": "index",
+            "columns": [
+                {"column": "doc_head"},
+                {"column": "sort_order"}
+            ]
+        },
+        {
+            "id": "idx_vat_code",
+            "type": "index",
+            "columns": [{"column": "vat_code"}]
+        }
+    ]
+}

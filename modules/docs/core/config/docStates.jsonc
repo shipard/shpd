@@ -1,0 +1,96 @@
+{
+    // docs.core.docStates
+    //
+    // Stavy dokladů. Oproti core.system.docStatesArchive:
+    // + 20 Potvrzeno (přidělené číslo, ale stále editovatelné)
+    // + 30 Storno (zachovává číslo, sdílí mainState s 40 V pořádku)
+    // - 70 V archívu (u dokladů nadbytečné)
+
+    "10": {
+        "stateName": "Koncept",
+        "stateName:cs": "Koncept",
+        "stateName:en": "Draft",
+        "actionName": "Uložit jako koncept",
+        "actionName:cs": "Uložit jako koncept",
+        "actionName:en": "Save as draft",
+        "stateStyle": "concept",
+        "mainState": 1,
+        "viewGroup": "active",
+        "closeForm": 0,
+        "goto": [20, 90]
+    },
+
+    "20": {
+        "stateName": "Potvrzeno",
+        "stateName:cs": "Potvrzeno",
+        "stateName:en": "Confirmed",
+        "actionName": "Potvrdit",
+        "actionName:cs": "Potvrdit",
+        "actionName:en": "Confirm",
+        "stateStyle": "confirmed",
+        "mainState": 2,
+        "viewGroup": "active",
+        "closeForm": 0,
+        "goto": [10, 40, 90]
+    },
+
+    "80": {
+        "stateName": "V opravě",
+        "stateName:cs": "V opravě",
+        "stateName:en": "Being edited",
+        "actionName": "Opravit",
+        "actionName:cs": "Opravit",
+        "actionName:en": "Edit",
+        "stateStyle": "edit",
+        "mainState": 3,
+        "viewGroup": "active",
+        "closeForm": 0,
+        "goto": [40, 30, 90]
+    },
+
+    "40": {
+        "stateName": "V pořádku",
+        "stateName:cs": "V pořádku",
+        "stateName:en": "Done",
+        "actionName": "V pořádku",
+        "actionName:cs": "V pořádku",
+        "actionName:en": "Mark as done",
+        "stateStyle": "done",
+        "mainState": 4,
+        "viewGroup": "active",
+        "readOnly": 1,
+        "enablePrint": 1,
+        "closeForm": 1,
+        "goto": [80, 30, 90]
+    },
+
+    "30": {
+        "stateName": "Storno",
+        "stateName:cs": "Storno",
+        "stateName:en": "Cancelled",
+        "actionName": "Stornovat",
+        "actionName:cs": "Stornovat",
+        "actionName:en": "Cancel",
+        "stateStyle": "cancelled",
+        "mainState": 4,
+        "viewGroup": "active",
+        "readOnly": 1,
+        "closeForm": 1,
+        "goto": [80]
+    },
+
+    "90": {
+        "stateName": "Smazáno",
+        "stateName:cs": "Smazáno",
+        "stateName:en": "Deleted",
+        "actionName": "Smazat",
+        "actionName:cs": "Smazat",
+        "actionName:en": "Delete",
+        "stateStyle": "trash",
+        "mainState": 5,
+        "viewGroup": "trash",
+        "readOnly": 1,
+        "closeForm": 1,
+        "goto": [80]
+    }
+}

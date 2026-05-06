@@ -1,0 +1,23 @@
+{
+    // docs.core.roundingModes
+    //
+    //   0 = bez zaokrouhlení
+    //   1 = matematicky na 1 (celé Kč)
+    //   2 = matematicky na 0,01 (haléře)
+
+    "0": {
+        "name": "No rounding",
+        "name:cs": "Bez zaokrouhlení",
+        "name:en": "No rounding"
+    },
+    "1": {
+        "name": "Round to 1",
+        "name:cs": "Matematicky na 1",
+        "name:en": "Round to 1"
+    },
+    "2": {
+        "name": "Round to 0.01",
+        "name:cs": "Matematicky na 0,01",
+        "name:en": "Round to 0.01"
+    }
+}

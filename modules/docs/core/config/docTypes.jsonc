@@ -1,0 +1,40 @@
+{
+    // docs.core.docTypes
+    //
+    // Typy dokladů v systému. V MVP jen invno (faktura vydaná) a invni
+    // (faktura přijatá). Postupně přibudou další (cash, bank, prfmin, …).
+    //
+    // Atributy:
+    //   doc_id_code: string vkládaný do %D placeholderu vzorce čísla dokladu
+    //   trade_dir:   1 = výstup (my=dodavatel), 2 = vstup (my=odběratel)
+    //   doc_number_pattern_default: vzorec, který provisioner použije při
+    //                               vytvoření default číselné řady
+    //   subclass:    plný název Document třídy v navazujícím modulu
+    //                (přijde s Fází 6 — zatím jen referenční hint)
+
+    "invno": {
+        "name": "Issued invoice",
+        "name:cs": "Faktura vydaná",
+        "name:en": "Issued invoice",
+        "shortcut": "FVB",
+        "shortcut:cs": "FVB",
+        "shortcut:en": "IV",
+        "doc_id_code": "1",
+        "trade_dir": 1,
+        "doc_number_pattern_default": "%D%y%C%4",
+        "subclass": "Shipard\\Module\\Docs\\InvoicesOut\\IssuedInvoiceDocument"
+    },
+
+    "invni": {
+        "name": "Received invoice",
+        "name:cs": "Faktura přijatá",
+        "name:en": "Received invoice",
+        "shortcut": "FPB",
+        "shortcut:cs": "FPB",
+        "shortcut:en": "RI",
+        "doc_id_code": "2",
+        "trade_dir": 2,
+        "doc_number_pattern_default": "%D%y%C%4",
+        "subclass": "Shipard\\Module\\Docs\\InvoicesIn\\ReceivedInvoiceDocument"
+    }
+}

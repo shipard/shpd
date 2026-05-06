@@ -15,6 +15,7 @@
         "economy.codebooks",
         "economy.items",
         "world.vat",
+        "docs.core",
     ],
 
     "config": [

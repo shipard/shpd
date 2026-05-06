@@ -1,0 +1,172 @@
+{
+    "tableId": 404,
+    "name": "Document number series",
+    "name:cs": "Číselné řady dokladů",
+    "name:en": "Document number series",
+
+    "displayPattern": "{name}",
+
+    "docStates": {
+        "stateColumn": "docState",
+        "mainColumn": "docStateMain",
+        "cfgItem": "core.system.docStatesArchive"
+    },
+
+    "columnGroups": [
+        {
+            "id": "identity",
+            "name": "Identity",
+            "name:cs": "Identifikace",
+            "name:en": "Identity"
+        },
+        {
+            "id": "numbering",
+            "name": "Numbering",
+            "name:cs": "Číslování",
+            "name:en": "Numbering"
+        },
+        {
+            "id": "validity",
+            "name": "Validity",
+            "name:cs": "Platnost",
+            "name:en": "Validity"
+        }
+    ],
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+
+        // --- identity ---
+
+        {
+            "id": "doc_type",
+            "name": "Document type",
+            "name:cs": "Typ dokladu",
+            "name:en": "Document type",
+            "type": "enumString",
+            "length": 20,
+            "cfgItem": "docs.core.docTypes",
+            "nullable": false,
+            "group": "identity"
+        },
+        {
+            "id": "name",
+            "name": "Series name",
+            "name:cs": "Název řady",
+            "name:en": "Series name",
+            "type": "varchar",
+            "length": 100,
+            "nullable": false,
+            "group": "identity"
+        },
+        {
+            "id": "notice",
+            "name": "Notice",
+            "name:cs": "Poznámka",
+            "name:en": "Notice",
+            "type": "varchar",
+            "length": 250,
+            "nullable": true,
+            "group": "identity"
+        },
+
+        // --- numbering ---
+
+        {
+            "id": "doc_number_code",
+            "name": "Series code (%C)",
+            "name:cs": "Kód řady (%C)",
+            "name:en": "Series code (%C)",
+            "type": "varchar",
+            "length": 10,
+            "nullable": true,
+            "group": "numbering"
+        },
+        {
+            "id": "doc_number_pattern",
+            "name": "Document number pattern",
+            "name:cs": "Vzorec čísla dokladu",
+            "name:en": "Document number pattern",
+            "type": "varchar",
+            "length": 50,
+            "nullable": false,
+            "group": "numbering"
+        },
+        {
+            "id": "reset_scope",
+            "name": "Counter reset",
+            "name:cs": "Restart počítadla",
+            "name:en": "Counter reset",
+            "type": "enumString",
+            "length": 15,
+            "cfgItem": "docs.core.resetScopes",
+            "default": "fiscal_year",
+            "nullable": false,
+            "group": "numbering"
+        },
+
+        // --- validity ---
+
+        {
+            "id": "valid_from",
+            "name": "Valid from",
+            "name:cs": "Platnost od",
+            "name:en": "Valid from",
+            "type": "date",
+            "nullable": true,
+            "group": "validity"
+        },
+        {
+            "id": "valid_to",
+            "name": "Valid to",
+            "name:cs": "Platnost do",
+            "name:en": "Valid to",
+            "type": "date",
+            "nullable": true,
+            "group": "validity"
+        },
+
+        // --- doc state (system) ---
+
+        {
+            "id": "docState",
+            "name": "Document state",
+            "name:cs": "Stav dokumentu",
+            "name:en": "Document state",
+            "type": "tinyint",
+            "default": 10,
+            "system": true
+        },
+        {
+            "id": "docStateMain",
+            "name": "Document state (sort)",
+            "name:cs": "Stav dokumentu (řazení)",
+            "name:en": "Document state (sort)",
+            "type": "tinyint",
+            "default": 1,
+            "system": true
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "idx_doc_type",
+            "type": "index",
+            "columns": [{"column": "doc_type"}]
+        },
+        {
+            "id": "idx_doc_state",
+            "type": "index",
+            "columns": [
+                {"column": "docStateMain", "order": "ASC"},
+                {"column": "name", "order": "ASC"}
+            ]
+        }
+    ]
+}

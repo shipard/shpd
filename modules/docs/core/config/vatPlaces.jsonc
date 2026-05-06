@@ -1,0 +1,24 @@
+{
+    // docs.core.vatPlaces
+    //
+    // Místo plnění:
+    //   0 = tuzemsko (CZ obchody, vč. tuzemského PDP — to je flag na vatCode)
+    //   1 = intrakomunitární (EU mimo ČR)
+    //   2 = zahraničí (mimo EU)
+
+    "0": {
+        "name": "Domestic",
+        "name:cs": "Tuzemsko",
+        "name:en": "Domestic"
+    },
+    "1": {
+        "name": "Intra-community",
+        "name:cs": "Intrakomunitární plnění",
+        "name:en": "Intra-community"
+    },
+    "2": {
+        "name": "Foreign",
+        "name:cs": "Zahraničí",
+        "name:en": "Foreign"
+    }
+}

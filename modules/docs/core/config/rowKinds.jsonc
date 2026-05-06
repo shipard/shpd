@@ -1,0 +1,17 @@
+{
+    // docs.core.rowKinds
+    //
+    //   0 = textový řádek (jen popis, nepřispívá do součtů)
+    //   1 = běžný řádek (s množstvím a cenou)
+
+    "0": {
+        "name": "Text row",
+        "name:cs": "Textový řádek",
+        "name:en": "Text row"
+    },
+    "1": {
+        "name": "Standard row",
+        "name:cs": "Běžný řádek",
+        "name:en": "Standard row"
+    }
+}

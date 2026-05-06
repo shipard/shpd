@@ -1,0 +1,18 @@
+{
+    // docs.core.resetScopes
+    //
+    // Kdy se restartuje counter čísel dokladů v číselné řadě:
+    //   "none" — counter je průběžný napříč všemi roky
+    //   "fiscal_year" — counter restartuje každý fiskální rok (default)
+
+    "none": {
+        "name": "No reset (continuous)",
+        "name:cs": "Bez restartu (průběžné)",
+        "name:en": "No reset (continuous)"
+    },
+    "fiscal_year": {
+        "name": "Reset each fiscal year",
+        "name:cs": "Restart každý fiskální rok",
+        "name:en": "Reset each fiscal year"
+    }
+}

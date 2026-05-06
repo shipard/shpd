@@ -1,0 +1,19 @@
+{
+    // docs.core.vatCalcSources
+    //
+    // Odkud se počítá DPH:
+    //   0 = z hlavičky (sečtu základy řádků se stejnou sazbou, pak vypočtu DPH)
+    //   1 = z řádků (každý řádek má vlastní DPH zaokrouhlené, sečtu)
+    // Pro většinu případů 0 (default) — řádkové počítání je méně časté.
+
+    "0": {
+        "name": "From header",
+        "name:cs": "Z hlavičky",
+        "name:en": "From header"
+    },
+    "1": {
+        "name": "From rows",
+        "name:cs": "Z řádků",
+        "name:en": "From rows"
+    }
+}

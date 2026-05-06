@@ -21,6 +21,7 @@ use Shipard\Core\Utils\JsoncParser;
 use Shipard\Module\Core\Mail\AIAnalyzerProvisioner;
 use Shipard\Module\Core\Mail\MailRouterProvisioner;
 use Shipard\Module\Core\Units\UnitsProvisioner;
+use Shipard\Module\Docs\Core\NumberSeriesProvisioner;
 use Shipard\Module\Economy\Codebooks\FiscalYearsProvisioner;
 use Shipard\Module\Economy\Codebooks\VatPeriodsProvisioner;
 use Shipard\Module\Economy\Items\ItemKindsProvisioner;
@@ -242,6 +243,7 @@ class DsUpgradeCommand extends Command
         $this->provisionItemKinds($resolvedModules, $dsConnection, $output);
         $this->provisionFiscalYears($resolvedModules, $dsDir, $dsConnection, $output);
         $this->provisionVatPeriods($resolvedModules, $dsConnection, $output);
+        $this->provisionDocCoreNumberSeries($resolvedModules, $dsDir, $dsConnection, $output);
         $this->provisionMailRouter($dsConfig, $dsConnection, $output);
         $this->provisionAiAnalyzer($dsConfig, $dsConnection, $output);
 
@@ -437,6 +439,41 @@ class DsUpgradeCommand extends Command
             '  [OK]    vat periods — created: %d, existing: %d',
             $periods['created'],
             $periods['existing'],
+        ));
+    }
+
+    /**
+     * @param list<\Shipard\Core\Module\ModuleDefinition> $resolvedModules
+     */
+    private function provisionDocCoreNumberSeries(
+        array $resolvedModules,
+        string $dsDir,
+        DataSourceConnection $dsConnection,
+        OutputInterface $output,
+    ): void {
+        $output->writeln('');
+        $output->writeln('Provisioning docs.core number series...');
+
+        if (!$this->isModuleActive($resolvedModules, 'docs.core')) {
+            $output->writeln('  <comment>[SKIP] docs.core module not active</comment>');
+            return;
+        }
+
+        $compiledFile = $dsDir . '/config/configuration/compiled.cs.json';
+        if (!is_file($compiledFile)) {
+            $output->writeln('  <comment>[SKIP] config not compiled yet</comment>');
+            return;
+        }
+
+        $config = ConfigRuntime::load($dsDir, 'cs');
+        $provisioner = new NumberSeriesProvisioner($dsConnection, $config);
+        $result = $provisioner->provision();
+
+        $series = $result['numberSeries'];
+        $output->writeln(sprintf(
+            '  [OK]    number series — created: %d, existing: %d',
+            $series['created'],
+            $series['existing'],
         ));
     }
 

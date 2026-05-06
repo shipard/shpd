@@ -96,6 +96,102 @@ class PersonDocumentTest extends TestCase
         $this->assertTrue($result->isValid());
     }
 
+    public function testValidateIsOwnOnPersonFails(): void
+    {
+        $doc = $this->doc();
+        $data = [
+            'person_type' => 1,
+            'first_name' => 'Jan',
+            'last_name' => 'Novák',
+            'is_own' => 1,
+        ];
+
+        $result = $doc->validate($data);
+
+        $this->assertFalse($result->isValid());
+        $codes = array_column($result->toArray(), 'code');
+        $this->assertContains('is_own_not_company', $codes);
+    }
+
+    public function testValidateIsOwnDuplicateFails(): void
+    {
+        // Mock returns an existing row → uniqueness check fails.
+        $db = $this->createMock(\Dibi\Connection::class);
+        $db->method('fetch')->willReturn(new \Dibi\Row(['id' => 7]));
+
+        $doc = $this->doc();
+        $doc->setDb($db);
+
+        $data = [
+            'person_type' => 2,
+            'full_name' => 'Acme s.r.o.',
+            'is_own' => 1,
+        ];
+
+        $result = $doc->validate($data);
+
+        $this->assertFalse($result->isValid());
+        $codes = array_column($result->toArray(), 'code');
+        $this->assertContains('is_own_duplicate', $codes);
+    }
+
+    public function testValidateIsOwnUniqueWhenNoOtherOwnExists(): void
+    {
+        // Mock returns null → no other own company in DS.
+        $db = $this->createMock(\Dibi\Connection::class);
+        $db->method('fetch')->willReturn(null);
+
+        $doc = $this->doc();
+        $doc->setDb($db);
+
+        $data = [
+            'person_type' => 2,
+            'full_name' => 'Acme s.r.o.',
+            'is_own' => 1,
+        ];
+
+        $result = $doc->validate($data);
+
+        $this->assertTrue($result->isValid());
+    }
+
+    public function testValidateIsOwnUpdateOfSameRecordPasses(): void
+    {
+        // Mock returns null because the SQL excludes the current id.
+        $db = $this->createMock(\Dibi\Connection::class);
+        $db->method('fetch')->willReturn(null);
+
+        $doc = $this->doc();
+        $doc->setDb($db);
+
+        $data = [
+            'id' => 42,
+            'person_type' => 2,
+            'full_name' => 'Acme s.r.o.',
+            'is_own' => 1,
+        ];
+
+        $result = $doc->validate($data);
+
+        $this->assertTrue($result->isValid());
+    }
+
+    public function testValidateIsOwnZeroSkipsChecks(): void
+    {
+        // No DB needed — the is_own block must short-circuit on falsy value.
+        $doc = $this->doc();
+        $data = [
+            'person_type' => 1,
+            'first_name' => 'Jan',
+            'last_name' => 'Novák',
+            'is_own' => 0,
+        ];
+
+        $result = $doc->validate($data);
+
+        $this->assertTrue($result->isValid());
+    }
+
     // --- beforeSave ---------------------------------------------------------
 
     public function testBeforeSaveCompanyClearsFirstNameAndSetsLastName(): void

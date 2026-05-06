@@ -106,6 +106,16 @@
             "nullable": true,
             "group": "identity"
         },
+        {
+            "id": "court_registration",
+            "name": "Court registration",
+            "name:cs": "Zápis v obchodním rejstříku",
+            "name:en": "Court registration",
+            "type": "varchar",
+            "length": 250,
+            "nullable": true,
+            "group": "identity"
+        },
 
         // --- name ---
 
@@ -262,6 +272,15 @@
             "name:en": "Closed date",
             "type": "date",
             "nullable": true,
+            "group": "status"
+        },
+        {
+            "id": "is_own",
+            "name": "Own company",
+            "name:cs": "Vlastní firma",
+            "name:en": "Own company",
+            "type": "boolean",
+            "default": 0,
             "group": "status"
         },
 

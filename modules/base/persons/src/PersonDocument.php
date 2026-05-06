@@ -32,6 +32,36 @@ class PersonDocument extends Document
             }
         }
 
+        if (!empty($data['is_own'])) {
+            if ($personType !== PersonType::Company) {
+                $result->addError(
+                    'is_own',
+                    'Vlastní firma musí být typu Firma',
+                    'is_own_not_company',
+                );
+            }
+
+            if ($this->db !== null) {
+                $sql = 'SELECT id FROM base_persons_persons
+                        WHERE is_own = 1 AND docState != %i';
+                $params = [90];
+                if (!empty($data['id'])) {
+                    $sql .= ' AND id != %i';
+                    $params[] = (int) $data['id'];
+                }
+                $sql .= ' LIMIT 1';
+
+                $existing = $this->db->fetch($sql, ...$params);
+                if ($existing) {
+                    $result->addError(
+                        'is_own',
+                        'Vlastní firma už je nastavena na jiném záznamu',
+                        'is_own_duplicate',
+                    );
+                }
+            }
+        }
+
         return $result;
     }
 

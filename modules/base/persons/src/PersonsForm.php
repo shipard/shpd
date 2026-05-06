@@ -32,6 +32,7 @@ class PersonsForm extends TableForm
             ->addInput('company_id', cols: 1, hidden: $isPerson || $isUndefined)
             ->addInput('tax_id', cols: 1, hidden: $isPerson || $isUndefined)
             ->addInput('vat_id', cols: 1, hidden: $isPerson || $isUndefined)
+            ->addInput('court_registration', cols: 3, hidden: $isPerson || $isUndefined)
             // Jméno
             ->addSeparator('Jméno', hidden: $isCompany || $isUndefined)
             ->addInput('title_before', cols: 1, hidden: $isCompany || $isUndefined)
@@ -44,6 +45,9 @@ class PersonsForm extends TableForm
             ->addDate('birth_date', cols: 1, hidden: $isCompany || $isUndefined)
             ->addInput('national_id', cols: 1, hidden: $isCompany || $isUndefined)
             ->addInput('id_card_number', cols: 1, hidden: $isCompany || $isUndefined)
+            // Naše firma
+            ->addSeparator('Naše firma', hidden: $isPerson || $isUndefined)
+            ->addCheckbox('is_own', cols: 1, hidden: $isPerson || $isUndefined)
             ->build();
 
         // ── Tab: Kontaktní údaje ─────────────────────────────────────────────

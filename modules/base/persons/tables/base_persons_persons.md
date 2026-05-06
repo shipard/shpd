@@ -17,6 +17,7 @@ Sloupce jsou organizovány do skupin:
 | `company_id` | varchar(30) | IČO — relevantní u firem |
 | `tax_id` | varchar(30) | DIČ |
 | `vat_id` | varchar(30) | DIČ pro DPH |
+| `court_registration` | varchar(250) | Zápis v obchodním rejstříku — typ "Městský soud v Praze, oddíl C, vložka 12345" |
 
 ### Jméno (name)
 
@@ -52,6 +53,7 @@ Sloupce jsou organizovány do skupin:
 |---|---|---|
 | `is_closed` | boolean | Příznak uzavřeného záznamu |
 | `closed_date` | date | Datum uzavření |
+| `is_own` | boolean | Příznak vlastní firmy — max 1 záznam v DS, jen pro firmy |
 
 ## Obchodní logika (PersonDocument)
 
@@ -94,6 +96,20 @@ hooky `validate` a `beforeSave`, které řídí chování podle typu osoby.
   krátký alfanumerický hash (písmena + číslice, cca 5 znaků). Slouží
   k jednoznačné identifikaci na tištěných sestavách (faktury, dodací listy),
   kde může dojít k záměně u duplicitních jmen.
+
+### Vlastní firma (is_own)
+
+Flag `is_own = 1` označuje záznam jako "naši firmu" — z toho dokladový
+systém čerpá údaje pro snapshot dodavatele/odběratele při potvrzení
+dokladu.
+
+Validace:
+- Maximálně **jedna** osoba v DS smí mít `is_own = 1` (přes všechny
+  aktivní stavy `docState != 90`).
+- Vlastní firma musí být typu `Company` (`person_type = 2`).
+
+Při instalaci nového DS uživatel ručně označí svou firmu — nelze vytvářet
+doklady, dokud vlastní firma není nastavená (kontrola v dokladovém modulu).
 
 ## Indexy
 

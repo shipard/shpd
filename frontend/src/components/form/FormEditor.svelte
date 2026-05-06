@@ -3,6 +3,8 @@
   import FormTab from './FormTab.svelte';
   import AttachmentPanel from './AttachmentPanel.svelte';
   import FormStateBar from './FormStateBar.svelte';
+  import { t } from '../../i18n/index.js';
+  import { translateError } from '../../i18n/errors.js';
 
   let {
     table,
@@ -29,7 +31,7 @@
   const formTitle = $derived(
     currentId != null
       ? (formDef?.title ?? '')
-      : (formDef?.title_new ?? 'Nový záznam')
+      : (formDef?.title_new ?? t('form.titleNew'))
   );
 
   const isDisabled = $derived(
@@ -88,7 +90,7 @@
       : `/_ui/form/${tbl}/meta`;
     const res = await get(path);
     if (!res?.success) {
-      loadError = res?.error?.message ?? 'Nepodařilo se načíst formulář.';
+      loadError = res?.error ? translateError(res.error) : t('form.loadFailed');
       return;
     }
     formDef = res.data.formDefinition;
@@ -163,7 +165,7 @@
       fieldErrors = errs;
       switchToErrorTab(errs);
     } else {
-      loadError = res?.error?.message ?? 'Nepodařilo se uložit záznam.';
+      loadError = res?.error ? translateError(res.error) : t('form.saveFailed');
     }
     saving = false;
   }
@@ -197,7 +199,7 @@
         fieldErrors = errs;
         switchToErrorTab(errs);
       } else {
-        loadError = res?.error?.message ?? 'Nepodařilo se uložit záznam.';
+        loadError = res?.error ? translateError(res.error) : t('form.saveFailed');
       }
     } else {
       // Existující záznam: nejdřív ulož data, pak přechod stavu
@@ -211,7 +213,7 @@
           fieldErrors = errs;
           switchToErrorTab(errs);
         } else {
-          loadError = saveRes?.error?.message ?? 'Nepodařilo se uložit záznam.';
+          loadError = saveRes?.error ? translateError(saveRes.error) : t('form.saveFailed');
         }
         saving = false;
         return;
@@ -227,7 +229,7 @@
           await loadForm(table, currentId);
         }
       } else {
-        loadError = res?.error?.message ?? 'Nepodařilo se změnit stav.';
+        loadError = res?.error ? translateError(res.error) : t('form.transitionFailed');
       }
     }
 
@@ -340,7 +342,7 @@
     {/if}
 
     {#if !formDef}
-      <div class="shpd-form-editor__loading">Načítám…</div>
+      <div class="shpd-form-editor__loading">{t('common.loading')}</div>
     {:else}
       {#each formDef.tabs as tab (tab.id)}
         <div class="shpd-form-editor__tab-content" hidden={tab.id !== activeTabId}>

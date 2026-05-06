@@ -2,6 +2,7 @@
   import { get, del } from '../../api/client.js';
   import Button from '../ui/Button.svelte';
   import FormDialog from './FormDialog.svelte';
+  import { t } from '../../i18n/index.js';
 
   let {
     element,
@@ -53,7 +54,7 @@
   }
 
   async function handleDelete(id) {
-    if (!confirm('Opravdu chcete smazat tento záznam?')) return;
+    if (!confirm(t('subtable.confirmDelete'))) return;
     await del(`/${element.table}/${id}`);
     fetchRows();
   }
@@ -78,12 +79,12 @@
 <div class="shpd-form-subtable">
   {#if parentId == null}
     <div class="shpd-form-subtable__info">
-      Nejprve uložte záznam, poté budete moci přidávat záznamy.
+      {t('subtable.saveFirst')}
     </div>
   {:else}
     <div class="shpd-form-subtable__toolbar">
       <Button
-        label="Přidat"
+        label={t('common.add')}
         variant="secondary"
         size="sm"
         onclick={handleAdd}
@@ -92,9 +93,9 @@
     </div>
 
     {#if loading}
-      <div class="shpd-form-subtable__loading">Načítám…</div>
+      <div class="shpd-form-subtable__loading">{t('common.loading')}</div>
     {:else if rows.length === 0}
-      <div class="shpd-form-subtable__empty">Žádné záznamy</div>
+      <div class="shpd-form-subtable__empty">{t('common.empty')}</div>
     {:else}
       <div class="shpd-form-subtable__table-wrap">
         <table class="shpd-form-subtable__table">
@@ -114,8 +115,8 @@
                 {/each}
                 <td class="shpd-form-subtable__actions">
                   {#if !disabled}
-                    <button class="shpd-form-subtable__btn" onclick={() => handleEdit(row.id)} title="Upravit">✎</button>
-                    <button class="shpd-form-subtable__btn shpd-form-subtable__btn--danger" onclick={() => handleDelete(row.id)} title="Smazat">✕</button>
+                    <button class="shpd-form-subtable__btn" onclick={() => handleEdit(row.id)} title={t('common.edit')}>✎</button>
+                    <button class="shpd-form-subtable__btn shpd-form-subtable__btn--danger" onclick={() => handleDelete(row.id)} title={t('common.delete')}>✕</button>
                   {/if}
                 </td>
               </tr>

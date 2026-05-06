@@ -3,6 +3,8 @@
   import { get, post, put } from '../../api/client.js';
   import FormField from './FormField.svelte';
   import Button from '../ui/Button.svelte';
+  import { t } from '../../i18n/index.js';
+  import { translateError } from '../../i18n/errors.js';
 
   const AUTO_MANAGED = ['id', 'created', 'modified'];
 
@@ -128,7 +130,7 @@
 
     const metaRes = await get(`/_meta/tables/${table}`);
     if (!metaRes?.success) {
-      loadError = metaRes?.error?.message ?? 'Nepodařilo se načíst metadata tabulky.';
+      loadError = metaRes?.error?.message ?? t('form.metaLoadFailed');
       return;
     }
 
@@ -139,7 +141,7 @@
     if (editing) {
       const recRes = await get(`/${table}/${recordId}`);
       if (!recRes?.success) {
-        loadError = recRes?.error?.message ?? 'Nepodařilo se načíst záznam.';
+        loadError = recRes?.error?.message ?? t('form.recordLoadFailed');
         return;
       }
       formData = buildRecordFormData(cols, recRes.data as Record<string, unknown>);
@@ -169,7 +171,7 @@
       }
       fieldErrors = errs;
     } else {
-      loadError = res?.error?.message ?? 'Při ukládání došlo k neznámé chybě.';
+      loadError = res?.error ? translateError(res.error) : t('form.saveUnknownError');
     }
 
     saving = false;
@@ -186,7 +188,7 @@
   {/if}
 
   {#if meta === null && !loadError}
-    <p class="shpd-form__loading">Načítám…</p>
+    <p class="shpd-form__loading">{t('common.loading')}</p>
   {/if}
 
   {#if meta !== null}
@@ -196,7 +198,7 @@
           <h3 class="shpd-form__group-title">{section.group.name}</h3>
         {:else if groupSections.length > 1}
           <!-- "Ostatní" heading only when other named groups exist -->
-          <h3 class="shpd-form__group-title">Ostatní</h3>
+          <h3 class="shpd-form__group-title">{t('form.groupOther')}</h3>
         {/if}
 
         <div class="shpd-form__fields">
@@ -214,13 +216,13 @@
 
     <div class="shpd-form__actions">
       <Button
-        label="Zrušit"
+        label={t('common.cancel')}
         variant="secondary"
         disabled={saving}
         onclick={onCancel}
       />
       <Button
-        label="Uložit"
+        label={t('common.save')}
         variant="primary"
         loading={saving}
         onclick={handleSave}

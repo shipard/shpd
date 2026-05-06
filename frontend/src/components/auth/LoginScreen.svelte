@@ -1,6 +1,8 @@
 <script>
   import { login } from '../../api/auth.js';
   import { authStore } from '../../stores/auth.svelte.js';
+  import { language, t } from '../../i18n/index.js';
+  import { translateError } from '../../i18n/errors.js';
 
   let { onSuccess } = $props();
 
@@ -29,7 +31,7 @@
       authStore.setAuth(response);
       onSuccess?.();
     } else {
-      errorMessage = response?.error?.message ?? 'Přihlášení se nezdařilo.';
+      errorMessage = response?.error ? translateError(response.error) : t('login.failed');
     }
   }
 
@@ -38,14 +40,27 @@
       handleSubmit();
     }
   }
+
+  // Discreet picker v patce karty — Phase 1B varianta B. Native <select>:
+  // klávesnice + a11y dostupné zadarmo, žádný vlastní open/close state,
+  // a v sidebar dropdown už dropdown stejně máme. setMode() reloadne stránku.
+  const languageOptions = [
+    { value: 'cs',   labelKey: 'sidebar.language.cs' },
+    { value: 'en',   labelKey: 'sidebar.language.en' },
+    { value: 'auto', labelKey: 'sidebar.language.auto' },
+  ];
+
+  function handleLanguageChange(event) {
+    language.setMode(event.target.value);
+  }
 </script>
 
 <div class="shpd-login">
   <div class="shpd-login__card">
-    <h1 class="shpd-login__heading">Shipard</h1>
+    <h1 class="shpd-login__heading">{t('login.heading')}</h1>
 
     <div class="shpd-login__field">
-      <label class="shpd-login__label" for="login-name">Přihlašovací jméno</label>
+      <label class="shpd-login__label" for="login-name">{t('login.username')}</label>
       <input
         bind:this={loginInput}
         id="login-name"
@@ -59,7 +74,7 @@
     </div>
 
     <div class="shpd-login__field">
-      <label class="shpd-login__label" for="login-password">Heslo</label>
+      <label class="shpd-login__label" for="login-password">{t('login.password')}</label>
       <input
         id="login-password"
         class="shpd-login__input"
@@ -81,8 +96,24 @@
       disabled={loading}
       onclick={handleSubmit}
     >
-      {loading ? 'Přihlašování…' : 'Přihlásit se'}
+      {loading ? t('login.submitting') : t('login.submit')}
     </button>
+
+    <div class="shpd-login__footer">
+      <label class="shpd-login__lang-label" for="login-language">
+        {t('login.languagePicker.label')}
+      </label>
+      <select
+        id="login-language"
+        class="shpd-login__lang-select"
+        value={language.mode}
+        onchange={handleLanguageChange}
+      >
+        {#each languageOptions as opt}
+          <option value={opt.value}>{t(opt.labelKey)}</option>
+        {/each}
+      </select>
+    </div>
   </div>
 </div>
 
@@ -177,5 +208,37 @@
   .shpd-login__button:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+  }
+
+  .shpd-login__footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--shpd-space-sm);
+    margin-top: var(--shpd-space-lg);
+    padding-top: var(--shpd-space-md);
+    border-top: 1px solid var(--shpd-color-border);
+  }
+
+  .shpd-login__lang-label {
+    font-size: var(--shpd-font-size-sm);
+    color: var(--shpd-color-text-secondary);
+  }
+
+  .shpd-login__lang-select {
+    padding: 4px 8px;
+    font-size: var(--shpd-font-size-sm);
+    font-family: inherit;
+    color: var(--shpd-color-text);
+    background-color: var(--shpd-color-bg);
+    border: 1px solid var(--shpd-color-border);
+    border-radius: var(--shpd-radius-sm);
+    cursor: pointer;
+  }
+
+  .shpd-login__lang-select:focus {
+    outline: none;
+    border-color: var(--shpd-color-border-focus);
+    box-shadow: 0 0 0 2px var(--shpd-color-focus-ring);
   }
 </style>

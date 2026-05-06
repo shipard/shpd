@@ -19,6 +19,27 @@
         } catch (e) { /* private mode / disabled storage — fallback na light */ }
       })();
     </script>
+    <script>
+      // Language bootstrap — nastavuje <html lang> ještě před načtením
+      // modulů. Synchronizované s logikou v stores/language.svelte.js —
+      // změníš-li STORAGE_KEY nebo detekci, měň obě místa.
+      (function () {
+        try {
+          var stored = localStorage.getItem('shpd_language');
+          var lang;
+          if (stored === 'cs' || stored === 'en') {
+            lang = stored;
+          } else {
+            // 'auto' nebo nic — vyber z navigator.language
+            var nav = (navigator.language || 'en').slice(0, 2).toLowerCase();
+            lang = (nav === 'cs') ? 'cs' : 'en';
+          }
+          document.documentElement.lang = lang;
+        } catch (e) {
+          document.documentElement.lang = 'en';
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="app"></div>

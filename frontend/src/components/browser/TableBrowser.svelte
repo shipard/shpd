@@ -2,6 +2,8 @@
   import { get } from '../../api/client.js';
   import Button from '../ui/Button.svelte';
   import FormDialog from '../form/FormDialog.svelte';
+  import { t } from '../../i18n/index.js';
+  import { translateError } from '../../i18n/errors.js';
 
   let { tab } = $props();
 
@@ -62,7 +64,7 @@
           ? value.toFixed(col.scale ?? 2)
           : String(value);
       case 'boolean':
-        return value ? 'Ano' : 'Ne';
+        return value ? t('common.yes') : t('common.no');
       case 'date':
         return typeof value === 'string' ? formatDate(value) : String(value);
       case 'datetime':
@@ -93,7 +95,7 @@
     loading = false;
 
     if (!result?.success) {
-      error = result?.error?.message ?? 'Chyba při načítání dat';
+      error = result?.error ? translateError(result.error) : t('browser.fetchFailed');
       return;
     }
 
@@ -110,7 +112,7 @@
 
     const metaResult = await get(`/_meta/tables/${tab.table}`);
     if (!metaResult?.success) {
-      error = metaResult?.error?.message ?? 'Chyba při načítání metadat';
+      error = metaResult?.error?.message ?? t('browser.metaFetchFailed');
       loading = false;
       return;
     }
@@ -200,14 +202,14 @@
 
 <div class="shpd-browser">
   <div class="shpd-browser__toolbar">
-    <Button label="Nový záznam" variant="primary" onclick={openCreate} />
+    <Button label={t('browser.addRecord')} variant="primary" onclick={openCreate} />
   </div>
 
   {#if loading && columns.length === 0}
     <!-- Initial load spinner -->
     <div class="shpd-browser__loading">
-      <span class="shpd-browser__spinner" aria-label="Načítám…"></span>
-      <span class="shpd-browser__loading-text">Načítám…</span>
+      <span class="shpd-browser__spinner" aria-label={t('common.loading')}></span>
+      <span class="shpd-browser__loading-text">{t('common.loading')}</span>
     </div>
 
   {:else if error}
@@ -246,13 +248,13 @@
             <!-- Reload spinner row shown during sort/pagination refetch -->
             <tr>
               <td colspan={columns.length} class="shpd-browser__loading-row">
-                <span class="shpd-browser__spinner" aria-label="Načítám…"></span>
+                <span class="shpd-browser__spinner" aria-label={t('common.loading')}></span>
               </td>
             </tr>
           {:else if rows.length === 0}
             <tr>
               <td colspan={columns.length} class="shpd-browser__empty-row">
-                Žádné záznamy
+                {t('common.empty')}
               </td>
             </tr>
           {:else}
@@ -276,7 +278,7 @@
     <!-- Pagination bar -->
     <div class="shpd-browser__pagination">
       <span class="shpd-browser__pagination-info">
-        Zobrazeno {startRecord}–{endRecord} z {total} záznamů
+        {t('browser.pagination.info', { start: startRecord, end: endRecord, total })}
       </span>
 
       <div class="shpd-browser__pagination-controls">
@@ -284,17 +286,17 @@
           class="shpd-browser__pagination-btn"
           disabled={!hasPrev || loading}
           onclick={handlePrev}
-        >← Předchozí</button>
+        >{t('browser.pagination.prev')}</button>
 
         <button
           class="shpd-browser__pagination-btn"
           disabled={!hasNext || loading}
           onclick={handleNext}
-        >Další →</button>
+        >{t('browser.pagination.next')}</button>
       </div>
 
       <label class="shpd-browser__page-size-label">
-        Na stránku:
+        {t('browser.pagination.pageSize')}
         <select
           class="shpd-browser__page-size"
           value={limit}

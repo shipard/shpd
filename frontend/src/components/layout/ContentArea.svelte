@@ -1,6 +1,7 @@
 <script>
   import TableBrowser from '../browser/TableBrowser.svelte';
   import Viewer from '../viewer/Viewer.svelte';
+  import { t } from '../../i18n/index.js';
 
   let { activeItem = null } = $props();
 </script>
@@ -13,11 +14,11 @@
   {:else if activeItem}
     <!-- Placeholder for future content types (form, dashboard, …) -->
     <div class="shpd-content__empty">
-      <p class="shpd-content__empty-text">Nepodporovaný typ panelu: {activeItem.type}</p>
+      <p class="shpd-content__empty-text">{t('app.unsupportedPanel', { type: activeItem.type })}</p>
     </div>
   {:else}
     <div class="shpd-content__empty">
-      <p class="shpd-content__empty-text">Vyberte položku v menu</p>
+      <p class="shpd-content__empty-text">{t('app.selectMenuItem')}</p>
     </div>
   {/if}
 </main>

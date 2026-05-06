@@ -2,6 +2,8 @@
   import { post } from '../../api/client.js';
   import Modal from '../ui/Modal.svelte';
   import Button from '../ui/Button.svelte';
+  import { t } from '../../i18n/index.js';
+  import { translateError } from '../../i18n/errors.js';
 
   let { detail = null, loading = false, onRefresh } = $props();
 
@@ -42,7 +44,7 @@
       if (result?.success) {
         onRefresh?.();
       } else {
-        alert('Nepodařilo se uložit: ' + (result?.error?.message ?? 'neznámá chyba'));
+        alert(t('viewer.detail.applyFailed', { msg: translateError(result?.error) }));
       }
     } finally {
       actionInFlightNdx = null;
@@ -70,7 +72,7 @@
         closeRejectDialog();
         onRefresh?.();
       } else {
-        alert('Nepodařilo se zamítnout: ' + (result?.error?.message ?? 'neznámá chyba'));
+        alert(t('viewer.detail.rejectFailed', { msg: translateError(result?.error) }));
       }
     } finally {
       rejectSubmitting = false;
@@ -99,7 +101,7 @@
   {#if loading}
     <div class="shpd-detail__loading">
       <span class="shpd-detail__spinner"></span>
-      <span>Načítám...</span>
+      <span>{t('common.loading')}</span>
     </div>
   {:else if detail?.tabs?.length > 0}
     {#if detail.title}
@@ -166,7 +168,7 @@
               {#if (activeContent.rows ?? []).length === 0}
                 <tr>
                   <td class="shpd-detail__empty-cell" colspan={activeContent.columns?.length ?? 1}>
-                    Žádné záznamy
+                    {t('common.empty')}
                   </td>
                 </tr>
               {:else}
@@ -190,7 +192,7 @@
       {:else if activeContent?.type === 'extracted-documents'}
         <div class="shpd-extracted">
           {#if (activeContent.documents ?? []).length === 0}
-            <div class="shpd-extracted__empty">Žádné extrahované dokumenty.</div>
+            <div class="shpd-extracted__empty">{t('viewer.detail.noExtracted')}</div>
           {:else}
             {#each activeContent.documents as doc (doc.ndx)}
               <div class="shpd-extracted__card">
@@ -209,22 +211,22 @@
                 {/if}
 
                 {#if doc.applied_at}
-                  <div class="shpd-extracted__meta">Použito: {doc.applied_at}</div>
+                  <div class="shpd-extracted__meta">{t('viewer.detail.applied', { date: doc.applied_at })}</div>
                 {/if}
                 {#if doc.rejected_reason}
-                  <div class="shpd-extracted__meta">Důvod zamítnutí: {doc.rejected_reason}</div>
+                  <div class="shpd-extracted__meta">{t('viewer.detail.rejected', { reason: doc.rejected_reason })}</div>
                 {/if}
 
                 <div class="shpd-extracted__actions">
                   <Button
-                    label="Zobrazit detail"
+                    label={t('viewer.detail.showDetail')}
                     variant="secondary"
                     size="sm"
                     onclick={() => openDetailModal(doc)}
                   />
                   {#if doc.can_apply}
                     <Button
-                      label="Použít"
+                      label={t('viewer.detail.apply')}
                       variant="success"
                       size="sm"
                       disabled={actionInFlightNdx === doc.ndx}
@@ -233,7 +235,7 @@
                   {/if}
                   {#if doc.can_reject}
                     <Button
-                      label="Zamítnout"
+                      label={t('viewer.detail.reject')}
                       variant="danger"
                       size="sm"
                       disabled={actionInFlightNdx === doc.ndx}
@@ -262,24 +264,24 @@
 
     <!-- Reject reason dialog — sdílená Modal komponenta. -->
     <Modal
-      title="Zamítnout dokument"
+      title={t('viewer.detail.rejectTitle')}
       open={rejectDialogDoc !== null}
       onClose={closeRejectDialog}
       width="480px"
     >
-      <label for="reject-reason" class="shpd-extracted__field-label">Důvod zamítnutí (povinné):</label>
+      <label for="reject-reason" class="shpd-extracted__field-label">{t('viewer.detail.rejectReasonLabel')}</label>
       <textarea
         id="reject-reason"
         class="shpd-extracted__textarea"
         bind:value={rejectReason}
         rows="3"
-        placeholder="Např. False positive, špatně rozpoznaný typ..."
+        placeholder={t('viewer.detail.rejectReasonPlaceholder')}
       ></textarea>
 
       {#snippet footer()}
-        <Button label="Zrušit" variant="secondary" size="sm" onclick={closeRejectDialog} />
+        <Button label={t('common.cancel')} variant="secondary" size="sm" onclick={closeRejectDialog} />
         <Button
-          label={rejectSubmitting ? 'Ukládám…' : 'Zamítnout'}
+          label={rejectSubmitting ? t('common.saving') : t('viewer.detail.reject')}
           variant="danger"
           size="sm"
           disabled={rejectSubmitting || rejectReason.trim() === ''}
@@ -289,7 +291,7 @@
     </Modal>
   {:else}
     <div class="shpd-detail__empty">
-      Žádné detaily
+      {t('viewer.detail.empty')}
     </div>
   {/if}
 </div>

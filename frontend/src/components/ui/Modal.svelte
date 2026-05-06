@@ -20,6 +20,7 @@
 
 <script lang="ts">
   import { type Snippet } from 'svelte';
+  import { t } from '../../i18n/index.js';
 
   interface Props {
     title: string;
@@ -100,7 +101,7 @@
             {@render headerExtra()}
           </span>
         {/if}
-        <button class="shpd-modal__close" onclick={onClose} aria-label="Zavřít">×</button>
+        <button class="shpd-modal__close" onclick={onClose} aria-label={t('common.close')}>×</button>
       </div>
       <div class="shpd-modal__body">
         {@render children()}

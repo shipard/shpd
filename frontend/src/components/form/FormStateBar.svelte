@@ -1,5 +1,6 @@
 <script>
   import Button from '../ui/Button.svelte';
+  import { t } from '../../i18n/index.js';
 
   let {
     docStates = null,
@@ -21,7 +22,7 @@
 <div class="shpd-form-state-bar">
   {#if showSave}
     <Button
-      label="Uložit"
+      label={t('common.save')}
       variant="primary"
       loading={saving}
       disabled={saving}

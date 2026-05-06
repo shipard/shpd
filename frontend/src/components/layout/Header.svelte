@@ -3,6 +3,7 @@
   import { authStore } from '../../stores/auth.svelte.js';
   import Icon from '../ui/Icon.svelte';
   import { iconLogout } from '../../icons.js';
+  import { t } from '../../i18n/index.js';
 
   let { onLogout } = $props();
 
@@ -20,7 +21,7 @@
     <span class="shpd-header__username">{authStore.user?.full_name ?? ''}</span>
     <button class="shpd-header__logout" onclick={handleLogout}>
       <Icon icon={iconLogout} size="sm" />
-      <span>Odhlásit</span>
+      <span>{t('sidebar.logout')}</span>
     </button>
   </div>
 </header>

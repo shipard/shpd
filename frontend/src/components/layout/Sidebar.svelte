@@ -4,6 +4,7 @@
   import { authStore } from '../../stores/auth.svelte.js';
   import { themeStore } from '../../stores/theme.svelte.js';
   import { navigationStore } from '../../stores/navigation.svelte.js';
+  import { language, t } from '../../i18n/index.js';
   import Icon from '../ui/Icon.svelte';
   import {
     iconCollapse,
@@ -52,12 +53,12 @@
     (async () => {
       try {
         const response = await get(url);
-        if (response === null) { error = 'Nepřihlášen'; return; }
-        if (!response.success) { error = response.error?.message ?? 'Nepodařilo se načíst navigaci'; return; }
+        if (response === null) { error = t('sidebar.notAuthenticated'); return; }
+        if (!response.success) { error = response.error?.message ?? t('sidebar.navigationLoadFailed'); return; }
         navTree = response.data;
         expanded = new Set(navTree.map(g => g.id));
       } catch {
-        error = 'Nepodařilo se načíst navigaci';
+        error = t('sidebar.navigationLoadFailed');
       } finally {
         loading = false;
       }
@@ -133,13 +134,25 @@
   // Položky vzhledu — záměrně nezavíráme menu po kliku, aby si uživatel
   // mohl rychle vyzkoušet více variant. Menu se zavře kliknutím mimo.
   const themeOptions = [
-    { value: 'light', label: 'Světlý', icon: iconThemeLight },
-    { value: 'dark',  label: 'Tmavý',  icon: iconThemeDark },
-    { value: 'auto',  label: 'Auto',    icon: iconThemeAuto },
+    { value: 'light', labelKey: 'sidebar.appearance.light', icon: iconThemeLight },
+    { value: 'dark',  labelKey: 'sidebar.appearance.dark',  icon: iconThemeDark },
+    { value: 'auto',  labelKey: 'sidebar.appearance.auto',  icon: iconThemeAuto },
   ];
 
   function handleThemeChange(value) {
     themeStore.setMode(value);
+  }
+
+  // Položky jazyka — přepnutí volá location.reload() v storu, takže menu
+  // se zavírat nemusí (stránka se beztak překreslí celá).
+  const languageOptions = [
+    { value: 'cs',   labelKey: 'sidebar.language.cs' },
+    { value: 'en',   labelKey: 'sidebar.language.en' },
+    { value: 'auto', labelKey: 'sidebar.language.auto' },
+  ];
+
+  function handleLanguageChange(value) {
+    language.setMode(value);
   }
 
   function handleLogoutFromMenu() {
@@ -188,7 +201,7 @@
     {#if expanded_sidebar}
       <span class="shpd-sidebar__logo">Shipard</span>
     {/if}
-    <button class="shpd-sidebar__toggle" onclick={toggleCollapse} title={collapsed ? 'Rozbalit menu' : 'Sbalit menu'}>
+    <button class="shpd-sidebar__toggle" onclick={toggleCollapse} title={collapsed ? t('sidebar.expand') : t('sidebar.collapse')}>
       <Icon icon={collapsed ? iconExpand : iconCollapse} size="sm" />
     </button>
   </div>
@@ -197,7 +210,7 @@
     <div class="shpd-sidebar__back-bar">
       <button class="shpd-sidebar__back-button" onclick={() => navigationStore.exitSettings()}>
         <Icon icon={iconChevronLeft} size="sm" />
-        <span>Zpět do aplikace</span>
+        <span>{t('sidebar.backToApp')}</span>
       </button>
     </div>
   {/if}
@@ -206,7 +219,7 @@
   {#if loading}
     <div class="shpd-sidebar__status">
       <Icon icon={iconSpinner} spin size="sm" />
-      {#if expanded_sidebar}<span>Načítám…</span>{/if}
+      {#if expanded_sidebar}<span>{t('common.loading')}</span>{/if}
     </div>
   {:else if error}
     <div class="shpd-sidebar__status shpd-sidebar__status--error">{error}</div>
@@ -305,18 +318,18 @@
       >
         <button class="shpd-sidebar__user-menu-item" onclick={handleSettings} role="menuitem">
           <Icon icon={iconSettings} size="sm" />
-          <span>Nastavení účtu</span>
+          <span>{t('sidebar.accountSettings')}</span>
         </button>
 
         {#if navigationStore.mode === 'app'}
           <button class="shpd-sidebar__user-menu-item" onclick={handleAppSettings} role="menuitem">
             <Icon icon={iconAppSettings} size="sm" />
-            <span>Nastavení aplikace</span>
+            <span>{t('sidebar.appSettings')}</span>
           </button>
         {/if}
 
         <div class="shpd-sidebar__user-menu-divider"></div>
-        <div class="shpd-sidebar__user-menu-label">Vzhled</div>
+        <div class="shpd-sidebar__user-menu-label">{t('sidebar.appearance')}</div>
         {#each themeOptions as opt}
           <button
             class="shpd-sidebar__user-menu-item"
@@ -326,8 +339,27 @@
             aria-checked={themeStore.mode === opt.value}
           >
             <Icon icon={opt.icon} size="sm" />
-            <span class="shpd-sidebar__user-menu-item-label">{opt.label}</span>
+            <span class="shpd-sidebar__user-menu-item-label">{t(opt.labelKey)}</span>
             {#if themeStore.mode === opt.value}
+              <span class="shpd-sidebar__user-menu-item-check">
+                <Icon icon={iconConfirm} size="xs" />
+              </span>
+            {/if}
+          </button>
+        {/each}
+
+        <div class="shpd-sidebar__user-menu-divider"></div>
+        <div class="shpd-sidebar__user-menu-label">{t('sidebar.language')}</div>
+        {#each languageOptions as opt}
+          <button
+            class="shpd-sidebar__user-menu-item"
+            class:shpd-sidebar__user-menu-item--active={language.mode === opt.value}
+            onclick={() => handleLanguageChange(opt.value)}
+            role="menuitemradio"
+            aria-checked={language.mode === opt.value}
+          >
+            <span class="shpd-sidebar__user-menu-item-label">{t(opt.labelKey)}</span>
+            {#if language.mode === opt.value}
               <span class="shpd-sidebar__user-menu-item-check">
                 <Icon icon={iconConfirm} size="xs" />
               </span>
@@ -338,7 +370,7 @@
         <div class="shpd-sidebar__user-menu-divider"></div>
         <button class="shpd-sidebar__user-menu-item" onclick={handleLogoutFromMenu} role="menuitem">
           <Icon icon={iconLogout} size="sm" />
-          <span>Odhlásit</span>
+          <span>{t('sidebar.logout')}</span>
         </button>
       </div>
     {/if}

@@ -1,4 +1,5 @@
 import { API_BASE_URL } from './config.js';
+import { language } from '../i18n/index.js';
 
 const TOKEN_KEY = 'shpd_token';
 
@@ -27,7 +28,7 @@ async function tryRefresh() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Accept-Language': 'cs',
+        'Accept-Language': language.current,
         'Authorization': `Bearer ${token}`,
       },
     });
@@ -57,7 +58,7 @@ async function tryRefresh() {
 async function apiRequest(method, path, body = null, isRetry = false) {
   const headers = {
     'Content-Type': 'application/json',
-    'Accept-Language': 'cs',
+    'Accept-Language': language.current,
   };
 
   const token = getToken();

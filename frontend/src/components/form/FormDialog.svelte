@@ -3,6 +3,7 @@
   import Modal from '../ui/Modal.svelte';
   import FormEditor from './FormEditor.svelte';
   import FormStateBadge from './FormStateBadge.svelte';
+  import { t } from '../../i18n/index.js';
 
   interface Props {
     table: string;
@@ -65,7 +66,7 @@
     // force=true — přeskočí dirty kontrolu. Používá se po úspěšném save+closeForm,
     // kde FormEditor ví, že data jsou uložená, a nesmí se zobrazit confirm.
     if (isDirty && !opts?.force) {
-      const confirmed = window.confirm('Máte neuložené změny. Opravdu chcete zavřít formulář?');
+      const confirmed = window.confirm(t('form.unsavedChanges'));
       if (!confirmed) return;
     }
     metaLoaded = false;
@@ -91,7 +92,7 @@
   }
 
   // Modal nesmí zůstat s prázdným titulem dokud se formDef nenačte.
-  const headerTitle = $derived(currentTitle || 'Načítám…');
+  const headerTitle = $derived(currentTitle || t('common.loading'));
 </script>
 
 {#if open && metaLoaded}

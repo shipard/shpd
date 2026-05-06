@@ -1,5 +1,6 @@
 <script>
   import { navigationStore } from '../../stores/navigation.svelte.js';
+  import { t } from '../../i18n/index.js';
 </script>
 
 {#if navigationStore.tabs.length > 0}
@@ -17,7 +18,7 @@
         <span class="shpd-tabbar__label">{tab.label}</span>
         <button
           class="shpd-tabbar__close"
-          aria-label="Zavřít {tab.label}"
+          aria-label={t('tabbar.close', { tab: tab.label })}
           onclick={(e) => { e.stopPropagation(); navigationStore.closeTab(tab.id); }}
         >×</button>
       </div>

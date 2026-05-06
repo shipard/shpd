@@ -11,6 +11,7 @@
   import Button from '../ui/Button.svelte';
   import Icon from '../ui/Icon.svelte';
   import { iconUpload, iconDownload, iconDelete, iconEdit, iconFile, iconFilePdf, iconFileImage, iconSpinner } from '../../icons.js';
+  import { t } from '../../i18n/index.js';
 
   let {
     tableId,
@@ -84,7 +85,7 @@
   }
 
   async function handleDelete(att) {
-    if (!confirm(`Opravdu smazat přílohu „${att.name}"?`)) return;
+    if (!confirm(t('attachments.confirmDelete', { name: att.name }))) return;
     await deleteAttachment(att.id);
     await fetchAttachments(tableId, recordId);
   }
@@ -137,17 +138,17 @@
   ondragleave={handleDragLeave}
   ondrop={handleDrop}
   role="region"
-  aria-label="Přílohy"
+  aria-label={t('attachments.title')}
 >
   {#if recordId == null}
     <div class="shpd-attachments__info">
-      Nejprve uložte záznam, poté budete moci přidávat přílohy.
+      {t('attachments.saveFirst')}
     </div>
   {:else}
     <!-- Toolbar -->
     <div class="shpd-attachments__toolbar">
       <Button
-        label="Nahrát přílohu"
+        label={t('attachments.upload')}
         icon={iconUpload}
         variant="secondary"
         size="sm"
@@ -163,7 +164,7 @@
         onchange={handleFileInput}
       />
       <span class="shpd-attachments__count">
-        {attachments.length} {attachments.length === 1 ? 'příloha' : attachments.length >= 2 && attachments.length <= 4 ? 'přílohy' : 'příloh'}
+        {t('attachments.count', { count: attachments.length })}
       </span>
     </div>
 
@@ -171,12 +172,12 @@
     {#if loading}
       <div class="shpd-attachments__loading">
         <Icon icon={iconSpinner} spin />
-        <span>Načítám přílohy…</span>
+        <span>{t('attachments.loading')}</span>
       </div>
     {:else if attachments.length === 0}
       <div class="shpd-attachments__empty">
         <div class="shpd-attachments__drop-hint">
-          Přetáhněte soubory sem nebo klikněte na „Nahrát přílohu"
+          {t('attachments.dropHint')}
         </div>
       </div>
     {:else}
@@ -223,21 +224,21 @@
               <div class="shpd-attachments__actions">
                 <button
                   class="shpd-attachments__action-btn"
-                  title="Stáhnout"
+                  title={t('attachments.action.download')}
                   onclick={() => handleDownload(att)}
                 >
                   <Icon icon={iconDownload} size="sm" />
                 </button>
                 <button
                   class="shpd-attachments__action-btn"
-                  title="Přejmenovat"
+                  title={t('attachments.action.rename')}
                   onclick={() => startRename(att)}
                 >
                   <Icon icon={iconEdit} size="sm" />
                 </button>
                 <button
                   class="shpd-attachments__action-btn shpd-attachments__action-btn--danger"
-                  title="Smazat"
+                  title={t('common.delete')}
                   onclick={() => handleDelete(att)}
                 >
                   <Icon icon={iconDelete} size="sm" />

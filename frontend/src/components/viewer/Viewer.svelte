@@ -6,6 +6,8 @@
   import FormDialog from '../form/FormDialog.svelte';
   import Modal from '../ui/Modal.svelte';
   import Button from '../ui/Button.svelte';
+  import { t } from '../../i18n/index.js';
+  import { translateError } from '../../i18n/errors.js';
 
   let { tab } = $props();
 
@@ -16,17 +18,20 @@
   // --- Doc state tabs ---
   let activeViewGroup = $state('active'); // 'active' | 'archive' | 'trash' | 'all'
 
-  const VIEW_GROUP_LABELS = {
-    active:  'Aktivní',
-    archive: 'Archív',
-    trash:   'Koš',
+  const VIEW_GROUP_LABEL_KEYS = {
+    active:  'viewer.tab.active',
+    archive: 'viewer.tab.archive',
+    trash:   'viewer.tab.trash',
   };
 
-  // Tabs to display: viewGroups from meta + always "Vše"
+  // Tabs to display: viewGroups from meta + always the "all" tab
   let viewTabs = $derived(() => {
     const groups = meta?.viewGroups ?? [];
-    const tabs = groups.map(vg => ({ id: vg, label: VIEW_GROUP_LABELS[vg] ?? vg }));
-    tabs.push({ id: 'all', label: 'Vše' });
+    const tabs = groups.map(vg => ({
+      id: vg,
+      label: VIEW_GROUP_LABEL_KEYS[vg] ? t(VIEW_GROUP_LABEL_KEYS[vg]) : vg,
+    }));
+    tabs.push({ id: 'all', label: t('viewer.tab.all') });
     return tabs;
   });
 
@@ -217,7 +222,7 @@
         fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, 0);
         fetchDetail(selectedRowId);
       } else {
-        alert('Nepodařilo se restartovat analýzu: ' + (result?.error?.message ?? 'neznámá chyba'));
+        alert(t('viewer.reanalyze.failed', { msg: translateError(result?.error) }));
       }
     } finally {
       reanalyzeSubmitting = false;
@@ -314,12 +319,12 @@
         <input
           class="shpd-viewer__search-input"
           type="text"
-          placeholder="Hledat..."
+          placeholder={t('viewer.search.placeholder')}
           oninput={handleSearchInput}
           bind:this={searchInputEl}
         />
         {#if activeSearch}
-          <button class="shpd-viewer__search-clear" onclick={handleSearchClear} aria-label="Vymazat hledání">×</button>
+          <button class="shpd-viewer__search-clear" onclick={handleSearchClear} aria-label={t('viewer.search.clear')}>×</button>
         {/if}
       </div>
 
@@ -332,11 +337,11 @@
         {#if loadingRows && rows.length === 0}
           <div class="shpd-viewer__status">
             <span class="shpd-viewer__spinner"></span>
-            <span>Načítám...</span>
+            <span>{t('common.loading')}</span>
           </div>
         {:else if rows.length === 0}
           <div class="shpd-viewer__status">
-            Žádné záznamy
+            {t('common.empty')}
           </div>
         {:else}
           {#each rows as row (row.id)}
@@ -350,11 +355,11 @@
           {#if loadingMore}
             <div class="shpd-viewer__status">
               <span class="shpd-viewer__spinner"></span>
-              <span>Načítám...</span>
+              <span>{t('common.loading')}</span>
             </div>
           {:else if !hasMore && rows.length > 0}
             <div class="shpd-viewer__status shpd-viewer__status--end">
-              To je všechno
+              {t('viewer.endOfList')}
             </div>
           {/if}
         {/if}
@@ -367,7 +372,7 @@
         <ViewerDetail {detail} loading={detailLoading} onRefresh={handleDetailRefresh} />
       {:else}
         <div class="shpd-viewer__detail-empty">
-          Vyberte záznam
+          {t('viewer.selectRecord')}
         </div>
       {/if}
     </div>
@@ -376,19 +381,17 @@
 
 <!-- Reanalyze dialog — sdílená Modal komponenta (../ui/Modal.svelte). -->
 <Modal
-  title="Znovu analyzovat zprávu"
+  title={t('viewer.reanalyze.title')}
   open={reanalyzeDialogOpen}
   onClose={closeReanalyzeDialog}
   width="520px"
 >
-  <p>Spustit AI analýzu znovu? Existující extrahované dokumenty ve stavech
-  <em>K použití / Čeká na review / Nízká jistota</em> budou označeny jako nahrazené.
-  Dokumenty, které jste již použili nebo zamítli, zůstanou beze změny.</p>
+  <p>{t('viewer.reanalyze.body', { states: t('viewer.reanalyze.replaceableStates') })}</p>
 
   <label class="shpd-reanalyze__label">
-    Profil (volitelné — výchozí ponechá DS-default):
+    {t('viewer.reanalyze.profileLabel')}
     <select class="shpd-reanalyze__input" bind:value={reanalyzeProfileNdx}>
-      <option value="">— výchozí profil DS —</option>
+      <option value="">{t('viewer.reanalyze.defaultProfile')}</option>
       {#each reanalyzeProfiles as p (p.ndx)}
         <option value={String(p.ndx)}>{p.name} ({p.profile_id})</option>
       {/each}
@@ -396,9 +399,9 @@
   </label>
 
   {#snippet footer()}
-    <Button label="Zrušit" variant="secondary" size="sm" disabled={reanalyzeSubmitting} onclick={closeReanalyzeDialog} />
+    <Button label={t('common.cancel')} variant="secondary" size="sm" disabled={reanalyzeSubmitting} onclick={closeReanalyzeDialog} />
     <Button
-      label={reanalyzeSubmitting ? 'Spouštím…' : 'Spustit analýzu'}
+      label={reanalyzeSubmitting ? t('viewer.reanalyze.submitting') : t('viewer.reanalyze.submit')}
       variant="primary"
       size="sm"
       disabled={reanalyzeSubmitting}

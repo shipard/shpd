@@ -91,7 +91,7 @@ class TrackingDocument extends Document
     public array $beforeDeleteData = [];
     public array $afterDeleteData = [];
 
-    public function beforeSave(array &$data): void
+    public function beforeSave(array &$data, ?array $originalData = null): void
     {
         $this->beforeSaveData = $data;
     }
@@ -114,7 +114,7 @@ class TrackingDocument extends Document
 
 class ModifyingDocument extends Document
 {
-    public function beforeSave(array &$data): void
+    public function beforeSave(array &$data, ?array $originalData = null): void
     {
         $data['computed'] = 'added-by-beforeSave';
     }

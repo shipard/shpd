@@ -51,7 +51,7 @@ class MailboxDocument extends Document
         return $result;
     }
 
-    public function beforeSave(array &$data): void
+    public function beforeSave(array &$data, ?array $originalData = null): void
     {
         $now = date('Y-m-d H:i:s');
         $isNew = empty($data['id']);

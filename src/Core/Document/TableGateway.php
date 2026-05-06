@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Shipard\Core\Document;
 
+use Shipard\Core\Config\ConfigRuntime;
+use Shipard\Core\Config\DataSourceConfig;
+
 class TableGateway
 {
     public function __construct(
@@ -11,7 +14,20 @@ class TableGateway
         private \Dibi\Connection $db,
         private DocumentRegistry $registry,
         private ?array $childTables = null,
+        private ?ConfigRuntime $config = null,
+        private ?DataSourceConfig $dsConfig = null,
     ) {}
+
+    private function injectDocServices(Document $doc): void
+    {
+        $doc->setDb($this->db);
+        if ($this->config !== null) {
+            $doc->setConfig($this->config);
+        }
+        if ($this->dsConfig !== null) {
+            $doc->setDsConfig($this->dsConfig);
+        }
+    }
 
     public function loadRecord(int $id): ?array
     {
@@ -30,6 +46,7 @@ class TableGateway
         }
 
         $doc = $this->registry->getDocument($this->tableId, $data);
+        $this->injectDocServices($doc);
         $doc->onLoad($data);
 
         return $data;
@@ -38,15 +55,22 @@ class TableGateway
     public function saveDocument(array $inputData): DocumentResult
     {
         $doc = $this->registry->getDocument($this->tableId, $inputData);
-        $doc->setDb($this->db);
+        $this->injectDocServices($doc);
         $data = $inputData;
+
+        // Load original record (head + child rows) on update — Document hooks
+        // need it to detect what changed (partner, docState, …). On insert: null.
+        $originalData = null;
+        if (isset($data['id']) && (int) $data['id'] > 0) {
+            $originalData = $this->loadDocument((int) $data['id']);
+        }
 
         $validation = $doc->validate($data);
         if (!$validation->isValid()) {
             return DocumentResult::validationFailed($validation);
         }
 
-        $doc->beforeSave($data);
+        $doc->beforeSave($data, $originalData);
 
         try {
             $this->beginTransaction();
@@ -81,6 +105,9 @@ class TableGateway
             $doc->afterPersist($data);
 
             $this->commitTransaction();
+        } catch (\DomainException $e) {
+            $this->rollbackTransaction();
+            return DocumentResult::domainError($e->getMessage(), $e->getCode() !== 0 ? (string) $e->getCode() : null);
         } catch (\Throwable $e) {
             $this->rollbackTransaction();
             return DocumentResult::error($e->getMessage());
@@ -98,6 +125,7 @@ class TableGateway
         }
 
         $doc = $this->registry->getDocument($this->tableId, $data);
+        $this->injectDocServices($doc);
         $doc->beforeDelete($data);
 
         $this->beginTransaction();

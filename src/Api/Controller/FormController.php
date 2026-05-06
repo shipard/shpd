@@ -85,6 +85,7 @@ class FormController
         DataSourceConnection $db,
         ?ConfigRuntime $config,
         ?DocumentRegistry $documentRegistry = null,
+        ?\Shipard\Core\Config\DataSourceConfig $dsConfig = null,
     ): Response {
         $def = $tables[$table] ?? null;
         if ($def === null) {
@@ -110,6 +111,14 @@ class FormController
             && $bodyKeys[0] === $stateCol;
 
         if ($isStateTransition) {
+            // Tables that opt-in via `stateTransitionsRunDocumentHooks` route
+            // through saveDocument — Document::beforeSave fires and can run
+            // business logic (assign number, build snapshots, …).
+            if ($def->stateTransitionsRunDocumentHooks) {
+                return $this->applyStateTransitionViaDocument(
+                    $table, $id, (int) $body[$stateCol], $def, $db, $config, $documentRegistry, $dsConfig,
+                );
+            }
             return $this->applyStateTransition($table, $id, $body, $def, $db, $config);
         }
 
@@ -134,7 +143,14 @@ class FormController
         }
 
         $registry = $documentRegistry ?? new DocumentRegistry();
-        $gateway  = new TableGateway($table, $db->getDibiConnection(), $registry);
+        $gateway  = new TableGateway(
+            $table,
+            $db->getDibiConnection(),
+            $registry,
+            $def->childTables,
+            $config,
+            $dsConfig,
+        );
         $result   = $gateway->saveDocument($inputData);
 
         if (!$result->isSuccess()) {
@@ -145,6 +161,13 @@ class FormController
                     $validation->getErrors(),
                 );
                 return Response::error('VALIDATION_ERROR', 'Validation failed', 422, $errors);
+            }
+            if ($result->isDomainError()) {
+                return Response::error(
+                    $result->getDomainErrorCode() ?: 'DOMAIN_ERROR',
+                    $result->getErrorMessage() ?? 'Domain rule violated',
+                    422,
+                );
             }
             return Response::error('INTERNAL_ERROR', $result->getErrorMessage() ?? 'Save failed', 500);
         }
@@ -382,6 +405,82 @@ class FormController
         }
 
         return null;
+    }
+
+    /**
+     * State transition routed through TableGateway::saveDocument so Document
+     * hooks fire (assignDocumentNumber on Concept→Confirmed, etc.). Triggered
+     * by `stateTransitionsRunDocumentHooks: true` on the table definition.
+     */
+    private function applyStateTransitionViaDocument(
+        string $table,
+        int $id,
+        int $newState,
+        TableDefinition $def,
+        DataSourceConnection $db,
+        ?ConfigRuntime $config,
+        ?DocumentRegistry $documentRegistry,
+        ?\Shipard\Core\Config\DataSourceConfig $dsConfig,
+    ): Response {
+        $dsDef = $def->docStates;
+        if ($dsDef === null || $config === null) {
+            return Response::error('BAD_REQUEST', 'Table does not support doc states', 400);
+        }
+
+        $stateCol = $dsDef->stateColumn;
+        $mainCol  = $dsDef->mainColumn;
+        $cfg      = DocStateConfig::fromCfgItem($config->cfgItem($dsDef->cfgItem));
+
+        $registry = $documentRegistry ?? new DocumentRegistry();
+        $gateway  = new TableGateway(
+            $table,
+            $db->getDibiConnection(),
+            $registry,
+            $def->childTables,
+            $config,
+            $dsConfig,
+        );
+
+        $existing = $gateway->loadDocument($id);
+        if ($existing === null) {
+            return Response::error('NOT_FOUND', 'Record not found', 404);
+        }
+
+        $currentState = (int) ($existing[$stateCol] ?? 0);
+        if ($newState !== $currentState && !$cfg->isTransitionAllowed($currentState, $newState)) {
+            return Response::error(
+                'INVALID_STATE_TRANSITION',
+                "Transition from state {$currentState} to {$newState} is not allowed.",
+                422,
+            );
+        }
+
+        $existing[$stateCol] = $newState;
+        $existing[$mainCol]  = $cfg->getMainState($newState);
+
+        $result = $gateway->saveDocument($existing);
+
+        if (!$result->isSuccess()) {
+            $validation = $result->getValidation();
+            if ($validation !== null) {
+                $errors = array_map(
+                    fn($e) => ['field' => $e->column, 'code' => $e->code ?: 'INVALID', 'message' => $e->message],
+                    $validation->getErrors(),
+                );
+                return Response::error('VALIDATION_ERROR', 'Validation failed', 422, $errors);
+            }
+            if ($result->isDomainError()) {
+                return Response::error(
+                    $result->getDomainErrorCode() ?: 'INVALID_STATE_TRANSITION',
+                    $result->getErrorMessage() ?? 'State transition failed',
+                    422,
+                );
+            }
+            return Response::error('INTERNAL_ERROR', $result->getErrorMessage() ?? 'Save failed', 500);
+        }
+
+        $record = $db->fetchRow("SELECT * FROM `{$table}` WHERE `id` = %i", $id);
+        return Response::success(['id' => $id, 'data' => $record]);
     }
 
     private function applyStateTransition(

@@ -4,15 +4,30 @@ declare(strict_types=1);
 
 namespace Shipard\Core\Document;
 
+use Shipard\Core\Config\ConfigRuntime;
+use Shipard\Core\Config\DataSourceConfig;
+
 abstract class Document
 {
     protected array $data = [];
     protected array $originalData = [];
     protected ?\Dibi\Connection $db = null;
+    protected ?ConfigRuntime $config = null;
+    protected ?DataSourceConfig $dsConfig = null;
 
     public function setDb(\Dibi\Connection $db): void
     {
         $this->db = $db;
+    }
+
+    public function setConfig(ConfigRuntime $config): void
+    {
+        $this->config = $config;
+    }
+
+    public function setDsConfig(DataSourceConfig $dsConfig): void
+    {
+        $this->dsConfig = $dsConfig;
     }
 
     public function validate(array &$data): ValidationResult
@@ -20,7 +35,13 @@ abstract class Document
         return new ValidationResult();
     }
 
-    public function beforeSave(array &$data): void
+    /**
+     * Pre-save hook. Receives the original DB row as $originalData on update;
+     * null on insert. Subclasses use originalData to detect what changed
+     * (e.g. partner change → rebuild snapshot, docState transition → assign
+     * number).
+     */
+    public function beforeSave(array &$data, ?array $originalData = null): void
     {
     }
 

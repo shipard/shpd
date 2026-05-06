@@ -26,6 +26,10 @@
         "docs_core_number_counters"
     ],
 
+    "extensions": [
+        "base_persons_persons"
+    ],
+
     "settingsItems": [
         { "viewer": "docs.core.numberSeries", "section": "accounting" }
     ],
@@ -53,9 +57,14 @@
         {
             "table": "docs_core_number_series",
             "class": "Shipard\\Module\\Docs\\Core\\NumberSeriesDocument"
+        },
+        {
+            "table": "docs_core_heads",
+            "class": "Shipard\\Module\\Docs\\Core\\DocsHeadsDocument"
         }
-        // docs_core_heads document class arrives in Phase 6
-        // (IssuedInvoiceDocument, ReceivedInvoiceDocument)
+        // Phase 6 will switch heads to typeColumn-based polymorphism
+        // (IssuedInvoiceDocument in docs.invoicesOut,
+        //  ReceivedInvoiceDocument in docs.invoicesIn).
     ],
 
     "config": [

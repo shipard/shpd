@@ -51,7 +51,7 @@ class FiscalMonthDocument extends Document
         return $result;
     }
 
-    public function beforeSave(array &$data): void
+    public function beforeSave(array &$data, ?array $originalData = null): void
     {
         if (empty($data['date_begin'])) {
             return;

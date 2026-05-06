@@ -42,7 +42,7 @@ class CashDeskDocument extends Document
         return $result;
     }
 
-    public function beforeSave(array &$data): void
+    public function beforeSave(array &$data, ?array $originalData = null): void
     {
         if (isset($data['currency'])) {
             $data['currency'] = strtolower(trim((string) $data['currency']));

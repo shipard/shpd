@@ -21,7 +21,7 @@ class TestSecretDocument extends DefaultDocument
         $this->cipher = $cipher;
     }
 
-    public function beforeSave(array &$data): void
+    public function beforeSave(array &$data, ?array $originalData = null): void
     {
         parent::beforeSave($data);
 

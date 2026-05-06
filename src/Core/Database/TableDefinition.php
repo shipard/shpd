@@ -17,6 +17,7 @@ class TableDefinition
         public readonly array $indexes,
         public readonly array $childTables,
         public readonly ?DocStatesDefinition $docStates,
+        public readonly bool $stateTransitionsRunDocumentHooks = false,
     ) {}
 
     public static function fromArray(array $data): self
@@ -64,6 +65,7 @@ class TableDefinition
             docStates: isset($data['docStates']) && is_array($data['docStates'])
                 ? DocStatesDefinition::fromArray($data['docStates'])
                 : null,
+            stateTransitionsRunDocumentHooks: (bool) ($data['stateTransitionsRunDocumentHooks'] ?? false),
         );
     }
 }

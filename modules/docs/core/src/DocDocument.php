@@ -6,24 +6,43 @@ namespace Shipard\Module\Docs\Core;
 
 use Shipard\Core\Document\Document;
 use Shipard\Core\Document\ValidationResult;
+use Shipard\Module\World\Vat\VatRateResolver;
 
 /**
  * Base class for all document types (issued invoice, received invoice, …).
  *
  * Polymorphism: docs_core_heads has `doc_type` (enumString) which resolves
  * to a specific subclass via cfgItem docs.core.docTypes (`subclass` attr).
- * Concrete subclasses live in docs.invoicesOut and docs.invoicesIn.
+ * In Phase 1/2 the only concrete subclass is DocsHeadsDocument; Phase 6
+ * adds IssuedInvoiceDocument / ReceivedInvoiceDocument in docs.invoicesOut
+ * / docs.invoicesIn.
  *
- * Phase 1 — minimal logic:
- *   - validate(): required number_series, issue_date, accounting_date
- *   - beforeSave(): denormalize doc_type from number_series
- *   - afterPersist(): init doc_number as `!{id_padded}` for new drafts
- *
- * Phase 2 fills in the stub methods (price/VAT calculations,
- * recapitulation, snapshots, atomic number assignment).
+ * The orchestration pipeline runs in `beforeSave`:
+ *   1. denormalize doc_type from number_series
+ *   2. apply date defaults (accounting_date, vat_duzp, vat_dppd, due_date)
+ *   3. apply home_currency from DS config
+ *   4. resolve fiscal_year/fiscal_month/vat_period
+ *   5. calculateRowPrice + calculateRowVat for each row
+ *   6. buildVatRecapitulation (with reverse charge pairs)
+ *   7. sumTotals + apply rounding + apply exchange rate to *_dom
+ *   8. processStateTransition (assignNumber 10→20, releaseNumber 20→10)
+ *   9. maintainSnapshots (buildSnapshots when partner changes / first time)
+ *  10. applyVariableSymbolDefault from sequence_number
  */
 abstract class DocDocument extends Document
 {
+    /** Default split for due_date when partner has no payment_term_days. */
+    private const DEFAULT_PAYMENT_TERM_DAYS = 14;
+
+    /** Snapshots are built/refreshed only in editable confirmed states. */
+    private const SNAPSHOT_STATES = [20, 80];
+
+    /** Active doc states for resolver lookups (Koncept, V pořádku, V opravě). */
+    private const ACTIVE_DOC_STATES = [10, 40, 80];
+
+    private ?VatRateResolver $vatRateResolver = null;
+    private ?OwnCompanyResolver $ownCompanyResolver = null;
+
     public function validate(array &$data): ValidationResult
     {
         $result = new ValidationResult();
@@ -38,30 +57,69 @@ abstract class DocDocument extends Document
             $result->addError('accounting_date', 'Účetní datum je povinné', 'required');
         }
 
-        return $result;
-    }
+        $newState = (int) ($data['docState'] ?? 10);
 
-    public function beforeSave(array &$data): void
-    {
-        if (!empty($data['number_series']) && $this->db !== null) {
-            $row = $this->db->fetch(
-                'SELECT [doc_type] FROM [docs_core_number_series] WHERE [id] = %i',
-                (int) $data['number_series'],
-            );
-            if ($row !== null) {
-                $data['doc_type'] = (string) $row['doc_type'];
+        if (in_array($newState, [20, 40, 80], true)) {
+            if (empty($data['partner'])) {
+                $result->addError('partner', 'Partner je povinný', 'required');
+            }
+            $vatMode = (int) ($data['vat_mode'] ?? 1);
+            if ($vatMode !== 0 && empty($data['vat_registration'])) {
+                $result->addError('vat_registration', 'Registrace DPH je povinná', 'required');
+            }
+            $rows = $data['rows'] ?? null;
+            if (!is_array($rows) || count($rows) === 0) {
+                $result->addError('rows', 'Doklad musí mít alespoň jeden řádek', 'no_rows');
+            }
+            if (!empty($data['doc_currency']) && !empty($data['home_currency'])
+                && $data['doc_currency'] !== $data['home_currency']
+                && empty($data['exchange_rate'])
+            ) {
+                $result->addError('exchange_rate', 'Kurz je povinný pro cizí měnu', 'required');
+            }
+
+            // Own company must be configured before confirming any document
+            if ($this->db !== null) {
+                $resolver = $this->ownCompanyResolver();
+                if ($resolver->getOwnPersonId() === null) {
+                    $result->addError(
+                        '_form',
+                        'Není nastavena vlastní firma. Otevři Osoby a označ záznam jako vlastní firmu.',
+                        'no_own_company',
+                    );
+                }
             }
         }
 
-        // Phase 2 will add here:
-        //   - accounting_date / vat_duzp defaults from issue_date
-        //   - fiscal_year / fiscal_month resolution
-        //   - vat_period resolution
-        //   - row calculations (price, vat)
-        //   - vat recapitulation build
-        //   - totals sum
-        //   - snapshots
-        //   - on Concept → Confirmed: assignDocumentNumber
+        return $result;
+    }
+
+    public function beforeSave(array &$data, ?array $originalData = null): void
+    {
+        $this->denormalizeDocType($data);
+        $this->applyDateDefaults($data);
+        $this->applyHomeCurrency($data);
+        $this->resolveAccountingPeriods($data);
+
+        $vatMode = (int) ($data['vat_mode'] ?? 1);
+        if (!empty($data['rows']) && is_array($data['rows'])) {
+            foreach ($data['rows'] as &$row) {
+                $this->calculateRowPrice($row);
+                $this->calculateRowVat($row, $vatMode);
+            }
+            unset($row);
+        }
+
+        $recap = $this->buildVatRecapitulation($data);
+        $data['vatRecap'] = $recap;
+
+        $this->sumTotals($data, $recap);
+        $this->applyTotalRounding($data);
+        $this->applyExchangeRate($data);
+
+        $this->processStateTransition($data, $originalData);
+        $this->maintainSnapshots($data, $originalData);
+        $this->applyVariableSymbolDefault($data);
     }
 
     public function afterPersist(array $data): void
@@ -84,71 +142,780 @@ abstract class DocDocument extends Document
         }
 
         $placeholder = '!' . str_pad((string) $data['id'], 10, '0', STR_PAD_LEFT);
-        $this->db->query(
+        $this->executeSql(
             'UPDATE [docs_core_heads] SET [doc_number] = %s WHERE [id] = %i',
             $placeholder,
             (int) $data['id'],
         );
     }
 
-    // ── Phase 2 stub methods ────────────────────────────────────────────────
-    //
-    // Subclasses can already reference these, but they are no-ops in Phase 1.
-    // Phase 2 fills them in.
+    // ── Defaults ────────────────────────────────────────────────────────────
 
-    protected function calculateRowPrice(array &$row): void
+    protected function denormalizeDocType(array &$data): void
     {
-        // Phase 2
+        if (empty($data['number_series']) || $this->db === null) {
+            return;
+        }
+        $row = $this->db->fetch(
+            'SELECT [doc_type] FROM [docs_core_number_series] WHERE [id] = %i',
+            (int) $data['number_series'],
+        );
+        if ($row !== null) {
+            $data['doc_type'] = (string) $row['doc_type'];
+        }
     }
 
-    protected function calculateRowVat(array &$row, int $vatMode): void
+    protected function applyDateDefaults(array &$data): void
     {
-        // Phase 2
+        if (!empty($data['issue_date'])) {
+            if (empty($data['accounting_date'])) {
+                $data['accounting_date'] = $data['issue_date'];
+            }
+            if (empty($data['vat_duzp'])) {
+                $data['vat_duzp'] = $data['issue_date'];
+            }
+        }
+        if (!empty($data['vat_duzp']) && empty($data['vat_dppd'])) {
+            $data['vat_dppd'] = $data['vat_duzp'];
+        }
+        if (!empty($data['issue_date']) && empty($data['due_date'])) {
+            $days = $this->resolvePartnerPaymentTermDays($data['partner'] ?? null)
+                ?? self::DEFAULT_PAYMENT_TERM_DAYS;
+            $data['due_date'] = (new \DateTimeImmutable((string) $data['issue_date']))
+                ->modify("+{$days} days")
+                ->format('Y-m-d');
+        }
     }
 
-    /** @return array<int, array<string, mixed>> */
-    protected function buildVatRecapitulation(array &$data): array
+    protected function resolvePartnerPaymentTermDays(mixed $partnerId): ?int
     {
-        // Phase 2
-        return [];
+        if ($partnerId === null || $this->db === null) {
+            return null;
+        }
+        $row = $this->db->fetch(
+            'SELECT [payment_term_days] FROM [base_persons_persons] WHERE [id] = %i',
+            (int) $partnerId,
+        );
+        if ($row === null) {
+            return null;
+        }
+        $days = $row['payment_term_days'] ?? null;
+        return $days !== null ? (int) $days : null;
     }
 
-    protected function sumTotals(array &$data, array $recap): void
+    protected function applyHomeCurrency(array &$data): void
     {
-        // Phase 2
+        if (empty($data['home_currency'])) {
+            $data['home_currency'] = $this->dsConfig?->getDefaultCurrency() ?? 'czk';
+        }
+        if (empty($data['doc_currency'])) {
+            $data['doc_currency'] = $data['home_currency'];
+        }
     }
 
-    protected function applyRounding(float $amount, int $mode): float
-    {
-        // Phase 2
-        return $amount;
-    }
+    // ── Accounting period resolvers ─────────────────────────────────────────
 
-    protected function maintainSnapshots(array &$data, ?array $originalData): void
+    protected function resolveAccountingPeriods(array &$data): void
     {
-        // Phase 2
-    }
-
-    protected function assignDocumentNumber(array &$data): void
-    {
-        // Phase 2
+        if (!empty($data['accounting_date'])) {
+            $data['fiscal_year']  = $this->resolveFiscalYearId((string) $data['accounting_date']);
+            $data['fiscal_month'] = $this->resolveFiscalMonthId((string) $data['accounting_date']);
+        }
+        if (!empty($data['vat_duzp']) && !empty($data['vat_registration'])) {
+            $data['vat_period'] = $this->resolveVatPeriodId(
+                (string) $data['vat_duzp'],
+                (int) $data['vat_registration'],
+            );
+        }
     }
 
     protected function resolveFiscalYearId(string $accountingDate): ?int
     {
-        // Phase 2
-        return null;
+        if ($this->db === null || $accountingDate === '') {
+            return null;
+        }
+        $row = $this->db->fetch(
+            'SELECT [id] FROM [economy_codebooks_fiscal_years]
+             WHERE [date_begin] <= %d AND [date_end] >= %d
+               AND [docState] IN (%i, %i, %i)
+             ORDER BY [date_begin] DESC
+             LIMIT 1',
+            $accountingDate, $accountingDate,
+            self::ACTIVE_DOC_STATES[0], self::ACTIVE_DOC_STATES[1], self::ACTIVE_DOC_STATES[2],
+        );
+        return $row !== null ? (int) $row['id'] : null;
     }
 
     protected function resolveFiscalMonthId(string $accountingDate): ?int
     {
-        // Phase 2
-        return null;
+        if ($this->db === null || $accountingDate === '') {
+            return null;
+        }
+        // Pick regular months (period_type = 1), skip Opening (0) and Closing (2)
+        $row = $this->db->fetch(
+            'SELECT [id] FROM [economy_codebooks_fiscal_months]
+             WHERE [date_begin] <= %d AND [date_end] >= %d AND [period_type] = 1
+             LIMIT 1',
+            $accountingDate, $accountingDate,
+        );
+        return $row !== null ? (int) $row['id'] : null;
     }
 
-    protected function resolveVatPeriodId(string $vatDuzp, ?int $vatRegistrationId): ?int
+    protected function resolveVatPeriodId(?string $vatDuzp, ?int $vatRegistrationId): ?int
     {
-        // Phase 2
-        return null;
+        if ($vatDuzp === null || $vatRegistrationId === null || $this->db === null) {
+            return null;
+        }
+        $row = $this->db->fetch(
+            'SELECT [id] FROM [economy_codebooks_vat_periods]
+             WHERE [vat_registration] = %i
+               AND [date_begin] <= %d AND [date_end] >= %d
+               AND [docState] IN (%i, %i, %i)
+             LIMIT 1',
+            $vatRegistrationId, $vatDuzp, $vatDuzp,
+            self::ACTIVE_DOC_STATES[0], self::ACTIVE_DOC_STATES[1], self::ACTIVE_DOC_STATES[2],
+        );
+        return $row !== null ? (int) $row['id'] : null;
+    }
+
+    // ── Row calculations ────────────────────────────────────────────────────
+
+    protected function calculateRowPrice(array &$row): void
+    {
+        $rowKind = (int) ($row['row_kind'] ?? 1);
+        if ($rowKind !== 1) {
+            $row['total_price'] = null;
+            return;
+        }
+
+        $qty = (float) ($row['quantity'] ?? 0);
+        $mode = (int) ($row['price_calc_mode'] ?? 0);
+
+        if ($mode === 0) {
+            $unitPrice = (float) ($row['unit_price'] ?? 0);
+            $row['total_price'] = round($qty * $unitPrice, 2);
+        } else {
+            $totalPrice = (float) ($row['total_price'] ?? 0);
+            $row['unit_price'] = $qty > 0 ? round($totalPrice / $qty, 4) : 0.0;
+        }
+
+        // Apply discount (pct OR amount, not both)
+        $totalPrice = (float) ($row['total_price'] ?? 0);
+        if (!empty($row['discount_pct'])) {
+            $discount = round($totalPrice * ((float) $row['discount_pct']) / 100.0, 2);
+            $row['total_price'] = round($totalPrice - $discount, 2);
+        } elseif (!empty($row['discount_amount'])) {
+            $row['total_price'] = round($totalPrice - (float) $row['discount_amount'], 2);
+        }
+    }
+
+    protected function calculateRowVat(array &$row, int $vatMode): void
+    {
+        $rowKind = (int) ($row['row_kind'] ?? 1);
+        if ($rowKind !== 1) {
+            $row['vat_base'] = null;
+            $row['vat_amount'] = null;
+            $row['vat_total'] = null;
+            return;
+        }
+
+        $totalPrice = (float) ($row['total_price'] ?? 0);
+
+        if ($vatMode === 0 || empty($row['vat_code']) || empty($row['vat_pct'])) {
+            $row['vat_base']   = $totalPrice;
+            $row['vat_amount'] = 0.0;
+            $row['vat_total']  = $totalPrice;
+            return;
+        }
+
+        $pct = (float) $row['vat_pct'];
+
+        if ($vatMode === 1) {
+            // From base — total_price is the base
+            $row['vat_base']   = $totalPrice;
+            $row['vat_amount'] = round($totalPrice * $pct / 100.0, 2);
+            $row['vat_total']  = round($row['vat_base'] + $row['vat_amount'], 2);
+        } else {
+            // From total (vat_mode === 2) — total_price includes VAT
+            $row['vat_total']  = $totalPrice;
+            $row['vat_base']   = round($totalPrice / (1.0 + $pct / 100.0), 2);
+            $row['vat_amount'] = round($row['vat_total'] - $row['vat_base'], 2);
+        }
+    }
+
+    // ── VAT recapitulation ──────────────────────────────────────────────────
+
+    /** @return array<int, array<string, mixed>> */
+    protected function buildVatRecapitulation(array &$data): array
+    {
+        $rows = $data['rows'] ?? [];
+        if (!is_array($rows) || $rows === []) {
+            return [];
+        }
+
+        $vatRegId = $data['vat_registration'] ?? null;
+        $countryCode = $this->resolveCountryFromVatRegistration($vatRegId);
+        if ($countryCode === null) {
+            return [];
+        }
+
+        try {
+            $vatCodes = $this->vatRateResolver()->getVatCodes(
+                $countryCode,
+                direction: null,
+                place: null,
+                includeHidden: true,
+            );
+        } catch (\LogicException) {
+            return [];
+        }
+
+        // 1. Group rows by (vat_code, vat_pct), sum base
+        $grouped = [];
+        foreach ($rows as $row) {
+            $rowKind = (int) ($row['row_kind'] ?? 1);
+            if ($rowKind !== 1 || empty($row['vat_code']) || empty($row['vat_pct'])) {
+                continue;
+            }
+            $key = $row['vat_code'] . '|' . $row['vat_pct'];
+            if (!isset($grouped[$key])) {
+                $grouped[$key] = [
+                    'vat_code' => (string) $row['vat_code'],
+                    'vat_pct'  => (float) $row['vat_pct'],
+                    'base'     => 0.0,
+                ];
+            }
+            $grouped[$key]['base'] += (float) ($row['total_price'] ?? 0);
+        }
+
+        // 2. For each group build primary line + optional reverse charge pair
+        $recap = [];
+        $sortOrder = 0;
+        $exchRate = (float) ($data['exchange_rate'] ?? 1.0);
+        if ($exchRate <= 0) {
+            $exchRate = 1.0;
+        }
+        $vatRoundingMode = (int) ($data['vat_rounding_mode'] ?? 2);
+
+        foreach ($grouped as $entry) {
+            $code = $entry['vat_code'];
+            if (!isset($vatCodes[$code])) {
+                continue;
+            }
+            $codeDef = $vatCodes[$code];
+
+            $base = round($entry['base'], 2);
+            $tax  = empty($codeDef['noPayTax'])
+                ? $this->applyRounding($base * $entry['vat_pct'] / 100.0, $vatRoundingMode)
+                : 0.0;
+
+            $primary = [
+                'vat_code'        => $code,
+                'vat_pct'         => $entry['vat_pct'],
+                'base'            => $base,
+                'tax'             => $tax,
+                'total'           => round($base + $tax, 2),
+                'sum_base'        => (int) ($codeDef['sumBase']  ?? 1),
+                'sum_tax'         => (int) ($codeDef['sumTax']   ?? 1),
+                'sum_total'       => (int) ($codeDef['sumTotal'] ?? 1),
+                'is_reverse_pair' => 0,
+                'sort_order'      => $sortOrder++,
+            ];
+            $primary['base_dom']  = round($primary['base']  * $exchRate, 2);
+            $primary['tax_dom']   = round($primary['tax']   * $exchRate, 2);
+            $primary['total_dom'] = round($primary['total'] * $exchRate, 2);
+            $recap[] = $primary;
+
+            // Reverse charge — generate paired (oddanění) row
+            if (!empty($codeDef['reverseVatCode']) && isset($vatCodes[$codeDef['reverseVatCode']])) {
+                $reverseCodeKey = (string) $codeDef['reverseVatCode'];
+                $reverseDef     = $vatCodes[$reverseCodeKey];
+
+                try {
+                    $reversePct = $this->vatRateResolver()->resolveVatPct(
+                        $countryCode,
+                        $reverseCodeKey,
+                        (string) ($data['vat_duzp'] ?? date('Y-m-d')),
+                    );
+                } catch (\LogicException) {
+                    // Unknown rate for date — skip pair generation rather than crash.
+                    continue;
+                }
+                $reverseTax = $this->applyRounding($base * $reversePct / 100.0, $vatRoundingMode);
+
+                $paired = [
+                    'vat_code'        => $reverseCodeKey,
+                    'vat_pct'         => $reversePct,
+                    'base'            => $base,
+                    'tax'             => $reverseTax,
+                    'total'           => round($base + $reverseTax, 2),
+                    'sum_base'        => (int) ($reverseDef['sumBase']  ?? 1),
+                    'sum_tax'         => (int) ($reverseDef['sumTax']   ?? 1),
+                    'sum_total'       => (int) ($reverseDef['sumTotal'] ?? 1),
+                    'is_reverse_pair' => 1,
+                    'sort_order'      => $sortOrder++,
+                ];
+                $paired['base_dom']  = round($paired['base']  * $exchRate, 2);
+                $paired['tax_dom']   = round($paired['tax']   * $exchRate, 2);
+                $paired['total_dom'] = round($paired['total'] * $exchRate, 2);
+                $recap[] = $paired;
+            }
+        }
+
+        return $recap;
+    }
+
+    protected function resolveCountryFromVatRegistration(mixed $vatRegId): ?string
+    {
+        if ($vatRegId === null || $this->db === null) {
+            return null;
+        }
+        $row = $this->db->fetch(
+            'SELECT [country] FROM [economy_codebooks_vat_registrations] WHERE [id] = %i',
+            (int) $vatRegId,
+        );
+        return $row !== null ? (string) $row['country'] : null;
+    }
+
+    // ── Totals, rounding, exchange ──────────────────────────────────────────
+
+    protected function sumTotals(array &$data, array $recap): void
+    {
+        $base = 0.0;
+        $vat  = 0.0;
+        $total = 0.0;
+
+        foreach ($recap as $r) {
+            if (!empty($r['sum_base']))  { $base  += (float) $r['base']; }
+            if (!empty($r['sum_tax']))   { $vat   += (float) $r['tax']; }
+            if (!empty($r['sum_total'])) { $total += (float) $r['total']; }
+        }
+
+        $data['total_base']     = round($base, 2);
+        $data['total_vat']      = round($vat, 2);
+        $data['total_amount']   = round($total, 2);
+        $data['total_rounding'] = 0.0;
+    }
+
+    protected function applyTotalRounding(array &$data): void
+    {
+        $original = (float) ($data['total_amount'] ?? 0);
+        $mode = (int) ($data['total_rounding_mode'] ?? 0);
+        $rounded = $this->applyRounding($original, $mode);
+        $data['total_amount']   = $rounded;
+        $data['total_rounding'] = round($rounded - $original, 2);
+    }
+
+    protected function applyRounding(float $amount, int $mode): float
+    {
+        return match ($mode) {
+            1       => (float) round($amount, 0),  // Whole units
+            2       => round($amount, 2),          // 0.01
+            default => round($amount, 2),          // No rounding (still 2 decimals)
+        };
+    }
+
+    protected function applyExchangeRate(array &$data): void
+    {
+        $exchRate = (float) ($data['exchange_rate'] ?? 1.0);
+        if ($exchRate <= 0) {
+            $exchRate = 1.0;
+        }
+        $data['total_base_dom']   = round((float) ($data['total_base'] ?? 0)   * $exchRate, 2);
+        $data['total_vat_dom']    = round((float) ($data['total_vat'] ?? 0)    * $exchRate, 2);
+        $data['total_amount_dom'] = round((float) ($data['total_amount'] ?? 0) * $exchRate, 2);
+    }
+
+    // ── Number assignment ───────────────────────────────────────────────────
+
+    protected function processStateTransition(array &$data, ?array $originalData): void
+    {
+        $newState = (int) ($data['docState'] ?? 10);
+        $oldState = (int) ($originalData['docState'] ?? $newState);
+
+        if ($oldState === 10 && $newState === 20) {
+            $this->assignDocumentNumber($data);
+            return;
+        }
+        if ($oldState === 20 && $newState === 10) {
+            $this->releaseDocumentNumber($data, $originalData);
+            return;
+        }
+    }
+
+    protected function assignDocumentNumber(array &$data): void
+    {
+        if ($this->db === null) {
+            throw new \LogicException('No DB connection available');
+        }
+        $seriesId = (int) ($data['number_series'] ?? 0);
+        if ($seriesId === 0) {
+            throw new \LogicException('Cannot assign number — number_series missing');
+        }
+
+        $seriesRow = $this->db->fetch(
+            'SELECT * FROM [docs_core_number_series] WHERE [id] = %i',
+            $seriesId,
+        );
+        if ($seriesRow === null) {
+            throw new \LogicException("Number series id={$seriesId} not found");
+        }
+        $series = $seriesRow->toArray();
+
+        $resetScope = (string) ($series['reset_scope'] ?? 'fiscal_year');
+        $fyId = ($resetScope === 'fiscal_year')
+            ? $this->resolveFiscalYearId((string) ($data['accounting_date'] ?? ''))
+            : null;
+
+        $this->db->begin();
+        try {
+            // Idempotent counter init
+            $this->executeSql(
+                'INSERT IGNORE INTO [docs_core_number_counters]
+                 ([number_series], [fiscal_year], [last_assigned])
+                 VALUES (%i, %iN, 0)',
+                $seriesId, $fyId,
+            );
+
+            // Lock + read counter (NULL-safe equality for fiscal_year)
+            $row = $this->db->fetch(
+                'SELECT [last_assigned] FROM [docs_core_number_counters]
+                 WHERE [number_series] = %i AND [fiscal_year] <=> %iN
+                 FOR UPDATE',
+                $seriesId, $fyId,
+            );
+            $current = (int) ($row['last_assigned'] ?? 0);
+            $newSeq = $current + 1;
+
+            $this->executeSql(
+                'UPDATE [docs_core_number_counters]
+                 SET [last_assigned] = %i
+                 WHERE [number_series] = %i AND [fiscal_year] <=> %iN',
+                $newSeq, $seriesId, $fyId,
+            );
+
+            $data['sequence_number'] = $newSeq;
+            $data['fiscal_year']     = $fyId;
+            $data['doc_number']      = $this->resolvePattern(
+                (string) $series['doc_number_pattern'],
+                $data,
+                $series,
+            );
+
+            $this->db->commit();
+        } catch (\Throwable $e) {
+            $this->db->rollback();
+            throw $e;
+        }
+    }
+
+    protected function releaseDocumentNumber(array &$data, ?array $originalData): void
+    {
+        if ($this->db === null || $originalData === null) {
+            throw new \LogicException('Cannot release number without original data');
+        }
+
+        $seriesId = (int) ($originalData['number_series'] ?? 0);
+        $fyId     = $originalData['fiscal_year'] ?? null;
+        $sequence = (int) ($originalData['sequence_number'] ?? 0);
+
+        if ($seriesId === 0 || $sequence === 0) {
+            $data['sequence_number'] = null;
+            $data['doc_number']      = '';
+            return;
+        }
+
+        $maxRow = $this->db->fetch(
+            'SELECT MAX([sequence_number]) AS [max_seq]
+             FROM [docs_core_heads]
+             WHERE [number_series] = %i AND [fiscal_year] <=> %iN',
+            $seriesId, $fyId,
+        );
+        $maxSeq = (int) ($maxRow['max_seq'] ?? 0);
+
+        if ($maxSeq !== $sequence) {
+            throw new \DomainException(
+                "Doklad #{$sequence} není poslední v řadě (poslední je #{$maxSeq}). "
+                . "Vrácení do Konceptu by vytvořilo díru v sekvenci.",
+            );
+        }
+
+        $this->db->begin();
+        try {
+            $this->executeSql(
+                'UPDATE [docs_core_number_counters]
+                 SET [last_assigned] = [last_assigned] - 1
+                 WHERE [number_series] = %i AND [fiscal_year] <=> %iN AND [last_assigned] = %i',
+                $seriesId, $fyId, $sequence,
+            );
+
+            $data['sequence_number'] = null;
+            $data['fiscal_year']     = null;
+            $data['doc_number']      = !empty($data['id'])
+                ? '!' . str_pad((string) $data['id'], 10, '0', STR_PAD_LEFT)
+                : '';
+            $data['supplier_snapshot'] = null;
+            $data['customer_snapshot'] = null;
+
+            $this->db->commit();
+        } catch (\Throwable $e) {
+            $this->db->rollback();
+            throw $e;
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $series
+     */
+    protected function resolvePattern(string $pattern, array $data, array $series): string
+    {
+        $resolved = preg_replace_callback(
+            '/%(D|C|y|Y|3|4|5|6)/',
+            function (array $m) use ($data, $series): string {
+                return match ($m[1]) {
+                    'D' => $this->getDocIdCode((string) ($data['doc_type'] ?? '')),
+                    'C' => (string) ($series['doc_number_code'] ?? ''),
+                    'y' => substr($this->getFiscalYearLabel($data), -2),
+                    'Y' => $this->getFiscalYearLabel($data),
+                    '3' => str_pad((string) ($data['sequence_number'] ?? 0), 3, '0', STR_PAD_LEFT),
+                    '4' => str_pad((string) ($data['sequence_number'] ?? 0), 4, '0', STR_PAD_LEFT),
+                    '5' => str_pad((string) ($data['sequence_number'] ?? 0), 5, '0', STR_PAD_LEFT),
+                    '6' => str_pad((string) ($data['sequence_number'] ?? 0), 6, '0', STR_PAD_LEFT),
+                    default => $m[0],
+                };
+            },
+            $pattern,
+        );
+        return $resolved ?? $pattern;
+    }
+
+    private function getDocIdCode(string $docType): string
+    {
+        if ($docType === '' || $this->config === null) {
+            return '';
+        }
+        $cfg = $this->config->cfgItem('docs.core.docTypes');
+        return is_array($cfg) && isset($cfg[$docType]['doc_id_code'])
+            ? (string) $cfg[$docType]['doc_id_code']
+            : '';
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    private function getFiscalYearLabel(array $data): string
+    {
+        if (empty($data['fiscal_year']) || $this->db === null) {
+            if (!empty($data['accounting_date'])) {
+                return substr((string) $data['accounting_date'], 0, 4);
+            }
+            return date('Y');
+        }
+        $row = $this->db->fetch(
+            'SELECT [doc_number_prefix], [name] FROM [economy_codebooks_fiscal_years] WHERE [id] = %i',
+            (int) $data['fiscal_year'],
+        );
+        if ($row === null) {
+            return date('Y');
+        }
+        $name = (string) ($row['name'] ?? '');
+        if (preg_match('/^(\d{4})/', $name, $matches)) {
+            return $matches[1];
+        }
+        return date('Y');
+    }
+
+    // ── Snapshots ───────────────────────────────────────────────────────────
+
+    protected function maintainSnapshots(array &$data, ?array $originalData): void
+    {
+        $newState = (int) ($data['docState'] ?? 10);
+        if (!in_array($newState, self::SNAPSHOT_STATES, true)) {
+            return;
+        }
+
+        $partnerChanged = ($data['partner'] ?? null) !== ($originalData['partner'] ?? null);
+        $needsBuild = empty($data['supplier_snapshot'])
+                    || empty($data['customer_snapshot'])
+                    || $partnerChanged;
+
+        if (!$needsBuild) {
+            return;
+        }
+
+        $this->buildSnapshots($data);
+    }
+
+    protected function buildSnapshots(array &$data): void
+    {
+        $docTypeKey = (string) ($data['doc_type'] ?? '');
+        $docTypes = $this->config?->cfgItem('docs.core.docTypes') ?? [];
+        if (!is_array($docTypes) || !isset($docTypes[$docTypeKey]['trade_dir'])) {
+            return;
+        }
+        $tradeDir = (int) $docTypes[$docTypeKey]['trade_dir'];
+
+        $partnerSnap = $this->buildPersonSnapshot(
+            personId:  (int) ($data['partner'] ?? 0),
+            addressId: $data['partner_address'] ?? null,
+            bankAccountId: null,
+            vatRegistrationId: null,
+        );
+
+        $own = $this->ownCompanyResolver();
+        $ownPersonId = $own->getOwnPersonId();
+        if ($ownPersonId === null) {
+            throw new \DomainException(
+                'Není nastavena vlastní firma (base_persons_persons.is_own = 1).',
+            );
+        }
+        $ownHqAddress = $own->getOwnHeadquartersAddress();
+
+        $ownSnap = $this->buildPersonSnapshot(
+            personId:  $ownPersonId,
+            addressId: $ownHqAddress !== null ? (int) $ownHqAddress['id'] : null,
+            bankAccountId: $data['bank_account'] ?? null,
+            vatRegistrationId: $data['vat_registration'] ?? null,
+        );
+
+        if ($tradeDir === 1) {
+            // Output (issued invoice) — we are supplier
+            $data['supplier_snapshot'] = $ownSnap;
+            $data['customer_snapshot'] = $partnerSnap;
+        } else {
+            // Input (received invoice) — we are customer
+            $data['supplier_snapshot'] = $partnerSnap;
+            $data['customer_snapshot'] = $ownSnap;
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function buildPersonSnapshot(
+        int $personId,
+        mixed $addressId,
+        mixed $bankAccountId,
+        mixed $vatRegistrationId,
+    ): array {
+        if ($this->db === null || $personId === 0) {
+            return [];
+        }
+
+        $personRow = $this->db->fetch(
+            'SELECT * FROM [base_persons_persons] WHERE [id] = %i',
+            $personId,
+        );
+        if ($personRow === null) {
+            return [];
+        }
+        $person = $personRow->toArray();
+
+        $snap = [
+            'name'               => (string) ($person['full_name'] ?? ''),
+            'company_id'         => $person['company_id']         ?? null,
+            'tax_id'             => $person['tax_id']             ?? null,
+            'vat_id'             => $person['vat_id']             ?? null,
+            'court_registration' => $person['court_registration'] ?? null,
+            'contact'            => [
+                'email' => $person['email'] ?? null,
+                'phone' => $person['phone'] ?? null,
+            ],
+        ];
+
+        if ($addressId !== null) {
+            $addr = $this->db->fetch(
+                'SELECT * FROM [base_persons_addresses] WHERE [id] = %i',
+                (int) $addressId,
+            );
+            if ($addr !== null) {
+                $snap['address'] = [
+                    'street'        => $addr['street']        ?? null,
+                    'house_number'  => $addr['house_number']  ?? null,
+                    'city'          => $addr['city']          ?? null,
+                    'city_part'     => $addr['city_part']     ?? null,
+                    'zip'           => $addr['zip']           ?? null,
+                    'country'       => $addr['country']       ?? null,
+                    'display_block' => $addr['display_block'] ?? null,
+                    'display_line'  => $addr['display_line']  ?? null,
+                ];
+            }
+        }
+
+        if ($bankAccountId !== null) {
+            $bank = $this->db->fetch(
+                'SELECT * FROM [economy_codebooks_bank_accounts] WHERE [id] = %i',
+                (int) $bankAccountId,
+            );
+            if ($bank !== null) {
+                $snap['bank_account'] = [
+                    'name'           => $bank['name']           ?? null,
+                    'account_number' => $bank['account_number'] ?? null,
+                    'iban'           => $bank['iban']           ?? null,
+                    'bic'            => $bank['bic']            ?? null,
+                    'currency'       => $bank['currency']       ?? null,
+                ];
+            }
+        }
+
+        if ($vatRegistrationId !== null) {
+            $reg = $this->db->fetch(
+                'SELECT * FROM [economy_codebooks_vat_registrations] WHERE [id] = %i',
+                (int) $vatRegistrationId,
+            );
+            if ($reg !== null) {
+                $snap['vat_registration'] = [
+                    'country' => $reg['country'] ?? null,
+                    'vat_id'  => $reg['vat_id']  ?? null,
+                ];
+            }
+        }
+
+        return $snap;
+    }
+
+    // ── Other defaults ──────────────────────────────────────────────────────
+
+    protected function applyVariableSymbolDefault(array &$data): void
+    {
+        if (!empty($data['variable_symbol'])) {
+            return;
+        }
+        if (!empty($data['sequence_number'])) {
+            $data['variable_symbol'] = (string) $data['sequence_number'];
+        }
+    }
+
+    /**
+     * Thin wrapper around Dibi\Connection::query() to make it overridable in
+     * tests (Connection::query() is `final` so PHPUnit cannot mock it).
+     */
+    protected function executeSql(mixed ...$args): void
+    {
+        $this->db?->query(...$args);
+    }
+
+    // ── Lazy service factories ──────────────────────────────────────────────
+
+    protected function vatRateResolver(): VatRateResolver
+    {
+        if ($this->vatRateResolver === null) {
+            if ($this->config === null) {
+                throw new \LogicException('VatRateResolver requires ConfigRuntime injection');
+            }
+            $this->vatRateResolver = new VatRateResolver($this->config);
+        }
+        return $this->vatRateResolver;
+    }
+
+    protected function ownCompanyResolver(): OwnCompanyResolver
+    {
+        if ($this->ownCompanyResolver === null) {
+            if ($this->db === null) {
+                throw new \LogicException('OwnCompanyResolver requires Dibi connection');
+            }
+            $this->ownCompanyResolver = new OwnCompanyResolver($this->db);
+        }
+        return $this->ownCompanyResolver;
     }
 }

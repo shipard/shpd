@@ -55,6 +55,7 @@ class TableMerger
             indexes: $indexes,
             childTables: $base->childTables,
             docStates: $base->docStates,
+            stateTransitionsRunDocumentHooks: $base->stateTransitionsRunDocumentHooks,
         );
     }
 }

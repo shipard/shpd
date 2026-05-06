@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Shipard\Module\Docs\Core;
 
-use Shipard\Core\Database\DataSourceConnection;
-
 /**
  * Helper for looking up the "own company" — the base_persons_persons row
  * with is_own = 1. Used by document snapshot building (Phase 2) and
  * validation checks at Confirm transition.
+ *
+ * Takes a raw \Dibi\Connection because Document subclasses hold one.
  */
 final class OwnCompanyResolver
 {
@@ -17,7 +17,7 @@ final class OwnCompanyResolver
     private const ADDRESS_TYPE_HEADQUARTERS = 1;
 
     public function __construct(
-        private readonly DataSourceConnection $db,
+        private readonly \Dibi\Connection $db,
     ) {}
 
     /**
@@ -25,9 +25,9 @@ final class OwnCompanyResolver
      */
     public function getOwnPersonId(): ?int
     {
-        $row = $this->db->fetchRow(
-            'SELECT id FROM base_persons_persons
-             WHERE is_own = 1 AND docState IN (%i, %i, %i)
+        $row = $this->db->fetch(
+            'SELECT [id] FROM [base_persons_persons]
+             WHERE [is_own] = 1 AND [docState] IN (%i, %i, %i)
              LIMIT 1',
             10, 40, 80,
         );
@@ -43,10 +43,11 @@ final class OwnCompanyResolver
         if ($id === null) {
             return null;
         }
-        return $this->db->fetchRow(
-            'SELECT * FROM base_persons_persons WHERE id = %i',
+        $row = $this->db->fetch(
+            'SELECT * FROM [base_persons_persons] WHERE [id] = %i',
             $id,
         );
+        return $row !== null ? $row->toArray() : null;
     }
 
     /**
@@ -60,12 +61,13 @@ final class OwnCompanyResolver
         if ($personId === null) {
             return null;
         }
-        return $this->db->fetchRow(
-            'SELECT * FROM base_persons_addresses
-             WHERE person = %i AND address_type = %i
+        $row = $this->db->fetch(
+            'SELECT * FROM [base_persons_addresses]
+             WHERE [person] = %i AND [address_type] = %i
              LIMIT 1',
             $personId,
             self::ADDRESS_TYPE_HEADQUARTERS,
         );
+        return $row !== null ? $row->toArray() : null;
     }
 }

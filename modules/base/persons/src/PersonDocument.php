@@ -65,7 +65,7 @@ class PersonDocument extends Document
         return $result;
     }
 
-    public function beforeSave(array &$data): void
+    public function beforeSave(array &$data, ?array $originalData = null): void
     {
         $personType = PersonType::tryFrom((int) ($data['person_type'] ?? 0));
 

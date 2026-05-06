@@ -78,7 +78,7 @@ class ItemDocument extends Document
         return $result;
     }
 
-    public function beforeSave(array &$data): void
+    public function beforeSave(array &$data, ?array $originalData = null): void
     {
         // Auto-generate code if missing
         if (empty($data['code']) && $this->db !== null) {

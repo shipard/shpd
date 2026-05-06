@@ -32,13 +32,13 @@ přijatá), kompletní DPH model pro **CZ** (vč. PDP, EU intracom, dovozu/vývo
 | `persons-is-own-extension.md`     | 1         | hotovo   | base.persons (existuje)                             |
 | `world-vat-cz.md`                 | 2         | hotovo   | world.base, world.trade (existují)                  |
 | `docs-core-phase1.md` (skeleton)  | 3         | hotovo   | persons-extension, world.vat, economy.codebooks, items |
-| `docs-core-phase2.md` (výpočty)   | 4         | TODO     | docs-core-phase1                                    |
-| `docs-core-phase3.md` (UI)        | 5         | TODO     | docs-core-phase2                                    |
+| `docs-core-phase2.md` (výpočty)   | 4         | hotovo   | docs-core-phase1                                    |
+| `docs-core-phase3.md` (UI)        | 5         | připrav. | docs-core-phase2                                    |
 | `docs-invoices.md`                | 6         | TODO     | docs-core-phase3                                    |
 
-Fáze 1 a 2 byly nezávislé a hotové. Tasky pro fáze 4-6 vzniknou postupně
-po dokončení Fáze 3 — designové detaily se mohou v reakci na zjištění
-z předchozí fáze upravit.
+Fáze 1–4 jsou hotové — backend dokladů včetně výpočtů, číselných řad
+a snapshotů. Tasky pro fáze 5 a 6 vzniknou postupně po dokončení Fáze 5 —
+designové detaily se mohou v reakci na zjištění z předchozí fáze upravit.
 
 ### Modul `economy.items` + `core.units`
 

@@ -1,0 +1,22 @@
+{
+    // Extension from docs.core: payment_term_days
+    //
+    // Splatnost (počet dní), kterou se default `due_date` na faktuře dopočítá
+    // jako `issue_date + payment_term_days`. Pole žije technicky na osobě,
+    // ale je to ekonomická informace vlastněná dokladovým systémem — proto
+    // extension z docs.core, ne přímý sloupec base.persons.
+
+    "table": "base_persons_persons",
+    "columns": [
+        {
+            "id": "payment_term_days",
+            "name": "Payment term (days)",
+            "name:cs": "Splatnost (dny)",
+            "name:en": "Payment term (days)",
+            "type": "smallint",
+            "default": 14,
+            "nullable": true,
+            "group": "status"
+        }
+    ]
+}

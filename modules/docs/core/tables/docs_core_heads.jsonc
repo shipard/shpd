@@ -12,6 +12,11 @@
         "cfgItem": "docs.core.docStates"
     },
 
+    // State transitions on this table run through DocDocument::beforeSave so
+    // assignDocumentNumber, snapshot building, etc. fire when the user clicks
+    // "Confirm" / "Mark as done" / etc. (default false; opt-in per-table).
+    "stateTransitionsRunDocumentHooks": true,
+
     "childTables": [
         { "table": "docs_core_rows",      "foreignKey": "doc_head", "dataKey": "rows" },
         { "table": "docs_core_vat_recap", "foreignKey": "doc_head", "dataKey": "vatRecap" }

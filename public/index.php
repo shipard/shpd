@@ -190,7 +190,7 @@ function dispatch(
 		'meta'    => dispatchMeta($route->action, $route->table, $tables, resolveLanguage($request, $resolved->config)),
 		'ui'      => dispatchUi($route->action, $resolved->config, $modulesBasePath, resolveLanguage($request, $resolved->config)),
 		'settings' => dispatchSettings($route->action, $resolved->config, $modulesBasePath, resolveLanguage($request, $resolved->config), $configRuntime),
-		'form'    => dispatchForm($route, $request, $tables, $db, $formRegistry ?? new FormRegistry(), $configRuntime, $modulesBasePath, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), resolveLanguage($request, $resolved->config)),
+		'form'    => dispatchForm($route, $request, $tables, $db, $formRegistry ?? new FormRegistry(), $configRuntime, $modulesBasePath, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), resolveLanguage($request, $resolved->config), $resolved->config),
 		'viewer'  => dispatchViewer($route, $request, $viewerRegistry, $db, $configRuntime),
 		'mail'    => dispatchMail($route, $request, $auth, $tables, $db, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'analysis' => dispatchAnalysis($route, $request, $auth, $tables, $db, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
@@ -360,12 +360,13 @@ function dispatchForm(
 	string $modulesBasePath = '',
 	?\Shipard\Core\Document\DocumentRegistry $documentRegistry = null,
 	string $language = 'en',
+	?\Shipard\Core\Config\DataSourceConfig $dsConfig = null,
 ): Response {
 	$ctrl  = new FormController();
 	$table = $route->table ?? '';
 	return match ($route->action) {
 		'meta'        => $ctrl->meta($table, $route->id, $tables, $db, $formRegistry, $configRuntime, $modulesBasePath, $language),
-		'save'        => $ctrl->save($table, $route->id, $request, $tables, $db, $configRuntime, $documentRegistry),
+		'save'        => $ctrl->save($table, $route->id, $request, $tables, $db, $configRuntime, $documentRegistry, $dsConfig),
 		'recalculate' => $ctrl->recalculate($table, $request, $tables, $db, $formRegistry, $configRuntime, $modulesBasePath, $language),
 		default       => Response::error('INTERNAL_ERROR', "Unknown form action: {$route->action}", 500),
 	};

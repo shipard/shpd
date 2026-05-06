@@ -55,6 +55,8 @@ class PersonsForm extends TableForm
             ->addInput('email', cols: 2)
             ->addInput('phone', cols: 1)
             ->addInput('web', cols: 2)
+            ->addSeparator('Platba')
+            ->addNumber('payment_term_days', cols: 1)
             ->build();
 
         // ── Tab: Kontakty (subtable) ─────────────────────────────────────────

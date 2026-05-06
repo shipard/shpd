@@ -26,7 +26,7 @@ class WarehouseDocument extends Document
         return $r;
     }
 
-    public function beforeSave(array &$data): void
+    public function beforeSave(array &$data, ?array $originalData = null): void
     {
         foreach (['code', 'name'] as $col) {
             if (isset($data[$col])) {

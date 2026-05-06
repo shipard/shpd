@@ -87,4 +87,14 @@ class DataSourceConfig
     {
         return $this->data['defaultLanguage'] ?? 'en';
     }
+
+    /**
+     * Default currency for documents created in this DS — used as fallback for
+     * `home_currency` on document headers. ISO 4217 lower-case (e.g. 'czk', 'eur').
+     * Optional; defaults to 'czk' when missing from main.json.
+     */
+    public function getDefaultCurrency(): string
+    {
+        return $this->data['defaultCurrency'] ?? 'czk';
+    }
 }

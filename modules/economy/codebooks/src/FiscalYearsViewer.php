@@ -122,7 +122,7 @@ class FiscalYearsViewer extends TableViewer
 
         $tabs[] = [
             'id'      => 'overview',
-            'label'   => 'Přehled',
+            'label'   => $this->defaultOverviewLabel(),
             'content' => $this->buildOverviewContent($record),
         ];
 
@@ -149,7 +149,7 @@ class FiscalYearsViewer extends TableViewer
 
         $tabs[] = [
             'id'      => 'months',
-            'label'   => 'Měsíce',
+            'label'   => $this->detailTabLabel('economy.codebooks.viewerDetailLabels', 'months', 'Months'),
             'content' => [
                 'type'    => 'table',
                 'columns' => [
@@ -164,19 +164,6 @@ class FiscalYearsViewer extends TableViewer
         ];
 
         return ['tabs' => $tabs];
-    }
-
-    public function getToolbarActions(?array $selectedRow): array
-    {
-        $actions = [
-            ['id' => 'create', 'label' => 'Přidat', 'variant' => 'primary'],
-        ];
-
-        if ($selectedRow !== null) {
-            $actions[] = ['id' => 'edit', 'label' => 'Otevřít', 'variant' => 'secondary'];
-        }
-
-        return $actions;
     }
 
     private function buildOverviewContent(array $record): array

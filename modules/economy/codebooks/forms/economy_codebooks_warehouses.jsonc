@@ -1,16 +1,22 @@
 {
     "title": "Sklad",
+    "title:cs": "Sklad",
+    "title:en": "Warehouse",
     "titleNew": "Nový sklad",
+    "titleNew:cs": "Nový sklad",
+    "titleNew:en": "New warehouse",
     "fullSize": false,
     "tabs": [
         {
             "id": "basic",
             "label": "Sklad",
+            "label:cs": "Sklad",
+            "label:en": "Warehouse",
             "elements": [
                 {"type": "input", "column": "code", "cols": 1, "required": true},
                 {"type": "input", "column": "name", "cols": 3, "required": true},
 
-                {"type": "separator", "label": "Nastavení"},
+                {"type": "separator", "label": "Nastavení", "label:cs": "Nastavení", "label:en": "Settings"},
                 {"type": "input", "column": "sort_order", "cols": 1},
                 {"type": "input", "column": "valid_from", "cols": 1},
                 {"type": "input", "column": "valid_to", "cols": 1}

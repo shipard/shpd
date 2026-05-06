@@ -77,4 +77,14 @@ class DataSourceConfig
     {
         return $this->dataSourceDir;
     }
+
+    /**
+     * Default language for this DS — used as fallback when the request has no
+     * Accept-Language header. ISO 639-1 lower-case (e.g. 'cs', 'en').
+     * Optional; defaults to 'en' when missing from main.json.
+     */
+    public function getDefaultLanguage(): string
+    {
+        return $this->data['defaultLanguage'] ?? 'en';
+    }
 }

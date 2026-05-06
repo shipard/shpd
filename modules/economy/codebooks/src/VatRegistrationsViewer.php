@@ -133,7 +133,7 @@ class VatRegistrationsViewer extends TableViewer
 
         $tabs[] = [
             'id'      => 'overview',
-            'label'   => 'Přehled',
+            'label'   => $this->defaultOverviewLabel(),
             'content' => $this->buildOverviewContent($record),
         ];
 
@@ -157,7 +157,7 @@ class VatRegistrationsViewer extends TableViewer
 
         $tabs[] = [
             'id'      => 'periods',
-            'label'   => 'Období DPH',
+            'label'   => $this->detailTabLabel('economy.codebooks.viewerDetailLabels', 'vatPeriods', 'VAT periods'),
             'content' => [
                 'type'    => 'table',
                 'columns' => [
@@ -171,19 +171,6 @@ class VatRegistrationsViewer extends TableViewer
         ];
 
         return ['tabs' => $tabs];
-    }
-
-    public function getToolbarActions(?array $selectedRow): array
-    {
-        $actions = [
-            ['id' => 'create', 'label' => 'Přidat', 'variant' => 'primary'],
-        ];
-
-        if ($selectedRow !== null) {
-            $actions[] = ['id' => 'edit', 'label' => 'Otevřít', 'variant' => 'secondary'];
-        }
-
-        return $actions;
     }
 
     private function buildOverviewContent(array $record): array

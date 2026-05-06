@@ -17,6 +17,18 @@
         {
             "id": "core.system.docStatesArchive",
             "file": "config/docStatesArchive.jsonc"
+        },
+        {
+            "id": "core.system.viewerDefaults",
+            "file": "config/viewerDefaults.jsonc"
+        },
+        {
+            "id": "core.system.formDefaults",
+            "file": "config/formDefaults.jsonc"
+        },
+        {
+            "id": "core.system.viewerDetailLabels",
+            "file": "config/viewerDetailLabels.jsonc"
         }
     ]
 }

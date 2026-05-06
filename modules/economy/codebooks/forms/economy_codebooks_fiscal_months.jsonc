@@ -1,12 +1,18 @@
 {
     "title": "Fiskální měsíc",
+    "title:cs": "Fiskální měsíc",
+    "title:en": "Fiscal month",
     "titleNew": "Nový fiskální měsíc",
+    "titleNew:cs": "Nový fiskální měsíc",
+    "titleNew:en": "New fiscal month",
     "fullSize": false,
 
     "tabs": [
         {
             "id": "basic",
             "label": "Měsíc",
+            "label:cs": "Měsíc",
+            "label:en": "Month",
             "elements": [
                 {"type": "input", "column": "date_begin", "cols": 1, "required": true},
                 {"type": "input", "column": "date_end", "cols": 1, "required": true},

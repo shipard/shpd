@@ -68,6 +68,10 @@
         {
             "id": "economy.items.itemTypes",
             "file": "config/itemTypes.jsonc"
+        },
+        {
+            "id": "economy.items.viewerDetailLabels",
+            "file": "config/viewerDetailLabels.jsonc"
         }
     ]
 }

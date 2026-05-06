@@ -1,19 +1,25 @@
 {
     "title": "Pokladna",
+    "title:cs": "Pokladna",
+    "title:en": "Cash desk",
     "titleNew": "Nová pokladna",
+    "titleNew:cs": "Nová pokladna",
+    "titleNew:en": "New cash desk",
     "fullSize": false,
 
     "tabs": [
         {
             "id": "basic",
             "label": "Pokladna",
+            "label:cs": "Pokladna",
+            "label:en": "Cash desk",
             "elements": [
                 {"type": "input", "column": "code", "cols": 1, "required": true},
                 {"type": "input", "column": "name", "cols": 2, "required": true},
                 {"type": "input", "column": "currency", "cols": 1, "required": true},
                 {"type": "input", "column": "notice", "cols": 4},
 
-                {"type": "separator", "label": "Nastavení"},
+                {"type": "separator", "label": "Nastavení", "label:cs": "Nastavení", "label:en": "Settings"},
                 {"type": "input", "column": "is_default", "cols": 1},
                 {"type": "input", "column": "sort_order", "cols": 1},
                 {"type": "input", "column": "valid_from", "cols": 1},

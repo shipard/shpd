@@ -75,5 +75,9 @@
             "id": "base.persons.placeRegTypes",
             "file": "config/placeRegTypes.jsonc"
         },
+        {
+            "id": "base.persons.viewerDetailLabels",
+            "file": "config/viewerDetailLabels.jsonc"
+        },
     ]
 }

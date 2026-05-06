@@ -1,0 +1,14 @@
+{
+    // economy.items.viewerDetailLabels
+    //
+    // Detail-tab labels specific to item viewers (list of items under a kind).
+    // The shared "overview" tab lives in core.system.viewerDetailLabels.
+
+    "tabs": {
+        "items": {
+            "name": "Items",
+            "name:cs": "Položky",
+            "name:en": "Items"
+        }
+    }
+}

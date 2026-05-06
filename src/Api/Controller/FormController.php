@@ -32,6 +32,7 @@ class FormController
         FormRegistry $formRegistry,
         ?ConfigRuntime $config,
         string $modulesBasePath,
+        string $language = 'en',
     ): Response {
         $def = $tables[$table] ?? null;
         if ($def === null) {
@@ -59,7 +60,7 @@ class FormController
         }
 
         $formDefinition = $this->resolveFormDefinition(
-            $table, $def, $data, $isNew, $formRegistry, $db, $config, $modulesBasePath,
+            $table, $def, $data, $isNew, $formRegistry, $db, $config, $modulesBasePath, $language,
         );
 
         // Enrich with docStates if applicable
@@ -167,6 +168,7 @@ class FormController
         FormRegistry $formRegistry,
         ?ConfigRuntime $config,
         string $modulesBasePath,
+        string $language = 'en',
     ): Response {
         $def = $tables[$table] ?? null;
         if ($def === null) {
@@ -190,7 +192,7 @@ class FormController
         } else {
             // JSONC or Auto — no custom recalculate logic, just rebuild definition
             $formDefinition = $this->resolveFormDefinition(
-                $table, $def, $data, $isNew, $formRegistry, $db, $config, $modulesBasePath,
+                $table, $def, $data, $isNew, $formRegistry, $db, $config, $modulesBasePath, $language,
             );
             $result = new RecalculateResult($formDefinition, $data);
         }
@@ -223,6 +225,7 @@ class FormController
         DataSourceConnection $db,
         ?ConfigRuntime $config,
         string $modulesBasePath,
+        string $language = 'en',
     ): FormDefinition {
         // 1. PHP class from registry
         $tableForm = $formRegistry->createForm($table, $db, $config);
@@ -235,7 +238,7 @@ class FormController
         $jsoncPath = $this->findJsoncFormPath($table, $modulesBasePath);
         if ($jsoncPath !== null) {
             $loader = new JsoncFormLoader();
-            return $loader->load($jsoncPath, $def, $config, $table);
+            return $loader->load($jsoncPath, $def, $config, $table, $language);
         }
 
         // 3. Auto-generate from TableDefinition

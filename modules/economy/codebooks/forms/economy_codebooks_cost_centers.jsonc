@@ -1,16 +1,22 @@
 {
     "title": "Středisko",
+    "title:cs": "Středisko",
+    "title:en": "Cost center",
     "titleNew": "Nové středisko",
+    "titleNew:cs": "Nové středisko",
+    "titleNew:en": "New cost center",
     "fullSize": false,
     "tabs": [
         {
             "id": "basic",
             "label": "Středisko",
+            "label:cs": "Středisko",
+            "label:en": "Cost center",
             "elements": [
                 {"type": "input", "column": "code", "cols": 1, "required": true},
                 {"type": "input", "column": "name", "cols": 3, "required": true},
 
-                {"type": "separator", "label": "Nastavení"},
+                {"type": "separator", "label": "Nastavení", "label:cs": "Nastavení", "label:en": "Settings"},
                 {"type": "input", "column": "sort_order", "cols": 1},
                 {"type": "input", "column": "valid_from", "cols": 1},
                 {"type": "input", "column": "valid_to", "cols": 1}

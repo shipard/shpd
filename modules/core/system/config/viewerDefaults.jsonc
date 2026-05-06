@@ -1,0 +1,27 @@
+{
+    // core.system.viewerDefaults
+    //
+    // Default labels for toolbar actions in TableViewer::getToolbarActions().
+    // Per-viewer overrides live in their own modules' config/ (e.g.
+    // core.mail.viewerDefaults for IncomingMessagesViewer "Nová zpráva" /
+    // "Reanalyze").
+    //
+    // Keep keys aligned with the action `id` returned by getToolbarActions —
+    // the base implementation reads `toolbarActions.<id>.name` for the label.
+    // The bare `name` is the fallback for languages without a `name:lang` variant.
+
+    "toolbarActions": {
+        "create": {
+            "name": "Add",
+            "name:cs": "Přidat",
+            "name:en": "Add",
+            "variant": "primary"
+        },
+        "edit": {
+            "name": "Open",
+            "name:cs": "Otevřít",
+            "name:en": "Open",
+            "variant": "secondary"
+        }
+    }
+}

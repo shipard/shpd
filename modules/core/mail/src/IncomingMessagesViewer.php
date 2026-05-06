@@ -160,35 +160,35 @@ class IncomingMessagesViewer extends TableViewer
         // Tab 1 — Obsah
         $tabs[] = [
             'id'      => 'content',
-            'label'   => 'Obsah',
+            'label'   => $this->detailTabLabel('core.mail.viewerDetailLabels', 'content', 'Content'),
             'content' => $this->buildContentTab($record),
         ];
 
         // Tab 2 — Přílohy (obsahové, s vyloučením raw .eml)
         $tabs[] = [
             'id'      => 'attachments',
-            'label'   => 'Přílohy',
+            'label'   => $this->detailTabLabel('core.mail.viewerDetailLabels', 'attachments', 'Attachments'),
             'content' => $this->buildAttachmentsTab($record),
         ];
 
         // Tab 3 — Analýzy
         $tabs[] = [
             'id'      => 'analyses',
-            'label'   => 'Analýzy',
+            'label'   => $this->detailTabLabel('core.mail.viewerDetailLabels', 'analyses', 'Analyses'),
             'content' => $this->buildAnalysesTab((int) $record['id']),
         ];
 
         // Tab 4 — Extrahované dokumenty (Fáze 3a)
         $tabs[] = [
             'id'      => 'extracted',
-            'label'   => 'Extrahované dokumenty',
+            'label'   => $this->detailTabLabel('core.mail.viewerDetailLabels', 'extractedDocuments', 'Extracted documents'),
             'content' => $this->buildExtractedDocumentsTab((int) $record['id']),
         ];
 
         // Tab 5 — Originál (raw .eml)
         $tabs[] = [
             'id'      => 'raw',
-            'label'   => 'Originál',
+            'label'   => $this->detailTabLabel('core.mail.viewerDetailLabels', 'original', 'Original'),
             'content' => $this->buildRawSourceTab($record),
         ];
 
@@ -197,45 +197,54 @@ class IncomingMessagesViewer extends TableViewer
 
     public function getToolbarActions(?array $selectedRow): array
     {
-        $actions = [
-            ['id' => 'create', 'label' => 'Nová zpráva', 'variant' => 'primary'],
-        ];
+        // Start from the base — gives localized create/edit. Then we override
+        // create's label with the mail-specific "New message" / "Nová zpráva"
+        // and append reanalyze when the message is in an analyzable state.
+        $actions = parent::getToolbarActions($selectedRow);
 
-        if ($selectedRow !== null) {
-            array_splice($actions, 1, 0, [
-                ['id' => 'edit', 'label' => 'Otevřít', 'variant' => 'secondary'],
-            ]);
+        $mailDefs = ($this->config?->cfgItem('core.mail.viewerDefaults') ?? [])['toolbarActions'] ?? [];
 
-            // Spec §5.3 — "Znova analyzovat" je viditelné jen když docState ∈ {30, 70}.
-            $docState = (int) ($selectedRow['docState'] ?? 0);
-            if ($docState === 30 || $docState === 70) {
-                // Inject seznam aktivních profilů → frontend dropdown bez další API
-                // round-trip. Spec §5.3 chce dropdown s profily, ne číselné ID.
-                $profiles = $this->db->fetchAll(
-                    'SELECT `id`, `profile_id`, `name` FROM `core_mail_ai_profiles`'
-                    . ' WHERE `is_active` = %i ORDER BY `is_default` DESC, `name` ASC',
-                    1,
-                );
-                $profileOptions = [];
-                foreach ($profiles as $p) {
-                    $profileOptions[] = [
-                        'ndx' => (int) $p['id'],
-                        'profile_id' => (string) $p['profile_id'],
-                        'name' => (string) $p['name'],
-                    ];
-                }
-
-                $actions[] = [
-                    'id' => 'reanalyze',
-                    'label' => 'Znova analyzovat',
-                    'variant' => 'secondary',
-                    'meta' => [
-                        'messageNdx' => (int) $selectedRow['id'],
-                        'profiles' => $profileOptions,
-                    ],
-                ];
-            }
+        if (isset($mailDefs['create']) && isset($actions[0]) && $actions[0]['id'] === 'create') {
+            $actions[0]['label']   = $mailDefs['create']['name']    ?? $actions[0]['label'];
+            $actions[0]['variant'] = $mailDefs['create']['variant'] ?? $actions[0]['variant'];
         }
+
+        if ($selectedRow === null) {
+            return $actions;
+        }
+
+        // Spec §5.3 — "Znova analyzovat" je viditelné jen když docState ∈ {30, 70}.
+        $docState = (int) ($selectedRow['docState'] ?? 0);
+        if ($docState !== 30 && $docState !== 70) {
+            return $actions;
+        }
+
+        // Inject seznam aktivních profilů → frontend dropdown bez další API
+        // round-trip. Spec §5.3 chce dropdown s profily, ne číselné ID.
+        $profiles = $this->db->fetchAll(
+            'SELECT `id`, `profile_id`, `name` FROM `core_mail_ai_profiles`'
+            . ' WHERE `is_active` = %i ORDER BY `is_default` DESC, `name` ASC',
+            1,
+        );
+        $profileOptions = [];
+        foreach ($profiles as $p) {
+            $profileOptions[] = [
+                'ndx' => (int) $p['id'],
+                'profile_id' => (string) $p['profile_id'],
+                'name' => (string) $p['name'],
+            ];
+        }
+
+        $reanalyzeDef = $mailDefs['reanalyze'] ?? ['name' => 'Reanalyze', 'variant' => 'secondary'];
+        $actions[] = [
+            'id'      => 'reanalyze',
+            'label'   => $reanalyzeDef['name']    ?? 'Reanalyze',
+            'variant' => $reanalyzeDef['variant'] ?? 'secondary',
+            'meta' => [
+                'messageNdx' => (int) $selectedRow['id'],
+                'profiles' => $profileOptions,
+            ],
+        ];
 
         return $actions;
     }

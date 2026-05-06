@@ -1,17 +1,23 @@
 {
     "title": "Adresa",
+    "title:cs": "Adresa",
+    "title:en": "Address",
     "titleNew": "Nová adresa",
+    "titleNew:cs": "Nová adresa",
+    "titleNew:en": "New address",
     "fullSize": false,
 
     "tabs": [
         {
             "id": "address",
             "label": "Adresa",
+            "label:cs": "Adresa",
+            "label:en": "Address",
             "elements": [
                 {"type": "select", "column": "address_type", "cols": 1},
                 {"type": "input", "column": "name", "cols": 2},
 
-                {"type": "separator", "label": "Adresa"},
+                {"type": "separator", "label": "Adresa", "label:cs": "Adresa", "label:en": "Address"},
                 {"type": "input", "column": "street", "cols": 2},
                 {"type": "input", "column": "house_number", "cols": 1},
                 {"type": "input", "column": "orientation_number", "cols": 1},
@@ -20,7 +26,7 @@
                 {"type": "input", "column": "zip", "cols": 1},
                 {"type": "input", "column": "country", "cols": 1},
 
-                {"type": "separator", "label": "Platnost"},
+                {"type": "separator", "label": "Platnost", "label:cs": "Platnost", "label:en": "Validity"},
                 {"type": "input", "column": "valid_from", "cols": 1},
                 {"type": "input", "column": "valid_to", "cols": 1},
                 {"type": "input", "column": "order_pos", "cols": 1},
@@ -30,11 +36,13 @@
         {
             "id": "detail",
             "label": "Upřesnění",
+            "label:cs": "Upřesnění",
+            "label:en": "Details",
             "elements": [
                 {"type": "select", "column": "place_reg_type", "cols": 1},
                 {"type": "input", "column": "place_reg_id", "cols": 1},
 
-                {"type": "separator", "label": "Geolokace"},
+                {"type": "separator", "label": "Geolokace", "label:cs": "Geolokace", "label:en": "Geolocation"},
                 {"type": "input", "column": "latitude", "cols": 1},
                 {"type": "input", "column": "longitude", "cols": 1},
                 {"type": "input", "column": "manual_gps", "cols": 1},

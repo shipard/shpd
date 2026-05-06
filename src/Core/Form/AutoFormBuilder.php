@@ -36,7 +36,8 @@ class AutoFormBuilder
         $tabs = [];
 
         if (isset($grouped['__general__'])) {
-            $tabs[] = $this->buildTab('general', 'Obecné', $grouped['__general__'], $config);
+            $generalLabel = $this->resolveGeneralTabLabel($config);
+            $tabs[] = $this->buildTab('general', $generalLabel, $grouped['__general__'], $config);
         }
 
         foreach ($groupOrder as $groupId) {
@@ -61,6 +62,15 @@ class AutoFormBuilder
             titleNew: $tableDef->name,
             tabs: $tabs,
         );
+    }
+
+    private function resolveGeneralTabLabel(?ConfigRuntime $config): string
+    {
+        // Fallback English when the cfgItem is missing — e.g. config not yet
+        // compiled. ConfigLocalizer reduces `name`/`name:cs`/`name:en` to a
+        // single localized `name` at compile time.
+        $defaults = $config?->cfgItem('core.system.formDefaults');
+        return $defaults['generalTabLabel']['name'] ?? 'General';
     }
 
     /** @param ColumnDefinition[] $columns */

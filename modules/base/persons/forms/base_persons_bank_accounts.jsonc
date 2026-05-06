@@ -1,12 +1,18 @@
 {
     "title": "Bankovní účet",
+    "title:cs": "Bankovní účet",
+    "title:en": "Bank account",
     "titleNew": "Nový bankovní účet",
+    "titleNew:cs": "Nový bankovní účet",
+    "titleNew:en": "New bank account",
     "fullSize": false,
 
     "tabs": [
         {
             "id": "basic",
             "label": "Bankovní účet",
+            "label:cs": "Bankovní účet",
+            "label:en": "Bank account",
             "elements": [
                 {"type": "input", "column": "name", "cols": 2},
                 {"type": "input", "column": "account_number", "cols": 2, "required": true},

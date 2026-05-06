@@ -82,6 +82,14 @@
         {
             "id": "core.mail.extractedDocTypes",
             "file": "config/extractedDocTypes.jsonc"
+        },
+        {
+            "id": "core.mail.viewerDetailLabels",
+            "file": "config/viewerDetailLabels.jsonc"
+        },
+        {
+            "id": "core.mail.viewerDefaults",
+            "file": "config/viewerDefaults.jsonc"
         }
     ]
 }

@@ -1,12 +1,18 @@
 {
     "title": "Kontakt",
+    "title:cs": "Kontakt",
+    "title:en": "Contact",
     "titleNew": "Nový kontakt",
+    "titleNew:cs": "Nový kontakt",
+    "titleNew:en": "New contact",
     "fullSize": false,
 
     "tabs": [
         {
             "id": "basic",
             "label": "Kontakt",
+            "label:cs": "Kontakt",
+            "label:en": "Contact",
             "elements": [
                 {"type": "input", "column": "name", "cols": 2, "required": true},
                 {"type": "input", "column": "role", "cols": 2},

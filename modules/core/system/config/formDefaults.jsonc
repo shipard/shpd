@@ -1,0 +1,13 @@
+{
+    // core.system.formDefaults
+    //
+    // Defaults consumed by AutoFormBuilder when a table has no explicit
+    // forms/{table}.jsonc. Currently just the label for the synthetic
+    // "general" tab that holds columns without an explicit group.
+
+    "generalTabLabel": {
+        "name": "General",
+        "name:cs": "Obecné",
+        "name:en": "General"
+    }
+}

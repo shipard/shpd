@@ -1,0 +1,19 @@
+{
+    // base.persons.viewerDetailLabels
+    //
+    // Detail-tab labels for PersonsViewer. The shared "overview" tab lives
+    // in core.system.viewerDetailLabels.
+
+    "tabs": {
+        "contacts": {
+            "name": "Contacts",
+            "name:cs": "Kontakty",
+            "name:en": "Contacts"
+        },
+        "addresses": {
+            "name": "Addresses",
+            "name:cs": "Adresy",
+            "name:en": "Addresses"
+        }
+    }
+}

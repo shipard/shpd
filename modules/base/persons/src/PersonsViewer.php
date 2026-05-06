@@ -131,7 +131,7 @@ class PersonsViewer extends TableViewer
 		// Tab 1: Overview
 		$tabs[] = [
 			'id'      => 'overview',
-			'label'   => 'Přehled',
+			'label'   => $this->defaultOverviewLabel(),
 			'content' => $this->buildOverviewContent($record),
 		];
 
@@ -142,7 +142,7 @@ class PersonsViewer extends TableViewer
 		);
 		$tabs[] = [
 			'id'    => 'contacts',
-			'label' => 'Kontakty',
+			'label' => $this->detailTabLabel('base.persons.viewerDetailLabels', 'contacts', 'Contacts'),
 			'content' => [
 				'type'    => 'table',
 				'columns' => [
@@ -162,7 +162,7 @@ class PersonsViewer extends TableViewer
 		);
 		$tabs[] = [
 			'id'    => 'addresses',
-			'label' => 'Adresy',
+			'label' => $this->detailTabLabel('base.persons.viewerDetailLabels', 'addresses', 'Addresses'),
 			'content' => [
 				'type'    => 'table',
 				'columns' => [
@@ -174,19 +174,6 @@ class PersonsViewer extends TableViewer
 		];
 
 		return ['tabs' => $tabs];
-	}
-
-	public function getToolbarActions(?array $selectedRow): array
-	{
-		$actions = [
-			['id' => 'create', 'label' => 'Přidat', 'variant' => 'primary'],
-		];
-
-		if ($selectedRow !== null) {
-			$actions[] = ['id' => 'edit', 'label' => 'Otevřít', 'variant' => 'secondary'];
-		}
-
-		return $actions;
 	}
 
 	// -------------------------------------------------------------------------

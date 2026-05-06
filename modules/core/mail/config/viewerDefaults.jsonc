@@ -1,0 +1,23 @@
+{
+    // core.mail.viewerDefaults
+    //
+    // Mail-specific overrides for toolbar actions. IncomingMessagesViewer
+    // renames the default "create" to "New message" and adds a custom
+    // "reanalyze" action. The default "edit" is reused from
+    // core.system.viewerDefaults (no override needed).
+
+    "toolbarActions": {
+        "create": {
+            "name": "New message",
+            "name:cs": "Nová zpráva",
+            "name:en": "New message",
+            "variant": "primary"
+        },
+        "reanalyze": {
+            "name": "Reanalyze",
+            "name:cs": "Znova analyzovat",
+            "name:en": "Reanalyze",
+            "variant": "secondary"
+        }
+    }
+}

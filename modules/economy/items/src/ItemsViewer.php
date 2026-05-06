@@ -172,7 +172,7 @@ class ItemsViewer extends TableViewer
         return [
             'tabs' => [[
                 'id'      => 'overview',
-                'label'   => 'Přehled',
+                'label'   => $this->defaultOverviewLabel(),
                 'content' => ['type' => 'properties', 'groups' => $groups],
             ]],
         ];

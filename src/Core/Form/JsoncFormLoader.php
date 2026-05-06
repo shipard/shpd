@@ -7,13 +7,24 @@ namespace Shipard\Core\Form;
 use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Database\ColumnDefinition;
 use Shipard\Core\Database\TableDefinition;
+use Shipard\Core\I18n\ConfigLocalizer;
 use Shipard\Core\Utils\JsoncParser;
 
 class JsoncFormLoader
 {
-    public function load(string $jsonPath, TableDefinition $tableDef, ?ConfigRuntime $config = null, string $tableId = ''): FormDefinition
-    {
+    public function load(
+        string $jsonPath,
+        TableDefinition $tableDef,
+        ?ConfigRuntime $config = null,
+        string $tableId = '',
+        string $language = 'en',
+    ): FormDefinition {
         $data = JsoncParser::parseFile($jsonPath);
+
+        // Reduce `field:cs`/`field:en` variants to a single `field` per the
+        // requested language. Recurses into tabs[].label, elements[].label
+        // (separators), elements[].placeholder, etc.
+        $data = ConfigLocalizer::localize($data, $language);
 
         $colMap = [];
         foreach ($tableDef->columns as $col) {

@@ -118,24 +118,11 @@ class WarehousesViewer extends TableViewer
             'tabs' => [
                 [
                     'id'      => 'overview',
-                    'label'   => 'Přehled',
+                    'label'   => $this->defaultOverviewLabel(),
                     'content' => $this->buildOverviewContent($record),
                 ],
             ],
         ];
-    }
-
-    public function getToolbarActions(?array $selectedRow): array
-    {
-        $actions = [
-            ['id' => 'create', 'label' => 'Přidat', 'variant' => 'primary'],
-        ];
-
-        if ($selectedRow !== null) {
-            $actions[] = ['id' => 'edit', 'label' => 'Otevřít', 'variant' => 'secondary'];
-        }
-
-        return $actions;
     }
 
     private function buildOverviewContent(array $record): array

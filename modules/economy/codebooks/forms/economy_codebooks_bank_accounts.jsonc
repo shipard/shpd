@@ -1,25 +1,31 @@
 {
     "title": "Bankovní spojení",
+    "title:cs": "Bankovní spojení",
+    "title:en": "Bank account",
     "titleNew": "Nové bankovní spojení",
+    "titleNew:cs": "Nové bankovní spojení",
+    "titleNew:en": "New bank account",
     "fullSize": false,
 
     "tabs": [
         {
             "id": "basic",
             "label": "Účet",
+            "label:cs": "Účet",
+            "label:en": "Account",
             "elements": [
                 {"type": "input", "column": "code", "cols": 1, "required": true},
                 {"type": "input", "column": "name", "cols": 2, "required": true},
                 {"type": "input", "column": "currency", "cols": 1, "required": true},
                 {"type": "input", "column": "notice", "cols": 4},
 
-                {"type": "separator", "label": "Bankovní údaje"},
+                {"type": "separator", "label": "Bankovní údaje", "label:cs": "Bankovní údaje", "label:en": "Bank details"},
                 {"type": "input", "column": "bank_name", "cols": 2},
                 {"type": "input", "column": "account_number", "cols": 2},
                 {"type": "input", "column": "iban", "cols": 2},
                 {"type": "input", "column": "bic", "cols": 2},
 
-                {"type": "separator", "label": "Nastavení"},
+                {"type": "separator", "label": "Nastavení", "label:cs": "Nastavení", "label:en": "Settings"},
                 {"type": "input", "column": "is_default", "cols": 1},
                 {"type": "input", "column": "sort_order", "cols": 1},
                 {"type": "input", "column": "valid_from", "cols": 1},

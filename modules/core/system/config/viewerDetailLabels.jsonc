@@ -1,0 +1,15 @@
+{
+    // core.system.viewerDetailLabels
+    //
+    // Shared detail-tab labels for the right-hand detail panel that almost
+    // every viewer renders. Module-specific tabs (e.g. mail "Content",
+    // persons "Contacts") live in their respective modules' viewerDetailLabels.
+
+    "tabs": {
+        "overview": {
+            "name": "Overview",
+            "name:cs": "Přehled",
+            "name:en": "Overview"
+        }
+    }
+}

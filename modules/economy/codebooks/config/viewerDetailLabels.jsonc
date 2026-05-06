@@ -1,0 +1,20 @@
+{
+    // economy.codebooks.viewerDetailLabels
+    //
+    // Detail-tab labels specific to codebook viewers (months under fiscal
+    // year, VAT periods under registration). The shared "overview" tab
+    // lives in core.system.viewerDetailLabels.
+
+    "tabs": {
+        "months": {
+            "name": "Months",
+            "name:cs": "Měsíce",
+            "name:en": "Months"
+        },
+        "vatPeriods": {
+            "name": "VAT periods",
+            "name:cs": "Období DPH",
+            "name:en": "VAT periods"
+        }
+    }
+}

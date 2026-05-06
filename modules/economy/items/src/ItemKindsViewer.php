@@ -119,7 +119,7 @@ class ItemKindsViewer extends TableViewer
 
         $tabs = [[
             'id'      => 'overview',
-            'label'   => 'Přehled',
+            'label'   => $this->defaultOverviewLabel(),
             'content' => [
                 'type'   => 'properties',
                 'groups' => [['title' => 'Druh položky', 'items' => $items]],
@@ -141,7 +141,7 @@ class ItemKindsViewer extends TableViewer
             }
             $tabs[] = [
                 'id'      => 'items',
-                'label'   => 'Položky',
+                'label'   => $this->detailTabLabel('economy.items.viewerDetailLabels', 'items', 'Items'),
                 'content' => [
                     'type'    => 'table',
                     'columns' => [

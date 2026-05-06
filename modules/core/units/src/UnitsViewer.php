@@ -135,7 +135,7 @@ class UnitsViewer extends TableViewer
         return [
             'tabs' => [[
                 'id'      => 'overview',
-                'label'   => 'Přehled',
+                'label'   => $this->defaultOverviewLabel(),
                 'content' => [
                     'type'   => 'properties',
                     'groups' => [['title' => 'Měrná jednotka', 'items' => $items]],

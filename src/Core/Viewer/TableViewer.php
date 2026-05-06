@@ -155,19 +155,31 @@ abstract class TableViewer
     /**
      * Toolbar actions. Changes based on whether a row is selected.
      *
+     * Labels come from `core.system.viewerDefaults.toolbarActions.<id>.name`,
+     * already localized by ConfigLocalizer at compile time. English fallbacks
+     * apply when the cfgItem is missing (e.g. config not yet compiled).
+     *
      * @param array|null $selectedRow null if no row selected
      * @return array [{id: string, label: string, icon?: string, variant?: string}]
      */
     public function getToolbarActions(?array $selectedRow): array
     {
-        $actions = [
-            ['id' => 'create', 'label' => 'Add', 'variant' => 'primary'],
-        ];
+        $defs = ($this->config?->cfgItem('core.system.viewerDefaults') ?? [])['toolbarActions'] ?? [];
+
+        $createDef = $defs['create'] ?? ['name' => 'Add', 'variant' => 'primary'];
+        $actions = [[
+            'id'      => 'create',
+            'label'   => $createDef['name'] ?? 'Add',
+            'variant' => $createDef['variant'] ?? 'primary',
+        ]];
 
         if ($selectedRow !== null) {
-            array_splice($actions, 1, 0, [
-                ['id' => 'edit', 'label' => 'Open', 'variant' => 'secondary'],
-            ]);
+            $editDef = $defs['edit'] ?? ['name' => 'Open', 'variant' => 'secondary'];
+            $actions[] = [
+                'id'      => 'edit',
+                'label'   => $editDef['name'] ?? 'Open',
+                'variant' => $editDef['variant'] ?? 'secondary',
+            ];
         }
 
         return $actions;
@@ -181,6 +193,31 @@ abstract class TableViewer
     public function getFilters(): array
     {
         return [];
+    }
+
+    /**
+     * Look up a localized detail-tab label from a cfgItem of shape
+     * `{tabs: {<key>: {name: "..."}}}`. The compiled config already holds
+     * the language-resolved `name` thanks to ConfigLocalizer.
+     *
+     * Subclasses use this in renderDetail() instead of hardcoding labels —
+     * fall back to the supplied English string when the cfgItem is missing
+     * (e.g. config not yet compiled).
+     */
+    protected function detailTabLabel(string $cfgItemId, string $key, string $englishFallback): string
+    {
+        $defs = ($this->config?->cfgItem($cfgItemId) ?? [])['tabs'] ?? [];
+        return $defs[$key]['name'] ?? $englishFallback;
+    }
+
+    /**
+     * Shortcut for the most common case — the "Overview" tab shared by
+     * almost every viewer's detail panel. Lives in core.system so all
+     * modules pick up the same translation.
+     */
+    protected function defaultOverviewLabel(): string
+    {
+        return $this->detailTabLabel('core.system.viewerDetailLabels', 'overview', 'Overview');
     }
 
     /**

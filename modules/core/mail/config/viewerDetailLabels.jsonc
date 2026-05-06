@@ -1,0 +1,34 @@
+{
+    // core.mail.viewerDetailLabels
+    //
+    // Detail-tab labels for IncomingMessagesViewer. No shared "overview" —
+    // mail uses Content / Attachments / Analyses / Extracted / Original.
+
+    "tabs": {
+        "content": {
+            "name": "Content",
+            "name:cs": "Obsah",
+            "name:en": "Content"
+        },
+        "attachments": {
+            "name": "Attachments",
+            "name:cs": "Přílohy",
+            "name:en": "Attachments"
+        },
+        "analyses": {
+            "name": "Analyses",
+            "name:cs": "Analýzy",
+            "name:en": "Analyses"
+        },
+        "extractedDocuments": {
+            "name": "Extracted documents",
+            "name:cs": "Extrahované dokumenty",
+            "name:en": "Extracted documents"
+        },
+        "original": {
+            "name": "Original",
+            "name:cs": "Originál",
+            "name:en": "Original"
+        }
+    }
+}

@@ -160,6 +160,10 @@
         {
             "id": "economy.codebooks.vatPeriodKinds",
             "file": "config/vatPeriodKinds.jsonc"
+        },
+        {
+            "id": "economy.codebooks.viewerDetailLabels",
+            "file": "config/viewerDetailLabels.jsonc"
         }
     ]
 }

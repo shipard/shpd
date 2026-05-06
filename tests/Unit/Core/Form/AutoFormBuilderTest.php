@@ -75,7 +75,8 @@ class AutoFormBuilderTest extends TestCase
 
         $this->assertCount(1, $result->tabs);
         $this->assertSame('general', $result->tabs[0]->id);
-        $this->assertSame('Obecné', $result->tabs[0]->label);
+        // English fallback when no config is provided — i18n cfgItem is missing.
+        $this->assertSame('General', $result->tabs[0]->label);
         $this->assertCount(2, $result->tabs[0]->elements);
     }
 
@@ -246,15 +247,18 @@ class AutoFormBuilderTest extends TestCase
             ],
         );
 
-        // Mock ConfigRuntime
+        // Mock ConfigRuntime — also serves the i18n general-tab label key
+        // that AutoFormBuilder reads via core.system.formDefaults.
         $config = $this->createMock(ConfigRuntime::class);
         $config->method('cfgItem')
-            ->with('base.persons.personTypes')
-            ->willReturn([
-                '0' => ['name' => 'Undefined'],
-                '1' => ['name' => 'Person'],
-                '2' => ['name' => 'Company'],
-            ]);
+            ->willReturnCallback(fn(string $id) => match ($id) {
+                'base.persons.personTypes' => [
+                    '0' => ['name' => 'Undefined'],
+                    '1' => ['name' => 'Person'],
+                    '2' => ['name' => 'Company'],
+                ],
+                default => null,
+            });
 
         $builder = new AutoFormBuilder();
         $result = $builder->build($def, $config);

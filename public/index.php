@@ -55,7 +55,7 @@ try {
 	$resolved = $resolver->resolve($request->getHost(), $request->getPath());
 
 	// ── 4. Load table definitions (localized) ─────────────────────────────────
-	$language        = resolveLanguage($request);
+	$language        = resolveLanguage($request, $resolved->config);
 	$modulesBasePath = dirname(__DIR__) . '/modules';
 	$tables          = TableLoader::load($resolved->config, $modulesBasePath, $language);
 
@@ -140,17 +140,19 @@ try {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function resolveLanguage(Request $request): string
+function resolveLanguage(Request $request, ?\Shipard\Core\Config\DataSourceConfig $config = null): string
 {
+	$fallback = $config?->getDefaultLanguage() ?? 'en';
+
 	$header = $request->getHeader('Accept-Language');
 	if ($header === null) {
-		return 'en';
+		return $fallback;
 	}
 	// Parse first language tag: "cs-CZ,cs;q=0.9,en;q=0.8" → "cs"
 	$first = explode(',', $header)[0];
 	$first = explode(';', $first)[0];
 	$first = explode('-', trim($first))[0];
-	return $first !== '' ? strtolower($first) : 'en';
+	return $first !== '' ? strtolower($first) : $fallback;
 }
 
 function applyAllHeaders(CorsMiddleware $cors, RateLimitMiddleware $rateLimit, Response $response): Response
@@ -185,10 +187,10 @@ function dispatch(
 		'auth'    => dispatchAuth($route->action, $request, $auth, $db),
 		'crud'       => dispatchCrud($route, $request, $tables, $db, $configRuntime),
 		'attachment'  => dispatchAttachment($route, $request, $auth, $tables, $db, $resolved),
-		'meta'    => dispatchMeta($route->action, $route->table, $tables, resolveLanguage($request)),
-		'ui'      => dispatchUi($route->action, $resolved->config, $modulesBasePath, resolveLanguage($request)),
-		'settings' => dispatchSettings($route->action, $resolved->config, $modulesBasePath, resolveLanguage($request), $configRuntime),
-		'form'    => dispatchForm($route, $request, $tables, $db, $formRegistry ?? new FormRegistry(), $configRuntime, $modulesBasePath, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
+		'meta'    => dispatchMeta($route->action, $route->table, $tables, resolveLanguage($request, $resolved->config)),
+		'ui'      => dispatchUi($route->action, $resolved->config, $modulesBasePath, resolveLanguage($request, $resolved->config)),
+		'settings' => dispatchSettings($route->action, $resolved->config, $modulesBasePath, resolveLanguage($request, $resolved->config), $configRuntime),
+		'form'    => dispatchForm($route, $request, $tables, $db, $formRegistry ?? new FormRegistry(), $configRuntime, $modulesBasePath, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), resolveLanguage($request, $resolved->config)),
 		'viewer'  => dispatchViewer($route, $request, $viewerRegistry, $db, $configRuntime),
 		'mail'    => dispatchMail($route, $request, $auth, $tables, $db, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'analysis' => dispatchAnalysis($route, $request, $auth, $tables, $db, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
@@ -357,13 +359,14 @@ function dispatchForm(
 	?\Shipard\Core\Config\ConfigRuntime $configRuntime = null,
 	string $modulesBasePath = '',
 	?\Shipard\Core\Document\DocumentRegistry $documentRegistry = null,
+	string $language = 'en',
 ): Response {
 	$ctrl  = new FormController();
 	$table = $route->table ?? '';
 	return match ($route->action) {
-		'meta'        => $ctrl->meta($table, $route->id, $tables, $db, $formRegistry, $configRuntime, $modulesBasePath),
+		'meta'        => $ctrl->meta($table, $route->id, $tables, $db, $formRegistry, $configRuntime, $modulesBasePath, $language),
 		'save'        => $ctrl->save($table, $route->id, $request, $tables, $db, $configRuntime, $documentRegistry),
-		'recalculate' => $ctrl->recalculate($table, $request, $tables, $db, $formRegistry, $configRuntime, $modulesBasePath),
+		'recalculate' => $ctrl->recalculate($table, $request, $tables, $db, $formRegistry, $configRuntime, $modulesBasePath, $language),
 		default       => Response::error('INTERNAL_ERROR', "Unknown form action: {$route->action}", 500),
 	};
 }

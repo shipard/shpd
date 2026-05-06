@@ -1,12 +1,18 @@
 {
     "title": "Období DPH",
+    "title:cs": "Období DPH",
+    "title:en": "VAT period",
     "titleNew": "Nové období DPH",
+    "titleNew:cs": "Nové období DPH",
+    "titleNew:en": "New VAT period",
     "fullSize": false,
 
     "tabs": [
         {
             "id": "basic",
             "label": "Období",
+            "label:cs": "Období",
+            "label:en": "Period",
             "elements": [
                 {"type": "input", "column": "name", "cols": 2, "required": true},
                 {"type": "input", "column": "date_begin", "cols": 1, "required": true},

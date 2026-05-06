@@ -14,6 +14,7 @@ Technické specifikace projektu Shipard.
 | [frontend.md](frontend.md) | Frontend architektura — Svelte 5, komponenty, viewer systém, ikony, API komunikace |
 | [design-system.md](design-system.md) | Design system — paleta barev, doc-state konvence, badge systém, avatary, CSS proměnné |
 | [documentation.md](documentation.md) | Pravidla pro dokumentaci modulů a tabulek — kde leží README.md, co obsahuje .md k tabulce, vzory |
+| [docs-mvp.md](docs-mvp.md) | **Designový dokument** — specifikace dokladového systému MVP (faktury vydané + přijaté, DPH model, číselné řady, stavy, snapshoty). Transientní — po implementaci přesune do archivu. |
 
 Nginx konfigurace jsou v [`nginx/`](nginx/) (app.conf, development.conf, production.conf).
 

@@ -14,6 +14,33 @@ kódu, věř kódu (kód je živý, task je momentka).
 
 Tasky, které jsou rozpracované nebo na řadě.
 
+### Doklady MVP — faktury vydané a přijaté
+
+Klíčový úkol systému — pořizování dokladů, výpočet DPH, číselné řady,
+stavový životní cyklus, snapshoty fakturačních údajů. Řídícím dokumentem
+celé práce je [`docs/docs-mvp.md`](../docs/docs-mvp.md), který popisuje
+návrh kompletní MVP architektury a rozděluje implementaci do 6 navazujících
+fází.
+
+MVP cílí na **dva typy dokladů** (`invno` faktura vydaná, `invni` faktura
+přijatá), kompletní DPH model pro **CZ** (vč. PDP, EU intracom, dovozu/vývozu),
+číselné řady, snapshot dodavatele/odběratele, polymorfní jádro `docs.core`
++ dvě tenké subclass moduly `docs.invoicesOut` a `docs.invoicesIn`.
+
+| Task                              | Fáze v MVP | Stav     | Závislosti                                          |
+|-----------------------------------|-----------|----------|-----------------------------------------------------|
+| `persons-is-own-extension.md`     | 1         | připrav. | base.persons (existuje)                             |
+| `world-vat-cz.md`                 | 2         | připrav. | world.base, world.trade (existují)                  |
+| `docs-core-phase1.md` (skeleton)  | 3         | TODO     | persons-extension, world.vat, economy.codebooks, items |
+| `docs-core-phase2.md` (výpočty)   | 4         | TODO     | docs-core-phase1                                    |
+| `docs-core-phase3.md` (UI)        | 5         | TODO     | docs-core-phase2                                    |
+| `docs-invoices.md`                | 6         | TODO     | docs-core-phase3                                    |
+
+Fáze 1 (`persons-is-own-extension.md`) a 2 (`world-vat-cz.md`) jsou nezávislé
+a lze je dělat paralelně. Tasky pro fáze 3-6 vzniknou postupně po dokončení
+předchozích — designové detaily se mohou v reakci na zjištění z předchozí fáze
+upravit.
+
 ### Modul `economy.items` + `core.units`
 
 Příprava na dokladový systém — katalog položek, číselník druhů, měrné
@@ -22,11 +49,12 @@ objednávkami.
 
 | Task                       | Stav     | Závislosti                                |
 |----------------------------|----------|-------------------------------------------|
-| `economy-items-phase1.md`  | připrav. | edit-forms (hotové), doc-states (hotové)  |
+| `economy-items-phase1.md`  | hotovo   | edit-forms (hotové), doc-states (hotové)  |
 
 Po dokončení této fáze bude možné začít plánovat samotné doklady (faktury,
 objednávky). V navazujících fázích modulu položek se bude řešit: VAT sazby
-per země a cena s DPH, skladová evidence, ceníkový mechanismus.
+per země a cena s DPH (řeší `world-vat-cz.md`), skladová evidence,
+ceníkový mechanismus.
 
 ---
 

@@ -472,6 +472,35 @@ Pro jednoduché formuláře bez business logiky.
 
 Labely a typy inputů se doplní z TableDefinition pokud chybí.
 
+### Vícejazyčnost v JSONC
+
+`title`, `titleNew`, `tabs[].label` a inline `label` u `separator` elementů podporují jazykové varianty `:cs` / `:en`. `JsoncFormLoader::load()` aplikuje `ConfigLocalizer::localize($data, $language)` rekurzivně, takže `field:lang` varianty se redukují na holé `field` podle požadovaného jazyka. Holé pole (bez `:lang` suffixu) je povinný fallback.
+
+```jsonc
+{
+    "title": "Kontakt",
+    "title:cs": "Kontakt",
+    "title:en": "Contact",
+    "titleNew": "Nový kontakt",
+    "titleNew:cs": "Nový kontakt",
+    "titleNew:en": "New contact",
+    "tabs": [
+        {
+            "id": "basic",
+            "label": "Kontakt",
+            "label:cs": "Kontakt",
+            "label:en": "Contact",
+            "elements": [
+                {"type": "input", "column": "name", "cols": 2, "required": true},
+                {"type": "separator", "label": "Adresa", "label:cs": "Adresa", "label:en": "Address"}
+            ]
+        }
+    ]
+}
+```
+
+`AutoFormBuilder` (fallback pro tabulky bez vlastního `forms/{table}.jsonc`) čte label syntetického „General" tabu z cfgItem `core.system.formDefaults.generalTabLabel.name`. Pokud config není zkompilovaný, použije se anglický fallback `'General'`.
+
 ### Priorita výběru formuláře
 
 1. PHP třída registrovaná v `module.jsonc` → `forms[].class`

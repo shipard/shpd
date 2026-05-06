@@ -214,7 +214,7 @@ $vatRates = $config->cfgItem('economy.docs.vatRates');
 
 ### Výchozí jazyk
 
-V `config/main.json` zdroje dat bude nastavení výchozího jazyka:
+V `config/main.json` zdroje dat se nastavuje výchozí jazyk volitelným polem `defaultLanguage` (ISO 639-1, lowercase):
 
 ```json
 {
@@ -225,7 +225,9 @@ V `config/main.json` zdroje dat bude nastavení výchozího jazyka:
 }
 ```
 
-Výchozí jazyk se použije, pokud informace o jazyce uživatele chybí (nepřihlášený uživatel, API volání bez jazykového kontextu atd.).
+Výchozí jazyk se použije jako fallback, pokud informace o jazyce uživatele chybí (chybějící hlavička `Accept-Language`, API volání bez jazykového kontextu atd.).
+
+Backend čte volbu z `Accept-Language`. Pokud hlavička chybí, použije se `DataSourceConfig::getDefaultLanguage()` — vrací hodnotu z `main.json`, fallback `'en'` když pole chybí. Frontend odesílá `Accept-Language: {language.current}` z `language` storu (viz `docs/frontend.md` sekce *Internacionalizace*).
 
 ---
 

@@ -126,6 +126,31 @@ Závislosti tečou shora dolů: Command → Document → Module/Config/Database 
   mají v JSONC definici `"hideFromNavigation": true` — nezobrazují se ani v hlavním
   sidebaru, ani v Nastavení
 
+### Frontend — Vícejazyčnost
+
+- Language store: `frontend/src/stores/language.svelte.js` (mode `cs` / `en` / `auto`)
+- Slovníky: `frontend/src/i18n/{cs,en}.js` — ploché objekty, tečková notace klíčů
+- Helper `t(key, params?)` přes ICU MessageFormat (`intl-messageformat`), import z `i18n/index.js`
+- Volba per-zařízení (localStorage `shpd_language`), `setMode()` reloadne stránku
+- Anti-flash bootstrap v `frontend/index.html` nastavuje `<html lang>` před prvním renderem
+- Backend dostává volbu přes `Accept-Language` header v `api/client.js`
+- Lint: `cd frontend && npm run check:i18n` — kontroluje paritu klíčů cs ↔ en
+- Mapování chybových kódů: `frontend/src/i18n/errors.js` `translateError(error)` přeloží `error.code` přes klíče `error.<CODE>`, fallback na server `error.message`
+
+### Backend — Vícejazyčnost server-driven labels
+
+Lokalizace UI textů, které generuje backend (toolbar tlačítka, taby formulářů, taby detailu vieweru), jde **přes cfgItems v jsonc, ne přes hardcoded stringy v PHP**:
+
+- **Toolbar default** (`Add`/`Open`): `core.system.viewerDefaults.toolbarActions` — `TableViewer::getToolbarActions()` z cfgItem; module overrides v `core.mail.viewerDefaults` apod.
+- **AutoFormBuilder General tab**: `core.system.formDefaults.generalTabLabel`
+- **Detail taby vieweru**: `*.viewerDetailLabels.tabs.*` per-modul (`core.system` má sdílený `overview`, ostatní moduly mají specifické klíče). Helper `TableViewer::detailTabLabel()` / `defaultOverviewLabel()`
+- **JSONC form titulky/taby**: `JsoncFormLoader::load($lang)` aplikuje `ConfigLocalizer::localize()` rekurzivně na `:cs`/`:en` varianty v `title`, `titleNew`, `tabs[].label`, `elements[].label` (separátory)
+- **Fallback při chybějícím compiled configu**: anglický řetězec přímo v PHP — lokalizace funguje degradovaně, ne crash
+
+`DataSourceConfig::getDefaultLanguage()` čte volitelné pole `defaultLanguage` z `config/main.json` (default `'en'`); `resolveLanguage()` v `public/index.php` ho použije jako fallback když chybí `Accept-Language`.
+
+Po přidání nové cfgItem registrace v `module.jsonc` je nutný **`vendor/bin/shpd-ds ds-upgrade`** v dev DS, aby se cfgItem dostala do `compiled.{cs,en}.json`.
+
 ## Příkazy pro vývoj
 
 ```bash

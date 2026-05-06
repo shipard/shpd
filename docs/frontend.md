@@ -652,7 +652,234 @@ volá `applyToDocument` opětovně.
 
 ---
 
-## 12. Budoucí rozšíření
+## 12. Internacionalizace (i18n)
+
+Aplikace podporuje češtinu a angličtinu, výběr per-zařízení (volba se ukládá
+do localStorage, ne na uživatele). Přihlášený uživatel přepíná v patce
+sidebaru pod přepínačem vzhledu, nepřihlášený přímo na LoginScreen
+v patce karty. Výběr má tři hodnoty: `cs`, `en`, `auto` (auto čte
+`navigator.language`).
+
+> **Pokrytí:** UI chrome komponent (sidebar, viewer, formuláře, browser,
+> login, modaly) i server-driven labels (toolbar tlačítka, taby formulářů,
+> taby detailu, titulky modulů) jsou lokalizované. Backend čte
+> `Accept-Language` a vrací data ve zvoleném jazyce přes cfgItem
+> mechanismus (viz níže *Pokrytí a co se nepřekládá v `t()`*). Validační
+> chybové kódy mapuje frontend přes `i18n/errors.js` `translateError()`
+> na lokalizovaný text, neznámé kódy fallback na server `message`.
+
+### Soubory
+
+| Soubor | Co dělá |
+|---|---|
+| `frontend/src/stores/language.svelte.js` | Store s `mode`, `current`, `setMode()`, helpery `t()` / `tn()`, ICU formatter cache |
+| `frontend/src/i18n/cs.js`, `en.js` | Ploché slovníky s tečkovou notací klíčů |
+| `frontend/src/i18n/index.js` | Barrel export — komponenty importují odsud |
+| `frontend/index.html` | Inline `<script>` bootstrap — nastavuje `<html lang>` před prvním renderem |
+| `frontend/src/api/client.js` | Posílá `Accept-Language: {language.current}` v každém requestu |
+| `frontend/scripts/check-i18n.mjs` | Lint — detekuje chybějící klíče mezi cs a en (`npm run check:i18n`) |
+| `frontend/src/components/layout/Sidebar.svelte` | UI přepínač v dropdownu patky (přihlášený uživatel) |
+| `frontend/src/components/auth/LoginScreen.svelte` | Native `<select>` přepínač v patce login karty (nepřihlášený) |
+
+### Režimy
+
+- `'cs'` / `'en'` — force daný jazyk
+- `'auto'` — vezme z `navigator.language` (první 2 znaky), pokud to není
+  `cs` / `en`, fallback `en`
+
+Default pro nové uživatele: `'auto'`.
+
+### localStorage
+
+Volba se persistuje pod klíčem `shpd_language`. Hodnoty: `'cs'`, `'en'`,
+`'auto'`. **Stejný klíč čte i bootstrap script** v `index.html` — pokud
+měníš klíč nebo detekci, musíš změnit obě místa.
+
+### Anti-flash bootstrap
+
+Před prvním renderem běží inline `<script>` v `index.html`, který nastaví
+`document.documentElement.lang` na efektivní jazyk. Bez něj by `<html lang>`
+zůstal s defaultem (`en`) až do hydratace JS, což by mátlo screen readery
+a SEO crawlery, byť jen krátce.
+
+### Reload po přepnutí
+
+`language.setMode()` persistuje volbu do localStorage a okamžitě volá
+`location.reload()`. Důvody:
+
+- nulové riziko stale stavu (server-driven názvy v navigaci, viewer
+  metadatech, stavech dokumentů)
+- jednoduchost — nemusíme udržovat list všech kešovaných API odpovědí
+- chování konzistentní s typickými enterprise systémy
+
+Soft refetch lze přidat později, pokud reload bude vadit.
+
+### `language` store API
+
+```js
+import { language, t, tn } from '../../i18n/index.js';
+
+language.mode;             // 'cs' | 'en' | 'auto' — uživatelská volba
+language.current;          // 'cs' | 'en' — efektivní jazyk po rozbalení 'auto'
+language.setMode('cs');    // přepne, persistuje, reloadne stránku
+
+t('common.cancel');        // → 'Zrušit' / 'Cancel'
+t('viewer.empty', { table: 'Faktury' });
+                           // → 'Tabulka Faktury je prázdná'
+t('viewer.recordCount', { count: 3 });
+                           // ICU plural: → '3 záznamy'
+tn('viewer.recordCount', 3);  // shortcut když je `count` hlavní param
+```
+
+### Slovníky
+
+Klíče jsou **ploché s tečkovou notací** (`'sidebar.language'`,
+`'viewer.tab.active'`). Žádná hluboká struktura — usnadňuje to grep
+a lint script.
+
+Pojmenování klíčů je v **anglické konvenci** (`'common.cancel'`,
+`'sidebar.language'`), aby ladilo se zbytkem kódu.
+
+Pluralizace přes ICU MessageFormat:
+
+```js
+// v cs.js:
+'viewer.recordCount': '{count, plural, one {# záznam} few {# záznamy} many {# záznamů} other {# záznamů}}',
+// v en.js:
+'viewer.recordCount': '{count, plural, one {# record} other {# records}}',
+```
+
+### Fallback chain
+
+`t(klíč)` zkouší v tomto pořadí: aktuální jazyk → `en` → klíč samotný.
+Když klíč chybí v obou slovnících, vrátí se holý klíč jako `'sidebar.foo'` —
+viditelný signál pro vývojáře, žádný runtime exception. Při chybě formátu
+ICU řetězce se warning loguje do konzole a vrací se taky klíč.
+
+### Přidání klíče
+
+1. Přidat řádek do `frontend/src/i18n/cs.js` a do `en.js` (oba!).
+2. Spustit `npm run check:i18n` v `frontend/` — musí projít.
+3. V komponentě: `import { t } from '../../i18n/index.js'`, použít `{t('můj.klíč')}`.
+
+### `Accept-Language` header
+
+`api/client.js` posílá `Accept-Language: {language.current}` v každém requestu.
+Backend `public/index.php` čte hlavičku v `resolveLanguage()` (s fallbackem
+`'en'`) a předává do `TableLoader`, `MetaController`, `NavigationController`,
+`SettingsController`, `ViewerLoader`, kde `LocalizedFieldResolver` /
+`ConfigLocalizer` vyberou správnou variantu z JSONC definic.
+
+### Lint
+
+`npm run check:i18n` zkontroluje, že `cs.js` a `en.js` mají stejnou sadu
+klíčů. Vrací exit 1 a vypíše chybějící klíče, jinak 0. Není v CI, volá
+se ručně před commitem.
+
+### ICU MessageFormat runtime
+
+Použitý balíček: [`intl-messageformat`](https://www.npmjs.com/package/intl-messageformat)
+(repo `@formatjs/intl-messageformat`). Tenké runtime (~12 KB gzip),
+vestavěná CLDR pravidla pro plural — funguje pro libovolný jazyk,
+takže přidání třetího jazyka je jen otázka nového slovníku, ne rewrite
+helperu.
+
+Store si cachuje zkompilované `IntlMessageFormat` instance per
+`lang::klíč`, takže opakované rendery stejného klíče nejsou drahé.
+
+### Konvence klíčů
+
+Pojmenování `oblast.komponenta.element` (max tři tečky):
+
+- **oblast** — funkční doména: `viewer`, `form`, `login`, `sidebar`,
+  `attachments`, `browser`, `app`, `tabbar`, `subtable`, `common`
+- **komponenta / element** — co konkrétně se překládá: typicky `label`,
+  `placeholder`, `title`, `empty`, `loading`, `failed`, `confirmDelete`
+
+Pravidlo: **žádné pořadí slov přes konkatenaci**. Vždy přes ICU
+placeholder — slovanské jazyky mají jiné pořadí než angličtina:
+
+```js
+// Špatně:
+{t('viewer.tab.label')} ({count})
+
+// Správně — v slovníku:
+'viewer.tab.activeWithCount': '{tab} ({count, plural, one {# záznam} other {# záznamů}})'
+// v komponentě:
+{t('viewer.tab.activeWithCount', { tab: t('viewer.tab.active'), count })}
+```
+
+### Pokrytí a co se nepřekládá v `t()`
+
+`t()` pokrývá UI chrome komponent: sidebar, viewer (taby, hledání,
+modaly), formuláře (FormDialog, FormEditor, FormStateBar, AttachmentPanel,
+FormSubTable), TableBrowser, app shell (Header, ContentArea, TabBar),
+LoginScreen, Modal `aria-label`. Slovníky mají v této chvíli ~96 klíčů.
+
+**Server-driven labels se nepřekládají v `t()`** — generuje je backend
+a posílá v API odpovědi v aktuálním jazyce (`Accept-Language` header):
+
+- toolbar tlačítka ve vieweru (`Add` / `Přidat`, `Open` / `Otevřít`) —
+  `TableViewer::getToolbarActions()` čte z cfgItem
+  `core.system.viewerDefaults.toolbarActions`. Module-specific override
+  (např. mail `New message` / `Nová zpráva`) v `core.mail.viewerDefaults`.
+- záložky editačních formulářů (`Contact` / `Kontakt`, `General` / `Obecné`)
+  — `JsoncFormLoader` aplikuje `ConfigLocalizer::localize()` na `:cs`/`:en`
+  varianty v `forms/{table}.jsonc`. `AutoFormBuilder` čte label syntetického
+  General tabu z `core.system.formDefaults.generalTabLabel`.
+- detail taby ve vieweru (`Overview` / `Přehled`, `Content` / `Obsah`,
+  `Attachments` / `Přílohy`, …) — `TableViewer::detailTabLabel()` /
+  `defaultOverviewLabel()` čte z `*.viewerDetailLabels.tabs.*` per-modul
+  (`core.system`, `base.persons`, `core.mail`, `economy.codebooks`,
+  `economy.items`).
+- názvy modulů, tabulek, sloupců — `ConfigLocalizer` /
+  `LocalizedFieldResolver` z jsonc.
+
+Tyto cfgItems žijí ve `compiled.{cs,en}.json` v adresáři DS (`config/configuration/`)
+— generuje je `vendor/bin/shpd-ds ds-upgrade`. Pokud config není
+zkompilovaný (čerstvá DS, chybí soubor), `TableViewer` / `AutoFormBuilder`
+fallback na anglický řetězec.
+
+### Mapování chybových kódů — `i18n/errors.js`
+
+Server vrací při chybě `{code, message, details?}`. Helper
+`translateError(error)` zkusí přeložit `error.code` přes klíč `error.<CODE>`
+ve slovníku, jinak fallback na `error.message` (anglicky ze serveru),
+v krajním případě `t('common.unknownError')`.
+
+```js
+import { translateError } from '../../i18n/errors.js';
+
+if (!result?.success) {
+  alert(translateError(result.error));
+}
+```
+
+Pokrývané kódy v `cs.js` / `en.js`: `VALIDATION_ERROR`, `NOT_FOUND`,
+`RECORD_NOT_FOUND`, `TABLE_NOT_FOUND`, `UNAUTHORIZED`, `FORBIDDEN`,
+`BAD_REQUEST`, `METHOD_NOT_ALLOWED`, `INTERNAL_ERROR`, `UPLOAD_ERROR`,
+`NETWORK_ERROR`. Méně časté kódy z analyzer pipeline a podobně se
+nemapují — fallback na server `message` stačí.
+
+`details[].field` (id sloupce) zůstává v anglickém ID podle backendu;
+field-level error display ve `FormEditor` zobrazí `details[].message`
+přímo — mapování `field` na lokalizovaný název sloupce z
+`TableDefinition` je future enhancement.
+
+### Otevřené body
+
+- Volba je per-zařízení; per-uživatel volba (sloupec `preferred_language`
+  v `core_system_users`) je odložená — localStorage je dle rozhodnutí
+  dostatečná, řeší se až bude potřeba (typicky pro multi-device UX).
+- Inline labels v `renderDetail()` content (group titles
+  `Identifikace`/`Předmět`/…, column labels v table content
+  `Název`/`Funkce`/…) zůstávají v PHP hardcoded česky. Lokalizace přes
+  `TableDefinition.column.name` (která je už lokalizovaná) by byla
+  natural follow-up; mimo scope Fáze 1C.
+
+---
+
+## 13. Budoucí rozšíření
 
 - **Filtrování v prohlížeči** — toolbar s filtry podle typu sloupce
 - **Mazání záznamů** — tlačítko v řádku nebo hromadně

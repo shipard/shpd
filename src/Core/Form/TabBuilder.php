@@ -70,8 +70,9 @@ class TabBuilder
         bool $readOnly = false,
         bool $hidden = false,
         ?string $hint = null,
+        ?string $triggers = null,
     ): static {
-        return $this->pushWidget($column, $cols, $label, $required, $readOnly, $hidden, $hint, 'textarea');
+        return $this->pushWidget($column, $cols, $label, $required, $readOnly, $hidden, $hint, $triggers, 'textarea');
     }
 
     public function addDate(
@@ -82,8 +83,9 @@ class TabBuilder
         bool $readOnly = false,
         bool $hidden = false,
         ?string $hint = null,
+        ?string $triggers = null,
     ): static {
-        return $this->pushWidget($column, $cols, $label, $required, $readOnly, $hidden, $hint, 'date');
+        return $this->pushWidget($column, $cols, $label, $required, $readOnly, $hidden, $hint, $triggers, 'date');
     }
 
     public function addDateTime(
@@ -94,8 +96,9 @@ class TabBuilder
         bool $readOnly = false,
         bool $hidden = false,
         ?string $hint = null,
+        ?string $triggers = null,
     ): static {
-        return $this->pushWidget($column, $cols, $label, $required, $readOnly, $hidden, $hint, 'datetime');
+        return $this->pushWidget($column, $cols, $label, $required, $readOnly, $hidden, $hint, $triggers, 'datetime');
     }
 
     public function addTime(
@@ -106,8 +109,9 @@ class TabBuilder
         bool $readOnly = false,
         bool $hidden = false,
         ?string $hint = null,
+        ?string $triggers = null,
     ): static {
-        return $this->pushWidget($column, $cols, $label, $required, $readOnly, $hidden, $hint, 'time');
+        return $this->pushWidget($column, $cols, $label, $required, $readOnly, $hidden, $hint, $triggers, 'time');
     }
 
     public function addNumber(
@@ -118,8 +122,9 @@ class TabBuilder
         bool $readOnly = false,
         bool $hidden = false,
         ?string $hint = null,
+        ?string $triggers = null,
     ): static {
-        return $this->pushWidget($column, $cols, $label, $required, $readOnly, $hidden, $hint, 'number');
+        return $this->pushWidget($column, $cols, $label, $required, $readOnly, $hidden, $hint, $triggers, 'number');
     }
 
     public function addCheckbox(
@@ -130,8 +135,9 @@ class TabBuilder
         bool $readOnly = false,
         bool $hidden = false,
         ?string $hint = null,
+        ?string $triggers = null,
     ): static {
-        return $this->pushWidget($column, $cols, $label, $required, $readOnly, $hidden, $hint, 'checkbox');
+        return $this->pushWidget($column, $cols, $label, $required, $readOnly, $hidden, $hint, $triggers, 'checkbox');
     }
 
     private function pushWidget(
@@ -142,6 +148,7 @@ class TabBuilder
         bool $readOnly,
         bool $hidden,
         ?string $hint,
+        ?string $triggers,
         string $inputType,
     ): static {
         $this->push(new FormElement(
@@ -152,6 +159,7 @@ class TabBuilder
             required: $required,
             readOnly: $readOnly,
             hidden: $hidden,
+            triggers: $triggers,
             hint: $hint,
             inputType: $inputType,
         ));

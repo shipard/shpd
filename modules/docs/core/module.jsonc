@@ -43,6 +43,15 @@
             "icon": "hash",
             "table": "docs_core_number_series",
             "class": "Shipard\\Module\\Docs\\Core\\NumberSeriesViewer"
+        },
+        {
+            "id": "docs.core.heads",
+            "name": "Documents",
+            "name:cs": "Doklady",
+            "name:en": "Documents",
+            "icon": "document",
+            "table": "docs_core_heads",
+            "class": "Shipard\\Module\\Docs\\Core\\DocsHeadsViewer"
         }
     ],
 
@@ -50,6 +59,15 @@
         {
             "table": "docs_core_number_series",
             "class": "Shipard\\Module\\Docs\\Core\\NumberSeriesForm"
+        },
+        {
+            "table": "docs_core_heads",
+            "class": "Shipard\\Module\\Docs\\Core\\DocsHeadsForm"
+        },
+        {
+            "table": "docs_core_rows",
+            "id": "docs.core.rows",
+            "class": "Shipard\\Module\\Docs\\Core\\DocRowsForm"
         }
     ],
 

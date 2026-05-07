@@ -1,0 +1,191 @@
+# Logging
+
+Centralizované logování aplikace. Vše prochází přes
+`Shipard\Core\Logging\ErrorLogger` — žádné přímé `error_log()` v aplikačním
+kódu (s výjimkou fallbacku v `ErrorLogger` samotném).
+
+## Cesta logu
+
+Default: `/opt/shipard/log/shipard.log`
+
+Konfigurovatelné v `/etc/shipard/server.json`:
+
+```jsonc
+{
+    "logFile": "/opt/shipard/log/shipard.log",
+    "logLevel": "debug"
+}
+```
+
+`logLevel` může být `"debug"`, `"info"`, `"warn"`, `"error"`. Záznamy
+s nižší úrovní se zahodí (neuloží do souboru, nezavolá `error_log`).
+
+## Formát záznamu
+
+Single-line JSON, jeden záznam per řádek:
+
+```json
+{"ts":"2026-05-07T12:34:56+02:00","level":"error","ds":"...","request":"GET /...","msg":"...","exception":{},"ctx":{}}
+```
+
+Pole:
+
+| Pole | Typ | Popis |
+|---|---|---|
+| `ts` | string | ISO 8601 s timezone, `date('c')` |
+| `level` | string | `debug` / `info` / `warn` / `error` |
+| `ds` | ?string | DS ID nebo `null` (chyby před rozpoznáním DS) |
+| `request` | ?string | `"METHOD /path"` nebo `null` (CLI / non-HTTP) |
+| `msg` | string | Krátká lidská zpráva |
+| `exception` | ?object | Jen u `logException`, viz níže |
+| `ctx` | object | Strukturovaný kontext (vždy objekt, i prázdný) |
+
+`exception` objekt:
+
+```json
+{
+    "class": "Dibi\\DriverException",
+    "message": "Unknown column 'docState' in 'WHERE'",
+    "at": "vendor/dibi/.../MySqliDriver.php:179",
+    "trace": ["#0 ...", "#1 ..."],
+    "previous": {}
+}
+```
+
+`trace` je oříznutý na 20 frames. `previous` rekurzivně pro chained
+exceptions, max 5 úrovní hloubky.
+
+## Použití v kódu
+
+```php
+use Shipard\Core\Logging\ErrorLogger;
+
+ErrorLogger::debug("Something happened", ["request_id" => $id]);
+ErrorLogger::info("User logged in", ["user_id" => $userId]);
+ErrorLogger::warn("Viewer not found, skipping", ["viewer_id" => $vid]);
+ErrorLogger::error("Save failed", ["table" => $t, "error" => $errMsg]);
+ErrorLogger::logException($e);
+ErrorLogger::logException($e, "Document save failed for doc {$docId}");
+```
+
+Pravidla:
+
+- **`msg` = lidská zpráva**, nikdy nezahrnuj parametry stringovým concatenací
+- **`ctx` = strukturovaná data**, dostane se do JSON `ctx` field
+- **`logException`** zachytí celou výjimku včetně stack trace; `msg`
+  parametr je volitelný kontext
+
+## Lifecycle (bootstrap)
+
+`public/index.php` nastaví logger v tomto pořadí:
+
+1. Po `Request::fromGlobals()` — `setRequestContext($method . ' ' . $path)`
+2. Po `ServerConfig::load()` — `setLogPath()`, `setLogLevel()`
+3. Po `DataSourceResolver::resolve()` — `setDsId($resolved->config->getId())`
+
+Pokud krok 2 nebo 3 selže, příslušná pole zůstanou na svém defaultu —
+logger funguje degradovaně, ale neztratí záznam.
+
+## Čtení logu
+
+Pro lidské sledování v dev / produkci:
+
+```bash
+# Live tail s formátováním
+tail -f /opt/shipard/log/shipard.log | jq -c .
+
+# Jen errors
+tail -f /opt/shipard/log/shipard.log | jq 'select(.level == "error")'
+
+# Jeden konkrétní DS
+tail -f /opt/shipard/log/shipard.log | jq 'select(.ds == "4l3j-z0bz-kz39-echj")'
+
+# Kolik chyb za den
+grep '"level":"error"' /opt/shipard/log/shipard.log | wc -l
+
+# Top 10 chybových hlášek za týden
+grep '"level":"error"' /opt/shipard/log/shipard.log \
+    | jq -r '.msg' \
+    | sort | uniq -c | sort -rn | head
+```
+
+## Deploy
+
+Při instalaci serveru:
+
+```bash
+sudo mkdir -p /opt/shipard/log
+sudo chown www-data:www-data /opt/shipard/log
+sudo chmod 0775 /opt/shipard/log
+```
+
+(Uživatel/skupina podle toho, pod čím běží PHP-FPM. Na Debianu
+typicky `www-data:www-data`, na Alpine `nginx:nginx`.)
+
+### Lokální dev setup
+
+V dev prostředí default cesta `/opt/shipard/log/` typicky není
+zapisovatelná. Buď:
+
+```bash
+sudo mkdir -p /opt/shipard/log
+sudo chown $USER /opt/shipard/log
+```
+
+nebo přepiš `logFile` v `/etc/shipard/server.json` na cestu, kterou
+vlastníš (např. `~/shipard-logs/shipard.log`). Bez toho `ErrorLogger`
+spadne na PHP `error_log()` fallback — zápisy půjdou do PHP-FPM logu
+nebo `stderr` (CLI).
+
+### Logrotate
+
+Doporučená konfigurace `/etc/logrotate.d/shipard`:
+
+```
+/opt/shipard/log/*.log {
+    daily
+    rotate 30
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0664 www-data www-data
+    sharedscripts
+}
+```
+
+30 dnů historie, gzip kompresí starších log souborů. Žádný `postrotate`
+hook potřeba — `ErrorLogger` otevírá soubor při každém zápisu (append +
+LOCK_EX), takže rotace bez signálu funguje.
+
+### Systemd-tmpfiles (alternativa pro logrotate)
+
+Pokud máš systemd-spravovaný host:
+
+```
+# /etc/tmpfiles.d/shipard.conf
+d /opt/shipard/log 0775 www-data www-data 30d
+```
+
+## Vztah k PHP error_log
+
+`ErrorLogger` paralelně volá PHP `error_log()` — každý zápis projde i
+do tradičního PHP error logu (PHP-FPM, syslog, nebo wherever `php.ini`
+ukáže). To je záměr:
+
+- Pokud by se `/opt/shipard/log/shipard.log` rozbil (oprávnění,
+  filesystem full), PHP error log je fallback
+- Produkční pipelines (fluentbit, journald) často konzumují PHP-FPM log
+  centrálně — takže získají stejné záznamy
+
+## Future work
+
+- **CLI integrace** — `bin/shpd-ds` příkazy by měly volat
+  `ErrorLogger::setRequestContext("cli: " . $commandName)` na začátku.
+  Aktuálně `ds` i `request` zůstávají `null` v CLI kontextu, ostatní
+  pole fungují normálně.
+- **Per-DS soubory** — pokud se ukáže, že jeden globální soubor je
+  pro multi-tenant nepraktický, řeší se buď logrotate splittingem
+  podle `ds` field, nebo refaktorem `ErrorLogger` na per-DS path.
+- **Log shipping** (Loki, Elasticsearch, fluentbit) — JSON formát to
+  připravuje. Integrace je `tail -f` source → parse json → ship.

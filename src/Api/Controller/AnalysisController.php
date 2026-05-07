@@ -11,6 +11,7 @@ use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Database\TableDefinition;
 use Shipard\Core\Document\DocumentRegistry;
+use Shipard\Core\Logging\ErrorLogger;
 use Shipard\Core\Security\DsSecretCipher;
 use Shipard\Core\Security\Exception\InvalidCiphertextException;
 use Shipard\Core\Security\Exception\SecretsKeyInsecureException;
@@ -422,7 +423,9 @@ class AnalysisController
             $dibi->rollback();
             // Plaintext API key žije v této metodě v paměti — exception message
             // nesmí prosáknout do klienta (spec §10 dec.2). Detail loguj server-side.
-            error_log('AnalysisController::claim failed: ' . $e->getMessage());
+            ErrorLogger::warn('AnalysisController::claim failed', [
+                'error' => $e->getMessage(),
+            ]);
             return Response::error('INTERNAL_ERROR', 'Internal server error during claim', 500);
         }
 
@@ -1150,7 +1153,9 @@ class AnalysisController
             $dibi->commit();
         } catch (\Throwable $e) {
             $dibi->rollback();
-            error_log('AnalysisController::updateExtractedStatus failed: ' . $e->getMessage());
+            ErrorLogger::warn('AnalysisController::updateExtractedStatus failed', [
+                'error' => $e->getMessage(),
+            ]);
             return Response::error('INTERNAL_ERROR', 'Internal server error', 500);
         }
 

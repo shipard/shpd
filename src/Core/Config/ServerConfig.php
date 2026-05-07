@@ -64,4 +64,14 @@ class ServerConfig
     {
         return $this->data['domainsFile'] ?? '/etc/shipard/domains.json';
     }
+
+    public function getLogFile(): string
+    {
+        return $this->data['logFile'] ?? '/opt/shipard/log/shipard.log';
+    }
+
+    public function getLogLevel(): string
+    {
+        return $this->data['logLevel'] ?? 'debug';
+    }
 }

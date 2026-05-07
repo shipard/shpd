@@ -8,6 +8,7 @@ use Shipard\Api\Response;
 use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\I18n\ConfigLocalizer;
+use Shipard\Core\Logging\ErrorLogger;
 use Shipard\Core\Module\ModuleDefinition;
 use Shipard\Core\Module\ModuleLoader;
 use Shipard\Core\Module\ModuleResolver;
@@ -91,7 +92,10 @@ class SettingsController
                     }
 
                     if ($viewerDef === null) {
-                        error_log("SettingsController: viewer '{$viewerId}' not found in module '{$module->id}', skipping");
+                        ErrorLogger::warn('Viewer not found in module, skipping', [
+                            'viewer_id' => $viewerId,
+                            'module_id' => $module->id,
+                        ]);
                         continue;
                     }
 
@@ -104,7 +108,11 @@ class SettingsController
                         [$group, $name] = explode('.', $module->id, 2);
                         $modulePath = $modulesBasePath . '/' . $group . '/' . $name;
                         if ($this->isTableHiddenFromNavigation($modulePath, $targetTable)) {
-                            error_log("SettingsController: viewer '{$viewerId}' targets table '{$targetTable}' marked hideFromNavigation, skipping");
+                            ErrorLogger::warn('Viewer targets hidden table, skipping', [
+                                'viewer_id'  => $viewerId,
+                                'table_name' => $targetTable,
+                                'module_id'  => $module->id,
+                            ]);
                             continue;
                         }
                     }
@@ -133,7 +141,10 @@ class SettingsController
                         continue;
                     }
                     if (!in_array($tableName, $module->tables, true)) {
-                        error_log("SettingsController: table '{$tableName}' not found in module '{$module->id}', skipping");
+                        ErrorLogger::warn('Table not found in module, skipping', [
+                            'table_name' => $tableName,
+                            'module_id'  => $module->id,
+                        ]);
                         continue;
                     }
 
@@ -141,7 +152,10 @@ class SettingsController
                     $modulePath = $modulesBasePath . '/' . $group . '/' . $name;
 
                     if ($this->isTableHiddenFromNavigation($modulePath, $tableName)) {
-                        error_log("SettingsController: table '{$tableName}' is marked hideFromNavigation, skipping");
+                        ErrorLogger::warn('Table is marked hideFromNavigation, skipping', [
+                            'table_name' => $tableName,
+                            'module_id'  => $module->id,
+                        ]);
                         continue;
                     }
 

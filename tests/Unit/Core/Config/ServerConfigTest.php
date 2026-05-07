@@ -108,6 +108,42 @@ class ServerConfigTest extends TestCase
         $config->load();
     }
 
+    public function testGetLogFileDefault(): void
+    {
+        $path = $this->createConfig([
+            'host'           => '127.0.0.1',
+            'port'           => 3306,
+            'admin_user'     => 'root',
+            'admin_password' => 'secret',
+            'mode'           => 'production',
+        ]);
+
+        $config = new ServerConfig($path);
+        $config->load();
+
+        $this->assertSame('/opt/shipard/log/shipard.log', $config->getLogFile());
+        $this->assertSame('debug', $config->getLogLevel());
+    }
+
+    public function testGetLogFileAndLevelCustom(): void
+    {
+        $path = $this->createConfig([
+            'host'           => '127.0.0.1',
+            'port'           => 3306,
+            'admin_user'     => 'root',
+            'admin_password' => 'secret',
+            'mode'           => 'production',
+            'logFile'        => '/var/log/shipard-custom.log',
+            'logLevel'       => 'warn',
+        ]);
+
+        $config = new ServerConfig($path);
+        $config->load();
+
+        $this->assertSame('/var/log/shipard-custom.log', $config->getLogFile());
+        $this->assertSame('warn', $config->getLogLevel());
+    }
+
     public function testLoadMissingEachRequiredField(): void
     {
         $required = ['host', 'port', 'admin_user', 'admin_password', 'mode'];

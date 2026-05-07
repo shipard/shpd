@@ -31,9 +31,14 @@ use Shipard\Api\TableLoader;
 use Shipard\Api\ViewerLoader;
 use Shipard\Core\Config\ServerConfig;
 use Shipard\Core\Form\FormRegistry;
+use Shipard\Core\Logging\ErrorLogger;
 use Shipard\Core\Viewer\ViewerRegistry;
 
 $request        = Request::fromGlobals();
+
+// Set request context immediately so even early errors carry it
+ErrorLogger::setRequestContext($request->getMethod() . ' ' . $request->getPath());
+
 $corsMiddleware = new CorsMiddleware();
 
 // ── 1. CORS preflight ────────────────────────────────────────────────────────
@@ -50,9 +55,16 @@ try {
 	$serverConfig = new ServerConfig();
 	$serverConfig->load();
 
+	// Configure logger from server config — must happen as early as possible
+	ErrorLogger::setLogPath($serverConfig->getLogFile());
+	ErrorLogger::setLogLevel($serverConfig->getLogLevel());
+
 	// ── 3. Resolve data source ────────────────────────────────────────────────
 	$resolver = new DataSourceResolver($serverConfig->getDomainsFile());
 	$resolved = $resolver->resolve($request->getHost(), $request->getPath());
+
+	// DS is now known — propagate to logger
+	ErrorLogger::setDsId($resolved->config->getId());
 
 	// ── 4. Load table definitions (localized) ─────────────────────────────────
 	$language        = resolveLanguage($request, $resolved->config);
@@ -129,9 +141,25 @@ try {
 		Response::error('UNKNOWN_HOST', 'Unknown host', 404),
 	)->send();
 } catch (\Throwable $e) {
-	$isDev   = $serverConfig !== null && $serverConfig->getMode() === 'development';
+	// Always log — request context and ds id were set on the logger earlier
+	// (see bootstrap), so the JSON entry carries everything needed for triage.
+	ErrorLogger::logException($e);
+
+	$isDev = $serverConfig !== null && $serverConfig->getMode() === 'development';
 	$details = $isDev
-		? [['field' => '_exception', 'code' => get_class($e), 'message' => $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine()]]
+		? [
+			[
+				'field'   => '_exception',
+				'code'    => get_class($e),
+				'message' => $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine(),
+				// Trim trace to keep the response readable; full trace is in the log file
+				'trace'   => array_slice(
+					preg_split('/\r?\n/', $e->getTraceAsString()) ?: [],
+					0,
+					10,
+				),
+			],
+		]
 		: [];
 	$corsMiddleware->applyTo(
 		Response::error('INTERNAL_ERROR', 'Internal server error', 500, $details),

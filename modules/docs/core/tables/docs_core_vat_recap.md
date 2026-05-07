@@ -25,7 +25,7 @@ rekapitulace se smaže, nová se vloží přes child-tables sync v
 | `base_dom`, `tax_dom`, `total_dom` | numeric(15,2) | Částky v domácí měně (přes `exchange_rate`) |
 | `sum_base`, `sum_tax`, `sum_total` | boolean default 1 | Flagy z `vatCode` definice |
 | `is_reverse_pair` | boolean default 0 | 1 = generovaný oddaňující protizáznam |
-| `sort_order` | smallint default 0 | Pořadí v rekapitulaci |
+| `order_pos` | smallint default 0 | Pořadí v rekapitulaci |
 
 ## Bez doc-state
 
@@ -34,7 +34,7 @@ dumpem výpočtu. Životní cyklus drží hlavička přes child-tables sync.
 
 ## Indexy
 
-- `idx_doc_head` — `(doc_head, sort_order)`
+- `idx_doc_head` — `(doc_head, order_pos)`
 - `idx_vat_code` — `(vat_code)` — připravený lookup pro budoucí Přiznání DPH
 
 ## Související

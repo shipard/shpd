@@ -156,7 +156,7 @@
         },
 
         {
-            "id": "sort_order",
+            "id": "order_pos",
             "name": "Sort order",
             "name:cs": "Pořadí",
             "name:en": "Sort order",
@@ -171,7 +171,7 @@
             "type": "index",
             "columns": [
                 {"column": "doc_head"},
-                {"column": "sort_order"}
+                {"column": "order_pos"}
             ]
         },
         {

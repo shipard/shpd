@@ -87,7 +87,7 @@ class DocRowsForm extends TableForm
 
         $tab = $tab
             ->addSeparator('Pořadí')
-            ->addNumber('sort_order', cols: 1);
+            ->addNumber('order_pos', cols: 1);
 
         return new FormDefinition(
             table: $this->table,

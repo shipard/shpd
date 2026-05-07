@@ -6,6 +6,7 @@ namespace Shipard\Core\Document;
 
 use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Config\DataSourceConfig;
+use Shipard\Core\Logging\ErrorLogger;
 
 class TableGateway
 {
@@ -75,10 +76,17 @@ class TableGateway
         try {
             $this->beginTransaction();
 
-            // Separate child data from head data
+            // Separate child data from head data. Only track child sets that
+            // were actually provided in $data — either by the client or set
+            // by Document::beforeSave. Children NOT present in $data stay
+            // untouched on disk: this is what protects sub-form managed rows
+            // (docs_core_rows) from being wiped when only the header is saved.
             $childDataByKey = [];
             foreach ($this->childTables ?? [] as $ct) {
-                $childDataByKey[$ct['dataKey']] = $data[$ct['dataKey']] ?? [];
+                if (!array_key_exists($ct['dataKey'], $data)) {
+                    continue;
+                }
+                $childDataByKey[$ct['dataKey']] = is_array($data[$ct['dataKey']]) ? $data[$ct['dataKey']] : [];
                 unset($data[$ct['dataKey']]);
             }
 
@@ -98,6 +106,9 @@ class TableGateway
             }
 
             foreach ($this->childTables ?? [] as $ct) {
+                if (!array_key_exists($ct['dataKey'], $childDataByKey)) {
+                    continue;
+                }
                 $this->syncChildren($ct['table'], $ct['foreignKey'], $headId, $childDataByKey[$ct['dataKey']]);
                 $data[$ct['dataKey']] = $childDataByKey[$ct['dataKey']];
             }
@@ -106,10 +117,17 @@ class TableGateway
 
             $this->commitTransaction();
         } catch (\DomainException $e) {
+            // Domain errors are expected business outcomes (e.g. "can't release
+            // number with gap in sequence") — surface to caller, don't log.
             $this->rollbackTransaction();
             return DocumentResult::domainError($e->getMessage(), $e->getCode() !== 0 ? (string) $e->getCode() : null);
         } catch (\Throwable $e) {
+            // Unexpected failure (SQL syntax, type mismatch, network) — log it
+            // before returning the error. Without this, only exceptions that
+            // bubble all the way up to index.php get logged; gateway-caught
+            // ones produced silent 500 responses.
             $this->rollbackTransaction();
+            ErrorLogger::logException($e, 'TableGateway::saveDocument failed for table ' . $this->tableId);
             return DocumentResult::error($e->getMessage());
         }
 

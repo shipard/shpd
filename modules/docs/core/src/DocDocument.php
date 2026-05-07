@@ -101,16 +101,23 @@ abstract class DocDocument extends Document
         $this->applyHomeCurrency($data);
         $this->resolveAccountingPeriods($data);
 
+        // Resolve rows for computation. Two scenarios:
+        //   1. Client sent rows in payload (e.g. future mass-edit flow) — use them.
+        //   2. Header-only save — rows are managed via sub-form, so they're
+        //      not in the payload. Load current state from DB so totals and
+        //      VAT recap reflect reality.
+        // We compute on a local variable and never write rows back to $data:
+        // TableGateway only syncs child sets that are present in $data, so
+        // omitting them protects existing DB rows from being wiped.
         $vatMode = (int) ($data['vat_mode'] ?? 1);
-        if (!empty($data['rows']) && is_array($data['rows'])) {
-            foreach ($data['rows'] as &$row) {
-                $this->calculateRowPrice($row);
-                $this->calculateRowVat($row, $vatMode);
-            }
-            unset($row);
+        $rowsForCompute = $this->resolveRowsForCompute($data);
+        foreach ($rowsForCompute as &$row) {
+            $this->calculateRowPrice($row);
+            $this->calculateRowVat($row, $vatMode);
         }
+        unset($row);
 
-        $recap = $this->buildVatRecapitulation($data);
+        $recap = $this->buildVatRecapitulation($data, $rowsForCompute);
         $data['vatRecap'] = $recap;
 
         $this->sumTotals($data, $recap);
@@ -120,6 +127,31 @@ abstract class DocDocument extends Document
         $this->processStateTransition($data, $originalData);
         $this->maintainSnapshots($data, $originalData);
         $this->applyVariableSymbolDefault($data);
+    }
+
+    /**
+     * Get the rows we should compute on. If the client provided rows in the
+     * payload, use those. Otherwise read current state from the database.
+     * Returns an empty array for new records (no id yet).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function resolveRowsForCompute(array $data): array
+    {
+        if (array_key_exists('rows', $data) && is_array($data['rows'])) {
+            return $data['rows'];
+        }
+        if (empty($data['id']) || $this->db === null) {
+            return [];
+        }
+        $rows = $this->db->fetchAll(
+            'SELECT * FROM [docs_core_rows] WHERE [doc_head] = %i ORDER BY [order_pos]',
+            (int) $data['id'],
+        );
+        return array_map(
+            fn($r) => $r instanceof \Dibi\Row ? $r->toArray() : (array) $r,
+            $rows,
+        );
     }
 
     public function afterPersist(array $data): void
@@ -345,10 +377,15 @@ abstract class DocDocument extends Document
 
     // ── VAT recapitulation ──────────────────────────────────────────────────
 
-    /** @return array<int, array<string, mixed>> */
-    protected function buildVatRecapitulation(array &$data): array
+    /**
+     * @param array<int, array<string, mixed>> $rowsOverride Pre-computed rows; falls back to $data['rows'] when empty.
+     * @return array<int, array<string, mixed>>
+     */
+    protected function buildVatRecapitulation(array &$data, array $rowsOverride = []): array
     {
-        $rows = $data['rows'] ?? [];
+        $rows = $rowsOverride !== []
+            ? $rowsOverride
+            : ($data['rows'] ?? []);
         if (!is_array($rows) || $rows === []) {
             return [];
         }
@@ -419,7 +456,7 @@ abstract class DocDocument extends Document
                 'sum_tax'         => (int) ($codeDef['sumTax']   ?? 1),
                 'sum_total'       => (int) ($codeDef['sumTotal'] ?? 1),
                 'is_reverse_pair' => 0,
-                'sort_order'      => $sortOrder++,
+                'order_pos'       => $sortOrder++,
             ];
             $primary['base_dom']  = round($primary['base']  * $exchRate, 2);
             $primary['tax_dom']   = round($primary['tax']   * $exchRate, 2);
@@ -453,7 +490,7 @@ abstract class DocDocument extends Document
                     'sum_tax'         => (int) ($reverseDef['sumTax']   ?? 1),
                     'sum_total'       => (int) ($reverseDef['sumTotal'] ?? 1),
                     'is_reverse_pair' => 1,
-                    'sort_order'      => $sortOrder++,
+                    'order_pos'       => $sortOrder++,
                 ];
                 $paired['base_dom']  = round($paired['base']  * $exchRate, 2);
                 $paired['tax_dom']   = round($paired['tax']   * $exchRate, 2);
@@ -778,15 +815,37 @@ abstract class DocDocument extends Document
             vatRegistrationId: $data['vat_registration'] ?? null,
         );
 
+        // Snapshots must hit the database as JSON strings, not PHP arrays.
+        // The columns are typed `json` in JSONC (= LONGTEXT in MariaDB), and
+        // dibi has no automatic array→JSON serialization for that type — if
+        // we pass a 2-D array, dibi treats it as a multi-row insert payload
+        // and produces broken SQL. DocsHeadsForm::decodeSnapshot reverses
+        // this on read.
         if ($tradeDir === 1) {
             // Output (issued invoice) — we are supplier
-            $data['supplier_snapshot'] = $ownSnap;
-            $data['customer_snapshot'] = $partnerSnap;
+            $data['supplier_snapshot'] = $this->encodeSnapshot($ownSnap);
+            $data['customer_snapshot'] = $this->encodeSnapshot($partnerSnap);
         } else {
             // Input (received invoice) — we are customer
-            $data['supplier_snapshot'] = $partnerSnap;
-            $data['customer_snapshot'] = $ownSnap;
+            $data['supplier_snapshot'] = $this->encodeSnapshot($partnerSnap);
+            $data['customer_snapshot'] = $this->encodeSnapshot($ownSnap);
         }
+    }
+
+    /**
+     * Encode a snapshot array as JSON string for storage in a `json` column.
+     * Returns null for empty snapshots so the column ends up NULL rather than
+     * an empty JSON object string.
+     *
+     * @param array<string, mixed> $snap
+     */
+    private function encodeSnapshot(array $snap): ?string
+    {
+        if ($snap === []) {
+            return null;
+        }
+        $json = json_encode($snap, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        return $json === false ? null : $json;
     }
 
     /**

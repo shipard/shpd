@@ -222,9 +222,36 @@ class DocsHeadsForm extends TableForm
     /** @param array<string, mixed> $data */
     private function buildRecapTab(array $data): FormTab
     {
+        // FormController::meta loads only the head row (SELECT * FROM heads),
+        // so $data doesn't carry the recap from the docs_core_vat_recap child
+        // table. Load it here — same pattern as DocDocument::resolveRowsForCompute.
+        $recap = $this->resolveRecapForRender($data);
         return $this->tab('recap', 'Rekapitulace DPH')
-            ->addHtml($this->renderRecapHtml($data), cols: 4)
+            ->addHtml($this->renderRecapHtml($data, $recap), cols: 4)
             ->build();
+    }
+
+    /**
+     * Get recap rows: prefer payload (server-computed during recalculate),
+     * else load current state from DB.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function resolveRecapForRender(array $data): array
+    {
+        if (isset($data['vatRecap']) && is_array($data['vatRecap'])) {
+            return $data['vatRecap'];
+        }
+        if (empty($data['id']) || $this->db === null) {
+            return [];
+        }
+        $rows = $this->db->fetchAll(
+            'SELECT * FROM `docs_core_vat_recap`'
+            . ' WHERE `doc_head` = %i'
+            . ' ORDER BY `order_pos` ASC',
+            (int) $data['id'],
+        );
+        return $rows;
     }
 
     /** @param array<string, mixed> $data */
@@ -515,11 +542,13 @@ class DocsHeadsForm extends TableForm
 
     // ── HTML renderers ──────────────────────────────────────────────────────
 
-    /** @param array<string, mixed> $data */
-    private function renderRecapHtml(array $data): string
+    /**
+     * @param array<string, mixed> $data
+     * @param list<array<string, mixed>> $recap
+     */
+    private function renderRecapHtml(array $data, array $recap = []): string
     {
-        $recap = $data['vatRecap'] ?? [];
-        if (!is_array($recap) || $recap === []) {
+        if ($recap === []) {
             return '<p class="muted"><em>Doklad zatím nemá rekapitulaci'
                 . ' — přidejte řádky a uložte doklad pro přepočet.</em></p>';
         }

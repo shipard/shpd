@@ -84,6 +84,13 @@
             "table": "docs_core_heads",
             "typeColumn": "doc_type",
             "defaultClass": "Shipard\\Module\\Docs\\Core\\DocsHeadsDocument"
+        },
+        {
+            // DocRowsDocument has no own validate / beforeSave — the only
+            // reason it exists is the afterSave hook that recomputes header
+            // totals + VAT recap whenever a row is added, edited, or deleted.
+            "table": "docs_core_rows",
+            "class": "Shipard\\Module\\Docs\\Core\\DocRowsDocument"
         }
     ],
 

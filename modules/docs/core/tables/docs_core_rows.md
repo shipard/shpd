@@ -8,7 +8,7 @@
 |---|---|---|
 | `doc_head` | int → `docs_core_heads` | Hlavička, ke které řádek patří |
 | `row_kind` | enumInt → `docs.core.rowKinds` | 0 textový (jen popis), 1 běžný (s množstvím a cenou) |
-| `sort_order` | smallint default 0 | Pořadí řádku v dokladu |
+| `order_pos` | smallint default 0 | Pořadí řádku v dokladu |
 
 ### Identifikace
 
@@ -56,7 +56,7 @@ Plněné v `Document::beforeSave` ve Fázi 2.
 
 ## Indexy
 
-- `idx_doc_head` — `(doc_head, sort_order)`
+- `idx_doc_head` — `(doc_head, order_pos)`
 - `idx_item` — `(item)`
 - `idx_vat_code` — `(vat_code)`
 

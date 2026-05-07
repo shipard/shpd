@@ -367,9 +367,13 @@ class DocsHeadsForm extends TableForm
         if ($this->db === null || $partnerId === 0) {
             return [];
         }
+        // base_persons_addresses has no docState column — active records are
+        // selected via period validity instead.
         $rows = $this->db->fetchAll(
             'SELECT `id`, `display_line` FROM `base_persons_addresses`'
-            . ' WHERE `person` = %i AND `docState` IN (10, 40, 80)'
+            . ' WHERE `person` = %i'
+            . ' AND (`valid_from` IS NULL OR `valid_from` <= CURDATE())'
+            . ' AND (`valid_to`   IS NULL OR `valid_to`   >= CURDATE())'
             . ' ORDER BY `order_pos` ASC, `id` ASC',
             $partnerId,
         );
@@ -389,9 +393,13 @@ class DocsHeadsForm extends TableForm
         if ($this->db === null || $partnerId === 0) {
             return [];
         }
+        // base_persons_bank_accounts has no docState column — active records
+        // are selected via period validity instead.
         $rows = $this->db->fetchAll(
             'SELECT `id`, `account_number`, `iban` FROM `base_persons_bank_accounts`'
-            . ' WHERE `person` = %i AND `docState` IN (10, 40, 80)'
+            . ' WHERE `person` = %i'
+            . ' AND (`valid_from` IS NULL OR `valid_from` <= CURDATE())'
+            . ' AND (`valid_to`   IS NULL OR `valid_to`   >= CURDATE())'
             . ' ORDER BY `id` ASC',
             $partnerId,
         );

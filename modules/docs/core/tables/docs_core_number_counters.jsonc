@@ -4,6 +4,10 @@
     "name:cs": "Počítadla čísel dokladů",
     "name:en": "Document number counters",
 
+    // Internal numbering state — atomic counter rows used by
+    // assignDocumentNumber. Not user-editable, hidden from navigation.
+    "hideFromNavigation": true,
+
     "displayPattern": "{number_series}/{fiscal_year}",
 
     "columns": [

@@ -17,6 +17,7 @@ class NavigationController
 		'core'    => ['cs' => 'Systém', 'en' => 'System'],
 		'base'    => ['cs' => 'Základní', 'en' => 'Basic'],
 		'economy' => ['cs' => 'Ekonomika', 'en' => 'Economy'],
+		'docs'    => ['cs' => 'Doklady', 'en' => 'Documents'],
 		'world'   => ['cs' => 'Svět', 'en' => 'World'],
 	];
 
@@ -109,10 +110,19 @@ class NavigationController
 				// Single module — tables go directly as children of the group
 				$children = $this->buildTableItems($modules[0], $modulesBasePath, $language, $hiddenViewers, $hiddenTables);
 			} else {
-				// Multiple modules — create sub-group per module
+				// Multiple modules — create sub-group per module. When a module
+				// contributes a single item (typical for per-type modules like
+				// docs.invoicesOut whose only navigation entry is its viewer),
+				// hoist that item directly into the group instead of wrapping
+				// it in a same-labeled sub-group.
 				foreach ($modules as $module) {
 					$tableItems = $this->buildTableItems($module, $modulesBasePath, $language, $hiddenViewers, $hiddenTables);
 					if ($tableItems === []) {
+						continue;
+					}
+
+					if (count($tableItems) === 1) {
+						$children[] = $tableItems[0];
 						continue;
 					}
 
@@ -147,8 +157,14 @@ class NavigationController
 		[$group, $name] = explode('.', $module->id, 2);
 		$modulePath = $modulesBasePath . '/' . $group . '/' . $name;
 
-		// Build a map of tables covered by viewers: table => viewer data
-		$viewerByTable = [];
+		$items = [];
+		$tablesCoveredByViewers = [];
+
+		// (1) The module's viewers are the primary navigation entries — each
+		// becomes a sidebar item regardless of whether the viewer's target
+		// table is owned by this module. This is what lets per-type modules
+		// (e.g. docs.invoicesOut → docs_core_heads) appear in navigation
+		// without redeclaring the underlying table.
 		foreach ($module->viewers as $viewer) {
 			if (isset($hiddenViewers[$viewer['id']])) {
 				continue;
@@ -166,10 +182,14 @@ class NavigationController
 			if (isset($viewer['icon'])) {
 				$viewerItem['icon'] = $viewer['icon'];
 			}
-			$viewerByTable[$viewer['table']] = $viewerItem;
+			$items[] = $viewerItem;
+			if (isset($viewer['table'])) {
+				$tablesCoveredByViewers[$viewer['table']] = true;
+			}
 		}
 
-		$items = [];
+		// (2) Tables declared by this module that no viewer (in this module)
+		// covers — fall back to a generic table item.
 		foreach ($module->tables as $tableName) {
 			if ($this->shouldSkip($tableName)) {
 				continue;
@@ -177,10 +197,7 @@ class NavigationController
 			if (isset($hiddenTables[$tableName])) {
 				continue;
 			}
-
-			// If a viewer covers this table, use the viewer item instead
-			if (isset($viewerByTable[$tableName])) {
-				$items[] = $viewerByTable[$tableName];
+			if (isset($tablesCoveredByViewers[$tableName])) {
 				continue;
 			}
 

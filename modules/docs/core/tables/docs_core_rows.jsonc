@@ -4,6 +4,10 @@
     "name:cs": "Řádky dokladů",
     "name:en": "Document rows",
 
+    // Sub-table managed exclusively through the parent docs_core_heads
+    // record. No standalone navigation entry.
+    "hideFromNavigation": true,
+
     "displayPattern": "{description}",
 
     "columns": [

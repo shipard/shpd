@@ -4,6 +4,10 @@
     "name:cs": "Rekapitulace DPH",
     "name:en": "VAT recapitulation",
 
+    // Sub-table — pre-rendered VAT recap rows attached to docs_core_heads.
+    // Not edited or browsed independently of the parent document.
+    "hideFromNavigation": true,
+
     "displayPattern": "{vat_code} {vat_pct}%",
 
     "columns": [

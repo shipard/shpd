@@ -16,6 +16,8 @@
         "economy.items",
         "world.vat",
         "docs.core",
+        "docs.invoicesOut",
+        "docs.invoicesIn",
     ],
 
     "config": [

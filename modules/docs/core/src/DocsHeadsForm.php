@@ -60,6 +60,20 @@ class DocsHeadsForm extends TableForm
         if (!$isNew) {
             return;
         }
+        // Per-type viewer hint: if doc_type is provided (e.g. 'invno' from
+        // IssuedInvoicesViewer.getNewRecordDefaults) and number_series is not
+        // yet set, pre-select the first active series of that type.
+        if (empty($data['number_series']) && !empty($data['doc_type']) && $this->db !== null) {
+            $row = $this->db->fetchRow(
+                'SELECT `id` FROM `docs_core_number_series`'
+                . ' WHERE `doc_type` = %s AND `docState` IN (10, 40, 80)'
+                . ' ORDER BY `id` ASC LIMIT 1',
+                (string) $data['doc_type'],
+            );
+            if ($row !== null) {
+                $data['number_series'] = (int) $row['id'];
+            }
+        }
         if (empty($data['issue_date'])) {
             $data['issue_date'] = date('Y-m-d');
         }
@@ -103,7 +117,9 @@ class DocsHeadsForm extends TableForm
         $tab = $this->tab('basic', 'Hlavička')
             ->addSeparator('Identifikace')
             ->addSelect('number_series', cols: 2,
-                options: $this->resolveNumberSeriesOptions(),
+                options: $this->resolveNumberSeriesOptions(
+                    !empty($data['doc_type']) ? (string) $data['doc_type'] : null,
+                ),
                 required: true,
                 readOnly: !$isNew,
             )
@@ -281,23 +297,42 @@ class DocsHeadsForm extends TableForm
 
     // ── Options resolvers ───────────────────────────────────────────────────
 
-    /** @return list<array{value: int, label: string}> */
-    private function resolveNumberSeriesOptions(): array
+    /**
+     * Build options for the `number_series` select.
+     *
+     * When `$docType` is supplied (per-type form context, e.g. issued invoices),
+     * the result is restricted to series of that type. Otherwise all active
+     * series are listed (generic "Documents" form).
+     *
+     * @return list<array{value: int, label: string}>
+     */
+    private function resolveNumberSeriesOptions(?string $docType = null): array
     {
         if ($this->db === null) {
             return [];
         }
-        $rows = $this->db->fetchAll(
-            'SELECT `id`, `name`, `doc_type` FROM `docs_core_number_series`'
-            . ' WHERE `docState` IN (10, 40, 80)'
-            . ' ORDER BY `doc_type` ASC, `name` ASC',
-        );
+        if ($docType !== null && $docType !== '') {
+            $rows = $this->db->fetchAll(
+                'SELECT `id`, `name`, `doc_type` FROM `docs_core_number_series`'
+                . ' WHERE `doc_type` = %s AND `docState` IN (10, 40, 80)'
+                . ' ORDER BY `name` ASC',
+                $docType,
+            );
+        } else {
+            $rows = $this->db->fetchAll(
+                'SELECT `id`, `name`, `doc_type` FROM `docs_core_number_series`'
+                . ' WHERE `docState` IN (10, 40, 80)'
+                . ' ORDER BY `doc_type` ASC, `name` ASC',
+            );
+        }
         $options = [];
         foreach ($rows as $row) {
-            $docType = (string) ($row['doc_type'] ?? '');
+            $rowDocType = (string) ($row['doc_type'] ?? '');
             $label = (string) ($row['name'] ?? '');
-            if ($docType !== '') {
-                $label .= ' (' . $docType . ')';
+            // For the generic form (no $docType filter) keep the type tag
+            // in the label so users can tell series apart.
+            if ($docType === null && $rowDocType !== '') {
+                $label .= ' (' . $rowDocType . ')';
             }
             $options[] = ['value' => (int) $row['id'], 'label' => $label];
         }

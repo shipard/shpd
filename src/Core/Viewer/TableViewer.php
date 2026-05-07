@@ -196,6 +196,20 @@ abstract class TableViewer
     }
 
     /**
+     * Prefill values for a new record initiated from this viewer's
+     * "Add" toolbar action. The viewer meta endpoint exposes the result as
+     * `newRecordDefaults` and the frontend passes it to the form dialog as
+     * `defaultData`. Used by per-type viewers (e.g. issued invoices set
+     * `doc_type` so the form can pre-select a matching number series).
+     *
+     * @return array<string, mixed>
+     */
+    public function getNewRecordDefaults(): array
+    {
+        return [];
+    }
+
+    /**
      * Look up a localized detail-tab label from a cfgItem of shape
      * `{tabs: {<key>: {name: "..."}}}`. The compiled config already holds
      * the language-resolved `name` thanks to ConfigLocalizer.

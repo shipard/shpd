@@ -1,0 +1,33 @@
+{
+    "id": "docs.invoicesOut",
+    "name": "Issued invoices",
+    "name:cs": "Faktury vydané",
+    "name:en": "Issued invoices",
+    "description": "Document type subclass for issued invoices (invno)",
+    "description:cs": "Faktury vydané (invno) — specifická Document třída a viewer",
+    "description:en": "Document type subclass for issued invoices (invno)",
+
+    "dependencies": ["docs.core"],
+
+    "viewers": [
+        {
+            "id": "docs.invoicesOut.heads",
+            "name": "Issued invoices",
+            "name:cs": "Faktury vydané",
+            "name:en": "Issued invoices",
+            "icon": "invoice",
+            "table": "docs_core_heads",
+            "class": "Shipard\\Module\\Docs\\InvoicesOut\\IssuedInvoicesViewer"
+        }
+    ],
+
+    "documentClasses": [
+        {
+            "table": "docs_core_heads",
+            "typeColumn": "doc_type",
+            "classes": {
+                "invno": "Shipard\\Module\\Docs\\InvoicesOut\\IssuedInvoiceDocument"
+            }
+        }
+    ]
+}

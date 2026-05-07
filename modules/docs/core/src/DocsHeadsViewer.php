@@ -42,9 +42,13 @@ class DocsHeadsViewer extends TableViewer
         $params = [];
 
         $viewGroup = 'active';
+        $docTypeFilter = null;
         foreach ($filters as $filter) {
-            if (($filter['id'] ?? null) === 'viewGroup') {
+            $id = $filter['id'] ?? null;
+            if ($id === 'viewGroup') {
                 $viewGroup = (string) $filter['value'];
+            } elseif ($id === '_doc_type') {
+                $docTypeFilter = (string) $filter['value'];
             }
         }
 
@@ -54,6 +58,11 @@ class DocsHeadsViewer extends TableViewer
                 $conditions[] = 'h.' . $vgSql;
                 $params = array_merge($params, $vgParams);
             }
+        }
+
+        if ($docTypeFilter !== null && $docTypeFilter !== '') {
+            $conditions[] = 'h.`doc_type` = %s';
+            $params[] = $docTypeFilter;
         }
 
         if ($search !== null && $search !== '') {

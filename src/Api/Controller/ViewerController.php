@@ -24,12 +24,13 @@ class ViewerController
 		}
 
 		return Response::success([
-			'id'         => $def->id,
-			'name'       => $def->name,
-			'table'      => $def->table,
-			'filters'    => $viewer->getFilters(),
-			'toolbar'    => $viewer->getToolbarActions(null),
-			'viewGroups' => $viewer->getViewGroups(),
+			'id'                 => $def->id,
+			'name'               => $def->name,
+			'table'              => $def->table,
+			'filters'            => $viewer->getFilters(),
+			'toolbar'            => $viewer->getToolbarActions(null),
+			'viewGroups'         => $viewer->getViewGroups(),
+			'newRecordDefaults'  => $viewer->getNewRecordDefaults(),
 		]);
 	}
 

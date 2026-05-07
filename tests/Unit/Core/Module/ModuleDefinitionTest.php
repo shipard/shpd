@@ -56,10 +56,23 @@ class ModuleDefinitionTest extends TestCase
         ModuleDefinition::fromArray(['id' => 'nodot', 'name' => 'Test']);
     }
 
-    public function testInvalidIdFormatUppercaseThrows(): void
+    public function testInvalidIdFormatUppercaseGroupThrows(): void
     {
         $this->expectException(\InvalidArgumentException::class);
         ModuleDefinition::fromArray(['id' => 'A.b', 'name' => 'Test']);
+    }
+
+    public function testIdFormatCamelCaseModulePartAllowed(): void
+    {
+        $def = ModuleDefinition::fromArray(['id' => 'docs.invoicesOut', 'name' => 'Issued']);
+        $this->assertSame('docs.invoicesOut', $def->id);
+    }
+
+    public function testIdFormatModulePartMustStartLowercaseThrows(): void
+    {
+        // First char of module part must be lowercase (PSR-4-friendly directory name).
+        $this->expectException(\InvalidArgumentException::class);
+        ModuleDefinition::fromArray(['id' => 'docs.InvoicesOut', 'name' => 'Issued']);
     }
 
     public function testOptionalFieldsDefault(): void

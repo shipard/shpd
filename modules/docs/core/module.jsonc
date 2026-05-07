@@ -77,12 +77,14 @@
             "class": "Shipard\\Module\\Docs\\Core\\NumberSeriesDocument"
         },
         {
+            // Polymorphic dispatch by `doc_type` column. The `classes` map is
+            // populated by per-type modules (docs.invoicesOut, docs.invoicesIn)
+            // via DocumentLoader::mergeDocumentClasses. Unknown / empty doc_type
+            // falls back to defaultClass.
             "table": "docs_core_heads",
-            "class": "Shipard\\Module\\Docs\\Core\\DocsHeadsDocument"
+            "typeColumn": "doc_type",
+            "defaultClass": "Shipard\\Module\\Docs\\Core\\DocsHeadsDocument"
         }
-        // Phase 6 will switch heads to typeColumn-based polymorphism
-        // (IssuedInvoiceDocument in docs.invoicesOut,
-        //  ReceivedInvoiceDocument in docs.invoicesIn).
     ],
 
     "config": [

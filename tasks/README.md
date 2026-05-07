@@ -33,12 +33,12 @@ přijatá), kompletní DPH model pro **CZ** (vč. PDP, EU intracom, dovozu/vývo
 | `world-vat-cz.md`                 | 2         | hotovo   | world.base, world.trade (existují)                  |
 | `docs-core-phase1.md` (skeleton)  | 3         | hotovo   | persons-extension, world.vat, economy.codebooks, items |
 | `docs-core-phase2.md` (výpočty)   | 4         | hotovo   | docs-core-phase1                                    |
-| `docs-core-phase3.md` (UI)        | 5         | připrav. | docs-core-phase2                                    |
-| `docs-invoices.md`                | 6         | TODO     | docs-core-phase3                                    |
+| `docs-core-phase3.md` (UI)        | 5         | hotovo   | docs-core-phase2                                    |
+| `docs-invoices.md`                | 6         | hotovo   | docs-core-phase3                                    |
 
-Fáze 1–4 jsou hotové — backend dokladů včetně výpočtů, číselných řad
-a snapshotů. Tasky pro fáze 5 a 6 vzniknou postupně po dokončení Fáze 5 —
-designové detaily se mohou v reakci na zjištění z předchozí fáze upravit.
+Všech 6 fází MVP dokladů je hotových — backend, výpočty, číselné řady,
+snapshoty, UI, a per-typ moduly `docs.invoicesOut` / `docs.invoicesIn`
+s polymorfním dispatch přes `typeColumn = doc_type`.
 
 ### Modul `economy.items` + `core.units`
 

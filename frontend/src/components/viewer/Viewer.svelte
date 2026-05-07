@@ -56,6 +56,7 @@
   // --- Form dialog state ---
   let formOpen = $state(false);
   let editRecordId = $state(null);
+  let formDefaultData = $state({});
 
   // --- Search debounce ---
   let searchTimer = null;
@@ -193,6 +194,10 @@
   function handleToolbarAction(actionId) {
     if (actionId === 'create') {
       editRecordId = null;
+      // Per-type viewers (e.g. issued/received invoices) expose
+      // newRecordDefaults so the form can pre-fill doc_type and the form
+      // class can derive a matching number_series default.
+      formDefaultData = meta?.newRecordDefaults ?? {};
       formOpen = true;
     } else if (actionId === 'edit' && selectedRowId != null) {
       editRecordId = selectedRowId;
@@ -288,6 +293,7 @@
     open={formOpen}
     onClose={handleFormClose}
     onSaved={handleFormSaved}
+    defaultData={formDefaultData}
   />
 {/if}
 

@@ -30,7 +30,11 @@ class ModuleDefinition
             throw new \InvalidArgumentException('Module definition missing required field: name');
         }
 
-        if (!preg_match('/^[a-z][a-z0-9]*\.[a-z][a-z0-9]*$/', $data['id'])) {
+        // Module id format: <group>.<module>
+        //   <group>  — lowercase alphanumeric (group directory name)
+        //   <module> — alphanumeric, must start lowercase. camelCase is allowed
+        //              for multi-word module names like `docs.invoicesOut`.
+        if (!preg_match('/^[a-z][a-z0-9]*\.[a-z][a-zA-Z0-9]*$/', $data['id'])) {
             throw new \InvalidArgumentException("Invalid module id format: '{$data['id']}'");
         }
 

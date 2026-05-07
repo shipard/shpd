@@ -33,6 +33,7 @@ class FormController
         ?ConfigRuntime $config,
         string $modulesBasePath,
         string $language = 'en',
+        array $newRecordDefaults = [],
     ): Response {
         $def = $tables[$table] ?? null;
         if ($def === null) {
@@ -55,6 +56,16 @@ class FormController
                 }
                 if ($col->default !== null) {
                     $data[$col->id] = $col->default;
+                }
+            }
+            // Klient může poslat per-typ prefill (např. doc_type z per-type
+            // vieweru) přes query string ?defaults[doc_type]=invno. Tyto
+            // hodnoty mají přednost před column defaults a viz je server-side
+            // form (DocsHeadsForm::applyClientDefaults), který z nich může
+            // odvodit další pole (číselná řada apod.).
+            foreach ($newRecordDefaults as $key => $value) {
+                if (is_string($key) && $key !== '') {
+                    $data[$key] = $value;
                 }
             }
         }

@@ -33,6 +33,7 @@ import {
   faUsers,
   faBuilding,
   faFileInvoiceDollar,
+  faFileInvoice,
   faFileLines,
   faBoxesStacked,
   faTag,
@@ -100,6 +101,7 @@ export const iconUsers = faUsers;
 // ── Číselníky / moduly (sidebar, navigace) ──────────────────────
 export const iconCompany = faBuilding;
 export const iconInvoice = faFileInvoiceDollar;
+export const iconInvoiceIn = faFileInvoice;
 export const iconDocument = faFileLines;
 export const iconWarehouse = faBoxesStacked;
 export const iconTag = faTag;
@@ -155,6 +157,7 @@ export const iconMap = {
   'users': iconUsers,
   'company': iconCompany,
   'invoice': iconInvoice,
+  'invoice-in': iconInvoiceIn,
   'document': iconDocument,
   'warehouse': iconWarehouse,
   'tag': iconTag,

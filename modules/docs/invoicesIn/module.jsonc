@@ -1,0 +1,33 @@
+{
+    "id": "docs.invoicesIn",
+    "name": "Received invoices",
+    "name:cs": "Faktury přijaté",
+    "name:en": "Received invoices",
+    "description": "Document type subclass for received invoices (invni)",
+    "description:cs": "Faktury přijaté (invni) — specifická Document třída a viewer",
+    "description:en": "Document type subclass for received invoices (invni)",
+
+    "dependencies": ["docs.core"],
+
+    "viewers": [
+        {
+            "id": "docs.invoicesIn.heads",
+            "name": "Received invoices",
+            "name:cs": "Faktury přijaté",
+            "name:en": "Received invoices",
+            "icon": "invoice-in",
+            "table": "docs_core_heads",
+            "class": "Shipard\\Module\\Docs\\InvoicesIn\\ReceivedInvoicesViewer"
+        }
+    ],
+
+    "documentClasses": [
+        {
+            "table": "docs_core_heads",
+            "typeColumn": "doc_type",
+            "classes": {
+                "invni": "Shipard\\Module\\Docs\\InvoicesIn\\ReceivedInvoiceDocument"
+            }
+        }
+    ]
+}

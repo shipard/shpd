@@ -364,8 +364,24 @@ function dispatchForm(
 ): Response {
 	$ctrl  = new FormController();
 	$table = $route->table ?? '';
+
+	// New-record prefill from per-type viewer (e.g. doc_type=invno) arrives
+	// as ?defaults[<key>]=<value>. Only forwarded to meta — save/recalculate
+	// receive the merged data via JSON body.
+	$queryDefaults = [];
+	if ($route->action === 'meta' && $route->id === null) {
+		$qp = $request->getQueryParams();
+		if (isset($qp['defaults']) && is_array($qp['defaults'])) {
+			foreach ($qp['defaults'] as $k => $v) {
+				if (is_string($k) && $k !== '' && (is_string($v) || is_numeric($v) || is_bool($v))) {
+					$queryDefaults[$k] = $v;
+				}
+			}
+		}
+	}
+
 	return match ($route->action) {
-		'meta'        => $ctrl->meta($table, $route->id, $tables, $db, $formRegistry, $configRuntime, $modulesBasePath, $language),
+		'meta'        => $ctrl->meta($table, $route->id, $tables, $db, $formRegistry, $configRuntime, $modulesBasePath, $language, $queryDefaults),
 		'save'        => $ctrl->save($table, $route->id, $request, $tables, $db, $configRuntime, $documentRegistry, $dsConfig),
 		'recalculate' => $ctrl->recalculate($table, $request, $tables, $db, $formRegistry, $configRuntime, $modulesBasePath, $language),
 		default       => Response::error('INTERNAL_ERROR', "Unknown form action: {$route->action}", 500),

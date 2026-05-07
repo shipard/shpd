@@ -85,9 +85,21 @@
 
   async function loadForm(tbl, id) {
     loadError = null;
-    const path = id != null
+    let path = id != null
       ? `/_ui/form/${tbl}/meta/${id}`
       : `/_ui/form/${tbl}/meta`;
+    // For new records propagate defaultData (e.g. doc_type from a per-type
+    // viewer) to the server so server-side form code can compute coherent
+    // initial values (e.g. pre-select a matching number_series).
+    if (id == null && defaultData && Object.keys(defaultData).length > 0) {
+      const qs = new URLSearchParams();
+      for (const [k, v] of Object.entries(defaultData)) {
+        if (v == null) continue;
+        qs.append(`defaults[${k}]`, String(v));
+      }
+      const query = qs.toString();
+      if (query) path += `?${query}`;
+    }
     const res = await get(path);
     if (!res?.success) {
       loadError = res?.error ? translateError(res.error) : t('form.loadFailed');

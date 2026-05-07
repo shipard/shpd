@@ -14,6 +14,21 @@ kódu, věř kódu (kód je živý, task je momentka).
 
 Tasky, které jsou rozpracované nebo na řadě.
 
+### Unifikované logování
+
+Dokončení loggovací infrastruktury, kterou jsme nakousli při debugování
+poslední chyby v dokladů. Centrální `ErrorLogger` už existuje, ale je
+MVP-grade. Tento task ho dotáhne do produkční kvality.
+
+| Task                       | Stav     | Závislosti                          |
+|----------------------------|----------|--------------------------------------|
+| `unified-logging.md`       | připrav. | docs MVP (kvůli existujícímu kontextu) |
+
+Task přidá: úrovně (DEBUG/INFO/WARN/ERROR) s konfigurovatelným prahem,
+strukturovaný JSON formát (jeden řádek per záznam), `ds_id` v každém
+záznamu, přesun logu z `var/log/` na `/opt/shipard/log/shipard.log`,
+migraci existujících `error_log()` volání na `ErrorLogger`, deploy guide.
+
 ### Doklady MVP — faktury vydané a přijaté
 
 Klíčový úkol systému — pořizování dokladů, výpočet DPH, číselné řady,

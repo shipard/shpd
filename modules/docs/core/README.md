@@ -16,39 +16,84 @@ vydaná, faktura přijatá, …):
 - `docs_core_number_counters` — atomické countery pro generování čísla
   dokladu
 
+Polymorfismus: hlavička má `doc_type` (enumString), který přes polymorfní
+Document dispatch (registrace v `module.jsonc` přes `typeColumn = doc_type`)
+resolvuje konkrétní Document subclass.
+
+## Stav
+
+MVP je hotové. Modul obsahuje:
+
+- **5 tabulek** (heads, rows, vat_recap, number_series, number_counters)
+  + 10 cfgItem souborů
+- **`DocDocument` (abstract)** — orchestrační `beforeSave` pipeline
+  (denormalizace doc_type, defaulty datumů, home currency, fiscal periods,
+  výpočty na řádcích, DPH rekapitulace vč. reverse charge párů, sumarizace,
+  zaokrouhlení, exchange rate, přidělení/uvolnění čísla, snapshoty,
+  variabilní symbol)
+- **`DocsHeadsDocument`** — thin concrete subclass, polymorfní dispatch
+  cesta v `module.jsonc` přes `typeColumn = doc_type`
+- **`DocRowsDocument`** — `afterSave` / `afterDelete` hook, který po
+  změně řádku spustí recompute hlavičky
+- **`DocsHeadsForm`** + **`DocRowsForm`** — UI s tabovaným rozhraním
+  (Hlavička / Řádky / Rekapitulace / Fakturační údaje / Poznámky / Přílohy)
+- **`DocsHeadsViewer`** — generický viewer „Doklady“ (všechny typy);
+  per-typ viewery (`Faktury vydané` / `Faktury přijaté`) jsou v navazujících
+  modulech
+- **Číselné řady** — kompletní CRUD + atomické přidělení čísla
+  (`assignDocumentNumber`) při Koncept → Potvrzeno, uvolnění
+  (`releaseDocumentNumber`) při návratu Potvrzeno → Koncept jen pokud je
+  poslední v sekvenci
+- **Snapshoty** — `supplier_snapshot` a `customer_snapshot` se ukládají jako
+  JSON string při Koncept → Potvrzeno (a refresh-ují pokud se změnil partner
+  v editovatelných potvrzených stavech)
+
 Konkrétní typy dokladů žijí v navazujících modulech:
 
-- `docs.invoicesOut` — faktura vydaná (Document subclass + viewer)
-- `docs.invoicesIn` — faktura přijatá
+- **`docs.invoicesOut`** — faktura vydaná (`IssuedInvoiceDocument` +
+  `IssuedInvoicesViewer`, validace `bank_account` při Potvrzení)
+- **`docs.invoicesIn`** — faktura přijatá (`ReceivedInvoiceDocument` +
+  `ReceivedInvoicesViewer`, validace bankovního spojení partnera)
 
-Polymorfismus: hlavička má `doc_type` (enumString), který určuje konkrétní
-Document třídu přes cfgItem `docs.core.docTypes`.
+## Klíčové patterny
 
-## Stav (Fáze 1)
+### Recompute hlavičky při změně řádku
 
-V této fázi je implementovaná **kostra**:
+Řádky dokladů se ukládají přes vlastní sub-form endpoint, který nepošle
+hlavičku zpět na server. Hlavička by tak po přidání/změně/smazání řádku
+měla zastaralé totals a rekapitulaci DPH. Řešení je `DocRowsDocument`:
 
-- 5 tabulek + 10 cfgItem souborů
-- Číselné řady — kompletní CRUD (Document + Form + Viewer + Provisioner)
-- `OwnCompanyResolver` helper
-- `DocDocument` abstract base s minimální logikou (init `doc_number`,
-  denormalizace `doc_type`)
+```php
+class DocRowsDocument extends Document
+{
+    public function afterSave(array $data): void  { $this->recomputeHeader($data); }
+    public function afterDelete(array $data): void { $this->recomputeHeader($data); }
 
-**Mimo rozsah Fáze 1** (přijde ve Fázi 2):
+    private function recomputeHeader(array $rowData): void
+    {
+        // Načti hlavičku, spusť DocsHeadsDocument::beforeSave
+        // (ten připočítá totals + recap z aktuálního stavu řádků v DB),
+        // pak UPDATE heads výpočetních sloupců a DELETE+INSERT vat_recap.
+    }
+}
+```
 
-- Výpočty cen, DPH, rekapitulace, snapshoty
-- Atomické přidělení čísla dokladu při Koncept → Potvrzeno
-- Resolvery `fiscal_year` / `fiscal_month` / `vat_period`
+Viz `DocRowsDocument.php` pro detail. Tento pattern — `afterSave` na child
+entitě spouští recompute parenta — je užitečný všude, kde má hlavička
+odvozené hodnoty od child setů. Detaily k save semantice gatewayů viz
+`docs/document-system.md` sekce 6.
 
-**Mimo rozsah Fáze 1** (Fáze 3 / 5+ / 6):
+### Server-driven UI s formuláři
 
-- `DocsHeadsForm` (formulář faktury — hlavička + řádky + rekapitulace)
-- Per-typ Document subclasses a viewers v navazujících modulech
-  (`docs.invoicesOut`, `docs.invoicesIn`)
+`DocsHeadsForm` výpočty rekapitulace nepošle do form definition jako
+samostatné elementy — místo toho v `buildRecapTab` zavolá
+`renderRecapHtml(...)` a výsledný HTML výstup předá do `addHtml(...)`.
+Frontend ho jen zobrazí. Stejný pattern používá i tab Fakturační údaje.
 
-V této fázi lze uložit jen **prázdný Koncept dokladu** přes přímé volání
-API (žádné UI). To stačí jako sanity check, že schéma a Document
-infrastructure funguje.
+Výhody: rekapitulace má server-side editovaný render (rozlišení reverse
+charge párů, dvouřádkové zobrazení pro cizí měnu, atd.) bez nutnosti
+frontend custom komponent. Cena: nelze stylování editovat z frontu;
+změna prezentační vrstvy vyžaduje deploy backendu.
 
 ## Konfigurace
 
@@ -105,10 +150,15 @@ Detaily v `docs/docs-mvp.md` sekce 3.
 ## Pro vývojáře
 
 `OwnCompanyResolver` najde záznam vlastní firmy v `base_persons_persons`
-(`is_own = 1`). Bez vlastní firmy nelze vystavovat doklady — od Fáze 2 se
-to kontroluje při Potvrzení.
+(`is_own = 1`). Bez vlastní firmy nelze vystavovat doklady — kontroluje
+se při Potvrzení.
 
-`DocDocument` (abstract) v této fázi pouze inicializuje `doc_number` jako
-placeholder `!{id_padded}` (10 číslic) přes `afterPersist` a denormalizuje
-`doc_type` z `number_series` v `beforeSave`. Reálné výpočty (cena, DPH,
-rekapitulace, snapshoty) přijdou ve Fázi 2.
+`DocDocument` (abstract) je orchestrační třída — většina logiky žije v
+ní. Per-typ subclasses (`DocsHeadsDocument`, `IssuedInvoiceDocument`,
+`ReceivedInvoiceDocument`) ji rozšiřují o typově specifické validace.
+
+Pokud přidáváš nový typ dokladu (např. zálohová faktura `prfmin`),
+vytvoř nový modul (`docs.proforma`) s vlastním Document subclassem +
+viewerem a zaregistruj typový dispatch v `documentClasses` přes
+`typeColumn = doc_type`. Nepotřebuješ žádné nové tabulky — `docs_core_*`
+je sdílí všechny typy.

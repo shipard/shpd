@@ -361,6 +361,15 @@ Speciální pole: žádná.
 |-------------|-------------------|-------|
 | `json` | JSON | Nativní JSON typ |
 
+**Pozor — manuální serializace v Document class.** Dibi pro `json` sloupce neumí automatickou konverzi PHP pole → JSON řetězec. Pokud `Document::beforeSave` zapíše do `$data['some_json_col']` PHP pole, dibi ho při `INSERT`/`UPDATE` interpretuje jako multi-row insert payload a vyprodukuje broken SQL.
+
+Praxe je jednoduchá:
+
+- **Při ukládání** — v `Document::beforeSave` (nebo kde se hodnota nastavuje) zavolej `json_encode(...)` před výstupem do `$data`. Vrať `null` pro prázdný snapshot, aby sloupec skônčil jako NULL, ne jako `"[]"`.
+- **Při čtení** — dibi vrátí obsah jako `string`. Form/viewer si ho podle potřeby `json_decode(...)`. Vzor je `DocsHeadsForm::decodeSnapshot`, který elegantně zvládá oba případy (string z DB i pole z server-side computed výstupu).
+
+Vzor implementace pro ukládání v `DocDocument::encodeSnapshot()` — helper, který Document classes používají pro snapshot sloupce.
+
 ### Enum typy
 
 Shipard nepoužívá databázový `ENUM` typ. Místo toho používá dva interní typy, které jsou fyzicky uloženy jako standardní databázové typy, ale v aplikační logice se chovají jako výčtové typy.
@@ -570,6 +579,23 @@ Extension je JSONC soubor, který přidává sloupce a indexy do tabulky jiného
 ### Cizí klíče
 
 Shipard nepoužívá databázové cizí klíče (FOREIGN KEY). Referenční integrita se řeší na aplikační úrovni. Databáze slouží jako úložiště dat.
+
+### Pořadový sloupec
+
+Projekt používá **dvě konvence pro pořadový sloupec**, podle role tabulky:
+
+| Konvence    | Použití                                              | Příklady                                                                                  |
+|-------------|------------------------------------------------------|-------------------------------------------------------------------------------------------|
+| `order_pos` | Sub-tabulky zobrazované přes `FormSubTable.svelte`   | `base_persons_addresses`, `base_persons_contacts`, `base_persons_bank_accounts`, `docs_core_rows`, `docs_core_vat_recap` |
+| `sort_order`| Top-level entity s vlastním viewerem                 | `economy_codebooks_cash_desks`, `economy_codebooks_bank_accounts`, `economy_codebooks_cost_centers`, `economy_codebooks_warehouses` |
+
+Frontend `FormSubTable.svelte` má hardcoded:
+- defaultní řazení podle `order_pos:asc`
+- vyloučení `order_pos` ze zobrazených sloupců
+
+Sub-tabulka **bez** `order_pos` se přes `FormSubTable` nedá rozumně zobrazit — defaultní `?sort=order_pos:asc` query selže s SQL chybou „Unknown column".
+
+Pokud nová sub-tabulka potřebuje pořadí, **vždy `order_pos`**. Pokud má vlastní viewer s explicitně řízeným řazením, `sort_order` je tradiční volba pro `economy_codebooks_*`. Konvence napříč těmito dvěma kategoriemi není 100% sjednocená — nejde o problém kvůli oddělené roli, ale stojí za to ji znát při psaní nových tabulek.
 
 ---
 

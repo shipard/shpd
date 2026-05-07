@@ -75,6 +75,28 @@ Pravidla:
 - **`logException`** zachytí celou výjimku včetně stack trace; `msg`
   parametr je volitelný kontext
 
+## Co se loguje automaticky
+
+`ErrorLogger` se volá z několika míst v aplikaci automaticky, bez nutnosti
+zasahovat do volajícího kódu:
+
+- **`public/index.php` `\Throwable` catch handler** — všechny výjimky, které
+  doletou až na nejvyšší úroveň (typicky bugy v controllerech, rozbitý
+  config, nezachycené chyby z infrastrukturních komponent), prolézají
+  `ErrorLogger::logException`.
+- **`TableGateway::saveDocument` `\Throwable` catch** — nečekané výjimky uvnitř
+  save transakce (SQL chyby, type mismatchy, problémy s připojením) se zalogujou
+  i tehdy, když gateway vrátí `DocumentResult::error()` zpět do
+  controlleru. Bez toho jsme uměli získat jen `INTERNAL_ERROR` v response,
+  ale samotný stack trace nikde — docházelo k tichým 500 bez stop.
+- **`\DomainException`** je výjimkou: gateway ji neloguje, protože
+  to je očekávaný business outcome (např. „can't release number with gap
+  in sequence”). Pro tyhle případy je log šum.
+
+Volání `ErrorLogger::warn/info/debug/error` z controllerů a Document
+classes je vždy explicitní — logger nemá žádnou globální magii, která
+by je nastřelila sama.
+
 ## Lifecycle (bootstrap)
 
 `public/index.php` nastaví logger v tomto pořadí:

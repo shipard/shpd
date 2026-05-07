@@ -353,6 +353,23 @@ saveDocument({
 
 Při smazání dokumentu se nejprve smažou všechny child záznamy, pak hlavička.
 
+### Důležité — kdy gateway na child sety sáhá
+
+`TableGateway` synchronizuje pouze ty child sety, které jsou **přítomny** v `$data` v okamžiku po `Document::beforeSave`. Pokud klíč v `$data` chybí, gateway se nedotkne existujících řádků v DB — nesmazá je, neupdatuje, nic.
+
+To má zcela praktický důvod: v UI flow se hlavička dokumentu často ukládá **bez řádků** (řádky jsou spravované přes vlastní sub-form endpoint). Kdyby gateway na chybějící `rows` reagoval jako na prázdný seznam, všechny řádky v DB by se při každém save hlavičky vyhladily.
+
+Důsledek pro Document classes:
+
+- Pokud `beforeSave` chce **nahradit** child set v DB (např. server-side computed agregát — v dokladech `vatRecap`), zapíše ho do `$data` pod příslušný `dataKey`. Gateway pak provede full sync (insert nových, update existujících podle `id`, delete zbylých).
+- Pokud `beforeSave` potřebuje child rows **jen pro výpočty**, načti je do **lokální proměnné**, nikdy zpět do `$data`. Gateway by je jinak synchronizoval, což u client-managed setů (jako jsou řádky dokladů) způsobí tichý data loss.
+
+Vzor: `Shipard\Module\Docs\Core\DocDocument::resolveRowsForCompute()` — helper, který buď vezme `rows` z payloadu, když jsou tam, nebo si je načte z DB do lokální proměnné. Jeho výstup nikdy neputuje zpět do `$data['rows']`.
+
+Pokud naopak chceš zajistit, aby změna v child setu triggerovala recompute na hlavičce (např. doplnit řádek do faktury → přepočítat totals + DPH rekapitulaci), použij `Document::afterSave` na child entitě. Z FK sloupce vyčteš `id` parenta a vyvoláš jeho recompute. Vzor je `DocRowsDocument::afterSave()`.
+
+Při smazání dokumentu se nejprve smažou všechny child záznamy, pak hlavička.
+
 ### Transakce
 
 Celá operace (hlavička + všechny child tabulky) probíhá v jedné DB transakci. Pokud cokoliv selže, provede se ROLLBACK.

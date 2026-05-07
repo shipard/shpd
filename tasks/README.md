@@ -14,61 +14,8 @@ kódu, věř kódu (kód je živý, task je momentka).
 
 Tasky, které jsou rozpracované nebo na řadě.
 
-### Unifikované logování
-
-Dokončení loggovací infrastruktury, kterou jsme nakousli při debugování
-poslední chyby v dokladů. Centrální `ErrorLogger` už existuje, ale je
-MVP-grade. Tento task ho dotáhne do produkční kvality.
-
-| Task                       | Stav     | Závislosti                          |
-|----------------------------|----------|--------------------------------------|
-| `unified-logging.md`       | připrav. | docs MVP (kvůli existujícímu kontextu) |
-
-Task přidá: úrovně (DEBUG/INFO/WARN/ERROR) s konfigurovatelným prahem,
-strukturovaný JSON formát (jeden řádek per záznam), `ds_id` v každém
-záznamu, přesun logu z `var/log/` na `/opt/shipard/log/shipard.log`,
-migraci existujících `error_log()` volání na `ErrorLogger`, deploy guide.
-
-### Doklady MVP — faktury vydané a přijaté
-
-Klíčový úkol systému — pořizování dokladů, výpočet DPH, číselné řady,
-stavový životní cyklus, snapshoty fakturačních údajů. Řídícím dokumentem
-celé práce je [`docs/docs-mvp.md`](../docs/docs-mvp.md), který popisuje
-návrh kompletní MVP architektury a rozděluje implementaci do 6 navazujících
-fází.
-
-MVP cílí na **dva typy dokladů** (`invno` faktura vydaná, `invni` faktura
-přijatá), kompletní DPH model pro **CZ** (vč. PDP, EU intracom, dovozu/vývozu),
-číselné řady, snapshot dodavatele/odběratele, polymorfní jádro `docs.core`
-+ dvě tenké subclass moduly `docs.invoicesOut` a `docs.invoicesIn`.
-
-| Task                              | Fáze v MVP | Stav     | Závislosti                                          |
-|-----------------------------------|-----------|----------|-----------------------------------------------------|
-| `persons-is-own-extension.md`     | 1         | hotovo   | base.persons (existuje)                             |
-| `world-vat-cz.md`                 | 2         | hotovo   | world.base, world.trade (existují)                  |
-| `docs-core-phase1.md` (skeleton)  | 3         | hotovo   | persons-extension, world.vat, economy.codebooks, items |
-| `docs-core-phase2.md` (výpočty)   | 4         | hotovo   | docs-core-phase1                                    |
-| `docs-core-phase3.md` (UI)        | 5         | hotovo   | docs-core-phase2                                    |
-| `docs-invoices.md`                | 6         | hotovo   | docs-core-phase3                                    |
-
-Všech 6 fází MVP dokladů je hotových — backend, výpočty, číselné řady,
-snapshoty, UI, a per-typ moduly `docs.invoicesOut` / `docs.invoicesIn`
-s polymorfním dispatch přes `typeColumn = doc_type`.
-
-### Modul `economy.items` + `core.units`
-
-Příprava na dokladový systém — katalog položek, číselník druhů, měrné
-jednotky. Bez těchto třech tabulek nemá smysl začínat s fakturami nebo
-objednávkami.
-
-| Task                       | Stav     | Závislosti                                |
-|----------------------------|----------|-------------------------------------------|
-| `economy-items-phase1.md`  | hotovo   | edit-forms (hotové), doc-states (hotové)  |
-
-Po dokončení této fáze bude možné začít plánovat samotné doklady (faktury,
-objednávky). V navazujících fázích modulu položek se bude řešit: VAT sazby
-per země a cena s DPH (řeší `world-vat-cz.md`), skladová evidence,
-ceníkový mechanismus.
+_Aktuálně nic rozpracovaného — doklady MVP a unifikované logování jsou hotové._
+_Další směr se uvidí po dokončení testování dokladů a commitnutí současných změn._
 
 ---
 
@@ -76,6 +23,44 @@ ceníkový mechanismus.
 
 Drží se jako reference. Když Claude Code potřebuje pochopit, **proč** je
 něco postavené tak, jak je, často to najde v původním PRD.
+
+### Doklady MVP — faktury vydané a přijaté
+
+Kompletní dokladový subsystém — polymorfní jádro `docs.core` + per-typ
+moduly `docs.invoicesOut` (faktura vydaná `invno`) a `docs.invoicesIn`
+(faktura přijatá `invni`). Řídící dokument v
+[`docs/docs-mvp.md`](../docs/docs-mvp.md). DPH model pro **CZ** včetně
+PDP, EU intracom, dovozu/vývozu. 6 fází.
+
+| Task                              | Fáze | Co řeší                                              |
+|-----------------------------------|------|------------------------------------------------------|
+| `persons-is-own-extension.md`     | 1    | `is_own` flag a `court_registration` na `base.persons` |
+| `world-vat-cz.md`                 | 2    | Modul `world.vat` s CZ DPH kódy a procenty            |
+| `docs-core-phase1.md`             | 3    | Skeleton `docs.core` — tabulky, cfgItem, číselné řady |
+| `docs-core-phase2.md`             | 4    | Výpočty cen, DPH, rekapitulace, snapshoty, atomické číslo |
+| `docs-core-phase3.md`             | 5    | UI — `DocsHeadsForm`, `DocRowsForm`, `DocsHeadsViewer` |
+| `docs-invoices.md`                | 6    | Per-typ moduly `docs.invoicesOut` a `docs.invoicesIn` s polymorfním dispatch |
+
+### Unifikované logování
+
+Produkční-grade `ErrorLogger` — úrovně (DEBUG/INFO/WARN/ERROR), JSON
+formát (jeden řádek per záznam) s `ds`, `request`, `exception` polem,
+`/opt/shipard/log/shipard.log` jako default cesta, automatické logování
+v `index.php` catch handleru a `TableGateway::saveDocument`. Detaily a
+způsoby čtení v [`docs/logging.md`](../docs/logging.md).
+
+| Task                       | Co řeší                                            |
+|----------------------------|----------------------------------------------------|
+| `unified-logging.md`       | Refactor MVP `ErrorLogger` do produkční kvality, deploy guide, migrace existujících `error_log()` volání |
+
+### Modul `economy.items` + `core.units`
+
+Příprava na dokladový systém — katalog položek, číselník druhů, měrné
+jednotky.
+
+| Task                       | Co řeší                                |
+|----------------------------|----------------------------------------|
+| `economy-items-phase1.md`  | Tabulky, viewer, formulář, fake data    |
 
 ### Modul `mail`
 

@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+#
+# Shared core for post-merge / post-rewrite / post-checkout hooks.
+# Each hook is a symlink to this file; we look at $0 to figure out which
+# hook fired and decide whether to run dev-update.sh.
+
+set -euo pipefail
+
+HOOK_NAME="$(basename "$0")"
+
+# post-checkout: args are (prev_HEAD, new_HEAD, is_branch_checkout).
+# Run only on branch checkout (= "1"), skip file checkout (= "0").
+if [ "$HOOK_NAME" = "post-checkout" ] && [ "${3:-0}" != "1" ]; then
+    exit 0
+fi
+
+# post-rewrite: 1st arg is "rebase" or "amend".
+# Run only on rebase; amend is a local-only change.
+if [ "$HOOK_NAME" = "post-rewrite" ] && [ "${1:-}" != "rebase" ]; then
+    exit 0
+fi
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+echo ""
+echo "==> Running dev-update.sh ($HOOK_NAME)"
+echo ""
+
+bash "$REPO_ROOT/scripts/dev-update.sh"

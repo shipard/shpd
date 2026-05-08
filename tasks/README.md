@@ -14,8 +14,16 @@ kódu, věř kódu (kód je živý, task je momentka).
 
 Tasky, které jsou rozpracované nebo na řadě.
 
-_Aktuálně nic rozpracovaného — doklady MVP a unifikované logování jsou hotové._
-_Další směr se uvidí po dokončení testování dokladů a commitnutí současných změn._
+### CLI utility — vylepšení dev workflow
+
+Po `git pull` aktuálně musí tester ručně pouštět composer + npm + ds-upgrade
+na každém DS. Tato dvojice tasků to zjednodušuje na jeden shell skript a
+jeden CLI příkaz, plus přidává kompletní CLI dokumentaci.
+
+| Task                       | Co řeší                                              |
+|----------------------------|------------------------------------------------------|
+| `dev-update-script.md`     | `scripts/dev-update.sh` + git hooks v `.githooks/`   |
+| `ds-upgrade-all.md`        | `shpd-server ds-upgrade-all` + `docs/cli.md`         |
 
 ---
 

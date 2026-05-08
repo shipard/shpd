@@ -12,6 +12,7 @@ use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Security\DsSecretCipher;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Tester\CommandTester;
 
 class TestableDsUpgradeCommand extends DsUpgradeCommand
@@ -195,7 +196,7 @@ class DsUpgradeCommandTest extends TestCase
         $this->dsConnection->expects($this->never())->method('executeSQL');
 
         $tester = $this->createCommandTester();
-        $exitCode = $tester->execute([]);
+        $exitCode = $tester->execute([], ['verbosity' => OutputInterface::VERBOSITY_VERBOSE]);
 
         $this->assertSame(Command::SUCCESS, $exitCode);
         $this->assertStringContainsString('[OK]', $tester->getDisplay());

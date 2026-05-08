@@ -17,6 +17,9 @@ class TestableDsUpgradeAllCommand extends DsUpgradeAllCommand
     /** @var list<string> */
     public array $callLog = [];
 
+    /** @var list<array{id: string, verbosity: string}> */
+    public array $verbosityLog = [];
+
     public function __construct(private readonly string $dataSourcesDir)
     {
         parent::__construct();
@@ -39,6 +42,15 @@ class TestableDsUpgradeAllCommand extends DsUpgradeAllCommand
     {
         $id = basename($dsDir);
         $this->callLog[] = $id;
+
+        $verbosityFlag = match (true) {
+            $output->isDebug() => '-vvv',
+            $output->isVeryVerbose() => '-vv',
+            $output->isVerbose() => '-v',
+            default => '',
+        };
+        $this->verbosityLog[] = ['id' => $id, 'verbosity' => $verbosityFlag];
+
         return $this->upgradeResults[$id] ?? ['success' => true, 'exitCode' => 0];
     }
 }
@@ -175,6 +187,36 @@ class DsUpgradeAllCommandTest extends TestCase
         $this->assertSame(0, $exit);
         $this->assertStringContainsString('--dry-run', $tester->getDisplay());
         $this->assertSame([], $cmd->callLog);
+    }
+
+    public function testDefaultVerbosityDoesNotPropagateFlag(): void
+    {
+        $this->createDs('aaaa-aaaa-aaaa-aaaa');
+
+        [$cmd, $tester] = $this->makeTester();
+
+        $exit = $tester->execute([]);
+
+        $this->assertSame(0, $exit);
+        $this->assertSame(
+            [['id' => 'aaaa-aaaa-aaaa-aaaa', 'verbosity' => '']],
+            $cmd->verbosityLog,
+        );
+    }
+
+    public function testVerboseFlagPropagatesToSubprocess(): void
+    {
+        $this->createDs('aaaa-aaaa-aaaa-aaaa');
+
+        [$cmd, $tester] = $this->makeTester();
+
+        $exit = $tester->execute([], ['verbosity' => OutputInterface::VERBOSITY_VERBOSE]);
+
+        $this->assertSame(0, $exit);
+        $this->assertSame(
+            [['id' => 'aaaa-aaaa-aaaa-aaaa', 'verbosity' => '-v']],
+            $cmd->verbosityLog,
+        );
     }
 
     public function testSkipsDirsWithoutConfigMainJson(): void

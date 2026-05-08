@@ -20,10 +20,11 @@ Po `git pull` aktuálně musí tester ručně pouštět composer + npm + ds-upgr
 na každém DS. Tato dvojice tasků to zjednodušuje na jeden shell skript a
 jeden CLI příkaz, plus přidává kompletní CLI dokumentaci.
 
-| Task                       | Co řeší                                              |
-|----------------------------|------------------------------------------------------|
-| `dev-update-script.md`     | `scripts/dev-update.sh` + git hooks v `.githooks/`   |
-| `ds-upgrade-all.md`        | `shpd-server ds-upgrade-all` + `docs/cli.md`         |
+| Task                            | Co řeší                                              |
+|---------------------------------|------------------------------------------------------|
+| `dev-update-script.md`          | `scripts/dev-update.sh` + git hooks v `.githooks/`   |
+| `ds-upgrade-all.md`             | `shpd-server ds-upgrade-all` + `docs/cli.md`         |
+| `ds-upgrade-quiet-default.md`   | Tichý default výstup `ds-upgrade`, kompletní jen s `-v` |
 
 ---
 

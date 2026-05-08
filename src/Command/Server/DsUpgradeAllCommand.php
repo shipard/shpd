@@ -40,10 +40,18 @@ class DsUpgradeAllCommand extends Command
      */
     protected function runDsUpgrade(string $dsDir, OutputInterface $output): array
     {
+        $verbosityFlag = match (true) {
+            $output->isDebug() => ' -vvv',
+            $output->isVeryVerbose() => ' -vv',
+            $output->isVerbose() => ' -v',
+            default => '',
+        };
+
         $cmd = sprintf(
-            'cd %s && %s ds-upgrade',
+            'cd %s && %s ds-upgrade%s',
             escapeshellarg($dsDir),
-            escapeshellarg($this->getShpdDsPath())
+            escapeshellarg($this->getShpdDsPath()),
+            $verbosityFlag,
         );
 
         $exitCode = 0;

@@ -62,9 +62,9 @@ class DsUpgradeCommand extends Command
         $dsConfig = $this->dsConfig ?? new DataSourceConfig($dsDir);
         $dsConnection = $this->dsConnection ?? new DataSourceConnection($dsConfig);
 
-        $output->writeln('<info>Shipard Data Source Upgrade v0.1.0</info>');
-        $output->writeln('Data source: ' . $dsConfig->getName() . ' (' . $dsConfig->getId() . ')');
-        $output->writeln('');
+        $output->writeln('<info>Shipard Data Source Upgrade v0.1.0</info>', OutputInterface::VERBOSITY_VERBOSE);
+        $output->writeln('Data source: ' . $dsConfig->getName() . ' (' . $dsConfig->getId() . ')', OutputInterface::VERBOSITY_VERBOSE);
+        $output->writeln('', OutputInterface::VERBOSITY_VERBOSE);
 
         // Ensure writable directories exist (att, cache)
         foreach (['att', 'cache/thumbnails'] as $subdir) {
@@ -89,7 +89,7 @@ class DsUpgradeCommand extends Command
         }
 
         // Step 2: Resolve modules
-        $output->writeln('Resolving modules...');
+        $output->writeln('Resolving modules...', OutputInterface::VERBOSITY_VERBOSE);
         $allModules = ModuleLoader::loadAllModules($modulesBasePath);
         $errors = [];
         $resolvedModules = ModuleResolver::resolve($allModules, $dsConfig->getModules(), $errors);
@@ -101,9 +101,9 @@ class DsUpgradeCommand extends Command
         $directCount = count($dsConfig->getModules());
         $totalCount = count($resolvedModules);
         $depCount = $totalCount - $directCount;
-        $output->writeln('  Active modules: ' . $totalCount . ' (' . $directCount . ' direct + ' . $depCount . ' dependencies)');
-        $output->writeln('  Module order: ' . implode(', ', array_map(fn($m) => $m->id, $resolvedModules)));
-        $output->writeln('');
+        $output->writeln('  Active modules: ' . $totalCount . ' (' . $directCount . ' direct + ' . $depCount . ' dependencies)', OutputInterface::VERBOSITY_VERBOSE);
+        $output->writeln('  Module order: ' . implode(', ', array_map(fn($m) => $m->id, $resolvedModules)), OutputInterface::VERBOSITY_VERBOSE);
+        $output->writeln('', OutputInterface::VERBOSITY_VERBOSE);
 
         // Step 3: Load table definitions and apply extensions
         $rawTables = [];
@@ -149,7 +149,7 @@ class DsUpgradeCommand extends Command
         }
 
         // Step 5: Compile configuration
-        $output->writeln('Compiling configuration...');
+        $output->writeln('Compiling configuration...', OutputInterface::VERBOSITY_VERBOSE);
         $languages = ['cs', 'en'];
         $outputPath = $dsDir . '/config/configuration';
         ConfigCompiler::compile($resolvedModules, $modulesBasePath, $languages, $outputPath);
@@ -159,15 +159,15 @@ class DsUpgradeCommand extends Command
             $configItemCount += count($module->config);
         }
 
-        $output->writeln('  Config items: ' . $configItemCount);
-        $output->writeln('  Languages: ' . implode(', ', $languages));
+        $output->writeln('  Config items: ' . $configItemCount, OutputInterface::VERBOSITY_VERBOSE);
+        $output->writeln('  Languages: ' . implode(', ', $languages), OutputInterface::VERBOSITY_VERBOSE);
         foreach ($languages as $lang) {
-            $output->writeln('  Written to: config/configuration/compiled.' . $lang . '.json');
+            $output->writeln('  Written to: config/configuration/compiled.' . $lang . '.json', OutputInterface::VERBOSITY_VERBOSE);
         }
-        $output->writeln('');
+        $output->writeln('', OutputInterface::VERBOSITY_VERBOSE);
 
         // Step 6: Sync database schema
-        $output->writeln('Checking database...');
+        $output->writeln('Checking database...', OutputInterface::VERBOSITY_VERBOSE);
         $created = 0;
         $altered = 0;
         $unchanged = 0;
@@ -178,7 +178,7 @@ class DsUpgradeCommand extends Command
             $ops = SchemaComparator::compare($tableDef, $existingColumns, $existingIndexes);
 
             if (empty($ops)) {
-                $output->writeln('  [OK]     ' . $tableName);
+                $output->writeln('  [OK]     ' . $tableName, OutputInterface::VERBOSITY_VERBOSE);
                 $unchanged++;
                 continue;
             }
@@ -236,7 +236,7 @@ class DsUpgradeCommand extends Command
             }
         }
 
-        $output->writeln('');
+        $output->writeln('', OutputInterface::VERBOSITY_VERBOSE);
         $output->writeln('Upgrade complete. ' . $created . ' tables created, ' . $altered . ' tables altered, ' . $unchanged . ' tables unchanged.');
 
         $this->provisionUnits($resolvedModules, $dsConnection, $output);
@@ -262,13 +262,37 @@ class DsUpgradeCommand extends Command
         $output->writeln('         Plaintext values will not be readable from DB directly.');
     }
 
+    /**
+     * @param array{created: int, existing: int} $stats
+     */
+    private function logProvisioningResult(
+        OutputInterface $output,
+        string $label,
+        array $stats,
+    ): void {
+        if ($stats['created'] > 0) {
+            $output->writeln(sprintf(
+                '  [CREATE] %s — created: %d, existing: %d',
+                $label,
+                $stats['created'],
+                $stats['existing'],
+            ));
+        } else {
+            $output->writeln(sprintf(
+                '  [OK]     %s — created: 0, existing: %d',
+                $label,
+                $stats['existing'],
+            ), OutputInterface::VERBOSITY_VERBOSE);
+        }
+    }
+
     private function provisionMailRouter(
         DataSourceConfig $dsConfig,
         DataSourceConnection $dsConnection,
         OutputInterface $output,
     ): void {
-        $output->writeln('');
-        $output->writeln('Provisioning mail router...');
+        $output->writeln('', OutputInterface::VERBOSITY_VERBOSE);
+        $output->writeln('Provisioning mail router...', OutputInterface::VERBOSITY_VERBOSE);
 
         $provisioner = new MailRouterProvisioner($dsConnection);
         $result = $provisioner->provision($dsConfig->getId());
@@ -276,15 +300,18 @@ class DsUpgradeCommand extends Command
         $user = $result['user'];
         $mailbox = $result['mailbox'];
 
-        $userTag = $user['created'] ? '[CREATE]' : '[OK]    ';
-        $output->writeln("  {$userTag} user '_mail_router' (id={$user['id']})");
+        if ($user['created']) {
+            $output->writeln("  [CREATE] user '_mail_router' (id={$user['id']})");
+        } else {
+            $output->writeln("  [OK]     user '_mail_router' (id={$user['id']})", OutputInterface::VERBOSITY_VERBOSE);
+        }
 
         if ($mailbox['created']) {
             $output->writeln("  [CREATE] mailbox 'default' (id={$mailbox['id']})");
         } elseif (isset($mailbox['skipped_reason'])) {
             $output->writeln("  <comment>[SKIP]   mailbox 'default' — {$mailbox['skipped_reason']}</comment>");
         } else {
-            $output->writeln("  [OK]     mailbox 'default' (id={$mailbox['id']})");
+            $output->writeln("  [OK]     mailbox 'default' (id={$mailbox['id']})", OutputInterface::VERBOSITY_VERBOSE);
         }
     }
 
@@ -293,8 +320,8 @@ class DsUpgradeCommand extends Command
         DataSourceConnection $dsConnection,
         OutputInterface $output,
     ): void {
-        $output->writeln('');
-        $output->writeln('Provisioning AI analyzer...');
+        $output->writeln('', OutputInterface::VERBOSITY_VERBOSE);
+        $output->writeln('Provisioning AI analyzer...', OutputInterface::VERBOSITY_VERBOSE);
 
         $provisioner = new AIAnalyzerProvisioner($dsConnection);
         $result = $provisioner->provision();
@@ -303,8 +330,11 @@ class DsUpgradeCommand extends Command
         $backend = $result['backend'];
         $profile = $result['profile'];
 
-        $userTag = $user['created'] ? '[CREATE]' : '[OK]    ';
-        $output->writeln("  {$userTag} user '_ai_analyzer' (id={$user['id']})");
+        if ($user['created']) {
+            $output->writeln("  [CREATE] user '_ai_analyzer' (id={$user['id']})");
+        } else {
+            $output->writeln("  [OK]     user '_ai_analyzer' (id={$user['id']})", OutputInterface::VERBOSITY_VERBOSE);
+        }
 
         if ($backend['created']) {
             $output->writeln("  [CREATE] backend 'default' (id={$backend['id']})");
@@ -312,7 +342,7 @@ class DsUpgradeCommand extends Command
         } elseif (isset($backend['skipped_reason'])) {
             $output->writeln("  <comment>[SKIP]   backend 'default' — {$backend['skipped_reason']}</comment>");
         } else {
-            $output->writeln("  [OK]     backend 'default' (id={$backend['id']})");
+            $output->writeln("  [OK]     backend 'default' (id={$backend['id']})", OutputInterface::VERBOSITY_VERBOSE);
         }
 
         if ($profile['created']) {
@@ -320,7 +350,7 @@ class DsUpgradeCommand extends Command
         } elseif (isset($profile['skipped_reason'])) {
             $output->writeln("  <comment>[SKIP]   profile 'czech_invoices' — {$profile['skipped_reason']}</comment>");
         } else {
-            $output->writeln("  [OK]     profile 'czech_invoices' (id={$profile['id']})");
+            $output->writeln("  [OK]     profile 'czech_invoices' (id={$profile['id']})", OutputInterface::VERBOSITY_VERBOSE);
         }
     }
 
@@ -332,11 +362,11 @@ class DsUpgradeCommand extends Command
         DataSourceConnection $dsConnection,
         OutputInterface $output,
     ): void {
-        $output->writeln('');
-        $output->writeln('Provisioning units...');
+        $output->writeln('', OutputInterface::VERBOSITY_VERBOSE);
+        $output->writeln('Provisioning units...', OutputInterface::VERBOSITY_VERBOSE);
 
         if (!$this->isModuleActive($resolvedModules, 'core.units')) {
-            $output->writeln('  <comment>[SKIP] core.units module not active</comment>');
+            $output->writeln('  <comment>[SKIP] core.units module not active</comment>', OutputInterface::VERBOSITY_VERBOSE);
             return;
         }
 
@@ -344,12 +374,7 @@ class DsUpgradeCommand extends Command
         $provisioner = new UnitsProvisioner($dsConnection, $seedFile);
         $result = $provisioner->provision();
 
-        $units = $result['units'];
-        $output->writeln(sprintf(
-            '  [OK]    units — created: %d, existing: %d',
-            $units['created'],
-            $units['existing'],
-        ));
+        $this->logProvisioningResult($output, 'units', $result['units']);
     }
 
     /**
@@ -360,11 +385,11 @@ class DsUpgradeCommand extends Command
         DataSourceConnection $dsConnection,
         OutputInterface $output,
     ): void {
-        $output->writeln('');
-        $output->writeln('Provisioning economy.items kinds...');
+        $output->writeln('', OutputInterface::VERBOSITY_VERBOSE);
+        $output->writeln('Provisioning economy.items kinds...', OutputInterface::VERBOSITY_VERBOSE);
 
         if (!$this->isModuleActive($resolvedModules, 'economy.items')) {
-            $output->writeln('  <comment>[SKIP] economy.items module not active</comment>');
+            $output->writeln('  <comment>[SKIP] economy.items module not active</comment>', OutputInterface::VERBOSITY_VERBOSE);
             return;
         }
 
@@ -372,12 +397,7 @@ class DsUpgradeCommand extends Command
         $provisioner = new ItemKindsProvisioner($dsConnection, $seedFile);
         $result = $provisioner->provision();
 
-        $kinds = $result['kinds'];
-        $output->writeln(sprintf(
-            '  [OK]    item kinds — created: %d, existing: %d',
-            $kinds['created'],
-            $kinds['existing'],
-        ));
+        $this->logProvisioningResult($output, 'item kinds', $result['kinds']);
     }
 
     /**
@@ -389,11 +409,11 @@ class DsUpgradeCommand extends Command
         DataSourceConnection $dsConnection,
         OutputInterface $output,
     ): void {
-        $output->writeln('');
-        $output->writeln('Provisioning economy.codebooks fiscal years...');
+        $output->writeln('', OutputInterface::VERBOSITY_VERBOSE);
+        $output->writeln('Provisioning economy.codebooks fiscal years...', OutputInterface::VERBOSITY_VERBOSE);
 
         if (!$this->isModuleActive($resolvedModules, 'economy.codebooks')) {
-            $output->writeln('  <comment>[SKIP] economy.codebooks module not active</comment>');
+            $output->writeln('  <comment>[SKIP] economy.codebooks module not active</comment>', OutputInterface::VERBOSITY_VERBOSE);
             return;
         }
 
@@ -407,12 +427,7 @@ class DsUpgradeCommand extends Command
         $provisioner = new FiscalYearsProvisioner($dsConnection, $config);
         $result = $provisioner->provision();
 
-        $years = $result['fiscalYears'];
-        $output->writeln(sprintf(
-            '  [OK]    fiscal years — created: %d, existing: %d',
-            $years['created'],
-            $years['existing'],
-        ));
+        $this->logProvisioningResult($output, 'fiscal years', $result['fiscalYears']);
     }
 
     /**
@@ -423,23 +438,18 @@ class DsUpgradeCommand extends Command
         DataSourceConnection $dsConnection,
         OutputInterface $output,
     ): void {
-        $output->writeln('');
-        $output->writeln('Provisioning economy.codebooks vat periods...');
+        $output->writeln('', OutputInterface::VERBOSITY_VERBOSE);
+        $output->writeln('Provisioning economy.codebooks vat periods...', OutputInterface::VERBOSITY_VERBOSE);
 
         if (!$this->isModuleActive($resolvedModules, 'economy.codebooks')) {
-            $output->writeln('  <comment>[SKIP] economy.codebooks module not active</comment>');
+            $output->writeln('  <comment>[SKIP] economy.codebooks module not active</comment>', OutputInterface::VERBOSITY_VERBOSE);
             return;
         }
 
         $provisioner = new VatPeriodsProvisioner($dsConnection);
         $result = $provisioner->provision();
 
-        $periods = $result['vatPeriods'];
-        $output->writeln(sprintf(
-            '  [OK]    vat periods — created: %d, existing: %d',
-            $periods['created'],
-            $periods['existing'],
-        ));
+        $this->logProvisioningResult($output, 'vat periods', $result['vatPeriods']);
     }
 
     /**
@@ -451,11 +461,11 @@ class DsUpgradeCommand extends Command
         DataSourceConnection $dsConnection,
         OutputInterface $output,
     ): void {
-        $output->writeln('');
-        $output->writeln('Provisioning docs.core number series...');
+        $output->writeln('', OutputInterface::VERBOSITY_VERBOSE);
+        $output->writeln('Provisioning docs.core number series...', OutputInterface::VERBOSITY_VERBOSE);
 
         if (!$this->isModuleActive($resolvedModules, 'docs.core')) {
-            $output->writeln('  <comment>[SKIP] docs.core module not active</comment>');
+            $output->writeln('  <comment>[SKIP] docs.core module not active</comment>', OutputInterface::VERBOSITY_VERBOSE);
             return;
         }
 
@@ -469,12 +479,7 @@ class DsUpgradeCommand extends Command
         $provisioner = new NumberSeriesProvisioner($dsConnection, $config);
         $result = $provisioner->provision();
 
-        $series = $result['numberSeries'];
-        $output->writeln(sprintf(
-            '  [OK]    number series — created: %d, existing: %d',
-            $series['created'],
-            $series['existing'],
-        ));
+        $this->logProvisioningResult($output, 'number series', $result['numberSeries']);
     }
 
     /**

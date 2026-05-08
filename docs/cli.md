@@ -96,6 +96,13 @@ jen když projde 100 % DS.
 Použití typicky po `git pull`, pokud se měnily definice tabulek nebo
 cfgItems modulů — viz [Workflow scénáře](#workflow-scénáře).
 
+**Verbosity propagace:** `-v` se předává do vnitřního volání
+`shpd-ds ds-upgrade` na každém DS:
+
+```bash
+sudo shpd-server ds-upgrade-all -v
+```
+
 ### `next-table-id`
 
 ```bash
@@ -167,6 +174,15 @@ opakované spuštění bez efektu, pokud se nic nezměnilo):
 
 Spustit po každém `git pull`, pokud se měnily definice tabulek nebo
 cfgItems modulů.
+
+**Verbosity:** výchozí výstup obsahuje jen akce a varování (`[CREATE]`,
+`[ALTER]`, `[INFO]`, `[WARN]`, `[ERROR]`). Pro kompletní výpis včetně
+průběhu kompilace konfigurace, kontroly schématu po tabulkách a
+provisioner detailů použij `-v`:
+
+```bash
+shpd-ds ds-upgrade -v
+```
 
 ### Users
 

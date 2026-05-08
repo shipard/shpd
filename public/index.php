@@ -59,6 +59,17 @@ try {
 	ErrorLogger::setLogPath($serverConfig->getLogFile());
 	ErrorLogger::setLogLevel($serverConfig->getLogLevel());
 
+	// ── 2.5. Dev dashboard ───────────────────────────────────────────────────
+	if ($serverConfig->getMode() === 'development') {
+		$path = $request->getPath();
+		if ($path === '/' || $path === '/_dev' || str_starts_with($path, '/_dev/')) {
+			$response = (new \Shipard\Api\Controller\DevDashboardController())
+				->dispatch($request);
+			$corsMiddleware->applyTo($response)->send();
+			exit;
+		}
+	}
+
 	// ── 3. Resolve data source ────────────────────────────────────────────────
 	$resolver = new DataSourceResolver($serverConfig->getDomainsFile());
 	$resolved = $resolver->resolve($request->getHost(), $request->getPath());

@@ -12,19 +12,8 @@ kódu, věř kódu (kód je živý, task je momentka).
 
 ## Aktivní práce
 
-Tasky, které jsou rozpracované nebo na řadě.
+Aktuálně nic rozpracovaného...
 
-### CLI utility — vylepšení dev workflow
-
-Po `git pull` aktuálně musí tester ručně pouštět composer + npm + ds-upgrade
-na každém DS. Tato dvojice tasků to zjednodušuje na jeden shell skript a
-jeden CLI příkaz, plus přidává kompletní CLI dokumentaci.
-
-| Task                            | Co řeší                                              |
-|---------------------------------|------------------------------------------------------|
-| `dev-update-script.md`          | `scripts/dev-update.sh` + git hooks v `.githooks/`   |
-| `ds-upgrade-all.md`             | `shpd-server ds-upgrade-all` + `docs/cli.md`         |
-| `ds-upgrade-quiet-default.md`   | Tichý default výstup `ds-upgrade`, kompletní jen s `-v` |
 
 ---
 
@@ -32,6 +21,19 @@ jeden CLI příkaz, plus přidává kompletní CLI dokumentaci.
 
 Drží se jako reference. Když Claude Code potřebuje pochopit, **proč** je
 něco postavené tak, jak je, často to najde v původním PRD.
+
+### CLI utility — vylepšení dev workflow
+
+Zjednodušení post-pull workflow (jeden shell skript místo čtyř ručních
+kroků), volitelná git-hook automatizace, hromadný `ds-upgrade` přes
+všechny DS, tichý default výstup `ds-upgrade`. Centrální CLI reference
+v [`docs/cli.md`](../docs/cli.md).
+
+| Task                            | Co řeší                                              |
+|---------------------------------|------------------------------------------------------|
+| `dev-update-script.md`          | `scripts/dev-update.sh` + git hooks v `.githooks/`   |
+| `ds-upgrade-all.md`             | `shpd-server ds-upgrade-all` + `docs/cli.md`         |
+| `ds-upgrade-quiet-default.md`   | Tichý default výstup `ds-upgrade`, kompletní jen s `-v` |
 
 ### Doklady MVP — faktury vydané a přijaté
 

@@ -6,6 +6,7 @@ namespace Shipard\Api;
 class Response
 {
 	private array $headers = [];
+	private string $bodyType = 'json';
 
 	private function __construct(
 		private int $status,
@@ -35,6 +36,21 @@ class Response
 		return new self($status, ['success' => false, 'error' => $error]);
 	}
 
+	public static function html(string $body, int $status = 200): self
+	{
+		$resp = new self($status, $body);
+		$resp->bodyType = 'html';
+		return $resp;
+	}
+
+	public static function redirect(string $location, int $status = 302): self
+	{
+		$resp = new self($status, '');
+		$resp->bodyType = 'redirect';
+		$resp->headers['Location'] = $location;
+		return $resp;
+	}
+
 	public function withHeader(string $name, string $value): static
 	{
 		$clone          = clone $this;
@@ -60,8 +76,14 @@ class Response
 
 		http_response_code($this->status);
 
-		if ($this->status === 204) {
-			return; // No Content — no body
+		if ($this->status === 204 || $this->bodyType === 'redirect') {
+			return;
+		}
+
+		if ($this->bodyType === 'html') {
+			header('Content-Type: text/html; charset=utf-8');
+			echo $this->payload;
+			return;
 		}
 
 		header('Content-Type: application/json; charset=utf-8');

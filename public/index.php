@@ -63,8 +63,10 @@ try {
 	if ($serverConfig->getMode() === 'development') {
 		$path = $request->getPath();
 		if ($path === '/' || $path === '/_dev' || str_starts_with($path, '/_dev/')) {
-			$response = (new \Shipard\Api\Controller\DevDashboardController())
-				->dispatch($request);
+			$response = (new \Shipard\Api\Controller\DevDashboardController(
+				'/opt/shipard/data-sources',
+				$serverConfig->getLogFile(),
+			))->dispatch($request);
 			$corsMiddleware->applyTo($response)->send();
 			exit;
 		}

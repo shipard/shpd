@@ -12,6 +12,8 @@ class DevDashboardControllerTest extends TestCase
 {
 	private string $tmpDir;
 	private DevDashboardController $ctrl;
+	/** @var list<string> */
+	private array $tmpFiles = [];
 
 	protected function setUp(): void
 	{
@@ -23,6 +25,9 @@ class DevDashboardControllerTest extends TestCase
 	protected function tearDown(): void
 	{
 		$this->rrmdir($this->tmpDir);
+		foreach ($this->tmpFiles as $f) {
+			if (file_exists($f)) unlink($f);
+		}
 	}
 
 	// -------------------------------------------------------------------------
@@ -166,5 +171,162 @@ class DevDashboardControllerTest extends TestCase
 	{
 		$resp = $this->ctrl->dispatch($this->makeRequest('POST', '/_dev/api/data-sources'));
 		$this->assertSame(404, $this->getStatus($resp));
+	}
+
+	// -------------------------------------------------------------------------
+	// Logs page / API
+	// -------------------------------------------------------------------------
+
+	private function makeLogFile(array $lines): string
+	{
+		$path = tempnam(sys_get_temp_dir(), 'shpd-log-');
+		if ($path === false) {
+			$this->fail('Could not create temp log file');
+		}
+		$this->tmpFiles[] = $path;
+		file_put_contents($path, implode("\n", $lines) . "\n");
+		return $path;
+	}
+
+	private function ctrlWithLog(string $logPath): DevDashboardController
+	{
+		return new DevDashboardController($this->tmpDir, $logPath);
+	}
+
+	private function jsonLine(array $data): string
+	{
+		return (string) json_encode($data);
+	}
+
+	public function testLogsPageReturnsHtml(): void
+	{
+		$resp = $this->ctrl->dispatch($this->makeRequest('GET', '/_dev/logs/'));
+		$this->assertSame(200, $this->getStatus($resp));
+		$body = (string) $this->getPayloadRaw($resp);
+		$this->assertStringContainsString('Shipard Logs', $body);
+		$this->assertStringContainsString((string) gethostname(), $body);
+	}
+
+	public function testLogsPageWithoutTrailingSlash(): void
+	{
+		$resp = $this->ctrl->dispatch($this->makeRequest('GET', '/_dev/logs'));
+		$this->assertSame(200, $this->getStatus($resp));
+		$body = (string) $this->getPayloadRaw($resp);
+		$this->assertStringContainsString('Shipard Logs', $body);
+	}
+
+	public function testApiLogsWithoutLogPathReturns503(): void
+	{
+		// $this->ctrl was constructed without log path
+		$resp = $this->ctrl->dispatch($this->makeRequest('GET', '/_dev/api/logs'));
+		$this->assertSame(503, $this->getStatus($resp));
+		$payload = $this->getPayloadRaw($resp);
+		$this->assertFalse($payload['success']);
+		$this->assertSame('LOG_NOT_CONFIGURED', $payload['error']['code']);
+	}
+
+	public function testApiLogsReturnsParsedEntries(): void
+	{
+		$logPath = $this->makeLogFile([
+			$this->jsonLine(['ts' => '2026-05-07T12:00:00+00:00', 'level' => 'info', 'msg' => 'one']),
+			$this->jsonLine(['ts' => '2026-05-07T12:00:01+00:00', 'level' => 'warn', 'msg' => 'two']),
+			$this->jsonLine(['ts' => '2026-05-07T12:00:02+00:00', 'level' => 'error', 'msg' => 'three']),
+		]);
+		$ctrl = $this->ctrlWithLog($logPath);
+		$resp = $ctrl->dispatch($this->makeRequest('GET', '/_dev/api/logs'));
+		$this->assertSame(200, $this->getStatus($resp));
+
+		$payload = $this->getPayloadRaw($resp);
+		$this->assertTrue($payload['success']);
+		$this->assertCount(3, $payload['data']['entries']);
+		$this->assertTrue($payload['data']['available']);
+		$this->assertSame('one', $payload['data']['entries'][0]['msg']);
+		$this->assertSame('three', $payload['data']['entries'][2]['msg']);
+	}
+
+	public function testApiLogsSkipsInvalidJsonLines(): void
+	{
+		$logPath = $this->makeLogFile([
+			$this->jsonLine(['ts' => '2026-05-07T12:00:00+00:00', 'level' => 'info', 'msg' => 'good']),
+			'this is not { valid json',
+			$this->jsonLine(['ts' => '2026-05-07T12:00:02+00:00', 'level' => 'error', 'msg' => 'good2']),
+		]);
+		$ctrl = $this->ctrlWithLog($logPath);
+		$resp = $ctrl->dispatch($this->makeRequest('GET', '/_dev/api/logs'));
+		$payload = $this->getPayloadRaw($resp);
+		$this->assertCount(2, $payload['data']['entries']);
+		$msgs = array_column($payload['data']['entries'], 'msg');
+		$this->assertSame(['good', 'good2'], $msgs);
+	}
+
+	public function testApiLogsSkipsLinesMissingRequiredFields(): void
+	{
+		$logPath = $this->makeLogFile([
+			$this->jsonLine(['ts' => '2026-05-07T12:00:00+00:00', 'level' => 'info', 'msg' => 'ok']),
+			$this->jsonLine(['level' => 'info', 'msg' => 'no-ts']),
+			$this->jsonLine(['ts' => '2026-05-07T12:00:02+00:00', 'msg' => 'no-level']),
+			$this->jsonLine(['ts' => '2026-05-07T12:00:03+00:00', 'level' => 'warn', 'msg' => 'ok2']),
+		]);
+		$ctrl = $this->ctrlWithLog($logPath);
+		$resp = $ctrl->dispatch($this->makeRequest('GET', '/_dev/api/logs'));
+		$payload = $this->getPayloadRaw($resp);
+		$msgs = array_column($payload['data']['entries'], 'msg');
+		$this->assertSame(['ok', 'ok2'], $msgs);
+	}
+
+	public function testApiLogsRespectsLimit(): void
+	{
+		$lines = [];
+		for ($i = 1; $i <= 50; $i++) {
+			$lines[] = $this->jsonLine([
+				'ts'    => sprintf('2026-05-07T12:00:%02d+00:00', $i % 60),
+				'level' => 'info',
+				'msg'   => 'm' . $i,
+			]);
+		}
+		$logPath = $this->makeLogFile($lines);
+		$ctrl    = $this->ctrlWithLog($logPath);
+
+		$resp    = $ctrl->dispatch(Request::fromArray('GET', '/_dev/api/logs?limit=10', ['limit' => '10'], '', []));
+		$payload = $this->getPayloadRaw($resp);
+		$this->assertCount(10, $payload['data']['entries']);
+		$this->assertSame(10, $payload['data']['limit']);
+		// Last 10 of 50 should be m41..m50
+		$this->assertSame('m41', $payload['data']['entries'][0]['msg']);
+		$this->assertSame('m50', $payload['data']['entries'][9]['msg']);
+	}
+
+	public function testApiLogsCapsLimitAt2000(): void
+	{
+		$logPath = $this->makeLogFile([
+			$this->jsonLine(['ts' => '2026-05-07T12:00:00+00:00', 'level' => 'info', 'msg' => 'x']),
+		]);
+		$ctrl = $this->ctrlWithLog($logPath);
+		$resp = $ctrl->dispatch(Request::fromArray('GET', '/_dev/api/logs?limit=99999', ['limit' => '99999'], '', []));
+		$payload = $this->getPayloadRaw($resp);
+		$this->assertSame(2000, $payload['data']['limit']);
+	}
+
+	public function testApiLogsClampsLimitAtMin(): void
+	{
+		$logPath = $this->makeLogFile([
+			$this->jsonLine(['ts' => '2026-05-07T12:00:00+00:00', 'level' => 'info', 'msg' => 'x']),
+		]);
+		$ctrl = $this->ctrlWithLog($logPath);
+		$resp = $ctrl->dispatch(Request::fromArray('GET', '/_dev/api/logs?limit=0', ['limit' => '0'], '', []));
+		$payload = $this->getPayloadRaw($resp);
+		$this->assertSame(1, $payload['data']['limit']);
+	}
+
+	public function testApiLogsHandlesMissingLogFile(): void
+	{
+		$ctrl = $this->ctrlWithLog('/tmp/shpd-nonexistent-log-' . uniqid());
+		$resp = $ctrl->dispatch($this->makeRequest('GET', '/_dev/api/logs'));
+		$this->assertSame(200, $this->getStatus($resp));
+
+		$payload = $this->getPayloadRaw($resp);
+		$this->assertTrue($payload['success']);
+		$this->assertFalse($payload['data']['available']);
+		$this->assertSame([], $payload['data']['entries']);
 	}
 }

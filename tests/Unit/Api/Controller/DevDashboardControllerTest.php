@@ -329,4 +329,273 @@ class DevDashboardControllerTest extends TestCase
 		$this->assertFalse($payload['data']['available']);
 		$this->assertSame([], $payload['data']['entries']);
 	}
+
+	// -------------------------------------------------------------------------
+	// ds-create page / validation
+	// -------------------------------------------------------------------------
+
+	private function makeJsonRequest(string $method, string $uri, array $body): Request
+	{
+		$rawBody = json_encode($body) ?: '';
+		return Request::fromArray($method, $uri, [], $rawBody, []);
+	}
+
+	public function testDsCreatePageReturnsHtml(): void
+	{
+		$resp = $this->ctrl->dispatch($this->makeRequest('GET', '/_dev/ds-create/'));
+		$this->assertSame(200, $this->getStatus($resp));
+		$body = (string) $this->getPayloadRaw($resp);
+		$this->assertStringContainsString('Create new Data Source', $body);
+	}
+
+	public function testDsCreatePageWithoutTrailingSlash(): void
+	{
+		$resp = $this->ctrl->dispatch($this->makeRequest('GET', '/_dev/ds-create'));
+		$this->assertSame(200, $this->getStatus($resp));
+	}
+
+	public function testDsCreateValidationEmptyName(): void
+	{
+		$resp = $this->ctrl->dispatch($this->makeJsonRequest('POST', '/_dev/api/ds-create', [
+			'name'     => '',
+			'login'    => 'admin',
+			'password' => 'admin',
+		]));
+		$this->assertSame(400, $this->getStatus($resp));
+		$payload = $this->getPayloadRaw($resp);
+		$this->assertFalse($payload['success']);
+		$this->assertSame('VALIDATION', $payload['error']['code']);
+		$this->assertStringContainsString('Name is required', $payload['error']['message']);
+	}
+
+	public function testDsCreateValidationInvalidLogin(): void
+	{
+		$resp = $this->ctrl->dispatch($this->makeJsonRequest('POST', '/_dev/api/ds-create', [
+			'name'     => 'Test DS',
+			'login'    => 'bad-login!',
+			'password' => 'admin',
+		]));
+		$this->assertSame(400, $this->getStatus($resp));
+		$payload = $this->getPayloadRaw($resp);
+		$this->assertStringContainsString('letters, digits, and underscores', $payload['error']['message']);
+	}
+
+	public function testDsCreateValidationShortPassword(): void
+	{
+		$resp = $this->ctrl->dispatch($this->makeJsonRequest('POST', '/_dev/api/ds-create', [
+			'name'     => 'Test DS',
+			'login'    => 'admin',
+			'password' => 'ab',
+		]));
+		$this->assertSame(400, $this->getStatus($resp));
+		$payload = $this->getPayloadRaw($resp);
+		$this->assertStringContainsString('at least 4 characters', $payload['error']['message']);
+	}
+
+	public function testDsCreateValidationMultipleErrors(): void
+	{
+		$resp = $this->ctrl->dispatch($this->makeJsonRequest('POST', '/_dev/api/ds-create', []));
+		$this->assertSame(400, $this->getStatus($resp));
+		$payload = $this->getPayloadRaw($resp);
+		$msg = $payload['error']['message'];
+		$this->assertStringContainsString('Name is required', $msg);
+		$this->assertStringContainsString('Admin login is required', $msg);
+		$this->assertStringContainsString('Admin password is required', $msg);
+	}
+
+	public function testDsCreateGetReturns404(): void
+	{
+		$resp = $this->ctrl->dispatch($this->makeRequest('GET', '/_dev/api/ds-create'));
+		$this->assertSame(404, $this->getStatus($resp));
+	}
+
+	// -------------------------------------------------------------------------
+	// ds-create pipeline (subprocess mocks via subclassing)
+	// -------------------------------------------------------------------------
+
+	private function streamToString(Response $response): string
+	{
+		$prop = (new \ReflectionClass($response))->getProperty('streamProducer');
+		$producer = $prop->getValue($response);
+		ob_start();
+		$producer();
+		return (string) ob_get_clean();
+	}
+
+	private function makeTestableCtrl(): TestableDevDashboardController
+	{
+		return new TestableDevDashboardController($this->tmpDir);
+	}
+
+	public function testDsCreatePipelineHappyPath(): void
+	{
+		$ctrl = $this->makeTestableCtrl();
+		$ctrl->commandResults = [
+			[0, "Some output\n  Directory:     /tmp/test/abc123\n"],
+			[0, ""],
+			[0, ""],
+		];
+
+		$resp = $ctrl->dispatch($this->makeJsonRequest('POST', '/_dev/api/ds-create', [
+			'name'     => 'Test',
+			'login'    => 'admin',
+			'password' => 'admin',
+			'seed'     => false,
+		]));
+
+		$this->assertSame(200, $this->getStatus($resp));
+		$out = $this->streamToString($resp);
+		$this->assertStringContainsString('[STEP] Creating data source...', $out);
+		$this->assertStringContainsString('[STEP] Running ds-upgrade...', $out);
+		$this->assertStringContainsString('[STEP] Creating admin user', $out);
+		$this->assertStringContainsString('[DONE] {"id":"abc123"', $out);
+		$this->assertCount(3, $ctrl->commandsRun);
+	}
+
+	public function testDsCreatePipelineCreateFails(): void
+	{
+		$ctrl = $this->makeTestableCtrl();
+		$ctrl->commandResults = [
+			[1, "boom\n"],
+		];
+
+		$resp = $ctrl->dispatch($this->makeJsonRequest('POST', '/_dev/api/ds-create', [
+			'name'     => 'Test',
+			'login'    => 'admin',
+			'password' => 'admin',
+		]));
+
+		$out = $this->streamToString($resp);
+		$this->assertStringContainsString('[ERROR] ds-create failed', $out);
+		$this->assertStringNotContainsString('[DONE]', $out);
+		$this->assertCount(1, $ctrl->commandsRun);
+	}
+
+	public function testDsCreatePipelineUpgradeFails(): void
+	{
+		$ctrl = $this->makeTestableCtrl();
+		$ctrl->commandResults = [
+			[0, "  Directory:     /tmp/test/abc123\n"],
+			[1, "upgrade boom\n"],
+		];
+
+		$resp = $ctrl->dispatch($this->makeJsonRequest('POST', '/_dev/api/ds-create', [
+			'name'     => 'Test',
+			'login'    => 'admin',
+			'password' => 'admin',
+		]));
+
+		$out = $this->streamToString($resp);
+		$this->assertStringContainsString('ds-upgrade failed', $out);
+		$this->assertStringContainsString('abc123', $out);
+		$this->assertStringNotContainsString('[DONE]', $out);
+		$this->assertCount(2, $ctrl->commandsRun);
+	}
+
+	public function testDsCreatePipelineParsesIdFromDirectoryLine(): void
+	{
+		$ctrl = $this->makeTestableCtrl();
+		$ctrl->commandResults = [
+			[0, "  Directory:     /opt/shipard/data-sources/zzzz-aaaa-bbbb-cccc\n"],
+			[0, ""],
+			[0, ""],
+		];
+
+		$resp = $ctrl->dispatch($this->makeJsonRequest('POST', '/_dev/api/ds-create', [
+			'name'     => 'Test',
+			'login'    => 'admin',
+			'password' => 'admin',
+		]));
+
+		$out = $this->streamToString($resp);
+		$this->assertStringContainsString('[DONE] {"id":"zzzz-aaaa-bbbb-cccc"', $out);
+		$this->assertStringContainsString('"url":"/zzzz-aaaa-bbbb-cccc/app/"', $out);
+	}
+
+	public function testDsCreatePipelineFailsOnMissingDirectoryLine(): void
+	{
+		$ctrl = $this->makeTestableCtrl();
+		$ctrl->commandResults = [
+			[0, "Some output without the magic line\n"],
+		];
+
+		$resp = $ctrl->dispatch($this->makeJsonRequest('POST', '/_dev/api/ds-create', [
+			'name'     => 'Test',
+			'login'    => 'admin',
+			'password' => 'admin',
+		]));
+
+		$out = $this->streamToString($resp);
+		$this->assertStringContainsString('[ERROR] Could not parse', $out);
+		$this->assertCount(1, $ctrl->commandsRun);
+	}
+
+	public function testDsCreatePipelineWithSeed(): void
+	{
+		$ctrl = $this->makeTestableCtrl();
+		$ctrl->commandResults = [
+			[0, "  Directory:     /tmp/x/abc123\n"],
+			[0, ""],
+			[0, ""],
+			[0, ""],
+			[0, ""],
+		];
+
+		$resp = $ctrl->dispatch($this->makeJsonRequest('POST', '/_dev/api/ds-create', [
+			'name'     => 'Test',
+			'login'    => 'admin',
+			'password' => 'admin',
+			'seed'     => true,
+		]));
+
+		$out = $this->streamToString($resp);
+		$this->assertStringContainsString('Seeding test persons', $out);
+		$this->assertStringContainsString('Seeding test mail', $out);
+		$this->assertStringContainsString('[DONE]', $out);
+		$this->assertCount(5, $ctrl->commandsRun);
+	}
+
+	public function testDsCreatePasswordRedactedInOutput(): void
+	{
+		$ctrl = $this->makeTestableCtrl();
+		$ctrl->commandResults = [
+			[0, "  Directory:     /tmp/x/abc123\n"],
+			[0, ""],
+			[0, "running with --password=secret123 in args\n"],
+		];
+
+		$resp = $ctrl->dispatch($this->makeJsonRequest('POST', '/_dev/api/ds-create', [
+			'name'     => 'Test',
+			'login'    => 'admin',
+			'password' => 'secret123',
+		]));
+
+		$out = $this->streamToString($resp);
+		$this->assertStringContainsString('--password=***', $out);
+		$this->assertStringNotContainsString('--password=secret123', $out);
+	}
+}
+
+class TestableDevDashboardController extends DevDashboardController
+{
+	/** @var list<array{0: int, 1: string}> */
+	public array $commandResults = [];
+	/** @var list<string> */
+	public array $commandsRun = [];
+
+	protected function streamCommand(string $cmd, bool $redactPassword = false): array
+	{
+		$this->commandsRun[] = $cmd;
+		if (count($this->commandResults) === 0) {
+			return [0, ''];
+		}
+		$result = array_shift($this->commandResults);
+
+		$emitted = $redactPassword
+			? (string) preg_replace('/--password=\S+/', '--password=***', $result[1])
+			: $result[1];
+		echo $emitted;
+
+		return $result;
+	}
 }

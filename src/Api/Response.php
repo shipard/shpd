@@ -8,6 +8,9 @@ class Response
 	private array $headers = [];
 	private string $bodyType = 'json';
 
+	/** @var (callable():void)|null */
+	private $streamProducer = null;
+
 	private function __construct(
 		private int $status,
 		private mixed $payload,
@@ -51,6 +54,20 @@ class Response
 		return $resp;
 	}
 
+	public static function stream(
+		callable $producer,
+		int $status = 200,
+		string $contentType = 'text/plain; charset=utf-8',
+	): self {
+		$resp = new self($status, '');
+		$resp->bodyType = 'stream';
+		$resp->headers['Content-Type'] = $contentType;
+		$resp->headers['X-Accel-Buffering'] = 'no';
+		$resp->headers['Cache-Control'] = 'no-cache';
+		$resp->streamProducer = $producer;
+		return $resp;
+	}
+
 	public function withHeader(string $name, string $value): static
 	{
 		$clone          = clone $this;
@@ -77,6 +94,18 @@ class Response
 		http_response_code($this->status);
 
 		if ($this->status === 204 || $this->bodyType === 'redirect') {
+			return;
+		}
+
+		if ($this->bodyType === 'stream') {
+			while (ob_get_level() > 0) {
+				ob_end_flush();
+			}
+			@ob_implicit_flush(true);
+
+			if ($this->streamProducer !== null) {
+				($this->streamProducer)();
+			}
 			return;
 		}
 

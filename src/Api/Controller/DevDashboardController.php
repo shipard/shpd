@@ -6,7 +6,7 @@ namespace Shipard\Api\Controller;
 use Shipard\Api\Request;
 use Shipard\Api\Response;
 
-final class DevDashboardController
+class DevDashboardController
 {
 	public function __construct(
 		private readonly string $dataSourcesDir = '/opt/shipard/data-sources',
@@ -35,6 +35,14 @@ final class DevDashboardController
 
 		if ($path === '/_dev/api/logs' && $request->getMethod() === 'GET') {
 			return $this->getLogs($request);
+		}
+
+		if ($path === '/_dev/ds-create' || $path === '/_dev/ds-create/') {
+			return $this->dsCreatePage();
+		}
+
+		if ($path === '/_dev/api/ds-create' && $request->getMethod() === 'POST') {
+			return $this->dsCreate($request);
 		}
 
 		return Response::error('NOT_FOUND', 'Not found', 404);
@@ -142,6 +150,220 @@ final class DevDashboardController
 		}
 
 		return Response::html($this->renderHtml($hostname, $refresh));
+	}
+
+	private function dsCreatePage(): Response
+	{
+		$hostname = htmlspecialchars(gethostname() ?: 'unknown', ENT_QUOTES, 'UTF-8');
+		return Response::html($this->renderDsCreateHtml($hostname));
+	}
+
+	private function dsCreate(Request $request): Response
+	{
+		$body = $request->getBody() ?? [];
+
+		$name     = is_string($body['name'] ?? null) ? trim($body['name']) : '';
+		$login    = is_string($body['login'] ?? null) ? trim($body['login']) : '';
+		$password = is_string($body['password'] ?? null) ? $body['password'] : '';
+		$seed     = (bool) ($body['seed'] ?? false);
+
+		$errors = $this->validateDsCreateInput($name, $login, $password);
+		if ($errors) {
+			return Response::error('VALIDATION', implode(' ', $errors), 400);
+		}
+
+		return Response::stream(function () use ($name, $login, $password, $seed) {
+			$this->runDsCreatePipeline($name, $login, $password, $seed);
+		});
+	}
+
+	/**
+	 * @return list<string>
+	 */
+	private function validateDsCreateInput(string $name, string $login, string $password): array
+	{
+		$errors = [];
+
+		if ($name === '') {
+			$errors[] = 'Name is required.';
+		} elseif (mb_strlen($name) > 200) {
+			$errors[] = 'Name is too long (max 200 characters).';
+		}
+
+		if ($login === '') {
+			$errors[] = 'Admin login is required.';
+		} elseif (!preg_match('/^[a-zA-Z0-9_]+$/', $login)) {
+			$errors[] = 'Admin login may contain only letters, digits, and underscores.';
+		} elseif (mb_strlen($login) > 64) {
+			$errors[] = 'Admin login is too long (max 64 characters).';
+		}
+
+		if ($password === '') {
+			$errors[] = 'Admin password is required.';
+		} elseif (mb_strlen($password) < 4) {
+			$errors[] = 'Admin password must be at least 4 characters.';
+		}
+
+		return $errors;
+	}
+
+	protected function getShpdServerPath(): string
+	{
+		return dirname(__DIR__, 3) . '/bin/shpd-server';
+	}
+
+	protected function getShpdDsPath(): string
+	{
+		return dirname(__DIR__, 3) . '/bin/shpd-ds';
+	}
+
+	private function runDsCreatePipeline(
+		string $name,
+		string $login,
+		string $password,
+		bool $seed,
+	): void {
+		$shpdServer = $this->getShpdServerPath();
+		$shpdDs     = $this->getShpdDsPath();
+
+		// ── 1. ds-create ────────────────────────────────────────────────
+		$this->emitStep('Creating data source...');
+		$cmd = sprintf(
+			'%s ds-create --name=%s --no-ansi 2>&1',
+			escapeshellarg($shpdServer),
+			escapeshellarg($name),
+		);
+		[$exitCode, $output] = $this->streamCommand($cmd);
+
+		if ($exitCode !== 0) {
+			$this->emitError('ds-create failed (exit ' . $exitCode . ')');
+			return;
+		}
+
+		if (!preg_match('~Directory:\s+(\S+)~', $output, $m)) {
+			$this->emitError('Could not parse data source directory from output');
+			return;
+		}
+		$dsDir = $m[1];
+		$dsId  = basename($dsDir);
+
+		// ── 2. ds-upgrade ───────────────────────────────────────────────
+		$this->emitStep('Running ds-upgrade...');
+		$cmd = sprintf(
+			'cd %s && %s ds-upgrade --no-ansi 2>&1',
+			escapeshellarg($dsDir),
+			escapeshellarg($shpdDs),
+		);
+		[$exitCode] = $this->streamCommand($cmd);
+
+		if ($exitCode !== 0) {
+			$this->emitError(
+				'ds-upgrade failed — DS ' . $dsId . ' was created but is not usable. '
+				. 'Check the directory and run upgrade manually.'
+			);
+			return;
+		}
+
+		// ── 3. user-create ──────────────────────────────────────────────
+		$this->emitStep('Creating admin user "' . $login . '"...');
+		$cmd = sprintf(
+			'cd %s && %s user-create --login=%s --password=%s --name=%s --no-ansi 2>&1',
+			escapeshellarg($dsDir),
+			escapeshellarg($shpdDs),
+			escapeshellarg($login),
+			escapeshellarg($password),
+			escapeshellarg($login),
+		);
+		[$exitCode] = $this->streamCommand($cmd, redactPassword: true);
+
+		if ($exitCode !== 0) {
+			$this->emitError(
+				'user-create failed — DS ' . $dsId . ' was upgraded but has no admin user.'
+			);
+			return;
+		}
+
+		// ── 4. seed (optional) ──────────────────────────────────────────
+		if ($seed) {
+			$this->emitStep('Seeding test persons...');
+			$cmd = sprintf(
+				'cd %s && %s seed-persons --no-ansi 2>&1',
+				escapeshellarg($dsDir),
+				escapeshellarg($shpdDs),
+			);
+			[$exitCode] = $this->streamCommand($cmd);
+			if ($exitCode !== 0) {
+				$this->emitError('seed-persons failed (DS is otherwise usable)');
+				return;
+			}
+
+			$this->emitStep('Seeding test mail...');
+			$cmd = sprintf(
+				'cd %s && %s seed-mail --no-ansi 2>&1',
+				escapeshellarg($dsDir),
+				escapeshellarg($shpdDs),
+			);
+			[$exitCode] = $this->streamCommand($cmd);
+			if ($exitCode !== 0) {
+				$this->emitError('seed-mail failed (DS is otherwise usable)');
+				return;
+			}
+		}
+
+		$this->emitDone($dsId);
+	}
+
+	/**
+	 * Run a shell command, stream its output to the client line-by-line, and
+	 * capture it for parsing.
+	 *
+	 * @return array{0: int, 1: string} [exitCode, capturedOutput]
+	 */
+	protected function streamCommand(string $cmd, bool $redactPassword = false): array
+	{
+		$proc = popen($cmd, 'r');
+		if ($proc === false) {
+			return [-1, ''];
+		}
+
+		$captured = '';
+		while (($line = fgets($proc)) !== false) {
+			$emitted = $redactPassword
+				? preg_replace('/--password=\S+/', '--password=***', $line)
+				: $line;
+
+			echo $emitted;
+			flush();
+
+			$captured .= $line;
+		}
+
+		$status = pclose($proc);
+		$exitCode = ($status === -1) ? -1 : (($status >> 8) & 0xFF);
+
+		return [$exitCode, $captured];
+	}
+
+	private function emitStep(string $msg): void
+	{
+		echo "[STEP] " . $msg . "\n";
+		flush();
+	}
+
+	private function emitError(string $msg): void
+	{
+		echo "[ERROR] " . $msg . "\n";
+		flush();
+	}
+
+	private function emitDone(string $dsId): void
+	{
+		$payload = json_encode(
+			['id' => $dsId, 'url' => '/' . $dsId . '/app/'],
+			JSON_UNESCAPED_SLASHES,
+		);
+		echo "[DONE] " . $payload . "\n";
+		flush();
 	}
 
 	private function renderHtml(string $hostname, int $refreshSeconds): string
@@ -259,7 +481,7 @@ final class DevDashboardController
 		<div class="banner">⚠️  DEVELOPMENT MODE — do not deploy publicly</div>
 		<header class="app">
 			<h1>Shipard Dev Dashboard</h1>
-			<div class="host">Server: <code>{$hostname}</code><a href="/_dev/logs/">View Logs &rarr;</a></div>
+			<div class="host">Server: <code>{$hostname}</code><a href="/_dev/logs/">View Logs &rarr;</a><a href="/_dev/ds-create/">+ New Data Source</a></div>
 		</header>
 		<main>
 			<div class="toolbar">
@@ -1217,6 +1439,453 @@ final class DevDashboardController
 			updateLoadOlder();
 			loadEntries();
 			setInterval(tick, 1000);
+		})();
+		</script>
+		</body>
+		</html>
+		HTML;
+	}
+
+	private function renderDsCreateHtml(string $hostname): string
+	{
+		return <<<HTML
+		<!DOCTYPE html>
+		<html lang="en">
+		<head>
+		<meta charset="utf-8">
+		<title>Create Data Source — Shipard Dev</title>
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<style>
+		* { box-sizing: border-box; }
+		body {
+			margin: 0;
+			font-family: system-ui, -apple-system, sans-serif;
+			background: #f3f4f6;
+			color: #111827;
+		}
+		.banner {
+			background: #d97706;
+			color: white;
+			padding: 8px 16px;
+			text-align: center;
+			font-weight: 600;
+			font-size: 14px;
+		}
+		header.app {
+			background: #1f2937;
+			color: white;
+			padding: 16px 24px;
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+		}
+		header.app h1 { margin: 0; font-size: 18px; font-weight: 600; }
+		header.app .meta { opacity: 0.9; font-size: 14px; }
+		header.app .meta code { font-family: monospace; }
+		header.app .meta a { color: #93c5fd; text-decoration: none; margin-left: 12px; }
+		header.app .meta a:hover { text-decoration: underline; }
+		main {
+			max-width: 800px;
+			margin: 24px auto;
+			padding: 0 16px;
+		}
+		.card {
+			background: white;
+			border-radius: 6px;
+			box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+			padding: 20px 24px;
+			margin-bottom: 16px;
+		}
+		.field { margin-bottom: 14px; }
+		.field label {
+			display: block;
+			font-size: 13px;
+			color: #374151;
+			font-weight: 600;
+			margin-bottom: 4px;
+		}
+		.field .req { color: #dc2626; }
+		.field input[type=text],
+		.field input[type=password] {
+			width: 100%;
+			padding: 8px 10px;
+			border: 1px solid #d1d5db;
+			border-radius: 4px;
+			font-size: 14px;
+			font-family: inherit;
+		}
+		.field input:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37,99,235,0.2); }
+		.field input:disabled { background: #f9fafb; color: #6b7280; }
+		.field .err {
+			color: #b91c1c;
+			font-size: 12px;
+			margin-top: 4px;
+			min-height: 14px;
+		}
+		.field .pw-row { display: flex; gap: 6px; }
+		.field .pw-row input { flex: 1; }
+		.field .pw-row button {
+			padding: 0 12px;
+			border: 1px solid #d1d5db;
+			background: white;
+			border-radius: 4px;
+			cursor: pointer;
+			font-size: 13px;
+		}
+		.field .pw-row button:hover { background: #f3f4f6; }
+		.field.checkbox { display: flex; align-items: center; gap: 8px; }
+		.field.checkbox label { margin: 0; font-weight: normal; }
+		.submit-row { margin-top: 18px; }
+		.submit-btn {
+			background: #2563eb;
+			color: white;
+			border: none;
+			border-radius: 4px;
+			padding: 10px 18px;
+			font-size: 14px;
+			font-weight: 600;
+			cursor: pointer;
+			width: 100%;
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			gap: 8px;
+		}
+		.submit-btn:hover:not(:disabled) { background: #1d4ed8; }
+		.submit-btn:disabled { background: #93c5fd; cursor: default; }
+		.spinner {
+			display: inline-block;
+			width: 12px;
+			height: 12px;
+			border: 2px solid rgba(255,255,255,0.4);
+			border-top-color: white;
+			border-radius: 50%;
+			animation: spin 0.8s linear infinite;
+		}
+		@keyframes spin { to { transform: rotate(360deg); } }
+		.form-error {
+			background: #fee2e2;
+			color: #991b1b;
+			border-radius: 4px;
+			padding: 8px 12px;
+			margin-bottom: 12px;
+			font-size: 13px;
+		}
+		.output-section { display: none; }
+		.output-section.active { display: block; }
+		.output-section h2 {
+			margin: 0 0 8px 0;
+			font-size: 13px;
+			color: #6b7280;
+			font-weight: 600;
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+		}
+		.output-pre {
+			background: #1f2937;
+			color: #f3f4f6;
+			padding: 12px 14px;
+			border-radius: 4px;
+			font-family: monospace;
+			font-size: 0.85em;
+			max-height: 60vh;
+			overflow-y: auto;
+			margin: 0;
+			white-space: pre-wrap;
+			word-break: break-word;
+		}
+		.output-pre .line-step  { color: #93c5fd; font-weight: 600; display: block; }
+		.output-pre .line-error { color: #fca5a5; font-weight: 600; display: block; }
+		.output-pre .line-plain { color: #e5e7eb; display: block; }
+		.result-banner {
+			padding: 14px 16px;
+			border-radius: 6px;
+			margin-bottom: 12px;
+			display: none;
+			align-items: center;
+			gap: 12px;
+			flex-wrap: wrap;
+		}
+		.result-banner.active { display: flex; }
+		.result-banner.success { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
+		.result-banner.error   { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+		.result-banner .msg { flex: 1; font-weight: 600; }
+		.result-banner .actions { display: flex; gap: 8px; }
+		.result-banner a, .result-banner button {
+			padding: 6px 14px;
+			border-radius: 4px;
+			text-decoration: none;
+			font-size: 13px;
+			font-weight: 600;
+			cursor: pointer;
+			border: 1px solid transparent;
+			background: white;
+			color: #111827;
+		}
+		.result-banner a:hover, .result-banner button:hover { background: #f3f4f6; }
+		.result-banner a.primary {
+			background: #059669;
+			color: white;
+		}
+		.result-banner a.primary:hover { background: #047857; }
+		.result-banner.error a.primary { background: #dc2626; }
+		.result-banner.error a.primary:hover { background: #b91c1c; }
+		</style>
+		</head>
+		<body>
+		<div class="banner">⚠️  DEVELOPMENT MODE — do not deploy publicly</div>
+		<header class="app">
+			<h1>Create new Data Source</h1>
+			<div class="meta">
+				Server: <code>{$hostname}</code>
+				<a href="/_dev/">&larr; Dashboard</a>
+			</div>
+		</header>
+		<main>
+			<div class="result-banner" id="resultBanner">
+				<span class="msg" id="resultMsg"></span>
+				<span class="actions" id="resultActions"></span>
+			</div>
+
+			<div class="card">
+				<div class="form-error" id="formError" style="display:none;"></div>
+				<form id="dsForm" autocomplete="off">
+					<div class="field">
+						<label for="f-name">Name <span class="req">*</span></label>
+						<input type="text" id="f-name" name="name" required maxlength="200">
+						<div class="err" id="err-name"></div>
+					</div>
+					<div class="field">
+						<label for="f-login">Admin login <span class="req">*</span></label>
+						<input type="text" id="f-login" name="login" value="admin" required maxlength="64">
+						<div class="err" id="err-login"></div>
+					</div>
+					<div class="field">
+						<label for="f-password">Admin password <span class="req">*</span></label>
+						<div class="pw-row">
+							<input type="password" id="f-password" name="password" value="admin" required>
+							<button type="button" id="togglePw">show</button>
+						</div>
+						<div class="err" id="err-password"></div>
+					</div>
+					<div class="field checkbox">
+						<input type="checkbox" id="f-seed" name="seed">
+						<label for="f-seed">Seed test data (persons, mail samples)</label>
+					</div>
+					<div class="submit-row">
+						<button type="submit" class="submit-btn" id="submitBtn">
+							<span id="submitLabel">Create Data Source</span>
+						</button>
+					</div>
+				</form>
+			</div>
+
+			<div class="output-section" id="outputSection">
+				<div class="card">
+					<h2>Output</h2>
+					<pre class="output-pre" id="outputPre"></pre>
+				</div>
+			</div>
+		</main>
+		<script>
+		(function () {
+			var form         = document.getElementById('dsForm');
+			var submitBtn    = document.getElementById('submitBtn');
+			var submitLabel  = document.getElementById('submitLabel');
+			var togglePw     = document.getElementById('togglePw');
+			var pwInput      = document.getElementById('f-password');
+			var nameInput    = document.getElementById('f-name');
+			var loginInput   = document.getElementById('f-login');
+			var seedInput    = document.getElementById('f-seed');
+			var formError    = document.getElementById('formError');
+			var outputSection = document.getElementById('outputSection');
+			var outputPre    = document.getElementById('outputPre');
+			var resultBanner = document.getElementById('resultBanner');
+			var resultMsg    = document.getElementById('resultMsg');
+			var resultActions = document.getElementById('resultActions');
+
+			// Pre-fill name from URL ?name=...
+			var qpName = new URLSearchParams(location.search).get('name');
+			if (qpName) nameInput.value = qpName;
+
+			togglePw.addEventListener('click', function () {
+				if (pwInput.type === 'password') {
+					pwInput.type = 'text';
+					togglePw.textContent = 'hide';
+				} else {
+					pwInput.type = 'password';
+					togglePw.textContent = 'show';
+				}
+			});
+
+			function clearErrors() {
+				formError.style.display = 'none';
+				formError.textContent = '';
+				document.getElementById('err-name').textContent = '';
+				document.getElementById('err-login').textContent = '';
+				document.getElementById('err-password').textContent = '';
+			}
+
+			function validateClient(name, login, password) {
+				var errs = {};
+				if (!name) errs.name = 'Name is required.';
+				else if (name.length > 200) errs.name = 'Name is too long (max 200 characters).';
+
+				if (!login) errs.login = 'Admin login is required.';
+				else if (!/^[a-zA-Z0-9_]+$/.test(login)) errs.login = 'Only letters, digits, and underscores.';
+				else if (login.length > 64) errs.login = 'Admin login is too long (max 64 characters).';
+
+				if (!password) errs.password = 'Admin password is required.';
+				else if (password.length < 4) errs.password = 'Admin password must be at least 4 characters.';
+
+				return errs;
+			}
+
+			function showFieldErrors(errs) {
+				if (errs.name) document.getElementById('err-name').textContent = errs.name;
+				if (errs.login) document.getElementById('err-login').textContent = errs.login;
+				if (errs.password) document.getElementById('err-password').textContent = errs.password;
+			}
+
+			function setBusy(busy) {
+				nameInput.disabled = busy;
+				loginInput.disabled = busy;
+				pwInput.disabled = busy;
+				seedInput.disabled = busy;
+				togglePw.disabled = busy;
+				submitBtn.disabled = busy;
+				if (busy) {
+					submitLabel.textContent = 'Creating...';
+					var sp = document.createElement('span');
+					sp.className = 'spinner';
+					submitBtn.insertBefore(sp, submitLabel);
+				} else {
+					submitLabel.textContent = 'Create Data Source';
+					var existing = submitBtn.querySelector('.spinner');
+					if (existing) existing.remove();
+				}
+			}
+
+			function appendOutput(line, kind) {
+				var span = document.createElement('span');
+				span.className = 'line-' + (kind || 'plain');
+				span.textContent = line + '\\n';
+				outputPre.appendChild(span);
+				outputPre.scrollTop = outputPre.scrollHeight;
+			}
+
+			function showDoneBanner(data) {
+				resultBanner.classList.remove('error');
+				resultBanner.classList.add('success', 'active');
+				resultMsg.textContent = 'Data source created successfully.';
+				while (resultActions.firstChild) resultActions.removeChild(resultActions.firstChild);
+
+				var openLink = document.createElement('a');
+				openLink.className = 'primary';
+				openLink.href = data.url || '/';
+				openLink.target = '_blank';
+				openLink.rel = 'noopener';
+				openLink.textContent = 'Open data source →';
+				resultActions.appendChild(openLink);
+
+				var another = document.createElement('button');
+				another.type = 'button';
+				another.textContent = 'Create another';
+				another.addEventListener('click', function () { location.reload(); });
+				resultActions.appendChild(another);
+			}
+
+			function showErrorBanner(message) {
+				resultBanner.classList.remove('success');
+				resultBanner.classList.add('error', 'active');
+				resultMsg.textContent = message || 'Failed.';
+				while (resultActions.firstChild) resultActions.removeChild(resultActions.firstChild);
+
+				var retry = document.createElement('a');
+				retry.className = 'primary';
+				retry.href = location.pathname + location.search;
+				retry.textContent = 'Try again';
+				resultActions.appendChild(retry);
+			}
+
+			function handleLine(line) {
+				if (line.startsWith('[STEP] ')) {
+					appendOutput(line, 'step');
+				} else if (line.startsWith('[ERROR] ')) {
+					appendOutput(line, 'error');
+					showErrorBanner(line.slice(8));
+				} else if (line.startsWith('[DONE] ')) {
+					try {
+						var data = JSON.parse(line.slice(7));
+						showDoneBanner(data);
+					} catch (e) {
+						showErrorBanner('Could not parse [DONE] payload');
+					}
+				} else if (line !== '') {
+					appendOutput(line, 'plain');
+				}
+			}
+
+			form.addEventListener('submit', async function (ev) {
+				ev.preventDefault();
+				clearErrors();
+
+				var name     = nameInput.value.trim();
+				var login    = loginInput.value.trim();
+				var password = pwInput.value;
+				var seed     = seedInput.checked;
+
+				var errs = validateClient(name, login, password);
+				if (Object.keys(errs).length > 0) {
+					showFieldErrors(errs);
+					return;
+				}
+
+				while (outputPre.firstChild) outputPre.removeChild(outputPre.firstChild);
+				outputSection.classList.add('active');
+				resultBanner.classList.remove('active', 'success', 'error');
+				setBusy(true);
+
+				try {
+					var response = await fetch('/_dev/api/ds-create', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ name: name, login: login, password: password, seed: seed }),
+					});
+
+					if (!response.ok) {
+						var err = await response.json().catch(function () { return {}; });
+						var msg = (err && err.error && err.error.message) || ('HTTP ' + response.status);
+						formError.textContent = msg;
+						formError.style.display = 'block';
+						setBusy(false);
+						return;
+					}
+
+					var reader = response.body.getReader();
+					var decoder = new TextDecoder();
+					var buffer = '';
+
+					while (true) {
+						var chunk = await reader.read();
+						if (chunk.done) break;
+						buffer += decoder.decode(chunk.value, { stream: true });
+
+						var nl;
+						while ((nl = buffer.indexOf('\\n')) >= 0) {
+							var line = buffer.slice(0, nl);
+							buffer = buffer.slice(nl + 1);
+							handleLine(line);
+						}
+					}
+					if (buffer) handleLine(buffer);
+				} catch (e) {
+					console.error(e);
+					showErrorBanner('Network error: ' + e.message);
+				} finally {
+					setBusy(false);
+				}
+			});
 		})();
 		</script>
 		</body>

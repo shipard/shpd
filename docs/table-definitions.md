@@ -194,6 +194,17 @@ Pravidla:
 - Unikátnost se kontroluje při `ds-upgrade` — duplicita je fatální chyba
 - CLI příkaz `shpd-server next-table-id` projde všechny moduly a vypíše další volné ID
 
+**Rezervované rozsahy.** Pro projekty s externími moduly (viz `docs/modules.md` sekce 10) doporučujeme rozdělení `tableId` do rozsahů:
+
+| Rozsah | Použití |
+|--------|---------|
+| `1 – 9 999` | Core (oficiální moduly) |
+| `10 000 – 19 999` | Custom (in-house zákaznické moduly) |
+| `20 000 – 29 999` | Vendor (placené moduly od třetích stran) |
+| `30 000 – 65 535` | Rezerva |
+
+Rozsahy nejsou vynuceny — `ds-upgrade` přijme jakýkoliv unikátní `tableId`. Konvence ale usnadňuje paralelní alokaci. Pro alokaci v konkrétním rozsahu použij `bin/shpd-server next-table-id --range=10000:10099` (vrátí první volné ID v rozsahu).
+
 ### `columnGroups` — logické skupiny sloupců
 
 Nepovinné seskupení sloupců pro přehlednost v UI (formuláře, detailní zobrazení).

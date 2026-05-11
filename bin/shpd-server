@@ -17,5 +17,7 @@ $app->add(new \Shipard\Command\Server\NextTableIdCommand());
 $app->add(new \Shipard\Command\Server\DomainAddCommand());
 $app->add(new \Shipard\Command\Server\DomainListCommand());
 $app->add(new \Shipard\Command\Server\DomainRemoveCommand());
+$app->add(new \Shipard\Command\Server\DoctorCommand());
+$app->add(new \Shipard\Command\Server\FixPermissionsCommand());
 $app->setDefaultCommand('help');
 $app->run();

@@ -28,9 +28,11 @@ class HelpCommand extends Command
         $output->writeln('  <info>ds-create</info>      Create a new data source');
         $output->writeln('  <info>ds-upgrade-all</info> Run ds-upgrade on all data sources');
         $output->writeln('  <info>next-table-id</info>  Print the next available table ID');
-        $output->writeln('  <info>domain-add</info>     Add a host → data source mapping');
-        $output->writeln('  <info>domain-list</info>    List all host → data source mappings');
-        $output->writeln('  <info>domain-remove</info>  Remove a host → data source mapping');
+        $output->writeln('  <info>domain-add</info>      Add a host → data source mapping');
+        $output->writeln('  <info>domain-list</info>     List all host → data source mappings');
+        $output->writeln('  <info>domain-remove</info>   Remove a host → data source mapping');
+        $output->writeln('  <info>doctor</info>          Diagnose server configuration and permissions');
+        $output->writeln('  <info>fix-permissions</info> Fix ownership and modes (requires sudo)');
         $output->writeln('');
         $output->writeln('<comment>Usage:</comment>');
         $output->writeln('  shpd-server <command> [options]');
@@ -42,6 +44,8 @@ class HelpCommand extends Command
         $output->writeln('                                           Upgrade all data sources');
         $output->writeln('  domain-add --host <host> --ds <ds-id>    Map a hostname to a data source');
         $output->writeln('  domain-remove --host <host>              Remove a hostname mapping');
+        $output->writeln('  doctor                                   Read-only health check (no options)');
+        $output->writeln('  fix-permissions [--dry-run] [--force]    Fix /opt/shipard and /etc/shipard');
         $output->writeln('');
 
         return Command::SUCCESS;

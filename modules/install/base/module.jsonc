@@ -18,6 +18,7 @@
         "docs.core",
         "docs.invoicesOut",
         "docs.invoicesIn",
+        "tasks.core",
     ],
 
     "config": [

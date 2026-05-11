@@ -40,6 +40,7 @@ src/
 │   ├── Module/                 # ModuleDefinition, ModuleLoader, ModuleResolver
 │   └── Utils/                  # JsoncParser, IdGenerator
 modules/{skupina}/{modul}/src/  # Document třídy modulů (PersonDocument, IssuedInvoiceDocument...)
+                                # Skupiny: core, base, economy, docs, tasks, world, install
 ```
 
 Závislosti tečou shora dolů: Command → Document → Module/Config/Database → I18n/Utils.
@@ -108,7 +109,7 @@ Závislosti tečou shora dolů: Command → Document → Module/Config/Database 
 
 ### Frontend — ikony
 - Font Awesome SVG/JS, tree-shaking přes Vite
-- Centrální registr: `frontend/src/icons.js` — pojmenování podle významu (`iconAdd`, `iconUser`), ne vzhledu
+- Centrální registr: `frontend/src/icons.js` — pojmenování podle významu (`iconAdd`, `iconUser`, `iconListCheck`), ne vzhledu
 - Komponenta: `Icon.svelte` (inline SVG), rozšířený `Button.svelte` (prop `icon`)
 - Navigace: server posílá `"icon": "klíč"` v JSON, frontend překládá přes `resolveIcon()` s fallbackem `iconTable`
 - Nová ikona: import v `icons.js` + export + záznam v `iconMap`

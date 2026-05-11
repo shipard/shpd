@@ -1,0 +1,48 @@
+{
+    "id": "tasks.core",
+    "name": "Tasks",
+    "name:cs": "Úkoly",
+    "name:en": "Tasks",
+    "description": "Personal and shared to-do list with priorities, due dates and a simple lifecycle",
+    "description:cs": "Osobní i sdílený seznam úkolů s prioritami, termíny a jednoduchým životním cyklem",
+    "description:en": "Personal and shared to-do list with priorities, due dates and a simple lifecycle",
+
+    "dependencies": [
+        "core.system"
+    ],
+
+    "tables": [
+        "tasks_core_tasks"
+    ],
+
+    "viewers": [
+        {
+            "id": "tasks.core",
+            "name": "Tasks",
+            "name:cs": "Úkoly",
+            "name:en": "Tasks",
+            "icon": "list-check",
+            "table": "tasks_core_tasks",
+            "class": "Shipard\\Module\\Tasks\\Core\\TasksViewer"
+        }
+    ],
+
+    "forms": [
+        {
+            "table": "tasks_core_tasks",
+            "class": "Shipard\\Module\\Tasks\\Core\\TasksForm"
+        }
+    ],
+
+    "documentClasses": [
+        {
+            "table": "tasks_core_tasks",
+            "class": "Shipard\\Module\\Tasks\\Core\\TaskDocument"
+        }
+    ],
+
+    "config": [
+        { "id": "tasks.core.docStatesTasks", "file": "config/docStatesTasks.jsonc" },
+        { "id": "tasks.core.priorities",     "file": "config/priorities.jsonc" }
+    ]
+}

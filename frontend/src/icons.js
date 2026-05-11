@@ -60,6 +60,7 @@ import {
   faRulerCombined,
   faCube,
   faCalendarDays,
+  faListCheck,
   faPercent,
   faWallet,
   faBuildingColumns,
@@ -112,6 +113,7 @@ export const iconMail = faEnvelope;
 export const iconRuler = faRulerCombined;
 export const iconBox = faCube;
 export const iconCalendar = faCalendarDays;
+export const iconListCheck = faListCheck;
 export const iconVat = faPercent;
 export const iconWallet = faWallet;
 export const iconBank = faBuildingColumns;
@@ -168,6 +170,7 @@ export const iconMap = {
   'ruler': iconRuler,
   'box': iconBox,
   'calendar': iconCalendar,
+  'list-check': iconListCheck,
   'vat': iconVat,
   'wallet': iconWallet,
   'bank': iconBank,

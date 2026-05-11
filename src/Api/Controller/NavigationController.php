@@ -18,6 +18,7 @@ class NavigationController
 		'base'    => ['cs' => 'Základní', 'en' => 'Basic'],
 		'economy' => ['cs' => 'Ekonomika', 'en' => 'Economy'],
 		'docs'    => ['cs' => 'Doklady', 'en' => 'Documents'],
+		'tasks'   => ['cs' => 'Úkoly', 'en' => 'Tasks'],
 		'world'   => ['cs' => 'Svět', 'en' => 'World'],
 	];
 

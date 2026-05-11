@@ -22,6 +22,7 @@
             "Shipard\\Module\\Economy\\Codebooks\\": "modules/economy/codebooks/src/",
             "Shipard\\Module\\Economy\\Items\\": "modules/economy/items/src/",
             "Shipard\\Module\\Install\\Base\\": "modules/install/base/src/",
+            "Shipard\\Module\\Tasks\\Core\\": "modules/tasks/core/src/",
             "Shipard\\Module\\World\\Vat\\": "modules/world/vat/src/"
         }
     },

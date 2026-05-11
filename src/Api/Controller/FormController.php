@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Shipard\Api\Controller;
 
+use Shipard\Api\AuthContext;
 use Shipard\Api\Request;
 use Shipard\Api\Response;
 use Shipard\Core\Config\ConfigRuntime;
@@ -97,6 +98,7 @@ class FormController
         ?ConfigRuntime $config,
         ?DocumentRegistry $documentRegistry = null,
         ?\Shipard\Core\Config\DataSourceConfig $dsConfig = null,
+        ?AuthContext $auth = null,
     ): Response {
         $def = $tables[$table] ?? null;
         if ($def === null) {
@@ -146,6 +148,18 @@ class FormController
         }
         if ($this->hasColumn($def, 'modified')) {
             $inputData['modified'] = $now;
+        }
+
+        // Auto-manage created_by — only on insert, only when we know the user.
+        // `created_by` is system:true, so it never arrives through
+        // filterWritableFields and the client can't forge it.
+        if ($id === null
+            && $this->hasColumn($def, 'created_by')
+            && $auth !== null
+            && $auth->isAuthenticated
+            && $auth->userId !== null
+        ) {
+            $inputData['created_by'] = $auth->userId;
         }
 
         // Init docState for new records

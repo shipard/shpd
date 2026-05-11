@@ -1,0 +1,86 @@
+{
+    // tasks.core.docStatesTasks
+    //
+    // Stavový automat pro úkoly. Pipeline:
+    //   Nový → V práci → Hotovo
+    //   ↘ Pozastaveno (libovolně tam a zpět mezi aktivními stavy) ↗
+    //   Hotovo → V práci (opětovné otevření)
+    //   Cokoli aktivního → Smazáno; zpět přes „V práci"
+    //
+    // Hotovo má viewGroup=archive — splněné úkoly automaticky mizí z tabu
+    // Aktivní a najdou se v tabu Archív. Samostatný „V archívu" stav by
+    // u to-do listu byl redundantní (konvence to-do aplikací: hotovo = z
+    // očí pryč; explicitní archivace nedokončeného nemá v doméně smysl).
+
+    "10": {
+        "stateName": "Nový",
+        "stateName:cs": "Nový",
+        "stateName:en": "New",
+        "actionName": "Vrátit jako nový",
+        "actionName:cs": "Vrátit jako nový",
+        "actionName:en": "Mark as new",
+        "stateStyle": "concept",
+        "mainState": 1,
+        "viewGroup": "active",
+        "closeForm": 0,
+        "goto": [20, 30, 40, 90]
+    },
+
+    "20": {
+        "stateName": "V práci",
+        "stateName:cs": "V práci",
+        "stateName:en": "In progress",
+        "actionName": "V práci",
+        "actionName:cs": "V práci",
+        "actionName:en": "Start",
+        "stateStyle": "confirmed",
+        "mainState": 2,
+        "viewGroup": "active",
+        "closeForm": 1,
+        "goto": [10, 30, 40, 90]
+    },
+
+    "30": {
+        "stateName": "Pozastaveno",
+        "stateName:cs": "Pozastaveno",
+        "stateName:en": "On hold",
+        "actionName": "Pozastavit",
+        "actionName:cs": "Pozastavit",
+        "actionName:en": "Pause",
+        "stateStyle": "edit",
+        "mainState": 3,
+        "viewGroup": "active",
+        "closeForm": 1,
+        "goto": [10, 20, 40, 90]
+    },
+
+    "40": {
+        "stateName": "Hotovo",
+        "stateName:cs": "Hotovo",
+        "stateName:en": "Done",
+        "actionName": "Hotovo",
+        "actionName:cs": "Hotovo",
+        "actionName:en": "Mark done",
+        "stateStyle": "done",
+        "mainState": 4,
+        "viewGroup": "archive",
+        "readOnly": 1,
+        "closeForm": 1,
+        "goto": [20, 90]
+    },
+
+    "90": {
+        "stateName": "Smazáno",
+        "stateName:cs": "Smazáno",
+        "stateName:en": "Deleted",
+        "actionName": "Smazat",
+        "actionName:cs": "Smazat",
+        "actionName:en": "Delete",
+        "stateStyle": "trash",
+        "mainState": 6,
+        "viewGroup": "trash",
+        "readOnly": 1,
+        "closeForm": 1,
+        "goto": [20]
+    }
+}

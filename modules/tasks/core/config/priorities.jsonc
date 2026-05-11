@@ -1,0 +1,30 @@
+{
+    "low": {
+        "name": "Nízká",
+        "name:cs": "Nízká",
+        "name:en": "Low",
+        "order": 1,
+        "spanClass": "muted"
+    },
+    "medium": {
+        "name": "Střední",
+        "name:cs": "Střední",
+        "name:en": "Medium",
+        "order": 2,
+        "spanClass": "primary"
+    },
+    "high": {
+        "name": "Vysoká",
+        "name:cs": "Vysoká",
+        "name:en": "High",
+        "order": 3,
+        "spanClass": "warning"
+    },
+    "critical": {
+        "name": "Kritická",
+        "name:cs": "Kritická",
+        "name:en": "Critical",
+        "order": 4,
+        "spanClass": "danger"
+    }
+}

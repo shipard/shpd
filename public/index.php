@@ -67,7 +67,7 @@ try {
 			$response = (new \Shipard\Api\Controller\DevDashboardController(
 				'/opt/shipard/data-sources',
 				$serverConfig->getLogFile(),
-				new ModulePathResolver([dirname(__DIR__) . '/modules']),
+				ModulePathResolver::fromServerConfig($serverConfig, dirname(__DIR__) . '/modules'),
 			))->dispatch($request);
 			$corsMiddleware->applyTo($response)->send();
 			exit;
@@ -83,7 +83,7 @@ try {
 
 	// ── 4. Load table definitions (localized) ─────────────────────────────────
 	$language           = resolveLanguage($request, $resolved->config);
-	$modulePathResolver = new ModulePathResolver([dirname(__DIR__) . '/modules']);
+	$modulePathResolver = ModulePathResolver::fromServerConfig($serverConfig, dirname(__DIR__) . '/modules');
 	$tables             = TableLoader::load($resolved->config, $modulePathResolver, $language);
 
 	// ── 4b. Build viewer registry ─────────────────────────────────────────────

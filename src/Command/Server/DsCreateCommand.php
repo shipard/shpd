@@ -46,7 +46,12 @@ class DsCreateCommand extends Command
 
     protected function getModulePathResolver(): ModulePathResolver
     {
-        return new ModulePathResolver([dirname(__DIR__, 3) . '/modules']);
+        $cfg = $this->serverConfig;
+        if ($cfg === null) {
+            $cfg = new ServerConfig();
+            $cfg->load();
+        }
+        return ModulePathResolver::fromServerConfig($cfg, dirname(__DIR__, 3) . '/modules');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -66,6 +71,16 @@ class DsCreateCommand extends Command
             return Command::FAILURE;
         }
 
+        // Load server config first — needed by both the module-path resolver
+        // (extraModulesPath) and DatabaseManager.
+        $config = $this->serverConfig ?? new ServerConfig();
+        try {
+            $config->load();
+        } catch (\RuntimeException $e) {
+            $output->writeln('<error>Failed to load server config: ' . $e->getMessage() . '</error>');
+            return Command::FAILURE;
+        }
+
         $resolver = $this->getModulePathResolver();
         $registry = new InstallModuleRegistry($resolver);
         if (!$registry->exists($moduleId)) {
@@ -76,15 +91,6 @@ class DsCreateCommand extends Command
             } else {
                 $output->writeln('<comment>No install modules found in ' . $resolver->getRoots()[0] . '/install/</comment>');
             }
-            return Command::FAILURE;
-        }
-
-        // Load server config
-        $config = $this->serverConfig ?? new ServerConfig();
-        try {
-            $config->load();
-        } catch (\RuntimeException $e) {
-            $output->writeln('<error>Failed to load server config: ' . $e->getMessage() . '</error>');
             return Command::FAILURE;
         }
 

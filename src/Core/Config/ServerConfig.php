@@ -32,6 +32,21 @@ class ServerConfig
             }
         }
 
+        if (isset($data['extraModulesPath'])) {
+            if (!is_array($data['extraModulesPath']) || !array_is_list($data['extraModulesPath'])) {
+                throw new \RuntimeException(
+                    "Server config field 'extraModulesPath' must be a JSON array of strings"
+                );
+            }
+            foreach ($data['extraModulesPath'] as $i => $entry) {
+                if (!is_string($entry) || $entry === '') {
+                    throw new \RuntimeException(
+                        "Server config 'extraModulesPath[$i]' must be a non-empty string"
+                    );
+                }
+            }
+        }
+
         $this->data = $data;
     }
 
@@ -73,5 +88,17 @@ class ServerConfig
     public function getLogLevel(): string
     {
         return $this->data['logLevel'] ?? 'debug';
+    }
+
+    /**
+     * Additional module root paths beyond the in-repo `modules/` directory.
+     * Used to load third-party / customer modules from outside the main
+     * repository.
+     *
+     * @return list<string>  Absolute paths, in the order given in server.json.
+     */
+    public function getExtraModulesPath(): array
+    {
+        return $this->data['extraModulesPath'] ?? [];
     }
 }

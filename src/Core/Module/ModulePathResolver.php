@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Shipard\Core\Module;
 
+use Shipard\Core\Config\ServerConfig;
+
 /**
  * Resolves module ids to absolute filesystem paths across one or more module
  * roots. The first root is the main (in-repo) `modules/` directory; subsequent
@@ -60,6 +62,24 @@ final class ModulePathResolver
         $ids = array_keys($map);
         sort($ids, SORT_STRING);
         $this->sortedIds = $ids;
+    }
+
+    /**
+     * Builds a resolver from a loaded ServerConfig plus the well-known main
+     * module root. The main root is always first; extras follow in the order
+     * declared in server.json's `extraModulesPath`.
+     *
+     * @param ServerConfig $serverConfig  Must already be loaded.
+     * @param string $mainModulesPath     Absolute path to the in-repo modules/ dir.
+     */
+    public static function fromServerConfig(
+        ServerConfig $serverConfig,
+        string $mainModulesPath,
+    ): self {
+        return new self(array_merge(
+            [$mainModulesPath],
+            $serverConfig->getExtraModulesPath(),
+        ));
     }
 
     /**

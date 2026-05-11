@@ -144,6 +144,118 @@ class ServerConfigTest extends TestCase
         $this->assertSame('warn', $config->getLogLevel());
     }
 
+    public function testGetExtraModulesPathDefaultsToEmpty(): void
+    {
+        $path = $this->createConfig([
+            'host'           => '127.0.0.1',
+            'port'           => 3306,
+            'admin_user'     => 'root',
+            'admin_password' => 'secret',
+            'mode'           => 'production',
+        ]);
+
+        $config = new ServerConfig($path);
+        $config->load();
+
+        $this->assertSame([], $config->getExtraModulesPath());
+    }
+
+    public function testGetExtraModulesPathReturnsList(): void
+    {
+        $path = $this->createConfig([
+            'host'             => '127.0.0.1',
+            'port'             => 3306,
+            'admin_user'       => 'root',
+            'admin_password'   => 'secret',
+            'mode'             => 'production',
+            'extraModulesPath' => ['/opt/customer-a/modules', '/opt/customer-b/modules'],
+        ]);
+
+        $config = new ServerConfig($path);
+        $config->load();
+
+        $this->assertSame(
+            ['/opt/customer-a/modules', '/opt/customer-b/modules'],
+            $config->getExtraModulesPath(),
+        );
+    }
+
+    public function testExtraModulesPathRejectsNonArray(): void
+    {
+        $path = $this->createConfig([
+            'host'             => '127.0.0.1',
+            'port'             => 3306,
+            'admin_user'       => 'root',
+            'admin_password'   => 'secret',
+            'mode'             => 'production',
+            'extraModulesPath' => '/just/a/string',
+        ]);
+
+        $config = new ServerConfig($path);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/extraModulesPath.*array/i');
+
+        $config->load();
+    }
+
+    public function testExtraModulesPathRejectsNonStringEntry(): void
+    {
+        $path = $this->createConfig([
+            'host'             => '127.0.0.1',
+            'port'             => 3306,
+            'admin_user'       => 'root',
+            'admin_password'   => 'secret',
+            'mode'             => 'production',
+            'extraModulesPath' => ['/ok', 123],
+        ]);
+
+        $config = new ServerConfig($path);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/extraModulesPath\[1\]/');
+
+        $config->load();
+    }
+
+    public function testExtraModulesPathRejectsEmptyStringEntry(): void
+    {
+        $path = $this->createConfig([
+            'host'             => '127.0.0.1',
+            'port'             => 3306,
+            'admin_user'       => 'root',
+            'admin_password'   => 'secret',
+            'mode'             => 'production',
+            'extraModulesPath' => ['/ok', ''],
+        ]);
+
+        $config = new ServerConfig($path);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/extraModulesPath\[1\]/');
+
+        $config->load();
+    }
+
+    public function testExtraModulesPathRejectsAssociativeArray(): void
+    {
+        $path = $this->createConfig([
+            'host'             => '127.0.0.1',
+            'port'             => 3306,
+            'admin_user'       => 'root',
+            'admin_password'   => 'secret',
+            'mode'             => 'production',
+            'extraModulesPath' => ['key' => '/path'],
+        ]);
+
+        $config = new ServerConfig($path);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/extraModulesPath.*array/i');
+
+        $config->load();
+    }
+
     public function testLoadMissingEachRequiredField(): void
     {
         $required = ['host', 'port', 'admin_user', 'admin_password', 'mode'];

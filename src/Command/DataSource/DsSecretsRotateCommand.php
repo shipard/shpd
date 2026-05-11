@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Shipard\Command\DataSource;
 
 use Shipard\Core\Config\DataSourceConfig;
+use Shipard\Core\Config\ServerConfig;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Database\SchemaIntrospector;
 use Shipard\Core\Database\SchemaLoader;
@@ -20,6 +21,7 @@ class DsSecretsRotateCommand extends Command
     public function __construct(
         private readonly ?DataSourceConfig $dsConfig = null,
         private readonly ?DataSourceConnection $dsConnection = null,
+        private readonly ?ServerConfig $serverConfig = null,
     ) {
         parent::__construct();
     }
@@ -38,7 +40,12 @@ class DsSecretsRotateCommand extends Command
 
     protected function getModulePathResolver(): ModulePathResolver
     {
-        return new ModulePathResolver([dirname(__DIR__, 3) . '/modules']);
+        $cfg = $this->serverConfig;
+        if ($cfg === null) {
+            $cfg = new ServerConfig();
+            $cfg->load();
+        }
+        return ModulePathResolver::fromServerConfig($cfg, dirname(__DIR__, 3) . '/modules');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int

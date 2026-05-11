@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Shipard\Tests\Unit\Core\Module;
 
 use PHPUnit\Framework\TestCase;
+use Shipard\Core\Config\ServerConfig;
 use Shipard\Core\Module\ModulePathResolver;
 
 class ModulePathResolverTest extends TestCase
@@ -216,5 +217,69 @@ class ModulePathResolverTest extends TestCase
         $r = new ModulePathResolver([$b, $c, $a]);
 
         $this->assertSame([$b, $c, $a], $r->getRoots());
+    }
+
+    /**
+     * @param list<string> $extras
+     */
+    private function makeServerConfig(array $extras): ServerConfig
+    {
+        $path = $this->tmpDir . '/server.json';
+        file_put_contents($path, (string) json_encode([
+            'host'             => 'x',
+            'port'             => 1,
+            'admin_user'       => 'x',
+            'admin_password'   => 'x',
+            'mode'             => 'production',
+            'extraModulesPath' => $extras,
+        ]));
+        $cfg = new ServerConfig($path);
+        $cfg->load();
+        return $cfg;
+    }
+
+    public function testFromServerConfigMainOnly(): void
+    {
+        $main = $this->makeRoot('main');
+        $this->makeModule($main, 'core', 'system');
+        $cfg  = $this->makeServerConfig([]);
+
+        $r = ModulePathResolver::fromServerConfig($cfg, $main);
+
+        $this->assertSame([$main], $r->getRoots());
+        $this->assertSame(['core.system'], $r->allModuleIds());
+    }
+
+    public function testFromServerConfigCombinesMainAndExtras(): void
+    {
+        $main   = $this->makeRoot('main');
+        $extra1 = $this->makeRoot('extra1');
+        $extra2 = $this->makeRoot('extra2');
+
+        $this->makeModule($main,   'core',    'system');
+        $this->makeModule($extra1, 'partner', 'crm');
+        $this->makeModule($extra2, 'customer', 'reports');
+
+        $cfg = $this->makeServerConfig([$extra1, $extra2]);
+
+        $r = ModulePathResolver::fromServerConfig($cfg, $main);
+
+        $this->assertSame(
+            ['core.system', 'customer.reports', 'partner.crm'],
+            $r->allModuleIds(),
+        );
+    }
+
+    public function testFromServerConfigOrderMainFirst(): void
+    {
+        $main   = $this->makeRoot('main');
+        $extra1 = $this->makeRoot('extra1');
+        $extra2 = $this->makeRoot('extra2');
+
+        $cfg = $this->makeServerConfig([$extra1, $extra2]);
+
+        $r = ModulePathResolver::fromServerConfig($cfg, $main);
+
+        $this->assertSame([$main, $extra1, $extra2], $r->getRoots());
     }
 }

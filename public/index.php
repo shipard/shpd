@@ -32,6 +32,7 @@ use Shipard\Api\ViewerLoader;
 use Shipard\Core\Config\ServerConfig;
 use Shipard\Core\Form\FormRegistry;
 use Shipard\Core\Logging\ErrorLogger;
+use Shipard\Core\Module\ModuleClassLoader;
 use Shipard\Core\Module\ModulePathResolver;
 use Shipard\Core\Viewer\ViewerRegistry;
 
@@ -60,6 +61,12 @@ try {
 	ErrorLogger::setLogPath($serverConfig->getLogFile());
 	ErrorLogger::setLogLevel($serverConfig->getLogLevel());
 
+	// ── 2a. Module path resolver + class autoloader ──────────────────────────
+	$modulePathResolver = ModulePathResolver::fromServerConfig(
+		$serverConfig, dirname(__DIR__) . '/modules',
+	);
+	ModuleClassLoader::register($modulePathResolver);
+
 	// ── 2.5. Dev dashboard ───────────────────────────────────────────────────
 	if ($serverConfig->getMode() === 'development') {
 		$path = $request->getPath();
@@ -67,7 +74,7 @@ try {
 			$response = (new \Shipard\Api\Controller\DevDashboardController(
 				'/opt/shipard/data-sources',
 				$serverConfig->getLogFile(),
-				ModulePathResolver::fromServerConfig($serverConfig, dirname(__DIR__) . '/modules'),
+				$modulePathResolver,
 			))->dispatch($request);
 			$corsMiddleware->applyTo($response)->send();
 			exit;
@@ -82,9 +89,8 @@ try {
 	ErrorLogger::setDsId($resolved->config->getId());
 
 	// ── 4. Load table definitions (localized) ─────────────────────────────────
-	$language           = resolveLanguage($request, $resolved->config);
-	$modulePathResolver = ModulePathResolver::fromServerConfig($serverConfig, dirname(__DIR__) . '/modules');
-	$tables             = TableLoader::load($resolved->config, $modulePathResolver, $language);
+	$language = resolveLanguage($request, $resolved->config);
+	$tables   = TableLoader::load($resolved->config, $modulePathResolver, $language);
 
 	// ── 4b. Build viewer registry ─────────────────────────────────────────────
 	$viewerRegistry = ViewerLoader::load($resolved->config, $modulePathResolver, $language);

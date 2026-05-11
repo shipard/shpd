@@ -5,7 +5,21 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../vendor/autoload.php';
 
+use Shipard\Core\Config\ServerConfig;
+use Shipard\Core\Module\ModuleClassLoader;
+use Shipard\Core\Module\ModulePathResolver;
 use Symfony\Component\Console\Application;
+
+try {
+    $sc = new ServerConfig();
+    $sc->load();
+    $resolver = ModulePathResolver::fromServerConfig($sc, dirname(__DIR__) . '/modules');
+} catch (\Throwable) {
+    // server.json not yet present (initial setup) or unreadable —
+    // main-only autoload is enough for commands like server-init and help.
+    $resolver = new ModulePathResolver([dirname(__DIR__) . '/modules']);
+}
+ModuleClassLoader::register($resolver);
 
 $app = new Application('Shipard Server Management', '0.1.0');
 $app->add(new \Shipard\Command\Server\VersionCommand());

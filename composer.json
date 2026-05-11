@@ -10,20 +10,7 @@
     },
     "autoload": {
         "psr-4": {
-            "Shipard\\": "src/",
-            "Shipard\\Module\\Base\\Persons\\": "modules/base/persons/src/",
-            "Shipard\\Module\\Core\\System\\": "modules/core/system/src/",
-            "Shipard\\Module\\Core\\Attachments\\": "modules/core/attachments/src/",
-            "Shipard\\Module\\Core\\Mail\\": "modules/core/mail/src/",
-            "Shipard\\Module\\Core\\Units\\": "modules/core/units/src/",
-            "Shipard\\Module\\Docs\\Core\\": "modules/docs/core/src/",
-            "Shipard\\Module\\Docs\\InvoicesOut\\": "modules/docs/invoicesOut/src/",
-            "Shipard\\Module\\Docs\\InvoicesIn\\": "modules/docs/invoicesIn/src/",
-            "Shipard\\Module\\Economy\\Codebooks\\": "modules/economy/codebooks/src/",
-            "Shipard\\Module\\Economy\\Items\\": "modules/economy/items/src/",
-            "Shipard\\Module\\Install\\Base\\": "modules/install/base/src/",
-            "Shipard\\Module\\Tasks\\Core\\": "modules/tasks/core/src/",
-            "Shipard\\Module\\World\\Vat\\": "modules/world/vat/src/"
+            "Shipard\\": "src/"
         }
     },
     "autoload-dev": {

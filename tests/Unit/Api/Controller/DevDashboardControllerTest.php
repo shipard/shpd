@@ -84,7 +84,12 @@ class DevDashboardControllerTest extends TestCase
 
 	private function makeRequest(string $method, string $uri): Request
 	{
-		return Request::fromArray($method, $uri, [], '', []);
+		$queryParams = [];
+		$queryString = parse_url($uri, PHP_URL_QUERY);
+		if (is_string($queryString) && $queryString !== '') {
+			parse_str($queryString, $queryParams);
+		}
+		return Request::fromArray($method, $uri, $queryParams, '', []);
 	}
 
 	private function getStatus(Response $r): int
@@ -710,6 +715,213 @@ class DevDashboardControllerTest extends TestCase
 		$out = $this->streamToString($resp);
 		$this->assertStringContainsString('--password=***', $out);
 		$this->assertStringNotContainsString('--password=secret123', $out);
+	}
+
+	// -------------------------------------------------------------------------
+	// Action pages (Doctor / Upgrade All / DS Upgrade) — HTML
+	// -------------------------------------------------------------------------
+
+	public function testDoctorPageReturnsHtml(): void
+	{
+		$resp = $this->ctrl->dispatch($this->makeRequest('GET', '/_dev/doctor/'));
+		$this->assertSame(200, $this->getStatus($resp));
+		$body = (string) $this->getPayloadRaw($resp);
+		$this->assertStringContainsString('Server Doctor', $body);
+		$this->assertStringContainsString('Run Doctor', $body);
+		$this->assertStringContainsString((string) gethostname(), $body);
+		$this->assertStringContainsString('/_dev/api/doctor', $body);
+	}
+
+	public function testDoctorPageWithoutTrailingSlash(): void
+	{
+		$resp = $this->ctrl->dispatch($this->makeRequest('GET', '/_dev/doctor'));
+		$this->assertSame(200, $this->getStatus($resp));
+		$body = (string) $this->getPayloadRaw($resp);
+		$this->assertStringContainsString('Server Doctor', $body);
+	}
+
+	public function testUpgradeAllPageReturnsHtml(): void
+	{
+		$resp = $this->ctrl->dispatch($this->makeRequest('GET', '/_dev/upgrade-all/'));
+		$this->assertSame(200, $this->getStatus($resp));
+		$body = (string) $this->getPayloadRaw($resp);
+		$this->assertStringContainsString('Upgrade All Data Sources', $body);
+		$this->assertStringContainsString('Run Upgrade All', $body);
+		$this->assertStringContainsString('/_dev/api/upgrade-all', $body);
+	}
+
+	public function testDsUpgradePageWithValidId(): void
+	{
+		$this->createDs('abcd-1234-efgh-5678', 'Demo');
+		$resp = $this->ctrl->dispatch($this->makeRequest('GET', '/_dev/ds-upgrade/?ds=abcd-1234-efgh-5678'));
+		$this->assertSame(200, $this->getStatus($resp));
+		$body = (string) $this->getPayloadRaw($resp);
+		$this->assertStringContainsString('abcd-1234-efgh-5678', $body);
+		$this->assertStringContainsString('Run Upgrade', $body);
+		$this->assertStringContainsString('?ds=abcd-1234-efgh-5678', $body);
+	}
+
+	public function testDsUpgradePageWithInvalidIdFormatReturns400(): void
+	{
+		$resp = $this->ctrl->dispatch($this->makeRequest('GET', '/_dev/ds-upgrade/?ds=bad!id'));
+		$this->assertSame(400, $this->getStatus($resp));
+		$payload = $this->getPayloadRaw($resp);
+		$this->assertSame('INVALID_DS_ID', $payload['error']['code']);
+	}
+
+	public function testDsUpgradePageWithLooseIdReturns400(): void
+	{
+		// Loose 3-group form must be rejected by the strict regex
+		$resp = $this->ctrl->dispatch($this->makeRequest('GET', '/_dev/ds-upgrade/?ds=abc-def-ghi'));
+		$this->assertSame(400, $this->getStatus($resp));
+		$payload = $this->getPayloadRaw($resp);
+		$this->assertSame('INVALID_DS_ID', $payload['error']['code']);
+	}
+
+	public function testDsUpgradePageWithoutIdReturns400(): void
+	{
+		$resp = $this->ctrl->dispatch($this->makeRequest('GET', '/_dev/ds-upgrade/'));
+		$this->assertSame(400, $this->getStatus($resp));
+	}
+
+	public function testDsUpgradePageWithUnknownIdReturns404(): void
+	{
+		$resp = $this->ctrl->dispatch($this->makeRequest('GET', '/_dev/ds-upgrade/?ds=zzzz-aaaa-bbbb-cccc'));
+		$this->assertSame(404, $this->getStatus($resp));
+		$payload = $this->getPayloadRaw($resp);
+		$this->assertSame('DS_NOT_FOUND', $payload['error']['code']);
+	}
+
+	// -------------------------------------------------------------------------
+	// Action endpoints — streaming
+	// -------------------------------------------------------------------------
+
+	public function testDoctorEndpointStreamsOutputAndReportsDone(): void
+	{
+		$ctrl = $this->makeTestableCtrl();
+		$ctrl->commandResults = [
+			[0, "All checks passed\n"],
+		];
+
+		$resp = $ctrl->dispatch($this->makeRequest('POST', '/_dev/api/doctor'));
+		$this->assertSame(200, $this->getStatus($resp));
+
+		$out = $this->streamToString($resp);
+		$this->assertStringContainsString('[DONE]', $out);
+		$this->assertStringContainsString('"message":"Doctor completed without issues"', $out);
+		$this->assertCount(1, $ctrl->commandsRun);
+		$this->assertStringContainsString('doctor --no-ansi', $ctrl->commandsRun[0]);
+	}
+
+	public function testDoctorEndpointReportsErrorOnNonZeroExit(): void
+	{
+		$ctrl = $this->makeTestableCtrl();
+		$ctrl->commandResults = [
+			[2, "Issues found\n"],
+		];
+
+		$resp = $ctrl->dispatch($this->makeRequest('POST', '/_dev/api/doctor'));
+
+		$out = $this->streamToString($resp);
+		$this->assertStringContainsString('[ERROR] Doctor reported issues', $out);
+		$this->assertStringContainsString('exit 2', $out);
+		$this->assertStringNotContainsString('[DONE]', $out);
+	}
+
+	public function testUpgradeAllEndpointSpawnsCorrectCommand(): void
+	{
+		$ctrl = $this->makeTestableCtrl();
+		$ctrl->commandResults = [
+			[0, "Upgraded 3 data sources\n"],
+		];
+
+		$resp = $ctrl->dispatch($this->makeRequest('POST', '/_dev/api/upgrade-all'));
+		$this->assertSame(200, $this->getStatus($resp));
+
+		$out = $this->streamToString($resp);
+		$this->assertStringContainsString('[STEP] Upgrading all data sources', $out);
+		$this->assertStringContainsString('[DONE]', $out);
+		$this->assertCount(1, $ctrl->commandsRun);
+		$this->assertStringContainsString('ds-upgrade-all --no-ansi', $ctrl->commandsRun[0]);
+	}
+
+	public function testUpgradeAllEndpointReportsErrorOnNonZeroExit(): void
+	{
+		$ctrl = $this->makeTestableCtrl();
+		$ctrl->commandResults = [
+			[1, "Failed for 2 DS\n"],
+		];
+
+		$resp = $ctrl->dispatch($this->makeRequest('POST', '/_dev/api/upgrade-all'));
+		$out = $this->streamToString($resp);
+		$this->assertStringContainsString('[ERROR] Upgrade-all reported failures', $out);
+		$this->assertStringNotContainsString('[DONE]', $out);
+	}
+
+	public function testDsUpgradeEndpointValidatesDsId(): void
+	{
+		$resp = $this->ctrl->dispatch($this->makeRequest('POST', '/_dev/api/ds-upgrade?ds=bad!'));
+		$this->assertSame(400, $this->getStatus($resp));
+		$payload = $this->getPayloadRaw($resp);
+		$this->assertSame('INVALID_DS_ID', $payload['error']['code']);
+	}
+
+	public function testDsUpgradeEndpointRejectsUnknownDs(): void
+	{
+		$resp = $this->ctrl->dispatch($this->makeRequest('POST', '/_dev/api/ds-upgrade?ds=zzzz-aaaa-bbbb-cccc'));
+		$this->assertSame(404, $this->getStatus($resp));
+		$payload = $this->getPayloadRaw($resp);
+		$this->assertSame('DS_NOT_FOUND', $payload['error']['code']);
+	}
+
+	public function testDsUpgradeEndpointSpawnsCorrectCommand(): void
+	{
+		$this->createDs('abcd-1234-efgh-5678', 'Demo');
+		$ctrl = $this->makeTestableCtrl();
+		$ctrl->commandResults = [
+			[0, "Nothing to upgrade\n"],
+		];
+
+		$resp = $ctrl->dispatch($this->makeRequest('POST', '/_dev/api/ds-upgrade?ds=abcd-1234-efgh-5678'));
+		$this->assertSame(200, $this->getStatus($resp));
+
+		$out = $this->streamToString($resp);
+		$this->assertStringContainsString('[STEP] Upgrading data source abcd-1234-efgh-5678', $out);
+		$this->assertStringContainsString('[DONE]', $out);
+		$this->assertStringContainsString('"message":"Data source abcd-1234-efgh-5678 upgraded successfully"', $out);
+		$this->assertCount(1, $ctrl->commandsRun);
+		$this->assertStringContainsString('abcd-1234-efgh-5678', $ctrl->commandsRun[0]);
+		$this->assertStringContainsString('ds-upgrade --no-ansi', $ctrl->commandsRun[0]);
+	}
+
+	public function testDsUpgradeEndpointReportsErrorOnNonZeroExit(): void
+	{
+		$this->createDs('abcd-1234-efgh-5678', 'Demo');
+		$ctrl = $this->makeTestableCtrl();
+		$ctrl->commandResults = [
+			[1, "Schema migration failed\n"],
+		];
+
+		$resp = $ctrl->dispatch($this->makeRequest('POST', '/_dev/api/ds-upgrade?ds=abcd-1234-efgh-5678'));
+		$out = $this->streamToString($resp);
+		$this->assertStringContainsString('[ERROR] Upgrade failed for abcd-1234-efgh-5678', $out);
+		$this->assertStringNotContainsString('[DONE]', $out);
+	}
+
+	public function testActionEndpointsRejectGet(): void
+	{
+		$this->createDs('abcd-1234-efgh-5678', 'Demo');
+
+		// GET on POST-only API endpoints — dispatch falls through to 404
+		$this->assertSame(404, $this->getStatus(
+			$this->ctrl->dispatch($this->makeRequest('GET', '/_dev/api/doctor'))
+		));
+		$this->assertSame(404, $this->getStatus(
+			$this->ctrl->dispatch($this->makeRequest('GET', '/_dev/api/upgrade-all'))
+		));
+		$this->assertSame(404, $this->getStatus(
+			$this->ctrl->dispatch($this->makeRequest('GET', '/_dev/api/ds-upgrade?ds=abcd-1234-efgh-5678'))
+		));
 	}
 }
 

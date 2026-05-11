@@ -50,6 +50,30 @@ class DevDashboardController
 			return $this->dsCreate($request);
 		}
 
+		if ($path === '/_dev/doctor' || $path === '/_dev/doctor/') {
+			return $this->doctorPage();
+		}
+
+		if ($path === '/_dev/api/doctor' && $request->getMethod() === 'POST') {
+			return $this->runDoctor();
+		}
+
+		if ($path === '/_dev/upgrade-all' || $path === '/_dev/upgrade-all/') {
+			return $this->upgradeAllPage();
+		}
+
+		if ($path === '/_dev/api/upgrade-all' && $request->getMethod() === 'POST') {
+			return $this->runUpgradeAll();
+		}
+
+		if ($path === '/_dev/ds-upgrade' || $path === '/_dev/ds-upgrade/') {
+			return $this->dsUpgradePage($request);
+		}
+
+		if ($path === '/_dev/api/ds-upgrade' && $request->getMethod() === 'POST') {
+			return $this->runDsUpgrade($request);
+		}
+
 		return Response::error('NOT_FOUND', 'Not found', 404);
 	}
 
@@ -401,6 +425,125 @@ class DevDashboardController
 		flush();
 	}
 
+	private function emitDoneMessage(string $message): void
+	{
+		echo "[DONE] " . json_encode(['message' => $message], JSON_UNESCAPED_SLASHES) . "\n";
+		flush();
+	}
+
+	private const DS_ID_REGEX = '/^[a-z0-9]{4}(-[a-z0-9]{4}){3}$/';
+
+	private function doctorPage(): Response
+	{
+		return $this->renderActionPage([
+			'title'         => 'Server Doctor',
+			'description'   => 'Runs <code>shpd-server doctor</code> to check server configuration, '
+			                 . 'filesystem permissions, FPM socket, nginx routing, and DB connections. '
+			                 . 'Read-only — no changes are made.',
+			'endpoint'      => '/_dev/api/doctor',
+			'runButtonText' => 'Run Doctor',
+		]);
+	}
+
+	private function upgradeAllPage(): Response
+	{
+		return $this->renderActionPage([
+			'title'         => 'Upgrade All Data Sources',
+			'description'   => 'Runs <code>shpd-server ds-upgrade-all</code> to upgrade schema and '
+			                 . 'configuration on every data source. Idempotent — DS that are already '
+			                 . 'up to date pass through without changes.',
+			'endpoint'      => '/_dev/api/upgrade-all',
+			'runButtonText' => 'Run Upgrade All',
+		]);
+	}
+
+	private function dsUpgradePage(Request $request): Response
+	{
+		$dsId = $request->getQueryParams()['ds'] ?? '';
+
+		if (!is_string($dsId) || !preg_match(self::DS_ID_REGEX, $dsId)) {
+			return Response::error('INVALID_DS_ID', 'Invalid or missing ?ds=<id> parameter', 400);
+		}
+
+		$dsDir = $this->dataSourcesDir . '/' . $dsId;
+		if (!is_file($dsDir . '/config/main.json')) {
+			return Response::error('DS_NOT_FOUND', 'Data source not found: ' . $dsId, 404);
+		}
+
+		return $this->renderActionPage([
+			'title'         => 'Upgrade Data Source — ' . $dsId,
+			'description'   => 'Runs <code>shpd-ds ds-upgrade</code> in <code>' . htmlspecialchars($dsDir, ENT_QUOTES, 'UTF-8') . '</code>. '
+			                 . 'Idempotent — no-op if already up to date.',
+			'endpoint'      => '/_dev/api/ds-upgrade',
+			'runButtonText' => 'Run Upgrade',
+			'queryParams'   => '?ds=' . urlencode($dsId),
+		]);
+	}
+
+	private function runDoctor(): Response
+	{
+		return Response::stream(function () {
+			$shpdServer = $this->getShpdServerPath();
+			$cmd = sprintf('%s doctor --no-ansi 2>&1', escapeshellarg($shpdServer));
+			[$exitCode] = $this->streamCommand($cmd);
+
+			if ($exitCode === 0) {
+				$this->emitDoneMessage('Doctor completed without issues');
+			} else {
+				$this->emitError('Doctor reported issues (exit ' . $exitCode . ')');
+			}
+		});
+	}
+
+	private function runUpgradeAll(): Response
+	{
+		return Response::stream(function () {
+			$shpdServer = $this->getShpdServerPath();
+
+			$this->emitStep('Upgrading all data sources...');
+			$cmd = sprintf('%s ds-upgrade-all --no-ansi 2>&1', escapeshellarg($shpdServer));
+			[$exitCode] = $this->streamCommand($cmd);
+
+			if ($exitCode === 0) {
+				$this->emitDoneMessage('All data sources upgraded successfully');
+			} else {
+				$this->emitError('Upgrade-all reported failures (exit ' . $exitCode . ')');
+			}
+		});
+	}
+
+	private function runDsUpgrade(Request $request): Response
+	{
+		$dsId = $request->getQueryParams()['ds'] ?? '';
+
+		if (!is_string($dsId) || !preg_match(self::DS_ID_REGEX, $dsId)) {
+			return Response::error('INVALID_DS_ID', 'Invalid or missing ?ds=<id> parameter', 400);
+		}
+
+		$dsDir = $this->dataSourcesDir . '/' . $dsId;
+		if (!is_file($dsDir . '/config/main.json')) {
+			return Response::error('DS_NOT_FOUND', 'Data source not found: ' . $dsId, 404);
+		}
+
+		return Response::stream(function () use ($dsId, $dsDir) {
+			$shpdDs = $this->getShpdDsPath();
+
+			$this->emitStep('Upgrading data source ' . $dsId . '...');
+			$cmd = sprintf(
+				'cd %s && %s ds-upgrade --no-ansi 2>&1',
+				escapeshellarg($dsDir),
+				escapeshellarg($shpdDs),
+			);
+			[$exitCode] = $this->streamCommand($cmd);
+
+			if ($exitCode === 0) {
+				$this->emitDoneMessage('Data source ' . $dsId . ' upgraded successfully');
+			} else {
+				$this->emitError('Upgrade failed for ' . $dsId . ' (exit ' . $exitCode . ')');
+			}
+		});
+	}
+
 	private function renderHtml(string $hostname, int $refreshSeconds): string
 	{
 		return <<<HTML
@@ -516,7 +659,7 @@ class DevDashboardController
 		<div class="banner">⚠️  DEVELOPMENT MODE — do not deploy publicly</div>
 		<header class="app">
 			<h1>Shipard Dev Dashboard</h1>
-			<div class="host">Server: <code>{$hostname}</code><a href="/_dev/logs/">View Logs &rarr;</a><a href="/_dev/ds-create/">+ New Data Source</a></div>
+			<div class="host">Server: <code>{$hostname}</code><a href="/_dev/ds-create/">+ New DS</a><a href="/_dev/upgrade-all/">Upgrade All</a><a href="/_dev/logs/">Logs</a><a href="/_dev/doctor/">Doctor</a></div>
 		</header>
 		<main>
 			<div class="toolbar">
@@ -625,6 +768,12 @@ class DevDashboardController
 				logs.textContent = 'Logs';
 				tdAction.appendChild(logs);
 
+				var upg = document.createElement('a');
+				upg.className = 'logs-btn';
+				upg.href = '/_dev/ds-upgrade/?ds=' + encodeURIComponent(item.id);
+				upg.textContent = 'Upgrade';
+				tdAction.appendChild(upg);
+
 				tr.appendChild(tdAction);
 
 				return tr;
@@ -666,6 +815,11 @@ class DevDashboardController
 				countdownEl.textContent = remaining;
 				loadData();
 			});
+
+			// ?refresh=1 from action pages → clean URL, fresh fetch already happens via loadData() below
+			if (new URLSearchParams(location.search).has('refresh')) {
+				history.replaceState({}, '', '/_dev/');
+			}
 
 			loadData();
 			setInterval(tick, 1000);
@@ -1853,6 +2007,11 @@ class DevDashboardController
 				another.textContent = 'Create another';
 				another.addEventListener('click', function () { location.reload(); });
 				resultActions.appendChild(another);
+
+				var back = document.createElement('a');
+				back.href = '/_dev/?refresh=1';
+				back.textContent = 'Back to Dashboard';
+				resultActions.appendChild(back);
 			}
 
 			function showErrorBanner(message) {
@@ -2003,5 +2162,359 @@ class DevDashboardController
 		</body>
 		</html>
 		HTML;
+	}
+
+	/**
+	 * @param array{
+	 *   title: string,
+	 *   description: string,
+	 *   endpoint: string,
+	 *   runButtonText: string,
+	 *   queryParams?: string,
+	 * } $config
+	 */
+	private function renderActionPage(array $config): Response
+	{
+		$hostname    = htmlspecialchars(gethostname() ?: 'unknown', ENT_QUOTES, 'UTF-8');
+		$title       = htmlspecialchars($config['title'], ENT_QUOTES, 'UTF-8');
+		$description = $config['description']; // already-trusted, contains <code> tags
+		$endpoint    = htmlspecialchars($config['endpoint'], ENT_QUOTES, 'UTF-8');
+		$runText     = htmlspecialchars($config['runButtonText'], ENT_QUOTES, 'UTF-8');
+		$queryParams = htmlspecialchars($config['queryParams'] ?? '', ENT_QUOTES, 'UTF-8');
+		$endpointJs  = addslashes($config['endpoint']);
+		$queryJs     = addslashes($config['queryParams'] ?? '');
+		$runTextJs   = addslashes($config['runButtonText']);
+
+		$html = <<<HTML
+		<!DOCTYPE html>
+		<html lang="en">
+		<head>
+		<meta charset="utf-8">
+		<title>{$title} — Shipard Dev</title>
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<style>
+		* { box-sizing: border-box; }
+		body {
+			margin: 0;
+			font-family: system-ui, -apple-system, sans-serif;
+			background: #f3f4f6;
+			color: #111827;
+		}
+		.banner {
+			background: #d97706;
+			color: white;
+			padding: 8px 16px;
+			text-align: center;
+			font-weight: 600;
+			font-size: 14px;
+		}
+		header.app {
+			background: #1f2937;
+			color: white;
+			padding: 16px 24px;
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+		}
+		header.app h1 { margin: 0; font-size: 18px; font-weight: 600; }
+		header.app .meta { opacity: 0.9; font-size: 14px; }
+		header.app .meta code { font-family: monospace; }
+		header.app .meta a { color: #93c5fd; text-decoration: none; margin-left: 12px; }
+		header.app .meta a:hover { text-decoration: underline; }
+		main {
+			max-width: 900px;
+			margin: 24px auto;
+			padding: 0 16px;
+		}
+		.card {
+			background: white;
+			border-radius: 6px;
+			box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+			padding: 20px 24px;
+			margin-bottom: 16px;
+		}
+		.card p { margin-top: 0; color: #374151; line-height: 1.5; }
+		.card p code { background: #f3f4f6; padding: 1px 6px; border-radius: 3px; font-size: 0.9em; }
+		.run-btn {
+			background: #2563eb;
+			color: white;
+			border: none;
+			border-radius: 4px;
+			padding: 10px 18px;
+			font-size: 14px;
+			font-weight: 600;
+			cursor: pointer;
+			display: inline-flex;
+			align-items: center;
+			gap: 8px;
+		}
+		.run-btn:hover:not(:disabled) { background: #1d4ed8; }
+		.run-btn:disabled { background: #93c5fd; cursor: default; }
+		.spinner {
+			display: inline-block;
+			width: 12px;
+			height: 12px;
+			border: 2px solid rgba(255,255,255,0.4);
+			border-top-color: white;
+			border-radius: 50%;
+			animation: spin 0.8s linear infinite;
+		}
+		@keyframes spin { to { transform: rotate(360deg); } }
+		.output-section { display: none; }
+		.output-section.active { display: block; }
+		.output-section h2 {
+			margin: 0 0 8px 0;
+			font-size: 13px;
+			color: #6b7280;
+			font-weight: 600;
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+		}
+		.output-pre {
+			background: #1f2937;
+			color: #f3f4f6;
+			padding: 12px 14px;
+			border-radius: 4px;
+			font-family: monospace;
+			font-size: 0.85em;
+			max-height: 60vh;
+			overflow-y: auto;
+			margin: 0;
+			white-space: pre-wrap;
+			word-break: break-word;
+		}
+		.output-pre .line-step  { color: #93c5fd; font-weight: 600; display: block; }
+		.output-pre .line-error { color: #fca5a5; font-weight: 600; display: block; }
+		.output-pre .line-done  { color: #86efac; font-weight: 600; display: block; }
+		.output-pre .line-plain { color: #e5e7eb; display: block; }
+		.result-banner {
+			padding: 14px 16px;
+			border-radius: 6px;
+			margin-bottom: 12px;
+			display: none;
+			align-items: center;
+			gap: 12px;
+			flex-wrap: wrap;
+		}
+		.result-banner.active { display: flex; }
+		.result-banner.success { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
+		.result-banner.error   { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+		.result-banner .msg { flex: 1; font-weight: 600; }
+		.result-banner .actions { display: flex; gap: 8px; }
+		.result-banner a, .result-banner button {
+			padding: 6px 14px;
+			border-radius: 4px;
+			text-decoration: none;
+			font-size: 13px;
+			font-weight: 600;
+			cursor: pointer;
+			border: 1px solid transparent;
+			background: white;
+			color: #111827;
+		}
+		.result-banner a:hover, .result-banner button:hover { background: #f3f4f6; }
+		.result-banner a.primary {
+			background: #059669;
+			color: white;
+		}
+		.result-banner a.primary:hover { background: #047857; }
+		.result-banner.error a.primary { background: #dc2626; }
+		.result-banner.error a.primary:hover { background: #b91c1c; }
+		</style>
+		</head>
+		<body>
+		<div class="banner">⚠️  DEVELOPMENT MODE — do not deploy publicly</div>
+		<header class="app">
+			<h1>{$title}</h1>
+			<div class="meta">
+				Server: <code>{$hostname}</code>
+				<a href="/_dev/?refresh=1">&larr; Dashboard</a>
+			</div>
+		</header>
+		<main>
+			<div class="result-banner" id="resultBanner">
+				<span class="msg" id="resultMsg"></span>
+				<span class="actions" id="resultActions"></span>
+			</div>
+
+			<div class="card">
+				<p>{$description}</p>
+				<button type="button" class="run-btn" id="runButton">
+					<span id="runLabel">{$runText}</span>
+				</button>
+			</div>
+
+			<div class="output-section" id="outputSection">
+				<div class="card">
+					<h2>Output</h2>
+					<pre class="output-pre" id="outputPre"></pre>
+				</div>
+			</div>
+		</main>
+		<script>
+		(function () {
+			var ENDPOINT = "{$endpointJs}";
+			var QUERY_PARAMS = "{$queryJs}";
+			var RUN_LABEL = "{$runTextJs}";
+
+			var runButton    = document.getElementById('runButton');
+			var runLabel     = document.getElementById('runLabel');
+			var outputSection = document.getElementById('outputSection');
+			var outputPre    = document.getElementById('outputPre');
+			var resultBanner = document.getElementById('resultBanner');
+			var resultMsg    = document.getElementById('resultMsg');
+			var resultActions = document.getElementById('resultActions');
+
+			function setBusy(busy) {
+				runButton.disabled = busy;
+				if (busy) {
+					runLabel.textContent = 'Running...';
+					var sp = document.createElement('span');
+					sp.className = 'spinner';
+					runButton.insertBefore(sp, runLabel);
+				} else {
+					runLabel.textContent = RUN_LABEL;
+					var existing = runButton.querySelector('.spinner');
+					if (existing) existing.remove();
+				}
+			}
+
+			function appendOutput(line, kind) {
+				var div = document.createElement('div');
+				div.className = 'line-' + (kind || 'plain');
+				div.textContent = line;
+				outputPre.appendChild(div);
+				outputPre.scrollTop = outputPre.scrollHeight;
+			}
+
+			function showDoneBanner(message) {
+				resultBanner.classList.remove('error');
+				resultBanner.classList.add('success', 'active');
+				resultMsg.textContent = message || 'Done.';
+				while (resultActions.firstChild) resultActions.removeChild(resultActions.firstChild);
+
+				var again = document.createElement('button');
+				again.type = 'button';
+				again.textContent = 'Run again';
+				again.addEventListener('click', resetAndRun);
+				resultActions.appendChild(again);
+
+				var back = document.createElement('a');
+				back.className = 'primary';
+				back.href = '/_dev/?refresh=1';
+				back.textContent = 'Back to Dashboard';
+				resultActions.appendChild(back);
+			}
+
+			function showErrorBanner(message) {
+				resultBanner.classList.remove('success');
+				resultBanner.classList.add('error', 'active');
+				resultMsg.textContent = message || 'Failed.';
+				while (resultActions.firstChild) resultActions.removeChild(resultActions.firstChild);
+
+				var again = document.createElement('button');
+				again.type = 'button';
+				again.textContent = 'Run again';
+				again.addEventListener('click', resetAndRun);
+				resultActions.appendChild(again);
+
+				var back = document.createElement('a');
+				back.href = '/_dev/?refresh=1';
+				back.textContent = 'Back to Dashboard';
+				resultActions.appendChild(back);
+			}
+
+			function handleLine(line) {
+				if (line === '') return;
+				if (line.startsWith('[STEP] ')) {
+					appendOutput(line, 'step');
+				} else if (line.startsWith('[ERROR] ')) {
+					appendOutput(line, 'error');
+				} else if (line.startsWith('[DONE] ')) {
+					appendOutput(line, 'done');
+				} else {
+					appendOutput(line, 'plain');
+				}
+			}
+
+			function resetAndRun() {
+				while (outputPre.firstChild) outputPre.removeChild(outputPre.firstChild);
+				resultBanner.classList.remove('active', 'success', 'error');
+				runAction();
+			}
+
+			async function runAction() {
+				outputSection.classList.add('active');
+				setBusy(true);
+
+				var sawDone = false;
+				var sawError = false;
+				var doneMessage = '';
+				var errorMessage = '';
+
+				try {
+					var response = await fetch(ENDPOINT + QUERY_PARAMS, { method: 'POST' });
+
+					if (!response.ok) {
+						var err = await response.json().catch(function () { return {}; });
+						var msg = (err && err.error && err.error.message) || ('HTTP ' + response.status);
+						showErrorBanner(msg);
+						return;
+					}
+
+					var reader = response.body.getReader();
+					var decoder = new TextDecoder();
+					var buffer = '';
+
+					while (true) {
+						var chunk = await reader.read();
+						if (chunk.done) break;
+						buffer += decoder.decode(chunk.value, { stream: true });
+
+						var nl;
+						while ((nl = buffer.indexOf('\\n')) >= 0) {
+							var line = buffer.slice(0, nl);
+							buffer = buffer.slice(nl + 1);
+
+							if (line.startsWith('[DONE] ')) {
+								sawDone = true;
+								try {
+									var payload = JSON.parse(line.slice(7));
+									doneMessage = payload.message || 'Done.';
+								} catch (e) {
+									doneMessage = 'Done.';
+								}
+							} else if (line.startsWith('[ERROR] ')) {
+								sawError = true;
+								errorMessage = line.slice(8);
+							}
+							handleLine(line);
+						}
+					}
+					if (buffer) handleLine(buffer);
+
+					if (sawError) {
+						showErrorBanner(errorMessage);
+					} else if (sawDone) {
+						showDoneBanner(doneMessage);
+					} else {
+						showDoneBanner('Completed.');
+					}
+				} catch (e) {
+					console.error(e);
+					showErrorBanner('Network error: ' + e.message);
+				} finally {
+					setBusy(false);
+				}
+			}
+
+			runButton.addEventListener('click', resetAndRun);
+		})();
+		</script>
+		</body>
+		</html>
+		HTML;
+
+		return Response::html($html);
 	}
 }

@@ -66,6 +66,7 @@ try {
 			$response = (new \Shipard\Api\Controller\DevDashboardController(
 				'/opt/shipard/data-sources',
 				$serverConfig->getLogFile(),
+				dirname(__DIR__) . '/modules',
 			))->dispatch($request);
 			$corsMiddleware->applyTo($response)->send();
 			exit;

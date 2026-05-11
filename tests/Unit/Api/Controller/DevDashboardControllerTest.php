@@ -10,24 +10,43 @@ use Shipard\Api\Response;
 
 class DevDashboardControllerTest extends TestCase
 {
+	private string $tmpRoot;
 	private string $tmpDir;
+	private string $modulesDir;
 	private DevDashboardController $ctrl;
 	/** @var list<string> */
 	private array $tmpFiles = [];
 
 	protected function setUp(): void
 	{
-		$this->tmpDir = sys_get_temp_dir() . '/shpd-dev-test-' . uniqid();
+		$this->tmpRoot   = sys_get_temp_dir() . '/shpd-dev-test-' . uniqid();
+		$this->tmpDir    = $this->tmpRoot . '/data-sources';
+		$this->modulesDir = $this->tmpRoot . '/modules';
 		mkdir($this->tmpDir, 0700, true);
-		$this->ctrl = new DevDashboardController($this->tmpDir);
+		mkdir($this->modulesDir . '/install/base', 0700, true);
+		file_put_contents(
+			$this->modulesDir . '/install/base/module.jsonc',
+			(string) json_encode(['id' => 'install.base', 'name' => 'Base']),
+		);
+		$this->ctrl = new DevDashboardController($this->tmpDir, null, $this->modulesDir);
 	}
 
 	protected function tearDown(): void
 	{
-		$this->rrmdir($this->tmpDir);
+		$this->rrmdir($this->tmpRoot);
 		foreach ($this->tmpFiles as $f) {
 			if (file_exists($f)) unlink($f);
 		}
+	}
+
+	private function createInstallModule(string $name): void
+	{
+		$dir = $this->modulesDir . '/install/' . $name;
+		mkdir($dir, 0700, true);
+		file_put_contents(
+			$dir . '/module.jsonc',
+			(string) json_encode(['id' => 'install.' . $name, 'name' => 'Module ' . $name]),
+		);
 	}
 
 	// -------------------------------------------------------------------------
@@ -190,7 +209,7 @@ class DevDashboardControllerTest extends TestCase
 
 	private function ctrlWithLog(string $logPath): DevDashboardController
 	{
-		return new DevDashboardController($this->tmpDir, $logPath);
+		return new DevDashboardController($this->tmpDir, $logPath, $this->modulesDir);
 	}
 
 	private function jsonLine(array $data): string
@@ -410,6 +429,124 @@ class DevDashboardControllerTest extends TestCase
 	}
 
 	// -------------------------------------------------------------------------
+	// Install modules endpoint
+	// -------------------------------------------------------------------------
+
+	public function testInstallModulesEndpointReturnsList(): void
+	{
+		$this->createInstallModule('foo');
+
+		$resp = $this->ctrl->dispatch($this->makeRequest('GET', '/_dev/api/install-modules'));
+		$this->assertSame(200, $this->getStatus($resp));
+
+		$payload = $this->getPayloadRaw($resp);
+		$this->assertTrue($payload['success']);
+		$this->assertCount(2, $payload['data']);
+
+		$ids = array_column($payload['data'], 'id');
+		$this->assertContains('install.base', $ids);
+		$this->assertContains('install.foo', $ids);
+	}
+
+	public function testInstallModulesEndpointEmpty(): void
+	{
+		// Wipe the install dir
+		unlink($this->modulesDir . '/install/base/module.jsonc');
+		rmdir($this->modulesDir . '/install/base');
+
+		$resp = $this->ctrl->dispatch($this->makeRequest('GET', '/_dev/api/install-modules'));
+		$this->assertSame(200, $this->getStatus($resp));
+
+		$payload = $this->getPayloadRaw($resp);
+		$this->assertTrue($payload['success']);
+		$this->assertSame([], $payload['data']);
+	}
+
+	public function testInstallModulesWithoutConfigReturns503(): void
+	{
+		$ctrl = new DevDashboardController($this->tmpDir, null, null);
+		$resp = $ctrl->dispatch($this->makeRequest('GET', '/_dev/api/install-modules'));
+
+		$this->assertSame(503, $this->getStatus($resp));
+		$payload = $this->getPayloadRaw($resp);
+		$this->assertFalse($payload['success']);
+		$this->assertSame('MODULES_NOT_CONFIGURED', $payload['error']['code']);
+	}
+
+	public function testInstallModulesEndpointPostReturns404(): void
+	{
+		$resp = $this->ctrl->dispatch($this->makeRequest('POST', '/_dev/api/install-modules'));
+		$this->assertSame(404, $this->getStatus($resp));
+	}
+
+	public function testDsCreateValidationInvalidModuleFormat(): void
+	{
+		$resp = $this->ctrl->dispatch($this->makeJsonRequest('POST', '/_dev/api/ds-create', [
+			'name'     => 'Test DS',
+			'login'    => 'admin',
+			'password' => 'admin',
+			'module'   => 'bad-id',
+		]));
+		$this->assertSame(400, $this->getStatus($resp));
+		$payload = $this->getPayloadRaw($resp);
+		$this->assertStringContainsString('Invalid install module id', $payload['error']['message']);
+	}
+
+	public function testDsCreateValidationNonExistentModule(): void
+	{
+		$resp = $this->ctrl->dispatch($this->makeJsonRequest('POST', '/_dev/api/ds-create', [
+			'name'     => 'Test DS',
+			'login'    => 'admin',
+			'password' => 'admin',
+			'module'   => 'install.zzz',
+		]));
+		$this->assertSame(400, $this->getStatus($resp));
+		$payload = $this->getPayloadRaw($resp);
+		$this->assertStringContainsString('not found', $payload['error']['message']);
+	}
+
+	public function testDsCreatePipelinePassesModuleFlag(): void
+	{
+		$ctrl = $this->makeTestableCtrl();
+		$ctrl->commandResults = [
+			[0, "  Directory:     /tmp/test/abc123\n"],
+			[0, ""],
+			[0, ""],
+		];
+
+		$resp = $ctrl->dispatch($this->makeJsonRequest('POST', '/_dev/api/ds-create', [
+			'name'     => 'Test',
+			'login'    => 'admin',
+			'password' => 'admin',
+		]));
+
+		$this->streamToString($resp);
+		$this->assertStringContainsString('--module=', $ctrl->commandsRun[0]);
+		$this->assertStringContainsString('install.base', $ctrl->commandsRun[0]);
+	}
+
+	public function testDsCreatePipelinePassesExplicitModuleFlag(): void
+	{
+		$this->createInstallModule('foo');
+		$ctrl = $this->makeTestableCtrl();
+		$ctrl->commandResults = [
+			[0, "  Directory:     /tmp/test/abc123\n"],
+			[0, ""],
+			[0, ""],
+		];
+
+		$resp = $ctrl->dispatch($this->makeJsonRequest('POST', '/_dev/api/ds-create', [
+			'name'     => 'Test',
+			'login'    => 'admin',
+			'password' => 'admin',
+			'module'   => 'install.foo',
+		]));
+
+		$this->streamToString($resp);
+		$this->assertStringContainsString('install.foo', $ctrl->commandsRun[0]);
+	}
+
+	// -------------------------------------------------------------------------
 	// ds-create pipeline (subprocess mocks via subclassing)
 	// -------------------------------------------------------------------------
 
@@ -424,7 +561,7 @@ class DevDashboardControllerTest extends TestCase
 
 	private function makeTestableCtrl(): TestableDevDashboardController
 	{
-		return new TestableDevDashboardController($this->tmpDir);
+		return new TestableDevDashboardController($this->tmpDir, null, $this->modulesDir);
 	}
 
 	public function testDsCreatePipelineHappyPath(): void

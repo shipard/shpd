@@ -19,6 +19,7 @@ class TestableDsCreateCommand extends DsCreateCommand
         ServerConfig $mockConfig,
         DatabaseManager $mockDbManager,
         private readonly string $dataSourcesDir,
+        private readonly string $modulesDir,
     ) {
         parent::__construct($mockConfig, $mockDbManager);
     }
@@ -27,18 +28,33 @@ class TestableDsCreateCommand extends DsCreateCommand
     {
         return $this->dataSourcesDir;
     }
+
+    protected function getModulesDir(): string
+    {
+        return $this->modulesDir;
+    }
 }
 
 class DsCreateCommandTest extends TestCase
 {
+    private string $rootDir;
     private string $tempDir;
+    private string $modulesDir;
     private MockObject $serverConfig;
     private MockObject $databaseManager;
 
     protected function setUp(): void
     {
-        $this->tempDir = sys_get_temp_dir() . '/shipard_cmd_test_' . uniqid();
+        $this->rootDir = sys_get_temp_dir() . '/shipard_cmd_test_' . uniqid();
+        $this->tempDir = $this->rootDir . '/data-sources';
+        $this->modulesDir = $this->rootDir . '/modules';
         mkdir($this->tempDir, 0755, true);
+
+        mkdir($this->modulesDir . '/install/base', 0755, true);
+        file_put_contents(
+            $this->modulesDir . '/install/base/module.jsonc',
+            (string) json_encode(['id' => 'install.base', 'name' => 'Base']),
+        );
 
         $this->serverConfig = $this->createMock(ServerConfig::class);
         $this->serverConfig->method('load');
@@ -51,7 +67,7 @@ class DsCreateCommandTest extends TestCase
 
     protected function tearDown(): void
     {
-        $this->rmdirRecursive($this->tempDir);
+        $this->rmdirRecursive($this->rootDir);
     }
 
     private function createCommandTester(): CommandTester
@@ -60,12 +76,23 @@ class DsCreateCommandTest extends TestCase
             $this->serverConfig,
             $this->databaseManager,
             $this->tempDir,
+            $this->modulesDir,
         );
 
         $app = new Application();
         $app->add($command);
 
         return new CommandTester($command);
+    }
+
+    private function createInstallModule(string $name): void
+    {
+        $dir = $this->modulesDir . '/install/' . $name;
+        mkdir($dir, 0755, true);
+        file_put_contents(
+            $dir . '/module.jsonc',
+            (string) json_encode(['id' => 'install.' . $name, 'name' => 'Module ' . $name]),
+        );
     }
 
     public function testDsCreateRequiresName(): void
@@ -119,6 +146,65 @@ class DsCreateCommandTest extends TestCase
         $dirName = basename($dirs[0]);
 
         $this->assertMatchesRegularExpression('/^[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}$/', $dirName);
+    }
+
+    public function testDsCreateWritesDefaultModuleInMainJson(): void
+    {
+        $tester = $this->createCommandTester();
+        $exitCode = $tester->execute(['--name' => 'Test']);
+        $this->assertSame(0, $exitCode);
+
+        $dirs = glob($this->tempDir . '/*', GLOB_ONLYDIR);
+        $config = json_decode(file_get_contents($dirs[0] . '/config/main.json'), true);
+        $this->assertSame(['install.base'], $config['modules']);
+    }
+
+    public function testDsCreateWritesExplicitModuleInMainJson(): void
+    {
+        $this->createInstallModule('foo');
+        $tester = $this->createCommandTester();
+        $exitCode = $tester->execute(['--name' => 'Test', '--module' => 'install.foo']);
+        $this->assertSame(0, $exitCode);
+
+        $dirs = glob($this->tempDir . '/*', GLOB_ONLYDIR);
+        $config = json_decode(file_get_contents($dirs[0] . '/config/main.json'), true);
+        $this->assertSame(['install.foo'], $config['modules']);
+    }
+
+    public function testDsCreateRejectsInvalidModuleFormat(): void
+    {
+        $tester = $this->createCommandTester();
+        $exitCode = $tester->execute(['--name' => 'Test', '--module' => 'core.system']);
+
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('Invalid install module id', $tester->getDisplay());
+        $this->assertCount(0, glob($this->tempDir . '/*', GLOB_ONLYDIR));
+    }
+
+    public function testDsCreateRejectsNonExistentModule(): void
+    {
+        $tester = $this->createCommandTester();
+        $exitCode = $tester->execute(['--name' => 'Test', '--module' => 'install.nope']);
+
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('Install module not found', $tester->getDisplay());
+        $this->assertCount(0, glob($this->tempDir . '/*', GLOB_ONLYDIR));
+    }
+
+    public function testDsCreateRejectsNonExistentModuleListsAvailable(): void
+    {
+        $tester = $this->createCommandTester();
+        $exitCode = $tester->execute(['--name' => 'Test', '--module' => 'install.zzz']);
+
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('Available: install.base', $tester->getDisplay());
+    }
+
+    public function testDsCreateOutputContainsModule(): void
+    {
+        $tester = $this->createCommandTester();
+        $tester->execute(['--name' => 'Test']);
+        $this->assertStringContainsString('install.base', $tester->getDisplay());
     }
 
     public function testDsCreateGeneratesSecretsKey(): void

@@ -52,10 +52,11 @@ admin DB credentials (uživatel pro `CREATE DATABASE` / `CREATE USER`) a
 připraví adresářovou strukturu pro DS (`/opt/shipard/data-sources/`).
 Spouští se **jednou** při instalaci serveru.
 
-### `ds-create --name <název>`
+### `ds-create --name <název> [--module <id>]`
 
 ```bash
 sudo shpd-server ds-create --name "Moje firma s.r.o."
+sudo shpd-server ds-create --name "Moje firma s.r.o." --module=install.base
 ```
 
 Vytvoří nový datový zdroj:
@@ -64,7 +65,7 @@ Vytvoří nový datový zdroj:
 - vytvoří `/opt/shipard/data-sources/<id>/` (config, att, cache)
 - vytvoří MariaDB databázi a runtime DB uživatele
 - vygeneruje `secrets/secrets.key` pro per-DS šifrování `encrypted_text` sloupců
-- zapíše `config/main.json` (práva 0600)
+- zapíše `config/main.json` (práva 0600) se zvoleným install modulem
 
 Po vytvoření je třeba spustit `shpd-ds ds-upgrade` z adresáře nového DS,
 aby se založilo schéma a načetla výchozí konfigurace modulů.
@@ -72,6 +73,11 @@ aby se založilo schéma a načetla výchozí konfigurace modulů.
 | Opce | Význam |
 |------|--------|
 | `--name <název>` | **povinné** — lidsky čitelný název DS |
+| `--module <id>` | volitelné (default: `install.base`) — install modul k aktivaci. Musí odpovídat adresáři `modules/install/<suffix>/`, jehož `module.jsonc` má id `install.<suffix>`. Seznam dostupných modulů: `ls modules/install/`. |
+
+Vytvořený `config/main.json` bude obsahovat `"modules": ["<id>"]`. Install
+modul je top-level bundle, který deklaruje své závislosti (`core.system`,
+`core.attachments`, …), které `ds-upgrade` tranzitivně rozresolvuje.
 
 ### `ds-upgrade-all`
 

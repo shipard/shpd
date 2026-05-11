@@ -36,7 +36,8 @@ class HelpCommand extends Command
         $output->writeln('  shpd-server <command> [options]');
         $output->writeln('');
         $output->writeln('<comment>Options:</comment>');
-        $output->writeln('  ds-create --name <name>                  Name of the data source to create');
+        $output->writeln('  ds-create --name=<n> [--module=<id>]     Create a new data source');
+        $output->writeln('                                           (--module defaults to install.base)');
         $output->writeln('  ds-upgrade-all [--ds=<id>] [--stop-on-error] [--dry-run]');
         $output->writeln('                                           Upgrade all data sources');
         $output->writeln('  domain-add --host <host> --ds <ds-id>    Map a hostname to a data source');

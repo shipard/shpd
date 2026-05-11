@@ -7,6 +7,7 @@ namespace Shipard\Command\Server;
 use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Config\ServerConfig;
 use Shipard\Core\Database\DatabaseManager;
+use Shipard\Core\Module\InstallModuleRegistry;
 use Shipard\Core\Security\DsSecretCipher;
 use Shipard\Core\Utils\IdGenerator;
 use Symfony\Component\Console\Command\Command;
@@ -27,12 +28,24 @@ class DsCreateCommand extends Command
     {
         $this->setName('ds-create')
              ->setDescription('Create a new data source')
-             ->addOption('name', null, InputOption::VALUE_REQUIRED, 'Name of the data source');
+             ->addOption('name', null, InputOption::VALUE_REQUIRED, 'Name of the data source')
+             ->addOption(
+                 'module',
+                 null,
+                 InputOption::VALUE_REQUIRED,
+                 'Install module id (e.g. install.base)',
+                 'install.base',
+             );
     }
 
     protected function getDataSourcesDir(): string
     {
         return '/opt/shipard/data-sources';
+    }
+
+    protected function getModulesDir(): string
+    {
+        return dirname(__DIR__, 3) . '/modules';
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -41,6 +54,26 @@ class DsCreateCommand extends Command
 
         if (empty($name)) {
             $output->writeln('<error>Option --name is required</error>');
+            return Command::FAILURE;
+        }
+
+        $moduleId = (string) $input->getOption('module');
+
+        if (!preg_match('/^install\.[a-z][a-zA-Z0-9]*$/', $moduleId)) {
+            $output->writeln('<error>Invalid install module id: ' . $moduleId . '</error>');
+            $output->writeln('<comment>Must match pattern: install.<name></comment>');
+            return Command::FAILURE;
+        }
+
+        $registry = new InstallModuleRegistry($this->getModulesDir());
+        if (!$registry->exists($moduleId)) {
+            $output->writeln('<error>Install module not found: ' . $moduleId . '</error>');
+            $available = array_map(fn($m) => $m['id'], $registry->list());
+            if ($available) {
+                $output->writeln('<comment>Available: ' . implode(', ', $available) . '</comment>');
+            } else {
+                $output->writeln('<comment>No install modules found in ' . $this->getModulesDir() . '/install/</comment>');
+            }
             return Command::FAILURE;
         }
 
@@ -91,6 +124,7 @@ class DsCreateCommand extends Command
         $mainConfig = [
             'id'                => $id,
             'name'              => $name,
+            'modules'           => [$moduleId],
             'database_name'     => $dbName,
             'database_user'     => $dbUser,
             'database_password' => $password,
@@ -119,6 +153,7 @@ class DsCreateCommand extends Command
         $output->writeln('');
         $output->writeln("  ID:            <comment>{$id}</comment>");
         $output->writeln("  Name:          <comment>{$name}</comment>");
+        $output->writeln("  Module:        <comment>{$moduleId}</comment>");
         $output->writeln("  Database:      <comment>{$dbName}</comment>");
         $output->writeln("  DB User:       <comment>{$dbUser}</comment>");
         $output->writeln("  Directory:     <comment>{$dataSourceDir}</comment>");

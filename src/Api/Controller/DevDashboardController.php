@@ -11,6 +11,7 @@ class DevDashboardController
 	public function __construct(
 		private readonly string $dataSourcesDir = '/opt/shipard/data-sources',
 		private readonly ?string $logFilePath = null,
+		private readonly ?string $modulesDir = null,
 	) {}
 
 	public function dispatch(Request $request): Response
@@ -27,6 +28,10 @@ class DevDashboardController
 
 		if ($path === '/_dev/api/data-sources' && $request->getMethod() === 'GET') {
 			return $this->listDataSources();
+		}
+
+		if ($path === '/_dev/api/install-modules' && $request->getMethod() === 'GET') {
+			return $this->getInstallModules();
 		}
 
 		if ($path === '/_dev/logs' || $path === '/_dev/logs/') {
@@ -81,6 +86,20 @@ class DevDashboardController
 		));
 
 		return Response::success($items);
+	}
+
+	private function getInstallModules(): Response
+	{
+		if ($this->modulesDir === null) {
+			return Response::error(
+				'MODULES_NOT_CONFIGURED',
+				'Modules directory not configured',
+				503,
+			);
+		}
+
+		$registry = new \Shipard\Core\Module\InstallModuleRegistry($this->modulesDir);
+		return Response::success($registry->list());
 	}
 
 	private function getLogs(Request $request): Response
@@ -166,21 +185,24 @@ class DevDashboardController
 		$login    = is_string($body['login'] ?? null) ? trim($body['login']) : '';
 		$password = is_string($body['password'] ?? null) ? $body['password'] : '';
 		$seed     = (bool) ($body['seed'] ?? false);
+		$module   = is_string($body['module'] ?? null) && trim($body['module']) !== ''
+			? trim($body['module'])
+			: 'install.base';
 
-		$errors = $this->validateDsCreateInput($name, $login, $password);
+		$errors = $this->validateDsCreateInput($name, $login, $password, $module);
 		if ($errors) {
 			return Response::error('VALIDATION', implode(' ', $errors), 400);
 		}
 
-		return Response::stream(function () use ($name, $login, $password, $seed) {
-			$this->runDsCreatePipeline($name, $login, $password, $seed);
+		return Response::stream(function () use ($name, $login, $password, $seed, $module) {
+			$this->runDsCreatePipeline($name, $login, $password, $seed, $module);
 		});
 	}
 
 	/**
 	 * @return list<string>
 	 */
-	private function validateDsCreateInput(string $name, string $login, string $password): array
+	private function validateDsCreateInput(string $name, string $login, string $password, string $module): array
 	{
 		$errors = [];
 
@@ -204,6 +226,17 @@ class DevDashboardController
 			$errors[] = 'Admin password must be at least 4 characters.';
 		}
 
+		if ($module === '') {
+			$errors[] = 'Install module is required.';
+		} elseif (!preg_match('/^install\.[a-z][a-zA-Z0-9]*$/', $module)) {
+			$errors[] = 'Invalid install module id.';
+		} elseif ($this->modulesDir !== null) {
+			$registry = new \Shipard\Core\Module\InstallModuleRegistry($this->modulesDir);
+			if (!$registry->exists($module)) {
+				$errors[] = 'Install module "' . $module . '" not found.';
+			}
+		}
+
 		return $errors;
 	}
 
@@ -222,6 +255,7 @@ class DevDashboardController
 		string $login,
 		string $password,
 		bool $seed,
+		string $module,
 	): void {
 		$shpdServer = $this->getShpdServerPath();
 		$shpdDs     = $this->getShpdDsPath();
@@ -229,9 +263,10 @@ class DevDashboardController
 		// ── 1. ds-create ────────────────────────────────────────────────
 		$this->emitStep('Creating data source...');
 		$cmd = sprintf(
-			'%s ds-create --name=%s --no-ansi 2>&1',
+			'%s ds-create --name=%s --module=%s --no-ansi 2>&1',
 			escapeshellarg($shpdServer),
 			escapeshellarg($name),
+			escapeshellarg($module),
 		);
 		[$exitCode, $output] = $this->streamCommand($cmd);
 
@@ -1514,8 +1549,18 @@ class DevDashboardController
 			font-size: 14px;
 			font-family: inherit;
 		}
-		.field input:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37,99,235,0.2); }
-		.field input:disabled { background: #f9fafb; color: #6b7280; }
+		.field input:focus, .field select:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37,99,235,0.2); }
+		.field input:disabled, .field select:disabled { background: #f9fafb; color: #6b7280; }
+		.field select {
+			width: 100%;
+			padding: 8px 10px;
+			border: 1px solid #d1d5db;
+			border-radius: 4px;
+			font-size: 14px;
+			font-family: inherit;
+			background: white;
+		}
+		.field .hint { font-size: 12px; color: #6b7280; margin-top: 4px; min-height: 14px; }
 		.field .err {
 			color: #b91c1c;
 			font-size: 12px;
@@ -1656,6 +1701,14 @@ class DevDashboardController
 						<div class="err" id="err-name"></div>
 					</div>
 					<div class="field">
+						<label for="f-module">Install module <span class="req">*</span></label>
+						<select id="f-module" name="module" required>
+							<option value="">Loading modules...</option>
+						</select>
+						<div class="hint" id="module-hint"></div>
+						<div class="err" id="err-module"></div>
+					</div>
+					<div class="field">
 						<label for="f-login">Admin login <span class="req">*</span></label>
 						<input type="text" id="f-login" name="login" value="admin" required maxlength="64">
 						<div class="err" id="err-login"></div>
@@ -1697,6 +1750,8 @@ class DevDashboardController
 			var nameInput    = document.getElementById('f-name');
 			var loginInput   = document.getElementById('f-login');
 			var seedInput    = document.getElementById('f-seed');
+			var moduleSel    = document.getElementById('f-module');
+			var moduleHint   = document.getElementById('module-hint');
 			var formError    = document.getElementById('formError');
 			var outputSection = document.getElementById('outputSection');
 			var outputPre    = document.getElementById('outputPre');
@@ -1724,9 +1779,10 @@ class DevDashboardController
 				document.getElementById('err-name').textContent = '';
 				document.getElementById('err-login').textContent = '';
 				document.getElementById('err-password').textContent = '';
+				document.getElementById('err-module').textContent = '';
 			}
 
-			function validateClient(name, login, password) {
+			function validateClient(name, login, password, module) {
 				var errs = {};
 				if (!name) errs.name = 'Name is required.';
 				else if (name.length > 200) errs.name = 'Name is too long (max 200 characters).';
@@ -1738,6 +1794,8 @@ class DevDashboardController
 				if (!password) errs.password = 'Admin password is required.';
 				else if (password.length < 4) errs.password = 'Admin password must be at least 4 characters.';
 
+				if (!module) errs.module = 'Please select an install module.';
+
 				return errs;
 			}
 
@@ -1745,6 +1803,7 @@ class DevDashboardController
 				if (errs.name) document.getElementById('err-name').textContent = errs.name;
 				if (errs.login) document.getElementById('err-login').textContent = errs.login;
 				if (errs.password) document.getElementById('err-password').textContent = errs.password;
+				if (errs.module) document.getElementById('err-module').textContent = errs.module;
 			}
 
 			function setBusy(busy) {
@@ -1752,6 +1811,7 @@ class DevDashboardController
 				loginInput.disabled = busy;
 				pwInput.disabled = busy;
 				seedInput.disabled = busy;
+				moduleSel.disabled = busy;
 				togglePw.disabled = busy;
 				submitBtn.disabled = busy;
 				if (busy) {
@@ -1826,6 +1886,57 @@ class DevDashboardController
 				}
 			}
 
+			function updateModuleHint() {
+				var opt = moduleSel.options[moduleSel.selectedIndex];
+				moduleHint.textContent = (opt && opt.dataset && opt.dataset.description) || '';
+			}
+
+			async function loadInstallModules() {
+				try {
+					var r = await fetch('/_dev/api/install-modules', { headers: { 'Accept': 'application/json' } });
+					var result = await r.json();
+					var modules = (result && result.data) || [];
+
+					while (moduleSel.firstChild) moduleSel.removeChild(moduleSel.firstChild);
+
+					if (modules.length === 0) {
+						var opt0 = document.createElement('option');
+						opt0.value = '';
+						opt0.textContent = 'No install modules found';
+						moduleSel.appendChild(opt0);
+						moduleSel.disabled = true;
+						moduleHint.textContent = '';
+						return;
+					}
+
+					modules.forEach(function (m) {
+						var opt = document.createElement('option');
+						opt.value = m.id;
+						opt.textContent = m.name + ' (' + m.id + ')';
+						opt.dataset.description = m.description || '';
+						moduleSel.appendChild(opt);
+					});
+
+					var baseIdx = -1;
+					for (var i = 0; i < modules.length; i++) {
+						if (modules[i].id === 'install.base') { baseIdx = i; break; }
+					}
+					moduleSel.selectedIndex = baseIdx >= 0 ? baseIdx : 0;
+					updateModuleHint();
+				} catch (e) {
+					console.error(e);
+					while (moduleSel.firstChild) moduleSel.removeChild(moduleSel.firstChild);
+					var opt = document.createElement('option');
+					opt.value = '';
+					opt.textContent = 'Failed to load modules';
+					moduleSel.appendChild(opt);
+					moduleSel.disabled = true;
+				}
+			}
+
+			moduleSel.addEventListener('change', updateModuleHint);
+			loadInstallModules();
+
 			form.addEventListener('submit', async function (ev) {
 				ev.preventDefault();
 				clearErrors();
@@ -1834,8 +1945,9 @@ class DevDashboardController
 				var login    = loginInput.value.trim();
 				var password = pwInput.value;
 				var seed     = seedInput.checked;
+				var module   = moduleSel.value;
 
-				var errs = validateClient(name, login, password);
+				var errs = validateClient(name, login, password, module);
 				if (Object.keys(errs).length > 0) {
 					showFieldErrors(errs);
 					return;
@@ -1850,7 +1962,7 @@ class DevDashboardController
 					var response = await fetch('/_dev/api/ds-create', {
 						method: 'POST',
 						headers: { 'Content-Type': 'application/json' },
-						body: JSON.stringify({ name: name, login: login, password: password, seed: seed }),
+						body: JSON.stringify({ name: name, login: login, password: password, seed: seed, module: module }),
 					});
 
 					if (!response.ok) {

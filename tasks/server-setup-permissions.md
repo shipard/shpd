@@ -45,7 +45,7 @@ aktuální mód.
 |-------|-------|-------|------|----------|
 | `/etc/shipard/` | `root` | shipard-user | `0750` | adresář |
 | `/etc/shipard/server.json` | `root` | shipard-user | `0640` | admin DB credentials |
-| `/opt/shipard/` | shipard-user | shipard-user | `0750` | root datový adresář |
+| `/opt/shipard/` | shipard-user | shipard-user | `0751` | root datový adresář (others=x kvůli nginx traversal pro `/opt/shipard/shpd/public`) |
 | `/opt/shipard/data-sources/` | shipard-user | shipard-user | `0750` | parent všech DS |
 | `/opt/shipard/data-sources/<id>/` | shipard-user | shipard-user | `0750` | per-DS |
 | `/opt/shipard/data-sources/<id>/config/` | shipard-user | shipard-user | `0750` | |

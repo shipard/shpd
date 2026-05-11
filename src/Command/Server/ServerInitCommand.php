@@ -6,6 +6,7 @@ namespace Shipard\Command\Server;
 
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 class ServerInitCommand extends Command
@@ -15,7 +16,9 @@ class ServerInitCommand extends Command
     protected function configure(): void
     {
         $this->setName('server-init')
-             ->setDescription('Initialize the Shipard server configuration');
+             ->setDescription('Initialize the Shipard server configuration')
+             ->addOption('mode', null, InputOption::VALUE_REQUIRED, 'Operating mode: development or production', 'development')
+             ->addOption('user', null, InputOption::VALUE_REQUIRED, 'Shipard user (owns /opt/shipard, runs as PHP-FPM). Defaults: $SUDO_USER in development, "shipard" in production.');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -25,8 +28,29 @@ class ServerInitCommand extends Command
             return Command::FAILURE;
         }
 
+        $mode = (string) $input->getOption('mode');
+        if ($mode !== 'development' && $mode !== 'production') {
+            $output->writeln("<error>Invalid --mode '{$mode}'. Must be 'development' or 'production'.</error>");
+            return Command::FAILURE;
+        }
+
+        $user = $input->getOption('user');
+        if ($user === null || $user === '') {
+            $user = $this->defaultShipardUser($mode);
+        }
+        if ($user === null) {
+            $output->writeln('<error>Cannot determine shipard user. Pass --user=<name> explicitly.</error>');
+            return Command::FAILURE;
+        }
+        if (posix_getpwnam($user) === false) {
+            $output->writeln("<error>User '{$user}' does not exist on this system.</error>");
+            return Command::FAILURE;
+        }
+
         if (file_exists($this->serverConfigPath)) {
             $output->writeln('<info>Server is already initialized</info>');
+            // Still re-apply ownership in case it was wrong
+            $this->applyConfigOwnership($user, $output);
             return Command::SUCCESS;
         }
 
@@ -38,7 +62,7 @@ class ServerInitCommand extends Command
         }
 
         $dir = dirname($this->serverConfigPath);
-        if (!is_dir($dir) && !mkdir($dir, 0755, true)) {
+        if (!is_dir($dir) && !mkdir($dir, 0750, true)) {
             $output->writeln('<error>Failed to create config directory</error>');
             return Command::FAILURE;
         }
@@ -48,19 +72,34 @@ class ServerInitCommand extends Command
             'port'           => 3306,
             'admin_user'     => 'root',
             'admin_password' => $password,
-            'mode'           => 'production',
+            'mode'           => $mode,
         ];
         file_put_contents($this->serverConfigPath, json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
-        chmod($this->serverConfigPath, 0600);
+
+        $this->applyConfigOwnership($user, $output);
 
         $output->writeln('<info>Server initialized successfully</info>');
-        $output->writeln("  Config: <comment>{$this->serverConfigPath}</comment>");
+        $output->writeln("  Mode:    <comment>{$mode}</comment>");
+        $output->writeln("  User:    <comment>{$user}</comment>");
+        $output->writeln("  Config:  <comment>{$this->serverConfigPath}</comment>");
         return Command::SUCCESS;
     }
 
     protected function isRunningAsRoot(): bool
     {
         return posix_getuid() === 0;
+    }
+
+    protected function defaultShipardUser(string $mode): ?string
+    {
+        if ($mode === 'production') {
+            return 'shipard';
+        }
+        $sudoUser = getenv('SUDO_USER');
+        if (is_string($sudoUser) && $sudoUser !== '' && $sudoUser !== 'root') {
+            return $sudoUser;
+        }
+        return null;
     }
 
     protected function generatePassword(): string
@@ -78,5 +117,33 @@ class ServerInitCommand extends Command
         $escaped = escapeshellarg($password);
         exec("mysqladmin -u root password {$escaped}", $out, $exitCode);
         return $exitCode === 0;
+    }
+
+    /**
+     * Apply per-contract ownership/mode on /etc/shipard and /etc/shipard/server.json.
+     * Best-effort: failures are reported but don't abort init.
+     */
+    protected function applyConfigOwnership(string $user, OutputInterface $output): void
+    {
+        $configDir = dirname($this->serverConfigPath);
+        if (is_dir($configDir)) {
+            $this->setOwnership($configDir, 'root', $user, 0750, $output);
+        }
+        if (is_file($this->serverConfigPath)) {
+            $this->setOwnership($this->serverConfigPath, 'root', $user, 0640, $output);
+        }
+    }
+
+    protected function setOwnership(string $path, string $owner, string $group, int $mode, OutputInterface $output): void
+    {
+        if (!@chown($path, $owner)) {
+            $output->writeln("<comment>Warning: chown {$owner} {$path} failed</comment>");
+        }
+        if (!@chgrp($path, $group)) {
+            $output->writeln("<comment>Warning: chgrp {$group} {$path} failed</comment>");
+        }
+        if (!@chmod($path, $mode)) {
+            $output->writeln(sprintf('<comment>Warning: chmod %04o %s failed</comment>', $mode, $path));
+        }
     }
 }

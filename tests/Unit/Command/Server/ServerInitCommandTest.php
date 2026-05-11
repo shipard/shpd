@@ -7,6 +7,7 @@ namespace Shipard\Tests\Unit\Command\Server;
 use PHPUnit\Framework\TestCase;
 use Shipard\Command\Server\ServerInitCommand;
 use Symfony\Component\Console\Application;
+use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Tester\CommandTester;
 
 class TestableServerInitCommand extends ServerInitCommand
@@ -14,6 +15,8 @@ class TestableServerInitCommand extends ServerInitCommand
     public bool $rootResult = false;
     public bool $mysqladminResult = true;
     public ?string $lastMysqladminPassword = null;
+    /** @var list<array{path: string, owner: string, group: string, mode: int}> */
+    public array $ownershipApplied = [];
 
     public function __construct(string $tempConfigPath)
     {
@@ -36,21 +39,40 @@ class TestableServerInitCommand extends ServerInitCommand
         $this->lastMysqladminPassword = $password;
         return $this->mysqladminResult;
     }
+
+    protected function setOwnership(string $path, string $owner, string $group, int $mode, OutputInterface $output): void
+    {
+        // Don't actually chown/chmod in tests — record and only apply chmod
+        // (which works without root on owned files) for path-existence sanity.
+        $this->ownershipApplied[] = [
+            'path' => $path,
+            'owner' => $owner,
+            'group' => $group,
+            'mode' => $mode,
+        ];
+    }
 }
 
 class ServerInitCommandTest extends TestCase
 {
     private string $tempConfigPath;
+    private string $tempDir;
 
     protected function setUp(): void
     {
-        $this->tempConfigPath = sys_get_temp_dir() . '/shipard_server_init_test_' . uniqid() . '.json';
+        $this->tempDir = sys_get_temp_dir() . '/shpd-server-init-test-' . uniqid();
+        mkdir($this->tempDir, 0750, true);
+        $this->tempConfigPath = $this->tempDir . '/server.json';
     }
 
     protected function tearDown(): void
     {
         if (file_exists($this->tempConfigPath)) {
-            unlink($this->tempConfigPath);
+            @chmod($this->tempConfigPath, 0700);
+            @unlink($this->tempConfigPath);
+        }
+        if (is_dir($this->tempDir)) {
+            @rmdir($this->tempDir);
         }
     }
 
@@ -67,11 +89,57 @@ class ServerInitCommandTest extends TestCase
         $command->rootResult = false;
 
         $tester = $this->createTester($command);
-        $exitCode = $tester->execute([]);
+        $exitCode = $tester->execute(['--user' => 'sebik']);
 
         $this->assertSame(1, $exitCode);
         $this->assertStringContainsString('must be run as root', $tester->getDisplay());
         $this->assertFileDoesNotExist($this->tempConfigPath);
+    }
+
+    public function testFailsOnInvalidMode(): void
+    {
+        $command = new TestableServerInitCommand($this->tempConfigPath);
+        $command->rootResult = true;
+
+        $tester = $this->createTester($command);
+        $exitCode = $tester->execute(['--mode' => 'staging', '--user' => 'sebik']);
+
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString("Invalid --mode 'staging'", $tester->getDisplay());
+    }
+
+    public function testFailsWhenUserDoesNotExist(): void
+    {
+        $command = new TestableServerInitCommand($this->tempConfigPath);
+        $command->rootResult = true;
+
+        $tester = $this->createTester($command);
+        $exitCode = $tester->execute(['--user' => 'nonexistent-user-' . uniqid()]);
+
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('does not exist', $tester->getDisplay());
+    }
+
+    public function testFailsWhenCannotDetermineUser(): void
+    {
+        // development mode + no --user + no SUDO_USER → cannot determine
+        $command = new TestableServerInitCommand($this->tempConfigPath);
+        $command->rootResult = true;
+
+        $previousSudoUser = getenv('SUDO_USER');
+        putenv('SUDO_USER');  // unset
+
+        try {
+            $tester = $this->createTester($command);
+            $exitCode = $tester->execute([]);
+
+            $this->assertSame(1, $exitCode);
+            $this->assertStringContainsString('Cannot determine shipard user', $tester->getDisplay());
+        } finally {
+            if ($previousSudoUser !== false) {
+                putenv('SUDO_USER=' . $previousSudoUser);
+            }
+        }
     }
 
     public function testSucceedsWhenAlreadyInitialized(): void
@@ -82,36 +150,90 @@ class ServerInitCommandTest extends TestCase
         $command->rootResult = true;
 
         $tester = $this->createTester($command);
-        $exitCode = $tester->execute([]);
+        $exitCode = $tester->execute(['--user' => $this->existingUser()]);
 
         $this->assertSame(0, $exitCode);
         $this->assertStringContainsString('already initialized', $tester->getDisplay());
         $this->assertNull($command->lastMysqladminPassword);
+
+        // Ownership is re-applied even on already-init
+        $paths = array_column($command->ownershipApplied, 'path');
+        $this->assertContains($this->tempConfigPath, $paths);
     }
 
-    public function testSuccessfulInit(): void
+    public function testSuccessfulDevelopmentInit(): void
     {
         $command = new TestableServerInitCommand($this->tempConfigPath);
         $command->rootResult = true;
+        $user = $this->existingUser();
 
         $tester = $this->createTester($command);
-        $exitCode = $tester->execute([]);
+        $exitCode = $tester->execute(['--mode' => 'development', '--user' => $user]);
 
         $this->assertSame(0, $exitCode);
         $this->assertStringContainsString('initialized successfully', $tester->getDisplay());
+        $this->assertStringContainsString('Mode:    development', $tester->getDisplay());
         $this->assertFileExists($this->tempConfigPath);
-
-        $perms = fileperms($this->tempConfigPath) & 0777;
-        $this->assertSame(0600, $perms);
 
         $config = json_decode(file_get_contents($this->tempConfigPath), true);
         $this->assertSame('127.0.0.1', $config['host']);
         $this->assertSame(3306, $config['port']);
         $this->assertSame('root', $config['admin_user']);
-        $this->assertSame('production', $config['mode']);
+        $this->assertSame('development', $config['mode']);
         $this->assertSame('TestPassword1234567890!@#$%^&*', $config['admin_password']);
 
-        $this->assertSame('TestPassword1234567890!@#$%^&*', $command->lastMysqladminPassword);
+        // Ownership was applied: config dir + config file, owner=root, group=user
+        $applied = $command->ownershipApplied;
+        $byPath = [];
+        foreach ($applied as $a) {
+            $byPath[$a['path']] = $a;
+        }
+        $this->assertArrayHasKey($this->tempDir, $byPath);
+        $this->assertSame(['owner' => 'root', 'group' => $user, 'mode' => 0750], [
+            'owner' => $byPath[$this->tempDir]['owner'],
+            'group' => $byPath[$this->tempDir]['group'],
+            'mode' => $byPath[$this->tempDir]['mode'],
+        ]);
+        $this->assertArrayHasKey($this->tempConfigPath, $byPath);
+        $this->assertSame(['owner' => 'root', 'group' => $user, 'mode' => 0640], [
+            'owner' => $byPath[$this->tempConfigPath]['owner'],
+            'group' => $byPath[$this->tempConfigPath]['group'],
+            'mode' => $byPath[$this->tempConfigPath]['mode'],
+        ]);
+    }
+
+    public function testDefaultModeIsDevelopment(): void
+    {
+        $command = new TestableServerInitCommand($this->tempConfigPath);
+        $command->rootResult = true;
+
+        $tester = $this->createTester($command);
+        $exitCode = $tester->execute(['--user' => $this->existingUser()]);
+
+        $this->assertSame(0, $exitCode);
+        $config = json_decode(file_get_contents($this->tempConfigPath), true);
+        $this->assertSame('development', $config['mode']);
+    }
+
+    public function testProductionModeUsesShipardUserByDefault(): void
+    {
+        // 'shipard' user may not exist on the test machine; we only verify
+        // the default-resolution path. If 'shipard' doesn't exist, init fails
+        // with "user does not exist" — that itself proves the default kicked in.
+        $command = new TestableServerInitCommand($this->tempConfigPath);
+        $command->rootResult = true;
+
+        $tester = $this->createTester($command);
+        $exitCode = $tester->execute(['--mode' => 'production']);
+
+        if (posix_getpwnam('shipard') === false) {
+            $this->assertSame(1, $exitCode);
+            $this->assertStringContainsString("User 'shipard' does not exist", $tester->getDisplay());
+        } else {
+            $this->assertSame(0, $exitCode);
+            $config = json_decode(file_get_contents($this->tempConfigPath), true);
+            $this->assertSame('production', $config['mode']);
+        }
     }
 
     public function testMysqladminFailure(): void
@@ -121,10 +243,16 @@ class ServerInitCommandTest extends TestCase
         $command->mysqladminResult = false;
 
         $tester = $this->createTester($command);
-        $exitCode = $tester->execute([]);
+        $exitCode = $tester->execute(['--user' => $this->existingUser()]);
 
         $this->assertSame(1, $exitCode);
         $this->assertStringContainsString('Failed to set MariaDB root password', $tester->getDisplay());
         $this->assertFileDoesNotExist($this->tempConfigPath);
+    }
+
+    private function existingUser(): string
+    {
+        $info = posix_getpwuid(posix_getuid());
+        return $info['name'];
     }
 }

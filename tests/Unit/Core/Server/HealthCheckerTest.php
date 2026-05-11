@@ -74,10 +74,14 @@ class HealthCheckerTest extends TestCase
     private function buildContractTree(PermissionSpec $spec, bool $withLogFile = false): void
     {
         mkdir($spec->getConfigDir(), 0750, true);
+        chmod($spec->getConfigDir(), 0750);
         $this->writeFile($spec->getConfigDir() . '/server.json', '{}', 0640);
-        mkdir($spec->getShipardRoot(), 0750, true);
+        mkdir($spec->getShipardRoot(), 0751, true);
+        chmod($spec->getShipardRoot(), 0751);
         mkdir($spec->getDataSourcesDir(), 0750, true);
+        chmod($spec->getDataSourcesDir(), 0750);
         mkdir($spec->getLogDir(), 0750, true);
+        chmod($spec->getLogDir(), 0750);
         if ($withLogFile) {
             $this->writeFile($spec->getLogDir() . '/shipard.log', "", 0640);
         }

@@ -82,8 +82,8 @@ class FixPermissionsCommandTest extends TestCase
         mkdir($spec->getConfigDir(), 0750, true);
         file_put_contents($spec->getConfigDir() . '/server.json', '{}');
         chmod($spec->getConfigDir() . '/server.json', 0640);
-        mkdir($spec->getShipardRoot(), 0750, true);
-        chmod($spec->getShipardRoot(), 0750);
+        mkdir($spec->getShipardRoot(), 0751, true);
+        chmod($spec->getShipardRoot(), 0751);
         mkdir($spec->getDataSourcesDir(), 0750, true);
         chmod($spec->getDataSourcesDir(), 0750);
         mkdir($spec->getLogDir(), 0750, true);

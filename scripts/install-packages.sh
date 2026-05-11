@@ -1,17 +1,89 @@
 #!/usr/bin/env bash
 # install-packages.sh — installs system dependencies for Shipard on Ubuntu LTS (22.04 / 24.04)
+#
+# Idempotent. Sets up /opt/shipard and /etc/shipard with correct ownership,
+# generates a dedicated shipard PHP-FPM pool, and activates the nginx site.
+#
+# Usage:
+#   sudo bash scripts/install-packages.sh --mode=development
+#   sudo bash scripts/install-packages.sh --mode=production
+#
+# In development mode the shipard user is the developer (taken from $SUDO_USER).
+# In production mode a dedicated 'shipard' system user is created.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# Must be run as root
-if [ "$(id -u)" -ne 0 ]; then
-    echo "Error: this script must be run as root (use sudo bash scripts/install-packages.sh)" >&2
+# ─── 1. Parse arguments ──────────────────────────────────────────────────────
+MODE=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --mode=*) MODE="${1#*=}" ;;
+        --mode)   MODE="${2:-}"; shift ;;
+        -h|--help)
+            cat <<EOF
+Usage: sudo bash scripts/install-packages.sh --mode=<development|production>
+EOF
+            exit 0
+            ;;
+        *)
+            echo "Error: unknown option '$1'" >&2
+            exit 1
+            ;;
+    esac
+    shift
+done
+
+if [ -z "$MODE" ]; then
+    echo "Select mode:"
+    echo "  1) development (single developer; shipard user = current dev)"
+    echo "  2) production  (dedicated system 'shipard' user)"
+    read -rp "Mode [1/2]: " choice
+    case "$choice" in
+        1) MODE="development" ;;
+        2) MODE="production" ;;
+        *) echo "Error: invalid choice" >&2; exit 1 ;;
+    esac
+fi
+
+if [ "$MODE" != "development" ] && [ "$MODE" != "production" ]; then
+    echo "Error: --mode must be 'development' or 'production' (got '$MODE')" >&2
     exit 1
 fi
 
+# ─── 2. Require root ─────────────────────────────────────────────────────────
+if [ "$(id -u)" -ne 0 ]; then
+    echo "Error: this script must be run as root (use sudo bash scripts/install-packages.sh --mode=$MODE)" >&2
+    exit 1
+fi
+
+# ─── 3. Determine shipard user ───────────────────────────────────────────────
+if [ "$MODE" = "production" ]; then
+    SHIPARD_USER="shipard"
+    if ! id "$SHIPARD_USER" >/dev/null 2>&1; then
+        echo "==> Creating system user '$SHIPARD_USER'..."
+        useradd --system --shell /usr/sbin/nologin --home-dir /opt/shipard "$SHIPARD_USER"
+    fi
+else
+    SHIPARD_USER="${SUDO_USER:-$(logname 2>/dev/null || true)}"
+    if [ -z "$SHIPARD_USER" ] || [ "$SHIPARD_USER" = "root" ]; then
+        echo "Error: cannot determine developer user. Run via sudo from your user account," >&2
+        echo "       or set SUDO_USER explicitly." >&2
+        exit 1
+    fi
+    if ! id "$SHIPARD_USER" >/dev/null 2>&1; then
+        echo "Error: user '$SHIPARD_USER' does not exist." >&2
+        exit 1
+    fi
+fi
+
+echo "==> Mode:         $MODE"
+echo "==> Shipard user: $SHIPARD_USER"
+echo ""
+
+# ─── 4. apt packages ─────────────────────────────────────────────────────────
 echo "==> Installing prerequisites..."
 apt-get install -y ca-certificates apt-transport-https software-properties-common
 
@@ -25,19 +97,142 @@ apt-get install -y \
     php8.5-mysql php8.5-xml php8.5-mbstring php8.5-curl php8.5-zip php8.5-intl \
     mariadb-server nginx composer git unzip
 
+# ─── 5. CLI utility symlinks ─────────────────────────────────────────────────
 echo "==> Creating symlinks for CLI utilities..."
 for util in shpd-server shpd-ds; do
     target="/usr/bin/$util"
     source="$PROJECT_DIR/bin/$util"
-    if [ -e "$target" ] || [ -L "$target" ]; then
-        echo "    $target already exists, skipping."
+    if [ -L "$target" ] && [ "$(readlink "$target")" = "$source" ]; then
+        echo "    $target already correct, skipping."
+    elif [ -e "$target" ] || [ -L "$target" ]; then
+        ln -sfn "$source" "$target"
+        echo "    Updated: $target -> $source"
     else
         ln -s "$source" "$target"
         echo "    Created: $target -> $source"
     fi
 done
 
+# ─── 6. Filesystem layout ────────────────────────────────────────────────────
+echo "==> Creating /opt/shipard and /etc/shipard..."
+mkdir -p /opt/shipard/data-sources /opt/shipard/log /etc/shipard
+
+chown "$SHIPARD_USER:$SHIPARD_USER" /opt/shipard /opt/shipard/data-sources /opt/shipard/log
+# /opt/shipard is 0751 so nginx (www-data) can traverse into /opt/shipard/shpd
+# for SPA static asset serving. Contents (data-sources, log) stay 0750.
+chmod 0751 /opt/shipard
+chmod 0750 /opt/shipard/data-sources /opt/shipard/log
+
+chown "root:$SHIPARD_USER" /etc/shipard
+chmod 0750 /etc/shipard
+if [ -f /etc/shipard/server.json ]; then
+    chown "root:$SHIPARD_USER" /etc/shipard/server.json
+    chmod 0640 /etc/shipard/server.json
+fi
+
+# /opt/shipard/shpd → project clone (idempotent). nginx root references this path.
+SHPD_LINK="/opt/shipard/shpd"
+if [ -L "$SHPD_LINK" ]; then
+    current="$(readlink "$SHPD_LINK")"
+    if [ "$current" != "$PROJECT_DIR" ]; then
+        echo "    Updating $SHPD_LINK: $current -> $PROJECT_DIR"
+        ln -sfn "$PROJECT_DIR" "$SHPD_LINK"
+    fi
+    chown -h "$SHIPARD_USER:$SHIPARD_USER" "$SHPD_LINK"
+elif [ -e "$SHPD_LINK" ]; then
+    echo "    Note: $SHPD_LINK exists and is not a symlink — leaving as-is."
+else
+    ln -s "$PROJECT_DIR" "$SHPD_LINK"
+    chown -h "$SHIPARD_USER:$SHIPARD_USER" "$SHPD_LINK"
+    echo "    Created $SHPD_LINK -> $PROJECT_DIR"
+fi
+
+# ─── 7. PHP-FPM pool (shipard) ───────────────────────────────────────────────
+PHP_VERSION="$(php -r 'echo PHP_MAJOR_VERSION . "." . PHP_MINOR_VERSION;')"
+POOL_FILE="/etc/php/${PHP_VERSION}/fpm/pool.d/shipard.conf"
+POOL_SOCKET="/run/php/php${PHP_VERSION}-fpm-shipard.sock"
+
+echo "==> Writing PHP-FPM pool: $POOL_FILE"
+cat > "$POOL_FILE" <<EOF
+[shipard]
+user = $SHIPARD_USER
+group = $SHIPARD_USER
+
+listen = $POOL_SOCKET
+listen.owner = www-data
+listen.group = www-data
+listen.mode = 0660
+
+pm = dynamic
+pm.max_children = 10
+pm.start_servers = 2
+pm.min_spare_servers = 1
+pm.max_spare_servers = 4
+
+php_admin_value[error_log] = /var/log/php${PHP_VERSION}-fpm-shipard.log
+php_admin_flag[log_errors] = on
+EOF
+chmod 0644 "$POOL_FILE"
+
+echo "==> Restarting php${PHP_VERSION}-fpm..."
+systemctl restart "php${PHP_VERSION}-fpm"
+
+# ─── 8. nginx site ───────────────────────────────────────────────────────────
+TEMPLATE="$PROJECT_DIR/docs/nginx/${MODE}.conf"
+SITE_FILE="/etc/nginx/sites-available/shipard.conf"
+SITE_LINK="/etc/nginx/sites-enabled/shipard.conf"
+
+if [ ! -f "$TEMPLATE" ]; then
+    echo "Error: nginx template not found: $TEMPLATE" >&2
+    exit 1
+fi
+
+echo "==> Installing nginx site: $SITE_FILE"
+# Substitute the default fastcgi_pass socket with the shipard pool socket.
+sed "s|fastcgi_pass unix:/run/php/[^;]*;|fastcgi_pass unix:${POOL_SOCKET};|g" "$TEMPLATE" > "$SITE_FILE"
+chmod 0644 "$SITE_FILE"
+
+ln -sfn "$SITE_FILE" "$SITE_LINK"
+
+# Disable conflicting sites that point at our docs/nginx/*.conf templates
+for stale in development.conf production.conf; do
+    if [ -L "/etc/nginx/sites-enabled/$stale" ]; then
+        target="$(readlink "/etc/nginx/sites-enabled/$stale")"
+        case "$target" in
+            "$PROJECT_DIR"/docs/nginx/*)
+                echo "    Removing stale symlink: /etc/nginx/sites-enabled/$stale -> $target"
+                rm -f "/etc/nginx/sites-enabled/$stale"
+                ;;
+        esac
+    fi
+done
+
+echo "==> Validating nginx config..."
+nginx -t
+systemctl reload nginx
+
+# ─── 9. Done ─────────────────────────────────────────────────────────────────
 echo ""
 echo "==> Installation complete."
-php --version
+php --version | head -1
 mariadb --version
+
+cat <<EOF
+
+Next steps:
+
+  1. Initialize the server config (creates /etc/shipard/server.json
+     with admin DB credentials):
+
+       sudo shpd-server server-init --mode=$MODE --user=$SHIPARD_USER
+
+  2. Verify the setup:
+
+       shpd-server doctor
+
+  3. If 'doctor' reports fixable issues (e.g. after migrating from an
+     older layout), apply the contract:
+
+       sudo shpd-server fix-permissions --dry-run
+       sudo shpd-server fix-permissions
+EOF

@@ -27,7 +27,10 @@ final class PermissionSpec
         return [
             ['path' => $this->configDir,                  'type' => 'dir',  'owner' => 'root', 'group' => 'user', 'mode' => 0750],
             ['path' => $this->configDir . '/server.json', 'type' => 'file', 'owner' => 'root', 'group' => 'user', 'mode' => 0640],
-            ['path' => $this->shipardRoot,                'type' => 'dir',  'owner' => 'user', 'group' => 'user', 'mode' => 0750],
+            // /opt/shipard is 0751 (not 0750) so that nginx (www-data) can traverse
+            // into /opt/shipard/shpd/public for SPA assets. Contents (data-sources,
+            // log) keep 0750 so data is not readable by others.
+            ['path' => $this->shipardRoot,                'type' => 'dir',  'owner' => 'user', 'group' => 'user', 'mode' => 0751],
             ['path' => $this->dataSourcesDir,             'type' => 'dir',  'owner' => 'user', 'group' => 'user', 'mode' => 0750],
             ['path' => $this->logDir,                     'type' => 'dir',  'owner' => 'user', 'group' => 'user', 'mode' => 0750],
             ['path' => $this->logDir . '/shipard.log',    'type' => 'file', 'owner' => 'user', 'group' => 'user', 'mode' => 0640, 'optional' => true],

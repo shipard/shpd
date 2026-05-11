@@ -166,8 +166,10 @@ class DocDocumentSnapshotsTest extends TestCase
         ];
         $doc->buildSnapshotsPub($data);
 
-        $this->assertSame('Naše firma s.r.o.', $data['supplier_snapshot']['name']);
-        $this->assertSame('Partner s.r.o.', $data['customer_snapshot']['name']);
+        $supplier = json_decode($data['supplier_snapshot'], true);
+        $customer = json_decode($data['customer_snapshot'], true);
+        $this->assertSame('Naše firma s.r.o.', $supplier['name']);
+        $this->assertSame('Partner s.r.o.', $customer['name']);
     }
 
     public function testBuildSnapshotsForReceivedInvoiceFlipsRoles(): void
@@ -192,8 +194,10 @@ class DocDocumentSnapshotsTest extends TestCase
         ];
         $doc->buildSnapshotsPub($data);
 
-        $this->assertSame('Partner s.r.o.', $data['supplier_snapshot']['name']);
-        $this->assertSame('Naše firma s.r.o.', $data['customer_snapshot']['name']);
+        $supplier = json_decode($data['supplier_snapshot'], true);
+        $customer = json_decode($data['customer_snapshot'], true);
+        $this->assertSame('Partner s.r.o.', $supplier['name']);
+        $this->assertSame('Naše firma s.r.o.', $customer['name']);
     }
 
     public function testBuildSnapshotsThrowsWhenOwnCompanyMissing(): void
@@ -268,7 +272,8 @@ class DocDocumentSnapshotsTest extends TestCase
         $original = ['docState' => 80, 'partner' => 50];
         $doc->maintainSnapshotsPub($data, $original);
 
-        $this->assertSame('Nový Partner', $data['customer_snapshot']['name']);
+        $customer = json_decode($data['customer_snapshot'], true);
+        $this->assertSame('Nový Partner', $customer['name']);
     }
 
     public function testMaintainSnapshotsKeepsExistingWhenUnchanged(): void

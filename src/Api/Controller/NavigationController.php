@@ -8,6 +8,7 @@ use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\I18n\ConfigLocalizer;
 use Shipard\Core\Module\ModuleDefinition;
 use Shipard\Core\Module\ModuleLoader;
+use Shipard\Core\Module\ModulePathResolver;
 use Shipard\Core\Module\ModuleResolver;
 use Shipard\Core\Utils\JsoncParser;
 
@@ -28,9 +29,9 @@ class NavigationController
 		'api_keys',
 	];
 
-	public function navigation(DataSourceConfig $config, string $modulesBasePath, string $language): Response
+	public function navigation(DataSourceConfig $config, ModulePathResolver $resolver, string $language): Response
 	{
-		$allModules      = ModuleLoader::loadAllModules($modulesBasePath);
+		$allModules      = ModuleLoader::loadAllModules($resolver);
 		$errors          = [];
 		$resolvedModules = ModuleResolver::resolve($allModules, $config->getModules(), $errors);
 
@@ -54,8 +55,8 @@ class NavigationController
 		// (typically sub-tables of a parent record — fiscal_months, vat_periods,
 		// etc.) should not appear in any navigation surface.
 		foreach ($resolvedModules as $module) {
-			[$group, $name] = explode('.', $module->id, 2);
-			$modulePath = $modulesBasePath . '/' . $group . '/' . $name;
+			$modulePath = $resolver->getPath($module->id);
+			if ($modulePath === null) continue;
 			foreach ($module->tables as $tableName) {
 				if ($this->isTableHiddenFromNavigation($modulePath, $tableName)) {
 					$hiddenTables[$tableName] = true;
@@ -85,7 +86,7 @@ class NavigationController
 			}
 		}
 
-		$groups = $this->buildTree($resolvedModules, $modulesBasePath, $language, $hiddenViewers, $hiddenTables);
+		$groups = $this->buildTree($resolvedModules, $resolver, $language, $hiddenViewers, $hiddenTables);
 
 		return Response::success($groups);
 	}
@@ -94,7 +95,7 @@ class NavigationController
 	 * @param  ModuleDefinition[]  $resolvedModules
 	 * @return array<int, array>
 	 */
-	private function buildTree(array $resolvedModules, string $modulesBasePath, string $language, array $hiddenViewers = [], array $hiddenTables = []): array
+	private function buildTree(array $resolvedModules, ModulePathResolver $resolver, string $language, array $hiddenViewers = [], array $hiddenTables = []): array
 	{
 		// Group modules by their group prefix
 		$grouped = [];
@@ -109,7 +110,7 @@ class NavigationController
 
 			if (count($modules) === 1) {
 				// Single module — tables go directly as children of the group
-				$children = $this->buildTableItems($modules[0], $modulesBasePath, $language, $hiddenViewers, $hiddenTables);
+				$children = $this->buildTableItems($modules[0], $resolver, $language, $hiddenViewers, $hiddenTables);
 			} else {
 				// Multiple modules — create sub-group per module. When a module
 				// contributes a single item (typical for per-type modules like
@@ -117,7 +118,7 @@ class NavigationController
 				// hoist that item directly into the group instead of wrapping
 				// it in a same-labeled sub-group.
 				foreach ($modules as $module) {
-					$tableItems = $this->buildTableItems($module, $modulesBasePath, $language, $hiddenViewers, $hiddenTables);
+					$tableItems = $this->buildTableItems($module, $resolver, $language, $hiddenViewers, $hiddenTables);
 					if ($tableItems === []) {
 						continue;
 					}
@@ -127,7 +128,7 @@ class NavigationController
 						continue;
 					}
 
-					$moduleLabel = $this->localizeModuleName($module, $modulesBasePath, $language);
+					$moduleLabel = $this->localizeModuleName($module, $resolver, $language);
 					$children[] = [
 						'id'       => $module->id,
 						'label'    => $moduleLabel,
@@ -153,10 +154,12 @@ class NavigationController
 	/**
 	 * @return array<int, array>
 	 */
-	private function buildTableItems(ModuleDefinition $module, string $modulesBasePath, string $language, array $hiddenViewers = [], array $hiddenTables = []): array
+	private function buildTableItems(ModuleDefinition $module, ModulePathResolver $resolver, string $language, array $hiddenViewers = [], array $hiddenTables = []): array
 	{
-		[$group, $name] = explode('.', $module->id, 2);
-		$modulePath = $modulesBasePath . '/' . $group . '/' . $name;
+		$modulePath = $resolver->getPath($module->id);
+		if ($modulePath === null) {
+			return [];
+		}
 
 		$items = [];
 		$tablesCoveredByViewers = [];
@@ -242,10 +245,13 @@ class NavigationController
 		return !empty($raw['hideFromNavigation']);
 	}
 
-	private function localizeModuleName(ModuleDefinition $module, string $modulesBasePath, string $language): string
+	private function localizeModuleName(ModuleDefinition $module, ModulePathResolver $resolver, string $language): string
 	{
-		[$group, $name] = explode('.', $module->id, 2);
-		$filePath = $modulesBasePath . '/' . $group . '/' . $name . '/module.jsonc';
+		$modulePath = $resolver->getPath($module->id);
+		if ($modulePath === null) {
+			return $module->name;
+		}
+		$filePath = $modulePath . '/module.jsonc';
 
 		if (!file_exists($filePath)) {
 			return $module->name;

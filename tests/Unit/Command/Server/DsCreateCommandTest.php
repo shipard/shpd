@@ -9,6 +9,7 @@ use PHPUnit\Framework\MockObject\MockObject;
 use Shipard\Command\Server\DsCreateCommand;
 use Shipard\Core\Config\ServerConfig;
 use Shipard\Core\Database\DatabaseManager;
+use Shipard\Core\Module\ModulePathResolver;
 use Shipard\Core\Security\DsSecretCipher;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Tester\CommandTester;
@@ -29,9 +30,9 @@ class TestableDsCreateCommand extends DsCreateCommand
         return $this->dataSourcesDir;
     }
 
-    protected function getModulesDir(): string
+    protected function getModulePathResolver(): ModulePathResolver
     {
-        return $this->modulesDir;
+        return new ModulePathResolver([$this->modulesDir]);
     }
 }
 

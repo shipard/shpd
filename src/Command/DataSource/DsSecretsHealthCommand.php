@@ -8,6 +8,7 @@ use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Database\SchemaIntrospector;
 use Shipard\Core\Database\SchemaLoader;
+use Shipard\Core\Module\ModulePathResolver;
 use Shipard\Core\Security\DsSecretCipher;
 use Shipard\Core\Security\Exception\InvalidCiphertextException;
 use Symfony\Component\Console\Command\Command;
@@ -34,15 +35,15 @@ class DsSecretsHealthCommand extends Command
         return getcwd();
     }
 
-    protected function getModulesBasePath(): string
+    protected function getModulePathResolver(): ModulePathResolver
     {
-        return dirname(__DIR__, 3) . '/modules';
+        return new ModulePathResolver([dirname(__DIR__, 3) . '/modules']);
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $dsDir = $this->getDataSourceDir();
-        $modulesBasePath = $this->getModulesBasePath();
+        $modulePathResolver = $this->getModulePathResolver();
         $dsConfig = $this->dsConfig ?? new DataSourceConfig($dsDir);
 
         $errors = 0;
@@ -70,7 +71,7 @@ class DsSecretsHealthCommand extends Command
                 return $this->finish($output, $errors, $warnings);
             }
 
-            $loaded = SchemaLoader::loadResolvedTables($modulesBasePath, $dsConfig->getModules());
+            $loaded = SchemaLoader::loadResolvedTables($modulePathResolver, $dsConfig->getModules());
             foreach ($loaded['errors'] as $err) {
                 $output->writeln('<error>✗ Module loading: ' . $err . '</error>');
                 $errors++;

@@ -5,13 +5,14 @@ namespace Shipard\Api\Controller;
 
 use Shipard\Api\Request;
 use Shipard\Api\Response;
+use Shipard\Core\Module\ModulePathResolver;
 
 class DevDashboardController
 {
 	public function __construct(
 		private readonly string $dataSourcesDir = '/opt/shipard/data-sources',
 		private readonly ?string $logFilePath = null,
-		private readonly ?string $modulesDir = null,
+		private readonly ?ModulePathResolver $modulePathResolver = null,
 	) {}
 
 	public function dispatch(Request $request): Response
@@ -114,7 +115,7 @@ class DevDashboardController
 
 	private function getInstallModules(): Response
 	{
-		if ($this->modulesDir === null) {
+		if ($this->modulePathResolver === null) {
 			return Response::error(
 				'MODULES_NOT_CONFIGURED',
 				'Modules directory not configured',
@@ -122,7 +123,7 @@ class DevDashboardController
 			);
 		}
 
-		$registry = new \Shipard\Core\Module\InstallModuleRegistry($this->modulesDir);
+		$registry = new \Shipard\Core\Module\InstallModuleRegistry($this->modulePathResolver);
 		return Response::success($registry->list());
 	}
 
@@ -254,8 +255,8 @@ class DevDashboardController
 			$errors[] = 'Install module is required.';
 		} elseif (!preg_match('/^install\.[a-z][a-zA-Z0-9]*$/', $module)) {
 			$errors[] = 'Invalid install module id.';
-		} elseif ($this->modulesDir !== null) {
-			$registry = new \Shipard\Core\Module\InstallModuleRegistry($this->modulesDir);
+		} elseif ($this->modulePathResolver !== null) {
+			$registry = new \Shipard\Core\Module\InstallModuleRegistry($this->modulePathResolver);
 			if (!$registry->exists($module)) {
 				$errors[] = 'Install module "' . $module . '" not found.';
 			}

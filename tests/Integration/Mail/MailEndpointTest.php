@@ -8,6 +8,7 @@ use Shipard\Api\AuthContext;
 use Shipard\Api\Controller\MailController;
 use Shipard\Api\DocumentLoader;
 use Shipard\Api\Request;
+use Shipard\Core\Module\ModulePathResolver;
 use Shipard\Tests\Integration\IntegrationTestCase;
 
 /**
@@ -35,8 +36,8 @@ class MailEndpointTest extends IntegrationTestCase
     {
         parent::setUp();
 
-        $modulesBasePath = dirname(__DIR__, 3) . '/modules';
-        $this->documentRegistry = DocumentLoader::load($this->dsConfig, $modulesBasePath);
+        $modulePathResolver = new ModulePathResolver([dirname(__DIR__, 3) . '/modules']);
+        $this->documentRegistry = DocumentLoader::load($this->dsConfig, $modulePathResolver);
 
         $user = $this->db->fetchRow('SELECT id FROM core_system_users WHERE login = %s', '_mail_router');
         if ($user === null) {

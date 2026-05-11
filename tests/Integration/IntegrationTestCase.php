@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use Shipard\Api\TableLoader;
 use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Database\DataSourceConnection;
+use Shipard\Core\Module\ModulePathResolver;
 
 abstract class IntegrationTestCase extends TestCase
 {
@@ -39,8 +40,8 @@ abstract class IntegrationTestCase extends TestCase
         $this->dsConfig = new DataSourceConfig($path);
         $this->db = new DataSourceConnection($this->dsConfig);
 
-        $modulesBasePath = dirname(__DIR__, 2) . '/modules';
-        $this->tables = TableLoader::load($this->dsConfig, $modulesBasePath, 'cs');
+        $modulePathResolver = new ModulePathResolver([dirname(__DIR__, 2) . '/modules']);
+        $this->tables = TableLoader::load($this->dsConfig, $modulePathResolver, 'cs');
     }
 
     protected function tearDown(): void

@@ -8,6 +8,7 @@ use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Config\ServerConfig;
 use Shipard\Core\Database\DatabaseManager;
 use Shipard\Core\Module\InstallModuleRegistry;
+use Shipard\Core\Module\ModulePathResolver;
 use Shipard\Core\Security\DsSecretCipher;
 use Shipard\Core\Utils\IdGenerator;
 use Symfony\Component\Console\Command\Command;
@@ -43,9 +44,9 @@ class DsCreateCommand extends Command
         return '/opt/shipard/data-sources';
     }
 
-    protected function getModulesDir(): string
+    protected function getModulePathResolver(): ModulePathResolver
     {
-        return dirname(__DIR__, 3) . '/modules';
+        return new ModulePathResolver([dirname(__DIR__, 3) . '/modules']);
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -65,14 +66,15 @@ class DsCreateCommand extends Command
             return Command::FAILURE;
         }
 
-        $registry = new InstallModuleRegistry($this->getModulesDir());
+        $resolver = $this->getModulePathResolver();
+        $registry = new InstallModuleRegistry($resolver);
         if (!$registry->exists($moduleId)) {
             $output->writeln('<error>Install module not found: ' . $moduleId . '</error>');
             $available = array_map(fn($m) => $m['id'], $registry->list());
             if ($available) {
                 $output->writeln('<comment>Available: ' . implode(', ', $available) . '</comment>');
             } else {
-                $output->writeln('<comment>No install modules found in ' . $this->getModulesDir() . '/install/</comment>');
+                $output->writeln('<comment>No install modules found in ' . $resolver->getRoots()[0] . '/install/</comment>');
             }
             return Command::FAILURE;
         }

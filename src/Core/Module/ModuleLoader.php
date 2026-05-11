@@ -20,19 +20,13 @@ class ModuleLoader
     }
 
     /** @return ModuleDefinition[] */
-    public static function loadAllModules(string $modulesBasePath): array
+    public static function loadAllModules(ModulePathResolver $resolver): array
     {
-        $dirs = glob("$modulesBasePath/*/*", GLOB_ONLYDIR);
-        if ($dirs === false) {
-            return [];
-        }
-
         $modules = [];
-        foreach ($dirs as $dir) {
-            if (!file_exists($dir . '/module.jsonc')) {
-                continue;
-            }
-            $modules[] = self::loadModule($dir);
+        foreach ($resolver->allModuleIds() as $id) {
+            $path = $resolver->getPath($id);
+            if ($path === null) continue;
+            $modules[] = self::loadModule($path);
         }
 
         return $modules;

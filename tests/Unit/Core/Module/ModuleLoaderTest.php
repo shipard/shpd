@@ -7,6 +7,7 @@ namespace Shipard\Tests\Unit\Core\Module;
 use PHPUnit\Framework\TestCase;
 use Shipard\Core\Module\ModuleDefinition;
 use Shipard\Core\Module\ModuleLoader;
+use Shipard\Core\Module\ModulePathResolver;
 
 class ModuleLoaderTest extends TestCase
 {
@@ -72,7 +73,7 @@ class ModuleLoaderTest extends TestCase
         file_put_contents($dir1 . '/module.jsonc', json_encode(['id' => 'core.system', 'name' => 'System']));
         file_put_contents($dir2 . '/module.jsonc', json_encode(['id' => 'base.persons', 'name' => 'Persons']));
 
-        $modules = ModuleLoader::loadAllModules($this->tmpDir);
+        $modules = ModuleLoader::loadAllModules(new ModulePathResolver([$this->tmpDir]));
 
         $this->assertCount(2, $modules);
         $ids = array_map(fn($m) => $m->id, $modules);
@@ -90,7 +91,7 @@ class ModuleLoaderTest extends TestCase
         // Only dir1 has module.jsonc
         file_put_contents($dir1 . '/module.jsonc', json_encode(['id' => 'core.system', 'name' => 'System']));
 
-        $modules = ModuleLoader::loadAllModules($this->tmpDir);
+        $modules = ModuleLoader::loadAllModules(new ModulePathResolver([$this->tmpDir]));
 
         $this->assertCount(1, $modules);
         $this->assertSame('core.system', $modules[0]->id);

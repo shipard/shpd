@@ -8,6 +8,7 @@ use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Database\SchemaIntrospector;
 use Shipard\Core\Database\SchemaLoader;
+use Shipard\Core\Module\ModulePathResolver;
 use Shipard\Core\Security\DsSecretCipher;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -35,16 +36,16 @@ class DsSecretsRotateCommand extends Command
         return getcwd();
     }
 
-    protected function getModulesBasePath(): string
+    protected function getModulePathResolver(): ModulePathResolver
     {
-        return dirname(__DIR__, 3) . '/modules';
+        return new ModulePathResolver([dirname(__DIR__, 3) . '/modules']);
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $dryRun = (bool) $input->getOption('dry-run');
         $dsDir = $this->getDataSourceDir();
-        $modulesBasePath = $this->getModulesBasePath();
+        $modulePathResolver = $this->getModulePathResolver();
         $dsConfig = $this->dsConfig ?? new DataSourceConfig($dsDir);
 
         if ($dryRun) {
@@ -58,7 +59,7 @@ class DsSecretsRotateCommand extends Command
             return Command::FAILURE;
         }
 
-        $loaded = SchemaLoader::loadResolvedTables($modulesBasePath, $dsConfig->getModules());
+        $loaded = SchemaLoader::loadResolvedTables($modulePathResolver, $dsConfig->getModules());
         if (!empty($loaded['errors'])) {
             foreach ($loaded['errors'] as $err) {
                 $output->writeln('<error>Module loading: ' . $err . '</error>');

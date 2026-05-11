@@ -9,6 +9,7 @@ use PHPUnit\Framework\TestCase;
 use Shipard\Command\DataSource\DsSecretsRotateCommand;
 use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Database\DataSourceConnection;
+use Shipard\Core\Module\ModulePathResolver;
 use Shipard\Core\Security\DsSecretCipher;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Command\Command;
@@ -30,9 +31,9 @@ class TestableDsSecretsRotateCommand extends DsSecretsRotateCommand
         return $this->dsDir;
     }
 
-    protected function getModulesBasePath(): string
+    protected function getModulePathResolver(): ModulePathResolver
     {
-        return $this->modulesPath;
+        return new ModulePathResolver([$this->modulesPath]);
     }
 }
 

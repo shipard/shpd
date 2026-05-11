@@ -11,6 +11,7 @@ use Shipard\Core\I18n\ConfigLocalizer;
 use Shipard\Core\Logging\ErrorLogger;
 use Shipard\Core\Module\ModuleDefinition;
 use Shipard\Core\Module\ModuleLoader;
+use Shipard\Core\Module\ModulePathResolver;
 use Shipard\Core\Module\ModuleResolver;
 use Shipard\Core\Utils\JsoncParser;
 
@@ -18,7 +19,7 @@ class SettingsController
 {
     public function navigation(
         DataSourceConfig $config,
-        string $modulesBasePath,
+        ModulePathResolver $resolver,
         string $language,
         ?ConfigRuntime $configRuntime,
     ): Response {
@@ -26,7 +27,7 @@ class SettingsController
             return Response::success([]);
         }
 
-        $allModules      = ModuleLoader::loadAllModules($modulesBasePath);
+        $allModules      = ModuleLoader::loadAllModules($resolver);
         $errors          = [];
         $resolvedModules = ModuleResolver::resolve($allModules, $config->getModules(), $errors);
 
@@ -38,7 +39,7 @@ class SettingsController
         $sections = $sectionsCfg['sections'];
         usort($sections, fn($a, $b) => ($a['order'] ?? 0) <=> ($b['order'] ?? 0));
 
-        $itemsBySection = $this->collectItems($resolvedModules, $modulesBasePath, $language);
+        $itemsBySection = $this->collectItems($resolvedModules, $resolver, $language);
 
         $tree = [];
         foreach ($sections as $section) {
@@ -67,7 +68,7 @@ class SettingsController
      * @param  ModuleDefinition[]  $resolvedModules
      * @return array<string, array>
      */
-    private function collectItems(array $resolvedModules, string $modulesBasePath, string $language): array
+    private function collectItems(array $resolvedModules, ModulePathResolver $resolver, string $language): array
     {
         $itemsBySection = [];
         $seenViewers = [];
@@ -105,9 +106,8 @@ class SettingsController
                     // configuration error worth logging.
                     $targetTable = $viewerDef['table'] ?? null;
                     if ($targetTable !== null) {
-                        [$group, $name] = explode('.', $module->id, 2);
-                        $modulePath = $modulesBasePath . '/' . $group . '/' . $name;
-                        if ($this->isTableHiddenFromNavigation($modulePath, $targetTable)) {
+                        $modulePath = $resolver->getPath($module->id);
+                        if ($modulePath !== null && $this->isTableHiddenFromNavigation($modulePath, $targetTable)) {
                             ErrorLogger::warn('Viewer targets hidden table, skipping', [
                                 'viewer_id'  => $viewerId,
                                 'table_name' => $targetTable,
@@ -148,8 +148,10 @@ class SettingsController
                         continue;
                     }
 
-                    [$group, $name] = explode('.', $module->id, 2);
-                    $modulePath = $modulesBasePath . '/' . $group . '/' . $name;
+                    $modulePath = $resolver->getPath($module->id);
+                    if ($modulePath === null) {
+                        continue;
+                    }
 
                     if ($this->isTableHiddenFromNavigation($modulePath, $tableName)) {
                         ErrorLogger::warn('Table is marked hideFromNavigation, skipping', [

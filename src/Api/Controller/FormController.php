@@ -16,6 +16,7 @@ use Shipard\Core\Form\FormRegistry;
 use Shipard\Core\Form\JsoncFormLoader;
 use Shipard\Core\Form\RecalculateResult;
 use Shipard\Core\Form\TableForm;
+use Shipard\Core\Module\ModulePathResolver;
 use Shipard\Core\Document\DocStateConfig;
 use Shipard\Core\Document\DocumentRegistry;
 use Shipard\Core\Document\TableGateway;
@@ -32,7 +33,7 @@ class FormController
         DataSourceConnection $db,
         FormRegistry $formRegistry,
         ?ConfigRuntime $config,
-        string $modulesBasePath,
+        ModulePathResolver $modulePathResolver,
         string $language = 'en',
         array $newRecordDefaults = [],
     ): Response {
@@ -72,7 +73,7 @@ class FormController
         }
 
         $formDefinition = $this->resolveFormDefinition(
-            $table, $def, $data, $isNew, $formRegistry, $db, $config, $modulesBasePath, $language,
+            $table, $def, $data, $isNew, $formRegistry, $db, $config, $modulePathResolver, $language,
         );
 
         // Enrich with docStates if applicable
@@ -215,7 +216,7 @@ class FormController
         DataSourceConnection $db,
         FormRegistry $formRegistry,
         ?ConfigRuntime $config,
-        string $modulesBasePath,
+        ModulePathResolver $modulePathResolver,
         string $language = 'en',
     ): Response {
         $def = $tables[$table] ?? null;
@@ -240,7 +241,7 @@ class FormController
         } else {
             // JSONC or Auto — no custom recalculate logic, just rebuild definition
             $formDefinition = $this->resolveFormDefinition(
-                $table, $def, $data, $isNew, $formRegistry, $db, $config, $modulesBasePath, $language,
+                $table, $def, $data, $isNew, $formRegistry, $db, $config, $modulePathResolver, $language,
             );
             $result = new RecalculateResult($formDefinition, $data);
         }
@@ -272,7 +273,7 @@ class FormController
         FormRegistry $formRegistry,
         DataSourceConnection $db,
         ?ConfigRuntime $config,
-        string $modulesBasePath,
+        ModulePathResolver $modulePathResolver,
         string $language = 'en',
     ): FormDefinition {
         // 1. PHP class from registry
@@ -283,7 +284,7 @@ class FormController
         }
 
         // 2. JSONC form file
-        $jsoncPath = $this->findJsoncFormPath($table, $modulesBasePath);
+        $jsoncPath = $this->findJsoncFormPath($table, $modulePathResolver);
         if ($jsoncPath !== null) {
             $loader = new JsoncFormLoader();
             return $loader->load($jsoncPath, $def, $config, $table, $language);
@@ -294,41 +295,16 @@ class FormController
         return $builder->build($def, $config, $table);
     }
 
-    private function findJsoncFormPath(string $table, string $modulesBasePath): ?string
+    private function findJsoncFormPath(string $table, ModulePathResolver $resolver): ?string
     {
-        if ($modulesBasePath === '') {
-            return null;
-        }
-
-        // Search for forms/{table}.jsonc in module directories
-        $groupDirs = @scandir($modulesBasePath);
-        if ($groupDirs === false) {
-            return null;
-        }
-
-        foreach ($groupDirs as $group) {
-            if ($group === '.' || $group === '..') {
-                continue;
-            }
-            $groupPath = $modulesBasePath . '/' . $group;
-            if (!is_dir($groupPath)) {
-                continue;
-            }
-            $moduleDirs = @scandir($groupPath);
-            if ($moduleDirs === false) {
-                continue;
-            }
-            foreach ($moduleDirs as $module) {
-                if ($module === '.' || $module === '..') {
-                    continue;
-                }
-                $path = $groupPath . '/' . $module . '/forms/' . $table . '.jsonc';
-                if (file_exists($path)) {
-                    return $path;
-                }
+        foreach ($resolver->allModuleIds() as $moduleId) {
+            $moduleDir = $resolver->getPath($moduleId);
+            if ($moduleDir === null) continue;
+            $candidate = $moduleDir . '/forms/' . $table . '.jsonc';
+            if (is_file($candidate)) {
+                return $candidate;
             }
         }
-
         return null;
     }
 

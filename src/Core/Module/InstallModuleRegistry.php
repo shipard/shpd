@@ -11,7 +11,7 @@ namespace Shipard\Core\Module;
 final class InstallModuleRegistry
 {
     public function __construct(
-        private readonly string $modulesDir,
+        private readonly ModulePathResolver $modulePathResolver,
     ) {}
 
     /**
@@ -20,26 +20,21 @@ final class InstallModuleRegistry
      */
     public function list(): array
     {
-        $installDir = $this->modulesDir . '/install';
-        if (!is_dir($installDir)) {
-            return [];
-        }
-
-        $dirs = glob($installDir . '/*', GLOB_ONLYDIR) ?: [];
         $modules = [];
 
-        foreach ($dirs as $dir) {
-            $file = $dir . '/module.jsonc';
-            if (!is_file($file)) continue;
-
-            try {
-                $def = ModuleLoader::loadModule($dir);
-            } catch (\Throwable) {
-                // Skip malformed modules — registry is best-effort.
+        foreach ($this->modulePathResolver->allModuleIds() as $id) {
+            if (!str_starts_with($id, 'install.')) {
+                continue;
+            }
+            $path = $this->modulePathResolver->getPath($id);
+            if ($path === null) {
                 continue;
             }
 
-            if (!str_starts_with($def->id, 'install.')) {
+            try {
+                $def = ModuleLoader::loadModule($path);
+            } catch (\Throwable) {
+                // Skip malformed modules — registry is best-effort.
                 continue;
             }
 
@@ -69,7 +64,6 @@ final class InstallModuleRegistry
         if (!preg_match('/^install\.[a-z][a-zA-Z0-9]*$/', $moduleId)) {
             return false;
         }
-        $suffix = substr($moduleId, strlen('install.'));
-        return is_file($this->modulesDir . '/install/' . $suffix . '/module.jsonc');
+        return $this->modulePathResolver->getPath($moduleId) !== null;
     }
 }

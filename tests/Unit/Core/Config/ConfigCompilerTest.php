@@ -7,6 +7,7 @@ namespace Shipard\Tests\Unit\Core\Config;
 use PHPUnit\Framework\TestCase;
 use Shipard\Core\Config\ConfigCompiler;
 use Shipard\Core\Module\ModuleDefinition;
+use Shipard\Core\Module\ModulePathResolver;
 
 class ConfigCompilerTest extends TestCase
 {
@@ -49,6 +50,13 @@ class ConfigCompilerTest extends TestCase
 
     private function writeConfigFile(string $modulePath, string $relPath, array $data): void
     {
+        if (!is_dir($modulePath)) {
+            mkdir($modulePath, 0755, true);
+        }
+        // Stub module.jsonc so ModulePathResolver discovers this module dir.
+        if (!is_file($modulePath . '/module.jsonc')) {
+            file_put_contents($modulePath . '/module.jsonc', '');
+        }
         $fullPath = $modulePath . '/' . $relPath;
         $dir = dirname($fullPath);
         if (!is_dir($dir)) {
@@ -65,7 +73,7 @@ class ConfigCompilerTest extends TestCase
         $module = $this->makeModule('core.system', [['id' => 'core.app', 'file' => 'config/app.jsonc']]);
         $outputPath = $this->tmpDir . '/output';
 
-        ConfigCompiler::compile([$module], $this->tmpDir . '/modules', ['en'], $outputPath);
+        ConfigCompiler::compile([$module], new ModulePathResolver([$this->tmpDir . '/modules']), ['en'], $outputPath);
 
         $this->assertFileExists($outputPath . '/compiled.en.json');
         $data = json_decode(file_get_contents($outputPath . '/compiled.en.json'), true);
@@ -86,7 +94,7 @@ class ConfigCompilerTest extends TestCase
         ];
         $outputPath = $this->tmpDir . '/output';
 
-        ConfigCompiler::compile($modules, $this->tmpDir . '/modules', ['cs', 'en'], $outputPath);
+        ConfigCompiler::compile($modules, new ModulePathResolver([$this->tmpDir . '/modules']), ['cs', 'en'], $outputPath);
 
         $this->assertFileExists($outputPath . '/compiled.cs.json');
         $this->assertFileExists($outputPath . '/compiled.en.json');
@@ -110,7 +118,7 @@ class ConfigCompilerTest extends TestCase
         $module = $this->makeModule('core.system', [['id' => 'core.app', 'file' => 'config/app.jsonc']]);
         $outputPath = $this->tmpDir . '/output';
 
-        ConfigCompiler::compile([$module], $this->tmpDir . '/modules', ['cs'], $outputPath);
+        ConfigCompiler::compile([$module], new ModulePathResolver([$this->tmpDir . '/modules']), ['cs'], $outputPath);
 
         $data = json_decode(file_get_contents($outputPath . '/compiled.cs.json'), true);
         $item = $data['items']['core.app'];
@@ -130,7 +138,7 @@ class ConfigCompilerTest extends TestCase
         $module = $this->makeModule('core.system', [['id' => 'core.app', 'file' => 'config/app.jsonc']]);
         $outputPath = $this->tmpDir . '/output';
 
-        ConfigCompiler::compile([$module], $this->tmpDir . '/modules', ['en'], $outputPath);
+        ConfigCompiler::compile([$module], new ModulePathResolver([$this->tmpDir . '/modules']), ['en'], $outputPath);
 
         $data = json_decode(file_get_contents($outputPath . '/compiled.en.json'), true);
         $item = $data['items']['core.app'];
@@ -146,7 +154,7 @@ class ConfigCompilerTest extends TestCase
         $module = $this->makeModule('core.system', [['id' => 'core.app', 'file' => 'config/app.jsonc']]);
         $outputPath = $this->tmpDir . '/output';
 
-        ConfigCompiler::compile([$module], $this->tmpDir . '/modules', ['cs', 'en'], $outputPath);
+        ConfigCompiler::compile([$module], new ModulePathResolver([$this->tmpDir . '/modules']), ['cs', 'en'], $outputPath);
 
         foreach (['cs', 'en'] as $lang) {
             $data = json_decode(file_get_contents($outputPath . "/compiled.$lang.json"), true);
@@ -162,7 +170,7 @@ class ConfigCompilerTest extends TestCase
         $module = $this->makeModule('core.system', [['id' => 'core.app', 'file' => 'config/app.jsonc']]);
         $outputPath = $this->tmpDir . '/output';
 
-        ConfigCompiler::compile([$module], $this->tmpDir . '/modules', ['en'], $outputPath);
+        ConfigCompiler::compile([$module], new ModulePathResolver([$this->tmpDir . '/modules']), ['en'], $outputPath);
 
         $data = json_decode(file_get_contents($outputPath . '/compiled.en.json'), true);
         $meta = $data['_meta'];
@@ -182,7 +190,7 @@ class ConfigCompilerTest extends TestCase
 
         $this->assertDirectoryDoesNotExist($outputPath);
 
-        ConfigCompiler::compile([$module], $this->tmpDir . '/modules', ['en'], $outputPath);
+        ConfigCompiler::compile([$module], new ModulePathResolver([$this->tmpDir . '/modules']), ['en'], $outputPath);
 
         $this->assertDirectoryExists($outputPath);
         $this->assertFileExists($outputPath . '/compiled.en.json');

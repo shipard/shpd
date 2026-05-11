@@ -32,6 +32,7 @@ use Shipard\Api\ViewerLoader;
 use Shipard\Core\Config\ServerConfig;
 use Shipard\Core\Form\FormRegistry;
 use Shipard\Core\Logging\ErrorLogger;
+use Shipard\Core\Module\ModulePathResolver;
 use Shipard\Core\Viewer\ViewerRegistry;
 
 $request        = Request::fromGlobals();
@@ -66,7 +67,7 @@ try {
 			$response = (new \Shipard\Api\Controller\DevDashboardController(
 				'/opt/shipard/data-sources',
 				$serverConfig->getLogFile(),
-				dirname(__DIR__) . '/modules',
+				new ModulePathResolver([dirname(__DIR__) . '/modules']),
 			))->dispatch($request);
 			$corsMiddleware->applyTo($response)->send();
 			exit;
@@ -81,18 +82,18 @@ try {
 	ErrorLogger::setDsId($resolved->config->getId());
 
 	// ── 4. Load table definitions (localized) ─────────────────────────────────
-	$language        = resolveLanguage($request, $resolved->config);
-	$modulesBasePath = dirname(__DIR__) . '/modules';
-	$tables          = TableLoader::load($resolved->config, $modulesBasePath, $language);
+	$language           = resolveLanguage($request, $resolved->config);
+	$modulePathResolver = new ModulePathResolver([dirname(__DIR__) . '/modules']);
+	$tables             = TableLoader::load($resolved->config, $modulePathResolver, $language);
 
 	// ── 4b. Build viewer registry ─────────────────────────────────────────────
-	$viewerRegistry = ViewerLoader::load($resolved->config, $modulesBasePath, $language);
+	$viewerRegistry = ViewerLoader::load($resolved->config, $modulePathResolver, $language);
 
 	// ── 4c. Build form registry ───────────────────────────────────────────────
-	$formRegistry = FormLoader::load($resolved->config, $modulesBasePath);
+	$formRegistry = FormLoader::load($resolved->config, $modulePathResolver);
 
 	// ── 4d. Build document registry ───────────────────────────────────────────
-	$documentRegistry = DocumentLoader::load($resolved->config, $modulesBasePath);
+	$documentRegistry = DocumentLoader::load($resolved->config, $modulePathResolver);
 
 	// ── 5. Route ──────────────────────────────────────────────────────────────
 	$router      = new Router();
@@ -139,7 +140,7 @@ try {
 	$response = dispatch(
 		$route, $request, $auth, $tables,
 		$resolved->connection, $openApiPublic,
-		$host, $resolved, $modulesBasePath,
+		$host, $resolved, $modulePathResolver,
 		$viewerRegistry, $configRuntime, $formRegistry, $documentRegistry,
 	);
 
@@ -215,7 +216,7 @@ function dispatch(
 	bool $openApiPublic,
 	string $host,
 	\Shipard\Api\ResolvedDataSource $resolved,
-	string $modulesBasePath,
+	ModulePathResolver $modulePathResolver,
 	ViewerRegistry $viewerRegistry,
 	?\Shipard\Core\Config\ConfigRuntime $configRuntime = null,
 	?FormRegistry $formRegistry = null,
@@ -230,9 +231,9 @@ function dispatch(
 		'crud'       => dispatchCrud($route, $request, $tables, $db, $configRuntime),
 		'attachment'  => dispatchAttachment($route, $request, $auth, $tables, $db, $resolved),
 		'meta'    => dispatchMeta($route->action, $route->table, $tables, resolveLanguage($request, $resolved->config)),
-		'ui'      => dispatchUi($route->action, $resolved->config, $modulesBasePath, resolveLanguage($request, $resolved->config)),
-		'settings' => dispatchSettings($route->action, $resolved->config, $modulesBasePath, resolveLanguage($request, $resolved->config), $configRuntime),
-		'form'    => dispatchForm($route, $request, $auth, $tables, $db, $formRegistry ?? new FormRegistry(), $configRuntime, $modulesBasePath, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), resolveLanguage($request, $resolved->config), $resolved->config),
+		'ui'      => dispatchUi($route->action, $resolved->config, $modulePathResolver, resolveLanguage($request, $resolved->config)),
+		'settings' => dispatchSettings($route->action, $resolved->config, $modulePathResolver, resolveLanguage($request, $resolved->config), $configRuntime),
+		'form'    => dispatchForm($route, $request, $auth, $tables, $db, $formRegistry ?? new FormRegistry(), $configRuntime, $modulePathResolver, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), resolveLanguage($request, $resolved->config), $resolved->config),
 		'viewer'  => dispatchViewer($route, $request, $viewerRegistry, $db, $configRuntime),
 		'mail'    => dispatchMail($route, $request, $auth, $tables, $db, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'analysis' => dispatchAnalysis($route, $request, $auth, $tables, $db, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
@@ -352,11 +353,11 @@ function dispatchMeta(string $action, ?string $tableName, array $tables, string 
 	};
 }
 
-function dispatchUi(string $action, \Shipard\Core\Config\DataSourceConfig $config, string $modulesBasePath, string $language): Response
+function dispatchUi(string $action, \Shipard\Core\Config\DataSourceConfig $config, ModulePathResolver $modulePathResolver, string $language): Response
 {
 	$ctrl = new NavigationController();
 	return match ($action) {
-		'navigation' => $ctrl->navigation($config, $modulesBasePath, $language),
+		'navigation' => $ctrl->navigation($config, $modulePathResolver, $language),
 		default      => Response::error('INTERNAL_ERROR', "Unknown UI action: {$action}", 500),
 	};
 }
@@ -364,13 +365,13 @@ function dispatchUi(string $action, \Shipard\Core\Config\DataSourceConfig $confi
 function dispatchSettings(
 	string $action,
 	\Shipard\Core\Config\DataSourceConfig $config,
-	string $modulesBasePath,
+	ModulePathResolver $modulePathResolver,
 	string $language,
 	?\Shipard\Core\Config\ConfigRuntime $configRuntime,
 ): Response {
 	$ctrl = new SettingsController();
 	return match ($action) {
-		'navigation' => $ctrl->navigation($config, $modulesBasePath, $language, $configRuntime),
+		'navigation' => $ctrl->navigation($config, $modulePathResolver, $language, $configRuntime),
 		default      => Response::error('INTERNAL_ERROR', "Unknown settings action: {$action}", 500),
 	};
 }
@@ -399,8 +400,8 @@ function dispatchForm(
 	array $tables,
 	\Shipard\Core\Database\DataSourceConnection $db,
 	FormRegistry $formRegistry,
-	?\Shipard\Core\Config\ConfigRuntime $configRuntime = null,
-	string $modulesBasePath = '',
+	?\Shipard\Core\Config\ConfigRuntime $configRuntime,
+	ModulePathResolver $modulePathResolver,
 	?\Shipard\Core\Document\DocumentRegistry $documentRegistry = null,
 	string $language = 'en',
 	?\Shipard\Core\Config\DataSourceConfig $dsConfig = null,
@@ -424,9 +425,9 @@ function dispatchForm(
 	}
 
 	return match ($route->action) {
-		'meta'        => $ctrl->meta($table, $route->id, $tables, $db, $formRegistry, $configRuntime, $modulesBasePath, $language, $queryDefaults),
+		'meta'        => $ctrl->meta($table, $route->id, $tables, $db, $formRegistry, $configRuntime, $modulePathResolver, $language, $queryDefaults),
 		'save'        => $ctrl->save($table, $route->id, $request, $tables, $db, $configRuntime, $documentRegistry, $dsConfig, $auth),
-		'recalculate' => $ctrl->recalculate($table, $request, $tables, $db, $formRegistry, $configRuntime, $modulesBasePath, $language),
+		'recalculate' => $ctrl->recalculate($table, $request, $tables, $db, $formRegistry, $configRuntime, $modulePathResolver, $language),
 		default       => Response::error('INTERNAL_ERROR', "Unknown form action: {$route->action}", 500),
 	};
 }

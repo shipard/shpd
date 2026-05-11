@@ -6,6 +6,7 @@ namespace Shipard\Tests\Unit\Core\Module;
 
 use PHPUnit\Framework\TestCase;
 use Shipard\Core\Module\InstallModuleRegistry;
+use Shipard\Core\Module\ModulePathResolver;
 
 class InstallModuleRegistryTest extends TestCase
 {
@@ -57,7 +58,7 @@ class InstallModuleRegistryTest extends TestCase
 
     public function testEmptyModulesDirReturnsEmpty(): void
     {
-        $reg = new InstallModuleRegistry($this->tmpDir);
+        $reg = new InstallModuleRegistry(new ModulePathResolver([$this->tmpDir]));
         $this->assertSame([], $reg->list());
         $this->assertFalse($reg->exists('install.base'));
     }
@@ -65,7 +66,7 @@ class InstallModuleRegistryTest extends TestCase
     public function testInstallDirWithoutModules(): void
     {
         mkdir($this->tmpDir . '/install', 0755, true);
-        $reg = new InstallModuleRegistry($this->tmpDir);
+        $reg = new InstallModuleRegistry(new ModulePathResolver([$this->tmpDir]));
         $this->assertSame([], $reg->list());
     }
 
@@ -75,7 +76,7 @@ class InstallModuleRegistryTest extends TestCase
         $this->createInstallModule('foo');
         $this->createInstallModule('bar');
 
-        $reg = new InstallModuleRegistry($this->tmpDir);
+        $reg = new InstallModuleRegistry(new ModulePathResolver([$this->tmpDir]));
         $list = $reg->list();
 
         $this->assertCount(3, $list);
@@ -94,7 +95,7 @@ class InstallModuleRegistryTest extends TestCase
         mkdir($badDir, 0755, true);
         file_put_contents($badDir . '/module.jsonc', '{ this is not valid json');
 
-        $reg = new InstallModuleRegistry($this->tmpDir);
+        $reg = new InstallModuleRegistry(new ModulePathResolver([$this->tmpDir]));
         $list = $reg->list();
 
         $this->assertCount(1, $list);
@@ -106,7 +107,7 @@ class InstallModuleRegistryTest extends TestCase
         $this->createInstallModule('base');
         mkdir($this->tmpDir . '/install/empty-dir', 0755, true);
 
-        $reg = new InstallModuleRegistry($this->tmpDir);
+        $reg = new InstallModuleRegistry(new ModulePathResolver([$this->tmpDir]));
         $list = $reg->list();
 
         $this->assertCount(1, $list);
@@ -119,7 +120,7 @@ class InstallModuleRegistryTest extends TestCase
         $this->createInstallModule('alpha', ['name' => 'alpha']);
         $this->createInstallModule('bravo', ['name' => 'Bravo']);
 
-        $reg = new InstallModuleRegistry($this->tmpDir);
+        $reg = new InstallModuleRegistry(new ModulePathResolver([$this->tmpDir]));
         $names = array_map(fn(array $m): string => $m['name'], $reg->list());
 
         $this->assertSame(['alpha', 'Bravo', 'Zebra'], $names);
@@ -128,20 +129,20 @@ class InstallModuleRegistryTest extends TestCase
     public function testExistsReturnsTrueForValidId(): void
     {
         $this->createInstallModule('base');
-        $reg = new InstallModuleRegistry($this->tmpDir);
+        $reg = new InstallModuleRegistry(new ModulePathResolver([$this->tmpDir]));
         $this->assertTrue($reg->exists('install.base'));
     }
 
     public function testExistsReturnsFalseForMissingId(): void
     {
-        $reg = new InstallModuleRegistry($this->tmpDir);
+        $reg = new InstallModuleRegistry(new ModulePathResolver([$this->tmpDir]));
         $this->assertFalse($reg->exists('install.nonexistent'));
     }
 
     public function testExistsRejectsInvalidFormat(): void
     {
         $this->createInstallModule('base');
-        $reg = new InstallModuleRegistry($this->tmpDir);
+        $reg = new InstallModuleRegistry(new ModulePathResolver([$this->tmpDir]));
 
         $this->assertFalse($reg->exists('core.system'));
         $this->assertFalse($reg->exists('install.'));

@@ -7,6 +7,7 @@ use PHPUnit\Framework\TestCase;
 use Shipard\Api\Controller\DevDashboardController;
 use Shipard\Api\Request;
 use Shipard\Api\Response;
+use Shipard\Core\Module\ModulePathResolver;
 
 class DevDashboardControllerTest extends TestCase
 {
@@ -28,7 +29,7 @@ class DevDashboardControllerTest extends TestCase
 			$this->modulesDir . '/install/base/module.jsonc',
 			(string) json_encode(['id' => 'install.base', 'name' => 'Base']),
 		);
-		$this->ctrl = new DevDashboardController($this->tmpDir, null, $this->modulesDir);
+		$this->ctrl = new DevDashboardController($this->tmpDir, null, new ModulePathResolver([$this->modulesDir]));
 	}
 
 	protected function tearDown(): void
@@ -214,7 +215,7 @@ class DevDashboardControllerTest extends TestCase
 
 	private function ctrlWithLog(string $logPath): DevDashboardController
 	{
-		return new DevDashboardController($this->tmpDir, $logPath, $this->modulesDir);
+		return new DevDashboardController($this->tmpDir, $logPath, new ModulePathResolver([$this->modulesDir]));
 	}
 
 	private function jsonLine(array $data): string
@@ -440,8 +441,11 @@ class DevDashboardControllerTest extends TestCase
 	public function testInstallModulesEndpointReturnsList(): void
 	{
 		$this->createInstallModule('foo');
+		// Resolver eagerly scans roots in its constructor — rebuild the controller
+		// so the freshly created install.foo module is discovered.
+		$ctrl = new DevDashboardController($this->tmpDir, null, new ModulePathResolver([$this->modulesDir]));
 
-		$resp = $this->ctrl->dispatch($this->makeRequest('GET', '/_dev/api/install-modules'));
+		$resp = $ctrl->dispatch($this->makeRequest('GET', '/_dev/api/install-modules'));
 		$this->assertSame(200, $this->getStatus($resp));
 
 		$payload = $this->getPayloadRaw($resp);
@@ -566,7 +570,7 @@ class DevDashboardControllerTest extends TestCase
 
 	private function makeTestableCtrl(): TestableDevDashboardController
 	{
-		return new TestableDevDashboardController($this->tmpDir, null, $this->modulesDir);
+		return new TestableDevDashboardController($this->tmpDir, null, new ModulePathResolver([$this->modulesDir]));
 	}
 
 	public function testDsCreatePipelineHappyPath(): void

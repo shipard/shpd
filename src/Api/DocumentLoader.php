@@ -8,13 +8,14 @@ use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Document\DocumentRegistry;
 use Shipard\Core\Module\ModuleDefinition;
 use Shipard\Core\Module\ModuleLoader;
+use Shipard\Core\Module\ModulePathResolver;
 use Shipard\Core\Module\ModuleResolver;
 
 class DocumentLoader
 {
-    public static function load(DataSourceConfig $config, string $modulesBasePath): DocumentRegistry
+    public static function load(DataSourceConfig $config, ModulePathResolver $resolver): DocumentRegistry
     {
-        $allModules      = ModuleLoader::loadAllModules($modulesBasePath);
+        $allModules      = ModuleLoader::loadAllModules($resolver);
         $errors          = [];
         $resolvedModules = ModuleResolver::resolve($allModules, $config->getModules(), $errors);
 

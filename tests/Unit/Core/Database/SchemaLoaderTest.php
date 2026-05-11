@@ -6,6 +6,7 @@ namespace Shipard\Tests\Unit\Core\Database;
 
 use PHPUnit\Framework\TestCase;
 use Shipard\Core\Database\SchemaLoader;
+use Shipard\Core\Module\ModulePathResolver;
 
 class SchemaLoaderTest extends TestCase
 {
@@ -84,7 +85,7 @@ class SchemaLoaderTest extends TestCase
             ],
         ]);
 
-        $result = SchemaLoader::loadResolvedTables($this->modulesPath, ['test.unit']);
+        $result = SchemaLoader::loadResolvedTables(new ModulePathResolver([$this->modulesPath]), ['test.unit']);
 
         $this->assertSame([], $result['errors']);
         $this->assertArrayHasKey('test_unit_items', $result['tables']);
@@ -111,7 +112,7 @@ class SchemaLoaderTest extends TestCase
         ]);
 
         $result = SchemaLoader::loadResolvedTables(
-            $this->modulesPath,
+            new ModulePathResolver([$this->modulesPath]),
             ['test.base', 'test.ext'],
         );
 
@@ -131,7 +132,7 @@ class SchemaLoaderTest extends TestCase
         ]);
 
         $result = SchemaLoader::loadResolvedTables(
-            $this->modulesPath,
+            new ModulePathResolver([$this->modulesPath]),
             ['nonexistent.module'],
         );
 

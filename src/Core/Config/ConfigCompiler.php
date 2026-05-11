@@ -6,6 +6,7 @@ namespace Shipard\Core\Config;
 
 use Shipard\Core\I18n\ConfigLocalizer;
 use Shipard\Core\Module\ModuleDefinition;
+use Shipard\Core\Module\ModulePathResolver;
 use Shipard\Core\Utils\JsoncParser;
 
 class ConfigCompiler
@@ -15,7 +16,7 @@ class ConfigCompiler
     /** @param ModuleDefinition[] $modules Resolved modules in dependency order */
     public static function compile(
         array $modules,
-        string $modulesBasePath,
+        ModulePathResolver $resolver,
         array $languages,
         string $outputPath,
     ): void {
@@ -24,8 +25,8 @@ class ConfigCompiler
 
         foreach ($modules as $module) {
             $moduleIds[] = $module->id;
-            [$group, $name] = explode('.', $module->id, 2);
-            $modulePath = $modulesBasePath . '/' . $group . '/' . $name;
+            $modulePath = $resolver->getPath($module->id);
+            if ($modulePath === null) continue;
 
             foreach ($module->config as $entry) {
                 $cfgId = $entry['id'];

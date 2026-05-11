@@ -15,6 +15,7 @@ use Shipard\Core\Database\SqlGenerator;
 use Shipard\Core\Database\TableDefinition;
 use Shipard\Core\Database\TableMerger;
 use Shipard\Core\Module\ModuleLoader;
+use Shipard\Core\Module\ModulePathResolver;
 use Shipard\Core\Module\ModuleResolver;
 use Shipard\Core\Security\DsSecretCipher;
 use Shipard\Core\Utils\JsoncParser;
@@ -49,15 +50,15 @@ class DsUpgradeCommand extends Command
         return getcwd();
     }
 
-    protected function getModulesBasePath(): string
+    protected function getModulePathResolver(): ModulePathResolver
     {
-        return dirname(__DIR__, 3) . '/modules';
+        return new ModulePathResolver([dirname(__DIR__, 3) . '/modules']);
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $dsDir = $this->getDataSourceDir();
-        $modulesBasePath = $this->getModulesBasePath();
+        $modulePathResolver = $this->getModulePathResolver();
 
         $dsConfig = $this->dsConfig ?? new DataSourceConfig($dsDir);
         $dsConnection = $this->dsConnection ?? new DataSourceConnection($dsConfig);
@@ -90,7 +91,7 @@ class DsUpgradeCommand extends Command
 
         // Step 2: Resolve modules
         $output->writeln('Resolving modules...', OutputInterface::VERBOSITY_VERBOSE);
-        $allModules = ModuleLoader::loadAllModules($modulesBasePath);
+        $allModules = ModuleLoader::loadAllModules($modulePathResolver);
         $errors = [];
         $resolvedModules = ModuleResolver::resolve($allModules, $dsConfig->getModules(), $errors);
 
@@ -110,8 +111,8 @@ class DsUpgradeCommand extends Command
         $tableDefs = [];
 
         foreach ($resolvedModules as $module) {
-            [$group, $name] = explode('.', $module->id, 2);
-            $modulePath = $modulesBasePath . '/' . $group . '/' . $name;
+            $modulePath = $modulePathResolver->getPath($module->id);
+            if ($modulePath === null) continue;
 
             foreach ($module->tables as $tableFile) {
                 $filePath = $modulePath . '/tables/' . $tableFile . '.jsonc';
@@ -122,8 +123,8 @@ class DsUpgradeCommand extends Command
         }
 
         foreach ($resolvedModules as $module) {
-            [$group, $name] = explode('.', $module->id, 2);
-            $modulePath = $modulesBasePath . '/' . $group . '/' . $name;
+            $modulePath = $modulePathResolver->getPath($module->id);
+            if ($modulePath === null) continue;
 
             foreach ($module->extensions as $extFile) {
                 $filePath = $modulePath . '/extensions/' . $extFile . '.jsonc';
@@ -152,7 +153,7 @@ class DsUpgradeCommand extends Command
         $output->writeln('Compiling configuration...', OutputInterface::VERBOSITY_VERBOSE);
         $languages = ['cs', 'en'];
         $outputPath = $dsDir . '/config/configuration';
-        ConfigCompiler::compile($resolvedModules, $modulesBasePath, $languages, $outputPath);
+        ConfigCompiler::compile($resolvedModules, $modulePathResolver, $languages, $outputPath);
 
         $configItemCount = 0;
         foreach ($resolvedModules as $module) {
@@ -370,7 +371,7 @@ class DsUpgradeCommand extends Command
             return;
         }
 
-        $seedFile = $this->getModulesBasePath() . '/core/units/config/unitsSeed.jsonc';
+        $seedFile = $this->getModulePathResolver()->getPath('core.units') . '/config/unitsSeed.jsonc';
         $provisioner = new UnitsProvisioner($dsConnection, $seedFile);
         $result = $provisioner->provision();
 
@@ -393,7 +394,7 @@ class DsUpgradeCommand extends Command
             return;
         }
 
-        $seedFile = $this->getModulesBasePath() . '/economy/items/config/itemKindsSeed.jsonc';
+        $seedFile = $this->getModulePathResolver()->getPath('economy.items') . '/config/itemKindsSeed.jsonc';
         $provisioner = new ItemKindsProvisioner($dsConnection, $seedFile);
         $result = $provisioner->provision();
 

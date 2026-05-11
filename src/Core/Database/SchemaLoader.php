@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Shipard\Core\Database;
 
 use Shipard\Core\Module\ModuleLoader;
+use Shipard\Core\Module\ModulePathResolver;
 use Shipard\Core\Module\ModuleResolver;
 use Shipard\Core\Utils\JsoncParser;
 
@@ -20,17 +21,17 @@ class SchemaLoader
      *     errors: list<string>
      * }
      */
-    public static function loadResolvedTables(string $modulesBasePath, array $directModuleIds): array
+    public static function loadResolvedTables(ModulePathResolver $resolver, array $directModuleIds): array
     {
-        $allModules = ModuleLoader::loadAllModules($modulesBasePath);
+        $allModules = ModuleLoader::loadAllModules($resolver);
         $errors = [];
         $resolvedModules = ModuleResolver::resolve($allModules, $directModuleIds, $errors);
 
         $tables = [];
 
         foreach ($resolvedModules as $module) {
-            [$group, $name] = explode('.', $module->id, 2);
-            $modulePath = $modulesBasePath . '/' . $group . '/' . $name;
+            $modulePath = $resolver->getPath($module->id);
+            if ($modulePath === null) continue;
             foreach ($module->tables as $tableFile) {
                 $filePath = $modulePath . '/tables/' . $tableFile . '.jsonc';
                 $raw = JsoncParser::parseFile($filePath);
@@ -39,8 +40,8 @@ class SchemaLoader
         }
 
         foreach ($resolvedModules as $module) {
-            [$group, $name] = explode('.', $module->id, 2);
-            $modulePath = $modulesBasePath . '/' . $group . '/' . $name;
+            $modulePath = $resolver->getPath($module->id);
+            if ($modulePath === null) continue;
             foreach ($module->extensions as $extFile) {
                 $filePath = $modulePath . '/extensions/' . $extFile . '.jsonc';
                 $extData = JsoncParser::parseFile($filePath);

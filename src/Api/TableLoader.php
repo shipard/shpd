@@ -9,6 +9,7 @@ use Shipard\Core\Database\TableDefinition;
 use Shipard\Core\Database\TableMerger;
 use Shipard\Core\I18n\ConfigLocalizer;
 use Shipard\Core\Module\ModuleLoader;
+use Shipard\Core\Module\ModulePathResolver;
 use Shipard\Core\Module\ModuleResolver;
 use Shipard\Core\Utils\JsoncParser;
 
@@ -19,17 +20,17 @@ class TableLoader
 	 *
 	 * @return array<string, TableDefinition>  Indexed by table name
 	 */
-	public static function load(DataSourceConfig $config, string $modulesBasePath, string $language = 'en'): array
+	public static function load(DataSourceConfig $config, ModulePathResolver $resolver, string $language = 'en'): array
 	{
-		$allModules      = ModuleLoader::loadAllModules($modulesBasePath);
+		$allModules      = ModuleLoader::loadAllModules($resolver);
 		$errors          = [];
 		$resolvedModules = ModuleResolver::resolve($allModules, $config->getModules(), $errors);
 
 		$tableDefs = [];
 
 		foreach ($resolvedModules as $module) {
-			[$group, $name] = explode('.', $module->id, 2);
-			$modulePath = $modulesBasePath . '/' . $group . '/' . $name;
+			$modulePath = $resolver->getPath($module->id);
+			if ($modulePath === null) continue;
 
 			foreach ($module->tables as $tableFile) {
 				$filePath  = $modulePath . '/tables/' . $tableFile . '.jsonc';
@@ -40,8 +41,8 @@ class TableLoader
 		}
 
 		foreach ($resolvedModules as $module) {
-			[$group, $name] = explode('.', $module->id, 2);
-			$modulePath = $modulesBasePath . '/' . $group . '/' . $name;
+			$modulePath = $resolver->getPath($module->id);
+			if ($modulePath === null) continue;
 
 			foreach ($module->extensions as $extFile) {
 				$filePath = $modulePath . '/extensions/' . $extFile . '.jsonc';

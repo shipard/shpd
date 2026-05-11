@@ -17,6 +17,8 @@ class TestableDoctorCommand extends DoctorCommand
     public ?string $stubPoolUser = null;
     public bool $skipDbCheck = true;
     public int $stubDbErrors = 0;
+    public ?string $fakePoolConfigGlob = null;
+    public ?string $fakeNginxSitesEnabledDir = null;
 
     public function __construct(string $tempConfigPath, PermissionSpec $spec)
     {
@@ -36,6 +38,16 @@ class TestableDoctorCommand extends DoctorCommand
             return $this->stubDbErrors;
         }
         return parent::checkDataSourceConnections($spec, $output);
+    }
+
+    protected function getPoolConfigGlob(): string
+    {
+        return $this->fakePoolConfigGlob ?? '/dev/null/nonexistent/*.conf';
+    }
+
+    protected function getNginxSitesEnabledDir(): string
+    {
+        return $this->fakeNginxSitesEnabledDir ?? '/dev/null/nonexistent';
     }
 }
 
@@ -204,5 +216,300 @@ class DoctorCommandTest extends TestCase
         $display = $tester->getDisplay();
         $this->assertStringContainsString('mode 0700, expected 0750', $display);
         $this->assertStringContainsString('sudo shpd-server fix-permissions', $display);
+    }
+
+    // ─── New checks: FPM socket + nginx routing ────────────────────────────
+
+    private function writeFakePoolConfig(string $socket): string
+    {
+        $dir = $this->tempRoot . '/pool';
+        if (!is_dir($dir)) {
+            mkdir($dir, 0750, true);
+        }
+        file_put_contents(
+            $dir . '/shipard.conf',
+            "[shipard]\nuser = sebik\ngroup = sebik\nlisten = {$socket}\n",
+        );
+        return $dir . '/*.conf';
+    }
+
+    private function makeFakeNginxDir(): string
+    {
+        $dir = $this->tempRoot . '/nginx-sites';
+        mkdir($dir, 0750, true);
+        return $dir;
+    }
+
+    private function commandWithStubs(PermissionSpec $spec, string $mode = 'development'): TestableDoctorCommand
+    {
+        $this->writeServerJson($mode);
+        $this->buildHealthyTree($spec);
+        $command = $this->makeTester($spec);
+        $command->stubPoolUser = $this->testUser;
+        return $command;
+    }
+
+    public function testFpmSocketMissingIsReported(): void
+    {
+        $spec = $this->makeSpec();
+        $command = $this->commandWithStubs($spec);
+        $command->fakePoolConfigGlob = $this->writeFakePoolConfig('/tmp/never-exists-' . uniqid() . '.sock');
+
+        $tester = new CommandTester($command);
+        $exitCode = $tester->execute([]);
+
+        $display = $tester->getDisplay();
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('FPM socket missing:', $display);
+        $this->assertStringContainsString('systemctl restart php8.5-fpm', $display);
+    }
+
+    public function testFpmPoolConfigMissingIsReported(): void
+    {
+        $spec = $this->makeSpec();
+        $command = $this->commandWithStubs($spec);
+        // fakePoolConfigGlob not set → defaults to /dev/null/nonexistent/*.conf
+
+        $tester = new CommandTester($command);
+        $exitCode = $tester->execute([]);
+
+        $display = $tester->getDisplay();
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('Shipard PHP-FPM pool config not found', $display);
+        $this->assertStringContainsString('install-packages.sh', $display);
+    }
+
+    public function testNginxRoutingAllShipardIsOk(): void
+    {
+        $socket = $this->tempRoot . '/run/shipard.sock';
+        mkdir(dirname($socket), 0750, true);
+        // Create a fake "socket" so checkFpmSocket passes too
+        file_put_contents($socket, '');
+
+        $spec = $this->makeSpec();
+        $command = $this->commandWithStubs($spec);
+        $command->fakePoolConfigGlob = $this->writeFakePoolConfig($socket);
+
+        $nginxDir = $this->makeFakeNginxDir();
+        file_put_contents($nginxDir . '/shipard.conf', "location ~ \\.php\$ {\n    fastcgi_pass unix:{$socket};\n}\n");
+        $command->fakeNginxSitesEnabledDir = $nginxDir;
+
+        $tester = new CommandTester($command);
+        $tester->execute([]);
+
+        $display = $tester->getDisplay();
+        $this->assertStringContainsString('nginx routes to shipard socket (1 active site(s))', $display);
+        $this->assertStringNotContainsString('not shipard socket', $display);
+    }
+
+    public function testNginxRoutingForeignFastcgiPassIsReported(): void
+    {
+        $socket = $this->tempRoot . '/run/shipard.sock';
+        mkdir(dirname($socket), 0750, true);
+        file_put_contents($socket, '');
+
+        $spec = $this->makeSpec();
+        $command = $this->commandWithStubs($spec);
+        $command->fakePoolConfigGlob = $this->writeFakePoolConfig($socket);
+
+        $nginxDir = $this->makeFakeNginxDir();
+        file_put_contents($nginxDir . '/shipard.conf', "location ~ \\.php\$ {\n    fastcgi_pass unix:{$socket};\n}\n");
+        file_put_contents($nginxDir . '/legacy.conf',  "location ~ \\.php\$ {\n    fastcgi_pass unix:/run/php/php-fpm.sock;\n}\n");
+        $command->fakeNginxSitesEnabledDir = $nginxDir;
+
+        $tester = new CommandTester($command);
+        $exitCode = $tester->execute([]);
+
+        $display = $tester->getDisplay();
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('legacy.conf', $display);
+        $this->assertStringContainsString('fastcgi_pass unix:/run/php/php-fpm.sock (not shipard socket)', $display);
+        $this->assertStringContainsString('regardless of file extension', $display);
+    }
+
+    public function testNginxRoutingScansFilesRegardlessOfExtension(): void
+    {
+        // The exact bug from the cutover: development.conf.disabled-20260511
+        // still in sites-enabled with old fastcgi_pass.
+        $socket = $this->tempRoot . '/run/shipard.sock';
+        mkdir(dirname($socket), 0750, true);
+        file_put_contents($socket, '');
+
+        $spec = $this->makeSpec();
+        $command = $this->commandWithStubs($spec);
+        $command->fakePoolConfigGlob = $this->writeFakePoolConfig($socket);
+
+        $nginxDir = $this->makeFakeNginxDir();
+        file_put_contents($nginxDir . '/shipard.conf', "location ~ \\.php\$ {\n    fastcgi_pass unix:{$socket};\n}\n");
+        // The "disabled" file — nginx loads it anyway
+        file_put_contents(
+            $nginxDir . '/development.conf.disabled-20260511',
+            "location ~ \\.php\$ {\n    fastcgi_pass unix:/run/php/php-fpm.sock;\n}\n",
+        );
+        $command->fakeNginxSitesEnabledDir = $nginxDir;
+
+        $tester = new CommandTester($command);
+        $exitCode = $tester->execute([]);
+
+        $display = $tester->getDisplay();
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('development.conf.disabled-20260511', $display);
+    }
+
+    public function testNginxRoutingEmptyDirIsWarning(): void
+    {
+        $socket = $this->tempRoot . '/run/shipard.sock';
+        mkdir(dirname($socket), 0750, true);
+        file_put_contents($socket, '');
+
+        $spec = $this->makeSpec();
+        $command = $this->commandWithStubs($spec);
+        $command->fakePoolConfigGlob = $this->writeFakePoolConfig($socket);
+        $command->fakeNginxSitesEnabledDir = $this->makeFakeNginxDir();   // empty
+
+        $tester = new CommandTester($command);
+        $tester->execute([]);
+
+        $display = $tester->getDisplay();
+        $this->assertStringContainsString('No site configs in sites-enabled', $display);
+        // Warning, not error — should not bump the issue counter
+        $this->assertStringNotContainsString('No nginx site routes to shipard FPM socket', $display);
+    }
+
+    public function testNginxRoutingHandlesMultipleFastcgiPassPerFile(): void
+    {
+        $socket = $this->tempRoot . '/run/shipard.sock';
+        mkdir(dirname($socket), 0750, true);
+        file_put_contents($socket, '');
+
+        $spec = $this->makeSpec();
+        $command = $this->commandWithStubs($spec);
+        $command->fakePoolConfigGlob = $this->writeFakePoolConfig($socket);
+
+        $nginxDir = $this->makeFakeNginxDir();
+        // One site file with two location blocks, both fastcgi_pass shipard
+        $content = "location ~ \\.php\$ {\n    fastcgi_pass unix:{$socket};\n}\n"
+                 . "location /api {\n    fastcgi_pass unix:{$socket};\n}\n";
+        file_put_contents($nginxDir . '/shipard.conf', $content);
+        $command->fakeNginxSitesEnabledDir = $nginxDir;
+
+        $tester = new CommandTester($command);
+        $tester->execute([]);
+
+        // Two fastcgi_pass matches in one file are counted as two active sites
+        $this->assertStringContainsString(
+            'nginx routes to shipard socket (2 active site(s))',
+            $tester->getDisplay(),
+        );
+    }
+
+    public function testNginxRoutingMixedMultipleFastcgiPassReportsForeignOnly(): void
+    {
+        $socket = $this->tempRoot . '/run/shipard.sock';
+        mkdir(dirname($socket), 0750, true);
+        file_put_contents($socket, '');
+
+        $spec = $this->makeSpec();
+        $command = $this->commandWithStubs($spec);
+        $command->fakePoolConfigGlob = $this->writeFakePoolConfig($socket);
+
+        $nginxDir = $this->makeFakeNginxDir();
+        // One file: one shipard pass, one foreign pass
+        $content = "location ~ \\.php\$ {\n    fastcgi_pass unix:{$socket};\n}\n"
+                 . "location /legacy {\n    fastcgi_pass unix:/run/php/php-fpm.sock;\n}\n";
+        file_put_contents($nginxDir . '/shipard.conf', $content);
+        $command->fakeNginxSitesEnabledDir = $nginxDir;
+
+        $tester = new CommandTester($command);
+        $exitCode = $tester->execute([]);
+
+        $display = $tester->getDisplay();
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('fastcgi_pass unix:/run/php/php-fpm.sock (not shipard socket)', $display);
+    }
+
+    public function testNginxRoutingMatchesInlineOneLinerDirective(): void
+    {
+        // Regression for the cutover repro: an inline `{ fastcgi_pass ...; }`
+        // block. The previous regex required `^\s*fastcgi_pass` (line start)
+        // and missed this form, letting the bug slip through.
+        $socket = $this->tempRoot . '/run/shipard.sock';
+        mkdir(dirname($socket), 0750, true);
+        file_put_contents($socket, '');
+
+        $spec = $this->makeSpec();
+        $command = $this->commandWithStubs($spec);
+        $command->fakePoolConfigGlob = $this->writeFakePoolConfig($socket);
+
+        $nginxDir = $this->makeFakeNginxDir();
+        // The shipard route (separate file)
+        file_put_contents($nginxDir . '/shipard.conf', "location ~ \\.php\$ {\n    fastcgi_pass unix:{$socket};\n}\n");
+        // Inline foreign directive (the reproduction format)
+        file_put_contents(
+            $nginxDir . '/old-bug-repro.disabled-99999',
+            "location ~ \\.php\$ { fastcgi_pass unix:/run/php/php-fpm.sock; }\n",
+        );
+        $command->fakeNginxSitesEnabledDir = $nginxDir;
+
+        $tester = new CommandTester($command);
+        $exitCode = $tester->execute([]);
+
+        $display = $tester->getDisplay();
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('old-bug-repro.disabled-99999', $display);
+        $this->assertStringContainsString(
+            'fastcgi_pass unix:/run/php/php-fpm.sock (not shipard socket)',
+            $display,
+        );
+    }
+
+    public function testNginxRoutingIgnoresCommentedDirectives(): void
+    {
+        // A commented-out fastcgi_pass should NOT count as a foreign route.
+        $socket = $this->tempRoot . '/run/shipard.sock';
+        mkdir(dirname($socket), 0750, true);
+        file_put_contents($socket, '');
+
+        $spec = $this->makeSpec();
+        $command = $this->commandWithStubs($spec);
+        $command->fakePoolConfigGlob = $this->writeFakePoolConfig($socket);
+
+        $nginxDir = $this->makeFakeNginxDir();
+        $content = "# fastcgi_pass unix:/run/php/php-fpm.sock;   ← old, kept for reference\n"
+                 . "location ~ \\.php\$ {\n    fastcgi_pass unix:{$socket};\n}\n";
+        file_put_contents($nginxDir . '/shipard.conf', $content);
+        $command->fakeNginxSitesEnabledDir = $nginxDir;
+
+        $tester = new CommandTester($command);
+        $tester->execute([]);
+
+        $display = $tester->getDisplay();
+        $this->assertStringContainsString('nginx routes to shipard socket (1 active site(s))', $display);
+        $this->assertStringNotContainsString('not shipard socket', $display);
+    }
+
+    public function testSocketPathNormalizationStripsUnixPrefix(): void
+    {
+        $socket = $this->tempRoot . '/run/shipard.sock';
+        mkdir(dirname($socket), 0750, true);
+        file_put_contents($socket, '');
+
+        $spec = $this->makeSpec();
+        $command = $this->commandWithStubs($spec);
+        $command->fakePoolConfigGlob = $this->writeFakePoolConfig($socket);
+
+        $nginxDir = $this->makeFakeNginxDir();
+        // Pool config has the path without 'unix:' prefix; nginx uses 'unix:'
+        // prefix. The doctor must normalize before comparing.
+        file_put_contents($nginxDir . '/shipard.conf', "location ~ \\.php\$ {\n    fastcgi_pass unix:{$socket};\n}\n");
+        $command->fakeNginxSitesEnabledDir = $nginxDir;
+
+        $tester = new CommandTester($command);
+        $tester->execute([]);
+
+        $this->assertStringContainsString(
+            'nginx routes to shipard socket (1 active site(s))',
+            $tester->getDisplay(),
+        );
     }
 }

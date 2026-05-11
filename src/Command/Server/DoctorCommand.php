@@ -81,13 +81,20 @@ class DoctorCommand extends Command
         }
 
         $output->writeln('');
+        $output->writeln('<info>Nginx + PHP-FPM routing</info>');
+        $expectedSocket = $this->detectShipardSocket();
+        $fpmErrors = $this->checkFpmSocket($output, $expectedSocket);
+        $nginxErrors = $this->checkNginxRouting($output, $expectedSocket);
+
+        $output->writeln('');
         $output->writeln('<info>Data source DB connections</info>');
         $dsErrors = $this->checkDataSourceConnections($spec, $output);
 
         $output->writeln('');
         $output->writeln(str_repeat('─', 55));
 
-        $totalIssues = count($issues) + $dsErrors + ($poolUser !== $shipardUser ? 1 : 0);
+        $totalIssues = count($issues) + $dsErrors + $fpmErrors + $nginxErrors
+                     + ($poolUser !== $shipardUser ? 1 : 0);
         if ($totalIssues === 0) {
             $output->writeln('<info>✓ All checks passed.</info>');
             return Command::SUCCESS;
@@ -152,6 +159,151 @@ class DoctorCommand extends Command
                 $output->writeln("  ✗ {$id}: " . $e->getMessage());
                 $errors++;
             }
+        }
+        return $errors;
+    }
+
+    protected function getPoolConfigGlob(): string
+    {
+        return '/etc/php/*/fpm/pool.d/shipard.conf';
+    }
+
+    protected function getNginxSitesEnabledDir(): string
+    {
+        return '/etc/nginx/sites-enabled';
+    }
+
+    /**
+     * Parses the shipard PHP-FPM pool config and returns the `listen` socket path.
+     * Returns null when no shipard pool config is present.
+     */
+    protected function detectShipardSocket(): ?string
+    {
+        foreach (glob($this->getPoolConfigGlob()) ?: [] as $file) {
+            $content = @file_get_contents($file);
+            if ($content === false) {
+                continue;
+            }
+            if (preg_match('/^\s*listen\s*=\s*(\S+)/m', $content, $m)) {
+                return $m[1];
+            }
+        }
+        return null;
+    }
+
+    /**
+     * @return int number of FPM-related issues
+     */
+    protected function checkFpmSocket(OutputInterface $output, ?string $expectedSocket): int
+    {
+        if ($expectedSocket === null) {
+            $globDir = dirname($this->getPoolConfigGlob());
+            $output->writeln("  ✗ Shipard PHP-FPM pool config not found in {$globDir}");
+            $output->writeln('    <comment>→ Re-run: sudo bash scripts/install-packages.sh --mode=...</comment>');
+            return 1;
+        }
+        if (!file_exists($expectedSocket)) {
+            $output->writeln("  ✗ FPM socket missing: {$expectedSocket}");
+            $output->writeln('    <comment>→ Pool config exists but daemon did not create the socket.</comment>');
+            $output->writeln('    <comment>→ Restart: sudo systemctl restart php8.5-fpm</comment>');
+            return 1;
+        }
+        $stat = @stat($expectedSocket);
+        if ($stat === false) {
+            $output->writeln("  ⚠ Cannot stat FPM socket: {$expectedSocket}");
+            return 0;
+        }
+        $ownerInfo = posix_getpwuid($stat['uid']);
+        $ownerName = $ownerInfo['name'] ?? (string) $stat['uid'];
+        $output->writeln("  ✓ FPM socket: {$expectedSocket} (owner: {$ownerName})");
+        return 0;
+    }
+
+    /**
+     * Extracts every fastcgi_pass target from an nginx config snippet, ignoring
+     * directives inside `#` comments. Works for multi-line as well as inline
+     * blocks like `{ fastcgi_pass unix:/x.sock; }`.
+     *
+     * @return list<string>
+     */
+    protected function extractFastcgiPassTargets(string $content): array
+    {
+        // Strip `# ... end-of-line` comments so commented-out directives don't match.
+        $stripped = preg_replace('/#[^\n]*/', '', $content);
+        if ($stripped === null) {
+            $stripped = $content;
+        }
+        if (!preg_match_all('/\bfastcgi_pass\s+(\S+?);/', $stripped, $matches)) {
+            return [];
+        }
+        return $matches[1];
+    }
+
+    /**
+     * Iterates ALL files in sites-enabled (regardless of extension — nginx
+     * loads `sites-enabled/*` literally) and verifies that every fastcgi_pass
+     * directive routes to the shipard FPM socket.
+     *
+     * @return int number of nginx routing issues
+     */
+    protected function checkNginxRouting(OutputInterface $output, ?string $expectedSocket): int
+    {
+        $sitesEnabled = $this->getNginxSitesEnabledDir();
+        if (!is_dir($sitesEnabled)) {
+            $output->writeln('  ⚠ nginx sites-enabled directory not found');
+            return 0;
+        }
+        if ($expectedSocket === null) {
+            $output->writeln('  ⚠ Cannot verify routing — shipard pool config not found');
+            return 0;
+        }
+
+        $files = glob($sitesEnabled . '/*') ?: [];
+        if (count($files) === 0) {
+            $output->writeln('  ⚠ No site configs in sites-enabled');
+            return 0;
+        }
+
+        $shipardSites = 0;
+        $foreignSites = [];
+
+        foreach ($files as $file) {
+            if (!is_file($file)) {
+                continue;
+            }
+            $content = @file_get_contents($file);
+            if ($content === false) {
+                continue;
+            }
+            foreach ($this->extractFastcgiPassTargets($content) as $target) {
+                $socketPath = str_starts_with($target, 'unix:')
+                    ? substr($target, 5)
+                    : $target;
+                if ($socketPath === $expectedSocket) {
+                    $shipardSites++;
+                } else {
+                    $foreignSites[] = ['file' => $file, 'target' => $target];
+                }
+            }
+        }
+
+        if ($shipardSites > 0 && count($foreignSites) === 0) {
+            $output->writeln("  ✓ nginx routes to shipard socket ({$shipardSites} active site(s))");
+            return 0;
+        }
+
+        $errors = 0;
+        if ($shipardSites === 0) {
+            $output->writeln('  ✗ No nginx site routes to shipard FPM socket');
+            $output->writeln("    <comment>→ Expected fastcgi_pass: unix:{$expectedSocket}</comment>");
+            $errors++;
+        }
+        foreach ($foreignSites as $site) {
+            $output->writeln("  ✗ {$site['file']}");
+            $output->writeln("    fastcgi_pass {$site['target']} (not shipard socket)");
+            $output->writeln('    <comment>→ Edit this file to use shipard socket, or remove if obsolete</comment>');
+            $output->writeln('    <comment>  (Note: nginx loads `sites-enabled/*` regardless of file extension)</comment>');
+            $errors++;
         }
         return $errors;
     }

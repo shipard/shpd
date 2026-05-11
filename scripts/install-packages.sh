@@ -194,23 +194,24 @@ chmod 0644 "$SITE_FILE"
 
 ln -sfn "$SITE_FILE" "$SITE_LINK"
 
-# Disable conflicting sites (development.conf, production.conf) so the new
-# shipard.conf wins on port 80. Symlinks pointing at our docs/nginx/* are
-# removed; regular files are moved to a timestamped backup.
-for stale in development.conf production.conf; do
+# Disable conflicting sites so the new shipard.conf wins on port 80.
+#
+# IMPORTANT: nginx includes `sites-enabled/*` regardless of file extension,
+# so a rename in place (e.g. development.conf → development.conf.disabled-X)
+# does NOT deactivate the site — nginx still loads it. We have to MOVE the
+# file out of sites-enabled entirely:
+#   - symlinks → rm (originál v sites-available zůstane nedotčený)
+#   - regular files → mv do sites-available/$name.disabled-TIMESTAMP
+for stale in development.conf production.conf default; do
     file="/etc/nginx/sites-enabled/$stale"
     if [ -L "$file" ]; then
-        target="$(readlink "$file")"
-        case "$target" in
-            "$PROJECT_DIR"/docs/nginx/*)
-                echo "    Removing stale symlink: $file -> $target"
-                rm -f "$file"
-                ;;
-        esac
+        echo "    Removing symlink: $file (original preserved in sites-available)"
+        rm -f "$file"
     elif [ -f "$file" ]; then
-        backup="${file}.disabled-$(date +%Y%m%d-%H%M%S)"
-        echo "    Disabling pre-existing $file → $backup"
-        mv "$file" "$backup"
+        timestamp=$(date +%Y%m%d-%H%M%S)
+        target="/etc/nginx/sites-available/${stale}.disabled-${timestamp}"
+        echo "    Moving: $file → $target"
+        mv "$file" "$target"
     fi
 done
 
@@ -218,13 +219,28 @@ echo "==> Validating nginx config..."
 nginx -t
 systemctl reload nginx
 
-# ─── 9. Done ─────────────────────────────────────────────────────────────────
+# ─── 9. Verify with doctor ───────────────────────────────────────────────────
 echo ""
-echo "==> Installation complete."
 php --version | head -1
 mariadb --version
 
-cat <<EOF
+if [ -f /etc/shipard/server.json ]; then
+    echo ""
+    echo "==> Verifying installation with shpd-server doctor..."
+    echo ""
+    if shpd-server doctor; then
+        echo ""
+        echo "==> Installation complete and verified."
+    else
+        echo ""
+        echo "==> Installation finished, but doctor found issues."
+        echo "    Review the report above and fix before proceeding."
+        exit 1
+    fi
+else
+    echo ""
+    echo "==> Installation complete (doctor skipped — server-init not yet run)."
+    cat <<EOF
 
 Next steps:
 
@@ -243,3 +259,4 @@ Next steps:
        sudo shpd-server fix-permissions --dry-run
        sudo shpd-server fix-permissions
 EOF
+fi

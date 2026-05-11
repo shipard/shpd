@@ -44,13 +44,63 @@ argumentů spustí `help`.
 ### `server-init`
 
 ```bash
-sudo shpd-server server-init
+sudo shpd-server server-init                              # development, user z $SUDO_USER
+sudo shpd-server server-init --mode=production            # default user 'shipard'
+sudo shpd-server server-init --mode=development --user=alice
 ```
 
-Inicializuje server: vytvoří `/etc/shipard/server.json` (práva 0600), vygeneruje
-admin DB credentials (uživatel pro `CREATE DATABASE` / `CREATE USER`) a
-připraví adresářovou strukturu pro DS (`/opt/shipard/data-sources/`).
-Spouští se **jednou** při instalaci serveru.
+Inicializuje server: vytvoří `/etc/shipard/server.json` (ownership `root:<user>`,
+mode 0640), vygeneruje admin DB credentials (uživatel pro `CREATE DATABASE` /
+`CREATE USER`). Spouští se **jednou** při instalaci serveru, typicky po
+`scripts/install-packages.sh`.
+
+| Opce | Význam |
+|------|--------|
+| `--mode <development\|production>` | Operační režim. Zapíše se do `server.json` jako `mode`. Default: `development`. |
+| `--user <name>` | Shipard user (vlastní `/opt/shipard/`, běží jako PHP-FPM pool). Default: `$SUDO_USER` v development, `shipard` v production. |
+
+### `doctor`
+
+```bash
+shpd-server doctor
+```
+
+Read-only health check. Vypíše:
+
+- **Mode** z `/etc/shipard/server.json`
+- **Shipard user** (detekce z owner `/opt/shipard/`)
+- **PHP-FPM pool user** (z `/etc/php/*/fpm/pool.d/shipard.conf`)
+- **Filesystem checks** — per-cesta kontrola existence + type + owner + group + mode
+  dle [permission kontraktu](operations/permissions.md)
+- **Data source DB connections** — pokus o `SELECT 1` na každý DS
+
+Žádné side-effecty. Exit code `0` (vše OK) nebo `1` (alespoň jeden issue).
+Bez sudo (jen čte).
+
+### `fix-permissions`
+
+```bash
+sudo shpd-server fix-permissions --dry-run        # preview, lze i bez sudo
+sudo shpd-server fix-permissions                  # interaktivní confirm
+sudo shpd-server fix-permissions --force          # bez confirm
+```
+
+Sjednotí ownership a modes dle [permission kontraktu](operations/permissions.md).
+Volá `chown`/`chgrp`/`chmod`. Žádné mazání ani vytváření — cesty které
+chybí jsou označené jako `fixable: false` a fix-permissions se jich nedotkne.
+
+| Opce | Význam |
+|------|--------|
+| `--dry-run` | Vypíše plánované změny, nic neaplikuje. Lze spustit i bez sudo. |
+| `--force` | Přeskočí interaktivní `[y/N]` konfirmaci |
+
+Typické použití po migraci ze staršího layoutu (`sebik:www-data` group hack):
+
+```bash
+sudo bash scripts/install-packages.sh --mode=development
+sudo shpd-server fix-permissions
+shpd-server doctor    # ověř že vše zelené
+```
 
 ### `ds-create --name <název> [--module <id>]`
 
@@ -421,18 +471,33 @@ po `git pull`, `git pull --rebase` a `git checkout <branch>`.
 ### `scripts/install-packages.sh`
 
 ```bash
-sudo bash scripts/install-packages.sh
+sudo bash scripts/install-packages.sh --mode=development
+sudo bash scripts/install-packages.sh --mode=production
 ```
 
-Jednorázová instalace systémových balíčků (musí běžet jako root):
+Jednorázová idempotentní instalace systémových balíčků (musí běžet jako root):
 
 - PHP 8.5 (cli, fpm, mysql, xml, mbstring, curl, zip, intl)
-- MariaDB
-- nginx
+- MariaDB, nginx
 - composer, git, unzip
 
-Vytvoří symlinky `/usr/bin/shpd-server` a `/usr/bin/shpd-ds`, takže oba
-nástroje jsou poté volatelné odkudkoliv.
+Dále zařídí:
+
+- Detekci **shipard usera** (development → `$SUDO_USER`, production → systémový `shipard`)
+- Vytvoření `/opt/shipard/` (data root) a `/etc/shipard/` (config root) s ownership
+  dle [permission kontraktu](operations/permissions.md)
+- Symlink `/opt/shipard/shpd` → tento repo clone (kvůli nginx root path)
+- Konfiguraci samostatného **PHP-FPM poolu `shipard`** běžícího pod shipard userem
+  (`/etc/php/8.5/fpm/pool.d/shipard.conf` + restart php-fpm)
+- Aktivaci nginx site `shipard.conf` (existující `development.conf`/`production.conf`
+  se uloží jako `.disabled-TIMESTAMP`)
+- Symlinky `/usr/bin/shpd-server` a `/usr/bin/shpd-ds` — utility volatelné odkudkoliv
+
+Po instalaci spusť `shpd-server doctor` pro ověření kontraktu.
+
+| Opce | Význam |
+|------|--------|
+| `--mode <development\|production>` | Operační režim. Default: interaktivní volba. |
 
 ---
 

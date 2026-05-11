@@ -194,16 +194,23 @@ chmod 0644 "$SITE_FILE"
 
 ln -sfn "$SITE_FILE" "$SITE_LINK"
 
-# Disable conflicting sites that point at our docs/nginx/*.conf templates
+# Disable conflicting sites (development.conf, production.conf) so the new
+# shipard.conf wins on port 80. Symlinks pointing at our docs/nginx/* are
+# removed; regular files are moved to a timestamped backup.
 for stale in development.conf production.conf; do
-    if [ -L "/etc/nginx/sites-enabled/$stale" ]; then
-        target="$(readlink "/etc/nginx/sites-enabled/$stale")"
+    file="/etc/nginx/sites-enabled/$stale"
+    if [ -L "$file" ]; then
+        target="$(readlink "$file")"
         case "$target" in
             "$PROJECT_DIR"/docs/nginx/*)
-                echo "    Removing stale symlink: /etc/nginx/sites-enabled/$stale -> $target"
-                rm -f "/etc/nginx/sites-enabled/$stale"
+                echo "    Removing stale symlink: $file -> $target"
+                rm -f "$file"
                 ;;
         esac
+    elif [ -f "$file" ]; then
+        backup="${file}.disabled-$(date +%Y%m%d-%H%M%S)"
+        echo "    Disabling pre-existing $file → $backup"
+        mv "$file" "$backup"
     fi
 done
 

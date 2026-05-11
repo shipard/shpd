@@ -7,26 +7,39 @@ Vítej v projektu Shipard! Tenhle dokument tě provede od nuly k funkčnímu vý
 ## Požadavky
 
 - **Ubuntu LTS** — 22.04 nebo 24.04
-- **git** (obvykle předinstalovaný - pokud není, proveď `sudo apt install git`)
+- **git** (obvykle předinstalovaný — pokud není, `sudo apt install git`)
+- **root přístup** přes `sudo` pro one-time instalaci
 
 ---
 
 ## 1. Stažení repozitáře
 
 ```bash
-git clone git@github.com:shipard/shpd.git
-cd shpd
+git clone git@github.com:shipard/shpd.git ~/sw/shpd
+cd ~/sw/shpd
 ```
 
 ---
 
-## 2. Instalace systémových balíčků
-
-Skript nainstaluje PHP 8.5, MariaDB, nginx, composer a potřebná rozšíření:
+## 2. Instalace systémových balíčků a setup
 
 ```bash
-sudo bash scripts/install-packages.sh
+sudo bash scripts/install-packages.sh --mode=development
 ```
+
+Skript je idempotentní a zařídí:
+
+- Instalaci PHP 8.5, MariaDB, nginx, composer a rozšíření
+- Vytvoření `/opt/shipard/` (datový root) a `/etc/shipard/` (config root)
+  s ownership vlastněným tvým uživatelem (detekce přes `$SUDO_USER`)
+- Konfiguraci samostatného **PHP-FPM poolu `shipard`** běžícího pod tvým
+  uživatelem (žádný group hack se `www-data`)
+- Symlink `/opt/shipard/shpd` → tento clone (kvůli nginx root path)
+- Aktivaci nginx site `shipard.conf` (existující `development.conf` se
+  uloží jako `.disabled-TIMESTAMP`)
+
+Permission kontrakt je popsán v
+[`docs/operations/permissions.md`](docs/operations/permissions.md).
 
 ---
 
@@ -38,21 +51,39 @@ composer install
 
 ---
 
-## 4. Ověření instalace
+## 4. Inicializace server configu
 
 ```bash
-shpd-server version
-shpd-server help
+sudo shpd-server server-init --mode=development
 ```
 
-Výstup první příkazu by měl být `Shipard <číslo-verze>`.
+Vytvoří `/etc/shipard/server.json` s admin DB credentials. Soubor má
+ownership `root:<tvůj-user>` a mode `0640` — root ho edituje, ty čteš
+přes group membership.
 
 ---
 
-## 5. Po `git pull`
+## 5. Ověření
 
-Po každém stažení nové verze je potřeba zaktualizovat závislosti a
-frontend build:
+```bash
+shpd-server doctor
+```
+
+Vypíše report: mode, shipard-user, PHP-FPM pool user, kontrolu cest,
+DB connection per DS. Exit 0 = vše OK.
+
+Pokud něco nesouhlasí (typicky po migraci ze starého layoutu):
+
+```bash
+sudo shpd-server fix-permissions --dry-run    # preview
+sudo shpd-server fix-permissions              # apply
+```
+
+---
+
+## 6. Po `git pull`
+
+Po každém stažení nové verze:
 
 ```bash
 bash scripts/dev-update.sh
@@ -66,36 +97,35 @@ Pokud se měnily definice tabulek nebo cfgItems modulů, je potřeba
 zaktualizovat i datové zdroje:
 
 ```bash
-sudo shpd-server ds-upgrade-all
+shpd-server ds-upgrade-all
 ```
 
 ### Automatizace přes git hooks (volitelné)
-
-Aby se `dev-update.sh` pouštěl automaticky po `git pull`,
-`git pull --rebase` a `git checkout <branch>`:
 
 ```bash
 git config core.hooksPath .githooks
 ```
 
-Stačí spustit jednou v repu. Hook skripty jsou součástí repozitáře.
+Stačí spustit jednou v repu.
 
 ---
 
-## 6. CLI utility
+## 7. CLI utility
 
-Projekt obsahuje dvě CLI utility:
+Přehled v [`docs/cli.md`](docs/cli.md). Po základním setupu nepotřebuješ
+`sudo` pro běžné shipard operace.
 
 ### `shpd-server` — správa serveru
-
-Spouštěj odkudkoliv.
 
 | Příkaz | Popis |
 |--------|-------|
 | `shpd-server version` | Verze aplikace |
 | `shpd-server help` | Nápověda |
 | `shpd-server ds-create --name <název>` | Vytvoří nový datový zdroj |
-| `shpd-server server-init` | Inicializuje server (generuje server config) |
+| `shpd-server ds-upgrade-all` | Spustí `ds-upgrade` na všech DS |
+| `shpd-server doctor` | Health check kontraktu a DB konektivity |
+| `sudo shpd-server fix-permissions` | Opraví ownership/mode dle kontraktu |
+| `sudo shpd-server server-init` | Inicializace server configu |
 | `shpd-server next-table-id` | Vrátí další volné tableId |
 
 ### `shpd-ds` — správa datového zdroje
@@ -106,14 +136,33 @@ Spouštěj z adresáře datového zdroje (musí obsahovat `config/main.json`).
 |--------|-------|
 | `shpd-ds version` | Verze aplikace |
 | `shpd-ds help` | Nápověda |
-| `shpd-ds ds-upgrade` | Synchronizuje databázové schéma podle modulů |
+| `shpd-ds ds-upgrade` | Synchronizuje DB schéma podle modulů |
+| `shpd-ds ds-secrets-health` | Kontrola encryption key pro `encrypted_text` |
+| `shpd-ds ds-secrets-rotate` | Rotace encryption key |
 
 ---
 
-## 7. Kam dál
+## 8. Migrace ze staršího layoutu
+
+Pokud máš dev box s ručně postaveným starým layoutem (typicky
+`sebik:www-data` group hack), proveď:
+
+```bash
+sudo bash scripts/install-packages.sh --mode=development
+sudo shpd-server fix-permissions
+shpd-server doctor    # ověř že je vše zelené
+```
+
+Detaily v [`docs/operations/permissions.md`](docs/operations/permissions.md).
+
+---
+
+## 9. Kam dál
 
 - **Architektura projektu:** [`docs/architecture.md`](docs/architecture.md)
 - **Modulový systém:** [`docs/modules.md`](docs/modules.md)
 - **Definice databázových tabulek:** [`docs/table-definitions.md`](docs/table-definitions.md)
+- **Permission kontrakt:** [`docs/operations/permissions.md`](docs/operations/permissions.md)
+- **CLI reference:** [`docs/cli.md`](docs/cli.md)
 - **Přehled dokumentace:** [`docs/README.md`](docs/README.md)
 - **Hlavní README:** [`README.md`](README.md)

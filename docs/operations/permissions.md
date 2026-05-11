@@ -60,6 +60,18 @@ funguje.
   `install-packages.sh` ho vytvoří jako symlink na `$PROJECT_DIR`.
 - `php-fpm` a `nginx` system config (kromě shipard pool / site) — řízeno OS.
 
+### Recursive ownership
+
+Adresáře `log/`, `config/configuration/`, `att/`, `cache/` a `secrets/` mají
+**rekurzivní kontrolu vlastnictví** — `doctor` projde jejich obsah a hlásí
+ownership mismatches u všech souborů (i v nested adresářích). `fix-permissions`
+je rekurzivně chownuje.
+
+Mode souborů uvnitř těchto adresářů **není vynucován** — různé typy obsahu
+mají různé konvence (JSON configy, uploadované PDF, cache thumbnaily, log
+rotace) a nepatří do kontraktu. Pokud máš striktní požadavek na mode, řeš
+přes umask v aplikační vrstvě.
+
 ## Diagnostika a oprava
 
 ### `shpd-server doctor`

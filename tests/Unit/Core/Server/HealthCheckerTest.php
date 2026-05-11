@@ -277,4 +277,82 @@ class HealthCheckerTest extends TestCase
         $checker = new HealthChecker($spec);
         $this->assertNull($checker->detectPoolUser($this->tempRoot . '/never/exists/*.conf'));
     }
+
+    public function testRecursiveScanDetectsWrongOwnerInsideAttDir(): void
+    {
+        // Spec where 'user' resolves to a non-existent user → every owner check
+        // (including recursive content) reports as wrong.
+        $fake = 'shipard-nonexistent-' . uniqid();
+        $spec = new PermissionSpec(
+            shipardUser: $fake,
+            dataSourcesDir: $this->tempRoot . '/opt/shipard/data-sources',
+            logDir: $this->tempRoot . '/opt/shipard/log',
+            configDir: $this->tempRoot . '/etc/shipard',
+            shipardRoot: $this->tempRoot . '/opt/shipard',
+        );
+        $this->buildContractTree($spec);
+        $dsDir = $this->createDsTree($spec, 'aaaa-bbbb-cccc-dddd');
+        // Plant a file inside att/ — recursive scan should pick it up
+        file_put_contents($dsDir . '/att/upload.bin', "hello");
+
+        $checker = new HealthChecker($spec);
+        $issues = $checker->checkAll();
+        $contentIssues = array_filter(
+            $issues,
+            static fn($i) => str_ends_with($i['path'], '/att/upload.bin'),
+        );
+        $this->assertCount(
+            2,
+            $contentIssues,
+            'expected owner + group issues for the planted file, got: ' . json_encode($contentIssues),
+        );
+        foreach ($contentIssues as $issue) {
+            $this->assertTrue($issue['fixable']);
+        }
+    }
+
+    public function testRecursiveScanIgnoresContentsOfNonRecurseDirs(): void
+    {
+        // /opt/shipard itself is NOT recurse=true → planting a file inside
+        // should NOT produce content-level issues (only the dir's own
+        // owner/group/mode is checked).
+        $spec = $this->makeSpec();
+        $this->buildContractTree($spec);
+        // shipard root has a 'shpd' symlink in real life — we plant a stray
+        // file at the root for the test.
+        file_put_contents($spec->getShipardRoot() . '/stray.txt', 'x');
+
+        $checker = new HealthChecker($spec);
+        $issues = $this->withoutRootOwnerIssues($checker->checkAll());
+        $strayIssues = array_filter(
+            $issues,
+            static fn($i) => str_ends_with($i['path'], '/stray.txt'),
+        );
+        $this->assertCount(0, $strayIssues, 'non-recurse dir leaked into content scan');
+    }
+
+    public function testRecursiveScanWalksNestedDirs(): void
+    {
+        $fake = 'shipard-nonexistent-' . uniqid();
+        $spec = new PermissionSpec(
+            shipardUser: $fake,
+            dataSourcesDir: $this->tempRoot . '/opt/shipard/data-sources',
+            logDir: $this->tempRoot . '/opt/shipard/log',
+            configDir: $this->tempRoot . '/etc/shipard',
+            shipardRoot: $this->tempRoot . '/opt/shipard',
+        );
+        $this->buildContractTree($spec);
+        $dsDir = $this->createDsTree($spec, 'aaaa-bbbb-cccc-dddd');
+        // Plant a file 2 levels deep under cache/ (which is recurse=true)
+        mkdir($dsDir . '/cache/sub/nested', 0750, true);
+        file_put_contents($dsDir . '/cache/sub/nested/deep.bin', 'x');
+
+        $checker = new HealthChecker($spec);
+        $issues = $checker->checkAll();
+        $deep = array_filter(
+            $issues,
+            static fn($i) => str_ends_with($i['path'], '/cache/sub/nested/deep.bin'),
+        );
+        $this->assertCount(2, $deep, 'recursive walk did not reach nested file');
+    }
 }

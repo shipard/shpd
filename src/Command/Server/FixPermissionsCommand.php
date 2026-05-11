@@ -205,6 +205,61 @@ class FixPermissionsCommand extends Command
             }
         }
 
+        if (!empty($entry['recurse']) && $entry['type'] === 'dir') {
+            $count += $this->fixContents($path, $expectedOwner, $expectedGroup, $output);
+        }
+
+        return $count;
+    }
+
+    /**
+     * Recursively applies expected ownership to $dir contents. Modes are
+     * preserved (file modes vary by content type and aren't part of the
+     * contract).
+     */
+    protected function fixContents(string $dir, string $expectedOwner, string $expectedGroup, OutputInterface $output): int
+    {
+        try {
+            $iter = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator(
+                    $dir,
+                    \FilesystemIterator::SKIP_DOTS | \FilesystemIterator::CURRENT_AS_PATHNAME,
+                ),
+                \RecursiveIteratorIterator::SELF_FIRST,
+            );
+        } catch (\UnexpectedValueException $e) {
+            $output->writeln("  <error>SKIP recurse {$dir}: " . $e->getMessage() . '</error>');
+            return 0;
+        }
+
+        $count = 0;
+        foreach ($iter as $path) {
+            $stat = @lstat($path);
+            if ($stat === false) {
+                continue;
+            }
+            $ownerInfo = posix_getpwuid($stat['uid']);
+            $currentOwner = $ownerInfo['name'] ?? (string) $stat['uid'];
+            $groupInfo = posix_getgrgid($stat['gid']);
+            $currentGroup = $groupInfo['name'] ?? (string) $stat['gid'];
+
+            if ($currentOwner !== $expectedOwner) {
+                if (@chown($path, $expectedOwner)) {
+                    $output->writeln("  chown {$expectedOwner} {$path}");
+                    $count++;
+                } else {
+                    $output->writeln("  <error>FAIL chown {$expectedOwner} {$path}</error>");
+                }
+            }
+            if ($currentGroup !== $expectedGroup) {
+                if (@chgrp($path, $expectedGroup)) {
+                    $output->writeln("  chgrp {$expectedGroup} {$path}");
+                    $count++;
+                } else {
+                    $output->writeln("  <error>FAIL chgrp {$expectedGroup} {$path}</error>");
+                }
+            }
+        }
         return $count;
     }
 }

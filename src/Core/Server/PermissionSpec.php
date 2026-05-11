@@ -7,7 +7,14 @@ namespace Shipard\Core\Server;
 /**
  * Permission contract for /opt/shipard and /etc/shipard.
  *
- * @phpstan-type SpecEntry array{path: string, type: 'dir'|'file', owner: 'root'|'user', group: 'user', mode: int, optional?: bool}
+ * Entries with `recurse: true` (only valid on dirs) declare that the
+ * directory's contents must also belong to the shipard user. HealthChecker
+ * scans them and reports ownership mismatches; FixPermissions chowns them.
+ * Modes inside recursive dirs are left untouched (file modes vary by content
+ * type — JSON vs upload vs cache vs log rotation — and aren't part of the
+ * contract).
+ *
+ * @phpstan-type SpecEntry array{path: string, type: 'dir'|'file', owner: 'root'|'user', group: 'user', mode: int, optional?: bool, recurse?: bool}
  */
 final class PermissionSpec
 {
@@ -32,7 +39,7 @@ final class PermissionSpec
             // log) keep 0750 so data is not readable by others.
             ['path' => $this->shipardRoot,                'type' => 'dir',  'owner' => 'user', 'group' => 'user', 'mode' => 0751],
             ['path' => $this->dataSourcesDir,             'type' => 'dir',  'owner' => 'user', 'group' => 'user', 'mode' => 0750],
-            ['path' => $this->logDir,                     'type' => 'dir',  'owner' => 'user', 'group' => 'user', 'mode' => 0750],
+            ['path' => $this->logDir,                     'type' => 'dir',  'owner' => 'user', 'group' => 'user', 'mode' => 0750, 'recurse' => true],
             ['path' => $this->logDir . '/shipard.log',    'type' => 'file', 'owner' => 'user', 'group' => 'user', 'mode' => 0640, 'optional' => true],
         ];
     }
@@ -46,11 +53,11 @@ final class PermissionSpec
             ['path' => $dsDir,                                'type' => 'dir',  'owner' => 'user', 'group' => 'user', 'mode' => 0750],
             ['path' => $dsDir . '/config',                    'type' => 'dir',  'owner' => 'user', 'group' => 'user', 'mode' => 0750],
             ['path' => $dsDir . '/config/main.json',          'type' => 'file', 'owner' => 'user', 'group' => 'user', 'mode' => 0600],
-            ['path' => $dsDir . '/config/configuration',      'type' => 'dir',  'owner' => 'user', 'group' => 'user', 'mode' => 0750, 'optional' => true],
-            ['path' => $dsDir . '/secrets',                   'type' => 'dir',  'owner' => 'user', 'group' => 'user', 'mode' => 0700, 'optional' => true],
+            ['path' => $dsDir . '/config/configuration',      'type' => 'dir',  'owner' => 'user', 'group' => 'user', 'mode' => 0750, 'optional' => true, 'recurse' => true],
+            ['path' => $dsDir . '/secrets',                   'type' => 'dir',  'owner' => 'user', 'group' => 'user', 'mode' => 0700, 'optional' => true, 'recurse' => true],
             ['path' => $dsDir . '/secrets/secrets.key',       'type' => 'file', 'owner' => 'user', 'group' => 'user', 'mode' => 0600, 'optional' => true],
-            ['path' => $dsDir . '/att',                       'type' => 'dir',  'owner' => 'user', 'group' => 'user', 'mode' => 0750, 'optional' => true],
-            ['path' => $dsDir . '/cache',                     'type' => 'dir',  'owner' => 'user', 'group' => 'user', 'mode' => 0750, 'optional' => true],
+            ['path' => $dsDir . '/att',                       'type' => 'dir',  'owner' => 'user', 'group' => 'user', 'mode' => 0750, 'optional' => true, 'recurse' => true],
+            ['path' => $dsDir . '/cache',                     'type' => 'dir',  'owner' => 'user', 'group' => 'user', 'mode' => 0750, 'optional' => true, 'recurse' => true],
             ['path' => $dsDir . '/cache/thumbnails',          'type' => 'dir',  'owner' => 'user', 'group' => 'user', 'mode' => 0750, 'optional' => true],
         ];
     }

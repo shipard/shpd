@@ -196,4 +196,93 @@ class FixPermissionsCommandTest extends TestCase
         $this->assertSame(1, $exitCode);
         $this->assertStringContainsString('Config file missing', $tester->getDisplay());
     }
+
+    public function testRecursiveChgrpFixesNestedContent(): void
+    {
+        // Create a tree owned by test user with a planted file. Then construct
+        // a spec that expects a *different* group → recursive walk should
+        // chgrp the planted file (chown to another user requires real root,
+        // but chgrp to a group the test user belongs to works).
+        $this->writeServerJson();
+
+        // Find a secondary group the test user belongs to (other than primary)
+        $info = posix_getpwuid(posix_getuid());
+        $secondaryGroup = $this->findSecondaryGroup($info['name']);
+        if ($secondaryGroup === null) {
+            $this->markTestSkipped('test user has no secondary groups for chgrp test');
+        }
+
+        $spec = new PermissionSpec(
+            shipardUser: $this->testUser,           // owner stays correct
+            dataSourcesDir: $this->tempRoot . '/opt/shipard/data-sources',
+            logDir: $this->tempRoot . '/opt/shipard/log',
+            configDir: $this->tempRoot . '/etc/shipard',
+            shipardRoot: $this->tempRoot . '/opt/shipard',
+        );
+        // Build a healthy tree
+        mkdir($spec->getConfigDir(), 0750, true);
+        file_put_contents($spec->getConfigDir() . '/server.json', '{}');
+        chmod($spec->getConfigDir() . '/server.json', 0640);
+        mkdir($spec->getShipardRoot(), 0751, true);
+        chmod($spec->getShipardRoot(), 0751);
+        mkdir($spec->getDataSourcesDir(), 0750, true);
+        chmod($spec->getDataSourcesDir(), 0750);
+        mkdir($spec->getLogDir(), 0750, true);
+        chmod($spec->getLogDir(), 0750);
+        $dsDir = $spec->getDataSourcesDir() . '/aaaa-bbbb-cccc-dddd';
+        mkdir($dsDir . '/config', 0750, true);
+        chmod($dsDir, 0750);
+        chmod($dsDir . '/config', 0750);
+        file_put_contents($dsDir . '/config/main.json', '{}');
+        chmod($dsDir . '/config/main.json', 0600);
+        mkdir($dsDir . '/att', 0750, true);
+        chmod($dsDir . '/att', 0750);
+
+        // Plant a file inside att/ and chgrp it to the secondary group
+        // (so it doesn't match the primary group the spec expects).
+        $planted = $dsDir . '/att/upload.bin';
+        file_put_contents($planted, 'x');
+        chgrp($planted, $secondaryGroup);
+        $this->assertSame(
+            $secondaryGroup,
+            posix_getgrgid(stat($planted)['gid'])['name'],
+            'precondition: planted file has secondary group',
+        );
+
+        $command = new TestableFixPermissionsCommand($this->tempConfigPath, $spec);
+        $command->rootResult = true;
+
+        $tester = new CommandTester($command);
+        $exitCode = $tester->execute(['--force' => true]);
+
+        $this->assertSame(0, $exitCode);
+        $this->assertSame(
+            $this->testUser,
+            posix_getgrgid(stat($planted)['gid'])['name'],
+            'planted file group was not fixed by recursive walk',
+        );
+    }
+
+    private function findSecondaryGroup(string $user): ?string
+    {
+        $out = [];
+        $rc = 0;
+        exec('id -Gn ' . escapeshellarg($user) . ' 2>/dev/null', $out, $rc);
+        if ($rc !== 0 || empty($out)) {
+            return null;
+        }
+        $groups = preg_split('/\s+/', $out[0], -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        if (count($groups) < 2) {
+            return null;   // user only has primary group
+        }
+        // Primary group name = user's primary gid name; secondary = anything else
+        $info = posix_getpwnam($user);
+        $primary = posix_getgrgid($info['gid'])['name'] ?? null;
+        foreach ($groups as $g) {
+            if ($g !== $primary) {
+                return $g;
+            }
+        }
+        return null;
+    }
 }

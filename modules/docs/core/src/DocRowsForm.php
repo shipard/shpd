@@ -35,59 +35,60 @@ class DocRowsForm extends TableForm
             }
         }
 
-        $tab = $this->tab('basic', 'Řádek')
-            ->addSelect('row_kind', cols: 1,
-                options: $this->resolveCfgItemOptions('docs.core.rowKinds'),
-                triggers: 'reload',
-                required: true,
-            )
-            ->addSelect('item', cols: 2,
-                options: $this->resolveItemOptions(),
-                triggers: 'reload',
-                hidden: $isText,
-            )
-            ->addInput('description', cols: 4)
-
-            ->addSeparator('Množství a cena', hidden: $isText)
-            ->addNumber('quantity', cols: 1, triggers: 'reload', hidden: $isText)
-            ->addSelect('unit', cols: 1,
-                options: $this->resolveUnitOptions(),
-                hidden: $isText,
-            )
-            ->addNumber('unit_price', cols: 1, triggers: 'reload', hidden: $isText)
-            ->addNumber('total_price', cols: 1, triggers: 'reload', hidden: $isText)
-            ->addSelect('price_calc_mode', cols: 1,
-                options: $this->resolveCfgItemOptions('docs.core.priceCalcModes'),
-                hidden: $isText,
-            )
-
-            ->addSeparator('Sleva', hidden: $isText)
-            ->addNumber('discount_pct', cols: 1, hidden: $isText, hint: 'Sleva v %')
-            ->addNumber('discount_amount', cols: 1, hidden: $isText, hint: 'Sleva absolutně');
-
         $showVat = $headHasVat && !$isText;
-        $tab = $tab
-            ->addSeparator('DPH', hidden: !$showVat)
-            ->addSelect('vat_code', cols: 2,
-                options: $this->buildVatCodeOptions($headContext),
-                triggers: 'reload',
-                required: $showVat,
-                hidden: !$showVat,
-            )
-            ->addNumber('vat_pct', cols: 1,
-                hidden: !$showVat,
-                hint: 'Lze přepsat pro doklady z jiného státu',
-            )
-            ->addNumber('vat_base', cols: 1, readOnly: true, hidden: !$showVat,
-                label: 'Základ DPH (vypočteno)')
-            ->addNumber('vat_amount', cols: 1, readOnly: true, hidden: !$showVat,
-                label: 'Částka DPH (vypočteno)')
-            ->addNumber('vat_total', cols: 1, readOnly: true, hidden: !$showVat,
-                label: 'Celkem (vypočteno)');
 
-        $tab = $tab
-            ->addSeparator('Pořadí')
-            ->addNumber('order_pos', cols: 1);
+        $tab = $this->tab('basic', 'Řádek')
+            ->section()
+                ->col()
+                    ->select('row_kind',
+                        options: $this->resolveCfgItemOptions('docs.core.rowKinds'),
+                        triggers: 'reload',
+                        required: true,
+                    )
+                    ->select('item',
+                        options: $this->resolveItemOptions(),
+                        triggers: 'reload',
+                        hidden: $isText,
+                    )
+                    ->input('description')
+
+                    ->separator('Množství a cena', hidden: $isText)
+                    ->number('quantity', triggers: 'reload', hidden: $isText)
+                    ->select('unit',
+                        options: $this->resolveUnitOptions(),
+                        hidden: $isText,
+                    )
+                    ->number('unit_price', triggers: 'reload', hidden: $isText)
+                    ->number('total_price', triggers: 'reload', hidden: $isText)
+                    ->select('price_calc_mode',
+                        options: $this->resolveCfgItemOptions('docs.core.priceCalcModes'),
+                        hidden: $isText,
+                    )
+
+                    ->separator('Sleva', hidden: $isText)
+                    ->number('discount_pct', hidden: $isText, hint: 'Sleva v %')
+                    ->number('discount_amount', hidden: $isText, hint: 'Sleva absolutně')
+
+                    ->separator('DPH', hidden: !$showVat)
+                    ->select('vat_code',
+                        options: $this->buildVatCodeOptions($headContext),
+                        triggers: 'reload',
+                        required: $showVat,
+                        hidden: !$showVat,
+                    )
+                    ->number('vat_pct',
+                        hidden: !$showVat,
+                        hint: 'Lze přepsat pro doklady z jiného státu',
+                    )
+                    ->number('vat_base', readOnly: true, hidden: !$showVat,
+                        label: 'Základ DPH (vypočteno)')
+                    ->number('vat_amount', readOnly: true, hidden: !$showVat,
+                        label: 'Částka DPH (vypočteno)')
+                    ->number('vat_total', readOnly: true, hidden: !$showVat,
+                        label: 'Celkem (vypočteno)')
+
+                    ->separator('Pořadí')
+                    ->number('order_pos');
 
         return new FormDefinition(
             table: $this->table,

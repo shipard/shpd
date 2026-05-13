@@ -13,11 +13,19 @@
             "label": "Období",
             "label:cs": "Období",
             "label:en": "Period",
-            "elements": [
-                {"type": "input", "column": "name", "cols": 2, "required": true},
-                {"type": "input", "column": "date_begin", "cols": 1, "required": true},
-                {"type": "input", "column": "date_end", "cols": 1, "required": true},
-                {"type": "input", "column": "locked", "cols": 1}
+            "sections": [
+                {
+                    "columns": [
+                        {
+                            "elements": [
+                                {"type": "input", "column": "name", "required": true},
+                                {"type": "input", "column": "date_begin", "required": true},
+                                {"type": "input", "column": "date_end", "required": true},
+                                {"type": "input", "column": "locked"}
+                            ]
+                        }
+                    ]
+                }
             ]
         }
     ]

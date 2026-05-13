@@ -44,23 +44,48 @@ abstract class TableForm
         );
     }
 
-    protected function tab(string $id, string $label): TabBuilder
+    protected function tab(string $id, string $label, ?string $icon = null): TabBuilder
     {
-        // Sestav mapu column_id => label z TableDefinition pro auto-label
         $colLabels = [];
         if ($this->tableDef !== null) {
             foreach ($this->tableDef->columns as $col) {
                 $colLabels[$col->id] = $col->name;
             }
         }
-        return new TabBuilder($id, $label, $colLabels);
+        return new TabBuilder($id, $label, $colLabels, $icon);
+    }
+
+    /**
+     * Build a tab that hosts a child table. The child table is rendered as a
+     * grid with its own toolbar; the parent record is identified by parentId
+     * at runtime.
+     */
+    protected function subtableTab(
+        string $id,
+        string $label,
+        string $table,
+        string $foreignKey,
+        ?string $formId = null,
+        ?string $sort = null,
+        ?string $icon = null,
+    ): FormTab {
+        return new FormTab(
+            id: $id,
+            label: $label,
+            type: 'subtable',
+            subtable: [
+                'table'      => $table,
+                'foreignKey' => $foreignKey,
+                'formId'     => $formId,
+                'sort'       => $sort,
+            ],
+            icon: $icon,
+        );
     }
 
     /**
      * Localized label for the generic "General" tab — same source as
-     * AutoFormBuilder, so every form (PHP / JSONC / auto) shows the same
-     * label. Subclasses use this for their basic / overview tab to avoid
-     * hardcoded Czech strings.
+     * AutoFormBuilder, so every form (PHP / JSONC / auto) shows the same label.
      */
     protected function defaultGeneralTabLabel(): string
     {
@@ -69,8 +94,8 @@ abstract class TableForm
     }
 
     /**
-     * Create an attachments tab for the current table.
-     * The tableId is taken from the table definition.
+     * Create an attachments tab for the current table. The tableId is taken
+     * from the loaded table definition.
      */
     protected function attachmentsTab(string $id = 'attachments', string $label = 'Přílohy'): FormTab
     {
@@ -78,7 +103,6 @@ abstract class TableForm
         return new FormTab(
             id: $id,
             label: $label,
-            elements: [],
             type: 'attachments',
             tableId: $tableId,
         );

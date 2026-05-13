@@ -14,14 +14,16 @@ class UnitsForm extends TableForm
         $hasSystemCode = !empty($data['system_code']);
 
         $basic = $this->tab('basic', 'Základní údaje')
-            ->addInput('name', cols: 2, required: true)
-            ->addInput('shortcut', cols: 1, required: true)
-            ->addInput('system_code', cols: 1, readOnly: true, hidden: !$hasSystemCode)
-            ->addSelect('quantity', cols: 1, options: $this->resolveQuantityOptions(), required: true)
-            ->addNumber('coefficient', cols: 1,
-                hint: 'Koeficient k základní jednotce. Prázdné = nepřevoditelné.',
-            )
-            ->addCheckbox('is_base', cols: 1)
+            ->section()
+                ->col()
+                    ->input('name', required: true)
+                    ->input('shortcut', required: true)
+                    ->input('system_code', readOnly: true, hidden: !$hasSystemCode)
+                    ->select('quantity', options: $this->resolveQuantityOptions(), required: true)
+                    ->number('coefficient',
+                        hint: 'Koeficient k základní jednotce. Prázdné = nepřevoditelné.',
+                    )
+                    ->checkbox('is_base')
             ->build();
 
         return new FormDefinition(

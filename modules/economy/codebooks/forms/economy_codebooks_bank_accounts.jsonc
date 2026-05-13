@@ -13,23 +13,31 @@
             "label": "Účet",
             "label:cs": "Účet",
             "label:en": "Account",
-            "elements": [
-                {"type": "input", "column": "code", "cols": 1, "required": true},
-                {"type": "input", "column": "name", "cols": 2, "required": true},
-                {"type": "input", "column": "currency", "cols": 1, "required": true},
-                {"type": "input", "column": "notice", "cols": 4},
+            "sections": [
+                {
+                    "columns": [
+                        {
+                            "elements": [
+                                {"type": "input", "column": "code", "required": true},
+                                {"type": "input", "column": "name", "required": true},
+                                {"type": "input", "column": "currency", "required": true},
+                                {"type": "input", "column": "notice"},
 
-                {"type": "separator", "label": "Bankovní údaje", "label:cs": "Bankovní údaje", "label:en": "Bank details"},
-                {"type": "input", "column": "bank_name", "cols": 2},
-                {"type": "input", "column": "account_number", "cols": 2},
-                {"type": "input", "column": "iban", "cols": 2},
-                {"type": "input", "column": "bic", "cols": 2},
+                                {"type": "separator", "label": "Bankovní údaje", "label:cs": "Bankovní údaje", "label:en": "Bank details"},
+                                {"type": "input", "column": "bank_name"},
+                                {"type": "input", "column": "account_number"},
+                                {"type": "input", "column": "iban"},
+                                {"type": "input", "column": "bic"},
 
-                {"type": "separator", "label": "Nastavení", "label:cs": "Nastavení", "label:en": "Settings"},
-                {"type": "input", "column": "is_default", "cols": 1},
-                {"type": "input", "column": "sort_order", "cols": 1},
-                {"type": "input", "column": "valid_from", "cols": 1},
-                {"type": "input", "column": "valid_to", "cols": 1}
+                                {"type": "separator", "label": "Nastavení", "label:cs": "Nastavení", "label:en": "Settings"},
+                                {"type": "input", "column": "is_default"},
+                                {"type": "input", "column": "sort_order"},
+                                {"type": "input", "column": "valid_from"},
+                                {"type": "input", "column": "valid_to"}
+                            ]
+                        }
+                    ]
+                }
             ]
         }
     ]

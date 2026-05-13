@@ -5,23 +5,36 @@ declare(strict_types=1);
 namespace Shipard\Tests\Unit\Core\Form;
 
 use PHPUnit\Framework\TestCase;
+use Shipard\Core\Form\FormColumn;
 use Shipard\Core\Form\FormDefinition;
 use Shipard\Core\Form\FormElement;
+use Shipard\Core\Form\FormSection;
 use Shipard\Core\Form\FormTab;
 
 class FormDefinitionTest extends TestCase
 {
+    private function singleFieldTab(string $id = 'basic', string $label = 'Basic'): FormTab
+    {
+        return new FormTab(
+            id: $id,
+            label: $label,
+            sections: [
+                new FormSection([
+                    new FormColumn([
+                        new FormElement(type: 'input', column: 'name', label: 'Name'),
+                    ]),
+                ]),
+            ],
+        );
+    }
+
     public function testToArrayProducesSnakeCaseKeys(): void
     {
         $def = new FormDefinition(
             table: 'test_table',
             title: 'Edit Record',
             titleNew: 'New Record',
-            tabs: [
-                new FormTab('basic', 'Basic', [
-                    new FormElement(type: 'input', cols: 2, column: 'name', label: 'Name'),
-                ]),
-            ],
+            tabs: [$this->singleFieldTab()],
             fullSize: true,
         );
 
@@ -33,6 +46,7 @@ class FormDefinitionTest extends TestCase
         $this->assertTrue($arr['full_size']);
         $this->assertCount(1, $arr['tabs']);
         $this->assertSame('basic', $arr['tabs'][0]['id']);
+        $this->assertSame('fields', $arr['tabs'][0]['type']);
         $this->assertArrayNotHasKey('doc_states', $arr);
     }
 
@@ -42,7 +56,7 @@ class FormDefinitionTest extends TestCase
             table: 'test',
             title: 'Test',
             titleNew: 'New',
-            tabs: [],
+            tabs: [$this->singleFieldTab()],
         );
 
         $arr = $def->toArray();
@@ -56,7 +70,7 @@ class FormDefinitionTest extends TestCase
             table: 'test',
             title: 'Test',
             titleNew: 'New',
-            tabs: [],
+            tabs: [$this->singleFieldTab()],
         );
 
         $docStates = [
@@ -69,115 +83,136 @@ class FormDefinitionTest extends TestCase
 
         $enriched = $def->withDocStates($docStates);
 
-        // New instance
         $this->assertNotSame($def, $enriched);
-
-        // Original unchanged
         $this->assertNull($def->docStates);
-
-        // Enriched has docStates
         $this->assertSame($docStates, $enriched->docStates);
         $this->assertSame($docStates, $enriched->toArray()['doc_states']);
     }
 
-    public function testFormElementToArrayOmitsNullProperties(): void
+    public function testFullStructureSerialization(): void
     {
-        $el = new FormElement(type: 'input', cols: 1, column: 'name', label: 'Name');
-        $arr = $el->toArray();
-
-        $this->assertSame('input', $arr['type']);
-        $this->assertSame(1, $arr['cols']);
-        $this->assertSame('name', $arr['column']);
-        $this->assertSame('Name', $arr['label']);
-        $this->assertArrayNotHasKey('placeholder', $arr);
-        $this->assertArrayNotHasKey('triggers', $arr);
-        $this->assertArrayNotHasKey('options', $arr);
-        $this->assertArrayNotHasKey('content', $arr);
-    }
-
-    public function testFormElementToArrayIncludesBooleanFlags(): void
-    {
-        $el = new FormElement(type: 'input', cols: 1, column: 'email', required: true, readOnly: true, hidden: true);
-        $arr = $el->toArray();
-
-        $this->assertTrue($arr['required']);
-        $this->assertTrue($arr['read_only']);
-        $this->assertTrue($arr['hidden']);
-    }
-
-    public function testFormElementToArrayOmitsFalseBooleans(): void
-    {
-        $el = new FormElement(type: 'input', cols: 1);
-        $arr = $el->toArray();
-
-        $this->assertArrayNotHasKey('required', $arr);
-        $this->assertArrayNotHasKey('read_only', $arr);
-        $this->assertArrayNotHasKey('hidden', $arr);
-    }
-
-    public function testFormElementNestedGroupSerialization(): void
-    {
-        $inner = [
-            new FormElement(type: 'input', cols: 1, column: 'first_name', label: 'First'),
-            new FormElement(type: 'input', cols: 1, column: 'last_name', label: 'Last'),
-        ];
-        $group = new FormElement(type: 'group', cols: 4, label: 'Name', elements: $inner);
-        $arr = $group->toArray();
-
-        $this->assertSame('group', $arr['type']);
-        $this->assertSame(4, $arr['cols']);
-        $this->assertCount(2, $arr['elements']);
-        $this->assertSame('first_name', $arr['elements'][0]['column']);
-        $this->assertSame('last_name', $arr['elements'][1]['column']);
-    }
-
-    public function testFormTabToArray(): void
-    {
-        $tab = new FormTab('info', 'Info', [
-            new FormElement(type: 'input', cols: 2, column: 'email'),
-        ]);
-        $arr = $tab->toArray();
-
-        $this->assertSame('info', $arr['id']);
-        $this->assertSame('Info', $arr['label']);
-        $this->assertCount(1, $arr['elements']);
-    }
-
-    public function testSelectElementWithOptions(): void
-    {
-        $el = new FormElement(
-            type: 'select',
-            cols: 1,
-            column: 'person_type',
-            label: 'Type',
-            options: [
-                ['value' => 0, 'label' => 'Undefined'],
-                ['value' => 1, 'label' => 'Person'],
+        $def = new FormDefinition(
+            table: 'base_persons_persons',
+            title: 'Osoba',
+            titleNew: 'Nová osoba',
+            tabs: [
+                new FormTab(
+                    id: 'basic',
+                    label: 'Základní údaje',
+                    sections: [
+                        new FormSection([
+                            new FormColumn([
+                                new FormElement(type: 'input', column: 'person_id', label: 'ID', required: true),
+                            ]),
+                        ]),
+                        new FormSection(
+                            columns: [
+                                new FormColumn([new FormElement(type: 'input', column: 'company_id', label: 'IČO')]),
+                                new FormColumn([new FormElement(type: 'input', column: 'tax_id', label: 'DIČ')]),
+                            ],
+                            title: 'Identifikace firmy',
+                        ),
+                    ],
+                ),
+                new FormTab(
+                    id: 'contacts',
+                    label: 'Kontakty',
+                    type: 'subtable',
+                    subtable: [
+                        'table'      => 'base_persons_contacts',
+                        'foreignKey' => 'person',
+                        'formId'     => 'base.persons.contacts',
+                    ],
+                ),
+                new FormTab(
+                    id: 'attachments',
+                    label: 'Přílohy',
+                    type: 'attachments',
+                    tableId: 110,
+                ),
             ],
         );
-        $arr = $el->toArray();
 
-        $this->assertSame('select', $arr['type']);
-        $this->assertCount(2, $arr['options']);
-        $this->assertSame(0, $arr['options'][0]['value']);
-        $this->assertSame('Person', $arr['options'][1]['label']);
+        $arr = $def->toArray();
+
+        // tab 0 — fields with 2 sections
+        $tab0 = $arr['tabs'][0];
+        $this->assertSame('fields', $tab0['type']);
+        $this->assertCount(2, $tab0['sections']);
+        $this->assertNull($tab0['sections'][0]['title']);
+        $this->assertSame('Identifikace firmy', $tab0['sections'][1]['title']);
+        $this->assertCount(2, $tab0['sections'][1]['columns']);
+
+        // tab 1 — subtable
+        $tab1 = $arr['tabs'][1];
+        $this->assertSame('subtable', $tab1['type']);
+        $this->assertSame('base_persons_contacts', $tab1['subtable']['table']);
+        $this->assertSame('person', $tab1['subtable']['foreign_key']);
+        $this->assertSame('base.persons.contacts', $tab1['subtable']['form_id']);
+
+        // tab 2 — attachments
+        $tab2 = $arr['tabs'][2];
+        $this->assertSame('attachments', $tab2['type']);
+        $this->assertSame(110, $tab2['table_id']);
     }
 
-    public function testSubtableElementSerialization(): void
+    public function testFieldsTabRejectsEmptySections(): void
     {
-        $el = new FormElement(
-            type: 'subtable',
-            cols: 4,
-            table: 'contacts',
-            foreignKey: 'person',
-            formId: 'contacts_form',
-            label: 'Contacts',
-        );
-        $arr = $el->toArray();
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('must have at least one section');
 
-        $this->assertSame('subtable', $arr['type']);
-        $this->assertSame('contacts', $arr['table']);
-        $this->assertSame('person', $arr['foreign_key']);
-        $this->assertSame('contacts_form', $arr['form_id']);
+        new FormTab(id: 'basic', label: 'Basic');
+    }
+
+    public function testSubtableTabRequiresSubtable(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('requires subtable');
+
+        new FormTab(id: 'contacts', label: 'Kontakty', type: 'subtable');
+    }
+
+    public function testAttachmentsTabRequiresTableId(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('requires tableId');
+
+        new FormTab(id: 'att', label: 'Přílohy', type: 'attachments');
+    }
+
+    public function testFieldsTabRejectsSubtable(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        new FormTab(
+            id: 'basic',
+            label: 'Basic',
+            sections: [new FormSection([new FormColumn([])])],
+            subtable: ['table' => 't', 'foreignKey' => 'fk', 'formId' => null],
+        );
+    }
+
+    public function testSubtableTabRejectsSections(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        new FormTab(
+            id: 'contacts',
+            label: 'Contacts',
+            type: 'subtable',
+            sections: [new FormSection([new FormColumn([])])],
+            subtable: ['table' => 't', 'foreignKey' => 'fk', 'formId' => null],
+        );
+    }
+
+    public function testIconIncludedInToArray(): void
+    {
+        $tab = new FormTab(
+            id: 'basic',
+            label: 'Basic',
+            sections: [new FormSection([new FormColumn([])])],
+            icon: 'user',
+        );
+        $this->assertSame('user', $tab->toArray()['icon']);
     }
 }

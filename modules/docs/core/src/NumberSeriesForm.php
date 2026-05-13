@@ -20,23 +20,24 @@ class NumberSeriesForm extends TableForm
         $resetScopeOptions = $this->resolveOptions('docs.core.resetScopes');
 
         $basic = $this->tab('basic', $this->defaultGeneralTabLabel())
-            ->addInput('name', cols: 2, required: true)
-            ->addSelect(
-                'doc_type',
-                cols: 1,
-                options: $docTypeOptions,
-                triggers: 'reload',
-                required: true,
-                readOnly: !$isNew,
-            )
-            ->addInput('doc_number_code', cols: 1)
-            ->addInput('doc_number_pattern', cols: 2, required: true, readOnly: !$isNew)
-            ->addSelect('reset_scope', cols: 1, options: $resetScopeOptions, required: true)
-            ->addSeparator('Platnost')
-            ->addDate('valid_from', cols: 1)
-            ->addDate('valid_to', cols: 1)
-            ->addSeparator('Poznámka')
-            ->addTextArea('notice', cols: 4)
+            ->section()
+                ->col()
+                    ->input('name', required: true)
+                    ->select(
+                        'doc_type',
+                        options: $docTypeOptions,
+                        triggers: 'reload',
+                        required: true,
+                        readOnly: !$isNew,
+                    )
+                    ->input('doc_number_code')
+                    ->input('doc_number_pattern', required: true, readOnly: !$isNew)
+                    ->select('reset_scope', options: $resetScopeOptions, required: true)
+                    ->separator('Platnost')
+                    ->date('valid_from')
+                    ->date('valid_to')
+                    ->separator('Poznámka')
+                    ->textarea('notice')
             ->build();
 
         return new FormDefinition(

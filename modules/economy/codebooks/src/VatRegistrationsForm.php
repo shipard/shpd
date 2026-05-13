@@ -35,27 +35,29 @@ class VatRegistrationsForm extends TableForm
         $periodKindOptions = $this->resolveIntOptions('economy.codebooks.vatPeriodKinds');
 
         $basic = $this->tab('basic', $this->defaultGeneralTabLabel())
-            ->addInput('name', cols: 2, required: true)
-            ->addInput('vat_id', cols: 2)
-            ->addSelect('region', cols: 1, options: $regionOptions, required: true)
-            ->addSelect('country', cols: 1, options: $countryOptions, required: true)
-            ->addSelect('taxpayer_kind', cols: 1, options: $taxpayerKindOptions, required: true)
-            ->addSeparator('Periodicita')
-            ->addSelect('tax_period_kind', cols: 1, options: $periodKindOptions, required: true)
-            ->addSelect('report_period_kind', cols: 1, options: $periodKindOptions, required: true)
-            ->addSeparator('Platnost')
-            ->addDate('valid_from', cols: 1, required: true)
-            ->addDate('valid_to', cols: 1)
+            ->section()
+                ->col()
+                    ->input('name', required: true)
+                    ->input('vat_id')
+                    ->select('region', options: $regionOptions, required: true)
+                    ->select('country', options: $countryOptions, required: true)
+                    ->select('taxpayer_kind', options: $taxpayerKindOptions, required: true)
+                    ->separator('Periodicita')
+                    ->select('tax_period_kind', options: $periodKindOptions, required: true)
+                    ->select('report_period_kind', options: $periodKindOptions, required: true)
+                    ->separator('Platnost')
+                    ->date('valid_from', required: true)
+                    ->date('valid_to')
             ->build();
 
-        $periods = $this->tab('periods', 'Období DPH')
-            ->addSubtable(
-                'economy_codebooks_vat_periods',
-                'vat_registration',
-                formId: 'economy.codebooks.vat_periods',
-                sort: 'date_begin:asc',
-            )
-            ->build();
+        $periods = $this->subtableTab(
+            'periods',
+            'Období DPH',
+            'economy_codebooks_vat_periods',
+            'vat_registration',
+            formId: 'economy.codebooks.vat_periods',
+            sort: 'date_begin:asc',
+        );
 
         return new FormDefinition(
             table: $this->table,

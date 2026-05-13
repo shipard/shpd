@@ -25,28 +25,27 @@ class IncomingMessagesForm extends TableForm
         $mailboxOptions = $this->resolveMailboxOptions();
         $primaryTypeOptions = $this->resolvePrimaryTypeOptions();
 
-        // ── Tab: Zpráva ──────────────────────────────────────────────────────
         $basic = $this->tab('basic', 'Zpráva')
-            ->addSelect('mailbox', cols: 2,
-                options: $mailboxOptions,
-                required: true,
-                triggers: 'reload',
-            )
-            ->addDateTime('received_at', cols: 1, required: true)
-            ->addSelect('primary_type', cols: 1,
-                options: $primaryTypeOptions,
-                required: true,
-            )
-
-            ->addSeparator('Odesílatel')
-            ->addInput('sender_email', cols: 2, required: true, inputType: 'email')
-            ->addInput('sender_name', cols: 2)
-
-            ->addSeparator('Obsah')
-            ->addInput('subject', cols: 4, required: true)
-            ->addTextArea('body_plain', cols: 4,
-                hint: 'Prostý text zprávy. HTML varianta se v Fázi 1 neupravuje ručně — vzniká jen přes import.',
-            )
+            ->section()
+                ->col()
+                    ->select('mailbox',
+                        options: $mailboxOptions,
+                        required: true,
+                        triggers: 'reload',
+                    )
+                    ->datetime('received_at', required: true)
+                    ->select('primary_type',
+                        options: $primaryTypeOptions,
+                        required: true,
+                    )
+                    ->separator('Odesílatel')
+                    ->input('sender_email', required: true, inputType: 'email')
+                    ->input('sender_name')
+                    ->separator('Obsah')
+                    ->input('subject', required: true)
+                    ->textarea('body_plain',
+                        hint: 'Prostý text zprávy. HTML varianta se v Fázi 1 neupravuje ručně — vzniká jen přes import.',
+                    )
             ->build();
 
         $tabs = [$basic, $this->attachmentsTab()];

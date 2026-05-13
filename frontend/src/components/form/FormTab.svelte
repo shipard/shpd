@@ -1,5 +1,7 @@
 <script>
-  import FormElement from './FormElement.svelte';
+  import FormSection from './FormSection.svelte';
+  import FormSubTable from './FormSubTable.svelte';
+  import AttachmentPanel from './AttachmentPanel.svelte';
 
   let {
     tab,
@@ -12,31 +14,29 @@
 </script>
 
 <div class="shpd-form-tab">
-  {#each tab.elements as element, i (element.column ?? `${element.type}-${i}`)}
-    <FormElement
-      {element}
-      bind:formData
-      {fieldErrors}
-      {disabled}
-      {onTrigger}
-      {parentId}
-    />
-  {/each}
+  {#if tab.type === 'subtable'}
+    <FormSubTable element={tab.subtable} {parentId} {disabled} />
+  {:else if tab.type === 'attachments'}
+    <AttachmentPanel tableId={tab.table_id} recordId={parentId} {disabled} />
+  {:else}
+    {#each tab.sections as section, i (section.title ?? `section-${i}`)}
+      <FormSection
+        {section}
+        bind:formData
+        {fieldErrors}
+        {disabled}
+        {onTrigger}
+        {parentId}
+      />
+    {/each}
+  {/if}
 </div>
 
 <style>
   .shpd-form-tab {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: var(--shpd-space-md);
+    display: flex;
+    flex-direction: column;
+    gap: var(--shpd-space-lg);
     padding: var(--shpd-space-lg);
-    align-items: start;
-  }
-
-  @media (max-width: 899px) {
-    .shpd-form-tab { grid-template-columns: repeat(2, 1fr); }
-  }
-  @media (max-width: 599px) {
-    .shpd-form-tab { grid-template-columns: 1fr; }
   }
 </style>

@@ -63,9 +63,7 @@ Server vrací `FormDefinition` z endpointu `/_ui/form/{table}/meta`. Klient ji r
             "stateStyle": "concept",
             "read_only": false,
             "transitions": [
-                {"state": 40, "actionName": "V pořádku", "stateStyle": "done", "close_form": true},
-                {"state": 70, "actionName": "Ukončit platnost", "stateStyle": "archive", "close_form": true},
-                {"state": 90, "actionName": "Smazat", "stateStyle": "trash", "close_form": true}
+                {"state": 40, "actionName": "V pořádku", "stateStyle": "done", "close_form": true}
             ]
         }
     },
@@ -77,7 +75,7 @@ Server vrací `FormDefinition` z endpointu `/_ui/form/{table}/meta`. Klient ji r
 }
 ```
 
-**Poznámka:** Všechny klíče jsou snake_case — `full_size`, `title_new`, `doc_states`, `read_only`, `close_form`, `foreign_key`, `form_id`, `input_type`, `read_only`.
+**Poznámka:** Všechny klíče jsou snake_case — `full_size`, `title_new`, `doc_states`, `read_only`, `close_form`, `foreign_key`, `form_id`, `input_type`, `table_id`, `component_name`.
 
 | Pole | Typ | Popis |
 |------|-----|-------|
@@ -88,21 +86,80 @@ Server vrací `FormDefinition` z endpointu `/_ui/form/{table}/meta`. Klient ji r
 | `tabs` | Tab[] | Seznam tabů (min. 1) |
 | `doc_states` | DocStatesInfo \| null | Info o stavech; přítomno i pro nový záznam (výchozí stav 10) |
 
-### Tab
+### Tab — tři typy
+
+Každý tab má `type`: `"fields"` (výchozí), `"subtable"`, nebo `"attachments"`.
+
+#### `type: "fields"` — formulářová pole v sekcích a sloupcích
 
 ```json
 {
     "id": "basic",
     "label": "Základní údaje",
-    "elements": [ { "...element..." } ]
+    "type": "fields",
+    "sections": [
+        {
+            "title": null,
+            "columns": [
+                {"elements": [
+                    {"type": "input", "column": "person_id", "label": "ID", "required": true}
+                ]}
+            ]
+        },
+        {
+            "title": "Identifikace firmy",
+            "columns": [
+                {"elements": [{"type": "input", "column": "company_id", "label": "IČO"}]},
+                {"elements": [{"type": "input", "column": "tax_id", "label": "DIČ"}]}
+            ]
+        }
+    ]
 }
 ```
+
+- **Sekce** je vizuální karta s pozadím. Volitelný `title` (zobrazí se jako malý nadpis nahoře). `hidden: true` celou sekci skryje.
+- **Sloupce** uvnitř sekce jsou vertikální dráhy (1 a více). Šířka labelu se v rámci jednoho sloupce automaticky synchronizuje — CSS Grid `max-content 1fr`.
+- **Elementy** žijí ve sloupcích, ne přímo v tabu. Element nemá `cols`; jeho šířka vyplývá z toho, ve kterém sloupci je.
+
+#### `type: "subtable"` — vlastní záložka pro child tabulku
+
+```json
+{
+    "id": "contacts",
+    "label": "Kontakty",
+    "type": "subtable",
+    "subtable": {
+        "table": "base_persons_contacts",
+        "foreign_key": "person",
+        "form_id": "base.persons.contacts"
+    }
+}
+```
+
+Frontend vykreslí tabulku řádků s toolbarem (Přidat / Upravit / Smazat). Sub-záznamy se otevírají v dalším modalu.
+
+#### `type: "attachments"` — záložka s přílohami
+
+```json
+{
+    "id": "attachments",
+    "label": "Přílohy",
+    "type": "attachments",
+    "table_id": 110
+}
+```
+
+Renderuje `AttachmentPanel` napojený na `core_attachments` filtrované podle `table_id` a `recordId` (= parentId).
 
 Formulář má vždy alespoň jeden tab. Je-li tab jen jeden, tab bar se nezobrazí.
 
 ---
 
 ## 4. Elementy formuláře
+
+Element žije uvnitř sloupce (`section.columns[i].elements[]`). Sám si nediktuje šířku — tu určuje sloupec.
+
+Povolené typy: `input`, `select`, `separator`, `inline`, `html`, `component`.
 
 ### 4.1 `input`
 
@@ -111,7 +168,6 @@ Formulář má vždy alespoň jeden tab. Je-li tab jen jeden, tab bar se nezobra
     "type": "input",
     "column": "full_name",
     "label": "Celý název",
-    "cols": 2,
     "required": true,
     "hidden": false,
     "read_only": false,
@@ -128,12 +184,13 @@ Hodnota je validována v konstruktoru `FormElement` proti whitelistu — neplatn
 |------|---------|-------|
 | `column` | — | ID sloupce v DB |
 | `label` | z TableDefinition | Automaticky doplněn z názvu sloupce pokud chybí |
-| `cols` | 1 | Šířka 1–4 v 4-sloupcovém gridu |
 | `required` | false | Hvězdička u labelu |
 | `hidden` | false | Skryto (`display: none`), pole zůstává v DOM |
 | `read_only` | false | Disabled input |
 | `triggers` | null | `"reload"` = při změně spustit recalculate |
-| `input_type` | `"text"` | Typ UI komponenty |
+| `input_type` | derived | Typ UI komponenty |
+
+**Checkbox je výjimka:** vykresluje se přes obě grid kolony (label + input) jako `<label><Checkbox/></label>`, kde text je popis vedle boxu. Externí label se v gridu nevykresluje.
 
 ### 4.2 `select`
 
@@ -142,7 +199,6 @@ Hodnota je validována v konstruktoru `FormElement` proti whitelistu — neplatn
     "type": "select",
     "column": "person_type",
     "label": "Typ osoby",
-    "cols": 1,
     "triggers": "reload",
     "options": [
         {"value": 0, "label": "Neurčeno"},
@@ -164,44 +220,41 @@ Hodnota je validována v konstruktoru `FormElement` proti whitelistu — neplatn
 }
 ```
 
-Horizontální linka s textem přes celou šířku gridu. `hidden` se nastavuje automaticky v `TabBuilder::build()` pokud jsou všechny elementy za separátorem skryté (`autoHideSeparators`).
+Horizontální linka s volitelným textem. Pokrývá obě grid kolony (label + input). `hidden` se nastavuje automaticky v `TabBuilder::build()` pokud jsou všechny elementy za separátorem **v daném sloupci** skryté (`autoHideSeparators` — operuje per-column).
 
-### 4.4 `group`
-
-```json
-{
-    "type": "group",
-    "label": "Jméno",
-    "cols": 4,
-    "elements": [ { "...vnořené elementy..." } ]
-}
-```
-
-Vnořený grid s nadpisem.
-
-### 4.5 `subtable`
+### 4.4 `inline`
 
 ```json
 {
-    "type": "subtable",
-    "table": "base_persons_contacts",
-    "foreign_key": "person",
-    "form_id": "base.persons.contacts",
-    "cols": 4
+    "type": "inline",
+    "elements": [
+        {"type": "input", "column": "date_tax", "label": "DUZP", "input_type": "date"},
+        {"type": "input", "column": "date_tax_duty", "label": "DPPD", "input_type": "date"}
+    ]
 }
 ```
 
-Tab věnovaný sub-editoru. Renderuje tabulku řádků + Přidat/Upravit/Smazat.
+Více polí v jedné řádce. Label prvního pole slouží jako „velký" label řádky (vlevo, v label dráze gridu). Ostatní pole mají vlastní mini-label vedle inputu. Uvnitř `inline.elements` jsou povoleny pouze `input` a `select`.
 
-### 4.6 `html`
+### 4.5 `html`
 
 ```json
-{
-    "type": "html",
-    "content": "<p>Poznámka</p>",
-    "cols": 4
-}
+{ "type": "html", "content": "<p>Poznámka</p>" }
 ```
+
+Vlastní HTML uvnitř sloupce; rendruje se přes obě kolony.
+
+### 4.6 `component`
+
+```json
+{ "type": "component", "component_name": "recapitulation" }
+```
+
+Pojmenovaná Svelte komponenta (např. VAT rekapitulace dokladu). Rendruje se přes obě kolony.
+
+### Zaniklé typy
+
+`group` a `subtable` (jako element uvnitř tabu) byly v novém systému odstraněny. `subtable` je vždy vlastní tab (`type: "subtable"`); pro grupování polí se používají sekce nebo `inline`.
 
 ---
 
@@ -246,15 +299,56 @@ Standardní nastavení v `core.system.docStatesArchive`:
 
 ## 6. Grid systém
 
-4-sloupcový CSS Grid. Responzivní breakpointy:
+Formuláře se vykreslují ve dvou vrstvách CSS Gridu:
 
-| Breakpoint | Grid |
-|------------|------|
-| Desktop ≥ 900px | 4 sloupce (`repeat(4, 1fr)`) |
-| Tablet 600–899px | 2 sloupce |
-| Mobil < 600px | 1 sloupec |
+### Sekce → sloupce
 
-Element s `cols: 2` → `grid-column: span 2`. `separator`, `subtable`, plný `group` → `grid-column: 1 / -1`.
+`FormSection` vytvoří horizontální grid podle počtu sloupců (`section.columns.length`). Vlevo i vpravo stejně široké:
+
+```css
+.shpd-form-section__columns {
+  display: grid;
+  grid-template-columns: repeat(var(--shpd-form-section-cols), 1fr);
+  gap: var(--shpd-space-xl);
+}
+```
+
+Na úzkém viewportu (<700px) se sloupce lámou pod sebe (`grid-template-columns: 1fr`).
+
+### Sloupec → label/input track
+
+`FormColumn` má vlastní dvouwidth grid: `max-content 1fr`. To znamená, že **všechny labely v daném sloupci jsou stejně široké** (podle nejdelšího), inputy zaberou zbytek. `FormFieldRow` emituje DVA sourozence (`<label>` a `<div>`) přímo do tohoto gridu, aby labely sdílely jednu dráhu.
+
+```css
+.shpd-form-column {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  column-gap: var(--shpd-space-md);
+  row-gap: var(--shpd-space-sm);
+  align-items: baseline;
+}
+```
+
+Šířka labelu je **per-sloupec** — dva vedlejší sloupce v jedné sekci mohou mít různě široké labely. To je záměr; pokud by bylo třeba synchronizovat napříč sloupci, musel by se použít CSS subgrid.
+
+### Full-span elementy
+
+`separator`, `html`, `component` a `checkbox` se rendují přes obě grid kolony (`grid-column: 1 / -1`). `inline` má vlastní label + flex container, takže do gridu vchází jako dvě běžné kolony.
+
+### Vizuál sekce
+
+`FormSection` je „karta" s vlastním pozadím a jemnou hranou:
+
+```css
+.shpd-form-section {
+  background: var(--shpd-color-bg-secondary);
+  border: 1px solid var(--shpd-color-border-subtle);
+  border-radius: var(--shpd-radius-md);
+  padding: var(--shpd-space-md) var(--shpd-space-lg);
+}
+```
+
+Volitelný `title` se vykreslí jako malý uppercase nadpis vlevo nahoře sekce.
 
 ---
 
@@ -378,70 +472,100 @@ abstract class TableForm
 
     public function recalculate(string $changedColumn, array $data): RecalculateResult { ... }
 
-    protected function tab(string $id, string $label): TabBuilder { ... }
-    // tab() automaticky předá colLabels z TableDefinition do TabBuilder
+    protected function tab(string $id, string $label, ?string $icon = null): TabBuilder;
+    protected function subtableTab(
+        string $id, string $label,
+        string $table, string $foreignKey,
+        ?string $formId = null, ?string $sort = null, ?string $icon = null,
+    ): FormTab;
+    protected function attachmentsTab(string $id = 'attachments', string $label = 'Přílohy'): FormTab;
 }
 ```
 
 ### Auto-label z TableDefinition
 
-`TableForm` dostane `TableDefinition` přes `setTableDef()` před voláním `buildFormDefinition`. Helper `tab()` sestaví mapu `column_id => name` a předá ji `TabBuilder`. `addInput`/`addSelect` pak doplní `label` automaticky z této mapy pokud není zadán explicitně.
+`TableForm` dostane `TableDefinition` přes `setTableDef()` před voláním `buildFormDefinition`. Helper `tab()` sestaví mapu `column_id => name` a předá ji `TabBuilder`. Element factory metody pak doplní `label` automaticky z této mapy pokud není zadán explicitně.
 
-### TabBuilder API
+### TabBuilder API — scope management
 
-`addInput()` je jen pro **text varianty** (`text`, `email`, `tel`, `url`, `password`). Pro všechno ostatní jsou **dedikované metody** — jsou sebedokumentující a builder se nedá tiše rozbít překlepem v `inputType`. Pokus o `addInput(..., inputType: 'textarea')` vyhodí `InvalidArgumentException`.
-
-| Metoda | `inputType` | Použití pro DB typ |
-|--------|-------------|--------------------|
-| `addInput` | `null`/`text`/`email`/`tel`/`url`/`password` | `char`, `varchar` (krátký text, kontaktní údaje) |
-| `addTextArea` | `textarea` | `text`, `longtext` |
-| `addDate` | `date` | `date` |
-| `addDateTime` | `datetime` | `datetime` |
-| `addTime` | `time` | `time` |
-| `addNumber` | `number` | `int`, `smallint`, `bigint`, `tinyint`, `numeric`, `float` |
-| `addCheckbox` | `checkbox` | `boolean` |
-| `addSelect` | — | `enumInt`, `enumString` (options z cfgItem) |
+Builder má **třípatrový stavový stroj**: `tab → section → col → [inline] → elements`. Volání musí být v pořadí; mimo otevřený scope vyhodí `LogicException`. `build()` automaticky uzavře otevřené scopy.
 
 ```php
-$tab->addInput(
-    string $column,
-    int $cols = 1,
-    ?string $label = null,      // null = auto z TableDefinition
-    bool $required = false,
-    ?string $triggers = null,   // 'reload' nebo null
-    bool $readOnly = false,
-    bool $hidden = false,
-    ?string $placeholder = null,
-    ?string $hint = null,
-    ?string $inputType = null,  // jen text varianty: null, text, email, tel, url, password
-): static
-
-// Dedikované widgety — konzistentní signatura (bez placeholder/triggers)
-$tab->addTextArea(string $column, int $cols = 4, ?string $label = null, bool $required = false, bool $readOnly = false, bool $hidden = false, ?string $hint = null): static
-$tab->addDate(string $column, int $cols = 1, ...): static
-$tab->addDateTime(string $column, int $cols = 1, ...): static
-$tab->addTime(string $column, int $cols = 1, ...): static
-$tab->addNumber(string $column, int $cols = 1, ...): static
-$tab->addCheckbox(string $column, int $cols = 1, ...): static
-
-$tab->addSelect(
-    string $column,
-    int $cols = 1,
-    ?string $label = null,
-    ?array $options = null,     // null = auto z cfgItem
-    ?string $triggers = null,
-    bool $required = false,
-    bool $readOnly = false,
-    bool $hidden = false,
-): static
-
-$tab->addSeparator(?string $label = null, bool $hidden = false): static
-$tab->openGroup(string $label, int $cols = 4): static
-$tab->closeGroup(): static
-$tab->addSubtable(string $table, string $foreignKey, ?string $formId, ?string $label, int $cols = 4): static
-$tab->addHtml(string $content, int $cols = 4): static
-$tab->build(): FormTab  // volá autoHideSeparators()
+$tab = $this->tab('basic', 'Základní údaje')
+    ->section()                              // otevře sekci bez titulku
+        ->col()                              // otevře první sloupec
+            ->input('person_id', required: true)
+            ->select('person_type', options: $opts, triggers: 'reload', required: true)
+            ->input('full_name', required: $isCompany, readOnly: $isPerson)
+    ->section('Identifikace firmy')          // další sekce s titulkem
+        ->col()                              // levý sloupec
+            ->input('company_id')
+            ->input('tax_id')
+        ->col()                              // pravý sloupec
+            ->input('vat_id')
+            ->input('court_registration')
+    ->section('Termíny')
+        ->col()
+            ->inline()                       // víc polí v řádce
+                ->date('date_tax', label: 'DUZP')
+                ->date('date_tax_duty', label: 'DPPD')
+            ->endInline()
+    ->build();
 ```
+
+`input()` je generická a přijímá `inputType` (text varianty `null/text/email/tel/url/password`); pro ostatní DB typy jsou dedikované metody — sebedokumentující a typově bezpečné.
+
+| Metoda | `inputType` | DB typ |
+|--------|-------------|--------|
+| `input` | text varianty | `char`, `varchar` |
+| `textarea` | `textarea` | `text`, `longtext` |
+| `date` | `date` | `date` |
+| `datetime` | `datetime` | `datetime` |
+| `time` | `time` | `time` |
+| `number` | `number` | `int`/`bigint`/`numeric`/`float` |
+| `checkbox` | `checkbox` | `boolean` |
+| `select` | — | `enumInt`, `enumString` |
+
+```php
+// Element factory metody (musí být uvnitř otevřeného col())
+$col->input(string $column, ?string $label = null, bool $required = false,
+    ?string $triggers = null, bool $readOnly = false, bool $hidden = false,
+    ?string $placeholder = null, ?string $hint = null, ?string $inputType = null): static;
+
+$col->textarea(string $column, ?string $label = null, ...): static;
+$col->date($column, ...);  $col->datetime($column, ...);  $col->time($column, ...);
+$col->number($column, ...);  $col->checkbox($column, ...);
+
+$col->select(string $column, ?string $label = null, ?array $options = null,
+    ?string $triggers = null, bool $required = false, ...): static;
+
+$col->separator(?string $label = null, bool $hidden = false): static;
+$col->html(string $content): static;
+$col->component(string $name): static;
+
+// Inline
+$col->inline(): static;        // otevři inline; následné input()/select() jdou do něj
+$col->endInline(): static;     // ukonči
+$col->inlineFields(string ...$columns): static;  // shortcut: inline + N×input
+
+// Závěr
+$tab->build(): FormTab;        // auto-close inline → col → section
+```
+
+### Subtable a attachments taby
+
+Tyto taby se nepostavují přes builder, ale přes helpery na `TableForm`:
+
+```php
+$contacts = $this->subtableTab('contacts', 'Kontakty',
+    'base_persons_contacts', 'person', 'base.persons.contacts');
+
+$attachments = $this->attachmentsTab();   // bere tableId z aktuální TableDefinition
+```
+
+### Auto-hide separátorů (per-column)
+
+`autoHideSeparators` se spouští v `build()` per sloupec: separátor je automaticky skryt, pokud jsou všechny elementy za ním v daném sloupci skryté (do dalšího separátoru). Vývojář může `hidden: true` na separátoru zapnout explicitně, ale ručně to není potřeba — typický conditional pattern (skrytí celé sekce závisí na `person_type`) funguje automaticky.
 
 ---
 
@@ -450,6 +574,8 @@ $tab->build(): FormTab  // volá autoHideSeparators()
 Pro jednoduché formuláře bez business logiky.
 
 **Umístění:** `modules/{skupina}/{modul}/forms/{table}.jsonc`
+
+JSONC source používá **camelCase** klíče (`titleNew`, `fullSize`, `readOnly`, `inputType`, `tableId`, `foreignKey`, `formId`). Loader je mapuje na snake_case wire formát při serializaci.
 
 ```jsonc
 {
@@ -460,17 +586,48 @@ Pro jednoduché formuláře bez business logiky.
         {
             "id": "basic",
             "label": "Kontakt",
-            "elements": [
-                {"type": "input", "column": "name", "cols": 2, "required": true},
-                {"type": "input", "column": "email", "cols": 2},
-                {"type": "select", "column": "address_type", "cols": 1}
+            "sections": [
+                {
+                    "title": null,
+                    "columns": [
+                        {
+                            "elements": [
+                                {"type": "input", "column": "name", "required": true},
+                                {"type": "input", "column": "email", "inputType": "email"},
+                                {"type": "input", "column": "phone", "inputType": "tel"},
+                                {"type": "separator"},
+                                {"type": "input", "column": "valid_from", "inputType": "date"},
+                                {"type": "input", "column": "valid_to", "inputType": "date"}
+                            ]
+                        }
+                    ]
+                }
             ]
         }
     ]
 }
 ```
 
-Labely a typy inputů se doplní z TableDefinition pokud chybí.
+Labely a typy inputů se doplní z TableDefinition pokud chybí. `options` u `select` se auto-resolují z `cfgItem` sloupce.
+
+### Taby s `type: subtable` / `attachments` v JSONC
+
+```jsonc
+{
+    "id": "contacts",
+    "label": "Kontakty",
+    "type": "subtable",
+    "subtable": {
+        "table": "base_persons_contacts",
+        "foreignKey": "person",
+        "formId": "base.persons.contacts"
+    }
+}
+```
+
+```jsonc
+{ "id": "attachments", "label": "Přílohy", "type": "attachments", "tableId": 110 }
+```
 
 ### Vícejazyčnost v JSONC
 
@@ -481,25 +638,33 @@ Labely a typy inputů se doplní z TableDefinition pokud chybí.
     "title": "Kontakt",
     "title:cs": "Kontakt",
     "title:en": "Contact",
-    "titleNew": "Nový kontakt",
-    "titleNew:cs": "Nový kontakt",
-    "titleNew:en": "New contact",
     "tabs": [
         {
             "id": "basic",
             "label": "Kontakt",
             "label:cs": "Kontakt",
             "label:en": "Contact",
-            "elements": [
-                {"type": "input", "column": "name", "cols": 2, "required": true},
-                {"type": "separator", "label": "Adresa", "label:cs": "Adresa", "label:en": "Address"}
+            "sections": [
+                {"columns": [{"elements": [
+                    {"type": "input", "column": "name", "required": true},
+                    {"type": "separator", "label": "Adresa", "label:cs": "Adresa", "label:en": "Address"}
+                ]}]}
             ]
         }
     ]
 }
 ```
 
-`AutoFormBuilder` (fallback pro tabulky bez vlastního `forms/{table}.jsonc`) čte label syntetického „General" tabu z cfgItem `core.system.formDefaults.generalTabLabel.name`. Pokud config není zkompilovaný, použije se anglický fallback `'General'`.
+`AutoFormBuilder` (fallback pro tabulky bez vlastního `forms/{table}.jsonc`) generuje pro každou skupinu sloupců jeden tab s jednou sekcí, jedním sloupcem a všemi poli. Label syntetického „General" tabu se čte z cfgItem `core.system.formDefaults.generalTabLabel.name`.
+
+### Detekce starého formátu
+
+`JsoncFormLoader` aktivně odmítá legacy konstrukce a vyhodí `RuntimeException` s odkazem na konkrétní místo:
+
+- `tab.elements[]` přímo (bez `sections`)
+- `element.cols` (šířka teď určuje sloupec sekce)
+- `element.type: "group"` (zrušeno; použij sekce nebo inline)
+- `element.type: "subtable"` (subtable je teď vlastní tab)
 
 ### Priorita výběru formuláře
 
@@ -560,11 +725,21 @@ Labely a typy inputů se doplní z TableDefinition pokud chybí.
 | `Modal.svelte` (ui/) | Generický modal: header s titulkem a `×`, tělo, overlay, body scroll lock, modal stack pro Esc handling. Volitelný `headerExtra` snippet pro badge, `width` a `height` props. |
 | `FormDialog.svelte` | Orchestrátor — načte meta, vybere velikost modalu (large/small), poskytuje header (titulek + badge), drží dirty stav, zobrazí confirm při zavření |
 | `FormEditor.svelte` | Hlavní shell: tab bar, obsah, toolbar (header je v Modal). Sleduje dirty stav (snapshot vs aktuální data), propaguje titulek/doc_states/dirty zpět do FormDialog přes callbacky `onFormLoaded` a `onDirtyChange` |
-| `FormTab.svelte` | Jeden tab — CSS Grid 4 sloupce |
-| `FormElement.svelte` | Renderer elementu; rekurzivní pro `group` |
-| `FormSubTable.svelte` | Editor sub-tabulky s CRUD |
+| `FormTab.svelte` | Jeden tab — vykreslí sekce / subtable / attachments podle `tab.type` |
+| `FormSection.svelte` | Karta s pozadím a volitelným titulkem; horizontální grid pro N sloupců |
+| `FormColumn.svelte` | Sloupec se sdílenou auto-šířkou labelů (`max-content 1fr`) |
+| `FormFieldRow.svelte` | Wrapper jedné label+input dvojice — emituje DVA sourozence do FormColumn gridu |
+| `FormInline.svelte` | Inline skupina (víc polí v jedné řádce); první pole použije label řádky, ostatní mají mini-labely |
+| `FormElement.svelte` | Renderer elementu — switch podle `type` + delegace na UI komponenty |
+| `FormSubTable.svelte` | Editor child tabulky s CRUD (uvnitř subtable tabu) |
 | `FormStateBar.svelte` | Spodní toolbar: Uložit + přechodová tlačítka |
 | `FormStateBadge.svelte` | Badge stavu v záhlaví Modalu |
+
+### UI komponenty (`components/ui/`)
+
+`Input.svelte`, `TextArea.svelte`, `NumberInput.svelte`, `DateInput.svelte`, `Select.svelte` jsou „bezlabelové" — renderují pouze input a error hlášku. Label dodá obalující `FormFieldRow` / `FormInline`. Komponenty mají prop `id`, který se navazuje na `<label for>`.
+
+`Checkbox.svelte` je výjimka: jeho interní `<label>` slouží jako UX text vedle boxu (např. „Plátce DPH"), takže prop `label` zůstává.
 
 ---
 
@@ -659,3 +834,17 @@ Dibi vrací DATE a DATETIME sloupce jako `Dibi\DateTime` objekty. `DataSourceCon
 ### Envelope konvence
 
 Všechny API odpovědi mají tvar `{ success, data, meta? }`. Data jsou vždy v `res.data`, nikdy přímo v `res`. Např. `res.data.formDefinition`, ne `res.formDefinition`.
+
+---
+
+## 20. Historie / Migrace
+
+Layout systém byl v PR „new-forms-01" kompletně přepracován:
+
+- **Pryč:** `cols: 1..4` na elementu, `type: "group"`, `type: "subtable"` jako element uvnitř tabu, label uvnitř UI komponent.
+- **Přibylo:** `FormSection`, `FormColumn` jako explicitní vrstvy mezi tabem a elementy. `FormFieldRow` a `FormInline` pro label-vně vykreslování. Subtable a attachments jsou vlastní typy tabu.
+- **Vizuál:** Sekce mají kartové pozadí (`--shpd-color-bg-secondary`) a jemnou hranu (`--shpd-color-border-subtle`). Labely vlevo s auto-šířkou v rámci sloupce (CSS Grid `max-content 1fr`).
+- **Builder:** `TabBuilder` má scope management `section() → col() → elementy`. Bez `addInput`/`addSelect` prefixu; metody se jmenují podle widgetu (`input`, `select`, `date`, `textarea`, `checkbox`, …).
+- **JSONC:** stará struktura `tabs[].elements[]` s `cols` čísly je odmítnuta `JsoncFormLoader`em s konkrétní hláškou.
+
+Žádná backward compatibility — staré formy bylo nutné mechanicky portovat.

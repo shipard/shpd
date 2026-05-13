@@ -18,10 +18,14 @@ class DocRowsFormTest extends TestCase
 
     private function findElement(FormDefinition $def, string $column): ?FormElement
     {
-        // Sub-form has a single tab.
-        foreach ($def->tabs[0]->elements as $el) {
-            if ($el->column === $column) {
-                return $el;
+        // Sub-form has a single tab with one section, one column.
+        foreach ($def->tabs[0]->sections as $section) {
+            foreach ($section->columns as $col) {
+                foreach ($col->elements as $el) {
+                    if ($el->column === $column) {
+                        return $el;
+                    }
+                }
             }
         }
         return null;

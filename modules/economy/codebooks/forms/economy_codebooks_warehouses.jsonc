@@ -12,14 +12,22 @@
             "label": "Sklad",
             "label:cs": "Sklad",
             "label:en": "Warehouse",
-            "elements": [
-                {"type": "input", "column": "code", "cols": 1, "required": true},
-                {"type": "input", "column": "name", "cols": 3, "required": true},
+            "sections": [
+                {
+                    "columns": [
+                        {
+                            "elements": [
+                                {"type": "input", "column": "code", "required": true},
+                                {"type": "input", "column": "name", "required": true},
 
-                {"type": "separator", "label": "Nastavení", "label:cs": "Nastavení", "label:en": "Settings"},
-                {"type": "input", "column": "sort_order", "cols": 1},
-                {"type": "input", "column": "valid_from", "cols": 1},
-                {"type": "input", "column": "valid_to", "cols": 1}
+                                {"type": "separator", "label": "Nastavení", "label:cs": "Nastavení", "label:en": "Settings"},
+                                {"type": "input", "column": "sort_order"},
+                                {"type": "input", "column": "valid_from"},
+                                {"type": "input", "column": "valid_to"}
+                            ]
+                        }
+                    ]
+                }
             ]
         }
     ]

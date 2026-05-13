@@ -111,6 +111,7 @@
   /* Borders */
   --shpd-color-border:        #e2e8f0;
   --shpd-color-border-strong: #cbd5e1;
+  --shpd-color-border-subtle: #eef1f5;  /* hrana sekcí — jemnější než default border */
   --shpd-color-border-focus:  var(--shpd-color-primary);
 
   /* Focus rings — jemné záře kolem inputu při focusu / chybě.
@@ -229,6 +230,7 @@
   /* Borders */
   --shpd-color-border:        #3a3f4a;
   --shpd-color-border-strong: #4a4f5c;
+  --shpd-color-border-subtle: #2f343d;
 
   /* Focus rings */
   --shpd-color-focus-ring:    rgb(90 155 207 / 0.30);

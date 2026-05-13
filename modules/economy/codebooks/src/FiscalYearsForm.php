@@ -16,22 +16,24 @@ class FiscalYearsForm extends TableForm
         }
 
         $basic = $this->tab('basic', $this->defaultGeneralTabLabel())
-            ->addInput('name', cols: 1, required: true)
-            ->addInput('doc_number_prefix', cols: 1, required: true)
-            ->addInput('currency', cols: 1, required: true, placeholder: 'czk')
-            ->addCheckbox('locked', cols: 1)
-            ->addDate('date_begin', cols: 1, required: true)
-            ->addDate('date_end', cols: 1, required: true)
+            ->section()
+                ->col()
+                    ->input('name', required: true)
+                    ->input('doc_number_prefix', required: true)
+                    ->input('currency', required: true, placeholder: 'czk')
+                    ->checkbox('locked')
+                    ->date('date_begin', required: true)
+                    ->date('date_end', required: true)
             ->build();
 
-        $months = $this->tab('months', 'Měsíce')
-            ->addSubtable(
-                'economy_codebooks_fiscal_months',
-                'fiscal_year',
-                formId: 'economy.codebooks.fiscal_months',
-                sort: 'date_begin:asc',
-            )
-            ->build();
+        $months = $this->subtableTab(
+            'months',
+            'Měsíce',
+            'economy_codebooks_fiscal_months',
+            'fiscal_year',
+            formId: 'economy.codebooks.fiscal_months',
+            sort: 'date_begin:asc',
+        );
 
         return new FormDefinition(
             table: $this->table,

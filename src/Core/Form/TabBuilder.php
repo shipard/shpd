@@ -4,31 +4,128 @@ declare(strict_types=1);
 
 namespace Shipard\Core\Form;
 
-class TabBuilder
+/**
+ * Fluent builder for {@see FormTab} of type 'fields'.
+ *
+ * Scope hierarchy:
+ *   tab → section() → col() → [inline()/endInline()] → elements
+ *
+ * Auto-close in build(): inline → col → section. The first section() and col()
+ * are NOT created implicitly — callers must open them. Adding an element without
+ * an open column throws LogicException.
+ */
+final class TabBuilder
 {
-    /** @var FormElement[][] Stack of element arrays (for group nesting) */
-    private array $elementStack;
+    /** @var FormSection[] Completed sections. */
+    private array $sections = [];
 
-    /** @var array{label: string, cols: int}[] Metadata for each open group */
-    private array $groupMeta = [];
+    /** @var FormColumn[] Completed columns in the currently-open section. */
+    private array $currentColumns = [];
 
-    /** @var array<string, string> column_id => label pro auto-doplnění */
+    /** @var FormElement[]|null Elements buffer for the currently-open column; null = no column open. */
+    private ?array $currentElements = null;
+
+    /** @var FormElement[]|null Elements buffer for the currently-open inline group; null = not in inline mode. */
+    private ?array $inlineBuffer = null;
+
+    /** Metadata for the currently-open section. */
+    private ?string $sectionTitle = null;
+    private bool $sectionHidden = false;
+    private bool $sectionOpen = false;
+
+    /** @var array<string, string> column => label map for auto-resolve. */
     private array $colLabels;
 
     public function __construct(
         private readonly string $id,
         private readonly string $label,
         array $colLabels = [],
+        private readonly ?string $icon = null,
     ) {
-        $this->colLabels  = $colLabels;
-        $this->elementStack = [[]];
+        $this->colLabels = $colLabels;
     }
 
-    private const ADD_INPUT_ALLOWED_TYPES = [null, 'text', 'email', 'tel', 'url', 'password'];
+    // -------- Section / column management --------
 
-    public function addInput(
+    public function section(?string $title = null, bool $hidden = false): static
+    {
+        $this->closeColumnIfOpen();
+        $this->flushSectionIfOpen();
+
+        $this->sectionTitle  = $title;
+        $this->sectionHidden = $hidden;
+        $this->sectionOpen   = true;
+        $this->currentColumns = [];
+
+        return $this;
+    }
+
+    public function col(): static
+    {
+        if (!$this->sectionOpen) {
+            throw new \LogicException(sprintf(
+                'TabBuilder["%s"]: col() called outside of a section. Call section() first.',
+                $this->id,
+            ));
+        }
+        $this->closeColumnIfOpen();
+        $this->currentElements = [];
+        return $this;
+    }
+
+    // -------- Inline group --------
+
+    public function inline(): static
+    {
+        $this->requireOpenColumn('inline()');
+        if ($this->inlineBuffer !== null) {
+            throw new \LogicException(sprintf(
+                'TabBuilder["%s"]: inline() called inside another inline group',
+                $this->id,
+            ));
+        }
+        $this->inlineBuffer = [];
+        return $this;
+    }
+
+    public function endInline(): static
+    {
+        if ($this->inlineBuffer === null) {
+            throw new \LogicException(sprintf(
+                'TabBuilder["%s"]: endInline() called without matching inline()',
+                $this->id,
+            ));
+        }
+        $elements = $this->inlineBuffer;
+        $this->inlineBuffer = null;
+
+        if ($elements === []) {
+            // Empty inline — silently drop, this is forgiving for conditional code paths.
+            return $this;
+        }
+
+        $this->currentElements[] = new FormElement(type: 'inline', elements: $elements);
+        return $this;
+    }
+
+    /**
+     * Shortcut: inline group of plain text-like inputs. Each entry is a column name;
+     * labels are auto-resolved. inputType is left null (text default), so this is meant for
+     * homogeneous quick groups. For mixed types use inline() + input()/date()/... + endInline().
+     */
+    public function inlineFields(string ...$columns): static
+    {
+        $this->inline();
+        foreach ($columns as $col) {
+            $this->input($col);
+        }
+        return $this->endInline();
+    }
+
+    // -------- Elements --------
+
+    public function input(
         string $column,
-        int $cols = 1,
         ?string $label = null,
         bool $required = false,
         ?string $triggers = null,
@@ -38,17 +135,8 @@ class TabBuilder
         ?string $hint = null,
         ?string $inputType = null,
     ): static {
-        if (!in_array($inputType, self::ADD_INPUT_ALLOWED_TYPES, true)) {
-            throw new \InvalidArgumentException(sprintf(
-                'addInput() accepts only text variants (null, text, email, tel, url, password); got "%s". '
-                . 'Use a dedicated builder method (addTextArea, addDate, addDateTime, addTime, addNumber, addCheckbox).',
-                $inputType,
-            ));
-        }
-
-        $this->push(new FormElement(
+        $this->pushElement(new FormElement(
             type: 'input',
-            cols: $cols,
             column: $column,
             label: $this->resolveLabel($column, $label),
             placeholder: $placeholder,
@@ -62,9 +150,8 @@ class TabBuilder
         return $this;
     }
 
-    public function addTextArea(
+    public function textarea(
         string $column,
-        int $cols = 4,
         ?string $label = null,
         bool $required = false,
         bool $readOnly = false,
@@ -72,12 +159,11 @@ class TabBuilder
         ?string $hint = null,
         ?string $triggers = null,
     ): static {
-        return $this->pushWidget($column, $cols, $label, $required, $readOnly, $hidden, $hint, $triggers, 'textarea');
+        return $this->pushWidget($column, $label, $required, $readOnly, $hidden, $hint, $triggers, 'textarea');
     }
 
-    public function addDate(
+    public function date(
         string $column,
-        int $cols = 1,
         ?string $label = null,
         bool $required = false,
         bool $readOnly = false,
@@ -85,12 +171,11 @@ class TabBuilder
         ?string $hint = null,
         ?string $triggers = null,
     ): static {
-        return $this->pushWidget($column, $cols, $label, $required, $readOnly, $hidden, $hint, $triggers, 'date');
+        return $this->pushWidget($column, $label, $required, $readOnly, $hidden, $hint, $triggers, 'date');
     }
 
-    public function addDateTime(
+    public function datetime(
         string $column,
-        int $cols = 1,
         ?string $label = null,
         bool $required = false,
         bool $readOnly = false,
@@ -98,12 +183,11 @@ class TabBuilder
         ?string $hint = null,
         ?string $triggers = null,
     ): static {
-        return $this->pushWidget($column, $cols, $label, $required, $readOnly, $hidden, $hint, $triggers, 'datetime');
+        return $this->pushWidget($column, $label, $required, $readOnly, $hidden, $hint, $triggers, 'datetime');
     }
 
-    public function addTime(
+    public function time(
         string $column,
-        int $cols = 1,
         ?string $label = null,
         bool $required = false,
         bool $readOnly = false,
@@ -111,12 +195,11 @@ class TabBuilder
         ?string $hint = null,
         ?string $triggers = null,
     ): static {
-        return $this->pushWidget($column, $cols, $label, $required, $readOnly, $hidden, $hint, $triggers, 'time');
+        return $this->pushWidget($column, $label, $required, $readOnly, $hidden, $hint, $triggers, 'time');
     }
 
-    public function addNumber(
+    public function number(
         string $column,
-        int $cols = 1,
         ?string $label = null,
         bool $required = false,
         bool $readOnly = false,
@@ -124,12 +207,11 @@ class TabBuilder
         ?string $hint = null,
         ?string $triggers = null,
     ): static {
-        return $this->pushWidget($column, $cols, $label, $required, $readOnly, $hidden, $hint, $triggers, 'number');
+        return $this->pushWidget($column, $label, $required, $readOnly, $hidden, $hint, $triggers, 'number');
     }
 
-    public function addCheckbox(
+    public function checkbox(
         string $column,
-        int $cols = 1,
         ?string $label = null,
         bool $required = false,
         bool $readOnly = false,
@@ -137,12 +219,98 @@ class TabBuilder
         ?string $hint = null,
         ?string $triggers = null,
     ): static {
-        return $this->pushWidget($column, $cols, $label, $required, $readOnly, $hidden, $hint, $triggers, 'checkbox');
+        return $this->pushWidget($column, $label, $required, $readOnly, $hidden, $hint, $triggers, 'checkbox');
     }
+
+    public function select(
+        string $column,
+        ?string $label = null,
+        ?array $options = null,
+        ?string $triggers = null,
+        bool $required = false,
+        bool $readOnly = false,
+        bool $hidden = false,
+    ): static {
+        $this->pushElement(new FormElement(
+            type: 'select',
+            column: $column,
+            label: $this->resolveLabel($column, $label),
+            required: $required,
+            readOnly: $readOnly,
+            hidden: $hidden,
+            triggers: $triggers,
+            options: $options,
+        ));
+        return $this;
+    }
+
+    public function separator(?string $label = null, bool $hidden = false): static
+    {
+        $this->requireOpenColumn('separator()');
+        if ($this->inlineBuffer !== null) {
+            throw new \LogicException(sprintf(
+                'TabBuilder["%s"]: separator cannot appear inside inline group',
+                $this->id,
+            ));
+        }
+        $this->currentElements[] = new FormElement(
+            type: 'separator',
+            label: $label,
+            hidden: $hidden,
+        );
+        return $this;
+    }
+
+    public function html(string $content): static
+    {
+        $this->requireOpenColumn('html()');
+        if ($this->inlineBuffer !== null) {
+            throw new \LogicException(sprintf(
+                'TabBuilder["%s"]: html cannot appear inside inline group',
+                $this->id,
+            ));
+        }
+        $this->currentElements[] = new FormElement(type: 'html', content: $content);
+        return $this;
+    }
+
+    public function component(string $name): static
+    {
+        $this->requireOpenColumn('component()');
+        if ($this->inlineBuffer !== null) {
+            throw new \LogicException(sprintf(
+                'TabBuilder["%s"]: component cannot appear inside inline group',
+                $this->id,
+            ));
+        }
+        $this->currentElements[] = new FormElement(type: 'component', componentName: $name);
+        return $this;
+    }
+
+    // -------- Build --------
+
+    public function build(): FormTab
+    {
+        // Auto-close any open scopes.
+        if ($this->inlineBuffer !== null) {
+            $this->endInline();
+        }
+        $this->closeColumnIfOpen();
+        $this->flushSectionIfOpen();
+
+        return new FormTab(
+            id: $this->id,
+            label: $this->label,
+            sections: $this->sections,
+            type: 'fields',
+            icon: $this->icon,
+        );
+    }
+
+    // -------- Internals --------
 
     private function pushWidget(
         string $column,
-        int $cols,
         ?string $label,
         bool $required,
         bool $readOnly,
@@ -151,9 +319,8 @@ class TabBuilder
         ?string $triggers,
         string $inputType,
     ): static {
-        $this->push(new FormElement(
+        $this->pushElement(new FormElement(
             type: 'input',
-            cols: $cols,
             column: $column,
             label: $this->resolveLabel($column, $label),
             required: $required,
@@ -166,150 +333,108 @@ class TabBuilder
         return $this;
     }
 
-    public function addSelect(
-        string $column,
-        int $cols = 1,
-        ?string $label = null,
-        ?array $options = null,
-        ?string $triggers = null,
-        bool $required = false,
-        bool $readOnly = false,
-        bool $hidden = false,
-    ): static {
-        $this->push(new FormElement(
-            type: 'select',
-            cols: $cols,
-            column: $column,
-            label: $this->resolveLabel($column, $label),
-            required: $required,
-            readOnly: $readOnly,
-            hidden: $hidden,
-            triggers: $triggers,
-            options: $options,
-        ));
-        return $this;
-    }
-
-    public function addSeparator(?string $label = null, bool $hidden = false): static
+    private function pushElement(FormElement $el): void
     {
-        $this->push(new FormElement(
-            type: 'separator',
-            cols: 4,
-            label: $label,
-            hidden: $hidden,
-        ));
-        return $this;
-    }
-
-    public function openGroup(string $label, int $cols = 4): static
-    {
-        $this->groupMeta[] = ['label' => $label, 'cols' => $cols];
-        $this->elementStack[] = [];
-        return $this;
-    }
-
-    public function closeGroup(): static
-    {
-        if ($this->groupMeta === []) {
-            throw new \LogicException('closeGroup() called without matching openGroup()');
+        if ($this->inlineBuffer !== null) {
+            // Validation: inline allows only input/select; FormElement constructor will enforce
+            // when the inline element is finally built, but we can fail earlier with a clearer error.
+            if (!in_array($el->type, ['input', 'select'], true)) {
+                throw new \LogicException(sprintf(
+                    'TabBuilder["%s"]: element type "%s" not allowed inside inline group',
+                    $this->id, $el->type,
+                ));
+            }
+            $this->inlineBuffer[] = $el;
+            return;
         }
 
-        $elements = array_pop($this->elementStack);
-        $meta = array_pop($this->groupMeta);
-
-        $this->push(new FormElement(
-            type: 'group',
-            cols: $meta['cols'],
-            label: $meta['label'],
-            elements: $elements,
-        ));
-        return $this;
+        $this->requireOpenColumn(sprintf('%s element', $el->type));
+        $this->currentElements[] = $el;
     }
 
-    public function addSubtable(
-        string $table,
-        string $foreignKey,
-        ?string $formId = null,
-        ?string $label = null,
-        int $cols = 4,
-        ?string $sort = null,
-    ): static {
-        $this->push(new FormElement(
-            type: 'subtable',
-            cols: $cols,
-            label: $label,
-            table: $table,
-            foreignKey: $foreignKey,
-            formId: $formId,
-            sort: $sort,
-        ));
-        return $this;
-    }
-
-    public function addHtml(string $content, int $cols = 4): static
+    private function requireOpenColumn(string $what): void
     {
-        $this->push(new FormElement(
-            type: 'html',
-            cols: $cols,
-            content: $content,
-        ));
-        return $this;
+        if ($this->currentElements === null) {
+            throw new \LogicException(sprintf(
+                'TabBuilder["%s"]: %s called outside of a column. Call section()->col() first.',
+                $this->id, $what,
+            ));
+        }
     }
 
-    public function build(): FormTab
+    private function closeColumnIfOpen(): void
     {
-        if ($this->groupMeta !== []) {
-            throw new \LogicException('Unclosed group in TabBuilder');
+        if ($this->currentElements === null) {
+            return;
+        }
+        if ($this->inlineBuffer !== null) {
+            // Auto-close inline first.
+            $this->endInline();
+        }
+        $elements = $this->autoHideSeparators($this->currentElements);
+        $this->currentColumns[] = new FormColumn($elements);
+        $this->currentElements = null;
+    }
+
+    private function flushSectionIfOpen(): void
+    {
+        if (!$this->sectionOpen) {
+            return;
+        }
+        if ($this->currentColumns === []) {
+            // Empty section — silently skip. Allows conditional code to open a section
+            // and add nothing without breaking the build.
+            $this->sectionOpen = false;
+            $this->sectionTitle = null;
+            $this->sectionHidden = false;
+            return;
         }
 
-        return new FormTab($this->id, $this->label, $this->autoHideSeparators($this->elementStack[0]));
+        $this->sections[] = new FormSection(
+            columns: $this->currentColumns,
+            title: $this->sectionTitle,
+            hidden: $this->sectionHidden,
+        );
+        $this->currentColumns = [];
+        $this->sectionTitle  = null;
+        $this->sectionHidden = false;
+        $this->sectionOpen   = false;
     }
 
     /**
-     * Automatically hides a separator if all elements following it
-     * (until the next separator or end of list) are also hidden.
+     * Hide a separator if every element following it in the same column (until the next
+     * separator or end) is hidden. Operates per-column.
      *
-     * @param FormElement[] $elements
+     * @param  FormElement[] $elements
      * @return FormElement[]
      */
     private function autoHideSeparators(array $elements): array
     {
-        $result = $elements;
-        $count  = count($result);
-
+        $count = count($elements);
         for ($i = 0; $i < $count; $i++) {
-            if ($result[$i]->type !== 'separator') {
+            if ($elements[$i]->type !== 'separator' || $elements[$i]->hidden) {
                 continue;
             }
-            // Collect elements until next separator or end
             $allHidden = true;
             for ($j = $i + 1; $j < $count; $j++) {
-                if ($result[$j]->type === 'separator') {
+                if ($elements[$j]->type === 'separator') {
                     break;
                 }
-                if (!$result[$j]->hidden) {
+                if (!$elements[$j]->hidden) {
                     $allHidden = false;
                     break;
                 }
             }
             if ($allHidden) {
-                // Replace with a hidden copy
-                $sep = $result[$i];
-                $result[$i] = new FormElement(
-                    type: $sep->type,
-                    cols: $sep->cols,
+                $sep = $elements[$i];
+                $elements[$i] = new FormElement(
+                    type: 'separator',
                     label: $sep->label,
                     hidden: true,
                 );
             }
         }
-
-        return $result;
-    }
-
-    private function push(FormElement $element): void
-    {
-        $this->elementStack[count($this->elementStack) - 1][] = $element;
+        return $elements;
     }
 
     private function resolveLabel(string $column, ?string $label): ?string

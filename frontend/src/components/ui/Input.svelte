@@ -1,7 +1,7 @@
 <script lang="ts">
   interface Props {
+    id?: string;
     value?: string;
-    label?: string;
     type?: string;
     placeholder?: string;
     required?: boolean;
@@ -11,8 +11,8 @@
   }
 
   let {
+    id,
     value = $bindable(''),
-    label,
     type = 'text',
     placeholder,
     required = false,
@@ -20,52 +20,24 @@
     disabled = false,
     error = null,
   }: Props = $props();
-
-  const inputId = `shpd-input-${Math.random().toString(36).slice(2)}`;
 </script>
 
-<div class="shpd-input">
-  {#if label}
-    <label class="shpd-input__label" for={inputId}>
-      {label}{#if required}<span class="shpd-input__required" aria-hidden="true">*</span>{/if}
-    </label>
-  {/if}
-  <input
-    id={inputId}
-    class="shpd-input__field"
-    class:shpd-input__field--error={!!error}
-    {type}
-    bind:value
-    {placeholder}
-    {required}
-    {maxlength}
-    {disabled}
-  />
-  {#if error}
-    <span class="shpd-input__error">{error}</span>
-  {/if}
-</div>
+<input
+  {id}
+  class="shpd-input__field"
+  class:shpd-input__field--error={!!error}
+  {type}
+  bind:value
+  {placeholder}
+  {required}
+  {maxlength}
+  {disabled}
+/>
+{#if error}
+  <span class="shpd-input__error">{error}</span>
+{/if}
 
 <style>
-  .shpd-input {
-    display: flex;
-    flex-direction: column;
-    width: 100%;
-    margin-bottom: var(--shpd-space-md);
-  }
-
-  .shpd-input__label {
-    font-size: var(--shpd-font-size-sm);
-    font-weight: 500;
-    color: var(--shpd-color-text);
-    margin-bottom: var(--shpd-space-sm);
-  }
-
-  .shpd-input__required {
-    color: var(--shpd-color-danger);
-    margin-left: 2px;
-  }
-
   .shpd-input__field {
     width: 100%;
     padding: var(--shpd-space-sm);
@@ -103,5 +75,6 @@
     font-size: var(--shpd-font-size-sm);
     color: var(--shpd-color-danger);
     margin-top: var(--shpd-space-xs);
+    grid-column: 2;
   }
 </style>

@@ -114,109 +114,109 @@ class DocsHeadsForm extends TableForm
             && $docCurrency !== $homeCurrency;
         $partnerId = (int) ($data['partner'] ?? 0);
 
-        $tab = $this->tab('basic', 'Hlavička')
-            ->addSeparator('Identifikace')
-            ->addSelect('number_series', cols: 2,
-                options: $this->resolveNumberSeriesOptions(
-                    !empty($data['doc_type']) ? (string) $data['doc_type'] : null,
-                ),
-                required: true,
-                readOnly: !$isNew,
-            )
-            ->addInput('doc_number', cols: 1, readOnly: true)
-            ->addInput('doc_text', cols: 1)
+        return $this->tab('basic', 'Hlavička')
+            ->section()
+                ->col()
+                    ->separator('Identifikace')
+                    ->select('number_series',
+                        options: $this->resolveNumberSeriesOptions(
+                            !empty($data['doc_type']) ? (string) $data['doc_type'] : null,
+                        ),
+                        required: true,
+                        readOnly: !$isNew,
+                    )
+                    ->input('doc_number', readOnly: true)
+                    ->input('doc_text')
 
-            ->addSeparator('Partner')
-            ->addSelect('partner', cols: 2,
-                options: $this->resolvePartnerOptions(),
-                triggers: 'reload',
-            )
-            ->addSelect('partner_address', cols: 2,
-                options: $this->resolvePartnerAddressOptions($partnerId),
-            )
-            ->addSelect('partner_bank', cols: 1,
-                options: $this->resolvePartnerBankOptions($partnerId),
-            )
-            ->addInput('partner_bank_account', cols: 1, label: 'Číslo účtu')
-            ->addInput('partner_bank_iban', cols: 1, label: 'IBAN')
-            ->addInput('partner_bank_bic', cols: 1, label: 'BIC/SWIFT')
+                    ->separator('Partner')
+                    ->select('partner',
+                        options: $this->resolvePartnerOptions(),
+                        triggers: 'reload',
+                    )
+                    ->select('partner_address',
+                        options: $this->resolvePartnerAddressOptions($partnerId),
+                    )
+                    ->select('partner_bank',
+                        options: $this->resolvePartnerBankOptions($partnerId),
+                    )
+                    ->input('partner_bank_account', label: 'Číslo účtu')
+                    ->input('partner_bank_iban', label: 'IBAN')
+                    ->input('partner_bank_bic', label: 'BIC/SWIFT')
 
-            ->addSeparator('Datumy')
-            ->addDate('issue_date', cols: 1, required: true, triggers: 'reload')
-            ->addDate('due_date', cols: 1)
-            ->addDate('accounting_date', cols: 1, required: true)
-            ->addDate('vat_duzp', cols: 1, hidden: !$hasVat)
-            ->addDate('vat_dppd', cols: 1, hidden: !$hasVat)
-            ->addDate('period_from', cols: 1, hint: 'Volitelné, např. pronájem za období')
-            ->addDate('period_to', cols: 1)
+                    ->separator('Datumy')
+                    ->date('issue_date', required: true, triggers: 'reload')
+                    ->date('due_date')
+                    ->date('accounting_date', required: true)
+                    ->date('vat_duzp', hidden: !$hasVat)
+                    ->date('vat_dppd', hidden: !$hasVat)
+                    ->date('period_from', hint: 'Volitelné, např. pronájem za období')
+                    ->date('period_to')
 
-            ->addSeparator('DPH')
-            ->addSelect('vat_mode', cols: 1,
-                options: $this->resolveCfgItemOptions('docs.core.vatModes'),
-                triggers: 'reload',
-            )
-            ->addSelect('vat_calc_source', cols: 1,
-                options: $this->resolveCfgItemOptions('docs.core.vatCalcSources'),
-                hidden: !$hasVat,
-            )
-            ->addSelect('vat_place', cols: 1,
-                options: $this->resolveCfgItemOptions('docs.core.vatPlaces'),
-                triggers: 'reload',
-                hidden: !$hasVat,
-            )
-            ->addSelect('vat_registration', cols: 1,
-                options: $this->resolveVatRegistrationOptions(),
-                triggers: 'reload',
-                hidden: !$hasVat,
-            )
+                    ->separator('DPH')
+                    ->select('vat_mode',
+                        options: $this->resolveCfgItemOptions('docs.core.vatModes'),
+                        triggers: 'reload',
+                    )
+                    ->select('vat_calc_source',
+                        options: $this->resolveCfgItemOptions('docs.core.vatCalcSources'),
+                        hidden: !$hasVat,
+                    )
+                    ->select('vat_place',
+                        options: $this->resolveCfgItemOptions('docs.core.vatPlaces'),
+                        triggers: 'reload',
+                        hidden: !$hasVat,
+                    )
+                    ->select('vat_registration',
+                        options: $this->resolveVatRegistrationOptions(),
+                        triggers: 'reload',
+                        hidden: !$hasVat,
+                    )
 
-            ->addSeparator('Měna')
-            ->addSelect('doc_currency', cols: 1,
-                options: $this->resolveCurrencyOptions(),
-                triggers: 'reload',
-            )
-            ->addInput('home_currency', cols: 1, readOnly: true)
-            ->addNumber('exchange_rate', cols: 1, hidden: !$hasForeignCurrency)
+                    ->separator('Měna')
+                    ->select('doc_currency',
+                        options: $this->resolveCurrencyOptions(),
+                        triggers: 'reload',
+                    )
+                    ->input('home_currency', readOnly: true)
+                    ->number('exchange_rate', hidden: !$hasForeignCurrency)
 
-            ->addSeparator('Zaokrouhlení')
-            ->addSelect('total_rounding_mode', cols: 1,
-                options: $this->resolveCfgItemOptions('docs.core.roundingModes'),
-            )
-            ->addSelect('vat_rounding_mode', cols: 1,
-                options: $this->resolveCfgItemOptions('docs.core.roundingModes'),
-                hidden: !$hasVat,
-            )
+                    ->separator('Zaokrouhlení')
+                    ->select('total_rounding_mode',
+                        options: $this->resolveCfgItemOptions('docs.core.roundingModes'),
+                    )
+                    ->select('vat_rounding_mode',
+                        options: $this->resolveCfgItemOptions('docs.core.roundingModes'),
+                        hidden: !$hasVat,
+                    )
 
-            ->addSeparator('Platba')
-            ->addSelect('payment_method', cols: 1,
-                options: $this->resolveCfgItemOptions('docs.core.paymentMethods'),
-            )
-            ->addSelect('bank_account', cols: 1,
-                options: $this->resolveBankAccountOptions($docCurrency),
-            )
-            ->addInput('variable_symbol', cols: 1)
-            ->addInput('specific_symbol', cols: 1)
-            ->addInput('constant_symbol', cols: 1)
+                    ->separator('Platba')
+                    ->select('payment_method',
+                        options: $this->resolveCfgItemOptions('docs.core.paymentMethods'),
+                    )
+                    ->select('bank_account',
+                        options: $this->resolveBankAccountOptions($docCurrency),
+                    )
+                    ->input('variable_symbol')
+                    ->input('specific_symbol')
+                    ->input('constant_symbol')
 
-            ->addSeparator('Součty')
-            ->addNumber('total_base', cols: 1, readOnly: true, label: 'Základ DPH')
-            ->addNumber('total_vat', cols: 1, readOnly: true, label: 'DPH')
-            ->addNumber('total_amount', cols: 1, readOnly: true, label: 'Celkem')
-            ->addNumber('total_rounding', cols: 1, readOnly: true, label: 'Zaokrouhlení');
-
-        return $tab->build();
+                    ->separator('Součty')
+                    ->number('total_base', readOnly: true, label: 'Základ DPH')
+                    ->number('total_vat', readOnly: true, label: 'DPH')
+                    ->number('total_amount', readOnly: true, label: 'Celkem')
+                    ->number('total_rounding', readOnly: true, label: 'Zaokrouhlení')
+            ->build();
     }
 
     private function buildRowsTab(): FormTab
     {
-        return $this->tab('rows', 'Řádky')
-            ->addSubtable(
-                table: 'docs_core_rows',
-                foreignKey: 'doc_head',
-                formId: 'docs.core.rows',
-                label: 'Řádky dokladu',
-            )
-            ->build();
+        return $this->subtableTab(
+            'rows',
+            'Řádky',
+            'docs_core_rows',
+            'doc_head',
+            formId: 'docs.core.rows',
+        );
     }
 
     /** @param array<string, mixed> $data */
@@ -227,7 +227,9 @@ class DocsHeadsForm extends TableForm
         // table. Load it here — same pattern as DocDocument::resolveRowsForCompute.
         $recap = $this->resolveRecapForRender($data);
         return $this->tab('recap', 'Rekapitulace DPH')
-            ->addHtml($this->renderRecapHtml($data, $recap), cols: 4)
+            ->section()
+                ->col()
+                    ->html($this->renderRecapHtml($data, $recap))
             ->build();
     }
 
@@ -258,17 +260,21 @@ class DocsHeadsForm extends TableForm
     private function buildSnapshotsTab(array $data): FormTab
     {
         return $this->tab('snapshots', 'Fakturační údaje')
-            ->addHtml($this->renderSnapshotsHtml($data), cols: 4)
+            ->section()
+                ->col()
+                    ->html($this->renderSnapshotsHtml($data))
             ->build();
     }
 
     private function buildNotesTab(): FormTab
     {
         return $this->tab('notes', 'Poznámky')
-            ->addTextArea('notice', cols: 4, label: 'Interní poznámka',
-                hint: 'Vidíme jen my, netiskne se')
-            ->addTextArea('doc_notice', cols: 4, label: 'Poznámka na doklad',
-                hint: 'Bude na PDF dokladu')
+            ->section()
+                ->col()
+                    ->textarea('notice', label: 'Interní poznámka',
+                        hint: 'Vidíme jen my, netiskne se')
+                    ->textarea('doc_notice', label: 'Poznámka na doklad',
+                        hint: 'Bude na PDF dokladu')
             ->build();
     }
 

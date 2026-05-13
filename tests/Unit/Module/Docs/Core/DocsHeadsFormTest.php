@@ -29,9 +29,42 @@ class DocsHeadsFormTest extends TestCase
             if ($tab->id !== $tabId) {
                 continue;
             }
-            foreach ($tab->elements as $el) {
-                if ($el->column === $column) {
-                    return $el;
+            foreach ($tab->sections as $section) {
+                foreach ($section->columns as $col) {
+                    foreach ($col->elements as $el) {
+                        if ($el->column === $column) {
+                            return $el;
+                        }
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private function findTab(FormDefinition $def, string $tabId): ?FormTab
+    {
+        foreach ($def->tabs as $tab) {
+            if ($tab->id === $tabId) {
+                return $tab;
+            }
+        }
+        return null;
+    }
+
+    /** Find the first element of a given type in a tab (e.g. 'html'). */
+    private function findElementByType(FormDefinition $def, string $tabId, string $type): ?FormElement
+    {
+        $tab = $this->findTab($def, $tabId);
+        if ($tab === null) {
+            return null;
+        }
+        foreach ($tab->sections as $section) {
+            foreach ($section->columns as $col) {
+                foreach ($col->elements as $el) {
+                    if ($el->type === $type) {
+                        return $el;
+                    }
                 }
             }
         }
@@ -232,19 +265,12 @@ class DocsHeadsFormTest extends TestCase
         $form = $this->createForm();
         $def = $form->buildFormDefinition([], true);
 
-        $rowsTab = null;
-        foreach ($def->tabs as $tab) {
-            if ($tab->id === 'rows') {
-                $rowsTab = $tab;
-                break;
-            }
-        }
+        $rowsTab = $this->findTab($def, 'rows');
         $this->assertNotNull($rowsTab);
-        $this->assertCount(1, $rowsTab->elements);
-        $this->assertSame('subtable', $rowsTab->elements[0]->type);
-        $this->assertSame('docs_core_rows', $rowsTab->elements[0]->table);
-        $this->assertSame('doc_head', $rowsTab->elements[0]->foreignKey);
-        $this->assertSame('docs.core.rows', $rowsTab->elements[0]->formId);
+        $this->assertSame('subtable', $rowsTab->type);
+        $this->assertSame('docs_core_rows', $rowsTab->subtable['table']);
+        $this->assertSame('doc_head', $rowsTab->subtable['foreignKey']);
+        $this->assertSame('docs.core.rows', $rowsTab->subtable['formId']);
     }
 
     // ── Recap tab always present and has html ────────────────────────────────
@@ -254,16 +280,8 @@ class DocsHeadsFormTest extends TestCase
         $form = $this->createForm();
         $def = $form->buildFormDefinition([], true);
 
-        $recap = null;
-        foreach ($def->tabs as $tab) {
-            if ($tab->id === 'recap') {
-                $recap = $tab;
-                break;
-            }
-        }
-        $this->assertNotNull($recap);
-        $this->assertCount(1, $recap->elements);
-        $this->assertSame('html', $recap->elements[0]->type);
+        $html = $this->findElementByType($def, 'recap', 'html');
+        $this->assertNotNull($html);
     }
 
     public function testRecapWithoutRowsShowsEmptyState(): void
@@ -271,16 +289,9 @@ class DocsHeadsFormTest extends TestCase
         $form = $this->createForm();
         $def = $form->buildFormDefinition([], true);
 
-        $recap = null;
-        foreach ($def->tabs as $tab) {
-            if ($tab->id === 'recap') {
-                $recap = $tab;
-                break;
-            }
-        }
-        $this->assertNotNull($recap);
-        $this->assertStringContainsString('zatím nemá rekapitulaci',
-            (string) $recap->elements[0]->content);
+        $html = $this->findElementByType($def, 'recap', 'html');
+        $this->assertNotNull($html);
+        $this->assertStringContainsString('zatím nemá rekapitulaci', (string) $html->content);
     }
 
     public function testRecapWithVatRecapRendersTable(): void
@@ -305,18 +316,10 @@ class DocsHeadsFormTest extends TestCase
             ],
         ], false);
 
-        $recap = null;
-        foreach ($def->tabs as $tab) {
-            if ($tab->id === 'recap') {
-                $recap = $tab;
-                break;
-            }
-        }
-        $this->assertNotNull($recap);
-        $html = (string) $recap->elements[0]->content;
+        $html = (string) $this->findElementByType($def, 'recap', 'html')->content;
         $this->assertStringContainsString('<table class="vat-recap">', $html);
-        $this->assertStringContainsString('1 000,00', $html);  // total_base
-        $this->assertStringContainsString('1 210,00', $html);  // total_amount
+        $this->assertStringContainsString('1 000,00', $html);
+        $this->assertStringContainsString('1 210,00', $html);
     }
 
     public function testReverseChargePairGetsGrayedTaxColumn(): void
@@ -338,15 +341,7 @@ class DocsHeadsFormTest extends TestCase
             ],
         ], false);
 
-        $recap = null;
-        foreach ($def->tabs as $tab) {
-            if ($tab->id === 'recap') {
-                $recap = $tab;
-                break;
-            }
-        }
-        $this->assertNotNull($recap);
-        $html = (string) $recap->elements[0]->content;
+        $html = (string) $this->findElementByType($def, 'recap', 'html')->content;
         $this->assertStringContainsString('reverse-pair', $html);
         $this->assertStringContainsString('grayed', $html);
     }
@@ -376,15 +371,7 @@ class DocsHeadsFormTest extends TestCase
             ],
         ], false);
 
-        $recap = null;
-        foreach ($def->tabs as $tab) {
-            if ($tab->id === 'recap') {
-                $recap = $tab;
-                break;
-            }
-        }
-        $this->assertNotNull($recap);
-        $html = (string) $recap->elements[0]->content;
+        $html = (string) $this->findElementByType($def, 'recap', 'html')->content;
         $this->assertStringContainsString('EUR', $html);
         $this->assertStringContainsString('CZK', $html);
         $this->assertStringContainsString('rowspan="2"', $html);
@@ -407,15 +394,7 @@ class DocsHeadsFormTest extends TestCase
             ],
         ], false);
 
-        $snapTab = null;
-        foreach ($def->tabs as $tab) {
-            if ($tab->id === 'snapshots') {
-                $snapTab = $tab;
-                break;
-            }
-        }
-        $this->assertNotNull($snapTab);
-        $html = (string) $snapTab->elements[0]->content;
+        $html = (string) $this->findElementByType($def, 'snapshots', 'html')->content;
         $this->assertStringContainsString('Naše firma s.r.o.', $html);
         $this->assertStringContainsString('Zákazník a.s.', $html);
         $this->assertStringContainsString('IČO: 12345678', $html);
@@ -430,15 +409,7 @@ class DocsHeadsFormTest extends TestCase
             'supplier_snapshot' => json_encode(['name' => 'JSON Supplier']),
         ], false);
 
-        $snapTab = null;
-        foreach ($def->tabs as $tab) {
-            if ($tab->id === 'snapshots') {
-                $snapTab = $tab;
-                break;
-            }
-        }
-        $this->assertNotNull($snapTab);
-        $html = (string) $snapTab->elements[0]->content;
+        $html = (string) $this->findElementByType($def, 'snapshots', 'html')->content;
         $this->assertStringContainsString('JSON Supplier', $html);
     }
 
@@ -449,15 +420,7 @@ class DocsHeadsFormTest extends TestCase
             'supplier_snapshot' => ['name' => '<script>x</script>'],
         ], false);
 
-        $snapTab = null;
-        foreach ($def->tabs as $tab) {
-            if ($tab->id === 'snapshots') {
-                $snapTab = $tab;
-                break;
-            }
-        }
-        $this->assertNotNull($snapTab);
-        $html = (string) $snapTab->elements[0]->content;
+        $html = (string) $this->findElementByType($def, 'snapshots', 'html')->content;
         $this->assertStringNotContainsString('<script>x</script>', $html);
         $this->assertStringContainsString('&lt;script&gt;', $html);
     }

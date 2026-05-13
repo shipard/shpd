@@ -8,13 +8,17 @@ use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Database\ColumnDefinition;
 use Shipard\Core\Database\TableDefinition;
 
+/**
+ * Generates a default FormDefinition for tables without an explicit form file.
+ * The output is intentionally minimalist: per columnGroup → one tab with a single
+ * section containing a single column listing every field vertically.
+ */
 class AutoFormBuilder
 {
     private const SKIP_COLUMNS = ['id', 'created', 'modified'];
 
     public function build(TableDefinition $tableDef, ?ConfigRuntime $config = null, string $tableId = ''): FormDefinition
     {
-        // Group columns by their group ID
         $grouped = [];
         foreach ($tableDef->columns as $col) {
             if ($this->shouldSkip($col)) {
@@ -24,15 +28,13 @@ class AutoFormBuilder
             $grouped[$groupId][] = $col;
         }
 
-        // Build group label map from columnGroups
         $groupLabels = [];
-        $groupOrder = [];
+        $groupOrder  = [];
         foreach ($tableDef->columnGroups as $group) {
             $groupLabels[$group['id']] = $group['name'] ?? $group['id'];
             $groupOrder[] = $group['id'];
         }
 
-        // Build tabs: general first (if exists), then in columnGroups order
         $tabs = [];
 
         if (isset($grouped['__general__'])) {
@@ -47,12 +49,11 @@ class AutoFormBuilder
             }
         }
 
-        // Any remaining groups not in columnGroups definition
         foreach ($grouped as $groupId => $columns) {
             if ($groupId === '__general__' || isset($groupLabels[$groupId])) {
                 continue;
             }
-            $tabs[] = $this->buildTab($groupId, $groupId, $columns, $config);
+            $tabs[] = $this->buildTab((string) $groupId, (string) $groupId, $columns, $config);
         }
 
         $dbName = $tableId !== '' ? $tableId : $tableDef->name;
@@ -66,9 +67,6 @@ class AutoFormBuilder
 
     private function resolveGeneralTabLabel(?ConfigRuntime $config): string
     {
-        // Fallback English when the cfgItem is missing — e.g. config not yet
-        // compiled. ConfigLocalizer reduces `name`/`name:cs`/`name:en` to a
-        // single localized `name` at compile time.
         $defaults = $config?->cfgItem('core.system.formDefaults');
         return $defaults['generalTabLabel']['name'] ?? 'General';
     }
@@ -80,7 +78,14 @@ class AutoFormBuilder
         foreach ($columns as $col) {
             $elements[] = $this->buildElement($col, $config);
         }
-        return new FormTab($id, $label, $elements);
+
+        $section = new FormSection([new FormColumn($elements)]);
+
+        return new FormTab(
+            id: $id,
+            label: $label,
+            sections: [$section],
+        );
     }
 
     private function buildElement(ColumnDefinition $col, ?ConfigRuntime $config): FormElement
@@ -90,7 +95,6 @@ class AutoFormBuilder
         if ($isEnum) {
             return new FormElement(
                 type: 'select',
-                cols: $this->determineCols($col),
                 column: $col->id,
                 label: $col->name,
                 required: $this->isRequired($col),
@@ -100,23 +104,11 @@ class AutoFormBuilder
 
         return new FormElement(
             type: 'input',
-            cols: $this->determineCols($col),
             column: $col->id,
             label: $col->name,
             required: $this->isRequired($col),
             inputType: $this->deriveInputType($col),
         );
-    }
-
-    private function determineCols(ColumnDefinition $col): int
-    {
-        if (in_array($col->type, ['text', 'longtext'], true)) {
-            return 4;
-        }
-        if ($col->type === 'varchar' && $col->length !== null && $col->length > 30) {
-            return 2;
-        }
-        return 1;
     }
 
     private function isRequired(ColumnDefinition $col): bool
@@ -141,13 +133,13 @@ class AutoFormBuilder
     private function deriveInputType(ColumnDefinition $col): string
     {
         return match ($col->type) {
-            'boolean'                                              => 'checkbox',
-            'date'                                                 => 'date',
-            'datetime'                                             => 'datetime',
-            'time'                                                 => 'time',
-            'text', 'longtext'                                     => 'textarea',
+            'boolean'                                                  => 'checkbox',
+            'date'                                                     => 'date',
+            'datetime'                                                 => 'datetime',
+            'time'                                                     => 'time',
+            'text', 'longtext'                                         => 'textarea',
             'int', 'smallint', 'bigint', 'tinyint', 'numeric', 'float' => 'number',
-            default                                                => 'text',
+            default                                                    => 'text',
         };
     }
 

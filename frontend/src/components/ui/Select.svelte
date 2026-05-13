@@ -5,8 +5,8 @@
   }
 
   interface Props {
+    id?: string;
     value?: string | number | null;
-    label?: string;
     options?: Option[];
     required?: boolean;
     disabled?: boolean;
@@ -16,8 +16,8 @@
   }
 
   let {
+    id,
     value = $bindable(null),
-    label,
     options = [],
     required = false,
     disabled = false,
@@ -25,60 +25,32 @@
     placeholder,
     onchange,
   }: Props = $props();
-
-  const inputId = `shpd-select-${Math.random().toString(36).slice(2)}`;
 </script>
 
-<div class="shpd-select">
-  {#if label}
-    <label class="shpd-select__label" for={inputId}>
-      {label}{#if required}<span class="shpd-select__required" aria-hidden="true">*</span>{/if}
-    </label>
-  {/if}
-  <div class="shpd-select__wrapper">
-    <select
-      id={inputId}
-      class="shpd-select__field"
-      class:shpd-select__field--error={!!error}
-      bind:value
-      {required}
-      {disabled}
-      {onchange}
-    >
-      {#if !required || placeholder}
-        <option value={null}>{placeholder ?? ''}</option>
-      {/if}
-      {#each options as option}
-        <option value={option.value}>{option.label}</option>
-      {/each}
-    </select>
-    <span class="shpd-select__arrow" aria-hidden="true">▾</span>
-  </div>
-  {#if error}
-    <span class="shpd-select__error">{error}</span>
-  {/if}
+<div class="shpd-select__wrapper">
+  <select
+    {id}
+    class="shpd-select__field"
+    class:shpd-select__field--error={!!error}
+    bind:value
+    {required}
+    {disabled}
+    {onchange}
+  >
+    {#if !required || placeholder}
+      <option value={null}>{placeholder ?? ''}</option>
+    {/if}
+    {#each options as option}
+      <option value={option.value}>{option.label}</option>
+    {/each}
+  </select>
+  <span class="shpd-select__arrow" aria-hidden="true">▾</span>
 </div>
+{#if error}
+  <span class="shpd-select__error">{error}</span>
+{/if}
 
 <style>
-  .shpd-select {
-    display: flex;
-    flex-direction: column;
-    width: 100%;
-    margin-bottom: var(--shpd-space-md);
-  }
-
-  .shpd-select__label {
-    font-size: var(--shpd-font-size-sm);
-    font-weight: 500;
-    color: var(--shpd-color-text);
-    margin-bottom: var(--shpd-space-sm);
-  }
-
-  .shpd-select__required {
-    color: var(--shpd-color-danger);
-    margin-left: 2px;
-  }
-
   .shpd-select__wrapper {
     position: relative;
     width: 100%;

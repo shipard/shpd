@@ -14,15 +14,17 @@ class ItemKindsForm extends TableForm
         $hasSystemCode = !empty($data['system_code']);
 
         $basic = $this->tab('basic', 'Základní údaje')
-            ->addInput('name', cols: 2, required: true)
-            ->addSelect('item_type', cols: 1,
-                options: $this->resolveItemTypeOptions(),
-                required: true,
-                readOnly: !$isNew,
-            )
-            ->addDate('valid_from', cols: 1)
-            ->addDate('valid_to', cols: 1)
-            ->addInput('system_code', cols: 1, readOnly: true, hidden: !$hasSystemCode)
+            ->section()
+                ->col()
+                    ->input('name', required: true)
+                    ->select('item_type',
+                        options: $this->resolveItemTypeOptions(),
+                        required: true,
+                        readOnly: !$isNew,
+                    )
+                    ->date('valid_from')
+                    ->date('valid_to')
+                    ->input('system_code', readOnly: true, hidden: !$hasSystemCode)
             ->build();
 
         return new FormDefinition(

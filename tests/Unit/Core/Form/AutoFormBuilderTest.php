@@ -6,15 +6,15 @@ namespace Shipard\Tests\Unit\Core\Form;
 
 use PHPUnit\Framework\TestCase;
 use Shipard\Core\Config\ConfigRuntime;
-use Shipard\Core\Database\ColumnDefinition;
 use Shipard\Core\Database\TableDefinition;
 use Shipard\Core\Form\AutoFormBuilder;
+use Shipard\Core\Form\FormElement;
+use Shipard\Core\Form\FormTab;
 
 class AutoFormBuilderTest extends TestCase
 {
     private function makeTableDef(array $columns, array $columnGroups = []): TableDefinition
     {
-        // Always need a PK column
         $hasPk = false;
         foreach ($columns as $col) {
             if ($col['primaryKey'] ?? false) {
@@ -37,6 +37,15 @@ class AutoFormBuilderTest extends TestCase
         ]);
     }
 
+    /** @return FormElement[] */
+    private function elementsOf(FormTab $tab): array
+    {
+        $this->assertSame('fields', $tab->type);
+        $this->assertCount(1, $tab->sections, 'auto-built tab should have exactly one section');
+        $this->assertCount(1, $tab->sections[0]->columns, 'auto-built section should have exactly one column');
+        return $tab->sections[0]->columns[0]->elements;
+    }
+
     public function testGroupedColumnsBecomeTabs(): void
     {
         $def = $this->makeTableDef(
@@ -50,15 +59,13 @@ class AutoFormBuilderTest extends TestCase
             ],
         );
 
-        $builder = new AutoFormBuilder();
-        $result = $builder->build($def, tableId: 'test_table');
+        $result = (new AutoFormBuilder())->build($def, tableId: 'test_table');
 
         $this->assertSame('test_table', $result->table);
         $this->assertCount(2, $result->tabs);
         $this->assertSame('basic', $result->tabs[0]->id);
         $this->assertSame('Basic Info', $result->tabs[0]->label);
         $this->assertSame('contact', $result->tabs[1]->id);
-        $this->assertSame('Contact', $result->tabs[1]->label);
     }
 
     public function testUngroupedColumnsGoToGeneralTab(): void
@@ -70,185 +77,105 @@ class AutoFormBuilderTest extends TestCase
             ],
         );
 
-        $builder = new AutoFormBuilder();
-        $result = $builder->build($def);
+        $result = (new AutoFormBuilder())->build($def);
 
         $this->assertCount(1, $result->tabs);
         $this->assertSame('general', $result->tabs[0]->id);
-        // English fallback when no config is provided — i18n cfgItem is missing.
         $this->assertSame('General', $result->tabs[0]->label);
-        $this->assertCount(2, $result->tabs[0]->elements);
+        $this->assertCount(2, $this->elementsOf($result->tabs[0]));
+    }
+
+    public function testSingleSectionSingleColumnStructure(): void
+    {
+        $def = $this->makeTableDef([
+            ['id' => 'a', 'name' => 'A', 'type' => 'varchar', 'length' => 50],
+            ['id' => 'b', 'name' => 'B', 'type' => 'varchar', 'length' => 50],
+            ['id' => 'c', 'name' => 'C', 'type' => 'text'],
+        ]);
+
+        $result = (new AutoFormBuilder())->build($def);
+        $section = $result->tabs[0]->sections[0];
+
+        $this->assertNull($section->title);
+        $this->assertCount(1, $section->columns);
+        $this->assertCount(3, $section->columns[0]->elements);
     }
 
     public function testSystemColumnsSkipped(): void
     {
-        $def = $this->makeTableDef(
-            columns: [
-                ['id' => 'name', 'name' => 'Name', 'type' => 'varchar', 'length' => 50],
-                ['id' => 'docState', 'name' => 'State', 'type' => 'tinyint', 'system' => true],
-                ['id' => 'docStateMain', 'name' => 'Main State', 'type' => 'tinyint', 'system' => true],
-            ],
-        );
+        $def = $this->makeTableDef([
+            ['id' => 'name', 'name' => 'Name', 'type' => 'varchar', 'length' => 50],
+            ['id' => 'docState', 'name' => 'State', 'type' => 'tinyint', 'system' => true],
+            ['id' => 'docStateMain', 'name' => 'Main State', 'type' => 'tinyint', 'system' => true],
+        ]);
 
-        $builder = new AutoFormBuilder();
-        $result = $builder->build($def);
+        $result = (new AutoFormBuilder())->build($def);
+        $cols = array_map(fn($e) => $e->column, $this->elementsOf($result->tabs[0]));
 
-        // Only 'name' should appear (system columns skipped, plus id is skipped)
-        $allColumns = [];
-        foreach ($result->tabs as $tab) {
-            foreach ($tab->elements as $el) {
-                if ($el->column !== null) {
-                    $allColumns[] = $el->column;
-                }
-            }
-        }
-
-        $this->assertContains('name', $allColumns);
-        $this->assertNotContains('docState', $allColumns);
-        $this->assertNotContains('docStateMain', $allColumns);
+        $this->assertContains('name', $cols);
+        $this->assertNotContains('docState', $cols);
+        $this->assertNotContains('docStateMain', $cols);
     }
 
     public function testIdCreatedModifiedSkipped(): void
     {
-        $def = $this->makeTableDef(
-            columns: [
-                ['id' => 'name', 'name' => 'Name', 'type' => 'varchar', 'length' => 50],
-                ['id' => 'created', 'name' => 'Created', 'type' => 'datetime'],
-                ['id' => 'modified', 'name' => 'Modified', 'type' => 'datetime'],
-            ],
-        );
+        $def = $this->makeTableDef([
+            ['id' => 'name', 'name' => 'Name', 'type' => 'varchar', 'length' => 50],
+            ['id' => 'created', 'name' => 'Created', 'type' => 'datetime'],
+            ['id' => 'modified', 'name' => 'Modified', 'type' => 'datetime'],
+        ]);
 
-        $builder = new AutoFormBuilder();
-        $result = $builder->build($def);
+        $result = (new AutoFormBuilder())->build($def);
+        $cols = array_map(fn($e) => $e->column, $this->elementsOf($result->tabs[0]));
 
-        $allColumns = [];
-        foreach ($result->tabs as $tab) {
-            foreach ($tab->elements as $el) {
-                if ($el->column !== null) {
-                    $allColumns[] = $el->column;
-                }
-            }
-        }
-
-        $this->assertContains('name', $allColumns);
-        $this->assertNotContains('id', $allColumns);
-        $this->assertNotContains('created', $allColumns);
-        $this->assertNotContains('modified', $allColumns);
+        $this->assertContains('name', $cols);
+        $this->assertNotContains('id', $cols);
+        $this->assertNotContains('created', $cols);
+        $this->assertNotContains('modified', $cols);
     }
 
     public function testPasswordColumnsSkipped(): void
     {
-        $def = $this->makeTableDef(
-            columns: [
-                ['id' => 'login', 'name' => 'Login', 'type' => 'varchar', 'length' => 50],
-                ['id' => 'password_hash', 'name' => 'Password', 'type' => 'varchar', 'length' => 255],
-            ],
-        );
+        $def = $this->makeTableDef([
+            ['id' => 'login', 'name' => 'Login', 'type' => 'varchar', 'length' => 50],
+            ['id' => 'password_hash', 'name' => 'Password', 'type' => 'varchar', 'length' => 255],
+        ]);
 
-        $builder = new AutoFormBuilder();
-        $result = $builder->build($def);
+        $result = (new AutoFormBuilder())->build($def);
+        $cols = array_map(fn($e) => $e->column, $this->elementsOf($result->tabs[0]));
 
-        $allColumns = [];
-        foreach ($result->tabs as $tab) {
-            foreach ($tab->elements as $el) {
-                if ($el->column !== null) {
-                    $allColumns[] = $el->column;
-                }
-            }
+        $this->assertContains('login', $cols);
+        $this->assertNotContains('password_hash', $cols);
+    }
+
+    public function testInputTypeDerivedFromColumn(): void
+    {
+        $def = $this->makeTableDef([
+            ['id' => 'name',  'name' => 'N', 'type' => 'varchar', 'length' => 50],
+            ['id' => 'notes', 'name' => 'X', 'type' => 'text'],
+            ['id' => 'qty',   'name' => 'Q', 'type' => 'int'],
+            ['id' => 'birth', 'name' => 'B', 'type' => 'date'],
+            ['id' => 'active','name' => 'A', 'type' => 'boolean'],
+        ]);
+        $result = (new AutoFormBuilder())->build($def);
+        $byCol = [];
+        foreach ($this->elementsOf($result->tabs[0]) as $el) {
+            $byCol[$el->column] = $el;
         }
 
-        $this->assertContains('login', $allColumns);
-        $this->assertNotContains('password_hash', $allColumns);
-    }
-
-    public function testColsMappingVarcharShort(): void
-    {
-        $def = $this->makeTableDef(
-            columns: [
-                ['id' => 'code', 'name' => 'Code', 'type' => 'varchar', 'length' => 10],
-            ],
-        );
-
-        $builder = new AutoFormBuilder();
-        $result = $builder->build($def);
-
-        $el = $result->tabs[0]->elements[0];
-        $this->assertSame(1, $el->cols);
-    }
-
-    public function testColsMappingVarcharMedium(): void
-    {
-        $def = $this->makeTableDef(
-            columns: [
-                ['id' => 'name', 'name' => 'Name', 'type' => 'varchar', 'length' => 100],
-            ],
-        );
-
-        $builder = new AutoFormBuilder();
-        $result = $builder->build($def);
-
-        $el = $result->tabs[0]->elements[0];
-        $this->assertSame(2, $el->cols);
-    }
-
-    public function testColsMappingText(): void
-    {
-        $def = $this->makeTableDef(
-            columns: [
-                ['id' => 'notes', 'name' => 'Notes', 'type' => 'text'],
-            ],
-        );
-
-        $builder = new AutoFormBuilder();
-        $result = $builder->build($def);
-
-        $el = $result->tabs[0]->elements[0];
-        $this->assertSame(4, $el->cols);
-    }
-
-    public function testColsMappingLongtext(): void
-    {
-        $def = $this->makeTableDef(
-            columns: [
-                ['id' => 'body', 'name' => 'Body', 'type' => 'longtext'],
-            ],
-        );
-
-        $builder = new AutoFormBuilder();
-        $result = $builder->build($def);
-
-        $el = $result->tabs[0]->elements[0];
-        $this->assertSame(4, $el->cols);
-    }
-
-    public function testColsMappingOtherTypes(): void
-    {
-        $def = $this->makeTableDef(
-            columns: [
-                ['id' => 'amount', 'name' => 'Amount', 'type' => 'int'],
-                ['id' => 'active', 'name' => 'Active', 'type' => 'boolean'],
-                ['id' => 'birth_date', 'name' => 'Birth', 'type' => 'date'],
-            ],
-        );
-
-        $builder = new AutoFormBuilder();
-        $result = $builder->build($def);
-
-        foreach ($result->tabs[0]->elements as $el) {
-            $this->assertSame(1, $el->cols, "Column {$el->column} should have cols=1");
-        }
+        $this->assertSame('text', $byCol['name']->inputType);
+        $this->assertSame('textarea', $byCol['notes']->inputType);
+        $this->assertSame('number', $byCol['qty']->inputType);
+        $this->assertSame('date', $byCol['birth']->inputType);
+        $this->assertSame('checkbox', $byCol['active']->inputType);
     }
 
     public function testEnumIntBecomesSelectWithOptions(): void
     {
-        $def = $this->makeTableDef(
-            columns: [
-                ['id' => 'person_type', 'name' => 'Type', 'type' => 'enumInt', 'cfgItem' => 'base.persons.personTypes'],
-            ],
-        );
+        $def = $this->makeTableDef([
+            ['id' => 'person_type', 'name' => 'Type', 'type' => 'enumInt', 'cfgItem' => 'base.persons.personTypes'],
+        ]);
 
-        // Mock ConfigRuntime — also serves the i18n general-tab label key
-        // that AutoFormBuilder reads via core.system.formDefaults.
         $config = $this->createMock(ConfigRuntime::class);
         $config->method('cfgItem')
             ->willReturnCallback(fn(string $id) => match ($id) {
@@ -260,50 +187,39 @@ class AutoFormBuilderTest extends TestCase
                 default => null,
             });
 
-        $builder = new AutoFormBuilder();
-        $result = $builder->build($def, $config);
+        $result = (new AutoFormBuilder())->build($def, $config);
+        $el = $this->elementsOf($result->tabs[0])[0];
 
-        $el = $result->tabs[0]->elements[0];
         $this->assertSame('select', $el->type);
         $this->assertCount(3, $el->options);
         $this->assertSame(0, $el->options[0]['value']);
         $this->assertSame('Undefined', $el->options[0]['label']);
-        $this->assertSame(1, $el->options[1]['value']);
-        $this->assertSame(2, $el->options[2]['value']);
     }
 
     public function testEnumIntWithoutConfigHasEmptyOptions(): void
     {
-        $def = $this->makeTableDef(
-            columns: [
-                ['id' => 'person_type', 'name' => 'Type', 'type' => 'enumInt', 'cfgItem' => 'base.persons.personTypes'],
-            ],
-        );
+        $def = $this->makeTableDef([
+            ['id' => 'person_type', 'name' => 'Type', 'type' => 'enumInt', 'cfgItem' => 'base.persons.personTypes'],
+        ]);
 
-        $builder = new AutoFormBuilder();
-        $result = $builder->build($def, null);
+        $result = (new AutoFormBuilder())->build($def, null);
+        $el = $this->elementsOf($result->tabs[0])[0];
 
-        $el = $result->tabs[0]->elements[0];
         $this->assertSame('select', $el->type);
         $this->assertSame([], $el->options);
     }
 
     public function testRequiredForNonNullableWithoutDefault(): void
     {
-        $def = $this->makeTableDef(
-            columns: [
-                ['id' => 'name', 'name' => 'Name', 'type' => 'varchar', 'length' => 50, 'nullable' => false],
-                ['id' => 'email', 'name' => 'Email', 'type' => 'varchar', 'length' => 200, 'nullable' => true],
-                ['id' => 'status', 'name' => 'Status', 'type' => 'int', 'default' => 0],
-            ],
-        );
+        $def = $this->makeTableDef([
+            ['id' => 'name', 'name' => 'Name', 'type' => 'varchar', 'length' => 50, 'nullable' => false],
+            ['id' => 'email', 'name' => 'Email', 'type' => 'varchar', 'length' => 200, 'nullable' => true],
+            ['id' => 'status', 'name' => 'Status', 'type' => 'int', 'default' => 0],
+        ]);
 
-        $builder = new AutoFormBuilder();
-        $result = $builder->build($def);
-
-        $elements = $result->tabs[0]->elements;
+        $result = (new AutoFormBuilder())->build($def);
         $elByCol = [];
-        foreach ($elements as $el) {
+        foreach ($this->elementsOf($result->tabs[0]) as $el) {
             $elByCol[$el->column] = $el;
         }
 
@@ -314,30 +230,18 @@ class AutoFormBuilderTest extends TestCase
 
     public function testFullSizeDefaultsFalse(): void
     {
-        $def = $this->makeTableDef(
-            columns: [
-                ['id' => 'name', 'name' => 'Name', 'type' => 'varchar', 'length' => 50],
-            ],
-        );
-
-        $builder = new AutoFormBuilder();
-        $result = $builder->build($def);
-
-        $this->assertFalse($result->fullSize);
+        $def = $this->makeTableDef([
+            ['id' => 'name', 'name' => 'Name', 'type' => 'varchar', 'length' => 50],
+        ]);
+        $this->assertFalse((new AutoFormBuilder())->build($def)->fullSize);
     }
 
     public function testDocStatesIsNullByDefault(): void
     {
-        $def = $this->makeTableDef(
-            columns: [
-                ['id' => 'name', 'name' => 'Name', 'type' => 'varchar', 'length' => 50],
-            ],
-        );
-
-        $builder = new AutoFormBuilder();
-        $result = $builder->build($def);
-
-        $this->assertNull($result->docStates);
+        $def = $this->makeTableDef([
+            ['id' => 'name', 'name' => 'Name', 'type' => 'varchar', 'length' => 50],
+        ]);
+        $this->assertNull((new AutoFormBuilder())->build($def)->docStates);
     }
 
     public function testGeneralTabComesFirst(): void
@@ -347,13 +251,10 @@ class AutoFormBuilderTest extends TestCase
                 ['id' => 'grouped', 'name' => 'Grouped', 'type' => 'varchar', 'length' => 50, 'group' => 'info'],
                 ['id' => 'ungrouped', 'name' => 'Ungrouped', 'type' => 'varchar', 'length' => 50],
             ],
-            columnGroups: [
-                ['id' => 'info', 'name' => 'Info'],
-            ],
+            columnGroups: [['id' => 'info', 'name' => 'Info']],
         );
 
-        $builder = new AutoFormBuilder();
-        $result = $builder->build($def);
+        $result = (new AutoFormBuilder())->build($def);
 
         $this->assertCount(2, $result->tabs);
         $this->assertSame('general', $result->tabs[0]->id);

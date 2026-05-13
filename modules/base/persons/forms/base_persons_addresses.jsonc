@@ -13,24 +13,32 @@
             "label": "Adresa",
             "label:cs": "Adresa",
             "label:en": "Address",
-            "elements": [
-                {"type": "select", "column": "address_type", "cols": 1},
-                {"type": "input", "column": "name", "cols": 2},
+            "sections": [
+                {
+                    "columns": [
+                        {
+                            "elements": [
+                                {"type": "select", "column": "address_type"},
+                                {"type": "input", "column": "name"},
 
-                {"type": "separator", "label": "Adresa", "label:cs": "Adresa", "label:en": "Address"},
-                {"type": "input", "column": "street", "cols": 2},
-                {"type": "input", "column": "house_number", "cols": 1},
-                {"type": "input", "column": "orientation_number", "cols": 1},
-                {"type": "input", "column": "city", "cols": 2},
-                {"type": "input", "column": "city_part", "cols": 1},
-                {"type": "input", "column": "zip", "cols": 1},
-                {"type": "input", "column": "country", "cols": 1},
+                                {"type": "separator", "label": "Adresa", "label:cs": "Adresa", "label:en": "Address"},
+                                {"type": "input", "column": "street"},
+                                {"type": "input", "column": "house_number"},
+                                {"type": "input", "column": "orientation_number"},
+                                {"type": "input", "column": "city"},
+                                {"type": "input", "column": "city_part"},
+                                {"type": "input", "column": "zip"},
+                                {"type": "input", "column": "country"},
 
-                {"type": "separator", "label": "Platnost", "label:cs": "Platnost", "label:en": "Validity"},
-                {"type": "input", "column": "valid_from", "cols": 1},
-                {"type": "input", "column": "valid_to", "cols": 1},
-                {"type": "input", "column": "order_pos", "cols": 1},
-                {"type": "input", "column": "note", "cols": 4},
+                                {"type": "separator", "label": "Platnost", "label:cs": "Platnost", "label:en": "Validity"},
+                                {"type": "input", "column": "valid_from"},
+                                {"type": "input", "column": "valid_to"},
+                                {"type": "input", "column": "order_pos"},
+                                {"type": "input", "column": "note"}
+                            ]
+                        }
+                    ]
+                }
             ]
         },
         {
@@ -38,14 +46,22 @@
             "label": "Upřesnění",
             "label:cs": "Upřesnění",
             "label:en": "Details",
-            "elements": [
-                {"type": "select", "column": "place_reg_type", "cols": 1},
-                {"type": "input", "column": "place_reg_id", "cols": 1},
+            "sections": [
+                {
+                    "columns": [
+                        {
+                            "elements": [
+                                {"type": "select", "column": "place_reg_type"},
+                                {"type": "input", "column": "place_reg_id"},
 
-                {"type": "separator", "label": "Geolokace", "label:cs": "Geolokace", "label:en": "Geolocation"},
-                {"type": "input", "column": "latitude", "cols": 1},
-                {"type": "input", "column": "longitude", "cols": 1},
-                {"type": "input", "column": "manual_gps", "cols": 1},
+                                {"type": "separator", "label": "Geolokace", "label:cs": "Geolokace", "label:en": "Geolocation"},
+                                {"type": "input", "column": "latitude"},
+                                {"type": "input", "column": "longitude"},
+                                {"type": "input", "column": "manual_gps"}
+                            ]
+                        }
+                    ]
+                }
             ]
         }
     ]

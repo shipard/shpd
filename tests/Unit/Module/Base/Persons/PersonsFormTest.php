@@ -22,9 +22,13 @@ class PersonsFormTest extends TestCase
             if ($tab->id !== $tabId) {
                 continue;
             }
-            foreach ($tab->elements as $el) {
-                if ($el->column === $column) {
-                    return $el;
+            foreach ($tab->sections as $section) {
+                foreach ($section->columns as $col) {
+                    foreach ($col->elements as $el) {
+                        if ($el->column === $column) {
+                            return $el;
+                        }
+                    }
                 }
             }
         }
@@ -254,10 +258,9 @@ class PersonsFormTest extends TestCase
         }
 
         $this->assertNotNull($contactsTab);
-        $this->assertCount(1, $contactsTab->elements);
-        $this->assertSame('subtable', $contactsTab->elements[0]->type);
-        $this->assertSame('base_persons_contacts', $contactsTab->elements[0]->table);
-        $this->assertSame('person', $contactsTab->elements[0]->foreignKey);
-        $this->assertSame('base.persons.contacts', $contactsTab->elements[0]->formId);
+        $this->assertSame('subtable', $contactsTab->type);
+        $this->assertSame('base_persons_contacts', $contactsTab->subtable['table']);
+        $this->assertSame('person', $contactsTab->subtable['foreignKey']);
+        $this->assertSame('base.persons.contacts', $contactsTab->subtable['formId']);
     }
 }

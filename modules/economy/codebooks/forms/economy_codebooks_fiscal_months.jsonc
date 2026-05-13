@@ -13,12 +13,20 @@
             "label": "Měsíc",
             "label:cs": "Měsíc",
             "label:en": "Month",
-            "elements": [
-                {"type": "input", "column": "date_begin", "cols": 1, "required": true},
-                {"type": "input", "column": "date_end", "cols": 1, "required": true},
-                {"type": "select", "column": "period_type", "cols": 1, "required": true},
-                {"type": "input", "column": "calendar_year", "cols": 1, "readOnly": true},
-                {"type": "input", "column": "calendar_month", "cols": 1, "readOnly": true}
+            "sections": [
+                {
+                    "columns": [
+                        {
+                            "elements": [
+                                {"type": "input", "column": "date_begin", "required": true},
+                                {"type": "input", "column": "date_end", "required": true},
+                                {"type": "select", "column": "period_type", "required": true},
+                                {"type": "input", "column": "calendar_year", "readOnly": true},
+                                {"type": "input", "column": "calendar_month", "readOnly": true}
+                            ]
+                        }
+                    ]
+                }
             ]
         }
     ]

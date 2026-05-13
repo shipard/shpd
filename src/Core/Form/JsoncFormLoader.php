@@ -10,6 +10,31 @@ use Shipard\Core\Database\TableDefinition;
 use Shipard\Core\I18n\ConfigLocalizer;
 use Shipard\Core\Utils\JsoncParser;
 
+/**
+ * Loads a JSONC form definition into the new section/column wire model.
+ *
+ * Expected source shape (camelCase keys for hand-authored fields):
+ *   {
+ *     "title": "...", "titleNew": "...", "fullSize": false,
+ *     "tabs": [
+ *       { "id": "...", "label": "...", "type": "fields" /* default *\/,
+ *         "sections": [
+ *           { "title": null, "hidden": false,
+ *             "columns": [
+ *               { "elements": [ {"type": "input", "column": "...", ...} ] }
+ *             ]
+ *           }
+ *         ]
+ *       },
+ *       { "id": "...", "label": "...", "type": "subtable",
+ *         "subtable": {"table": "...", "foreignKey": "...", "formId": "..."} },
+ *       { "id": "...", "label": "...", "type": "attachments", "tableId": 110 }
+ *     ]
+ *   }
+ *
+ * The old format (tabs with `elements` directly, `cols` on element, `group` type) is
+ * actively rejected with a clear error to surface forgotten migrations.
+ */
 class JsoncFormLoader
 {
     public function load(
@@ -20,10 +45,6 @@ class JsoncFormLoader
         string $language = 'en',
     ): FormDefinition {
         $data = JsoncParser::parseFile($jsonPath);
-
-        // Reduce `field:cs`/`field:en` variants to a single `field` per the
-        // requested language. Recurses into tabs[].label, elements[].label
-        // (separators), elements[].placeholder, etc.
         $data = ConfigLocalizer::localize($data, $language);
 
         $colMap = [];
@@ -32,16 +53,8 @@ class JsoncFormLoader
         }
 
         $tabs = [];
-        foreach ($data['tabs'] ?? [] as $tabData) {
-            $elements = [];
-            foreach ($tabData['elements'] ?? [] as $elData) {
-                $elements[] = $this->buildElement($elData, $colMap, $config);
-            }
-            $tabs[] = new FormTab(
-                id: $tabData['id'] ?? '',
-                label: $tabData['label'] ?? '',
-                elements: $elements,
-            );
+        foreach (($data['tabs'] ?? []) as $i => $tabData) {
+            $tabs[] = $this->buildTab($tabData, $i, $colMap, $config, $jsonPath);
         }
 
         $dbName = $tableId !== '' ? $tableId : $tableDef->name;
@@ -57,33 +70,167 @@ class JsoncFormLoader
     /**
      * @param array<string, ColumnDefinition> $colMap
      */
-    private function buildElement(array $elData, array $colMap, ?ConfigRuntime $config): FormElement
+    private function buildTab(array $tabData, int $idx, array $colMap, ?ConfigRuntime $config, string $jsonPath): FormTab
     {
+        $id    = $tabData['id'] ?? '';
+        $label = $tabData['label'] ?? '';
+        $type  = $tabData['type'] ?? 'fields';
+
+        // Detect old format at the tab level: elements[] directly inside a tab without
+        // 'sections' is the legacy shape; bail out with a clear error.
+        if (isset($tabData['elements']) && !isset($tabData['sections']) && $type === 'fields') {
+            throw new \RuntimeException(sprintf(
+                'JsoncFormLoader: %s tab "%s" uses the legacy "elements[]" shape. '
+                . 'The form must be ported to the new sections[]→columns[]→elements[] model.',
+                $jsonPath, $id,
+            ));
+        }
+
+        if ($type === 'subtable') {
+            $sub = $tabData['subtable'] ?? null;
+            if (!is_array($sub) || !isset($sub['table'], $sub['foreignKey'])) {
+                throw new \RuntimeException(sprintf(
+                    'JsoncFormLoader: %s tab "%s" of type "subtable" requires subtable {table, foreignKey, [formId]}',
+                    $jsonPath, $id,
+                ));
+            }
+            return new FormTab(
+                id: $id,
+                label: $label,
+                type: 'subtable',
+                subtable: [
+                    'table'      => $sub['table'],
+                    'foreignKey' => $sub['foreignKey'],
+                    'formId'     => $sub['formId'] ?? null,
+                    'sort'       => $sub['sort'] ?? null,
+                ],
+                icon: $tabData['icon'] ?? null,
+            );
+        }
+
+        if ($type === 'attachments') {
+            $tableId = $tabData['tableId'] ?? null;
+            if (!is_int($tableId)) {
+                throw new \RuntimeException(sprintf(
+                    'JsoncFormLoader: %s tab "%s" of type "attachments" requires integer tableId',
+                    $jsonPath, $id,
+                ));
+            }
+            return new FormTab(
+                id: $id,
+                label: $label,
+                type: 'attachments',
+                tableId: $tableId,
+                icon: $tabData['icon'] ?? null,
+            );
+        }
+
+        // type='fields'
+        $sections = [];
+        foreach (($tabData['sections'] ?? []) as $sIdx => $sectionData) {
+            $sections[] = $this->buildSection($sectionData, $id, $sIdx, $colMap, $config, $jsonPath);
+        }
+
+        if ($sections === []) {
+            throw new \RuntimeException(sprintf(
+                'JsoncFormLoader: %s tab "%s" of type "fields" has no sections (sections[] is required and non-empty)',
+                $jsonPath, $id,
+            ));
+        }
+
+        return new FormTab(
+            id: $id,
+            label: $label,
+            sections: $sections,
+            type: 'fields',
+            icon: $tabData['icon'] ?? null,
+        );
+    }
+
+    /**
+     * @param array<string, ColumnDefinition> $colMap
+     */
+    private function buildSection(array $sectionData, string $tabId, int $sIdx, array $colMap, ?ConfigRuntime $config, string $jsonPath): FormSection
+    {
+        $columnsData = $sectionData['columns'] ?? null;
+        if (!is_array($columnsData) || $columnsData === []) {
+            throw new \RuntimeException(sprintf(
+                'JsoncFormLoader: %s tab "%s" section[%d] requires non-empty columns[]',
+                $jsonPath, $tabId, $sIdx,
+            ));
+        }
+
+        $columns = [];
+        foreach ($columnsData as $cIdx => $colData) {
+            $elementsData = $colData['elements'] ?? null;
+            if (!is_array($elementsData)) {
+                throw new \RuntimeException(sprintf(
+                    'JsoncFormLoader: %s tab "%s" section[%d] column[%d] requires elements[]',
+                    $jsonPath, $tabId, $sIdx, $cIdx,
+                ));
+            }
+            $elements = [];
+            foreach ($elementsData as $elData) {
+                $elements[] = $this->buildElement($elData, $colMap, $config, $jsonPath);
+            }
+            $columns[] = new FormColumn($elements);
+        }
+
+        return new FormSection(
+            columns: $columns,
+            title: $sectionData['title'] ?? null,
+            hidden: $sectionData['hidden'] ?? false,
+        );
+    }
+
+    /**
+     * @param array<string, ColumnDefinition> $colMap
+     */
+    private function buildElement(array $elData, array $colMap, ?ConfigRuntime $config, string $jsonPath): FormElement
+    {
+        // Reject the legacy `cols` field — it signals an unported element.
+        if (array_key_exists('cols', $elData)) {
+            throw new \RuntimeException(sprintf(
+                'JsoncFormLoader: %s — element "%s" still has legacy "cols" key. '
+                . 'Element widths are determined by the parent section\'s columns now.',
+                $jsonPath, $elData['column'] ?? ($elData['type'] ?? '?'),
+            ));
+        }
+
+        $type = $elData['type'] ?? null;
+        if ($type === 'group' || $type === 'subtable') {
+            throw new \RuntimeException(sprintf(
+                'JsoncFormLoader: %s — element type "%s" is no longer supported. '
+                . 'Use inline groups or convert subtables to dedicated tabs.',
+                $jsonPath, $type,
+            ));
+        }
+
         $column = $elData['column'] ?? null;
         $col = $column !== null ? ($colMap[$column] ?? null) : null;
 
-        // Fill missing label from TableDefinition
+        // Fill missing label from TableDefinition.
         $label = $elData['label'] ?? ($col !== null ? $col->name : null);
 
-        // Determine type: explicit in JSONC, or derived from column definition
-        $type = $elData['type'] ?? $this->deriveType($col);
+        // Determine type: explicit in JSONC, or derived from column definition.
+        $type = $type ?? $this->deriveType($col);
 
-        // Resolve select options from config if not provided
+        // Resolve select options from config if not provided.
         $options = $elData['options'] ?? null;
         if ($type === 'select' && $options === null && $col !== null) {
             $options = $this->resolveEnumOptions($col, $config);
         }
 
-        // Handle nested elements for groups
+        // Nested elements (inline groups).
         $elements = null;
         if (isset($elData['elements']) && is_array($elData['elements'])) {
             $elements = array_map(
-                fn(array $nested) => $this->buildElement($nested, $colMap, $config),
+                fn(array $nested) => $this->buildElement($nested, $colMap, $config, $jsonPath),
                 $elData['elements'],
             );
         }
 
-        // Derive inputType from JSONC or column definition
+        // Derive inputType from JSONC or column definition.
         $inputType = $elData['inputType'] ?? null;
         if ($inputType === null && $type === 'input' && $col !== null) {
             $inputType = $this->deriveInputType($col);
@@ -91,7 +238,6 @@ class JsoncFormLoader
 
         return new FormElement(
             type: $type,
-            cols: $elData['cols'] ?? 1,
             column: $column,
             label: $label,
             placeholder: $elData['placeholder'] ?? null,
@@ -102,12 +248,9 @@ class JsoncFormLoader
             hint: $elData['hint'] ?? null,
             options: $options,
             elements: $elements,
-            table: $elData['table'] ?? null,
-            foreignKey: $elData['foreignKey'] ?? null,
-            formId: $elData['formId'] ?? null,
             content: $elData['content'] ?? null,
+            componentName: $elData['componentName'] ?? null,
             inputType: $inputType,
-            sort: $elData['sort'] ?? null,
         );
     }
 
@@ -125,13 +268,13 @@ class JsoncFormLoader
     private function deriveInputType(ColumnDefinition $col): string
     {
         return match ($col->type) {
-            'boolean'                                              => 'checkbox',
-            'date'                                                 => 'date',
-            'datetime'                                             => 'datetime',
-            'time'                                                 => 'time',
-            'text', 'longtext'                                     => 'textarea',
+            'boolean'                                                  => 'checkbox',
+            'date'                                                     => 'date',
+            'datetime'                                                 => 'datetime',
+            'time'                                                     => 'time',
+            'text', 'longtext'                                         => 'textarea',
             'int', 'smallint', 'bigint', 'tinyint', 'numeric', 'float' => 'number',
-            default                                                => 'text',
+            default                                                    => 'text',
         };
     }
 

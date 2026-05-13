@@ -118,7 +118,7 @@
   function buildDefaultData(def) {
     const data = { ...defaultData };
     for (const tab of def.tabs ?? []) {
-      for (const el of flatElements(tab.elements ?? [])) {
+      for (const el of tabFields(tab)) {
         if (el.column && !(el.column in data)) {
           data[el.column] = '';
         }
@@ -255,13 +255,13 @@
     if (errCols.size === 0) return false;
     const tab = formDef?.tabs?.find(t => t.id === tabId);
     if (!tab) return false;
-    return flatElements(tab.elements ?? []).some(el => el.column && errCols.has(el.column));
+    return tabFields(tab).some(el => el.column && errCols.has(el.column));
   }
 
   function switchToErrorTab(errs) {
     const colToTab = {};
     for (const tab of formDef?.tabs ?? []) {
-      for (const el of flatElements(tab.elements ?? [])) {
+      for (const el of tabFields(tab)) {
         if (el.column) colToTab[el.column] = tab.id;
       }
     }
@@ -272,17 +272,32 @@
     }
   }
 
-  function flatElements(elements) {
-    return elements.flatMap(el =>
-      el.type === 'group' ? flatElements(el.elements ?? []) : [el]
-    );
+  /**
+   * Vrátí ploché pole field-elements pro daný tab (rozbalí inline groups).
+   * Pro non-fields taby (subtable/attachments) vrací prázdné pole.
+   */
+  function tabFields(tab) {
+    if (!tab || tab.type === 'subtable' || tab.type === 'attachments') return [];
+    const out = [];
+    for (const section of tab.sections ?? []) {
+      for (const column of section.columns ?? []) {
+        for (const el of column.elements ?? []) {
+          if (el.type === 'inline') {
+            for (const inner of el.elements ?? []) out.push(inner);
+          } else {
+            out.push(el);
+          }
+        }
+      }
+    }
+    return out;
   }
 
   // Sestaví mapu column → element pro všechna pole ve všech tabech
   function buildElementMap() {
     const map = {};
     for (const tab of formDef?.tabs ?? []) {
-      for (const el of flatElements(tab.elements ?? [])) {
+      for (const el of tabFields(tab)) {
         if (el.column) map[el.column] = el;
       }
     }

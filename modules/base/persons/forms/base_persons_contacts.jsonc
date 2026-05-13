@@ -13,15 +13,24 @@
             "label": "Kontakt",
             "label:cs": "Kontakt",
             "label:en": "Contact",
-            "elements": [
-                {"type": "input", "column": "name", "cols": 2, "required": true},
-                {"type": "input", "column": "role", "cols": 2},
-                {"type": "input", "column": "email", "cols": 2},
-                {"type": "input", "column": "phone", "cols": 1},
-                {"type": "input", "column": "note", "cols": 4},
-                {"type": "input", "column": "valid_from", "cols": 1},
-                {"type": "input", "column": "valid_to", "cols": 1},
-                {"type": "input", "column": "order_pos", "cols": 1},
+            "sections": [
+                {
+                    "columns": [
+                        {
+                            "elements": [
+                                {"type": "input", "column": "name", "required": true},
+                                {"type": "input", "column": "role"},
+                                {"type": "input", "column": "email", "inputType": "email"},
+                                {"type": "input", "column": "phone", "inputType": "tel"},
+                                {"type": "input", "column": "note", "inputType": "textarea"},
+                                {"type": "separator"},
+                                {"type": "input", "column": "valid_from", "inputType": "date"},
+                                {"type": "input", "column": "valid_to", "inputType": "date"},
+                                {"type": "input", "column": "order_pos", "inputType": "number"}
+                            ]
+                        }
+                    ]
+                }
             ]
         }
     ]

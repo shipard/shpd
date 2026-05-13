@@ -27,36 +27,37 @@ class ItemsForm extends TableForm
         $itemTypeOptions = $this->resolveItemTypeOptions();
 
         $basic = $this->tab('basic', 'Základní údaje')
-            ->addInput('code', cols: 1,
-                hint: 'Necháte-li prázdné, kód se vygeneruje automaticky.',
-            )
-            ->addInput('name', cols: 3, required: true)
-
-            ->addSeparator('Klasifikace')
-            ->addSelect('item_kind', cols: 2,
-                options: $itemKindOptions,
-                required: true,
-                triggers: 'reload',
-            )
-            ->addSelect('item_type', cols: 1,
-                options: $itemTypeOptions,
-                readOnly: true,
-            )
-            ->addSelect('unit', cols: 1,
-                options: $unitOptions,
-                required: true,
-            )
-
-            ->addSeparator('Cena')
-            ->addNumber('sales_price_no_vat', cols: 1)
-
-            ->addSeparator('Platnost')
-            ->addDate('valid_from', cols: 1)
-            ->addDate('valid_to', cols: 1)
+            ->section()
+                ->col()
+                    ->input('code',
+                        hint: 'Necháte-li prázdné, kód se vygeneruje automaticky.',
+                    )
+                    ->input('name', required: true)
+                    ->separator('Klasifikace')
+                    ->select('item_kind',
+                        options: $itemKindOptions,
+                        required: true,
+                        triggers: 'reload',
+                    )
+                    ->select('item_type',
+                        options: $itemTypeOptions,
+                        readOnly: true,
+                    )
+                    ->select('unit',
+                        options: $unitOptions,
+                        required: true,
+                    )
+                    ->separator('Cena')
+                    ->number('sales_price_no_vat')
+                    ->separator('Platnost')
+                    ->date('valid_from')
+                    ->date('valid_to')
             ->build();
 
         $description = $this->tab('description', 'Popis')
-            ->addTextArea('description', cols: 4)
+            ->section()
+                ->col()
+                    ->textarea('description')
             ->build();
 
         return new FormDefinition(

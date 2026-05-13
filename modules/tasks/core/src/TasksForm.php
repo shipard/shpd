@@ -12,10 +12,12 @@ class TasksForm extends TableForm
     public function buildFormDefinition(array $data, bool $isNew): FormDefinition
     {
         $basic = $this->tab('basic', 'Základní údaje')
-            ->addInput('title', cols: 2, required: true)
-            ->addTextArea('description', cols: 2)
-            ->addSelect('priority', cols: 1, options: $this->resolvePriorityOptions())
-            ->addDate('due_date', cols: 1)
+            ->section()
+                ->col()
+                    ->input('title', required: true)
+                    ->textarea('description')
+                    ->select('priority', options: $this->resolvePriorityOptions())
+                    ->date('due_date')
             ->build();
 
         return new FormDefinition(

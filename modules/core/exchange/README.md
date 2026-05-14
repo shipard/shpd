@@ -172,13 +172,37 @@ formátem.
 - **Update existujícího dokladu** přes `/apply` není v Fázi 1; jen create.
 - **Batch apply** (víc dokladů v jednom requestu) není v Fázi 1.
 
+## Stav (Fáze 2)
+
+- ✅ AI analyzer napojen — profile `czech_invoices` `v2.0.0` instruuje
+  AI k produkci canonical `shpd.docs.document.v1` v poli
+  `extracted_documents[].extracted_json`.
+- ✅ `AnalysisController::result` validuje AI výstup proti canonical
+  schématu; invalid → `status = 70 (ai_failed)` s wrapperem
+  `{_validationError, _validationIssues, _rawOutput}`. AI se neretryje
+  na malformed payload — uživatel řeší přes UI / reanalyze.
+- ✅ `applyExtracted` (UI "Použít") deleguje na `DocumentApplier::apply`
+  s `applyOptions = {autoCreateMode: "safe", targetDocState: 10}`.
+  Statusy: ai_failed → 422, already-applied → 200 idempotent, partially-
+  applied (target_row_ndx set, status≠40) → recovery via status update.
+- ✅ `applyOptions.autoCreateMode` se 3 režimy (strict/safe/liberal).
+  Per-tabulka safety guard: Party `company_id`, Item `name`,
+  BankAccount `iban` ∨ `account_number`.
+- ✅ Idempotent re-apply: applier i controller umí — applier přes
+  `source.extractedDoc + target_row_ndx + status=40` lookup, controller
+  navíc přes recovery cestu (target_row_ndx set, status pending).
+- ✅ Lineage rozdělená: applier zapíše `target_*` v rámci své transakce,
+  status update + auto-transition zprávy běží přes
+  `ExtractedDocumentDocument` hooks v separátní controller transakci.
+- ✅ `reanalyze` rozšířen — superseduje i `STATUS_AI_FAILED`.
+- ✅ `ProfileSchemaDriftTest` hlídá inline kopii canonical schema v
+  profile `output_schema.documents.items.properties.fields`.
+
 ## Navazující fáze
 
-- **Fáze 2** — napojení AI analyzeru: AnalyzerProvisioner přepíše prompt
-  tak, aby produkoval canonical, a `core_mail_extracted_documents.apply`
-  flow zavolá Exchange `/apply` automaticky.
 - **Fáze 3** — frontend náhled canonical dokumentu s `_resolve` interakcí
-  (Svelte komponenta).
+  (Svelte komponenta). Tehdy default pro `applyExtracted` přepneme z
+  `autoCreateMode = "safe"` na `"strict"` a vyžádáme explicit user input.
 
 ## Související
 

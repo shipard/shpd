@@ -153,6 +153,7 @@
             "additionalProperties": false,
             "properties": {
                 "targetDocState":        { "type": "integer", "enum": [10, 20] },
+                "autoCreateMode":        { "enum": ["strict", "safe", "liberal"] },
                 "createMissingEntities": { "type": "boolean" },
                 "rejectOnIssues": {
                     "type": "array",

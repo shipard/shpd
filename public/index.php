@@ -243,7 +243,7 @@ function dispatch(
 		'form'    => dispatchForm($route, $request, $auth, $tables, $db, $formRegistry ?? new FormRegistry(), $configRuntime, $modulePathResolver, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), resolveLanguage($request, $resolved->config), $resolved->config),
 		'viewer'  => dispatchViewer($route, $request, $viewerRegistry, $db, $configRuntime),
 		'mail'    => dispatchMail($route, $request, $auth, $tables, $db, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
-		'analysis' => dispatchAnalysis($route, $request, $auth, $tables, $db, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
+		'analysis' => dispatchAnalysis($route, $request, $auth, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'exchange' => dispatchExchange($route, $request, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'openapi' => (new OpenApiController())->spec($auth, $openApiPublic, $tables, $baseUrl),
 		default   => Response::error('INTERNAL_ERROR', "Unknown controller: {$route->controller}", 500),
@@ -303,11 +303,33 @@ function dispatchAnalysis(
 	AuthContext $auth,
 	array $tables,
 	\Shipard\Core\Database\DataSourceConnection $db,
+	?\Shipard\Core\Config\ConfigRuntime $configRuntime,
 	\Shipard\Api\ResolvedDataSource $resolved,
 	\Shipard\Core\Document\DocumentRegistry $documentRegistry,
 ): Response {
 	$dsPath = $resolved->config->getDataSourceDir();
-	$ctrl = new AnalysisController($db, $resolved->config, $dsPath, $tables, $documentRegistry);
+
+	// Exchange wiring: SchemaValidator for /result canonical validation,
+	// DocumentApplier for /applyExtracted. Both require ConfigRuntime; if
+	// the compiled config is missing we degrade gracefully (controller
+	// falls back to legacy behaviour). See Phase 2 spec.
+	$schemaValidator = new \Shipard\Module\Core\Exchange\Schema\SchemaValidator(
+		\Shipard\Module\Core\Exchange\Schema\SchemaLoader::default(),
+	);
+	$applier = $configRuntime !== null
+		? \Shipard\Module\Core\Exchange\Document\DocumentApplier::create(
+			$db->getDibiConnection(),
+			$configRuntime,
+			$resolved->config,
+			$documentRegistry,
+			$tables,
+		)
+		: null;
+
+	$ctrl = new AnalysisController(
+		$db, $resolved->config, $dsPath, $tables, $documentRegistry,
+		$schemaValidator, $applier,
+	);
 	return match ($route->action) {
 		'queue'             => $ctrl->queue($auth, $request),
 		'claim'             => $ctrl->claim($auth, $request, (int) $route->id),

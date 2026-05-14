@@ -17,6 +17,8 @@ use Shipard\Core\Security\Exception\InvalidCiphertextException;
 use Shipard\Core\Security\Exception\SecretsKeyInsecureException;
 use Shipard\Core\Security\Exception\SecretsKeyMissingException;
 use Shipard\Module\Core\Attachments\AttachmentService;
+use Shipard\Module\Core\Exchange\Document\DocumentApplier;
+use Shipard\Module\Core\Exchange\Schema\SchemaValidator;
 use Shipard\Module\Core\Mail\AIAnalyzerProvisioner;
 use Shipard\Module\Core\Mail\AIBackendDocument;
 use Shipard\Module\Core\Mail\ExtractedDocumentDocument;
@@ -58,6 +60,11 @@ class AnalysisController
     private const MAX_LEASE_SECONDS = 900;
 
     /**
+     * SchemaValidator + DocumentApplier are intentionally nullable for
+     * back-compat with the Phase 1 wiring (and unit tests that don't need
+     * either). When null, /result skips canonical validation and
+     * /applyExtracted falls back to plain status update.
+     *
      * @param array<string, TableDefinition> $tables
      */
     public function __construct(
@@ -66,6 +73,8 @@ class AnalysisController
         private readonly string $dsPath,
         private readonly array $tables,
         private readonly DocumentRegistry $documentRegistry,
+        private readonly ?SchemaValidator $schemaValidator = null,
+        private readonly ?DocumentApplier $applier = null,
     ) {}
 
     // -------------------------------------------------------------------
@@ -745,18 +754,29 @@ class AnalysisController
             ])->execute();
             $analysisNdx = (int) $dibi->getInsertId();
 
-            // 2) extracted_documents
+            // 2) extracted_documents — validate each canonical against the
+            //    canonical schema; invalid output is preserved but flagged
+            //    as STATUS_AI_FAILED so UI / reanalyze can deal with it.
             $extractedNdxs = [];
             foreach ($extractedDocsInput as $doc) {
                 if (!is_array($doc)) {
                     continue;
                 }
                 $confidence = isset($doc['confidence']) ? (float) $doc['confidence'] : 0.0;
-                $status = $this->mapConfidenceToStatus($confidence, $thresholds);
 
                 $sourceAttachmentNdxs = is_array($doc['source_attachment_ndxs'] ?? null)
                     ? $doc['source_attachment_ndxs']
                     : [];
+
+                $extractedJson = is_array($doc['extracted_json'] ?? null)
+                    ? $doc['extracted_json']
+                    : null;
+
+                [$status, $jsonForDb] = $this->validateAndStoreCanonical(
+                    $extractedJson,
+                    $confidence,
+                    $thresholds,
+                );
 
                 $dibi->insert(self::EXTRACTED_TABLE, [
                     'message' => $messageNdx,
@@ -766,9 +786,7 @@ class AnalysisController
                         array_values(array_map('intval', $sourceAttachmentNdxs)),
                         JSON_UNESCAPED_UNICODE,
                     ),
-                    'extracted_json' => isset($doc['extracted_json'])
-                        ? (string) json_encode($doc['extracted_json'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
-                        : null,
+                    'extracted_json' => $jsonForDb,
                     'confidence' => $confidence,
                     'status' => $status,
                     'created' => $now,
@@ -854,6 +872,61 @@ class AnalysisController
             return ExtractedDocumentDocument::STATUS_PENDING_REVIEW;
         }
         return ExtractedDocumentDocument::STATUS_LOW_CONFIDENCE;
+    }
+
+    /**
+     * Validate a canonical extracted by AI against shpd.docs.document.v1
+     * schema and decide its status. Invalid output is wrapped (for
+     * forensics) and flagged STATUS_AI_FAILED — never rejected outright,
+     * so the user can still see what came out and trigger reanalyze.
+     *
+     * @param array<string, mixed>|null $extractedJson  Raw canonical from AI (or null).
+     * @param array{ready: float, review: float} $thresholds
+     * @return array{0: int, 1: ?string}  [status, jsonForDb]
+     */
+    private function validateAndStoreCanonical(
+        ?array $extractedJson,
+        float $confidence,
+        array $thresholds,
+    ): array {
+        if ($extractedJson === null) {
+            // No canonical at all — keep legacy behaviour: status by
+            // confidence, NULL extracted_json. (Test result without canonical.)
+            return [$this->mapConfidenceToStatus($confidence, $thresholds), null];
+        }
+
+        // If no SchemaValidator was wired (e.g. unit tests), skip validation
+        // and store as-is. This preserves Phase 1 behaviour for tests that
+        // instantiate the controller without the Exchange dependencies.
+        if ($this->schemaValidator === null) {
+            return [
+                $this->mapConfidenceToStatus($confidence, $thresholds),
+                (string) json_encode($extractedJson, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            ];
+        }
+
+        $schemaIssues = $this->schemaValidator->validate(
+            $extractedJson,
+            DocumentApplier::FORMAT_ID,
+            DocumentApplier::FORMAT_VERSION,
+        );
+
+        if ($schemaIssues === []) {
+            return [
+                $this->mapConfidenceToStatus($confidence, $thresholds),
+                (string) json_encode($extractedJson, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            ];
+        }
+
+        $wrapped = [
+            '_validationError' => 'Canonical schema validation failed',
+            '_validationIssues' => $schemaIssues,
+            '_rawOutput' => $extractedJson,
+        ];
+        return [
+            ExtractedDocumentDocument::STATUS_AI_FAILED,
+            (string) json_encode($wrapped, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        ];
     }
 
     // -------------------------------------------------------------------
@@ -997,7 +1070,11 @@ class AnalysisController
 
             $now = date('Y-m-d H:i:s');
 
-            // Označit pending/ready/low extracted docs jako superseded.
+            // Označit pending/ready/low + ai_failed extracted docs jako
+            // superseded. AI_FAILED je legitimní cíl pro reanalyze —
+            // jinak by ai_failed dokumenty navždy blokovaly auto-transition
+            // zprávy 30→40 (afterPersist v ExtractedDocumentDocument
+            // počítá s tím, že žádný sibling není v pending stavu).
             $supersededCount = $dibi->update(self::EXTRACTED_TABLE, [
                 'status' => ExtractedDocumentDocument::STATUS_SUPERSEDED,
             ])
@@ -1006,6 +1083,7 @@ class AnalysisController
                 ExtractedDocumentDocument::STATUS_READY_TO_APPLY,
                 ExtractedDocumentDocument::STATUS_PENDING_REVIEW,
                 ExtractedDocumentDocument::STATUS_LOW_CONFIDENCE,
+                ExtractedDocumentDocument::STATUS_AI_FAILED,
             ])
             ->execute();
 
@@ -1047,12 +1125,150 @@ class AnalysisController
             return Response::error('UNAUTHORIZED', 'Authentication required', 401);
         }
 
-        return $this->updateExtractedStatus(
+        // Without an Applier wired (e.g. ConfigRuntime missing), fall back
+        // to the legacy Phase 1 behaviour — pure status update. Lineage
+        // won't be filled and no doc will be created, but the UI keeps
+        // working.
+        if ($this->applier === null) {
+            return $this->updateExtractedStatus(
+                $extractedNdx,
+                $auth->userId,
+                ExtractedDocumentDocument::STATUS_APPLIED,
+                null,
+            );
+        }
+
+        $existing = $this->db->fetchRow(
+            'SELECT * FROM %n WHERE id = %i',
+            self::EXTRACTED_TABLE, $extractedNdx,
+        );
+        if ($existing === null) {
+            return Response::error('NOT_FOUND', "Extracted document {$extractedNdx} not found", 404);
+        }
+
+        $currentStatus = (int) $existing['status'];
+
+        // ai_failed → cannot apply. User must reanalyze.
+        if ($currentStatus === ExtractedDocumentDocument::STATUS_AI_FAILED) {
+            return Response::error(
+                'AI_OUTPUT_INVALID',
+                'AI extrakce neproběhla úspěšně, použij reanalýzu.',
+                422,
+            );
+        }
+
+        // Recovery path — apply succeeded earlier (target_row_ndx set) but
+        // status update may have lagged. Skip the applier and just finish
+        // the status flow. Also covers re-clicks on already-applied rows.
+        $targetRowNdx = isset($existing['target_row_ndx']) ? (int) $existing['target_row_ndx'] : 0;
+        if ($targetRowNdx > 0) {
+            return $this->completeApplied($existing, $extractedNdx, $auth->userId, $targetRowNdx);
+        }
+
+        // pending (10/20/30) → proceed with full apply
+        $pendingStates = [
+            ExtractedDocumentDocument::STATUS_READY_TO_APPLY,
+            ExtractedDocumentDocument::STATUS_PENDING_REVIEW,
+            ExtractedDocumentDocument::STATUS_LOW_CONFIDENCE,
+        ];
+        if (!in_array($currentStatus, $pendingStates, true)) {
+            return Response::error(
+                'INVALID_STATE',
+                'Document is not in a pending state (10/20/30)',
+                409,
+            );
+        }
+
+        $canonical = json_decode((string) ($existing['extracted_json'] ?? ''), true);
+        if (!is_array($canonical)) {
+            return Response::error('CORRUPTED_DATA', 'extracted_json cannot be parsed', 500);
+        }
+
+        // Server-controlled injection — never trust client-supplied source
+        // metadata or applyOptions for the AI flow.
+        $source = is_array($canonical['source'] ?? null) ? $canonical['source'] : [];
+        $source['extractedDoc'] = $extractedNdx;
+        if (empty($source['kind'])) {
+            $source['kind'] = 'aiExtraction';
+        }
+        $canonical['source'] = $source;
+        $canonical['applyOptions'] = [
+            'autoCreateMode' => 'safe',
+            'targetDocState' => 10,
+        ];
+
+        $result = $this->applier->apply($canonical);
+        if (!$result->success) {
+            return Response::error(
+                $result->errorCode ?? 'INTERNAL_ERROR',
+                $result->errorMessage ?? 'Apply failed',
+                $result->statusCode,
+                ['canonical' => $result->canonical],
+            );
+        }
+
+        $savedDocId = (int) ($result->savedDocId ?? 0);
+
+        // Mark the extracted_document as applied via the Document flow —
+        // ExtractedDocumentDocument::afterPersist triggers the message
+        // 30→40 auto-transition. If this fails, the doc is already in DB
+        // and the user can retry (target_row_ndx is set, see recovery
+        // path above).
+        $statusUpdate = $this->updateExtractedStatus(
             $extractedNdx,
             $auth->userId,
             ExtractedDocumentDocument::STATUS_APPLIED,
             null,
         );
+        $statusUpdatePayload = $statusUpdate->getPayload();
+        if (!is_array($statusUpdatePayload) || ($statusUpdatePayload['success'] ?? false) !== true) {
+            ErrorLogger::warn('applyExtracted: status update failed after successful apply', [
+                'extractedNdx' => $extractedNdx,
+                'savedDocId' => $savedDocId,
+            ]);
+        }
+
+        return Response::success([
+            'savedDocId' => $savedDocId,
+            'extractedNdx' => $extractedNdx,
+            'messageNdx' => (int) $existing['message'],
+            'canonical' => $result->canonical,
+        ]);
+    }
+
+    /**
+     * Re-entry path for an already-applied (or partially-applied) extracted
+     * document. If `extracted_document.status` is already 40, return success
+     * idempotently. Otherwise run the status update (recovery from a
+     * lagged status write after a successful apply).
+     *
+     * @param array<string, mixed> $existing
+     */
+    private function completeApplied(array $existing, int $extractedNdx, ?int $userId, int $savedDocId): Response
+    {
+        $currentStatus = (int) $existing['status'];
+        if ($currentStatus === ExtractedDocumentDocument::STATUS_APPLIED) {
+            return Response::success([
+                'savedDocId' => $savedDocId,
+                'extractedNdx' => $extractedNdx,
+                'messageNdx' => (int) $existing['message'],
+                'idempotent' => true,
+            ]);
+        }
+        $statusUpdate = $this->updateExtractedStatus(
+            $extractedNdx, $userId,
+            ExtractedDocumentDocument::STATUS_APPLIED, null,
+        );
+        $statusUpdatePayload = $statusUpdate->getPayload();
+        if (!is_array($statusUpdatePayload) || ($statusUpdatePayload['success'] ?? false) !== true) {
+            return $statusUpdate;
+        }
+        return Response::success([
+            'savedDocId' => $savedDocId,
+            'extractedNdx' => $extractedNdx,
+            'messageNdx' => (int) $existing['message'],
+            'recovered' => true,
+        ]);
     }
 
     public function rejectExtracted(AuthContext $auth, Request $request, int $extractedNdx): Response

@@ -24,28 +24,39 @@ Audit běhu: každý `core_mail_message_analyses` row si propíše `profile_ndx`
 `backend_ndx` a `prompt_version`, takže historie je auditovatelná i po pozdějších
 změnách profilu.
 
-## Default prompt
+## Default prompt (v2.0.0)
 
-```
-Jsi asistent pro zpracování došlé pošty českých firem. Pro každou přílohu
-zprávy rozhodni, zda jde o přijatou fakturu, dobropis nebo jiný dokument.
-U faktury extrahuj hlavičku (dodavatel, IČO, DIČ, č. faktury, var. symbol,
-data, celková částka, měna, způsob platby, č. účtu) a položky (popis, množství,
-MJ, cena, sazba DPH). U dobropisu navíc odkaz na opravovanou fakturu. Pole,
-která nelze určit, vynech (neuhaduj). Vrať JSON podle output_schema. confidence
-0–1 vyjadřuje tvou jistotu kvality extrakce.
-```
+Od `v2.0.0` AI vrací data přímo v kanonickém **`shpd.docs.document.v1`**
+formátu (viz [`docs/exchange-format.md`](../../../../docs/exchange-format.md))
+v poli `documents[].fields`. Předchozí ad-hoc shape (`supplier.ico`,
+`invoice_number`, `vat_breakdown[]`, `line_items[]` …) byl nahrazen
+canonical strukturou, aby `core.exchange` Applier mohl výstup uložit bez
+další transformační vrstvy.
 
-Prompt je úmyslně konzervativní — preferuje "vynech pole" před "uhádni".
+Klíčové pokyny v promptu:
+
+- Pole, která AI nedokáže určit, vynechej (neuhaduj).
+- Datumy ISO 8601 `YYYY-MM-DD`, měny ISO 4217 uppercase (`CZK`), země
+  ISO 3166-1 alpha-2 lowercase (`cz`).
+- `selfParty` vždy `"customer"` (jsme příjemce přijaté faktury).
+- `source.kind` vždy `"aiExtraction"`, `source.promptVersion` vždy
+  shodná s `prompt_version` profilu (`v2.0.0`).
+- VAT kódy v řádcích jsou klíče z `world.vat.{country}.vatCodes`
+  cfgItem (`cz-110`, `cz-111`, …) — ne sazby v procentech.
+- Když žádná příloha není dokladem, vrať `documents: []`.
+
+Plný prompt v [`profiles/default_czech_invoices.jsonc`](../profiles/default_czech_invoices.jsonc)
+sekce `prompt_template`.
 
 ## Output schema
 
-JSON Schema draft-07. Hlavní struktura:
+JSON Schema **draft-2020-12** (od `v2.0.0`; dřív draft-07). Wrapper:
 
 ```json
 {
   "type": "object",
   "required": ["overall_confidence", "documents"],
+  "additionalProperties": false,
   "properties": {
     "overall_confidence": { "type": "number", "minimum": 0, "maximum": 1 },
     "documents": {
@@ -54,10 +65,10 @@ JSON Schema draft-07. Hlavní struktura:
         "type": "object",
         "required": ["doc_type", "source_attachment_ndxs", "confidence", "fields"],
         "properties": {
-          "doc_type": { "enum": ["invoiceReceived", "creditNote", "other"] },
-          "source_attachment_ndxs": { "type": "array", "items": { "type": "integer" } },
+          "doc_type": { "enum": ["invoiceReceived", "invoiceIssued", "creditNote", "other"] },
+          "source_attachment_ndxs": { "type": "array", "items": { "type": "integer", "minimum": 0 } },
           "confidence": { "type": "number" },
-          "fields": { ... }
+          "fields": { /* inline shpd.docs.document.v1 schema */ }
         }
       }
     }
@@ -65,7 +76,15 @@ JSON Schema draft-07. Hlavní struktura:
 }
 ```
 
-Plné schéma viz [profiles/default_czech_invoices.jsonc](../profiles/default_czech_invoices.jsonc).
+**`fields` je inline kopie** `modules/core/exchange/schemas/shpd.docs.document.v1.json`.
+Analyzer (`/claim` response) dostává `output_schema` napřímo — neumí
+`$ref` resolve napříč souborům, takže canonical schéma musí být doslovně
+embedded. Drift mezi profilem a canonical souborem hlídá test
+[`tests/Unit/Module/Core/Mail/ProfileSchemaDriftTest.php`](../../../../tests/Unit/Module/Core/Mail/ProfileSchemaDriftTest.php) —
+selže s odkazem na regeneraci, pokud někdo updatuje jedno a zapomene
+druhé.
+
+Plné schéma viz [`profiles/default_czech_invoices.jsonc`](../profiles/default_czech_invoices.jsonc).
 
 ## Customization guidelines
 
@@ -75,8 +94,10 @@ Plné schéma viz [profiles/default_czech_invoices.jsonc](../profiles/default_cz
    ([config/extractedDocTypes.jsonc](../config/extractedDocTypes.jsonc)).
 2. V profilu rozšiř `supported_doc_types` (JSON pole klíčů).
 3. V `prompt_template` doplň pravidla pro nový typ.
-4. V `output_schema` rozšiř enum `doc_type` a přidej fields-section pro nový typ.
-5. Bumpni `prompt_version` (`v1.0.0` → `v1.1.0`).
+4. V `output_schema.documents[].doc_type` enum přidej nový klíč. Pole
+   `fields` zůstává jednotné napříč typy — canonical formát je polymorfní
+   podle `fields.docType`, nepotřebuje per-typ branch v output_schema.
+5. Bumpni `prompt_version` (`v2.0.0` → `v2.1.0`).
 
 ### Vlastní profil pro jiný jazyk / účel
 

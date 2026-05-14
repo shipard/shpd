@@ -629,7 +629,8 @@ specifikovat:
 ```jsonc
 {
   "applyOptions": {
-    "targetDocState": 20,      // 10 (Koncept) | 20 (Potvrzeno) | …
+    "targetDocState": 20,      // 10 (Koncept) | 20 (Potvrzeno)
+    "autoCreateMode": "safe",  // strict (default) | safe | liberal — viz níže
     "createMissingEntities": true,   // explicit consent k side-creates
     "rejectOnIssues": ["error"]      // ["error"] | ["error","warning"] | []
   }
@@ -639,6 +640,20 @@ specifikovat:
 Když `targetDocState >= 20`, projde state transition v `DocDocument::processStateTransition`
 (přidělí číslo z series, vyrobí snapshoty). Pokud kterákoliv povinná reference
 chybí, applier selže (validace v `DocDocument::validate`).
+
+### `autoCreateMode`
+
+Řídí, co se stane s `canCreate` referencí, na které klient nedoplnil
+`userAction`:
+
+| Mode | Chování |
+|---|---|
+| `strict` (default) | Bez explicit `userAction` → `422 unresolved_required`. Vhodné pro UI flow, kde uživatel rozhoduje. |
+| `safe` | Autocreate, pokud `createPayload` splňuje per-tabulka guard (Party: `company_id`; Item: `name`; BankAccount: `iban` nebo `account_number`). Jinak `unresolved_required`. Vhodné pro AI flow (`AnalysisController::applyExtracted` posílá `safe`). |
+| `liberal` | Autocreate vždy. Žádný safety guard. Pro budoucí B2B import / testovací cesty. |
+
+`userAction` přebíjí mode — explicit `useExisting:<id>` nebo `create`
+funguje stejně ve všech režimech.
 
 ## 11. REST API endpointy
 

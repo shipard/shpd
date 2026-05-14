@@ -90,6 +90,15 @@ class DocumentApplier
         'invoiceIssued'   => 'invno',
     ];
 
+    /**
+     * Apply-time options pulled from `$canonical['applyOptions']` at the
+     * start of apply(). Read by resolveOne() for autoCreateMode behaviour.
+     * Reset to [] on every apply().
+     *
+     * @var array<string, mixed>
+     */
+    private array $applyOptionsCache = [];
+
     public function __construct(
         private readonly Connection $db,
         private readonly ConfigRuntime $config,
@@ -223,6 +232,18 @@ class DocumentApplier
      */
     public function apply(array $canonical): ApplyResult
     {
+        $this->applyOptionsCache = is_array($canonical['applyOptions'] ?? null)
+            ? $canonical['applyOptions']
+            : [];
+
+        // 0. Idempotency check — same extracted_document already applied?
+        //    Return existing savedDocId without re-saving. See Phase 2 spec
+        //    "Idempotency apply".
+        $idempotent = $this->checkIdempotent($canonical);
+        if ($idempotent !== null) {
+            return $idempotent;
+        }
+
         // 1+2. Schema + DocumentValidator.
         $schemaIssues = $this->schemaValidator->validate($canonical, self::FORMAT_ID, self::FORMAT_VERSION);
         if ($schemaIssues !== []) {
@@ -280,9 +301,11 @@ class DocumentApplier
             // which row.item ids ended up actually linked.
             $this->writeSupplierCodeMappings($canonical, $plan, $sideCreatedIds);
 
-            // Lineage update on core_mail_extracted_documents (only when
-            // source.extractedDoc is set; idempotent — applied_at + status).
-            $this->writeLineage($canonical, $savedDocId);
+            // Lineage targets only — status / applied_at update lives in
+            // AnalysisController::applyExtracted so the
+            // ExtractedDocumentDocument hooks (incl. message 30→40
+            // auto-transition) fire. See Phase 2 spec.
+            $this->writeLineageTargets($canonical, $savedDocId);
 
             $this->db->commit();
         } catch (\Throwable $e) {
@@ -427,9 +450,9 @@ class DocumentApplier
                 continue;
             }
             $userAction = is_array($client) ? ($client['userAction'] ?? null) : null;
-            $id = $this->resolveOne($partyKey, $fresh, $userAction, 'base_persons_persons', $plan, $issues);
-            $plan["resolved" . ucfirst($partyKey)] = $id;
-            if ($id === null && ($fresh['status'] ?? null) === 'canCreate' && $userAction === 'create') {
+            $res = $this->resolveOne($partyKey, $fresh, $userAction, 'base_persons_persons', $plan, $issues);
+            $plan["resolved" . ucfirst($partyKey)] = $res['id'];
+            if ($res['autoCreate']) {
                 $plan['partyCreates'][$partyKey] = $fresh['createPayload'] ?? [];
             }
         }
@@ -438,9 +461,9 @@ class DocumentApplier
             $fresh = $resolved['supplierBank'];
             $client = $clientResolve['supplierBank'] ?? null;
             $userAction = is_array($client) ? ($client['userAction'] ?? null) : null;
-            $id = $this->resolveOne('supplierBank', $fresh, $userAction, 'base_persons_bank_accounts', $plan, $issues);
-            $plan['resolvedSupplierBank'] = $id;
-            if ($id === null && ($fresh['status'] ?? null) === 'canCreate' && $userAction === 'create') {
+            $res = $this->resolveOne('supplierBank', $fresh, $userAction, 'base_persons_bank_accounts', $plan, $issues);
+            $plan['resolvedSupplierBank'] = $res['id'];
+            if ($res['autoCreate']) {
                 $plan['bankCreate'] = $fresh['createPayload'] ?? [];
             }
         }
@@ -458,9 +481,9 @@ class DocumentApplier
             if ($itemFresh !== null) {
                 $itemClient = is_array($clientRow['item'] ?? null) ? $clientRow['item'] : null;
                 $itemAction = $itemClient['userAction'] ?? null;
-                $itemId = $this->resolveOne("rows.{$i}.item", $itemFresh, $itemAction, 'economy_items', $plan, $issues);
-                $plan['resolvedRowItems'][$i] = $itemId;
-                if ($itemId === null && ($itemFresh['status'] ?? null) === 'canCreate' && $itemAction === 'create') {
+                $itemRes = $this->resolveOne("rows.{$i}.item", $itemFresh, $itemAction, 'economy_items', $plan, $issues);
+                $plan['resolvedRowItems'][$i] = $itemRes['id'];
+                if ($itemRes['autoCreate']) {
                     $plan['rowItemCreates'][$i] = $itemFresh['createPayload'] ?? [];
                 }
             } else {
@@ -479,20 +502,32 @@ class DocumentApplier
     }
 
     /**
-     * Generic per-reference reconcile. Returns the resolved id or null
-     * (caller distinguishes valid-null from error via $plan['errorCode']).
+     * Generic per-reference reconcile.
+     *
+     * Returns {id: ?int, autoCreate: bool}:
+     *   - `id`         — resolved DB id, or null when none (error or
+     *                    pending side-create).
+     *   - `autoCreate` — true when caller should schedule a side-create
+     *                    from `$fresh['createPayload']`. Driven by
+     *                    explicit `userAction = 'create'` OR by
+     *                    `applyOptions.autoCreateMode` (liberal always;
+     *                    safe when `safetyGuardOk()` passes).
      *
      * @param array<string, mixed> $fresh Fresh resolve output (toArray shape).
      * @param array<string, mixed> $plan  Modified in place on error.
      * @param array<int, array{severity: string, path: string, code: string, message: string}> $issues
+     * @return array{id: ?int, autoCreate: bool}
      */
-    private function resolveOne(string $path, array $fresh, ?string $userAction, string $existsTable, array &$plan, array &$issues): ?int
+    private function resolveOne(string $path, array $fresh, ?string $userAction, string $existsTable, array &$plan, array &$issues): array
     {
         $status = $fresh['status'] ?? null;
 
         if ($userAction === null) {
             if ($status === 'matched') {
-                return $fresh['matchedId'] ?? null;
+                return ['id' => $fresh['matchedId'] ?? null, 'autoCreate' => false];
+            }
+            if ($status === 'canCreate' && $this->autoCreateAllowed($existsTable, $fresh)) {
+                return ['id' => null, 'autoCreate' => true];
             }
             if ($status === 'canCreate' || $status === 'ambiguous' || $status === 'notFound') {
                 $plan['errorCode'] = 'unresolved_required';
@@ -504,7 +539,7 @@ class DocumentApplier
                     'message'  => 'Nelze automaticky propojit; doplňte _resolve.userAction.',
                 ];
             }
-            return null;
+            return ['id' => null, 'autoCreate' => false];
         }
 
         if (str_starts_with($userAction, 'useExisting:')) {
@@ -512,33 +547,77 @@ class DocumentApplier
             if (!ctype_digit($idStr) || (int) $idStr <= 0) {
                 $plan['errorCode'] = 'conflict';
                 $plan['errorMessage'] = "Neplatné id v userAction pro „{$path}\".";
-                return null;
+                return ['id' => null, 'autoCreate' => false];
             }
             $id = (int) $idStr;
             if (!$this->entityActive($existsTable, $id)) {
                 $plan['errorCode'] = 'conflict';
                 $plan['errorMessage'] = "Cílový záznam {$existsTable}#{$id} pro „{$path}\" už neexistuje.";
-                return null;
+                return ['id' => null, 'autoCreate' => false];
             }
-            return $id;
+            return ['id' => $id, 'autoCreate' => false];
         }
 
         if ($userAction === 'create') {
             if ($status !== 'canCreate') {
                 $plan['errorCode'] = 'conflict';
                 $plan['errorMessage'] = "userAction=\"create\" pro „{$path}\", ale resolve status je „{$status}\".";
-                return null;
+                return ['id' => null, 'autoCreate' => false];
             }
-            return null; // Side-create scheduled by caller.
+            return ['id' => null, 'autoCreate' => true];
         }
 
         if ($userAction === 'skip') {
-            return null;
+            return ['id' => null, 'autoCreate' => false];
         }
 
         $plan['errorCode'] = 'conflict';
         $plan['errorMessage'] = "Neznámá userAction „{$userAction}\" pro „{$path}\".";
-        return null;
+        return ['id' => null, 'autoCreate' => false];
+    }
+
+    /**
+     * Decide whether `userAction = null` on a `canCreate` reference should
+     * be promoted to autocreate based on applyOptions.autoCreateMode.
+     *
+     * - `strict` (default) — never.
+     * - `liberal`          — always.
+     * - `safe`             — only if `$fresh['createPayload']` has enough
+     *                        identifiers per {@see safetyGuardOk()}.
+     *
+     * @param array<string, mixed> $fresh
+     */
+    private function autoCreateAllowed(string $existsTable, array $fresh): bool
+    {
+        $mode = $this->applyOptionsCache['autoCreateMode'] ?? 'strict';
+        if ($mode === 'liberal') {
+            return true;
+        }
+        if ($mode === 'safe') {
+            return $this->safetyGuardOk($existsTable, $fresh);
+        }
+        return false;
+    }
+
+    /**
+     * Per-table minimum identifiers required for "safe" autocreate.
+     * See exchange-format-phase2.md §"autoCreateMode" guard table.
+     *
+     * @param array<string, mixed> $fresh
+     */
+    private function safetyGuardOk(string $existsTable, array $fresh): bool
+    {
+        $payload = $fresh['createPayload'] ?? [];
+        if (!is_array($payload)) {
+            return false;
+        }
+        return match ($existsTable) {
+            'base_persons_persons' => !empty($payload['company_id']),
+            'economy_items' => !empty($payload['name']),
+            'base_persons_bank_accounts' =>
+                !empty($payload['iban']) || !empty($payload['account_number']),
+            default => false,
+        };
     }
 
     private function entityActive(string $table, int $id): bool
@@ -605,6 +684,16 @@ class DocumentApplier
     }
 
     /**
+     * Thin wrapper around `Connection::query()` so subclasses (especially
+     * testing doubles) can intercept. `Connection::query()` itself is
+     * final and cannot be mocked directly. Pattern matches DocDocument.
+     */
+    protected function executeSql(mixed ...$args): void
+    {
+        $this->db->query(...$args);
+    }
+
+    /**
      * Per-partner item code learning — see docs/exchange-format.md §"Side-
      * creates a per-partner item mapping". Idempotent via unique index.
      *
@@ -633,7 +722,7 @@ class DocumentApplier
             if ($itemId === null) {
                 continue;
             }
-            $this->db->query(
+            $this->executeSql(
                 'INSERT IGNORE INTO [economy_items_supplier_codes]
                  ([person], [item], [supplier_code], [supplier_name], [created])
                  VALUES (%i, %i, %s, %sN, NOW())',
@@ -847,23 +936,67 @@ class DocumentApplier
     // ── Lineage update ─────────────────────────────────────────────────────
 
     /**
+     * Stamp the extracted_document with target_table_id + target_row_ndx
+     * (where the canonical went). Status and applied_at are intentionally
+     * NOT touched here — those move through ExtractedDocumentDocument hooks
+     * in AnalysisController so message auto-transition (30→40) runs.
+     * See exchange-format-phase2.md §"Lineage targets vs status update split".
+     *
      * @param array<string, mixed> $canonical
      */
-    private function writeLineage(array $canonical, int $savedDocId): void
+    private function writeLineageTargets(array $canonical, int $savedDocId): void
     {
         $extractedDoc = $canonical['source']['extractedDoc'] ?? null;
         if (!is_int($extractedDoc) || $extractedDoc <= 0) {
             return;
         }
-        $this->db->query(
+        $this->executeSql(
             'UPDATE [core_mail_extracted_documents]
              SET [target_table_id] = %s,
-                 [target_row_ndx] = %i,
-                 [status] = %i,
-                 [applied_at] = NOW()
+                 [target_row_ndx] = %i
              WHERE [id] = %i',
-            'docs_core_heads', $savedDocId, 40, $extractedDoc,
+            'docs_core_heads', $savedDocId, $extractedDoc,
         );
+    }
+
+    /**
+     * Idempotency pre-check for apply(). If the canonical's
+     * source.extractedDoc already has target_row_ndx set AND status = 40
+     * (Applied), return the existing savedDocId without re-saving. Saves
+     * a duplicate INSERT on retries / double-clicks.
+     *
+     * @param array<string, mixed> $canonical
+     */
+    private function checkIdempotent(array $canonical): ?ApplyResult
+    {
+        $extractedNdx = $canonical['source']['extractedDoc'] ?? null;
+        if (!is_int($extractedNdx) || $extractedNdx <= 0) {
+            return null;
+        }
+        $row = $this->db->fetch(
+            'SELECT [target_row_ndx], [status]
+             FROM [core_mail_extracted_documents]
+             WHERE [id] = %i',
+            $extractedNdx,
+        );
+        if ($row === null || empty($row['target_row_ndx']) || (int) $row['status'] !== 40) {
+            return null;
+        }
+        $existingId = (int) $row['target_row_ndx'];
+
+        $enriched = $canonical;
+        $enriched['savedDocId'] = $existingId;
+        $enriched['_resolve'] = [
+            'summary' => [
+                'status'          => 'alreadyApplied',
+                'matchedCount'    => 0,
+                'unresolvedCount' => 0,
+                'ambiguousCount'  => 0,
+                'errorCount'      => 0,
+            ],
+            'issues' => [],
+        ];
+        return ApplyResult::ok($enriched, $existingId);
     }
 
     // ── Output enrichment helpers ──────────────────────────────────────────

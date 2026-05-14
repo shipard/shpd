@@ -7,6 +7,7 @@ namespace Shipard\Tests\Unit\Module\Base\Persons;
 use PHPUnit\Framework\TestCase;
 use Shipard\Core\Form\FormDefinition;
 use Shipard\Core\Form\FormElement;
+use Shipard\Core\Form\FormSection;
 use Shipard\Module\Base\Persons\PersonsForm;
 
 class PersonsFormTest extends TestCase
@@ -28,7 +29,30 @@ class PersonsFormTest extends TestCase
                         if ($el->column === $column) {
                             return $el;
                         }
+                        // Also look inside inline groups.
+                        if ($el->type === 'inline' && $el->elements !== null) {
+                            foreach ($el->elements as $inner) {
+                                if ($inner->column === $column) {
+                                    return $inner;
+                                }
+                            }
+                        }
                     }
+                }
+            }
+        }
+        return null;
+    }
+
+    private function findSection(FormDefinition $def, string $tabId, ?string $title): ?FormSection
+    {
+        foreach ($def->tabs as $tab) {
+            if ($tab->id !== $tabId) {
+                continue;
+            }
+            foreach ($tab->sections as $section) {
+                if ($section->title === $title) {
+                    return $section;
                 }
             }
         }
@@ -40,12 +64,12 @@ class PersonsFormTest extends TestCase
         return array_map(fn($tab) => $tab->id, $def->tabs);
     }
 
-    // ── Company ──────────────────────────────────────────────────────────────
+    // ── Form-level ───────────────────────────────────────────────────────────
 
-    public function testCompanyFormHasSixTabs(): void
+    public function testFormHasSixTabs(): void
     {
         $form = $this->createForm();
-        $def = $form->buildFormDefinition(['person_type' => 2], false);
+        $def  = $form->buildFormDefinition(['person_type' => 2], false);
 
         $this->assertSame(
             ['basic', 'contact', 'contacts', 'addresses', 'bank_accounts', 'attachments'],
@@ -53,38 +77,104 @@ class PersonsFormTest extends TestCase
         );
     }
 
-    public function testCompanyFormFullSize(): void
+    public function testFormFullSize(): void
     {
         $form = $this->createForm();
-        $def = $form->buildFormDefinition(['person_type' => 2], false);
+        $def  = $form->buildFormDefinition(['person_type' => 2], false);
 
         $this->assertTrue($def->fullSize);
     }
 
-    public function testCompanyFormCompanyIdVisible(): void
+    public function testFormTitles(): void
     {
         $form = $this->createForm();
-        $def = $form->buildFormDefinition(['person_type' => 2], false);
+        $def  = $form->buildFormDefinition([], true);
 
-        $el = $this->findElement($def, 'basic', 'company_id');
-        $this->assertNotNull($el);
-        $this->assertFalse($el->hidden);
+        $this->assertSame('Osoba', $def->title);
+        $this->assertSame('Nová osoba', $def->titleNew);
+        $this->assertSame('base_persons_persons', $def->table);
     }
 
-    public function testCompanyFormFirstNameHidden(): void
+    // ── Basic tab section layout ─────────────────────────────────────────────
+
+    public function testBasicTabHasFourSections(): void
     {
         $form = $this->createForm();
-        $def = $form->buildFormDefinition(['person_type' => 2], false);
+        $def  = $form->buildFormDefinition(['person_type' => 2], false);
 
-        $el = $this->findElement($def, 'basic', 'first_name');
-        $this->assertNotNull($el);
-        $this->assertTrue($el->hidden);
+        $basicTab = null;
+        foreach ($def->tabs as $tab) {
+            if ($tab->id === 'basic') {
+                $basicTab = $tab;
+                break;
+            }
+        }
+
+        $this->assertNotNull($basicTab);
+        $this->assertCount(4, $basicTab->sections);
+
+        $titles = array_map(fn($s) => $s->title, $basicTab->sections);
+        $this->assertSame(
+            [null, 'Identifikace firmy', 'Jméno', 'Osobní údaje'],
+            $titles,
+        );
     }
 
-    public function testCompanyFormFullNameRequiredAndEditable(): void
+    public function testContactTabHasTwoSections(): void
     {
         $form = $this->createForm();
-        $def = $form->buildFormDefinition(['person_type' => 2], false);
+        $def  = $form->buildFormDefinition([], true);
+
+        $contactTab = null;
+        foreach ($def->tabs as $tab) {
+            if ($tab->id === 'contact') {
+                $contactTab = $tab;
+                break;
+            }
+        }
+
+        $this->assertNotNull($contactTab);
+        $this->assertCount(2, $contactTab->sections);
+        $this->assertSame(null, $contactTab->sections[0]->title);
+        $this->assertSame('Platba', $contactTab->sections[1]->title);
+    }
+
+    // ── Section visibility — Company ─────────────────────────────────────────
+
+    public function testCompanyShowsIdentifikaceFirmy(): void
+    {
+        $form = $this->createForm();
+        $def  = $form->buildFormDefinition(['person_type' => 2], false);
+
+        $section = $this->findSection($def, 'basic', 'Identifikace firmy');
+        $this->assertNotNull($section);
+        $this->assertFalse($section->hidden);
+    }
+
+    public function testCompanyHidesJmenoSection(): void
+    {
+        $form = $this->createForm();
+        $def  = $form->buildFormDefinition(['person_type' => 2], false);
+
+        $section = $this->findSection($def, 'basic', 'Jméno');
+        $this->assertNotNull($section);
+        $this->assertTrue($section->hidden);
+    }
+
+    public function testCompanyHidesOsobniUdajeSection(): void
+    {
+        $form = $this->createForm();
+        $def  = $form->buildFormDefinition(['person_type' => 2], false);
+
+        $section = $this->findSection($def, 'basic', 'Osobní údaje');
+        $this->assertNotNull($section);
+        $this->assertTrue($section->hidden);
+    }
+
+    public function testCompanyFullNameRequiredAndEditable(): void
+    {
+        $form = $this->createForm();
+        $def  = $form->buildFormDefinition(['person_type' => 2], false);
 
         $el = $this->findElement($def, 'basic', 'full_name');
         $this->assertNotNull($el);
@@ -92,44 +182,83 @@ class PersonsFormTest extends TestCase
         $this->assertFalse($el->readOnly);
     }
 
-    // ── Person ───────────────────────────────────────────────────────────────
-
-    public function testPersonFormCompanyIdHidden(): void
+    public function testIsOwnCheckboxIsInIdentifikaceFirmy(): void
     {
         $form = $this->createForm();
-        $def = $form->buildFormDefinition(['person_type' => 1], false);
+        $def  = $form->buildFormDefinition(['person_type' => 2], false);
 
-        $el = $this->findElement($def, 'basic', 'company_id');
-        $this->assertNotNull($el);
-        $this->assertTrue($el->hidden);
+        // is_own should live in the "Identifikace firmy" section, not its own section.
+        $section = $this->findSection($def, 'basic', 'Identifikace firmy');
+        $this->assertNotNull($section);
+
+        $columns = [];
+        foreach ($section->columns as $col) {
+            foreach ($col->elements as $el) {
+                if ($el->column !== null) {
+                    $columns[] = $el->column;
+                }
+            }
+        }
+
+        $this->assertContains('is_own', $columns);
     }
 
-    public function testPersonFormFirstNameVisibleAndRequired(): void
+    // ── Section visibility — Person ──────────────────────────────────────────
+
+    public function testPersonHidesIdentifikaceFirmy(): void
     {
         $form = $this->createForm();
-        $def = $form->buildFormDefinition(['person_type' => 1], false);
+        $def  = $form->buildFormDefinition(['person_type' => 1], false);
+
+        $section = $this->findSection($def, 'basic', 'Identifikace firmy');
+        $this->assertNotNull($section);
+        $this->assertTrue($section->hidden);
+    }
+
+    public function testPersonShowsJmenoSection(): void
+    {
+        $form = $this->createForm();
+        $def  = $form->buildFormDefinition(['person_type' => 1], false);
+
+        $section = $this->findSection($def, 'basic', 'Jméno');
+        $this->assertNotNull($section);
+        $this->assertFalse($section->hidden);
+    }
+
+    public function testPersonShowsOsobniUdajeSection(): void
+    {
+        $form = $this->createForm();
+        $def  = $form->buildFormDefinition(['person_type' => 1], false);
+
+        $section = $this->findSection($def, 'basic', 'Osobní údaje');
+        $this->assertNotNull($section);
+        $this->assertFalse($section->hidden);
+    }
+
+    public function testPersonFirstNameRequired(): void
+    {
+        $form = $this->createForm();
+        $def  = $form->buildFormDefinition(['person_type' => 1], false);
 
         $el = $this->findElement($def, 'basic', 'first_name');
         $this->assertNotNull($el);
-        $this->assertFalse($el->hidden);
         $this->assertTrue($el->required);
     }
 
-    public function testPersonFormLastNameVisibleAndRequired(): void
+    public function testPersonLastNameRequired(): void
     {
         $form = $this->createForm();
-        $def = $form->buildFormDefinition(['person_type' => 1], false);
+        $def  = $form->buildFormDefinition(['person_type' => 1], false);
 
         $el = $this->findElement($def, 'basic', 'last_name');
         $this->assertNotNull($el);
-        $this->assertFalse($el->hidden);
         $this->assertTrue($el->required);
     }
 
-    public function testPersonFormFullNameReadOnlyAndNotRequired(): void
+    public function testPersonFullNameReadOnlyAndNotRequired(): void
     {
         $form = $this->createForm();
-        $def = $form->buildFormDefinition(['person_type' => 1], false);
+        $def  = $form->buildFormDefinition(['person_type' => 1], false);
 
         $el = $this->findElement($def, 'basic', 'full_name');
         $this->assertNotNull($el);
@@ -137,46 +266,86 @@ class PersonsFormTest extends TestCase
         $this->assertFalse($el->required);
     }
 
-    // ── Undefined ────────────────────────────────────────────────────────────
-
-    public function testUndefinedFormBothSectionsHidden(): void
+    public function testPersonNamesAreInsideInlineGroup(): void
     {
         $form = $this->createForm();
-        $def = $form->buildFormDefinition([], true);
+        $def  = $form->buildFormDefinition(['person_type' => 1], false);
 
-        // Company fields hidden
-        $companyId = $this->findElement($def, 'basic', 'company_id');
-        $this->assertNotNull($companyId);
-        $this->assertTrue($companyId->hidden);
+        $jmenoSection = $this->findSection($def, 'basic', 'Jméno');
+        $this->assertNotNull($jmenoSection);
 
-        // Person fields hidden
-        $firstName = $this->findElement($def, 'basic', 'first_name');
-        $this->assertNotNull($firstName);
-        $this->assertTrue($firstName->hidden);
+        $foundInline = null;
+        foreach ($jmenoSection->columns as $col) {
+            foreach ($col->elements as $el) {
+                if ($el->type === 'inline') {
+                    $foundInline = $el;
+                    break 2;
+                }
+            }
+        }
 
-        // Personal details hidden
-        $birthDate = $this->findElement($def, 'basic', 'birth_date');
-        $this->assertNotNull($birthDate);
-        $this->assertTrue($birthDate->hidden);
+        $this->assertNotNull($foundInline, 'Inline group expected in Jméno section');
+        $this->assertNotNull($foundInline->elements);
+        $columns = array_map(fn($e) => $e->column, $foundInline->elements);
+        $this->assertSame(['first_name', 'middle_name', 'last_name'], $columns);
     }
 
-    public function testUndefinedWithExplicitZero(): void
+    // ── Section visibility — Undefined ───────────────────────────────────────
+
+    public function testUndefinedHidesAllConditionalSections(): void
     {
         $form = $this->createForm();
-        $def = $form->buildFormDefinition(['person_type' => 0], true);
+        $def  = $form->buildFormDefinition([], true);
 
-        $companyId = $this->findElement($def, 'basic', 'company_id');
-        $this->assertTrue($companyId->hidden);
+        $sIdent = $this->findSection($def, 'basic', 'Identifikace firmy');
+        $sJmeno = $this->findSection($def, 'basic', 'Jméno');
+        $sOsobni = $this->findSection($def, 'basic', 'Osobní údaje');
 
-        $firstName = $this->findElement($def, 'basic', 'first_name');
-        $this->assertTrue($firstName->hidden);
+        $this->assertTrue($sIdent->hidden);
+        $this->assertTrue($sJmeno->hidden);
+        $this->assertTrue($sOsobni->hidden);
+    }
+
+    public function testUndefinedWithExplicitZeroBehavesSame(): void
+    {
+        $form = $this->createForm();
+        $def  = $form->buildFormDefinition(['person_type' => 0], true);
+
+        $this->assertTrue($this->findSection($def, 'basic', 'Identifikace firmy')->hidden);
+        $this->assertTrue($this->findSection($def, 'basic', 'Jméno')->hidden);
+        $this->assertTrue($this->findSection($def, 'basic', 'Osobní údaje')->hidden);
+    }
+
+    // ── Person type select ───────────────────────────────────────────────────
+
+    public function testPersonTypeSelectHasTriggers(): void
+    {
+        $form = $this->createForm();
+        $def  = $form->buildFormDefinition([], true);
+
+        $el = $this->findElement($def, 'basic', 'person_type');
+        $this->assertNotNull($el);
+        $this->assertSame('select', $el->type);
+        $this->assertSame('reload', $el->triggers);
+    }
+
+    // ── Contact tab ──────────────────────────────────────────────────────────
+
+    public function testContactInputTypesAreSemantic(): void
+    {
+        $form = $this->createForm();
+        $def  = $form->buildFormDefinition([], true);
+
+        $this->assertSame('email', $this->findElement($def, 'contact', 'email')->inputType);
+        $this->assertSame('tel',   $this->findElement($def, 'contact', 'phone')->inputType);
+        $this->assertSame('url',   $this->findElement($def, 'contact', 'web')->inputType);
     }
 
     // ── Recalculate ──────────────────────────────────────────────────────────
 
     public function testRecalculateToPersonComputesFullName(): void
     {
-        $form = $this->createForm();
+        $form   = $this->createForm();
         $result = $form->recalculate('person_type', [
             'person_type' => 1,
             'first_name'  => 'Jan',
@@ -190,7 +359,7 @@ class PersonsFormTest extends TestCase
 
     public function testRecalculateToCompanyKeepsFullName(): void
     {
-        $form = $this->createForm();
+        $form   = $this->createForm();
         $result = $form->recalculate('person_type', [
             'person_type' => 2,
             'full_name'   => 'ACME s.r.o.',
@@ -201,45 +370,20 @@ class PersonsFormTest extends TestCase
 
     public function testRecalculateFormDefinitionReflectsNewType(): void
     {
-        $form = $this->createForm();
+        $form   = $this->createForm();
         $result = $form->recalculate('person_type', [
             'person_type' => 1,
             'first_name'  => 'Jan',
             'last_name'   => 'Novák',
         ]);
 
-        // After switching to Person, company_id should be hidden
-        $companyId = $this->findElement($result->formDefinition, 'basic', 'company_id');
-        $this->assertTrue($companyId->hidden);
-
-        // first_name should be visible
-        $firstName = $this->findElement($result->formDefinition, 'basic', 'first_name');
-        $this->assertFalse($firstName->hidden);
-    }
-
-    // ── Title & table ────────────────────────────────────────────────────────
-
-    public function testFormTitles(): void
-    {
-        $form = $this->createForm();
-        $def = $form->buildFormDefinition([], true);
-
-        $this->assertSame('Osoba', $def->title);
-        $this->assertSame('Nová osoba', $def->titleNew);
-        $this->assertSame('base_persons_persons', $def->table);
-    }
-
-    // ── Person type select has triggers ──────────────────────────────────────
-
-    public function testPersonTypeSelectHasTriggers(): void
-    {
-        $form = $this->createForm();
-        $def = $form->buildFormDefinition([], true);
-
-        $el = $this->findElement($def, 'basic', 'person_type');
-        $this->assertNotNull($el);
-        $this->assertSame('select', $el->type);
-        $this->assertSame('reload', $el->triggers);
+        // Switched to Person → Identifikace firmy hidden, Jméno visible.
+        $this->assertTrue(
+            $this->findSection($result->formDefinition, 'basic', 'Identifikace firmy')->hidden,
+        );
+        $this->assertFalse(
+            $this->findSection($result->formDefinition, 'basic', 'Jméno')->hidden,
+        );
     }
 
     // ── Subtable tabs ────────────────────────────────────────────────────────
@@ -247,7 +391,7 @@ class PersonsFormTest extends TestCase
     public function testContactsSubtableTab(): void
     {
         $form = $this->createForm();
-        $def = $form->buildFormDefinition([], true);
+        $def  = $form->buildFormDefinition([], true);
 
         $contactsTab = null;
         foreach ($def->tabs as $tab) {

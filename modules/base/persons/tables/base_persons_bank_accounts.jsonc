@@ -3,9 +3,7 @@
     "name": "Bank accounts",
     "name:cs": "Bankovní účty",
     "name:en": "Bank accounts",
-
     "displayPattern": "{account_number}",
-
     "columns": [
         {
             "id": "id",
@@ -102,28 +100,36 @@
             "nullable": true
         }
     ],
-
     "indexes": [
         {
             "id": "idx_person",
             "type": "index",
             "columns": [
-                {"column": "person"},
-                {"column": "order_pos", "order": "ASC"}
+                {
+                    "column": "person"
+                },
+                {
+                    "column": "order_pos",
+                    "order": "ASC"
+                }
             ]
         },
         {
             "id": "idx_account_number",
             "type": "index",
             "columns": [
-                {"column": "account_number"}
+                {
+                    "column": "account_number"
+                }
             ]
         },
         {
             "id": "idx_iban",
             "type": "index",
             "columns": [
-                {"column": "iban"}
+                {
+                    "column": "iban"
+                }
             ]
         }
     ]

@@ -6,7 +6,6 @@
     "titleNew:cs": "Nový bankovní účet",
     "titleNew:en": "New bank account",
     "fullSize": false,
-
     "tabs": [
         {
             "id": "basic",
@@ -15,20 +14,65 @@
             "label:en": "Bank account",
             "sections": [
                 {
+                    "title": "Účet",
+                    "title:cs": "Účet",
+                    "title:en": "Account",
                     "columns": [
                         {
                             "elements": [
-                                {"type": "input", "column": "name"},
-                                {"type": "input", "column": "account_number", "required": true},
-                                {"type": "input", "column": "iban"},
-                                {"type": "input", "column": "bic"},
-                                {"type": "input", "column": "currency"},
-                                {"type": "select", "column": "source"},
-
-                                {"type": "separator"},
-                                {"type": "input", "column": "valid_from"},
-                                {"type": "input", "column": "valid_to"},
-                                {"type": "input", "column": "order_pos"}
+                                {
+                                    "type": "input",
+                                    "column": "name"
+                                },
+                                {
+                                    "type": "input",
+                                    "column": "account_number",
+                                    "required": true
+                                },
+                                {
+                                    "type": "input",
+                                    "column": "iban"
+                                },
+                                {
+                                    "type": "input",
+                                    "column": "bic"
+                                },
+                                {
+                                    "type": "input",
+                                    "column": "currency"
+                                },
+                                {
+                                    "type": "select",
+                                    "column": "source"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "title": "Platnost",
+                    "title:cs": "Platnost",
+                    "title:en": "Validity",
+                    "columns": [
+                        {
+                            "elements": [
+                                {
+                                    "type": "inline",
+                                    "elements": [
+                                        {
+                                            "type": "input",
+                                            "column": "valid_from"
+                                        },
+                                        {
+                                            "type": "input",
+                                            "column": "valid_to"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "type": "input",
+                                    "column": "order_pos"
+                                }
                             ]
                         }
                     ]

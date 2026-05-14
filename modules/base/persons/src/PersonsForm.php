@@ -12,53 +12,74 @@ class PersonsForm extends TableForm
 {
     public function buildFormDefinition(array $data, bool $isNew): FormDefinition
     {
-        $personType = PersonType::tryFrom((int) ($data['person_type'] ?? 0));
-        $isCompany = $personType === PersonType::Company;
-        $isPerson = $personType === PersonType::Person;
+        $personType  = PersonType::tryFrom((int) ($data['person_type'] ?? 0));
+        $isCompany   = $personType === PersonType::Company;
+        $isPerson    = $personType === PersonType::Person;
         $isUndefined = $personType === null || $personType === PersonType::Undefined;
 
         $personTypeOptions = $this->resolvePersonTypeOptions();
 
+        // ── Tab: Základní údaje ──────────────────────────────────────────────
         $basic = $this->tab('basic', 'Základní údaje')
+            // Vždy viditelné základy
             ->section()
-                ->col()
-                    ->input('person_id', required: true)
-                    ->select('person_type', options: $personTypeOptions, triggers: 'reload', required: true)
-                    ->input('full_name',
-                        required: $isCompany,
-                        readOnly: $isPerson,
-                    )
-                    ->separator('Identifikace firmy', hidden: $isPerson || $isUndefined)
-                    ->input('company_id', hidden: $isPerson || $isUndefined)
-                    ->input('tax_id', hidden: $isPerson || $isUndefined)
-                    ->input('vat_id', hidden: $isPerson || $isUndefined)
-                    ->input('court_registration', hidden: $isPerson || $isUndefined)
-                    ->separator('Jméno', hidden: $isCompany || $isUndefined)
-                    ->input('title_before', hidden: $isCompany || $isUndefined)
-                    ->input('first_name', hidden: $isCompany || $isUndefined, required: $isPerson)
-                    ->input('middle_name', hidden: $isCompany || $isUndefined)
-                    ->input('last_name', hidden: $isCompany || $isUndefined, required: $isPerson)
-                    ->input('title_after', hidden: $isCompany || $isUndefined)
-                    ->separator('Osobní údaje', hidden: $isCompany || $isUndefined)
-                    ->date('birth_date', hidden: $isCompany || $isUndefined)
-                    ->input('national_id', hidden: $isCompany || $isUndefined)
-                    ->input('id_card_number', hidden: $isCompany || $isUndefined)
-                    ->separator('Naše firma', hidden: $isPerson || $isUndefined)
-                    ->checkbox('is_own', hidden: $isPerson || $isUndefined)
+            ->col()
+            ->input('person_id', required: true)
+            ->select(
+                'person_type',
+                options: $personTypeOptions,
+                triggers: 'reload',
+                required: true,
+            )
+            ->input(
+                'full_name',
+                required: $isCompany,
+                readOnly: $isPerson,
+            )
+
+            // Jen pro Company
+            ->section(title: 'Identifikace firmy', hidden: $isPerson || $isUndefined)
+            ->col()
+            ->input('company_id')
+            ->input('tax_id')
+            ->input('vat_id')
+            ->input('court_registration')
+            ->checkbox('is_own')
+
+            // Jen pro Person
+            ->section(title: 'Jméno', hidden: $isCompany || $isUndefined)
+            ->col()
+            ->input('title_before')
+            ->inline()
+            ->input('first_name', required: $isPerson)
+            ->input('middle_name')
+            ->input('last_name', required: $isPerson)
+            ->endInline()
+            ->input('title_after')
+
+            // Jen pro Person
+            ->section(title: 'Osobní údaje', hidden: $isCompany || $isUndefined)
+            ->col()
+            ->date('birth_date')
+            ->input('national_id')
+            ->input('id_card_number')
             ->build();
 
+        // ── Tab: Kontaktní údaje ─────────────────────────────────────────────
         $contact = $this->tab('contact', 'Kontaktní údaje')
             ->section()
-                ->col()
-                    ->input('email')
-                    ->input('phone')
-                    ->input('web')
-                    ->separator('Platba')
-                    ->number('payment_term_days')
+            ->col()
+            ->input('email', inputType: 'email')
+            ->input('phone', inputType: 'tel')
+            ->input('web', inputType: 'url')
+            ->section(title: 'Platba')
+            ->col()
+            ->number('payment_term_days')
             ->build();
 
-        $contacts     = $this->subtableTab('contacts', 'Kontakty', 'base_persons_contacts', 'person', 'base.persons.contacts');
-        $addresses    = $this->subtableTab('addresses', 'Adresy', 'base_persons_addresses', 'person', 'base.persons.addresses');
+        // ── Subtable a attachments taby ──────────────────────────────────────
+        $contacts     = $this->subtableTab('contacts',      'Kontakty',       'base_persons_contacts',      'person', 'base.persons.contacts');
+        $addresses    = $this->subtableTab('addresses',     'Adresy',         'base_persons_addresses',     'person', 'base.persons.addresses');
         $bankAccounts = $this->subtableTab('bank_accounts', 'Bankovní účty', 'base_persons_bank_accounts', 'person', 'base.persons.bank_accounts');
 
         return new FormDefinition(

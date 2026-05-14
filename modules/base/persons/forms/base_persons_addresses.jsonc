@@ -6,7 +6,6 @@
     "titleNew:cs": "Nová adresa",
     "titleNew:en": "New address",
     "fullSize": false,
-
     "tabs": [
         {
             "id": "address",
@@ -15,26 +14,100 @@
             "label:en": "Address",
             "sections": [
                 {
+                    "title": "Adresát",
+                    "title:cs": "Adresát",
+                    "title:en": "Recipient",
                     "columns": [
                         {
                             "elements": [
-                                {"type": "select", "column": "address_type"},
-                                {"type": "input", "column": "name"},
-
-                                {"type": "separator", "label": "Adresa", "label:cs": "Adresa", "label:en": "Address"},
-                                {"type": "input", "column": "street"},
-                                {"type": "input", "column": "house_number"},
-                                {"type": "input", "column": "orientation_number"},
-                                {"type": "input", "column": "city"},
-                                {"type": "input", "column": "city_part"},
-                                {"type": "input", "column": "zip"},
-                                {"type": "input", "column": "country"},
-
-                                {"type": "separator", "label": "Platnost", "label:cs": "Platnost", "label:en": "Validity"},
-                                {"type": "input", "column": "valid_from"},
-                                {"type": "input", "column": "valid_to"},
-                                {"type": "input", "column": "order_pos"},
-                                {"type": "input", "column": "note"}
+                                {
+                                    "type": "select",
+                                    "column": "address_type"
+                                },
+                                {
+                                    "type": "input",
+                                    "column": "name"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "title": "Adresa",
+                    "title:cs": "Adresa",
+                    "title:en": "Address",
+                    "columns": [
+                        {
+                            "elements": [
+                                {
+                                    "type": "input",
+                                    "column": "street"
+                                },
+                                {
+                                    "type": "inline",
+                                    "elements": [
+                                        {
+                                            "type": "input",
+                                            "column": "house_number"
+                                        },
+                                        {
+                                            "type": "input",
+                                            "column": "orientation_number"
+                                        }
+                                    ]
+                                }
+                            ]
+                        },
+                        {
+                            "elements": [
+                                {
+                                    "type": "input",
+                                    "column": "city"
+                                },
+                                {
+                                    "type": "input",
+                                    "column": "city_part"
+                                },
+                                {
+                                    "type": "input",
+                                    "column": "zip"
+                                },
+                                {
+                                    "type": "input",
+                                    "column": "country"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "title": "Platnost",
+                    "title:cs": "Platnost",
+                    "title:en": "Validity",
+                    "columns": [
+                        {
+                            "elements": [
+                                {
+                                    "type": "inline",
+                                    "elements": [
+                                        {
+                                            "type": "input",
+                                            "column": "valid_from"
+                                        },
+                                        {
+                                            "type": "input",
+                                            "column": "valid_to"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "type": "input",
+                                    "column": "order_pos"
+                                },
+                                {
+                                    "type": "input",
+                                    "column": "note"
+                                }
                             ]
                         }
                     ]
@@ -48,16 +121,48 @@
             "label:en": "Details",
             "sections": [
                 {
+                    "title": "Registr adresních míst",
+                    "title:cs": "Registr adresních míst",
+                    "title:en": "Place registry",
                     "columns": [
                         {
                             "elements": [
-                                {"type": "select", "column": "place_reg_type"},
-                                {"type": "input", "column": "place_reg_id"},
-
-                                {"type": "separator", "label": "Geolokace", "label:cs": "Geolokace", "label:en": "Geolocation"},
-                                {"type": "input", "column": "latitude"},
-                                {"type": "input", "column": "longitude"},
-                                {"type": "input", "column": "manual_gps"}
+                                {
+                                    "type": "select",
+                                    "column": "place_reg_type"
+                                },
+                                {
+                                    "type": "input",
+                                    "column": "place_reg_id"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "title": "Geolokace",
+                    "title:cs": "Geolokace",
+                    "title:en": "Geolocation",
+                    "columns": [
+                        {
+                            "elements": [
+                                {
+                                    "type": "inline",
+                                    "elements": [
+                                        {
+                                            "type": "input",
+                                            "column": "latitude"
+                                        },
+                                        {
+                                            "type": "input",
+                                            "column": "longitude"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "type": "input",
+                                    "column": "manual_gps"
+                                }
                             ]
                         }
                     ]

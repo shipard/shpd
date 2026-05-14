@@ -14,6 +14,8 @@ položka patří do jednoho **druhu** (`item_kind`), přebírá z něj svůj
 |---|---|---|
 | `code` | varchar(25), NOT NULL, UNIQUE | Kód položky. Pokud uživatel nezadá, vygeneruje se 6 hex znaků (viz níže). |
 | `name` | varchar(200), NOT NULL | Český název položky |
+| `sku` | varchar(50), nullable | Volitelný SKU kód pro propojení s externími katalogy / e-shopem (indexovaný; používá Exchange resolver). |
+| `ean` | varchar(20), nullable | Volitelný EAN / GTIN čárový kód (indexovaný; používá Exchange resolver). |
 
 ### Klasifikace (classification)
 
@@ -76,6 +78,8 @@ V UI je pole `item_type` vždy readOnly.
 | `idx_item_kind` | index | `item_kind` |
 | `idx_item_type` | index | `item_type` |
 | `idx_unit` | index | `unit` |
+| `idx_sku` | index | `sku` |
+| `idx_ean` | index | `ean` |
 | `idx_doc_state` | index | `docStateMain` ASC, `name` ASC |
 | `ft_name` | fulltext | `name`, `description` |
 

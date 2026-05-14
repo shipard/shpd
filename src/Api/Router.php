@@ -90,6 +90,10 @@ class Router
 			return $this->resolveExtractedDocumentsRoute($subpath, $method);
 		}
 
+		if (str_starts_with($subpath, '/_exchange/docs/document/')) {
+			return $this->resolveExchangeRoute($subpath, $method);
+		}
+
 		if ($subpath === '/_auth/login') {
 			if ($method !== 'POST') {
 				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
@@ -270,6 +274,18 @@ class Router
 		}
 
 		return Response::error('NOT_FOUND', 'Not found', 404);
+	}
+
+	private function resolveExchangeRoute(string $subpath, string $method): Route|Response
+	{
+		$rest = substr($subpath, strlen('/_exchange/docs/document/'));
+		if (!in_array($rest, ['validate', 'preview', 'apply'], true)) {
+			return Response::error('NOT_FOUND', 'Not found', 404);
+		}
+		if ($method !== 'POST') {
+			return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+		}
+		return new Route('exchange', $rest);
 	}
 
 	private function resolveAttachmentRoute(string $subpath, string $method): Route|Response

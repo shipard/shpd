@@ -70,6 +70,26 @@
             "nullable": false,
             "group": "identity"
         },
+        {
+            "id": "sku",
+            "name": "SKU",
+            "name:cs": "SKU",
+            "name:en": "SKU",
+            "type": "varchar",
+            "length": 50,
+            "nullable": true,
+            "group": "identity"
+        },
+        {
+            "id": "ean",
+            "name": "EAN",
+            "name:cs": "EAN",
+            "name:en": "EAN",
+            "type": "varchar",
+            "length": 20,
+            "nullable": true,
+            "group": "identity"
+        },
 
         // --- classification ---
 
@@ -198,6 +218,20 @@
             "type": "index",
             "columns": [
                 {"column": "unit"}
+            ]
+        },
+        {
+            "id": "idx_sku",
+            "type": "index",
+            "columns": [
+                {"column": "sku"}
+            ]
+        },
+        {
+            "id": "idx_ean",
+            "type": "index",
+            "columns": [
+                {"column": "ean"}
             ]
         },
         {

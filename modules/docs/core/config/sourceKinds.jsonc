@@ -1,0 +1,38 @@
+{
+    // docs.core.sourceKinds
+    //
+    // Source / lineage of a document — written to docs_core_heads.source_kind
+    // by the Exchange apply pipeline. Extensible by downstream modules
+    // (e.g. import.flexibee, import.pohoda) by adding their own keys.
+
+    "aiExtraction": {
+        "name": "AI extraction",
+        "name:cs": "AI extrakce",
+        "name:en": "AI extraction"
+    },
+    "isdoc": {
+        "name": "ISDOC",
+        "name:cs": "ISDOC",
+        "name:en": "ISDOC"
+    },
+    "peppolUbl": {
+        "name": "Peppol UBL",
+        "name:cs": "Peppol UBL",
+        "name:en": "Peppol UBL"
+    },
+    "manual": {
+        "name": "Manual entry",
+        "name:cs": "Ručně pořízeno",
+        "name:en": "Manual entry"
+    },
+    "import.flexibee": {
+        "name": "Import — Flexibee",
+        "name:cs": "Import — Flexibee",
+        "name:en": "Import — Flexibee"
+    },
+    "import.pohoda": {
+        "name": "Import — Pohoda",
+        "name:cs": "Import — Pohoda",
+        "name:en": "Import — Pohoda"
+    }
+}

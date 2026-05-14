@@ -1,0 +1,309 @@
+{
+    // shpd.docs.document.v1 — canonical exchange format for documents.
+    //
+    // Full specification: docs/exchange-format.md.
+    //
+    // Important:
+    //   - Polymorphism by `docType` is NOT enforced in the schema. All
+    //     type-specific fields are optional and the PHP DocumentValidator
+    //     enforces per-docType rules (povinná pole, místo plnění apod.).
+    //   - `additionalProperties` is false on top-level and on most objects;
+    //     `source.raw` is the one exception (opaque vendor payload).
+    //   - `vatRecap` and `totals` are *informative* — Applier recomputes them
+    //     via DocDocument::beforeSave. Validator compares declared vs.
+    //     computed and emits `totals_mismatch` warning.
+
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://shipard.cz/schemas/shpd.docs.document.v1.json",
+    "title": "Shipard canonical document v1",
+    "type": "object",
+    "additionalProperties": false,
+
+    "required": ["format", "formatVersion", "docType"],
+
+    "properties": {
+        "format":        { "const": "shpd.docs.document" },
+        "formatVersion": { "type": "string", "pattern": "^1\\.[0-9]+$" },
+
+        // ── Source / lineage ────────────────────────────────────────────
+        "source": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "kind":          { "type": "string" },
+                "extractedAt":   { "type": ["string", "null"], "format": "date-time" },
+                "confidence":    { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+                "mailMessage":   { "type": ["integer", "null"] },
+                "extractedDoc":  { "type": ["integer", "null"] },
+                "promptVersion": { "type": ["string", "null"] },
+                "raw": {
+                    // Vendor-specific opaque payload (e.g. ISDOC <Header>,
+                    // AI extraction raw response). Schema-less by design.
+                    "type": ["object", "null"],
+                    "additionalProperties": true
+                }
+            }
+        },
+
+        // ── Document identity ───────────────────────────────────────────
+        "docType":   { "type": "string", "minLength": 1 },
+        "docNumber": { "type": ["string", "null"] },
+        "docText":   { "type": ["string", "null"] },
+        "selfParty": { "enum": ["supplier", "customer", null] },
+
+        // ── Parties ─────────────────────────────────────────────────────
+        "supplier": { "$ref": "#/$defs/Party" },
+        "customer": { "$ref": "#/$defs/Party" },
+
+        // ── Dates ───────────────────────────────────────────────────────
+        "dates": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "issueDate":         { "type": ["string", "null"], "format": "date" },
+                "dueDate":           { "type": ["string", "null"], "format": "date" },
+                "accountingDate":    { "type": ["string", "null"], "format": "date" },
+                "taxPointDate":      { "type": ["string", "null"], "format": "date" },
+                "vatObligationDate": { "type": ["string", "null"], "format": "date" },
+                "periodFrom":        { "type": ["string", "null"], "format": "date" },
+                "periodTo":          { "type": ["string", "null"], "format": "date" }
+            }
+        },
+
+        // ── Currency & VAT ─────────────────────────────────────────────
+        "currency": {
+            // ISO 4217 uppercase in canonical. Applier lowercases for cfgItem.
+            "type": ["string", "null"],
+            "pattern": "^[A-Z]{3}$"
+        },
+        "exchangeRate": { "type": ["number", "null"], "exclusiveMinimum": 0 },
+
+        "vat": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "mode":                { "type": ["string", "null"] },
+                "place":               { "type": ["string", "null"] },
+                "registrationCountry": { "type": ["string", "null"], "pattern": "^[A-Z]{2}$" }
+            }
+        },
+
+        // ── Payment ─────────────────────────────────────────────────────
+        "payment": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "method":         { "type": ["string", "null"] },
+                "variableSymbol": { "type": ["string", "null"] },
+                "specificSymbol": { "type": ["string", "null"] },
+                "constantSymbol": { "type": ["string", "null"] }
+            }
+        },
+
+        // ── Notes ───────────────────────────────────────────────────────
+        "notes": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "internal":   { "type": ["string", "null"] },
+                "onDocument": { "type": ["string", "null"] }
+            }
+        },
+
+        // ── Rows ────────────────────────────────────────────────────────
+        "rows": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/Row" }
+        },
+
+        // ── Computed (informative; applier recomputes) ─────────────────
+        "vatRecap": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/VatRecapEntry" }
+        },
+        "totals": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "totalBase":     { "type": ["number", "null"] },
+                "totalVat":      { "type": ["number", "null"] },
+                "totalAmount":   { "type": ["number", "null"] },
+                "totalRounding": { "type": ["number", "null"] }
+            }
+        },
+
+        // ── Attachments ─────────────────────────────────────────────────
+        "attachments": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/Attachment" }
+        },
+
+        // ── Resolve state ───────────────────────────────────────────────
+        // Populated by /preview, consumed by /apply. Free-form here; the
+        // PHP DocumentValidator does deeper semantic checks (userAction
+        // values, presence of personId for matched, …).
+        "_resolve": {
+            "type": "object",
+            "additionalProperties": true
+        },
+
+        // ── Apply options (only honored by /apply) ─────────────────────
+        "applyOptions": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "targetDocState":        { "type": "integer", "enum": [10, 20] },
+                "createMissingEntities": { "type": "boolean" },
+                "rejectOnIssues": {
+                    "type": "array",
+                    "items": { "enum": ["error", "warning"] }
+                }
+            }
+        },
+
+        // ── Saved id (server fills on /apply success) ──────────────────
+        "savedDocId": { "type": ["integer", "null"] }
+    },
+
+    "$defs": {
+
+        // ── Party ───────────────────────────────────────────────────────
+        "Party": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "properties": {
+                "name":              { "type": ["string", "null"] },
+                "country":           { "type": ["string", "null"] },
+                "companyId":         { "type": ["string", "null"] },
+                "taxId":             { "type": ["string", "null"] },
+                "vatId":             { "type": ["string", "null"] },
+                "courtRegistration": { "type": ["string", "null"] },
+                "address":           { "$ref": "#/$defs/Address" },
+                "contact":           { "$ref": "#/$defs/Contact" },
+                "bankAccount":       { "$ref": "#/$defs/BankAccount" },
+                "paymentTermDays":   { "type": ["integer", "null"], "minimum": 0 }
+            }
+        },
+
+        "Address": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "properties": {
+                "street":       { "type": ["string", "null"] },
+                "houseNumber":  { "type": ["string", "null"] },
+                "city":         { "type": ["string", "null"] },
+                "cityPart":     { "type": ["string", "null"] },
+                "zip":          { "type": ["string", "null"] },
+                "country":      { "type": ["string", "null"] },
+                "registryCode": { "type": ["string", "null"] },
+                "displayLine":  { "type": ["string", "null"] },
+                "displayBlock": { "type": ["string", "null"] }
+            }
+        },
+
+        "Contact": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "properties": {
+                "email": { "type": ["string", "null"] },
+                "phone": { "type": ["string", "null"] },
+                "web":   { "type": ["string", "null"] }
+            }
+        },
+
+        "BankAccount": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "properties": {
+                "accountNumber": { "type": ["string", "null"] },
+                "iban":          { "type": ["string", "null"] },
+                "bic":           { "type": ["string", "null"] },
+                "currency":      {
+                    "type": ["string", "null"],
+                    "pattern": "^[A-Z]{3}$"
+                }
+            }
+        },
+
+        // ── Row ─────────────────────────────────────────────────────────
+        "Row": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "rowKind":        { "type": ["string", "null"] },
+                "orderPos":       { "type": ["integer", "null"] },
+                "item":           { "$ref": "#/$defs/RowItem" },
+                "unit":           { "type": ["string", "null"] },
+                "quantity":       { "type": ["number", "null"] },
+                "unitPrice":      { "type": ["number", "null"] },
+                "totalPrice":     { "type": ["number", "null"] },
+                "priceCalcMode":  { "type": ["string", "null"] },
+                "discountPct":    { "type": ["number", "null"] },
+                "discountAmount": { "type": ["number", "null"] },
+                "vat":            { "$ref": "#/$defs/RowVat" },
+                "computed":       { "$ref": "#/$defs/RowComputed" }
+            }
+        },
+
+        "RowItem": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "properties": {
+                "ourCode":      { "type": ["string", "null"] },
+                "supplierCode": { "type": ["string", "null"] },
+                "sku":          { "type": ["string", "null"] },
+                "ean":          { "type": ["string", "null"] },
+                "name":         { "type": ["string", "null"] },
+                "description":  { "type": ["string", "null"] }
+            }
+        },
+
+        "RowVat": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "properties": {
+                "code": { "type": ["string", "null"] },
+                "pct":  { "type": ["number", "null"] }
+            }
+        },
+
+        "RowComputed": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "properties": {
+                "vatBase":   { "type": ["number", "null"] },
+                "vatAmount": { "type": ["number", "null"] },
+                "vatTotal":  { "type": ["number", "null"] }
+            }
+        },
+
+        // ── VAT recapitulation ─────────────────────────────────────────
+        "VatRecapEntry": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "vatCode":       { "type": ["string", "null"] },
+                "vatPct":        { "type": ["number", "null"] },
+                "base":          { "type": ["number", "null"] },
+                "tax":           { "type": ["number", "null"] },
+                "total":         { "type": ["number", "null"] },
+                "isReversePair": { "type": ["boolean", "null"] }
+            }
+        },
+
+        // ── Attachment ─────────────────────────────────────────────────
+        "Attachment": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "filename": { "type": ["string", "null"] },
+                "mimeType": { "type": ["string", "null"] },
+                "size":     { "type": ["integer", "null"], "minimum": 0 },
+                "sha256":   { "type": ["string", "null"], "pattern": "^[a-fA-F0-9]{64}$" },
+                "kind":     { "enum": ["original", "scan", "supplement", "preview", null] },
+                "ref":      { "type": ["string", "null"], "pattern": "^att:[0-9]+$" },
+                "inline":   { "type": ["string", "null"] }
+            }
+        }
+    }
+}

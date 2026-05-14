@@ -32,6 +32,7 @@
         {"id": "rounding",   "name": "Rounding",      "name:cs": "Zaokrouhlení",      "name:en": "Rounding"},
         {"id": "totals",     "name": "Totals",        "name:cs": "Součty",            "name:en": "Totals"},
         {"id": "payment",    "name": "Payment",       "name:cs": "Platba",            "name:en": "Payment"},
+        {"id": "lineage",    "name": "Lineage",       "name:cs": "Návaznosti",        "name:en": "Lineage"},
         {"id": "snapshots",  "name": "Snapshots",     "name:cs": "Snapshoty",         "name:en": "Snapshots"},
         {"id": "notes",      "name": "Notes",         "name:cs": "Poznámky",          "name:en": "Notes"}
     ],
@@ -100,6 +101,21 @@
             "length": 200,
             "nullable": true,
             "group": "identity"
+        },
+        {
+            "id": "partner_doc_number",
+            "name": "Partner's document number",
+            "name:cs": "Číslo dokladu od partnera",
+            "name:en": "Partner's document number",
+            "type": "varchar",
+            "length": 40,
+            "nullable": true,
+            "group": "identity"
+            // Number assigned by the other party (e.g. supplier's invoice
+            // number on a received invoice). Our own sequence number lives
+            // in `doc_number`. Recommended non-empty for invoiceReceived at
+            // docState >= 20 — Exchange validator emits a warning; hard
+            // per-docType validation is a follow-up in docs.invoicesIn.
         },
 
         // --- partner ---
@@ -476,6 +492,42 @@
             "name:en": "Constant symbol",
             "type": "varchar", "length": 10,
             "nullable": true, "group": "payment"
+        },
+
+        // --- lineage ---
+
+        {
+            "id": "source_kind",
+            "name": "Source kind",
+            "name:cs": "Druh zdroje",
+            "name:en": "Source kind",
+            "type": "enumString",
+            "length": 40,
+            "cfgItem": "docs.core.sourceKinds",
+            "nullable": true,
+            "system": true,
+            "group": "lineage"
+        },
+        {
+            "id": "source_extracted_doc",
+            "name": "Source extracted document",
+            "name:cs": "Zdrojový extrahovaný dokument",
+            "name:en": "Source extracted document",
+            "type": "int",
+            "nullable": true,
+            "reference": "core_mail_extracted_documents",
+            "system": true,
+            "group": "lineage"
+        },
+        {
+            "id": "source_extracted_at",
+            "name": "Source extraction time",
+            "name:cs": "Čas extrakce zdroje",
+            "name:en": "Source extraction time",
+            "type": "datetime",
+            "nullable": true,
+            "system": true,
+            "group": "lineage"
         },
 
         // --- snapshots ---

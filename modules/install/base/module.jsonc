@@ -11,6 +11,7 @@
         "core.attachments",
         "core.mail",
         "core.units",
+        "core.exchange",
         "base.persons",
         "economy.codebooks",
         "economy.items",

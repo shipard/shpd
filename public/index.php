@@ -6,6 +6,7 @@ require __DIR__ . '/../vendor/autoload.php';
 use Shipard\Api\AuthContext;
 use Shipard\Api\Controller\AuthController;
 use Shipard\Api\Controller\CrudController;
+use Shipard\Api\Controller\ExchangeController;
 use Shipard\Api\Controller\MetaController;
 use Shipard\Api\Controller\NavigationController;
 use Shipard\Api\Controller\SettingsController;
@@ -243,8 +244,39 @@ function dispatch(
 		'viewer'  => dispatchViewer($route, $request, $viewerRegistry, $db, $configRuntime),
 		'mail'    => dispatchMail($route, $request, $auth, $tables, $db, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'analysis' => dispatchAnalysis($route, $request, $auth, $tables, $db, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
+		'exchange' => dispatchExchange($route, $request, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'openapi' => (new OpenApiController())->spec($auth, $openApiPublic, $tables, $baseUrl),
 		default   => Response::error('INTERNAL_ERROR', "Unknown controller: {$route->controller}", 500),
+	};
+}
+
+function dispatchExchange(
+	Route $route,
+	Request $request,
+	array $tables,
+	\Shipard\Core\Database\DataSourceConnection $db,
+	?\Shipard\Core\Config\ConfigRuntime $configRuntime,
+	\Shipard\Api\ResolvedDataSource $resolved,
+	\Shipard\Core\Document\DocumentRegistry $documentRegistry,
+): Response {
+	if ($configRuntime === null) {
+		return Response::error('INTERNAL_ERROR', 'ConfigRuntime is required for /_exchange endpoints', 500);
+	}
+
+	$applier = \Shipard\Module\Core\Exchange\Document\DocumentApplier::create(
+		$db->getDibiConnection(),
+		$configRuntime,
+		$resolved->config,
+		$documentRegistry,
+		$tables,
+	);
+	$ctrl = new ExchangeController($applier);
+
+	return match ($route->action) {
+		'validate' => $ctrl->validate($request),
+		'preview'  => $ctrl->preview($request),
+		'apply'    => $ctrl->apply($request),
+		default    => Response::error('INTERNAL_ERROR', "Unknown exchange action: {$route->action}", 500),
 	};
 }
 

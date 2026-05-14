@@ -1,0 +1,127 @@
+{
+    "format": "shpd.docs.document",
+    "formatVersion": "1.0",
+
+    "source": {
+        "kind": "aiExtraction",
+        "extractedAt": "2026-05-14T10:30:00Z",
+        "confidence": 0.92,
+        "mailMessage": 12345,
+        "extractedDoc": 678,
+        "promptVersion": "v1.1.0"
+    },
+
+    "docType": "invoiceReceived",
+    "docNumber": "2026000123",
+    "docText": "Konzultace 04/2026",
+    "selfParty": "customer",
+
+    "supplier": {
+        "name": "Dodavatel s.r.o.",
+        "country": "CZ",
+        "companyId": "12345678",
+        "taxId": "CZ12345678",
+        "vatId": "CZ12345678",
+        "address": {
+            "street": "Hlavní",
+            "houseNumber": "1",
+            "city": "Praha",
+            "zip": "11000",
+            "country": "CZ",
+            "displayLine": "Hlavní 1, 110 00 Praha 1"
+        },
+        "contact": {
+            "email": "fakturace@example.cz",
+            "phone": "+420 123 456 789"
+        },
+        "bankAccount": {
+            "accountNumber": "1234567890/0100",
+            "iban": "CZ6508000000001234567890",
+            "bic": "GIBACZPX",
+            "currency": "CZK"
+        },
+        "paymentTermDays": 14
+    },
+
+    "customer": null,
+
+    "dates": {
+        "issueDate": "2026-04-15",
+        "dueDate": "2026-04-29",
+        "accountingDate": "2026-04-15",
+        "taxPointDate": "2026-04-15",
+        "vatObligationDate": "2026-04-15"
+    },
+
+    "currency": "CZK",
+
+    "vat": {
+        "mode": "fromBase",
+        "place": "domestic",
+        "registrationCountry": "CZ"
+    },
+
+    "payment": {
+        "method": "bankTransfer",
+        "variableSymbol": "2026000123"
+    },
+
+    "notes": {
+        "onDocument": "Děkujeme."
+    },
+
+    "rows": [
+        {
+            "rowKind": "item",
+            "orderPos": 1,
+            "item": {
+                "ourCode": null,
+                "supplierCode": "KONZ-001",
+                "name": "Konzultace",
+                "description": "Hodinová sazba senior konzultanta"
+            },
+            "unit": "h",
+            "quantity": 10,
+            "unitPrice": 1033.06,
+            "totalPrice": 10330.58,
+            "priceCalcMode": "fromUnitPrice",
+            "vat": {
+                "code": "cz-110",
+                "pct": 21
+            },
+            "computed": {
+                "vatBase": 10330.58,
+                "vatAmount": 2169.42,
+                "vatTotal": 12500.00
+            }
+        }
+    ],
+
+    "vatRecap": [
+        {
+            "vatCode": "highEU",
+            "vatPct": 21,
+            "base": 10330.58,
+            "tax": 2169.42,
+            "total": 12500.00,
+            "isReversePair": false
+        }
+    ],
+
+    "totals": {
+        "totalBase": 10330.58,
+        "totalVat": 2169.42,
+        "totalAmount": 12500.00,
+        "totalRounding": 0.00
+    },
+
+    "attachments": [
+        {
+            "filename": "faktura-001.pdf",
+            "mimeType": "application/pdf",
+            "size": 123456,
+            "kind": "original",
+            "ref": "att:42"
+        }
+    ]
+}

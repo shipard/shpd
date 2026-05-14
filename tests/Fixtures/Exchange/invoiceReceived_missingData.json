@@ -1,0 +1,19 @@
+{
+    "format": "shpd.docs.document",
+    "formatVersion": "1.0",
+
+    "docType": "invoiceReceived",
+    "docText": "Faktura bez vyplněných údajů",
+    "selfParty": "customer",
+
+    "supplier": {
+        "name": "Někdo s.r.o.",
+        "country": "CZ"
+    },
+
+    "dates": {
+        "dueDate": "2026-04-29"
+    },
+
+    "rows": []
+}

@@ -1,0 +1,88 @@
+{
+    "tableId": 407,
+    "name": "Supplier item codes",
+    "name:cs": "Dodavatelské kódy položek",
+    "name:en": "Supplier item codes",
+
+    "displayPattern": "{supplier_code} → {item}",
+
+    // Managed exclusively through the Exchange apply pipeline — when the user
+    // resolves a row.item.userAction = useExisting:<id> together with a
+    // non-empty supplierCode, the applier INSERT IGNOREs a mapping row.
+    // Lookup happens automatically next time. Not exposed in navigation.
+    "hideFromNavigation": true,
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+        {
+            "id": "person",
+            "name": "Person (supplier)",
+            "name:cs": "Osoba (dodavatel)",
+            "name:en": "Person (supplier)",
+            "type": "int",
+            "nullable": false,
+            "reference": "base_persons_persons"
+        },
+        {
+            "id": "item",
+            "name": "Item",
+            "name:cs": "Položka",
+            "name:en": "Item",
+            "type": "int",
+            "nullable": false,
+            "reference": "economy_items"
+        },
+        {
+            "id": "supplier_code",
+            "name": "Supplier code",
+            "name:cs": "Dodavatelský kód",
+            "name:en": "Supplier code",
+            "type": "varchar",
+            "length": 50,
+            "nullable": false
+        },
+        {
+            "id": "supplier_name",
+            "name": "Supplier name (extracted)",
+            "name:cs": "Název v dokladu (extrahovaný)",
+            "name:en": "Supplier name (extracted)",
+            "type": "varchar",
+            "length": 200,
+            "nullable": true
+            // Free-form label the supplier uses for this item on their
+            // documents. Useful for audit / debug; not used for matching.
+        },
+        {
+            "id": "created",
+            "name": "Created",
+            "name:cs": "Vytvořeno",
+            "name:en": "Created",
+            "type": "datetime",
+            "nullable": false
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "unq_person_supplier_code",
+            "type": "unique",
+            "columns": [
+                {"column": "person"},
+                {"column": "supplier_code"}
+            ]
+        },
+        {
+            "id": "idx_item",
+            "type": "index",
+            "columns": [
+                {"column": "item"}
+            ]
+        }
+    ]
+}

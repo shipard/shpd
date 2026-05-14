@@ -1,0 +1,23 @@
+{
+    "id": "core.exchange",
+    "name": "Exchange formats",
+    "name:cs": "Výměnné formáty",
+    "name:en": "Exchange formats",
+    "description": "Canonical exchange formats for documents and other entities",
+    "description:cs": "Kanonické výměnné formáty pro doklady a další entity",
+    "description:en": "Canonical exchange formats for documents and other entities",
+
+    "dependencies": [
+        "docs.core",
+        "base.persons",
+        "economy.items",
+        "core.units",
+        "world.vat",
+        "core.mail",
+        "core.attachments"
+    ]
+
+    // No tables of its own — purely a logic / API layer.
+    // No documentClasses — uses existing Document/TableGateway.
+    // No viewers — backend service module.
+}

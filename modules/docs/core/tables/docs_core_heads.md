@@ -18,6 +18,7 @@ nastavuje se v `DocDocument::beforeSave` a má příznak `system: true`.
 | `sequence_number` | int, nullable, system | Pořadové číslo v řadě, NULL pro Koncept |
 | `doc_number` | varchar(40), system | Resolvované číslo dokladu (`126A0001`) nebo placeholder `!{id_padded}` u Konceptu |
 | `doc_text` | varchar(200), nullable | Volný popisný text |
+| `partner_doc_number` | varchar(40), nullable | Číslo dokladu přidělené druhou stranou (např. číslo faktury od dodavatele u přijaté faktury). Naše číslo z řady je v `doc_number`. Pro `invoiceReceived` ve stavu ≥ 20 doporučené non-empty — Exchange validator vyrobí warning; tvrdá per-docType validace bude follow-up v `docs.invoicesIn`. |
 
 ### `partner`
 
@@ -62,6 +63,20 @@ Sumace plněné v `beforeSave` ve Fázi 2. Doc currency: `total_base`,
 `payment_method`, `bank_account` (náš účet, vazba na
 `economy_codebooks_bank_accounts`), `variable_symbol`, `specific_symbol`,
 `constant_symbol`.
+
+### `lineage` — system
+
+Stopa, odkud doklad vznikl. Plní `core.exchange` Applier při apply
+canonical dokumentu; pro doklady ručně pořízené přes UI zůstává NULL
+(případně `'manual'`).
+
+| Sloupec | Typ | Popis |
+|---|---|---|
+| `source_kind` | enumString(40), nullable, cfgItem `docs.core.sourceKinds` | `aiExtraction` / `isdoc` / `peppolUbl` / `manual` / `import.flexibee` / `import.pohoda` |
+| `source_extracted_doc` | int, nullable, ref → `core_mail_extracted_documents` | Vyplněn jen pro `source_kind = aiExtraction` (reverse lookup z dokladu → původ) |
+| `source_extracted_at` | datetime, nullable | Časový bod extrakce / importu |
+
+Forward lookup (extrakce → výsledný doklad) je v `core_mail_extracted_documents.target_table_id` / `target_row_ndx`.
 
 ### `snapshots` — system
 

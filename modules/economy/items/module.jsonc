@@ -14,7 +14,8 @@
 
     "tables": [
         "economy_items",
-        "economy_items_kinds"
+        "economy_items_kinds",
+        "economy_items_supplier_codes"
     ],
 
     "settingsItems": [

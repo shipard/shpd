@@ -1,0 +1,59 @@
+{
+    "format": "shpd.docs.document",
+    "formatVersion": "1.0",
+
+    "source": {
+        "kind": "aiExtraction",
+        "extractedAt": "2026-05-14T10:30:00Z",
+        "confidence": 0.65
+    },
+
+    "docType": "invoiceReceived",
+    "docNumber": "2026000999",
+    "docText": "Faktura s nejednoznačným dodavatelem",
+    "selfParty": "customer",
+
+    "supplier": {
+        "name": "Acme",
+        "country": "CZ"
+    },
+
+    "dates": {
+        "issueDate": "2026-04-15",
+        "dueDate": "2026-04-29",
+        "accountingDate": "2026-04-15",
+        "taxPointDate": "2026-04-15"
+    },
+
+    "currency": "CZK",
+
+    "vat": {
+        "mode": "fromBase",
+        "place": "domestic",
+        "registrationCountry": "CZ"
+    },
+
+    "payment": {
+        "method": "bankTransfer",
+        "variableSymbol": "2026000999"
+    },
+
+    "rows": [
+        {
+            "rowKind": "item",
+            "orderPos": 1,
+            "item": {
+                "name": "Položka"
+            },
+            "unit": "ks",
+            "quantity": 1,
+            "unitPrice": 1000.00,
+            "totalPrice": 1000.00,
+            "priceCalcMode": "fromUnitPrice",
+            "vat": {
+                "code": "cz-110",
+                "pct": 21
+            }
+        }
+    ]
+}

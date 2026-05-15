@@ -84,6 +84,14 @@ class FormController
             $formDefinition = $formDefinition->withDocStates($docStatesInfo);
         }
 
+        // Header info — jen pro existující záznam. Pro nový formulář nemá co
+        // zobrazovat; nechává se na fallback `title_new`.
+        if (!$isNew) {
+            $formDefinition = $this->enrichHeaderInfo(
+                $formDefinition, $table, $data, $formRegistry, $db, $config,
+            );
+        }
+
         return Response::success([
             'formDefinition' => $formDefinition->toArray(),
             'data'           => $isNew ? ($data ?: null) : $data,
@@ -306,6 +314,30 @@ class FormController
             }
         }
         return null;
+    }
+
+    /**
+     * Doplní `headerInfo` do FormDefinition, pokud table-specific form
+     * (`PersonsForm` apod.) override vrací non-null `FormHeaderInfo`. Pro
+     * JSONC / Auto formuláře (TableForm bez override) zůstává null.
+     */
+    private function enrichHeaderInfo(
+        FormDefinition $formDefinition,
+        string $table,
+        array $data,
+        FormRegistry $formRegistry,
+        DataSourceConnection $db,
+        ?ConfigRuntime $config,
+    ): FormDefinition {
+        $tableForm = $formRegistry->createForm($table, $db, $config);
+        if ($tableForm === null) {
+            return $formDefinition;
+        }
+        $headerInfo = $tableForm->buildHeaderInfo($data);
+        if ($headerInfo === null) {
+            return $formDefinition;
+        }
+        return $formDefinition->withHeaderInfo($headerInfo);
     }
 
     private function buildDocStatesInfo(TableDefinition $def, array $data, ConfigRuntime $config): array

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Shipard\Module\Base\Persons;
 
 use Shipard\Core\Form\FormDefinition;
+use Shipard\Core\Form\FormHeaderInfo;
 use Shipard\Core\Form\RecalculateResult;
 use Shipard\Core\Form\TableForm;
 
@@ -89,6 +90,41 @@ class PersonsForm extends TableForm
             tabs: [$basic, $contact, $contacts, $addresses, $bankAccounts, $this->attachmentsTab()],
             fullSize: true,
         );
+    }
+
+    public function buildHeaderInfo(array $data): ?FormHeaderInfo
+    {
+        $fullName = trim((string) ($data['full_name'] ?? ''));
+        if ($fullName === '') {
+            return null;
+        }
+
+        $personType = PersonType::tryFrom((int) ($data['person_type'] ?? 0));
+
+        $info = [];
+        if ($personType === PersonType::Company) {
+            $companyId = trim((string) ($data['company_id'] ?? ''));
+            if ($companyId !== '') {
+                $info[] = ['label' => 'IČO', 'value' => $companyId];
+            }
+        } elseif ($personType === PersonType::Person) {
+            $birthDate = $data['birth_date'] ?? null;
+            if ($birthDate !== null && $birthDate !== '') {
+                $dt = \DateTimeImmutable::createFromFormat('Y-m-d', (string) $birthDate);
+                if ($dt instanceof \DateTimeImmutable) {
+                    $info[] = ['label' => 'Datum narození', 'value' => $dt->format('d.m.Y')];
+                }
+            }
+        } else {
+            return null;
+        }
+
+        $personId = trim((string) ($data['person_id'] ?? ''));
+        if ($personId !== '') {
+            $info[] = ['label' => 'Kód osoby', 'value' => $personId];
+        }
+
+        return new FormHeaderInfo(title: $fullName, info: $info);
     }
 
     public function recalculate(string $changedColumn, array $data): RecalculateResult

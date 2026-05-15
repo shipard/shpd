@@ -27,6 +27,9 @@
   let currentId = $state(null);
   // Snapshot dat po posledním načtení/uložení — slouží k detekci dirty stavu
   let loadedDataSnapshot = $state(null);
+  // Header info ze serveru — aktualizuje se jen v loadForm (z formDef.header_info),
+  // NE v handleTrigger. Tím hlavička modalu odráží uložená data, ne neuložené změny.
+  let savedHeaderInfo = $state(null);
 
   const formTitle = $derived(
     currentId != null
@@ -39,12 +42,13 @@
   );
 
   // Notifikuje rodiče (FormDialog) o aktuálním titulku a stavu — header modalu
-  // tak může zobrazit titulek a FormStateBadge.
+  // tak může zobrazit titulek, FormStateBadge a subtitle z header_info.
   $effect(() => {
     if (formDef) {
       onFormLoaded?.({
         title: formTitle,
         docStates: formDef.doc_states ?? null,
+        headerInfo: savedHeaderInfo,
       });
     }
   });
@@ -106,6 +110,9 @@
       return;
     }
     formDef = res.data.formDefinition;
+    // Header info ze serveru — null pro nový záznam, pro existující záznam
+    // se aktualizuje (přepíše předchozí hodnotu) i po save → reload cyklu.
+    savedHeaderInfo = formDef.header_info ?? null;
     // Sestav výchozí data: nejdřív prázdné stringy pro všechna pole,
     // pak přepiš skuteČnými daty ze serveru (včetně defaultů pro nový záznam)
     const defaults = buildDefaultData(res.data.formDefinition);

@@ -27,6 +27,11 @@
     open: boolean;
     onClose: () => void;
     children: Snippet;
+    /** Optional second header line, rendered below the title in a smaller,
+     *  lighter style. Useful for record identifiers (e.g. „IČO 68253848 ·
+     *  Kód osoby TEST-0098"). Snippet je vyvolán vždy, je-li předán — pokud
+     *  uvnitř nic nevykreslí, vykreslí se prázdný kontejner (gap mu nevadí). */
+    subtitle?: Snippet;
     /** Optional content rendered in the header between title and close button.
      *  Useful for badges or other status indicators. */
     headerExtra?: Snippet;
@@ -45,6 +50,7 @@
     open,
     onClose,
     children,
+    subtitle,
     headerExtra,
     footer,
     width = '640px',
@@ -95,7 +101,12 @@
   <div class="shpd-modal" onclick={handleOverlayClick} role="dialog" aria-modal="true" aria-label={title} tabindex="-1">
     <div class="shpd-modal__card" style={cardStyle}>
       <div class="shpd-modal__header">
-        <span class="shpd-modal__title">{title}</span>
+        <div class="shpd-modal__header-main">
+          <span class="shpd-modal__title">{title}</span>
+          {#if subtitle}
+            <span class="shpd-modal__subtitle">{@render subtitle()}</span>
+          {/if}
+        </div>
         {#if headerExtra}
           <span class="shpd-modal__header-extra">
             {@render headerExtra()}
@@ -157,12 +168,29 @@
     flex-shrink: 0;
   }
 
-  .shpd-modal__title {
+  .shpd-modal__header-main {
     flex: 1;
+    /* min-width: 0 je nutné, aby ellipsis fungoval uvnitř flex containeru */
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .shpd-modal__title {
     font-size: var(--shpd-font-size-lg);
     font-weight: 600;
     color: var(--shpd-color-text);
     /* truncate long titles instead of pushing close button off-screen */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .shpd-modal__subtitle {
+    font-size: var(--shpd-font-size-sm);
+    color: var(--shpd-color-text-secondary);
+    font-weight: 400;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

@@ -37,6 +37,9 @@
   // callback z FormEditor po každém (re)loadu formuláře.
   let currentTitle = $state('');
   let currentDocStates = $state<Record<string, unknown> | null>(null);
+  // Strukturovaná hlavička (title + info pro subtitle). Nastavuje se jen
+  // při load/save, ne při recalculate — header odráží uložená data, ne živý formData.
+  let savedHeaderInfo = $state<{ title: string; info: Array<{ label: string; value: string }> } | null>(null);
 
   // Dirty stav formuláře — propagován z FormEditor přes onDirtyChange callback.
   // Při pokusu o zavření (Esc, klik na overlay, křížek) se zobrazí potvrzovací dialog.
@@ -57,6 +60,7 @@
       fullSize = false;
       currentTitle = '';
       currentDocStates = null;
+      savedHeaderInfo = null;
       isDirty = false;
       checkFullSize(table, recordId);
     }
@@ -81,9 +85,14 @@
   }
 
   // Volá FormEditor po načtení / přepočtu formuláře. Aktualizuje header modalu.
-  function handleFormLoaded(info: { title: string; docStates: Record<string, unknown> | null }) {
+  function handleFormLoaded(info: {
+    title: string;
+    docStates: Record<string, unknown> | null;
+    headerInfo: { title: string; info: Array<{ label: string; value: string }> } | null;
+  }) {
     currentTitle = info.title;
     currentDocStates = info.docStates;
+    savedHeaderInfo = info.headerInfo;
   }
 
   // Volá FormEditor při změně dirty stavu (po editaci polí nebo po načtení/uložení).
@@ -91,8 +100,21 @@
     isDirty = dirty;
   }
 
-  // Modal nesmí zůstat s prázdným titulem dokud se formDef nenačte.
-  const headerTitle = $derived(currentTitle || t('common.loading'));
+  // Modal nesmí zůstat s prázdným titulem dokud se formDef nenačte. Pokud
+  // server pošle strukturované header_info, jeho `title` má přednost před
+  // generickým `currentTitle` (formDef.title — typicky „Osoba", „Faktura"…).
+  const headerTitle = $derived(
+    savedHeaderInfo?.title || currentTitle || t('common.loading')
+  );
+
+  // Spojený řádek info pro subtitle: „IČO 68253848 · Kód osoby TEST-0098".
+  // Renderuje se jen pokud máme aspoň jednu položku info — jinak subtitle
+  // snippet vrátí prázdno a Modal __header-main gap je neviditelný.
+  const subtitleText = $derived(
+    savedHeaderInfo && savedHeaderInfo.info.length > 0
+      ? savedHeaderInfo.info.map(i => `${i.label} ${i.value}`).join(' · ')
+      : ''
+  );
 </script>
 
 {#if open && metaLoaded}
@@ -103,6 +125,12 @@
     width={fullSize ? LARGE_WIDTH : SMALL_WIDTH}
     height={fullSize ? LARGE_HEIGHT : undefined}
   >
+    {#snippet subtitle()}
+      {#if subtitleText}
+        {subtitleText}
+      {/if}
+    {/snippet}
+
     {#snippet headerExtra()}
       {#if currentDocStates}
         <FormStateBadge docStates={currentDocStates} />

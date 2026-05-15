@@ -35,6 +35,22 @@ abstract class TableForm
 
     abstract public function buildFormDefinition(array $data, bool $isNew): FormDefinition;
 
+    /**
+     * Volitelná strukturovaná hlavička formuláře pro existující záznam.
+     *
+     * Default: žádná hlavička (modal zobrazí jen `title` z FormDefinition).
+     * Subclassy mohou přepsat a vrátit `FormHeaderInfo` s identifikačními údaji
+     * (např. název firmy, IČO, kód).
+     *
+     * Tato metoda se volá v `FormController` pro `GET /meta/{id}` a po úspěšném
+     * `save` — NE pro `GET /meta` (nový záznam) ani pro `recalculate`. Hodnoty
+     * v `$data` jsou tedy data uložená v DB, ne živá data z formuláře.
+     */
+    public function buildHeaderInfo(array $data): ?FormHeaderInfo
+    {
+        return null;
+    }
+
     public function recalculate(string $changedColumn, array $data): RecalculateResult
     {
         $isNew = !isset($data['id']) || $data['id'] === null;

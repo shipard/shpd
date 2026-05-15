@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use Shipard\Core\Form\FormColumn;
 use Shipard\Core\Form\FormDefinition;
 use Shipard\Core\Form\FormElement;
+use Shipard\Core\Form\FormHeaderInfo;
 use Shipard\Core\Form\FormSection;
 use Shipard\Core\Form\FormTab;
 
@@ -203,6 +204,66 @@ class FormDefinitionTest extends TestCase
             sections: [new FormSection([new FormColumn([])])],
             subtable: ['table' => 't', 'foreignKey' => 'fk', 'formId' => null],
         );
+    }
+
+    public function testHeaderInfoNullByDefaultAndIncludedInToArray(): void
+    {
+        $def = new FormDefinition(
+            table: 'test',
+            title: 'Test',
+            titleNew: 'New',
+            tabs: [$this->singleFieldTab()],
+        );
+
+        $this->assertNull($def->headerInfo);
+        $arr = $def->toArray();
+        $this->assertArrayHasKey('header_info', $arr);
+        $this->assertNull($arr['header_info']);
+    }
+
+    public function testWithHeaderInfoReturnsNewInstanceWithHeaderInfo(): void
+    {
+        $def = new FormDefinition(
+            table: 'test',
+            title: 'Test',
+            titleNew: 'New',
+            tabs: [$this->singleFieldTab()],
+        );
+
+        $headerInfo = new FormHeaderInfo(
+            title: 'Beta Software, a.s.',
+            info: [['label' => 'IČO', 'value' => '68253848']],
+        );
+
+        $enriched = $def->withHeaderInfo($headerInfo);
+
+        $this->assertNotSame($def, $enriched);
+        $this->assertNull($def->headerInfo);
+        $this->assertSame($headerInfo, $enriched->headerInfo);
+
+        $arr = $enriched->toArray();
+        $this->assertSame('Beta Software, a.s.', $arr['header_info']['title']);
+        $this->assertSame(
+            [['label' => 'IČO', 'value' => '68253848']],
+            $arr['header_info']['info'],
+        );
+    }
+
+    public function testWithHeaderInfoAcceptsNullToClear(): void
+    {
+        $def = new FormDefinition(
+            table: 'test',
+            title: 'Test',
+            titleNew: 'New',
+            tabs: [$this->singleFieldTab()],
+            headerInfo: new FormHeaderInfo(title: 'X'),
+        );
+
+        $cleared = $def->withHeaderInfo(null);
+
+        $this->assertNotNull($def->headerInfo);
+        $this->assertNull($cleared->headerInfo);
+        $this->assertNull($cleared->toArray()['header_info']);
     }
 
     public function testIconIncludedInToArray(): void

@@ -16,6 +16,7 @@ class FormDefinition
         public readonly array $tabs,
         public readonly bool $fullSize = false,
         public ?array $docStates = null,
+        public ?FormHeaderInfo $headerInfo = null,
     ) {}
 
     public function withDocStates(array $docStatesInfo): static
@@ -25,17 +26,25 @@ class FormDefinition
         return $clone;
     }
 
+    public function withHeaderInfo(?FormHeaderInfo $headerInfo): static
+    {
+        $clone = clone $this;
+        $clone->headerInfo = $headerInfo;
+        return $clone;
+    }
+
     public function toArray(): array
     {
         $result = [
-            'table'     => $this->table,
-            'title'     => $this->title,
-            'title_new' => $this->titleNew,
-            'tabs'      => array_map(
+            'table'       => $this->table,
+            'title'       => $this->title,
+            'title_new'   => $this->titleNew,
+            'tabs'        => array_map(
                 fn(FormTab $tab) => $tab->toArray(),
                 $this->tabs,
             ),
-            'full_size' => $this->fullSize,
+            'full_size'   => $this->fullSize,
+            'header_info' => $this->headerInfo?->toArray(),
         ];
 
         if ($this->docStates !== null) {

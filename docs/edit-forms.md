@@ -848,3 +848,103 @@ Layout systém byl v PR „new-forms-01" kompletně přepracován:
 - **JSONC:** stará struktura `tabs[].elements[]` s `cols` čísly je odmítnuta `JsoncFormLoader`em s konkrétní hláškou.
 
 Žádná backward compatibility — staré formy bylo nutné mechanicky portovat.
+
+---
+
+## 21. Hlavička formuláře (HeaderInfo)
+
+Editační modal má v hlavičce dva řádky: hlavní titulek + volitelný strukturovaný „subtitle" s identifikačními údaji o záznamu.
+
+```
+┌───────────────────────────────────────────────────────────────────────┐
+│ Beta Software, a.s.                                  [Koncept]    [×] │  ← title z header_info
+│ IČO 68253848 · Kód osoby TEST-0098                                    │  ← info položky spojené " · "
+├───────────────────────────────────────────────────────────────────────┤
+│ [Základní údaje] [Kontaktní údaje] [Kontakty] [Adresy] …              │
+```
+
+### Kdy se zobrazuje
+
+- **Existující záznam** (`GET /meta/{id}`) — pokud `TableForm::buildHeaderInfo()` vrátí non-null
+- **Nový záznam** (`GET /meta`) — `header_info: null`, modal zobrazí jen `title_new`
+- **Recalculate** (`POST /recalculate`) — `header_info: null`, klient ignoruje (hlavička neodráží neuložené změny)
+- **Save** — server nevrací `header_info` přímo v save response. Klient po úspěšném save volá `loadForm()` (přes meta endpoint), čímž se header aktualizuje na novou uloženou hodnotu
+
+### Struktura
+
+`FormHeaderInfo` (`src/Core/Form/FormHeaderInfo.php`):
+
+```php
+final class FormHeaderInfo
+{
+    public function __construct(
+        public readonly string $title,
+        /** @var list<array{label: string, value: string}> */
+        public readonly array $info = [],
+    ) {}
+}
+```
+
+Wire formát (`header_info` klíč ve `FormDefinition.toArray()`, vždy přítomný — `null` nebo objekt):
+
+```json
+{
+  "header_info": {
+    "title": "Beta Software, a.s.",
+    "info": [
+      { "label": "IČO",       "value": "68253848" },
+      { "label": "Kód osoby", "value": "TEST-0098" }
+    ]
+  }
+}
+```
+
+### Override v PHP
+
+Subclass `TableForm` přepíše virtuální metodu `buildHeaderInfo()`:
+
+```php
+public function buildHeaderInfo(array $data): ?FormHeaderInfo
+{
+    $fullName = trim((string) ($data['full_name'] ?? ''));
+    if ($fullName === '') {
+        return null;
+    }
+
+    $info = [];
+    $companyId = trim((string) ($data['company_id'] ?? ''));
+    if ($companyId !== '') {
+        $info[] = ['label' => 'IČO', 'value' => $companyId];
+    }
+    $personId = trim((string) ($data['person_id'] ?? ''));
+    if ($personId !== '') {
+        $info[] = ['label' => 'Kód osoby', 'value' => $personId];
+    }
+
+    return new FormHeaderInfo(title: $fullName, info: $info);
+}
+```
+
+Pravidla pro implementaci:
+
+- **Vrátit `null`**, pokud nemáme co zobrazit (typicky prázdný hlavní identifikátor).
+- **Vynechat položky `info`** s prázdnou hodnotou — pole `info` může být prázdné, title pak stojí samostatně.
+- **Data jsou z DB** (uložená), ne živá z formuláře — metoda dostává `array $data` z `fetchRow`.
+- Lokalizace labelů (`IČO`, `Kód osoby`, …) zatím napevno v jazyce modulu; i18n vrstva pro PHP texty se řeší v navazujících taskech.
+
+Default implementace v `TableForm` vrací `null` — JSONC/Auto formuláře a všechny moduly, které neoverrideují, hlavičku nezobrazí.
+
+### Frontend render
+
+- `Modal.svelte` přijímá volitelný `subtitle: Snippet` prop. Renderuje druhý řádek pod titulem ve menším fontu a sekundární barvě.
+- `FormEditor.svelte` drží `savedHeaderInfo` state, aktualizuje ho jen v `loadForm` (NE v `handleTrigger`/recalculate), a propaguje přes `onFormLoaded` callback.
+- `FormDialog.svelte` z `headerInfo.info` skládá řádek `"Label1 hodnota1 · Label2 hodnota2 · …"` a předává Modalu přes `{#snippet subtitle()}`.
+- Title v Modalu se rozhoduje: `headerInfo.title || formDef.title || t('common.loading')` — strukturovaný title má přednost před generickým „Osoba" / „Faktura" apod.
+
+### Proč ne živá data
+
+Hlavička reflektuje **uložený stav v DB**, ne dirty formData. Důvody:
+
+- Recalculate může změnit `person_type` z Person na Company — title by „blikal" mezi „Jan Novák" a názvem firmy podle rozpracovaného formuláře.
+- Uživatel může mít rozpracované špatné jméno; po Cancel by header lhal, že záznam má jiný titulek, než ve skutečnosti.
+- Server-side `buildHeaderInfo` má jasná pravidla a vstupuje do něj jen schválně načtená data (`SELECT * WHERE id = ?`).

@@ -80,6 +80,11 @@ class PersonsViewer extends TableViewer
 			'i1' => $rowData['person_id'] ?? null,
 		];
 
+		// Ikona řádku: fyzická osoba (1) / neurčeno (0) → user,
+		// právnická osoba (2) → company (building).
+		$personType = (int) ($rowData['person_type'] ?? 0);
+		$row['icon'] = $personType === 2 ? 'company' : 'user';
+
 		// Line 2: IČO, DIČ, plus state badge for non-default states
 		$t2 = [];
 		if (!empty($rowData['company_id'])) {

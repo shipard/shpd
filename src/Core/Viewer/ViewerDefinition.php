@@ -12,5 +12,6 @@ class ViewerDefinition
         public readonly string $table,
         public readonly ?string $class,
         public readonly string $moduleId,
+        public readonly ?string $icon = null,
     ) {}
 }

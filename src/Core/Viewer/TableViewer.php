@@ -115,7 +115,13 @@ abstract class TableViewer
      *
      * Row format:
      * - id: int (record ID)
-     * - icon: string|null (icon identifier for left side, ~32px area)
+     * - icon: string|null
+     *     Icon identifier matching a key in frontend `iconMap`
+     *     (e.g. 'user', 'company', 'invoice'). When omitted, the controller
+     *     fills in the viewer's default icon from module.jsonc (`viewers[].icon`).
+     *     Override per-row when the icon depends on the record's data
+     *     (e.g. PersonsViewer switches between 'user' and 'company' based
+     *     on person_type).
      * - t1: string|array|null (first line, left -- main text, displayed bold)
      * - i1: string|array|null (first line, right -- e.g. amount, code)
      * - t2: string|array|null (second line, left -- e.g. doc number, date)

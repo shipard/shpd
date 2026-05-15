@@ -350,9 +350,10 @@
             {t('common.empty')}
           </div>
         {:else}
-          {#each rows as row (row.id)}
+          {#each rows as row, i (row.id)}
             <ViewerRow
               {row}
+              index={i + 1}
               selected={selectedRowId === row.id}
               onclick={() => handleRowClick(row)}
             />

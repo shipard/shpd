@@ -35,6 +35,7 @@ class ViewerRegistry
                     table: $viewer['table'],
                     class: $viewer['class'] ?? null,
                     moduleId: $module->id,
+                    icon: $viewer['icon'] ?? null,
                 );
 
                 $this->viewers[$def->id] = $def;

@@ -114,6 +114,9 @@ Závislosti tečou shora dolů: Command → Document → Module/Config/Database 
 - Komponenta: `Icon.svelte` (inline SVG), rozšířený `Button.svelte` (prop `icon`)
 - Navigace: server posílá `"icon": "klíč"` v JSON, frontend překládá přes `resolveIcon()` s fallbackem `iconTable`
 - Nová ikona: import v `icons.js` + export + záznam v `iconMap`
+- Viewery dědí default ikonu pro řádky z `module.jsonc` viewers[].icon
+  (stejná jako v sidebaru). Per-row override v `renderRow()`
+  (např. PersonsViewer podle person_type).
 
 ### Frontend — Settings mód
 

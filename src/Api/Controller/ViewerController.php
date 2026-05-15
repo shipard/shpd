@@ -36,9 +36,14 @@ class ViewerController
 
 	public function rows(string $viewerId, Request $request, ViewerRegistry $registry, DataSourceConnection $db, ?ConfigRuntime $config = null): Response
 	{
+		$def = $registry->get($viewerId);
+		if ($def === null) {
+			return Response::error('VIEWER_NOT_FOUND', "Viewer '{$viewerId}' not found", 404);
+		}
+
 		$viewer = $registry->createViewer($viewerId, $db, $config);
 		if ($viewer === null) {
-			return Response::error('VIEWER_NOT_FOUND', "Viewer '{$viewerId}' not found", 404);
+			return Response::error('VIEWER_CLASS_NOT_FOUND', "Viewer class for '{$viewerId}' not found", 500);
 		}
 
 		$params = $request->getQueryParams();
@@ -60,9 +65,15 @@ class ViewerController
 			$rawRows = array_slice($rawRows, 0, $pageSize);
 		}
 
+		$defaultIcon = $def->icon;
+
 		$rows = [];
 		foreach ($rawRows as $row) {
-			$rows[] = $viewer->renderRow($row);
+			$rendered = $viewer->renderRow($row);
+			if (!isset($rendered['icon']) && $defaultIcon !== null) {
+				$rendered['icon'] = $defaultIcon;
+			}
+			$rows[] = $rendered;
 		}
 
 		return Response::success([

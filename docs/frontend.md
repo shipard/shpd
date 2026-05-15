@@ -348,6 +348,16 @@ Přepnutí tabu resetuje stránku a výběr záznamu. Výchozí tab: Aktivní.
 
 Pole `t1`, `i1`, `t2`, `i2`, `t3` přijímají string, objekt `{text, class?}` nebo pole objektů. `stateStyle` se mapuje na CSS třídu `docState_{stateStyle}` na řádku. Dostupné span třídy: `amount`, `muted`, `bold`, `primary`, `success`, `warning`, `danger`.
 
+Pole `icon` (string, optional) — identifikátor ikony z `iconMap`
+(`user`, `company`, `invoice`, …). Když ho `renderRow()` nevrátí,
+backend doplní default z `module.jsonc` (`viewers[].icon`). Frontend
+přes `resolveIcon()` přeloží na FA icon definition, fallback `iconTable`.
+
+**Pořadové číslo** v každém řádku je čistě frontend záležitost —
+`Viewer.svelte` ho počítá z pozice v poli `rows` (1, 2, 3, … souvisle
+přes celý načtený seznam). Při infinite scrollu pokračuje (50 → 51 → …),
+při změně tabu / filtru / hledání reset na 1.
+
 ### Formát detail panelu (`renderDetail()`)
 
 Vrací taby s obsahem jednoho ze tří typů:

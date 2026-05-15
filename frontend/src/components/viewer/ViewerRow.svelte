@@ -1,5 +1,8 @@
 <script>
-  let { row, selected = false, onclick } = $props();
+  import Icon from '../ui/Icon.svelte';
+  import { resolveIcon } from '../../icons.js';
+
+  let { row, index, selected = false, onclick } = $props();
 
   // Compute row CSS class including optional docState style
   let rowClass = $derived(
@@ -28,13 +31,20 @@
 >
   {#if row.avatar}
     <span class="shpd-viewer-row__avatar">{row.avatar}</span>
-  {:else if row.icon}
-    <span class="shpd-viewer-row__icon">{row.icon}</span>
+  {:else}
+    <span class="shpd-viewer-row__lead">
+      <span class="shpd-viewer-row__icon">
+        <Icon icon={resolveIcon(row.icon)} size="xl" />
+      </span>
+    </span>
   {/if}
 
   <div class="shpd-viewer-row__body">
     <!-- Line 1 -->
     <div class="shpd-viewer-row__line">
+      {#if index != null}
+        <span class="shpd-viewer-row__index">{index}</span>
+      {/if}
       <span class="shpd-viewer-row__t1">
         {#each normalizeSpans(row.t1) ?? [] as span}
           <span class={span.class ? `shpd-viewer-row__span--${span.class}` : ''}>{span.text}</span>
@@ -152,12 +162,36 @@
   .shpd-viewer-row.docState_trash     { --shpd-row-bar: var(--shpd-color-state-trash-bar); color: var(--shpd-color-state-trash-bar); text-decoration: line-through; }
   .shpd-viewer-row.docState_cancelled { --shpd-row-bar: var(--shpd-color-state-cancelled-bar); }
 
-  .shpd-viewer-row__icon {
+  /* Levý sloupec — drží jen ikonu typu záznamu, vertikálně
+   * vystředěnou v celé výšce řádku.
+   * Tlumená barva, aby ikona nekonkurovala stavovému proužku
+   * ani hlavnímu textu v t1.
+   *
+   * align-self: stretch natáhne sloupec na výšku řádku;
+   * align-items + justify-content: center vystředí ikonu
+   * (jediný child) v obou osách. */
+  .shpd-viewer-row__lead {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    align-self: stretch;
     width: 32px;
     flex-shrink: 0;
-    text-align: center;
-    font-size: var(--shpd-font-size-lg);
-    line-height: 1.4;
+    color: var(--shpd-color-text-secondary);
+  }
+
+  .shpd-viewer-row__icon {
+    /* Velikost SVG přes `size="xl"` v <Icon>; výška 1.5em. */
+    display: inline-flex;
+  }
+
+  /* Pořadové číslo — sedí v prvním řádku těla před názvem (t1).
+   * Tabular-nums = monospace číslice, aby šířka Č=99 a Č=10 byla stejná. */
+  .shpd-viewer-row__index {
+    flex-shrink: 0;
+    font-size: 0.75rem;
+    color: var(--shpd-color-text-secondary);
+    font-variant-numeric: tabular-nums;
   }
 
   /* Avatar (kruhový, s iniciálami).
@@ -197,6 +231,8 @@
   }
 
   .shpd-viewer-row__t1 {
+    flex: 1;
+    min-width: 0;
     font-weight: 600;
     overflow: hidden;
     text-overflow: ellipsis;

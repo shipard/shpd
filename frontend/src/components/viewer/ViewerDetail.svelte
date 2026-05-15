@@ -2,6 +2,7 @@
   import { post } from '../../api/client.js';
   import Modal from '../ui/Modal.svelte';
   import Button from '../ui/Button.svelte';
+  import DocumentExchangePreviewModal from '../exchange/DocumentExchangePreviewModal.svelte';
   import { t } from '../../i18n/index.js';
   import { translateError } from '../../i18n/errors.js';
 
@@ -22,8 +23,9 @@
     detail?.tabs?.find(t => t.id === activeTabId)?.content ?? null
   );
 
-  // --- Extracted documents — JSON detail modal state ---
-  let detailModalDoc = $state(null);
+  // --- Extracted documents — Exchange preview modal (Phase 3a) ---
+  // Visual split-view (PDF + canonical) replaces the old raw JSON dump.
+  let previewModalNdx = $state(null);
 
   // --- Extracted documents — reject dialog state ---
   let rejectDialogDoc = $state(null);
@@ -79,20 +81,41 @@
     }
   }
 
-  function openDetailModal(doc) {
-    detailModalDoc = doc;
+  function openPreviewModal(doc) {
+    previewModalNdx = doc.ndx;
   }
 
-  function closeDetailModal() {
-    detailModalDoc = null;
+  function closePreviewModal() {
+    previewModalNdx = null;
   }
 
-  function formatJson(jsonStr) {
-    if (!jsonStr) return '';
+  // Apply from modal — runs the same endpoint as the inline "Použít"
+  // button. On success: close modal + refresh parent list.
+  async function handleApplyFromModal(extractedNdx) {
+    if (actionInFlightNdx !== null) return;
+    actionInFlightNdx = extractedNdx;
     try {
-      return JSON.stringify(JSON.parse(jsonStr), null, 2);
-    } catch {
-      return jsonStr;
+      const result = await post(`/_mail/extracted-documents/${extractedNdx}/apply`, {});
+      if (result?.success) {
+        closePreviewModal();
+        onRefresh?.();
+      } else {
+        alert(t('viewer.detail.applyFailed', { msg: translateError(result?.error) }));
+      }
+    } finally {
+      actionInFlightNdx = null;
+    }
+  }
+
+  // Reject from modal — closes the preview modal first so the reject
+  // dialog isn't obscured underneath.
+  function handleRejectFromModal(extractedNdx) {
+    const doc = (detail?.tabs ?? [])
+      .flatMap((tab) => tab.content?.documents ?? [])
+      .find((d) => d.ndx === extractedNdx);
+    if (doc) {
+      closePreviewModal();
+      openRejectDialog(doc);
     }
   }
 </script>
@@ -222,7 +245,7 @@
                     label={t('viewer.detail.showDetail')}
                     variant="secondary"
                     size="sm"
-                    onclick={() => openDetailModal(doc)}
+                    onclick={() => openPreviewModal(doc)}
                   />
                   {#if doc.can_apply}
                     <Button
@@ -250,17 +273,14 @@
       {/if}
     </div>
 
-    <!-- Detail modal with extracted JSON — sdílená Modal komponenta. -->
-    <Modal
-      title={detailModalDoc?.doc_type_label ?? ''}
-      open={detailModalDoc !== null}
-      onClose={closeDetailModal}
-      width="800px"
-    >
-      {#if detailModalDoc}
-        <pre class="shpd-extracted__json">{formatJson(detailModalDoc.extracted_json)}</pre>
-      {/if}
-    </Modal>
+    <!-- Phase 3a: full-screen Exchange preview (PDF + canonical split). -->
+    <DocumentExchangePreviewModal
+      open={previewModalNdx !== null}
+      extractedNdx={previewModalNdx}
+      onClose={closePreviewModal}
+      onApply={handleApplyFromModal}
+      onReject={handleRejectFromModal}
+    />
 
     <!-- Reject reason dialog — sdílená Modal komponenta. -->
     <Modal
@@ -590,16 +610,6 @@
   /* Tlačítkové styly tady byly dříve hardcoded přes !important.
      Teď používáme <Button variant="success|danger|secondary"> komponentu,
      která čerpá z brand palety v variables.css. */
-
-  .shpd-extracted__json {
-    background: var(--shpd-color-bg-secondary);
-    padding: var(--shpd-space-sm);
-    border-radius: var(--shpd-radius-sm);
-    font-family: monospace;
-    font-size: 12px;
-    overflow-x: auto;
-    max-height: 60vh;
-  }
 
   .shpd-extracted__field-label {
     display: block;

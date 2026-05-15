@@ -38,10 +38,12 @@
     /** Optional content rendered in a footer strip below the body.
      *  Useful for action buttons (Save, Cancel, etc.). */
     footer?: Snippet;
-    /** Modal width, e.g. '720px' or '1200px'. Default '640px'. */
+    /** Modal width, e.g. '720px' or '1200px'. Default '640px'.
+     *  Special keyword `'full'` expands to 95vw × 95vh (no `height` needed). */
     width?: string;
     /** Modal height. If set, the card uses this fixed height (capped at 90vh).
-     *  If not set, the card sizes to its content (max 90vh). */
+     *  If not set, the card sizes to its content (max 90vh). Ignored when
+     *  `width === 'full'` (which forces 95vh). */
     height?: string;
   }
 
@@ -88,9 +90,11 @@
   });
 
   const cardStyle = $derived(
-    height
-      ? `width: ${width}; height: min(${height}, 90vh);`
-      : `width: ${width};`
+    width === 'full'
+      ? 'width: 95vw; max-width: 95vw; height: 95vh;'
+      : height
+        ? `width: ${width}; height: min(${height}, 90vh);`
+        : `width: ${width};`
   );
 </script>
 

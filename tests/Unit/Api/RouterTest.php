@@ -497,6 +497,22 @@ class RouterTest extends TestCase
 		$this->assertSame(55, $result->id);
 	}
 
+	public function testExtractedDocumentPreviewPost(): void
+	{
+		$result = $this->router->resolve('/api/v1/_mail/extracted-documents/55/preview', 'POST');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertSame('analysis', $result->controller);
+		$this->assertSame('previewExtracted', $result->action);
+		$this->assertSame(55, $result->id);
+	}
+
+	public function testExtractedDocumentPreviewGetNotAllowed(): void
+	{
+		$result = $this->router->resolve('/api/v1/_mail/extracted-documents/55/preview', 'GET');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
+	}
+
 	public function testExtractedDocumentUnknownActionReturns404(): void
 	{
 		$result = $this->router->resolve('/api/v1/_mail/extracted-documents/55/whatever', 'POST');

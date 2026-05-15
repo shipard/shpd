@@ -90,9 +90,14 @@ class AttachmentController
     }
 
     /**
-     * GET /_attachments/{id}/download
+     * GET /_attachments/{id}/download[?inline=1]
+     *
+     * Default disposition is `attachment` (file save dialog). With
+     * `?inline=1` the browser renders the file inline — required for the
+     * Exchange split-view PDF panel and image previews. Restricted to PDF
+     * and image MIME types to prevent same-origin XSS via inline HTML/SVG.
      */
-    public function download(int $id): Response
+    public function download(int $id, Request $request): Response
     {
         $attachment = $this->service->getAttachment($id);
         if ($attachment === null) {
@@ -104,16 +109,39 @@ class AttachmentController
             return Response::error('NOT_FOUND', 'Soubor nenalezen na disku', 404);
         }
 
-        // Send file directly
+        $inlineRequested = ($request->getQueryParams()['inline'] ?? '0') === '1';
+        $disposition = $this->computeDisposition(
+            (string) $attachment['mime_type'],
+            $inlineRequested,
+        );
+
         $this->sendFile(
             $filePath,
             $attachment['mime_type'],
             $attachment['name'],
             (int) $attachment['file_size'],
+            cacheForever: false,
+            disposition: $disposition,
         );
 
         // sendFile exits — this is just for type safety
         return Response::success(null, 204);
+    }
+
+    /**
+     * Decide `Content-Disposition` value. Inline is only granted to safe
+     * types — anything else falls back to `attachment` even when the
+     * caller asks for inline. Public so it can be tested without invoking
+     * the streaming `sendFile()` path that exits the process.
+     */
+    public function computeDisposition(string $mimeType, bool $inlineRequested): string
+    {
+        if (!$inlineRequested) {
+            return 'attachment';
+        }
+        $inlineSafe = $mimeType === 'application/pdf'
+            || str_starts_with($mimeType, 'image/');
+        return $inlineSafe ? 'inline' : 'attachment';
     }
 
     /**
@@ -259,9 +287,21 @@ class AttachmentController
 
     /**
      * Send a file to the client and exit.
+     *
+     * `$disposition` controls the Content-Disposition value — `attachment`
+     * for downloads (default), `inline` for the rare cases where the
+     * caller wants the browser to render inline (PDF/image preview).
+     * Callers must whitelist MIME types before passing `inline` —
+     * {@see computeDisposition()}.
      */
-    private function sendFile(string $filePath, string $mimeType, ?string $displayName, ?int $fileSize, bool $cacheForever = false): never
-    {
+    private function sendFile(
+        string $filePath,
+        string $mimeType,
+        ?string $displayName,
+        ?int $fileSize,
+        bool $cacheForever = false,
+        string $disposition = 'attachment',
+    ): never {
         // Clean any output buffers
         while (ob_get_level()) {
             ob_end_clean();
@@ -272,7 +312,7 @@ class AttachmentController
         if ($displayName !== null) {
             // RFC 6266: ASCII fallback + UTF-8 filename*
             $asciiName = preg_replace('/[^\x20-\x7E]/', '_', $displayName);
-            header("Content-Disposition: attachment; filename=\"{$asciiName}\"; filename*=UTF-8''" . rawurlencode($displayName));
+            header("Content-Disposition: {$disposition}; filename=\"{$asciiName}\"; filename*=UTF-8''" . rawurlencode($displayName));
         }
 
         if ($fileSize !== null) {

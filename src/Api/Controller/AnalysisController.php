@@ -1297,6 +1297,158 @@ class AnalysisController
     }
 
     /**
+     * Read-only preview of an extracted document — returns enriched
+     * canonical with `_resolve` populated for the UI split-view modal.
+     * Server-side injection of `source.extractedDoc` + informative
+     * `applyOptions` mirrors {@see applyExtracted} so the preview reflects
+     * how an apply would run (without doing the side-creates/save).
+     *
+     * For `STATUS_AI_FAILED` rows (where extracted_json was wrapped during
+     * /result validation), returns the wrapper directly so the UI can
+     * render its dedicated error view.
+     */
+    public function previewExtracted(AuthContext $auth, Request $request, int $extractedNdx): Response
+    {
+        if (!$auth->isAuthenticated) {
+            return Response::error('UNAUTHORIZED', 'Authentication required', 401);
+        }
+
+        $existing = $this->db->fetchRow(
+            'SELECT * FROM %n WHERE id = %i',
+            self::EXTRACTED_TABLE, $extractedNdx,
+        );
+        if ($existing === null) {
+            return Response::error('NOT_FOUND', "Extracted document {$extractedNdx} not found", 404);
+        }
+
+        $extractedJson = json_decode((string) ($existing['extracted_json'] ?? ''), true);
+        if (!is_array($extractedJson)) {
+            return Response::error('CORRUPTED_DATA', 'extracted_json cannot be parsed', 500);
+        }
+
+        $attachmentNdxs = $this->parseSourceAttachments((string) ($existing['source_attachments'] ?? '[]'));
+        $attachments = $this->loadAttachmentsMeta($attachmentNdxs);
+
+        $currentStatus = (int) $existing['status'];
+
+        // ai_failed → return wrapper for the special UI render path
+        if ($currentStatus === ExtractedDocumentDocument::STATUS_AI_FAILED
+            && isset($extractedJson['_validationError'])
+        ) {
+            return Response::success([
+                'aiFailed'      => true,
+                'wrapper'       => $extractedJson,
+                'attachments'   => $attachments,
+                'extractedNdx'  => $extractedNdx,
+                'messageNdx'    => (int) $existing['message'],
+                'status'        => $currentStatus,
+            ]);
+        }
+
+        // Without applier wired (e.g. ConfigRuntime missing), return raw
+        // canonical without resolve — the UI can still render the read-only
+        // view, just without resolve badges.
+        if ($this->applier === null) {
+            return Response::success([
+                'aiFailed'     => false,
+                'canonical'    => $extractedJson,
+                'attachments'  => $attachments,
+                'extractedNdx' => $extractedNdx,
+                'messageNdx'   => (int) $existing['message'],
+                'status'       => $currentStatus,
+            ]);
+        }
+
+        // Server-controlled injection — applier preview is informative, so
+        // applyOptions are advisory (they would only matter for /apply).
+        $canonical = $extractedJson;
+        $canonical['source'] = is_array($canonical['source'] ?? null) ? $canonical['source'] : [];
+        $canonical['source']['extractedDoc'] = $extractedNdx;
+        if (empty($canonical['source']['kind'])) {
+            $canonical['source']['kind'] = 'aiExtraction';
+        }
+        $canonical['applyOptions'] = [
+            'autoCreateMode' => 'safe',
+            'targetDocState' => 10,
+        ];
+
+        $result = $this->applier->preview($canonical);
+        if (!$result->success) {
+            // preview() should always succeed (resolve issues live in
+            // _resolve.issues, not errorCode), but propagate defensively.
+            return Response::error(
+                $result->errorCode ?? 'INTERNAL_ERROR',
+                $result->errorMessage ?? 'Preview failed',
+                $result->statusCode,
+                ['canonical' => $result->canonical],
+            );
+        }
+
+        return Response::success([
+            'aiFailed'     => false,
+            'canonical'    => $result->canonical,
+            'attachments'  => $attachments,
+            'extractedNdx' => $extractedNdx,
+            'messageNdx'   => (int) $existing['message'],
+            'status'       => $currentStatus,
+        ]);
+    }
+
+    /**
+     * Parse `source_attachments` JSON column into a flat list of positive
+     * attachment ids.
+     *
+     * @return list<int>
+     */
+    private function parseSourceAttachments(string $json): array
+    {
+        $decoded = json_decode($json, true);
+        if (!is_array($decoded)) {
+            return [];
+        }
+        $out = [];
+        foreach ($decoded as $v) {
+            $n = (int) $v;
+            if ($n > 0) {
+                $out[] = $n;
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Fetch attachment metadata for the UI PDF viewer panel. Restricted to
+     * the mail table (table_id = 303) so unrelated attachments can't leak
+     * via crafted source_attachments.
+     *
+     * @param list<int> $ndxs
+     * @return array<int, array{ndx: int, filename: string, mime_type: string, size_bytes: int}>
+     */
+    private function loadAttachmentsMeta(array $ndxs): array
+    {
+        if ($ndxs === []) {
+            return [];
+        }
+        $rows = $this->db->fetchAll(
+            'SELECT id, name, mime_type, file_size
+             FROM %n
+             WHERE id IN %in AND table_id = %i AND is_deleted = %i
+             ORDER BY id ASC',
+            self::ATTACHMENTS_TABLE, $ndxs, self::MAIL_TABLE_ID, 0,
+        );
+        $out = [];
+        foreach ($rows as $row) {
+            $out[] = [
+                'ndx'        => (int) $row['id'],
+                'filename'   => (string) $row['name'],
+                'mime_type'  => (string) $row['mime_type'],
+                'size_bytes' => (int) $row['file_size'],
+            ];
+        }
+        return $out;
+    }
+
+    /**
      * Společné jádro pro apply/reject — načte řádek, sestaví $data, projde
      * přes Document hooky (validate, beforeSave, afterPersist) v transakci.
      */

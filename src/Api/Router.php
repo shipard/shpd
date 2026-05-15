@@ -256,7 +256,7 @@ class Router
 	private function resolveExtractedDocumentsRoute(string $subpath, string $method): Route|Response
 	{
 		$rest = substr($subpath, strlen('/_mail/extracted-documents/'));
-		if (preg_match('#^(\d+)/(apply|reject)$#', $rest, $m)) {
+		if (preg_match('#^(\d+)/(apply|reject|preview)$#', $rest, $m)) {
 			$ndx = (int) $m[1];
 			$action = $m[2];
 			if ($ndx <= 0) {
@@ -265,12 +265,12 @@ class Router
 			if ($method !== 'POST') {
 				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
 			}
-			return new Route(
-				'analysis',
-				$action === 'apply' ? 'applyExtracted' : 'rejectExtracted',
-				null,
-				$ndx,
-			);
+			$controllerAction = match ($action) {
+				'apply'   => 'applyExtracted',
+				'reject'  => 'rejectExtracted',
+				'preview' => 'previewExtracted',
+			};
+			return new Route('analysis', $controllerAction, null, $ndx);
 		}
 
 		return Response::error('NOT_FOUND', 'Not found', 404);

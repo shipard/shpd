@@ -340,6 +340,7 @@ function dispatchAnalysis(
 		'reanalyze'         => $ctrl->reanalyze($auth, $request, (int) $route->id),
 		'applyExtracted'    => $ctrl->applyExtracted($auth, $request, (int) $route->id),
 		'rejectExtracted'   => $ctrl->rejectExtracted($auth, $request, (int) $route->id),
+		'previewExtracted'  => $ctrl->previewExtracted($auth, $request, (int) $route->id),
 		default             => Response::error('INTERNAL_ERROR', "Unknown analysis action: {$route->action}", 500),
 	};
 }
@@ -371,7 +372,7 @@ function dispatchAttachment(
 	$ctrl   = new AttachmentController($db, $dsPath, $tables);
 	return match ($route->action) {
 		'upload'    => $ctrl->upload($auth),
-		'download'  => $ctrl->download((int) $route->id),
+		'download'  => $ctrl->download((int) $route->id, $request),
 		'thumbnail' => $ctrl->thumbnail((int) $route->id, $request),
 		'list'      => $ctrl->list($request),
 		'patch'     => $ctrl->patch((int) $route->id, $request),

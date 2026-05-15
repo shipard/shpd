@@ -84,7 +84,7 @@
             "properties": {
                 "mode":                { "type": ["string", "null"] },
                 "place":               { "type": ["string", "null"] },
-                "registrationCountry": { "type": ["string", "null"], "pattern": "^[A-Z]{2}$" }
+                "registrationCountry": { "type": ["string", "null"], "pattern": "^[A-Za-z]{2}$" }
             }
         },
 

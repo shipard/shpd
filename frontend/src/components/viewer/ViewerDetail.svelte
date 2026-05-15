@@ -1,5 +1,6 @@
 <script>
   import { post } from '../../api/client.js';
+  import { applyExtractedDocument } from '../../api/exchange.js';
   import Modal from '../ui/Modal.svelte';
   import Button from '../ui/Button.svelte';
   import DocumentExchangePreviewModal from '../exchange/DocumentExchangePreviewModal.svelte';
@@ -89,18 +90,27 @@
     previewModalNdx = null;
   }
 
-  // Apply from modal — runs the same endpoint as the inline "Použít"
-  // button. On success: close modal + refresh parent list.
-  async function handleApplyFromModal(extractedNdx) {
+  // Apply from modal — Phase 3b passes accumulated userActions (flat
+  // {path: action} map) for backend strict-mode resolution. Phase 2
+  // callsite (inline "Použít" button) still uses post() directly with
+  // empty body → safe mode.
+  async function handleApplyFromModal(extractedNdx, userActions = null) {
     if (actionInFlightNdx !== null) return;
     actionInFlightNdx = extractedNdx;
     try {
-      const result = await post(`/_mail/extracted-documents/${extractedNdx}/apply`, {});
+      const result = await applyExtractedDocument(extractedNdx, userActions);
       if (result?.success) {
         closePreviewModal();
         onRefresh?.();
       } else {
-        alert(t('viewer.detail.applyFailed', { msg: translateError(result?.error) }));
+        // unresolved_required after a successful preview means DB state
+        // shifted between preview and apply (rare race). Keep the modal
+        // open so the user sees the current state.
+        if (result?.error?.code === 'unresolved_required') {
+          alert(t('exchange.preview.apply.error.unresolved'));
+        } else {
+          alert(t('viewer.detail.applyFailed', { msg: translateError(result?.error) }));
+        }
       }
     } finally {
       actionInFlightNdx = null;

@@ -198,11 +198,58 @@ formátem.
 - ✅ `ProfileSchemaDriftTest` hlídá inline kopii canonical schema v
   profile `output_schema.documents.items.properties.fields`.
 
+## Stav (Fáze 3a)
+
+- ✅ Frontend náhled canonical dokumentu — modal `DocumentExchangePreviewModal`
+  se split-view (PDF přílohy vlevo + canonical vizualizace vpravo).
+- ✅ `POST /_mail/extracted-documents/{ndx}/preview` — read-only enrichment
+  přes `DocumentApplier::preview()`. `ai_failed` (status=70) → vrátí wrapper.
+- ✅ `AttachmentController::download?inline=1` — inline disposition jen pro
+  `application/pdf` + `image/*` (XSS prevence v same-origin iframe).
+- ✅ 3 Exchange Svelte komponenty: `PdfViewerPanel`,
+  `DocumentExchangePreview` (read-only badges), `DocumentExchangePreviewModal`.
+- ✅ `EntityPicker.svelte` jako standalone univerzální search-and-pick (3a:
+  postaven a otestovaný; produkční použití přijde v 3b).
+- ✅ Modal `width="full"` (95vw × 95vh) + mobile `<768px` tab switcher
+  (PDF / Náhled).
+- ✅ Klik "Detail" otevře nový preview modal, JSON dump (Phase 1 placeholder)
+  odstraněn z `ViewerDetail`.
+
+## Stav (Fáze 3b)
+
+- ✅ Interaktivní status badges v Preview — non-matched badge je `<button>`,
+  klik otevře `Popover` s `ResolveDecisionPanel` (Vytvořit / Vybrat
+  existujícího / Přeskočit). EntityPicker se mountuje z panelu pro
+  "Vybrat existujícího".
+- ✅ `userActions` flat map (`{path: action}`) — `'supplier'`,
+  `'customer'`, `'supplierBank'`, `'rows[N].item'`. Akumulace v
+  Preview komponentě, propagace přes `onUserActionsChange` callback.
+- ✅ Decided badge states (`matchedDecided` / `canCreateDecided` / `skipped`)
+  s outline-based visual indikátorem (lépe čitelné v 18px badge než
+  kombinované glyfy).
+- ✅ Tlačítko "Použít" disabled dokud zůstávají nerozhodnuté non-matched
+  reference (kromě unit/vatCode — applier má fallbacky).
+- ✅ Backend `applyExtracted` přijímá flat `_resolve` v body, expanduje
+  na nested `_resolve.{path}.userAction` pro applier. `expandUserActions`
+  + `mergeUserActions` helpery silently skip neznámé / non-string hodnoty.
+- ✅ `autoCreateMode` derivace per request body: `{}` = `safe` (CLI / pre-3b),
+  `{_resolve: ...}` (s nebo bez entries) = `strict` (3b client),
+  `applyOptions.autoCreateMode` explicit override.
+- ✅ Race condition handling — `unresolved_required` z applieru po preview
+  (DB state se změnil) → localized alert, modal zůstává otevřený.
+- ✅ Nested popover/modal — click-outside na popover ignoruje target
+  uvnitř `.shpd-modal` (EntityPicker portal-mounted do body).
+- ✅ `Popover.svelte` univerzální floating panel s viewport-flip a Escape close.
+
 ## Navazující fáze
 
-- **Fáze 3** — frontend náhled canonical dokumentu s `_resolve` interakcí
-  (Svelte komponenta). Tehdy default pro `applyExtracted` přepneme z
-  `autoCreateMode = "safe"` na `"strict"` a vyžádáme explicit user input.
+- **Fáze 3c** (volitelně, později) — edit canonical hodnot před apply
+  (oprava IČO, doplnění data). Aktuální 3b interakce eliminují většinu
+  potřeby; zbytek se řeší přes form-editor po apply (Koncept doklad →
+  standard FormEditor).
+- Drobnosti k zvážení: multi-field OR search v EntityPicker (`code` OR
+  `name` pro Item), bulk decisions ("vytvoř všechny canCreate"),
+  person-scoped filter pro BankAccount picker.
 
 ## Související
 

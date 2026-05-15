@@ -1184,17 +1184,45 @@ class AnalysisController
             return Response::error('CORRUPTED_DATA', 'extracted_json cannot be parsed', 500);
         }
 
+        // Read Phase 3b additions from request body: flat `_resolve` map
+        // of {path: userAction} + optional applyOptions override.
+        $body = $request->getBody();
+        $body = is_array($body) ? $body : [];
+        $clientResolveFlat = is_array($body['_resolve'] ?? null) ? $body['_resolve'] : null;
+        $hasResolveKey = array_key_exists('_resolve', $body);
+        $applyOptionsBody = is_array($body['applyOptions'] ?? null) ? $body['applyOptions'] : [];
+
         // Server-controlled injection — never trust client-supplied source
-        // metadata or applyOptions for the AI flow.
+        // metadata for the AI flow.
         $source = is_array($canonical['source'] ?? null) ? $canonical['source'] : [];
         $source['extractedDoc'] = $extractedNdx;
         if (empty($source['kind'])) {
             $source['kind'] = 'aiExtraction';
         }
         $canonical['source'] = $source;
+
+        // Merge client userActions into canonical _resolve. Backend
+        // expands flat `{path: action}` to nested `_resolve.{path}.userAction`.
+        if ($clientResolveFlat !== null) {
+            $expanded = $this->expandUserActions($clientResolveFlat);
+            $canonical['_resolve'] = $this->mergeUserActions(
+                is_array($canonical['_resolve'] ?? null) ? $canonical['_resolve'] : [],
+                $expanded,
+            );
+        }
+
+        // autoCreateMode rules (see exchange-format-phase3b.md):
+        //   - body without `_resolve` key   → safe (Phase 2 / CLI backward compat)
+        //   - body with `_resolve` (even {}) → strict (3b-aware client)
+        //   - explicit applyOptions.autoCreateMode → wins over both
+        $autoCreateMode = $applyOptionsBody['autoCreateMode']
+            ?? ($hasResolveKey ? 'strict' : 'safe');
+        $targetDocState = isset($applyOptionsBody['targetDocState'])
+            ? (int) $applyOptionsBody['targetDocState']
+            : 10;
         $canonical['applyOptions'] = [
-            'autoCreateMode' => 'safe',
-            'targetDocState' => 10,
+            'autoCreateMode' => $autoCreateMode,
+            'targetDocState' => $targetDocState,
         ];
 
         $result = $this->applier->apply($canonical);
@@ -1269,6 +1297,87 @@ class AnalysisController
             'messageNdx' => (int) $existing['message'],
             'recovered' => true,
         ]);
+    }
+
+    /**
+     * Expand flat client-side userActions into nested `_resolve` shape
+     * expected by DocumentApplier.
+     *
+     * Input shape:
+     *   {"supplier": "useExisting:42", "rows[0].item": "create", ...}
+     *
+     * Output shape:
+     *   {
+     *     "supplier": {"userAction": "useExisting:42"},
+     *     "rows": [{"item": {"userAction": "create"}}],
+     *   }
+     *
+     * Unknown paths are silently ignored — the applier handles unresolved
+     * references via its normal reconcile flow, so a broken UI shouldn't
+     * block save. Strict 400-rejection happens only when the request body
+     * isn't an object at all (handled upstream).
+     *
+     * @param array<string, mixed> $flat
+     * @return array<string, mixed>
+     */
+    private function expandUserActions(array $flat): array
+    {
+        $expanded = [];
+        foreach ($flat as $path => $action) {
+            if (!is_string($action)) {
+                continue;
+            }
+            if (preg_match('/^rows\[(\d+)\]\.(item|unit|vatCode)$/', (string) $path, $m)) {
+                $idx = (int) $m[1];
+                $field = $m[2];
+                $expanded['rows'][$idx][$field]['userAction'] = $action;
+                continue;
+            }
+            if (in_array($path, ['supplier', 'customer', 'supplierBank', 'customerBank'], true)) {
+                $expanded[$path]['userAction'] = $action;
+            }
+        }
+        return $expanded;
+    }
+
+    /**
+     * Deep-merge userAction overrides into existing canonical `_resolve`.
+     * Only `userAction` keys are touched; status/candidates/createPayload
+     * etc. stay as-is (the applier does a fresh resolve and overwrites
+     * them anyway).
+     *
+     * @param array<string, mixed> $existing
+     * @param array<string, mixed> $overrides
+     * @return array<string, mixed>
+     */
+    private function mergeUserActions(array $existing, array $overrides): array
+    {
+        foreach ($overrides as $key => $value) {
+            if ($key === 'rows' && is_array($value)) {
+                $existing['rows'] = is_array($existing['rows'] ?? null) ? $existing['rows'] : [];
+                foreach ($value as $idx => $rowOverride) {
+                    if (!is_array($rowOverride)) continue;
+                    $existing['rows'][$idx] = is_array($existing['rows'][$idx] ?? null)
+                        ? $existing['rows'][$idx]
+                        : [];
+                    foreach ($rowOverride as $field => $fieldOverride) {
+                        if (!is_array($fieldOverride) || !isset($fieldOverride['userAction'])) {
+                            continue;
+                        }
+                        $existing['rows'][$idx][$field] = is_array($existing['rows'][$idx][$field] ?? null)
+                            ? $existing['rows'][$idx][$field]
+                            : [];
+                        $existing['rows'][$idx][$field]['userAction'] = $fieldOverride['userAction'];
+                    }
+                }
+                continue;
+            }
+            if (is_array($value) && isset($value['userAction'])) {
+                $existing[$key] = is_array($existing[$key] ?? null) ? $existing[$key] : [];
+                $existing[$key]['userAction'] = $value['userAction'];
+            }
+        }
+        return $existing;
     }
 
     public function rejectExtracted(AuthContext $auth, Request $request, int $extractedNdx): Response

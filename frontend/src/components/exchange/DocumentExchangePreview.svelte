@@ -1,23 +1,34 @@
 <script>
-  // Read-only canonical document visualization.
+  // Canonical document visualization with optional interactive resolve.
   //
-  // Renders a `shpd.docs.document.v1` payload as a human-readable invoice
-  // preview with status badges per resolve outcome (matched/canCreate/
-  // ambiguous/notFound). Badges are non-interactive in Phase 3a; Phase 3b
-  // promotes them to <button>s that open EntityPicker.
+  // Phase 3a: read-only render. Phase 3b adds interactive status badges:
+  // when `onUserActionsChange` callback is provided, non-matched badges
+  // become <button>s that open a Popover with a ResolveDecisionPanel
+  // (Create / Pick existing / Skip). Decisions are accumulated in
+  // `userActions` (prop, parent-owned) and reported back via callback.
   //
   // For `aiFailed=true` (status=70 from /result with ai_failed wrapper) the
   // component switches to an error view that surfaces _validationError +
   // _validationIssues + raw output (collapsible).
   //
   // Props:
-  //   canonical  shpd.docs.document.v1 payload (with _resolve, optional)
-  //   aiFailed   boolean — if true, render error view from wrapper
-  //   wrapper    AI failed wrapper {_validationError, _validationIssues, _rawOutput}
+  //   canonical            shpd.docs.document.v1 payload (with _resolve)
+  //   aiFailed             boolean
+  //   wrapper              AI failed wrapper
+  //   userActions          flat map {path: action} of accumulated decisions
+  //   onUserActionsChange  (next) => void; null = read-only mode (3a)
 
   import { t } from '../../i18n/index.js';
+  import Popover from '../ui/Popover.svelte';
+  import ResolveDecisionPanel from './ResolveDecisionPanel.svelte';
 
-  let { canonical = null, aiFailed = false, wrapper = null } = $props();
+  let {
+    canonical = null,
+    aiFailed = false,
+    wrapper = null,
+    userActions = {},
+    onUserActionsChange = null,
+  } = $props();
 
   // Derived helpers
   let docType = $derived(canonical?.docType ?? null);
@@ -62,7 +73,97 @@
     if (s === 'canCreate') return '+';
     if (s === 'ambiguous') return '?';
     if (s === 'notFound') return '✗';
+    if (s === 'matchedDecided') return '✓';
+    if (s === 'canCreateDecided') return '+';
+    if (s === 'skipped') return '⊘';
     return null;
+  }
+
+  // ── Phase 3b: interactive decisions ────────────────────────────────────
+
+  // decisionOpen tracks the popover state. When non-null:
+  //   { anchor: HTMLElement, path: string, resolveBlock, kind, table,
+  //     searchFields, displayPattern }
+  let decisionOpen = $state(null);
+
+  function entityConfigForKind(kind) {
+    if (kind === 'party') {
+      return {
+        table: 'base_persons_persons',
+        searchFields: ['full_name'],
+        displayPattern: (row) => row.full_name ?? row.name ?? `#${row.id}`,
+      };
+    }
+    if (kind === 'item') {
+      return {
+        table: 'economy_items',
+        searchFields: ['name'],
+        displayPattern: (row) => `${row.code ?? '—'} — ${row.name ?? '#' + row.id}`,
+      };
+    }
+    if (kind === 'bankAccount') {
+      return {
+        table: 'base_persons_bank_accounts',
+        searchFields: ['iban'],
+        displayPattern: (row) => row.iban ?? row.account_number ?? `#${row.id}`,
+      };
+    }
+    return null;
+  }
+
+  function openDecision(event, path, resolveBlock, kind) {
+    if (onUserActionsChange === null) return; // read-only mode
+    event.preventDefault();
+    event.stopPropagation();
+    const cfg = entityConfigForKind(kind);
+    if (!cfg) return;
+    decisionOpen = {
+      anchor: event.currentTarget,
+      path,
+      resolveBlock,
+      kind,
+      ...cfg,
+    };
+  }
+
+  function closeDecision() {
+    decisionOpen = null;
+  }
+
+  function handleDecide(action) {
+    if (!decisionOpen) return;
+    const next = { ...userActions };
+    if (action === null || action === undefined) {
+      delete next[decisionOpen.path];
+    } else {
+      next[decisionOpen.path] = action;
+    }
+    onUserActionsChange?.(next);
+    decisionOpen = null;
+  }
+
+  function effectiveStatusKey(path, resolveBlock) {
+    const original = statusKey(resolveBlock?.status);
+    if (path === null || onUserActionsChange === null) return original;
+    if (resolveBlock?.status === 'matched') return 'matched';
+    const ua = userActions[path] ?? null;
+    if (ua === null) return original;
+    if (typeof ua === 'string' && ua.startsWith('useExisting:')) return 'matchedDecided';
+    if (ua === 'create') return 'canCreateDecided';
+    if (ua === 'skip') return 'skipped';
+    return original;
+  }
+
+  function effectiveStatusLabel(path, resolveBlock) {
+    if (path === null || onUserActionsChange === null) return statusLabel(resolveBlock);
+    const ua = userActions[path] ?? null;
+    if (ua === null) return statusLabel(resolveBlock);
+    if (typeof ua === 'string' && ua.startsWith('useExisting:')) {
+      return t('exchange.preview.status.decided.useExisting', { id: ua.slice('useExisting:'.length) });
+    }
+    if (ua === 'create') return t('exchange.preview.status.decided.create');
+    if (ua === 'skip') return t('exchange.preview.status.decided.skip');
+    return statusLabel(resolveBlock);
   }
 
   function formatMoney(value, currency) {
@@ -103,23 +204,40 @@
   }
 </script>
 
-{#snippet statusBadge(resolveBlock)}
+{#snippet statusBadge(resolveBlock, path = null, kind = null)}
   {#if resolveBlock && statusKey(resolveBlock.status)}
-    {@const sk = statusKey(resolveBlock.status)}
-    <span
-      class="shpd-exchange__status shpd-exchange__status--{sk}"
-      title={statusLabel(resolveBlock)}
-    >
-      <span class="shpd-exchange__status-glyph">{statusGlyph(sk)}</span>
-    </span>
+    {@const modifier = effectiveStatusKey(path, resolveBlock)}
+    {@const label = effectiveStatusLabel(path, resolveBlock)}
+    {@const interactive
+      = onUserActionsChange !== null
+      && resolveBlock.status !== 'matched'
+      && path !== null
+      && kind !== null}
+    {#if interactive}
+      <button
+        type="button"
+        class="shpd-exchange__status shpd-exchange__status--{modifier} shpd-exchange__status--interactive"
+        title={label}
+        onclick={(e) => openDecision(e, path, resolveBlock, kind)}
+      >
+        <span class="shpd-exchange__status-glyph">{statusGlyph(modifier)}</span>
+      </button>
+    {:else}
+      <span
+        class="shpd-exchange__status shpd-exchange__status--{modifier}"
+        title={label}
+      >
+        <span class="shpd-exchange__status-glyph">{statusGlyph(modifier)}</span>
+      </span>
+    {/if}
   {/if}
 {/snippet}
 
-{#snippet partyCard(label, party, partyResolve)}
+{#snippet partyCard(label, party, partyResolve, path)}
   <div class="shpd-exchange__party">
     <div class="shpd-exchange__party-header">
       <h3 class="shpd-exchange__party-label">{label}</h3>
-      {@render statusBadge(partyResolve)}
+      {@render statusBadge(partyResolve, path, 'party')}
     </div>
     {#if party}
       <div class="shpd-exchange__party-body">
@@ -218,11 +336,13 @@
         t('exchange.preview.section.supplier'),
         canonical.supplier,
         resolve?.supplier,
+        'supplier',
       )}
       {@render partyCard(
         t('exchange.preview.section.customer'),
         canonical.customer,
         resolve?.customer,
+        'customer',
       )}
     </section>
 
@@ -263,7 +383,7 @@
                   {#if row.item?.supplierCode}
                     <span class="shpd-exchange__row-code">{row.item.supplierCode}</span>
                   {/if}
-                  {@render statusBadge(resolve?.rows?.[i]?.item)}
+                  {@render statusBadge(resolve?.rows?.[i]?.item, `rows[${i}].item`, 'item')}
                 </td>
                 <td class="num">{row.quantity ?? '—'}</td>
                 <td>
@@ -346,6 +466,25 @@
       </section>
     {/if}
   </div>
+{/if}
+
+{#if decisionOpen !== null}
+  <Popover
+    open={true}
+    anchor={decisionOpen.anchor}
+    placement="bottom"
+    onClose={closeDecision}
+  >
+    <ResolveDecisionPanel
+      resolveBlock={decisionOpen.resolveBlock}
+      referenceKind={decisionOpen.kind}
+      entityTable={decisionOpen.table}
+      entitySearchFields={decisionOpen.searchFields}
+      entityDisplayPattern={decisionOpen.displayPattern}
+      currentUserAction={userActions[decisionOpen.path] ?? null}
+      onDecide={handleDecide}
+    />
+  </Popover>
 {/if}
 
 <style>
@@ -531,6 +670,46 @@
   .shpd-exchange__status--notFound {
     background: var(--shpd-color-state-cancelled-bg);
     color: var(--shpd-color-state-cancelled-text);
+  }
+
+  /* Phase 3b: clickable badge (`<button>` element variant). Removes the
+     default button chrome — visual stays identical to the read-only span. */
+  .shpd-exchange__status--interactive {
+    cursor: pointer;
+    padding: 0;
+    border: 0;
+    font-family: inherit;
+  }
+
+  .shpd-exchange__status--interactive:hover {
+    filter: brightness(1.1);
+  }
+
+  .shpd-exchange__status--interactive:focus-visible {
+    outline: 2px solid var(--shpd-color-primary);
+    outline-offset: 1px;
+  }
+
+  /* Decided modifiers — same color palette as the original status plus a
+     2px outline to signal "user made a choice". Outline is more legible at
+     18px than a combined "✓+" glyph and works across all bg colors. */
+  .shpd-exchange__status--matchedDecided {
+    background: var(--shpd-color-state-done-bg);
+    color: var(--shpd-color-state-done-text);
+    outline: 2px solid var(--shpd-color-state-done-text);
+    outline-offset: 1px;
+  }
+
+  .shpd-exchange__status--canCreateDecided {
+    background: var(--shpd-color-state-concept-bg);
+    color: var(--shpd-color-state-concept-text);
+    outline: 2px solid var(--shpd-color-state-concept-text);
+    outline-offset: 1px;
+  }
+
+  .shpd-exchange__status--skipped {
+    background: var(--shpd-color-text-muted, #888);
+    color: var(--shpd-color-surface, white);
   }
 
   /* ── Rows table ──────────────────────────────────────────────────────── */

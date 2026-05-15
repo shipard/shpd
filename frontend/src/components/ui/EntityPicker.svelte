@@ -126,7 +126,7 @@
     {:else}
       <ul class="shpd-picker__results" role="listbox">
         {#each results as row (row.id)}
-          <li class="shpd-picker__item" role="option">
+          <li class="shpd-picker__item" role="option" aria-selected="false">
             <button
               type="button"
               class="shpd-picker__item-button"

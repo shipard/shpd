@@ -36,18 +36,29 @@ export async function previewExtractedDocument(extractedNdx) {
 }
 
 /**
- * Apply an extracted document — runs DocumentApplier with
- * `autoCreateMode = "safe"` and `targetDocState = 10` server-side.
+ * Apply an extracted document.
  *
- * `resolveOverrides` is a placeholder for Phase 3b (userAction decisions
- * from the UI); in Phase 3a always pass `null` — backend ignores body
- * for the apply endpoint.
+ * Body shape and backend behaviour:
+ *   - `userActions = null` → POST body `{}`. Backend derives
+ *     `autoCreateMode = "safe"` (Phase 2 / CLI backward compat).
+ *   - `userActions = {}` (empty object) → POST body `{_resolve: {}}`.
+ *     Backend sees the `_resolve` key and switches to
+ *     `autoCreateMode = "strict"` — 3b-aware client with no decisions
+ *     (every reference must already be `matched`).
+ *   - `userActions = {path: action, ...}` → POST body `{_resolve: ...}`.
+ *     Backend expands flat paths to nested `_resolve.{path}.userAction`,
+ *     mode = strict.
+ *
+ * userActions tvar: `{"supplier": "useExisting:42", "rows[0].item": "create"}`.
+ * Backend (AnalysisController::expandUserActions) handles the flat → nested
+ * translation.
  *
  * @param {number} extractedNdx
- * @param {object|null} [resolveOverrides] - { supplier: {userAction: ...}, ... }
+ * @param {object|null} [userActions]  Flat {path: action} map, or null
+ *                                      for Phase 2 / non-3b callers.
  */
-export async function applyExtractedDocument(extractedNdx, resolveOverrides = null) {
-  const body = resolveOverrides !== null ? { _resolve: resolveOverrides } : {};
+export async function applyExtractedDocument(extractedNdx, userActions = null) {
+  const body = userActions !== null ? { _resolve: userActions } : {};
   return await post(`/_mail/extracted-documents/${extractedNdx}/apply`, body);
 }
 

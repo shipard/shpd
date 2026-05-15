@@ -11,6 +11,14 @@
   // Apply / reject delegate to parent callbacks — parent still owns the
   // actual API call (existing applyDocument/rejectDoc in ViewerDetail).
   //
+  // Phase 3b additions:
+  //   - `userActions` state accumulates the resolve-decision choices from
+  //     clickable badges in DocumentExchangePreview.
+  //   - `canApply` is true only when all non-matched references have a
+  //     decision (or are explicitly skipped). Unit / vatCode badges don't
+  //     gate apply — the applier has fallback defaults.
+  //   - "Použít" passes `userActions` to onApply for the API call.
+  //
   // Mobile (<768px): single column with PDF/Preview tab switcher.
 
   import Modal from '../ui/Modal.svelte';
@@ -33,12 +41,17 @@
   let data = $state(null);
   let mobileTab = $state('pdf'); // 'pdf' | 'preview'
 
+  // Phase 3b: accumulated decisions from clickable status badges. Flat
+  // {path: action} map — see api/exchange.js applyExtractedDocument.
+  let userActions = $state({});
+
   $effect(() => {
     if (open && extractedNdx !== null && extractedNdx !== undefined) {
       void loadPreview(extractedNdx);
     } else {
       data = null;
       error = null;
+      userActions = {};
     }
   });
 
@@ -46,6 +59,7 @@
     loading = true;
     error = null;
     data = null;
+    userActions = {};
     try {
       const result = await previewExtractedDocument(ndx);
       if (result?.success) {
@@ -60,7 +74,42 @@
     }
   }
 
-  let canApply = $derived(data !== null && !data.aiFailed);
+  function handleUserActionsChange(next) {
+    userActions = next;
+  }
+
+  // Walk `_resolve` and verify every non-matched reference has a decision.
+  // unit/vatCode badges are excluded — applier falls back to defaults.
+  function allDecided(resolve, ua) {
+    if (!resolve) return true;
+    for (const key of ['supplier', 'customer', 'supplierBank', 'customerBank']) {
+      const block = resolve[key];
+      if (!block) continue;
+      if (block.status === 'matched') continue;
+      if (ua[key] !== undefined && ua[key] !== null) continue;
+      return false;
+    }
+    const rows = resolve.rows ?? [];
+    for (let i = 0; i < rows.length; i++) {
+      const itemBlock = rows[i]?.item;
+      if (!itemBlock) continue;
+      if (itemBlock.status === 'matched') continue;
+      const p = `rows[${i}].item`;
+      if (ua[p] !== undefined && ua[p] !== null) continue;
+      return false;
+    }
+    return true;
+  }
+
+  let canApply = $derived(
+    data !== null
+      && !data.aiFailed
+      && allDecided(data.canonical?._resolve ?? null, userActions),
+  );
+
+  function handleApplyClick() {
+    onApply(extractedNdx, userActions);
+  }
 </script>
 
 <Modal title={t('exchange.preview.title')} {open} {onClose} width="full">
@@ -104,6 +153,8 @@
           canonical={data.canonical}
           aiFailed={data.aiFailed}
           wrapper={data.wrapper}
+          {userActions}
+          onUserActionsChange={handleUserActionsChange}
         />
       </div>
     </div>
@@ -125,7 +176,7 @@
       label={t('exchange.preview.actions.apply')}
       variant="success"
       disabled={!canApply}
-      onclick={() => onApply(extractedNdx)}
+      onclick={handleApplyClick}
     />
   {/snippet}
 </Modal>

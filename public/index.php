@@ -3,7 +3,9 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
+use Shipard\Api\AlertCheckLoader;
 use Shipard\Api\AuthContext;
+use Shipard\Api\Controller\AlertsController;
 use Shipard\Api\Controller\AuthController;
 use Shipard\Api\Controller\CrudController;
 use Shipard\Api\Controller\ExchangeController;
@@ -107,6 +109,9 @@ try {
 	// ── 4d. Build document registry ───────────────────────────────────────────
 	$documentRegistry = DocumentLoader::load($resolved->config, $modulePathResolver);
 
+	// ── 4e. Build alert check registry ────────────────────────────────────────
+	$alertCheckRegistry = AlertCheckLoader::load($resolved->config, $modulePathResolver, $language);
+
 	// ── 5. Route ──────────────────────────────────────────────────────────────
 	$router      = new Router();
 	$routeResult = $router->resolve($resolved->normalizedPath, $request->getMethod());
@@ -154,7 +159,7 @@ try {
 		$resolved->connection, $openApiPublic,
 		$host, $resolved, $modulePathResolver,
 		$viewerRegistry, $configRuntime, $formRegistry, $documentRegistry,
-		$lookupRegistry,
+		$lookupRegistry, $alertCheckRegistry,
 	);
 
 	// ── 10. Apply headers and send ────────────────────────────────────────────
@@ -235,6 +240,7 @@ function dispatch(
 	?FormRegistry $formRegistry = null,
 	?\Shipard\Core\Document\DocumentRegistry $documentRegistry = null,
 	?LookupRegistry $lookupRegistry = null,
+	?\Shipard\Core\Alerts\AlertCheckRegistry $alertCheckRegistry = null,
 ): Response {
 	$baseUrl = $resolved->isDevMode()
 		? 'http://' . $host . '/' . $resolved->config->getId()
@@ -253,8 +259,36 @@ function dispatch(
 		'mail'    => dispatchMail($route, $request, $auth, $tables, $db, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'analysis' => dispatchAnalysis($route, $request, $auth, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'exchange' => dispatchExchange($route, $request, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
+		'alerts' => dispatchAlerts($route, $request, $db, $alertCheckRegistry, $configRuntime, resolveLanguage($request, $resolved->config)),
 		'openapi' => (new OpenApiController())->spec($auth, $openApiPublic, $tables, $baseUrl),
 		default   => Response::error('INTERNAL_ERROR', "Unknown controller: {$route->controller}", 500),
+	};
+}
+
+function dispatchAlerts(
+	Route $route,
+	Request $request,
+	\Shipard\Core\Database\DataSourceConnection $db,
+	?\Shipard\Core\Alerts\AlertCheckRegistry $registry,
+	?\Shipard\Core\Config\ConfigRuntime $configRuntime,
+	string $language,
+): Response {
+	if ($registry === null) {
+		return Response::error('INTERNAL_ERROR', 'AlertCheckRegistry is required for /_alerts endpoints', 500);
+	}
+	if ($configRuntime === null) {
+		return Response::error('INTERNAL_ERROR', 'ConfigRuntime is required for /_alerts endpoints', 500);
+	}
+
+	$ctrl = new AlertsController($db, $registry, $configRuntime, $language);
+	return match ($route->action) {
+		'registry'  => $ctrl->registry(),
+		'runDue'    => $ctrl->runDue(),
+		'runCheck'  => $ctrl->runCheck($route->table ?? ''),
+		'snooze'    => $ctrl->snooze((int) $route->id, $request),
+		'dismiss'   => $ctrl->dismiss((int) $route->id),
+		'unsnooze'  => $ctrl->unsnooze((int) $route->id),
+		default     => Response::error('INTERNAL_ERROR', "Unknown alerts action: {$route->action}", 500),
 	};
 }
 

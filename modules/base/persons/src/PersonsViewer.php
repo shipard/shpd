@@ -24,7 +24,7 @@ class PersonsViewer extends TableViewer
 	public function selectRows(?string $search, array $filters, int $pageNumber): array
 	{
 		$sql = 'SELECT `id`, `person_id`, `person_type`, `full_name`, `company_id`, `tax_id`,'
-			. ' `email`, `phone`, `docState`, `docStateMain`'
+			. ' `email`, `phone`, `is_own`, `docState`, `docStateMain`'
 			. ' FROM `' . $this->table . '`';
 
 		$conditions = [];
@@ -85,8 +85,11 @@ class PersonsViewer extends TableViewer
 		$personType = (int) ($rowData['person_type'] ?? 0);
 		$row['icon'] = $personType === 2 ? 'company' : 'user';
 
-		// Line 2: IČO, DIČ, plus state badge for non-default states
+		// Line 2: badge "Vlastní" for is_own, then IČO/DIČ, plus state badge for non-default states
 		$t2 = [];
+		if (!empty($rowData['is_own'])) {
+			$t2[] = ['text' => 'Vlastní', 'class' => 'primary'];
+		}
 		if (!empty($rowData['company_id'])) {
 			$t2[] = ['text' => 'IČO: ' . $rowData['company_id']];
 		}

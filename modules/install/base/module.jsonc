@@ -8,6 +8,7 @@
     "description:en": "Base set of modules for system operation",
     "dependencies": [
         "core.system",
+        "core.alerts",
         "core.attachments",
         "core.mail",
         "core.units",

@@ -1,0 +1,50 @@
+{
+    // core.alerts.alertStates
+    //
+    // Vlastní lifecycle alertů — NENÍ to docStates mechanismus (alert tabulka
+    // nemá docState/docStateMain, místo toho ji řídí AlertReconciler a API
+    // endpointy snooze/dismiss/unsnooze).
+    //
+    // Stavový automat:
+    //   Active   → Snoozed (user) | Dismissed (user) | Resolved (reconciler auto)
+    //   Snoozed  → Active (user unsnooze | reconciler po vypršení snoozed_until)
+    //              | Dismissed (user)
+    //   Resolved → (terminál — reconciler v dalším běhu může vytvořit nový
+    //              alert se stejným check_id+finding_key, ale to bude nový
+    //              řádek, ne reaktivace tohohle)
+    //   Dismissed → (terminál — totéž; "dismiss" = "teď mě to nezajímá", ne
+    //              "navždy zapomeň". Pro permanentní suppress slouží snooze
+    //              s velmi dlouhou dobou nebo enabled=false na check_states.)
+    //
+    // isOpen rozlišuje "ještě v hledáčku" (10, 20) vs. "uzavřené" (70, 80).
+    // Slouží pro filtry ve vieweru.
+
+    "10": {
+        "name": "Active",
+        "name:cs": "Aktivní",
+        "name:en": "Active",
+        "style": "active",
+        "isOpen": true
+    },
+    "20": {
+        "name": "Snoozed",
+        "name:cs": "Odložené",
+        "name:en": "Snoozed",
+        "style": "snoozed",
+        "isOpen": true
+    },
+    "70": {
+        "name": "Resolved",
+        "name:cs": "Vyřešené",
+        "name:en": "Resolved",
+        "style": "resolved",
+        "isOpen": false
+    },
+    "80": {
+        "name": "Dismissed",
+        "name:cs": "Zamítnuté",
+        "name:en": "Dismissed",
+        "style": "dismissed",
+        "isOpen": false
+    }
+}

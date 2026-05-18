@@ -1,0 +1,29 @@
+{
+    // core.alerts.severities
+    //
+    // Závažnost alertu. Mapuje se v UI na barvu badge přes CSS custom
+    // properties --shpd-color-alert-{style} (viz docs/design-system.md).
+    //
+    // V AlertFinding (PHP) se předává jako string klíč `info|warning|error`;
+    // AlertReconciler ho mapuje na zde uvedené numerické hodnoty před zápisem
+    // do core_alerts_alerts.severity.
+
+    "10": {
+        "name": "Info",
+        "name:cs": "Informace",
+        "name:en": "Info",
+        "style": "info"
+    },
+    "20": {
+        "name": "Warning",
+        "name:cs": "Upozornění",
+        "name:en": "Warning",
+        "style": "warning"
+    },
+    "30": {
+        "name": "Error",
+        "name:cs": "Chyba",
+        "name:en": "Error",
+        "style": "error"
+    }
+}

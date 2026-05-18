@@ -233,4 +233,79 @@ class ModuleDefinitionTest extends TestCase
 
         $this->assertSame([], $def->lookups);
     }
+
+    public function testAlertChecksAbsentDefaultsToEmpty(): void
+    {
+        $def = ModuleDefinition::fromArray(['id' => 'base.persons', 'name' => 'Persons']);
+
+        $this->assertSame([], $def->alertChecks);
+    }
+
+    public function testAlertChecksRawPassthrough(): void
+    {
+        $raw = [
+            [
+                'id' => 'base.persons.missing_own_person',
+                'name' => 'Own Person is missing',
+                'name:cs' => 'Chybí vlastní Osoba',
+                'class' => 'Foo\\Bar',
+                'interval' => '1h',
+            ],
+            [
+                'id' => 'base.persons.duplicate_own',
+                'name' => 'Multiple own persons',
+                'class' => 'Foo\\Baz',
+                'interval' => '4h',
+            ],
+        ];
+
+        $def = ModuleDefinition::fromArray([
+            'id' => 'base.persons',
+            'name' => 'Persons',
+            'alertChecks' => $raw,
+        ]);
+
+        // Module-level passthrough — :cs suffix zůstává až do ConfigLocalizeru.
+        $this->assertCount(2, $def->alertChecks);
+        $this->assertSame('base.persons.missing_own_person', $def->alertChecks[0]['id']);
+        $this->assertSame('Chybí vlastní Osoba', $def->alertChecks[0]['name:cs']);
+    }
+
+    public function testAlertChecksMissingIdThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("missing 'id'");
+        ModuleDefinition::fromArray([
+            'id' => 'base.persons',
+            'name' => 'Persons',
+            'alertChecks' => [
+                ['name' => 'x', 'class' => 'Y', 'interval' => '1h'],
+            ],
+        ]);
+    }
+
+    public function testAlertChecksDuplicateIdWithinModuleThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('duplicate alertChecks id');
+        ModuleDefinition::fromArray([
+            'id' => 'base.persons',
+            'name' => 'Persons',
+            'alertChecks' => [
+                ['id' => 'x.y', 'name' => 'a', 'class' => 'A', 'interval' => '1h'],
+                ['id' => 'x.y', 'name' => 'b', 'class' => 'B', 'interval' => '2h'],
+            ],
+        ]);
+    }
+
+    public function testAlertChecksNonArrayEntryThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('must be an object');
+        ModuleDefinition::fromArray([
+            'id' => 'base.persons',
+            'name' => 'Persons',
+            'alertChecks' => ['not-an-array'],
+        ]);
+    }
 }

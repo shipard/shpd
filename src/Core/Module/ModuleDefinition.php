@@ -19,6 +19,7 @@ class ModuleDefinition
         public readonly array $forms,
         public readonly array $settingsItems,
         public readonly array $lookups = [],
+        public readonly array $alertChecks = [],
     ) {}
 
     public static function fromArray(array $data): self
@@ -68,6 +69,34 @@ class ModuleDefinition
             }
         }
 
+        // alertChecks — raw array passthrough. Plný parser (s lokalizací
+        // a duplicit detection napříč moduly) je v AlertCheckRegistry.
+        // Tady jen validujeme strukturu a duplicity uvnitř téhož modulu.
+        $alertChecks = [];
+        if (isset($data['alertChecks']) && is_array($data['alertChecks'])) {
+            $seenIds = [];
+            foreach ($data['alertChecks'] as $idx => $check) {
+                if (!is_array($check)) {
+                    throw new \InvalidArgumentException(
+                        "Module '{$data['id']}': alertChecks[{$idx}] must be an object",
+                    );
+                }
+                $checkId = $check['id'] ?? null;
+                if (!is_string($checkId) || $checkId === '') {
+                    throw new \InvalidArgumentException(
+                        "Module '{$data['id']}': alertChecks[{$idx}] missing 'id'",
+                    );
+                }
+                if (isset($seenIds[$checkId])) {
+                    throw new \InvalidArgumentException(
+                        "Module '{$data['id']}': duplicate alertChecks id '{$checkId}'",
+                    );
+                }
+                $seenIds[$checkId] = true;
+                $alertChecks[] = $check;
+            }
+        }
+
         return new self(
             id: $data['id'],
             name: $data['name'],
@@ -81,6 +110,7 @@ class ModuleDefinition
             forms: $data['forms'] ?? [],
             settingsItems: $settingsItems,
             lookups: $lookups,
+            alertChecks: $alertChecks,
         );
     }
 }

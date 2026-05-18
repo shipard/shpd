@@ -1,0 +1,19 @@
+{
+    // core.alerts.viewerDetailLabels
+    //
+    // Detail-tab labely pro AlertsViewer. Alert má jednoduchý detail: overview
+    // (text alertu + actions) a context (raw JSON pro debug).
+
+    "tabs": {
+        "overview": {
+            "name": "Overview",
+            "name:cs": "Přehled",
+            "name:en": "Overview"
+        },
+        "context": {
+            "name": "Context",
+            "name:cs": "Kontext",
+            "name:en": "Context"
+        }
+    }
+}

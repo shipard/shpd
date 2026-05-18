@@ -1,0 +1,34 @@
+{
+    // core.alerts.viewerDefaults
+    //
+    // Lokalizované labely pro toolbar a row akce AlertsVieweru. AlertsViewer
+    // sám zodpovídá za to, které akce do listu zařadí (nedědí default
+    // create/edit z core.system.viewerDefaults — alerty se needitují ručně).
+
+    "toolbarActions": {
+        "runDue": {
+            "name": "Run due checks",
+            "name:cs": "Spustit naplánované kontroly",
+            "name:en": "Run due checks",
+            "variant": "primary"
+        }
+    },
+
+    "rowActions": {
+        "snooze": {
+            "name": "Snooze",
+            "name:cs": "Odložit",
+            "name:en": "Snooze"
+        },
+        "dismiss": {
+            "name": "Dismiss",
+            "name:cs": "Zamítnout",
+            "name:en": "Dismiss"
+        },
+        "recheck": {
+            "name": "Re-check",
+            "name:cs": "Zkontrolovat znovu",
+            "name:en": "Re-check"
+        }
+    }
+}

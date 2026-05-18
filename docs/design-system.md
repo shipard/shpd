@@ -164,6 +164,26 @@ Když uživatel označí řádek v seznamu:
 Logika je v `ViewerRow.svelte` přes CSS proměnnou `--shpd-row-bar`, kterou
 nastavují `docState_*` třídy. `--selected` ji přepisuje.
 
+### Alert severity (samostatná paleta)
+
+`core.alerts` modul má **vlastní paletu** — alert není doc-state, má svůj
+lifecycle (Active / Snoozed / Resolved / Dismissed). Stejná struktura tokenů
+(`-bar`, `-bg`, `-text`), ale jiný prefix:
+
+| severity | Bar v seznamu | Badge bg / text | Význam |
+|---|---|---|---|
+| `info` | modrá `#3b82f6` | světle modrá / tmavě modrá | Informace, FYI |
+| `warning` | oranžová `#f59e0b` | světle žlutá / tmavě hnědá | Něco potřebuje pozornost |
+| `error` | červená `#ef4444` | světle červená / tmavě červená | Něco je rozbité |
+
+Mapování stringu `severity` (z `core.alerts.severities.style`) na CSS třídy:
+`shpd-alert--severity-{style}`. Tokeny: `--shpd-color-alert-{info|warning|error}-{bar|bg|text}`.
+
+Proč ne sdílet s `--shpd-color-state-*`? Alerty nemají stavy v doc-state
+smyslu — `severity` je horizontální (závažnost), zatímco `alert_state`
+(Active/Snoozed/…) je životní cyklus a kreslí se jiným způsobem (typicky jen
+opacity/text indikací, ne bar).
+
 ---
 
 ## 5. Badge systém

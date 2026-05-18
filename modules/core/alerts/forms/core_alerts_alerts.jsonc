@@ -1,0 +1,45 @@
+{
+    "title": "Upozornění",
+    "title:cs": "Upozornění",
+    "title:en": "Alert",
+    // Alerts se nevytvářejí přes formulář — vznikají v AlertReconciler.
+    // Tenhle form je read-only pohled používaný leda když by se v budoucnu
+    // v UI dalo otevřít detail alertu jako modál (zatím není ani toolbar
+    // "Open" action, viz AlertsViewer::getToolbarActions).
+    "fullSize": false,
+
+    "tabs": [
+        {
+            "id": "detail",
+            "label": "Detail",
+            "label:cs": "Detail",
+            "label:en": "Detail",
+            "sections": [
+                {
+                    "columns": [
+                        {
+                            "elements": [
+                                {"type": "input", "column": "title"},
+                                {"type": "input", "column": "message"},
+                                {"type": "input", "column": "severity"},
+                                {"type": "input", "column": "alert_state"},
+
+                                {"type": "separator", "label": "Identifikace", "label:cs": "Identifikace", "label:en": "Identity"},
+                                {"type": "input", "column": "check_id"},
+                                {"type": "input", "column": "finding_key"},
+
+                                {"type": "separator", "label": "Časování", "label:cs": "Časování", "label:en": "Timing"},
+                                {"type": "input", "column": "first_seen_at"},
+                                {"type": "input", "column": "last_seen_at"},
+                                {"type": "input", "column": "seen_count"},
+                                {"type": "input", "column": "snoozed_until"},
+                                {"type": "input", "column": "dismissed_at"},
+                                {"type": "input", "column": "resolved_at"}
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

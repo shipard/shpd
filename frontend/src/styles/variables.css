@@ -75,6 +75,23 @@
   --shpd-color-state-error-bg:       #fecaca;
   --shpd-color-state-error-text:     #991b1b;
 
+  /* Alert severity palette — barvy pro core.alerts viewer.
+   *
+   * Stejná struktura jako doc-state: -bar pro levý proužek řádku,
+   * -bg/-text pro badge. Severities (info/warning/error) jsou mapovány
+   * z cfgItem core.alerts.severities přes `style` klíč. */
+  --shpd-color-alert-info-bar:       #3b82f6;
+  --shpd-color-alert-info-bg:        #dbeafe;
+  --shpd-color-alert-info-text:      #1e40af;
+
+  --shpd-color-alert-warning-bar:    #f59e0b;
+  --shpd-color-alert-warning-bg:     #fef3c7;
+  --shpd-color-alert-warning-text:   #92400e;
+
+  --shpd-color-alert-error-bar:      #ef4444;
+  --shpd-color-alert-error-bg:       #fee2e2;
+  --shpd-color-alert-error-text:     #991b1b;
+
   /* Plochy.
    *   bg            = obsah (hlavička s tlačítky, seznam, detail panel)
    *   bg-secondary  = "podloží" pod a kolem prohlížeče
@@ -266,4 +283,14 @@
 
   --shpd-color-state-error-bg:       #3d1414;
   --shpd-color-state-error-text:     #fca5a5;
+
+  /* Alert severity palette — dark variants */
+  --shpd-color-alert-info-bg:        #1e3a5f;
+  --shpd-color-alert-info-text:      #93c5fd;
+
+  --shpd-color-alert-warning-bg:     #3d2814;
+  --shpd-color-alert-warning-text:   #fcd34d;
+
+  --shpd-color-alert-error-bg:       #3d1414;
+  --shpd-color-alert-error-text:     #fca5a5;
 }

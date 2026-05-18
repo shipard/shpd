@@ -98,6 +98,10 @@ class Router
 			return $this->resolveExchangeRoute($subpath, $method);
 		}
 
+		if (str_starts_with($subpath, '/_alerts')) {
+			return $this->resolveAlertsRoute($subpath, $method);
+		}
+
 		if ($subpath === '/_auth/login') {
 			if ($method !== 'POST') {
 				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
@@ -290,6 +294,50 @@ class Router
 			return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
 		}
 		return new Route('exchange', $rest);
+	}
+
+	private function resolveAlertsRoute(string $subpath, string $method): Route|Response
+	{
+		$rest = substr($subpath, strlen('/_alerts'));
+
+		// GET /_alerts/registry
+		if ($rest === '/registry') {
+			if ($method !== 'GET') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('alerts', 'registry');
+		}
+
+		// POST /_alerts/run-due
+		if ($rest === '/run-due') {
+			if ($method !== 'POST') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('alerts', 'runDue');
+		}
+
+		// POST /_alerts/checks/{checkId}/run
+		if (preg_match('#^/checks/([a-z][a-z0-9_.]*)/run$#', $rest, $m)) {
+			if ($method !== 'POST') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			// Použijeme `table` slot pro checkId (Route nemá dedikovaný string slot).
+			return new Route('alerts', 'runCheck', $m[1]);
+		}
+
+		// POST /_alerts/alerts/{id}/{snooze|dismiss|unsnooze}
+		if (preg_match('#^/alerts/(\d+)/(snooze|dismiss|unsnooze)$#', $rest, $m)) {
+			$id = (int) $m[1];
+			if ($id <= 0) {
+				return Response::error('NOT_FOUND', 'Not found', 404);
+			}
+			if ($method !== 'POST') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('alerts', $m[2], null, $id);
+		}
+
+		return Response::error('NOT_FOUND', 'Not found', 404);
 	}
 
 	private function resolveAttachmentRoute(string $subpath, string $method): Route|Response

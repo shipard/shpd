@@ -1,0 +1,173 @@
+{
+    "tableId": 409,
+    "name": "Alert check states",
+    "name:cs": "Stavy kontrol upozornění",
+    "name:en": "Alert check states",
+
+    // Interní stavová tabulka spravovaná výhradně AlertReconcilerem.
+    // Uživatel ji nikdy nepotřebuje vidět samostatně — info o lastRun/nextRun
+    // se zobrazuje přes /_alerts/registry endpoint.
+    "hideFromNavigation": true,
+
+    "displayPattern": "{check_id}",
+
+    "columnGroups": [
+        {
+            "id": "identity",
+            "name": "Identification",
+            "name:cs": "Identifikace",
+            "name:en": "Identification"
+        },
+        {
+            "id": "schedule",
+            "name": "Schedule",
+            "name:cs": "Plánování",
+            "name:en": "Schedule"
+        },
+        {
+            "id": "lastRun",
+            "name": "Last run",
+            "name:cs": "Poslední běh",
+            "name:en": "Last run"
+        },
+        {
+            "id": "lock",
+            "name": "Lock",
+            "name:cs": "Zámek",
+            "name:en": "Lock"
+        }
+    ],
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+
+        // --- identity ---
+
+        {
+            "id": "check_id",
+            "name": "Check ID",
+            "name:cs": "ID kontroly",
+            "name:en": "Check ID",
+            "type": "varchar",
+            "length": 200,
+            "nullable": false,
+            "group": "identity"
+        },
+        {
+            "id": "enabled",
+            "name": "Enabled",
+            "name:cs": "Povoleno",
+            "name:en": "Enabled",
+            "type": "boolean",
+            "default": true,
+            "group": "identity"
+        },
+
+        // --- schedule ---
+
+        {
+            "id": "next_run_at",
+            "name": "Next run at",
+            "name:cs": "Další běh v",
+            "name:en": "Next run at",
+            "type": "datetime",
+            "nullable": true,
+            "group": "schedule"
+        },
+
+        // --- lastRun ---
+
+        {
+            "id": "last_run_at",
+            "name": "Last run at",
+            "name:cs": "Poslední běh v",
+            "name:en": "Last run at",
+            "type": "datetime",
+            "nullable": true,
+            "group": "lastRun"
+        },
+        {
+            "id": "last_run_status",
+            "name": "Last run status",
+            "name:cs": "Status posledního běhu",
+            "name:en": "Last run status",
+            "type": "enumString",
+            "length": 20,
+            "cfgItem": "core.alerts.checkRunStatuses",
+            "nullable": true,
+            "group": "lastRun"
+        },
+        {
+            "id": "last_run_duration_ms",
+            "name": "Last run duration (ms)",
+            "name:cs": "Trvání posledního běhu (ms)",
+            "name:en": "Last run duration (ms)",
+            "type": "int",
+            "nullable": true,
+            "group": "lastRun"
+        },
+        {
+            "id": "last_run_findings",
+            "name": "Last run findings",
+            "name:cs": "Počet nálezů posl. běhu",
+            "name:en": "Last run findings",
+            "type": "int",
+            "nullable": true,
+            "group": "lastRun"
+        },
+        {
+            "id": "last_run_error",
+            "name": "Last run error",
+            "name:cs": "Chyba posledního běhu",
+            "name:en": "Last run error",
+            "type": "text",
+            "nullable": true,
+            "group": "lastRun"
+        },
+
+        // --- lock ---
+
+        {
+            "id": "is_running",
+            "name": "Is running",
+            "name:cs": "Právě běží",
+            "name:en": "Is running",
+            "type": "boolean",
+            "default": false,
+            "group": "lock"
+        },
+        {
+            "id": "running_since",
+            "name": "Running since",
+            "name:cs": "Běží od",
+            "name:en": "Running since",
+            "type": "datetime",
+            "nullable": true,
+            "group": "lock"
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "unq_check_id",
+            "type": "unique",
+            "columns": [
+                {"column": "check_id"}
+            ]
+        },
+        {
+            "id": "idx_next_run",
+            "type": "index",
+            "columns": [
+                {"column": "enabled"},
+                {"column": "next_run_at"}
+            ]
+        }
+    ]
+}

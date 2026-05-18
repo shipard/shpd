@@ -1,0 +1,244 @@
+{
+    "tableId": 408,
+    "name": "Alerts",
+    "name:cs": "Upozornění",
+    "name:en": "Alerts",
+
+    "displayPattern": "{title}",
+
+    "columnGroups": [
+        {
+            "id": "identity",
+            "name": "Identification",
+            "name:cs": "Identifikace",
+            "name:en": "Identification"
+        },
+        {
+            "id": "content",
+            "name": "Content",
+            "name:cs": "Obsah",
+            "name:en": "Content"
+        },
+        {
+            "id": "subject",
+            "name": "Subject",
+            "name:cs": "Předmět",
+            "name:en": "Subject"
+        },
+        {
+            "id": "state",
+            "name": "State",
+            "name:cs": "Stav",
+            "name:en": "State"
+        },
+        {
+            "id": "timing",
+            "name": "Timing",
+            "name:cs": "Časové údaje",
+            "name:en": "Timing"
+        }
+    ],
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+
+        // --- identity ---
+
+        {
+            "id": "check_id",
+            "name": "Check ID",
+            "name:cs": "ID kontroly",
+            "name:en": "Check ID",
+            "type": "varchar",
+            "length": 200,
+            "nullable": false,
+            "group": "identity"
+        },
+        {
+            "id": "finding_key",
+            "name": "Finding key",
+            "name:cs": "Klíč nálezu",
+            "name:en": "Finding key",
+            "type": "varchar",
+            "length": 200,
+            "nullable": false,
+            "default": "",
+            "group": "identity"
+        },
+
+        // --- content ---
+
+        {
+            "id": "title",
+            "name": "Title",
+            "name:cs": "Titulek",
+            "name:en": "Title",
+            "type": "varchar",
+            "length": 250,
+            "nullable": false,
+            "group": "content"
+        },
+        {
+            "id": "message",
+            "name": "Message",
+            "name:cs": "Zpráva",
+            "name:en": "Message",
+            "type": "text",
+            "nullable": true,
+            "group": "content"
+        },
+        {
+            "id": "severity",
+            "name": "Severity",
+            "name:cs": "Závažnost",
+            "name:en": "Severity",
+            "type": "enumInt",
+            "cfgItem": "core.alerts.severities",
+            "default": 20,
+            "group": "content"
+        },
+        {
+            "id": "actions",
+            "name": "Actions",
+            "name:cs": "Akce",
+            "name:en": "Actions",
+            "type": "json",
+            "nullable": true,
+            "group": "content"
+        },
+        {
+            "id": "context",
+            "name": "Context",
+            "name:cs": "Kontext",
+            "name:en": "Context",
+            "type": "json",
+            "nullable": true,
+            "group": "content"
+        },
+
+        // --- subject ---
+
+        {
+            "id": "subject_table_id",
+            "name": "Subject table",
+            "name:cs": "Tabulka předmětu",
+            "name:en": "Subject table",
+            "type": "smallint",
+            "nullable": true,
+            "group": "subject"
+        },
+        {
+            "id": "subject_row_id",
+            "name": "Subject row",
+            "name:cs": "Záznam předmětu",
+            "name:en": "Subject row",
+            "type": "int",
+            "nullable": true,
+            "group": "subject"
+        },
+
+        // --- state ---
+
+        {
+            "id": "alert_state",
+            "name": "State",
+            "name:cs": "Stav",
+            "name:en": "State",
+            "type": "enumInt",
+            "cfgItem": "core.alerts.alertStates",
+            "default": 10,
+            "group": "state"
+        },
+        {
+            "id": "snoozed_until",
+            "name": "Snoozed until",
+            "name:cs": "Odloženo do",
+            "name:en": "Snoozed until",
+            "type": "datetime",
+            "nullable": true,
+            "group": "state"
+        },
+        {
+            "id": "dismissed_at",
+            "name": "Dismissed at",
+            "name:cs": "Zamítnuto",
+            "name:en": "Dismissed at",
+            "type": "datetime",
+            "nullable": true,
+            "group": "state"
+        },
+        {
+            "id": "resolved_at",
+            "name": "Resolved at",
+            "name:cs": "Vyřešeno",
+            "name:en": "Resolved at",
+            "type": "datetime",
+            "nullable": true,
+            "group": "state"
+        },
+
+        // --- timing ---
+
+        {
+            "id": "first_seen_at",
+            "name": "First seen at",
+            "name:cs": "Poprvé spatřeno",
+            "name:en": "First seen at",
+            "type": "datetime",
+            "nullable": false,
+            "group": "timing"
+        },
+        {
+            "id": "last_seen_at",
+            "name": "Last seen at",
+            "name:cs": "Naposled spatřeno",
+            "name:en": "Last seen at",
+            "type": "datetime",
+            "nullable": false,
+            "group": "timing"
+        },
+        {
+            "id": "seen_count",
+            "name": "Seen count",
+            "name:cs": "Počet pozorování",
+            "name:en": "Seen count",
+            "type": "int",
+            "default": 1,
+            "group": "timing"
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "idx_check_finding_state",
+            "type": "index",
+            "columns": [
+                {"column": "check_id"},
+                {"column": "finding_key"},
+                {"column": "alert_state"}
+            ]
+        },
+        {
+            "id": "idx_state_last_seen",
+            "type": "index",
+            "columns": [
+                {"column": "alert_state"},
+                {"column": "last_seen_at", "order": "DESC"}
+            ]
+        },
+        {
+            "id": "idx_subject",
+            "type": "index",
+            "columns": [
+                {"column": "subject_table_id"},
+                {"column": "subject_row_id"}
+            ]
+        }
+    ]
+}

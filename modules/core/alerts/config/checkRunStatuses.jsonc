@@ -1,0 +1,27 @@
+{
+    // core.alerts.checkRunStatuses
+    //
+    // Stav posledního běhu checku — zapisuje AlertReconciler do
+    // core_alerts_check_states.last_run_status.
+    //
+    //   ok    — check proběhl bez výjimky a vrátil 0 nálezů
+    //   found — check proběhl bez výjimky a vrátil 1..N nálezů
+    //   error — check hodil výjimku (existující alerty se NEresolvují,
+    //           detail v last_run_error)
+
+    "ok": {
+        "name": "OK",
+        "name:cs": "OK",
+        "name:en": "OK"
+    },
+    "found": {
+        "name": "Found problems",
+        "name:cs": "Nalezeny problémy",
+        "name:en": "Found problems"
+    },
+    "error": {
+        "name": "Error",
+        "name:cs": "Chyba",
+        "name:en": "Error"
+    }
+}

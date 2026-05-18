@@ -9,6 +9,7 @@
 
     "dependencies": [
         "core.system",
+        "core.alerts",
         "world.divisions",
         "world.trade",
     ],
@@ -94,5 +95,21 @@
             "id": "base.persons.viewerDetailLabels",
             "file": "config/viewerDetailLabels.jsonc"
         },
+    ],
+
+    "alertChecks": [
+        {
+            "id": "base.persons.missing_own_person",
+            "name": "Own Person is missing",
+            "name:cs": "Chybí vlastní Osoba",
+            "name:en": "Own Person is missing",
+            "description": "Detects missing own legal entity (set up after creating a new data source).",
+            "description:cs": "Detekuje chybějící vlastní právní subjekt (nastavuje se po vytvoření nového zdroje dat).",
+            "description:en": "Detects missing own legal entity (set up after creating a new data source).",
+            "class": "Shipard\\Module\\Base\\Persons\\Checks\\MissingOwnPersonCheck",
+            "severity": "warning",
+            "interval": "1h",
+            "tags": ["setup"]
+        }
     ]
 }

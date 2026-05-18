@@ -38,6 +38,8 @@ $app->add(new \Shipard\Command\DataSource\AiAnalyzerSetupCommand());
 $app->add(new \Shipard\Command\DataSource\AiAnalyzerSetKeyCommand());
 $app->add(new \Shipard\Command\DataSource\AiProfileReloadCommand());
 $app->add(new \Shipard\Command\DataSource\MailAnalysisReapCommand());
+$app->add(new \Shipard\Command\DataSource\AlertsRunCommand());
+$app->add(new \Shipard\Command\DataSource\AlertsPruneCommand());
 $app->add(new \Shipard\Command\DataSource\DsSecretsHealthCommand());
 $app->add(new \Shipard\Command\DataSource\DsSecretsRotateCommand());
 $app->setDefaultCommand('help');

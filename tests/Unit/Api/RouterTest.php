@@ -606,4 +606,83 @@ class RouterTest extends TestCase
 		$this->assertInstanceOf(Response::class, $result);
 		$this->assertSame('NOT_FOUND', $result->getPayload()['error']['code']);
 	}
+
+	// Alerts endpoints
+
+	public function testAlertsRegistry(): void
+	{
+		$result = $this->router->resolve('/api/v1/_alerts/registry', 'GET');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'alerts', 'registry');
+	}
+
+	public function testAlertsRegistryPostNotAllowed(): void
+	{
+		$result = $this->router->resolve('/api/v1/_alerts/registry', 'POST');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
+	}
+
+	public function testAlertsRunDue(): void
+	{
+		$result = $this->router->resolve('/api/v1/_alerts/run-due', 'POST');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'alerts', 'runDue');
+	}
+
+	public function testAlertsRunDueGetNotAllowed(): void
+	{
+		$result = $this->router->resolve('/api/v1/_alerts/run-due', 'GET');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
+	}
+
+	public function testAlertsRunCheck(): void
+	{
+		$result = $this->router->resolve('/api/v1/_alerts/checks/base.persons.missing_own_person/run', 'POST');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'alerts', 'runCheck', 'base.persons.missing_own_person');
+	}
+
+	public function testAlertsRunCheckBadIdIs404(): void
+	{
+		$result = $this->router->resolve('/api/v1/_alerts/checks/BadCAPS/run', 'POST');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('NOT_FOUND', $result->getPayload()['error']['code']);
+	}
+
+	public function testAlertsSnooze(): void
+	{
+		$result = $this->router->resolve('/api/v1/_alerts/alerts/42/snooze', 'POST');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'alerts', 'snooze', null, 42);
+	}
+
+	public function testAlertsDismiss(): void
+	{
+		$result = $this->router->resolve('/api/v1/_alerts/alerts/7/dismiss', 'POST');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'alerts', 'dismiss', null, 7);
+	}
+
+	public function testAlertsUnsnooze(): void
+	{
+		$result = $this->router->resolve('/api/v1/_alerts/alerts/3/unsnooze', 'POST');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'alerts', 'unsnooze', null, 3);
+	}
+
+	public function testAlertsUnknownActionIs404(): void
+	{
+		$result = $this->router->resolve('/api/v1/_alerts/alerts/3/explode', 'POST');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('NOT_FOUND', $result->getPayload()['error']['code']);
+	}
+
+	public function testAlertsRunCheckGetNotAllowed(): void
+	{
+		$result = $this->router->resolve('/api/v1/_alerts/checks/x.y/run', 'GET');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
+	}
 }

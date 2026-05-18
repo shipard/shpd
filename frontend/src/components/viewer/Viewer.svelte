@@ -1,5 +1,6 @@
 <script>
   import { get, post } from '../../api/client.js';
+  import { runDueAlertChecks } from '../../api/alerts.js';
   import ViewerRow from './ViewerRow.svelte';
   import ViewerDetail from './ViewerDetail.svelte';
   import ViewerToolbar from './ViewerToolbar.svelte';
@@ -208,6 +209,41 @@
       reanalyzeProfiles = action?.meta?.profiles ?? [];
       reanalyzeProfileNdx = '';
       reanalyzeDialogOpen = true;
+    } else if (actionId === 'runDue') {
+      handleRunDue();
+    }
+  }
+
+  let runDueInProgress = $state(false);
+
+  async function handleRunDue() {
+    if (runDueInProgress) return;
+    runDueInProgress = true;
+    try {
+      const result = await runDueAlertChecks();
+      if (!result?.success) {
+        alert(translateError(result?.error) || 'Alerts run failed');
+        return;
+      }
+      const d = result.data ?? {};
+      if (d.checksRun === 0) {
+        alert('Žádné kontroly nejsou naplánované ke spuštění.');
+      } else {
+        const parts = [
+          `Spuštěno ${d.checksRun} kontrol`,
+          `${d.totalFindings} nálezů (${d.newFindings} nových)`,
+        ];
+        if ((d.stats?.error ?? 0) > 0) parts.push(`${d.stats.error} chyba`);
+        alert(parts.join(', '));
+      }
+      // Refresh rows so any newly created alerts appear.
+      pageNumber = 0;
+      fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, 0);
+      if (selectedRowId != null) {
+        fetchDetail(selectedRowId);
+      }
+    } finally {
+      runDueInProgress = false;
     }
   }
 

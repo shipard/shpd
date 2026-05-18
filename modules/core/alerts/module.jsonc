@@ -1,0 +1,67 @@
+{
+    "id": "core.alerts",
+    "name": "Alerts",
+    "name:cs": "Upozornění",
+    "name:en": "Alerts",
+    "description": "User-facing alerts for problems the system detected — missing setup, stale states, unmatched data, low IoT battery, etc.",
+    "description:cs": "Upozornění pro uživatele — chybějící nastavení, dlouho otevřené stavy, nespárovaná data, vybitá IoT baterie atp.",
+    "description:en": "User-facing alerts for problems the system detected — missing setup, stale states, unmatched data, low IoT battery, etc.",
+
+    "dependencies": [
+        "core.system"
+    ],
+
+    "tables": [
+        "core_alerts_alerts",
+        "core_alerts_check_states"
+    ],
+
+    "viewers": [
+        {
+            "id": "core.alerts.alerts",
+            "name": "Alerts",
+            "name:cs": "Upozornění",
+            "name:en": "Alerts",
+            "icon": "alert",
+            "table": "core_alerts_alerts",
+            "class": "Shipard\\Module\\Core\\Alerts\\AlertsViewer"
+        }
+    ],
+
+    "forms": [
+        {
+            "table": "core_alerts_alerts",
+            "id": "core.alerts.alerts"
+        }
+    ],
+
+    "documentClasses": [
+        {
+            "table": "core_alerts_alerts",
+            "class": "Shipard\\Module\\Core\\Alerts\\AlertDocument"
+        }
+    ],
+
+    "config": [
+        {
+            "id": "core.alerts.severities",
+            "file": "config/severities.jsonc"
+        },
+        {
+            "id": "core.alerts.alertStates",
+            "file": "config/alertStates.jsonc"
+        },
+        {
+            "id": "core.alerts.checkRunStatuses",
+            "file": "config/checkRunStatuses.jsonc"
+        },
+        {
+            "id": "core.alerts.viewerDefaults",
+            "file": "config/viewerDefaults.jsonc"
+        },
+        {
+            "id": "core.alerts.viewerDetailLabels",
+            "file": "config/viewerDetailLabels.jsonc"
+        }
+    ]
+}

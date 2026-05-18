@@ -96,6 +96,8 @@ abstract class DocDocument extends Document
 
     public function beforeSave(array &$data, ?array $originalData = null): void
     {
+        $this->trackStateChange($data, $originalData);
+
         $this->denormalizeDocType($data);
         $this->applyDateDefaults($data);
         $this->applyHomeCurrency($data);
@@ -152,6 +154,37 @@ abstract class DocDocument extends Document
             fn($r) => $r instanceof \Dibi\Row ? $r->toArray() : (array) $r,
             $rows,
         );
+    }
+
+    /**
+     * Eviduje čas poslední změny `docState`. Vstup pro alert check
+     * `docs.core.stale_in_repair` (doklady visící v 80 V opravě > 24 h).
+     *
+     * - Nové záznamy (`$originalData === null`): nastav na NOW, ať od prvního
+     *   uložení existuje validní hodnota.
+     * - Update s nezměněným `docState`: zachovej původní hodnotu — klient ji
+     *   v payloadu nemá nastavovat (sloupec je `system: true`).
+     * - Update se změněným `docState`: nastav na NOW.
+     */
+    protected function trackStateChange(array &$data, ?array $originalData): void
+    {
+        if ($originalData === null) {
+            $data['doc_state_changed_at'] = date('Y-m-d H:i:s');
+            return;
+        }
+
+        $newState = (int) ($data['docState'] ?? $originalData['docState'] ?? 10);
+        $oldState = (int) ($originalData['docState'] ?? 10);
+
+        if ($newState !== $oldState) {
+            $data['doc_state_changed_at'] = date('Y-m-d H:i:s');
+            return;
+        }
+
+        // Same state — preserve original. Fallback to NOW if pre-backfill row
+        // somehow still has NULL (defensive, should not happen post-upgrade).
+        $data['doc_state_changed_at'] = $originalData['doc_state_changed_at']
+            ?? date('Y-m-d H:i:s');
     }
 
     public function afterPersist(array $data): void

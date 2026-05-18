@@ -88,6 +88,23 @@ nezávisle na pozdějších změnách v `base_persons_*`.
 
 `notice` (interní), `doc_notice` (na doklad).
 
+### Trvalé system sloupce
+
+#### `doc_state_changed_at`
+
+Datum a čas posledního přechodu mezi `docState` hodnotami (`datetime`,
+nullable, `system: true`). Vyplňováno automaticky v `DocDocument::trackStateChange`
+(první krok `beforeSave`):
+
+- Nový záznam → NOW.
+- Změna `docState` → NOW.
+- Update bez změny `docState` → původní hodnota zůstává (klient ji v payloadu
+  nemá nastavovat).
+
+Slouží jako vstup pro alert check `docs.core.stale_in_repair` (detekce
+dokladů visících ve stavu 80 V opravě déle než 24 h). Backfill existujících
+řádků dělá `DsUpgradeCommand` jednorázovým idempotentním `UPDATE`.
+
 ## Indexy
 
 - `idx_series_seq` — `(number_series, fiscal_year, sequence_number DESC)`,
@@ -96,6 +113,8 @@ nezávisle na pozdějších změnách v `base_persons_*`.
   pojistka proti duplicitním číslům dokladu. NULL hodnoty UNIQUE neporušují,
   takže víc Konceptů koexistuje
 - `idx_doc_state` — `(docStateMain, doc_number DESC)`
+- `idx_doc_state_changed` — `(docState, doc_state_changed_at)`, predikát
+  alert checku `docs.core.stale_in_repair`
 - `idx_partner` — `(partner)`
 - `idx_accounting_date`, `idx_vat_duzp` — pro reporty
 - `ft_doc_text` FULLTEXT — `doc_text`

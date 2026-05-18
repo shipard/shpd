@@ -148,6 +148,60 @@ final class MissingOwnPersonCheck extends AlertCheck
 }
 ```
 
+### Per-row check
+
+Druhý reálný check, `docs.core.stale_in_repair`, vrací jeden `AlertFinding`
+**na každý doklad** visící ve stavu `docState = 80` (V opravě) déle než 24 h:
+
+```php
+final class StaleInRepairCheck extends AlertCheck
+{
+    public function run(): array
+    {
+        $threshold = (new \DateTimeImmutable('-24 hours'))->format('Y-m-d H:i:s');
+        $rows = $this->db->fetchAll(
+            'SELECT [id], [doc_number], [doc_text], [doc_state_changed_at]
+             FROM [docs_core_heads]
+             WHERE [docState] = 80
+               AND [doc_state_changed_at] IS NOT NULL
+               AND [doc_state_changed_at] < %s',
+            $threshold,
+        );
+        $findings = [];
+        foreach ($rows as $row) {
+            $findings[] = new AlertFinding(
+                findingKey: (string) $row['id'],   // ID dokladu — stabilní identita
+                title: "Doklad {$row['doc_number']} je v opravě …",
+                subjectTableId: 401,               // docs_core_heads.tableId
+                subjectRowId: (int) $row['id'],
+                actions: [['id' => 'open_doc', 'kind' => 'open_form',
+                           'target' => ['table' => 'docs_core_heads',
+                                        'mode' => 'edit',
+                                        'id' => (int) $row['id']],
+                           'primary' => true]],
+            );
+        }
+        return $findings;
+    }
+}
+```
+
+Rozdíly oproti singleton checku:
+
+- **`findingKey` = ID záznamu** (string). Reconciler dedupuje napříč běhy:
+  alert pro doklad #42 zůstává stejný řádek v `core_alerts_alerts`, jen se
+  inkrementuje `seen_count` / aktualizuje `last_seen_at`.
+- **Auto-resolve** je zadarmo: jakmile uživatel doklad přepne zpět do 40 nebo
+  na 90, řádek z výsledku checku zmizí, reconciler ho vyhodnotí jako
+  resolved (`alert_state = 70`).
+- **`subjectTableId` + `subjectRowId`** propisují vazbu na konkrétní záznam —
+  viewer z toho staví odkaz / preset pro form. Hodnoty se musí oba nastavit
+  nebo oba nechat `null` (validace v `AlertFinding::__construct`).
+- Vstup pro detekci je sloupec `doc_state_changed_at` v `docs_core_heads`,
+  udržovaný `DocDocument::trackStateChange()` při každém saveu. Backfill
+  v `DsUpgradeCommand` zajistí, že existující řádky před přidáním sloupce
+  nezůstanou `NULL` (jinak by je SQL predikát ignoroval).
+
 **Konvence pro implementery:**
 
 - `$this->db` — `DataSourceConnection` pro raw SQL.
@@ -168,7 +222,7 @@ klíč = jeden řádek v `core_alerts_alerts`. Pro různé typy checků:
 | Typ checku | finding_key konvence | Příklad |
 |---|---|---|
 | Singleton (problém buď je, nebo není) | `""` (prázdný řetězec) | `base.persons.missing_own_person` |
-| Per-row (jeden alert per dotčený záznam) | `<table>:<id>` | `economy_docs_heads:1234` |
+| Per-row (jeden alert per dotčený záznam) | `(string) $id` (table je v `subjectTableId`) | `"1234"` pro doklad #1234 |
 | Per-(row, podtéma) | `<table>:<id>:<topic>` | `iot_devices:42:battery` |
 | Per-typ problému | `<typ>` (slug) | `unmatched_bank_payments` (singleton-ish — 1 alert nese počet) |
 
@@ -374,8 +428,6 @@ Spouští každých 5 minut. Jednotlivé checky mají vlastní `interval` (typic
 
 Following are explicitně **out of scope MVP**:
 
-- Sloupec `doc_state_changed_at` v `economy_docs_heads` a check
-  `economy.docs.stale_in_repair` (doklady viset dlouho v "V opravě")
 - Bank transactions unmatched check
 - IoT low battery check
 - Dashboard widget s agregací alertů (top severity, count by check)

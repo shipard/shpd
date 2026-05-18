@@ -593,6 +593,15 @@
             "type": "tinyint",
             "default": 1,
             "system": true
+        },
+        {
+            "id": "doc_state_changed_at",
+            "name": "Doc state changed at",
+            "name:cs": "Stav změněn",
+            "name:en": "Doc state changed at",
+            "type": "datetime",
+            "nullable": true,
+            "system": true
         }
     ],
 
@@ -626,6 +635,16 @@
             "columns": [
                 {"column": "docStateMain"},
                 {"column": "doc_number", "order": "DESC"}
+            ]
+        },
+
+        // stale_in_repair check predicate (docState = 80 AND doc_state_changed_at < threshold)
+        {
+            "id": "idx_doc_state_changed",
+            "type": "index",
+            "columns": [
+                {"column": "docState"},
+                {"column": "doc_state_changed_at"}
             ]
         },
 

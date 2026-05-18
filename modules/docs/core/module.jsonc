@@ -9,6 +9,7 @@
 
     "dependencies": [
         "core.system",
+        "core.alerts",
         "core.units",
         "core.attachments",
         "base.persons",
@@ -106,5 +107,21 @@
         { "id": "docs.core.paymentMethods",  "file": "config/paymentMethods.jsonc" },
         { "id": "docs.core.resetScopes",     "file": "config/resetScopes.jsonc" },
         { "id": "docs.core.sourceKinds",     "file": "config/sourceKinds.jsonc" }
+    ],
+
+    "alertChecks": [
+        {
+            "id": "docs.core.stale_in_repair",
+            "name": "Documents stale in repair (>24 h)",
+            "name:cs": "Doklady v opravě déle než 24 h",
+            "name:en": "Documents stale in repair (>24 h)",
+            "description": "Detects documents stuck in 'Being edited' state for more than 24 hours.",
+            "description:cs": "Detekuje doklady visící ve stavu „V opravě\" déle než 24 hodin.",
+            "description:en": "Detects documents stuck in 'Being edited' state for more than 24 hours.",
+            "class": "Shipard\\Module\\Docs\\Core\\Checks\\StaleInRepairCheck",
+            "severity": "warning",
+            "interval": "1h",
+            "tags": ["docs", "stale"]
+        }
     ]
 }

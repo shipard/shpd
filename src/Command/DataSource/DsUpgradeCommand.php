@@ -247,6 +247,13 @@ class DsUpgradeCommand extends Command
         $output->writeln('', OutputInterface::VERBOSITY_VERBOSE);
         $output->writeln('Upgrade complete. ' . $created . ' tables created, ' . $altered . ' tables altered, ' . $unchanged . ' tables unchanged.');
 
+        // Backfill doc_state_changed_at for rows that pre-date the column.
+        // Idempotent: after first run no NULL rows remain, second run is no-op.
+        // Without it, StaleInRepairCheck would silently ignore those rows forever.
+        if ($this->isModuleActive($resolvedModules, 'docs.core')) {
+            $dsConnection->executeSQL('UPDATE docs_core_heads SET doc_state_changed_at = NOW() WHERE doc_state_changed_at IS NULL');
+        }
+
         $this->provisionUnits($resolvedModules, $dsConnection, $output);
         $this->provisionItemKinds($resolvedModules, $dsConnection, $output);
         $this->provisionFiscalYears($resolvedModules, $dsDir, $dsConnection, $output);

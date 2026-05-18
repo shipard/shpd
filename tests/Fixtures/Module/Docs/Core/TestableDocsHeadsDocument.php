@@ -131,4 +131,9 @@ class TestableDocsHeadsDocument extends DocsHeadsDocument
     {
         $this->applyVariableSymbolDefault($data);
     }
+
+    public function trackStateChangePub(array &$data, ?array $originalData): void
+    {
+        $this->trackStateChange($data, $originalData);
+    }
 }

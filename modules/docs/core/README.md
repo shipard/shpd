@@ -162,3 +162,13 @@ vytvoř nový modul (`docs.proforma`) s vlastním Document subclassem +
 viewerem a zaregistruj typový dispatch v `documentClasses` přes
 `typeColumn = doc_type`. Nepotřebuješ žádné nové tabulky — `docs_core_*`
 je sdílí všechny typy.
+
+## Alerts
+
+Modul registruje jeden alert check (viz `docs/alerts.md`):
+
+- **`docs.core.stale_in_repair`** (per-row, interval 1h, severity warning) —
+  detekuje doklady visící ve stavu 80 V opravě déle než 24 h. Vstupem je sloupec
+  `docs_core_heads.doc_state_changed_at`, udržovaný `DocDocument::trackStateChange`
+  (první krok `beforeSave`). Existující řádky před přidáním sloupce backfillne
+  jednorázový idempotentní `UPDATE` v `DsUpgradeCommand`.

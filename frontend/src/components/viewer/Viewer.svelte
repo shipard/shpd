@@ -1,6 +1,12 @@
 <script>
   import { get, post } from '../../api/client.js';
-  import { runDueAlertChecks } from '../../api/alerts.js';
+  import {
+    runDueAlertChecks,
+    snoozeAlert,
+    dismissAlert,
+    unsnoozeAlert,
+    runAlertCheck,
+  } from '../../api/alerts.js';
   import ViewerRow from './ViewerRow.svelte';
   import ViewerDetail from './ViewerDetail.svelte';
   import ViewerToolbar from './ViewerToolbar.svelte';
@@ -58,6 +64,11 @@
   let formOpen = $state(false);
   let editRecordId = $state(null);
   let formDefaultData = $state({});
+  // Pokud non-null, FormDialog otevírá formulář pro tuto tabulku místo
+  // `meta.table`. Používá se pro custom detail akce `kind: 'open_form'`,
+  // kde detail.action.target.table cílí na jinou tabulku než viewer
+  // (např. alert v core_alerts_alerts otevírá form pro base_persons_persons).
+  let formTable = $state(null);
 
   // --- Search debounce ---
   let searchTimer = null;
@@ -284,9 +295,74 @@
     }
   }
 
+  function refreshAfterAction() {
+    pageNumber = 0;
+    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, 0);
+    if (selectedRowId != null) {
+      fetchDetail(selectedRowId);
+    }
+  }
+
+  async function handleDetailAction(actionId, action, value) {
+    if (selectedRowId == null) return;
+    const recordId = selectedRowId;
+
+    // Vestavěné alerts akce — identifikujeme podle id. Záměrně neřešíme
+    // viewer/tabulku: id je sdílený slovník („snooze", „dismiss", „recheck",
+    // „unsnooze") a jiný viewer ho zatím nepoužívá. Až bude víc konzumentů
+    // se stejnými id, přesuneme dispatch na backend přes action.kind/target.
+    if (actionId === 'snooze') {
+      if (!value) return;
+      const result = await snoozeAlert(recordId, value);
+      if (result?.success) refreshAfterAction();
+      else alert(translateError(result?.error));
+      return;
+    }
+    if (actionId === 'dismiss') {
+      const result = await dismissAlert(recordId);
+      if (result?.success) refreshAfterAction();
+      else alert(translateError(result?.error));
+      return;
+    }
+    if (actionId === 'unsnooze') {
+      const result = await unsnoozeAlert(recordId);
+      if (result?.success) refreshAfterAction();
+      else alert(translateError(result?.error));
+      return;
+    }
+    if (actionId === 'recheck') {
+      const checkId = action.meta?.checkId;
+      if (!checkId) return;
+      const result = await runAlertCheck(checkId);
+      if (result?.success) refreshAfterAction();
+      else alert(translateError(result?.error));
+      return;
+    }
+
+    // Custom akce — generická obsluha podle kind.
+    if (action.kind === 'open_form') {
+      const target = action.target ?? {};
+      if (!target.table) return;
+      formTable = target.table;
+      editRecordId = target.mode === 'edit' ? (target.id ?? null) : null;
+      formDefaultData = target.preset ?? {};
+      formOpen = true;
+      return;
+    }
+    if (action.kind === 'open_viewer') {
+      console.warn('open_viewer not yet implemented', action);
+      alert('Viewer navigation not yet implemented');
+      return;
+    }
+
+    console.warn('Unknown detail action', actionId, action);
+  }
+
   function handleFormClose() {
     formOpen = false;
     editRecordId = null;
+    formTable = null;
+    formDefaultData = {};
   }
 
   function handleFormSaved() {
@@ -295,6 +371,10 @@
     if (selectedRowId != null) {
       fetchDetail(selectedRowId);
     }
+    // Reset custom open_form state — uložení záznamu z detail akce nemá
+    // důvod hned znovu otvírat stejný formulář, refresh listu/detailu stačí.
+    formTable = null;
+    formDefaultData = {};
   }
 
   // Re-initialize ONLY when the viewer tab changes.
@@ -322,9 +402,9 @@
   });
 </script>
 
-{#if meta?.table}
+{#if meta?.table || formTable}
   <FormDialog
-    table={meta.table}
+    table={formTable ?? meta.table}
     recordId={editRecordId}
     open={formOpen}
     onClose={handleFormClose}
@@ -412,7 +492,12 @@
     <!-- Right panel: detail -->
     <div class="shpd-viewer__detail-panel">
       {#if selectedRowId != null}
-        <ViewerDetail {detail} loading={detailLoading} onRefresh={handleDetailRefresh} />
+        <ViewerDetail
+          {detail}
+          loading={detailLoading}
+          onRefresh={handleDetailRefresh}
+          onAction={handleDetailAction}
+        />
       {:else}
         <div class="shpd-viewer__detail-empty">
           {t('viewer.selectRecord')}

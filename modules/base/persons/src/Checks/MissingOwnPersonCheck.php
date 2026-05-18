@@ -26,7 +26,7 @@ final class MissingOwnPersonCheck extends AlertCheck
     {
         $count = (int) $this->db->fetchSingle(
             'SELECT COUNT(*) FROM base_persons_persons'
-            . ' WHERE is_own = %i AND docState IN %in',
+                . ' WHERE is_own = %i AND docState IN %in',
             1,
             self::ACTIVE_DOC_STATES,
         );
@@ -40,9 +40,9 @@ final class MissingOwnPersonCheck extends AlertCheck
         $title   = $isCs ? 'Chybí vlastní Osoba' : 'Own Person is missing';
         $message = $isCs
             ? 'Po vytvoření zdroje dat je třeba nastavit vlastní právní subjekt'
-              . ' (firmu nebo živnostníka), pod jehož hlavičkou systém funguje.'
+            . ' (firmu nebo živnostníka), pod jehož hlavičkou systém funguje.'
             : 'After creating a data source, you need to set up the own legal'
-              . ' entity that the system runs on behalf of.';
+            . ' entity that the system runs on behalf of.';
 
         $actionLabel = $isCs ? 'Přidat vlastní Osobu' : 'Add own Person';
 
@@ -60,7 +60,10 @@ final class MissingOwnPersonCheck extends AlertCheck
                         'target'  => [
                             'table'  => 'base_persons_persons',
                             'mode'   => 'create',
-                            'preset' => ['is_own' => true],
+                            // person_type: 2 = Firma (Company). Vlastní subjekt
+                            // bývá v drtivé většině právní osoba; když uživatel
+                            // potřebuje živnostníka, přepne v formuláři.
+                            'preset' => ['is_own' => true, 'person_type' => 2],
                         ],
                         'primary' => true,
                     ],

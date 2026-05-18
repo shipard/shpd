@@ -71,8 +71,12 @@ class ViewerRegistry
     /**
      * Instantiate a TableViewer object for the given viewer ID.
      */
-    public function createViewer(string $id, DataSourceConnection $db, ?ConfigRuntime $config = null): ?TableViewer
-    {
+    public function createViewer(
+        string $id,
+        DataSourceConnection $db,
+        ?ConfigRuntime $config = null,
+        ?string $language = null,
+    ): ?TableViewer {
         $def = $this->viewers[$id] ?? null;
         if ($def === null) {
             return null;
@@ -86,6 +90,9 @@ class ViewerRegistry
         $viewer = new $class($db, $def->table);
         if ($config !== null) {
             $viewer->setConfig($config);
+        }
+        if ($language !== null) {
+            $viewer->setLanguage($language);
         }
         return $viewer;
     }

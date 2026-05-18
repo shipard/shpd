@@ -20,6 +20,13 @@ abstract class TableViewer
     protected ?ConfigRuntime $config = null;
 
     /**
+     * Request language (e.g. 'cs', 'en') — injected via setLanguage().
+     * Subclasses use it for inline label maps in renderDetail() when no
+     * cfgItem-based localization is available yet.
+     */
+    protected ?string $language = null;
+
+    /**
      * Set by subclass to enable automatic viewGroup tab support.
      * Must match the cfgItem ID of a docStates config (e.g. 'core.system.docStatesArchive').
      */
@@ -34,6 +41,12 @@ abstract class TableViewer
     public function setConfig(ConfigRuntime $config): void
     {
         $this->config = $config;
+    }
+
+    /** Inject request language — called by ViewerRegistry after construction. */
+    public function setLanguage(string $language): void
+    {
+        $this->language = $language;
     }
 
     /**

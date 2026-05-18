@@ -224,7 +224,141 @@ class AlertsViewer extends TableViewer
             ];
         }
 
-        return ['tabs' => $tabs];
+        $actions = $this->buildDetailActions($row, $alertState);
+
+        return [
+            'tabs'    => $tabs,
+            'actions' => $actions,
+        ];
+    }
+
+    /**
+     * Sestaví actions array pro detail panel: nejdřív custom akce z DB
+     * (sloupec `actions`), pak vestavěné akce odpovídající aktuálnímu
+     * `alert_state`.
+     */
+    private function buildDetailActions(array $row, int $alertState): array
+    {
+        $actions = $this->customActionsFromColumn($row['actions'] ?? null);
+
+        $checkId = (string) ($row['check_id'] ?? '');
+
+        switch ($alertState) {
+            case AlertReconciler::STATE_ACTIVE:
+                $actions[] = $this->snoozeDropdownAction();
+                $actions[] = $this->dismissAction();
+                $actions[] = $this->recheckAction($checkId);
+                break;
+            case AlertReconciler::STATE_SNOOZED:
+                $actions[] = $this->unsnoozeAction();
+                $actions[] = $this->dismissAction();
+                $actions[] = $this->recheckAction($checkId);
+                break;
+            case AlertReconciler::STATE_RESOLVED:
+            case AlertReconciler::STATE_DISMISSED:
+                $actions[] = $this->recheckAction($checkId);
+                break;
+        }
+
+        return $actions;
+    }
+
+    /**
+     * Parsuje JSON pole `actions` (custom akce z reconcileru). Položka
+     * `primary: true` se přemapuje na `variant: 'primary'`; ostatní pole
+     * zachováme beze změny. Nevalidní JSON → log warning a vrátí [].
+     */
+    private function customActionsFromColumn(mixed $raw): array
+    {
+        if ($raw === null || $raw === '') {
+            return [];
+        }
+        $decoded = is_string($raw) ? json_decode($raw, true) : (is_array($raw) ? $raw : null);
+        if (!is_array($decoded)) {
+            error_log('AlertsViewer: invalid actions JSON in core_alerts_alerts row — skipping custom actions');
+            return [];
+        }
+
+        $out = [];
+        foreach ($decoded as $action) {
+            if (!is_array($action)) continue;
+            if (!empty($action['primary'])) {
+                $action['variant'] = 'primary';
+            }
+            unset($action['primary']);
+            $out[] = $action;
+        }
+        return $out;
+    }
+
+    private function snoozeDropdownAction(): array
+    {
+        $lang = $this->language ?? 'en';
+        $labels = [
+            'cs' => ['action' => 'Odložit', 'items' => ['1 h', '4 h', '1 den', '1 týden']],
+            'en' => ['action' => 'Snooze',  'items' => ['1 h', '4 h', '1 day', '1 week']],
+        ];
+        $l = $labels[$lang] ?? $labels['en'];
+        return [
+            'id'      => 'snooze',
+            'label'   => $l['action'],
+            'kind'    => 'dropdown',
+            'variant' => 'secondary',
+            'items'   => [
+                ['label' => $l['items'][0], 'value' => 'PT1H'],
+                ['label' => $l['items'][1], 'value' => 'PT4H'],
+                ['label' => $l['items'][2], 'value' => 'P1D'],
+                ['label' => $l['items'][3], 'value' => 'P7D'],
+            ],
+        ];
+    }
+
+    private function dismissAction(): array
+    {
+        $lang = $this->language ?? 'en';
+        $labels = [
+            'cs' => ['label' => 'Zamítnout',    'confirm' => 'Opravdu zamítnout?'],
+            'en' => ['label' => 'Dismiss',      'confirm' => 'Really dismiss?'],
+        ];
+        $l = $labels[$lang] ?? $labels['en'];
+        return [
+            'id'      => 'dismiss',
+            'label'   => $l['label'],
+            'kind'    => 'button',
+            'variant' => 'danger',
+            'confirm' => $l['confirm'],
+        ];
+    }
+
+    private function recheckAction(string $checkId): array
+    {
+        $lang = $this->language ?? 'en';
+        $labels = [
+            'cs' => 'Zkontrolovat znovu',
+            'en' => 'Re-check',
+        ];
+        return [
+            'id'      => 'recheck',
+            'label'   => $labels[$lang] ?? $labels['en'],
+            'kind'    => 'button',
+            'variant' => 'secondary',
+            'meta'    => ['checkId' => $checkId],
+        ];
+    }
+
+    private function unsnoozeAction(): array
+    {
+        $lang = $this->language ?? 'en';
+        $labels = [
+            'cs' => 'Vrátit do aktivních',
+            'en' => 'Unsnooze',
+        ];
+        return [
+            'id'      => 'unsnooze',
+            'label'   => $labels[$lang] ?? $labels['en'],
+            'kind'    => 'button',
+            'variant' => 'secondary',
+        ];
     }
 
     public function getFilters(): array

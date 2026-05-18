@@ -68,10 +68,20 @@ class FormController
             // hodnoty mají přednost před column defaults a viz je server-side
             // form (DocsHeadsForm::applyClientDefaults), který z nich může
             // odvodit další pole (číselná řada apod.).
+            //
+            // Query string vždy přijde jako string — pro číselné/bool sloupce
+            // zkoercujeme na cílový typ. Bez toho by Svelte `<select bind:value>`
+            // nerozpoznal shodu (string '2' !== int 2) a roletka zůstala prázdná.
+            $colByName = [];
+            foreach ($def->columns as $c) {
+                $colByName[$c->id] = $c;
+            }
             foreach ($newRecordDefaults as $key => $value) {
-                if (is_string($key) && $key !== '') {
-                    $data[$key] = $value;
+                if (!is_string($key) || $key === '') {
+                    continue;
                 }
+                $col = $colByName[$key] ?? null;
+                $data[$key] = $col !== null ? $this->coerceDefaultValue($value, $col->type) : $value;
             }
         }
 
@@ -726,5 +736,25 @@ class FormController
             $formRegistry, $db, $config, $modulePathResolver, $language,
         );
         return $this->buildDataResolved($formDef, $record, $lookupRegistry, $db, $config, $tables);
+    }
+
+    /**
+     * Convert a defaults[] query-string value (always string) to the column's
+     * native PHP type, so the frontend can match it against typed option lists
+     * (Svelte `<select bind:value>` is strict-equality).
+     */
+    private function coerceDefaultValue(mixed $value, string $columnType): mixed
+    {
+        if ($value === null) {
+            return null;
+        }
+        return match ($columnType) {
+            'tinyint', 'smallint', 'int', 'bigint', 'enumInt' => is_numeric($value) ? (int) $value : $value,
+            'numeric', 'float' => is_numeric($value) ? (float) $value : $value,
+            'boolean' => is_string($value)
+                ? in_array(strtolower($value), ['1', 'true', 'yes', 'on'], true)
+                : (bool) $value,
+            default => $value,
+        };
     }
 }

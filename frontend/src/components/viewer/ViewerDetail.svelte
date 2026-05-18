@@ -3,11 +3,37 @@
   import { applyExtractedDocument } from '../../api/exchange.js';
   import Modal from '../ui/Modal.svelte';
   import Button from '../ui/Button.svelte';
+  import Popover from '../ui/Popover.svelte';
   import DocumentExchangePreviewModal from '../exchange/DocumentExchangePreviewModal.svelte';
   import { t } from '../../i18n/index.js';
   import { translateError } from '../../i18n/errors.js';
 
-  let { detail = null, loading = false, onRefresh } = $props();
+  let { detail = null, loading = false, onRefresh, onAction = null } = $props();
+
+  // Otevřený dropdown — { actionId, anchor }. Per-action, takže různá tlačítka
+  // se navzájem zavírají (otevření nového dropdownu shodí předchozí).
+  let dropdownOpen = $state(null);
+
+  function openDropdown(action, event) {
+    dropdownOpen = { actionId: action.id, anchor: event.currentTarget };
+  }
+
+  function closeDropdown() {
+    dropdownOpen = null;
+  }
+
+  function handleAction(action, value = null) {
+    // Confirm se aplikuje jen na single-shot tlačítka (button / open_form /
+    // open_viewer). Pro dropdown je výběr položky sám o sobě explicitní akcí,
+    // další confirm by byl zbytečný a otravný (viz task §6).
+    if (action.kind !== 'dropdown' && action.confirm && !window.confirm(action.confirm)) return;
+    onAction?.(action.id, action, value);
+  }
+
+  function handleDropdownPick(action, item) {
+    closeDropdown();
+    handleAction(action, item.value);
+  }
 
   let activeTabId = $state(null);
 
@@ -137,6 +163,36 @@
       <span>{t('common.loading')}</span>
     </div>
   {:else if detail?.tabs?.length > 0}
+    {#snippet renderAction(action)}
+      {#if action.kind === 'dropdown'}
+        <button
+          type="button"
+          class="shpd-detail__action-dropdown"
+          class:shpd-detail__action-dropdown--primary={(action.variant ?? 'secondary') === 'primary'}
+          class:shpd-detail__action-dropdown--danger={action.variant === 'danger'}
+          class:shpd-detail__action-dropdown--success={action.variant === 'success'}
+          onclick={(e) => openDropdown(action, e)}
+        >
+          {action.label} <span class="shpd-detail__action-caret">▾</span>
+        </button>
+      {:else}
+        <Button
+          label={action.label}
+          variant={action.variant ?? 'secondary'}
+          size="sm"
+          onclick={() => handleAction(action)}
+        />
+      {/if}
+    {/snippet}
+
+    {#if (detail?.actions ?? []).length > 0}
+      <div class="shpd-detail__actions">
+        {#each detail.actions as action (action.id)}
+          {@render renderAction(action)}
+        {/each}
+      </div>
+    {/if}
+
     {#if detail.title}
       <!-- Header (title + badges) — zobrazuje se jen pokud backend
            posílá detail.title. Bez něj se hlavička přeskočí a layout
@@ -283,6 +339,32 @@
       {/if}
     </div>
 
+    <!-- Dropdown menu pro detail.actions kind=dropdown — Popover anchorovaný
+         na trigger button. Otvírání řídí `dropdownOpen`. -->
+    {#if dropdownOpen !== null}
+      {@const openAction = (detail?.actions ?? []).find(a => a.id === dropdownOpen.actionId)}
+      {#if openAction}
+        <Popover
+          open={true}
+          anchor={dropdownOpen.anchor}
+          placement="bottom"
+          onClose={closeDropdown}
+        >
+          <div class="shpd-detail__action-menu">
+            {#each openAction.items ?? [] as item}
+              <button
+                type="button"
+                class="shpd-detail__action-menu-item"
+                onclick={() => handleDropdownPick(openAction, item)}
+              >
+                {item.label}
+              </button>
+            {/each}
+          </div>
+        </Popover>
+      {/if}
+    {/if}
+
     <!-- Phase 3a: full-screen Exchange preview (PDF + canonical split). -->
     <DocumentExchangePreviewModal
       open={previewModalNdx !== null}
@@ -420,6 +502,92 @@
   .shpd-detail__badge--archive   { background: var(--shpd-color-state-archive-bg);   color: var(--shpd-color-state-archive-text); }
   .shpd-detail__badge--trash     { background: var(--shpd-color-state-trash-bg);     color: var(--shpd-color-state-trash-text); text-decoration: line-through; }
   .shpd-detail__badge--cancelled { background: var(--shpd-color-state-cancelled-bg); color: var(--shpd-color-state-cancelled-text); }
+
+  /* Actions bar — řádek per-record akcí nad taby (snooze/dismiss/recheck +
+     custom akce alertů). Stejná vizuální logika jako header: padding sm/md,
+     border-bottom, wrap při velkém počtu tlačítek. */
+  .shpd-detail__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--shpd-space-sm);
+    padding: var(--shpd-space-sm) var(--shpd-space-md);
+    border-bottom: 1px solid var(--shpd-color-border);
+    background-color: var(--shpd-color-bg);
+    flex-shrink: 0;
+  }
+
+  /* Dropdown trigger button — vizuálně stejný jako Button variant="secondary",
+     ale nativní <button> protože potřebujeme `event.currentTarget` jako anchor
+     pro Popover. */
+  .shpd-detail__action-dropdown {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    font-family: inherit;
+    font-size: var(--shpd-font-size-sm);
+    font-weight: 500;
+    line-height: 1.4;
+    background-color: var(--shpd-color-bg);
+    color: var(--shpd-color-text);
+    border: 1px solid var(--shpd-color-border);
+    border-radius: var(--shpd-radius-sm);
+    cursor: pointer;
+    transition: background-color 0.15s, border-color 0.15s;
+  }
+
+  .shpd-detail__action-dropdown:hover {
+    background-color: var(--shpd-color-bg-hover);
+  }
+
+  .shpd-detail__action-dropdown--primary {
+    background-color: var(--shpd-color-primary);
+    color: var(--shpd-color-on-primary, #fff);
+    border-color: var(--shpd-color-primary);
+  }
+  .shpd-detail__action-dropdown--primary:hover {
+    background-color: var(--shpd-color-primary-hover, var(--shpd-color-primary));
+  }
+
+  .shpd-detail__action-dropdown--danger {
+    background-color: var(--shpd-color-state-cancelled-bg);
+    color: var(--shpd-color-state-cancelled-text);
+    border-color: var(--shpd-color-state-cancelled-bg);
+  }
+
+  .shpd-detail__action-dropdown--success {
+    background-color: var(--shpd-color-state-done-bg);
+    color: var(--shpd-color-state-done-text);
+    border-color: var(--shpd-color-state-done-bg);
+  }
+
+  .shpd-detail__action-caret {
+    font-size: 0.7em;
+    opacity: 0.7;
+  }
+
+  /* Dropdown menu — položky v Popoveru. */
+  .shpd-detail__action-menu {
+    display: flex;
+    flex-direction: column;
+    min-width: 140px;
+    padding: 4px 0;
+  }
+
+  .shpd-detail__action-menu-item {
+    text-align: left;
+    padding: 6px 14px;
+    border: none;
+    background: none;
+    font-family: inherit;
+    font-size: var(--shpd-font-size-sm);
+    color: var(--shpd-color-text);
+    cursor: pointer;
+  }
+
+  .shpd-detail__action-menu-item:hover {
+    background-color: var(--shpd-color-bg-hover);
+  }
 
   /* Tabs */
   .shpd-detail__tabs {

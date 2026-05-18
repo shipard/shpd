@@ -11,14 +11,14 @@ use Shipard\Core\Viewer\ViewerRegistry;
 
 class ViewerController
 {
-	public function meta(string $viewerId, ViewerRegistry $registry, DataSourceConnection $db, ?ConfigRuntime $config = null): Response
+	public function meta(string $viewerId, ViewerRegistry $registry, DataSourceConnection $db, ?ConfigRuntime $config = null, ?string $language = null): Response
 	{
 		$def = $registry->get($viewerId);
 		if ($def === null) {
 			return Response::error('VIEWER_NOT_FOUND', "Viewer '{$viewerId}' not found", 404);
 		}
 
-		$viewer = $registry->createViewer($viewerId, $db, $config);
+		$viewer = $registry->createViewer($viewerId, $db, $config, $language);
 		if ($viewer === null) {
 			return Response::error('VIEWER_CLASS_NOT_FOUND', "Viewer class for '{$viewerId}' not found", 500);
 		}
@@ -34,14 +34,14 @@ class ViewerController
 		]);
 	}
 
-	public function rows(string $viewerId, Request $request, ViewerRegistry $registry, DataSourceConnection $db, ?ConfigRuntime $config = null): Response
+	public function rows(string $viewerId, Request $request, ViewerRegistry $registry, DataSourceConnection $db, ?ConfigRuntime $config = null, ?string $language = null): Response
 	{
 		$def = $registry->get($viewerId);
 		if ($def === null) {
 			return Response::error('VIEWER_NOT_FOUND', "Viewer '{$viewerId}' not found", 404);
 		}
 
-		$viewer = $registry->createViewer($viewerId, $db, $config);
+		$viewer = $registry->createViewer($viewerId, $db, $config, $language);
 		if ($viewer === null) {
 			return Response::error('VIEWER_CLASS_NOT_FOUND', "Viewer class for '{$viewerId}' not found", 500);
 		}
@@ -82,14 +82,14 @@ class ViewerController
 		]);
 	}
 
-	public function detail(string $viewerId, int $recordId, ViewerRegistry $registry, DataSourceConnection $db, ?ConfigRuntime $config = null): Response
+	public function detail(string $viewerId, int $recordId, ViewerRegistry $registry, DataSourceConnection $db, ?ConfigRuntime $config = null, ?string $language = null): Response
 	{
 		$def = $registry->get($viewerId);
 		if ($def === null) {
 			return Response::error('VIEWER_NOT_FOUND', "Viewer '{$viewerId}' not found", 404);
 		}
 
-		$viewer = $registry->createViewer($viewerId, $db, $config);
+		$viewer = $registry->createViewer($viewerId, $db, $config, $language);
 		if ($viewer === null) {
 			return Response::error('VIEWER_CLASS_NOT_FOUND', "Viewer class for '{$viewerId}' not found", 500);
 		}

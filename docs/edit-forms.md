@@ -252,6 +252,28 @@ Vlastní HTML uvnitř sloupce; rendruje se přes obě kolony.
 
 Pojmenovaná Svelte komponenta (např. VAT rekapitulace dokladu). Rendruje se přes obě kolony.
 
+### 4.7 `lookup`
+
+```json
+{
+    "type": "lookup",
+    "column": "partner",
+    "label": "Partner",
+    "placeholder": "Hledat partnera…",
+    "lookup": {
+        "table": "base_persons_persons",
+        "filter": null
+    }
+}
+```
+
+Inline combobox pro FK na velkou tabulku (Osoby, Adresy, Položky…). Klient si průběžně dohledává záznamy přes endpoint `GET /_ui/lookup/{table}/search`. Server pre-resolvuje vybrané hodnoty do `dataResolved` v response — žádný extra fetch při otevření formuláře.
+
+Detailně viz [kapitolu 22](#22-lookup-pole). Pravidla:
+
+- `lookup` element **nemůže** být uvnitř `inline` skupiny.
+- `select` ponechte pro enumy a malé cfgItem-based číselníky; `lookup` je pro velké tabulky se search-driven UX.
+
 ### Zaniklé typy
 
 `group` a `subtable` (jako element uvnitř tabu) byly v novém systému odstraněny. `subtable` je vždy vlastní tab (`type: "subtable"`); pro grupování polí se používají sekce nebo `inline`.
@@ -434,11 +456,15 @@ Důvod existence tohoto mechanismu je timing Svelte reaktivity. Když FormEditor
 
 Modal komponenta (Esc, klik na overlay, `×`) volá `onClose()` bez parametru — tyto akce **mají** procházet dirty kontrolou. `force: true` posílá pouze FormEditor po vlastním úspěšném uložení.
 
-### Vrstvení modalů (Esc handling)
+### Vrstvení modalů (Esc handling a depth shrink)
 
-`Modal.svelte` používá module-level stack otevřených modalů. Esc handler reaguje pouze na modal na vrcholu stacku. Bez tohoto by Esc v subdialogu Kontaktu zavřel současně Kontakt i nadřazenou Osobu (oba modaly poslouchají window keydown).
+`Modal.svelte` používá module-level stack otevřených modalů. Slouží dvěma účelům:
 
-Klik na overlay tento problém nemá — overlay každého modalu zachytí jen kliky na vlastní plochu. Tlačítko `×` je per-modal element. Esc je ale globální event, proto vyžaduje stack.
+**Esc handling** — Esc handler reaguje pouze na modal na vrcholu stacku. Bez tohoto by Esc v subdialogu Kontaktu zavřel současně Kontakt i nadřazenou Osobu (oba modaly poslouchají window keydown). Klik na overlay tento problém nemá — overlay každého modalu zachytí jen kliky na vlastní plochu. Tlačítko `×` je per-modal element. Esc je ale globální event, proto vyžaduje stack.
+
+**Depth-based shrink** — každý modal si při `pushModal()` zjistí svoji hloubku ve stacku (0 = kořenový, 1 = vnořený, atd.). Podle hloubky se `cardStyle` zmenší o 30 px na každé straně (60 px celkem na šířku i výšku). Vnořený modal je tak vycentrovaný a všechny strany rodičovského modalu rovnoměrně vyčnívají — uživatel vidí hierarchii. Funguje pro libovolnou hloubku vnoření (např. Doklad → Řádek → Položka = depth 2, položka modal je o 120 px užší/nižší než doklad).
+
+Mechanismus je generický na úrovni `Modal.svelte` — žádný kontext o tom, kdo je rodič/dítě. Funguje pro všechny vnořené modaly (FormSubTable child rows, LookupInput edit/create dialog, budoucí scenáře).
 
 ---
 
@@ -948,3 +974,304 @@ Hlavička reflektuje **uložený stav v DB**, ne dirty formData. Důvody:
 - Recalculate může změnit `person_type` z Person na Company — title by „blikal" mezi „Jan Novák" a názvem firmy podle rozpracovaného formuláře.
 - Uživatel může mít rozpracované špatné jméno; po Cancel by header lhal, že záznam má jiný titulek, než ve skutečnosti.
 - Server-side `buildHeaderInfo` má jasná pravidla a vstupuje do něj jen schválně načtená data (`SELECT * WHERE id = ?`).
+
+---
+
+## 22. Lookup pole
+
+Inline combobox pro FK na velké tabulky. Klient si průběžně dohledává záznamy přes serverový endpoint — žádné statické `options[]` v `FormDefinition`.
+
+### Kdy použít `lookup` vs `select`
+
+- **`select`** — enumy (`enumInt`/`enumString`), malé cfgItem-based číselníky (jednotky, sazby DPH, typy adres). Options se předají v `FormDefinition` jako pole `{value, label}`.
+- **`lookup`** — velké tabulky (Osoby, Adresy, Bankovní účty, Položky…), kde nativní `<select>` nezvládá vyhledávání a stažení tisíců záznamů do payloadu by zpomalilo render.
+
+### Wire formát elementu
+
+```json
+{
+    "type": "lookup",
+    "column": "partner",
+    "label": "Partner",
+    "placeholder": "Hledat partnera…",
+    "required": false,
+    "read_only": false,
+    "hidden": false,
+    "triggers": "reload",
+    "lookup": {
+        "table": "base_persons_persons",
+        "filter": null
+    }
+}
+```
+
+Cascade variant (po vybrání partnera filtruje adresy podle něj):
+
+```json
+{
+    "type": "lookup",
+    "column": "partner_address",
+    "lookup": {
+        "table": "base_persons_addresses",
+        "filter": {"person": 42}
+    }
+}
+```
+
+Pravidla:
+
+- `lookup.table` — DB název cílové tabulky; musí být registrovaná v `LookupRegistry` (jinak endpoint vrátí 404 `LOOKUP_NOT_REGISTERED`).
+- `lookup.filter` — server-zapečené páry `{column: scalar}`. Frontend je zkopíruje do query stringu volání jako `filter[col]=val`. Whitelist klíčů je v `TableLookup::getAllowedFilterKeys()`; neznámé klíče controller silently zahodí.
+- `lookup` element nelze umístit do `inline` skupiny (validace v `FormElement` konstruktoru, inline povoluje jen `input`/`select`).
+- Cascade přes `triggers: 'reload'` — po změně partnera proběhne `recalculate`, server rebuildne FormDefinition s novým filtrem v adresách/bance.
+
+### Endpoint `/_ui/lookup/{table}/search`
+
+```
+GET /_ui/lookup/{table}/search?q={term}&limit={n}&filter[col]={val}
+```
+
+| Parametr | Default | Limity |
+|----------|---------|--------|
+| `q` | `""` | Prázdné = první stránka záznamů (browseable) |
+| `limit` | 20 | Max 50 (víc se srazí na 50) |
+| `filter[<col>]` | — | Whitelist přes `TableLookup::getAllowedFilterKeys()`; ostatní se ignorují |
+
+Response:
+
+```json
+{
+    "success": true,
+    "data": {
+        "items": [
+            {"id": 42, "primary": "Testování 999", "secondary": "IČO 12345678"},
+            {"id": 17, "primary": "Testování 22",  "secondary": "IČO 87654321"}
+        ],
+        "limit": 20,
+        "total": null
+    }
+}
+```
+
+- `items[].id` může být int nebo string (FK na enumString)
+- `items[].secondary` může být `null` — frontend pak druhý řádek nevykreslí
+- `total` je v MVP vždy `null` (klíč je zachován pro budoucí stránkování)
+
+Chybové kódy: `LOOKUP_NOT_REGISTERED` (404), `TABLE_NOT_FOUND` (404), `BAD_REQUEST` (400 — neplatný limit/parametry), `METHOD_NOT_ALLOWED` (405).
+
+### Endpoint `/_ui/lookup/{table}/resolve`
+
+```
+GET /_ui/lookup/{table}/resolve?ids=42,17,3
+```
+
+Vrátí display popis pro konkrétní ID. Klient ho typicky nevolá — server pre-resolvuje hodnoty v meta/save/recalculate response. Použití je v okrajových situacích (kdyby `dataResolved` z lokálního stavu zmizel).
+
+Response stejný tvar jako search bez `total`. Neexistující ID se v `items[]` prostě vynechá.
+
+### `dataResolved` v meta/save/recalculate response
+
+`FormController` v každé z metod (`meta`, `save`, `recalculate`, state-transition) sestaví top-level klíč `dataResolved` paralelně k `data`:
+
+```json
+{
+    "success": true,
+    "data": {
+        "formDefinition": { ... },
+        "data": {
+            "partner": 42,
+            "partner_address": 17,
+            "partner_bank": null
+        },
+        "dataResolved": {
+            "partner":         {"id": 42, "primary": "Testování 999",  "secondary": "IČO 12345678"},
+            "partner_address": {"id": 17, "primary": "Hlavní 12, Praha", "secondary": null}
+        }
+    }
+}
+```
+
+- `dataResolved` je vždy přítomné (pro nový záznam je `{}`)
+- Klíče jsou pouze ty `column` z lookup elementů, kde má `data[column]` ne-null hodnotu a kde resolve uspěl
+- camelCase top-level (drží konzistenci s `formDefinition`); uvnitř `formDefinition.tabs[].sections[]` zůstává snake_case
+
+### `TableLookup` třída
+
+Konkrétní lookupy dědí z abstraktní `Shipard\Core\Form\Lookup\TableLookup`:
+
+```php
+abstract class TableLookup
+{
+    /** @return list<LookupItem> */
+    abstract public function search(string $q, array $filter, int $limit): array;
+
+    /** @return list<LookupItem> */
+    abstract public function resolve(array $ids): array;
+
+    /** @return list<string> Whitelist filter keys (default: žádné) */
+    public function getAllowedFilterKeys(): array { return []; }
+}
+```
+
+Setter trojicí ze základní třídy dostávají instanci `DataSourceConnection`, `?ConfigRuntime`, `?TableDefinition` (volá `LookupRegistry::create()`).
+
+### Registrace v `module.jsonc`
+
+```jsonc
+"lookups": [
+    {
+        "table": "base_persons_persons",
+        "class": "Shipard\\Module\\Base\\Persons\\PersonsLookup"
+    },
+    {
+        "table": "base_persons_addresses",
+        "class": "Shipard\\Module\\Base\\Persons\\AddressesLookup"
+    }
+]
+```
+
+`LookupLoader` (analogie `FormLoader`) projde všechny moduly a naplní `LookupRegistry` při bootu. Tabulka bez registrace → endpoint vrací 404 `LOOKUP_NOT_REGISTERED`.
+
+### PHP builder API
+
+```php
+$this->tab('basic', 'Hlavička')
+    ->section()->col()
+        ->lookup('partner',
+            table: 'base_persons_persons',
+            placeholder: 'Hledat partnera…',
+            triggers: 'reload',
+        )
+        ->lookup('partner_address',
+            table: 'base_persons_addresses',
+            filter: $partnerId !== 0 ? ['person' => $partnerId] : null,
+            placeholder: $partnerId !== 0 ? 'Vyberte adresu…' : 'Nejdřív vyberte partnera',
+            readOnly: $partnerId === 0,
+        )
+    ->build();
+```
+
+Signatura `TabBuilder::lookup()`:
+
+```php
+public function lookup(
+    string $column,
+    string $table,
+    ?array $filter = null,
+    ?string $label = null,
+    ?string $placeholder = null,
+    bool $required = false,
+    bool $readOnly = false,
+    bool $hidden = false,
+    ?string $triggers = null,
+    ?string $hint = null,
+): static
+```
+
+### Deklarativní JSONC
+
+```jsonc
+{
+    "type": "lookup",
+    "column": "partner",
+    "lookup": {
+        "table": "base_persons_persons"
+    }
+}
+```
+
+Statický `filter` lze v JSONC zapsat taky (`"filter": {"col": "val"}`), ale typicky se filtry generují dynamicky v PHP `recalculate()` — viz `DocsHeadsForm` jako kanonický vzor.
+
+### Cascade přes recalculate — destruktivní reset
+
+Vzor v `DocsHeadsForm`:
+
+1. Uživatel změní partnera v `partner` lookup poli (`triggers: 'reload'`).
+2. Frontend pošle `POST /_ui/form/{table}/recalculate` s body `{changedColumn: 'partner', data: {...}}`.
+3. Server v `DocsHeadsForm::recalculate()` při `changedColumn === 'partner'` **vždy vynuluje `partner_address` a `partner_bank`** (cascade reset) — dřív vybraná adresa/banka patřily bývalému partnerovi a uživatel je musí vybrat znovu z filtrovaného dropdownu nového partnera. Pokud je zadaný nový partner, dopočítá `due_date` z `payment_term_days` (jen pokud ještě není). Žádný auto-fill na hlavní adresu — výběr je vždy explicitní.
+4. Server zavolá `buildFormDefinition` — nový FormDef má `partner_address` lookup s `filter: {person: newPartnerId}` (místo původního null) a placeholder „Vyberte adresu…“ místo „Nejdřív vyberte partnera“.
+5. `FormController` sestaví `dataResolved` — chybějí klíče `partner_address`, `partner_bank` (data jsou null), je přítomný `partner`.
+6. Frontend v `handleTrigger` **replace** `dataResolved` ze serverové response — staré displaye adresy/banky zmizejí, inputy se vyprázdní (`hasValue` je false).
+
+Klíčem je, že backend `recalculate` u destruktivní cascade explicitně vynuluje závislá pole, a frontend `dataResolved` přepisuje replace strategy (ne merge). Cascade nepotřebuje žádný nový mechanismus — funguje přes existující recalculate flow.
+
+### Cascade přes recalculate — propisující (položka → řádek)
+
+Protipolný vzor v `DocRowsForm`. Změna `item` vždy přepisuje `description`, `unit_price`, `unit` z dat položky (`economy_items`) — platí pro výběr z dropdownu, create nové položky i edit existující (viz `edit_triggers` flag v další sekci). Sémantika: **položka = řádek**, kompletně. Ruční slevy se řeší přes samostatná pole `discount_pct` / `discount_amount`, nikoli přepisem `unit_price` ručně — ten by se při příští změně položky beztak přepisal.
+
+### Frontend chování (`LookupInput.svelte`)
+
+- **Render value (dropdown zavřený):** input zobrazí `resolved.primary`. `resolved.secondary` se uvnitř inputu **nezobrazuje** — sekundární řádek (IČO, Datum narození…) se ukazuje jen u položek v rozevréném dropdownu.
+- **Klik / fokus:** otevře dropdown s prázdným `q` (první stránka záznamů). Pokud má hodnotu, do inputu se vyplnil `displayLabel` (vybrané jméno) a `inputEl.select()` v `queueMicrotask` text vyselectuje. Uživatel tak vidí, kdo je vybraný, a první stisk klávesy text přepíše (standardní combobox UX).
+- **Psaní:** debounce 300 ms; každý fetch má token — starší odpovědi se zahodí (race protection).
+- **Klávesnice:**
+  - `↓`/`↑` navigace s wrap-around
+  - `Enter` vybírá aktivní položku
+  - `Escape` zavírá dropdown
+  - `Tab` zavře dropdown a **nechá default chování proběhnout** (`preventDefault` se nevolá) — fokus přejde na další pole formuláře. Položky dropdownu mají `tabindex="-1"`, takže do nich Tab nemůže zabloudit.
+  - `Backspace` na prázdném inputu při nastavené hodnotě clearuje.
+- **`×` tlačítko:** clear (jen pokud `hasValue && !disabled`, `tabindex="-1"`).
+- **Klik mimo:** zavírá dropdown.
+- **Klik na položku:** `onmousedown` + `preventDefault` — výběr proběhne před tím, než input ztratí fokus.
+- **Disabled state:** input readonly, klávesnice/klik neotevírají dropdown, žádný `×` button.
+- **States v dropdownu:** loading (`Načítám…`), error (`Chyba načítání`), empty (`Žádné výsledky`), nebo seznam položek (primary tučný, secondary menším fontem).
+
+### Drilldown ve form komponentách
+
+`FormEditor` drží state `dataResolved` (map column → `{id, primary, secondary}`), propaguje přes `FormTab → FormSection → FormColumn → FormElement` k jednotlivým `LookupInput` instancím. Callback `onResolveChange(column, item)` při výběru / clear aktualizuje keš:
+
+- **Load (meta response):** `dataResolved = res.data.dataResolved ?? {}` — kompletní nahrazení.
+- **Recalculate response:** `dataResolved = res.data.dataResolved ?? {}` — **replace**, ne merge. Server vrací autoritativní obraz pro všechna lookup pole v aktuálním form-state; klíče chybějící v response znamenají, že dané pole je null (resp. lookup neresolvoval) a display popis musí v UI zmizet. Bez tohoto by cascade reset (změna partnera → vynulování `partner_address`) zůstal v inputu — hodnota null, ale starý `resolved.primary` v keši.
+- **User select:** `dataResolved = { ...dataResolved, [column]: item }` — okamžitý update z odpovědi `LookupInput`.
+- **Save response:** explicitně neaktualizuje, ale `handleSave` volá `loadForm(...)`, který načte fresh `dataResolved` ze serveru.
+
+### Edit a Create přes lookup
+
+Lookup pole podporuje inline **edit** vybrané hodnoty a **create** úplně nového záznamu — obojí přes vnořený `FormDialog` z `LookupInput.svelte`. Opt-in přes flagy v lookup definici.
+
+**Wire flagy** (součást `lookup` objektu, snake_case na drátě, camelCase v JSONC/PHP builderu):
+
+| Flag | Default | Co dělá |
+|------|---------|--------|
+| `edit_form` / `editForm` | `false` | Zapne ikonu tužky vedle `×` u vyplněného pole. Klik otevře `FormDialog` s `recordId = value`. |
+| `create_form` / `createForm` | `false` | Zapne tlačítko „+ Vytvořit nový záznam“ v patce dropdownu. Klik otevře `FormDialog` bez `recordId`. |
+| `edit_triggers` / `editTriggers` | `false` | Po úspěšném save v **edit** modalu volá `onchange?.()` v rodiči (triggers recalculate). Default vypnuto, viz sémantika níže. |
+
+**PHP builder API:**
+
+```php
+->lookup('partner',
+    table: 'base_persons_persons',
+    placeholder: 'Hledat partnera…',
+    triggers: 'reload',
+    editForm: true,
+    createForm: true,
+    // editTriggers nezapínáme — edit partnera nemá měnit řádek
+)
+
+->lookup('item',
+    table: 'economy_items',
+    placeholder: 'Hledat položku…',
+    triggers: 'reload',
+    editForm: true,
+    createForm: true,
+    editTriggers: true,  // ← položka = řádek, edit propisuje cenu/popis/jednotku
+)
+```
+
+**Sémantika edit vs create:**
+
+Obě akce sdílí pipeline v `LookupInput.handleSubDialogSaved`:
+
+1. Přečíst `newId` z `record.id ?? record.data.id`.
+2. **Edit (value se nemění, jen detaily):** refetch `/_ui/lookup/{table}/resolve?ids={newId}` → aktualizovat `resolved` → `onResolveChange`. Pokud `lookup.edit_triggers === true`, ještě zavolat `onchange?.()` (= recalculate v rodiči).
+3. **Create (nové ID):** `value = newId` → refetch resolve → `onResolveChange` → vždy `onchange?.()`. Mode se přepne na 'edit' a `subDialogRecordId` na `newId`, aby případný další save v té samé modal session nešel cestou create.
+
+Klíčové pro vyhodnocení `edit_triggers`:
+
+- **Bez flagu (Partner):** edit detailů partnera jen aktualizuje display popis v inputu. Recalculate v rodiči se nevolá, takže `DocsHeadsForm::recalculate('partner')` neběží → cascade reset adresy/banky neproběhne. Správně: uživatel editoval partnera, neměnil ho.
+- **S flagem (Item):** edit položky triggerne recalculate v rodiči → `DocRowsForm::recalculate('item')` přepiše `description`, `unit_price`, `unit` z aktualizovaných dat položky. Správně: položka určuje řádek.
+
+**LookupInput NEzavírá modal po `onSaved`.** Modal se zavře až přes `onClose` — to znamená transition s `closeForm: 1` (`FormEditor` zavolá `onClose({force: true})`), `×`, Esc nebo overlay click. Tj. po prostém **Uložit** nebo po **Opravit** (40 → 80 s `closeForm: 0`) zůstává vnořený modal otevřený — stejně jako u primárních formulářů otevřených z vieweru. `onSaved` callback běží na pozadí: re-resolvuje display popis a (pokud `edit_triggers`) triggerne recalculate.
+
+**Vnořený `FormDialog` v `LookupInput`:** přímý import (stejný vzor jako `FormSubTable.svelte`). Cyklická závislost `FormDialog → FormEditor → … → LookupInput → FormDialog` Vite zvládá, protože komponenta se instantuje až runtime. Modal-stack depth shrink v `Modal.svelte` (viz kap. 9) automaticky vykreslí vnořený modal o 30 px užší/nižší na každé straně, takže rodič vykřukuje a uživatel vidí hierarchii.

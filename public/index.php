@@ -19,6 +19,7 @@ use Shipard\Api\Controller\AnalysisController;
 use Shipard\Api\DataSourceResolver;
 use Shipard\Api\DocumentLoader;
 use Shipard\Api\FormLoader;
+use Shipard\Api\LookupLoader;
 use Shipard\Api\Exception\UnknownDataSourceException;
 use Shipard\Api\Exception\UnknownHostException;
 use Shipard\Api\Middleware\AuthMiddleware;
@@ -32,6 +33,7 @@ use Shipard\Api\TableLoader;
 use Shipard\Api\ViewerLoader;
 use Shipard\Core\Config\ServerConfig;
 use Shipard\Core\Form\FormRegistry;
+use Shipard\Core\Form\Lookup\LookupRegistry;
 use Shipard\Core\Logging\ErrorLogger;
 use Shipard\Core\Module\ModuleClassLoader;
 use Shipard\Core\Module\ModulePathResolver;
@@ -99,6 +101,9 @@ try {
 	// ── 4c. Build form registry ───────────────────────────────────────────────
 	$formRegistry = FormLoader::load($resolved->config, $modulePathResolver);
 
+	// ── 4c2. Build lookup registry ───────────────────────────────────────────
+	$lookupRegistry = LookupLoader::load($resolved->config, $modulePathResolver);
+
 	// ── 4d. Build document registry ───────────────────────────────────────────
 	$documentRegistry = DocumentLoader::load($resolved->config, $modulePathResolver);
 
@@ -149,6 +154,7 @@ try {
 		$resolved->connection, $openApiPublic,
 		$host, $resolved, $modulePathResolver,
 		$viewerRegistry, $configRuntime, $formRegistry, $documentRegistry,
+		$lookupRegistry,
 	);
 
 	// ── 10. Apply headers and send ────────────────────────────────────────────
@@ -228,6 +234,7 @@ function dispatch(
 	?\Shipard\Core\Config\ConfigRuntime $configRuntime = null,
 	?FormRegistry $formRegistry = null,
 	?\Shipard\Core\Document\DocumentRegistry $documentRegistry = null,
+	?LookupRegistry $lookupRegistry = null,
 ): Response {
 	$baseUrl = $resolved->isDevMode()
 		? 'http://' . $host . '/' . $resolved->config->getId()
@@ -240,7 +247,8 @@ function dispatch(
 		'meta'    => dispatchMeta($route->action, $route->table, $tables, resolveLanguage($request, $resolved->config)),
 		'ui'      => dispatchUi($route->action, $resolved->config, $modulePathResolver, resolveLanguage($request, $resolved->config)),
 		'settings' => dispatchSettings($route->action, $resolved->config, $modulePathResolver, resolveLanguage($request, $resolved->config), $configRuntime),
-		'form'    => dispatchForm($route, $request, $auth, $tables, $db, $formRegistry ?? new FormRegistry(), $configRuntime, $modulePathResolver, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), resolveLanguage($request, $resolved->config), $resolved->config),
+		'form'    => dispatchForm($route, $request, $auth, $tables, $db, $formRegistry ?? new FormRegistry(), $configRuntime, $modulePathResolver, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), resolveLanguage($request, $resolved->config), $resolved->config, $lookupRegistry ?? new LookupRegistry()),
+		'lookup'  => dispatchLookup($route, $request, $tables, $db, $lookupRegistry ?? new LookupRegistry(), $configRuntime),
 		'viewer'  => dispatchViewer($route, $request, $viewerRegistry, $db, $configRuntime),
 		'mail'    => dispatchMail($route, $request, $auth, $tables, $db, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'analysis' => dispatchAnalysis($route, $request, $auth, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
@@ -466,6 +474,7 @@ function dispatchForm(
 	?\Shipard\Core\Document\DocumentRegistry $documentRegistry = null,
 	string $language = 'en',
 	?\Shipard\Core\Config\DataSourceConfig $dsConfig = null,
+	?LookupRegistry $lookupRegistry = null,
 ): Response {
 	$ctrl  = new FormController();
 	$table = $route->table ?? '';
@@ -485,10 +494,28 @@ function dispatchForm(
 		}
 	}
 
+	$lookupReg = $lookupRegistry ?? new LookupRegistry();
 	return match ($route->action) {
-		'meta'        => $ctrl->meta($table, $route->id, $tables, $db, $formRegistry, $configRuntime, $modulePathResolver, $language, $queryDefaults),
-		'save'        => $ctrl->save($table, $route->id, $request, $tables, $db, $configRuntime, $documentRegistry, $dsConfig, $auth),
-		'recalculate' => $ctrl->recalculate($table, $request, $tables, $db, $formRegistry, $configRuntime, $modulePathResolver, $language),
+		'meta'        => $ctrl->meta($table, $route->id, $tables, $db, $formRegistry, $configRuntime, $lookupReg, $modulePathResolver, $language, $queryDefaults),
+		'save'        => $ctrl->save($table, $route->id, $request, $tables, $db, $configRuntime, $formRegistry, $modulePathResolver, $lookupReg, $language, $documentRegistry, $dsConfig, $auth),
+		'recalculate' => $ctrl->recalculate($table, $request, $tables, $db, $formRegistry, $configRuntime, $lookupReg, $modulePathResolver, $language),
 		default       => Response::error('INTERNAL_ERROR', "Unknown form action: {$route->action}", 500),
+	};
+}
+
+function dispatchLookup(
+	Route $route,
+	Request $request,
+	array $tables,
+	\Shipard\Core\Database\DataSourceConnection $db,
+	LookupRegistry $lookupRegistry,
+	?\Shipard\Core\Config\ConfigRuntime $configRuntime,
+): Response {
+	$ctrl  = new \Shipard\Api\Controller\LookupController();
+	$table = $route->table ?? '';
+	return match ($route->action) {
+		'search'  => $ctrl->search($table, $request, $tables, $db, $lookupRegistry, $configRuntime),
+		'resolve' => $ctrl->resolve($table, $request, $tables, $db, $lookupRegistry, $configRuntime),
+		default   => Response::error('INTERNAL_ERROR', "Unknown lookup action: {$route->action}", 500),
 	};
 }

@@ -12,8 +12,10 @@ use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Database\TableDefinition;
 use Shipard\Core\Form\AutoFormBuilder;
 use Shipard\Core\Form\FormDefinition;
+use Shipard\Core\Form\FormElement;
 use Shipard\Core\Form\FormRegistry;
 use Shipard\Core\Form\JsoncFormLoader;
+use Shipard\Core\Form\Lookup\LookupRegistry;
 use Shipard\Core\Form\RecalculateResult;
 use Shipard\Core\Form\TableForm;
 use Shipard\Core\Module\ModulePathResolver;
@@ -33,6 +35,7 @@ class FormController
         DataSourceConnection $db,
         FormRegistry $formRegistry,
         ?ConfigRuntime $config,
+        LookupRegistry $lookupRegistry,
         ModulePathResolver $modulePathResolver,
         string $language = 'en',
         array $newRecordDefaults = [],
@@ -92,9 +95,14 @@ class FormController
             );
         }
 
+        $dataResolved = $this->buildDataResolved(
+            $formDefinition, $data, $lookupRegistry, $db, $config, $tables,
+        );
+
         return Response::success([
             'formDefinition' => $formDefinition->toArray(),
             'data'           => $isNew ? ($data ?: null) : $data,
+            'dataResolved'   => $dataResolved,
         ]);
     }
 
@@ -105,6 +113,10 @@ class FormController
         array $tables,
         DataSourceConnection $db,
         ?ConfigRuntime $config,
+        FormRegistry $formRegistry,
+        ModulePathResolver $modulePathResolver,
+        LookupRegistry $lookupRegistry,
+        string $language = 'en',
         ?DocumentRegistry $documentRegistry = null,
         ?\Shipard\Core\Config\DataSourceConfig $dsConfig = null,
         ?AuthContext $auth = null,
@@ -139,9 +151,13 @@ class FormController
             if ($def->stateTransitionsRunDocumentHooks) {
                 return $this->applyStateTransitionViaDocument(
                     $table, $id, (int) $body[$stateCol], $def, $db, $config, $documentRegistry, $dsConfig,
+                    $formRegistry, $modulePathResolver, $lookupRegistry, $language, $tables,
                 );
             }
-            return $this->applyStateTransition($table, $id, $body, $def, $db, $config);
+            return $this->applyStateTransition(
+                $table, $id, $body, $def, $db, $config,
+                $formRegistry, $modulePathResolver, $lookupRegistry, $language, $tables,
+            );
         }
 
         // ── Běžné uložení přes TableGateway + Document lifecycle ──────────────
@@ -211,7 +227,15 @@ class FormController
         $record  = $db->fetchRow("SELECT * FROM `{$table}` WHERE `id` = %i", $savedId);
 
         $httpStatus = ($id === null) ? 201 : 200;
-        return Response::success(['id' => $savedId, 'data' => $record], $httpStatus);
+        $dataResolved = $this->resolveLookupValuesForRecord(
+            $table, $def, $record ?? [], $formRegistry, $db, $config,
+            $lookupRegistry, $modulePathResolver, $language, $tables,
+        );
+        return Response::success([
+            'id'           => $savedId,
+            'data'         => $record,
+            'dataResolved' => $dataResolved,
+        ], $httpStatus);
     }
 
     /**
@@ -224,6 +248,7 @@ class FormController
         DataSourceConnection $db,
         FormRegistry $formRegistry,
         ?ConfigRuntime $config,
+        LookupRegistry $lookupRegistry,
         ModulePathResolver $modulePathResolver,
         string $language = 'en',
     ): Response {
@@ -265,9 +290,14 @@ class FormController
             );
         }
 
+        $dataResolved = $this->buildDataResolved(
+            $formDefinition, $result->data, $lookupRegistry, $db, $config, $tables,
+        );
+
         return Response::success([
             'formDefinition' => $formDefinition->toArray(),
             'data'           => $result->data,
+            'dataResolved'   => $dataResolved,
         ]);
     }
 
@@ -454,6 +484,11 @@ class FormController
         ?ConfigRuntime $config,
         ?DocumentRegistry $documentRegistry,
         ?\Shipard\Core\Config\DataSourceConfig $dsConfig,
+        FormRegistry $formRegistry,
+        ModulePathResolver $modulePathResolver,
+        LookupRegistry $lookupRegistry,
+        string $language,
+        array $tables,
     ): Response {
         $dsDef = $def->docStates;
         if ($dsDef === null || $config === null) {
@@ -513,7 +548,15 @@ class FormController
         }
 
         $record = $db->fetchRow("SELECT * FROM `{$table}` WHERE `id` = %i", $id);
-        return Response::success(['id' => $id, 'data' => $record]);
+        $dataResolved = $this->resolveLookupValuesForRecord(
+            $table, $def, $record ?? [], $formRegistry, $db, $config,
+            $lookupRegistry, $modulePathResolver, $language, $tables,
+        );
+        return Response::success([
+            'id'           => $id,
+            'data'         => $record,
+            'dataResolved' => $dataResolved,
+        ]);
     }
 
     private function applyStateTransition(
@@ -523,6 +566,11 @@ class FormController
         TableDefinition $def,
         DataSourceConnection $db,
         ?ConfigRuntime $config,
+        FormRegistry $formRegistry,
+        ModulePathResolver $modulePathResolver,
+        LookupRegistry $lookupRegistry,
+        string $language,
+        array $tables,
     ): Response {
         $dsDef = $def->docStates;
         if ($dsDef === null || $config === null) {
@@ -554,7 +602,15 @@ class FormController
         ], 'id = %i', $id);
 
         $record = $db->fetchRow("SELECT * FROM `{$table}` WHERE `id` = %i", $id);
-        return Response::success(['id' => $id, 'data' => $record]);
+        $dataResolved = $this->resolveLookupValuesForRecord(
+            $table, $def, $record ?? [], $formRegistry, $db, $config,
+            $lookupRegistry, $modulePathResolver, $language, $tables,
+        );
+        return Response::success([
+            'id'           => $id,
+            'data'         => $record,
+            'dataResolved' => $dataResolved,
+        ]);
     }
 
     private function hasColumn(TableDefinition $def, string $colId): bool
@@ -565,5 +621,110 @@ class FormController
             }
         }
         return false;
+    }
+
+    /**
+     * Vrátí všechny lookup elementy z FormDefinition (rekurze přes
+     * tabs → sections → columns → elements). Inline group neobsahuje
+     * lookup elementy (validace na úrovni FormElement to zaručuje).
+     *
+     * @return list<FormElement>
+     */
+    private function collectLookupElements(FormDefinition $formDef): array
+    {
+        $out = [];
+        foreach ($formDef->tabs as $tab) {
+            if ($tab->type !== 'fields') {
+                continue;
+            }
+            foreach ($tab->sections as $section) {
+                foreach ($section->columns as $column) {
+                    foreach ($column->elements as $el) {
+                        if ($el->type === 'lookup') {
+                            $out[] = $el;
+                        }
+                    }
+                }
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Vrátí mapu `{column → {id, primary, secondary}}` pro každý lookup element,
+     * jehož hodnota v `$data` je ne-null a kde resolve uspěl. Klíče se nevkládají
+     * pro null hodnoty ani pro lookup elementy ukazující na nezaregistrovanou tabulku.
+     *
+     * @param array<string, TableDefinition> $tables
+     * @return array<string, array{id: int|string, primary: string, secondary: string|null}>
+     */
+    private function buildDataResolved(
+        FormDefinition $formDef,
+        array $data,
+        LookupRegistry $lookupRegistry,
+        DataSourceConnection $db,
+        ?ConfigRuntime $config,
+        array $tables,
+    ): array {
+        $result = [];
+        foreach ($this->collectLookupElements($formDef) as $element) {
+            $column = $element->column;
+            if ($column === null || $column === '') {
+                continue;
+            }
+            $value = $data[$column] ?? null;
+            if ($value === null || $value === '') {
+                continue;
+            }
+            $lookupCfg = $element->lookup;
+            if (!is_array($lookupCfg)) {
+                continue;
+            }
+            $targetTable = $lookupCfg['table'] ?? null;
+            if (!is_string($targetTable) || $targetTable === '') {
+                continue;
+            }
+            $targetDef = $tables[$targetTable] ?? null;
+            $lookup = $lookupRegistry->create($targetTable, $db, $config, $targetDef);
+            if ($lookup === null) {
+                continue;
+            }
+            $items = $lookup->resolve([$value]);
+            if ($items === []) {
+                continue;
+            }
+            $result[$column] = $items[0]->toArray();
+        }
+        return $result;
+    }
+
+    /**
+     * Rebuild FormDefinition for a saved record and resolve all its lookup
+     * values. Used in save() and state-transition responses to keep the
+     * client's `dataResolved` keš in sync.
+     *
+     * @param array<string, TableDefinition> $tables
+     * @return array<string, array{id: int|string, primary: string, secondary: string|null}>
+     */
+    private function resolveLookupValuesForRecord(
+        string $table,
+        TableDefinition $def,
+        array $record,
+        FormRegistry $formRegistry,
+        DataSourceConnection $db,
+        ?ConfigRuntime $config,
+        LookupRegistry $lookupRegistry,
+        ModulePathResolver $modulePathResolver,
+        string $language,
+        array $tables,
+    ): array {
+        if ($record === []) {
+            return [];
+        }
+        $formDef = $this->resolveFormDefinition(
+            $table, $def, $record, /*$isNew*/ false,
+            $formRegistry, $db, $config, $modulePathResolver, $language,
+        );
+        return $this->buildDataResolved($formDef, $record, $lookupRegistry, $db, $config, $tables);
     }
 }

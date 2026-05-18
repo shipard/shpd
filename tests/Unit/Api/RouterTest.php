@@ -562,4 +562,48 @@ class RouterTest extends TestCase
 		$this->assertInstanceOf(Response::class, $result);
 		$this->assertSame('NOT_FOUND', $result->getPayload()['error']['code']);
 	}
+
+	// Lookup routes
+
+	public function testLookupSearch(): void
+	{
+		$result = $this->router->resolve('/api/v1/_ui/lookup/base_persons_persons/search', 'GET');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'lookup', 'search', 'base_persons_persons');
+	}
+
+	public function testLookupResolve(): void
+	{
+		$result = $this->router->resolve('/api/v1/_ui/lookup/base_persons_persons/resolve', 'GET');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'lookup', 'resolve', 'base_persons_persons');
+	}
+
+	public function testLookupSearchPostNotAllowed(): void
+	{
+		$result = $this->router->resolve('/api/v1/_ui/lookup/base_persons_persons/search', 'POST');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
+	}
+
+	public function testLookupUnknownActionIs404(): void
+	{
+		$result = $this->router->resolve('/api/v1/_ui/lookup/base_persons_persons/explode', 'GET');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('NOT_FOUND', $result->getPayload()['error']['code']);
+	}
+
+	public function testLookupMissingActionIs404(): void
+	{
+		$result = $this->router->resolve('/api/v1/_ui/lookup/base_persons_persons', 'GET');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('NOT_FOUND', $result->getPayload()['error']['code']);
+	}
+
+	public function testLookupExtraSegmentIs404(): void
+	{
+		$result = $this->router->resolve('/api/v1/_ui/lookup/foo/search/extra', 'GET');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('NOT_FOUND', $result->getPayload()['error']['code']);
+	}
 }

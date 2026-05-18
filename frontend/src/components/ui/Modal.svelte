@@ -8,8 +8,9 @@
     return modalStack[modalStack.length - 1] === id;
   }
 
-  function pushModal(id: symbol): void {
+  function pushModal(id: symbol): number {
     modalStack.push(id);
+    return modalStack.length - 1;
   }
 
   function removeModal(id: symbol): void {
@@ -74,10 +75,15 @@
     if (e.target === e.currentTarget) onClose();
   }
 
+  // Hloubka ve stacku (0 = nejnižší/rodičovský, 1+ = vnořený). Používá se pro
+  // postupné zmenšení vnořených modalů, aby uživatel viděl rodičovský modal
+  // vyčnívat ze všech stran a vizuálně chápal hierarchii.
+  let depth = $state(0);
+
   // Registrace ve stacku + body scroll lock při otevření; cleanup při zavření.
   $effect(() => {
     if (open) {
-      pushModal(modalId);
+      depth = pushModal(modalId);
       document.body.style.overflow = 'hidden';
       return () => {
         removeModal(modalId);
@@ -89,13 +95,18 @@
     }
   });
 
-  const cardStyle = $derived(
-    width === 'full'
-      ? 'width: 95vw; max-width: 95vw; height: 95vh;'
-      : height
-        ? `width: ${width}; height: min(${height}, 90vh);`
-        : `width: ${width};`
-  );
+  // Side offset (px na každé straně) pro vnořený modal. 30px x depth → vnořený
+  // je o 60px užší/nižší než rodič a vycentrovaný → rodič vykřukuje ze všech stran.
+  const cardStyle = $derived.by(() => {
+    const off = depth * 30;
+    if (width === 'full') {
+      return `width: calc(95vw - ${off * 2}px); max-width: calc(95vw - ${off * 2}px); height: calc(95vh - ${off * 2}px);`;
+    }
+    if (height) {
+      return `width: calc(${width} - ${off * 2}px); height: min(calc(${height} - ${off * 2}px), 90vh);`;
+    }
+    return `width: calc(${width} - ${off * 2}px);`;
+  });
 </script>
 
 <svelte:window onkeydown={open ? handleKeydown : undefined} />

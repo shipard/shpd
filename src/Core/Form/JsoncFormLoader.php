@@ -236,6 +236,57 @@ class JsoncFormLoader
             $inputType = $this->deriveInputType($col);
         }
 
+        // Lookup config — only meaningful for type=lookup; FormElement validates the rest.
+        $lookup = null;
+        if ($type === 'lookup') {
+            $rawLookup = $elData['lookup'] ?? null;
+            if (!is_array($rawLookup) || !isset($rawLookup['table']) || !is_string($rawLookup['table']) || $rawLookup['table'] === '') {
+                throw new \RuntimeException(sprintf(
+                    'JsoncFormLoader: %s — lookup element "%s" requires lookup.table',
+                    $jsonPath, $column ?? '?',
+                ));
+            }
+            $filter = $rawLookup['filter'] ?? null;
+            if ($filter !== null && !is_array($filter)) {
+                throw new \RuntimeException(sprintf(
+                    'JsoncFormLoader: %s — lookup element "%s" filter must be object|null',
+                    $jsonPath, $column ?? '?',
+                ));
+            }
+            $lookup = [
+                'table'  => $rawLookup['table'],
+                'filter' => $filter,
+            ];
+            // editForm / createForm (camelCase v JSONC) → edit_form / create_form na drátě
+            if (array_key_exists('editForm', $rawLookup)) {
+                if (!is_bool($rawLookup['editForm'])) {
+                    throw new \RuntimeException(sprintf(
+                        'JsoncFormLoader: %s — lookup element "%s" editForm must be boolean',
+                        $jsonPath, $column ?? '?',
+                    ));
+                }
+                $lookup['edit_form'] = $rawLookup['editForm'];
+            }
+            if (array_key_exists('createForm', $rawLookup)) {
+                if (!is_bool($rawLookup['createForm'])) {
+                    throw new \RuntimeException(sprintf(
+                        'JsoncFormLoader: %s — lookup element "%s" createForm must be boolean',
+                        $jsonPath, $column ?? '?',
+                    ));
+                }
+                $lookup['create_form'] = $rawLookup['createForm'];
+            }
+            if (array_key_exists('editTriggers', $rawLookup)) {
+                if (!is_bool($rawLookup['editTriggers'])) {
+                    throw new \RuntimeException(sprintf(
+                        'JsoncFormLoader: %s — lookup element "%s" editTriggers must be boolean',
+                        $jsonPath, $column ?? '?',
+                    ));
+                }
+                $lookup['edit_triggers'] = $rawLookup['editTriggers'];
+            }
+        }
+
         return new FormElement(
             type: $type,
             column: $column,
@@ -251,6 +302,7 @@ class JsoncFormLoader
             content: $elData['content'] ?? null,
             componentName: $elData['componentName'] ?? null,
             inputType: $inputType,
+            lookup: $lookup,
         );
     }
 

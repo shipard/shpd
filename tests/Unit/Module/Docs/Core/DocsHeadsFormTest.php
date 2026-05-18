@@ -258,6 +258,66 @@ class DocsHeadsFormTest extends TestCase
         }
     }
 
+    // ── Partner lookups ──────────────────────────────────────────────────────
+
+    public function testPartnerIsLookupAgainstPersons(): void
+    {
+        $el = $this->findElement(
+            $this->createForm()->buildFormDefinition([], true),
+            'basic',
+            'partner',
+        );
+
+        $this->assertNotNull($el);
+        $this->assertSame('lookup', $el->type);
+        $this->assertSame('base_persons_persons', $el->lookup['table']);
+        $this->assertNull($el->lookup['filter']);
+        $this->assertSame('reload', $el->triggers);
+    }
+
+    public function testPartnerAddressLookupWithoutPartnerIsReadOnly(): void
+    {
+        $el = $this->findElement(
+            $this->createForm()->buildFormDefinition([], true),
+            'basic',
+            'partner_address',
+        );
+
+        $this->assertNotNull($el);
+        $this->assertSame('lookup', $el->type);
+        $this->assertSame('base_persons_addresses', $el->lookup['table']);
+        $this->assertNull($el->lookup['filter']);
+        $this->assertTrue($el->readOnly);
+    }
+
+    public function testPartnerAddressLookupWithPartnerHasFilter(): void
+    {
+        $el = $this->findElement(
+            $this->createForm()->buildFormDefinition(['partner' => 42], false),
+            'basic',
+            'partner_address',
+        );
+
+        $this->assertNotNull($el);
+        $this->assertSame('lookup', $el->type);
+        $this->assertSame(['person' => 42], $el->lookup['filter']);
+        $this->assertFalse($el->readOnly);
+    }
+
+    public function testPartnerBankLookupWithPartnerHasFilter(): void
+    {
+        $el = $this->findElement(
+            $this->createForm()->buildFormDefinition(['partner' => 42], false),
+            'basic',
+            'partner_bank',
+        );
+
+        $this->assertNotNull($el);
+        $this->assertSame('lookup', $el->type);
+        $this->assertSame('base_persons_bank_accounts', $el->lookup['table']);
+        $this->assertSame(['person' => 42], $el->lookup['filter']);
+    }
+
     // ── Subtable in rows tab ─────────────────────────────────────────────────
 
     public function testRowsTabHoldsSubtable(): void

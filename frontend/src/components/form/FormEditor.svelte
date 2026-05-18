@@ -19,6 +19,12 @@
   let formDef = $state(null);
   let formData = $state({});
   let fieldErrors = $state({});
+  // Map column → {id, primary, secondary} pre-resolved lookup popisů.
+  // Při (re)loadu a po recalculate/save nahrazujeme celým státem ze serveru
+  // (server vrací autoritativní obraz pro všechna lookup pole — chybějící klíč
+  // znamená, že dané pole v `data` nemá hodnotu, tj. resolved má zmizet).
+  // Výběr v LookupInput aktualizuje per-column přes handleResolveChange.
+  let dataResolved = $state({});
   let activeTabId = $state(null);
   let saving = $state(false);
   let recalculating = $state(false);
@@ -117,6 +123,10 @@
     // pak přepiš skuteČnými daty ze serveru (včetně defaultů pro nový záznam)
     const defaults = buildDefaultData(res.data.formDefinition);
     formData = res.data.data ? { ...defaults, ...res.data.data } : defaults;
+    // Pre-resolvované lookup hodnoty — server posílá map column → {id, primary, secondary}.
+    // Při (re)loadu nahrazujeme celé, aby se zbavily starých keší pro pole,
+    // která už nejsou v aktuálním FormDef.
+    dataResolved = res.data.dataResolved ?? {};
     // Snapshot dat — po načtení formulář není dirty
     loadedDataSnapshot = { ...formData };
     activeTabId = formDef.tabs[0]?.id ?? null;
@@ -153,12 +163,32 @@
     if (res?.success) {
       formDef = res.data.formDefinition;
       formData = res.data.data;
+      // dataResolved nahradíme celý — server vrací autoritativní mapu pro všechna
+      // lookup pole v aktuálním form-state. Klíče chybějící v response znamenají,
+      // že dané pole je null (nebo lookup neresolvoval) — display popis musí
+      // zmizet, jinak by zelo cascade reset (změna partnera vynuluje
+      // partner_address) přežilo staromu displej v UI.
+      dataResolved = res.data.dataResolved ?? {};
       // Snapshot se NEAKTUALIZUJE — recalculate neukládá do DB, takže přepočítaná data
       // jsou stále neuložená změna. Dirty stav zůstává true a uživatel musí explicitně Uložit.
       const tabIds = formDef.tabs.map(t => t.id);
       if (!tabIds.includes(activeTabId)) activeTabId = tabIds[0] ?? null;
     }
     recalculating = false;
+  }
+
+  // Lookup výběr / clear v `LookupInput` propaguje sem přes callback. Aktualizujeme
+  // per-column keš dataResolved — během editace bez recalculate je tohle jediný
+  // zdroj změn; následný recalculate / save pak keš přepne na serverový stav.
+  function handleResolveChange(column, resolvedItem) {
+    if (!column) return;
+    if (resolvedItem === null) {
+      const next = { ...dataResolved };
+      delete next[column];
+      dataResolved = next;
+    } else {
+      dataResolved = { ...dataResolved, [column]: resolvedItem };
+    }
   }
 
   // ── Save ────────────────────────────────────────────────────────────────────
@@ -391,8 +421,10 @@
               {tab}
               bind:formData
               {fieldErrors}
+              {dataResolved}
               disabled={isDisabled}
               onTrigger={handleTrigger}
+              onResolveChange={handleResolveChange}
               parentId={currentId}
             />
           {/if}

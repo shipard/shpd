@@ -129,15 +129,24 @@ class DocsHeadsForm extends TableForm
                     ->input('doc_text')
 
                     ->separator('Partner')
-                    ->select('partner',
-                        options: $this->resolvePartnerOptions(),
+                    ->lookup('partner',
+                        table: 'base_persons_persons',
+                        placeholder: 'Hledat partnera…',
                         triggers: 'reload',
+                        editForm: true,
+                        createForm: true,
                     )
-                    ->select('partner_address',
-                        options: $this->resolvePartnerAddressOptions($partnerId),
+                    ->lookup('partner_address',
+                        table: 'base_persons_addresses',
+                        filter: $partnerId !== 0 ? ['person' => $partnerId] : null,
+                        placeholder: $partnerId !== 0 ? 'Vyberte adresu…' : 'Nejdřív vyberte partnera',
+                        readOnly: $partnerId === 0,
                     )
-                    ->select('partner_bank',
-                        options: $this->resolvePartnerBankOptions($partnerId),
+                    ->lookup('partner_bank',
+                        table: 'base_persons_bank_accounts',
+                        filter: $partnerId !== 0 ? ['person' => $partnerId] : null,
+                        placeholder: $partnerId !== 0 ? 'Vyberte bankovní účet…' : 'Nejdřív vyberte partnera',
+                        readOnly: $partnerId === 0,
                     )
                     ->input('partner_bank_account', label: 'Číslo účtu')
                     ->input('partner_bank_iban', label: 'IBAN')
@@ -280,19 +289,18 @@ class DocsHeadsForm extends TableForm
 
     public function recalculate(string $changedColumn, array $data): RecalculateResult
     {
-        if ($changedColumn === 'partner' && !empty($data['partner']) && $this->db !== null) {
-            $addr = $this->db->fetchRow(
-                'SELECT `id` FROM `base_persons_addresses`'
-                . ' WHERE `person` = %i'
-                . ' ORDER BY (`address_type` = 1) DESC, `order_pos` ASC, `id` ASC'
-                . ' LIMIT 1',
-                (int) $data['partner'],
-            );
-            if ($addr !== null && empty($data['partner_address'])) {
-                $data['partner_address'] = (int) $addr['id'];
-            }
+        if ($changedColumn === 'partner') {
+            // Cascading reset: změna partnera invaliduje dříve vybranou adresu
+            // a bankovní účet — ty patřily bývalému partnerovi. Uživatel musí
+            // vybrat znovu z dropdownu (který je už filtrovaný na nového partnera).
+            $data['partner_address'] = null;
+            $data['partner_bank'] = null;
 
-            if (!empty($data['issue_date']) && empty($data['due_date'])) {
+            // Auto-fill due_date podle payment_term_days partnera (pouze pokud
+            // je nový partner zadaný a due_date ještě není vyplněný).
+            if (!empty($data['partner']) && $this->db !== null
+                && !empty($data['issue_date']) && empty($data['due_date'])
+            ) {
                 $partner = $this->db->fetchRow(
                     'SELECT `payment_term_days` FROM `base_persons_persons` WHERE `id` = %i',
                     (int) $data['partner'],
@@ -366,85 +374,6 @@ class DocsHeadsForm extends TableForm
             // in the label so users can tell series apart.
             if ($docType === null && $rowDocType !== '') {
                 $label .= ' (' . $rowDocType . ')';
-            }
-            $options[] = ['value' => (int) $row['id'], 'label' => $label];
-        }
-        return $options;
-    }
-
-    /** @return list<array{value: int, label: string}> */
-    private function resolvePartnerOptions(): array
-    {
-        if ($this->db === null) {
-            return [];
-        }
-        $rows = $this->db->fetchAll(
-            'SELECT `id`, `full_name` FROM `base_persons_persons`'
-            . ' WHERE `docState` IN (10, 40, 80)'
-            . ' ORDER BY `full_name` ASC'
-            . ' LIMIT 500',
-        );
-        $options = [];
-        foreach ($rows as $row) {
-            $options[] = [
-                'value' => (int) $row['id'],
-                'label' => (string) ($row['full_name'] ?? ''),
-            ];
-        }
-        return $options;
-    }
-
-    /** @return list<array{value: int, label: string}> */
-    private function resolvePartnerAddressOptions(int $partnerId): array
-    {
-        if ($this->db === null || $partnerId === 0) {
-            return [];
-        }
-        // base_persons_addresses has no docState column — active records are
-        // selected via period validity instead.
-        $rows = $this->db->fetchAll(
-            'SELECT `id`, `display_line` FROM `base_persons_addresses`'
-            . ' WHERE `person` = %i'
-            . ' AND (`valid_from` IS NULL OR `valid_from` <= CURDATE())'
-            . ' AND (`valid_to`   IS NULL OR `valid_to`   >= CURDATE())'
-            . ' ORDER BY `order_pos` ASC, `id` ASC',
-            $partnerId,
-        );
-        $options = [];
-        foreach ($rows as $row) {
-            $options[] = [
-                'value' => (int) $row['id'],
-                'label' => (string) ($row['display_line'] ?? ('#' . $row['id'])),
-            ];
-        }
-        return $options;
-    }
-
-    /** @return list<array{value: int, label: string}> */
-    private function resolvePartnerBankOptions(int $partnerId): array
-    {
-        if ($this->db === null || $partnerId === 0) {
-            return [];
-        }
-        // base_persons_bank_accounts has no docState column — active records
-        // are selected via period validity instead.
-        $rows = $this->db->fetchAll(
-            'SELECT `id`, `account_number`, `iban` FROM `base_persons_bank_accounts`'
-            . ' WHERE `person` = %i'
-            . ' AND (`valid_from` IS NULL OR `valid_from` <= CURDATE())'
-            . ' AND (`valid_to`   IS NULL OR `valid_to`   >= CURDATE())'
-            . ' ORDER BY `id` ASC',
-            $partnerId,
-        );
-        $options = [];
-        foreach ($rows as $row) {
-            $label = (string) ($row['account_number'] ?? '');
-            $iban = (string) ($row['iban'] ?? '');
-            if ($iban !== '') {
-                $label = $label !== '' ? "{$label} ({$iban})" : $iban;
-            }
-            if ($label === '') {
-                $label = '#' . $row['id'];
             }
             $options[] = ['value' => (int) $row['id'], 'label' => $label];
         }

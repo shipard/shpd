@@ -45,10 +45,14 @@ class DocRowsForm extends TableForm
                         triggers: 'reload',
                         required: true,
                     )
-                    ->select('item',
-                        options: $this->resolveItemOptions(),
+                    ->lookup('item',
+                        table: 'economy_items',
+                        placeholder: 'Hledat položku…',
                         triggers: 'reload',
                         hidden: $isText,
+                        editForm: true,
+                        createForm: true,
+                        editTriggers: true,
                     )
                     ->input('description')
 
@@ -109,13 +113,16 @@ class DocRowsForm extends TableForm
                 (int) $data['item'],
             );
             if ($item !== null) {
-                if (empty($data['description'])) {
-                    $data['description'] = (string) ($item['name'] ?? '');
-                }
-                if (empty($data['unit_price']) && !empty($item['sales_price_no_vat'])) {
+                // Položka = řádek: name, sales_price_no_vat a unit z položky se vždy
+                // propisují do řádku. Platí pro výběr z dropdownu, vytvoření nové položky,
+                // i edit existující položky (editTriggers: true na lookup). Uživateláňské
+                // úpravy unit_price (sleva) se řeší přes samostatná pole
+                // discount_pct / discount_amount, ne přepisem unit_price.
+                $data['description'] = (string) ($item['name'] ?? '');
+                if (!empty($item['sales_price_no_vat'])) {
                     $data['unit_price'] = (float) $item['sales_price_no_vat'];
                 }
-                if (empty($data['unit']) && !empty($item['unit'])) {
+                if (!empty($item['unit'])) {
                     $data['unit'] = (int) $item['unit'];
                 }
             }
@@ -240,28 +247,6 @@ class DocRowsForm extends TableForm
         foreach ($codes as $key => $code) {
             $label = (string) ($code['fullName'] ?? $code['name'] ?? $key);
             $options[] = ['value' => (string) $key, 'label' => $label];
-        }
-        return $options;
-    }
-
-    /** @return list<array{value: int, label: string}> */
-    private function resolveItemOptions(): array
-    {
-        if ($this->db === null) {
-            return [];
-        }
-        $rows = $this->db->fetchAll(
-            'SELECT `id`, `code`, `name` FROM `economy_items`'
-            . ' WHERE `docState` IN (10, 40, 80)'
-            . ' ORDER BY `name` ASC'
-            . ' LIMIT 500',
-        );
-        $options = [];
-        foreach ($rows as $row) {
-            $code = (string) ($row['code'] ?? '');
-            $name = (string) ($row['name'] ?? '');
-            $label = $code !== '' ? "{$code} — {$name}" : $name;
-            $options[] = ['value' => (int) $row['id'], 'label' => $label];
         }
         return $options;
     }

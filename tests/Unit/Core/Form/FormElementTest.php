@@ -204,4 +204,105 @@ class FormElementTest extends TestCase
         $this->assertSame('component', $arr['type']);
         $this->assertSame('recapitulation', $arr['component_name']);
     }
+
+    // -------- Lookup --------
+
+    public function testLookupBasic(): void
+    {
+        $el = new FormElement(
+            type: 'lookup',
+            column: 'partner',
+            label: 'Partner',
+            lookup: ['table' => 'base_persons_persons', 'filter' => null],
+        );
+
+        $this->assertSame('lookup', $el->type);
+        $this->assertSame('partner', $el->column);
+        $this->assertSame(['table' => 'base_persons_persons', 'filter' => null], $el->lookup);
+    }
+
+    public function testLookupRequiresColumn(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('lookup element requires column');
+
+        new FormElement(
+            type: 'lookup',
+            lookup: ['table' => 'base_persons_persons'],
+        );
+    }
+
+    public function testLookupRequiresLookupConfig(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('lookup element requires lookup config');
+
+        new FormElement(type: 'lookup', column: 'partner');
+    }
+
+    public function testLookupRequiresTable(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('lookup.table must be a non-empty string');
+
+        new FormElement(
+            type: 'lookup',
+            column: 'partner',
+            lookup: ['table' => ''],
+        );
+    }
+
+    public function testLookupFilterMustBeArrayOrNull(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('lookup.filter must be array|null');
+
+        new FormElement(
+            type: 'lookup',
+            column: 'partner',
+            lookup: ['table' => 't', 'filter' => 'oops'],
+        );
+    }
+
+    public function testLookupSerializationWithFilter(): void
+    {
+        $el = new FormElement(
+            type: 'lookup',
+            column: 'partner_address',
+            lookup: ['table' => 'base_persons_addresses', 'filter' => ['person' => 42]],
+        );
+        $arr = $el->toArray();
+
+        $this->assertSame('lookup', $arr['type']);
+        $this->assertSame('partner_address', $arr['column']);
+        $this->assertSame(['table' => 'base_persons_addresses', 'filter' => ['person' => 42]], $arr['lookup']);
+    }
+
+    public function testLookupSerializationEmptyFilterAsNull(): void
+    {
+        $el = new FormElement(
+            type: 'lookup',
+            column: 'partner',
+            lookup: ['table' => 't', 'filter' => []],
+        );
+
+        $this->assertNull($el->toArray()['lookup']['filter']);
+    }
+
+    public function testLookupInsideInlineRejected(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('only input, select are allowed inside inline groups');
+
+        new FormElement(
+            type: 'inline',
+            elements: [
+                new FormElement(
+                    type: 'lookup',
+                    column: 'partner',
+                    lookup: ['table' => 't'],
+                ),
+            ],
+        );
+    }
 }

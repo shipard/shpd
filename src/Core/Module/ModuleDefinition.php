@@ -18,6 +18,7 @@ class ModuleDefinition
         public readonly array $viewers,
         public readonly array $forms,
         public readonly array $settingsItems,
+        public readonly array $lookups = [],
     ) {}
 
     public static function fromArray(array $data): self
@@ -54,6 +55,19 @@ class ModuleDefinition
             }
         }
 
+        $lookups = [];
+        if (isset($data['lookups']) && is_array($data['lookups'])) {
+            foreach ($data['lookups'] as $lookup) {
+                if (!is_array($lookup)) continue;
+                if (!isset($lookup['table']) || !is_string($lookup['table']) || $lookup['table'] === '') continue;
+                if (!isset($lookup['class']) || !is_string($lookup['class']) || $lookup['class'] === '') continue;
+                $lookups[] = [
+                    'table' => $lookup['table'],
+                    'class' => $lookup['class'],
+                ];
+            }
+        }
+
         return new self(
             id: $data['id'],
             name: $data['name'],
@@ -66,6 +80,7 @@ class ModuleDefinition
             viewers: $data['viewers'] ?? [],
             forms: $data['forms'] ?? [],
             settingsItems: $settingsItems,
+            lookups: $lookups,
         );
     }
 }

@@ -30,6 +30,14 @@ export default {
   'common.error': 'Nastala chyba',
   'common.unknownError': 'neznámá chyba',
   'common.empty': 'Žádné záznamy',
+  'common.clear': 'Vymazat',
+
+  // ── Lookup pole (combobox) ──────────────────────────────────────────────
+  'lookup.loading': 'Načítám…',
+  'lookup.empty': 'Žádné výsledky',
+  'lookup.error': 'Chyba načítání',
+  'lookup.editItem': 'Upravit',
+  'lookup.createNew': 'Vytvořit nový záznam',
 
   // ── Sidebar ─────────────────────────────────────────────────────────────
   'sidebar.language': 'Jazyk',

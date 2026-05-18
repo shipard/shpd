@@ -314,4 +314,42 @@ class TabBuilderTest extends TestCase
             ->build();
         $this->assertSame('user', $tab->icon);
     }
+
+    public function testLookupElement(): void
+    {
+        $tab = (new TabBuilder('t', 'T', colLabels: ['partner' => 'Partner']))
+            ->section()->col()
+                ->lookup('partner', table: 'base_persons_persons', placeholder: 'Hledat…', triggers: 'reload')
+            ->build();
+        $el = $tab->sections[0]->columns[0]->elements[0];
+
+        $this->assertSame('lookup', $el->type);
+        $this->assertSame('partner', $el->column);
+        $this->assertSame('Partner', $el->label);
+        $this->assertSame('Hledat…', $el->placeholder);
+        $this->assertSame('reload', $el->triggers);
+        $this->assertSame(['table' => 'base_persons_persons', 'filter' => null], $el->lookup);
+    }
+
+    public function testLookupWithFilter(): void
+    {
+        $tab = (new TabBuilder('t', 'T'))
+            ->section()->col()
+                ->lookup('partner_address', table: 'base_persons_addresses', filter: ['person' => 42])
+            ->build();
+        $el = $tab->sections[0]->columns[0]->elements[0];
+
+        $this->assertSame(['person' => 42], $el->lookup['filter']);
+    }
+
+    public function testLookupInsideInlineRejected(): void
+    {
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('not allowed inside inline group');
+
+        (new TabBuilder('t', 'T'))
+            ->section()->col()
+                ->inline()->lookup('partner', table: 'base_persons_persons')->endInline()
+            ->build();
+    }
 }

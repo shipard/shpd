@@ -58,6 +58,21 @@
         }
     ],
 
+    "lookups": [
+        {
+            "table": "base_persons_persons",
+            "class": "Shipard\\Module\\Base\\Persons\\PersonsLookup"
+        },
+        {
+            "table": "base_persons_addresses",
+            "class": "Shipard\\Module\\Base\\Persons\\AddressesLookup"
+        },
+        {
+            "table": "base_persons_bank_accounts",
+            "class": "Shipard\\Module\\Base\\Persons\\BankAccountsLookup"
+        }
+    ],
+
     "config": [
         {
             "id": "base.persons.personTypes",

@@ -409,4 +409,80 @@ class JsoncFormLoaderTest extends TestCase
         $this->assertCount(2, $inline->elements);
         $this->assertSame('DPPD', $inline->elements[1]->label);
     }
+
+    public function testLookupElementParsed(): void
+    {
+        $path = $this->writeJsonc(<<<JSON
+        {
+            "tabs": [{"id": "h", "label": "H", "sections": [{"columns": [{"elements": [
+                {
+                    "type": "lookup",
+                    "column": "partner",
+                    "label": "Partner",
+                    "placeholder": "Hledat partnera…",
+                    "lookup": {"table": "base_persons_persons"}
+                }
+            ]}]}]}]
+        }
+        JSON);
+
+        $def = (new JsoncFormLoader())->load($path, $this->makeTableDef());
+        $el = $def->tabs[0]->sections[0]->columns[0]->elements[0];
+
+        $this->assertSame('lookup', $el->type);
+        $this->assertSame('partner', $el->column);
+        $this->assertSame('Partner', $el->label);
+        $this->assertSame('Hledat partnera…', $el->placeholder);
+        $this->assertSame(['table' => 'base_persons_persons', 'filter' => null], $el->lookup);
+    }
+
+    public function testLookupWithFilterParsed(): void
+    {
+        $path = $this->writeJsonc(<<<JSON
+        {
+            "tabs": [{"id": "h", "label": "H", "sections": [{"columns": [{"elements": [
+                {
+                    "type": "lookup",
+                    "column": "partner_address",
+                    "lookup": {"table": "base_persons_addresses", "filter": {"person": 42}}
+                }
+            ]}]}]}]
+        }
+        JSON);
+
+        $def = (new JsoncFormLoader())->load($path, $this->makeTableDef());
+        $el = $def->tabs[0]->sections[0]->columns[0]->elements[0];
+
+        $this->assertSame(['person' => 42], $el->lookup['filter']);
+    }
+
+    public function testLookupMissingTableThrows(): void
+    {
+        $path = $this->writeJsonc(<<<JSON
+        {
+            "tabs": [{"id": "h", "label": "H", "sections": [{"columns": [{"elements": [
+                {"type": "lookup", "column": "partner"}
+            ]}]}]}]
+        }
+        JSON);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('requires lookup.table');
+        (new JsoncFormLoader())->load($path, $this->makeTableDef());
+    }
+
+    public function testLookupInvalidFilterThrows(): void
+    {
+        $path = $this->writeJsonc(<<<JSON
+        {
+            "tabs": [{"id": "h", "label": "H", "sections": [{"columns": [{"elements": [
+                {"type": "lookup", "column": "partner", "lookup": {"table": "t", "filter": "oops"}}
+            ]}]}]}]
+        }
+        JSON);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('filter must be object|null');
+        (new JsoncFormLoader())->load($path, $this->makeTableDef());
+    }
 }

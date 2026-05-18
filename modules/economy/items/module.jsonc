@@ -54,6 +54,13 @@
         }
     ],
 
+    "lookups": [
+        {
+            "table": "economy_items",
+            "class": "Shipard\\Module\\Economy\\Items\\ItemsLookup"
+        }
+    ],
+
     "documentClasses": [
         {
             "table": "economy_items",

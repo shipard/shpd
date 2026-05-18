@@ -196,4 +196,41 @@ class ModuleDefinitionTest extends TestCase
 
         $this->assertSame([], $def->settingsItems);
     }
+
+    public function testLookupsParsed(): void
+    {
+        $def = ModuleDefinition::fromArray([
+            'id'   => 'base.persons',
+            'name' => 'Persons',
+            'lookups' => [
+                ['table' => 'base_persons_persons', 'class' => 'Foo\\Bar\\PersonsLookup'],
+                ['table' => 'base_persons_addresses', 'class' => 'Foo\\Bar\\AddressesLookup'],
+            ],
+        ]);
+
+        $this->assertCount(2, $def->lookups);
+        $this->assertSame('base_persons_persons', $def->lookups[0]['table']);
+        $this->assertSame('Foo\\Bar\\PersonsLookup', $def->lookups[0]['class']);
+    }
+
+    public function testLookupsMissingTableIgnored(): void
+    {
+        $def = ModuleDefinition::fromArray([
+            'id'   => 'base.persons',
+            'name' => 'Persons',
+            'lookups' => [
+                ['class' => 'Foo\\Bar\\Lookup'],
+                ['table' => 't', 'class' => 'Foo\\Bar\\Lookup'],
+            ],
+        ]);
+
+        $this->assertCount(1, $def->lookups);
+    }
+
+    public function testLookupsAbsentDefaultsToEmpty(): void
+    {
+        $def = ModuleDefinition::fromArray(['id' => 'base.persons', 'name' => 'Persons']);
+
+        $this->assertSame([], $def->lookups);
+    }
 }

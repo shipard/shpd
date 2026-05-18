@@ -5,8 +5,10 @@
     column,
     formData = $bindable({}),
     fieldErrors = {},
+    dataResolved = {},
     disabled = false,
     onTrigger,
+    onResolveChange,
     parentId = null,
   } = $props();
 </script>
@@ -17,8 +19,10 @@
       {element}
       bind:formData
       {fieldErrors}
+      {dataResolved}
       {disabled}
       {onTrigger}
+      {onResolveChange}
       {parentId}
     />
   {/each}

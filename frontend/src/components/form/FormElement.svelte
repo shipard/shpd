@@ -5,6 +5,7 @@
   import Select from '../ui/Select.svelte';
   import NumberInput from '../ui/NumberInput.svelte';
   import DateInput from '../ui/DateInput.svelte';
+  import LookupInput from '../ui/LookupInput.svelte';
   import FormFieldRow from './FormFieldRow.svelte';
   import FormInline from './FormInline.svelte';
 
@@ -12,8 +13,10 @@
     element,
     formData = $bindable({}),
     fieldErrors = {},
+    dataResolved = {},
     disabled = false,
     onTrigger,
+    onResolveChange,
     parentId = null,
   } = $props();
 
@@ -56,6 +59,20 @@
   <FormFieldRow {element} id={inputId}>
     {#if element.type === 'select'}
       <Select id={inputId} bind:value={formData[element.column]} options={element.options ?? []} required={element.required ?? false} disabled={elDisabled} {error} onchange={handleChange} />
+
+    {:else if element.type === 'lookup'}
+      <LookupInput
+        id={inputId}
+        bind:value={formData[element.column]}
+        resolved={dataResolved?.[element.column] ?? null}
+        lookup={element.lookup}
+        required={element.required ?? false}
+        disabled={elDisabled}
+        placeholder={element.placeholder}
+        {error}
+        onchange={handleChange}
+        onResolveChange={(item) => onResolveChange?.(element.column, item)}
+      />
 
     {:else if element.input_type === 'textarea'}
       <TextArea id={inputId} bind:value={formData[element.column]} required={element.required ?? false} disabled={elDisabled} {error} />

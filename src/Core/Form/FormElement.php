@@ -9,6 +9,7 @@ final class FormElement
     public const ALLOWED_TYPES = [
         'input',
         'select',
+        'lookup',
         'separator',
         'inline',
         'component',
@@ -36,6 +37,7 @@ final class FormElement
     /**
      * @param FormElement[]|null $elements Used by inline groups.
      * @param array<int, array{value: mixed, label: string}>|null $options
+     * @param array{table: string, filter: array<string, scalar>|null}|null $lookup
      */
     public function __construct(
         public readonly string $type,
@@ -52,6 +54,7 @@ final class FormElement
         public readonly ?string $content = null,
         public readonly ?string $componentName = null,
         public readonly ?string $inputType = null,
+        public readonly ?array $lookup = null,
     ) {
         if (!in_array($type, self::ALLOWED_TYPES, true)) {
             throw new \InvalidArgumentException(sprintf(
@@ -96,6 +99,31 @@ final class FormElement
 
         if ($type === 'html' && $content === null) {
             throw new \InvalidArgumentException('html element requires content');
+        }
+
+        if ($type === 'lookup') {
+            if ($column === null || $column === '') {
+                throw new \InvalidArgumentException('lookup element requires column');
+            }
+            if ($lookup === null) {
+                throw new \InvalidArgumentException('lookup element requires lookup config {table, filter?}');
+            }
+            $table = $lookup['table'] ?? null;
+            if (!is_string($table) || $table === '') {
+                throw new \InvalidArgumentException('lookup.table must be a non-empty string');
+            }
+            if (array_key_exists('filter', $lookup) && $lookup['filter'] !== null && !is_array($lookup['filter'])) {
+                throw new \InvalidArgumentException('lookup.filter must be array|null');
+            }
+            if (array_key_exists('edit_form', $lookup) && !is_bool($lookup['edit_form'])) {
+                throw new \InvalidArgumentException('lookup.edit_form must be bool');
+            }
+            if (array_key_exists('create_form', $lookup) && !is_bool($lookup['create_form'])) {
+                throw new \InvalidArgumentException('lookup.create_form must be bool');
+            }
+            if (array_key_exists('edit_triggers', $lookup) && !is_bool($lookup['edit_triggers'])) {
+                throw new \InvalidArgumentException('lookup.edit_triggers must be bool');
+            }
         }
     }
 
@@ -144,6 +172,23 @@ final class FormElement
         }
         if ($this->inputType !== null) {
             $result['input_type'] = $this->inputType;
+        }
+        if ($this->lookup !== null) {
+            $filter = $this->lookup['filter'] ?? null;
+            $lookupOut = [
+                'table'  => $this->lookup['table'],
+                'filter' => is_array($filter) && $filter !== [] ? $filter : null,
+            ];
+            if (!empty($this->lookup['edit_form'])) {
+                $lookupOut['edit_form'] = true;
+            }
+            if (!empty($this->lookup['create_form'])) {
+                $lookupOut['create_form'] = true;
+            }
+            if (!empty($this->lookup['edit_triggers'])) {
+                $lookupOut['edit_triggers'] = true;
+            }
+            $result['lookup'] = $lookupOut;
         }
 
         return $result;

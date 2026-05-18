@@ -67,6 +67,10 @@ class Router
 			return $this->resolveFormRoute($subpath, $method);
 		}
 
+		if (str_starts_with($subpath, '/_ui/lookup/')) {
+			return $this->resolveLookupRoute($subpath, $method);
+		}
+
 		if (str_starts_with($subpath, '/_attachments')) {
 			return $this->resolveAttachmentRoute($subpath, $method);
 		}
@@ -417,6 +421,25 @@ class Router
 		}
 
 		return Response::error('NOT_FOUND', 'Not found', 404);
+	}
+
+	private function resolveLookupRoute(string $subpath, string $method): Route|Response
+	{
+		$rest = substr($subpath, strlen('/_ui/lookup/'));
+		$parts = explode('/', $rest);
+		if (count($parts) !== 2 || $parts[0] === '' || $parts[1] === '') {
+			return Response::error('NOT_FOUND', 'Not found', 404);
+		}
+		[$table, $action] = $parts;
+
+		if ($action !== 'search' && $action !== 'resolve') {
+			return Response::error('NOT_FOUND', 'Not found', 404);
+		}
+		if ($method !== 'GET') {
+			return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+		}
+
+		return new Route('lookup', $action, $table);
 	}
 
 	private function resolveViewerRoute(string $subpath): Route|Response

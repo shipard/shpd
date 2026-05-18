@@ -5,8 +5,10 @@
     section,
     formData = $bindable({}),
     fieldErrors = {},
+    dataResolved = {},
     disabled = false,
     onTrigger,
+    onResolveChange,
     parentId = null,
   } = $props();
 </script>
@@ -25,8 +27,10 @@
           {column}
           bind:formData
           {fieldErrors}
+          {dataResolved}
           {disabled}
           {onTrigger}
+          {onResolveChange}
           {parentId}
         />
       {/each}

@@ -21,6 +21,14 @@ export default {
   'common.error': 'An error occurred',
   'common.unknownError': 'unknown error',
   'common.empty': 'No records',
+  'common.clear': 'Clear',
+
+  // ── Lookup field (combobox) ─────────────────────────────────────────────
+  'lookup.loading': 'Loading…',
+  'lookup.empty': 'No results',
+  'lookup.error': 'Loading error',
+  'lookup.editItem': 'Edit',
+  'lookup.createNew': 'Create new',
 
   // ── Sidebar ─────────────────────────────────────────────────────────────
   'sidebar.language': 'Language',

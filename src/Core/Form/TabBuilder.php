@@ -244,6 +244,49 @@ final class TabBuilder
         return $this;
     }
 
+    /**
+     * @param array<string, scalar>|null $filter
+     */
+    public function lookup(
+        string $column,
+        string $table,
+        ?array $filter = null,
+        ?string $label = null,
+        ?string $placeholder = null,
+        bool $required = false,
+        bool $readOnly = false,
+        bool $hidden = false,
+        ?string $triggers = null,
+        ?string $hint = null,
+        bool $editForm = false,
+        bool $createForm = false,
+        bool $editTriggers = false,
+    ): static {
+        $lookupCfg = ['table' => $table, 'filter' => $filter];
+        if ($editForm) {
+            $lookupCfg['edit_form'] = true;
+        }
+        if ($createForm) {
+            $lookupCfg['create_form'] = true;
+        }
+        if ($editTriggers) {
+            $lookupCfg['edit_triggers'] = true;
+        }
+        $this->pushElement(new FormElement(
+            type: 'lookup',
+            column: $column,
+            label: $this->resolveLabel($column, $label),
+            placeholder: $placeholder,
+            required: $required,
+            readOnly: $readOnly,
+            hidden: $hidden,
+            triggers: $triggers,
+            hint: $hint,
+            lookup: $lookupCfg,
+        ));
+        return $this;
+    }
+
     public function separator(?string $label = null, bool $hidden = false): static
     {
         $this->requireOpenColumn('separator()');

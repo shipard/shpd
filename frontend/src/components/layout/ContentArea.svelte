@@ -1,18 +1,21 @@
 <script>
   import TableBrowser from '../browser/TableBrowser.svelte';
   import Viewer from '../viewer/Viewer.svelte';
+  import Dashboard from '../dashboard/Dashboard.svelte';
   import { t } from '../../i18n/index.js';
 
   let { activeItem = null } = $props();
 </script>
 
 <main class="shpd-content">
-  {#if activeItem?.type === 'viewer'}
+  {#if activeItem?.type === 'dashboard'}
+    <Dashboard />
+  {:else if activeItem?.type === 'viewer'}
     <Viewer tab={activeItem} />
   {:else if activeItem?.type === 'table'}
     <TableBrowser tab={activeItem} />
   {:else if activeItem}
-    <!-- Placeholder for future content types (form, dashboard, …) -->
+    <!-- Placeholder for future content types (form, …) -->
     <div class="shpd-content__empty">
       <p class="shpd-content__empty-text">{t('app.unsupportedPanel', { type: activeItem.type })}</p>
     </div>

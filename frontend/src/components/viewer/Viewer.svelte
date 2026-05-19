@@ -15,6 +15,7 @@
   import Button from '../ui/Button.svelte';
   import { t } from '../../i18n/index.js';
   import { translateError } from '../../i18n/errors.js';
+  import { navigationStore } from '../../stores/navigation.svelte.js';
 
   let { tab } = $props();
 
@@ -350,8 +351,10 @@
       return;
     }
     if (action.kind === 'open_viewer') {
-      console.warn('open_viewer not yet implemented', action);
-      alert('Viewer navigation not yet implemented');
+      const targetViewerId = action.viewerId ?? action.target?.viewerId;
+      const targetRecordId = action.recordId ?? action.target?.recordId ?? null;
+      if (!targetViewerId) return;
+      navigationStore.navigateToViewer(targetViewerId, targetRecordId);
       return;
     }
 
@@ -397,8 +400,18 @@
       searchInputEl.value = '';
     }
 
+    // Vyzvedneme pending record (z dashboard widget klikání) — pokud existuje,
+    // po načtení řádků nastavíme selectedRowId a fetchneme detail. Konzumace
+    // hned vrátí store do nuly, aby se efekt neaplikoval podruhé.
+    const pendingRecord = navigationStore.consumePendingRecordId();
+
     fetchMeta(viewerId);
-    fetchRowsExplicit(viewerId, '', 'active', 0);
+    fetchRowsExplicit(viewerId, '', 'active', 0).then(() => {
+      if (pendingRecord != null) {
+        selectedRowId = pendingRecord;
+        fetchDetail(pendingRecord);
+      }
+    });
   });
 </script>
 

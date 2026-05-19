@@ -8,6 +8,7 @@ use Shipard\Api\AuthContext;
 use Shipard\Api\Controller\AlertsController;
 use Shipard\Api\Controller\AuthController;
 use Shipard\Api\Controller\CrudController;
+use Shipard\Api\Controller\DashboardController;
 use Shipard\Api\Controller\ExchangeController;
 use Shipard\Api\Controller\MetaController;
 use Shipard\Api\Controller\NavigationController;
@@ -252,6 +253,7 @@ function dispatch(
 		'attachment'  => dispatchAttachment($route, $request, $auth, $tables, $db, $resolved),
 		'meta'    => dispatchMeta($route->action, $route->table, $tables, resolveLanguage($request, $resolved->config)),
 		'ui'      => dispatchUi($route->action, $resolved->config, $modulePathResolver, resolveLanguage($request, $resolved->config)),
+		'dashboard' => dispatchDashboard($route, $db, $viewerRegistry, $configRuntime, resolveLanguage($request, $resolved->config)),
 		'settings' => dispatchSettings($route->action, $resolved->config, $modulePathResolver, resolveLanguage($request, $resolved->config), $configRuntime),
 		'form'    => dispatchForm($route, $request, $auth, $tables, $db, $formRegistry ?? new FormRegistry(), $configRuntime, $modulePathResolver, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), resolveLanguage($request, $resolved->config), $resolved->config, $lookupRegistry ?? new LookupRegistry()),
 		'lookup'  => dispatchLookup($route, $request, $tables, $db, $lookupRegistry ?? new LookupRegistry(), $configRuntime),
@@ -462,6 +464,20 @@ function dispatchUi(string $action, \Shipard\Core\Config\DataSourceConfig $confi
 	return match ($action) {
 		'navigation' => $ctrl->navigation($config, $modulePathResolver, $language),
 		default      => Response::error('INTERNAL_ERROR', "Unknown UI action: {$action}", 500),
+	};
+}
+
+function dispatchDashboard(
+	Route $route,
+	\Shipard\Core\Database\DataSourceConnection $db,
+	ViewerRegistry $registry,
+	?\Shipard\Core\Config\ConfigRuntime $configRuntime,
+	string $language,
+): Response {
+	$ctrl = new DashboardController();
+	return match ($route->action) {
+		'index'  => $ctrl->dashboard($registry, $db, $configRuntime, $language),
+		default  => Response::error('INTERNAL_ERROR', "Unknown dashboard action: {$route->action}", 500),
 	};
 }
 

@@ -56,7 +56,14 @@
         if (response === null) { error = t('sidebar.notAuthenticated'); return; }
         if (!response.success) { error = response.error?.message ?? t('sidebar.navigationLoadFailed'); return; }
         navTree = response.data;
-        expanded = new Set(navTree.map(g => g.id));
+        // Expandnout jen položky, které mají `children`. Root-level leaf
+        // (Dashboard) má `type` a žádné children — netřeba expandovat.
+        expanded = new Set(navTree.filter(g => g.children).map(g => g.id));
+        // Po loadu app navigace (ne settings) zajistíme, že je něco vybráno —
+        // typicky Dashboard u čerstvého loginu.
+        if (navigationStore.mode === 'app') {
+          navigationStore.ensureDefaultActiveItem();
+        }
       } catch {
         error = t('sidebar.navigationLoadFailed');
       } finally {
@@ -226,6 +233,21 @@
   {/if}
 
     {#each navTree as group}
+    {#if group.type}
+      <!-- Root-level leaf (např. Dashboard) — žádná skupina, klikatelná
+           položka přímo. Stejný layout jako leaf v podskupinách, aby
+           vizuálně zapadl mezi ostatní sidebar items. -->
+      <div class="shpd-sidebar__group shpd-sidebar__group--leaf">
+        <button
+          class="shpd-sidebar__item"
+          class:shpd-sidebar__item--active={activeId === group.id}
+          onclick={() => handleItemClick(group)}
+        >
+          <Icon icon={resolveIcon(group.icon)} size="sm" />
+          <span>{group.label}</span>
+        </button>
+      </div>
+    {:else}
     <div class="shpd-sidebar__group">
       <button
         class="shpd-sidebar__group-header"
@@ -286,6 +308,7 @@
         </ul>
       {/if}
     </div>
+    {/if}
     {/each}
   </div>
 

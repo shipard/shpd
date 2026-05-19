@@ -88,6 +88,16 @@ class NavigationController
 
 		$groups = $this->buildTree($resolvedModules, $resolver, $language, $hiddenViewers, $hiddenTables);
 
+		// Dashboard je root-level leaf — výchozí pohled po loginu. Není to
+		// skupina (žádné `children`); Sidebar.svelte ho rozpoznává podle
+		// přítomnosti `type` na root položce.
+		array_unshift($groups, [
+			'id'    => 'dashboard',
+			'label' => $language === 'cs' ? 'Dashboard' : 'Dashboard',
+			'type'  => 'dashboard',
+			'icon'  => 'dashboard',
+		]);
+
 		return Response::success($groups);
 	}
 

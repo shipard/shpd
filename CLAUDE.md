@@ -23,6 +23,7 @@ Podrobné specifikace jsou v adresáři `docs/`. Přečti příslušný dokument
 | `docs/edit-forms.md` | Editační formuláře — FormDefinition, taby, sekce, sloupce, `TableForm`, JSONC formy, recalculate, doc states, **HeaderInfo** (sekce 21), **Lookup pole** (sekce 22) |
 | `docs/operations/secrets.md` | Per-DS šifrování `encrypted_text` sloupců — `DsSecretCipher`, klíčový soubor, rotace, health check, threat model |
 | `docs/migration-guide.md` | Backup a přenos DS na jiný server — tarball, DB dump, perms, ověření |
+| `docs/dashboard.md` | Dashboard — home obrazovka, widget systém, API kontrakt, AI shrnutí |
 
 ## Architektura — rychlý přehled
 
@@ -127,6 +128,22 @@ Závislosti tečou shora dolů: Command → Document → Module/Config/Database 
 - Viewery dědí default ikonu pro řádky z `module.jsonc` viewers[].icon
   (stejná jako v sidebaru). Per-row override v `renderRow()`
   (např. PersonsViewer podle person_type).
+
+### Frontend — Dashboard
+
+- Home obrazovka aplikace, výchozí po loginu (root-level leaf v sidebaru
+  s `type: 'dashboard'`, `icon: 'dashboard'`)
+- `GET /_ui/dashboard` vrací agregát alerts/mail/tasks z existujících viewerů
+  přes `selectRows()` + `renderRow()` (re-use, žádné duplikované SQL pro řádky;
+  COUNT separátně)
+- AI shrnutí karta je v MVP statická (počty z widgetů, ikona robota,
+  ICU plurály); rozhraní připravené na pozdější AI integraci
+- Klik na widget řádek volá `navigationStore.navigateToViewer(viewerId, recordId)`,
+  Viewer.svelte po loadu vyzvedne `pendingRecordId` a předvybere záznam
+- Doc-state `.docState_*` třídy jsou globální v `styles/base.css` —
+  sdílené mezi `ViewerRow` (6px proužek) a `WidgetRow` (4px proužek)
+- Modulární widget systém přes `module.jsonc` je out of scope MVP — fáze 2
+- Detaily: `docs/dashboard.md`
 
 ### Frontend — Settings mód
 

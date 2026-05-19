@@ -421,14 +421,36 @@ Nové viewery přidávají moduly přes `module.jsonc.viewers[]` — jakmile je 
 
 ---
 
+## 7.5 Dashboard
+
+Home obrazovka aplikace — výchozí pohled po loginu (`type: 'dashboard'` jako root-level
+leaf v sidebar navigaci). Tři widgety (Upozornění / Aktuální došlá pošta /
+Aktivní úkoly) a statická „AI shrnutí" karta nahoře.
+
+Komponenty: `Dashboard.svelte` (top-level fetch + grid), `AiSummaryCard.svelte`
+(robot ikona, text z countů, ICU plurály), `WidgetCard.svelte` (sdílený shell
+pro 3 widgety), `WidgetRow.svelte` (řádek s doc-state pruhem 4px). API klient:
+`api/dashboard.js → fetchDashboard()`.
+
+Backend: `DashboardController::dashboard()` agreguje `selectRows()`+`renderRow()`
+ze tří existujících viewerů (`core.alerts.alerts`, `core.mail.incoming`,
+`tasks.core`) + samostatný COUNT pro celkový počet otevřených záznamů.
+
+Klik na widget řádek volá `navigationStore.navigateToViewer(viewerId, recordId)`
+— store si recordId uloží, Viewer.svelte ho po loadu vyzvedne (`consumePendingRecordId()`)
+a předvybere ten záznam. Detaily v [`dashboard.md`](dashboard.md).
+
+---
+
 ## 8. UI API endpointy
 
 ### Implementované
 
 | Endpoint | Popis |
 |----------|-------|
-| `GET /_ui/navigation` | Navigační strom ze serveru (moduly → skupiny → tabulky/viewery) |
+| `GET /_ui/navigation` | Navigační strom ze serveru (moduly → skupiny → tabulky/viewery) — vč. Dashboard leaf na začátku |
 | `GET /_ui/settings/navigation` | Navigační strom režimu Nastavení (sekce + položky podle `settingsItems[]` napříč moduly) |
+| `GET /_ui/dashboard` | Agregát alerts/mail/tasks pro home obrazovku (viz [`dashboard.md`](dashboard.md)) |
 | `GET /_ui/viewer/{id}/meta` | Metadata vieweru (name, table, filters, toolbar, viewGroups) |
 | `GET /_ui/viewer/{id}/rows` | Záznamy vieweru (page, search, filter) |
 | `GET /_ui/viewer/{id}/detail/{recordId}` | Detail panel záznamu (tabs) |

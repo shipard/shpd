@@ -61,6 +61,7 @@ class DashboardController
             $registry, $db, $config, $lang, $viewerId,
             [['id' => 'alert_state', 'value' => 'active']],
             'alert',
+            ['kind' => 'open_viewer', 'viewerId' => $viewerId],
         );
 
         $def = $registry->get($viewerId);
@@ -95,6 +96,7 @@ class DashboardController
             $registry, $db, $config, $lang, $viewerId,
             [['id' => 'viewGroup', 'value' => 'active']],
             'mail',
+            ['kind' => 'open_viewer', 'viewerId' => $viewerId],
         );
 
         $count = $this->countActiveByDocState(
@@ -123,6 +125,7 @@ class DashboardController
             $registry, $db, $config, $lang, $viewerId,
             [['id' => 'viewGroup', 'value' => 'active']],
             'list-check',
+            ['kind' => 'open_form', 'table' => 'tasks_core_tasks'],
         );
 
         $count = $this->countActiveByDocState(
@@ -156,6 +159,7 @@ class DashboardController
         string $viewerId,
         array $filters,
         string $widgetIcon,
+        array $actionTemplate,
     ): array {
         $viewer = $registry->createViewer($viewerId, $db, $config, $lang);
         if ($viewer === null) {
@@ -173,7 +177,7 @@ class DashboardController
         $items = [];
         foreach ($rawRows as $rawRow) {
             $rendered = $viewer->renderRow($rawRow);
-            $items[] = $this->renderRowToWidgetItem($rendered, $viewerId, $widgetIcon);
+            $items[] = $this->renderRowToWidgetItem($rendered, $actionTemplate, $widgetIcon);
         }
         return $items;
     }
@@ -210,11 +214,13 @@ class DashboardController
      * Mapuje renderRow() výstup vieweru na widget-row tvar pro Dashboard
      * (kompaktnější než plný viewer řádek, neobsahuje i1/i2/t3).
      *
+     * @param  array{kind:'open_viewer',viewerId:string}|array{kind:'open_form',table:string}  $actionTemplate
+     *         Šablona action; recordId se vyplní z řádku (rendered['id']).
      * @internal Public pro účely testů — bez business logiky, čistá transformace.
      */
     public function renderRowToWidgetItem(
         array $rendered,
-        string $viewerId,
+        array $actionTemplate,
         ?string $widgetIcon,
     ): array {
         $id = (int) ($rendered['id'] ?? 0);
@@ -225,11 +231,7 @@ class DashboardController
                             ?: ('#' . $id),
             'subtitle'   => $this->flattenTextField($rendered['t2'] ?? null, ' · '),
             'icon'       => $rendered['icon'] ?? $widgetIcon,
-            'action'     => [
-                'kind'     => 'open_viewer',
-                'viewerId' => $viewerId,
-                'recordId' => $id,
-            ],
+            'action'     => array_merge($actionTemplate, ['recordId' => $id]),
         ];
     }
 

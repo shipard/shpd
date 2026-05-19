@@ -19,8 +19,8 @@ use Shipard\Core\Viewer\ViewerRegistry;
  *   - happy path: 3 widgety, agregovaný summary, items převedené z renderRow()
  *   - prázdná data: 0 items / 0 count u všech widgetů
  *   - flattenTextField — všechny varianty t1/t2 (null, string, {text,class}, list)
- *   - renderRowToWidgetItem — fallback na widget icon, action.viewerId, title
- *     fallback `#id` při prázdném t1
+ *   - renderRowToWidgetItem — fallback na widget icon, action templates
+ *     (open_viewer i open_form), title fallback `#id` při prázdném t1
  *   - countActiveByDocState přes mockovaný ConfigRuntime
  */
 final class DashboardControllerTest extends TestCase
@@ -73,7 +73,11 @@ final class DashboardControllerTest extends TestCase
             'icon'       => 'alert',
         ];
 
-        $item = $ctrl->renderRowToWidgetItem($rendered, 'core.alerts.alerts', 'fallback-icon');
+        $item = $ctrl->renderRowToWidgetItem(
+            $rendered,
+            ['kind' => 'open_viewer', 'viewerId' => 'core.alerts.alerts'],
+            'fallback-icon',
+        );
 
         $this->assertSame(42, $item['id']);
         $this->assertSame('Hello world', $item['title']);
@@ -92,12 +96,54 @@ final class DashboardControllerTest extends TestCase
         $ctrl = new DashboardController();
         $rendered = ['id' => 17];  // No t1, no icon
 
-        $item = $ctrl->renderRowToWidgetItem($rendered, 'tasks.core', 'list-check');
+        $item = $ctrl->renderRowToWidgetItem(
+            $rendered,
+            ['kind' => 'open_form', 'table' => 'tasks_core_tasks'],
+            'list-check',
+        );
 
         $this->assertSame('#17', $item['title']);
         $this->assertNull($item['subtitle']);
         $this->assertSame('list-check', $item['icon']);  // Falls back to widget icon
         $this->assertNull($item['stateStyle']);
+    }
+
+    public function testRenderRowToWidgetItemWithFormAction(): void
+    {
+        $ctrl = new DashboardController();
+        $rendered = ['id' => 33, 't1' => 'Připravit reporty'];
+
+        $item = $ctrl->renderRowToWidgetItem(
+            $rendered,
+            ['kind' => 'open_form', 'table' => 'tasks_core_tasks'],
+            'list-check',
+        );
+
+        $this->assertSame([
+            'kind'     => 'open_form',
+            'table'    => 'tasks_core_tasks',
+            'recordId' => 33,
+        ], $item['action']);
+        $this->assertArrayNotHasKey('viewerId', $item['action']);
+    }
+
+    public function testRenderRowToWidgetItemWithViewerAction(): void
+    {
+        $ctrl = new DashboardController();
+        $rendered = ['id' => 7, 't1' => 'Chybí vlastní Osoba'];
+
+        $item = $ctrl->renderRowToWidgetItem(
+            $rendered,
+            ['kind' => 'open_viewer', 'viewerId' => 'core.alerts.alerts'],
+            'alert',
+        );
+
+        $this->assertSame([
+            'kind'     => 'open_viewer',
+            'viewerId' => 'core.alerts.alerts',
+            'recordId' => 7,
+        ], $item['action']);
+        $this->assertArrayNotHasKey('table', $item['action']);
     }
 
     public function testDashboardEmptyAllWidgets(): void

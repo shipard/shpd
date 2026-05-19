@@ -3,16 +3,15 @@
   import { resolveIcon } from '../../icons.js';
   import Icon from '../ui/Icon.svelte';
   import WidgetRow from './WidgetRow.svelte';
-  import { navigationStore } from '../../stores/navigation.svelte.js';
 
-  let { widget } = $props();
+  let { widget, onItemAction, onOpenAllAction } = $props();
 
   function handleRowClick(item) {
-    navigationStore.navigateToViewer(item.action.viewerId, item.action.recordId);
+    onItemAction(item.action);
   }
 
   function handleOpenAll() {
-    navigationStore.navigateToViewer(widget.openAllAction.viewerId);
+    onOpenAllAction(widget.openAllAction);
   }
 
   // Empty-state text klíč podle typu widgetu — alerts/mail/tasks.

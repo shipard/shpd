@@ -3,13 +3,24 @@
   import { t } from '../../i18n/index.js';
   import { fetchDashboard } from '../../api/dashboard.js';
   import { iconRefresh } from '../../icons.js';
+  import { navigationStore } from '../../stores/navigation.svelte.js';
   import Button from '../ui/Button.svelte';
+  import FormDialog from '../form/FormDialog.svelte';
   import AiSummaryCard from './AiSummaryCard.svelte';
   import WidgetCard from './WidgetCard.svelte';
 
   let data = $state(null);
   let loading = $state(true);
   let error = $state(null);
+
+  // Form modal state. wasSaved se nastaví true z onSaved callbacku FormDialogu;
+  // handleFormClose podle něj rozhodne, zda refetchnout dashboard.
+  let formModal = $state({
+    open: false,
+    table: '',
+    recordId: null,
+    wasSaved: false,
+  });
 
   async function load() {
     loading = true;
@@ -26,6 +37,47 @@
       console.error('Dashboard load failed:', err);
     } finally {
       loading = false;
+    }
+  }
+
+  function handleItemAction(action) {
+    if (!action || !action.kind) return;
+
+    if (action.kind === 'open_viewer') {
+      navigationStore.navigateToViewer(action.viewerId, action.recordId ?? null);
+      return;
+    }
+
+    if (action.kind === 'open_form') {
+      formModal = {
+        open: true,
+        table: action.table,
+        recordId: action.recordId ?? null,
+        wasSaved: false,
+      };
+      return;
+    }
+
+    console.warn('Unknown widget action kind:', action.kind);
+  }
+
+  function handleOpenAllAction(action) {
+    if (!action?.viewerId) return;
+    navigationStore.navigateToViewer(action.viewerId);
+  }
+
+  function handleFormSaved() {
+    // Mutace property, ne reassign celého $state proxy — reassign by propagoval
+    // derived signals do všech bindingů FormDialogu (open/table/recordId), což by
+    // re-runlo $effect ve FormDialog a způsobilo flash close+reopen modalu.
+    formModal.wasSaved = true;
+  }
+
+  function handleFormClose() {
+    const shouldRefetch = formModal.wasSaved;
+    formModal = { open: false, table: '', recordId: null, wasSaved: false };
+    if (shouldRefetch) {
+      load();
     }
   }
 
@@ -54,11 +106,25 @@
 
     <div class="shpd-dashboard__widgets">
       {#each data.widgets as widget (widget.id)}
-        <WidgetCard {widget} />
+        <WidgetCard
+          {widget}
+          onItemAction={handleItemAction}
+          onOpenAllAction={handleOpenAllAction}
+        />
       {/each}
     </div>
   {/if}
 </div>
+
+{#if formModal.open}
+  <FormDialog
+    table={formModal.table}
+    recordId={formModal.recordId}
+    open={formModal.open}
+    onSaved={handleFormSaved}
+    onClose={handleFormClose}
+  />
+{/if}
 
 <style>
   .shpd-dashboard {

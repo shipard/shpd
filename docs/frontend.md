@@ -436,9 +436,12 @@ Backend: `DashboardController::dashboard()` agreguje `selectRows()`+`renderRow()
 ze tří existujících viewerů (`core.alerts.alerts`, `core.mail.incoming`,
 `tasks.core`) + samostatný COUNT pro celkový počet otevřených záznamů.
 
-Klik na widget řádek volá `navigationStore.navigateToViewer(viewerId, recordId)`
-— store si recordId uloží, Viewer.svelte ho po loadu vyzvedne (`consumePendingRecordId()`)
-a předvybere ten záznam. Detaily v [`dashboard.md`](dashboard.md).
+Klik na widget řádek emituje akci přes `onItemAction` callback z `WidgetCard`
+do `Dashboard.svelte`. Pro Alerts/Mail (`action.kind = 'open_viewer'`) dashboard
+zavolá `navigationStore.navigateToViewer(viewerId, recordId)`; pro Tasks
+(`action.kind = 'open_form'`) mountuje `<FormDialog table recordId>` rovnou
+nad sebou a po close refetchuje **jen pokud došlo k save** (sledováno přes
+`wasSaved` flag z `onSaved` callbacku). Detaily v [`dashboard.md`](dashboard.md).
 
 ---
 

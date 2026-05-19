@@ -129,7 +129,7 @@ záměrná — výhody (jednotná render logika v `renderRow()`) převažují.
         "title": "Aktuální došlá pošta",
         "icon": "mail",
         "count": 8,
-        "items": [ /* posledních ~7 podle renderRow() */ ],
+        "items": [ /* posledních ~7 podle renderRow(), action.kind=open_viewer */ ],
         "openAllAction": { "viewerId": "core.mail.incoming" }
       },
       {
@@ -138,7 +138,20 @@ záměrná — výhody (jednotná render logika v `renderRow()`) převažují.
         "title": "Aktivní úkoly",
         "icon": "list-check",
         "count": 5,
-        "items": [ /* aktivní úkoly podle renderRow() */ ],
+        "items": [
+          {
+            "id": 33,
+            "stateStyle": "concept",
+            "title": "Připravit reporty",
+            "subtitle": null,
+            "icon": "list-check",
+            "action": {
+              "kind": "open_form",
+              "table": "tasks_core_tasks",
+              "recordId": 33
+            }
+          }
+        ],
         "openAllAction": { "viewerId": "tasks.core" }
       }
     ]
@@ -175,10 +188,30 @@ fallback na widget-level icon (= default z `module.jsonc`).
 `"concept"`, ne `"docState_concept"`). Frontend si přidá prefix při
 sestavování CSS třídy.
 
-**Pole `items[].action.kind`** — pro MVP vždy `"open_viewer"`. Frontend
-zavolá `navigationStore.navigateToViewer(viewerId, recordId)`, který
-přepne `activeItem` a uloží `pendingRecordId` pro Viewer.svelte —
-ten po načtení řádků předvybere ten záznam a zobrazí jeho detail.
+**Pole `items[].action.kind`** — určuje, jak frontend reaguje na klik na řádek.
+Server volí typ akce per widget; recordId se vždy plní z `rendered.id`.
+
+| Kind | Pole akce | Sémantika frontendu |
+|------|-----------|---------------------|
+| `"open_viewer"` | `viewerId`, `recordId` | `navigationStore.navigateToViewer(viewerId, recordId)` — přepne `activeItem` a uloží `pendingRecordId`. Viewer.svelte ho po loadu vyzvedne a předvybere záznam. |
+| `"open_form"` | `table`, `recordId` | Dashboard otevře `<FormDialog table recordId>` jako modal přímo nad sebou. Po close se případně refetchne dashboard (jen pokud `onSaved` proběhlo). |
+
+**Které widgety používají kterou variantu**:
+
+- **Tasks** — `open_form`. Klik otevře editaci úkolu rovnou v modalu; klik
+  na **Hotovo** v `FormStateBar` zavře modal (`closeForm:1` u stavu 40
+  v `tasks.core.docStatesTasks`) a úkol zmizí z widgetu (`viewGroup: archive`).
+- **Alerts** — `open_viewer`. Specifické akce (acknowledge, snooze, dismiss)
+  nejdou přes form save, takže form modal nedává sémanticky smysl.
+- **Mail** — `open_viewer`. Read-flow s atachmenty / threadem — uživatel
+  typicky chce vidět víc detailu najednou.
+
+`openAllAction` zůstává jednotně `{viewerId}` bez kindu — open-all sémantika
+pro form modal nedává smysl.
+
+**Proč `table` u `open_form`, ne `viewerId`?** Form endpoint
+(`/_ui/form/{table}/meta`) je table-keyed. Server `table` zná, ať ho rovnou
+pošle — odpadá round-trip pro odvození.
 
 **Response — error**: standardní envelope `{ success: false, error: {...} }`.
 
@@ -247,6 +280,29 @@ kterou tyto třídy nastavují podle stavu.
 viewerId, recordId)`. Store si recordId uloží v `pendingRecordId`,
 Viewer.svelte ho po loadu řádků vyzvedne (`consumePendingRecordId()`)
 a předvybere záznam — automaticky se otevře jeho detail.
+
+**Form modal nad dashboardem (Tasks widget).** `Dashboard.svelte` drží
+state `formModal = {open, table, recordId, wasSaved}` a mountuje
+`<FormDialog>` nezávisle na navigaci. `WidgetCard` emituje akci nahoru
+přes `onItemAction` callback prop — Dashboard rozhoduje, co s ní dělat
+(navigate vs. open modal). Refresh dashboardu po close je podmíněný:
+
+| Scénář | Refetch? |
+|---|---|
+| Klik na úkol → close (×, Esc) bez editace | Ne |
+| Edit → **Uložit** → close | Ano (`onSaved` proběhlo) |
+| **Hotovo** v FormStateBar (closeForm: 1) | Ano (`onSaved` proběhlo) |
+| Edit + Esc/× → confirm OK (ztratí změny) | Ne (`onSaved` neproběhlo) |
+
+`wasSaved` se nastaví **pouze** v `onSaved` callbacku FormDialogu. Close
+handler ho kontroluje a refetchne jen pokud true. Dirty kontrola
+v `FormDialog` běží nezávisle.
+
+Modal žije ve scope `Dashboard.svelte` — při přechodu do Settings se
+přirozeně odmountuje. Žádný globální state, žádný `pendingRecordId`
+reset (form modal navigation store nevyužívá). Modal stack mechanismus
+z `Modal.svelte` funguje automaticky — sub-modaly (lookup edit, …) se
+zanořují s depth-shrink animací.
 
 ## 8. Budoucí rozšíření (fáze 2+)
 

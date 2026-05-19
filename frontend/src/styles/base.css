@@ -124,3 +124,29 @@ a:hover {
   font-family: inherit;
   margin: var(--shpd-space-sm) 0;
 }
+
+/* ============================================================
+ * Doc-state utility classes (globální)
+ *
+ * Nastavují CSS proměnnou `--shpd-row-bar` (barva levého stavového
+ * proužku v řádku). Konzumují je `ViewerRow` (6px proužek)
+ * a `WidgetRow` v dashboardu (4px proužek).
+ *
+ * Konvence stavů viz docs/design-system.md:
+ *   confirmed → bez proužku ("OK = klid")
+ *   concept   → žlutý     (rozpracováno)
+ *   edit      → fialový   (právě se edituje)
+ *   error     → červený   (permanentní chyba)
+ *   archive   → šedý      (tichý archiv)
+ *   trash     → tmavší šedá + line-through
+ *   cancelled → červený   (pozor!)
+ *
+ * docState_done schválně bez proužku — „V pořádku" je default cílový
+ * stav, neřeší pozornost.
+ * ============================================================ */
+.docState_concept   { --shpd-row-bar: var(--shpd-color-state-concept-bar); }
+.docState_edit      { --shpd-row-bar: var(--shpd-color-state-edit-bar); }
+.docState_error     { --shpd-row-bar: var(--shpd-color-state-cancelled-bar); }
+.docState_archive   { --shpd-row-bar: var(--shpd-color-state-archive-bar); color: var(--shpd-color-state-archive-row); }
+.docState_trash     { --shpd-row-bar: var(--shpd-color-state-trash-bar); color: var(--shpd-color-state-trash-bar); text-decoration: line-through; }
+.docState_cancelled { --shpd-row-bar: var(--shpd-color-state-cancelled-bar); }

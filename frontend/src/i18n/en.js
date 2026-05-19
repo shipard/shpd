@@ -230,4 +230,20 @@ export default {
   'picker.results.loading': 'Searching…',
   'picker.actions.cancel': 'Cancel',
   'picker.actions.select': 'Select',
+
+  // ── Dashboard ────────────────────────────────────────────────────────────
+  'dashboard.title': 'Dashboard',
+  'dashboard.refresh': 'Refresh',
+  'dashboard.openAll': 'Open all',
+  'dashboard.error.failed': 'Failed to load dashboard.',
+  'dashboard.widget.alerts.empty': 'All clear ✓',
+  'dashboard.widget.mail.empty': 'No new messages',
+  'dashboard.widget.tasks.empty': 'No active tasks',
+  'dashboard.aiSummary.title': "Today's summary",
+  'dashboard.aiSummary.intro': 'You currently have:',
+  'dashboard.aiSummary.empty': 'All clear — nothing pending today.',
+  'dashboard.aiSummary.placeholder': 'AI assistant — coming soon; for now I aggregate counts from the other widgets.',
+  'dashboard.aiSummary.alerts': '{count, plural, one {# alert} other {# alerts}}',
+  'dashboard.aiSummary.mail': '{count, plural, one {# new message} other {# new messages}}',
+  'dashboard.aiSummary.tasks': '{count, plural, one {# active task} other {# active tasks}}',
 };

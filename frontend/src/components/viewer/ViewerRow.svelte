@@ -142,25 +142,8 @@
     background-color: var(--shpd-color-bg-selected-hover);
   }
 
-  /* Doc-state stavové proužky (jen barva pruhu, pozadí zůstává bílé).
-   *
-   * Konvence:
-   *   confirmed → žádný proužek ("OK = klid")
-   *   concept   → žlutý       (rozpracováno)
-   *   edit      → fialový      (právě se edituje)
-   *   archive   → šedý         (tichý archiv)
-   *   trash     → tmavší šedá + line-through
-   *   cancelled → červený     (pozor!)
-   *
-   * Používáme child selectory místo :global(.docState_*) — :global
-   * by se chytlo i na stejnojmenné třídy v jiných komponentách
-   * (FormStateBadge atd.). docState_done schválně není — "V pořádku"
-   * je default stav, neěrěží pozornost. */
-  .shpd-viewer-row.docState_concept   { --shpd-row-bar: var(--shpd-color-state-concept-bar); }
-  .shpd-viewer-row.docState_edit      { --shpd-row-bar: var(--shpd-color-state-edit-bar); }
-  .shpd-viewer-row.docState_archive   { --shpd-row-bar: var(--shpd-color-state-archive-bar); color: var(--shpd-color-state-archive-row); }
-  .shpd-viewer-row.docState_trash     { --shpd-row-bar: var(--shpd-color-state-trash-bar); color: var(--shpd-color-state-trash-bar); text-decoration: line-through; }
-  .shpd-viewer-row.docState_cancelled { --shpd-row-bar: var(--shpd-color-state-cancelled-bar); }
+  /* Doc-state proužky řeší globální .docState_* třídy v styles/base.css
+   * (společné pro ViewerRow i WidgetRow v dashboardu). */
 
   /* Levý sloupec — drží jen ikonu typu záznamu, vertikálně
    * vystředěnou v celé výšce řádku.

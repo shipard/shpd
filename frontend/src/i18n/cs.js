@@ -243,4 +243,20 @@ export default {
   'picker.results.loading': 'Hledám…',
   'picker.actions.cancel': 'Zrušit',
   'picker.actions.select': 'Vybrat',
+
+  // ── Dashboard ────────────────────────────────────────────────────────────
+  'dashboard.title': 'Dashboard',
+  'dashboard.refresh': 'Obnovit',
+  'dashboard.openAll': 'Otevřít všechny',
+  'dashboard.error.failed': 'Načtení dashboardu selhalo.',
+  'dashboard.widget.alerts.empty': 'Vše v pořádku ✓',
+  'dashboard.widget.mail.empty': 'Žádné nové zprávy',
+  'dashboard.widget.tasks.empty': 'Žádné aktivní úkoly',
+  'dashboard.aiSummary.title': 'Dnešní shrnutí',
+  'dashboard.aiSummary.intro': 'Aktuálně máte:',
+  'dashboard.aiSummary.empty': 'Vše je v klidu, dnes nic nečeká.',
+  'dashboard.aiSummary.placeholder': 'AI asistent — připravujeme; zatím počítám z dat ostatních widgetů.',
+  'dashboard.aiSummary.alerts': '{count, plural, one {# upozornění} few {# upozornění} many {# upozornění} other {# upozornění}}',
+  'dashboard.aiSummary.mail': '{count, plural, one {# nová zpráva} few {# nové zprávy} many {# nových zpráv} other {# nových zpráv}}',
+  'dashboard.aiSummary.tasks': '{count, plural, one {# aktivní úkol} few {# aktivní úkoly} many {# aktivních úkolů} other {# aktivních úkolů}}',
 };

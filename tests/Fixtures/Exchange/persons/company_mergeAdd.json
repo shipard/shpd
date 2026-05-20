@@ -1,0 +1,41 @@
+{
+    "format": "shpd.persons.person",
+    "formatVersion": "1.0",
+
+    "personType": "company",
+    "country": "cz",
+    "companyId": "34567890",
+
+    "name": {
+        "fullName": "IT-EX MergeAdd s.r.o."
+    },
+
+    "addresses": [
+        {
+            "addressType": 3,
+            "name": "Provozovna (refreshed)",
+            "placeRegType": "ICP",
+            "placeRegId": "9876543210",
+            "isStandardized": true,
+            "street": "Nová ulice",
+            "houseNumber": "42",
+            "city": "Plzeň",
+            "zip": "30100",
+            "country": "cz",
+            "displayLine": "Nová ulice 42, 301 00 Plzeň"
+        }
+    ],
+
+    "bankAccounts": [
+        {
+            "name": "Dodatečný účet",
+            "accountNumber": "1111222233/0300",
+            "iban": "CZ7008000000001111222233",
+            "currency": "CZK"
+        }
+    ],
+
+    "applyOptions": {
+        "mergeStrategy": "mergeAdd"
+    }
+}

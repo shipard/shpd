@@ -1,41 +1,61 @@
 # core.exchange
 
-Backend modul implementující **kanonický výměnný formát** pro doklady
-(`shpd.docs.document.v1`) — JSON strukturu, kterou lze validovat,
-vizualizovat, ukládat do DB, importovat z cizích zdrojů (AI analyzer,
-ISDOC, ERP) a exportovat.
+Backend modul implementující **kanonické výměnné formáty** pro Shipard
+entity — JSON struktury, které lze validovat, vizualizovat, ukládat
+do DB, importovat z cizích zdrojů a exportovat.
 
-Plná specifikace formátu a apply pipeline:
-**[docs/exchange-format.md](../../../docs/exchange-format.md)**.
+| Formát | Specifikace | Stav |
+|---|---|---|
+| `shpd.docs.document.v1` — doklady | [docs/exchange-format.md](../../../docs/exchange-format.md) | Fáze 3b hotová |
+| `shpd.persons.person.v1` — osoby | [docs/exchange-format-persons.md](../../../docs/exchange-format-persons.md) | Fáze 1 hotová |
 
 Modul je čistě servisní vrstva — žádné vlastní tabulky, žádné viewers
-ani formy. Vystavuje 3 REST endpointy.
+ani formy. Vystavuje 6 REST endpointů (po třech pro každý formát).
 
 ## Architektura
 
 ```
-ExchangeController                    (src/Api/Controller/)
-  └─→ DocumentApplier                 (Document/)
-       ├─→ SchemaValidator            (Schema/)             ← opis/json-schema
-       ├─→ PartyResolver, ItemResolver, UnitResolver,
-       │   VatCodeResolver, BankAccountResolver             (Resolve/)
-       ├─→ DocumentValidator          (Document/)
-       └─→ TransactionlessTableGateway                      (Document/)
-            └─→ DocDocument (existing)                      (modules/docs/core/src/)
+ExchangeController                                  (src/Api/Controller/)
+  ├─→ DocumentApplier                               (Document/)
+  │    ├─→ SchemaValidator                          (Schema/)         ← opis/json-schema
+  │    ├─→ PartyResolver, ItemResolver, UnitResolver,
+  │    │   VatCodeResolver, BankAccountResolver     (Resolve/)
+  │    ├─→ DocumentValidator                        (Document/)
+  │    └─→ TransactionlessTableGateway              (Common/)
+  │         └─→ DocDocument                         (modules/docs/core/src/)
+  │
+  └─→ PersonApplier                                 (Person/)
+       ├─→ SchemaValidator                          (Schema/)
+       ├─→ PersonResolver                           (Person/)
+       │    ├─→ PartyResolver (s personType filtrem) (Resolve/)
+       │    ├─→ AddressResolver, ContactResolver,
+       │    │   BankAccountResolver                  (Resolve/)
+       │    └─→ closingExisting enumerator (fullSync)
+       ├─→ PersonValidator                          (Person/)
+       └─→ TransactionlessTableGateway              (Common/)
+            └─→ PersonDocument                      (modules/base/persons/src/)
 ```
 
+Sdílené třídy v `Common/`: `ApplyResult` (response shape, `savedId` generic
+pole — controller mapuje na `savedDocId`/`savedPersonId` v JSON response)
+a `TransactionlessTableGateway`.
+
 Applier vlastní outer transakci (MariaDB nedoporučuje nested `START TRANSACTION`).
-Side-creates → save → lineage update probíhají atomicky pod jedním `$db->begin/commit`.
+Side-creates → save → sub-collections → lineage update probíhají atomicky
+pod jedním `$db->begin/commit`.
 
 ## REST API
 
-Tři endpointy pod `/api/v1/_exchange/docs/document/`:
+Šest endpointů, tři pro doklady a tři pro osoby:
 
 | Method | Path | Účel |
 |---|---|---|
-| POST | `/validate` | Statická validace (schema + povinná pole + totals) |
-| POST | `/preview` | Validate + plný resolve referencí. **Žádné DB writes.** |
-| POST | `/apply` | Validate + resolve + reconcile + uložit (transakční) |
+| POST | `/api/v1/_exchange/docs/document/validate` | Statická validace dokladu |
+| POST | `/api/v1/_exchange/docs/document/preview` | Validate + resolve referencí (no DB writes) |
+| POST | `/api/v1/_exchange/docs/document/apply` | Validate + resolve + reconcile + uložit |
+| POST | `/api/v1/_exchange/persons/person/validate` | Statická validace osoby |
+| POST | `/api/v1/_exchange/persons/person/preview` | Validate + resolve + closingExisting (no DB writes) |
+| POST | `/api/v1/_exchange/persons/person/apply` | Validate + resolve + reconcile + uložit |
 
 ### Error response shape
 
@@ -52,8 +72,17 @@ Tři endpointy pod `/api/v1/_exchange/docs/document/`:
 }
 ```
 
-Kódy chyb: `schema_invalid` (400), `validation_failed` (422),
-`unresolved_required` (422), `conflict` (409), `internal_error` (500).
+Kódy chyb:
+
+| Kód | HTTP | Kdy |
+|---|---|---|
+| `schema_invalid` | 400 | JSON neprošel JSON Schema |
+| `validation_failed` | 422 | Doc/PersonValidator nahlásil error |
+| `unresolved_required` | 422 | Reference vyžaduje rozhodnutí (`userAction`) |
+| `conflict` | 409 | Neplatná `userAction` nebo cíl už neexistuje |
+| `person_exists` | 409 | Person flow: `createOnly` + matched header |
+| `person_id_conflict` | 409 | Person flow: `personId` koliduje s jinou osobou |
+| `internal_error` | 500 | Interní chyba (rollback proběhl) |
 
 ## Curl příklady
 
@@ -134,6 +163,89 @@ V odpovědi:
 - `data.savedDocId` — id nového záznamu v `docs_core_heads`
 - `data.canonical._resolve.supplier.status = "matched"` s nově přiřazeným `matchedId`
 - `data.canonical._resolve.summary.status = "ok"` (pokud žádné `notFound`)
+
+## Curl příklady — Person flow
+
+Plná spec a popis polí: [docs/exchange-format-persons.md](../../../docs/exchange-format-persons.md).
+
+### `/validate` — minimální payload (firma)
+
+```bash
+curl -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Host: 127.0.0.1' \
+  -d '{
+    "format":"shpd.persons.person","formatVersion":"1.0",
+    "personType":"company","country":"cz",
+    "companyId":"12345678",
+    "name":{"fullName":"Acme s.r.o."}
+  }' \
+  http://127.0.0.1/<ds-id>/api/v1/_exchange/persons/person/validate
+```
+
+### `/preview` — fullSync re-import z ARES
+
+```bash
+curl -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Host: 127.0.0.1' \
+  -d @tests/Fixtures/Exchange/persons/company_fullSync.json \
+  http://127.0.0.1/<ds-id>/api/v1/_exchange/persons/person/preview
+```
+
+V odpovědi `data.canonical._resolve` obsahuje:
+- `header.status` = `matched` / `canCreate` / `ambiguous`
+- `addresses[]`, `bankAccounts[]`, `contacts[]` per-index resolve
+- `closingExisting` — sub-záznamy, které applier uzavře (`valid_to = today`)
+  při `fullSync`
+- Adresy Provozovna (typ 3) a Zařízení (typ 4) matched podle `placeRegId`
+  mají `authoritativeRefresh: true` — applier přepíše jejich pole i pod
+  `mergeStrategy: mergeAdd` (registr je zdroj pravdy).
+
+### `/apply` — vytvoření nové firmy z importu
+
+```bash
+curl -X POST \
+  -H 'Content-Type: application/json' \
+  -H 'Host: 127.0.0.1' \
+  -d '{
+    "format":"shpd.persons.person","formatVersion":"1.0",
+    "source":{"kind":"import.ares","registryRef":"12345678"},
+    "personType":"company","country":"cz",
+    "companyId":"12345678","taxId":"CZ12345678","vatId":"CZ12345678",
+    "name":{"fullName":"Acme s.r.o."},
+    "contact":{"email":"info@acme.cz","phone":"+420 100 200 300"},
+    "addresses":[
+      {"addressType":1,"name":"Sídlo","isStandardized":true,
+       "street":"Karlova","houseNumber":"15","city":"Praha",
+       "zip":"11000","country":"cz","registryCode":"21794160",
+       "displayLine":"Karlova 15, 110 00 Praha 1"}
+    ],
+    "bankAccounts":[
+      {"accountNumber":"1234567890/0100","iban":"CZ65...","currency":"CZK"}
+    ],
+    "applyOptions":{"mergeStrategy":"createOnly","targetDocState":40}
+  }' \
+  http://127.0.0.1/<ds-id>/api/v1/_exchange/persons/person/apply
+```
+
+V odpovědi:
+- `data.savedPersonId` — id nové osoby v `base_persons_persons`
+- `data.canonical._resolve.summary.status = "applied"`
+- `data.canonical._resolve.header.status = "matched"` s `matchedId = savedPersonId`
+- Sub-záznamy mají vyplněné `matchedId` (po insertu)
+- Sloupce `source_kind`, `source_ref`, `source_imported_at` v
+  `base_persons_persons` vyplněné (lineage); UI editace bez `source.kind`
+  v payloadu lineage zachová.
+
+### MergeStrategy — kdy co použít
+
+| Strategy | Chování při matched headeru |
+|---|---|
+| `createOnly` | Reject s 409 `person_exists` |
+| `updateHeader` | Přepsat hlavičku, sub-kolekce netknout |
+| `mergeAdd` *(default)* | Hlavička: doplnit prázdná DB pole. Sub: matched → nech (kromě authoritativeRefresh → overwrite); canCreate → insert |
+| `fullSync` | Hlavička: overwrite celá. Sub: matched → update; canCreate → insert; existující missing v payloadu → `valid_to = today` (closing per `address_type`) |
 
 ## docType mapping
 
@@ -251,8 +363,56 @@ formátem.
   `name` pro Item), bulk decisions ("vytvoř všechny canCreate"),
   person-scoped filter pro BankAccount picker.
 
+## Stav (Persons Fáze 1)
+
+- ✅ DB schema: sub-tabulky `base_persons_addresses`, `_contacts`,
+  `_bank_accounts` dostaly `docState` + `docStateMain` + index
+  `idx_doc_state` (oprava latentního bugu v existujícím
+  `BankAccountResolver` filtru).
+- ✅ DB schema: `base_persons_persons` lineage skupina —
+  `source_kind` (varchar 40, cfgItem `base.persons.sourceKinds`),
+  `source_ref` (varchar 60), `source_imported_at` (datetime).
+- ✅ cfgItem `base.persons.sourceKinds` se 7 klíči (manual, aiExtraction,
+  import.ares, import.rpo, import.handelsregister, import.shipardRegistry,
+  import.csv).
+- ✅ JSON Schema `shpd.persons.person.v1.{json,jsonc}` + drift test.
+- ✅ Sdílený `Common/ApplyResult` a `Common/TransactionlessTableGateway`
+  (refactor z `Document/` namespace, generic `savedId` pole; controller
+  mapuje na `savedDocId`/`savedPersonId` v JSON response).
+- ✅ `PartyResolver` rozšířen o optional `?PersonType` filter parametr —
+  zpětně kompatibilní s doc flow (default `null`).
+- ✅ Nové resolvery: `AddressResolver` (placeRegId → registryCode →
+  displayLine priority, `authoritativeRefresh = true` pro IČP/IČZ match),
+  `ContactResolver` ((name, email) → (name) priority),
+  `PersonResolver` (orchestrátor header + sub-kolekce + closingExisting
+  pro fullSync).
+- ✅ `PersonValidator` — polymorfismus per `personType`, `placeRegType`/Id
+  per `addressType in [3,4]`, `iban` OR `accountNumber`,
+  `is_own + targetDocState=40` vyžaduje `companyId`.
+- ✅ `PersonApplier` s plnou pipeline §11 (validate → resolve → reconcile
+  → header upsert → sub-collection insert/update/close → lineage).
+- ✅ REST endpointy `/api/v1/_exchange/persons/person/{validate,preview,apply}`.
+- ✅ PHPUnit pokrytí: 69 unit testů (PersonValidator 17, AddressResolver 13,
+  ContactResolver 7, PersonResolver 10, PersonApplier 12, ResolveResult drift)
+  + 6 integration testů (per fixture).
+
+## Limity Persons Fáze 1
+
+- **Frontend UI** (modal náhled + popover `userAction`, analogie doc
+  flow Fáze 3) — samostatný task.
+- **PersonExporter** (DB → canonical) — Persons Fáze 3, potřeba pro
+  registry sync a export mezi Shipard DS.
+- **Batch apply** (víc osob v jednom requestu, CSV import) — Persons Fáze 3.
+- **Country filter v `PartyResolver` name probe** — krok 4 spec §8.1
+  je follow-up (Phase 1 jen LIKE %name%).
+- **Batch `divisionCode → world_divisions.id` lookup** — Phase 1
+  per-adresa round-trip; pro CSV bulk import bude bottleneck.
+- **ARES / RPO / Handelsregister adaptér** (HTTP klient + mapping
+  registr-JSON → canonical) — Persons Fáze 2.
+
 ## Související
 
-- [docs/exchange-format.md](../../../docs/exchange-format.md) — kanonická specifikace
-- [tests/Fixtures/Exchange/](../../../tests/Fixtures/Exchange/) — fixture JSON soubory
-- [tests/Integration/Exchange/](../../../tests/Integration/Exchange/) — E2E test
+- [docs/exchange-format.md](../../../docs/exchange-format.md) — kanonická specifikace dokladů
+- [docs/exchange-format-persons.md](../../../docs/exchange-format-persons.md) — kanonická specifikace osob
+- [tests/Fixtures/Exchange/](../../../tests/Fixtures/Exchange/) — fixture JSON soubory (doc + `persons/`)
+- [tests/Integration/Exchange/](../../../tests/Integration/Exchange/) — E2E testy

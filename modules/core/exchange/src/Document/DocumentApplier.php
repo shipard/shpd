@@ -10,6 +10,8 @@ use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Database\TableDefinition;
 use Shipard\Core\Document\DocumentRegistry;
 use Shipard\Module\Base\Persons\PersonType;
+use Shipard\Module\Core\Exchange\Common\ApplyResult;
+use Shipard\Module\Core\Exchange\Common\TransactionlessTableGateway;
 use Shipard\Module\Core\Exchange\Schema\SchemaLoader;
 use Shipard\Module\Docs\Core\OwnCompanyResolver;
 use Shipard\Module\Core\Exchange\Resolve\BankAccountResolver;

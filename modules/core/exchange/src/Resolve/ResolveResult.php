@@ -15,6 +15,14 @@ class ResolveResult
      * @param array<string, mixed>             $createPayload Used only for CanCreate;
      *                                                       pre-built input for the
      *                                                       corresponding *Document::saveDocument.
+     * @param bool $authoritativeRefresh Used only for Matched; true means the
+     *                                   applier MUST overwrite the matched
+     *                                   record's fields from payload even
+     *                                   under `mergeStrategy = mergeAdd`.
+     *                                   AddressResolver sets this for matches
+     *                                   on `(place_reg_type, place_reg_id)` —
+     *                                   the registry is authoritative for
+     *                                   provozovna / zařízení addresses.
      */
     public function __construct(
         public readonly ResolveStatus $status,
@@ -22,11 +30,17 @@ class ResolveResult
         public readonly ?string $matchedBy = null,
         public readonly array $candidates = [],
         public readonly array $createPayload = [],
+        public readonly bool $authoritativeRefresh = false,
     ) {}
 
-    public static function matched(int $id, string $by): self
+    public static function matched(int $id, string $by, bool $authoritativeRefresh = false): self
     {
-        return new self(ResolveStatus::Matched, matchedId: $id, matchedBy: $by);
+        return new self(
+            ResolveStatus::Matched,
+            matchedId: $id,
+            matchedBy: $by,
+            authoritativeRefresh: $authoritativeRefresh,
+        );
     }
 
     /**
@@ -71,6 +85,9 @@ class ResolveResult
         }
         if ($this->createPayload !== []) {
             $out['createPayload'] = $this->createPayload;
+        }
+        if ($this->authoritativeRefresh) {
+            $out['authoritativeRefresh'] = true;
         }
         return $out;
     }

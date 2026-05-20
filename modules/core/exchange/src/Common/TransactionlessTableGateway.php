@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Shipard\Module\Core\Exchange\Document;
+namespace Shipard\Module\Core\Exchange\Common;
 
 use Shipard\Core\Document\TableGateway;
 
 /**
  * TableGateway variant that does NOT manage its own DB transaction —
- * begin/commit/rollback are no-ops. Used by DocumentApplier so the
+ * begin/commit/rollback are no-ops. Used by exchange Appliers so the
  * Applier can own the outer transaction (side-creates + doc save +
  * lineage update must be atomic, see docs/exchange-format.md §10).
  *

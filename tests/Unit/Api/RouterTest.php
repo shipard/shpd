@@ -563,6 +563,41 @@ class RouterTest extends TestCase
 		$this->assertSame('NOT_FOUND', $result->getPayload()['error']['code']);
 	}
 
+	public function testPersonExchangeValidate(): void
+	{
+		$result = $this->router->resolve('/api/v1/_exchange/persons/person/validate', 'POST');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'exchange', 'person:validate');
+	}
+
+	public function testPersonExchangePreview(): void
+	{
+		$result = $this->router->resolve('/api/v1/_exchange/persons/person/preview', 'POST');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'exchange', 'person:preview');
+	}
+
+	public function testPersonExchangeApply(): void
+	{
+		$result = $this->router->resolve('/api/v1/_exchange/persons/person/apply', 'POST');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'exchange', 'person:apply');
+	}
+
+	public function testPersonExchangeGetNotAllowed(): void
+	{
+		$result = $this->router->resolve('/api/v1/_exchange/persons/person/apply', 'GET');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
+	}
+
+	public function testPersonExchangeUnknownActionIs404(): void
+	{
+		$result = $this->router->resolve('/api/v1/_exchange/persons/person/explode', 'POST');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('NOT_FOUND', $result->getPayload()['error']['code']);
+	}
+
 	// Lookup routes
 
 	public function testLookupSearch(): void

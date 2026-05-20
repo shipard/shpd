@@ -1,0 +1,30 @@
+{
+    "format": "shpd.persons.person",
+    "formatVersion": "1.0",
+
+    "personType": "company",
+    "country": "at",
+    "companyId": "AT-99999999",
+
+    "name": {
+        "fullName": "IT-EX Foreign GmbH"
+    },
+
+    "addresses": [
+        {
+            "addressType": 1,
+            "name": "Hauptsitz",
+            "isStandardized": false,
+            "street": "Mariahilfer Strasse 100",
+            "city": "Wien",
+            "zip": "1070",
+            "country": "at",
+            "displayLine": "Mariahilfer Strasse 100, 1070 Wien"
+        }
+    ],
+
+    "applyOptions": {
+        "mergeStrategy": "createOnly",
+        "targetDocState": 10
+    }
+}

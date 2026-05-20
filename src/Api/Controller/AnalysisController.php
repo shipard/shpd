@@ -1235,7 +1235,7 @@ class AnalysisController
             );
         }
 
-        $savedDocId = (int) ($result->savedDocId ?? 0);
+        $savedDocId = (int) ($result->savedId ?? 0);
 
         // Mark the extracted_document as applied via the Document flow —
         // ExtractedDocumentDocument::afterPersist triggers the message

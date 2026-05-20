@@ -1,0 +1,573 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://shipard.cz/schemas/shpd.persons.person.v1.json",
+    "title": "Shipard canonical person v1",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+        "format",
+        "formatVersion",
+        "personType",
+        "country"
+    ],
+    "properties": {
+        "format": {
+            "const": "shpd.persons.person"
+        },
+        "formatVersion": {
+            "type": "string",
+            "pattern": "^1\\.[0-9]+$"
+        },
+        "source": {
+            "type": [
+                "object",
+                "null"
+            ],
+            "additionalProperties": false,
+            "properties": {
+                "kind": {
+                    "type": "string"
+                },
+                "fetchedAt": {
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "format": "date-time"
+                },
+                "registryRef": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "raw": {
+                    "type": [
+                        "object",
+                        "null"
+                    ],
+                    "additionalProperties": true
+                }
+            }
+        },
+        "personType": {
+            "type": "string",
+            "enum": [
+                "company",
+                "person"
+            ]
+        },
+        "country": {
+            "type": "string",
+            "pattern": "^[a-z]{2}$"
+        },
+        "personId": {
+            "type": [
+                "string",
+                "null"
+            ]
+        },
+        "companyId": {
+            "type": [
+                "string",
+                "null"
+            ]
+        },
+        "taxId": {
+            "type": [
+                "string",
+                "null"
+            ]
+        },
+        "vatId": {
+            "type": [
+                "string",
+                "null"
+            ]
+        },
+        "courtRegistration": {
+            "type": [
+                "string",
+                "null"
+            ]
+        },
+        "name": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "fullName": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "titleBefore": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "firstName": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "middleName": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "lastName": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "titleAfter": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                }
+            }
+        },
+        "personal": {
+            "type": [
+                "object",
+                "null"
+            ],
+            "additionalProperties": false,
+            "properties": {
+                "birthDate": {
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "format": "date"
+                },
+                "nationalId": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "idCardNumber": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                }
+            }
+        },
+        "contact": {
+            "type": [
+                "object",
+                "null"
+            ],
+            "additionalProperties": false,
+            "properties": {
+                "email": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "phone": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "web": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                }
+            }
+        },
+        "status": {
+            "type": [
+                "object",
+                "null"
+            ],
+            "additionalProperties": false,
+            "properties": {
+                "isClosed": {
+                    "type": [
+                        "boolean",
+                        "null"
+                    ]
+                },
+                "closedDate": {
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "format": "date"
+                },
+                "isOwn": {
+                    "type": [
+                        "boolean",
+                        "null"
+                    ]
+                },
+                "docState": {
+                    "type": [
+                        "integer",
+                        "null"
+                    ],
+                    "enum": [
+                        null,
+                        10,
+                        40,
+                        70,
+                        80,
+                        90
+                    ]
+                }
+            }
+        },
+        "addresses": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "addressType"
+                ],
+                "properties": {
+                    "addressType": {
+                        "type": "integer",
+                        "enum": [
+                            1,
+                            2,
+                            3,
+                            4
+                        ]
+                    },
+                    "name": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "placeRegType": {
+                        "enum": [
+                            null,
+                            "ICP",
+                            "ICZ"
+                        ]
+                    },
+                    "placeRegId": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "isStandardized": {
+                        "type": [
+                            "boolean",
+                            "null"
+                        ]
+                    },
+                    "street": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "houseNumber": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "orientationNumber": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "city": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "cityPart": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "district": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "zip": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "country": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "pattern": "^[a-z]{2}$"
+                    },
+                    "registryCode": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "divisionCode": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "latitude": {
+                        "type": [
+                            "number",
+                            "null"
+                        ]
+                    },
+                    "longitude": {
+                        "type": [
+                            "number",
+                            "null"
+                        ]
+                    },
+                    "manualGps": {
+                        "type": [
+                            "boolean",
+                            "null"
+                        ]
+                    },
+                    "displayLine": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "displayBlock": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "orderPos": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ]
+                    },
+                    "validFrom": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "date"
+                    },
+                    "validTo": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "date"
+                    },
+                    "note": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    }
+                }
+            }
+        },
+        "bankAccounts": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                    "name": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "accountNumber": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "iban": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "bic": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "currency": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "pattern": "^[A-Z]{3}$"
+                    },
+                    "source": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ]
+                    },
+                    "orderPos": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ]
+                    },
+                    "validFrom": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "date"
+                    },
+                    "validTo": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "date"
+                    }
+                }
+            }
+        },
+        "contacts": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "name"
+                ],
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "role": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "email": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "phone": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "note": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "orderPos": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ]
+                    },
+                    "validFrom": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "date"
+                    },
+                    "validTo": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "date"
+                    }
+                }
+            }
+        },
+        "applyOptions": {
+            "type": [
+                "object",
+                "null"
+            ],
+            "additionalProperties": false,
+            "properties": {
+                "mergeStrategy": {
+                    "enum": [
+                        null,
+                        "createOnly",
+                        "updateHeader",
+                        "mergeAdd",
+                        "fullSync"
+                    ]
+                },
+                "targetDocState": {
+                    "enum": [
+                        null,
+                        10,
+                        40
+                    ]
+                },
+                "createPersonId": {
+                    "type": [
+                        "boolean",
+                        "null"
+                    ]
+                },
+                "rejectOnIssues": {
+                    "type": [
+                        "array",
+                        "null"
+                    ],
+                    "items": {
+                        "enum": [
+                            "error",
+                            "warning"
+                        ]
+                    }
+                }
+            }
+        },
+        "_resolve": {
+            "type": [
+                "object",
+                "null"
+            ],
+            "additionalProperties": true
+        }
+    }
+}

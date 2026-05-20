@@ -196,7 +196,7 @@ class DocumentExchangeEndpointTest extends IntegrationTestCase
                 . json_encode($result->canonical['_resolve']['issues'] ?? [], JSON_PRETTY_PRINT),
         );
 
-        $savedId = $result->savedDocId;
+        $savedId = $result->savedId;
         $this->assertNotNull($savedId);
         $this->createdDocIds[] = $savedId;
 

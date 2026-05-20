@@ -13,7 +13,7 @@ use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Document\DocumentRegistry;
 use Shipard\Core\Security\DsSecretCipher;
-use Shipard\Module\Core\Exchange\Document\ApplyResult;
+use Shipard\Module\Core\Exchange\Common\ApplyResult;
 use Shipard\Module\Core\Exchange\Document\DocumentApplier;
 use Shipard\Module\Core\Exchange\Schema\SchemaLoader;
 use Shipard\Module\Core\Exchange\Schema\SchemaValidator;
@@ -125,7 +125,7 @@ class AnalysisControllerResolveBodyTest extends TestCase
         $applier->method('apply')->willReturnCallback(
             function (array $passed) use (&$captured) {
                 $captured = $passed;
-                return ApplyResult::ok($passed, savedDocId: 9999);
+                return ApplyResult::ok($passed, savedId: 9999);
             },
         );
         return [$applier, function () use (&$captured): ?array { return $captured; }];

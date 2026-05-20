@@ -1,0 +1,17 @@
+{
+    "format": "shpd.persons.person",
+    "formatVersion": "1.0",
+
+    "personType": "company",
+    "country": "cz",
+    "personId": "F-IT-EX-CONFLICT",
+    "companyId": "45678901",
+
+    "name": {
+        "fullName": "IT-EX Conflict Two s.r.o."
+    },
+
+    "applyOptions": {
+        "mergeStrategy": "createOnly"
+    }
+}

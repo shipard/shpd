@@ -21,7 +21,8 @@ class SchemaDriftTest extends TestCase
     public static function schemaProvider(): array
     {
         return [
-            'shpd.docs.document.v1' => ['shpd.docs.document.v1'],
+            'shpd.docs.document.v1'   => ['shpd.docs.document.v1'],
+            'shpd.persons.person.v1' => ['shpd.persons.person.v1'],
         ];
     }
 

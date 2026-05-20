@@ -1,0 +1,44 @@
+{
+    "format": "shpd.persons.person",
+    "formatVersion": "1.0",
+
+    "source": {
+        "kind": "manual"
+    },
+
+    "personType": "person",
+    "country": "cz",
+
+    "name": {
+        "firstName": "Jan",
+        "lastName": "Novák"
+    },
+
+    "personal": {
+        "birthDate": "1980-01-01"
+    },
+
+    "contact": {
+        "email": "novak@osobni.cz",
+        "phone": "+420 600 700 800"
+    },
+
+    "addresses": [
+        {
+            "addressType": 2,
+            "name": "Doručovací",
+            "isStandardized": true,
+            "street": "Vinohradská",
+            "houseNumber": "100",
+            "city": "Praha",
+            "zip": "12000",
+            "country": "cz",
+            "displayLine": "Vinohradská 100, 120 00 Praha 2"
+        }
+    ],
+
+    "applyOptions": {
+        "mergeStrategy": "createOnly",
+        "targetDocState": 10
+    }
+}

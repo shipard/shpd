@@ -68,6 +68,22 @@ Tabulka řeší dva odlišné režimy zadávání:
 | `valid_to` | date | Platnost do |
 | `note` | text | Poznámka |
 
+### Stavy dokumentů
+
+| Sloupec | Typ | Popis |
+|---|---|---|
+| `docState` | tinyint, default 10 | Stav dokumentu — cfgItem `core.system.docStatesArchive` |
+| `docStateMain` | tinyint, default 1 | Stav pro řazení a filtraci viewerů |
+
+`valid_to` a `docState` jsou dvě ortogonální osy — viz
+[exchange-format-persons.md §4a](../../../../docs/exchange-format-persons.md#4a-stavy-dokumentů-a-valid_to--dvě-ortogonální-osy).
+Stručně: `valid_to` značí, že záznam přestal platit (historie zůstává
+korektní), `docState = 90` značí, že záznam je vadný.
+
+Aktivní záznamy mají `docState IN (10, 40, 80)`. Resolvery výměnného
+formátu (modul `core.exchange`) tímto filtrem párují payload se
+záznamy v DB.
+
 ## Obchodní logika
 
 ### Standardizovaná vs nestandardizovaná adresa
@@ -152,6 +168,7 @@ záznam úrovně ZÚJ (obec) v ČR, Gemeinde v DE apod. Tím se řeší:
 | `idx_division` | index | `division` | Zpětný odkaz — všechny adresy v dané obci |
 | `idx_place_reg` | index | `place_reg_type`, `place_reg_id` | Vyhledání provozovny/zařízení podle identifikátoru |
 | `ft_display_line` | fulltext | `display_line` | Fulltextové vyhledávání v jednořádkové adrese |
+| `idx_doc_state` | index | `docStateMain` ASC | Filtrace aktivních záznamů ve výpisech a resolverech |
 
 ## Návaznosti
 

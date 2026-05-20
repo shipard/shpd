@@ -105,6 +105,10 @@ class Router
 			return $this->resolveExchangeRoute($subpath, $method);
 		}
 
+		if (str_starts_with($subpath, '/_exchange/persons/person/')) {
+			return $this->resolvePersonsExchangeRoute($subpath, $method);
+		}
+
 		if (str_starts_with($subpath, '/_alerts')) {
 			return $this->resolveAlertsRoute($subpath, $method);
 		}
@@ -301,6 +305,23 @@ class Router
 			return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
 		}
 		return new Route('exchange', $rest);
+	}
+
+	/**
+	 * Person flow routes share the `exchange` dispatcher with documents so
+	 * authentication and controller wiring stay in one place. Action is
+	 * prefixed with `person:` to disambiguate.
+	 */
+	private function resolvePersonsExchangeRoute(string $subpath, string $method): Route|Response
+	{
+		$rest = substr($subpath, strlen('/_exchange/persons/person/'));
+		if (!in_array($rest, ['validate', 'preview', 'apply'], true)) {
+			return Response::error('NOT_FOUND', 'Not found', 404);
+		}
+		if ($method !== 'POST') {
+			return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+		}
+		return new Route('exchange', "person:{$rest}");
 	}
 
 	private function resolveAlertsRoute(string $subpath, string $method): Route|Response

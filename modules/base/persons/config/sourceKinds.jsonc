@@ -1,0 +1,37 @@
+{
+    "manual": {
+        "name": "Manual entry",
+        "name:cs": "Ruční zadání",
+        "name:en": "Manual entry"
+    },
+    "aiExtraction": {
+        "name": "From AI extraction",
+        "name:cs": "Z AI extrakce",
+        "name:en": "From AI extraction"
+    },
+    "import.ares": {
+        "name": "ARES",
+        "name:cs": "ARES",
+        "name:en": "ARES"
+    },
+    "import.rpo": {
+        "name": "RPO (SK)",
+        "name:cs": "RPO (SK)",
+        "name:en": "RPO (SK)"
+    },
+    "import.handelsregister": {
+        "name": "Handelsregister",
+        "name:cs": "Handelsregister",
+        "name:en": "Handelsregister"
+    },
+    "import.shipardRegistry": {
+        "name": "Shipard registry",
+        "name:cs": "Shipard registr",
+        "name:en": "Shipard registry"
+    },
+    "import.csv": {
+        "name": "CSV import",
+        "name:cs": "CSV import",
+        "name:en": "CSV import"
+    }
+}

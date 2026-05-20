@@ -1,0 +1,87 @@
+{
+    "format": "shpd.persons.person",
+    "formatVersion": "1.0",
+
+    "source": {
+        "kind": "import.ares",
+        "fetchedAt": "2026-05-19T10:00:00Z",
+        "registryRef": "12345678"
+    },
+
+    "personType": "company",
+    "country": "cz",
+    "companyId": "12345678",
+    "taxId": "CZ12345678",
+    "vatId": "CZ12345678",
+    "courtRegistration": "Městský soud v Praze, oddíl C, vložka 123456",
+
+    "name": {
+        "fullName": "IT-EX New Company s.r.o."
+    },
+
+    "contact": {
+        "email": "info@itex-new.cz",
+        "phone": "+420 100 200 300",
+        "web": "https://itex-new.cz"
+    },
+
+    "status": {
+        "isClosed": false,
+        "isOwn": false
+    },
+
+    "addresses": [
+        {
+            "addressType": 1,
+            "name": "Sídlo",
+            "isStandardized": true,
+            "street": "Karlova",
+            "houseNumber": "15",
+            "orientationNumber": "3",
+            "city": "Praha",
+            "cityPart": "Staré Město",
+            "district": "Praha 1",
+            "zip": "11000",
+            "country": "cz",
+            "registryCode": "21794160",
+            "displayLine": "Karlova 15/3, 110 00 Praha 1"
+        },
+        {
+            "addressType": 3,
+            "name": "Provozovna Brno",
+            "placeRegType": "ICP",
+            "placeRegId": "1234567890",
+            "isStandardized": true,
+            "street": "Masarykova",
+            "houseNumber": "10",
+            "city": "Brno",
+            "zip": "60200",
+            "country": "cz",
+            "displayLine": "Masarykova 10, 602 00 Brno"
+        }
+    ],
+
+    "bankAccounts": [
+        {
+            "name": "Hlavní účet CZK",
+            "accountNumber": "1234567890/0100",
+            "iban": "CZ6508000000001234567890",
+            "bic": "GIBACZPX",
+            "currency": "CZK"
+        }
+    ],
+
+    "contacts": [
+        {
+            "name": "Jan Novák",
+            "role": "Obchodní ředitel",
+            "email": "novak@itex-new.cz",
+            "phone": "+420 100 200 301"
+        }
+    ],
+
+    "applyOptions": {
+        "mergeStrategy": "createOnly",
+        "targetDocState": 40
+    }
+}

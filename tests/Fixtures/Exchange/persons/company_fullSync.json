@@ -1,0 +1,55 @@
+{
+    "format": "shpd.persons.person",
+    "formatVersion": "1.0",
+
+    "source": {
+        "kind": "import.ares",
+        "fetchedAt": "2026-05-19T10:00:00Z",
+        "registryRef": "23456789"
+    },
+
+    "personType": "company",
+    "country": "cz",
+    "companyId": "23456789",
+
+    "name": {
+        "fullName": "IT-EX FullSync s.r.o."
+    },
+
+    "addresses": [
+        {
+            "addressType": 1,
+            "name": "Sídlo (nové)",
+            "isStandardized": true,
+            "street": "Národní",
+            "houseNumber": "20",
+            "city": "Praha",
+            "zip": "11000",
+            "country": "cz",
+            "registryCode": "21794200",
+            "displayLine": "Národní 20, 110 00 Praha 1"
+        }
+    ],
+
+    "bankAccounts": [
+        {
+            "name": "EUR účet",
+            "accountNumber": "9876543210/0100",
+            "iban": "CZ6708000000009876543210",
+            "currency": "EUR"
+        }
+    ],
+
+    "contacts": [
+        {
+            "name": "Pavla Svobodová",
+            "role": "Účetní",
+            "email": "svobodova@itex-fs.cz"
+        }
+    ],
+
+    "applyOptions": {
+        "mergeStrategy": "fullSync",
+        "targetDocState": 40
+    }
+}

@@ -29,6 +29,19 @@ struktuře.
 | `order_pos` | smallint | ne (default 0) | Pořadí zobrazení — nižší hodnota = vyšší priorita |
 | `valid_from` | date | ano | Datum začátku platnosti účtu |
 | `valid_to` | date | ano | Datum konce platnosti — účet s vyplněným `valid_to` v minulosti se v UI přestane nabízet |
+| `docState` | tinyint | ne (default 10) | Stav dokumentu — cfgItem `core.system.docStatesArchive` |
+| `docStateMain` | tinyint | ne (default 1) | Stav pro řazení a filtraci viewerů |
+
+### Stavy dokumentů
+
+`valid_to` a `docState` jsou dvě ortogonální osy — viz
+[exchange-format-persons.md §4a](../../../../docs/exchange-format-persons.md#4a-stavy-dokumentů-a-valid_to--dvě-ortogonální-osy).
+Stručně: `valid_to` značí, že účet zanikl (historie zůstává korektní),
+`docState = 90` značí, že záznam je vadný (například překlep v IBAN).
+
+Aktivní záznamy mají `docState IN (10, 40, 80)`. Resolvery výměnného
+formátu (modul `core.exchange`) tímto filtrem párují payload se
+záznamy v DB.
 
 ## Obchodní logika
 
@@ -71,6 +84,7 @@ párování bankovních transakcí.
 | `idx_person` | index | `person`, `order_pos` ASC | Hlavní přístupová cesta — účty osoby seřazené podle priority |
 | `idx_account_number` | index | `account_number` | Zpětné vyhledání osoby podle čísla účtu (párování transakcí) |
 | `idx_iban` | index | `iban` | Vyhledání podle IBAN — např. při zpracování SEPA plateb |
+| `idx_doc_state` | index | `docStateMain` ASC | Filtrace aktivních záznamů ve výpisech a resolverech |
 
 ## Návaznosti
 

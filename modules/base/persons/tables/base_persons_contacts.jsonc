@@ -6,6 +6,12 @@
 
     "displayPattern": "{name}",
 
+    "docStates": {
+        "stateColumn": "docState",
+        "mainColumn": "docStateMain",
+        "cfgItem": "core.system.docStatesArchive"
+    },
+
     "columns": [
         {
             "id": "id",
@@ -90,6 +96,24 @@
             "name:en": "Valid to",
             "type": "date",
             "nullable": true
+        },
+        {
+            "id": "docState",
+            "name": "Document state",
+            "name:cs": "Stav dokumentu",
+            "name:en": "Document state",
+            "type": "tinyint",
+            "default": 10,
+            "system": true
+        },
+        {
+            "id": "docStateMain",
+            "name": "Document state (sort)",
+            "name:cs": "Stav dokumentu (řazení)",
+            "name:en": "Document state (sort)",
+            "type": "tinyint",
+            "default": 1,
+            "system": true
         }
     ],
 
@@ -107,6 +131,13 @@
             "type": "index",
             "columns": [
                 {"column": "name"}
+            ]
+        },
+        {
+            "id": "idx_doc_state",
+            "type": "index",
+            "columns": [
+                {"column": "docStateMain", "order": "ASC"}
             ]
         }
     ]

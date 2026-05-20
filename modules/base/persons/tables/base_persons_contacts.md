@@ -27,6 +27,19 @@ struktuře.
 | `order_pos` | smallint | ne (default 0) | Pořadí zobrazení — nižší hodnota = vyšší priorita. Kontakt s `order_pos = 0` se považuje za primární |
 | `valid_from` | date | ano | Datum začátku platnosti kontaktu |
 | `valid_to` | date | ano | Datum konce platnosti — kontakt s vyplněným `valid_to` v minulosti se v UI přestane nabízet jako aktivní, ale zůstane v historii |
+| `docState` | tinyint | ne (default 10) | Stav dokumentu — cfgItem `core.system.docStatesArchive` |
+| `docStateMain` | tinyint | ne (default 1) | Stav pro řazení a filtraci viewerů |
+
+### Stavy dokumentů
+
+`valid_to` a `docState` jsou dvě ortogonální osy — viz
+[exchange-format-persons.md §4a](../../../../docs/exchange-format-persons.md#4a-stavy-dokumentů-a-valid_to--dvě-ortogonální-osy).
+Stručně: `valid_to` značí, že kontakt přestal platit (historie zůstává
+korektní), `docState = 90` značí, že záznam je vadný.
+
+Aktivní záznamy mají `docState IN (10, 40, 80)`. Resolvery výměnného
+formátu (modul `core.exchange`) tímto filtrem párují payload se
+záznamy v DB.
 
 ## Obchodní logika
 
@@ -58,6 +71,7 @@ obsahuje funkční označení (např. „Účtárna"), `role` se obvykle nevypl�
 |---|---|---|---|
 | `idx_person` | index | `person`, `order_pos` ASC | Hlavní přístupová cesta — rychlé načtení kontaktů osoby seřazených podle priority. Kompozitní index obslouží dotaz i řazení bez dalšího třídění |
 | `idx_name` | index | `name` | Vyhledávání kontaktu podle jména napříč osobami |
+| `idx_doc_state` | index | `docStateMain` ASC | Filtrace aktivních záznamů ve výpisech a resolverech |
 
 ## Návaznosti
 

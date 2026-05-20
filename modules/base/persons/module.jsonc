@@ -95,6 +95,10 @@
             "id": "base.persons.viewerDetailLabels",
             "file": "config/viewerDetailLabels.jsonc"
         },
+        {
+            "id": "base.persons.sourceKinds",
+            "file": "config/sourceKinds.jsonc"
+        },
     ],
 
     "alertChecks": [

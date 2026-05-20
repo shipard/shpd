@@ -55,6 +55,19 @@ Sloupce jsou organizovány do skupin:
 | `closed_date` | date | Datum uzavření |
 | `is_own` | boolean | Příznak vlastní firmy — max 1 záznam v DS, jen pro firmy |
 
+### Původ záznamu (lineage)
+
+| Sloupec | Typ | Popis |
+|---|---|---|
+| `source_kind` | varchar(40), nullable | Klíč z [base.persons.sourceKinds](../config/sourceKinds.jsonc) — `manual`, `aiExtraction`, `import.ares`, `import.rpo`, `import.handelsregister`, `import.shipardRegistry`, `import.csv` |
+| `source_ref` | varchar(60), nullable | Identifikátor v zdrojovém registru — typicky IČO, ARES snapshot ID, RPO ID apod. |
+| `source_imported_at` | datetime, nullable | Čas posledního importu / synchronizace |
+
+Lineage sloupce vyplňuje `PersonApplier` (modul `core.exchange`) při apply
+canonical payloadu — viz [exchange-format-persons.md §13](../../../../docs/exchange-format-persons.md#13-lineage).
+Manuálně pořízené osoby přes UI mají `source_kind = NULL` (nebo zachovanou
+hodnotu z dřívějšího importu — manuální editace přes UI lineage nepřepisuje).
+
 ## Obchodní logika (PersonDocument)
 
 Dokumentová třída [PersonDocument.php](../src/PersonDocument.php) implementuje
@@ -110,6 +123,18 @@ Validace:
 
 Při instalaci nového DS uživatel ručně označí svou firmu — nelze vytvářet
 doklady, dokud vlastní firma není nastavená (kontrola v dokladovém modulu).
+
+### Lineage (původ záznamu)
+
+Sloupce `source_kind`, `source_ref`, `source_imported_at` vyplňuje
+`PersonApplier` v modulu `core.exchange` při apply canonical payloadu —
+typicky při importu z ARES / RPO / vlastního Shipard registru nebo při
+periodické synchronizaci. Sloupce jsou volitelné — manuálně pořízené
+osoby přes FormEditor mají `NULL`.
+
+`PersonApplier` lineage přepisuje **jen** když payload obsahuje
+`source.kind` — UI editace osoby (která `source` neposílá) zachová
+předchozí hodnoty.
 
 ## Indexy
 

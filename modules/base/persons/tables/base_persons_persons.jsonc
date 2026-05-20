@@ -42,6 +42,12 @@
             "name": "Status",
             "name:cs": "Stav",
             "name:en": "Status"
+        },
+        {
+            "id": "lineage",
+            "name": "Lineage",
+            "name:cs": "Původ záznamu",
+            "name:en": "Lineage"
         }
     ],
 
@@ -282,6 +288,39 @@
             "type": "boolean",
             "default": 0,
             "group": "status"
+        },
+
+        // --- lineage ---
+
+        {
+            "id": "source_kind",
+            "name": "Source kind",
+            "name:cs": "Zdroj záznamu",
+            "name:en": "Source kind",
+            "type": "varchar",
+            "length": 40,
+            "nullable": true,
+            "cfgItem": "base.persons.sourceKinds",
+            "group": "lineage"
+        },
+        {
+            "id": "source_ref",
+            "name": "Source reference",
+            "name:cs": "Identifikátor ve zdroji",
+            "name:en": "Source reference",
+            "type": "varchar",
+            "length": 60,
+            "nullable": true,
+            "group": "lineage"
+        },
+        {
+            "id": "source_imported_at",
+            "name": "Imported at",
+            "name:cs": "Importováno",
+            "name:en": "Imported at",
+            "type": "datetime",
+            "nullable": true,
+            "group": "lineage"
         },
 
         // --- doc state (systémové, bez skupiny) ---

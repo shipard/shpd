@@ -8,10 +8,10 @@ use Dibi\Connection;
 use Dibi\Row;
 use PHPUnit\Framework\TestCase;
 use Shipard\Core\Config\ConfigRuntime;
-use Shipard\Module\Core\Exchange\Document\ApplyResult;
+use Shipard\Module\Core\Exchange\Common\ApplyResult;
 use Shipard\Module\Core\Exchange\Document\DocumentApplier;
 use Shipard\Module\Core\Exchange\Document\DocumentValidator;
-use Shipard\Module\Core\Exchange\Document\TransactionlessTableGateway;
+use Shipard\Module\Core\Exchange\Common\TransactionlessTableGateway;
 use Shipard\Module\Core\Exchange\Resolve\BankAccountResolver;
 use Shipard\Module\Core\Exchange\Resolve\ItemResolver;
 use Shipard\Module\Core\Exchange\Resolve\PartyResolver;
@@ -434,7 +434,7 @@ class DocumentApplierTest extends TestCase
             $result->success,
             "Expected success; errorCode={$result->errorCode} msg={$result->errorMessage}",
         );
-        $this->assertSame(1234, $result->savedDocId);
+        $this->assertSame(1234, $result->savedId);
     }
 
     public function testSafeModeRejectsPartyWithoutCompanyId(): void
@@ -551,7 +551,7 @@ class DocumentApplierTest extends TestCase
         $result = $applier->apply($payload);
 
         $this->assertTrue($result->success);
-        $this->assertSame(1234, $result->savedDocId);
+        $this->assertSame(1234, $result->savedId);
         $this->assertSame('alreadyApplied', $result->canonical['_resolve']['summary']['status']);
     }
 

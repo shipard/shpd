@@ -21,22 +21,37 @@
     iconThemeDark,
     iconThemeAuto,
     iconConfirm,
+    iconWarning,
     resolveIcon,
   } from '../../icons.js';
 
+  // Rekurzivně sebere všechny klikatelné leaves ze stromu navigace
+  // v depth-first pořadí. Skupiny (bez `type`, jen s `children`) se
+  // vynechají; jejich children se ploše zařadí do výsledku.
+  function flattenLeaves(tree) {
+    const leaves = [];
+    for (const node of tree) {
+      if (node.type) {
+        leaves.push(node);
+      } else if (node.children) {
+        leaves.push(...flattenLeaves(node.children));
+      }
+    }
+    return leaves;
+  }
+
   let { onNavigate, onLogout } = $props();
 
-  // Collapsed state
+  // Collapsed state — toggle tlačítkem v hlavičce.
   let collapsed = $state(false);
-  let hovered = $state(false);
-
-  // Sidebar is visually expanded when not collapsed OR when hovered
-  let expanded_sidebar = $derived(!collapsed || hovered);
 
   // Navigation tree loaded from server API — reloads when mode changes
   let navTree = $state([]);
   let loading = $state(true);
   let error   = $state(null);
+
+  // Plochý seznam klikatelných leaves pro sbalený stav sidebaru.
+  let flatLeaves = $derived(flattenLeaves(navTree));
 
   // Track expanded state per group id
   let expanded = $state(new Set());
@@ -99,15 +114,6 @@
 
   function toggleCollapse() {
     collapsed = !collapsed;
-    if (!collapsed) hovered = false;
-  }
-
-  function handleMouseEnter() {
-    if (collapsed) hovered = true;
-  }
-
-  function handleMouseLeave() {
-    if (collapsed) hovered = false;
   }
 
   // --- User menu (dropdown nad uživatelským jménem v patce) ---
@@ -191,7 +197,7 @@
 
   // Při sbalení sidebaru zavři otevřené menu (jinak by zůstalo viset).
   $effect(() => {
-    if (collapsed && !hovered) closeUserMenu();
+    if (collapsed) closeUserMenu();
   });
 
   let activeId = $derived(navigationStore.activeId);
@@ -200,12 +206,9 @@
 <nav
   class="shpd-sidebar"
   class:shpd-sidebar--collapsed={collapsed}
-  class:shpd-sidebar--hover-expanded={collapsed && hovered}
-  onmouseenter={handleMouseEnter}
-  onmouseleave={handleMouseLeave}
 >
   <div class="shpd-sidebar__header">
-    {#if expanded_sidebar}
+    {#if !collapsed}
       <span class="shpd-sidebar__logo">Shipard</span>
     {/if}
     <button class="shpd-sidebar__toggle" onclick={toggleCollapse} title={collapsed ? t('sidebar.expand') : t('sidebar.collapse')}>
@@ -213,109 +216,145 @@
     </button>
   </div>
 
-  {#if navigationStore.mode === 'settings' && expanded_sidebar}
-    <div class="shpd-sidebar__back-bar">
-      <button class="shpd-sidebar__back-button" onclick={() => navigationStore.exitSettings()}>
-        <Icon icon={iconChevronLeft} size="sm" />
-        <span>{t('sidebar.backToApp')}</span>
-      </button>
-    </div>
-  {/if}
-
-  <div class="shpd-sidebar__nav">
-  {#if loading}
-    <div class="shpd-sidebar__status">
-      <Icon icon={iconSpinner} spin size="sm" />
-      {#if expanded_sidebar}<span>{t('common.loading')}</span>{/if}
-    </div>
-  {:else if error}
-    <div class="shpd-sidebar__status shpd-sidebar__status--error">{error}</div>
-  {/if}
-
-    {#each navTree as group}
-    {#if group.type}
-      <!-- Root-level leaf (např. Dashboard) — žádná skupina, klikatelná
-           položka přímo. Stejný layout jako leaf v podskupinách, aby
-           vizuálně zapadl mezi ostatní sidebar items. -->
-      <div class="shpd-sidebar__group shpd-sidebar__group--leaf">
+  {#if navigationStore.mode === 'settings'}
+    {#if collapsed}
+      <div class="shpd-sidebar__back-bar shpd-sidebar__back-bar--collapsed">
         <button
-          class="shpd-sidebar__item"
-          class:shpd-sidebar__item--active={activeId === group.id}
-          onclick={() => handleItemClick(group)}
+          class="shpd-sidebar__back-button shpd-sidebar__back-button--icon-only"
+          onclick={() => navigationStore.exitSettings()}
+          title={t('sidebar.backToApp')}
+          aria-label={t('sidebar.backToApp')}
         >
-          <Icon icon={resolveIcon(group.icon)} size="sm" />
-          <span>{group.label}</span>
+          <Icon icon={iconChevronLeft} size="sm" />
         </button>
       </div>
     {:else}
-    <div class="shpd-sidebar__group">
-      <button
-        class="shpd-sidebar__group-header"
-        onclick={() => toggleGroup(group.id)}
-      >
-        <span class="shpd-sidebar__group-label">{group.label}</span>
-        <span class="shpd-sidebar__chevron">
-          <Icon icon={expanded.has(group.id) ? iconChevronDown : iconChevronRight} size="xs" />
-        </span>
-      </button>
-
-      {#if expanded.has(group.id)}
-        <ul class="shpd-sidebar__list">
-          {#each group.children as child}
-            {#if child.children}
-              <!-- Nested sub-group -->
-              <li class="shpd-sidebar__subgroup">
-                <button
-                  class="shpd-sidebar__subgroup-header"
-                  onclick={() => toggleGroup(child.id)}
-                >
-                  <span>{child.label}</span>
-                  <span class="shpd-sidebar__chevron">
-                    <Icon icon={expanded.has(child.id) ? iconChevronDown : iconChevronRight} size="xs" />
-                  </span>
-                </button>
-
-                {#if expanded.has(child.id)}
-                  <ul class="shpd-sidebar__list shpd-sidebar__list--nested">
-                    {#each child.children as leaf}
-                      <li>
-                        <button
-                          class="shpd-sidebar__item"
-                          class:shpd-sidebar__item--active={activeId === leaf.id}
-                          onclick={() => handleItemClick(leaf)}
-                        >
-                          <Icon icon={resolveIcon(leaf.icon)} size="sm" />
-                          <span>{leaf.label}</span>
-                        </button>
-                      </li>
-                    {/each}
-                  </ul>
-                {/if}
-              </li>
-            {:else}
-              <li>
-                <button
-                  class="shpd-sidebar__item"
-                  class:shpd-sidebar__item--active={activeId === child.id}
-                  onclick={() => handleItemClick(child)}
-                >
-                  <Icon icon={resolveIcon(child.icon)} size="sm" />
-                  <span>{child.label}</span>
-                </button>
-              </li>
-            {/if}
-          {/each}
-        </ul>
-      {/if}
-    </div>
+      <div class="shpd-sidebar__back-bar">
+        <button class="shpd-sidebar__back-button" onclick={() => navigationStore.exitSettings()}>
+          <Icon icon={iconChevronLeft} size="sm" />
+          <span>{t('sidebar.backToApp')}</span>
+        </button>
+      </div>
     {/if}
-    {/each}
+  {/if}
+
+  <div class="shpd-sidebar__nav">
+    {#if loading}
+      <div class="shpd-sidebar__status">
+        <Icon icon={iconSpinner} spin size="sm" />
+        {#if !collapsed}<span>{t('common.loading')}</span>{/if}
+      </div>
+    {:else if error}
+      <div class="shpd-sidebar__status shpd-sidebar__status--error">
+        {#if collapsed}
+          <Icon icon={iconWarning} size="sm" />
+        {:else}
+          {error}
+        {/if}
+      </div>
+    {:else if collapsed}
+      <!-- Sbalený stav: ploché ikony všech leaves, bez sekcí. -->
+      <ul class="shpd-sidebar__list shpd-sidebar__list--collapsed">
+        {#each flatLeaves as leaf}
+          <li>
+            <button
+              class="shpd-sidebar__item shpd-sidebar__item--icon-only"
+              class:shpd-sidebar__item--active={activeId === leaf.id}
+              onclick={() => handleItemClick(leaf)}
+              title={leaf.label}
+              aria-label={leaf.label}
+            >
+              <Icon icon={resolveIcon(leaf.icon)} size="sm" />
+            </button>
+          </li>
+        {/each}
+      </ul>
+    {:else}
+      {#each navTree as group}
+        {#if group.type}
+          <!-- Root-level leaf (např. Dashboard) — žádná skupina, klikatelná
+               položka přímo. Stejný layout jako leaf v podskupinách, aby
+               vizuálně zapadl mezi ostatní sidebar items. -->
+          <div class="shpd-sidebar__group shpd-sidebar__group--leaf">
+            <button
+              class="shpd-sidebar__item"
+              class:shpd-sidebar__item--active={activeId === group.id}
+              onclick={() => handleItemClick(group)}
+            >
+              <Icon icon={resolveIcon(group.icon)} size="sm" />
+              <span>{group.label}</span>
+            </button>
+          </div>
+        {:else}
+          <div class="shpd-sidebar__group">
+            <button
+              class="shpd-sidebar__group-header"
+              onclick={() => toggleGroup(group.id)}
+            >
+              <span class="shpd-sidebar__group-label">{group.label}</span>
+              <span class="shpd-sidebar__chevron">
+                <Icon icon={expanded.has(group.id) ? iconChevronDown : iconChevronRight} size="xs" />
+              </span>
+            </button>
+
+            {#if expanded.has(group.id)}
+              <ul class="shpd-sidebar__list">
+                {#each group.children as child}
+                  {#if child.children}
+                    <!-- Nested sub-group -->
+                    <li class="shpd-sidebar__subgroup">
+                      <button
+                        class="shpd-sidebar__subgroup-header"
+                        onclick={() => toggleGroup(child.id)}
+                      >
+                        <span>{child.label}</span>
+                        <span class="shpd-sidebar__chevron">
+                          <Icon icon={expanded.has(child.id) ? iconChevronDown : iconChevronRight} size="xs" />
+                        </span>
+                      </button>
+
+                      {#if expanded.has(child.id)}
+                        <ul class="shpd-sidebar__list shpd-sidebar__list--nested">
+                          {#each child.children as leaf}
+                            <li>
+                              <button
+                                class="shpd-sidebar__item"
+                                class:shpd-sidebar__item--active={activeId === leaf.id}
+                                onclick={() => handleItemClick(leaf)}
+                              >
+                                <Icon icon={resolveIcon(leaf.icon)} size="sm" />
+                                <span>{leaf.label}</span>
+                              </button>
+                            </li>
+                          {/each}
+                        </ul>
+                      {/if}
+                    </li>
+                  {:else}
+                    <li>
+                      <button
+                        class="shpd-sidebar__item"
+                        class:shpd-sidebar__item--active={activeId === child.id}
+                        onclick={() => handleItemClick(child)}
+                      >
+                        <Icon icon={resolveIcon(child.icon)} size="sm" />
+                        <span>{child.label}</span>
+                      </button>
+                    </li>
+                  {/if}
+                {/each}
+              </ul>
+            {/if}
+          </div>
+        {/if}
+      {/each}
+    {/if}
   </div>
 
   <div class="shpd-sidebar__footer" bind:this={userMenuRoot}>
     <button
       class="shpd-sidebar__user-button"
-      class:shpd-sidebar__user-button--collapsed={!expanded_sidebar}
+      class:shpd-sidebar__user-button--collapsed={collapsed}
       class:shpd-sidebar__user-button--open={userMenuOpen}
       onclick={toggleUserMenu}
       title={authStore.user?.full_name ?? ''}
@@ -325,7 +364,7 @@
       <span class="shpd-sidebar__avatar">
         {(authStore.user?.full_name ?? '?').charAt(0)}
       </span>
-      {#if expanded_sidebar}
+      {#if !collapsed}
         <span class="shpd-sidebar__username">{authStore.user?.full_name ?? ''}</span>
         <span class="shpd-sidebar__user-chevron">
           <Icon icon={userMenuOpen ? iconChevronDown : iconChevronUp} size="xs" />
@@ -336,7 +375,7 @@
     {#if userMenuOpen}
       <div
         class="shpd-sidebar__user-menu"
-        class:shpd-sidebar__user-menu--side={!expanded_sidebar}
+        class:shpd-sidebar__user-menu--side={collapsed}
         role="menu"
       >
         <button class="shpd-sidebar__user-menu-item" onclick={handleSettings} role="menuitem">
@@ -415,15 +454,11 @@
 
   .shpd-sidebar--collapsed {
     width: var(--shpd-sidebar-width-collapsed);
-  }
-
-  .shpd-sidebar--hover-expanded {
-    width: var(--shpd-sidebar-width);
-    position: absolute;
-    top: 0;
-    left: 0;
-    z-index: 100;
-    box-shadow: var(--shpd-shadow-lg);
+    /* Ve sbaleném stavu povolíme overflow, aby user-menu dropdown
+       (`.shpd-sidebar__user-menu--side`) mohl vyčnívat doprava ven ze
+       48px proužku. V rozbaleném stavu zůstává `overflow: hidden`
+       z `.shpd-sidebar` kvůli skrývání labelů během toggle transition. */
+    overflow: visible;
   }
 
   .shpd-sidebar__header {
@@ -436,7 +471,7 @@
     border-bottom: 1px solid var(--shpd-color-bg-sidebar-border);
   }
 
-  .shpd-sidebar--collapsed:not(.shpd-sidebar--hover-expanded) .shpd-sidebar__header {
+  .shpd-sidebar--collapsed .shpd-sidebar__header {
     justify-content: center;
     padding: 0;
   }
@@ -479,8 +514,49 @@
     min-height: 0;
   }
 
-  .shpd-sidebar--collapsed:not(.shpd-sidebar--hover-expanded) .shpd-sidebar__nav {
-    display: none;
+  /* Plochý seznam ikon ve sbaleném sidebaru.
+   * Bez sekcí, bez chevronů — jen ikony pod sebou, vystředěné. */
+  .shpd-sidebar__list--collapsed {
+    padding: var(--shpd-space-sm) 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    list-style: none;
+  }
+
+  .shpd-sidebar__list--collapsed > li {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+  }
+
+  /* Sbalená varianta klikatelné položky — čtvercové tlačítko, jen ikona.
+   * Stejné barvy a aktivní stav (accent proužek vlevo + primary pozadí)
+   * jako rozbalená varianta — uživatel pozná aktivní položku stejně. */
+  .shpd-sidebar__item--icon-only {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    gap: 0;
+  }
+
+  /* Kompaktní back button ve sbaleném settings sidebaru. */
+  .shpd-sidebar__back-bar--collapsed {
+    display: flex;
+    justify-content: center;
+    padding: var(--shpd-space-xs);
+  }
+
+  .shpd-sidebar__back-button--icon-only {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    gap: 0;
+    justify-content: center;
   }
 
   .shpd-sidebar__footer {

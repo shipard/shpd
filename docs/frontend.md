@@ -67,7 +67,7 @@ frontend/
 │   │   │   └── Modal.svelte
 │   │   ├── layout/
 │   │   │   ├── AppShell.svelte         # Hlavní layout (sidebar + content)
-│   │   │   ├── Sidebar.svelte          # Navigace, logo, user info — kolapsibilní s hover rozbalením
+│   │   │   ├── Sidebar.svelte          # Navigace, logo, user info — kolapsibilní (sbalený = ploché ikony)
 │   │   │   └── ContentArea.svelte      # Hlavní oblast — renderuje aktivní položku
 │   │   ├── auth/
 │   │   │   └── LoginScreen.svelte      # Přihlašovací obrazovka
@@ -194,13 +194,23 @@ Sidebar je flex column se třemi sekcemi:
 
 Sidebar je kolapsibilní na úzký proužek (48px). Ve sbaleném stavu:
 
-- Navigační strom a logo jsou skryté
-- V patce zůstává jen kruhový avatar uzivatele; klik otevře dropdown menu
-  jako overlay vpravo od sidebaru
-- Při hoveru myší se sidebar rozbalí jako overlay (`position: absolute`, `z-index: 100`) na plnou šířku, aniž by posouval hlavní obsah
-- Po odjetí myší se sidebar zase sbalí
+- Logo a sekce navigace (groups, sub-groups) jsou skryté
+- Klikatelné položky menu (leaves) zůstávají vidět jako plochý seznam
+  ikon — `flattenLeaves(navTree)` rekurzivně vybere všechny nody s `type`
+  v depth-first pořadí. Každá ikona má `title` atribut s názvem položky.
+- Aktivní položka se zvýrazní stejně jako v rozbaleném stavu
+  (oranžový accent proužek vlevo + modré primary pozadí)
+- V settings módu zůstává v hlavičce sidebaru kompaktní tlačítko zpět
+  (jen ikona `iconChevronLeft`)
+- V patce zůstává jen kruhový avatar uživatele; klik otevře dropdown menu
+  jako overlay vpravo od sidebaru (`.shpd-sidebar__user-menu--side`)
+- Rozbalení/sbalení jen přes toggle tlačítko v hlavičce. Hover myší
+  sidebar nerozbaluje (klávesová zkratka pro toggle je plánovaná do
+  budoucna).
 
-Stav řídí Svelte runes: `collapsed` (toggle tlačítkem), `hovered` (mouseenter/mouseleave).
+Stav řídí Svelte runes: `collapsed` (toggle tlačítkem). Pomocný
+`$derived flatLeaves` je plochý seznam klikatelných položek pro sbalený
+stav.
 
 ### Sidebar — dynamická navigace ze serveru
 

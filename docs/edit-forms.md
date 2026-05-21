@@ -82,7 +82,7 @@ Server vrací `FormDefinition` z endpointu `/_ui/form/{table}/meta`. Klient ji r
 | `table` | string | DB název tabulky |
 | `title` | string | Nadpis pro editaci existujícího záznamu |
 | `title_new` | string | Nadpis pro nový záznam |
-| `full_size` | bool | true = velký modal (1200×900px) pro hlavní entity, false = malý modal (720px, výška dle obsahu) pro sub-záznamy |
+| `full_size` | bool | true = velký modal (1200×900px) pro hlavní entity, false = malý modal (960px, výška dle obsahu) pro sub-záznamy |
 | `tabs` | Tab[] | Seznam tabů (min. 1) |
 | `doc_states` | DocStatesInfo \| null | Info o stavech; přítomno i pro nový záznam (výchozí stav 10) |
 
@@ -430,7 +430,7 @@ Klient zobrazí chyby u příslušných polí. Pokud je chybné pole na neaktivn
 `FormDialog.svelte` vždy renderuje formulář v Modal komponentě (centrovaný popup nad tmavým overlayem). `full_size` určuje pouze **velikost** modalu:
 
 - `true` → velký modal: šířka `1200px`, výška `min(900px, 90vh)`. Pro hlavní entity (Osoby, Faktury…).
-- `false` → malý modal: šířka `720px`, výška dle obsahu (max `90vh`). Pro sub-záznamy (Kontakt, Adresa…).
+- `false` → malý modal: šířka `960px`, výška dle obsahu (max `90vh`). Pro sub-záznamy (Kontakt, Adresa, Bankovní účet…).
 
 ### Chování modalu
 

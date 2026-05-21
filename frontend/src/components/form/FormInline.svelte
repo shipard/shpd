@@ -31,7 +31,7 @@
   <div class="shpd-form-inline">
     {#each element.elements as inner, i (inner.column ?? i)}
       <span class="shpd-form-inline__item">
-        {#if i > 0}<span class="shpd-form-inline__mini-label">{inner.label ?? ''}:</span>{/if}
+        {#if i > 0}<span class="shpd-form-inline__mini-label">{inner.label ?? ''}</span>{/if}
 
         {#if inner.type === 'select'}
           <Select
@@ -80,16 +80,25 @@
     display: flex;
     gap: var(--shpd-space-md);
     align-items: baseline;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
   }
   .shpd-form-inline__item {
     display: flex;
-    gap: var(--shpd-space-xs);
+    gap: var(--shpd-space-md);
     align-items: baseline;
+    flex: 1 1 0;
+    min-width: 0;
   }
+  /*
+   * Mini-labely u 2. a dalších polí v inline skupině. Vizuálně shodné
+   * s velkým labelem (.shpd-form-field-row__label) — stejná velikost, váha
+   * a barva, aby mezi velkým a mini-labelem nebyl rozdíl. Bez dvojtečky
+   * v template ze stejného důvodu.
+   */
   .shpd-form-inline__mini-label {
     font-size: var(--shpd-font-size-sm);
-    color: var(--shpd-color-text-secondary);
+    font-weight: 500;
+    color: var(--shpd-color-text);
     white-space: nowrap;
   }
 </style>

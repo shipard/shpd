@@ -26,7 +26,7 @@
   // Velikosti modalu pro hlavní (full_size: true) a sub (full_size: false) formuláře.
   const LARGE_WIDTH = '1200px';
   const LARGE_HEIGHT = '900px';
-  const SMALL_WIDTH = '720px';
+  const SMALL_WIDTH = '960px';
 
   // Meta načtená před otevřením modalu — určuje velikost a (po načtení FormEditorem)
   // titulek a stavový badge v headeru.

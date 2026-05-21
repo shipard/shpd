@@ -16,15 +16,21 @@
    * <label> and <.input> are two SEPARATE siblings inside the parent FormColumn
    * grid (no wrapping element around them). That's how all labels in a column
    * collapse to one shared "max-content" track.
+   *
+   * The label/required rules are exposed via :global() because FormInline.svelte
+   * also emits a <label class="shpd-form-field-row__label"> as its grid label
+   * sibling. Without :global, Svelte's scoped styles would hash this rule to
+   * the FormFieldRow component only, leaving inline labels at the default
+   * text-align: left — inconsistent with non-inline labels in the same column.
    */
-  .shpd-form-field-row__label {
+  :global(.shpd-form-field-row__label) {
     font-size: var(--shpd-font-size-sm);
     font-weight: 500;
     color: var(--shpd-color-text);
     text-align: right;
     white-space: nowrap;
   }
-  .shpd-form-field-row__required {
+  :global(.shpd-form-field-row__required) {
     color: var(--shpd-color-danger);
     margin-left: 2px;
   }

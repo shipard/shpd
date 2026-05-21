@@ -22,72 +22,81 @@ class PersonsForm extends TableForm
 
         // ── Tab: Základní údaje ──────────────────────────────────────────────
         $basic = $this->tab('basic', 'Základní údaje')
-            // Vždy viditelné základy
             ->section()
-            ->col()
-            ->input('person_id', required: true)
-            ->select(
-                'person_type',
-                options: $personTypeOptions,
-                triggers: 'reload',
-                required: true,
-            )
-            ->input(
-                'full_name',
-                required: $isCompany,
-                readOnly: $isPerson,
-            )
+                ->col()
+                    ->select(
+                        'person_type',
+                        options: $personTypeOptions,
+                        triggers: 'reload',
+                        required: true,
+                    )
+                    ->input(
+                        'full_name',
+                        required: $isCompany,
+                        hidden: $isPerson,
+                    )
 
-            // Jen pro Company
             ->section(title: 'Identifikace firmy', hidden: $isPerson || $isUndefined)
-            ->col()
-            ->input('company_id')
-            ->input('tax_id')
-            ->input('vat_id')
-            ->input('court_registration')
-            ->checkbox('is_own')
+                ->col()
+                    ->inline()
+                        ->input('company_id')
+                        ->input('tax_id')
+                    ->endInline()
 
-            // Jen pro Person
             ->section(title: 'Jméno', hidden: $isCompany || $isUndefined)
-            ->col()
-            ->input('title_before')
-            ->inline()
-            ->input('first_name', required: $isPerson)
-            ->input('middle_name')
-            ->input('last_name', required: $isPerson)
-            ->endInline()
-            ->input('title_after')
+                ->col()
+                    ->input('title_before')
+                    ->inline()
+                        ->input('first_name', required: $isPerson)
+                        ->input('middle_name')
+                        ->input('last_name', required: $isPerson)
+                    ->endInline()
+                    ->input('title_after')
 
-            // Jen pro Person
             ->section(title: 'Osobní údaje', hidden: $isCompany || $isUndefined)
-            ->col()
-            ->date('birth_date')
-            ->input('national_id')
-            ->input('id_card_number')
-            ->build();
+                ->col()
+                    ->inline()
+                        ->date('birth_date')
+                        ->input('national_id')
+                    ->endInline()
+                    ->input('id_card_number')
 
-        // ── Tab: Kontaktní údaje ─────────────────────────────────────────────
-        $contact = $this->tab('contact', 'Kontaktní údaje')
-            ->section()
-            ->col()
-            ->input('email', inputType: 'email')
-            ->input('phone', inputType: 'tel')
-            ->input('web', inputType: 'url')
-            ->section(title: 'Platba')
-            ->col()
-            ->number('payment_term_days')
+            ->section(title: 'Kontakt')
+                ->col()
+                    ->inline()
+                        ->input('email', inputType: 'email')
+                        ->input('phone', inputType: 'tel')
+                    ->endInline()
+                    ->input('web', inputType: 'url')
             ->build();
 
         // ── Subtable a attachments taby ──────────────────────────────────────
-        $contacts     = $this->subtableTab('contacts',      'Kontakty',       'base_persons_contacts',      'person', 'base.persons.contacts');
-        $addresses    = $this->subtableTab('addresses',     'Adresy',         'base_persons_addresses',     'person', 'base.persons.addresses');
+        $contacts     = $this->subtableTab('contacts',      'Kontakty',      'base_persons_contacts',      'person', 'base.persons.contacts');
+        $addresses    = $this->subtableTab('addresses',     'Adresy',        'base_persons_addresses',     'person', 'base.persons.addresses');
         $bankAccounts = $this->subtableTab('bank_accounts', 'Bankovní účty', 'base_persons_bank_accounts', 'person', 'base.persons.bank_accounts');
+
+        // ── Tab: Nastavení (úplně na konci, za Přílohami) ───────────────────
+        $settings = $this->tab('settings', 'Nastavení')
+            ->section(title: 'Identifikace')
+                ->col()
+                    ->input('person_id', required: true)
+
+            ->section(title: 'Identifikace firmy - doplňující', hidden: $isPerson || $isUndefined)
+                ->col()
+                    ->input('vat_id')
+                    ->input('court_registration')
+                    ->checkbox('is_own')
+
+            ->section(title: 'Obchodní podmínky')
+                ->col()
+                    ->number('payment_term_days')
+            ->build();
 
         return new FormDefinition(
             table: $this->table,
             title: 'Osoba',
             titleNew: 'Nová osoba',
-            tabs: [$basic, $contact, $contacts, $addresses, $bankAccounts, $this->attachmentsTab()],
+            tabs: [$basic, $contacts, $addresses, $bankAccounts, $this->attachmentsTab(), $settings],
             fullSize: true,
         );
     }

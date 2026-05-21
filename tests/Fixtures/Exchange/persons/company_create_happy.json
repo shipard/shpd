@@ -14,6 +14,7 @@
     "taxId": "CZ12345678",
     "vatId": "CZ12345678",
     "courtRegistration": "Městský soud v Praze, oddíl C, vložka 123456",
+    "govEBoxId": "itexnew9",
 
     "name": {
         "fullName": "IT-EX New Company s.r.o."

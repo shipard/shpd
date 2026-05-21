@@ -86,6 +86,7 @@ Zbytek pojmosloví (Canonical, Schema, Resolve, Apply, Lineage) viz
   "taxId":             "CZ12345678",
   "vatId":             "CZ12345678",
   "courtRegistration": "Obchodní rejstřík vedený MS v Praze, oddíl C, vložka 123456",
+  "govEBoxId":         "abcd1ef",     // ID datové schránky (jen CZ; 7 znaků v praxi)
 
   // ── Jméno ────────────────────────────────────────────────────────────────
   "name": {
@@ -153,7 +154,7 @@ Zbytek pojmosloví (Canonical, Schema, Resolve, Apply, Lineage) viz
 na sloupce `base_persons_persons`:
 
 - **`company`** — relevantní: `companyId`, `taxId`, `vatId`, `courtRegistration`,
-  `name.fullName`. Pole `personal` musí být `null` / vynecháno. Pole
+  `govEBoxId`, `name.fullName`. Pole `personal` musí být `null` / vynecháno. Pole
   `name.firstName`/`lastName` se ignorují (applier je vyprázdní podle
   business logiky v `PersonDocument::beforeSave`).
 - **`person`** — relevantní: `name.firstName`, `name.lastName`, případně

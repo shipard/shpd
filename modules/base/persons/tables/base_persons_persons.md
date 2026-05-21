@@ -18,6 +18,7 @@ Sloupce jsou organizovány do skupin:
 | `tax_id` | varchar(30) | DIČ |
 | `vat_id` | varchar(30) | DIČ pro DPH |
 | `court_registration` | varchar(250) | Zápis v obchodním rejstříku — typ "Městský soud v Praze, oddíl C, vložka 12345" |
+| `gov_e_box_id` | varchar(10), nullable | ID datové schránky (CZ; 7 znaků v praxi, 10 rezervou) |
 
 ### Jméno (name)
 

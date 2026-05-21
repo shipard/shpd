@@ -61,6 +61,7 @@
         "taxId":             { "type": ["string", "null"] },
         "vatId":             { "type": ["string", "null"] },
         "courtRegistration": { "type": ["string", "null"] },
+        "govEBoxId":         { "type": ["string", "null"] },
 
         // ── Name ────────────────────────────────────────────────────────
         // Per-personType validation lives in PHP PersonValidator. Schema

@@ -122,6 +122,16 @@
             "nullable": true,
             "group": "identity"
         },
+        {
+            "id": "gov_e_box_id",
+            "name": "Government e-box ID",
+            "name:cs": "ID datové schránky",
+            "name:en": "Government e-box ID",
+            "type": "varchar",
+            "length": 10,
+            "nullable": true,
+            "group": "identity"
+        },
 
         // --- name ---
 

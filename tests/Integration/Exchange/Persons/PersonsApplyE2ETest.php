@@ -107,6 +107,7 @@ class PersonsApplyE2ETest extends IntegrationTestCase
         $this->assertSame(2, (int) $person['person_type']);
         $this->assertSame('IT-EX New Company s.r.o.', $person['full_name']);
         $this->assertSame(40, (int) $person['docState']);
+        $this->assertSame('itexnew9', $person['gov_e_box_id'], 'govEBoxId must round-trip via canonical → applier → DB');
 
         // 2 addresses (Sídlo + Provozovna)
         $addresses = $this->db->fetchAll(

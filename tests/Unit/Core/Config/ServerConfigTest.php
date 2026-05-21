@@ -256,6 +256,83 @@ class ServerConfigTest extends TestCase
         $config->load();
     }
 
+    public function testGetRegistryPersonsBaseUrlDefault(): void
+    {
+        $path = $this->createConfig([
+            'host'           => '127.0.0.1',
+            'port'           => 3306,
+            'admin_user'     => 'root',
+            'admin_password' => 'secret',
+            'mode'           => 'production',
+        ]);
+
+        $config = new ServerConfig($path);
+        $config->load();
+
+        $this->assertSame('https://data.shipard.org/persons', $config->getRegistryPersonsBaseUrl());
+    }
+
+    public function testGetRegistryPersonsBaseUrlCustom(): void
+    {
+        $path = $this->createConfig([
+            'host'           => '127.0.0.1',
+            'port'           => 3306,
+            'admin_user'     => 'root',
+            'admin_password' => 'secret',
+            'mode'           => 'production',
+            'registry'       => [
+                'persons' => [
+                    'baseUrl' => 'https://dev-sebik.shpd.dev/e3bz-axkw-5tiw-hxaj/www/data.shipard.org/persons',
+                ],
+            ],
+        ]);
+
+        $config = new ServerConfig($path);
+        $config->load();
+
+        $this->assertSame(
+            'https://dev-sebik.shpd.dev/e3bz-axkw-5tiw-hxaj/www/data.shipard.org/persons',
+            $config->getRegistryPersonsBaseUrl(),
+        );
+    }
+
+    public function testGetRegistryPersonsBaseUrlStripsTrailingSlash(): void
+    {
+        $path = $this->createConfig([
+            'host'           => '127.0.0.1',
+            'port'           => 3306,
+            'admin_user'     => 'root',
+            'admin_password' => 'secret',
+            'mode'           => 'production',
+            'registry'       => ['persons' => ['baseUrl' => 'https://example.org/persons/']],
+        ]);
+
+        $config = new ServerConfig($path);
+        $config->load();
+
+        $this->assertSame('https://example.org/persons', $config->getRegistryPersonsBaseUrl());
+    }
+
+    public function testGetRegistryPersonsBaseUrlRejectsNonHttpScheme(): void
+    {
+        $path = $this->createConfig([
+            'host'           => '127.0.0.1',
+            'port'           => 3306,
+            'admin_user'     => 'root',
+            'admin_password' => 'secret',
+            'mode'           => 'production',
+            'registry'       => ['persons' => ['baseUrl' => 'ftp://example.org/persons']],
+        ]);
+
+        $config = new ServerConfig($path);
+        $config->load();
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/registry\.persons\.baseUrl.*http/i');
+
+        $config->getRegistryPersonsBaseUrl();
+    }
+
     public function testLoadMissingEachRequiredField(): void
     {
         $required = ['host', 'port', 'admin_user', 'admin_password', 'mode'];

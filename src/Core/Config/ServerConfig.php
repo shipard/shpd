@@ -101,4 +101,33 @@ class ServerConfig
     {
         return $this->data['extraModulesPath'] ?? [];
     }
+
+    /**
+     * Base URL of the Shipard persons registry (combined ARES + RPO +
+     * VAT-registry HTTP service). Read from nested config key
+     * `registry.persons.baseUrl`; defaults to the public service.
+     *
+     * Trailing slash is stripped so callers can append paths uniformly:
+     *   `{baseUrl}/{country}/{companyId}/json?formatMode=ns`
+     *
+     * Used by `PersonsRegistryClient` (modul base.persons) for the
+     * "Přidat firmu z registru" wizard and the AI Analyzer person
+     * importer.
+     */
+    public function getRegistryPersonsBaseUrl(): string
+    {
+        $url = $this->data['registry']['persons']['baseUrl']
+            ?? 'https://data.shipard.org/persons';
+        if (!is_string($url) || $url === '') {
+            throw new \RuntimeException(
+                "Server config 'registry.persons.baseUrl' must be a non-empty string",
+            );
+        }
+        if (!preg_match('#^https?://#', $url)) {
+            throw new \RuntimeException(
+                "Server config 'registry.persons.baseUrl' must start with http:// or https://, got '{$url}'",
+            );
+        }
+        return rtrim($url, '/');
+    }
 }

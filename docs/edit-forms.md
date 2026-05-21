@@ -837,6 +837,46 @@ function dispatch(..., ?DocumentRegistry $documentRegistry = null): Response { .
 
 Svelte 5 komponenty nepředávají DOM eventy automaticky. `onchange` musí být explicitní prop v interface + předán na interní `<select>`.
 
+### Reaktivní `$effect` a leaky dependencies přes async helpery
+
+Svelte 5 `$effect` sleduje reaktivní reads v synchronní části svého těla — včetně readů uvnitř volných funkcí (až do prvního `await`). Snadno to vede ke skrytým závislostem, které nečekaně spouštějí re-runy efektu.
+
+Konkrétním případem byl reload po Uložit ve `FormEditor.svelte`. Původní efekt:
+
+```js
+$effect(() => {
+  const tbl = table;
+  const id = recordId;
+  currentId = id;
+  loadForm(tbl, id);   // čte `defaultData` před prvním await
+});
+```
+
+`loadForm` synchronně kontroluje `if (id == null && defaultData && Object.keys(defaultData).length > 0)` před `await get(path)`. Pro nový záznam (`id == null`) se `defaultData` přečte — a tím se stane sledovaným depem efektu. Po Uložit rodič (Viewer) typicky resetuje `formDefaultData = {}` (nová object reference), efekt se znovu spustí, přepíše `currentId` zpět na `recordId` (stále `null`) a spustí paralelní `loadForm(table, null)`. Ten dorazí jako poslední a přepisuje data čerstvě uloženého záznamu prázdným formulářem.
+
+U existujících záznamů bug nenastane: `id == null` je `false`, AND short-circuit přes `id == null` `defaultData` v podmínce vůbec nečte — dep se nezaloží.
+
+Fix — `untrack` ohraničí, co se nemá trackovat:
+
+```js
+import { untrack } from 'svelte';
+
+$effect(() => {
+  const tbl = table;
+  const id = recordId;
+  // Reload jen na změnu (table, recordId). Reads uvnitř loadForm
+  // (defaultData prop) se nesmí stát skrytými dependencies.
+  untrack(() => {
+    currentId = id;
+    loadForm(tbl, id);
+  });
+});
+```
+
+Obecné pravidlo: pokud `$effect` volá async helper, který před prvním `await` čte další reaktivní stav neuvedený na dependency listu efektu, obal volání do `untrack(() => ...)`. Nebo helper přestavte tak, aby reaktivní reads byly až za prvním `await` (anti-pattern, lepší je explicitní `untrack`).
+
+Současně — `Viewer.handleFormSaved` zase nesmí resetovat `formTable` / `formDefaultData` při každém save, formulář může zůstat otevřený. Reset patří do `handleFormClose`.
+
 ### Validace `enumInt` v `InputValidator`
 
 cfgItem je mapa klíčů `{"0": {...}, "1": {...}}`. Správná validace:

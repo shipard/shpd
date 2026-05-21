@@ -374,10 +374,12 @@
     if (selectedRowId != null) {
       fetchDetail(selectedRowId);
     }
-    // Reset custom open_form state — uložení záznamu z detail akce nemá
-    // důvod hned znovu otvírat stejný formulář, refresh listu/detailu stačí.
-    formTable = null;
-    formDefaultData = {};
+    // formTable/formDefaultData se NEresetují tady. Formulář může po Uložit
+    // zůstat otevřený a tyto props ho parametrizují — přepisování `formDefaultData = {}`
+    // tvoří novou object referenci, která spouští re-run `$effect`u v `FormEditor`u
+    // a v kombinaci s probíhajícím `loadForm(table, newId)` způsobuje race condition
+    // (form se vynuluje na prázdný nový záznam). Reset proběhne až v handleFormClose.
+    // Viz docs/edit-forms.md sekce 19.
   }
 
   // Re-initialize ONLY when the viewer tab changes.

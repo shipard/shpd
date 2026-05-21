@@ -1,4 +1,5 @@
 <script>
+  import { untrack } from 'svelte';
   import { get, post, put } from '../../api/client.js';
   import FormTab from './FormTab.svelte';
   import AttachmentPanel from './AttachmentPanel.svelte';
@@ -147,8 +148,18 @@
   $effect(() => {
     const tbl = table;
     const id = recordId;
-    currentId = id;
-    loadForm(tbl, id);
+    // Re-load jen na změnu (table, recordId). `untrack` zabraňuje tomu,
+    // aby reaktivní reads uvnitř `loadForm` (typicky prop `defaultData`,
+    // čtený synchronně před prvním `await`) přidaly do efektu skryté
+    // závislosti. Bez `untrack` save nového záznamu způsobí race condition:
+    // rodič po `onSaved` typicky resetuje `formDefaultData`, což spustí
+    // re-run efektu, ten currentId přepíše zpět na recordId (null) a
+    // souběžný `loadForm(table, null)` přepíše data uloženého záznamu
+    // prázdným formulářem. Viz docs/edit-forms.md sekce 19.
+    untrack(() => {
+      currentId = id;
+      loadForm(tbl, id);
+    });
   });
 
   // ── Recalculate ─────────────────────────────────────────────────────────────

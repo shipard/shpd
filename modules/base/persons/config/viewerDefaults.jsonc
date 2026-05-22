@@ -1,0 +1,16 @@
+{
+    // base.persons.viewerDefaults
+    //
+    // Per-viewer overrides for PersonsViewer::getToolbarActions(). The base
+    // create/edit actions inherit labels from core.system.viewerDefaults;
+    // this file only declares actions specific to the persons module.
+
+    "toolbarActions": {
+        "import_from_registry": {
+            "name": "From registry",
+            "name:cs": "Z registru",
+            "name:en": "From registry",
+            "variant": "secondary"
+        }
+    }
+}

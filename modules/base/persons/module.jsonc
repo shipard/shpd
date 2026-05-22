@@ -99,6 +99,10 @@
             "id": "base.persons.sourceKinds",
             "file": "config/sourceKinds.jsonc"
         },
+        {
+            "id": "base.persons.viewerDefaults",
+            "file": "config/viewerDefaults.jsonc"
+        },
     ],
 
     "alertChecks": [

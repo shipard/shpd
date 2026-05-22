@@ -1,12 +1,12 @@
 <script>
   import Button from '../ui/Button.svelte';
-  import { iconAdd, iconDelete, iconRefresh, iconFilter } from '../../icons.js';
+  import { iconAdd, iconDelete, iconRefresh, iconFilter, resolveIcon } from '../../icons.js';
 
   let { actions = [], onAction } = $props();
 
   /**
    * Mapování běžných action IDs na ikony.
-   * Pokud akce má vlastní `icon`, použije se ten.
+   * Pokud akce má vlastní `icon`, použije se ten (string → resolveIcon, objekt = už hotová ikona).
    */
   const defaultActionIcons = {
     'add': iconAdd,
@@ -19,6 +19,12 @@
   };
 
   function getActionIcon(action) {
+    if (typeof action.icon === 'string' && action.icon !== '') {
+      // Backend posílá jméno ikony jako string (např. "cloud-download").
+      // resolveIcon vrátí undefined fallback iconTable, ale my chceme
+      // raději nic než iconTable na toolbarovém tlačítku.
+      return resolveIcon(action.icon, undefined);
+    }
     return action.icon ?? defaultActionIcons[action.id] ?? undefined;
   }
 </script>

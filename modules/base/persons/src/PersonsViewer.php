@@ -184,6 +184,30 @@ class PersonsViewer extends TableViewer
 		return ['tabs' => $tabs];
 	}
 
+	public function getToolbarActions(?array $selectedRow): array
+	{
+		// Base gives localized create/edit; append the registry-import action
+		// only on the unselected (list) toolbar — picking it on a selected row
+		// would be confusing UX.
+		$actions = parent::getToolbarActions($selectedRow);
+
+		if ($selectedRow !== null) {
+			return $actions;
+		}
+
+		$personDefs = ($this->config?->cfgItem('base.persons.viewerDefaults') ?? [])['toolbarActions'] ?? [];
+		$def = $personDefs['import_from_registry'] ?? ['name' => 'From registry', 'variant' => 'secondary'];
+
+		$actions[] = [
+			'id'      => 'import_from_registry',
+			'label'   => $def['name']    ?? 'From registry',
+			'variant' => $def['variant'] ?? 'secondary',
+			'icon'    => 'cloud-download',
+		];
+
+		return $actions;
+	}
+
 	// -------------------------------------------------------------------------
 
 	private function buildOverviewContent(array $record): array

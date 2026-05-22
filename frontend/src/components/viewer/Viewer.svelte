@@ -11,6 +11,7 @@
   import ViewerDetail from './ViewerDetail.svelte';
   import ViewerToolbar from './ViewerToolbar.svelte';
   import FormDialog from '../form/FormDialog.svelte';
+  import RegistryImportWizard from '../registry/RegistryImportWizard.svelte';
   import Modal from '../ui/Modal.svelte';
   import Button from '../ui/Button.svelte';
   import { t } from '../../i18n/index.js';
@@ -198,6 +199,9 @@
     }
   }
 
+  // --- Registry import wizard state ---
+  let registryWizardOpen = $state(false);
+
   // --- Reanalyze dialog state ---
   let reanalyzeDialogOpen = $state(false);
   let reanalyzeProfileNdx = $state('');
@@ -215,6 +219,8 @@
     } else if (actionId === 'edit' && selectedRowId != null) {
       editRecordId = selectedRowId;
       formOpen = true;
+    } else if (actionId === 'import_from_registry') {
+      registryWizardOpen = true;
     } else if (actionId === 'reanalyze' && selectedRowId != null) {
       // Najdi action a vytáhni z meta.profiles seznam profilů.
       const action = (toolbarActions ?? []).find(a => a.id === 'reanalyze');
@@ -285,6 +291,23 @@
   function closeReanalyzeDialog() {
     if (reanalyzeSubmitting) return;
     reanalyzeDialogOpen = false;
+  }
+
+  function handleRegistryWizardClose() {
+    registryWizardOpen = false;
+  }
+
+  function handleRegistryWizardSaved(personId) {
+    // Refresh the list so the new record appears, and focus it. The list
+    // is sorted by docState/name, so the new record may not be at the top
+    // — fetchDetail still highlights it in the detail panel even if it's
+    // scrolled out of view.
+    pageNumber = 0;
+    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, 0);
+    if (personId != null) {
+      selectedRowId = personId;
+      fetchDetail(personId);
+    }
   }
 
   function handleDetailRefresh() {
@@ -427,6 +450,12 @@
     defaultData={formDefaultData}
   />
 {/if}
+
+<RegistryImportWizard
+  open={registryWizardOpen}
+  onClose={handleRegistryWizardClose}
+  onSaved={handleRegistryWizardSaved}
+/>
 
 <div class="shpd-viewer">
   <ViewerToolbar actions={toolbarActions} onAction={handleToolbarAction} />

@@ -49,6 +49,7 @@ import {
   faCircleCheck,
   faPaperclip,
   faDownload,
+  faCloudArrowDown,
   faUpload,
   faFile,
   faFilePdf,
@@ -141,6 +142,7 @@ export const iconRobot = faRobot;
 // ── Přílohy / soubory ─────────────────────────────────────────────
 export const iconAttachment = faPaperclip;
 export const iconDownload = faDownload;
+export const iconCloudDownload = faCloudArrowDown;
 export const iconUpload = faUpload;
 export const iconFile = faFile;
 export const iconFilePdf = faFilePdf;
@@ -189,6 +191,7 @@ export const iconMap = {
   'alert': iconAlert,
   'dashboard': iconDashboard,
   'robot': iconRobot,
+  'cloud-download': iconCloudDownload,
 };
 
 /**

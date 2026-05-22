@@ -184,15 +184,15 @@ class PersonsRegistryControllerTest extends IntegrationTestCase
 
     public function testImportCreatesPersonThenIdempotent(): void
     {
-        // The full apply pipeline touches persons sub-tables + world_divisions;
-        // each needs the docState column (persons-phase1 + world upgrade).
-        // Skip cleanly when the DS hasn't been upgraded yet — the fetch + search
-        // tests don't go through this path, so they still run.
-        foreach (['base_persons_addresses', 'world_divisions'] as $t) {
-            $row = $this->db->fetchRow("SHOW COLUMNS FROM `{$t}` LIKE 'docState'");
-            if ($row === null) {
-                $this->markTestSkipped("DS missing docState on {$t} — run ds-upgrade.");
-            }
+        // The full apply pipeline touches persons sub-tables; they need
+        // the docState column (persons-phase1 migration). Skip cleanly
+        // on un-upgraded DS — the fetch + search tests still run.
+        // world_divisions has no docState by design (reference data).
+        $row = $this->db->fetchRow(
+            "SHOW COLUMNS FROM base_persons_addresses LIKE 'docState'",
+        );
+        if ($row === null) {
+            $this->markTestSkipped('DS missing docState on base_persons_addresses — run ds-upgrade.');
         }
 
         $response = $this->ctrl->import($this->buildRequest('POST', [

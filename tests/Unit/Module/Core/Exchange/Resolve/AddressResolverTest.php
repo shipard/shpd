@@ -165,11 +165,30 @@ class AddressResolverTest extends TestCase
             ->with(
                 $this->stringContains('world_divisions'),
                 '554782',
-                10, 40, 80,
             )
             ->willReturn(new Row(['id' => 777]));
 
         $this->assertSame(777, (new AddressResolver($db))->lookupDivisionId('554782'));
+    }
+
+    public function testDivisionCodeLookupDoesNotFilterByDocState(): void
+    {
+        // world_divisions is reference data without a docState column;
+        // the lookup must NOT pass the historic ACTIVE_STATES tuple
+        // (otherwise it crashes against the real schema).
+        $captured = [];
+        $db = $this->createMock(Connection::class);
+        $db->method('fetch')->willReturnCallback(
+            function (...$args) use (&$captured): ?Row {
+                $captured = $args;
+                return null;
+            },
+        );
+
+        (new AddressResolver($db))->lookupDivisionId('554782');
+
+        $sql = (string) ($captured[0] ?? '');
+        $this->assertStringNotContainsString('docState', $sql, 'world_divisions has no docState column');
     }
 
     public function testDivisionCodeLookupReturnsNullForUnknownCode(): void

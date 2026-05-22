@@ -32,8 +32,9 @@ use Dibi\Connection;
  * person row yet to attach addresses to), the resolver short-circuits to
  * `canCreate` without DB probes.
  *
- * All SQL probes filter `docState IN (10, 40, 80)` — archived (70) and
- * deleted (90) addresses are not matched.
+ * Address-table probes filter `docState IN (10, 40, 80)` — archived (70)
+ * and deleted (90) addresses are not matched. `world_divisions` is
+ * reference data without docState (see {@see lookupDivisionId()}).
  *
  * `divisionCode → world_divisions.id` lookup lives in
  * {@see lookupDivisionId()} — a public method PersonResolver also uses
@@ -97,6 +98,11 @@ class AddressResolver
      * Map a canonical `divisionCode` (ZÚJ kód / RÚIAN obec code) to a
      * `world_divisions.id`. Returns null when the code is empty or
      * unknown. Caller emits a warning issue on the latter.
+     *
+     * `world_divisions` is reference data without docState — validity
+     * is expressed via `valid_from`/`valid_to`. For now we accept any
+     * matching code; historic-validity filtering is a follow-up if/when
+     * the registry actually emits codes for retired divisions.
      */
     public function lookupDivisionId(?string $code): ?int
     {
@@ -105,11 +111,8 @@ class AddressResolver
             return null;
         }
         $row = $this->db->fetch(
-            'SELECT [id] FROM [world_divisions]
-             WHERE [code] = %s AND [docState] IN (%i, %i, %i)
-             LIMIT 1',
+            'SELECT [id] FROM [world_divisions] WHERE [code] = %s LIMIT 1',
             $code,
-            self::ACTIVE_STATES[0], self::ACTIVE_STATES[1], self::ACTIVE_STATES[2],
         );
         return $row !== null ? (int) $row['id'] : null;
     }

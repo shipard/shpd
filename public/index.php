@@ -19,6 +19,7 @@ use Shipard\Api\Controller\ViewerController;
 use Shipard\Api\Controller\AttachmentController;
 use Shipard\Api\Controller\MailController;
 use Shipard\Api\Controller\AnalysisController;
+use Shipard\Api\Controller\PersonsRegistryController;
 use Shipard\Api\DataSourceResolver;
 use Shipard\Api\DocumentLoader;
 use Shipard\Api\FormLoader;
@@ -160,7 +161,7 @@ try {
 		$resolved->connection, $openApiPublic,
 		$host, $resolved, $modulePathResolver,
 		$viewerRegistry, $configRuntime, $formRegistry, $documentRegistry,
-		$lookupRegistry, $alertCheckRegistry,
+		$lookupRegistry, $alertCheckRegistry, $serverConfig,
 	);
 
 	// ── 10. Apply headers and send ────────────────────────────────────────────
@@ -242,6 +243,7 @@ function dispatch(
 	?\Shipard\Core\Document\DocumentRegistry $documentRegistry = null,
 	?LookupRegistry $lookupRegistry = null,
 	?\Shipard\Core\Alerts\AlertCheckRegistry $alertCheckRegistry = null,
+	?ServerConfig $serverConfig = null,
 ): Response {
 	$baseUrl = $resolved->isDevMode()
 		? 'http://' . $host . '/' . $resolved->config->getId()
@@ -262,6 +264,7 @@ function dispatch(
 		'analysis' => dispatchAnalysis($route, $request, $auth, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'exchange' => dispatchExchange($route, $request, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'alerts' => dispatchAlerts($route, $request, $db, $alertCheckRegistry, $configRuntime, resolveLanguage($request, $resolved->config)),
+		'personsRegistry' => dispatchPersonsRegistry($route, $request, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $serverConfig),
 		'openapi' => (new OpenApiController())->spec($auth, $openApiPublic, $tables, $baseUrl),
 		default   => Response::error('INTERNAL_ERROR', "Unknown controller: {$route->controller}", 500),
 	};
@@ -331,6 +334,52 @@ function dispatchExchange(
 		'person:preview'  => $ctrl->previewPerson($request),
 		'person:apply'    => $ctrl->applyPerson($request),
 		default           => Response::error('INTERNAL_ERROR', "Unknown exchange action: {$route->action}", 500),
+	};
+}
+
+function dispatchPersonsRegistry(
+	Route $route,
+	Request $request,
+	array $tables,
+	\Shipard\Core\Database\DataSourceConnection $db,
+	?\Shipard\Core\Config\ConfigRuntime $configRuntime,
+	\Shipard\Api\ResolvedDataSource $resolved,
+	\Shipard\Core\Document\DocumentRegistry $documentRegistry,
+	?ServerConfig $serverConfig,
+): Response {
+	if ($configRuntime === null) {
+		return Response::error('INTERNAL_ERROR', 'ConfigRuntime is required for /persons/registry endpoints', 500);
+	}
+	if ($serverConfig === null) {
+		return Response::error('INTERNAL_ERROR', 'ServerConfig is required for /persons/registry endpoints', 500);
+	}
+
+	$client = \Shipard\Module\Base\Persons\Registry\PersonsRegistryClient::fromServerConfig($serverConfig);
+
+	$personApplier = \Shipard\Module\Core\Exchange\Person\PersonApplier::create(
+		$db->getDibiConnection(),
+		$configRuntime,
+		$resolved->config,
+		$documentRegistry,
+		$tables,
+	);
+	$importer = new \Shipard\Module\Base\Persons\Registry\RegistryPersonImporter(
+		$client, $personApplier,
+	);
+
+	$ctrl = new PersonsRegistryController($client, $importer, $db);
+
+	return match ($route->action) {
+		'search'      => $ctrl->search($request),
+		'fetchPerson' => (function () use ($ctrl, $route): Response {
+			$parts = explode(':', (string) $route->table, 2);
+			if (count($parts) !== 2 || $parts[0] === '' || $parts[1] === '') {
+				return Response::error('NOT_FOUND', 'Not found', 404);
+			}
+			return $ctrl->fetchPerson($parts[0], $parts[1]);
+		})(),
+		'import'      => $ctrl->import($request),
+		default       => Response::error('INTERNAL_ERROR', "Unknown personsRegistry action: {$route->action}", 500),
 	};
 }
 

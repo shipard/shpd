@@ -113,6 +113,10 @@ class Router
 			return $this->resolveAlertsRoute($subpath, $method);
 		}
 
+		if ($subpath === '/persons/registry' || str_starts_with($subpath, '/persons/registry/')) {
+			return $this->resolvePersonsRegistryRoute($subpath, $method);
+		}
+
 		if ($subpath === '/_auth/login') {
 			if ($method !== 'POST') {
 				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
@@ -363,6 +367,41 @@ class Router
 				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
 			}
 			return new Route('alerts', $m[2], null, $id);
+		}
+
+		return Response::error('NOT_FOUND', 'Not found', 404);
+	}
+
+	private function resolvePersonsRegistryRoute(string $subpath, string $method): Route|Response
+	{
+		// GET /persons/registry — search
+		if ($subpath === '/persons/registry') {
+			if ($method !== 'GET') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('personsRegistry', 'search');
+		}
+
+		$rest = substr($subpath, strlen('/persons/registry/'));
+
+		// POST /persons/registry/import
+		if ($rest === 'import') {
+			if ($method !== 'POST') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('personsRegistry', 'import');
+		}
+
+		// GET /persons/registry/{country}/{companyId}
+		if (preg_match('#^([a-zA-Z]{2})/([^/]+)$#', $rest, $m)) {
+			if ($method !== 'GET') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			$country   = strtolower($m[1]);
+			$companyId = $m[2];
+			// Pack (country, companyId) into the `table` slot — Route has no
+			// dedicated multi-string slot. Dispatcher splits on the colon.
+			return new Route('personsRegistry', 'fetchPerson', $country . ':' . $companyId);
 		}
 
 		return Response::error('NOT_FOUND', 'Not found', 404);

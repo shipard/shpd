@@ -83,30 +83,38 @@
 
   // decisionOpen tracks the popover state. When non-null:
   //   { anchor: HTMLElement, path: string, resolveBlock, kind, table,
-  //     searchFields, displayPattern }
+  //     parentMatchedId }
   let decisionOpen = $state(null);
 
   function entityConfigForKind(kind) {
-    if (kind === 'party') {
-      return {
-        table: 'base_persons_persons',
-        searchFields: ['full_name'],
-        displayPattern: (row) => row.full_name ?? row.name ?? `#${row.id}`,
-      };
+    if (kind === 'party')       return { table: 'base_persons_persons' };
+    if (kind === 'item')        return { table: 'economy_items' };
+    if (kind === 'bankAccount') return { table: 'base_persons_bank_accounts' };
+    return null;
+  }
+
+  // For a bank-account decision we need the resolved supplier person id, so
+  // the panel can filter the lookup search and pre-fill the create form.
+  // `path` for supplier bank is e.g. `supplier.bankAccount` — derive the
+  // owning party path by stripping the last segment and read its matched id.
+  function parentMatchedIdForPath(path, kind) {
+    if (kind !== 'bankAccount' || !path) return null;
+    const parentPath = path.replace(/\.[^.]+$/, '');
+    if (parentPath === path) return null;
+    // Walk _resolve via the parent path. Only the supplier/customer slots
+    // currently carry bankAccount, so a 2-level lookup is enough.
+    const parentBlock = parentPath
+      .split('.')
+      .reduce((acc, seg) => (acc && typeof acc === 'object' ? acc[seg] : undefined), resolve);
+    if (!parentBlock) return null;
+    if (parentBlock.status === 'matched' && parentBlock.matchedId != null) {
+      return parentBlock.matchedId;
     }
-    if (kind === 'item') {
-      return {
-        table: 'economy_items',
-        searchFields: ['name'],
-        displayPattern: (row) => `${row.code ?? '—'} — ${row.name ?? '#' + row.id}`,
-      };
-    }
-    if (kind === 'bankAccount') {
-      return {
-        table: 'base_persons_bank_accounts',
-        searchFields: ['iban'],
-        displayPattern: (row) => row.iban ?? row.account_number ?? `#${row.id}`,
-      };
+    // Also accept a user-side decision to use an existing party.
+    const parentAction = userActions[parentPath] ?? null;
+    if (typeof parentAction === 'string' && parentAction.startsWith('useExisting:')) {
+      const id = Number(parentAction.slice('useExisting:'.length));
+      return Number.isFinite(id) ? id : null;
     }
     return null;
   }
@@ -122,6 +130,7 @@
       path,
       resolveBlock,
       kind,
+      parentMatchedId: parentMatchedIdForPath(path, kind),
       ...cfg,
     };
   }
@@ -473,14 +482,15 @@
     open={true}
     anchor={decisionOpen.anchor}
     placement="bottom"
+    width="400px"
     onClose={closeDecision}
   >
     <ResolveDecisionPanel
       resolveBlock={decisionOpen.resolveBlock}
       referenceKind={decisionOpen.kind}
       entityTable={decisionOpen.table}
-      entitySearchFields={decisionOpen.searchFields}
-      entityDisplayPattern={decisionOpen.displayPattern}
+      createPayload={decisionOpen.resolveBlock?.createPayload ?? null}
+      parentMatchedId={decisionOpen.parentMatchedId}
       currentUserAction={userActions[decisionOpen.path] ?? null}
       onDecide={handleDecide}
     />

@@ -208,28 +208,28 @@ export default {
   'exchange.preview.actions.apply': 'Apply',
   'exchange.preview.actions.reject': 'Reject',
 
-  // ── Resolve decision panel (Phase 3b) ────────────────────────────────────
+  // ── Resolve decision panel ───────────────────────────────────────────────
   'exchange.preview.decide.create': 'Create new',
   'exchange.preview.decide.createItem': 'Create new item',
   'exchange.preview.decide.createParty': 'Create new party',
+  'exchange.preview.decide.createBankAccount': 'Create new account',
   'exchange.preview.decide.pickExisting': 'Pick existing…',
   'exchange.preview.decide.skip': 'Skip row',
-  'exchange.preview.decide.candidates': 'Candidates:',
+  'exchange.preview.decide.skipRow': 'Skip row',
+  'exchange.preview.decide.candidates': 'Candidates',
   'exchange.preview.decide.useCandidate': 'Use #{id}',
   'exchange.preview.decide.selected': 'Selected: {label}',
   'exchange.preview.decide.unselect': 'Clear selection',
+  'exchange.preview.decide.searchPlaceholder': 'Search…',
+  'exchange.preview.decide.loading': 'Loading…',
+  'exchange.preview.decide.empty': 'Nothing found',
+  'exchange.preview.decide.errorPrefix': 'Error: ',
+  'exchange.preview.decide.bankRequiresSupplier': 'Pick or create supplier first.',
   'exchange.preview.status.decided.create': 'Will be created (decided)',
   'exchange.preview.status.decided.useExisting': 'Will use #{id}',
   'exchange.preview.status.decided.skip': 'Row skipped',
   'exchange.preview.apply.disabled': 'Some references need a decision',
   'exchange.preview.apply.error.unresolved': 'Apply found additional unresolved references. Reopen and decide them.',
-
-  // ── EntityPicker (Phase 3a; used in 3b) ──────────────────────────────────
-  'picker.search.placeholder': 'Search…',
-  'picker.results.empty': 'No results',
-  'picker.results.loading': 'Searching…',
-  'picker.actions.cancel': 'Cancel',
-  'picker.actions.select': 'Select',
 
   // ── Dashboard ────────────────────────────────────────────────────────────
   'dashboard.title': 'Dashboard',

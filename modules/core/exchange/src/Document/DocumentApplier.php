@@ -293,9 +293,19 @@ class DocumentApplier
             // Save doc head + rows + vat_recap through DocDocument.
             $result = $this->headsGateway->saveDocument($data);
             if (!$result->isSuccess()) {
-                throw new \RuntimeException(
-                    'Save failed: ' . ($result->getErrorMessage() ?? 'unknown error'),
-                );
+                // DocumentResult::validationFailed() leaves errorMessage null
+                // and carries field-level errors in ValidationResult — bubble
+                // them up explicitly, otherwise the caller only sees the
+                // generic "unknown error" placeholder.
+                $msg = $result->getErrorMessage();
+                if ($msg === null && $result->getValidation() !== null) {
+                    $parts = array_map(
+                        static fn($e) => ($e->column !== '' ? $e->column . ': ' : '') . $e->message,
+                        $result->getValidation()->getErrors(),
+                    );
+                    $msg = $parts !== [] ? implode('; ', $parts) : null;
+                }
+                throw new \RuntimeException('Save failed: ' . ($msg ?? 'unknown error'));
             }
             $savedDocId = (int) $result->getData()['id'];
 
@@ -801,6 +811,17 @@ class DocumentApplier
         $vatPlace = self::VAT_PLACE_MAP[(string) ($canonical['vat']['place'] ?? 'domestic')] ?? 0;
         $paymentMethod = self::PAYMENT_METHOD_MAP[(string) ($canonical['payment']['method'] ?? 'bankTransfer')] ?? 1;
 
+        // AI extractors sometimes omit accountingDate even when issueDate
+        // is present. DocDocument::beforeSave (applyDateDefaults) would
+        // backfill accounting_date from issue_date, but its validate() runs
+        // first and rejects an empty accounting_date — so default it here,
+        // matching the same Czech accounting practice as the beforeSave
+        // hook. The form-based flow still requires accounting_date
+        // explicitly (DocsHeadsForm marks it required); this fallback
+        // applies only to the Exchange apply path.
+        $issueDate = $canonical['dates']['issueDate'] ?? null;
+        $accountingDate = $canonical['dates']['accountingDate'] ?? $issueDate;
+
         $data = [
             'doc_type'             => $docType,
             'number_series'        => $numberSeriesId,
@@ -811,9 +832,9 @@ class DocumentApplier
             'partner_bank_account' => $canonical['supplier']['bankAccount']['accountNumber'] ?? null,
             'partner_bank_iban'    => $canonical['supplier']['bankAccount']['iban'] ?? null,
             'partner_bank_bic'     => $canonical['supplier']['bankAccount']['bic'] ?? null,
-            'issue_date'           => $canonical['dates']['issueDate'] ?? null,
+            'issue_date'           => $issueDate,
             'due_date'             => $canonical['dates']['dueDate'] ?? null,
-            'accounting_date'      => $canonical['dates']['accountingDate'] ?? null,
+            'accounting_date'      => $accountingDate,
             'vat_duzp'             => $canonical['dates']['taxPointDate'] ?? null,
             'vat_dppd'             => $canonical['dates']['vatObligationDate'] ?? null,
             'period_from'          => $canonical['dates']['periodFrom'] ?? null,

@@ -221,28 +221,28 @@ export default {
   'exchange.preview.actions.apply': 'Použít',
   'exchange.preview.actions.reject': 'Zamítnout',
 
-  // ── Resolve decision panel (Fáze 3b) ─────────────────────────────────────
+  // ── Resolve decision panel ───────────────────────────────────────────────
   'exchange.preview.decide.create': 'Vytvořit nového',
   'exchange.preview.decide.createItem': 'Vytvořit novou položku',
   'exchange.preview.decide.createParty': 'Vytvořit novou osobu',
+  'exchange.preview.decide.createBankAccount': 'Vytvořit nový účet',
   'exchange.preview.decide.pickExisting': 'Vybrat existujícího…',
   'exchange.preview.decide.skip': 'Přeskočit řádek',
-  'exchange.preview.decide.candidates': 'Kandidáti:',
+  'exchange.preview.decide.skipRow': 'Vynechat řádek',
+  'exchange.preview.decide.candidates': 'Kandidáti',
   'exchange.preview.decide.useCandidate': 'Použít #{id}',
   'exchange.preview.decide.selected': 'Vybráno: {label}',
   'exchange.preview.decide.unselect': 'Zrušit výběr',
+  'exchange.preview.decide.searchPlaceholder': 'Hledat…',
+  'exchange.preview.decide.loading': 'Načítám…',
+  'exchange.preview.decide.empty': 'Nic nenalezeno',
+  'exchange.preview.decide.errorPrefix': 'Chyba: ',
+  'exchange.preview.decide.bankRequiresSupplier': 'Nejdřív vyber nebo vytvoř dodavatele.',
   'exchange.preview.status.decided.create': 'Bude vytvořeno nové (rozhodnuto)',
   'exchange.preview.status.decided.useExisting': 'Bude použito #{id}',
   'exchange.preview.status.decided.skip': 'Řádek přeskočen',
   'exchange.preview.apply.disabled': 'Některé reference vyžadují rozhodnutí',
   'exchange.preview.apply.error.unresolved': 'Při ukládání se objevily další nerozhodnuté reference. Zobraz znovu a rozhodni je.',
-
-  // ── EntityPicker (Fáze 3a; používá se ve 3b) ─────────────────────────────
-  'picker.search.placeholder': 'Hledat…',
-  'picker.results.empty': 'Žádné výsledky',
-  'picker.results.loading': 'Hledám…',
-  'picker.actions.cancel': 'Zrušit',
-  'picker.actions.select': 'Vybrat',
 
   // ── Dashboard ────────────────────────────────────────────────────────────
   'dashboard.title': 'Dashboard',

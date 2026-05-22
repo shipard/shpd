@@ -76,6 +76,18 @@ final class DocumentValidator
     }
 
     /**
+     * Cross-checks declared `totals.totalAmount` against three independent
+     * variants the canonical may express. A warning fires only when *none*
+     * of them lands within tolerance — AI extractors typically don't fill
+     * `row.computed.vatTotal`, so the legacy "sum of row.totalPrice vs
+     * total with VAT" check produced a false alarm on most VAT invoices.
+     *
+     * Variants:
+     *   1. Sum of `row.totalPrice`                  — base only.
+     *   2. Sum of `row.totalPrice * (1 + vat.pct)`  — base scaled per-row.
+     *   3. Sum of `vatRecap[].total`                — most authoritative
+     *      when available (per-rate breakdown with `total` = base + tax).
+     *
      * @param array<int, array{severity: string, path: string, code: string, message: string}> $issues
      */
     private function checkTotalsCoherence(array $canonical, array &$issues): void
@@ -91,28 +103,64 @@ final class DocumentValidator
             return;
         }
 
-        $computed = 0.0;
-        foreach ($rows as $row) {
-            if (!is_array($row)) continue;
-            // Prefer row.computed.vatTotal (with VAT) over row.totalPrice
-            // — the canonical's row.totalPrice is base-only.
-            $rowTotal = $row['computed']['vatTotal'] ?? $row['totalPrice'] ?? null;
-            if ($rowTotal !== null) {
-                $computed += (float) $rowTotal;
-            }
-        }
-        $computed = round($computed, 2);
         $declaredF = round((float) $declared, 2);
 
-        // Half-cent tolerance for rounding noise.
-        if (abs($computed - $declaredF) > 0.01) {
-            $issues[] = [
-                'severity' => 'warning',
-                'path'     => 'totals.totalAmount',
-                'code'     => 'totals_mismatch',
-                'message'  => "Deklarovaná částka {$declaredF} neodpovídá vypočtené {$computed}.",
-            ];
+        // (1) base, (2) base × (1 + vat.pct/100)
+        $sumBase = 0.0;
+        $sumWithVat = 0.0;
+        foreach ($rows as $row) {
+            if (!is_array($row)) continue;
+            $rowBase = $row['totalPrice'] ?? null;
+            if ($rowBase === null || !is_numeric($rowBase)) continue;
+            $rowBaseF = (float) $rowBase;
+            $sumBase += $rowBaseF;
+
+            $pct = $row['vat']['pct'] ?? null;
+            if ($pct !== null && is_numeric($pct)) {
+                $sumWithVat += $rowBaseF * (1.0 + ((float) $pct) / 100.0);
+            } else {
+                $sumWithVat += $rowBaseF;
+            }
         }
+        $sumBase = round($sumBase, 2);
+        $sumWithVat = round($sumWithVat, 2);
+
+        // (3) vatRecap total
+        $sumVatRecap = null;
+        $vatRecap = $canonical['vatRecap'] ?? null;
+        if (is_array($vatRecap) && count($vatRecap) > 0) {
+            $acc = 0.0;
+            $hasAny = false;
+            foreach ($vatRecap as $r) {
+                if (is_array($r) && isset($r['total']) && is_numeric($r['total'])) {
+                    $acc += (float) $r['total'];
+                    $hasAny = true;
+                }
+            }
+            if ($hasAny) {
+                $sumVatRecap = round($acc, 2);
+            }
+        }
+
+        $tolerance = 0.01;
+        $matchBase = abs($sumBase - $declaredF) <= $tolerance;
+        $matchWithVat = abs($sumWithVat - $declaredF) <= $tolerance;
+        $matchRecap = $sumVatRecap !== null && abs($sumVatRecap - $declaredF) <= $tolerance;
+
+        if ($matchBase || $matchWithVat || $matchRecap) {
+            return;
+        }
+
+        $detail = "součet řádků bez DPH: {$sumBase}; s DPH per řádek: {$sumWithVat}";
+        if ($sumVatRecap !== null) {
+            $detail .= "; podle vatRecap: {$sumVatRecap}";
+        }
+        $issues[] = [
+            'severity' => 'warning',
+            'path'     => 'totals.totalAmount',
+            'code'     => 'totals_mismatch',
+            'message'  => "Deklarovaná částka {$declaredF} neodpovídá žádné vypočtené variantě ({$detail}).",
+        ];
     }
 
     /**

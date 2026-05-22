@@ -1,41 +1,83 @@
 <script>
-  // Decision panel rendered inside a Popover anchored to a clicked status
-  // badge in DocumentExchangePreview. Lets the user pick one of:
+  // Inline resolve-decision panel rendered inside a Popover anchored to a
+  // clicked status badge in DocumentExchangePreview. It is a compact
+  // typeahead — search input + result list (max 8) + "create new" button
+  // — driving `_resolve.*.userAction` decisions.
   //
-  //   - "Create new"           → onDecide('create')
-  //   - "Pick existing"        → opens EntityPicker → onDecide('useExisting:<id>')
-  //   - "Skip row"             → onDecide('skip')  (only when referenceKind='item')
-  //   - one of N ambiguous candidates → onDecide('useExisting:<id>')
-  //   - "Clear selection"      → onDecide(null)  (only when currentUserAction is set)
+  // Outcomes (via `onDecide(action)`):
+  //   - pick a result            → onDecide(`useExisting:${item.id}`)
+  //   - "create new" → save      → onDecide(`useExisting:${newId}`)  (real id, no side-create)
+  //   - "skip row"  (items only) → onDecide('skip')
+  //   - "create"   (bank only)   → onDecide('create')  // fallback when no parent
+  //   - clear current selection  → onDecide(null)
   //
-  // The parent (DocumentExchangePreview) owns the userActions map and is
-  // responsible for closing the popover after each decision.
+  // Search hits the shared lookup endpoint
+  //   GET /_ui/lookup/{table}/search?q=…&limit=8[&filter[person]=…]
+  // The endpoint owns the primary/secondary display formatting — this panel
+  // does not need per-table searchFields/displayPattern.
+  //
+  // Special bankAccount behaviour: BankAccountsLookup requires
+  // `filter[person]`, so the panel only shows search + create when
+  // `parentMatchedId` is known. Otherwise it just shows a hint nudging the
+  // user to decide on the supplier first.
 
-  import EntityPicker from '../ui/EntityPicker.svelte';
+  import { onMount } from 'svelte';
+  import { get } from '../../api/client.js';
   import { t } from '../../i18n/index.js';
+  import FormDialog from '../form/FormDialog.svelte';
 
   let {
     resolveBlock,
-    referenceKind = 'party', // 'party' | 'item' | 'bankAccount'
+    referenceKind = 'party',            // 'party' | 'item' | 'bankAccount'
     entityTable = 'base_persons_persons',
-    entitySearchFields = ['full_name'],
-    entityDisplayPattern = (row) => row.name ?? row.full_name ?? `#${row.id}`,
+    createPayload = null,
     currentUserAction = null,
+    parentMatchedId = null,
     onDecide = () => {},
   } = $props();
 
-  let pickerOpen = $state(false);
+  let searchTerm = $state('');
+  /** @type {Array<{id:number|string, primary:string, secondary:string|null}>} */
+  let results = $state([]);
+  let loading = $state(false);
+  let lastError = $state(null);
+  let activeIndex = $state(-1);
+  let debounceTimer = null;
+  /** Token of the latest fetch — older responses are dropped. */
+  let currentFetchToken = 0;
 
-  let candidates = $derived(resolveBlock?.candidates ?? []);
+  let createDialogOpen = $state(false);
 
-  let createLabel = $derived(
-    referenceKind === 'item'
-      ? t('exchange.preview.decide.createItem')
-      : t('exchange.preview.decide.createParty'),
+  // ── Derived ─────────────────────────────────────────────────────────────
+
+  const candidates = $derived(resolveBlock?.candidates ?? []);
+
+  // For bankAccount we need a person FK to search and to create. Without it
+  // the panel collapses to a hint.
+  const bankBlocked = $derived(
+    referenceKind === 'bankAccount' && (parentMatchedId === null || parentMatchedId === undefined),
   );
 
-  // Friendly summary of the current decision, e.g. "useExisting:42" → "Use #42".
-  let currentLabel = $derived(formatCurrentUserAction(currentUserAction));
+  const createLabel = $derived(
+    referenceKind === 'item'
+      ? t('exchange.preview.decide.createItem')
+      : referenceKind === 'bankAccount'
+        ? t('exchange.preview.decide.createBankAccount')
+        : t('exchange.preview.decide.createParty'),
+  );
+
+  // Pre-fill: pass-through createPayload (snake_case keys match DB columns
+  // for base_persons_persons / economy_items / base_persons_bank_accounts).
+  // For bank we also inject the resolved supplier id as `person` FK.
+  const createDefaults = $derived.by(() => {
+    const base = createPayload && typeof createPayload === 'object' ? { ...createPayload } : {};
+    if (referenceKind === 'bankAccount' && parentMatchedId != null && base.person == null) {
+      base.person = parentMatchedId;
+    }
+    return base;
+  });
+
+  const currentLabel = $derived(formatCurrentUserAction(currentUserAction));
 
   function formatCurrentUserAction(action) {
     if (action === null || action === undefined) return '';
@@ -47,104 +89,257 @@
     return String(action);
   }
 
-  function chooseCreate() {
-    onDecide('create');
+  // ── Search ──────────────────────────────────────────────────────────────
+
+  function buildSearchUrl(term) {
+    const params = new URLSearchParams();
+    params.set('q', term);
+    params.set('limit', '8');
+    if (referenceKind === 'bankAccount' && parentMatchedId != null) {
+      params.set('filter[person]', String(parentMatchedId));
+    }
+    return `/_ui/lookup/${entityTable}/search?${params.toString()}`;
   }
-  function chooseSkip() {
-    onDecide('skip');
+
+  async function runSearch(term) {
+    if (!entityTable || bankBlocked) {
+      results = [];
+      loading = false;
+      return;
+    }
+    const myToken = ++currentFetchToken;
+    loading = true;
+    lastError = null;
+    const res = await get(buildSearchUrl(term));
+    if (myToken !== currentFetchToken) return;
+    loading = false;
+    if (res === null) {
+      results = [];
+      lastError = t('common.unknownError');
+      return;
+    }
+    if (!res.success) {
+      results = [];
+      lastError = res.error?.message ?? t('exchange.preview.decide.errorPrefix');
+      return;
+    }
+    results = res.data?.items ?? [];
+    activeIndex = results.length > 0 ? 0 : -1;
   }
-  function chooseUnselect() {
-    onDecide(null);
+
+  function scheduleSearch(term) {
+    if (debounceTimer !== null) {
+      clearTimeout(debounceTimer);
+    }
+    debounceTimer = setTimeout(() => {
+      debounceTimer = null;
+      runSearch(term);
+    }, 250);
   }
+
+  function handleInput(e) {
+    searchTerm = e.currentTarget.value;
+    scheduleSearch(searchTerm);
+  }
+
+  function handleKeydown(e) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (results.length > 0) {
+        activeIndex = (activeIndex + 1) % results.length;
+      }
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (results.length > 0) {
+        activeIndex = activeIndex <= 0 ? results.length - 1 : activeIndex - 1;
+      }
+      return;
+    }
+    if (e.key === 'Enter') {
+      if (activeIndex >= 0 && results[activeIndex]) {
+        e.preventDefault();
+        chooseResult(results[activeIndex]);
+      }
+      return;
+    }
+    // Escape bubbles up to Popover's keydown handler → onClose.
+  }
+
+  // ── Actions ─────────────────────────────────────────────────────────────
+
+  function chooseResult(item) {
+    onDecide(`useExisting:${item.id}`);
+  }
+
   function chooseCandidate(id) {
     onDecide(`useExisting:${id}`);
   }
-  function handlePickerSelect(row) {
-    pickerOpen = false;
-    onDecide(`useExisting:${row.id}`);
+
+  function chooseSkip() {
+    onDecide('skip');
   }
+
+  function chooseUnselect() {
+    onDecide(null);
+  }
+
+  function chooseCreateViaApplier() {
+    // Fallback for bankAccount when supplier is not yet matched/decided.
+    // Backend runSideCreates attaches the new account to the freshly
+    // created supplier inside the apply transaction.
+    onDecide('create');
+  }
+
+  function openCreateDialog() {
+    if (bankBlocked) return;
+    createDialogOpen = true;
+  }
+
+  function handleCreateClose() {
+    createDialogOpen = false;
+  }
+
+  function handleCreated(record) {
+    const newId = record?.id ?? record?.data?.id ?? null;
+    if (newId == null) return;
+    createDialogOpen = false;
+    onDecide(`useExisting:${newId}`);
+  }
+
+  // ── Lifecycle ──────────────────────────────────────────────────────────
+
+  onMount(() => {
+    if (!bankBlocked) {
+      runSearch('');
+    }
+  });
 </script>
 
-<div class="shpd-decision">
+<div class="shpd-resolve">
   {#if currentUserAction !== null && currentUserAction !== undefined}
-    <div class="shpd-decision__current">
+    <div class="shpd-resolve__current">
       <span>{t('exchange.preview.decide.selected', { label: currentLabel })}</span>
-      <button type="button" class="shpd-decision__unselect" onclick={chooseUnselect}>
+      <button type="button" class="shpd-resolve__unselect" onclick={chooseUnselect}>
         {t('exchange.preview.decide.unselect')}
       </button>
     </div>
-    <hr class="shpd-decision__sep" />
   {/if}
 
   {#if resolveBlock?.status === 'ambiguous' && candidates.length > 0}
-    <div class="shpd-decision__candidates">
-      <div class="shpd-decision__heading">
+    <div class="shpd-resolve__candidates">
+      <div class="shpd-resolve__heading">
         {t('exchange.preview.decide.candidates')}
       </div>
-      <ul class="shpd-decision__candidate-list">
+      <div class="shpd-resolve__candidate-list">
         {#each candidates as c (c.id)}
-          <li>
-            <button
-              type="button"
-              class="shpd-decision__candidate"
-              onclick={() => chooseCandidate(c.id)}
-            >
-              {t('exchange.preview.decide.useCandidate', { id: c.id })}: {c.name ?? '—'}
-            </button>
-          </li>
+          <button
+            type="button"
+            class="shpd-resolve__candidate"
+            onclick={() => chooseCandidate(c.id)}
+          >
+            <span class="shpd-resolve__candidate-id">#{c.id}</span>
+            <span class="shpd-resolve__candidate-name">{c.name ?? '—'}</span>
+          </button>
         {/each}
-      </ul>
+      </div>
     </div>
-    <hr class="shpd-decision__sep" />
   {/if}
 
-  <div class="shpd-decision__actions">
-    {#if referenceKind !== 'bankAccount' || resolveBlock?.status === 'canCreate'}
-      <button type="button" class="shpd-decision__action" onclick={chooseCreate}>
-        {createLabel}
-      </button>
-    {/if}
-    <button
-      type="button"
-      class="shpd-decision__action"
-      onclick={() => (pickerOpen = true)}
-    >
-      {t('exchange.preview.decide.pickExisting')}
-    </button>
-    {#if referenceKind === 'item'}
+  {#if bankBlocked}
+    <p class="shpd-resolve__hint">
+      {t('exchange.preview.decide.bankRequiresSupplier')}
+    </p>
+    <div class="shpd-resolve__actions">
       <button
         type="button"
-        class="shpd-decision__action shpd-decision__action--danger"
-        onclick={chooseSkip}
+        class="shpd-resolve__create"
+        onclick={chooseCreateViaApplier}
       >
-        {t('exchange.preview.decide.skip')}
+        + {createLabel}
       </button>
-    {/if}
-  </div>
+    </div>
+  {:else}
+    <input
+      type="text"
+      class="shpd-resolve__input"
+      placeholder={t('exchange.preview.decide.searchPlaceholder')}
+      value={searchTerm}
+      oninput={handleInput}
+      onkeydown={handleKeydown}
+    />
+
+    <div class="shpd-resolve__results">
+      {#if loading}
+        <div class="shpd-resolve__status">{t('exchange.preview.decide.loading')}</div>
+      {:else if lastError}
+        <div class="shpd-resolve__status shpd-resolve__status--error">
+          {t('exchange.preview.decide.errorPrefix')}{lastError}
+        </div>
+      {:else if results.length === 0}
+        <div class="shpd-resolve__status">{t('exchange.preview.decide.empty')}</div>
+      {:else}
+        {#each results as item, i (item.id)}
+          <button
+            type="button"
+            class="shpd-resolve__item"
+            class:shpd-resolve__item--active={i === activeIndex}
+            onmouseenter={() => (activeIndex = i)}
+            onclick={() => chooseResult(item)}
+          >
+            <span class="shpd-resolve__item-primary">{item.primary}</span>
+            {#if item.secondary}
+              <span class="shpd-resolve__item-secondary">{item.secondary}</span>
+            {/if}
+          </button>
+        {/each}
+      {/if}
+    </div>
+
+    <div class="shpd-resolve__actions">
+      <button
+        type="button"
+        class="shpd-resolve__create"
+        onclick={openCreateDialog}
+      >
+        + {createLabel}
+      </button>
+      {#if referenceKind === 'item'}
+        <button
+          type="button"
+          class="shpd-resolve__skip"
+          onclick={chooseSkip}
+        >
+          {t('exchange.preview.decide.skipRow')}
+        </button>
+      {/if}
+    </div>
+  {/if}
 </div>
 
-<EntityPicker
-  open={pickerOpen}
-  tableName={entityTable}
-  searchFields={entitySearchFields}
-  displayPattern={entityDisplayPattern}
-  onSelect={handlePickerSelect}
-  onClose={() => (pickerOpen = false)}
+<FormDialog
+  table={entityTable}
+  recordId={null}
+  open={createDialogOpen}
+  defaultData={createDefaults}
+  onClose={handleCreateClose}
+  onSaved={handleCreated}
 />
 
 <style>
-  .shpd-decision {
+  .shpd-resolve {
     display: flex;
     flex-direction: column;
     gap: var(--shpd-space-xs);
     font-size: 0.875rem;
   }
 
-  .shpd-decision__current {
-    background: var(--shpd-color-primary-soft);
+  .shpd-resolve__current {
+    background-color: var(--shpd-color-primary-soft);
     color: var(--shpd-color-primary);
     padding: var(--shpd-space-xs) var(--shpd-space-sm);
-    border-radius: 4px;
+    border-radius: var(--shpd-radius-sm);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -152,84 +347,188 @@
     font-size: 0.8125rem;
   }
 
-  .shpd-decision__unselect {
+  .shpd-resolve__unselect {
     background: transparent;
     border: 0;
-    text-decoration: underline;
     color: inherit;
+    text-decoration: underline;
     cursor: pointer;
     font-size: 0.75rem;
     flex-shrink: 0;
   }
 
-  .shpd-decision__heading {
-    font-size: 0.6875rem;
-    text-transform: uppercase;
-    color: var(--shpd-color-text-muted);
-    letter-spacing: 0.5px;
-    margin-bottom: var(--shpd-space-xs);
-  }
-
-  .shpd-decision__candidate-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
+  .shpd-resolve__candidates {
     display: flex;
     flex-direction: column;
     gap: 2px;
   }
 
-  .shpd-decision__candidate {
+  .shpd-resolve__heading {
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    color: var(--shpd-color-text-secondary);
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+  }
+
+  .shpd-resolve__candidate-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .shpd-resolve__candidate {
+    display: flex;
+    align-items: baseline;
+    gap: var(--shpd-space-xs);
     width: 100%;
     text-align: left;
     background: transparent;
     border: 1px solid var(--shpd-color-border);
     padding: var(--shpd-space-xs) var(--shpd-space-sm);
-    border-radius: 4px;
+    border-radius: var(--shpd-radius-sm);
     cursor: pointer;
     color: var(--shpd-color-text);
     font-size: 0.8125rem;
   }
 
-  .shpd-decision__candidate:hover {
-    background: var(--shpd-color-primary-soft);
+  .shpd-resolve__candidate:hover {
+    background-color: var(--shpd-color-primary-soft);
   }
 
-  .shpd-decision__sep {
+  .shpd-resolve__candidate-id {
+    font-family: var(--shpd-font-mono, monospace);
+    color: var(--shpd-color-text-secondary);
+    font-size: 0.75rem;
+  }
+
+  .shpd-resolve__input {
+    width: 100%;
+    padding: var(--shpd-space-xs) var(--shpd-space-sm);
+    border: 1px solid var(--shpd-color-border);
+    border-radius: var(--shpd-radius-sm);
+    font-size: 0.875rem;
+    font-family: inherit;
+    background-color: var(--shpd-color-bg);
+    color: var(--shpd-color-text);
+    box-sizing: border-box;
+  }
+
+  .shpd-resolve__input:focus {
+    outline: none;
+    border-color: var(--shpd-color-border-focus, var(--shpd-color-primary));
+    box-shadow: 0 0 0 2px var(--shpd-color-focus-ring, var(--shpd-color-primary-soft));
+  }
+
+  .shpd-resolve__results {
+    display: flex;
+    flex-direction: column;
+    max-height: 280px;
+    overflow-y: auto;
+    border: 1px solid var(--shpd-color-border);
+    border-radius: var(--shpd-radius-sm);
+  }
+
+  .shpd-resolve__status {
+    padding: var(--shpd-space-sm);
+    text-align: center;
+    color: var(--shpd-color-text-secondary);
+    font-size: 0.8125rem;
+  }
+
+  .shpd-resolve__status--error {
+    color: var(--shpd-color-danger);
+  }
+
+  .shpd-resolve__item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    width: 100%;
+    padding: var(--shpd-space-xs) var(--shpd-space-sm);
     border: 0;
-    border-top: 1px solid var(--shpd-color-border);
-    margin: var(--shpd-space-xs) 0;
+    background: transparent;
+    color: var(--shpd-color-text);
+    font-family: inherit;
+    font-size: 0.8125rem;
+    cursor: pointer;
+    text-align: left;
+    border-bottom: 1px solid var(--shpd-color-border);
   }
 
-  .shpd-decision__actions {
+  .shpd-resolve__item:last-child {
+    border-bottom: 0;
+  }
+
+  .shpd-resolve__item--active {
+    background-color: var(--shpd-color-primary-soft);
+  }
+
+  .shpd-resolve__item:hover {
+    background-color: var(--shpd-color-bg-secondary);
+  }
+
+  .shpd-resolve__item-primary {
+    font-weight: 500;
+  }
+
+  .shpd-resolve__item-secondary {
+    font-size: 0.75rem;
+    color: var(--shpd-color-text-secondary);
+  }
+
+  .shpd-resolve__actions {
     display: flex;
     flex-direction: column;
     gap: var(--shpd-space-xs);
   }
 
-  .shpd-decision__action {
-    background: var(--shpd-color-primary-soft);
-    border: 1px solid var(--shpd-color-border);
+  .shpd-resolve__create {
+    display: flex;
+    align-items: center;
+    gap: var(--shpd-space-xs);
+    width: 100%;
     padding: var(--shpd-space-xs) var(--shpd-space-sm);
-    border-radius: 4px;
+    border: 1px solid var(--shpd-color-border);
+    background-color: var(--shpd-color-bg);
+    color: var(--shpd-color-primary);
+    font-family: inherit;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    border-radius: var(--shpd-radius-sm);
     cursor: pointer;
-    color: var(--shpd-color-text);
-    font-size: 0.875rem;
     text-align: left;
   }
 
-  .shpd-decision__action:hover {
-    background: var(--shpd-color-primary);
-    color: white;
+  .shpd-resolve__create:hover {
+    background-color: var(--shpd-color-primary-soft);
   }
 
-  .shpd-decision__action--danger {
-    background: var(--shpd-color-state-cancelled-bg);
-    color: var(--shpd-color-state-cancelled-text);
+  .shpd-resolve__skip {
+    width: 100%;
+    padding: var(--shpd-space-xs) var(--shpd-space-sm);
+    border: 1px solid var(--shpd-color-border);
+    background-color: var(--shpd-color-bg);
+    color: var(--shpd-color-text-secondary);
+    font-family: inherit;
+    font-size: 0.8125rem;
+    border-radius: var(--shpd-radius-sm);
+    cursor: pointer;
+    text-align: left;
   }
 
-  .shpd-decision__action--danger:hover {
-    background: var(--shpd-color-danger);
-    color: white;
+  .shpd-resolve__skip:hover {
+    background-color: var(--shpd-color-bg-secondary);
+    color: var(--shpd-color-text);
+  }
+
+  .shpd-resolve__hint {
+    margin: 0;
+    padding: var(--shpd-space-xs) var(--shpd-space-sm);
+    background-color: var(--shpd-color-bg-secondary);
+    border-radius: var(--shpd-radius-sm);
+    color: var(--shpd-color-text-secondary);
+    font-size: 0.8125rem;
   }
 </style>

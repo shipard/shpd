@@ -66,32 +66,108 @@ class DocumentValidatorTest extends TestCase
         $this->assertSame('error', $customerIssue['severity']);
     }
 
-    public function testTotalsMismatchProducesWarning(): void
+    public function testTotalsMismatchProducesWarningWhenNoVariantFits(): void
     {
+        // None of the variants lands within 0.01 — neither base-sum nor
+        // base×(1+pct) and there is no vatRecap.
         $issues = $this->v->validate([
             'docType' => 'invoiceReceived',
             'supplier' => ['name' => 'V'],
             'dates' => ['issueDate' => '2026-04-15'],
             'rows' => [
-                ['computed' => ['vatTotal' => 1000.00]],
-                ['computed' => ['vatTotal' => 500.00]],
+                ['totalPrice' => 1000.00, 'vat' => ['pct' => 21]],
+                ['totalPrice' => 500.00, 'vat' => ['pct' => 21]],
             ],
             'totals' => ['totalAmount' => 1499.50],
         ]);
         $mismatch = $this->findByCode($issues, 'totals_mismatch');
         $this->assertNotNull($mismatch);
         $this->assertSame('warning', $mismatch['severity']);
-        $this->assertStringContainsString('1500', $mismatch['message']);
+        // Both computed variants should appear in the detail string.
+        $this->assertStringContainsString('1500', $mismatch['message']); // sumBase
+        $this->assertStringContainsString('1815', $mismatch['message']); // sumWithVat = 1500 * 1.21
     }
 
-    public function testTotalsWithinToleranceProducesNoWarning(): void
+    public function testTotalsBaseSumWithinToleranceProducesNoWarning(): void
     {
+        // Doc without VAT — declared total matches the sum of base prices.
         $issues = $this->v->validate([
             'docType' => 'invoiceReceived',
             'supplier' => ['name' => 'V'],
             'dates' => ['issueDate' => '2026-04-15'],
             'rows' => [
-                ['computed' => ['vatTotal' => 1000.00]],
+                ['totalPrice' => 1000.00],
+            ],
+            'totals' => ['totalAmount' => 1000.005],
+        ]);
+        $this->assertNull($this->findByCode($issues, 'totals_mismatch'));
+    }
+
+    public function testTotalsWithVatPerRowProducesNoWarning(): void
+    {
+        // Typical VAT invoice: AI emits row.totalPrice (base only) and
+        // row.vat.pct. Declared totalAmount is with VAT. Variant (2) hits.
+        $issues = $this->v->validate([
+            'docType' => 'invoiceReceived',
+            'supplier' => ['name' => 'V'],
+            'dates' => ['issueDate' => '2026-04-15'],
+            'rows' => [
+                ['totalPrice' => 1000.00, 'vat' => ['pct' => 21]],
+                ['totalPrice' => 500.00, 'vat' => ['pct' => 21]],
+            ],
+            'totals' => ['totalAmount' => 1815.00], // 1500 * 1.21
+        ]);
+        $this->assertNull($this->findByCode($issues, 'totals_mismatch'));
+    }
+
+    public function testTotalsByVatRecapProducesNoWarning(): void
+    {
+        // vatRecap.total breakdown is the authoritative variant. Even when
+        // row.totalPrice would not add up, vatRecap matching suppresses the
+        // warning.
+        $issues = $this->v->validate([
+            'docType' => 'invoiceReceived',
+            'supplier' => ['name' => 'V'],
+            'dates' => ['issueDate' => '2026-04-15'],
+            'rows' => [
+                ['totalPrice' => 800.00, 'vat' => ['pct' => 21]],
+                ['totalPrice' => 200.00, 'vat' => ['pct' => 15]],
+            ],
+            'vatRecap' => [
+                ['vatPct' => 21, 'base' => 800.00, 'tax' => 168.00, 'total' => 968.00],
+                ['vatPct' => 15, 'base' => 200.00, 'tax' => 30.00, 'total' => 230.00],
+            ],
+            'totals' => ['totalAmount' => 1198.00],
+        ]);
+        $this->assertNull($this->findByCode($issues, 'totals_mismatch'));
+    }
+
+    public function testTotalsNoVatRowsProducesNoWarning(): void
+    {
+        // Cash receipt with no VAT info at all.
+        $issues = $this->v->validate([
+            'docType' => 'invoiceReceived',
+            'supplier' => ['name' => 'V'],
+            'dates' => ['issueDate' => '2026-04-15'],
+            'rows' => [
+                ['totalPrice' => 250.00],
+                ['totalPrice' => 100.00],
+            ],
+            'totals' => ['totalAmount' => 350.00],
+        ]);
+        $this->assertNull($this->findByCode($issues, 'totals_mismatch'));
+    }
+
+    public function testTotalsAtToleranceEdgeProducesNoWarning(): void
+    {
+        // Diff 0.005 < tolerance 0.01 — should not fire even with a
+        // base-only sum hitting just under the boundary.
+        $issues = $this->v->validate([
+            'docType' => 'invoiceReceived',
+            'supplier' => ['name' => 'V'],
+            'dates' => ['issueDate' => '2026-04-15'],
+            'rows' => [
+                ['totalPrice' => 1000.00],
             ],
             'totals' => ['totalAmount' => 1000.005],
         ]);

@@ -11,15 +11,16 @@
   //   children   Svelte 5 children snippet
   //
   // Click-outside is portal-aware: if the outside target is inside a
-  // `.shpd-modal` (e.g. nested EntityPicker mounted into body), the click
+  // `.shpd-modal` (e.g. a nested FormDialog mounted into body), the click
   // is treated as "inside the popover's logical hierarchy" and ignored.
-  // Without this guard, clicking a row in the picker would simultaneously
-  // close the popover that opened it.
+  // Without this guard, clicking inside the nested dialog would
+  // simultaneously close the popover that opened it.
 
   let {
     open = false,
     anchor = null,
     placement = 'bottom',
+    width = null,
     onClose = () => {},
     children,
   } = $props();
@@ -69,7 +70,7 @@
     if (!open || !panelEl) return;
     // Inside the panel → ignore.
     if (panelEl.contains(event.target)) return;
-    // Inside a nested modal (EntityPicker etc.) → ignore. The modal sits
+    // Inside a nested modal (FormDialog etc.) → ignore. The modal sits
     // as a sibling under document.body, so we test the ancestor chain.
     const modalAncestor = event.target?.closest?.('.shpd-modal');
     if (modalAncestor) return;
@@ -97,7 +98,10 @@
   <div
     class="shpd-popover"
     bind:this={panelEl}
-    style="top: {position.top}px; left: {position.left}px"
+    style:top="{position.top}px"
+    style:left="{position.left}px"
+    style:width={width}
+    style:max-width={width}
     role="dialog"
   >
     {@render children?.()}

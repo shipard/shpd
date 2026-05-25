@@ -508,6 +508,8 @@ abstract class TableForm
 }
 ```
 
+`TableForm` instance vyrábí `FormRegistry::createForm($table, $data, $db, $config)` — pro polymorfní tabulky (`docs_core_heads` přes `doc_type`) `$data` rozhodne o konkrétní subclass. Detaily viz [kapitola 23](#23-polymorfní-dispatch-formulářů-přes-typecolumn). Per-typ rodina formulářů typicky tvoří abstract base (`DocsHeadsFormBase`) se společnou logikou + tenké subclassy, které přepisují virtuální `getFormTitle()` / `getNewFormTitle()` (a do budoucna jednotlivé `buildXxxTab()` metody).
+
 ### Auto-label z TableDefinition
 
 `TableForm` dostane `TableDefinition` přes `setTableDef()` před voláním `buildFormDefinition`. Helper `tab()` sestaví mapu `column_id => name` a předá ji `TabBuilder`. Element factory metody pak doplní `label` automaticky z této mapy pokud není zadán explicitně.
@@ -720,6 +722,8 @@ Labely a typy inputů se doplní z TableDefinition pokud chybí. `options` u `se
 
 `id` umožňuje odkazovat na formulář jako `form_id` v `subtable` elementu.
 
+Pro polymorfní tabulky (jeden physický řádek může reprezentovat víc logických typů, typicky `docs_core_heads` s `doc_type`) místo prostého `{table, class}` použijte zápis `{table, typeColumn, classes, defaultClass}`. Detailně viz [kapitola 23](#23-polymorfní-dispatch-formulářů-přes-typecolumn).
+
 ---
 
 ## 14. Document lifecycle ve FormController
@@ -779,8 +783,8 @@ Labely a typy inputů se doplní z TableDefinition pokud chybí. `options` u `se
 | `FormDefinition` | Datová třída; `toArray()` → snake_case JSON |
 | `FormTab` | Datová třída |
 | `FormElement` | Datová třída; `input_type`, `hidden`, `triggers` |
-| `FormRegistry` | Registr PHP tříd formulářů |
-| `FormController` | HTTP controller |
+| `FormRegistry` | Registr PHP tříd formulářů; podporuje per-table polymorfismus přes `typeColumn` + `classes` + `defaultClass` (`createForm($table, $data, ...)`) — viz kap. 23 |
+| `FormController` | HTTP controller; volá `createForm($table, $data, ...)` ve všech třech metodách (`resolveFormDefinition`, `recalculate`, `enrichHeaderInfo`) |
 | `AutoFormBuilder` | Generuje FormDefinition z TableDefinition |
 | `JsoncFormLoader` | Načítá JSONC formy |
 | `RecalculateResult` | Výsledek recalculate |
@@ -788,7 +792,7 @@ Labely a typy inputů se doplní z TableDefinition pokud chybí. `options` u `se
 ### `src/Api/`
 | Soubor | Popis |
 |--------|-------|
-| `FormLoader.php` | Načte FormRegistry z modulů |
+| `FormLoader.php` | Načte FormRegistry z modulů; `mergeForms()` slévá per-table registrace přes moduly (paralela `DocumentLoader::mergeDocumentClasses`) |
 | `DocumentLoader.php` | Načte DocumentRegistry z modulů |
 
 ---
@@ -1315,3 +1319,121 @@ Klíčové pro vyhodnocení `edit_triggers`:
 **LookupInput NEzavírá modal po `onSaved`.** Modal se zavře až přes `onClose` — to znamená transition s `closeForm: 1` (`FormEditor` zavolá `onClose({force: true})`), `×`, Esc nebo overlay click. Tj. po prostém **Uložit** nebo po **Opravit** (40 → 80 s `closeForm: 0`) zůstává vnořený modal otevřený — stejně jako u primárních formulářů otevřených z vieweru. `onSaved` callback běží na pozadí: re-resolvuje display popis a (pokud `edit_triggers`) triggerne recalculate.
 
 **Vnořený `FormDialog` v `LookupInput`:** přímý import (stejný vzor jako `FormSubTable.svelte`). Cyklická závislost `FormDialog → FormEditor → … → LookupInput → FormDialog` Vite zvládá, protože komponenta se instantuje až runtime. Modal-stack depth shrink v `Modal.svelte` (viz kap. 9) automaticky vykreslí vnořený modal o 30 px užší/nižší na každé straně, takže rodič vykřukuje a uživatel vidí hierarchii.
+
+---
+
+## 23. Polymorfní dispatch formulářů přes `typeColumn`
+
+Pro tabulky, kde jeden physický řádek může reprezentovat víc logických typů (typicky `docs_core_heads` s `doc_type`), `FormRegistry` podporuje per-table polymorfismus — jedna tabulka, N PHP tříd, dispatch podle hodnoty diskriminačního sloupce. Mechanismus zrcadlí `DocumentRegistry::getDocument()` 1:1 (typeColumn + `classes` map + `defaultClass`).
+
+### Kdy použít
+
+- **Polymorfní zápis `{table, typeColumn, classes, defaultClass}`** — tabulka má diskriminační sloupec, jednotlivé hodnoty mají různé chování formuláře (titulky, sekce, validace).
+- **Prostý zápis `{table, class}`** — jeden typ, jedna třída. Zůstává plně podporovaný a doporučený pro většinu tabulek (Osoby, Položky, Číselné řady, …). Nemá smysl ho zbytečně rozkládat.
+
+### Registrace v `module.jsonc`
+
+Vzor pro per-typ rodinu nad `docs_core_heads`:
+
+```jsonc
+// docs.core — vlastní tabulky + default
+"forms": [
+    {
+        "table": "docs_core_heads",
+        "typeColumn": "doc_type",
+        "defaultClass": "Shipard\\Module\\Docs\\Core\\DocsHeadsForm"
+    }
+]
+
+// docs.invoicesOut — per-typ subclass
+"forms": [
+    {
+        "table": "docs_core_heads",
+        "typeColumn": "doc_type",
+        "classes": {
+            "invno": "Shipard\\Module\\Docs\\InvoicesOut\\IssuedInvoiceForm"
+        }
+    }
+]
+
+// docs.invoicesIn — per-typ subclass
+"forms": [
+    {
+        "table": "docs_core_heads",
+        "typeColumn": "doc_type",
+        "classes": {
+            "invni": "Shipard\\Module\\Docs\\InvoicesIn\\ReceivedInvoiceForm"
+        }
+    }
+]
+```
+
+### Dispatch pravidla
+
+`FormRegistry::createForm($table, $data, $db, $config)` vrací konkrétní instanci `TableForm`:
+
+- Pokud má registrace `typeColumn`: vyhodnotí `$data[$typeColumn]`, výsledek hledá v mapě `classes`. Pokud klíč neexistuje → fallback na `defaultClass`. Pokud neexistuje ani `defaultClass` → `null`.
+- Pokud má registrace prostý `class`: vrátí instanci té třídy bez ohledu na `$data`.
+- Tabulka bez registrace v `FormRegistry` → fallback na JSONC formulář (`forms/{table}.jsonc`) nebo `AutoFormBuilder` (viz kap. 12).
+
+### `$data` pro nový záznam
+
+Per-typ viewer poskytuje `getNewRecordDefaults()` (např. `{doc_type: 'invno'}`). `FormController` to spojí s column defaults a předá do `createForm($table, $data, ...)`. Dispatch tedy funguje i pro nový záznam otevřený z per-typ vieweru.
+
+Pro nový záznam otevřený z **generického vieweru** (bez hintu `doc_type`) je `$data[$typeColumn]` prázdné → dispatch padá na `defaultClass`. ✓
+
+### Slévání napříč moduly
+
+`FormLoader::mergeForms()` (paralela `DocumentLoader::mergeDocumentClasses()`) slévá per-table:
+
+- `typeColumn` musí být shodný (jinak `LogicException`)
+- `classes` mapy se mergují; kolize klíčů s **různými** hodnotami → `LogicException`, **identická** hodnota → idempotentní průchod
+- `defaultClass` first-wins (typicky ho registruje base modul, např. `docs.core`)
+- `id` first-wins (pro `subtable.form_id` referenci)
+- Prostý `class` se ignoruje, pokud cílová registrace má `typeColumn` (smíšený zápis nedává smysl)
+
+### Hierarchie tříd — doporučený vzor
+
+```
+TableForm (abstract, core)
+    └── DocsHeadsFormBase (abstract, docs.core)
+            ├── DocsHeadsForm        (docs.core)        — defaultClass
+            ├── IssuedInvoiceForm    (docs.invoicesOut) — invno
+            └── ReceivedInvoiceForm  (docs.invoicesIn)  — invni
+```
+
+Společná logika žije v base třídě (build tabů, recalculate, options resolvery, HTML renderery). Subclassy přepisují jen tam, kde se chování má lišit — v MVP typicky `getFormTitle()` / `getNewFormTitle()`. Do budoucna budou rozšiřovat o per-typ `buildXxxTab()` metody (FVB-specifický splátkový kalendář, FPB schvalovací workflow, …).
+
+```php
+abstract class DocsHeadsFormBase extends TableForm
+{
+    protected function getFormTitle(): string    { return 'Doklad'; }
+    protected function getNewFormTitle(): string { return 'Nový doklad'; }
+    // ... shared build* / recalculate / resolve* metody jsou `protected`,
+    // aby je subclassy mohly override-ovat
+}
+
+class IssuedInvoiceForm extends DocsHeadsFormBase
+{
+    protected function getFormTitle(): string    { return 'Faktura vydaná'; }
+    protected function getNewFormTitle(): string { return 'Nová faktura vydaná'; }
+}
+```
+
+### Vztah k `DocumentRegistry`
+
+Formulářová polymorfizace zrcadlí `DocumentRegistry` 1:1. Když přidáváš nový typ dokladu (proforma faktura, dobropis, bankovní výpis, pokladní doklad, …), typicky přidáváš tři věci společně:
+
+- `documentClasses` entry pro per-typ `Document` třídu (validace, beforeSave)
+- `forms` entry pro per-typ `Form` třídu (UI overrides)
+- `viewers` entry pro per-typ filtered viewer s `getNewRecordDefaults()`
+
+Symetrie není povinná, ale pro nový typ dokladu je defaultní cesta.
+
+### Invariant: `doc_type` per-záznam fixní po vzniku
+
+`recalculate` v `FormController` předává `$data` do `createForm($table, $data, ...)`, ale `$data` obsahuje aktuální stav formuláře z requestu. Teoreticky by uživatel změnou `doc_type` za běhu mohl forcenout změnu `TableForm` mid-flight. V praxi je `doc_type` v UI **neměnitelné po vytvoření záznamu** (řídí ho výběr číselné řady při kliku „Přidat" v per-typ vieweru). Implicitní invariant: hodnota diskriminačního sloupce je per-záznam fixní.
+
+### Backwards compat
+
+Všechny existující registrace `{table, class}` (`PersonsForm`, `NumberSeriesForm`, `ItemsForm`, JSONC `DocRowsForm`, …) fungují beze změny. Polymorfní mechanismus se týká výhradně PHP `TableForm` subclassů — pro JSONC formuláře (`forms/{table}.jsonc`) typeColumn dispatch neexistuje (deklarativní JSONC nemá motiv per-typ varianty).

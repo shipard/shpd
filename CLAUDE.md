@@ -105,6 +105,23 @@ Závislosti tečou shora dolů: Command → Document → Module/Config/Database 
 - `lookup` element **nelze** umístit do `inline` skupiny.
 - Detailně viz `docs/edit-forms.md` kapitola 22.
 
+### Editační formuláře — polymorfismus per typ
+- Formuláře nad polymorfní tabulkou (např. `docs_core_heads` s `doc_type`)
+  se registrují přes `typeColumn` + `classes` + `defaultClass` v
+  `module.jsonc` → `forms[]`. `FormLoader::mergeForms()` slévá registrace
+  z více modulů per-table (paralela k `DocumentLoader::mergeDocumentClasses()`).
+- Vzor: `docs.core` registruje `DocsHeadsForm` jako defaultClass,
+  `docs.invoicesOut` přidává `invno → IssuedInvoiceForm`, `docs.invoicesIn`
+  přidává `invni → ReceivedInvoiceForm`. Hierarchie tříd:
+  `TableForm → DocsHeadsFormBase → {DocsHeadsForm, IssuedInvoiceForm, ReceivedInvoiceForm}`.
+- Per-typ subclassy jsou tenké — overridují jen, co se má lišit (titulky
+  přes `getFormTitle()` / `getNewFormTitle()`, do budoucna jednotlivé
+  `buildXxxTab()` metody). Společná logika žije v base.
+- `FormRegistry::createForm($table, $data, $db, $config)` dispatchuje podle
+  `$data[$typeColumn]`. Existující `{table, class}` registrace fungují beze
+  změny (PersonsForm, ItemsForm, …).
+- Detailně viz `docs/edit-forms.md` kapitola 23.
+
 ### Citlivá data (encrypted_text)
 - Pro nové citlivé sloupce (API klíče, hesla, tokeny) **vždy** typ `encrypted_text` v JSONC schema. Nikdy plain `text`/`varchar`.
 - Encrypt/decrypt se **nedělá automaticky v TableGateway** — Document class odpovídá za:

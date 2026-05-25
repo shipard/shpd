@@ -6,39 +6,31 @@ namespace Shipard\Core\Form;
 
 use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Database\DataSourceConnection;
-use Shipard\Core\Module\ModuleDefinition;
 
 class FormRegistry
 {
-    /** @var array<string, string> table name => FQN class */
-    private array $forms = [];
+    /** @var array<string, array<string, mixed>> tableId → merged registration */
+    private array $registrations = [];
 
-    /** @var array<string, string> table name => form ID */
+    /** @var array<string, string> tableId → form id (per-table, ne per-type) */
     private array $formIds = [];
 
     /**
-     * @param ModuleDefinition[] $modules
+     * @param list<array<string, mixed>> $registrations
+     *     Pre-merged form registrations (output of FormLoader::mergeForms).
      */
-    public function loadFromModules(array $modules): void
+    public function __construct(array $registrations = [])
     {
-        foreach ($modules as $module) {
-            foreach ($module->forms as $form) {
-                if (!isset($form['table'])) {
-                    continue;
-                }
-                if (isset($form['class'])) {
-                    $this->forms[$form['table']] = $form['class'];
-                }
-                if (isset($form['id'])) {
-                    $this->formIds[$form['table']] = $form['id'];
-                }
+        foreach ($registrations as $reg) {
+            $table = $reg['table'] ?? null;
+            if (!is_string($table) || $table === '') {
+                continue;
+            }
+            $this->registrations[$table] = $reg;
+            if (isset($reg['id']) && is_string($reg['id'])) {
+                $this->formIds[$table] = $reg['id'];
             }
         }
-    }
-
-    public function getFormClass(string $table): ?string
-    {
-        return $this->forms[$table] ?? null;
     }
 
     public function getFormId(string $table): ?string
@@ -46,10 +38,36 @@ class FormRegistry
         return $this->formIds[$table] ?? null;
     }
 
-    public function createForm(string $table, ?DataSourceConnection $db = null, ?ConfigRuntime $config = null): ?TableForm
-    {
-        $class = $this->forms[$table] ?? null;
-        if ($class === null || !class_exists($class)) {
+    /**
+     * Resolve form class for given $table and $data.
+     *
+     * For typeColumn-based registrations: dispatch via $data[$typeColumn]
+     * through `classes` map, fallback to `defaultClass`. For simple
+     * `{table, class}` registrations: return `class` regardless of $data.
+     *
+     * @param array<string, mixed> $data Row data — typically from DB SELECT
+     *     for existing records, or newRecordDefaults for new ones.
+     */
+    public function createForm(
+        string $table,
+        array $data = [],
+        ?DataSourceConnection $db = null,
+        ?ConfigRuntime $config = null,
+    ): ?TableForm {
+        $reg = $this->registrations[$table] ?? null;
+        if ($reg === null) {
+            return null;
+        }
+
+        $class = null;
+        if (isset($reg['typeColumn'])) {
+            $typeValue = $data[$reg['typeColumn']] ?? '';
+            $class = $reg['classes'][$typeValue] ?? $reg['defaultClass'] ?? null;
+        } elseif (isset($reg['class'])) {
+            $class = $reg['class'];
+        }
+
+        if (!is_string($class) || $class === '' || !class_exists($class)) {
             return null;
         }
 

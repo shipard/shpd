@@ -29,5 +29,15 @@
                 "invni": "Shipard\\Module\\Docs\\InvoicesIn\\ReceivedInvoiceDocument"
             }
         }
+    ],
+
+    "forms": [
+        {
+            "table": "docs_core_heads",
+            "typeColumn": "doc_type",
+            "classes": {
+                "invni": "Shipard\\Module\\Docs\\InvoicesIn\\ReceivedInvoiceForm"
+            }
+        }
     ]
 }

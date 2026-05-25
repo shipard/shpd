@@ -23,12 +23,18 @@ rozlišení: my jsme odběratel (snapshot customer), partner je dodavatel
   zaroutuje doklad s `doc_type = 'invni'` na `ReceivedInvoiceDocument`.
   Registrace se merge-uje s `docs.core` (defaultClass + typeColumn) a
   `docs.invoicesOut` (`invno`) přes `DocumentLoader::mergeDocumentClasses`.
+- **Editační formulář** `ReceivedInvoiceForm extends DocsHeadsFormBase` —
+  per-typ formulář pro Faktury přijaté. V MVP přepisuje pouze titulky
+  („Faktura přijatá" / „Nová faktura přijatá"); slouží jako rozšiřovací
+  bod pro budoucí FPB-specifické změny (schvalovací workflow, AI extrakce,
+  ...). Registrace ve `forms[]` zrcadlí `documentClasses` —
+  `FormLoader::mergeForms` slévá `invni → ReceivedInvoiceForm` s defaultClass
+  z `docs.core` a `invno` z `docs.invoicesOut`.
 
 ## Co modul NEpřidává
 
 - Žádné nové tabulky — všechny doklady leží v `docs_core_heads`
 - Žádné nové cfgItems — typy dokladů jsou v `docs.core.docTypes`
-- Žádné nové forms — používáme `DocsHeadsForm` z `docs.core`
 
 ## Vztah k `docs.invoicesOut`
 

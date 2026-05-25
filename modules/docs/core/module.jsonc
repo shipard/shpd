@@ -62,8 +62,13 @@
             "class": "Shipard\\Module\\Docs\\Core\\NumberSeriesForm"
         },
         {
+            // Polymorphic dispatch by `doc_type` column. The `classes` map is
+            // populated by per-type modules (docs.invoicesOut, docs.invoicesIn)
+            // via FormLoader::mergeForms. Unknown / empty doc_type falls back
+            // to defaultClass — same pattern as documentClasses polymorphism.
             "table": "docs_core_heads",
-            "class": "Shipard\\Module\\Docs\\Core\\DocsHeadsForm"
+            "typeColumn": "doc_type",
+            "defaultClass": "Shipard\\Module\\Docs\\Core\\DocsHeadsForm"
         },
         {
             "table": "docs_core_rows",

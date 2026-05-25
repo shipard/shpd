@@ -277,7 +277,7 @@ class FormController
         $isNew = !isset($data['id']) || $data['id'] === null;
 
         // Try PHP class form first
-        $tableForm = $formRegistry->createForm($table, $db, $config);
+        $tableForm = $formRegistry->createForm($table, $data, $db, $config);
         if ($tableForm !== null) {
             $tableForm->setTableDef($def);
             $result = $tableForm->recalculate($changedColumn, $data);
@@ -325,7 +325,7 @@ class FormController
         string $language = 'en',
     ): FormDefinition {
         // 1. PHP class from registry
-        $tableForm = $formRegistry->createForm($table, $db, $config);
+        $tableForm = $formRegistry->createForm($table, $data, $db, $config);
         if ($tableForm !== null) {
             $tableForm->setTableDef($def);
             return $tableForm->buildFormDefinition($data, $isNew);
@@ -369,7 +369,7 @@ class FormController
         DataSourceConnection $db,
         ?ConfigRuntime $config,
     ): FormDefinition {
-        $tableForm = $formRegistry->createForm($table, $db, $config);
+        $tableForm = $formRegistry->createForm($table, $data, $db, $config);
         if ($tableForm === null) {
             return $formDefinition;
         }

@@ -23,12 +23,18 @@ odběratel (snapshot customer). Trade direction = 1 (output) — viz cfgItem
   zaroutuje doklad s `doc_type = 'invno'` na `IssuedInvoiceDocument`.
   Registrace se merge-uje s `docs.core` (defaultClass + typeColumn) a
   `docs.invoicesIn` (`invni`) přes `DocumentLoader::mergeDocumentClasses`.
+- **Editační formulář** `IssuedInvoiceForm extends DocsHeadsFormBase` —
+  per-typ formulář pro Faktury vydané. V MVP přepisuje pouze titulky
+  („Faktura vydaná" / „Nová faktura vydaná"); slouží jako rozšiřovací
+  bod pro budoucí FVB-specifické změny (splátkový kalendář, výzvy
+  k úhradě, ...). Registrace ve `forms[]` zrcadlí `documentClasses` —
+  `FormLoader::mergeForms` slévá `invno → IssuedInvoiceForm` s defaultClass
+  z `docs.core` a `invni` z `docs.invoicesIn`.
 
 ## Co modul NEpřidává
 
 - Žádné nové tabulky — všechny doklady leží v `docs_core_heads`
 - Žádné nové cfgItems — typy dokladů jsou v `docs.core.docTypes`
-- Žádné nové forms — používáme `DocsHeadsForm` z `docs.core`
 
 ## Vztah k `docs.invoicesIn`
 

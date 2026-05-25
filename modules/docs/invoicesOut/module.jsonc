@@ -29,5 +29,15 @@
                 "invno": "Shipard\\Module\\Docs\\InvoicesOut\\IssuedInvoiceDocument"
             }
         }
+    ],
+
+    "forms": [
+        {
+            "table": "docs_core_heads",
+            "typeColumn": "doc_type",
+            "classes": {
+                "invno": "Shipard\\Module\\Docs\\InvoicesOut\\IssuedInvoiceForm"
+            }
+        }
     ]
 }

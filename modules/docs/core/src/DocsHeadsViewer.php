@@ -28,6 +28,16 @@ class DocsHeadsViewer extends TableViewer
         'trash'     => 'muted',
     ];
 
+    /**
+     * When set, this viewer is scoped to a single doc_type (e.g. 'invni' for
+     * received invoices). Drives the implicit doc_type filter in selectRows(),
+     * the bottom number-series tab list (getNumberSeries), and the default
+     * doc_type for newly created records (getNewRecordDefaults).
+     *
+     * Generic viewers (cross-type "all documents") leave this null.
+     */
+    protected ?string $scopedDocType = null;
+
     public function selectRows(?string $search, array $filters, int $pageNumber): array
     {
         $sql = 'SELECT h.`id`, h.`doc_type`, h.`doc_number`, h.`doc_text`,'
@@ -42,13 +52,17 @@ class DocsHeadsViewer extends TableViewer
         $params = [];
 
         $viewGroup = 'active';
-        $docTypeFilter = null;
+        $docTypeFilter = $this->scopedDocType;
+        $numberSeriesFilter = null;
         foreach ($filters as $filter) {
             $id = $filter['id'] ?? null;
             if ($id === 'viewGroup') {
                 $viewGroup = (string) $filter['value'];
             } elseif ($id === '_doc_type') {
+                // Explicit override (e.g. a cross-type viewer pinning a type manually).
                 $docTypeFilter = (string) $filter['value'];
+            } elseif ($id === 'number_series') {
+                $numberSeriesFilter = (int) $filter['value'];
             }
         }
 
@@ -63,6 +77,11 @@ class DocsHeadsViewer extends TableViewer
         if ($docTypeFilter !== null && $docTypeFilter !== '') {
             $conditions[] = 'h.`doc_type` = %s';
             $params[] = $docTypeFilter;
+        }
+
+        if ($numberSeriesFilter !== null && $numberSeriesFilter > 0) {
+            $conditions[] = 'h.`number_series` = %i';
+            $params[] = $numberSeriesFilter;
         }
 
         if ($search !== null && $search !== '') {
@@ -83,6 +102,53 @@ class DocsHeadsViewer extends TableViewer
         $sql .= ' LIMIT ' . $offset . ', ' . $limit;
 
         return $this->db->fetchAll($sql, ...$params);
+    }
+
+    /**
+     * Bottom-tab number series for this viewer.
+     *
+     * Returns only series in "V pořádku" state (docState = 40):
+     *  - Koncept (10) — series not yet in use for filing documents.
+     *  - Archivovaná (70) — past series, not shown (its documents are thus
+     *    not visible in the default view — a deliberate choice).
+     *  - Smazaná (90) — gone.
+     *
+     * Empty for cross-type viewers ($scopedDocType === null) — the generic
+     * DocsHeadsViewer (and any subclass that doesn't pin a type) shows no tabs.
+     *
+     * Note: wider than DocsHeadsFormBase::resolveNumberSeriesOptions() (which
+     * uses docState IN (10, 40, 80)) on purpose — that's "which series may a
+     * new document be filed into", a different question than "which series are
+     * worth showing as a tab".
+     *
+     * @return list<array{id: int, name: string}>
+     */
+    public function getNumberSeries(): array
+    {
+        if ($this->scopedDocType === null) {
+            return [];
+        }
+        $rows = $this->db->fetchAll(
+            'SELECT `id`, `name` FROM `docs_core_number_series`'
+            . ' WHERE `doc_type` = %s AND `docState` = 40'
+            . ' ORDER BY `name` ASC',
+            $this->scopedDocType,
+        );
+        $out = [];
+        foreach ($rows as $row) {
+            $out[] = [
+                'id'   => (int) $row['id'],
+                'name' => (string) $row['name'],
+            ];
+        }
+        return $out;
+    }
+
+    public function getNewRecordDefaults(): array
+    {
+        return $this->scopedDocType !== null
+            ? ['doc_type' => $this->scopedDocType]
+            : [];
     }
 
     public function renderRow(array $rowData): array

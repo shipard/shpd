@@ -27,6 +27,11 @@
   // --- Doc state tabs ---
   let activeViewGroup = $state('active'); // 'active' | 'archive' | 'trash' | 'all'
 
+  // --- Number series tabs (bottom bar) ---
+  // `null` = no series filter (viewer doesn't expose series or list is empty).
+  // Otherwise an int matching one of meta.numberSeries[].id.
+  let activeSeriesId = $state(null);
+
   const VIEW_GROUP_LABEL_KEYS = {
     active:  'viewer.tab.active',
     archive: 'viewer.tab.archive',
@@ -45,6 +50,12 @@
   });
 
   let hasViewGroups = $derived((meta?.viewGroups ?? []).length > 0);
+
+  // --- Number series tabs ---
+  // Lišta se ukáže jen když je víc než 1 řada; při jedné se filter stejně
+  // aplikuje (přes activeSeriesId), ale single-tab by vizuálně nedával smysl.
+  let numberSeries = $derived(meta?.numberSeries ?? []);
+  let hasNumberSeriesTabs = $derived(numberSeries.length > 1);
 
   // --- Row list state ---
   let rows = $state([]);
@@ -91,6 +102,10 @@
     const result = await get(`/_ui/viewer/${viewerId}/meta`);
     if (result?.success) {
       meta = result.data;
+      // Default to the first series (alphabetical). Generic viewers expose no
+      // series → stays null and the number_series filter is not applied.
+      const series = meta.numberSeries ?? [];
+      activeSeriesId = series.length > 0 ? series[0].id : null;
     }
     loadingMeta = false;
   }
@@ -99,7 +114,7 @@
    * Fetch rows from the API.
    * Takes explicit parameters to avoid reading $state inside $effect.
    */
-  async function fetchRowsExplicit(viewerId, search, viewGroup, page, append = false) {
+  async function fetchRowsExplicit(viewerId, search, viewGroup, seriesId, page, append = false) {
     if (append) {
       loadingMore = true;
     } else {
@@ -113,6 +128,10 @@
     // Send viewGroup filter unless "all" is selected
     if (viewGroup && viewGroup !== 'all') {
       path += `&filter[viewGroup]=${encodeURIComponent(viewGroup)}`;
+    }
+    // Number-series bottom-tab filter (per-type doc viewers).
+    if (seriesId != null) {
+      path += `&filter[number_series]=${encodeURIComponent(seriesId)}`;
     }
 
     const result = await get(path);
@@ -132,7 +151,7 @@
 
   /** Convenience wrapper — call from event handlers, NOT from $effect */
   function fetchRows(append = false) {
-    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, pageNumber, append);
+    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, pageNumber, append);
   }
 
   async function fetchDetail(id) {
@@ -158,7 +177,16 @@
     selectedRowId = null;
     detail = null;
     pageNumber = 0;
-    fetchRowsExplicit(tab.viewerId, activeSearch, viewGroup, 0);
+    fetchRowsExplicit(tab.viewerId, activeSearch, viewGroup, activeSeriesId, 0);
+  }
+
+  function handleSeriesTabClick(seriesId) {
+    if (seriesId === activeSeriesId) return;
+    activeSeriesId = seriesId;
+    selectedRowId = null;
+    detail = null;
+    pageNumber = 0;
+    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, seriesId, 0);
   }
 
   function handleSearchInput(e) {
@@ -169,7 +197,7 @@
       selectedRowId = null;
       detail = null;
       pageNumber = 0;
-      fetchRowsExplicit(tab.viewerId, value, activeViewGroup, 0);
+      fetchRowsExplicit(tab.viewerId, value, activeViewGroup, activeSeriesId, 0);
     }, 300);
   }
 
@@ -182,7 +210,7 @@
     selectedRowId = null;
     detail = null;
     pageNumber = 0;
-    fetchRowsExplicit(tab.viewerId, '', activeViewGroup, 0);
+    fetchRowsExplicit(tab.viewerId, '', activeViewGroup, activeSeriesId, 0);
   }
 
   function handleRowClick(row) {
@@ -195,7 +223,7 @@
     const { scrollTop, scrollHeight, clientHeight } = listEl;
     if (scrollHeight - scrollTop - clientHeight < 100) {
       pageNumber += 1;
-      fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, pageNumber, true);
+      fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, pageNumber, true);
     }
   }
 
@@ -212,9 +240,13 @@
     if (actionId === 'create') {
       editRecordId = null;
       // Per-type viewers (e.g. issued/received invoices) expose
-      // newRecordDefaults so the form can pre-fill doc_type and the form
-      // class can derive a matching number_series default.
-      formDefaultData = meta?.newRecordDefaults ?? {};
+      // newRecordDefaults so the form can pre-fill doc_type. On top of that,
+      // when a specific number series is the active bottom tab, pre-fill it too
+      // so the user doesn't have to pick it again in the form.
+      const base = meta?.newRecordDefaults ?? {};
+      formDefaultData = activeSeriesId != null
+        ? { ...base, number_series: activeSeriesId }
+        : base;
       formOpen = true;
     } else if (actionId === 'edit' && selectedRowId != null) {
       editRecordId = selectedRowId;
@@ -256,7 +288,7 @@
       }
       // Refresh rows so any newly created alerts appear.
       pageNumber = 0;
-      fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, 0);
+      fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, 0);
       if (selectedRowId != null) {
         fetchDetail(selectedRowId);
       }
@@ -278,7 +310,7 @@
         reanalyzeDialogOpen = false;
         // Refresh detail i list — zpráva mohla změnit stav
         pageNumber = 0;
-        fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, 0);
+        fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, 0);
         fetchDetail(selectedRowId);
       } else {
         alert(t('viewer.reanalyze.failed', { msg: translateError(result?.error) }));
@@ -303,7 +335,7 @@
     // — fetchDetail still highlights it in the detail panel even if it's
     // scrolled out of view.
     pageNumber = 0;
-    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, 0);
+    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, 0);
     if (personId != null) {
       selectedRowId = personId;
       fetchDetail(personId);
@@ -315,13 +347,13 @@
       fetchDetail(selectedRowId);
       // Také refresh list — apply/reject mohlo přepnout stav zprávy 30→40
       pageNumber = 0;
-      fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, 0);
+      fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, 0);
     }
   }
 
   function refreshAfterAction() {
     pageNumber = 0;
-    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, 0);
+    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, 0);
     if (selectedRowId != null) {
       fetchDetail(selectedRowId);
     }
@@ -393,7 +425,7 @@
 
   function handleFormSaved() {
     pageNumber = 0;
-    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, 0);
+    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, 0);
     if (selectedRowId != null) {
       fetchDetail(selectedRowId);
     }
@@ -418,6 +450,7 @@
     detailToolbar = [];
     activeSearch = '';
     activeViewGroup = 'active';
+    activeSeriesId = null;
     pageNumber = 0;
     hasMore = false;
 
@@ -430,12 +463,15 @@
     // hned vrátí store do nuly, aby se efekt neaplikoval podruhé.
     const pendingRecord = navigationStore.consumePendingRecordId();
 
-    fetchMeta(viewerId);
-    fetchRowsExplicit(viewerId, '', 'active', 0).then(() => {
-      if (pendingRecord != null) {
-        selectedRowId = pendingRecord;
-        fetchDetail(pendingRecord);
-      }
+    // Sequence: meta first (sets activeSeriesId from numberSeries), then rows
+    // with that filter, then optional pending-record detail.
+    fetchMeta(viewerId).then(() => {
+      fetchRowsExplicit(viewerId, '', 'active', activeSeriesId, 0).then(() => {
+        if (pendingRecord != null) {
+          selectedRowId = pendingRecord;
+          fetchDetail(pendingRecord);
+        }
+      });
     });
   });
 </script>
@@ -531,6 +567,22 @@
           {/if}
         {/if}
       </div>
+
+      <!-- Bottom bar: number-series tabs (shown only when >1 series) -->
+      {#if hasNumberSeriesTabs}
+        <div class="shpd-viewer__series-tabs">
+          {#each numberSeries as ns (ns.id)}
+            <button
+              class="shpd-viewer__series-tab"
+              class:shpd-viewer__series-tab--active={activeSeriesId === ns.id}
+              onclick={() => handleSeriesTabClick(ns.id)}
+              type="button"
+            >
+              {ns.name}
+            </button>
+          {/each}
+        </div>
+      {/if}
     </div>
 
     <!-- Right panel: detail -->
@@ -745,6 +797,43 @@
     font-size: var(--shpd-font-size-sm);
     background: var(--shpd-color-bg);
     color: var(--shpd-color-text);
+  }
+
+  /* Spodní lišta záložek číselných řad. Ortogonální k viewGroup tabům nahoře —
+     viewGroup filtruje docState, series filtruje number_series. V 400px panelu
+     se 4+ řad začne tísnit, proto horizontální scroll; žádné wrapping. */
+  .shpd-viewer__series-tabs {
+    display: flex;
+    flex-shrink: 0;
+    border-top: 1px solid var(--shpd-color-border);
+    background-color: var(--shpd-color-bg);
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+  }
+
+  .shpd-viewer__series-tab {
+    padding: var(--shpd-space-xs) var(--shpd-space-md);
+    border: none;
+    border-top: 2px solid transparent;
+    background: none;
+    font-family: inherit;
+    font-size: var(--shpd-font-size-sm);
+    color: var(--shpd-color-text-secondary);
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition: color 0.12s, border-color 0.12s;
+  }
+
+  .shpd-viewer__series-tab:hover {
+    color: var(--shpd-color-text);
+  }
+
+  .shpd-viewer__series-tab--active {
+    color: var(--shpd-color-primary);
+    border-top-color: var(--shpd-color-primary);
+    font-weight: 600;
   }
 
   /* Spinner */

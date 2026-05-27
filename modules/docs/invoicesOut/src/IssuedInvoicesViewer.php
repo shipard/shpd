@@ -9,20 +9,11 @@ use Shipard\Module\Docs\Core\DocsHeadsViewer;
 /**
  * Per-type viewer for issued invoices (doc_type = 'invno').
  *
- * Inherits everything from DocsHeadsViewer and adds a fixed type filter.
+ * All behavior — doc_type filter in selectRows, number-series bottom tabs,
+ * newRecordDefaults for the create form — is derived in DocsHeadsViewer
+ * from $scopedDocType.
  */
 class IssuedInvoicesViewer extends DocsHeadsViewer
 {
-    private const DOC_TYPE = 'invno';
-
-    public function selectRows(?string $search, array $filters, int $pageNumber): array
-    {
-        $filters[] = ['id' => '_doc_type', 'value' => self::DOC_TYPE];
-        return parent::selectRows($search, $filters, $pageNumber);
-    }
-
-    public function getNewRecordDefaults(): array
-    {
-        return ['doc_type' => self::DOC_TYPE];
-    }
+    protected ?string $scopedDocType = 'invno';
 }

@@ -229,6 +229,22 @@ abstract class TableViewer
     }
 
     /**
+     * Returns the list of number series shown as bottom tabs in the viewer's
+     * row list. Empty array = no series tabs.
+     *
+     * Subclasses scoped to a single doc_type (e.g. ReceivedInvoicesViewer)
+     * override this to expose the active series for their type. Generic
+     * viewers leave the default empty. The meta endpoint exposes the result
+     * as `numberSeries`.
+     *
+     * @return list<array{id: int, name: string}>
+     */
+    public function getNumberSeries(): array
+    {
+        return [];
+    }
+
+    /**
      * Look up a localized detail-tab label from a cfgItem of shape
      * `{tabs: {<key>: {name: "..."}}}`. The compiled config already holds
      * the language-resolved `name` thanks to ConfigLocalizer.

@@ -2060,7 +2060,7 @@ způsobí recalculate (partner_address, due_date). Změna kategorie DPH na
   vydané faktury (např. validace `bank_account` povinný v Potvrzení)
 - `IssuedInvoicesViewer extends TableViewer`:
   - filter `WHERE doc_type = 'invno'`
-  - Spodní taby s číselnými řadami (jako v screenshotu od Davida)
+  - Spodní taby s číselnými řadami (jako v screenshotu od Davida) — ✓ viewer-number-series-tabs.md
   - Sloupce: Partner, doc_number, doc_text, datumy, totals, stav badge
 - `modules/docs/invoicesIn/module.jsonc`
 - `ReceivedInvoiceDocument extends DocDocument`

@@ -12,7 +12,9 @@ kódu, věř kódu (kód je živý, task je momentka).
 
 ## Aktivní práce
 
-Aktuálně nic rozpracovaného...
+| Task                              | Co řeší                                              |
+|-----------------------------------|------------------------------------------------------|
+| `viewer-number-series-tabs.md`    | Spodní lišta záložek číselných řad v per-type doc viewerech (`ReceivedInvoicesViewer`, `IssuedInvoicesViewer`) + předvyplnění aktivní řady při create. Refactor `DocsHeadsViewer` na opt-in přes `$scopedDocType`. |
 
 
 ---

@@ -321,14 +321,15 @@ PersonsViewer          (PHP — konkrétní viewer pro base.persons)
 
 | Endpoint | Popis |
 |----------|-------|
-| `GET /_ui/viewer/{id}/meta` | Metadata: name, table, filters, toolbar, viewGroups |
-| `GET /_ui/viewer/{id}/rows` | Záznamy (stránkované, fulltext, viewGroup filter) |
+| `GET /_ui/viewer/{id}/meta` | Metadata: name, table, filters, toolbar, viewGroups, numberSeries |
+| `GET /_ui/viewer/{id}/rows` | Záznamy (stránkované, fulltext, viewGroup + number_series filter) |
 | `GET /_ui/viewer/{id}/detail/{recordId}` | Detail vybraného záznamu (tabs) |
 
 Parametry pro `rows`:
 - `page=0` — číslo stránky (0-based), server vrátí pageSize+1 pro detekci `hasMore`
 - `search=text` — fulltext hledání
 - `filter[viewGroup]=active` — filtr skupiny stavů (active / archive / trash; bez = vše)
+- `filter[number_series]=<id>` — filtr na konkrétní číselnou řadu (per-type doc viewery)
 
 ### Tab bar (doc state taby)
 
@@ -342,6 +343,21 @@ Pokud viewer vrací neprázdné `viewGroups` v meta odpovědi, `Viewer.svelte` z
 | **Vše** | bez filtru | Všechny záznamy |
 
 Přepnutí tabu resetuje stránku a výběr záznamu. Výchozí tab: Aktivní.
+
+### Spodní lišta — číselné řady
+
+`numberSeries` (list, volitelné) — pole `{id, name}` aktivních číselných řad
+pro tento viewer (jen řady ve stavu V pořádku, `docState = 40`). Per-type
+viewery (`ReceivedInvoicesViewer`, `IssuedInvoicesViewer`) ho exponují přes
+`getNumberSeries()` v base třídě `DocsHeadsViewer` — odvozeno z property
+`$scopedDocType`. Cross-type viewery vrací prázdné pole.
+
+`Viewer.svelte` z toho vykreslí spodní lištu záložek na dně list-panelu (ortogonální
+k horním viewGroup tabům — viewGroup filtruje `docState`, tahle `number_series`),
+když je řad víc než jedna. Default je první řada abecedně. Klik na záložku posílá
+`filter[number_series]=<id>`; při vytváření dokladu se id přimerg-uje do
+`formDefaultData` (`number_series`) vedle `doc_type`, takže nová faktura má
+předvyplněnou řadu z aktivní záložky.
 
 ### Formát řádku (`renderRow()`)
 
@@ -464,7 +480,7 @@ nad sebou a po close refetchuje **jen pokud došlo k save** (sledováno přes
 | `GET /_ui/navigation` | Navigační strom ze serveru (moduly → skupiny → tabulky/viewery) — vč. Dashboard leaf na začátku |
 | `GET /_ui/settings/navigation` | Navigační strom režimu Nastavení (sekce + položky podle `settingsItems[]` napříč moduly) |
 | `GET /_ui/dashboard` | Agregát alerts/mail/tasks pro home obrazovku (viz [`dashboard.md`](dashboard.md)) |
-| `GET /_ui/viewer/{id}/meta` | Metadata vieweru (name, table, filters, toolbar, viewGroups) |
+| `GET /_ui/viewer/{id}/meta` | Metadata vieweru (name, table, filters, toolbar, viewGroups, numberSeries) |
 | `GET /_ui/viewer/{id}/rows` | Záznamy vieweru (page, search, filter) |
 | `GET /_ui/viewer/{id}/detail/{recordId}` | Detail panel záznamu (tabs) |
 

@@ -30,6 +30,7 @@ class ViewerController
 			'filters'            => $viewer->getFilters(),
 			'toolbar'            => $viewer->getToolbarActions(null),
 			'viewGroups'         => $viewer->getViewGroups(),
+			'numberSeries'       => $viewer->getNumberSeries(),
 			'newRecordDefaults'  => $viewer->getNewRecordDefaults(),
 		]);
 	}

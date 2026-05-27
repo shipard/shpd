@@ -257,6 +257,71 @@ Vytvoří nového uživatele v DS.
 | `--name <jméno>` | **povinné** — celé jméno |
 | `--email <email>` | volitelné — e-mailová adresa |
 
+### API keys
+
+Generické příkazy pro správu API klíčů libovolného uživatele. Pro
+role-specifické bootstrap subsystémů (mail-router, AI analyzer) viz
+příslušné sekce níže — ty jsou samostatné a tyto generické příkazy
+je nenahrazují.
+
+Klíč žije v `core_system_api_keys`: ukládá se jen SHA-256 hash + 12-znakový
+`key_prefix` pro lookup. Plaintext token (`shpd_ak_` + 32 hex chars) se
+zobrazí pouze jednou, ihned po vytvoření. Revoke nemaže row — jen nastaví
+`is_active = 0`, kvůli auditu.
+
+#### `api-key-create`
+
+```bash
+shpd-ds api-key-create --user=alice --name=import-from-old-shipard
+shpd-ds api-key-create --user=alice --name=ci-bot --ip=10.0.0.5 --ip=10.0.0.6
+shpd-ds api-key-create --user=5 --name=temp --expires=+30d
+shpd-ds api-key-create --user=alice@example.com --name=k --expires="2026-12-31 23:59:59"
+```
+
+Vygeneruje nový API klíč pro existujícího uživatele. Plaintext token vypíše
+ve výstupu — zachyť ho ihned, podruhé už k němu nemáš přístup.
+
+| Opce | Význam |
+|------|--------|
+| `--user <login\|email\|id>` | **povinné** — uživatel. Ambiguous match (login a email se prolnuly) → chyba, použij `--user=<id>`. |
+| `--name <text>` | **povinné** — lidsky čitelný popisek (max 100 znaků). Není unique. |
+| `--ip <addr>` | volitelné, lze opakovat nebo dát comma-separated (`--ip=1.2.3.4,5.6.7.8`). Bez opce = bez IP restrikce. |
+| `--expires <date>` | volitelné — datum/čas expirace. Akceptuje `YYYY-MM-DD`, `YYYY-MM-DD HH:MM:SS`, relative `+30d` / `+1y`, nebo cokoli, co umí PHP `DateTimeImmutable`. Bez opce = bez expirace. |
+
+#### `api-key-list`
+
+```bash
+shpd-ds api-key-list                          # všichni useři, jen aktivní
+shpd-ds api-key-list --user=alice             # filter per uživatel
+shpd-ds api-key-list --include-inactive       # včetně revokovaných
+```
+
+Tabulkový výpis API klíčů. Plaintext se nikdy nezobrazí — jen prefix.
+Allowed IPs nejsou v listu (sloupec by byl moc široký).
+
+| Opce | Význam |
+|------|--------|
+| `--user <login\|email\|id>` | Filtrovat jen klíče tohoto uživatele. |
+| `--include-inactive` | Zobrazit i revokované klíče (jinak filtr `is_active = 1`). |
+
+#### `api-key-revoke`
+
+```bash
+shpd-ds api-key-revoke --id=42                # interaktivní potvrzení
+shpd-ds api-key-revoke --id=42 --yes          # bez potvrzení
+shpd-ds api-key-revoke --prefix=aabbccdd1122  # identifikace přes prefix
+```
+
+Deaktivuje klíč (`is_active = 0`). Idempotentní — opakované volání na už
+revokovaný klíč vrátí success bez změny. Identifikace přes `--id`
+(preferované) nebo `--prefix` (přesných 12 znaků); přesně jedno z těch dvou.
+
+| Opce | Význam |
+|------|--------|
+| `--id <N>` | Numerické ID klíče (`core_system_api_keys.id`). |
+| `--prefix <12chars>` | Prefix. Pokud sdílí prefix víc klíčů (vzácné), command vyzve k `--id`. |
+| `--yes`, `-y` | Skip interaktivního potvrzení. |
+
 ### Secrets
 
 #### `ds-secrets-health`

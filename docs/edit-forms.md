@@ -1527,4 +1527,5 @@ Dopořučení:
 - Tab Nastavení je umístěn za Přílohami stejně jako u `PersonsForm` — udržuje konzistentní UX napříč aplikací.
 - Hook má stejnou signaturu jako `buildHeaderTab()` (`array $data, bool $isNew`), použitelnou pro větvení podle stavu formuláře (např. skrýt sekce „DPH“ když `vat_mode === 0`).
 - Pro extra **subtable** nebo **attachments** taby použij stejný hook — vrací se z něj `list<FormTab>`, který může obsahovat i `$this->subtableTab(...)` nebo `$this->attachmentsTab(...)`.
-- `IssuedInvoiceForm` (FVB) a generický `DocsHeadsForm` hook nepřepisují — nemění default `[]`. Můžou ho zapnout kdykoli bez úpravy base třídy.
+- `IssuedInvoiceForm` (FVB) hook používá taky, ale s užším obsahem: jen sekce „Měna“ s `home_currency` (readOnly). `vat_registration` a `bank_account` zůstávají v hlavičce — u vydaných faktur se mění podle odběratele a měny dokladu, nepatří mezi „zřídka měněná“ nastavení. Strukturu má smysl držet stejnou jako u FPB — další pole (např. připomínkový režim, AI checks) se přidávají jako sekce navrch.
+- Generický `DocsHeadsForm` hook nepřepisuje, nemění default `[]`. Může ho zapnout kdykoli bez úpravy base třídy.

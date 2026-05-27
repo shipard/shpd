@@ -124,8 +124,12 @@ Závislosti tečou shora dolů: Command → Document → Module/Config/Database 
   změny (PersonsForm, ItemsForm, …).
 - `DocsHeadsFormBase` má hook `buildExtraTabs(array $data, bool $isNew): array`
   (default `[]`) pro přidání per-typ tabů na konec formuláře za Přílohy.
-  První použití: `ReceivedInvoiceForm` přidává tab „Nastavení“
-  (vat_registration, bank_account, home_currency readOnly).
+  První uživatelé:
+  - `ReceivedInvoiceForm` (FPB) — sekce DPH (vat_registration),
+    Bankovní spojení (bank_account), Měna (home_currency readOnly).
+  - `IssuedInvoiceForm` (FVB) — jen sekce Měna (home_currency readOnly);
+    vat_registration a bank_account zůstávají v hlavičce, mění se podle
+    odběratele / měny dokladu.
 - Detailně viz `docs/edit-forms.md` kapitola 23.
 
 ### Citlivá data (encrypted_text)

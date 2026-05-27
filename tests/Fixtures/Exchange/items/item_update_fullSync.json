@@ -1,0 +1,16 @@
+{
+    "format": "shpd.items.item",
+    "formatVersion": "1.0",
+    "code": "IT-EX-FS-004",
+    "name": "IT-EX FullSync Item (E2E)",
+    "description": "NEW description — must overwrite",
+    "kind": {
+        "code": "service"
+    },
+    "salesPriceNoVat": 2500.00,
+    "unit": "h",
+    "applyOptions": {
+        "mergeStrategy": "fullSync",
+        "targetDocState": 40
+    }
+}

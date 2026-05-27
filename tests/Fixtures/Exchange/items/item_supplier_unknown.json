@@ -1,0 +1,26 @@
+{
+    "format": "shpd.items.item",
+    "formatVersion": "1.0",
+    "code": "IT-EX-SUNK-005",
+    "name": "IT-EX SupplierUnknown Item (E2E)",
+    "kind": {
+        "code": "service"
+    },
+    "salesPriceNoVat": 100.00,
+    "unit": "h",
+    "supplierCodes": [
+        {
+            "supplier": {
+                "name": "IT-EX UNKNOWN s.r.o.",
+                "country": "cz",
+                "companyId": "IT-EX-UNK01"
+            },
+            "supplierCode": "UNK-X1",
+            "supplierName": "Položka u neznámého dodavatele"
+        }
+    ],
+    "applyOptions": {
+        "mergeStrategy": "createOnly",
+        "targetDocState": 40
+    }
+}

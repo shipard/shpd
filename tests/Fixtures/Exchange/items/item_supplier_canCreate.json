@@ -1,0 +1,32 @@
+{
+    "format": "shpd.items.item",
+    "formatVersion": "1.0",
+    "code": "IT-EX-SCC-006",
+    "name": "IT-EX SupplierCanCreate Item (E2E)",
+    "kind": {
+        "code": "service"
+    },
+    "salesPriceNoVat": 250.00,
+    "unit": "h",
+    "supplierCodes": [
+        {
+            "supplier": {
+                "name": "IT-EX AutoSupplier s.r.o.",
+                "country": "cz",
+                "companyId": "IT-EX-AUT01",
+                "vatId": "CZIT-EX-AUT01"
+            },
+            "supplierCode": "AUT-X1",
+            "supplierName": "Položka u autocreate dodavatele"
+        }
+    ],
+    "applyOptions": {
+        "mergeStrategy": "createOnly",
+        "targetDocState": 40
+    },
+    "_resolve": {
+        "supplierCodes": [
+            { "index": 0, "userAction": "create" }
+        ]
+    }
+}

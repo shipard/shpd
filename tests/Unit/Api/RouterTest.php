@@ -598,6 +598,41 @@ class RouterTest extends TestCase
 		$this->assertSame('NOT_FOUND', $result->getPayload()['error']['code']);
 	}
 
+	public function testItemExchangeValidate(): void
+	{
+		$result = $this->router->resolve('/api/v1/_exchange/items/item/validate', 'POST');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'exchange', 'item:validate');
+	}
+
+	public function testItemExchangePreview(): void
+	{
+		$result = $this->router->resolve('/api/v1/_exchange/items/item/preview', 'POST');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'exchange', 'item:preview');
+	}
+
+	public function testItemExchangeApply(): void
+	{
+		$result = $this->router->resolve('/api/v1/_exchange/items/item/apply', 'POST');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'exchange', 'item:apply');
+	}
+
+	public function testItemExchangeGetNotAllowed(): void
+	{
+		$result = $this->router->resolve('/api/v1/_exchange/items/item/apply', 'GET');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
+	}
+
+	public function testItemExchangeUnknownActionIs404(): void
+	{
+		$result = $this->router->resolve('/api/v1/_exchange/items/item/explode', 'POST');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('NOT_FOUND', $result->getPayload()['error']['code']);
+	}
+
 	// Lookup routes
 
 	public function testLookupSearch(): void

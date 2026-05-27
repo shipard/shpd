@@ -39,6 +39,19 @@ položka patří do jednoho **druhu** (`item_kind`), přebírá z něj svůj
 | `sales_price_no_vat` | numeric(15, 4) | Prodejní cena bez DPH v domácí měně DS |
 | `unit` | int, NOT NULL, ref → `core_units` | Měrná jednotka. Default `pcs` (Kus) u nové položky. |
 
+### Původ záznamu (lineage)
+
+| Sloupec | Typ | Popis |
+|---|---|---|
+| `source_kind` | varchar(40), nullable | Klíč z [economy.items.sourceKinds](../config/sourceKinds.jsonc) — `manual`, `aiExtraction`, `import.oldShipard`, `import.csv`, `import.supplierCatalog` |
+| `source_ref` | varchar(60), nullable | Identifikátor ve zdroji — typicky ndx ve starém Shipardu, ID vendor katalogu, řádkové číslo CSV apod. |
+| `source_imported_at` | datetime, nullable | Čas posledního importu / synchronizace |
+
+Lineage sloupce vyplňuje `ItemApplier` (modul `core.exchange`) při apply
+canonical payloadu — viz [exchange-format-items.md §12](../../../../docs/exchange-format-items.md#12-lineage).
+Manuálně pořízené položky přes UI mají `source_kind = NULL` (nebo zachovanou
+hodnotu z dřívějšího importu — manuální editace přes UI lineage nepřepisuje).
+
 ## Auto-gen kódu
 
 Pokud uživatel ponechá pole `code` prázdné, `ItemDocument::beforeSave`:

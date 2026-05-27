@@ -1,0 +1,15 @@
+{
+    "format": "shpd.items.item",
+    "formatVersion": "1.0",
+    "code": "IT-EX-ITF-008",
+    "name": "IT-EX ItemTypeFallback Item (E2E)",
+    "kind": {
+        "itemType": 0
+    },
+    "salesPriceNoVat": 200.00,
+    "unit": "h",
+    "applyOptions": {
+        "mergeStrategy": "createOnly",
+        "targetDocState": 40
+    }
+}

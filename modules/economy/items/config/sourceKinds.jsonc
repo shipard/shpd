@@ -1,0 +1,27 @@
+{
+    "manual": {
+        "name": "Manual entry",
+        "name:cs": "Ruční zadání",
+        "name:en": "Manual entry"
+    },
+    "aiExtraction": {
+        "name": "From AI extraction",
+        "name:cs": "Z AI extrakce",
+        "name:en": "From AI extraction"
+    },
+    "import.oldShipard": {
+        "name": "Import from legacy Shipard",
+        "name:cs": "Import ze starého Shipardu",
+        "name:en": "Import from legacy Shipard"
+    },
+    "import.csv": {
+        "name": "CSV import",
+        "name:cs": "CSV import",
+        "name:en": "CSV import"
+    },
+    "import.supplierCatalog": {
+        "name": "Supplier catalog",
+        "name:cs": "Katalog dodavatele",
+        "name:en": "Supplier catalog"
+    }
+}

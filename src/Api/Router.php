@@ -109,6 +109,10 @@ class Router
 			return $this->resolvePersonsExchangeRoute($subpath, $method);
 		}
 
+		if (str_starts_with($subpath, '/_exchange/items/item/')) {
+			return $this->resolveItemsExchangeRoute($subpath, $method);
+		}
+
 		if (str_starts_with($subpath, '/_alerts')) {
 			return $this->resolveAlertsRoute($subpath, $method);
 		}
@@ -326,6 +330,22 @@ class Router
 			return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
 		}
 		return new Route('exchange', "person:{$rest}");
+	}
+
+	/**
+	 * Item flow routes share the `exchange` dispatcher with documents and
+	 * persons. Action prefixed with `item:` to disambiguate.
+	 */
+	private function resolveItemsExchangeRoute(string $subpath, string $method): Route|Response
+	{
+		$rest = substr($subpath, strlen('/_exchange/items/item/'));
+		if (!in_array($rest, ['validate', 'preview', 'apply'], true)) {
+			return Response::error('NOT_FOUND', 'Not found', 404);
+		}
+		if ($method !== 'POST') {
+			return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+		}
+		return new Route('exchange', "item:{$rest}");
 	}
 
 	private function resolveAlertsRoute(string $subpath, string $method): Route|Response

@@ -1,0 +1,25 @@
+{
+    "format": "shpd.items.item",
+    "formatVersion": "1.0",
+    "source": {
+        "kind": "import.oldShipard",
+        "fetchedAt": "2026-05-27T10:00:00Z",
+        "registryRef": "12345"
+    },
+    "code": "IT-EX-SVC-001",
+    "name": "IT-EX Konzultace IT (E2E)",
+    "description": "Hodinová sazba senior konzultanta",
+    "kind": {
+        "code": "service"
+    },
+    "salesPriceNoVat": 1500.00,
+    "unit": "h",
+    "status": {
+        "isClosed": false,
+        "docState": 40
+    },
+    "applyOptions": {
+        "mergeStrategy": "createOnly",
+        "targetDocState": 40
+    }
+}

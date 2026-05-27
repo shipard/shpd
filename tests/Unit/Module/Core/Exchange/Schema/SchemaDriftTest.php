@@ -23,6 +23,7 @@ class SchemaDriftTest extends TestCase
         return [
             'shpd.docs.document.v1'   => ['shpd.docs.document.v1'],
             'shpd.persons.person.v1' => ['shpd.persons.person.v1'],
+            'shpd.items.item.v1'     => ['shpd.items.item.v1'],
         ];
     }
 

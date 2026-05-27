@@ -1,0 +1,16 @@
+{
+    "format": "shpd.items.item",
+    "formatVersion": "1.0",
+    "code": "IT-EX-MA-003",
+    "name": "IT-EX MergeAdd Item (E2E)",
+    "description": "NEW description — should NOT overwrite existing",
+    "kind": {
+        "code": "service"
+    },
+    "salesPriceNoVat": 999.00,
+    "unit": "h",
+    "applyOptions": {
+        "mergeStrategy": "mergeAdd",
+        "targetDocState": 40
+    }
+}

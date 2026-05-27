@@ -324,15 +324,26 @@ function dispatchExchange(
 		$documentRegistry,
 		$tables,
 	);
-	$ctrl = new ExchangeController($applier, $personApplier);
+	$itemApplier = \Shipard\Module\Core\Exchange\Item\ItemApplier::create(
+		$db->getDibiConnection(),
+		$configRuntime,
+		$resolved->config,
+		$documentRegistry,
+		$tables,
+		$personApplier,
+	);
+	$ctrl = new ExchangeController($applier, $personApplier, $itemApplier);
 
 	return match ($route->action) {
 		'validate'        => $ctrl->validate($request),
 		'preview'         => $ctrl->preview($request),
-		'apply'           => $ctrl->apply($request),
+		'apply'            => $ctrl->apply($request),
 		'person:validate' => $ctrl->validatePerson($request),
 		'person:preview'  => $ctrl->previewPerson($request),
 		'person:apply'    => $ctrl->applyPerson($request),
+		'item:validate'   => $ctrl->validateItem($request),
+		'item:preview'    => $ctrl->previewItem($request),
+		'item:apply'      => $ctrl->applyItem($request),
 		default           => Response::error('INTERNAL_ERROR', "Unknown exchange action: {$route->action}", 500),
 	};
 }

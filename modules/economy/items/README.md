@@ -38,6 +38,7 @@ později spolu s VAT modulem a `economy.docs`.
 | Klíč | Soubor | Popis |
 |---|---|---|
 | `economy.items.itemTypes` | [config/itemTypes.jsonc](config/itemTypes.jsonc) | Typ položky — služba / zásoba / účetní / ostatní |
+| `economy.items.sourceKinds` | [config/sourceKinds.jsonc](config/sourceKinds.jsonc) | Klíče pro sloupec `source_kind` v `economy_items` — `manual`, `aiExtraction`, `import.oldShipard`, `import.csv`, `import.supplierCatalog` |
 
 ## Seedovaná data
 

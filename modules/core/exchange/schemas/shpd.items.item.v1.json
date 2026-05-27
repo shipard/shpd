@@ -1,0 +1,276 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://shipard.cz/schemas/shpd.items.item.v1.json",
+    "title": "Shipard canonical item v1",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+        "format",
+        "formatVersion",
+        "name",
+        "unit"
+    ],
+    "properties": {
+        "format": {
+            "const": "shpd.items.item"
+        },
+        "formatVersion": {
+            "type": "string",
+            "pattern": "^1\\.[0-9]+$"
+        },
+        "source": {
+            "type": [
+                "object",
+                "null"
+            ],
+            "additionalProperties": false,
+            "properties": {
+                "kind": {
+                    "type": "string"
+                },
+                "fetchedAt": {
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "format": "date-time"
+                },
+                "registryRef": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "raw": {
+                    "type": [
+                        "object",
+                        "null"
+                    ],
+                    "additionalProperties": true
+                }
+            }
+        },
+        "code": {
+            "type": [
+                "string",
+                "null"
+            ]
+        },
+        "name": {
+            "type": "string",
+            "minLength": 1
+        },
+        "description": {
+            "type": [
+                "string",
+                "null"
+            ]
+        },
+        "sku": {
+            "type": [
+                "string",
+                "null"
+            ]
+        },
+        "ean": {
+            "type": [
+                "string",
+                "null"
+            ]
+        },
+        "kind": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "code": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "name": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "itemType": {
+                    "type": [
+                        "integer",
+                        "null"
+                    ],
+                    "enum": [
+                        null,
+                        0,
+                        1,
+                        2,
+                        3
+                    ]
+                }
+            }
+        },
+        "validFrom": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "format": "date"
+        },
+        "validTo": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "format": "date"
+        },
+        "salesPriceNoVat": {
+            "type": [
+                "number",
+                "null"
+            ]
+        },
+        "unit": {
+            "type": "string",
+            "minLength": 1
+        },
+        "supplierCodes": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "supplier",
+                    "supplierCode"
+                ],
+                "properties": {
+                    "supplier": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                            "name": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ]
+                            },
+                            "country": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ],
+                                "pattern": "^[a-z]{2}$"
+                            },
+                            "companyId": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ]
+                            },
+                            "taxId": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ]
+                            },
+                            "vatId": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ]
+                            },
+                            "govEBoxId": {
+                                "type": [
+                                    "string",
+                                    "null"
+                                ]
+                            }
+                        }
+                    },
+                    "supplierCode": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "supplierName": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    }
+                }
+            }
+        },
+        "status": {
+            "type": [
+                "object",
+                "null"
+            ],
+            "additionalProperties": false,
+            "properties": {
+                "isClosed": {
+                    "type": [
+                        "boolean",
+                        "null"
+                    ]
+                },
+                "docState": {
+                    "type": [
+                        "integer",
+                        "null"
+                    ],
+                    "enum": [
+                        null,
+                        10,
+                        40,
+                        70,
+                        80,
+                        90
+                    ]
+                }
+            }
+        },
+        "applyOptions": {
+            "type": [
+                "object",
+                "null"
+            ],
+            "additionalProperties": false,
+            "properties": {
+                "mergeStrategy": {
+                    "enum": [
+                        null,
+                        "createOnly",
+                        "updateHeader",
+                        "mergeAdd",
+                        "fullSync"
+                    ]
+                },
+                "targetDocState": {
+                    "enum": [
+                        null,
+                        10,
+                        40
+                    ]
+                },
+                "rejectOnIssues": {
+                    "type": [
+                        "array",
+                        "null"
+                    ],
+                    "items": {
+                        "enum": [
+                            "error",
+                            "warning"
+                        ]
+                    }
+                }
+            }
+        },
+        "_resolve": {
+            "type": [
+                "object",
+                "null"
+            ],
+            "additionalProperties": true
+        }
+    }
+}

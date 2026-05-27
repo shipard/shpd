@@ -94,6 +94,102 @@ class SchemaValidatorTest extends TestCase
         $this->assertSame([], $issues, 'Happy fixture should validate cleanly: ' . json_encode($issues, JSON_PRETTY_PRINT));
     }
 
+    public function testItemMinimalValidPayloadProducesNoIssues(): void
+    {
+        $payload = [
+            'format'        => 'shpd.items.item',
+            'formatVersion' => '1.0',
+            'name'          => 'Konzultace IT',
+            'unit'          => 'h',
+        ];
+
+        $issues = $this->validator->validate($payload, 'shpd.items.item', '1');
+        $this->assertSame([], $issues);
+    }
+
+    public function testItemMissingRequiredNameProducesIssue(): void
+    {
+        $payload = [
+            'format'        => 'shpd.items.item',
+            'formatVersion' => '1.0',
+            'unit'          => 'h',
+        ];
+
+        $issues = $this->validator->validate($payload, 'shpd.items.item', '1');
+        $this->assertNotEmpty($issues);
+        $codes = array_column($issues, 'code');
+        $this->assertContains('required', $codes);
+    }
+
+    public function testItemRichPayloadWithSubObjectsIsAccepted(): void
+    {
+        $payload = [
+            'format'        => 'shpd.items.item',
+            'formatVersion' => '1.0',
+            'source'        => [
+                'kind'        => 'import.oldShipard',
+                'registryRef' => '12345',
+            ],
+            'code'             => 'K-001',
+            'name'             => 'Konzultace IT',
+            'description'      => 'Hodinová sazba',
+            'kind'             => ['code' => 'service', 'itemType' => 0],
+            'salesPriceNoVat'  => 1000.0,
+            'unit'             => 'h',
+            'supplierCodes'    => [[
+                'supplier'     => [
+                    'name'      => 'Acme s.r.o.',
+                    'country'   => 'cz',
+                    'companyId' => '12345678',
+                ],
+                'supplierCode' => 'KONZ-001',
+                'supplierName' => 'Konzultace IT',
+            ]],
+            'status'       => ['isClosed' => false, 'docState' => 40],
+            'applyOptions' => [
+                'mergeStrategy'  => 'mergeAdd',
+                'targetDocState' => 40,
+                'rejectOnIssues' => ['error'],
+            ],
+        ];
+
+        $issues = $this->validator->validate($payload, 'shpd.items.item', '1');
+        $this->assertSame([], $issues, 'Rich item payload should validate cleanly: ' . json_encode($issues, JSON_PRETTY_PRINT));
+    }
+
+    public function testItemKindItemTypeOutOfRangeIsRejected(): void
+    {
+        $payload = [
+            'format'        => 'shpd.items.item',
+            'formatVersion' => '1.0',
+            'name'          => 'X',
+            'unit'          => 'h',
+            'kind'          => ['itemType' => 7],
+        ];
+
+        $issues = $this->validator->validate($payload, 'shpd.items.item', '1');
+        $codes = array_column($issues, 'code');
+        $this->assertContains('enum', $codes);
+    }
+
+    public function testItemSupplierCountryUppercaseIsRejected(): void
+    {
+        $payload = [
+            'format'        => 'shpd.items.item',
+            'formatVersion' => '1.0',
+            'name'          => 'X',
+            'unit'          => 'h',
+            'supplierCodes' => [[
+                'supplier'     => ['country' => 'CZ'],
+                'supplierCode' => 'X',
+            ]],
+        ];
+
+        $issues = $this->validator->validate($payload, 'shpd.items.item', '1');
+        $codes = array_column($issues, 'code');
+        $this->assertContains('pattern', $codes);
+    }
+
     public function testIssuePathPointsAtFailingField(): void
     {
         $payload = [

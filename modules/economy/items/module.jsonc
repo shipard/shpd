@@ -80,6 +80,10 @@
         {
             "id": "economy.items.viewerDetailLabels",
             "file": "config/viewerDetailLabels.jsonc"
+        },
+        {
+            "id": "economy.items.sourceKinds",
+            "file": "config/sourceKinds.jsonc"
         }
     ]
 }

@@ -8,14 +8,16 @@ use Shipard\Api\Request;
 use Shipard\Api\Response;
 use Shipard\Module\Core\Exchange\Common\ApplyResult;
 use Shipard\Module\Core\Exchange\Document\DocumentApplier;
+use Shipard\Module\Core\Exchange\Item\ItemApplier;
 use Shipard\Module\Core\Exchange\Person\PersonApplier;
 
 /**
- * REST endpoints for the canonical exchange formats. Two parallel
+ * REST endpoints for the canonical exchange formats. Three parallel
  * flavours sharing the same response shape:
  *
  *   POST /api/v1/_exchange/docs/document/{validate|preview|apply}
  *   POST /api/v1/_exchange/persons/person/{validate|preview|apply}
+ *   POST /api/v1/_exchange/items/item/{validate|preview|apply}
  *
  * The controller is intentionally thin — body validation + delegate to
  * the relevant Applier + map ApplyResult to Response. Error shape
@@ -23,16 +25,17 @@ use Shipard\Module\Core\Exchange\Person\PersonApplier;
  *
  *   { success: false, error: { code, message, details: <enriched canonical> } }
  *
- * `PersonApplier` is injected optionally so document-only deployments
- * and existing unit tests can stub the controller without wiring the
- * person flow. Calling a /persons/* endpoint without a configured
- * PersonApplier returns 500 INTERNAL_ERROR.
+ * `PersonApplier` / `ItemApplier` are injected optionally so document-only
+ * deployments and existing unit tests can stub the controller without
+ * wiring the person/item flows. Calling a /persons/* or /items/* endpoint
+ * without the corresponding configured applier returns 500 INTERNAL_ERROR.
  */
 final class ExchangeController
 {
     public function __construct(
         private readonly DocumentApplier $applier,
         private readonly ?PersonApplier $personApplier = null,
+        private readonly ?ItemApplier $itemApplier = null,
     ) {}
 
     // ── Document flow ──────────────────────────────────────────────────
@@ -102,6 +105,44 @@ final class ExchangeController
         return $this->respond($this->personApplier->apply($payload), 'savedPersonId');
     }
 
+    // ── Item flow ──────────────────────────────────────────────────────
+
+    public function validateItem(Request $request): Response
+    {
+        if ($this->itemApplier === null) {
+            return $this->itemFlowUnavailable();
+        }
+        $payload = $this->extractPayload($request);
+        if ($payload instanceof Response) {
+            return $payload;
+        }
+        return $this->respond($this->itemApplier->validate($payload), 'savedItemId');
+    }
+
+    public function previewItem(Request $request): Response
+    {
+        if ($this->itemApplier === null) {
+            return $this->itemFlowUnavailable();
+        }
+        $payload = $this->extractPayload($request);
+        if ($payload instanceof Response) {
+            return $payload;
+        }
+        return $this->respond($this->itemApplier->preview($payload), 'savedItemId');
+    }
+
+    public function applyItem(Request $request): Response
+    {
+        if ($this->itemApplier === null) {
+            return $this->itemFlowUnavailable();
+        }
+        $payload = $this->extractPayload($request);
+        if ($payload instanceof Response) {
+            return $payload;
+        }
+        return $this->respond($this->itemApplier->apply($payload), 'savedItemId');
+    }
+
     // ── Shared plumbing ────────────────────────────────────────────────
 
     /**
@@ -144,6 +185,15 @@ final class ExchangeController
         return Response::error(
             'INTERNAL_ERROR',
             'Person exchange flow is not wired in this dispatcher.',
+            500,
+        );
+    }
+
+    private function itemFlowUnavailable(): Response
+    {
+        return Response::error(
+            'INTERNAL_ERROR',
+            'Item exchange flow is not wired in this dispatcher.',
             500,
         );
     }

@@ -17,6 +17,9 @@ Technické specifikace projektu Shipard.
 | [design-system.md](design-system.md) | Design system — paleta barev, doc-state konvence, badge systém, avatary, CSS proměnné |
 | [documentation.md](documentation.md) | Pravidla pro dokumentaci modulů a tabulek — kde leží README.md, co obsahuje .md k tabulce, vzory |
 | [cli.md](cli.md) | CLI nástroje — kompletní reference `shpd-server` a `shpd-ds` příkazů, pomocných skriptů a workflow scénářů |
+| [exchange-format.md](exchange-format.md) | Výměnný formát pro doklady — kanonický JSON `shpd.docs.document.v1`, validate/preview/apply pipeline, resolvery, merge strategie |
+| [exchange-format-persons.md](exchange-format-persons.md) | Výměnný formát pro osoby — `shpd.persons.person.v1`, sub-kolekce (adresy, banky, kontakty), authoritative refresh, lineage |
+| [exchange-format-items.md](exchange-format-items.md) | Výměnný formát pro položky — `shpd.items.item.v1`, KindResolver / SupplierCodesResolver, per-partner dodavatelské kódy |
 | [docs-mvp.md](docs-mvp.md) | **Designový dokument** — specifikace dokladového systému MVP (faktury vydané + přijaté, DPH model, číselné řady, stavy, snapshoty). Transientní — po implementaci přesune do archivu. |
 
 Nginx konfigurace jsou v [`nginx/`](nginx/) (app.conf, development.conf, production.conf).

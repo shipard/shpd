@@ -1,0 +1,29 @@
+{
+    "format": "shpd.items.item",
+    "formatVersion": "1.0",
+    "source": {
+        "kind": "import.csv",
+        "registryRef": "row-7"
+    },
+    "code": "IT-EX-STK-002",
+    "name": "IT-EX Notebook Dell XPS 15 (E2E)",
+    "description": "Pracovní notebook pro vývoj",
+    "kind": {
+        "name": "IT-EX Hardware notebooky (E2E)",
+        "itemType": 1
+    },
+    "salesPriceNoVat": 45000.00,
+    "unit": "pcs",
+    "status": {
+        "docState": 40
+    },
+    "applyOptions": {
+        "mergeStrategy": "createOnly",
+        "targetDocState": 40
+    },
+    "_resolve": {
+        "kind": {
+            "userAction": "create"
+        }
+    }
+}

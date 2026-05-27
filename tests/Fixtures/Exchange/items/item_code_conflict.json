@@ -1,0 +1,16 @@
+{
+    "format": "shpd.items.item",
+    "formatVersion": "1.0",
+    "code": "IT-EX-CC-007",
+    "name": "IT-EX CodeConflict Different Item (E2E)",
+    "description": "Other item with the same code — should reject",
+    "kind": {
+        "code": "service"
+    },
+    "salesPriceNoVat": 500.00,
+    "unit": "h",
+    "applyOptions": {
+        "mergeStrategy": "createOnly",
+        "targetDocState": 40
+    }
+}

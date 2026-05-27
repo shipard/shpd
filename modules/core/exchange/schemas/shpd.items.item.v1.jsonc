@@ -1,0 +1,150 @@
+{
+    // shpd.items.item.v1 — canonical exchange format for items (goods,
+    // services, accounting items, other) including per-partner supplier
+    // code mappings.
+    //
+    // Full specification: docs/exchange-format-items.md.
+    //
+    // Important:
+    //   - The `additionalProperties` is false on top-level and on most
+    //     objects; `source.raw` and `_resolve` are the two exceptions
+    //     (opaque vendor payload / resolver passthrough — validated by
+    //     PHP, not by JSON Schema).
+    //   - The `supplier` sub-object inside `supplierCodes[]` is an inline
+    //     Party fragment — shared shape with Document spec. We deliberately
+    //     skip $ref/definitions in Phase 1 to keep the file readable;
+    //     refactor to shared definitions is a Phase 3 follow-up.
+    //   - `kind` requires at least one of (code / name / itemType) — that
+    //     constraint is enforced by PHP ItemValidator, not schema (schema
+    //     would need `anyOf` plumbing that doesn't pay off in readability).
+    //   - `code` accepts null / missing — applier drops the key when null
+    //     and lets ItemDocument::beforeSave generate a hex code.
+    //   - `name` and `unit` are required in top-level — economy_items.name
+    //     is NOT NULL in DB, unit has no usable default at apply time.
+    //   - `country` on supplier Party is lowercase ISO 3166-1 alpha-2
+    //     ("cz", "sk", …) — same convention as persons spec.
+    //   - `kind.itemType` enum mirrors economy.items.itemTypes cfgItem
+    //     (0=Service, 1=Stock, 2=Accounting, 3=Other).
+
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://shipard.cz/schemas/shpd.items.item.v1.json",
+    "title": "Shipard canonical item v1",
+    "type": "object",
+    "additionalProperties": false,
+
+    "required": ["format", "formatVersion", "name", "unit"],
+
+    "properties": {
+        "format":        { "const": "shpd.items.item" },
+        "formatVersion": { "type": "string", "pattern": "^1\\.[0-9]+$" },
+
+        // ── Source / lineage ────────────────────────────────────────────
+        "source": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "properties": {
+                "kind":        { "type": "string" },
+                "fetchedAt":   { "type": ["string", "null"], "format": "date-time" },
+                "registryRef": { "type": ["string", "null"] },
+                "raw": {
+                    // Vendor-specific opaque payload (e.g. raw vendor catalog
+                    // record, raw old-Shipard ndx blob). Schema-less by design.
+                    "type": ["object", "null"],
+                    "additionalProperties": true
+                }
+            }
+        },
+
+        // ── Identity ────────────────────────────────────────────────────
+        "code":        { "type": ["string", "null"] },
+        "name":        { "type": "string", "minLength": 1 },
+        "description": { "type": ["string", "null"] },
+        "sku":         { "type": ["string", "null"] },
+        "ean":         { "type": ["string", "null"] },
+
+        // ── Classification ──────────────────────────────────────────────
+        // KindResolver picks `code` → `name` → `itemType` fallback in order.
+        // At least one of the three hints must be present — enforced by PHP
+        // ItemValidator (kind_required issue).
+        "kind": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "code":     { "type": ["string", "null"] },
+                "name":     { "type": ["string", "null"] },
+                "itemType": { "type": ["integer", "null"], "enum": [null, 0, 1, 2, 3] }
+            }
+        },
+
+        // ── Details ─────────────────────────────────────────────────────
+        "validFrom": { "type": ["string", "null"], "format": "date" },
+        "validTo":   { "type": ["string", "null"], "format": "date" },
+
+        // ── Pricing ─────────────────────────────────────────────────────
+        // `salesPriceNoVat >= 0` is enforced by PHP ItemValidator
+        // (JSON Schema's `minimum: 0` would reject sensibly-valid `null`).
+        "salesPriceNoVat": { "type": ["number", "null"] },
+        "unit":            { "type": "string", "minLength": 1 },
+
+        // ── Per-partner supplier codes ──────────────────────────────────
+        "supplierCodes": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["supplier", "supplierCode"],
+                "properties": {
+                    "supplier": {
+                        // Inline Party fragment (shared shape with Document
+                        // spec). PartyResolver maps to base_persons_persons
+                        // with personType = company filter.
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                            "name":      { "type": ["string", "null"] },
+                            "country":   { "type": ["string", "null"], "pattern": "^[a-z]{2}$" },
+                            "companyId": { "type": ["string", "null"] },
+                            "taxId":     { "type": ["string", "null"] },
+                            "vatId":     { "type": ["string", "null"] },
+                            "govEBoxId": { "type": ["string", "null"] }
+                        }
+                    },
+                    "supplierCode": { "type": "string", "minLength": 1 },
+                    "supplierName": { "type": ["string", "null"] }
+                }
+            }
+        },
+
+        // ── Status ──────────────────────────────────────────────────────
+        "status": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "properties": {
+                "isClosed": { "type": ["boolean", "null"] },
+                "docState": { "type": ["integer", "null"], "enum": [null, 10, 40, 70, 80, 90] }
+            }
+        },
+
+        // ── Apply options ───────────────────────────────────────────────
+        "applyOptions": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "properties": {
+                "mergeStrategy":  { "enum": [null, "createOnly", "updateHeader", "mergeAdd", "fullSync"] },
+                "targetDocState": { "enum": [null, 10, 40] },
+                "rejectOnIssues": {
+                    "type": ["array", "null"],
+                    "items": { "enum": ["error", "warning"] }
+                }
+            }
+        },
+
+        // ── Resolve state ───────────────────────────────────────────────
+        // Populated by /preview and accepted by /apply. Structure is
+        // validated by PHP (ItemFlowResolver), schema lets it pass through.
+        "_resolve": {
+            "type": ["object", "null"],
+            "additionalProperties": true
+        }
+    }
+}

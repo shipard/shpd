@@ -164,6 +164,9 @@ namespace Shipard\Core\Document;
 
 class ValidationError
 {
+    /** Konvenční `column` pro chyby bez vazby na konkrétní pole. */
+    public const FIELD_FORM = '_form';
+
     public function __construct(
         public readonly string $column,
         public readonly string $message,
@@ -193,6 +196,16 @@ Příklad použití v UI — API vrátí:
 ```
 
 Pole `column` umožňuje UI nastavit focus na konkrétní pole. Pro chyby v řádcích se použije tečková notace `rows.{index}.{column}`.
+
+Význam hodnot `column` (kontrakt s frontendem, detailně viz `docs/edit-forms.md` sekce 8):
+
+- **Konkrétní sloupec** → chyba se zobrazí vedle pole ve formuláři (+ tabová tečka + banner s labelem).
+- **`_form`** (konstanta `ValidationError::FIELD_FORM`) → chyba bez vazby na pole; vykreslí se jen v top-level banneru formuláře.
+- **Cokoli jiného** (např. `rows`, neznámý sloupec) → frontend fallbackne na form-level (banner). Doporučená cesta pro nové form-level validace je explicitně používat `FIELD_FORM`:
+
+```php
+$result->addError(ValidationError::FIELD_FORM, 'Není nastavena vlastní firma…', 'no_own_company');
+```
 
 ---
 

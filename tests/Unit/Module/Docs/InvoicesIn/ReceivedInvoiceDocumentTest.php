@@ -49,6 +49,9 @@ class ReceivedInvoiceDocumentTest extends TestCase
             fn (array $e) => $e['code'] === 'partner_bank_required',
         );
         $this->assertNotEmpty($matched, 'Confirmed FPB without partner bank info must fail');
+        // Bound to the partner_bank column (header-tab lookup) so the UI shows it
+        // next to that field + colors the Hlavička tab — not a form-level error.
+        $this->assertSame('partner_bank', array_values($matched)[0]['column']);
     }
 
     public function testPartnerBankIdSatisfiesRequirement(): void

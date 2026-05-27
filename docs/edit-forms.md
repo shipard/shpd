@@ -402,20 +402,64 @@ Recalculate **neukládá** do DB.
 
 ## 8. Validace a chybové stavy
 
-Server vrátí při chybě:
+Server vrátí při chybě validace `VALIDATION_ERROR` s polem `details[]`. Každá
+položka má `{field, code, message}` (wire formát je snake_case; `field` mapuje
+`ValidationError::column` z backendu):
+
 ```json
 {
-    "success": false,
-    "error": {
-        "code": "VALIDATION_ERROR",
-        "details": [
-            {"field": "last_name", "code": "required", "message": "Příjmení je povinné"}
-        ]
-    }
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Validation failed",
+    "details": [
+      {"field": "partner",          "code": "required",              "message": "Partner je povinný"},
+      {"field": "vat_registration", "code": "required",              "message": "Registrace DPH je povinná"},
+      {"field": "partner_bank",     "code": "partner_bank_required", "message": "Bankovní spojení dodavatele…"},
+      {"field": "rows",             "code": "no_rows",               "message": "Doklad musí mít alespoň jeden řádek"},
+      {"field": "_form",            "code": "no_own_company",        "message": "Není nastavena vlastní firma…"}
+    ]
+  }
 }
 ```
 
-Klient zobrazí chyby u příslušných polí. Pokud je chybné pole na neaktivním tabu, klient automaticky přepne na ten tab.
+### Kontrakt `field`
+
+| Hodnota `field` | Význam | UI chování |
+|-----------------|--------|------------|
+| Konkrétní `column` formuláře | Field-level chyba | error vedle inputu, tabová tečka, řádek v banneru s prefixem labelu pole |
+| `field` = id nějakého tabu (typicky subtable, např. `rows` → tab „Řádky") | Tab-level chyba | banner + tabová tečka na tom tabu + `switchToErrorTab` na něj přeskočí |
+| `_form` (konstanta `ValidationError::FIELD_FORM`) | Form-level chyba | jen banner, holá hláška |
+| Cokoli jiného (neznámý sloupec, prázdný string) | Fallback na form-level | jako `_form` — jen banner |
+
+Frontend rozlišuje field-level a form-level přes `buildElementMap()`: pokud
+`field` odpovídá nějakému sloupci ve formuláři, je field-level; jinak putuje
+do `formErrors`. Tím je robustní — backend může používat `_form`, `rows` nebo
+cokoli jiného a banner ho odbaví. Z `formErrors` se navíc vyzobnou ty, jejichž
+`field` odpovídá id tabu (`errorTabIds`), a aktivují tabovou tečku / přeskok na
+ten tab — tak `rows` ukáže na subtable tab „Řádky", aniž by `rows` byl sloupec.
+Nové form-level validace by měly používat kanonický marker
+`ValidationError::FIELD_FORM`.
+
+### Zobrazení (FormEditor)
+
+Sdílený helper `extractValidationErrors(details)` rozdělí `details[]` na
+`fieldErrors` (mapa column → hláška) a `formErrors` (seznam `{message, code}`).
+Stejný helper (`applyValidationErrors`) používají **všechny** save/transition
+větve — `handleSave`, `handleTransition` pro nový záznam i **oba PUTy** pro
+existující záznam (přechod stavu naostro je až druhý PUT s `{docState}`).
+
+- **Banner nad tabbarem** (`__validation-banner`) se ukáže, když je neprázdné
+  `fieldErrors` nebo `formErrors`. Obsahuje nadpis (`form.validation.bannerTitle`,
+  neutrální „Formulář obsahuje chyby:") a seznam: form-level chyby holé,
+  field-level s prefixem labelu pole („Partner: Partner je povinný").
+- **Field-level** chyby se navíc zobrazují vedle inputu a aktivují **tabovou
+  tečku**; je-li chybné pole na neaktivním tabu, `switchToErrorTab` přepne tab.
+- **Tab-level** chyby (form-level chyba, jejíž `field` = id tabu, např. `rows`)
+  také aktivují tabovou tečku a přeskok na ten tab. Čistě form-level chyby
+  (`_form`, neznámý field) tabové tečky neaktivují — od toho je banner.
+- Oba state se vyčistí na začátku každého save/transition pokusu
+  (`clearValidationErrors`); po úspěšném save zmizí přirozeně (reload formuláře).
 
 ### Sanitizace dat před odesláním
 
@@ -1437,3 +1481,50 @@ Symetrie není povinná, ale pro nový typ dokladu je defaultní cesta.
 ### Backwards compat
 
 Všechny existující registrace `{table, class}` (`PersonsForm`, `NumberSeriesForm`, `ItemsForm`, JSONC `DocRowsForm`, …) fungují beze změny. Polymorfní mechanismus se týká výhradně PHP `TableForm` subclassů — pro JSONC formuláře (`forms/{table}.jsonc`) typeColumn dispatch neexistuje (deklarativní JSONC nemá motiv per-typ varianty).
+
+### Hook `buildExtraTabs()` — per-typ rozšíření tabů
+
+`DocsHeadsFormBase::buildFormDefinition()` nabízí rozšiřující hook `buildExtraTabs(array $data, bool $isNew): array`, který subclassy mohou přepisovat a vracet extra taby — ty se přidají **na konec** formuláře, za Přílohy. Default v base třídě vrací prázdné pole.
+
+Vzor použití — `ReceivedInvoiceForm` (FPB) přidává tab „Nastavení“ s poli, která se u přijatých faktur nastavují zřídka (registrace DPH, náš bankovní účet, domácí měna readOnly):
+
+```php
+class ReceivedInvoiceForm extends DocsHeadsFormBase
+{
+    protected function buildExtraTabs(array $data, bool $isNew): array
+    {
+        return [$this->buildSettingsTab($data)];
+    }
+
+    protected function buildSettingsTab(array $data): FormTab
+    {
+        $vatMode = (int) ($data['vat_mode'] ?? 1);
+        $hasVat = $vatMode !== 0;
+        $docCurrency = strtolower((string) ($data['doc_currency'] ?? 'czk'));
+
+        return $this->tab('settings', 'Nastavení')
+            ->section(title: 'DPH', hidden: !$hasVat)
+                ->col()
+                    ->select('vat_registration',
+                        options: $this->resolveVatRegistrationOptions(),
+                        triggers: 'reload',
+                    )
+            ->section(title: 'Bankovní spojení')
+                ->col()
+                    ->select('bank_account',
+                        options: $this->resolveBankAccountOptions($docCurrency),
+                    )
+            ->section(title: 'Měna')
+                ->col()
+                    ->input('home_currency', readOnly: true)
+            ->build();
+    }
+}
+```
+
+Dopořučení:
+
+- Tab Nastavení je umístěn za Přílohami stejně jako u `PersonsForm` — udržuje konzistentní UX napříč aplikací.
+- Hook má stejnou signaturu jako `buildHeaderTab()` (`array $data, bool $isNew`), použitelnou pro větvení podle stavu formuláře (např. skrýt sekce „DPH“ když `vat_mode === 0`).
+- Pro extra **subtable** nebo **attachments** taby použij stejný hook — vrací se z něj `list<FormTab>`, který může obsahovat i `$this->subtableTab(...)` nebo `$this->attachmentsTab(...)`.
+- `IssuedInvoiceForm` (FVB) a generický `DocsHeadsForm` hook nepřepisují — nemění default `[]`. Můžou ho zapnout kdykoli bez úpravy base třídy.

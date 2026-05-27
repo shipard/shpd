@@ -29,8 +29,13 @@ class ReceivedInvoiceDocument extends DocsHeadsDocument
                 || !empty($data['partner_bank_account'])
                 || !empty($data['partner_bank_iban']);
             if (!$hasBank) {
+                // Bind to the `partner_bank` column (lookup on the header tab) so
+                // the UI shows it next to that field + colors the Hlavička tab,
+                // rather than as a form-level banner-only error. The check covers
+                // partner_bank / partner_bank_account / partner_bank_iban, but the
+                // lookup is the primary "vyberte jeho účet" entry point.
                 $result->addError(
-                    '_form',
+                    'partner_bank',
                     'Bankovní spojení dodavatele je povinné — vyberte jeho účet '
                     . 'nebo vyplňte ručně číslo účtu / IBAN.',
                     'partner_bank_required',

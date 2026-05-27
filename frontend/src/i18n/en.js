@@ -104,6 +104,8 @@ export default {
   'form.recordLoadFailed': 'Failed to load record.',
   'form.saveUnknownError': 'An unknown error occurred while saving.',
   'form.groupOther': 'Other',
+  // Neutral title — banner shows for Save as well as Confirm / Repair.
+  'form.validation.bannerTitle': 'The form contains errors:',
 
   // ── Form sub-table ──────────────────────────────────────────────────────
   'subtable.saveFirst': 'Save the record first, then you can add rows.',

@@ -28,6 +28,7 @@ use Shipard\Core\Form\TableForm;
  *   - snapshots   — supplier/customer snapshoty (jen když jsou vyplněné)
  *   - notes       — interní + on-document poznámky
  *   - attachments
+ *   - + extra taby z `buildExtraTabs()` (např. FPB „Nastavení“)
  */
 abstract class DocsHeadsFormBase extends TableForm
 {
@@ -47,6 +48,13 @@ abstract class DocsHeadsFormBase extends TableForm
 
         $tabs[] = $this->buildNotesTab();
         $tabs[] = $this->attachmentsTab();
+
+        // Per-type extra taby na konci formuláře (např. FPB „Nastavení“).
+        // Default v base třídě je prázdné pole — subclassy přepisují
+        // `buildExtraTabs()`, pokud chtějí přidat per-typ taby.
+        foreach ($this->buildExtraTabs($data, $isNew) as $extraTab) {
+            $tabs[] = $extraTab;
+        }
 
         return new FormDefinition(
             table: $this->table,
@@ -73,6 +81,22 @@ abstract class DocsHeadsFormBase extends TableForm
     protected function getNewFormTitle(): string
     {
         return 'Nový doklad';
+    }
+
+    /**
+     * Hook pro per-typ subclassy — vrací pole tabů, které se přidají
+     * na konec formuláře (za Přílohy). Default: žádné extra taby.
+     *
+     * Vzor: `ReceivedInvoiceForm` přepisuje a vrací `[buildSettingsTab($data)]`
+     * (FPB má vlastní tab „Nastavení“ s registrací DPH, naším bankovním účtem
+     * a readOnly domácí měnou).
+     *
+     * @param array<string, mixed> $data
+     * @return list<FormTab>
+     */
+    protected function buildExtraTabs(array $data, bool $isNew): array
+    {
+        return [];
     }
 
     /**

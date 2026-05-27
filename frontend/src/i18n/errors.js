@@ -7,8 +7,12 @@
 //
 // Validation errors carry `details[]` — currently we surface only the first
 // detail's `field` / `value` as ICU params for translations that want them.
-// Field-level error display (in form fields) is handled separately in
-// FormEditor.svelte; this helper is for the "banner" / `alert()` line.
+// Validation-error display is handled separately in FormEditor.svelte, which
+// has its own banner with two levels: form-level errors (`_form` / unknown
+// field) and field-level errors (matched against the form's columns), the
+// latter also shown next to the input. translateError() is unaffected — it
+// still maps the top-level `error.code` → text and is used for the generic
+// (non-VALIDATION) error banner / `alert()` line.
 
 import { t } from './index.js';
 

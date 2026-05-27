@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Shipard\Module\Docs\Core;
 
 use Shipard\Core\Document\Document;
+use Shipard\Core\Document\ValidationError;
 use Shipard\Core\Document\ValidationResult;
 use Shipard\Module\World\Vat\VatRateResolver;
 
@@ -83,7 +84,7 @@ abstract class DocDocument extends Document
                 $resolver = $this->ownCompanyResolver();
                 if ($resolver->getOwnPersonId() === null) {
                     $result->addError(
-                        '_form',
+                        ValidationError::FIELD_FORM,
                         'Není nastavena vlastní firma. Otevři Osoby a označ záznam jako vlastní firmu.',
                         'no_own_company',
                     );

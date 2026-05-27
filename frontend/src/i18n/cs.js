@@ -113,6 +113,8 @@ export default {
   'form.recordLoadFailed': 'Nepodařilo se načíst záznam.',
   'form.saveUnknownError': 'Při ukládání došlo k neznámé chybě.',
   'form.groupOther': 'Ostatní',
+  // Neutrální nadpis — banner se ukazuje při Uložit i Potvrdit i Opravit.
+  'form.validation.bannerTitle': 'Formulář obsahuje chyby:',
 
   // ── Form sub-table ──────────────────────────────────────────────────────
   'subtable.saveFirst': 'Nejprve uložte záznam, poté budete moci přidávat záznamy.',

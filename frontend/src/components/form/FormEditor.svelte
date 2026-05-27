@@ -19,7 +19,12 @@
 
   let formDef = $state(null);
   let formData = $state({});
+  // Chyby vázané na konkrétní pole formuláře (column → hláška). Zobrazují se
+  // vedle inputu, aktivují tabovou tečku a vykreslí se i v banneru s labelem.
   let fieldErrors = $state({});
+  // Form-level chyby ze serveru (`_form`, neznámý/prázdný field). Nemají vazbu
+  // na konkrétní pole — žijí jen v banneru nad tabbarem. {message, code}.
+  let formErrors = $state([]);
   // Map column → {id, primary, secondary} pre-resolved lookup popisů.
   // Při (re)loadu a po recalculate/save nahrazujeme celým státem ze serveru
   // (server vrací autoritativní obraz pro všechna lookup pole — chybějící klíč
@@ -206,7 +211,7 @@
 
   async function handleSave() {
     saving = true;
-    fieldErrors = {};
+    clearValidationErrors();
     loadError = null;
     const isNew = currentId == null;
     const res = isNew
@@ -218,12 +223,7 @@
       currentId = res.data?.id ?? currentId;
       await loadForm(table, currentId);  // Reload bez zavření
     } else if (res?.error?.code === 'VALIDATION_ERROR' && res?.error?.details) {
-      const errs = {};
-      for (const e of res.error.details) {
-        if (e.field) errs[e.field] = e.message;
-      }
-      fieldErrors = errs;
-      switchToErrorTab(errs);
+      applyValidationErrors(res.error.details);
     } else {
       loadError = res?.error ? translateError(res.error) : t('form.saveFailed');
     }
@@ -234,6 +234,7 @@
 
   async function handleTransition(targetState, closeForm = false) {
     saving = true;
+    clearValidationErrors();
     loadError = null;
 
     if (currentId == null) {
@@ -252,12 +253,7 @@
           await loadForm(table, currentId);
         }
       } else if (res?.error?.code === 'VALIDATION_ERROR' && res?.error?.details) {
-        const errs = {};
-        for (const e of res.error.details) {
-          if (e.field) errs[e.field] = e.message;
-        }
-        fieldErrors = errs;
-        switchToErrorTab(errs);
+        applyValidationErrors(res.error.details);
       } else {
         loadError = res?.error ? translateError(res.error) : t('form.saveFailed');
       }
@@ -266,19 +262,16 @@
       const saveRes = await put(`/_ui/form/${table}/save/${currentId}`, sanitizeFormData(formData));
       if (!saveRes?.success) {
         if (saveRes?.error?.code === 'VALIDATION_ERROR' && saveRes?.error?.details) {
-          const errs = {};
-          for (const e of saveRes.error.details) {
-            if (e.field) errs[e.field] = e.message;
-          }
-          fieldErrors = errs;
-          switchToErrorTab(errs);
+          applyValidationErrors(saveRes.error.details);
         } else {
           loadError = saveRes?.error ? translateError(saveRes.error) : t('form.saveFailed');
         }
         saving = false;
         return;
       }
-      // Přechod stavu
+      // Přechod stavu (DRUHÝ PUT). Dřív tahle větev rozbalování `error.details`
+      // přeskakovala — validace naostro (newState !== oldState) tak skončila jen
+      // generickým „Validace selhala". Teď používá stejný helper jako ostatní větve.
       const res = await put(`/_ui/form/${table}/save/${currentId}`, { docState: targetState });
       if (res?.success) {
         onSaved?.(res.data);
@@ -288,6 +281,8 @@
         } else {
           await loadForm(table, currentId);
         }
+      } else if (res?.error?.code === 'VALIDATION_ERROR' && res?.error?.details) {
+        applyValidationErrors(res.error.details);
       } else {
         loadError = res?.error ? translateError(res.error) : t('form.transitionFailed');
       }
@@ -298,7 +293,20 @@
 
   // ── Tab error detection ─────────────────────────────────────────────────────
 
+  // Form-level chyby, jejichž `field` odpovídá id nějakého tabu (typicky
+  // subtable tab — např. `rows` → tab „Řádky"). Nemají column, ale patří
+  // konkrétnímu tabu, takže ten tab zbarví tečkou i aktivují switchToErrorTab.
+  function errorTabIds() {
+    const tabIds = new Set((formDef?.tabs ?? []).map(t => t.id));
+    const out = new Set();
+    for (const err of formErrors) {
+      if (err.field && tabIds.has(err.field)) out.add(err.field);
+    }
+    return out;
+  }
+
   function tabHasError(tabId) {
+    if (errorTabIds().has(tabId)) return true;
     const errCols = new Set(Object.keys(fieldErrors));
     if (errCols.size === 0) return false;
     const tab = formDef?.tabs?.find(t => t.id === tabId);
@@ -306,17 +314,21 @@
     return tabFields(tab).some(el => el.column && errCols.has(el.column));
   }
 
-  function switchToErrorTab(errs) {
+  // Přepne na první tab (v pořadí tabů), který obsahuje field chybu NEBO
+  // tab-level chybu (errorTabIds). Čte error state přímo — volá se až po jejich
+  // nastavení v applyValidationErrors.
+  function switchToErrorTab() {
     const colToTab = {};
     for (const tab of formDef?.tabs ?? []) {
       for (const el of tabFields(tab)) {
         if (el.column) colToTab[el.column] = tab.id;
       }
     }
+    const fieldCols = Object.keys(fieldErrors);
+    const tabIdsWithError = errorTabIds();
     for (const tab of formDef?.tabs ?? []) {
-      for (const col of Object.keys(errs)) {
-        if (colToTab[col] === tab.id) { activeTabId = tab.id; return; }
-      }
+      if (tabIdsWithError.has(tab.id)) { activeTabId = tab.id; return; }
+      if (fieldCols.some(col => colToTab[col] === tab.id)) { activeTabId = tab.id; return; }
     }
   }
 
@@ -350,6 +362,58 @@
       }
     }
     return map;
+  }
+
+  // ── Validation errors ─────────────────────────────────────────────────────
+
+  /**
+   * Rozbalí `error.details` z VALIDATION_ERROR response do field-level a
+   * form-level chyb. Field je „field-level" jen pokud odpovídá nějakému
+   * sloupci ve formuláři (přes buildElementMap). Vše ostatní (`_form`, `rows`,
+   * prázdný field, neznámý sloupec) jde do formErrors. Čistá funkce — vrací
+   * objekt, nesahá na state (testovatelná samostatně).
+   */
+  function extractValidationErrors(details) {
+    const elMap = buildElementMap();
+    const fieldErrs = {};
+    const formErrs = [];
+    for (const d of details ?? []) {
+      if (d.field && elMap[d.field]) {
+        fieldErrs[d.field] = d.message;
+      } else {
+        // `field` zachováváme — form-level chyba, jejíž field odpovídá id tabu
+        // (typicky subtable, např. `rows`), zbarví ten tab (viz errorTabIds).
+        formErrs.push({ message: d.message ?? '', code: d.code ?? '', field: d.field ?? '' });
+      }
+    }
+    return { fieldErrors: fieldErrs, formErrors: formErrs };
+  }
+
+  // Nastaví oba error state ze serverové odpovědi a přepne na tab s field chybou.
+  // Sdílí ho všechny save/transition větve — jediné místo, kde se details rozbaluje.
+  function applyValidationErrors(details) {
+    const extracted = extractValidationErrors(details);
+    fieldErrors = extracted.fieldErrors;
+    formErrors = extracted.formErrors;
+    switchToErrorTab();
+  }
+
+  // Vyčistí oba error state — volá se na začátku každého save/transition pokusu.
+  function clearValidationErrors() {
+    fieldErrors = {};
+    formErrors = [];
+  }
+
+  // Sestaví field-level položky banneru s labelem pole (fallback na column).
+  function fieldEntriesForBanner() {
+    const elMap = buildElementMap();
+    const out = [];
+    for (const [column, message] of Object.entries(fieldErrors)) {
+      const el = elMap[column];
+      const label = el?.label ?? column;
+      out.push({ column, label, message });
+    }
+    return out;
   }
 
   // Sanitizuje data před odesláním:
@@ -407,6 +471,25 @@
           {/if}
         </button>
       {/each}
+    </div>
+  {/if}
+
+  <!-- Validační banner — form-level i field-level chyby z VALIDATION_ERROR.
+       Žije nad tab-content (mimo scrollovaný obsah) — je globální o formuláři,
+       ne o aktuálním tabu. Form-level chyby holé, field-level s labelem pole. -->
+  {#if formErrors.length > 0 || Object.keys(fieldErrors).length > 0}
+    <div class="shpd-form-editor__validation-banner" role="alert">
+      <div class="shpd-form-editor__validation-banner-title">
+        {t('form.validation.bannerTitle')}
+      </div>
+      <ul class="shpd-form-editor__validation-banner-list">
+        {#each formErrors as err}
+          <li>{err.message}</li>
+        {/each}
+        {#each fieldEntriesForBanner() as { label, message }}
+          <li><strong>{label}:</strong> {message}</li>
+        {/each}
+      </ul>
     </div>
   {/if}
 
@@ -531,5 +614,38 @@
     border-radius: var(--shpd-radius-md);
     color: var(--shpd-color-danger);
     font-size: var(--shpd-font-size-sm);
+  }
+
+  /* Validační banner — sladěn s __error-banner (červené téma), ale samostatná
+     třída, aby šel nezávisle styliovat. flex-shrink: 0 ho drží nad scrollovaným
+     contentem. */
+  .shpd-form-editor__validation-banner {
+    margin: var(--shpd-space-md);
+    padding: var(--shpd-space-sm) var(--shpd-space-md);
+    background: var(--shpd-color-danger-soft);
+    border: 1px solid var(--shpd-color-danger);
+    border-radius: var(--shpd-radius-md);
+    color: var(--shpd-color-danger);
+    font-size: var(--shpd-font-size-sm);
+    flex-shrink: 0;
+  }
+
+  .shpd-form-editor__validation-banner-title {
+    font-weight: 600;
+    margin-bottom: var(--shpd-space-xs);
+  }
+
+  .shpd-form-editor__validation-banner-list {
+    margin: 0;
+    padding-left: var(--shpd-space-lg);
+    list-style: disc;
+  }
+
+  .shpd-form-editor__validation-banner-list li + li {
+    margin-top: 2px;
+  }
+
+  .shpd-form-editor__validation-banner-list strong {
+    font-weight: 600;
   }
 </style>

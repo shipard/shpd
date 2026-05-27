@@ -91,6 +91,7 @@ Závislosti tečou shora dolů: Command → Document → Module/Config/Database 
 - Data vždy jako PHP `array` — žádné property per sloupec (kvůli extensions)
 - Hooky: `validate()` → `beforeSave()` → DB → `afterSave()`, `beforeDelete()` → DB → `afterDelete()`, `onLoad()`
 - `validate()` vrací `ValidationResult` s chybami (column + message + code), pro UI focus
+- Chyby bez vazby na pole (form-level): `column = ValidationError::FIELD_FORM` (`'_form'`) — frontend je vykreslí v banneru formuláře, ne vedle inputu. Kontrakt `field` viz `docs/edit-forms.md` sekce 8
 - Chyby v řádcích: tečková notace `rows.0.unit_price`
 - Hlavička + řádky: vždy v jedné DB transakci
 - Child tabulky sync: bez `id` = INSERT, s `id` = UPDATE, chybějící = DELETE
@@ -121,6 +122,10 @@ Závislosti tečou shora dolů: Command → Document → Module/Config/Database 
 - `FormRegistry::createForm($table, $data, $db, $config)` dispatchuje podle
   `$data[$typeColumn]`. Existující `{table, class}` registrace fungují beze
   změny (PersonsForm, ItemsForm, …).
+- `DocsHeadsFormBase` má hook `buildExtraTabs(array $data, bool $isNew): array`
+  (default `[]`) pro přidání per-typ tabů na konec formuláře za Přílohy.
+  První použití: `ReceivedInvoiceForm` přidává tab „Nastavení“
+  (vat_registration, bank_account, home_currency readOnly).
 - Detailně viz `docs/edit-forms.md` kapitola 23.
 
 ### Citlivá data (encrypted_text)

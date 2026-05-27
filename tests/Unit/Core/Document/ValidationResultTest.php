@@ -5,10 +5,26 @@ declare(strict_types=1);
 namespace Shipard\Tests\Unit\Core\Document;
 
 use PHPUnit\Framework\TestCase;
+use Shipard\Core\Document\ValidationError;
 use Shipard\Core\Document\ValidationResult;
 
 class ValidationResultTest extends TestCase
 {
+    public function testFieldFormConstantValue(): void
+    {
+        $this->assertSame('_form', ValidationError::FIELD_FORM);
+    }
+
+    public function testFormLevelErrorUsesFieldFormColumn(): void
+    {
+        $result = new ValidationResult();
+        $result->addError(ValidationError::FIELD_FORM, 'Není nastavena vlastní firma.', 'no_own_company');
+
+        $array = $result->toArray();
+        $this->assertSame('_form', $array[0]['column']);
+        $this->assertSame('no_own_company', $array[0]['code']);
+    }
+
     public function testEmptyResultIsValid(): void
     {
         $result = new ValidationResult();

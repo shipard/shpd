@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Shipard\Module\Core\Mail;
 
 use Shipard\Core\Form\FormDefinition;
+use Shipard\Core\Form\FormHeaderInfo;
 use Shipard\Core\Form\RecalculateResult;
 use Shipard\Core\Form\TableForm;
 
@@ -57,6 +58,83 @@ class IncomingMessagesForm extends TableForm
             tabs: $tabs,
             fullSize: true,
         );
+    }
+
+    /**
+     * Strukturovaná hlavička došlé zprávy.
+     *
+     *   ┌──┐ Faktura č. 2024-0001
+     *   │✉ │ [Nový] Od Jan Novák · Doručeno 28.05.2024 14:30
+     *   └──┘
+     *
+     *   - title  = subject („Předmět"). Fallback na formDef.title
+     *              („Došlá zpráva") když předmět chybí.
+     *   - info[] = odesílatel (sender_name preferovaně, e-mail fallback) +
+     *              datum doručení (s časem — v rámci dne se pořadí hraje).
+     *   - icon   = stejná jako u vieweru pošty (`mail`).
+     *
+     * Sender pattern (`name ?? email`) je shodný s `IncomingMessagesViewer::renderRow`
+     * v poli `t2` — konzistentní identifikace odesílatele napříč UI.
+     *
+     * @param array<string, mixed> $data
+     */
+    public function buildHeaderInfo(array $data): ?FormHeaderInfo
+    {
+        $subject = trim((string) ($data['subject'] ?? ''));
+        if ($subject === '') {
+            return null;
+        }
+
+        $info = [];
+
+        $sender = $this->resolveSenderLabel($data);
+        if ($sender !== '') {
+            $info[] = ['label' => 'Od', 'value' => $sender];
+        }
+
+        $receivedAt = $this->formatHeaderDateTime($data['received_at'] ?? null);
+        if ($receivedAt !== '') {
+            $info[] = ['label' => 'Doručeno', 'value' => $receivedAt];
+        }
+
+        return new FormHeaderInfo(
+            title: $subject,
+            info: $info,
+            icon: 'mail',
+        );
+    }
+
+    /**
+     * Sender label — `sender_name` preferovaně, `sender_email` fallback.
+     * Stejný vzor jako `IncomingMessagesViewer::renderRow()` v `t2`.
+     */
+    protected function resolveSenderLabel(array $data): string
+    {
+        $name = trim((string) ($data['sender_name'] ?? ''));
+        if ($name !== '') {
+            return $name;
+        }
+        return trim((string) ($data['sender_email'] ?? ''));
+    }
+
+    /**
+     * Bezpečně z DB DATETIME hodnoty (normálně 'Y-m-d\TH:i:s' string přes
+     * DataSourceConnection) udělá formát vhodný pro hlavičku — „28.05.2024 14:30".
+     * Dibi DateTime objekty jsou taky podporované (defenzivně).
+     */
+    protected function formatHeaderDateTime(mixed $value): string
+    {
+        if ($value === null || $value === '') {
+            return '';
+        }
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format('d.m.Y H:i');
+        }
+        try {
+            return (new \DateTimeImmutable((string) $value))->format('d.m.Y H:i');
+        } catch (\Exception) {
+            return '';
+        }
     }
 
     public function recalculate(string $changedColumn, array $data): RecalculateResult

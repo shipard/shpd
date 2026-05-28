@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Shipard\Module\Economy\Items;
 
 use Shipard\Core\Form\FormDefinition;
+use Shipard\Core\Form\FormHeaderInfo;
 use Shipard\Core\Form\RecalculateResult;
 use Shipard\Core\Form\TableForm;
 
@@ -67,6 +68,99 @@ class ItemsForm extends TableForm
             tabs: [$basic, $description, $this->attachmentsTab()],
             fullSize: true,
         );
+    }
+
+    public function buildHeaderInfo(array $data): ?FormHeaderInfo
+    {
+        $name = trim((string) ($data['name'] ?? ''));
+        if ($name === '') {
+            return null;
+        }
+
+        $info = [];
+
+        $kindName = $this->resolveItemKindName((int) ($data['item_kind'] ?? 0));
+        if ($kindName !== '') {
+            $info[] = ['label' => 'Druh', 'value' => $kindName];
+        }
+
+        $code = trim((string) ($data['code'] ?? ''));
+        if ($code !== '') {
+            $info[] = ['label' => 'Kód', 'value' => $code];
+        }
+
+        $validity = $this->formatValidityRange(
+            $data['valid_from'] ?? null,
+            $data['valid_to'] ?? null,
+        );
+        if ($validity !== '') {
+            $info[] = ['label' => 'Platí', 'value' => $validity];
+        }
+
+        return new FormHeaderInfo(
+            title: $name,
+            info: $info,
+            icon: 'box',
+        );
+    }
+
+    /**
+     * Resolvuje jméno druhu položky z FK item_kind. Vrací prázdný string,
+     * pokud druh není vybraný, není DB k dispozici, nebo druh již neexistuje
+     * (referenční integrita je aplikační). Archivované druhy (`docState=70`)
+     * se schválně nefiltrují — položka může být v archivovaném druhu a uživatel
+     * to pořád potřebuje vidět.
+     */
+    protected function resolveItemKindName(int $kindId): string
+    {
+        if ($kindId === 0 || $this->db === null) {
+            return '';
+        }
+        $row = $this->db->fetchRow(
+            'SELECT `name` FROM `economy_items_kinds` WHERE `id` = %i',
+            $kindId,
+        );
+        if (!is_array($row) || empty($row['name'])) {
+            return '';
+        }
+        return trim((string) $row['name']);
+    }
+
+    /**
+     * Formátuje rozsah platnosti položky pro subtitle hlavičky:
+     *   - oba data:   „14.05.2024 – 31.12.2024"
+     *   - jen od:     „od 14.05.2024"
+     *   - jen do:     „do 31.12.2024"
+     *   - ani jedno:  prázdný string (volající pak položku v info vynechá)
+     */
+    protected function formatValidityRange(mixed $validFrom, mixed $validTo): string
+    {
+        $from = $this->formatHeaderDate($validFrom);
+        $to   = $this->formatHeaderDate($validTo);
+
+        if ($from !== '' && $to !== '') {
+            return $from . ' – ' . $to;
+        }
+        if ($from !== '') {
+            return 'od ' . $from;
+        }
+        if ($to !== '') {
+            return 'do ' . $to;
+        }
+        return '';
+    }
+
+    /**
+     * Bezpečně z DB datové hodnoty (DATE jako 'Y-m-d' string) udělá formát
+     * vhodný pro hlavičku („14.05.2024"). Konzistentní s PersonsForm.
+     */
+    protected function formatHeaderDate(mixed $value): string
+    {
+        if ($value === null || $value === '') {
+            return '';
+        }
+        $dt = \DateTimeImmutable::createFromFormat('Y-m-d', (string) $value);
+        return $dt instanceof \DateTimeImmutable ? $dt->format('d.m.Y') : '';
     }
 
     public function recalculate(string $changedColumn, array $data): RecalculateResult

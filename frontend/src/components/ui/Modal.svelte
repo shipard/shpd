@@ -30,12 +30,24 @@
     children: Snippet;
     /** Optional second header line, rendered below the title in a smaller,
      *  lighter style. Useful for record identifiers (e.g. „IČO 68253848 ·
-     *  Kód osoby TEST-0098"). Snippet je vyvolán vždy, je-li předán — pokud
-     *  uvnitř nic nevykreslí, vykreslí se prázdný kontejner (gap mu nevadí). */
+     *  Kód osoby TEST-0098"). When provided, `headerExtra` (typicky badge)
+     *  se posune na začátek subtitle řádku — tvoří „kontext záznamu" cluster
+     *  (stav + identifikace). Bez subtitle zůstává headerExtra vedle titulky. */
     subtitle?: Snippet;
     /** Optional content rendered in the header between title and close button.
-     *  Useful for badges or other status indicators. */
+     *  Useful for badges or other status indicators. Pozice závisí na `subtitle`:
+     *  bez subtitle vpravo od titulky, se subtitle inline před subtitle textem. */
     headerExtra?: Snippet;
+    /** Optional icon block rendered on the far left of the header. Snippet má
+     *  zodpovědnost vrendrovat ikonu (typicky `<Icon icon={...} />`); Modal jen
+     *  poskytuje wrapper s pevnou velikostí a vertikálním vystředěním na celou
+     *  výšku hlavičky. */
+    iconSlot?: Snippet;
+    /** Optional right-aligned summary block (např. shrnutí cen u dokladů).
+     *  Snippet musí emitovat páry sourozenců `<label-element><value-element>`
+     *  — Modal je rozloží do 2-sloupcového gridu (label vpravo zarovnán,
+     *  value tučně). Renderuje se mezi `headerExtra` a `×`. */
+    summary?: Snippet;
     /** Optional content rendered in a footer strip below the body.
      *  Useful for action buttons (Save, Cancel, etc.). */
     footer?: Snippet;
@@ -55,6 +67,8 @@
     children,
     subtitle,
     headerExtra,
+    iconSlot,
+    summary,
     footer,
     width = '640px',
     height,
@@ -116,16 +130,33 @@
   <div class="shpd-modal" onclick={handleOverlayClick} role="dialog" aria-modal="true" aria-label={title} tabindex="-1">
     <div class="shpd-modal__card" style={cardStyle}>
       <div class="shpd-modal__header">
+        {#if iconSlot}
+          <div class="shpd-modal__header-icon">
+            {@render iconSlot()}
+          </div>
+        {/if}
         <div class="shpd-modal__header-main">
           <span class="shpd-modal__title">{title}</span>
           {#if subtitle}
-            <span class="shpd-modal__subtitle">{@render subtitle()}</span>
+            <div class="shpd-modal__subtitle-row">
+              {#if headerExtra}
+                <span class="shpd-modal__header-extra shpd-modal__header-extra--inline">
+                  {@render headerExtra()}
+                </span>
+              {/if}
+              <span class="shpd-modal__subtitle">{@render subtitle()}</span>
+            </div>
           {/if}
         </div>
-        {#if headerExtra}
+        {#if !subtitle && headerExtra}
           <span class="shpd-modal__header-extra">
             {@render headerExtra()}
           </span>
+        {/if}
+        {#if summary}
+          <div class="shpd-modal__header-summary">
+            {@render summary()}
+          </div>
         {/if}
         <button class="shpd-modal__close" onclick={onClose} aria-label={t('common.close')}>×</button>
       </div>
@@ -183,6 +214,17 @@
     flex-shrink: 0;
   }
 
+  .shpd-modal__header-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    font-size: 1.75em;
+    color: var(--shpd-color-text-secondary);
+  }
+
   .shpd-modal__header-main {
     flex: 1;
     /* min-width: 0 je nutné, aby ellipsis fungoval uvnitř flex containeru */
@@ -202,6 +244,13 @@
     white-space: nowrap;
   }
 
+  .shpd-modal__subtitle-row {
+    display: flex;
+    align-items: center;
+    gap: var(--shpd-space-sm);
+    min-width: 0;
+  }
+
   .shpd-modal__subtitle {
     font-size: var(--shpd-font-size-sm);
     color: var(--shpd-color-text-secondary);
@@ -209,12 +258,47 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    min-width: 0;
   }
 
   .shpd-modal__header-extra {
     display: inline-flex;
     align-items: center;
     flex-shrink: 0;
+  }
+
+  /* Když je headerExtra na subtitle řádku (forma s HeaderInfo), nemá flex-shrink:0
+     bránit elipsování subtitle textu — badge má pevnou velikost přes vlastní obsah. */
+  .shpd-modal__header-extra--inline {
+    flex-shrink: 0;
+  }
+
+  .shpd-modal__header-summary {
+    display: grid;
+    grid-template-columns: max-content max-content;
+    column-gap: var(--shpd-space-sm);
+    row-gap: 2px;
+    align-items: baseline;
+    flex-shrink: 0;
+    font-size: var(--shpd-font-size-sm);
+    color: var(--shpd-color-text-secondary);
+  }
+
+  /* Kontrakt: snippet emituje páry <label><value>. Lichý sourozenec = label
+     (vpravo zarovnaný, sekundární barva), sudý = value (tučný, primární barva).
+     :global() je nutné — elementy v summary snippetu vlastní volající komponenta
+     (FormDialog), ne Modal, takže Svelte CSS scoping by je jinak minul. */
+  .shpd-modal__header-summary > :global(:nth-child(odd)) {
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .shpd-modal__header-summary > :global(:nth-child(even)) {
+    text-align: right;
+    font-weight: 600;
+    color: var(--shpd-color-text);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
   }
 
   .shpd-modal__close {

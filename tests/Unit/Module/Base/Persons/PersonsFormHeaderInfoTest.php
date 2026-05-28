@@ -77,6 +77,8 @@ class PersonsFormHeaderInfoTest extends TestCase
             ],
             $info->info,
         );
+        $this->assertSame('company', $info->icon);
+        $this->assertSame([], $info->summary);
     }
 
     public function testCompanyWithoutCompanyId(): void
@@ -118,6 +120,8 @@ class PersonsFormHeaderInfoTest extends TestCase
             ],
             $info->info,
         );
+        $this->assertSame('user', $info->icon);
+        $this->assertSame([], $info->summary);
     }
 
     public function testPersonWithoutBirthDate(): void

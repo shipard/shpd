@@ -967,14 +967,33 @@ Layout systém byl v PR „new-forms-01" kompletně přepracován:
 
 ## 21. Hlavička formuláře (HeaderInfo)
 
-Editační modal má v hlavičce dva řádky: hlavní titulek + volitelný strukturovaný „subtitle" s identifikačními údaji o záznamu.
+Editační modal má strukturovanou hlavičku se čtyřmi volitelnými prvky: **ikona** vlevo, **titulek** uprostřed nahoře, **subtitle s identifikátory** pod titulkem (na něj inline kotví stavový badge), a **souhrn** vpravo (typicky totals u dokladů). Vše je server-driven přes `FormHeaderInfo`.
 
 ```
-┌───────────────────────────────────────────────────────────────────────┐
-│ Beta Software, a.s.                                  [Koncept]    [×] │  ← title z header_info
-│ IČO 68253848 · Kód osoby TEST-0098                                    │  ← info položky spojené " · "
-├───────────────────────────────────────────────────────────────────────┤
-│ [Základní údaje] [Kontaktní údaje] [Kontakty] [Adresy] …              │
+┌──────────────────────────────────────────────────────────────────────────┐
+│ ┌──┐ Beta Software, a.s.                  Bez DPH:    10 000,00      [×] │
+│ │📄│ [Koncept] Přijatá faktura · 2024-0001  DPH:       2 100,00           │
+│ └──┘                                       Celkem CZK: 12 100,00          │
+├──────────────────────────────────────────────────────────────────────────┤
+│ [Hlavička] [Řádky] [Rekapitulace DPH] [Poznámky] [Přílohy] [Nastavení]    │
+```
+
+Persons forma má jen 2 prvky (ikona + title + subtitle s badge), bez souhrnu vpravo:
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│ ┌──┐ Beta Software, a.s.                                       [×] │
+│ │🏢│ [Koncept] IČO 68253848 · Kód osoby TEST-0098                  │
+│ └──┘                                                                │
+├────────────────────────────────────────────────────────────────────┤
+```
+
+A formy bez `buildHeaderInfo()` override (typicky JSONC sub-formuláře jako Kontakt nebo Adresa) si zachovávají původní jednořádkový layout — badge vpravo vedle titulky, žádný subtitle, žádná ikona, žádný souhrn:
+
+```
+┌───────────────────────────────────────────────────────────────┐
+│ Kontakt                                       [Koncept]   [×] │
+├───────────────────────────────────────────────────────────────┤
 ```
 
 ### Kdy se zobrazuje
@@ -995,27 +1014,43 @@ final class FormHeaderInfo
         public readonly string $title,
         /** @var list<array{label: string, value: string}> */
         public readonly array $info = [],
+        public readonly ?string $icon = null,
+        /** @var list<array{label: string, value: string}> */
+        public readonly array $summary = [],
     ) {}
 }
 ```
 
-Wire formát (`header_info` klíč ve `FormDefinition.toArray()`, vždy přítomný — `null` nebo objekt):
+Wire formát (`header_info` klíč ve `FormDefinition.toArray()`, vždy přítomný — `null` nebo objekt; uvnitř jsou všechny čtyři klíče vždy přítomné, defaulty jsou prázdná hodnota):
 
 ```json
 {
   "header_info": {
     "title": "Beta Software, a.s.",
     "info": [
-      { "label": "IČO",       "value": "68253848" },
-      { "label": "Kód osoby", "value": "TEST-0098" }
+      { "label": "",      "value": "Přijatá faktura" },
+      { "label": "Číslo", "value": "2024-0001" }
+    ],
+    "icon": "invoice-in",
+    "summary": [
+      { "label": "Bez DPH", "value": "10 000,00" },
+      { "label": "DPH",     "value": "2 100,00" },
+      { "label": "Celkem CZK", "value": "12 100,00" }
     ]
   }
 }
 ```
 
+| Pole | Typ | Význam |
+|------|-----|--------|
+| `title` | string | Hlavní titulek nahoře (přepíše generický formDef.title) |
+| `info` | list | Identifikátory zobrazené v subtitle řádku spojené `·` |
+| `icon` | string\|null | Klíč ikony z `icons.js::iconMap` (např. `"company"`, `"user"`, `"invoice-in"`). Frontend překládá přes `resolveIcon()`. `null` = bez ikony. |
+| `summary` | list | Pravý blok (label/value páry). Renderuje se v 2-sloupcovém gridu (label vpravo zarovnaný, value tučný, tabular-nums). Prázdné pole = bez bloku. |
+
 ### Override v PHP
 
-Subclass `TableForm` přepíše virtuální metodu `buildHeaderInfo()`:
+Subclass `TableForm` přepíše virtuální metodu `buildHeaderInfo()`. Persons:
 
 ```php
 public function buildHeaderInfo(array $data): ?FormHeaderInfo
@@ -1024,43 +1059,129 @@ public function buildHeaderInfo(array $data): ?FormHeaderInfo
     if ($fullName === '') {
         return null;
     }
+    $personType = PersonType::tryFrom((int) ($data['person_type'] ?? 0));
 
     $info = [];
-    $companyId = trim((string) ($data['company_id'] ?? ''));
-    if ($companyId !== '') {
-        $info[] = ['label' => 'IČO', 'value' => $companyId];
+    $icon = null;
+    if ($personType === PersonType::Company) {
+        $icon = 'company';
+        $companyId = trim((string) ($data['company_id'] ?? ''));
+        if ($companyId !== '') {
+            $info[] = ['label' => 'IČO', 'value' => $companyId];
+        }
+    } elseif ($personType === PersonType::Person) {
+        $icon = 'user';
+        // ... birth_date formátování
+    } else {
+        return null;
     }
+
     $personId = trim((string) ($data['person_id'] ?? ''));
     if ($personId !== '') {
         $info[] = ['label' => 'Kód osoby', 'value' => $personId];
     }
 
-    return new FormHeaderInfo(title: $fullName, info: $info);
+    return new FormHeaderInfo(title: $fullName, info: $info, icon: $icon);
 }
 ```
 
+U dokladů (`docs_core_heads`) žije sdílený `buildHeaderInfo()` přímo v `DocsHeadsFormBase`. Volá tři virtuální hooky a sestaví hlavičku tak, jak má vypadat pro libovolný typ dokladu (FPB, FVB, proforma, dobropis, bankovní výpis, …):
+
+```php
+abstract class DocsHeadsFormBase extends TableForm
+{
+    /** „Přijatá faktura" / „Vydaná faktura" / … — popisek vedle čísla v subtitle. */
+    protected function getDocTypeLabel(): string { return 'Doklad'; }
+
+    /** Klíč ikony z icons.js::iconMap (typicky shodný s viewers[].icon). */
+    protected function getHeaderIcon(): ?string { return null; }
+
+    /** Kde žije snapshot partnera — 'supplier_snapshot' pro přijaté
+     *  (default), 'customer_snapshot' pro vydané. */
+    protected function getPartnerSnapshotKey(): string { return 'supplier_snapshot'; }
+
+    public function buildHeaderInfo(array $data): ?FormHeaderInfo
+    {
+        $partnerName = $this->resolvePartnerName($data);  // snapshot.name → fallback DB SELECT
+        if ($partnerName === '') {
+            return null;
+        }
+        $info = [['label' => '', 'value' => $this->getDocTypeLabel()]];
+        $docNumber = trim((string) ($data['doc_number'] ?? ''));
+        if ($docNumber !== '') {
+            $info[] = ['label' => 'Číslo', 'value' => $docNumber];
+        }
+        return new FormHeaderInfo(
+            title: $partnerName,
+            info: $info,
+            icon: $this->getHeaderIcon(),
+            summary: $this->buildHeaderSummary($data),  // Bez DPH / DPH / Celkem CZK
+        );
+    }
+}
+```
+
+Subclassy pak deklarují jen rozdíly:
+
+```php
+class ReceivedInvoiceForm extends DocsHeadsFormBase  // FPB, doc_type='invni'
+{
+    protected function getDocTypeLabel(): string { return 'Přijatá faktura'; }
+    protected function getHeaderIcon(): ?string  { return 'invoice-in'; }
+    // getPartnerSnapshotKey() — default 'supplier_snapshot' je správný.
+}
+
+class IssuedInvoiceForm extends DocsHeadsFormBase  // FVB, doc_type='invno'
+{
+    protected function getDocTypeLabel(): string       { return 'Vydaná faktura'; }
+    protected function getHeaderIcon(): ?string        { return 'invoice'; }
+    protected function getPartnerSnapshotKey(): string { return 'customer_snapshot'; }
+}
+```
+
+Stejný hook-pattern jako `getFormTitle()` / `getNewFormTitle()` / `buildExtraTabs()`. Společná logika (`buildHeaderInfo`, `resolvePartnerName`, `buildHeaderSummary`) žije v `DocsHeadsFormBase` jako `protected`, takže subclassy můžou kterýkoliv jednotlivý kus override-ovat, pokud potřebují (např. ručně sestavit `summary` z atypických polí pro bankovní výpis).
+
 Pravidla pro implementaci:
 
-- **Vrátit `null`**, pokud nemáme co zobrazit (typicky prázdný hlavní identifikátor).
-- **Vynechat položky `info`** s prázdnou hodnotou — pole `info` může být prázdné, title pak stojí samostatně.
-- **Data jsou z DB** (uložená), ne živá z formuláře — metoda dostává `array $data` z `fetchRow`.
-- Lokalizace labelů (`IČO`, `Kód osoby`, …) zatím napevno v jazyce modulu; i18n vrstva pro PHP texty se řeší v navazujících taskech.
+- **Vrátit `null`**, pokud nemáme co zobrazit (typicky prázdný hlavní identifikátor) — modal pak zobrazí jen `formDef.title` jako jednořádkovou hlavičku (bez subtitle, bez ikony, bez souhrnu, badge vpravo).
+- **Vynechat položky `info` / `summary`** s prázdnou hodnotou — obě pole mohou být prázdná. `info: []` = subtitle řádek je v UI pořád vidět (kvůli badge, který se kotví na něj), ale bez identifikátorů.
+- **Prázdný `label` v `info` položce** značí „jen hodnota bez prefixu" — např. u dokladu typ `Přijatá faktura` nepotřebuje „Typ:" labelu, je sebepopisný. Frontend pak vloží do subtitle řádku jen hodnotu bez vedoucí mezery. Používej střízlivě — většina identifikátorů label potřebuje („IČO", „Číslo").
+- **Skrýt `summary`**, dokud doklad nemá vypočítané totals (nový záznam → `total_amount === 0`). Předejde nezajímavému „Bez DPH 0,00 · DPH 0,00 · Celkem 0,00".
+- **Data jsou z DB** (uložená), ne živá z formuláře — metoda dostává `array $data` z `fetchRow`. Pro snapshoty (`supplier_snapshot.name` apod.) je hodnota stringem JSON; pomocný `decodeSnapshot()` z `DocsHeadsFormBase` ji bezpečně rozparsuje.
+- **Lokalizace labelů** (`IČO`, `Bez DPH`, …) je zatím napevno v jazyce modulu; i18n vrstva pro PHP texty se řeší v navazujících taskech.
 
 Default implementace v `TableForm` vrací `null` — JSONC/Auto formuláře a všechny moduly, které neoverrideují, hlavičku nezobrazí.
 
+### Ikony — string klíče, ne FontAwesome instance
+
+`icon` v `FormHeaderInfo` je **string klíč** ze sdíleného registru `frontend/src/icons.js::iconMap` (stejný registr jako sidebar nav, viewer řádky, toolbar). Backend tedy nepředává FA instance, jen pojmenování významu — frontend je přeloží přes `resolveIcon(name, fallback)`. Vzory:
+
+- Persons: `'company'` (firma) / `'user'` (fyzická osoba) — odvozeno z `person_type` stejně jako `PersonsViewer::renderRow()`.
+- Doklady: `'invoice-in'` (FPB), v budoucnu `'invoice'` (FVB), `'document'` (generický). Hodnota se typicky shoduje s `viewers[].icon` ve `module.jsonc` daného modulu — jeden klíč pro viewer list i form header.
+
+Nová ikona = záznam v `frontend/src/icons.js` (import z FA + export + `iconMap` mapping). Backend pak hodnotu používá jako neprůhledný string.
+
 ### Frontend render
 
-- `Modal.svelte` přijímá volitelný `subtitle: Snippet` prop. Renderuje druhý řádek pod titulem ve menším fontu a sekundární barvě.
+- `Modal.svelte` přijímá čtyři volitelné snippet propy: `subtitle`, `headerExtra` (badge), `iconSlot` a `summary`. Layout:
+  - `iconSlot` vlevo, ve fixním 40×40 boxu, vertikálně vystředěný na celou výšku hlavičky.
+  - `headerExtra` pozice se mění podle přítomnosti `subtitle`: **bez subtitle** sedí vpravo od titulky (stejně jako dřív, zpětně kompatibilní), **se subtitle** se inline kotví na začátek subtitle řádku — tvoří „kontext záznamu" cluster s identifikátory.
+  - `summary` vpravo, mezi headerem a `×`. Kontrakt: snippet musí emitovat páry sourozenců `<label-element><value-element>` — Modal je rozloží do 2-sloupcového gridu (label pravostranně zarovnaný + sekundární barva, value tučný + primární barva + tabular-nums pro slušné zarovnání čísel).
 - `FormEditor.svelte` drží `savedHeaderInfo` state, aktualizuje ho jen v `loadForm` (NE v `handleTrigger`/recalculate), a propaguje přes `onFormLoaded` callback.
-- `FormDialog.svelte` z `headerInfo.info` skládá řádek `"Label1 hodnota1 · Label2 hodnota2 · …"` a předává Modalu přes `{#snippet subtitle()}`.
+- `FormDialog.svelte` mapuje `headerInfo` na Modal propy:
+  - `iconSnippet` (přes `<Icon icon={resolveIcon(headerInfo.icon)} />`), předán jen pokud `headerInfo.icon` není null
+  - `subtitleSnippet` (řádek `"Label1 hodnota1 · Label2 hodnota2 · …"`), předán jen pokud `headerInfo !== null` — tím se zachovává jednořádkový layout pro formy bez override
+  - `summarySnippet` (`#each` přes `summary`, emituje `<span>{label}</span><span>{value}</span>` pro každou položku), předán jen pokud `summary.length > 0`
+  - `headerExtraSnippet` (FormStateBadge) předán vždy, když máme `currentDocStates`
 - Title v Modalu se rozhoduje: `headerInfo.title || formDef.title || t('common.loading')` — strukturovaný title má přednost před generickým „Osoba" / „Faktura" apod.
 
 ### Proč ne živá data
 
 Hlavička reflektuje **uložený stav v DB**, ne dirty formData. Důvody:
 
-- Recalculate může změnit `person_type` z Person na Company — title by „blikal" mezi „Jan Novák" a názvem firmy podle rozpracovaného formuláře.
+- Recalculate může změnit `person_type` z Person na Company — title by „blikal" mezi „Jan Novák" a názvem firmy podle rozpracovaného formuláře, ikona by skákala mezi `user` a `company`.
 - Uživatel může mít rozpracované špatné jméno; po Cancel by header lhal, že záznam má jiný titulek, než ve skutečnosti.
+- Totals (`summary`) by reflektovaly rozpracované řádky, ne zatím uložený stav — což by uživatele mátlo, protože hodnoty v Rekapitulaci DPH tabu by neseděly.
 - Server-side `buildHeaderInfo` má jasná pravidla a vstupuje do něj jen schválně načtená data (`SELECT * WHERE id = ?`).
 
 ---

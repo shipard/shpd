@@ -1,9 +1,19 @@
 <script lang="ts">
   import { get } from '../../api/client.js';
   import Modal from '../ui/Modal.svelte';
+  import Icon from '../ui/Icon.svelte';
   import FormEditor from './FormEditor.svelte';
   import FormStateBadge from './FormStateBadge.svelte';
+  import { resolveIcon } from '../../icons.js';
   import { t } from '../../i18n/index.js';
+
+  type HeaderInfoItem = { label: string; value: string };
+  type HeaderInfo = {
+    title: string;
+    info: HeaderInfoItem[];
+    icon: string | null;
+    summary: HeaderInfoItem[];
+  };
 
   interface Props {
     table: string;
@@ -37,9 +47,9 @@
   // callback z FormEditor po každém (re)loadu formuláře.
   let currentTitle = $state('');
   let currentDocStates = $state<Record<string, unknown> | null>(null);
-  // Strukturovaná hlavička (title + info pro subtitle). Nastavuje se jen
+  // Strukturovaná hlavička (title + info + icon + summary). Nastavuje se jen
   // při load/save, ne při recalculate — header odráží uložená data, ne živý formData.
-  let savedHeaderInfo = $state<{ title: string; info: Array<{ label: string; value: string }> } | null>(null);
+  let savedHeaderInfo = $state<HeaderInfo | null>(null);
 
   // Dirty stav formuláře — propagován z FormEditor přes onDirtyChange callback.
   // Při pokusu o zavření (Esc, klik na overlay, křížek) se zobrazí potvrzovací dialog.
@@ -88,7 +98,7 @@
   function handleFormLoaded(info: {
     title: string;
     docStates: Record<string, unknown> | null;
-    headerInfo: { title: string; info: Array<{ label: string; value: string }> } | null;
+    headerInfo: HeaderInfo | null;
   }) {
     currentTitle = info.title;
     currentDocStates = info.docStates;
@@ -108,14 +118,50 @@
   );
 
   // Spojený řádek info pro subtitle: „IČO 68253848 · Kód osoby TEST-0098".
+  // Prázdný `label` znamená „jen hodnota bez prefixu" (např. „Přijatá faktura"
+  // u dokladu — typ je samopopisný, žádný „Typ:" prefix tam nepatří).
   // Renderuje se jen pokud máme aspoň jednu položku info — jinak subtitle
-  // snippet vrátí prázdno a Modal __header-main gap je neviditelný.
+  // snippet vrátí prázdno a Modal subtitle row je vidět jen kvůli badge (pokud je).
   const subtitleText = $derived(
     savedHeaderInfo && savedHeaderInfo.info.length > 0
-      ? savedHeaderInfo.info.map(i => `${i.label} ${i.value}`).join(' · ')
+      ? savedHeaderInfo.info.map(i => i.label ? `${i.label} ${i.value}` : i.value).join(' · ')
       : ''
   );
+
+  // Subtitle row se renderuje, jen když máme strukturovanou hlavičku. Tím se
+  // zachovává původní layout (badge vedle titulku, jednořádková hlavička) pro
+  // formuláře bez `buildHeaderInfo()` override (typicky JSONC sub-formy).
+  const hasHeaderInfo = $derived(savedHeaderInfo !== null);
+  const hasSummary = $derived((savedHeaderInfo?.summary?.length ?? 0) > 0);
+  const hasIcon = $derived(!!savedHeaderInfo?.icon);
 </script>
+
+{#snippet subtitleSnippet()}
+  {#if subtitleText}
+    {subtitleText}
+  {/if}
+{/snippet}
+
+{#snippet iconSnippet()}
+  {#if savedHeaderInfo?.icon}
+    <Icon icon={resolveIcon(savedHeaderInfo.icon)} />
+  {/if}
+{/snippet}
+
+{#snippet summarySnippet()}
+  {#if savedHeaderInfo}
+    {#each savedHeaderInfo.summary as item (item.label)}
+      <span>{item.label}</span>
+      <span>{item.value}</span>
+    {/each}
+  {/if}
+{/snippet}
+
+{#snippet headerExtraSnippet()}
+  {#if currentDocStates}
+    <FormStateBadge docStates={currentDocStates} />
+  {/if}
+{/snippet}
 
 {#if open && metaLoaded}
   <Modal
@@ -124,19 +170,11 @@
     onClose={handleClose}
     width={fullSize ? LARGE_WIDTH : SMALL_WIDTH}
     height={fullSize ? LARGE_HEIGHT : undefined}
+    subtitle={hasHeaderInfo ? subtitleSnippet : undefined}
+    iconSlot={hasIcon ? iconSnippet : undefined}
+    summary={hasSummary ? summarySnippet : undefined}
+    headerExtra={headerExtraSnippet}
   >
-    {#snippet subtitle()}
-      {#if subtitleText}
-        {subtitleText}
-      {/if}
-    {/snippet}
-
-    {#snippet headerExtra()}
-      {#if currentDocStates}
-        <FormStateBadge docStates={currentDocStates} />
-      {/if}
-    {/snippet}
-
     <FormEditor
       {table}
       {recordId}

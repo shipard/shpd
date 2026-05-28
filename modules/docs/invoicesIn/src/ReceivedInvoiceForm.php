@@ -13,6 +13,8 @@ use Shipard\Core\Form\FormTab;
  *
  * Dědí veškerou logiku z DocsHeadsFormBase. Přepisuje:
  *   - titulky modalu (Faktura přijatá / Nová faktura přijatá)
+ *   - 3 header-info hooky (`getDocTypeLabel`, `getHeaderIcon`) — společný
+ *     `buildHeaderInfo()` v base; FPB drží `supplier_snapshot` defaultní.
  *   - `buildHeaderTab()` — 2-sloupcový layout bez separátorů, jen pole
  *     potřebná pro každodenní práci s FPB
  *   - `buildExtraTabs()` — přidává tab „Nastavení" za Přílohy s poli,
@@ -34,6 +36,19 @@ class ReceivedInvoiceForm extends DocsHeadsFormBase
     {
         return 'Nová faktura přijatá';
     }
+
+    protected function getDocTypeLabel(): string
+    {
+        return 'Přijatá faktura';
+    }
+
+    protected function getHeaderIcon(): ?string
+    {
+        return 'invoice-in';
+    }
+
+    // getPartnerSnapshotKey() — default 'supplier_snapshot' je správně
+    // pro přijaté doklady, override není potřeba.
 
     /** @param array<string, mixed> $data */
     protected function buildHeaderTab(array $data, bool $isNew): FormTab

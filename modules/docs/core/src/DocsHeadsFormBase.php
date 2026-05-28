@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Shipard\Module\Docs\Core;
 
 use Shipard\Core\Form\FormDefinition;
+use Shipard\Core\Form\FormHeaderInfo;
 use Shipard\Core\Form\FormTab;
 use Shipard\Core\Form\RecalculateResult;
 use Shipard\Core\Form\TableForm;
@@ -97,6 +98,140 @@ abstract class DocsHeadsFormBase extends TableForm
     protected function buildExtraTabs(array $data, bool $isNew): array
     {
         return [];
+    }
+
+    // ── Header info hooks ───────────────────────────────────────────────
+
+    /**
+     * Krátký popis typu dokladu pro subtitle hlavičky modalu (např.
+     * „Přijatá faktura", „Vydaná faktura"). Liší se od `getFormTitle()`:
+     * ten dává formální titulek modalu („Faktura přijatá"), tady je popisek
+     * vedle čísla dokladu v subtitle („Přijatá faktura · 2024-0001").
+     */
+    protected function getDocTypeLabel(): string
+    {
+        return 'Doklad';
+    }
+
+    /**
+     * Klíč ikony (z `icons.js::iconMap`) pro levý okraj hlavičky modalu.
+     * Typicky shodný s `viewers[].icon` v `module.jsonc` daného modulu —
+     * jeden klíč pro viewer i hlavičku formuláře. `null` = bez ikony.
+     */
+    protected function getHeaderIcon(): ?string
+    {
+        return null;
+    }
+
+    /**
+     * Klíč ve `$data`, kde žije snapshot partnera. Přijaté doklady mají
+     * partnera = dodavatele (`supplier_snapshot`), vydané = odběratele
+     * (`customer_snapshot`). Default je `supplier_snapshot` — nejčastější
+     * případ (přijaté doklady, výdaje, platby ven).
+     */
+    protected function getPartnerSnapshotKey(): string
+    {
+        return 'supplier_snapshot';
+    }
+
+    /**
+     * Strukturovaná hlavička modalu pro všechny doklady nad `docs_core_heads`.
+     *
+     *   ┌──┐ Beta Software, a.s.                Bez DPH:    10 000,00  [×]
+     *   │📄│ [Koncept] Přijatá faktura · Číslo  DPH:         2 100,00
+     *   └──┘                     2024-0001    Celkem CZK: 12 100,00
+     *
+     *   - title    = jméno partnera. Není-li k dispozici (nový nezavedený
+     *                záznam), vrátíme null → modal použije fallback
+     *                `formDef.title`.
+     *   - info     = typ dokladu (z `getDocTypeLabel()`, label prázdný —
+     *                hodnota se zobrazí bez prefixu) + číslo dokladu
+     *                (vynecháno, dokud ho server nepřidělil).
+     *   - icon     = z `getHeaderIcon()`.
+     *   - summary  = Bez DPH / DPH / Celkem v měně dokladu. Skryto, pokud
+     *                doklad ještě nemá vypočítané totals.
+     *
+     * @param array<string, mixed> $data
+     */
+    public function buildHeaderInfo(array $data): ?FormHeaderInfo
+    {
+        $partnerName = $this->resolvePartnerName($data);
+        if ($partnerName === '') {
+            return null;
+        }
+
+        // Info řádka: typ dokladu (bez labelu) + volitelně číslo dokladu.
+        $info = [['label' => '', 'value' => $this->getDocTypeLabel()]];
+        $docNumber = trim((string) ($data['doc_number'] ?? ''));
+        if ($docNumber !== '') {
+            $info[] = ['label' => 'Číslo', 'value' => $docNumber];
+        }
+
+        return new FormHeaderInfo(
+            title: $partnerName,
+            info: $info,
+            icon: $this->getHeaderIcon(),
+            summary: $this->buildHeaderSummary($data),
+        );
+    }
+
+    /**
+     * Najde jméno partnera z partner-snapshotu. Preferuje uložený snapshot
+     * (`supplier_snapshot` / `customer_snapshot` podle `getPartnerSnapshotKey()`),
+     * fallback je SELECT z `base_persons_persons` přes `partner` FK.
+     *
+     * @param array<string, mixed> $data
+     */
+    protected function resolvePartnerName(array $data): string
+    {
+        $snap = $this->decodeSnapshot($data[$this->getPartnerSnapshotKey()] ?? null);
+        if ($snap !== null && !empty($snap['name'])) {
+            return trim((string) $snap['name']);
+        }
+
+        $partnerId = (int) ($data['partner'] ?? 0);
+        if ($partnerId === 0 || $this->db === null) {
+            return '';
+        }
+        $row = $this->db->fetchRow(
+            'SELECT `full_name` FROM `base_persons_persons` WHERE `id` = %i',
+            $partnerId,
+        );
+        if (!is_array($row) || empty($row['full_name'])) {
+            return '';
+        }
+        return trim((string) $row['full_name']);
+    }
+
+    /**
+     * Pravý souhrn (Bez DPH / DPH / Celkem v měně dokladu). Měna jde do labelu
+     * „Celkem", ne do hodnoty — všechny tři částky pak stojí v jednom sloupci
+     * zarovnané vpravo (jinak by „CZK" za částkou posunulo číslo doleva
+     * a Celkem by se rozjelo s Bez DPH / DPH).
+     *
+     * Vrací prázdné pole, pokud doklad ještě nemá vypočítané totals — typicky
+     * nový záznam bez řádků.
+     *
+     * @param array<string, mixed> $data
+     * @return list<array{label: string, value: string}>
+     */
+    protected function buildHeaderSummary(array $data): array
+    {
+        $totalAmount = (float) ($data['total_amount'] ?? 0);
+        if ($totalAmount === 0.0) {
+            return [];
+        }
+
+        $currency = strtoupper((string) ($data['doc_currency'] ?? ''));
+        $totalBase = (float) ($data['total_base'] ?? 0);
+        $totalVat  = (float) ($data['total_vat'] ?? 0);
+        $celkemLabel = $currency !== '' ? 'Celkem ' . $currency : 'Celkem';
+
+        return [
+            ['label' => 'Bez DPH',    'value' => $this->formatMoney($totalBase)],
+            ['label' => 'DPH',        'value' => $this->formatMoney($totalVat)],
+            ['label' => $celkemLabel, 'value' => $this->formatMoney($totalAmount)],
+        ];
     }
 
     /**

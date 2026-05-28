@@ -13,6 +13,9 @@ use Shipard\Core\Form\FormTab;
  *
  * Dědí veškerou logiku z DocsHeadsFormBase. Přepisuje:
  *   - titulky modalu (Faktura vydaná / Nová faktura vydaná)
+ *   - 3 header-info hooky (`getDocTypeLabel`, `getHeaderIcon`,
+ *     `getPartnerSnapshotKey`) — společný `buildHeaderInfo()` v base;
+ *     FVB partner = odběratel → customer_snapshot.
  *   - `buildHeaderTab()` — 2-sloupcový layout bez separátorů, jen pole
  *     potřebná pro každodenní práci s FVB. Oproti FPB zachovává v hlavičce
  *     `vat_registration` (různé registrace podle odběratele) a `bank_account`
@@ -33,6 +36,22 @@ class IssuedInvoiceForm extends DocsHeadsFormBase
     protected function getNewFormTitle(): string
     {
         return 'Nová faktura vydaná';
+    }
+
+    protected function getDocTypeLabel(): string
+    {
+        return 'Vydaná faktura';
+    }
+
+    protected function getHeaderIcon(): ?string
+    {
+        return 'invoice';
+    }
+
+    protected function getPartnerSnapshotKey(): string
+    {
+        // FVB partner = odběratel → snímá se do customer_snapshot.
+        return 'customer_snapshot';
     }
 
     /** @param array<string, mixed> $data */

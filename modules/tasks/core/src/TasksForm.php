@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Shipard\Module\Tasks\Core;
 
 use Shipard\Core\Form\FormDefinition;
+use Shipard\Core\Form\FormHeaderInfo;
 use Shipard\Core\Form\TableForm;
 
 class TasksForm extends TableForm
@@ -27,6 +28,77 @@ class TasksForm extends TableForm
             tabs:     [$basic],
             fullSize: false,
         );
+    }
+
+    /**
+     * Strukturovaná hlavička úkolu.
+     *
+     *   ┌──┐ Zavolat účetní o uzávěrce
+     *   │☑ │ [Nový] Priorita Vysoká · Termín 15.05.2024
+     *   └──┘
+     *
+     *   - title  = title úkolu, fallback na formDef.title („Úkol")
+     *   - info[] = priorita (pokud je vyplalněná a známá v cfgItem) +
+     *              termín (pokud je vypělněný)
+     *   - icon   = stejná jako u vieweru úkolů
+     *   - summary = prázdný (úkoly nemají totals)
+     *
+     * @param array<string, mixed> $data
+     */
+    public function buildHeaderInfo(array $data): ?FormHeaderInfo
+    {
+        $title = trim((string) ($data['title'] ?? ''));
+        if ($title === '') {
+            return null;
+        }
+
+        $info = [];
+
+        $priority = $this->resolvePriorityLabel((string) ($data['priority'] ?? ''));
+        if ($priority !== '') {
+            $info[] = ['label' => 'Priorita', 'value' => $priority];
+        }
+
+        $dueDate = $this->formatHeaderDate($data['due_date'] ?? null);
+        if ($dueDate !== '') {
+            $info[] = ['label' => 'Termín', 'value' => $dueDate];
+        }
+
+        return new FormHeaderInfo(
+            title: $title,
+            info: $info,
+            icon: 'list-check',
+        );
+    }
+
+    /**
+     * Resolvuje lokalizovaný název priority z cfgItem. Neznámý klíč nebo
+     * chybějící config → prázdný string (volající pak položku v info vynechá
+     * — radši nic než ukazovat surový enum klíč „high").
+     */
+    protected function resolvePriorityLabel(string $key): string
+    {
+        if ($key === '' || $this->config === null) {
+            return '';
+        }
+        $cfg = $this->config->cfgItem('tasks.core.priorities');
+        if (is_array($cfg) && isset($cfg[$key]['name'])) {
+            return (string) $cfg[$key]['name'];
+        }
+        return '';
+    }
+
+    /**
+     * Bezpečně z DB datové hodnoty (DATE jako 'Y-m-d' string) udělá formát
+     * vhodný pro hlavičku („15.05.2024"). Konzistentní s PersonsForm / ItemsForm.
+     */
+    protected function formatHeaderDate(mixed $value): string
+    {
+        if ($value === null || $value === '') {
+            return '';
+        }
+        $dt = \DateTimeImmutable::createFromFormat('Y-m-d', (string) $value);
+        return $dt instanceof \DateTimeImmutable ? $dt->format('d.m.Y') : '';
     }
 
     /**

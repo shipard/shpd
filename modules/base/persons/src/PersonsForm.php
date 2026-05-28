@@ -111,12 +111,15 @@ class PersonsForm extends TableForm
         $personType = PersonType::tryFrom((int) ($data['person_type'] ?? 0));
 
         $info = [];
+        $icon = null;
         if ($personType === PersonType::Company) {
+            $icon = 'company';
             $companyId = trim((string) ($data['company_id'] ?? ''));
             if ($companyId !== '') {
                 $info[] = ['label' => 'IČO', 'value' => $companyId];
             }
         } elseif ($personType === PersonType::Person) {
+            $icon = 'user';
             $birthDate = $data['birth_date'] ?? null;
             if ($birthDate !== null && $birthDate !== '') {
                 $dt = \DateTimeImmutable::createFromFormat('Y-m-d', (string) $birthDate);
@@ -133,7 +136,7 @@ class PersonsForm extends TableForm
             $info[] = ['label' => 'Kód osoby', 'value' => $personId];
         }
 
-        return new FormHeaderInfo(title: $fullName, info: $info);
+        return new FormHeaderInfo(title: $fullName, info: $info, icon: $icon);
     }
 
     public function recalculate(string $changedColumn, array $data): RecalculateResult

@@ -19,6 +19,7 @@ class DatabaseManager
             'port'     => $config->getPort(),
             'username' => $config->getAdminUser(),
             'password' => $config->getAdminPassword(),
+            'charset'  => 'utf8mb4',
         ]);
     }
 

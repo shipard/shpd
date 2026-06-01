@@ -19,6 +19,7 @@ class DataSourceConnection
             'database' => $config->getDatabaseName(),
             'username' => $config->getDatabaseUser(),
             'password' => $config->getDatabasePassword(),
+            'charset'  => 'utf8mb4',
         ]);
     }
 

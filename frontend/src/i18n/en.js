@@ -51,6 +51,8 @@ export default {
   // ── App shell ───────────────────────────────────────────────────────────
   'app.selectMenuItem': 'Select an item from the menu',
   'app.unsupportedPanel': 'Unsupported panel type: {type}',
+  'app.menu.open': 'Open menu',
+  'app.menu.close': 'Close menu',
   'tabbar.close': 'Close {tab}',
 
   // ── Login ───────────────────────────────────────────────────────────────

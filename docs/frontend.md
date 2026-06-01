@@ -158,6 +158,31 @@ Layout je bez horní lišty — logo a uživatelské info jsou integrovány v si
 └──────────┴──────────────────────────────────────────┘
 ```
 
+### Mobilní režim (drawer)
+
+Na viewportu ≤ 768px se shell přepne do mobilního režimu (řídí
+`layout.svelte.js` store přes `window.matchMedia`):
+
+- Nahoře se objeví `MobileTopBar` — hamburger (otevře drawer), titul
+  aktuální obrazovky (`navigationStore.activeItem.label`), vpravo prázdný
+  slot pro budoucí akce (Přidat / Otevřít — naplní se ve fázi vieweru).
+- Sidebar vystoupí z toku layoutu a stane se z něj **drawer** — vysune
+  se zleva přes obsah (`position: fixed`, `transform: translateX`),
+  zbytek ztmaví overlay. Recykluje stejný `Sidebar.svelte` jako desktop.
+- Drawer se zavírá: klikem na overlay, ✕ tlačítkem v hlavičce drawera
+  (nahrazuje desktopový collapse toggle), klávesou Esc, a klikem na
+  položku navigace.
+- Sbalovací logika (`collapsed`) se na mobilu nepoužívá — drawer je buď
+  otevřený, nebo zavřený.
+
+Na desktopu (> 768px) zůstává sidebar pevným sloupcem se sbalováním
+beze změny.
+
+**Breakpoint 768px** je definovaný na dvou místech, která musí ladit:
+JS konstanta `MOBILE_BREAKPOINT` v `layout.svelte.js` a literál
+v `@media` queries v komponentách. Stejný vzor jako theme/language
+bootstrap ↔ store.
+
 ### Mode systém — App vs. Settings
 
 Aplikace má dva navigační módy: `'app'` (běžná práce) a `'settings'`

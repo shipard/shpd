@@ -91,6 +91,7 @@ export const iconChevronRight = faChevronRight;
 export const iconChevronDown = faChevronDown;
 export const iconChevronUp = faChevronUp;
 export const iconMenu = faBars;
+export const iconClose = faXmark; // ✕ — zavření drawera / panelu (význam „zavřít", odlišný od iconCancel)
 export const iconCollapse = faAnglesLeft;
 export const iconExpand = faAnglesRight;
 export const iconMore = faEllipsisVertical;

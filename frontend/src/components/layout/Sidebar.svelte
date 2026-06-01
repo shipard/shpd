@@ -4,11 +4,13 @@
   import { authStore } from '../../stores/auth.svelte.js';
   import { themeStore } from '../../stores/theme.svelte.js';
   import { navigationStore } from '../../stores/navigation.svelte.js';
+  import { layoutStore } from '../../stores/layout.svelte.js';
   import { language, t } from '../../i18n/index.js';
   import Icon from '../ui/Icon.svelte';
   import {
     iconCollapse,
     iconExpand,
+    iconClose,
     iconLogout,
     iconChevronDown,
     iconChevronUp,
@@ -135,7 +137,17 @@
 
   function handleAppSettings() {
     navigationStore.enterSettings();
-    // Menu se zavře přes $effect níže při změně módu
+    // Menu se zavře přes $effect níže při změně módu.
+    // Na mobilu navíc zavři drawer — enterSettings nejde přes
+    // AppShell.handleNavigate, takže by drawer zůstal otevřený.
+    if (layoutStore.isMobile) layoutStore.closeDrawer();
+  }
+
+  // Výstup z Nastavení (back button v hlavičce). Na mobilu zavři drawer —
+  // exitSettings stejně jako enterSettings neprochází přes handleNavigate.
+  function handleExitSettings() {
+    navigationStore.exitSettings();
+    if (layoutStore.isMobile) layoutStore.closeDrawer();
   }
 
   // Při změně módu zavři user menu
@@ -208,12 +220,24 @@
   class:shpd-sidebar--collapsed={collapsed}
 >
   <div class="shpd-sidebar__header">
-    {#if !collapsed}
+    {#if !collapsed || layoutStore.isMobile}
       <span class="shpd-sidebar__logo">Shipard</span>
     {/if}
-    <button class="shpd-sidebar__toggle" onclick={toggleCollapse} title={collapsed ? t('sidebar.expand') : t('sidebar.collapse')}>
-      <Icon icon={collapsed ? iconExpand : iconCollapse} size="sm" />
-    </button>
+    {#if layoutStore.isMobile}
+      <!-- Na mobilu nahrazuje collapse toggle ✕, které zavře drawer.
+           Collapse nedává v draweru smysl (je buď otevřený, nebo zavřený). -->
+      <button
+        class="shpd-sidebar__toggle"
+        onclick={() => layoutStore.closeDrawer()}
+        aria-label={t('app.menu.close')}
+      >
+        <Icon icon={iconClose} size="sm" />
+      </button>
+    {:else}
+      <button class="shpd-sidebar__toggle" onclick={toggleCollapse} title={collapsed ? t('sidebar.expand') : t('sidebar.collapse')}>
+        <Icon icon={collapsed ? iconExpand : iconCollapse} size="sm" />
+      </button>
+    {/if}
   </div>
 
   {#if navigationStore.mode === 'settings'}
@@ -221,7 +245,7 @@
       <div class="shpd-sidebar__back-bar shpd-sidebar__back-bar--collapsed">
         <button
           class="shpd-sidebar__back-button shpd-sidebar__back-button--icon-only"
-          onclick={() => navigationStore.exitSettings()}
+          onclick={handleExitSettings}
           title={t('sidebar.backToApp')}
           aria-label={t('sidebar.backToApp')}
         >
@@ -230,7 +254,7 @@
       </div>
     {:else}
       <div class="shpd-sidebar__back-bar">
-        <button class="shpd-sidebar__back-button" onclick={() => navigationStore.exitSettings()}>
+        <button class="shpd-sidebar__back-button" onclick={handleExitSettings}>
           <Icon icon={iconChevronLeft} size="sm" />
           <span>{t('sidebar.backToApp')}</span>
         </button>

@@ -289,6 +289,12 @@ Pokud `row.avatar` chybí, fallback na `row.icon` (emoji nebo unicode glyph).
   pozadí (`var(--shpd-color-primary)`)
 - Neaktivní položky mají hover s lehkou bílou (`var(--shpd-color-bg-sidebar-hover)`)
 
+### Mobilní drawer
+
+Na ≤ 768px se sidebar mění na overlay drawer (vysune zleva přes obsah,
+overlay ztmaví zbytek). Spouští ho hamburger v `MobileTopBar`. Detaily
+v [`frontend.md`](frontend.md) sekce *Aplikační shell → Mobilní režim*.
+
 ### User dropdown v patce sidebaru
 
 Uživatelské menu (avatar + jméno, klik otevře dropdown s položkami

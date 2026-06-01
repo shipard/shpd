@@ -60,6 +60,8 @@ export default {
   // ── App shell ───────────────────────────────────────────────────────────
   'app.selectMenuItem': 'Vyberte položku v menu',
   'app.unsupportedPanel': 'Nepodporovaný typ panelu: {type}',
+  'app.menu.open': 'Otevřít menu',
+  'app.menu.close': 'Zavřít menu',
   'tabbar.close': 'Zavřít {tab}',
 
   // ── Login ───────────────────────────────────────────────────────────────

@@ -254,13 +254,22 @@ class DsUpgradeCommand extends Command
             $dsConnection->executeSQL('UPDATE docs_core_heads SET doc_state_changed_at = NOW() WHERE doc_state_changed_at IS NULL');
         }
 
-        $this->provisionUnits($resolvedModules, $dsConnection, $output);
-        $this->provisionItemKinds($resolvedModules, $dsConnection, $output);
-        $this->provisionFiscalYears($resolvedModules, $dsDir, $dsConnection, $output);
-        $this->provisionVatPeriods($resolvedModules, $dsConnection, $output);
-        $this->provisionDocCoreNumberSeries($resolvedModules, $dsDir, $dsConnection, $output);
-        $this->provisionMailRouter($dsConfig, $dsConnection, $output);
-        $this->provisionAiAnalyzer($dsConfig, $dsConnection, $output);
+        if ($dsConfig->shouldSkipProvisioning()) {
+            $output->writeln('');
+            $output->writeln("<comment>[SKIP] Provisioning disabled via config (skipProvisioning=true).</comment>");
+            $output->writeln("<comment>       No reference data (units, item kinds, fiscal years, VAT periods,</comment>");
+            $output->writeln("<comment>       number series, mail router, AI analyzer) was generated.</comment>");
+            $output->writeln("<comment>       Set skipProvisioning=false in config/main.json and re-run</comment>");
+            $output->writeln("<comment>       ds-upgrade once the import is complete.</comment>");
+        } else {
+            $this->provisionUnits($resolvedModules, $dsConnection, $output);
+            $this->provisionItemKinds($resolvedModules, $dsConnection, $output);
+            $this->provisionFiscalYears($resolvedModules, $dsDir, $dsConnection, $output);
+            $this->provisionVatPeriods($resolvedModules, $dsConnection, $output);
+            $this->provisionDocCoreNumberSeries($resolvedModules, $dsDir, $dsConnection, $output);
+            $this->provisionMailRouter($dsConfig, $dsConnection, $output);
+            $this->provisionAiAnalyzer($dsConfig, $dsConnection, $output);
+        }
 
         $secretsWarnings = DsSecretCipher::healthCheck($dsConfig);
         foreach ($secretsWarnings as $warning) {

@@ -97,4 +97,16 @@ class DataSourceConfig
     {
         return $this->data['defaultCurrency'] ?? 'czk';
     }
+
+    /**
+     * When true, `shpd-ds ds-upgrade` syncs the schema but SKIPS auto-provisioning
+     * of reference data (units, item kinds, fiscal years, VAT periods, number series,
+     * mail router, AI analyzer). Intended for data migration / import from another
+     * system, where that reference data is supplied by the import itself.
+     * Optional; defaults to false when missing from main.json.
+     */
+    public function shouldSkipProvisioning(): bool
+    {
+        return $this->data['skipProvisioning'] ?? false;
+    }
 }

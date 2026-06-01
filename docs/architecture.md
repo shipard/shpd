@@ -144,7 +144,7 @@ JSONC soubor s "name", "name:cs", "name:en"
 | Třída | Účel |
 |-------|------|
 | `ServerConfig` | Načtení a validace `/etc/shipard/server.json` (DB credentials, mód nasazení). |
-| `DataSourceConfig` | Načtení a validace `config/main.json` zdroje dat (ID, DB credentials, moduly, defaultLanguage). |
+| `DataSourceConfig` | Načtení a validace `config/main.json` zdroje dat (ID, DB credentials, moduly, defaultLanguage). Volitelná pole: `defaultLanguage` (default `en`), `defaultCurrency` (default `czk`), `skipProvisioning` (bool, default `false` — dočasně vypne auto-provisioning v `ds-upgrade`; viz `docs/cli.md`). |
 | `ConfigCompiler` | Kompilace konfiguračních souborů ze všech aktivních modulů. Generuje `compiled.{lang}.json` pro každý jazyk. Používá `ConfigLocalizer`. |
 | `ConfigRuntime` | Runtime přístup ke zkompilované konfiguraci. Metoda `cfgItem(id)` vrací konfigurační položku. |
 

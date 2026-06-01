@@ -94,6 +94,56 @@ class DataSourceConfigTest extends TestCase
         $this->assertSame('cs', $config->getDefaultLanguage());
     }
 
+    public function testShouldSkipProvisioningDefaultsToFalse(): void
+    {
+        $this->createConfig([
+            'id'                => 'abcd-efgh-ijkl-mnop',
+            'name'              => 'Test DS',
+            'database_name'     => 'abcd_efgh_ijkl_mnop',
+            'database_user'     => 'shpd_abcdefgh',
+            'database_password' => 'supersecret',
+            'created'           => '2026-03-12T10:00:00+01:00',
+        ]);
+
+        $config = new DataSourceConfig($this->tempDir);
+
+        $this->assertFalse($config->shouldSkipProvisioning());
+    }
+
+    public function testShouldSkipProvisioningReadsTrueFromConfig(): void
+    {
+        $this->createConfig([
+            'id'                => 'abcd-efgh-ijkl-mnop',
+            'name'              => 'Test DS',
+            'database_name'     => 'abcd_efgh_ijkl_mnop',
+            'database_user'     => 'shpd_abcdefgh',
+            'database_password' => 'supersecret',
+            'created'           => '2026-03-12T10:00:00+01:00',
+            'skipProvisioning'  => true,
+        ]);
+
+        $config = new DataSourceConfig($this->tempDir);
+
+        $this->assertTrue($config->shouldSkipProvisioning());
+    }
+
+    public function testShouldSkipProvisioningReadsFalseFromConfig(): void
+    {
+        $this->createConfig([
+            'id'                => 'abcd-efgh-ijkl-mnop',
+            'name'              => 'Test DS',
+            'database_name'     => 'abcd_efgh_ijkl_mnop',
+            'database_user'     => 'shpd_abcdefgh',
+            'database_password' => 'supersecret',
+            'created'           => '2026-03-12T10:00:00+01:00',
+            'skipProvisioning'  => false,
+        ]);
+
+        $config = new DataSourceConfig($this->tempDir);
+
+        $this->assertFalse($config->shouldSkipProvisioning());
+    }
+
     public function testMissingRequiredFieldThrowsException(): void
     {
         $this->createConfig([

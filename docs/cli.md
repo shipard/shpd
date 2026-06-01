@@ -240,6 +240,16 @@ provisioner detailů použij `-v`:
 shpd-ds ds-upgrade -v
 ```
 
+**Vypnutí provisioningu (`skipProvisioning`):** volitelný boolean v
+`config/main.json`. Když je `true`, `ds-upgrade` synchronizuje schéma, ale
+přeskočí generování referenčních dat (units, druhy položek, fiskální roky,
+VAT období, číselné řady, mail router, AI analyzer). Určeno pro import dat
+z jiného systému, kde tyto údaje dodává sám import. Po dokončení importu
+nastav `skipProvisioning` zpět na `false` a spusť `ds-upgrade` znovu —
+provisionery jsou idempotentní, doplní jen chybějící data. Při zapnutém
+flagu `ds-upgrade` při každém běhu hlásí `[SKIP] Provisioning disabled via
+config`.
+
 #### `ds-reset`
 
 ```bash
@@ -655,9 +665,19 @@ sudo shpd-ds ds-secrets-health
 
 ```bash
 cd /opt/shipard/data-sources/<id>
-sudo shpd-ds ds-reset -y            # čistý stav (zůstane login + importní API klíč)
-# … spustit import ze starého Shipardu …
+# 1. zapnout import mód
+#    config/main.json:  "skipProvisioning": true
+sudo shpd-ds ds-reset -y            # čistý stav, schéma bez provisioningu
+# 2. … spustit import ze starého Shipardu …
+# 3. vypnout import mód
+#    config/main.json:  "skipProvisioning": false
+sudo shpd-ds ds-upgrade             # doplní zbývající referenční data
 ```
+
+`skipProvisioning` se propíše i přes interní `ds-upgrade` v `ds-reset`,
+takže při zapnutém flagu reset rekreuje jen schéma a žádné referenční data
+nevytvoří. Po celou dobu opakovaného testování zůstává flag `true`; na
+`false` se přepne, až je import hotový „naostro".
 
 ---
 

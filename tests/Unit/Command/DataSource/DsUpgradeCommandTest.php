@@ -64,6 +64,7 @@ class DsUpgradeCommandTest extends TestCase
         $this->dsConfig->method('getDatabaseUser')->willReturn('shpd_test0001');
         $this->dsConfig->method('getDatabasePassword')->willReturn('secret');
         $this->dsConfig->method('getDataSourceDir')->willReturn($this->dsDir);
+        $this->dsConfig->method('shouldSkipProvisioning')->willReturn(false);
 
         $this->dsConnection = $this->createMock(DataSourceConnection::class);
 
@@ -364,6 +365,44 @@ class DsUpgradeCommandTest extends TestCase
 
         $this->assertFileExists($this->dsDir . '/config/configuration/compiled.cs.json');
         $this->assertFileExists($this->dsDir . '/config/configuration/compiled.en.json');
+    }
+
+    public function testUpgradeRunsProvisioningByDefault(): void
+    {
+        $this->dsConnection->method('getTableColumns')->willReturn([]);
+        $this->dsConnection->method('getTableIndexes')->willReturn([]);
+        $this->dsConnection->method('executeSQL');
+
+        $tester = $this->createCommandTester();
+        $exitCode = $tester->execute([]);
+
+        $this->assertSame(Command::SUCCESS, $exitCode);
+        $this->assertStringNotContainsString('Provisioning disabled via config', $tester->getDisplay());
+    }
+
+    public function testUpgradeSkipsProvisioningWhenConfigured(): void
+    {
+        $this->dsConfig = $this->createMock(DataSourceConfig::class);
+        $this->dsConfig->method('getModules')->willReturn(['test.unit']);
+        $this->dsConfig->method('getName')->willReturn('Test DS');
+        $this->dsConfig->method('getId')->willReturn('test-0001-test-0001');
+        $this->dsConfig->method('getDatabaseName')->willReturn('test_db');
+        $this->dsConfig->method('getDatabaseUser')->willReturn('shpd_test0001');
+        $this->dsConfig->method('getDatabasePassword')->willReturn('secret');
+        $this->dsConfig->method('getDataSourceDir')->willReturn($this->dsDir);
+        $this->dsConfig->method('shouldSkipProvisioning')->willReturn(true);
+
+        $this->dsConnection->method('getTableColumns')->willReturn([]);
+        $this->dsConnection->method('getTableIndexes')->willReturn([]);
+        $this->dsConnection->method('executeSQL');
+
+        $tester = $this->createCommandTester();
+        $exitCode = $tester->execute([]);
+
+        $this->assertSame(Command::SUCCESS, $exitCode);
+        $display = $tester->getDisplay();
+        $this->assertStringContainsString('Provisioning disabled via config', $display);
+        $this->assertStringContainsString('Upgrade complete.', $display);
     }
 
     private function rmdirRecursive(string $dir): void

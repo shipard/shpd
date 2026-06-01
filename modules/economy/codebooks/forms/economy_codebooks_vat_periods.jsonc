@@ -5,8 +5,6 @@
     "titleNew": "Nové období DPH",
     "titleNew:cs": "Nové období DPH",
     "titleNew:en": "New VAT period",
-    "fullSize": false,
-
     "tabs": [
         {
             "id": "basic",

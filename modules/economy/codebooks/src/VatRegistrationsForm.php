@@ -64,7 +64,6 @@ class VatRegistrationsForm extends TableForm
             title: 'Registrace DPH',
             titleNew: 'Nová registrace DPH',
             tabs: [$basic, $periods],
-            fullSize: true,
         );
     }
 

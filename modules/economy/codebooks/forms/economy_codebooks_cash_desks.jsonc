@@ -5,8 +5,6 @@
     "titleNew": "Nová pokladna",
     "titleNew:cs": "Nová pokladna",
     "titleNew:en": "New cash desk",
-    "fullSize": false,
-
     "tabs": [
         {
             "id": "basic",

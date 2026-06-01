@@ -146,6 +146,17 @@
   --shpd-space-lg: 24px;
   --shpd-space-xl: 32px;
 
+  /* Form controls */
+  /* Vertikální padding uvnitř inputů (Input, Select, NumberInput, DateInput,
+     TextArea, LookupInput). Horizontální padding zůstává --shpd-space-sm.
+     Snížení = kompaktnější formuláře (méně vertikálního scrollu). */
+  --shpd-input-padding-y: 4px;
+
+  /* Mezera mezi sekcemi ve FormTab a vertikální padding uvnitř sekce.
+     Strany sekce zůstávají na --shpd-space-lg. Ladí kompaktnost formuláře. */
+  --shpd-form-section-gap: 8px;
+  --shpd-form-section-padding-y: 8px;
+
   /* Typography */
   --shpd-font-family: Inter, system-ui, sans-serif;
   --shpd-font-size-sm: 0.875rem;

@@ -26,7 +26,6 @@ class TasksForm extends TableForm
             title:    'Úkol',
             titleNew: 'Nový úkol',
             tabs:     [$basic],
-            fullSize: false,
         );
     }
 

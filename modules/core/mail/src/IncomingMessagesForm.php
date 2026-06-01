@@ -56,7 +56,6 @@ class IncomingMessagesForm extends TableForm
             title: 'Došlá zpráva',
             titleNew: 'Nová došlá zpráva',
             tabs: $tabs,
-            fullSize: true,
         );
     }
 

@@ -41,7 +41,7 @@
 <style>
   .shpd-input__field {
     width: 100%;
-    padding: var(--shpd-space-sm);
+    padding: var(--shpd-input-padding-y) var(--shpd-space-sm);
     border: 1px solid var(--shpd-color-border);
     border-radius: var(--shpd-radius-md);
     font-size: var(--shpd-font-size-base);

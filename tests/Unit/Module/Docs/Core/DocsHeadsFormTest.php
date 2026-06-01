@@ -115,12 +115,11 @@ class DocsHeadsFormTest extends TestCase
         $this->assertNotContains('snapshots', $this->tabIds($def));
     }
 
-    public function testFormIsFullSizeAndTitled(): void
+    public function testFormTitled(): void
     {
         $form = $this->createForm();
         $def = $form->buildFormDefinition([], true);
 
-        $this->assertTrue($def->fullSize);
         $this->assertSame('Doklad', $def->title);
         $this->assertSame('Nový doklad', $def->titleNew);
         $this->assertSame('docs_core_heads', $def->table);

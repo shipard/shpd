@@ -58,7 +58,6 @@ class JsoncFormLoaderTest extends TestCase
         {
             "title": "Kontakt",
             "titleNew": "Nový kontakt",
-            "fullSize": false,
             "tabs": [
                 {
                     "id": "basic",
@@ -89,7 +88,6 @@ class JsoncFormLoaderTest extends TestCase
 
         $this->assertSame('Kontakt', $def->title);
         $this->assertSame('Nový kontakt', $def->titleNew);
-        $this->assertFalse($def->fullSize);
         $this->assertCount(1, $def->tabs);
 
         $tab = $def->tabs[0];

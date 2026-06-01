@@ -99,7 +99,6 @@ class DocRowsForm extends TableForm
             title: 'Řádek dokladu',
             titleNew: 'Nový řádek',
             tabs: [$tab->build()],
-            fullSize: false,
         );
     }
 

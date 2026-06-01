@@ -31,7 +31,6 @@ class UnitsForm extends TableForm
             title: 'Měrná jednotka',
             titleNew: 'Nová měrná jednotka',
             tabs: [$basic, $this->attachmentsTab()],
-            fullSize: false,
         );
     }
 

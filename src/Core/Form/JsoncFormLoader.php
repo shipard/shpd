@@ -15,7 +15,7 @@ use Shipard\Core\Utils\JsoncParser;
  *
  * Expected source shape (camelCase keys for hand-authored fields):
  *   {
- *     "title": "...", "titleNew": "...", "fullSize": false,
+ *     "title": "...", "titleNew": "...",
  *     "tabs": [
  *       { "id": "...", "label": "...", "type": "fields" /* default *\/,
  *         "sections": [
@@ -63,7 +63,6 @@ class JsoncFormLoader
             title: $data['title'] ?? $tableDef->name,
             titleNew: $data['titleNew'] ?? $data['title'] ?? $tableDef->name,
             tabs: $tabs,
-            fullSize: $data['fullSize'] ?? false,
         );
     }
 

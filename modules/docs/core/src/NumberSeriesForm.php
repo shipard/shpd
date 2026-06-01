@@ -45,7 +45,6 @@ class NumberSeriesForm extends TableForm
             title: 'Číselná řada',
             titleNew: 'Nová číselná řada',
             tabs: [$basic, $this->attachmentsTab()],
-            fullSize: false,
         );
     }
 

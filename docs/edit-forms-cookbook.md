@@ -44,7 +44,6 @@ Když nestačí JSONC, nepřepisuj — vytvoř PHP třídu. `JsoncFormLoader` ak
 {
     "title": "Kontakt",
     "titleNew": "Nový kontakt",
-    "fullSize": false,
     "tabs": [
         {
             "id": "basic",
@@ -289,14 +288,9 @@ Labely a placeholders u inputů se typicky berou z TableDefinition, takže tam v
 
 ---
 
-## 13. `fullSize` — velikost modalu
+## 13. Velikost modalu
 
-```jsonc
-"fullSize": true   // 1200 × 900 px — pro hlavní entity (Osoby, Faktury…)
-"fullSize": false  // 960 px × dle obsahu — pro sub-záznamy (Kontakt, Adresa…)
-```
-
-Vždy Modal, jen rozdíl ve velikosti. `false` se hodí pro krátké formuláře otevírané z subtable.
+Velikost modalu se neřídí per-formulář. Všechny top-level modaly mají 1200×900, vnořené se automaticky zmenšují přes depth-shrink (viz `docs/edit-forms.md` kap. 9).
 
 ---
 
@@ -329,7 +323,6 @@ class PersonsForm extends TableForm
             title: 'Osoba',
             titleNew: 'Nová osoba',
             tabs: [$basic],
-            fullSize: true,
         );
     }
 }
@@ -482,7 +475,6 @@ return new FormDefinition(
     title: 'Osoba',
     titleNew: 'Nová osoba',
     tabs: [$basic, $contacts, $addresses, $attachments, $settings],
-    fullSize: true,
 );
 ```
 
@@ -503,7 +495,7 @@ $this->subtableTab(
 # Časté chyby
 
 - **`lookup` v `inline`** — vyhodí `InvalidArgumentException` v konstruktoru `FormElement`. Inline povoluje jen `input` a `select`. Pro lookup udělej vlastní řádku v sloupci.
-- **JSONC zápis vs. wire formát** — v JSONC piš `camelCase` (`titleNew`, `inputType`, `fullSize`, `foreignKey`, `formId`, `tableId`, `readOnly`). Loader převede na `snake_case` pro frontend.
+- **JSONC zápis vs. wire formát** — v JSONC piš `camelCase` (`titleNew`, `inputType`, `foreignKey`, `formId`, `tableId`, `readOnly`). Loader převede na `snake_case` pro frontend.
 - **Šířka labelu** — synchronizuje se per-sloupec (CSS Grid `max-content 1fr`), **ne** napříč celou sekcí. Dva vedlejší sloupce v jedné sekci mohou mít různě široké label-dráhy. To je záměr.
 - **`separator` `hidden`** — nenastavuj ručně. `autoHideSeparators` v `TabBuilder::build()` ho skryje, pokud jsou všechny elementy za ním ve stejném sloupci skryté.
 - **Pořadí scopů PHP builderu** — `tab() → section() → col() → element` (nebo `inline()`). Skipnutí úrovně → `LogicException`. `endInline()` je jediný explicitní close, který musíš volat.

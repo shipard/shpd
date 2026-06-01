@@ -438,7 +438,7 @@
 
   .shpd-lookup__input {
     width: 100%;
-    padding: var(--shpd-space-sm);
+    padding: var(--shpd-input-padding-y) var(--shpd-space-sm);
     /* Rezerva pro clear button. Při edit + clear se zvětší přes modifier. */
     padding-right: calc(var(--shpd-space-lg) + var(--shpd-space-sm));
     border: 1px solid var(--shpd-color-border);

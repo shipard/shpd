@@ -40,7 +40,7 @@
   .shpd-form-tab {
     display: flex;
     flex-direction: column;
-    gap: var(--shpd-space-lg);
-    padding: var(--shpd-space-lg);
+    gap: var(--shpd-form-section-gap);
+    padding: var(--shpd-space-sm) var(--shpd-space-md);
   }
 </style>

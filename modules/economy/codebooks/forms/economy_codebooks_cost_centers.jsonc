@@ -5,7 +5,6 @@
     "titleNew": "Nové středisko",
     "titleNew:cs": "Nové středisko",
     "titleNew:en": "New cost center",
-    "fullSize": false,
     "tabs": [
         {
             "id": "basic",

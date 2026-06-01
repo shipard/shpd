@@ -40,7 +40,6 @@ class FiscalYearsForm extends TableForm
             title: 'Fiskální rok',
             titleNew: 'Nový fiskální rok',
             tabs: [$basic, $months],
-            fullSize: true,
         );
     }
 }

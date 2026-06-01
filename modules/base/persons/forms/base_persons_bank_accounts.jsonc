@@ -5,7 +5,6 @@
     "titleNew": "Nový bankovní účet",
     "titleNew:cs": "Nový bankovní účet",
     "titleNew:en": "New bank account",
-    "fullSize": false,
     "tabs": [
         {
             "id": "basic",

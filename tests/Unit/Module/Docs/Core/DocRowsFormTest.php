@@ -31,13 +31,12 @@ class DocRowsFormTest extends TestCase
         return null;
     }
 
-    public function testFormHasSingleTabSmallSize(): void
+    public function testFormHasSingleTab(): void
     {
         $form = $this->createForm();
         $def = $form->buildFormDefinition([], true);
 
         $this->assertCount(1, $def->tabs);
-        $this->assertFalse($def->fullSize);
     }
 
     public function testTextRowKindHidesItemAndPriceFields(): void

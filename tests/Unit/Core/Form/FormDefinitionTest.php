@@ -36,7 +36,6 @@ class FormDefinitionTest extends TestCase
             title: 'Edit Record',
             titleNew: 'New Record',
             tabs: [$this->singleFieldTab()],
-            fullSize: true,
         );
 
         $arr = $def->toArray();
@@ -44,7 +43,6 @@ class FormDefinitionTest extends TestCase
         $this->assertSame('test_table', $arr['table']);
         $this->assertSame('Edit Record', $arr['title']);
         $this->assertSame('New Record', $arr['title_new']);
-        $this->assertTrue($arr['full_size']);
         $this->assertCount(1, $arr['tabs']);
         $this->assertSame('basic', $arr['tabs'][0]['id']);
         $this->assertSame('fields', $arr['tabs'][0]['type']);

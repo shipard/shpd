@@ -111,15 +111,18 @@
 
   // Side offset (px na každé straně) pro vnořený modal. 30px x depth → vnořený
   // je o 60px užší/nižší než rodič a vycentrovaný → rodič vykřukuje ze všech stran.
+  // Inline max-width/max-height musí přepsat CSS pravidla (max-width: 100vw-2*lg,
+  // max-height: 90vh), jinak by se na úzkém/nízkém viewportu obě hloubky capnuly na
+  // stejnou hodnotu a depth-shrink by nebyl vidět.
   const cardStyle = $derived.by(() => {
     const off = depth * 30;
     if (width === 'full') {
-      return `width: calc(95vw - ${off * 2}px); max-width: calc(95vw - ${off * 2}px); height: calc(95vh - ${off * 2}px);`;
+      return `width: calc(95vw - ${off * 2}px); max-width: calc(95vw - ${off * 2}px); height: calc(95vh - ${off * 2}px); max-height: calc(95vh - ${off * 2}px);`;
     }
     if (height) {
-      return `width: calc(${width} - ${off * 2}px); height: min(calc(${height} - ${off * 2}px), 90vh);`;
+      return `width: calc(${width} - ${off * 2}px); max-width: calc(100vw - var(--shpd-space-lg) * 2 - ${off * 2}px); height: calc(${height} - ${off * 2}px); max-height: calc(90vh - ${off * 2}px);`;
     }
-    return `width: calc(${width} - ${off * 2}px);`;
+    return `width: calc(${width} - ${off * 2}px); max-width: calc(100vw - var(--shpd-space-lg) * 2 - ${off * 2}px);`;
   });
 </script>
 
@@ -209,7 +212,7 @@
     display: flex;
     align-items: center;
     gap: var(--shpd-space-md);
-    padding: var(--shpd-space-md) var(--shpd-space-lg);
+    padding: var(--shpd-space-sm) var(--shpd-space-lg);
     border-bottom: 1px solid var(--shpd-color-border);
     flex-shrink: 0;
   }

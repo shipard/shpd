@@ -5,8 +5,6 @@
     "titleNew": "Nový kontakt",
     "titleNew:cs": "Nový kontakt",
     "titleNew:en": "New contact",
-    "fullSize": false,
-
     "tabs": [
         {
             "id": "basic",

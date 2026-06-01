@@ -77,14 +77,6 @@ class PersonsFormTest extends TestCase
         );
     }
 
-    public function testFormFullSize(): void
-    {
-        $form = $this->createForm();
-        $def  = $form->buildFormDefinition(['person_type' => 2], false);
-
-        $this->assertTrue($def->fullSize);
-    }
-
     public function testFormTitles(): void
     {
         $form = $this->createForm();

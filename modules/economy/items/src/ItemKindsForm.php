@@ -32,7 +32,6 @@ class ItemKindsForm extends TableForm
             title: 'Druh položky',
             titleNew: 'Nový druh položky',
             tabs: [$basic, $this->attachmentsTab()],
-            fullSize: false,
         );
     }
 

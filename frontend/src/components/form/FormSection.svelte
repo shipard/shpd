@@ -43,7 +43,7 @@
     background: var(--shpd-color-bg-secondary);
     border: 1px solid var(--shpd-color-border-subtle);
     border-radius: var(--shpd-radius-md);
-    padding: var(--shpd-space-md) var(--shpd-space-lg);
+    padding: var(--shpd-form-section-padding-y) var(--shpd-space-lg);
   }
 
   .shpd-form-section__title {

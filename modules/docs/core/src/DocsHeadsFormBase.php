@@ -62,7 +62,6 @@ abstract class DocsHeadsFormBase extends TableForm
             title: $this->getFormTitle(),
             titleNew: $this->getNewFormTitle(),
             tabs: $tabs,
-            fullSize: true,
         );
     }
 

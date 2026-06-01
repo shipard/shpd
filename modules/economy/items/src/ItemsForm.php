@@ -66,7 +66,6 @@ class ItemsForm extends TableForm
             title: 'Položka',
             titleNew: 'Nová položka',
             tabs: [$basic, $description, $this->attachmentsTab()],
-            fullSize: true,
         );
     }
 

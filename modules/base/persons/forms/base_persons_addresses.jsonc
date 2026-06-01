@@ -5,7 +5,6 @@
     "titleNew": "Nová adresa",
     "titleNew:cs": "Nová adresa",
     "titleNew:en": "New address",
-    "fullSize": false,
     "tabs": [
         {
             "id": "address",

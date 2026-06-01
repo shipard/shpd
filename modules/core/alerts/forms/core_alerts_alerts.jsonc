@@ -6,8 +6,6 @@
     // Tenhle form je read-only pohled používaný leda když by se v budoucnu
     // v UI dalo otevřít detail alertu jako modál (zatím není ani toolbar
     // "Open" action, viz AlertsViewer::getToolbarActions).
-    "fullSize": false,
-
     "tabs": [
         {
             "id": "detail",

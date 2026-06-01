@@ -55,7 +55,6 @@ Server vrací `FormDefinition` z endpointu `/_ui/form/{table}/meta`. Klient ji r
         "table": "base_persons_persons",
         "title": "Osoba",
         "title_new": "Nová osoba",
-        "full_size": true,
         "tabs": [ { "...tab..." } ],
         "doc_states": {
             "currentState": 10,
@@ -75,14 +74,13 @@ Server vrací `FormDefinition` z endpointu `/_ui/form/{table}/meta`. Klient ji r
 }
 ```
 
-**Poznámka:** Všechny klíče jsou snake_case — `full_size`, `title_new`, `doc_states`, `read_only`, `close_form`, `foreign_key`, `form_id`, `input_type`, `table_id`, `component_name`.
+**Poznámka:** Všechny klíče jsou snake_case — `title_new`, `doc_states`, `read_only`, `close_form`, `foreign_key`, `form_id`, `input_type`, `table_id`, `component_name`.
 
 | Pole | Typ | Popis |
 |------|-----|-------|
 | `table` | string | DB název tabulky |
 | `title` | string | Nadpis pro editaci existujícího záznamu |
 | `title_new` | string | Nadpis pro nový záznam |
-| `full_size` | bool | true = velký modal (1200×900px) pro hlavní entity, false = malý modal (960px, výška dle obsahu) pro sub-záznamy |
 | `tabs` | Tab[] | Seznam tabů (min. 1) |
 | `doc_states` | DocStatesInfo \| null | Info o stavech; přítomno i pro nový záznam (výchozí stav 10) |
 
@@ -469,19 +467,47 @@ existující záznam (přechod stavu naostro je až druhý PUT s `{docState}`).
 
 ---
 
-## 9. fullSize flag — velikost modalu
+## 9. Velikost modalu
 
-`FormDialog.svelte` vždy renderuje formulář v Modal komponentě (centrovaný popup nad tmavým overlayem). `full_size` určuje pouze **velikost** modalu:
+`FormDialog.svelte` vždy renderuje formulář v Modal komponentě (centrovaný popup nad tmavým overlayem). Velikost top-level modalu se plynule škáluje podle velikosti okna přes CSS `clamp()`:
 
-- `true` → velký modal: šířka `1200px`, výška `min(900px, 90vh)`. Pro hlavní entity (Osoby, Faktury…).
-- `false` → malý modal: šířka `960px`, výška dle obsahu (max `90vh`). Pro sub-záznamy (Kontakt, Adresa, Bankovní účet…).
+```
+width:  clamp(1200px, 80vw, 1700px)
+height: clamp(720px, 88vh, 1100px)
+```
+
+- **Spodní mez (1200 × 720)** — co se nikdy nepodleze. Na malých laptopech (1366×768) modal nevyleze mimo viewport, formulář scrolluje.
+- **Preferovaná (80vw × 88vh)** — co se vykreslí, když není uplatněna mez. Na FHD (1920×1080) vyjde cca 1536 × 950.
+- **Horní mez (1700 × 1100)** — strop. 1700 px je hranice, kde 2–3sloupcový layout sekcí ještě zůstává čitelný (label vlevo, input vpravo nepřeskakují přes půl obrazovky); 1100 px stačí i pro nejdelší formy.
+
+Žádný flag, žádné rozhodování per-formulář — všechny top-level modaly se škálují stejně bez ohledu na počet polí. `clamp()` je předaný z `FormDialog` jako `width` / `height` prop; `Modal.svelte` ho použije beze změny (skládá `calc(${width} − offset)` pro depth-shrink, `clamp()` uvnitř `calc()` je validní CSS).
 
 ### Chování modalu
 
-- **Header** — Modal vlastní header s titulkem (`formDef.title` / `formDef.title_new`), `FormStateBadge` (přes `headerExtra` snippet) a tlačítkem `×` vpravo nahoře. FormEditor vlastní header nemá.
-- **Body skroluje** — header a `FormStateBar` zůstávají fixní, skroluje pouze tělo formuláře.
+- **Header** — Modal vlastní header s titulkem (`formDef.title` / `formDef.title_new` / `header_info.title`), `FormStateBadge` (přes `headerExtra` snippet) a tlačítkem `×` vpravo nahoře. FormEditor vlastní header nemá.
+- **Body skroluje** — header a `FormStateBar` zůstávají fixní, skroluje pouze tělo formuláře. Pro krátké formuláře (Úkol) zůstává prázdný prostor pod posledním polem — záměrný kompromis pro konzistenci napříč aplikací.
 - **Zavření** — `Esc` nebo klik na overlay (mimo kartu modalu) nebo tlačítko `×`. Všechny tři způsoby volají stejný `onClose` callback.
 - **Body scroll lock** — modal blokuje scrollování stránky pod sebou.
+
+### Vrstvení modalů (Esc handling a depth shrink)
+
+`Modal.svelte` používá module-level stack otevřených modalů. Slouží dvěma účelům:
+
+**Esc handling** — Esc handler reaguje pouze na modal na vrcholu stacku. Bez tohoto by Esc v subdialogu Kontaktu zavřel současně Kontakt i nadřazenou Osobu (oba modaly poslouchají window keydown). Klik na overlay tento problém nemá — overlay každého modalu zachytí jen kliky na vlastní plochu. Tlačítko `×` je per-modal element. Esc je ale globální event, proto vyžaduje stack.
+
+**Depth-based shrink** — každý modal si při `pushModal()` zjistí svoji hloubku ve stacku (0 = kořenový, 1 = vnořený, atd.). Podle hloubky se `cardStyle` zmenší o 30 px na každé straně (60 px celkem na šířku i výšku). Vnořený modal je tak vycentrovaný a všechny strany rodičovského modalu rovnoměrně vyčnívají — uživatel vidí hierarchii. Funguje pro libovolnou hloubku vnoření (Doklad → Řádek → Položka = depth 2 → položka modal je o 120 px užší/nižší než doklad).
+
+Konkrétní offsety podle hloubky (odecténo od aktuálně vypočtené `clamp()` velikosti na každé straně):
+
+| Depth | Offset / strana | Celá šířka i výška |
+|-------|-----------------|----------------------|| 0     | 0 px            | bez změny            |
+| 1     | 30 px           | −60 px               |
+| 2     | 60 px           | −120 px              |
+| 3     | 90 px           | −180 px              |
+
+Shrink je **fixní v px** (30 px / úroveň), ne procentuální — slouží k rozpoznání hierarchie, ne k proporcionálnímu škálování. Aplikuje se na vypočtenou velikost po `clamp()`, takže na širokém monitoru (modal u stropu 1700 px) i na laptopu (modal u spodní meze 1200 px) je vnořený modal vždy o 60 px užší/nižší než jeho rodič.
+
+Mechanismus je generický na úrovni `Modal.svelte` — žádný kontext o tom, kdo je rodič/dítě. Funguje pro všechny vnořené modaly (FormSubTable child rows, LookupInput edit/create dialog, budoucí scénáře).
 
 ### Detekce neuložených změn (dirty state)
 
@@ -499,16 +525,6 @@ FormEditor sleduje změny dat oproti snapshotu pořízenému při posledním na�
 Důvod existence tohoto mechanismu je timing Svelte reaktivity. Když FormEditor po uspěšném save aktualizuje snapshot, `isDirty` derived state se přepočítá až v dalším mikrotasku. Pokud by FormEditor okamžitě synchronně zavolal `onClose()`, FormDialog by ještě viděl starý `isDirty: true` a zobrazil by zbytečný confirm. `force: true` to obchází bez závislosti na pořadí reaktivních updatů.
 
 Modal komponenta (Esc, klik na overlay, `×`) volá `onClose()` bez parametru — tyto akce **mají** procházet dirty kontrolou. `force: true` posílá pouze FormEditor po vlastním úspěšném uložení.
-
-### Vrstvení modalů (Esc handling a depth shrink)
-
-`Modal.svelte` používá module-level stack otevřených modalů. Slouží dvěma účelům:
-
-**Esc handling** — Esc handler reaguje pouze na modal na vrcholu stacku. Bez tohoto by Esc v subdialogu Kontaktu zavřel současně Kontakt i nadřazenou Osobu (oba modaly poslouchají window keydown). Klik na overlay tento problém nemá — overlay každého modalu zachytí jen kliky na vlastní plochu. Tlačítko `×` je per-modal element. Esc je ale globální event, proto vyžaduje stack.
-
-**Depth-based shrink** — každý modal si při `pushModal()` zjistí svoji hloubku ve stacku (0 = kořenový, 1 = vnořený, atd.). Podle hloubky se `cardStyle` zmenší o 30 px na každé straně (60 px celkem na šířku i výšku). Vnořený modal je tak vycentrovaný a všechny strany rodičovského modalu rovnoměrně vyčnívají — uživatel vidí hierarchii. Funguje pro libovolnou hloubku vnoření (např. Doklad → Řádek → Položka = depth 2, položka modal je o 120 px užší/nižší než doklad).
-
-Mechanismus je generický na úrovni `Modal.svelte` — žádný kontext o tom, kdo je rodič/dítě. Funguje pro všechny vnořené modaly (FormSubTable child rows, LookupInput edit/create dialog, budoucí scenáře).
 
 ---
 
@@ -647,13 +663,12 @@ Pro jednoduché formuláře bez business logiky.
 
 **Umístění:** `modules/{skupina}/{modul}/forms/{table}.jsonc`
 
-JSONC source používá **camelCase** klíče (`titleNew`, `fullSize`, `readOnly`, `inputType`, `tableId`, `foreignKey`, `formId`). Loader je mapuje na snake_case wire formát při serializaci.
+JSONC source používá **camelCase** klíče (`titleNew`, `readOnly`, `inputType`, `tableId`, `foreignKey`, `formId`). Loader je mapuje na snake_case wire formát při serializaci.
 
 ```jsonc
 {
     "title": "Kontakt",
     "titleNew": "Nový kontakt",
-    "fullSize": false,
     "tabs": [
         {
             "id": "basic",
@@ -797,7 +812,7 @@ Pro polymorfní tabulky (jeden physický řádek může reprezentovat víc logic
 | Komponenta | Popis |
 |------------|-------|
 | `Modal.svelte` (ui/) | Generický modal: header s titulkem a `×`, tělo, overlay, body scroll lock, modal stack pro Esc handling. Volitelný `headerExtra` snippet pro badge, `width` a `height` props. |
-| `FormDialog.svelte` | Orchestrátor — načte meta, vybere velikost modalu (large/small), poskytuje header (titulek + badge), drží dirty stav, zobrazí confirm při zavření |
+| `FormDialog.svelte` | Orchestrátor — Modal s škálující se velikostí (clamp 1200–1700 px), poskytuje header (titulek + badge + subtitle + summary), drží dirty stav, zobrazí confirm při zavření. Meta načítá FormEditor uvnitř. |
 | `FormEditor.svelte` | Hlavní shell: tab bar, obsah, toolbar (header je v Modal). Sleduje dirty stav (snapshot vs aktuální data), propaguje titulek/doc_states/dirty zpět do FormDialog přes callbacky `onFormLoaded` a `onDirtyChange` |
 | `FormTab.svelte` | Jeden tab — vykreslí sekce / subtable / attachments podle `tab.type` |
 | `FormSection.svelte` | Karta s pozadím a volitelným titulkem; horizontální grid pro N sloupců |
@@ -960,6 +975,7 @@ Layout systém byl v PR „new-forms-01" kompletně přepracován:
 - **Vizuál:** Sekce mají kartové pozadí (`--shpd-color-bg-secondary`) a jemnou hranu (`--shpd-color-border-subtle`). Labely vlevo s auto-šířkou v rámci sloupce (CSS Grid `max-content 1fr`).
 - **Builder:** `TabBuilder` má scope management `section() → col() → elementy`. Bez `addInput`/`addSelect` prefixu; metody se jmenují podle widgetu (`input`, `select`, `date`, `textarea`, `checkbox`, …).
 - **JSONC:** stará struktura `tabs[].elements[]` s `cols` čísly je odmítnuta `JsoncFormLoader`em s konkrétní hláškou.
+- **`fullSize` flag odstraněn.** Všechny modaly mají jednotnou velikost, vnořené přes existující depth-shrink mechanismus (kap. 9). Žádný flag v JSONC ani PHP, žádný `full_size` ve wire formátu. Následně velikost top-level modalu přešla z pevných 1200×900 na `clamp(1200px, 80vw, 1700px)` × `clamp(720px, 88vh, 1100px)` — na větších monitorech se modal roztahuje, méně se scrolluje.
 
 Žádná backward compatibility — staré formy bylo nutné mechanicky portovat.
 

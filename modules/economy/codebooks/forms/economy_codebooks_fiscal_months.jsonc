@@ -5,8 +5,6 @@
     "titleNew": "Nový fiskální měsíc",
     "titleNew:cs": "Nový fiskální měsíc",
     "titleNew:en": "New fiscal month",
-    "fullSize": false,
-
     "tabs": [
         {
             "id": "basic",

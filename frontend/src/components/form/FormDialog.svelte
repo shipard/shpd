@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { get } from '../../api/client.js';
   import Modal from '../ui/Modal.svelte';
   import Icon from '../ui/Icon.svelte';
   import FormEditor from './FormEditor.svelte';
@@ -33,16 +32,6 @@
     defaultData = {},
   }: Props = $props();
 
-  // Velikosti modalu pro hlavní (full_size: true) a sub (full_size: false) formuláře.
-  const LARGE_WIDTH = '1200px';
-  const LARGE_HEIGHT = '900px';
-  const SMALL_WIDTH = '960px';
-
-  // Meta načtená před otevřením modalu — určuje velikost a (po načtení FormEditorem)
-  // titulek a stavový badge v headeru.
-  let fullSize = $state(false);
-  let metaLoaded = $state(false);
-
   // Aktuální titulek a doc_states z formuláře — aktualizuje se přes onFormLoaded
   // callback z FormEditor po každém (re)loadu formuláře.
   let currentTitle = $state('');
@@ -55,24 +44,12 @@
   // Při pokusu o zavření (Esc, klik na overlay, křížek) se zobrazí potvrzovací dialog.
   let isDirty = $state(false);
 
-  async function checkFullSize(tbl: string, id: number | null) {
-    const path = id != null ? `/_ui/form/${tbl}/meta/${id}` : `/_ui/form/${tbl}/meta`;
-    const res = await get(path);
-    if (res?.success) {
-      fullSize = res.data?.formDefinition?.full_size ?? false;
-    }
-    metaLoaded = true;
-  }
-
   $effect(() => {
     if (open) {
-      metaLoaded = false;
-      fullSize = false;
       currentTitle = '';
       currentDocStates = null;
       savedHeaderInfo = null;
       isDirty = false;
-      checkFullSize(table, recordId);
     }
   });
 
@@ -83,7 +60,6 @@
       const confirmed = window.confirm(t('form.unsavedChanges'));
       if (!confirmed) return;
     }
-    metaLoaded = false;
     isDirty = false;
     onClose();
   }
@@ -163,13 +139,13 @@
   {/if}
 {/snippet}
 
-{#if open && metaLoaded}
+{#if open}
   <Modal
     title={headerTitle}
     open={true}
     onClose={handleClose}
-    width={fullSize ? LARGE_WIDTH : SMALL_WIDTH}
-    height={fullSize ? LARGE_HEIGHT : undefined}
+    width="clamp(1200px, 80vw, 1700px)"
+    height="clamp(720px, 88vh, 1100px)"
     subtitle={hasHeaderInfo ? subtitleSnippet : undefined}
     iconSlot={hasIcon ? iconSnippet : undefined}
     summary={hasSummary ? summarySnippet : undefined}

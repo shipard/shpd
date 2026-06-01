@@ -5,7 +5,6 @@
     "titleNew": "Nový sklad",
     "titleNew:cs": "Nový sklad",
     "titleNew:en": "New warehouse",
-    "fullSize": false,
     "tabs": [
         {
             "id": "basic",

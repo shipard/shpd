@@ -228,14 +228,6 @@ class AutoFormBuilderTest extends TestCase
         $this->assertFalse($elByCol['status']->required);
     }
 
-    public function testFullSizeDefaultsFalse(): void
-    {
-        $def = $this->makeTableDef([
-            ['id' => 'name', 'name' => 'Name', 'type' => 'varchar', 'length' => 50],
-        ]);
-        $this->assertFalse((new AutoFormBuilder())->build($def)->fullSize);
-    }
-
     public function testDocStatesIsNullByDefault(): void
     {
         $def = $this->makeTableDef([

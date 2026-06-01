@@ -14,7 +14,6 @@ class FormDefinition
         public readonly string $title,
         public readonly string $titleNew,
         public readonly array $tabs,
-        public readonly bool $fullSize = false,
         public ?array $docStates = null,
         public ?FormHeaderInfo $headerInfo = null,
     ) {}
@@ -43,7 +42,6 @@ class FormDefinition
                 fn(FormTab $tab) => $tab->toArray(),
                 $this->tabs,
             ),
-            'full_size'   => $this->fullSize,
             'header_info' => $this->headerInfo?->toArray(),
         ];
 

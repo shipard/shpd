@@ -8,16 +8,15 @@ use PHPUnit\Framework\TestCase;
 use Shipard\Core\Utils\JsoncParser;
 
 /**
- * The AI profile's `output_schema.documents.items.fields` is an inline
- * copy of `modules/core/exchange/schemas/shpd.docs.document.v1.json`.
+ * The AI profile's `output_schema.documents.items.extracted_json` is an
+ * inline copy of `modules/core/exchange/schemas/shpd.docs.document.v1.json`.
  * Analyzers receive `output_schema` over the wire (`/claim` response)
  * and don't resolve `$ref` across files, so we keep the canonical schema
  * inlined. This test catches drift when one is updated and the other
  * isn't.
  *
- * Repair: regenerate the profile with /tmp/build_profile.php or copy
- * `shpd.docs.document.v1.json` content into the `fields` value of the
- * profile JSONC.
+ * Repair: copy `shpd.docs.document.v1.json` content into the
+ * `extracted_json` value of the profile JSONC.
  */
 class ProfileSchemaDriftTest extends TestCase
 {
@@ -37,14 +36,14 @@ class ProfileSchemaDriftTest extends TestCase
         $this->assertIsArray($canonical, 'canonical schema must be valid JSON');
         $this->assertIsArray($profile, 'profile JSONC must parse');
 
-        $fields = $profile['output_schema']['properties']['documents']['items']['properties']['fields'] ?? null;
-        $this->assertIsArray($fields, 'profile output_schema.documents.items.properties.fields missing');
+        $extractedJson = $profile['output_schema']['properties']['documents']['items']['properties']['extracted_json'] ?? null;
+        $this->assertIsArray($extractedJson, 'profile output_schema.documents.items.properties.extracted_json missing');
 
         $this->assertSame(
             $canonical,
-            $fields,
-            "Drift between canonical schema and profile's inline `fields`. "
-                . "Regenerate the profile from shpd.docs.document.v1.json (see /tmp/build_profile.php).",
+            $extractedJson,
+            "Drift between canonical schema and profile's inline `extracted_json`. "
+                . "Copy shpd.docs.document.v1.json content into the profile's `extracted_json`.",
         );
     }
 

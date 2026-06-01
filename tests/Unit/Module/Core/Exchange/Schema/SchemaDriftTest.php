@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Shipard\Tests\Unit\Module\Core\Exchange\Schema;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Shipard\Core\Utils\JsoncParser;
 
@@ -27,9 +28,7 @@ class SchemaDriftTest extends TestCase
         ];
     }
 
-    /**
-     * @dataProvider schemaProvider
-     */
+    #[DataProvider('schemaProvider')]
     public function testJsoncAndJsonAreEquivalent(string $name): void
     {
         $base = dirname(__DIR__, 6) . '/modules/core/exchange/schemas';

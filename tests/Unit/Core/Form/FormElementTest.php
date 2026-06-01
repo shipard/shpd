@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Shipard\Tests\Unit\Core\Form;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Shipard\Core\Form\FormElement;
 
@@ -27,9 +28,7 @@ class FormElementTest extends TestCase
         ];
     }
 
-    /**
-     * @dataProvider validInputTypesProvider
-     */
+    #[DataProvider('validInputTypesProvider')]
     public function testValidInputTypesPass(?string $inputType): void
     {
         $el = new FormElement(type: 'input', column: 'x', inputType: $inputType);

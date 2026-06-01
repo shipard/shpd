@@ -240,6 +240,43 @@ provisioner detailů použij `-v`:
 shpd-ds ds-upgrade -v
 ```
 
+#### `ds-reset`
+
+```bash
+cd /opt/shipard/data-sources/<id>
+sudo shpd-ds ds-reset --dry-run     # co by se smazalo
+sudo shpd-ds ds-reset               # interaktivní potvrzení [y/N]
+sudo shpd-ds ds-reset -y            # bez potvrzení (skriptování)
+sudo shpd-ds ds-reset --keep=core_mail_mailboxes -y
+```
+
+Uvede DS do čistého stavu pro **opakovaný test kompletního importu**.
+Smaže všechny „datové" tabulky (číselníky, osoby, položky, doklady, došlá
+pošta, …) a delegací na `ds-upgrade` znovu vytvoří schéma i referenční data.
+
+Které tabulky reset přežijí, se řeší **deklarativně** polem `keepOnReset`
+v `module.jsonc` každého modulu (viz [docs/modules.md](modules.md)). Ve
+výchozím stavu zůstávají:
+
+- `core.system` — uživatelé, relace, nastavení, API klíče (vč. importního),
+  rate limity (login funguje i po resetu),
+- `core.mail` — `core_mail_ai_backends` kvůli zašifrovanému AI klíči
+  (`ai-analyzer-set-key`).
+
+Vše ostatní se dropuje, **včetně osiřelých tabulek** po odebraných modulech
+(`dropSet` = existující tabulky − `keepSet`). Pokud se dropuje
+`core_attachments_files`, vyčistí se i obsah `att/` a `cache/thumbnails/`
+(prázdné adresáře `ds-upgrade` následně znovu zajistí).
+
+**Produkční pojistka:** v `production` módu příkaz tvrdě odmítne (`FAILURE`)
+bez jakéhokoliv dropu — je to záměrně destruktivní vývojový/testovací nástroj.
+
+| Opce | Význam |
+|------|--------|
+| `--keep <tabulka>` | ad-hoc další tabulka k zachování (opakovatelné); aditivní k deklarativní `keepOnReset` |
+| `--dry-run` | vypsat `[keep]`/`[drop]` a počty, nic neměnit |
+| `--yes`, `-y` | přeskočit potvrzovací dotaz |
+
 ### Users
 
 #### `user-create`
@@ -614,6 +651,14 @@ sudo shpd-ds ds-secrets-rotate            # provést
 sudo shpd-ds ds-secrets-health
 ```
 
+### 7. Opakovaný test importu
+
+```bash
+cd /opt/shipard/data-sources/<id>
+sudo shpd-ds ds-reset -y            # čistý stav (zůstane login + importní API klíč)
+# … spustit import ze starého Shipardu …
+```
+
 ---
 
 ## Konvence
@@ -649,6 +694,10 @@ sudo shpd-ds ds-secrets-health
 být idempotentní — opakované spuštění bez efektu, pokud se nic nezměnilo.
 To je conscious design choice; umožňuje pouštět `ds-upgrade-all` po každém
 deployi bez obav.
+
+Výjimkou je `ds-reset` — ten je **záměrně destruktivní** (vždy dropuje
+datové tabulky a rekreuje schéma, není idempotentní v běžném smyslu), ale
+je bezpečný k opakování: opakovaný běh skončí znovu čistým stavem.
 
 ---
 

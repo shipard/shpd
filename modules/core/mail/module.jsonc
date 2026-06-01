@@ -24,6 +24,13 @@
         "core_mail_analysis_claims"
     ],
 
+    // ds-reset chrání jen AI backend kvůli zašifrovanému API klíči
+    // (ai-analyzer-set-key). Schránky, profily, zprávy, analýzy
+    // i extrahované doklady se resetují.
+    "keepOnReset": [
+        "core_mail_ai_backends"
+    ],
+
     "viewers": [
         {
             "id": "core.mail.incoming",

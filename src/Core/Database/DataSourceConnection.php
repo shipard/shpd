@@ -73,6 +73,22 @@ class DataSourceConnection
         $this->connection->query($sql);
     }
 
+    /** @return string[] all base table names in the database */
+    public function getAllTableNames(): array
+    {
+        $rows = $this->connection->query('SHOW TABLES')->fetchAll();
+        $names = [];
+        foreach ($rows as $row) {
+            // SHOW TABLES returns rows keyed by a variable column name
+            // (`Tables_in_<db>`), so take the first value of each row.
+            foreach ($row as $value) {
+                $names[] = (string) $value;
+                break;
+            }
+        }
+        return $names;
+    }
+
     public function begin(): void
     {
         $this->connection->begin();

@@ -360,6 +360,36 @@ ID modulu přímo odpovídá cestě v souborovém systému:
 | `config` | object[] | Ne | Ne | Konfigurační položky modulu |
 | `config[].id` | string | Ano | Ne | Globální identifikátor konfigurace |
 | `config[].file` | string | Ano | Ne | Relativní cesta ke konfiguračnímu JSONC souboru |
+| `keepOnReset` | string[] | Ne | Ne | Vlastní tabulky modulu, které `shpd-ds ds-reset` nesmaže |
+
+### Pole `keepOnReset`
+
+Volitelné pole názvů **vlastních** tabulek modulu, které příkaz
+`shpd-ds ds-reset` nesmaže (systémové/konfigurační tabulky vs. data).
+Vše neuvedené reset dropuje a rekreuje. Položky musí být tabulky vlastněné
+tímto modulem (uvedené v `tables`), jinak nahlášení modulu skončí fatální
+chybou (záchyt překlepů a zákaz „chránit" cizí tabulku).
+
+Funguje i pro third-party moduly z `extraModulesPath` — každý modul si sám
+deklaruje, co je systém a co data.
+
+```jsonc
+// modules/core/system/module.jsonc — chráníme všechny systémové tabulky
+"keepOnReset": [
+    "core_system_users",
+    "core_system_sessions",
+    "core_system_settings",
+    "core_system_api_keys",
+    "core_system_rate_limits"
+]
+
+// modules/core/mail/module.jsonc — jen AI backend kvůli zašifrovanému API klíči
+"keepOnReset": [
+    "core_mail_ai_backends"
+]
+```
+
+Viz [docs/cli.md](cli.md) → `ds-reset`.
 
 ### Instalační modul — příklad
 

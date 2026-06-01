@@ -13,6 +13,15 @@
         "core_system_api_keys",
         "core_system_rate_limits"
     ],
+    // ds-reset nikdy nesmaže systémové tabulky — login, relace, nastavení,
+    // API klíče (vč. importního) a rate limity přežijí reset.
+    "keepOnReset": [
+        "core_system_users",
+        "core_system_sessions",
+        "core_system_settings",
+        "core_system_api_keys",
+        "core_system_rate_limits"
+    ],
     "config": [
         {
             "id": "core.system.docStatesArchive",

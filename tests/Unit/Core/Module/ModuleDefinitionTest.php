@@ -308,4 +308,71 @@ class ModuleDefinitionTest extends TestCase
             'alertChecks' => ['not-an-array'],
         ]);
     }
+
+    public function testKeepOnResetParsed(): void
+    {
+        $def = ModuleDefinition::fromArray([
+            'id'     => 'core.system',
+            'name'   => 'System',
+            'tables' => ['core_system_users', 'core_system_sessions'],
+            'keepOnReset' => ['core_system_users', 'core_system_sessions'],
+        ]);
+
+        $this->assertSame(['core_system_users', 'core_system_sessions'], $def->keepOnReset);
+    }
+
+    public function testKeepOnResetAbsentDefaultsToEmpty(): void
+    {
+        $def = ModuleDefinition::fromArray(['id' => 'base.persons', 'name' => 'Persons']);
+
+        $this->assertSame([], $def->keepOnReset);
+    }
+
+    public function testKeepOnResetForeignTableThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('not a table owned by this module');
+        ModuleDefinition::fromArray([
+            'id'     => 'core.system',
+            'name'   => 'System',
+            'tables' => ['core_system_users'],
+            'keepOnReset' => ['base_persons_persons'],
+        ]);
+    }
+
+    public function testKeepOnResetEmptyStringThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('must be a non-empty string');
+        ModuleDefinition::fromArray([
+            'id'     => 'core.system',
+            'name'   => 'System',
+            'tables' => ['core_system_users'],
+            'keepOnReset' => [''],
+        ]);
+    }
+
+    public function testKeepOnResetNonStringThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('must be a non-empty string');
+        ModuleDefinition::fromArray([
+            'id'     => 'core.system',
+            'name'   => 'System',
+            'tables' => ['core_system_users'],
+            'keepOnReset' => [123],
+        ]);
+    }
+
+    public function testKeepOnResetNotListThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('must be a JSON array of table names');
+        ModuleDefinition::fromArray([
+            'id'     => 'core.system',
+            'name'   => 'System',
+            'tables' => ['core_system_users'],
+            'keepOnReset' => ['key' => 'core_system_users'],
+        ]);
+    }
 }

@@ -27,6 +27,7 @@ class HelpCommand extends Command
         $output->writeln('  <info>version</info>                 Show Shipard data source tool version');
         $output->writeln('  <info>help</info>                    Show this help message');
         $output->writeln('  <info>ds-upgrade</info>              Upgrade the data source schema and configuration');
+        $output->writeln('  <info>ds-reset</info>                Reset the data source — drop all data tables and recreate them, keeping users, API keys and protected tables');
         $output->writeln('');
         $output->writeln('<comment>Users:</comment>');
         $output->writeln('  <info>user-create</info>             Create a new user in the data source');
@@ -58,6 +59,8 @@ class HelpCommand extends Command
         $output->writeln('');
         $output->writeln('<comment>Examples:</comment>');
         $output->writeln('  shpd-ds ds-upgrade');
+        $output->writeln('  shpd-ds ds-reset --dry-run');
+        $output->writeln('  shpd-ds ds-reset -y');
         $output->writeln('  shpd-ds user-create --login=admin --password=...');
         $output->writeln('  shpd-ds ai-analyzer-set-key --key=<api-key>');
         $output->writeln('  shpd-ds ds-secrets-rotate --dry-run');

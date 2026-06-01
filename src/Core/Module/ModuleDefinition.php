@@ -20,6 +20,7 @@ class ModuleDefinition
         public readonly array $settingsItems,
         public readonly array $lookups = [],
         public readonly array $alertChecks = [],
+        public readonly array $keepOnReset = [],
     ) {}
 
     public static function fromArray(array $data): self
@@ -97,6 +98,33 @@ class ModuleDefinition
             }
         }
 
+        // keepOnReset — names of this module's OWN tables that `ds-reset`
+        // must not drop (system/config tables vs. data). Items must be
+        // strings and must be tables owned by this module (catches typos
+        // and forbids "protecting" a foreign table).
+        $keepOnReset = [];
+        if (isset($data['keepOnReset'])) {
+            if (!is_array($data['keepOnReset']) || !array_is_list($data['keepOnReset'])) {
+                throw new \InvalidArgumentException(
+                    "Module '{$data['id']}': keepOnReset must be a JSON array of table names",
+                );
+            }
+            $ownTables = $data['tables'] ?? [];
+            foreach ($data['keepOnReset'] as $i => $t) {
+                if (!is_string($t) || $t === '') {
+                    throw new \InvalidArgumentException(
+                        "Module '{$data['id']}': keepOnReset[{$i}] must be a non-empty string",
+                    );
+                }
+                if (!in_array($t, $ownTables, true)) {
+                    throw new \InvalidArgumentException(
+                        "Module '{$data['id']}': keepOnReset[{$i}] '{$t}' is not a table owned by this module",
+                    );
+                }
+                $keepOnReset[] = $t;
+            }
+        }
+
         return new self(
             id: $data['id'],
             name: $data['name'],
@@ -111,6 +139,7 @@ class ModuleDefinition
             settingsItems: $settingsItems,
             lookups: $lookups,
             alertChecks: $alertChecks,
+            keepOnReset: $keepOnReset,
         );
     }
 }

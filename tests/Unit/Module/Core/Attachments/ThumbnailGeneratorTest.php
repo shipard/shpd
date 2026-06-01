@@ -148,9 +148,53 @@ class ThumbnailGeneratorTest extends TestCase
             $this->markTestSkipped('pdftocairo not available');
         }
 
-        // We can't easily create a test PDF without dependencies.
-        // Skip if no test PDF is available.
-        $this->markTestSkipped('Requires a test PDF fixture');
+        // Build a minimal valid one-page PDF from raw bytes — no external
+        // tooling needed to author the fixture (same approach as createMinimalPng).
+        $inputPath = $this->tempDir . '/input.pdf';
+        file_put_contents($inputPath, $this->createMinimalPdf());
+
+        $outputPath = $this->tempDir . '/output.jpg';
+
+        $result = $this->generator->generatePdf($inputPath, $outputPath, 200, 85, 1);
+
+        $this->assertTrue($result);
+        $this->assertFileExists($outputPath);
+    }
+
+    /**
+     * Create a minimal valid single-page PDF (blank 200×200 page) from raw
+     * bytes, computing xref byte offsets so poppler accepts it — no GD,
+     * libvips, or pdf tooling required to author it.
+     */
+    private function createMinimalPdf(): string
+    {
+        $objects = [
+            '<< /Type /Catalog /Pages 2 0 R >>',
+            '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+            '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] >>',
+        ];
+
+        $pdf = "%PDF-1.4\n";
+        $offsets = [];
+        foreach ($objects as $i => $body) {
+            $offsets[] = strlen($pdf);
+            $pdf .= ($i + 1) . " 0 obj\n" . $body . "\nendobj\n";
+        }
+
+        $xrefOffset = strlen($pdf);
+        $count = count($objects) + 1; // + the free object 0
+
+        // Each xref entry is exactly 20 bytes ("nnnnnnnnnn ggggg x \n").
+        $pdf .= "xref\n0 {$count}\n";
+        $pdf .= "0000000000 65535 f \n";
+        foreach ($offsets as $off) {
+            $pdf .= sprintf("%010d 00000 n \n", $off);
+        }
+
+        $pdf .= "trailer\n<< /Size {$count} /Root 1 0 R >>\n";
+        $pdf .= "startxref\n{$xrefOffset}\n%%EOF";
+
+        return $pdf;
     }
 
     // --- Unsupported type returns null ---

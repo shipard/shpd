@@ -48,7 +48,7 @@ class MetadataExtractorTest extends TestCase
         $img = imagecreatetruecolor(800, 600);
         $path = $this->tempDir . '/test.jpg';
         imagejpeg($img, $path);
-        imagedestroy($img);
+        // imagedestroy() is a no-op since PHP 8.0 and deprecated in 8.5
 
         $meta = $this->extractor->extract($path, 'image/jpeg');
 

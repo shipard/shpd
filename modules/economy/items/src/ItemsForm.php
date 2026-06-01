@@ -27,14 +27,14 @@ class ItemsForm extends TableForm
         $unitOptions = $this->resolveUnitOptions();
         $itemTypeOptions = $this->resolveItemTypeOptions();
 
+        // ── Tab: Základní údaje ──────────────────────────────────────────────
         $basic = $this->tab('basic', 'Základní údaje')
             ->section()
                 ->col()
-                    ->input('code',
-                        hint: 'Necháte-li prázdné, kód se vygeneruje automaticky.',
-                    )
                     ->input('name', required: true)
-                    ->separator('Klasifikace')
+
+            ->section(title: 'Klasifikace')
+                ->col()
                     ->select('item_kind',
                         options: $itemKindOptions,
                         required: true,
@@ -48,24 +48,36 @@ class ItemsForm extends TableForm
                         options: $unitOptions,
                         required: true,
                     )
-                    ->separator('Cena')
+
+            ->section(title: 'Cena')
+                ->col()
                     ->number('sales_price_no_vat')
-                    ->separator('Platnost')
+
+            ->section(title: 'Platnost')
+                ->col()
                     ->date('valid_from')
                     ->date('valid_to')
             ->build();
 
+        // ── Tab: Popis ───────────────────────────────────────────────────────
         $description = $this->tab('description', 'Popis')
             ->section()
                 ->col()
                     ->textarea('description')
             ->build();
 
+        // ── Tab: Nastavení (úplně na konci, za Přílohami) ───────────────────
+        $settings = $this->tab('settings', 'Nastavení')
+            ->section(title: 'Identifikace')
+                ->col()
+                    ->input('code')
+            ->build();
+
         return new FormDefinition(
             table: $this->table,
             title: 'Položka',
             titleNew: 'Nová položka',
-            tabs: [$basic, $description, $this->attachmentsTab()],
+            tabs: [$basic, $description, $this->attachmentsTab(), $settings],
         );
     }
 

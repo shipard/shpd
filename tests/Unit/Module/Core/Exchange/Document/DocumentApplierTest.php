@@ -575,4 +575,62 @@ class DocumentApplierTest extends TestCase
         $this->assertFalse($result->success);
         $this->assertSame('unresolved_required', $result->errorCode);
     }
+
+    // ── transform(): import-mode virtual fields ─────────────────────────────
+
+    /**
+     * Invoke the private transform() with a minimal plan/sideIds via reflection.
+     *
+     * @param array<string, mixed> $canonical
+     * @return array<string, mixed>
+     */
+    private function invokeTransform(DocumentApplier $applier, array $canonical): array
+    {
+        $plan = [
+            'resolvedSupplier' => 5, 'resolvedCustomer' => null, 'resolvedSupplierBank' => null,
+            'rowSkips' => [], 'resolvedRowItems' => [], 'resolvedRowUnits' => [], 'resolvedRowVatCodes' => [],
+        ];
+        $sideIds = ['supplier' => null, 'customer' => null, 'supplierBank' => null, 'rowItems' => []];
+
+        $ref = new \ReflectionMethod($applier, 'transform');
+        return $ref->invoke($applier, $canonical, $plan, $sideIds);
+    }
+
+    public function testTransformPassesImportNumberAsVirtualField(): void
+    {
+        $applier = $this->buildApplier(); // db mock → resolveNumberSeries/Vat return null
+        $canonical = [
+            'docType'   => 'invoiceReceived',
+            'selfParty' => 'customer',
+            'dates'     => ['issueDate' => '2024-06-01'],
+            'applyOptions' => [
+                'importNumber'        => ['docNumber' => '2024-0042', 'sequenceNumber' => 42],
+                'importOwnBankAccount' => 17,
+            ],
+        ];
+
+        $data = $this->invokeTransform($applier, $canonical);
+
+        $this->assertSame(
+            ['docNumber' => '2024-0042', 'sequenceNumber' => 42],
+            $data['_importNumber'],
+        );
+        $this->assertSame(17, $data['bank_account']);
+    }
+
+    public function testTransformOmitsImportFieldsWhenNotRequested(): void
+    {
+        $applier = $this->buildApplier();
+        $canonical = [
+            'docType'   => 'invoiceReceived',
+            'selfParty' => 'customer',
+            'dates'     => ['issueDate' => '2024-06-01'],
+        ];
+
+        $data = $this->invokeTransform($applier, $canonical);
+
+        // array_filter drops null _importNumber and null bank_account.
+        $this->assertArrayNotHasKey('_importNumber', $data);
+        $this->assertArrayNotHasKey('bank_account', $data);
+    }
 }

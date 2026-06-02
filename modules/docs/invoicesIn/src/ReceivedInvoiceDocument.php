@@ -21,10 +21,13 @@ class ReceivedInvoiceDocument extends DocsHeadsDocument
         $result = parent::validate($data);
 
         $newState = (int) ($data['docState'] ?? 10);
+        $paymentMethod = (int) ($data['payment_method'] ?? 1);
 
         // Confirm and beyond: at least one of partner_bank, partner_bank_account,
         // or partner_bank_iban must be filled — we need to know how to pay.
-        if (in_array($newState, [20, 40, 80], true)) {
+        // Only relevant for bank transfer (payment_method === 1). Cash / card /
+        // cash-on-delivery / set-off don't need supplier bank info.
+        if (in_array($newState, [20, 40, 80], true) && $paymentMethod === 1) {
             $hasBank = !empty($data['partner_bank'])
                 || !empty($data['partner_bank_account'])
                 || !empty($data['partner_bank_iban']);

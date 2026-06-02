@@ -111,6 +111,29 @@
                 "rejectOnIssues": {
                     "type": "array",
                     "items": { "enum": ["error", "warning"] }
+                },
+                "importNumber": {
+                    "type": "object",
+                    "description": "Import mode: force the document's own number + sequence instead of generating from the series counter. Used by legacy migration. When present, DocDocument skips assignDocumentNumber and syncs the counter to GREATEST(last_assigned, sequenceNumber).",
+                    "properties": {
+                        "docNumber": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "The document's own number to store verbatim in doc_number."
+                        },
+                        "sequenceNumber": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "description": "Sequence-in-series, used for counter sync and variable_symbol default."
+                        }
+                    },
+                    "required": ["docNumber", "sequenceNumber"],
+                    "additionalProperties": false
+                },
+                "importOwnBankAccount": {
+                    "type": ["integer", "null"],
+                    "minimum": 1,
+                    "description": "Import mode: id of our own bank account (economy_codebooks_bank_accounts) to set on the document. For issued invoices confirmed at state 20+, bank_account is required and cannot be carried by the standard self-party flow; the importer resolves it and passes it here."
                 }
             }
         },

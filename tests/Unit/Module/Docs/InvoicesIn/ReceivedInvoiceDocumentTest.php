@@ -93,6 +93,35 @@ class ReceivedInvoiceDocumentTest extends TestCase
         $this->assertEmpty($matched);
     }
 
+    public function testCashPaymentDoesNotRequirePartnerBankInfo(): void
+    {
+        $doc = new ReceivedInvoiceDocument();
+        $doc->setDb($this->dbWithOwn());
+
+        // Confirmed, no bank info, but paid in cash (payment_method = 0) —
+        // supplier bank info is irrelevant, so no error.
+        $data = $this->confirmedData();
+        $data['payment_method'] = 0;
+
+        $errors = $doc->validate($data)->toArray();
+        $matched = array_filter($errors, fn (array $e) => $e['code'] === 'partner_bank_required');
+        $this->assertEmpty($matched, 'Cash-paid FPB must not require supplier bank info');
+    }
+
+    public function testBankTransferRequiresPartnerBankInfo(): void
+    {
+        $doc = new ReceivedInvoiceDocument();
+        $doc->setDb($this->dbWithOwn());
+
+        // Explicit bank transfer (payment_method = 1), confirmed, no bank info.
+        $data = $this->confirmedData();
+        $data['payment_method'] = 1;
+
+        $errors = $doc->validate($data)->toArray();
+        $matched = array_filter($errors, fn (array $e) => $e['code'] === 'partner_bank_required');
+        $this->assertNotEmpty($matched, 'Bank-transfer FPB without supplier bank info must fail');
+    }
+
     public function testKonceptDoesNotRequirePartnerBankInfo(): void
     {
         $doc = new ReceivedInvoiceDocument();

@@ -100,6 +100,22 @@ class TestableDocsHeadsDocument extends DocsHeadsDocument
         $this->assignDocumentNumber($data);
     }
 
+    /** @param array<string, mixed> $importNumber */
+    public function applyImportNumberPub(array &$data, array $importNumber): void
+    {
+        $this->applyImportNumber($data, $importNumber);
+    }
+
+    public function numberSeriesResetScopePub(int $seriesId): string
+    {
+        return $this->numberSeriesResetScope($seriesId);
+    }
+
+    public function beforeSavePub(array &$data, ?array $originalData = null): void
+    {
+        $this->beforeSave($data, $originalData);
+    }
+
     public function releaseDocumentNumberPub(array &$data, ?array $originalData): void
     {
         $this->releaseDocumentNumber($data, $originalData);

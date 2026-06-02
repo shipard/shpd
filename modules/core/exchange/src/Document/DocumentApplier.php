@@ -822,12 +822,28 @@ class DocumentApplier
         $issueDate = $canonical['dates']['issueDate'] ?? null;
         $accountingDate = $canonical['dates']['accountingDate'] ?? $issueDate;
 
+        // Import mode (legacy migration): the client supplies the document's own
+        // number + sequence and (for issued invoices) our own bank account.
+        // Both are opt-in — without them apply() behaves exactly as before.
+        $importNumber = $canonical['applyOptions']['importNumber'] ?? null;
+        $importOwnBank = $canonical['applyOptions']['importOwnBankAccount'] ?? null;
+
         $data = [
             'doc_type'             => $docType,
             'number_series'        => $numberSeriesId,
             'doc_text'             => $canonical['docText'] ?? null,
             'partner_doc_number'   => $canonical['docNumber'] ?? null,
             'partner'              => $partnerId,
+            // Import mode: virtual field consumed + removed by
+            // DocDocument::beforeSave. Must NOT reach SQL. Null when not in
+            // import mode → dropped by the array_filter below.
+            '_importNumber'        => is_array($importNumber) ? [
+                'docNumber'      => (string) ($importNumber['docNumber'] ?? ''),
+                'sequenceNumber' => (int) ($importNumber['sequenceNumber'] ?? 0),
+            ] : null,
+            // Import mode: our own bank account (issued invoices need it at
+            // state 20+; standard self-party flow can't carry it).
+            'bank_account'         => $importOwnBank !== null ? (int) $importOwnBank : null,
             'partner_bank'         => $sideIds['supplierBank'] ?? $plan['resolvedSupplierBank'] ?? null,
             'partner_bank_account' => $canonical['supplier']['bankAccount']['accountNumber'] ?? null,
             'partner_bank_iban'    => $canonical['supplier']['bankAccount']['iban'] ?? null,

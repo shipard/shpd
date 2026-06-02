@@ -97,6 +97,13 @@ abstract class DocDocument extends Document
 
     public function beforeSave(array &$data, ?array $originalData = null): void
     {
+        // Import mode marker — virtual field, must be consumed + removed before
+        // SQL. TableGateway::insertRow does not filter unknown columns, so a
+        // leftover `_importNumber` would reach the INSERT and blow up with
+        // "unknown column". Pull it out first, branch on it at the end.
+        $importNumber = $data['_importNumber'] ?? null;
+        unset($data['_importNumber']);
+
         $this->trackStateChange($data, $originalData);
 
         $this->denormalizeDocType($data);
@@ -127,7 +134,14 @@ abstract class DocDocument extends Document
         $this->applyTotalRounding($data);
         $this->applyExchangeRate($data);
 
-        $this->processStateTransition($data, $originalData);
+        // Number assignment: import mode forces the document's own number;
+        // otherwise normal state-transition assignment from the series counter.
+        if (is_array($importNumber)) {
+            $this->applyImportNumber($data, $importNumber);
+        } else {
+            $this->processStateTransition($data, $originalData);
+        }
+
         $this->maintainSnapshots($data, $originalData);
         $this->applyVariableSymbolDefault($data);
     }
@@ -612,6 +626,86 @@ abstract class DocDocument extends Document
             $this->releaseDocumentNumber($data, $originalData);
             return;
         }
+    }
+
+    /**
+     * Import mode: store the document's own number + sequence verbatim and sync
+     * the series counter to the highest used sequence. Replaces
+     * assignDocumentNumber for migrated documents.
+     *
+     * Counter sync uses GREATEST so it is:
+     *   - idempotent (re-importing the same doc never lowers the counter),
+     *   - order-independent (importing 7, then 3, leaves counter at 7),
+     *   - hole-tolerant (deleted source docs leave gaps; counter still ends at
+     *     the true maximum so the next new doc continues correctly).
+     *
+     * The counter key (number_series, fiscal_year) is computed identically to
+     * assignDocumentNumber — same reset_scope handling, same NULL-safe `<=>`
+     * match — otherwise the sync would miss and the next new doc would not
+     * continue from the imported sequence.
+     *
+     * @param array<string, mixed> $importNumber {docNumber: string, sequenceNumber: int}
+     */
+    protected function applyImportNumber(array &$data, array $importNumber): void
+    {
+        $docNumber = (string) ($importNumber['docNumber'] ?? '');
+        $sequence  = (int) ($importNumber['sequenceNumber'] ?? 0);
+
+        if ($docNumber === '' || $sequence <= 0) {
+            // Defensive: malformed import payload — fall back to normal
+            // assignment rather than persisting an empty/placeholder number.
+            $this->processStateTransition($data, null);
+            return;
+        }
+
+        $data['doc_number']      = $docNumber;
+        $data['sequence_number'] = $sequence;
+
+        $seriesId = (int) ($data['number_series'] ?? 0);
+        if ($seriesId === 0 || $this->db === null) {
+            return;
+        }
+
+        // Mirror assignDocumentNumber's counter key: per (number_series,
+        // fiscal_year) for reset_scope = 'fiscal_year', else fiscal_year = NULL.
+        $resetScope = $this->numberSeriesResetScope($seriesId);
+        $fyId = ($resetScope === 'fiscal_year')
+            ? ($data['fiscal_year'] ?? null)   // already resolved by resolveAccountingPeriods()
+            : null;
+
+        // Two-step, NULL-safe (matches assignDocumentNumber): INSERT IGNORE the
+        // counter row, then bump it via GREATEST. A single ON DUPLICATE KEY
+        // UPDATE would not fire for fiscal_year = NULL rows (UNIQUE treats NULL
+        // as distinct in MariaDB).
+        $this->executeSql(
+            'INSERT IGNORE INTO [docs_core_number_counters]
+                ([number_series], [fiscal_year], [last_assigned])
+             VALUES (%i, %iN, 0)',
+            $seriesId, $fyId,
+        );
+        $this->executeSql(
+            'UPDATE [docs_core_number_counters]
+             SET [last_assigned] = GREATEST([last_assigned], %i)
+             WHERE [number_series] = %i AND [fiscal_year] <=> %iN',
+            $sequence, $seriesId, $fyId,
+        );
+    }
+
+    /**
+     * Read a number series' reset_scope (default 'fiscal_year'). Used by
+     * applyImportNumber to compute the same counter key as
+     * assignDocumentNumber.
+     */
+    protected function numberSeriesResetScope(int $seriesId): string
+    {
+        if ($this->db === null || $seriesId === 0) {
+            return 'fiscal_year';
+        }
+        $row = $this->db->fetch(
+            'SELECT [reset_scope] FROM [docs_core_number_series] WHERE [id] = %i',
+            $seriesId,
+        );
+        return $row !== null ? (string) ($row['reset_scope'] ?? 'fiscal_year') : 'fiscal_year';
     }
 
     protected function assignDocumentNumber(array &$data): void

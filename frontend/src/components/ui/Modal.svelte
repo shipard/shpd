@@ -343,4 +343,57 @@
     gap: var(--shpd-space-sm);
     flex-shrink: 0;
   }
+
+  /* ============================================================
+   * Mobilní fullscreen
+   * ------------------------------------------------------------
+   * Na ≤ 768px je každý modál fullscreen (100vw × 100vh), bez
+   * zaoblení a okrajů. Přebíjí inline cardStyle (width/height/
+   * max-* počítané z depth a width prop) — proto !important.
+   *
+   * Breakpoint 768px ladí s MOBILE_BREAKPOINT v layout.svelte.js.
+   *
+   * Depth-shrink (odsazení vnořených modálů) se tím ruší: všechny
+   * hloubky dostanou stejný fullscreen rozměr, vnořený modál
+   * překryje rodiče. Stack/Esc/zavírání funguje beze změny.
+   * ============================================================ */
+  @media (max-width: 768px) {
+    .shpd-modal {
+      /* Overlay okraje pryč — karta vyplní celou plochu. */
+      align-items: stretch;
+      justify-content: stretch;
+    }
+
+    .shpd-modal__card {
+      width: 100vw !important;
+      max-width: 100vw !important;
+      /* 100dvh (dynamic viewport height) řeší ořez footeru pod adresní
+         lištou mobilních prohlížečů; druhá deklarace přebije 100vh tam,
+         kde prohlížeč dvh zná, staré ji ignorují a použijí 100vh. */
+      height: 100vh !important;
+      height: 100dvh !important;
+      max-height: 100vh !important;
+      max-height: 100dvh !important;
+      border-radius: 0 !important;
+    }
+
+    /* Summary blok v hlavičce (shrnutí cen u dokladů) se na mobilu
+       skrývá — redundantní s obsahem formuláře, hlavička musí zůstat
+       kompaktní na úzké obrazovce. */
+    .shpd-modal__header-summary {
+      display: none;
+    }
+
+    /* Footer tlačítka roztáhnout na plnou šířku (lepší pro dotyk).
+       Tlačítka emituje volající komponenta přes footer snippet (ne Modal),
+       takže scoped CSS by je minul → :global(). Stejný vzor jako
+       .shpd-modal__header-summary > :global(...) výše. */
+    .shpd-modal__footer {
+      justify-content: stretch;
+    }
+
+    .shpd-modal__footer > :global(*) {
+      flex: 1;
+    }
+  }
 </style>

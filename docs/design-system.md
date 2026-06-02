@@ -326,6 +326,12 @@ posledního.
 - Tlačítka v patce přes snippet `footer` + `<Button>` komponentu
 - Title + volitelný `headerExtra` snippet pro badge/stav v hlavičce
 - Width default 640px, lze předělat (`width="800px"`, `width="480px"` atd.)
+- **Mobil (≤ 768px)**: každý modál je fullscreen (`100vw × 100dvh`,
+  bez zaoblení/okrajů), footer tlačítka na plnou šířku, header summary
+  skryt, depth-shrink vypnut (vnořený modál překryje rodiče). Pevné
+  width/height props se přebijí. Čistě CSS `@media` v `Modal.svelte`;
+  breakpoint 768px ladí s `MOBILE_BREAKPOINT`. Detaily v
+  [`edit-forms.md`](edit-forms.md) sekce *Velikost modalu → Mobilní fullscreen*.
 
 **Použití**:
 ```svelte

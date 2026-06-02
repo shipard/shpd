@@ -507,6 +507,31 @@ Konkrétní offsety podle hloubky (odecténo od aktuálně vypočtené `clamp()`
 
 Shrink je **fixní v px** (30 px / úroveň), ne procentuální — slouží k rozpoznání hierarchie, ne k proporcionálnímu škálování. Aplikuje se na vypočtenou velikost po `clamp()`, takže na širokém monitoru (modal u stropu 1700 px) i na laptopu (modal u spodní meze 1200 px) je vnořený modal vždy o 60 px užší/nižší než jeho rodič.
 
+### Mobilní fullscreen (≤ 768px)
+
+Na mobilu (≤ 768px) je **každý** modál fullscreen — `Modal.svelte` má
+`@media` blok, který kartu přepíše na `100vw × 100dvh` (fallback `100vh`),
+bez zaoblení a overlay okrajů. Platí univerzálně pro všechny modály
+postavené přes `Modal.svelte` (FormDialog, reanalyze, reject, Exchange
+preview…); pevné `width`/`height` props i `clamp()` z `FormDialog` jsou
+přebity. Inline `cardStyle` má vyšší specificitu než třídní pravidlo,
+proto media query používá `!important`.
+
+Specifika na mobilu:
+- **Depth-shrink se ruší** — vnořený modál je taky fullscreen a překryje
+  rodiče (na fullscreenu není kam vykukovat). Stack, Esc i zavírání
+  fungují beze změny — Esc/✕ zavře jen vnořený a vrátí na rodiče.
+- **Header summary** (`summary` snippet, ceny u dokladů) se skrývá —
+  redundantní s obsahem, hlavička zůstává kompaktní. Titul, badge
+  a subtitle zůstávají.
+- **Footer tlačítka** na plnou šířku (`flex: 1`) — lepší pro dotyk palcem.
+
+Je to čistě CSS přepnutí vzhledu (karta → fullscreen), bez čtení
+`layoutStore.isMobile` — konzistentní se strategií „CSS na vzhled, JS
+store jen na chování". Na desktopu (> 768px) beze změny (clamp, pevné
+šířky i depth-shrink fungují jako dnes). Vnitřní layout polí (label nad
+input) řeší samostatná fáze 3b — kontejner a pole jsou oddělené.
+
 Mechanismus je generický na úrovni `Modal.svelte` — žádný kontext o tom, kdo je rodič/dítě. Funguje pro všechny vnořené modaly (FormSubTable child rows, LookupInput edit/create dialog, budoucí scénáře).
 
 ### Detekce neuložených změn (dirty state)

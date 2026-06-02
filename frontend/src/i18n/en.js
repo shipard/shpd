@@ -73,6 +73,8 @@ export default {
   'viewer.search.clear': 'Clear search',
   'viewer.endOfList': "That's all",
   'viewer.selectRecord': 'Select a record',
+  'viewer.back': 'Back to list',
+  'viewer.more': 'More actions',
   'viewer.reanalyze.title': 'Re-analyze message',
   'viewer.reanalyze.body': 'Run AI analysis again? Existing extracted documents in states {states} will be marked as superseded. Documents you have already applied or rejected will remain unchanged.',
   'viewer.reanalyze.replaceableStates': 'To apply / Awaiting review / Low confidence',

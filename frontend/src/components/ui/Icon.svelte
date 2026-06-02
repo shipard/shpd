@@ -20,27 +20,32 @@
   } = $props();
 
   // FontAwesome icon definition: icon = [width, height, ligatures, unicode, svgPathData]
-  const viewBox = $derived(`0 0 ${icon.icon[0]} ${icon.icon[1]}`);
-  const pathData = $derived(icon.icon[4]);
+  // Defenzivní: chybějící/neúplná definice (undefined icon prop, nerozpoznané
+  // jméno) nesmí shodit celý render strom — radši nevykreslíme nic.
+  const def = $derived(Array.isArray(icon?.icon) ? icon.icon : null);
+  const viewBox = $derived(def ? `0 0 ${def[0]} ${def[1]}` : '0 0 0 0');
+  const pathData = $derived(def ? def[4] : null);
 </script>
 
-<svg
-  class="shpd-icon shpd-icon--{size} {extraClass}"
-  class:shpd-icon--spin={spin}
-  viewBox={viewBox}
-  xmlns="http://www.w3.org/2000/svg"
-  aria-hidden={label ? undefined : 'true'}
-  aria-label={label ?? undefined}
-  role={label ? 'img' : undefined}
->
-  {#if Array.isArray(pathData)}
-    {#each pathData as d}
-      <path fill="currentColor" {d} />
-    {/each}
-  {:else}
-    <path fill="currentColor" d={pathData} />
-  {/if}
-</svg>
+{#if pathData}
+  <svg
+    class="shpd-icon shpd-icon--{size} {extraClass}"
+    class:shpd-icon--spin={spin}
+    viewBox={viewBox}
+    xmlns="http://www.w3.org/2000/svg"
+    aria-hidden={label ? undefined : 'true'}
+    aria-label={label ?? undefined}
+    role={label ? 'img' : undefined}
+  >
+    {#if Array.isArray(pathData)}
+      {#each pathData as d}
+        <path fill="currentColor" {d} />
+      {/each}
+    {:else}
+      <path fill="currentColor" d={pathData} />
+    {/if}
+  </svg>
+{/if}
 
 <style>
   .shpd-icon {

@@ -164,8 +164,12 @@ Na viewportu ≤ 768px se shell přepne do mobilního režimu (řídí
 `layout.svelte.js` store přes `window.matchMedia`):
 
 - Nahoře se objeví `MobileTopBar` — hamburger (otevře drawer), titul
-  aktuální obrazovky (`navigationStore.activeItem.label`), vpravo prázdný
-  slot pro budoucí akce (Přidat / Otevřít — naplní se ve fázi vieweru).
+  aktuální obrazovky (`navigationStore.activeItem.label`), vpravo akce.
+  Akce + kontext (list/detail) publikuje aktuální obrazovka přes
+  `layout.svelte.js` kanál `topBar*` (`setTopBar` / `clearTopBar`);
+  když nikdo nic nepublikuje (`topBarContext === null`, např. dashboard),
+  fallback na hamburger + titul z navigace + prázdný slot. Detaily
+  publikování viz **Mobilní viewer (list/detail)** v sekci 7.
 - Sidebar vystoupí z toku layoutu a stane se z něj **drawer** — vysune
   se zleva přes obsah (`position: fixed`, `transform: translateX`),
   zbytek ztmaví overlay. Recykluje stejný `Sidebar.svelte` jako desktop.
@@ -329,6 +333,33 @@ Modal wrapper — otevírá se z TableBrowser (tlačítko / dvojklik). Po ulože
 ## 7. Viewer systém
 
 Viewer je specializovaný prohlížeč pro složitější tabulky — na rozdíl od generického `TableBrowser` (který funguje čistě z metadat) viewer implementuje vlastní renderování řádků, filtrování a detail panel. Každý viewer je PHP třída dědící `TableViewer`.
+
+### Mobilní viewer (list/detail)
+
+Na ≤ 768px se viewer přepne z dvoupanelu na list/detail přepínání:
+v daný moment je vidět buď seznam, nebo detail (řídí `selectedRowId`).
+Bez vybraného záznamu se zobrazí seznam přes celou šířku; po kliknutí
+na řádek se seznam skryje (CSS přes třídy `shpd-viewer__body--mobile`
+a `shpd-viewer__body--detail`) a detail zabere celou šířku.
+
+Akce se přesouvají do `MobileTopBar` (přes `layout.svelte.js` store,
+kanál `topBar*`):
+
+- Seznam: hamburger + titul + akce seznamu jako ikony (Přidat, …).
+- Detail: ← zpět (vlevo, místo hamburgeru) + titul záznamu + hlavní
+  akce jako ikona + kebab (⋮) se zbytkem akcí (`Popover`).
+
+Viewer publikuje akce reaktivně přes `layoutStore.setTopBar(...)` podle
+`selectedRowId`; akce nesou navázaný `onClick`, takže MobileTopBar
+o vieweru nic neví — jen volá `action.onClick()`. Seznam mapuje
+`meta.toolbar`, detail `detailToolbar` (= `result.data.toolbar`); obojí
+přes `handleToolbarAction`, stejně jako desktopový `ViewerToolbar`.
+Hlavní akce v detailu = heuristika „první v `detailToolbar`". Snooze/
+dismiss/recheck a `kind` akce nejsou v `detailToolbar` — žijí v
+`detail.actions` uvnitř `ViewerDetail` (na mobilu plná šířka detailu),
+takže do top baru nepatří. Při unmountu / přepnutí na desktop viewer
+volá `clearTopBar()`. Na desktopu zůstává `ViewerToolbar` ve vieweru
+beze změny.
 
 ### Architektura
 

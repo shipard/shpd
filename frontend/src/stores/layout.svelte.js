@@ -13,6 +13,35 @@ const MOBILE_BREAKPOINT = 768; // px — musí ladit s @media v komponentách
 let isMobile   = $state(false);
 let drawerOpen = $state(false);
 
+// --- Top bar obsah (publikovaný aktuální obrazovkou, čte MobileTopBar) ---
+//
+// Obrazovka (typicky Viewer) zapíše, co má top bar zobrazit: kontext
+// (list/detail → ovlivní levou ikonu), akce (pole {id, label, icon,
+// variant, onClick}), titul override a back handler. MobileTopBar to
+// čte a renderuje, sám nic neví o vieweru.
+//
+// `null` kontext = obrazovka nic nepublikuje → MobileTopBar fallback
+// na hamburger + titul z navigace + prázdný slot (dashboard apod.).
+
+let topBarContext = $state(null);  // 'list' | 'detail' | null
+let topBarActions = $state([]);    // [{ id, label, icon, variant, onClick }]
+let topBarTitle   = $state(null);  // string | null (override; null = z navigace)
+let topBarBack    = $state(null);  // (() => void) | null
+
+function setTopBar({ context = null, actions = [], title = null, back = null }) {
+  topBarContext = context;
+  topBarActions = actions;
+  topBarTitle   = title;
+  topBarBack    = back;
+}
+
+function clearTopBar() {
+  topBarContext = null;
+  topBarActions = [];
+  topBarTitle   = null;
+  topBarBack    = null;
+}
+
 // Inicializace matchMedia listeneru. Voláno jednou z main.js po mountu.
 // Defenzivní — matchMedia nemusí existovat v SSR/test prostředí.
 function initLayout() {
@@ -47,8 +76,14 @@ function toggleDrawer() { drawerOpen = !drawerOpen; }
 export const layoutStore = {
   get isMobile()   { return isMobile; },
   get drawerOpen() { return drawerOpen; },
+  get topBarContext() { return topBarContext; },
+  get topBarActions() { return topBarActions; },
+  get topBarTitle()   { return topBarTitle; },
+  get topBarBack()    { return topBarBack; },
   initLayout,
   openDrawer,
   closeDrawer,
   toggleDrawer,
+  setTopBar,
+  clearTopBar,
 };

@@ -17,6 +17,7 @@
   import { t } from '../../i18n/index.js';
   import { translateError } from '../../i18n/errors.js';
   import { navigationStore } from '../../stores/navigation.svelte.js';
+  import { layoutStore } from '../../stores/layout.svelte.js';
 
   let { tab } = $props();
 
@@ -474,6 +475,70 @@
       });
     });
   });
+
+  // Publikování akcí do MobileTopBaru (jen mobil). Na desktopu se akce
+  // renderují ve ViewerToolbar (beze změny), takže top bar nečteme.
+  //
+  // Reaktivně čte isMobile, selectedRowId, meta, detail, detailToolbar, tab —
+  // přepočítá se při výběru řádku i při přepnutí mobil/desktop (žádoucí).
+  //
+  // Mapování handlerů: jak list akce (meta.toolbar), tak detail akce
+  // (detailToolbar = result.data.toolbar) jdou přes `handleToolbarAction`,
+  // přesně jako desktop ViewerToolbar (onAction={handleToolbarAction}).
+  // Snooze/dismiss/recheck a kind akce NEJSOU v detailToolbaru — žijí v
+  // `detail.actions` uvnitř ViewerDetail (na mobilu plná šířka detailu),
+  // takže se do top baru vůbec nedostanou a zůstávají beze změny.
+  $effect(() => {
+    if (!layoutStore.isMobile) {
+      layoutStore.clearTopBar();
+      return;
+    }
+
+    if (selectedRowId == null) {
+      // Seznam — akce z meta.toolbar (Přidat, Přidat z registru, …).
+      const actions = (meta?.toolbar ?? []).map(a => ({
+        id: a.id,
+        label: a.label,
+        icon: a.icon,
+        variant: a.variant,
+        onClick: () => handleToolbarAction(a.id),
+      }));
+      layoutStore.setTopBar({
+        context: 'list',
+        actions,
+        title: tab.label ?? null,
+        back: null,
+      });
+    } else {
+      // Detail — akce z detailToolbar. První = hlavní (ikona), zbytek kebab.
+      // `create` (Přidat) patří jen do seznamu — backend ho ale vrací i pro
+      // vybraný řádek (viz TableViewer::getToolbarActions). Na mobilu ho
+      // z detailu odfiltrujeme, ať hlavní akce je Otevřít (edit), ne Přidat.
+      const actions = (detailToolbar ?? [])
+        .filter(a => a.id !== 'create' && a.id !== 'add' && a.id !== 'new')
+        .map(a => ({
+          id: a.id,
+          label: a.label,
+          icon: a.icon,
+          variant: a.variant,
+          onClick: () => handleToolbarAction(a.id),
+        }));
+      layoutStore.setTopBar({
+        context: 'detail',
+        actions,
+        title: detail?.title ?? tab.label ?? null,
+        back: () => {
+          selectedRowId = null;
+          detail = null;
+        },
+      });
+    }
+  });
+
+  // Úklid při unmountu — ať akce nezůstanou na další obrazovce.
+  $effect(() => {
+    return () => layoutStore.clearTopBar();
+  });
 </script>
 
 {#if meta?.table || formTable}
@@ -494,9 +559,17 @@
 />
 
 <div class="shpd-viewer">
-  <ViewerToolbar actions={toolbarActions} onAction={handleToolbarAction} />
+  {#if !layoutStore.isMobile}
+    <!-- Na mobilu jsou akce v top baru (publikované přes layout store),
+         takže ViewerToolbar se nerenderuje. Desktop beze změny. -->
+    <ViewerToolbar actions={toolbarActions} onAction={handleToolbarAction} />
+  {/if}
 
-  <div class="shpd-viewer__body">
+  <div
+    class="shpd-viewer__body"
+    class:shpd-viewer__body--mobile={layoutStore.isMobile}
+    class:shpd-viewer__body--detail={layoutStore.isMobile && selectedRowId != null}
+  >
     <!-- Left panel: tabs + search + row list -->
     <div class="shpd-viewer__list-panel">
 
@@ -646,6 +719,31 @@
     display: flex;
     flex: 1;
     overflow: hidden;
+  }
+
+  /* --- Mobilní list/detail přepínání --- */
+  /* Na mobilu je vidět jen jeden panel. Bez vybraného řádku seznam přes
+     celou šířku; s vybraným řádkem detail přes celou šířku, seznam skrytý.
+     Breakpoint 768px musí LADIT s MOBILE_BREAKPOINT v layout.svelte.js. */
+  @media (max-width: 768px) {
+    .shpd-viewer__body--mobile .shpd-viewer__list-panel {
+      width: 100%;
+      flex-shrink: 1;
+      border-right: none;
+    }
+
+    .shpd-viewer__body--mobile .shpd-viewer__detail-panel {
+      display: none;
+    }
+
+    /* Detail stav: seznam pryč, detail přes celou šířku. */
+    .shpd-viewer__body--detail .shpd-viewer__list-panel {
+      display: none;
+    }
+
+    .shpd-viewer__body--detail .shpd-viewer__detail-panel {
+      display: block;
+    }
   }
 
   /* Left panel */

@@ -82,6 +82,8 @@ export default {
   'viewer.search.clear': 'Vymazat hledání',
   'viewer.endOfList': 'To je všechno',
   'viewer.selectRecord': 'Vyberte záznam',
+  'viewer.back': 'Zpět na seznam',
+  'viewer.more': 'Další akce',
   'viewer.reanalyze.title': 'Znovu analyzovat zprávu',
   'viewer.reanalyze.body': 'Spustit AI analýzu znovu? Existující extrahované dokumenty ve stavech {states} budou označeny jako nahrazené. Dokumenty, které jste již použili nebo zamítli, zůstanou beze změny.',
   'viewer.reanalyze.replaceableStates': 'K použití / Čeká na review / Nízká jistota',

@@ -324,6 +324,15 @@ Generický renderer — `FormRenderer` dostane tabulku a volitelně ID záznamu,
 - Auto-managed pole (id, created, modified) a systémové pole (`system: true`) se nezobrazují
 - password_hash se nezobrazuje v editaci
 
+**`FormInline` na mobilu** — inline skupina (víc polí na jednom řádku,
+např. „Platnost od / do") se na ≤ 768px rozpadne na samostatná pole pod
+sebou, každé se svým labelem vedle inputu (splyne s běžnými poli). Je to
+strukturní přepnutí markupu řízené `layoutStore.isMobile` (ne CSS) —
+desktop renderuje flex skupinu s mini-labely, mobil sérii label+input
+grid sourozenců, které `FormColumn` grid naskládá pod sebe. Input je
+sdílený mezi větvemi přes Svelte snippet `inputFor`. Detaily v
+[`edit-forms.md`](edit-forms.md) sekce *4.4 inline*.
+
 ### FormDialog
 
 Modal wrapper — otevírá se z TableBrowser (tlačítko / dvojklik). Po uložení se prohlížeč automaticky refreshuje.

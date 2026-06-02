@@ -234,6 +234,16 @@ Horizontální linka s volitelným textem. Pokrývá obě grid kolony (label + i
 
 Více polí v jedné řádce. Label prvního pole slouží jako „velký" label řádky (vlevo, v label dráze gridu). Ostatní pole mají vlastní mini-label vedle inputu. Uvnitř `inline.elements` jsou povoleny pouze `input` a `select`.
 
+Na mobilu (≤ 768px) se inline skupina **rozpadne na samostatná pole pod
+sebou** — každý prvek skupiny dostane svůj label vedle inputu, jako běžné
+pole (mini-labely zanikají). Na desktopu zůstává skupina na jednom řádku
+(první prvek velký label vlevo, další mini-labely mezi poli). Řídí
+`layout.svelte.js` (`isMobile`) — je to **strukturní** přepnutí markupu
+(flex skupina + mini-labely → grid řádky + velké labely), ne jen CSS,
+proto JS store místo media query (stejný typ rozhodnutí jako viewer
+list/detail ve fázi 2). Label zůstává **vedle** inputu i na mobilu (grid
+`max-content 1fr` v `FormColumn` se nemění) — ověřeno na reálném telefonu.
+
 ### 4.5 `html`
 
 ```json

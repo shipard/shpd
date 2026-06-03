@@ -1,0 +1,18 @@
+{
+    // docs.core.viewerDetailLabels
+    //
+    // Detail-tab labels for DocsHeadsViewer. The shared "overview" tab uses
+    // core.system.viewerDetailLabels; only docs-specific tabs live here.
+    //
+    // sourceAttachments — přílohy zpráv došlé pošty, ze kterých doklad vznikl
+    // (vazba message.target_table_id + target_row). Společné pro importní i
+    // nativní AI flow.
+
+    "tabs": {
+        "sourceAttachments": {
+            "name": "Attachments",
+            "name:cs": "Přílohy",
+            "name:en": "Attachments"
+        }
+    }
+}

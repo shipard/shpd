@@ -262,13 +262,103 @@ class DocsHeadsViewer extends TableViewer
             $groups[] = ['title' => 'Stav', 'items' => $stateItems];
         }
 
-        return [
-            'tabs' => [[
-                'id'      => 'overview',
-                'label'   => $this->defaultOverviewLabel(),
-                'content' => ['type' => 'properties', 'groups' => $groups],
-            ]],
-        ];
+        $tabs = [[
+            'id'      => 'overview',
+            'label'   => $this->defaultOverviewLabel(),
+            'content' => ['type' => 'properties', 'groups' => $groups],
+        ]];
+
+        // Tab "Přílohy" — přílohy zpráv došlé pošty, ze kterých doklad vznikl.
+        // Zobrazí se jen když existuje aspoň jedna navázaná zpráva s přílohou.
+        $attachmentGroups = $this->sourceAttachmentGroups($recordId);
+        if ($attachmentGroups !== []) {
+            $count = array_sum(array_map(
+                static fn (array $g): int => count($g['attachments']),
+                $attachmentGroups,
+            ));
+            $tabs[] = [
+                'id'      => 'sourceAttachments',
+                'label'   => $this->detailTabLabel('docs.core.viewerDetailLabels', 'sourceAttachments', 'Attachments')
+                    . ' (' . $count . ')',
+                'content' => [
+                    'type'           => 'attachments',
+                    'groups'         => $attachmentGroups,
+                    'sourceViewerId' => 'core.mail.incoming',
+                ],
+            ];
+        }
+
+        return ['tabs' => $tabs];
+    }
+
+    /**
+     * Zprávy došlé pošty, ze kterých tento doklad vznikl (vazba přes
+     * message.target_table_id + target_row; index idx_target). Trash (90)
+     * vynechán. Shodná konvence pro importní i nativní AI flow.
+     *
+     * @return list<array{id:int, message_id:string, received_at:?string, raw_source_attachment:?int}>
+     */
+    private function sourceMessages(int $docId): array
+    {
+        return $this->db->fetchAll(
+            'SELECT `id`, `message_id`, `received_at`, `raw_source_attachment`'
+            . ' FROM `core_mail_incoming_messages`'
+            . ' WHERE `target_table_id` = %s AND `target_row` = %i AND `docState` != %i'
+            . ' ORDER BY `received_at` ASC, `id` ASC',
+            'docs_core_heads', $docId, 90,
+        );
+    }
+
+    /**
+     * Přílohy zdrojových zpráv seskupené per zpráva. Skupiny bez obsahových
+     * příloh se vynechávají. Raw .eml originál (raw_source_attachment) je
+     * vyloučen — patří zprávě zvlášť a není to obsahová příloha.
+     *
+     * Přílohy zprávy = core_attachments_files s table_id = 303 (tableId
+     * core_mail_incoming_messages), record_id = message.id.
+     *
+     * @return list<array{message_id:string, received_at:?string, message_ndx:int, attachments:list<array{id:int, name:string, mime_type:string, file_size:int}>}>
+     */
+    private function sourceAttachmentGroups(int $docId): array
+    {
+        $groups = [];
+        foreach ($this->sourceMessages($docId) as $msg) {
+            $rawId = $msg['raw_source_attachment'] !== null ? (int) $msg['raw_source_attachment'] : null;
+
+            $sql = 'SELECT `id`, `name`, `file_name`, `file_size`, `mime_type`'
+                . ' FROM `core_attachments_files`'
+                . ' WHERE `table_id` = %i AND `record_id` = %i AND `is_deleted` = 0';
+            $params = [303, (int) $msg['id']];
+            if ($rawId !== null) {
+                $sql .= ' AND `id` != %i';
+                $params[] = $rawId;
+            }
+            $sql .= ' ORDER BY `att_order` ASC, `name` ASC';
+
+            $files = $this->db->fetchAll($sql, ...$params);
+            if ($files === []) {
+                continue;
+            }
+
+            $attachments = [];
+            foreach ($files as $f) {
+                $attachments[] = [
+                    'id'        => (int) $f['id'],
+                    'name'      => (string) ($f['name'] ?? $f['file_name']),
+                    'mime_type' => (string) ($f['mime_type'] ?? ''),
+                    'file_size' => (int) ($f['file_size'] ?? 0),
+                ];
+            }
+
+            $groups[] = [
+                'message_id'  => (string) $msg['message_id'],
+                'received_at' => $this->formatDate($msg['received_at'] ?? null),
+                'message_ndx' => (int) $msg['id'],
+                'attachments' => $attachments,
+            ];
+        }
+
+        return $groups;
     }
 
     private function resolveStateStyle(int $docState): string

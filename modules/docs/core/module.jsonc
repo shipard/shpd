@@ -111,7 +111,8 @@
         { "id": "docs.core.roundingModes",   "file": "config/roundingModes.jsonc" },
         { "id": "docs.core.paymentMethods",  "file": "config/paymentMethods.jsonc" },
         { "id": "docs.core.resetScopes",     "file": "config/resetScopes.jsonc" },
-        { "id": "docs.core.sourceKinds",     "file": "config/sourceKinds.jsonc" }
+        { "id": "docs.core.sourceKinds",     "file": "config/sourceKinds.jsonc" },
+        { "id": "docs.core.viewerDetailLabels", "file": "config/viewerDetailLabels.jsonc" }
     ],
 
     "alertChecks": [

@@ -1,12 +1,27 @@
 <script>
   import { post } from '../../api/client.js';
   import { applyExtractedDocument } from '../../api/exchange.js';
+  import { thumbnailUrl, downloadUrl, formatFileSize } from '../../api/attachments.js';
+  import { navigationStore } from '../../stores/navigation.svelte.js';
   import Modal from '../ui/Modal.svelte';
   import Button from '../ui/Button.svelte';
+  import Icon from '../ui/Icon.svelte';
   import Popover from '../ui/Popover.svelte';
+  import { iconFile, iconFilePdf, iconFileImage } from '../../icons.js';
   import DocumentExchangePreviewModal from '../exchange/DocumentExchangePreviewModal.svelte';
   import { t } from '../../i18n/index.js';
   import { translateError } from '../../i18n/errors.js';
+
+  // Mime → ikona pro přílohy bez náhledu (mirror AttachmentPanel.fileIcon).
+  function attachmentIcon(mime) {
+    if (mime === 'application/pdf') return iconFilePdf;
+    if ((mime ?? '').startsWith('image/')) return iconFileImage;
+    return iconFile;
+  }
+
+  function attachmentHasThumbnail(mime) {
+    return (mime ?? '').startsWith('image/') || mime === 'application/pdf';
+  }
 
   let { detail = null, loading = false, onRefresh, onAction = null } = $props();
 
@@ -335,6 +350,61 @@
               </div>
             {/each}
           {/if}
+        </div>
+
+      {:else if activeContent?.type === 'attachments'}
+        <div class="shpd-detail__att-groups">
+          {#each activeContent.groups ?? [] as group (group.message_ndx)}
+            <div class="shpd-detail__att-group">
+              <h4 class="shpd-detail__group-title">
+                {#if activeContent.sourceViewerId}
+                  <button
+                    type="button"
+                    class="shpd-detail__att-msglink"
+                    onclick={() => navigationStore.navigateToViewer(activeContent.sourceViewerId, group.message_ndx)}
+                  >
+                    #{group.message_id}
+                  </button>
+                {:else}
+                  <span>#{group.message_id}</span>
+                {/if}
+                {#if group.received_at}
+                  <span class="shpd-detail__att-msgdate">· {group.received_at}</span>
+                {/if}
+              </h4>
+
+              <div class="shpd-detail__att-grid">
+                {#each group.attachments as att (att.id)}
+                  <a
+                    class="shpd-detail__att-card"
+                    href={downloadUrl(att.id)}
+                    target="_blank"
+                    rel="noopener"
+                    title={att.name}
+                  >
+                    <div class="shpd-detail__att-thumb">
+                      {#if attachmentHasThumbnail(att.mime_type)}
+                        <img
+                          src={thumbnailUrl(att.id, 200)}
+                          alt={att.name}
+                          class="shpd-detail__att-thumb-img"
+                          loading="lazy"
+                        />
+                      {:else}
+                        <div class="shpd-detail__att-thumb-icon">
+                          <Icon icon={attachmentIcon(att.mime_type)} size="xl" />
+                        </div>
+                      {/if}
+                    </div>
+                    <div class="shpd-detail__att-info">
+                      <span class="shpd-detail__att-name">{att.name}</span>
+                      <span class="shpd-detail__att-size">{formatFileSize(att.file_size)}</span>
+                    </div>
+                  </a>
+                {/each}
+              </div>
+            </div>
+          {/each}
         </div>
       {/if}
     </div>
@@ -808,4 +878,96 @@
 
   /* Modální shell (overlay, header, body, footer) je ve sdílené Modal komponentě
      (../ui/Modal.svelte). Tady jsou jen styly form polí uvnitř modálu. */
+
+  /* Attachments content — přílohy zdrojových zpráv (read-only grid),
+     seskupené per zpráva. Vizuálně sladěno s AttachmentPanel kartami. */
+  .shpd-detail__att-groups {
+    display: flex;
+    flex-direction: column;
+    gap: var(--shpd-space-lg);
+  }
+
+  .shpd-detail__att-msglink {
+    border: none;
+    background: none;
+    padding: 0;
+    font: inherit;
+    font-weight: 600;
+    color: var(--shpd-color-primary);
+    cursor: pointer;
+  }
+
+  .shpd-detail__att-msglink:hover {
+    text-decoration: underline;
+  }
+
+  .shpd-detail__att-msgdate {
+    font-weight: 400;
+    color: var(--shpd-color-text-secondary);
+  }
+
+  .shpd-detail__att-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: var(--shpd-space-md);
+    margin-top: var(--shpd-space-sm);
+  }
+
+  .shpd-detail__att-card {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--shpd-color-border);
+    border-radius: var(--shpd-radius-md);
+    overflow: hidden;
+    background: var(--shpd-color-bg);
+    text-decoration: none;
+    color: inherit;
+    transition: box-shadow 0.15s;
+  }
+
+  .shpd-detail__att-card:hover {
+    box-shadow: var(--shpd-shadow-md);
+  }
+
+  .shpd-detail__att-thumb {
+    aspect-ratio: 4 / 3;
+    background: var(--shpd-color-bg-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  .shpd-detail__att-thumb-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .shpd-detail__att-thumb-icon {
+    color: var(--shpd-color-text-secondary);
+    font-size: 2rem;
+  }
+
+  .shpd-detail__att-info {
+    padding: var(--shpd-space-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .shpd-detail__att-name {
+    font-size: var(--shpd-font-size-sm);
+    font-weight: 500;
+    color: var(--shpd-color-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .shpd-detail__att-size {
+    font-size: 0.75rem;
+    color: var(--shpd-color-text-secondary);
+  }
 </style>

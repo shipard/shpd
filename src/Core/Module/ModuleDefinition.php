@@ -49,10 +49,11 @@ class ModuleDefinition
                 if (!isset($item['viewer']) && !isset($item['table'])) continue;
                 if (isset($item['viewer']) && isset($item['table'])) continue;
                 $settingsItems[] = [
-                    'viewer'  => $item['viewer'] ?? null,
-                    'table'   => $item['table']  ?? null,
-                    'section' => (string) $item['section'],
-                    'order'   => isset($item['order']) ? (int) $item['order'] : null,
+                    'viewer'     => $item['viewer'] ?? null,
+                    'table'      => $item['table']  ?? null,
+                    'section'    => (string) $item['section'],
+                    'subsection' => isset($item['subsection']) ? (string) $item['subsection'] : null,
+                    'order'      => isset($item['order']) ? (int) $item['order'] : null,
                 ];
             }
         }

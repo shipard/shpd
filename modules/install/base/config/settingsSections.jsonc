@@ -23,6 +23,44 @@
             "name:en": "Items",
             "icon": "tags",
             "order": 30
+        },
+        {
+            "id": "other",
+            "name": "Other",
+            "name:cs": "Ostatní",
+            "name:en": "Other",
+            "icon": "dots",
+            "order": 100,
+            "subsections": [
+                {
+                    "id": "other.system",
+                    "name": "System",
+                    "name:cs": "Systém",
+                    "name:en": "System",
+                    "order": 10
+                },
+                {
+                    "id": "other.mail",
+                    "name": "Mail",
+                    "name:cs": "Pošta",
+                    "name:en": "Mail",
+                    "order": 20
+                },
+                {
+                    "id": "other.world",
+                    "name": "World",
+                    "name:cs": "Svět",
+                    "name:en": "World",
+                    "order": 30
+                },
+                {
+                    "id": "other.persons",
+                    "name": "Persons",
+                    "name:cs": "Osoby",
+                    "name:en": "Persons",
+                    "order": 40
+                }
+            ]
         }
     ]
 }

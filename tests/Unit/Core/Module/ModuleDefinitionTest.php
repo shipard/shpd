@@ -147,8 +147,25 @@ class ModuleDefinitionTest extends TestCase
         $this->assertSame('economy.codebooks.cashDesks', $def->settingsItems[0]['viewer']);
         $this->assertNull($def->settingsItems[0]['table']);
         $this->assertSame('accounting', $def->settingsItems[0]['section']);
+        $this->assertNull($def->settingsItems[0]['subsection']);
         $this->assertNull($def->settingsItems[0]['order']);
         $this->assertSame(5, $def->settingsItems[1]['order']);
+    }
+
+    public function testSettingsItemsSubsectionParsed(): void
+    {
+        $def = ModuleDefinition::fromArray([
+            'id'   => 'core.mail',
+            'name' => 'Mail',
+            'settingsItems' => [
+                ['table' => 'core_mail_mailboxes', 'section' => 'other', 'subsection' => 'other.mail', 'order' => 10],
+                ['table' => 'core_attachments_files', 'section' => 'other'],
+            ],
+        ]);
+
+        $this->assertSame('other.mail', $def->settingsItems[0]['subsection']);
+        // Bez subsection → null (zpětná kompatibilita — položka padne přímo do sekce).
+        $this->assertNull($def->settingsItems[1]['subsection']);
     }
 
     public function testSettingsItemsMissingSectionIgnored(): void

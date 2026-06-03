@@ -44,7 +44,36 @@ class SettingsController
         $tree = [];
         foreach ($sections as $section) {
             $sectionId = $section['id'];
-            if (empty($itemsBySection[$sectionId])) {
+
+            // Položky patřící přímo do sekce (bez subsection).
+            $directItems = $itemsBySection[$sectionId] ?? [];
+
+            // Podsekce — každá sbírá své položky z klíče "section\0subsection".
+            $subChildren = [];
+            if (!empty($section['subsections']) && is_array($section['subsections'])) {
+                $subsections = $section['subsections'];
+                usort($subsections, fn($a, $b) => ($a['order'] ?? 0) <=> ($b['order'] ?? 0));
+                foreach ($subsections as $sub) {
+                    $subId    = $sub['id'];
+                    $subKey   = $this->sectionKey($sectionId, $subId);
+                    $subItems = $itemsBySection[$subKey] ?? [];
+                    if ($subItems === []) {
+                        continue; // prázdnou podsekci nevykreslujeme
+                    }
+                    $subLabel = $sub['name:' . $language]
+                        ?? $sub['name:en']
+                        ?? $sub['name']
+                        ?? $subId;
+                    $subChildren[] = [
+                        'id'       => $subId,
+                        'label'    => $subLabel,
+                        'children' => $subItems,
+                    ];
+                }
+            }
+
+            // Sekce bez přímých položek i bez naplněných podsekcí se vynechá.
+            if ($directItems === [] && $subChildren === []) {
                 continue;
             }
 
@@ -53,11 +82,13 @@ class SettingsController
                 ?? $section['name']
                 ?? $sectionId;
 
+            // Pořadí children: nejdřív přímé položky, pak podsekce.
+            // (Pro sekci "other" nejsou žádné přímé položky — jen podsekce.)
             $tree[] = [
                 'id'       => $sectionId,
                 'label'    => $label,
                 'icon'     => $section['icon'] ?? null,
-                'children' => $itemsBySection[$sectionId],
+                'children' => array_merge($directItems, $subChildren),
             ];
         }
 
@@ -76,7 +107,8 @@ class SettingsController
 
         foreach ($resolvedModules as $module) {
             foreach ($module->settingsItems as $item) {
-                $section = $item['section'];
+                $section    = $item['section'];
+                $subsection = $item['subsection'] ?? null;
 
                 if ($item['viewer'] !== null) {
                     $viewerId = $item['viewer'];
@@ -134,7 +166,7 @@ class SettingsController
                         $navItem['_order'] = $item['order'];
                     }
 
-                    $itemsBySection[$section][] = $navItem;
+                    $itemsBySection[$this->sectionKey($section, $subsection)][] = $navItem;
                 } elseif ($item['table'] !== null) {
                     $tableName = $item['table'];
                     if (isset($seenTables[$tableName])) {
@@ -177,7 +209,7 @@ class SettingsController
                         $navItem['_order'] = $item['order'];
                     }
 
-                    $itemsBySection[$section][] = $navItem;
+                    $itemsBySection[$this->sectionKey($section, $subsection)][] = $navItem;
                 }
             }
         }
@@ -194,6 +226,17 @@ class SettingsController
         }
 
         return $itemsBySection;
+    }
+
+    /**
+     * Flat key for $itemsBySection: bare section id for items belonging
+     * directly to a section, or "section\0subsection" (NUL separator — can't
+     * occur in an id) for items inside a subsection. navigation() parses
+     * these back when assembling the two-level tree.
+     */
+    private function sectionKey(string $section, ?string $subsection): string
+    {
+        return $subsection === null ? $section : $section . "\0" . $subsection;
     }
 
     private function localizeViewerName(array $viewer, string $language): string

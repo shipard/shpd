@@ -21,6 +21,14 @@
         "base_persons_addresses"
     ],
 
+    // base_persons_persons má viewer base.persons (Osoby) a zůstává
+    // v hlavní navigaci — do settings nepatří.
+    "settingsItems": [
+        { "table": "base_persons_contacts",      "section": "other", "subsection": "other.persons", "order": 10 },
+        { "table": "base_persons_bank_accounts", "section": "other", "subsection": "other.persons", "order": 20 },
+        { "table": "base_persons_addresses",     "section": "other", "subsection": "other.persons", "order": 30 }
+    ],
+
     "viewers": [
         {
             "id": "base.persons",

@@ -15,4 +15,7 @@
     "config": [
         {"id": "world.divisions.adminLevels", "file": "config/adminLevels.jsonc"},
     ],
+    "settingsItems": [
+        { "table": "world_divisions", "section": "other", "subsection": "other.world", "order": 10 },
+    ],
 }

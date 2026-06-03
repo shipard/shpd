@@ -20,5 +20,9 @@
             "table": "core_attachments_files",
             "class": "Shipard\\Module\\Core\\Attachments\\AttachmentDocument"
         }
+    ],
+
+    "settingsItems": [
+        { "table": "core_attachments_files", "section": "other", "subsection": "other.system", "order": 10 }
     ]
 }

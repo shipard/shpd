@@ -1,0 +1,34 @@
+{
+    "title": "Schránka",
+    "title:cs": "Schránka",
+    "title:en": "Mailbox",
+    "titleNew": "Nová schránka",
+    "titleNew:cs": "Nová schránka",
+    "titleNew:en": "New mailbox",
+    "tabs": [
+        {
+            "id": "basic",
+            "label": "Schránka",
+            "label:cs": "Schránka",
+            "label:en": "Mailbox",
+            "sections": [
+                {
+                    "columns": [
+                        {
+                            "elements": [
+                                {"type": "input", "column": "mailbox_id", "required": true},
+                                {"type": "input", "column": "name", "required": true},
+                                {"type": "input", "column": "email_address", "required": true},
+                                {"type": "input", "column": "description", "inputType": "textarea"},
+
+                                {"type": "separator", "label": "Konfigurace", "label:cs": "Konfigurace", "label:en": "Configuration"},
+                                {"type": "select", "column": "default_primary_type"},
+                                {"type": "input", "column": "is_default"}
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

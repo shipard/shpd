@@ -1,0 +1,43 @@
+{
+    "title": "AI backend",
+    "title:cs": "AI backend",
+    "title:en": "AI backend",
+    "titleNew": "Nový AI backend",
+    "titleNew:cs": "Nový AI backend",
+    "titleNew:en": "New AI backend",
+    "tabs": [
+        {
+            "id": "basic",
+            "label": "AI backend",
+            "label:cs": "AI backend",
+            "label:en": "AI backend",
+            "sections": [
+                {
+                    "columns": [
+                        {
+                            "elements": [
+                                {"type": "input", "column": "backend_id", "required": true},
+                                {"type": "input", "column": "name", "required": true},
+
+                                {"type": "separator", "label": "Provider", "label:cs": "Provider", "label:en": "Provider"},
+                                {"type": "input", "column": "provider", "required": true},
+                                {"type": "input", "column": "model", "required": true},
+                                {"type": "input", "column": "base_url"},
+
+                                {"type": "separator", "label": "API klíč se nastavuje přes CLI (ai-analyzer-set-key)", "label:cs": "API klíč se nastavuje přes CLI (ai-analyzer-set-key)", "label:en": "API key is set via CLI (ai-analyzer-set-key)"},
+
+                                {"type": "separator", "label": "Ladění", "label:cs": "Ladění", "label:en": "Tuning"},
+                                {"type": "input", "column": "max_tokens"},
+                                {"type": "input", "column": "temperature"},
+
+                                {"type": "separator", "label": "Příznaky", "label:cs": "Příznaky", "label:en": "Flags"},
+                                {"type": "input", "column": "is_default"},
+                                {"type": "input", "column": "is_active"}
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

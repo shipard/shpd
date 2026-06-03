@@ -7,8 +7,10 @@ namespace Shipard\Api\Controller;
 use Shipard\Api\AuthContext;
 use Shipard\Api\Request;
 use Shipard\Api\Response;
+use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Database\TableDefinition;
+use Shipard\Core\Document\DocStateConfig;
 use Shipard\Core\Document\DocumentRegistry;
 use Shipard\Module\Core\Attachments\AttachmentService;
 use Shipard\Module\Core\Mail\IdempotencyStore;
@@ -39,6 +41,7 @@ class MailController
         private readonly string $dsPath,
         private readonly array $tables,
         private readonly DocumentRegistry $documentRegistry,
+        private readonly ?ConfigRuntime $config = null,
     ) {
         $this->attachments = new AttachmentService($db, $dsPath, $tables);
         $this->idempotency = new IdempotencyStore($db);
@@ -144,6 +147,122 @@ class MailController
 
             return Response::error('INTERNAL_ERROR', $e->getMessage(), 500);
         }
+    }
+
+    /**
+     * Endpoint `POST /_mail/import` — programové založení jedné importované
+     * došlé zprávy (JSON, žádný .eml/přílohy). Vytváří přes Document path,
+     * takže `beforeSave` vygeneruje `message_id` a znormalizuje `sender_email`.
+     *
+     * Na rozdíl od `/_mail/incoming` není omezen na systémového uživatele
+     * `_mail_router` — běží pod libovolným api_key (typicky `_legacy_importer`),
+     * konzistentně s `/_exchange/*`. Idempotenci řeší volající (LocalIdMap).
+     *
+     * Viz `tasks/mail-phase4-import-endpoint.md`.
+     */
+    public function importMessage(AuthContext $auth, Request $request): Response
+    {
+        if (!$auth->isAuthenticated || $auth->tokenType !== 'api_key') {
+            return Response::error('UNAUTHORIZED', 'API key required', 401);
+        }
+
+        $body = $request->getBody();
+        if ($body === null) {
+            return Response::error('BAD_REQUEST', 'Request body must be a JSON object', 400);
+        }
+
+        $mailboxResolved = $this->resolveMailbox(trim((string) ($body['mailbox'] ?? '')));
+        if ($mailboxResolved instanceof Response) {
+            return $mailboxResolved;
+        }
+        $mailboxId = $mailboxResolved;
+
+        // received_at: ISO8601 → DB datetime; validitu dořeší Document::validate
+        $receivedAtRaw = trim((string) ($body['received_at'] ?? ''));
+        $receivedAt = $receivedAtRaw !== '' && strtotime($receivedAtRaw) !== false
+            ? date('Y-m-d H:i:s', (int) strtotime($receivedAtRaw))
+            : '';
+
+        $subject = trim((string) ($body['subject'] ?? ''));
+        if ($subject === '') {
+            $subject = '(bez předmětu)';
+        }
+
+        // primary_type/source_type z těla mají přednost před defaulty v beforeSave,
+        // proto je nastavujeme do $data před jeho voláním.
+        $data = [
+            'mailbox'             => $mailboxId,
+            'subject'             => $subject,
+            'sender_email'        => trim((string) ($body['sender_email'] ?? '')),
+            'sender_name'         => self::nullIfEmpty($body['sender_name'] ?? null),
+            'sender_person'       => isset($body['sender_person']) ? (int) $body['sender_person'] : null,
+            'received_at'         => $receivedAt,
+            'body_plain'          => self::nullIfEmpty($body['body_plain'] ?? null),
+            'body_html'           => self::nullIfEmpty($body['body_html'] ?? null),
+            'external_message_id' => self::nullIfEmpty($body['external_message_id'] ?? null),
+            'in_reply_to'         => self::nullIfEmpty($body['in_reply_to'] ?? null),
+            'reply_references'    => self::nullIfEmpty($body['reply_references'] ?? null),
+            'target_table_id'     => self::nullIfEmpty($body['target_table_id'] ?? null),
+            'target_row'          => isset($body['target_row']) ? (int) $body['target_row'] : null,
+            'created_by'          => $auth->userId,
+        ];
+        if (!empty($body['primary_type'])) {
+            $data['primary_type'] = (string) $body['primary_type'];
+        }
+        if (isset($body['source_type'])) {
+            $data['source_type'] = (int) $body['source_type'];
+        }
+
+        $doc = $this->documentRegistry->getDocument(self::MAIL_TABLE);
+        $dibi = $this->db->getDibiConnection();
+        $doc->setDb($dibi);
+
+        $validation = $doc->validate($data);
+        if (!$validation->isValid()) {
+            $first = $validation->getErrors()[0];
+            return Response::error(
+                'VALIDATION_ERROR',
+                $first->message,
+                422,
+                [['field' => $first->column, 'code' => $first->code]],
+            );
+        }
+
+        // Vygeneruje message_id, znormalizuje sender_email, dorovná default
+        // primary_type/source_type (pokud je v $data nemáme).
+        $doc->beforeSave($data);
+
+        // docState explicitně — beforeSave ho neřeší a DB default by byl 10.
+        // Default 40 (Zpracovaná); volající pošle 10 pro nenavázané zprávy.
+        $docState = isset($body['docState']) ? (int) $body['docState'] : 40;
+        $data['docState']     = $docState;
+        $data['docStateMain'] = $this->resolveIncomingMainState($docState);
+
+        $dibi->insert(self::MAIL_TABLE, $data)->execute();
+        $messageId = (int) $dibi->getInsertId();
+
+        $createdRow = $this->db->fetchRow('SELECT message_id FROM %n WHERE id = %i', self::MAIL_TABLE, $messageId);
+
+        return Response::success([
+            'ndx'        => $messageId,
+            'message_id' => (string) ($createdRow['message_id'] ?? ''),
+        ], 201);
+    }
+
+    /**
+     * Dopočítá `docStateMain` pro daný `docState` z `core.mail.docStatesIncoming`.
+     * Bez compiled configu degraduje na pevnou mapu (hodnoty jsou stabilní
+     * v docStatesIncoming.jsonc).
+     */
+    private function resolveIncomingMainState(int $docState): int
+    {
+        if ($this->config !== null) {
+            return DocStateConfig::fromCfgItem(
+                $this->config->cfgItem('core.mail.docStatesIncoming'),
+            )->getMainState($docState);
+        }
+
+        return [10 => 1, 20 => 2, 30 => 3, 40 => 4, 70 => 7, 80 => 5, 90 => 6][$docState] ?? 1;
     }
 
     private function verifyAuth(AuthContext $auth): ?Response

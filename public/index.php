@@ -260,7 +260,7 @@ function dispatch(
 		'form'    => dispatchForm($route, $request, $auth, $tables, $db, $formRegistry ?? new FormRegistry(), $configRuntime, $modulePathResolver, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), resolveLanguage($request, $resolved->config), $resolved->config, $lookupRegistry ?? new LookupRegistry()),
 		'lookup'  => dispatchLookup($route, $request, $tables, $db, $lookupRegistry ?? new LookupRegistry(), $configRuntime),
 		'viewer'  => dispatchViewer($route, $request, $viewerRegistry, $db, $configRuntime, resolveLanguage($request, $resolved->config)),
-		'mail'    => dispatchMail($route, $request, $auth, $tables, $db, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
+		'mail'    => dispatchMail($route, $request, $auth, $tables, $db, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $configRuntime),
 		'analysis' => dispatchAnalysis($route, $request, $auth, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'exchange' => dispatchExchange($route, $request, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'alerts' => dispatchAlerts($route, $request, $db, $alertCheckRegistry, $configRuntime, resolveLanguage($request, $resolved->config)),
@@ -402,11 +402,13 @@ function dispatchMail(
 	\Shipard\Core\Database\DataSourceConnection $db,
 	\Shipard\Api\ResolvedDataSource $resolved,
 	\Shipard\Core\Document\DocumentRegistry $documentRegistry,
+	?\Shipard\Core\Config\ConfigRuntime $configRuntime = null,
 ): Response {
 	$dsPath = $resolved->config->getDataSourceDir();
-	$ctrl = new MailController($db, $dsPath, $tables, $documentRegistry);
+	$ctrl = new MailController($db, $dsPath, $tables, $documentRegistry, $configRuntime);
 	return match ($route->action) {
 		'receiveIncoming' => $ctrl->receiveIncoming($auth, $request),
+		'importMessage'   => $ctrl->importMessage($auth, $request),
 		default           => Response::error('INTERNAL_ERROR', "Unknown mail action: {$route->action}", 500),
 	};
 }

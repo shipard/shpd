@@ -89,6 +89,13 @@ class Router
 			return new Route('mail', 'receiveIncoming');
 		}
 
+		if ($subpath === '/_mail/import') {
+			if ($method !== 'POST') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('mail', 'importMessage');
+		}
+
 		if (str_starts_with($subpath, '/_mail/analysis')) {
 			return $this->resolveAnalysisRoute($subpath, $method);
 		}

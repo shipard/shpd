@@ -212,6 +212,91 @@ class MailControllerTest extends TestCase
         $this->assertSame('raw_source', $response->getPayload()['error']['details'][0]['field']);
     }
 
+    // -------------------------------------------------------------------------
+    // POST /_mail/import — importMessage()
+    // -------------------------------------------------------------------------
+
+    private function jsonRequest(array $body): Request
+    {
+        $server = ['HTTP_HOST' => 'test', 'REMOTE_ADDR' => '127.0.0.1'];
+        return Request::fromArray('POST', '/_mail/import', [], (string) json_encode($body), $server);
+    }
+
+    public function testImportAnonymousReturns401(): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $ctrl = $this->controller($db);
+
+        $response = $ctrl->importMessage(AuthContext::anonymous(), $this->jsonRequest(['subject' => 'x']));
+
+        $this->assertSame(401, $this->statusOf($response));
+        $this->assertSame('UNAUTHORIZED', $response->getPayload()['error']['code']);
+    }
+
+    public function testImportSessionTokenReturns401(): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $ctrl = $this->controller($db);
+
+        $auth = new AuthContext(true, 1, 'session', 'shpd_st_xxx');
+        $response = $ctrl->importMessage($auth, $this->jsonRequest(['subject' => 'x']));
+
+        $this->assertSame(401, $this->statusOf($response));
+    }
+
+    public function testImportAcceptsAnyApiKeyUser(): void
+    {
+        // Na rozdíl od /_mail/incoming není import omezen na _mail_router:
+        // libovolný api_key projde gate a spadne až na mailbox resolve.
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturn(null); // default mailbox miss → 422, ne 403
+
+        $ctrl = $this->controller($db);
+        $auth = new AuthContext(true, 99, 'api_key', 'shpd_ak_importer');
+
+        $response = $ctrl->importMessage($auth, $this->jsonRequest(['sender_email' => 'a@b.cz']));
+
+        $this->assertSame(422, $this->statusOf($response));
+        $this->assertSame('VALIDATION_ERROR', $response->getPayload()['error']['code']);
+    }
+
+    public function testImportEmptyBodyReturns400(): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $ctrl = $this->controller($db);
+
+        $auth = new AuthContext(true, 2, 'api_key', 'shpd_ak_xxx');
+        $request = Request::fromArray('POST', '/_mail/import', [], '', ['HTTP_HOST' => 'test']);
+
+        $response = $ctrl->importMessage($auth, $request);
+
+        $this->assertSame(400, $this->statusOf($response));
+        $this->assertSame('BAD_REQUEST', $response->getPayload()['error']['code']);
+    }
+
+    public function testImportUnknownMailboxReturns422(): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturn(null); // mailbox lookup miss
+
+        $ctrl = $this->controller($db);
+        $auth = new AuthContext(true, 2, 'api_key', 'shpd_ak_xxx');
+
+        $response = $ctrl->importMessage($auth, $this->jsonRequest([
+            'mailbox' => 'nonexistent',
+            'sender_email' => 'a@b.cz',
+            'subject' => 'Hi',
+        ]));
+
+        $this->assertSame(422, $this->statusOf($response));
+        $this->assertStringContainsString("'nonexistent'", $response->getPayload()['error']['message']);
+    }
+
+    // Pozn.: validace povinných polí / formátu sender_email žije v
+    // IncomingMessageDocument, ne v controlleru (na rozdíl od /_mail/incoming).
+    // Unit úroveň s prázdným DocumentRegistry ji nezachytí — pokrývá ji
+    // MailImportEndpointTest::testImportInvalidSenderEmailReturns422.
+
     protected function tearDown(): void
     {
         $_POST = [];

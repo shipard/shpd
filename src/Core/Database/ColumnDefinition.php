@@ -19,6 +19,7 @@ class ColumnDefinition
     public function __construct(
         public readonly string $id,
         public readonly string $name,
+        public readonly ?string $formLabel,
         public readonly string $type,
         public readonly ?int $length,
         public readonly ?int $precision,
@@ -83,6 +84,9 @@ class ColumnDefinition
         return new self(
             id: $data['id'],
             name: $data['name'],
+            formLabel: isset($data['formLabel']) && is_string($data['formLabel']) && $data['formLabel'] !== ''
+                ? $data['formLabel']
+                : null,
             type: $type,
             length: $data['length'] ?? null,
             precision: $data['precision'] ?? null,

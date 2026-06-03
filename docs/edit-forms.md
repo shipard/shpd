@@ -610,6 +610,38 @@ abstract class TableForm
 
 `TableForm` dostane `TableDefinition` přes `setTableDef()` před voláním `buildFormDefinition`. Helper `tab()` sestaví mapu `column_id => name` a předá ji `TabBuilder`. Element factory metody pak doplní `label` automaticky z této mapy pokud není zadán explicitně.
 
+#### Krátký label ve formuláři — `formLabel`
+
+Definice sloupce může mít volitelnou položku `formLabel` (s `:cs` / `:en`
+variantami), která slouží jako **krátký popisek inputu v editačním formuláři**.
+Když je přítomna, `tab()` ji použije do auto-label mapy místo `name`
+(`$col->formLabel ?? $col->name`); plný `name` zůstává pro viewer, detail panel
+a browser. Když chybí, fallback na `name` — beze změny pro všechny existující
+sloupce (`formLabel` je `?string`, default `null`).
+
+Typický případ: dlouhý oficiální název sloupce nepohodlný v úzké label dráze
+formuláře. Např. `vat_duzp` má `name:cs` „Datum uskutečnění zdan. plnění (DUZP)“
+(zobrazí se ve vieweru / detailu), ale `formLabel` „DUZP“ (popisek inputu).
+
+```jsonc
+{
+    "id": "vat_duzp",
+    "name:cs": "Datum uskutečnění zdan. plnění (DUZP)",
+    "name:en": "Tax point date (DUZP)",
+    "formLabel:cs": "DUZP",
+    "formLabel:en": "DUZP",
+    "type": "date"
+}
+```
+
+Lokalizace je zadarmo — `ConfigLocalizer::localize()` redukuje `formLabel:cs` /
+`formLabel:en` na holé `formLabel` ještě před `ColumnDefinition::fromArray()`,
+stejně jako u `name`. Mechanismus platí pro PHP builder i JSONC formy (oba jdou
+přes stejnou auto-label mapu) a funguje na desktopu i mobilu — na mobilu se
+inline skupina rozpadne na samostatná pole, každé použije svůj (zkrácený) label.
+Explicitní `label:` v builderu / JSONC má pořád přednost před `formLabel`
+i `name`.
+
 ### TabBuilder API — scope management
 
 Builder má **třípatrový stavový stroj**: `tab → section → col → [inline] → elements`. Volání musí být v pořadí; mimo otevřený scope vyhodí `LogicException`. `build()` automaticky uzavře otevřené scopy.

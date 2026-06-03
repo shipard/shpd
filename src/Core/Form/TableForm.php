@@ -65,7 +65,7 @@ abstract class TableForm
         $colLabels = [];
         if ($this->tableDef !== null) {
             foreach ($this->tableDef->columns as $col) {
-                $colLabels[$col->id] = $col->name;
+                $colLabels[$col->id] = $col->formLabel ?? $col->name;
             }
         }
         return new TabBuilder($id, $label, $colLabels, $icon);

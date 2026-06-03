@@ -32,6 +32,10 @@
 <style>
   .shpd-input__field {
     width: 100%;
+    /* Umožní zmenšení pod intrinsic šířku nativního date inputu (dd.mm.rrrr
+       + ikona kalendáře) v grid/flex kontejneru — bez toho pole přetéká
+       doprava na úzkých obrazovkách (mobil, inline rozpad). */
+    min-width: 0;
     padding: var(--shpd-input-padding-y) var(--shpd-space-sm);
     border: 1px solid var(--shpd-color-border);
     border-radius: var(--shpd-radius-md);

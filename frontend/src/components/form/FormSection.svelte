@@ -61,9 +61,15 @@
     gap: var(--shpd-space-xl);
   }
 
-  @media (max-width: 700px) {
+  /* Breakpoint 768px ladí s MOBILE_BREAKPOINT v layout.svelte.js
+     (konzistentní s ostatní mobilní prací). Na mobilu se sloupce
+     skládají pod sebe; gap přepneme z xl (vodorovná mezera mezi
+     sloupci vedle sebe) na sm, aby svislá mezera mezi naskládanými
+     sloupci navazovala na row-gap polí uvnitř sloupce (FormColumn). */
+  @media (max-width: 768px) {
     .shpd-form-section__columns {
       grid-template-columns: 1fr;
+      gap: var(--shpd-space-sm);
     }
   }
 </style>

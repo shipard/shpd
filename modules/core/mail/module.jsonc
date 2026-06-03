@@ -34,11 +34,11 @@
     // core_mail_incoming_messages má viewer core.mail.incoming (Došlá pošta)
     // a zůstává v hlavní navigaci — do settings nepatří.
     "settingsItems": [
-        { "table": "core_mail_mailboxes",           "section": "other", "subsection": "other.mail", "order": 10 },
+        { "viewer": "core.mail.mailboxes",          "section": "other", "subsection": "other.mail", "order": 10 },
         { "table": "core_mail_message_analyses",    "section": "other", "subsection": "other.mail", "order": 20 },
         { "table": "core_mail_incoming_idempotency","section": "other", "subsection": "other.mail", "order": 30 },
-        { "table": "core_mail_ai_backends",         "section": "other", "subsection": "other.mail", "order": 40 },
-        { "table": "core_mail_ai_profiles",         "section": "other", "subsection": "other.mail", "order": 50 },
+        { "viewer": "core.mail.aiBackends",         "section": "other", "subsection": "other.mail", "order": 40 },
+        { "viewer": "core.mail.aiProfiles",         "section": "other", "subsection": "other.mail", "order": 50 },
         { "table": "core_mail_analysis_claims",     "section": "other", "subsection": "other.mail", "order": 60 }
     ],
 

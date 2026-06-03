@@ -51,6 +51,40 @@
             "icon": "mail",
             "table": "core_mail_incoming_messages",
             "class": "Shipard\\Module\\Core\\Mail\\IncomingMessagesViewer"
+        },
+        {
+            "id": "core.mail.mailboxes",
+            "name": "Mailboxes",
+            "name:cs": "Schránky",
+            "name:en": "Mailboxes",
+            "icon": "mail",
+            "table": "core_mail_mailboxes",
+            "class": "Shipard\\Module\\Core\\Mail\\MailboxesViewer"
+        },
+        {
+            "id": "core.mail.aiBackends",
+            "name": "AI backends",
+            "name:cs": "AI backendy",
+            "name:en": "AI backends",
+            "icon": "robot",
+            "table": "core_mail_ai_backends",
+            "class": "Shipard\\Module\\Core\\Mail\\AIBackendsViewer"
+        },
+        {
+            "id": "core.mail.aiProfiles",
+            "name": "AI profiles",
+            "name:cs": "AI profily",
+            "name:en": "AI profiles",
+            "icon": "robot",
+            "table": "core_mail_ai_profiles",
+            "class": "Shipard\\Module\\Core\\Mail\\AIProfilesViewer"
+        }
+    ],
+
+    "lookups": [
+        {
+            "table": "core_mail_ai_backends",
+            "class": "Shipard\\Module\\Core\\Mail\\AIBackendLookup"
         }
     ],
 

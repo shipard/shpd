@@ -333,6 +333,22 @@ grid sourozenců, které `FormColumn` grid naskládá pod sebe. Input je
 sdílený mezi větvemi přes Svelte snippet `inputFor`. Detaily v
 [`edit-forms.md`](edit-forms.md) sekce *4.4 inline*.
 
+**`FormStateBar` na mobilu** — footer formuláře má na desktopu Uložit
++ všechny přechody dokladu (Potvrdit, Archivovat, Storno…) vedle sebe.
+Na ≤ 768px se na úzkou obrazovku nevejdou, proto jdou do kebab menu (⋮)
+přes `Popover` (placement `top` — footer je dole, otevírá se nahoru):
+**destruktivní** přechody (`archive`/`trash`/`cancelled` — Archivovat,
+Stornovat, Smazat; v kebabu červeně), **`concept`** (Uložit jako koncept
+— pomocná akce, v kebabu neutrálně) a přechody s příznakem **`mobileKebab`**
+v docStates (vedlejší akce, jejíž `stateStyle` na rozlišení nestačí — např.
+„Pozastavit" u úkolů má `edit` stejně jako „Opravit" u faktur). **Postupové**
+přechody (Potvrdit, V pořádku, Opravit…; v daném stavu jich je max pár)
+zůstávají viditelné vedle Uložit. Stejný vzor jako
+kebab ve vieweru (`MobileTopBar`) — strukturní přepnutí (tlačítka → kebab)
+řízené `layoutStore.isMobile` (ne CSS). Kebab volá stejný `onTransition`
+jako tlačítko, takže případný `confirm` proběhne stejně. Detaily v
+[`edit-forms.md`](edit-forms.md) sekce *Toolbar formuláře (FormStateBar)*.
+
 ### FormDialog
 
 Modal wrapper — otevírá se z TableBrowser (tlačítko / dvojklik). Po uložení se prohlížeč automaticky refreshuje.

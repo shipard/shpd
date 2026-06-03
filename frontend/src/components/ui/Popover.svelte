@@ -70,10 +70,19 @@
     if (!open || !panelEl) return;
     // Inside the panel → ignore.
     if (panelEl.contains(event.target)) return;
-    // Inside a nested modal (FormDialog etc.) → ignore. The modal sits
-    // as a sibling under document.body, so we test the ancestor chain.
-    const modalAncestor = event.target?.closest?.('.shpd-modal');
-    if (modalAncestor) return;
+    // On the anchor itself (e.g. the kebab button) → ignore here and let the
+    // anchor's own click handler decide. Otherwise the capture-phase close
+    // would race the button's toggle and the popover couldn't be closed by
+    // re-tapping the trigger.
+    if (anchor?.contains?.(event.target)) return;
+    // Inside a *nested* modal (a FormDialog the popover itself opened, which
+    // sits as a separate `.shpd-modal` under body) → ignore, so opening that
+    // dialog doesn't close this popover. But a popover that *lives inside* a
+    // modal (e.g. the mobile FormStateBar footer in a fullscreen modal) must
+    // still close on clicks elsewhere in that same modal — so only ignore a
+    // modal that is NOT the popover's own modal.
+    const targetModal = event.target?.closest?.('.shpd-modal');
+    if (targetModal && targetModal !== anchor?.closest?.('.shpd-modal')) return;
     onClose();
   }
 

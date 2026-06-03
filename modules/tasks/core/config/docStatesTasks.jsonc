@@ -51,6 +51,10 @@
         "mainState": 3,
         "viewGroup": "active",
         "closeForm": 1,
+        // Vedlejší akce (ne hlavní postup) — na mobilu do kebabu, ať
+        // nezabírá místo ve footeru. stateStyle 'edit' tu nestačí, protože
+        // u faktur 'edit' = "Opravit", které má zůstat viditelné.
+        "mobileKebab": 1,
         "goto": [10, 20, 40, 90]
     },
 

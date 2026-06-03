@@ -66,7 +66,14 @@ class DocStateConfig
     /**
      * Returns available transitions from the given state, ready for API response.
      *
-     * @return array<array{state: int, stateName: string, actionName: string, stateStyle: string}>
+     * `mobileKebab` is an optional per-state UI hint: when true, the form footer
+     * (FormStateBar) tucks this transition into the mobile kebab menu instead of
+     * showing it as a button, even though its stateStyle would otherwise be
+     * visible. Used to demote side actions whose stateStyle is reused with a
+     * different meaning across doc types (e.g. `edit` = "Opravit" on invoices,
+     * kept visible, vs. "Pozastavit" on tasks, demoted to the kebab).
+     *
+     * @return array<array{state: int, stateName: string, actionName: string, stateStyle: string, close_form: bool, mobileKebab: bool}>
      */
     public function getAvailableTransitions(int $currentState): array
     {
@@ -81,6 +88,7 @@ class DocStateConfig
                     'actionName' => $s['actionName'] ?? (string) $target,
                     'stateStyle' => $s['stateStyle'] ?? '',
                     'close_form'  => (bool) ($s['closeForm'] ?? false),
+                    'mobileKebab' => (bool) ($s['mobileKebab'] ?? false),
                 ];
             }
         }

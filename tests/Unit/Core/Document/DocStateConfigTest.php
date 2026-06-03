@@ -161,6 +161,34 @@ class DocStateConfigTest extends TestCase
         $this->assertArrayHasKey('stateName', $transitions[0]);
         $this->assertArrayHasKey('actionName', $transitions[0]);
         $this->assertArrayHasKey('stateStyle', $transitions[0]);
+        $this->assertArrayHasKey('close_form', $transitions[0]);
+        $this->assertArrayHasKey('mobileKebab', $transitions[0]);
+    }
+
+    public function testMobileKebabFlagDefaultsFalseAndReflectsState(): void
+    {
+        $states = [
+            '10' => [
+                'stateName' => 'Nový', 'actionName' => 'Vrátit jako nový',
+                'stateStyle' => 'concept', 'goto' => [20, 30],
+            ],
+            '20' => [
+                'stateName' => 'V práci', 'actionName' => 'V práci',
+                'stateStyle' => 'confirmed', 'goto' => [10],
+            ],
+            '30' => [
+                'stateName' => 'Pozastaveno', 'actionName' => 'Pozastavit',
+                'stateStyle' => 'edit', 'mobileKebab' => 1, 'goto' => [10],
+            ],
+        ];
+        $cfg = DocStateConfig::fromCfgItem($states);
+        $transitions = $cfg->getAvailableTransitions(10);
+
+        $byState = array_column($transitions, null, 'state');
+        // Bez příznaku → false.
+        $this->assertFalse($byState[20]['mobileKebab']);
+        // S "mobileKebab": 1 → true.
+        $this->assertTrue($byState[30]['mobileKebab']);
     }
 
     public function testGetAvailableTransitionsFromArchiv(): void

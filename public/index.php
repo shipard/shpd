@@ -265,9 +265,25 @@ function dispatch(
 		'exchange' => dispatchExchange($route, $request, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'alerts' => dispatchAlerts($route, $request, $db, $alertCheckRegistry, $configRuntime, resolveLanguage($request, $resolved->config)),
 		'personsRegistry' => dispatchPersonsRegistry($route, $request, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $serverConfig),
+		'mcp'     => dispatchMcp($request, $auth, $resolved->connection, $tables, $configRuntime),
 		'openapi' => (new OpenApiController())->spec($auth, $openApiPublic, $tables, $baseUrl),
 		default   => Response::error('INTERNAL_ERROR', "Unknown controller: {$route->controller}", 500),
 	};
+}
+
+function dispatchMcp(
+	Request $request,
+	AuthContext $auth,
+	\Shipard\Core\Database\DataSourceConnection $db,
+	array $tables,
+	?\Shipard\Core\Config\ConfigRuntime $configRuntime,
+): Response {
+	// Fáze 1: in-code registr nástrojů (analogie wiring v dispatchExchange).
+	$registry = new \Shipard\Api\Mcp\McpToolRegistry();
+	$registry->register(new \Shipard\Module\Base\Persons\Mcp\PersonsSearchTool());
+
+	$ctrl = new \Shipard\Api\Controller\McpController($registry);
+	return $ctrl->rpc($request, $auth, $db, $tables, $configRuntime);
 }
 
 function dispatchAlerts(

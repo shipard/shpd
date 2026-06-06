@@ -124,6 +124,13 @@ class Router
 			return $this->resolveAlertsRoute($subpath, $method);
 		}
 
+		if ($subpath === '/_mcp') {
+			if ($method !== 'POST') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('mcp', 'rpc');
+		}
+
 		if ($subpath === '/persons/registry' || str_starts_with($subpath, '/persons/registry/')) {
 			return $this->resolvePersonsRegistryRoute($subpath, $method);
 		}

@@ -77,7 +77,7 @@
             "name:en": "Backend",
             "type": "int",
             "nullable": true,
-            "reference": "core_mail_ai_backends",
+            "reference": "core_ai_backends",
             "group": "identity"
         },
         {

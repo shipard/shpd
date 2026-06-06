@@ -16,7 +16,7 @@ může pro různé typy pošty zvolit jiný model.
 |---|---|---|
 | `profile_id` | varchar(50), NOT NULL, UNIQUE | Lidský identifikátor (`czech_invoices`) |
 | `name` | varchar(100), NOT NULL | Zobrazovaný název v UI |
-| `backend` | int → `core_mail_ai_backends`, NOT NULL | Backend, přes který profil běží |
+| `backend` | int → `core_ai_backends`, NOT NULL | Backend, přes který profil běží |
 
 ### Záběr (scope)
 
@@ -86,6 +86,6 @@ analýz je auditovatelná i po pozdějších změnách profilu.
 
 | Tabulka | Vazba | Popis |
 |---|---|---|
-| [core_mail_ai_backends](core_mail_ai_backends.md) | `ai_profiles.backend` → `ai_backends.id` | Backend, na kterém profil běží |
+| [core_ai_backends](../../ai/tables/core_ai_backends.md) | `ai_profiles.backend` → `core_ai_backends.id` | Backend, na kterém profil běží (modul core/ai) |
 | [core_mail_message_analyses](core_mail_message_analyses.md) | `message_analyses.profile` → `ai_profiles.id` | Audit běhu |
 | [core_mail_incoming_messages](core_mail_incoming_messages.md) | `incoming_messages.profile_override` → `ai_profiles.id` | Per-zpráva override profilu pro znovu-analýzu |

@@ -102,7 +102,7 @@ class SqlGeneratorTest extends TestCase
     public function testEncryptedTextNullable(): void
     {
         $col = $this->makeCol(['id' => 'api_key', 'type' => 'encrypted_text', 'nullable' => true]);
-        $sql = SqlGenerator::generateAddColumn('core_mail_ai_backends', $col);
+        $sql = SqlGenerator::generateAddColumn('core_ai_backends', $col);
         $this->assertStringContainsString('`api_key` TEXT NULL', $sql);
     }
 

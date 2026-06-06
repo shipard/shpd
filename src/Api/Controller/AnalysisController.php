@@ -19,8 +19,8 @@ use Shipard\Core\Security\Exception\SecretsKeyMissingException;
 use Shipard\Module\Core\Attachments\AttachmentService;
 use Shipard\Module\Core\Exchange\Document\DocumentApplier;
 use Shipard\Module\Core\Exchange\Schema\SchemaValidator;
+use Shipard\Module\Core\Ai\AIBackendDocument;
 use Shipard\Module\Core\Mail\AIAnalyzerProvisioner;
-use Shipard\Module\Core\Mail\AIBackendDocument;
 use Shipard\Module\Core\Mail\ExtractedApplyOutcome;
 use Shipard\Module\Core\Mail\ExtractedDocumentApplier;
 use Shipard\Module\Core\Mail\ExtractedDocumentDocument;
@@ -42,7 +42,7 @@ class AnalysisController
     private const MESSAGES_TABLE = 'core_mail_incoming_messages';
     private const ANALYSES_TABLE = 'core_mail_message_analyses';
     private const EXTRACTED_TABLE = 'core_mail_extracted_documents';
-    private const BACKENDS_TABLE = 'core_mail_ai_backends';
+    private const BACKENDS_TABLE = 'core_ai_backends';
     private const PROFILES_TABLE = 'core_mail_ai_profiles';
     private const CLAIMS_TABLE = 'core_mail_analysis_claims';
     private const ATTACHMENTS_TABLE = 'core_attachments_files';

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Shipard\Module\Core\Mail;
+namespace Shipard\Module\Core\Ai;
 
 use Shipard\Core\Document\DocStateConfig;
 use Shipard\Core\Viewer\TableViewer;

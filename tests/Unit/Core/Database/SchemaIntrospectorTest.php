@@ -39,14 +39,14 @@ class SchemaIntrospectorTest extends TestCase
     public function testFindsSingleEncryptedColumn(): void
     {
         $tables = [
-            'core_mail_ai_backends' => $this->makeTable(101, 'AI Backends', [
+            'core_ai_backends' => $this->makeTable(101, 'AI Backends', [
                 ['id' => 'provider', 'name' => 'Provider', 'type' => 'varchar', 'length' => 50],
                 ['id' => 'api_key', 'name' => 'API key', 'type' => 'encrypted_text', 'nullable' => true],
             ]),
         ];
 
         $this->assertSame(
-            [['table' => 'core_mail_ai_backends', 'column' => 'api_key']],
+            [['table' => 'core_ai_backends', 'column' => 'api_key']],
             SchemaIntrospector::findEncryptedColumns($tables),
         );
     }

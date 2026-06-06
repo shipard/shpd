@@ -26,8 +26,7 @@ další providers (Ollama, ...), odeslaná pošta.
 | [core_mail_message_analyses](tables/core_mail_message_analyses.md) | Historie AI analýz zpráv |
 | [core_mail_incoming_idempotency](tables/core_mail_incoming_idempotency.md) | Idempotency klíče pro `POST /_mail/incoming` (TTL 7 dní) |
 | [core_mail_extracted_documents](tables/core_mail_extracted_documents.md) | Kandidáti na business entity z AI analýzy (Fáze 3a) |
-| [core_mail_ai_backends](tables/core_mail_ai_backends.md) | Konfigurace AI providerů — `api_key` jako `encrypted_text` (Fáze 3a) |
-| [core_mail_ai_profiles](tables/core_mail_ai_profiles.md) | Prompty + JSON schémata + thresholdy per use-case (Fáze 3a) |
+| [core_mail_ai_profiles](tables/core_mail_ai_profiles.md) | Prompty + JSON schémata + thresholdy per use-case (Fáze 3a); FK `backend` → `core_ai_backends` (modul core/ai) |
 | [core_mail_analysis_claims](tables/core_mail_analysis_claims.md) | Lease mechanismus pro pull protocol (Fáze 3a) |
 
 ## Zdrojové soubory
@@ -40,7 +39,6 @@ další providers (Ollama, ...), odeslaná pošta.
 | [IncomingMessagesViewer.php](src/IncomingMessagesViewer.php) | Viewer pro seznam došlých zpráv + tab "Extrahované dokumenty" |
 | [MailRouterProvisioner.php](src/MailRouterProvisioner.php) | Bootstrap `_mail_router` + default schránky |
 | [IdempotencyStore.php](src/IdempotencyStore.php) | Lookup/store idempotency klíčů |
-| [AIBackendDocument.php](src/AIBackendDocument.php) | AI backend — šifrování `api_key` přes `DsSecretCipher` |
 | [AIProfileDocument.php](src/AIProfileDocument.php) | AI profil — JSON validace, `is_default` invariant |
 | [ExtractedDocumentDocument.php](src/ExtractedDocumentDocument.php) | Extrahovaný dokument — atomický auto-transition zprávy 30→40 v `afterPersist` |
 | [AIAnalyzerProvisioner.php](src/AIAnalyzerProvisioner.php) | Bootstrap `_ai_analyzer` + default backend + default profil |

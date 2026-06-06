@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Shipard\Module\Core\Mail;
+namespace Shipard\Module\Core\Ai;
 
 use Shipard\Core\Document\Document;
 use Shipard\Core\Document\ValidationResult;
 use Shipard\Core\Security\DsSecretCipher;
 
 /**
- * Document třída pro `core_mail_ai_backends`.
+ * Document třída pro `core_ai_backends`.
  *
  * Zodpovědnosti:
  *   - validace povinných polí (backend_id, name, model)
@@ -128,7 +128,7 @@ class AIBackendDocument extends Document
             'SELECT %n, %n FROM %n WHERE %n = %i AND %n != %i LIMIT 1',
             'backend_id',
             'name',
-            'core_mail_ai_backends',
+            'core_ai_backends',
             'is_default',
             1,
             'id',

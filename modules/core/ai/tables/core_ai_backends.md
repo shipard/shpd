@@ -1,4 +1,4 @@
-# Tabulka: AI backendy (core_mail_ai_backends)
+# Tabulka: AI backendy (core_ai_backends)
 
 Konfigurace AI providerů pro analýzu došlé pošty. Per DS může existovat více
 backendů (např. Anthropic + lokální Ollama), právě jeden může mít

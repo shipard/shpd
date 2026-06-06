@@ -84,7 +84,7 @@ class AIAnalyzerProvisioner
     public function ensureDefaultBackend(): array
     {
         $row = $this->db->fetchRow(
-            'SELECT id FROM core_mail_ai_backends WHERE backend_id = %s',
+            'SELECT id FROM core_ai_backends WHERE backend_id = %s',
             self::DEFAULT_BACKEND_ID,
         );
 
@@ -93,7 +93,7 @@ class AIAnalyzerProvisioner
         }
 
         $existingDefault = $this->db->fetchRow(
-            'SELECT id, backend_id FROM core_mail_ai_backends WHERE is_default = %i',
+            'SELECT id, backend_id FROM core_ai_backends WHERE is_default = %i',
             1,
         );
 
@@ -106,7 +106,7 @@ class AIAnalyzerProvisioner
         }
 
         $now = date('Y-m-d H:i:s');
-        $id = $this->db->insertRow('core_mail_ai_backends', [
+        $id = $this->db->insertRow('core_ai_backends', [
             'backend_id' => self::DEFAULT_BACKEND_ID,
             'name' => 'Anthropic Claude',
             'provider' => 'anthropic',

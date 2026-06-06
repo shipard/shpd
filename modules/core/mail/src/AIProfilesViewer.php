@@ -21,7 +21,7 @@ class AIProfilesViewer extends TableViewer
             . ' p.`is_default`, p.`is_active`, p.`docState`, p.`docStateMain`,'
             . ' b.`name` AS `backend_name`'
             . ' FROM `' . $this->table . '` p'
-            . ' LEFT JOIN `core_mail_ai_backends` b ON b.`id` = p.`backend`';
+            . ' LEFT JOIN `core_ai_backends` b ON b.`id` = p.`backend`';
 
         $conditions = [];
         $params = [];
@@ -101,7 +101,7 @@ class AIProfilesViewer extends TableViewer
             . ' p.`supported_doc_types`, p.`language`, p.`prompt_version`,'
             . ' p.`is_default`, p.`is_active`, p.`created`, p.`modified`'
             . ' FROM `' . $this->table . '` p'
-            . ' LEFT JOIN `core_mail_ai_backends` b ON b.`id` = p.`backend`'
+            . ' LEFT JOIN `core_ai_backends` b ON b.`id` = p.`backend`'
             . ' WHERE p.`id` = %i',
             $recordId,
         );

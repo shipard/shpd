@@ -10,6 +10,7 @@
     "dependencies": [
         "core.system",
         "core.attachments",
+        "core.ai",
         "base.persons"
     ],
 
@@ -19,25 +20,17 @@
         "core_mail_message_analyses",
         "core_mail_incoming_idempotency",
         "core_mail_extracted_documents",
-        "core_mail_ai_backends",
         "core_mail_ai_profiles",
         "core_mail_analysis_claims"
     ],
 
-    // ds-reset chrání jen AI backend kvůli zašifrovanému API klíči
-    // (ai-analyzer-set-key). Schránky, profily, zprávy, analýzy
-    // i extrahované doklady se resetují.
-    "keepOnReset": [
-        "core_mail_ai_backends"
-    ],
-
     // core_mail_incoming_messages má viewer core.mail.incoming (Došlá pošta)
     // a zůstává v hlavní navigaci — do settings nepatří.
+    // AI backendy se přesunuly do core.ai (i jejich settingsItem + keepOnReset).
     "settingsItems": [
         { "viewer": "core.mail.mailboxes",          "section": "other", "subsection": "other.mail", "order": 10 },
         { "table": "core_mail_message_analyses",    "section": "other", "subsection": "other.mail", "order": 20 },
         { "table": "core_mail_incoming_idempotency","section": "other", "subsection": "other.mail", "order": 30 },
-        { "viewer": "core.mail.aiBackends",         "section": "other", "subsection": "other.mail", "order": 40 },
         { "viewer": "core.mail.aiProfiles",         "section": "other", "subsection": "other.mail", "order": 50 },
         { "table": "core_mail_analysis_claims",     "section": "other", "subsection": "other.mail", "order": 60 }
     ],
@@ -62,15 +55,6 @@
             "class": "Shipard\\Module\\Core\\Mail\\MailboxesViewer"
         },
         {
-            "id": "core.mail.aiBackends",
-            "name": "AI backends",
-            "name:cs": "AI backendy",
-            "name:en": "AI backends",
-            "icon": "robot",
-            "table": "core_mail_ai_backends",
-            "class": "Shipard\\Module\\Core\\Mail\\AIBackendsViewer"
-        },
-        {
             "id": "core.mail.aiProfiles",
             "name": "AI profiles",
             "name:cs": "AI profily",
@@ -78,13 +62,6 @@
             "icon": "robot",
             "table": "core_mail_ai_profiles",
             "class": "Shipard\\Module\\Core\\Mail\\AIProfilesViewer"
-        }
-    ],
-
-    "lookups": [
-        {
-            "table": "core_mail_ai_backends",
-            "class": "Shipard\\Module\\Core\\Mail\\AIBackendLookup"
         }
     ],
 
@@ -103,10 +80,6 @@
         {
             "table": "core_mail_incoming_messages",
             "class": "Shipard\\Module\\Core\\Mail\\IncomingMessageDocument"
-        },
-        {
-            "table": "core_mail_ai_backends",
-            "class": "Shipard\\Module\\Core\\Mail\\AIBackendDocument"
         },
         {
             "table": "core_mail_ai_profiles",

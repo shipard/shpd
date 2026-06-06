@@ -15,7 +15,7 @@ s upraveným promptem; znovu analyzováno po upgradu modelu apod.).
 |---|---|---|
 | `message` | int → `core_mail_incoming_messages`, NOT NULL | Zpráva, ke které analýza patří |
 | `profile` | int → `core_mail_ai_profiles` | Profil použitý při běhu (NULL u legacy záznamů z Fáze 1) |
-| `backend` | int → `core_mail_ai_backends` | Backend použitý při běhu (NULL u legacy záznamů z Fáze 1) |
+| `backend` | int → `core_ai_backends` | Backend použitý při běhu (NULL u legacy záznamů z Fáze 1) |
 | `analyzed_at` | datetime, NOT NULL | Čas dokončení analýzy (start nebo konec — nastavuje AI pipeline) |
 | `status` | tinyint, default 1 | `1` = pending, `2` = success, `3` = failed |
 

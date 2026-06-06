@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Shipard\Tests\Unit\Module\Core\Mail;
+namespace Shipard\Tests\Unit\Module\Core\Ai;
 
 use PHPUnit\Framework\TestCase;
 use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Security\DsSecretCipher;
-use Shipard\Module\Core\Mail\AIBackendDocument;
+use Shipard\Module\Core\Ai\AIBackendDocument;
 
 /**
  * AIBackendDocument — validate, beforeSave, encryption flow.

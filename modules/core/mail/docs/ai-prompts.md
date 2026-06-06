@@ -145,7 +145,7 @@ běžící zpracování — promítne se až do nových claimů po reload.
 
 ### Jinak vybraný backend per profil
 
-Pole `backend` v profilu je FK na `core_mail_ai_backends`. Můžeš mít víc
+Pole `backend` v profilu je FK na `core_ai_backends`. Můžeš mít víc
 backendů (`default` Anthropic Claude Sonnet pro běžné případy, druhý backend
 s Claude Opus pro náročné dokumenty) a přiřadit je různým profilům.
 

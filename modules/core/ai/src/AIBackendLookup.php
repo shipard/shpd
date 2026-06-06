@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Shipard\Module\Core\Mail;
+namespace Shipard\Module\Core\Ai;
 
 use Shipard\Core\Form\Lookup\LookupItem;
 use Shipard\Core\Form\Lookup\TableLookup;
@@ -24,7 +24,7 @@ class AIBackendLookup extends TableLookup
         }
 
         $sql = 'SELECT `id`, `backend_id`, `name`, `provider`, `model`'
-            . ' FROM `core_mail_ai_backends`';
+            . ' FROM `core_ai_backends`';
         $params = [];
         if ($q !== '') {
             $term = '%' . $q . '%';
@@ -50,7 +50,7 @@ class AIBackendLookup extends TableLookup
         }
         $rows = $this->db->fetchAll(
             'SELECT `id`, `backend_id`, `name`, `provider`, `model`'
-            . ' FROM `core_mail_ai_backends` WHERE `id` IN %in',
+            . ' FROM `core_ai_backends` WHERE `id` IN %in',
             $intIds,
         );
         return array_map(fn(array $r) => self::buildItem($r), $rows);

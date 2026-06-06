@@ -137,7 +137,7 @@ class AiAnalyzerSetKeyCommandTest extends TestCase
 
         $this->assertSame(Command::SUCCESS, $exitCode);
         $this->assertNotNull($captured);
-        $this->assertSame('core_mail_ai_backends', $captured['table']);
+        $this->assertSame('core_ai_backends', $captured['table']);
         $this->assertSame([17], $captured['params']);
 
         // Klíčové bezpečnostní invarianty:

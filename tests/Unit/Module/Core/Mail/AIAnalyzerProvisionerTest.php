@@ -117,8 +117,8 @@ class AIAnalyzerProvisionerTest extends TestCase
         $provisioner = new AIAnalyzerProvisioner($db);
         $provisioner->provision();
 
-        $this->assertArrayHasKey('core_mail_ai_backends', $insertedRows);
-        $backend = $insertedRows['core_mail_ai_backends'];
+        $this->assertArrayHasKey('core_ai_backends', $insertedRows);
+        $backend = $insertedRows['core_ai_backends'];
         $this->assertNull($backend['api_key']);
         $this->assertSame(0, $backend['is_active']);
         $this->assertSame(1, $backend['is_default']);

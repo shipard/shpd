@@ -68,7 +68,7 @@ selhání se vše rollbackuje.
 
 ## Šifrování API klíčů backendů
 
-`core_mail_ai_backends.api_key` je sloupec typu `encrypted_text` (viz
+`core_ai_backends.api_key` je sloupec typu `encrypted_text` (viz
 [docs/operations/secrets.md](../../../../docs/operations/secrets.md)).
 `AIBackendDocument::beforeSave()` šifruje hodnotu přes `DsSecretCipher` při
 dirty change; `AnalysisController::claim()` ji decryptuje a vkládá plaintext do

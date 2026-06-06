@@ -1,0 +1,54 @@
+{
+    "id": "core.ai",
+    "name": "AI",
+    "name:cs": "AI",
+    "name:en": "AI",
+    "description": "Shared AI infrastructure: LLM provider backends (credentials, model, encrypted API key) reused by mail analysis, chat, and future AI features",
+    "description:cs": "Sdílená AI infrastruktura: LLM backendy (přístupové údaje, model, zašifrovaný API klíč) sdílené analýzou pošty, chatem a dalšími AI funkcemi",
+    "description:en": "Shared AI infrastructure: LLM provider backends (credentials, model, encrypted API key) reused by mail analysis, chat, and future AI features",
+
+    "dependencies": [
+        "core.system"
+    ],
+
+    "tables": [
+        "core_ai_backends"
+    ],
+
+    // ds-reset chrání AI backend kvůli zašifrovanému API klíči
+    // (ai-analyzer-set-key). Přesunuto z core.mail spolu s tabulkou.
+    "keepOnReset": [
+        "core_ai_backends"
+    ],
+
+    // Umístění v nastavení zachováno 1:1 z core.mail (subsekce other.mail).
+    "settingsItems": [
+        { "viewer": "core.ai.backends", "section": "other", "subsection": "other.mail", "order": 40 }
+    ],
+
+    "viewers": [
+        {
+            "id": "core.ai.backends",
+            "name": "AI backends",
+            "name:cs": "AI backendy",
+            "name:en": "AI backends",
+            "icon": "robot",
+            "table": "core_ai_backends",
+            "class": "Shipard\\Module\\Core\\Ai\\AIBackendsViewer"
+        }
+    ],
+
+    "lookups": [
+        {
+            "table": "core_ai_backends",
+            "class": "Shipard\\Module\\Core\\Ai\\AIBackendLookup"
+        }
+    ],
+
+    "documentClasses": [
+        {
+            "table": "core_ai_backends",
+            "class": "Shipard\\Module\\Core\\Ai\\AIBackendDocument"
+        }
+    ]
+}

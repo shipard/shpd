@@ -23,7 +23,7 @@
                                     "column": "backend",
                                     "required": true,
                                     "placeholder": "Vyberte backend…",
-                                    "lookup": {"table": "core_mail_ai_backends", "filter": null}
+                                    "lookup": {"table": "core_ai_backends", "filter": null}
                                 },
 
                                 {"type": "separator", "label": "Záběr", "label:cs": "Záběr", "label:en": "Scope"},

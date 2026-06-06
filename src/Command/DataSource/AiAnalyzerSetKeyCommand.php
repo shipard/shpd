@@ -10,7 +10,7 @@ use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Security\DsSecretCipher;
 use Shipard\Core\Security\Exception\SecretsKeyInsecureException;
 use Shipard\Core\Security\Exception\SecretsKeyMissingException;
-use Shipard\Module\Core\Mail\AIBackendDocument;
+use Shipard\Module\Core\Ai\AIBackendDocument;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
@@ -77,7 +77,7 @@ class AiAnalyzerSetKeyCommand extends Command
         }
 
         $row = $dsConnection->fetchRow(
-            'SELECT id FROM core_mail_ai_backends WHERE backend_id = %s',
+            'SELECT id FROM core_ai_backends WHERE backend_id = %s',
             $backendCode,
         );
         if ($row === null) {
@@ -127,7 +127,7 @@ class AiAnalyzerSetKeyCommand extends Command
         }
 
         $dsConnection->updateWhere(
-            'core_mail_ai_backends',
+            'core_ai_backends',
             [
                 'api_key' => $data['api_key'],
                 'is_active' => 1,

@@ -278,9 +278,12 @@ function dispatchMcp(
 	array $tables,
 	?\Shipard\Core\Config\ConfigRuntime $configRuntime,
 ): Response {
-	// Fáze 1: in-code registr nástrojů (analogie wiring v dispatchExchange).
+	// Fáze 1+2: in-code registr nástrojů (analogie wiring v dispatchExchange).
 	$registry = new \Shipard\Api\Mcp\McpToolRegistry();
 	$registry->register(new \Shipard\Module\Base\Persons\Mcp\PersonsSearchTool());
+	$registry->register(new \Shipard\Module\Base\Persons\Mcp\PersonsGetTool());
+	$registry->register(new \Shipard\Module\Docs\Core\Mcp\DocumentsSearchTool());
+	$registry->register(new \Shipard\Module\Core\Mail\Mcp\MailListPendingTool());
 
 	$ctrl = new \Shipard\Api\Controller\McpController($registry);
 	return $ctrl->rpc($request, $auth, $db, $tables, $configRuntime);

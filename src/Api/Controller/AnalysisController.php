@@ -21,7 +21,10 @@ use Shipard\Module\Core\Exchange\Document\DocumentApplier;
 use Shipard\Module\Core\Exchange\Schema\SchemaValidator;
 use Shipard\Module\Core\Mail\AIAnalyzerProvisioner;
 use Shipard\Module\Core\Mail\AIBackendDocument;
+use Shipard\Module\Core\Mail\ExtractedApplyOutcome;
+use Shipard\Module\Core\Mail\ExtractedDocumentApplier;
 use Shipard\Module\Core\Mail\ExtractedDocumentDocument;
+use Shipard\Module\Core\Mail\StatusWriteResult;
 
 /**
  * Endpoints `/_mail/analysis/*` — pull-based protokol pro externí AI analyzer.
@@ -1130,254 +1133,57 @@ class AnalysisController
         // won't be filled and no doc will be created, but the UI keeps
         // working.
         if ($this->applier === null) {
-            return $this->updateExtractedStatus(
-                $extractedNdx,
-                $auth->userId,
-                ExtractedDocumentDocument::STATUS_APPLIED,
-                null,
+            $write = ExtractedDocumentApplier::writeStatusTransition(
+                $this->db, $extractedNdx, $auth->userId,
+                ExtractedDocumentDocument::STATUS_APPLIED, null,
             );
+            return $this->statusWriteToResponse($write, $extractedNdx);
         }
 
-        $existing = $this->db->fetchRow(
-            'SELECT * FROM %n WHERE id = %i',
-            self::EXTRACTED_TABLE, $extractedNdx,
-        );
-        if ($existing === null) {
-            return Response::error('NOT_FOUND', "Extracted document {$extractedNdx} not found", 404);
-        }
-
-        $currentStatus = (int) $existing['status'];
-
-        // ai_failed → cannot apply. User must reanalyze.
-        if ($currentStatus === ExtractedDocumentDocument::STATUS_AI_FAILED) {
-            return Response::error(
-                'AI_OUTPUT_INVALID',
-                'AI extrakce neproběhla úspěšně, použij reanalýzu.',
-                422,
-            );
-        }
-
-        // Recovery path — apply succeeded earlier (target_row_ndx set) but
-        // status update may have lagged. Skip the applier and just finish
-        // the status flow. Also covers re-clicks on already-applied rows.
-        $targetRowNdx = isset($existing['target_row_ndx']) ? (int) $existing['target_row_ndx'] : 0;
-        if ($targetRowNdx > 0) {
-            return $this->completeApplied($existing, $extractedNdx, $auth->userId, $targetRowNdx);
-        }
-
-        // pending (10/20/30) → proceed with full apply
-        $pendingStates = [
-            ExtractedDocumentDocument::STATUS_READY_TO_APPLY,
-            ExtractedDocumentDocument::STATUS_PENDING_REVIEW,
-            ExtractedDocumentDocument::STATUS_LOW_CONFIDENCE,
-        ];
-        if (!in_array($currentStatus, $pendingStates, true)) {
-            return Response::error(
-                'INVALID_STATE',
-                'Document is not in a pending state (10/20/30)',
-                409,
-            );
-        }
-
-        $canonical = json_decode((string) ($existing['extracted_json'] ?? ''), true);
-        if (!is_array($canonical)) {
-            return Response::error('CORRUPTED_DATA', 'extracted_json cannot be parsed', 500);
-        }
-
-        // Read Phase 3b additions from request body: flat `_resolve` map
-        // of {path: userAction} + optional applyOptions override.
+        // Apply core lives in the shared service so this HTTP endpoint and
+        // the MCP mail_draft_document tool run one code path. The controller
+        // only parses the body and maps the outcome back onto a Response.
         $body = $request->getBody();
         $body = is_array($body) ? $body : [];
-        $clientResolveFlat = is_array($body['_resolve'] ?? null) ? $body['_resolve'] : null;
-        $hasResolveKey = array_key_exists('_resolve', $body);
-        $applyOptionsBody = is_array($body['applyOptions'] ?? null) ? $body['applyOptions'] : [];
-
-        // Server-controlled injection — never trust client-supplied source
-        // metadata for the AI flow.
-        $source = is_array($canonical['source'] ?? null) ? $canonical['source'] : [];
-        $source['extractedDoc'] = $extractedNdx;
-        if (empty($source['kind'])) {
-            $source['kind'] = 'aiExtraction';
-        }
-        $canonical['source'] = $source;
-
-        // Merge client userActions into canonical _resolve. Backend
-        // expands flat `{path: action}` to nested `_resolve.{path}.userAction`.
-        if ($clientResolveFlat !== null) {
-            $expanded = $this->expandUserActions($clientResolveFlat);
-            $canonical['_resolve'] = $this->mergeUserActions(
-                is_array($canonical['_resolve'] ?? null) ? $canonical['_resolve'] : [],
-                $expanded,
-            );
-        }
-
-        // autoCreateMode rules (see exchange-format-phase3b.md):
-        //   - body without `_resolve` key   → safe (Phase 2 / CLI backward compat)
-        //   - body with `_resolve` (even {}) → strict (3b-aware client)
-        //   - explicit applyOptions.autoCreateMode → wins over both
-        $autoCreateMode = $applyOptionsBody['autoCreateMode']
-            ?? ($hasResolveKey ? 'strict' : 'safe');
-        $targetDocState = isset($applyOptionsBody['targetDocState'])
-            ? (int) $applyOptionsBody['targetDocState']
-            : 10;
-        $canonical['applyOptions'] = [
-            'autoCreateMode' => $autoCreateMode,
-            'targetDocState' => $targetDocState,
-        ];
-
-        $result = $this->applier->apply($canonical);
-        if (!$result->success) {
-            return Response::error(
-                $result->errorCode ?? 'INTERNAL_ERROR',
-                $result->errorMessage ?? 'Apply failed',
-                $result->statusCode,
-                ['canonical' => $result->canonical],
-            );
-        }
-
-        $savedDocId = (int) ($result->savedId ?? 0);
-
-        // Mark the extracted_document as applied via the Document flow —
-        // ExtractedDocumentDocument::afterPersist triggers the message
-        // 30→40 auto-transition. If this fails, the doc is already in DB
-        // and the user can retry (target_row_ndx is set, see recovery
-        // path above).
-        $statusUpdate = $this->updateExtractedStatus(
+        $service = new ExtractedDocumentApplier($this->db, $this->applier);
+        $outcome = $service->apply(
             $extractedNdx,
             $auth->userId,
-            ExtractedDocumentDocument::STATUS_APPLIED,
-            null,
+            array_key_exists('_resolve', $body) && is_array($body['_resolve']) ? $body['_resolve'] : null,
+            is_array($body['applyOptions'] ?? null) ? $body['applyOptions'] : [],
         );
-        $statusUpdatePayload = $statusUpdate->getPayload();
-        if (!is_array($statusUpdatePayload) || ($statusUpdatePayload['success'] ?? false) !== true) {
-            ErrorLogger::warn('applyExtracted: status update failed after successful apply', [
-                'extractedNdx' => $extractedNdx,
-                'savedDocId' => $savedDocId,
-            ]);
-        }
 
-        return Response::success([
-            'savedDocId' => $savedDocId,
-            'extractedNdx' => $extractedNdx,
-            'messageNdx' => (int) $existing['message'],
-            'canonical' => $result->canonical,
-        ]);
+        return $this->outcomeToResponse($outcome);
     }
 
     /**
-     * Re-entry path for an already-applied (or partially-applied) extracted
-     * document. If `extracted_document.status` is already 40, return success
-     * idempotently. Otherwise run the status update (recovery from a
-     * lagged status write after a successful apply).
-     *
-     * @param array<string, mixed> $existing
+     * Map an {@see ExtractedApplyOutcome} onto the exact Response payloads /
+     * HTTP statuses the endpoint produced before the service extraction.
      */
-    private function completeApplied(array $existing, int $extractedNdx, ?int $userId, int $savedDocId): Response
+    private function outcomeToResponse(ExtractedApplyOutcome $outcome): Response
     {
-        $currentStatus = (int) $existing['status'];
-        if ($currentStatus === ExtractedDocumentDocument::STATUS_APPLIED) {
-            return Response::success([
-                'savedDocId' => $savedDocId,
-                'extractedNdx' => $extractedNdx,
-                'messageNdx' => (int) $existing['message'],
-                'idempotent' => true,
-            ]);
+        if (!$outcome->ok) {
+            return Response::error(
+                $outcome->errorCode ?? 'INTERNAL_ERROR',
+                $outcome->errorMessage ?? 'Apply failed',
+                $outcome->statusCode,
+                $outcome->canonical !== null ? ['canonical' => $outcome->canonical] : [],
+            );
         }
-        $statusUpdate = $this->updateExtractedStatus(
-            $extractedNdx, $userId,
-            ExtractedDocumentDocument::STATUS_APPLIED, null,
-        );
-        $statusUpdatePayload = $statusUpdate->getPayload();
-        if (!is_array($statusUpdatePayload) || ($statusUpdatePayload['success'] ?? false) !== true) {
-            return $statusUpdate;
-        }
-        return Response::success([
-            'savedDocId' => $savedDocId,
-            'extractedNdx' => $extractedNdx,
-            'messageNdx' => (int) $existing['message'],
-            'recovered' => true,
-        ]);
-    }
 
-    /**
-     * Expand flat client-side userActions into nested `_resolve` shape
-     * expected by DocumentApplier.
-     *
-     * Input shape:
-     *   {"supplier": "useExisting:42", "rows[0].item": "create", ...}
-     *
-     * Output shape:
-     *   {
-     *     "supplier": {"userAction": "useExisting:42"},
-     *     "rows": [{"item": {"userAction": "create"}}],
-     *   }
-     *
-     * Unknown paths are silently ignored — the applier handles unresolved
-     * references via its normal reconcile flow, so a broken UI shouldn't
-     * block save. Strict 400-rejection happens only when the request body
-     * isn't an object at all (handled upstream).
-     *
-     * @param array<string, mixed> $flat
-     * @return array<string, mixed>
-     */
-    private function expandUserActions(array $flat): array
-    {
-        $expanded = [];
-        foreach ($flat as $path => $action) {
-            if (!is_string($action)) {
-                continue;
-            }
-            if (preg_match('/^rows\[(\d+)\]\.(item|unit|vatCode)$/', (string) $path, $m)) {
-                $idx = (int) $m[1];
-                $field = $m[2];
-                $expanded['rows'][$idx][$field]['userAction'] = $action;
-                continue;
-            }
-            if (in_array($path, ['supplier', 'customer', 'supplierBank', 'customerBank'], true)) {
-                $expanded[$path]['userAction'] = $action;
-            }
+        $payload = [
+            'savedDocId'   => (int) ($outcome->savedDocId ?? 0),
+            'extractedNdx' => $outcome->extractedNdx,
+            'messageNdx'   => $outcome->messageNdx,
+        ];
+        if ($outcome->idempotent) {
+            $payload['idempotent'] = true;
+        } elseif ($outcome->recovered) {
+            $payload['recovered'] = true;
+        } else {
+            $payload['canonical'] = $outcome->canonical;
         }
-        return $expanded;
-    }
-
-    /**
-     * Deep-merge userAction overrides into existing canonical `_resolve`.
-     * Only `userAction` keys are touched; status/candidates/createPayload
-     * etc. stay as-is (the applier does a fresh resolve and overwrites
-     * them anyway).
-     *
-     * @param array<string, mixed> $existing
-     * @param array<string, mixed> $overrides
-     * @return array<string, mixed>
-     */
-    private function mergeUserActions(array $existing, array $overrides): array
-    {
-        foreach ($overrides as $key => $value) {
-            if ($key === 'rows' && is_array($value)) {
-                $existing['rows'] = is_array($existing['rows'] ?? null) ? $existing['rows'] : [];
-                foreach ($value as $idx => $rowOverride) {
-                    if (!is_array($rowOverride)) continue;
-                    $existing['rows'][$idx] = is_array($existing['rows'][$idx] ?? null)
-                        ? $existing['rows'][$idx]
-                        : [];
-                    foreach ($rowOverride as $field => $fieldOverride) {
-                        if (!is_array($fieldOverride) || !isset($fieldOverride['userAction'])) {
-                            continue;
-                        }
-                        $existing['rows'][$idx][$field] = is_array($existing['rows'][$idx][$field] ?? null)
-                            ? $existing['rows'][$idx][$field]
-                            : [];
-                        $existing['rows'][$idx][$field]['userAction'] = $fieldOverride['userAction'];
-                    }
-                }
-                continue;
-            }
-            if (is_array($value) && isset($value['userAction'])) {
-                $existing[$key] = is_array($existing[$key] ?? null) ? $existing[$key] : [];
-                $existing[$key]['userAction'] = $value['userAction'];
-            }
-        }
-        return $existing;
+        return Response::success($payload);
     }
 
     public function rejectExtracted(AuthContext $auth, Request $request, int $extractedNdx): Response
@@ -1397,12 +1203,38 @@ class AnalysisController
             );
         }
 
-        return $this->updateExtractedStatus(
-            $extractedNdx,
-            $auth->userId,
-            ExtractedDocumentDocument::STATUS_REJECTED,
-            $reason,
+        $write = ExtractedDocumentApplier::writeStatusTransition(
+            $this->db, $extractedNdx, $auth->userId,
+            ExtractedDocumentDocument::STATUS_REJECTED, $reason,
         );
+        return $this->statusWriteToResponse($write, $extractedNdx);
+    }
+
+    /**
+     * Map a {@see StatusWriteResult} onto the Response shape the legacy
+     * `updateExtractedStatus` produced — used by reject and the no-applier
+     * apply fallback.
+     */
+    private function statusWriteToResponse(StatusWriteResult $write, int $extractedNdx): Response
+    {
+        if ($write->notFound) {
+            return Response::error('NOT_FOUND', "Extracted document {$extractedNdx} not found", 404);
+        }
+        if (!$write->ok) {
+            if ($write->validationErrors !== null) {
+                return Response::error('VALIDATION_ERROR', 'Validation failed', 422, $write->validationErrors);
+            }
+            return Response::error(
+                $write->errorCode ?? 'INTERNAL_ERROR',
+                $write->errorMessage ?? 'Internal server error',
+                $write->statusCode,
+            );
+        }
+        return Response::success([
+            'ndx'         => $extractedNdx,
+            'status'      => $write->newStatus,
+            'message_ndx' => $write->messageNdx,
+        ]);
     }
 
     /**
@@ -1555,91 +1387,5 @@ class AnalysisController
             ];
         }
         return $out;
-    }
-
-    /**
-     * Společné jádro pro apply/reject — načte řádek, sestaví $data, projde
-     * přes Document hooky (validate, beforeSave, afterPersist) v transakci.
-     */
-    private function updateExtractedStatus(
-        int $extractedNdx,
-        ?int $userId,
-        int $newStatus,
-        ?string $rejectedReason,
-    ): Response {
-        $existing = $this->db->fetchRow(
-            'SELECT * FROM %n WHERE id = %i',
-            self::EXTRACTED_TABLE,
-            $extractedNdx,
-        );
-        if ($existing === null) {
-            return Response::error('NOT_FOUND', "Extracted document {$extractedNdx} not found", 404);
-        }
-
-        // Transitions povolené z "pending" stavů (10/20/30) do applied/rejected.
-        $currentStatus = (int) $existing['status'];
-        $pendingStates = [
-            ExtractedDocumentDocument::STATUS_READY_TO_APPLY,
-            ExtractedDocumentDocument::STATUS_PENDING_REVIEW,
-            ExtractedDocumentDocument::STATUS_LOW_CONFIDENCE,
-        ];
-        if (!in_array($currentStatus, $pendingStates, true)) {
-            return Response::error(
-                'INVALID_STATE',
-                'Document is not in a pending state (10/20/30)',
-                409,
-            );
-        }
-
-        $dibi = $this->db->getDibiConnection();
-        $doc = new ExtractedDocumentDocument();
-        $doc->setDb($dibi);
-
-        $data = $existing;
-        $data['status'] = $newStatus;
-        if ($rejectedReason !== null) {
-            $data['rejected_reason'] = $rejectedReason;
-        }
-        if ($newStatus === ExtractedDocumentDocument::STATUS_APPLIED) {
-            $data['applied_by'] = $userId;
-            // applied_at nastaví beforeSave
-        }
-
-        $validation = $doc->validate($data);
-        if (!$validation->isValid()) {
-            $errors = array_map(
-                static fn($e) => ['field' => $e->column, 'message' => $e->message, 'code' => $e->code],
-                $validation->getErrors(),
-            );
-            return Response::error('VALIDATION_ERROR', 'Validation failed', 422, $errors);
-        }
-
-        $dibi->begin();
-        try {
-            $doc->beforeSave($data);
-
-            $writableData = $data;
-            unset($writableData['id']);
-            $dibi->update(self::EXTRACTED_TABLE, $writableData)
-                ->where('id = %i', $extractedNdx)
-                ->execute();
-
-            // afterPersist běží uvnitř transakce — auto-transition zprávy 30→40
-            $doc->afterPersist($data);
-
-            $dibi->commit();
-        } catch (\Throwable $e) {
-            $dibi->rollback();
-            ErrorLogger::warn('AnalysisController::updateExtractedStatus failed', [
-                'error' => $e->getMessage(),
-            ]);
-            return Response::error('INTERNAL_ERROR', 'Internal server error', 500);
-        }
-
-        return Response::success([
-            'ndx' => $extractedNdx,
-            'status' => $newStatus,
-            'message_ndx' => (int) $existing['message'],
-        ]);
     }
 }

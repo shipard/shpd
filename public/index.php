@@ -265,7 +265,7 @@ function dispatch(
 		'exchange' => dispatchExchange($route, $request, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'alerts' => dispatchAlerts($route, $request, $db, $alertCheckRegistry, $configRuntime, resolveLanguage($request, $resolved->config)),
 		'personsRegistry' => dispatchPersonsRegistry($route, $request, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $serverConfig),
-		'mcp'     => dispatchMcp($request, $auth, $resolved->connection, $tables, $configRuntime),
+		'mcp'     => dispatchMcp($request, $auth, $resolved->connection, $tables, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'openapi' => (new OpenApiController())->spec($auth, $openApiPublic, $tables, $baseUrl),
 		default   => Response::error('INTERNAL_ERROR', "Unknown controller: {$route->controller}", 500),
 	};
@@ -277,13 +277,32 @@ function dispatchMcp(
 	\Shipard\Core\Database\DataSourceConnection $db,
 	array $tables,
 	?\Shipard\Core\Config\ConfigRuntime $configRuntime,
+	\Shipard\Api\ResolvedDataSource $resolved,
+	\Shipard\Core\Document\DocumentRegistry $documentRegistry,
 ): Response {
-	// Fáze 1+2: in-code registr nástrojů (analogie wiring v dispatchExchange).
+	// Fáze 1+2: in-code registr čtecích nástrojů (analogie wiring v dispatchExchange).
 	$registry = new \Shipard\Api\Mcp\McpToolRegistry();
 	$registry->register(new \Shipard\Module\Base\Persons\Mcp\PersonsSearchTool());
 	$registry->register(new \Shipard\Module\Base\Persons\Mcp\PersonsGetTool());
 	$registry->register(new \Shipard\Module\Docs\Core\Mcp\DocumentsSearchTool());
 	$registry->register(new \Shipard\Module\Core\Mail\Mcp\MailListPendingTool());
+
+	// Fáze 3: zápisový nástroj mail_draft_document nad sdílenou apply službou.
+	// DocumentApplier vyžaduje ConfigRuntime (jako dispatchExchange/Analysis);
+	// bez něj injektujeme null → nástroj degraduje na graceful obálku.
+	$draftApplier = $configRuntime !== null
+		? new \Shipard\Module\Core\Mail\ExtractedDocumentApplier(
+			$db,
+			\Shipard\Module\Core\Exchange\Document\DocumentApplier::create(
+				$db->getDibiConnection(),
+				$configRuntime,
+				$resolved->config,
+				$documentRegistry,
+				$tables,
+			),
+		)
+		: null;
+	$registry->register(new \Shipard\Module\Core\Mail\Mcp\MailDraftDocumentTool($draftApplier));
 
 	$ctrl = new \Shipard\Api\Controller\McpController($registry);
 	return $ctrl->rpc($request, $auth, $db, $tables, $configRuntime);

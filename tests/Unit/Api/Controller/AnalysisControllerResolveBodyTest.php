@@ -308,82 +308,8 @@ class AnalysisControllerResolveBodyTest extends TestCase
         $this->assertSame('skip', $c['_resolve']['rows'][99]['item']['userAction']);
     }
 
-    // ── Direct helper tests via reflection ──────────────────────────────────
-
-    private function callPrivate(string $method, array $args): mixed
-    {
-        $db = $this->createMock(DataSourceConnection::class);
-        $ctrl = $this->controller($db);
-        $ref = new \ReflectionClass($ctrl);
-        return $ref->getMethod($method)->invoke($ctrl, ...$args);
-    }
-
-    public function testExpandUserActionsTopLevelAndRows(): void
-    {
-        $result = $this->callPrivate('expandUserActions', [[
-            'supplier' => 'useExisting:42',
-            'supplierBank' => 'create',
-            'customer' => 'useExisting:1',
-            'rows[0].item' => 'skip',
-            'rows[2].item' => 'create',
-        ]]);
-
-        $this->assertSame(['userAction' => 'useExisting:42'], $result['supplier']);
-        $this->assertSame(['userAction' => 'create'], $result['supplierBank']);
-        $this->assertSame(['userAction' => 'useExisting:1'], $result['customer']);
-        $this->assertSame(['userAction' => 'skip'], $result['rows'][0]['item']);
-        $this->assertSame(['userAction' => 'create'], $result['rows'][2]['item']);
-        $this->assertArrayNotHasKey(1, $result['rows']);
-    }
-
-    public function testExpandUserActionsSkipsInvalidShapes(): void
-    {
-        $result = $this->callPrivate('expandUserActions', [[
-            'supplier' => 'useExisting:1',
-            'bogus' => 'create',           // unknown top-level
-            'rows[abc].item' => 'skip',    // non-numeric index
-            'rows[0].bogus' => 'create',   // unknown field
-            123 => 'create',                // non-string key (becomes int)
-            'customer' => null,             // null value
-            'supplierBank' => 12345,        // non-string value
-        ]]);
-
-        $this->assertSame(['userAction' => 'useExisting:1'], $result['supplier']);
-        $this->assertArrayNotHasKey('bogus', $result);
-        $this->assertArrayNotHasKey('rows', $result);
-        $this->assertArrayNotHasKey('customer', $result);
-        $this->assertArrayNotHasKey('supplierBank', $result);
-    }
-
-    public function testMergeUserActionsTopLevel(): void
-    {
-        $result = $this->callPrivate('mergeUserActions', [
-            ['supplier' => ['status' => 'canCreate', 'createPayload' => ['x' => 1]]],
-            ['supplier' => ['userAction' => 'create']],
-        ]);
-
-        $this->assertSame('canCreate', $result['supplier']['status']);
-        $this->assertSame('create', $result['supplier']['userAction']);
-        $this->assertSame(['x' => 1], $result['supplier']['createPayload']);
-    }
-
-    public function testMergeUserActionsRows(): void
-    {
-        $result = $this->callPrivate('mergeUserActions', [
-            ['rows' => [
-                ['item' => ['status' => 'canCreate']],
-                ['item' => ['status' => 'matched', 'matchedId' => 18]],
-            ]],
-            ['rows' => [
-                0 => ['item' => ['userAction' => 'create']],
-                1 => ['item' => ['userAction' => 'useExisting:18']],
-            ]],
-        ]);
-
-        $this->assertSame('canCreate', $result['rows'][0]['item']['status']);
-        $this->assertSame('create', $result['rows'][0]['item']['userAction']);
-        $this->assertSame('matched', $result['rows'][1]['item']['status']);
-        $this->assertSame('useExisting:18', $result['rows'][1]['item']['userAction']);
-        $this->assertSame(18, $result['rows'][1]['item']['matchedId']);
-    }
+    // Direct unit tests for the expand/merge helpers moved with the apply
+    // core into ExtractedDocumentApplier — see ExtractedDocumentApplierTest.
+    // The body→canonical contract (above) still exercises them end-to-end
+    // through applyExtracted.
 }

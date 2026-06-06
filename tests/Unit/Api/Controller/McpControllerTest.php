@@ -13,6 +13,10 @@ use Shipard\Api\Response;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Module\Base\Persons\Mcp\PersonsGetTool;
 use Shipard\Module\Base\Persons\Mcp\PersonsSearchTool;
+use Shipard\Module\Core\Exchange\Common\ApplyResult;
+use Shipard\Module\Core\Exchange\Document\DocumentApplier;
+use Shipard\Module\Core\Mail\ExtractedDocumentApplier;
+use Shipard\Module\Core\Mail\Mcp\MailDraftDocumentTool;
 use Shipard\Module\Core\Mail\Mcp\MailListPendingTool;
 use Shipard\Module\Docs\Core\Mcp\DocumentsSearchTool;
 
@@ -403,5 +407,157 @@ class McpControllerTest extends TestCase
 		$this->callTool($db, 'mail_list_pending', ['only_actionable' => true]);
 		$this->assertStringContainsString('`m`.`docState` != 40', $capturedSql);
 		$this->assertStringContainsString('`t`.`pending_extracted_count` > 0', $capturedSql);
+	}
+
+	// --- Fáze 3: write-tier mail_draft_document --------------------------
+
+	private function happyCanonical(): array
+	{
+		return json_decode(
+			(string) file_get_contents(__DIR__ . '/../../../Fixtures/Exchange/invoiceReceived_happy.json'),
+			true,
+		);
+	}
+
+	/** Postaví controller s registrovaným draft nástrojem a vyvolá tools/call. */
+	private function callDraftTool(DataSourceConnection $db, ?DocumentApplier $applier, array $args): array
+	{
+		$registry = new McpToolRegistry();
+		$service = $applier !== null ? new ExtractedDocumentApplier($db, $applier) : null;
+		$registry->register(new MailDraftDocumentTool($service));
+		$ctrl = new McpController($registry);
+		$resp = $this->call($ctrl, $this->buildRequest([
+			'jsonrpc' => '2.0', 'id' => 200, 'method' => 'tools/call',
+			'params' => ['name' => 'mail_draft_document', 'arguments' => $args],
+		]), $db);
+		$this->assertSame(200, $this->getStatus($resp));
+		return $resp->getPayload()['result'];
+	}
+
+	public function testDraftToolInToolsList(): void
+	{
+		$registry = new McpToolRegistry();
+		$registry->register(new MailDraftDocumentTool(null));
+		$ctrl = new McpController($registry);
+		$db = $this->createMock(DataSourceConnection::class);
+		$resp = $this->call($ctrl, $this->buildRequest([
+			'jsonrpc' => '2.0', 'id' => 201, 'method' => 'tools/list',
+		]), $db);
+
+		$tools = $resp->getPayload()['result']['tools'];
+		$names = array_column($tools, 'name');
+		$this->assertContains('mail_draft_document', $names);
+		$tool = $tools[array_search('mail_draft_document', $names, true)];
+		$this->assertContains('message_id', $tool['inputSchema']['required']);
+	}
+
+	public function testDraftToolGracefulWithoutApplier(): void
+	{
+		$db = $this->createMock(DataSourceConnection::class);
+		$result = $this->callDraftTool($db, null, ['message_id' => 1]);
+		$this->assertFalse($result['isError']);
+		$sc = $result['structuredContent'];
+		$this->assertSame([], $sc['items']);
+		$this->assertStringContainsString('není', $sc['summary']);
+	}
+
+	public function testDraftToolDraftsCleanDocument(): void
+	{
+		$canonical = $this->happyCanonical();
+		$db = $this->createMock(DataSourceConnection::class);
+		$db->method('fetchAll')->willReturn([
+			['id' => 5, 'doc_type' => 'invni', 'status' => 20],
+		]);
+		$db->method('fetchRow')->willReturn([
+			'id' => 5, 'status' => 20, 'message' => 100, 'target_row_ndx' => null,
+			'extracted_json' => json_encode($canonical),
+		]);
+		$db->method('getDibiConnection')->willReturn($this->createMock(\Dibi\Connection::class));
+
+		$applier = $this->createMock(DocumentApplier::class);
+		$applier->expects($this->once())->method('apply')
+			->willReturn(ApplyResult::ok($canonical, savedId: 777));
+
+		$result = $this->callDraftTool($db, $applier, ['message_id' => 100]);
+		$sc = $result['structuredContent'];
+		$this->assertCount(1, $sc['items']);
+		$this->assertTrue($sc['items'][0]['drafted']);
+		$this->assertSame(['type' => 'document', 'id' => 777], $sc['items'][0]['document_ref']);
+		$this->assertSame(['type' => 'extracted_document', 'id' => 5], $sc['items'][0]['extracted_ref']);
+		$this->assertStringContainsString('založeno 1 konceptů', $sc['summary']);
+	}
+
+	public function testDraftToolReportsNeedsResolution(): void
+	{
+		$canonical = $this->happyCanonical();
+		$db = $this->createMock(DataSourceConnection::class);
+		$db->method('fetchAll')->willReturn([
+			['id' => 5, 'doc_type' => 'invni', 'status' => 20],
+		]);
+		$db->method('fetchRow')->willReturn([
+			'id' => 5, 'status' => 20, 'message' => 100, 'target_row_ndx' => null,
+			'extracted_json' => json_encode($canonical),
+		]);
+
+		$applier = $this->createMock(DocumentApplier::class);
+		$applier->method('apply')->willReturn(ApplyResult::error(
+			'unresolved_required', 'Doplň userAction',
+			['_resolve' => ['issues' => [
+				['severity' => 'error', 'path' => 'supplier', 'message' => 'Nelze automaticky propojit'],
+				['severity' => 'warning', 'path' => 'rows.0.unit', 'message' => 'jen varování'],
+			]]],
+			422,
+		));
+
+		$result = $this->callDraftTool($db, $applier, ['message_id' => 100]);
+		$item = $result['structuredContent']['items'][0];
+		$this->assertFalse($item['drafted']);
+		$this->assertTrue($item['needs_resolution']);
+		$this->assertCount(1, $item['unresolved']); // jen severity=error
+		$this->assertSame('supplier', $item['unresolved'][0]['path']);
+		$this->assertStringContainsString('čeká na ruční dořešení', $result['structuredContent']['summary']);
+	}
+
+	public function testDraftToolNarrowsToExtractedIdAndSkipsAiFailed(): void
+	{
+		$capturedSql = '';
+		$db = $this->createMock(DataSourceConnection::class);
+		$db->method('fetchAll')->willReturnCallback(static function (string $sql, ...$p) use (&$capturedSql): array {
+			$capturedSql = $sql;
+			return [['id' => 9, 'doc_type' => 'invni', 'status' => 70]]; // ai_failed
+		});
+
+		$applier = $this->createMock(DocumentApplier::class);
+		$applier->expects($this->never())->method('apply');
+
+		$result = $this->callDraftTool($db, $applier, ['message_id' => 100, 'extracted_document_id' => 9]);
+		$this->assertStringContainsString('`id` = %i AND `message` = %i', $capturedSql);
+		$item = $result['structuredContent']['items'][0];
+		$this->assertTrue($item['skipped']);
+		$this->assertStringContainsString('reanalýzu', $item['reason']);
+	}
+
+	public function testDraftToolUsesSafeModeAndDraftState(): void
+	{
+		$canonical = $this->happyCanonical();
+		$db = $this->createMock(DataSourceConnection::class);
+		$db->method('fetchAll')->willReturn([['id' => 5, 'doc_type' => 'invni', 'status' => 20]]);
+		$db->method('fetchRow')->willReturn([
+			'id' => 5, 'status' => 20, 'message' => 100, 'target_row_ndx' => null,
+			'extracted_json' => json_encode($canonical),
+		]);
+
+		$captured = null;
+		$applier = $this->createMock(DocumentApplier::class);
+		$applier->method('apply')->willReturnCallback(function (array $passed) use (&$captured) {
+			$captured = $passed;
+			return ApplyResult::error('unresolved_required', 'X', [], 422);
+		});
+
+		$this->callDraftTool($db, $applier, ['message_id' => 100]);
+		$this->assertSame('safe', $captured['applyOptions']['autoCreateMode']);
+		$this->assertSame(10, $captured['applyOptions']['targetDocState']);
+		$this->assertSame(5, $captured['source']['extractedDoc']);
+		$this->assertSame('aiExtraction', $captured['source']['kind']);
 	}
 }

@@ -11,6 +11,8 @@ use Shipard\Core\Ai\Exception\LlmException;
 use Shipard\Core\Ai\LlmChatParams;
 use Shipard\Core\Ai\LlmChatResult;
 use Shipard\Core\Ai\LlmClient;
+use Shipard\Api\Mcp\McpInvocationContext;
+use Shipard\Api\Mcp\McpToolRegistry;
 use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Database\DataSourceConnection;
@@ -44,17 +46,23 @@ class ChatController
     private const DEFAULT_LIMIT        = 50;
     private const MAX_LIMIT            = 200;
     private const BACKENDS_TABLE       = 'core_ai_backends';
+    private const MAX_TOOL_ITERATIONS  = 8;
 
     private const SYSTEM_PROMPT_FALLBACK =
         'Jsi vestavěný AI asistent účetního systému Shipard. Pomáháš uživateli '
         . 's dotazy o jeho datech a agendě. Odpovídej věcně, stručně a česky. '
         . 'Odpověz přímo, bez zbytečného úvodu.';
 
+    /**
+     * @param array<string, mixed> $tables
+     */
     public function __construct(
         protected DataSourceConnection $db,
         private ?ConfigRuntime $config = null,
         private ?DataSourceConfig $dsConfig = null,
         private ?LlmClient $llm = null,
+        private array $tables = [],
+        private ?McpToolRegistry $toolRegistry = null,
     ) {}
 
     /**
@@ -265,6 +273,10 @@ class ChatController
             return Response::error('BACKEND_KEY_ERROR', 'Cannot read backend API key', 500);
         }
 
+        // Offer the model only read-only tools (security invariant); the loop
+        // also re-checks isReadOnly() before executing any requested tool.
+        [$tools, $toolDefs] = $this->readOnlyTools();
+
         $params = new LlmChatParams(
             provider: (string) ($backend['provider'] ?? 'anthropic'),
             model: (string) ($backend['model'] ?? ''),
@@ -274,10 +286,13 @@ class ChatController
             messages: $this->buildAnthropicMessages($id),
             maxTokens: (int) ($backend['max_tokens'] ?? 4096),
             temperature: null, // v1: omitted — Opus 4.7/4.8 reject `temperature` (HTTP 400)
+            tools: $toolDefs !== [] ? $toolDefs : null,
         );
 
+        $ctx = new McpInvocationContext($auth, $this->db, $this->tables, $this->config);
+
         return Response::stream(
-            fn () => $this->runStream($params, $id, $userId),
+            fn () => $this->runAgenticLoop($params, $id, $userId, $tools, $ctx),
             200,
             'text/event-stream; charset=utf-8',
         );
@@ -288,58 +303,115 @@ class ChatController
     // -------------------------------------------------------------------------
 
     /**
-     * Drives the streaming turn: emits text-delta events, persists the
-     * assistant message + conversation aggregates, then emits message-complete.
-     * Any failure becomes an `error` event; the user message is already saved
-     * and any partial assistant text is persisted best-effort.
+     * Agentic tool-use loop (≤ MAX_TOOL_ITERATIONS). Each turn streams text as
+     * text-delta events; if the model requests tools, they run in-process and
+     * their results feed the next turn. Assistant turns (text + tool_use) and
+     * synthetic tool_results messages are persisted as block lists. Ends on a
+     * tool-free turn (message-complete), the iteration cap (graceful), or an
+     * error (error event). The user message is already persisted by the caller.
+     *
+     * @param array<string, \Shipard\Api\Mcp\McpTool> $tools  read-only tools, keyed by name
      */
-    private function runStream(LlmChatParams $params, int $conversationId, int $userId): void
-    {
-        $accumulated = '';
+    private function runAgenticLoop(
+        LlmChatParams $base,
+        int $conversationId,
+        int $userId,
+        array $tools,
+        McpInvocationContext $ctx,
+    ): void {
+        $messages = $base->messages;
+        $cumInput = 0;
+        $cumOutput = 0;
+        $lastModel = null;
+
         try {
             /** @var LlmClient $llm */
             $llm = $this->llm;
-            $result = $llm->streamChat($params, function (string $delta) use (&$accumulated): void {
-                $accumulated .= $delta;
-                $this->sse('text-delta', ['text' => $delta]);
-            });
 
-            $messageId = $this->insertMessage(
-                $conversationId,
-                $userId,
-                'assistant',
-                'assistant',
-                [['type' => 'text', 'text' => $result->text]],
-                $this->nextSeq($conversationId),
-                $result,
-            );
-            $this->bumpConversation($conversationId, $result);
+            for ($iteration = 1; $iteration <= self::MAX_TOOL_ITERATIONS; $iteration++) {
+                $params = $this->withMessages($base, $messages);
+                $result = $llm->streamChat($params, function (string $delta): void {
+                    $this->sse('text-delta', ['text' => $delta]);
+                });
 
-            $this->sse('message-complete', [
-                'message_id' => $messageId,
-                'usage' => [
-                    'input_tokens'  => $result->inputTokens,
-                    'output_tokens' => $result->outputTokens,
-                ],
-                'model' => $result->model,
-            ]);
-        } catch (\Throwable $e) {
-            // User message is already persisted; keep partial assistant text too.
-            if ($accumulated !== '') {
-                try {
-                    $this->insertMessage(
-                        $conversationId,
-                        $userId,
-                        'assistant',
-                        'assistant',
-                        [['type' => 'text', 'text' => $accumulated]],
-                        $this->nextSeq($conversationId),
-                    );
-                } catch (\Throwable) {
-                    // best-effort — do not mask the original error
+                $cumInput += $result->inputTokens ?? 0;
+                $cumOutput += $result->outputTokens ?? 0;
+                $lastModel = $result->model ?? $lastModel;
+
+                $content = $result->contentBlocks !== []
+                    ? $result->contentBlocks
+                    : [['type' => 'text', 'text' => $result->text]];
+
+                $messageId = $this->insertMessage(
+                    $conversationId, $userId, 'assistant', 'assistant',
+                    $content, $this->nextSeq($conversationId), $result,
+                );
+
+                // Final answer — no tools requested.
+                if ($result->toolUses === []) {
+                    $this->bumpConversationTotals($conversationId, $cumInput, $cumOutput, $lastModel);
+                    $this->sse('message-complete', [
+                        'message_id' => $messageId,
+                        'usage' => ['input_tokens' => $cumInput, 'output_tokens' => $cumOutput],
+                        'model' => $lastModel,
+                    ]);
+                    return;
                 }
+
+                // Model wants tools: echo the assistant turn into history, run
+                // each tool, collect tool_result blocks for the next turn.
+                $messages[] = ['role' => 'assistant', 'content' => $content];
+
+                $toolResultBlocks = [];
+                foreach ($result->toolUses as $toolUse) {
+                    $this->sse('tool-call', ['name' => $toolUse['name'], 'arguments' => $toolUse['input']]);
+
+                    $tool = $tools[$toolUse['name']] ?? null;
+                    // Security invariant: only registered read-only tools run.
+                    if ($tool === null || !$tool->isReadOnly()) {
+                        $toolResultBlocks[] = $this->toolResultBlock(
+                            $toolUse['id'], 'Neznámý nebo nepovolený nástroj.', true,
+                        );
+                        continue;
+                    }
+                    try {
+                        $envelope = $tool->call($toolUse['input'], $ctx);
+                        $toolResultBlocks[] = $this->toolResultBlock(
+                            $toolUse['id'],
+                            (string) json_encode($envelope, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                            false,
+                        );
+                    } catch (\Throwable $e) {
+                        $toolResultBlocks[] = $this->toolResultBlock(
+                            $toolUse['id'], 'Nástroj selhal: ' . $e->getMessage(), true,
+                        );
+                    }
+                }
+
+                $this->insertMessage(
+                    $conversationId, $userId, 'user', 'tool_results',
+                    $toolResultBlocks, $this->nextSeq($conversationId),
+                );
+                $messages[] = ['role' => 'user', 'content' => $toolResultBlocks];
             }
 
+            // Iteration cap reached — graceful close, not an error.
+            $capText = 'Dosáhl jsem limitu kroků; zkus prosím dotaz upřesnit.';
+            $messageId = $this->insertMessage(
+                $conversationId, $userId, 'assistant', 'assistant',
+                [['type' => 'text', 'text' => $capText]], $this->nextSeq($conversationId),
+            );
+            $this->bumpConversationTotals($conversationId, $cumInput, $cumOutput, $lastModel);
+            $this->sse('message-complete', [
+                'message_id' => $messageId,
+                'usage' => ['input_tokens' => $cumInput, 'output_tokens' => $cumOutput],
+                'model' => $lastModel,
+                'note' => 'iteration_limit',
+            ]);
+        } catch (\Throwable $e) {
+            if ($cumInput !== 0 || $cumOutput !== 0) {
+                $this->bumpConversationTotals($conversationId, $cumInput, $cumOutput, $lastModel);
+            }
             if ($e instanceof LlmException) {
                 $this->sse('error', ['code' => 'LLM_ERROR', 'message' => $e->getMessage()]);
             } else {
@@ -347,6 +419,64 @@ class ChatController
                 $this->sse('error', ['code' => 'INTERNAL_ERROR', 'message' => 'Internal error during chat']);
             }
         }
+    }
+
+    /**
+     * Read-only tools from the registry: a name→tool map for execution and the
+     * Anthropic tool-definition list for the request.
+     *
+     * @return array{0: array<string, \Shipard\Api\Mcp\McpTool>, 1: array<int, array{name: string, description: string, input_schema: array}>}
+     */
+    private function readOnlyTools(): array
+    {
+        $tools = [];
+        $defs = [];
+        if ($this->toolRegistry !== null) {
+            foreach ($this->toolRegistry->all() as $tool) {
+                if (!$tool->isReadOnly()) {
+                    continue;
+                }
+                $tools[$tool->name()] = $tool;
+                $defs[] = [
+                    'name'         => $tool->name(),
+                    'description'  => $tool->description(),
+                    'input_schema' => $tool->inputSchema(),
+                ];
+            }
+        }
+        return [$tools, $defs];
+    }
+
+    /** Clones the base params with a fresh messages list (LlmChatParams is readonly). */
+    private function withMessages(LlmChatParams $base, array $messages): LlmChatParams
+    {
+        return new LlmChatParams(
+            provider: $base->provider,
+            model: $base->model,
+            apiKey: $base->apiKey,
+            baseUrl: $base->baseUrl,
+            system: $base->system,
+            messages: $messages,
+            maxTokens: $base->maxTokens,
+            temperature: $base->temperature,
+            tools: $base->tools,
+        );
+    }
+
+    /**
+     * @return array<string, mixed> an Anthropic tool_result block
+     */
+    private function toolResultBlock(string $toolUseId, string $content, bool $isError): array
+    {
+        $block = [
+            'type'        => 'tool_result',
+            'tool_use_id' => $toolUseId,
+            'content'     => $content,
+        ];
+        if ($isError) {
+            $block['is_error'] = true;
+        }
+        return $block;
     }
 
     /** Writes one SSE event frame and flushes it to the client. */
@@ -394,8 +524,8 @@ class ChatController
         ]);
     }
 
-    /** Adds the turn's usage onto the conversation aggregates. */
-    private function bumpConversation(int $conversationId, LlmChatResult $result): void
+    /** Adds the turn's (cumulative) usage onto the conversation aggregates. */
+    private function bumpConversationTotals(int $conversationId, int $inputTokens, int $outputTokens, ?string $model): void
     {
         $this->db->execute(
             'UPDATE `' . self::TABLE_CONVERSATIONS . '`'
@@ -404,9 +534,9 @@ class ChatController
             . '     `model_snapshot` = %sN,'
             . '     `modified` = %s'
             . ' WHERE `id` = %i',
-            $result->inputTokens ?? 0,
-            $result->outputTokens ?? 0,
-            $result->model,
+            $inputTokens,
+            $outputTokens,
+            $model,
             date('Y-m-d H:i:s'),
             $conversationId,
         );

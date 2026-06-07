@@ -19,6 +19,11 @@ final class MailListPendingTool implements McpTool
 	private const int DEFAULT_LIMIT = 20;
 	private const int MAX_LIMIT = 50;
 
+	public function isReadOnly(): bool
+	{
+		return true;
+	}
+
 	public function name(): string
 	{
 		return 'mail_list_pending';

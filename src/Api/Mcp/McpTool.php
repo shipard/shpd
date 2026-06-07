@@ -22,6 +22,13 @@ interface McpTool
 	public function inputSchema(): array;
 
 	/**
+	 * Je nástroj jen čtecí (bez vedlejších efektů)? Chat (Fáze 2b) nabízí
+	 * modelu v tool-use smyčce jen read-only nástroje; zápisové/akční nástroje
+	 * vyžadují potvrzovací tok a do chatu v1 nejdou.
+	 */
+	public function isReadOnly(): bool;
+
+	/**
 	 * @param array $arguments  argumenty od klienta (dle inputSchema)
 	 * @return array doménová obálka {summary, items, pagination}
 	 * @throws \InvalidArgumentException při chybějícím/neplatném povinném argumentu (→ -32602)

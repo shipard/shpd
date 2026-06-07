@@ -10,6 +10,9 @@ use Shipard\Api\Controller\ChatController;
 use Shipard\Api\Request;
 use Shipard\Api\Response;
 use Shipard\Core\Ai\Exception\LlmApiException;
+use Shipard\Api\Mcp\McpInvocationContext;
+use Shipard\Api\Mcp\McpTool;
+use Shipard\Api\Mcp\McpToolRegistry;
 use Shipard\Core\Ai\LlmChatParams;
 use Shipard\Core\Ai\LlmChatResult;
 use Shipard\Core\Ai\LlmClient;
@@ -421,6 +424,151 @@ class ChatControllerTest extends TestCase
 
         $this->assertSame(422, $this->statusOf($response));
     }
+
+    // -------------------------------------------------------------------
+    // sendMessage — agentic tool-use loop (Fáze 2b)
+    // -------------------------------------------------------------------
+
+    private function toolUseResult(string $id, string $name, array $input): LlmChatResult
+    {
+        $block = ['type' => 'tool_use', 'id' => $id, 'name' => $name, 'input' => $input];
+        return new LlmChatResult('', 10, 5, 'tool_use', 'claude-test', [['id' => $id, 'name' => $name, 'input' => $input]], [$block]);
+    }
+
+    private function finalResult(string $text): LlmChatResult
+    {
+        return new LlmChatResult($text, 8, 4, 'end_turn', 'claude-test', [], [['type' => 'text', 'text' => $text]]);
+    }
+
+    private function registry(McpTool ...$tools): McpToolRegistry
+    {
+        $reg = new McpToolRegistry();
+        foreach ($tools as $tool) {
+            $reg->register($tool);
+        }
+        return $reg;
+    }
+
+    public function testLoopRunsReadToolThenFinalAnswer(): void
+    {
+        $inserts = [];
+        $db = $this->streamDb($inserts, self::BACKEND);
+        $read = new FakeReadTool('persons_search');
+        $write = new FakeWriteTool();
+        $llm = new ScriptedLlmClient([
+            $this->toolUseResult('tu1', 'persons_search', ['query' => 'Acme']),
+            $this->finalResult('Našel jsem Acme.'),
+        ]);
+        $ctrl = new ChatController($db, null, null, $llm, [], $this->registry($read, $write));
+
+        $response = $ctrl->sendMessage($this->auth(), 5, $this->request('POST', '/x', ['text' => 'Najdi Acme']));
+        $out = $this->runProducer($response);
+
+        $this->assertStringContainsString('event: tool-call', $out);
+        $this->assertStringContainsString('persons_search', $out);
+        $this->assertStringContainsString('event: message-complete', $out);
+        $this->assertSame(1, $read->calls);
+
+        // user, assistant(tool_use), tool_results, assistant(final)
+        $this->assertCount(4, $inserts);
+        $this->assertSame('assistant', $inserts[1]['role']);
+        $turn1 = json_decode((string) $inserts[1]['content'], true);
+        $this->assertSame('tool_use', $turn1[0]['type']);
+        $this->assertSame('tool_results', $inserts[2]['kind']);
+        $results = json_decode((string) $inserts[2]['content'], true);
+        $this->assertSame('tool_result', $results[0]['type']);
+        $this->assertArrayNotHasKey('is_error', $results[0]);
+        $final = json_decode((string) $inserts[3]['content'], true);
+        $this->assertSame('Našel jsem Acme.', $final[0]['text']);
+
+        // only read-only tools are offered to the model
+        $this->assertNotNull($llm->lastParams?->tools);
+        $names = array_column($llm->lastParams->tools, 'name');
+        $this->assertSame(['persons_search'], $names);
+    }
+
+    public function testLoopRunsMultipleToolsInOneTurn(): void
+    {
+        $inserts = [];
+        $db = $this->streamDb($inserts, self::BACKEND);
+        $a = new FakeReadTool('persons_search');
+        $b = new FakeReadTool('documents_search');
+        $multi = new LlmChatResult('', 10, 5, 'tool_use', 'claude-test', [
+            ['id' => 't1', 'name' => 'persons_search', 'input' => []],
+            ['id' => 't2', 'name' => 'documents_search', 'input' => []],
+        ], [
+            ['type' => 'tool_use', 'id' => 't1', 'name' => 'persons_search', 'input' => []],
+            ['type' => 'tool_use', 'id' => 't2', 'name' => 'documents_search', 'input' => []],
+        ]);
+        $llm = new ScriptedLlmClient([$multi, $this->finalResult('Hotovo.')]);
+        $ctrl = new ChatController($db, null, null, $llm, [], $this->registry($a, $b));
+
+        $this->runProducer($ctrl->sendMessage($this->auth(), 5, $this->request('POST', '/x', ['text' => 'x'])));
+
+        $this->assertSame(1, $a->calls);
+        $this->assertSame(1, $b->calls);
+        $results = json_decode((string) $inserts[2]['content'], true);
+        $this->assertCount(2, $results);
+    }
+
+    public function testLoopRejectsNonReadOnlyToolRequest(): void
+    {
+        $inserts = [];
+        $db = $this->streamDb($inserts, self::BACKEND);
+        $read = new FakeReadTool('persons_search');
+        $write = new FakeWriteTool();
+        // Model asks for the write tool even though it was never offered.
+        $llm = new ScriptedLlmClient([
+            $this->toolUseResult('tu1', 'fake_write', []),
+            $this->finalResult('ok'),
+        ]);
+        $ctrl = new ChatController($db, null, null, $llm, [], $this->registry($read, $write));
+
+        $this->runProducer($ctrl->sendMessage($this->auth(), 5, $this->request('POST', '/x', ['text' => 'x'])));
+
+        $this->assertSame(0, $write->calls); // never executed
+        $results = json_decode((string) $inserts[2]['content'], true);
+        $this->assertTrue($results[0]['is_error']);
+    }
+
+    public function testLoopToolExceptionBecomesErrorResultAndContinues(): void
+    {
+        $inserts = [];
+        $db = $this->streamDb($inserts, self::BACKEND);
+        $read = new FakeReadTool('persons_search', throw: true);
+        $llm = new ScriptedLlmClient([
+            $this->toolUseResult('tu1', 'persons_search', []),
+            $this->finalResult('omlouvám se'),
+        ]);
+        $ctrl = new ChatController($db, null, null, $llm, [], $this->registry($read));
+
+        $out = $this->runProducer($ctrl->sendMessage($this->auth(), 5, $this->request('POST', '/x', ['text' => 'x'])));
+
+        $this->assertSame(1, $read->calls);
+        $results = json_decode((string) $inserts[2]['content'], true);
+        $this->assertTrue($results[0]['is_error']);
+        $this->assertStringContainsString('Nástroj selhal', (string) $results[0]['content']);
+        $this->assertStringContainsString('event: message-complete', $out); // loop recovered
+    }
+
+    public function testLoopIterationCapEndsGracefully(): void
+    {
+        $inserts = [];
+        $db = $this->streamDb($inserts, self::BACKEND);
+        $read = new FakeReadTool('persons_search');
+        // Every turn requests a tool → never converges.
+        $llm = new ScriptedLlmClient([], $this->toolUseResult('tu', 'persons_search', []));
+        $ctrl = new ChatController($db, null, null, $llm, [], $this->registry($read));
+
+        $out = $this->runProducer($ctrl->sendMessage($this->auth(), 5, $this->request('POST', '/x', ['text' => 'x'])));
+
+        $this->assertSame(8, $read->calls); // capped at MAX_TOOL_ITERATIONS
+        $this->assertStringContainsString('iteration_limit', $out);
+        // 1 user + 8×(assistant + tool_results) + 1 cap assistant
+        $this->assertCount(18, $inserts);
+        $cap = json_decode((string) $inserts[17]['content'], true);
+        $this->assertStringContainsString('limitu', $cap[0]['text']);
+    }
 }
 
 /**
@@ -446,5 +594,72 @@ final class FakeLlmClient implements LlmClient
         }
         return $this->result
             ?? new LlmChatResult(implode('', $this->deltas), 42, 7, 'end_turn', 'claude-test');
+    }
+}
+
+/**
+ * Scripted LlmClient: returns queued per-turn results in order; once the queue
+ * is exhausted, repeats $whenExhausted (used for the iteration-cap test).
+ * Emits each result's text as a single delta and records the last params seen.
+ */
+final class ScriptedLlmClient implements LlmClient
+{
+    private int $turn = 0;
+    public ?LlmChatParams $lastParams = null;
+
+    /** @param LlmChatResult[] $turns */
+    public function __construct(private array $turns, private ?LlmChatResult $whenExhausted = null) {}
+
+    public function streamChat(LlmChatParams $params, callable $onTextDelta): LlmChatResult
+    {
+        $this->lastParams = $params;
+        $result = $this->turns[$this->turn] ?? $this->whenExhausted;
+        $this->turn++;
+        if ($result === null) {
+            throw new \RuntimeException('ScriptedLlmClient: no scripted turn');
+        }
+        if ($result->text !== '') {
+            $onTextDelta($result->text);
+        }
+        return $result;
+    }
+}
+
+/** Read-only fake tool; records call count and can simulate a failure. */
+final class FakeReadTool implements McpTool
+{
+    public int $calls = 0;
+
+    public function __construct(private string $toolName, private bool $throw = false) {}
+
+    public function name(): string { return $this->toolName; }
+    public function description(): string { return 'fake read tool'; }
+    public function inputSchema(): array { return ['type' => 'object', 'properties' => []]; }
+    public function isReadOnly(): bool { return true; }
+
+    public function call(array $arguments, McpInvocationContext $ctx): array
+    {
+        $this->calls++;
+        if ($this->throw) {
+            throw new \RuntimeException('tool boom');
+        }
+        return ['summary' => '1 výsledek', 'items' => [['ref' => ['id' => 1]]]];
+    }
+}
+
+/** Write (non-read-only) fake tool; must never be executed by the chat loop. */
+final class FakeWriteTool implements McpTool
+{
+    public int $calls = 0;
+
+    public function name(): string { return 'fake_write'; }
+    public function description(): string { return 'fake write tool'; }
+    public function inputSchema(): array { return ['type' => 'object', 'properties' => []]; }
+    public function isReadOnly(): bool { return false; }
+
+    public function call(array $arguments, McpInvocationContext $ctx): array
+    {
+        $this->calls++;
+        return [];
     }
 }

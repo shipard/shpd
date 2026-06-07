@@ -255,7 +255,7 @@ function dispatch(
 		'auth'    => dispatchAuth($route->action, $request, $auth, $db),
 		'crud'       => dispatchCrud($route, $request, $tables, $db, $configRuntime),
 		'attachment'  => dispatchAttachment($route, $request, $auth, $tables, $db, $resolved),
-		'chat'    => dispatchChat($route, $request, $auth, $db, $configRuntime, $resolved),
+		'chat'    => dispatchChat($route, $request, $auth, $db, $tables, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'meta'    => dispatchMeta($route->action, $route->table, $tables, resolveLanguage($request, $resolved->config)),
 		'ui'      => dispatchUi($route->action, $resolved->config, $modulePathResolver, resolveLanguage($request, $resolved->config)),
 		'dashboard' => dispatchDashboard($route, $db, $viewerRegistry, $configRuntime, resolveLanguage($request, $resolved->config)),
@@ -283,14 +283,32 @@ function dispatchMcp(
 	\Shipard\Api\ResolvedDataSource $resolved,
 	\Shipard\Core\Document\DocumentRegistry $documentRegistry,
 ): Response {
-	// Fáze 1+2: in-code registr čtecích nástrojů (analogie wiring v dispatchExchange).
+	$registry = buildMcpRegistry($db, $tables, $configRuntime, $resolved, $documentRegistry);
+	$ctrl = new \Shipard\Api\Controller\McpController($registry);
+	return $ctrl->rpc($request, $auth, $db, $tables, $configRuntime);
+}
+
+/**
+ * Builds the in-process MCP tool registry shared by /_mcp (dispatchMcp) and the
+ * chat tool-use loop (dispatchChat). All five tools are registered; the chat
+ * loop filters to read-only tools itself via McpTool::isReadOnly().
+ *
+ * @param array<string, \Shipard\Core\Database\TableDefinition> $tables
+ */
+function buildMcpRegistry(
+	\Shipard\Core\Database\DataSourceConnection $db,
+	array $tables,
+	?\Shipard\Core\Config\ConfigRuntime $configRuntime,
+	\Shipard\Api\ResolvedDataSource $resolved,
+	\Shipard\Core\Document\DocumentRegistry $documentRegistry,
+): \Shipard\Api\Mcp\McpToolRegistry {
 	$registry = new \Shipard\Api\Mcp\McpToolRegistry();
 	$registry->register(new \Shipard\Module\Base\Persons\Mcp\PersonsSearchTool());
 	$registry->register(new \Shipard\Module\Base\Persons\Mcp\PersonsGetTool());
 	$registry->register(new \Shipard\Module\Docs\Core\Mcp\DocumentsSearchTool());
 	$registry->register(new \Shipard\Module\Core\Mail\Mcp\MailListPendingTool());
 
-	// Fáze 3: zápisový nástroj mail_draft_document nad sdílenou apply službou.
+	// Zápisový nástroj mail_draft_document nad sdílenou apply službou.
 	// DocumentApplier vyžaduje ConfigRuntime (jako dispatchExchange/Analysis);
 	// bez něj injektujeme null → nástroj degraduje na graceful obálku.
 	$draftApplier = $configRuntime !== null
@@ -307,8 +325,7 @@ function dispatchMcp(
 		: null;
 	$registry->register(new \Shipard\Module\Core\Mail\Mcp\MailDraftDocumentTool($draftApplier));
 
-	$ctrl = new \Shipard\Api\Controller\McpController($registry);
-	return $ctrl->rpc($request, $auth, $db, $tables, $configRuntime);
+	return $registry;
 }
 
 function dispatchAlerts(
@@ -544,10 +561,15 @@ function dispatchChat(
 	Request $request,
 	AuthContext $auth,
 	\Shipard\Core\Database\DataSourceConnection $db,
+	array $tables = [],
 	?\Shipard\Core\Config\ConfigRuntime $configRuntime = null,
 	?\Shipard\Api\ResolvedDataSource $resolved = null,
+	?\Shipard\Core\Document\DocumentRegistry $documentRegistry = null,
 ): Response {
-	$ctrl = new ChatController($db, $configRuntime, $resolved?->config, new AnthropicLlmClient());
+	$registry = $resolved !== null
+		? buildMcpRegistry($db, $tables, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry())
+		: null;
+	$ctrl = new ChatController($db, $configRuntime, $resolved?->config, new AnthropicLlmClient(), $tables, $registry);
 	return match ($route->action) {
 		'list'        => $ctrl->list($auth, $request),
 		'create'      => $ctrl->create($auth, $request),

@@ -42,18 +42,24 @@ class AnthropicLlmClient implements LlmClient
         if ($params->temperature !== null) {
             $body['temperature'] = $params->temperature;
         }
+        if ($params->tools !== null && $params->tools !== []) {
+            $body['tools'] = $params->tools;
+        }
 
         // Accumulator threaded through the SSE parser. `buf` holds the partial
-        // line carried across chunk boundaries; `error` records an inline SSE
-        // error event (thrown after the stream drains, not from the callback).
+        // line carried across chunk boundaries; `blocks` collects content blocks
+        // keyed by their stream index (text + tool_use, finalized below);
+        // `error` records an inline SSE error event (thrown after the stream
+        // drains, not from the callback).
         $acc = [
-            'buf'   => '',
-            'text'  => '',
-            'in'    => null,
-            'out'   => null,
-            'stop'  => null,
-            'model' => null,
-            'error' => null,
+            'buf'    => '',
+            'text'   => '',
+            'in'     => null,
+            'out'    => null,
+            'stop'   => null,
+            'model'  => null,
+            'error'  => null,
+            'blocks' => [],
         ];
 
         $json = (string) json_encode($body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
@@ -66,13 +72,53 @@ class AnthropicLlmClient implements LlmClient
             throw new LlmApiException(200, $acc['error']['type'], $acc['error']['message']);
         }
 
+        [$contentBlocks, $toolUses] = $this->finalizeBlocks($acc['blocks']);
+
         return new LlmChatResult(
             $acc['text'],
             $acc['in'],
             $acc['out'],
             $acc['stop'],
             $acc['model'],
+            $toolUses,
+            $contentBlocks,
         );
+    }
+
+    /**
+     * Turns the index-keyed accumulator into ordered Anthropic content blocks
+     * and the tool_use subset.
+     *
+     * @param array<int, array<string, mixed>> $rawBlocks
+     * @return array{0: array<int, array<string, mixed>>, 1: array<int, array{id: string, name: string, input: array}>}
+     */
+    private function finalizeBlocks(array $rawBlocks): array
+    {
+        ksort($rawBlocks);
+        $contentBlocks = [];
+        $toolUses = [];
+
+        foreach ($rawBlocks as $block) {
+            if (($block['type'] ?? '') === 'text') {
+                $contentBlocks[] = ['type' => 'text', 'text' => (string) ($block['text'] ?? '')];
+            } elseif (($block['type'] ?? '') === 'tool_use') {
+                $decoded = ($block['json'] ?? '') !== '' ? json_decode((string) $block['json'], true) : [];
+                $input = is_array($decoded) ? $decoded : [];
+                $contentBlocks[] = [
+                    'type'  => 'tool_use',
+                    'id'    => (string) ($block['id'] ?? ''),
+                    'name'  => (string) ($block['name'] ?? ''),
+                    'input' => $input,
+                ];
+                $toolUses[] = [
+                    'id'    => (string) ($block['id'] ?? ''),
+                    'name'  => (string) ($block['name'] ?? ''),
+                    'input' => $input,
+                ];
+            }
+        }
+
+        return [$contentBlocks, $toolUses];
     }
 
     /**
@@ -181,12 +227,36 @@ class AnthropicLlmClient implements LlmClient
                 }
                 break;
 
+            case 'content_block_start':
+                $index = (int) ($data['index'] ?? 0);
+                $cb = $data['content_block'] ?? [];
+                if (($cb['type'] ?? '') === 'text') {
+                    $acc['blocks'][$index] = ['type' => 'text', 'text' => (string) ($cb['text'] ?? '')];
+                } elseif (($cb['type'] ?? '') === 'tool_use') {
+                    $acc['blocks'][$index] = [
+                        'type' => 'tool_use',
+                        'id'   => (string) ($cb['id'] ?? ''),
+                        'name' => (string) ($cb['name'] ?? ''),
+                        'json' => '',
+                    ];
+                }
+                break;
+
             case 'content_block_delta':
-                if (($data['delta']['type'] ?? '') === 'text_delta') {
+                $index = (int) ($data['index'] ?? 0);
+                $deltaType = $data['delta']['type'] ?? '';
+                if ($deltaType === 'text_delta') {
                     $text = (string) ($data['delta']['text'] ?? '');
                     if ($text !== '') {
                         $acc['text'] .= $text;
+                        if (isset($acc['blocks'][$index]) && $acc['blocks'][$index]['type'] === 'text') {
+                            $acc['blocks'][$index]['text'] .= $text;
+                        }
                         $onTextDelta($text);
+                    }
+                } elseif ($deltaType === 'input_json_delta') {
+                    if (isset($acc['blocks'][$index]) && $acc['blocks'][$index]['type'] === 'tool_use') {
+                        $acc['blocks'][$index]['json'] .= (string) ($data['delta']['partial_json'] ?? '');
                     }
                 }
                 break;
@@ -207,7 +277,7 @@ class AnthropicLlmClient implements LlmClient
                 ];
                 break;
 
-            // message_stop, content_block_start, content_block_stop, ping → ignored
+            // message_stop, content_block_stop, ping → ignored (blocks finalized post-stream)
         }
     }
 }

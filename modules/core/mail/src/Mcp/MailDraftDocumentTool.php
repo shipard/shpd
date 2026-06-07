@@ -31,6 +31,11 @@ final class MailDraftDocumentTool implements McpTool
 
 	public function __construct(private readonly ?ExtractedDocumentApplier $applier) {}
 
+	public function isReadOnly(): bool
+	{
+		return false;
+	}
+
 	public function name(): string
 	{
 		return 'mail_draft_document';

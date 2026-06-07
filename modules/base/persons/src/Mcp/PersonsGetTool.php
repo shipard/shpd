@@ -15,6 +15,11 @@ use Shipard\Module\Base\Persons\PersonType;
  */
 final class PersonsGetTool implements McpTool
 {
+	public function isReadOnly(): bool
+	{
+		return true;
+	}
+
 	public function name(): string
 	{
 		return 'persons_get';

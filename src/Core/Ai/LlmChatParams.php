@@ -17,7 +17,9 @@ namespace Shipard\Core\Ai;
 final readonly class LlmChatParams
 {
     /**
-     * @param array<int, array{role: string, content: mixed}> $messages
+     * @param array<int, array{role: string, content: mixed}>                       $messages
+     * @param array<int, array{name: string, description: string, input_schema: array}>|null $tools
+     *        Anthropic tool definitions; null = no tools offered (plain chat).
      */
     public function __construct(
         public string $provider,
@@ -28,5 +30,6 @@ final readonly class LlmChatParams
         public array $messages,
         public int $maxTokens,
         public ?float $temperature = null,
+        public ?array $tools = null,
     ) {}
 }

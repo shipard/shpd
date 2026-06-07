@@ -62,7 +62,7 @@ class HelpCommand extends Command
         $output->writeln('  shpd-ds ds-reset --dry-run');
         $output->writeln('  shpd-ds ds-reset -y');
         $output->writeln('  shpd-ds user-create --login=admin --password=...');
-        $output->writeln('  shpd-ds ai-analyzer-set-key --key=<api-key>');
+        $output->writeln('  shpd-ds ai-analyzer-set-key --backend default --api-key <api-key>');
         $output->writeln('  shpd-ds ds-secrets-rotate --dry-run');
         $output->writeln('  shpd-ds seed-persons --count=100 --with-contacts --with-bank-accounts');
         $output->writeln('  shpd-ds seed-persons -c 20 --company-ratio=60');

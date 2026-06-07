@@ -82,6 +82,10 @@ class Router
 			return $this->resolveAttachmentRoute($subpath, $method);
 		}
 
+		if (str_starts_with($subpath, '/_chat/conversations')) {
+			return $this->resolveChatRoute($subpath, $method);
+		}
+
 		if ($subpath === '/_mail/incoming') {
 			if ($method !== 'POST') {
 				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
@@ -436,6 +440,36 @@ class Router
 			// Pack (country, companyId) into the `table` slot — Route has no
 			// dedicated multi-string slot. Dispatcher splits on the colon.
 			return new Route('personsRegistry', 'fetchPerson', $country . ':' . $companyId);
+		}
+
+		return Response::error('NOT_FOUND', 'Not found', 404);
+	}
+
+	private function resolveChatRoute(string $subpath, string $method): Route|Response
+	{
+		$rest = substr($subpath, strlen('/_chat/conversations'));
+
+		// /_chat/conversations
+		if ($rest === '' || $rest === '/') {
+			return match ($method) {
+				'GET'  => new Route('chat', 'list'),
+				'POST' => new Route('chat', 'create'),
+				default => Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405),
+			};
+		}
+
+		// /_chat/conversations/{id}
+		if (preg_match('#^/(\d+)$#', $rest, $m)) {
+			$id = (int) $m[1];
+			if ($id <= 0) {
+				return Response::error('NOT_FOUND', 'Not found', 404);
+			}
+			return match ($method) {
+				'GET'    => new Route('chat', 'show', null, $id),
+				'PATCH'  => new Route('chat', 'rename', null, $id),
+				'DELETE' => new Route('chat', 'delete', null, $id),
+				default  => Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405),
+			};
 		}
 
 		return Response::error('NOT_FOUND', 'Not found', 404);

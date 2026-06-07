@@ -1,0 +1,29 @@
+{
+    // core.chat.messageKinds
+    //
+    // Display hint pro UI — odlišuje skutečnou zprávu uživatele od
+    // syntetické zprávy s tool_result bloky a od asistentského tahu.
+    // Hodnota se ukládá do sloupce `kind` (enumString) tabulky
+    // core_chat_messages. Nezávisí 1:1 na `role`: tool_results má
+    // role=user (kontrakt Anthropic), ale UI je nemá zobrazit jako
+    // promluvu uživatele.
+
+    "user_text": {
+        "name": "User message",
+        "name:cs": "Zpráva uživatele",
+        "name:en": "User message",
+        "order": 10
+    },
+    "tool_results": {
+        "name": "Tool results",
+        "name:cs": "Výsledky nástrojů",
+        "name:en": "Tool results",
+        "order": 20
+    },
+    "assistant": {
+        "name": "Assistant turn",
+        "name:cs": "Tah asistenta",
+        "name:en": "Assistant turn",
+        "order": 30
+    }
+}

@@ -21,6 +21,7 @@
         "docs.invoicesOut",
         "docs.invoicesIn",
         "tasks.core",
+        "core.chat",
     ],
 
     "config": [

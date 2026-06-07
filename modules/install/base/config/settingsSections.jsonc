@@ -59,6 +59,13 @@
                     "name:cs": "Osoby",
                     "name:en": "Persons",
                     "order": 40
+                },
+                {
+                    "id": "other.chat",
+                    "name": "Chat",
+                    "name:cs": "Chat",
+                    "name:en": "Chat",
+                    "order": 50
                 }
             ]
         }

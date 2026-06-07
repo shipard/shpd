@@ -1,0 +1,201 @@
+{
+    "tableId": 410,
+    "name": "Chat conversations",
+    "name:cs": "Konverzace chatu",
+    "name:en": "Chat conversations",
+
+    "displayPattern": "{title}",
+
+    "docStates": {
+        "stateColumn": "docState",
+        "mainColumn": "docStateMain",
+        "cfgItem": "core.system.docStatesArchive"
+    },
+
+    "columnGroups": [
+        {
+            "id": "identity",
+            "name": "Identity",
+            "name:cs": "Identifikace",
+            "name:en": "Identity"
+        },
+        {
+            "id": "backend",
+            "name": "Backend",
+            "name:cs": "Backend",
+            "name:en": "Backend"
+        },
+        {
+            "id": "telemetry",
+            "name": "Telemetry",
+            "name:cs": "Telemetrie",
+            "name:en": "Telemetry"
+        },
+        {
+            "id": "status",
+            "name": "Status",
+            "name:cs": "Stav",
+            "name:en": "Status"
+        }
+    ],
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+
+        // --- identity ---
+
+        {
+            "id": "user",
+            "name": "Owner",
+            "name:cs": "Vlastník",
+            "name:en": "Owner",
+            "type": "int",
+            "nullable": false,
+            "reference": "core_system_users",
+            "group": "identity"
+        },
+        {
+            "id": "title",
+            "name": "Title",
+            "name:cs": "Název",
+            "name:en": "Title",
+            "type": "varchar",
+            "length": 200,
+            "nullable": true,
+            "group": "identity"
+        },
+
+        // --- backend ---
+
+        {
+            "id": "backend",
+            "name": "AI backend",
+            "name:cs": "AI backend",
+            "name:en": "AI backend",
+            "type": "int",
+            "nullable": true,
+            "reference": "core_ai_backends",
+            "group": "backend"
+        },
+        {
+            "id": "model_snapshot",
+            "name": "Model snapshot",
+            "name:cs": "Model (snapshot)",
+            "name:en": "Model snapshot",
+            "type": "varchar",
+            "length": 100,
+            "nullable": true,
+            "group": "backend"
+        },
+
+        // --- telemetry (agregát přes zprávy) ---
+
+        {
+            "id": "tokens_input",
+            "name": "Input tokens",
+            "name:cs": "Vstupní tokeny",
+            "name:en": "Input tokens",
+            "type": "int",
+            "nullable": false,
+            "default": 0,
+            "group": "telemetry"
+        },
+        {
+            "id": "tokens_output",
+            "name": "Output tokens",
+            "name:cs": "Výstupní tokeny",
+            "name:en": "Output tokens",
+            "type": "int",
+            "nullable": false,
+            "default": 0,
+            "group": "telemetry"
+        },
+        {
+            "id": "cost",
+            "name": "Cost",
+            "name:cs": "Náklady",
+            "name:en": "Cost",
+            "type": "numeric",
+            "precision": 14,
+            "scale": 6,
+            "nullable": false,
+            "default": 0,
+            "group": "telemetry"
+        },
+
+        // --- audit ---
+
+        {
+            "id": "created",
+            "name": "Created",
+            "name:cs": "Vytvořeno",
+            "name:en": "Created",
+            "type": "datetime",
+            "nullable": false,
+            "group": "status"
+        },
+        {
+            "id": "created_by",
+            "name": "Created by",
+            "name:cs": "Vytvořil",
+            "name:en": "Created by",
+            "type": "int",
+            "nullable": true,
+            "reference": "core_system_users",
+            "group": "status"
+        },
+        {
+            "id": "modified",
+            "name": "Modified",
+            "name:cs": "Změněno",
+            "name:en": "Modified",
+            "type": "datetime",
+            "nullable": false,
+            "group": "status"
+        },
+
+        // --- doc state (systémové) ---
+
+        {
+            "id": "docState",
+            "name": "Document state",
+            "name:cs": "Stav dokumentu",
+            "name:en": "Document state",
+            "type": "tinyint",
+            "default": 10,
+            "system": true
+        },
+        {
+            "id": "docStateMain",
+            "name": "Document state (sort)",
+            "name:cs": "Stav dokumentu (řazení)",
+            "name:en": "Document state (sort)",
+            "type": "tinyint",
+            "default": 1,
+            "system": true
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "idx_user",
+            "type": "index",
+            "columns": [
+                {"column": "user"}
+            ]
+        },
+        {
+            "id": "idx_doc_state",
+            "type": "index",
+            "columns": [
+                {"column": "docState"}
+            ]
+        }
+    ]
+}

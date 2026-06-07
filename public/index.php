@@ -17,6 +17,7 @@ use Shipard\Api\Controller\OpenApiController;
 use Shipard\Api\Controller\FormController;
 use Shipard\Api\Controller\ViewerController;
 use Shipard\Api\Controller\AttachmentController;
+use Shipard\Api\Controller\ChatController;
 use Shipard\Api\Controller\MailController;
 use Shipard\Api\Controller\AnalysisController;
 use Shipard\Api\Controller\PersonsRegistryController;
@@ -253,6 +254,7 @@ function dispatch(
 		'auth'    => dispatchAuth($route->action, $request, $auth, $db),
 		'crud'       => dispatchCrud($route, $request, $tables, $db, $configRuntime),
 		'attachment'  => dispatchAttachment($route, $request, $auth, $tables, $db, $resolved),
+		'chat'    => dispatchChat($route, $request, $auth, $db, $configRuntime),
 		'meta'    => dispatchMeta($route->action, $route->table, $tables, resolveLanguage($request, $resolved->config)),
 		'ui'      => dispatchUi($route->action, $resolved->config, $modulePathResolver, resolveLanguage($request, $resolved->config)),
 		'dashboard' => dispatchDashboard($route, $db, $viewerRegistry, $configRuntime, resolveLanguage($request, $resolved->config)),
@@ -533,6 +535,24 @@ function dispatchAttachment(
 		'delete'    => $ctrl->delete((int) $route->id),
 		'restore'   => $ctrl->restore((int) $route->id),
 		default     => Response::error('INTERNAL_ERROR', "Unknown attachment action: {$route->action}", 500),
+	};
+}
+
+function dispatchChat(
+	Route $route,
+	Request $request,
+	AuthContext $auth,
+	\Shipard\Core\Database\DataSourceConnection $db,
+	?\Shipard\Core\Config\ConfigRuntime $configRuntime = null,
+): Response {
+	$ctrl = new ChatController($db, $configRuntime);
+	return match ($route->action) {
+		'list'   => $ctrl->list($auth, $request),
+		'create' => $ctrl->create($auth, $request),
+		'show'   => $ctrl->show($auth, (int) $route->id),
+		'rename' => $ctrl->rename($auth, (int) $route->id, $request),
+		'delete' => $ctrl->delete($auth, (int) $route->id),
+		default  => Response::error('INTERNAL_ERROR', "Unknown chat action: {$route->action}", 500),
 	};
 }
 

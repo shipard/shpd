@@ -1,0 +1,21 @@
+{
+    // core.chat.messageRoles
+    //
+    // Role zprávy v konverzaci. Hodnota se ukládá do sloupce `role`
+    // (enumString) tabulky core_chat_messages. Věrné formátu Anthropic
+    // Messages API (user / assistant). Zprávy vznikají ve smyčce (Fáze 2),
+    // ne přes CRUD — tento číselník slouží pro validaci a UI labely.
+
+    "user": {
+        "name": "User",
+        "name:cs": "Uživatel",
+        "name:en": "User",
+        "order": 10
+    },
+    "assistant": {
+        "name": "Assistant",
+        "name:cs": "Asistent",
+        "name:en": "Assistant",
+        "order": 20
+    }
+}

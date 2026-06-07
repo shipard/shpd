@@ -1,0 +1,46 @@
+{
+    "id": "core.chat",
+    "name": "Chat",
+    "name:cs": "Chat",
+    "name:en": "Chat",
+    "description": "In-app AI assistant: persisted conversations and messages",
+    "description:cs": "Vestavěný AI asistent: perzistované konverzace a zprávy",
+    "description:en": "In-app AI assistant: persisted conversations and messages",
+
+    "dependencies": [
+        "core.system",
+        "core.ai"
+    ],
+
+    "tables": [
+        "core_chat_conversations",
+        "core_chat_messages"
+    ],
+
+    "settingsItems": [
+        { "viewer": "core.chat.conversations", "section": "other", "subsection": "other.chat", "order": 10 }
+    ],
+
+    "viewers": [
+        {
+            "id": "core.chat.conversations",
+            "name": "Conversations",
+            "name:cs": "Konverzace",
+            "name:en": "Conversations",
+            "icon": "robot",
+            "table": "core_chat_conversations",
+            "class": "Shipard\\Module\\Core\\Chat\\ConversationsViewer"
+        }
+    ],
+
+    "config": [
+        {
+            "id": "core.chat.messageRoles",
+            "file": "config/messageRoles.jsonc"
+        },
+        {
+            "id": "core.chat.messageKinds",
+            "file": "config/messageKinds.jsonc"
+        }
+    ]
+}

@@ -18,6 +18,7 @@ use Shipard\Api\Controller\FormController;
 use Shipard\Api\Controller\ViewerController;
 use Shipard\Api\Controller\AttachmentController;
 use Shipard\Api\Controller\ChatController;
+use Shipard\Core\Ai\AnthropicLlmClient;
 use Shipard\Api\Controller\MailController;
 use Shipard\Api\Controller\AnalysisController;
 use Shipard\Api\Controller\PersonsRegistryController;
@@ -254,7 +255,7 @@ function dispatch(
 		'auth'    => dispatchAuth($route->action, $request, $auth, $db),
 		'crud'       => dispatchCrud($route, $request, $tables, $db, $configRuntime),
 		'attachment'  => dispatchAttachment($route, $request, $auth, $tables, $db, $resolved),
-		'chat'    => dispatchChat($route, $request, $auth, $db, $configRuntime),
+		'chat'    => dispatchChat($route, $request, $auth, $db, $configRuntime, $resolved),
 		'meta'    => dispatchMeta($route->action, $route->table, $tables, resolveLanguage($request, $resolved->config)),
 		'ui'      => dispatchUi($route->action, $resolved->config, $modulePathResolver, resolveLanguage($request, $resolved->config)),
 		'dashboard' => dispatchDashboard($route, $db, $viewerRegistry, $configRuntime, resolveLanguage($request, $resolved->config)),
@@ -544,15 +545,17 @@ function dispatchChat(
 	AuthContext $auth,
 	\Shipard\Core\Database\DataSourceConnection $db,
 	?\Shipard\Core\Config\ConfigRuntime $configRuntime = null,
+	?\Shipard\Api\ResolvedDataSource $resolved = null,
 ): Response {
-	$ctrl = new ChatController($db, $configRuntime);
+	$ctrl = new ChatController($db, $configRuntime, $resolved?->config, new AnthropicLlmClient());
 	return match ($route->action) {
-		'list'   => $ctrl->list($auth, $request),
-		'create' => $ctrl->create($auth, $request),
-		'show'   => $ctrl->show($auth, (int) $route->id),
-		'rename' => $ctrl->rename($auth, (int) $route->id, $request),
-		'delete' => $ctrl->delete($auth, (int) $route->id),
-		default  => Response::error('INTERNAL_ERROR', "Unknown chat action: {$route->action}", 500),
+		'list'        => $ctrl->list($auth, $request),
+		'create'      => $ctrl->create($auth, $request),
+		'show'        => $ctrl->show($auth, (int) $route->id),
+		'rename'      => $ctrl->rename($auth, (int) $route->id, $request),
+		'delete'      => $ctrl->delete($auth, (int) $route->id),
+		'sendMessage' => $ctrl->sendMessage($auth, (int) $route->id, $request),
+		default       => Response::error('INTERNAL_ERROR', "Unknown chat action: {$route->action}", 500),
 	};
 }
 

@@ -472,6 +472,18 @@ class Router
 			};
 		}
 
+		// POST /_chat/conversations/{id}/messages — streamed chat turn (SSE)
+		if (preg_match('#^/(\d+)/messages$#', $rest, $m)) {
+			$id = (int) $m[1];
+			if ($id <= 0) {
+				return Response::error('NOT_FOUND', 'Not found', 404);
+			}
+			if ($method !== 'POST') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('chat', 'sendMessage', null, $id);
+		}
+
 		return Response::error('NOT_FOUND', 'Not found', 404);
 	}
 

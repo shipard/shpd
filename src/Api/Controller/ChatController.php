@@ -7,9 +7,17 @@ namespace Shipard\Api\Controller;
 use Shipard\Api\AuthContext;
 use Shipard\Api\Request;
 use Shipard\Api\Response;
+use Shipard\Core\Ai\Exception\LlmException;
+use Shipard\Core\Ai\LlmChatParams;
+use Shipard\Core\Ai\LlmChatResult;
+use Shipard\Core\Ai\LlmClient;
 use Shipard\Core\Config\ConfigRuntime;
+use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Document\DocStateConfig;
+use Shipard\Core\Logging\ErrorLogger;
+use Shipard\Core\Security\DsSecretCipher;
+use Shipard\Module\Core\Ai\AIBackendDocument;
 
 /**
  * API controller for chat conversation management (Phase 1).
@@ -35,10 +43,18 @@ class ChatController
     private const STATE_DELETED        = 90;
     private const DEFAULT_LIMIT        = 50;
     private const MAX_LIMIT            = 200;
+    private const BACKENDS_TABLE       = 'core_ai_backends';
+
+    private const SYSTEM_PROMPT_FALLBACK =
+        'Jsi vestavěný AI asistent účetního systému Shipard. Pomáháš uživateli '
+        . 's dotazy o jeho datech a agendě. Odpovídej věcně, stručně a česky. '
+        . 'Odpověz přímo, bez zbytečného úvodu.';
 
     public function __construct(
         protected DataSourceConnection $db,
         private ?ConfigRuntime $config = null,
+        private ?DataSourceConfig $dsConfig = null,
+        private ?LlmClient $llm = null,
     ) {}
 
     /**
@@ -204,9 +220,285 @@ class ChatController
         return Response::success(null, 200);
     }
 
+    /**
+     * POST /_chat/conversations/{id}/messages
+     * Body: { "text": string }
+     *
+     * Persists the user message immediately, then streams the assistant reply
+     * over SSE (text-delta → message-complete | error). The user message
+     * survives a model failure; the assistant message is written on completion.
+     */
+    public function sendMessage(AuthContext $auth, int $id, Request $request): Response
+    {
+        $userId = $this->requireUser($auth);
+        if ($userId instanceof Response) {
+            return $userId;
+        }
+
+        $conversation = $this->loadOwnedConversation($id, $userId);
+        if ($conversation === null) {
+            return Response::error('NOT_FOUND', 'Conversation not found', 404);
+        }
+
+        if ($this->llm === null) {
+            return Response::error('LLM_NOT_CONFIGURED', 'Chat LLM is not configured', 503);
+        }
+
+        $body = $request->getBody() ?? [];
+        $text = trim((string) ($body['text'] ?? ''));
+        if ($text === '') {
+            return Response::error('VALIDATION_ERROR', 'Message text is required', 422);
+        }
+
+        // Persist the user message before calling the model (resilience).
+        $this->insertMessage($id, $userId, 'user', 'user_text', [['type' => 'text', 'text' => $text]], $this->nextSeq($id));
+
+        $backend = $this->resolveBackend($conversation);
+        if ($backend === null) {
+            return Response::error('NO_BACKEND', 'No active AI backend is configured', 503);
+        }
+
+        try {
+            $apiKey = $this->resolveApiKey($backend);
+        } catch (\Throwable $e) {
+            ErrorLogger::warn('ChatController: backend key decrypt failed', ['error' => $e->getMessage()]);
+            return Response::error('BACKEND_KEY_ERROR', 'Cannot read backend API key', 500);
+        }
+
+        $params = new LlmChatParams(
+            provider: (string) ($backend['provider'] ?? 'anthropic'),
+            model: (string) ($backend['model'] ?? ''),
+            apiKey: $apiKey,
+            baseUrl: $backend['base_url'] !== null ? (string) $backend['base_url'] : '',
+            system: $this->systemPrompt(),
+            messages: $this->buildAnthropicMessages($id),
+            maxTokens: (int) ($backend['max_tokens'] ?? 4096),
+            temperature: null, // v1: omitted — Opus 4.7/4.8 reject `temperature` (HTTP 400)
+        );
+
+        return Response::stream(
+            fn () => $this->runStream($params, $id, $userId),
+            200,
+            'text/event-stream; charset=utf-8',
+        );
+    }
+
     // -------------------------------------------------------------------------
     // Internals
     // -------------------------------------------------------------------------
+
+    /**
+     * Drives the streaming turn: emits text-delta events, persists the
+     * assistant message + conversation aggregates, then emits message-complete.
+     * Any failure becomes an `error` event; the user message is already saved
+     * and any partial assistant text is persisted best-effort.
+     */
+    private function runStream(LlmChatParams $params, int $conversationId, int $userId): void
+    {
+        $accumulated = '';
+        try {
+            /** @var LlmClient $llm */
+            $llm = $this->llm;
+            $result = $llm->streamChat($params, function (string $delta) use (&$accumulated): void {
+                $accumulated .= $delta;
+                $this->sse('text-delta', ['text' => $delta]);
+            });
+
+            $messageId = $this->insertMessage(
+                $conversationId,
+                $userId,
+                'assistant',
+                'assistant',
+                [['type' => 'text', 'text' => $result->text]],
+                $this->nextSeq($conversationId),
+                $result,
+            );
+            $this->bumpConversation($conversationId, $result);
+
+            $this->sse('message-complete', [
+                'message_id' => $messageId,
+                'usage' => [
+                    'input_tokens'  => $result->inputTokens,
+                    'output_tokens' => $result->outputTokens,
+                ],
+                'model' => $result->model,
+            ]);
+        } catch (\Throwable $e) {
+            // User message is already persisted; keep partial assistant text too.
+            if ($accumulated !== '') {
+                try {
+                    $this->insertMessage(
+                        $conversationId,
+                        $userId,
+                        'assistant',
+                        'assistant',
+                        [['type' => 'text', 'text' => $accumulated]],
+                        $this->nextSeq($conversationId),
+                    );
+                } catch (\Throwable) {
+                    // best-effort — do not mask the original error
+                }
+            }
+
+            if ($e instanceof LlmException) {
+                $this->sse('error', ['code' => 'LLM_ERROR', 'message' => $e->getMessage()]);
+            } else {
+                ErrorLogger::warn('ChatController: stream failed', ['error' => $e->getMessage()]);
+                $this->sse('error', ['code' => 'INTERNAL_ERROR', 'message' => 'Internal error during chat']);
+            }
+        }
+    }
+
+    /** Writes one SSE event frame and flushes it to the client. */
+    private function sse(string $event, array $data): void
+    {
+        echo "event: {$event}\n";
+        echo 'data: ' . json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n\n";
+        @flush();
+    }
+
+    /** Next sequence number for a conversation (0-based, gap-free per insert order). */
+    private function nextSeq(int $conversationId): int
+    {
+        $max = $this->db->fetchSingle(
+            'SELECT MAX(`seq`) FROM `' . self::TABLE_MESSAGES . '` WHERE `conversation` = %i',
+            $conversationId,
+        );
+        return $max === null ? 0 : ((int) $max + 1);
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $content
+     */
+    private function insertMessage(
+        int $conversationId,
+        int $userId,
+        string $role,
+        string $kind,
+        array $content,
+        int $seq,
+        ?LlmChatResult $result = null,
+    ): int {
+        return $this->db->insertRow(self::TABLE_MESSAGES, [
+            'conversation'  => $conversationId,
+            'seq'           => $seq,
+            'role'          => $role,
+            'kind'          => $kind,
+            'content'       => json_encode($content, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'tokens_input'  => $result?->inputTokens,
+            'tokens_output' => $result?->outputTokens,
+            'cost'          => null,
+            'model_name'    => $result?->model,
+            'created'       => date('Y-m-d H:i:s'),
+            'created_by'    => $userId,
+        ]);
+    }
+
+    /** Adds the turn's usage onto the conversation aggregates. */
+    private function bumpConversation(int $conversationId, LlmChatResult $result): void
+    {
+        $this->db->execute(
+            'UPDATE `' . self::TABLE_CONVERSATIONS . '`'
+            . ' SET `tokens_input` = `tokens_input` + %i,'
+            . '     `tokens_output` = `tokens_output` + %i,'
+            . '     `model_snapshot` = %sN,'
+            . '     `modified` = %s'
+            . ' WHERE `id` = %i',
+            $result->inputTokens ?? 0,
+            $result->outputTokens ?? 0,
+            $result->model,
+            date('Y-m-d H:i:s'),
+            $conversationId,
+        );
+    }
+
+    /**
+     * Backend = conversation.backend if set and active, else the default active
+     * backend. Returns null when no active backend exists.
+     *
+     * @param array<string, mixed> $conversation
+     * @return array<string, mixed>|null
+     */
+    private function resolveBackend(array $conversation): ?array
+    {
+        $backendId = isset($conversation['backend']) && $conversation['backend'] !== null
+            ? (int) $conversation['backend']
+            : 0;
+
+        if ($backendId > 0) {
+            $row = $this->db->fetchRow(
+                'SELECT * FROM `' . self::BACKENDS_TABLE . '` WHERE `id` = %i AND `is_active` = %i LIMIT 1',
+                $backendId,
+                1,
+            );
+            if ($row !== null) {
+                return $row;
+            }
+        }
+
+        return $this->db->fetchRow(
+            'SELECT * FROM `' . self::BACKENDS_TABLE . '` WHERE `is_default` = %i AND `is_active` = %i LIMIT 1',
+            1,
+            1,
+        );
+    }
+
+    /**
+     * Decrypts the backend API key. Builds the cipher only when a key is set,
+     * so backends without a key (or test fixtures) need no secrets infra.
+     *
+     * @param array<string, mixed> $backend
+     */
+    private function resolveApiKey(array $backend): ?string
+    {
+        if (!isset($backend['api_key']) || $backend['api_key'] === null || $backend['api_key'] === '') {
+            return null;
+        }
+        if ($this->dsConfig === null) {
+            throw new \RuntimeException('DataSourceConfig is required to decrypt the backend API key');
+        }
+        $doc = new AIBackendDocument();
+        $doc->setSecretCipher(DsSecretCipher::forConfig($this->dsConfig));
+        return $doc->decryptApiKey($backend);
+    }
+
+    /**
+     * Builds the Anthropic `messages` array from the full conversation history.
+     * Stored `content` is already a list of Anthropic blocks.
+     *
+     * @return array<int, array{role: string, content: mixed}>
+     */
+    private function buildAnthropicMessages(int $conversationId): array
+    {
+        $rows = $this->db->fetchAll(
+            'SELECT `role`, `content` FROM `' . self::TABLE_MESSAGES . '`'
+            . ' WHERE `conversation` = %i ORDER BY `seq` ASC, `id` ASC',
+            $conversationId,
+        );
+
+        $messages = [];
+        foreach ($rows as $row) {
+            $content = $row['content'] ?? '';
+            $decoded = is_string($content) && $content !== '' ? json_decode($content, true) : [];
+            $messages[] = [
+                'role'    => (string) $row['role'],
+                'content' => is_array($decoded) ? $decoded : [],
+            ];
+        }
+        return $messages;
+    }
+
+    /** System prompt from the chat config cfgItem, with a built-in fallback. */
+    private function systemPrompt(): string
+    {
+        if ($this->config !== null) {
+            $cfg = $this->config->cfgItem('core.chat.settings');
+            if (is_array($cfg) && !empty($cfg['systemPrompt'])) {
+                return (string) $cfg['systemPrompt'];
+            }
+        }
+        return self::SYSTEM_PROMPT_FALLBACK;
+    }
 
     /**
      * Returns the authenticated user id, or a 401 Response when missing.

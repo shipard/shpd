@@ -41,6 +41,10 @@
         {
             "id": "core.chat.messageKinds",
             "file": "config/messageKinds.jsonc"
+        },
+        {
+            "id": "core.chat.settings",
+            "file": "config/settings.jsonc"
         }
     ]
 }

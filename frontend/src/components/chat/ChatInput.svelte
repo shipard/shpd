@@ -1,0 +1,77 @@
+<script>
+  /**
+   * Message composer. Enter sends, Shift+Enter inserts a newline. Disabled
+   * while a turn is streaming.
+   */
+  import Button from '../ui/Button.svelte';
+  import { iconChat } from '../../icons.js';
+  import { t } from '../../i18n/index.js';
+
+  let { disabled = false, onsend } = $props();
+
+  let text = $state('');
+
+  function submit() {
+    const value = text.trim();
+    if (disabled || value === '') return;
+    text = '';
+    onsend?.(value);
+  }
+
+  function handleKeydown(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      submit();
+    }
+  }
+</script>
+
+<div class="shpd-chat-input">
+  <textarea
+    class="shpd-chat-input__field"
+    bind:value={text}
+    {disabled}
+    rows="2"
+    placeholder={t('chat.input.placeholder')}
+    onkeydown={handleKeydown}
+  ></textarea>
+  <Button
+    icon={iconChat}
+    label={t('chat.input.send')}
+    variant="primary"
+    disabled={disabled || text.trim() === ''}
+    onclick={submit}
+  />
+</div>
+
+<style>
+  .shpd-chat-input {
+    display: flex;
+    gap: var(--shpd-space-sm);
+    align-items: flex-end;
+    padding: var(--shpd-space-md);
+    border-top: 1px solid var(--shpd-color-border);
+    background-color: var(--shpd-color-bg);
+  }
+  .shpd-chat-input__field {
+    flex: 1;
+    padding: var(--shpd-space-sm);
+    border: 1px solid var(--shpd-color-border);
+    border-radius: var(--shpd-radius-md);
+    font-size: var(--shpd-font-size-base);
+    font-family: var(--shpd-font-family);
+    color: var(--shpd-color-text);
+    background-color: var(--shpd-color-bg);
+    box-sizing: border-box;
+    resize: none;
+  }
+  .shpd-chat-input__field:focus {
+    outline: none;
+    border-color: var(--shpd-color-border-focus);
+    box-shadow: 0 0 0 2px var(--shpd-color-focus-ring);
+  }
+  .shpd-chat-input__field:disabled {
+    opacity: 0.6;
+    background-color: var(--shpd-color-bg-secondary);
+  }
+</style>

@@ -72,6 +72,7 @@ import {
   faBell,
   faGauge,
   faRobot,
+  faComments,
 } from '@fortawesome/free-solid-svg-icons';
 
 // ── Akce (toolbary, tlačítka) ──────────────────────────────────
@@ -139,6 +140,7 @@ export const iconAlert = faBell;
 // ── Dashboard ──────────────────────────────────────────────────
 export const iconDashboard = faGauge;
 export const iconRobot = faRobot;
+export const iconChat = faComments;
 
 // ── Přílohy / soubory ─────────────────────────────────────────────
 export const iconAttachment = faPaperclip;
@@ -192,6 +194,7 @@ export const iconMap = {
   'alert': iconAlert,
   'dashboard': iconDashboard,
   'robot': iconRobot,
+  'chat': iconChat,
   'cloud-download': iconCloudDownload,
 };
 

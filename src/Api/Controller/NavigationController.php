@@ -88,6 +88,16 @@ class NavigationController
 
 		$groups = $this->buildTree($resolvedModules, $resolver, $language, $hiddenViewers, $hiddenTables);
 
+		// Chat je root-level leaf (vlastní pohled, ne viewer). Stejný princip
+		// jako Dashboard — Sidebar ho pozná podle `type`. Vkládáme před
+		// dashboard unshift, aby dashboard zůstal první (výchozí po loginu).
+		array_unshift($groups, [
+			'id'    => 'chat',
+			'label' => 'Chat',
+			'type'  => 'chat',
+			'icon'  => 'chat',
+		]);
+
 		// Dashboard je root-level leaf — výchozí pohled po loginu. Není to
 		// skupina (žádné `children`); Sidebar.svelte ho rozpoznává podle
 		// přítomnosti `type` na root položce.

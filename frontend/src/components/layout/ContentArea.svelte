@@ -2,6 +2,7 @@
   import TableBrowser from '../browser/TableBrowser.svelte';
   import Viewer from '../viewer/Viewer.svelte';
   import Dashboard from '../dashboard/Dashboard.svelte';
+  import ChatView from '../chat/ChatView.svelte';
   import { t } from '../../i18n/index.js';
 
   let { activeItem = null } = $props();
@@ -10,6 +11,8 @@
 <main class="shpd-content">
   {#if activeItem?.type === 'dashboard'}
     <Dashboard />
+  {:else if activeItem?.type === 'chat'}
+    <ChatView />
   {:else if activeItem?.type === 'viewer'}
     <Viewer tab={activeItem} />
   {:else if activeItem?.type === 'table'}

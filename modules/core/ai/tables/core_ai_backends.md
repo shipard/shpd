@@ -1,6 +1,8 @@
 # Tabulka: AI backendy (core_ai_backends)
 
-Konfigurace AI providerů pro analýzu došlé pošty. Per DS může existovat více
+Konfigurace AI providerů — **sdílený pool** (provider, model a šifrovaný
+klíč), využívaný analýzou došlé pošty i vnitřním chatem (modul `core/ai`). Per DS
+může existovat více
 backendů (např. Anthropic + lokální Ollama), právě jeden může mít
 `is_default = true`. Per DS se obvykle vystačí s jedním Anthropic backendem
 auto-provisioned při `ds-upgrade`.

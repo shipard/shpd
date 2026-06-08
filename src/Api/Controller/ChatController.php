@@ -618,16 +618,28 @@ class ChatController
         return $messages;
     }
 
-    /** System prompt from the chat config cfgItem, with a built-in fallback. */
+    /**
+     * System prompt from the chat config cfgItem (or built-in fallback), with the
+     * current date appended at request time. The model has no inherent sense of
+     * "today" — without this it falls back to its training cutoff and may treat a
+     * present-day year as the future.
+     */
     private function systemPrompt(): string
     {
+        $base = self::SYSTEM_PROMPT_FALLBACK;
         if ($this->config !== null) {
             $cfg = $this->config->cfgItem('core.chat.settings');
             if (is_array($cfg) && !empty($cfg['systemPrompt'])) {
-                return (string) $cfg['systemPrompt'];
+                $base = (string) $cfg['systemPrompt'];
             }
         }
-        return self::SYSTEM_PROMPT_FALLBACK;
+
+        $today = date('Y-m-d');
+        return $base
+            . "\n\nAktuální datum je dnes {$today}; data v systému jsou aktuální k tomuto dni. "
+            . 'Nepředpokládej podle svých tréninkových dat, co v datech je nebo není, ani '
+            . 'že nějaký rok či datum je v budoucnosti — co v systému existuje, ověř voláním '
+            . 'nástrojů. Nástroje a data jsou zdroj pravdy; pokud na dotaz nemáš vhodný nástroj, řekni to.';
     }
 
     /**

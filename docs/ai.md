@@ -1,0 +1,135 @@
+# Shipard — AI subsystém
+
+Vestavěný AI asistent („chat nad svými daty") a sdílená infrastruktura pro
+volání jazykových modelů. Subsystém stojí na jednom společném základu — **sadě
+nástrojů (MCP serveru)** nad daty Shipardu — který konzumuje několik klientů.
+Jazykový model je vyměnitelný díl; nástroje jsou napsané jednou.
+
+> Tento dokument je **přehled**. Detaily viz [`mcp-server.md`](mcp-server.md)
+> (jak přidat nástroj) a [`chat.md`](chat.md) (orchestrátor a frontend).
+
+---
+
+## 1. Vrstvená mapa
+
+```
+  Konzumenti:   vnitřní chat        externí MCP         ai_analyzer
+                (core/chat,         klienti             (Python daemon,
+                 in-process)        (/_mcp, HTTP)        analýza pošty)
+                     │                   │                    │
+                     └──── nástroje ─────┘                    │ vlastní cesta
+                              ▼                               │ (claim/result,
+              ┌─────────────────────────────────┐            │  ne přes MCP)
+              │ MCP nástroje (src/Api/Mcp)       │            │
+              │ doménové operace nad daty        │            │
+              └───────────────┬─────────────────┘            │
+                              ▼                               │
+              ┌─────────────────────────────────┐            │
+              │ Shipard data (moduly, PHP)       │            │
+              └─────────────────────────────────┘            │
+                                                              │
+  Mozek:   LLM provider ◄───── core/ai backendy ─────────────┘
+           (Anthropic)         (provider / model / klíč; sdílené)
+```
+
+Klíčový poznatek: **MCP server (= nástroje nad Shipardem) je společný základ,
+vnitřní chat je jen jeden z jeho klientů.** Nástroje volá vnitřní chat
+in-process (registr je hned vedle), externí klienti přes `/_mcp` po HTTP.
+Analýza došlé pošty má vlastní cestu (Python daemon), backend ale sdílí.
+
+---
+
+## 2. Komponenty a kde leží
+
+| Vrstva | Umístění | Co |
+|--------|----------|----|
+| Sdílené backendy | `modules/core/ai/` | `core_ai_backends` + `AIBackendDocument`/`Lookup`/`Viewer`; provider, model, šifrovaný klíč |
+| MCP server | `src/Api/Mcp/` + `src/Api/Controller/McpController.php`; routa `POST /api/v1/_mcp` | JSON-RPC 2.0 (`initialize`, `tools/list`, `tools/call`), registr nástrojů, mapování obálky |
+| Nástroje | `modules/*/*/src/Mcp/` | doménové operace (viz §3) |
+| Chat orchestrátor | `src/Api/Controller/ChatController.php` + `modules/core/chat/` | konverzace, SSE smyčka, in-process volání nástrojů |
+| LLM klient | `src/Core/Ai/` (`LlmClient`, `AnthropicLlmClient`) | streamovaný Anthropic Messages API (+ tool-use) |
+| Frontend | `frontend/src/components/chat/` + `api/chat.js` | pohled „Chat", SSE konzumace přes `fetch` + reader |
+
+---
+
+## 3. Katalog nástrojů a tiery podle rizika
+
+Nástroje se neřadí podle modulů, ale podle **rizika** — to určuje, kolik
+samostatnosti dostane AI. Vnitřní chat v1 nabízí modelu **jen čtecí tier**
+(`McpTool::isReadOnly()`).
+
+| Tier | Brzda | Nástroje |
+|------|-------|----------|
+| **Čtení** | žádná (bezpečné) | `persons_search`, `persons_get`, `documents_search`, `mail_list_pending` |
+| **Koncepty** | zápis do `docState` Konceptu (10) + lidská revize; `autoCreateMode='safe'` (nezakládá master data) | `mail_draft_document` |
+| **Akce** | (potvrzení / zatím nezavedeno) | — |
+
+Katalog roste podle schopností systému: nástroj smí tvrdit jen to, co data
+umí pravdivě zodpovědět (např. „po splatnosti" ano, „neuhrazeno" ne — chybí
+saldokonto).
+
+---
+
+## 4. Dvě cesty k jazykovému modelu
+
+| Cesta | Kdo volá LLM | Režim | Nástroje |
+|-------|--------------|-------|----------|
+| **Analýza pošty** | Python daemon `ai_analyzer` (pull/claim přes `AnalysisController`) | strukturovaný výstup, ne-streamovaně | — |
+| **Vnitřní chat** | PHP `AnthropicLlmClient` (in-process) | streamovaně (SSE), tool-use smyčka | čtecí MCP nástroje |
+
+Obě cesty čtou backend (provider/model/klíč) z `core_ai_backends`. Pozn.: PHP
+strana neměla LLM klienta, dokud nevznikl chat — analýza pošty volá model
+výhradně z Python daemonu.
+
+---
+
+## 5. Backendy a konfigurace
+
+`core_ai_backends` je **sdílený pool** providerů (provider, model, šifrovaný
+klíč). Per DS může být víc backendů, právě jeden `is_default`. Detaily sloupců:
+[`core_ai_backends.md`](../modules/core/ai/tables/core_ai_backends.md).
+
+- Klíč je šifrovaný přes `DsSecretCipher` — viz [`operations/secrets.md`](operations/secrets.md).
+- Nastavení klíče: `bin/shpd-ds ai-analyzer-set-key --backend default --api-key <api-key>` (aktivuje backend). Auto-provisioning vytvoří `default` backend při `ds-upgrade`.
+- **Provider scope:** v1 jen `anthropic`; rozhraní `LlmClient` drží dveře pro
+  další providery (lokální, OpenAI) otevřené, aniž by se předčasně abstrahoval
+  formát streamu.
+
+---
+
+## 6. Bezpečnostní zásady
+
+- **Auth + DS scoping.** Každý nástroj běží v rámci přihlášeného uživatele a
+  jeho zdroje dat (DS je resolvnutý z hostu/cesty před dispatchem). MCP server
+  nesmí být cesta, jak obejít oprávnění.
+- **Read-only invariant chatu.** Smyčka nabízí modelu a spouští **jen** nástroje
+  s `isReadOnly()===true` — i kdyby si model vyžádal jiný či zápisový nástroj
+  (vrátí se `tool_result` s `is_error`, nespustí se).
+- **Brzda u konceptů.** `mail_draft_document` zakládá jen **Koncept**
+  (`targetDocState=10`) a jede `autoCreateMode='safe'` — nikdy nezakládá novou
+  master data (dodavatele/položky) ani nefinalizuje doklad; to dělá člověk přes
+  stavový automat dokladu.
+- **Bez MCP OAuth v1.** Cizí klienti se autentizují stávajícím Bearer tokenem /
+  API klíčem (first-party); MCP OAuth flow je odložený.
+
+---
+
+## 7. Datum a kontext v chatu
+
+Jazykový model nemá vlastní smysl pro „dnešek". `ChatController::systemPrompt()`
+proto k systémovému promptu při každém požadavku **přilepí aktuální datum** a
+instrukci „neodhaduj podle tréninkových dat — ověř nástrojem". Bez toho model
+spadne na své tréninkové datum a může pokládat současný rok za budoucnost.
+
+---
+
+## 8. Související dokumenty
+
+- [`mcp-server.md`](mcp-server.md) — MCP server a jak přidat nástroj (dev guide)
+- [`chat.md`](chat.md) — orchestrátor, SSE kontrakt, datový model, frontend
+- [`core_ai_backends.md`](../modules/core/ai/tables/core_ai_backends.md),
+  [`core_chat_conversations.md`](../modules/core/chat/tables/core_chat_conversations.md),
+  [`core_chat_messages.md`](../modules/core/chat/tables/core_chat_messages.md)
+- [`operations/secrets.md`](operations/secrets.md) — šifrování klíčů
+- [`cli.md`](cli.md) — `ai-analyzer-set-key` a další příkazy
+- [`mail/api-contract.md`](mail/api-contract.md) — analýza došlé pošty (sousední cesta)

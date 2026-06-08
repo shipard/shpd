@@ -14,6 +14,9 @@ Technické specifikace projektu Shipard.
 | [attachments.md](attachments.md) | Systém příloh dokumentů — upload, download, náhledy, úložiště souborů, API endpointy |
 | [frontend.md](frontend.md) | Frontend architektura — Svelte 5, komponenty, viewer systém, ikony, API komunikace |
 | [dashboard.md](dashboard.md) | Dashboard — home obrazovka, widget systém, API kontrakt, AI shrnutí |
+| [ai.md](ai.md) | AI subsystém — přehled: MCP server, katalog nástrojů a tiery podle rizika, chat orchestrátor, sdílené backendy, dvě cesty k LLM |
+| [mcp-server.md](mcp-server.md) | MCP server — JSON-RPC protokol, rozhraní `McpTool`, doménová obálka a wire mapping, auth/DS scoping, **jak přidat nový nástroj** |
+| [chat.md](chat.md) | Vnitřní AI asistent — orchestrační SSE smyčka, kontrakt událostí, LLM klient, výběr backendu, datový model konverzací, frontend konzumace |
 | [design-system.md](design-system.md) | Design system — paleta barev, doc-state konvence, badge systém, avatary, CSS proměnné |
 | [documentation.md](documentation.md) | Pravidla pro dokumentaci modulů a tabulek — kde leží README.md, co obsahuje .md k tabulce, vzory |
 | [cli.md](cli.md) | CLI nástroje — kompletní reference `shpd-server` a `shpd-ds` příkazů, pomocných skriptů a workflow scénářů |

@@ -24,6 +24,7 @@ use Shipard\Module\Core\Mail\AIAnalyzerProvisioner;
 use Shipard\Module\Core\Mail\MailRouterProvisioner;
 use Shipard\Module\Core\Units\UnitsProvisioner;
 use Shipard\Module\Docs\Core\NumberSeriesProvisioner;
+use Shipard\Module\Economy\Accounting\AccountChartProvisioner;
 use Shipard\Module\Economy\Codebooks\FiscalYearsProvisioner;
 use Shipard\Module\Economy\Codebooks\VatPeriodsProvisioner;
 use Shipard\Module\Economy\Items\ItemKindsProvisioner;
@@ -264,6 +265,7 @@ class DsUpgradeCommand extends Command
         } else {
             $this->provisionUnits($resolvedModules, $dsConnection, $output);
             $this->provisionItemKinds($resolvedModules, $dsConnection, $output);
+            $this->provisionAccountChart($resolvedModules, $dsConfig, $dsConnection, $output);
             $this->provisionFiscalYears($resolvedModules, $dsDir, $dsConnection, $output);
             $this->provisionVatPeriods($resolvedModules, $dsConnection, $output);
             $this->provisionDocCoreNumberSeries($resolvedModules, $dsDir, $dsConnection, $output);
@@ -422,6 +424,46 @@ class DsUpgradeCommand extends Command
         $result = $provisioner->provision();
 
         $this->logProvisioningResult($output, 'item kinds', $result['kinds']);
+    }
+
+    /**
+     * @param list<\Shipard\Core\Module\ModuleDefinition> $resolvedModules
+     */
+    private function provisionAccountChart(
+        array $resolvedModules,
+        DataSourceConfig $dsConfig,
+        DataSourceConnection $dsConnection,
+        OutputInterface $output,
+    ): void {
+        $output->writeln('', OutputInterface::VERBOSITY_VERBOSE);
+        $output->writeln('Provisioning economy.accounting chart of accounts...', OutputInterface::VERBOSITY_VERBOSE);
+
+        if (!$this->isModuleActive($resolvedModules, 'economy.accounting')) {
+            $output->writeln('  <comment>[SKIP] economy.accounting module not active</comment>', OutputInterface::VERBOSITY_VERBOSE);
+            return;
+        }
+
+        $variant = $dsConfig->getAccountChart();
+        $file = match ($variant) {
+            'default' => 'accountChartDefault.jsonc',
+            'npo'     => 'accountChartNpo.jsonc',
+            default   => null,
+        };
+        if ($file === null) {
+            $output->writeln("  <comment>[WARN] Unknown accountChart variant '{$variant}' — falling back to 'default'.</comment>");
+            $file = 'accountChartDefault.jsonc';
+        }
+
+        $seedFile = $this->getModulePathResolver()->getPath('economy.accounting') . '/config/' . $file;
+        if (!is_file($seedFile)) {
+            $output->writeln("  <comment>[SKIP] Account chart seed file not found: {$file}</comment>");
+            return;
+        }
+
+        $provisioner = new AccountChartProvisioner($dsConnection, $seedFile);
+        $result = $provisioner->provision();
+
+        $this->logProvisioningResult($output, 'account chart', $result['accountChart']);
     }
 
     /**

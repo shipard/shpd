@@ -1,0 +1,249 @@
+{
+    "tableId": 412,
+    "displayPattern": "{number} — {name}",
+    "name": "Chart of accounts",
+    "name:cs": "Účtový rozvrh",
+    "name:en": "Chart of accounts",
+
+    "docStates": {
+        "stateColumn": "docState",
+        "mainColumn": "docStateMain",
+        "cfgItem": "core.system.docStatesArchive"
+    },
+
+    "columnGroups": [
+        {
+            "id": "identity",
+            "name": "Identity",
+            "name:cs": "Identifikace",
+            "name:en": "Identity"
+        },
+        {
+            "id": "classification",
+            "name": "Classification",
+            "name:cs": "Zatřídění",
+            "name:en": "Classification"
+        },
+        {
+            "id": "settings",
+            "name": "Settings",
+            "name:cs": "Nastavení",
+            "name:en": "Settings"
+        }
+    ],
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+
+        // --- identity ---
+
+        {
+            "id": "number",
+            "name": "Account number",
+            "name:cs": "Číslo účtu",
+            "name:en": "Account number",
+            "type": "varchar",
+            "length": 12,
+            "nullable": false,
+            "group": "identity"
+        },
+        {
+            "id": "name",
+            "name": "Name",
+            "name:cs": "Název",
+            "name:en": "Name",
+            "type": "varchar",
+            "length": 180,
+            "nullable": false,
+            "group": "identity"
+        },
+        {
+            "id": "short_name",
+            "name": "Short name",
+            "name:cs": "Název zkrácený",
+            "name:en": "Short name",
+            "type": "varchar",
+            "length": 100,
+            "nullable": true,
+            "group": "identity"
+        },
+
+        // --- classification ---
+
+        {
+            "id": "account_level",
+            "name": "Level",
+            "name:cs": "Úroveň",
+            "name:en": "Level",
+            "type": "enumInt",
+            "nullable": false,
+            "default": 4,
+            "cfgItem": "economy.accounting.accountLevels",
+            "group": "classification"
+        },
+        {
+            "id": "g1",
+            "name": "Class (prefix)",
+            "name:cs": "Třída (prefix)",
+            "type": "varchar",
+            "length": 1,
+            "nullable": true,
+            "group": "classification"
+        },
+        {
+            "id": "g2",
+            "name": "Group (prefix)",
+            "name:cs": "Skupina (prefix)",
+            "type": "varchar",
+            "length": 2,
+            "nullable": true,
+            "group": "classification"
+        },
+        {
+            "id": "g3",
+            "name": "Synthetic (prefix)",
+            "name:cs": "Syntetika (prefix)",
+            "type": "varchar",
+            "length": 3,
+            "nullable": true,
+            "group": "classification"
+        },
+        {
+            "id": "account_kind",
+            "name": "Account kind",
+            "name:cs": "Povaha účtu",
+            "name:en": "Account kind",
+            "type": "enumInt",
+            "nullable": true,
+            "cfgItem": "economy.accounting.accountKinds",
+            "group": "classification"
+        },
+        {
+            "id": "costs_type",
+            "name": "Cost type",
+            "name:cs": "Druh nákladu",
+            "name:en": "Cost type",
+            "type": "enumInt",
+            "nullable": true,
+            "cfgItem": "economy.accounting.costsTypes",
+            "group": "classification"
+        },
+        {
+            "id": "results_type",
+            "name": "Result type",
+            "name:cs": "Druh výsledku",
+            "name:en": "Result type",
+            "type": "enumInt",
+            "nullable": true,
+            "cfgItem": "economy.accounting.resultsTypes",
+            "group": "classification"
+        },
+
+        // --- settings ---
+
+        {
+            "id": "valid_from",
+            "name": "Valid from",
+            "name:cs": "Platnost od",
+            "name:en": "Valid from",
+            "type": "date",
+            "nullable": true,
+            "group": "settings"
+        },
+        {
+            "id": "valid_to",
+            "name": "Valid to",
+            "name:cs": "Platnost do",
+            "name:en": "Valid to",
+            "type": "date",
+            "nullable": true,
+            "group": "settings"
+        },
+        {
+            "id": "is_system",
+            "name": "System",
+            "name:cs": "Systémový",
+            "name:en": "System",
+            "type": "boolean",
+            "nullable": false,
+            "default": 0,
+            "group": "settings"
+        },
+        {
+            "id": "note",
+            "name": "Note",
+            "name:cs": "Popis",
+            "name:en": "Note",
+            "type": "text",
+            "nullable": true
+        },
+
+        // --- doc state (systémové, bez skupiny) ---
+
+        {
+            "id": "docState",
+            "name": "Document state",
+            "name:cs": "Stav dokumentu",
+            "name:en": "Document state",
+            "type": "tinyint",
+            "nullable": false,
+            "default": 10,
+            "system": true
+        },
+        {
+            "id": "docStateMain",
+            "name": "Document state (sort)",
+            "name:cs": "Stav dokumentu (řazení)",
+            "name:en": "Document state (sort)",
+            "type": "tinyint",
+            "nullable": false,
+            "default": 1,
+            "system": true
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "unq_number",
+            "type": "unique",
+            "columns": [
+                {"column": "number"}
+            ]
+        },
+        {
+            "id": "idx_account_kind",
+            "type": "index",
+            "columns": [
+                {"column": "account_kind"}
+            ]
+        },
+        {
+            "id": "idx_level",
+            "type": "index",
+            "columns": [
+                {"column": "account_level"}
+            ]
+        },
+        {
+            "id": "idx_g3",
+            "type": "index",
+            "columns": [
+                {"column": "g3"}
+            ]
+        },
+        {
+            "id": "idx_doc_state",
+            "type": "index",
+            "columns": [
+                {"column": "docStateMain", "order": "ASC"},
+                {"column": "number", "order": "ASC"}
+            ]
+        }
+    ]
+}

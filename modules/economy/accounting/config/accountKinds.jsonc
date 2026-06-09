@@ -1,0 +1,55 @@
+{
+    // Povaha účtu. Číselné hodnoty shodné se Starým Shipardem (accountKind)
+    // kvůli bezeztrátové migraci. Stará hodnota `99 ---` se nereprezentuje
+    // (vynechaný klíč v seedu → NULL).
+    "0": {
+        "name": "Assets",
+        "name:cs": "Aktiva",
+        "name:en": "Assets"
+    },
+    "1": {
+        "name": "Liabilities",
+        "name:cs": "Pasiva",
+        "name:en": "Liabilities"
+    },
+    "2": {
+        "name": "Expenses",
+        "name:cs": "Náklady",
+        "name:en": "Expenses"
+    },
+    "3": {
+        "name": "Revenue",
+        "name:cs": "Výnosy",
+        "name:en": "Revenue"
+    },
+    "4": {
+        "name": "Period opening",
+        "name:cs": "Otevření období",
+        "name:en": "Period opening"
+    },
+    "5": {
+        "name": "Mixed (assets & liabilities)",
+        "name:cs": "Aktivně pasivní",
+        "name:en": "Mixed (assets & liabilities)"
+    },
+    "6": {
+        "name": "Off-balance-sheet",
+        "name:cs": "Podrozvaha",
+        "name:en": "Off-balance-sheet"
+    },
+    "7": {
+        "name": "Internal expenses",
+        "name:cs": "Vnitropodnikové náklady",
+        "name:en": "Internal expenses"
+    },
+    "8": {
+        "name": "Internal revenue",
+        "name:cs": "Vnitropodnikové výnosy",
+        "name:en": "Internal revenue"
+    },
+    "9": {
+        "name": "Period closing",
+        "name:cs": "Uzavření období",
+        "name:en": "Period closing"
+    }
+}

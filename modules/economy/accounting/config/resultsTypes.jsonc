@@ -1,0 +1,20 @@
+{
+    // Druh výsledku. Hodnota 0 (---) se nereprezentuje — používá se NULL
+    // (sloupec results_type je nullable, seed hodnotu 0 nepíše).
+    // Hodnota 3 "Mimořádný" ponechána kvůli historickým datům před r. 2016.
+    "1": {
+        "name": "Operating",
+        "name:cs": "Provozní",
+        "name:en": "Operating"
+    },
+    "2": {
+        "name": "Financial",
+        "name:cs": "Finanční",
+        "name:en": "Financial"
+    },
+    "3": {
+        "name": "Extraordinary",
+        "name:cs": "Mimořádný",
+        "name:en": "Extraordinary"
+    }
+}

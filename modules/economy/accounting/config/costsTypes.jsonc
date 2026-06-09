@@ -1,0 +1,14 @@
+{
+    // Druh nákladu. Hodnota 0 (---) se nereprezentuje — používá se NULL
+    // (sloupec costs_type je nullable, seed hodnotu 0 nepíše).
+    "1": {
+        "name": "Tax-deductible",
+        "name:cs": "Daňově uznatelný",
+        "name:en": "Tax-deductible"
+    },
+    "2": {
+        "name": "Non-deductible",
+        "name:cs": "Daňově neuznatelný",
+        "name:en": "Non-deductible"
+    }
+}

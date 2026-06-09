@@ -1,0 +1,24 @@
+{
+    // Úroveň účtu v rozvrhu. Dopočítává se z délky `number`
+    // (1=třída, 2=skupina, 3=syntetika, 4+=analytický účet).
+    "1": {
+        "name": "Class",
+        "name:cs": "Třída",
+        "name:en": "Class"
+    },
+    "2": {
+        "name": "Group",
+        "name:cs": "Skupina",
+        "name:en": "Group"
+    },
+    "3": {
+        "name": "Synthetic account",
+        "name:cs": "Syntetický účet",
+        "name:en": "Synthetic account"
+    },
+    "4": {
+        "name": "Analytic account",
+        "name:cs": "Analytický účet",
+        "name:en": "Analytic account"
+    }
+}

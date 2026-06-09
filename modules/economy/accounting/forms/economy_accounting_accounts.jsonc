@@ -1,0 +1,39 @@
+{
+    "title": "Účet",
+    "title:cs": "Účet",
+    "title:en": "Account",
+    "titleNew": "Nový účet",
+    "titleNew:cs": "Nový účet",
+    "titleNew:en": "New account",
+    "tabs": [
+        {
+            "id": "basic",
+            "label": "Účet",
+            "label:cs": "Účet",
+            "label:en": "Account",
+            "sections": [
+                {
+                    "columns": [
+                        {
+                            "elements": [
+                                {"type": "input", "column": "number", "required": true},
+                                {"type": "input", "column": "name", "required": true},
+                                {"type": "input", "column": "short_name"},
+
+                                {"type": "separator", "label": "Zatřídění", "label:cs": "Zatřídění", "label:en": "Classification"},
+                                {"type": "select", "column": "account_kind"},
+                                {"type": "select", "column": "costs_type"},
+                                {"type": "select", "column": "results_type"},
+
+                                {"type": "separator", "label": "Nastavení", "label:cs": "Nastavení", "label:en": "Settings"},
+                                {"type": "input", "column": "valid_from"},
+                                {"type": "input", "column": "valid_to"},
+                                {"type": "input", "column": "note"}
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

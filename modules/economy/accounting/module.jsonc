@@ -1,0 +1,60 @@
+{
+    "id": "economy.accounting",
+    "name": "Accounting",
+    "name:cs": "Účetnictví",
+    "name:en": "Accounting",
+    "description": "Double-entry accounting — chart of accounts",
+    "description:cs": "Podvojné účetnictví — účtový rozvrh",
+    "description:en": "Double-entry accounting — chart of accounts",
+
+    "dependencies": ["core.system"],
+
+    "tables": [
+        "economy_accounting_accounts"
+    ],
+
+    "viewers": [
+        {
+            "id": "economy.accounting.accounts",
+            "name": "Chart of accounts",
+            "name:cs": "Účtový rozvrh",
+            "name:en": "Chart of accounts",
+            "icon": "calculator",
+            "table": "economy_accounting_accounts",
+            "class": "Shipard\\Module\\Economy\\Accounting\\AccountsViewer"
+        }
+    ],
+
+    "forms": [
+        {
+            "table": "economy_accounting_accounts",
+            "id": "economy.accounting.accounts"
+        }
+    ],
+
+    "documentClasses": [
+        {
+            "table": "economy_accounting_accounts",
+            "class": "Shipard\\Module\\Economy\\Accounting\\AccountDocument"
+        }
+    ],
+
+    "config": [
+        {
+            "id": "economy.accounting.accountLevels",
+            "file": "config/accountLevels.jsonc"
+        },
+        {
+            "id": "economy.accounting.accountKinds",
+            "file": "config/accountKinds.jsonc"
+        },
+        {
+            "id": "economy.accounting.costsTypes",
+            "file": "config/costsTypes.jsonc"
+        },
+        {
+            "id": "economy.accounting.resultsTypes",
+            "file": "config/resultsTypes.jsonc"
+        }
+    ]
+}

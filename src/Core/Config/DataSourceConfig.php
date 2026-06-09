@@ -109,4 +109,15 @@ class DataSourceConfig
     {
         return $this->data['skipProvisioning'] ?? false;
     }
+
+    /**
+     * Standardní účtová osnova k naseedování při ds-upgrade:
+     * 'default' (firemní) | 'npo' (neziskové organizace).
+     * Volba je jednorázová při zakládání DS.
+     * Optional; defaults to 'default' when missing from main.json.
+     */
+    public function getAccountChart(): string
+    {
+        return $this->data['accountChart'] ?? 'default';
+    }
 }

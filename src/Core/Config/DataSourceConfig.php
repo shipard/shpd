@@ -112,7 +112,8 @@ class DataSourceConfig
 
     /**
      * Standardní účtová osnova k naseedování při ds-upgrade:
-     * 'default' (firemní) | 'npo' (neziskové organizace).
+     * 'default' (firemní) | 'npo' (neziskové organizace) | 'none' (seed se přeskočí,
+     * osnova přijde importem nebo se nepoužívá).
      * Volba je jednorázová při zakládání DS.
      * Optional; defaults to 'default' when missing from main.json.
      */

@@ -444,6 +444,14 @@ class DsUpgradeCommand extends Command
         }
 
         $variant = $dsConfig->getAccountChart();
+        if ($variant === 'none') {
+            $output->writeln(
+                "  <comment>[SKIP] accountChart='none' — standardní osnova se neseeduje.</comment>",
+                OutputInterface::VERBOSITY_VERBOSE,
+            );
+            return;
+        }
+
         $file = match ($variant) {
             'default' => 'accountChartDefault.jsonc',
             'npo'     => 'accountChartNpo.jsonc',

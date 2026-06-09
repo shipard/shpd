@@ -2,6 +2,11 @@
 
 Vítej v projektu Shipard! Tenhle dokument tě provede od nuly k funkčnímu vývojovému prostředí.
 
+> **Stav projektu:** Shipard je v **alfa fázi**. Backend, REST API i Svelte
+> frontend běží, ale věci se ještě aktivně mění a místy něco zaskřípe.
+> Když na něco narazíš, dej nám vědět — viz poslední kapitola
+> [Něco nefunguje?](#9-něco-nefunguje).
+
 ---
 
 ## Požadavky
@@ -72,16 +77,58 @@ shpd-server doctor
 Vypíše report: mode, shipard-user, PHP-FPM pool user, kontrolu cest,
 DB connection per DS. Exit 0 = vše OK.
 
-Pokud něco nesouhlasí (typicky po migraci ze starého layoutu):
+Pokud něco nesouhlasí:
 
 ```bash
 sudo shpd-server fix-permissions --dry-run    # preview
 sudo shpd-server fix-permissions              # apply
 ```
 
+Až je doctor zelený, otevři vývojářský dashboard (viz kapitola 6) — odtud
+už můžeš vytvořit první datový zdroj a aplikaci otevřít.
+
 ---
 
-## 6. Po `git pull`
+## 6. Vývojářský dashboard
+
+V development módu běží na kořeni serveru jednoduchý webový dashboard,
+který shrnuje vše, co při testování potřebuješ — bez ručního skládání URL
+a hledání ID datových zdrojů v terminálu.
+
+Otevři v prohlížeči:
+
+```
+http://<adresa-serveru>/_dev/
+```
+
+Kořen `/` se v dev módu automaticky přesměruje na `/_dev/`, takže stačí
+zadat jen adresu serveru. V produkčním módu dashboard neexistuje —
+`/_dev/...` vrací 404.
+
+Co dashboard umí:
+
+- **Seznam datových zdrojů** — všechny DS s názvem, datem vytvoření a
+  databází. U každého tlačítka **Open** (otevře aplikaci `/{ds-id}/app/`
+  v novém tabu), **Logs** a **Upgrade**. ID lze jedním klikem zkopírovat
+  do schránky. Seznam se sám obnovuje.
+- **+ New DS** — vytvoření nového datového zdroje rovnou z formuláře
+  (výběr instalačního modulu, admin login a heslo, volitelně testovací
+  data). Průběh (`ds-create` → `ds-upgrade` → `user-create` → příp. seed)
+  se streamuje živě do stránky; po dokončení vede odkaz přímo do nového DS.
+- **Logs** — prohlížeč logu (`/opt/shipard/log/shipard.log`) s filtrováním
+  podle úrovně, datového zdroje a fulltextu, auto-refresh ve stylu
+  `tail -f` a rozbalitelný detail záznamu včetně exception trace.
+- **Doctor** — spustí `shpd-server doctor` a zobrazí report.
+- **Upgrade All** — spustí `shpd-server ds-upgrade-all` na všech DS.
+
+Dashboard je chráněný pouze kontrolou `mode: development` — počítá s tím,
+že **vývojový server běží v důvěryhodné síti**. Oranžový banner
+„DEVELOPMENT MODE" nahoře je připomínka, ať se prostředí neplete
+s produkčním.
+
+---
+
+## 7. Po `git pull`
 
 Po každém stažení nové verze:
 
@@ -100,6 +147,9 @@ zaktualizovat i datové zdroje:
 shpd-server ds-upgrade-all
 ```
 
+(Totéž lze spustit tlačítkem **Upgrade All** ve vývojářském dashboardu —
+viz kapitola 6.)
+
 ### Automatizace přes git hooks (volitelné)
 
 ```bash
@@ -110,7 +160,7 @@ Stačí spustit jednou v repu.
 
 ---
 
-## 7. CLI utility
+## 8. CLI utility
 
 Přehled v [`docs/cli.md`](docs/cli.md). Po základním setupu nepotřebuješ
 `sudo` pro běžné shipard operace.
@@ -142,22 +192,37 @@ Spouštěj z adresáře datového zdroje (musí obsahovat `config/main.json`).
 
 ---
 
-## 8. Migrace ze staršího layoutu
+## 9. Něco nefunguje?
 
-Pokud máš dev box s ručně postaveným starým layoutem (typicky
-`sebik:www-data` group hack), proveď:
+Většinu potíží s rozchozením odhalí health check:
 
 ```bash
-sudo bash scripts/install-packages.sh --mode=development
-sudo shpd-server fix-permissions
-shpd-server doctor    # ověř že je vše zelené
+shpd-server doctor
 ```
 
-Detaily v [`docs/operations/permissions.md`](docs/operations/permissions.md).
+Pokud hlásí problém s právy:
+
+```bash
+sudo shpd-server fix-permissions --dry-run    # co by se změnilo
+sudo shpd-server fix-permissions              # oprav
+```
+
+Logy aplikace najdeš ve vývojářském dashboardu pod **Logs**
+(`/_dev/logs/`) — s filtrováním podle úrovně a fulltextu — nebo přímo
+v souboru `/opt/shipard/log/shipard.log`.
+
+Když po `git pull` aplikace hlásí nesoulad schématu, „dojely" ti definice
+tabulek — spusť `shpd-server ds-upgrade-all` (nebo **Upgrade All**
+v dashboardu).
+
+Pořád to nejde? Založ issue na
+[GitHubu](https://github.com/shipard/shpd/issues) s výstupem
+`shpd-server doctor` a relevantními řádky z logu — díky tomu to
+rozklíčujeme nejrychleji.
 
 ---
 
-## 9. Kam dál
+## 10. Kam dál
 
 - **Architektura projektu:** [`docs/architecture.md`](docs/architecture.md)
 - **Modulový systém:** [`docs/modules.md`](docs/modules.md)

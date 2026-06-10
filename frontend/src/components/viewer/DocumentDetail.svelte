@@ -6,7 +6,7 @@
   // labely přes t().
   import { t } from '../../i18n/index.js';
   import { navigationStore } from '../../stores/navigation.svelte.js';
-  import { layoutStore } from '../../stores/layout.svelte.js';
+  import { attachmentViewStore } from '../../stores/attachmentView.svelte.js';
   import AttachmentGrid from './AttachmentGrid.svelte';
 
   let { content = null } = $props();
@@ -52,32 +52,8 @@
     }
   }
 
-  // Rezim zobrazeni priloh: 'full' (velke nahledy) / 'grid' (miniatury).
-  // Volba se pamatuje v localStorage napric zaznamy i sezenimi. Default:
-  // velke nahledy na desktopu, miniatury na mobilu (PDF v <iframe> na
-  // iOS Safari vykresli jen prvni stranku, viz AttachmentGrid).
-  const ATT_VIEW_KEY = 'shpd_att_view';
-
-  function loadAttView() {
-    try {
-      const stored = localStorage.getItem(ATT_VIEW_KEY);
-      if (stored === 'full' || stored === 'grid') return stored;
-    } catch {
-      // localStorage nedostupne -> jen default
-    }
-    return layoutStore.isMobile ? 'grid' : 'full';
-  }
-
-  let attView = $state(loadAttView());
-
-  function toggleAttView() {
-    attView = attView === 'full' ? 'grid' : 'full';
-    try {
-      localStorage.setItem(ATT_VIEW_KEY, attView);
-    } catch {
-      // noop
-    }
-  }
+  // Rezim zobrazeni priloh ('full'/'grid') je sdileny store — stejna volba
+  // plati i v detailu dosle posty (ViewerDetail). Detaily v attachmentView.svelte.js.
 </script>
 
 {#snippet partyCard(labelKey, party)}
@@ -261,9 +237,9 @@
           <button
             type="button"
             class="shpd-docdetail__att-toggle"
-            onclick={toggleAttView}
+            onclick={() => attachmentViewStore.toggle()}
           >
-            {attView === 'full'
+            {attachmentViewStore.mode === 'full'
               ? t('viewer.document.attachments.viewGrid')
               : t('viewer.document.attachments.viewFull')}
           </button>
@@ -290,7 +266,7 @@
                 {t('viewer.document.attachments.doc')}
               {/if}
             </h3>
-            <AttachmentGrid attachments={group.attachments} mode={attView} />
+            <AttachmentGrid attachments={group.attachments} mode={attachmentViewStore.mode} />
           </div>
         {/each}
       </section>

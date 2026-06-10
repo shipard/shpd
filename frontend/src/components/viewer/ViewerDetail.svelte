@@ -7,6 +7,7 @@
   import Popover from '../ui/Popover.svelte';
   import DocumentExchangePreviewModal from '../exchange/DocumentExchangePreviewModal.svelte';
   import AttachmentGrid from './AttachmentGrid.svelte';
+  import { attachmentViewStore } from '../../stores/attachmentView.svelte.js';
   import DocumentDetail from './DocumentDetail.svelte';
   import { t } from '../../i18n/index.js';
   import { translateError } from '../../i18n/errors.js';
@@ -368,7 +369,18 @@
       {:else if content?.type === 'attachment-grid'}
         <!-- Plochý grid příloh (bez per-message skupin) - blok composite
              obsahu, např. sekce Přílohy v tabu Obsah došlé pošty. -->
-        <AttachmentGrid attachments={content.attachments ?? []} />
+        <div class="shpd-detail__att-toolbar">
+          <button
+            type="button"
+            class="shpd-detail__att-toggle"
+            onclick={() => attachmentViewStore.toggle()}
+          >
+            {attachmentViewStore.mode === 'full'
+              ? t('viewer.document.attachments.viewGrid')
+              : t('viewer.document.attachments.viewFull')}
+          </button>
+        </div>
+        <AttachmentGrid attachments={content.attachments ?? []} mode={attachmentViewStore.mode} />
 
       {:else if content?.type === 'document'}
         <DocumentDetail content={content} />
@@ -878,6 +890,28 @@
 
   /* Attachments content — přílohy zdrojových zpráv (read-only grid),
      seskupené per zpráva. Vizuálně sladěno s AttachmentPanel kartami. */
+  .shpd-detail__att-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: var(--shpd-space-sm);
+  }
+
+  .shpd-detail__att-toggle {
+    border: 1px solid var(--shpd-color-border);
+    background: var(--shpd-color-bg);
+    color: var(--shpd-color-text-secondary);
+    border-radius: var(--shpd-radius-md);
+    padding: 2px 10px;
+    font: inherit;
+    font-size: 0.75rem;
+    cursor: pointer;
+  }
+
+  .shpd-detail__att-toggle:hover {
+    color: var(--shpd-color-text);
+    border-color: var(--shpd-color-text-secondary);
+  }
+
   .shpd-detail__att-groups {
     display: flex;
     flex-direction: column;

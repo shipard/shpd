@@ -1,0 +1,33 @@
+{
+    // Extension from economy.accounting: stav účtování dokladu
+    //
+    // Stav účtování vlastní účetnictví, ne dokladový systém — docs.core
+    // nesmí na economy.accounting záviset. Plní výhradně AccountingEngine /
+    // DocsHeadsEventHandler (sloupce jsou system).
+    //
+    // accounting_messages: JSON seznam chyb z enginu,
+    // [{"code": "...", "message": "...", "rowId": <id řádku dokladu|null>}]
+
+    "table": "docs_core_heads",
+    "columns": [
+        {
+            "id": "accounting_state",
+            "name": "Accounting state",
+            "name:cs": "Stav účtování",
+            "name:en": "Accounting state",
+            "type": "enumInt",
+            "default": 0,
+            "system": true,
+            "cfgItem": "economy.accounting.accountingStates"
+        },
+        {
+            "id": "accounting_messages",
+            "name": "Accounting messages",
+            "name:cs": "Chyby účtování",
+            "name:en": "Accounting messages",
+            "type": "json",
+            "nullable": true,
+            "system": true
+        }
+    ]
+}

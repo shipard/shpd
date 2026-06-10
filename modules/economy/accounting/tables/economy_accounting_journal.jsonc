@@ -1,0 +1,226 @@
+{
+    "tableId": 413,
+    "name": "Accounting journal",
+    "name:cs": "Účetní deník",
+    "name:en": "Accounting journal",
+
+    // Deník je derivát dokladu — zapisuje výhradně AccountingEngine
+    // (DELETE + INSERT celého dokladu), žádná ruční editace. Proto bez
+    // docStates, bez document class a bez formu. Řazení deníku = id.
+    //
+    // Viewer deníku přijde ve Fázi 3 — do té doby tabulku skrýváme
+    // z navigace.
+    "hideFromNavigation": true,
+
+    "displayPattern": "{account_number} {text}",
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+        {
+            "id": "doc_head",
+            "name": "Document",
+            "name:cs": "Doklad",
+            "name:en": "Document",
+            "type": "int",
+            "nullable": false,
+            "reference": "docs_core_heads"
+        },
+        {
+            "id": "doc_type",
+            "name": "Document type",
+            "name:cs": "Typ dokladu",
+            "name:en": "Document type",
+            "type": "enumString",
+            "length": 20,
+            "cfgItem": "docs.core.docTypes",
+            "nullable": true
+        },
+        {
+            "id": "doc_number",
+            "name": "Document number",
+            "name:cs": "Číslo dokladu",
+            "name:en": "Document number",
+            "type": "varchar",
+            "length": 40,
+            "nullable": true
+        },
+        {
+            "id": "accounting_date",
+            "name": "Accounting date",
+            "name:cs": "Účetní datum",
+            "name:en": "Accounting date",
+            "type": "date",
+            "nullable": false
+        },
+        {
+            "id": "fiscal_year",
+            "name": "Fiscal year",
+            "name:cs": "Fiskální rok",
+            "name:en": "Fiscal year",
+            "type": "int",
+            "nullable": true,
+            "reference": "economy_codebooks_fiscal_years"
+        },
+        {
+            "id": "fiscal_month",
+            "name": "Fiscal month",
+            "name:cs": "Fiskální měsíc",
+            "name:en": "Fiscal month",
+            "type": "int",
+            "nullable": true,
+            "reference": "economy_codebooks_fiscal_months"
+        },
+
+        // --- account ---
+        // account je NULL u nedohledaného účtu; account_number pak nese
+        // chybovou masku doplněnou '?' na 6 znaků (např. '504???').
+
+        {
+            "id": "account",
+            "name": "Account",
+            "name:cs": "Účet",
+            "name:en": "Account",
+            "type": "int",
+            "nullable": true,
+            "reference": "economy_accounting_accounts"
+        },
+        {
+            "id": "account_number",
+            "name": "Account number",
+            "name:cs": "Číslo účtu",
+            "name:en": "Account number",
+            "type": "varchar",
+            "length": 12,
+            "nullable": false
+        },
+        {
+            "id": "is_error",
+            "name": "Error row",
+            "name:cs": "Chybový řádek",
+            "name:en": "Error row",
+            "type": "boolean",
+            "default": 0
+        },
+        {
+            "id": "operation",
+            "name": "Operation",
+            "name:cs": "Pohyb",
+            "name:en": "Operation",
+            "type": "enumString",
+            "length": 40,
+            "cfgItem": "docs.core.rowOperations",
+            "nullable": true
+        },
+
+        // --- amounts ---
+        // Jednostranné řádky: vyplněno právě money_dr XOR money_cr (a párový
+        // _cur sloupec). U dokladu v domácí měně jsou *_cur shodné s domácími.
+
+        {
+            "id": "money_dr",
+            "name": "Debit",
+            "name:cs": "Má dáti",
+            "name:en": "Debit",
+            "type": "numeric",
+            "precision": 15,
+            "scale": 2,
+            "default": 0
+        },
+        {
+            "id": "money_cr",
+            "name": "Credit",
+            "name:cs": "Dal",
+            "name:en": "Credit",
+            "type": "numeric",
+            "precision": 15,
+            "scale": 2,
+            "default": 0
+        },
+        {
+            "id": "currency",
+            "name": "Currency",
+            "name:cs": "Měna",
+            "name:en": "Currency",
+            "type": "enumString",
+            "length": 3,
+            "cfgItem": "world.base.currencies",
+            "nullable": true
+        },
+        {
+            "id": "money_dr_cur",
+            "name": "Debit (doc currency)",
+            "name:cs": "Má dáti (měna dokladu)",
+            "name:en": "Debit (doc currency)",
+            "type": "numeric",
+            "precision": 15,
+            "scale": 2,
+            "default": 0
+        },
+        {
+            "id": "money_cr_cur",
+            "name": "Credit (doc currency)",
+            "name:cs": "Dal (měna dokladu)",
+            "name:en": "Credit (doc currency)",
+            "type": "numeric",
+            "precision": 15,
+            "scale": 2,
+            "default": 0
+        },
+
+        // --- context ---
+
+        {
+            "id": "partner",
+            "name": "Partner",
+            "name:cs": "Partner",
+            "name:en": "Partner",
+            "type": "int",
+            "nullable": true,
+            "reference": "base_persons_persons"
+        },
+        {
+            "id": "text",
+            "name": "Text",
+            "name:cs": "Text",
+            "name:en": "Text",
+            "type": "varchar",
+            "length": 200,
+            "nullable": true
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "idx_doc_head",
+            "type": "index",
+            "columns": [{"column": "doc_head"}]
+        },
+        {
+            "id": "idx_account_date",
+            "type": "index",
+            "columns": [
+                {"column": "account_number"},
+                {"column": "accounting_date"}
+            ]
+        },
+        {
+            "id": "idx_fiscal",
+            "type": "index",
+            "columns": [
+                {"column": "fiscal_year"},
+                {"column": "fiscal_month"}
+            ]
+        },
+        {
+            "id": "idx_partner",
+            "type": "index",
+            "columns": [{"column": "partner"}]
+        }
+    ]
+}

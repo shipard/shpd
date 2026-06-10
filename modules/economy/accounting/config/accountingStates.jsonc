@@ -1,0 +1,23 @@
+{
+    // economy.accounting.accountingStates
+    //
+    // Stav účtování dokladu (docs_core_heads.accounting_state, extension).
+    // Invariant: doklad má řádky v deníku právě tehdy, když je ve stavu 40 —
+    // stav 1/2 říká, jak generování dopadlo.
+
+    "0": {
+        "name": "Not accounted",
+        "name:cs": "Neúčtováno",
+        "name:en": "Not accounted"
+    },
+    "1": {
+        "name": "Accounted",
+        "name:cs": "Zaúčtováno",
+        "name:en": "Accounted"
+    },
+    "2": {
+        "name": "Error",
+        "name:cs": "Chyba účtování",
+        "name:en": "Accounting error"
+    }
+}

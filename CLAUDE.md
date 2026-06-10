@@ -25,6 +25,7 @@ Podrobné specifikace jsou v adresáři `docs/`. Přečti příslušný dokument
 | `docs/operations/secrets.md` | Per-DS šifrování `encrypted_text` sloupců — `DsSecretCipher`, klíčový soubor, rotace, health check, threat model |
 | `docs/migration-guide.md` | Backup a přenos DS na jiný server — tarball, DB dump, perms, ověření |
 | `docs/dashboard.md` | Dashboard — home obrazovka, widget systém, API kontrakt, AI shrnutí |
+| `docs/app-settings.md` | Settings pages + branding — `SettingsStore`, `settingsPages` v module.jsonc, klíče `app.*`, branding sloty, `/_app` endpointy, jak přidat další stránku |
 
 ## Architektura — rychlý přehled
 
@@ -181,6 +182,10 @@ Závislosti tečou shora dolů: Command → Document → Module/Config/Database 
   sekce v `modules/install/base/config/settingsSections.jsonc`
 - Položky uvedené v `settingsItems[]` se automaticky skrývají z hlavního
   navigačního stromu
+- Třetí typ položky: **settings page** (`settingsItems` s `"page"`,
+  definice v `settingsPages[]`) — server-driven stránka vlastností,
+  hodnoty v `core_system_settings` přes `SettingsStore`. První stránka:
+  Aplikace (název, ikona, logo — branding sloty). Viz `docs/app-settings.md`
 - Sub-tabulky spravované výhradně přes parent záznam (např. `economy_codebooks_fiscal_months`)
   mají v JSONC definici `"hideFromNavigation": true` — nezobrazují se ani v hlavním
   sidebaru, ani v Nastavení

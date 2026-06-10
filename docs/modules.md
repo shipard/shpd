@@ -361,6 +361,8 @@ ID modulu přímo odpovídá cestě v souborovém systému:
 | `config[].id` | string | Ano | Ne | Globální identifikátor konfigurace |
 | `config[].file` | string | Ano | Ne | Relativní cesta ke konfiguračnímu JSONC souboru |
 | `keepOnReset` | string[] | Ne | Ne | Vlastní tabulky modulu, které `shpd-ds ds-reset` nesmaže |
+| `settingsItems` | object[] | Ne | Ne | Položky v navigaci režimu Nastavení (viz níže) |
+| `settingsPages` | object[] | Ne | Ano | Server-driven stránky vlastností v Nastavení (viz níže) |
 
 ### Pole `keepOnReset`
 
@@ -390,6 +392,73 @@ deklaruje, co je systém a co data.
 ```
 
 Viz [docs/cli.md](cli.md) → `ds-reset`.
+
+### Pole `settingsItems`
+
+Položky, které modul přidává do navigačního stromu režimu **Nastavení**.
+Každá položka patří do sekce (definované v cfgItem `global.settingsSections`,
+viz `modules/install/base/config/settingsSections.jsonc`) a odkazuje na
+**právě jeden** cíl — `viewer`, `table`, nebo `page`:
+
+```jsonc
+"settingsItems": [
+    { "viewer": "core.units", "section": "items" },
+    { "table": "base_persons_contacts", "section": "other", "subsection": "other.persons", "order": 10 },
+    { "page": "appSettings", "section": "app", "order": 10 }
+]
+```
+
+| Pole | Typ | Povinné | Popis |
+|------|-----|---------|-------|
+| `viewer` / `table` / `page` | string | Právě jedno | ID vieweru, název tabulky, nebo ID settings page (z `settingsPages` téhož modulu) |
+| `section` | string | Ano | ID sekce v Nastavení |
+| `subsection` | string | Ne | ID podsekce |
+| `order` | int | Ne | Pořadí v rámci sekce |
+
+Položky s vadnou strukturou (chybějící `section`, víc než jeden cíl) se
+tolerantně přeskakují. Tabulky/viewery uvedené v `settingsItems` se
+automaticky skrývají z hlavního navigačního stromu.
+
+### Pole `settingsPages`
+
+Server-driven stránky vlastností — třetí typ obsahu v Nastavení vedle
+vieweru a tabulky. Hodnoty polí žijí v key-value tabulce
+`core_system_settings` (`id` pole = klíč, tečkové namespacy). Stránka se
+zapojuje do navigace přes `settingsItems` s `page`.
+
+```jsonc
+"settingsPages": [
+    {
+        "id": "appSettings",
+        "name": "Application",
+        "name:cs": "Aplikace",
+        "icon": "settings",
+        "fields": [
+            {
+                "id": "app.name",              // klíč v core_system_settings
+                "type": "text",
+                "name:cs": "Název zdroje dat", "name:en": "Data source name",
+                "hint:cs": "Plný název — výchozí hodnota pochází z instalace.",
+                "maxLength": 120
+            },
+            {
+                "id": "app.icon",
+                "type": "image",
+                "slot": "icon",                // branding slot (viz app-settings.md)
+                "name:cs": "Ikona aplikace", "name:en": "Application icon"
+            }
+        ]
+    }
+]
+```
+
+Podporované typy polí: `text` (default) a `image`. `name`/`hint` jsou
+vícejazyčné (`:cs`/`:en` suffixy, standardní fallback chain). Pole s
+neznámým typem nebo bez `id` se tolerantně přeskakují. `image` pole
+neukládá hodnotu přes stránku — odkazuje na branding slot s vlastním
+upload endpointem.
+
+Endpointy, ukládání a branding sloty: [docs/app-settings.md](app-settings.md).
 
 ### Instalační modul — příklad
 

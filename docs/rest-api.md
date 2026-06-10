@@ -166,6 +166,20 @@ http://{ip-adresa}/{ds-id}/api/v1/{tabulka}
 | `POST` | `/api/v1/_auth/login` | Přihlášení (email + heslo → token) |
 | `POST` | `/api/v1/_auth/refresh` | Obnovení tokenu |
 | `DELETE` | `/api/v1/_auth/logout` | Odhlášení (invalidace tokenu) |
+| `GET` | `/api/v1/_ui/settings/page/{pageId}` | Definice + hodnoty settings page (auth) |
+| `POST` | `/api/v1/_ui/settings/page/{pageId}` | Uložení hodnot settings page (auth) |
+| `GET` | `/api/v1/_app/info` | Název/zkrácený název/ikona/logo aplikace — **veřejné** |
+| `GET` | `/api/v1/_app/branding/{slot}` | Binární obsah branding slotu — **veřejné**, immutable cache |
+| `POST` | `/api/v1/_app/branding/{slot}` | Upload obrázku slotu (multipart, pole `file`) — auth |
+| `DELETE` | `/api/v1/_app/branding/{slot}` | Smazání obrázku slotu — auth |
+
+**Veřejné `/_app` endpointy:** `GET /_app/info` a `GET /_app/branding/{slot}`
+jsou výjimky z autentizace (`AuthMiddleware::isExempt()`) — login obrazovka
+zobrazuje název/logo a favicon se načítá bez tokenu. Nesmí sem přibýt nic
+citlivého. Branding GET posílá `Cache-Control: public, max-age=31536000,
+immutable` (URL nese `?h={hash}` pro cache-busting); SVG navíc
+`Content-Security-Policy: default-src 'none'` a `X-Content-Type-Options:
+nosniff`. Detaily: [docs/app-settings.md](app-settings.md).
 
 ---
 

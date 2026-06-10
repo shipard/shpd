@@ -560,6 +560,9 @@ nad sebou a po close refetchuje **jen pokud došlo k save** (sledováno přes
 |----------|-------|
 | `GET /_ui/navigation` | Navigační strom ze serveru (moduly → skupiny → tabulky/viewery) — vč. Dashboard leaf na začátku |
 | `GET /_ui/settings/navigation` | Navigační strom režimu Nastavení (sekce + položky podle `settingsItems[]` napříč moduly) |
+| `GET/POST /_ui/settings/page/{pageId}` | Settings page — definice + hodnoty / uložení (viz [`app-settings.md`](app-settings.md)) |
+| `GET /_app/info` | Veřejné info aplikace — název, zkrácený název, ikona, logo (titulek, favicon, sidebar, login) |
+| `GET/POST/DELETE /_app/branding/{slot}` | Branding obrázky — GET veřejný s immutable cache, zápis s auth |
 | `GET /_ui/dashboard` | Agregát alerts/mail/tasks pro home obrazovku (viz [`dashboard.md`](dashboard.md)) |
 | `GET /_ui/viewer/{id}/meta` | Metadata vieweru (name, table, filters, toolbar, viewGroups, numberSeries) |
 | `GET /_ui/viewer/{id}/rows` | Záznamy vieweru (page, search, filter) |

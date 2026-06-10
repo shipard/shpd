@@ -17,7 +17,9 @@ use Shipard\Core\Viewer\TableViewer;
  *   i2 — badge primárního typu (barva dle cfgItem)
  *   t3 — [mailbox.name] + první řádek body_plain (preview)
  *
- * Detail panel (§5.3): Obsah / Přílohy / Analýzy / Originál.
+ * Detail panel (§5.3): Obsah (hlavička, tělo, přílohy) / Analýzy /
+ * Extrahované dokumenty / Originál. Samostatný tab Přílohy zrušen —
+ * přílohy jsou blok `attachment-grid` uvnitř Obsahu.
  */
 class IncomingMessagesViewer extends TableViewer
 {
@@ -164,28 +166,21 @@ class IncomingMessagesViewer extends TableViewer
             'content' => $this->buildContentTab($record),
         ];
 
-        // Tab 2 — Přílohy (obsahové, s vyloučením raw .eml)
-        $tabs[] = [
-            'id'      => 'attachments',
-            'label'   => $this->detailTabLabel('core.mail.viewerDetailLabels', 'attachments', 'Attachments'),
-            'content' => $this->buildAttachmentsTab($record),
-        ];
-
-        // Tab 3 — Analýzy
+        // Tab 2 — Analýzy
         $tabs[] = [
             'id'      => 'analyses',
             'label'   => $this->detailTabLabel('core.mail.viewerDetailLabels', 'analyses', 'Analyses'),
             'content' => $this->buildAnalysesTab((int) $record['id']),
         ];
 
-        // Tab 4 — Extrahované dokumenty (Fáze 3a)
+        // Tab 3 — Extrahované dokumenty (Fáze 3a)
         $tabs[] = [
             'id'      => 'extracted',
             'label'   => $this->detailTabLabel('core.mail.viewerDetailLabels', 'extractedDocuments', 'Extracted documents'),
             'content' => $this->buildExtractedDocumentsTab((int) $record['id']),
         ];
 
-        // Tab 5 — Originál (raw .eml)
+        // Tab 4 — Originál (raw .eml)
         $tabs[] = [
             'id'      => 'raw',
             'label'   => $this->detailTabLabel('core.mail.viewerDetailLabels', 'original', 'Original'),
@@ -296,22 +291,37 @@ class IncomingMessagesViewer extends TableViewer
             ];
         }
 
-        if ($bodyContent === null) {
-            return ['type' => 'properties', 'groups' => $groups];
+        $attachments = $this->fetchContentAttachments($record);
+
+        // Skládáme bloky: properties vždy, tělo a přílohy jen pokud existují.
+        $blocks = [['type' => 'properties', 'groups' => $groups]];
+        if ($bodyContent !== null) {
+            $blocks[] = ['type' => 'heading', 'text' => 'Tělo zprávy'];
+            $blocks[] = $bodyContent;
+        }
+        if ($attachments !== []) {
+            $blocks[] = [
+                'type' => 'heading',
+                'text' => $this->detailTabLabel('core.mail.viewerDetailLabels', 'attachments', 'Attachments'),
+            ];
+            $blocks[] = ['type' => 'attachment-grid', 'attachments' => $attachments];
         }
 
-        // Kombinovaný obsah: properties + body — vrátíme seznam bloků.
-        return [
-            'type' => 'composite',
-            'blocks' => [
-                ['type' => 'properties', 'groups' => $groups],
-                ['type' => 'heading', 'text' => 'Tělo zprávy'],
-                $bodyContent,
-            ],
-        ];
+        if (count($blocks) === 1) {
+            return $blocks[0];
+        }
+
+        return ['type' => 'composite', 'blocks' => $blocks];
     }
 
-    private function buildAttachmentsTab(array $record): array
+    /**
+     * Obsahové přílohy zprávy pro blok `attachment-grid` (AttachmentGrid).
+     * Vylučuje raw .eml (raw_source_attachment); velikost posíláme v bajtech,
+     * formátuje frontend (formatFileSize v api/attachments.js).
+     *
+     * @return array<int, array{id: int, name: string, mime_type: string, file_size: int}>
+     */
+    private function fetchContentAttachments(array $record): array
     {
         $rawId = isset($record['raw_source_attachment']) && $record['raw_source_attachment'] !== null
             ? (int) $record['raw_source_attachment']
@@ -319,7 +329,7 @@ class IncomingMessagesViewer extends TableViewer
 
         // Seznam obsahových příloh = core_attachments_files.table_id = 303 AND record_id = msg.id
         // s vyloučením raw .eml (raw_source_attachment_ndx)
-        $sql = 'SELECT `id`, `name`, `file_name`, `file_size`, `mime_type`, `created`'
+        $sql = 'SELECT `id`, `name`, `file_name`, `file_size`, `mime_type`'
             . ' FROM `core_attachments_files`'
             . ' WHERE `table_id` = %i AND `record_id` = %i AND `is_deleted` = 0';
         $params = [303, (int) $record['id']];
@@ -332,30 +342,17 @@ class IncomingMessagesViewer extends TableViewer
         $sql .= ' ORDER BY `att_order` ASC, `name` ASC';
 
         $files = $this->db->fetchAll($sql, ...$params);
-        $rows = [];
+        $out = [];
         foreach ($files as $f) {
-            $rows[] = [
-                'name'      => $f['name'] ?? $f['file_name'],
-                'mime_type' => $f['mime_type'] ?? '',
-                'size'      => $this->formatFileSize((int) ($f['file_size'] ?? 0)),
-                'created'   => $this->formatDateTime($f['created'] ?? null),
+            $out[] = [
+                'id'        => (int) $f['id'],
+                'name'      => (string) ($f['name'] ?? $f['file_name']),
+                'mime_type' => (string) ($f['mime_type'] ?? ''),
+                'file_size' => (int) ($f['file_size'] ?? 0),
             ];
         }
 
-        if ($rows === []) {
-            return ['type' => 'html', 'html' => '<p class="muted">Zpráva nemá žádné obsahové přílohy.</p>'];
-        }
-
-        return [
-            'type'    => 'table',
-            'columns' => [
-                ['id' => 'name',      'label' => 'Název'],
-                ['id' => 'mime_type', 'label' => 'Typ'],
-                ['id' => 'size',      'label' => 'Velikost'],
-                ['id' => 'created',   'label' => 'Nahráno'],
-            ],
-            'rows' => $rows,
-        ];
+        return $out;
     }
 
     private function buildAnalysesTab(int $messageId): array

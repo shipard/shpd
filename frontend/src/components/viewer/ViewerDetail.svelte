@@ -365,6 +365,11 @@
           {/each}
         </div>
 
+      {:else if content?.type === 'attachment-grid'}
+        <!-- Plochý grid příloh (bez per-message skupin) - blok composite
+             obsahu, např. sekce Přílohy v tabu Obsah došlé pošty. -->
+        <AttachmentGrid attachments={content.attachments ?? []} />
+
       {:else if content?.type === 'document'}
         <DocumentDetail content={content} />
 

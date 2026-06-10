@@ -235,8 +235,16 @@ abstract class DocDocument extends Document
      */
     protected function trackStateChange(array &$data, ?array $originalData): void
     {
+        $this->stateTransition = null;
+
         if ($originalData === null) {
             $data['doc_state_changed_at'] = date('Y-m-d H:i:s');
+            // Nový záznam vzniklý rovnou mimo Koncept (import) je taky
+            // přechod — old = 0, ať se importované doklady ve 40 zaúčtují.
+            $newState = (int) ($data['docState'] ?? 10);
+            if ($newState !== 10) {
+                $this->stateTransition = ['old' => 0, 'new' => $newState];
+            }
             return;
         }
 
@@ -245,6 +253,7 @@ abstract class DocDocument extends Document
 
         if ($newState !== $oldState) {
             $data['doc_state_changed_at'] = date('Y-m-d H:i:s');
+            $this->stateTransition = ['old' => $oldState, 'new' => $newState];
             return;
         }
 

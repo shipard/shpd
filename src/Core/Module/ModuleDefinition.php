@@ -22,6 +22,7 @@ class ModuleDefinition
         public readonly array $lookups = [],
         public readonly array $alertChecks = [],
         public readonly array $keepOnReset = [],
+        public readonly array $documentEventHandlers = [],
     ) {}
 
     public static function fromArray(array $data): self
@@ -130,6 +131,38 @@ class ModuleDefinition
             }
         }
 
+        // documentEventHandlers — hooky na události dokumentů cizích tabulek
+        // (stateChanged po commitu, beforeDelete v transakci). Dispatch dělá
+        // TableGateway přes DocumentEventDispatcher.
+        $documentEventHandlers = [];
+        if (isset($data['documentEventHandlers']) && is_array($data['documentEventHandlers'])) {
+            $knownEvents = ['stateChanged', 'beforeDelete'];
+            foreach ($data['documentEventHandlers'] as $idx => $reg) {
+                if (!is_array($reg)
+                    || !isset($reg['table']) || !is_string($reg['table']) || $reg['table'] === ''
+                    || !isset($reg['class']) || !is_string($reg['class']) || $reg['class'] === ''
+                ) {
+                    throw new \InvalidArgumentException(
+                        "Module '{$data['id']}': documentEventHandlers[{$idx}] requires 'table' and 'class'",
+                    );
+                }
+                $events = $reg['events'] ?? $knownEvents;
+                if (!is_array($events) || $events === []
+                    || array_diff($events, $knownEvents) !== []
+                ) {
+                    throw new \InvalidArgumentException(
+                        "Module '{$data['id']}': documentEventHandlers[{$idx}] has invalid 'events' "
+                        . '(allowed: ' . implode(', ', $knownEvents) . ')',
+                    );
+                }
+                $documentEventHandlers[] = [
+                    'table'  => $reg['table'],
+                    'class'  => $reg['class'],
+                    'events' => array_values($events),
+                ];
+            }
+        }
+
         // keepOnReset — names of this module's OWN tables that `ds-reset`
         // must not drop (system/config tables vs. data). Items must be
         // strings and must be tables owned by this module (catches typos
@@ -173,6 +206,7 @@ class ModuleDefinition
             lookups: $lookups,
             alertChecks: $alertChecks,
             keepOnReset: $keepOnReset,
+            documentEventHandlers: $documentEventHandlers,
         );
     }
 }

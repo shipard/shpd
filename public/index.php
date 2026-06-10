@@ -156,6 +156,14 @@ try {
 		// Config may not be compiled yet — doc state and enum features degrade gracefully
 	}
 
+	// ── 8b. Build document event dispatcher (documentEventHandlers) ──────────
+	$documentEventDispatcher = \Shipard\Api\DocumentEventHandlerLoader::load(
+		$resolved->config,
+		$modulePathResolver,
+		$resolved->connection->getDibiConnection(),
+		$configRuntime,
+	);
+
 	// ── 9. Dispatch to controller ─────────────────────────────────────────────
 	$host     = $request->getHost();
 	$response = dispatch(
@@ -164,6 +172,7 @@ try {
 		$host, $resolved, $modulePathResolver,
 		$viewerRegistry, $configRuntime, $formRegistry, $documentRegistry,
 		$lookupRegistry, $alertCheckRegistry, $serverConfig,
+		$documentEventDispatcher,
 	);
 
 	// ── 10. Apply headers and send ────────────────────────────────────────────
@@ -246,6 +255,7 @@ function dispatch(
 	?LookupRegistry $lookupRegistry = null,
 	?\Shipard\Core\Alerts\AlertCheckRegistry $alertCheckRegistry = null,
 	?ServerConfig $serverConfig = null,
+	?\Shipard\Core\Document\DocumentEventDispatcher $documentEventDispatcher = null,
 ): Response {
 	$baseUrl = $resolved->isDevMode()
 		? 'http://' . $host . '/' . $resolved->config->getId()
@@ -261,7 +271,7 @@ function dispatch(
 		'dashboard' => dispatchDashboard($route, $db, $viewerRegistry, $configRuntime, resolveLanguage($request, $resolved->config)),
 		'settings' => dispatchSettings($route, $request, $auth, $resolved->config, $modulePathResolver, resolveLanguage($request, $resolved->config), $configRuntime, $db),
 		'app'     => dispatchApp($route, $auth, $db, $resolved->config),
-		'form'    => dispatchForm($route, $request, $auth, $tables, $db, $formRegistry ?? new FormRegistry(), $configRuntime, $modulePathResolver, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), resolveLanguage($request, $resolved->config), $resolved->config, $lookupRegistry ?? new LookupRegistry()),
+		'form'    => dispatchForm($route, $request, $auth, $tables, $db, $formRegistry ?? new FormRegistry(), $configRuntime, $modulePathResolver, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), resolveLanguage($request, $resolved->config), $resolved->config, $lookupRegistry ?? new LookupRegistry(), $documentEventDispatcher),
 		'lookup'  => dispatchLookup($route, $request, $tables, $db, $lookupRegistry ?? new LookupRegistry(), $configRuntime),
 		'viewer'  => dispatchViewer($route, $request, $viewerRegistry, $db, $configRuntime, resolveLanguage($request, $resolved->config)),
 		'mail'    => dispatchMail($route, $request, $auth, $tables, $db, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $configRuntime),
@@ -704,6 +714,7 @@ function dispatchForm(
 	string $language = 'en',
 	?\Shipard\Core\Config\DataSourceConfig $dsConfig = null,
 	?LookupRegistry $lookupRegistry = null,
+	?\Shipard\Core\Document\DocumentEventDispatcher $eventDispatcher = null,
 ): Response {
 	$ctrl  = new FormController();
 	$table = $route->table ?? '';
@@ -726,7 +737,7 @@ function dispatchForm(
 	$lookupReg = $lookupRegistry ?? new LookupRegistry();
 	return match ($route->action) {
 		'meta'        => $ctrl->meta($table, $route->id, $tables, $db, $formRegistry, $configRuntime, $lookupReg, $modulePathResolver, $language, $queryDefaults),
-		'save'        => $ctrl->save($table, $route->id, $request, $tables, $db, $configRuntime, $formRegistry, $modulePathResolver, $lookupReg, $language, $documentRegistry, $dsConfig, $auth),
+		'save'        => $ctrl->save($table, $route->id, $request, $tables, $db, $configRuntime, $formRegistry, $modulePathResolver, $lookupReg, $language, $documentRegistry, $dsConfig, $auth, $eventDispatcher),
 		'recalculate' => $ctrl->recalculate($table, $request, $tables, $db, $formRegistry, $configRuntime, $lookupReg, $modulePathResolver, $language),
 		default       => Response::error('INTERNAL_ERROR', "Unknown form action: {$route->action}", 500),
 	};

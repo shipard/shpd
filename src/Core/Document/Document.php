@@ -15,6 +15,16 @@ abstract class Document
     protected ?ConfigRuntime $config = null;
     protected ?DataSourceConfig $dsConfig = null;
 
+    /**
+     * Přechod docState detekovaný v beforeSave (DocDocument::trackStateChange).
+     * Null = stav se neměnil. Pro nový záznam vzniklý rovnou mimo Koncept
+     * (import) je old = 0. Čte TableGateway po commitu pro dispatch
+     * documentEventHandlers — gateway sám nic nedopočítává.
+     *
+     * @var array{old: int, new: int}|null
+     */
+    protected ?array $stateTransition = null;
+
     public function setDb(\Dibi\Connection $db): void
     {
         $this->db = $db;
@@ -76,5 +86,13 @@ abstract class Document
 
     public function onLoad(array &$data): void
     {
+    }
+
+    /**
+     * @return array{old: int, new: int}|null
+     */
+    public function getStateTransition(): ?array
+    {
+        return $this->stateTransition;
     }
 }

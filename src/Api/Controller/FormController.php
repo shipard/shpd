@@ -140,6 +140,7 @@ class FormController
         ?DocumentRegistry $documentRegistry = null,
         ?\Shipard\Core\Config\DataSourceConfig $dsConfig = null,
         ?AuthContext $auth = null,
+        ?\Shipard\Core\Document\DocumentEventDispatcher $eventDispatcher = null,
     ): Response {
         $def = $tables[$table] ?? null;
         if ($def === null) {
@@ -172,6 +173,7 @@ class FormController
                 return $this->applyStateTransitionViaDocument(
                     $table, $id, (int) $body[$stateCol], $def, $db, $config, $documentRegistry, $dsConfig,
                     $formRegistry, $modulePathResolver, $lookupRegistry, $language, $tables,
+                    $eventDispatcher,
                 );
             }
             return $this->applyStateTransition(
@@ -220,6 +222,7 @@ class FormController
             $def->childTables,
             $config,
             $dsConfig,
+            $eventDispatcher,
         );
         $result   = $gateway->saveDocument($inputData);
 
@@ -509,6 +512,7 @@ class FormController
         LookupRegistry $lookupRegistry,
         string $language,
         array $tables,
+        ?\Shipard\Core\Document\DocumentEventDispatcher $eventDispatcher = null,
     ): Response {
         $dsDef = $def->docStates;
         if ($dsDef === null || $config === null) {
@@ -527,6 +531,7 @@ class FormController
             $def->childTables,
             $config,
             $dsConfig,
+            $eventDispatcher,
         );
 
         $existing = $gateway->loadDocument($id);

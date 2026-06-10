@@ -17,6 +17,7 @@ class TableGateway
         private ?array $childTables = null,
         private ?ConfigRuntime $config = null,
         private ?DataSourceConfig $dsConfig = null,
+        private ?DocumentEventDispatcher $eventDispatcher = null,
     ) {}
 
     private function injectDocServices(Document $doc): void
@@ -132,6 +133,20 @@ class TableGateway
         }
 
         $doc->afterSave($data);
+
+        // Dispatch documentEventHandlers až po commitu a po afterSave —
+        // přechod poskytuje Document (trackStateChange), gateway nic
+        // nedopočítává. Výjimky handlerů loguje a polyká dispatcher.
+        $transition = $doc->getStateTransition();
+        if ($transition !== null && $this->eventDispatcher !== null) {
+            $this->eventDispatcher->dispatchStateChanged(
+                $this->tableId,
+                $data,
+                $transition['old'],
+                $transition['new'],
+            );
+        }
+
         return DocumentResult::ok($data);
     }
 
@@ -147,11 +162,22 @@ class TableGateway
         $doc->beforeDelete($data);
 
         $this->beginTransaction();
-        foreach ($this->childTables ?? [] as $ct) {
-            $this->deleteChildren($ct['table'], $ct['foreignKey'], $id);
+        try {
+            // beforeDelete handlery uvnitř transakce, před child delete —
+            // mažou závislá data (deník). Výjimka = rollback, dokument
+            // zůstává netknutý.
+            $this->eventDispatcher?->dispatchBeforeDelete($this->tableId, $data);
+
+            foreach ($this->childTables ?? [] as $ct) {
+                $this->deleteChildren($ct['table'], $ct['foreignKey'], $id);
+            }
+            $this->deleteRow($this->tableId, $id);
+            $this->commitTransaction();
+        } catch (\Throwable $e) {
+            $this->rollbackTransaction();
+            ErrorLogger::logException($e, 'TableGateway::deleteDocument failed for table ' . $this->tableId);
+            return DocumentResult::error($e->getMessage());
         }
-        $this->deleteRow($this->tableId, $id);
-        $this->commitTransaction();
 
         $doc->afterDelete($data);
         return DocumentResult::ok($data);

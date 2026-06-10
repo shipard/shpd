@@ -100,4 +100,43 @@ class DocDocumentTrackStateChangeTest extends TestCase
 
         $this->assertSame('2024-06-15 12:00:00', $data['doc_state_changed_at']);
     }
+
+    // ── getStateTransition (vstup pro documentEventHandlers dispatch) ───────
+
+    public function testTransitionExposedOnStateChange(): void
+    {
+        $doc = new TestableDocsHeadsDocument();
+        $data = ['docState' => 40];
+        $doc->trackStateChangePub($data, ['docState' => 20]);
+
+        $this->assertSame(['old' => 20, 'new' => 40], $doc->getStateTransition());
+    }
+
+    public function testNoTransitionOnUnchangedState(): void
+    {
+        $doc = new TestableDocsHeadsDocument();
+        $data = ['docState' => 40, 'description' => 'x'];
+        $doc->trackStateChangePub($data, ['docState' => 40, 'doc_state_changed_at' => '2024-06-15 12:00:00']);
+
+        $this->assertNull($doc->getStateTransition());
+    }
+
+    public function testInsertInKonceptHasNoTransition(): void
+    {
+        $doc = new TestableDocsHeadsDocument();
+        $data = ['docState' => 10];
+        $doc->trackStateChangePub($data, null);
+
+        $this->assertNull($doc->getStateTransition());
+    }
+
+    public function testInsertOutsideKonceptHasTransitionFromZero(): void
+    {
+        // Import: doklad vzniká rovnou ve 40 — old = 0, ať se zaúčtuje.
+        $doc = new TestableDocsHeadsDocument();
+        $data = ['docState' => 40];
+        $doc->trackStateChangePub($data, null);
+
+        $this->assertSame(['old' => 0, 'new' => 40], $doc->getStateTransition());
+    }
 }

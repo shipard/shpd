@@ -18,6 +18,7 @@ class ModuleDefinition
         public readonly array $viewers,
         public readonly array $forms,
         public readonly array $settingsItems,
+        public readonly array $settingsPages = [],
         public readonly array $lookups = [],
         public readonly array $alertChecks = [],
         public readonly array $keepOnReset = [],
@@ -46,15 +47,45 @@ class ModuleDefinition
             foreach ($data['settingsItems'] as $item) {
                 if (!is_array($item)) continue;
                 if (!isset($item['section'])) continue;
-                if (!isset($item['viewer']) && !isset($item['table'])) continue;
-                if (isset($item['viewer']) && isset($item['table'])) continue;
+                // Právě jedno z viewer|table|page.
+                $targets = count(array_filter([
+                    isset($item['viewer']),
+                    isset($item['table']),
+                    isset($item['page']),
+                ]));
+                if ($targets !== 1) continue;
                 $settingsItems[] = [
                     'viewer'     => $item['viewer'] ?? null,
                     'table'      => $item['table']  ?? null,
+                    'page'       => $item['page']   ?? null,
                     'section'    => (string) $item['section'],
                     'subsection' => isset($item['subsection']) ? (string) $item['subsection'] : null,
                     'order'      => isset($item['order']) ? (int) $item['order'] : null,
                 ];
+            }
+        }
+
+        // settingsPages — server-driven stránky vlastností v Nastavení.
+        // Hodnoty polí žijí v core_system_settings (field id = klíč).
+        $settingsPages = [];
+        if (isset($data['settingsPages']) && is_array($data['settingsPages'])) {
+            foreach ($data['settingsPages'] as $page) {
+                if (!is_array($page)) continue;
+                if (!isset($page['id']) || !is_string($page['id']) || $page['id'] === '') continue;
+                if (!isset($page['fields']) || !is_array($page['fields'])) continue;
+
+                $fields = [];
+                foreach ($page['fields'] as $field) {
+                    if (!is_array($field)) continue;
+                    if (!isset($field['id']) || !is_string($field['id']) || $field['id'] === '') continue;
+                    $type = $field['type'] ?? 'text';
+                    if (!in_array($type, ['text', 'image'], true)) continue;
+                    $field['type'] = $type;
+                    $fields[]      = $field;
+                }
+
+                $page['fields']  = $fields;
+                $settingsPages[] = $page;
             }
         }
 
@@ -138,6 +169,7 @@ class ModuleDefinition
             viewers: $data['viewers'] ?? [],
             forms: $data['forms'] ?? [],
             settingsItems: $settingsItems,
+            settingsPages: $settingsPages,
             lookups: $lookups,
             alertChecks: $alertChecks,
             keepOnReset: $keepOnReset,

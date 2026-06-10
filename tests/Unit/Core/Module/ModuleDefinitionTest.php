@@ -214,6 +214,99 @@ class ModuleDefinitionTest extends TestCase
         $this->assertSame([], $def->settingsItems);
     }
 
+    public function testSettingsItemsPageParsed(): void
+    {
+        $def = ModuleDefinition::fromArray([
+            'id'   => 'core.system',
+            'name' => 'System',
+            'settingsItems' => [
+                ['page' => 'appSettings', 'section' => 'app', 'order' => 10],
+            ],
+        ]);
+
+        $this->assertCount(1, $def->settingsItems);
+        $this->assertSame('appSettings', $def->settingsItems[0]['page']);
+        $this->assertNull($def->settingsItems[0]['viewer']);
+        $this->assertNull($def->settingsItems[0]['table']);
+        $this->assertSame('app', $def->settingsItems[0]['section']);
+        $this->assertSame(10, $def->settingsItems[0]['order']);
+    }
+
+    public function testSettingsItemsPageCombinedWithViewerIgnored(): void
+    {
+        $def = ModuleDefinition::fromArray([
+            'id'   => 'core.system',
+            'name' => 'System',
+            'settingsItems' => [
+                ['page' => 'appSettings', 'viewer' => 'core.units', 'section' => 'app'],
+            ],
+        ]);
+
+        $this->assertSame([], $def->settingsItems);
+    }
+
+    public function testSettingsPagesParsed(): void
+    {
+        $def = ModuleDefinition::fromArray([
+            'id'   => 'core.system',
+            'name' => 'System',
+            'settingsPages' => [
+                [
+                    'id'      => 'appSettings',
+                    'name'    => 'Application',
+                    'name:cs' => 'Aplikace',
+                    'icon'    => 'settings',
+                    'fields'  => [
+                        ['id' => 'app.name', 'type' => 'text', 'name' => 'Name', 'maxLength' => 120],
+                        ['id' => 'app.icon', 'type' => 'image', 'slot' => 'icon', 'name' => 'Icon'],
+                    ],
+                ],
+            ],
+        ]);
+
+        $this->assertCount(1, $def->settingsPages);
+        $page = $def->settingsPages[0];
+        $this->assertSame('appSettings', $page['id']);
+        $this->assertSame('Aplikace', $page['name:cs']);
+        $this->assertCount(2, $page['fields']);
+        $this->assertSame('app.name', $page['fields'][0]['id']);
+        $this->assertSame('image', $page['fields'][1]['type']);
+        $this->assertSame('icon', $page['fields'][1]['slot']);
+    }
+
+    public function testSettingsPagesInvalidEntriesSkipped(): void
+    {
+        $def = ModuleDefinition::fromArray([
+            'id'   => 'core.system',
+            'name' => 'System',
+            'settingsPages' => [
+                'not-an-object',
+                ['name' => 'Missing id', 'fields' => []],
+                ['id' => 'noFields'],
+                [
+                    'id'     => 'valid',
+                    'fields' => [
+                        ['type' => 'text'],                                  // chybí id pole
+                        ['id' => 'a.b', 'type' => 'select'],                  // nepodporovaný typ
+                        ['id' => 'a.c'],                                      // type default = text
+                    ],
+                ],
+            ],
+        ]);
+
+        $this->assertCount(1, $def->settingsPages);
+        $this->assertSame('valid', $def->settingsPages[0]['id']);
+        $this->assertCount(1, $def->settingsPages[0]['fields']);
+        $this->assertSame('a.c', $def->settingsPages[0]['fields'][0]['id']);
+    }
+
+    public function testSettingsPagesAbsentDefaultsToEmpty(): void
+    {
+        $def = ModuleDefinition::fromArray(['id' => 'economy.docs', 'name' => 'Documents']);
+
+        $this->assertSame([], $def->settingsPages);
+    }
+
     public function testLookupsParsed(): void
     {
         $def = ModuleDefinition::fromArray([

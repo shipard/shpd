@@ -1,0 +1,24 @@
+{
+    // Extension from economy.accounting: accounting_account
+    //
+    // Účet pro položky typu Účetní položka (item_type = 2) — řádek dokladu
+    // s pohybem `acc.entry` se účtuje přímo na tento účet (accountSrc: item
+    // v účtovacím předpisu). Pole žije technicky na položce, ale je to
+    // účetní informace — proto extension z economy.accounting, ne přímý
+    // sloupec economy.items. Závislost směřuje správně: účetnictví zná
+    // položky, položky o účetnictví nevědí.
+
+    "table": "economy_items",
+    "columns": [
+        {
+            "id": "accounting_account",
+            "name": "Accounting account",
+            "name:cs": "Účet",
+            "name:en": "Accounting account",
+            "type": "int",
+            "nullable": true,
+            "reference": "economy_accounting_accounts",
+            "group": "classification"
+        }
+    ]
+}

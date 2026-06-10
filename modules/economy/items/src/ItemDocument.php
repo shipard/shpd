@@ -57,6 +57,24 @@ class ItemDocument extends Document
             }
         }
 
+        // Účet (extension z economy.accounting) musí odkazovat na existující
+        // aktivní analytický účet (account_level = 4). Klientský filtr
+        // lookupu není bezpečnostní hranice — tady je tvrdé vynucení.
+        if (!empty($data['accounting_account']) && $this->db !== null) {
+            $row = $this->db->fetch(
+                'SELECT id FROM economy_accounting_accounts'
+                . ' WHERE id = %i AND account_level = 4 AND docState IN (10, 40, 80)',
+                (int) $data['accounting_account'],
+            );
+            if ($row === null || $row === false) {
+                $result->addError(
+                    'accounting_account',
+                    'Účet musí být existující aktivní analytický účet',
+                    'invalid',
+                );
+            }
+        }
+
         // Manuálně zadaný kód musí být unikátní
         if (!empty($data['code']) && $this->db !== null) {
             $existingId = !empty($data['id']) ? (int) $data['id'] : 0;

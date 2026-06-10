@@ -7,10 +7,14 @@
     "description:cs": "Podvojné účetnictví — účtový rozvrh",
     "description:en": "Double-entry accounting — chart of accounts",
 
-    "dependencies": ["core.system"],
+    "dependencies": ["core.system", "economy.items"],
 
     "tables": [
         "economy_accounting_accounts"
+    ],
+
+    "extensions": [
+        "economy_items"
     ],
 
     "viewers": [
@@ -36,6 +40,13 @@
         {
             "table": "economy_accounting_accounts",
             "class": "Shipard\\Module\\Economy\\Accounting\\AccountDocument"
+        }
+    ],
+
+    "lookups": [
+        {
+            "table": "economy_accounting_accounts",
+            "class": "Shipard\\Module\\Economy\\Accounting\\AccountsLookup"
         }
     ],
 

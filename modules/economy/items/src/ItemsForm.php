@@ -27,6 +27,12 @@ class ItemsForm extends TableForm
         $unitOptions = $this->resolveUnitOptions();
         $itemTypeOptions = $this->resolveItemTypeOptions();
 
+        // Účet jen pro typ 2 (Účetní položka) — řádek dokladu s pohybem
+        // acc.entry se účtuje přímo na tento účet. item_type se odvozuje
+        // z item_kind v recalculate (triggers: reload), viditelnost se tedy
+        // přepočítá při změně druhu.
+        $isAccEntryItem = (int) ($data['item_type'] ?? 0) === 2;
+
         // ── Tab: Základní údaje ──────────────────────────────────────────────
         $basic = $this->tab('basic', 'Základní údaje')
             ->section()
@@ -47,6 +53,15 @@ class ItemsForm extends TableForm
                     ->select('unit',
                         options: $unitOptions,
                         required: true,
+                    )
+
+            ->section(title: 'Účetnictví', hidden: !$isAccEntryItem)
+                ->col()
+                    ->lookup('accounting_account',
+                        table: 'economy_accounting_accounts',
+                        filter: ['account_level' => 4],
+                        placeholder: 'Hledat účet…',
+                        hidden: !$isAccEntryItem,
                     )
 
             ->section(title: 'Cena')

@@ -127,4 +127,63 @@ class ItemDocumentTest extends TestCase
 
         $this->assertSame('ITEM-42', $data['code']);
     }
+
+    /**
+     * DB mock pro validaci účtu: druh/jednotka existují, dotaz na
+     * economy_accounting_accounts vrací $accountRow.
+     */
+    private function dbForAccountValidation(?\Dibi\Row $accountRow): \Dibi\Connection
+    {
+        $db = $this->createMock(\Dibi\Connection::class);
+        $db->method('fetch')->willReturnCallback(
+            function (...$args) use ($accountRow): ?\Dibi\Row {
+                $sql = (string) ($args[0] ?? '');
+                if (str_contains($sql, 'economy_accounting_accounts')) {
+                    return $accountRow;
+                }
+                if (str_contains($sql, 'economy_items WHERE code')) {
+                    return null; // kód unikátní
+                }
+                return new \Dibi\Row(['id' => 1]);
+            },
+        );
+        return $db;
+    }
+
+    public function testValidateAccountingAccountMustBeActiveAnalytic(): void
+    {
+        // Dotaz s podmínkou account_level = 4 + aktivní stav nic nenajde
+        $doc = $this->doc();
+        $doc->setDb($this->dbForAccountValidation(null));
+
+        $data = ['name' => 'Bankovní poplatek', 'item_kind' => 1, 'unit' => 1,
+                 'accounting_account' => 99];
+        $result = $doc->validate($data);
+
+        $this->assertFalse($result->isValid());
+        $columns = array_column($result->toArray(), 'column');
+        $this->assertContains('accounting_account', $columns);
+    }
+
+    public function testValidateValidAccountingAccountPasses(): void
+    {
+        $doc = $this->doc();
+        $doc->setDb($this->dbForAccountValidation(new \Dibi\Row(['id' => 99])));
+
+        $data = ['name' => 'Bankovní poplatek', 'item_kind' => 1, 'unit' => 1,
+                 'accounting_account' => 99];
+
+        $this->assertTrue($doc->validate($data)->isValid());
+    }
+
+    public function testValidateEmptyAccountingAccountIsFine(): void
+    {
+        $doc = $this->doc();
+        $doc->setDb($this->dbForAccountValidation(null));
+
+        $data = ['name' => 'Konzultace', 'item_kind' => 1, 'unit' => 1,
+                 'accounting_account' => null];
+
+        $this->assertTrue($doc->validate($data)->isValid());
+    }
 }

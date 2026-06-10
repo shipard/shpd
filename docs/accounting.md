@@ -185,7 +185,8 @@ Nový systémový sloupec `total_rounding_dom` (numeric 15,2) — doplňuje řad
 ### 3.3 Extension `economy.accounting` → `docs_core_heads`
 
 Stav účtování vlastní účetnictví, ne dokladový systém — proto extension
-(`modules/economy/accounting/extensions/ext-docs-core-heads.jsonc`),
+(`modules/economy/accounting/extensions/docs_core_heads.jsonc` — soubory
+extensions se jmenují podle cílové tabulky),
 stejný princip jako `payment_term_days` z `docs.core` na osobách.
 
 | sloupec | typ | popis |
@@ -206,7 +207,7 @@ Config `modules/economy/accounting/config/accountingStates.jsonc`:
 
 ### 3.4 Extension `economy.accounting` → `economy_items`
 
-`modules/economy/accounting/extensions/ext-economy-items.jsonc`:
+`modules/economy/accounting/extensions/economy_items.jsonc`:
 
 ```jsonc
 {
@@ -619,7 +620,18 @@ Vědomě se teď neřeší (a předpis/schéma na to nic nepředpřipravuje):
 
 ## 11. Fáze implementace
 
-### Fáze 1 — pohyby a sloupce
+**Stav: Fáze 1 i Fáze 2 hotové** (commity `87e53b1`/`e6442c4`/`2bd1619` —
+Fáze 1; mechanismus eventů, deník, předpis, engine, endpoint, alert —
+Fáze 2). Zbývá Fáze 3 (UI). Drobnosti zjištěné implementací:
+
+- cfgItem předpisu: `economy.accounting.rules.cz` (tečkovaný suffix funguje)
+- extension soubory dle cílové tabulky (`extensions/docs_core_heads.jsonc`)
+- krok `src: vat` iteruje celý recap — oddaňovací pár reverse charge proto
+  skončí jako `unbalanced` → state 2 + alert (RC účtování je mimo scope,
+  záměrně hlasité chování)
+- integrační testy: `tests/Integration/Accounting/`
+
+### Fáze 1 — pohyby a sloupce ✓
 
 - `rowOperations.jsonc` + sloupec `operation` v `docs_core_rows` + validace
   v `DocDocument` + select v řádkovém formuláři (filtrovaný dle docType,
@@ -629,7 +641,7 @@ Vědomě se teď neřeší (a předpis/schéma na to nic nepředpřipravuje):
 - extension `accounting_account` na `economy_items` + pole ve formuláři
   položky
 
-### Fáze 2 — deník a engine
+### Fáze 2 — deník a engine ✓
 
 - mechanismus `documentEventHandlers` (core: interface, registry, dispatch
   v `TableGateway`)

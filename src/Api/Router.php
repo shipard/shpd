@@ -163,6 +163,14 @@ class Router
 			return $this->resolveAlertsRoute($subpath, $method);
 		}
 
+		// POST /_accounting/reaccount — přeúčtování dokladu ve stavu 40
+		if ($subpath === '/_accounting/reaccount') {
+			if ($method !== 'POST') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('accounting', 'reaccount');
+		}
+
 		if ($subpath === '/_mcp') {
 			if ($method !== 'POST') {
 				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);

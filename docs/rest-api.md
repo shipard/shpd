@@ -172,6 +172,14 @@ http://{ip-adresa}/{ds-id}/api/v1/{tabulka}
 | `GET` | `/api/v1/_app/branding/{slot}` | Binární obsah branding slotu — **veřejné**, immutable cache |
 | `POST` | `/api/v1/_app/branding/{slot}` | Upload obrázku slotu (multipart, pole `file`) — auth |
 | `DELETE` | `/api/v1/_app/branding/{slot}` | Smazání obrázku slotu — auth |
+| `POST` | `/api/v1/_accounting/reaccount` | Přeúčtování dokladu ve stavu 40 (auth) |
+
+**`POST /_accounting/reaccount`** — body `{"docId": N}`. Znovu spustí
+`AccountingEngine` pro doklad ve stavu 40 (po opravě účtového rozvrhu /
+položky). Vrací `{"accountingState": 1|2, "messages": [...]}`. Doklad mimo
+stav 40 → `422 INVALID_DOC_STATE`, neexistující → `404`. Účtování při
+přechodech stavů běží automaticky přes `documentEventHandlers` — endpoint
+je pro ruční přeúčtování (alert / tlačítko v UI od Fáze 3).
 
 **Veřejné `/_app` endpointy:** `GET /_app/info` a `GET /_app/branding/{slot}`
 jsou výjimky z autentizace (`AuthMiddleware::isExempt()`) — login obrazovka

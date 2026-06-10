@@ -52,6 +52,30 @@
         }
     ],
 
+    "documentEventHandlers": [
+        {
+            "table": "docs_core_heads",
+            "class": "Shipard\\Module\\Economy\\Accounting\\DocsHeadsEventHandler",
+            "events": ["stateChanged", "beforeDelete"]
+        }
+    ],
+
+    "alertChecks": [
+        {
+            "id": "economy.accounting.accounting_errors",
+            "name": "Accounting errors",
+            "name:cs": "Chyby účtování",
+            "name:en": "Accounting errors",
+            "description": "Documents in OK state that failed to post to the accounting journal.",
+            "description:cs": "Doklady ve stavu V pořádku, které se nepodařilo zaúčtovat do deníku.",
+            "description:en": "Documents in OK state that failed to post to the accounting journal.",
+            "class": "Shipard\\Module\\Economy\\Accounting\\Checks\\AccountingErrorsCheck",
+            "severity": "warning",
+            "interval": "1h",
+            "tags": ["accounting"]
+        }
+    ],
+
     "config": [
         {
             "id": "economy.accounting.accountLevels",

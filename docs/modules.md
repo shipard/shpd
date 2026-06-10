@@ -363,6 +363,44 @@ ID modulu přímo odpovídá cestě v souborovém systému:
 | `keepOnReset` | string[] | Ne | Ne | Vlastní tabulky modulu, které `shpd-ds ds-reset` nesmaže |
 | `settingsItems` | object[] | Ne | Ne | Položky v navigaci režimu Nastavení (viz níže) |
 | `settingsPages` | object[] | Ne | Ano | Server-driven stránky vlastností v Nastavení (viz níže) |
+| `documentEventHandlers` | object[] | Ne | Ne | Hooky na události dokumentů cizích tabulek (viz níže) |
+| `documentEventHandlers[].table` | string | Ano | Ne | ID cílové tabulky |
+| `documentEventHandlers[].class` | string | Ano | Ne | FQCN handleru (implements `DocumentEventHandler`) |
+| `documentEventHandlers[].events` | string[] | Ne | Ne | `stateChanged`, `beforeDelete`; default obě |
+
+### Pole `documentEventHandlers`
+
+Hook na události dokumentů **cizí** tabulky — modul reaguje na změny
+dokumentů, aniž by vlastník tabulky na něm závisel (např. `economy.accounting`
+účtuje `docs_core_heads`; později sklad, saldo). Registrace se čtou za běhu
+(`DocumentEventHandlerLoader`, vzor `documentClasses`), dispatch dělá
+`TableGateway` přes `DocumentEventDispatcher`.
+
+```jsonc
+"documentEventHandlers": [
+    {
+        "table": "docs_core_heads",
+        "class": "Shipard\\Module\\Economy\\Accounting\\DocsHeadsEventHandler",
+        "events": ["stateChanged", "beforeDelete"]
+    }
+]
+```
+
+Sémantika událostí:
+
+- **`stateChanged`** — po commitu uložení a po `afterSave`, jen pokud se
+  `docState` reálně změnil. Přechod poskytuje `Document::getStateTransition()`
+  (plní `trackStateChange`); pro nový záznam vzniklý rovnou mimo Koncept
+  (import) je `old = 0`. Výjimka handleru se zaloguje a **spolkne** —
+  uložení dokladu nesmí selhat kvůli hooku.
+- **`beforeDelete`** — uvnitř delete transakce, před mazáním child tabulek
+  (handler maže závislá data, např. řádky deníku). Výjimka se **propaguje**
+  a transakce se rollbackne.
+
+Handler dědí z `AbstractDocumentEventHandler` (settery `setDb`/`setConfig`/
+`setDsConfig`, injektuje dispatcher). Víc handlerů na tabulku se volá
+v pořadí registrace modulů. Pozn.: cesta `DocRowsDocument::recomputeHeader`
+gateway obchází — z přepočtu řádků se eventy nevyvolávají (stav se tam nemění).
 
 ### Pole `keepOnReset`
 

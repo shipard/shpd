@@ -520,6 +520,86 @@ class AccountingEngineTest extends IntegrationTestCase
         $this->assertSame([], $this->journalOf($headId));
     }
 
+    public function testReaccountEndpointReturnsStateAndMessages(): void
+    {
+        $headId = $this->insertHead('invno', [
+            'total_base' => 1000.0, 'total_vat' => 210.0, 'total_amount' => 1210.0,
+            'total_base_dom' => 1000.0, 'total_vat_dom' => 210.0, 'total_amount_dom' => 1210.0,
+        ]);
+        $this->insertRow($headId, 'sale.services', 1000.0, 21.0);
+        $this->insertRecap($headId, 1000.0, 210.0);
+
+        $ctrl = new \Shipard\Module\Economy\Accounting\AccountingController(
+            $this->db,
+            ConfigRuntime::load($this->realDsPath, 'cs'),
+        );
+
+        $request = \Shipard\Api\Request::fromArray(
+            'POST', '/_accounting/reaccount', [], json_encode(['docId' => $headId]), [],
+        );
+        $response = $ctrl->reaccount($request);
+        $payload = $response->getPayload()['data'];
+
+        $this->assertSame(1, $payload['accountingState']);
+        $this->assertSame([], $payload['messages']);
+        $this->assertCount(3, $this->journalOf($headId));
+
+        // doklad mimo 40 → 422
+        $this->db->getDibiConnection()->update('docs_core_heads', ['docState' => 80])
+            ->where('id = %i', $headId)->execute();
+        $denied = $ctrl->reaccount(\Shipard\Api\Request::fromArray(
+            'POST', '/_accounting/reaccount', [], json_encode(['docId' => $headId]), [],
+        ));
+        $this->assertSame(422, $this->responseStatus($denied));
+
+        // neexistující doklad → 404
+        $missing = $ctrl->reaccount(\Shipard\Api\Request::fromArray(
+            'POST', '/_accounting/reaccount', [], json_encode(['docId' => 999999999]), [],
+        ));
+        $this->assertSame(404, $this->responseStatus($missing));
+    }
+
+    private function responseStatus(\Shipard\Api\Response $response): int
+    {
+        $ref = new \ReflectionClass($response);
+        return $ref->getProperty('status')->getValue($response);
+    }
+
+    public function testAccountingErrorsCheckFindsErrorDoc(): void
+    {
+        $headId = $this->insertHead('invno', [
+            'accounting_state'    => 2,
+            'accounting_messages' => json_encode([
+                ['code' => 'account_not_found', 'message' => 'Účet nenalezen pro masku 311', 'rowId' => null],
+            ], JSON_UNESCAPED_UNICODE),
+        ]);
+
+        $check = new \Shipard\Module\Economy\Accounting\Checks\AccountingErrorsCheck(
+            $this->db,
+            ConfigRuntime::load($this->realDsPath, 'cs'),
+            'cs',
+        );
+        $findings = $check->run();
+
+        $ours = array_values(array_filter(
+            $findings,
+            fn($f) => $f->findingKey === (string) $headId,
+        ));
+        $this->assertCount(1, $ours);
+        $this->assertStringContainsString('chybu účtování', $ours[0]->title);
+        $this->assertStringContainsString('Účet nenalezen pro masku 311', $ours[0]->message);
+        $this->assertSame($headId, $ours[0]->subjectRowId);
+
+        // Doklad mimo 40 / bez chyby se nehlásí
+        $this->db->getDibiConnection()->update('docs_core_heads', ['accounting_state' => 1])
+            ->where('id = %i', $headId)->execute();
+        $after = array_filter(
+            $check->run(),
+            fn($f) => $f->findingKey === (string) $headId,
+        );
+        $this->assertCount(0, $after);
+    }
+
     private function insertAccEntryItem(?int $accountId): int
     {
         $kind = $this->db->fetchRow('SELECT id FROM economy_items_kinds ORDER BY id LIMIT 1');

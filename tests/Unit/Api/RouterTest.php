@@ -40,6 +40,68 @@ class RouterTest extends TestCase
 		$this->assertRoute($result, 'meta', 'table', 'core_system_users');
 	}
 
+	// Settings pages
+	public function testSettingsPageGet(): void
+	{
+		$result = $this->router->resolve('/api/v1/_ui/settings/page/appSettings', 'GET');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'settings', 'page', 'appSettings');
+	}
+
+	public function testSettingsPageSave(): void
+	{
+		$result = $this->router->resolve('/api/v1/_ui/settings/page/appSettings', 'POST');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'settings', 'savePage', 'appSettings');
+	}
+
+	public function testSettingsPageDeleteNotAllowed(): void
+	{
+		$result = $this->router->resolve('/api/v1/_ui/settings/page/appSettings', 'DELETE');
+		$this->assertInstanceOf(Response::class, $result);
+	}
+
+	public function testSettingsPageEmptyIdNotFound(): void
+	{
+		$result = $this->router->resolve('/api/v1/_ui/settings/page/', 'GET');
+		$this->assertInstanceOf(Response::class, $result);
+	}
+
+	// App info + branding
+	public function testAppInfo(): void
+	{
+		$result = $this->router->resolve('/api/v1/_app/info', 'GET');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'app', 'info');
+	}
+
+	public function testAppInfoPostNotAllowed(): void
+	{
+		$result = $this->router->resolve('/api/v1/_app/info', 'POST');
+		$this->assertInstanceOf(Response::class, $result);
+	}
+
+	public function testAppBrandingActionsPerMethod(): void
+	{
+		$get = $this->router->resolve('/api/v1/_app/branding/icon', 'GET');
+		$this->assertInstanceOf(Route::class, $get);
+		$this->assertRoute($get, 'app', 'brandingGet', 'icon');
+
+		$post = $this->router->resolve('/api/v1/_app/branding/companyLogo', 'POST');
+		$this->assertInstanceOf(Route::class, $post);
+		$this->assertRoute($post, 'app', 'brandingUpload', 'companyLogo');
+
+		$delete = $this->router->resolve('/api/v1/_app/branding/icon', 'DELETE');
+		$this->assertInstanceOf(Route::class, $delete);
+		$this->assertRoute($delete, 'app', 'brandingDelete', 'icon');
+	}
+
+	public function testAppBrandingNestedPathNotFound(): void
+	{
+		$result = $this->router->resolve('/api/v1/_app/branding/icon/extra', 'GET');
+		$this->assertInstanceOf(Response::class, $result);
+	}
+
 	// OpenAPI
 	public function testOpenApiSpec(): void
 	{

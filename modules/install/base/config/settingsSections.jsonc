@@ -1,6 +1,14 @@
 {
     "sections": [
         {
+            "id": "app",
+            "name": "Application",
+            "name:cs": "Aplikace",
+            "name:en": "Application",
+            "icon": "settings",
+            "order": 1
+        },
+        {
             "id": "accounting",
             "name": "Accounting",
             "name:cs": "Účetnictví",

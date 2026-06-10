@@ -63,6 +63,41 @@ class Router
 			return new Route('settings', 'navigation');
 		}
 
+		if (str_starts_with($subpath, '/_ui/settings/page/')) {
+			$pageId = substr($subpath, strlen('/_ui/settings/page/'));
+			if ($pageId === '' || str_contains($pageId, '/')) {
+				return Response::error('NOT_FOUND', 'Not found', 404);
+			}
+			// pageId jede ve slotu `table` (Route nemá dedikovaný string slot).
+			return match ($method) {
+				'GET'   => new Route('settings', 'page', $pageId),
+				'POST'  => new Route('settings', 'savePage', $pageId),
+				default => Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405),
+			};
+		}
+
+		if ($subpath === '/_app/info') {
+			if ($method !== 'GET') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('app', 'info');
+		}
+
+		if (str_starts_with($subpath, '/_app/branding/')) {
+			$slot = substr($subpath, strlen('/_app/branding/'));
+			if ($slot === '' || str_contains($slot, '/')) {
+				return Response::error('NOT_FOUND', 'Not found', 404);
+			}
+			// Akce per metoda — GET je veřejný (AuthMiddleware::isExempt
+			// matchuje (controller, action)), POST/DELETE vyžadují auth.
+			return match ($method) {
+				'GET'    => new Route('app', 'brandingGet', $slot),
+				'POST'   => new Route('app', 'brandingUpload', $slot),
+				'DELETE' => new Route('app', 'brandingDelete', $slot),
+				default  => Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405),
+			};
+		}
+
 		if (str_starts_with($subpath, '/_ui/viewer/')) {
 			if ($method !== 'GET') {
 				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);

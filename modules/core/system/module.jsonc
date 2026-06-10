@@ -22,6 +22,64 @@
         "core_system_api_keys",
         "core_system_rate_limits"
     ],
+    "settingsPages": [
+        {
+            "id": "appSettings",
+            "name": "Application",
+            "name:cs": "Aplikace",
+            "name:en": "Application",
+            "icon": "settings",
+            "fields": [
+                {
+                    "id": "app.name",
+                    "type": "text",
+                    "name": "Data source name",
+                    "name:cs": "Název zdroje dat",
+                    "name:en": "Data source name",
+                    "hint": "Full name — the default comes from the installation.",
+                    "hint:cs": "Plný název — výchozí hodnota pochází z instalace.",
+                    "hint:en": "Full name — the default comes from the installation.",
+                    "maxLength": 120
+                },
+                {
+                    "id": "app.shortName",
+                    "type": "text",
+                    "name": "Short name",
+                    "name:cs": "Zkrácený název",
+                    "name:en": "Short name",
+                    "hint": "Browser tab title and sidebar text.",
+                    "hint:cs": "Titulek tabu prohlížeče a sidebaru.",
+                    "hint:en": "Browser tab title and sidebar text.",
+                    "maxLength": 30
+                },
+                {
+                    "id": "app.icon",
+                    "type": "image",
+                    "slot": "icon",
+                    "name": "Application icon",
+                    "name:cs": "Ikona aplikace",
+                    "name:en": "Application icon",
+                    "hint": "Browser favicon and sidebar icon. Ideally square, PNG.",
+                    "hint:cs": "Ikona v prohlížeči (favicon) a v sidebaru. Ideálně čtvercová, PNG.",
+                    "hint:en": "Browser favicon and sidebar icon. Ideally square, PNG."
+                },
+                {
+                    "id": "app.companyLogo",
+                    "type": "image",
+                    "slot": "companyLogo",
+                    "name": "Company logo",
+                    "name:cs": "Logo firmy",
+                    "name:en": "Company logo",
+                    "hint": "Used on output documents (invoices etc.).",
+                    "hint:cs": "Použije se na výstupních sestavách (faktury apod.).",
+                    "hint:en": "Used on output documents (invoices etc.)."
+                }
+            ]
+        }
+    ],
+    "settingsItems": [
+        { "page": "appSettings", "section": "app", "order": 10 }
+    ],
     "config": [
         {
             "id": "core.system.docStatesArchive",

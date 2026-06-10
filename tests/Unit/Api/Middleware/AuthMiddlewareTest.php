@@ -125,6 +125,48 @@ class AuthMiddlewareTest extends TestCase
 		$this->assertFalse($result->isAuthenticated);
 	}
 
+	public function testAppInfoIsExempt(): void
+	{
+		// Exempt route propustí i request s vadnou hlavičkou — login obrazovka
+		// a favicon musí fungovat bez tokenu.
+		$route = new Route('app', 'info');
+		$req = $this->req(server: ['HTTP_AUTHORIZATION' => 'Token malformed']);
+		$result = $this->middleware->handle($req, $route, $this->db);
+
+		$this->assertInstanceOf(AuthContext::class, $result);
+		$this->assertFalse($result->isAuthenticated);
+	}
+
+	public function testAppBrandingGetIsExempt(): void
+	{
+		$route = new Route('app', 'brandingGet', 'icon');
+		$req = $this->req(server: ['HTTP_AUTHORIZATION' => 'Token malformed']);
+		$result = $this->middleware->handle($req, $route, $this->db);
+
+		$this->assertInstanceOf(AuthContext::class, $result);
+		$this->assertFalse($result->isAuthenticated);
+	}
+
+	public function testAppBrandingUploadIsNotExempt(): void
+	{
+		$route = new Route('app', 'brandingUpload', 'icon');
+		$req = $this->req('POST', '/api/v1/_app/branding/icon', ['HTTP_AUTHORIZATION' => 'Token malformed']);
+		$result = $this->middleware->handle($req, $route, $this->db);
+
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame(401, $this->getStatus($result));
+	}
+
+	public function testAppBrandingDeleteIsNotExempt(): void
+	{
+		$route = new Route('app', 'brandingDelete', 'icon');
+		$req = $this->req('DELETE', '/api/v1/_app/branding/icon', ['HTTP_AUTHORIZATION' => 'Token malformed']);
+		$result = $this->middleware->handle($req, $route, $this->db);
+
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame(401, $this->getStatus($result));
+	}
+
 	public function testOpenApiRequiresAuthWhenNotPublic(): void
 	{
 		// Even without a token, openapi is not exempt → anonymous (but controllers must check)

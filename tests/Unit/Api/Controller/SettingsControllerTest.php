@@ -1,0 +1,227 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Shipard\Tests\Unit\Api\Controller;
+
+use PHPUnit\Framework\TestCase;
+use Shipard\Api\AuthContext;
+use Shipard\Api\Controller\SettingsController;
+use Shipard\Api\Request;
+use Shipard\Api\Response;
+use Shipard\Core\Config\DataSourceConfig;
+use Shipard\Core\Database\DataSourceConnection;
+use Shipard\Core\Module\ModulePathResolver;
+
+/**
+ * Testy settings pages (page/savePage) nad reálnou definicí appSettings
+ * z modules/core/system/module.jsonc — DB je mockovaná.
+ */
+class SettingsControllerTest extends TestCase
+{
+    private string $dsDir;
+    private ModulePathResolver $resolver;
+    private SettingsController $ctrl;
+
+    protected function setUp(): void
+    {
+        $this->dsDir = sys_get_temp_dir() . '/shpd_settingsctrl_' . uniqid('', true);
+        mkdir($this->dsDir . '/config', 0755, true);
+        file_put_contents($this->dsDir . '/config/main.json', json_encode([
+            'id'                => 'test-test-test-test',
+            'name'              => 'Testovací firma',
+            'database_name'     => 'x',
+            'database_user'     => 'x',
+            'database_password' => 'x',
+            'created'           => '2026-01-01T00:00:00+00:00',
+            'modules'           => ['core.system'],
+        ]));
+
+        $this->resolver = new ModulePathResolver([dirname(__DIR__, 4) . '/modules']);
+        $this->ctrl     = new SettingsController();
+    }
+
+    protected function tearDown(): void
+    {
+        @unlink($this->dsDir . '/config/main.json');
+        @rmdir($this->dsDir . '/config');
+        @rmdir($this->dsDir);
+    }
+
+    private function config(): DataSourceConfig
+    {
+        return new DataSourceConfig($this->dsDir);
+    }
+
+    private function auth(): AuthContext
+    {
+        return new AuthContext(true, 1, 'session', 'shpd_st_test');
+    }
+
+    private function mockDb(array $fetchAllRows = []): DataSourceConnection
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchAll')->willReturn($fetchAllRows);
+        return $db;
+    }
+
+    private function saveRequest(array $body): Request
+    {
+        return Request::fromArray('POST', '/api/v1/_ui/settings/page/appSettings', [], json_encode($body), []);
+    }
+
+    private function getStatus(Response $response): int
+    {
+        $ref = new \ReflectionClass($response);
+        return $ref->getProperty('status')->getValue($response);
+    }
+
+    // --- page() ---
+
+    public function testPageRequiresAuth(): void
+    {
+        $resp = $this->ctrl->page('appSettings', $this->config(), $this->resolver, 'cs', AuthContext::anonymous(), $this->mockDb());
+
+        $this->assertSame(401, $this->getStatus($resp));
+    }
+
+    public function testPageUnknownIdReturns404(): void
+    {
+        $resp = $this->ctrl->page('noSuchPage', $this->config(), $this->resolver, 'cs', $this->auth(), $this->mockDb());
+
+        $this->assertSame(404, $this->getStatus($resp));
+    }
+
+    public function testPageReturnsLocalizedDefinitionAndValues(): void
+    {
+        $db = $this->mockDb([
+            ['key' => 'app.name', 'value' => json_encode('Moje firma s.r.o.')],
+        ]);
+
+        $resp = $this->ctrl->page('appSettings', $this->config(), $this->resolver, 'cs', $this->auth(), $db);
+        $data = $resp->getPayload()['data'];
+
+        $this->assertSame('appSettings', $data['definition']['id']);
+        $this->assertSame('Aplikace', $data['definition']['label']);
+        $this->assertCount(4, $data['definition']['fields']);
+
+        $byId = array_column($data['definition']['fields'], null, 'id');
+        $this->assertSame('Název zdroje dat', $byId['app.name']['label']);
+        $this->assertSame(120, $byId['app.name']['maxLength']);
+        $this->assertSame('image', $byId['app.icon']['type']);
+        $this->assertSame('icon', $byId['app.icon']['slot']);
+
+        $this->assertSame('Moje firma s.r.o.', $data['values']['app.name']);
+        $this->assertNull($data['values']['app.shortName']);
+        $this->assertNull($data['values']['app.icon']);
+    }
+
+    public function testPageResolvesImageSlotState(): void
+    {
+        $db = $this->mockDb([
+            ['key' => 'app.icon', 'value' => json_encode([
+                'filename' => 'logo.png',
+                'storedAs' => 'icon.png',
+                'mime'     => 'image/png',
+                'size'     => 1234,
+                'hash'     => 'abcd1234abcd1234',
+            ])],
+        ]);
+
+        $resp = $this->ctrl->page('appSettings', $this->config(), $this->resolver, 'en', $this->auth(), $db);
+        $icon = $resp->getPayload()['data']['values']['app.icon'];
+
+        $this->assertSame('/_app/branding/icon?h=abcd1234abcd1234', $icon['url']);
+        $this->assertSame('logo.png', $icon['filename']);
+        $this->assertSame('image/png', $icon['mime']);
+        $this->assertSame(1234, $icon['size']);
+    }
+
+    // --- savePage() ---
+
+    public function testSavePageRequiresAuth(): void
+    {
+        $resp = $this->ctrl->savePage(
+            'appSettings', $this->saveRequest(['values' => []]),
+            $this->config(), $this->resolver, AuthContext::anonymous(), $this->mockDb(),
+        );
+
+        $this->assertSame(401, $this->getStatus($resp));
+    }
+
+    public function testSavePageWithoutValuesReturns400(): void
+    {
+        $resp = $this->ctrl->savePage(
+            'appSettings', $this->saveRequest(['nonsense' => true]),
+            $this->config(), $this->resolver, $this->auth(), $this->mockDb(),
+        );
+
+        $this->assertSame(400, $this->getStatus($resp));
+    }
+
+    public function testSavePageStoresOnlyWhitelistedTextFields(): void
+    {
+        $db = $this->mockDb();
+        // Jediný upsert — app.name. Klíč mimo definici a image klíč se ignorují.
+        $db->expects($this->once())->method('execute');
+        $db->expects($this->never())->method('deleteWhere');
+
+        $resp = $this->ctrl->savePage(
+            'appSettings',
+            $this->saveRequest(['values' => [
+                'app.name'     => '  Nová firma  ',
+                'evil.key'     => 'hack',
+                'app.icon'     => ['hash' => 'spoofed'],
+            ]]),
+            $this->config(), $this->resolver, $this->auth(), $db,
+        );
+
+        $this->assertSame(200, $this->getStatus($resp));
+        // Trim + cache store: uložená hodnota se vrací bez mezer.
+        $this->assertSame('Nová firma', $resp->getPayload()['data']['values']['app.name']);
+    }
+
+    public function testSavePageEmptyStringDeletesKey(): void
+    {
+        $db = $this->mockDb();
+        $db->expects($this->never())->method('execute');
+        $db->expects($this->once())->method('deleteWhere');
+
+        $resp = $this->ctrl->savePage(
+            'appSettings',
+            $this->saveRequest(['values' => ['app.shortName' => '   ']]),
+            $this->config(), $this->resolver, $this->auth(), $db,
+        );
+
+        $this->assertSame(200, $this->getStatus($resp));
+        $this->assertNull($resp->getPayload()['data']['values']['app.shortName']);
+    }
+
+    public function testSavePageMaxLengthValidation(): void
+    {
+        $db = $this->mockDb();
+        $db->expects($this->never())->method('execute');
+
+        $resp = $this->ctrl->savePage(
+            'appSettings',
+            $this->saveRequest(['values' => ['app.shortName' => str_repeat('x', 31)]]),
+            $this->config(), $this->resolver, $this->auth(), $db,
+        );
+
+        $this->assertSame(422, $this->getStatus($resp));
+        $error = $resp->getPayload()['error'];
+        $this->assertSame('VALIDATION_ERROR', $error['code']);
+        $this->assertSame('app.shortName', $error['details'][0]['field']);
+        $this->assertSame('MAX_LENGTH', $error['details'][0]['code']);
+    }
+
+    public function testSavePageUnknownPageReturns404(): void
+    {
+        $resp = $this->ctrl->savePage(
+            'noSuchPage', $this->saveRequest(['values' => []]),
+            $this->config(), $this->resolver, $this->auth(), $this->mockDb(),
+        );
+
+        $this->assertSame(404, $this->getStatus($resp));
+    }
+}

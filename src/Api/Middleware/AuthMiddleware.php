@@ -57,6 +57,12 @@ class AuthMiddleware
 		if ($openApiPublic && $route->controller === 'openapi' && $route->action === 'spec') {
 			return true;
 		}
+		// Veřejné app info + čtení brandingu — login obrazovka a favicon
+		// potřebují název/ikonu bez tokenu. Zápisové akce (brandingUpload,
+		// brandingDelete) exempt nejsou.
+		if ($route->controller === 'app' && ($route->action === 'info' || $route->action === 'brandingGet')) {
+			return true;
+		}
 		return false;
 	}
 

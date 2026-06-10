@@ -4,15 +4,19 @@ declare(strict_types=1);
 
 namespace Shipard\Api\Controller;
 
+use Shipard\Api\AuthContext;
+use Shipard\Api\Request;
 use Shipard\Api\Response;
 use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Config\DataSourceConfig;
+use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\I18n\ConfigLocalizer;
 use Shipard\Core\Logging\ErrorLogger;
 use Shipard\Core\Module\ModuleDefinition;
 use Shipard\Core\Module\ModuleLoader;
 use Shipard\Core\Module\ModulePathResolver;
 use Shipard\Core\Module\ModuleResolver;
+use Shipard\Core\Settings\SettingsStore;
 use Shipard\Core\Utils\JsoncParser;
 
 class SettingsController
@@ -96,6 +100,195 @@ class SettingsController
     }
 
     /**
+     * GET /_ui/settings/page/{pageId}
+     *
+     * Vrátí lokalizovanou definici settings page + aktuální hodnoty polí.
+     * Pro `image` pole je hodnotou stav slotu ({url, hash, filename, mime,
+     * size} nebo null), textová pole čtou přímo z SettingsStore.
+     */
+    public function page(
+        string $pageId,
+        DataSourceConfig $config,
+        ModulePathResolver $resolver,
+        string $language,
+        AuthContext $auth,
+        DataSourceConnection $db,
+    ): Response {
+        if (!$auth->isAuthenticated) {
+            return Response::error('UNAUTHORIZED', 'Authentication required', 401);
+        }
+
+        $pageDef = $this->findPage($pageId, $config, $resolver);
+        if ($pageDef === null) {
+            return Response::error('NOT_FOUND', "Settings page not found: {$pageId}", 404);
+        }
+
+        $store = new SettingsStore($db);
+
+        return Response::success([
+            'definition' => $this->localizePageDefinition($pageDef, $language),
+            'values'     => $this->buildPageValues($pageDef, $store),
+        ]);
+    }
+
+    /**
+     * POST /_ui/settings/page/{pageId}
+     *
+     * Body: { values: { "app.name": "...", ... } }. Ukládá jen textová pole
+     * definovaná ve stránce (whitelist), trim, maxLength validace, prázdný
+     * string maže klíč (fallback na default). `image` klíče se ignorují —
+     * obrázky mají vlastní upload endpoint (/_app/branding/{slot}).
+     */
+    public function savePage(
+        string $pageId,
+        Request $request,
+        DataSourceConfig $config,
+        ModulePathResolver $resolver,
+        AuthContext $auth,
+        DataSourceConnection $db,
+    ): Response {
+        if (!$auth->isAuthenticated) {
+            return Response::error('UNAUTHORIZED', 'Authentication required', 401);
+        }
+
+        $pageDef = $this->findPage($pageId, $config, $resolver);
+        if ($pageDef === null) {
+            return Response::error('NOT_FOUND', "Settings page not found: {$pageId}", 404);
+        }
+
+        $body   = $request->getBody();
+        $values = $body['values'] ?? null;
+        if (!is_array($values)) {
+            return Response::error('BAD_REQUEST', 'Body must contain a `values` object', 400);
+        }
+
+        // Whitelist: jen textová pole z definice; klíče mimo definici a image
+        // pole se tiše ignorují.
+        $toSave = [];
+        $errors = [];
+        foreach ($pageDef['fields'] as $field) {
+            if ($field['type'] !== 'text' || !array_key_exists($field['id'], $values)) {
+                continue;
+            }
+            $raw = $values[$field['id']];
+            if ($raw !== null && !is_scalar($raw)) {
+                $errors[] = [
+                    'field'   => $field['id'],
+                    'code'    => 'INVALID_TYPE',
+                    'message' => 'Value must be a string',
+                ];
+                continue;
+            }
+            $value = trim((string) ($raw ?? ''));
+
+            $maxLength = isset($field['maxLength']) ? (int) $field['maxLength'] : null;
+            if ($maxLength !== null && mb_strlen($value) > $maxLength) {
+                $errors[] = [
+                    'field'   => $field['id'],
+                    'code'    => 'MAX_LENGTH',
+                    'message' => "Value exceeds maximum length of {$maxLength} characters",
+                ];
+                continue;
+            }
+
+            // Prázdný string = smazat klíč → čtenáři padnou na fallback.
+            $toSave[$field['id']] = $value === '' ? null : $value;
+        }
+
+        if ($errors !== []) {
+            return Response::error('VALIDATION_ERROR', 'Validation failed', 422, $errors);
+        }
+
+        $store = new SettingsStore($db);
+        foreach ($toSave as $key => $value) {
+            $store->set($key, $value);
+        }
+
+        return Response::success([
+            'values' => $this->buildPageValues($pageDef, $store),
+        ]);
+    }
+
+    /** Najde definici stránky napříč resolved moduly (první výskyt vyhrává). */
+    private function findPage(string $pageId, DataSourceConfig $config, ModulePathResolver $resolver): ?array
+    {
+        $allModules      = ModuleLoader::loadAllModules($resolver);
+        $errors          = [];
+        $resolvedModules = ModuleResolver::resolve($allModules, $config->getModules(), $errors);
+
+        foreach ($resolvedModules as $module) {
+            foreach ($module->settingsPages as $page) {
+                if (($page['id'] ?? '') === $pageId) {
+                    return $page;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private function localizePageDefinition(array $page, string $language): array
+    {
+        $fields = [];
+        foreach ($page['fields'] as $field) {
+            $localized = [
+                'id'    => $field['id'],
+                'type'  => $field['type'],
+                'label' => $this->localizeViewerName($field, $language),
+            ];
+            $hint = $field['hint:' . $language] ?? $field['hint:en'] ?? $field['hint'] ?? null;
+            if ($hint !== null) {
+                $localized['hint'] = $hint;
+            }
+            if (isset($field['maxLength'])) {
+                $localized['maxLength'] = (int) $field['maxLength'];
+            }
+            if (isset($field['slot'])) {
+                $localized['slot'] = $field['slot'];
+            }
+            $fields[] = $localized;
+        }
+
+        return [
+            'id'     => $page['id'],
+            'label'  => $this->localizeViewerName($page, $language),
+            'icon'   => $page['icon'] ?? null,
+            'fields' => $fields,
+        ];
+    }
+
+    /**
+     * Hodnoty polí stránky. Textová pole čtou klíč přímo, image pole vrací
+     * stav slotu — metadata uploadu + relativní URL pro <img>.
+     */
+    private function buildPageValues(array $page, SettingsStore $store): array
+    {
+        $keys = array_map(static fn(array $f): string => $f['id'], $page['fields']);
+        $raw  = $store->getMany($keys);
+
+        $values = [];
+        foreach ($page['fields'] as $field) {
+            $id = $field['id'];
+            if ($field['type'] === 'image') {
+                $metadata = $raw[$id];
+                $slot     = $field['slot'] ?? null;
+                $info     = is_string($slot) ? AppController::slotInfo($slot, $metadata) : null;
+                $values[$id] = $info === null ? null : [
+                    'url'      => $info['url'],
+                    'hash'     => $info['hash'],
+                    'filename' => $metadata['filename'] ?? null,
+                    'mime'     => $metadata['mime'] ?? null,
+                    'size'     => $metadata['size'] ?? null,
+                ];
+            } else {
+                $values[$id] = $raw[$id];
+            }
+        }
+
+        return $values;
+    }
+
+    /**
      * @param  ModuleDefinition[]  $resolvedModules
      * @return array<string, array>
      */
@@ -104,6 +297,7 @@ class SettingsController
         $itemsBySection = [];
         $seenViewers = [];
         $seenTables = [];
+        $seenPages = [];
 
         foreach ($resolvedModules as $module) {
             foreach ($module->settingsItems as $item) {
@@ -204,6 +398,44 @@ class SettingsController
                     ];
                     if (isset($tableData['icon'])) {
                         $navItem['icon'] = $tableData['icon'];
+                    }
+                    if ($item['order'] !== null) {
+                        $navItem['_order'] = $item['order'];
+                    }
+
+                    $itemsBySection[$this->sectionKey($section, $subsection)][] = $navItem;
+                } elseif (($item['page'] ?? null) !== null) {
+                    $pageId = $item['page'];
+                    if (isset($seenPages[$pageId])) {
+                        continue;
+                    }
+
+                    $pageDef = null;
+                    foreach ($module->settingsPages as $p) {
+                        if (($p['id'] ?? '') === $pageId) {
+                            $pageDef = $p;
+                            break;
+                        }
+                    }
+
+                    if ($pageDef === null) {
+                        ErrorLogger::warn('Settings page not found in module, skipping', [
+                            'page_id'   => $pageId,
+                            'module_id' => $module->id,
+                        ]);
+                        continue;
+                    }
+
+                    $seenPages[$pageId] = true;
+
+                    $navItem = [
+                        'id'     => 'page:' . $pageId,
+                        'label'  => $this->localizeViewerName($pageDef, $language),
+                        'type'   => 'page',
+                        'pageId' => $pageId,
+                    ];
+                    if (isset($pageDef['icon'])) {
+                        $navItem['icon'] = $pageDef['icon'];
                     }
                     if ($item['order'] !== null) {
                         $navItem['_order'] = $item['order'];

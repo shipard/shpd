@@ -259,7 +259,8 @@ function dispatch(
 		'meta'    => dispatchMeta($route->action, $route->table, $tables, resolveLanguage($request, $resolved->config)),
 		'ui'      => dispatchUi($route->action, $resolved->config, $modulePathResolver, resolveLanguage($request, $resolved->config)),
 		'dashboard' => dispatchDashboard($route, $db, $viewerRegistry, $configRuntime, resolveLanguage($request, $resolved->config)),
-		'settings' => dispatchSettings($route->action, $resolved->config, $modulePathResolver, resolveLanguage($request, $resolved->config), $configRuntime),
+		'settings' => dispatchSettings($route, $request, $auth, $resolved->config, $modulePathResolver, resolveLanguage($request, $resolved->config), $configRuntime, $db),
+		'app'     => dispatchApp($route, $auth, $db, $resolved->config),
 		'form'    => dispatchForm($route, $request, $auth, $tables, $db, $formRegistry ?? new FormRegistry(), $configRuntime, $modulePathResolver, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), resolveLanguage($request, $resolved->config), $resolved->config, $lookupRegistry ?? new LookupRegistry()),
 		'lookup'  => dispatchLookup($route, $request, $tables, $db, $lookupRegistry ?? new LookupRegistry(), $configRuntime),
 		'viewer'  => dispatchViewer($route, $request, $viewerRegistry, $db, $configRuntime, resolveLanguage($request, $resolved->config)),
@@ -637,16 +638,38 @@ function dispatchDashboard(
 }
 
 function dispatchSettings(
-	string $action,
+	Route $route,
+	Request $request,
+	AuthContext $auth,
 	\Shipard\Core\Config\DataSourceConfig $config,
 	ModulePathResolver $modulePathResolver,
 	string $language,
 	?\Shipard\Core\Config\ConfigRuntime $configRuntime,
+	\Shipard\Core\Database\DataSourceConnection $db,
 ): Response {
 	$ctrl = new SettingsController();
-	return match ($action) {
+	return match ($route->action) {
 		'navigation' => $ctrl->navigation($config, $modulePathResolver, $language, $configRuntime),
-		default      => Response::error('INTERNAL_ERROR', "Unknown settings action: {$action}", 500),
+		'page'       => $ctrl->page((string) $route->table, $config, $modulePathResolver, $language, $auth, $db),
+		'savePage'   => $ctrl->savePage((string) $route->table, $request, $config, $modulePathResolver, $auth, $db),
+		default      => Response::error('INTERNAL_ERROR', "Unknown settings action: {$route->action}", 500),
+	};
+}
+
+function dispatchApp(
+	Route $route,
+	AuthContext $auth,
+	\Shipard\Core\Database\DataSourceConnection $db,
+	\Shipard\Core\Config\DataSourceConfig $config,
+): Response {
+	$ctrl = new \Shipard\Api\Controller\AppController($db, $config);
+	$slot = (string) $route->table;
+	return match ($route->action) {
+		'info'           => $ctrl->info(),
+		'brandingGet'    => $ctrl->brandingGet($slot),
+		'brandingUpload' => $ctrl->brandingUpload($slot, $auth),
+		'brandingDelete' => $ctrl->brandingDelete($slot, $auth),
+		default          => Response::error('INTERNAL_ERROR', "Unknown app action: {$route->action}", 500),
 	};
 }
 

@@ -72,6 +72,10 @@
         {
             "id": "economy.accounting.accountingStates",
             "file": "config/accountingStates.jsonc"
+        },
+        {
+            "id": "economy.accounting.rules.cz",
+            "file": "config/accountingRules.cz.jsonc"
         }
     ]
 }

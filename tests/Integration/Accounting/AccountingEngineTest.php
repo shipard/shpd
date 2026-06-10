@@ -1,0 +1,544 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Shipard\Tests\Integration\Accounting;
+
+use Shipard\Core\Config\ConfigRuntime;
+use Shipard\Module\Economy\Accounting\AccountingEngine;
+use Shipard\Tests\Integration\IntegrationTestCase;
+
+/**
+ * Scénáře W3.3 z tasks/accounting-phase2.md — engine nad reálným dev DS
+ * (účtový rozvrh, fiskální období a osoby z provisioneru).
+ *
+ * Dokladová data se vkládají přímo SQL s ručně spočtenými computed
+ * hodnotami — engine čte DB, nezajímá ho, jak vznikla. Vše vytvořené se
+ * v tearDown maže.
+ */
+class AccountingEngineTest extends IntegrationTestCase
+{
+    private const ACC_DATE = '2026-06-10';
+
+    /** @var list<int> */
+    private array $createdHeads = [];
+
+    /** @var list<int> */
+    private array $createdItems = [];
+
+    private ?AccountingEngine $engine = null;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->engine = new AccountingEngine(
+            $this->db->getDibiConnection(),
+            ConfigRuntime::load($this->realDsPath, 'cs'),
+        );
+    }
+
+    protected function tearDown(): void
+    {
+        $dibi = $this->db->getDibiConnection();
+        foreach ($this->createdHeads as $id) {
+            $dibi->delete('economy_accounting_journal')->where('doc_head = %i', $id)->execute();
+            $dibi->delete('docs_core_vat_recap')->where('doc_head = %i', $id)->execute();
+            $dibi->delete('docs_core_rows')->where('doc_head = %i', $id)->execute();
+            $dibi->delete('docs_core_heads')->where('id = %i', $id)->execute();
+        }
+        foreach ($this->createdItems as $id) {
+            $dibi->delete('economy_items')->where('id = %i', $id)->execute();
+        }
+        parent::tearDown();
+    }
+
+    // ── Helpers ─────────────────────────────────────────────────────────────
+
+    private function fiscalIds(): array
+    {
+        $fy = $this->db->fetchRow(
+            'SELECT id FROM economy_codebooks_fiscal_years WHERE date_begin <= %s AND date_end >= %s LIMIT 1',
+            self::ACC_DATE, self::ACC_DATE,
+        );
+        $fm = $this->db->fetchRow(
+            'SELECT id FROM economy_codebooks_fiscal_months WHERE date_begin <= %s AND date_end >= %s AND period_type = 1 LIMIT 1',
+            self::ACC_DATE, self::ACC_DATE,
+        );
+        if ($fy === null || $fm === null) {
+            $this->markTestSkipped('Dev DS nemá fiskální období pro ' . self::ACC_DATE);
+        }
+        return [(int) $fy['id'], (int) $fm['id']];
+    }
+
+    private function anyPartnerId(): int
+    {
+        $row = $this->db->fetchRow('SELECT id FROM base_persons_persons ORDER BY id LIMIT 1');
+        if ($row === null) {
+            $this->markTestSkipped('Dev DS nemá žádnou osobu');
+        }
+        return (int) $row['id'];
+    }
+
+    private function seriesId(string $docType): int
+    {
+        $row = $this->db->fetchRow(
+            'SELECT id FROM docs_core_number_series WHERE doc_type = %s LIMIT 1',
+            $docType,
+        );
+        if ($row === null) {
+            $this->markTestSkipped("Dev DS nemá číselnou řadu pro {$docType}");
+        }
+        return (int) $row['id'];
+    }
+
+    /**
+     * Vloží hlavičku s defaulty CZK dokladu ve stavu 40. $overrides
+     * přepisují cokoliv (totals, měnu, fiskální období…).
+     */
+    private function insertHead(string $docType, array $overrides = []): int
+    {
+        [$fy, $fm] = $this->fiscalIds();
+        $head = array_merge([
+            'doc_type'        => $docType,
+            'number_series'   => $this->seriesId($docType),
+            'doc_number'      => 'IT-ACC-' . uniqid(),
+            'issue_date'      => self::ACC_DATE,
+            'accounting_date' => self::ACC_DATE,
+            'fiscal_year'     => $fy,
+            'fiscal_month'    => $fm,
+            'partner'         => $this->anyPartnerId(),
+            'doc_currency'    => 'czk',
+            'home_currency'   => 'czk',
+            'exchange_rate'   => 1.0,
+            'doc_text'        => 'IT test doklad',
+            'docState'        => 40,
+            'docStateMain'    => 2,
+        ], $overrides);
+
+        $dibi = $this->db->getDibiConnection();
+        $dibi->insert('docs_core_heads', $head)->execute();
+        $id = (int) $dibi->getInsertId();
+        $this->createdHeads[] = $id;
+        return $id;
+    }
+
+    /**
+     * Vloží běžný řádek s computed hodnotami. Pro CZK doklady _dom = cur.
+     */
+    private function insertRow(int $headId, string $operation, float $base, float $vatPct, array $overrides = []): int
+    {
+        $amount = round($base * $vatPct / 100.0, 2);
+        $row = array_merge([
+            'doc_head'       => $headId,
+            'row_kind'       => 1,
+            'operation'      => $operation,
+            'description'    => "Řádek {$operation}",
+            'vat_code'       => 'cz-101',
+            'vat_pct'        => $vatPct,
+            'vat_base'       => $base,
+            'vat_amount'     => $amount,
+            'vat_total'      => round($base + $amount, 2),
+            'vat_base_dom'   => $base,
+            'vat_amount_dom' => $amount,
+            'vat_total_dom'  => round($base + $amount, 2),
+        ], $overrides);
+
+        $dibi = $this->db->getDibiConnection();
+        $dibi->insert('docs_core_rows', $row)->execute();
+        return (int) $dibi->getInsertId();
+    }
+
+    private function insertRecap(int $headId, float $base, float $tax, array $overrides = []): void
+    {
+        $recap = array_merge([
+            'doc_head'        => $headId,
+            'vat_code'        => 'cz-101',
+            'vat_pct'         => 21.0,
+            'base'            => $base,
+            'tax'             => $tax,
+            'total'           => round($base + $tax, 2),
+            'base_dom'        => $base,
+            'tax_dom'         => $tax,
+            'total_dom'       => round($base + $tax, 2),
+            'sum_base'        => 1,
+            'sum_tax'         => 1,
+            'sum_total'       => 1,
+            'is_reverse_pair' => 0,
+            'order_pos'       => 0,
+        ], $overrides);
+        $this->db->getDibiConnection()->insert('docs_core_vat_recap', $recap)->execute();
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function journalOf(int $headId): array
+    {
+        $rows = $this->db->fetchAll(
+            'SELECT * FROM economy_accounting_journal WHERE doc_head = %i ORDER BY id',
+            $headId,
+        );
+        return array_map(fn($r) => is_array($r) ? $r : $r->toArray(), $rows);
+    }
+
+    /** @return array<string, mixed> Jediný řádek deníku s daným prefixem čísla účtu */
+    private function lineByPrefix(array $journal, string $prefix): array
+    {
+        $matches = array_values(array_filter(
+            $journal,
+            fn($l) => str_starts_with((string) $l['account_number'], $prefix),
+        ));
+        $this->assertCount(1, $matches, "Očekáván právě jeden řádek deníku {$prefix}*");
+        return $matches[0];
+    }
+
+    private function assertBalanced(array $journal): void
+    {
+        $dr = array_sum(array_map(fn($l) => (float) $l['money_dr'], $journal));
+        $cr = array_sum(array_map(fn($l) => (float) $l['money_cr'], $journal));
+        $this->assertEqualsWithDelta($dr, $cr, 0.001, 'MD != DAL (dom)');
+
+        $drCur = array_sum(array_map(fn($l) => (float) $l['money_dr_cur'], $journal));
+        $crCur = array_sum(array_map(fn($l) => (float) $l['money_cr_cur'], $journal));
+        $this->assertEqualsWithDelta($drCur, $crCur, 0.001, 'MD != DAL (cur)');
+    }
+
+    private function accountingState(int $headId): int
+    {
+        $row = $this->db->fetchRow('SELECT accounting_state FROM docs_core_heads WHERE id = %i', $headId);
+        return (int) $row['accounting_state'];
+    }
+
+    // ── Scénáře ─────────────────────────────────────────────────────────────
+
+    public function testInvnoCzkBasic(): void
+    {
+        $headId = $this->insertHead('invno', [
+            'total_base' => 1000.0, 'total_vat' => 210.0, 'total_amount' => 1210.0,
+            'total_base_dom' => 1000.0, 'total_vat_dom' => 210.0, 'total_amount_dom' => 1210.0,
+        ]);
+        $this->insertRow($headId, 'sale.services', 1000.0, 21.0);
+        $this->insertRecap($headId, 1000.0, 210.0);
+
+        $result = $this->engine->accountDocument($headId);
+
+        $this->assertSame(1, $result['state']);
+        $this->assertSame([], $result['messages']);
+        $this->assertSame(1, $this->accountingState($headId));
+
+        $journal = $this->journalOf($headId);
+        $this->assertCount(3, $journal);
+        $this->assertBalanced($journal);
+
+        $revenue = $this->lineByPrefix($journal, '602');
+        $this->assertEqualsWithDelta(1000.0, (float) $revenue['money_cr'], 0.001);
+        $this->assertSame('sale.services', $revenue['operation']);
+
+        $vat = $this->lineByPrefix($journal, '343');
+        $this->assertEqualsWithDelta(210.0, (float) $vat['money_cr'], 0.001);
+
+        $receivable = $this->lineByPrefix($journal, '311');
+        $this->assertEqualsWithDelta(1210.0, (float) $receivable['money_dr'], 0.001);
+
+        // CZK doklad: *_cur == domácí hodnoty
+        foreach ($journal as $line) {
+            $this->assertEqualsWithDelta((float) $line['money_dr'], (float) $line['money_dr_cur'], 0.001);
+            $this->assertEqualsWithDelta((float) $line['money_cr'], (float) $line['money_cr_cur'], 0.001);
+            $this->assertSame('czk', $line['currency']);
+        }
+    }
+
+    public function testInvniCzkThreeOperations(): void
+    {
+        $headId = $this->insertHead('invni', [
+            'total_base' => 350.0, 'total_vat' => 73.5, 'total_amount' => 423.5,
+            'total_base_dom' => 350.0, 'total_vat_dom' => 73.5, 'total_amount_dom' => 423.5,
+        ]);
+        $this->insertRow($headId, 'purchase.goods', 100.0, 21.0);
+        $this->insertRow($headId, 'purchase.services', 200.0, 21.0);
+        $this->insertRow($headId, 'purchase.other', 50.0, 21.0);
+        $this->insertRecap($headId, 350.0, 73.5);
+
+        $result = $this->engine->accountDocument($headId);
+
+        $this->assertSame(1, $result['state']);
+        $journal = $this->journalOf($headId);
+        $this->assertCount(5, $journal);
+        $this->assertBalanced($journal);
+
+        // Náklady MD, DPH MD, závazek DAL
+        $this->assertEqualsWithDelta(100.0, (float) $this->lineByPrefix($journal, '504')['money_dr'], 0.001);
+        $this->assertEqualsWithDelta(200.0, (float) $this->lineByPrefix($journal, '518')['money_dr'], 0.001);
+        $this->assertEqualsWithDelta(50.0, (float) $this->lineByPrefix($journal, '548')['money_dr'], 0.001);
+        $this->assertEqualsWithDelta(73.5, (float) $this->lineByPrefix($journal, '343')['money_dr'], 0.001);
+        $this->assertEqualsWithDelta(423.5, (float) $this->lineByPrefix($journal, '321')['money_cr'], 0.001);
+    }
+
+    public function testInvnoForeignCurrencyBothAmountSetsBalance(): void
+    {
+        $rate = 25.285;
+        // Hodnoty konzistentní s Fází 1: dom = round(cur × rate), rounding_dom odvozeně 0
+        $headId = $this->insertHead('invno', [
+            'doc_currency'     => 'eur',
+            'exchange_rate'    => $rate,
+            'total_base'       => 100.0,  'total_base_dom'   => 2528.50,
+            'total_vat'        => 21.0,   'total_vat_dom'    => 530.99,
+            'total_amount'     => 121.0,  'total_amount_dom' => 3059.49,
+        ]);
+        $this->insertRow($headId, 'sale.services', 100.0, 21.0, [
+            'vat_base_dom' => 2528.50, 'vat_amount_dom' => 530.99, 'vat_total_dom' => 3059.49,
+        ]);
+        $this->insertRecap($headId, 100.0, 21.0, ['base_dom' => 2528.50, 'tax_dom' => 530.99]);
+
+        $result = $this->engine->accountDocument($headId);
+
+        $this->assertSame(1, $result['state']);
+        $journal = $this->journalOf($headId);
+        $this->assertCount(3, $journal);
+        $this->assertBalanced($journal);
+
+        $revenue = $this->lineByPrefix($journal, '602');
+        $this->assertEqualsWithDelta(2528.50, (float) $revenue['money_cr'], 0.001);
+        $this->assertEqualsWithDelta(100.0, (float) $revenue['money_cr_cur'], 0.001);
+        $this->assertSame('eur', $revenue['currency']);
+
+        $receivable = $this->lineByPrefix($journal, '311');
+        $this->assertEqualsWithDelta(3059.49, (float) $receivable['money_dr'], 0.001);
+        $this->assertEqualsWithDelta(121.0, (float) $receivable['money_dr_cur'], 0.001);
+    }
+
+    public function testRoundingPositiveGoesTo648(): void
+    {
+        // 999.80 + 209.96 = 1209.76 → zaokrouhleno 1210.00, rounding +0.24
+        $headId = $this->insertHead('invno', [
+            'total_base' => 999.80, 'total_vat' => 209.96,
+            'total_amount' => 1210.0, 'total_rounding' => 0.24,
+            'total_base_dom' => 999.80, 'total_vat_dom' => 209.96,
+            'total_amount_dom' => 1210.0, 'total_rounding_dom' => 0.24,
+        ]);
+        $this->insertRow($headId, 'sale.services', 999.80, 21.0);
+        $this->insertRecap($headId, 999.80, 209.96);
+
+        $result = $this->engine->accountDocument($headId);
+
+        $this->assertSame(1, $result['state']);
+        $journal = $this->journalOf($headId);
+        $this->assertBalanced($journal);
+        $rounding = $this->lineByPrefix($journal, '648');
+        $this->assertEqualsWithDelta(0.24, (float) $rounding['money_cr'], 0.001);
+    }
+
+    public function testRoundingNegativeReverseSignGoesTo548(): void
+    {
+        // 1000.41 + 210.08 = 1210.49 → zaokrouhleno 1210.00, rounding −0.49
+        $headId = $this->insertHead('invno', [
+            'total_base' => 1000.41, 'total_vat' => 210.08,
+            'total_amount' => 1210.0, 'total_rounding' => -0.49,
+            'total_base_dom' => 1000.41, 'total_vat_dom' => 210.08,
+            'total_amount_dom' => 1210.0, 'total_rounding_dom' => -0.49,
+        ]);
+        $this->insertRow($headId, 'sale.services', 1000.41, 21.0);
+        $this->insertRecap($headId, 1000.41, 210.08);
+
+        $result = $this->engine->accountDocument($headId);
+
+        $this->assertSame(1, $result['state']);
+        $journal = $this->journalOf($headId);
+        $this->assertBalanced($journal);
+        // reverseSign: −0.49 → MD +0.49 na zaokrouhlení-náklad
+        $rounding = $this->lineByPrefix($journal, '548');
+        $this->assertEqualsWithDelta(0.49, (float) $rounding['money_dr'], 0.001);
+    }
+
+    public function testAccEntryUsesItemAccount(): void
+    {
+        $account = $this->db->fetchRow(
+            'SELECT id, number FROM economy_accounting_accounts
+             WHERE account_level = 4 AND number LIKE %s ORDER BY number LIMIT 1',
+            '568%',
+        );
+        if ($account === null) {
+            $account = $this->db->fetchRow(
+                'SELECT id, number FROM economy_accounting_accounts WHERE account_level = 4 ORDER BY number LIMIT 1',
+            );
+        }
+        $itemId = $this->insertAccEntryItem((int) $account['id']);
+
+        $headId = $this->insertHead('invno', [
+            'total_base' => 1050.0, 'total_vat' => 220.5, 'total_amount' => 1270.5,
+            'total_base_dom' => 1050.0, 'total_vat_dom' => 220.5, 'total_amount_dom' => 1270.5,
+        ]);
+        $this->insertRow($headId, 'sale.services', 1000.0, 21.0);
+        $this->insertRow($headId, 'acc.entry', 50.0, 21.0, ['item' => $itemId]);
+        $this->insertRecap($headId, 1050.0, 220.5);
+
+        $result = $this->engine->accountDocument($headId);
+
+        $this->assertSame(1, $result['state']);
+        $journal = $this->journalOf($headId);
+        $this->assertBalanced($journal);
+
+        $itemLine = $this->lineByPrefix($journal, (string) $account['number']);
+        $this->assertEqualsWithDelta(50.0, (float) $itemLine['money_cr'], 0.001);
+        $this->assertSame((int) $account['id'], (int) $itemLine['account']);
+    }
+
+    public function testAccEntryWithoutItemAccountProducesErrorRow(): void
+    {
+        $itemId = $this->insertAccEntryItem(null);
+
+        $headId = $this->insertHead('invno', [
+            'total_base' => 50.0, 'total_vat' => 10.5, 'total_amount' => 60.5,
+            'total_base_dom' => 50.0, 'total_vat_dom' => 10.5, 'total_amount_dom' => 60.5,
+        ]);
+        $this->insertRow($headId, 'acc.entry', 50.0, 21.0, ['item' => $itemId]);
+        $this->insertRecap($headId, 50.0, 10.5);
+
+        $result = $this->engine->accountDocument($headId);
+
+        $this->assertSame(2, $result['state']);
+        $this->assertSame(2, $this->accountingState($headId));
+        $codes = array_column($result['messages'], 'code');
+        $this->assertContains('item_account_missing', $codes);
+
+        $journal = $this->journalOf($headId);
+        $errorLines = array_values(array_filter($journal, fn($l) => (int) $l['is_error'] === 1));
+        $this->assertCount(1, $errorLines);
+        $this->assertSame('??????', $errorLines[0]['account_number']);
+        $this->assertNull($errorLines[0]['account']);
+        // ostatní řádky (DPH, pohledávka) zapsané i tak
+        $this->assertGreaterThan(1, count($journal));
+    }
+
+    public function testMissingAccountInChartProducesMaskedErrorRow(): void
+    {
+        $dibi = $this->db->getDibiConnection();
+        // Dočasně archivuj všechny analytické 311* — engine masku nedohledá
+        $affected = $this->db->fetchAll(
+            'SELECT id, docState FROM economy_accounting_accounts WHERE number LIKE %s AND account_level = 4',
+            '311%',
+        );
+        $dibi->update('economy_accounting_accounts', ['docState' => 90])
+            ->where('number LIKE %s AND account_level = 4', '311%')->execute();
+
+        try {
+            $headId = $this->insertHead('invno', [
+                'total_base' => 1000.0, 'total_vat' => 210.0, 'total_amount' => 1210.0,
+                'total_base_dom' => 1000.0, 'total_vat_dom' => 210.0, 'total_amount_dom' => 1210.0,
+            ]);
+            $this->insertRow($headId, 'sale.services', 1000.0, 21.0);
+            $this->insertRecap($headId, 1000.0, 210.0);
+
+            $result = $this->engine->accountDocument($headId);
+
+            $this->assertSame(2, $result['state']);
+            $codes = array_column($result['messages'], 'code');
+            $this->assertContains('account_not_found', $codes);
+
+            $journal = $this->journalOf($headId);
+            $masked = $this->lineByPrefix($journal, '311');
+            $this->assertSame('311???', $masked['account_number']);
+            $this->assertSame(1, (int) $masked['is_error']);
+            $this->assertNull($masked['account']);
+            // ostatní řádky zapsané
+            $this->assertCount(3, $journal);
+        } finally {
+            foreach ($affected as $acc) {
+                $a = is_array($acc) ? $acc : $acc->toArray();
+                $dibi->update('economy_accounting_accounts', ['docState' => $a['docState']])
+                    ->where('id = %i', $a['id'])->execute();
+            }
+        }
+    }
+
+    public function testGroupingSumsSameAccountPartnerOperation(): void
+    {
+        $headId = $this->insertHead('invno', [
+            'total_base' => 300.0, 'total_vat' => 63.0, 'total_amount' => 363.0,
+            'total_base_dom' => 300.0, 'total_vat_dom' => 63.0, 'total_amount_dom' => 363.0,
+        ]);
+        $this->insertRow($headId, 'sale.services', 100.0, 21.0);
+        $this->insertRow($headId, 'sale.services', 200.0, 21.0);
+        $this->insertRecap($headId, 300.0, 63.0);
+
+        $result = $this->engine->accountDocument($headId);
+
+        $this->assertSame(1, $result['state']);
+        $journal = $this->journalOf($headId);
+        $this->assertCount(3, $journal, 'Dva řádky sale.services se měly sloučit do jednoho');
+        $revenue = $this->lineByPrefix($journal, '602');
+        $this->assertEqualsWithDelta(300.0, (float) $revenue['money_cr'], 0.001);
+    }
+
+    public function testSecondRunIsIdempotent(): void
+    {
+        $headId = $this->insertHead('invno', [
+            'total_base' => 1000.0, 'total_vat' => 210.0, 'total_amount' => 1210.0,
+            'total_base_dom' => 1000.0, 'total_vat_dom' => 210.0, 'total_amount_dom' => 1210.0,
+        ]);
+        $this->insertRow($headId, 'sale.services', 1000.0, 21.0);
+        $this->insertRecap($headId, 1000.0, 210.0);
+
+        $this->engine->accountDocument($headId);
+        $first = $this->journalOf($headId);
+        $this->engine->accountDocument($headId);
+        $second = $this->journalOf($headId);
+
+        $this->assertCount(count($first), $second, 'Druhý běh nesmí zdvojit řádky');
+        $this->assertSame(1, $this->accountingState($headId));
+    }
+
+    public function testClearDocumentRemovesJournalAndResetsState(): void
+    {
+        $headId = $this->insertHead('invno', [
+            'total_base' => 1000.0, 'total_vat' => 210.0, 'total_amount' => 1210.0,
+            'total_base_dom' => 1000.0, 'total_vat_dom' => 210.0, 'total_amount_dom' => 1210.0,
+        ]);
+        $this->insertRow($headId, 'sale.services', 1000.0, 21.0);
+        $this->insertRecap($headId, 1000.0, 210.0);
+        $this->engine->accountDocument($headId);
+        $this->assertNotSame([], $this->journalOf($headId));
+
+        $this->engine->clearDocument($headId);
+
+        $this->assertSame([], $this->journalOf($headId));
+        $this->assertSame(0, $this->accountingState($headId));
+    }
+
+    public function testMissingFiscalPeriodSkipsJournal(): void
+    {
+        $headId = $this->insertHead('invno', [
+            'fiscal_year' => null, 'fiscal_month' => null,
+            'total_base' => 1000.0, 'total_vat' => 210.0, 'total_amount' => 1210.0,
+            'total_base_dom' => 1000.0, 'total_vat_dom' => 210.0, 'total_amount_dom' => 1210.0,
+        ]);
+        $this->insertRow($headId, 'sale.services', 1000.0, 21.0);
+        $this->insertRecap($headId, 1000.0, 210.0);
+
+        $result = $this->engine->accountDocument($headId);
+
+        $this->assertSame(2, $result['state']);
+        $this->assertSame('fiscal_period_missing', $result['messages'][0]['code']);
+        $this->assertSame([], $this->journalOf($headId));
+    }
+
+    private function insertAccEntryItem(?int $accountId): int
+    {
+        $kind = $this->db->fetchRow('SELECT id FROM economy_items_kinds ORDER BY id LIMIT 1');
+        $unit = $this->db->fetchRow('SELECT id FROM core_units ORDER BY id LIMIT 1');
+        if ($kind === null || $unit === null) {
+            $this->markTestSkipped('Dev DS nemá druhy položek / jednotky');
+        }
+
+        $dibi = $this->db->getDibiConnection();
+        $dibi->insert('economy_items', [
+            'code'               => 'IT-ACC-' . uniqid(),
+            'name'               => 'IT účetní položka',
+            'item_kind'          => (int) $kind['id'],
+            'unit'               => (int) $unit['id'],
+            'item_type'          => 2,
+            'accounting_account' => $accountId,
+        ])->execute();
+        $id = (int) $dibi->getInsertId();
+        $this->createdItems[] = $id;
+        return $id;
+    }
+}

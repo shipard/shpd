@@ -1,0 +1,70 @@
+{
+    // economy.accounting.rules.cz
+    //
+    // Účtovací předpis — Česká republika, podvojné účetnictví.
+    //
+    // documents:  per docType seznam kroků — odkud vzít částku (src/col),
+    //             na kterou stranu (side: 0 = MD, 1 = DAL), jaká kategorie.
+    // accounts:   kategorie → maska účtu; první záznam se shodnou cat a
+    //             vyhovující query vyhrává. Maska se dohledává v rozvrhu
+    //             (number LIKE mask%, jen analytické účty, dle čísla).
+    // categories: názvy kategorií pro dokumentaci/UI.
+    //
+    // Detaily sémantiky kroků: docs/accounting.md sekce 4 a 5.
+
+    "categories": {
+        "receivables":      {"name:cs": "Pohledávky"},
+        "payables":         {"name:cs": "Závazky"},
+        "vat":              {"name:cs": "DPH"},
+        "revenue":          {"name:cs": "Výnosy"},
+        "costs":            {"name:cs": "Náklady"},
+        "rounding.cost":    {"name:cs": "Zaokrouhlení — náklad"},
+        "rounding.revenue": {"name:cs": "Zaokrouhlení — výnos"}
+    },
+
+    "accounts": [
+        {"cat": "revenue", "accountMask": "602", "query": {"operation": "sale.services"}},
+        {"cat": "revenue", "accountMask": "604", "query": {"operation": "sale.goods"}},
+
+        {"cat": "costs", "accountMask": "504", "query": {"operation": "purchase.goods"}},
+        {"cat": "costs", "accountMask": "518", "query": {"operation": "purchase.services"}},
+        {"cat": "costs", "accountMask": "548", "query": {"operation": "purchase.other"}},
+
+        {"cat": "receivables",      "accountMask": "311"},
+        {"cat": "payables",         "accountMask": "321"},
+        {"cat": "vat",              "accountMask": "343"},
+        {"cat": "rounding.cost",    "accountMask": "548"},
+        {"cat": "rounding.revenue", "accountMask": "648"}
+    ],
+
+    "documents": [
+        {"docType": "invno",
+            "accounting": [
+                {"cat": "revenue", "src": "rows", "side": 1,
+                    "operations": ["sale.services", "sale.goods"]},
+                {"accountSrc": "item", "src": "rows", "side": 1,
+                    "operation": "acc.entry"},
+                {"cat": "vat", "src": "vat", "side": 1},
+                {"cat": "rounding.revenue", "src": "head", "col": "rounding",
+                    "side": 1, "sign": "+", "text": "Zaokrouhlení dokladu"},
+                {"cat": "rounding.cost", "src": "head", "col": "rounding",
+                    "side": 0, "reverseSign": 1, "sign": "-", "text": "Zaokrouhlení dokladu"},
+                {"cat": "receivables", "src": "head", "col": "total", "side": 0}
+            ]
+        },
+        {"docType": "invni",
+            "accounting": [
+                {"cat": "costs", "src": "rows", "side": 0,
+                    "operations": ["purchase.goods", "purchase.services", "purchase.other"]},
+                {"accountSrc": "item", "src": "rows", "side": 0,
+                    "operation": "acc.entry"},
+                {"cat": "vat", "src": "vat", "side": 0},
+                {"cat": "rounding.cost", "src": "head", "col": "rounding",
+                    "side": 0, "sign": "+", "text": "Zaokrouhlení dokladu"},
+                {"cat": "rounding.revenue", "src": "head", "col": "rounding",
+                    "side": 1, "reverseSign": 1, "sign": "-", "text": "Zaokrouhlení dokladu"},
+                {"cat": "payables", "src": "head", "col": "total", "side": 1}
+            ]
+        }
+    ]
+}

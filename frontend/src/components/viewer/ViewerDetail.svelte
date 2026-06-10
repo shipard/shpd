@@ -229,10 +229,9 @@
       {/each}
     </div>
 
-    <!-- Tab content -->
-    <div class="shpd-detail__content">
-      {#if activeContent?.type === 'properties'}
-        {#each activeContent.groups ?? [] as group}
+    {#snippet renderContent(content)}
+      {#if content?.type === 'properties'}
+        {#each content.groups ?? [] as group}
           <div class="shpd-detail__group">
             <h4 class="shpd-detail__group-title">{group.title}</h4>
             <dl class="shpd-detail__props">
@@ -246,27 +245,27 @@
           </div>
         {/each}
 
-      {:else if activeContent?.type === 'table'}
+      {:else if content?.type === 'table'}
         <div class="shpd-detail__table-wrap">
           <table class="shpd-detail__table">
             <thead>
               <tr>
-                {#each activeContent.columns ?? [] as col (col.id)}
+                {#each content.columns ?? [] as col (col.id)}
                   <th class="shpd-detail__th">{col.label}</th>
                 {/each}
               </tr>
             </thead>
             <tbody>
-              {#if (activeContent.rows ?? []).length === 0}
+              {#if (content.rows ?? []).length === 0}
                 <tr>
-                  <td class="shpd-detail__empty-cell" colspan={activeContent.columns?.length ?? 1}>
+                  <td class="shpd-detail__empty-cell" colspan={content.columns?.length ?? 1}>
                     {t('common.empty')}
                   </td>
                 </tr>
               {:else}
-                {#each activeContent.rows ?? [] as row}
+                {#each content.rows ?? [] as row}
                   <tr>
-                    {#each activeContent.columns ?? [] as col (col.id)}
+                    {#each content.columns ?? [] as col (col.id)}
                       <td class="shpd-detail__td">{row[col.id] ?? '—'}</td>
                     {/each}
                   </tr>
@@ -276,17 +275,17 @@
           </table>
         </div>
 
-      {:else if activeContent?.type === 'html'}
+      {:else if content?.type === 'html'}
         <div class="shpd-detail__html">
-          {@html activeContent.html}
+          {@html content.html}
         </div>
 
-      {:else if activeContent?.type === 'extracted-documents'}
+      {:else if content?.type === 'extracted-documents'}
         <div class="shpd-extracted">
-          {#if (activeContent.documents ?? []).length === 0}
+          {#if (content.documents ?? []).length === 0}
             <div class="shpd-extracted__empty">{t('viewer.detail.noExtracted')}</div>
           {:else}
-            {#each activeContent.documents as doc (doc.ndx)}
+            {#each content.documents as doc (doc.ndx)}
               <div class="shpd-extracted__card">
                 <div class="shpd-extracted__header">
                   <span class="shpd-extracted__type">{doc.doc_type_label}</span>
@@ -340,16 +339,16 @@
           {/if}
         </div>
 
-      {:else if activeContent?.type === 'attachments'}
+      {:else if content?.type === 'attachments'}
         <div class="shpd-detail__att-groups">
-          {#each activeContent.groups ?? [] as group (group.message_ndx)}
+          {#each content.groups ?? [] as group (group.message_ndx)}
             <div class="shpd-detail__att-group">
               <h4 class="shpd-detail__group-title">
-                {#if activeContent.sourceViewerId}
+                {#if content.sourceViewerId}
                   <button
                     type="button"
                     class="shpd-detail__att-msglink"
-                    onclick={() => navigationStore.navigateToViewer(activeContent.sourceViewerId, group.message_ndx)}
+                    onclick={() => navigationStore.navigateToViewer(content.sourceViewerId, group.message_ndx)}
                   >
                     #{group.message_id}
                   </button>
@@ -366,9 +365,24 @@
           {/each}
         </div>
 
-      {:else if activeContent?.type === 'document'}
-        <DocumentDetail content={activeContent} />
+      {:else if content?.type === 'document'}
+        <DocumentDetail content={content} />
+
+      {:else if content?.type === 'heading'}
+        <h3 class="shpd-detail__content-heading">{content.text}</h3>
+
+      {:else if content?.type === 'composite'}
+        <!-- Composite = seznam bloků, každý blok je libovolný známý content
+             typ. Rekurzivní render přes tentýž snippet. -->
+        {#each content.blocks ?? [] as block}
+          {@render renderContent(block)}
+        {/each}
       {/if}
+    {/snippet}
+
+    <!-- Tab content -->
+    <div class="shpd-detail__content">
+      {@render renderContent(activeContent)}
     </div>
 
     <!-- Dropdown menu pro detail.actions kind=dropdown — Popover anchorovaný
@@ -732,6 +746,20 @@
     text-align: center;
     color: var(--shpd-color-text-secondary);
     border-bottom: 1px solid var(--shpd-color-border);
+  }
+
+  /* Heading blok (composite) - vizualne sjednoceno s group-title */
+  .shpd-detail__content-heading {
+    margin: var(--shpd-space-lg) 0 var(--shpd-space-sm);
+    font-size: var(--shpd-font-size-sm);
+    font-weight: 600;
+    color: var(--shpd-color-text);
+    padding-bottom: var(--shpd-space-xs);
+    border-bottom: 1px solid var(--shpd-color-border);
+  }
+
+  .shpd-detail__content-heading:first-child {
+    margin-top: 0;
   }
 
   /* HTML content */

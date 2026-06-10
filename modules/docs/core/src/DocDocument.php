@@ -43,6 +43,7 @@ abstract class DocDocument extends Document
 
     private ?VatRateResolver $vatRateResolver = null;
     private ?OwnCompanyResolver $ownCompanyResolver = null;
+    private ?PersonSnapshotBuilder $personSnapshotBuilder = null;
 
     public function validate(array &$data): ValidationResult
     {
@@ -977,6 +978,9 @@ abstract class DocDocument extends Document
     }
 
     /**
+     * Thin delegation to the shared PersonSnapshotBuilder — kept as a method
+     * so existing subclasses and tests overriding/calling it keep working.
+     *
      * @return array<string, mixed>
      */
     protected function buildPersonSnapshot(
@@ -988,77 +992,12 @@ abstract class DocDocument extends Document
         if ($this->db === null || $personId === 0) {
             return [];
         }
-
-        $personRow = $this->db->fetch(
-            'SELECT * FROM [base_persons_persons] WHERE [id] = %i',
+        return $this->personSnapshotBuilder()->build(
             $personId,
+            $addressId,
+            $bankAccountId,
+            $vatRegistrationId,
         );
-        if ($personRow === null) {
-            return [];
-        }
-        $person = $personRow->toArray();
-
-        $snap = [
-            'name'               => (string) ($person['full_name'] ?? ''),
-            'company_id'         => $person['company_id']         ?? null,
-            'tax_id'             => $person['tax_id']             ?? null,
-            'vat_id'             => $person['vat_id']             ?? null,
-            'court_registration' => $person['court_registration'] ?? null,
-            'contact'            => [
-                'email' => $person['email'] ?? null,
-                'phone' => $person['phone'] ?? null,
-            ],
-        ];
-
-        if ($addressId !== null) {
-            $addr = $this->db->fetch(
-                'SELECT * FROM [base_persons_addresses] WHERE [id] = %i',
-                (int) $addressId,
-            );
-            if ($addr !== null) {
-                $snap['address'] = [
-                    'street'        => $addr['street']        ?? null,
-                    'house_number'  => $addr['house_number']  ?? null,
-                    'city'          => $addr['city']          ?? null,
-                    'city_part'     => $addr['city_part']     ?? null,
-                    'zip'           => $addr['zip']           ?? null,
-                    'country'       => $addr['country']       ?? null,
-                    'display_block' => $addr['display_block'] ?? null,
-                    'display_line'  => $addr['display_line']  ?? null,
-                ];
-            }
-        }
-
-        if ($bankAccountId !== null) {
-            $bank = $this->db->fetch(
-                'SELECT * FROM [economy_codebooks_bank_accounts] WHERE [id] = %i',
-                (int) $bankAccountId,
-            );
-            if ($bank !== null) {
-                $snap['bank_account'] = [
-                    'name'           => $bank['name']           ?? null,
-                    'account_number' => $bank['account_number'] ?? null,
-                    'iban'           => $bank['iban']           ?? null,
-                    'bic'            => $bank['bic']            ?? null,
-                    'currency'       => $bank['currency']       ?? null,
-                ];
-            }
-        }
-
-        if ($vatRegistrationId !== null) {
-            $reg = $this->db->fetch(
-                'SELECT * FROM [economy_codebooks_vat_registrations] WHERE [id] = %i',
-                (int) $vatRegistrationId,
-            );
-            if ($reg !== null) {
-                $snap['vat_registration'] = [
-                    'country' => $reg['country'] ?? null,
-                    'vat_id'  => $reg['vat_id']  ?? null,
-                ];
-            }
-        }
-
-        return $snap;
     }
 
     // ── Other defaults ──────────────────────────────────────────────────────
@@ -1104,5 +1043,16 @@ abstract class DocDocument extends Document
             $this->ownCompanyResolver = new OwnCompanyResolver($this->db);
         }
         return $this->ownCompanyResolver;
+    }
+
+    protected function personSnapshotBuilder(): PersonSnapshotBuilder
+    {
+        if ($this->personSnapshotBuilder === null) {
+            if ($this->db === null) {
+                throw new \LogicException('PersonSnapshotBuilder requires Dibi connection');
+            }
+            $this->personSnapshotBuilder = new PersonSnapshotBuilder($this->db);
+        }
+        return $this->personSnapshotBuilder;
     }
 }

@@ -15,6 +15,7 @@ kódu, věř kódu (kód je živý, task je momentka).
 | Task                              | Co řeší                                              |
 |-----------------------------------|------------------------------------------------------|
 | `viewer-number-series-tabs.md`    | Spodní lišta záložek číselných řad v per-type doc viewerech (`ReceivedInvoicesViewer`, `IssuedInvoicesViewer`) + předvyplnění aktivní řady při create. Refactor `DocsHeadsViewer` na opt-in přes `$scopedDocType`. |
+| `docs-detail-document.md`         | Detail dokladu jako textová faktura — nový content type `document` (strany Dodavatel/Odběratel, řádky, DPH rekapitulace, náhledy příloh na konci), `PersonSnapshotBuilder`, `DocumentDetail.svelte` + sdílená `AttachmentGrid.svelte`. |
 
 
 ---

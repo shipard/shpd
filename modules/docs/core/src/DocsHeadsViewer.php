@@ -18,6 +18,12 @@ class DocsHeadsViewer extends TableViewer
 {
     protected ?string $docStatesCfgItem = 'docs.core.docStates';
 
+    /** tableId tabulky docs_core_heads — pro vlastní přílohy dokladu. */
+    private const TABLE_ID_HEADS = 401;
+
+    private ?PersonSnapshotBuilder $personSnapshotBuilder = null;
+    private ?OwnCompanyResolver $ownCompanyResolver = null;
+
     private const STATE_SPAN_CLASS = [
         'concept'   => 'warning',
         'confirmed' => 'primary',
@@ -211,6 +217,15 @@ class DocsHeadsViewer extends TableViewer
         return $row;
     }
 
+    /**
+     * Detail dokladu jako "textová faktura" — jediný tab `overview` s content
+     * typem `document`: hlavička se stavem, strany Dodavatel/Odběratel, meta
+     * mřížka, řádky, DPH rekapitulace, součty a náhledy příloh (mailové
+     * zdrojové skupiny + vlastní přílohy dokladu) na konci.
+     *
+     * Server formátuje hodnoty (datumy `j. n. Y`, částky `1 234,56`);
+     * frontend (DocumentDetail.svelte) jen skládá layout.
+     */
     public function renderDetail(int $recordId): array
     {
         $record = $this->db->fetchRow(
@@ -225,70 +240,250 @@ class DocsHeadsViewer extends TableViewer
             return ['tabs' => []];
         }
 
-        $identityItems = [];
-        $this->addItem($identityItems, 'Číslo dokladu', $record['doc_number'] ?? null);
-        $this->addItem($identityItems, 'Typ dokladu', $this->resolveDocTypeLabel((string) ($record['doc_type'] ?? '')));
-        $this->addItem($identityItems, 'Text', $record['doc_text'] ?? null);
-        $this->addItem($identityItems, 'Partner', $record['partner_name'] ?? null);
+        [$supplier, $customer] = $this->buildDetailParties($record);
 
-        $dateItems = [];
-        $this->addItem($dateItems, 'Datum vystavení', $this->formatDate($record['issue_date'] ?? null));
-        $this->addItem($dateItems, 'Datum splatnosti', $this->formatDate($record['due_date'] ?? null));
-        $this->addItem($dateItems, 'Účetní datum', $this->formatDate($record['accounting_date'] ?? null));
-        $this->addItem($dateItems, 'DUZP', $this->formatDate($record['vat_duzp'] ?? null));
+        $content = [
+            'type'      => 'document',
+            'header'    => $this->buildDetailHeader($record),
+            'supplier'  => $supplier,
+            'customer'  => $customer,
+            'meta'      => $this->buildDetailMeta($record),
+            'rows'      => $this->buildDetailRows($recordId),
+            'vat_recap' => $this->buildDetailVatRecap($recordId),
+            'totals'    => $this->buildDetailTotals($record),
+        ];
 
-        $totalsItems = [];
-        $currency = strtoupper((string) ($record['doc_currency'] ?? ''));
-        $this->addItem($totalsItems, 'Základ', $this->formatMoneyWith($record['total_base'] ?? null, $currency));
-        $this->addItem($totalsItems, 'DPH', $this->formatMoneyWith($record['total_vat'] ?? null, $currency));
-        $this->addItem($totalsItems, 'Celkem', $this->formatMoneyWith($record['total_amount'] ?? null, $currency));
-
-        $stateItems = [];
-        $cfg = DocStateConfig::fromCfgItem($this->config?->cfgItem($this->docStatesCfgItem ?? ''));
-        $stateData = $cfg->getState((int) ($record['docState'] ?? 10));
-        $this->addItem($stateItems, 'Stav', $stateData['stateName'] ?? null);
-
-        $groups = [];
-        if ($identityItems !== []) {
-            $groups[] = ['title' => 'Identifikace', 'items' => $identityItems];
-        }
-        if ($dateItems !== []) {
-            $groups[] = ['title' => 'Datumy', 'items' => $dateItems];
-        }
-        if ($totalsItems !== []) {
-            $groups[] = ['title' => 'Součty', 'items' => $totalsItems];
-        }
-        if ($stateItems !== []) {
-            $groups[] = ['title' => 'Stav', 'items' => $stateItems];
+        $attachmentGroups = $this->detailAttachmentGroups($recordId);
+        if ($attachmentGroups !== []) {
+            $content['attachments'] = ['groups' => $attachmentGroups];
         }
 
-        $tabs = [[
+        return ['tabs' => [[
             'id'      => 'overview',
             'label'   => $this->defaultOverviewLabel(),
-            'content' => ['type' => 'properties', 'groups' => $groups],
-        ]];
+            'content' => $content,
+        ]]];
+    }
 
-        // Tab "Přílohy" — přílohy zpráv došlé pošty, ze kterých doklad vznikl.
-        // Zobrazí se jen když existuje aspoň jedna navázaná zpráva s přílohou.
-        $attachmentGroups = $this->sourceAttachmentGroups($recordId);
-        if ($attachmentGroups !== []) {
-            $count = array_sum(array_map(
-                static fn (array $g): int => count($g['attachments']),
-                $attachmentGroups,
-            ));
-            $tabs[] = [
-                'id'      => 'sourceAttachments',
-                'label'   => $this->detailTabLabel('docs.core.viewerDetailLabels', 'sourceAttachments', 'Attachments')
-                    . ' (' . $count . ')',
-                'content' => [
-                    'type'           => 'attachments',
-                    'groups'         => $attachmentGroups,
-                    'sourceViewerId' => 'core.mail.incoming',
-                ],
+    /** @return array<string, mixed> */
+    private function buildDetailHeader(array $record): array
+    {
+        $cfg = DocStateConfig::fromCfgItem($this->config?->cfgItem($this->docStatesCfgItem ?? ''));
+        $stateData = $cfg->getState((int) ($record['docState'] ?? 10));
+        $docText = trim((string) ($record['doc_text'] ?? ''));
+
+        return [
+            'docTypeLabel' => $this->resolveDocTypeLabel((string) ($record['doc_type'] ?? '')),
+            'docNumber'    => (string) ($record['doc_number'] ?? ''),
+            'docText'      => $docText !== '' ? $docText : null,
+            'state'        => [
+                'name'  => (string) ($stateData['stateName'] ?? ''),
+                'style' => (string) ($stateData['stateStyle'] ?? 'concept'),
+            ],
+        ];
+    }
+
+    /**
+     * Strany dokladu. Uložené snapshoty (zmrazené při Potvrzení) mají
+     * přednost; u Konceptu se strany skládají živě přes PersonSnapshotBuilder
+     * + OwnCompanyResolver. Chybějící vlastní firma → strana je null, detail
+     * nesmí spadnout na nenakonfigurovaném DS.
+     *
+     * @return array{0: ?array<string, mixed>, 1: ?array<string, mixed>}  [supplier, customer]
+     */
+    private function buildDetailParties(array $record): array
+    {
+        $supplier = $this->decodeSnapshot($record['supplier_snapshot'] ?? null);
+        $customer = $this->decodeSnapshot($record['customer_snapshot'] ?? null);
+        if ($supplier !== null && $customer !== null) {
+            return [$supplier, $customer];
+        }
+
+        // Stejné mapování jako DocDocument::buildSnapshots():
+        // trade_dir 1 = my jsme dodavatel, jinak my odběratel.
+        $docTypes = $this->config?->cfgItem('docs.core.docTypes');
+        $docTypeKey = (string) ($record['doc_type'] ?? '');
+        $tradeDir = is_array($docTypes)
+            ? (int) ($docTypes[$docTypeKey]['trade_dir'] ?? 2)
+            : 2;
+
+        $partner = null;
+        $partnerId = (int) ($record['partner'] ?? 0);
+        if ($partnerId > 0) {
+            $snap = $this->personSnapshotBuilder()->build(
+                $partnerId,
+                $record['partner_address'] ?? null,
+                null,
+                null,
+            );
+            $partner = $snap !== [] ? $snap : null;
+        }
+
+        $own = null;
+        $ownPersonId = $this->ownCompanyResolver()->getOwnPersonId();
+        if ($ownPersonId !== null) {
+            $hqAddress = $this->ownCompanyResolver()->getOwnHeadquartersAddress();
+            $snap = $this->personSnapshotBuilder()->build(
+                $ownPersonId,
+                $hqAddress !== null ? (int) $hqAddress['id'] : null,
+                $record['bank_account'] ?? null,
+                $record['vat_registration'] ?? null,
+            );
+            $own = $snap !== [] ? $snap : null;
+        }
+
+        $liveSupplier = $tradeDir === 1 ? $own : $partner;
+        $liveCustomer = $tradeDir === 1 ? $partner : $own;
+
+        return [$supplier ?? $liveSupplier, $customer ?? $liveCustomer];
+    }
+
+    /** @return array<string, mixed>|null */
+    private function decodeSnapshot(mixed $raw): ?array
+    {
+        if (!is_string($raw) || trim($raw) === '') {
+            return null;
+        }
+        $decoded = json_decode($raw, true);
+        return is_array($decoded) && $decoded !== [] ? $decoded : null;
+    }
+
+    /** @return array<string, ?string> */
+    private function buildDetailMeta(array $record): array
+    {
+        $currency = strtoupper((string) ($record['doc_currency'] ?? ''));
+        $rate = $record['exchange_rate'] ?? null;
+        $hasRate = $this->isForeignCurrency($record) && $rate !== null && (float) $rate > 0;
+
+        return [
+            'issue_date'      => $this->formatDate($record['issue_date'] ?? null),
+            'due_date'        => $this->formatDate($record['due_date'] ?? null),
+            'accounting_date' => $this->formatDate($record['accounting_date'] ?? null),
+            'vat_duzp'        => $this->formatDate($record['vat_duzp'] ?? null),
+            'currency'        => $currency !== '' ? $currency : null,
+            'exchange_rate'   => $hasRate ? number_format((float) $rate, 3, ',', ' ') : null,
+            'payment_method'  => $this->resolvePaymentMethodLabel($record['payment_method'] ?? null),
+            'variable_symbol' => $this->nullableString($record['variable_symbol'] ?? null),
+            'specific_symbol' => $this->nullableString($record['specific_symbol'] ?? null),
+            'constant_symbol' => $this->nullableString($record['constant_symbol'] ?? null),
+        ];
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function buildDetailRows(int $recordId): array
+    {
+        $rows = $this->db->fetchAll(
+            'SELECT r.`row_kind`, r.`order_pos`, r.`description`, r.`quantity`,'
+            . ' r.`unit_price`, r.`total_price`, r.`vat_pct`,'
+            . ' u.`shortcut` AS unit_shortcut'
+            . ' FROM `docs_core_rows` r'
+            . ' LEFT JOIN `core_units` u ON u.`id` = r.`unit`'
+            . ' WHERE r.`doc_head` = %i'
+            . ' ORDER BY r.`order_pos` ASC, r.`id` ASC',
+            $recordId,
+        );
+
+        $out = [];
+        foreach ($rows as $row) {
+            $out[] = [
+                'order_pos'   => (int) ($row['order_pos'] ?? 0),
+                'kind'        => (int) ($row['row_kind'] ?? 1),
+                'description' => (string) ($row['description'] ?? ''),
+                'quantity'    => $this->formatTrimmedNumber($row['quantity'] ?? null, 4),
+                'unit'        => $this->nullableString($row['unit_shortcut'] ?? null),
+                'unit_price'  => $this->formatMoney($row['unit_price'] ?? null),
+                'vat_pct'     => $this->formatTrimmedNumber($row['vat_pct'] ?? null, 2),
+                'total_price' => $this->formatMoney($row['total_price'] ?? null),
+            ];
+        }
+        return $out;
+    }
+
+    /** @return list<array<string, ?string>> */
+    private function buildDetailVatRecap(int $recordId): array
+    {
+        $rows = $this->db->fetchAll(
+            'SELECT `vat_pct`, `base`, `tax`, `total`'
+            . ' FROM `docs_core_vat_recap`'
+            . ' WHERE `doc_head` = %i'
+            . ' ORDER BY `order_pos` ASC, `id` ASC',
+            $recordId,
+        );
+
+        $out = [];
+        foreach ($rows as $row) {
+            $out[] = [
+                'vat_pct' => $this->formatTrimmedNumber($row['vat_pct'] ?? null, 2),
+                'base'    => $this->formatMoney($row['base'] ?? null),
+                'tax'     => $this->formatMoney($row['tax'] ?? null),
+                'total'   => $this->formatMoney($row['total'] ?? null),
+            ];
+        }
+        return $out;
+    }
+
+    /** @return array<string, mixed> */
+    private function buildDetailTotals(array $record): array
+    {
+        $rounding = (float) ($record['total_rounding'] ?? 0);
+
+        $totals = [
+            'currency' => strtoupper((string) ($record['doc_currency'] ?? '')),
+            'base'     => $this->formatMoney($record['total_base'] ?? 0),
+            'vat'      => $this->formatMoney($record['total_vat'] ?? 0),
+            'amount'   => $this->formatMoney($record['total_amount'] ?? 0),
+            'rounding' => $rounding !== 0.0 ? $this->formatMoney($rounding) : null,
+            'dom'      => null,
+        ];
+
+        if ($this->isForeignCurrency($record)) {
+            $totals['dom'] = [
+                'currency' => strtoupper((string) ($record['home_currency'] ?? '')),
+                'base'     => $this->formatMoney($record['total_base_dom'] ?? 0),
+                'vat'      => $this->formatMoney($record['total_vat_dom'] ?? 0),
+                'amount'   => $this->formatMoney($record['total_amount_dom'] ?? 0),
             ];
         }
 
-        return ['tabs' => $tabs];
+        return $totals;
+    }
+
+    /**
+     * Skupiny příloh pro konec detailu: mailové zdrojové skupiny první
+     * (kind 'mail'), pak vlastní přílohy dokladu (kind 'doc', vynechá se
+     * když žádné nejsou).
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function detailAttachmentGroups(int $recordId): array
+    {
+        $groups = $this->sourceAttachmentGroups($recordId);
+
+        $files = $this->db->fetchAll(
+            'SELECT `id`, `name`, `file_name`, `file_size`, `mime_type`'
+            . ' FROM `core_attachments_files`'
+            . ' WHERE `table_id` = %i AND `record_id` = %i AND `is_deleted` = 0'
+            . ' ORDER BY `att_order` ASC, `name` ASC',
+            self::TABLE_ID_HEADS,
+            $recordId,
+        );
+        if ($files !== []) {
+            $attachments = [];
+            foreach ($files as $f) {
+                $attachments[] = [
+                    'id'        => (int) $f['id'],
+                    'name'      => (string) ($f['name'] ?? $f['file_name']),
+                    'mime_type' => (string) ($f['mime_type'] ?? ''),
+                    'file_size' => (int) ($f['file_size'] ?? 0),
+                ];
+            }
+            $groups[] = [
+                'kind'        => 'doc',
+                'attachments' => $attachments,
+            ];
+        }
+
+        return $groups;
     }
 
     /**
@@ -317,7 +512,7 @@ class DocsHeadsViewer extends TableViewer
      * Přílohy zprávy = core_attachments_files s table_id = 303 (tableId
      * core_mail_incoming_messages), record_id = message.id.
      *
-     * @return list<array{message_id:string, received_at:?string, message_ndx:int, attachments:list<array{id:int, name:string, mime_type:string, file_size:int}>}>
+     * @return list<array{kind:string, sourceViewerId:string, message_id:string, received_at:?string, message_ndx:int, attachments:list<array{id:int, name:string, mime_type:string, file_size:int}>}>
      */
     private function sourceAttachmentGroups(int $docId): array
     {
@@ -351,10 +546,12 @@ class DocsHeadsViewer extends TableViewer
             }
 
             $groups[] = [
-                'message_id'  => (string) $msg['message_id'],
-                'received_at' => $this->formatDate($msg['received_at'] ?? null),
-                'message_ndx' => (int) $msg['id'],
-                'attachments' => $attachments,
+                'kind'           => 'mail',
+                'sourceViewerId' => 'core.mail.incoming',
+                'message_id'     => (string) $msg['message_id'],
+                'received_at'    => $this->formatDate($msg['received_at'] ?? null),
+                'message_ndx'    => (int) $msg['id'],
+                'attachments'    => $attachments,
             ];
         }
 
@@ -382,21 +579,72 @@ class DocsHeadsViewer extends TableViewer
         return (string) $cfg[$key]['name'];
     }
 
-    /** @param array<int, array{label: string, value: string}> $items */
-    private function addItem(array &$items, string $label, mixed $value): void
+    private function resolvePaymentMethodLabel(mixed $value): ?string
     {
-        if ($value !== null && $value !== '') {
-            $items[] = ['label' => $label, 'value' => (string) $value];
+        if ($value === null || $value === '' || $this->config === null) {
+            return null;
         }
+        $cfg = $this->config->cfgItem('docs.core.paymentMethods');
+        $key = (string) (int) $value;
+        if (!is_array($cfg) || !isset($cfg[$key]['name'])) {
+            return null;
+        }
+        return (string) $cfg[$key]['name'];
     }
 
-    private function formatMoneyWith(mixed $amount, string $currency): ?string
+    private function isForeignCurrency(array $record): bool
+    {
+        $doc = strtolower((string) ($record['doc_currency'] ?? ''));
+        $home = strtolower((string) ($record['home_currency'] ?? ''));
+        return $doc !== '' && $home !== '' && $doc !== $home;
+    }
+
+    private function formatMoney(mixed $amount): ?string
     {
         if ($amount === null || $amount === '') {
             return null;
         }
-        $formatted = number_format((float) $amount, 2, ',', ' ');
-        return $currency !== '' ? $formatted . ' ' . $currency : $formatted;
+        return number_format((float) $amount, 2, ',', ' ');
+    }
+
+    /**
+     * Číslo s ořezanými koncovými nulami v desetinné části
+     * (množství "10,0000" → "10", sazba "21,00" → "21").
+     */
+    private function formatTrimmedNumber(mixed $value, int $decimals): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        $formatted = number_format((float) $value, $decimals, ',', ' ');
+        if (str_contains($formatted, ',')) {
+            $formatted = rtrim(rtrim($formatted, '0'), ',');
+        }
+        return $formatted;
+    }
+
+    private function nullableString(mixed $value): ?string
+    {
+        $str = trim((string) ($value ?? ''));
+        return $str !== '' ? $str : null;
+    }
+
+    // ── Lazy service factories (protected → overridable v testech) ─────────
+
+    protected function personSnapshotBuilder(): PersonSnapshotBuilder
+    {
+        if ($this->personSnapshotBuilder === null) {
+            $this->personSnapshotBuilder = new PersonSnapshotBuilder($this->db->getDibiConnection());
+        }
+        return $this->personSnapshotBuilder;
+    }
+
+    protected function ownCompanyResolver(): OwnCompanyResolver
+    {
+        if ($this->ownCompanyResolver === null) {
+            $this->ownCompanyResolver = new OwnCompanyResolver($this->db->getDibiConnection());
+        }
+        return $this->ownCompanyResolver;
     }
 
     private function formatDate(mixed $value): ?string

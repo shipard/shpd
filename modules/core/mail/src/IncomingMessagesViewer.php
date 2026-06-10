@@ -17,9 +17,9 @@ use Shipard\Core\Viewer\TableViewer;
  *   i2 — badge primárního typu (barva dle cfgItem)
  *   t3 — [mailbox.name] + první řádek body_plain (preview)
  *
- * Detail panel (§5.3): Obsah (hlavička, tělo, přílohy) / Analýzy /
- * Extrahované dokumenty / Originál. Samostatný tab Přílohy zrušen —
- * přílohy jsou blok `attachment-grid` uvnitř Obsahu.
+ * Detail panel (§5.3): hlavička (předmět · odesílatel · schránka · doručeno
+ * + badges stavu a primárního typu) nad taby, taby Obsah (tělo, přílohy,
+ * technické údaje) / Analýzy / Extrahované dokumenty / Originál.
  */
 class IncomingMessagesViewer extends TableViewer
 {
@@ -157,6 +157,8 @@ class IncomingMessagesViewer extends TableViewer
             return ['tabs' => []];
         }
 
+        $header = $this->buildDetailHeader($record);
+
         $tabs = [];
 
         // Tab 1 — Obsah
@@ -187,7 +189,12 @@ class IncomingMessagesViewer extends TableViewer
             'content' => $this->buildRawSourceTab($record),
         ];
 
-        return ['tabs' => $tabs];
+        return [
+            'title'    => $header['title'],
+            'subtitle' => $header['subtitle'],
+            'badges'   => $header['badges'],
+            'tabs'     => $tabs,
+        ];
     }
 
     public function getToolbarActions(?array $selectedRow): array
@@ -248,35 +255,92 @@ class IncomingMessagesViewer extends TableViewer
     // Private — detail tabs
     // -------------------------------------------------------------------------
 
+    /**
+     * Hlavička detailu nad taby — předmět jako title, odesílatel · schránka ·
+     * doručeno jako subtitle, badges se stavem a primárním typem. Renderuje
+     * generický header v ViewerDetail (detail.title/subtitle/badges).
+     *
+     * @return array{title: string, subtitle: ?string, badges: array<int, array{label: string, style: string}>}
+     */
+    private function buildDetailHeader(array $record): array
+    {
+        $subject = trim((string) ($record['subject'] ?? ''));
+
+        $senderName  = trim((string) ($record['sender_name'] ?? ''));
+        $senderEmail = trim((string) ($record['sender_email'] ?? ''));
+        $sender = match (true) {
+            $senderName !== '' && $senderEmail !== '' => $senderName . ' <' . $senderEmail . '>',
+            $senderName !== ''                        => $senderName,
+            default                                   => $senderEmail,
+        };
+
+        $subtitleParts = [];
+        if ($sender !== '') {
+            $subtitleParts[] = $sender;
+        }
+        $mailbox = $this->formatMailbox($record);
+        if ($mailbox !== '') {
+            $subtitleParts[] = $mailbox;
+        }
+        $received = $this->formatDateTime($record['received_at'] ?? null);
+        if ($received !== null) {
+            $subtitleParts[] = $received;
+        }
+
+        $badges = [];
+        $stateBadge = $this->buildStateBadge((int) ($record['docState'] ?? 10));
+        if ($stateBadge !== null) {
+            $badges[] = $stateBadge;
+        }
+
+        $primaryType = (string) ($record['primary_type'] ?? 'other');
+        $typeStyle = self::PRIMARY_TYPE_SPAN_CLASS[$primaryType] ?? 'muted';
+        $badges[] = [
+            'label' => $this->resolvePrimaryTypeLabel($primaryType),
+            // Detail badge nemá variantu `muted` — mapujeme na `neutral`.
+            'style' => $typeStyle === 'muted' ? 'neutral' : $typeStyle,
+        ];
+
+        return [
+            'title'    => $subject !== '' ? $subject : '(bez předmětu)',
+            'subtitle' => $subtitleParts !== [] ? implode(' · ', $subtitleParts) : null,
+            'badges'   => $badges,
+        ];
+    }
+
+    /** Badge stavu zprávy (label + stateStyle) z docState configu. */
+    private function buildStateBadge(int $docState): ?array
+    {
+        if ($this->config === null || $this->docStatesCfgItem === null) {
+            return null;
+        }
+
+        $cfg = DocStateConfig::fromCfgItem($this->config->cfgItem($this->docStatesCfgItem));
+        $stateData = $cfg->getState($docState);
+        $label = (string) ($stateData['stateName'] ?? '');
+        if ($label === '') {
+            return null;
+        }
+
+        return [
+            'label' => $label,
+            'style' => (string) ($stateData['stateStyle'] ?? 'concept'),
+        ];
+    }
+
     private function buildContentTab(array $record): array
     {
-        $headerItems = [];
-        $this->addItem($headerItems, 'Kód zprávy', $record['message_id'] ?? null);
-        $this->addItem($headerItems, 'Schránka', $this->formatMailbox($record));
-        $this->addItem($headerItems, 'Doručeno', $this->formatDateTime($record['received_at'] ?? null));
-        $this->addItem($headerItems, 'Primární typ', $this->resolvePrimaryTypeLabel((string) ($record['primary_type'] ?? 'other')));
-
-        $senderItems = [];
-        $this->addItem($senderItems, 'E-mail', $record['sender_email'] ?? null);
-        $this->addItem($senderItems, 'Jméno', $record['sender_name'] ?? null);
+        // Předmět, odesílatel, schránka, doručeno, typ a stav jsou v hlavičce
+        // detailu nad taby (buildDetailHeader). Tady zůstávají jen technické
+        // identifikátory zprávy.
+        $techItems = [];
+        $this->addItem($techItems, 'Kód zprávy', $record['message_id'] ?? null);
         if (!empty($record['external_message_id'])) {
-            $this->addItem($senderItems, 'Message-ID', (string) $record['external_message_id']);
+            $this->addItem($techItems, 'Message-ID', (string) $record['external_message_id']);
         }
 
-        $subject = (string) ($record['subject'] ?? '');
         $bodyHtml = (string) ($record['body_html'] ?? '');
         $bodyPlain = (string) ($record['body_plain'] ?? '');
-
-        $groups = [];
-        if ($headerItems !== []) {
-            $groups[] = ['title' => 'Hlavička', 'items' => $headerItems];
-        }
-        if ($senderItems !== []) {
-            $groups[] = ['title' => 'Odesílatel', 'items' => $senderItems];
-        }
-        if ($subject !== '') {
-            $groups[] = ['title' => 'Předmět', 'items' => [['label' => '', 'value' => $subject]]];
-        }
 
         // Tělo: preferujeme HTML, fallback na plain. Frontend ho renderuje sanitovaně.
         $bodyContent = null;
@@ -293,10 +357,10 @@ class IncomingMessagesViewer extends TableViewer
 
         $attachments = $this->fetchContentAttachments($record);
 
-        // Skládáme bloky: properties vždy, tělo a přílohy jen pokud existují.
-        $blocks = [['type' => 'properties', 'groups' => $groups]];
+        // Skládáme bloky: tělo, přílohy a technické údaje jen pokud existují.
+        // Tělo bez headingu — s hlavičkou nad taby začíná obsah rovnou textem.
+        $blocks = [];
         if ($bodyContent !== null) {
-            $blocks[] = ['type' => 'heading', 'text' => 'Tělo zprávy'];
             $blocks[] = $bodyContent;
         }
         if ($attachments !== []) {
@@ -306,7 +370,16 @@ class IncomingMessagesViewer extends TableViewer
             ];
             $blocks[] = ['type' => 'attachment-grid', 'attachments' => $attachments];
         }
+        if ($techItems !== []) {
+            $blocks[] = [
+                'type'   => 'properties',
+                'groups' => [['title' => 'Technické údaje', 'items' => $techItems]],
+            ];
+        }
 
+        if ($blocks === []) {
+            return ['type' => 'html', 'html' => '<p class="muted">Zpráva nemá žádný obsah.</p>'];
+        }
         if (count($blocks) === 1) {
             return $blocks[0];
         }

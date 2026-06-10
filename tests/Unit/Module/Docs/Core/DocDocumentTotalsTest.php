@@ -84,47 +84,57 @@ class DocDocumentTotalsTest extends TestCase
         $this->assertSame(0.0, $data['total_rounding']);
     }
 
-    public function testApplyExchangeRateConvertsAllThree(): void
+    public function testApplyDomesticAmountsHeadFromRecapSums(): void
     {
-        $data = [
-            'total_base'     => 100.0,
-            'total_vat'      => 21.0,
-            'total_amount'   => 121.0,
-            'exchange_rate'  => 25.0,
+        $recap = [
+            ['vat_code' => 'cz-101', 'vat_pct' => 21.0, 'base' => 100.0, 'tax' => 21.0,
+             'base_dom' => 2500.0, 'tax_dom' => 525.0,
+             'sum_base' => 1, 'sum_tax' => 1, 'is_reverse_pair' => 0],
         ];
-        $this->doc()->applyExchangeRatePub($data);
+        $data = ['total_amount' => 121.0, 'exchange_rate' => 25.0];
+        $rows = [];
+        $this->doc()->applyDomesticAmountsPub($data, $rows, $recap);
 
         $this->assertSame(2500.0, $data['total_base_dom']);
         $this->assertSame(525.0, $data['total_vat_dom']);
         $this->assertSame(3025.0, $data['total_amount_dom']);
+        $this->assertSame(0.0, $data['total_rounding_dom']);
     }
 
-    public function testApplyExchangeRateZeroFallsBackToOne(): void
+    public function testApplyDomesticAmountsZeroRateFallsBackToOne(): void
     {
-        $data = [
-            'total_base'    => 100.0,
-            'total_vat'     => 21.0,
-            'total_amount'  => 121.0,
-            'exchange_rate' => 0.0,
+        $recap = [
+            ['vat_code' => 'cz-101', 'vat_pct' => 21.0, 'base' => 100.0, 'tax' => 21.0,
+             'base_dom' => 100.0, 'tax_dom' => 21.0,
+             'sum_base' => 1, 'sum_tax' => 1, 'is_reverse_pair' => 0],
         ];
-        $this->doc()->applyExchangeRatePub($data);
+        $data = ['total_amount' => 121.0, 'exchange_rate' => 0.0];
+        $rows = [];
+        $this->doc()->applyDomesticAmountsPub($data, $rows, $recap);
 
         $this->assertSame(100.0, $data['total_base_dom']);
         $this->assertSame(21.0, $data['total_vat_dom']);
         $this->assertSame(121.0, $data['total_amount_dom']);
     }
 
-    public function testApplyExchangeRateMissingFallsBackToOne(): void
+    public function testApplyDomesticAmountsRespectsSumFlags(): void
     {
-        $data = [
-            'total_base'   => 100.0,
-            'total_vat'    => 21.0,
-            'total_amount' => 121.0,
+        // Reverse charge: paired oddanění line must not leak into head sums
+        $recap = [
+            ['vat_code' => 'cz-115', 'vat_pct' => 0.0, 'base' => 200.0, 'tax' => 0.0,
+             'base_dom' => 200.0, 'tax_dom' => 0.0,
+             'sum_base' => 1, 'sum_tax' => 0, 'is_reverse_pair' => 0],
+            ['vat_code' => 'cz-203', 'vat_pct' => 21.0, 'base' => 200.0, 'tax' => 42.0,
+             'base_dom' => 200.0, 'tax_dom' => 42.0,
+             'sum_base' => 0, 'sum_tax' => 0, 'is_reverse_pair' => 1],
         ];
-        $this->doc()->applyExchangeRatePub($data);
+        $data = ['total_amount' => 200.0, 'exchange_rate' => 1.0];
+        $rows = [];
+        $this->doc()->applyDomesticAmountsPub($data, $rows, $recap);
 
-        $this->assertSame(100.0, $data['total_base_dom']);
-        $this->assertSame(21.0, $data['total_vat_dom']);
-        $this->assertSame(121.0, $data['total_amount_dom']);
+        $this->assertSame(200.0, $data['total_base_dom']);
+        $this->assertSame(0.0, $data['total_vat_dom']);
+        $this->assertSame(200.0, $data['total_amount_dom']);
+        $this->assertSame(0.0, $data['total_rounding_dom']);
     }
 }

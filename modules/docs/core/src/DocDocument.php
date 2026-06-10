@@ -45,6 +45,16 @@ abstract class DocDocument extends Document
     private ?OwnCompanyResolver $ownCompanyResolver = null;
     private ?PersonSnapshotBuilder $personSnapshotBuilder = null;
 
+    /**
+     * Rows after the compute pipeline (prices, VAT, _dom amounts) from the
+     * last beforeSave run. afterPersist persists their computed columns to
+     * DB — Phase 2 (accounting engine) reads row values from DB, so they
+     * must stay current even for rows managed via the sub-form.
+     *
+     * @var array<int, array<string, mixed>>
+     */
+    protected array $computedRows = [];
+
     public function validate(array &$data): ValidationResult
     {
         $result = new ValidationResult();
@@ -165,7 +175,16 @@ abstract class DocDocument extends Document
 
         $this->sumTotals($data, $recap);
         $this->applyTotalRounding($data);
-        $this->applyExchangeRate($data);
+        $this->applyDomesticAmounts($data, $rowsForCompute, $recap);
+
+        // Propagate computed values back into the payload child set so the
+        // gateway's child sync writes them (covers new rows without id).
+        // Only when the key already exists — adding it would trigger child
+        // sync and wipe DB rows on header-only saves.
+        if (array_key_exists('rows', $data) && is_array($data['rows'])) {
+            $data['rows'] = $rowsForCompute;
+        }
+        $this->computedRows = $rowsForCompute;
 
         // Number assignment: import mode forces the document's own number;
         // otherwise normal state-transition assignment from the series counter.
@@ -241,7 +260,13 @@ abstract class DocDocument extends Document
             return;
         }
 
-        $current = $this->db->fetch(
+        $this->ensureDocNumberPlaceholder($data);
+        $this->persistRowComputedColumns();
+    }
+
+    private function ensureDocNumberPlaceholder(array $data): void
+    {
+        $current = $this->db?->fetch(
             'SELECT [doc_number] FROM [docs_core_heads] WHERE [id] = %i',
             (int) $data['id'],
         );
@@ -260,6 +285,42 @@ abstract class DocDocument extends Document
             $placeholder,
             (int) $data['id'],
         );
+    }
+
+    /**
+     * Persist computed row columns from the last beforeSave run by direct
+     * per-id UPDATEs — never through the child-sync payload (missing 'rows'
+     * key must keep protecting DB rows from a wipe). Rows without id (new
+     * rows in a full-sync payload) are written by the gateway's child sync
+     * instead, because beforeSave propagates computed values into
+     * $data['rows'].
+     *
+     * Public: DocRowsDocument::recomputeHeader calls it inside its own
+     * transaction after re-running the compute pipeline.
+     */
+    public function persistRowComputedColumns(): void
+    {
+        if ($this->db === null) {
+            return;
+        }
+        foreach ($this->computedRows as $row) {
+            $rowId = (int) ($row['id'] ?? 0);
+            if ($rowId === 0) {
+                continue;
+            }
+            $this->executeSql(
+                'UPDATE [docs_core_rows] SET %a WHERE [id] = %i',
+                [
+                    'vat_base'       => $row['vat_base']       ?? null,
+                    'vat_amount'     => $row['vat_amount']     ?? null,
+                    'vat_total'      => $row['vat_total']      ?? null,
+                    'vat_base_dom'   => $row['vat_base_dom']   ?? null,
+                    'vat_amount_dom' => $row['vat_amount_dom'] ?? null,
+                    'vat_total_dom'  => $row['vat_total_dom']  ?? null,
+                ],
+                $rowId,
+            );
+        }
     }
 
     // ── Defaults ────────────────────────────────────────────────────────────
@@ -633,15 +694,127 @@ abstract class DocDocument extends Document
         };
     }
 
-    protected function applyExchangeRate(array &$data): void
+    /**
+     * Domácí měna pro řádky, rekapitulaci a hlavičku — top-down dorovnání.
+     *
+     * Závazné jsou head totals: rekapitulace se nedopočítává (base_dom/tax_dom
+     * = round(cur × rate) z buildVatRecapitulation), head se sčítá z ní a
+     * řádky se dorovnávají na rekapitulaci. Výsledné invarianty (testované):
+     *
+     *   Σ rows.vat_base_dom   (per vat_code+pct) == recap.base_dom
+     *   Σ rows.vat_amount_dom (per vat_code+pct) == recap.tax_dom
+     *   Σ recap.base_dom (sum_base=1) == total_base_dom
+     *   Σ recap.tax_dom  (sum_tax=1)  == total_vat_dom
+     *   total_base_dom + total_vat_dom + total_rounding_dom == total_amount_dom
+     *
+     * total_rounding_dom je odvozený (amount − base − vat), ne kurzový —
+     * absorbuje haléřový rozdíl, takže poslední invariant platí konstrukčně.
+     * Při rate = 1 jsou všechny diffy nulové a _dom = kopie cur hodnot.
+     *
+     * @param array<int, array<string, mixed>> $rows Rows after calculateRowPrice/Vat
+     * @param array<int, array<string, mixed>> $recap From buildVatRecapitulation
+     */
+    protected function applyDomesticAmounts(array &$data, array &$rows, array $recap): void
     {
         $exchRate = (float) ($data['exchange_rate'] ?? 1.0);
         if ($exchRate <= 0) {
             $exchRate = 1.0;
         }
-        $data['total_base_dom']   = round((float) ($data['total_base'] ?? 0)   * $exchRate, 2);
-        $data['total_vat_dom']    = round((float) ($data['total_vat'] ?? 0)    * $exchRate, 2);
-        $data['total_amount_dom'] = round((float) ($data['total_amount'] ?? 0) * $exchRate, 2);
+
+        // 1. Per-row domestic amounts; text rows stay NULL
+        foreach ($rows as &$row) {
+            if ((int) ($row['row_kind'] ?? 1) !== 1) {
+                $row['vat_base_dom']   = null;
+                $row['vat_amount_dom'] = null;
+                $row['vat_total_dom']  = null;
+                continue;
+            }
+            $row['vat_base_dom']   = round((float) ($row['vat_base'] ?? 0)   * $exchRate, 2);
+            $row['vat_amount_dom'] = round((float) ($row['vat_amount'] ?? 0) * $exchRate, 2);
+        }
+        unset($row);
+
+        // 2. Head: base/vat as recap sums (same sum flags as sumTotals — NOT
+        //    an independent rate conversion), amount by rate, rounding derived.
+        $baseDom = 0.0;
+        $vatDom  = 0.0;
+        foreach ($recap as $r) {
+            if (!empty($r['sum_base'])) { $baseDom += (float) ($r['base_dom'] ?? 0); }
+            if (!empty($r['sum_tax']))  { $vatDom  += (float) ($r['tax_dom']  ?? 0); }
+        }
+        $data['total_base_dom']     = round($baseDom, 2);
+        $data['total_vat_dom']      = round($vatDom, 2);
+        $data['total_amount_dom']   = round((float) ($data['total_amount'] ?? 0) * $exchRate, 2);
+        $data['total_rounding_dom'] = round(
+            (float) $data['total_amount_dom']
+            - (float) $data['total_base_dom']
+            - (float) $data['total_vat_dom'],
+            2,
+        );
+
+        // 3. Reconcile rows to recap per (vat_code, vat_pct) group. Reverse
+        //    charge pairs have no document rows — skip them. The rounding
+        //    diff goes to the last row of the group with a nonzero cur value.
+        foreach ($recap as $r) {
+            if (!empty($r['is_reverse_pair'])) {
+                continue;
+            }
+            $key = $this->vatGroupKey($r['vat_code'] ?? '', $r['vat_pct'] ?? 0);
+
+            $sumBase = 0.0;
+            $sumAmount = 0.0;
+            $lastIdx = null;
+            $lastBaseIdx = null;
+            $lastAmountIdx = null;
+            foreach ($rows as $i => $row) {
+                if ((int) ($row['row_kind'] ?? 1) !== 1
+                    || empty($row['vat_code']) || empty($row['vat_pct'])
+                    || $this->vatGroupKey($row['vat_code'], $row['vat_pct']) !== $key
+                ) {
+                    continue;
+                }
+                $sumBase   += (float) ($row['vat_base_dom'] ?? 0);
+                $sumAmount += (float) ($row['vat_amount_dom'] ?? 0);
+                $lastIdx = $i;
+                if ((float) ($row['vat_base'] ?? 0) !== 0.0)   { $lastBaseIdx = $i; }
+                if ((float) ($row['vat_amount'] ?? 0) !== 0.0) { $lastAmountIdx = $i; }
+            }
+            if ($lastIdx === null) {
+                continue;
+            }
+
+            $diffBase = round((float) ($r['base_dom'] ?? 0) - $sumBase, 2);
+            if ($diffBase !== 0.0) {
+                $t = $lastBaseIdx ?? $lastIdx;
+                $rows[$t]['vat_base_dom'] = round((float) $rows[$t]['vat_base_dom'] + $diffBase, 2);
+            }
+            $diffAmount = round((float) ($r['tax_dom'] ?? 0) - $sumAmount, 2);
+            if ($diffAmount !== 0.0) {
+                $t = $lastAmountIdx ?? $lastIdx;
+                $rows[$t]['vat_amount_dom'] = round((float) $rows[$t]['vat_amount_dom'] + $diffAmount, 2);
+            }
+        }
+
+        // 4. Row home-currency totals from the final reconciled parts
+        foreach ($rows as &$row) {
+            if ((int) ($row['row_kind'] ?? 1) !== 1) {
+                continue;
+            }
+            $row['vat_total_dom'] = round(
+                (float) ($row['vat_base_dom'] ?? 0) + (float) ($row['vat_amount_dom'] ?? 0),
+                2,
+            );
+        }
+        unset($row);
+    }
+
+    /**
+     * Normalized group key matching buildVatRecapitulation's grouping —
+     * pct via float cast so '21.00' (DB) and 21.0 (recap) compare equal.
+     */
+    private function vatGroupKey(mixed $vatCode, mixed $vatPct): string
+    {
+        return (string) $vatCode . '|' . (string) (float) $vatPct;
     }
 
     // ── Number assignment ───────────────────────────────────────────────────

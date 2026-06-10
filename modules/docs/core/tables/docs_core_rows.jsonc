@@ -213,6 +213,39 @@
             "scale": 2,
             "nullable": true,
             "system": true
+        },
+        {
+            "id": "vat_base_dom",
+            "name": "VAT base (home)",
+            "name:cs": "Základ DPH (domácí)",
+            "name:en": "VAT base (home)",
+            "type": "numeric",
+            "precision": 15,
+            "scale": 2,
+            "nullable": true,
+            "system": true
+        },
+        {
+            "id": "vat_amount_dom",
+            "name": "VAT amount (home)",
+            "name:cs": "DPH (domácí)",
+            "name:en": "VAT amount (home)",
+            "type": "numeric",
+            "precision": 15,
+            "scale": 2,
+            "nullable": true,
+            "system": true
+        },
+        {
+            "id": "vat_total_dom",
+            "name": "VAT total (home)",
+            "name:cs": "Celkem s DPH (domácí)",
+            "name:en": "VAT total (home)",
+            "type": "numeric",
+            "precision": 15,
+            "scale": 2,
+            "nullable": true,
+            "system": true
         }
     ],
 

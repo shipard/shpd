@@ -85,9 +85,21 @@ class TestableDocsHeadsDocument extends DocsHeadsDocument
         return $this->applyRounding($amount, $mode);
     }
 
-    public function applyExchangeRatePub(array &$data): void
+    public function applyDomesticAmountsPub(array &$data, array &$rows, array $recap): void
     {
-        $this->applyExchangeRate($data);
+        $this->applyDomesticAmounts($data, $rows, $recap);
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    public function getComputedRows(): array
+    {
+        return $this->computedRows;
+    }
+
+    /** @param array<int, array<string, mixed>> $rows */
+    public function setComputedRows(array $rows): void
+    {
+        $this->computedRows = $rows;
     }
 
     public function processStateTransitionPub(array &$data, ?array $originalData): void

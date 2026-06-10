@@ -121,14 +121,19 @@ class DocRowsDocument extends Document
         $this->db->begin();
         try {
             $this->db->update('docs_core_heads', [
-                'total_base'       => $headData['total_base']       ?? 0,
-                'total_vat'        => $headData['total_vat']        ?? 0,
-                'total_amount'     => $headData['total_amount']     ?? 0,
-                'total_rounding'   => $headData['total_rounding']   ?? 0,
-                'total_base_dom'   => $headData['total_base_dom']   ?? 0,
-                'total_vat_dom'    => $headData['total_vat_dom']    ?? 0,
-                'total_amount_dom' => $headData['total_amount_dom'] ?? 0,
+                'total_base'         => $headData['total_base']         ?? 0,
+                'total_vat'          => $headData['total_vat']          ?? 0,
+                'total_amount'       => $headData['total_amount']       ?? 0,
+                'total_rounding'     => $headData['total_rounding']     ?? 0,
+                'total_base_dom'     => $headData['total_base_dom']     ?? 0,
+                'total_vat_dom'      => $headData['total_vat_dom']      ?? 0,
+                'total_amount_dom'   => $headData['total_amount_dom']   ?? 0,
+                'total_rounding_dom' => $headData['total_rounding_dom'] ?? 0,
             ])->where('id = %i', $headId)->execute();
+
+            // Computed row columns (vat_* + _dom) — rows were loaded from DB
+            // by resolveRowsForCompute, so they all have ids.
+            $headDoc->persistRowComputedColumns();
 
             $this->db->delete('docs_core_vat_recap')
                 ->where('doc_head = %i', $headId)

@@ -455,6 +455,14 @@
             "type": "numeric", "precision": 15, "scale": 2,
             "default": 0, "system": true, "group": "totals"
         },
+        {
+            "id": "total_rounding_dom",
+            "name": "Rounding diff (home)",
+            "name:cs": "Rozdíl zaokrouhlení (domácí)",
+            "name:en": "Rounding diff (home)",
+            "type": "numeric", "precision": 15, "scale": 2,
+            "default": 0, "system": true, "group": "totals"
+        },
 
         // --- payment ---
 

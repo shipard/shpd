@@ -315,4 +315,14 @@ export default {
   'chat.tool.documentsSearch': '🔍 Hledám doklady…',
   'chat.tool.mailListPending': '🔍 Procházím došlou poštu…',
   'chat.tool.generic': '🔧 Používám nástroj {name}…',
+  // ── Settings pages (Nastavení → stránky vlastností) ────────────────────
+  'settingsPage.loadFailed': 'Stránku nastavení se nepodařilo načíst.',
+  'settingsPage.save': 'Uložit',
+  'settingsPage.saved': 'Nastavení bylo uloženo.',
+  'settingsPage.saveFailed': 'Uložení nastavení selhalo.',
+  'settingsPage.image.empty': 'Žádný obrázek',
+  'settingsPage.image.upload': 'Nahrát',
+  'settingsPage.image.remove': 'Odebrat',
+  'settingsPage.image.uploadFailed': 'Nahrání obrázku selhalo.',
+  'settingsPage.image.removeFailed': 'Odebrání obrázku selhalo.',
 };

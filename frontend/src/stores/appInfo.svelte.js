@@ -1,0 +1,63 @@
+// App info store — název, zkrácený název, ikona a logo zdroje dat.
+//
+// Plní se z veřejného GET /_app/info (funguje bez tokenu), takže se volá
+// už při bootu v main.js — login obrazovka zobrazí název/logo a favicon
+// se nastaví před přihlášením. Znovu se volá po uložení stránky Aplikace
+// nebo změně branding obrázků.
+//
+// apply() propisuje shortName do document.title a ikonu do <link rel="icon">.
+// Text v sidebaru/headeru čte store reaktivně přes getter.
+
+import { getAppInfo, brandingUrl } from '../api/app.js';
+
+const DEFAULT_NAME = 'Shipard';
+
+let info = $state({
+  name: null,
+  shortName: null,
+  icon: null,        // { url, hash } | null
+  companyLogo: null, // { url, hash } | null
+});
+
+async function load() {
+  try {
+    const response = await getAppInfo();
+    if (response?.success && response.data) {
+      info = {
+        name: response.data.name ?? null,
+        shortName: response.data.shortName ?? null,
+        icon: response.data.icon ?? null,
+        companyLogo: response.data.companyLogo ?? null,
+      };
+    }
+  } catch {
+    // Endpoint nedostupný (např. server down) — zůstanou defaulty.
+  }
+  apply();
+}
+
+function apply() {
+  document.title = info.shortName ?? DEFAULT_NAME;
+
+  let link = document.querySelector('link[rel="icon"]');
+  if (info.icon) {
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = 'icon';
+      document.head.appendChild(link);
+    }
+    link.href = brandingUrl('icon', info.icon.hash);
+  } else if (link) {
+    // Ikona odebrána — vrátíme browser default.
+    link.remove();
+  }
+}
+
+export const appInfoStore = {
+  get name()        { return info.name; },
+  get shortName()   { return info.shortName; },
+  get icon()        { return info.icon; },
+  get companyLogo() { return info.companyLogo; },
+  load,
+  apply,
+};

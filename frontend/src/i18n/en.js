@@ -302,4 +302,14 @@ export default {
   'chat.tool.documentsSearch': '🔍 Searching documents…',
   'chat.tool.mailListPending': '🔍 Checking incoming mail…',
   'chat.tool.generic': '🔧 Using tool {name}…',
+  // ── Settings pages (Settings → property pages) ─────────────────────────
+  'settingsPage.loadFailed': 'Failed to load the settings page.',
+  'settingsPage.save': 'Save',
+  'settingsPage.saved': 'Settings saved.',
+  'settingsPage.saveFailed': 'Failed to save settings.',
+  'settingsPage.image.empty': 'No image',
+  'settingsPage.image.upload': 'Upload',
+  'settingsPage.image.remove': 'Remove',
+  'settingsPage.image.uploadFailed': 'Image upload failed.',
+  'settingsPage.image.removeFailed': 'Failed to remove the image.',
 };

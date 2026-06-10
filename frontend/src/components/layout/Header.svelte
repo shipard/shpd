@@ -1,6 +1,7 @@
 <script>
   import { logout } from '../../api/auth.js';
   import { authStore } from '../../stores/auth.svelte.js';
+  import { appInfoStore } from '../../stores/appInfo.svelte.js';
   import Icon from '../ui/Icon.svelte';
   import { iconLogout } from '../../icons.js';
   import { t } from '../../i18n/index.js';
@@ -15,7 +16,7 @@
 </script>
 
 <header class="shpd-header">
-  <span class="shpd-header__logo">Shipard</span>
+  <span class="shpd-header__logo">{appInfoStore.shortName ?? 'Shipard'}</span>
 
   <div class="shpd-header__user">
     <span class="shpd-header__username">{authStore.user?.full_name ?? ''}</span>

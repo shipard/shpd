@@ -54,6 +54,7 @@ import {
   faFile,
   faFilePdf,
   faFileImage,
+  faImage,
   faFileWord,
   faFileExcel,
   faFileZipper,
@@ -150,6 +151,7 @@ export const iconUpload = faUpload;
 export const iconFile = faFile;
 export const iconFilePdf = faFilePdf;
 export const iconFileImage = faFileImage;
+export const iconImage = faImage; // obrázkový placeholder (branding sloty)
 export const iconFileWord = faFileWord;
 export const iconFileExcel = faFileExcel;
 export const iconFileZip = faFileZipper;

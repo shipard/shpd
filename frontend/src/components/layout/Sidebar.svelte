@@ -5,6 +5,7 @@
   import { themeStore } from '../../stores/theme.svelte.js';
   import { navigationStore } from '../../stores/navigation.svelte.js';
   import { layoutStore } from '../../stores/layout.svelte.js';
+  import { appInfoStore } from '../../stores/appInfo.svelte.js';
   import { language, t } from '../../i18n/index.js';
   import Icon from '../ui/Icon.svelte';
   import {
@@ -100,8 +101,9 @@
   }
 
   function handleItemClick(item) {
-    navigationStore.navigate({ id: item.id, label: item.label, type: item.type, table: item.table, viewerId: item.viewerId, filter: item.filter });
-    onNavigate?.({ id: item.id, label: item.label, type: item.type, table: item.table, viewerId: item.viewerId, filter: item.filter });
+    const navItem = { id: item.id, label: item.label, type: item.type, table: item.table, viewerId: item.viewerId, pageId: item.pageId, filter: item.filter };
+    navigationStore.navigate(navItem);
+    onNavigate?.(navItem);
   }
 
   async function handleLogout() {
@@ -221,7 +223,7 @@
 >
   <div class="shpd-sidebar__header">
     {#if !collapsed || layoutStore.isMobile}
-      <span class="shpd-sidebar__logo">Shipard</span>
+      <span class="shpd-sidebar__logo">{appInfoStore.shortName ?? 'Shipard'}</span>
     {/if}
     {#if layoutStore.isMobile}
       <!-- Na mobilu nahrazuje collapse toggle ✕, které zavře drawer.

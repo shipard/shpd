@@ -1,6 +1,8 @@
 <script>
   import { login } from '../../api/auth.js';
   import { authStore } from '../../stores/auth.svelte.js';
+  import { appInfoStore } from '../../stores/appInfo.svelte.js';
+  import { brandingUrl } from '../../api/app.js';
   import { language, t } from '../../i18n/index.js';
   import { translateError } from '../../i18n/errors.js';
 
@@ -57,7 +59,14 @@
 
 <div class="shpd-login">
   <div class="shpd-login__card">
-    <h1 class="shpd-login__heading">{t('login.heading')}</h1>
+    {#if appInfoStore.companyLogo}
+      <img
+        class="shpd-login__logo"
+        src={brandingUrl('companyLogo', appInfoStore.companyLogo.hash)}
+        alt=""
+      />
+    {/if}
+    <h1 class="shpd-login__heading">{appInfoStore.name ?? t('login.heading')}</h1>
 
     <div class="shpd-login__field">
       <label class="shpd-login__label" for="login-name">{t('login.username')}</label>
@@ -133,6 +142,13 @@
     background-color: var(--shpd-color-bg);
     border-radius: var(--shpd-radius-lg);
     box-shadow: var(--shpd-shadow-md);
+  }
+
+  .shpd-login__logo {
+    display: block;
+    max-height: 48px;
+    max-width: 200px;
+    margin: 0 auto var(--shpd-space-md);
   }
 
   .shpd-login__heading {

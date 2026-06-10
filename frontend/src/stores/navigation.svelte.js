@@ -30,6 +30,7 @@ function navigate(item) {
     type: item.type,
     table: item.table,
     viewerId: item.viewerId,
+    pageId: item.pageId ?? null,
     filter: item.filter ?? null,
   };
   // Manuální navigace mimo dashboard widget — pending record vyprší.

@@ -93,7 +93,39 @@ abstract class DocDocument extends Document
             }
         }
 
+        if ($newState === 40) {
+            $this->validateRowOperations($data, $result);
+        }
+
         return $result;
+    }
+
+    /**
+     * Záchytná síť pro pohyby řádků při přechodu do 40 (V pořádku): řádky
+     * uložené před zavedením pohybů nebo importem nešly přes
+     * DocRowsDocument::validate, proto se tady zvalidují všechny znovu.
+     * Chyby s konvencí `rows.{index}.{column}`.
+     */
+    protected function validateRowOperations(array &$data, ValidationResult $result): void
+    {
+        $cfg = $this->config?->cfgItem('docs.core.rowOperations');
+        if (!is_array($cfg)) {
+            return;
+        }
+
+        // validate() runs before beforeSave, so doc_type may not be
+        // denormalized yet — idempotent, beforeSave repeats it.
+        $this->denormalizeDocType($data);
+        $docType = (string) ($data['doc_type'] ?? '');
+        if ($docType === '') {
+            return;
+        }
+
+        foreach ($this->resolveRowsForCompute($data) as $i => $row) {
+            foreach (DocRowOperationRules::validateRow($row, $docType, $cfg) as $err) {
+                $result->addError("rows.{$i}.{$err['column']}", $err['message'], $err['code']);
+            }
+        }
     }
 
     public function beforeSave(array &$data, ?array $originalData = null): void
@@ -154,7 +186,7 @@ abstract class DocDocument extends Document
      *
      * @return array<int, array<string, mixed>>
      */
-    private function resolveRowsForCompute(array $data): array
+    protected function resolveRowsForCompute(array $data): array
     {
         if (array_key_exists('rows', $data) && is_array($data['rows'])) {
             return $data['rows'];

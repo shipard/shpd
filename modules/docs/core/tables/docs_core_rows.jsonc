@@ -39,6 +39,17 @@
         },
 
         {
+            "id": "operation",
+            "name": "Operation",
+            "name:cs": "Pohyb",
+            "name:en": "Operation",
+            "type": "enumString",
+            "length": 40,
+            "cfgItem": "docs.core.rowOperations",
+            "nullable": true
+        },
+
+        {
             "id": "order_pos",
             "name": "Sort order",
             "name:cs": "Pořadí",

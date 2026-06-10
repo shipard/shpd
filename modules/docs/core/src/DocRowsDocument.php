@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Shipard\Module\Docs\Core;
 
 use Shipard\Core\Document\Document;
+use Shipard\Core\Document\ValidationResult;
 
 /**
  * Document for `docs_core_rows`.
@@ -24,6 +25,41 @@ use Shipard\Core\Document\Document;
  */
 class DocRowsDocument extends Document
 {
+    /**
+     * Tvrdá validace pohybu řádku (sdílená pravidla viz
+     * DocRowOperationRules). Bez head kontextu nebo compiled configu se
+     * validace degradovaně přeskočí — záchytnou sítí je pak kontrola
+     * všech řádků v DocDocument::validate při přechodu do stavu 40.
+     */
+    public function validate(array &$data): ValidationResult
+    {
+        $result = new ValidationResult();
+
+        $docType = $this->loadHeadDocType($data['doc_head'] ?? null);
+        $cfg = $this->config?->cfgItem('docs.core.rowOperations');
+        if ($docType === null || !is_array($cfg)) {
+            return $result;
+        }
+
+        foreach (DocRowOperationRules::validateRow($data, $docType, $cfg) as $err) {
+            $result->addError($err['column'], $err['message'], $err['code']);
+        }
+        return $result;
+    }
+
+    private function loadHeadDocType(mixed $headId): ?string
+    {
+        if ($headId === null || $headId === '' || $this->db === null) {
+            return null;
+        }
+        $row = $this->db->fetch(
+            'SELECT [doc_type] FROM [docs_core_heads] WHERE [id] = %i',
+            (int) $headId,
+        );
+        $docType = $row !== null ? (string) ($row['doc_type'] ?? '') : '';
+        return $docType !== '' ? $docType : null;
+    }
+
     public function afterSave(array $data): void
     {
         $this->recomputeHeader($data);

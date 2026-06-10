@@ -28,6 +28,8 @@ class DocRowsForm extends TableForm
         $headHasVat = $headContext !== null
             && (int) ($headContext['vat_mode'] ?? 0) !== 0;
 
+        $operationOptions = $this->buildOperationOptions($headContext);
+
         if ($isNew) {
             $data['row_kind'] = $rowKind;
             if (!isset($data['price_calc_mode'])) {
@@ -44,6 +46,11 @@ class DocRowsForm extends TableForm
                         options: $this->resolveCfgItemOptions('docs.core.rowKinds'),
                         triggers: 'reload',
                         required: true,
+                    )
+                    ->select('operation',
+                        options: $operationOptions,
+                        required: !$isText,
+                        hidden: $isText,
                     )
                     ->lookup('item',
                         table: 'economy_items',
@@ -102,9 +109,37 @@ class DocRowsForm extends TableForm
         );
     }
 
+    /**
+     * Default pohyb pro nový řádek = první povolený pro doc_type hlavičky
+     * (nejnižší order). Hlavička je známá z prefillu `defaults[doc_head]`.
+     */
+    public function applyNewRecordDefaults(array &$data): void
+    {
+        if ((int) ($data['row_kind'] ?? 1) !== 1 || !empty($data['operation'])) {
+            return;
+        }
+        $options = $this->buildOperationOptions(
+            $this->loadHeadContext($data['doc_head'] ?? null),
+        );
+        if ($options !== []) {
+            $data['operation'] = $options[0]['value'];
+        }
+    }
+
     public function recalculate(string $changedColumn, array $data): RecalculateResult
     {
         $headContext = $this->loadHeadContext($data['doc_head'] ?? null);
+
+        if ($changedColumn === 'row_kind') {
+            if ((int) ($data['row_kind'] ?? 1) !== 1) {
+                $data['operation'] = null;
+            } elseif (empty($data['operation'])) {
+                $options = $this->buildOperationOptions($headContext);
+                if ($options !== []) {
+                    $data['operation'] = $options[0]['value'];
+                }
+            }
+        }
 
         if ($changedColumn === 'item' && !empty($data['item']) && $this->db !== null) {
             $item = $this->db->fetchRow(
@@ -269,6 +304,48 @@ class DocRowsForm extends TableForm
             $options[] = ['value' => (int) $row['id'], 'label' => $label];
         }
         return $options;
+    }
+
+    /**
+     * Options pohybů filtrované podle `doc_type` hlavičky, řazené dle
+     * `docTypes[docType].order` vzestupně (první = default pro nový řádek).
+     * `name` z cfgItem je už lokalizované compiled configem.
+     *
+     * @param array<string, mixed>|null $headContext
+     * @return list<array{value: string, label: string}>
+     */
+    private function buildOperationOptions(?array $headContext): array
+    {
+        $docType = (string) ($headContext['doc_type'] ?? '');
+        if ($docType === '' || $this->config === null) {
+            return [];
+        }
+        $cfg = $this->config->cfgItem('docs.core.rowOperations');
+        if (!is_array($cfg)) {
+            return [];
+        }
+
+        $entries = [];
+        foreach ($cfg as $key => $entry) {
+            if (!is_array($entry)) {
+                continue;
+            }
+            $docTypeAttrs = $entry['docTypes'][$docType] ?? null;
+            if (!is_array($docTypeAttrs)) {
+                continue;
+            }
+            $entries[] = [
+                'value' => (string) $key,
+                'label' => (string) ($entry['name'] ?? $key),
+                'order' => (int) ($docTypeAttrs['order'] ?? 0),
+            ];
+        }
+        usort($entries, fn(array $a, array $b) => $a['order'] <=> $b['order']);
+
+        return array_map(
+            fn(array $e) => ['value' => $e['value'], 'label' => $e['label']],
+            $entries,
+        );
     }
 
     /** @return list<array{value: int, label: string}> */

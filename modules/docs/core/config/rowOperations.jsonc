@@ -1,0 +1,57 @@
+{
+    // docs.core.rowOperations
+    //
+    // Pohyby řádků dokladů. Klíč = stabilní stringový identifikátor.
+    // docTypes: pro které typy dokladů je pohyb povolený; order určuje
+    // pořadí v nabídce UI (vzestupně, první = default pro nový řádek).
+
+    "sale.services": {
+        "name": "Sale of services",
+        "name:cs": "Prodej služeb",
+        "name:en": "Sale of services",
+        "docTypes": {
+            "invno": {"order": 100}
+        }
+    },
+    "sale.goods": {
+        "name": "Sale of goods",
+        "name:cs": "Prodej zboží",
+        "name:en": "Sale of goods",
+        "docTypes": {
+            "invno": {"order": 200}
+        }
+    },
+    "purchase.goods": {
+        "name": "Purchase of goods",
+        "name:cs": "Nákup zboží a materiálu",
+        "name:en": "Purchase of goods",
+        "docTypes": {
+            "invni": {"order": 100}
+        }
+    },
+    "purchase.services": {
+        "name": "Purchase of services",
+        "name:cs": "Nákup služeb",
+        "name:en": "Purchase of services",
+        "docTypes": {
+            "invni": {"order": 200}
+        }
+    },
+    "purchase.other": {
+        "name": "Other purchase",
+        "name:cs": "Ostatní nákup",
+        "name:en": "Other purchase",
+        "docTypes": {
+            "invni": {"order": 300}
+        }
+    },
+    "acc.entry": {
+        "name": "Accounting entry",
+        "name:cs": "Účetní položka",
+        "name:en": "Accounting entry",
+        "docTypes": {
+            "invno": {"order": 900},
+            "invni": {"order": 900}
+        }
+    }
+}

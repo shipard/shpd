@@ -492,6 +492,54 @@ $this->subtableTab(
 
 ---
 
+## 21. Select v sub-formu filtrovaný hodnotou z hlavičky
+
+Sub-form řádku (např. `docs_core_rows`) často potřebuje options závislé na
+parent záznamu — třeba pohyb řádku (`operation`) povolený jen pro `doc_type`
+hlavičky. Žádný extra endpoint není potřeba: sub-form má v datech FK na
+hlavičku (`doc_head` z prefillu `defaults[doc_head]`), takže si kontext
+načte server-side při každém buildu.
+
+```php
+public function buildFormDefinition(array $data, bool $isNew): FormDefinition
+{
+    $headContext = $this->loadHeadContext($data['doc_head'] ?? null);   // SELECT hlavičky
+    $operationOptions = $this->buildOperationOptions($headContext);     // filtr + řazení dle cfgItem
+
+    $tab = $this->tab('basic', 'Řádek')
+        ->section()
+            ->col()
+                ->select('operation', options: $operationOptions, required: true)
+    // ...
+}
+```
+
+Vzor: `DocRowsForm::buildOperationOptions()` — filtruje cfgItem
+`docs.core.rowOperations` podle `docTypes[{doc_type}]` a řadí dle
+`docTypes[{doc_type}].order`.
+
+**Default pro nový záznam odvozený z kontextu** se NEDĚLÁ mutací `$data`
+v `buildFormDefinition` — ta ovlivní jen podmíněné renderování, do response
+`data` se nepropíše. Override `applyNewRecordDefaults(array &$data)`
+(hook `TableForm`), který FormController volá pro GET /meta bez id:
+
+```php
+public function applyNewRecordDefaults(array &$data): void
+{
+    if (!empty($data['operation'])) {
+        return;
+    }
+    $options = $this->buildOperationOptions(
+        $this->loadHeadContext($data['doc_head'] ?? null),
+    );
+    if ($options !== []) {
+        $data['operation'] = $options[0]['value'];   // nejnižší order
+    }
+}
+```
+
+---
+
 # Časté chyby
 
 - **`lookup` v `inline`** — vyhodí `InvalidArgumentException` v konstruktoru `FormElement`. Inline povoluje jen `input` a `select`. Pro lookup udělej vlastní řádku v sloupci.

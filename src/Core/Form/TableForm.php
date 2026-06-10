@@ -36,6 +36,18 @@ abstract class TableForm
     abstract public function buildFormDefinition(array $data, bool $isNew): FormDefinition;
 
     /**
+     * Server-side defaulty nového záznamu odvozené z client prefillu
+     * (`?defaults[...]`) nebo kontextu (např. default pohyb řádku podle
+     * doc_type hlavičky z `defaults[doc_head]`). Volá FormController
+     * (GET /meta bez id) před buildFormDefinition; mutace `$data` se
+     * propíší do response `data` — na rozdíl od mutací uvnitř
+     * buildFormDefinition, které ovlivní jen podmíněné renderování.
+     */
+    public function applyNewRecordDefaults(array &$data): void
+    {
+    }
+
+    /**
      * Volitelná strukturovaná hlavička formuláře pro existující záznam.
      *
      * Default: žádná hlavička (modal zobrazí jen `title` z FormDefinition).

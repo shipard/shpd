@@ -83,6 +83,16 @@ class FormController
                 $col = $colByName[$key] ?? null;
                 $data[$key] = $col !== null ? $this->coerceDefaultValue($value, $col->type) : $value;
             }
+
+            // Server-side defaulty odvozené z prefillu (např. default pohyb
+            // řádku podle doc_type hlavičky z defaults[doc_head]). Na rozdíl
+            // od mutací uvnitř buildFormDefinition se tyto propíší do
+            // response `data`.
+            $tableForm = $formRegistry->createForm($table, $data, $db, $config);
+            if ($tableForm !== null) {
+                $tableForm->setTableDef($def);
+                $tableForm->applyNewRecordDefaults($data);
+            }
         }
 
         $formDefinition = $this->resolveFormDefinition(

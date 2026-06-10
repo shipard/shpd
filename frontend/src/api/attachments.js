@@ -119,6 +119,18 @@ export function downloadUrl(id) {
 }
 
 /**
+ * Build the inline-render URL for an attachment (PDF / image preview
+ * in the browser). The server whitelists MIME types and falls back to
+ * attachment disposition for anything else — see
+ * AttachmentController::computeDisposition().
+ * @param {number} id
+ * @returns {string}
+ */
+export function inlineUrl(id) {
+  return `${API_BASE_URL}/_attachments/${id}/download?inline=1`;
+}
+
+/**
  * Format file size for display.
  * @param {number} bytes
  * @returns {string}

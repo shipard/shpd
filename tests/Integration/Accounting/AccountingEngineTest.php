@@ -246,6 +246,27 @@ class AccountingEngineTest extends IntegrationTestCase
         }
     }
 
+    public function testInvnoPdpOutputBooksNoVat(): void
+    {
+        // W4: PDP výstup (cz-150) — daň odvádí zákazník, doklad je jen základ.
+        // Recap dle opraveného vat-cz.jsonc: tax 0, sum_tax 0, žádný pár.
+        $headId = $this->insertHead('invno', [
+            'total_base' => 1000.0, 'total_vat' => 0.0, 'total_amount' => 1000.0,
+            'total_base_dom' => 1000.0, 'total_vat_dom' => 0.0, 'total_amount_dom' => 1000.0,
+        ]);
+        $this->insertRow($headId, 'sale.services', 1000.0, 21.0, ['vat_code' => 'cz-150']);
+        $this->insertRecap($headId, 1000.0, 0.0, ['vat_code' => 'cz-150', 'sum_tax' => 0]);
+
+        $result = $this->engine->accountDocument($headId);
+
+        $this->assertSame(1, $result['state']);
+        $journal = $this->journalOf($headId);
+        $this->assertCount(2, $journal, 'PDP výstup nesmí generovat žádný řádek 343');
+        $this->assertBalanced($journal);
+        $this->assertEqualsWithDelta(1000.0, (float) $this->lineByPrefix($journal, '602')['money_cr'], 0.001);
+        $this->assertEqualsWithDelta(1000.0, (float) $this->lineByPrefix($journal, '311')['money_dr'], 0.001);
+    }
+
     public function testInvniCzkThreeOperations(): void
     {
         $headId = $this->insertHead('invni', [

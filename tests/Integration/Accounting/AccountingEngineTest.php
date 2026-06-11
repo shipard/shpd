@@ -324,17 +324,11 @@ class AccountingEngineTest extends IntegrationTestCase
         $this->assertEqualsWithDelta(1000.0, (float) $this->lineByPrefix($journal, '518')['money_dr'], 0.001);
         $this->assertEqualsWithDelta(1000.0, (float) $this->lineByPrefix($journal, '321')['money_cr'], 0.001);
 
-        $vatLines = array_values(array_filter(
-            $journal,
-            fn($l) => str_starts_with((string) $l['account_number'], '343'),
-        ));
-        $this->assertCount(2, $vatLines, 'Odpočet i oddanění musí mít vlastní řádek deníku');
-        $md = array_values(array_filter($vatLines, fn($l) => (float) $l['money_dr'] > 0));
-        $dal = array_values(array_filter($vatLines, fn($l) => (float) $l['money_cr'] > 0));
-        $this->assertCount(1, $md, 'Odpočet DPH na MD');
-        $this->assertCount(1, $dal, 'Oddanění DPH na DAL');
-        $this->assertEqualsWithDelta(210.0, (float) $md[0]['money_dr'], 0.001);
-        $this->assertEqualsWithDelta(210.0, (float) $dal[0]['money_cr'], 0.001);
+        // Odpočet i oddanění na analytice svého kódu (mapování v předpisu)
+        $deduction = $this->lineByPrefix($journal, '343217');
+        $this->assertEqualsWithDelta(210.0, (float) $deduction['money_dr'], 0.001, 'Odpočet cz-217 na MD');
+        $selfAssessment = $this->lineByPrefix($journal, '343207');
+        $this->assertEqualsWithDelta(210.0, (float) $selfAssessment['money_cr'], 0.001, 'Oddanění cz-207 na DAL');
     }
 
     /**
@@ -365,15 +359,90 @@ class AccountingEngineTest extends IntegrationTestCase
         $this->assertEqualsWithDelta(1000.0, (float) $this->lineByPrefix($journal, '548')['money_dr'], 0.001);
         $this->assertEqualsWithDelta(1000.0, (float) $this->lineByPrefix($journal, '321')['money_cr'], 0.001);
 
-        $vatLines = array_values(array_filter(
-            $journal,
-            fn($l) => str_starts_with((string) $l['account_number'], '343'),
-        ));
-        $this->assertCount(2, $vatLines);
-        $md = array_values(array_filter($vatLines, fn($l) => (float) $l['money_dr'] > 0));
-        $dal = array_values(array_filter($vatLines, fn($l) => (float) $l['money_cr'] > 0));
-        $this->assertEqualsWithDelta(210.0, (float) ($md[0]['money_dr'] ?? 0), 0.001);
-        $this->assertEqualsWithDelta(210.0, (float) ($dal[0]['money_cr'] ?? 0), 0.001);
+        $this->assertEqualsWithDelta(210.0, (float) $this->lineByPrefix($journal, '343115')['money_dr'], 0.001);
+        $this->assertEqualsWithDelta(210.0, (float) $this->lineByPrefix($journal, '343203')['money_cr'], 0.001);
+    }
+
+    /**
+     * W2: tuzemský kód účtuje na svou analytiku (343120 výstup, 343110
+     * vstup), ne na syntetiku 343.
+     */
+    public function testDomesticVatCodeBooksOnOwnAnalytics(): void
+    {
+        $headId = $this->insertHead('invno', [
+            'total_base' => 1000.0, 'total_vat' => 210.0, 'total_amount' => 1210.0,
+            'total_base_dom' => 1000.0, 'total_vat_dom' => 210.0, 'total_amount_dom' => 1210.0,
+        ]);
+        $this->insertRow($headId, 'sale.services', 1000.0, 21.0, ['vat_code' => 'cz-120']);
+        $this->insertRecap($headId, 1000.0, 210.0, ['vat_code' => 'cz-120']);
+
+        $this->assertSame(1, $this->engine->accountDocument($headId)['state']);
+        $vat = $this->lineByPrefix($this->journalOf($headId), '343');
+        $this->assertSame('343120', $vat['account_number']);
+        $this->assertEqualsWithDelta(210.0, (float) $vat['money_cr'], 0.001);
+
+        $headId2 = $this->insertHead('invni', [
+            'total_base' => 500.0, 'total_vat' => 105.0, 'total_amount' => 605.0,
+            'total_base_dom' => 500.0, 'total_vat_dom' => 105.0, 'total_amount_dom' => 605.0,
+        ]);
+        $this->insertRow($headId2, 'purchase.services', 500.0, 21.0, ['vat_code' => 'cz-110']);
+        $this->insertRecap($headId2, 500.0, 105.0, ['vat_code' => 'cz-110']);
+
+        $this->assertSame(1, $this->engine->accountDocument($headId2)['state']);
+        $vat2 = $this->lineByPrefix($this->journalOf($headId2), '343');
+        $this->assertSame('343110', $vat2['account_number']);
+        $this->assertEqualsWithDelta(105.0, (float) $vat2['money_dr'], 0.001);
+    }
+
+    /**
+     * W2: neznámý tuzemský kód spadne na syntetickou masku 343 (fallback
+     * s query vat_code_country = cz) — chová se jako dřív.
+     */
+    public function testUnknownDomesticCodeFallsBackToSynthetic343(): void
+    {
+        $headId = $this->insertHead('invno', [
+            'total_base' => 100.0, 'total_vat' => 21.0, 'total_amount' => 121.0,
+            'total_base_dom' => 100.0, 'total_vat_dom' => 21.0, 'total_amount_dom' => 121.0,
+        ]);
+        $this->insertRow($headId, 'sale.services', 100.0, 21.0, ['vat_code' => 'cz-999']);
+        $this->insertRecap($headId, 100.0, 21.0, ['vat_code' => 'cz-999']);
+
+        $result = $this->engine->accountDocument($headId);
+
+        $this->assertSame(1, $result['state']);
+        $vat = $this->lineByPrefix($this->journalOf($headId), '343');
+        // fallback maska 343 → první aktivní analytika dle čísla
+        $this->assertSame(0, (int) $vat['is_error']);
+        $this->assertEqualsWithDelta(21.0, (float) $vat['money_cr'], 0.001);
+    }
+
+    /**
+     * W2: zahraniční kód bez mapování skončí hlasitě — chybový řádek
+     * 343???, account_not_found, state 2. Žádné tiché smíchání cizí
+     * DPH s tuzemskou na 343.
+     */
+    public function testForeignCodeWithoutMappingFailsLoudly(): void
+    {
+        $headId = $this->insertHead('invno', [
+            'total_base' => 1000.0, 'total_vat' => 190.0, 'total_amount' => 1190.0,
+            'total_base_dom' => 1000.0, 'total_vat_dom' => 190.0, 'total_amount_dom' => 1190.0,
+        ]);
+        $this->insertRow($headId, 'sale.services', 1000.0, 19.0, ['vat_code' => 'de-120']);
+        $this->insertRecap($headId, 1000.0, 190.0, ['vat_code' => 'de-120', 'vat_pct' => 19.0]);
+
+        $result = $this->engine->accountDocument($headId);
+
+        $this->assertSame(2, $result['state']);
+        $this->assertSame(2, $this->accountingState($headId));
+        $codes = array_column($result['messages'], 'code');
+        $this->assertContains('account_not_found', $codes);
+
+        $journal = $this->journalOf($headId);
+        $errorLines = array_values(array_filter($journal, fn($l) => (int) $l['is_error'] === 1));
+        $this->assertCount(1, $errorLines);
+        $this->assertSame('343???', $errorLines[0]['account_number']);
+        $this->assertNull($errorLines[0]['account']);
+        $this->assertEqualsWithDelta(190.0, (float) $errorLines[0]['money_cr'], 0.001);
     }
 
     public function testInvnoForeignCurrencyBothAmountSetsBalance(): void

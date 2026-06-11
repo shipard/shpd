@@ -32,7 +32,76 @@
 
         {"cat": "receivables",      "accountMask": "311"},
         {"cat": "payables",         "accountMask": "321"},
-        {"cat": "vat",              "accountMask": "343"},
+
+        // DPH analytiky per kód — konvence 343{NNN}, NNN = číselná část kódu.
+        // Řádek má každý kód, který může vyprodukovat nenulovou daň: nenulová
+        // hodnota ve vatPercents (vč. historické 3xx řady — zpětně datované
+        // a migrované doklady) nebo cíl reverseVatCode (oddaňovací páry).
+        // Generováno z world.vat/config/vat-cz.jsonc; úplnost hlídá test
+        // VatAnalyticsCompletenessTest. Trvale nulové kódy (cz-112, cz-122,
+        // cz-123, cz-201, cz-202, cz-401) řádek nemají — nulová daň žádný
+        // řádek deníku negeneruje.
+        {"cat": "vat", "accountMask": "343110", "query": {"vat_code": "cz-110"}},
+        {"cat": "vat", "accountMask": "343111", "query": {"vat_code": "cz-111"}},
+        {"cat": "vat", "accountMask": "343301", "query": {"vat_code": "cz-301"}},
+        {"cat": "vat", "accountMask": "343302", "query": {"vat_code": "cz-302"}},
+        {"cat": "vat", "accountMask": "343115", "query": {"vat_code": "cz-115"}},
+        {"cat": "vat", "accountMask": "343116", "query": {"vat_code": "cz-116"}},
+        {"cat": "vat", "accountMask": "343340", "query": {"vat_code": "cz-340"}},
+        {"cat": "vat", "accountMask": "343117", "query": {"vat_code": "cz-117"}},
+        {"cat": "vat", "accountMask": "343118", "query": {"vat_code": "cz-118"}},
+        {"cat": "vat", "accountMask": "343119", "query": {"vat_code": "cz-119"}},
+        {"cat": "vat", "accountMask": "343341", "query": {"vat_code": "cz-341"}},
+        {"cat": "vat", "accountMask": "343342", "query": {"vat_code": "cz-342"}},
+        {"cat": "vat", "accountMask": "343120", "query": {"vat_code": "cz-120"}},
+        {"cat": "vat", "accountMask": "343121", "query": {"vat_code": "cz-121"}},
+        {"cat": "vat", "accountMask": "343310", "query": {"vat_code": "cz-310"}},
+        {"cat": "vat", "accountMask": "343311", "query": {"vat_code": "cz-311"}},
+        {"cat": "vat", "accountMask": "343150", "query": {"vat_code": "cz-150"}},
+        {"cat": "vat", "accountMask": "343151", "query": {"vat_code": "cz-151"}},
+        {"cat": "vat", "accountMask": "343350", "query": {"vat_code": "cz-350"}},
+        {"cat": "vat", "accountMask": "343152", "query": {"vat_code": "cz-152"}},
+        {"cat": "vat", "accountMask": "343203", "query": {"vat_code": "cz-203"}},
+        {"cat": "vat", "accountMask": "343204", "query": {"vat_code": "cz-204"}},
+        {"cat": "vat", "accountMask": "343370", "query": {"vat_code": "cz-370"}},
+        {"cat": "vat", "accountMask": "343205", "query": {"vat_code": "cz-205"}},
+        {"cat": "vat", "accountMask": "343206", "query": {"vat_code": "cz-206"}},
+        {"cat": "vat", "accountMask": "343360", "query": {"vat_code": "cz-360"}},
+        {"cat": "vat", "accountMask": "343361", "query": {"vat_code": "cz-361"}},
+        {"cat": "vat", "accountMask": "343207", "query": {"vat_code": "cz-207"}},
+        {"cat": "vat", "accountMask": "343208", "query": {"vat_code": "cz-208"}},
+        {"cat": "vat", "accountMask": "343362", "query": {"vat_code": "cz-362"}},
+        {"cat": "vat", "accountMask": "343363", "query": {"vat_code": "cz-363"}},
+        {"cat": "vat", "accountMask": "343215", "query": {"vat_code": "cz-215"}},
+        {"cat": "vat", "accountMask": "343216", "query": {"vat_code": "cz-216"}},
+        {"cat": "vat", "accountMask": "343390", "query": {"vat_code": "cz-390"}},
+        {"cat": "vat", "accountMask": "343391", "query": {"vat_code": "cz-391"}},
+        {"cat": "vat", "accountMask": "343217", "query": {"vat_code": "cz-217"}},
+        {"cat": "vat", "accountMask": "343218", "query": {"vat_code": "cz-218"}},
+        {"cat": "vat", "accountMask": "343392", "query": {"vat_code": "cz-392"}},
+        {"cat": "vat", "accountMask": "343393", "query": {"vat_code": "cz-393"}},
+        {"cat": "vat", "accountMask": "343405", "query": {"vat_code": "cz-405"}},
+        {"cat": "vat", "accountMask": "343406", "query": {"vat_code": "cz-406"}},
+        {"cat": "vat", "accountMask": "343460", "query": {"vat_code": "cz-460"}},
+        {"cat": "vat", "accountMask": "343461", "query": {"vat_code": "cz-461"}},
+        {"cat": "vat", "accountMask": "343407", "query": {"vat_code": "cz-407"}},
+        {"cat": "vat", "accountMask": "343408", "query": {"vat_code": "cz-408"}},
+        {"cat": "vat", "accountMask": "343462", "query": {"vat_code": "cz-462"}},
+        {"cat": "vat", "accountMask": "343463", "query": {"vat_code": "cz-463"}},
+        {"cat": "vat", "accountMask": "343415", "query": {"vat_code": "cz-415"}},
+        {"cat": "vat", "accountMask": "343416", "query": {"vat_code": "cz-416"}},
+        {"cat": "vat", "accountMask": "343490", "query": {"vat_code": "cz-490"}},
+        {"cat": "vat", "accountMask": "343491", "query": {"vat_code": "cz-491"}},
+        {"cat": "vat", "accountMask": "343417", "query": {"vat_code": "cz-417"}},
+        {"cat": "vat", "accountMask": "343418", "query": {"vat_code": "cz-418"}},
+        {"cat": "vat", "accountMask": "343492", "query": {"vat_code": "cz-492"}},
+        {"cat": "vat", "accountMask": "343493", "query": {"vat_code": "cz-493"}},
+
+        // Fallback jen pro tuzemské kódy: neznámý cz kód spadne na syntetiku
+        // 343, zahraniční kód bez mapování skončí hlasitě (account_not_found,
+        // řádek 343???, is_error) — žádné tiché smíchání cizí DPH s tuzemskou.
+        {"cat": "vat", "accountMask": "343", "query": {"vat_code_country": "cz"}},
+
         {"cat": "rounding.cost",    "accountMask": "548"},
         {"cat": "rounding.revenue", "accountMask": "648"}
     ],

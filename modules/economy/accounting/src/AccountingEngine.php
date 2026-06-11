@@ -243,6 +243,12 @@ final class AccountingEngine
     {
         $lines = [];
         foreach ($recap as $r) {
+            // Odvozené pole pro query kroků i mapování účtů (cz-110 → cz).
+            // Nepersistuje se — existuje jen po dobu matchování; umožňuje
+            // omezit fallback masky na tuzemské kódy (viz accounts sekce
+            // předpisu), aby zahraniční kód bez mapování selhal hlasitě.
+            $r['vat_code_country'] = self::vatCodeCountry((string) ($r['vat_code'] ?? ''));
+
             if (!$this->matchesQuery($step, $r)) {
                 continue;
             }
@@ -314,6 +320,13 @@ final class AccountingEngine
             operation: null,
             rowId: null,
         )];
+    }
+
+    /** Část vat kódu před první pomlčkou, lowercase (`cz-110` → `cz`). */
+    private static function vatCodeCountry(string $vatCode): string
+    {
+        $dash = strpos($vatCode, '-');
+        return strtolower($dash === false ? $vatCode : substr($vatCode, 0, $dash));
     }
 
     /**
@@ -465,7 +478,18 @@ final class AccountingEngine
                 "Předpis nemá masku pro kategorii '{$cat}'",
                 $rowId,
             );
-            return ['number' => str_repeat('?', self::ACCOUNT_NUMBER_LENGTH), 'is_error' => true];
+            // Display-only: syntetika z poslední (nejobecnější) masky
+            // kategorie, ať chybový řádek ukazuje aspoň oblast (343???).
+            $hint = '';
+            foreach ($rules['accounts'] ?? [] as $entry) {
+                if (is_array($entry) && ($entry['cat'] ?? null) === $cat) {
+                    $hint = substr((string) ($entry['accountMask'] ?? ''), 0, 3);
+                }
+            }
+            return [
+                'number'   => str_pad($hint, self::ACCOUNT_NUMBER_LENGTH, '?'),
+                'is_error' => true,
+            ];
         }
 
         $account = $this->resolveMask($mask, (string) ($head['accounting_date'] ?? ''));

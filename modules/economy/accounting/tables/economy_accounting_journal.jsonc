@@ -7,10 +7,8 @@
     // Deník je derivát dokladu — zapisuje výhradně AccountingEngine
     // (DELETE + INSERT celého dokladu), žádná ruční editace. Proto bez
     // docStates, bez document class a bez formu. Řazení deníku = id.
-    //
-    // Viewer deníku přijde ve Fázi 3 — do té doby tabulku skrýváme
-    // z navigace.
-    "hideFromNavigation": true,
+    // Do navigace jde přes JournalViewer (read-only), ne jako generic
+    // table item.
 
     "displayPattern": "{account_number} {text}",
 

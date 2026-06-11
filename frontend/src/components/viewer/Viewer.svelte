@@ -11,6 +11,7 @@
   import ViewerRow from './ViewerRow.svelte';
   import ViewerDetail from './ViewerDetail.svelte';
   import ViewerToolbar from './ViewerToolbar.svelte';
+  import ViewerFilters from './ViewerFilters.svelte';
   import FormDialog from '../form/FormDialog.svelte';
   import RegistryImportWizard from '../registry/RegistryImportWizard.svelte';
   import Modal from '../ui/Modal.svelte';
@@ -69,6 +70,17 @@
   // Active search term used for API calls (updated after debounce)
   let activeSearch = $state('');
 
+  // --- Custom filters (meta.filters) ---
+  // Plain objekt id → string hodnota; prázdná hodnota = filtr neaktivní
+  // (klíč se maže). Definice renderuje ViewerFilters; typy, které neumí
+  // (historický 'enum'), se odfiltrují — bar se ukáže jen když zbude něco
+  // k zobrazení.
+  let activeFilters = $state({});
+  const SUPPORTED_FILTER_TYPES = ['select', 'text', 'checkbox'];
+  let viewerFilters = $derived(
+    (meta?.filters ?? []).filter(f => SUPPORTED_FILTER_TYPES.includes(f.type))
+  );
+
   // --- Detail state ---
   let selectedRowId = $state(null);
   let detail = $state(null);
@@ -116,7 +128,7 @@
    * Fetch rows from the API.
    * Takes explicit parameters to avoid reading $state inside $effect.
    */
-  async function fetchRowsExplicit(viewerId, search, viewGroup, seriesId, page, append = false) {
+  async function fetchRowsExplicit(viewerId, search, viewGroup, seriesId, filterValues, page, append = false) {
     if (append) {
       loadingMore = true;
     } else {
@@ -134,6 +146,12 @@
     // Number-series bottom-tab filter (per-type doc viewers).
     if (seriesId != null) {
       path += `&filter[number_series]=${encodeURIComponent(seriesId)}`;
+    }
+    // Custom filtry (ViewerFilters) — backend je parsuje generericky
+    // jako filter[id]=value (ViewerController::rows).
+    for (const [id, value] of Object.entries(filterValues ?? {})) {
+      if (value === '' || value == null) continue;
+      path += `&filter[${encodeURIComponent(id)}]=${encodeURIComponent(value)}`;
     }
 
     const result = await get(path);
@@ -153,7 +171,7 @@
 
   /** Convenience wrapper — call from event handlers, NOT from $effect */
   function fetchRows(append = false) {
-    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, pageNumber, append);
+    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, pageNumber, append);
   }
 
   async function fetchDetail(id) {
@@ -179,7 +197,7 @@
     selectedRowId = null;
     detail = null;
     pageNumber = 0;
-    fetchRowsExplicit(tab.viewerId, activeSearch, viewGroup, activeSeriesId, 0);
+    fetchRowsExplicit(tab.viewerId, activeSearch, viewGroup, activeSeriesId, activeFilters, 0);
   }
 
   function handleSeriesTabClick(seriesId) {
@@ -188,7 +206,26 @@
     selectedRowId = null;
     detail = null;
     pageNumber = 0;
-    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, seriesId, 0);
+    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, seriesId, activeFilters, 0);
+  }
+
+  function handleFilterChange(filterId, value) {
+    const next = { ...activeFilters };
+    if (value === '' || value == null) {
+      delete next[filterId];
+    } else {
+      next[filterId] = value;
+    }
+    // Změna rodiče závislého selectu (fiscal_year → fiscal_month) ruší
+    // hodnotu potomka — jinak by zůstal aktivní filtr na měsíc cizího roku.
+    for (const f of viewerFilters) {
+      if (f.parentFilter === filterId) {
+        delete next[f.id];
+      }
+    }
+    activeFilters = next;
+    pageNumber = 0;
+    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, next, 0);
   }
 
   function handleSearchInput(e) {
@@ -199,7 +236,7 @@
       selectedRowId = null;
       detail = null;
       pageNumber = 0;
-      fetchRowsExplicit(tab.viewerId, value, activeViewGroup, activeSeriesId, 0);
+      fetchRowsExplicit(tab.viewerId, value, activeViewGroup, activeSeriesId, activeFilters, 0);
     }, 300);
   }
 
@@ -212,7 +249,7 @@
     selectedRowId = null;
     detail = null;
     pageNumber = 0;
-    fetchRowsExplicit(tab.viewerId, '', activeViewGroup, activeSeriesId, 0);
+    fetchRowsExplicit(tab.viewerId, '', activeViewGroup, activeSeriesId, activeFilters, 0);
   }
 
   function handleRowClick(row) {
@@ -225,7 +262,7 @@
     const { scrollTop, scrollHeight, clientHeight } = listEl;
     if (scrollHeight - scrollTop - clientHeight < 100) {
       pageNumber += 1;
-      fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, pageNumber, true);
+      fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, pageNumber, true);
     }
   }
 
@@ -290,7 +327,7 @@
       }
       // Refresh rows so any newly created alerts appear.
       pageNumber = 0;
-      fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, 0);
+      fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, 0);
       if (selectedRowId != null) {
         fetchDetail(selectedRowId);
       }
@@ -312,7 +349,7 @@
         reanalyzeDialogOpen = false;
         // Refresh detail i list — zpráva mohla změnit stav
         pageNumber = 0;
-        fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, 0);
+        fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, 0);
         fetchDetail(selectedRowId);
       } else {
         alert(t('viewer.reanalyze.failed', { msg: translateError(result?.error) }));
@@ -337,7 +374,7 @@
     // — fetchDetail still highlights it in the detail panel even if it's
     // scrolled out of view.
     pageNumber = 0;
-    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, 0);
+    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, 0);
     if (personId != null) {
       selectedRowId = personId;
       fetchDetail(personId);
@@ -349,13 +386,13 @@
       fetchDetail(selectedRowId);
       // Také refresh list — apply/reject mohlo přepnout stav zprávy 30→40
       pageNumber = 0;
-      fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, 0);
+      fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, 0);
     }
   }
 
   function refreshAfterAction() {
     pageNumber = 0;
-    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, 0);
+    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, 0);
     if (selectedRowId != null) {
       fetchDetail(selectedRowId);
     }
@@ -436,7 +473,7 @@
 
   function handleFormSaved() {
     pageNumber = 0;
-    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, 0);
+    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, 0);
     if (selectedRowId != null) {
       fetchDetail(selectedRowId);
     }
@@ -462,6 +499,7 @@
     activeSearch = '';
     activeViewGroup = 'active';
     activeSeriesId = null;
+    activeFilters = {};
     pageNumber = 0;
     hasMore = false;
 
@@ -477,7 +515,9 @@
     // Sequence: meta first (sets activeSeriesId from numberSeries), then rows
     // with that filter, then optional pending-record detail.
     fetchMeta(viewerId).then(() => {
-      fetchRowsExplicit(viewerId, '', 'active', activeSeriesId, 0).then(() => {
+      // Filtry se právě resetovaly na {} — předáváme literál, protože tento
+      // $effect nesmí číst jiný $state než tab.viewerId.
+      fetchRowsExplicit(viewerId, '', 'active', activeSeriesId, {}, 0).then(() => {
         if (pendingRecord != null) {
           selectedRowId = pendingRecord;
           fetchDetail(pendingRecord);
@@ -612,6 +652,15 @@
           <button class="shpd-viewer__search-clear" onclick={handleSearchClear} aria-label={t('viewer.search.clear')}>×</button>
         {/if}
       </div>
+
+      <!-- Custom filtry vieweru (meta.filters) — viz ViewerFilters.svelte -->
+      {#if viewerFilters.length > 0}
+        <ViewerFilters
+          filters={viewerFilters}
+          values={activeFilters}
+          onChange={handleFilterChange}
+        />
+      {/if}
 
       <!-- Row list -->
       <div

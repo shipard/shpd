@@ -70,6 +70,7 @@ export default {
   'viewer.tab.trash': 'Trash',
   'viewer.tab.all': 'All',
   'viewer.search.placeholder': 'Search…',
+  'viewer.filters.all': '— all —',
   'viewer.search.clear': 'Clear search',
   'viewer.endOfList': "That's all",
   'viewer.selectRecord': 'Select a record',

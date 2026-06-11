@@ -28,6 +28,15 @@
             "icon": "calculator",
             "table": "economy_accounting_accounts",
             "class": "Shipard\\Module\\Economy\\Accounting\\AccountsViewer"
+        },
+        {
+            "id": "economy.accounting.journal",
+            "name": "Accounting journal",
+            "name:cs": "Účetní deník",
+            "name:en": "Accounting journal",
+            "icon": "book",
+            "table": "economy_accounting_journal",
+            "class": "Shipard\\Module\\Economy\\Accounting\\JournalViewer"
         }
     ],
 

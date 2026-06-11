@@ -79,6 +79,7 @@ export default {
   'viewer.tab.trash': 'Koš',
   'viewer.tab.all': 'Vše',
   'viewer.search.placeholder': 'Hledat…',
+  'viewer.filters.all': '— vše —',
   'viewer.search.clear': 'Vymazat hledání',
   'viewer.endOfList': 'To je všechno',
   'viewer.selectRecord': 'Vyberte záznam',

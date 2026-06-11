@@ -1,0 +1,16 @@
+{
+    // economy.accounting.viewerDetailLabels
+    //
+    // Detail-tab labels for the accounting integration — the Accounting tab
+    // that DocsHeadsViewer adds to document detail when this module is
+    // installed. The shared "overview" tab lives in
+    // core.system.viewerDetailLabels.
+
+    "tabs": {
+        "accounting": {
+            "name": "Accounting",
+            "name:cs": "Zaúčtování",
+            "name:en": "Accounting"
+        }
+    }
+}

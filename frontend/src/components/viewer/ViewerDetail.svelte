@@ -261,7 +261,7 @@
             <thead>
               <tr>
                 {#each content.columns ?? [] as col (col.id)}
-                  <th class="shpd-detail__th">{col.label}</th>
+                  <th class="shpd-detail__th" class:shpd-detail__th--num={col.align === 'right'}>{col.label}</th>
                 {/each}
               </tr>
             </thead>
@@ -273,10 +273,15 @@
                   </td>
                 </tr>
               {:else}
+                <!-- row._class (error | total) — klasifikace řádku od backendu,
+                     např. chybové a součtové řádky účetního deníku. -->
                 {#each content.rows ?? [] as row}
-                  <tr>
+                  <tr
+                    class:shpd-detail__tr--error={row._class === 'error'}
+                    class:shpd-detail__tr--total={row._class === 'total'}
+                  >
                     {#each content.columns ?? [] as col (col.id)}
-                      <td class="shpd-detail__td">{row[col.id] ?? '—'}</td>
+                      <td class="shpd-detail__td" class:shpd-detail__td--num={col.align === 'right'}>{row[col.id] ?? '—'}</td>
                     {/each}
                   </tr>
                 {/each}
@@ -796,6 +801,26 @@
     text-align: center;
     color: var(--shpd-color-text-secondary);
     border-bottom: 1px solid var(--shpd-color-border);
+  }
+
+  /* Číselné sloupce (columns[].align === 'right') — stejná konvence jako
+     .num v DocumentDetail. */
+  .shpd-detail__th--num,
+  .shpd-detail__td--num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Klasifikace řádků (row._class) — chybové a součtové řádky. */
+  .shpd-detail__tr--error > .shpd-detail__td {
+    background: var(--shpd-color-state-error-bg);
+    color: var(--shpd-color-state-error-text);
+  }
+
+  .shpd-detail__tr--total > .shpd-detail__td {
+    font-weight: 600;
+    border-top: 2px solid var(--shpd-color-border);
+    border-bottom: none;
   }
 
   /* Heading blok (composite) - vizualne sjednoceno s group-title */

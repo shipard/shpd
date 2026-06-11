@@ -258,11 +258,202 @@ class DocsHeadsViewer extends TableViewer
             $content['attachments'] = ['groups' => $attachmentGroups];
         }
 
-        return ['tabs' => [[
+        $tabs = [[
             'id'      => 'overview',
             'label'   => $this->defaultOverviewLabel(),
             'content' => $content,
-        ]]];
+        ]];
+
+        $accountingTab = $this->buildAccountingTab($record);
+        if ($accountingTab !== null) {
+            $tabs[] = $accountingTab;
+        }
+
+        return ['tabs' => $tabs];
+    }
+
+    // ── Tab Zaúčtování (economy.accounting) ────────────────────────────────
+
+    /**
+     * Tab Zaúčtování — stav účtování + řádky účetního deníku. Mezimodulová
+     * vazba na economy.accounting řešená jako přílohy z core.attachments
+     * (přímý dotaz); guardem je extension sloupec accounting_state, který je
+     * v SELECT h.* jen s nainstalovaným modulem — bez něj se na tabulku
+     * deníku nesahá. Obecný extension point pro cizí taby detailu zatím
+     * neexistuje (dluh, viz tasks/accounting-phase3.md).
+     *
+     * Tab se zobrazí, když doklad má nenulový stav účtování nebo řádky
+     * v deníku; koncept bez deníku tab nemá.
+     */
+    private function buildAccountingTab(array $record): ?array
+    {
+        if (!array_key_exists('accounting_state', $record)) {
+            return null;
+        }
+
+        $state = (int) ($record['accounting_state'] ?? 0);
+        $journalRows = $this->db->fetchAll(
+            'SELECT `account_number`, `text`, `money_dr`, `money_cr`,'
+            . ' `money_dr_cur`, `money_cr_cur`, `is_error`'
+            . ' FROM `economy_accounting_journal`'
+            . ' WHERE `doc_head` = %i'
+            . ' ORDER BY `id` ASC',
+            (int) $record['id'],
+        );
+
+        if ($state === 0 && $journalRows === []) {
+            return null;
+        }
+
+        $blocks = [$this->accountingStatusBlock($record, $state)];
+        if ($journalRows !== []) {
+            $blocks[] = $this->accountingJournalTable($record, $journalRows);
+        }
+
+        return [
+            'id'      => 'accounting',
+            'label'   => $this->detailTabLabel(
+                'economy.accounting.viewerDetailLabels',
+                'accounting',
+                'Accounting',
+            ),
+            'content' => ['type' => 'composite', 'blocks' => $blocks],
+        ];
+    }
+
+    /**
+     * Badge stavu účtování; při chybě (state 2) navíc banner s výpisem
+     * accounting_messages. Scoped styly ViewerDetail.svelte se na {@html}
+     * obsah nevztahují — vzhled jde přes globální CSS proměnné, které
+     * fungují i v dark mode. Všechny hodnoty escapované (frontend vkládá
+     * html bez sanitizace).
+     */
+    private function accountingStatusBlock(array $record, int $state): array
+    {
+        $states = $this->config?->cfgItem('economy.accounting.accountingStates');
+        $stateName = is_array($states) ? (string) ($states[(string) $state]['name'] ?? '') : '';
+        if ($stateName === '') {
+            $stateName = ['Not accounted', 'Accounted', 'Accounting error'][$state] ?? (string) $state;
+        }
+        $tone = match ($state) {
+            1       => 'done',
+            2       => 'error',
+            default => 'concept',
+        };
+
+        $html = '<div style="margin-bottom:var(--shpd-space-md)">'
+            . '<span style="display:inline-block;padding:2px 8px;border-radius:999px;'
+            . 'font-size:0.75rem;font-weight:500;'
+            . 'background:var(--shpd-color-state-' . $tone . '-bg);'
+            . 'color:var(--shpd-color-state-' . $tone . '-text)">'
+            . htmlspecialchars($stateName, ENT_QUOTES) . '</span>';
+
+        $messages = $state === 2
+            ? $this->decodeAccountingMessages($record['accounting_messages'] ?? null)
+            : [];
+        if ($messages !== []) {
+            $rowWord = $this->language === 'cs' ? 'řádek' : 'row';
+            $items = '';
+            foreach ($messages as $msg) {
+                $text = htmlspecialchars((string) ($msg['message'] ?? ''), ENT_QUOTES);
+                $rowId = $msg['rowId'] ?? null;
+                if ($rowId !== null) {
+                    $text .= ' (' . $rowWord . ' ' . (int) $rowId . ')';
+                }
+                $items .= '<li>' . $text . '</li>';
+            }
+            $html .= '<ul role="alert" style="margin:var(--shpd-space-sm) 0 0;'
+                . 'padding:var(--shpd-space-sm) var(--shpd-space-md) var(--shpd-space-sm) 28px;'
+                . 'background:var(--shpd-color-state-error-bg);'
+                . 'color:var(--shpd-color-state-error-text);'
+                . 'border-radius:var(--shpd-radius-md);'
+                . 'font-size:var(--shpd-font-size-sm)">' . $items . '</ul>';
+        }
+
+        return ['type' => 'html', 'html' => $html . '</div>'];
+    }
+
+    /**
+     * Tabulka řádků deníku se součtovým Σ řádkem na konci. Nulová strana
+     * zápisu se nechává prázdná (frontend vykreslí —). U cizoměnového
+     * dokladu přibydou sloupce v měně dokladu s kódem měny v labelu.
+     * Chybové řádky mají `_class: error`, Σ řádek `_class: total`.
+     */
+    private function accountingJournalTable(array $record, array $journalRows): array
+    {
+        $cs = $this->language === 'cs';
+        $foreign = $this->isForeignCurrency($record);
+        $curCode = strtoupper((string) ($record['doc_currency'] ?? ''));
+
+        $mdLabel = $cs ? 'MD' : 'Debit';
+        $dalLabel = $cs ? 'DAL' : 'Credit';
+        $columns = [
+            ['id' => 'account', 'label' => $cs ? 'Účet' : 'Account'],
+            ['id' => 'text',    'label' => 'Text'],
+            ['id' => 'md',      'label' => $mdLabel,  'align' => 'right'],
+            ['id' => 'dal',     'label' => $dalLabel, 'align' => 'right'],
+        ];
+        if ($foreign) {
+            $columns[] = ['id' => 'md_cur',  'label' => $mdLabel . ' ' . $curCode,  'align' => 'right'];
+            $columns[] = ['id' => 'dal_cur', 'label' => $dalLabel . ' ' . $curCode, 'align' => 'right'];
+        }
+
+        $rows = [];
+        $sum = ['md' => 0.0, 'dal' => 0.0, 'md_cur' => 0.0, 'dal_cur' => 0.0];
+        foreach ($journalRows as $jr) {
+            $row = [
+                'account' => (string) ($jr['account_number'] ?? ''),
+                'text'    => (string) ($jr['text'] ?? ''),
+                'md'      => $this->formatNonZeroMoney($jr['money_dr'] ?? null),
+                'dal'     => $this->formatNonZeroMoney($jr['money_cr'] ?? null),
+            ];
+            if ($foreign) {
+                $row['md_cur']  = $this->formatNonZeroMoney($jr['money_dr_cur'] ?? null);
+                $row['dal_cur'] = $this->formatNonZeroMoney($jr['money_cr_cur'] ?? null);
+            }
+            if ((int) ($jr['is_error'] ?? 0) === 1) {
+                $row['_class'] = 'error';
+            }
+            $sum['md']      += (float) ($jr['money_dr'] ?? 0);
+            $sum['dal']     += (float) ($jr['money_cr'] ?? 0);
+            $sum['md_cur']  += (float) ($jr['money_dr_cur'] ?? 0);
+            $sum['dal_cur'] += (float) ($jr['money_cr_cur'] ?? 0);
+            $rows[] = $row;
+        }
+
+        $total = [
+            'account' => 'Σ',
+            'text'    => '',
+            'md'      => $this->formatMoney($sum['md']),
+            'dal'     => $this->formatMoney($sum['dal']),
+            '_class'  => 'total',
+        ];
+        if ($foreign) {
+            $total['md_cur']  = $this->formatMoney($sum['md_cur']);
+            $total['dal_cur'] = $this->formatMoney($sum['dal_cur']);
+        }
+        $rows[] = $total;
+
+        return ['type' => 'table', 'columns' => $columns, 'rows' => $rows];
+    }
+
+    /** @return list<array<string, mixed>> dekódované accounting_messages (JSON) */
+    private function decodeAccountingMessages(mixed $raw): array
+    {
+        if (!is_string($raw) || trim($raw) === '') {
+            return [];
+        }
+        $decoded = json_decode($raw, true);
+        return is_array($decoded) ? array_values(array_filter($decoded, 'is_array')) : [];
+    }
+
+    /** Částka pro stranu zápisu — nula se nechává prázdná. */
+    private function formatNonZeroMoney(mixed $amount): ?string
+    {
+        if ($amount === null || $amount === '' || (float) $amount === 0.0) {
+            return null;
+        }
+        return $this->formatMoney($amount);
     }
 
     /** @return array<string, mixed> */

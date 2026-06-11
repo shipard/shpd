@@ -132,10 +132,7 @@ class ItemsViewer extends TableViewer
             return ['tabs' => []];
         }
 
-        $identityItems = [];
-        $this->addItem($identityItems, 'Kód', $record['code'] ?? null);
-        $this->addItem($identityItems, 'Název', $record['name'] ?? null);
-
+        // Kód a název jsou v hlavičce detailu — skupina Identifikace tu už není.
         $classificationItems = [];
         $this->addItem($classificationItems, 'Druh', $record['kind_name'] ?? null);
         $this->addItem($classificationItems, 'Typ', $this->resolveItemTypeLabel((int) ($record['item_type'] ?? 3)));
@@ -156,9 +153,6 @@ class ItemsViewer extends TableViewer
         $this->addItem($detailItems, 'Platnost do', $this->formatDate($record['valid_to'] ?? null));
 
         $groups = [];
-        if ($identityItems !== []) {
-            $groups[] = ['title' => 'Identifikace', 'items' => $identityItems];
-        }
         if ($classificationItems !== []) {
             $groups[] = ['title' => 'Klasifikace', 'items' => $classificationItems];
         }
@@ -169,12 +163,46 @@ class ItemsViewer extends TableViewer
             $groups[] = ['title' => 'Detaily', 'items' => $detailItems];
         }
 
+        $name = trim((string) ($record['name'] ?? ''));
+        $code = trim((string) ($record['code'] ?? ''));
+
+        $badges = [];
+        $stateBadge = $this->buildStateBadge((int) ($record['docState'] ?? 10));
+        if ($stateBadge !== null) {
+            $badges[] = $stateBadge;
+        }
+
         return [
-            'tabs' => [[
+            'title'    => $name !== '' ? $name : '(bez názvu)',
+            'subtitle' => $code !== '' ? 'Kód ' . $code : null,
+            'badges'   => $badges,
+            // Stejný klíč jako viewers[].icon v module.jsonc.
+            'icon'     => 'box',
+            'tabs'     => [[
                 'id'      => 'overview',
                 'label'   => $this->defaultOverviewLabel(),
                 'content' => ['type' => 'properties', 'groups' => $groups],
             ]],
+        ];
+    }
+
+    /** Badge stavu záznamu (label + stateStyle) z docState configu. */
+    private function buildStateBadge(int $docState): ?array
+    {
+        if ($this->config === null || $this->docStatesCfgItem === null) {
+            return null;
+        }
+
+        $cfg = DocStateConfig::fromCfgItem($this->config->cfgItem($this->docStatesCfgItem));
+        $stateData = $cfg->getState($docState);
+        $label = (string) ($stateData['stateName'] ?? '');
+        if ($label === '') {
+            return null;
+        }
+
+        return [
+            'label' => $label,
+            'style' => (string) ($stateData['stateStyle'] ?? 'concept'),
         ];
     }
 

@@ -63,7 +63,7 @@
 
     "payment": {
         "method": "bankTransfer",
-        "variableSymbol": "2026000123"
+        "paymentReference": "2026000123"
     },
 
     "notes": {

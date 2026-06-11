@@ -55,7 +55,7 @@ class ProfileSchemaDriftTest extends TestCase
         );
 
         $this->assertSame('czech_invoices', $profile['profile_id']);
-        $this->assertSame('v2.0.0', $profile['prompt_version']);
+        $this->assertSame('v2.1.0', $profile['prompt_version']);
         $this->assertContains('invoiceReceived', $profile['supported_doc_types']);
         $this->assertSame(0.9, $profile['confidence_thresholds']['ready']);
     }

@@ -863,7 +863,7 @@ class DocumentApplier
                                        : null,
             'exchange_rate'        => $canonical['exchangeRate'] ?? null,
             'payment_method'       => $paymentMethod,
-            'variable_symbol'      => $canonical['payment']['variableSymbol'] ?? null,
+            'payment_reference'    => $canonical['payment']['paymentReference'] ?? null,
             'specific_symbol'      => $canonical['payment']['specificSymbol'] ?? null,
             'constant_symbol'      => $canonical['payment']['constantSymbol'] ?? null,
             'notice'               => $canonical['notes']['internal'] ?? null,

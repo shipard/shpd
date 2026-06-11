@@ -94,7 +94,7 @@
             "additionalProperties": false,
             "properties": {
                 "method":         { "type": ["string", "null"] },
-                "variableSymbol": { "type": ["string", "null"] },
+                "paymentReference": { "type": ["string", "null"], "maxLength": 35 },
                 "specificSymbol": { "type": ["string", "null"] },
                 "constantSymbol": { "type": ["string", "null"] }
             }
@@ -172,7 +172,7 @@
                         "sequenceNumber": {
                             "type": "integer",
                             "minimum": 1,
-                            "description": "Sequence-in-series, used for counter sync and variable_symbol default."
+                            "description": "Sequence-in-series, used for counter sync and payment_reference default."
                         }
                     },
                     "required": ["docNumber", "sequenceNumber"],

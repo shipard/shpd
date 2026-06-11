@@ -142,11 +142,9 @@ class TasksViewer extends TableViewer
             return ['tabs' => []];
         }
 
+        // Název, priorita, termín a stav jsou v hlavičce detailu —
+        // v Přehledu zůstávají údaje o vzniku úkolu.
         $items = [];
-        $this->addItem($items, 'Název', $record['title'] ?? null);
-        $this->addItem($items, 'Priorita', $this->resolvePriorityLabel((string) ($record['priority'] ?? '')));
-        $this->addItem($items, 'Termín', $this->formatDate($record['due_date'] ?? null));
-        $this->addItem($items, 'Stav', $this->resolveStateLabel((int) ($record['docState'] ?? 10)));
         $this->addItem($items, 'Vytvořil', $this->resolveCreatorLabel($record));
         $this->addItem($items, 'Vytvořeno', $this->formatDateTime($record['created'] ?? null));
 
@@ -160,8 +158,15 @@ class TasksViewer extends TableViewer
             ];
         }
 
+        $header = $this->buildDetailHeader($record);
+
         return [
-            'tabs' => [[
+            'title'    => $header['title'],
+            'subtitle' => $header['subtitle'],
+            'badges'   => $header['badges'],
+            // Stejný klíč jako viewers[].icon v module.jsonc.
+            'icon'     => 'list-check',
+            'tabs'     => [[
                 'id'      => 'overview',
                 'label'   => $this->defaultOverviewLabel(),
                 'content' => [
@@ -169,6 +174,50 @@ class TasksViewer extends TableViewer
                     'groups' => $groups,
                 ],
             ]],
+        ];
+    }
+
+    /**
+     * Hlavička detailu nad taby — title úkolu, termín jako subtitle, badges
+     * se stavem, prioritou a případným „Po termínu“ (stejná logika jako
+     * danger zvýraznění termínu v řádku vieweru).
+     *
+     * @return array{title: string, subtitle: ?string, badges: array<int, array{label: string, style: string}>}
+     */
+    private function buildDetailHeader(array $record): array
+    {
+        $docState = (int) ($record['docState'] ?? 10);
+
+        $badges = [];
+        $stateLabel = $this->resolveStateLabel($docState);
+        if ($stateLabel !== '') {
+            $badges[] = ['label' => $stateLabel, 'style' => $this->resolveStateStyle($docState)];
+        }
+
+        $priority = (string) ($record['priority'] ?? '');
+        if ($priority !== '') {
+            $cfg = $this->config?->cfgItem('tasks.core.priorities');
+            if (is_array($cfg) && isset($cfg[$priority])) {
+                $spanClass = (string) ($cfg[$priority]['spanClass'] ?? 'muted');
+                $badges[] = [
+                    'label' => (string) ($cfg[$priority]['name'] ?? $priority),
+                    // badge styly detailu nemají `muted` — mapujeme na `neutral`
+                    'style' => $spanClass === 'muted' ? 'neutral' : $spanClass,
+                ];
+            }
+        }
+
+        if ($this->isOverdue($record['due_date'] ?? null, $docState)) {
+            $badges[] = ['label' => 'Po termínu', 'style' => 'danger'];
+        }
+
+        $dueDate = $this->formatDate($record['due_date'] ?? null);
+        $title = trim((string) ($record['title'] ?? ''));
+
+        return [
+            'title'    => $title !== '' ? $title : '(bez názvu)',
+            'subtitle' => $dueDate !== '' ? 'Termín ' . $dueDate : null,
+            'badges'   => $badges,
         ];
     }
 
@@ -188,18 +237,6 @@ class TasksViewer extends TableViewer
         }
         $cfg = DocStateConfig::fromCfgItem($this->config->cfgItem($this->docStatesCfgItem));
         return (string) ($cfg->getState($docState)['stateName'] ?? '');
-    }
-
-    private function resolvePriorityLabel(string $key): string
-    {
-        if ($key === '' || $this->config === null) {
-            return $key;
-        }
-        $cfg = $this->config->cfgItem('tasks.core.priorities');
-        if (is_array($cfg) && isset($cfg[$key]['name'])) {
-            return (string) $cfg[$key]['name'];
-        }
-        return $key;
     }
 
     private function resolveCreatorLabel(array $row): string

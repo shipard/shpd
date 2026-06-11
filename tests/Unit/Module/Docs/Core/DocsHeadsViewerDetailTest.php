@@ -163,15 +163,20 @@ class DocsHeadsViewerDetailTest extends TestCase
     public function testHeaderCarriesTypeNumberTextAndStateBadge(): void
     {
         $viewer = $this->makeViewer($this->baseRecord(['docState' => 40]));
-        $content = $this->detailContent($viewer);
+        $detail = $viewer->renderDetail(7);
 
-        $this->assertSame('document', $content['type']);
+        // Hlavička je nově nad taby (generický header ViewerDetail)
+        $this->assertSame('!0000000016', $detail['title']);
+        $this->assertSame('testtest', $detail['subtitle']);
         $this->assertSame([
-            'docTypeLabel' => 'Faktura přijatá',
-            'docNumber'    => '!0000000016',
-            'docText'      => 'testtest',
-            'state'        => ['name' => 'V pořádku', 'style' => 'done'],
-        ], $content['header']);
+            ['label' => 'Faktura přijatá', 'style' => 'neutral'],
+            ['label' => 'V pořádku', 'style' => 'done'],
+        ], $detail['badges']);
+        $this->assertSame('invoice-in', $detail['icon']);
+
+        $content = $detail['tabs'][0]['content'];
+        $this->assertSame('document', $content['type']);
+        $this->assertArrayNotHasKey('header', $content, 'Hlavička už není v contentu dokumentu');
     }
 
     // ── Strany ──────────────────────────────────────────────────────────────

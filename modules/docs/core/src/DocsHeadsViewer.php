@@ -218,8 +218,9 @@ class DocsHeadsViewer extends TableViewer
     }
 
     /**
-     * Detail dokladu jako "textová faktura" — jediný tab `overview` s content
-     * typem `document`: hlavička se stavem, strany Dodavatel/Odběratel, meta
+     * Detail dokladu — hlavička nad taby (generický header ViewerDetail:
+     * číslo, text, typ + stav, ikona) a tab `overview` s content typem
+     * `document`: strany Dodavatel/Odběratel, meta
      * mřížka, řádky, DPH rekapitulace, součty a náhledy příloh (mailové
      * zdrojové skupiny + vlastní přílohy dokladu) na konci.
      *
@@ -244,7 +245,6 @@ class DocsHeadsViewer extends TableViewer
 
         $content = [
             'type'      => 'document',
-            'header'    => $this->buildDetailHeader($record),
             'supplier'  => $supplier,
             'customer'  => $customer,
             'meta'      => $this->buildDetailMeta($record),
@@ -269,7 +269,15 @@ class DocsHeadsViewer extends TableViewer
             $tabs[] = $accountingTab;
         }
 
-        $detail = ['tabs' => $tabs];
+        $header = $this->buildDetailHeader($record);
+
+        $detail = [
+            'title'    => $header['title'],
+            'subtitle' => $header['subtitle'],
+            'badges'   => $header['badges'],
+            'icon'     => $header['icon'],
+            'tabs'     => $tabs,
+        ];
 
         $actions = $this->buildDetailActions($record);
         if ($actions !== []) {
@@ -488,22 +496,51 @@ class DocsHeadsViewer extends TableViewer
         return $this->formatMoney($amount);
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * Hlavička detailu nad taby (generický header ViewerDetail, sjednocené
+     * s Osobami, Položkami a Došlou poštou) — číslo dokladu jako title,
+     * doc_text jako subtitle, badges s typem dokladu a stavem, ikona podle
+     * doc_type. Nahrazuje dřívější hlavičku uvnitř content typu `document`;
+     * DocumentDetail ji bez klíče `header` nevykresluje.
+     *
+     * @return array{title: string, subtitle: ?string, badges: array<int, array{label: string, style: string}>, icon: string}
+     */
     private function buildDetailHeader(array $record): array
     {
         $cfg = DocStateConfig::fromCfgItem($this->config?->cfgItem($this->docStatesCfgItem ?? ''));
         $stateData = $cfg->getState((int) ($record['docState'] ?? 10));
         $docText = trim((string) ($record['doc_text'] ?? ''));
+        $docNumber = trim((string) ($record['doc_number'] ?? ''));
+
+        $badges = [];
+        $typeLabel = $this->resolveDocTypeLabel((string) ($record['doc_type'] ?? ''));
+        if ($typeLabel !== '') {
+            $badges[] = ['label' => $typeLabel, 'style' => 'neutral'];
+        }
+        $stateName = (string) ($stateData['stateName'] ?? '');
+        if ($stateName !== '') {
+            $badges[] = [
+                'label' => $stateName,
+                'style' => (string) ($stateData['stateStyle'] ?? 'concept'),
+            ];
+        }
 
         return [
-            'docTypeLabel' => $this->resolveDocTypeLabel((string) ($record['doc_type'] ?? '')),
-            'docNumber'    => (string) ($record['doc_number'] ?? ''),
-            'docText'      => $docText !== '' ? $docText : null,
-            'state'        => [
-                'name'  => (string) ($stateData['stateName'] ?? ''),
-                'style' => (string) ($stateData['stateStyle'] ?? 'concept'),
-            ],
+            'title'    => $docNumber !== '' ? $docNumber : '—',
+            'subtitle' => $docText !== '' ? $docText : null,
+            'badges'   => $badges,
+            'icon'     => $this->detailIconForDocType((string) ($record['doc_type'] ?? '')),
         ];
+    }
+
+    /** Ikona detailu podle typu dokladu — stejné klíče jako viewers[].icon v module.jsonc. */
+    private function detailIconForDocType(string $docType): string
+    {
+        return match ($docType) {
+            'invni' => 'invoice-in',
+            'invno' => 'invoice',
+            default => 'document',
+        };
     }
 
     /**

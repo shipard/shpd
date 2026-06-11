@@ -123,6 +123,14 @@ class PersonsViewer extends TableViewer
 		return $row;
 	}
 
+	/**
+	 * Detail osoby — hlavička nad taby (jméno, identifikátory, badges, ikona
+	 * dle typu osoby; stejný vzor jako IncomingMessagesViewer) a jediný tab
+	 * Přehled s composite obsahem: vlastnosti záznamu + kontakty + adresy.
+	 *
+	 * Identifikátory zobrazené v hlavičce (IČO, DIČ, datum narození, kód
+	 * osoby) se v Přehledu už neopakují — zrcadlí PersonsForm::buildHeaderInfo.
+	 */
 	public function renderDetail(int $recordId): array
 	{
 		$record = $this->db->fetchRow(
@@ -134,54 +142,19 @@ class PersonsViewer extends TableViewer
 			return ['tabs' => []];
 		}
 
-		$tabs = [];
+		$header = $this->buildDetailHeader($record);
 
-		// Tab 1: Overview
-		$tabs[] = [
-			'id'      => 'overview',
-			'label'   => $this->defaultOverviewLabel(),
-			'content' => $this->buildOverviewContent($record),
+		return [
+			'title'    => $header['title'],
+			'subtitle' => $header['subtitle'],
+			'badges'   => $header['badges'],
+			'icon'     => $header['icon'],
+			'tabs'     => [[
+				'id'      => 'overview',
+				'label'   => $this->defaultOverviewLabel(),
+				'content' => $this->buildOverviewContent($record),
+			]],
 		];
-
-		// Tab 2: Contacts
-		$contacts = $this->db->fetchAll(
-			'SELECT `name`, `role`, `email`, `phone` FROM `base_persons_contacts` WHERE `person` = %i ORDER BY `order_pos`',
-			$recordId,
-		);
-		$tabs[] = [
-			'id'    => 'contacts',
-			'label' => $this->detailTabLabel('base.persons.viewerDetailLabels', 'contacts', 'Contacts'),
-			'content' => [
-				'type'    => 'table',
-				'columns' => [
-					['id' => 'name',  'label' => 'Název'],
-					['id' => 'role',  'label' => 'Funkce'],
-					['id' => 'email', 'label' => 'E-mail'],
-					['id' => 'phone', 'label' => 'Telefon'],
-				],
-				'rows' => $contacts,
-			],
-		];
-
-		// Tab 3: Addresses
-		$addresses = $this->db->fetchAll(
-			'SELECT `name`, `display_line` FROM `base_persons_addresses` WHERE `person` = %i ORDER BY `order_pos`',
-			$recordId,
-		);
-		$tabs[] = [
-			'id'    => 'addresses',
-			'label' => $this->detailTabLabel('base.persons.viewerDetailLabels', 'addresses', 'Addresses'),
-			'content' => [
-				'type'    => 'table',
-				'columns' => [
-					['id' => 'name',         'label' => 'Název'],
-					['id' => 'display_line', 'label' => 'Adresa'],
-				],
-				'rows' => $addresses,
-			],
-		];
-
-		return ['tabs' => $tabs];
 	}
 
 	public function getToolbarActions(?array $selectedRow): array
@@ -209,17 +182,97 @@ class PersonsViewer extends TableViewer
 	}
 
 	// -------------------------------------------------------------------------
+	// Private — detail header
+	// -------------------------------------------------------------------------
 
+	/**
+	 * Hlavička detailu nad taby — full_name jako title, identifikátory jako
+	 * subtitle (firma: IČO · DIČ · kód osoby; fyzická osoba: datum narození ·
+	 * kód osoby), badges se stavem a příznakem Vlastní. Typ osoby vyjadřuje
+	 * jen ikona (company/user) — stejné mapování jako renderRow().
+	 *
+	 * @return array{title: string, subtitle: ?string, badges: array<int, array{label: string, style: string}>, icon: string}
+	 */
+	private function buildDetailHeader(array $record): array
+	{
+		$personType = (int) ($record['person_type'] ?? 0);
+
+		$subtitleParts = [];
+		if ($personType === 2) {
+			if (!empty($record['company_id'])) {
+				$subtitleParts[] = 'IČO ' . $record['company_id'];
+			}
+			if (!empty($record['tax_id'])) {
+				$subtitleParts[] = 'DIČ ' . $record['tax_id'];
+			}
+		} else {
+			$birthDate = $this->formatDate($record['birth_date'] ?? null);
+			if ($birthDate !== null) {
+				$subtitleParts[] = 'Datum narození ' . $birthDate;
+			}
+		}
+		if (!empty($record['person_id'])) {
+			$subtitleParts[] = 'Kód osoby ' . $record['person_id'];
+		}
+
+		$badges = [];
+		$stateBadge = $this->buildStateBadge((int) ($record['docState'] ?? 10));
+		if ($stateBadge !== null) {
+			$badges[] = $stateBadge;
+		}
+		if (!empty($record['is_own'])) {
+			$badges[] = ['label' => 'Vlastní', 'style' => 'primary'];
+		}
+
+		$fullName = trim((string) ($record['full_name'] ?? ''));
+
+		return [
+			'title'    => $fullName !== '' ? $fullName : '(bez názvu)',
+			'subtitle' => $subtitleParts !== [] ? implode(' · ', $subtitleParts) : null,
+			'badges'   => $badges,
+			'icon'     => $personType === 2 ? 'company' : 'user',
+		];
+	}
+
+	/** Badge stavu záznamu (label + stateStyle) z docState configu. */
+	private function buildStateBadge(int $docState): ?array
+	{
+		if ($this->config === null || $this->docStatesCfgItem === null) {
+			return null;
+		}
+
+		$cfg = DocStateConfig::fromCfgItem($this->config->cfgItem($this->docStatesCfgItem));
+		$stateData = $cfg->getState($docState);
+		$label = (string) ($stateData['stateName'] ?? '');
+		if ($label === '') {
+			return null;
+		}
+
+		return [
+			'label' => $label,
+			'style' => (string) ($stateData['stateStyle'] ?? 'concept'),
+		];
+	}
+
+	// -------------------------------------------------------------------------
+	// Private — overview tab
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Composite obsah Přehledu: vlastnosti (Identifikace / Kontakt / Osobní
+	 * údaje), kontakty (nadpis + tabulka) a adresy (properties řádky
+	 * název → display_line). Prázdné sekce se vynechávají.
+	 */
 	private function buildOverviewContent(array $record): array
 	{
-		$personTypeLabels = [0 => 'Neurčeno', 1 => 'Fyzická osoba', 2 => 'Právnická osoba'];
+		$blocks = [];
 
+		// IČO, DIČ, kód osoby a datum narození jsou v hlavičce detailu —
+		// tady zůstávají méně časté identifikátory.
 		$identityItems = [];
-		$this->addItem($identityItems, 'Kód osoby', $record['person_id'] ?? null);
-		$this->addItem($identityItems, 'Typ osoby', $personTypeLabels[(int) ($record['person_type'] ?? 0)] ?? null);
-		$this->addItem($identityItems, 'IČO', $record['company_id'] ?? null);
-		$this->addItem($identityItems, 'DIČ', $record['tax_id'] ?? null);
 		$this->addItem($identityItems, 'DIČ pro DPH', $record['vat_id'] ?? null);
+		$this->addItem($identityItems, 'Zápis v obchodním rejstříku', $record['court_registration'] ?? null);
+		$this->addItem($identityItems, 'ID datové schránky', $record['gov_e_box_id'] ?? null);
 
 		$contactItems = [];
 		$this->addItem($contactItems, 'E-mail', $record['email'] ?? null);
@@ -227,8 +280,8 @@ class PersonsViewer extends TableViewer
 		$this->addItem($contactItems, 'Web', $record['web'] ?? null);
 
 		$personalItems = [];
-		$this->addItem($personalItems, 'Datum narození', $record['birth_date'] ?? null);
 		$this->addItem($personalItems, 'Rodné číslo', $record['national_id'] ?? null);
+		$this->addItem($personalItems, 'Číslo osobního dokladu', $record['id_card_number'] ?? null);
 
 		$groups = [];
 		if ($identityItems !== []) {
@@ -240,8 +293,106 @@ class PersonsViewer extends TableViewer
 		if ($personalItems !== []) {
 			$groups[] = ['title' => 'Osobní údaje', 'items' => $personalItems];
 		}
+		if ($groups !== []) {
+			$blocks[] = ['type' => 'properties', 'groups' => $groups];
+		}
 
-		return ['type' => 'properties', 'groups' => $groups];
+		// Kontakty — nadpis + tabulka (jen pokud existují)
+		$contacts = $this->db->fetchAll(
+			'SELECT `name`, `role`, `email`, `phone` FROM `base_persons_contacts` WHERE `person` = %i ORDER BY `order_pos`',
+			(int) $record['id'],
+		);
+		if ($contacts !== []) {
+			$blocks[] = [
+				'type' => 'heading',
+				'text' => $this->detailTabLabel('base.persons.viewerDetailLabels', 'contacts', 'Contacts'),
+			];
+			$blocks[] = [
+				'type'    => 'table',
+				'columns' => [
+					['id' => 'name',  'label' => 'Název'],
+					['id' => 'role',  'label' => 'Funkce'],
+					['id' => 'email', 'label' => 'E-mail'],
+					['id' => 'phone', 'label' => 'Telefon'],
+				],
+				'rows' => $contacts,
+			];
+		}
+
+		// Adresy — properties řádky (label = název adresy / typ, value = display_line)
+		$addressItems = $this->buildAddressItems((int) $record['id']);
+		if ($addressItems !== []) {
+			$blocks[] = [
+				'type'   => 'properties',
+				'groups' => [[
+					'title' => $this->detailTabLabel('base.persons.viewerDetailLabels', 'addresses', 'Addresses'),
+					'items' => $addressItems,
+				]],
+			];
+		}
+
+		if ($blocks === []) {
+			return ['type' => 'html', 'html' => '<p class="muted">Záznam nemá žádné další údaje.</p>'];
+		}
+		if (count($blocks) === 1) {
+			return $blocks[0];
+		}
+
+		return ['type' => 'composite', 'blocks' => $blocks];
+	}
+
+	/**
+	 * Adresy osoby jako properties položky. Label je název adresy; pokud
+	 * chybí, použije se lokalizovaný typ adresy z cfgItem addressTypes.
+	 *
+	 * @return array<int, array{label: string, value: string}>
+	 */
+	private function buildAddressItems(int $personId): array
+	{
+		$addresses = $this->db->fetchAll(
+			'SELECT `name`, `address_type`, `display_line` FROM `base_persons_addresses` WHERE `person` = %i ORDER BY `order_pos`',
+			$personId,
+		);
+		if ($addresses === []) {
+			return [];
+		}
+
+		$typeLabels = [];
+		$cfgTypes = $this->config?->cfgItem('base.persons.addressTypes');
+		if (is_array($cfgTypes)) {
+			foreach ($cfgTypes as $key => $entry) {
+				$typeLabels[(int) $key] = (string) ($entry['name'] ?? $key);
+			}
+		}
+
+		$items = [];
+		foreach ($addresses as $a) {
+			$value = trim((string) ($a['display_line'] ?? ''));
+			if ($value === '') {
+				continue;
+			}
+			$label = trim((string) ($a['name'] ?? ''));
+			if ($label === '') {
+				$label = $typeLabels[(int) ($a['address_type'] ?? 0)] ?? 'Adresa';
+			}
+			$items[] = ['label' => $label, 'value' => $value];
+		}
+
+		return $items;
+	}
+
+	// -------------------------------------------------------------------------
+	// Private — formátovací helpery
+	// -------------------------------------------------------------------------
+
+	/** DB datum (Y-m-d) → d.m.Y; neplatné/prázdné → null. */
+	private function formatDate(mixed $value): ?string
+	{
+		if ($value === null || $value === '') {
+			return null;
+		}
+		$dt = \DateTimeImmutable::createFromFormat('Y-m-d', (string) $value);
+		return $dt instanceof \DateTimeImmutable ? $dt->format('d.m.Y') : null;
 	}
 
 	/** @param array<int, array{label: string, value: string}> $items */

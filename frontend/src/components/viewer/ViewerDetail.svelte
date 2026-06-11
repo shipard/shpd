@@ -9,6 +9,8 @@
   import AttachmentGrid from './AttachmentGrid.svelte';
   import { attachmentViewStore } from '../../stores/attachmentView.svelte.js';
   import DocumentDetail from './DocumentDetail.svelte';
+  import Icon from '../ui/Icon.svelte';
+  import { resolveIcon } from '../../icons.js';
   import { t } from '../../i18n/index.js';
   import { translateError } from '../../i18n/errors.js';
 
@@ -202,17 +204,24 @@
            posílá detail.title. Bez něj se hlavička přeskočí a layout
            je stejný jako předtím. -->
       <div class="shpd-detail__header">
-        <div class="shpd-detail__title-row">
-          <h2 class="shpd-detail__title">{detail.title}</h2>
-          {#each detail.badges ?? [] as badge}
-            <span class="shpd-detail__badge shpd-detail__badge--{badge.style ?? 'neutral'}">
-              {badge.label}
-            </span>
-          {/each}
-        </div>
-        {#if detail.subtitle}
-          <div class="shpd-detail__subtitle">{detail.subtitle}</div>
+        {#if detail.icon}
+          <div class="shpd-detail__header-icon">
+            <Icon icon={resolveIcon(detail.icon)} />
+          </div>
         {/if}
+        <div class="shpd-detail__header-main">
+          <div class="shpd-detail__title-row">
+            <h2 class="shpd-detail__title">{detail.title}</h2>
+            {#each detail.badges ?? [] as badge}
+              <span class="shpd-detail__badge shpd-detail__badge--{badge.style ?? 'neutral'}">
+                {badge.label}
+              </span>
+            {/each}
+          </div>
+          {#if detail.subtitle}
+            <div class="shpd-detail__subtitle">{detail.subtitle}</div>
+          {/if}
+        </div>
       </div>
     {/if}
 
@@ -506,10 +515,32 @@
   /* Header (title + badges) — zobrazuje se jen když backend
      pošle detail.title. Drobný panel nad taby. */
   .shpd-detail__header {
+    display: flex;
+    align-items: center;
+    gap: var(--shpd-space-sm);
     padding: var(--shpd-space-sm) var(--shpd-space-md);
     border-bottom: 1px solid var(--shpd-color-border);
     background-color: var(--shpd-color-bg);
     flex-shrink: 0;
+  }
+
+  /* Ikona vlevo v hlavicce (typ zaznamu) - stejny vizual jako
+     shpd-modal__header-icon ve formularovem modalu. */
+  .shpd-detail__header-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    font-size: 1.75em;
+    color: var(--shpd-color-text-secondary);
+  }
+
+  .shpd-detail__header-main {
+    flex: 1;
+    /* min-width: 0 kvuli ellipsis uvnitr flex containeru */
+    min-width: 0;
   }
 
   .shpd-detail__title-row {

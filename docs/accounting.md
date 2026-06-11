@@ -283,6 +283,18 @@ Zdroje částek (vždy pár domácí měna + měna dokladu):
 Default texty: `rows` → `description` řádku; `vat` → `"DPH {vat_code} {vat_pct}%"`;
 `head` → `doc_text`.
 
+Specifika `src: vat`:
+
+- **Reverse charge**: řádek rekapitulace s `is_reverse_pair = 1` (oddanění)
+  se účtuje na **opačnou** stranu, než určuje krok (`side` 0 ↔ 1). Primární
+  řádek samovyměření nese odpočet a jde na stranu kroku — deník je vyrovnaný,
+  obě strany dostanou analytiku svého kódu. Flip je nezávislý na `reverseSign`
+  (ten otáčí znaménko částky, typicky u zaokrouhlení).
+- **`vat_code_country`**: engine při matchování doplní do kopie záznamu
+  rekapitulace odvozené pole — lowercase část `vat_code` před první pomlčkou
+  (`cz-110` → `cz`). Nepersistuje se; je dostupné v `query` kroků i záznamů
+  `accounts` (využívá ho fallback masky 343).
+
 ### Předpis CZ pro MVP (invno, invni)
 
 ```jsonc
@@ -311,7 +323,16 @@ Default texty: `rows` → `description` řádku; `vat` → `"DPH {vat_code} {vat
 
         {"cat": "receivables",      "accountMask": "311"},
         {"cat": "payables",         "accountMask": "321"},
-        {"cat": "vat",              "accountMask": "343"},
+
+        // DPH analytiky per kód — 55 mapovacích řádků, konvence 343{NNN}
+        // (generováno z vat-cz.jsonc, úplnost hlídá VatAnalyticsCompletenessTest)
+        {"cat": "vat", "accountMask": "343110", "query": {"vat_code": "cz-110"}},
+        {"cat": "vat", "accountMask": "343111", "query": {"vat_code": "cz-111"}},
+        // ... všechny kódy s možnou nenulovou daní ...
+
+        // fallback jen pro tuzemsko — zahraniční kód bez mapování selže hlasitě
+        {"cat": "vat", "accountMask": "343", "query": {"vat_code_country": "cz"}},
+
         {"cat": "rounding.cost",    "accountMask": "548"},
         {"cat": "rounding.revenue", "accountMask": "648"}
     ],
@@ -349,13 +370,24 @@ Default texty: `rows` → `description` řádku; `vat` → `"DPH {vat_code} {vat
 }
 ```
 
-Kontrolní příklad — faktura vydaná 1 000 Kč služby + 21 % DPH,
+Kontrolní příklad — faktura vydaná 1 000 Kč služby + 21 % DPH (cz-120),
 zaokrouhleno na 1 210 Kč (rounding 0):
 
 ```
 602xxx  DAL  1 000,00   (rows, sale.services)
-343xxx  DAL    210,00   (vat)
+343120  DAL    210,00   (vat — analytika dle vat_code)
 311xxx  MD   1 210,00   (head, total)
+                         MD 1 210 = DAL 1 210 ✓
+```
+
+Kontrolní příklad — faktura přijatá, EU pořízení služeb 1 000 Kč
+(cz-217, 21 %, samovyměření):
+
+```
+518xxx  MD   1 000,00   (rows, purchase.services)
+343217  MD     210,00   (vat — odpočet, primární řádek rekapitulace)
+343207  DAL    210,00   (vat — oddanění, pár na opačné straně)
+321xxx  DAL  1 000,00   (head, total — jen základ, daň se neplatí)
                          MD 1 210 = DAL 1 210 ✓
 ```
 
@@ -398,8 +430,41 @@ se starým systémem: `602` najde `602000` dřív než `602100`.
   message: "Účet nenalezen pro masku 504", rowId: ...}`
 - `accounting_state = 2`
 
+Pokud se nenajde ani maska (žádný záznam `accounts` dané kategorie
+nevyhovuje query — typicky zahraniční vat kód bez mapování), zapíše se
+chybový řádek se syntetikou kategorie doplněnou `?` (`343???`) — hint je
+display-only, bere se z poslední masky dané kategorie.
+
 Reporty (obratová předvaha apod.) chybové řádky snadno vyloučí/zvýrazní
 podle `is_error`.
+
+### Konvence DPH analytik a OSS
+
+- **Tuzemsko**: `343{NNN}`, kde `NNN` = číselná část vat kódu
+  (`cz-110` → `343110`). Mapování žije v sekci `accounts` předpisu (query
+  na `vat_code`), **ne** jako atribut kódu ve `world.vat` — legislativní
+  vrstva zůstává bez účetních konvencí. Řádek má každý kód, který může
+  vyprodukovat nenulovou daň (nenulové `vatPercents` vč. historické 3xx
+  řady kvůli zpětně datovaným a migrovaným dokladům + cíle
+  `reverseVatCode`); úplnost vůči číselníku i seed rozvrhům hlídá
+  `VatAnalyticsCompletenessTest`.
+- **Zahraničí (budoucí OSS)**: `343{CC}{NNN}` (`de-120` → `343DE120`).
+  Zahraniční účty se **neprovisionují** do každého DS — vzniknou on-demand
+  s budoucím OSS úkolem (enablement per stát = doprovisionování účtů +
+  per-datasource vrstva mapování; pořadí resolution pak: per-DS mapování →
+  předpis → fallback). Alfanumerická čísla účtů projdou celým stackem:
+  `AccountDocument::validate` povoluje analytiku `3 číslice + 1–9 číslic
+  či písmen`, `deriveStructure` je délková (level 4, g3 `343`), sloupce
+  `number` / `account_number` jsou varchar(12).
+- **Fallback** `{"cat": "vat", "accountMask": "343"}` je omezen query na
+  `vat_code_country = cz`: neznámý tuzemský kód spadne na syntetiku 343,
+  zahraniční kód bez mapování skončí hlasitě (`account_not_found`, řádek
+  `343???`, `is_error`, alert) — žádné tiché smíchání cizí DPH s tuzemskou.
+  Hodnota `cz` je správně, dokud existuje jen `rules.cz`; každý budoucí
+  country předpis dostane vlastní fallback se svou zemí.
+- **Krácené kódy** (118/119/341/342, koeficient odpočtu): zatím se účtuje
+  plná daň na vlastní analytiku; krácení odpočtu (dopočet na 548) je
+  budoucí téma DPH přiznání — mimo scope účtování.
 
 ---
 
@@ -504,7 +569,8 @@ Storno (30) = doklad účetně neexistuje. Generování je idempotentní
 3. Pro každý krok předpisu:
    a. src=rows: iteruj řádky dokladu (row_kind=1), aplikuj filtry
       (operation/operations, query, sign) → částka z vat_base_dom / vat_base
-   b. src=vat:  iteruj vat_recap → tax_dom / tax
+   b. src=vat:  iteruj vat_recap → tax_dom / tax; záznam se obohatí o
+      vat_code_country; pár is_reverse_pair=1 jde na opačnou stranu kroku
    c. src=head: jedna částka podle col
    d. dohledej účet (sekce 5), sestav řádek deníku
    e. money == 0 → řádek se přeskakuje
@@ -563,10 +629,14 @@ provádí jednou (při uložení dokladu) a deník už jen čte hotové hodnoty.
 ```
 Σ rows.vat_base_dom   (per vat_code) == vat_recap.base_dom   (daného kódu)
 Σ rows.vat_amount_dom (per vat_code) == vat_recap.tax_dom
-Σ vat_recap.base_dom  == heads.total_base_dom
-Σ vat_recap.tax_dom   == heads.total_vat_dom
+Σ vat_recap.base_dom  (sum_base=1)   == heads.total_base_dom
+Σ vat_recap.tax_dom   (sum_tax=1)    == heads.total_vat_dom
 total_base_dom + total_vat_dom + total_rounding_dom == total_amount_dom
 ```
+
+Pozn. k reverse charge: primární řádek samovyměření nese spočtenou daň
+(odpočet), ale `sum_tax = 0` — do `total_vat` nevstupuje a `total` řádku
+je jen základ (daň se dodavateli neplatí).
 
 Dorovnání: rozdíl ze zaokrouhlení se přičte k poslednímu nenulovému řádku
 příslušné skupiny (vat_code). Závazné jsou head totals (top-down: head →
@@ -658,13 +728,18 @@ Vědomě se teď neřeší (a předpis/schéma na to nic nepředpřipravuje):
   typy dokladů; mechanismus `query` v krocích předpisu pokryje budoucí
   potřeby typu filtr podle `payment_method`. Hotovostní úhrada faktury
   (protistrana 211) se vyřeší až s pokladnou.
-- **DPH analytiky per vatCode** — zatím jediná maska `343`. Až budou
-  `vatCodes` řádný číselník, analytika bude **atribut kódu**
-  (`accountAnalytics`) — žádné odvozování ze substringů jako ve starém
-  systému. Stejný princip později pro analytiky bankovních účtů a pokladen
-  (atribut v codebooku, jako `debsAccountId` ve starém systému).
+- **OSS** (prodej neplátcům v EU se zahraničními sazbami) — `vat-de.jsonc`
+  a další státy, zahraniční kódy v UI dokladu, OSS přiznání, per-datasource
+  vrstva mapování, enablement per stát. Základ je položený: konvence
+  `343{CC}{NNN}`, fallback omezený na tuzemsko, alfanumerické účty projdou
+  stackem (viz sekce 5, Konvence DPH analytik a OSS).
+- **Krácení odpočtu** u krácených kódů (118/119/341/342) — dopočet na 548
+  je téma budoucího DPH přiznání; zatím se účtuje plná daň na vlastní
+  analytiku.
 - **Automatické zakládání DPH účtů za běhu** (`checkAccountVAT`) — účty
   zakládá provisioner / uživatel, engine jen dohledává.
+- **Analytiky bankovních účtů a pokladen** — později jako atribut
+  v codebooku (jako `debsAccountId` ve starém systému).
 
 ---
 
@@ -678,9 +753,9 @@ Drobnosti zjištěné implementací:
 
 - cfgItem předpisu: `economy.accounting.rules.cz` (tečkovaný suffix funguje)
 - extension soubory dle cílové tabulky (`extensions/docs_core_heads.jsonc`)
-- krok `src: vat` iteruje celý recap — oddaňovací pár reverse charge proto
-  skončí jako `unbalanced` → state 2 + alert (RC účtování je mimo scope,
-  záměrně hlasité chování)
+- reverse charge se účtuje oboustranně: primární řádek recapu nese odpočet
+  (strana kroku), pár `is_reverse_pair = 1` oddanění (opačná strana) —
+  viz sekce 4, Specifika `src: vat`
 - integrační testy: `tests/Integration/Accounting/`
 
 ### Fáze 1 — pohyby a sloupce ✓
@@ -734,7 +809,11 @@ Drobnosti zjištěné implementací:
    (head → recap → rows).
 7. Předpis per-country (`accountingRules.cz.jsonc`) v `economy.accounting`;
    výběr dle země vlastní firmy.
-8. DPH zatím jedna maska `343`; analytika později jako atribut vatCode.
+8. DPH analytiky per kód: mapování `vat_code → 343{NNN}` žije v sekci
+   `accounts` účtovacího předpisu (query na `vat_code`), **ne** jako
+   atribut kódu ve `world.vat` (legislativní vrstva bez účetních konvencí)
+   a **ne** v DB číselníku (ten přijde až jako per-DS override s OSS).
+   Ruší dřívější záměr „analytika jako atribut vatCode".
 9. Účetní položky: extension `accounting_account` na items (FK na rozvrh),
    pohyb `acc.entry`, účet přímo z položky (`accountSrc: "item"`).
 10. Saldokonto kompletně mimo scope, bez předpřípravy ve schématu.
@@ -742,3 +821,20 @@ Drobnosti zjištěné implementací:
     ne čísla účtů.
 12. Hook přes obecný mechanismus `documentEventHandlers`
     (`stateChanged`, `beforeDelete`) — použitelný i pro budoucí sklad/saldo.
+13. Konvence čísel DPH analytik: `343{NNN}` tuzemsko, `343{CC}{NNN}`
+    zahraničí (`de-120` → `343DE120`); `NNN` = číselná část vat kódu.
+    Zahraniční analytiky se neprovisionují plošně — on-demand s OSS.
+14. Reverse charge: primární řádek rekapitulace (kód s `reverseVatCode`)
+    nese spočtenou daň — odpočet pro účetnictví i budoucí DPH přiznání;
+    `total` řádku je jen základ a `sum_tax = 0` drží head totals beze změny.
+    Pár (`is_reverse_pair = 1`) se účtuje na opačnou stranu než krok;
+    analytika podle vlastního kódu páru.
+15. Fallback `vat` masky 343 omezen na `vat_code_country = cz` — zahraniční
+    kód bez mapování selže hlasitě (chybový řádek `343???` + alert), nikdy
+    tiše na 343. Až přibudou další country předpisy, každý má svůj fallback
+    se svou zemí.
+16. Historické kódy (3xx řada 2015–2023) mají mapování i seed účty — kvůli
+    zpětně datovaným a migrovaným dokladům. Trvale nulové kódy (112, 122,
+    123, 201, 202, 401) mapování nemají, nulová daň řádek negeneruje.
+17. PDP výstup (cz-150/151/152/350): `noPayTax + sumTax: 0` — faktura je
+    jen základ, daň odvádí zákazník, bez oddaňovacího páru (oprava W4).

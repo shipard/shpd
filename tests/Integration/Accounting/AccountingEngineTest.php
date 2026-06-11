@@ -293,6 +293,89 @@ class AccountingEngineTest extends IntegrationTestCase
         $this->assertEqualsWithDelta(423.5, (float) $this->lineByPrefix($journal, '321')['money_cr'], 0.001);
     }
 
+    /**
+     * W1: EU pořízení služeb (invni, cz-217, základ 1000, 21 %).
+     * Recap dle DocDocument: primární cz-217 nese odpočet (tax 210,
+     * sum_tax 0), pár cz-207 oddanění (is_reverse_pair 1). Engine:
+     * odpočet MD (strana kroku), oddanění DAL (opačná strana).
+     */
+    public function testInvniEuAcquisitionBooksVatBothSides(): void
+    {
+        $headId = $this->insertHead('invni', [
+            'total_base' => 1000.0, 'total_vat' => 0.0, 'total_amount' => 1000.0,
+            'total_base_dom' => 1000.0, 'total_vat_dom' => 0.0, 'total_amount_dom' => 1000.0,
+        ]);
+        $this->insertRow($headId, 'purchase.services', 1000.0, 21.0, ['vat_code' => 'cz-217']);
+        $this->insertRecap($headId, 1000.0, 210.0, [
+            'vat_code' => 'cz-217', 'total' => 1000.0, 'total_dom' => 1000.0, 'sum_tax' => 0,
+        ]);
+        $this->insertRecap($headId, 1000.0, 210.0, [
+            'vat_code' => 'cz-207', 'is_reverse_pair' => 1, 'order_pos' => 1,
+            'sum_base' => 0, 'sum_tax' => 0, 'sum_total' => 0,
+        ]);
+
+        $result = $this->engine->accountDocument($headId);
+
+        $this->assertSame(1, $result['state'], 'EU pořízení musí být vyrovnané: ' . json_encode($result['messages']));
+        $journal = $this->journalOf($headId);
+        $this->assertCount(4, $journal);
+        $this->assertBalanced($journal);
+
+        $this->assertEqualsWithDelta(1000.0, (float) $this->lineByPrefix($journal, '518')['money_dr'], 0.001);
+        $this->assertEqualsWithDelta(1000.0, (float) $this->lineByPrefix($journal, '321')['money_cr'], 0.001);
+
+        $vatLines = array_values(array_filter(
+            $journal,
+            fn($l) => str_starts_with((string) $l['account_number'], '343'),
+        ));
+        $this->assertCount(2, $vatLines, 'Odpočet i oddanění musí mít vlastní řádek deníku');
+        $md = array_values(array_filter($vatLines, fn($l) => (float) $l['money_dr'] > 0));
+        $dal = array_values(array_filter($vatLines, fn($l) => (float) $l['money_cr'] > 0));
+        $this->assertCount(1, $md, 'Odpočet DPH na MD');
+        $this->assertCount(1, $dal, 'Oddanění DPH na DAL');
+        $this->assertEqualsWithDelta(210.0, (float) $md[0]['money_dr'], 0.001);
+        $this->assertEqualsWithDelta(210.0, (float) $dal[0]['money_cr'], 0.001);
+    }
+
+    /**
+     * W1: tuzemské PDP4 na vstupu (invni, cz-115 → pár cz-203).
+     */
+    public function testInvniDomesticPdpInputBooksVatBothSides(): void
+    {
+        $headId = $this->insertHead('invni', [
+            'total_base' => 1000.0, 'total_vat' => 0.0, 'total_amount' => 1000.0,
+            'total_base_dom' => 1000.0, 'total_vat_dom' => 0.0, 'total_amount_dom' => 1000.0,
+        ]);
+        $this->insertRow($headId, 'purchase.other', 1000.0, 21.0, ['vat_code' => 'cz-115']);
+        $this->insertRecap($headId, 1000.0, 210.0, [
+            'vat_code' => 'cz-115', 'total' => 1000.0, 'total_dom' => 1000.0, 'sum_tax' => 0,
+        ]);
+        $this->insertRecap($headId, 1000.0, 210.0, [
+            'vat_code' => 'cz-203', 'is_reverse_pair' => 1, 'order_pos' => 1,
+            'sum_base' => 0, 'sum_tax' => 0, 'sum_total' => 0,
+        ]);
+
+        $result = $this->engine->accountDocument($headId);
+
+        $this->assertSame(1, $result['state'], 'PDP vstup musí být vyrovnaný: ' . json_encode($result['messages']));
+        $journal = $this->journalOf($headId);
+        $this->assertCount(4, $journal);
+        $this->assertBalanced($journal);
+
+        $this->assertEqualsWithDelta(1000.0, (float) $this->lineByPrefix($journal, '548')['money_dr'], 0.001);
+        $this->assertEqualsWithDelta(1000.0, (float) $this->lineByPrefix($journal, '321')['money_cr'], 0.001);
+
+        $vatLines = array_values(array_filter(
+            $journal,
+            fn($l) => str_starts_with((string) $l['account_number'], '343'),
+        ));
+        $this->assertCount(2, $vatLines);
+        $md = array_values(array_filter($vatLines, fn($l) => (float) $l['money_dr'] > 0));
+        $dal = array_values(array_filter($vatLines, fn($l) => (float) $l['money_cr'] > 0));
+        $this->assertEqualsWithDelta(210.0, (float) ($md[0]['money_dr'] ?? 0), 0.001);
+        $this->assertEqualsWithDelta(210.0, (float) ($dal[0]['money_cr'] ?? 0), 0.001);
+    }
+
     public function testInvnoForeignCurrencyBothAmountSetsBalance(): void
     {
         $rate = 25.285;

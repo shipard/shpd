@@ -593,16 +593,24 @@ abstract class DocDocument extends Document
             $codeDef = $vatCodes[$code];
 
             $base = round($entry['base'], 2);
-            $tax  = empty($codeDef['noPayTax'])
+
+            // Samovyměření (kód s reverseVatCode): primární řádek nese
+            // spočtenou daň — je to nárok na odpočet (DPH přiznání ř. 43/44)
+            // a předloha pro stranu MD v účetnictví. Do total se ale počítá
+            // jen daň placená dodavateli, u noPayTax tedy zůstává jen základ.
+            $selfAssessed = !empty($codeDef['reverseVatCode'])
+                && isset($vatCodes[(string) $codeDef['reverseVatCode']]);
+            $tax = (empty($codeDef['noPayTax']) || $selfAssessed)
                 ? $this->applyRounding($base * $entry['vat_pct'] / 100.0, $vatRoundingMode)
                 : 0.0;
+            $payableTax = empty($codeDef['noPayTax']) ? $tax : 0.0;
 
             $primary = [
                 'vat_code'        => $code,
                 'vat_pct'         => $entry['vat_pct'],
                 'base'            => $base,
                 'tax'             => $tax,
-                'total'           => round($base + $tax, 2),
+                'total'           => round($base + $payableTax, 2),
                 'sum_base'        => (int) ($codeDef['sumBase']  ?? 1),
                 'sum_tax'         => (int) ($codeDef['sumTax']   ?? 1),
                 'sum_total'       => (int) ($codeDef['sumTotal'] ?? 1),
@@ -615,7 +623,7 @@ abstract class DocDocument extends Document
             $recap[] = $primary;
 
             // Reverse charge — generate paired (oddanění) row
-            if (!empty($codeDef['reverseVatCode']) && isset($vatCodes[$codeDef['reverseVatCode']])) {
+            if ($selfAssessed) {
                 $reverseCodeKey = (string) $codeDef['reverseVatCode'];
                 $reverseDef     = $vatCodes[$reverseCodeKey];
 

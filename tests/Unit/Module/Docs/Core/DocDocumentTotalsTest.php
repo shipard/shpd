@@ -32,8 +32,9 @@ class DocDocumentTotalsTest extends TestCase
     public function testSumTotalsExcludesReverseChargePair(): void
     {
         $recap = [
-            // Primary cz-115 (PDP) — sum_tax=0
-            ['base' => 200, 'tax' => 0,  'total' => 200, 'sum_base' => 1, 'sum_tax' => 0, 'sum_total' => 1],
+            // Primary cz-115 (PDP) — nese odpočet (tax 42), ale sum_tax=0
+            // a total jen základ (daň se dodavateli neplatí)
+            ['base' => 200, 'tax' => 42, 'total' => 200, 'sum_base' => 1, 'sum_tax' => 0, 'sum_total' => 1],
             // Paired cz-203 (oddanění) — all sum_*=0
             ['base' => 200, 'tax' => 42, 'total' => 242, 'sum_base' => 0, 'sum_tax' => 0, 'sum_total' => 0],
         ];
@@ -121,8 +122,8 @@ class DocDocumentTotalsTest extends TestCase
     {
         // Reverse charge: paired oddanění line must not leak into head sums
         $recap = [
-            ['vat_code' => 'cz-115', 'vat_pct' => 0.0, 'base' => 200.0, 'tax' => 0.0,
-             'base_dom' => 200.0, 'tax_dom' => 0.0,
+            ['vat_code' => 'cz-115', 'vat_pct' => 21.0, 'base' => 200.0, 'tax' => 42.0,
+             'base_dom' => 200.0, 'tax_dom' => 42.0,
              'sum_base' => 1, 'sum_tax' => 0, 'is_reverse_pair' => 0],
             ['vat_code' => 'cz-203', 'vat_pct' => 21.0, 'base' => 200.0, 'tax' => 42.0,
              'base_dom' => 200.0, 'tax_dom' => 42.0,

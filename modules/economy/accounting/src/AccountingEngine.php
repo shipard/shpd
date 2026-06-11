@@ -24,10 +24,9 @@ use Shipard\Module\Docs\Core\OwnCompanyResolver;
  *
  * Algoritmus a sémantika kroků předpisu: docs/accounting.md sekce 4, 5, 7.3.
  *
- * Známá mez (reverse charge je mimo scope, docs/accounting.md sekce 10):
- * krok `src: vat` iteruje celou rekapitulaci, takže oddaňovací pár PDP
- * vygeneruje jednostrannou DPH → unbalanced → state 2 + alert. Záměrně
- * hlasité chování, ne tichá chyba.
+ * Reverse charge: primární řádek rekapitulace nese odpočet (účtuje se na
+ * stranu kroku), oddaňovací pár (`is_reverse_pair = 1`) na stranu opačnou —
+ * deník je vyrovnaný a obě strany dostanou analytiku svého vat kódu.
  */
 final class AccountingEngine
 {
@@ -261,8 +260,17 @@ final class AccountingEngine
                 (string) ($r['vat_code'] ?? ''),
                 rtrim(rtrim(number_format((float) ($r['vat_pct'] ?? 0), 2, '.', ''), '0'), '.'),
             );
+
+            // Oddaňovací pár reverse charge jde na opačnou stranu než krok —
+            // primární řádek nese odpočet (strana kroku), pár samovyměření.
+            // Nezávislé na reverseSign (ten otáčí znaménko částky).
+            $lineStep = $step;
+            if (!empty($r['is_reverse_pair'])) {
+                $lineStep['side'] = ((int) ($step['side'] ?? 0)) === 0 ? 1 : 0;
+            }
+
             $lines[] = $this->makeLine(
-                $step,
+                $lineStep,
                 $head,
                 $this->resolveCategoryAccount($step, $r, $head, null),
                 $dom,

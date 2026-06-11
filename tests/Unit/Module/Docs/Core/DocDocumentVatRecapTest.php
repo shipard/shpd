@@ -180,10 +180,12 @@ class DocDocumentVatRecapTest extends TestCase
 
         $this->assertCount(2, $recap);
 
-        // Primary cz-115 — base=200, tax=0 (noPayTax=1), sum_tax=0
+        // Primary cz-115 — samovyměření: tax=42 (nárok na odpočet),
+        // total ale jen základ (noPayTax — daň se dodavateli neplatí)
         $this->assertSame('cz-115', $recap[0]['vat_code']);
         $this->assertSame(200.0, $recap[0]['base']);
-        $this->assertSame(0.0, $recap[0]['tax']);
+        $this->assertSame(42.0, $recap[0]['tax']);
+        $this->assertSame(200.0, $recap[0]['total']);
         $this->assertSame(0, $recap[0]['sum_tax']);
         $this->assertSame(0, $recap[0]['is_reverse_pair']);
 

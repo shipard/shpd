@@ -171,6 +171,7 @@ export default {
   'error.FORBIDDEN': 'Insufficient permissions',
   'error.BAD_REQUEST': 'Bad request',
   'error.METHOD_NOT_ALLOWED': 'Method not allowed',
+  'error.INVALID_DOC_STATE': 'The document state does not allow this action',
   'error.INTERNAL_ERROR': 'Internal server error',
   'error.UPLOAD_ERROR': 'File upload failed',
   'error.NETWORK_ERROR': 'Network error — check your connection',

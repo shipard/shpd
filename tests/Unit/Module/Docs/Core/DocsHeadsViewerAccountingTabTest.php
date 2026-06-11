@@ -262,6 +262,49 @@ class DocsHeadsViewerAccountingTabTest extends TestCase
         $this->assertStringContainsString('Chybí fiskální období', $tab['content']['blocks'][0]['html']);
     }
 
+    // ── Akce Přeúčtovat ─────────────────────────────────────────────────────
+
+    public function testReaccountActionPresentForStateOkDocument(): void
+    {
+        $viewer = $this->makeViewer(
+            $this->baseRecord(['accounting_state' => 1]),
+            $this->okJournal(),
+        );
+        $detail = $viewer->renderDetail(7);
+
+        $this->assertSame([[
+            'id'      => 'reaccount',
+            'label'   => 'Přeúčtovat',
+            'kind'    => 'button',
+            'variant' => 'secondary',
+        ]], $detail['actions']);
+    }
+
+    public function testReaccountActionAvailableEvenForErrorFreeAccounting(): void
+    {
+        // Přeúčtovat lze i doklad bez chyb účtování (accounting_state 0/1/2
+        // nehraje roli) — rozhoduje jen docState 40.
+        $viewer = $this->makeViewer($this->baseRecord(['accounting_state' => 0]));
+        $this->assertArrayHasKey('actions', $viewer->renderDetail(7));
+    }
+
+    public function testNoReaccountActionOutsideStateOk(): void
+    {
+        $viewer = $this->makeViewer(
+            $this->baseRecord(['docState' => 10, 'accounting_state' => 0]),
+        );
+        $this->assertArrayNotHasKey('actions', $viewer->renderDetail(7));
+    }
+
+    public function testNoReaccountActionWithoutAccountingExtension(): void
+    {
+        $record = $this->baseRecord();
+        unset($record['accounting_state'], $record['accounting_messages']);
+
+        $viewer = $this->makeViewer($record);
+        $this->assertArrayNotHasKey('actions', $viewer->renderDetail(7));
+    }
+
     // ── Cizí měna ───────────────────────────────────────────────────────────
 
     public function testForeignCurrencyAddsCurrencyColumnsAndSums(): void

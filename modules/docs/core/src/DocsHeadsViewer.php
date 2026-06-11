@@ -269,7 +269,39 @@ class DocsHeadsViewer extends TableViewer
             $tabs[] = $accountingTab;
         }
 
-        return ['tabs' => $tabs];
+        $detail = ['tabs' => $tabs];
+
+        $actions = $this->buildDetailActions($record);
+        if ($actions !== []) {
+            $detail['actions'] = $actions;
+        }
+
+        return $detail;
+    }
+
+    /**
+     * Akce detailu dokladu. Přeúčtovat — jen pro doklad ve stavu 40
+     * s nainstalovaným economy.accounting (guard přes extension sloupec,
+     * stejně jako buildAccountingTab). Záměrně bez vazby na accounting_state:
+     * přeúčtovat lze i bezchybně zaúčtovaný doklad (operace je idempotentní,
+     * proto i bez confirm). Obsluha: Viewer.svelte volá
+     * POST /_accounting/reaccount a refreshne detail.
+     */
+    private function buildDetailActions(array $record): array
+    {
+        if (!array_key_exists('accounting_state', $record)) {
+            return [];
+        }
+        if ((int) ($record['docState'] ?? 0) !== 40) {
+            return [];
+        }
+
+        return [[
+            'id'      => 'reaccount',
+            'label'   => $this->language === 'cs' ? 'Přeúčtovat' : 'Re-account',
+            'kind'    => 'button',
+            'variant' => 'secondary',
+        ]];
     }
 
     // ── Tab Zaúčtování (economy.accounting) ────────────────────────────────

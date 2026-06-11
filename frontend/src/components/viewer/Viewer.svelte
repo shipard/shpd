@@ -7,6 +7,7 @@
     unsnoozeAlert,
     runAlertCheck,
   } from '../../api/alerts.js';
+  import { reaccountDocument } from '../../api/accounting.js';
   import ViewerRow from './ViewerRow.svelte';
   import ViewerDetail from './ViewerDetail.svelte';
   import ViewerToolbar from './ViewerToolbar.svelte';
@@ -391,6 +392,15 @@
       const checkId = action.meta?.checkId;
       if (!checkId) return;
       const result = await runAlertCheck(checkId);
+      if (result?.success) refreshAfterAction();
+      else alert(translateError(result?.error));
+      return;
+    }
+    // Přeúčtovat doklad (DocsHeadsViewer, doklad ve stavu 40). Success
+    // zahrnuje i výsledek „zaúčtováno s chybami" — refresh detailu ukáže
+    // banner v tabu Zaúčtování.
+    if (actionId === 'reaccount') {
+      const result = await reaccountDocument(recordId);
       if (result?.success) refreshAfterAction();
       else alert(translateError(result?.error));
       return;

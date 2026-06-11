@@ -183,6 +183,7 @@ export default {
   'error.FORBIDDEN': 'Nedostatečná oprávnění',
   'error.BAD_REQUEST': 'Chybný požadavek',
   'error.METHOD_NOT_ALLOWED': 'Metoda není povolená',
+  'error.INVALID_DOC_STATE': 'Doklad není ve stavu, který tuto akci umožňuje',
   'error.INTERNAL_ERROR': 'Vnitřní chyba serveru',
   'error.UPLOAD_ERROR': 'Chyba při nahrávání souboru',
   'error.NETWORK_ERROR': 'Chyba sítě — zkontrolujte připojení',

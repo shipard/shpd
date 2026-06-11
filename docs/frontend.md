@@ -557,7 +557,7 @@ Typy obsahu:
 | `heading` | mezititulek sekce (`text`) |
 | `attachment-grid` | plochý grid příloh (`attachments`: `id`, `name`, `mime_type`, `file_size` v bajtech); přepínání miniatury/velké náhledy přes sdílený store `attachmentView.svelte.js` |
 | `composite` | seznam `blocks[]` — každý blok je libovolný z ostatních typů, renderuje se rekurzivně týmž snippetem |
-| `extracted-documents`, `attachments`, `document` | doménové typy: extrahované dokumenty pošty, přílohy seskupené po zprávách, textový detail dokladu (`DocumentDetail`; hlavička dokladu je nově nad taby, klíč `header` se v contentu už neposílá) |
+| `extracted-documents`, `attachments`, `document` | doménové typy: extrahované dokumenty pošty, přílohy seskupené po zprávách, textový detail dokladu (`DocumentDetail`; hlavička dokladu je nově nad taby, klíč `header` se v contentu už neposílá). V `document` contentu je jméno partnera klikatelné (klíč `person_id` přidává backend jen na partnerské straně podle `trade_dir` — vlastní firma ho nedostane) a popis řádku s vazbou na Položku též (`item_id` se posílá jen když položka v DB existuje, včetně archivu a koše; tehdy má řádek i badge `item_state: {label, style}`). Klik volá `onAction` s generickou akcí `kind: open_form` — otevře `FormDialog` osoby (`base_persons_persons`) / položky (`economy_items`), po uložení se detail i seznam refreshnou |
 
 ### Akce detailu (`detail.actions`)
 
@@ -576,6 +576,10 @@ tlačítek nad taby (vzor `AlertsViewer::buildDetailActions`):
 - `kind: "dropdown"` — `items: [{label, value}]`, výběr položky volá akci
   s hodnotou (bez confirm).
 - `kind: "open_form"` — otevře `FormDialog` dle `target.{table, mode, id, preset}`.
+  Stejný handler využívá i `DocumentDetail` pro klikatelného partnera a položky
+  řádků — akce nejde z `detail.actions`, ale komponenta ji skládá sama a volá
+  `onAction('open_record', …)`; id `open_record` není ve sdíleném slovníku
+  vestavěných akcí, takže propadá na generickou obsluhu podle `kind`.
 - `kind: "open_viewer"` — cross-viewer navigace: `viewerId` + `recordId` →
   `navigationStore.navigateToViewer()` (cílový viewer záznam předvybere
   přes `pendingRecordId`). Používá deník pro odkaz na zdrojový doklad.

@@ -21,6 +21,13 @@ class DocsHeadsViewer extends TableViewer
     /** tableId tabulky docs_core_heads — pro vlastní přílohy dokladu. */
     private const TABLE_ID_HEADS = 401;
 
+    /**
+     * docStates cfgItem položek (economy_items) — musí ladit
+     * s ItemsViewer::$docStatesCfgItem. Pro badge stavu položky u řádků
+     * detailu dokladu (itemStateBadge).
+     */
+    private const ITEMS_DOC_STATES_CFG_ITEM = 'core.system.docStatesArchive';
+
     private ?PersonSnapshotBuilder $personSnapshotBuilder = null;
     private ?OwnCompanyResolver $ownCompanyResolver = null;
 
@@ -556,16 +563,12 @@ class DocsHeadsViewer extends TableViewer
         $supplier = $this->decodeSnapshot($record['supplier_snapshot'] ?? null);
         $customer = $this->decodeSnapshot($record['customer_snapshot'] ?? null);
         if ($supplier !== null && $customer !== null) {
-            return [$supplier, $customer];
+            return $this->attachPartnerPersonId($record, $supplier, $customer);
         }
 
         // Stejné mapování jako DocDocument::buildSnapshots():
         // trade_dir 1 = my jsme dodavatel, jinak my odběratel.
-        $docTypes = $this->config?->cfgItem('docs.core.docTypes');
-        $docTypeKey = (string) ($record['doc_type'] ?? '');
-        $tradeDir = is_array($docTypes)
-            ? (int) ($docTypes[$docTypeKey]['trade_dir'] ?? 2)
-            : 2;
+        $tradeDir = $this->resolveTradeDir($record);
 
         $partner = null;
         $partnerId = (int) ($record['partner'] ?? 0);
@@ -595,7 +598,56 @@ class DocsHeadsViewer extends TableViewer
         $liveSupplier = $tradeDir === 1 ? $own : $partner;
         $liveCustomer = $tradeDir === 1 ? $partner : $own;
 
-        return [$supplier ?? $liveSupplier, $customer ?? $liveCustomer];
+        return $this->attachPartnerPersonId(
+            $record,
+            $supplier ?? $liveSupplier,
+            $customer ?? $liveCustomer,
+        );
+    }
+
+    /**
+     * Směr obchodu z docs.core.docTypes — stejné mapování jako
+     * DocDocument::buildSnapshots(): trade_dir 1 = my jsme dodavatel,
+     * jinak my odběratel.
+     */
+    private function resolveTradeDir(array $record): int
+    {
+        $docTypes = $this->config?->cfgItem('docs.core.docTypes');
+        $docTypeKey = (string) ($record['doc_type'] ?? '');
+        return is_array($docTypes)
+            ? (int) ($docTypes[$docTypeKey]['trade_dir'] ?? 2)
+            : 2;
+    }
+
+    /**
+     * Dekorace partnerské strany detailu odkazem na živý záznam osoby
+     * (klíč person_id) — frontend z něj dělá klikatelné jméno, které otevře
+     * formulář osoby. Jen partner; vlastní firma person_id nedostane,
+     * a zůstává tak neklikatelná. Perzistovaný tvar snapshotu se nemění —
+     * dekoruje se až výstup pro renderDetail. Odkaz vede na aktuální záznam
+     * osoby, který se u potvrzených dokladů může od zmrazeného snapshotu
+     * lišit (záměrné rozhodnutí).
+     *
+     * @return array{0: ?array<string, mixed>, 1: ?array<string, mixed>}  [supplier, customer]
+     */
+    private function attachPartnerPersonId(array $record, ?array $supplier, ?array $customer): array
+    {
+        $partnerId = (int) ($record['partner'] ?? 0);
+        // partner_name z LEFT JOIN v renderDetail — null znamená visící FK,
+        // mrtvý odkaz se neposílá.
+        if ($partnerId <= 0 || ($record['partner_name'] ?? null) === null) {
+            return [$supplier, $customer];
+        }
+
+        if ($this->resolveTradeDir($record) === 1) {
+            if ($customer !== null) {
+                $customer['person_id'] = $partnerId;
+            }
+        } elseif ($supplier !== null) {
+            $supplier['person_id'] = $partnerId;
+        }
+
+        return [$supplier, $customer];
     }
 
     /** @return array<string, mixed>|null */
@@ -635,9 +687,11 @@ class DocsHeadsViewer extends TableViewer
         $rows = $this->db->fetchAll(
             'SELECT r.`row_kind`, r.`order_pos`, r.`description`, r.`quantity`,'
             . ' r.`unit_price`, r.`total_price`, r.`vat_pct`,'
-            . ' u.`shortcut` AS unit_shortcut'
+            . ' u.`shortcut` AS unit_shortcut,'
+            . ' it.`id` AS item_id, it.`docState` AS item_doc_state'
             . ' FROM `docs_core_rows` r'
             . ' LEFT JOIN `core_units` u ON u.`id` = r.`unit`'
+            . ' LEFT JOIN `economy_items` it ON it.`id` = r.`item`'
             . ' WHERE r.`doc_head` = %i'
             . ' ORDER BY r.`order_pos` ASC, r.`id` ASC',
             $recordId,
@@ -645,7 +699,8 @@ class DocsHeadsViewer extends TableViewer
 
         $out = [];
         foreach ($rows as $row) {
-            $out[] = [
+            $itemId = isset($row['item_id']) ? (int) $row['item_id'] : null;
+            $entry = [
                 'order_pos'   => (int) ($row['order_pos'] ?? 0),
                 'kind'        => (int) ($row['row_kind'] ?? 1),
                 'description' => (string) ($row['description'] ?? ''),
@@ -655,6 +710,16 @@ class DocsHeadsViewer extends TableViewer
                 'vat_pct'     => $this->formatTrimmedNumber($row['vat_pct'] ?? null, 2),
                 'total_price' => $this->formatMoney($row['total_price'] ?? null),
             ];
+            // Vazba na Položky přes FK docs_core_rows.item — řádek bez FK
+            // (typicky import z pošty s pouhým popisem) odkaz nemá.
+            if ($itemId !== null) {
+                $entry['item_id'] = $itemId;
+                $badge = $this->itemStateBadge((int) ($row['item_doc_state'] ?? 0));
+                if ($badge !== null) {
+                    $entry['item_state'] = $badge;
+                }
+            }
+            $out[] = $entry;
         }
         return $out;
     }
@@ -825,6 +890,32 @@ class DocsHeadsViewer extends TableViewer
         }
         $cfg = DocStateConfig::fromCfgItem($this->config->cfgItem($this->docStatesCfgItem));
         return $cfg->getState($docState)['stateStyle'] ?? 'concept';
+    }
+
+    /**
+     * Badge stavu položky pro řádek detailu — jen archiv a koš, aby šlo
+     * hned vidět, že odkazovaná položka už není aktivní. Aktivní stavy
+     * badge nedostávají (zbytečný šum). Label je stateName z cfgItem,
+     * lokalizovaný přes compiled config daného jazyka.
+     *
+     * @return array{label: string, style: string}|null
+     */
+    private function itemStateBadge(int $docState): ?array
+    {
+        if ($this->config === null) {
+            return null;
+        }
+        $cfg = DocStateConfig::fromCfgItem($this->config->cfgItem(self::ITEMS_DOC_STATES_CFG_ITEM));
+        $state = $cfg->getState($docState);
+        $style = (string) ($state['stateStyle'] ?? '');
+        if ($style !== 'archive' && $style !== 'trash') {
+            return null;
+        }
+        $label = (string) ($state['stateName'] ?? '');
+        if ($label === '') {
+            return null;
+        }
+        return ['label' => $label, 'style' => $style];
     }
 
     private function resolveDocTypeLabel(string $key): string

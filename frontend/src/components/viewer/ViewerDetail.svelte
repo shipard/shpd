@@ -397,7 +397,7 @@
         <AttachmentGrid attachments={content.attachments ?? []} mode={attachmentViewStore.mode} />
 
       {:else if content?.type === 'document'}
-        <DocumentDetail content={content} />
+        <DocumentDetail content={content} onAction={onAction} />
 
       {:else if content?.type === 'heading'}
         <h3 class="shpd-detail__content-heading">{content.text}</h3>

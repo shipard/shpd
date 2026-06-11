@@ -9,7 +9,7 @@
   import { attachmentViewStore } from '../../stores/attachmentView.svelte.js';
   import AttachmentGrid from './AttachmentGrid.svelte';
 
-  let { content = null } = $props();
+  let { content = null, onAction = null } = $props();
 
   let header = $derived(content?.header ?? null);
   let meta = $derived(content?.meta ?? {});
@@ -52,6 +52,17 @@
     }
   }
 
+  // Klik na partnera / položku řádku — otevře FormDialog přes generický
+  // handler detail akcí ve Viewer.svelte (kind: open_form). Akční id
+  // 'open_record' není ve sdíleném slovníku vestavěných akcí (snooze,
+  // reaccount, ...), takže propadne na obsluhu podle kind.
+  function openRecord(table, id) {
+    onAction?.('open_record', {
+      kind: 'open_form',
+      target: { table, mode: 'edit', id },
+    });
+  }
+
   // Rezim zobrazeni priloh ('full'/'grid') je sdileny store — stejna volba
   // plati i v detailu dosle posty (ViewerDetail). Detaily v attachmentView.svelte.js.
 </script>
@@ -62,7 +73,17 @@
     {#if party}
       <div class="shpd-docdetail__party-body">
         {#if party.name}
-          <div class="shpd-docdetail__party-name">{party.name}</div>
+          {#if party.person_id && onAction}
+            <button
+              type="button"
+              class="shpd-docdetail__party-name shpd-docdetail__party-name--link"
+              onclick={() => openRecord('base_persons_persons', party.person_id)}
+            >
+              {party.name}
+            </button>
+          {:else}
+            <div class="shpd-docdetail__party-name">{party.name}</div>
+          {/if}
         {/if}
         {#if party.company_id || party.tax_id || party.vat_id}
           <div class="shpd-docdetail__party-ids">
@@ -97,6 +118,32 @@
       <div class="shpd-docdetail__party-empty">—</div>
     {/if}
   </div>
+{/snippet}
+
+{#snippet rowDescription(row)}
+  <!-- Popis řádku: klikatelný link na Položku, když řádek má FK item
+       a položka v DB existuje (backend posílá item_id jen tehdy).
+       item_state (archiv/koš) se vykreslí jako badge za popisem. -->
+  {#if row.item_id && onAction}
+    <button
+      type="button"
+      class="shpd-docdetail__row-link"
+      onclick={() => openRecord('economy_items', row.item_id)}
+    >
+      {row.description}
+    </button>
+  {:else}
+    {row.description}
+  {/if}
+  {#if row.item_state}
+    <span
+      class="shpd-docdetail__row-badge"
+      class:shpd-docdetail__row-badge--trash={row.item_state.style === 'trash'}
+      style="background: var(--shpd-color-state-{row.item_state.style}-bg); color: var(--shpd-color-state-{row.item_state.style}-text);"
+    >
+      {row.item_state.label}
+    </span>
+  {/if}
 {/snippet}
 
 {#if content}
@@ -160,10 +207,10 @@
                 {#if row.kind === 0}
                   <!-- Textový řádek — jen popis přes celou šířku. -->
                   <td>{row.order_pos ?? i + 1}</td>
-                  <td colspan="6">{row.description}</td>
+                  <td colspan="6">{@render rowDescription(row)}</td>
                 {:else}
                   <td>{row.order_pos ?? i + 1}</td>
-                  <td>{row.description}</td>
+                  <td>{@render rowDescription(row)}</td>
                   <td class="num">{row.quantity ?? '—'}</td>
                   <td>{row.unit ?? '—'}</td>
                   <td class="num">{row.unit_price ?? '—'}</td>
@@ -380,6 +427,25 @@
     font-style: italic;
   }
 
+  /* Klikatelné jméno partnera — link na záznam osoby. Stejná vizuální
+     váha jako party-name, jen primary barva + underline na hover. */
+  .shpd-docdetail__party-name--link {
+    display: block;
+    border: none;
+    background: none;
+    padding: 0;
+    font: inherit;
+    font-weight: 600;
+    font-size: 1rem;
+    text-align: left;
+    color: var(--shpd-color-primary);
+    cursor: pointer;
+  }
+
+  .shpd-docdetail__party-name--link:hover {
+    text-decoration: underline;
+  }
+
   /* ── Meta grid ───────────────────────────────────────────────────────── */
 
   .shpd-docdetail__meta-grid {
@@ -443,6 +509,39 @@
   .shpd-docdetail__vat-recap .num {
     text-align: right;
     font-variant-numeric: tabular-nums;
+  }
+
+  /* Klikatelný popis řádku — link na záznam položky. */
+  .shpd-docdetail__row-link {
+    border: none;
+    background: none;
+    padding: 0;
+    font: inherit;
+    text-align: left;
+    color: var(--shpd-color-primary);
+    cursor: pointer;
+  }
+
+  .shpd-docdetail__row-link:hover {
+    text-decoration: underline;
+  }
+
+  /* Badge stavu položky (archiv/koš) za popisem řádku — stejné state
+     tokeny jako badge v hlavičce detailu, koš navíc přeškrtnutý. */
+  .shpd-docdetail__row-badge {
+    display: inline-block;
+    margin-left: var(--shpd-space-xs);
+    padding: 1px 6px;
+    border-radius: 999px;
+    font-size: 0.6875rem;
+    font-weight: 500;
+    line-height: 1.4;
+    white-space: nowrap;
+    vertical-align: middle;
+  }
+
+  .shpd-docdetail__row-badge--trash {
+    text-decoration: line-through;
   }
 
   /* ── Totals ──────────────────────────────────────────────────────────── */

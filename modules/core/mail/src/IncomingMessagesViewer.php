@@ -193,6 +193,9 @@ class IncomingMessagesViewer extends TableViewer
             'title'    => $header['title'],
             'subtitle' => $header['subtitle'],
             'badges'   => $header['badges'],
+            // Stejny klic jako viewers[].icon v module.jsonc - jeden vyznam,
+            // jedna ikona pro radek vieweru i hlavicku detailu.
+            'icon'     => 'mail',
             'tabs'     => $tabs,
         ];
     }

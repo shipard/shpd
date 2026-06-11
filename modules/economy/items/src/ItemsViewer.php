@@ -172,6 +172,15 @@ class ItemsViewer extends TableViewer
             $badges[] = $stateBadge;
         }
 
+        $blocks = [['type' => 'properties', 'groups' => $groups]];
+
+        // Přílohy — velké náhledy / miniatury s přepínáním (attachment-grid)
+        $attachments = $this->fetchAttachments((int) $record['id']);
+        if ($attachments !== []) {
+            $blocks[] = ['type' => 'heading', 'text' => 'Přílohy'];
+            $blocks[] = ['type' => 'attachment-grid', 'attachments' => $attachments];
+        }
+
         return [
             'title'    => $name !== '' ? $name : '(bez názvu)',
             'subtitle' => $code !== '' ? 'Kód ' . $code : null,
@@ -181,9 +190,44 @@ class ItemsViewer extends TableViewer
             'tabs'     => [[
                 'id'      => 'overview',
                 'label'   => $this->defaultOverviewLabel(),
-                'content' => ['type' => 'properties', 'groups' => $groups],
+                'content' => count($blocks) === 1
+                    ? $blocks[0]
+                    : ['type' => 'composite', 'blocks' => $blocks],
             ]],
         ];
+    }
+
+    /**
+     * Přílohy položky pro blok `attachment-grid` (AttachmentGrid s
+     * přepínáním full/grid na frontendu). Velikost posíláme v bajtech,
+     * formátuje frontend (formatFileSize v api/attachments.js).
+     *
+     * @return array<int, array{id: int, name: string, mime_type: string, file_size: int}>
+     */
+    private function fetchAttachments(int $recordId): array
+    {
+        // table_id 311 = economy_items (tables/economy_items.jsonc),
+        // stejný vzor jako 303 v IncomingMessagesViewer
+        $files = $this->db->fetchAll(
+            'SELECT `id`, `name`, `file_name`, `file_size`, `mime_type`'
+            . ' FROM `core_attachments_files`'
+            . ' WHERE `table_id` = %i AND `record_id` = %i AND `is_deleted` = 0'
+            . ' ORDER BY `att_order` ASC, `name` ASC',
+            311,
+            $recordId,
+        );
+
+        $out = [];
+        foreach ($files as $f) {
+            $out[] = [
+                'id'        => (int) $f['id'],
+                'name'      => (string) ($f['name'] ?? $f['file_name']),
+                'mime_type' => (string) ($f['mime_type'] ?? ''),
+                'file_size' => (int) ($f['file_size'] ?? 0),
+            ];
+        }
+
+        return $out;
     }
 
     /** Badge stavu záznamu (label + stateStyle) z docState configu. */

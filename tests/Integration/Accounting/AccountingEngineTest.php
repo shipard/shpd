@@ -773,6 +773,55 @@ class AccountingEngineTest extends IntegrationTestCase
         $this->assertCount(0, $after);
     }
 
+    /**
+     * Hotovo-když #5: alfanumerický účet (OSS konvence 343{CC}{NNN})
+     * projde deriveStructure, maska ho dohledá a řádek deníku ho unese.
+     */
+    public function testAlphanumericAccountWorksEndToEnd(): void
+    {
+        $dibi = $this->db->getDibiConnection();
+        $structure = \Shipard\Module\Economy\Accounting\AccountDocument::deriveStructure('343DE123');
+        $this->assertSame(4, $structure['account_level']);
+        $this->assertSame('343', $structure['g3']);
+
+        $dibi->insert('economy_accounting_accounts', array_merge($structure, [
+            'number'       => '343DE123',
+            'name'         => 'DPH OSS DE základní (IT test)',
+            'short_name'   => 'DPH OSS DE',
+            'account_kind' => 1,
+            'docState'     => 40,
+            'docStateMain' => 3,
+        ]))->execute();
+        $accountId = (int) $dibi->getInsertId();
+
+        try {
+            // maska 343DE123 účet dohledá (LIKE, ci kolace)
+            $resolveMask = new \ReflectionMethod(AccountingEngine::class, 'resolveMask');
+            $found = $resolveMask->invoke($this->engine, '343DE123', self::ACC_DATE);
+            $this->assertNotNull($found, 'resolveMask musí alfanumerický účet najít');
+            $this->assertSame('343DE123', $found['number']);
+            $this->assertSame($accountId, $found['id']);
+
+            // řádek deníku ho unese (varchar 12) — přes acc.entry položku
+            $itemId = $this->insertAccEntryItem($accountId);
+            $headId = $this->insertHead('invno', [
+                'total_base' => 50.0, 'total_vat' => 10.5, 'total_amount' => 60.5,
+                'total_base_dom' => 50.0, 'total_vat_dom' => 10.5, 'total_amount_dom' => 60.5,
+            ]);
+            $this->insertRow($headId, 'acc.entry', 50.0, 21.0, ['item' => $itemId]);
+            $this->insertRecap($headId, 50.0, 10.5);
+
+            $result = $this->engine->accountDocument($headId);
+
+            $this->assertSame(1, $result['state']);
+            $line = $this->lineByPrefix($this->journalOf($headId), '343DE123');
+            $this->assertSame($accountId, (int) $line['account']);
+            $this->assertEqualsWithDelta(50.0, (float) $line['money_cr'], 0.001);
+        } finally {
+            $dibi->delete('economy_accounting_accounts')->where('id = %i', $accountId)->execute();
+        }
+    }
+
     private function insertAccEntryItem(?int $accountId): int
     {
         $kind = $this->db->fetchRow('SELECT id FROM economy_items_kinds ORDER BY id LIMIT 1');

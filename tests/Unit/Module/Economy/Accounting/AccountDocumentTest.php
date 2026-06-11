@@ -56,6 +56,15 @@ class AccountDocumentTest extends TestCase
         );
     }
 
+    public function testDeriveStructureAlphanumericAnalytic(): void
+    {
+        // OSS konvence 343{CC}{NNN} — délková logika, písmena projdou
+        $this->assertSame(
+            ['account_level' => 4, 'g1' => '3', 'g2' => '34', 'g3' => '343'],
+            AccountDocument::deriveStructure('343DE123'),
+        );
+    }
+
     // --- validate -----------------------------------------------------------
 
     /** @return array<string, mixed> */
@@ -86,8 +95,27 @@ class AccountDocumentTest extends TestCase
 
     public function testNonNumericNumberFails(): void
     {
+        // písmeno uvnitř syntetiky (první 3 znaky) je chyba
         $data = $this->validData();
         $data['number'] = '50A1';
+        $this->assertHasError($this->doc()->validate($data), 'number', 'invalid');
+    }
+
+    public function testAlphanumericAnalyticIsValid(): void
+    {
+        $data = $this->validData();
+        $data['number'] = '343DE123';
+        $this->assertTrue($this->doc()->validate($data)->isValid());
+
+        // case-insensitive — beforeSave normalizuje na velká písmena
+        $data['number'] = '343de123';
+        $this->assertTrue($this->doc()->validate($data)->isValid());
+    }
+
+    public function testAlphanumericClassOrGroupFails(): void
+    {
+        $data = $this->validData();
+        $data['number'] = '3A'; // třída/skupina musí být čistě číselná
         $this->assertHasError($this->doc()->validate($data), 'number', 'invalid');
     }
 
@@ -120,6 +148,16 @@ class AccountDocumentTest extends TestCase
         $this->assertSame('5', $data['g1']);
         $this->assertSame('50', $data['g2']);
         $this->assertSame('501', $data['g3']);
+    }
+
+    public function testBeforeSaveUppercasesAlphanumericNumber(): void
+    {
+        $data = ['number' => '343de123', 'name' => 'DPH OSS DE základní'];
+        $this->doc()->beforeSave($data);
+
+        $this->assertSame('343DE123', $data['number']);
+        $this->assertSame(4, $data['account_level']);
+        $this->assertSame('343', $data['g3']);
     }
 
     private function assertHasError(

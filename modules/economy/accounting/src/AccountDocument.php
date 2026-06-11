@@ -37,11 +37,18 @@ class AccountDocument extends Document
     {
         $r = new ValidationResult();
 
+        // Třída/skupina/syntetika čistě číselné; analytika smí mít za
+        // syntetikou i písmena — OSS konvence 343{CC}{NNN} (343DE120).
         $number = isset($data['number']) ? trim((string) $data['number']) : '';
         if ($number === '') {
             $r->addError('number', 'Číslo účtu je povinné', 'required');
-        } elseif (!preg_match('/^[0-9]{1,12}$/', $number)) {
-            $r->addError('number', 'Číslo účtu smí obsahovat jen 1 až 12 číslic', 'invalid');
+        } elseif (!preg_match('/^[0-9]{1,3}$|^[0-9]{3}[0-9A-Z]{1,9}$/i', $number)) {
+            $r->addError(
+                'number',
+                'Číslo účtu: 1–3 číslice (třída/skupina/syntetika), '
+                . 'analytika 3 číslice + 1–9 číslic či písmen',
+                'invalid',
+            );
         }
 
         if (empty($data['name'])) {
@@ -66,6 +73,7 @@ class AccountDocument extends Document
         }
 
         if (isset($data['number']) && $data['number'] !== '') {
+            $data['number'] = strtoupper((string) $data['number']);
             $structure = self::deriveStructure((string) $data['number']);
             $data['account_level'] = $structure['account_level'];
             $data['g1'] = $structure['g1'];

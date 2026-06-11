@@ -36,7 +36,7 @@ další providers (Ollama, ...), odeslaná pošta.
 | [IncomingMessageDocument.php](src/IncomingMessageDocument.php) | Document třída pro došlé zprávy — validace, generování ID, cascade delete |
 | [MailboxDocument.php](src/MailboxDocument.php) | Schránky — invariant "max 1 `is_default` per DS" |
 | [IncomingMessagesForm.php](src/IncomingMessagesForm.php) | Formulář pro ruční pořízení a úpravu zprávy |
-| [IncomingMessagesViewer.php](src/IncomingMessagesViewer.php) | Viewer pro seznam došlých zpráv + tab "Extrahované dokumenty" |
+| [IncomingMessagesViewer.php](src/IncomingMessagesViewer.php) | Viewer pro seznam došlých zpráv; detail s hlavičkou (předmět · odesílatel · badges) a taby Obsah / Analýzy / Extrahované dokumenty / Originál |
 | [MailRouterProvisioner.php](src/MailRouterProvisioner.php) | Bootstrap `_mail_router` + default schránky |
 | [IdempotencyStore.php](src/IdempotencyStore.php) | Lookup/store idempotency klíčů |
 | [AIProfileDocument.php](src/AIProfileDocument.php) | AI profil — JSON validace, `is_default` invariant |

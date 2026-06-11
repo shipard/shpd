@@ -76,7 +76,7 @@ frontend/
 │   │   ├── viewer/
 │   │   │   ├── Viewer.svelte           # Viewer shell (tab bar, search, infinite scroll, detail)
 │   │   │   ├── ViewerRow.svelte        # Jeden řádek seznamu (t1/t2/t3, stateStyle)
-│   │   │   ├── ViewerDetail.svelte     # Detail panel s taby (properties, table, html)
+│   │   │   ├── ViewerDetail.svelte     # Detail panel: hlavička + taby s content bloky
 │   │   │   └── ViewerToolbar.svelte    # Toolbar akcí (Přidat, Otevřít, …)
 │   │   └── form/
 │   │       ├── FormField.svelte        # Dynamický field renderer (typ → komponenta)
@@ -467,23 +467,45 @@ při změně tabu / filtru / hledání reset na 1.
 
 ### Formát detail panelu (`renderDetail()`)
 
-Vrací taby s obsahem jednoho ze tří typů:
+Vrací volitelnou hlavičku (`title`, `subtitle`, `badges`) a taby s obsahem:
 
 ```json
-{"tabs": [
-    {"id": "overview", "label": "Přehled", "content": {
-        "type": "properties",
-        "groups": [{"title": "Identifikace", "items": [{"label": "IČO", "value": "12345"}]}]
-    }},
-    {"id": "contacts", "label": "Kontakty", "content": {
-        "type": "table",
-        "columns": [{"id": "name", "label": "Název"}, {"id": "email", "label": "E-mail"}],
-        "rows": [{"name": "Jan Novák", "email": "jan@example.com"}]
-    }}
-]}
+{
+    "title": "Faktura 2026/0412 — dodávka serverů",
+    "subtitle": "Jan Novák <jan@example.com> · Fakturace (FAKT) · 9. 6. 2026 14:32",
+    "badges": [{"label": "Nová", "style": "concept"}],
+    "tabs": [
+        {"id": "overview", "label": "Přehled", "content": {
+            "type": "properties",
+            "groups": [{"title": "Identifikace", "items": [{"label": "IČO", "value": "12345"}]}]
+        }},
+        {"id": "contacts", "label": "Kontakty", "content": {
+            "type": "table",
+            "columns": [{"id": "name", "label": "Název"}, {"id": "email", "label": "E-mail"}],
+            "rows": [{"name": "Jan Novák", "email": "jan@example.com"}]
+        }}
+    ]
+}
 ```
 
-Typy obsahu: `properties` (label/value grid), `table` (tabulka), `html` (surové HTML).
+Hlavička je volitelná (bez `title` se nerenderuje) a zůstává viditelná
+při přepínání tabů. Badge `style` přijímá obecné varianty (`neutral`,
+`primary`, `accent`, `success`, `warning`, `danger`) i doc-state styly
+(`concept`, `edit`, `confirmed`, `done`, `archive`, `trash`, `cancelled`,
+`error`) — viz `docs/design-system.md`. První konzument hlavičky je došlá
+pošta (`IncomingMessagesViewer`).
+
+Typy obsahu:
+
+| Typ | Popis |
+|---|---|
+| `properties` | label/value grid ve skupinách |
+| `table` | tabulka (`columns` + `rows`) |
+| `html` | surové HTML (na frontendu sanitované) |
+| `heading` | mezititulek sekce (`text`) |
+| `attachment-grid` | plochý grid příloh (`attachments`: `id`, `name`, `mime_type`, `file_size` v bajtech); přepínání miniatury/velké náhledy přes sdílený store `attachmentView.svelte.js` |
+| `composite` | seznam `blocks[]` — každý blok je libovolný z ostatních typů, renderuje se rekurzivně týmž snippetem |
+| `extracted-documents`, `attachments`, `document` | doménové typy: extrahované dokumenty pošty, přílohy seskupené po zprávách, textový detail dokladu (`DocumentDetail`) |
 
 ### Registrace vieweru
 

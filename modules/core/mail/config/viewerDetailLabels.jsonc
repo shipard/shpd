@@ -1,8 +1,10 @@
 {
     // core.mail.viewerDetailLabels
     //
-    // Detail-tab labels for IncomingMessagesViewer. No shared "overview" —
-    // mail uses Content / Attachments / Analyses / Extracted / Original.
+    // Detail labels for IncomingMessagesViewer. No shared "overview" —
+    // tabs are Content / Analyses / Extracted / Original. The `attachments`
+    // key is not a tab anymore — it labels the attachments section heading
+    // inside the Content tab.
 
     "tabs": {
         "content": {

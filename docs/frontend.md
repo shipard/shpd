@@ -519,6 +519,7 @@ Vrací volitelnou hlavičku (`title`, `subtitle`, `badges`) a taby s obsahem:
     "title": "Faktura 2026/0412 — dodávka serverů",
     "subtitle": "Jan Novák <jan@example.com> · Fakturace (FAKT) · 9. 6. 2026 14:32",
     "badges": [{"label": "Nová", "style": "concept"}],
+    "icon": "mail",
     "tabs": [
         {"id": "overview", "label": "Přehled", "content": {
             "type": "properties",
@@ -537,11 +538,14 @@ Vrací volitelnou hlavičku (`title`, `subtitle`, `badges`) a taby s obsahem:
 ```
 
 Hlavička je volitelná (bez `title` se nerenderuje) a zůstává viditelná
-při přepínání tabů. Badge `style` přijímá obecné varianty (`neutral`,
+při přepínání tabů. Volitelný `icon` (klíč z `icons.js`, typicky shodný
+s `viewers[].icon` v `module.jsonc` daného modulu) se vykreslí ve 40×40
+boxu vlevo od title — stejný vizuál jako ikona ve formulářovém modalu
+(`shpd-modal__header-icon`). Badge `style` přijímá obecné varianty (`neutral`,
 `primary`, `accent`, `success`, `warning`, `danger`) i doc-state styly
 (`concept`, `edit`, `confirmed`, `done`, `archive`, `trash`, `cancelled`,
-`error`) — viz `docs/design-system.md`. První konzument hlavičky je došlá
-pošta (`IncomingMessagesViewer`).
+`error`) — viz `docs/design-system.md`. Hlavičku používají všechny hlavní
+detaily: došlá pošta, Osoby, Položky, Úkoly i doklady (`DocsHeadsViewer`).
 
 Typy obsahu:
 
@@ -553,7 +557,7 @@ Typy obsahu:
 | `heading` | mezititulek sekce (`text`) |
 | `attachment-grid` | plochý grid příloh (`attachments`: `id`, `name`, `mime_type`, `file_size` v bajtech); přepínání miniatury/velké náhledy přes sdílený store `attachmentView.svelte.js` |
 | `composite` | seznam `blocks[]` — každý blok je libovolný z ostatních typů, renderuje se rekurzivně týmž snippetem |
-| `extracted-documents`, `attachments`, `document` | doménové typy: extrahované dokumenty pošty, přílohy seskupené po zprávách, textový detail dokladu (`DocumentDetail`) |
+| `extracted-documents`, `attachments`, `document` | doménové typy: extrahované dokumenty pošty, přílohy seskupené po zprávách, textový detail dokladu (`DocumentDetail`; hlavička dokladu je nově nad taby, klíč `header` se v contentu už neposílá) |
 
 ### Akce detailu (`detail.actions`)
 

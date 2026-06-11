@@ -222,11 +222,14 @@ Backend posílá v `data.detail`:
         { "label": "Fyzická osoba", "style": "primary" },
         { "label": "VIP klient",    "style": "accent"  }
     ],
+    "icon": "user",
     "tabs": [ ... ]
 }
 ```
 
-`title` je povinný pokud se má hlavička detailu vykreslit. Bez něj se
+`title` je povinný pokud se má hlavička detailu vykreslit. Volitelný
+`icon` (klíč z `icons.js`, typicky shodný s `viewers[].icon` v
+`module.jsonc`) přidá 40×40 ikonu vlevo od title. Bez `title` se
 hlavička přeskočí (graceful fallback — backend nemusí být upraven).
 
 ---

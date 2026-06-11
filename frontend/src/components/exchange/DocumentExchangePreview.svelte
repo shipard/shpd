@@ -363,7 +363,7 @@
       {@render field(t('exchange.preview.field.vatObligationDate'), formatDate(canonical.dates?.vatObligationDate))}
       {@render field(t('exchange.preview.field.currency'), canonical.currency)}
       {@render field(t('exchange.preview.field.paymentMethod'), canonical.payment?.method)}
-      {@render field(t('exchange.preview.field.variableSymbol'), canonical.payment?.variableSymbol)}
+      {@render field(t('exchange.preview.field.paymentReference'), canonical.payment?.paymentReference)}
     </section>
 
     {#if (canonical.rows ?? []).length > 0}

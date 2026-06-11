@@ -56,7 +56,7 @@ class DocsHeadsViewerDetailTest extends TestCase
             'home_currency'     => 'czk',
             'exchange_rate'     => null,
             'payment_method'    => 1,
-            'variable_symbol'   => '16',
+            'payment_reference'   => '16',
             'specific_symbol'   => null,
             'constant_symbol'   => null,
             'total_base'        => 6000.0,
@@ -245,7 +245,7 @@ class DocsHeadsViewerDetailTest extends TestCase
         $this->assertSame('CZK', $meta['currency']);
         $this->assertNull($meta['exchange_rate'], 'Kurz jen u cizí měny');
         $this->assertSame('Převodem', $meta['payment_method']);
-        $this->assertSame('16', $meta['variable_symbol']);
+        $this->assertSame('16', $meta['payment_reference']);
         $this->assertNull($meta['specific_symbol']);
     }
 

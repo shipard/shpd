@@ -28,7 +28,7 @@ use Shipard\Module\World\Vat\VatRateResolver;
  *   7. sumTotals + apply rounding + apply exchange rate to *_dom
  *   8. processStateTransition (assignNumber 10→20, releaseNumber 20→10)
  *   9. maintainSnapshots (buildSnapshots when partner changes / first time)
- *  10. applyVariableSymbolDefault from sequence_number
+ *  10. applyPaymentReferenceDefault from sequence_number
  */
 abstract class DocDocument extends Document
 {
@@ -195,7 +195,7 @@ abstract class DocDocument extends Document
         }
 
         $this->maintainSnapshots($data, $originalData);
-        $this->applyVariableSymbolDefault($data);
+        $this->applyPaymentReferenceDefault($data);
     }
 
     /**
@@ -1224,13 +1224,13 @@ abstract class DocDocument extends Document
 
     // ── Other defaults ──────────────────────────────────────────────────────
 
-    protected function applyVariableSymbolDefault(array &$data): void
+    protected function applyPaymentReferenceDefault(array &$data): void
     {
-        if (!empty($data['variable_symbol'])) {
+        if (!empty($data['payment_reference'])) {
             return;
         }
         if (!empty($data['sequence_number'])) {
-            $data['variable_symbol'] = (string) $data['sequence_number'];
+            $data['payment_reference'] = (string) $data['sequence_number'];
         }
     }
 

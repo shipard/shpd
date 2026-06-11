@@ -487,11 +487,11 @@
             "group": "payment"
         },
         {
-            "id": "variable_symbol",
-            "name": "Variable symbol",
+            "id": "payment_reference",
+            "name": "Payment reference",
             "name:cs": "Variabilní symbol",
-            "name:en": "Variable symbol",
-            "type": "varchar", "length": 20,
+            "name:en": "Payment reference",
+            "type": "varchar", "length": 35,
             "nullable": true, "group": "payment"
         },
         {

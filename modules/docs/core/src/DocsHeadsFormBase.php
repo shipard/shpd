@@ -390,7 +390,7 @@ abstract class DocsHeadsFormBase extends TableForm
                     ->select('bank_account',
                         options: $this->resolveBankAccountOptions($docCurrency),
                     )
-                    ->input('variable_symbol')
+                    ->input('payment_reference')
                     ->input('specific_symbol')
                     ->input('constant_symbol')
 

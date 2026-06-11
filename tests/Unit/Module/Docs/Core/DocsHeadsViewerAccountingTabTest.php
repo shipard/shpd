@@ -55,7 +55,7 @@ class DocsHeadsViewerAccountingTabTest extends TestCase
             'home_currency'       => 'czk',
             'exchange_rate'       => null,
             'payment_method'      => null,
-            'variable_symbol'     => null,
+            'payment_reference'     => null,
             'specific_symbol'     => null,
             'constant_symbol'     => null,
             'total_base'          => 6000.0,

@@ -146,7 +146,7 @@ class ReceivedInvoiceForm extends DocsHeadsFormBase
                 'payment_method',
                 options: $this->resolveCfgItemOptions('docs.core.paymentMethods'),
             )
-            ->input('variable_symbol')
+            ->input('payment_reference')
             ->input('specific_symbol')
             ->input('constant_symbol')
 

@@ -180,27 +180,27 @@ class DocDocumentValidateTest extends TestCase
         $this->assertNotEmpty($matched);
     }
 
-    public function testApplyVariableSymbolDefaultUsesSequenceNumber(): void
+    public function testApplyPaymentReferenceDefaultUsesSequenceNumber(): void
     {
         $doc = new TestableDocsHeadsDocument();
         $data = ['sequence_number' => 42];
-        $doc->applyVariableSymbolDefaultPub($data);
-        $this->assertSame('42', $data['variable_symbol']);
+        $doc->applyPaymentReferenceDefaultPub($data);
+        $this->assertSame('42', $data['payment_reference']);
     }
 
-    public function testApplyVariableSymbolDefaultDoesNotOverrideUserValue(): void
+    public function testApplyPaymentReferenceDefaultDoesNotOverrideUserValue(): void
     {
         $doc = new TestableDocsHeadsDocument();
-        $data = ['sequence_number' => 42, 'variable_symbol' => '12345'];
-        $doc->applyVariableSymbolDefaultPub($data);
-        $this->assertSame('12345', $data['variable_symbol']);
+        $data = ['sequence_number' => 42, 'payment_reference' => '12345'];
+        $doc->applyPaymentReferenceDefaultPub($data);
+        $this->assertSame('12345', $data['payment_reference']);
     }
 
-    public function testApplyVariableSymbolDefaultNoSequenceNoOp(): void
+    public function testApplyPaymentReferenceDefaultNoSequenceNoOp(): void
     {
         $doc = new TestableDocsHeadsDocument();
         $data = [];
-        $doc->applyVariableSymbolDefaultPub($data);
-        $this->assertArrayNotHasKey('variable_symbol', $data);
+        $doc->applyPaymentReferenceDefaultPub($data);
+        $this->assertArrayNotHasKey('payment_reference', $data);
     }
 }

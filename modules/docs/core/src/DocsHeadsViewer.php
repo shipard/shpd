@@ -675,7 +675,7 @@ class DocsHeadsViewer extends TableViewer
             'currency'        => $currency !== '' ? $currency : null,
             'exchange_rate'   => $hasRate ? number_format((float) $rate, 3, ',', ' ') : null,
             'payment_method'  => $this->resolvePaymentMethodLabel($record['payment_method'] ?? null),
-            'variable_symbol' => $this->nullableString($record['variable_symbol'] ?? null),
+            'payment_reference' => $this->nullableString($record['payment_reference'] ?? null),
             'specific_symbol' => $this->nullableString($record['specific_symbol'] ?? null),
             'constant_symbol' => $this->nullableString($record['constant_symbol'] ?? null),
         ];

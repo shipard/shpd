@@ -155,9 +155,9 @@ class TestableDocsHeadsDocument extends DocsHeadsDocument
         return $this->buildPersonSnapshot($personId, $addressId, $bankAccountId, $vatRegistrationId);
     }
 
-    public function applyVariableSymbolDefaultPub(array &$data): void
+    public function applyPaymentReferenceDefaultPub(array &$data): void
     {
-        $this->applyVariableSymbolDefault($data);
+        $this->applyPaymentReferenceDefault($data);
     }
 
     public function trackStateChangePub(array &$data, ?array $originalData): void

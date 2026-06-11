@@ -61,7 +61,7 @@ Sumace plněné v `beforeSave` ve Fázi 2. Doc currency: `total_base`,
 ### `payment`
 
 `payment_method`, `bank_account` (náš účet, vazba na
-`economy_codebooks_bank_accounts`), `variable_symbol`, `specific_symbol`,
+`economy_codebooks_bank_accounts`), `payment_reference`, `specific_symbol`,
 `constant_symbol`.
 
 ### `lineage` — system

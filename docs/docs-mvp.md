@@ -951,7 +951,7 @@ Idempotence: lookup před insertem. Uživatel si může výchozí řadu zarchivo
 | `currency` | Měna a kurz | `doc_currency`, `home_currency`, `exchange_rate` |
 | `rounding` | Zaokrouhlení | `total_rounding_mode`, `vat_rounding_mode` |
 | `totals` | Součtové částky (system) | `total_base`, `total_vat`, `total_amount`, `total_rounding`, `*_dom` |
-| `payment` | Platba a symboly | `payment_method`, `bank_account`, `variable_symbol`, `specific_symbol`, `constant_symbol` |
+| `payment` | Platba a symboly | `payment_method`, `bank_account`, `payment_reference`, `specific_symbol`, `constant_symbol` |
 | `snapshots` | JSON snapshoty (system) | `supplier_snapshot`, `customer_snapshot` |
 | `notes` | Poznámky | `notice`, `doc_notice` |
 | (system) | Stavy | `docState`, `docStateMain` |
@@ -1104,7 +1104,7 @@ Idempotence: lookup před insertem. Uživatel si může výchozí řadu zarchivo
         {"id": "bank_account", "type": "int", "nullable": true,
          "reference": "economy_codebooks_bank_accounts",
          "group": "payment", "name:cs": "Náš bankovní účet"},
-        {"id": "variable_symbol", "type": "varchar", "length": 20, "nullable": true,
+        {"id": "payment_reference", "type": "varchar", "length": 35, "nullable": true,
          "group": "payment", "name:cs": "Variabilní symbol"},
         {"id": "specific_symbol", "type": "varchar", "length": 20, "nullable": true,
          "group": "payment", "name:cs": "Specifický symbol"},
@@ -1203,7 +1203,7 @@ serveru v `Document::beforeSave`** podle povahy:
 | `vat_rounding_mode` | 2 (matematicky na 0,01) |
 | `fiscal_year`, `fiscal_month` | resolvované z `accounting_date` v `beforeSave` |
 | `vat_period` | resolvované z `vat_duzp` + `vat_registration` v `beforeSave` |
-| `variable_symbol` | = `sequence_number` po Potvrzeno (jen pokud uživatel nezadal jinak) |
+| `payment_reference` | = `sequence_number` po Potvrzeno (jen pokud uživatel nezadal jinak) |
 
 ### 6.4 Snapshot logika
 
@@ -1722,7 +1722,7 @@ třída `DocDocument` v `docs.core`.
 3. Document.beforeSave():
    a. assignDocumentNumber() — atomicky, viz sekce 5.3
    b. maintainSnapshots() — sestaví supplier_snapshot + customer_snapshot
-   c. variable_symbol default = sequence_number, pokud user nenastavil
+   c. payment_reference default = sequence_number, pokud user nenastavil
    d. ostatní jako v 9.1 (defaults, calculations)
 4. UPDATE heads, sync rows, sync recap
 5. COMMIT

@@ -177,7 +177,7 @@ Top-level struktura:
   // ── Payment ──────────────────────────────────────────────────────────────
   "payment": {
     "method":          "bankTransfer",  // key z docs.core.paymentMethods
-    "variableSymbol":  "2026000123",
+    "paymentReference": "2026000123",
     "specificSymbol":  null,
     "constantSymbol":  null
   },
@@ -245,7 +245,7 @@ vypočtené hodnoty. Důvod, proč jsou v canonical:
 
 - **`invoiceReceived`** — strana, kterou _my_ pozici je `customer`,
   `supplier.bankAccount` se má vyplnit (kam platíme),
-  `payment.variableSymbol` typicky odvozeno od `docNumber`.
+  `payment.paymentReference` typicky odvozeno od `docNumber`.
 - **`invoiceIssued`** — strana, kterou my pozici je `supplier`,
   `supplier.bankAccount` (= náš účet) se vyplní z dokladu, customer
   z partnera.

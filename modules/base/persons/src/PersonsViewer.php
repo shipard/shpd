@@ -260,8 +260,8 @@ class PersonsViewer extends TableViewer
 
 	/**
 	 * Composite obsah Přehledu: vlastnosti (Identifikace / Kontakt / Osobní
-	 * údaje), kontakty (nadpis + tabulka) a adresy (properties řádky
-	 * název → display_line). Prázdné sekce se vynechávají.
+	 * údaje), kontakty a adresy jako properties řádky. Prázdné sekce se
+	 * vynechávají.
 	 */
 	private function buildOverviewContent(array $record): array
 	{
@@ -297,25 +297,15 @@ class PersonsViewer extends TableViewer
 			$blocks[] = ['type' => 'properties', 'groups' => $groups];
 		}
 
-		// Kontakty — nadpis + tabulka (jen pokud existují)
-		$contacts = $this->db->fetchAll(
-			'SELECT `name`, `role`, `email`, `phone` FROM `base_persons_contacts` WHERE `person` = %i ORDER BY `order_pos`',
-			(int) $record['id'],
-		);
-		if ($contacts !== []) {
+		// Kontakty — properties řádky (label = jméno, value = funkce · e-mail · telefon)
+		$contactRowItems = $this->buildContactItems((int) $record['id']);
+		if ($contactRowItems !== []) {
 			$blocks[] = [
-				'type' => 'heading',
-				'text' => $this->detailTabLabel('base.persons.viewerDetailLabels', 'contacts', 'Contacts'),
-			];
-			$blocks[] = [
-				'type'    => 'table',
-				'columns' => [
-					['id' => 'name',  'label' => 'Název'],
-					['id' => 'role',  'label' => 'Funkce'],
-					['id' => 'email', 'label' => 'E-mail'],
-					['id' => 'phone', 'label' => 'Telefon'],
-				],
-				'rows' => $contacts,
+				'type'   => 'properties',
+				'groups' => [[
+					'title' => $this->detailTabLabel('base.persons.viewerDetailLabels', 'contacts', 'Contacts'),
+					'items' => $contactRowItems,
+				]],
 			];
 		}
 
@@ -339,6 +329,40 @@ class PersonsViewer extends TableViewer
 		}
 
 		return ['type' => 'composite', 'blocks' => $blocks];
+	}
+
+	/**
+	 * Kontakty osoby jako properties položky. Label je jméno kontaktu,
+	 * value spojuje funkci, e-mail a telefon přes „·“; bez detailů „—“.
+	 *
+	 * @return array<int, array{label: string, value: string}>
+	 */
+	private function buildContactItems(int $personId): array
+	{
+		$contacts = $this->db->fetchAll(
+			'SELECT `name`, `role`, `email`, `phone` FROM `base_persons_contacts` WHERE `person` = %i ORDER BY `order_pos`',
+			$personId,
+		);
+
+		$items = [];
+		foreach ($contacts as $c) {
+			$label = trim((string) ($c['name'] ?? ''));
+			if ($label === '') {
+				$label = 'Kontakt';
+			}
+
+			$parts = [];
+			foreach (['role', 'email', 'phone'] as $col) {
+				$v = trim((string) ($c[$col] ?? ''));
+				if ($v !== '') {
+					$parts[] = $v;
+				}
+			}
+
+			$items[] = ['label' => $label, 'value' => $parts !== [] ? implode(' · ', $parts) : '—'];
+		}
+
+		return $items;
 	}
 
 	/**

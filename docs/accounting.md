@@ -578,14 +578,64 @@ strana pohledávky/závazku (head total) přesně odpovídá součtu základů +
 
 ---
 
-## 9. Zobrazení (Fáze 3)
+## 9. Zobrazení (Fáze 3) ✓
 
-- **Detail dokladu** — nový tab/sekce "Zaúčtování": tabulka řádků deníku
-  (účet, text, MD, DAL — domácí měna; u cizí měny i cur), chybové řádky
-  zvýrazněné, banner s `accounting_messages`, akce **Přeúčtovat**.
-- **Viewer deníku** (`economy.accounting`): seznam řádků deníku, filtry
-  fiskální rok/měsíc, účet, partner; fulltext na text. Obratová předvaha a
-  další reporty = samostatný pozdější úkol.
+### Detail dokladu — tab Zaúčtování
+
+`DocsHeadsViewer::buildAccountingTab()` přidává za Přehled podmíněný tab
+Zaúčtování (label z cfgItem `economy.accounting.viewerDetailLabels`).
+Zobrazí se, když `accounting_state != 0` nebo existují řádky deníku.
+
+- **Mezimodulová vazba** docs.core × economy.accounting: přímý dotaz
+  (precedent: přílohy z core.attachments). Guard bez `tableExists` —
+  extension sloupec `accounting_state` je v `SELECT h.*` jen
+  s nainstalovaným modulem; bez něj se na tabulku deníku vůbec nesahá.
+  Čistý extension point (`viewerDetailExtensions` v module.jsonc, obdoba
+  `documentEventHandlers`) zůstává dluh.
+- **Obsah** (composite): stavový badge (názvy z `accountingStates`,
+  inline styly přes globální CSS proměnné — scoped styly se na `{@html}`
+  nevztahují); při stavu 2 banner s `accounting_messages` (`rowId` →
+  „řádek N", hodnoty escapované). Tabulka řádků deníku Účet / Text /
+  MD / DAL se Σ řádkem; u cizoměnového dokladu navíc MD/DAL v měně
+  dokladu (kód měny v labelu sloupce). Chybové řádky `_class: error`,
+  součtový řádek `_class: total`, částky `align: right` (viz
+  `docs/frontend.md` §7). Nulová strana zápisu se nechává prázdná.
+  Prázdný deník při chybě (např. chybějící fiskální období) → jen
+  banner bez tabulky.
+
+### Akce Přeúčtovat
+
+Detail dokladu vrací `actions: [{id: "reaccount"}]` jen pro doklad ve
+stavu 40 — libovolný `accounting_state` (přeúčtovat lze i bezchybně
+zaúčtovaný doklad), bez confirm (operace je idempotentní). Frontend
+(`Viewer.svelte::handleDetailAction` + `api/accounting.js`) volá
+`POST /_accounting/reaccount` `{docId}` a refreshne detail i seznam;
+endpoint vrací success i při výsledku „zaúčtováno s chybami" — refresh
+rovnou ukáže banner. Chybové odpovědi jdou přes `translateError`
+(klíč `error.INVALID_DOC_STATE`).
+
+### Viewer deníku — `economy.accounting.journal`
+
+`JournalViewer` („Účetní deník", ikona `book`) — **read-only**: žádné
+new/edit/delete (`getToolbarActions()` prázdné), bez docState tabů
+(`$docStatesCfgItem = null`), bez formu. Tabulka deníku už nemá
+`hideFromNavigation` — do navigace jde přes viewer.
+
+- **Seznam**: text + číslo účtu, datum / číslo dokladu / partner,
+  částka se stranou zápisu (MD/DAL) v domácí měně, u cizoměnového
+  řádku navíc částka v měně dokladu s kódem. Chybové řádky: červený
+  proužek (`stateStyle: error`) + ⚠. Řazení `accounting_date` desc,
+  `id` desc.
+- **Filtry** (generický filtr bar `ViewerFilters.svelte`, viz
+  `docs/frontend.md` §7): fiskální rok, fiskální měsíc (závislý select
+  přes `parentFilter`), účet (prefix match), partner (contains na
+  jméno), Jen chyby. **Fulltext**: text, doc_number, account_number.
+- **Detail**: properties (Zápis / Částky vč. obou měn / Doklad) + akce
+  Otevřít doklad (`kind: open_viewer` → `docs.core.heads`, existující
+  cross-viewer navigace).
+
+Obratová předvaha, hlavní kniha a další reporty = samostatný pozdější
+úkol.
 
 ---
 
@@ -620,9 +670,11 @@ Vědomě se teď neřeší (a předpis/schéma na to nic nepředpřipravuje):
 
 ## 11. Fáze implementace
 
-**Stav: Fáze 1 i Fáze 2 hotové** (commity `87e53b1`/`e6442c4`/`2bd1619` —
+**Stav: Fáze 1–3 hotové** (commity `87e53b1`/`e6442c4`/`2bd1619` —
 Fáze 1; mechanismus eventů, deník, předpis, engine, endpoint, alert —
-Fáze 2). Zbývá Fáze 3 (UI). Drobnosti zjištěné implementací:
+Fáze 2; tab Zaúčtování, akce Přeúčtovat, JournalViewer — Fáze 3).
+Dál: reporty (obratová předvaha, hlavní kniha), saldo, další docTypes.
+Drobnosti zjištěné implementací:
 
 - cfgItem předpisu: `economy.accounting.rules.cz` (tečkovaný suffix funguje)
 - extension soubory dle cílové tabulky (`extensions/docs_core_heads.jsonc`)
@@ -653,10 +705,16 @@ Fáze 2). Zbývá Fáze 3 (UI). Drobnosti zjištěné implementací:
 - testy: kontrolní příklady invno/invni (CZK, cizí měna, zaokrouhlení,
   acc.entry, chybové stavy)
 
-### Fáze 3 — UI
+### Fáze 3 — UI ✓
 
-- detail dokladu: sekce Zaúčtování + banner chyb + akce Přeúčtovat
-- viewer deníku s filtry
+- tab Zaúčtování v detailu dokladu (podmíněný, composite; guard přes
+  extension sloupec v `SELECT h.*`) + banner chyb + akce Přeúčtovat
+- `JournalViewer` s filtry; vznikly obecné frontend patterny: generický
+  filtr bar `ViewerFilters.svelte` (`TableViewer::getFilters()` →
+  `filter[id]=value`) a rozšíření `table` content typu o
+  `columns[].align` / `row._class` — viz `docs/frontend.md` §7
+- task: `tasks/accounting-phase3.md` (vč. zapsaných rozhodnutí a dluhu
+  `viewerDetailExtensions`)
 
 ---
 

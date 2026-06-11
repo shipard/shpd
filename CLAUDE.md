@@ -26,6 +26,7 @@ Podrobné specifikace jsou v adresáři `docs/`. Přečti příslušný dokument
 | `docs/migration-guide.md` | Backup a přenos DS na jiný server — tarball, DB dump, perms, ověření |
 | `docs/dashboard.md` | Dashboard — home obrazovka, widget systém, API kontrakt, AI shrnutí |
 | `docs/app-settings.md` | Settings pages + branding — `SettingsStore`, `settingsPages` v module.jsonc, klíče `app.*`, branding sloty, `/_app` endpointy, jak přidat další stránku |
+| `docs/accounting.md` | Účtování dokladů — rowOperations, účtovací předpis, `AccountingEngine`, deník, lifecycle (stav 40), endpoint reaccount, tab Zaúčtování + `JournalViewer` (Fáze 1–3 hotové) |
 
 ## Architektura — rychlý přehled
 

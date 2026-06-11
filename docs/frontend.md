@@ -411,6 +411,10 @@ Parametry pro `rows`:
 - `search=text` — fulltext hledání
 - `filter[viewGroup]=active` — filtr skupiny stavů (active / archive / trash; bez = vše)
 - `filter[number_series]=<id>` — filtr na konkrétní číselnou řadu (per-type doc viewery)
+- `filter[<id>]=<hodnota>` — custom filtry vieweru (definice z `meta.filters`,
+  UI z `ViewerFilters.svelte` — viz níže). `ViewerController::rows` parsuje
+  `filter[...]` generericky a předává do `selectRows()` jako
+  `[{id, value}, …]`
 
 ### Tab bar (doc state taby)
 
@@ -439,6 +443,47 @@ když je řad víc než jedna. Default je první řada abecedně. Klik na zálo�
 `filter[number_series]=<id>`; při vytváření dokladu se id přimerg-uje do
 `formDefaultData` (`number_series`) vedle `doc_type`, takže nová faktura má
 předvyplněnou řadu z aktivní záložky.
+
+### Filtry vieweru (`ViewerFilters.svelte`)
+
+Viewer deklaruje filtry v PHP přes `TableViewer::getFilters()`; meta
+endpoint je vrací jako `filters` a `Viewer.svelte` z nich (pokud je aspoň
+jeden podporovaného typu) vykreslí filtr bar pod searchem. Hodnoty se
+posílají jako `filter[id]=value`; prázdná hodnota filtr ruší. Změna
+filtru resetuje stránkování; přepnutí vieweru filtry vynuluje.
+
+Podporované typy:
+
+```php
+public function getFilters(): array
+{
+    return [
+        ['id' => 'fiscal_year', 'label' => 'Fiskální rok', 'type' => 'select',
+         'options' => [['value' => 3, 'label' => '2026']]],
+        ['id' => 'fiscal_month', 'label' => 'Měsíc', 'type' => 'select',
+         'parentFilter' => 'fiscal_year',          // závislý select
+         'options' => [['value' => 15, 'label' => '5/2026', 'parent' => 3]]],
+        ['id' => 'account', 'label' => 'Účet', 'type' => 'text'],      // debounce 300 ms
+        ['id' => 'only_errors', 'label' => 'Jen chyby', 'type' => 'checkbox'], // '1' / nic
+    ];
+}
+```
+
+- **select** — `<select>` s prázdnou option „— vše —". Závislý select:
+  `parentFilter` odkazuje na id jiného filtru, options se omezí na ty
+  s `option.parent === hodnota rodiče`; bez zvoleného rodiče je select
+  disabled a změna rodiče hodnotu potomka zruší.
+- **text** — debounced input; sémantiku (prefix/contains) určuje backend
+  v `selectRows()`.
+- **checkbox** — posílá `'1'`, odškrtnutí filtr odstraní.
+
+Jiné typy (historický `enum` v `AlertsViewer`) se přeskakují — bar se
+nezobrazí, dokud viewer nedeklaruje aspoň jeden podporovaný typ. Labely
+jdou z backendu (lokalizace přes `$this->language` / cfgItems), frontend
+překládá jen prázdnou option (`viewer.filters.all`).
+
+První uživatel: `JournalViewer` (`economy.accounting.journal`) — fiskální
+rok/měsíc (závislý select), prefix účtu, partner, jen chyby.
 
 ### Formát řádku (`renderRow()`)
 
@@ -479,10 +524,13 @@ Vrací volitelnou hlavičku (`title`, `subtitle`, `badges`) a taby s obsahem:
             "type": "properties",
             "groups": [{"title": "Identifikace", "items": [{"label": "IČO", "value": "12345"}]}]
         }},
-        {"id": "contacts", "label": "Kontakty", "content": {
+        {"id": "journal", "label": "Zaúčtování", "content": {
             "type": "table",
-            "columns": [{"id": "name", "label": "Název"}, {"id": "email", "label": "E-mail"}],
-            "rows": [{"name": "Jan Novák", "email": "jan@example.com"}]
+            "columns": [{"id": "name", "label": "Název"}, {"id": "amount", "label": "Částka", "align": "right"}],
+            "rows": [
+                {"name": "Jan Novák", "amount": "6 000,00"},
+                {"name": "Σ", "amount": "6 000,00", "_class": "total"}
+            ]
         }}
     ]
 }
@@ -500,12 +548,33 @@ Typy obsahu:
 | Typ | Popis |
 |---|---|
 | `properties` | label/value grid ve skupinách |
-| `table` | tabulka (`columns` + `rows`) |
-| `html` | surové HTML (na frontendu sanitované) |
+| `table` | tabulka (`columns` + `rows`); `columns[].align: "right"` = číselný sloupec (zarovnání doprava + `tabular-nums`, header i buňky); `rows[]._class` = klasifikace řádku — `error` (červené podbarvení, chybové řádky deníku) nebo `total` (tučný součtový řádek s horní linkou); `_class` není sloupec, do buněk se nerenderuje |
+| `html` | surové HTML — **bez sanitizace**, backend musí hodnoty escapovat; scoped styly komponenty se na `{@html}` nevztahují, vzhled jde přes globální CSS proměnné (vzor: stavový blok tabu Zaúčtování) |
 | `heading` | mezititulek sekce (`text`) |
 | `attachment-grid` | plochý grid příloh (`attachments`: `id`, `name`, `mime_type`, `file_size` v bajtech); přepínání miniatury/velké náhledy přes sdílený store `attachmentView.svelte.js` |
 | `composite` | seznam `blocks[]` — každý blok je libovolný z ostatních typů, renderuje se rekurzivně týmž snippetem |
 | `extracted-documents`, `attachments`, `document` | doménové typy: extrahované dokumenty pošty, přílohy seskupené po zprávách, textový detail dokladu (`DocumentDetail`) |
+
+### Akce detailu (`detail.actions`)
+
+`renderDetail()` může vedle `tabs` vrátit i `actions` — řádek per-record
+tlačítek nad taby (vzor `AlertsViewer::buildDetailActions`):
+
+```json
+{"id": "reaccount", "label": "Přeúčtovat", "kind": "button", "variant": "secondary",
+ "confirm": "Opravdu?"}
+```
+
+- `kind: "button"` (default) — obsluhu řeší `Viewer.svelte::handleDetailAction`
+  podle `action.id` (sdílený slovník id: `snooze`, `dismiss`, `unsnooze`,
+  `recheck`, `reaccount`); po úspěchu `refreshAfterAction()` (detail
+  i seznam), chyba → `alert(translateError(...))`.
+- `kind: "dropdown"` — `items: [{label, value}]`, výběr položky volá akci
+  s hodnotou (bez confirm).
+- `kind: "open_form"` — otevře `FormDialog` dle `target.{table, mode, id, preset}`.
+- `kind: "open_viewer"` — cross-viewer navigace: `viewerId` + `recordId` →
+  `navigationStore.navigateToViewer()` (cílový viewer záznam předvybere
+  přes `pendingRecordId`). Používá deník pro odkaz na zdrojový doklad.
 
 ### Registrace vieweru
 
@@ -545,6 +614,7 @@ Viz také `docs/doc-states.md` — sekce Viewer systém.
 | `base.persons` | `base.persons` | `PersonsViewer` | Archivační docStates, fulltext search přes full_name/company_id/email/person_id |
 | `core.mail.incoming` | `core.mail` | `IncomingMessagesViewer` | Vlastní docStates (`core.mail.docStatesIncoming`), JOIN na schránku, relativní formátování received_at, 4 detail taby (Obsah / Přílohy / Analýzy / Originál) |
 | `tasks.core` | `tasks.core` | `TasksViewer` | Vlastní docStates (`tasks.core.docStatesTasks`), JOIN na `core_system_users` kvůli zobrazení autora, indikace po termínu v t2 |
+| `economy.accounting.journal` | `economy.accounting` | `JournalViewer` | Read-only (prázdný toolbar, bez docStates, bez formu), custom filtry přes `getFilters()` vč. závislého selectu, detail akce `open_viewer` na zdrojový doklad |
 
 Nové viewery přidávají moduly přes `module.jsonc.viewers[]` — jakmile je viewer registrován, automaticky se objeví v navigaci (ikona z `iconMap`, fallback `iconTable`).
 

@@ -481,7 +481,10 @@
     flex-direction: column;
     width: var(--shpd-sidebar-width);
     height: 100%;
-    background-color: var(--shpd-color-bg-sidebar);
+    /* Shorthand kvůli custom gradientu (--shpd-sidebar-bg-image je
+       image, ne barva) — token existuje jen jako inline property
+       z theme storu, jinak platí fallback na solid barvu. */
+    background: var(--shpd-sidebar-bg-image, var(--shpd-color-bg-sidebar));
     color: var(--shpd-color-text-sidebar);
     flex-shrink: 0;
     transition: width 0.2s ease;

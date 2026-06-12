@@ -36,10 +36,14 @@ const storageKey = (name) => (DATA_SOURCE_ID ? `${name}:${DATA_SOURCE_ID}` : nam
 
 // Default custom config = Shipard modrá na světlé bázi, takže panel
 // startuje vizuálně z defaultu. Formát je sdílený s budoucími úrovněmi
-// persistence (server per-user, DS default) i Fází 2 (gradient, opacity).
+// persistence (server per-user, DS default). `sidebar` je buď
+// {type:'solid', color} nebo {type:'gradient', stops:[a,b]}; `opacity`
+// (0–100) je top-level záměrně — výměna sidebar objektu při přepnutí
+// solid ↔ gradient ji nesmí přepsat.
 const DEFAULT_CUSTOM = {
   version: 1,
   base: 'light',
+  opacity: 100,
   sidebar: { type: 'solid', color: '#00345C' },
 };
 
@@ -63,7 +67,13 @@ function loadInitialCustom() {
     const raw = localStorage.getItem(storageKey(CUSTOM_KEY));
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed && parsed.sidebar?.color) return parsed;
+      if (parsed && (parsed.sidebar?.color || parsed.sidebar?.stops)) {
+        // Normalizace: configy z Fáze 1 nemají opacity → 100.
+        return {
+          ...parsed,
+          opacity: typeof parsed.opacity === 'number' ? parsed.opacity : 100,
+        };
+      }
     }
   } catch (e) {
     // chybný JSON / disabled storage — default
@@ -98,7 +108,13 @@ function applyTheme(currentMode, currentCustom) {
 
   if (currentMode === 'custom') {
     setDarkAttribute(currentCustom.base === 'dark');
-    const tokens = deriveSidebarTokens(currentCustom.sidebar.color);
+    // Clear-then-set: derivace nemusí vrátit všechny tokeny (bg-image
+    // má jen gradient) — přepnutí gradient → solid by jinak nechalo
+    // viset starý inline --shpd-sidebar-bg-image.
+    clearInlineTokens();
+    const tokens = deriveSidebarTokens(
+      currentCustom.sidebar, currentCustom.base, currentCustom.opacity ?? 100,
+    );
     for (const [name, value] of Object.entries(tokens)) {
       document.documentElement.style.setProperty(name, value);
     }

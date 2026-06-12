@@ -100,6 +100,9 @@
    * V light módu jsou bg-secondary a bg-hover shodou okolností
    * stejné — ale v dark se rozcházejí (secondary musí být tmavší
    * než bg, hover světlejší). Proto dva tokeny. */
+  /* Pozor: hodnotu --shpd-color-bg zrcadlí BASE_BG v utils/themeColor.js
+     (mix target pro opacity custom tématu) — při změně aktualizovat obě
+     místa. */
   --shpd-color-bg:           #ffffff;
   --shpd-color-bg-secondary: #f6f8fa; /* lehce teplejší šedá než předtím */
   --shpd-color-bg-hover:     #f6f8fa;
@@ -119,6 +122,12 @@
      [data-theme="dark"] se nic nepředefinovává. */
   --shpd-color-sidebar-active-bg:       var(--shpd-color-primary);
   --shpd-color-sidebar-active-bg-hover: var(--shpd-color-primary-hover);
+
+  /* --shpd-sidebar-bg-image (gradient custom tématu) se tu ZÁMĚRNĚ
+     nedeklaruje — existuje pouze jako inline property z theme storu.
+     Fallback var(--shpd-sidebar-bg-image, ...) v Sidebar.svelte funguje
+     jen pro neexistující property; deklarovaná prázdná hodnota by
+     fallback rozbila a vyrobila nevalidní background. */
 
   /* Výběr záznamu v seznamu (vieweru)
    * Sytost „o stupeň výš“ než primary-soft, aby vybraný řádek
@@ -243,6 +252,9 @@
    *   bg-hover      = hover nad obsahem (světlejší než bg)
    * V dark se secondary a hover rozcházejí — secondary musí být
    * tmavší (vystupuje obsah), hover světlejší (rozjasnění). */
+  /* Pozor: hodnotu --shpd-color-bg zrcadlí BASE_BG v utils/themeColor.js
+     (mix target pro opacity custom tématu) — při změně aktualizovat obě
+     místa. */
   --shpd-color-bg:           #232730;
   --shpd-color-bg-secondary: #1a1d23;
   --shpd-color-bg-hover:     #2d3340;

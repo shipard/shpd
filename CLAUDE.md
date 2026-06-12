@@ -196,8 +196,9 @@ Závislosti tečou shora dolů: Command → Document → Module/Config/Database 
 - Tři režimy: Shipard (`light`) / Tmavý (`dark`) / Vlastní (`custom`);
   `auto` zanikl (migrace na `light`)
 - Custom barví **jen sidebar** přes runtime inline tokeny na `<html>`
-  (`deriveSidebarTokens()` v `utils/themeColor.js`, OKLCH); tělo stránky
-  se nebarví nikdy — chrání doc-state systém
+  (`deriveSidebarTokens()` v `utils/themeColor.js`, OKLab/OKLCH) —
+  solid barva nebo vertikální gradient + opacity mix k bázi; tělo
+  stránky se nebarví nikdy — chrání doc-state systém
 - Persistence localStorage s per-DS klíčem v dev; token cache
   `shpd_theme_tokens` pro anti-flash bootstrap. Tři synchronizovaná
   místa: `theme.svelte.js`, `index.html` bootstrap, `api/config.js`

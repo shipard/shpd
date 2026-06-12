@@ -849,8 +849,8 @@ hodnotami jako s `'light'`.
 | `frontend/src/styles/variables.css` | Light tokeny v `:root`, dark tokeny v `[data-theme="dark"]`, tokeny `--shpd-color-sidebar-active-bg(-hover)` |
 | `frontend/index.html` | Inline `<script>` bootstrap — aplikuje téma před prvním renderem (anti-flash), pro custom čte token cache |
 | `frontend/src/stores/theme.svelte.js` | Store s `mode`, `custom`, `setMode()`, `setCustom()`; persistence; aplikace inline tokenů |
-| `frontend/src/utils/themeColor.js` | `hexToOklch()`, `deriveSidebarTokens()`, `SIDEBAR_TOKEN_NAMES` — OKLCH odvozování, bez závislostí |
-| `frontend/src/components/layout/themePresets.js` | `THEME_PRESETS` — 12 kurátorovaných barev |
+| `frontend/src/utils/themeColor.js` | `hexToOklch()`, `hexToOklab()`, `mixOklab()`, `oklabToCss()`, `deriveSidebarTokens()`, `SIDEBAR_TOKEN_NAMES`, `BASE_BG` — OKLab/OKLCH odvozování, bez závislostí |
+| `frontend/src/components/layout/themePresets.js` | `THEME_PRESETS` (12 plných barev) + `THEME_GRADIENT_PRESETS` (12 přechodů) |
 | `frontend/src/components/layout/ThemePanel.svelte` | Panel custom tématu (desktop fixed vedle sidebaru, mobil Modal) |
 | `frontend/src/components/layout/Sidebar.svelte` | UI přepínač v dropdownu patky, otevírání panelu |
 | `frontend/src/components/layout/AppShell.svelte` | Vlastní stav `themePanelOpen`, renderuje `<ThemePanel>` |
@@ -860,8 +860,9 @@ hodnotami jako s `'light'`.
 - `'light'` — Shipard default; žádný `data-theme` atribut, žádné inline tokeny
 - `'dark'` — `data-theme="dark"` na `<html>`, žádné inline tokeny
 - `'custom'` — `data-theme` podle `custom.base` (`'dark'` → atribut,
-  `'light'` → odebrat); sidebar tokeny z `deriveSidebarTokens()` se
-  nastaví jako inline custom properties na `<html>`
+  `'light'` → odebrat); sidebar tokeny z `deriveSidebarTokens(sidebar,
+  base, opacity)` se nastaví jako inline custom properties na `<html>`
+  (u gradientu včetně `--shpd-sidebar-bg-image`)
 
 Default pro nové uživatele: `'light'`.
 
@@ -879,16 +880,34 @@ automaticky.
 | `shpd_theme_tokens` | JSON cache vypočítaných tokenů pro anti-flash bootstrap |
 
 Formát `shpd_theme_custom` — navržený jako sdílený pro budoucí úrovně
-persistence (server per-user = Fáze 2, DS-wide default = Fáze 3)
-i pro Fázi 2 (gradient, opacity):
+persistence (server per-user = Fáze 3, DS-wide default = Fáze 4):
 
 ```json
 {
   "version": 1,
   "base": "light",
+  "opacity": 100,
   "sidebar": { "type": "solid", "color": "#6D1F2C" }
 }
 ```
+
+```json
+{
+  "version": 1,
+  "base": "dark",
+  "opacity": 85,
+  "sidebar": { "type": "gradient", "stops": ["#00345C", "#0E4F5C"] }
+}
+```
+
+- `opacity` (0–100, default 100) je **top-level** záměrně — přepnutí
+  solid ↔ gradient posílá kompletní `sidebar` objekt a opacity nesmí
+  být přepsána. Configy z Fáze 1 bez `opacity` normalizuje
+  `loadInitialCustom()` na 100.
+- `sidebar.type: 'gradient'` má `stops` (pole dvou `#RRGGBB`), nemá
+  `color`. Směr je fixně vertikální (180deg); `angle` se do formátu
+  doplní až s vlastními gradienty.
+- `version` zůstává 1 — rozšíření je čistě aditivní.
 
 Cache `shpd_theme_tokens` zapisuje store při každé aplikaci custom
 tématu a maže při přepnutí na built-in. Bootstrap ji jen čte a aplikuje.
@@ -922,17 +941,34 @@ themeStore.setCustom({ base: 'dark' });        // merge + persistence + apply,
                                                // implikuje mode 'custom'
 ```
 
-`applyTheme()` (privátní) při `custom` nastaví inline tokeny a zapíše
-token cache; při built-in tématech inline tokeny vyčistí
+`applyTheme()` (privátní) při `custom` **nejdřív vyčistí inline
+tokeny a pak nastaví nové** (clear-then-set) — derivace nemusí vrátit
+všechny tokeny (`--shpd-sidebar-bg-image` má jen gradient) a přepnutí
+gradient → solid by jinak nechalo viset starý inline gradient. Poté
+zapíše token cache. Při built-in tématech inline tokeny vyčistí
 (`removeProperty` přes `SIDEBAR_TOKEN_NAMES`) a cache smaže.
+
+Opacity mixuje barvu/stopy směrem k pozadí báze v OKLab — mix targety
+`BASE_BG` v `themeColor.js` **zrcadlí `--shpd-color-bg`** ve
+`variables.css` (`:root` a `[data-theme="dark"]`); sync komentáře na
+obou místech. Odvozování všech tokenů běží z efektivní barvy (solid =
+barva po mixu, gradient = OKLab střed stopů po mixu) — detaily
+v [`design-system.md`](design-system.md) sekce 9.
+
+Bootstrap v `index.html` se Fází 2 **nemění** — token cache nese
+i `--shpd-sidebar-bg-image` a aplikační loop je generický.
 
 ### ThemePanel
 
 `ThemePanel.svelte` — props `open`, `onClose`, `collapsed`. Obsah:
-přepínač báze těla (světlá/tmavá), grid 12 preset swatchů, nativní
-`<input type="color">` s `oninput` (live preview při tažení). Každá
-interakce volá `themeStore.setCustom()` — aplikace okamžitá, žádné
-tlačítko Uložit.
+přepínač báze těla (světlá/tmavá), **stránkovaný** grid preset swatchů
+(stránka 1 = plné barvy, stránka 2 = gradienty; šipky po stranách bez
+wrap-aroundu, klikatelné tečky pod gridem; otevření panelu zobrazí
+stránku s aktuálním výběrem), opacity slider (0–100, step 5) a nativní
+`<input type="color">` s `oninput` (live preview při tažení). Custom
+color input je **solid-only** — při aktivním gradientu zobrazuje první
+stop a interakce přepne na solid. Každá interakce volá
+`themeStore.setCustom()` — aplikace okamžitá, žádné tlačítko Uložit.
 
 - **Desktop**: fixed panel vedle sidebaru (`left` podle
   `collapsed` stavu); zavírání ✕ / Esc / klik mimo (document listener

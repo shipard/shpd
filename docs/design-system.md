@@ -388,13 +388,26 @@ plošně ve všech tématech kvůli konzistenci, ne per-téma.
 
 ### Odvozované tokeny custom tématu
 
-Z vybrané barvy `deriveSidebarTokens()` (`frontend/src/utils/themeColor.js`,
-OKLCH matematika bez závislostí) odvodí:
+Custom konfigurace = solid barva nebo gradient dvou stopů + báze
+(light/dark) + opacity (0–100). `deriveSidebarTokens(sidebar, base,
+opacity)` (`frontend/src/utils/themeColor.js`, OKLab/OKLCH matematika
+bez závislostí) odvodí tokeny z **efektivní barvy**:
+
+1. Stopy se podle opacity mixují v OKLab směrem k pozadí báze aplikace
+   (`BASE_BG` v `themeColor.js` zrcadlí `--shpd-color-bg` ve
+   `variables.css` — bílá pro light, `#232730` pro dark; sync komentáře
+   na obou místech). OKLab = lineární interpolace bez hue wraparound
+   problémů.
+2. Efektivní barva: u solid barva po mixu, u gradientu OKLab střed
+   (aritmetický průměr složek) obou stopů po mixu.
+3. Elevated plocha a větvení světlý/tmavý text se počítají z efektivní
+   barvy — jeden pipeline pro solid i gradient.
 
 | Token | Hodnota |
 |---|---|
-| `--shpd-color-bg-sidebar` | vybraná barva beze změny |
-| `--shpd-color-bg-sidebar-elevated` | `oklch(min(L+0.06, 0.98) C H)` — dropdown nad sidebarem |
+| `--shpd-color-bg-sidebar` | `oklch()` barvy po opacity mixu (u gradientu efektivní barva — fallback/podklad) |
+| `--shpd-sidebar-bg-image` | **jen gradient**: `linear-gradient(180deg, stop1, stop2)` — vertikální |
+| `--shpd-color-bg-sidebar-elevated` | `oklch(min(L+0.06, 0.98) C H)` z efektivní barvy — dropdown nad sidebarem |
 | `--shpd-color-text-sidebar` | `rgb(255 255 255 / 0.92)` tmavý sidebar / `rgb(15 23 42 / 0.88)` světlý |
 | `--shpd-color-text-sidebar-muted` | `… / 0.58` / `… / 0.56` |
 | `--shpd-color-bg-sidebar-hover` | `rgb(255 255 255 / 0.08)` / `rgb(0 0 0 / 0.06)` |
@@ -402,23 +415,50 @@ OKLCH matematika bez závislostí) odvodí:
 | `--shpd-color-sidebar-active-bg` | `rgb(255 255 255 / 0.16)` / `rgb(0 0 0 / 0.10)` |
 | `--shpd-color-sidebar-active-bg-hover` | `rgb(255 255 255 / 0.22)` / `rgb(0 0 0 / 0.15)` |
 
-Větvení světlý/tmavý sidebar: `L >= 0.65` v OKLCH → světlý sidebar,
-tmavý text. Světlé barvy sidebaru tak dostanou čitelný text automaticky.
+Větvení světlý/tmavý sidebar: `L >= 0.65` (efektivní barvy) → světlý
+sidebar, tmavý text. Světlé barvy i gradienty tak dostanou čitelný
+text automaticky; opacity mix ke světlé bázi překlopí text na tmavý,
+jakmile barva dostatečně zbledne.
 
-### Preset paleta
+`--shpd-sidebar-bg-image` **není deklarovaný ve `variables.css`** —
+existuje jen jako inline property z theme storu. Fallback pattern
+`var(--shpd-sidebar-bg-image, var(--shpd-color-bg-sidebar))`
+v `Sidebar.svelte` funguje jen pro neexistující property; deklarovaná
+prázdná hodnota by fallback rozbila.
 
-`frontend/src/components/layout/themePresets.js` — 12 kurátorovaných
-barev (10 tmavých + 2 světlé). Tmavé tóny drží lightness pásmo brand
-modré (~L 0.30 v OKLCH), aby bílý text měl všude srovnatelný kontrast:
+### Preset paleta — plné barvy
+
+`frontend/src/components/layout/themePresets.js` (`THEME_PRESETS`) —
+12 kurátorovaných barev (10 tmavých + 2 světlé). Tmavé tóny drží
+lightness pásmo brand modré (~L 0.30 v OKLCH), aby bílý text měl všude
+srovnatelný kontrast:
 
 | Preset | Hex | | Preset | Hex |
 |---|---|---|---|---|
-| Shipard modrá | `#00345C` | | Tlumená magenta | `#8C2F5D` |
+| Ocelová modř | `#2E6494` | | Tlumená magenta | `#8C2F5D` |
 | Petrolejová | `#0E4F5C` | | Švestková | `#4A2C66` |
 | Smaragdová | `#115E4B` | | Indigo | `#34307D` |
 | Lahvová zelená | `#2F5D3A` | | Grafit | `#2F343D` |
 | Terakota | `#9A3B26` | | Písková (světlá) | `#E3D5B8` |
 | Vínová | `#6D1F2C` | | Mlhavá modř (světlá) | `#DBE4EE` |
+
+### Preset paleta — gradienty
+
+`THEME_GRADIENT_PRESETS` — 12 vertikálních přechodů (180deg, shora
+dolů; horizontální zamítnut — úzký vysoký sidebar dává přechodu
+prostor vertikálně). Dvojice stopů drží podobné lightness pásmo
+(**ΔL ≤ ~0.08** v OKLCH): přechody jsou posuny odstínu, ne světlosti,
+aby text a alpha zvýraznění fungovaly po celé výšce sidebaru. Stopy
+z velké části recyklují solid paletu:
+
+| Preset | Stopy | | Preset | Stopy |
+|---|---|---|---|---|
+| Oceán | `#00345C → #0E4F5C` | | Ostružina | `#6D1F2C → #4A2C66` |
+| Louka | `#6E6320 → #2F5D3A` | | Západ slunce | `#9A3B26 → #6D1F2C` |
+| Mech | `#115E4B → #46702F` | | Žár | `#9A3B26 → #8C2F5D` |
+| Polární záře | `#2E6494 → #115E4B` | | Bouřka | `#2F343D → #34307D` |
+| Půlnoc | `#34307D → #00345C` | | Svítání (světlý) | `#DBE4EE → #E3D5B8` |
+| Vřes | `#4A2C66 → #8C2F5D` | | Pivoňka (světlý) | `#EAD9E2 → #DBE4EE` |
 
 ### Designové principy dark módu
 

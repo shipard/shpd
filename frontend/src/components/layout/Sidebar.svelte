@@ -22,7 +22,7 @@
     iconAppSettings,
     iconThemeLight,
     iconThemeDark,
-    iconThemeAuto,
+    iconPalette,
     iconConfirm,
     iconWarning,
     resolveIcon,
@@ -43,10 +43,11 @@
     return leaves;
   }
 
-  let { onNavigate, onLogout } = $props();
-
-  // Collapsed state — toggle tlačítkem v hlavičce.
-  let collapsed = $state(false);
+  // `collapsed` je bindable — AppShell ho zrcadlí kvůli pozici ThemePanel
+  // (panel se renderuje v AppShellu, ne tady; drawer má transform, který
+  // by position:fixed panel uvěznil). `onOpenThemePanel` otevírá panel
+  // custom vzhledu vlastněný AppShellem.
+  let { onNavigate, onLogout, onOpenThemePanel, collapsed = $bindable(false) } = $props();
 
   // Navigation tree loaded from server API — reloads when mode changes
   let navTree = $state([]);
@@ -158,16 +159,25 @@
     closeUserMenu();
   });
 
-  // Položky vzhledu — záměrně nezavíráme menu po kliku, aby si uživatel
-  // mohl rychle vyzkoušet více variant. Menu se zavře kliknutím mimo.
+  // Položky vzhledu — u light/dark záměrně nezavíráme menu po kliku,
+  // aby si uživatel mohl rychle vyzkoušet více variant. Menu se zavře
+  // kliknutím mimo.
   const themeOptions = [
-    { value: 'light', labelKey: 'sidebar.appearance.light', icon: iconThemeLight },
-    { value: 'dark',  labelKey: 'sidebar.appearance.dark',  icon: iconThemeDark },
-    { value: 'auto',  labelKey: 'sidebar.appearance.auto',  icon: iconThemeAuto },
+    { value: 'light',  labelKey: 'sidebar.appearance.light',  icon: iconThemeLight },
+    { value: 'dark',   labelKey: 'sidebar.appearance.dark',   icon: iconThemeDark },
+    { value: 'custom', labelKey: 'sidebar.appearance.custom', icon: iconPalette },
   ];
 
   function handleThemeChange(value) {
     themeStore.setMode(value);
+    if (value === 'custom') {
+      // Volba Vlastní otevírá panel — i když už je custom aktivní
+      // (uživatel chce upravit barvu). Menu zavřít a panel otevřít až
+      // po ticku — viz past s click bubbling v docs/frontend.md
+      // sekce Konvence → Dropdown / popover komponenty.
+      closeUserMenu();
+      setTimeout(() => { onOpenThemePanel?.(); }, 0);
+    }
   }
 
   // Položky jazyka — přepnutí volá location.reload() v storu, takže menu

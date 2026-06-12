@@ -70,7 +70,7 @@ import {
   faHashtag,
   faSun,
   faMoon,
-  faDesktop,
+  faPalette,
   faBell,
   faGauge,
   faRobot,
@@ -131,7 +131,7 @@ export const iconHash = faHashtag;
 // ── Vzhled / theme ─────────────────────────────────────────────
 export const iconThemeLight = faSun;
 export const iconThemeDark = faMoon;
-export const iconThemeAuto = faDesktop;
+export const iconPalette = faPalette;
 
 // ── Stav / feedback ─────────────────────────────────────────────
 export const iconSpinner = faCircleNotch;

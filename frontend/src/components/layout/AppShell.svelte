@@ -2,10 +2,23 @@
   import Sidebar from './Sidebar.svelte';
   import ContentArea from './ContentArea.svelte';
   import MobileTopBar from './MobileTopBar.svelte';
+  import ThemePanel from './ThemePanel.svelte';
   import { navigationStore } from '../../stores/navigation.svelte.js';
   import { layoutStore } from '../../stores/layout.svelte.js';
 
   let { onLogout } = $props();
+
+  // Panel custom vzhledu žije tady, ne v Sidebaru — mobilní drawer má
+  // transform (containing block pro position:fixed) a Sidebar overflow:
+  // hidden, takže panel/Modal renderovaný uvnitř by se ořízl. Sidebar
+  // ho otevírá přes onOpenThemePanel callback; collapsed se zrcadlí
+  // přes bind kvůli left pozici panelu na desktopu.
+  let themePanelOpen = $state(false);
+  let sidebarCollapsed = $state(false);
+
+  function openThemePanel() {
+    themePanelOpen = true;
+  }
 
   function handleNavigate(item) {
     navigationStore.navigate(item);
@@ -41,7 +54,7 @@
       class="shpd-shell__drawer"
       class:shpd-shell__drawer--open={layoutStore.drawerOpen}
     >
-      <Sidebar onNavigate={handleNavigate} {onLogout} />
+      <Sidebar onNavigate={handleNavigate} {onLogout} onOpenThemePanel={openThemePanel} />
     </div>
 
     <div class="shpd-shell__main">
@@ -49,11 +62,22 @@
     </div>
   {:else}
     <!-- Desktop režim: beze změny — pevný sidebar + obsah vedle. -->
-    <Sidebar onNavigate={handleNavigate} {onLogout} />
+    <Sidebar
+      onNavigate={handleNavigate}
+      {onLogout}
+      onOpenThemePanel={openThemePanel}
+      bind:collapsed={sidebarCollapsed}
+    />
     <div class="shpd-shell__main">
       <ContentArea activeItem={navigationStore.activeItem} />
     </div>
   {/if}
+
+  <ThemePanel
+    open={themePanelOpen}
+    onClose={() => { themePanelOpen = false; }}
+    collapsed={sidebarCollapsed}
+  />
 </div>
 
 <style>

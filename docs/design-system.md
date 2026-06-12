@@ -405,7 +405,7 @@ bez závislostí) odvodí tokeny z **efektivní barvy**:
 
 | Token | Hodnota |
 |---|---|
-| `--shpd-color-bg-sidebar` | `oklch()` barvy po opacity mixu (u gradientu efektivní barva — fallback/podklad) |
+| `--shpd-color-bg-sidebar` | `oklch()` barvy po opacity mixu (u gradientu **horní stop** — fallback a plochy bez gradientu jako mobile topbar navazují na začátek přechodu) |
 | `--shpd-sidebar-bg-image` | **jen gradient**: `linear-gradient(180deg, stop1, stop2)` — vertikální |
 | `--shpd-color-bg-sidebar-elevated` | `oklch(min(L+0.06, 0.98) C H)` z efektivní barvy — dropdown nad sidebarem |
 | `--shpd-color-text-sidebar` | `rgb(255 255 255 / 0.92)` tmavý sidebar / `rgb(15 23 42 / 0.88)` světlý |

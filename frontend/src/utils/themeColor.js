@@ -157,9 +157,11 @@ export function deriveSidebarTokens(sidebar, base, opacity) {
       };
 
   const tokens = {
-    /* U gradientu slouží bg-sidebar jako fallback a podklad pro plochy,
-       které gradient nepoužívají. */
-    '--shpd-color-bg-sidebar': oklabToCss(isGradient ? effective : s1),
+    /* U gradientu nese bg-sidebar HORNÍ stop (s1) — plochy bez
+       gradientu (mobile topbar, fallback) tak navážou na začátek
+       přechodu na stejné výškové hladině. Odvozování textu a
+       elevated dál běží z efektivní barvy (střed stopů). */
+    '--shpd-color-bg-sidebar': oklabToCss(s1),
     '--shpd-color-bg-sidebar-elevated': elevated,
     ...textTokens,
   };

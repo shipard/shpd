@@ -112,6 +112,14 @@
   --shpd-color-bg-sidebar-hover:    rgb(255 255 255 / 0.08);
   --shpd-color-bg-sidebar-border:   rgb(255 255 255 / 0.10);
 
+  /* Pozadí aktivní položky sidebaru. V built-in tématech ukazuje na
+     primary; custom téma ho přepisuje na neutrální white/black-alpha,
+     aby fungovalo na libovolné barvě sidebaru. Nepřímá reference přes
+     var() se v dark vyhodnotí na dark primary sama — v bloku
+     [data-theme="dark"] se nic nepředefinovává. */
+  --shpd-color-sidebar-active-bg:       var(--shpd-color-primary);
+  --shpd-color-sidebar-active-bg-hover: var(--shpd-color-primary-hover);
+
   /* Výběr záznamu v seznamu (vieweru)
    * Sytost „o stupeň výš“ než primary-soft, aby vybraný řádek
    * šel zetelně vidět i vedle barevných doc-state pozadí.

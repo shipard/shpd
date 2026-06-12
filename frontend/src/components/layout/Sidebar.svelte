@@ -826,13 +826,13 @@
   }
 
   .shpd-sidebar__item--active {
-    background-color: var(--shpd-color-primary);
+    background-color: var(--shpd-color-sidebar-active-bg);
     opacity: 1;
     font-weight: 500;
   }
 
   .shpd-sidebar__item--active:hover {
-    background-color: var(--shpd-color-primary-hover);
+    background-color: var(--shpd-color-sidebar-active-bg-hover);
   }
 
   /* Levý oranžový proužek u aktivní položky — zvýrazňuje pozici

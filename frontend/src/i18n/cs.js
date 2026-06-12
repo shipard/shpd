@@ -53,7 +53,7 @@ export default {
   'theme.base.light': 'Světlý',
   'theme.base.dark': 'Tmavý',
   'theme.panel.customColor': 'Vlastní barva',
-  'theme.preset.shipardBlue': 'Shipard modrá',
+  'theme.preset.steelBlue': 'Ocelová modř',
   'theme.preset.petrol': 'Petrolejová',
   'theme.preset.emerald': 'Smaragdová',
   'theme.preset.bottleGreen': 'Lahvová zelená',

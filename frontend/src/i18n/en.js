@@ -44,7 +44,7 @@ export default {
   'theme.base.light': 'Light',
   'theme.base.dark': 'Dark',
   'theme.panel.customColor': 'Custom color',
-  'theme.preset.shipardBlue': 'Shipard blue',
+  'theme.preset.steelBlue': 'Steel blue',
   'theme.preset.petrol': 'Petrol',
   'theme.preset.emerald': 'Emerald',
   'theme.preset.bottleGreen': 'Bottle green',

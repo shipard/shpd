@@ -15,6 +15,10 @@
  * segment matching the DS ID format (xxxx-xxxx-xxxx-xxxx).
  */
 
+// Pozor: stejný regex duplikuje theme bootstrap v index.html (per-DS
+// prefix localStorage klíčů musí běžet před načtením modulů). Změna
+// formátu DS ID = upravit obě místa; viz komentáře tam
+// a v stores/theme.svelte.js.
 const DS_ID_PATTERN = /^\/([a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4})\//;
 
 function detectDsId() {

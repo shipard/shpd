@@ -6,15 +6,31 @@
     <title>Shipard</title>
     <script>
       // Theme bootstrap — běží před prvním renderem, aby se zabránilo
-      // "flash of unstyled content" v dark módu. Čte volbu z localStorage
-      // (light/dark/auto), pro 'auto' čte prefers-color-scheme.
-      // Synchronizované s logikou v stores/theme.svelte.js — pokud se
-      // někdy mění klic localStorage nebo media query, měň obě místa.
+      // flashi špatného tématu (dark / custom barva sidebaru). Čte volbu
+      // z localStorage (light/dark/custom); pro 'custom' aplikuje
+      // předpočítané sidebar tokeny z cache shpd_theme_tokens — žádná
+      // OKLCH matematika tady, jen setProperty.
+      //
+      // Tři synchronizovaná místa: stores/theme.svelte.js (klíče,
+      // formáty), tento script a api/config.js (DS regex pro per-DS
+      // prefix klíčů v dev módu). Změna kteréhokoli = aktualizovat
+      // komentáře u všech.
       (function () {
         try {
-          var pref = localStorage.getItem('shpd_theme') || 'auto';
-          var dark = pref === 'dark' ||
-            (pref === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          // Per-DS klíč — stejná detekce jako api/config.js (sync ručně!)
+          var m = location.pathname.match(/^\/([a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4})\//);
+          var sfx = m ? ':' + m[1] : '';
+          var mode = localStorage.getItem('shpd_theme' + sfx) || 'light';
+          var dark = false;
+          if (mode === 'dark') {
+            dark = true;
+          } else if (mode === 'custom') {
+            var cfg = JSON.parse(localStorage.getItem('shpd_theme_custom' + sfx) || '{}');
+            dark = cfg.base === 'dark';
+            var tokens = JSON.parse(localStorage.getItem('shpd_theme_tokens' + sfx) || '{}');
+            for (var k in tokens) document.documentElement.style.setProperty(k, tokens[k]);
+          }
+          // 'auto' (legacy) i neznámé hodnoty propadnou na light
           if (dark) document.documentElement.setAttribute('data-theme', 'dark');
         } catch (e) { /* private mode / disabled storage — fallback na light */ }
       })();

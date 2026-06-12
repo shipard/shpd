@@ -236,18 +236,19 @@
     width: 36px;
     height: 36px;
     padding: 0;
-    border: 1px solid var(--shpd-color-border);
+    border: 1px solid color-mix(in srgb, var(--shpd-color-text) 25%, transparent);
     border-radius: 50%;
     cursor: pointer;
-    transition: transform 0.1s;
+    transition: border-color 0.15s;
   }
 
   .shpd-theme-panel__swatch:hover {
-    transform: scale(1.1);
+    border-color: var(--shpd-color-text-secondary);
   }
 
   .shpd-theme-panel__swatch--selected {
-    box-shadow: 0 0 0 2px var(--shpd-color-bg), 0 0 0 4px var(--shpd-color-accent);
+    outline: 2px solid var(--shpd-color-accent);
+    outline-offset: 2px;
   }
 
   .shpd-theme-panel__color-input {

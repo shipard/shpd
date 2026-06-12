@@ -69,6 +69,8 @@ Když se rozhoduje o nové barvě, vždy nejdřív sáhni do `variables.css`.
 | `--shpd-color-bg-sidebar-elevated` | `#014b80` | Dropdown / popover nad sidebarem (o stupeň světlejší, aby šlo poznat hranice) |
 | `--shpd-color-bg-sidebar-hover` | `rgb(255 255 255 / 0.08)` | Hover na položce sidebaru |
 | `--shpd-color-bg-sidebar-border` | `rgb(255 255 255 / 0.10)` | Děliče v sidebaru |
+| `--shpd-color-sidebar-active-bg` | `var(--shpd-color-primary)` | Pozadí aktivní položky sidebaru; custom téma přepisuje na neutrální alpha |
+| `--shpd-color-sidebar-active-bg-hover` | `var(--shpd-color-primary-hover)` | Hover na aktivní položce |
 
 ### Text
 
@@ -349,21 +351,74 @@ posledního.
 
 ---
 
-## 9. Dark mode
+## 9. Vzhledy (themes)
 
-Aplikace podporuje tři režimy vzhledu:
+Aplikace podporuje tři režimy vzhledu (dropdown Vzhled v patce sidebaru):
 
-- **Light** (default v light tokens v `:root`)
-- **Dark** — aktivuje se atributem `data-theme="dark"` na `<html>`,
-  v `variables.css` jsou pod selektorem `[data-theme="dark"]` předefinované
-  všechny barevné tokeny
-- **Auto** — sleduje OS preferenci přes `prefers-color-scheme` media query
+- **Shipard** (interně `light`) — default; light tokeny v `:root`,
+  žádný `data-theme` atribut, žádné inline tokeny
+- **Tmavý** (`dark`) — atribut `data-theme="dark"` na `<html>`,
+  v `variables.css` jsou pod selektorem `[data-theme="dark"]`
+  předefinované všechny barevné tokeny
+- **Vlastní** (`custom`) — uživatel vybere barvu sidebaru (preset paleta
+  nebo color picker) + světlou/tmavou bázi těla; sidebar tokeny se
+  přepíšou inline custom properties na `<html>` za běhu
 
-Uživatel volbu přepíná v dropdownu sidebaru (Vzhled: Světlý / Tmavý / Auto).
-Volba se persistuje do `localStorage` pod klíčem `shpd_theme`.
+Dřívější režim Auto (sledování `prefers-color-scheme`) zanikl — uložená
+hodnota `'auto'` se migruje na `'light'`. Volba se persistuje do
+`localStorage` (klíč `shpd_theme`, v dev módu per-DS prefix).
 
-Implementace store + bootstrap je v [`frontend.md`](frontend.md)
+Implementace store + bootstrap + panel je v [`frontend.md`](frontend.md)
 (sekce *Theme management*).
+
+### Princip custom tématu: barví se jen sidebar
+
+Tělo stránky se **nebarví nikdy** — na bílých plochách žije doc-state
+systém (barevné pruhy, badge, selection) a tónování obsahu by rozbilo
+jeho čitelnost. Obsah stránky (tlačítka, odkazy, doc-states, selection)
+drží brand barvy beze změny ve všech tématech.
+
+Jediná výjimka v sidebaru: aktivní položka používá token
+`--shpd-color-sidebar-active-bg` — v built-in tématech ukazuje na
+primary modrou (vzhled beze změny), v custom tématu ho store přepíše
+na neutrální white/black-alpha, aby fungoval na libovolné barvě.
+**Oranžový proužek aktivní položky zůstává ve všech tématech** — pokud
+by v praxi kolidoval s červenými presety (terakota, vínová), zruší se
+plošně ve všech tématech kvůli konzistenci, ne per-téma.
+
+### Odvozované tokeny custom tématu
+
+Z vybrané barvy `deriveSidebarTokens()` (`frontend/src/utils/themeColor.js`,
+OKLCH matematika bez závislostí) odvodí:
+
+| Token | Hodnota |
+|---|---|
+| `--shpd-color-bg-sidebar` | vybraná barva beze změny |
+| `--shpd-color-bg-sidebar-elevated` | `oklch(min(L+0.06, 0.98) C H)` — dropdown nad sidebarem |
+| `--shpd-color-text-sidebar` | `rgb(255 255 255 / 0.92)` tmavý sidebar / `rgb(15 23 42 / 0.88)` světlý |
+| `--shpd-color-text-sidebar-muted` | `… / 0.58` / `… / 0.56` |
+| `--shpd-color-bg-sidebar-hover` | `rgb(255 255 255 / 0.08)` / `rgb(0 0 0 / 0.06)` |
+| `--shpd-color-bg-sidebar-border` | `rgb(255 255 255 / 0.10)` / `rgb(0 0 0 / 0.10)` |
+| `--shpd-color-sidebar-active-bg` | `rgb(255 255 255 / 0.16)` / `rgb(0 0 0 / 0.10)` |
+| `--shpd-color-sidebar-active-bg-hover` | `rgb(255 255 255 / 0.22)` / `rgb(0 0 0 / 0.15)` |
+
+Větvení světlý/tmavý sidebar: `L >= 0.65` v OKLCH → světlý sidebar,
+tmavý text. Světlé barvy sidebaru tak dostanou čitelný text automaticky.
+
+### Preset paleta
+
+`frontend/src/components/layout/themePresets.js` — 12 kurátorovaných
+barev (10 tmavých + 2 světlé). Tmavé tóny drží lightness pásmo brand
+modré (~L 0.30 v OKLCH), aby bílý text měl všude srovnatelný kontrast:
+
+| Preset | Hex | | Preset | Hex |
+|---|---|---|---|---|
+| Shipard modrá | `#00345C` | | Tlumená magenta | `#8C2F5D` |
+| Petrolejová | `#0E4F5C` | | Švestková | `#4A2C66` |
+| Smaragdová | `#115E4B` | | Indigo | `#34307D` |
+| Lahvová zelená | `#2F5D3A` | | Grafit | `#2F343D` |
+| Terakota | `#9A3B26` | | Písková (světlá) | `#E3D5B8` |
+| Vínová | `#6D1F2C` | | Mlhavá modř (světlá) | `#DBE4EE` |
 
 ### Designové principy dark módu
 
@@ -398,11 +453,13 @@ Když implementuješ hover, používej `bg-hover` (rozjasní). Když implementuj
 
 ### Anti-flash bootstrap
 
-Dark mód se aplikuje před prvním renderem inline `<script>` v `index.html`
-— jinak by uživatel s uloženou `dark` volbou viděl flash bílé stranky
-před načtením Svelte. Bootstrap čte stejný `localStorage` klíč jako
-store (`shpd_theme`). Pokud někdy měníš klíč nebo logiku, musíš to upravit
-na obou místech.
+Téma se aplikuje před prvním renderem inline `<script>` v `index.html`
+— jinak by uživatel s uloženou `dark`/`custom` volbou viděl flash
+defaultního vzhledu před načtením Svelte. Pro custom téma bootstrap
+aplikuje předpočítané tokeny z cache `shpd_theme_tokens` — žádná OKLCH
+matematika před renderem. Bootstrap čte stejné `localStorage` klíče
+jako store; detaily a synchronizovaná místa v [`frontend.md`](frontend.md)
+(sekce *Theme management*).
 
 ---
 

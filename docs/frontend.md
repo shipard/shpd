@@ -831,45 +831,83 @@ Navigační položky mohou mít volitelnou ikonu definovanou na serveru v `modul
 
 ## 11. Theme management
 
-Aplikace podporuje light / dark / auto režim vzhledu. Vizuální paleta
-a designové principy jsou v [`design-system.md`](design-system.md) (sekce *Dark mode*).
-Tato sekce popisuje **implementaci** — store, bootstrap, přepínač.
+Aplikace podporuje tři vzhledy: **Shipard** (`light`), **Tmavý** (`dark`)
+a **Vlastní** (`custom` — uživatelská barva sidebaru + světlá/tmavá báze
+těla). Vizuální paleta, odvozované tokeny a designové principy jsou
+v [`design-system.md`](design-system.md) (sekce *Vzhledy (themes)*).
+Tato sekce popisuje **implementaci** — store, bootstrap, panel, přepínač.
+
+Dřívější režim `'auto'` (sledování `prefers-color-scheme`) zanikl —
+`loadInitialMode()` migruje uloženou hodnotu `'auto'` na `'light'`
+s okamžitým write-backem; bootstrap zachází s `'auto'` i neznámými
+hodnotami jako s `'light'`.
 
 ### Soubory
 
 | Soubor | Co dělá |
 |---|---|
-| `frontend/src/styles/variables.css` | Light tokeny v `:root`, dark tokeny v `[data-theme="dark"]` |
-| `frontend/index.html` | Inline `<script>` bootstrap — aplikuje téma před prvním renderem (anti-flash) |
-| `frontend/src/stores/theme.svelte.js` | Store s `mode`, `setMode()`, `effective`; persistence; `prefers-color-scheme` listener |
-| `frontend/src/components/layout/Sidebar.svelte` | UI přepínač v dropdownu patky |
+| `frontend/src/styles/variables.css` | Light tokeny v `:root`, dark tokeny v `[data-theme="dark"]`, tokeny `--shpd-color-sidebar-active-bg(-hover)` |
+| `frontend/index.html` | Inline `<script>` bootstrap — aplikuje téma před prvním renderem (anti-flash), pro custom čte token cache |
+| `frontend/src/stores/theme.svelte.js` | Store s `mode`, `custom`, `setMode()`, `setCustom()`; persistence; aplikace inline tokenů |
+| `frontend/src/utils/themeColor.js` | `hexToOklch()`, `deriveSidebarTokens()`, `SIDEBAR_TOKEN_NAMES` — OKLCH odvozování, bez závislostí |
+| `frontend/src/components/layout/themePresets.js` | `THEME_PRESETS` — 12 kurátorovaných barev |
+| `frontend/src/components/layout/ThemePanel.svelte` | Panel custom tématu (desktop fixed vedle sidebaru, mobil Modal) |
+| `frontend/src/components/layout/Sidebar.svelte` | UI přepínač v dropdownu patky, otevírání panelu |
+| `frontend/src/components/layout/AppShell.svelte` | Vlastní stav `themePanelOpen`, renderuje `<ThemePanel>` |
 
 ### Režimy
 
-- `'light'` — force light, žádný `data-theme` atribut na `<html>`
-- `'dark'` — force dark, `data-theme="dark"` na `<html>`
-- `'auto'` — sleduje `prefers-color-scheme: dark` media query, atribut
-  se přidává/odebírá dynamicky podle OS preference
+- `'light'` — Shipard default; žádný `data-theme` atribut, žádné inline tokeny
+- `'dark'` — `data-theme="dark"` na `<html>`, žádné inline tokeny
+- `'custom'` — `data-theme` podle `custom.base` (`'dark'` → atribut,
+  `'light'` → odebrat); sidebar tokeny z `deriveSidebarTokens()` se
+  nastaví jako inline custom properties na `<html>`
 
-Default pro nové uživatele: `'auto'`.
+Default pro nové uživatele: `'light'`.
 
-### localStorage
+### localStorage — per-DS klíče
 
-Volba se persistuje pod klíčem `shpd_theme`. Hodnoty: `'light'`, `'dark'`,
-`'auto'`. **Stejný klíč čte i bootstrap script** v `index.html` — pokud
-měníš klíč nebo logiku, musíš změnit obě místa.
+Klíče se v dev módu (DS ID v URL path) prefixují přes
+`storageKey(name)` → `name:{dsId}`, aby se volby pro různé DS na
+stejném originu nemíchaly; v produkci (subdoména per DS) izoluje origin
+automaticky.
+
+| Klíč (base) | Obsah |
+|---|---|
+| `shpd_theme` | Mode string: `'light'` / `'dark'` / `'custom'` |
+| `shpd_theme_custom` | JSON custom konfigurace (viz níže) |
+| `shpd_theme_tokens` | JSON cache vypočítaných tokenů pro anti-flash bootstrap |
+
+Formát `shpd_theme_custom` — navržený jako sdílený pro budoucí úrovně
+persistence (server per-user = Fáze 2, DS-wide default = Fáze 3)
+i pro Fázi 2 (gradient, opacity):
+
+```json
+{
+  "version": 1,
+  "base": "light",
+  "sidebar": { "type": "solid", "color": "#6D1F2C" }
+}
+```
+
+Cache `shpd_theme_tokens` zapisuje store při každé aplikaci custom
+tématu a maže při přepnutí na built-in. Bootstrap ji jen čte a aplikuje.
+
+**Tři synchronizovaná místa** pro localStorage klíče a DS detekci:
+`theme.svelte.js`, bootstrap v `index.html` (duplikuje DS regex,
+protože běží před načtením modulů) a `api/config.js` (`DS_ID_PATTERN`).
+Při změně kteréhokoli aktualizovat komentáře u všech.
 
 ### Anti-flash bootstrap
 
-Před prvním renderem běží krátký inline `<script>` v `index.html`,
-který přečte `localStorage.shpd_theme`, vyhodnotí efektivní téma
-(pro `auto` přes `prefers-color-scheme`) a nastaví `data-theme="dark"`
-na `<html>` před tím, než Svelte začne renderovat. Bez tohoto
-bootstrapu by uživatel s uloženou `dark` volbou viděl flash bílé
-stránky před načtením CSS.
+Před prvním renderem běží krátký inline `<script>` v `index.html`:
+detekuje DS ID z URL (stejný regex jako `api/config.js`), přečte mode,
+pro `'dark'` nastaví `data-theme`, pro `'custom'` nastaví `data-theme`
+podle `cfg.base` a aplikuje tokeny z cache `shpd_theme_tokens` přes
+`setProperty()` — **žádná OKLCH matematika v inline scriptu**.
 
-Bootstrap je záměrně velmi malý a defenzivní (try/catch okolo localStorage
-kvůli private mode / disabled storage), aby selhal tichu s fallbackem
+Bootstrap je záměrně malý a defenzivní (try/catch okolo localStorage
+kvůli private mode / disabled storage), aby selhal tiše s fallbackem
 na light, ne aby blokoval render.
 
 ### `themeStore` API
@@ -877,24 +915,50 @@ na light, ne aby blokoval render.
 ```js
 import { themeStore } from '../../stores/theme.svelte.js';
 
-themeStore.mode;       // 'light' | 'dark' | 'auto' — uživatelská volba
-themeStore.effective;  // 'light' | 'dark' — co se opravdu vykresluje
-themeStore.setMode('dark');  // přepnutí + persistence + apply
+themeStore.mode;    // 'light' | 'dark' | 'custom' — uživatelská volba
+themeStore.custom;  // {version, base, sidebar: {type, color}}
+themeStore.setMode('dark');                    // přepnutí + persistence + apply
+themeStore.setCustom({ base: 'dark' });        // merge + persistence + apply,
+                                               // implikuje mode 'custom'
 ```
 
-Při `'auto'` režimu store registruje listener na `prefers-color-scheme`
-media query — změna v OS se okamžitě projeví v aplikaci bez refreshu.
+`applyTheme()` (privátní) při `custom` nastaví inline tokeny a zapíše
+token cache; při built-in tématech inline tokeny vyčistí
+(`removeProperty` přes `SIDEBAR_TOKEN_NAMES`) a cache smaže.
+
+### ThemePanel
+
+`ThemePanel.svelte` — props `open`, `onClose`, `collapsed`. Obsah:
+přepínač báze těla (světlá/tmavá), grid 12 preset swatchů, nativní
+`<input type="color">` s `oninput` (live preview při tažení). Každá
+interakce volá `themeStore.setCustom()` — aplikace okamžitá, žádné
+tlačítko Uložit.
+
+- **Desktop**: fixed panel vedle sidebaru (`left` podle
+  `collapsed` stavu); zavírání ✕ / Esc / klik mimo (document listener
+  v `$effect` — stejný vzor jako user menu).
+- **Mobil** (`layoutStore.isMobile`): strukturní přepnutí — obsah se
+  renderuje uvnitř `<Modal>` (fullscreen automaticky).
+
+Panel renderuje **AppShell**, ne Sidebar — mobilní drawer má
+`transform` (containing block pro `position: fixed`) a `.shpd-sidebar`
+má `overflow: hidden`, panel/Modal uvnitř by se ořízl. Sidebar panel
+otevírá přes callback prop `onOpenThemePanel`; svůj `collapsed` stav
+zrcadlí do AppShellu přes `$bindable` prop. Klik na položku Vlastní
+v dropdownu zavře menu a otevře panel až po ticku (`setTimeout 0`) —
+viz past s click bubbling v sekci *Konvence → Dropdown / popover
+komponenty*.
 
 ### Implementační poznámka: `state_referenced_locally`
 
-Při mountu modulu se volá `applyToDocument(computeEffective(initialMode))`,
-kde `initialMode` je lokální `const`, ne `$state` proměnná. Kdybychom
-dávali přímo `mode` (`$state`), Svelte 5 by hlásilo varování
-`state_referenced_locally` — čtení `$state` proměnné v top-level
-modulu zachycuje jen počáteční hodnotu, ne reaktivně. V tomto případě
-je to schválně (chceme spustit jen jednou při mountu), ale Svelte to
-neumi rozeznat. Reaktivní updaty následují přes `setMode()`, který
-volá `applyToDocument` opětovně.
+Při mountu modulu se volá `applyTheme(initialMode, initialCustom)`,
+kde `initialMode`/`initialCustom` jsou lokální `const`, ne `$state`
+proměnné. Kdybychom dávali přímo `mode` (`$state`), Svelte 5 by hlásilo
+varování `state_referenced_locally` — čtení `$state` proměnné
+v top-level modulu zachycuje jen počáteční hodnotu, ne reaktivně.
+V tomto případě je to schválně (chceme spustit jen jednou při mountu),
+ale Svelte to neumi rozeznat. Reaktivní updaty následují přes
+`setMode()`/`setCustom()`, které volají `applyTheme` opětovně.
 
 ---
 

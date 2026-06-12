@@ -191,6 +191,18 @@ Závislosti tečou shora dolů: Command → Document → Module/Config/Database 
   mají v JSONC definici `"hideFromNavigation": true` — nezobrazují se ani v hlavním
   sidebaru, ani v Nastavení
 
+### Frontend — Vzhledy (themes)
+
+- Tři režimy: Shipard (`light`) / Tmavý (`dark`) / Vlastní (`custom`);
+  `auto` zanikl (migrace na `light`)
+- Custom barví **jen sidebar** přes runtime inline tokeny na `<html>`
+  (`deriveSidebarTokens()` v `utils/themeColor.js`, OKLCH); tělo stránky
+  se nebarví nikdy — chrání doc-state systém
+- Persistence localStorage s per-DS klíčem v dev; token cache
+  `shpd_theme_tokens` pro anti-flash bootstrap. Tři synchronizovaná
+  místa: `theme.svelte.js`, `index.html` bootstrap, `api/config.js`
+- Detaily: `docs/design-system.md` (sekce 9), `docs/frontend.md` (sekce 11)
+
 ### Frontend — Vícejazyčnost
 
 - Language store: `frontend/src/stores/language.svelte.js` (mode `cs` / `en` / `auto`)

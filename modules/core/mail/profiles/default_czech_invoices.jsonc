@@ -635,6 +635,12 @@
                                                 "null"
                                             ]
                                         },
+                                        "operation": {
+                                            "type": [
+                                                "string",
+                                                "null"
+                                            ]
+                                        },
                                         "orderPos": {
                                             "type": [
                                                 "integer",

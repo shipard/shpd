@@ -928,6 +928,10 @@ class DocumentApplier
 
             $out[] = array_filter([
                 'row_kind'        => self::ROW_KIND_MAP[(string) ($row['rowKind'] ?? 'item')] ?? 1,
+                // Row movement (docs.core.rowOperations). Verbatim passthrough —
+                // required for item rows to reach state 40 (DocRowOperationRules).
+                // Absent → null → row cannot be confirmed at 40 (caller's job).
+                'operation'       => $row['operation'] ?? null,
                 'order_pos'       => $orderPos,
                 'item'            => $itemId,
                 'unit'            => $unitId,

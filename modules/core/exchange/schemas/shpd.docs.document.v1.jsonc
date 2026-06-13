@@ -262,6 +262,7 @@
             "additionalProperties": false,
             "properties": {
                 "rowKind":        { "type": ["string", "null"] },
+                "operation":      { "type": ["string", "null"] },
                 "orderPos":       { "type": ["integer", "null"] },
                 "item":           { "$ref": "#/$defs/RowItem" },
                 "unit":           { "type": ["string", "null"] },

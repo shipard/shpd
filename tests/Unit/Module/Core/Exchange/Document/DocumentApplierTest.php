@@ -11,6 +11,7 @@ use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Module\Core\Exchange\Common\ApplyResult;
 use Shipard\Module\Core\Exchange\Document\DocumentApplier;
 use Shipard\Module\Core\Exchange\Document\DocumentValidator;
+use Shipard\Module\Core\Exchange\Document\NumberSeriesNotFoundException;
 use Shipard\Module\Core\Exchange\Common\TransactionlessTableGateway;
 use Shipard\Module\Core\Exchange\Resolve\BankAccountResolver;
 use Shipard\Module\Core\Exchange\Resolve\ItemResolver;
@@ -593,7 +594,7 @@ class DocumentApplierTest extends TestCase
         $sideIds = ['supplier' => null, 'customer' => null, 'supplierBank' => null, 'rowItems' => []];
 
         $ref = new \ReflectionMethod($applier, 'transform');
-        return $ref->invoke($applier, $canonical, $plan, $sideIds);
+        return $ref->invoke($applier, $canonical, $plan, $sideIds, null);
     }
 
     public function testTransformPassesImportNumberAsVirtualField(): void
@@ -632,5 +633,56 @@ class DocumentApplierTest extends TestCase
         // array_filter drops null _importNumber and null bank_account.
         $this->assertArrayNotHasKey('_importNumber', $data);
         $this->assertArrayNotHasKey('bank_account', $data);
+    }
+
+    // ── resolveNumberSeriesFor(): code selection + error path ───────────────
+
+    private function invokeResolveSeries(DocumentApplier $applier, string $docType, ?string $seriesCode): ?int
+    {
+        $ref = new \ReflectionMethod($applier, 'resolveNumberSeriesFor');
+        return $ref->invoke($applier, $docType, $seriesCode);
+    }
+
+    public function testResolveNumberSeriesByCodeMatches(): void
+    {
+        $captured = null;
+        $db = $this->createMock(Connection::class);
+        $db->method('fetch')->willReturnCallback(function (...$args) use (&$captured) {
+            $captured = $args;
+            return new Row(['id' => 55]);
+        });
+        $applier = $this->buildApplier(db: $db);
+
+        // kód 5 u invni → konkrétní řada (např. „Ostatní závazky")
+        $this->assertSame(55, $this->invokeResolveSeries($applier, 'invni', '5'));
+        // SQL filtruje podle doc_number_code a váže docType i kód
+        $this->assertStringContainsString('doc_number_code', (string) $captured[0]);
+        $this->assertContains('invni', $captured);
+        $this->assertContains('5', $captured);
+    }
+
+    public function testResolveNumberSeriesByUnknownCodeThrows(): void
+    {
+        $db = $this->createMock(Connection::class);
+        $db->method('fetch')->willReturn(null); // nic nematchuje
+        $applier = $this->buildApplier(db: $db);
+
+        $this->expectException(NumberSeriesNotFoundException::class);
+        $this->invokeResolveSeries($applier, 'invni', '999');
+    }
+
+    public function testResolveNumberSeriesWithoutCodeFallsBackToFirstActive(): void
+    {
+        $captured = null;
+        $db = $this->createMock(Connection::class);
+        $db->method('fetch')->willReturnCallback(function (...$args) use (&$captured) {
+            $captured = $args;
+            return new Row(['id' => 1]);
+        });
+        $applier = $this->buildApplier(db: $db);
+
+        $this->assertSame(1, $this->invokeResolveSeries($applier, 'invni', null));
+        // Stará cesta NESMÍ filtrovat podle doc_number_code (zpětná kompatibilita)
+        $this->assertStringNotContainsString('doc_number_code', (string) $captured[0]);
     }
 }

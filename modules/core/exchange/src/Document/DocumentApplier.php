@@ -8,6 +8,7 @@ use Dibi\Connection;
 use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Database\TableDefinition;
+use Shipard\Core\Document\DocumentEventDispatcher;
 use Shipard\Core\Document\DocumentRegistry;
 use Shipard\Module\Base\Persons\PersonType;
 use Shipard\Module\Core\Exchange\Common\ApplyResult;
@@ -129,6 +130,7 @@ class DocumentApplier
         DataSourceConfig $dsConfig,
         DocumentRegistry $registry,
         array $tables,
+        ?DocumentEventDispatcher $eventDispatcher = null,
     ): self {
         $vatRateResolver = new \Shipard\Module\World\Vat\VatRateResolver($config);
         $own = new OwnCompanyResolver($db);
@@ -136,7 +138,10 @@ class DocumentApplier
         return new self(
             db: $db,
             config: $config,
-            headsGateway: self::buildGateway('docs_core_heads', $db, $registry, $config, $dsConfig, $tables),
+            // Only the heads gateway needs the event dispatcher — a document
+            // saved at state 40 must trigger DocsHeadsEventHandler (accounting).
+            // Persons/items never transition to an accounted state.
+            headsGateway: self::buildGateway('docs_core_heads', $db, $registry, $config, $dsConfig, $tables, $eventDispatcher),
             personsGateway: self::buildGateway('base_persons_persons', $db, $registry, $config, $dsConfig, $tables),
             itemsGateway: self::buildGateway('economy_items', $db, $registry, $config, $dsConfig, $tables),
             schemaValidator: new SchemaValidator(SchemaLoader::default()),
@@ -159,6 +164,7 @@ class DocumentApplier
         ConfigRuntime $config,
         DataSourceConfig $dsConfig,
         array $tables,
+        ?DocumentEventDispatcher $eventDispatcher = null,
     ): TransactionlessTableGateway {
         $childTables = $tables[$tableName]?->childTables ?? [];
         return new TransactionlessTableGateway(
@@ -168,6 +174,7 @@ class DocumentApplier
             $childTables,
             $config,
             $dsConfig,
+            $eventDispatcher,
         );
     }
 
@@ -281,6 +288,17 @@ class DocumentApplier
             return ApplyResult::error('validation_failed', 'Validace dokumentu selhala.', $enriched);
         }
 
+        // 5b. Resolve the target number series up-front. An explicit but
+        //     unknown numberSeriesCode must fail as a clean apply-level error
+        //     (422) here, not blow up mid-transaction as internal_error (500).
+        $seriesCode = $canonical['applyOptions']['numberSeriesCode'] ?? null;
+        $seriesCode = is_string($seriesCode) && $seriesCode !== '' ? $seriesCode : null;
+        try {
+            $numberSeriesId = $this->resolveNumberSeriesFor($this->mapDocType($canonical), $seriesCode);
+        } catch (NumberSeriesNotFoundException $e) {
+            return ApplyResult::error('number_series_not_found', $e->getMessage(), $enriched, statusCode: 422);
+        }
+
         // 6–11. Transactional save.
         $this->db->begin();
         try {
@@ -288,7 +306,7 @@ class DocumentApplier
             $sideCreatedIds = $this->runSideCreates($plan, $resolved);
 
             // Transform canonical → internal $data.
-            $data = $this->transform($canonical, $plan, $sideCreatedIds);
+            $data = $this->transform($canonical, $plan, $sideCreatedIds, $numberSeriesId);
 
             // Save doc head + rows + vat_recap through DocDocument.
             $result = $this->headsGateway->saveDocument($data);
@@ -786,12 +804,12 @@ class DocumentApplier
      * @param array<string, mixed> $canonical
      * @param array<string, mixed> $plan
      * @param array{supplier: ?int, customer: ?int, supplierBank: ?int, rowItems: array<int, int>} $sideIds
+     * @param ?int $numberSeriesId Pre-resolved by apply() (honors numberSeriesCode).
      * @return array<string, mixed>
      */
-    private function transform(array $canonical, array $plan, array $sideIds): array
+    private function transform(array $canonical, array $plan, array $sideIds, ?int $numberSeriesId): array
     {
-        $docType = self::DOC_TYPE_MAP[(string) ($canonical['docType'] ?? '')]
-            ?? (string) ($canonical['docType'] ?? '');
+        $docType = $this->mapDocType($canonical);
         $selfParty = $canonical['selfParty'] ?? null;
         $targetDocState = (int) ($canonical['applyOptions']['targetDocState'] ?? 10);
 
@@ -806,7 +824,6 @@ class DocumentApplier
         };
 
         $vatRegistrationId = $this->resolveVatRegistrationFor($canonical);
-        $numberSeriesId = $this->resolveNumberSeriesFor($docType);
         $vatMode = self::VAT_MODE_MAP[(string) ($canonical['vat']['mode'] ?? 'fromBase')] ?? 1;
         $vatPlace = self::VAT_PLACE_MAP[(string) ($canonical['vat']['place'] ?? 'domestic')] ?? 0;
         $paymentMethod = self::PAYMENT_METHOD_MAP[(string) ($canonical['payment']['method'] ?? 'bankTransfer')] ?? 1;
@@ -928,8 +945,32 @@ class DocumentApplier
         return $out;
     }
 
-    private function resolveNumberSeriesFor(string $docType): ?int
+    /**
+     * Resolve the target number series for a document.
+     *
+     *   - $seriesCode !== null → exact match on (doc_type, doc_number_code).
+     *     No match throws {@see NumberSeriesNotFoundException}; the caller
+     *     maps it to a clean apply-level error. NO silent fallback to the
+     *     first active series.
+     *   - $seriesCode === null → legacy behaviour: first active series for
+     *     the doc_type (backward compatible for clients not sending a code).
+     */
+    private function resolveNumberSeriesFor(string $docType, ?string $seriesCode = null): ?int
     {
+        if ($seriesCode !== null) {
+            $row = $this->db->fetch(
+                'SELECT [id] FROM [docs_core_number_series]
+                 WHERE [doc_type] = %s AND [doc_number_code] = %s AND [docState] IN (%i, %i, %i)
+                 ORDER BY [id] LIMIT 1',
+                $docType, $seriesCode,
+                self::ACTIVE_STATES[0], self::ACTIVE_STATES[1], self::ACTIVE_STATES[2],
+            );
+            if ($row === null) {
+                throw new NumberSeriesNotFoundException($docType, $seriesCode);
+            }
+            return (int) $row['id'];
+        }
+
         $row = $this->db->fetch(
             'SELECT [id] FROM [docs_core_number_series]
              WHERE [doc_type] = %s AND [docState] IN (%i, %i, %i)
@@ -938,6 +979,18 @@ class DocumentApplier
             self::ACTIVE_STATES[0], self::ACTIVE_STATES[1], self::ACTIVE_STATES[2],
         );
         return $row !== null ? (int) $row['id'] : null;
+    }
+
+    /**
+     * Map canonical docType (descriptive name or short code) → the short code
+     * stored in docs_core_heads.doc_type. Passthrough when no alias matches.
+     *
+     * @param array<string, mixed> $canonical
+     */
+    private function mapDocType(array $canonical): string
+    {
+        $raw = (string) ($canonical['docType'] ?? '');
+        return self::DOC_TYPE_MAP[$raw] ?? $raw;
     }
 
     /**

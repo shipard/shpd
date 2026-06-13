@@ -372,7 +372,9 @@
                                             "type": "integer",
                                             "enum": [
                                                 10,
-                                                20
+                                                20,
+                                                40,
+                                                30
                                             ]
                                         },
                                         "autoCreateMode": {
@@ -381,6 +383,11 @@
                                                 "safe",
                                                 "liberal"
                                             ]
+                                        },
+                                        "numberSeriesCode": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "description": "Výběr číselné řady v rámci doc_type (%C = docs_core_number_series.doc_number_code). Bez něj platí stávající chování (první aktivní řada). Neznámý kód = apply selže (number_series_not_found), žádný tichý fallback."
                                         },
                                         "createMissingEntities": {
                                             "type": "boolean"

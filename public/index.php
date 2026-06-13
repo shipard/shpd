@@ -275,8 +275,8 @@ function dispatch(
 		'lookup'  => dispatchLookup($route, $request, $tables, $db, $lookupRegistry ?? new LookupRegistry(), $configRuntime),
 		'viewer'  => dispatchViewer($route, $request, $viewerRegistry, $db, $configRuntime, resolveLanguage($request, $resolved->config)),
 		'mail'    => dispatchMail($route, $request, $auth, $tables, $db, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $configRuntime),
-		'analysis' => dispatchAnalysis($route, $request, $auth, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
-		'exchange' => dispatchExchange($route, $request, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
+		'analysis' => dispatchAnalysis($route, $request, $auth, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher),
+		'exchange' => dispatchExchange($route, $request, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher),
 		'alerts' => dispatchAlerts($route, $request, $db, $alertCheckRegistry, $configRuntime, resolveLanguage($request, $resolved->config)),
 		'accounting' => dispatchAccounting($route, $request, $db, $configRuntime),
 		'personsRegistry' => dispatchPersonsRegistry($route, $request, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $serverConfig),
@@ -323,6 +323,8 @@ function buildMcpRegistry(
 	// Zápisový nástroj mail_draft_document nad sdílenou apply službou.
 	// DocumentApplier vyžaduje ConfigRuntime (jako dispatchExchange/Analysis);
 	// bez něj injektujeme null → nástroj degraduje na graceful obálku.
+	// Bez event dispatcheru záměrně: draft tool zakládá vždy jen Koncept
+	// (targetDocState=10), nikdy stav 40 → účtování se ho netýká.
 	$draftApplier = $configRuntime !== null
 		? new \Shipard\Module\Core\Mail\ExtractedDocumentApplier(
 			$db,
@@ -388,6 +390,7 @@ function dispatchExchange(
 	?\Shipard\Core\Config\ConfigRuntime $configRuntime,
 	\Shipard\Api\ResolvedDataSource $resolved,
 	\Shipard\Core\Document\DocumentRegistry $documentRegistry,
+	?\Shipard\Core\Document\DocumentEventDispatcher $documentEventDispatcher = null,
 ): Response {
 	if ($configRuntime === null) {
 		return Response::error('INTERNAL_ERROR', 'ConfigRuntime is required for /_exchange endpoints', 500);
@@ -399,6 +402,7 @@ function dispatchExchange(
 		$resolved->config,
 		$documentRegistry,
 		$tables,
+		$documentEventDispatcher,
 	);
 	$personApplier = \Shipard\Module\Core\Exchange\Person\PersonApplier::create(
 		$db->getDibiConnection(),
@@ -505,6 +509,7 @@ function dispatchAnalysis(
 	?\Shipard\Core\Config\ConfigRuntime $configRuntime,
 	\Shipard\Api\ResolvedDataSource $resolved,
 	\Shipard\Core\Document\DocumentRegistry $documentRegistry,
+	?\Shipard\Core\Document\DocumentEventDispatcher $documentEventDispatcher = null,
 ): Response {
 	$dsPath = $resolved->config->getDataSourceDir();
 
@@ -522,6 +527,7 @@ function dispatchAnalysis(
 			$resolved->config,
 			$documentRegistry,
 			$tables,
+			$documentEventDispatcher,
 		)
 		: null;
 

@@ -42,6 +42,17 @@ Důsledek: `dispatchStateChanged()` při apply nevystřelí a doklad uložený r
 na 40 se NEZAÚČTUJE. Zapojení dispatcheru do exchange/analysis cesty je proto
 součástí tohoto tasku (viz „Co implementovat" bod 4).
 
+**Nález C — pohyb řádku (`operation`) blokuje stav 40.** Při přechodu do 40
+běží `DocDocument::validateRowOperations`: každý item-řádek musí mít
+`operation` (pohyb, cfgItem `docs.core.rowOperations`) povolený pro daný
+docType. Kanonický formát ale pole pro pohyb neměl a applier ho nenastavoval —
+všechny migrované item-řádky mají `operation = NULL`, proto doklady uvízly ve
+stavu 20 (tam se pohyby nevalidují). Řešení: kanonický `rows[].operation`
+(volitelný string), applier ho mapuje verbatim do `docs_core_rows.operation`;
+runner ho musí posílat (invni: `purchase.goods`/`.services`/`.other`/`acc.entry`).
+Bez pohybu se item-řádek na 40 nedostane (záměrně — odpovědnost runneru).
+Storno (30) tím netrpí: stav 30 není v `[20,40,80]`, validace pohybů neběží.
+
 ## Cíl
 
 Applier umí cílit konkrétní číselnou řadu podle kódu a přijímá cílové stavy
@@ -53,8 +64,9 @@ import na 30 nikoliv.
 - Předchází: Fáze 05/05b (import dokladů + import-mód čísla), accounting
   phase 1–3 (engine, journal, event handler).
 - Páruje se s: old_shipard `tasks/10-docs-import-revision.md` — DocsRunner
-  začne posílat `numberSeriesCode` a stavy 40/30. **Tento task se nasazuje
-  první** (applier musí nové volby přijímat dřív, než je runner pošle).
+  začne posílat `numberSeriesCode`, stavy 40/30 **a `rows[].operation`**
+  (pohyb řádku, viz Nález C). **Tento task se nasazuje první** (applier musí
+  nové volby přijímat dřív, než je runner pošle).
 
 ## Před implementací přečti
 
@@ -135,27 +147,39 @@ V `shpd.docs.document.v1.jsonc`:
   commitnou atomicky s dokladem; výjimka enginu → handler ji chytí
   (`accounting_state=2`), import nepadá.
 
+### 5. Pohyb řádku `rows[].operation` (Nález C)
+
+- Schema: do `$defs.Row` přidat `"operation": { "type": ["string", "null"] }`
+  (za `rowKind`). Promítnout i do `.json` a do inline kopie v AI profilu
+  `default_czech_invoices.jsonc` (drift testy).
+- `DocumentApplier::transformRows`: mapovat `row['operation']` → `operation`
+  (verbatim; chybí → null přes array_filter). Žádný auto-default — pohyb dodá
+  runner (jinak item-řádek neprojde na 40).
+
 ## Hotovo když
 
-- [ ] Schema přijme `numberSeriesCode` a `targetDocState` 40/30; starý
+- [x] Schema přijme `numberSeriesCode` a `targetDocState` 40/30; starý
       payload (bez kódu, stav 20) projde beze změny chování.
-- [ ] Unit: resoluce řady — kód 5 u invni → řada „Ostatní závazky"; kód
+- [x] Unit: resoluce řady — kód 5 u invni → řada „Ostatní závazky"; kód
       neexistující → error; bez kódu → první aktivní.
-- [ ] Integrace: apply dokladu `targetDocState=40` + `importNumber` →
-      doklad ve 40, správná řada, `doc_number`/`sequence_number` verbatim,
-      counter = GREATEST, deník existuje, `accounting_state=1`.
-- [ ] Integrace: apply `targetDocState=30` → stav 30, číslo+counter ano,
+- [x] Integrace: apply dokladu `targetDocState=40` + `importNumber` +
+      `rows[].operation` → doklad ve 40, správná řada, `doc_number`/
+      `sequence_number` verbatim, counter = GREATEST, deník existuje,
+      `accounting_state=1`. (ověřeno proti btpg: 3 řádky deníku)
+- [x] Integrace: apply `targetDocState=30` → stav 30, číslo+counter ano,
       deník neexistuje.
-- [ ] Integrace: apply na 40 s rozbitým účtováním (např. chybějící účet) →
-      doklad se uloží, `accounting_state=2`, alert; import nepadá.
-- [ ] PHPUnit s úzkým filtrem (`--filter 'DocumentApplier|Exchange'`).
+- [x] Integrace: apply s neznámým `numberSeriesCode` → `number_series_not_found`
+      (422), žádný doklad.
+- [x] PHPUnit (celá suite zelená až na pre-existing
+      `AIAnalyzerProvisionerTest`, mimo scope).
 
 ## Doporučené pořadí
 
 1. Schema + numberSeriesCode (enum [10,20,40,30])
 2. resolveNumberSeriesFor + error cesta (`number_series_not_found`, 422)
 3. Zapojení dispatcheru do exchange/analysis (`DocumentApplier::create`, index.php)
-4. Integrace stavů 40/30 + testy účtování; celé testy, commit po logických celcích
+4. `rows[].operation` (Nález C) — schema + profil + transformRows
+5. Integrace stavů 40/30 + testy účtování; celé testy, commit po logických celcích
 
 ## Rozhodnutí ✓
 
@@ -169,6 +193,9 @@ V `shpd.docs.document.v1.jsonc`:
 - Dispatch účtování se do exchange applieru musí teprve zapojit — dnes tam
   `DocumentEventDispatcher` chybí, takže apply na 40 bez tohoto zapojení
   nezaúčtuje. (zjištěno 2026-06-13)
+- Pohyb řádku se přenáší přes nové kanonické `rows[].operation`; applier ho
+  mapuje verbatim, žádný auto-default — pohyb je odpovědnost runneru.
+  (Nález C, 2026-06-13)
 - `applyImportNumber` (GREATEST sync) zůstává beze změny.
 
 ## Otevřené body

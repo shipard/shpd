@@ -8,6 +8,7 @@
     runAlertCheck,
   } from '../../api/alerts.js';
   import { reaccountDocument } from '../../api/accounting.js';
+  import { importStatement } from '../../api/bank.js';
   import ViewerRow from './ViewerRow.svelte';
   import ViewerDetail from './ViewerDetail.svelte';
   import ViewerToolbar from './ViewerToolbar.svelte';
@@ -275,6 +276,10 @@
   let reanalyzeProfiles = $state([]);
   let reanalyzeSubmitting = $state(false);
 
+  // Import bankovního výpisu (akce import_statement)
+  let importInProgress = $state(false);
+  let importFileInput = $state(null);
+
   function handleToolbarAction(actionId) {
     if (actionId === 'create') {
       editRecordId = null;
@@ -298,6 +303,8 @@
       reanalyzeProfiles = action?.meta?.profiles ?? [];
       reanalyzeProfileNdx = '';
       reanalyzeDialogOpen = true;
+    } else if (actionId === 'import_statement') {
+      importFileInput?.click();
     } else if (actionId === 'runDue') {
       handleRunDue();
     }
@@ -333,6 +340,31 @@
       }
     } finally {
       runDueInProgress = false;
+    }
+  }
+
+  async function handleImportStatementFile(event) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || importInProgress) return;
+    importInProgress = true;
+    try {
+      const result = await importStatement(file);
+      if (!result?.success) {
+        alert(translateError(result?.error) || 'Import výpisu selhal');
+        return;
+      }
+      const d = result.data ?? {};
+      const parts = [
+        `Vytvořeno ${d.created ?? 0} transakcí`,
+        `přeskočeno ${d.skipped ?? 0}`,
+      ];
+      const errs = (d.statements ?? []).filter((s) => s.error).map((s) => s.error);
+      if (errs.length > 0) parts.push('chyby: ' + errs.join('; '));
+      alert(parts.join(', '));
+      refreshAfterAction();
+    } finally {
+      importInProgress = false;
     }
   }
 
@@ -609,6 +641,15 @@
 />
 
 <div class="shpd-viewer">
+  <!-- Skrytý file input pro import bankovního výpisu (akce import_statement) -->
+  <input
+    type="file"
+    bind:this={importFileInput}
+    onchange={handleImportStatementFile}
+    accept=".xml,.gpc,.json,.sta,.txt,.csv"
+    style="display: none"
+  />
+
   {#if !layoutStore.isMobile}
     <!-- Na mobilu jsou akce v top baru (publikované přes layout store),
          takže ViewerToolbar se nerenderuje. Desktop beze změny. -->

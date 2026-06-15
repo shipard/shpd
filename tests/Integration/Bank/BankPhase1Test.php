@@ -181,7 +181,10 @@ class BankPhase1Test extends IntegrationTestCase
         $this->assertNotEmpty($detail['tabs']);
         $this->assertNotEmpty($detail['tabs'][0]['content']['groups']);
 
-        $this->assertSame([], $viewer->getToolbarActions(null));
+        // Bez „nový" (create); od Fáze 2 je zde akce Importovat výpis.
+        $nullIds = array_column($viewer->getToolbarActions(null), 'id');
+        $this->assertNotContains('create', $nullIds);
+        $this->assertContains('import_statement', $nullIds);
         $actionIds = array_column($viewer->getToolbarActions($row), 'id');
         $this->assertContains('edit', $actionIds);
         $this->assertNotContains('create', $actionIds);

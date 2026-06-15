@@ -162,17 +162,24 @@ class BankStatementsViewer extends TableViewer
 
     public function getToolbarActions(?array $selectedRow): array
     {
-        // Bez „nový" — výpis vzniká importem/migrací. Edit + přílohy přes Open.
-        if ($selectedRow === null) {
-            return [];
-        }
-        $defs = ($this->config?->cfgItem('core.system.viewerDefaults') ?? [])['toolbarActions'] ?? [];
-        $editDef = $defs['edit'] ?? ['name' => 'Open', 'variant' => 'secondary'];
-        return [[
-            'id'      => 'edit',
-            'label'   => $editDef['name'] ?? 'Open',
-            'variant' => $editDef['variant'] ?? 'secondary',
+        // Bez „nový" — výpis vzniká importem. Akce Importovat výpis (vždy)
+        // + Open na vybraném řádku (edit + přílohy).
+        $cs = $this->language !== 'en';
+        $actions = [[
+            'id'      => 'import_statement',
+            'label'   => $cs ? 'Importovat výpis' : 'Import statement',
+            'variant' => 'primary',
         ]];
+        if ($selectedRow !== null) {
+            $defs = ($this->config?->cfgItem('core.system.viewerDefaults') ?? [])['toolbarActions'] ?? [];
+            $editDef = $defs['edit'] ?? ['name' => 'Open', 'variant' => 'secondary'];
+            $actions[] = [
+                'id'      => 'edit',
+                'label'   => $editDef['name'] ?? 'Open',
+                'variant' => $editDef['variant'] ?? 'secondary',
+            ];
+        }
+        return $actions;
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────

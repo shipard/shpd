@@ -15,7 +15,8 @@
     ],
 
     "extensions": [
-        "economy_codebooks_bank_accounts"
+        "economy_codebooks_bank_accounts",
+        "economy_accounting_journal"
     ],
 
     "forms": [

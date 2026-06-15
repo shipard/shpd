@@ -107,6 +107,10 @@
             "file": "config/accountingStates.jsonc"
         },
         {
+            "id": "economy.accounting.journalSources",
+            "file": "config/journalSources.jsonc"
+        },
+        {
             "id": "economy.accounting.viewerDetailLabels",
             "file": "config/viewerDetailLabels.jsonc"
         },

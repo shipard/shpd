@@ -593,6 +593,7 @@ final class AccountingEngine
 
             foreach ($grouped as $line) {
                 $this->db->insert('economy_accounting_journal', [
+                    'source_kind'     => 'doc',
                     'doc_head'        => $docHeadId,
                     'doc_type'        => $head['doc_type'] ?? null,
                     'doc_number'      => $head['doc_number'] ?? null,

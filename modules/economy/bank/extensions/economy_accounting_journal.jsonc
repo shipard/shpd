@@ -1,0 +1,31 @@
+{
+    // Extension z economy.bank: FK bank_transaction na účetní deník.
+    //
+    // Generická infrastruktura polymorfního zdroje (source_kind, nullable
+    // doc_head) žije v economy.accounting; bankovně specifický FK přidává
+    // economy.bank — tím směřuje závislost správně (bank → accounting),
+    // accounting o bance neví.
+    //
+    // Invariant (zatím dokumentační, vynutí mikroengine ve Fázi 3): vyplněno
+    // právě jedno z (doc_head, bank_transaction) dle source_kind.
+
+    "table": "economy_accounting_journal",
+    "columns": [
+        {
+            "id": "bank_transaction",
+            "name": "Bank transaction",
+            "name:cs": "Bankovní transakce",
+            "name:en": "Bank transaction",
+            "type": "int",
+            "nullable": true,
+            "reference": "economy_bank_transactions"
+        }
+    ],
+    "indexes": [
+        {
+            "id": "idx_bank_transaction",
+            "type": "index",
+            "columns": [{"column": "bank_transaction"}]
+        }
+    ]
+}

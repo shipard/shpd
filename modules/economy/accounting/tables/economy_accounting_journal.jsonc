@@ -4,11 +4,18 @@
     "name:cs": "Účetní deník",
     "name:en": "Accounting journal",
 
-    // Deník je derivát dokladu — zapisuje výhradně AccountingEngine
-    // (DELETE + INSERT celého dokladu), žádná ruční editace. Proto bez
+    // Deník je derivát zdroje — zapisuje výhradně účtovací engine
+    // (DELETE + INSERT celého zdroje), žádná ruční editace. Proto bez
     // docStates, bez document class a bez formu. Řazení deníku = id.
     // Do navigace jde přes JournalViewer (read-only), ne jako generic
     // table item.
+    //
+    // Polymorfní zdroj: source_kind ('doc' | 'bankTransaction') určuje,
+    // které z polí doc_head / bank_transaction (FK přidává economy.bank
+    // jako extension) je vyplněné. Invariant: vyplněno právě jedno z nich
+    // dle source_kind (zatím dokumentační; vynutí mikroengine ve Fázi 3).
+    // doc_head je proto nullable — fresh DS ho vytvoří správně; existující
+    // DS s NOT NULL doc_head se řeší přes ds-reset (deník je čistý derivát).
 
     "displayPattern": "{account_number} {text}",
 
@@ -21,12 +28,23 @@
             "primaryKey": true
         },
         {
+            "id": "source_kind",
+            "name": "Source kind",
+            "name:cs": "Zdroj zápisu",
+            "name:en": "Source kind",
+            "type": "enumString",
+            "length": 20,
+            "cfgItem": "economy.accounting.journalSources",
+            "nullable": false,
+            "default": "doc"
+        },
+        {
             "id": "doc_head",
             "name": "Document",
             "name:cs": "Doklad",
             "name:en": "Document",
             "type": "int",
-            "nullable": false,
+            "nullable": true,
             "reference": "docs_core_heads"
         },
         {
@@ -198,6 +216,11 @@
             "id": "idx_doc_head",
             "type": "index",
             "columns": [{"column": "doc_head"}]
+        },
+        {
+            "id": "idx_source",
+            "type": "index",
+            "columns": [{"column": "source_kind"}]
         },
         {
             "id": "idx_account_date",

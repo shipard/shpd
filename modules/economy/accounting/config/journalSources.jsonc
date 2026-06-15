@@ -1,0 +1,23 @@
+{
+    // economy.accounting.journalSources
+    //
+    // Polymorfní zdroj řádku účetního deníku
+    // (economy_accounting_journal.source_kind):
+    //   'doc'             — řádek pochází z dokladu (doc_head)
+    //   'bankTransaction' — z bankovní transakce (bank_transaction,
+    //                       FK přidává economy.bank jako extension)
+    //
+    // Label bankTransaction je jen i18n string — nezakládá závislost
+    // accounting → bank.
+
+    "doc": {
+        "name": "Document",
+        "name:cs": "Doklad",
+        "name:en": "Document"
+    },
+    "bankTransaction": {
+        "name": "Bank transaction",
+        "name:cs": "Bankovní transakce",
+        "name:en": "Bank transaction"
+    }
+}

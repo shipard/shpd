@@ -7,27 +7,28 @@ namespace Shipard\Core\Settings;
 use Shipard\Core\Database\DataSourceConnection;
 
 /**
- * Tenká služba nad key-value tabulkou `core_system_settings`.
+ * Per-uživatelská varianta {@see SettingsStore} nad tabulkou
+ * `core_system_user_settings`. Každý dotaz je scoped na `user_id`, unikátní
+ * je dvojice `(user_id, key)`. Hodnoty se ukládají jako JSON (sloupec
+ * `value`), klíče používají tečkové namespacy (`account.theme`,
+ * `account.language`, …).
  *
- * Hodnoty se ukládají jako JSON (sloupec `value`), klíče používají tečkové
- * namespacy (`app.name`, `app.icon`, …). Konstruktor bere jen DB připojení,
- * takže je volatelná z HTTP kontextu i z CLI (sestavy, generátor faktur).
- *
- * Request-level cache: každý přečtený/zapsaný klíč se drží v privátním poli,
- * opakované get() v rámci jednoho requestu nejdou do DB.
+ * Request-level cache: instance je per-user, takže stačí klíčovat jen
+ * názvem klíče (user_id je fixní v konstruktoru).
  */
-class SettingsStore implements KeyValueStore
+class UserSettingsStore implements KeyValueStore
 {
-    private const string TABLE = 'core_system_settings';
+    private const string TABLE = 'core_system_user_settings';
 
     /** @var array<string, mixed> cache klíč → dekódovaná hodnota (vč. null pro "neexistuje") */
     private array $cache = [];
 
-    public function __construct(private readonly DataSourceConnection $db)
-    {
+    public function __construct(
+        private readonly DataSourceConnection $db,
+        private readonly int $userId,
+    ) {
     }
 
-    /** Vrátí dekódovanou hodnotu klíče, nebo null pokud klíč neexistuje. */
     public function get(string $key): mixed
     {
         if (array_key_exists($key, $this->cache)) {
@@ -35,7 +36,8 @@ class SettingsStore implements KeyValueStore
         }
 
         $raw = $this->db->fetchSingle(
-            'SELECT `value` FROM `' . self::TABLE . '` WHERE `key` = %s',
+            'SELECT `value` FROM `' . self::TABLE . '` WHERE `user_id` = %i AND `key` = %s',
+            $this->userId,
             $key,
         );
 
@@ -46,10 +48,8 @@ class SettingsStore implements KeyValueStore
     }
 
     /**
-     * Načte více klíčů jedním dotazem.
-     *
      * @param  string[] $keys
-     * @return array<string, mixed> mapa key → value; neexistující klíče mají null
+     * @return array<string, mixed>
      */
     public function getMany(array $keys): array
     {
@@ -66,13 +66,14 @@ class SettingsStore implements KeyValueStore
 
         if ($missing !== []) {
             $rows = $this->db->fetchAll(
-                'SELECT `key`, `value` FROM `' . self::TABLE . '` WHERE `key` IN %in',
+                'SELECT `key`, `value` FROM `' . self::TABLE . '` WHERE `user_id` = %i AND `key` IN %in',
+                $this->userId,
                 $missing,
             );
             foreach ($rows as $row) {
                 $value = is_string($row['value']) ? json_decode($row['value'], true) : null;
-                $result[$row['key']]       = $value;
-                $this->cache[$row['key']]  = $value;
+                $result[$row['key']]      = $value;
+                $this->cache[$row['key']] = $value;
             }
             foreach ($missing as $key) {
                 if (!array_key_exists($key, $this->cache)) {
@@ -86,7 +87,8 @@ class SettingsStore implements KeyValueStore
 
     /**
      * Upsert hodnoty. `set($key, null)` klíč smaže — null a "neexistuje"
-     * jsou pro čtenáře nerozlišitelné, takže by řádek jen zabíral místo.
+     * jsou pro čtenáře nerozlišitelné. Unikát `(user_id, key)` zajistí, že
+     * ON DUPLICATE KEY UPDATE trefí správný řádek per uživatel.
      */
     public function set(string $key, mixed $value): void
     {
@@ -98,8 +100,9 @@ class SettingsStore implements KeyValueStore
         $json = json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
         $this->db->execute(
-            'INSERT INTO `' . self::TABLE . '` (`key`, `value`, `modified`) VALUES (%s, %s, NOW())'
+            'INSERT INTO `' . self::TABLE . '` (`user_id`, `key`, `value`, `modified`) VALUES (%i, %s, %s, NOW())'
             . ' ON DUPLICATE KEY UPDATE `value` = %s, `modified` = NOW()',
+            $this->userId,
             $key,
             $json,
             $json,
@@ -110,7 +113,7 @@ class SettingsStore implements KeyValueStore
 
     public function delete(string $key): void
     {
-        $this->db->deleteWhere(self::TABLE, '`key` = %s', $key);
+        $this->db->deleteWhere(self::TABLE, '`user_id` = %i AND `key` = %s', $this->userId, $key);
         $this->cache[$key] = null;
     }
 }

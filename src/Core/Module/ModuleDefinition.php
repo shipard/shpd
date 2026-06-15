@@ -23,6 +23,7 @@ class ModuleDefinition
         public readonly array $alertChecks = [],
         public readonly array $keepOnReset = [],
         public readonly array $documentEventHandlers = [],
+        public readonly array $accountItems = [],
     ) {}
 
     public static function fromArray(array $data): self
@@ -43,31 +44,15 @@ class ModuleDefinition
             throw new \InvalidArgumentException("Invalid module id format: '{$data['id']}'");
         }
 
-        $settingsItems = [];
-        if (isset($data['settingsItems']) && is_array($data['settingsItems'])) {
-            foreach ($data['settingsItems'] as $item) {
-                if (!is_array($item)) continue;
-                if (!isset($item['section'])) continue;
-                // Právě jedno z viewer|table|page.
-                $targets = count(array_filter([
-                    isset($item['viewer']),
-                    isset($item['table']),
-                    isset($item['page']),
-                ]));
-                if ($targets !== 1) continue;
-                $settingsItems[] = [
-                    'viewer'     => $item['viewer'] ?? null,
-                    'table'      => $item['table']  ?? null,
-                    'page'       => $item['page']   ?? null,
-                    'section'    => (string) $item['section'],
-                    'subsection' => isset($item['subsection']) ? (string) $item['subsection'] : null,
-                    'order'      => isset($item['order']) ? (int) $item['order'] : null,
-                ];
-            }
-        }
+        // settingsItems (Nastavení aplikace) i accountItems (Nastavení účtu)
+        // sdílí stejný tvar položky (viewer|table|page + section/order) —
+        // parser je společný, liší se jen zdrojový klíč v module.jsonc.
+        $settingsItems = self::parseNavItems($data, 'settingsItems');
+        $accountItems  = self::parseNavItems($data, 'accountItems');
 
         // settingsPages — server-driven stránky vlastností v Nastavení.
-        // Hodnoty polí žijí v core_system_settings (field id = klíč).
+        // `scope` (ds|user) určuje, kam jdou hodnoty: ds → core_system_settings
+        // (field id = klíč), user → core_system_user_settings scoped na usera.
         $settingsPages = [];
         if (isset($data['settingsPages']) && is_array($data['settingsPages'])) {
             foreach ($data['settingsPages'] as $page) {
@@ -80,11 +65,12 @@ class ModuleDefinition
                     if (!is_array($field)) continue;
                     if (!isset($field['id']) || !is_string($field['id']) || $field['id'] === '') continue;
                     $type = $field['type'] ?? 'text';
-                    if (!in_array($type, ['text', 'image'], true)) continue;
+                    if (!in_array($type, ['text', 'image', 'theme', 'language'], true)) continue;
                     $field['type'] = $type;
                     $fields[]      = $field;
                 }
 
+                $page['scope']   = (isset($page['scope']) && $page['scope'] === 'user') ? 'user' : 'ds';
                 $page['fields']  = $fields;
                 $settingsPages[] = $page;
             }
@@ -207,6 +193,42 @@ class ModuleDefinition
             alertChecks: $alertChecks,
             keepOnReset: $keepOnReset,
             documentEventHandlers: $documentEventHandlers,
+            accountItems: $accountItems,
         );
+    }
+
+    /**
+     * Parser navigačních položek pro Nastavení (settingsItems) i Nastavení
+     * účtu (accountItems) — sdílený tvar: právě jedno z viewer|table|page,
+     * povinná `section`, volitelné `subsection`/`order`.
+     *
+     * @param  array<string, mixed> $data
+     * @return list<array<string, mixed>>
+     */
+    private static function parseNavItems(array $data, string $key): array
+    {
+        $items = [];
+        if (isset($data[$key]) && is_array($data[$key])) {
+            foreach ($data[$key] as $item) {
+                if (!is_array($item)) continue;
+                if (!isset($item['section'])) continue;
+                // Právě jedno z viewer|table|page.
+                $targets = count(array_filter([
+                    isset($item['viewer']),
+                    isset($item['table']),
+                    isset($item['page']),
+                ]));
+                if ($targets !== 1) continue;
+                $items[] = [
+                    'viewer'     => $item['viewer'] ?? null,
+                    'table'      => $item['table']  ?? null,
+                    'page'       => $item['page']   ?? null,
+                    'section'    => (string) $item['section'],
+                    'subsection' => isset($item['subsection']) ? (string) $item['subsection'] : null,
+                    'order'      => isset($item['order']) ? (int) $item['order'] : null,
+                ];
+            }
+        }
+        return $items;
     }
 }

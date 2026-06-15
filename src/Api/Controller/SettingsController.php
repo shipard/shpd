@@ -16,7 +16,9 @@ use Shipard\Core\Module\ModuleDefinition;
 use Shipard\Core\Module\ModuleLoader;
 use Shipard\Core\Module\ModulePathResolver;
 use Shipard\Core\Module\ModuleResolver;
+use Shipard\Core\Settings\KeyValueStore;
 use Shipard\Core\Settings\SettingsStore;
+use Shipard\Core\Settings\UserSettingsStore;
 use Shipard\Core\Utils\JsoncParser;
 
 class SettingsController
@@ -26,6 +28,7 @@ class SettingsController
         ModulePathResolver $resolver,
         string $language,
         ?ConfigRuntime $configRuntime,
+        string $kind = 'settings',
     ): Response {
         if ($configRuntime === null) {
             return Response::success([]);
@@ -35,7 +38,10 @@ class SettingsController
         $errors          = [];
         $resolvedModules = ModuleResolver::resolve($allModules, $config->getModules(), $errors);
 
-        $sectionsCfg = $configRuntime->cfgItem('global.settingsSections');
+        // Nastavení účtu jede z vlastní stromové konfigurace (global.accountSections)
+        // a vlastních položek (accountItems) — žádná kontaminace se settings módem.
+        $cfgItemId   = $kind === 'account' ? 'global.accountSections' : 'global.settingsSections';
+        $sectionsCfg = $configRuntime->cfgItem($cfgItemId);
         if (!is_array($sectionsCfg) || empty($sectionsCfg['sections'])) {
             return Response::success([]);
         }
@@ -43,7 +49,7 @@ class SettingsController
         $sections = $sectionsCfg['sections'];
         usort($sections, fn($a, $b) => ($a['order'] ?? 0) <=> ($b['order'] ?? 0));
 
-        $itemsBySection = $this->collectItems($resolvedModules, $resolver, $language);
+        $itemsBySection = $this->collectItems($resolvedModules, $resolver, $language, $kind);
 
         $tree = [];
         foreach ($sections as $section) {
@@ -123,12 +129,29 @@ class SettingsController
             return Response::error('NOT_FOUND', "Settings page not found: {$pageId}", 404);
         }
 
-        $store = new SettingsStore($db);
+        if (($pageDef['scope'] ?? 'ds') === 'user' && $auth->userId === null) {
+            return Response::error('UNAUTHORIZED', 'User scope requires a user session', 401);
+        }
+
+        $store = $this->storeForPage($pageDef, $db, $auth);
 
         return Response::success([
             'definition' => $this->localizePageDefinition($pageDef, $language),
             'values'     => $this->buildPageValues($pageDef, $store),
         ]);
+    }
+
+    /**
+     * Vybere úložiště podle scope stránky: `user` → per-user
+     * {@see UserSettingsStore} (vyžaduje přihlášeného uživatele s userId),
+     * jinak DS-scoped {@see SettingsStore}.
+     */
+    private function storeForPage(array $pageDef, DataSourceConnection $db, AuthContext $auth): KeyValueStore
+    {
+        if (($pageDef['scope'] ?? 'ds') === 'user') {
+            return new UserSettingsStore($db, (int) $auth->userId);
+        }
+        return new SettingsStore($db);
     }
 
     /**
@@ -156,50 +179,71 @@ class SettingsController
             return Response::error('NOT_FOUND', "Settings page not found: {$pageId}", 404);
         }
 
+        if (($pageDef['scope'] ?? 'ds') === 'user' && $auth->userId === null) {
+            return Response::error('UNAUTHORIZED', 'User scope requires a user session', 401);
+        }
+
         $body   = $request->getBody();
         $values = $body['values'] ?? null;
         if (!is_array($values)) {
             return Response::error('BAD_REQUEST', 'Body must contain a `values` object', 400);
         }
 
-        // Whitelist: jen textová pole z definice; klíče mimo definici a image
-        // pole se tiše ignorují.
+        // Whitelist: jen pole z definice, která chodí přes Uložit (text,
+        // theme, language). `image` má vlastní upload endpoint a tiše se
+        // ignoruje. Klíče mimo definici taky.
         $toSave = [];
         $errors = [];
         foreach ($pageDef['fields'] as $field) {
-            if ($field['type'] !== 'text' || !array_key_exists($field['id'], $values)) {
+            $id   = $field['id'];
+            $type = $field['type'];
+            if (!array_key_exists($id, $values)) {
                 continue;
             }
-            $raw = $values[$field['id']];
-            if ($raw !== null && !is_scalar($raw)) {
-                $errors[] = [
-                    'field'   => $field['id'],
-                    'code'    => 'INVALID_TYPE',
-                    'message' => 'Value must be a string',
-                ];
-                continue;
-            }
-            $value = trim((string) ($raw ?? ''));
+            $raw = $values[$id];
 
-            $maxLength = isset($field['maxLength']) ? (int) $field['maxLength'] : null;
-            if ($maxLength !== null && mb_strlen($value) > $maxLength) {
-                $errors[] = [
-                    'field'   => $field['id'],
-                    'code'    => 'MAX_LENGTH',
-                    'message' => "Value exceeds maximum length of {$maxLength} characters",
+            if ($type === 'text') {
+                if ($raw !== null && !is_scalar($raw)) {
+                    $errors[] = ['field' => $id, 'code' => 'INVALID_TYPE', 'message' => 'Value must be a string'];
+                    continue;
+                }
+                $value     = trim((string) ($raw ?? ''));
+                $maxLength = isset($field['maxLength']) ? (int) $field['maxLength'] : null;
+                if ($maxLength !== null && mb_strlen($value) > $maxLength) {
+                    $errors[] = ['field' => $id, 'code' => 'MAX_LENGTH', 'message' => "Value exceeds maximum length of {$maxLength} characters"];
+                    continue;
+                }
+                // Prázdný string = smazat klíč → čtenáři padnou na fallback.
+                $toSave[$id] = $value === '' ? null : $value;
+            } elseif ($type === 'theme') {
+                // Strukturovaná hodnota { mode: light|dark|custom, custom: {...} }.
+                // U light/dark může custom nést poslední známou konfiguraci.
+                if (!is_array($raw)
+                    || !in_array($raw['mode'] ?? null, ['light', 'dark', 'custom'], true)
+                    || (isset($raw['custom']) && !is_array($raw['custom']))
+                ) {
+                    $errors[] = ['field' => $id, 'code' => 'INVALID_VALUE', 'message' => 'Invalid theme value'];
+                    continue;
+                }
+                $toSave[$id] = [
+                    'mode'   => $raw['mode'],
+                    'custom' => is_array($raw['custom'] ?? null) ? $raw['custom'] : null,
                 ];
-                continue;
+            } elseif ($type === 'language') {
+                if (!in_array($raw, ['cs', 'en', 'auto'], true)) {
+                    $errors[] = ['field' => $id, 'code' => 'INVALID_VALUE', 'message' => 'Invalid language value'];
+                    continue;
+                }
+                $toSave[$id] = $raw;
             }
-
-            // Prázdný string = smazat klíč → čtenáři padnou na fallback.
-            $toSave[$field['id']] = $value === '' ? null : $value;
+            // image — ignorováno (vlastní upload endpoint).
         }
 
         if ($errors !== []) {
             return Response::error('VALIDATION_ERROR', 'Validation failed', 422, $errors);
         }
 
-        $store = new SettingsStore($db);
+        $store = $this->storeForPage($pageDef, $db, $auth);
         foreach ($toSave as $key => $value) {
             $store->set($key, $value);
         }
@@ -261,7 +305,7 @@ class SettingsController
      * Hodnoty polí stránky. Textová pole čtou klíč přímo, image pole vrací
      * stav slotu — metadata uploadu + relativní URL pro <img>.
      */
-    private function buildPageValues(array $page, SettingsStore $store): array
+    private function buildPageValues(array $page, KeyValueStore $store): array
     {
         $keys = array_map(static fn(array $f): string => $f['id'], $page['fields']);
         $raw  = $store->getMany($keys);
@@ -292,7 +336,7 @@ class SettingsController
      * @param  ModuleDefinition[]  $resolvedModules
      * @return array<string, array>
      */
-    private function collectItems(array $resolvedModules, ModulePathResolver $resolver, string $language): array
+    private function collectItems(array $resolvedModules, ModulePathResolver $resolver, string $language, string $kind = 'settings'): array
     {
         $itemsBySection = [];
         $seenViewers = [];
@@ -300,7 +344,8 @@ class SettingsController
         $seenPages = [];
 
         foreach ($resolvedModules as $module) {
-            foreach ($module->settingsItems as $item) {
+            $moduleItems = $kind === 'account' ? $module->accountItems : $module->settingsItems;
+            foreach ($moduleItems as $item) {
                 $section    = $item['section'];
                 $subsection = $item['subsection'] ?? null;
 

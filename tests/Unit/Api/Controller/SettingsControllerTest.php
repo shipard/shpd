@@ -224,4 +224,112 @@ class SettingsControllerTest extends TestCase
 
         $this->assertSame(404, $this->getStatus($resp));
     }
+
+    // --- account page (scope user, theme/language pole) ---
+
+    public function testPageUserScopeRequiresUserId(): void
+    {
+        // Autentizovaný, ale bez userId (např. API klíč) → user scope nelze obsloužit.
+        $auth = new AuthContext(true, null, 'api_key', 'k');
+        $resp = $this->ctrl->page('accountBasic', $this->config(), $this->resolver, 'cs', $auth, $this->mockDb());
+
+        $this->assertSame(401, $this->getStatus($resp));
+    }
+
+    public function testPageAccountBasicReturnsThemeAndLanguageFields(): void
+    {
+        $db = $this->mockDb([
+            ['key' => 'account.language', 'value' => json_encode('cs')],
+        ]);
+
+        $resp = $this->ctrl->page('accountBasic', $this->config(), $this->resolver, 'cs', $this->auth(), $db);
+        $data = $resp->getPayload()['data'];
+
+        $byId = array_column($data['definition']['fields'], null, 'id');
+        $this->assertSame('theme', $byId['account.theme']['type']);
+        $this->assertSame('language', $byId['account.language']['type']);
+        $this->assertSame('Vzhled', $byId['account.theme']['label']);
+        $this->assertSame('cs', $data['values']['account.language']);
+        $this->assertNull($data['values']['account.theme']);
+    }
+
+    public function testSavePageThemeStoresStructuredValue(): void
+    {
+        $db = $this->mockDb();
+        $db->expects($this->once())->method('execute');
+
+        $resp = $this->ctrl->savePage(
+            'accountBasic',
+            $this->saveRequest(['values' => [
+                'account.theme' => ['mode' => 'custom', 'custom' => ['base' => 'light', 'sidebar' => ['type' => 'solid', 'color' => '#00345C']]],
+            ]]),
+            $this->config(), $this->resolver, $this->auth(), $db,
+        );
+
+        $this->assertSame(200, $this->getStatus($resp));
+    }
+
+    public function testSavePageInvalidThemeReturns422(): void
+    {
+        $db = $this->mockDb();
+        $db->expects($this->never())->method('execute');
+
+        $resp = $this->ctrl->savePage(
+            'accountBasic',
+            $this->saveRequest(['values' => ['account.theme' => ['mode' => 'bogus']]]),
+            $this->config(), $this->resolver, $this->auth(), $db,
+        );
+
+        $this->assertSame(422, $this->getStatus($resp));
+        $this->assertSame('account.theme', $resp->getPayload()['error']['details'][0]['field']);
+    }
+
+    public function testSavePageLanguageStored(): void
+    {
+        $db = $this->mockDb();
+        $db->expects($this->once())->method('execute');
+
+        $resp = $this->ctrl->savePage(
+            'accountBasic',
+            $this->saveRequest(['values' => ['account.language' => 'en']]),
+            $this->config(), $this->resolver, $this->auth(), $db,
+        );
+
+        $this->assertSame(200, $this->getStatus($resp));
+    }
+
+    public function testSavePageInvalidLanguageReturns422(): void
+    {
+        $db = $this->mockDb();
+        $db->expects($this->never())->method('execute');
+
+        $resp = $this->ctrl->savePage(
+            'accountBasic',
+            $this->saveRequest(['values' => ['account.language' => 'de']]),
+            $this->config(), $this->resolver, $this->auth(), $db,
+        );
+
+        $this->assertSame(422, $this->getStatus($resp));
+    }
+
+    // --- account navigation ---
+
+    public function testAccountNavigationBuildsBasicSectionTree(): void
+    {
+        $configRuntime = $this->createMock(\Shipard\Core\Config\ConfigRuntime::class);
+        $configRuntime->method('cfgItem')->willReturnCallback(
+            fn(string $id) => $id === 'global.accountSections'
+                ? ['sections' => [['id' => 'basic', 'name' => 'Basic', 'name:cs' => 'Základní', 'icon' => 'settings', 'order' => 10]]]
+                : null,
+        );
+
+        $resp = $this->ctrl->navigation($this->config(), $this->resolver, 'cs', $configRuntime, 'account');
+        $tree = $resp->getPayload()['data'];
+
+        $this->assertCount(1, $tree);
+        $this->assertSame('basic', $tree[0]['id']);
+        $this->assertSame('Základní', $tree[0]['label']);
+        $this->assertSame('page:accountBasic', $tree[0]['children'][0]['id']);
+        $this->assertSame('page', $tree[0]['children'][0]['type']);
+    }
 }

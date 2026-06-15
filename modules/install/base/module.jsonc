@@ -26,6 +26,7 @@
     ],
 
     "config": [
-        { "id": "global.settingsSections", "file": "config/settingsSections.jsonc" }
+        { "id": "global.settingsSections", "file": "config/settingsSections.jsonc" },
+        { "id": "global.accountSections", "file": "config/accountSections.jsonc" }
     ]
 }

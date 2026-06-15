@@ -10,15 +10,17 @@
         "core_system_users",
         "core_system_sessions",
         "core_system_settings",
+        "core_system_user_settings",
         "core_system_api_keys",
         "core_system_rate_limits"
     ],
-    // ds-reset nikdy nesmaže systémové tabulky — login, relace, nastavení,
-    // API klíče (vč. importního) a rate limity přežijí reset.
+    // ds-reset nikdy nesmaže systémové tabulky — login, relace, nastavení
+    // (DS i per-user), API klíče (vč. importního) a rate limity přežijí reset.
     "keepOnReset": [
         "core_system_users",
         "core_system_sessions",
         "core_system_settings",
+        "core_system_user_settings",
         "core_system_api_keys",
         "core_system_rate_limits"
     ],
@@ -75,10 +77,43 @@
                     "hint:en": "Used on output documents (invoices etc.)."
                 }
             ]
+        },
+        {
+            "id": "accountBasic",
+            "scope": "user",
+            "name": "Basic",
+            "name:cs": "Základní",
+            "name:en": "Basic",
+            "icon": "settings",
+            "fields": [
+                {
+                    "id": "account.theme",
+                    "type": "theme",
+                    "name": "Appearance",
+                    "name:cs": "Vzhled",
+                    "name:en": "Appearance",
+                    "hint": "Sidebar color and light/dark base. Synced across your devices.",
+                    "hint:cs": "Barva sidebaru a světlý/tmavý základ. Synchronizováno mezi vašimi zařízeními.",
+                    "hint:en": "Sidebar color and light/dark base. Synced across your devices."
+                },
+                {
+                    "id": "account.language",
+                    "type": "language",
+                    "name": "Language",
+                    "name:cs": "Jazyk",
+                    "name:en": "Language",
+                    "hint": "Interface language.",
+                    "hint:cs": "Jazyk rozhraní.",
+                    "hint:en": "Interface language."
+                }
+            ]
         }
     ],
     "settingsItems": [
         { "page": "appSettings", "section": "app", "order": 10 }
+    ],
+    "accountItems": [
+        { "page": "accountBasic", "section": "basic", "order": 10 }
     ],
     "config": [
         {

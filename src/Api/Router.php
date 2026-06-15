@@ -63,6 +63,16 @@ class Router
 			return new Route('settings', 'navigation');
 		}
 
+		// Nastavení účtu — vlastní navigační strom. Sdílí controller `settings`
+		// (page/savePage account stránek jde přes /_ui/settings/page/{id},
+		// scope řeší definice), jen jiná action pro strom.
+		if ($subpath === '/_ui/account/navigation') {
+			if ($method !== 'GET') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('settings', 'accountNavigation');
+		}
+
 		if (str_starts_with($subpath, '/_ui/settings/page/')) {
 			$pageId = substr($subpath, strlen('/_ui/settings/page/'));
 			if ($pageId === '' || str_contains($pageId, '/')) {

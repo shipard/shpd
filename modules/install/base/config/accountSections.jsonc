@@ -1,0 +1,15 @@
+{
+    // Navigační sekce módu "Nastavení účtu" (account). Paralela k
+    // settingsSections.jsonc, ale samostatný strom — položky se sbírají
+    // z accountItems[] v modulech, ne ze settingsItems[].
+    "sections": [
+        {
+            "id": "basic",
+            "name": "Basic",
+            "name:cs": "Základní",
+            "name:en": "Basic",
+            "icon": "settings",
+            "order": 10
+        }
+    ]
+}

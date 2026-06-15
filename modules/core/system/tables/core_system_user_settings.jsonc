@@ -1,0 +1,64 @@
+{
+    "tableId": 105,
+    "name": "User settings",
+    "name:cs": "Nastavení uživatelů",
+    "name:en": "User settings",
+    "hideFromNavigation": true,
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+        {
+            "id": "user_id",
+            "name": "User",
+            "name:cs": "Uživatel",
+            "name:en": "User",
+            "type": "int",
+            "nullable": false
+        },
+        {
+            "id": "key",
+            "name": "Key",
+            "name:cs": "Klíč",
+            "name:en": "Key",
+            "type": "varchar",
+            "length": 191,
+            "nullable": false
+        },
+        {
+            "id": "value",
+            "name": "Value",
+            "name:cs": "Hodnota",
+            "name:en": "Value",
+            "type": "json",
+            "nullable": true
+        },
+        {
+            "id": "modified",
+            "name": "Modified",
+            "name:cs": "Změněno",
+            "name:en": "Modified",
+            "type": "datetime",
+            "nullable": true
+        }
+    ],
+
+    // Referenční integrita na user_id je na aplikační úrovni (projekt
+    // nepoužívá FOREIGN KEY — viz CLAUDE.md). Smazání uživatele je vzácné;
+    // osiřelé řádky se uklidí mimo runtime.
+    "indexes": [
+        {
+            "id": "unq_user_key",
+            "type": "unique",
+            "columns": [
+                {"column": "user_id"},
+                {"column": "key"}
+            ]
+        }
+    ]
+}

@@ -307,6 +307,93 @@ class ModuleDefinitionTest extends TestCase
         $this->assertSame([], $def->settingsPages);
     }
 
+    public function testSettingsPagesScopeDefaultsToDs(): void
+    {
+        $def = ModuleDefinition::fromArray([
+            'id'   => 'core.system',
+            'name' => 'System',
+            'settingsPages' => [
+                ['id' => 'appSettings', 'fields' => [['id' => 'app.name', 'type' => 'text']]],
+            ],
+        ]);
+
+        $this->assertSame('ds', $def->settingsPages[0]['scope']);
+    }
+
+    public function testSettingsPagesScopeUserPreserved(): void
+    {
+        $def = ModuleDefinition::fromArray([
+            'id'   => 'core.system',
+            'name' => 'System',
+            'settingsPages' => [
+                ['id' => 'accountBasic', 'scope' => 'user', 'fields' => [['id' => 'account.theme', 'type' => 'theme']]],
+            ],
+        ]);
+
+        $this->assertSame('user', $def->settingsPages[0]['scope']);
+    }
+
+    public function testSettingsPagesUnknownScopeFallsBackToDs(): void
+    {
+        $def = ModuleDefinition::fromArray([
+            'id'   => 'core.system',
+            'name' => 'System',
+            'settingsPages' => [
+                ['id' => 'p', 'scope' => 'bogus', 'fields' => [['id' => 'a.b', 'type' => 'text']]],
+            ],
+        ]);
+
+        $this->assertSame('ds', $def->settingsPages[0]['scope']);
+    }
+
+    public function testSettingsPagesThemeAndLanguageFieldTypesAccepted(): void
+    {
+        $def = ModuleDefinition::fromArray([
+            'id'   => 'core.system',
+            'name' => 'System',
+            'settingsPages' => [
+                [
+                    'id'     => 'accountBasic',
+                    'scope'  => 'user',
+                    'fields' => [
+                        ['id' => 'account.theme', 'type' => 'theme'],
+                        ['id' => 'account.language', 'type' => 'language'],
+                        ['id' => 'account.bogus', 'type' => 'select'],  // nepodporovaný → zahozeno
+                    ],
+                ],
+            ],
+        ]);
+
+        $fields = $def->settingsPages[0]['fields'];
+        $this->assertCount(2, $fields);
+        $this->assertSame('theme', $fields[0]['type']);
+        $this->assertSame('language', $fields[1]['type']);
+    }
+
+    public function testAccountItemsParsedLikeSettingsItems(): void
+    {
+        $def = ModuleDefinition::fromArray([
+            'id'   => 'core.system',
+            'name' => 'System',
+            'accountItems' => [
+                ['page' => 'accountBasic', 'section' => 'basic', 'order' => 10],
+            ],
+        ]);
+
+        $this->assertCount(1, $def->accountItems);
+        $this->assertSame('accountBasic', $def->accountItems[0]['page']);
+        $this->assertSame('basic', $def->accountItems[0]['section']);
+        $this->assertSame(10, $def->accountItems[0]['order']);
+        $this->assertNull($def->accountItems[0]['viewer']);
+    }
+
+    public function testAccountItemsAbsentDefaultsToEmpty(): void
+    {
+        $def = ModuleDefinition::fromArray(['id' => 'core.system', 'name' => 'System']);
+
+        $this->assertSame([], $def->accountItems);
+    }
+
     public function testLookupsParsed(): void
     {
         $def = ModuleDefinition::fromArray([

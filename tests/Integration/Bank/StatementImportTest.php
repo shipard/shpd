@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Shipard\Tests\Integration\Bank;
 
 use Shipard\Core\Config\ConfigRuntime;
+use Shipard\Module\Economy\Bank\Checks\StatementReconciliationCheck;
 use Shipard\Module\Economy\Bank\Import\Parsers\GpcParser;
 use Shipard\Module\Economy\Bank\Import\StatementImportService;
 use Shipard\Tests\Integration\IntegrationTestCase;
@@ -229,5 +230,26 @@ class StatementImportTest extends IntegrationTestCase
             $this->bankAccountId,
         )->fetchSingle();
         $this->assertStringContainsString('Příliš žluťoučký kůň', (string) $message);
+    }
+
+    public function testReconciliationMismatchProducesAlertFinding(): void
+    {
+        $broken = str_replace('2160.00', '9999.00', $this->fixture('camt053.xml'));
+        $this->service()->import($broken);
+
+        $stmtId = (int) $this->dibi->query(
+            'SELECT [id] FROM [economy_bank_statements] WHERE [bank_account] = %i LIMIT 1',
+            $this->bankAccountId,
+        )->fetchSingle();
+
+        $check = new StatementReconciliationCheck($this->db, $this->configRuntime, 'cs');
+        $mine = array_values(array_filter(
+            $check->run(),
+            static fn($f) => $f->subjectRowId === $stmtId && $f->subjectTableId === 415,
+        ));
+
+        $this->assertCount(1, $mine);
+        $this->assertSame('warning', $mine[0]->severity);
+        $this->assertSame((string) $stmtId, $mine[0]->findingKey);
     }
 }

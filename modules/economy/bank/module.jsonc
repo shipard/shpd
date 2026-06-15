@@ -50,6 +50,22 @@
         {"table": "economy_bank_statements",   "class": "Shipard\\Module\\Economy\\Bank\\BankStatementDocument"}
     ],
 
+    "alertChecks": [
+        {
+            "id": "economy.bank.reconciliation_errors",
+            "name": "Bank statement reconciliation",
+            "name:cs": "Rekonciliace bankovních výpisů",
+            "name:en": "Bank statement reconciliation",
+            "description": "Bank statements whose opening balance plus movements does not match the closing balance.",
+            "description:cs": "Bankovní výpisy, u nichž počáteční zůstatek a obraty nesedí s koncovým zůstatkem.",
+            "description:en": "Bank statements whose opening balance plus movements does not match the closing balance.",
+            "class": "Shipard\\Module\\Economy\\Bank\\Checks\\StatementReconciliationCheck",
+            "severity": "warning",
+            "interval": "1h",
+            "tags": ["bank"]
+        }
+    ],
+
     "config": [
         {"id": "economy.bank.txStates",             "file": "config/txStates.jsonc"},
         {"id": "economy.bank.txOperations",         "file": "config/txOperations.jsonc"},

@@ -17,6 +17,7 @@ kódu, věř kódu (kód je živý, task je momentka).
 | `viewer-number-series-tabs.md`    | Spodní lišta záložek číselných řad v per-type doc viewerech (`ReceivedInvoicesViewer`, `IssuedInvoicesViewer`) + předvyplnění aktivní řady při create. Refactor `DocsHeadsViewer` na opt-in přes `$scopedDocType`. |
 | `docs-detail-document.md`         | Detail dokladu jako textová faktura — nový content type `document` (strany Dodavatel/Odběratel, řádky, DPH rekapitulace, náhledy příloh na konci), `PersonSnapshotBuilder`, `DocumentDetail.svelte` + sdílená `AttachmentGrid.svelte`. |
 | `custom-theme-phase2.md`          | Vlastní vzhledy fáze 2 — gradientové presety (stránkovaný grid se šipkami), token `--shpd-sidebar-bg-image`, opacity slider (OKLab mix k bázi), odvozování z efektivní barvy. |
+| `custom-theme-phase3.md`          | Vlastní vzhledy fáze 3 — per-user persistence (tabulka `core_system_user_settings` + `UserSettingsStore`, scope `user` u settings pages), nový mód `account` (Nastavení účtu) s vlastním stromem (`global.accountSections` + `accountItems[]`), stránka Základní s field typy `theme`/`language`, server jako zdroj pravdy + localStorage anti-flash cache. |
 
 
 ---

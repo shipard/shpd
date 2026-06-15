@@ -32,6 +32,11 @@ Tenká služba nad `core_system_settings`: `get` / `getMany` / `set` /
 jen `DataSourceConnection` — volatelná z HTTP i CLI (sestavy, generátor
 faktur). `set($key, null)` klíč maže; klíče používají tečkové namespacy.
 
+Od Fáze 3 implementuje rozhraní **`KeyValueStore`** (`get`/`getMany`/`set`/
+`delete`), které sdílí s per-user `UserSettingsStore` — `SettingsController`
+si vybírá store podle `scope` stránky a nezávisí na konkrétní třídě. Viz
+sekci 8.
+
 ### Pravidla ukládání (`savePage`)
 
 - Ukládají se **jen textová pole definovaná ve stránce** (whitelist);
@@ -129,3 +134,80 @@ stránkou, která je potřebuje — struktura definice je na to připravená
   (vč. SVG fallbacku), sloty, store/replace/delete.
 
 Spouštění: `vendor/bin/phpunit --filter 'Settings|App|Branding'`.
+
+## 8. Per-user scope + Nastavení účtu (`account` mód)
+
+Settings page nese pole **`scope`** (`ds` | `user`, default `ds`). Určuje,
+kam jdou hodnoty:
+
+- `ds` → `SettingsStore` nad `core_system_settings` (sdílené na DS).
+- `user` → `UserSettingsStore` nad `core_system_user_settings`, scoped na
+  `user_id` (per-uživatel, přenáší se mezi zařízeními).
+
+`SettingsController::storeForPage()` vybere store podle scope; user-scope
+stránka vyžaduje přihlášeného uživatele s `userId` (jinak 401).
+
+### `UserSettingsStore` — `src/Core/Settings/UserSettingsStore.php`
+
+Kopie `SettingsStore` scoped na `user_id`; unikát je dvojice
+`(user_id, key)`, upsert přes `ON DUPLICATE KEY UPDATE`. Tabulka
+`core_system_user_settings` (tableId 105) je v `tables[]` i `keepOnReset[]`
+modulu `core.system`. Referenční integrita na `user_id` je na aplikační
+úrovni (projekt nepoužívá FOREIGN KEY).
+
+### Nové field typy `theme` / `language`
+
+Řízené widgety vázané na klientské stores (`themeStore`, `language`),
+hodnota se ale ukládá na server (zdroj pravdy). Validace v `savePage()`:
+
+- `theme` — objekt `{ mode: light|dark|custom, custom: {…}|null }`.
+- `language` — string `cs` | `en` | `auto`.
+
+Klíče v user store: `account.theme` (JSON), `account.language` (string).
+Na klientu jdou tato pole **mimo tlačítko Uložit** — mění se okamžitě
+(live preview / reload) a synchronizují přes `POST account.theme/language`.
+
+### Account mód — vlastní navigační strom
+
+Třetí navigační mód `account` (vedle `app` a `settings`) má samostatný
+strom:
+
+- Sekce v `modules/install/base/config/accountSections.jsonc`, registrace
+  `global.accountSections` v `install.base` `config[]`.
+- Položky `accountItems[]` v `module.jsonc` (sdílený parser se
+  `settingsItems` — `ModuleDefinition::parseNavItems()`).
+- `SettingsController::navigation(..., $kind)` parametrizuje strom
+  (`settings` → `global.settingsSections` + `settingsItems`; `account` →
+  `global.accountSections` + `accountItems`).
+- Endpoint `GET /_ui/account/navigation` (Router → `settings`/
+  `accountNavigation`). Page/savePage jdou přes existující
+  `/_ui/settings/page/{id}` — lookup stránky je společný, scope řeší
+  definice.
+
+První konzument: page `accountBasic` (scope `user`, pole `account.theme`
++ `account.language`) v `core.system`, sekce **Základní**.
+
+### Frontend (account)
+
+- `navigation.svelte.js` — mód `account`, `accountActiveItem`,
+  `enterAccount`/`exitAccount`/`exitToApp`.
+- `Sidebar.svelte` — dropdown patky „Nastavení účtu" → `enterAccount`;
+  back-bar `mode !== 'app'`; mode-aware fetch `/_ui/account/navigation`.
+- `SettingsPage.svelte` — větve pro `theme` (`ThemeField`, otevírá
+  ThemePanel přes probublaný `onOpenThemePanel`) a `language`
+  (`LanguageField`). Uložit tlačítko jen pro `text` pole.
+- `stores/accountPrefs.svelte.js` — po loginu/bootu (`App.svelte`
+  onSuccess + `main.js` při autentizovaném startu) `load()` ze serveru,
+  aplikuje `themeStore.applyFromServer()` a (liší-li se) `language.setMode()`.
+  localStorage zůstává anti-flash cache; server vyhrává.
+- Server push: `themeStore.setMode/setCustom` a `language.setMode` zapisují
+  přes `api/account.js` (`pushAccountPrefs`) — odděleno od `accountPrefs`
+  storu kvůli kruhovému importu.
+
+### Testy (Fáze 3)
+
+- `tests/Unit/Core/Settings/UserSettingsStoreTest.php` — scope, cache, upsert.
+- `tests/Unit/Core/Module/ModuleDefinitionTest.php` — scope default/user,
+  field typy theme/language, `accountItems`.
+- `tests/Unit/Api/Controller/SettingsControllerTest.php` — user-scope
+  page/savePage (theme/language validace), account navigation.

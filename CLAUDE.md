@@ -176,9 +176,12 @@ Závislosti tečou shora dolů: Command → Document → Module/Config/Database 
 
 ### Frontend — Settings mód
 
-- Aplikace má dva navigační módy: `app` (běžná práce) a `settings` (Nastavení)
-- Mode drží `navigation.svelte.js`, oba módy mají vlastní `activeItem`
-- Sidebar mode-aware načítá `/_ui/navigation` (app) nebo `/_ui/settings/navigation` (settings)
+- Aplikace má tři navigační módy: `app` (běžná práce), `settings` (Nastavení
+  aplikace, DS-scoped) a `account` (Nastavení účtu, per-user)
+- Mode drží `navigation.svelte.js`, každý mód má vlastní `activeItem`;
+  `enterSettings`/`enterAccount`/`exitToApp`
+- Sidebar mode-aware načítá `/_ui/navigation` (app), `/_ui/settings/navigation`
+  (settings) nebo `/_ui/account/navigation` (account)
 - Číselníky určené do Nastavení mají `settingsItems[]` v `module.jsonc`,
   sekce v `modules/install/base/config/settingsSections.jsonc`
 - Položky uvedené v `settingsItems[]` se automaticky skrývají z hlavního
@@ -187,6 +190,15 @@ Závislosti tečou shora dolů: Command → Document → Module/Config/Database 
   definice v `settingsPages[]`) — server-driven stránka vlastností,
   hodnoty v `core_system_settings` přes `SettingsStore`. První stránka:
   Aplikace (název, ikona, logo — branding sloty). Viz `docs/app-settings.md`
+- Settings page má `scope` (`ds` | `user`, default `ds`). User-scope čte/píše
+  přes `UserSettingsStore` (`core_system_user_settings`, scoped na `user_id`,
+  klíče `account.*`); `SettingsStore`/`UserSettingsStore` sdílí rozhraní
+  `KeyValueStore`. Field typy `theme`/`language` jsou řízené widgety vázané
+  na klientské stores
+- **Account mód** (`account`): Nastavení účtu — vlastní strom
+  (`global.accountSections` + `accountItems[]`), endpoint
+  `/_ui/account/navigation`, page `accountBasic` (vzhled + jazyk, scope user).
+  Detaily `docs/app-settings.md` sekce 8
 - Sub-tabulky spravované výhradně přes parent záznam (např. `economy_codebooks_fiscal_months`)
   mají v JSONC definici `"hideFromNavigation": true` — nezobrazují se ani v hlavním
   sidebaru, ani v Nastavení
@@ -199,10 +211,16 @@ Závislosti tečou shora dolů: Command → Document → Module/Config/Database 
   (`deriveSidebarTokens()` v `utils/themeColor.js`, OKLab/OKLCH) —
   solid barva nebo vertikální gradient + opacity mix k bázi; tělo
   stránky se nebarví nikdy — chrání doc-state systém
-- Persistence localStorage s per-DS klíčem v dev; token cache
-  `shpd_theme_tokens` pro anti-flash bootstrap. Tři synchronizovaná
-  místa: `theme.svelte.js`, `index.html` bootstrap, `api/config.js`
-- Detaily: `docs/design-system.md` (sekce 9), `docs/frontend.md` (sekce 11)
+- Persistence dvouúrovňová: **server je zdroj pravdy** (per-user
+  `account.theme`/`account.language` přes `UserSettingsStore`), localStorage
+  zůstává **anti-flash cache** (per-DS klíč v dev; token cache
+  `shpd_theme_tokens`). Po loginu `accountPrefs.load()` sesynchronizuje
+  server → store + cache; změny z panelu/dropdownu/stránky Základní píší
+  zpět na server (`themeStore.setMode/setCustom`, `language.setMode` přes
+  `api/account.js`). Tři synchronizovaná místa localStorage: `theme.svelte.js`,
+  `index.html` bootstrap, `api/config.js`
+- Detaily: `docs/design-system.md` (sekce 9), `docs/frontend.md` (sekce 11),
+  `docs/app-settings.md` (sekce 8)
 
 ### Frontend — Vícejazyčnost
 

@@ -365,11 +365,19 @@ Aplikace podporuje tři režimy vzhledu (dropdown Vzhled v patce sidebaru):
   přepíšou inline custom properties na `<html>` za běhu
 
 Dřívější režim Auto (sledování `prefers-color-scheme`) zanikl — uložená
-hodnota `'auto'` se migruje na `'light'`. Volba se persistuje do
-`localStorage` (klíč `shpd_theme`, v dev módu per-DS prefix).
+hodnota `'auto'` se migruje na `'light'`.
 
-Implementace store + bootstrap + panel je v [`frontend.md`](frontend.md)
-(sekce *Theme management*).
+Volba je **per-uživatelské nastavení na serveru** (Fáze 3) —
+`account.theme` v `core_system_user_settings` přes `UserSettingsStore`,
+přenáší se mezi zařízeními. `localStorage` (klíč `shpd_theme`, v dev módu
+per-DS prefix) zůstává **anti-flash cache**: server je zdroj pravdy, po
+loginu `accountPrefs.load()` sesynchronizuje server → store + cache.
+Uživatel volbu mění na třech místech (dropdown patky, ThemePanel, stránka
+Základní v Nastavení účtu) — jedna pravda ve storu.
+
+Implementace store + bootstrap + panel + server sync je
+v [`frontend.md`](frontend.md) (sekce *Theme management*); per-user
+úložiště a account mód v [`app-settings.md`](app-settings.md) (sekce 8).
 
 ### Princip custom tématu: barví se jen sidebar
 

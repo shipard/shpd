@@ -187,25 +187,34 @@ JS konstanta `MOBILE_BREAKPOINT` v `layout.svelte.js` a literál
 v `@media` queries v komponentách. Stejný vzor jako theme/language
 bootstrap ↔ store.
 
-### Mode systém — App vs. Settings
+### Mode systém — App / Settings / Account
 
-Aplikace má dva navigační módy: `'app'` (běžná práce) a `'settings'`
-(Nastavení aplikace). Mode drží `navigation.svelte.js` ve `$state`.
+Aplikace má tři navigační módy: `'app'` (běžná práce), `'settings'`
+(Nastavení aplikace, DS-scoped) a `'account'` (Nastavení účtu, per-user).
+Mode drží `navigation.svelte.js` ve `$state`.
 
-- **Vstup do Nastavení**: dropdown v patce sidebaru → položka „Nastavení
+- **Vstup do Nastavení aplikace**: dropdown v patce sidebaru → „Nastavení
   aplikace" → `navigationStore.enterSettings()`
+- **Vstup do Nastavení účtu**: dropdown v patce sidebaru → „Nastavení
+  účtu" → `navigationStore.enterAccount()`
 - **Výstup**: tlačítko „← Zpět do aplikace" v hlavičce sidebaru pod
-  logem → `navigationStore.exitSettings()`
-- **Stav per mode**: každý mode si pamatuje vlastní `activeItem`. Přepnutí
-  app→settings→app vrátí uživatele na poslední položku v app módu
+  logem → `navigationStore.exitToApp()` (společné pro settings i account)
+- **Stav per mode**: každý mode si pamatuje vlastní `activeItem`
+  (`appActiveItem` / `settingsActiveItem` / `accountActiveItem`). Přepnutí
+  app→settings→app (i app→account→app) vrátí uživatele na poslední položku
+  v app módu
 
 Sidebar reaguje na `navigationStore.mode` přes `$effect`:
 - `'app'` → načítá z `GET /_ui/navigation`
 - `'settings'` → načítá z `GET /_ui/settings/navigation`
+- `'account'` → načítá z `GET /_ui/account/navigation`
 
-V režimu `'settings'` jsou v hlavičce sidebaru navíc tlačítko „Zpět do
-aplikace" (pod logem) a v dropdownu patky se skrývá položka „Nastavení
-aplikace".
+V režimu `!== 'app'` je v hlavičce sidebaru navíc tlačítko „Zpět do
+aplikace" (pod logem); v dropdownu patky se v settings módu skrývá položka
+„Nastavení aplikace". Stránka **Základní** v account módu nese pole vzhledu
+(`ThemeField`) a jazyka (`LanguageField`) — řízené widgety vázané na
+`themeStore` / `language` (viz sekci 11). Detaily account módu a per-user
+úložiště: `docs/app-settings.md` sekce 8.
 
 Žádné URL routing — mode se nepamatuje napříč reloady (po F5 se vrátí
 do `'app'` módu). Persistence módu je out of scope této fáze.
@@ -936,9 +945,10 @@ import { themeStore } from '../../stores/theme.svelte.js';
 
 themeStore.mode;    // 'light' | 'dark' | 'custom' — uživatelská volba
 themeStore.custom;  // {version, base, opacity, sidebar: {type, color|stops}}
-themeStore.setMode('dark');                    // přepnutí + persistence + apply
+themeStore.setMode('dark');                    // přepnutí + persistence + apply + push na server
 themeStore.setCustom({ base: 'dark' });        // merge + persistence + apply,
-                                               // implikuje mode 'custom'
+                                               // implikuje mode 'custom'; push na server (debounce)
+themeStore.applyFromServer({mode, custom});    // aplikace serverové volby BEZ zpětného zápisu
 ```
 
 `applyTheme()` (privátní) při `custom` **nejdřív vyčistí inline
@@ -957,6 +967,36 @@ v [`design-system.md`](design-system.md) sekce 9.
 
 Bootstrap v `index.html` se Fází 2 **nemění** — token cache nese
 i `--shpd-sidebar-bg-image` a aplikační loop je generický.
+
+### Per-user persistence (server) — Fáze 3
+
+Vzhled (a jazyk) jsou **per-uživatelské nastavení na serveru**; localStorage
+zůstává anti-flash cache. Zdroj pravdy je server, lokální cache jen drží
+poslední známý stav pro první render.
+
+- **Klíče v user store** (`core_system_user_settings`, scope `user`):
+  `account.theme` (JSON `{mode, custom}`), `account.language` (string).
+- **Načtení po loginu**: `stores/accountPrefs.svelte.js` `load()` —
+  `GET /_ui/settings/page/accountBasic`, z `values` aplikuje
+  `themeStore.applyFromServer()` a (liší-li se od cache) `language.setMode()`.
+  Volá se z `App.svelte` onSuccess (fresh login) a z `main.js` při
+  autentizovaném startu (reload s platným tokenem). Guard `languageApplied`
+  brání reload-smyčce.
+- **Zápis na server**: `themeStore.setMode/setCustom` a `language.setMode`
+  pushují přes `api/account.js` (`pushAccountPrefs` → `POST
+  /_ui/settings/page/accountBasic`). `setCustom` má debounce ~300 ms
+  (color picker `oninput`); `language.setMode` await-uje POST před
+  `location.reload()`. Selhání je tiché — lokál platí pro session.
+- **Žádný kruhový import**: server push žije v `api/account.js`, ne
+  v `accountPrefs` storu (ten importuje `theme`/`language`). `theme`/
+  `language` stores importují jen `api/account.js`.
+- **Cross-device flash**: na novém zařízení s čistou cache je první render
+  default Shipard; po `accountPrefs.load()` se aplikuje serverová volba a
+  naplní cache (další reloady bez flashe) — akceptováno.
+
+Tatáž volba je dostupná na třech místech, všechna čtou/píší jednu pravdu
+ve storu: dropdown patky sidebaru, `ThemePanel`, a stránka **Základní**
+v account módu (`ThemeField` / `LanguageField`).
 
 ### ThemePanel
 

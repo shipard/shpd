@@ -935,7 +935,7 @@ na light, ne aby blokoval render.
 import { themeStore } from '../../stores/theme.svelte.js';
 
 themeStore.mode;    // 'light' | 'dark' | 'custom' — uživatelská volba
-themeStore.custom;  // {version, base, sidebar: {type, color}}
+themeStore.custom;  // {version, base, opacity, sidebar: {type, color|stops}}
 themeStore.setMode('dark');                    // přepnutí + persistence + apply
 themeStore.setCustom({ base: 'dark' });        // merge + persistence + apply,
                                                // implikuje mode 'custom'

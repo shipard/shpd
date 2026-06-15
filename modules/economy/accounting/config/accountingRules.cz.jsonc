@@ -19,7 +19,13 @@
         "revenue":          {"name:cs": "Výnosy"},
         "costs":            {"name:cs": "Náklady"},
         "rounding.cost":    {"name:cs": "Zaokrouhlení — náklad"},
-        "rounding.revenue": {"name:cs": "Zaokrouhlení — výnos"}
+        "rounding.revenue": {"name:cs": "Zaokrouhlení — výnos"},
+
+        "bank.unmatched.in":  {"name:cs": "Banka — nespárovaný příjem"},
+        "bank.unmatched.out": {"name:cs": "Banka — nespárovaný výdaj"},
+        "bank.fee":           {"name:cs": "Banka — poplatek"},
+        "bank.interest.in":   {"name:cs": "Banka — připsaný úrok"},
+        "bank.interest.out":  {"name:cs": "Banka — zaplacený úrok"}
     },
 
     "accounts": [
@@ -32,6 +38,15 @@
 
         {"cat": "receivables",      "accountMask": "311"},
         {"cat": "payables",         "accountMask": "321"},
+
+        // Bankovní kategorie (konzumuje bankovní mikroengine ve Fázi 3; teď
+        // neškodná konfigurace). 261200/261300 = clearing účty nespárovaných
+        // plateb (seed W7.1); poplatky/úroky jdou na finanční náklady/výnosy.
+        {"cat": "bank.unmatched.in",  "accountMask": "261200"},
+        {"cat": "bank.unmatched.out", "accountMask": "261300"},
+        {"cat": "bank.fee",           "accountMask": "568"},
+        {"cat": "bank.interest.in",   "accountMask": "662"},
+        {"cat": "bank.interest.out",  "accountMask": "562"},
 
         // DPH analytiky per kód — konvence 343{NNN}, NNN = číselná část kódu.
         // Řádek má každý kód, který může vyprodukovat nenulovou daň: nenulová

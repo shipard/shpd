@@ -137,6 +137,8 @@
     {"number":"26","name":"Převody mezi finančními účty","short_name":"Převody mezi finančními účty","account_kind":0},
     {"number":"261","name":"Peníze na cestě","short_name":"Peníze na cestě","account_kind":0},
     {"number":"261100","name":"Peníze na cestě","short_name":"Peníze na cestě","account_kind":0},
+    {"number":"261200","name":"Nespárované platby — příjmy","short_name":"Nespárované příjmy","account_kind":0},
+    {"number":"261300","name":"Nespárované platby — výdaje","short_name":"Nespárované výdaje","account_kind":0},
     {"number":"3","name":"Zúčtovací vztahy","short_name":"Zúčtovací vztahy","account_kind":0},
     {"number":"31","name":"Pohledávky (krátkodobé i dlouhodobé)","short_name":"Pohledávky","account_kind":0},
     {"number":"311","name":"Odběratelé","short_name":"Odběratelé","account_kind":0},

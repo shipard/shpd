@@ -196,6 +196,8 @@
     {"number":"26","name":"Převody mezi finančními účty","short_name":"Převody mezi finančními účty","account_kind":0},
     {"number":"261","name":"Peníze na cestě","short_name":"Peníze na cestě","account_kind":0},
     {"number":"261100","name":"Peníze na cestě","short_name":"Peníze na cestě","account_kind":0},
+    {"number":"261200","name":"Nespárované platby — příjmy","short_name":"Nespárované příjmy","account_kind":0},
+    {"number":"261300","name":"Nespárované platby — výdaje","short_name":"Nespárované výdaje","account_kind":0},
     {"number":"29","name":"Opravné položky ke krátkodobému finančnímu majetku","short_name":"OP ke krátkodobému FM","account_kind":0},
     {"number":"291","name":"Opravná položka ke krátkodobému finančnímu majetku","short_name":"OP ke krátkodobému FM","account_kind":0},
     {"number":"291100","name":"Opravná položka ke krátkodobému finančnímu majetku","short_name":"FP ke krátkodobému FM","account_kind":0},

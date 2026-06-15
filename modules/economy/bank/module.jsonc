@@ -14,6 +14,10 @@
         "economy_bank_statements"
     ],
 
+    "extensions": [
+        "economy_codebooks_bank_accounts"
+    ],
+
     "forms": [
         {"table": "economy_bank_transactions", "id": "economy.bank.transactions"},
         {"table": "economy_bank_statements",   "id": "economy.bank.statements"}

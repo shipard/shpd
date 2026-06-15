@@ -13,14 +13,16 @@ use Shipard\Core\Form\Lookup\TableLookup;
  *
  * Filter `account_level` umožňuje formulářům omezit nabídku na analytické
  * účty (`account_level = 4`) — např. pole Účet na položce typu Účetní
- * položka. Klientský filtr není bezpečnostní hranice; tvrdé omezení
- * vynucuje validace v ItemDocument.
+ * položka. Filter `number_prefix` omezí nabídku na řadu účtů (`number LIKE
+ * "prefix%"`) — např. bankovní spojení vybírá jen z řady 221. Klientský
+ * filtr není bezpečnostní hranice; tvrdé omezení vynucuje validace
+ * v dokumentu (ItemDocument, BankAccountDocument).
  */
 class AccountsLookup extends TableLookup
 {
     public function getAllowedFilterKeys(): array
     {
-        return ['account_level'];
+        return ['account_level', 'number_prefix'];
     }
 
     public function search(string $q, array $filter, int $limit): array
@@ -37,6 +39,10 @@ class AccountsLookup extends TableLookup
         if (isset($filter['account_level'])) {
             $sql .= ' AND `account_level` = %i';
             $args[] = (int) $filter['account_level'];
+        }
+        if (isset($filter['number_prefix']) && (string) $filter['number_prefix'] !== '') {
+            $sql .= ' AND `number` LIKE %s';
+            $args[] = (string) $filter['number_prefix'] . '%';
         }
         if ($q !== '') {
             $like = '%' . $q . '%';

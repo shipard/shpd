@@ -59,6 +59,27 @@ class BankAccountDocument extends Document
             $result->addError('bic', 'BIC/SWIFT má neplatný formát.', 'invalid_format');
         }
 
+        // accounting_account (extension z economy.bank) musí odkazovat na
+        // existující aktivní analytický bankovní účet — account_level = 4
+        // a číslo v řadě 221. Klientský filtr lookupu není bezpečnostní
+        // hranice; tady je tvrdé vynucení (stejný kompromis jako
+        // accounting_account na položkách).
+        if (!empty($data['accounting_account']) && $this->db !== null) {
+            $row = $this->db->fetch(
+                'SELECT id FROM economy_accounting_accounts'
+                . ' WHERE id = %i AND account_level = 4 AND number LIKE %s AND docState IN (10, 40, 80)',
+                (int) $data['accounting_account'],
+                '221%',
+            );
+            if ($row === null || $row === false) {
+                $result->addError(
+                    'accounting_account',
+                    'Účet musí být existující aktivní analytický účet v řadě 221.',
+                    'invalid',
+                );
+            }
+        }
+
         return $result;
     }
 

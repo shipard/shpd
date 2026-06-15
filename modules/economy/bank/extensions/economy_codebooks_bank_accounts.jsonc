@@ -1,0 +1,36 @@
+{
+    // Extension z economy.bank na číselník bankovních spojení.
+    //
+    // accounting_account — protiúčet pro bankovní pohyby (221xxx). Bankovní
+    //   mikroengine (Fáze 3) z něj bere stranu „banka" účtu. Pole je účetní
+    //   informace, ale žije na bankovním spojení — proto extension z economy.bank
+    //   (závislost směřuje správně: bank → accounting + codebooks).
+    // ebanking_id — identifikátor účtu v ebankingu / u API konektoru (Fáze API).
+    //
+    // connector_* / sync_cursor se ZDE NEZAVÁDÍ (mimo scope Fáze 1; ADD COLUMN
+    // je bezpečné dodat později s API fází).
+
+    "table": "economy_codebooks_bank_accounts",
+    "columns": [
+        {
+            "id": "accounting_account",
+            "name": "Accounting account",
+            "name:cs": "Účet",
+            "name:en": "Accounting account",
+            "type": "int",
+            "nullable": true,
+            "reference": "economy_accounting_accounts",
+            "group": "settings"
+        },
+        {
+            "id": "ebanking_id",
+            "name": "E-banking ID",
+            "name:cs": "ID v ebankingu",
+            "name:en": "E-banking ID",
+            "type": "varchar",
+            "length": 80,
+            "nullable": true,
+            "group": "account"
+        }
+    ]
+}

@@ -26,8 +26,15 @@
                                 {"type": "input", "column": "account_number"},
                                 {"type": "input", "column": "iban"},
                                 {"type": "input", "column": "bic"},
+                                {"type": "input", "column": "ebanking_id"},
 
                                 {"type": "separator", "label": "Nastavení", "label:cs": "Nastavení", "label:en": "Settings"},
+                                {
+                                    "type": "lookup",
+                                    "column": "accounting_account",
+                                    "placeholder": "Hledat účet 221…",
+                                    "lookup": {"table": "economy_accounting_accounts", "filter": {"account_level": 4, "number_prefix": "221"}}
+                                },
                                 {"type": "input", "column": "is_default"},
                                 {"type": "input", "column": "sort_order"},
                                 {"type": "input", "column": "valid_from"},

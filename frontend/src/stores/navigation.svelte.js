@@ -1,7 +1,7 @@
 // Navigation store — manages navigation mode and the active item per mode.
-// Modes: 'app' | 'settings'.
+// Modes: 'app' | 'settings' | 'account'.
 // Each mode remembers its own activeItem so switching app→settings→app
-// returns the user to where they were.
+// (nebo app→account→app) returns the user to where they were.
 //
 // `pendingRecordId` je jednorázový hint pro Viewer.svelte: když dashboard
 // widget zavolá navigateToViewer(viewerId, recordId), Viewer si ho po mountu
@@ -12,7 +12,16 @@
 let mode = $state('app');
 let appActiveItem      = $state(null);
 let settingsActiveItem = $state(null);
+let accountActiveItem  = $state(null);
 let pendingRecordId    = $state(null);
+
+// Aktivní položka pro aktuální mód — jedno místo pro tří-cestnou volbu,
+// sdílené gettery i navigate().
+function currentActiveItem() {
+  if (mode === 'settings') return settingsActiveItem;
+  if (mode === 'account')  return accountActiveItem;
+  return appActiveItem;
+}
 
 const DASHBOARD_ITEM = Object.freeze({
   id: 'dashboard',
@@ -37,6 +46,8 @@ function navigate(item) {
   pendingRecordId = null;
   if (mode === 'settings') {
     settingsActiveItem = normalized;
+  } else if (mode === 'account') {
+    accountActiveItem = normalized;
   } else {
     appActiveItem = normalized;
   }
@@ -63,6 +74,8 @@ function navigateToViewer(viewerId, recordId = null) {
   };
   if (mode === 'settings') {
     settingsActiveItem = item;
+  } else if (mode === 'account') {
+    accountActiveItem = item;
   } else {
     appActiveItem = item;
   }
@@ -97,10 +110,24 @@ function exitSettings() {
   mode = 'app';
 }
 
+function enterAccount() {
+  mode = 'account';
+}
+
+function exitAccount() {
+  mode = 'app';
+}
+
+// Společný návrat do aplikace z libovolného sekundárního módu
+// (settings i account) — back-bar v sidebaru volá tento helper.
+function exitToApp() {
+  mode = 'app';
+}
+
 export const navigationStore = {
   get mode()       { return mode; },
-  get activeItem() { return mode === 'settings' ? settingsActiveItem : appActiveItem; },
-  get activeId()   { const it = mode === 'settings' ? settingsActiveItem : appActiveItem; return it?.id ?? null; },
+  get activeItem() { return currentActiveItem(); },
+  get activeId()   { return currentActiveItem()?.id ?? null; },
   get pendingRecordId() { return pendingRecordId; },
   navigate,
   navigateToViewer,
@@ -108,4 +135,7 @@ export const navigationStore = {
   ensureDefaultActiveItem,
   enterSettings,
   exitSettings,
+  enterAccount,
+  exitAccount,
+  exitToApp,
 };

@@ -6,7 +6,7 @@
   import SettingsPage from '../settings/SettingsPage.svelte';
   import { t } from '../../i18n/index.js';
 
-  let { activeItem = null } = $props();
+  let { activeItem = null, onOpenThemePanel } = $props();
 </script>
 
 <main class="shpd-content">
@@ -19,7 +19,7 @@
   {:else if activeItem?.type === 'table'}
     <TableBrowser tab={activeItem} />
   {:else if activeItem?.type === 'page'}
-    <SettingsPage tab={activeItem} />
+    <SettingsPage tab={activeItem} {onOpenThemePanel} />
   {:else if activeItem}
     <!-- Placeholder for future content types (form, …) -->
     <div class="shpd-content__empty">

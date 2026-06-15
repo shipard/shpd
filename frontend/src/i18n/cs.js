@@ -395,4 +395,7 @@ export default {
   'settingsPage.image.remove': 'Odebrat',
   'settingsPage.image.uploadFailed': 'Nahrání obrázku selhalo.',
   'settingsPage.image.removeFailed': 'Odebrání obrázku selhalo.',
+
+  // Nastavení účtu — widget vzhledu
+  'account.theme.editColor': 'Upravit barvu',
 };

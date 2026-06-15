@@ -63,7 +63,9 @@
   $effect(() => {
     const url = navigationStore.mode === 'settings'
       ? '/_ui/settings/navigation'
-      : '/_ui/navigation';
+      : navigationStore.mode === 'account'
+        ? '/_ui/account/navigation'
+        : '/_ui/navigation';
 
     loading = true;
     error   = null;
@@ -134,8 +136,10 @@
   }
 
   function handleSettings() {
-    closeUserMenu();
-    // TODO: implementovat navigaci na nastavení účtu, až bude stránka existovat
+    navigationStore.enterAccount();
+    // Menu se zavře přes $effect na změnu módu níže.
+    // Na mobilu navíc zavři drawer (enterAccount neprochází handleNavigate).
+    if (layoutStore.isMobile) layoutStore.closeDrawer();
   }
 
   function handleAppSettings() {
@@ -146,10 +150,11 @@
     if (layoutStore.isMobile) layoutStore.closeDrawer();
   }
 
-  // Výstup z Nastavení (back button v hlavičce). Na mobilu zavři drawer —
-  // exitSettings stejně jako enterSettings neprochází přes handleNavigate.
-  function handleExitSettings() {
-    navigationStore.exitSettings();
+  // Výstup ze sekundárního módu (Nastavení aplikace i Nastavení účtu) zpět
+  // do aplikace — back button v hlavičce. Na mobilu zavři drawer, exitToApp
+  // stejně jako enter* neprochází přes handleNavigate.
+  function handleExitToApp() {
+    navigationStore.exitToApp();
     if (layoutStore.isMobile) layoutStore.closeDrawer();
   }
 
@@ -252,12 +257,12 @@
     {/if}
   </div>
 
-  {#if navigationStore.mode === 'settings'}
+  {#if navigationStore.mode !== 'app'}
     {#if collapsed}
       <div class="shpd-sidebar__back-bar shpd-sidebar__back-bar--collapsed">
         <button
           class="shpd-sidebar__back-button shpd-sidebar__back-button--icon-only"
-          onclick={handleExitSettings}
+          onclick={handleExitToApp}
           title={t('sidebar.backToApp')}
           aria-label={t('sidebar.backToApp')}
         >
@@ -266,7 +271,7 @@
       </div>
     {:else}
       <div class="shpd-sidebar__back-bar">
-        <button class="shpd-sidebar__back-button" onclick={handleExitSettings}>
+        <button class="shpd-sidebar__back-button" onclick={handleExitToApp}>
           <Icon icon={iconChevronLeft} size="sm" />
           <span>{t('sidebar.backToApp')}</span>
         </button>

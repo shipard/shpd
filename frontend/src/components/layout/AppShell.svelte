@@ -58,7 +58,7 @@
     </div>
 
     <div class="shpd-shell__main">
-      <ContentArea activeItem={navigationStore.activeItem} />
+      <ContentArea activeItem={navigationStore.activeItem} onOpenThemePanel={openThemePanel} />
     </div>
   {:else}
     <!-- Desktop režim: beze změny — pevný sidebar + obsah vedle. -->
@@ -69,7 +69,7 @@
       bind:collapsed={sidebarCollapsed}
     />
     <div class="shpd-shell__main">
-      <ContentArea activeItem={navigationStore.activeItem} />
+      <ContentArea activeItem={navigationStore.activeItem} onOpenThemePanel={openThemePanel} />
     </div>
   {/if}
 

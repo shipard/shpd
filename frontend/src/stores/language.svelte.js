@@ -18,6 +18,7 @@
 import IntlMessageFormat from 'intl-messageformat';
 import csMessages from '../i18n/cs.js';
 import enMessages from '../i18n/en.js';
+import { pushAccountPrefs } from '../api/account.js';
 
 const STORAGE_KEY = 'shpd_language';
 const VALID_MODES = ['cs', 'en', 'auto'];
@@ -92,7 +93,7 @@ function tn(key, count, params) {
   return t(key, { count, ...(params ?? {}) });
 }
 
-function setMode(newMode) {
+async function setMode(newMode) {
   if (!VALID_MODES.includes(newMode)) return;
   try {
     localStorage.setItem(STORAGE_KEY, newMode);
@@ -100,6 +101,14 @@ function setMode(newMode) {
     // private mode — choice won't persist, but reload still applies it
     // for this session via the in-memory `mode` value… except we reload
     // immediately, so this branch effectively does nothing.
+  }
+  // Jazyk je per-user na serveru (zdroj pravdy) — zapiš před reloadem.
+  // Reload přijde hned, takže POST awaitujeme (drobné zdržení akceptovatelné);
+  // selhání ignorujeme — lokální volba platí, sync se dožene příště.
+  try {
+    await pushAccountPrefs({ 'account.language': newMode });
+  } catch (e) {
+    // network / not authenticated — reload stejně
   }
   // Reload — see "Rozhodnutí k designu" in the phase 1A task.
   location.reload();

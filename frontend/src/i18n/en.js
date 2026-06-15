@@ -382,4 +382,7 @@ export default {
   'settingsPage.image.remove': 'Remove',
   'settingsPage.image.uploadFailed': 'Image upload failed.',
   'settingsPage.image.removeFailed': 'Failed to remove the image.',
+
+  // Account settings — appearance widget
+  'account.theme.editColor': 'Edit color',
 };

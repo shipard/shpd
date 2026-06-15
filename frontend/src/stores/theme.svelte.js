@@ -23,6 +23,7 @@
 
 import { DATA_SOURCE_ID } from '../api/config.js';
 import { deriveSidebarTokens, SIDEBAR_TOKEN_NAMES } from '../utils/themeColor.js';
+import { pushAccountPrefs } from '../api/account.js';
 
 const VALID_MODES = ['light', 'dark', 'custom'];
 
@@ -138,8 +139,49 @@ function applyTheme(currentMode, currentCustom) {
 // v docs/frontend.md.
 applyTheme(initialMode, initialCustom);
 
+// Server zápis — preference jsou per-user na serveru (zdroj pravdy).
+// Posíláme vždy {mode, custom}, aby i u light/dark přežila poslední známá
+// custom konfigurace. Selhání je tiché (lokál platí pro session).
+function pushToServer() {
+  try {
+    pushAccountPrefs({ 'account.theme': { mode, custom: customConfig } });
+  } catch (e) {
+    // network / not authenticated — sync se dožene příště
+  }
+}
+
+// Debounce pro setCustom — color picker pálí oninput, nechceme POST na
+// každý pixel. setTimeout/clearTimeout jsou v browseru dostupné.
+let pushTimer = null;
+function pushToServerDebounced() {
+  if (pushTimer) clearTimeout(pushTimer);
+  pushTimer = setTimeout(() => { pushTimer = null; pushToServer(); }, 300);
+}
+
 /**
- * Set the theme mode. Persists to localStorage and applies to <html>.
+ * Aplikuje vzhled ze serveru (zdroj pravdy) — nastaví mode i custom config,
+ * aplikuje na <html> a obnoví localStorage cache. NEpíše zpět na server.
+ * @param {{mode: string, custom: object|null}} value
+ */
+function applyFromServer(value) {
+  if (!value || !VALID_MODES.includes(value.mode)) return;
+  mode = value.mode;
+  if (value.custom && (value.custom.sidebar?.color || value.custom.sidebar?.stops)) {
+    customConfig = {
+      ...value.custom,
+      opacity: typeof value.custom.opacity === 'number' ? value.custom.opacity : 100,
+    };
+  }
+  try {
+    localStorage.setItem(storageKey(MODE_KEY), mode);
+    localStorage.setItem(storageKey(CUSTOM_KEY), JSON.stringify(customConfig));
+  } catch (e) { /* persistence selhala — vizuál pro session platí */ }
+  applyTheme(mode, customConfig);
+}
+
+/**
+ * Set the theme mode. Persists to localStorage, applies to <html> and syncs
+ * to the server (per-user preference).
  * @param {'light' | 'dark' | 'custom'} newMode
  */
 function setMode(newMode) {
@@ -152,6 +194,7 @@ function setMode(newMode) {
     // the visual theme still applies for this session
   }
   applyTheme(newMode, customConfig);
+  pushToServer();
 }
 
 /**
@@ -164,10 +207,11 @@ function setCustom(patch) {
     localStorage.setItem(storageKey(CUSTOM_KEY), JSON.stringify(customConfig));
   } catch (e) { /* persistence selhala — vizuál pro session platí */ }
   if (mode !== 'custom') {
-    setMode('custom');
+    setMode('custom');  // setMode už pushne na server
   } else {
     applyTheme(mode, customConfig);
   }
+  pushToServerDebounced();
 }
 
 export const themeStore = {
@@ -175,4 +219,5 @@ export const themeStore = {
   get custom() { return customConfig; },
   setMode,
   setCustom,
+  applyFromServer,
 };

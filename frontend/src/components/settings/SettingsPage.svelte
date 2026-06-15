@@ -11,9 +11,13 @@
   import Button from '../ui/Button.svelte';
   import Icon from '../ui/Icon.svelte';
   import ImageSlotField from './ImageSlotField.svelte';
+  import ThemeField from './ThemeField.svelte';
+  import LanguageField from './LanguageField.svelte';
   import { iconSave, iconSpinner, resolveIcon } from '../../icons.js';
 
-  let { tab } = $props();
+  // onOpenThemePanel probublává z AppShellu (přes ContentArea) — ThemeField
+  // ho volá při volbě „Vlastní" / „Upravit barvu".
+  let { tab, onOpenThemePanel } = $props();
 
   let definition  = $state(null);
   let values      = $state({});      // textová pole — editovaný stav
@@ -52,16 +56,18 @@
   });
 
   // Server vrací jednu mapu values — rozdělíme na editovatelné texty
-  // (string | null → '') a stavy image slotů.
+  // (string | null → '') a stavy image slotů. Pole `theme`/`language` jsou
+  // řízená přímo stores (live), přes Uložit nejdou — do `values` nepatří.
   function splitValues(serverValues) {
     const texts = {};
     const images = {};
     for (const field of definition?.fields ?? []) {
       if (field.type === 'image') {
         images[field.id] = serverValues[field.id] ?? null;
-      } else {
+      } else if (field.type === 'text') {
         texts[field.id] = serverValues[field.id] ?? '';
       }
+      // theme/language — bez lokálního stavu, čtou se z themeStore/language.
     }
     values = texts;
     imageStates = images;
@@ -103,7 +109,9 @@
     appInfoStore.load();
   }
 
-  let hasTextFields = $derived((definition?.fields ?? []).some(f => f.type !== 'image'));
+  // Uložit tlačítko jen pro text pole. image/theme/language se ukládají mimo
+  // (vlastní endpoint / live store binding), takže account Basic tlačítko nemá.
+  let hasTextFields = $derived((definition?.fields ?? []).some(f => f.type === 'text'));
 </script>
 
 <div class="shpd-settings-page">
@@ -144,6 +152,10 @@
                   slotState={imageStates[field.id]}
                   onchange={(newState) => handleImageChange(field.id, newState)}
                 />
+              {:else if field.type === 'theme'}
+                <ThemeField {onOpenThemePanel} />
+              {:else if field.type === 'language'}
+                <LanguageField />
               {:else}
                 <Input
                   id={`settings-${field.id}`}

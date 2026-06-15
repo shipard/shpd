@@ -279,6 +279,7 @@ function dispatch(
 		'exchange' => dispatchExchange($route, $request, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher),
 		'alerts' => dispatchAlerts($route, $request, $db, $alertCheckRegistry, $configRuntime, resolveLanguage($request, $resolved->config)),
 		'accounting' => dispatchAccounting($route, $request, $db, $configRuntime),
+		'bank'    => dispatchBank($route, $auth, $tables, $db, $resolved, $configRuntime),
 		'personsRegistry' => dispatchPersonsRegistry($route, $request, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $serverConfig),
 		'mcp'     => dispatchMcp($request, $auth, $resolved->connection, $tables, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'openapi' => (new OpenApiController())->spec($auth, $openApiPublic, $tables, $baseUrl),
@@ -352,6 +353,22 @@ function dispatchAccounting(
 	return match ($route->action) {
 		'reaccount' => $ctrl->reaccount($request),
 		default     => Response::error('INTERNAL_ERROR', "Unknown accounting action: {$route->action}", 500),
+	};
+}
+
+function dispatchBank(
+	Route $route,
+	AuthContext $auth,
+	array $tables,
+	\Shipard\Core\Database\DataSourceConnection $db,
+	\Shipard\Api\ResolvedDataSource $resolved,
+	?\Shipard\Core\Config\ConfigRuntime $configRuntime,
+): Response {
+	$dsPath = $resolved->config->getDataSourceDir();
+	$ctrl = new \Shipard\Module\Economy\Bank\BankController($db, $configRuntime, $dsPath, $tables);
+	return match ($route->action) {
+		'importStatement' => $ctrl->importStatement($auth),
+		default           => Response::error('INTERNAL_ERROR', "Unknown bank action: {$route->action}", 500),
 	};
 }
 

@@ -181,6 +181,14 @@ class Router
 			return new Route('accounting', 'reaccount');
 		}
 
+		// POST /_bank/import-statement — import bankovního výpisu (multipart)
+		if ($subpath === '/_bank/import-statement') {
+			if ($method !== 'POST') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('bank', 'importStatement');
+		}
+
 		if ($subpath === '/_mcp') {
 			if ($method !== 'POST') {
 				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);

@@ -817,4 +817,19 @@ class RouterTest extends TestCase
 		$this->assertInstanceOf(Response::class, $result);
 		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
 	}
+
+	// Bank
+	public function testBankImportStatementRoute(): void
+	{
+		$result = $this->router->resolve('/api/v1/_bank/import-statement', 'POST');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'bank', 'importStatement');
+	}
+
+	public function testBankImportStatementGetNotAllowed(): void
+	{
+		$result = $this->router->resolve('/api/v1/_bank/import-statement', 'GET');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
+	}
 }

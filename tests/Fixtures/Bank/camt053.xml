@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.02">
+  <BkToCstmrStmt>
+    <Stmt>
+      <LglSeqNb>42</LglSeqNb>
+      <Acct><Id><IBAN>CZ6508000000192000145399</IBAN></Id><Ccy>CZK</Ccy></Acct>
+      <FrToDt><FrDtTm>2026-06-01T00:00:00</FrDtTm><ToDtTm>2026-06-30T23:59:59</ToDtTm></FrToDt>
+      <Bal><Tp><CdOrPrtry><Cd>OPBD</Cd></CdOrPrtry></Tp><Amt Ccy="CZK">1000.00</Amt><CdtDbtInd>CRDT</CdtDbtInd></Bal>
+      <Bal><Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp><Amt Ccy="CZK">2160.00</Amt><CdtDbtInd>CRDT</CdtDbtInd></Bal>
+      <Ntry>
+        <Amt Ccy="CZK">1210.00</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <AcctSvcrRef>REF-INC-001</AcctSvcrRef>
+        <BookgDt><Dt>2026-06-10</Dt></BookgDt>
+        <ValDt><Dt>2026-06-09</Dt></ValDt>
+        <NtryDtls><TxDtls>
+          <Refs><EndToEndId>VS12345</EndToEndId><PmtInfId>SS678</PmtInfId></Refs>
+          <RltdPties>
+            <Dbtr><Nm>Alfa s.r.o.</Nm></Dbtr>
+            <DbtrAcct><Id><Othr><Id>123456789</Id></Othr></Id></DbtrAcct>
+          </RltdPties>
+          <RltdAgts><DbtrAgt><FinInstnId><Othr><Id>0800</Id></Othr></FinInstnId></DbtrAgt></RltdAgts>
+          <RmtInf><Ustrd>Platba za fakturu 12345</Ustrd></RmtInf>
+        </TxDtls></NtryDtls>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CZK">50.00</Amt>
+        <CdtDbtInd>DBIT</CdtDbtInd>
+        <AcctSvcrRef>REF-OUT-001</AcctSvcrRef>
+        <BookgDt><Dt>2026-06-11</Dt></BookgDt>
+        <ValDt><Dt>2026-06-11</Dt></ValDt>
+        <NtryDtls><TxDtls>
+          <Refs><EndToEndId>NOTPROVIDED</EndToEndId></Refs>
+          <RltdPties><Cdtr><Nm>Banka a.s.</Nm></Cdtr></RltdPties>
+          <RmtInf><Ustrd>Bankovni poplatek</Ustrd></RmtInf>
+          <AddtlTxInf>Poplatek za vedeni uctu</AddtlTxInf>
+        </TxDtls></NtryDtls>
+      </Ntry>
+    </Stmt>
+  </BkToCstmrStmt>
+</Document>

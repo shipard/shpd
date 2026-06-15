@@ -1,0 +1,37 @@
+{
+  "accountStatement": {
+    "info": {
+      "accountId": "2900123456",
+      "iban": "CZ6508000000192000145399",
+      "currency": "CZK",
+      "openingBalance": 1000.00,
+      "closingBalance": 2160.00,
+      "dateStart": "2026-06-01+02:00",
+      "dateEnd": "2026-06-30+02:00",
+      "idList": 42
+    },
+    "transactionList": {
+      "transaction": [
+        {
+          "column0": {"value": "2026-06-10+02:00", "name": "Datum", "id": 0},
+          "column1": {"value": 1210.00, "name": "Objem", "id": 1},
+          "column2": {"value": "123456789", "name": "Protiucet", "id": 2},
+          "column3": {"value": "0800", "name": "Kod banky", "id": 3},
+          "column4": {"value": "0000", "name": "KS", "id": 4},
+          "column5": {"value": "0000012345", "name": "VS", "id": 5},
+          "column6": {"value": "678", "name": "SS", "id": 6},
+          "column7": {"value": "Alfa s.r.o.", "name": "Uziv. identifikace", "id": 7},
+          "column10": {"value": "Alfa s.r.o.", "name": "Nazev protiuctu", "id": 10},
+          "column16": {"value": "Platba za fakturu 12345", "name": "Zprava pro prijemce", "id": 16},
+          "column22": {"value": "EXT-FIO-001", "name": "ID pohybu", "id": 22}
+        },
+        {
+          "column0": {"value": "2026-06-11+02:00", "name": "Datum", "id": 0},
+          "column1": {"value": -50.00, "name": "Objem", "id": 1},
+          "column16": {"value": "Bankovni poplatek", "name": "Zprava", "id": 16},
+          "column22": {"value": "EXT-FIO-002", "name": "ID pohybu", "id": 22}
+        }
+      ]
+    }
+  }
+}

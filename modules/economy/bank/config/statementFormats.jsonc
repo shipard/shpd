@@ -1,0 +1,26 @@
+{
+    // economy.bank.statementFormats
+    //
+    // Detekční pravidla formátů bankovních výpisů — port formats.json ze
+    // starého Shipardu. Pořadí klíčů = pořadí vyhodnocení. checkRegExp /
+    // checkRegExp2 se matchují nad SUROVÝM (nedekódovaným) textem; srcCharset
+    // (když uveden) → iconv(srcCharset, 'UTF-8'). Chybějící srcCharset = UTF-8.
+    //
+    // Fáze 2: CAMT (cba-xml), GPC, FIO. Ostatní formáty (MT940, ČSOB, ČS, KB,
+    // RB) se doplní spolu s parsery později.
+
+    "cz.cba-xml": {
+        "name": "ČBA / CAMT XML",
+        "checkRegExp": "/<BkToCstmrStmt>/"
+    },
+    "cz.gpc": {
+        "name": "GPC",
+        "srcCharset": "CP1250",
+        "checkRegExp": "/^074(.+)\\s075(.+)/",
+        "checkRegExp2": "/^074(.+)\\s/"
+    },
+    "cz.fio-json": {
+        "name": "FIO / JSON",
+        "checkRegExp": "/\"accountStatement\"\\s*:\\s*\\{/"
+    }
+}

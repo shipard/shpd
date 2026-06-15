@@ -54,6 +54,7 @@
         {"id": "economy.bank.txStates",             "file": "config/txStates.jsonc"},
         {"id": "economy.bank.txOperations",         "file": "config/txOperations.jsonc"},
         {"id": "economy.bank.txDirections",         "file": "config/txDirections.jsonc"},
-        {"id": "economy.bank.reconciliationStates", "file": "config/reconciliationStates.jsonc"}
+        {"id": "economy.bank.reconciliationStates", "file": "config/reconciliationStates.jsonc"},
+        {"id": "economy.bank.statementFormats",     "file": "config/statementFormats.jsonc"}
     ]
 }

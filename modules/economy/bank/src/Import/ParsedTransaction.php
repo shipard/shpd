@@ -1,0 +1,31 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Shipard\Module\Economy\Bank\Import;
+
+/**
+ * Neutrální mezistruktura jedné bankovní transakce z výpisu — výstup parseru,
+ * vstup import service. Immutable, bez vazby na DB.
+ *
+ * `amount` je ZNAMÉNKOVÁ (záporná = výdaj); import ji rozloží na kladný
+ * `amount` + `direction`. `raw` nese surový parser payload pro fingerprint
+ * a debug.
+ */
+final class ParsedTransaction
+{
+    /** @param array<string, mixed> $raw */
+    public function __construct(
+        public readonly ?string $externalId,
+        public readonly float $amount,
+        public readonly \DateTimeImmutable $dateTransaction,
+        public readonly ?\DateTimeImmutable $dateValue = null,
+        public readonly ?string $counterpartyAccount = null,
+        public readonly ?string $counterpartyName = null,
+        public readonly ?string $symbol1 = null,
+        public readonly ?string $symbol2 = null,
+        public readonly ?string $symbol3 = null,
+        public readonly ?string $message = null,
+        public readonly array $raw = [],
+    ) {}
+}

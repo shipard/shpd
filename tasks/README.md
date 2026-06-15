@@ -16,6 +16,7 @@ kódu, věř kódu (kód je živý, task je momentka).
 |-----------------------------------|------------------------------------------------------|
 | `viewer-number-series-tabs.md`    | Spodní lišta záložek číselných řad v per-type doc viewerech (`ReceivedInvoicesViewer`, `IssuedInvoicesViewer`) + předvyplnění aktivní řady při create. Refactor `DocsHeadsViewer` na opt-in přes `$scopedDocType`. |
 | `docs-detail-document.md`         | Detail dokladu jako textová faktura — nový content type `document` (strany Dodavatel/Odběratel, řádky, DPH rekapitulace, náhledy příloh na konci), `PersonSnapshotBuilder`, `DocumentDetail.svelte` + sdílená `AttachmentGrid.svelte`. |
+| `custom-theme-phase2.md`          | Vlastní vzhledy fáze 2 — gradientové presety (stránkovaný grid se šipkami), token `--shpd-sidebar-bg-image`, opacity slider (OKLab mix k bázi), odvozování z efektivní barvy. |
 
 
 ---
@@ -24,6 +25,15 @@ kódu, věř kódu (kód je živý, task je momentka).
 
 Drží se jako reference. Když Claude Code potřebuje pochopit, **proč** je
 něco postavené tak, jak je, často to najde v původním PRD.
+
+### Vzhledy (themes)
+
+Custom téma sidebaru — uživatel si barevně odliší zdroje dat.
+Obsah stránky drží brand, barví se jen sidebar přes runtime tokeny.
+
+| Task                          | Co řeší                                |
+|-------------------------------|----------------------------------------|
+| `custom-theme-phase1.md`      | Dropdown Shipard/Tmavý/Vlastní, panel s presety + color pickerem, OKLCH odvozování sidebar tokenů, localStorage per-DS |
 
 ### CLI utility — vylepšení dev workflow
 

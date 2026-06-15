@@ -1,0 +1,233 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Shipard\Module\Economy\Bank;
+
+use Shipard\Core\Document\DocStateConfig;
+use Shipard\Core\Viewer\TableViewer;
+
+/**
+ * Viewer bankovních výpisů (economy_bank_statements).
+ *
+ * Archivní stavové taby (core.system.docStatesArchive). Bez akce „nový" —
+ * výpis vzniká importem/migrací; editace a přílohy (PDF) přes Open (form má
+ * tab Přílohy). Rekonciliace je Fáze 2.
+ */
+class BankStatementsViewer extends TableViewer
+{
+    protected ?string $docStatesCfgItem = 'core.system.docStatesArchive';
+
+    private const STATE_SPAN_CLASS = [
+        'concept'   => 'warning',
+        'confirmed' => 'primary',
+        'done'      => 'success',
+        'edit'      => 'warning',
+        'archive'   => 'muted',
+        'trash'     => 'muted',
+        'cancelled' => 'danger',
+    ];
+
+    public function selectRows(?string $search, array $filters, int $pageNumber): array
+    {
+        $sql = 'SELECT `id`, `statement_number`, `period_start`, `period_end`,'
+            . ' `closing_balance`, `currency`, `reconciliation_state`,'
+            . ' `docState`, `docStateMain`'
+            . ' FROM `' . $this->table . '`';
+
+        $conditions = [];
+        $params = [];
+
+        $viewGroup = 'active';
+        foreach ($filters as $filter) {
+            if (($filter['id'] ?? null) === 'viewGroup') {
+                $viewGroup = (string) $filter['value'];
+            }
+        }
+
+        if ($viewGroup !== 'all') {
+            [$vgSql, $vgParams] = $this->buildViewGroupFilter($this->docStatesCfgItem, $viewGroup);
+            if ($vgSql !== '') {
+                $conditions[] = $vgSql;
+                $params = array_merge($params, $vgParams);
+            }
+        }
+
+        if ($search !== null && $search !== '') {
+            [$searchSql, $searchParams] = $this->buildSearchCondition(['statement_number'], $search);
+            if ($searchSql !== '') {
+                $conditions[] = $searchSql;
+                $params = array_merge($params, $searchParams);
+            }
+        }
+
+        if ($conditions !== []) {
+            $sql .= ' WHERE ' . implode(' AND ', $conditions);
+        }
+
+        $sql .= ' ORDER BY `docStateMain` ASC, `period_end` DESC, `id` DESC';
+
+        [$offset, $limit] = $this->buildPaginationLimit($pageNumber);
+        $sql .= ' LIMIT ' . $offset . ', ' . $limit;
+
+        return $this->db->fetchAll($sql, ...$params);
+    }
+
+    public function renderRow(array $rowData): array
+    {
+        $period = $this->formatDate($rowData['period_start'] ?? null) . ' – ' . $this->formatDate($rowData['period_end'] ?? null);
+        $number = trim((string) ($rowData['statement_number'] ?? ''));
+
+        $row = [
+            'id' => (int) $rowData['id'],
+            't1' => $number !== '' ? $number : $period,
+        ];
+
+        $closing = $rowData['closing_balance'] ?? null;
+        if ($closing !== null && $closing !== '') {
+            $row['i1'] = [
+                ['text' => $this->formatMoney($closing), 'class' => 'amount'],
+                ['text' => strtoupper((string) ($rowData['currency'] ?? '')), 'class' => 'muted'],
+            ];
+        }
+
+        $t2 = [['text' => $period, 'class' => 'muted']];
+        $recon = (int) ($rowData['reconciliation_state'] ?? 0);
+        if ($recon !== 0) {
+            $label = $this->enumLabel('economy.bank.reconciliationStates', $recon, 'int');
+            if ($label !== null) {
+                $t2[] = ['text' => $label, 'class' => $recon === 2 ? 'danger' : 'success'];
+            }
+        }
+        $row['t2'] = $t2;
+
+        $docState = (int) ($rowData['docState'] ?? 10);
+        $cfg = DocStateConfig::fromCfgItem($this->config?->cfgItem($this->docStatesCfgItem));
+        $stateData = $cfg->getState($docState);
+        $row['stateStyle'] = $stateData['stateStyle'] ?? 'concept';
+
+        return $row;
+    }
+
+    public function renderDetail(int $recordId): array
+    {
+        $r = $this->db->fetchRow(
+            'SELECT s.*, ba.`code` AS account_code, ba.`name` AS account_name'
+            . ' FROM `' . $this->table . '` s'
+            . ' LEFT JOIN `economy_codebooks_bank_accounts` ba ON ba.`id` = s.`bank_account`'
+            . ' WHERE s.`id` = %i',
+            $recordId,
+        );
+
+        if ($r === null) {
+            return ['tabs' => []];
+        }
+
+        $cs = $this->language !== 'en';
+
+        $accountLabel = trim(
+            (string) ($r['account_code'] ?? '')
+            . (($r['account_name'] ?? null) !== null ? ' — ' . $r['account_name'] : ''),
+        );
+
+        $stmtItems = [];
+        $this->addItem($stmtItems, $cs ? 'Bankovní účet' : 'Bank account', $accountLabel !== '' ? $accountLabel : null);
+        $this->addItem($stmtItems, $cs ? 'Číslo výpisu' : 'Statement number', $r['statement_number'] ?? null);
+        $this->addItem(
+            $stmtItems,
+            $cs ? 'Období' : 'Period',
+            $this->formatDate($r['period_start'] ?? null) . ' – ' . $this->formatDate($r['period_end'] ?? null),
+        );
+        $this->addItem(
+            $stmtItems,
+            $cs ? 'Rekonciliace' : 'Reconciliation',
+            $this->enumLabel('economy.bank.reconciliationStates', $r['reconciliation_state'] ?? null, 'int'),
+        );
+
+        $curCode = strtoupper((string) ($r['currency'] ?? ''));
+        $balanceItems = [];
+        $this->addItem($balanceItems, $cs ? 'Počáteční zůstatek' : 'Opening balance', $this->balanceLabel($r['opening_balance'] ?? null, $curCode));
+        $this->addItem($balanceItems, $cs ? 'Koncový zůstatek' : 'Closing balance', $this->balanceLabel($r['closing_balance'] ?? null, $curCode));
+
+        $groups = [];
+        $this->addGroup($groups, $cs ? 'Výpis' : 'Statement', $stmtItems);
+        $this->addGroup($groups, $cs ? 'Zůstatky' : 'Balances', $balanceItems);
+
+        return ['tabs' => [[
+            'id'      => 'overview',
+            'label'   => $this->defaultOverviewLabel(),
+            'content' => ['type' => 'properties', 'groups' => $groups],
+        ]]];
+    }
+
+    public function getToolbarActions(?array $selectedRow): array
+    {
+        // Bez „nový" — výpis vzniká importem/migrací. Edit + přílohy přes Open.
+        if ($selectedRow === null) {
+            return [];
+        }
+        $defs = ($this->config?->cfgItem('core.system.viewerDefaults') ?? [])['toolbarActions'] ?? [];
+        $editDef = $defs['edit'] ?? ['name' => 'Open', 'variant' => 'secondary'];
+        return [[
+            'id'      => 'edit',
+            'label'   => $editDef['name'] ?? 'Open',
+            'variant' => $editDef['variant'] ?? 'secondary',
+        ]];
+    }
+
+    // ── Helpers ─────────────────────────────────────────────────────────────
+
+    private function balanceLabel(mixed $value, string $curCode): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        return $this->formatMoney($value) . ($curCode !== '' ? ' ' . $curCode : '');
+    }
+
+    private function enumLabel(string $cfgItemId, mixed $value, string $keyType = 'int', string $field = 'name'): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        $items = $this->config?->cfgItem($cfgItemId);
+        if (!is_array($items)) {
+            return null;
+        }
+        $key = $keyType === 'int' ? (string) (int) $value : (string) $value;
+        $entry = $items[$key] ?? null;
+        return is_array($entry) ? ($entry[$field] ?? null) : null;
+    }
+
+    /** @param array<int, array{label: string, value: string}> $items */
+    private function addItem(array &$items, string $label, mixed $value): void
+    {
+        if ($value !== null && $value !== '') {
+            $items[] = ['label' => $label, 'value' => (string) $value];
+        }
+    }
+
+    private function addGroup(array &$groups, string $title, array $items): void
+    {
+        if ($items !== []) {
+            $groups[] = ['title' => $title, 'items' => $items];
+        }
+    }
+
+    private function formatMoney(mixed $amount): string
+    {
+        return number_format((float) ($amount ?? 0), 2, ',', ' ');
+    }
+
+    private function formatDate(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format('j. n. Y');
+        }
+        $ts = is_string($value) ? strtotime($value) : false;
+        return $ts !== false ? date('j. n. Y', $ts) : null;
+    }
+}

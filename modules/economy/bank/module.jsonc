@@ -19,6 +19,27 @@
         "economy_accounting_journal"
     ],
 
+    "viewers": [
+        {
+            "id": "economy.bank.transactions",
+            "name": "Bank transactions",
+            "name:cs": "Bankovní transakce",
+            "name:en": "Bank transactions",
+            "icon": "wallet",
+            "table": "economy_bank_transactions",
+            "class": "Shipard\\Module\\Economy\\Bank\\BankTransactionsViewer"
+        },
+        {
+            "id": "economy.bank.statements",
+            "name": "Bank statements",
+            "name:cs": "Bankovní výpisy",
+            "name:en": "Bank statements",
+            "icon": "bank",
+            "table": "economy_bank_statements",
+            "class": "Shipard\\Module\\Economy\\Bank\\BankStatementsViewer"
+        }
+    ],
+
     "forms": [
         {"table": "economy_bank_transactions", "id": "economy.bank.transactions"},
         {"table": "economy_bank_statements",   "id": "economy.bank.statements"}

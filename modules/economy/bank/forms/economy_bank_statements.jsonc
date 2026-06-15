@@ -1,0 +1,54 @@
+{
+    // Editační form bankovního výpisu + tab příloh (PDF výpisu přes
+    // core.attachments). Výpis vzniká importem/migrací; rekonciliace je Fáze 2,
+    // proto je reconciliation_state read-only.
+
+    "title": "Bankovní výpis",
+    "title:cs": "Bankovní výpis",
+    "title:en": "Bank statement",
+    "titleNew": "Nový bankovní výpis",
+    "titleNew:cs": "Nový bankovní výpis",
+    "titleNew:en": "New bank statement",
+    "tabs": [
+        {
+            "id": "basic",
+            "label": "Výpis",
+            "label:cs": "Výpis",
+            "label:en": "Statement",
+            "sections": [
+                {
+                    "columns": [
+                        {
+                            "elements": [
+                                {
+                                    "type": "lookup",
+                                    "column": "bank_account",
+                                    "required": true,
+                                    "placeholder": "Vyberte bankovní účet…",
+                                    "lookup": {"table": "economy_codebooks_bank_accounts", "filter": null}
+                                },
+                                {"type": "input", "column": "statement_number"},
+                                {"type": "input", "column": "period_start", "required": true},
+                                {"type": "input", "column": "period_end", "required": true},
+
+                                {"type": "separator", "label": "Zůstatky", "label:cs": "Zůstatky", "label:en": "Balances"},
+                                {"type": "input",  "column": "opening_balance"},
+                                {"type": "input",  "column": "closing_balance"},
+                                {"type": "select", "column": "currency", "required": true},
+                                {"type": "select", "column": "reconciliation_state", "readOnly": true}
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "id": "attachments",
+            "label": "Přílohy",
+            "label:cs": "Přílohy",
+            "label:en": "Attachments",
+            "type": "attachments",
+            "tableId": 415
+        }
+    ]
+}

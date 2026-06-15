@@ -1,0 +1,59 @@
+{
+    "tableId": 415,
+    "name": "Bank statements",
+    "name:cs": "Bankovní výpisy",
+    "name:en": "Bank statements",
+
+    "displayPattern": "{period_start} – {period_end}",
+
+    "docStates": {
+        "stateColumn": "docState",
+        "mainColumn": "docStateMain",
+        "cfgItem": "core.system.docStatesArchive"
+    },
+
+    "columnGroups": [
+        {"id": "basic",  "name": "Statement", "name:cs": "Výpis",     "name:en": "Statement"},
+        {"id": "amount", "name": "Balances",  "name:cs": "Zůstatky",  "name:en": "Balances"}
+    ],
+
+    "columns": [
+        {"id": "id", "name": "ID", "type": "int", "autoIncrement": true, "primaryKey": true},
+
+        // --- basic ---
+
+        {"id": "bank_account", "name": "Bank account", "name:cs": "Bankovní účet", "name:en": "Bank account",
+            "type": "int", "nullable": false, "reference": "economy_codebooks_bank_accounts", "group": "basic"},
+        {"id": "statement_number", "name": "Statement number", "name:cs": "Číslo výpisu", "name:en": "Statement number",
+            "type": "varchar", "length": 40, "nullable": true, "group": "basic"},
+        {"id": "period_start", "name": "Period start", "name:cs": "Začátek období", "name:en": "Period start",
+            "type": "date", "nullable": false, "group": "basic"},
+        {"id": "period_end", "name": "Period end", "name:cs": "Konec období", "name:en": "Period end",
+            "type": "date", "nullable": false, "group": "basic"},
+        {"id": "reconciliation_state", "name": "Reconciliation state", "name:cs": "Stav rekonciliace", "name:en": "Reconciliation state",
+            "type": "enumInt", "cfgItem": "economy.bank.reconciliationStates", "default": 0, "nullable": false, "group": "basic"},
+
+        // --- amount ---
+
+        {"id": "opening_balance", "name": "Opening balance", "name:cs": "Počáteční zůstatek", "name:en": "Opening balance",
+            "type": "numeric", "precision": 15, "scale": 2, "nullable": true, "group": "amount"},
+        {"id": "closing_balance", "name": "Closing balance", "name:cs": "Koncový zůstatek", "name:en": "Closing balance",
+            "type": "numeric", "precision": 15, "scale": 2, "nullable": true, "group": "amount"},
+        {"id": "currency", "name": "Currency", "name:cs": "Měna", "name:en": "Currency",
+            "type": "enumString", "length": 3, "cfgItem": "world.base.currencies", "nullable": false, "group": "amount"},
+
+        // --- doc state (systémové) ---
+
+        {"id": "docState", "name": "Document state", "name:cs": "Stav dokumentu", "name:en": "Document state",
+            "type": "tinyint", "default": 10, "system": true},
+        {"id": "docStateMain", "name": "Document state (sort)", "name:cs": "Stav dokumentu (řazení)", "name:en": "Document state (sort)",
+            "type": "tinyint", "default": 1, "system": true}
+    ],
+
+    "indexes": [
+        {"id": "idx_account_period", "type": "index", "columns": [
+            {"column": "bank_account"}, {"column": "period_end"}]},
+        {"id": "idx_doc_state", "type": "index", "columns": [
+            {"column": "docStateMain"}, {"column": "period_end"}]}
+    ]
+}

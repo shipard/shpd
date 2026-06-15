@@ -1,0 +1,33 @@
+{
+    "id": "economy.bank",
+    "name": "Bank",
+    "name:cs": "Banka",
+    "name:en": "Bank",
+    "description": "Bank transactions and statements",
+    "description:cs": "Bankovní transakce a výpisy",
+    "description:en": "Bank transactions and statements",
+
+    "dependencies": ["core.system", "economy.accounting", "economy.codebooks", "docs.core", "core.attachments"],
+
+    "tables": [
+        "economy_bank_transactions",
+        "economy_bank_statements"
+    ],
+
+    "forms": [
+        {"table": "economy_bank_transactions", "id": "economy.bank.transactions"},
+        {"table": "economy_bank_statements",   "id": "economy.bank.statements"}
+    ],
+
+    "documentClasses": [
+        {"table": "economy_bank_transactions", "class": "Shipard\\Module\\Economy\\Bank\\BankTransactionDocument"},
+        {"table": "economy_bank_statements",   "class": "Shipard\\Module\\Economy\\Bank\\BankStatementDocument"}
+    ],
+
+    "config": [
+        {"id": "economy.bank.txStates",             "file": "config/txStates.jsonc"},
+        {"id": "economy.bank.txOperations",         "file": "config/txOperations.jsonc"},
+        {"id": "economy.bank.txDirections",         "file": "config/txDirections.jsonc"},
+        {"id": "economy.bank.reconciliationStates", "file": "config/reconciliationStates.jsonc"}
+    ]
+}

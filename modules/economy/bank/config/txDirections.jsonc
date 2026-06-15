@@ -1,0 +1,17 @@
+{
+    // economy.bank.txDirections
+    //
+    // Směr bankovní transakce (economy_bank_transactions.direction).
+    // Částka (amount) je vždy kladná; znaménko drží směr.
+
+    "1": {
+        "name": "Income",
+        "name:cs": "Příjem",
+        "name:en": "Income"
+    },
+    "2": {
+        "name": "Expense",
+        "name:cs": "Výdaj",
+        "name:en": "Expense"
+    }
+}

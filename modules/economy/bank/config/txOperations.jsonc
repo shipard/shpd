@@ -1,0 +1,48 @@
+{
+    // economy.bank.txOperations
+    //
+    // Pohyby bankovní transakce (economy_bank_transactions.operation).
+    // Klíč = stabilní stringový identifikátor. `direction` (1 příjem / 2 výdaj)
+    // říká, na jakou stranu transakce patří; `cat` je účetní kategorie, kterou
+    // konzumuje bankovní mikroengine (Fáze 3) přes sekci `accounts` účtovacího
+    // předpisu (accountingRules.cz.jsonc).
+    //
+    // Default operace dle směru (payment.in / payment.out) doplní ingestion /
+    // UI ve Fázi 2/3; tento config jen definuje povolenou sadu.
+
+    "payment.in": {
+        "name": "Incoming payment (unmatched)",
+        "name:cs": "Příjem (nespárováno)",
+        "name:en": "Incoming payment (unmatched)",
+        "direction": 1,
+        "cat": "bank.unmatched.in"
+    },
+    "payment.out": {
+        "name": "Outgoing payment (unmatched)",
+        "name:cs": "Výdaj (nespárováno)",
+        "name:en": "Outgoing payment (unmatched)",
+        "direction": 2,
+        "cat": "bank.unmatched.out"
+    },
+    "fee.out": {
+        "name": "Bank fee",
+        "name:cs": "Bankovní poplatek",
+        "name:en": "Bank fee",
+        "direction": 2,
+        "cat": "bank.fee"
+    },
+    "interest.in": {
+        "name": "Interest received",
+        "name:cs": "Připsaný úrok",
+        "name:en": "Interest received",
+        "direction": 1,
+        "cat": "bank.interest.in"
+    },
+    "interest.out": {
+        "name": "Interest paid",
+        "name:cs": "Zaplacený úrok",
+        "name:en": "Interest paid",
+        "direction": 2,
+        "cat": "bank.interest.out"
+    }
+}

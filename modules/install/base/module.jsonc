@@ -17,6 +17,7 @@
         "economy.codebooks",
         "economy.items",
         "economy.accounting",
+        "economy.bank",
         "world.vat",
         "docs.core",
         "docs.invoicesOut",

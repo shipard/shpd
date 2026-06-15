@@ -1,0 +1,107 @@
+{
+    "tableId": 414,
+    "name": "Bank transactions",
+    "name:cs": "Bankovní transakce",
+    "name:en": "Bank transactions",
+
+    "displayPattern": "{date_transaction} — {amount} {currency}",
+
+    "docStates": {
+        "stateColumn": "docState",
+        "mainColumn": "docStateMain",
+        "cfgItem": "economy.bank.txStates"
+    },
+
+    "columnGroups": [
+        {"id": "basic",        "name": "Transaction",   "name:cs": "Transakce",   "name:en": "Transaction"},
+        {"id": "amount",       "name": "Amounts",        "name:cs": "Částky",       "name:en": "Amounts"},
+        {"id": "counterparty", "name": "Counterparty",   "name:cs": "Protistrana",  "name:en": "Counterparty"},
+        {"id": "payment",      "name": "Payment details","name:cs": "Platební údaje","name:en": "Payment details"},
+        {"id": "accounting",   "name": "Accounting",     "name:cs": "Zaúčtování",   "name:en": "Accounting"},
+        {"id": "dedup",        "name": "Identification",  "name:cs": "Identifikace", "name:en": "Identification"}
+    ],
+
+    "columns": [
+        {"id": "id", "name": "ID", "type": "int", "autoIncrement": true, "primaryKey": true},
+
+        // --- basic ---
+
+        {"id": "bank_account", "name": "Bank account", "name:cs": "Bankovní účet", "name:en": "Bank account",
+            "type": "int", "nullable": false, "reference": "economy_codebooks_bank_accounts", "group": "basic"},
+        {"id": "statement", "name": "Statement", "name:cs": "Výpis", "name:en": "Statement",
+            "type": "int", "nullable": true, "reference": "economy_bank_statements", "group": "basic"},
+        {"id": "direction", "name": "Direction", "name:cs": "Směr", "name:en": "Direction",
+            "type": "enumInt", "cfgItem": "economy.bank.txDirections", "nullable": false, "group": "basic"},
+        {"id": "date_transaction", "name": "Transaction date", "name:cs": "Datum transakce", "name:en": "Transaction date",
+            "type": "date", "nullable": false, "group": "basic"},
+        {"id": "date_value", "name": "Value date", "name:cs": "Datum valuty", "name:en": "Value date",
+            "type": "date", "nullable": true, "group": "basic"},
+
+        // --- amount ---
+
+        {"id": "amount", "name": "Amount", "name:cs": "Částka", "name:en": "Amount",
+            "type": "numeric", "precision": 15, "scale": 2, "nullable": false, "group": "amount"},
+        {"id": "currency", "name": "Currency", "name:cs": "Měna", "name:en": "Currency",
+            "type": "enumString", "length": 3, "cfgItem": "world.base.currencies", "nullable": false, "group": "amount"},
+        {"id": "amount_dom", "name": "Amount (home currency)", "name:cs": "Částka (domácí měna)", "name:en": "Amount (home currency)",
+            "type": "numeric", "precision": 15, "scale": 2, "nullable": false, "group": "amount"},
+        {"id": "exchange_rate", "name": "Exchange rate", "name:cs": "Kurz", "name:en": "Exchange rate",
+            "type": "numeric", "precision": 15, "scale": 6, "default": 1, "nullable": false, "group": "amount"},
+
+        // --- counterparty ---
+
+        {"id": "counterparty_account", "name": "Counterparty account", "name:cs": "Protiúčet", "name:en": "Counterparty account",
+            "type": "varchar", "length": 40, "nullable": true, "group": "counterparty"},
+        {"id": "counterparty_name", "name": "Counterparty name", "name:cs": "Název protistrany", "name:en": "Counterparty name",
+            "type": "varchar", "length": 150, "nullable": true, "group": "counterparty"},
+        {"id": "partner", "name": "Partner", "name:cs": "Partner", "name:en": "Partner",
+            "type": "int", "nullable": true, "reference": "base_persons_persons", "group": "counterparty"},
+
+        // --- payment ---
+
+        {"id": "symbol1", "name": "Variable symbol", "name:cs": "Variabilní symbol", "name:en": "Variable symbol",
+            "type": "varchar", "length": 10, "nullable": true, "group": "payment"},
+        {"id": "symbol2", "name": "Specific symbol", "name:cs": "Specifický symbol", "name:en": "Specific symbol",
+            "type": "varchar", "length": 10, "nullable": true, "group": "payment"},
+        {"id": "symbol3", "name": "Constant symbol", "name:cs": "Konstantní symbol", "name:en": "Constant symbol",
+            "type": "varchar", "length": 10, "nullable": true, "group": "payment"},
+        {"id": "message", "name": "Message", "name:cs": "Zpráva / poznámka", "name:en": "Message",
+            "type": "varchar", "length": 250, "nullable": true, "group": "payment"},
+
+        // --- accounting ---
+
+        {"id": "operation", "name": "Operation", "name:cs": "Pohyb", "name:en": "Operation",
+            "type": "enumString", "length": 40, "cfgItem": "economy.bank.txOperations", "nullable": true, "group": "accounting"},
+        {"id": "accounting_state", "name": "Accounting state", "name:cs": "Stav účtování", "name:en": "Accounting state",
+            "type": "enumInt", "cfgItem": "economy.accounting.accountingStates", "default": 0, "system": true},
+        {"id": "accounting_messages", "name": "Accounting messages", "name:cs": "Hlášení účtování", "name:en": "Accounting messages",
+            "type": "json", "nullable": true, "system": true},
+
+        // --- dedup (plní ingestion ve Fázi 2; ve Fázi 1 zůstávají prázdné) ---
+
+        {"id": "external_id", "name": "External ID", "name:cs": "Externí ID", "name:en": "External ID",
+            "type": "varchar", "length": 80, "nullable": true, "group": "dedup"},
+        {"id": "fingerprint", "name": "Fingerprint", "name:cs": "Otisk", "name:en": "Fingerprint",
+            "type": "varchar", "length": 64, "nullable": true, "group": "dedup"},
+
+        // --- doc state (systémové) ---
+
+        {"id": "docState", "name": "Document state", "name:cs": "Stav dokumentu", "name:en": "Document state",
+            "type": "tinyint", "default": 10, "system": true},
+        {"id": "docStateMain", "name": "Document state (sort)", "name:cs": "Stav dokumentu (řazení)", "name:en": "Document state (sort)",
+            "type": "tinyint", "default": 1, "system": true}
+    ],
+
+    "indexes": [
+        {"id": "unq_external", "type": "unique", "columns": [
+            {"column": "bank_account"}, {"column": "external_id"}]},
+        {"id": "unq_fingerprint", "type": "unique", "columns": [
+            {"column": "bank_account"}, {"column": "fingerprint"}]},
+        {"id": "idx_account_date", "type": "index", "columns": [
+            {"column": "bank_account"}, {"column": "date_transaction"}]},
+        {"id": "idx_partner", "type": "index", "columns": [{"column": "partner"}]},
+        {"id": "idx_statement", "type": "index", "columns": [{"column": "statement"}]},
+        {"id": "idx_doc_state", "type": "index", "columns": [
+            {"column": "docStateMain"}, {"column": "date_transaction"}]}
+    ]
+}

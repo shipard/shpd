@@ -1,0 +1,23 @@
+{
+    // economy.bank.reconciliationStates
+    //
+    // Stav rekonciliace výpisu (economy_bank_statements.reconciliation_state).
+    // Kontrola: opening_balance + Σ(příjem) − Σ(výdaj) == closing_balance nad
+    // navázanými transakcemi (vlastní rekonciliace je Fáze 2).
+
+    "0": {
+        "name": "Not reconciled",
+        "name:cs": "Nezkontrolováno",
+        "name:en": "Not reconciled"
+    },
+    "1": {
+        "name": "Reconciled",
+        "name:cs": "Souhlasí",
+        "name:en": "Reconciled"
+    },
+    "2": {
+        "name": "Discrepancy",
+        "name:cs": "Nesouhlasí",
+        "name:en": "Discrepancy"
+    }
+}

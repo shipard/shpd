@@ -189,7 +189,7 @@ final class StatementImportService
 
         $this->db->begin();
         try {
-            $statementId = $this->findOrCreateStatement($stmt, $bankAccountId, $currency);
+            $statementId = $this->findOrCreateStatement($stmt, $bankAccountId, $currency, $targetState);
 
             foreach ($stmt->transactions as $tx) {
                 $direction = $tx->amount < 0 ? 2 : 1;
@@ -348,21 +348,38 @@ final class StatementImportService
         );
     }
 
-    private function findOrCreateStatement(ParsedStatement $parsed, int $accountId, string $currency): int
+    private function findOrCreateStatement(ParsedStatement $parsed, int $accountId, string $currency, int $targetState = 10): int
     {
         $start = $parsed->periodStart->format('Y-m-d');
         $end = $parsed->periodEnd->format('Y-m-d');
 
+        // Stav výpisu zrcadlí targetState transakcí: souborový import zakládá
+        // koncept (10), migrace „hotového" výpisu rovnou „V pořádku" (40).
+        // docStateMain z archivační sady stavů (economy_bank_statements →
+        // core.system.docStatesArchive: 10→1, 40→3).
+        $stmtStates = DocStateConfig::fromCfgItem($this->config->cfgItem('core.system.docStatesArchive'));
+
         // Vodící klíč: (bank_account, period_start, period_end).
         $row = $this->db->query(
-            'SELECT [id] FROM %n WHERE [bank_account] = %i AND [period_start] = %s AND [period_end] = %s LIMIT 1',
+            'SELECT [id], [docState] FROM %n WHERE [bank_account] = %i AND [period_start] = %s AND [period_end] = %s LIMIT 1',
             self::TABLE_STMT,
             $accountId,
             $start,
             $end,
         )->fetch();
         if ($row !== false && $row !== null) {
-            return (int) $row['id'];
+            $existingId = (int) $row['id'];
+            // Self-healing re-import: koncept (10) povýšit na cílový stav (migrace
+            // „hotového" výpisu po opravě / re-importu). Vyšší nebo ručně nastavené
+            // stavy (40/80/70/90) neměníme. Souborový import (targetState=10) nikdy
+            // nepovyšuje.
+            if ($targetState !== 10 && (int) ($row['docState'] ?? 10) === 10) {
+                $this->db->update(self::TABLE_STMT, [
+                    'docState'     => $targetState,
+                    'docStateMain' => $stmtStates->getMainState($targetState),
+                ])->where('[id] = %i', $existingId)->execute();
+            }
+            return $existingId;
         }
 
         $stmtRow = [
@@ -374,8 +391,8 @@ final class StatementImportService
             'closing_balance'      => round($parsed->closingBalance, 2),
             'currency'             => $currency,
             'reconciliation_state' => 0,
-            'docState'             => 10,
-            'docStateMain'         => 1,
+            'docState'             => $targetState,
+            'docStateMain'         => $stmtStates->getMainState($targetState),
         ];
 
         $doc = new BankStatementDocument();

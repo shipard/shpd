@@ -139,6 +139,14 @@ class BankStatementApplyTest extends IntegrationTestCase
         $this->assertTrue($result->success, 'apply selhal: ' . ($result->errorMessage ?? ''));
         $this->assertGreaterThan(0, $result->savedId, 'savedStatementId');
 
+        // Výpis (hlavička) zrcadlí targetState: „hotový" → V pořádku (40), ne koncept.
+        $stmt = $this->db->getDibiConnection()->fetch(
+            'SELECT docState, docStateMain FROM economy_bank_statements WHERE id = %i',
+            $result->savedId,
+        );
+        $this->assertSame(40, (int) $stmt['docState'], 'výpis ve stavu V pořádku (40)');
+        $this->assertSame(3, (int) $stmt['docStateMain'], 'docStateMain pro stav 40');
+
         $rows = $this->txRows();
         $this->assertCount(2, $rows);
         foreach ($rows as $r) {
@@ -182,6 +190,13 @@ class BankStatementApplyTest extends IntegrationTestCase
     {
         $result = $this->applier->apply($this->payload(['applyOptions' => ['targetState' => 10]]));
         $this->assertTrue($result->success);
+
+        // Výpis zůstává koncept (10) — souborový import i konceptová migrace.
+        $stmt = $this->db->getDibiConnection()->fetch(
+            'SELECT docState FROM economy_bank_statements WHERE id = %i',
+            $result->savedId,
+        );
+        $this->assertSame(10, (int) $stmt['docState'], 'výpis zůstává koncept (10)');
 
         $rows = $this->txRows();
         $this->assertCount(2, $rows);

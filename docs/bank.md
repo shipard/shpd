@@ -1,8 +1,8 @@
 # Shipard — Banka (modul `economy.bank`)
 
-**Designový dokument.** Specifikace modulu pro bankovní transakce a výpisy.
-Transientní charakter jako `docs-mvp.md` — po implementaci se udržuje jako
-referenční spec modulu, sekce „Otevřené body" se postupně rozpouští.
+**Referenční specifikace modulu** pro bankovní transakce a výpisy (původně
+designový dokument; modul je implementován — viz Stav níže). Sekce „Otevřené
+body" se postupně rozpouští, jak se rozšíření realizují.
 
 Modul nahrazuje koncept „bankovní výpis = doklad s řádky" ze starého Shipardu
 (`e10doc/bank`) modelem, kde **prvotřídním záznamem je jednotlivá transakce**.
@@ -89,8 +89,7 @@ Modul `economy.bank`, závislosti: `core.system`, `economy.accounting`,
 
 ### 3.1 `economy_bank_transactions` — bankovní transakce
 
-tableId **420** *(navrhováno — alokovat proti registru tableId)*.
-docStates: vlastní sada `economy.bank.txStates` (§5).
+tableId **414**. docStates: vlastní sada `economy.bank.txStates` (§5).
 
 | sloupec | typ | popis |
 |---|---|---|
@@ -98,7 +97,7 @@ docStates: vlastní sada `economy.bank.txStates` (§5).
 | `bank_account` | int, FK `economy_codebooks_bank_accounts`, not null | náš účet, na kterém pohyb nastal |
 | `statement` | int, FK `economy_bank_statements`, nullable | výpis, do kterého transakce patří (může dorazit přes API dřív než výpis) |
 | `external_id` | varchar 80, nullable | stabilní ID transakce od banky (FIO `column22`, CAMT `AcctSvcrRef`/`EndToEndId`) |
-| `fingerprint` | char 64, not null | hash pro dedup, když chybí `external_id` (§4.3) |
+| `fingerprint` | varchar 64, nullable | hash pro dedup, když chybí `external_id` (§4.3); plní ho ingestion |
 | `direction` | enumInt | 1 = příjem (na účet), 2 = výdaj (z účtu); odvozeno ze znaménka |
 | `amount` | numeric 15,2, not null | částka v měně účtu (vždy kladná; směr drží `direction`) |
 | `currency` | enumString 3, cfgItem `world.base.currencies` | měna transakce (= měna účtu) |
@@ -134,7 +133,7 @@ Poznámky:
 
 ### 3.2 `economy_bank_statements` — bankovní výpis
 
-tableId **421** *(navrhováno)*. docStates: archivní sada
+tableId **415**. docStates: archivní sada
 `core.system.docStatesArchive`. PDF výpisu přes `core.attachments`.
 
 | sloupec | typ | popis |
@@ -164,9 +163,10 @@ modul ho rozšíří (vzor: jak `economy.accounting` rozšiřuje `economy_items`
 |---|---|---|
 | `accounting_account` | int, FK `economy_accounting_accounts`, nullable | analytika 221xxx — bankovní strana zápisu (ekvivalent `debsAccountId`) |
 | `ebanking_id` | varchar 80, nullable | identifikace účtu v ebankingu / pro párování s hlavičkou výpisu |
-| `connector_kind` | enumString, nullable | typ API konektoru (FIO, ČS/Erste…) — využije se až v API fázi |
-| `connector_config` | json, nullable, system | konfigurace konektoru; **secrety šifrovaně** (vzor `ds-encrypted-secrets`, libsodium, `keepOnReset` jako `core_mail_ai_backends`) |
-| `sync_cursor` | varchar 80, nullable, system | poslední stažená pozice (API fáze) |
+
+Sloupce konektorů (`connector_kind`, `connector_config` se šifrovanými secrety,
+`sync_cursor`) jsou **mimo scope** a přibudou až s API fází (`ADD COLUMN` je
+bezpečné dodat později) — viz §8.
 
 Picker `accounting_account` omezen na analytiky `221xxx` (`account_level = 4`,
 prefix 221), aktivní záznamy.
@@ -194,6 +194,12 @@ Log rozhodnutí.
 Invariant deníku se zobecňuje: **zdroj má řádky v deníku právě tehdy, když je
 ve stavu „zaúčtováno"** (doklad stav 40; transakce `accounting_state = 1`).
 Generování zůstává idempotentní (DELETE + INSERT per zdroj).
+
+Dělba mezi moduly (realizováno): `source_kind` + nullable `doc_head` jsou v
+základní tabulce (`economy.accounting`), FK `bank_transaction` přidává
+`economy.bank` jako **extension** — správný směr závislosti (banka → účetnictví).
+Změnu `doc_head` na nullable `ds-upgrade` sám neprovede (umí jen rozšíření
+typu); deník je ale čistý derivát, takže se řeší drop+recreate.
 
 ---
 
@@ -276,10 +282,10 @@ Návrh:
 - Účtování **neblokuje** přechod do 40 — nedohledaný účet → `accounting_state = 2`
   + alert (filozofie z `accounting.md` §7.4).
 
-Trigger: dnešní `documentEventHandlers` jsou vázané na `docs_core_heads`.
-Pro transakce se mechanismus **zobecní** na libovolnou tabulku se stavy
-(dispatch v `TableGateway` při změně `docState`), nebo dostane bankovní modul
-vlastní handler téhož tvaru. Viz Otevřené body.
+Trigger (realizováno): spouštěč je generický — `TableGateway` (instanciovaný
+per-tabulku) volá `DocumentEventDispatcher` při každém přechodu stavu, takže
+stačí zaregistrovat `documentEventHandlers` na `economy_bank_transactions`
+(`BankTransactionEventHandler`). Žádný zásah do `core` (§6.5).
 
 ---
 
@@ -403,8 +409,9 @@ z `LocalIdMap`), applier ho použije přímo.
 níže). Nasadit **až po** nové straně (ta musí umět formát přijmout dřív).
 Z hlavičky: `myBankAccount` → `bankAccountId`, perioda, `initBalance`/`balance`,
 `docOrderNumber` → výpis; PDF příloha → `core.attachments` (mimo exchange JSON).
-Z řádku: `debit/credit` → znaménková `amount`, `bankAccount` →
-`counterparty_account`, symboly, `text` → `message` → jedna transakce.
+Z řádku: `debit/credit` → znaménková `amount`, `exchangeRate` (kurz za
+jednotku) → `exchange_rate`/`amount_dom`, `bankAccount` → `counterparty_account`,
+symboly, `text` → `message` → jedna transakce.
 
 **Rozsah migrace (rozhodnuto):** migrujeme **jen výpisy a jejich transakce**.
 „Hotové" výpisy vznikají rovnou ve stavu **40** přes dokumentovou vrstvu →
@@ -428,7 +435,8 @@ byla zamítnuta jako drahá a závislá na neexistujícím saldu.)
   přegenerovatelný mikroengine).
 - **API konektory** — stahování transakcí z bankovních API (FIO token,
   ČS/Erste OAuth2/AISP…), plánovač, `sync_cursor`, šifrované credentials,
-  retry. Vlastní pozdější fáze; datový model (`connector_*`) je předpřipraven.
+  retry. Vlastní pozdější fáze; sloupce `connector_*`/`sync_cursor` na číselníku
+  účtů přibudou až tehdy (`ADD COLUMN` je bezpečný) — ve Fázi 1 zavedeny nebyly.
 - **Auto-klasifikace** `operation` dle protistrany/textu (poplatky, úroky).
 - **Příkazy k úhradě / inkasu** (starý `bankorder`) — samostatné téma.
 - **Vícecestné převody mezi vlastními účty** (261100) a hotovost (pokladna)
@@ -508,6 +516,10 @@ Vyřešené (ponechané pro kontext):
 - ✅ **tableId** — transakce 414, výpisy 415 (ne 420/421 z původního odhadu).
 - ✅ **Sekce předpisu pro transakce** — vystačila kategorie `bank.*` v sekci
   `accounts` + logika v enginu; samostatná `bankTransactions` sekce netřeba.
+- ✅ **Kurz u migrace** (`exchange_rate`) — nese se ze starého řádku (kurz za
+  jednotku) celým řetězcem schéma `shpd.bank.statement.v1` → `ParsedTransaction`
+  → `applyParsedStatement` → runner; `amount_dom = amount × rate`, prázdný/CZK
+  → rate 1.
 
 Otevřené:
 

@@ -132,6 +132,54 @@ class BankTransactionAccountingEngineTest extends IntegrationTestCase
         $this->assertSame(1, $this->accountingStateOf($txId));
     }
 
+    // ── W6.5 Chybový stav + alert ────────────────────────────────────────────
+
+    public function testMissingBankAccountRaisesErrorAndAlert(): void
+    {
+        // Bankovní účet bez účtu pro pohyby (221xxx) → chybový řádek banky.
+        $baId = $this->insertBankAccount(null);
+
+        $txId = $this->insertTx([
+            'bank_account' => $baId,
+            'direction'    => 1,
+            'operation'    => 'payment.in',
+            'amount'       => 100.00,
+            'amount_dom'   => 100.00,
+        ]);
+
+        $result = $this->engine->accountTransaction($txId);
+        $this->assertSame(2, $result['state'], 'Nedohledaný bankovní účet → accounting_state 2');
+        $this->assertSame(2, $this->accountingStateOf($txId));
+
+        $rows = $this->journalOf($txId);
+        $bank = $this->lineByPrefix($rows, '221');
+        $this->assertSame(1, (int) $bank['is_error'], 'Bankovní řádek je chybový');
+
+        // Alert check transakci najde (stav 40 + accounting_state 2)
+        $check = new \Shipard\Module\Economy\Bank\Checks\BankAccountingErrorsCheck(
+            $this->db,
+            ConfigRuntime::load($this->realDsPath, 'cs'),
+            'cs',
+        );
+        $ours = array_values(array_filter(
+            $check->run(),
+            fn($f) => $f->findingKey === (string) $txId,
+        ));
+        $this->assertCount(1, $ours);
+        $this->assertStringContainsString('chybu účtování', $ours[0]->title);
+        $this->assertSame($txId, $ours[0]->subjectRowId);
+        $this->assertSame(414, $ours[0]->subjectTableId);
+
+        // Po opravě (accounting_state 1) alert zmizí — reconciler auto-resolve
+        $this->db->getDibiConnection()->update('economy_bank_transactions', ['accounting_state' => 1])
+            ->where('id = %i', $txId)->execute();
+        $after = array_filter(
+            $check->run(),
+            fn($f) => $f->findingKey === (string) $txId,
+        );
+        $this->assertCount(0, $after);
+    }
+
     // ── W6.7 Vyrovnanost ─────────────────────────────────────────────────────
 
     public function testJournalIsBalanced(): void
@@ -225,7 +273,7 @@ class BankTransactionAccountingEngineTest extends IntegrationTestCase
         return $id;
     }
 
-    private function insertBankAccount(int $accountingAccountId): int
+    private function insertBankAccount(?int $accountingAccountId): int
     {
         $dibi = $this->db->getDibiConnection();
         $dibi->insert('economy_codebooks_bank_accounts', [

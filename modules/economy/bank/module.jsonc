@@ -71,6 +71,19 @@
             "severity": "warning",
             "interval": "1h",
             "tags": ["bank"]
+        },
+        {
+            "id": "economy.bank.accounting_errors",
+            "name": "Bank transaction accounting errors",
+            "name:cs": "Chyby účtování bankovních transakcí",
+            "name:en": "Bank transaction accounting errors",
+            "description": "Bank transactions in the Accounted state that failed to post to the journal.",
+            "description:cs": "Bankovní transakce ve stavu Zaúčtováno, které se nepodařilo zaúčtovat do deníku.",
+            "description:en": "Bank transactions in the Accounted state that failed to post to the journal.",
+            "class": "Shipard\\Module\\Economy\\Bank\\Checks\\BankAccountingErrorsCheck",
+            "severity": "warning",
+            "interval": "15m",
+            "tags": ["bank"]
         }
     ],
 

@@ -50,6 +50,14 @@
         {"table": "economy_bank_statements",   "class": "Shipard\\Module\\Economy\\Bank\\BankStatementDocument"}
     ],
 
+    "documentEventHandlers": [
+        {
+            "table": "economy_bank_transactions",
+            "class": "Shipard\\Module\\Economy\\Bank\\BankTransactionEventHandler",
+            "events": ["stateChanged", "beforeDelete"]
+        }
+    ],
+
     "alertChecks": [
         {
             "id": "economy.bank.reconciliation_errors",

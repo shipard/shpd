@@ -796,9 +796,9 @@ class AccountingEngineTest extends IntegrationTestCase
 
         try {
             // maska 343DE123 účet dohledá (LIKE, ci kolace)
-            $resolveMask = new \ReflectionMethod(AccountingEngine::class, 'resolveMask');
-            $found = $resolveMask->invoke($this->engine, '343DE123', self::ACC_DATE);
-            $this->assertNotNull($found, 'resolveMask musí alfanumerický účet najít');
+            $resolver = new \Shipard\Module\Economy\Accounting\AccountMaskResolver($dibi);
+            $found = $resolver->resolve('343DE123', self::ACC_DATE);
+            $this->assertNotNull($found, 'AccountMaskResolver musí alfanumerický účet najít');
             $this->assertSame('343DE123', $found['number']);
             $this->assertSame($accountId, $found['id']);
 

@@ -30,15 +30,13 @@ use Shipard\Module\Docs\Core\OwnCompanyResolver;
  */
 final class AccountingEngine
 {
-    private const ACTIVE_DOC_STATES = [10, 40, 80];
-
     /** Délka čísla účtu pro chybovou masku (504 → '504???'). */
     private const ACCOUNT_NUMBER_LENGTH = 6;
 
     private const ITEM_TYPE_ACC_ENTRY = 2;
 
-    /** @var array<string, array{id: int, number: string}|null> mask → resolved account (per-run cache) */
-    private array $maskCache = [];
+    /** Per-run dohledávač účtů dle masky (cache se nuluje s novým během). */
+    private AccountMaskResolver $maskResolver;
 
     /** @var list<array{code: string, message: string, rowId: int|null}> */
     private array $messages = [];
@@ -56,7 +54,7 @@ final class AccountingEngine
     public function accountDocument(int $docHeadId): array
     {
         $this->messages = [];
-        $this->maskCache = [];
+        $this->maskResolver = new AccountMaskResolver($this->db);
 
         $headRow = $this->db->fetch(
             'SELECT * FROM [docs_core_heads] WHERE [id] = %i',
@@ -492,7 +490,7 @@ final class AccountingEngine
             ];
         }
 
-        $account = $this->resolveMask($mask, (string) ($head['accounting_date'] ?? ''));
+        $account = $this->maskResolver->resolve($mask, (string) ($head['accounting_date'] ?? ''));
         if ($account === null) {
             $this->addMessage(
                 'account_not_found',
@@ -506,39 +504,6 @@ final class AccountingEngine
         }
 
         return $account;
-    }
-
-    /**
-     * Maska → první aktivní analytický účet dle čísla vzestupně
-     * (602 najde 602000 dřív než 602100). Per-run cache.
-     *
-     * @return array{id: int, number: string}|null
-     */
-    private function resolveMask(string $mask, string $accountingDate): ?array
-    {
-        $cacheKey = $mask . '|' . $accountingDate;
-        if (array_key_exists($cacheKey, $this->maskCache)) {
-            return $this->maskCache[$cacheKey];
-        }
-
-        $row = $this->db->fetch(
-            'SELECT [id], [number] FROM [economy_accounting_accounts]
-             WHERE [number] LIKE %like~ AND [account_level] = 4
-               AND [docState] IN (%i, %i, %i)
-               AND ([valid_from] IS NULL OR [valid_from] <= %s)
-               AND ([valid_to] IS NULL OR [valid_to] >= %s)
-             ORDER BY [number]
-             LIMIT 1',
-            $mask,
-            self::ACTIVE_DOC_STATES[0], self::ACTIVE_DOC_STATES[1], self::ACTIVE_DOC_STATES[2],
-            $accountingDate,
-            $accountingDate,
-        );
-
-        $result = $row !== null
-            ? ['id' => (int) $row['id'], 'number' => (string) $row['number']]
-            : null;
-        return $this->maskCache[$cacheKey] = $result;
     }
 
     // ── Seskupení a zápis ───────────────────────────────────────────────────

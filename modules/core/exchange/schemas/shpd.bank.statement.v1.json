@@ -1,0 +1,187 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://shipard.cz/schemas/shpd.bank.statement.v1.json",
+    "title": "Shipard canonical bank statement v1",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+        "format",
+        "formatVersion",
+        "bankAccountId",
+        "statement",
+        "transactions"
+    ],
+    "properties": {
+        "format": {
+            "const": "shpd.bank.statement"
+        },
+        "formatVersion": {
+            "type": "string",
+            "pattern": "^1\\.[0-9]+$"
+        },
+        "source": {
+            "type": [
+                "object",
+                "null"
+            ],
+            "additionalProperties": false,
+            "properties": {
+                "kind": {
+                    "type": "string"
+                },
+                "raw": {
+                    "type": [
+                        "object",
+                        "null"
+                    ],
+                    "additionalProperties": true
+                }
+            }
+        },
+        "bankAccountId": {
+            "type": "integer",
+            "minimum": 1
+        },
+        "statement": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "periodStart",
+                "periodEnd"
+            ],
+            "properties": {
+                "statementNumber": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "periodStart": {
+                    "type": "string",
+                    "format": "date"
+                },
+                "periodEnd": {
+                    "type": "string",
+                    "format": "date"
+                },
+                "openingBalance": {
+                    "type": "number"
+                },
+                "closingBalance": {
+                    "type": "number"
+                },
+                "currency": {
+                    "type": [
+                        "string",
+                        "null"
+                    ],
+                    "pattern": "^[A-Z]{3}$"
+                }
+            }
+        },
+        "transactions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "amount",
+                    "dateTransaction"
+                ],
+                "properties": {
+                    "externalId": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "amount": {
+                        "type": "number"
+                    },
+                    "dateTransaction": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "dateValue": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "format": "date"
+                    },
+                    "counterpartyAccount": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "counterpartyName": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "symbol1": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "symbol2": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "symbol3": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "message": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "operation": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    }
+                }
+            }
+        },
+        "applyOptions": {
+            "type": [
+                "object",
+                "null"
+            ],
+            "additionalProperties": false,
+            "properties": {
+                "targetState": {
+                    "enum": [
+                        null,
+                        10,
+                        40
+                    ]
+                },
+                "createMissingPartner": {
+                    "type": [
+                        "boolean",
+                        "null"
+                    ]
+                }
+            }
+        },
+        "_resolve": {
+            "type": [
+                "object",
+                "null"
+            ],
+            "additionalProperties": true
+        }
+    }
+}

@@ -1,0 +1,105 @@
+{
+    // shpd.bank.statement.v1 — kanonický výměnný formát bankovního výpisu
+    // (hlavička výpisu + pole transakcí) pro migraci ze starého Shipardu.
+    //
+    // Plná specifikace: docs/bank.md §7 (migrace) a docs/exchange-format.md.
+    //
+    // Important:
+    //   - `additionalProperties` je false na top-levelu i podobjektech;
+    //     `source.raw` a `_resolve` jsou výjimky (opaque vendor payload /
+    //     resolver passthrough — validuje PHP).
+    //   - `bankAccountId` je id NAŠEHO účtu v cílovém systému (runner ho zná
+    //     z LocalIdMap ENTITY_BANK_ACCOUNT); applier ho použije přímo, žádné
+    //     dohledání z čísla účtu (vzor importOwnBankAccount u dokladů).
+    //   - `transactions[].amount` je ZNAMÉNKOVÁ (− = výdaj); applier ji
+    //     rozloží na kladný amount + direction (stejně jako parser souboru).
+    //   - `statement.currency` je informativní (uppercase ISO 4217); zdroj
+    //     pravdy je měna účtu, applier ji lowercasuje na hranici DB.
+    //   - Pořadí periody (periodEnd >= periodStart) je sémantická kontrola
+    //     v BankStatementApplier, ne ve schématu (cross-field).
+
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://shipard.cz/schemas/shpd.bank.statement.v1.json",
+    "title": "Shipard canonical bank statement v1",
+    "type": "object",
+    "additionalProperties": false,
+
+    "required": ["format", "formatVersion", "bankAccountId", "statement", "transactions"],
+
+    "properties": {
+        "format":        { "const": "shpd.bank.statement" },
+        "formatVersion": { "type": "string", "pattern": "^1\\.[0-9]+$" },
+
+        // ── Source / lineage ────────────────────────────────────────────
+        "source": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "properties": {
+                "kind": { "type": "string" },
+                "raw": {
+                    // Vendor-specific opaque payload (např. old ndx). Schema-less.
+                    "type": ["object", "null"],
+                    "additionalProperties": true
+                }
+            }
+        },
+
+        // ── Náš účet ────────────────────────────────────────────────────
+        "bankAccountId": { "type": "integer", "minimum": 1 },
+
+        // ── Hlavička výpisu ─────────────────────────────────────────────
+        "statement": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["periodStart", "periodEnd"],
+            "properties": {
+                "statementNumber": { "type": ["string", "null"] },
+                "periodStart":     { "type": "string", "format": "date" },
+                "periodEnd":       { "type": "string", "format": "date" },
+                "openingBalance":  { "type": "number" },
+                "closingBalance":  { "type": "number" },
+                "currency":        { "type": ["string", "null"], "pattern": "^[A-Z]{3}$" }
+            }
+        },
+
+        // ── Transakce ───────────────────────────────────────────────────
+        "transactions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["amount", "dateTransaction"],
+                "properties": {
+                    "externalId":          { "type": ["string", "null"] },
+                    "amount":              { "type": "number" },
+                    "dateTransaction":     { "type": "string", "format": "date" },
+                    "dateValue":           { "type": ["string", "null"], "format": "date" },
+                    "counterpartyAccount": { "type": ["string", "null"] },
+                    "counterpartyName":    { "type": ["string", "null"] },
+                    "symbol1":             { "type": ["string", "null"] },
+                    "symbol2":             { "type": ["string", "null"] },
+                    "symbol3":             { "type": ["string", "null"] },
+                    "message":             { "type": ["string", "null"] },
+                    "operation":           { "type": ["string", "null"] }
+                }
+            }
+        },
+
+        // ── Apply options ───────────────────────────────────────────────
+        "applyOptions": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "properties": {
+                "targetState":          { "enum": [null, 10, 40] },
+                "createMissingPartner": { "type": ["boolean", "null"] }
+            }
+        },
+
+        // ── Resolve state ───────────────────────────────────────────────
+        // Populated by /preview, accepted by /apply. Strukturu validuje PHP.
+        "_resolve": {
+            "type": ["object", "null"],
+            "additionalProperties": true
+        }
+    }
+}

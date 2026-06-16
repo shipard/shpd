@@ -190,6 +190,121 @@ class SchemaValidatorTest extends TestCase
         $this->assertContains('pattern', $codes);
     }
 
+    // ── Bank statement schema (shpd.bank.statement.v1) ──────────────────────
+
+    /** @return array<string, mixed> minimální validní payload výpisu */
+    private static function bankStatementPayload(): array
+    {
+        return [
+            'format'        => 'shpd.bank.statement',
+            'formatVersion' => '1.0',
+            'bankAccountId' => 12,
+            'statement'     => [
+                'periodStart' => '2026-06-01',
+                'periodEnd'   => '2026-06-30',
+            ],
+            'transactions'  => [
+                [
+                    'externalId'      => 'old-7',
+                    'amount'          => -1210.00,
+                    'dateTransaction' => '2026-06-10',
+                ],
+            ],
+        ];
+    }
+
+    public function testBankStatementMinimalValidPayloadProducesNoIssues(): void
+    {
+        $issues = $this->validator->validate(self::bankStatementPayload(), 'shpd.bank.statement', '1');
+        $this->assertSame([], $issues);
+    }
+
+    public function testBankStatementRichPayloadIsAccepted(): void
+    {
+        $payload = self::bankStatementPayload();
+        $payload['source'] = ['kind' => 'import.oldShipard', 'raw' => ['oldNdx' => 7]];
+        $payload['statement'] += [
+            'statementNumber' => '2026/06',
+            'openingBalance'  => 1000.0,
+            'closingBalance'  => -210.0,
+            'currency'        => 'CZK',
+        ];
+        $payload['transactions'][0] += [
+            'dateValue'           => '2026-06-11',
+            'counterpartyAccount' => '123456789/0100',
+            'counterpartyName'    => 'Acme s.r.o.',
+            'symbol1'             => '12345',
+            'symbol2'             => '67',
+            'symbol3'             => '0308',
+            'message'             => 'Platba faktury',
+            'operation'           => null,
+        ];
+        $payload['applyOptions'] = ['targetState' => 40, 'createMissingPartner' => false];
+
+        $issues = $this->validator->validate($payload, 'shpd.bank.statement', '1');
+        $this->assertSame([], $issues, 'Rich bank payload should validate: ' . json_encode($issues, JSON_PRETTY_PRINT));
+    }
+
+    public function testBankStatementMissingBankAccountIdProducesIssue(): void
+    {
+        $payload = self::bankStatementPayload();
+        unset($payload['bankAccountId']);
+
+        $issues = $this->validator->validate($payload, 'shpd.bank.statement', '1');
+        $codes = array_column($issues, 'code');
+        $this->assertContains('required', $codes);
+    }
+
+    public function testBankStatementZeroBankAccountIdIsRejected(): void
+    {
+        $payload = self::bankStatementPayload();
+        $payload['bankAccountId'] = 0;
+
+        $issues = $this->validator->validate($payload, 'shpd.bank.statement', '1');
+        $codes = array_column($issues, 'code');
+        $this->assertContains('minimum', $codes);
+    }
+
+    public function testBankStatementMissingPeriodIsRejected(): void
+    {
+        $payload = self::bankStatementPayload();
+        unset($payload['statement']['periodStart']);
+
+        $issues = $this->validator->validate($payload, 'shpd.bank.statement', '1');
+        $codes = array_column($issues, 'code');
+        $this->assertContains('required', $codes);
+    }
+
+    public function testBankStatementInvalidTargetStateIsRejected(): void
+    {
+        $payload = self::bankStatementPayload();
+        $payload['applyOptions'] = ['targetState' => 20];
+
+        $issues = $this->validator->validate($payload, 'shpd.bank.statement', '1');
+        $codes = array_column($issues, 'code');
+        $this->assertContains('enum', $codes);
+    }
+
+    public function testBankStatementUnknownPropertyIsRejected(): void
+    {
+        $payload = self::bankStatementPayload();
+        $payload['gibberish'] = 'nope';
+
+        $issues = $this->validator->validate($payload, 'shpd.bank.statement', '1');
+        $codes = array_column($issues, 'code');
+        $this->assertContains('additionalProperties', $codes);
+    }
+
+    public function testBankStatementCurrencyLowercaseIsRejected(): void
+    {
+        $payload = self::bankStatementPayload();
+        $payload['statement']['currency'] = 'czk';
+
+        $issues = $this->validator->validate($payload, 'shpd.bank.statement', '1');
+        $codes = array_column($issues, 'code');
+        $this->assertContains('pattern', $codes);
+    }
+
     public function testIssuePathPointsAtFailingField(): void
     {
         $payload = [

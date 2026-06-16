@@ -150,6 +150,13 @@
                             "string",
                             "null"
                         ]
+                    },
+                    "exchangeRate": {
+                        "type": [
+                            "number",
+                            "null"
+                        ],
+                        "exclusiveMinimum": 0
                     }
                 }
             }

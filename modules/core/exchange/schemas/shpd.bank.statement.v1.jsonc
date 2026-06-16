@@ -80,7 +80,8 @@
                     "symbol2":             { "type": ["string", "null"] },
                     "symbol3":             { "type": ["string", "null"] },
                     "message":             { "type": ["string", "null"] },
-                    "operation":           { "type": ["string", "null"] }
+                    "operation":           { "type": ["string", "null"] },
+                    "exchangeRate":        { "type": ["number", "null"], "exclusiveMinimum": 0 }
                 }
             }
         },

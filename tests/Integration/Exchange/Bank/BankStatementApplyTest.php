@@ -252,6 +252,34 @@ class BankStatementApplyTest extends IntegrationTestCase
         $this->assertCount(0, $this->txRows(), 'preview nezapisuje');
     }
 
+    public function testApplyCarriesExchangeRateIntoAmountDom(): void
+    {
+        // exchange_rate je nezávislý multiplikátor (kurz za jednotku); i na CZK
+        // účtu ověří celý řetězec schéma → DTO → service → DB (amount_dom = amount × rate).
+        $this->applier->apply($this->payload([
+            'statement'    => [
+                'statementNumber' => 'FX-1',
+                'periodStart'     => '2026-06-01',
+                'periodEnd'       => '2026-06-30',
+                'openingBalance'  => 0.0,
+                'closingBalance'  => 100.0,
+                'currency'        => 'CZK',
+            ],
+            'transactions' => [[
+                'externalId'      => 'fx-in-1',
+                'amount'          => 100.00,
+                'dateTransaction' => self::ACC_DATE,
+                'exchangeRate'    => 25.30,
+            ]],
+        ]));
+
+        $rows = $this->txRows();
+        $this->assertCount(1, $rows);
+        $this->assertEqualsWithDelta(25.30, (float) $rows[0]['exchange_rate'], 0.0001);
+        $this->assertEqualsWithDelta(100.00, (float) $rows[0]['amount'], 0.001);
+        $this->assertEqualsWithDelta(2530.00, (float) $rows[0]['amount_dom'], 0.001);
+    }
+
     // ── Helpers ─────────────────────────────────────────────────────────────
 
     /** @return list<array<string, mixed>> */

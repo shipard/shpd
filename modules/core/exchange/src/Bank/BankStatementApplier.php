@@ -237,6 +237,7 @@ class BankStatementApplier
                 message: isset($t['message']) ? (string) $t['message'] : null,
                 raw: [],
                 operation: isset($t['operation']) ? (string) $t['operation'] : null,
+                exchangeRate: isset($t['exchangeRate']) ? (float) $t['exchangeRate'] : null,
             );
         }
 

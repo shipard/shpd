@@ -194,6 +194,7 @@ final class StatementImportService
             foreach ($stmt->transactions as $tx) {
                 $direction = $tx->amount < 0 ? 2 : 1;
                 $amount = abs($tx->amount);
+                $rate = $tx->exchangeRate ?? 1.0;
                 $dateKey = $tx->dateTransaction->format('Y-m-d');
                 $seqInDay[$dateKey] = ($seqInDay[$dateKey] ?? -1) + 1;
 
@@ -213,8 +214,8 @@ final class StatementImportService
                     'direction'            => $direction,
                     'amount'               => round($amount, 2),
                     'currency'             => $currency,
-                    'exchange_rate'        => 1,
-                    'amount_dom'           => round($amount, 2),
+                    'exchange_rate'        => $rate,
+                    'amount_dom'           => round($amount * $rate, 2),
                     'date_transaction'     => $dateKey,
                     'date_value'           => $tx->dateValue?->format('Y-m-d'),
                     'counterparty_account' => $tx->counterpartyAccount,

@@ -11,6 +11,7 @@ use Shipard\Core\Document\TableGateway;
 use Shipard\Core\Module\ModulePathResolver;
 use Shipard\Module\Economy\Accounting\AccountDocument;
 use Shipard\Module\Economy\Bank\BankTransactionAccountingEngine;
+use Shipard\Module\Economy\Bank\BankTransactionsViewer;
 use Shipard\Tests\Integration\IntegrationTestCase;
 
 /**
@@ -123,6 +124,55 @@ class BankAccountingLifecycleTest extends IntegrationTestCase
         $this->assertTrue($delete->isSuccess());
         $this->assertSame(0, $this->journalCount());
         $this->txId = null; // tearDown už nemá co mazat
+    }
+
+    public function testViewerShowsAccountingTabAndAction(): void
+    {
+        $baId = $this->setupBankAccount();
+        $create = $this->gateway->saveDocument([
+            'bank_account'      => $baId,
+            'direction'         => 1,
+            'amount'            => 1210.00,
+            'currency'          => 'czk',
+            'exchange_rate'     => 1,
+            'date_transaction'  => self::ACC_DATE,
+            'operation'         => 'payment.in',
+            'counterparty_name' => 'IT viewer',
+            'docState'          => 10,
+            'docStateMain'      => 1,
+        ]);
+        $this->assertTrue($create->isSuccess());
+        $this->txId = (int) $create->getData()['id'];
+        $this->transitionTo(40);
+
+        $viewer = new BankTransactionsViewer($this->db, 'economy_bank_transactions');
+        $viewer->setConfig($this->configRuntime);
+        $viewer->setLanguage('cs');
+
+        $detail = $viewer->renderDetail($this->txId);
+        $tabIds = array_column($detail['tabs'], 'id');
+        $this->assertContains('accounting', $tabIds, 'Detail má tab Zaúčtování');
+
+        $actionIds = array_column($detail['actions'] ?? [], 'id');
+        $this->assertContains('reaccountTransaction', $actionIds, 'Detail nabízí akci Přeúčtovat');
+
+        // Tab Zaúčtování obsahuje tabulku deníku (banka + clearing + Σ)
+        $accTab = null;
+        foreach ($detail['tabs'] as $t) {
+            if ($t['id'] === 'accounting') {
+                $accTab = $t;
+            }
+        }
+        $this->assertNotNull($accTab);
+        $blocks = $accTab['content']['blocks'] ?? [];
+        $table = null;
+        foreach ($blocks as $b) {
+            if (($b['type'] ?? '') === 'table') {
+                $table = $b;
+            }
+        }
+        $this->assertNotNull($table, 'Tab Zaúčtování má tabulku deníku');
+        $this->assertCount(3, $table['rows'], '2 řádky deníku + Σ');
     }
 
     public function testReaccountIsIdempotent(): void

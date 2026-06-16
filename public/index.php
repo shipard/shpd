@@ -279,7 +279,7 @@ function dispatch(
 		'exchange' => dispatchExchange($route, $request, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher),
 		'alerts' => dispatchAlerts($route, $request, $db, $alertCheckRegistry, $configRuntime, resolveLanguage($request, $resolved->config)),
 		'accounting' => dispatchAccounting($route, $request, $db, $configRuntime),
-		'bank'    => dispatchBank($route, $auth, $tables, $db, $resolved, $configRuntime),
+		'bank'    => dispatchBank($route, $request, $auth, $tables, $db, $resolved, $configRuntime),
 		'personsRegistry' => dispatchPersonsRegistry($route, $request, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $serverConfig),
 		'mcp'     => dispatchMcp($request, $auth, $resolved->connection, $tables, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'openapi' => (new OpenApiController())->spec($auth, $openApiPublic, $tables, $baseUrl),
@@ -358,6 +358,7 @@ function dispatchAccounting(
 
 function dispatchBank(
 	Route $route,
+	Request $request,
 	AuthContext $auth,
 	array $tables,
 	\Shipard\Core\Database\DataSourceConnection $db,
@@ -368,6 +369,7 @@ function dispatchBank(
 	$ctrl = new \Shipard\Module\Economy\Bank\BankController($db, $configRuntime, $dsPath, $tables);
 	return match ($route->action) {
 		'importStatement' => $ctrl->importStatement($auth),
+		'reaccount'       => $ctrl->reaccount($request),
 		default           => Response::error('INTERNAL_ERROR', "Unknown bank action: {$route->action}", 500),
 	};
 }

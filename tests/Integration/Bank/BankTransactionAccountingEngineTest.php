@@ -215,6 +215,51 @@ class BankTransactionAccountingEngineTest extends IntegrationTestCase
         }
     }
 
+    // ── W6.6 Clearing nese nespárované ───────────────────────────────────────
+
+    public function testClearingCarriesUnmatchedMovements(): void
+    {
+        $bankAccountId = $this->ensureAccountByMask('221');
+        $this->ensureAccountByNumber('261200');
+        $this->ensureAccountByNumber('261300');
+        $baId = $this->insertBankAccount($bankAccountId);
+
+        // Příjem nespárovaný → 261200 DAL 1210
+        $inId = $this->insertTx([
+            'bank_account' => $baId, 'direction' => 1, 'operation' => 'payment.in',
+            'amount' => 1210.00, 'amount_dom' => 1210.00,
+        ]);
+        // Výdaj nespárovaný → 261300 MD 500
+        $outId = $this->insertTx([
+            'bank_account' => $baId, 'direction' => 2, 'operation' => 'payment.out',
+            'amount' => 500.00, 'amount_dom' => 500.00,
+        ]);
+        $this->engine->accountTransaction($inId);
+        $this->engine->accountTransaction($outId);
+
+        // 261200 nese přesně příjem (DAL), 261300 přesně výdaj (MD)
+        $in = $this->clearingTurnover('261200');
+        $this->assertEqualsWithDelta(0.0, $in['dr'], 0.001);
+        $this->assertEqualsWithDelta(1210.00, $in['cr'], 0.001, 'Clearing 261200 nese nespárovaný příjem');
+
+        $out = $this->clearingTurnover('261300');
+        $this->assertEqualsWithDelta(500.00, $out['dr'], 0.001, 'Clearing 261300 nese nespárovaný výdaj');
+        $this->assertEqualsWithDelta(0.0, $out['cr'], 0.001);
+    }
+
+    /** @return array{dr: float, cr: float} obrat clearing účtu napříč deníkem našich transakcí */
+    private function clearingTurnover(string $number): array
+    {
+        $row = $this->db->fetchRow(
+            'SELECT COALESCE(SUM(money_dr),0) AS dr, COALESCE(SUM(money_cr),0) AS cr
+             FROM economy_accounting_journal
+             WHERE account_number = %s AND bank_transaction IN %in',
+            $number,
+            $this->createdTxs,
+        );
+        return ['dr' => (float) $row['dr'], 'cr' => (float) $row['cr']];
+    }
+
     // ── Helpers ─────────────────────────────────────────────────────────────
 
     private function ensureFiscalPeriod(): void

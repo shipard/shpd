@@ -6,6 +6,7 @@
  */
 
 import { API_BASE_URL } from './config.js';
+import { post } from './client.js';
 
 const TOKEN_KEY = 'shpd_token';
 
@@ -34,4 +35,13 @@ export async function importStatement(file, account = null) {
     body: formData,
   });
   return res.json();
+}
+
+/**
+ * Přeúčtovat bankovní transakci ve stavu 40 (po opravě rozvrhu / pohybu).
+ * Vrací {accountingState, messages}; chybové kódy BAD_REQUEST, NOT_FOUND,
+ * INVALID_DOC_STATE. Idempotentní — deník se vždy přegeneruje celý.
+ */
+export async function reaccountTransaction(transactionId) {
+  return await post('/_bank/reaccount', { transactionId });
 }

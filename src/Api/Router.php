@@ -189,6 +189,14 @@ class Router
 			return new Route('bank', 'importStatement');
 		}
 
+		// POST /_bank/reaccount — přeúčtování transakce ve stavu 40
+		if ($subpath === '/_bank/reaccount') {
+			if ($method !== 'POST') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('bank', 'reaccount');
+		}
+
 		if ($subpath === '/_mcp') {
 			if ($method !== 'POST') {
 				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);

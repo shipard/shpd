@@ -8,7 +8,7 @@
     runAlertCheck,
   } from '../../api/alerts.js';
   import { reaccountDocument } from '../../api/accounting.js';
-  import { importStatement } from '../../api/bank.js';
+  import { importStatement, reaccountTransaction } from '../../api/bank.js';
   import ViewerRow from './ViewerRow.svelte';
   import ViewerDetail from './ViewerDetail.svelte';
   import ViewerToolbar from './ViewerToolbar.svelte';
@@ -470,6 +470,14 @@
     // banner v tabu Zaúčtování.
     if (actionId === 'reaccount') {
       const result = await reaccountDocument(recordId);
+      if (result?.success) refreshAfterAction();
+      else alert(translateError(result?.error));
+      return;
+    }
+    // Přeúčtovat bankovní transakci (BankTransactionsViewer, stav 40) —
+    // jiný endpoint/payload než doklad. Success vč. „zaúčtováno s chybami".
+    if (actionId === 'reaccountTransaction') {
+      const result = await reaccountTransaction(recordId);
       if (result?.success) refreshAfterAction();
       else alert(translateError(result?.error));
       return;

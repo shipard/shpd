@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Shipard\Module\Economy\Bank;
 
 use Shipard\Api\AuthContext;
+use Shipard\Api\Request;
 use Shipard\Api\Response;
 use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Database\DataSourceConnection;
@@ -20,6 +21,9 @@ use Shipard\Module\Economy\Bank\Import\StatementImportService;
  * import přes StatementImportService, vrácení souhrnu. Volitelné pole
  * `account` (kód / id) override detekce vlastního účtu. Zdrojový soubor se
  * uloží jako příloha výpisu.
+ *
+ * POST /_bank/reaccount, body {"transactionId": N} — přeúčtuje transakci ve
+ * stavu 40 (po opravě rozvrhu / pohybu). Vrací {accountingState, messages}.
  */
 final class BankController
 {
@@ -73,5 +77,37 @@ final class BankController
         }
 
         return Response::success($summary);
+    }
+
+    public function reaccount(Request $request): Response
+    {
+        $body = $request->getBody();
+        $txId = is_array($body) ? (int) ($body['transactionId'] ?? 0) : 0;
+        if ($txId <= 0) {
+            return Response::error('BAD_REQUEST', 'Body must contain a positive transactionId', 400);
+        }
+
+        $tx = $this->db->fetchRow(
+            'SELECT id, docState FROM economy_bank_transactions WHERE id = %i',
+            $txId,
+        );
+        if ($tx === null) {
+            return Response::error('NOT_FOUND', "Transaction {$txId} not found", 404);
+        }
+        if ((int) $tx['docState'] !== 40) {
+            return Response::error(
+                'INVALID_DOC_STATE',
+                'Only transactions in state 40 (Accounted) can be re-accounted',
+                422,
+            );
+        }
+
+        $engine = new BankTransactionAccountingEngine($this->db->getDibiConnection(), $this->config);
+        $result = $engine->accountTransaction($txId);
+
+        return Response::success([
+            'accountingState' => $result['state'],
+            'messages'        => $result['messages'],
+        ]);
     }
 }

@@ -12,6 +12,7 @@
   import Icon from '../ui/Icon.svelte';
   import ImageSlotField from './ImageSlotField.svelte';
   import ThemeField from './ThemeField.svelte';
+  import DsThemeField from './DsThemeField.svelte';
   import LanguageField from './LanguageField.svelte';
   import { iconSave, iconSpinner, resolveIcon } from '../../icons.js';
 
@@ -56,18 +57,25 @@
   });
 
   // Server vrací jednu mapu values — rozdělíme na editovatelné texty
-  // (string | null → '') a stavy image slotů. Pole `theme`/`language` jsou
-  // řízená přímo stores (live), přes Uložit nejdou — do `values` nepatří.
+  // (string | null → '') a stavy image slotů.
+  //   user-scope theme/language → řízená přímo stores (live), do `values`
+  //     nepatří (mění se okamžitě, ne přes Uložit)
+  //   ds-scope theme (app.theme) → ukládá se přes Uložit jako hodnota, takže
+  //     do `values` patří (controlled DsThemeField)
   function splitValues(serverValues) {
     const texts = {};
     const images = {};
+    const scope = definition?.scope ?? 'ds';
     for (const field of definition?.fields ?? []) {
       if (field.type === 'image') {
         images[field.id] = serverValues[field.id] ?? null;
       } else if (field.type === 'text') {
         texts[field.id] = serverValues[field.id] ?? '';
+      } else if (field.type === 'theme' && scope === 'ds') {
+        // DS default — uloží se přes Uložit (objekt {mode, custom} nebo null).
+        texts[field.id] = serverValues[field.id] ?? null;
       }
-      // theme/language — bez lokálního stavu, čtou se z themeStore/language.
+      // user-scope theme/language — live stores, mimo `values`.
     }
     values = texts;
     imageStates = images;
@@ -109,9 +117,12 @@
     appInfoStore.load();
   }
 
-  // Uložit tlačítko jen pro text pole. image/theme/language se ukládají mimo
-  // (vlastní endpoint / live store binding), takže account Basic tlačítko nemá.
-  let hasTextFields = $derived((definition?.fields ?? []).some(f => f.type === 'text'));
+  // Uložit tlačítko pro pole ukládaná přes savePage: text + ds-scope theme
+  // (app.theme). image/user-theme/language se ukládají mimo (vlastní endpoint
+  // / live store binding), takže account Basic tlačítko nemá.
+  let hasSavableFields = $derived((definition?.fields ?? []).some(f =>
+    f.type === 'text' || (f.type === 'theme' && (definition?.scope ?? 'ds') === 'ds')
+  ));
 </script>
 
 <div class="shpd-settings-page">
@@ -153,7 +164,14 @@
                   onchange={(newState) => handleImageChange(field.id, newState)}
                 />
               {:else if field.type === 'theme'}
-                <ThemeField {onOpenThemePanel} />
+                {#if (definition.scope ?? 'ds') === 'user'}
+                  <ThemeField {onOpenThemePanel} />
+                {:else}
+                  <DsThemeField
+                    value={values[field.id]}
+                    onchange={(v) => { values[field.id] = v; }}
+                  />
+                {/if}
               {:else if field.type === 'language'}
                 <LanguageField />
               {:else}
@@ -173,7 +191,7 @@
         {/each}
       </div>
 
-      {#if hasTextFields}
+      {#if hasSavableFields}
         <div class="shpd-settings-page__actions">
           <Button
             label={t('settingsPage.save')}

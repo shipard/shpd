@@ -1,23 +1,27 @@
 <script>
-  // Řízený widget vzhledu pro settings page (field type `theme`). Vázaný
-  // na themeStore — segmented control Shipard/Tmavý/Vlastní mění mód okamžitě
-  // (live preview + server sync přes store). U „Vlastní" tlačítko otevře
-  // ThemePanel (vlastněný AppShellem) přes onOpenThemePanel callback.
+  // Řízený widget vzhledu pro user-scope settings page (account.theme).
+  // Vázaný na themeStore.
   //
-  // Čte store reaktivně, takže zůstává v synchronu s dropdownem v patce
-  // sidebaru i s panelem — jedna pravda ve storu.
+  // Přepínač „Vlastní vzhled" (follow) nahoře:
+  //   vypnuto (follow) → skryje výběr, jen poznámka „Řídí se nastavením
+  //                      aplikace" + mini náhled DS defaultu
+  //   zapnuto (override) → odemkne segmented control Shipard/Tmavý/Vlastní;
+  //                        u „Vlastní" tlačítko otevře ThemePanel
+  //                        (přes onOpenThemePanel callback).
+  //
+  // `showFollow` (default true) zapíná přepínač. DsThemeField (DS default)
+  // tuto komponentu nepoužívá — má vlastní controlled flow.
+  //
+  // Čte store reaktivně, takže zůstává v synchronu s panelem — jedna pravda
+  // ve storu.
   import { themeStore } from '../../stores/theme.svelte.js';
+  import { appInfoStore } from '../../stores/appInfo.svelte.js';
   import { t } from '../../i18n/index.js';
   import Icon from '../ui/Icon.svelte';
-  import { iconThemeLight, iconThemeDark, iconPalette, iconConfirm } from '../../icons.js';
+  import { iconPalette } from '../../icons.js';
+  import ThemeModeSegments from './ThemeModeSegments.svelte';
 
-  let { onOpenThemePanel } = $props();
-
-  const options = [
-    { value: 'light',  labelKey: 'sidebar.appearance.light',  icon: iconThemeLight },
-    { value: 'dark',   labelKey: 'sidebar.appearance.dark',   icon: iconThemeDark },
-    { value: 'custom', labelKey: 'sidebar.appearance.custom', icon: iconPalette },
-  ];
+  let { onOpenThemePanel, showFollow = true } = $props();
 
   // Otevření panelu deferujeme za aktuální klik (setTimeout 0). ThemePanel
   // si na desktopu po otevření přidá document click listener; bez deferu by
@@ -33,33 +37,50 @@
       openPanel();
     }
   }
+
+  // Mini náhled DS defaultu při follow — solid barva, gradient nebo built-in.
+  const dsSwatchStyle = $derived.by(() => {
+    const ds = appInfoStore.theme;
+    if (!ds || ds.mode === 'light') return 'background:#00345C';
+    if (ds.mode === 'dark') return 'background:#232730';
+    const sb = ds.custom?.sidebar;
+    if (sb?.type === 'gradient' && sb.stops?.length === 2) {
+      return `background:linear-gradient(180deg, ${sb.stops[0]}, ${sb.stops[1]})`;
+    }
+    return `background:${sb?.color ?? '#00345C'}`;
+  });
+
+  // „Vlastní vzhled" zaškrtnuté = override (!follow). Pojmenováno tak, aby
+  // bylo jasné, že zaškrtnuto znamená „mám vlastní volbu".
+  const customChecked = $derived(showFollow ? !themeStore.follow : true);
 </script>
 
 <div class="shpd-theme-field">
-  <div class="shpd-theme-field__segments" role="radiogroup">
-    {#each options as opt}
-      <button
-        type="button"
-        class="shpd-theme-field__segment"
-        class:shpd-theme-field__segment--active={themeStore.mode === opt.value}
-        role="radio"
-        aria-checked={themeStore.mode === opt.value}
-        onclick={() => select(opt.value)}
-      >
-        <Icon icon={opt.icon} size="sm" />
-        <span>{t(opt.labelKey)}</span>
-        {#if themeStore.mode === opt.value}
-          <span class="shpd-theme-field__check"><Icon icon={iconConfirm} size="xs" /></span>
-        {/if}
-      </button>
-    {/each}
-  </div>
+  {#if showFollow}
+    <label class="shpd-theme-field__follow">
+      <input
+        type="checkbox"
+        checked={customChecked}
+        onchange={(e) => themeStore.setFollow(!e.currentTarget.checked)}
+      />
+      <span>{t('theme.customAppearance')}</span>
+    </label>
+  {/if}
 
-  {#if themeStore.mode === 'custom'}
-    <button type="button" class="shpd-theme-field__edit" onclick={openPanel}>
-      <Icon icon={iconPalette} size="sm" />
-      <span>{t('account.theme.editColor')}</span>
-    </button>
+  {#if !showFollow || !themeStore.follow}
+    <ThemeModeSegments mode={themeStore.mode} onSelect={select} />
+
+    {#if themeStore.mode === 'custom'}
+      <button type="button" class="shpd-theme-field__edit" onclick={openPanel}>
+        <Icon icon={iconPalette} size="sm" />
+        <span>{t('account.theme.editColor')}</span>
+      </button>
+    {/if}
+  {:else}
+    <div class="shpd-theme-field__follow-note">
+      <span class="shpd-theme-field__ds-swatch" style={dsSwatchStyle}></span>
+      <span>{t('theme.followsApp')}</span>
+    </div>
   {/if}
 </div>
 
@@ -70,40 +91,35 @@
     gap: var(--shpd-space-sm);
   }
 
-  .shpd-theme-field__segments {
-    display: inline-flex;
-    gap: var(--shpd-space-xs);
-    flex-wrap: wrap;
-  }
-
-  .shpd-theme-field__segment {
+  .shpd-theme-field__follow {
     display: inline-flex;
     align-items: center;
     gap: var(--shpd-space-xs);
-    padding: var(--shpd-space-xs) var(--shpd-space-md);
-    background-color: var(--shpd-color-bg);
-    border: 1px solid var(--shpd-color-border);
-    border-radius: var(--shpd-radius-md);
-    color: var(--shpd-color-text);
     font-size: var(--shpd-font-size-sm);
+    color: var(--shpd-color-text);
     cursor: pointer;
-    transition: background-color 0.12s, border-color 0.12s;
+    align-self: flex-start;
   }
 
-  .shpd-theme-field__segment:hover {
-    background-color: var(--shpd-color-bg-secondary);
+  .shpd-theme-field__follow input {
+    cursor: pointer;
   }
 
-  .shpd-theme-field__segment--active {
-    border-color: var(--shpd-color-accent);
-    background-color: var(--shpd-color-bg-secondary);
-    font-weight: 500;
-  }
-
-  .shpd-theme-field__check {
+  .shpd-theme-field__follow-note {
     display: inline-flex;
     align-items: center;
-    color: var(--shpd-color-accent);
+    gap: var(--shpd-space-sm);
+    font-size: var(--shpd-font-size-sm);
+    color: var(--shpd-color-text-secondary);
+  }
+
+  .shpd-theme-field__ds-swatch {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 1px solid color-mix(in srgb, var(--shpd-color-text) 25%, transparent);
+    flex-shrink: 0;
   }
 
   .shpd-theme-field__edit {

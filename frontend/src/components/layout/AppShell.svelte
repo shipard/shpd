@@ -10,9 +10,10 @@
 
   // Panel custom vzhledu žije tady, ne v Sidebaru — mobilní drawer má
   // transform (containing block pro position:fixed) a Sidebar overflow:
-  // hidden, takže panel/Modal renderovaný uvnitř by se ořízl. Sidebar
-  // ho otevírá přes onOpenThemePanel callback; collapsed se zrcadlí
-  // přes bind kvůli left pozici panelu na desktopu.
+  // hidden, takže panel/Modal renderovaný uvnitř by se ořízl. Otevírá ho
+  // ThemeField (Nastavení účtu → Základní) přes onOpenThemePanel probublaný
+  // skrz ContentArea; collapsed se zrcadlí přes bind kvůli left pozici
+  // panelu na desktopu.
   let themePanelOpen = $state(false);
   let sidebarCollapsed = $state(false);
 
@@ -54,7 +55,7 @@
       class="shpd-shell__drawer"
       class:shpd-shell__drawer--open={layoutStore.drawerOpen}
     >
-      <Sidebar onNavigate={handleNavigate} {onLogout} onOpenThemePanel={openThemePanel} />
+      <Sidebar onNavigate={handleNavigate} {onLogout} />
     </div>
 
     <div class="shpd-shell__main">
@@ -65,7 +66,6 @@
     <Sidebar
       onNavigate={handleNavigate}
       {onLogout}
-      onOpenThemePanel={openThemePanel}
       bind:collapsed={sidebarCollapsed}
     />
     <div class="shpd-shell__main">

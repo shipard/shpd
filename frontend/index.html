@@ -7,30 +7,44 @@
     <script>
       // Theme bootstrap — běží před prvním renderem, aby se zabránilo
       // flashi špatného tématu (dark / custom barva sidebaru). Čte volbu
-      // z localStorage (light/dark/custom); pro 'custom' aplikuje
-      // předpočítané sidebar tokeny z cache shpd_theme_tokens — žádná
-      // OKLCH matematika tady, jen setProperty.
+      // z localStorage (shpd_theme = 'follow' | 'light' | 'dark' | 'custom').
+      //   'follow'  → aplikuj DS default cache (shpd_ds_theme + tokeny)
+      //   'custom'  → aplikuj override tokeny z cache shpd_theme_tokens
+      // Žádná OKLCH matematika tady, jen setProperty z předpočítaných tokenů.
       //
-      // Tři synchronizovaná místa: stores/theme.svelte.js (klíče,
-      // formáty), tento script a api/config.js (DS regex pro per-DS
-      // prefix klíčů v dev módu). Změna kteréhokoli = aktualizovat
-      // komentáře u všech.
+      // Čtyři synchronizovaná místa: stores/theme.svelte.js (klíče,
+      // formáty, vč. shpd_ds_theme* DS cache), tento script a api/config.js
+      // (DS regex pro per-DS prefix klíčů v dev módu). Změna kteréhokoli =
+      // aktualizovat komentáře u všech.
       (function () {
         try {
           // Per-DS klíč — stejná detekce jako api/config.js (sync ručně!)
           var m = location.pathname.match(/^\/([a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4})\//);
           var sfx = m ? ':' + m[1] : '';
-          var mode = localStorage.getItem('shpd_theme' + sfx) || 'light';
+          var mode = localStorage.getItem('shpd_theme' + sfx) || 'follow';
           var dark = false;
-          if (mode === 'dark') {
+          var k;
+          if (mode === 'follow') {
+            // Sleduj DS default — aplikuj cache. Prázdná cache → Shipard light.
+            var ds = JSON.parse(localStorage.getItem('shpd_ds_theme' + sfx) || 'null');
+            if (ds && ds.mode) {
+              if (ds.mode === 'dark' || (ds.mode === 'custom' && ds.custom && ds.custom.base === 'dark')) {
+                dark = true;
+              }
+              if (ds.mode === 'custom') {
+                var dsTokens = JSON.parse(localStorage.getItem('shpd_ds_theme_tokens' + sfx) || '{}');
+                for (k in dsTokens) document.documentElement.style.setProperty(k, dsTokens[k]);
+              }
+            }
+          } else if (mode === 'dark') {
             dark = true;
           } else if (mode === 'custom') {
             var cfg = JSON.parse(localStorage.getItem('shpd_theme_custom' + sfx) || '{}');
             dark = cfg.base === 'dark';
             var tokens = JSON.parse(localStorage.getItem('shpd_theme_tokens' + sfx) || '{}');
-            for (var k in tokens) document.documentElement.style.setProperty(k, tokens[k]);
+            for (k in tokens) document.documentElement.style.setProperty(k, tokens[k]);
           }
-          // 'auto' (legacy) i neznámé hodnoty propadnou na light
+          // 'light' (legacy 'auto' i neznámé hodnoty) propadnou na light
           if (dark) document.documentElement.setAttribute('data-theme', 'dark');
         } catch (e) { /* private mode / disabled storage — fallback na light */ }
       })();

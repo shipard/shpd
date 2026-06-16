@@ -2,7 +2,6 @@
   import { get } from '../../api/client.js';
   import { logout } from '../../api/auth.js';
   import { authStore } from '../../stores/auth.svelte.js';
-  import { themeStore } from '../../stores/theme.svelte.js';
   import { navigationStore } from '../../stores/navigation.svelte.js';
   import { layoutStore } from '../../stores/layout.svelte.js';
   import { appInfoStore } from '../../stores/appInfo.svelte.js';
@@ -20,9 +19,6 @@
     iconSpinner,
     iconSettings,
     iconAppSettings,
-    iconThemeLight,
-    iconThemeDark,
-    iconPalette,
     iconConfirm,
     iconWarning,
     resolveIcon,
@@ -45,9 +41,10 @@
 
   // `collapsed` je bindable — AppShell ho zrcadlí kvůli pozici ThemePanel
   // (panel se renderuje v AppShellu, ne tady; drawer má transform, který
-  // by position:fixed panel uvěznil). `onOpenThemePanel` otevírá panel
-  // custom vzhledu vlastněný AppShellem.
-  let { onNavigate, onLogout, onOpenThemePanel, collapsed = $bindable(false) } = $props();
+  // by position:fixed panel uvěznil). Panel custom vzhledu už neotevírá
+  // sidebar (dropdown vzhledu zanikl) — otevírá ho ThemeField na stránce
+  // Nastavení účtu → Základní.
+  let { onNavigate, onLogout, collapsed = $bindable(false) } = $props();
 
   // Navigation tree loaded from server API — reloads when mode changes
   let navTree = $state([]);
@@ -163,27 +160,6 @@
     void navigationStore.mode;
     closeUserMenu();
   });
-
-  // Položky vzhledu — u light/dark záměrně nezavíráme menu po kliku,
-  // aby si uživatel mohl rychle vyzkoušet více variant. Menu se zavře
-  // kliknutím mimo.
-  const themeOptions = [
-    { value: 'light',  labelKey: 'sidebar.appearance.light',  icon: iconThemeLight },
-    { value: 'dark',   labelKey: 'sidebar.appearance.dark',   icon: iconThemeDark },
-    { value: 'custom', labelKey: 'sidebar.appearance.custom', icon: iconPalette },
-  ];
-
-  function handleThemeChange(value) {
-    themeStore.setMode(value);
-    if (value === 'custom') {
-      // Volba Vlastní otevírá panel — i když už je custom aktivní
-      // (uživatel chce upravit barvu). Menu zavřít a panel otevřít až
-      // po ticku — viz past s click bubbling v docs/frontend.md
-      // sekce Konvence → Dropdown / popover komponenty.
-      closeUserMenu();
-      setTimeout(() => { onOpenThemePanel?.(); }, 0);
-    }
-  }
 
   // Položky jazyka — přepnutí volá location.reload() v storu, takže menu
   // se zavírat nemusí (stránka se beztak překreslí celá).
@@ -430,26 +406,6 @@
             <span>{t('sidebar.appSettings')}</span>
           </button>
         {/if}
-
-        <div class="shpd-sidebar__user-menu-divider"></div>
-        <div class="shpd-sidebar__user-menu-label">{t('sidebar.appearance')}</div>
-        {#each themeOptions as opt}
-          <button
-            class="shpd-sidebar__user-menu-item"
-            class:shpd-sidebar__user-menu-item--active={themeStore.mode === opt.value}
-            onclick={() => handleThemeChange(opt.value)}
-            role="menuitemradio"
-            aria-checked={themeStore.mode === opt.value}
-          >
-            <Icon icon={opt.icon} size="sm" />
-            <span class="shpd-sidebar__user-menu-item-label">{t(opt.labelKey)}</span>
-            {#if themeStore.mode === opt.value}
-              <span class="shpd-sidebar__user-menu-item-check">
-                <Icon icon={iconConfirm} size="xs" />
-              </span>
-            {/if}
-          </button>
-        {/each}
 
         <div class="shpd-sidebar__user-menu-divider"></div>
         <div class="shpd-sidebar__user-menu-label">{t('sidebar.language')}</div>

@@ -7,8 +7,14 @@
 //
 // apply() propisuje shortName do document.title a ikonu do <link rel="icon">.
 // Text v sidebaru/headeru čte store reaktivně přes getter.
+//
+// Vedle brandingu nese i DS-wide výchozí vzhled (`theme`, klíč app.theme).
+// Po loadu se tlačí do themeStore.setDsDefault() — push směr appInfo → theme,
+// aby theme store neimportoval appInfo (žádný kruhový import). DS-wide hodnota
+// logicky patří k brandingu.
 
 import { getAppInfo, brandingUrl } from '../api/app.js';
+import { themeStore } from './theme.svelte.js';
 
 const DEFAULT_NAME = 'Shipard';
 
@@ -17,6 +23,7 @@ let info = $state({
   shortName: null,
   icon: null,        // { url, hash } | null
   companyLogo: null, // { url, hash } | null
+  theme: null,       // { mode, custom } | null — DS default vzhledu
 });
 
 async function load() {
@@ -28,7 +35,10 @@ async function load() {
         shortName: response.data.shortName ?? null,
         icon: response.data.icon ?? null,
         companyLogo: response.data.companyLogo ?? null,
+        theme: response.data.theme ?? null,
       };
+      // DS default → theme store (efektivní vzhled pro follow-uživatele).
+      themeStore.setDsDefault(info.theme);
     }
   } catch {
     // Endpoint nedostupný (např. server down) — zůstanou defaulty.
@@ -58,6 +68,7 @@ export const appInfoStore = {
   get shortName()   { return info.shortName; },
   get icon()        { return info.icon; },
   get companyLogo() { return info.companyLogo; },
+  get theme()       { return info.theme; },
   load,
   apply,
 };

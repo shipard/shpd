@@ -18,7 +18,9 @@
 // Pozor: stejný regex duplikuje theme bootstrap v index.html (per-DS
 // prefix localStorage klíčů musí běžet před načtením modulů). Změna
 // formátu DS ID = upravit obě místa; viz komentáře tam
-// a v stores/theme.svelte.js.
+// a v stores/theme.svelte.js (čtyři synchronizovaná místa localStorage
+// klíčů/formátů: theme.svelte.js, index.html bootstrap, tento regex
+// a DS default cache klíče shpd_ds_theme* sdílené store↔bootstrap).
 const DS_ID_PATTERN = /^\/([a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4})\//;
 
 function detectDsId() {

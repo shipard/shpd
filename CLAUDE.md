@@ -206,19 +206,31 @@ Závislosti tečou shora dolů: Command → Document → Module/Config/Database 
 ### Frontend — Vzhledy (themes)
 
 - Tři režimy: Shipard (`light`) / Tmavý (`dark`) / Vlastní (`custom`);
-  `auto` zanikl (migrace na `light`)
+  `auto` zanikl (migrace na follow)
 - Custom barví **jen sidebar** přes runtime inline tokeny na `<html>`
   (`deriveSidebarTokens()` v `utils/themeColor.js`, OKLab/OKLCH) —
   solid barva nebo vertikální gradient + opacity mix k bázi; tělo
   stránky se nebarví nikdy — chrání doc-state systém
-- Persistence dvouúrovňová: **server je zdroj pravdy** (per-user
-  `account.theme`/`account.language` přes `UserSettingsStore`), localStorage
-  zůstává **anti-flash cache** (per-DS klíč v dev; token cache
-  `shpd_theme_tokens`). Po loginu `accountPrefs.load()` sesynchronizuje
-  server → store + cache; změny z panelu/dropdownu/stránky Základní píší
-  zpět na server (`themeStore.setMode/setCustom`, `language.setMode` přes
-  `api/account.js`). Tři synchronizovaná místa localStorage: `theme.svelte.js`,
-  `index.html` bootstrap, `api/config.js`
+- **Dvouúrovňový (Fáze 4):** efektivní vzhled = `follow ? (DS default ??
+  Shipard) : user override`. **DS default** = `app.theme` (scope ds,
+  Nastavení aplikace → Aplikace, edituje `DsThemeField` přes Uložit), na
+  klienta přes `appInfo` → `themeStore.setDsDefault()`. **User
+  `account.theme`** (scope user) nese `follow`: `{follow:true}` = sleduj
+  DS default, `{follow:false, mode, custom}` = override; legacy bez follow
+  = override; nový uživatel/absence = follow. Přepínač „Vlastní vzhled"
+  v `ThemeField`. **Dropdown vzhledu v patce sidebaru zanikl** — vzhled je
+  nastavení, panel otevírá `ThemeField`
+- Persistence: **server je zdroj pravdy** (per-user `account.theme`,
+  DS-wide `app.theme`), localStorage = **anti-flash cache** (per-DS klíč
+  v dev): override cache `shpd_theme(_custom/_tokens)`, DS default cache
+  `shpd_ds_theme(_tokens)`. Po loginu `accountPrefs.load()` + `appInfo.load()`
+  sesynchronizují server → store + cache; změny z panelu/stránky Základní
+  píší zpět na server (`themeStore.setMode/setCustom/setFollow` přes
+  `api/account.js`). **Čtyři synchronizovaná místa** localStorage:
+  `theme.svelte.js`, `index.html` bootstrap, `api/config.js`, DS cache
+  klíče `shpd_ds_theme*`
+- Sdílené komponenty: `ThemeModeSegments` (segmented control),
+  `ThemeSwatches` (controlled editor — používá ThemePanel i DsThemeField)
 - Detaily: `docs/design-system.md` (sekce 9), `docs/frontend.md` (sekce 11),
   `docs/app-settings.md` (sekce 8)
 

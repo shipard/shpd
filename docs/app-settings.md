@@ -53,6 +53,7 @@ sekci 8.
 | `app.shortName` | Titulek tabu prohlížeče + text v sidebaru | `app.name` → `main.json` name |
 | `app.icon` | Metadata branding slotu `icon` (favicon, sidebar) | žádná ikona (browser default) |
 | `app.companyLogo` | Metadata branding slotu `companyLogo` (login, později sestavy/faktury) | žádné logo |
+| `app.theme` | DS-wide výchozí vzhled `{ mode, custom }` (Fáze 4) — platí pro uživatele bez vlastního | žádný → vestavěný Shipard light |
 
 Metadata obrázkových klíčů zapisuje upload endpoint:
 `{ filename, storedAs, mime, size, hash (sha256, 16 zn.), modified }`.
@@ -77,14 +78,15 @@ nedotýká → branding přežívá reset.
 
 | Metoda | URL | Auth | Popis |
 |--------|-----|------|-------|
-| `GET` | `/_app/info` | **veřejné** | `{ name, shortName, icon, companyLogo }` — icon/logo jako `{url, hash}` nebo `null` |
+| `GET` | `/_app/info` | **veřejné** | `{ name, shortName, icon, companyLogo, theme }` — icon/logo jako `{url, hash}` nebo `null`; `theme` = DS default `{mode, custom}` nebo `null` |
 | `GET` | `/_app/branding/{slot}` | **veřejné** | Binární obsah; `Cache-Control: immutable` (cache-busting přes `?h={hash}`); SVG s CSP + nosniff |
 | `POST` | `/_app/branding/{slot}` | auth | Multipart upload (pole `file`), vrací metadata |
 | `DELETE` | `/_app/branding/{slot}` | auth | Smaže soubor i settings klíč |
 
 Veřejné GET jsou vědomé rozhodnutí — login obrazovka zobrazuje název/logo
 a favicon se načítá bez tokenu. Do `/_app/info` nesmí přibýt nic citlivého
-(DB jméno, moduly, uživatelé). Výjimky z auth: `AuthMiddleware::isExempt()`
+(DB jméno, moduly, uživatelé) — `theme` je jen barva sidebaru, veřejná
+spolu s brandingem. Výjimky z auth: `AuthMiddleware::isExempt()`
 matchuje akce `('app', 'info')` a `('app', 'brandingGet')` — zápisové akce
 mají vlastní action názvy (`brandingUpload`, `brandingDelete`), takže
 exempt nejsou.
@@ -94,7 +96,9 @@ exempt nejsou.
 - **`stores/appInfo.svelte.js`** — načítá `/_app/info` při bootu
   (`main.js`, před loginem) a po každé změně nastavení/obrázku. `apply()`
   nastavuje `document.title` a `<link rel="icon">`; sidebar/header/login
-  čtou store reaktivně.
+  čtou store reaktivně. Po loadu navíc tlačí DS default vzhledu do
+  `themeStore.setDsDefault(theme)` (push směr appInfo → theme, žádný
+  kruhový import).
 - **`components/settings/SettingsPage.svelte`** — render definice
   (label vlevo, input + hint vpravo), Uložit → POST, po uspěchu
   `appInfoStore.load()`.
@@ -155,17 +159,41 @@ Kopie `SettingsStore` scoped na `user_id`; unikát je dvojice
 modulu `core.system`. Referenční integrita na `user_id` je na aplikační
 úrovni (projekt nepoužívá FOREIGN KEY).
 
-### Nové field typy `theme` / `language`
+### Field typy `theme` / `language`
 
-Řízené widgety vázané na klientské stores (`themeStore`, `language`),
-hodnota se ale ukládá na server (zdroj pravdy). Validace v `savePage()`:
+`language` (a user-scope `theme`) jsou řízené widgety vázané na klientské
+stores (`themeStore`, `language`), hodnota se ukládá na server (zdroj
+pravdy). Validace v `savePage()`:
 
 - `theme` — objekt `{ mode: light|dark|custom, custom: {…}|null }`.
+  **User-scope** (`account.theme`) nese navíc `follow` flag:
+  `{follow:true}` (sleduj DS default) nebo `{follow:false, mode, custom}`
+  (override); legacy `{mode, custom}` bez follow → override (`follow:false`).
+  **DS-scope** (`app.theme`) follow nezná — případný flag se zahodí,
+  uloží se jen `{mode, custom}`. Větvení podle `$pageDef['scope']`.
 - `language` — string `cs` | `en` | `auto`.
 
-Klíče v user store: `account.theme` (JSON), `account.language` (string).
-Na klientu jdou tato pole **mimo tlačítko Uložit** — mění se okamžitě
-(live preview / reload) a synchronizují přes `POST account.theme/language`.
+Klíče: user store `account.theme`/`account.language`, DS store `app.theme`.
+**User-scope** theme/language jdou na klientu **mimo tlačítko Uložit** —
+mění se okamžitě (live preview / reload) a synchronizují přes `POST`.
+**DS-scope** `app.theme` se naopak ukládá **přes tlačítko Uložit** jako
+běžná hodnota (controlled `DsThemeField`) — DS-wide default nevysílá
+mezistavy všem uživatelům. Render větev v `SettingsPage` rozhoduje podle
+`definition.scope`: `user` → živý `ThemeField`, `ds` → `DsThemeField` do
+`values`.
+
+### DS-wide výchozí vzhled (Fáze 4)
+
+Pole **`app.theme`** [type `theme`] v `appSettings` (scope `ds`) drží
+DS-wide default. Efektivní vzhled na klientu: `follow ? (DS default ??
+Shipard) : user override`. DS default se na klienta dostane přes `appInfo`
+(`/_app/info` → `theme`) → `themeStore.setDsDefault()` (vč. localStorage
+anti-flash cache `shpd_ds_theme`). Změna DS defaultu správcem se projeví
+u všech follow-uživatelů po jejich příštím loadu; override-uživatelů se
+nedotkne. Omezení nastavení DS defaultu jen na správce je zatím mimo
+rozsah — smí kdokoli s přístupem do Nastavení aplikace. Detaily efektivního
+výpočtu a follow přepínače: [`design-system.md`](design-system.md)
+(sekce 9), [`frontend.md`](frontend.md) (sekce *Theme management*).
 
 ### Account mód — vlastní navigační strom
 
@@ -193,9 +221,15 @@ První konzument: page `accountBasic` (scope `user`, pole `account.theme`
   `enterAccount`/`exitAccount`/`exitToApp`.
 - `Sidebar.svelte` — dropdown patky „Nastavení účtu" → `enterAccount`;
   back-bar `mode !== 'app'`; mode-aware fetch `/_ui/account/navigation`.
-- `SettingsPage.svelte` — větve pro `theme` (`ThemeField`, otevírá
-  ThemePanel přes probublaný `onOpenThemePanel`) a `language`
-  (`LanguageField`). Uložit tlačítko jen pro `text` pole.
+  **Dropdown vzhledu v patce zanikl (Fáze 4)** — vzhled je nastavení, ne
+  rychlý přepínač; sidebar už neotevírá ThemePanel (dělá to `ThemeField`).
+- `SettingsPage.svelte` — větve pro `theme` (scope `user` → `ThemeField`
+  s follow přepínačem, otevírá ThemePanel přes probublaný `onOpenThemePanel`;
+  scope `ds` → `DsThemeField` ukládaný přes Uložit) a `language`
+  (`LanguageField`). Uložit tlačítko pro `text` + ds-scope `theme` pole.
+  Sdílené UI: `ThemeModeSegments` (segmented control) a `ThemeSwatches`
+  (báze/presety/opacity/picker) — používá je ThemeField/DsThemeField
+  i ThemePanel.
 - `stores/accountPrefs.svelte.js` — po loginu/bootu (`App.svelte`
   onSuccess + `main.js` při autentizovaném startu) `load()` ze serveru,
   aplikuje `themeStore.applyFromServer()` a (liší-li se) `language.setMode()`.
@@ -211,3 +245,8 @@ První konzument: page `accountBasic` (scope `user`, pole `account.theme`
   field typy theme/language, `accountItems`.
 - `tests/Unit/Api/Controller/SettingsControllerTest.php` — user-scope
   page/savePage (theme/language validace), account navigation.
+
+Fáze 4: `SettingsControllerTest` — `account.theme` follow tvary
+(`{follow:true}`, override, legacy → override), `app.theme` scope ds
+(follow zahozen, invalid → 422), `scope` v definici; `AppControllerTest`
+— `/_app/info` vrací `theme` (null když nenastaveno).

@@ -353,7 +353,7 @@ posledního.
 
 ## 9. Vzhledy (themes)
 
-Aplikace podporuje tři režimy vzhledu (dropdown Vzhled v patce sidebaru):
+Aplikace podporuje tři režimy vzhledu:
 
 - **Shipard** (interně `light`) — default; light tokeny v `:root`,
   žádný `data-theme` atribut, žádné inline tokeny
@@ -365,19 +365,49 @@ Aplikace podporuje tři režimy vzhledu (dropdown Vzhled v patce sidebaru):
   přepíšou inline custom properties na `<html>` za běhu
 
 Dřívější režim Auto (sledování `prefers-color-scheme`) zanikl — uložená
-hodnota `'auto'` se migruje na `'light'`.
+hodnota `'auto'` se migruje na `'light'` (resp. na follow, viz níže).
 
-Volba je **per-uživatelské nastavení na serveru** (Fáze 3) —
-`account.theme` v `core_system_user_settings` přes `UserSettingsStore`,
-přenáší se mezi zařízeními. `localStorage` (klíč `shpd_theme`, v dev módu
-per-DS prefix) zůstává **anti-flash cache**: server je zdroj pravdy, po
-loginu `accountPrefs.load()` sesynchronizuje server → store + cache.
-Uživatel volbu mění na třech místech (dropdown patky, ThemePanel, stránka
-Základní v Nastavení účtu) — jedna pravda ve storu.
+### Dvě úrovně + efektivní vzhled (Fáze 4)
+
+Od Fáze 4 je vzhled **nastavení, ne rychlý přepínač** — dropdown vzhledu
+v patce sidebaru zanikl, vše se řeší v **Nastavení účtu → Základní**
+(otevírá panel přes `ThemeField`) a v **Nastavení aplikace → Aplikace**
+(DS-wide default).
+
+Efektivní vzhled se počítá ze dvou serverových hodnot:
+
+```
+efektivní vzhled = (uživatel má vlastní vzhled) ? user override
+                                                 : (DS default ?? Shipard)
+```
+
+- **DS default** — `app.theme` v `core_system_settings` (scope `ds`),
+  nastaví ho kdokoli s přístupem do Nastavení aplikace. Platí pro všechny
+  uživatele, kteří nemají vlastní. Na klienta jde přes `appInfo` store
+  (vedle brandingu) → `themeStore.setDsDefault()`.
+- **User override / follow** — `account.theme` v `core_system_user_settings`
+  (scope `user`) nese `follow` flag: `{follow:true}` = sleduj DS default
+  (včetně jeho budoucích změn), `{follow:false, mode, custom}` = vlastní
+  override. Nový uživatel i absence hodnoty = follow. **Legacy
+  `account.theme` bez follow se interpretuje jako override.**
+
+Vstup uživatele do „mám vlastní" řeší přepínač **„Vlastní vzhled"** na
+stránce Základní: vypnuto = follow (výběr skrytý + poznámka „Řídí se
+nastavením aplikace" + mini náhled DS defaultu), zapnuto = override
+(první zapnutí předvyplní zděděnou DS hodnotou — „začni od toho, co
+vidíš").
+
+`localStorage` zůstává **anti-flash cache** (server je zdroj pravdy):
+`shpd_theme` = `'follow'`|`'light'`|`'dark'`|`'custom'`, override cache
+`shpd_theme_custom`/`shpd_theme_tokens`, a DS default cache
+`shpd_ds_theme`/`shpd_ds_theme_tokens` (aby ani follow-uživatel neviděl
+flash). V dev módu per-DS prefix. Po loginu `accountPrefs.load()` +
+`appInfo.load()` sesynchronizují server → store + cache.
 
 Implementace store + bootstrap + panel + server sync je
 v [`frontend.md`](frontend.md) (sekce *Theme management*); per-user
-úložiště a account mód v [`app-settings.md`](app-settings.md) (sekce 8).
+úložiště, DS default pole a account mód v
+[`app-settings.md`](app-settings.md) (sekce 8).
 
 ### Princip custom tématu: barví se jen sidebar
 
@@ -502,11 +532,13 @@ Když implementuješ hover, používej `bg-hover` (rozjasní). Když implementuj
 ### Anti-flash bootstrap
 
 Téma se aplikuje před prvním renderem inline `<script>` v `index.html`
-— jinak by uživatel s uloženou `dark`/`custom` volbou viděl flash
-defaultního vzhledu před načtením Svelte. Pro custom téma bootstrap
-aplikuje předpočítané tokeny z cache `shpd_theme_tokens` — žádná OKLCH
-matematika před renderem. Bootstrap čte stejné `localStorage` klíče
-jako store; detaily a synchronizovaná místa v [`frontend.md`](frontend.md)
+— jinak by uživatel s uloženou `dark`/`custom`/`follow` volbou viděl
+flash defaultního vzhledu před načtením Svelte. Bootstrap čte
+`shpd_theme`: pro `custom` aplikuje předpočítané override tokeny z cache
+`shpd_theme_tokens`, pro `follow` (sleduj DS default) tokeny z DS cache
+`shpd_ds_theme_tokens` — žádná OKLCH matematika před renderem. Bootstrap
+čte stejné `localStorage` klíče jako store; detaily a **čtyři
+synchronizovaná místa** v [`frontend.md`](frontend.md)
 (sekce *Theme management*).
 
 ---

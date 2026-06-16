@@ -846,23 +846,35 @@ těla). Vizuální paleta, odvozované tokeny a designové principy jsou
 v [`design-system.md`](design-system.md) (sekce *Vzhledy (themes)*).
 Tato sekce popisuje **implementaci** — store, bootstrap, panel, přepínač.
 
+Od **Fáze 4** je vzhled dvouúrovňový: **DS default** (`app.theme`, scope
+ds) + **user follow/override** (`account.theme`, scope user). Efektivní
+vzhled = `follow ? (DS default ?? Shipard) : user override`. Vzhled je
+nastavení (ne rychlý přepínač) — **dropdown vzhledu v patce sidebaru
+zanikl**, vše se řeší v Nastavení účtu → Základní a Nastavení aplikace →
+Aplikace.
+
 Dřívější režim `'auto'` (sledování `prefers-color-scheme`) zanikl —
-`loadInitialMode()` migruje uloženou hodnotu `'auto'` na `'light'`
-s okamžitým write-backem; bootstrap zachází s `'auto'` i neznámými
-hodnotami jako s `'light'`.
+`loadInitialState()` migruje uloženou hodnotu `'auto'` na `'follow'`
+s okamžitým write-backem; bootstrap zachází s neznámými hodnotami jako
+s `'follow'` (prázdná DS cache → Shipard light).
 
 ### Soubory
 
 | Soubor | Co dělá |
 |---|---|
 | `frontend/src/styles/variables.css` | Light tokeny v `:root`, dark tokeny v `[data-theme="dark"]`, tokeny `--shpd-color-sidebar-active-bg(-hover)` |
-| `frontend/index.html` | Inline `<script>` bootstrap — aplikuje téma před prvním renderem (anti-flash), pro custom čte token cache |
-| `frontend/src/stores/theme.svelte.js` | Store s `mode`, `custom`, `setMode()`, `setCustom()`; persistence; aplikace inline tokenů |
+| `frontend/index.html` | Inline `<script>` bootstrap — aplikuje téma před prvním renderem (anti-flash); pro `custom` čte override token cache, pro `follow` DS default cache |
+| `frontend/src/stores/theme.svelte.js` | Store s `mode`, `custom`, `follow`, `dsDefault`, `setMode/setCustom/setFollow/setDsDefault/applyFromServer`; efektivní vzhled; persistence (override + DS cache) |
+| `frontend/src/stores/appInfo.svelte.js` | Nese DS default (`theme`); po loadu `themeStore.setDsDefault()` (push appInfo → theme) |
 | `frontend/src/utils/themeColor.js` | `hexToOklch()`, `hexToOklab()`, `mixOklab()`, `oklabToCss()`, `deriveSidebarTokens()`, `SIDEBAR_TOKEN_NAMES`, `BASE_BG` — OKLab/OKLCH odvozování, bez závislostí |
 | `frontend/src/components/layout/themePresets.js` | `THEME_PRESETS` (12 plných barev) + `THEME_GRADIENT_PRESETS` (12 přechodů) |
-| `frontend/src/components/layout/ThemePanel.svelte` | Panel custom tématu (desktop fixed vedle sidebaru, mobil Modal) |
-| `frontend/src/components/layout/Sidebar.svelte` | UI přepínač v dropdownu patky, otevírání panelu |
-| `frontend/src/components/layout/AppShell.svelte` | Vlastní stav `themePanelOpen`, renderuje `<ThemePanel>` |
+| `frontend/src/components/settings/ThemeModeSegments.svelte` | Sdílený segmented control Shipard/Tmavý/Vlastní (mode + onSelect) |
+| `frontend/src/components/settings/ThemeSwatches.svelte` | Sdílený editor (báze/presety/opacity/picker), controlled — `custom` + callbacky |
+| `frontend/src/components/settings/ThemeField.svelte` | User-scope widget: follow přepínač + segmenty + „Upravit barvu" (otevírá ThemePanel) |
+| `frontend/src/components/settings/DsThemeField.svelte` | DS-scope widget: segmenty + inline ThemeSwatches, controlled (ukládá přes Uložit) |
+| `frontend/src/components/layout/ThemePanel.svelte` | Panel custom tématu (desktop fixed vedle sidebaru, mobil Modal), obsah = `ThemeSwatches` |
+| `frontend/src/components/layout/Sidebar.svelte` | Dropdown vzhledu **odstraněn**; jen jazyk + Nastavení účtu/aplikace |
+| `frontend/src/components/layout/AppShell.svelte` | Vlastní stav `themePanelOpen`, renderuje `<ThemePanel>`; `onOpenThemePanel` jde do ContentArea (ne Sidebaru) |
 
 ### Režimy
 
@@ -873,7 +885,10 @@ hodnotami jako s `'light'`.
   base, opacity)` se nastaví jako inline custom properties na `<html>`
   (u gradientu včetně `--shpd-sidebar-bg-image`)
 
-Default pro nové uživatele: `'light'`.
+Mode platí pro override i pro DS default config. Stav `follow` (default
+`true`) rozhoduje, zda se aplikuje DS default, nebo user override. Default
+pro nové uživatele: `follow` (efektivně DS default, nebo Shipard když DS
+default chybí).
 
 ### localStorage — per-DS klíče
 
@@ -884,9 +899,11 @@ automaticky.
 
 | Klíč (base) | Obsah |
 |---|---|
-| `shpd_theme` | Mode string: `'light'` / `'dark'` / `'custom'` |
-| `shpd_theme_custom` | JSON custom konfigurace (viz níže) |
-| `shpd_theme_tokens` | JSON cache vypočítaných tokenů pro anti-flash bootstrap |
+| `shpd_theme` | `'follow'` (sleduj DS default) / `'light'` / `'dark'` / `'custom'` (override mode) |
+| `shpd_theme_custom` | JSON override custom konfigurace (viz níže) |
+| `shpd_theme_tokens` | JSON cache override tokenů pro anti-flash bootstrap |
+| `shpd_ds_theme` | JSON DS default `{mode, custom}` — follow anti-flash cache (Fáze 4) |
+| `shpd_ds_theme_tokens` | JSON cache DS default tokenů (jen když DS default je `custom`) |
 
 Formát `shpd_theme_custom` — navržený jako sdílený pro budoucí úrovně
 persistence (server per-user = Fáze 3, DS-wide default = Fáze 4):
@@ -918,21 +935,31 @@ persistence (server per-user = Fáze 3, DS-wide default = Fáze 4):
   doplní až s vlastními gradienty.
 - `version` zůstává 1 — rozšíření je čistě aditivní.
 
-Cache `shpd_theme_tokens` zapisuje store při každé aplikaci custom
-tématu a maže při přepnutí na built-in. Bootstrap ji jen čte a aplikuje.
+Cache `shpd_theme_tokens` zapisuje store při override (mode `custom`)
+a maže při built-in. DS cache `shpd_ds_theme(_tokens)` zapisuje store,
+kdykoli zná DS default (vč. override-uživatelů — pro pozdější follow).
+Bootstrap je jen čte a aplikuje.
 
-**Tři synchronizovaná místa** pro localStorage klíče a DS detekci:
-`theme.svelte.js`, bootstrap v `index.html` (duplikuje DS regex,
-protože běží před načtením modulů) a `api/config.js` (`DS_ID_PATTERN`).
-Při změně kteréhokoli aktualizovat komentáře u všech.
+**Čtyři synchronizovaná místa** pro localStorage klíče/formáty a DS
+detekci: `theme.svelte.js`, bootstrap v `index.html` (duplikuje DS regex,
+protože běží před načtením modulů, + čte DS cache klíče), `api/config.js`
+(`DS_ID_PATTERN`) a DS default cache klíče `shpd_ds_theme*` sdílené mezi
+store a bootstrapem. Při změně kteréhokoli aktualizovat komentáře u všech.
 
 ### Anti-flash bootstrap
 
 Před prvním renderem běží krátký inline `<script>` v `index.html`:
-detekuje DS ID z URL (stejný regex jako `api/config.js`), přečte mode,
-pro `'dark'` nastaví `data-theme`, pro `'custom'` nastaví `data-theme`
-podle `cfg.base` a aplikuje tokeny z cache `shpd_theme_tokens` přes
-`setProperty()` — **žádná OKLCH matematika v inline scriptu**.
+detekuje DS ID z URL (stejný regex jako `api/config.js`), přečte mode
+z `shpd_theme` (default `'follow'`):
+- `'follow'` → přečte DS cache `shpd_ds_theme`; podle `ds.mode` nastaví
+  `data-theme` (dark báze) a pro `custom` aplikuje `shpd_ds_theme_tokens`.
+  Prázdná DS cache → Shipard light.
+- `'dark'` → `data-theme`.
+- `'custom'` → `data-theme` podle `cfg.base` + override tokeny ze
+  `shpd_theme_tokens`.
+
+Vždy přes `setProperty()` z předpočítaných tokenů — **žádná OKLCH
+matematika v inline scriptu**.
 
 Bootstrap je záměrně malý a defenzivní (try/catch okolo localStorage
 kvůli private mode / disabled storage), aby selhal tiše s fallbackem
@@ -943,13 +970,22 @@ na light, ne aby blokoval render.
 ```js
 import { themeStore } from '../../stores/theme.svelte.js';
 
-themeStore.mode;    // 'light' | 'dark' | 'custom' — uživatelská volba
-themeStore.custom;  // {version, base, opacity, sidebar: {type, color|stops}}
-themeStore.setMode('dark');                    // přepnutí + persistence + apply + push na server
-themeStore.setCustom({ base: 'dark' });        // merge + persistence + apply,
-                                               // implikuje mode 'custom'; push na server (debounce)
-themeStore.applyFromServer({mode, custom});    // aplikace serverové volby BEZ zpětného zápisu
+themeStore.mode;      // 'light' | 'dark' | 'custom' — override mode (platí když !follow)
+themeStore.custom;    // {version, base, opacity, sidebar: {type, color|stops}} — override config
+themeStore.follow;    // bool — sleduji DS default?
+themeStore.dsDefault; // {mode, custom} | null — DS default z appInfo
+themeStore.setMode('dark');                 // override (follow=false) + persistence + apply + push
+themeStore.setCustom({ base: 'dark' });     // override merge; implikuje mode 'custom'; push (debounce)
+themeStore.setFollow(true);                 // přepne follow/override; první override předvyplní z DS; push
+themeStore.setDsDefault({mode, custom});    // nastaví DS default (z appInfo); follow → re-apply; BEZ pushe
+themeStore.applyFromServer(accountTheme);   // aplikace account.theme ze serveru (follow tvary) BEZ pushe
 ```
+
+`pushToServer()` posílá follow tvar: `{follow:true}` nebo
+`{follow:false, mode, custom}`. `applyFromServer()` rozpozná
+`{follow:true}` / `{follow:false, ...}` / legacy `{mode, custom}`
+(= override). `setMode`/`setCustom` implikují override (`follow=false`)
+— uživatel aktivně volí.
 
 `applyTheme()` (privátní) při `custom` **nejdřív vyčistí inline
 tokeny a pak nastaví nové** (clear-then-set) — derivace nemusí vrátit
@@ -975,40 +1011,64 @@ zůstává anti-flash cache. Zdroj pravdy je server, lokální cache jen drží
 poslední známý stav pro první render.
 
 - **Klíče v user store** (`core_system_user_settings`, scope `user`):
-  `account.theme` (JSON `{mode, custom}`), `account.language` (string).
+  `account.theme` (JSON — follow tvar, viz níže), `account.language` (string).
 - **Načtení po loginu**: `stores/accountPrefs.svelte.js` `load()` —
   `GET /_ui/settings/page/accountBasic`, z `values` aplikuje
   `themeStore.applyFromServer()` a (liší-li se od cache) `language.setMode()`.
   Volá se z `App.svelte` onSuccess (fresh login) a z `main.js` při
   autentizovaném startu (reload s platným tokenem). Guard `languageApplied`
   brání reload-smyčce.
-- **Zápis na server**: `themeStore.setMode/setCustom` a `language.setMode`
-  pushují přes `api/account.js` (`pushAccountPrefs` → `POST
-  /_ui/settings/page/accountBasic`). `setCustom` má debounce ~300 ms
+- **Zápis na server**: `themeStore.setMode/setCustom/setFollow` a
+  `language.setMode` pushují přes `api/account.js` (`pushAccountPrefs` →
+  `POST /_ui/settings/page/accountBasic`). `setCustom` má debounce ~300 ms
   (color picker `oninput`); `language.setMode` await-uje POST před
   `location.reload()`. Selhání je tiché — lokál platí pro session.
 - **Žádný kruhový import**: server push žije v `api/account.js`, ne
   v `accountPrefs` storu (ten importuje `theme`/`language`). `theme`/
-  `language` stores importují jen `api/account.js`.
+  `language` stores importují jen `api/account.js`. **DS default jde
+  opačným směrem** — `appInfo` po loadu volá `themeStore.setDsDefault()`,
+  takže theme store neimportuje `appInfo`.
 - **Cross-device flash**: na novém zařízení s čistou cache je první render
-  default Shipard; po `accountPrefs.load()` se aplikuje serverová volba a
-  naplní cache (další reloady bez flashe) — akceptováno.
+  default Shipard; po `accountPrefs.load()` + `appInfo.load()` se aplikuje
+  efektivní vzhled a naplní cache (další reloady bez flashe) — akceptováno.
 
-Tatáž volba je dostupná na třech místech, všechna čtou/píší jednu pravdu
-ve storu: dropdown patky sidebaru, `ThemePanel`, a stránka **Základní**
-v account módu (`ThemeField` / `LanguageField`).
+#### DS default + follow (Fáze 4)
+
+- **DS default** přichází přes `appInfo` (`/_app/info` → `theme`) →
+  `themeStore.setDsDefault({mode, custom} | null)`. Store ho drží v
+  `dsDefault` a cachuje do `shpd_ds_theme(_tokens)`. Změna DS defaultu
+  (uložená správcem) se u follow-uživatele projeví po jeho příštím loadu;
+  `SettingsPage` po Uložit volá `appInfoStore.load()`, takže follow-admin
+  vidí změnu hned.
+- **`account.theme` follow tvar**: `{follow:true}` (sleduj DS default) nebo
+  `{follow:false, mode, custom}` (override). Legacy `{mode, custom}` bez
+  follow = override. Absence hodnoty = follow (nový uživatel).
+- **Efektivní vzhled**: `effectiveConfig()` = `follow ? (dsDefault ??
+  Shipard) : {mode, custom}`. `applyEffective()` je jediné místo, které
+  píše `shpd_theme` (`'follow'` vs override mode) a synchronizuje cache.
+- **Přepínač „Vlastní vzhled"** (`ThemeField`, `setFollow`): vypnuto =
+  follow (výběr skrytý + poznámka + mini náhled DS defaultu), zapnuto =
+  override. První zapnutí předvyplní override zděděnou DS hodnotou, pokud
+  je override ještě „pristine" (Shipard default) — `overrideIsPristine()`.
+
+Volba je dostupná na dvou místech, obě čtou/píší jednu pravdu ve storu:
+`ThemePanel` a stránka **Základní** v account módu (`ThemeField`). DS
+default edituje `DsThemeField` (Nastavení aplikace, ukládá přes Uložit).
+Dropdown vzhledu v patce sidebaru **zanikl**.
 
 ### ThemePanel
 
-`ThemePanel.svelte` — props `open`, `onClose`, `collapsed`. Obsah:
-přepínač báze těla (světlá/tmavá), **stránkovaný** grid preset swatchů
-(stránka 1 = plné barvy, stránka 2 = gradienty; šipky po stranách bez
-wrap-aroundu, klikatelné tečky pod gridem; otevření panelu zobrazí
-stránku s aktuálním výběrem), opacity slider (0–100, step 5) a nativní
+`ThemePanel.svelte` — props `open`, `onClose`, `collapsed`. Obsah je
+sdílená komponenta **`ThemeSwatches`** (Nastavení): přepínač báze těla
+(světlá/tmavá), **stránkovaný** grid preset swatchů (stránka 1 = plné
+barvy, stránka 2 = gradienty; šipky po stranách bez wrap-aroundu,
+klikatelné tečky pod gridem), opacity slider (0–100, step 5) a nativní
 `<input type="color">` s `oninput` (live preview při tažení). Custom
 color input je **solid-only** — při aktivním gradientu zobrazuje první
-stop a interakce přepne na solid. Každá interakce volá
+stop a interakce přepne na solid. Panel předává callbacky, které volají
 `themeStore.setCustom()` — aplikace okamžitá, žádné tlačítko Uložit.
+`ThemeSwatches` je **controlled** (dostane `custom` + callbacky, neimportuje
+themeStore) — stejnou komponentu používá i `DsThemeField` (DS default).
 
 - **Desktop**: fixed panel vedle sidebaru (`left` podle
   `collapsed` stavu); zavírání ✕ / Esc / klik mimo (document listener
@@ -1018,23 +1078,25 @@ stop a interakce přepne na solid. Každá interakce volá
 
 Panel renderuje **AppShell**, ne Sidebar — mobilní drawer má
 `transform` (containing block pro `position: fixed`) a `.shpd-sidebar`
-má `overflow: hidden`, panel/Modal uvnitř by se ořízl. Sidebar panel
-otevírá přes callback prop `onOpenThemePanel`; svůj `collapsed` stav
-zrcadlí do AppShellu přes `$bindable` prop. Klik na položku Vlastní
-v dropdownu zavře menu a otevře panel až po ticku (`setTimeout 0`) —
-viz past s click bubbling v sekci *Konvence → Dropdown / popover
-komponenty*.
+má `overflow: hidden`, panel/Modal uvnitř by se ořízl. Panel otevírá
+**`ThemeField`** (Nastavení účtu → Základní) přes callback prop
+`onOpenThemePanel` probublaný z AppShellu skrz `ContentArea` →
+`SettingsPage`. Sidebar `collapsed` stav zrcadlí do AppShellu přes
+`$bindable` prop. Otevření panelu deferujeme za aktuální klik
+(`setTimeout 0`) — viz past s click bubbling v sekci *Konvence →
+Dropdown / popover komponenty*.
 
 ### Implementační poznámka: `state_referenced_locally`
 
-Při mountu modulu se volá `applyTheme(initialMode, initialCustom)`,
-kde `initialMode`/`initialCustom` jsou lokální `const`, ne `$state`
-proměnné. Kdybychom dávali přímo `mode` (`$state`), Svelte 5 by hlásilo
-varování `state_referenced_locally` — čtení `$state` proměnné
-v top-level modulu zachycuje jen počáteční hodnotu, ne reaktivně.
-V tomto případě je to schválně (chceme spustit jen jednou při mountu),
-ale Svelte to neumi rozeznat. Reaktivní updaty následují přes
-`setMode()`/`setCustom()`, které volají `applyTheme` opětovně.
+Při mountu modulu se v `theme.svelte.js` volá IIFE `applyInitial()`,
+které čte lokální `const` (`initial`, `initialCustom`, `initialDsDefault`),
+ne `$state` proměnné. Kdybychom četli přímo `mode`/`follow` (`$state`),
+Svelte 5 by hlásilo varování `state_referenced_locally` — čtení `$state`
+v top-level modulu zachycuje jen počáteční hodnotu, ne reaktivně. Tady je
+to schválně (jednorázová aplikace při mountu); reaktivní updaty následují
+přes `setMode/setCustom/setFollow/setDsDefault`. Stejný vzor v
+`ThemeSwatches` — `presetPage` init čte prop `custom` přes `untrack()`
+(jen počáteční stránka, dál řízeno uživatelem).
 
 ---
 

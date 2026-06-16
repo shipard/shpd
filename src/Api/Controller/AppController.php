@@ -48,6 +48,7 @@ class AppController
             'app.shortName',
             'app.icon',
             'app.companyLogo',
+            'app.theme',
         ]);
 
         $name = is_string($values['app.name']) && trim($values['app.name']) !== ''
@@ -63,6 +64,10 @@ class AppController
             'shortName'   => $shortName,
             'icon'        => self::slotInfo('icon', $values['app.icon']),
             'companyLogo' => self::slotInfo('companyLogo', $values['app.companyLogo']),
+            // DS-wide výchozí vzhled ({mode, custom} nebo null). Veřejné spolu
+            // s brandingem — je to jen barva sidebaru, nic citlivého. Klient
+            // z něj počítá efektivní vzhled pro follow-uživatele.
+            'theme'       => is_array($values['app.theme']) ? $values['app.theme'] : null,
         ]);
     }
 

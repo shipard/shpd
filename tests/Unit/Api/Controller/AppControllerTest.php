@@ -101,6 +101,27 @@ class AppControllerTest extends TestCase
         $this->assertSame('Moje firma s.r.o.', $data['shortName']);
     }
 
+    public function testInfoThemeNullWhenUnset(): void
+    {
+        $data = $this->makeController()->info()->getPayload()['data'];
+        $this->assertArrayHasKey('theme', $data);
+        $this->assertNull($data['theme']);
+    }
+
+    public function testInfoIncludesDsTheme(): void
+    {
+        $resp = $this->makeController([
+            ['key' => 'app.theme', 'value' => json_encode([
+                'mode'   => 'custom',
+                'custom' => ['base' => 'light', 'sidebar' => ['type' => 'solid', 'color' => '#0E4F5C']],
+            ])],
+        ])->info();
+
+        $theme = $resp->getPayload()['data']['theme'];
+        $this->assertSame('custom', $theme['mode']);
+        $this->assertSame('#0E4F5C', $theme['custom']['sidebar']['color']);
+    }
+
     public function testInfoIncludesIconUrlWithHash(): void
     {
         $resp = $this->makeController([

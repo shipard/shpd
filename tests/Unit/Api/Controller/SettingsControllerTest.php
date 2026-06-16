@@ -103,13 +103,17 @@ class SettingsControllerTest extends TestCase
 
         $this->assertSame('appSettings', $data['definition']['id']);
         $this->assertSame('Aplikace', $data['definition']['label']);
-        $this->assertCount(4, $data['definition']['fields']);
+        $this->assertSame('ds', $data['definition']['scope']);
+        $this->assertCount(5, $data['definition']['fields']);
 
         $byId = array_column($data['definition']['fields'], null, 'id');
         $this->assertSame('Název zdroje dat', $byId['app.name']['label']);
         $this->assertSame(120, $byId['app.name']['maxLength']);
         $this->assertSame('image', $byId['app.icon']['type']);
         $this->assertSame('icon', $byId['app.icon']['slot']);
+        // DS default vzhledu — pole typu theme, scope ds (přes Uložit).
+        $this->assertSame('theme', $byId['app.theme']['type']);
+        $this->assertSame('Výchozí vzhled', $byId['app.theme']['label']);
 
         $this->assertSame('Moje firma s.r.o.', $data['values']['app.name']);
         $this->assertNull($data['values']['app.shortName']);
@@ -310,6 +314,113 @@ class SettingsControllerTest extends TestCase
         );
 
         $this->assertSame(422, $this->getStatus($resp));
+    }
+
+    // --- account.theme follow tvary (Fáze 4) ---
+
+    public function testSavePageAccountThemeFollowTrue(): void
+    {
+        $captured = null;
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchAll')->willReturn([]);
+        $db->expects($this->once())->method('execute')
+            ->willReturnCallback(function (...$args) use (&$captured) { $captured = $args; });
+
+        $resp = $this->ctrl->savePage(
+            'accountBasic',
+            $this->saveRequest(['values' => ['account.theme' => ['follow' => true]]]),
+            $this->config(), $this->resolver, $this->auth(), $db,
+        );
+
+        $this->assertSame(200, $this->getStatus($resp));
+        // UserSettingsStore::set váže (userId, key, json, json) — JSON je index 3.
+        $this->assertSame(['follow' => true], json_decode($captured[3], true));
+    }
+
+    public function testSavePageAccountThemeOverrideKeepsFollowFalse(): void
+    {
+        $captured = null;
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchAll')->willReturn([]);
+        $db->expects($this->once())->method('execute')
+            ->willReturnCallback(function (...$args) use (&$captured) { $captured = $args; });
+
+        $resp = $this->ctrl->savePage(
+            'accountBasic',
+            $this->saveRequest(['values' => [
+                'account.theme' => ['follow' => false, 'mode' => 'dark', 'custom' => null],
+            ]]),
+            $this->config(), $this->resolver, $this->auth(), $db,
+        );
+
+        $this->assertSame(200, $this->getStatus($resp));
+        $stored = json_decode($captured[3], true);
+        $this->assertFalse($stored['follow']);
+        $this->assertSame('dark', $stored['mode']);
+    }
+
+    public function testSavePageAccountThemeLegacyShapeBecomesOverride(): void
+    {
+        // Legacy {mode, custom} bez follow → uloží se jako override (follow:false).
+        $captured = null;
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchAll')->willReturn([]);
+        $db->expects($this->once())->method('execute')
+            ->willReturnCallback(function (...$args) use (&$captured) { $captured = $args; });
+
+        $resp = $this->ctrl->savePage(
+            'accountBasic',
+            $this->saveRequest(['values' => [
+                'account.theme' => ['mode' => 'custom', 'custom' => ['base' => 'light', 'sidebar' => ['type' => 'solid', 'color' => '#6D1F2C']]],
+            ]]),
+            $this->config(), $this->resolver, $this->auth(), $db,
+        );
+
+        $this->assertSame(200, $this->getStatus($resp));
+        $stored = json_decode($captured[3], true);
+        $this->assertFalse($stored['follow']);
+        $this->assertSame('custom', $stored['mode']);
+    }
+
+    // --- app.theme (DS default, scope ds, bez follow) ---
+
+    public function testSavePageAppThemeStoresWithoutFollow(): void
+    {
+        $captured = null;
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchAll')->willReturn([]);
+        $db->expects($this->once())->method('execute')
+            ->willReturnCallback(function (...$args) use (&$captured) { $captured = $args; });
+
+        $resp = $this->ctrl->savePage(
+            'appSettings',
+            $this->saveRequest(['values' => [
+                'app.theme' => ['follow' => true, 'mode' => 'custom', 'custom' => ['base' => 'light', 'sidebar' => ['type' => 'solid', 'color' => '#00345C']]],
+            ]]),
+            $this->config(), $this->resolver, $this->auth(), $db,
+        );
+
+        $this->assertSame(200, $this->getStatus($resp));
+        // DS scope follow ignoruje — uloží jen {mode, custom}.
+        $stored = json_decode($captured[2], true);
+        $this->assertArrayNotHasKey('follow', $stored);
+        $this->assertSame('custom', $stored['mode']);
+        $this->assertSame('#00345C', $stored['custom']['sidebar']['color']);
+    }
+
+    public function testSavePageAppThemeInvalidReturns422(): void
+    {
+        $db = $this->mockDb();
+        $db->expects($this->never())->method('execute');
+
+        $resp = $this->ctrl->savePage(
+            'appSettings',
+            $this->saveRequest(['values' => ['app.theme' => ['mode' => 'bogus']]]),
+            $this->config(), $this->resolver, $this->auth(), $db,
+        );
+
+        $this->assertSame(422, $this->getStatus($resp));
+        $this->assertSame('app.theme', $resp->getPayload()['error']['details'][0]['field']);
     }
 
     // --- account navigation ---

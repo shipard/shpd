@@ -216,19 +216,35 @@ class SettingsController
                 // Prázdný string = smazat klíč → čtenáři padnou na fallback.
                 $toSave[$id] = $value === '' ? null : $value;
             } elseif ($type === 'theme') {
+                if (!is_array($raw)) {
+                    $errors[] = ['field' => $id, 'code' => 'INVALID_VALUE', 'message' => 'Invalid theme value'];
+                    continue;
+                }
+                // User-scope theme (account.theme) nese follow flag:
+                //   {follow:true}                → sleduj DS default
+                //   {follow:false, mode, custom} → vlastní override
+                //   {mode, custom} (legacy)      → ber jako override (follow:false)
+                // DS-scope theme (app.theme) follow nemá — případný flag zahodíme.
+                $isUserScope = ($pageDef['scope'] ?? 'ds') === 'user';
+                if ($isUserScope && ($raw['follow'] ?? false) === true) {
+                    $toSave[$id] = ['follow' => true];
+                    continue;
+                }
                 // Strukturovaná hodnota { mode: light|dark|custom, custom: {...} }.
                 // U light/dark může custom nést poslední známou konfiguraci.
-                if (!is_array($raw)
-                    || !in_array($raw['mode'] ?? null, ['light', 'dark', 'custom'], true)
+                if (!in_array($raw['mode'] ?? null, ['light', 'dark', 'custom'], true)
                     || (isset($raw['custom']) && !is_array($raw['custom']))
                 ) {
                     $errors[] = ['field' => $id, 'code' => 'INVALID_VALUE', 'message' => 'Invalid theme value'];
                     continue;
                 }
-                $toSave[$id] = [
+                $clean = [
                     'mode'   => $raw['mode'],
                     'custom' => is_array($raw['custom'] ?? null) ? $raw['custom'] : null,
                 ];
+                // Override z user-scope si nese explicitní follow:false, aby se
+                // odlišil od „sleduj DS"; ds-scope follow nezná.
+                $toSave[$id] = $isUserScope ? ['follow' => false] + $clean : $clean;
             } elseif ($type === 'language') {
                 if (!in_array($raw, ['cs', 'en', 'auto'], true)) {
                     $errors[] = ['field' => $id, 'code' => 'INVALID_VALUE', 'message' => 'Invalid language value'];
@@ -297,6 +313,10 @@ class SettingsController
             'id'     => $page['id'],
             'label'  => $this->localizeViewerName($page, $language),
             'icon'   => $page['icon'] ?? null,
+            // scope (ds|user) řídí na klientovi render theme pole: user →
+            // živý ThemeField vázaný na themeStore (+ follow přepínač), ds →
+            // DsThemeField ukládaný přes Uložit do app.theme.
+            'scope'  => $page['scope'] ?? 'ds',
             'fields' => $fields,
         ];
     }

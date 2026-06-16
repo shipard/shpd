@@ -75,6 +75,16 @@
                     "hint": "Used on output documents (invoices etc.).",
                     "hint:cs": "Použije se na výstupních sestavách (faktury apod.).",
                     "hint:en": "Used on output documents (invoices etc.)."
+                },
+                {
+                    "id": "app.theme",
+                    "type": "theme",
+                    "name": "Default appearance",
+                    "name:cs": "Výchozí vzhled",
+                    "name:en": "Default appearance",
+                    "hint": "Default sidebar appearance for all users who haven't set their own.",
+                    "hint:cs": "Výchozí vzhled sidebaru pro všechny uživatele, kteří nemají vlastní.",
+                    "hint:en": "Default sidebar appearance for all users who haven't set their own."
                 }
             ]
         },

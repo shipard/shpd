@@ -11,6 +11,7 @@
         "docs.core",
         "base.persons",
         "economy.items",
+        "economy.bank",
         "core.units",
         "world.vat",
         "core.mail",

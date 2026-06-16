@@ -448,7 +448,15 @@ function dispatchExchange(
 		$tables,
 		$personApplier,
 	);
-	$ctrl = new ExchangeController($applier, $personApplier, $itemApplier);
+	$bankApplier = \Shipard\Module\Core\Exchange\Bank\BankStatementApplier::create(
+		$db->getDibiConnection(),
+		$configRuntime,
+		$resolved->config,
+		$documentRegistry,
+		$tables,
+		$documentEventDispatcher,
+	);
+	$ctrl = new ExchangeController($applier, $personApplier, $itemApplier, $bankApplier);
 
 	return match ($route->action) {
 		'validate'        => $ctrl->validate($request),
@@ -460,6 +468,9 @@ function dispatchExchange(
 		'item:validate'   => $ctrl->validateItem($request),
 		'item:preview'    => $ctrl->previewItem($request),
 		'item:apply'      => $ctrl->applyItem($request),
+		'bank:validate'   => $ctrl->validateBankStatement($request),
+		'bank:preview'    => $ctrl->previewBankStatement($request),
+		'bank:apply'      => $ctrl->applyBankStatement($request),
 		default           => Response::error('INTERNAL_ERROR', "Unknown exchange action: {$route->action}", 500),
 	};
 }

@@ -169,6 +169,10 @@ class Router
 			return $this->resolveItemsExchangeRoute($subpath, $method);
 		}
 
+		if (str_starts_with($subpath, '/_exchange/bank/statement/')) {
+			return $this->resolveBankExchangeRoute($subpath, $method);
+		}
+
 		if (str_starts_with($subpath, '/_alerts')) {
 			return $this->resolveAlertsRoute($subpath, $method);
 		}
@@ -433,6 +437,22 @@ class Router
 			return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
 		}
 		return new Route('exchange', "item:{$rest}");
+	}
+
+	/**
+	 * Bank statement flow sdílí `exchange` dispatcher; akce s prefixem
+	 * `bank:` (vzor person/item).
+	 */
+	private function resolveBankExchangeRoute(string $subpath, string $method): Route|Response
+	{
+		$rest = substr($subpath, strlen('/_exchange/bank/statement/'));
+		if (!in_array($rest, ['validate', 'preview', 'apply'], true)) {
+			return Response::error('NOT_FOUND', 'Not found', 404);
+		}
+		if ($method !== 'POST') {
+			return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+		}
+		return new Route('exchange', "bank:{$rest}");
 	}
 
 	private function resolveAlertsRoute(string $subpath, string $method): Route|Response

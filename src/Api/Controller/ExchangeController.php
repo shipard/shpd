@@ -6,6 +6,7 @@ namespace Shipard\Api\Controller;
 
 use Shipard\Api\Request;
 use Shipard\Api\Response;
+use Shipard\Module\Core\Exchange\Bank\BankStatementApplier;
 use Shipard\Module\Core\Exchange\Common\ApplyResult;
 use Shipard\Module\Core\Exchange\Document\DocumentApplier;
 use Shipard\Module\Core\Exchange\Item\ItemApplier;
@@ -36,6 +37,7 @@ final class ExchangeController
         private readonly DocumentApplier $applier,
         private readonly ?PersonApplier $personApplier = null,
         private readonly ?ItemApplier $itemApplier = null,
+        private readonly ?BankStatementApplier $bankApplier = null,
     ) {}
 
     // ── Document flow ──────────────────────────────────────────────────
@@ -143,6 +145,44 @@ final class ExchangeController
         return $this->respond($this->itemApplier->apply($payload), 'savedItemId');
     }
 
+    // ── Bank statement flow ────────────────────────────────────────────
+
+    public function validateBankStatement(Request $request): Response
+    {
+        if ($this->bankApplier === null) {
+            return $this->bankFlowUnavailable();
+        }
+        $payload = $this->extractPayload($request);
+        if ($payload instanceof Response) {
+            return $payload;
+        }
+        return $this->respond($this->bankApplier->validate($payload), 'savedStatementId');
+    }
+
+    public function previewBankStatement(Request $request): Response
+    {
+        if ($this->bankApplier === null) {
+            return $this->bankFlowUnavailable();
+        }
+        $payload = $this->extractPayload($request);
+        if ($payload instanceof Response) {
+            return $payload;
+        }
+        return $this->respond($this->bankApplier->preview($payload), 'savedStatementId');
+    }
+
+    public function applyBankStatement(Request $request): Response
+    {
+        if ($this->bankApplier === null) {
+            return $this->bankFlowUnavailable();
+        }
+        $payload = $this->extractPayload($request);
+        if ($payload instanceof Response) {
+            return $payload;
+        }
+        return $this->respond($this->bankApplier->apply($payload), 'savedStatementId');
+    }
+
     // ── Shared plumbing ────────────────────────────────────────────────
 
     /**
@@ -194,6 +234,15 @@ final class ExchangeController
         return Response::error(
             'INTERNAL_ERROR',
             'Item exchange flow is not wired in this dispatcher.',
+            500,
+        );
+    }
+
+    private function bankFlowUnavailable(): Response
+    {
+        return Response::error(
+            'INTERNAL_ERROR',
+            'Bank statement exchange flow is not wired in this dispatcher.',
             500,
         );
     }

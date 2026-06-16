@@ -5,18 +5,31 @@ declare(strict_types=1);
 namespace Shipard\Module\Economy\Bank\Import;
 
 use Shipard\Core\Config\ConfigRuntime;
+use Shipard\Core\Config\DataSourceConfig;
+use Shipard\Core\Document\DocStateConfig;
+use Shipard\Core\Document\DocumentEventDispatcher;
+use Shipard\Core\Document\DocumentRegistry;
+use Shipard\Core\Document\TableGateway;
 use Shipard\Module\Core\Attachments\AttachmentService;
 use Shipard\Module\Economy\Bank\BankStatementDocument;
-use Shipard\Module\Economy\Bank\BankTransactionDocument;
 
 /**
  * Orchestrace importu bankovního výpisu: detekce + parse → match našeho účtu →
  * najít/založit výpis → per transakce dedup (external_id / fingerprint) +
- * vznik ve stavu Nová (10) → dohledání partnera → zůstatkový můstek →
+ * vznik ve stavu `targetState` → dohledání partnera → zůstatkový můstek →
  * uložení zdrojového souboru jako příloha.
  *
- * Idempotentní: opětovný import téhož souboru → vše skipped. Per-výpis
- * transakce (jeden vadný výpis neshodí ostatní). Žádné účtování (Fáze 3).
+ * Apply jádro (`applyParsedStatement`) je sdílené souborovým importem (Fáze 2,
+ * `targetState = 10`) i migrací přes výměnný formát (Fáze 4 `BankStatementApplier`,
+ * `targetState = 40` → účtování). Transakce vznikají přes dokumentovou vrstvu
+ * (`TableGateway`), takže přechod do stavu 40 spustí `BankTransactionEventHandler`
+ * (účtování). Vznik přes core `TableGateway` (ne exchange variantu) drží směr
+ * závislostí (economy.bank nezná core.exchange); `applyParsedStatement` vlastní
+ * vnější transakci, vnořené begin/commit gatewaye i účetního enginu jsou
+ * savepointy (dibi).
+ *
+ * Idempotentní: opětovný import/apply téhož vstupu → vše skipped. Per-výpis
+ * transakce (jeden vadný výpis neshodí ostatní).
  */
 final class StatementImportService
 {
@@ -31,8 +44,37 @@ final class StatementImportService
         private readonly \Dibi\Connection $db,
         private readonly ConfigRuntime $config,
         private readonly ?AttachmentService $attachments = null,
+        private readonly ?TableGateway $txGateway = null,
     ) {
         $this->partnerResolver = new PartnerResolver($db);
+    }
+
+    /**
+     * Produkční factory — postaví core TableGateway pro transakce (s event
+     * dispatcherem, aby vznik ve stavu 40 spustil účtování) a vrátí službu.
+     *
+     * @param array<string, \Shipard\Core\Database\TableDefinition> $tables
+     */
+    public static function create(
+        \Dibi\Connection $db,
+        ConfigRuntime $config,
+        DataSourceConfig $dsConfig,
+        DocumentRegistry $registry,
+        array $tables,
+        ?DocumentEventDispatcher $eventDispatcher = null,
+        ?AttachmentService $attachments = null,
+    ): self {
+        $childTables = $tables[self::TABLE_TX]?->childTables ?? [];
+        $txGateway = new TableGateway(
+            self::TABLE_TX,
+            $db,
+            $registry,
+            $childTables,
+            $config,
+            $dsConfig,
+            $eventDispatcher,
+        );
+        return new self($db, $config, $attachments, $txGateway);
     }
 
     /**
@@ -61,12 +103,10 @@ final class StatementImportService
         ];
 
         foreach ($statements as $parsed) {
-            $this->db->begin();
             try {
-                $result = $this->importStatement($parsed, $accountOverride);
-                $this->db->commit();
+                $account = $this->matchBankAccount($parsed->bankAccountRef, $accountOverride);
+                $result = $this->applyParsedStatement($parsed, (int) $account['id'], 10);
             } catch (ImportException $e) {
-                $this->db->rollback();
                 $summary['statements'][] = [
                     'bankAccountRef' => $parsed->bankAccountRef,
                     'error'          => $e->getMessage(),
@@ -100,23 +140,46 @@ final class StatementImportService
         return $summary;
     }
 
-    /** @return array<string, mixed> */
-    private function importStatement(ParsedStatement $parsed, ?string $accountOverride): array
-    {
-        $account = $this->matchBankAccount($parsed->bankAccountRef, $accountOverride);
-        $accountId = (int) $account['id'];
+    /**
+     * Sdílené apply jádro — vznik výpisu + transakcí z již naparsované
+     * `ParsedStatement` na zadaný účet (`bankAccountId`), ve stavu
+     * `targetState` (10 = Nová, 40 = Zaúčtováno → spustí účetní engine).
+     * Vlastní transakce per výpis (atomická hlavička + transakce + můstek).
+     *
+     * Volá souborový import (`import()` s targetState 10) i migrace
+     * (`BankStatementApplier` přes výměnný formát). `createMissingPartner` je
+     * rezervovaný (auto-create partnera z protistrany je rozšíření, viz
+     * docs/bank.md §7 — saldo/párování se nemigruje).
+     *
+     * @return array<string, mixed> souhrn (created/skipped/unmatched/reconciliation)
+     * @throws ImportException účet nenalezen/neaktivní nebo neplatný výpis
+     */
+    public function applyParsedStatement(
+        ParsedStatement $stmt,
+        int $bankAccountId,
+        int $targetState = 10,
+        bool $createMissingPartner = false,
+    ): array {
+        if ($this->txGateway === null) {
+            throw new \LogicException(
+                'StatementImportService vyžaduje transakční gateway; použij StatementImportService::create().',
+            );
+        }
+
+        $account = $this->loadBankAccount($bankAccountId);
         $accountCurrency = strtolower((string) ($account['currency'] ?? ''));
 
         $currency = $accountCurrency;
         $currencyWarning = null;
-        $parsedCcy = $parsed->currency !== null ? strtolower($parsed->currency) : null;
-        if ($parsedCcy !== null && $accountCurrency !== '' && $parsedCcy !== $accountCurrency) {
-            $currencyWarning = "Měna výpisu ({$parsedCcy}) se liší od měny účtu ({$accountCurrency}); použita měna účtu.";
-        } elseif ($parsedCcy !== null && $accountCurrency === '') {
-            $currency = $parsedCcy;
+        $stmtCcy = $stmt->currency !== null ? strtolower($stmt->currency) : null;
+        if ($stmtCcy !== null && $accountCurrency !== '' && $stmtCcy !== $accountCurrency) {
+            $currencyWarning = "Měna výpisu ({$stmtCcy}) se liší od měny účtu ({$accountCurrency}); použita měna účtu.";
+        } elseif ($stmtCcy !== null && $accountCurrency === '') {
+            $currency = $stmtCcy;
         }
 
-        $statementId = $this->findOrCreateStatement($parsed, $accountId, $currency);
+        $statesCfg = DocStateConfig::fromCfgItem($this->config->cfgItem('economy.bank.txStates'));
+        $mainState = $statesCfg->getMainState($targetState);
 
         $created = 0;
         $skipped = 0;
@@ -124,68 +187,79 @@ final class StatementImportService
         $txErrors = [];
         $seqInDay = [];
 
-        foreach ($parsed->transactions as $tx) {
-            $direction = $tx->amount < 0 ? 2 : 1;
-            $amount = abs($tx->amount);
-            $dateKey = $tx->dateTransaction->format('Y-m-d');
-            $seqKey = $dateKey;
-            $seqInDay[$seqKey] = ($seqInDay[$seqKey] ?? -1) + 1;
+        $this->db->begin();
+        try {
+            $statementId = $this->findOrCreateStatement($stmt, $bankAccountId, $currency);
 
-            $fingerprint = $this->fingerprint($accountId, $tx, $direction, $amount, $dateKey, $seqInDay[$seqKey]);
+            foreach ($stmt->transactions as $tx) {
+                $direction = $tx->amount < 0 ? 2 : 1;
+                $amount = abs($tx->amount);
+                $dateKey = $tx->dateTransaction->format('Y-m-d');
+                $seqInDay[$dateKey] = ($seqInDay[$dateKey] ?? -1) + 1;
 
-            $existingId = $this->findExisting($accountId, $tx->externalId, $fingerprint);
-            if ($existingId !== null) {
-                // doplnit chybějící statement / external_id
-                $this->backfill($existingId, $statementId, $tx->externalId, $fingerprint);
-                $skipped++;
-                continue;
+                $fingerprint = $this->fingerprint($bankAccountId, $tx, $direction, $amount, $dateKey, $seqInDay[$dateKey]);
+
+                $existingId = $this->findExisting($bankAccountId, $tx->externalId, $fingerprint);
+                if ($existingId !== null) {
+                    $this->backfill($existingId, $statementId, $tx->externalId, $fingerprint);
+                    $skipped++;
+                    continue;
+                }
+
+                $partnerId = $this->partnerResolver->resolve($tx->counterpartyAccount);
+                $row = [
+                    'bank_account'         => $bankAccountId,
+                    'statement'            => $statementId,
+                    'direction'            => $direction,
+                    'amount'               => round($amount, 2),
+                    'currency'             => $currency,
+                    'exchange_rate'        => 1,
+                    'amount_dom'           => round($amount, 2),
+                    'date_transaction'     => $dateKey,
+                    'date_value'           => $tx->dateValue?->format('Y-m-d'),
+                    'counterparty_account' => $tx->counterpartyAccount,
+                    'counterparty_name'    => $this->cap($tx->counterpartyName, 150),
+                    'symbol1'              => $this->cap($tx->symbol1, 10),
+                    'symbol2'              => $this->cap($tx->symbol2, 10),
+                    'symbol3'              => $this->cap($tx->symbol3, 10),
+                    'message'              => $this->cap($tx->message, 250),
+                    'operation'            => $tx->operation ?? ($direction === 1 ? 'payment.in' : 'payment.out'),
+                    'external_id'          => $tx->externalId,
+                    'fingerprint'          => $fingerprint,
+                    'partner'              => $partnerId,
+                    'accounting_state'     => 0,
+                    'docState'             => $targetState,
+                    'docStateMain'         => $mainState,
+                ];
+
+                // Vznik přes dokumentovou vrstvu — přechod do 40 spustí
+                // BankTransactionEventHandler (účtování). Selhání jedné
+                // transakce (savepoint rollback) neshodí zbytek výpisu.
+                $result = $this->txGateway->saveDocument($row);
+                if (!$result->isSuccess()) {
+                    $txErrors[] = [
+                        'date'   => $dateKey,
+                        'amount' => $amount,
+                        'errors' => $this->resultErrors($result),
+                    ];
+                    continue;
+                }
+
+                if ($partnerId === null && $tx->counterpartyAccount !== null) {
+                    $unmatchedPartner++;
+                }
+                $created++;
             }
 
-            $row = [
-                'bank_account'        => $accountId,
-                'statement'           => $statementId,
-                'direction'           => $direction,
-                'amount'              => round($amount, 2),
-                'currency'            => $currency,
-                'exchange_rate'       => 1,
-                'amount_dom'          => round($amount, 2),
-                'date_transaction'    => $dateKey,
-                'date_value'          => $tx->dateValue?->format('Y-m-d'),
-                'counterparty_account' => $tx->counterpartyAccount,
-                'counterparty_name'   => $this->cap($tx->counterpartyName, 150),
-                'symbol1'             => $this->cap($tx->symbol1, 10),
-                'symbol2'             => $this->cap($tx->symbol2, 10),
-                'symbol3'             => $this->cap($tx->symbol3, 10),
-                'message'             => $this->cap($tx->message, 250),
-                'operation'           => $direction === 1 ? 'payment.in' : 'payment.out',
-                'external_id'         => $tx->externalId,
-                'fingerprint'         => $fingerprint,
-                'partner'             => $this->partnerResolver->resolve($tx->counterpartyAccount),
-                'accounting_state'    => 0,
-                'docState'            => 10,
-                'docStateMain'        => 1,
-            ];
-
-            $doc = new BankTransactionDocument();
-            $doc->setDb($this->db);
-            $validation = $doc->validate($row);
-            if (!$validation->isValid()) {
-                $txErrors[] = ['date' => $dateKey, 'amount' => $amount, 'errors' => $validation->toArray()];
-                continue;
-            }
-            $doc->beforeSave($row);
-            $this->db->insert(self::TABLE_TX, $row)->execute();
-
-            if ($row['partner'] === null && $tx->counterpartyAccount !== null) {
-                $unmatchedPartner++;
-            }
-            $created++;
+            $reconciliation = $this->reconcile($statementId, $stmt->openingBalance, $stmt->closingBalance);
+            $this->db->commit();
+        } catch (\Throwable $e) {
+            $this->db->rollback();
+            throw $e;
         }
 
-        $reconciliation = $this->reconcile($statementId, $parsed->openingBalance, $parsed->closingBalance);
-
         return [
-            'bankAccountRef'   => $parsed->bankAccountRef,
+            'bankAccountRef'   => $stmt->bankAccountRef,
             'statementId'      => $statementId,
             'created'          => $created,
             'skipped'          => $skipped,
@@ -194,6 +268,40 @@ final class StatementImportService
             'currencyWarning'  => $currencyWarning,
             'txErrors'         => $txErrors,
         ];
+    }
+
+    /**
+     * Načte vlastní bankovní účet dle id (exchange/migrace ho zná přímo).
+     *
+     * @return array<string, mixed>
+     * @throws ImportException nenalezen / neaktivní
+     */
+    private function loadBankAccount(int $id): array
+    {
+        $row = $this->db->query(
+            'SELECT [id], [currency], [code] FROM %n WHERE [id] = %i AND [docState] IN %in',
+            self::tableBankAccounts(),
+            $id,
+            self::ACTIVE_STATES,
+        )->fetch();
+        if ($row === false || $row === null) {
+            throw new ImportException("Bankovní účet #{$id} nenalezen nebo není aktivní.");
+        }
+        return (array) $row;
+    }
+
+    /**
+     * Chybové hlášky z neúspěšného saveDocument (validace / doménová chyba).
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function resultErrors(\Shipard\Core\Document\DocumentResult $result): array
+    {
+        $validation = $result->getValidation();
+        if ($validation !== null && !$validation->isValid()) {
+            return $validation->toArray();
+        }
+        return [['message' => $result->getErrorMessage() ?? 'Uložení transakce selhalo.']];
     }
 
     /**

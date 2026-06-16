@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Shipard\Command\DataSource;
 
+use Shipard\Api\DocumentEventHandlerLoader;
+use Shipard\Api\DocumentLoader;
 use Shipard\Api\TableLoader;
 use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Config\DataSourceConfig;
@@ -79,7 +81,18 @@ class BankImportStatementCommand extends Command
         $config = ConfigRuntime::load($dsDir, $lang);
         $tables = TableLoader::load($dsConfig, $resolver, $lang);
         $attachments = new AttachmentService($dsConnection, $dsDir, $tables);
-        $service = new StatementImportService($dsConnection->getDibiConnection(), $config, $attachments);
+        $dibi = $dsConnection->getDibiConnection();
+        $registry = DocumentLoader::load($dsConfig, $resolver);
+        $dispatcher = DocumentEventHandlerLoader::load($dsConfig, $resolver, $dibi, $config);
+        $service = StatementImportService::create(
+            $dibi,
+            $config,
+            $dsConfig,
+            $registry,
+            $tables,
+            $dispatcher,
+            $attachments,
+        );
 
         // Kopie do tempu — upload přílohy nesmí spotřebovat uživatelův originál.
         $tmp = (string) tempnam(sys_get_temp_dir(), 'bankimp_');

@@ -279,7 +279,7 @@ function dispatch(
 		'exchange' => dispatchExchange($route, $request, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher),
 		'alerts' => dispatchAlerts($route, $request, $db, $alertCheckRegistry, $configRuntime, resolveLanguage($request, $resolved->config)),
 		'accounting' => dispatchAccounting($route, $request, $db, $configRuntime),
-		'bank'    => dispatchBank($route, $request, $auth, $tables, $db, $resolved, $configRuntime),
+		'bank'    => dispatchBank($route, $request, $auth, $tables, $db, $resolved, $configRuntime, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher),
 		'personsRegistry' => dispatchPersonsRegistry($route, $request, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $serverConfig),
 		'mcp'     => dispatchMcp($request, $auth, $resolved->connection, $tables, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'openapi' => (new OpenApiController())->spec($auth, $openApiPublic, $tables, $baseUrl),
@@ -364,9 +364,19 @@ function dispatchBank(
 	\Shipard\Core\Database\DataSourceConnection $db,
 	\Shipard\Api\ResolvedDataSource $resolved,
 	?\Shipard\Core\Config\ConfigRuntime $configRuntime,
+	\Shipard\Core\Document\DocumentRegistry $documentRegistry,
+	?\Shipard\Core\Document\DocumentEventDispatcher $documentEventDispatcher = null,
 ): Response {
 	$dsPath = $resolved->config->getDataSourceDir();
-	$ctrl = new \Shipard\Module\Economy\Bank\BankController($db, $configRuntime, $dsPath, $tables);
+	$ctrl = new \Shipard\Module\Economy\Bank\BankController(
+		$db,
+		$configRuntime,
+		$dsPath,
+		$tables,
+		$resolved->config,
+		$documentRegistry,
+		$documentEventDispatcher,
+	);
 	return match ($route->action) {
 		'importStatement' => $ctrl->importStatement($auth),
 		'reaccount'       => $ctrl->reaccount($request),

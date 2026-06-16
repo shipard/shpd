@@ -9,8 +9,10 @@ namespace Shipard\Module\Economy\Bank\Import;
  * vstup import service. Immutable, bez vazby na DB.
  *
  * `amount` je ZNAMÉNKOVÁ (záporná = výdaj); import ji rozloží na kladný
- * `amount` + `direction`. `raw` nese surový parser payload pro fingerprint
- * a debug.
+ * `amount` + `direction`. `operation` je obvykle null (souborové parsery ho
+ * nenesou → default dle směru payment.in/out); migrace přes výměnný formát
+ * může předat explicitní pohyb. `raw` nese surový parser payload pro
+ * fingerprint a debug.
  */
 final class ParsedTransaction
 {
@@ -27,5 +29,6 @@ final class ParsedTransaction
         public readonly ?string $symbol3 = null,
         public readonly ?string $message = null,
         public readonly array $raw = [],
+        public readonly ?string $operation = null,
     ) {}
 }

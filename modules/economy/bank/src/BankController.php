@@ -8,8 +8,11 @@ use Shipard\Api\AuthContext;
 use Shipard\Api\Request;
 use Shipard\Api\Response;
 use Shipard\Core\Config\ConfigRuntime;
+use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Database\TableDefinition;
+use Shipard\Core\Document\DocumentEventDispatcher;
+use Shipard\Core\Document\DocumentRegistry;
 use Shipard\Module\Core\Attachments\AttachmentService;
 use Shipard\Module\Economy\Bank\Import\ImportException;
 use Shipard\Module\Economy\Bank\Import\StatementImportService;
@@ -33,6 +36,9 @@ final class BankController
         private readonly ?ConfigRuntime $config,
         private readonly string $dsPath,
         private readonly array $tables,
+        private readonly DataSourceConfig $dsConfig,
+        private readonly DocumentRegistry $registry,
+        private readonly ?DocumentEventDispatcher $eventDispatcher = null,
     ) {
     }
 
@@ -68,7 +74,15 @@ final class BankController
         $userId = $auth->isAuthenticated ? $auth->userId : null;
 
         $attachments = new AttachmentService($this->db, $this->dsPath, $this->tables);
-        $service = new StatementImportService($this->db->getDibiConnection(), $this->config, $attachments);
+        $service = StatementImportService::create(
+            $this->db->getDibiConnection(),
+            $this->config,
+            $this->dsConfig,
+            $this->registry,
+            $this->tables,
+            $this->eventDispatcher,
+            $attachments,
+        );
 
         try {
             $summary = $service->import($raw, $account, $tmpPath, $originalName, $userId);

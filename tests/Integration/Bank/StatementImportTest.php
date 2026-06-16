@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Shipard\Tests\Integration\Bank;
 
+use Shipard\Api\DocumentEventHandlerLoader;
+use Shipard\Api\DocumentLoader;
 use Shipard\Core\Config\ConfigRuntime;
+use Shipard\Core\Module\ModulePathResolver;
 use Shipard\Module\Economy\Bank\Checks\StatementReconciliationCheck;
 use Shipard\Module\Economy\Bank\Import\Parsers\GpcParser;
 use Shipard\Module\Economy\Bank\Import\StatementImportService;
@@ -72,7 +75,20 @@ class StatementImportTest extends IntegrationTestCase
 
     private function service(): StatementImportService
     {
-        return new StatementImportService($this->dibi, $this->configRuntime, null);
+        // Refaktorované apply jádro vzniká transakce přes dokumentovou vrstvu;
+        // service se staví factory create() (registry + gateway).
+        $resolver = new ModulePathResolver([dirname(__DIR__, 3) . '/modules']);
+        $registry = DocumentLoader::load($this->dsConfig, $resolver);
+        $dispatcher = DocumentEventHandlerLoader::load($this->dsConfig, $resolver, $this->dibi, $this->configRuntime);
+        return StatementImportService::create(
+            $this->dibi,
+            $this->configRuntime,
+            $this->dsConfig,
+            $registry,
+            $this->tables,
+            $dispatcher,
+            null,
+        );
     }
 
     private function fixture(string $name): string

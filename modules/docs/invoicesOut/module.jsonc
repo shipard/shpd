@@ -17,7 +17,9 @@
             "name:en": "Issued invoices",
             "icon": "invoice",
             "table": "docs_core_heads",
-            "class": "Shipard\\Module\\Docs\\InvoicesOut\\IssuedInvoicesViewer"
+            "class": "Shipard\\Module\\Docs\\InvoicesOut\\IssuedInvoicesViewer",
+            "navSection": "sales",
+            "navOrder": 10
         }
     ],
 

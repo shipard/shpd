@@ -17,7 +17,9 @@
             "name:en": "Received invoices",
             "icon": "invoice-in",
             "table": "docs_core_heads",
-            "class": "Shipard\\Module\\Docs\\InvoicesIn\\ReceivedInvoicesViewer"
+            "class": "Shipard\\Module\\Docs\\InvoicesIn\\ReceivedInvoicesViewer",
+            "navSection": "purchase",
+            "navOrder": 10
         }
     ],
 

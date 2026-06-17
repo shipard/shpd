@@ -267,7 +267,7 @@ function dispatch(
 		'attachment'  => dispatchAttachment($route, $request, $auth, $tables, $db, $resolved),
 		'chat'    => dispatchChat($route, $request, $auth, $db, $tables, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'meta'    => dispatchMeta($route->action, $route->table, $tables, resolveLanguage($request, $resolved->config)),
-		'ui'      => dispatchUi($route->action, $resolved->config, $modulePathResolver, resolveLanguage($request, $resolved->config)),
+		'ui'      => dispatchUi($route->action, $resolved->config, $modulePathResolver, resolveLanguage($request, $resolved->config), $configRuntime),
 		'dashboard' => dispatchDashboard($route, $db, $viewerRegistry, $configRuntime, resolveLanguage($request, $resolved->config)),
 		'settings' => dispatchSettings($route, $request, $auth, $resolved->config, $modulePathResolver, resolveLanguage($request, $resolved->config), $configRuntime, $db),
 		'app'     => dispatchApp($route, $auth, $db, $resolved->config),
@@ -684,11 +684,16 @@ function dispatchMeta(string $action, ?string $tableName, array $tables, string 
 	};
 }
 
-function dispatchUi(string $action, \Shipard\Core\Config\DataSourceConfig $config, ModulePathResolver $modulePathResolver, string $language): Response
-{
+function dispatchUi(
+	string $action,
+	\Shipard\Core\Config\DataSourceConfig $config,
+	ModulePathResolver $modulePathResolver,
+	string $language,
+	?\Shipard\Core\Config\ConfigRuntime $configRuntime = null,
+): Response {
 	$ctrl = new NavigationController();
 	return match ($action) {
-		'navigation' => $ctrl->navigation($config, $modulePathResolver, $language),
+		'navigation' => $ctrl->navigation($config, $modulePathResolver, $language, $configRuntime),
 		default      => Response::error('INTERNAL_ERROR', "Unknown UI action: {$action}", 500),
 	};
 }

@@ -27,7 +27,9 @@
             "name:en": "Chart of accounts",
             "icon": "calculator",
             "table": "economy_accounting_accounts",
-            "class": "Shipard\\Module\\Economy\\Accounting\\AccountsViewer"
+            "class": "Shipard\\Module\\Economy\\Accounting\\AccountsViewer",
+            "navSection": "accounting",
+            "navOrder": 20
         },
         {
             "id": "economy.accounting.journal",
@@ -36,7 +38,9 @@
             "name:en": "Accounting journal",
             "icon": "book",
             "table": "economy_accounting_journal",
-            "class": "Shipard\\Module\\Economy\\Accounting\\JournalViewer"
+            "class": "Shipard\\Module\\Economy\\Accounting\\JournalViewer",
+            "navSection": "accounting",
+            "navOrder": 10
         }
     ],
 

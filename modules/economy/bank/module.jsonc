@@ -27,7 +27,9 @@
             "name:en": "Bank transactions",
             "icon": "wallet",
             "table": "economy_bank_transactions",
-            "class": "Shipard\\Module\\Economy\\Bank\\BankTransactionsViewer"
+            "class": "Shipard\\Module\\Economy\\Bank\\BankTransactionsViewer",
+            "navSection": "accounting",
+            "navOrder": 30
         },
         {
             "id": "economy.bank.statements",
@@ -36,7 +38,9 @@
             "name:en": "Bank statements",
             "icon": "bank",
             "table": "economy_bank_statements",
-            "class": "Shipard\\Module\\Economy\\Bank\\BankStatementsViewer"
+            "class": "Shipard\\Module\\Economy\\Bank\\BankStatementsViewer",
+            "navSection": "accounting",
+            "navOrder": 40
         }
     ],
 

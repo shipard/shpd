@@ -31,6 +31,7 @@
         { "viewer": "core.mail.mailboxes",          "section": "other", "subsection": "other.mail", "order": 10 },
         { "table": "core_mail_message_analyses",    "section": "other", "subsection": "other.mail", "order": 20 },
         { "table": "core_mail_incoming_idempotency","section": "other", "subsection": "other.mail", "order": 30 },
+        { "table": "core_mail_extracted_documents", "section": "other", "subsection": "other.mail", "order": 35 },
         { "viewer": "core.mail.aiProfiles",         "section": "other", "subsection": "other.mail", "order": 50 },
         { "table": "core_mail_analysis_claims",     "section": "other", "subsection": "other.mail", "order": 60 }
     ],
@@ -43,7 +44,9 @@
             "name:en": "Incoming messages",
             "icon": "mail",
             "table": "core_mail_incoming_messages",
-            "class": "Shipard\\Module\\Core\\Mail\\IncomingMessagesViewer"
+            "class": "Shipard\\Module\\Core\\Mail\\IncomingMessagesViewer",
+            "navSection": "_top",
+            "navOrder": 30
         },
         {
             "id": "core.mail.mailboxes",

@@ -18,7 +18,8 @@
     ],
 
     "settingsItems": [
-        { "viewer": "core.chat.conversations", "section": "other", "subsection": "other.chat", "order": 10 }
+        { "viewer": "core.chat.conversations", "section": "other", "subsection": "other.chat", "order": 10 },
+        { "table": "core_chat_messages",       "section": "other", "subsection": "other.chat", "order": 20 }
     ],
 
     "viewers": [

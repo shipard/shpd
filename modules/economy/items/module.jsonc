@@ -30,7 +30,9 @@
             "name:en": "Items",
             "icon": "box",
             "table": "economy_items",
-            "class": "Shipard\\Module\\Economy\\Items\\ItemsViewer"
+            "class": "Shipard\\Module\\Economy\\Items\\ItemsViewer",
+            "navSection": "basic",
+            "navOrder": 20
         },
         {
             "id": "economy.items.kinds",

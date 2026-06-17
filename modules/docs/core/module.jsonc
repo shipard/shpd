@@ -52,7 +52,13 @@
             "name:en": "Documents",
             "icon": "document",
             "table": "docs_core_heads",
-            "class": "Shipard\\Module\\Docs\\Core\\DocsHeadsViewer"
+            "class": "Shipard\\Module\\Docs\\Core\\DocsHeadsViewer",
+            // Souhrnný viewer všech dokladů — skrytý z hlavní navigace.
+            // Doklady se zobrazují přes per-typ viewery (Faktury přijaté /
+            // vydané), které sdílejí tabulku docs_core_heads. Skrytí JEN
+            // tohoto vieweru, sdílená tabulka zůstává viditelná (viz
+            // NavigationController: tablesWithViewer + table→viewer propagace).
+            "hideFromNavigation": true
         }
     ],
 

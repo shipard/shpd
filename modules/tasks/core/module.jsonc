@@ -23,7 +23,9 @@
             "name:en": "Tasks",
             "icon": "list-check",
             "table": "tasks_core_tasks",
-            "class": "Shipard\\Module\\Tasks\\Core\\TasksViewer"
+            "class": "Shipard\\Module\\Tasks\\Core\\TasksViewer",
+            "navSection": "_top",
+            "navOrder": 40
         }
     ],
 

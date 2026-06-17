@@ -24,7 +24,9 @@
             "name:en": "Alerts",
             "icon": "alert",
             "table": "core_alerts_alerts",
-            "class": "Shipard\\Module\\Core\\Alerts\\AlertsViewer"
+            "class": "Shipard\\Module\\Core\\Alerts\\AlertsViewer",
+            "navSection": "system",
+            "navOrder": 10
         }
     ],
 

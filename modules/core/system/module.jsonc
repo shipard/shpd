@@ -120,7 +120,9 @@
         }
     ],
     "settingsItems": [
-        { "page": "appSettings", "section": "app", "order": 10 }
+        { "page": "appSettings", "section": "app", "order": 10 },
+        { "table": "core_system_users",    "section": "other", "subsection": "other.system", "order": 20 },
+        { "table": "core_system_settings", "section": "other", "subsection": "other.system", "order": 30 }
     ],
     "accountItems": [
         { "page": "accountBasic", "section": "basic", "order": 10 }

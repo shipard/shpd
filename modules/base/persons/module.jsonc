@@ -37,7 +37,9 @@
             "name:en": "Persons",
             "icon": "user",
             "table": "base_persons_persons",
-            "class": "Shipard\\Module\\Base\\Persons\\PersonsViewer"
+            "class": "Shipard\\Module\\Base\\Persons\\PersonsViewer",
+            "navSection": "basic",
+            "navOrder": 10
         }
     ],
 

@@ -1,0 +1,55 @@
+{
+    // Sémantické sekce hlavního sidebaru (sidebar navigation sections).
+    // Analogie k settingsSections.jsonc, ale pro hlavní navigaci (app mód).
+    // NavigationController seskupuje viewery/tabulky podle jejich `navSection`
+    // a řadí sekce dle `order`, položky dle `navOrder`. Co nemá `navSection`
+    // → fallback do `system`. Sentinel `_top` (na vieweru) = root-level leaf
+    // nad sekcemi — není to sekce, proto tu není.
+    //
+    // Pozn.: `icon` je zatím jen metadata — Sidebar.svelte u group headerů
+    // ikonu nevykresluje (jen label + chevron). Klíče volíme z existující
+    // sady (frontend/src/icons.js), aby reference zůstaly živé, kdyby se
+    // ikony u sekcí v budoucnu zobrazovaly.
+    "sections": [
+        {
+            "id": "basic",
+            "name": "Basic",
+            "name:cs": "Základní",
+            "name:en": "Basic",
+            "icon": "folder",
+            "order": 10
+        },
+        {
+            "id": "purchase",
+            "name": "Purchase",
+            "name:cs": "Nákup",
+            "name:en": "Purchase",
+            "icon": "invoice-in",
+            "order": 20
+        },
+        {
+            "id": "sales",
+            "name": "Sales",
+            "name:cs": "Prodej",
+            "name:en": "Sales",
+            "icon": "invoice",
+            "order": 30
+        },
+        {
+            "id": "accounting",
+            "name": "Accounting",
+            "name:cs": "Účtárna",
+            "name:en": "Accounting",
+            "icon": "calculator",
+            "order": 40
+        },
+        {
+            "id": "system",
+            "name": "System",
+            "name:cs": "Systém",
+            "name:en": "System",
+            "icon": "settings",
+            "order": 50
+        }
+    ]
+}

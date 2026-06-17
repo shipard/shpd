@@ -123,6 +123,7 @@ PRD `docs/edit-forms.md` rozdělené na tři fáze:
 | `frontend-phase3-app-sidebar.md`  | Hlavní navigace                        |
 | `frontend-phase4-forms.md`        | `FormRenderer`, `FormDialog`           |
 | `frontend-phase5-viewers.md`      | Konkrétní viewery (Persons, …)            |
+| `sidebar-sections.md`             | Sémantické sekce sidebaru — cfgItem `global.navSections` + `navSection`/`navOrder` na vieverech, `NavigationController` seskupuje dle navSection (sentinel `_top` pro root leaves, fallback `system`). Skrytí souhrnných Dokladů (sdílená tabulka faktur nepoškozena), přesun Extrahovaných dokumentů/Zpráv chatu/Období DPH/Uživatelů/Nastavení do Nastavení. |
 
 ### Drobné
 

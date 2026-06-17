@@ -457,6 +457,52 @@ Položky s vadnou strukturou (chybějící `section`, víc než jeden cíl) se
 tolerantně přeskakují. Tabulky/viewery uvedené v `settingsItems` se
 automaticky skrývají z hlavního navigačního stromu.
 
+### Sekce hlavního sidebaru — `global.navSections` + `navSection`
+
+Hlavní navigace (app mód) seskupuje viewery a tabulky do **sémantických
+sekcí**, ne podle prefixu module ID. Mechanismus je paralelní k Nastavení:
+
+- **cfgItem `global.navSections`**
+  (`modules/install/base/config/navSections.jsonc`) definuje sekce sidebaru —
+  `id`, `name`/`name:cs`/`name:en`, `icon`, `order`. Stejná struktura jako
+  `global.settingsSections` (ploché sekce, bez podsekcí). Registruje se přes
+  `config[]` v `module.jsonc` úplně stejně jako settingsSections; po přidání
+  je nutný `vendor/bin/shpd-ds ds-upgrade`, aby se dostal do
+  `compiled.{cs,en}.json`.
+- **`navSection` + `navOrder` na vieweru** (`viewers[]`) — id sekce z
+  navSections a pořadí v sekci (int). Tabulky bez vieweru (generický fallback
+  item) je mohou nést v `tables/*.jsonc`.
+- **Sentinel `navSection: "_top"`** = root-level leaf nad sekcemi (Došlá pošta,
+  Úkoly). Řadí se dle `navOrder`, vkládá za hardcoded Dashboard/Chat.
+- **Fallback:** viewer/tabulka bez `navSection` (nebo s neznámou sekcí) padá do
+  sekce `system`. Prázdné sekce se ve výstupu vynechají.
+
+```jsonc
+"viewers": [
+    {
+        "id": "docs.invoicesIn.heads",
+        "name:cs": "Faktury přijaté", "name:en": "Received invoices",
+        "icon": "invoice-in",
+        "table": "docs_core_heads",
+        "class": "…",
+        "navSection": "purchase",   // sekce z global.navSections
+        "navOrder": 10              // pořadí v sekci
+    }
+]
+```
+
+**`hideFromNavigation` na vieweru:** kromě tabulky (`tables/*.jsonc`) lze
+`hideFromNavigation: true` deklarovat i na vieweru v `module.jsonc`. Skryje
+**jen ten viewer**; sdílenou tabulku dál zobrazují ostatní viewery (vzor:
+souhrnný `docs.core.heads` skrytý, ale Faktury přijaté/vydané nad sdílenou
+`docs_core_heads` viditelné). Tabulka reprezentovaná jakýmkoli viewerem se
+nikdy nevykreslí jako syrový fallback table item.
+
+Seskupování provádí `NavigationController` (`src/Api/Controller/`); API tvar
+odpovědi je shodný se starým prefix-groupingem, takže `Sidebar.svelte` se
+nemění. Detaily viz [docs/frontend.md](frontend.md) — „Sidebar — dynamická
+navigace ze serveru".
+
 ### Pole `settingsPages`
 
 Server-driven stránky vlastností — třetí typ obsahu v Nastavení vedle

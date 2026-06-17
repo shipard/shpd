@@ -158,6 +158,25 @@ Závislosti tečou shora dolů: Command → Document → Module/Config/Database 
   (stejná jako v sidebaru). Per-row override v `renderRow()`
   (např. PersonsViewer podle person_type).
 
+### Frontend — Navigace (sidebar)
+
+- Sekce hlavního sidebaru pocházejí z cfgItem **`global.navSections`**
+  (`modules/install/base/config/navSections.jsonc`), NE z prefixu module ID.
+  Analogie k `global.settingsSections`. `NavigationController` (`GET
+  /_ui/navigation`) seskupuje viewery/tabulky podle jejich `navSection`,
+  řadí sekce dle `navSections.order` a položky dle `navOrder`.
+- `navSection` + `navOrder` se deklarují na vieweru v `module.jsonc`
+  `viewers[]` (tabulky bez vieweru v `tables/*.jsonc`). Sentinel
+  `navSection: "_top"` = root-level leaf nad sekcemi (Došlá pošta, Úkoly);
+  Dashboard a Chat jsou hardcoded root leaves. Bez `navSection` → fallback
+  do sekce `system`.
+- `hideFromNavigation: true` funguje i na **vieweru** (nejen na tabulce) —
+  skryje jen ten viewer; sdílenou tabulku dál zobrazují ostatní viewery
+  (souhrnný `docs.core.heads` skrytý, Faktury přijaté/vydané nad sdílenou
+  `docs_core_heads` viditelné).
+- API tvar odpovědi je shodný se starým prefix-groupingem → `Sidebar.svelte`
+  beze změny. Detaily: `docs/frontend.md`, `docs/modules.md`.
+
 ### Frontend — Dashboard
 
 - Home obrazovka aplikace, výchozí po loginu (root-level leaf v sidebaru

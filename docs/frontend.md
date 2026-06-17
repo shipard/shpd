@@ -252,22 +252,44 @@ stav.
 
 ### Sidebar — dynamická navigace ze serveru
 
-Sidebar načítá navigační strom z `GET /_ui/navigation`. Server generuje strom automaticky z aktivních modulů:
+Sidebar načítá navigační strom z `GET /_ui/navigation`. Server seskupuje
+viewery a tabulky do **sémantických sekcí** — ne podle prefixu module ID, ale
+podle pole `navSection`, které každý viewer/tabulka deklaruje.
+
+- **Sekce definuje cfgItem `global.navSections`**
+  (`modules/install/base/config/navSections.jsonc`) — `id`, `name`/`name:cs`/
+  `name:en`, `icon`, `order`. Analogie k `global.settingsSections`.
+  `NavigationController` ho čte přes `ConfigRuntime::cfgItem` (jako
+  `SettingsController` settingsSections); když compiled config chybí, použije
+  vestavěný PHP fallback (degradovaně, ne crash).
+- **`navSection` + `navOrder` na vieweru** (v `module.jsonc` `viewers[]`) určují,
+  do které sekce viewer patří a v jakém pořadí. Tabulky bez vieweru (generický
+  fallback item) mohou `navSection`/`navOrder` nést v `*.jsonc`.
+- **Sentinel `navSection: "_top"`** = root-level leaf nad sekcemi (Došlá pošta,
+  Úkoly). Řadí se dle `navOrder` a vkládá za Dashboard/Chat, před sekce.
+- **Dashboard a Chat** zůstávají hardcoded root leaves (nejsou viewery).
+- **Fallback:** co nemá `navSection` (nebo má neznámou sekci) → sekce `system`
+  (nic nezmizí, kdyby přibyl viewer bez konfigurace). Prázdné sekce se vynechají.
+- **Skrytí z navigace:** `hideFromNavigation: true` funguje i na **vieweru**
+  (nejen na tabulce). Použito pro souhrnný `docs.core.heads` — skryje JEN ten
+  viewer; sdílenou tabulku `docs_core_heads` dál zobrazují per-typ viewery
+  Faktury přijaté/vydané. (Tabulka reprezentovaná jakýmkoli viewerem se nikdy
+  nevykreslí jako syrový fallback table item — viz `tablesWithViewer`.)
+
+Cílové uspořádání: Dashboard → Chat → Došlá pošta → Úkoly → Základní → Nákup →
+Prodej → Účtárna → Systém.
 
 ```json
 {
     "success": true,
     "data": [
+        {"id": "dashboard", "label": "Dashboard", "type": "dashboard", "icon": "dashboard"},
+        {"id": "chat", "label": "Chat", "type": "chat", "icon": "chat"},
+        {"id": "viewer:core.mail.incoming", "label": "Došlá pošta", "type": "viewer", "viewerId": "core.mail.incoming", "icon": "mail"},
         {
-            "id": "core",
-            "label": "Systém",
-            "children": [
-                {"id": "core_system_users", "label": "Uživatelé", "type": "table", "table": "core_system_users"}
-            ]
-        },
-        {
-            "id": "base",
+            "id": "basic",
             "label": "Základní",
+            "icon": "folder",
             "children": [
                 {"id": "viewer:base.persons", "label": "Osoby", "type": "viewer", "viewerId": "base.persons", "icon": "user"}
             ]
@@ -276,7 +298,12 @@ Sidebar načítá navigační strom z `GET /_ui/navigation`. Server generuje str
 }
 ```
 
-Klik v sidebaru přímo nahradí obsah hlavní oblasti. `navigation.svelte.js` spravuje jedinou aktivní položku (`activeItem`). `ContentArea` renderuje obsah podle typu (`table` → `TableBrowser`, `viewer` → `Viewer`).
+API tvar (`id`/`label`/`children`/`type`/`icon`/`viewerId`/`table`) je shodný
+jako u dřívějšího prefix-groupingu — `Sidebar.svelte` rozlišuje root-leaf
+(má `type`) vs skupinu (má `children`) a nemění se. Klik v sidebaru přímo
+nahradí obsah hlavní oblasti. `navigation.svelte.js` spravuje jedinou aktivní
+položku (`activeItem`). `ContentArea` renderuje obsah podle typu (`table` →
+`TableBrowser`, `viewer` → `Viewer`).
 
 ---
 

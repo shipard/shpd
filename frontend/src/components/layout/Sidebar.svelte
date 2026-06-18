@@ -395,12 +395,14 @@
         class:shpd-sidebar__user-menu--side={collapsed}
         role="menu"
       >
-        <button class="shpd-sidebar__user-menu-item" onclick={handleSettings} role="menuitem">
-          <Icon icon={iconSettings} size="sm" />
-          <span>{t('sidebar.accountSettings')}</span>
-        </button>
+        {#if navigationStore.mode !== 'account'}
+          <button class="shpd-sidebar__user-menu-item" onclick={handleSettings} role="menuitem">
+            <Icon icon={iconSettings} size="sm" />
+            <span>{t('sidebar.accountSettings')}</span>
+          </button>
+        {/if}
 
-        {#if navigationStore.mode === 'app'}
+        {#if navigationStore.mode !== 'settings'}
           <button class="shpd-sidebar__user-menu-item" onclick={handleAppSettings} role="menuitem">
             <Icon icon={iconAppSettings} size="sm" />
             <span>{t('sidebar.appSettings')}</span>

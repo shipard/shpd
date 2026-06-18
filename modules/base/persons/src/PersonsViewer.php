@@ -10,6 +10,14 @@ class PersonsViewer extends TableViewer
 {
 	protected ?string $docStatesCfgItem = 'core.system.docStatesArchive';
 
+	/**
+	 * True when the active tab is "Vse" (viewGroup 'all'). Set in selectRows(),
+	 * read in renderRow() so archived/deleted records always get a state badge
+	 * in the combined list. Outside the 'all' tab each tab is self-evident, so
+	 * the badge stays demoted to non-default states only.
+	 */
+	private bool $showAllStates = false;
+
 	/** Maps stateStyle to a span class for the state badge in t2. */
 	private const STATE_SPAN_CLASS = [
 		'concept'   => 'warning',
@@ -39,6 +47,8 @@ class PersonsViewer extends TableViewer
 			}
 		}
 
+		$this->showAllStates = ($viewGroup === 'all');
+
 		if ($viewGroup !== 'all') {
 			[$vgSql, $vgParams] = $this->buildViewGroupFilter($this->docStatesCfgItem, $viewGroup);
 			if ($vgSql !== '') {
@@ -63,8 +73,14 @@ class PersonsViewer extends TableViewer
 			$sql .= ' WHERE ' . implode(' AND ', $conditions);
 		}
 
-		// docStateMain first: Koncepty nahoře, pak V opravě, pak V pořádku; within each group, alphabetically
-		$sql .= ' ORDER BY `docStateMain` ASC, `last_name` ASC, `first_name` ASC, `id` ASC';
+		// Razeni: v zalozce "Vse" cistou abecedou (stav ignorujeme, badge je
+		// v renderRow), jinak docStateMain ASC (Koncepty nahore, pak V oprave,
+		// pak V poradku) a uvnitr skupiny abecedne.
+		if ($this->showAllStates) {
+			$sql .= ' ORDER BY `last_name` ASC, `first_name` ASC, `id` ASC';
+		} else {
+			$sql .= ' ORDER BY `docStateMain` ASC, `last_name` ASC, `first_name` ASC, `id` ASC';
+		}
 
 		[$offset, $limit] = $this->buildPaginationLimit($pageNumber);
 		$sql .= ' LIMIT ' . $offset . ', ' . $limit;
@@ -102,8 +118,10 @@ class PersonsViewer extends TableViewer
 		$stateData = $cfg->getState($docState);
 		$stateStyle = $stateData['stateStyle'] ?? 'concept';
 
-		// Badge non-default states so the user sees them at a glance
-		if ($docState !== 10) {
+		// Badge non-default states so the user sees them at a glance.
+		// V zalozce "Vse" ukaz badge vzdy (i pro Koncept), aby archiv/kos
+		// nesplynuly s aktivnimi zaznamy; jinak zustava demoted na ne-vychozi.
+		if ($this->showAllStates || $docState !== 10) {
 			$t2[] = [
 				'text'  => $stateData['stateName'] ?? '',
 				'class' => self::STATE_SPAN_CLASS[$stateStyle] ?? 'muted',

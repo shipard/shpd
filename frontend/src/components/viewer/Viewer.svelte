@@ -21,6 +21,7 @@
   import { translateError } from '../../i18n/errors.js';
   import { navigationStore } from '../../stores/navigation.svelte.js';
   import { layoutStore } from '../../stores/layout.svelte.js';
+  import { untrack } from 'svelte';
 
   let { tab } = $props();
 
@@ -550,7 +551,15 @@
     // Vyzvedneme pending record (z dashboard widget klikání) — pokud existuje,
     // po načtení řádků nastavíme selectedRowId a fetchneme detail. Konzumace
     // hned vrátí store do nuly, aby se efekt neaplikoval podruhé.
-    const pendingRecord = navigationStore.consumePendingRecordId();
+    //
+    // POZOR: consumePendingRecordId() čte i zapisuje $state pendingRecordId.
+    // Bez untrack() by se tím pendingRecordId stal závislostí tohoto $effectu
+    // a jeho zápis na null by efekt znovu naplánoval — re-run by přepsal
+    // activeViewGroup zpět na 'active', takže přepnutí na záložku „Vše" by se
+    // potichu ztratilo (hledání ve „Vše" vracelo jen aktivní záznamy).
+    // untrack() drží efekt závislý jen na tab.viewerId, jak slibuje komentář
+    // výše. Stejný vzor jako FormEditor.svelte.
+    const pendingRecord = untrack(() => navigationStore.consumePendingRecordId());
 
     // Sequence: meta first (sets activeSeriesId from numberSeries), then rows
     // with that filter, then optional pending-record detail.

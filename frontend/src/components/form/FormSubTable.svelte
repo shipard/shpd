@@ -64,9 +64,18 @@
     editRecordId = null;
   }
 
-  function handleDialogSaved() {
-    dialogOpen = false;
-    editRecordId = null;
+  // onSaved se volá po každém uložení včetně přechodu stavu s close_form: 0
+  // (např. "Opravit" 40 → 80). Modal proto NEzavíráme bezpodmínečně — to by
+  // shazovalo formulář i při Opravit, což je špatně (viz hlavní modaly, kde
+  // onSaved jen refetchuje). Zavíráme jen u formulářů BEZ doc states — ty mají
+  // jedinou akci Uložit (žádné přechody), takže po Uložit nemá smysl zůstávat
+  // otevřený (jinak by šel zavřít jen křížkem). Formuláře s doc states
+  // (Kontakty, Adresy …) zůstanou otevřené — zavření řeší close_form / onClose.
+  function handleDialogSaved(_record, info) {
+    if (!info?.hasDocStates) {
+      dialogOpen = false;
+      editRecordId = null;
+    }
     fetchRows();
   }
 

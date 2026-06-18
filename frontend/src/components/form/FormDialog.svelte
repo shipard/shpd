@@ -19,7 +19,7 @@
     recordId?: number | null;
     open: boolean;
     onClose: () => void;
-    onSaved?: (record: Record<string, unknown>) => void;
+    onSaved?: (record: Record<string, unknown>, info?: { hasDocStates: boolean }) => void;
     defaultData?: Record<string, unknown>;
   }
 
@@ -65,7 +65,13 @@
   }
 
   function handleSaved(record: Record<string, unknown>) {
-    onSaved?.(record);
+    // Druhý argument informuje konzumenta (např. FormSubTable), zda má
+    // formulář doc states. Formuláře bez doc states mají jedinou akci Uložit
+    // (žádné přechody s close_form), takže subtable je po Uložit zavře. Formuláře
+    // s doc states zůstanou otevřené — zavření řeší close_form / onClose, stejně
+    // jako u hlavních modalů. currentDocStates je v okamžiku save spolehlivě
+    // naplněný (onFormLoaded proběhl při loadu).
+    onSaved?.(record, { hasDocStates: currentDocStates != null });
     // Nezavíráme formulář zde — o zavření rozhoduje FormEditor sám
     // na základě closeForm flagu nebo akce uživatele
   }

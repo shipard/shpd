@@ -5,6 +5,7 @@
   import { navigationStore } from '../../stores/navigation.svelte.js';
   import { layoutStore } from '../../stores/layout.svelte.js';
   import { appInfoStore } from '../../stores/appInfo.svelte.js';
+  import { brandingUrl } from '../../api/app.js';
   import { language, t } from '../../i18n/index.js';
   import Icon from '../ui/Icon.svelte';
   import {
@@ -214,7 +215,16 @@
 >
   <div class="shpd-sidebar__header">
     {#if !collapsed || layoutStore.isMobile}
-      <span class="shpd-sidebar__logo">{appInfoStore.shortName ?? 'Shipard'}</span>
+      <div class="shpd-sidebar__brand">
+        {#if appInfoStore.icon}
+          <img
+            class="shpd-sidebar__app-icon"
+            src={brandingUrl('icon', appInfoStore.icon.hash)}
+            alt=""
+          />
+        {/if}
+        <span class="shpd-sidebar__logo">{appInfoStore.shortName ?? 'Shipard'}</span>
+      </div>
     {/if}
     {#if layoutStore.isMobile}
       <!-- Na mobilu nahrazuje collapse toggle ✕, které zavře drawer.
@@ -478,10 +488,28 @@
     padding: 0;
   }
 
+  .shpd-sidebar__brand {
+    display: flex;
+    align-items: center;
+    gap: var(--shpd-space-sm);
+    min-width: 0;
+  }
+
+  .shpd-sidebar__app-icon {
+    width: 24px;
+    height: 24px;
+    object-fit: contain;
+    border-radius: var(--shpd-radius-sm);
+    flex-shrink: 0;
+  }
+
   .shpd-sidebar__logo {
     font-size: var(--shpd-font-size-lg);
     font-weight: 700;
     color: var(--shpd-color-text-sidebar);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .shpd-sidebar__back-bar {

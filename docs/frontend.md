@@ -225,7 +225,7 @@ do `'app'` módu). Persistence módu je out of scope této fáze.
 
 Sidebar je flex column se třemi sekcemi:
 
-- **Header** (fixní) — logo „Shipard" + tlačítko pro sbalení/rozbalení
+- **Header** (fixní) — volitelná ikona aplikace (branding slot `icon`, jen pokud je nastavená) + logo „Shipard" + tlačítko pro sbalení/rozbalení
 - **Nav** (scrollovatelný, `flex: 1`) — navigační strom ze serveru
 - **Footer** (fixní) — uživatelský panel s avatarem a jménem; klik otevře
   dropdown s položkami **Nastavení účtu** a **Odhlásit**
@@ -234,7 +234,7 @@ Sidebar je flex column se třemi sekcemi:
 
 Sidebar je kolapsibilní na úzký proužek (48px). Ve sbaleném stavu:
 
-- Logo a sekce navigace (groups, sub-groups) jsou skryté
+- Ikona aplikace, logo a sekce navigace (groups, sub-groups) jsou skryté
 - Klikatelné položky menu (leaves) zůstávají vidět jako plochý seznam
   ikon — `flattenLeaves(navTree)` rekurzivně vybere všechny nody s `type`
   v depth-first pořadí. Každá ikona má `title` atribut s názvem položky.

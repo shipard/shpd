@@ -210,8 +210,10 @@ Sidebar reaguje na `navigationStore.mode` přes `$effect`:
 - `'account'` → načítá z `GET /_ui/account/navigation`
 
 V režimu `!== 'app'` je v hlavičce sidebaru navíc tlačítko „Zpět do
-aplikace" (pod logem); v dropdownu patky se v settings módu skrývá položka
-„Nastavení aplikace". Stránka **Základní** v account módu nese pole vzhledu
+aplikace" (pod logem); v dropdownu patky se zobrazují jen ta nastavení, ve
+kterých uživatel právě není — v settings módu se skrývá „Nastavení
+aplikace", v account módu „Nastavení účtu" (`mode !== 'account'` resp.
+`mode !== 'settings'`). Stránka **Základní** v account módu nese pole vzhledu
 (`ThemeField`) a jazyka (`LanguageField`) — řízené widgety vázané na
 `themeStore` / `language` (viz sekci 11). Detaily account módu a per-user
 úložiště: `docs/app-settings.md` sekce 8.

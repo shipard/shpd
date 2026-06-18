@@ -319,6 +319,29 @@ Standardní nastavení v `core.system.docStatesArchive`:
 - Koncept (10), V opravě (80) → `close_form: 0`
 - V pořádku (40), V archívu (70), Smazáno (90) → `close_form: 1`
 
+### `onSaved` neznamená „zavři“
+
+Zavírání formuláře je oddělené od ukládání (commit `355f24a`). Jediný, kdo
+rozhoduje o zavření, je `FormEditor` — a to výhradně podle `close_form`
+přechodu (volá `onClose({force:true})` jen když `close_form: true`). Callback
+`onSaved` znamená pouze „data byla uložena, refreshni se“ — **nikdy** „zavři“.
+Volá se po prostém Uložit i po přechodu s `close_form: 0` (typicky Opravit
+40 → 80).
+
+Konzumenti `onSaved` (Viewer, TableBrowser, Dashboard) proto v handleru jen
+refetchují data a formulář **nezavírají**. `open` přepnou na `false` jen ve svém
+`onClose` handleru. Kdo na `onSaved` bezpodmínečně zavře modal, rozbije Opravit
+(stav se změní, ale modal zmizí) — a vůči uživateli to vypadá jako bug v
+`close_form`, ačkoli `close_form` i `FormEditor` jsou v pořádku.
+
+**Výjimka — `FormSubTable`.** Subtable řádky bez doc states (např. Faktura →
+Řádky) mají jedinou akci Uložit (žádné přechody s `close_form`), takže by po
+Uložit šly zavřít jen křížkem. Proto `FormSubTable.handleDialogSaved` modal
+zavírá, ale **jen když formulář nemá doc states**. `FormDialog` k tomu předává
+do `onSaved` druhý argument `{ hasDocStates }`. Subtable se záznamy s doc states
+(Osoba → Kontakty/Adresy) se chovají jako hlavní modaly — zůstanou otevřené a
+zavření řeší `close_form` / `onClose`.
+
 ### Toolbar formuláře (FormStateBar)
 
 - **Tlačítko Uložit** — viditelné pokud `!read_only`. Uloží data, ale formulář nezavře.

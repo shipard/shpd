@@ -141,8 +141,11 @@
     if (search) {
       path += `&search=${encodeURIComponent(search)}`;
     }
-    // Send viewGroup filter unless "all" is selected
-    if (viewGroup && viewGroup !== 'all') {
+    // Send viewGroup filter. Posilame i 'all' explicitne — backend ho
+    // rozpozna a preskoci docState filtr. Kdyz se 'all' neposlal vubec,
+    // backend spadl na default 'active' a zalozka Vse ukazovala jen
+    // aktivni zaznamy (archiv/kos chybely i pri hledani).
+    if (viewGroup) {
       path += `&filter[viewGroup]=${encodeURIComponent(viewGroup)}`;
     }
     // Number-series bottom-tab filter (per-type doc viewers).

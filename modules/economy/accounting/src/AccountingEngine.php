@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Shipard\Module\Economy\Accounting;
 
 use Shipard\Core\Config\ConfigRuntime;
+use Shipard\Core\Document\JournalEventDispatcher;
 use Shipard\Module\Docs\Core\OwnCompanyResolver;
 
 /**
@@ -44,6 +45,7 @@ final class AccountingEngine
     public function __construct(
         private readonly \Dibi\Connection $db,
         private readonly ?ConfigRuntime $config,
+        private readonly ?JournalEventDispatcher $journalEvents = null,
     ) {}
 
     /**
@@ -597,6 +599,10 @@ final class AccountingEngine
             throw $e;
         }
 
+        // Po commitu (deník zapsán): saldo si pohyby zdroje (re)derivuje.
+        // Výjimku handleru dispatcher spolkne — účtování už je hotové.
+        $this->journalEvents?->dispatchJournalWritten('doc', $docHeadId);
+
         return ['state' => $state, 'messages' => $this->messages];
     }
 
@@ -620,6 +626,9 @@ final class AccountingEngine
             $this->db->rollback();
             throw $e;
         }
+
+        // Deník vymazán → saldo musí pohyby zdroje odebrat.
+        $this->journalEvents?->dispatchJournalWritten('doc', $docHeadId);
     }
 
     // ── Načítání zdrojových dat ─────────────────────────────────────────────

@@ -60,7 +60,7 @@ final class DocsHeadsEventHandler extends AbstractDocumentEventHandler
 
     private function engine(): AccountingEngine
     {
-        return new AccountingEngine($this->db, $this->config);
+        return new AccountingEngine($this->db, $this->config, $this->journalEvents);
     }
 
     private function markEngineError(int $docId, \Throwable $e): void

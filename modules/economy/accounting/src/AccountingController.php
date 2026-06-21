@@ -8,6 +8,7 @@ use Shipard\Api\Request;
 use Shipard\Api\Response;
 use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Database\DataSourceConnection;
+use Shipard\Core\Document\JournalEventDispatcher;
 
 /**
  * REST endpointy účetnictví (`/_accounting/*`).
@@ -24,6 +25,7 @@ final class AccountingController
     public function __construct(
         private readonly DataSourceConnection $db,
         private readonly ?ConfigRuntime $config,
+        private readonly ?JournalEventDispatcher $journalEvents = null,
     ) {}
 
     public function reaccount(Request $request): Response
@@ -49,7 +51,7 @@ final class AccountingController
             );
         }
 
-        $engine = new AccountingEngine($this->db->getDibiConnection(), $this->config);
+        $engine = new AccountingEngine($this->db->getDibiConnection(), $this->config, $this->journalEvents);
         $result = $engine->accountDocument($docId);
 
         return Response::success([

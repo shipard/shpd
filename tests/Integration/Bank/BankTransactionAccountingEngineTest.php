@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Shipard\Tests\Integration\Bank;
 
 use Shipard\Core\Config\ConfigRuntime;
+use Shipard\Core\Document\AbstractJournalEventHandler;
+use Shipard\Core\Document\JournalEventDispatcher;
 use Shipard\Module\Economy\Accounting\AccountDocument;
 use Shipard\Module\Economy\Bank\BankTransactionAccountingEngine;
 use Shipard\Tests\Integration\IntegrationTestCase;
@@ -161,6 +163,64 @@ class BankTransactionAccountingEngineTest extends IntegrationTestCase
             $this->assertSame('0308', $r['constant_symbol']);
             $this->assertNull($r['due_date'], 'Bankovní transakce splatnost nemá');
         }
+    }
+
+    // ── accbal Fáze 2a: emise journalWritten ─────────────────────────────────
+
+    public function testEmitsJournalWrittenOnAccountAndClear(): void
+    {
+        BankJournalSpy::$calls = [];
+        $dispatcher = new JournalEventDispatcher([
+            ['class' => BankJournalSpy::class, 'events' => ['journalWritten']],
+        ]);
+        $engine = new BankTransactionAccountingEngine(
+            $this->db->getDibiConnection(),
+            ConfigRuntime::load($this->realDsPath, 'cs'),
+            $dispatcher,
+        );
+
+        $bankAccountId = $this->ensureAccountByMask('221');
+        $this->ensureAccountByNumber('261200');
+        $baId = $this->insertBankAccount($bankAccountId);
+        $txId = $this->insertTx([
+            'bank_account' => $baId, 'direction' => 1, 'operation' => 'payment.in',
+            'amount' => 1210.00, 'amount_dom' => 1210.00,
+        ]);
+
+        $engine->accountTransaction($txId);   // zápis
+        $engine->accountTransaction($txId);   // reaccount
+        $engine->clearTransaction($txId);     // vymazání
+
+        $this->assertSame(
+            [['bankTransaction', $txId], ['bankTransaction', $txId], ['bankTransaction', $txId]],
+            BankJournalSpy::$calls,
+        );
+    }
+
+    public function testJournalHandlerExceptionDoesNotBreakAccounting(): void
+    {
+        // Pozn.: spolknutá výjimka se zaloguje (ErrorLogger → stderr) — očekávané.
+        $dispatcher = new JournalEventDispatcher([
+            ['class' => ThrowingBankJournalSpy::class, 'events' => ['journalWritten']],
+        ]);
+        $engine = new BankTransactionAccountingEngine(
+            $this->db->getDibiConnection(),
+            ConfigRuntime::load($this->realDsPath, 'cs'),
+            $dispatcher,
+        );
+
+        $bankAccountId = $this->ensureAccountByMask('221');
+        $this->ensureAccountByNumber('261200');
+        $baId = $this->insertBankAccount($bankAccountId);
+        $txId = $this->insertTx([
+            'bank_account' => $baId, 'direction' => 1, 'operation' => 'payment.in',
+            'amount' => 100.00, 'amount_dom' => 100.00,
+        ]);
+
+        $result = $engine->accountTransaction($txId);
+        $this->assertSame(1, $result['state']);
+        $this->assertSame(1, $this->accountingStateOf($txId));
+        $this->assertCount(2, $this->journalOf($txId));
     }
 
     // ── W6.5 Chybový stav + alert ────────────────────────────────────────────
@@ -415,5 +475,26 @@ class BankTransactionAccountingEngineTest extends IntegrationTestCase
             $txId,
         );
         return (int) $row['accounting_state'];
+    }
+}
+
+/** Spy journal handler — zaznamenává (sourceKind, sourceId) staticky. */
+class BankJournalSpy extends AbstractJournalEventHandler
+{
+    /** @var list<array{0: string, 1: int}> */
+    public static array $calls = [];
+
+    public function onJournalWritten(string $sourceKind, int $sourceId): void
+    {
+        self::$calls[] = [$sourceKind, $sourceId];
+    }
+}
+
+/** Vyhazuje výjimku — ověřuje, že nespadne účtování. */
+class ThrowingBankJournalSpy extends AbstractJournalEventHandler
+{
+    public function onJournalWritten(string $sourceKind, int $sourceId): void
+    {
+        throw new \RuntimeException('saldo boom');
     }
 }

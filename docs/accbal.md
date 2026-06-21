@@ -460,27 +460,35 @@ speciálního nepotřebují; `fiscal_year`-scoping ano.
 
 ## 9. Fáze implementace
 
-**Fáze 0 — prerekvizity** (mimo vlastní accbal):
+**Fáze 0 — prerekvizity** (mimo vlastní accbal) ✓ hotovo:
 
 - symboly + splatnost do `economy_accounting_journal` + razítkování v obou
   enginech + `payment_reference` do `JournalViewer` filtrů/fulltextu (§3.5)
 - přejmenování `symbol1/2/3 → payment_reference/specific_symbol/constant_symbol`
   na `economy_bank_transactions` + parsery + exchange + applier (§3.6)
-- core: událost `journalWritten` vyslaná účtovacími enginy + registrační
-  mechanismus handlerů (§4.1)
 
-**Fáze 1 — nastavení saldokont:**
+> Událost `journalWritten` (§4.1) přesunuta z Fáze 0 do **Fáze 2a** — staví se
+> až s prvním konzumentem (generátorem), ne spekulativně bez odběratele.
+
+**Fáze 1 — nastavení saldokont** ✓ hotovo:
 
 - modul `economy.accbal`, tabulky `economy_accbal_balances` (416),
   `economy_accbal_balance_accounts` (417) + formuláře + viewer
 - seed skupin + účtů (vč. clearingu jako „Nespárované platby") + provisioner
 - import/export nastavení (vzor starého `AccBalances{Import,Export}Wizard`)
 
-**Fáze 2 — generování pohybů z deníku:**
+**Fáze 2a — událost `journalWritten` (core):**
+
+- mechanismus `journalWritten` (interface + dispatcher + loader + registrace
+  `journalEventHandlers`), zrcadlo `documentEventHandlers` (§4.1)
+- emise z obou účtovacích enginů (po (pře)zápisu i vymazání deníku),
+  proplumbování dispatcheru do míst konstrukce enginu
+
+**Fáze 2b — generování pohybů z deníku:**
 
 - tabulky `economy_accbal_ledger` (418), `economy_accbal_allocations` (419)
 - handler na `journalWritten` → generátor pohybů (UPSERT dle stabilního klíče,
-  §4.3) vč. clearing skupiny
+  §4.3) vč. clearing skupiny + beforeDelete úklid ledger/allocations
 - viewer ledgeru (read-only, filtry: skupina, partner, VS, jen otevřené)
 
 **Fáze 3 — matcher (samostatné sezení):**

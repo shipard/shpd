@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Shipard\Command\DataSource;
 
 use Shipard\Api\DocumentEventHandlerLoader;
+use Shipard\Api\JournalEventHandlerLoader;
 use Shipard\Api\DocumentLoader;
 use Shipard\Api\TableLoader;
 use Shipard\Core\Config\ConfigRuntime;
@@ -83,7 +84,8 @@ class BankImportStatementCommand extends Command
         $attachments = new AttachmentService($dsConnection, $dsDir, $tables);
         $dibi = $dsConnection->getDibiConnection();
         $registry = DocumentLoader::load($dsConfig, $resolver);
-        $dispatcher = DocumentEventHandlerLoader::load($dsConfig, $resolver, $dibi, $config);
+        $journalEvents = JournalEventHandlerLoader::load($dsConfig, $resolver, $dibi, $config);
+        $dispatcher = DocumentEventHandlerLoader::load($dsConfig, $resolver, $dibi, $config, $journalEvents);
         $service = StatementImportService::create(
             $dibi,
             $config,

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Shipard\Module\Economy\Bank;
 
 use Shipard\Core\Config\ConfigRuntime;
+use Shipard\Core\Document\JournalEventDispatcher;
 use Shipard\Module\Docs\Core\OwnCompanyResolver;
 use Shipard\Module\Economy\Accounting\AccountMaskResolver;
 
@@ -47,6 +48,7 @@ final class BankTransactionAccountingEngine
     public function __construct(
         private readonly \Dibi\Connection $db,
         private readonly ?ConfigRuntime $config,
+        private readonly ?JournalEventDispatcher $journalEvents = null,
     ) {}
 
     /**
@@ -137,6 +139,9 @@ final class BankTransactionAccountingEngine
             $this->db->rollback();
             throw $e;
         }
+
+        // Deník vymazán → saldo musí pohyby transakce odebrat.
+        $this->journalEvents?->dispatchJournalWritten('bankTransaction', $txId);
     }
 
     // ── Dohledávání účtů ────────────────────────────────────────────────────
@@ -414,6 +419,9 @@ final class BankTransactionAccountingEngine
             $this->db->rollback();
             throw $e;
         }
+
+        // Po commitu (deník zapsán): saldo si pohyby transakce (re)derivuje.
+        $this->journalEvents?->dispatchJournalWritten('bankTransaction', $txId);
 
         return ['state' => $state, 'messages' => $this->messages];
     }

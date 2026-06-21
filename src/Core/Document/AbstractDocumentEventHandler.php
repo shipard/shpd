@@ -17,9 +17,21 @@ abstract class AbstractDocumentEventHandler implements DocumentEventHandler
     protected ?ConfigRuntime $config = null;
     protected ?DataSourceConfig $dsConfig = null;
 
+    /**
+     * Journal dispatcher pro handlery, které konstruují účtovací engine
+     * (DocsHeadsEventHandler, BankTransactionEventHandler) — engine ho použije
+     * k vyslání journalWritten. Injektuje DocumentEventDispatcher.
+     */
+    protected ?JournalEventDispatcher $journalEvents = null;
+
     public function setDb(\Dibi\Connection $db): void
     {
         $this->db = $db;
+    }
+
+    public function setJournalEvents(?JournalEventDispatcher $journalEvents): void
+    {
+        $this->journalEvents = $journalEvents;
     }
 
     public function setConfig(ConfigRuntime $config): void

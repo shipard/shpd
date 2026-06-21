@@ -24,6 +24,7 @@ class ModuleDefinition
         public readonly array $keepOnReset = [],
         public readonly array $documentEventHandlers = [],
         public readonly array $accountItems = [],
+        public readonly array $journalEventHandlers = [],
     ) {}
 
     public static function fromArray(array $data): self
@@ -149,6 +150,37 @@ class ModuleDefinition
             }
         }
 
+        // journalEventHandlers — hooky na zápis účetního deníku (journalWritten
+        // po commitu (pře)zápisu/vymazání). Mirror documentEventHandlers, ale
+        // registrace je {class, events} bez `table` (události nejsou per-tabulka);
+        // dispatch dělá účtovací engine přes JournalEventDispatcher.
+        $journalEventHandlers = [];
+        if (isset($data['journalEventHandlers']) && is_array($data['journalEventHandlers'])) {
+            $knownEvents = ['journalWritten'];
+            foreach ($data['journalEventHandlers'] as $idx => $reg) {
+                if (!is_array($reg)
+                    || !isset($reg['class']) || !is_string($reg['class']) || $reg['class'] === ''
+                ) {
+                    throw new \InvalidArgumentException(
+                        "Module '{$data['id']}': journalEventHandlers[{$idx}] requires 'class'",
+                    );
+                }
+                $events = $reg['events'] ?? $knownEvents;
+                if (!is_array($events) || $events === []
+                    || array_diff($events, $knownEvents) !== []
+                ) {
+                    throw new \InvalidArgumentException(
+                        "Module '{$data['id']}': journalEventHandlers[{$idx}] has invalid 'events' "
+                        . '(allowed: ' . implode(', ', $knownEvents) . ')',
+                    );
+                }
+                $journalEventHandlers[] = [
+                    'class'  => $reg['class'],
+                    'events' => array_values($events),
+                ];
+            }
+        }
+
         // keepOnReset — names of this module's OWN tables that `ds-reset`
         // must not drop (system/config tables vs. data). Items must be
         // strings and must be tables owned by this module (catches typos
@@ -194,6 +226,7 @@ class ModuleDefinition
             keepOnReset: $keepOnReset,
             documentEventHandlers: $documentEventHandlers,
             accountItems: $accountItems,
+            journalEventHandlers: $journalEventHandlers,
         );
     }
 

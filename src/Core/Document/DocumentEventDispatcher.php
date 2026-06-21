@@ -37,6 +37,7 @@ final class DocumentEventDispatcher
         private readonly ?\Dibi\Connection $db = null,
         private readonly ?ConfigRuntime $config = null,
         private readonly ?DataSourceConfig $dsConfig = null,
+        private readonly ?JournalEventDispatcher $journalEvents = null,
     ) {
         foreach ($registrations as $reg) {
             $this->registrations[$reg['table']][] = [
@@ -112,6 +113,8 @@ final class DocumentEventDispatcher
             if ($this->dsConfig !== null) {
                 $handler->setDsConfig($this->dsConfig);
             }
+            // Handlery konstruující engine ho potřebují k vyslání journalWritten.
+            $handler->setJournalEvents($this->journalEvents);
         }
 
         return $this->instances[$className] = $handler;

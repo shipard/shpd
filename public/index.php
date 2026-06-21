@@ -156,12 +156,21 @@ try {
 		// Config may not be compiled yet — doc state and enum features degrade gracefully
 	}
 
-	// ── 8b. Build document event dispatcher (documentEventHandlers) ──────────
+	// ── 8b. Build journal + document event dispatchers ───────────────────────
+	// Journal dispatcher (journalEventHandlers) se vkládá do document dispatcheru,
+	// aby ho ten injektoval do handlerů konstruujících účtovací engine.
+	$journalEventDispatcher = \Shipard\Api\JournalEventHandlerLoader::load(
+		$resolved->config,
+		$modulePathResolver,
+		$resolved->connection->getDibiConnection(),
+		$configRuntime,
+	);
 	$documentEventDispatcher = \Shipard\Api\DocumentEventHandlerLoader::load(
 		$resolved->config,
 		$modulePathResolver,
 		$resolved->connection->getDibiConnection(),
 		$configRuntime,
+		$journalEventDispatcher,
 	);
 
 	// ── 9. Dispatch to controller ─────────────────────────────────────────────
@@ -172,7 +181,7 @@ try {
 		$host, $resolved, $modulePathResolver,
 		$viewerRegistry, $configRuntime, $formRegistry, $documentRegistry,
 		$lookupRegistry, $alertCheckRegistry, $serverConfig,
-		$documentEventDispatcher,
+		$documentEventDispatcher, $journalEventDispatcher,
 	);
 
 	// ── 10. Apply headers and send ────────────────────────────────────────────
@@ -256,6 +265,7 @@ function dispatch(
 	?\Shipard\Core\Alerts\AlertCheckRegistry $alertCheckRegistry = null,
 	?ServerConfig $serverConfig = null,
 	?\Shipard\Core\Document\DocumentEventDispatcher $documentEventDispatcher = null,
+	?\Shipard\Core\Document\JournalEventDispatcher $journalEventDispatcher = null,
 ): Response {
 	$baseUrl = $resolved->isDevMode()
 		? 'http://' . $host . '/' . $resolved->config->getId()
@@ -278,8 +288,8 @@ function dispatch(
 		'analysis' => dispatchAnalysis($route, $request, $auth, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher),
 		'exchange' => dispatchExchange($route, $request, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher),
 		'alerts' => dispatchAlerts($route, $request, $db, $alertCheckRegistry, $configRuntime, resolveLanguage($request, $resolved->config)),
-		'accounting' => dispatchAccounting($route, $request, $db, $configRuntime),
-		'bank'    => dispatchBank($route, $request, $auth, $tables, $db, $resolved, $configRuntime, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher),
+		'accounting' => dispatchAccounting($route, $request, $db, $configRuntime, $journalEventDispatcher),
+		'bank'    => dispatchBank($route, $request, $auth, $tables, $db, $resolved, $configRuntime, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher, $journalEventDispatcher),
 		'personsRegistry' => dispatchPersonsRegistry($route, $request, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $serverConfig),
 		'mcp'     => dispatchMcp($request, $auth, $resolved->connection, $tables, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'openapi' => (new OpenApiController())->spec($auth, $openApiPublic, $tables, $baseUrl),
@@ -348,8 +358,9 @@ function dispatchAccounting(
 	Request $request,
 	\Shipard\Core\Database\DataSourceConnection $db,
 	?\Shipard\Core\Config\ConfigRuntime $configRuntime,
+	?\Shipard\Core\Document\JournalEventDispatcher $journalEventDispatcher = null,
 ): Response {
-	$ctrl = new \Shipard\Module\Economy\Accounting\AccountingController($db, $configRuntime);
+	$ctrl = new \Shipard\Module\Economy\Accounting\AccountingController($db, $configRuntime, $journalEventDispatcher);
 	return match ($route->action) {
 		'reaccount' => $ctrl->reaccount($request),
 		default     => Response::error('INTERNAL_ERROR', "Unknown accounting action: {$route->action}", 500),
@@ -366,6 +377,7 @@ function dispatchBank(
 	?\Shipard\Core\Config\ConfigRuntime $configRuntime,
 	\Shipard\Core\Document\DocumentRegistry $documentRegistry,
 	?\Shipard\Core\Document\DocumentEventDispatcher $documentEventDispatcher = null,
+	?\Shipard\Core\Document\JournalEventDispatcher $journalEventDispatcher = null,
 ): Response {
 	$dsPath = $resolved->config->getDataSourceDir();
 	$ctrl = new \Shipard\Module\Economy\Bank\BankController(
@@ -376,6 +388,7 @@ function dispatchBank(
 		$resolved->config,
 		$documentRegistry,
 		$documentEventDispatcher,
+		$journalEventDispatcher,
 	);
 	return match ($route->action) {
 		'importStatement' => $ctrl->importStatement($auth),

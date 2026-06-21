@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Shipard\Tests\Integration\Accounting;
 
 use Shipard\Core\Config\ConfigRuntime;
+use Shipard\Core\Document\AbstractJournalEventHandler;
+use Shipard\Core\Document\JournalEventDispatcher;
 use Shipard\Module\Economy\Accounting\AccountingEngine;
 use Shipard\Tests\Integration\IntegrationTestCase;
 
@@ -276,6 +278,62 @@ class AccountingEngineTest extends IntegrationTestCase
                     : (string) $line['due_date'],
             );
         }
+    }
+
+    public function testEmitsJournalWrittenOnAccountReaccountAndClear(): void
+    {
+        AcctJournalSpy::$calls = [];
+        $dispatcher = new JournalEventDispatcher([
+            ['class' => AcctJournalSpy::class, 'events' => ['journalWritten']],
+        ]);
+        $engine = new AccountingEngine(
+            $this->db->getDibiConnection(),
+            ConfigRuntime::load($this->realDsPath, 'cs'),
+            $dispatcher,
+        );
+
+        $headId = $this->insertHead('invno', [
+            'total_base' => 1000.0, 'total_vat' => 210.0, 'total_amount' => 1210.0,
+            'total_base_dom' => 1000.0, 'total_vat_dom' => 210.0, 'total_amount_dom' => 1210.0,
+        ]);
+        $this->insertRow($headId, 'sale.services', 1000.0, 21.0);
+        $this->insertRecap($headId, 1000.0, 210.0);
+
+        $engine->accountDocument($headId);            // zápis deníku
+        $engine->accountDocument($headId);            // reaccount (bez změny stavu)
+        $engine->clearDocument($headId);              // vymazání deníku
+
+        $this->assertSame(
+            [['doc', $headId], ['doc', $headId], ['doc', $headId]],
+            AcctJournalSpy::$calls,
+            'journalWritten se vyšle po zápisu, reaccountu i clear',
+        );
+    }
+
+    public function testJournalHandlerExceptionDoesNotBreakAccounting(): void
+    {
+        // Pozn.: spolknutá výjimka se zaloguje (ErrorLogger → stderr) — očekávané.
+        $dispatcher = new JournalEventDispatcher([
+            ['class' => ThrowingAcctJournalSpy::class, 'events' => ['journalWritten']],
+        ]);
+        $engine = new AccountingEngine(
+            $this->db->getDibiConnection(),
+            ConfigRuntime::load($this->realDsPath, 'cs'),
+            $dispatcher,
+        );
+
+        $headId = $this->insertHead('invno', [
+            'total_base' => 1000.0, 'total_vat' => 210.0, 'total_amount' => 1210.0,
+            'total_base_dom' => 1000.0, 'total_vat_dom' => 210.0, 'total_amount_dom' => 1210.0,
+        ]);
+        $this->insertRow($headId, 'sale.services', 1000.0, 21.0);
+        $this->insertRecap($headId, 1000.0, 210.0);
+
+        // Výjimka v journal handleru nesmí shodit účtování — commit už proběhl.
+        $result = $engine->accountDocument($headId);
+        $this->assertSame(1, $result['state']);
+        $this->assertSame(1, $this->accountingState($headId));
+        $this->assertCount(3, $this->journalOf($headId));
     }
 
     public function testInvnoPdpOutputBooksNoVat(): void
@@ -874,5 +932,26 @@ class AccountingEngineTest extends IntegrationTestCase
         $id = (int) $dibi->getInsertId();
         $this->createdItems[] = $id;
         return $id;
+    }
+}
+
+/** Spy journal handler — zaznamenává (sourceKind, sourceId) staticky. */
+class AcctJournalSpy extends AbstractJournalEventHandler
+{
+    /** @var list<array{0: string, 1: int}> */
+    public static array $calls = [];
+
+    public function onJournalWritten(string $sourceKind, int $sourceId): void
+    {
+        self::$calls[] = [$sourceKind, $sourceId];
+    }
+}
+
+/** Vyhazuje výjimku — ověřuje, že nespadne účtování. */
+class ThrowingAcctJournalSpy extends AbstractJournalEventHandler
+{
+    public function onJournalWritten(string $sourceKind, int $sourceId): void
+    {
+        throw new \RuntimeException('saldo boom');
     }
 }

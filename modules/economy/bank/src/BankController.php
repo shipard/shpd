@@ -13,6 +13,7 @@ use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Database\TableDefinition;
 use Shipard\Core\Document\DocumentEventDispatcher;
 use Shipard\Core\Document\DocumentRegistry;
+use Shipard\Core\Document\JournalEventDispatcher;
 use Shipard\Module\Core\Attachments\AttachmentService;
 use Shipard\Module\Economy\Bank\Import\ImportException;
 use Shipard\Module\Economy\Bank\Import\StatementImportService;
@@ -39,6 +40,7 @@ final class BankController
         private readonly DataSourceConfig $dsConfig,
         private readonly DocumentRegistry $registry,
         private readonly ?DocumentEventDispatcher $eventDispatcher = null,
+        private readonly ?JournalEventDispatcher $journalEvents = null,
     ) {
     }
 
@@ -116,7 +118,7 @@ final class BankController
             );
         }
 
-        $engine = new BankTransactionAccountingEngine($this->db->getDibiConnection(), $this->config);
+        $engine = new BankTransactionAccountingEngine($this->db->getDibiConnection(), $this->config, $this->journalEvents);
         $result = $engine->accountTransaction($txId);
 
         return Response::success([

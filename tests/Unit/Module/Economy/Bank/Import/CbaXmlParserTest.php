@@ -39,8 +39,8 @@ class CbaXmlParserTest extends TestCase
         // dateTransaction = BookgDt (ne ValDt)
         $this->assertSame('2026-06-10', $t->dateTransaction->format('Y-m-d'));
         $this->assertSame('2026-06-09', $t->dateValue->format('Y-m-d'));
-        $this->assertSame('12345', $t->symbol1);
-        $this->assertSame('678', $t->symbol2);
+        $this->assertSame('12345', $t->paymentReference);
+        $this->assertSame('678', $t->specificSymbol);
         $this->assertSame('123456789/0800', $t->counterpartyAccount);
         $this->assertSame('Alfa s.r.o.', $t->counterpartyName);
         $this->assertSame('Platba za fakturu 12345', $t->message);

@@ -56,7 +56,7 @@ class BankTransactionDocument extends Document
 
     public function beforeSave(array &$data, ?array $originalData = null): void
     {
-        foreach (['counterparty_account', 'counterparty_name', 'symbol1', 'symbol2', 'symbol3', 'message', 'external_id'] as $col) {
+        foreach (['counterparty_account', 'counterparty_name', 'payment_reference', 'specific_symbol', 'constant_symbol', 'message', 'external_id'] as $col) {
             if (isset($data[$col]) && $data[$col] !== null) {
                 $data[$col] = trim((string) $data[$col]);
             }

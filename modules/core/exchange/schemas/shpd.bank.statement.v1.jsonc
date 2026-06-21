@@ -76,9 +76,9 @@
                     "dateValue":           { "type": ["string", "null"], "format": "date" },
                     "counterpartyAccount": { "type": ["string", "null"] },
                     "counterpartyName":    { "type": ["string", "null"] },
-                    "symbol1":             { "type": ["string", "null"] },
-                    "symbol2":             { "type": ["string", "null"] },
-                    "symbol3":             { "type": ["string", "null"] },
+                    "paymentReference":    { "type": ["string", "null"] },
+                    "specificSymbol":      { "type": ["string", "null"] },
+                    "constantSymbol":      { "type": ["string", "null"] },
                     "message":             { "type": ["string", "null"] },
                     "operation":           { "type": ["string", "null"] },
                     "exchangeRate":        { "type": ["number", "null"], "exclusiveMinimum": 0 }

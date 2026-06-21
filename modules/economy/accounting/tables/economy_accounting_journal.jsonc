@@ -16,6 +16,13 @@
     // dle source_kind (zatím dokumentační; vynutí mikroengine ve Fázi 3).
     // doc_head je proto nullable — fresh DS ho vytvoří správně; existující
     // DS s NOT NULL doc_head se řeší přes ds-reset (deník je čistý derivát).
+    //
+    // Platební identita (payment_reference / specific_symbol /
+    // constant_symbol / due_date): orazítkovaná ze zdroje, drží invariant
+    // „saldo zná jen deník" (accbal Fáze 0). Generátor saldo pohybů je čte
+    // odsud bez joinu na zdroj; navíc umožňují filtr deníku za VS. Tím se
+    // částečně obrací accounting.md rozhodnutí #10 (deník schválně bez
+    // saldokontních sloupců) — symboly + splatnost zpět dovnitř.
 
     "displayPattern": "{account_number} {text}",
 
@@ -208,6 +215,50 @@
             "type": "varchar",
             "length": 200,
             "nullable": true
+        },
+
+        // --- payment identity ---
+        // Párovací symboly + splatnost orazítkované ze zdroje (hlavička
+        // dokladu / bankovní transakce). Drží invariant „saldo zná jen
+        // deník" — generátor saldo pohybů (accbal Fáze 2) je čte odsud,
+        // bez joinu na zdroj. Symboly v konvenci dokladů (payment_reference
+        // varchar 35 pro RF/EndToEndId). U bankovní transakce je due_date
+        // vždy NULL (transakce splatnost nemá).
+
+        {
+            "id": "payment_reference",
+            "name": "Payment reference",
+            "name:cs": "Variabilní symbol",
+            "name:en": "Payment reference",
+            "type": "varchar",
+            "length": 35,
+            "nullable": true
+        },
+        {
+            "id": "specific_symbol",
+            "name": "Specific symbol",
+            "name:cs": "Specifický symbol",
+            "name:en": "Specific symbol",
+            "type": "varchar",
+            "length": 20,
+            "nullable": true
+        },
+        {
+            "id": "constant_symbol",
+            "name": "Constant symbol",
+            "name:cs": "Konstantní symbol",
+            "name:en": "Constant symbol",
+            "type": "varchar",
+            "length": 10,
+            "nullable": true
+        },
+        {
+            "id": "due_date",
+            "name": "Due date",
+            "name:cs": "Datum splatnosti",
+            "name:en": "Due date",
+            "type": "date",
+            "nullable": true
         }
     ],
 
@@ -242,6 +293,11 @@
             "id": "idx_partner",
             "type": "index",
             "columns": [{"column": "partner"}]
+        },
+        {
+            "id": "idx_payment_reference",
+            "type": "index",
+            "columns": [{"column": "payment_reference"}]
         }
     ]
 }

@@ -72,9 +72,9 @@ final class GpcParser implements StatementParser
                 dateValue: null,
                 counterpartyAccount: ParserUtils::nullIfEmpty($r['account']),
                 counterpartyName: null,
-                symbol1: $r['symbol1'],
-                symbol2: $r['symbol2'],
-                symbol3: $r['symbol3'],
+                paymentReference: $r['payment_reference'],
+                specificSymbol: $r['specific_symbol'],
+                constantSymbol: $r['constant_symbol'],
                 message: ParserUtils::mergeMemo($r['memo']),
                 raw: $r,
             );
@@ -116,9 +116,9 @@ final class GpcParser implements StatementParser
             'account'  => $account,
             'amount'   => $amount,
             'date'     => $date,
-            'symbol1'  => ParserUtils::normalizeSymbol(ParserUtils::sub($line, 61, 10)),
-            'symbol2'  => ParserUtils::normalizeSymbol(ParserUtils::sub($line, 81, 10)),
-            'symbol3'  => ParserUtils::normalizeSymbol(ParserUtils::sub($line, 77, 4)),
+            'payment_reference' => ParserUtils::normalizeSymbol(ParserUtils::sub($line, 61, 10)),
+            'specific_symbol'   => ParserUtils::normalizeSymbol(ParserUtils::sub($line, 81, 10)),
+            'constant_symbol'   => ParserUtils::normalizeSymbol(ParserUtils::sub($line, 77, 4)),
             'memo'     => [ParserUtils::sub($line, 97, 20)],
         ];
     }

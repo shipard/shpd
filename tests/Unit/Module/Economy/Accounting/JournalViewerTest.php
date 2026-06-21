@@ -108,10 +108,10 @@ class JournalViewerTest extends TestCase
 
         ['sql' => $sql, 'params' => $params] = $this->queries[0];
         $this->assertStringContainsString(
-            '(j.`text` LIKE %s OR j.`doc_number` LIKE %s OR j.`account_number` LIKE %s)',
+            '(j.`text` LIKE %s OR j.`doc_number` LIKE %s OR j.`account_number` LIKE %s OR j.`payment_reference` LIKE %s)',
             $sql,
         );
-        $this->assertSame(['%518%', '%518%', '%518%'], $params);
+        $this->assertSame(['%518%', '%518%', '%518%', '%518%'], $params);
     }
 
     // ── renderRow ───────────────────────────────────────────────────────────
@@ -266,10 +266,10 @@ class JournalViewerTest extends TestCase
         $filters = $viewer->getFilters();
 
         $this->assertSame(
-            ['fiscal_year', 'fiscal_month', 'account', 'partner', 'only_errors'],
+            ['fiscal_year', 'fiscal_month', 'account', 'partner', 'payment_reference', 'only_errors'],
             array_column($filters, 'id'),
         );
-        $this->assertSame(['select', 'select', 'text', 'text', 'checkbox'], array_column($filters, 'type'));
+        $this->assertSame(['select', 'select', 'text', 'text', 'text', 'checkbox'], array_column($filters, 'type'));
 
         $this->assertSame([['value' => 3, 'label' => '2026']], $filters[0]['options']);
         $this->assertSame('fiscal_year', $filters[1]['parentFilter']);

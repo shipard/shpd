@@ -246,6 +246,38 @@ class AccountingEngineTest extends IntegrationTestCase
         }
     }
 
+    public function testStampsPaymentIdentityFromHead(): void
+    {
+        // accbal Fáze 0: každý řádek deníku nese párovací symboly +
+        // splatnost z hlavičky (konstantní přes doklad).
+        $headId = $this->insertHead('invno', [
+            'total_base' => 1000.0, 'total_vat' => 210.0, 'total_amount' => 1210.0,
+            'total_base_dom' => 1000.0, 'total_vat_dom' => 210.0, 'total_amount_dom' => 1210.0,
+            'payment_reference' => '20260042',
+            'specific_symbol'   => '777',
+            'constant_symbol'   => '0308',
+            'due_date'          => '2026-07-10',
+        ]);
+        $this->insertRow($headId, 'sale.services', 1000.0, 21.0);
+        $this->insertRecap($headId, 1000.0, 210.0);
+
+        $this->assertSame(1, $this->engine->accountDocument($headId)['state']);
+
+        $journal = $this->journalOf($headId);
+        $this->assertNotEmpty($journal);
+        foreach ($journal as $line) {
+            $this->assertSame('20260042', $line['payment_reference']);
+            $this->assertSame('777', $line['specific_symbol']);
+            $this->assertSame('0308', $line['constant_symbol']);
+            $this->assertSame(
+                '2026-07-10',
+                $line['due_date'] instanceof \DateTimeInterface
+                    ? $line['due_date']->format('Y-m-d')
+                    : (string) $line['due_date'],
+            );
+        }
+    }
+
     public function testInvnoPdpOutputBooksNoVat(): void
     {
         // W4: PDP výstup (cz-150) — daň odvádí zákazník, doklad je jen základ.

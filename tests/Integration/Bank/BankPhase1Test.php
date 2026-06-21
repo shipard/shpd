@@ -74,7 +74,7 @@ class BankPhase1Test extends IntegrationTestCase
             'exchange_rate'    => 1,
             'date_transaction' => '2026-06-10',
             'counterparty_name' => 'IT BankPhase1 Alpha',
-            'symbol1'          => '12345',
+            'payment_reference' => '12345',
             'accounting_state' => 0,
             'docState'         => 10,
             'docStateMain'     => 1,

@@ -132,6 +132,37 @@ class BankTransactionAccountingEngineTest extends IntegrationTestCase
         $this->assertSame(1, $this->accountingStateOf($txId));
     }
 
+    // ── accbal Fáze 0: razítkování platební identity ─────────────────────────
+
+    public function testStampsPaymentReferenceDueDateNull(): void
+    {
+        $bankAccountId = $this->ensureAccountByMask('221');
+        $this->ensureAccountByNumber('261200');
+        $baId = $this->insertBankAccount($bankAccountId);
+
+        $txId = $this->insertTx([
+            'bank_account'      => $baId,
+            'direction'         => 1,
+            'operation'         => 'payment.in',
+            'amount'            => 1210.00,
+            'amount_dom'        => 1210.00,
+            'payment_reference' => '20260042',
+            'specific_symbol'   => '777',
+            'constant_symbol'   => '0308',
+        ]);
+
+        $this->assertSame(1, $this->engine->accountTransaction($txId)['state']);
+
+        $rows = $this->journalOf($txId);
+        $this->assertCount(2, $rows);
+        foreach ($rows as $r) {
+            $this->assertSame('20260042', $r['payment_reference']);
+            $this->assertSame('777', $r['specific_symbol']);
+            $this->assertSame('0308', $r['constant_symbol']);
+            $this->assertNull($r['due_date'], 'Bankovní transakce splatnost nemá');
+        }
+    }
+
     // ── W6.5 Chybový stav + alert ────────────────────────────────────────────
 
     public function testMissingBankAccountRaisesErrorAndAlert(): void

@@ -37,9 +37,9 @@ class GpcParserTest extends TestCase
         $this->assertNull($t->externalId); // GPC stabilní ID nemá
         $this->assertEqualsWithDelta(1210.0, $t->amount, 0.001); // typ 2 = příjem (+)
         $this->assertSame('2026-06-10', $t->dateTransaction->format('Y-m-d'));
-        $this->assertSame('12345', $t->symbol1);
-        $this->assertSame('678', $t->symbol2);
-        $this->assertNull($t->symbol3); // KS 0000 → null
+        $this->assertSame('12345', $t->paymentReference);
+        $this->assertSame('678', $t->specificSymbol);
+        $this->assertNull($t->constantSymbol); // KS 0000 → null
         $this->assertStringContainsString('/0800', (string) $t->counterpartyAccount);
         $this->assertSame('Platba faktura 12345', $t->message);
     }
@@ -49,7 +49,7 @@ class GpcParserTest extends TestCase
         $t = (new GpcParser())->parse($this->fixture())[0]->transactions[1];
 
         $this->assertEqualsWithDelta(-50.0, $t->amount, 0.001); // typ 1 = výdaj (−)
-        $this->assertNull($t->symbol1);
+        $this->assertNull($t->paymentReference);
         // memo 075 + continuation 078
         $this->assertSame('Bankovni poplatek Poplatek za vedeni', $t->message);
     }

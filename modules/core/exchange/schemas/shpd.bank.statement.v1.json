@@ -121,19 +121,19 @@
                             "null"
                         ]
                     },
-                    "symbol1": {
+                    "paymentReference": {
                         "type": [
                             "string",
                             "null"
                         ]
                     },
-                    "symbol2": {
+                    "specificSymbol": {
                         "type": [
                             "string",
                             "null"
                         ]
                     },
-                    "symbol3": {
+                    "constantSymbol": {
                         "type": [
                             "string",
                             "null"

@@ -36,7 +36,7 @@ class BankTransactionsViewer extends TableViewer
     public function selectRows(?string $search, array $filters, int $pageNumber): array
     {
         $sql = 'SELECT `id`, `date_transaction`, `direction`, `amount`, `currency`,'
-            . ' `counterparty_name`, `symbol1`, `operation`, `accounting_state`,'
+            . ' `counterparty_name`, `payment_reference`, `operation`, `accounting_state`,'
             . ' `docState`, `docStateMain`'
             . ' FROM `' . $this->table . '`';
 
@@ -67,7 +67,7 @@ class BankTransactionsViewer extends TableViewer
 
         if ($search !== null && $search !== '') {
             [$searchSql, $searchParams] = $this->buildSearchCondition(
-                ['counterparty_name', 'counterparty_account', 'symbol1', 'message'],
+                ['counterparty_name', 'counterparty_account', 'payment_reference', 'message'],
                 $search,
             );
             if ($searchSql !== '') {
@@ -107,7 +107,7 @@ class BankTransactionsViewer extends TableViewer
         if ($date !== null) {
             $t2[] = ['text' => $date];
         }
-        $vs = trim((string) ($rowData['symbol1'] ?? ''));
+        $vs = trim((string) ($rowData['payment_reference'] ?? ''));
         if ($vs !== '') {
             $t2[] = ['text' => 'VS ' . $vs, 'class' => 'muted'];
         }
@@ -172,9 +172,9 @@ class BankTransactionsViewer extends TableViewer
         $this->addItem($cpItems, $cs ? 'Protiúčet' : 'Counterparty account', $r['counterparty_account'] ?? null);
         $this->addItem($cpItems, $cs ? 'Název protistrany' : 'Counterparty name', $r['counterparty_name'] ?? null);
         $this->addItem($cpItems, 'Partner', $r['partner_name'] ?? null);
-        $this->addItem($cpItems, $cs ? 'Variabilní symbol' : 'Variable symbol', $r['symbol1'] ?? null);
-        $this->addItem($cpItems, $cs ? 'Specifický symbol' : 'Specific symbol', $r['symbol2'] ?? null);
-        $this->addItem($cpItems, $cs ? 'Konstantní symbol' : 'Constant symbol', $r['symbol3'] ?? null);
+        $this->addItem($cpItems, $cs ? 'Variabilní symbol' : 'Variable symbol', $r['payment_reference'] ?? null);
+        $this->addItem($cpItems, $cs ? 'Specifický symbol' : 'Specific symbol', $r['specific_symbol'] ?? null);
+        $this->addItem($cpItems, $cs ? 'Konstantní symbol' : 'Constant symbol', $r['constant_symbol'] ?? null);
         $this->addItem($cpItems, $cs ? 'Zpráva' : 'Message', $r['message'] ?? null);
 
         $accountLabel = trim(

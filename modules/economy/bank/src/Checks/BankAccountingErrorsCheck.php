@@ -28,7 +28,7 @@ final class BankAccountingErrorsCheck extends AlertCheck
     public function run(): array
     {
         $rows = $this->db->fetchAll(
-            'SELECT [id], [date_transaction], [counterparty_name], [symbol1], [accounting_messages]
+            'SELECT [id], [date_transaction], [counterparty_name], [payment_reference], [accounting_messages]
              FROM [economy_bank_transactions]
              WHERE [docState] = %i AND [accounting_state] = %i
              ORDER BY [id]',

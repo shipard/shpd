@@ -40,9 +40,9 @@ class FioJsonParserTest extends TestCase
         $this->assertSame('2026-06-10', $t->dateTransaction->format('Y-m-d'));
         $this->assertSame('123456789/0800', $t->counterpartyAccount);
         $this->assertSame('Alfa s.r.o.', $t->counterpartyName);
-        $this->assertSame('12345', $t->symbol1);
-        $this->assertSame('678', $t->symbol2);
-        $this->assertNull($t->symbol3); // KS 0000 → null
+        $this->assertSame('12345', $t->paymentReference);
+        $this->assertSame('678', $t->specificSymbol);
+        $this->assertNull($t->constantSymbol); // KS 0000 → null
         // memo sloučené, opakovaný název protistrany sloučen
         $this->assertSame('Platba za fakturu 12345 Alfa s.r.o.', $t->message);
     }

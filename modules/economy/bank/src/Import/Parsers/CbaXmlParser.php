@@ -149,9 +149,9 @@ final class CbaXmlParser implements StatementParser
             dateValue: $dateValue,
             counterpartyAccount: $cpAccount,
             counterpartyName: $cpName,
-            symbol1: $s1,
-            symbol2: $s2,
-            symbol3: $s3,
+            paymentReference: $s1,
+            specificSymbol: $s2,
+            constantSymbol: $s3,
             message: $memo,
         );
     }

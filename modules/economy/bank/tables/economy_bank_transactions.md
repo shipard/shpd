@@ -43,9 +43,9 @@ přechod do 40 spustí bankovní mikroengine (Fáze 3).
 
 | Sloupec | Typ | Popis |
 |---|---|---|
-| `symbol1` | varchar(10) NULL | Variabilní symbol |
-| `symbol2` | varchar(10) NULL | Specifický symbol |
-| `symbol3` | varchar(10) NULL | Konstantní symbol |
+| `payment_reference` | varchar(35) NULL | Variabilní symbol (konvence dokladů; délka 35 pro RF/EndToEndId) |
+| `specific_symbol` | varchar(20) NULL | Specifický symbol |
+| `constant_symbol` | varchar(10) NULL | Konstantní symbol |
 | `message` | varchar(250) NULL | Zpráva pro příjemce / poznámka |
 
 ### Skupina `accounting`
@@ -88,7 +88,7 @@ přechod do 40 spustí bankovní mikroengine (Fáze 3).
   nekolidují.
 - `fingerprint` se **NEPOČÍTÁ** v `BankTransactionDocument` — je to ingestion
   concern (Fáze 2), hash z `(bank_account, date_transaction, amount, direction,
-  counterparty_account, symbol1, symbol2, message, pořadí v rámci dne)`.
+  counterparty_account, payment_reference, specific_symbol, message, pořadí v rámci dne)`.
 - `direction` ∈ {1, 2} (povinné), `amount > 0`, `bank_account` / `currency` /
   `date_transaction` povinné — vynucuje `validate()`.
 - `amount_dom` je derivované: `beforeSave` dopočítá `round(amount × exchange_rate, 2)`,

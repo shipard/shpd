@@ -494,9 +494,13 @@ podle `is_error`.
 | `money_cr_cur` | numeric 15,2, default 0 | DAL — měna dokladu |
 | `partner` | int, FK `base_persons_persons`, nullable | partner z hlavičky |
 | `text` | varchar 200 | text řádku |
+| `payment_reference` | varchar 35, nullable | variabilní symbol (ze zdroje) |
+| `specific_symbol` | varchar 20, nullable | specifický symbol (ze zdroje) |
+| `constant_symbol` | varchar 10, nullable | konstantní symbol (ze zdroje) |
+| `due_date` | date, nullable | splatnost z hlavičky dokladu (bankovní transakce: NULL) |
 
-Indexy: (`doc_head`), (`account_number`, `accounting_date`),
-(`fiscal_year`, `fiscal_month`), (`partner`).
+Indexy: (`doc_head`), (`source_kind`), (`account_number`, `accounting_date`),
+(`fiscal_year`, `fiscal_month`), (`partner`), (`payment_reference`).
 
 Poznámky:
 
@@ -504,7 +508,11 @@ Poznámky:
   (a párový `_cur` sloupec).
 - U dokladu v domácí měně jsou `*_cur` shodné s domácími — **plní se vždy**,
   reporty pak nemusí rozlišovat.
-- Žádné saldokontní sloupce (symboly, balance, párování) — viz Mimo scope.
+- **Platební identita** (`payment_reference` / `specific_symbol` /
+  `constant_symbol` / `due_date`): orazítkovaná ze zdroje (hlavička dokladu /
+  bankovní transakce), aby saldo (accbal) četlo výhradně deník bez joinu na
+  zdroj a šel filtr deníku za VS. Symboly v konvenci dokladů (varchar 35 pro
+  RF/EndToEndId). Tím se **částečně obrací rozhodnutí #10** (viz Log rozhodnutí).
 
 ---
 
@@ -817,6 +825,10 @@ Drobnosti zjištěné implementací:
 9. Účetní položky: extension `accounting_account` na items (FK na rozvrh),
    pohyb `acc.entry`, účet přímo z položky (`accountSrc: "item"`).
 10. Saldokonto kompletně mimo scope, bez předpřípravy ve schématu.
+    **Částečně obráceno (accbal Fáze 0, tasks/accbal-phase0-payment-identity.md):**
+    deník dostal `payment_reference` / `specific_symbol` / `constant_symbol` /
+    `due_date`, aby saldo četlo výhradně deník (bez joinu na zdroj) a šel filtr
+    deníku za VS. Samotná saldo tabulka/logika zůstává mimo scope.
 11. Kategorie předpisu jsou sémantické stringy (`receivables`, `revenue`, …),
     ne čísla účtů.
 12. Hook přes obecný mechanismus `documentEventHandlers`

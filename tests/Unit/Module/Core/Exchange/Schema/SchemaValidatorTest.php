@@ -233,9 +233,9 @@ class SchemaValidatorTest extends TestCase
             'dateValue'           => '2026-06-11',
             'counterpartyAccount' => '123456789/0100',
             'counterpartyName'    => 'Acme s.r.o.',
-            'symbol1'             => '12345',
-            'symbol2'             => '67',
-            'symbol3'             => '0308',
+            'paymentReference'    => '12345',
+            'specificSymbol'      => '67',
+            'constantSymbol'      => '0308',
             'message'             => 'Platba faktury',
             'operation'           => null,
         ];

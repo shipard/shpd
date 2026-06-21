@@ -107,9 +107,9 @@ tableId **414**. docStates: vlastní sada `economy.bank.txStates` (§5).
 | `date_value` | date, nullable | datum valuty |
 | `counterparty_account` | varchar 40, nullable | protiúčet (číslo/IBAN) |
 | `counterparty_name` | varchar 150, nullable | název protistrany dle banky |
-| `symbol1` | varchar 10, nullable | variabilní symbol |
-| `symbol2` | varchar 10, nullable | specifický symbol |
-| `symbol3` | varchar 10, nullable | konstantní symbol |
+| `payment_reference` | varchar 35, nullable | variabilní symbol (konvence dokladů; 35 pro RF/EndToEndId) |
+| `specific_symbol` | varchar 20, nullable | specifický symbol |
+| `constant_symbol` | varchar 10, nullable | konstantní symbol |
 | `message` | varchar 250, nullable | zpráva pro příjemce / poznámka |
 | `partner` | int, FK `base_persons_persons`, nullable | dohledaná protistrana (§4.5) |
 | `operation` | enumString 40, cfgItem `economy.bank.txOperations`, nullable | co transakce znamená — řídí účtování (§4.2 / §6.2) |
@@ -238,7 +238,7 @@ starý import ho **zahazoval**.
 
 - **Primárně** `(bank_account, external_id)` — když banka stabilní ID dává.
 - **Fallback `fingerprint`** = hash z `(bank_account, date_transaction,
-  amount, direction, counterparty_account, symbol1, symbol2, message,
+  amount, direction, counterparty_account, payment_reference, specific_symbol, message,
   pořadové číslo v rámci dne)` — pro formáty bez ID. Pořadové číslo řeší dvě
   identické transakce v jednom dni.
 - Import je **idempotentní**: existující transakce (dle klíče) se přeskočí

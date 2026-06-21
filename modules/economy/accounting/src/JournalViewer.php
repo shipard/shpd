@@ -25,6 +25,7 @@ class JournalViewer extends TableViewer
         $sql = 'SELECT j.`id`, j.`accounting_date`, j.`doc_head`, j.`doc_number`,'
             . ' j.`account_number`, j.`text`, j.`money_dr`, j.`money_cr`,'
             . ' j.`currency`, j.`money_dr_cur`, j.`money_cr_cur`, j.`is_error`,'
+            . ' j.`payment_reference`,'
             . ' p.`full_name` AS partner_name'
             . ' FROM `' . $this->table . '` j'
             . ' LEFT JOIN `base_persons_persons` p ON p.`id` = j.`partner`';
@@ -51,6 +52,10 @@ class JournalViewer extends TableViewer
             } elseif ($id === 'partner') {
                 $conditions[] = 'p.`full_name` LIKE %s';
                 $params[] = '%' . (string) $value . '%';
+            } elseif ($id === 'payment_reference') {
+                // VS se hledá přesně/od začátku (prefix) — ne substring.
+                $conditions[] = 'j.`payment_reference` LIKE %s';
+                $params[] = (string) $value . '%';
             } elseif ($id === 'only_errors' && (string) $value === '1') {
                 $conditions[] = 'j.`is_error` = 1';
             }
@@ -58,7 +63,8 @@ class JournalViewer extends TableViewer
 
         if ($search !== null && $search !== '') {
             $term = '%' . $search . '%';
-            $conditions[] = '(j.`text` LIKE %s OR j.`doc_number` LIKE %s OR j.`account_number` LIKE %s)';
+            $conditions[] = '(j.`text` LIKE %s OR j.`doc_number` LIKE %s OR j.`account_number` LIKE %s OR j.`payment_reference` LIKE %s)';
+            $params[] = $term;
             $params[] = $term;
             $params[] = $term;
             $params[] = $term;
@@ -194,12 +200,21 @@ class JournalViewer extends TableViewer
         );
         $this->addItem($docItems, $cs ? 'Číslo dokladu' : 'Document number', $r['doc_number'] ?? null);
 
+        $paymentItems = [];
+        $this->addItem($paymentItems, $cs ? 'Variabilní symbol' : 'Payment reference', $r['payment_reference'] ?? null);
+        $this->addItem($paymentItems, $cs ? 'Specifický symbol' : 'Specific symbol', $r['specific_symbol'] ?? null);
+        $this->addItem($paymentItems, $cs ? 'Konstantní symbol' : 'Constant symbol', $r['constant_symbol'] ?? null);
+        $this->addItem($paymentItems, $cs ? 'Splatnost' : 'Due date', $this->formatDate($r['due_date'] ?? null));
+
         $groups = [
             ['title' => $cs ? 'Zápis' : 'Entry', 'items' => $entryItems],
             ['title' => $cs ? 'Částky' : 'Amounts', 'items' => $amountItems],
         ];
         if ($docItems !== []) {
             $groups[] = ['title' => $cs ? 'Doklad' : 'Document', 'items' => $docItems];
+        }
+        if ($paymentItems !== []) {
+            $groups[] = ['title' => $cs ? 'Platba' : 'Payment', 'items' => $paymentItems];
         }
 
         $detail = ['tabs' => [[
@@ -276,6 +291,11 @@ class JournalViewer extends TableViewer
             [
                 'id'    => 'partner',
                 'label' => 'Partner',
+                'type'  => 'text',
+            ],
+            [
+                'id'    => 'payment_reference',
+                'label' => $cs ? 'Variabilní symbol' : 'Payment reference',
                 'type'  => 'text',
             ],
             [

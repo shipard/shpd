@@ -295,7 +295,7 @@ final class BankTransactionAccountingEngine
         if ($counterparty !== '') {
             $parts[] = $counterparty;
         }
-        $vs = trim((string) ($tx['symbol1'] ?? ''));
+        $vs = trim((string) ($tx['payment_reference'] ?? ''));
         if ($vs !== '') {
             $parts[] = 'VS ' . $vs;
         }
@@ -394,6 +394,11 @@ final class BankTransactionAccountingEngine
                     'money_cr_cur'     => $line['money_cr_cur'],
                     'partner'          => $line['partner'],
                     'text'             => $line['text'],
+                    // Platební identita z transakce; splatnost transakce nemá.
+                    'payment_reference' => $tx['payment_reference'] ?? null,
+                    'specific_symbol'   => $tx['specific_symbol'] ?? null,
+                    'constant_symbol'   => $tx['constant_symbol'] ?? null,
+                    'due_date'          => null,
                 ])->execute();
             }
 

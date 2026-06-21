@@ -31,9 +31,9 @@
                                 {"type": "separator", "label": "Protistrana", "label:cs": "Protistrana", "label:en": "Counterparty"},
                                 {"type": "input", "column": "counterparty_account", "readOnly": true},
                                 {"type": "input", "column": "counterparty_name",    "readOnly": true},
-                                {"type": "input", "column": "symbol1",              "readOnly": true},
-                                {"type": "input", "column": "symbol2",              "readOnly": true},
-                                {"type": "input", "column": "symbol3",              "readOnly": true},
+                                {"type": "input", "column": "payment_reference",    "readOnly": true},
+                                {"type": "input", "column": "specific_symbol",      "readOnly": true},
+                                {"type": "input", "column": "constant_symbol",      "readOnly": true},
 
                                 {"type": "separator", "label": "Zaúčtování", "label:cs": "Zaúčtování", "label:en": "Accounting"},
                                 {"type": "select", "column": "operation"},

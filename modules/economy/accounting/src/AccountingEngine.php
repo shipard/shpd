@@ -576,6 +576,11 @@ final class AccountingEngine
                     'money_cr_cur'    => $line['money_cr_cur'],
                     'partner'         => $line['partner'],
                     'text'            => $line['text'],
+                    // Platební identita — konstantní přes celý doklad (z hlavičky).
+                    'payment_reference' => $head['payment_reference'] ?? null,
+                    'specific_symbol'   => $head['specific_symbol'] ?? null,
+                    'constant_symbol'   => $head['constant_symbol'] ?? null,
+                    'due_date'          => $head['due_date'] ?? null,
                 ])->execute();
             }
 

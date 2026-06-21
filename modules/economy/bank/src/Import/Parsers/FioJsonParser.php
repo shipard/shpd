@@ -81,9 +81,9 @@ final class FioJsonParser implements StatementParser
             dateValue: null,
             counterpartyAccount: $counterparty,
             counterpartyName: $this->col($t, 'column10') ?? $this->col($t, 'column7'),
-            symbol1: ParserUtils::normalizeSymbol($this->col($t, 'column5')),
-            symbol2: ParserUtils::normalizeSymbol($this->col($t, 'column6')),
-            symbol3: ParserUtils::normalizeSymbol($this->col($t, 'column4')),
+            paymentReference: ParserUtils::normalizeSymbol($this->col($t, 'column5')),
+            specificSymbol: ParserUtils::normalizeSymbol($this->col($t, 'column6')),
+            constantSymbol: ParserUtils::normalizeSymbol($this->col($t, 'column4')),
             message: ParserUtils::mergeMemo([
                 $this->col($t, 'column16'),
                 $this->col($t, 'column7'),

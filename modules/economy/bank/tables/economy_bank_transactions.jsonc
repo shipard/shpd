@@ -59,11 +59,11 @@
 
         // --- payment ---
 
-        {"id": "symbol1", "name": "Variable symbol", "name:cs": "Variabilní symbol", "name:en": "Variable symbol",
-            "type": "varchar", "length": 10, "nullable": true, "group": "payment"},
-        {"id": "symbol2", "name": "Specific symbol", "name:cs": "Specifický symbol", "name:en": "Specific symbol",
-            "type": "varchar", "length": 10, "nullable": true, "group": "payment"},
-        {"id": "symbol3", "name": "Constant symbol", "name:cs": "Konstantní symbol", "name:en": "Constant symbol",
+        {"id": "payment_reference", "name": "Payment reference", "name:cs": "Variabilní symbol", "name:en": "Payment reference",
+            "type": "varchar", "length": 35, "nullable": true, "group": "payment"},
+        {"id": "specific_symbol", "name": "Specific symbol", "name:cs": "Specifický symbol", "name:en": "Specific symbol",
+            "type": "varchar", "length": 20, "nullable": true, "group": "payment"},
+        {"id": "constant_symbol", "name": "Constant symbol", "name:cs": "Konstantní symbol", "name:en": "Constant symbol",
             "type": "varchar", "length": 10, "nullable": true, "group": "payment"},
         {"id": "message", "name": "Message", "name:cs": "Zpráva / poznámka", "name:en": "Message",
             "type": "varchar", "length": 250, "nullable": true, "group": "payment"},

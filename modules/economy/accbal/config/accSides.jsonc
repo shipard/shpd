@@ -1,0 +1,17 @@
+{
+    // economy.accbal.accSides
+    //
+    // Strana řádku účetního deníku, kterou účet saldokonta sleduje
+    // (economy_accbal_balance_accounts.acc_side).
+
+    "0": {
+        "name": "Debit",
+        "name:cs": "MD",
+        "name:en": "Debit"
+    },
+    "1": {
+        "name": "Credit",
+        "name:cs": "DAL",
+        "name:en": "Credit"
+    }
+}

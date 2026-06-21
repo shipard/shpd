@@ -1,0 +1,17 @@
+{
+    // economy.accbal.balSides
+    //
+    // Role pohybu v saldokontu (economy_accbal_balance_accounts.bal_side):
+    // předpis (vzniká pohledávka/závazek) vs. úhrada (plní se).
+
+    "0": {
+        "name": "Request",
+        "name:cs": "Předpis",
+        "name:en": "Request"
+    },
+    "1": {
+        "name": "Payment",
+        "name:cs": "Úhrada",
+        "name:en": "Payment"
+    }
+}

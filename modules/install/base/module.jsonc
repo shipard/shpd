@@ -18,6 +18,7 @@
         "economy.items",
         "economy.accounting",
         "economy.bank",
+        "economy.accbal",
         "world.vat",
         "docs.core",
         "docs.invoicesOut",

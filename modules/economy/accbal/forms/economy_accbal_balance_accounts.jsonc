@@ -1,0 +1,44 @@
+{
+    "title": "Účet saldokonta",
+    "title:cs": "Účet saldokonta",
+    "title:en": "Balance account",
+    "titleNew": "Nový účet saldokonta",
+    "titleNew:cs": "Nový účet saldokonta",
+    "titleNew:en": "New balance account",
+    "tabs": [
+        {
+            "id": "basic",
+            "label": "Účet",
+            "label:cs": "Účet",
+            "label:en": "Account",
+            "sections": [
+                {
+                    "columns": [
+                        {
+                            "elements": [
+                                {
+                                    "type": "lookup",
+                                    "column": "balance",
+                                    "required": true,
+                                    "placeholder": "Vyhledat saldokonto…",
+                                    "lookup": {"table": "economy_accbal_balances", "filter": null}
+                                },
+                                {"type": "input", "column": "account_number", "required": true},
+
+                                {"type": "separator", "label": "Nastavení", "label:cs": "Nastavení", "label:en": "Settings"},
+                                {"type": "select", "column": "acc_side", "required": true},
+                                {"type": "select", "column": "amounts_sign", "required": true},
+                                {"type": "select", "column": "bal_side", "required": true},
+                                {"type": "input", "column": "modify_sign"},
+                                {"type": "input", "column": "note"},
+                                {"type": "input", "column": "sort_order"},
+                                {"type": "input", "column": "valid_from"},
+                                {"type": "input", "column": "valid_to"}
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

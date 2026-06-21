@@ -1,0 +1,34 @@
+{
+    "title": "Saldokonto",
+    "title:cs": "Saldokonto",
+    "title:en": "Balance",
+    "titleNew": "Nové saldokonto",
+    "titleNew:cs": "Nové saldokonto",
+    "titleNew:en": "New balance",
+    "tabs": [
+        {
+            "id": "basic",
+            "label": "Saldokonto",
+            "label:cs": "Saldokonto",
+            "label:en": "Balance",
+            "sections": [
+                {
+                    "columns": [
+                        {
+                            "elements": [
+                                {"type": "input", "column": "code", "required": true},
+                                {"type": "input", "column": "name", "required": true},
+                                {"type": "input", "column": "short_name"},
+
+                                {"type": "separator", "label": "Nastavení", "label:cs": "Nastavení", "label:en": "Settings"},
+                                {"type": "input", "column": "sort_order"},
+                                {"type": "input", "column": "valid_from"},
+                                {"type": "input", "column": "valid_to"}
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

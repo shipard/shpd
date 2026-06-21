@@ -1,0 +1,66 @@
+{
+    "tableId": 417,
+    "name": "Balance accounts",
+    "name:cs": "Účty saldokont",
+    "name:en": "Balance accounts",
+
+    "displayPattern": "{account_number}",
+
+    "docStates": {
+        "stateColumn": "docState",
+        "mainColumn": "docStateMain",
+        "cfgItem": "core.system.docStatesArchive"
+    },
+
+    "columnGroups": [
+        {"id": "identity", "name": "Identity", "name:cs": "Identifikace", "name:en": "Identity"},
+        {"id": "settings", "name": "Settings", "name:cs": "Nastavení",    "name:en": "Settings"}
+    ],
+
+    "columns": [
+        {"id": "id", "name": "ID", "type": "int", "autoIncrement": true, "primaryKey": true},
+
+        // --- identity ---
+
+        {"id": "balance", "name": "Balance", "name:cs": "Saldokonto", "name:en": "Balance",
+            "type": "int", "nullable": false, "reference": "economy_accbal_balances", "group": "identity"},
+        // account_number je PREFIX účtu — '311' chytí '311100' (str_starts_with),
+        // proto varchar 12 (max délka čísla účtu), ne FK na rozvrh.
+        {"id": "account_number", "name": "Account number", "name:cs": "Číslo účtu", "name:en": "Account number",
+            "type": "varchar", "length": 12, "nullable": false, "group": "identity"},
+
+        // --- settings ---
+
+        {"id": "acc_side", "name": "Account side", "name:cs": "Strana", "name:en": "Account side",
+            "type": "enumInt", "cfgItem": "economy.accbal.accSides", "default": 0, "nullable": false, "group": "settings"},
+        {"id": "amounts_sign", "name": "Amounts", "name:cs": "Částky", "name:en": "Amounts",
+            "type": "enumInt", "cfgItem": "economy.accbal.amountsSigns", "default": 0, "nullable": false, "group": "settings"},
+        {"id": "bal_side", "name": "Role", "name:cs": "Předpis/Úhrada", "name:en": "Role",
+            "type": "enumInt", "cfgItem": "economy.accbal.balSides", "default": 0, "nullable": false, "group": "settings"},
+        {"id": "modify_sign", "name": "Invert sign", "name:cs": "Obrátit znaménko", "name:en": "Invert sign",
+            "type": "boolean", "default": 0, "nullable": false, "group": "settings"},
+        {"id": "note", "name": "Note", "name:cs": "Poznámka", "name:en": "Note",
+            "type": "varchar", "length": 80, "nullable": true, "group": "settings"},
+        {"id": "sort_order", "name": "Order", "name:cs": "Pořadí", "name:en": "Order",
+            "type": "smallint", "default": 0, "nullable": false, "group": "settings"},
+        {"id": "valid_from", "name": "Valid from", "name:cs": "Platnost od", "name:en": "Valid from",
+            "type": "date", "nullable": true, "group": "settings"},
+        {"id": "valid_to", "name": "Valid to", "name:cs": "Platnost do", "name:en": "Valid to",
+            "type": "date", "nullable": true, "group": "settings"},
+
+        // --- doc state (systémové, bez skupiny) ---
+
+        {"id": "docState", "name": "Document state", "name:cs": "Stav dokumentu", "name:en": "Document state",
+            "type": "tinyint", "default": 10, "system": true},
+        {"id": "docStateMain", "name": "Document state (sort)", "name:cs": "Stav dokumentu (řazení)", "name:en": "Document state (sort)",
+            "type": "tinyint", "default": 1, "system": true}
+    ],
+
+    "indexes": [
+        {"id": "idx_balance", "type": "index", "columns": [
+            {"column": "balance", "order": "ASC"}, {"column": "sort_order", "order": "ASC"}]},
+        {"id": "idx_account_number", "type": "index", "columns": [{"column": "account_number"}]},
+        {"id": "idx_doc_state", "type": "index", "columns": [
+            {"column": "docStateMain", "order": "ASC"}, {"column": "sort_order", "order": "ASC"}]}
+    ]
+}

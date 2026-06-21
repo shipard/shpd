@@ -24,6 +24,7 @@ use Shipard\Module\Core\Mail\AIAnalyzerProvisioner;
 use Shipard\Module\Core\Mail\MailRouterProvisioner;
 use Shipard\Module\Core\Units\UnitsProvisioner;
 use Shipard\Module\Docs\Core\NumberSeriesProvisioner;
+use Shipard\Module\Economy\Accbal\BalancesProvisioner;
 use Shipard\Module\Economy\Accounting\AccountChartProvisioner;
 use Shipard\Module\Economy\Codebooks\FiscalYearsProvisioner;
 use Shipard\Module\Economy\Codebooks\VatPeriodsProvisioner;
@@ -266,6 +267,7 @@ class DsUpgradeCommand extends Command
             $this->provisionUnits($resolvedModules, $dsConnection, $output);
             $this->provisionItemKinds($resolvedModules, $dsConnection, $output);
             $this->provisionAccountChart($resolvedModules, $dsConfig, $dsConnection, $output);
+            $this->provisionAccbalBalances($resolvedModules, $dsConnection, $output);
             $this->provisionFiscalYears($resolvedModules, $dsDir, $dsConnection, $output);
             $this->provisionVatPeriods($resolvedModules, $dsConnection, $output);
             $this->provisionDocCoreNumberSeries($resolvedModules, $dsDir, $dsConnection, $output);
@@ -472,6 +474,34 @@ class DsUpgradeCommand extends Command
         $result = $provisioner->provision();
 
         $this->logProvisioningResult($output, 'account chart', $result['accountChart']);
+    }
+
+    /**
+     * @param list<\Shipard\Core\Module\ModuleDefinition> $resolvedModules
+     */
+    private function provisionAccbalBalances(
+        array $resolvedModules,
+        DataSourceConnection $dsConnection,
+        OutputInterface $output,
+    ): void {
+        $output->writeln('', OutputInterface::VERBOSITY_VERBOSE);
+        $output->writeln('Provisioning economy.accbal balances...', OutputInterface::VERBOSITY_VERBOSE);
+
+        if (!$this->isModuleActive($resolvedModules, 'economy.accbal')) {
+            $output->writeln('  <comment>[SKIP] economy.accbal module not active</comment>', OutputInterface::VERBOSITY_VERBOSE);
+            return;
+        }
+
+        $seedFile = $this->getModulePathResolver()->getPath('economy.accbal') . '/config/balancesDefault.cz.jsonc';
+        if (!is_file($seedFile)) {
+            $output->writeln('  <comment>[SKIP] Balances seed file not found: balancesDefault.cz.jsonc</comment>');
+            return;
+        }
+
+        $provisioner = new BalancesProvisioner($dsConnection, $seedFile);
+        $result = $provisioner->provision();
+
+        $this->logProvisioningResult($output, 'accbal balances', $result['balances']);
     }
 
     /**

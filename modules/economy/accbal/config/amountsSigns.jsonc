@@ -1,0 +1,23 @@
+{
+    // economy.accbal.amountsSigns
+    //
+    // Filtr částky řádku deníku (economy_accbal_balance_accounts.amounts_sign):
+    // které částky účet do saldokonta bere. Dobropisy (záporné) jdou typicky
+    // do opačné skupiny — viz modify_sign.
+
+    "0": {
+        "name": "All",
+        "name:cs": "Všechny",
+        "name:en": "All"
+    },
+    "1": {
+        "name": "Positive",
+        "name:cs": "Kladné",
+        "name:en": "Positive"
+    },
+    "2": {
+        "name": "Negative",
+        "name:cs": "Záporné",
+        "name:en": "Negative"
+    }
+}

@@ -1,0 +1,60 @@
+{
+    "id": "economy.accbal",
+    "name": "Open items",
+    "name:cs": "Saldokonto",
+    "name:en": "Open items",
+    "description": "Open items / balances configuration — groups and their accounts",
+    "description:cs": "Nastavení saldokont — skupiny a jejich účty",
+    "description:en": "Open items / balances configuration — groups and their accounts",
+
+    "dependencies": ["core.system", "economy.accounting", "economy.bank", "docs.core", "economy.codebooks"],
+
+    "tables": [
+        "economy_accbal_balances",
+        "economy_accbal_balance_accounts"
+    ],
+
+    "settingsItems": [
+        { "viewer": "economy.accbal.balances",        "section": "accounting" },
+        { "viewer": "economy.accbal.balanceAccounts",  "section": "accounting" }
+    ],
+
+    "viewers": [
+        {
+            "id": "economy.accbal.balances",
+            "name": "Balances",
+            "name:cs": "Saldokonta",
+            "name:en": "Balances",
+            "icon": "book",
+            "table": "economy_accbal_balances",
+            "class": "Shipard\\Module\\Economy\\Accbal\\BalancesViewer"
+        },
+        {
+            "id": "economy.accbal.balanceAccounts",
+            "name": "Balance accounts",
+            "name:cs": "Účty saldokont",
+            "name:en": "Balance accounts",
+            "icon": "table",
+            "table": "economy_accbal_balance_accounts",
+            "class": "Shipard\\Module\\Economy\\Accbal\\BalanceAccountsViewer"
+        }
+    ],
+
+    "forms": [
+        { "table": "economy_accbal_balances",         "id": "economy.accbal.balances" },
+        { "table": "economy_accbal_balance_accounts", "id": "economy.accbal.balanceAccounts" }
+    ],
+
+    "lookups": [
+        {
+            "table": "economy_accbal_balances",
+            "class": "Shipard\\Module\\Economy\\Accbal\\BalancesLookup"
+        }
+    ],
+
+    "config": [
+        { "id": "economy.accbal.accSides",     "file": "config/accSides.jsonc" },
+        { "id": "economy.accbal.amountsSigns", "file": "config/amountsSigns.jsonc" },
+        { "id": "economy.accbal.balSides",     "file": "config/balSides.jsonc" }
+    ]
+}

@@ -25,6 +25,7 @@ Technické specifikace projektu Shipard.
 | [exchange-format-items.md](exchange-format-items.md) | Výměnný formát pro položky — `shpd.items.item.v1`, KindResolver / SupplierCodesResolver, per-partner dodavatelské kódy |
 | [docs-mvp.md](docs-mvp.md) | **Designový dokument** — specifikace dokladového systému MVP (faktury vydané + přijaté, DPH model, číselné řady, stavy, snapshoty). Transientní — po implementaci přesune do archivu. |
 | [bank.md](bank.md) | **Referenční spec modulu** `economy.bank`: bankovní transakce a výpisy, ingestion (parsery + dedup), účtovací mikroengine, clearing účty nespárovaných plateb, polymorfní zdroj deníku, migrace. Fáze 1–4 hotové. |
+| [accbal.md](accbal.md) | **Designový dokument** modulu `economy.accbal`: saldokonto postavené nad účetním deníkem — nastavení skupin a účtů, generátor pohybů z deníku (předpisy/úhrady) + allocations, clearing nespárovaných plateb, událost `journalWritten`. Fáze 0–2 hotové, matcher (Fáze 3) v přípravě. |
 
 Nginx konfigurace jsou v [`nginx/`](nginx/) (app.conf, development.conf, production.conf).
 

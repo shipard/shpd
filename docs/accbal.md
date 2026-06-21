@@ -477,14 +477,14 @@ speciálního nepotřebují; `fiscal_year`-scoping ano.
 - seed skupin + účtů (vč. clearingu jako „Nespárované platby") + provisioner
 - import/export nastavení (vzor starého `AccBalances{Import,Export}Wizard`)
 
-**Fáze 2a — událost `journalWritten` (core):**
+**Fáze 2a — událost `journalWritten` (core)** ✓ hotovo:
 
 - mechanismus `journalWritten` (interface + dispatcher + loader + registrace
   `journalEventHandlers`), zrcadlo `documentEventHandlers` (§4.1)
 - emise z obou účtovacích enginů (po (pře)zápisu i vymazání deníku),
   proplumbování dispatcheru do míst konstrukce enginu
 
-**Fáze 2b — generování pohybů z deníku:**
+**Fáze 2b — generování pohybů z deníku** ✓ hotovo:
 
 - tabulky `economy_accbal_ledger` (418), `economy_accbal_allocations` (419)
 - handler na `journalWritten` → generátor pohybů (UPSERT dle stabilního klíče,

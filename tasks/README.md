@@ -88,6 +88,25 @@ jednotky.
 |----------------------------|----------------------------------------|
 | `economy-items-phase1.md`  | Tabulky, viewer, formulář, fake data    |
 
+### Modul `economy.accbal` — saldokonto
+
+Saldokonto postavené **nad účetním deníkem** — vybrané řádky deníku se
+projektují do saldo pohybů (předpisy/úhrady), párování je samostatná
+vrstva. Řídící dokument [`docs/accbal.md`](../docs/accbal.md). Clearing
+nespárovaných plateb (varianta B), regenerovatelný deník, idempotence přes
+stabilní klíč zdroje.
+
+| Task                                 | Fáze | Co řeší                                              |
+|--------------------------------------|------|------------------------------------------------------|
+| `accbal-phase0-payment-identity.md`  | 0    | Platební identita v deníku — `payment_reference`/`specific_symbol`/`constant_symbol`/`due_date` do `economy_accounting_journal`, razítkování v obou enginech, přejmenování `symbol1/2/3` na bankovních transakcích, VS ve `JournalViewer` |
+| `accbal-phase1-settings.md`          | 1    | Modul `economy.accbal` + nastavení saldokont (`balances` + `balance_accounts`), CRUD, seed + provisioner (vč. clearing skupiny „Nespárované platby") |
+| `accbal-phase2a-journal-event.md`    | 2a   | Core událost `journalWritten` vyslaná účtovacími enginy (i při reaccountu bez změny stavu) — interface/dispatcher/loader, zrcadlo `documentEventHandlers` |
+| `accbal-phase2b-ledger-generator.md` | 2b   | Generátor pohybů — `economy_accbal_ledger` + `economy_accbal_allocations`, `LedgerGenerator` na `journalWritten` (UPSERT dle stabilního klíče), ledger viewer |
+
+Matcher (Fáze 3 — alokační algoritmus, ruční úprava, přegenerace případu,
+reaccount clearing → 311/321) je odložený do samostatného design sezení;
+task zatím neexistuje.
+
 ### Modul `mail`
 
 | Task                       | Co řeší                                                |

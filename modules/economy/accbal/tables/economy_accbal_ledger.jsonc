@@ -1,0 +1,89 @@
+{
+    "tableId": 418,
+    "name": "Balance ledger",
+    "name:cs": "Saldo pohyby",
+    "name:en": "Balance ledger",
+
+    // Čistý derivát účetního deníku — generuje/maže ho jen LedgerGenerator
+    // (handler na journalWritten), žádná ruční editace. Proto bez docStates,
+    // bez document class a bez formu (jako účetní deník).
+    //
+    // Identita pohybu (`id`) je stabilní přes reaccount — UPSERT podle klíče
+    // (source_kind, source_id, balance, bal_side, account_number), aby na pohyb
+    // šly ve Fázi 3 navázat allocations. `source_id` je non-null kopie id zdroje
+    // (= doc_head NEBO bank_transaction dle source_kind) — drží unique index
+    // funkční (UNIQUE s NULL sloupcem v MariaDB duplicity nechytá, a jeden z FK
+    // je vždy NULL). doc_head/bank_transaction zůstávají jako typové FK pro
+    // joiny a cascade úklid. `journal_row` je jen denorm (volatilní přes
+    // reaccount), bez FK.
+
+    "displayPattern": "{account_number} {amount}",
+
+    "columns": [
+        {"id": "id", "name": "ID", "type": "int", "autoIncrement": true, "primaryKey": true},
+
+        {"id": "balance", "name": "Balance", "name:cs": "Saldokonto", "name:en": "Balance",
+            "type": "int", "nullable": false, "reference": "economy_accbal_balances"},
+        {"id": "bal_side", "name": "Role", "name:cs": "Předpis/Úhrada", "name:en": "Role",
+            "type": "enumInt", "cfgItem": "economy.accbal.balSides", "nullable": false},
+
+        {"id": "source_kind", "name": "Source kind", "name:cs": "Zdroj", "name:en": "Source kind",
+            "type": "enumString", "length": 20, "cfgItem": "economy.accounting.journalSources", "nullable": false, "default": "doc"},
+        // Non-null id zdroje (= doc_head | bank_transaction dle source_kind);
+        // součást stabilní identity, drží unique index funkční (bez NULL).
+        {"id": "source_id", "name": "Source ID", "name:cs": "ID zdroje", "name:en": "Source ID",
+            "type": "int", "nullable": false},
+        {"id": "doc_head", "name": "Document", "name:cs": "Doklad", "name:en": "Document",
+            "type": "int", "nullable": true, "reference": "docs_core_heads"},
+        // accbal závisí na economy.bank → přímý FK (ne extension jako u deníku).
+        {"id": "bank_transaction", "name": "Bank transaction", "name:cs": "Bankovní transakce", "name:en": "Bank transaction",
+            "type": "int", "nullable": true, "reference": "economy_bank_transactions"},
+        // Denorm odkaz na aktuální řádek deníku (pro „otevřít deník"); volatilní
+        // přes reaccount, proto bez FK a není součástí stabilní identity.
+        {"id": "journal_row", "name": "Journal row", "name:cs": "Řádek deníku", "name:en": "Journal row",
+            "type": "int", "nullable": true},
+
+        {"id": "account_number", "name": "Account number", "name:cs": "Číslo účtu", "name:en": "Account number",
+            "type": "varchar", "length": 12, "nullable": false},
+        {"id": "fiscal_year", "name": "Fiscal year", "name:cs": "Fiskální rok", "name:en": "Fiscal year",
+            "type": "int", "nullable": true, "reference": "economy_codebooks_fiscal_years"},
+        {"id": "partner", "name": "Partner", "name:cs": "Partner", "name:en": "Partner",
+            "type": "int", "nullable": true, "reference": "base_persons_persons"},
+
+        // --- platební identita (denorm z deníku, signál pro matcher Fáze 3) ---
+        {"id": "payment_reference", "name": "Payment reference", "name:cs": "Variabilní symbol", "name:en": "Payment reference",
+            "type": "varchar", "length": 35, "nullable": true},
+        {"id": "specific_symbol", "name": "Specific symbol", "name:cs": "Specifický symbol", "name:en": "Specific symbol",
+            "type": "varchar", "length": 20, "nullable": true},
+        {"id": "constant_symbol", "name": "Constant symbol", "name:cs": "Konstantní symbol", "name:en": "Constant symbol",
+            "type": "varchar", "length": 10, "nullable": true},
+        {"id": "due_date", "name": "Due date", "name:cs": "Datum splatnosti", "name:en": "Due date",
+            "type": "date", "nullable": true},
+
+        // --- částky (obě měny; po modify_sign) ---
+        {"id": "currency", "name": "Currency", "name:cs": "Měna", "name:en": "Currency",
+            "type": "enumString", "length": 3, "cfgItem": "world.base.currencies", "nullable": true},
+        {"id": "home_currency", "name": "Home currency", "name:cs": "Domácí měna", "name:en": "Home currency",
+            "type": "enumString", "length": 3, "cfgItem": "world.base.currencies", "nullable": true},
+        {"id": "amount", "name": "Amount", "name:cs": "Částka (měna dokladu)", "name:en": "Amount",
+            "type": "numeric", "precision": 15, "scale": 2, "default": 0},
+        {"id": "amount_hc", "name": "Amount (home currency)", "name:cs": "Částka (domácí měna)", "name:en": "Amount (home currency)",
+            "type": "numeric", "precision": 15, "scale": 2, "default": 0},
+
+        {"id": "text", "name": "Text", "name:cs": "Text", "name:en": "Text",
+            "type": "varchar", "length": 200, "nullable": true}
+    ],
+
+    "indexes": [
+        {"id": "unq_stable_key", "type": "unique", "columns": [
+            {"column": "source_kind"}, {"column": "source_id"},
+            {"column": "balance"}, {"column": "bal_side"}, {"column": "account_number"}]},
+        {"id": "idx_bucket", "type": "index", "columns": [
+            {"column": "balance"}, {"column": "partner"}, {"column": "currency"}, {"column": "fiscal_year"}]},
+        {"id": "idx_payment_reference", "type": "index", "columns": [{"column": "payment_reference"}]},
+        {"id": "idx_doc_head", "type": "index", "columns": [{"column": "doc_head"}]},
+        {"id": "idx_bank_transaction", "type": "index", "columns": [{"column": "bank_transaction"}]},
+        {"id": "idx_account_fiscal", "type": "index", "columns": [
+            {"column": "account_number"}, {"column": "fiscal_year"}]}
+    ]
+}

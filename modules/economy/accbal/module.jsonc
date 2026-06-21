@@ -11,7 +11,9 @@
 
     "tables": [
         "economy_accbal_balances",
-        "economy_accbal_balance_accounts"
+        "economy_accbal_balance_accounts",
+        "economy_accbal_ledger",
+        "economy_accbal_allocations"
     ],
 
     "settingsItems": [
@@ -37,6 +39,17 @@
             "icon": "table",
             "table": "economy_accbal_balance_accounts",
             "class": "Shipard\\Module\\Economy\\Accbal\\BalanceAccountsViewer"
+        },
+        {
+            "id": "economy.accbal.ledger",
+            "name": "Balance ledger",
+            "name:cs": "Saldo pohyby",
+            "name:en": "Balance ledger",
+            "icon": "calculator",
+            "table": "economy_accbal_ledger",
+            "class": "Shipard\\Module\\Economy\\Accbal\\LedgerViewer",
+            "navSection": "accounting",
+            "navOrder": 30
         }
     ],
 
@@ -52,9 +65,30 @@
         }
     ],
 
+    "journalEventHandlers": [
+        {
+            "class": "Shipard\\Module\\Economy\\Accbal\\JournalLedgerHandler",
+            "events": ["journalWritten"]
+        }
+    ],
+
+    "documentEventHandlers": [
+        {
+            "table": "docs_core_heads",
+            "class": "Shipard\\Module\\Economy\\Accbal\\AccbalSourceCleanupHandler",
+            "events": ["beforeDelete"]
+        },
+        {
+            "table": "economy_bank_transactions",
+            "class": "Shipard\\Module\\Economy\\Accbal\\AccbalSourceCleanupHandler",
+            "events": ["beforeDelete"]
+        }
+    ],
+
     "config": [
-        { "id": "economy.accbal.accSides",     "file": "config/accSides.jsonc" },
-        { "id": "economy.accbal.amountsSigns", "file": "config/amountsSigns.jsonc" },
-        { "id": "economy.accbal.balSides",     "file": "config/balSides.jsonc" }
+        { "id": "economy.accbal.accSides",          "file": "config/accSides.jsonc" },
+        { "id": "economy.accbal.amountsSigns",      "file": "config/amountsSigns.jsonc" },
+        { "id": "economy.accbal.balSides",          "file": "config/balSides.jsonc" },
+        { "id": "economy.accbal.allocationOrigins", "file": "config/allocationOrigins.jsonc" }
     ]
 }

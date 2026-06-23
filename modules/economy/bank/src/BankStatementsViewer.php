@@ -153,11 +153,21 @@ class BankStatementsViewer extends TableViewer
         $this->addGroup($groups, $cs ? 'Výpis' : 'Statement', $stmtItems);
         $this->addGroup($groups, $cs ? 'Zůstatky' : 'Balances', $balanceItems);
 
-        return ['tabs' => [[
+        $tabs = [[
             'id'      => 'overview',
             'label'   => $this->defaultOverviewLabel(),
             'content' => ['type' => 'properties', 'groups' => $groups],
-        ]]];
+        ]];
+
+        $header = $this->buildDetailHeader($r);
+
+        return [
+            'title'    => $header['title'],
+            'subtitle' => $header['subtitle'],
+            'badges'   => $header['badges'],
+            'icon'     => $header['icon'],
+            'tabs'     => $tabs,
+        ];
     }
 
     public function getToolbarActions(?array $selectedRow): array
@@ -180,6 +190,72 @@ class BankStatementsViewer extends TableViewer
             ];
         }
         return $actions;
+    }
+
+    /**
+     * Hlavička detailu nad taby (generický header ViewerDetail, sjednocené
+     * s doklady, Osobami, Položkami a Bankovními transakcemi). Title = číslo
+     * výpisu (nejvýraznější údaj — obdoba čísla dokladu u faktur), při chybějícím
+     * čísle fallback na období; subtitle = bankovní účet · období; badges = stav
+     * dokladu (docStatesArchive) a stav rekonciliace, když není
+     * „Nezkontrolováno" (0 je default — samostatný badge by byl šum, obdoba
+     * „Zaúčtováno" u transakcí). Ikona shodná s viewers[].icon v module.jsonc (bank).
+     *
+     * @param array<string, mixed> $record
+     * @return array{title: string, subtitle: ?string, badges: array<int, array{label: string, style: string}>, icon: string}
+     */
+    private function buildDetailHeader(array $record): array
+    {
+        $period = $this->formatDate($record['period_start'] ?? null)
+            . ' – ' . $this->formatDate($record['period_end'] ?? null);
+        $number = trim((string) ($record['statement_number'] ?? ''));
+        $title = $number !== '' ? $number : $period;
+
+        $accountLabel = trim(
+            (string) ($record['account_code'] ?? '')
+            . (($record['account_name'] ?? null) !== null ? ' — ' . $record['account_name'] : ''),
+        );
+        // Subtitle: „účet · období"; když účet chybí, jen období (a naopak,
+        // když title už nese období kvůli chybějícímu číslu, subtitle ho neopakuje).
+        $subtitleParts = [];
+        if ($accountLabel !== '') {
+            $subtitleParts[] = $accountLabel;
+        }
+        if ($number !== '') {
+            $subtitleParts[] = $period;
+        }
+        $subtitle = implode(' · ', $subtitleParts);
+
+        $badges = [];
+        $cfg = DocStateConfig::fromCfgItem($this->config?->cfgItem($this->docStatesCfgItem));
+        $stateData = $cfg->getState((int) ($record['docState'] ?? 10));
+        $stateName = (string) ($stateData['stateName'] ?? '');
+        if ($stateName !== '') {
+            $badges[] = [
+                'label' => $stateName,
+                'style' => (string) ($stateData['stateStyle'] ?? 'concept'),
+            ];
+        }
+
+        // Rekonciliace — badge jen když není „Nezkontrolováno" (0). Souhlasí (1)
+        // success, Nesouhlasí (2) error.
+        $recon = (int) ($record['reconciliation_state'] ?? 0);
+        if ($recon !== 0) {
+            $reconLabel = $this->enumLabel('economy.bank.reconciliationStates', $recon, 'int');
+            if ($reconLabel !== null) {
+                $badges[] = [
+                    'label' => $reconLabel,
+                    'style' => $recon === 2 ? 'error' : 'success',
+                ];
+            }
+        }
+
+        return [
+            'title'    => $title,
+            'subtitle' => $subtitle !== '' ? $subtitle : null,
+            'badges'   => $badges,
+            'icon'     => 'bank',
+        ];
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────

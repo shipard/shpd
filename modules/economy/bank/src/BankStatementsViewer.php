@@ -156,10 +156,14 @@ class BankStatementsViewer extends TableViewer
         $this->addGroup($groups, $cs ? 'Výpis' : 'Statement', $stmtItems);
         $this->addGroup($groups, $cs ? 'Zůstatky' : 'Balances', $balanceItems);
 
-        // Tab Přehled = composite: vlastnosti + (když existují) přílohy s
+        // Tab Přehled = composite: vlastnosti -> transakce výpisu -> přílohy.
+        // Transakce a přílohy se přidávají jen když existují. Přílohy s
         // přepínačem Velké náhledy/Miniatury — stejně jako u Přijatých faktur,
-        // ale ve stejném tabu, aby byly přílohy hned vidět.
+        // ale ve stejném tabu, aby byly hned vidět.
         $blocks = [['type' => 'properties', 'groups' => $groups]];
+        foreach ($this->detailTransactionBlocks($recordId) as $txBlock) {
+            $blocks[] = $txBlock;
+        }
         foreach ($this->detailAttachmentBlocks($recordId) as $attBlock) {
             $blocks[] = $attBlock;
         }
@@ -306,6 +310,68 @@ class BankStatementsViewer extends TableViewer
         return [
             ['type' => 'heading', 'text' => $this->language === 'en' ? 'Attachments' : 'Přílohy'],
             ['type' => 'attachment-grid', 'attachments' => $attachments],
+        ];
+    }
+
+    /**
+     * Bloky transakcí výpisu pro tab Přehled (composite). Výčet transakcí
+     * navázaných přes economy_bank_transactions.statement, vzestupně dle data
+     * (přirozené pořadí pohybů na výpisu). Bez součtového řádku; když výpis
+     * žádné transakce nemá, vrací prázdné pole a do composite se nic nepřidá.
+     * Řádky nejsou klikací — table blok proklik neumí, je to přehledový výčet.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function detailTransactionBlocks(int $recordId): array
+    {
+        $rows = $this->db->fetchAll(
+            'SELECT t.`id`, t.`date_transaction`, t.`direction`, t.`amount`, t.`currency`,'
+            . ' t.`counterparty_name`, t.`payment_reference`, t.`docState`,'
+            . ' p.`full_name` AS partner_name'
+            . ' FROM `economy_bank_transactions` t'
+            . ' LEFT JOIN `base_persons_persons` p ON p.`id` = t.`partner`'
+            . ' WHERE t.`statement` = %i'
+            . ' ORDER BY t.`date_transaction` ASC, t.`id` ASC',
+            $recordId,
+        );
+        if ($rows === []) {
+            return [];
+        }
+
+        $cs = $this->language !== 'en';
+        $txCfg = DocStateConfig::fromCfgItem($this->config?->cfgItem('economy.bank.txStates'));
+
+        $columns = [
+            ['id' => 'date',    'label' => $cs ? 'Datum' : 'Date'],
+            ['id' => 'amount',  'label' => $cs ? 'Částka' : 'Amount', 'align' => 'right'],
+            ['id' => 'party',   'label' => $cs ? 'Protistrana' : 'Counterparty'],
+            ['id' => 'vs',      'label' => $cs ? 'VS' : 'VS'],
+            ['id' => 'state',   'label' => $cs ? 'Stav' : 'State'],
+        ];
+
+        $tableRows = [];
+        foreach ($rows as $tx) {
+            $sign = (int) ($tx['direction'] ?? 0) === 2 ? '−' : '+';
+            $curCode = strtoupper((string) ($tx['currency'] ?? ''));
+            $amount = $sign . $this->formatMoney($tx['amount'] ?? 0) . ($curCode !== '' ? ' ' . $curCode : '');
+
+            $partner = trim((string) ($tx['partner_name'] ?? ''));
+            $party = $partner !== '' ? $partner : trim((string) ($tx['counterparty_name'] ?? ''));
+
+            $stateData = $txCfg->getState((int) ($tx['docState'] ?? 10));
+
+            $tableRows[] = [
+                'date'   => $this->formatDate($tx['date_transaction'] ?? null) ?? '',
+                'amount' => $amount,
+                'party'  => $party !== '' ? $party : '—',
+                'vs'     => trim((string) ($tx['payment_reference'] ?? '')),
+                'state'  => (string) ($stateData['stateName'] ?? ''),
+            ];
+        }
+
+        return [
+            ['type' => 'heading', 'text' => $cs ? 'Transakce' : 'Transactions'],
+            ['type' => 'table', 'columns' => $columns, 'rows' => $tableRows],
         ];
     }
 

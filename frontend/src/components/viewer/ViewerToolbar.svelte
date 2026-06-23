@@ -39,6 +39,19 @@
       onclick={() => onAction?.(action.id)}
     />
   {/each}
+  {#if actions.length === 0}
+    <!-- Spacer: drží přesnou výšku řady tlačítek, když viewer nemá žádné
+         akce (např. bankovní transakce bez „Přidat"). Bez něj toolbar
+         kolabuje a při výběru řádku layout poskočí. Skutečné tlačítko
+         zaručuje pixel-přesnou výšku (font, padding, border, line-height)
+         lépe než ručně počítaná min-height.
+         Button má pevný Props interface (nepropaguje aria/tabindex), proto
+         skrýváme přes wrapper a label = nezalomitelná mezera, aby se
+         vyrenderoval i __label span (jinak by chyběla výška textu). -->
+    <div class="shpd-viewer-toolbar__spacer" aria-hidden="true">
+      <Button label={'\u00A0'} variant="secondary" size="md" disabled />
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -50,5 +63,13 @@
     border-bottom: 1px solid var(--shpd-color-border);
     background-color: var(--shpd-color-bg);
     flex-shrink: 0;
+  }
+
+  /* Spacer (render jen když nejsou akce) zabírá místo, ale není vidět ani
+     nereaguje. Drží výšku toolbaru shodnou s variantou, kde tlačítko je. */
+  .shpd-viewer-toolbar__spacer {
+    display: inline-flex;
+    visibility: hidden;
+    pointer-events: none;
   }
 </style>

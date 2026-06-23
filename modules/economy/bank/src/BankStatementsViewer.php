@@ -18,6 +18,9 @@ class BankStatementsViewer extends TableViewer
 {
     protected ?string $docStatesCfgItem = 'core.system.docStatesArchive';
 
+    /** tableId výpisů — vazba příloh v core_attachments_files (shodně s form tab „Přílohy"). */
+    private const TABLE_ID_STATEMENTS = 415;
+
     private const STATE_SPAN_CLASS = [
         'concept'   => 'warning',
         'confirmed' => 'primary',
@@ -153,10 +156,18 @@ class BankStatementsViewer extends TableViewer
         $this->addGroup($groups, $cs ? 'Výpis' : 'Statement', $stmtItems);
         $this->addGroup($groups, $cs ? 'Zůstatky' : 'Balances', $balanceItems);
 
+        // Tab Přehled = composite: vlastnosti + (když existují) přílohy s
+        // přepínačem Velké náhledy/Miniatury — stejně jako u Přijatých faktur,
+        // ale ve stejném tabu, aby byly přílohy hned vidět.
+        $blocks = [['type' => 'properties', 'groups' => $groups]];
+        foreach ($this->detailAttachmentBlocks($recordId) as $attBlock) {
+            $blocks[] = $attBlock;
+        }
+
         $tabs = [[
             'id'      => 'overview',
             'label'   => $this->defaultOverviewLabel(),
-            'content' => ['type' => 'properties', 'groups' => $groups],
+            'content' => ['type' => 'composite', 'blocks' => $blocks],
         ]];
 
         $header = $this->buildDetailHeader($r);
@@ -255,6 +266,46 @@ class BankStatementsViewer extends TableViewer
             'subtitle' => $subtitle !== '' ? $subtitle : null,
             'badges'   => $badges,
             'icon'     => 'bank',
+        ];
+    }
+
+    /**
+     * Bloky příloh výpisu pro tab Přehled (composite). Vlastní přílohy
+     * z core_attachments_files (table_id = výpisy, shodně s form tabem
+     * „Přílohy"); když žádné nejsou, vrací prázdné pole a do composite se
+     * nic nepřidá. Nadpis „Přílohy" + plochý grid (attachment-grid) s
+     * přepínačem Velké náhledy/Miniatury — frontend ViewerDetail to renderuje
+     * sdílenou AttachmentGrid, beze změny.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function detailAttachmentBlocks(int $recordId): array
+    {
+        $files = $this->db->fetchAll(
+            'SELECT `id`, `name`, `file_name`, `file_size`, `mime_type`'
+            . ' FROM `core_attachments_files`'
+            . ' WHERE `table_id` = %i AND `record_id` = %i AND `is_deleted` = 0'
+            . ' ORDER BY `att_order` ASC, `name` ASC',
+            self::TABLE_ID_STATEMENTS,
+            $recordId,
+        );
+        if ($files === []) {
+            return [];
+        }
+
+        $attachments = [];
+        foreach ($files as $f) {
+            $attachments[] = [
+                'id'        => (int) $f['id'],
+                'name'      => (string) ($f['name'] ?? $f['file_name']),
+                'mime_type' => (string) ($f['mime_type'] ?? ''),
+                'file_size' => (int) ($f['file_size'] ?? 0),
+            ];
+        }
+
+        return [
+            ['type' => 'heading', 'text' => $this->language === 'en' ? 'Attachments' : 'Přílohy'],
+            ['type' => 'attachment-grid', 'attachments' => $attachments],
         ];
     }
 

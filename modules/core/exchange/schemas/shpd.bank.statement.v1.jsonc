@@ -76,6 +76,7 @@
                     "dateValue":           { "type": ["string", "null"], "format": "date" },
                     "counterpartyAccount": { "type": ["string", "null"] },
                     "counterpartyName":    { "type": ["string", "null"] },
+                    "partnerId":           { "type": ["integer", "null"], "minimum": 1 },
                     "paymentReference":    { "type": ["string", "null"] },
                     "specificSymbol":      { "type": ["string", "null"] },
                     "constantSymbol":      { "type": ["string", "null"] },

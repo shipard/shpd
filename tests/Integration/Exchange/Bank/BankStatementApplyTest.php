@@ -228,6 +228,84 @@ class BankStatementApplyTest extends IntegrationTestCase
         $this->assertSame(1, $result->canonical['_result']['reconciliation']);
     }
 
+    // ── partnerId z migrace (explicitní partner) ─────────────────────────────
+
+    public function testExplicitPartnerIdSetsPartner(): void
+    {
+        $personId = $this->anyActivePersonId();
+
+        // Protiúčet bez vazby na osobu → párování přes účet by selhalo;
+        // partner musí přijít z explicitního partnerId.
+        $result = $this->applier->apply($this->payload([
+            'transactions' => [[
+                'externalId'          => 'ptx-explicit-1',
+                'amount'              => 100.00,
+                'dateTransaction'     => self::ACC_DATE,
+                'counterpartyAccount' => '9359200456/2700',
+                'counterpartyName'    => 'GRAFE Polymer Solutions GmbH',
+                'partnerId'           => $personId,
+            ]],
+        ]));
+        $this->assertTrue($result->success, 'apply selhal: ' . ($result->errorMessage ?? ''));
+
+        $rows = $this->txRows();
+        $this->assertCount(1, $rows);
+        $this->assertSame($personId, (int) $rows[0]['partner'], 'partner z explicitního partnerId');
+        $this->assertSame(0, $result->canonical['_result']['unmatchedPartner']);
+    }
+
+    public function testInvalidPartnerIdFallsBackWithoutFailing(): void
+    {
+        // Neexistující osoba → fallback na párování přes účet (tady bez vazby →
+        // partner zůstane null), transakce NESMÍ spadnout.
+        $result = $this->applier->apply($this->payload([
+            'transactions' => [[
+                'externalId'          => 'ptx-invalid-1',
+                'amount'              => 100.00,
+                'dateTransaction'     => self::ACC_DATE,
+                'counterpartyAccount' => '9359200456/2700',
+                'partnerId'           => 2147483600, // neexistující id
+            ]],
+        ]));
+        $this->assertTrue($result->success, 'neplatné partnerId nesmí shodit apply');
+
+        $rows = $this->txRows();
+        $this->assertCount(1, $rows);
+        $this->assertNull($rows[0]['partner'], 'neplatné partnerId → fallback, partner null');
+        $this->assertSame(1, $result->canonical['_result']['unmatchedPartner']);
+    }
+
+    public function testReRunBackfillsPartnerIntoExistingNullPartner(): void
+    {
+        $personId = $this->anyActivePersonId();
+
+        $base = [
+            'externalId'          => 'ptx-backfill-1',
+            'amount'              => 100.00,
+            'dateTransaction'     => self::ACC_DATE,
+            'counterpartyAccount' => '9359200456/2700',
+        ];
+
+        // 1) Import bez partnerId → partner null.
+        $first = $this->applier->apply($this->payload(['transactions' => [$base]]));
+        $this->assertTrue($first->success);
+        $rows = $this->txRows();
+        $this->assertCount(1, $rows);
+        $this->assertNull($rows[0]['partner'], 'první běh bez partnera');
+
+        // 2) Re-run téže transakce s partnerId → dedup skip + backfill partnera.
+        $second = $this->applier->apply($this->payload([
+            'transactions' => [array_merge($base, ['partnerId' => $personId])],
+        ]));
+        $this->assertTrue($second->success);
+        $this->assertSame(0, $second->canonical['_result']['created'], 're-run nezakládá');
+        $this->assertSame(1, $second->canonical['_result']['skipped']);
+
+        $rows = $this->txRows();
+        $this->assertCount(1, $rows, 'žádné zdvojení');
+        $this->assertSame($personId, (int) $rows[0]['partner'], 'partner doplněn backfillem');
+    }
+
     // ── validate / preview bez zápisu ────────────────────────────────────────
 
     public function testValidateRejectsMissingBankAccount(): void
@@ -290,6 +368,17 @@ class BankStatementApplyTest extends IntegrationTestCase
             $this->bankAccountId,
         );
         return array_map(static fn($r) => $r->toArray(), $rows);
+    }
+
+    private function anyActivePersonId(): int
+    {
+        $row = $this->db->fetchRow(
+            'SELECT id FROM base_persons_persons WHERE docState IN (10,40,80) ORDER BY id LIMIT 1',
+        );
+        if ($row === null) {
+            $this->markTestSkipped('Dev DS nemá žádnou aktivní osobu');
+        }
+        return (int) $row['id'];
     }
 
     private function ensureAccountByMask(string $mask): int

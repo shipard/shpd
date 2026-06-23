@@ -32,5 +32,6 @@ final class ParsedTransaction
         public readonly array $raw = [],
         public readonly ?string $operation = null,
         public readonly ?float $exchangeRate = null,
+        public readonly ?int $partnerId = null,
     ) {}
 }

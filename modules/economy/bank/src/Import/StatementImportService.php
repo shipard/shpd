@@ -200,14 +200,18 @@ final class StatementImportService
 
                 $fingerprint = $this->fingerprint($bankAccountId, $tx, $direction, $amount, $dateKey, $seqInDay[$dateKey]);
 
+                // Partner: přednost explicitního partnera z migrace (partnerId),
+                // fallback na párování přes protiúčet. Spočítané PŘED dedup blokem,
+                // aby šlo backfillnout i do dříve naimportovaných transakcí.
+                $partnerId = $this->resolvePartner($tx);
+
                 $existingId = $this->findExisting($bankAccountId, $tx->externalId, $fingerprint);
                 if ($existingId !== null) {
-                    $this->backfill($existingId, $statementId, $tx->externalId, $fingerprint);
+                    $this->backfill($existingId, $statementId, $tx->externalId, $fingerprint, $partnerId);
                     $skipped++;
                     continue;
                 }
 
-                $partnerId = $this->partnerResolver->resolve($tx->counterpartyAccount);
                 $row = [
                     'bank_account'         => $bankAccountId,
                     'statement'            => $statementId,
@@ -246,7 +250,7 @@ final class StatementImportService
                     continue;
                 }
 
-                if ($partnerId === null && $tx->counterpartyAccount !== null) {
+                if ($partnerId === null) {
                     $unmatchedPartner++;
                 }
                 $created++;
@@ -430,10 +434,10 @@ final class StatementImportService
         return ($row !== false && $row !== null) ? (int) $row['id'] : null;
     }
 
-    private function backfill(int $txId, int $statementId, ?string $externalId, string $fingerprint): void
+    private function backfill(int $txId, int $statementId, ?string $externalId, string $fingerprint, ?int $partnerId = null): void
     {
         $set = [];
-        $existing = $this->db->query('SELECT [statement], [external_id], [fingerprint] FROM %n WHERE [id] = %i', self::TABLE_TX, $txId)->fetch();
+        $existing = $this->db->query('SELECT [statement], [external_id], [fingerprint], [partner] FROM %n WHERE [id] = %i', self::TABLE_TX, $txId)->fetch();
         if ($existing === false || $existing === null) {
             return;
         }
@@ -446,9 +450,40 @@ final class StatementImportService
         if (($existing['fingerprint'] ?? null) === null) {
             $set['fingerprint'] = $fingerprint;
         }
+        // Doplnit partnera do dříve naimportovaných transakcí, kde chybí
+        // (re-run migrace s nově dodaným partnerId ze starého řádku).
+        if (($existing['partner'] ?? null) === null && $partnerId !== null) {
+            $set['partner'] = $partnerId;
+        }
         if ($set !== []) {
             $this->db->update(self::TABLE_TX, $set)->where('[id] = %i', $txId)->execute();
         }
+    }
+
+    /**
+     * Partner transakce: přednost explicitního `partnerId` z migrace (přímý
+     * odkaz ze starého řádku, je-li to aktivní osoba), jinak fallback na
+     * párování přes protiúčet (souborový import partnerId neposílá).
+     */
+    private function resolvePartner(ParsedTransaction $tx): ?int
+    {
+        if ($tx->partnerId !== null && $this->personActive($tx->partnerId)) {
+            return $tx->partnerId;
+        }
+        return $this->partnerResolver->resolve($tx->counterpartyAccount);
+    }
+
+    private function personActive(int $id): bool
+    {
+        if ($id <= 0) {
+            return false;
+        }
+        $row = $this->db->query(
+            'SELECT [id] FROM [base_persons_persons] WHERE [id] = %i AND [docState] IN %in',
+            $id,
+            self::ACTIVE_STATES,
+        )->fetch();
+        return $row !== false && $row !== null;
     }
 
     /** sha256 z normalizovaných polí + seqInDay (W4.2). */

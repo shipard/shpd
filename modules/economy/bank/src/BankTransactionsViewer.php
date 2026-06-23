@@ -35,10 +35,11 @@ class BankTransactionsViewer extends TableViewer
 
     public function selectRows(?string $search, array $filters, int $pageNumber): array
     {
-        $sql = 'SELECT `id`, `date_transaction`, `direction`, `amount`, `currency`,'
-            . ' `counterparty_name`, `payment_reference`, `operation`, `accounting_state`,'
-            . ' `docState`, `docStateMain`'
-            . ' FROM `' . $this->table . '`';
+        $sql = 'SELECT t.`id`, t.`date_transaction`, t.`direction`, t.`amount`, t.`currency`,'
+            . ' t.`counterparty_name`, t.`payment_reference`, t.`operation`, t.`accounting_state`,'
+            . ' t.`docState`, t.`docStateMain`, p.`full_name` AS partner_name'
+            . ' FROM `' . $this->table . '` t'
+            . ' LEFT JOIN `base_persons_persons` p ON p.`id` = t.`partner`';
 
         $conditions = [];
         $params = [];
@@ -56,31 +57,35 @@ class BankTransactionsViewer extends TableViewer
         if ($viewGroup !== 'all') {
             [$vgSql, $vgParams] = $this->buildViewGroupFilter($this->docStatesCfgItem, $viewGroup);
             if ($vgSql !== '') {
-                $conditions[] = $vgSql;
+                // buildViewGroupFilter vrací nekvalifikovaný `docState`; po JOINu
+                // je `docState` v base_persons_persons i zde, qualifikujeme aliasem t.
+                $conditions[] = str_replace('`docState`', 't.`docState`', $vgSql);
                 $params = array_merge($params, $vgParams);
             }
         }
 
         if ($onlyErrors) {
-            $conditions[] = '`accounting_state` = 2';
+            $conditions[] = 't.`accounting_state` = 2';
         }
 
         if ($search !== null && $search !== '') {
-            [$searchSql, $searchParams] = $this->buildSearchCondition(
-                ['counterparty_name', 'counterparty_account', 'payment_reference', 'message'],
-                $search,
-            );
-            if ($searchSql !== '') {
-                $conditions[] = $searchSql;
-                $params = array_merge($params, $searchParams);
+            // Hledá i v partnerově full_name (joinovaná base_persons_persons).
+            // buildSearchCondition obaluje sloupce backticky a nekvalifikuje,
+            // proto stavíme podmínku ručně s aliasy.
+            $searchCols = ['t.`counterparty_name`', 't.`counterparty_account`', 't.`payment_reference`', 't.`message`', 'p.`full_name`'];
+            $likeParts = [];
+            foreach ($searchCols as $col) {
+                $likeParts[] = $col . ' LIKE %s';
+                $params[] = '%' . $search . '%';
             }
+            $conditions[] = '(' . implode(' OR ', $likeParts) . ')';
         }
 
         if ($conditions !== []) {
             $sql .= ' WHERE ' . implode(' AND ', $conditions);
         }
 
-        $sql .= ' ORDER BY `docStateMain` ASC, `date_transaction` DESC, `id` DESC';
+        $sql .= ' ORDER BY t.`docStateMain` ASC, t.`date_transaction` DESC, t.`id` DESC';
 
         [$offset, $limit] = $this->buildPaginationLimit($pageNumber);
         $sql .= ' LIMIT ' . $offset . ', ' . $limit;
@@ -90,10 +95,10 @@ class BankTransactionsViewer extends TableViewer
 
     public function renderRow(array $rowData): array
     {
-        $counterparty = trim((string) ($rowData['counterparty_name'] ?? ''));
+        $partner = trim((string) ($rowData['partner_name'] ?? ''));
         $row = [
             'id' => (int) $rowData['id'],
-            't1' => $counterparty !== '' ? $counterparty : '—',
+            't1' => $partner !== '' ? $partner : '—',
         ];
 
         $sign = (int) ($rowData['direction'] ?? 0) === 2 ? '−' : '+';

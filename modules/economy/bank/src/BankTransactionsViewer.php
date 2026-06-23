@@ -213,7 +213,14 @@ class BankTransactionsViewer extends TableViewer
             $tabs[] = $accountingTab;
         }
 
-        $detail = ['tabs' => $tabs];
+        $header = $this->buildDetailHeader($r);
+        $detail = [
+            'title'    => $header['title'],
+            'subtitle' => $header['subtitle'],
+            'badges'   => $header['badges'],
+            'icon'     => $header['icon'],
+            'tabs'     => $tabs,
+        ];
 
         $actions = $this->buildDetailActions($r);
         if ($actions !== []) {
@@ -221,6 +228,63 @@ class BankTransactionsViewer extends TableViewer
         }
 
         return $detail;
+    }
+
+    /**
+     * Hlavička detailu nad taby (generický header ViewerDetail, sjednocené
+     * s doklady, Osobami a Položkami). Title = částka se znaménkem a měnou
+     * (u transakce nejvýraznější údaj — obdoba čísla dokladu u faktur),
+     * subtitle = Partner / protistrana / datum, badges = stav transakce
+     * (txStates) a při chybě účtování badge „Chyba účtování". Zaúčtováno
+     * samostatný badge nedostává — pokrývá ho už stav transakce (docState
+     * 40 = Zaúčtováno). Ikona shodná s viewers[].icon v module.jsonc (wallet).
+     *
+     * @param array<string, mixed> $record
+     * @return array{title: string, subtitle: ?string, badges: array<int, array{label: string, style: string}>, icon: string}
+     */
+    private function buildDetailHeader(array $record): array
+    {
+        $sign = (int) ($record['direction'] ?? 0) === 2 ? '−' : '+';
+        $curCode = strtoupper((string) ($record['currency'] ?? ''));
+        $title = $sign . $this->formatMoney($record['amount'] ?? 0);
+        if ($curCode !== '') {
+            $title .= ' ' . $curCode;
+        }
+
+        $partner = trim((string) ($record['partner_name'] ?? ''));
+        $counterparty = trim((string) ($record['counterparty_name'] ?? ''));
+        $who = $partner !== '' ? $partner : $counterparty;
+        $date = $this->formatDate($record['date_transaction'] ?? null);
+        // Subtitle: „Partner · datum"; když chybí jméno, jen datum, a naopak.
+        $subtitleParts = array_filter([$who, $date], static fn ($v) => $v !== null && $v !== '');
+        $subtitle = implode(' · ', $subtitleParts);
+
+        $badges = [];
+        $cfg = DocStateConfig::fromCfgItem($this->config?->cfgItem($this->docStatesCfgItem));
+        $stateData = $cfg->getState((int) ($record['docState'] ?? 10));
+        $stateName = (string) ($stateData['stateName'] ?? '');
+        if ($stateName !== '') {
+            $badges[] = [
+                'label' => $stateName,
+                'style' => (string) ($stateData['stateStyle'] ?? 'concept'),
+            ];
+        }
+
+        // Stav účtování — badge jen při chybě (stav 2). Zaúčtováno už
+        // signalizuje stav transakce (docState 40), duplicitní badge by byl šum.
+        if ((int) ($record['accounting_state'] ?? 0) === 2) {
+            $badges[] = [
+                'label' => $this->language === 'en' ? 'Posting error' : 'Chyba účtování',
+                'style' => 'error',
+            ];
+        }
+
+        return [
+            'title'    => $title,
+            'subtitle' => ($subtitle !== null && $subtitle !== '') ? $subtitle : null,
+            'badges'   => $badges,
+            'icon'     => 'wallet',
+        ];
     }
 
     /**

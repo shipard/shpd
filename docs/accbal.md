@@ -6,8 +6,9 @@ Vychází z myšlenek rozpracovaného „Saldo2" ze starého Shipardu
 (`e10doc/accBal`), ale párování řeší jinak a opírá se o regenerovatelný
 deník a clearing šev nového systému.
 
-> **Stav:** návrh. Implementace po fázích (§9). Vlastní párovací algoritmus
-> (matcher) je samostatná pozdější fáze s vlastním designem.
+> **Stav:** Fáze 0–3 hotové a nasazené. Matcher (§5, rozhodnutí #13–#17)
+> implementován — config matched operací, `BalanceMatcher` (FIFO/VS + brána),
+> CLI `accbal-match`. Pozdější: UI párování, auto-trigger, partner resolution.
 
 ---
 
@@ -357,18 +358,90 @@ Důsledky:
 
 ---
 
-## 5. Párování (matcher) — samostatná fáze
+## 5. Párování (matcher) — Fáze 3
 
-> Vlastní algoritmus je velký a navrhne se zvlášť (Fáze 3, samostatné sezení).
-> Zde jen tvar řešení a hranice, aby na něj schéma sedělo.
+Matcher je **samostatný explicitně volaný průchod**, ne handler `journalWritten`
+(ten drží jen re-derivaci ledgeru, §4.1) — tím je rozpojená smyčka
+reaccount → událost → matcher (rozhodnutí #15). Pracuje v odvozeném **bucketu**
+`(partner, balance, currency)` nad otevřenými předpisy (`bal_side=0`, nenulové
+reziduum) a jednotlivými úhradami; reziduum předpisu = `amount − Σ allocations`.
 
-Matcher pracuje v rámci **bucketu** `(partner, balance, currency)`:
+### 5.1 Spárovanost = hodnota `operation` (kontrakt s enginem)
 
-- kandidáti: nealokované úhrady + otevřené předpisy (nenulové reziduum) bucketu
-- variabilní symbol je **silný signál** (shoda VS → preferuj), ne tvrdý klíč
-- default strategie: **FIFO dle `due_date`** předpisů; částka úhrady se
-  rozúčtuje na nejstarší otevřené předpisy
-- výsledek = zápis allocations; možnost ruční úpravy (`created_by = 1`)
+Spárovanost nenese zvláštní příznak — nese ji **`operation`** transakce. Default
+`payment.in` („Příjem (nespárováno)") má `cat` `bank.unmatched.in`, ten přes
+účtovací předpis padá na clearing `261200`. Clearing tedy není zvláštní větev
+enginu, je to výstup řetězce `operation → cat → maska`
+(`accountingRules.cz.jsonc`). Spárování ten řetězec jen dotáhne na 311/321.
+
+Nové v configu (a **nic** jinde — engine, accbal seed ani deník se nemění):
+
+| operation | směr | cat | maska |
+|---|---|---|---|
+| `payment.in.matched`  | příjem | `bank.matched.in`  | 311 |
+| `payment.out.matched` | výdaj  | `bank.matched.out` | 321 |
+
+Kontrakt matcher → engine (vzor `BankController::reaccount`):
+
+```
+1. operation = payment.in.matched, partner = P    (na transakci)
+2. accountTransaction(txId)              ← stávající engine, beze změny
+3. engine: matched op → cat → maska 311 → účet; řádek 311 DAL + partner P;
+   DELETE+INSERT deníku; po commitu synchronně journalWritten(bankTx, txId)
+4. LedgerGenerator re-derivuje: clearing pohyb (jiný stabilní klíč) zmizí,
+   vznikne pohyb 311 DAL = Úhrada v Pohledávkách (nové id, partner P)
+5. matcher najde nový úhradový pohyb a zapíše na něj allocations
+```
+
+Re-derivace zařadí 311 DAL jako Úhradu v Pohledávkách (a 321 MD jako Úhradu
+v Závazcích) sama — seed saldokont ty řádky už má (`balancesDefault.cz.jsonc`).
+Rozpárování viz §5.5.
+
+### 5.2 Routing — z clearingu do správného saldokonta
+
+Konzervativní strategie (rozhodnutí #14). Než matcher cokoli alokuje, nasměruje
+clearing-platbu:
+
+- **Směr transakce** určuje cíl: příjem → pohledávky/311, výdaj → závazky/321.
+  Opačné páry (vrácení od dodavatele jako snížení závazku ap.) jsou edge-case →
+  MVP nechá na clearingu / ruční.
+- **Partner povinný.** Bez `tx.partner` se routovat nedá → zůstává na clearingu.
+  Dohledání partnera při ingestaci zatím není (§5.6, §11) — tvrdá závislost
+  automatu; na importovaných datech partnera máme.
+- **Jen stejná měna** (bucket nese `currency`). Kříž měn = území kurzových
+  rozdílů (§6) → clearing / ruční.
+
+### 5.3 Alokační algoritmus
+
+Pořadí: rozhodni celý plán (předpisy jsou stabilní bez ohledu na to, kde platba
+sedí), pak teprve přesuň a zapiš.
+
+- **FIFO dle splatnosti:** předpisy `due_date ASC`, NULL na konec, tie-break
+  `ledger.id ASC`; úhrada se rozúčtuje na nejstarší otevřené předpisy.
+- **VS jako signál, ne klíč:** `payment_reference` úhrady přebije FIFO **jen**
+  když jednoznačně sedí na *právě jeden* otevřený předpis — ten dostane přednost
+  do výše rezidua, zbytek pokračuje FIFO. Sedí na víc předpisů (starý chaos
+  opakovaných plateb) → VS se ignoruje, jede čisté FIFO; „která faktura" se pak
+  rozhoduje stářím, ne náhodným prvním záznamem. `specific_symbol` se v MVP jako
+  auto-signál nebere (jen se nese/zobrazuje).
+- **Měny:** alokuje se v `amount` (měna dokladu = obchodní saldokonto, §6).
+  `amount_hc` allocation je **proporční z platby**
+  (`alloc.amount × payment.amount_hc / payment.amount`), ne z kurzu faktury →
+  platba je plně spotřebovaná v obou měnách. Domácí reziduum předpisu proti jeho
+  fakturačnímu kurzu zůstane jako kurzový rozdíl (vlastní engine, mimo scope).
+- **Zaokrouhlení:** haléřové dorovnání na poslední alokaci, aby
+  `Σ alloc.amount == payment.amount` i `Σ alloc.amount_hc == payment.amount_hc`
+  přesně (vzor `accounting.md` §8).
+- **Pořadí plateb v dávce:** `date_transaction ASC`, tie `id ASC`; každá platba
+  hned zapíše allocations → další vidí snížená rezidua.
+
+**Konzervativní brána (jen pro přechod clearing → 311):** platba opouští clearing
+jen když je **celá alokovatelná** — `payment.amount ≤ Σ rezidua` (+ haléř) a
+existuje ≥1 otevřený předpis. „Celá alokovatelná" = plně spotřebovat platbu, ne
+uzavřít celé faktury (poslední dotčený předpis smí zůstat částečně otevřený).
+Přeplatek / žádný kandidát / dvojznačnost → platba **zůstává na clearingu**
+(signál k ruční akci). Tím jsou zavřené i přeplatky: nikam se „neukládají", jen
+se nehnou z clearingu.
 
 **Kontrolní příklad — „600 Kč na 3×250":** zákazník má tři vydané faktury po
 250 Kč (tři předpisy na 311, různé VS), dluží 750, pošle 600.
@@ -386,27 +459,65 @@ matcher v bucketu (partner, Pohledávky, CZK):
               → inv2 250  (inv2 uzavřen)
               → inv3 100  (inv3 reziduum 150, otevřen)
 
-Matcher označí transakci jako spárovanou → bankovní engine ji přeúčtuje
-clearing → 311 (jeden řádek 600 na partnera) → journalWritten → saldo
-re-derivuje: clearing pohyb zmizí, vznikne 311 úhrada 600, allocations
-(250/250/100) se navážou na ni.
+Matcher: VS platby nesedí jednoznačně → čisté FIFO. Platba je celá alokovatelná
+(600 ≤ 750) → projde branou. operation = payment.in.matched → reaccount
+clearing → 311 (jeden řádek 600 na partnera) → journalWritten → re-derivace:
+clearing pohyb zmizí, vznikne 311 úhrada 600, allocations (250/250/100) se
+navážou na ni.
 ```
 
-Granularita 3-cestného rozúčtování žije **jen v allocations** — deník nese
-jeden 311 řádek 600 Kč (bankovní engine nepotřebuje znát rozpad). Tím zůstává
-saldo deník čistý a starý „chaos stejných VS" mizí: párujeme částkou a stářím,
-ne přesnou shodou symbolu.
+Granularita 3-cestného rozúčtování žije **jen v allocations** — deník nese jeden
+311 řádek 600 Kč (bankovní engine nepotřebuje znát rozpad). Tím zůstává deník
+čistý a starý „chaos stejných VS" mizí: párujeme částkou a stářím, ne přesnou
+shodou symbolu.
 
-**Přegenerovat případ** = smaž auto allocations bucketu, spusť matcher znovu;
-ruční allocations (`created_by=1`) se zachovají.
+### 5.4 Auto vs. ruční allocations
 
-**Kontrakt matcher → bankovní engine:** matcher označí transakci jako
-spárovanou (operation / příznak) → reaccount → 311/321. Detail (jak banka
-pozná „matched") se doladí v Fázi 3.
+`created_by=0` (auto) jsou jednorázové, `created_by=1` (ruční) posvátné. Matcher
+na ruční **nikdy** nesáhne a počítá je jako předem spotřebované — reziduum
+předpisu i zbytek platby se počítají po odečtení ručních allocations; automat
+doplní jen to, co ruční nezabraly. Ruční cesta je neomezená: člověk v UI smí
+spárovat cokoli (záměrný přeplatek, kříž s ručním kurzem, později zálohu) týmž
+mechanismem (matched operace → reaccount → ruční allocation). Automat je opatrný,
+člověk má plnou moc.
 
-Mimo Fázi 3 (další pozdější témata): zálohy (přijaté/poskytnuté, odpočty,
-zdanění — účty 314/324/…900 jsou v osnově), zápočty, kurzové rozdíly (§6),
-přeplatky/platby bez předpisu (zůstanou na clearingu nebo se stanou zálohou).
+### 5.5 Přegenerace případu vs. úplné rozpárování
+
+Dvě různé operace na dvou různých vrstvách (rozhodnutí #17):
+
+- **Přegenerace případu** (levný reset *vrstvy allocations*): smaž `created_by=0`
+  allocations bucketu → spusť matcher pro bucket znovu (přeživší ruční respektuje,
+  zkusí i dosud clearingové platby partnera). Platby **zůstávají na 311** —
+  routing se nehýbe. Konzervativní brána platí jen pro clearing → 311; platba,
+  která už na 311 je, se alokuje best-effort a při neúplném pokrytí nechá
+  nealokované reziduum na 311 (signál), **nevrací se** na clearing.
+- **Úplné rozpárování** (vědomý destruktivní reset *vrstvy routingu*): `operation`
+  zpět na `payment.in/out` + reaccount → 311 pohyb zmizí a cascade smaže **všechny**
+  jeho allocations (auto i ruční). Jediná cesta, která ničí ruční allocations —
+  v UI proto zřetelně oddělená od přegenerace (jiné tlačítko + potvrzení).
+
+### 5.6 Vstupní body a běh
+
+Jádro vystaví metody (`matchTransaction`/`matchBucket`, `rematchBucket`,
+`unmatch`); nad nimi tenké vrstvy jako dnes `BankController::reaccount` nad
+enginem, v pořadí dle reálné potřeby:
+
+- **CLI dávka `AccbalMatchCommand`** (per-DS, `src/Command/DataSource/`) —
+  okamžitá potřeba pro importovaná data. Flagy `--all` / `--partner=` /
+  `--fiscal-year=`, `--rematch-partner=`, `--unmatch=` a hlavně **`--dry-run`**
+  (vypíše plán bez reaccountu a allocations — bezpečné ladění na importu).
+- **Controller akce + UI „Spáruj" / „Rozpárovat"** — později, zrcadlo `reaccount`.
+- **Auto po ingestaci / cronu — odloženo** do partner resolution + důvěry
+  v algoritmus (tiché přesouvání na 311 jde proti konzervativnímu duchu).
+
+Běh je **monotónní** — matcher jen přidává páry, nikdy sám nerozpojuje → dávka je
+bezpečně opakovatelná (spárované platby nejsou na clearingu → nejsou kandidáti).
+Selhání po reaccountu před alokací není ztrátové: 311 úhrada zůstane nealokovaná
+a další běh ji dožene.
+
+Mimo Fázi 3 (pozdější témata): zálohy (přijaté/poskytnuté, odpočty, zdanění —
+účty 314/324/…900 jsou v osnově), zápočty, kurzové rozdíly (§6), multi-cíl (jedna
+platba na fakturu + odpočet zálohy), explicitní entita případu.
 
 ---
 
@@ -491,14 +602,23 @@ speciálního nepotřebují; `fiscal_year`-scoping ano.
   §4.3) vč. clearing skupiny + beforeDelete úklid ledger/allocations
 - viewer ledgeru (read-only, filtry: skupina, partner, VS, jen otevřené)
 
-**Fáze 3 — matcher (samostatné sezení):**
+**Fáze 3 — matcher** ✓ hotovo (§5):
 
-- alokační algoritmus (FIFO/částka/signál VS), ruční úprava, přegenerace případu
-- kontrakt s bankovním enginem (reaccount clearing → 311/321)
-- UI párování + bucket pohled (kdo kolik dluží)
+- config: matched operace `payment.in.matched`/`payment.out.matched` + řádky
+  předpisu `bank.matched.in → 311` / `bank.matched.out → 321` (§5.1)
+- `AllocationPlanner` — čisté jádro: routing (§5.2) + FIFO/VS (§5.3), konzervativní
+  brána (1 haléř), proporční domácí částka + haléřové dorovnání; `enforceGate`
+  přepíná clearing→311 (brána) vs. best-effort rematch
+- `BalanceMatcher` — `matchTransaction`/`matchAll`/`rematchBucket`/`unmatch`,
+  kontrakt přes `operation` + `accountTransaction` (§5.1), monotónní průchod;
+  auto/ruční allocations, přegenerace bucketu vs. úplné rozpárování (§5.4/5.5)
+- CLI `AccbalMatchCommand` (`accbal-match`) s `--dry-run` (§5.6)
 
-Pozdější: zálohy, zápočty, kurzové rozdíly, otevírací doklady období, explicitní
-case entita.
+Pozdější (mimo Fázi 3): UI párování + bucket pohled (kdo kolik dluží),
+auto-trigger po ingestaci/cronu.
+
+Pozdější: zálohy, zápočty, kurzové rozdíly, otevírací doklady období, multi-cíl,
+explicitní case entita, partner resolution při ingestaci.
 
 ---
 
@@ -534,21 +654,37 @@ case entita.
 11. **Bankovní symboly přejmenovat** na `payment_reference/specific_symbol/
     constant_symbol` (varchar 35) — párovací klíč musí být porovnatelný
     napříč doklad↔transakce.
-12. Matcher (alokační algoritmus) = samostatná Fáze 3 s vlastním designem.
+12. Matcher (Fáze 3) nadesignován samostatně — rozhodnutí #13–#17.
+13. **Spárovanost = hodnota `operation`** (D1). Matcher nastaví matched operaci
+    (`payment.in.matched` → 311 / `payment.out.matched` → 321) a zavolá stávající
+    `accountTransaction`; clearing → 311/321 je výstup řetězce `operation → cat →
+    maska`. Nula změn v enginu, accbal seedu i deníku; reverzibilní a idempotentní
+    přes re-derivaci (#7).
+14. **Konzervativní routing** (D2). Směr transakce určuje cíl (příjem → 311,
+    výdaj → 321), partner povinný, jen stejná měna. Platba opouští clearing jen
+    když je celá alokovatelná; jinak zůstává (signál) — tím i přeplatky zůstávají
+    na clearingu.
+15. **Matcher = samostatný průchod**, ne handler `journalWritten` (D3) — rozpojuje
+    smyčku reaccount → událost → matcher. Vstup: CLI dávka s `--dry-run`, UI a
+    auto-trigger později. Běh monotónní (jen přidává páry).
+16. **FIFO dle splatnosti, VS jako signál** (D4). VS přebije FIFO jen při
+    jednoznačné shodě na jeden předpis (léčí „chaos stejných VS"); alokace v měně
+    dokladu, domácí proporčně z platby; haléřové dorovnání na poslední alokaci.
+17. **Dvě vrstvy rozpárování** (D5). Auto allocations (`created_by=0`) jednorázové,
+    ruční (`1`) posvátné. Přegenerace bucketu = smaž auto + spusť znovu (platby
+    zůstanou na 311). Úplné rozpárování = `operation` zpět + reaccount (311 →
+    clearing, cascade smaže i ruční) — vědomá destruktivní akce.
 
 ---
 
 ## 11. Otevřené body
 
-- **Mechanika `journalWritten`** — přesný tvar core události a registrace
-  (synchronně v téže transakci jako zápis deníku, nebo po commitu?).
-  Synchronně je konzistentnější; doladit v PRD Fáze 0.
-- **Výkon hromadné re-derivace** — při migraci/účtování tisíců zdrojů běží
-  generátor per zdroj. Zvážit dávkový režim (analogie `bank.md` §11
-  „account all").
-- **Skupina „Nespárované platby" a obousměrný clearing** — 261200 (příjmy) jen
-  Pohledávkám, 261300 (výdaje) Závazkům; ověřit, že amounts_sign + acc_side
-  pokryjí oba směry bez kolize.
-- **Zaokrouhlení rozúčtování** — při rozpadu úhrady na více předpisů hlídat,
-  že `Σ allocations == payment.amount` v obou měnách (haléřové dorovnání na
-  poslední alokaci, vzor `accounting.md` §8).
+- **Partner resolution při ingestaci** — dohledání `partner` u bankovních
+  transakcí z protiúčtu (reverse lookup přes bankovní účty `base_persons`) zatím
+  není. Tvrdá závislost auto-matcheru (§5.2/5.6); na importovaných datech ze
+  starého Shipardu partnera máme, takže neblokuje odladění Fáze 3.
+- **Výkon hromadné re-derivace** — generátor i matcher běží per zdroj/platbu;
+  pro tisíce zdrojů zvážit dávkový režim (analogie `bank.md` §11 „account all").
+  Per-platba zpracování matcheru je ale přirozeně nezávislé.
+- **Ruční párovací UI** — guard „ruční allocation ≤ min(reziduum předpisu, zbytek
+  platby)", výběr předpisů, záměrný přeplatek / kříž měn. Doladit s UI matcheru.

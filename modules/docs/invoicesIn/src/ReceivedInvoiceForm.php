@@ -71,8 +71,9 @@ class ReceivedInvoiceForm extends DocsHeadsFormBase
                 ),
                 required: true,
                 readOnly: !$isNew,
+                hidden: true,
             )
-            ->input('doc_number', readOnly: true)
+            ->input('doc_number', readOnly: true, hidden: true)
             ->input('partner_doc_number')
 
             ->lookup(

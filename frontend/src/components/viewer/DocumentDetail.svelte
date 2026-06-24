@@ -470,6 +470,26 @@
     font-size: 0.875rem;
   }
 
+  /* Na mobilu (≤ 768px, MOBILE_BREAKPOINT) má meta mřížka dva pevné
+     sloupce místo jednoho — hodnoty (datumy, symboly, měna) jsou krátké
+     a vejdou se vedle sebe, čímž se ušetří vertikální místo. Desktop
+     zůstává na auto-fit (minmax 180px). */
+  @media (max-width: 768px) {
+    .shpd-docdetail__meta-grid {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+
+  /* Na mobilu (≤ 768px, MOBILE_BREAKPOINT) má meta mřížka dva pevné
+     sloupce místo jednoho — hodnoty (datumy, symboly, měna) jsou krátké
+     a vejdou se vedle sebe, čímž se ušetří vertikální místo. Desktop
+     zůstává na auto-fit (minmax 180px). */
+  @media (max-width: 768px) {
+    .shpd-docdetail__meta-grid {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+
   /* ── Rows + VAT recap tables ─────────────────────────────────────────── */
 
   .shpd-docdetail__section-heading {

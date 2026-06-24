@@ -93,6 +93,18 @@ class Router
 			return new Route('app', 'info');
 		}
 
+		if ($subpath === '/_app/avatar') {
+			// Avatar nenese slot v URL — uživatel se bere z tokenu (AuthContext).
+			// Všechny metody vyžadují auth (na rozdíl od brandingGet, který je
+			// exempt) — avatar je per-uživatel a není veřejný.
+			return match ($method) {
+				'GET'    => new Route('app', 'avatarGet'),
+				'POST'   => new Route('app', 'avatarUpload'),
+				'DELETE' => new Route('app', 'avatarDelete'),
+				default  => Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405),
+			};
+		}
+
 		if (str_starts_with($subpath, '/_app/branding/')) {
 			$slot = substr($subpath, strlen('/_app/branding/'));
 			if ($slot === '' || str_contains($slot, '/')) {

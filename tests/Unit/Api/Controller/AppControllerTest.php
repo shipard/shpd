@@ -36,6 +36,10 @@ class AppControllerTest extends TestCase
     protected function tearDown(): void
     {
         unset($_FILES['file']);
+        foreach (glob($this->dsDir . '/branding/avatars/*') ?: [] as $f) {
+            @unlink($f);
+        }
+        @rmdir($this->dsDir . '/branding/avatars');
         foreach (glob($this->dsDir . '/branding/*') ?: [] as $f) {
             @unlink($f);
         }
@@ -296,5 +300,155 @@ class AppControllerTest extends TestCase
 
         $this->assertSame(204, $this->getStatus($resp));
         $this->assertFileDoesNotExist($this->dsDir . '/branding/icon.png');
+    }
+
+    // --- avatarGet() ---
+
+    public function testAvatarGetRequiresAuth(): void
+    {
+        $resp = $this->makeController()->avatarGet(AuthContext::anonymous());
+        $this->assertSame(401, $this->getStatus($resp));
+    }
+
+    public function testAvatarGetNoMetadataReturns404(): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchSingle')->willReturn(null);
+        $resp = $this->makeController(db: $db)->avatarGet($this->auth());
+
+        $this->assertSame(404, $this->getStatus($resp));
+    }
+
+    public function testAvatarGetMissingFileReturns404(): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchSingle')->willReturn(json_encode([
+            'storedAs' => '1.jpg',
+            'mime'     => 'image/jpeg',
+            'hash'     => 'abcd1234abcd1234',
+        ]));
+        $resp = $this->makeController(db: $db)->avatarGet($this->auth());
+
+        $this->assertSame(404, $this->getStatus($resp));
+    }
+
+    // --- avatarUpload() ---
+
+    public function testAvatarUploadRequiresAuth(): void
+    {
+        $resp = $this->makeController()->avatarUpload(AuthContext::anonymous());
+        $this->assertSame(401, $this->getStatus($resp));
+    }
+
+    public function testAvatarUploadWithoutFileReturns400(): void
+    {
+        unset($_FILES['file']);
+        $resp = $this->makeController()->avatarUpload($this->auth());
+
+        $this->assertSame(400, $this->getStatus($resp));
+        $this->assertSame('UPLOAD_ERROR', $resp->getPayload()['error']['code']);
+    }
+
+    public function testAvatarUploadRejectsUnsupportedMime(): void
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'shpd_av_');
+        file_put_contents($tmp, 'plain text, not an image');
+        $_FILES['file'] = [
+            'name'     => 'evil.txt',
+            'tmp_name' => $tmp,
+            'size'     => filesize($tmp),
+            'error'    => UPLOAD_ERR_OK,
+        ];
+
+        $resp = $this->makeController()->avatarUpload($this->auth());
+
+        $this->assertSame(422, $this->getStatus($resp));
+        $this->assertSame('VALIDATION_ERROR', $resp->getPayload()['error']['code']);
+        unlink($tmp);
+    }
+
+    public function testAvatarUploadRejectsSvg(): void
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'shpd_av_');
+        file_put_contents($tmp, '<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg"></svg>');
+        $_FILES['file'] = [
+            'name'     => 'vector.svg',
+            'tmp_name' => $tmp,
+            'size'     => filesize($tmp),
+            'error'    => UPLOAD_ERR_OK,
+        ];
+
+        $resp = $this->makeController()->avatarUpload($this->auth());
+
+        $this->assertSame(422, $this->getStatus($resp));
+        unlink($tmp);
+    }
+
+    public function testAvatarUploadStoresFileAndMetadata(): void
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'shpd_av_');
+        // 2x2 PNG — vipsthumbnail smartcrop potřebuje plochu.
+        file_put_contents($tmp, base64_decode(
+            'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEUlEQVR4nGNkYGD4z8DAwAAAEAYBAQ7uw9wAAAAASUVORK5CYII='
+        ));
+        $_FILES['file'] = [
+            'name'     => 'moje foto.png',
+            'tmp_name' => $tmp,
+            'size'     => (int) filesize($tmp),
+            'error'    => UPLOAD_ERR_OK,
+        ];
+
+        $db = $this->createMock(DataSourceConnection::class);
+        // Upsert metadat do core_system_user_settings (UserSettingsStore::set).
+        $db->expects($this->once())->method('execute');
+
+        $resp = $this->makeController(db: $db)->avatarUpload($this->auth());
+
+        $this->assertSame(201, $this->getStatus($resp));
+        $data = $resp->getPayload()['data'];
+        $this->assertSame('moje foto.png', $data['filename']);
+        $this->assertSame('1.jpg', $data['storedAs']);
+        // Po downscale je výstup vždy JPEG.
+        $this->assertSame('image/jpeg', $data['mime']);
+        $this->assertSame(16, strlen($data['hash']));
+        $this->assertStringContainsString('/_app/avatar?h=', $data['url']);
+        $this->assertFileExists($this->dsDir . '/branding/avatars/1.jpg');
+    }
+
+    // --- avatarDelete() ---
+
+    public function testAvatarDeleteRequiresAuth(): void
+    {
+        $resp = $this->makeController()->avatarDelete(AuthContext::anonymous());
+        $this->assertSame(401, $this->getStatus($resp));
+    }
+
+    public function testAvatarDeleteRemovesFileAndKey(): void
+    {
+        mkdir($this->dsDir . '/branding/avatars', 0755, true);
+        file_put_contents($this->dsDir . '/branding/avatars/1.jpg', base64_decode(self::PNG_1X1_BASE64));
+
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->expects($this->once())->method('deleteWhere');
+
+        $resp = $this->makeController(db: $db)->avatarDelete($this->auth());
+
+        $this->assertSame(204, $this->getStatus($resp));
+        $this->assertFileDoesNotExist($this->dsDir . '/branding/avatars/1.jpg');
+    }
+
+    // --- avatarInfo() ---
+
+    public function testAvatarInfoNullWhenNoHash(): void
+    {
+        $this->assertNull(AppController::avatarInfo(null));
+        $this->assertNull(AppController::avatarInfo(['storedAs' => '1.jpg']));
+    }
+
+    public function testAvatarInfoBuildsUrl(): void
+    {
+        $info = AppController::avatarInfo(['hash' => 'deadbeefdeadbeef', 'storedAs' => '1.jpg']);
+        $this->assertSame('/_app/avatar?h=deadbeefdeadbeef', $info['url']);
+        $this->assertSame('deadbeefdeadbeef', $info['hash']);
     }
 }

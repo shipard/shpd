@@ -8,8 +8,10 @@ use Shipard\Api\AuthContext;
 use Shipard\Api\Response;
 use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Database\DataSourceConnection;
+use Shipard\Core\Settings\AvatarStorage;
 use Shipard\Core\Settings\BrandingStorage;
 use Shipard\Core\Settings\SettingsStore;
+use Shipard\Core\Settings\UserSettingsStore;
 
 /**
  * Veřejné info o aplikaci + branding obrázky.
@@ -19,14 +21,19 @@ use Shipard\Core\Settings\SettingsStore;
  *   GET    /_app/branding/{slot}  Binární obsah slotu (VEŘEJNÉ, immutable cache)
  *   POST   /_app/branding/{slot}  Upload (multipart, pole `file`) — vyžaduje auth
  *   DELETE /_app/branding/{slot}  Smazání souboru i metadat — vyžaduje auth
+ *   GET    /_app/avatar           Avatar přihlášeného uživatele — vyžaduje auth
+ *   POST   /_app/avatar           Upload avataru (multipart, downscale) — auth
+ *   DELETE /_app/avatar           Smazání avataru přihlášeného uživatele — auth
  *
- * GET endpointy jsou vědomě veřejné (login obrazovka, favicon bez tokenu) —
- * nesmí sem přibýt nic citlivého (DB jméno, moduly, uživatelé).
+ * Branding GET endpointy jsou vědomě veřejné (login obrazovka, favicon bez
+ * tokenu) — nesmí sem přibýt nic citlivého (DB jméno, moduly, uživatelé).
+ * Avatar je naopak per-uživatel a celý za auth (i GET).
  */
 class AppController
 {
     private SettingsStore $settings;
     private BrandingStorage $storage;
+    private AvatarStorage $avatars;
 
     public function __construct(
         private DataSourceConnection $db,
@@ -34,6 +41,7 @@ class AppController
     ) {
         $this->settings = new SettingsStore($db);
         $this->storage  = new BrandingStorage($config->getDataSourceDir());
+        $this->avatars  = new AvatarStorage($config->getDataSourceDir());
     }
 
     /**
@@ -199,6 +207,121 @@ class AppController
         $this->settings->delete(BrandingStorage::SLOT_SETTINGS_KEYS[$slot]);
 
         return Response::success(null, 204);
+    }
+
+
+    /**
+     * GET /_app/avatar — binární obsah avataru PŘIHLÁŠENÉHO uživatele.
+     * Vyžaduje auth (na rozdíl od brandingGet) — avatar je per-uživatel a není
+     * veřejný. Uživatel se bere z tokenu, ne z URL (žádný {userId} parametr).
+     */
+    public function avatarGet(AuthContext $auth): Response
+    {
+        if (!$auth->isAuthenticated || $auth->userId === null) {
+            return Response::error('UNAUTHORIZED', 'Authentication required', 401);
+        }
+
+        $store    = new UserSettingsStore($this->db, $auth->userId);
+        $metadata = $store->get(AvatarStorage::SETTINGS_KEY);
+        if (!is_array($metadata) || !is_string($metadata['storedAs'] ?? null)) {
+            return Response::error('NOT_FOUND', 'Not found', 404);
+        }
+
+        $filePath = $this->avatars->getFilePath($metadata['storedAs']);
+        if (!file_exists($filePath)) {
+            return Response::error('NOT_FOUND', 'Not found', 404);
+        }
+
+        $mime = is_string($metadata['mime'] ?? null) ? $metadata['mime'] : 'image/jpeg';
+        // Avatar je per-uživatel — cache jen privátně, ne veřejně (na rozdíl od
+        // brandingu). Cache-busting přes ?h={hash} v URL.
+        $this->sendFile($filePath, [
+            'Content-Type'  => $mime,
+            'Cache-Control' => 'private, max-age=31536000, immutable',
+            'Content-Length' => (string) (filesize($filePath) ?: 0),
+        ]);
+
+        return Response::success(null, 204);
+    }
+
+    /**
+     * POST /_app/avatar — multipart upload (pole `file`) pro přihlášeného
+     * uživatele. Obrázek se při uložení downscaluje na čtvercový avatar.
+     */
+    public function avatarUpload(AuthContext $auth): Response
+    {
+        if (!$auth->isAuthenticated || $auth->userId === null) {
+            return Response::error('UNAUTHORIZED', 'Authentication required', 401);
+        }
+
+        if (!isset($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
+            $errorCode = $_FILES['file']['error'] ?? UPLOAD_ERR_NO_FILE;
+            $errorMessage = match ($errorCode) {
+                UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE => 'Soubor je příliš velký',
+                UPLOAD_ERR_NO_FILE => 'Žádný soubor nebyl nahrán',
+                UPLOAD_ERR_PARTIAL => 'Soubor byl nahrán jen částečně',
+                default => 'Chyba při nahrávání souboru',
+            };
+            return Response::error('UPLOAD_ERROR', $errorMessage, 400);
+        }
+
+        $file    = $_FILES['file'];
+        $tmpPath = (string) $file['tmp_name'];
+        $size    = (int) ($file['size'] ?? 0);
+
+        $validated = $this->avatars->validateUpload($tmpPath, $size);
+        if (is_string($validated)) {
+            return Response::error('VALIDATION_ERROR', $validated, 422);
+        }
+
+        $stored = $this->avatars->store($auth->userId, $tmpPath);
+        // Hash z VÝSLEDNÉHO souboru (po downscale) — cache-buster musí odpovídat
+        // tomu, co se reálně servíruje.
+        $hash = substr((string) hash_file('sha256', $this->avatars->getFilePath($stored['storedAs'])), 0, 16);
+
+        $metadata = [
+            'filename' => (string) ($file['name'] ?? $stored['storedAs']),
+            'storedAs' => $stored['storedAs'],
+            'mime'     => $stored['mime'],
+            'hash'     => $hash,
+            'modified' => date('c'),
+        ];
+        $store = new UserSettingsStore($this->db, $auth->userId);
+        $store->set(AvatarStorage::SETTINGS_KEY, $metadata);
+
+        return Response::success($metadata + ['url' => self::avatarInfo($metadata)['url']], 201);
+    }
+
+    /**
+     * DELETE /_app/avatar — smaže soubor i metadata přihlášeného uživatele.
+     */
+    public function avatarDelete(AuthContext $auth): Response
+    {
+        if (!$auth->isAuthenticated || $auth->userId === null) {
+            return Response::error('UNAUTHORIZED', 'Authentication required', 401);
+        }
+
+        $this->avatars->deleteUserFiles($auth->userId);
+        $store = new UserSettingsStore($this->db, $auth->userId);
+        $store->delete(AvatarStorage::SETTINGS_KEY);
+
+        return Response::success(null, 204);
+    }
+
+    /**
+     * Veřejný stav avataru pro API odpovědi: `{url, hash}` nebo null.
+     * URL je relativní k API base; nenese {userId} — endpoint bere uživatele
+     * z tokenu.
+     */
+    public static function avatarInfo(mixed $metadata): ?array
+    {
+        if (!is_array($metadata) || !is_string($metadata['hash'] ?? null)) {
+            return null;
+        }
+        return [
+            'url'  => '/_app/avatar?h=' . $metadata['hash'],
+            'hash' => $metadata['hash'],
+        ];
     }
 
     /** @param array<string, string> $headers */

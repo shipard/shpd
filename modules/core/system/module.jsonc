@@ -97,6 +97,16 @@
             "icon": "settings",
             "fields": [
                 {
+                    "id": "account.avatar",
+                    "type": "avatar",
+                    "name": "Photo",
+                    "name:cs": "Fotka",
+                    "name:en": "Photo",
+                    "hint": "Shown next to your name in the sidebar. Ideally square, PNG; downscaled automatically.",
+                    "hint:cs": "Zobrazí se v sidebaru vedle vašeho jména. Ideálně čtvercová, PNG; automaticky zmenšená.",
+                    "hint:en": "Shown next to your name in the sidebar. Ideally square, PNG; downscaled automatically."
+                },
+                {
                     "id": "account.theme",
                     "type": "theme",
                     "name": "Appearance",

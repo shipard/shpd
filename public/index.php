@@ -758,6 +758,9 @@ function dispatchApp(
 		'brandingGet'    => $ctrl->brandingGet($slot),
 		'brandingUpload' => $ctrl->brandingUpload($slot, $auth),
 		'brandingDelete' => $ctrl->brandingDelete($slot, $auth),
+		'avatarGet'      => $ctrl->avatarGet($auth),
+		'avatarUpload'   => $ctrl->avatarUpload($auth),
+		'avatarDelete'   => $ctrl->avatarDelete($auth),
 		default          => Response::error('INTERNAL_ERROR', "Unknown app action: {$route->action}", 500),
 	};
 }

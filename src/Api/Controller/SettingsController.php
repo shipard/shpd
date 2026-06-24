@@ -252,7 +252,7 @@ class SettingsController
                 }
                 $toSave[$id] = $raw;
             }
-            // image — ignorováno (vlastní upload endpoint).
+            // image / avatar — ignorováno (vlastní upload endpoint).
         }
 
         if ($errors !== []) {
@@ -343,6 +343,16 @@ class SettingsController
                     'filename' => $metadata['filename'] ?? null,
                     'mime'     => $metadata['mime'] ?? null,
                     'size'     => $metadata['size'] ?? null,
+                ];
+            } elseif ($field['type'] === 'avatar') {
+                // Avatar nem\u00e1 slot v URL \u2014 info nese URL /_app/avatar?h={hash}.
+                $metadata = $raw[$id];
+                $info     = AppController::avatarInfo($metadata);
+                $values[$id] = $info === null ? null : [
+                    'url'      => $info['url'],
+                    'hash'     => $info['hash'],
+                    'filename' => $metadata['filename'] ?? null,
+                    'mime'     => $metadata['mime'] ?? null,
                 ];
             } else {
                 $values[$id] = $raw[$id];

@@ -212,8 +212,67 @@ strom:
   `/_ui/settings/page/{id}` — lookup stránky je společný, scope řeší
   definice.
 
-První konzument: page `accountBasic` (scope `user`, pole `account.theme`
-+ `account.language`) v `core.system`, sekce **Základní**.
+První konzument: page `accountBasic` (scope `user`, pole `account.avatar`,
+`account.theme`, `account.language`) v `core.system`, sekce **Základní**.
+
+
+### Uživatelský avatar (per-user fotka)
+
+Pole **`account.avatar`** [type `avatar`] v `accountBasic` (scope `user`)
+drží fotku přihlášeného uživatele. Zobrazí se v patičce sidebaru vedle jména;
+bez nastavené fotky zůstává kolečko s iniciálou.
+
+**Model — per-user „branding slot".** Avatar je hybrid brandingu (binární
+soubor) a per-user nastavení (per `user_id`, jen na dané DB). Soubor žije v
+`branding/avatars/{userId}.{ext}` — stejný `branding/` strom, který
+`ds-reset` nemaže, takže avatar reset přežívá. Metadata
+(`{filename, storedAs, mime, hash, modified}`) jdou do
+`core_system_user_settings` pod klíč `account.avatar` (scope `user`).
+
+- Logika: `src/Core/Settings/AvatarStorage.php` — single-slot per uživatel
+  (nový upload smaže starý i s jinou příponou), validace mime z obsahu
+  (PNG/JPEG/WebP; **SVG záměrně nepovolen** — avatar je fotka, ne vektor,
+  a vyhneme se XSS ploše), max 2 MB.
+- **Downscale při uploadu** na čtvercový 256px JPEG přes `vipsthumbnail
+  --smartcrop attention` (stejný libvips jako u příloh). Slot tak drží malý
+  soubor místo originálu. Selhání vipsu → fallback kopie originálu.
+
+**Endpointy — `AppController`, vše za auth.** Na rozdíl od brandingu (jehož
+GET je veřejný/exempt) je avatar per-uživatel a celý za auth, včetně GET.
+Uživatel se bere z `AuthContext` (tokenu), **ne z URL** — žádný `{userId}`
+parametr, takže nelze číst cizí avatary.
+
+| Metoda | URL | Popis |
+|--------|-----|-------|
+| `GET` | `/_app/avatar` | Binární obsah avataru přihlášeného uživatele; `Cache-Control: private` |
+| `POST` | `/_app/avatar` | Multipart upload (pole `file`), downscale, vrací metadata |
+| `DELETE` | `/_app/avatar` | Smaže soubor i settings klíč |
+
+`AuthMiddleware::isExempt()` avatar akce **nematchuje** (na rozdíl od
+`info`/`brandingGet`) — zůstávají za auth.
+
+**Frontend — blob fetch kvůli auth.** Protože GET vyžaduje `Authorization:
+Bearer` a `<img src>` hlavičku neposílá, avatar se nenačítá přímo do `img`.
+Místo toho `stores/avatar.svelte.js` fetchne blob s hlavičkou a vystaví
+`URL.createObjectURL` object URL, na který se naváže `<img>` v sidebaru i
+náhled v `AvatarSlotField`. Object URL se při každé výměně revokuje.
+
+- `stores/avatar.svelte.js` — `load()` po loginu (`App.svelte` onSuccess) i
+  autentizovaném bootu (`main.js`); `reload()` po uploadu/smazání; `clear()`
+  volá `authStore.clearAuth()` při logoutu (revoke blob).
+- `components/settings/AvatarSlotField.svelte` — náhled (kulatý) +
+  Nahrát/Odebrat, upload jde okamžitě mimo tlačítko Uložit; viditelnost
+  Odebrat i náhled se odvozují z `avatarStore.objectUrl` (jediný zdroj
+  pravdy). `SettingsPage` má pro `field.type === 'avatar'` vlastní větev.
+- `Sidebar.svelte` — patička: `avatarStore.objectUrl ? <img> : iniciála`.
+
+**Testy:**
+- `tests/Unit/Core/Settings/AvatarStorageTest.php` — mime (PNG ano, SVG/text
+  ne), validace (oversized, SVG), store (JPEG výstup, nahrazení starého,
+  izolace uživatelů), deleteUserFiles napříč příponami.
+- `tests/Unit/Api/Controller/AppControllerTest.php` — avatar* akce: auth
+  gating, 404 (chybí metadata/soubor), upload (unsupported/SVG → 422,
+  úspěch → 201 + `1.jpg` + JPEG), delete, `avatarInfo()` URL.
 
 ### Frontend (account)
 

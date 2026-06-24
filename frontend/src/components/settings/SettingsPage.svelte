@@ -11,6 +11,7 @@
   import Button from '../ui/Button.svelte';
   import Icon from '../ui/Icon.svelte';
   import ImageSlotField from './ImageSlotField.svelte';
+  import AvatarSlotField from './AvatarSlotField.svelte';
   import ThemeField from './ThemeField.svelte';
   import DsThemeField from './DsThemeField.svelte';
   import LanguageField from './LanguageField.svelte';
@@ -163,6 +164,8 @@
                   slotState={imageStates[field.id]}
                   onchange={(newState) => handleImageChange(field.id, newState)}
                 />
+              {:else if field.type === 'avatar'}
+                <AvatarSlotField />
               {:else if field.type === 'theme'}
                 {#if (definition.scope ?? 'ds') === 'user'}
                   <ThemeField {onOpenThemePanel} />

@@ -7,6 +7,7 @@ import { layoutStore } from './stores/layout.svelte.js'
 import { appInfoStore } from './stores/appInfo.svelte.js'
 import { authStore } from './stores/auth.svelte.js'
 import { accountPrefs } from './stores/accountPrefs.svelte.js'
+import { avatarStore } from './stores/avatar.svelte.js'
 
 // Inicializace mobilní detekce (matchMedia listener). Jednou na začátku.
 layoutStore.initLayout()
@@ -19,6 +20,7 @@ appInfoStore.load()
 // (reload s platným tokenem). Fresh login je obsloužen v App.svelte onSuccess.
 if (authStore.isAuthenticated) {
   accountPrefs.load()
+  avatarStore.load()
 }
 
 const app = mount(App, {

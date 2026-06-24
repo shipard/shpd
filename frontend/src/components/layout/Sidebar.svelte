@@ -5,6 +5,7 @@
   import { navigationStore } from '../../stores/navigation.svelte.js';
   import { layoutStore } from '../../stores/layout.svelte.js';
   import { appInfoStore } from '../../stores/appInfo.svelte.js';
+  import { avatarStore } from '../../stores/avatar.svelte.js';
   import { brandingUrl } from '../../api/app.js';
   import { language, t } from '../../i18n/index.js';
   import Icon from '../ui/Icon.svelte';
@@ -389,7 +390,11 @@
       aria-expanded={userMenuOpen}
     >
       <span class="shpd-sidebar__avatar">
-        {(authStore.user?.full_name ?? '?').charAt(0)}
+        {#if avatarStore.objectUrl}
+          <img class="shpd-sidebar__avatar-img" src={avatarStore.objectUrl} alt="" />
+        {:else}
+          {(authStore.user?.full_name ?? '?').charAt(0)}
+        {/if}
       </span>
       {#if !collapsed}
         <span class="shpd-sidebar__username">{authStore.user?.full_name ?? ''}</span>
@@ -741,6 +746,14 @@
     background-color: var(--shpd-color-accent);
     border-radius: 50%;
     flex-shrink: 0;
+    overflow: hidden;
+  }
+
+  /* Avatar fotka vyplní kolečko; bez fotky zůstává accent kolečko s iniciálou. */
+  .shpd-sidebar__avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
   }
 
   .shpd-sidebar__username {

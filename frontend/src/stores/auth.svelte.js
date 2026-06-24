@@ -1,3 +1,5 @@
+import { avatarStore } from './avatar.svelte.js';
+
 const TOKEN_KEY = 'shpd_token';
 const USER_KEY = 'shpd_user';
 
@@ -25,6 +27,8 @@ function clearAuth() {
   user = null;
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
+  // Zahodit avatar blob přihlášeného uživatele (object URL revoke).
+  avatarStore.clear();
 }
 
 /**

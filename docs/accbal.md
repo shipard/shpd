@@ -8,7 +8,9 @@ deník a clearing šev nového systému.
 
 > **Stav:** Fáze 0–3 hotové a nasazené. Matcher (§5, rozhodnutí #13–#17)
 > implementován — config matched operací, `BalanceMatcher` (FIFO/VS + brána),
-> CLI `accbal-match`. Pozdější: UI párování, auto-trigger, partner resolution.
+> CLI `accbal-match`. Migrační infrastruktura clearingu (§4.5, rozhodnutí #18)
+> navržena, čeká na implementaci. Pozdější: UI párování, auto-trigger, partner
+> resolution.
 
 ---
 
@@ -356,6 +358,30 @@ Důsledky:
 - Pravidlo matcheru: skupina „Nespárované platby" se **nepáruje sama proti
   sobě** (nemá předpisy).
 
+### 4.5 Clearing infrastruktura na migrovaném DS
+
+Clearing účty 261200/261300 i skupina `unmatched_payments` normálně vznikají
+seedem v `ds-upgrade` (`AccountChartProvisioner` / `BalancesProvisioner`). Na
+**migrovaném DS** je ale provisioning vypnutý (`skipProvisioning`) — osnova i
+saldo nastavení se přebírají ze staré strany, kde tyhle dva nové konstrukty
+**nemají protějšek**. Bez nich `AccountMaskResolver` nedohledá 261200/261300
+(bankovní engine → `accounting_state=2` u každé platby, hlučně) a matcher
+nenajde skupinu `unmatched_payments` (`balanceId('unmatched_payments')` → null
+→ tiše nula kandidátů).
+
+Řešení (rozhodnutí #18): clearing účty + skupina nejsou *migrovaná data*, ale
+**infrastruktura modulů** `bank`/`accbal`. Zajišťuje je
+`ClearingInfrastructureProvisioner` **bezpodmínečně** (i pod `skipProvisioning`)
+v `ds-upgrade`, idempotentně podle `number` / `code` — mimo gate provisioningu,
+hned po sync schématu. Tím je infrastruktura zaručeně přítomna před jakýmkoli
+importem (ds-upgrade vždy předchází `all`). Migrace pak nese jen **business**
+saldo skupiny; clearing skupinu (`unmatched_payments`) v migračním JSONu mít
+nesmí (kolize `unq_code`), a stará skupina „Peníze na cestě" na holém prefixu
+`261` se zúží na `261100` (jinak prefix-overlap → dvojité pohyby na clearingu).
+Pojistka: pre-flight v `AllRunner` ověří přítomnost infrastruktury a tvrdě
+spadne dřív, než začne import dokladů/transakcí (tichý no-op matcheru → hlasitá
+chyba).
+
 ---
 
 ## 5. Párování (matcher) — Fáze 3
@@ -674,6 +700,14 @@ explicitní case entita, partner resolution při ingestaci.
     ruční (`1`) posvátné. Přegenerace bucketu = smaž auto + spusť znovu (platby
     zůstanou na 311). Úplné rozpárování = `operation` zpět + reaccount (311 →
     clearing, cascade smaže i ruční) — vědomá destruktivní akce.
+18. **Clearing infrastruktura na migrovaném DS** (§4.5). Účty 261200/261300 +
+    skupina `unmatched_payments` jsou infrastruktura modulů `bank`/`accbal`, ne
+    migrovaná data — `ClearingInfrastructureProvisioner` je zajistí
+    bezpodmínečně v `ds-upgrade` (i pod `skipProvisioning`), idempotentně podle
+    `number`/`code`. Migrace nese jen business saldo skupiny; pre-flight v
+    `AllRunner` ověří infrastrukturu před importem dokladů/transakcí. Zdroj
+    pravdy = inline konstanty provisioneru (= enginový kontrakt), hlídané testem
+    na drift proti seedům.
 
 ---
 

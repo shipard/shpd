@@ -25,6 +25,7 @@ use Shipard\Module\Core\Mail\MailRouterProvisioner;
 use Shipard\Module\Core\Units\UnitsProvisioner;
 use Shipard\Module\Docs\Core\NumberSeriesProvisioner;
 use Shipard\Module\Economy\Accbal\BalancesProvisioner;
+use Shipard\Module\Economy\Accbal\ClearingInfrastructureProvisioner;
 use Shipard\Module\Economy\Accounting\AccountChartProvisioner;
 use Shipard\Module\Economy\Codebooks\FiscalYearsProvisioner;
 use Shipard\Module\Economy\Codebooks\VatPeriodsProvisioner;
@@ -256,6 +257,14 @@ class DsUpgradeCommand extends Command
             $dsConnection->executeSQL('UPDATE docs_core_heads SET doc_state_changed_at = NOW() WHERE doc_state_changed_at IS NULL');
         }
 
+        // Clearing infrastruktura (261200/261300 + saldo skupina unmatched_payments)
+        // se zajišťuje BEZPODMÍNEČNĚ — i pod skipProvisioning. Není to migrovaná
+        // data, ale enginový kontrakt modulů bank/accbal. Bez ní bankovní engine
+        // spadne na account_not_found a matcher úhrad najde nula kandidátů.
+        // Idempotentní; na normálním DS no-op (full provisionery v else větvi pak
+        // skupinu/účty přeskočí dle number/code).
+        $this->provisionClearingInfrastructure($resolvedModules, $dsConnection, $output);
+
         if ($dsConfig->shouldSkipProvisioning()) {
             $output->writeln('');
             $output->writeln("<comment>[SKIP] Provisioning disabled via config (skipProvisioning=true).</comment>");
@@ -474,6 +483,34 @@ class DsUpgradeCommand extends Command
         $result = $provisioner->provision();
 
         $this->logProvisioningResult($output, 'account chart', $result['accountChart']);
+    }
+
+    /**
+     * @param list<\Shipard\Core\Module\ModuleDefinition> $resolvedModules
+     */
+    private function provisionClearingInfrastructure(
+        array $resolvedModules,
+        DataSourceConnection $dsConnection,
+        OutputInterface $output,
+    ): void {
+        $output->writeln('', OutputInterface::VERBOSITY_VERBOSE);
+        $output->writeln('Provisioning clearing infrastructure...', OutputInterface::VERBOSITY_VERBOSE);
+
+        if (!$this->isModuleActive($resolvedModules, 'economy.accbal')
+            || !$this->isModuleActive($resolvedModules, 'economy.accounting')
+        ) {
+            $output->writeln(
+                '  <comment>[SKIP] economy.accbal / economy.accounting module not active</comment>',
+                OutputInterface::VERBOSITY_VERBOSE,
+            );
+            return;
+        }
+
+        $provisioner = new ClearingInfrastructureProvisioner($dsConnection);
+        $result = $provisioner->provision();
+
+        $this->logProvisioningResult($output, 'clearing accounts', $result['accounts']);
+        $this->logProvisioningResult($output, 'clearing balance group', $result['group']);
     }
 
     /**

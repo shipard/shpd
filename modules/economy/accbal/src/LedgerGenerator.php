@@ -102,6 +102,13 @@ final class LedgerGenerator
         $desired = [];
 
         foreach ($journalRows as $row) {
+            // Chybový řádek deníku nemá dohledaný účet (account NULL, account_number
+            // je jen nedořešená maska) — saldo z něj derivovat nelze, jinak by
+            // vznikl fantomový pohyb maskující účetní chybu (docs/accbal.md §4.2).
+            if (!empty($row['is_error'])) {
+                continue;
+            }
+
             $accountNumber = (string) ($row['account_number'] ?? '');
             $accountingDate = $this->dateString($row['accounting_date'] ?? null);
 

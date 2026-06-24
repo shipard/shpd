@@ -196,6 +196,23 @@ class LedgerGeneratorTest extends IntegrationTestCase
         $this->assertSame('eur', $m['currency']);
     }
 
+    public function testErrorJournalRowProducesNoLedgerMove(): void
+    {
+        // Chybový řádek deníku (is_error=1, nedohledaný účet) nesmí vyrobit
+        // saldo pohyb — jinak by fantomový pohyb maskoval účetní chybu.
+        $txId = $this->newTxId();
+        $this->insertJournal('bankTransaction', $txId, [
+            'account_number' => '261200',   // maska clearing účtu, který v osnově není
+            'is_error'       => 1,
+            'money_cr'       => 1210.00,
+            'money_cr_cur'   => 1210.00,
+        ]);
+
+        $this->generator()->generate('bankTransaction', $txId);
+
+        $this->assertSame([], $this->ledgerOf('bankTransaction', $txId), 'Z chybového řádku nevzniká saldo pohyb');
+    }
+
     public function testReaccountPreservesLedgerId(): void
     {
         $docId = $this->newDocId();

@@ -194,8 +194,9 @@
             "name": "Country",
             "name:cs": "Země",
             "name:en": "Country",
-            "type": "varchar",
+            "type": "enumString",
             "length": 2,
+            "cfgItem": "world.base.countries",
             "nullable": true,
             "group": "address"
         },

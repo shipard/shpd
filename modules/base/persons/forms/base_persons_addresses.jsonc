@@ -72,7 +72,7 @@
                                     "column": "zip"
                                 },
                                 {
-                                    "type": "input",
+                                    "type": "select",
                                     "column": "country"
                                 }
                             ]

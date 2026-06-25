@@ -18,7 +18,7 @@
                             "elements": [
                                 {"type": "input", "column": "code", "required": true},
                                 {"type": "input", "column": "name", "required": true},
-                                {"type": "input", "column": "currency", "required": true},
+                                {"type": "select", "column": "currency", "required": true},
                                 {"type": "input", "column": "notice"},
 
                                 {"type": "separator", "label": "Nastavení", "label:cs": "Nastavení", "label:en": "Settings"},

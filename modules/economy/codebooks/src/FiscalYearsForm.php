@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Shipard\Module\Economy\Codebooks;
 
+use Shipard\Core\Form\EnumOptionsHelper;
 use Shipard\Core\Form\FormDefinition;
 use Shipard\Core\Form\TableForm;
 
@@ -20,7 +21,7 @@ class FiscalYearsForm extends TableForm
                 ->col()
                     ->input('name', required: true)
                     ->input('doc_number_prefix', required: true)
-                    ->input('currency', required: true, placeholder: 'czk')
+                    ->select('currency', options: $this->resolveCurrencyOptions(), required: true)
                     ->checkbox('locked')
                     ->date('date_begin', required: true)
                     ->date('date_end', required: true)
@@ -41,5 +42,18 @@ class FiscalYearsForm extends TableForm
             titleNew: 'Nový fiskální rok',
             tabs: [$basic, $months],
         );
+    }
+
+    /** @return list<array{value: int|string, label: string}> */
+    private function resolveCurrencyOptions(): array
+    {
+        if ($this->config === null) {
+            return [];
+        }
+        $cfg = $this->config->cfgItem('world.base.currencies');
+        if (!is_array($cfg)) {
+            return [];
+        }
+        return EnumOptionsHelper::fromCfgData($cfg, 'enumString', 'world.base.currencies');
     }
 }

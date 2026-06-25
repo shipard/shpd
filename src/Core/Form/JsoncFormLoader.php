@@ -340,14 +340,6 @@ class JsoncFormLoader
             return null;
         }
 
-        $options = [];
-        foreach ($cfgData as $key => $entry) {
-            if (is_array($entry) && isset($entry['name'])) {
-                $value = $col->type === 'enumInt' ? (int) $key : (string) $key;
-                $options[] = ['value' => $value, 'label' => $entry['name']];
-            }
-        }
-
-        return $options;
+        return EnumOptionsHelper::fromCfgData($cfgData, $col->type, $col->cfgItem);
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Shipard\Module\Economy\Codebooks;
 
+use Shipard\Core\Form\EnumOptionsHelper;
 use Shipard\Core\Form\FormDefinition;
 use Shipard\Core\Form\TableForm;
 
@@ -81,12 +82,7 @@ class VatRegistrationsForm extends TableForm
             return [];
         }
 
-        $options = [];
-        foreach ($cfgData as $key => $entry) {
-            if (is_array($entry) && isset($entry['name'])) {
-                $options[] = ['value' => (string) $key, 'label' => (string) $entry['name']];
-            }
-        }
+        $options = EnumOptionsHelper::fromCfgData($cfgData, 'enumString', $cfgItemId);
 
         if ($sortByLabel) {
             usort($options, static fn(array $a, array $b): int => strcmp($a['label'], $b['label']));
@@ -109,12 +105,6 @@ class VatRegistrationsForm extends TableForm
             return [];
         }
 
-        $options = [];
-        foreach ($cfgData as $key => $entry) {
-            if (is_array($entry) && isset($entry['name'])) {
-                $options[] = ['value' => (int) $key, 'label' => (string) $entry['name']];
-            }
-        }
-        return $options;
+        return EnumOptionsHelper::fromCfgData($cfgData, 'enumInt', $cfgItemId);
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Shipard\Module\Docs\Core;
 
+use Shipard\Core\Form\EnumOptionsHelper;
 use Shipard\Core\Form\FormDefinition;
 use Shipard\Core\Form\FormHeaderInfo;
 use Shipard\Core\Form\FormTab;
@@ -629,16 +630,7 @@ abstract class DocsHeadsFormBase extends TableForm
         if (!is_array($cfg)) {
             return [];
         }
-        $options = [];
-        foreach ($cfg as $key => $entry) {
-            if (!is_array($entry)) {
-                continue;
-            }
-            $alpha3 = (string) ($entry['alpha3'] ?? strtoupper((string) $key));
-            $name = (string) ($entry['name'] ?? $alpha3);
-            $options[] = ['value' => (string) $key, 'label' => "{$alpha3} — {$name}"];
-        }
-        return $options;
+        return EnumOptionsHelper::fromCfgData($cfg, 'enumString', 'world.base.currencies');
     }
 
     /** @return list<array{value: int, label: string}> */

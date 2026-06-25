@@ -183,4 +183,46 @@ class PartyResolverTest extends TestCase
 
         $this->assertSame(['companyId'], $diff);
     }
+
+    public function testIdentifiersOnlySkipsNameProbeAndCanCreate(): void
+    {
+        // Natural person without IČO whose name collides with others —
+        // identifiersOnly must skip the fuzzy probe (no fetchAll) and fall
+        // straight to canCreate instead of matching/ambiguous.
+        $db = $this->createMock(Connection::class);
+        $db->expects($this->never())->method('fetch');     // no identifier probes (none supplied)
+        $db->expects($this->never())->method('fetchAll');  // name probe skipped
+
+        $r = $this->buildResolver($db)->resolve(
+            ['name' => 'Jan Novák'],
+            PersonType::Person,
+            true,
+        );
+
+        $this->assertSame(ResolveStatus::CanCreate, $r->status);
+        $this->assertSame('Jan Novák', $r->createPayload['full_name']);
+        $this->assertSame(PersonType::Person->value, $r->createPayload['person_type']);
+    }
+
+    public function testIdentifiersOnlyStillMatchesByCompanyId(): void
+    {
+        // identifiersOnly suppresses only the name probe — a real companyId
+        // match still wins (don't duplicate a company already in the DB).
+        $db = $this->createMock(Connection::class);
+        $db->expects($this->once())
+            ->method('fetch')
+            ->with($this->stringContains('base_persons_persons'), 'company_id', '12345678', 10, 40, 80)
+            ->willReturn(new Row(['id' => 42]));
+        $db->expects($this->never())->method('fetchAll');
+
+        $r = $this->buildResolver($db)->resolve(
+            ['companyId' => '12345678', 'name' => 'Anything'],
+            PersonType::Company,
+            true,
+        );
+
+        $this->assertSame(ResolveStatus::Matched, $r->status);
+        $this->assertSame(42, $r->matchedId);
+        $this->assertSame('companyId', $r->matchedBy);
+    }
 }

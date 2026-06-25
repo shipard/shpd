@@ -131,6 +131,8 @@
             "additionalProperties": false,
             "properties": {
                 "mergeStrategy":  { "enum": [null, "createOnly", "updateHeader", "mergeAdd", "fullSync"] },
+                // identifiersOnly: skip name fuzzy match (legacy migration — don't merge same-name items).
+                "matchStrategy":  { "enum": [null, "identifiersAndName", "identifiersOnly"] },
                 "targetDocState": { "enum": [null, 10, 40] },
                 "rejectOnIssues": {
                     "type": ["array", "null"],

@@ -55,7 +55,10 @@ class PersonResolver
             'taxId'     => $canonical['taxId'] ?? null,
             'name'      => $this->resolvePartyName($canonical),
         ];
-        $header = $this->partyResolver->resolve($partyShape, $personType);
+        // `matchStrategy = identifiersOnly` (legacy migration) drops the name
+        // fuzzy probe so same-name-but-distinct people are not merged.
+        $identifiersOnly = ($canonical['applyOptions']['matchStrategy'] ?? null) === 'identifiersOnly';
+        $header = $this->partyResolver->resolve($partyShape, $personType, $identifiersOnly);
 
         $personId = $header->status === ResolveStatus::Matched ? $header->matchedId : null;
 

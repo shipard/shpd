@@ -20,6 +20,13 @@ use Dibi\Connection;
  *                                                              / ambiguous (n)
  *   6. No match → `canCreate` payload (caller still needs to supply
  *      `item_kind` and `unit` before INSERT — see ItemDocument::validate).
+ *
+ * The `$identifiersOnly` flag drops probe 5 (the `name` fuzzy match). Used by
+ * the legacy migration, where the old item `id` is an authoritative code: two
+ * distinct items that merely share a name (e.g. "Parkovné" as a service vs. as
+ * an accounting item) must stay separate, not get merged by name. Cross-run
+ * idempotence there is provided by the importer's LocalIdMap, not by name
+ * matching. The AI/extraction flow keeps name matching (default).
  */
 class ItemResolver
 {
@@ -34,8 +41,10 @@ class ItemResolver
      * @param array<string, mixed> $item              Canonical row.item block.
      * @param int|null             $supplierPersonId  Resolved supplier id, for
      *                                                per-partner mapping lookup.
+     * @param bool                 $identifiersOnly   Skip the `name` fuzzy probe
+     *                                                (legacy migration — see class doc).
      */
-    public function resolve(array $item, ?int $supplierPersonId): ResolveResult
+    public function resolve(array $item, ?int $supplierPersonId, bool $identifiersOnly = false): ResolveResult
     {
         $ourCode = $this->normalize($item['ourCode'] ?? null);
         $supplierCode = $this->normalize($item['supplierCode'] ?? null);
@@ -76,7 +85,7 @@ class ItemResolver
             }
         }
 
-        if ($name !== null) {
+        if ($name !== null && !$identifiersOnly) {
             $candidates = $this->fetchByName($name);
             if (count($candidates) === 1) {
                 return ResolveResult::matched((int) $candidates[0]['id'], 'name');

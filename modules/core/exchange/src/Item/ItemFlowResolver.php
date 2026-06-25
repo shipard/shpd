@@ -60,9 +60,13 @@ class ItemFlowResolver
         // 1. Header — adapt canonical onto ItemResolver shape (it expects
         // flat keys: ourCode / name / ean / sku / supplierCode). Item apply
         // flow has no single supplier — supplierPersonId = null.
+        // `matchStrategy = identifiersOnly` (legacy migration) drops the name
+        // fuzzy probe so same-name-but-distinct items are not merged.
+        $identifiersOnly = ($canonical['applyOptions']['matchStrategy'] ?? null) === 'identifiersOnly';
         $header = $this->itemResolver->resolve(
             $this->toHeaderProbe($canonical),
             supplierPersonId: null,
+            identifiersOnly: $identifiersOnly,
         );
 
         // 2. Kind

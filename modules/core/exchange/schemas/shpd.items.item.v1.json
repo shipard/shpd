@@ -244,6 +244,13 @@
                         "fullSync"
                     ]
                 },
+                "matchStrategy": {
+                    "enum": [
+                        null,
+                        "identifiersAndName",
+                        "identifiersOnly"
+                    ]
+                },
                 "targetDocState": {
                     "enum": [
                         null,

@@ -51,8 +51,15 @@ class PartyResolver
      * @param array<string, mixed> $party Canonical Party object (may be empty).
      * @param ?PersonType $personType When non-null, narrows all probes to a
      *        specific Person type. Default null = no filter (doc flow BC).
+     * @param bool $identifiersOnly Skip probe 4 (the `full_name` fuzzy match).
+     *        Used by the legacy migration: natural persons without IČO routinely
+     *        share names (operators tell them apart by birth date / ID number),
+     *        so name matching would wrongly merge distinct people. Cross-run
+     *        idempotence there comes from the importer's LocalIdMap; documents
+     *        pin the exact partner via `_resolve.*.userAction = useExisting:<id>`.
+     *        The AI/extraction flow keeps name matching (default).
      */
-    public function resolve(array $party, ?PersonType $personType = null): ResolveResult
+    public function resolve(array $party, ?PersonType $personType = null, bool $identifiersOnly = false): ResolveResult
     {
         $companyId = $this->normalize($party['companyId'] ?? null);
         $vatId = $this->normalize($party['vatId'] ?? null);
@@ -78,7 +85,7 @@ class PartyResolver
             }
         }
 
-        if ($name !== null) {
+        if ($name !== null && !$identifiersOnly) {
             $candidates = $this->fetchByName($name, $personType);
             if (count($candidates) === 1) {
                 return ResolveResult::matched((int) $candidates[0]['id'], 'name');

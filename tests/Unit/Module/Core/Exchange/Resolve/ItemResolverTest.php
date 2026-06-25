@@ -169,4 +169,45 @@ class ItemResolverTest extends TestCase
         $r = (new ItemResolver($db))->resolve(['ourCode' => 'X-001'], null);
         $this->assertSame(ResolveStatus::NotFound, $r->status);
     }
+
+    public function testIdentifiersOnlySkipsNameProbeAndCanCreate(): void
+    {
+        // Two distinct items share the name "Parkovné" in the DB — fuzzy match
+        // would be ambiguous. With identifiersOnly the name probe is skipped
+        // entirely (no fetchAll), so a code miss falls straight to canCreate.
+        $db = $this->createMock(Connection::class);
+        $db->method('fetch')->willReturn(null);    // ourCode "100" miss
+        $db->expects($this->never())->method('fetchAll');
+
+        $r = (new ItemResolver($db))->resolve(
+            ['ourCode' => '100', 'name' => 'Parkovné'],
+            null,
+            identifiersOnly: true,
+        );
+
+        $this->assertSame(ResolveStatus::CanCreate, $r->status);
+        $this->assertSame('100', $r->createPayload['code']);
+        $this->assertSame('Parkovné', $r->createPayload['name']);
+    }
+
+    public function testIdentifiersOnlyStillMatchesByCode(): void
+    {
+        // identifiersOnly suppresses only the name probe — a real code match
+        // still wins (don't duplicate a seeded item that owns the code).
+        $db = $this->createMock(Connection::class);
+        $db->expects($this->once())
+            ->method('fetch')
+            ->with($this->stringContains('economy_items'), 'code', '100', 10, 40, 80)
+            ->willReturn(new Row(['id' => 6]));
+
+        $r = (new ItemResolver($db))->resolve(
+            ['ourCode' => '100', 'name' => 'Parkovné'],
+            null,
+            identifiersOnly: true,
+        );
+
+        $this->assertSame(ResolveStatus::Matched, $r->status);
+        $this->assertSame(6, $r->matchedId);
+        $this->assertSame('ourCode', $r->matchedBy);
+    }
 }

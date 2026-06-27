@@ -211,7 +211,12 @@ class PartyResolverTest extends TestCase
         $db = $this->createMock(Connection::class);
         $db->expects($this->once())
             ->method('fetch')
-            ->with($this->stringContains('base_persons_persons'), 'company_id', '12345678', 10, 40, 80)
+            ->with(
+                $this->stringContains('base_persons_persons'),
+                'company_id', '12345678',
+                PersonType::Company->value,   // probe narrowed to the requested person type
+                10, 40, 80,
+            )
             ->willReturn(new Row(['id' => 42]));
         $db->expects($this->never())->method('fetchAll');
 

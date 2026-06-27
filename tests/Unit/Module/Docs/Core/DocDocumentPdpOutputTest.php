@@ -6,6 +6,7 @@ namespace Shipard\Tests\Unit\Module\Docs\Core;
 
 use Dibi\Connection;
 use Dibi\Row;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Utils\JsoncParser;
@@ -84,7 +85,7 @@ class DocDocumentPdpOutputTest extends TestCase
         ];
     }
 
-    /** @dataProvider pdpOutputCodes */
+    #[DataProvider('pdpOutputCodes')]
     public function testPdpOutputCodeProducesNoTax(string $code, float $pct): void
     {
         $doc = $this->buildDocWithRealConfig();

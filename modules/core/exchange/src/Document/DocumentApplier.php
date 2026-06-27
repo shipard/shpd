@@ -15,6 +15,7 @@ use Shipard\Module\Core\Exchange\Common\ApplyResult;
 use Shipard\Module\Core\Exchange\Common\TransactionlessTableGateway;
 use Shipard\Module\Core\Exchange\Schema\SchemaLoader;
 use Shipard\Module\Docs\Core\OwnCompanyResolver;
+use Shipard\Module\Core\Exchange\Resolve\AccountResolver;
 use Shipard\Module\Core\Exchange\Resolve\BankAccountResolver;
 use Shipard\Module\Core\Exchange\Resolve\ItemResolver;
 use Shipard\Module\Core\Exchange\Resolve\PartyResolver;
@@ -89,8 +90,9 @@ class DocumentApplier
      * accepted — passthrough when no alias matches.
      */
     private const DOC_TYPE_MAP = [
-        'invoiceReceived' => 'invni',
-        'invoiceIssued'   => 'invno',
+        'invoiceReceived'    => 'invni',
+        'invoiceIssued'      => 'invno',
+        'accountingDocument' => 'cmnbkp',
     ];
 
     /**
@@ -115,6 +117,7 @@ class DocumentApplier
         private readonly UnitResolver $unitResolver,
         private readonly VatCodeResolver $vatCodeResolver,
         private readonly BankAccountResolver $bankAccountResolver,
+        private readonly AccountResolver $accountResolver,
     ) {}
 
     /**
@@ -151,6 +154,7 @@ class DocumentApplier
             unitResolver: new UnitResolver($db),
             vatCodeResolver: new VatCodeResolver($vatRateResolver),
             bankAccountResolver: new BankAccountResolver($db),
+            accountResolver: new AccountResolver($db),
         );
     }
 
@@ -361,23 +365,37 @@ class DocumentApplier
      */
     private function resolveAll(array $canonical, array &$issues): array
     {
-        $selfParty = $canonical['selfParty'] ?? null;
-        $supplier = is_array($canonical['supplier'] ?? null) ? $canonical['supplier'] : [];
-        $customer = is_array($canonical['customer'] ?? null) ? $canonical['customer'] : [];
+        // Účetní doklad (cmnbkp): nemá supplier/customer/selfParty — saldo
+        // identita žije per řádek. Resolvujeme jen řádky (item + účet z čísla).
+        $isAccountingDoc = $this->mapDocType($canonical) === 'cmnbkp';
 
-        $supplierResult = $selfParty === 'supplier'
-            ? $this->partyResolver->resolveSelfParty()
-            : $this->partyResolver->resolve($supplier);
-        $customerResult = $selfParty === 'customer'
-            ? $this->partyResolver->resolveSelfParty()
-            : $this->partyResolver->resolve($customer);
-
+        $supplierResult = null;
+        $customerResult = null;
         $supplierBankResult = null;
-        if (is_array($supplier['bankAccount'] ?? null) && $supplier['bankAccount'] !== []) {
-            $supplierBankResult = $this->bankAccountResolver->resolvePartnerBank(
-                $supplier['bankAccount'],
-                $supplierResult->status === ResolveStatus::Matched ? $supplierResult->matchedId : null,
-            );
+        $supplierPersonId = null;
+
+        if (!$isAccountingDoc) {
+            $selfParty = $canonical['selfParty'] ?? null;
+            $supplier = is_array($canonical['supplier'] ?? null) ? $canonical['supplier'] : [];
+            $customer = is_array($canonical['customer'] ?? null) ? $canonical['customer'] : [];
+
+            $supplierResult = $selfParty === 'supplier'
+                ? $this->partyResolver->resolveSelfParty()
+                : $this->partyResolver->resolve($supplier);
+            $customerResult = $selfParty === 'customer'
+                ? $this->partyResolver->resolveSelfParty()
+                : $this->partyResolver->resolve($customer);
+
+            if (is_array($supplier['bankAccount'] ?? null) && $supplier['bankAccount'] !== []) {
+                $supplierBankResult = $this->bankAccountResolver->resolvePartnerBank(
+                    $supplier['bankAccount'],
+                    $supplierResult->status === ResolveStatus::Matched ? $supplierResult->matchedId : null,
+                );
+            }
+
+            $supplierPersonId = $supplierResult->status === ResolveStatus::Matched
+                ? $supplierResult->matchedId
+                : null;
         }
 
         $rowsResolve = [];
@@ -385,14 +403,29 @@ class DocumentApplier
         $vatCountry = strtolower((string) ($canonical['vat']['registrationCountry'] ?? ''));
         $taxPointDate = $canonical['dates']['taxPointDate'] ?? ($canonical['dates']['issueDate'] ?? null);
 
-        $supplierPersonId = $supplierResult->status === ResolveStatus::Matched
-            ? $supplierResult->matchedId
-            : null;
-
         foreach ($rows as $idx => $row) {
             $rowResolve = ['index' => $idx];
             if (is_array($row['item'] ?? null) && $row['item'] !== []) {
                 $rowResolve['item'] = $this->itemResolver->resolve($row['item'], $supplierPersonId)->toArray();
+            }
+
+            // Účet z čísla (kontační řádek acc.record). Nenalezeno → warning,
+            // řádek skončí jako chybový až při účtování — neblokovat import.
+            if (isset($row['account']) && (string) $row['account'] !== '') {
+                $accountId = $this->accountResolver->resolve((string) $row['account']);
+                $rowResolve['account'] = [
+                    'number'    => (string) $row['account'],
+                    'matchedId' => $accountId,
+                    'status'    => $accountId !== null ? 'matched' : 'notFound',
+                ];
+                if ($accountId === null) {
+                    $issues[] = [
+                        'severity' => 'warning',
+                        'path'     => "rows.{$idx}.account",
+                        'code'     => 'account_not_found',
+                        'message'  => "Účet „{$row['account']}\" nebyl v rozvrhu nalezen; řádek bude bez účtu.",
+                    ];
+                }
             }
             if (!empty($row['unit'])) {
                 $unitR = $this->unitResolver->resolve((string) $row['unit']);
@@ -426,11 +459,15 @@ class DocumentApplier
             $rowsResolve[] = $rowResolve;
         }
 
-        $resolved = [
-            'supplier' => $supplierResult->toArray(),
-            'customer' => $customerResult->toArray(),
-            'rows'     => $rowsResolve,
-        ];
+        $resolved = ['rows' => $rowsResolve];
+        // For accounting documents these stay unset → reconcile skips them
+        // (no supplier/customer/bank to reconcile, no unresolved_required).
+        if ($supplierResult !== null) {
+            $resolved['supplier'] = $supplierResult->toArray();
+        }
+        if ($customerResult !== null) {
+            $resolved['customer'] = $customerResult->toArray();
+        }
         if ($supplierBankResult !== null) {
             $resolved['supplierBank'] = $supplierBankResult->toArray();
         }
@@ -471,7 +508,16 @@ class DocumentApplier
             'resolvedRowItems'    => [],
             'resolvedRowUnits'    => [],
             'resolvedRowVatCodes' => [],
+            'resolvedRowAccounts' => [],
+            'resolvedRowPartners' => [],
+            'resolvedHeadPartner' => null,
         ];
+
+        // Hlavičkový partner účetního dokladu — nepovinný, pin přes
+        // _resolve.partner (useExisting:<id>). Bez pinu zůstává null.
+        $plan['resolvedHeadPartner'] = $this->resolvePin(
+            is_array($clientResolve['partner'] ?? null) ? ($clientResolve['partner']['userAction'] ?? null) : null,
+        );
 
         foreach (['supplier', 'customer'] as $partyKey) {
             $fresh = $resolved[$partyKey] ?? null;
@@ -526,9 +572,40 @@ class DocumentApplier
                 : null;
 
             $plan['resolvedRowVatCodes'][$i] = $rowResolve['vatCode'] ?? null;
+
+            // Účet z čísla (kontace) — passthrough, žádná userAction (číslo je
+            // autoritativní; nenalezeno už dalo warning v resolveAll).
+            $accountFresh = $rowResolve['account'] ?? null;
+            $plan['resolvedRowAccounts'][$i] = ($accountFresh['status'] ?? null) === 'matched'
+                ? ($accountFresh['matchedId'] ?? null)
+                : null;
+
+            // Per-řádkový partner — pin přes _resolve.rows[i].partner.
+            $plan['resolvedRowPartners'][$i] = $this->resolvePin(
+                is_array($clientRow['partner'] ?? null) ? ($clientRow['partner']['userAction'] ?? null) : null,
+            );
         }
 
         return $plan;
+    }
+
+    /**
+     * Resolve a `useExisting:<id>` pin against active persons. Returns the id
+     * when valid + active, null otherwise (no pin / malformed / inactive).
+     * Used for the optional accounting-document partners (head + per row),
+     * which are pin-only in MVP — no fresh resolve, no side-create.
+     */
+    private function resolvePin(?string $userAction): ?int
+    {
+        if (!is_string($userAction) || !str_starts_with($userAction, 'useExisting:')) {
+            return null;
+        }
+        $idStr = substr($userAction, strlen('useExisting:'));
+        if (!ctype_digit($idStr) || (int) $idStr <= 0) {
+            return null;
+        }
+        $id = (int) $idStr;
+        return $this->entityActive('base_persons_persons', $id) ? $id : null;
     }
 
     /**
@@ -813,15 +890,17 @@ class DocumentApplier
         $selfParty = $canonical['selfParty'] ?? null;
         $targetDocState = (int) ($canonical['applyOptions']['targetDocState'] ?? 10);
 
-        // Partner = the *other* party. For invoiceReceived: supplier; for
-        // invoiceIssued: customer. Self-party (us) is captured later in
-        // snapshots through DocDocument::buildSnapshots.
-        $partnerId = match ($selfParty) {
-            'customer' => $sideIds['supplier'] ?? $plan['resolvedSupplier'] ?? null,
-            'supplier' => $sideIds['customer'] ?? $plan['resolvedCustomer'] ?? null,
-            default    => $sideIds['supplier'] ?? $plan['resolvedSupplier']
-                           ?? ($sideIds['customer'] ?? $plan['resolvedCustomer'] ?? null),
-        };
+        // Účetní doklad (cmnbkp): hlavičkový partner je nepovinný a žije per
+        // řádek; bere se z volitelného pinu (resolvedHeadPartner), bez
+        // selfParty resolution. Faktura: partner = ta druhá strana.
+        $partnerId = $docType === 'cmnbkp'
+            ? ($plan['resolvedHeadPartner'] ?? null)
+            : match ($selfParty) {
+                'customer' => $sideIds['supplier'] ?? $plan['resolvedSupplier'] ?? null,
+                'supplier' => $sideIds['customer'] ?? $plan['resolvedCustomer'] ?? null,
+                default    => $sideIds['supplier'] ?? $plan['resolvedSupplier']
+                               ?? ($sideIds['customer'] ?? $plan['resolvedCustomer'] ?? null),
+            };
 
         $vatRegistrationId = $this->resolveVatRegistrationFor($canonical);
         $vatMode = self::VAT_MODE_MAP[(string) ($canonical['vat']['mode'] ?? 'fromBase')] ?? 1;
@@ -938,12 +1017,27 @@ class DocumentApplier
                 'quantity'        => $row['quantity'] ?? null,
                 'unit_price'      => $row['unitPrice'] ?? null,
                 'total_price'     => $row['totalPrice'] ?? null,
-                'price_calc_mode' => self::PRICE_CALC_MODE_MAP[(string) ($row['priceCalcMode'] ?? 'fromUnitPrice')] ?? 0,
+                // Kontační řádek (má accSide) účtuje částku přímo → fromTotal,
+                // jinak by calculateRowPrice přepsal total_price z qty×unit (0).
+                'price_calc_mode' => isset($row['accSide'])
+                                      ? 1
+                                      : (self::PRICE_CALC_MODE_MAP[(string) ($row['priceCalcMode'] ?? 'fromUnitPrice')] ?? 0),
                 'discount_pct'    => $row['discountPct'] ?? null,
                 'discount_amount' => $row['discountAmount'] ?? null,
                 'vat_code'        => $vatCode,
                 'vat_pct'         => $vatPct,
                 'description'     => $row['item']['description'] ?? ($row['item']['name'] ?? null),
+                // Kontace (účetní doklad) — chybí u faktur → array_filter je
+                // vynechá, takže faktury jsou beze změny.
+                'account'           => $plan['resolvedRowAccounts'][$i] ?? null,
+                'acc_side'          => isset($row['accSide'])
+                                        ? (['debit' => 0, 'credit' => 1][$row['accSide']] ?? null)
+                                        : null,
+                'partner'           => $plan['resolvedRowPartners'][$i] ?? null,
+                'payment_reference' => $row['paymentReference'] ?? null,
+                'specific_symbol'   => $row['specificSymbol'] ?? null,
+                'constant_symbol'   => $row['constantSymbol'] ?? null,
+                'due_date'          => $row['dueDate'] ?? null,
             ], static fn($v) => $v !== null);
         }
         return $out;

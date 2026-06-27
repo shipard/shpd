@@ -257,6 +257,11 @@
         },
 
         // ── Row ─────────────────────────────────────────────────────────
+        // Kontační řádek účetního dokladu (docType accountingDocument):
+        // operation `acc.record` (účet z `account`) / `acc.item` (účet z
+        // položky), `accSide` + `totalPrice` nesou stranu a částku; item /
+        // quantity / unitPrice / vat zůstávají prázdné. Per-řádkový partner se
+        // pinuje přes `_resolve.rows[i].partner` (useExisting:<id>).
         "Row": {
             "type": "object",
             "additionalProperties": false,
@@ -273,7 +278,15 @@
                 "discountPct":    { "type": ["number", "null"] },
                 "discountAmount": { "type": ["number", "null"] },
                 "vat":            { "$ref": "#/$defs/RowVat" },
-                "computed":       { "$ref": "#/$defs/RowComputed" }
+                "computed":       { "$ref": "#/$defs/RowComputed" },
+
+                // Kontace (účetní doklad) — viz komentář výše.
+                "account":          { "type": ["string", "null"], "pattern": "^[0-9]+$" },
+                "accSide":          { "enum": ["debit", "credit", null] },
+                "paymentReference": { "type": ["string", "null"], "maxLength": 35 },
+                "specificSymbol":   { "type": ["string", "null"], "maxLength": 20 },
+                "constantSymbol":   { "type": ["string", "null"], "maxLength": 10 },
+                "dueDate":          { "type": ["string", "null"], "format": "date" }
             }
         },
 

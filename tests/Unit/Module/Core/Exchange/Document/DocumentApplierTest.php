@@ -13,6 +13,7 @@ use Shipard\Module\Core\Exchange\Document\DocumentApplier;
 use Shipard\Module\Core\Exchange\Document\DocumentValidator;
 use Shipard\Module\Core\Exchange\Document\NumberSeriesNotFoundException;
 use Shipard\Module\Core\Exchange\Common\TransactionlessTableGateway;
+use Shipard\Module\Core\Exchange\Resolve\AccountResolver;
 use Shipard\Module\Core\Exchange\Resolve\BankAccountResolver;
 use Shipard\Module\Core\Exchange\Resolve\ItemResolver;
 use Shipard\Module\Core\Exchange\Resolve\PartyResolver;
@@ -51,6 +52,7 @@ class DocumentApplierTest extends TestCase
         ?TransactionlessTableGateway $heads = null,
         ?TransactionlessTableGateway $persons = null,
         ?TransactionlessTableGateway $items = null,
+        ?AccountResolver $account = null,
     ): DocumentApplier {
         $db ??= $this->createMock(Connection::class);
         $party ??= $this->createMock(PartyResolver::class);
@@ -61,6 +63,7 @@ class DocumentApplierTest extends TestCase
         $heads ??= $this->createMock(TransactionlessTableGateway::class);
         $persons ??= $this->createMock(TransactionlessTableGateway::class);
         $items ??= $this->createMock(TransactionlessTableGateway::class);
+        $account ??= $this->createMock(AccountResolver::class);
 
         return new TestableDocumentApplier(
             db: $db,
@@ -75,6 +78,7 @@ class DocumentApplierTest extends TestCase
             unitResolver: $unit,
             vatCodeResolver: $vat,
             bankAccountResolver: $bank,
+            accountResolver: $account,
         );
     }
 
@@ -684,5 +688,98 @@ class DocumentApplierTest extends TestCase
         $this->assertSame(1, $this->invokeResolveSeries($applier, 'invni', null));
         // Stará cesta NESMÍ filtrovat podle doc_number_code (zpětná kompatibilita)
         $this->assertStringNotContainsString('doc_number_code', (string) $captured[0]);
+    }
+
+    // ── Účetní doklad (accountingDocument → cmnbkp) ─────────────────────────
+
+    /**
+     * @param array<string, mixed> $canonical
+     * @param array<string, mixed> $plan
+     * @return array<string, mixed>
+     */
+    private function invokeTransformWithPlan(DocumentApplier $applier, array $canonical, array $plan): array
+    {
+        $sideIds = ['supplier' => null, 'customer' => null, 'supplierBank' => null, 'rowItems' => []];
+        $ref = new \ReflectionMethod($applier, 'transform');
+        return $ref->invoke($applier, $canonical, $plan, $sideIds, null);
+    }
+
+    public function testValidateAcceptsAccountingDocumentWithoutParty(): void
+    {
+        $applier = $this->buildApplier();
+        $result = $applier->validate([
+            'format' => 'shpd.docs.document',
+            'formatVersion' => '1.0',
+            'docType' => 'accountingDocument',
+            'dates' => ['issueDate' => '2026-06-10'],
+            'rows' => [
+                ['operation' => 'acc.record', 'account' => '518100', 'accSide' => 'debit', 'totalPrice' => 1000.0],
+                ['operation' => 'acc.record', 'account' => '321100', 'accSide' => 'credit', 'totalPrice' => 1000.0],
+            ],
+        ]);
+        // Žádný požadavek na partnera/selfParty — accountingDocument je
+        // party-agnostický (DocumentValidator switch default).
+        $this->assertTrue($result->success, json_encode($result->canonical['_resolve']['issues'] ?? []));
+    }
+
+    public function testTransformAccountingDocumentRowsCarryContation(): void
+    {
+        $applier = $this->buildApplier(); // db mock → series/vat reg null
+        $canonical = [
+            'docType' => 'accountingDocument',
+            'dates'   => ['issueDate' => '2026-06-10', 'accountingDate' => '2026-06-10'],
+            'rows' => [
+                ['operation' => 'acc.record', 'account' => '518100', 'accSide' => 'debit',
+                 'totalPrice' => 1000.0],
+                ['operation' => 'acc.record', 'account' => '321100', 'accSide' => 'credit',
+                 'totalPrice' => 1000.0, 'paymentReference' => 'VS123', 'dueDate' => '2026-07-10'],
+            ],
+        ];
+        $plan = [
+            'resolvedHeadPartner' => null,
+            'rowSkips' => [], 'resolvedRowItems' => [], 'resolvedRowUnits' => [], 'resolvedRowVatCodes' => [],
+            'resolvedRowAccounts' => [0 => 195, 1 => 207],
+            'resolvedRowPartners' => [1 => 42],
+        ];
+
+        $data = $this->invokeTransformWithPlan($applier, $canonical, $plan);
+
+        $this->assertSame('cmnbkp', $data['doc_type']);
+        $this->assertArrayNotHasKey('partner', $data); // hlavička bez partnera → null → array_filter
+
+        $rows = $data['rows'];
+        $this->assertCount(2, $rows);
+
+        // MD řádek: účet 195, strana 0, částka přímo (price_calc_mode 1).
+        $this->assertSame(195, $rows[0]['account']);
+        $this->assertSame(0, $rows[0]['acc_side']);
+        $this->assertSame(1000.0, $rows[0]['total_price']);
+        $this->assertSame(1, $rows[0]['price_calc_mode']);
+        $this->assertArrayNotHasKey('partner', $rows[0]);
+
+        // DAL řádek: účet 207, strana 1, per-řádkový partner + VS + splatnost.
+        $this->assertSame(207, $rows[1]['account']);
+        $this->assertSame(1, $rows[1]['acc_side']);
+        $this->assertSame(42, $rows[1]['partner']);
+        $this->assertSame('VS123', $rows[1]['payment_reference']);
+        $this->assertSame('2026-07-10', $rows[1]['due_date']);
+    }
+
+    public function testTransformAccountingDocumentUsesHeadPartnerPin(): void
+    {
+        $applier = $this->buildApplier();
+        $canonical = [
+            'docType' => 'accountingDocument',
+            'dates'   => ['issueDate' => '2026-06-10'],
+            'rows'    => [['operation' => 'acc.record', 'account' => '518100', 'accSide' => 'debit', 'totalPrice' => 50.0]],
+        ];
+        $plan = [
+            'resolvedHeadPartner' => 77,
+            'rowSkips' => [], 'resolvedRowItems' => [], 'resolvedRowUnits' => [], 'resolvedRowVatCodes' => [],
+            'resolvedRowAccounts' => [0 => 195], 'resolvedRowPartners' => [],
+        ];
+
+        $data = $this->invokeTransformWithPlan($applier, $canonical, $plan);
+        $this->assertSame(77, $data['partner']);
     }
 }

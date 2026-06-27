@@ -697,6 +697,48 @@
                                         },
                                         "computed": {
                                             "$ref": "#/$defs/RowComputed"
+                                        },
+                                        "account": {
+                                            "type": [
+                                                "string",
+                                                "null"
+                                            ],
+                                            "pattern": "^[0-9]+$"
+                                        },
+                                        "accSide": {
+                                            "enum": [
+                                                "debit",
+                                                "credit",
+                                                null
+                                            ]
+                                        },
+                                        "paymentReference": {
+                                            "type": [
+                                                "string",
+                                                "null"
+                                            ],
+                                            "maxLength": 35
+                                        },
+                                        "specificSymbol": {
+                                            "type": [
+                                                "string",
+                                                "null"
+                                            ],
+                                            "maxLength": 20
+                                        },
+                                        "constantSymbol": {
+                                            "type": [
+                                                "string",
+                                                "null"
+                                            ],
+                                            "maxLength": 10
+                                        },
+                                        "dueDate": {
+                                            "type": [
+                                                "string",
+                                                "null"
+                                            ],
+                                            "format": "date"
                                         }
                                     }
                                 },

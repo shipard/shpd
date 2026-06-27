@@ -562,14 +562,18 @@ abstract class DocDocument extends Document
         $grouped = [];
         foreach ($rows as $row) {
             $rowKind = (int) ($row['row_kind'] ?? 1);
-            if ($rowKind !== 1 || empty($row['vat_code']) || empty($row['vat_pct'])) {
+            // A row belongs in the recap when it is an item row with a VAT code.
+            // vat_pct may legitimately be 0 (osvobozeno / 0% codes); filtering
+            // via empty($row['vat_pct']) would drop those rows, so their base
+            // would vanish from the recap and from the document totals.
+            if ($rowKind !== 1 || empty($row['vat_code'])) {
                 continue;
             }
-            $key = $row['vat_code'] . '|' . $row['vat_pct'];
+            $key = $this->vatGroupKey($row['vat_code'], $row['vat_pct'] ?? 0);
             if (!isset($grouped[$key])) {
                 $grouped[$key] = [
                     'vat_code' => (string) $row['vat_code'],
-                    'vat_pct'  => (float) $row['vat_pct'],
+                    'vat_pct'  => (float) ($row['vat_pct'] ?? 0),
                     'base'     => 0.0,
                 ];
             }
@@ -789,8 +793,8 @@ abstract class DocDocument extends Document
             $lastAmountIdx = null;
             foreach ($rows as $i => $row) {
                 if ((int) ($row['row_kind'] ?? 1) !== 1
-                    || empty($row['vat_code']) || empty($row['vat_pct'])
-                    || $this->vatGroupKey($row['vat_code'], $row['vat_pct']) !== $key
+                    || empty($row['vat_code'])
+                    || $this->vatGroupKey($row['vat_code'], $row['vat_pct'] ?? 0) !== $key
                 ) {
                     continue;
                 }

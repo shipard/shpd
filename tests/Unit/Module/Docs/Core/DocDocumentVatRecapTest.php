@@ -50,6 +50,7 @@ class DocDocumentVatRecapTest extends TestCase
                 'vatCategories' => [
                     'standard' => ['name' => 'Standard'],
                     'reduced'  => ['name' => 'Reduced'],
+                    'exempt'   => ['name' => 'Exempt'],
                 ],
                 'vatCodes' => [
                     'cz-110' => [
@@ -67,12 +68,17 @@ class DocDocumentVatRecapTest extends TestCase
                         'category' => 'standard', 'place' => 'domestic', 'direction' => 'output',
                         'noPayTax' => 1, 'hidden' => 1, 'sumBase' => 0, 'sumTax' => 0, 'sumTotal' => 0,
                     ],
+                    // Osvobozeno (exempt) — valid code with a 0% rate.
+                    'cz-123' => [
+                        'category' => 'exempt', 'place' => 'domestic', 'direction' => 'output',
+                    ],
                 ],
                 'vatPercents' => [
                     ['code' => 'cz-110', 'from' => '0000-00-00', 'to' => '0000-00-00', 'value' => 21],
                     ['code' => 'cz-111', 'from' => '0000-00-00', 'to' => '0000-00-00', 'value' => 12],
                     ['code' => 'cz-115', 'from' => '0000-00-00', 'to' => '0000-00-00', 'value' => 21],
                     ['code' => 'cz-203', 'from' => '0000-00-00', 'to' => '0000-00-00', 'value' => 21],
+                    ['code' => 'cz-123', 'from' => '0000-00-00', 'to' => '0000-00-00', 'value' => 0],
                 ],
                 'vatNotes' => [],
             ],
@@ -234,6 +240,37 @@ class DocDocumentVatRecapTest extends TestCase
         $this->assertSame(6250.0, $recap[0]['base']);
         $this->assertSame(750.0, $recap[0]['tax']);
         $this->assertSame(7000.0, $recap[0]['total']);
+    }
+
+    /**
+     * Osvobozeno / 0% rows (e.g. cz-123, vat_pct=0) must appear in the recap
+     * with their base and tax=0 — they must NOT be dropped just because the
+     * percent is zero, or their base vanishes from the document totals.
+     */
+    public function testZeroPercentExemptRowIncludedInRecap(): void
+    {
+        $doc = $this->buildDoc();
+        $data = [
+            'rows' => [
+                ['row_kind' => 1, 'vat_code' => 'cz-110', 'vat_pct' => 21, 'total_price' => 1000],
+                ['row_kind' => 1, 'vat_code' => 'cz-123', 'vat_pct' => 0,  'total_price' => 500],
+            ],
+            'vat_registration' => 1,
+            'vat_duzp' => '2026-05-06',
+            'exchange_rate' => 1.0,
+        ];
+        $recap = $doc->buildVatRecapitulationPub($data);
+
+        $this->assertCount(2, $recap);
+        $byCode = array_column($recap, null, 'vat_code');
+
+        $this->assertArrayHasKey('cz-123', $byCode);
+        $this->assertSame(500.0, $byCode['cz-123']['base']);
+        $this->assertSame(0.0, $byCode['cz-123']['tax']);
+        $this->assertSame(500.0, $byCode['cz-123']['total']);
+
+        $this->assertSame(1000.0, $byCode['cz-110']['base']);
+        $this->assertSame(210.0, $byCode['cz-110']['tax']);
     }
 
     public function testNullVatCodeRowSkipped(): void

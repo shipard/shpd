@@ -1,0 +1,168 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Shipard\Tests\Unit\Module\Docs\Core;
+
+use PHPUnit\Framework\TestCase;
+use Shipard\Core\Config\ConfigRuntime;
+use Shipard\Core\Database\DataSourceConnection;
+use Shipard\Core\Form\FormDefinition;
+use Shipard\Core\Form\FormElement;
+use Shipard\Module\Docs\Core\DocRowsForm;
+
+/**
+ * Kontační řádek účetního dokladu (cmnbkp): operace s atributem `rowAccount`
+ * přepne DocRowsForm do účetní větve — účet / strana / částka místo
+ * položkového bloku (množství / cena / DPH).
+ */
+class DocRowsFormContationTest extends TestCase
+{
+    private string $tmpDir;
+
+    protected function setUp(): void
+    {
+        $this->tmpDir = sys_get_temp_dir() . '/shpd_rowcont_test_' . uniqid();
+        mkdir($this->tmpDir . '/config/configuration', 0755, true);
+    }
+
+    protected function tearDown(): void
+    {
+        foreach (glob($this->tmpDir . '/config/configuration/*') ?: [] as $f) {
+            unlink($f);
+        }
+        rmdir($this->tmpDir . '/config/configuration');
+        rmdir($this->tmpDir . '/config');
+        rmdir($this->tmpDir);
+    }
+
+    private function buildConfig(): ConfigRuntime
+    {
+        $items = [
+            'docs.core.rowOperations' => [
+                'acc.record' => [
+                    'name' => 'Účetní zápis', 'rowPartner' => 1, 'rowPaymentId' => 1,
+                    'rowAccount' => 'direct', 'docTypes' => ['cmnbkp' => ['order' => 100]],
+                ],
+                'acc.item' => [
+                    'name' => 'Účetní položka', 'rowPartner' => 1, 'rowPaymentId' => 1,
+                    'rowAccount' => 'item', 'docTypes' => ['cmnbkp' => ['order' => 200]],
+                ],
+                // faktura — bez rowAccount, ať ověříme, že položková větev zůstává
+                'purchase.goods' => ['name' => 'Nákup zboží', 'docTypes' => ['invni' => ['order' => 100]]],
+            ],
+            'docs.core.rowKinds' => [
+                '0' => ['name' => 'Textový řádek'],
+                '1' => ['name' => 'Běžný řádek'],
+            ],
+            'docs.core.accSides' => [
+                '0' => ['name' => 'Má dáti'],
+                '1' => ['name' => 'Dal'],
+            ],
+            'docs.core.priceCalcModes' => [
+                '0' => ['name' => 'Z jednotkové'],
+                '1' => ['name' => 'Z celkové'],
+            ],
+        ];
+        file_put_contents(
+            $this->tmpDir . '/config/configuration/compiled.cs.json',
+            json_encode(['_meta' => ['language' => 'cs'], 'items' => $items]),
+        );
+        return ConfigRuntime::load($this->tmpDir, 'cs');
+    }
+
+    private function form(string $docType, int $vatMode = 0): DocRowsForm
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturn([
+            'doc_type' => $docType, 'vat_place' => 0, 'vat_duzp' => null,
+            'vat_mode' => $vatMode, 'vat_registration' => null,
+        ]);
+        $db->method('fetchAll')->willReturn([]);
+
+        $form = new DocRowsForm('docs_core_rows');
+        $form->setConfig($this->buildConfig());
+        $form->setDb($db);
+        return $form;
+    }
+
+    private function findElement(FormDefinition $def, string $column): ?FormElement
+    {
+        foreach ($def->tabs[0]->sections as $section) {
+            foreach ($section->columns as $col) {
+                foreach ($col->elements as $el) {
+                    if ($el->column === $column) {
+                        return $el;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    public function testAccRecordShowsAccountAndHidesItemBlock(): void
+    {
+        $data = ['row_kind' => 1, 'doc_head' => 5, 'operation' => 'acc.record'];
+        $def = $this->form('cmnbkp')->buildFormDefinition($data, true);
+
+        // Účet přímo, strana, částka.
+        $account = $this->findElement($def, 'account');
+        $this->assertNotNull($account);
+        $this->assertSame('lookup', $account->type);
+        $this->assertSame('economy_accounting_accounts', $account->lookup['table']);
+        $this->assertSame(['account_level' => 4], $account->lookup['filter']);
+
+        $this->assertNotNull($this->findElement($def, 'acc_side'));
+        $this->assertNotNull($this->findElement($def, 'total_price'));
+
+        // Per-řádková identita (vlajky rowPartner / rowPaymentId).
+        $this->assertNotNull($this->findElement($def, 'partner'));
+        $this->assertNotNull($this->findElement($def, 'payment_reference'));
+        $this->assertNotNull($this->findElement($def, 'due_date'));
+
+        // Položkový / DPH blok se v kontační větvi vůbec nestaví.
+        $this->assertNull($this->findElement($def, 'quantity'));
+        $this->assertNull($this->findElement($def, 'unit_price'));
+        $this->assertNull($this->findElement($def, 'vat_code'));
+
+        // price_calc_mode je skryté pole (částka se zadává přímo).
+        $pcm = $this->findElement($def, 'price_calc_mode');
+        $this->assertNotNull($pcm);
+        $this->assertTrue($pcm->hidden);
+    }
+
+    public function testAccItemShowsItemLookupRestrictedToType2(): void
+    {
+        $data = ['row_kind' => 1, 'doc_head' => 5, 'operation' => 'acc.item'];
+        $def = $this->form('cmnbkp')->buildFormDefinition($data, true);
+
+        $item = $this->findElement($def, 'item');
+        $this->assertNotNull($item);
+        $this->assertSame('economy_items', $item->lookup['table']);
+        $this->assertSame(['item_type' => 2], $item->lookup['filter']);
+
+        // Přímý účet se v item-větvi nestaví.
+        $this->assertNull($this->findElement($def, 'account'));
+    }
+
+    public function testNewContationRowDefaultsOperationAndPriceCalcMode(): void
+    {
+        $data = ['row_kind' => 1, 'doc_head' => 5];
+        $this->form('cmnbkp')->applyNewRecordDefaults($data);
+
+        $this->assertSame('acc.record', $data['operation']);
+        $this->assertSame(1, $data['price_calc_mode']);
+    }
+
+    public function testInvoiceRowKeepsItemBlock(): void
+    {
+        // Faktura: operace bez rowAccount → stávající položková větev.
+        $data = ['row_kind' => 1, 'doc_head' => 5, 'operation' => 'purchase.goods'];
+        $def = $this->form('invni', vatMode: 1)->buildFormDefinition($data, true);
+
+        $this->assertNotNull($this->findElement($def, 'quantity'));
+        $this->assertNotNull($this->findElement($def, 'unit_price'));
+        $this->assertNull($this->findElement($def, 'account'));
+        $this->assertNull($this->findElement($def, 'acc_side'));
+    }
+}

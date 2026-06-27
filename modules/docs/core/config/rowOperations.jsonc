@@ -11,6 +11,11 @@
     //   rowPaymentId: 1 — řádek nese vlastní platební identitu
     //                     (payment_reference / specific_symbol /
     //                     constant_symbol / due_date), jinak z hlavičky.
+    //
+    // Forma-facing atribut (řídí, jaký vstup účtu formulář ukáže — protějšek
+    // accountSrc z účtovacího předpisu, musí souhlasit):
+    //   rowAccount: "direct" — účet se zadává přímo na řádku (vstup account)
+    //   rowAccount: "item"   — účet přijde z položky typu 2 (vstup item)
 
     "sale.services": {
         "name": "Sale of services",
@@ -67,6 +72,7 @@
         "name:en": "Accounting record",
         "rowPartner": 1,
         "rowPaymentId": 1,
+        "rowAccount": "direct",
         "docTypes": { "cmnbkp": {"order": 100} }
     },
     "acc.item": {
@@ -75,6 +81,7 @@
         "name:en": "Accounting item",
         "rowPartner": 1,
         "rowPaymentId": 1,
+        "rowAccount": "item",
         "docTypes": { "cmnbkp": {"order": 200} }
     }
 }

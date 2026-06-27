@@ -111,6 +111,7 @@ export const iconUsers = faUsers;
 export const iconCompany = faBuilding;
 export const iconInvoice = faFileInvoiceDollar;
 export const iconInvoiceIn = faFileInvoice;
+export const iconDocAccounting = faFileInvoiceDollar;
 export const iconDocument = faFileLines;
 export const iconWarehouse = faBoxesStacked;
 export const iconTag = faTag;
@@ -177,6 +178,7 @@ export const iconMap = {
   'company': iconCompany,
   'invoice': iconInvoice,
   'invoice-in': iconInvoiceIn,
+  'doc-accounting': iconDocAccounting,
   'document': iconDocument,
   'warehouse': iconWarehouse,
   'tag': iconTag,

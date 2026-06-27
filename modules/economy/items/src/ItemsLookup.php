@@ -14,6 +14,16 @@ use Shipard\Core\Form\Lookup\TableLookup;
  */
 class ItemsLookup extends TableLookup
 {
+    /**
+     * Filter `item_type` omezí nabídku na daný typ položky (`item_type = N`) —
+     * např. řádek kontace „Účetní položka" vybírá jen z položek typu 2.
+     * Klientský filtr není bezpečnostní hranice; tvrdé omezení je v dokumentu.
+     */
+    public function getAllowedFilterKeys(): array
+    {
+        return ['item_type'];
+    }
+
     public function search(string $q, array $filter, int $limit): array
     {
         if ($this->db === null) {
@@ -21,13 +31,20 @@ class ItemsLookup extends TableLookup
         }
         $q = trim($q);
 
+        $typeSql = '';
+        $typeArgs = [];
+        if (isset($filter['item_type']) && (string) $filter['item_type'] !== '') {
+            $typeSql = ' AND `item_type` = %i';
+            $typeArgs[] = (int) $filter['item_type'];
+        }
+
         if ($q === '') {
             $rows = $this->db->fetchAll(
                 'SELECT `id`, `code`, `name` FROM `economy_items`'
-                . ' WHERE `docState` IN (10, 40, 80)'
+                . ' WHERE `docState` IN (10, 40, 80)' . $typeSql
                 . ' ORDER BY `name` ASC'
                 . ' LIMIT %i',
-                $limit,
+                ...$typeArgs, ...[$limit],
             );
         } else {
             $like = '%' . $q . '%';
@@ -35,11 +52,11 @@ class ItemsLookup extends TableLookup
             // čehokoliv, co má na položce/dokladu k dispozici.
             $rows = $this->db->fetchAll(
                 'SELECT `id`, `code`, `name` FROM `economy_items`'
-                . ' WHERE `docState` IN (10, 40, 80)'
+                . ' WHERE `docState` IN (10, 40, 80)' . $typeSql
                 . '   AND (`name` LIKE %s OR `code` LIKE %s OR `sku` LIKE %s OR `ean` LIKE %s)'
                 . ' ORDER BY `name` ASC'
                 . ' LIMIT %i',
-                $like, $like, $like, $like, $limit,
+                ...$typeArgs, ...[$like, $like, $like, $like, $limit],
             );
         }
         return array_map(fn($r) => $this->buildItem($r), $rows);

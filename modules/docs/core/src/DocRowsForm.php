@@ -37,6 +37,15 @@ class DocRowsForm extends TableForm
             }
         }
 
+        // Kontační řádek účetního dokladu: operace má atribut `rowAccount`
+        // (účet z řádku / z položky). Vlastní layout bez položkového bloku;
+        // faktury (operace bez rowAccount) jdou stávající větví níže beze změny.
+        $opAttrs = $this->resolveOperationAttrs((string) ($data['operation'] ?? ''));
+        $rowAccount = is_array($opAttrs) ? ($opAttrs['rowAccount'] ?? null) : null;
+        if (!$isText && $rowAccount !== null) {
+            return $this->buildContationDefinition($operationOptions, $opAttrs, (string) $rowAccount);
+        }
+
         $showVat = $headHasVat && !$isText;
 
         $tab = $this->tab('basic', 'Řádek')
@@ -110,6 +119,88 @@ class DocRowsForm extends TableForm
     }
 
     /**
+     * Definice formuláře pro kontační řádek účetního dokladu (operace s
+     * atributem `rowAccount`). Skrývá položkový blok (množství/cena/sleva/DPH)
+     * a zobrazuje: účet (přímo nebo z položky typu 2), stranu MD/DAL, částku,
+     * popis a per-řádkovou saldo identitu dle vlajek operace. `price_calc_mode`
+     * je skryté a fixní 1 (z celkové) — částka se zadává přímo, nedopočítává se.
+     *
+     * @param list<array{value: string, label: string}> $operationOptions
+     * @param array<string, mixed> $opAttrs
+     */
+    private function buildContationDefinition(
+        array $operationOptions,
+        array $opAttrs,
+        string $rowAccount,
+    ): FormDefinition {
+        $section = $this->tab('basic', 'Řádek kontace')
+            ->section()
+                ->col()
+                    ->select('row_kind',
+                        options: $this->resolveCfgItemOptions('docs.core.rowKinds'),
+                        triggers: 'reload',
+                        required: true,
+                    )
+                    ->select('operation',
+                        options: $operationOptions,
+                        triggers: 'reload',
+                        required: true,
+                    );
+
+        if ($rowAccount === 'item') {
+            $section->lookup('item',
+                table: 'economy_items',
+                filter: ['item_type' => 2],
+                placeholder: 'Hledat účetní položku…',
+                triggers: 'reload',
+                required: true,
+            );
+        } else {
+            $section->lookup('account',
+                table: 'economy_accounting_accounts',
+                filter: ['account_level' => 4],
+                placeholder: 'Hledat účet…',
+                required: true,
+            );
+        }
+
+        $section
+            ->select('acc_side',
+                options: $this->resolveCfgItemOptions('docs.core.accSides'),
+                required: true,
+            )
+            ->number('total_price', label: 'Částka', required: true)
+            ->input('description')
+            ->number('price_calc_mode', hidden: true);
+
+        if (!empty($opAttrs['rowPartner']) || !empty($opAttrs['rowPaymentId'])) {
+            $section->separator('Saldo identita');
+        }
+        if (!empty($opAttrs['rowPartner'])) {
+            $section->lookup('partner',
+                table: 'base_persons_persons',
+                placeholder: 'Hledat partnera…',
+            );
+        }
+        if (!empty($opAttrs['rowPaymentId'])) {
+            $section
+                ->input('payment_reference', label: 'Variabilní symbol')
+                ->input('specific_symbol', label: 'Specifický symbol')
+                ->input('constant_symbol', label: 'Konstantní symbol')
+                ->date('due_date', label: 'Splatnost');
+        }
+
+        $section->separator('Pořadí')->number('order_pos');
+
+        return new FormDefinition(
+            table: $this->table,
+            title: 'Řádek kontace',
+            titleNew: 'Nový řádek kontace',
+            tabs: [$section->build()],
+        );
+    }
+
+    /**
      * Default pohyb pro nový řádek = první povolený pro doc_type hlavičky
      * (nejnižší order). Hlavička je známá z prefillu `defaults[doc_head]`.
      */
@@ -123,7 +214,40 @@ class DocRowsForm extends TableForm
         );
         if ($options !== []) {
             $data['operation'] = $options[0]['value'];
+            $this->applyContationRowDefaults($data);
         }
+    }
+
+    /**
+     * Kontační řádek (operace s `rowAccount`) má `price_calc_mode = 1` (z
+     * celkové), aby `calculateRowPrice` nepřepsal ručně zadanou `total_price`
+     * výpočtem z množství × cena.
+     */
+    private function applyContationRowDefaults(array &$data): void
+    {
+        $attrs = $this->resolveOperationAttrs((string) ($data['operation'] ?? ''));
+        if (is_array($attrs) && isset($attrs['rowAccount'])) {
+            $data['price_calc_mode'] = 1;
+        }
+    }
+
+    /**
+     * Atributy operace z cfgItem `docs.core.rowOperations` (vlajky rowPartner /
+     * rowPaymentId / rowAccount). Null, když operace není známá.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function resolveOperationAttrs(string $operation): ?array
+    {
+        if ($operation === '' || $this->config === null) {
+            return null;
+        }
+        $cfg = $this->config->cfgItem('docs.core.rowOperations');
+        if (!is_array($cfg)) {
+            return null;
+        }
+        $entry = $cfg[$operation] ?? null;
+        return is_array($entry) ? $entry : null;
     }
 
     public function recalculate(string $changedColumn, array $data): RecalculateResult
@@ -179,6 +303,12 @@ class DocRowsForm extends TableForm
             } catch (\LogicException) {
                 // Unknown rate / no period — leave manual entry; UI shows warning.
             }
+        }
+
+        // Kontační řádek (cmnbkp): při změně operace / typu řádku zajisti
+        // price_calc_mode = 1, ať se ručně zadaná částka nepřepíše výpočtem.
+        if ($changedColumn === 'operation' || $changedColumn === 'row_kind') {
+            $this->applyContationRowDefaults($data);
         }
 
         $isNew = !isset($data['id']) || $data['id'] === null || $data['id'] === '';

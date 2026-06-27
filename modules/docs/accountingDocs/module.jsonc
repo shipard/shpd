@@ -9,12 +9,36 @@
 
     "dependencies": ["docs.core", "economy.accounting"],
 
+    "viewers": [
+        {
+            "id": "docs.accountingDocs.heads",
+            "name": "Accounting documents",
+            "name:cs": "Účetní doklady",
+            "name:en": "Accounting documents",
+            "icon": "doc-accounting",
+            "table": "docs_core_heads",
+            "class": "Shipard\\Module\\Docs\\AccountingDocs\\AccountingDocsViewer",
+            "navSection": "accounting",
+            "navOrder": 5
+        }
+    ],
+
     "documentClasses": [
         {
             "table": "docs_core_heads",
             "typeColumn": "doc_type",
             "classes": {
                 "cmnbkp": "Shipard\\Module\\Docs\\AccountingDocs\\AccountingDocument"
+            }
+        }
+    ],
+
+    "forms": [
+        {
+            "table": "docs_core_heads",
+            "typeColumn": "doc_type",
+            "classes": {
+                "cmnbkp": "Shipard\\Module\\Docs\\AccountingDocs\\AccountingDocsForm"
             }
         }
     ]

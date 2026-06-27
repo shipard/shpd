@@ -573,7 +573,11 @@ abstract class DocDocument extends Document
                     'base'     => 0.0,
                 ];
             }
-            $grouped[$key]['base'] += (float) ($row['total_price'] ?? 0);
+            // Use the per-row vat_base computed by calculateRowVat(), which
+            // already respects vat_mode. For "Ze základu" (mode 0/1) it equals
+            // total_price; for "Z ceny celkem" (mode 2) it is the VAT-exclusive
+            // base back-calculated from the VAT-inclusive total_price.
+            $grouped[$key]['base'] += (float) ($row['vat_base'] ?? $row['total_price'] ?? 0);
         }
 
         // 2. For each group build primary line + optional reverse charge pair

@@ -199,6 +199,43 @@ class DocDocumentVatRecapTest extends TestCase
         $this->assertSame(1, $recap[1]['is_reverse_pair']);
     }
 
+    /**
+     * "Z ceny celkem" (vat_mode = 2): the row's total_price is VAT-inclusive
+     * and calculateRowVat() has already back-calculated vat_base. The recap
+     * must aggregate vat_base, not total_price, so the summary base/tax/total
+     * match the per-row figures.
+     *
+     * Mirrors issued invoice 12610005: total_price=7000 incl. 12% VAT →
+     * base=6250, tax=750, total=7000 (not base=7000, tax=840, total=7840).
+     */
+    public function testVatInclusiveModeAggregatesBaseNotTotal(): void
+    {
+        $doc = $this->buildDoc();
+        $data = [
+            'rows' => [
+                [
+                    'row_kind'    => 1,
+                    'vat_code'    => 'cz-111',
+                    'vat_pct'     => 12,
+                    'total_price' => 7000,   // VAT-inclusive
+                    'vat_base'    => 6250.0, // computed by calculateRowVat (7000 / 1.12)
+                    'vat_amount'  => 750.0,
+                    'vat_total'   => 7000.0,
+                ],
+            ],
+            'vat_registration' => 1,
+            'vat_duzp' => '2026-05-06',
+            'exchange_rate' => 1.0,
+        ];
+        $recap = $doc->buildVatRecapitulationPub($data);
+
+        $this->assertCount(1, $recap);
+        $this->assertSame('cz-111', $recap[0]['vat_code']);
+        $this->assertSame(6250.0, $recap[0]['base']);
+        $this->assertSame(750.0, $recap[0]['tax']);
+        $this->assertSame(7000.0, $recap[0]['total']);
+    }
+
     public function testNullVatCodeRowSkipped(): void
     {
         $doc = $this->buildDoc();

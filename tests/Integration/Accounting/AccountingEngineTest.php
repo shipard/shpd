@@ -912,6 +912,134 @@ class AccountingEngineTest extends IntegrationTestCase
         }
     }
 
+    private function accountId(string $number): int
+    {
+        $row = $this->db->fetchRow(
+            'SELECT id FROM economy_accounting_accounts WHERE number = %s LIMIT 1',
+            $number,
+        );
+        if ($row === null) {
+            $this->markTestSkipped("Dev DS nemá účet {$number}");
+        }
+        return (int) $row['id'];
+    }
+
+    /**
+     * Vloží kontační řádek účetního dokladu (cmnbkp): bez DPH, částka v
+     * vat_base(_dom), strana + účet + identita přes $overrides.
+     */
+    private function insertAccRow(int $headId, string $operation, float $amount, int $side, array $overrides = []): int
+    {
+        return $this->insertRow($headId, $operation, $amount, 0.0, array_merge([
+            'vat_code' => null,
+            'vat_pct'  => null,
+            'acc_side' => $side,
+        ], $overrides));
+    }
+
+    // ── Účetní doklad (cmnbkp) ──────────────────────────────────────────────
+
+    public function testCmnbkpAccountRecordBalancedWithPerRowIdentity(): void
+    {
+        // 518100 MD / 321100 DAL, 1000 Kč. Hlavička bez partnera; partner +
+        // VS jen na DAL řádku (závazek) — engine je razítkuje per řádek.
+        $headId = $this->insertHead('cmnbkp', [
+            'partner'         => null,
+            'payment_reference' => null,
+            'total_base'      => 1000.0, 'total_vat' => 0.0, 'total_amount' => 1000.0,
+            'total_base_dom'  => 1000.0, 'total_vat_dom' => 0.0, 'total_amount_dom' => 1000.0,
+        ]);
+        $partnerId = $this->anyPartnerId();
+        $this->insertAccRow($headId, 'acc.record', 1000.0, 0, [
+            'account' => $this->accountId('518100'), 'order_pos' => 0,
+        ]);
+        $this->insertAccRow($headId, 'acc.record', 1000.0, 1, [
+            'account' => $this->accountId('321100'), 'order_pos' => 1,
+            'partner' => $partnerId, 'payment_reference' => 'VS12345',
+        ]);
+
+        $result = $this->engine->accountDocument($headId);
+
+        $this->assertSame(1, $result['state'], json_encode($result['messages']));
+        $this->assertSame([], $result['messages']);
+
+        $journal = $this->journalOf($headId);
+        $this->assertCount(2, $journal);
+        $this->assertBalanced($journal);
+
+        $md = $this->lineByPrefix($journal, '518');
+        $this->assertEqualsWithDelta(1000.0, (float) $md['money_dr'], 0.001);
+        $this->assertEqualsWithDelta(0.0, (float) $md['money_cr'], 0.001);
+        // Nákladový řádek bez partnera (řádek partnera nenese) — null.
+        $this->assertNull($md['partner']);
+        $this->assertNull($md['payment_reference']);
+
+        $dal = $this->lineByPrefix($journal, '321');
+        $this->assertEqualsWithDelta(1000.0, (float) $dal['money_cr'], 0.001);
+        $this->assertSame($partnerId, (int) $dal['partner']);
+        $this->assertSame('VS12345', (string) $dal['payment_reference']);
+    }
+
+    public function testCmnbkpSameAccountDifferentVsNotMerged(): void
+    {
+        // Dva závazky na 321100, různý VS → dva řádky deníku (D7), ne sloučený.
+        $headId = $this->insertHead('cmnbkp', [
+            'partner'        => null,
+            'total_base'     => 300.0, 'total_vat' => 0.0, 'total_amount' => 300.0,
+            'total_base_dom' => 300.0, 'total_vat_dom' => 0.0, 'total_amount_dom' => 300.0,
+        ]);
+        $partnerId = $this->anyPartnerId();
+        $acc321 = $this->accountId('321100');
+        $this->insertAccRow($headId, 'acc.record', 300.0, 0, [
+            'account' => $this->accountId('518100'), 'order_pos' => 0,
+        ]);
+        $this->insertAccRow($headId, 'acc.record', 100.0, 1, [
+            'account' => $acc321, 'order_pos' => 1, 'partner' => $partnerId, 'payment_reference' => 'AAA',
+        ]);
+        $this->insertAccRow($headId, 'acc.record', 200.0, 1, [
+            'account' => $acc321, 'order_pos' => 2, 'partner' => $partnerId, 'payment_reference' => 'BBB',
+        ]);
+
+        $this->engine->accountDocument($headId);
+        $journal = $this->journalOf($headId);
+
+        $dal321 = array_values(array_filter(
+            $journal,
+            fn($l) => str_starts_with((string) $l['account_number'], '321'),
+        ));
+        $this->assertCount(2, $dal321, 'Dva závazky s různým VS se nesmí slít do jednoho řádku deníku');
+        $this->assertCount(3, $journal);
+        $this->assertBalanced($journal);
+
+        $vs = array_map(fn($l) => (string) $l['payment_reference'], $dal321);
+        sort($vs);
+        $this->assertSame(['AAA', 'BBB'], $vs);
+    }
+
+    public function testCmnbkpAccountFromItem(): void
+    {
+        // acc.item: účet přijde z položky typu 2 (Účetní položka).
+        $headId = $this->insertHead('cmnbkp', [
+            'partner'        => null,
+            'total_base'     => 500.0, 'total_vat' => 0.0, 'total_amount' => 500.0,
+            'total_base_dom' => 500.0, 'total_vat_dom' => 0.0, 'total_amount_dom' => 500.0,
+        ]);
+        $itemId = $this->insertAccEntryItem($this->accountId('518100'));
+        $this->insertAccRow($headId, 'acc.item', 500.0, 0, ['item' => $itemId, 'order_pos' => 0]);
+        $this->insertAccRow($headId, 'acc.record', 500.0, 1, [
+            'account' => $this->accountId('321100'), 'order_pos' => 1,
+        ]);
+
+        $result = $this->engine->accountDocument($headId);
+
+        $this->assertSame(1, $result['state'], json_encode($result['messages']));
+        $journal = $this->journalOf($headId);
+        $this->assertCount(2, $journal);
+        $this->assertBalanced($journal);
+        $md = $this->lineByPrefix($journal, '518');
+        $this->assertEqualsWithDelta(500.0, (float) $md['money_dr'], 0.001);
+    }
+
     private function insertAccEntryItem(?int $accountId): int
     {
         $kind = $this->db->fetchRow('SELECT id FROM economy_items_kinds ORDER BY id LIMIT 1');

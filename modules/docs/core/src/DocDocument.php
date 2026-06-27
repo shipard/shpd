@@ -72,7 +72,7 @@ abstract class DocDocument extends Document
         $newState = (int) ($data['docState'] ?? 10);
 
         if (in_array($newState, [20, 40, 80], true)) {
-            if (empty($data['partner'])) {
+            if ($this->headPartnerRequired() && empty($data['partner'])) {
                 $result->addError('partner', 'Partner je povinný', 'required');
             }
             $vatMode = (int) ($data['vat_mode'] ?? 1);
@@ -108,6 +108,16 @@ abstract class DocDocument extends Document
         }
 
         return $result;
+    }
+
+    /**
+     * Je hlavičkový partner povinný při potvrzení (stavy 20/40/80)?
+     * Faktury ano; účetní doklad (cmnbkp) ne — partner žije per řádek
+     * (zápočet má dva partnery, mzda závazek bez hlavičkového partnera).
+     */
+    protected function headPartnerRequired(): bool
+    {
+        return true;
     }
 
     /**
@@ -173,7 +183,7 @@ abstract class DocDocument extends Document
         $recap = $this->buildVatRecapitulation($data, $rowsForCompute);
         $data['vatRecap'] = $recap;
 
-        $this->sumTotals($data, $recap);
+        $this->sumTotals($data, $recap, $rowsForCompute);
         $this->applyTotalRounding($data);
         $this->applyDomesticAmounts($data, $rowsForCompute, $recap);
 
@@ -683,7 +693,14 @@ abstract class DocDocument extends Document
 
     // ── Totals, rounding, exchange ──────────────────────────────────────────
 
-    protected function sumTotals(array &$data, array $recap): void
+    /**
+     * Součty hlavičky z rekapitulace DPH. Báze ignoruje $rows (faktury
+     * sčítají přes recap); subclassy bez DPH (cmnbkp) si přes $rows počítají
+     * součty z řádků.
+     *
+     * @param array<int, array<string, mixed>> $rows Řádky po compute pipeline.
+     */
+    protected function sumTotals(array &$data, array $recap, array $rows = []): void
     {
         $base = 0.0;
         $vat  = 0.0;

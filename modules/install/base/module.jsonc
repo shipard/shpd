@@ -23,6 +23,7 @@
         "docs.core",
         "docs.invoicesOut",
         "docs.invoicesIn",
+        "docs.accountingDocs",
         "tasks.core",
         "core.chat",
     ],

@@ -154,6 +154,12 @@
                     "side": 1, "reverseSign": 1, "sign": "-", "text": "Zaokrouhlení dokladu"},
                 {"cat": "payables", "src": "head", "col": "total", "side": 1}
             ]
+        },
+        {"docType": "cmnbkp",
+            "accounting": [
+                {"src": "rows", "accountSrc": "row",  "sideSrc": "row", "operation": "acc.record"},
+                {"src": "rows", "accountSrc": "item", "sideSrc": "row", "operation": "acc.item"}
+            ]
         }
     ]
 }

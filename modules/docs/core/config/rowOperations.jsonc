@@ -4,6 +4,13 @@
     // Pohyby řádků dokladů. Klíč = stabilní stringový identifikátor.
     // docTypes: pro které typy dokladů je pohyb povolený; order určuje
     // pořadí v nabídce UI (vzestupně, první = default pro nový řádek).
+    //
+    // Vlajky per-řádkové identity (čte je AccountingEngine ve Fázi 2):
+    //   rowPartner: 1   — řádek nese vlastního partnera (engine ho razítkuje
+    //                     z řádku místo z hlavičky; formulář ukáže input).
+    //   rowPaymentId: 1 — řádek nese vlastní platební identitu
+    //                     (payment_reference / specific_symbol /
+    //                     constant_symbol / due_date), jinak z hlavičky.
 
     "sale.services": {
         "name": "Sale of services",
@@ -51,8 +58,23 @@
         "name:en": "Accounting entry",
         "docTypes": {
             "invno": {"order": 900},
-            "invni": {"order": 900},
-            "cmnbkp": {"order": 100}
+            "invni": {"order": 900}
         }
+    },
+    "acc.record": {
+        "name": "Accounting record",
+        "name:cs": "Účetní zápis",
+        "name:en": "Accounting record",
+        "rowPartner": 1,
+        "rowPaymentId": 1,
+        "docTypes": { "cmnbkp": {"order": 100} }
+    },
+    "acc.item": {
+        "name": "Accounting item",
+        "name:cs": "Účetní položka",
+        "name:en": "Accounting item",
+        "rowPartner": 1,
+        "rowPaymentId": 1,
+        "docTypes": { "cmnbkp": {"order": 200} }
     }
 }

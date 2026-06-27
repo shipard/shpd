@@ -1,0 +1,9 @@
+{
+    // docs.core.accSides
+    //
+    // Strana účetní kontace na řádku dokladu (acc_side). Účetní doklad
+    // (cmnbkp) nese MD/DAL per řádek; engine ji čte přes sideSrc:'row'.
+
+    "0": { "name": "Debit",  "name:cs": "Má dáti", "name:en": "Debit" },
+    "1": { "name": "Credit", "name:cs": "Dal",     "name:en": "Credit" }
+}

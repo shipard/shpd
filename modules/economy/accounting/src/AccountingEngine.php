@@ -218,12 +218,20 @@ final class AccountingEngine
             }
 
             $rowId = (int) $row['id'];
-            $account = isset($step['accountSrc']) && $step['accountSrc'] === 'item'
-                ? $this->resolveItemAccount($row, $rowId)
-                : $this->resolveCategoryAccount($step, $row, $head, $rowId);
+            $account = match ($step['accountSrc'] ?? null) {
+                'row'   => $this->resolveRowAccount($row, $rowId),
+                'item'  => $this->resolveItemAccount($row, $rowId),
+                default => $this->resolveCategoryAccount($step, $row, $head, $rowId),
+            };
+
+            // Strana z řádku (sideSrc:'row' → acc_side), jinak ze kroku.
+            $lineStep = $step;
+            if (($step['sideSrc'] ?? null) === 'row') {
+                $lineStep['side'] = (int) ($row['acc_side'] ?? 0);
+            }
 
             $lines[] = $this->makeLine(
-                $step,
+                $lineStep,
                 $head,
                 $account,
                 $dom,
@@ -231,6 +239,7 @@ final class AccountingEngine
                 text: (string) ($step['text'] ?? $row['description'] ?? ''),
                 operation: $operation !== '' ? $operation : null,
                 rowId: $rowId,
+                identity: $this->resolveRowIdentity($row, $head, $operation),
             );
         }
         return $lines;
@@ -371,6 +380,8 @@ final class AccountingEngine
 
     /**
      * @param array{id: int, number: string, is_error?: bool}|array{number: string, is_error: bool} $account
+     * @param array{partner: int|null, payment_reference: ?string, specific_symbol: ?string, constant_symbol: ?string, due_date: ?string}|null $identity
+     *        Per-řádková identita; null → odvodí se z hlavičky (vat/head zdroje).
      */
     private function makeLine(
         array $step,
@@ -381,16 +392,21 @@ final class AccountingEngine
         string $text,
         ?string $operation,
         ?int $rowId,
+        ?array $identity = null,
     ): array {
         $side = (int) ($step['side'] ?? 0);
+        $identity ??= $this->headIdentity($head);
         return [
             'side'           => $side,
             'account'        => $account['id'] ?? null,
             'account_number' => $account['number'],
             'is_error'       => !empty($account['is_error']),
             'operation'      => $operation,
-            'partner'        => isset($head['partner']) && $head['partner'] !== null
-                ? (int) $head['partner'] : null,
+            'partner'           => $identity['partner'],
+            'payment_reference' => $identity['payment_reference'],
+            'specific_symbol'   => $identity['specific_symbol'],
+            'constant_symbol'   => $identity['constant_symbol'],
+            'due_date'          => $identity['due_date'],
             'text'           => mb_substr($text, 0, 200),
             'money_dr'       => $side === 0 ? round($dom, 2) : 0.0,
             'money_cr'       => $side === 1 ? round($dom, 2) : 0.0,
@@ -398,6 +414,64 @@ final class AccountingEngine
             'money_cr_cur'   => $side === 1 ? round($cur, 2) : 0.0,
             'rowId'          => $rowId,
         ];
+    }
+
+    /**
+     * Platební + saldo identita z hlavičky — fallback pro řádky bez vlajek
+     * a pro vat/head zdroje (zachovává chování faktur).
+     *
+     * @return array{partner: int|null, payment_reference: ?string, specific_symbol: ?string, constant_symbol: ?string, due_date: ?string}
+     */
+    private function headIdentity(array $head): array
+    {
+        return [
+            'partner' => isset($head['partner']) && $head['partner'] !== null
+                ? (int) $head['partner'] : null,
+            'payment_reference' => $head['payment_reference'] ?? null,
+            'specific_symbol'   => $head['specific_symbol'] ?? null,
+            'constant_symbol'   => $head['constant_symbol'] ?? null,
+            'due_date'          => $this->normalizeDate($head['due_date'] ?? null),
+        ];
+    }
+
+    /**
+     * Per-řádková identita dle vlajek operace (docs.core.rowOperations):
+     * rowPartner → partner z řádku, rowPaymentId → platební symboly +
+     * splatnost z řádku. Bez vlajky (faktury) → vše z hlavičky.
+     *
+     * @return array{partner: int|null, payment_reference: ?string, specific_symbol: ?string, constant_symbol: ?string, due_date: ?string}
+     */
+    private function resolveRowIdentity(array $row, array $head, string $operation): array
+    {
+        $ops = $this->config?->cfgItem('docs.core.rowOperations');
+        $opCfg = is_array($ops) ? ($ops[$operation] ?? null) : null;
+
+        $identity = $this->headIdentity($head);
+
+        if (is_array($opCfg) && !empty($opCfg['rowPartner'])) {
+            $identity['partner'] = isset($row['partner'])
+                && $row['partner'] !== null && $row['partner'] !== ''
+                ? (int) $row['partner'] : null;
+        }
+        if (is_array($opCfg) && !empty($opCfg['rowPaymentId'])) {
+            $identity['payment_reference'] = $row['payment_reference'] ?? null;
+            $identity['specific_symbol']   = $row['specific_symbol'] ?? null;
+            $identity['constant_symbol']   = $row['constant_symbol'] ?? null;
+            $identity['due_date']          = $this->normalizeDate($row['due_date'] ?? null);
+        }
+        return $identity;
+    }
+
+    /** Datum jako 'Y-m-d' string (group key i INSERT) — DB date / DateTime / null. */
+    private function normalizeDate(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format('Y-m-d');
+        }
+        return (string) $value;
     }
 
     // ── Dohledávání účtů ────────────────────────────────────────────────────
@@ -441,6 +515,41 @@ final class AccountingEngine
             $this->addMessage(
                 'item_account_missing',
                 'Účet uvedený na položce řádku v rozvrhu neexistuje',
+                $rowId,
+            );
+            return ['number' => str_repeat('?', self::ACCOUNT_NUMBER_LENGTH), 'is_error' => true];
+        }
+
+        return ['id' => (int) $account['id'], 'number' => (string) $account['number']];
+    }
+
+    /**
+     * Účet přímo z řádku dokladu (pohyb acc.record, accountSrc:'row').
+     * Nevyplněný / v rozvrhu neexistující → chybový řádek (maska '??????',
+     * is_error) + message — stejný vzor jako resolveItemAccount.
+     *
+     * @return array{id?: int, number: string, is_error?: bool}
+     */
+    private function resolveRowAccount(array $row, int $rowId): array
+    {
+        $accountId = (int) ($row['account'] ?? 0);
+        if ($accountId === 0) {
+            $this->addMessage(
+                'row_account_missing',
+                'Řádek účetního zápisu nemá vyplněný účet',
+                $rowId,
+            );
+            return ['number' => str_repeat('?', self::ACCOUNT_NUMBER_LENGTH), 'is_error' => true];
+        }
+
+        $account = $this->db->fetch(
+            'SELECT [id], [number] FROM [economy_accounting_accounts] WHERE [id] = %i',
+            $accountId,
+        );
+        if ($account === null) {
+            $this->addMessage(
+                'row_account_missing',
+                'Účet uvedený na řádku v rozvrhu neexistuje',
                 $rowId,
             );
             return ['number' => str_repeat('?', self::ACCOUNT_NUMBER_LENGTH), 'is_error' => true];
@@ -511,8 +620,11 @@ final class AccountingEngine
     // ── Seskupení a zápis ───────────────────────────────────────────────────
 
     /**
-     * Seskupení klíčem (side, account_number, partner, operation) —
-     * shodné řádky se sčítají (dom i cur), text z prvního řádku skupiny.
+     * Seskupení klíčem (side, account_number, partner, operation + platební
+     * identita) — shodné řádky se sčítají (dom i cur), text z prvního řádku
+     * skupiny. Platební identita v klíči (D7) brání slévání saldokontních
+     * řádků na stejný účet s různým VS/SS/KS/splatností (zápočet, mzdy);
+     * u faktur je identita napříč řádky konstantní → klíč beze změny.
      *
      * @param list<array<string, mixed>> $lines
      * @return list<array<string, mixed>>
@@ -526,6 +638,10 @@ final class AccountingEngine
                 $line['account_number'],
                 $line['partner'] ?? '',
                 $line['operation'] ?? '',
+                $line['payment_reference'] ?? '',
+                $line['specific_symbol'] ?? '',
+                $line['constant_symbol'] ?? '',
+                $line['due_date'] ?? '',
             ]);
             if (!isset($grouped[$key])) {
                 $grouped[$key] = $line;
@@ -578,11 +694,12 @@ final class AccountingEngine
                     'money_cr_cur'    => $line['money_cr_cur'],
                     'partner'         => $line['partner'],
                     'text'            => $line['text'],
-                    // Platební identita — konstantní přes celý doklad (z hlavičky).
-                    'payment_reference' => $head['payment_reference'] ?? null,
-                    'specific_symbol'   => $head['specific_symbol'] ?? null,
-                    'constant_symbol'   => $head['constant_symbol'] ?? null,
-                    'due_date'          => $head['due_date'] ?? null,
+                    // Platební identita — per řádek deníku (engine ji razítkuje
+                    // z řádku dokladu dle vlajek operace, fallback hlavička).
+                    'payment_reference' => $line['payment_reference'] ?? null,
+                    'specific_symbol'   => $line['specific_symbol'] ?? null,
+                    'constant_symbol'   => $line['constant_symbol'] ?? null,
+                    'due_date'          => $line['due_date'] ?? null,
                 ])->execute();
             }
 

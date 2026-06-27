@@ -296,6 +296,30 @@
             "name:en": "Due date",
             "type": "date",
             "nullable": true
+        },
+
+        // --- accounting contation (per-row účet + strana) ---
+        // Účetní doklad (cmnbkp) nese kontaci na řádku: účet přímo na řádku
+        // (operace acc.record) nebo z položky typu 2 (acc.item), strana MD/DAL
+        // per řádek. Engine je čte ve Fázi 2; faktur se to netýká (nullable).
+
+        {
+            "id": "account",
+            "name": "Account",
+            "name:cs": "Účet",
+            "name:en": "Account",
+            "type": "int",
+            "nullable": true,
+            "reference": "economy_accounting_accounts"
+        },
+        {
+            "id": "acc_side",
+            "name": "Accounting side",
+            "name:cs": "Strana",
+            "name:en": "Accounting side",
+            "type": "enumInt",
+            "nullable": true,
+            "cfgItem": "docs.core.accSides"
         }
     ],
 

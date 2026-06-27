@@ -1,0 +1,21 @@
+{
+    "id": "docs.accountingDocs",
+    "name": "Accounting documents",
+    "name:cs": "Účetní doklady",
+    "name:en": "Accounting documents",
+    "description": "Document type subclass for accounting documents (cmnbkp)",
+    "description:cs": "Účetní doklady (cmnbkp) — specifická Document třída (účtování + vyrovnanost)",
+    "description:en": "Document type subclass for accounting documents (cmnbkp)",
+
+    "dependencies": ["docs.core", "economy.accounting"],
+
+    "documentClasses": [
+        {
+            "table": "docs_core_heads",
+            "typeColumn": "doc_type",
+            "classes": {
+                "cmnbkp": "Shipard\\Module\\Docs\\AccountingDocs\\AccountingDocument"
+            }
+        }
+    ]
+}

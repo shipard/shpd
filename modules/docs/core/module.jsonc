@@ -115,6 +115,7 @@
         { "id": "docs.core.priceCalcModes",  "file": "config/priceCalcModes.jsonc" },
         { "id": "docs.core.rowKinds",        "file": "config/rowKinds.jsonc" },
         { "id": "docs.core.rowOperations",   "file": "config/rowOperations.jsonc" },
+        { "id": "docs.core.accSides",        "file": "config/accSides.jsonc" },
         { "id": "docs.core.roundingModes",   "file": "config/roundingModes.jsonc" },
         { "id": "docs.core.paymentMethods",  "file": "config/paymentMethods.jsonc" },
         { "id": "docs.core.resetScopes",     "file": "config/resetScopes.jsonc" },

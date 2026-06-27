@@ -246,6 +246,56 @@
             "scale": 2,
             "nullable": true,
             "system": true
+        },
+
+        // --- saldo identity (per-row override pro saldokontní doklady) ---
+        // Razítkuje se do deníku per řádek až ve Fázi 2 (engine); operace řádku
+        // rozhodne přes vlajky rowPartner / rowPaymentId, zda se bere z řádku
+        // nebo z hlavičky. Zde jen schéma — zatím nečtené, faktur se to netýká.
+
+        {
+            "id": "partner",
+            "name": "Partner",
+            "name:cs": "Partner",
+            "name:en": "Partner",
+            "type": "int",
+            "nullable": true,
+            "reference": "base_persons_persons"
+        },
+        {
+            "id": "payment_reference",
+            "name": "Payment reference",
+            "name:cs": "Variabilní symbol",
+            "name:en": "Payment reference",
+            "type": "varchar",
+            "length": 35,
+            "nullable": true
+        },
+        {
+            "id": "specific_symbol",
+            "name": "Specific symbol",
+            "name:cs": "Specifický symbol",
+            "name:en": "Specific symbol",
+            "type": "varchar",
+            "length": 20,
+            "nullable": true
+        },
+        {
+            "id": "constant_symbol",
+            "name": "Constant symbol",
+            "name:cs": "Konstantní symbol",
+            "name:en": "Constant symbol",
+            "type": "varchar",
+            "length": 10,
+            "nullable": true
+        },
+        {
+            "id": "due_date",
+            "name": "Due date",
+            "name:cs": "Datum splatnosti",
+            "name:en": "Due date",
+            "type": "date",
+            "nullable": true
         }
     ],
 

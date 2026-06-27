@@ -51,7 +51,8 @@
         "name:en": "Accounting entry",
         "docTypes": {
             "invno": {"order": 900},
-            "invni": {"order": 900}
+            "invni": {"order": 900},
+            "cmnbkp": {"order": 100}
         }
     }
 }

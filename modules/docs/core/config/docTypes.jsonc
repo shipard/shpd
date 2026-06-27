@@ -36,5 +36,18 @@
         "trade_dir": 2,
         "doc_number_pattern_default": "%D%y%C%4",
         "subclass": "Shipard\\Module\\Docs\\InvoicesIn\\ReceivedInvoiceDocument"
+    },
+
+    "cmnbkp": {
+        "name": "Accounting document",
+        "name:cs": "Účetní doklad",
+        "name:en": "Accounting document",
+        "shortcut": "ÚČD",
+        "shortcut:cs": "ÚČD",
+        "shortcut:en": "AD",
+        "doc_id_code": "60",
+        "trade_dir": 0,
+        "doc_number_pattern_default": "%D%y%C%4",
+        "subclass": "Shipard\\Module\\Docs\\AccountingDocs\\AccountingDocument"
     }
 }

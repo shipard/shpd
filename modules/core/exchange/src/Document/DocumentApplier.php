@@ -1026,7 +1026,13 @@ class DocumentApplier
                 'discount_amount' => $row['discountAmount'] ?? null,
                 'vat_code'        => $vatCode,
                 'vat_pct'         => $vatPct,
-                'description'     => $row['item']['description'] ?? ($row['item']['name'] ?? null),
+                // Text řádku: faktury ho nesou přes item.description / item.name;
+                // účetní doklad (acc.record) item fragment nemá → bere se z
+                // řádkové úrovně. Top-level description má přednost.
+                'description'     => $row['description']
+                                      ?? (is_array($row['item'] ?? null)
+                                          ? ($row['item']['description'] ?? $row['item']['name'] ?? null)
+                                          : null),
                 // Kontace (účetní doklad) — chybí u faktur → array_filter je
                 // vynechá, takže faktury jsou beze změny.
                 'account'           => $plan['resolvedRowAccounts'][$i] ?? null,

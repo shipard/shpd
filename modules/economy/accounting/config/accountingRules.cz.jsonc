@@ -158,7 +158,12 @@
         {"docType": "cmnbkp",
             "accounting": [
                 {"src": "rows", "accountSrc": "row",  "sideSrc": "row", "operation": "acc.record"},
-                {"src": "rows", "accountSrc": "item", "sideSrc": "row", "operation": "acc.item"}
+                {"src": "rows", "accountSrc": "item", "sideSrc": "row", "operation": "acc.item"},
+                // Saldokontní operace bez accountSrc — účet z kategorie
+                // (receivables → 311, payables → 321), strana z řádku (acc_side),
+                // identita per řádek (vlajky rowPartner/rowPaymentId operace).
+                {"src": "rows", "cat": "receivables", "sideSrc": "row", "operation": "acc.balanceReceivable"},
+                {"src": "rows", "cat": "payables",    "sideSrc": "row", "operation": "acc.balancePayable"}
             ]
         }
     ]

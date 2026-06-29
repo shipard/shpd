@@ -48,6 +48,11 @@ class DocRowsFormContationTest extends TestCase
                     'name' => 'Účetní položka', 'rowPartner' => 1, 'rowPaymentId' => 1,
                     'rowAccount' => 'item', 'docTypes' => ['cmnbkp' => ['order' => 200]],
                 ],
+                // saldokontní operace — vlajky bez rowAccount (účet z kategorie)
+                'acc.balanceReceivable' => [
+                    'name' => 'Zápočet pohledávky', 'rowPartner' => 1, 'rowPaymentId' => 1,
+                    'docTypes' => ['cmnbkp' => ['order' => 300]],
+                ],
                 // faktura — bez rowAccount, ať ověříme, že položková větev zůstává
                 'purchase.goods' => ['name' => 'Nákup zboží', 'docTypes' => ['invni' => ['order' => 100]]],
             ],
@@ -143,6 +148,45 @@ class DocRowsFormContationTest extends TestCase
 
         // Přímý účet se v item-větvi nestaví.
         $this->assertNull($this->findElement($def, 'account'));
+    }
+
+    public function testBalanceOpShowsIdentityButHidesAccountAndItem(): void
+    {
+        // Saldokontní operace (zápočet) — účet implicitní z kategorie předpisu,
+        // formulář ukáže stranu / částku / saldo identitu, ale ne vstup účtu.
+        $data = ['row_kind' => 1, 'doc_head' => 5, 'operation' => 'acc.balanceReceivable'];
+        $def = $this->form('cmnbkp')->buildFormDefinition($data, true);
+
+        // Strana, částka, saldo identita.
+        $this->assertNotNull($this->findElement($def, 'acc_side'));
+        $this->assertNotNull($this->findElement($def, 'total_price'));
+        $this->assertNotNull($this->findElement($def, 'partner'));
+        $this->assertNotNull($this->findElement($def, 'payment_reference'));
+        $this->assertNotNull($this->findElement($def, 'due_date'));
+
+        // Vstup účtu ani položky se u saldokontní operace nestaví — účet je
+        // implicitní z kategorie (311/321).
+        $this->assertNull($this->findElement($def, 'account'));
+        $this->assertNull($this->findElement($def, 'item'));
+
+        // Položkový / DPH blok zůstává skrytý.
+        $this->assertNull($this->findElement($def, 'quantity'));
+        $this->assertNull($this->findElement($def, 'vat_code'));
+
+        // price_calc_mode skryté (částka přímo).
+        $pcm = $this->findElement($def, 'price_calc_mode');
+        $this->assertNotNull($pcm);
+        $this->assertTrue($pcm->hidden);
+    }
+
+    public function testBalanceOpRecalculateSetsPriceCalcMode(): void
+    {
+        // Přepnutí na saldokontní operaci zajistí price_calc_mode = 1, ať se
+        // ručně zadaná částka nepřepíše výpočtem z množství × cena.
+        $data = ['row_kind' => 1, 'doc_head' => 5, 'operation' => 'acc.balanceReceivable'];
+        $result = $this->form('cmnbkp')->recalculate('operation', $data);
+
+        $this->assertSame(1, $result->data['price_calc_mode']);
     }
 
     public function testNewContationRowDefaultsOperationAndPriceCalcMode(): void

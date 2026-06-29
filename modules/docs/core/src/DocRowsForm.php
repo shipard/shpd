@@ -37,13 +37,17 @@ class DocRowsForm extends TableForm
             }
         }
 
-        // Kontační řádek účetního dokladu: operace má atribut `rowAccount`
-        // (účet z řádku / z položky). Vlastní layout bez položkového bloku;
-        // faktury (operace bez rowAccount) jdou stávající větví níže beze změny.
+        // Kontační řádek účetního dokladu: operace má `rowAccount` NEBO
+        // saldo vlajky (rowPartner/rowPaymentId). Vlastní layout bez položkového
+        // bloku; faktury (běžné operace) jdou stávající větví níže beze změny.
         $opAttrs = $this->resolveOperationAttrs((string) ($data['operation'] ?? ''));
-        $rowAccount = is_array($opAttrs) ? ($opAttrs['rowAccount'] ?? null) : null;
-        if (!$isText && $rowAccount !== null) {
-            return $this->buildContationDefinition($operationOptions, $opAttrs, (string) $rowAccount);
+        if (!$isText && $this->isContationOperation($opAttrs)) {
+            $rowAccount = $opAttrs['rowAccount'] ?? null;
+            return $this->buildContationDefinition(
+                $operationOptions,
+                $opAttrs,
+                $rowAccount !== null ? (string) $rowAccount : null,
+            );
         }
 
         $showVat = $headHasVat && !$isText;
@@ -119,11 +123,15 @@ class DocRowsForm extends TableForm
     }
 
     /**
-     * Definice formuláře pro kontační řádek účetního dokladu (operace s
-     * atributem `rowAccount`). Skrývá položkový blok (množství/cena/sleva/DPH)
-     * a zobrazuje: účet (přímo nebo z položky typu 2), stranu MD/DAL, částku,
-     * popis a per-řádkovou saldo identitu dle vlajek operace. `price_calc_mode`
-     * je skryté a fixní 1 (z celkové) — částka se zadává přímo, nedopočítává se.
+     * Definice formuláře pro kontační řádek účetního dokladu. Skrývá položkový
+     * blok (množství/cena/sleva/DPH) a zobrazuje: stranu MD/DAL, částku, popis
+     * a per-řádkovou saldo identitu dle vlajek operace. `price_calc_mode` je
+     * skryté a fixní 1 (z celkové) — částka se zadává přímo, nedopočítává se.
+     *
+     * Vstup účtu/položky se zobrazí jen u operací s `rowAccount`
+     * (`direct`/`item`). U saldokontních operací (`$rowAccount === null`) je
+     * účet implicitní z kategorie účtovacího předpisu (311/321) — vstup se
+     * nestaví.
      *
      * @param list<array{value: string, label: string}> $operationOptions
      * @param array<string, mixed> $opAttrs
@@ -131,7 +139,7 @@ class DocRowsForm extends TableForm
     private function buildContationDefinition(
         array $operationOptions,
         array $opAttrs,
-        string $rowAccount,
+        ?string $rowAccount,
     ): FormDefinition {
         $section = $this->tab('basic', 'Řádek kontace')
             ->section()
@@ -155,7 +163,7 @@ class DocRowsForm extends TableForm
                 triggers: 'reload',
                 required: true,
             );
-        } else {
+        } elseif ($rowAccount === 'direct') {
             $section->lookup('account',
                 table: 'economy_accounting_accounts',
                 filter: ['account_level' => 4],
@@ -219,16 +227,33 @@ class DocRowsForm extends TableForm
     }
 
     /**
-     * Kontační řádek (operace s `rowAccount`) má `price_calc_mode = 1` (z
+     * Kontační řádek (vč. saldokontních operací) má `price_calc_mode = 1` (z
      * celkové), aby `calculateRowPrice` nepřepsal ručně zadanou `total_price`
      * výpočtem z množství × cena.
      */
     private function applyContationRowDefaults(array &$data): void
     {
         $attrs = $this->resolveOperationAttrs((string) ($data['operation'] ?? ''));
-        if (is_array($attrs) && isset($attrs['rowAccount'])) {
+        if ($this->isContationOperation($attrs)) {
             $data['price_calc_mode'] = 1;
         }
+    }
+
+    /**
+     * Kontační řádek = operace nese účet přímo/z položky (`rowAccount`) NEBO
+     * per-řádkovou saldo identitu (`rowPartner`/`rowPaymentId`). Saldokontní
+     * operace (zápočty) mají jen vlajky a účet z kategorie předpisu.
+     *
+     * @param array<string, mixed>|null $attrs
+     */
+    private function isContationOperation(?array $attrs): bool
+    {
+        if (!is_array($attrs)) {
+            return false;
+        }
+        return isset($attrs['rowAccount'])
+            || !empty($attrs['rowPartner'])
+            || !empty($attrs['rowPaymentId']);
     }
 
     /**

@@ -215,6 +215,7 @@
                 "discountAmount": { "type": ["number", "null"] },
                 "vat":            { "$ref": "#/$defs/RowVat" },
                 "computed":       { "$ref": "#/$defs/RowComputed" },
+                "description":      { "type": ["string", "null"] },
                 "account":          { "type": ["string", "null"], "pattern": "^[0-9]+$" },
                 "accSide":          { "enum": ["debit", "credit", null] },
                 "paymentReference": { "type": ["string", "null"], "maxLength": 35 },

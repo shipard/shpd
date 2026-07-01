@@ -8,24 +8,34 @@ use Shipard\Api\Response;
 use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Document\DocStateConfig;
+use Shipard\Core\Feed\FeedContext;
+use Shipard\Core\Feed\FeedSource;
 use Shipard\Core\Viewer\ViewerRegistry;
+use Shipard\Module\Core\Alerts\Feed\AlertsSource;
+use Shipard\Module\Core\Mail\Feed\MailSuggestionsSource;
 
 /**
- * Dashboard — agregovaný pohled na alerts / mail / tasks pro home obrazovku.
+ * Dashboard — prioritizovaný feed akčních karet pro home obrazovku (fáze 2).
  *
- * MVP: hardcoded sada tří widgetů. Položky se získávají re-use existujících
- * viewerů přes `selectRows()` + `renderRow()`, počty otevřených záznamů
- * doplňuje samostatný COUNT (může být > items.length, viz `count` v API).
+ * Alerty a návrhy z došlé pošty se agregují do jednotného `cards[]` přes lehké
+ * `FeedSource` zdroje (napevno registrované, D10). Úkoly zůstávají jako
+ * sekundární widget `tasks` pod feedem (re-use fáze 1: `buildTasksWidget` +
+ * `fetchWidgetItems` + `renderRowToWidgetItem`).
  *
- * Modularita (widgety per modul přes `module.jsonc`) je out of scope pro
- * fázi 1 — viz tasks/dashboard-phase1.md.
+ * Řazení a strop řeší server (`sortAndCap` dle `KIND_ORDER` + `timestamp`),
+ * frontend jen renderuje. `summary.aiText` je v této fázi `null` (naplní 2b).
+ *
+ * Detaily: `docs/dashboard.md`.
  */
 class DashboardController
 {
     private const int ITEMS_PER_WIDGET = 7;
 
-    /** alert_state Active — viz core.alerts.alertStates + AlertReconciler::STATE_ACTIVE. */
-    private const int ALERT_STATE_ACTIVE = 10;
+    /** Strop počtu karet feedu; při ořezu se přidá info karta „a další…". */
+    private const int MAX_CARDS = 30;
+
+    /** Prioritní žebříček pásem karet (nižší = výše). Sekundárně timestamp DESC. */
+    private const array KIND_ORDER = ['urgent' => 0, 'review' => 1, 'ready' => 2, 'info' => 3];
 
     public function dashboard(
         ViewerRegistry $registry,
@@ -34,83 +44,110 @@ class DashboardController
         ?string $language = null,
     ): Response {
         $lang = $language ?? 'en';
+        $ctx  = new FeedContext($db, $config, $lang, self::MAX_CARDS);
 
-        $alerts = $this->buildAlertsWidget($registry, $db, $config, $lang);
-        $mail   = $this->buildMailWidget($registry, $db, $config, $lang);
-        $tasks  = $this->buildTasksWidget($registry, $db, $config, $lang);
+        /** @var list<FeedSource> $sources — napevno registrované (D10). */
+        $sources = [
+            new MailSuggestionsSource(),
+            new AlertsSource(),
+        ];
+
+        $cards = [];
+        foreach ($sources as $src) {
+            foreach ($src->collectCards($ctx) as $card) {
+                $cards[] = $card;
+            }
+        }
+
+        [$cards, $truncated] = $this->sortAndCap($cards, self::MAX_CARDS);
+        if ($truncated) {
+            $cards[] = $this->andMoreCard($lang);
+        }
+
+        $tasks = $this->buildTasksWidget($registry, $db, $config, $lang);
 
         return Response::success([
             'generatedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
-            'summary' => [
-                'alertsCount'       => $alerts['count'],
-                'incomingMailCount' => $mail['count'],
-                'tasksCount'        => $tasks['count'],
-            ],
-            'widgets' => [$alerts, $mail, $tasks],
+            'summary'     => ['aiText' => null, 'counts' => $this->countByKind($cards)],
+            'cards'       => $cards,
+            'tasks'       => $tasks,
         ]);
     }
 
-    private function buildAlertsWidget(
-        ViewerRegistry $registry,
-        DataSourceConnection $db,
-        ?ConfigRuntime $config,
-        string $lang,
-    ): array {
-        $viewerId = 'core.alerts.alerts';
-        $items = $this->fetchWidgetItems(
-            $registry, $db, $config, $lang, $viewerId,
-            [['id' => 'alert_state', 'value' => 'active']],
-            'alert',
-            ['kind' => 'open_viewer', 'viewerId' => $viewerId],
-        );
+    /**
+     * Seřadí karty dle prioritního žebříčku (`KIND_ORDER`), uvnitř pásma dle
+     * `timestamp` sestupně (nejnovější první; karty bez timestampu naspod), a
+     * ořízne na `$max`.
+     *
+     * @param  list<array<string,mixed>> $cards
+     * @return array{0: list<array<string,mixed>>, 1: bool}  [seřazené+oříznuté, zda došlo k ořezu]
+     * @internal Public pro účely testů — čistá transformace bez business logiky.
+     */
+    public function sortAndCap(array $cards, int $max): array
+    {
+        usort($cards, static function (array $a, array $b): int {
+            $oa = self::KIND_ORDER[$a['kind'] ?? ''] ?? 99;
+            $ob = self::KIND_ORDER[$b['kind'] ?? ''] ?? 99;
+            if ($oa !== $ob) {
+                return $oa <=> $ob;
+            }
+            $ta = (string) ($a['timestamp'] ?? '');
+            $tb = (string) ($b['timestamp'] ?? '');
+            if ($ta === $tb) {
+                return 0;
+            }
+            if ($ta === '') {
+                return 1;
+            }
+            if ($tb === '') {
+                return -1;
+            }
+            return strcmp($tb, $ta); // ATOM formát řadí lexikálně = chronologicky
+        });
 
-        $def = $registry->get($viewerId);
-        $count = 0;
-        if ($def !== null) {
-            $val = $db->fetchSingle(
-                'SELECT COUNT(*) FROM `' . $def->table . '` WHERE `alert_state` = %i',
-                self::ALERT_STATE_ACTIVE,
-            );
-            $count = (int) ($val ?? 0);
+        $truncated = count($cards) > $max;
+        if ($truncated) {
+            $cards = array_slice($cards, 0, $max);
         }
-
-        return [
-            'id'            => 'alerts',
-            'type'          => 'alerts',
-            'title'         => $lang === 'cs' ? 'Upozornění' : 'Alerts',
-            'icon'          => 'alert',
-            'count'         => $count,
-            'items'         => $items,
-            'openAllAction' => ['viewerId' => $viewerId],
-        ];
+        return [$cards, $truncated];
     }
 
-    private function buildMailWidget(
-        ViewerRegistry $registry,
-        DataSourceConnection $db,
-        ?ConfigRuntime $config,
-        string $lang,
-    ): array {
-        $viewerId = 'core.mail.incoming';
-        $items = $this->fetchWidgetItems(
-            $registry, $db, $config, $lang, $viewerId,
-            [['id' => 'viewGroup', 'value' => 'active']],
-            'mail',
-            ['kind' => 'open_viewer', 'viewerId' => $viewerId],
-        );
+    /**
+     * Počty karet dle kind (jen actionable pásma — urgent/review/ready).
+     * Info karty (vč. „a další…") se nezapočítávají.
+     *
+     * @param  list<array<string,mixed>> $cards
+     * @return array{urgent:int, review:int, ready:int}
+     * @internal Public pro účely testů.
+     */
+    public function countByKind(array $cards): array
+    {
+        $counts = ['urgent' => 0, 'review' => 0, 'ready' => 0];
+        foreach ($cards as $card) {
+            $kind = (string) ($card['kind'] ?? '');
+            if (isset($counts[$kind])) {
+                $counts[$kind]++;
+            }
+        }
+        return $counts;
+    }
 
-        $count = $this->countActiveByDocState(
-            $db, $registry, $config, $viewerId, 'core.mail.docStatesIncoming',
-        );
-
+    /** Závěrečná info karta při ořezu feedu — navigace na došlou poštu. */
+    private function andMoreCard(string $lang): array
+    {
         return [
-            'id'            => 'incoming_mail',
-            'type'          => 'mail',
-            'title'         => $lang === 'cs' ? 'Aktuální došlá pošta' : 'Recent incoming mail',
-            'icon'          => 'mail',
-            'count'         => $count,
-            'items'         => $items,
-            'openAllAction' => ['viewerId' => $viewerId],
+            'id'         => 'mail_more',
+            'source'     => 'mail',
+            'kind'       => 'info',
+            'icon'       => 'mail',
+            'stateStyle' => 'concept',
+            'title'      => $lang === 'cs' ? '…a další nezpracovaná pošta' : '…and more unprocessed mail',
+            'subtitle'   => '',
+            'timestamp'  => null,
+            'context'    => [],
+            'actions'    => [
+                ['id' => 'openMail', 'kind' => 'open_viewer', 'target' => ['viewerId' => 'core.mail.incoming']],
+            ],
         ];
     }
 

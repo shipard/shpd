@@ -6,10 +6,7 @@ namespace Shipard\Tests\Unit\Api\Controller;
 
 use PHPUnit\Framework\TestCase;
 use Shipard\Api\Controller\DashboardController;
-use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Database\DataSourceConnection;
-use Shipard\Core\Viewer\TableViewer;
-use Shipard\Core\Viewer\ViewerDefinition;
 use Shipard\Core\Viewer\ViewerRegistry;
 
 /**
@@ -146,14 +143,77 @@ final class DashboardControllerTest extends TestCase
         $this->assertArrayNotHasKey('table', $item['action']);
     }
 
-    public function testDashboardEmptyAllWidgets(): void
+    // ── sortAndCap / countByKind (čisté funkce) ──────────────────────────────
+
+    /** @return array<string,mixed> */
+    private function card(string $kind, ?string $timestamp, string $id = 'x'): array
     {
-        // Registry without any matching viewer => createViewer returns null,
-        // fetchWidgetItems returns []. get($viewerId) also returns null so
-        // alerts count stays at 0.
+        return ['id' => $id, 'kind' => $kind, 'timestamp' => $timestamp];
+    }
+
+    public function testSortAndCapOrdersByKindBand(): void
+    {
+        $ctrl = new DashboardController();
+        $input = [
+            $this->card('info', '2026-06-28T10:00:00+00:00', 'i'),
+            $this->card('ready', '2026-06-28T10:00:00+00:00', 'r'),
+            $this->card('urgent', '2026-06-28T10:00:00+00:00', 'u'),
+            $this->card('review', '2026-06-28T10:00:00+00:00', 'v'),
+        ];
+        [$sorted, $truncated] = $ctrl->sortAndCap($input, 30);
+
+        $this->assertFalse($truncated);
+        $this->assertSame(['u', 'v', 'r', 'i'], array_column($sorted, 'id'));
+    }
+
+    public function testSortAndCapTimestampDescWithinBand(): void
+    {
+        $ctrl = new DashboardController();
+        $input = [
+            $this->card('ready', '2026-06-01T10:00:00+00:00', 'old'),
+            $this->card('ready', '2026-06-28T10:00:00+00:00', 'new'),
+            $this->card('ready', null, 'notime'),
+        ];
+        [$sorted] = $ctrl->sortAndCap($input, 30);
+
+        // Nejnovější první, karta bez timestampu naspod pásma.
+        $this->assertSame(['new', 'old', 'notime'], array_column($sorted, 'id'));
+    }
+
+    public function testSortAndCapCapsAndFlagsTruncation(): void
+    {
+        $ctrl = new DashboardController();
+        $input = [];
+        for ($i = 0; $i < 35; $i++) {
+            $input[] = $this->card('ready', '2026-06-28T10:00:00+00:00', "c$i");
+        }
+        [$sorted, $truncated] = $ctrl->sortAndCap($input, 30);
+
+        $this->assertTrue($truncated);
+        $this->assertCount(30, $sorted);
+    }
+
+    public function testCountByKindCountsOnlyActionable(): void
+    {
+        $ctrl = new DashboardController();
+        $cards = [
+            $this->card('urgent', null),
+            $this->card('urgent', null),
+            $this->card('review', null),
+            $this->card('ready', null),
+            $this->card('info', null),   // nezapočítává se
+        ];
+        $this->assertSame(['urgent' => 2, 'review' => 1, 'ready' => 1], $ctrl->countByKind($cards));
+    }
+
+    // ── dashboard() feed tvar ────────────────────────────────────────────────
+
+    public function testDashboardEmptyFeedShape(): void
+    {
+        // Prázdný registry + DB mock vracející prázdné sady → žádné karty.
         $registry = new ViewerRegistry();
         $db = $this->createMock(DataSourceConnection::class);
-        $db->expects($this->never())->method('fetchSingle');
+        $db->method('fetchAll')->willReturn([]);
 
         $ctrl = new DashboardController();
         $response = $ctrl->dashboard($registry, $db, null, 'cs');
@@ -163,154 +223,77 @@ final class DashboardControllerTest extends TestCase
         $data = $payload['data'];
 
         $this->assertArrayHasKey('generatedAt', $data);
-        $this->assertSame(['alertsCount' => 0, 'incomingMailCount' => 0, 'tasksCount' => 0], $data['summary']);
-        $this->assertCount(3, $data['widgets']);
-
-        foreach ($data['widgets'] as $widget) {
-            $this->assertSame(0, $widget['count']);
-            $this->assertSame([], $widget['items']);
-            $this->assertArrayHasKey('openAllAction', $widget);
-        }
+        $this->assertNull($data['summary']['aiText']);
+        $this->assertSame(['urgent' => 0, 'review' => 0, 'ready' => 0], $data['summary']['counts']);
+        $this->assertSame([], $data['cards']);
+        $this->assertArrayHasKey('tasks', $data);
+        $this->assertArrayNotHasKey('widgets', $data);
     }
 
-    public function testDashboardHappyPathWithStubViewer(): void
-    {
-        $registry = new ViewerRegistry();
-        $registry->register(new ViewerDefinition(
-            id: 'core.alerts.alerts',
-            name: 'Alerts',
-            table: 'core_alerts_alerts',
-            class: DashboardTestStubViewer::class,
-            moduleId: 'core.alerts',
-            icon: 'alert',
-        ));
-
-        $db = $this->createMock(DataSourceConnection::class);
-        // Alerts: state=10 active count; mail/tasks: 0 because their viewer defs missing
-        $db->expects($this->once())
-            ->method('fetchSingle')
-            ->willReturn(5);
-
-        $ctrl = new DashboardController();
-        $response = $ctrl->dashboard($registry, $db, null, 'en');
-
-        $data = $response->getPayload()['data'];
-
-        $alertsWidget = $data['widgets'][0];
-        $this->assertSame('alerts', $alertsWidget['id']);
-        $this->assertSame('Alerts', $alertsWidget['title']);
-        $this->assertSame('alert', $alertsWidget['icon']);
-        $this->assertSame(5, $alertsWidget['count']);
-        $this->assertCount(DashboardTestStubViewer::ROW_COUNT, $alertsWidget['items']);
-
-        // First item structure
-        $firstItem = $alertsWidget['items'][0];
-        $this->assertSame(1, $firstItem['id']);
-        $this->assertSame('Title 1', $firstItem['title']);
-        $this->assertSame('open_viewer', $firstItem['action']['kind']);
-        $this->assertSame('core.alerts.alerts', $firstItem['action']['viewerId']);
-        $this->assertSame(1, $firstItem['action']['recordId']);
-
-        // Summary aggregates only what's present
-        $this->assertSame(5, $data['summary']['alertsCount']);
-        $this->assertSame(0, $data['summary']['incomingMailCount']);
-        $this->assertSame(0, $data['summary']['tasksCount']);
-    }
-
-    public function testDashboardLimitsItemsTo7PerWidget(): void
-    {
-        $registry = new ViewerRegistry();
-        $registry->register(new ViewerDefinition(
-            id: 'core.alerts.alerts',
-            name: 'Alerts',
-            table: 'core_alerts_alerts',
-            class: DashboardTestStubViewerManyRows::class,
-            moduleId: 'core.alerts',
-        ));
-
-        $db = $this->createMock(DataSourceConnection::class);
-        $db->method('fetchSingle')->willReturn(100);
-
-        $ctrl = new DashboardController();
-        $response = $ctrl->dashboard($registry, $db, null, 'cs');
-        $alerts = $response->getPayload()['data']['widgets'][0];
-
-        $this->assertCount(7, $alerts['items'], 'Items limited to 7 server-side');
-        $this->assertSame(100, $alerts['count'], 'Count can exceed items.length');
-    }
-
-    public function testDashboardCzechTitles(): void
+    public function testDashboardWiresBothSourcesAndSorts(): void
     {
         $registry = new ViewerRegistry();
         $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchAll')->willReturnCallback(
+            static function (string $sql): array {
+                if (str_contains($sql, 'core_alerts_alerts')) {
+                    return [[
+                        'id' => 7, 'check_id' => 'chk', 'title' => 'Chyba', 'message' => 'm',
+                        'severity' => 30, 'actions' => null,
+                        'first_seen_at' => '2026-06-28 08:00:00', 'last_seen_at' => '2026-06-28 08:00:00',
+                    ]];
+                }
+                if (str_contains($sql, 'extracted_documents')) {
+                    return [[
+                        'extracted_ndx' => 1, 'message_ndx' => 2, 'doc_type' => 'invoiceReceived',
+                        'confidence' => 0.9, 'status' => 10, 'subject' => 'Faktura',
+                        'sender_name' => 'X', 'received_at' => '2026-06-28 09:00:00',
+                        'extracted_json' => '{}',
+                    ]];
+                }
+                return [];
+            },
+        );
 
         $ctrl = new DashboardController();
-        $response = $ctrl->dashboard($registry, $db, null, 'cs');
-        $widgets = $response->getPayload()['data']['widgets'];
+        $data = $ctrl->dashboard($registry, $db, null, 'cs')->getPayload()['data'];
 
-        $this->assertSame('Upozornění', $widgets[0]['title']);
-        $this->assertSame('Aktuální došlá pošta', $widgets[1]['title']);
-        $this->assertSame('Aktivní úkoly', $widgets[2]['title']);
+        $this->assertCount(2, $data['cards']);
+        // urgent (alert) před ready (mail)
+        $this->assertSame('alert:7', $data['cards'][0]['id']);
+        $this->assertSame('mail_extracted:1', $data['cards'][1]['id']);
+        $this->assertSame(['urgent' => 1, 'review' => 0, 'ready' => 1], $data['summary']['counts']);
     }
 
-    public function testDashboardEnglishTitles(): void
+    public function testDashboardAppendsAndMoreCardWhenTruncated(): void
     {
         $registry = new ViewerRegistry();
         $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchAll')->willReturnCallback(
+            static function (string $sql): array {
+                if (!str_contains($sql, 'extracted_documents')) {
+                    return [];
+                }
+                $rows = [];
+                for ($i = 1; $i <= 35; $i++) {
+                    $rows[] = [
+                        'extracted_ndx' => $i, 'message_ndx' => 100 + $i, 'doc_type' => 'invoiceReceived',
+                        'confidence' => 0.9, 'status' => 10, 'subject' => "F$i",
+                        'sender_name' => 'X', 'received_at' => '2026-06-28 09:00:00',
+                        'extracted_json' => '{}',
+                    ];
+                }
+                return $rows;
+            },
+        );
 
         $ctrl = new DashboardController();
-        $response = $ctrl->dashboard($registry, $db, null, 'en');
-        $widgets = $response->getPayload()['data']['widgets'];
+        $data = $ctrl->dashboard($registry, $db, null, 'cs')->getPayload()['data'];
 
-        $this->assertSame('Alerts', $widgets[0]['title']);
-        $this->assertSame('Recent incoming mail', $widgets[1]['title']);
-        $this->assertSame('Active tasks', $widgets[2]['title']);
-    }
-}
-
-/**
- * Stub viewer: vrací deterministickou sadu řádků pro testy.
- */
-final class DashboardTestStubViewer extends TableViewer
-{
-    public const int ROW_COUNT = 3;
-
-    public function selectRows(?string $search, array $filters, int $pageNumber): array
-    {
-        $rows = [];
-        for ($i = 1; $i <= self::ROW_COUNT; $i++) {
-            $rows[] = ['id' => $i, 'title' => "Title $i"];
-        }
-        return $rows;
-    }
-
-    public function renderRow(array $rowData): array
-    {
-        return [
-            'id'         => (int) $rowData['id'],
-            't1'         => $rowData['title'],
-            't2'         => null,
-            'stateStyle' => 'concept',
-        ];
-    }
-}
-
-/**
- * Stub viewer vracející 10 řádků — pro test limitu 7.
- */
-final class DashboardTestStubViewerManyRows extends TableViewer
-{
-    public function selectRows(?string $search, array $filters, int $pageNumber): array
-    {
-        $rows = [];
-        for ($i = 1; $i <= 10; $i++) {
-            $rows[] = ['id' => $i];
-        }
-        return $rows;
-    }
-
-    public function renderRow(array $rowData): array
-    {
-        return ['id' => (int) $rowData['id']];
+        $this->assertCount(31, $data['cards']); // 30 + „a další" karta
+        $last = $data['cards'][30];
+        $this->assertSame('mail_more', $last['id']);
+        $this->assertSame('info', $last['kind']);
+        $this->assertSame('open_viewer', $last['actions'][0]['kind']);
     }
 }

@@ -47,6 +47,7 @@ import {
   faTriangleExclamation,
   faCircleInfo,
   faCircleCheck,
+  faCircleQuestion,
   faPaperclip,
   faDownload,
   faCloudArrowDown,
@@ -139,6 +140,7 @@ export const iconSpinner = faCircleNotch;
 export const iconWarning = faTriangleExclamation;
 export const iconInfo = faCircleInfo;
 export const iconSuccess = faCircleCheck;
+export const iconQuestion = faCircleQuestion;
 export const iconAlert = faBell;
 
 // ── Dashboard ──────────────────────────────────────────────────
@@ -203,6 +205,11 @@ export const iconMap = {
   'robot': iconRobot,
   'chat': iconChat,
   'cloud-download': iconCloudDownload,
+  // Feed karty (kind → stavová ikona)
+  'check': iconSuccess,
+  'question': iconQuestion,
+  'warning': iconWarning,
+  'info': iconInfo,
 };
 
 /**

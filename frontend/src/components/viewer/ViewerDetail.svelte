@@ -2,10 +2,10 @@
   import { post } from '../../api/client.js';
   import { applyExtractedDocument } from '../../api/exchange.js';
   import { navigationStore } from '../../stores/navigation.svelte.js';
-  import Modal from '../ui/Modal.svelte';
   import Button from '../ui/Button.svelte';
   import Popover from '../ui/Popover.svelte';
   import DocumentExchangePreviewModal from '../exchange/DocumentExchangePreviewModal.svelte';
+  import RejectReasonPrompt from '../dashboard/RejectReasonPrompt.svelte';
   import AttachmentGrid from './AttachmentGrid.svelte';
   import { attachmentViewStore } from '../../stores/attachmentView.svelte.js';
   import DocumentDetail from './DocumentDetail.svelte';
@@ -61,8 +61,8 @@
   let previewModalNdx = $state(null);
 
   // --- Extracted documents — reject dialog state ---
+  // Reason drží sdílená RejectReasonPrompt komponenta; tady jen který doklad.
   let rejectDialogDoc = $state(null);
-  let rejectReason = $state('');
   let rejectSubmitting = $state(false);
 
   // --- Extracted documents — apply confirmation ---
@@ -88,20 +88,18 @@
 
   function openRejectDialog(doc) {
     rejectDialogDoc = doc;
-    rejectReason = '';
   }
 
   function closeRejectDialog() {
     rejectDialogDoc = null;
-    rejectReason = '';
   }
 
-  async function submitReject() {
-    if (!rejectDialogDoc || rejectReason.trim() === '' || rejectSubmitting) return;
+  async function submitReject(reason) {
+    if (!rejectDialogDoc || rejectSubmitting) return;
     rejectSubmitting = true;
     try {
       const result = await post(`/_mail/extracted-documents/${rejectDialogDoc.ndx}/reject`, {
-        reason: rejectReason.trim(),
+        reason,
       });
       if (result?.success) {
         closeRejectDialog();
@@ -451,33 +449,17 @@
       onReject={handleRejectFromModal}
     />
 
-    <!-- Reject reason dialog — sdílená Modal komponenta. -->
-    <Modal
-      title={t('viewer.detail.rejectTitle')}
+    <!-- Reject reason dialog — sdílená komponenta (Feed i ViewerDetail). -->
+    <RejectReasonPrompt
       open={rejectDialogDoc !== null}
+      submitting={rejectSubmitting}
+      title={t('viewer.detail.rejectTitle')}
+      reasonLabel={t('viewer.detail.rejectReasonLabel')}
+      placeholder={t('viewer.detail.rejectReasonPlaceholder')}
+      confirmLabel={t('viewer.detail.reject')}
+      onConfirm={submitReject}
       onClose={closeRejectDialog}
-      width="480px"
-    >
-      <label for="reject-reason" class="shpd-extracted__field-label">{t('viewer.detail.rejectReasonLabel')}</label>
-      <textarea
-        id="reject-reason"
-        class="shpd-extracted__textarea"
-        bind:value={rejectReason}
-        rows="3"
-        placeholder={t('viewer.detail.rejectReasonPlaceholder')}
-      ></textarea>
-
-      {#snippet footer()}
-        <Button label={t('common.cancel')} variant="secondary" size="sm" onclick={closeRejectDialog} />
-        <Button
-          label={rejectSubmitting ? t('common.saving') : t('viewer.detail.reject')}
-          variant="danger"
-          size="sm"
-          disabled={rejectSubmitting || rejectReason.trim() === ''}
-          onclick={submitReject}
-        />
-      {/snippet}
-    </Modal>
+    />
   {:else}
     <div class="shpd-detail__empty">
       {t('viewer.detail.empty')}
@@ -924,25 +906,9 @@
      Teď používáme <Button variant="success|danger|secondary"> komponentu,
      která čerpá z brand palety v variables.css. */
 
-  .shpd-extracted__field-label {
-    display: block;
-    margin-bottom: 6px;
-    font-size: var(--shpd-font-size-sm);
-    color: var(--shpd-color-text);
-  }
-
-  .shpd-extracted__textarea {
-    width: 100%;
-    box-sizing: border-box;
-    padding: 6px;
-    border: 1px solid var(--shpd-color-border);
-    border-radius: var(--shpd-radius-sm);
-    font-family: inherit;
-    font-size: var(--shpd-font-size-sm);
-  }
-
-  /* Modální shell (overlay, header, body, footer) je ve sdílené Modal komponentě
-     (../ui/Modal.svelte). Tady jsou jen styly form polí uvnitř modálu. */
+  /* Reject-reason form pole se přesunula do sdílené RejectReasonPrompt
+     komponenty (../dashboard/RejectReasonPrompt.svelte). Modální shell je ve
+     sdílené Modal komponentě (../ui/Modal.svelte). */
 
   /* Attachments content — přílohy zdrojových zpráv (read-only grid),
      seskupené per zpráva. Vizuálně sladěno s AttachmentPanel kartami. */

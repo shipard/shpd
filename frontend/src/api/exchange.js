@@ -73,6 +73,30 @@ export async function rejectExtractedDocument(extractedNdx, reason) {
 }
 
 /**
+ * Undo an apply — trashes the created draft and returns the extracted document
+ * to pending_review. Dashboard feed „Vrátit". Backend guards: applied (40) with
+ * an untouched draft target (docState=10), else 409.
+ *
+ * @param {number} extractedNdx
+ * @returns {Promise<{success: boolean, data?: {ndx: number, status: number, messageNdx: number, trashedDocId: number}, error?: object}>}
+ */
+export async function unapplyExtractedDocument(extractedNdx) {
+  return await post(`/_mail/extracted-documents/${extractedNdx}/unapply`, {});
+}
+
+/**
+ * Re-run AI analysis for a message (dashboard feed urgent card „Znovu
+ * analyzovat"). Supersedes pending extracted docs and re-queues the message.
+ *
+ * @param {number} messageNdx
+ * @param {number|null} [profileOverrideNdx]  Optional AI profile override.
+ */
+export async function reanalyzeMessage(messageNdx, profileOverrideNdx = null) {
+  const body = profileOverrideNdx ? { profile_override_ndx: profileOverrideNdx } : {};
+  return await post(`/_mail/messages/${messageNdx}/reanalyze`, body);
+}
+
+/**
  * Build a download URL for an attachment. With `inline=true` the URL
  * carries `?inline=1` so the browser renders the file inline (PDF embed
  * / image preview). The backend allowlist limits inline to PDF and

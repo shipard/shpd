@@ -5,18 +5,23 @@
 
   let { summary } = $props();
 
-  // Skládáme části jen pro nenulové počty — pak join čárkou. Pokud je
-  // vše nulové, vrátíme univerzální empty text (viz `dashboard.aiSummary.empty`).
+  // Fáze 2b naplní `summary.aiText` generovaným shrnutím — pokud je, zobraz ho
+  // přímo. Jinak (MVP) složíme statický text z počtů karet dle kind (plurály),
+  // jen pro nenulová pásma. Vše nulové → univerzální empty text.
   const summaryText = $derived.by(() => {
+    if (summary.aiText) {
+      return summary.aiText;
+    }
+    const counts = summary.counts ?? {};
     const parts = [];
-    if (summary.alertsCount > 0) {
-      parts.push(t('dashboard.aiSummary.alerts', { count: summary.alertsCount }));
+    if (counts.urgent > 0) {
+      parts.push(t('dashboard.aiSummary.counts.urgent', { count: counts.urgent }));
     }
-    if (summary.incomingMailCount > 0) {
-      parts.push(t('dashboard.aiSummary.mail', { count: summary.incomingMailCount }));
+    if (counts.review > 0) {
+      parts.push(t('dashboard.aiSummary.counts.review', { count: counts.review }));
     }
-    if (summary.tasksCount > 0) {
-      parts.push(t('dashboard.aiSummary.tasks', { count: summary.tasksCount }));
+    if (counts.ready > 0) {
+      parts.push(t('dashboard.aiSummary.counts.ready', { count: counts.ready }));
     }
     if (parts.length === 0) {
       return t('dashboard.aiSummary.empty');

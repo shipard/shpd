@@ -72,6 +72,7 @@ class AiExtractedDocumentApplyTest extends IntegrationTestCase
             $this->db, $this->dsConfig, $this->realDsPath, $this->tables, $documentRegistry,
             new SchemaValidator(SchemaLoader::default()),
             $applier,
+            $this->configRuntime,
         );
 
         $this->ensureOwnCompany();
@@ -338,5 +339,88 @@ class AiExtractedDocumentApplyTest extends IntegrationTestCase
         $resp = $this->controller->applyExtracted($this->authed(), $this->request(), $extractedNdx);
         $this->assertSame(422, $this->statusOf($resp));
         $this->assertSame('AI_OUTPUT_INVALID', $resp->getPayload()['error']['code']);
+    }
+
+    // ── unapply (undo) round-trip ────────────────────────────────────────────
+
+    /** Zaeviduje partner/item vytvořené apply-em pro úklid v tearDown. */
+    private function trackCreatedFromDoc(int $savedDocId): void
+    {
+        $this->createdDocIds[] = $savedDocId;
+        $head = $this->db->fetchRow('SELECT partner FROM docs_core_heads WHERE id = %i', $savedDocId);
+        if ($head !== null) {
+            $this->createdPersonIds[] = (int) $head['partner'];
+        }
+        foreach ($this->db->fetchAll('SELECT item FROM docs_core_rows WHERE doc_head = %i', $savedDocId) as $r) {
+            $this->createdItemIds[] = (int) $r['item'];
+        }
+    }
+
+    public function testUnapplyRoundTripTrashesDocAndRestoresExtracted(): void
+    {
+        $suffix = (string) uniqid();
+        $extractedNdx = $this->provisionExtractedDocument($this->buildCanonical($suffix));
+
+        $apply = $this->controller->applyExtracted($this->authed(), $this->request(), $extractedNdx);
+        $this->assertSame(200, $this->statusOf($apply), 'apply: ' . json_encode($apply->getPayload()));
+        $savedDocId = (int) $apply->getPayload()['data']['savedDocId'];
+        $this->trackCreatedFromDoc($savedDocId);
+
+        // Apply posunul zprávu na 40 (jediný pending child vyřešen).
+        $this->assertSame(40, (int) $this->db->fetchRow(
+            'SELECT docState FROM core_mail_incoming_messages WHERE id = %i', $this->messageRowId,
+        )['docState']);
+
+        $undo = $this->controller->unapplyExtracted($this->authed(), $this->request(), $extractedNdx);
+        $this->assertSame(200, $this->statusOf($undo), 'unapply: ' . json_encode($undo->getPayload()));
+        $undoData = $undo->getPayload()['data'];
+        $this->assertSame($savedDocId, (int) $undoData['trashedDocId']);
+        $this->assertSame(ExtractedDocumentDocument::STATUS_PENDING_REVIEW, (int) $undoData['status']);
+
+        // Doklad → Koš (90), ne hard-delete.
+        $this->assertSame(90, (int) $this->db->fetchRow(
+            'SELECT docState FROM docs_core_heads WHERE id = %i', $savedDocId,
+        )['docState']);
+
+        // Extracted → pending_review, target/applied_* vynulované.
+        $extracted = $this->db->fetchRow('SELECT * FROM core_mail_extracted_documents WHERE id = %i', $extractedNdx);
+        $this->assertSame(ExtractedDocumentDocument::STATUS_PENDING_REVIEW, (int) $extracted['status']);
+        $this->assertNull($extracted['target_row_ndx']);
+        $this->assertNull($extracted['applied_at']);
+        $this->assertNull($extracted['applied_by']);
+
+        // Zpráva zpět na 30 (Analyzovaná) — reverzní reconcile.
+        $this->assertSame(30, (int) $this->db->fetchRow(
+            'SELECT docState FROM core_mail_incoming_messages WHERE id = %i', $this->messageRowId,
+        )['docState']);
+    }
+
+    public function testUnapplyRejectsNonApplied(): void
+    {
+        $suffix = (string) uniqid();
+        $extractedNdx = $this->provisionExtractedDocument($this->buildCanonical($suffix)); // status 20
+
+        $resp = $this->controller->unapplyExtracted($this->authed(), $this->request(), $extractedNdx);
+        $this->assertSame(409, $this->statusOf($resp));
+        $this->assertSame('INVALID_STATE', $resp->getPayload()['error']['code']);
+    }
+
+    public function testUnapplyRejectsAdvancedDocument(): void
+    {
+        $suffix = (string) uniqid();
+        $extractedNdx = $this->provisionExtractedDocument($this->buildCanonical($suffix));
+
+        $apply = $this->controller->applyExtracted($this->authed(), $this->request(), $extractedNdx);
+        $savedDocId = (int) $apply->getPayload()['data']['savedDocId'];
+        $this->trackCreatedFromDoc($savedDocId);
+
+        // Doklad posunut z Konceptu dál (10→20) → unapply musí odmítnout.
+        $this->db->getDibiConnection()->query(
+            'UPDATE docs_core_heads SET docState = 20 WHERE id = %i', $savedDocId,
+        );
+
+        $resp = $this->controller->unapplyExtracted($this->authed(), $this->request(), $extractedNdx);
+        $this->assertSame(409, $this->statusOf($resp));
+        $this->assertSame('DOC_ADVANCED', $resp->getPayload()['error']['code']);
     }
 }

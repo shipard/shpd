@@ -49,6 +49,7 @@ class ExtractedDocumentDocument extends Document
     private const EXTRACTED_TABLE = 'core_mail_extracted_documents';
     private const DOC_STATE_ANALYZED = 30;
     private const DOC_STATE_PROCESSED = 40;
+    private const DOC_STATE_MAIN_ANALYZED = 3;
     private const DOC_STATE_MAIN_PROCESSED = 4;
 
     public function validate(array &$data): ValidationResult
@@ -179,6 +180,53 @@ class ExtractedDocumentDocument extends Document
         $this->db->update(self::MESSAGES_TABLE, [
             'docState' => self::DOC_STATE_PROCESSED,
             'docStateMain' => self::DOC_STATE_MAIN_PROCESSED,
+            'modified' => $now,
+        ])->where('%n = %i', 'id', $messageId)->execute();
+    }
+
+    /**
+     * Reverzní reconcile pro unapply — zrcadlí {@see maybeTransitionMessage}.
+     * Když je zpráva `docState=40` (Zpracovaná) a některý sourozenec se právě
+     * vrátil do pending statusu (unapply vrátil applied doklad na 20), přepne
+     * zprávu zpět na `docState=30` (Analyzovaná). Volá se v rámci téže
+     * transakce jako save vráceného extracted dokladu.
+     */
+    public function reconcileMessageAfterUnapply(int $messageId): void
+    {
+        if ($this->db === null) {
+            return;
+        }
+        if (!$this->messageIsProcessed($messageId)) {
+            return;
+        }
+        if ($this->countPendingSiblings($messageId) === 0) {
+            return;
+        }
+        $this->markMessageAnalyzed($messageId);
+    }
+
+    protected function messageIsProcessed(int $messageId): bool
+    {
+        $row = $this->db->fetch(
+            'SELECT %n FROM %n WHERE %n = %i',
+            'docState',
+            self::MESSAGES_TABLE,
+            'id',
+            $messageId,
+        );
+
+        if ($row === null) {
+            return false;
+        }
+        return (int) ((array) $row)['docState'] === self::DOC_STATE_PROCESSED;
+    }
+
+    protected function markMessageAnalyzed(int $messageId): void
+    {
+        $now = date('Y-m-d H:i:s');
+        $this->db->update(self::MESSAGES_TABLE, [
+            'docState' => self::DOC_STATE_ANALYZED,
+            'docStateMain' => self::DOC_STATE_MAIN_ANALYZED,
             'modified' => $now,
         ])->where('%n = %i', 'id', $messageId)->execute();
     }

@@ -586,7 +586,7 @@ function dispatchAnalysis(
 
 	$ctrl = new AnalysisController(
 		$db, $resolved->config, $dsPath, $tables, $documentRegistry,
-		$schemaValidator, $applier,
+		$schemaValidator, $applier, $configRuntime, $documentEventDispatcher,
 	);
 	return match ($route->action) {
 		'queue'             => $ctrl->queue($auth, $request),
@@ -597,6 +597,7 @@ function dispatchAnalysis(
 		'failed'            => $ctrl->failed($auth, $request, (int) $route->id),
 		'reanalyze'         => $ctrl->reanalyze($auth, $request, (int) $route->id),
 		'applyExtracted'    => $ctrl->applyExtracted($auth, $request, (int) $route->id),
+		'unapplyExtracted'  => $ctrl->unapplyExtracted($auth, $request, (int) $route->id),
 		'rejectExtracted'   => $ctrl->rejectExtracted($auth, $request, (int) $route->id),
 		'previewExtracted'  => $ctrl->previewExtracted($auth, $request, (int) $route->id),
 		default             => Response::error('INTERNAL_ERROR', "Unknown analysis action: {$route->action}", 500),

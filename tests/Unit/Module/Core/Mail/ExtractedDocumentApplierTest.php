@@ -6,6 +6,8 @@ namespace Shipard\Tests\Unit\Module\Core\Mail;
 
 use PHPUnit\Framework\TestCase;
 use Shipard\Core\Database\DataSourceConnection;
+use Shipard\Core\Document\DocumentResult;
+use Shipard\Core\Document\TableGateway;
 use Shipard\Module\Core\Exchange\Common\ApplyResult;
 use Shipard\Module\Core\Exchange\Document\DocumentApplier;
 use Shipard\Module\Core\Mail\ExtractedDocumentApplier;
@@ -216,6 +218,120 @@ class ExtractedDocumentApplierTest extends TestCase
         $this->service($db, $applier)->apply(1, 7, ['supplier' => 'useExisting:42']);
         $this->assertSame('strict', $captured['applyOptions']['autoCreateMode']);
         $this->assertSame('useExisting:42', $captured['_resolve']['supplier']['userAction']);
+    }
+
+    // ── unapply() guard branches ────────────────────────────────────────────
+    //
+    // Happy round-trip (trash + extracted→20 + zpráva→30) potřebuje reálné dibi
+    // (writeUnapplyTransition) → pokryto v Integration/AiExtractedDocumentApplyTest.
+    // Tady čistě guard cesty, které se vrací před writeUnapplyTransition.
+
+    public function testUnapplyNotFound(): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturn(null);
+        $gw = $this->createMock(TableGateway::class);
+        $gw->expects($this->never())->method('loadDocument');
+
+        $outcome = ExtractedDocumentApplier::unapply($db, 999, 7, $gw);
+        $this->assertFalse($outcome->ok);
+        $this->assertSame('NOT_FOUND', $outcome->errorCode);
+        $this->assertSame(404, $outcome->statusCode);
+    }
+
+    public function testUnapplyRejectsNonApplied(): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturn([
+            'id' => 1, 'status' => 20, 'message' => 100, 'target_row_ndx' => null,
+        ]);
+        $gw = $this->createMock(TableGateway::class);
+        $gw->expects($this->never())->method('loadDocument');
+
+        $outcome = ExtractedDocumentApplier::unapply($db, 1, 7, $gw);
+        $this->assertFalse($outcome->ok);
+        $this->assertSame('INVALID_STATE', $outcome->errorCode);
+        $this->assertSame(409, $outcome->statusCode);
+    }
+
+    public function testUnapplyRejectsAppliedWithoutTarget(): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturn([
+            'id' => 1, 'status' => 40, 'message' => 100, 'target_row_ndx' => 0,
+        ]);
+        $gw = $this->createMock(TableGateway::class);
+        $gw->expects($this->never())->method('loadDocument');
+
+        $outcome = ExtractedDocumentApplier::unapply($db, 1, 7, $gw);
+        $this->assertFalse($outcome->ok);
+        $this->assertSame('INVALID_STATE', $outcome->errorCode);
+    }
+
+    public function testUnapplyRejectsWhenTargetDocMissing(): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturn([
+            'id' => 1, 'status' => 40, 'message' => 100, 'target_row_ndx' => 555,
+        ]);
+        $gw = $this->createMock(TableGateway::class);
+        $gw->method('loadDocument')->willReturn(null);
+        $gw->expects($this->never())->method('saveDocument');
+
+        $outcome = ExtractedDocumentApplier::unapply($db, 1, 7, $gw);
+        $this->assertFalse($outcome->ok);
+        $this->assertSame('DOC_ADVANCED', $outcome->errorCode);
+        $this->assertSame(409, $outcome->statusCode);
+    }
+
+    public function testUnapplyRejectsWhenTargetDocAdvancedBeyondDraft(): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturn([
+            'id' => 1, 'status' => 40, 'message' => 100, 'target_row_ndx' => 555,
+        ]);
+        $gw = $this->createMock(TableGateway::class);
+        $gw->method('loadDocument')->willReturn(['id' => 555, 'docState' => 20]); // Confirmed
+        $gw->expects($this->never())->method('saveDocument');
+
+        $outcome = ExtractedDocumentApplier::unapply($db, 1, 7, $gw);
+        $this->assertFalse($outcome->ok);
+        $this->assertSame('DOC_ADVANCED', $outcome->errorCode);
+    }
+
+    public function testUnapplyTrashesTargetWithDocState90(): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturn([
+            'id' => 1, 'status' => 40, 'message' => 100, 'target_row_ndx' => 555,
+        ]);
+
+        $captured = null;
+        $gw = $this->createMock(TableGateway::class);
+        $gw->method('loadDocument')->willReturn(['id' => 555, 'docState' => 10]);
+        $gw->method('saveDocument')->willReturnCallback(function (array $doc) use (&$captured): DocumentResult {
+            $captured = $doc;
+            return DocumentResult::ok($doc);
+        });
+
+        // writeUnapplyTransition pak selže na mock dibi (getDibiConnection),
+        // takže výsledek je INTERNAL_ERROR — ale trash krok proběhl a to ověřujeme.
+        ExtractedDocumentApplier::unapply($db, 1, 7, $gw);
+
+        $this->assertNotNull($captured);
+        $this->assertSame(90, $captured['docState']);
+        $this->assertSame(5, $captured['docStateMain']);
+    }
+
+    public function testWriteUnapplyTransitionRejectsNonApplied(): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturn(['id' => 1, 'status' => 20, 'message' => 100]);
+
+        $result = ExtractedDocumentApplier::writeUnapplyTransition($db, 1);
+        $this->assertFalse($result->ok);
+        $this->assertSame('INVALID_STATE', $result->errorCode);
+        $this->assertSame(409, $result->statusCode);
     }
 
     // ── expand / merge helpers (moved from AnalysisController) ───────────────

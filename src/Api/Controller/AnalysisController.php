@@ -7,10 +7,13 @@ namespace Shipard\Api\Controller;
 use Shipard\Api\AuthContext;
 use Shipard\Api\Request;
 use Shipard\Api\Response;
+use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Database\TableDefinition;
+use Shipard\Core\Document\DocumentEventDispatcher;
 use Shipard\Core\Document\DocumentRegistry;
+use Shipard\Core\Document\TableGateway;
 use Shipard\Core\Logging\ErrorLogger;
 use Shipard\Core\Security\DsSecretCipher;
 use Shipard\Core\Security\Exception\InvalidCiphertextException;
@@ -46,6 +49,7 @@ class AnalysisController
     private const PROFILES_TABLE = 'core_mail_ai_profiles';
     private const CLAIMS_TABLE = 'core_mail_analysis_claims';
     private const ATTACHMENTS_TABLE = 'core_attachments_files';
+    private const HEADS_TABLE = 'docs_core_heads';
 
     private const DOC_STATE_NEW = 10;
     private const DOC_STATE_NEW_MAIN = 1;
@@ -78,6 +82,8 @@ class AnalysisController
         private readonly DocumentRegistry $documentRegistry,
         private readonly ?SchemaValidator $schemaValidator = null,
         private readonly ?DocumentApplier $applier = null,
+        private readonly ?ConfigRuntime $configRuntime = null,
+        private readonly ?DocumentEventDispatcher $eventDispatcher = null,
     ) {}
 
     // -------------------------------------------------------------------
@@ -1208,6 +1214,64 @@ class AnalysisController
             ExtractedDocumentDocument::STATUS_REJECTED, $reason,
         );
         return $this->statusWriteToResponse($write, $extractedNdx);
+    }
+
+    /**
+     * Undo apply (dashboard feed „Vrátit"): cílový Koncept do Koše, extracted
+     * zpět na pending_review. Viz {@see ExtractedDocumentApplier::unapply}.
+     */
+    public function unapplyExtracted(AuthContext $auth, Request $request, int $extractedNdx): Response
+    {
+        if (!$auth->isAuthenticated) {
+            return Response::error('UNAUTHORIZED', 'Authentication required', 401);
+        }
+
+        $headsGateway = $this->buildHeadsGateway();
+        if ($headsGateway === null) {
+            return Response::error('INTERNAL_ERROR', 'Document gateway unavailable', 500);
+        }
+
+        $outcome = ExtractedDocumentApplier::unapply(
+            $this->db, $extractedNdx, $auth->userId, $headsGateway,
+        );
+        if (!$outcome->ok) {
+            return Response::error(
+                $outcome->errorCode ?? 'INTERNAL_ERROR',
+                $outcome->errorMessage ?? 'Unapply failed',
+                $outcome->statusCode,
+            );
+        }
+
+        return Response::success([
+            'ndx'          => $outcome->extractedNdx,
+            'status'       => ExtractedDocumentDocument::STATUS_PENDING_REVIEW,
+            'messageNdx'   => $outcome->messageNdx,
+            'trashedDocId' => (int) ($outcome->savedDocId ?? 0),
+        ]);
+    }
+
+    /**
+     * Postaví TableGateway nad `docs_core_heads` pro přesun cílového dokladu do
+     * Koše přes Document flow (paralela k
+     * `FormController::applyStateTransitionViaDocument`). Vrací null, když
+     * definice tabulky chybí (modul docs vypnutý).
+     */
+    private function buildHeadsGateway(): ?TableGateway
+    {
+        $def = $this->tables[self::HEADS_TABLE] ?? null;
+        if ($def === null) {
+            return null;
+        }
+        return new TableGateway(
+            self::HEADS_TABLE,
+            $this->db->getDibiConnection(),
+            $this->documentRegistry,
+            $def->childTables,
+            $this->configRuntime,
+            $this->config,
+            $this->eventDispatcher,
+            $def->docStates,
+        );
     }
 
     /**

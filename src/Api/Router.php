@@ -386,7 +386,7 @@ class Router
 	private function resolveExtractedDocumentsRoute(string $subpath, string $method): Route|Response
 	{
 		$rest = substr($subpath, strlen('/_mail/extracted-documents/'));
-		if (preg_match('#^(\d+)/(apply|reject|preview)$#', $rest, $m)) {
+		if (preg_match('#^(\d+)/(apply|unapply|reject|preview)$#', $rest, $m)) {
 			$ndx = (int) $m[1];
 			$action = $m[2];
 			if ($ndx <= 0) {
@@ -397,6 +397,7 @@ class Router
 			}
 			$controllerAction = match ($action) {
 				'apply'   => 'applyExtracted',
+				'unapply' => 'unapplyExtracted',
 				'reject'  => 'rejectExtracted',
 				'preview' => 'previewExtracted',
 			};

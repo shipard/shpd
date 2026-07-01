@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Shipard\Module\Core\Mail;
 
 use Shipard\Core\Database\DataSourceConnection;
+use Shipard\Core\Document\TableGateway;
 use Shipard\Core\Logging\ErrorLogger;
 use Shipard\Module\Core\Exchange\Document\DocumentApplier;
 
@@ -28,6 +29,13 @@ final class ExtractedDocumentApplier
         ExtractedDocumentDocument::STATUS_PENDING_REVIEW,
         ExtractedDocumentDocument::STATUS_LOW_CONFIDENCE,
     ];
+
+    private const HEADS_TABLE = 'docs_core_heads';
+
+    /** Doc-state cíle apply (docs.core.docStates): Koncept / Koš. */
+    private const DOC_STATE_DRAFT = 10;
+    private const DOC_STATE_TRASH = 90;
+    private const DOC_STATE_TRASH_MAIN = 5;
 
     public function __construct(
         private readonly DataSourceConnection $db,
@@ -182,6 +190,173 @@ final class ExtractedDocumentApplier
             );
         }
         return ExtractedApplyOutcome::ok($extractedNdx, $messageNdx, $savedDocId, null, recovered: true);
+    }
+
+    /**
+     * Vrátí aplikovaný extracted doklad (undo apply): cílový Koncept přesune do
+     * Koše a extracted vrátí na `pending_review`. Vratná operace, nikdy tvrdě
+     * nemaže doklad.
+     *
+     * Guard (dle `docs/dashboard.md`):
+     *   - extracted musí být `applied` (40) s `target_row_ndx > 0`, jinak 409
+     *     `INVALID_STATE`;
+     *   - cílový doklad musí být **stále nedotčený Koncept** (`docState=10`),
+     *     jinak 409 `DOC_ADVANCED` (uživatel řeší ručně).
+     *
+     * Doklad → Koš (`docState=90`) přes Document flow (`saveDocument`), extracted
+     * → 20 + vynulování `target_row_ndx`/`applied_*` a zpráva 40→30 přes reverzní
+     * reconcile ({@see writeUnapplyTransition}). Zrcadlí neatomicitu apply:
+     * doc-save a status-write jsou dvě transakce; při selhání druhé je doklad
+     * už v koši (vratné ručně) a chyba se reportuje.
+     *
+     * `$headsGateway` je předaný zvenčí (controller ho staví se všemi
+     * závislostmi jako `FormController::applyStateTransitionViaDocument`), takže
+     * unapply nezávisí na `DocumentApplier` — proto static.
+     */
+    public static function unapply(
+        DataSourceConnection $db,
+        int $extractedNdx,
+        ?int $userId,
+        TableGateway $headsGateway,
+    ): ExtractedApplyOutcome {
+        $existing = $db->fetchRow(
+            'SELECT * FROM %n WHERE id = %i',
+            self::EXTRACTED_TABLE, $extractedNdx,
+        );
+        if ($existing === null) {
+            return ExtractedApplyOutcome::error(
+                $extractedNdx, 0, 'NOT_FOUND',
+                "Extracted document {$extractedNdx} not found", 404,
+            );
+        }
+
+        $messageNdx = (int) ($existing['message'] ?? 0);
+
+        if ((int) $existing['status'] !== ExtractedDocumentDocument::STATUS_APPLIED) {
+            return ExtractedApplyOutcome::error(
+                $extractedNdx, $messageNdx, 'INVALID_STATE',
+                'Extracted document is not applied (status 40)', 409,
+            );
+        }
+        $targetDocId = isset($existing['target_row_ndx']) ? (int) $existing['target_row_ndx'] : 0;
+        if ($targetDocId <= 0) {
+            return ExtractedApplyOutcome::error(
+                $extractedNdx, $messageNdx, 'INVALID_STATE',
+                'Applied document has no target record', 409,
+            );
+        }
+
+        // Cíl musí být stále nedotčený Koncept — jinak řeší uživatel ručně.
+        $doc = $headsGateway->loadDocument($targetDocId);
+        if ($doc === null) {
+            return ExtractedApplyOutcome::error(
+                $extractedNdx, $messageNdx, 'DOC_ADVANCED',
+                'Target document no longer exists', 409,
+            );
+        }
+        if ((int) ($doc['docState'] ?? 0) !== self::DOC_STATE_DRAFT) {
+            return ExtractedApplyOutcome::error(
+                $extractedNdx, $messageNdx, 'DOC_ADVANCED',
+                'Target document is no longer an untouched draft', 409,
+            );
+        }
+
+        // 1. Doklad → Koš (soft-delete, vratné). Koncept nespotřeboval číslo
+        //    (přiděluje se až 10→20), takže není co vracet.
+        $doc['docState']     = self::DOC_STATE_TRASH;
+        $doc['docStateMain'] = self::DOC_STATE_TRASH_MAIN;
+        $result = $headsGateway->saveDocument($doc);
+        if (!$result->isSuccess()) {
+            return ExtractedApplyOutcome::error(
+                $extractedNdx, $messageNdx, 'INTERNAL_ERROR',
+                $result->getErrorMessage() ?? 'Failed to trash target document', 500,
+            );
+        }
+
+        // 2. Extracted → pending_review, vynulovat target/applied_*, zpráva 40→30.
+        $write = self::writeUnapplyTransition($db, $extractedNdx);
+        if (!$write->ok) {
+            ErrorLogger::warn('ExtractedDocumentApplier::unapply status update failed after trashing doc', [
+                'extractedNdx' => $extractedNdx,
+                'targetDocId'  => $targetDocId,
+            ]);
+            return ExtractedApplyOutcome::error(
+                $extractedNdx, $messageNdx,
+                $write->errorCode ?? 'INTERNAL_ERROR',
+                $write->errorMessage, $write->statusCode,
+            );
+        }
+
+        return ExtractedApplyOutcome::ok($extractedNdx, $messageNdx, $targetDocId, null);
+    }
+
+    /**
+     * Zapíše undo přechod extracted dokladu 40 → 20 (pending_review) přes
+     * Document hooky v jedné transakci: vynuluje `target_row_ndx`/`applied_*`
+     * a reverzně reconciluje zprávu (40→30, opak apply). Oddělená od
+     * {@see writeStatusTransition}, protože ta cíleně povoluje jen přechody
+     * z pending stavů (10/20/30) — unapply je jediná legitimní cesta z
+     * `applied` (40) zpět.
+     */
+    public static function writeUnapplyTransition(
+        DataSourceConnection $db,
+        int $extractedNdx,
+    ): StatusWriteResult {
+        $existing = $db->fetchRow(
+            'SELECT * FROM %n WHERE id = %i',
+            self::EXTRACTED_TABLE, $extractedNdx,
+        );
+        if ($existing === null) {
+            return StatusWriteResult::notFound();
+        }
+
+        $messageNdx = (int) ($existing['message'] ?? 0);
+        if ((int) $existing['status'] !== ExtractedDocumentDocument::STATUS_APPLIED) {
+            return StatusWriteResult::invalidState($messageNdx);
+        }
+
+        $dibi = $db->getDibiConnection();
+        $doc = new ExtractedDocumentDocument();
+        $doc->setDb($dibi);
+
+        $data = $existing;
+        $data['status']         = ExtractedDocumentDocument::STATUS_PENDING_REVIEW;
+        $data['target_row_ndx'] = null;
+        $data['applied_at']     = null;
+        $data['applied_by']     = null;
+
+        $validation = $doc->validate($data);
+        if (!$validation->isValid()) {
+            $errors = array_map(
+                static fn($e) => ['field' => $e->column, 'message' => $e->message, 'code' => $e->code],
+                $validation->getErrors(),
+            );
+            return StatusWriteResult::validationFailed($errors, $messageNdx);
+        }
+
+        $dibi->begin();
+        try {
+            $doc->beforeSave($data);
+
+            $writableData = $data;
+            unset($writableData['id']);
+            $dibi->update(self::EXTRACTED_TABLE, $writableData)
+                ->where('id = %i', $extractedNdx)
+                ->execute();
+
+            // Reverzní reconcile zprávy (40→30) uvnitř transakce.
+            $doc->reconcileMessageAfterUnapply($messageNdx);
+
+            $dibi->commit();
+        } catch (\Throwable $e) {
+            $dibi->rollback();
+            ErrorLogger::warn('ExtractedDocumentApplier::writeUnapplyTransition failed', [
+                'error' => $e->getMessage(),
+            ]);
+            return StatusWriteResult::internalError($messageNdx);
+        }
+
+        return StatusWriteResult::ok($messageNdx, ExtractedDocumentDocument::STATUS_PENDING_REVIEW);
     }
 
     /**

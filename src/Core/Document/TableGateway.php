@@ -18,6 +18,7 @@ class TableGateway
         private ?ConfigRuntime $config = null,
         private ?DataSourceConfig $dsConfig = null,
         private ?DocumentEventDispatcher $eventDispatcher = null,
+        private ?DocStatesDefinition $docStates = null,
     ) {}
 
     private function injectDocServices(Document $doc): void
@@ -73,6 +74,17 @@ class TableGateway
         }
 
         $doc->beforeSave($data, $originalData);
+
+        // Odvození docStateMain z cfgItemu — jediné místo pravdy pro všechny
+        // zápisové cesty přes Document/Gateway (import Applier i FormController).
+        if ($this->docStates !== null && $this->config !== null) {
+            $stateCol = $this->docStates->stateColumn;
+            $mainCol  = $this->docStates->mainColumn;
+            if (array_key_exists($stateCol, $data) && $data[$stateCol] !== null) {
+                $cfg = DocStateConfig::fromCfgItem($this->config->cfgItem($this->docStates->cfgItem));
+                $data[$mainCol] = $cfg->getMainState((int) $data[$stateCol]);
+            }
+        }
 
         try {
             $this->beginTransaction();

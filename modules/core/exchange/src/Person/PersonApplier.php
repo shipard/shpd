@@ -108,6 +108,7 @@ class PersonApplier
         $childTables = $tables[$tableName]?->childTables ?? [];
         return new TransactionlessTableGateway(
             $tableName, $db, $registry, $childTables, $config, $dsConfig,
+            docStates: $tables[$tableName]?->docStates,
         );
     }
 

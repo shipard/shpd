@@ -73,6 +73,7 @@ final class StatementImportService
             $config,
             $dsConfig,
             $eventDispatcher,
+            $tables[self::TABLE_TX]?->docStates,
         );
         return new self($db, $config, $attachments, $txGateway);
     }

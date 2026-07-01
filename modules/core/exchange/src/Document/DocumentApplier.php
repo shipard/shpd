@@ -179,6 +179,7 @@ class DocumentApplier
             $config,
             $dsConfig,
             $eventDispatcher,
+            $tables[$tableName]?->docStates,
         );
     }
 

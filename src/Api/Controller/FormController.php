@@ -223,6 +223,7 @@ class FormController
             $config,
             $dsConfig,
             $eventDispatcher,
+            $def->docStates,
         );
         $result   = $gateway->saveDocument($inputData);
 
@@ -532,6 +533,7 @@ class FormController
             $config,
             $dsConfig,
             $eventDispatcher,
+            $def->docStates,
         );
 
         $existing = $gateway->loadDocument($id);

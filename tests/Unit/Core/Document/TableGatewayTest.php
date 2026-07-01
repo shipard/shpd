@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Shipard\Tests\Unit\Core\Document;
 
 use PHPUnit\Framework\TestCase;
+use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Document\DefaultDocument;
 use Shipard\Core\Document\Document;
+use Shipard\Core\Document\DocStatesDefinition;
 use Shipard\Core\Document\DocumentRegistry;
 use Shipard\Core\Document\DocumentResult;
 use Shipard\Core\Document\TableGateway;
@@ -234,6 +236,75 @@ class TableGatewayTest extends TestCase
         $this->assertFalse($result->getValidation()->isValid());
         $this->assertEmpty($gw->insertCalls);
         $this->assertSame(0, $gw->beginCount);
+    }
+
+    // --- saveDocument — docStateMain dopočet ---------------------------------
+
+    /**
+     * @param array<string, array{mainState:int}> $states
+     */
+    private function makeGatewayWithDocStates(
+        Document $doc,
+        ?DocStatesDefinition $docStates,
+        array $states = [],
+    ): TestableTableGateway {
+        $config = $this->createMock(ConfigRuntime::class);
+        $config->method('cfgItem')->willReturn($states);
+
+        return new TestableTableGateway(
+            'heads',
+            $this->makeDb(),
+            new SingletonRegistry($doc),
+            null,
+            $config,
+            null,
+            null,
+            $docStates,
+        );
+    }
+
+    public function testSaveDocumentDerivesDocStateMainOnInsert(): void
+    {
+        $gw = $this->makeGatewayWithDocStates(
+            new DefaultDocument(),
+            new DocStatesDefinition('docState', 'docStateMain', 'core.system.docStatesArchive'),
+            ['10' => ['mainState' => 1], '40' => ['mainState' => 3]],
+        );
+
+        $result = $gw->saveDocument(['title' => 'Invoice', 'docState' => 40]);
+
+        $this->assertTrue($result->isSuccess());
+        $this->assertCount(1, $gw->insertCalls);
+        $this->assertSame(3, $gw->insertCalls[0]['data']['docStateMain']);
+        $this->assertSame(3, $result->getData()['docStateMain']);
+    }
+
+    public function testSaveDocumentRecomputesDocStateMainOnUpdate(): void
+    {
+        $gw = $this->makeGatewayWithDocStates(
+            new DefaultDocument(),
+            new DocStatesDefinition('docState', 'docStateMain', 'core.system.docStatesArchive'),
+            ['20' => ['mainState' => 2], '40' => ['mainState' => 4]],
+        );
+        // Plný řádek z DB má zastaralý docStateMain (např. default 1) —
+        // recompute z docState musí být idempotentní a přepsat ho.
+        $gw->storedRows[5] = ['id' => 5, 'title' => 'Invoice', 'docState' => 20, 'docStateMain' => 1];
+
+        $result = $gw->saveDocument(['id' => 5, 'title' => 'Invoice', 'docState' => 20, 'docStateMain' => 1]);
+
+        $this->assertTrue($result->isSuccess());
+        $this->assertCount(1, $gw->updateCalls);
+        $this->assertSame(2, $gw->updateCalls[0]['data']['docStateMain']);
+    }
+
+    public function testSaveDocumentSkipsDocStateMainWithoutDocStatesDefinition(): void
+    {
+        $gw = $this->makeGatewayWithDocStates(new DefaultDocument(), null, []);
+
+        $result = $gw->saveDocument(['title' => 'Invoice', 'docState' => 40]);
+
+        $this->assertTrue($result->isSuccess());
+        $this->assertArrayNotHasKey('docStateMain', $gw->insertCalls[0]['data']);
     }
 
     // --- saveDocument — with child rows -------------------------------------

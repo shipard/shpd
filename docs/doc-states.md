@@ -279,6 +279,16 @@ Při každém `create`/`update`/`patch`:
   - Je-li v těle `docState`: ověří `goto`, nastaví `docStateMain` → `422 INVALID_STATE_TRANSITION` jinak
 - Pokud `ConfigRuntime` není k dispozici (config ještě není zkompilovaný), celá doc state logika se přeskočí — degraduje gracefully
 
+### `TableGateway` — persistenční dopočet `docStateMain`
+
+Dopočet `docStateMain` je centralizovaný v persistenční vrstvě: `TableGateway::saveDocument()` po `Document::beforeSave()` odvodí `docStateMain` z cfgItemu (`DocStateConfig::getMainState()`), kdykoli má tabulka `docStates` a payload obsahuje stavový sloupec s nenull hodnotou. To je **jediné místo pravdy** pro `docStateMain` — platí pro každou zápisovou cestu přes Document/Gateway, tedy i pro importní exchange Appliery (`PersonApplier`, `DocumentApplier`, `ItemApplier`) a `StatementImportService`.
+
+`TableGateway` dostává `DocStatesDefinition` konstruktorem; volající ji předává z `TableDefinition->docStates`. Bez `docStates` nebo bez `ConfigRuntime` se dopočet tiše přeskočí (stejná degradace jako v `CrudController`).
+
+Dopočet je idempotentní — na update z plného řádku (merge `existing` + patch) se `docStateMain` přepočítá ze současného `docState`, takže re-sync existujícího záznamu zároveň opraví případně nesprávnou hodnotu.
+
+Dopočet v controllerech (`CrudController::initDocState`/`processDocState`; ruční dopočty v `MailController`/`AnalysisController`/`ChatController`) zůstává jako redundantní pojistka. Přímé `$dibi->insert` cesty přes Gateway nejdou — ty si `docStateMain` řeší samy.
+
 ---
 
 ## 10. REST API — stavové přechody

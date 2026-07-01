@@ -24,7 +24,7 @@ Podrobné specifikace jsou v adresáři `docs/`. Přečti příslušný dokument
 | `docs/edit-forms-cookbook.md` | Editační formuláře — cookbook s izolovanými vzory pro psaní forem (JSONC i PHP `TableBuilder`); rychlý úvod, sekce/sloupce/inline/separator recepty, časté chyby. Pro hluboký referenční materiál viz `edit-forms.md`. |
 | `docs/operations/secrets.md` | Per-DS šifrování `encrypted_text` sloupců — `DsSecretCipher`, klíčový soubor, rotace, health check, threat model |
 | `docs/migration-guide.md` | Backup a přenos DS na jiný server — tarball, DB dump, perms, ověření |
-| `docs/dashboard.md` | Dashboard — home obrazovka, widget systém, API kontrakt, AI shrnutí |
+| `docs/dashboard.md` | Dashboard — home feed akčních karet (fáze 2), kartový kontrakt, zdroje, akce + undo, tasks widget, API kontrakt |
 | `docs/app-settings.md` | Settings pages + branding — `SettingsStore`, `settingsPages` v module.jsonc, klíče `app.*`, branding sloty, `/_app` endpointy, jak přidat další stránku |
 | `docs/accounting.md` | Účtování dokladů — rowOperations, účtovací předpis, `AccountingEngine`, deník, lifecycle (stav 40), endpoint reaccount, tab Zaúčtování + `JournalViewer` (Fáze 1–3 hotové), DPH analytiky per vatCode + reverse charge + konvence OSS |
 
@@ -177,20 +177,31 @@ Závislosti tečou shora dolů: Command → Document → Module/Config/Database 
 - API tvar odpovědi je shodný se starým prefix-groupingem → `Sidebar.svelte`
   beze změny. Detaily: `docs/frontend.md`, `docs/modules.md`.
 
-### Frontend — Dashboard
+### Frontend — Dashboard (feed, fáze 2)
 
-- Home obrazovka aplikace, výchozí po loginu (root-level leaf v sidebaru
-  s `type: 'dashboard'`, `icon: 'dashboard'`)
-- `GET /_ui/dashboard` vrací agregát alerts/mail/tasks z existujících viewerů
-  přes `selectRows()` + `renderRow()` (re-use, žádné duplikované SQL pro řádky;
-  COUNT separátně)
-- AI shrnutí karta je v MVP statická (počty z widgetů, ikona robota,
-  ICU plurály); rozhraní připravené na pozdější AI integraci
-- Klik na widget řádek volá `navigationStore.navigateToViewer(viewerId, recordId)`,
-  Viewer.svelte po loadu vyzvedne `pendingRecordId` a předvybere záznam
-- Doc-state `.docState_*` třídy jsou globální v `styles/base.css` —
-  sdílené mezi `ViewerRow` (6px proužek) a `WidgetRow` (4px proužek)
-- Modulární widget systém přes `module.jsonc` je out of scope MVP — fáze 2
+- Home obrazovka, výchozí po loginu (root-level leaf, `type: 'dashboard'`).
+  **Prioritizovaný feed akčních karet** + tasks widget pod ním (fáze 1 widget
+  mřížka nahrazena).
+- `GET /_ui/dashboard` → `{summary{aiText,counts}, cards[], tasks}`. Karty
+  agregují napevno registrované `FeedSource` zdroje (`MailSuggestionsSource`,
+  `AlertsSource` — `src/Core/Feed/` + moduly). **Řadí a stropuje server**
+  (`sortAndCap` dle `KIND_ORDER` urgent/review/ready/info + `timestamp` DESC,
+  `MAX_CARDS ~30` + „a další…" karta). `buildTasksWidget` re-use fáze 1.
+- Kartový kontrakt `{id, source, kind, icon, stateStyle, title, subtitle,
+  timestamp, context, actions[]}`. Chování akcí odvozuje frontend z `action.kind`
+  (`apply_extracted`/`review_extracted`/`reject_extracted`/`reanalyze`/
+  `open_viewer`/`open_form`). Mail akce bez `label` (FE lokalizuje dle
+  `action.id`); alert akce nesou vlastní label (passthrough).
+- **Jednoklik apply** posílá `safe` (`applyExtractedDocument(ndx)` bez
+  userActions); `unresolved_required` (422) → **fall-through** do
+  `DocumentExchangePreviewModal`. **Undo** = `POST …/unapply` (doklad do koše
+  90, extracted → 20, zpráva 40→30). Toast s „Otevřít"/„Vrátit" (app nemá toast
+  infra → lokální v `Dashboard.svelte`).
+- `RejectReasonPrompt` je sdílený (feed i `ViewerDetail`). AI shrnutí zatím
+  statické (county dle kind); `summary.aiText` naplní fáze 2b.
+- Doc-state `.docState_*` třídy globální (`styles/base.css`) — sdílené
+  `ViewerRow`/`WidgetRow`/`FeedCard`. Feed ikony (`check/question/warning/info`)
+  v `icons.js`.
 - Detaily: `docs/dashboard.md`
 
 ### Frontend — Settings mód

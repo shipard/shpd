@@ -397,6 +397,26 @@ CLI `bin/shpd-ds mail-analysis-reap` (cron 1×/min) vyčistí stale claimy:
 - UPDATE messages SET `docState=10` WHERE `id=msg AND docState=20` (manuální
   override admin má přednost).
 
+### 9.11 `POST /_mail/extracted-documents/{ndx}/unapply`
+
+UI akce „Vrátit" (dashboard feed undo). Auth: běžný uživatelský token. Vratí
+předchozí apply — viz `ExtractedDocumentApplier::unapply`. Transakčně:
+
+1. Extracted musí být `status=40` (applied) s `target_row_ndx > 0`, jinak
+   **409 `INVALID_STATE`**.
+2. Cílový doklad (`target_row_ndx`) musí být **stále nedotčený Koncept**
+   (`docState=10`), jinak **409 `DOC_ADVANCED`** (uživatel řeší ručně).
+3. Cílový doklad → **Koš** (`docState=90`, ne hard-delete — vratné) přes
+   Document flow. Koncept nespotřeboval číslo dokladu (přiděluje se až 10→20).
+4. Extracted → `status=20` (pending_review), vynulování `target_row_ndx`,
+   `applied_at`, `applied_by` (`writeUnapplyTransition` — oddělená od
+   `writeStatusTransition`, která povoluje jen pending stavy).
+5. Zpráva `docState 40→30` přes reverzní reconcile
+   (`reconcileMessageAfterUnapply`, opak apply auto-transition).
+
+Vrací `{ ndx, status, messageNdx, trashedDocId }`. Chyby: `409 INVALID_STATE` /
+`409 DOC_ADVANCED`, `404 NOT_FOUND`, `500 INTERNAL_ERROR`.
+
 ## 10. Známé limity
 
 - **Velikost message:** v Shipardu žádný tvrdý limit. Postfix v mail-routeru

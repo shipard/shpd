@@ -698,6 +698,12 @@
                                         "computed": {
                                             "$ref": "#/$defs/RowComputed"
                                         },
+                                        "description": {
+                                            "type": [
+                                                "string",
+                                                "null"
+                                            ]
+                                        },
                                         "account": {
                                             "type": [
                                                 "string",

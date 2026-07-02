@@ -56,6 +56,14 @@ class Router
 			return new Route('dashboard', 'index');
 		}
 
+		// GET /_ui/dashboard/summary — generované AI shrnutí feedu (SSE)
+		if ($subpath === '/_ui/dashboard/summary') {
+			if ($method !== 'GET') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('dashboard', 'summary');
+		}
+
 		if ($subpath === '/_ui/settings/navigation') {
 			if ($method !== 'GET') {
 				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);

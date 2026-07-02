@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace Shipard\Api\Controller;
 
 use Shipard\Api\Response;
+use Shipard\Core\Ai\Exception\LlmException;
 use Shipard\Core\Config\ConfigRuntime;
+use Shipard\Core\Dashboard\DashboardSummaryService;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Document\DocStateConfig;
 use Shipard\Core\Feed\FeedContext;
 use Shipard\Core\Feed\FeedSource;
+use Shipard\Core\Logging\ErrorLogger;
 use Shipard\Core\Viewer\ViewerRegistry;
 use Shipard\Module\Core\Alerts\Feed\AlertsSource;
 use Shipard\Module\Core\Mail\Feed\MailSuggestionsSource;
@@ -44,7 +47,74 @@ class DashboardController
         ?string $language = null,
     ): Response {
         $lang = $language ?? 'en';
-        $ctx  = new FeedContext($db, $config, $lang, self::MAX_CARDS);
+
+        [$cards, $truncated] = $this->collectCards($db, $config, $lang);
+        if ($truncated) {
+            $cards[] = $this->andMoreCard($lang);
+        }
+
+        $tasks = $this->buildTasksWidget($registry, $db, $config, $lang);
+
+        return Response::success([
+            'generatedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
+            'summary'     => ['aiText' => null, 'counts' => $this->countByKind($cards)],
+            'cards'       => $cards,
+            'tasks'       => $tasks,
+        ]);
+    }
+
+    /**
+     * GET /_ui/dashboard/summary — generované AI shrnutí feedu (SSE, fáze 2b).
+     *
+     * Sdílí `collectCards()` s `dashboard()`, takže shrnutí vzniká nad přesně
+     * týmiž kartami, jaké vidí uživatel. Události: `text {delta}` (jen při
+     * cache miss), `done {text, cached}` (`text=null` = prázdný feed nebo
+     * degradace — frontend ponechá statické county), `error {message}`.
+     * Vzor streamu: ChatController. Detaily docs/dashboard.md §AI shrnutí.
+     */
+    public function summary(
+        ViewerRegistry $registry,
+        DataSourceConnection $db,
+        DashboardSummaryService $service,
+        ?ConfigRuntime $config = null,
+        ?string $language = null,
+    ): Response {
+        $lang = $language ?? 'en';
+
+        [$cards] = $this->collectCards($db, $config, $lang);
+        $tasksCount = $this->countActiveByDocState(
+            $db, $registry, $config, 'tasks.core', 'tasks.core.docStatesTasks',
+        );
+
+        return Response::stream(
+            function () use ($service, $cards, $tasksCount, $lang): void {
+                try {
+                    $result = $service->stream($cards, $tasksCount, $lang, function (string $delta): void {
+                        $this->sse('text', ['delta' => $delta]);
+                    });
+                    $this->sse('done', ['text' => $result['text'], 'cached' => $result['cached']]);
+                } catch (LlmException $e) {
+                    $this->sse('error', ['message' => $e->getMessage()]);
+                } catch (\Throwable $e) {
+                    ErrorLogger::warn('DashboardController: summary stream failed', ['error' => $e->getMessage()]);
+                    $this->sse('error', ['message' => 'Internal error during summary']);
+                }
+            },
+            200,
+            'text/event-stream; charset=utf-8',
+        );
+    }
+
+    /**
+     * Posbírá karty ze zdrojů feedu, seřadí a stropuje (`sortAndCap`). Sdílené
+     * mezi `dashboard()` a `summary()` — obě odpovědi stojí nad týmiž kartami.
+     * Info karta „…a další" se přidává až v `dashboard()` (do shrnutí nepatří).
+     *
+     * @return array{0: list<array<string,mixed>>, 1: bool}  [karty, zda došlo k ořezu]
+     */
+    private function collectCards(DataSourceConnection $db, ?ConfigRuntime $config, string $lang): array
+    {
+        $ctx = new FeedContext($db, $config, $lang, self::MAX_CARDS);
 
         /** @var list<FeedSource> $sources — napevno registrované (D10). */
         $sources = [
@@ -59,19 +129,15 @@ class DashboardController
             }
         }
 
-        [$cards, $truncated] = $this->sortAndCap($cards, self::MAX_CARDS);
-        if ($truncated) {
-            $cards[] = $this->andMoreCard($lang);
-        }
+        return $this->sortAndCap($cards, self::MAX_CARDS);
+    }
 
-        $tasks = $this->buildTasksWidget($registry, $db, $config, $lang);
-
-        return Response::success([
-            'generatedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
-            'summary'     => ['aiText' => null, 'counts' => $this->countByKind($cards)],
-            'cards'       => $cards,
-            'tasks'       => $tasks,
-        ]);
+    /** Writes one SSE event frame and flushes it to the client. */
+    private function sse(string $event, array $data): void
+    {
+        echo "event: {$event}\n";
+        echo 'data: ' . json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n\n";
+        @flush();
     }
 
     /**

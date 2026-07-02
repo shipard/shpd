@@ -6,6 +6,13 @@ namespace Shipard\Tests\Unit\Api\Controller;
 
 use PHPUnit\Framework\TestCase;
 use Shipard\Api\Controller\DashboardController;
+use Shipard\Api\Response;
+use Shipard\Core\Ai\AiBackendResolver;
+use Shipard\Core\Ai\Exception\LlmApiException;
+use Shipard\Core\Ai\LlmChatParams;
+use Shipard\Core\Ai\LlmChatResult;
+use Shipard\Core\Ai\LlmClient;
+use Shipard\Core\Dashboard\DashboardSummaryService;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Viewer\ViewerRegistry;
 
@@ -295,5 +302,114 @@ final class DashboardControllerTest extends TestCase
         $this->assertSame('mail_more', $last['id']);
         $this->assertSame('info', $last['kind']);
         $this->assertSame('open_viewer', $last['actions'][0]['kind']);
+    }
+
+    // ── summary() — SSE AI shrnutí (fáze 2b) ─────────────────────────────────
+
+    private function runProducer(Response $response): string
+    {
+        $ref = new \ReflectionClass($response);
+        $producer = $ref->getProperty('streamProducer')->getValue($response);
+        $this->assertIsCallable($producer);
+
+        ob_start();
+        try {
+            $producer();
+        } finally {
+            $out = ob_get_clean();
+        }
+        return (string) $out;
+    }
+
+    /** DB mock: jedna mail karta ve feedu, žádná cache (fetchRow → null). */
+    private function summaryDb(): DataSourceConnection
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturn(null);
+        $db->method('fetchAll')->willReturnCallback(
+            static function (string $sql): array {
+                if (!str_contains($sql, 'extracted_documents')) {
+                    return [];
+                }
+                return [[
+                    'extracted_ndx' => 1, 'message_ndx' => 2, 'doc_type' => 'invoiceReceived',
+                    'confidence' => 0.9, 'status' => 10, 'subject' => 'Faktura',
+                    'sender_name' => 'X', 'received_at' => '2026-06-28 09:00:00',
+                    'extracted_json' => '{}',
+                ]];
+            },
+        );
+        return $db;
+    }
+
+    private function summaryService(DataSourceConnection $db, LlmClient $llm): DashboardSummaryService
+    {
+        $backends = $this->createMock(AiBackendResolver::class);
+        $backends->method('defaultBackend')->willReturn([
+            'provider' => 'anthropic', 'model' => 'claude-x', 'base_url' => null,
+        ]);
+        $backends->method('apiKey')->willReturn('sk-test');
+        return new DashboardSummaryService($db, $llm, $backends);
+    }
+
+    public function testSummaryEmptyFeedEmitsDoneNull(): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchAll')->willReturn([]);
+
+        $llm = $this->createMock(LlmClient::class);
+        $llm->expects($this->never())->method('streamChat');
+
+        $ctrl = new DashboardController();
+        $out  = $this->runProducer(
+            $ctrl->summary(new ViewerRegistry(), $db, $this->summaryService($db, $llm), null, 'cs'),
+        );
+
+        $this->assertStringContainsString('event: done', $out);
+        $this->assertStringContainsString('"text":null', $out);
+        $this->assertStringNotContainsString('event: text', $out);
+        $this->assertStringNotContainsString('event: error', $out);
+    }
+
+    public function testSummaryStreamsDeltasAndDone(): void
+    {
+        $db  = $this->summaryDb();
+        $llm = $this->createMock(LlmClient::class);
+        $llm->expects($this->once())->method('streamChat')->willReturnCallback(
+            static function (LlmChatParams $params, callable $onDelta): LlmChatResult {
+                $onDelta('Dnes máte ');
+                $onDelta('jednu fakturu.');
+                return new LlmChatResult('Dnes máte jednu fakturu.', 100, 20, 'end_turn', 'claude-x');
+            },
+        );
+
+        $ctrl = new DashboardController();
+        $out  = $this->runProducer(
+            $ctrl->summary(new ViewerRegistry(), $db, $this->summaryService($db, $llm), null, 'cs'),
+        );
+
+        $this->assertStringContainsString('event: text', $out);
+        $this->assertStringContainsString('"delta":"Dnes máte "', $out);
+        $this->assertStringContainsString('event: done', $out);
+        $this->assertStringContainsString('"text":"Dnes máte jednu fakturu."', $out);
+        $this->assertStringContainsString('"cached":false', $out);
+    }
+
+    public function testSummaryLlmErrorEmitsErrorEvent(): void
+    {
+        $db  = $this->summaryDb();
+        $llm = $this->createMock(LlmClient::class);
+        $llm->method('streamChat')->willThrowException(
+            new LlmApiException(500, 'api_error', 'model exploded'),
+        );
+
+        $ctrl = new DashboardController();
+        $out  = $this->runProducer(
+            $ctrl->summary(new ViewerRegistry(), $db, $this->summaryService($db, $llm), null, 'cs'),
+        );
+
+        $this->assertStringContainsString('event: error', $out);
+        $this->assertStringContainsString('model exploded', $out);
+        $this->assertStringNotContainsString('event: done', $out);
     }
 }

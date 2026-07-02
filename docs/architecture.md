@@ -80,7 +80,7 @@ HTTP request
 | `CrudController` | Univerzální CRUD pro libovolnou tabulku. `list` (filtry, řazení, stránkování), `show`, `create`, `update`, `patch`, `delete`. Filtrovací operátory: eq/neq/gt/gte/lt/lte/like/in/null/notnull. Password sloupce jsou odstraněny z výstupu. |
 | `MetaController` | `tables` (seznam tabulek s metadaty), `table` (detail sloupců + indexů). Lokalizovaný výstup. |
 | `OpenApiController` | `spec` → OpenAPI 3.1 JSON generovaný ze `SpecGenerator`. Podmíněný přístup dle `openApiPublic`. |
-| `DashboardController` | `dashboard` → `GET /_ui/dashboard` — feed akčních karet `{summary, cards[], tasks}`. Karty agregují napevno registrované `FeedSource` zdroje (`MailSuggestionsSource`, `AlertsSource`), `sortAndCap` řadí dle kind + času; tasks widget re-use fáze 1. Detaily viz [`dashboard.md`](dashboard.md). |
+| `DashboardController` | `dashboard` → `GET /_ui/dashboard` — feed akčních karet `{summary, cards[], tasks}`. Karty agregují napevno registrované `FeedSource` zdroje (`MailSuggestionsSource`, `AlertsSource`) přes sdílené `collectCards()`, `sortAndCap` řadí dle kind + času; tasks widget re-use fáze 1. `summary` → `GET /_ui/dashboard/summary` — SSE stream generovaného AI shrnutí feedu (`DashboardSummaryService`: digest/hash cache v `core_ai_dashboard_summary`, LLM přes `AiBackendResolver` + `LlmClient`). Detaily viz [`dashboard.md`](dashboard.md). |
 
 ### Validace
 

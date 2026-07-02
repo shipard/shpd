@@ -47,7 +47,8 @@ Analýza došlé pošty má vlastní cestu (Python daemon), backend ale sdílí.
 | MCP server | `src/Api/Mcp/` + `src/Api/Controller/McpController.php`; routa `POST /api/v1/_mcp` | JSON-RPC 2.0 (`initialize`, `tools/list`, `tools/call`), registr nástrojů, mapování obálky |
 | Nástroje | `modules/*/*/src/Mcp/` | doménové operace (viz §3) |
 | Chat orchestrátor | `src/Api/Controller/ChatController.php` + `modules/core/chat/` | konverzace, SSE smyčka, in-process volání nástrojů |
-| LLM klient | `src/Core/Ai/` (`LlmClient`, `AnthropicLlmClient`) | streamovaný Anthropic Messages API (+ tool-use) |
+| LLM klient | `src/Core/Ai/` (`LlmClient`, `AnthropicLlmClient`, `AiBackendResolver`) | streamovaný Anthropic Messages API (+ tool-use); resolver default backendu + dešifrování klíče |
+| Dashboard shrnutí | `src/Core/Dashboard/DashboardSummaryService.php` + `modules/core/ai/tables/core_ai_dashboard_summary.jsonc` | generované shrnutí feedu (SSE, cache dle hashe digestu) — viz [`dashboard.md`](dashboard.md) §11 |
 | Frontend | `frontend/src/components/chat/` + `api/chat.js` | pohled „Chat", SSE konzumace přes `fetch` + reader |
 
 ---
@@ -70,16 +71,23 @@ saldokonto).
 
 ---
 
-## 4. Dvě cesty k jazykovému modelu
+## 4. Cesty k jazykovému modelu
 
 | Cesta | Kdo volá LLM | Režim | Nástroje |
 |-------|--------------|-------|----------|
 | **Analýza pošty** | Python daemon `ai_analyzer` (pull/claim přes `AnalysisController`) | strukturovaný výstup, ne-streamovaně | — |
 | **Vnitřní chat** | PHP `AnthropicLlmClient` (in-process) | streamovaně (SSE), tool-use smyčka | čtecí MCP nástroje |
+| **Dashboard shrnutí** | PHP `AnthropicLlmClient` přes `DashboardSummaryService` | streamovaně (SSE), **bez tools**, `maxTokens ~300` | — |
 
-Obě cesty čtou backend (provider/model/klíč) z `core_ai_backends`. Pozn.: PHP
-strana neměla LLM klienta, dokud nevznikl chat — analýza pošty volá model
-výhradně z Python daemonu.
+Všechny cesty čtou backend (provider/model/klíč) z `core_ai_backends`; default
+backend na PHP straně resolvuje `AiBackendResolver`. Pozn.: PHP strana neměla
+LLM klienta, dokud nevznikl chat — analýza pošty volá model výhradně z Python
+daemonu.
+
+**Soukromí digestu shrnutí**: prompt shrnutí obsahuje titulky karet
+(partneři/částky z hlaviček dokladů) — stejná data, jaká analyzer LLM už
+posílá při extrakci; žádná nová datová hranice. Plný `extracted_json` se do
+promptu nikdy nedává.
 
 ---
 

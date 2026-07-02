@@ -6,8 +6,8 @@ akci **přímo z feedu** (apply / review / reject / reanalyze) bez procházení
 viewerů. Úkoly zůstávají jako sekundární widget pod feedem.
 
 Fáze 2 pokrývá jeden tok — **došlá pošta → doklad** — plus deterministické
-alerty jako druhý zdroj. AI shrnutí je zatím statické (počty dle kind); generované
-shrnutí je plánované jako fáze 2b (§11).
+alerty jako druhý zdroj. Fáze 2b přidává **generované AI shrnutí dne** nad
+feedem (SSE, cache dle hashe feedu, tichá degradace na statické county — §11).
 
 ## 1. Přehled
 
@@ -222,10 +222,29 @@ Logika (`ExtractedDocumentApplier::unapply`):
 }
 ```
 
-- `summary.aiText` je `null` (naplní fáze 2b). `counts` = počet karet dle kind,
-  jen actionable pásma (urgent/review/ready).
+- `summary.aiText` je `null` — generované shrnutí **neblokuje feed**, teče
+  samostatným SSE endpointem (níže); `counts` = počet karet dle kind, jen
+  actionable pásma (urgent/review/ready).
 - Přetečení stropu → karty se ořežou a přidá se závěrečná info karta
   „…a další nezpracovaná pošta" s `open_viewer` na `core.mail.incoming`.
+
+### `GET /_ui/dashboard/summary` (SSE)
+
+**Auth**: Bearer token. **Content-Type**: `text/event-stream`.
+
+Generované AI shrnutí feedu (fáze 2b, §11). Události:
+
+| Událost | Payload | Kdy |
+|---|---|---|
+| `text` | `{ "delta": "…" }` | inkrementální text — jen při cache miss (LLM streamuje) |
+| `done` | `{ "text": "…"\|null, "cached": bool }` | vždy poslední; `text=null` = prázdný feed / degradace |
+| `error` | `{ "message": "…" }` | LLM/transport chyba → frontend tiše degraduje |
+
+- **Prázdný feed** (žádné actionable karty) → rovnou `done{text:null}`, žádné LLM.
+- **Cache hit** → `done{text, cached:true}` okamžitě, žádné LLM.
+- **Cache miss** → stream `text` delt → `done{text, cached:false}` + upsert cache.
+- **Backend chybí / bez API klíče / klíč nejde dešifrovat** → `done{text:null}`
+  (tichá degradace, log server-side).
 
 ### `POST /_mail/extracted-documents/{ndx}/unapply`
 
@@ -243,11 +262,12 @@ frontend/src/components/dashboard/
 ├── Feed.svelte           — seznam karet (řazení ze serveru), prázdný stav
 ├── FeedCard.svelte       — jedna karta (kind proužek, ikona, akce)
 ├── RejectReasonPrompt.svelte — sdílený prompt na důvod (feed i ViewerDetail)
-├── AiSummaryCard.svelte  — county dle kind (aiText ready pro 2b)
+├── AiSummaryCard.svelte  — AI shrnutí přes SSE (fallback county dle kind, §11)
 └── WidgetCard / WidgetRow — re-use pro tasks widget
 ```
 
-API: `frontend/src/api/dashboard.js` (`fetchDashboard()`), `api/exchange.js`
+API: `frontend/src/api/dashboard.js` (`fetchDashboard()`,
+`streamDashboardSummary()` — SSE konzument dle vzoru `chat.js`), `api/exchange.js`
 (`applyExtractedDocument`, `unapplyExtractedDocument`, `rejectExtractedDocument`,
 `reanalyzeMessage`, `previewExtractedDocument`).
 
@@ -289,14 +309,40 @@ Tentýž `formModal` obsluhuje i alert `open_form` akce a toast „Otevřít"
 
 **Refresh** — fetch při mountu + manuální tlačítko. Žádný polling / SSE.
 
-## 11. Fáze 2b — AI shrnutí (plánováno)
+## 11. AI shrnutí (fáze 2b)
 
-Nahradit statické počty v `AiSummaryCard` **generovaným shrnutím dne** („Dnes
-přišlo 8 e-mailů, z toho 5 faktur — 3 připravené, 2 ke kontrole; nejnaléhavější:
-…"). Vstup: county + headline karet (žádný nový sběr dat). Model: reuse
-`LlmClient` z chatu. **Líné + cache** per uživatel, neblokující (feed se zobrazí
-hned, shrnutí dotéká). Interface je připravený — backend naplní `summary.aiText`,
-`AiSummaryCard` ho zobrazí místo statických počtů.
+Nad feedem se zobrazuje **generované shrnutí dne** — krátká próza (2–4 věty)
+o tom, co je nejnaléhavější, co čeká na kontrolu a co je připravené. První
+viditelný generativní AI prvek na home obrazovce.
+
+**Backend** — `DashboardSummaryService` (`src/Core/Dashboard/`):
+
+- **Vstup (digest)**: county dle kind + počet aktivních úkolů + top ~6 karet
+  (kind, id, titulek, subtitle) + dnešní datum (`Y-m-d`) + jazyk. Nikdy plný
+  `extracted_json` (D13). Digest je kanonický — tentýž slouží pro hash i prompt.
+- **Cache** (D12): `core_ai_dashboard_summary` (modul `core.ai`), jeden řádek
+  per jazyk `{language UNIQUE, input_hash, text, input_tokens, output_tokens,
+  generated_at}`. Klíč = `sha256(digest)`; **datum v digestu** realizuje
+  „regeneruj aspoň jednou denně" bez TTL časovače — přes půlnoc nový hash,
+  v rámci dne regenerace jen při změně feedu. Usage (tokeny) se ukládá pro
+  budoucí telemetrii.
+- **LLM cesta**: default backend přes `AiBackendResolver` (`src/Core/Ai/` —
+  extrakce chat vzoru: default aktivní řádek `core_ai_backends` + dešifrování
+  klíče `DsSecretCipher`), jedno streamované `LlmClient::streamChat` volání,
+  `maxTokens ~300`, `temperature=null`, `tools=null` (D15).
+- `DashboardController::summary()` sdílí `collectCards()` s `dashboard()` —
+  shrnutí vzniká nad přesně týmiž kartami; SSE vzor z `ChatController`.
+
+**Frontend** — `AiSummaryCard.svelte` po každém načtení dashboardu (mount i
+refresh — hit/miss rozhodne server) otevře `streamDashboardSummary()`; text
+dotéká do karty, během streamu běží nenápadný indikátor „Generuji shrnutí…"
+(`dashboard.aiSummary.generating`). Prázdné/`null` shrnutí nebo chyba → statický
+text z countů (2a), unmount/refresh zavře stream (`handle.close()`).
+
+**Rozhodnutí**: shrnutí je **per-DS + per-jazyk** (feed není per-user); prompt
+je pevný; levnější model override odložen (D15); žádný polling — jen mount +
+manuální refresh. **Soukromí**: digest obsahuje partnery/částky — stejná data,
+jaká analyzer LLM už posílá (viz `ai.md`).
 
 ## 12. Budoucí rozšíření
 

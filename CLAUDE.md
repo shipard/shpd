@@ -197,8 +197,17 @@ Závislosti tečou shora dolů: Command → Document → Module/Config/Database 
   `DocumentExchangePreviewModal`. **Undo** = `POST …/unapply` (doklad do koše
   90, extracted → 20, zpráva 40→30). Toast s „Otevřít"/„Vrátit" (app nemá toast
   infra → lokální v `Dashboard.svelte`).
-- `RejectReasonPrompt` je sdílený (feed i `ViewerDetail`). AI shrnutí zatím
-  statické (county dle kind); `summary.aiText` naplní fáze 2b.
+- `RejectReasonPrompt` je sdílený (feed i `ViewerDetail`).
+- **AI shrnutí (fáze 2b)**: `GET /_ui/dashboard/summary` — SSE stream
+  (`text`/`done`/`error`) generovaného shrnutí feedu. `DashboardSummaryService`
+  (`src/Core/Dashboard/`) staví digest (county + top 6 karet + datum + jazyk),
+  cache dle `sha256(digest)` v `core_ai_dashboard_summary` per jazyk (datum
+  v hashi = regenerace aspoň denně); LLM přes `AiBackendResolver`
+  (`src/Core/Ai/`) + `streamChat` (`temperature=null`, `tools=null`,
+  `maxTokens ~300`). Prázdný feed / chybějící backend či klíč / chyba →
+  `done{text:null}` = tichá degradace na statické county. FE:
+  `streamDashboardSummary()` v `api/dashboard.js` + stream v
+  `AiSummaryCard.svelte` (re-open při každém loadu dashboardu).
 - Doc-state `.docState_*` třídy globální (`styles/base.css`) — sdílené
   `ViewerRow`/`WidgetRow`/`FeedCard`. Feed ikony (`check/question/warning/info`)
   v `icons.js`.

@@ -34,7 +34,7 @@ sudo bash scripts/install-packages.sh --mode=development
 
 Skript je idempotentní a zařídí:
 
-- Instalaci PHP 8.5, MariaDB, nginx, composer a rozšíření
+- Instalaci PHP 8.5, MariaDB, nginx, composer, Node.js 22 (LTS) a rozšíření
 - Vytvoření `/opt/shipard/` (datový root) a `/etc/shipard/` (config root)
   s ownership vlastněným tvým uživatelem (detekce přes `$SUDO_USER`)
 - Konfiguraci samostatného **PHP-FPM poolu `shipard`** běžícího pod tvým

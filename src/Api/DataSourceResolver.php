@@ -71,8 +71,11 @@ class DataSourceResolver
 
 	protected function loadDomainsFile(): array
 	{
+		// Chybějící domains.json = zatím žádná mapování → prázdná mapa, aby
+		// nenamapovaný host skončil čistým UnknownHostException (404 Unknown host),
+		// ne generickým 500.
 		if (!file_exists($this->domainsFile)) {
-			throw new \RuntimeException("Domains file not found: {$this->domainsFile}");
+			return [];
 		}
 
 		$content = file_get_contents($this->domainsFile);

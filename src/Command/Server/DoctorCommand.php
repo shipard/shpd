@@ -35,15 +35,18 @@ class DoctorCommand extends Command
 
         $configFile = $this->serverConfigPath;
         if (!is_file($configFile)) {
-            $output->writeln("<error>Config file missing: {$configFile}</error>");
-            $output->writeln('<comment>→ Run: sudo bash scripts/install-packages.sh --mode=development</comment>');
+            $output->writeln("<error>Config file not found or not accessible: {$configFile}</error>");
+            $output->writeln('<comment>→ If it exists, you likely lack permission — run as the shipard user (or root):</comment>');
+            $output->writeln('<comment>    sudo -u shipard shpd-server doctor</comment>');
+            $output->writeln('<comment>→ If it is genuinely missing, initialize the server:</comment>');
+            $output->writeln('<comment>    sudo shpd-server server-init --mode=...</comment>');
             return Command::FAILURE;
         }
 
         $configContent = @file_get_contents($configFile);
         if ($configContent === false) {
             $output->writeln("<error>Config file not readable: {$configFile}</error>");
-            $output->writeln('<comment>→ Check group membership or run as root</comment>');
+            $output->writeln('<comment>→ Run as the shipard user (or root): sudo -u shipard shpd-server doctor</comment>');
             return Command::FAILURE;
         }
 

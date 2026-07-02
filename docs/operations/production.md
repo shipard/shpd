@@ -1,0 +1,298 @@
+# Produkční instalace
+
+Postup pro nasazení Shipardu do produkčního (ostrého) provozu na čistém
+Ubuntu LTS. Vývojové prostředí řeší [`../../DEVELOPERS.md`](../../DEVELOPERS.md);
+tenhle dokument popisuje produkční mód, který se od dev liší ve třech věcech:
+
+- běží pod dedikovaným systémovým uživatelem `shipard` (ne pod tvým účtem),
+- servíruje se přes HTTPS na doméně (ne přes HTTP na IP),
+- datové zdroje se zakládají z CLI — **vývojářský dashboard `/_dev/`
+  je v produkci vypnutý** (vrací 404).
+
+> **Stav:** Shipard je v alfa fázi. Produkční nasazení je zatím
+> ověřované v praxi — ber tenhle postup jako výchozí a počítej s ručním
+> doladěním, hlavně u nginx/TLS.
+
+---
+
+## Předpoklady
+
+- **Ubuntu LTS** — 22.04 nebo 24.04
+- **root přístup** přes `sudo`
+- **doména** směřující na server a **TLS certifikát** (řešíš ručně — viz
+  kapitola 6)
+
+---
+
+## 1. Stažení repozitáře
+
+V produkci klonuj rovnou do datového rootu (ne do `~`):
+
+```bash
+sudo mkdir -p /opt/shipard
+sudo git clone https://github.com/shipard/shpd.git /opt/shipard/shpd
+```
+
+(Ownership se srovná v dalším kroku instalačním skriptem.)
+
+---
+
+## 2. Instalace systémových balíčků a setup
+
+```bash
+cd /opt/shipard/shpd
+sudo bash scripts/install-packages.sh --mode=production
+```
+
+Oproti dev módu skript navíc **vytvoří systémového uživatele `shipard`**
+(`useradd --system --shell /usr/sbin/nologin --home-dir /opt/shipard`),
+pod kterým poběží PHP-FPM pool. Dále nainstaluje PHP 8.5, MariaDB, nginx,
+composer, Node.js 22 (LTS, z NodeSource — pro build frontendu), vytvoří `/opt/shipard/` a `/etc/shipard/` a aktivuje nginx site
+ze šablony `docs/nginx/production.conf`.
+
+Permission kontrakt je stejný single-user model jako v dev, jen je OS
+uživatel `shipard` — detaily v
+[`permissions.md`](permissions.md).
+
+**Převlastni clone na uživatele `shipard`.** V kroku 1 jsi klonoval jako
+root, takže repozitář patří `root:root`. Instalační skript samotný clone
+**nepřevlastňuje** (počítá s tím, že už patří shipard uživateli) — a když
+`/opt/shipard/shpd` existuje jako skutečný adresář, nechá ho být. Sjednoť
+vlastnictví ručně, jinak `composer install` ani pozdější `git pull` pod
+uživatelem `shipard` nezapíšou (`Permission denied` na `composer.lock`):
+
+```bash
+sudo chown -R shipard:shipard /opt/shipard/shpd
+```
+
+(`chown -R` zahrne i `.git`, takže `sudo -u shipard git pull` nebude hlásit
+„dubious ownership".)
+
+---
+
+## 3. Instalace PHP závislostí
+
+```bash
+cd /opt/shipard/shpd
+sudo -u shipard composer install --no-dev --optimize-autoloader
+```
+
+`--no-dev` vynechá vývojové závislosti, `--optimize-autoloader` sestaví
+classmap. Instalační skript composer **nespouští** — je to samostatný krok.
+
+---
+
+## 4. Build frontendu
+
+Frontend (Svelte 5 SPA) se sestavuje do `public/app` a nginx ho odtud
+servíruje. Node.js pro build nainstaloval instalační skript v kroku 2. Sestav frontend:
+
+```bash
+cd /opt/shipard/shpd/frontend
+sudo -u shipard npm ci
+sudo -u shipard npm run build
+```
+
+`npm ci` je pro produkci vhodnější než `npm install` — instaluje přesně
+podle `package-lock.json`. Výstup skončí v `/opt/shipard/shpd/public/app/`
+(base cesta `/app/`).
+
+---
+
+## 5. Inicializace server configu
+
+```bash
+sudo shpd-server server-init --mode=production --user=shipard
+```
+
+Vytvoří `/etc/shipard/server.json` s admin DB credentials (ownership
+`root:shipard`, mode `0640`).
+
+---
+
+## 6. nginx a TLS
+
+Instalační skript aktivoval site ze šablony `docs/nginx/production.conf`.
+Ta je ale **jen výchozí kostra a je potřeba ji doupravit** — počítá se
+s tím, že tuhle část řešíš ručně:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name *.shipard.cz;
+
+    root /opt/shipard/shpd/public;
+    index index.php;
+
+    location / {
+        try_files $uri /index.php$is_args$args;
+    }
+
+    location ~ \.php$ {
+        fastcgi_pass unix:/run/php/php-fpm.sock;   # skript přepíše na socket poolu shipard
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_param HTTP_HOST $host;
+        fastcgi_param REQUEST_URI $request_uri;
+        include fastcgi_params;
+    }
+}
+```
+
+Co je potřeba doplnit před nasazením:
+
+- **TLS certifikáty** — šablona má `listen 443 ssl;`, ale žádné
+  `ssl_certificate` / `ssl_certificate_key`. Bez nich `nginx -t`
+  neprojde. Doplň cesty ke svým certifikátům.
+- **HTTP → HTTPS redirect** — přidej `server { listen 80; ... return 301
+  https://$host$request_uri; }` (a případně location pro ACME challenge,
+  pokud budeš certy obnovovat automaticky).
+- **`server_name`** — uprav z `*.shipard.cz` na svou doménu.
+
+Poznámka: `fastcgi_pass` v šabloně míří na výchozí socket, ale instalační
+skript ho při nasazení automaticky přepíše na socket poolu `shipard`.
+Ověř výsledný `/etc/nginx/sites-available/shipard.conf`.
+
+Po úpravách:
+
+```bash
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+---
+
+## 7. Ověření
+
+```bash
+sudo -u shipard shpd-server doctor
+```
+
+Spouštěj doctor **jako uživatel `shipard`** — konfigurace `/etc/shipard`
+je `root:shipard 0750`, takže tvůj přihlašovací účet do ní bez členství
+ve skupině `shipard` nevidí (a doctor by mylně hlásil „config missing").
+
+Vypíše report: mode (musí být `production`), shipard-user, PHP-FPM pool
+user, kontrolu cest a DB konektivitu. Exit 0 = OK.
+
+Kdyby doctor hlásil problém s právy:
+
+```bash
+sudo shpd-server fix-permissions --dry-run
+sudo shpd-server fix-permissions
+```
+
+---
+
+## 8. Vytvoření datového zdroje a uživatele
+
+V produkci se DS zakládají z CLI. Spouštěj je **jako uživatel `shipard`**,
+aby soubory vznikly se správným ownership:
+
+```bash
+# 1) Nový datový zdroj (default instalační modul install.base)
+sudo -u shipard shpd-server ds-create --name "Moje firma" --module install.base
+```
+
+DS vznikne v `/opt/shipard/data-sources/<id>`. Do jeho adresáře přejdi a
+dokonči inicializaci:
+
+```bash
+cd /opt/shipard/data-sources/<id>
+
+# 2) Synchronizace DB schématu podle modulů
+sudo -u shipard shpd-ds ds-upgrade
+
+# 3) Založení admin uživatele
+sudo -u shipard shpd-ds user-create \
+    --login admin \
+    --password 'ZVOL_SILNE_HESLO' \
+    --name 'Správce' \
+    --email admin@example.cz
+
+# 4) Srovnat práva — čerstvý DS dostane defaultní umask módy (0755/0644),
+#    kontrakt chce 0750/0640
+sudo shpd-server fix-permissions
+```
+
+`ds-create` sám nespouští `ds-upgrade` ani nezakládá uživatele — jsou to
+samostatné kroky (stejný sled, jaký v dev provádí dashboard).
+
+`secrets.key` pro šifrování citlivých dat se vytvoří automaticky při
+`ds-create` (mode `0600 shipard:shipard`). Viz [`secrets.md`](secrets.md).
+
+> **Práva čerstvého DS:** nově vytvořený DS dostane defaultní umask módy
+> (0755/0644), takže hned po `ds-create` na něm `doctor` nahlásí „mode
+> drift". `sudo shpd-server fix-permissions` (krok 4 výše) je srovná na
+> kontraktní 0750/0640 — a je zároveň záchranná brzda, kdyby něco vzniklo
+> jako root. Na závěr ověř `sudo -u shipard shpd-server doctor`.
+
+Datový zdroj je pak dostupný na `https://<tvoje-doména>/<id>/app/`.
+
+---
+
+## 9. Namapování domény na datový zdroj
+
+V produkci aplikace vybírá datový zdroj podle **hostname** požadavku. Mapu
+`host → ds-id` drží soubor `/etc/shipard/domains.json` a spravuje ji CLI:
+
+```bash
+# Přiřaď doménu datovému zdroji (spouštěj jako root — zapisuje do /etc/shipard)
+sudo shpd-server domain-add --host data-source-name.example.com --ds <id>
+
+# Výpis všech mapování
+sudo shpd-server domain-list
+
+# Zrušení mapování
+sudo shpd-server domain-remove --host data-source-name.example.com
+```
+
+Mapa se čte při každém požadavku, takže po `domain-add` není potřeba nic
+restartovat — stačí obnovit stránku. Aplikace pak běží na
+`https://<host>/app/`.
+
+Předpoklady, aby to fungovalo:
+
+- **DNS** hostu míří na server.
+- **nginx `server_name`** pokrývá tento host (viz kapitola 6).
+- **Datový zdroj existuje** (kapitola 8) — `domain-add` jeho existenci ověří.
+
+> Pozn.: dev režim (přístup přes IP adresu) domény neřeší — tam se ID
+> zdroje bere z první části cesty (`/{id}/app/`). `domains.json` se uplatní
+> jen u přístupu přes hostname. Když host v mapě není (nebo mapa ještě
+> neexistuje), aplikace vrátí `404 Unknown host`.
+
+---
+
+## 10. Zálohování a provoz
+
+- **Databáze:** pravidelný dump (mariadb-dump) všech DS databází.
+- **`secrets/` adresáře:** `/opt/shipard/data-sources/<id>/secrets/`
+  **musí** být součástí zálohy. **Ztráta `secrets.key` = ztráta všech
+  šifrovaných dat** (API klíče, tokeny) daného DS. Tarball adresáře DS
+  klíč zahrnuje; po obnově ověř permissions a spusť `shpd-ds
+  ds-secrets-health`. Detaily v [`secrets.md`](secrets.md).
+- **Logy:** `/opt/shipard/log/shipard.log` (viz [`../logging.md`](../logging.md)).
+- **Firewall:** ven vystav jen 80/443 (a SSH). PHP-FPM socket je lokální.
+
+---
+
+## 11. Po `git pull`
+
+Po nasazení nové verze:
+
+```bash
+cd /opt/shipard/shpd
+sudo -u shipard git pull
+sudo -u shipard composer install --no-dev --optimize-autoloader
+(cd frontend && sudo -u shipard npm ci && sudo -u shipard npm run build)
+```
+
+Pokud se měnily definice tabulek nebo cfgItems modulů, zaktualizuj DS:
+
+```bash
+sudo -u shipard shpd-server ds-upgrade-all
+```
+
+Na závěr `shpd-server doctor`.
+
+> Pozn.: `scripts/dev-update.sh` je určený pro vývoj (`npm install`, bez
+> `--no-dev`) — v produkci použij kroky výše.

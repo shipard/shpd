@@ -85,7 +85,7 @@ echo ""
 
 # ─── 4. apt packages ─────────────────────────────────────────────────────────
 echo "==> Installing prerequisites..."
-apt-get install -y ca-certificates apt-transport-https software-properties-common
+apt-get install -y ca-certificates curl apt-transport-https software-properties-common
 
 echo "==> Adding PHP PPA (ondrej/php)..."
 add-apt-repository --yes ppa:ondrej/php
@@ -96,6 +96,15 @@ apt-get install -y \
     php8.5-cli php8.5-fpm \
     php8.5-mysql php8.5-xml php8.5-mbstring php8.5-curl php8.5-zip php8.5-intl \
     mariadb-server nginx composer git unzip
+
+echo "==> Installing Node.js 22 LTS (NodeSource)..."
+NODE_MAJOR="$(node -v 2>/dev/null | tr -d 'v' | cut -d. -f1)"
+if [ -n "$NODE_MAJOR" ] && [ "$NODE_MAJOR" -ge 20 ]; then
+    echo "    Node $(node -v) already present (>=20), skipping."
+else
+    curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+    apt-get install -y nodejs
+fi
 
 # ─── 5. CLI utility symlinks ─────────────────────────────────────────────────
 echo "==> Creating symlinks for CLI utilities..."

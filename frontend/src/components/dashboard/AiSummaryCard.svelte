@@ -1,17 +1,18 @@
 <script>
   import { t } from '../../i18n/index.js';
+  import { streamDashboardSummary } from '../../api/dashboard.js';
   import { iconRobot } from '../../icons.js';
   import Icon from '../ui/Icon.svelte';
 
   let { summary } = $props();
 
-  // Fáze 2b naplní `summary.aiText` generovaným shrnutím — pokud je, zobraz ho
-  // přímo. Jinak (MVP) složíme statický text z počtů karet dle kind (plurály),
-  // jen pro nenulová pásma. Vše nulové → univerzální empty text.
-  const summaryText = $derived.by(() => {
-    if (summary.aiText) {
-      return summary.aiText;
-    }
+  // Generované shrnutí (fáze 2b) dotéká přes SSE do `aiText`. Dokud není
+  // (prázdný feed, degradace, stream teprve běží), zobrazuje se statický
+  // text složený z počtů karet dle kind (fáze 2a).
+  let aiText = $state('');
+  let streaming = $state(false);
+
+  const staticText = $derived.by(() => {
     const counts = summary.counts ?? {};
     const parts = [];
     if (counts.urgent > 0) {
@@ -28,6 +29,32 @@
     }
     return t('dashboard.aiSummary.intro') + ' ' + parts.join(', ') + '.';
   });
+
+  const displayText = $derived(aiText !== '' ? aiText : staticText);
+
+  // Každá změna `summary` (mount i refresh dashboardu — load() vymění data)
+  // otevře stream znovu; hit/miss rozhodne server. Cleanup zavře předchozí
+  // stream, chyba/prázdné shrnutí = tichá degradace na statický text.
+  $effect(() => {
+    void summary;
+    aiText = '';
+    streaming = true;
+    const handle = streamDashboardSummary({
+      onDelta: (delta) => {
+        aiText += delta;
+      },
+      onDone: (text) => {
+        streaming = false;
+        aiText = text ?? '';
+      },
+      onError: (message) => {
+        streaming = false;
+        aiText = '';
+        console.warn('AI summary failed:', message);
+      },
+    });
+    return () => handle.close();
+  });
 </script>
 
 <div class="shpd-ai-summary">
@@ -36,8 +63,10 @@
   </span>
   <div class="shpd-ai-summary__body">
     <div class="shpd-ai-summary__title">{t('dashboard.aiSummary.title')}</div>
-    <div class="shpd-ai-summary__text">{summaryText}</div>
-    <div class="shpd-ai-summary__hint">{t('dashboard.aiSummary.placeholder')}</div>
+    <div class="shpd-ai-summary__text">{displayText}</div>
+    {#if streaming}
+      <div class="shpd-ai-summary__hint">{t('dashboard.aiSummary.generating')}</div>
+    {/if}
   </div>
 </div>
 

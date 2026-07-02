@@ -321,7 +321,7 @@ export default {
   'dashboard.aiSummary.title': "Today's summary",
   'dashboard.aiSummary.intro': 'You currently have:',
   'dashboard.aiSummary.empty': 'All clear — nothing pending today.',
-  'dashboard.aiSummary.placeholder': 'AI assistant — coming soon; for now I aggregate counts from the other widgets.',
+  'dashboard.aiSummary.generating': 'Generating summary…',
   'dashboard.aiSummary.alerts': '{count, plural, one {# alert} other {# alerts}}',
   'dashboard.aiSummary.mail': '{count, plural, one {# new message} other {# new messages}}',
   'dashboard.aiSummary.tasks': '{count, plural, one {# active task} other {# active tasks}}',

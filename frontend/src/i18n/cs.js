@@ -334,7 +334,7 @@ export default {
   'dashboard.aiSummary.title': 'Dnešní shrnutí',
   'dashboard.aiSummary.intro': 'Aktuálně máte:',
   'dashboard.aiSummary.empty': 'Vše je v klidu, dnes nic nečeká.',
-  'dashboard.aiSummary.placeholder': 'AI asistent — připravujeme; zatím počítám z dat ostatních widgetů.',
+  'dashboard.aiSummary.generating': 'Generuji shrnutí…',
   'dashboard.aiSummary.alerts': '{count, plural, one {# upozornění} few {# upozornění} many {# upozornění} other {# upozornění}}',
   'dashboard.aiSummary.mail': '{count, plural, one {# nová zpráva} few {# nové zprávy} many {# nových zpráv} other {# nových zpráv}}',
   'dashboard.aiSummary.tasks': '{count, plural, one {# aktivní úkol} few {# aktivní úkoly} many {# aktivních úkolů} other {# aktivních úkolů}}',

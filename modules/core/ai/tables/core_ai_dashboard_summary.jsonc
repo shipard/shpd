@@ -1,0 +1,82 @@
+{
+    "tableId": 420,
+    "name": "AI dashboard summary cache",
+    "name:cs": "Cache AI shrnutí dashboardu",
+    "name:en": "AI dashboard summary cache",
+
+    // Interní cache generovaného shrnutí domovského feedu — jeden řádek per
+    // jazyk. Není to dokument (žádné docStates, needituje se přes UI); plní
+    // a čte ji výhradně DashboardSummaryService. Viz docs/dashboard.md.
+
+    "hideFromNavigation": true,
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+        {
+            "id": "language",
+            "name": "Language",
+            "name:cs": "Jazyk",
+            "name:en": "Language",
+            "type": "varchar",
+            "length": 8,
+            "nullable": false
+        },
+        {
+            "id": "input_hash",
+            "name": "Input hash",
+            "name:cs": "Hash vstupu",
+            "name:en": "Input hash",
+            "type": "varchar",
+            "length": 64,
+            "nullable": false
+        },
+        {
+            "id": "text",
+            "name": "Summary text",
+            "name:cs": "Text shrnutí",
+            "name:en": "Summary text",
+            "type": "text",
+            "nullable": true
+        },
+        {
+            "id": "input_tokens",
+            "name": "Input tokens",
+            "name:cs": "Vstupní tokeny",
+            "name:en": "Input tokens",
+            "type": "int",
+            "nullable": true
+        },
+        {
+            "id": "output_tokens",
+            "name": "Output tokens",
+            "name:cs": "Výstupní tokeny",
+            "name:en": "Output tokens",
+            "type": "int",
+            "nullable": true
+        },
+        {
+            "id": "generated_at",
+            "name": "Generated at",
+            "name:cs": "Vygenerováno",
+            "name:en": "Generated at",
+            "type": "datetime",
+            "nullable": false
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "unq_language",
+            "type": "unique",
+            "columns": [
+                {"column": "language"}
+            ]
+        }
+    ]
+}

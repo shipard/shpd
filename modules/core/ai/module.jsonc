@@ -12,7 +12,8 @@
     ],
 
     "tables": [
-        "core_ai_backends"
+        "core_ai_backends",
+        "core_ai_dashboard_summary"
     ],
 
     // ds-reset chrání AI backend kvůli zašifrovanému API klíči

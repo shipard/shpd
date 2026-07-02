@@ -13,17 +13,22 @@ Technické specifikace projektu Shipard.
 | [rest-api.md](rest-api.md) | REST API — endpointy, autentizace, formát odpovědí, filtrování, řazení, stránkování |
 | [attachments.md](attachments.md) | Systém příloh dokumentů — upload, download, náhledy, úložiště souborů, API endpointy |
 | [frontend.md](frontend.md) | Frontend architektura — Svelte 5, komponenty, viewer systém, ikony, API komunikace |
-| [dashboard.md](dashboard.md) | Dashboard — home obrazovka, widget systém, API kontrakt, AI shrnutí |
+| [edit-forms.md](edit-forms.md) | Editační formuláře — server-driven architektura, generický klient, 4-sloupcový grid, JSONC vs `TableForm`, integrace s doc states |
+| [edit-forms-cookbook.md](edit-forms-cookbook.md) | Edit Forms Cookbook — krátké copy-paste vzory pro psaní formulářů (doplněk k `edit-forms.md`) |
+| [app-settings.md](app-settings.md) | Nastavení aplikace — mechanismus settings pages (server-driven stránky vlastností), key-value `core_system_settings`, branding (název, logo, ikona) |
+| [dashboard.md](dashboard.md) | Dashboard — home obrazovka, prioritizovaný feed akčních karet (pošta→doklad, alerty), inline akce + undo, generované AI shrnutí přes SSE, API kontrakt |
 | [ai.md](ai.md) | AI subsystém — přehled: MCP server, katalog nástrojů a tiery podle rizika, chat orchestrátor, sdílené backendy, dvě cesty k LLM |
 | [mcp-server.md](mcp-server.md) | MCP server — JSON-RPC protokol, rozhraní `McpTool`, doménová obálka a wire mapping, auth/DS scoping, **jak přidat nový nástroj** |
 | [chat.md](chat.md) | Vnitřní AI asistent — orchestrační SSE smyčka, kontrakt událostí, LLM klient, výběr backendu, datový model konverzací, frontend konzumace |
 | [design-system.md](design-system.md) | Design system — paleta barev, doc-state konvence, badge systém, avatary, CSS proměnné |
 | [documentation.md](documentation.md) | Pravidla pro dokumentaci modulů a tabulek — kde leží README.md, co obsahuje .md k tabulce, vzory |
 | [cli.md](cli.md) | CLI nástroje — kompletní reference `shpd-server` a `shpd-ds` příkazů, pomocných skriptů a workflow scénářů |
+| [logging.md](logging.md) | Logging — centralizovaný `ErrorLogger`, JSON řádky (jeden per záznam), cesta a konfigurace logu; žádné přímé `error_log()` |
 | [exchange-format.md](exchange-format.md) | Výměnný formát pro doklady — kanonický JSON `shpd.docs.document.v1`, validate/preview/apply pipeline, resolvery, merge strategie |
 | [exchange-format-persons.md](exchange-format-persons.md) | Výměnný formát pro osoby — `shpd.persons.person.v1`, sub-kolekce (adresy, banky, kontakty), authoritative refresh, lineage |
 | [exchange-format-items.md](exchange-format-items.md) | Výměnný formát pro položky — `shpd.items.item.v1`, KindResolver / SupplierCodesResolver, per-partner dodavatelské kódy |
 | [docs-mvp.md](docs-mvp.md) | **Designový dokument** — specifikace dokladového systému MVP (faktury vydané + přijaté, DPH model, číselné řady, stavy, snapshoty). Transientní — po implementaci přesune do archivu. |
+| [accounting.md](accounting.md) | Účtování dokladů — automatické generování záznamů účetního deníku z obsahu dokladu (pohyb → předpis → kategorie → maska účtu → rozvrh), bez ručního zadávání účtů |
 | [bank.md](bank.md) | **Referenční spec modulu** `economy.bank`: bankovní transakce a výpisy, ingestion (parsery + dedup), účtovací mikroengine, clearing účty nespárovaných plateb, polymorfní zdroj deníku, migrace. Fáze 1–4 hotové. |
 | [accbal.md](accbal.md) | **Designový dokument** modulu `economy.accbal`: saldokonto postavené nad účetním deníkem — nastavení skupin a účtů, generátor pohybů z deníku (předpisy/úhrady) + allocations, clearing nespárovaných plateb, událost `journalWritten`. Fáze 0–2 hotové, matcher (Fáze 3) v přípravě. |
 
@@ -38,6 +43,16 @@ Nginx konfigurace jsou v [`nginx/`](nginx/) (app.conf, development.conf, product
 Dokumentace konkrétního modulu žije obvykle v jeho adresáři
 (`modules/{skupina}/{modul}/docs/`) — zde v `docs/` jsou pouze ty,
 které přesahují hranice modulu (integrace s externími službami, API kontrakty).
+
+## Provoz
+
+Provozní a operační dokumentace (nasazení, oprávnění, bezpečnost).
+
+| Dokument | Obsah |
+|----------|-------|
+| [migration-guide.md](migration-guide.md) | Migrace DS mezi servery — checklist pro přenos celého data-source (co tvoří DS, kritické secrets); detailní postupy v `operations/` |
+| [operations/permissions.md](operations/permissions.md) | Permission kontrakt pro `/opt/shipard` a `/etc/shipard` — `PermissionSpec`, `shpd-server doctor` / `fix-permissions`, single-user model |
+| [operations/secrets.md](operations/secrets.md) | Šifrované secrets v DS — AES-256-GCM, per-DS klíč, `encrypted_text` sloupce v jakémkoli modulu |
 
 ---
 

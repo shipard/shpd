@@ -8,158 +8,277 @@ Tasky se po dokončení **nemažou** — slouží jako historický záznam desig
 a rozhodnutí. Když narazíš na nesoulad mezi taskem a aktuálním stavem
 kódu, věř kódu (kód je živý, task je momentka).
 
----
-
-## Aktivní práce
-
-| Task                              | Co řeší                                              |
-|-----------------------------------|------------------------------------------------------|
-| `viewer-number-series-tabs.md`    | Spodní lišta záložek číselných řad v per-type doc viewerech (`ReceivedInvoicesViewer`, `IssuedInvoicesViewer`) + předvyplnění aktivní řady při create. Refactor `DocsHeadsViewer` na opt-in přes `$scopedDocType`. |
-| `docs-detail-document.md`         | Detail dokladu jako textová faktura — nový content type `document` (strany Dodavatel/Odběratel, řádky, DPH rekapitulace, náhledy příloh na konci), `PersonSnapshotBuilder`, `DocumentDetail.svelte` + sdílená `AttachmentGrid.svelte`. |
-| `custom-theme-phase2.md`          | Vlastní vzhledy fáze 2 — gradientové presety (stránkovaný grid se šipkami), token `--shpd-sidebar-bg-image`, opacity slider (OKLab mix k bázi), odvozování z efektivní barvy. |
-| `custom-theme-phase3.md`          | Vlastní vzhledy fáze 3 — per-user persistence (tabulka `core_system_user_settings` + `UserSettingsStore`, scope `user` u settings pages), nový mód `account` (Nastavení účtu) s vlastním stromem (`global.accountSections` + `accountItems[]`), stránka Základní s field typy `theme`/`language`, server jako zdroj pravdy + localStorage anti-flash cache. |
-| `custom-theme-phase4.md`          | Vlastní vzhledy fáze 4 — DS-wide default vzhledu (`app.theme` ve scope `ds`, Nastavení aplikace → Aplikace), `follow` flag v `account.theme` (sleduj DS default / vlastní override), DS default na klienta přes `appInfo` + anti-flash cache `shpd_ds_theme`, odstranění dropdownu vzhledu z patky sidebaru. |
-
+Níže je **kompletní index podle oblastí**. Řídící / designové dokumenty
+jednotlivých subsystémů žijí v [`docs/`](../docs/README.md).
 
 ---
 
-## Hotové tasky — feature work
+## Server, CLI a provoz
 
-Drží se jako reference. Když Claude Code potřebuje pochopit, **proč** je
-něco postavené tak, jak je, často to najde v původním PRD.
+Nasazení, oprávnění, správa datových zdrojů, dev workflow, logování,
+šifrování. Centrální CLI reference v [`docs/cli.md`](../docs/cli.md).
 
-### Vzhledy (themes)
+| Task | Co řeší |
+|------|---------|
+| `server-setup-permissions.md` | Server setup, módy (development/production), model oprávnění a uživatelů |
+| `server-setup-doctor-improvements.md` | `doctor`: nginx/FPM kontroly + fix install skriptu |
+| `install-for-developers.md` | `DEVELOPERS.md` + `scripts/install-packages.sh` |
+| `dev-update-script.md` | `scripts/dev-update.sh` + git hooks (post-pull workflow) |
+| `ds-upgrade-all.md` | `shpd-server ds-upgrade-all` + kompletní `docs/cli.md` |
+| `ds-upgrade-quiet-default.md` | Tichý default `ds-upgrade`, plný výpis jen s `-v` |
+| `ds-upgrade-skip-provisioning.md` | Vypnutelný provisioning přes `config/main.json` |
+| `ds-create-install-module.md` | `ds-create --module` + UI výběr instalačního modulu |
+| `ds-reset.md` | `ds-reset` — čistý stav DS pro opakované testování importů |
+| `unified-logging.md` | Produkční `ErrorLogger` (JSON řádky, úrovně, deploy guide, migrace `error_log()`) |
+| `ds-encrypted-secrets.md` | Šifrování citlivých sloupců (`encrypted_text`, per-DS klíč, rotace) |
+| `add-user.md` | CLI `shpd-ds user-create` |
+| `api-key-cli.md` | CLI příkazy pro správu API klíčů |
 
-Custom téma sidebaru — uživatel si barevně odliší zdroje dat.
-Obsah stránky drží brand, barví se jen sidebar přes runtime tokeny.
+## Moduly třetích stran
 
-| Task                          | Co řeší                                |
-|-------------------------------|----------------------------------------|
-| `custom-theme-phase1.md`      | Dropdown Shipard/Tmavý/Vlastní, panel s presety + color pickerem, OKLCH odvozování sidebar tokenů, localStorage per-DS |
+Podpora modulů mimo hlavní strom — `ModulePathResolver`, `extraModulesPath`
+v `server.json`, autoloader, alokace `tableId` napříč rooty.
 
-### CLI utility — vylepšení dev workflow
+| Task | Fáze | Co řeší |
+|------|------|---------|
+| `third-party-modules-phase1.md` | 1 | `ModulePathResolver` |
+| `third-party-modules-phase2.md` | 2 | Refactor callsites na `ModulePathResolver` |
+| `third-party-modules-phase3a.md` | 3a | Čtení `extraModulesPath` ze `server.json` |
+| `third-party-modules-phase3b.md` | 3b | Autoloader custom module tříd |
+| `third-party-modules-phase4.md` | 4 | `next-table-id` napříč rooty + `--range` |
+| `third-party-modules-phase5.md` | 5 | Dokumentace (finální) |
 
-Zjednodušení post-pull workflow (jeden shell skript místo čtyř ručních
-kroků), volitelná git-hook automatizace, hromadný `ds-upgrade` přes
-všechny DS, tichý default výstup `ds-upgrade`. Centrální CLI reference
-v [`docs/cli.md`](../docs/cli.md).
+## Frontend — shell, navigace, viewery
 
-| Task                            | Co řeší                                              |
-|---------------------------------|------------------------------------------------------|
-| `dev-update-script.md`          | `scripts/dev-update.sh` + git hooks v `.githooks/`   |
-| `ds-upgrade-all.md`             | `shpd-server ds-upgrade-all` + `docs/cli.md`         |
-| `ds-upgrade-quiet-default.md`   | Tichý default výstup `ds-upgrade`, kompletní jen s `-v` |
+| Task | Co řeší |
+|------|---------|
+| `frontend-phase1-tasks.md` | Skeleton SPA, routing, layout, login |
+| `frontend-phase1-viewer.md` | `TableViewer` komponenta |
+| `frontend-phase3-app-sidebar.md` | Dynamická navigace generovaná ze serveru |
+| `frontend-phase5-viewers.md` | Viewer systém (formátované řádky, fulltext, infinite scroll) |
+| `viewer-row-icons-and-numbers.md` | Ikony a pořadová čísla v řádcích vieweru |
+| `viewer-number-series-tabs.md` | Spodní taby číselných řad v per-type doc viewerech |
+| `sidebar-sections.md` | Sémantické sekce sidebaru (Nákup/Prodej/Účtárna) přes `navSection` |
+| `sidebar-collapsed-icons.md` | Ikony položek ve sbaleném sidebaru (48 px) |
 
-### Doklady MVP — faktury vydané a přijaté
+## Frontend — i18n
 
-Kompletní dokladový subsystém — polymorfní jádro `docs.core` + per-typ
-moduly `docs.invoicesOut` (faktura vydaná `invno`) a `docs.invoicesIn`
-(faktura přijatá `invni`). Řídící dokument v
-[`docs/docs-mvp.md`](../docs/docs-mvp.md). DPH model pro **CZ** včetně
-PDP, EU intracom, dovozu/vývozu. 6 fází.
+| Task | Fáze | Co řeší |
+|------|------|---------|
+| `frontend-i18n-phase1a.md` | 1A | Kostra vícejazyčnosti |
+| `frontend-i18n-phase1b.md` | 1B | Překlad UI chrome + LoginScreen |
+| `frontend-i18n-phase1c.md` | 1C | Backend i18n — lokalizace server-driven labelů |
 
-| Task                              | Fáze | Co řeší                                              |
-|-----------------------------------|------|------------------------------------------------------|
-| `persons-is-own-extension.md`     | 1    | `is_own` flag a `court_registration` na `base.persons` |
-| `world-vat-cz.md`                 | 2    | Modul `world.vat` s CZ DPH kódy a procenty            |
-| `docs-core-phase1.md`             | 3    | Skeleton `docs.core` — tabulky, cfgItem, číselné řady |
-| `docs-core-phase2.md`             | 4    | Výpočty cen, DPH, rekapitulace, snapshoty, atomické číslo |
-| `docs-core-phase3.md`             | 5    | UI — `DocsHeadsForm`, `DocRowsForm`, `DocsHeadsViewer` |
-| `docs-invoices.md`                | 6    | Per-typ moduly `docs.invoicesOut` a `docs.invoicesIn` s polymorfním dispatch |
+## Editační formuláře
 
-### Unifikované logování
+Server-driven formuláře, generický klient. Reference
+[`docs/edit-forms.md`](../docs/edit-forms.md) + [`edit-forms-cookbook.md`](../docs/edit-forms-cookbook.md).
 
-Produkční-grade `ErrorLogger` — úrovně (DEBUG/INFO/WARN/ERROR), JSON
-formát (jeden řádek per záznam) s `ds`, `request`, `exception` polem,
-`/opt/shipard/log/shipard.log` jako default cesta, automatické logování
-v `index.php` catch handleru a `TableGateway::saveDocument`. Detaily a
-způsoby čtení v [`docs/logging.md`](../docs/logging.md).
+| Task | Co řeší |
+|------|---------|
+| `edit-forms-phase1.md` | Backend jádro (`FormController`, `FormDefinition`, `AutoFormBuilder`) |
+| `edit-forms-phase2.md` | JSONC loader, PersonsForm, sub-formy, recalculate hook |
+| `edit-forms-phase3.md` | Frontend (`FormRenderer`, `FormDialog`) |
+| `frontend-phase4-forms.md` | Frontend formuláře generované z metadat |
+| `new-forms-01.md` | Nový layout system (sekce, sloupce, label-left, auto-šířka labelů) |
+| `form-builder-hardening.md` | Whitelist `inputType`, dedikované buildery (`addTextArea`, `addDate`, …) |
+| `form-header-info.md` | Strukturované info v hlavičce formuláře (`HeaderInfo`) |
+| `form-lookup-fields.md` | Typeahead lookup pro FK na velké tabulky |
+| `form-modal-unified-size.md` | Sjednocení velikosti editačních modalů |
+| `form-validation-errors.md` | Zobrazení a kontrakt validačních hlášek |
+| `persons-form-restructure.md` | Restrukturalizace formuláře osob |
+| `items-form-restructure.md` | Restrukturalizace formuláře položek |
 
-| Task                       | Co řeší                                            |
-|----------------------------|----------------------------------------------------|
-| `unified-logging.md`       | Refactor MVP `ErrorLogger` do produkční kvality, deploy guide, migrace existujících `error_log()` volání |
+## Nastavení aplikace a vlastní vzhledy
 
-### Modul `economy.items` + `core.units`
+Režim Nastavení (`docs/app-settings.md`) + custom vzhled sidebaru.
 
-Příprava na dokladový systém — katalog položek, číselník druhů, měrné
-jednotky.
+| Task | Co řeší |
+|------|---------|
+| `frontend-settings-app.md` | Režim Nastavení — číselníky jako settings |
+| `app-settings-pages.md` | Settings pages + branding (název, ikona, logo) |
+| `settings-subsections.md` | Dvouúrovňové sekce v Nastavení + přesun položek |
+| `custom-theme-phase1.md` | Custom téma sidebaru (presety, color picker, OKLCH, per-DS) |
+| `custom-theme-phase2.md` | Gradienty, opacity slider, stránkování presetů |
+| `custom-theme-phase3.md` | Per-user persistence + režim Nastavení účtu |
+| `custom-theme-phase4.md` | DS-wide default vzhledu + `follow` flag |
 
-| Task                       | Co řeší                                |
-|----------------------------|----------------------------------------|
-| `economy-items-phase1.md`  | Tabulky, viewer, formulář, fake data    |
+## Mobilní (responzivní) UI
 
-### Modul `economy.accbal` — saldokonto
+Responzivní design pro telefon (~380px).
 
-Saldokonto postavené **nad účetním deníkem** — vybrané řádky deníku se
-projektují do saldo pohybů (předpisy/úhrady), párování je samostatná
-vrstva. Řídící dokument [`docs/accbal.md`](../docs/accbal.md). Clearing
-nespárovaných plateb (varianta B), regenerovatelný deník, idempotence přes
-stabilní klíč zdroje.
+| Task | Fáze | Co řeší |
+|------|------|---------|
+| `mobile-app-chrome-phase1.md` | 1 | Drawer sidebar + top bar |
+| `mobile-viewer-phase2.md` | 2 | List/detail přepínání + akce v top baru |
+| `mobile-forms-phase3a.md` | 3a | Editační modál fullscreen |
+| `mobile-forms-phase3b.md` | 3b | Inline skupiny pod sebe |
+| `mobile-forms-phase3c.md` | 3c | Footer kebab pro vedlejší akce |
 
-| Task                                 | Fáze | Co řeší                                              |
-|--------------------------------------|------|------------------------------------------------------|
-| `accbal-phase0-payment-identity.md`  | 0    | Platební identita v deníku — `payment_reference`/`specific_symbol`/`constant_symbol`/`due_date` do `economy_accounting_journal`, razítkování v obou enginech, přejmenování `symbol1/2/3` na bankovních transakcích, VS ve `JournalViewer` |
-| `accbal-phase1-settings.md`          | 1    | Modul `economy.accbal` + nastavení saldokont (`balances` + `balance_accounts`), CRUD, seed + provisioner (vč. clearing skupiny „Nespárované platby") |
-| `accbal-phase2a-journal-event.md`    | 2a   | Core událost `journalWritten` vyslaná účtovacími enginy (i při reaccountu bez změny stavu) — interface/dispatcher/loader, zrcadlo `documentEventHandlers` |
-| `accbal-phase2b-ledger-generator.md` | 2b   | Generátor pohybů — `economy_accbal_ledger` + `economy_accbal_allocations`, `LedgerGenerator` na `journalWritten` (UPSERT dle stabilního klíče), ledger viewer |
+## Osoby a číselníky
 
-Matcher (Fáze 3 — alokační algoritmus, ruční úprava, přegenerace případu,
-reaccount clearing → 311/321) je odložený do samostatného design sezení;
-task zatím neexistuje.
+Základ pro dokladový systém — osoby, měna/země, položky, období.
 
-### Modul `mail`
+| Task | Co řeší |
+|------|---------|
+| `persons-is-own-extension.md` | `base.persons`: `is_own` (vlastní firma) + obchodní rejstřík |
+| `world-vat-cz.md` | Modul `world.vat` — CZ DPH kódy a procenta |
+| `economy-items-phase1.md` | Položky + měrné jednotky |
+| `economy-cash-and-bank.md` | Pokladny + vlastní bankovní spojení |
+| `economy-fiscal-periods.md` | Fiskální období (roky/měsíce) |
+| `economy-vat-periods.md` | Období DPH (registrace + období) |
+| `codebooks-currency-select.md` | Roletky měny/země + sdílený `EnumOptionsHelper` |
 
-| Task                       | Co řeší                                                |
-|----------------------------|--------------------------------------------------------|
-| `mail-phase1.md`           | Tabulky, viewer, editor, fake data — evidence došlé pošty |
-| `mail-phase2a.md`          | API endpoint `/api/v1/_mail/incoming`, idempotency, auto-provisioning |
-| `ds-encrypted-secrets.md`  | Šifrování citlivých sloupců — `encrypted_text` typ, `DsSecretCipher`, kanárková tabulka, rotace klíčů |
-| `mail-phase3a.md`          | AI analýza došlé pošty — backendy, profily, claims, extrahované dokumenty, integrace s `ai_analyzer` daemonem |
+## Dokladový systém (doklady, faktury)
 
-`mail_router/tasks/phase1.md` (Fáze 2b) žije v jiném repozitáři a
-implementuje samotný daemon, který volá endpoint `/api/v1/_mail/incoming`.
+Polymorfní jádro `docs.core` + per-typ faktury. Řídící dokument
+[`docs/docs-mvp.md`](../docs/docs-mvp.md).
 
-`ai_analyzer:tasks/phase1.md` (Python daemon) implementuje samotnou AI
-analýzu, která konzumuje claims a vrací výsledky do tabulek z `mail-phase3a`.
+| Task | Co řeší |
+|------|---------|
+| `docs-core-phase1.md` | Skeleton `docs.core` (tabulky, cfgItem, číselné řady) |
+| `docs-core-phase2.md` | Výpočty cen/DPH, rekapitulace, snapshoty, atomické číslo |
+| `docs-core-phase3.md` | Formulář a viewer dokladu |
+| `docs-invoices.md` | Per-typ moduly `docs.invoicesOut` / `docs.invoicesIn` |
+| `docs-invoices-split-forms.md` | Rozdělení editačního formuláře na per-typ varianty |
+| `docs-detail-document.md` | Detail jako „textová faktura" (content type `document`) |
+| `docs-source-mail-attachments.md` | Přílohy navázaných došlých zpráv v detailu dokladu |
+| `docs-payment-reference-rename.md` | `variable_symbol` → `payment_reference` |
+| `doc-states-main-persistence.md` | Centralizace dopočtu `docStateMain` do persistenční vrstvy |
 
-### Editační formuláře
+## Výměnný formát a import ze starého Shipardu
 
-PRD `docs/edit-forms.md` rozdělené na tři fáze:
+Kanonický `shpd.docs.document.v1` + resolvery + apply pipeline; import
+historických dat. Reference [`docs/exchange-format.md`](../docs/exchange-format.md).
 
-| Task                      | Co řeší                                            |
-|---------------------------|----------------------------------------------------|
-| `edit-forms-phase1.md`    | Backend jádro — `FormController`, `FormDefinition`, `AutoFormBuilder` |
-| `edit-forms-phase2.md`    | JSONC loader, registrace, recalculate hook         |
-| `edit-forms-phase3.md`    | Document classes, validace, sub-tabs               |
-| `form-builder-hardening.md` | Whitelist pro `inputType`, dedikované buildery (`addTextArea`, `addDate`, …) — vyplynulo z provozu na `mail-phase1` |
+| Task | Co řeší |
+|------|---------|
+| `exchange-format-phase1.md` | Core modul + apply pipeline (doklady) |
+| `exchange-format-phase2.md` | Napojení AI analyzeru |
+| `exchange-format-phase3a.md` | Vizualizace canonical + PDF split-view |
+| `exchange-format-phase3b.md` | Interakce s `_resolve` |
+| `exchange-resolve-decision-ui.md` | Rebuild rozhodování canCreate/ambiguous/notFound + smart totals |
+| `exchange-format-persons-phase1.md` | Výměnný formát osob (`shpd.persons.person.v1`) |
+| `exchange-format-items-phase1.md` | Výměnný formát položek (`shpd.items.item.v1`) |
+| `docs-import-number-mode.md` | Import-mód čísla dokladu + fix validace bank. spojení |
+| `docs-import-series-states.md` | Výběr číselné řady + cílové stavy 40/30 při importu |
+| `mail-phase4-import-endpoint.md` | Import endpoint pro importer ze starého Shipardu |
 
-### Frontend
+## Účetnictví
 
-| Task                              | Co řeší                                |
-|-----------------------------------|----------------------------------------|
-| `frontend-phase1-tasks.md`        | Skeleton SPA, routing, layout          |
-| `frontend-phase1-viewer.md`       | `TableViewer` Svelte komponenta        |
-| `frontend-phase3-app-sidebar.md`  | Hlavní navigace                        |
-| `frontend-phase4-forms.md`        | `FormRenderer`, `FormDialog`           |
-| `frontend-phase5-viewers.md`      | Konkrétní viewery (Persons, …)            |
-| `sidebar-sections.md`             | Sémantické sekce sidebaru — cfgItem `global.navSections` + `navSection`/`navOrder` na vieverech, `NavigationController` seskupuje dle navSection (sentinel `_top` pro root leaves, fallback `system`). Skrytí souhrnných Dokladů (sdílená tabulka faktur nepoškozena), přesun Extrahovaných dokumentů/Zpráv chatu/Období DPH/Uživatelů/Nastavení do Nastavení. |
+Automatické účtování dokladů ([`docs/accounting.md`](../docs/accounting.md)),
+účtový rozvrh a účetní doklady `cmnbkp`.
 
-### Číselníky — roletky měny a země
+| Task | Co řeší |
+|------|---------|
+| `economy-accounting-accounts.md` | Účtový rozvrh (modul `economy.accounting`, Fáze 1) |
+| `account-chart-none-variant.md` | `accountChart: "none"` — přeskočení seedu standardní osnovy |
+| `accounting-phase1.md` | Pohyby a `_dom` sloupce |
+| `accounting-phase2.md` | Deník + účtovací engine |
+| `accounting-phase3.md` | UI účtování |
+| `accounting-vat-analytics.md` | DPH analytiky per `vatCode` |
+| `accounting-docs-phase1.md` | `cmnbkp` — schéma řádků + typ dokladu |
+| `accounting-docs-phase2.md` | `cmnbkp` — účetní backend (engine + předpis + subclass) |
+| `accounting-docs-phase2-balance-ops.md` | `cmnbkp` — saldokontní operace (operation-default účet) |
+| `accounting-docs-phase3.md` | `cmnbkp` — UI (viewer, form, sekce Účtárna) |
+| `accounting-docs-phase4-import.md` | `cmnbkp` — exchange + applier (import ze starého Shipardu) |
 
-Sjednocení skládání labelu enum options do sdíleného `EnumOptionsHelper`
-(odstranění 5 duplikací) + roletky tam, kde byla měna/země volný text.
+## Banka
 
-| Task                          | Co řeší                                |
-|-------------------------------|----------------------------------------|
-| `codebooks-currency-select.md`| Roletka měny ve třech číselnících Nastavení (Pokladny, Bankovní spojení, Fiskální období) — sloupec `varchar` → `enumString`. Roletka země na Adresách (Osoby). Sdílený `EnumOptionsHelper`; **M1**: prefix `ALPHA3 — name` jen pro měny, země a ostatní `name`. |
+Modul `economy.bank`. Referenční spec [`docs/bank.md`](../docs/bank.md).
 
-### Drobné
+| Task | Fáze | Co řeší |
+|------|------|---------|
+| `bank-phase1.md` | 1 | Datový model + generalizace deníku |
+| `bank-phase2.md` | 2 | Import výpisu ze souboru + deduplikace |
+| `bank-phase3.md` | 3 | Účetní mikroengine + UI účtování |
+| `bank-phase4.md` | 4 | Výměnný formát + applier pro migraci výpisů |
 
-| Task                          | Co řeší                                |
-|-------------------------------|----------------------------------------|
-| `add-reference.md`            | Přidání reference (FK) do schema       |
-| `add-user.md`                 | Vytvoření uživatele přes CLI           |
-| `install-for-developers.md`   | `DEVELOPERS.md`, `scripts/install-packages.sh` |
+## Saldokonto (economy.accbal)
+
+Saldokonto nad účetním deníkem. Designový dokument
+[`docs/accbal.md`](../docs/accbal.md).
+
+| Task | Fáze | Co řeší |
+|------|------|---------|
+| `accbal-phase0-payment-identity.md` | 0 | Platební identita v účetním deníku |
+| `accbal-phase1-settings.md` | 1 | Nastavení saldokont (skupiny + účty, seed + provisioner) |
+| `accbal-phase2a-journal-event.md` | 2a | Core událost `journalWritten` |
+| `accbal-phase2b-ledger-generator.md` | 2b | Generátor saldo pohybů z deníku + allocations |
+| `accbal-phase3-matcher.md` | 3 | Matcher — párování úhrad (FIFO alokace, ruční úprava) |
+| `accbal-clearing-infrastructure.md` | — | Clearing účty + saldo skupina pro migrovaný DS |
+
+## Došlá pošta (core.mail)
+
+Evidence → API endpoint → AI analýza do dokladů. Kontrakt endpointu
+[`docs/mail/api-contract.md`](../docs/mail/api-contract.md).
+
+| Task | Co řeší |
+|------|---------|
+| `mail-phase1.md` | Evidence došlé pošty (tabulky, viewer, editor, fake data) |
+| `mail-phase2a.md` | API endpoint `/_mail/incoming` (idempotency, auto-provisioning) |
+| `mail-phase3a.md` | AI analýza (shpd strana): backendy, profily, claims, extrahované doklady |
+| `mail-config-viewers.md` | Viewery a formuláře pro mailové konfigurační tabulky |
+| `ai-profile-reload.md` | CLI `ai-profile-reload` — reload promptu/schématu profilu z JSONC |
+
+Daemony volající endpoint žijí v jiných repech: `mail_router:tasks/phase1.md`
+(mail-router, Python) a `ai_analyzer:tasks/phase1.md` (AI analyzer, Python).
+
+## AI — MCP server a chat
+
+Sdílené LLM backendy, MCP nástroje, vnitřní chat. Přehled
+[`docs/ai.md`](../docs/ai.md), [`docs/mcp-server.md`](../docs/mcp-server.md),
+[`docs/chat.md`](../docs/chat.md).
+
+| Task | Co řeší |
+|------|---------|
+| `core-ai-extract-backends.md` | Extrakce AI backendů do `core/ai` (sdíleno analyzer/chat) |
+| `mcp-server-01-skeleton.md` | Skeleton MCP serveru + `persons_search` |
+| `mcp-server-02-read-tools.md` | Zbývající čtecí nástroje (`documents_search`, `mail_list_pending`, …) |
+| `mcp-server-03-draft-tool.md` | Draft nástroj `mail_draft_document` (první zápisový) |
+| `chat-phase1-persistence.md` | Perzistenční skelet konverzací |
+| `chat-phase2a-streaming.md` | Streamovaný chat bez nástrojů (`LlmClient::streamChat`) |
+| `chat-phase2b-tools.md` | Tool-use smyčka |
+| `chat-phase3-ui.md` | Svelte UI chatu |
+
+## Upozornění (core.alerts)
+
+Systém upozornění s akcemi. Reference [`docs/alerts.md`](../docs/alerts.md).
+
+| Task | Co řeší |
+|------|---------|
+| `alerts-01.md` | Modul `core.alerts` MVP (checks, reconciliation, snooze/dismiss) |
+| `alerts-02.md` | `detail.actions` ve Vieweru (alerts první konzument akcí) |
+| `alerts-03.md` | Check `docs.core.stale_in_repair` |
+
+## Dashboard a Úkoly
+
+Home obrazovka + modul úkolů. Reference [`docs/dashboard.md`](../docs/dashboard.md).
+
+| Task | Co řeší |
+|------|---------|
+| `01-module-tasks.md` | Modul `tasks.core` — Úkoly / To-Do list |
+| `dashboard-phase1.md` | Widget MVP (3 widgety, agregovaný endpoint `/_ui/dashboard`) |
+| `dashboard-phase2.md` | Přestavba na feed (kartový kontrakt, 2 zdroje, inline akce, undo) |
+| `dashboard-phase2b.md` | Generované AI shrnutí (SSE endpoint, cache dle hashe feedu) |
+| `dashboard-row-edit-modal.md` | Edit z řádku widgetu Úkoly |
+
+## Dev dashboard
+
+Vývojářský nástroj v development módu (`/_dev/`).
+
+| Task | Co řeší |
+|------|---------|
+| `dev-dashboard-mvp.md` | Seznam datových zdrojů |
+| `dev-dashboard-log-viewer.md` | Log viewer `/_dev/logs/` |
+| `dev-dashboard-create-ds.md` | Vytvoření DS přes UI |
+| `dev-dashboard-actions.md` | Server akce + per-DS upgrade |
+
+## Drobné
+
+| Task | Co řeší |
+|------|---------|
+| `add-reference.md` | Přidání `reference` (FK) + `displayPattern` do schema |
 
 ---
 
@@ -185,8 +304,8 @@ Větší PRD typicky obsahují:
 - **Task breakdown** — commitovatelné jednotky s akceptačními kritérii
 - **Rozhodnutí k designu** — body s `✓ potvrzeno` po finalizaci
 
-Menší tasky stačí jako jednostránkové prompty s nadpisem "Co je potřeba
-udělat" a check-listem "Hotovo když".
+Menší tasky stačí jako jednostránkové prompty s nadpisem „Co je potřeba
+udělat" a check-listem „Hotovo když".
 
 ### Referencování externích repozitářů
 
@@ -216,15 +335,15 @@ otevřené.
 
 Tasky obvykle žijí v repu, kterého se týkají primárně. Cross-repo
 změny dělej tak, že nejdřív stabilizuješ jeden repo (typicky shpd jako
-"server"), pak proti němu vyvíjíš klienty.
+„server"), pak proti němu vyvíjíš klienty.
 
 ---
 
 ## Když se vracíš po pauze
 
-1. Přečti **Aktivní práci** na začátku — co je rozpracované
-2. Pokud rozpracované není, podívej se do *Hotových tasků* na poslední
-   commit-ovaný PRD (typicky to bude clue, kde projekt skončil)
-3. Čti `CLAUDE.md` v kořeni repa pro celkový architectural overview
+1. Najdi v **indexu podle oblastí** oblast, které se chceš věnovat
+2. Poslední commitnutý PRD v dané oblasti napoví, kde práce skončila
+   (kód je zdroj pravdy — task je momentka)
+3. Čti `CLAUDE.md` v kořeni repa pro celkový architektonický přehled
 4. Při startu nové fáze: nejdřív design diskuze (otevřené otázky), pak
    PRD, pak implementace

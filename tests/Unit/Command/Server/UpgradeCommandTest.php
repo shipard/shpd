@@ -54,6 +54,11 @@ class TestableUpgradeCommand extends UpgradeCommand
         return $this->shipardUser;
     }
 
+    protected function getPhpVersion(): string
+    {
+        return '8.5';
+    }
+
     protected function capture(string $shellCmd): array
     {
         $this->captureLog[] = $shellCmd;
@@ -138,6 +143,8 @@ class UpgradeCommandTest extends TestCase
         $this->assertFalse($plan['composer']);
         $this->assertFalse($plan['frontend']);
         $this->assertTrue($plan['dsUpgradeAll']);
+        $this->assertFalse($plan['nginxReload']);
+        $this->assertFalse($plan['fpmReload']);
     }
 
     public function testComputePlanFullForcesEverything(): void
@@ -147,6 +154,26 @@ class UpgradeCommandTest extends TestCase
         $this->assertTrue($plan['composer']);
         $this->assertTrue($plan['frontend']);
         $this->assertTrue($plan['dsUpgradeAll']);
+        $this->assertTrue($plan['nginxReload']);
+        $this->assertTrue($plan['fpmReload']);
+    }
+
+    public function testComputePlanNginxConfigOnly(): void
+    {
+        $cmd = new TestableUpgradeCommand($this->repoRoot);
+        $plan = $cmd->computePlan(['docs/nginx/shipard-common.conf'], false, false);
+        $this->assertTrue($plan['nginxReload']);
+        $this->assertFalse($plan['fpmReload']);
+        $this->assertFalse($plan['composer']);
+        $this->assertFalse($plan['frontend']);
+    }
+
+    public function testComputePlanFpmConfigOnly(): void
+    {
+        $cmd = new TestableUpgradeCommand($this->repoRoot);
+        $plan = $cmd->computePlan(['docs/php/shipard-fpm-common.conf'], false, false);
+        $this->assertFalse($plan['nginxReload']);
+        $this->assertTrue($plan['fpmReload']);
     }
 
     public function testComputePlanSkipDsUpgrade(): void
@@ -326,5 +353,65 @@ class UpgradeCommandTest extends TestCase
         $this->assertSame(0, $tester->execute([], ['verbosity' => \Symfony\Component\Console\Output\OutputInterface::VERBOSITY_VERBOSE]));
         $last = end($cmd->stepLog);
         $this->assertStringContainsString('ds-upgrade-all -v', $last);
+    }
+
+    // --- service reload steps ---
+
+    public function testRootRunsReloadStepsAfterDsUpgradeAll(): void
+    {
+        $cmd = new TestableUpgradeCommand($this->repoRoot, euid: 0, currentUser: 'root', shipardUser: 'shipard');
+        $cmd->captureMap = $this->happyCaptureMap(['docs/nginx/shipard-common.conf', 'docs/php/shipard-fpm-common.conf']);
+        $tester = new CommandTester($cmd);
+
+        $this->assertSame(0, $tester->execute([]));
+        // pull, ds-upgrade-all, nginx reload, fpm reload, doctor
+        $this->assertCount(5, $cmd->stepLog);
+        $this->assertStringContainsString('ds-upgrade-all', $cmd->stepLog[1]);
+        $this->assertSame('nginx -t && systemctl reload nginx', $cmd->stepLog[2]);
+        $this->assertSame('systemctl reload php8.5-fpm', $cmd->stepLog[3]);
+        $this->assertStringContainsString('doctor', $cmd->stepLog[4]);
+    }
+
+    public function testNonRootSkipsReloadAndPrintsHint(): void
+    {
+        $cmd = new TestableUpgradeCommand($this->repoRoot);
+        $cmd->captureMap = $this->happyCaptureMap(['docs/nginx/shipard-common.conf']);
+        $tester = new CommandTester($cmd);
+
+        $this->assertSame(0, $tester->execute([]));
+        foreach ($cmd->stepLog as $step) {
+            $this->assertStringNotContainsString('systemctl', $step);
+        }
+        $display = $tester->getDisplay();
+        $this->assertStringContainsString('[skip] nginx reload (not running as root)', $display);
+        $this->assertStringContainsString('sudo nginx -t && sudo systemctl reload nginx', $display);
+        $this->assertStringNotContainsString('sudo systemctl reload php8.5-fpm', $display);
+    }
+
+    public function testNginxReloadFailureReportsCodeDeployed(): void
+    {
+        $cmd = new TestableUpgradeCommand($this->repoRoot, euid: 0, currentUser: 'root', shipardUser: 'shipard');
+        $cmd->captureMap = $this->happyCaptureMap(['docs/nginx/shipard-common.conf']);
+        $cmd->stepExitCodes = ['nginx -t' => 1];
+        $tester = new CommandTester($cmd);
+
+        $this->assertSame(1, $tester->execute([]));
+        $display = $tester->getDisplay();
+        $this->assertStringContainsString('Step "nginx reload" failed', $display);
+        $this->assertStringContainsString('Code is deployed — only the service config/reload is broken.', $display);
+        $this->assertStringContainsString('nginx -t && systemctl reload nginx', $display);
+    }
+
+    public function testDryRunShowsReloadPlan(): void
+    {
+        $cmd = new TestableUpgradeCommand($this->repoRoot, euid: 0, currentUser: 'root', shipardUser: 'shipard');
+        $cmd->captureMap = $this->happyCaptureMap(['docs/nginx/shipard-common.conf']);
+        $tester = new CommandTester($cmd);
+
+        $this->assertSame(0, $tester->execute(['--dry-run' => true]));
+        $display = $tester->getDisplay();
+        $this->assertStringContainsString('[run]  nginx reload (docs/nginx/ changed)', $display);
+        $this->assertStringContainsString('[skip] php-fpm reload (no docs/php/ changes)', $display);
+        $this->assertSame([], $cmd->stepLog);
     }
 }

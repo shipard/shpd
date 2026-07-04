@@ -106,16 +106,24 @@ class UpgradeCommand extends Command
         return $exitCode;
     }
 
+    /** Verze běžícího PHP (např. '8.5') — suffix názvu FPM služby. */
+    protected function getPhpVersion(): string
+    {
+        return PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION;
+    }
+
     /**
      * Které kroky se mají provést — čistá funkce kvůli testům.
      *
      * @param string[] $changedFiles
-     * @return array{composer: bool, frontend: bool, dsUpgradeAll: bool}
+     * @return array{composer: bool, frontend: bool, dsUpgradeAll: bool, nginxReload: bool, fpmReload: bool}
      */
     public function computePlan(array $changedFiles, bool $full, bool $skipDsUpgrade): array
     {
         $composer = $full;
         $frontend = $full;
+        $nginxReload = $full;
+        $fpmReload = $full;
         foreach ($changedFiles as $file) {
             if ($file === 'composer.json' || $file === 'composer.lock') {
                 $composer = true;
@@ -123,11 +131,19 @@ class UpgradeCommand extends Command
             if (str_starts_with($file, 'frontend/')) {
                 $frontend = true;
             }
+            if (str_starts_with($file, 'docs/nginx/')) {
+                $nginxReload = true;
+            }
+            if (str_starts_with($file, 'docs/php/')) {
+                $fpmReload = true;
+            }
         }
         return [
             'composer' => $composer,
             'frontend' => $frontend,
             'dsUpgradeAll' => !$skipDsUpgrade,
+            'nginxReload' => $nginxReload,
+            'fpmReload' => $fpmReload,
         ];
     }
 
@@ -247,6 +263,16 @@ class UpgradeCommand extends Command
         $output->writeln($plan['dsUpgradeAll']
             ? '  [run]  ds-upgrade-all'
             : '  [skip] ds-upgrade-all (--skip-ds-upgrade)');
+        $output->writeln(match (true) {
+            !$plan['nginxReload'] => '  [skip] nginx reload (no docs/nginx/ changes)',
+            $euid !== 0 => '  [skip] nginx reload (not running as root)',
+            default => '  [run]  nginx reload' . ($full ? ' (--full)' : ' (docs/nginx/ changed)'),
+        });
+        $output->writeln(match (true) {
+            !$plan['fpmReload'] => '  [skip] php-fpm reload (no docs/php/ changes)',
+            $euid !== 0 => '  [skip] php-fpm reload (not running as root)',
+            default => '  [run]  php-fpm reload' . ($full ? ' (--full)' : ' (docs/php/ changed)'),
+        });
         $output->writeln($runDoctor
             ? '  [run]  doctor'
             : '  [skip] doctor (not running as root)');
@@ -295,6 +321,21 @@ class UpgradeCommand extends Command
             // Nový proces = nový kód (po pullu).
             $steps[] = ['ds-upgrade-all', $this->wrapUser($shpdServer . ' ds-upgrade-all' . $verbosityFlag, $sudoUser)];
         }
+        // Reload kroky běží přímo jako root (žádný wrapUser — systemctl
+        // potřebuje root, ne shipard uživatele).
+        $nginxReloadCmd = 'nginx -t && systemctl reload nginx';
+        $fpmReloadCmd = 'systemctl reload php' . $this->getPhpVersion() . '-fpm';
+        $reloadSteps = [];
+        if ($euid === 0) {
+            if ($plan['nginxReload']) {
+                $steps[] = ['nginx reload', $nginxReloadCmd];
+                $reloadSteps[] = 'nginx reload';
+            }
+            if ($plan['fpmReload']) {
+                $steps[] = ['php-fpm reload', $fpmReloadCmd];
+                $reloadSteps[] = 'php-fpm reload';
+            }
+        }
 
         // --- Provedení (D5) — od git pull dál žádné lazy-loadované třídy ---
         $executed = [];
@@ -304,7 +345,14 @@ class UpgradeCommand extends Command
             if ($exitCode !== 0) {
                 $output->writeln('');
                 $output->writeln(sprintf('<error>Step "%s" failed (exit code %d) — upgrade aborted.</error>', $name, $exitCode));
-                $output->writeln('Finish the remaining steps manually, see docs/operations/production.md §11.');
+                if (in_array($name, $reloadSteps, true)) {
+                    $output->writeln('<error>Code is deployed — only the service config/reload is broken.</error>');
+                    $output->writeln('Fix the config, then reload manually:');
+                    $output->writeln('  ' . $nginxReloadCmd);
+                    $output->writeln('  ' . $fpmReloadCmd);
+                } else {
+                    $output->writeln('Finish the remaining steps manually, see docs/operations/production.md §11.');
+                }
                 return Command::FAILURE;
             }
             $executed[] = $name;
@@ -339,6 +387,17 @@ class UpgradeCommand extends Command
             $output->writeln("Skipped: doctor — run 'sudo shpd-server doctor' to verify");
         }
         $output->writeln('==========================================');
+
+        if ($euid !== 0 && ($plan['nginxReload'] || $plan['fpmReload'])) {
+            $output->writeln('');
+            $output->writeln('<comment>System config changed — reload the services manually as root:</comment>');
+            if ($plan['nginxReload']) {
+                $output->writeln('  sudo nginx -t && sudo systemctl reload nginx');
+            }
+            if ($plan['fpmReload']) {
+                $output->writeln('  sudo systemctl reload php' . $this->getPhpVersion() . '-fpm');
+            }
+        }
 
         if ($doctorFailed) {
             $output->writeln('<error>Code deployed, but doctor reported issues — inspect the output above.</error>');

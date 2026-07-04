@@ -197,6 +197,10 @@ class Router
 			return $this->resolveAlertsRoute($subpath, $method);
 		}
 
+		if (str_starts_with($subpath, '/_accbal')) {
+			return $this->resolveAccbalRoute($subpath, $method);
+		}
+
 		// POST /_accounting/reaccount — přeúčtování dokladu ve stavu 40
 		if ($subpath === '/_accounting/reaccount') {
 			if ($method !== 'POST') {
@@ -515,6 +519,24 @@ class Router
 				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
 			}
 			return new Route('alerts', $m[2], null, $id);
+		}
+
+		return Response::error('NOT_FOUND', 'Not found', 404);
+	}
+
+	/**
+	 * POST /_accbal/match — dávkové párování úhrad saldokonta. Destruktivní
+	 * cesty matcheru (unmatch, rematch-partner) API záměrně nevystavuje.
+	 */
+	private function resolveAccbalRoute(string $subpath, string $method): Route|Response
+	{
+		$rest = substr($subpath, strlen('/_accbal'));
+
+		if ($rest === '/match') {
+			if ($method !== 'POST') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('accbal', 'match');
 		}
 
 		return Response::error('NOT_FOUND', 'Not found', 404);

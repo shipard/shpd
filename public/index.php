@@ -288,6 +288,7 @@ function dispatch(
 		'analysis' => dispatchAnalysis($route, $request, $auth, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher),
 		'exchange' => dispatchExchange($route, $request, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher),
 		'alerts' => dispatchAlerts($route, $request, $db, $alertCheckRegistry, $configRuntime, resolveLanguage($request, $resolved->config)),
+		'accbal'  => dispatchAccbal($route, $request, $db, $configRuntime, $journalEventDispatcher, $resolved->config),
 		'accounting' => dispatchAccounting($route, $request, $db, $configRuntime, $journalEventDispatcher),
 		'bank'    => dispatchBank($route, $request, $auth, $tables, $db, $resolved, $configRuntime, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher, $journalEventDispatcher),
 		'personsRegistry' => dispatchPersonsRegistry($route, $request, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $serverConfig),
@@ -421,6 +422,29 @@ function dispatchAlerts(
 		'dismiss'   => $ctrl->dismiss((int) $route->id),
 		'unsnooze'  => $ctrl->unsnooze((int) $route->id),
 		default     => Response::error('INTERNAL_ERROR', "Unknown alerts action: {$route->action}", 500),
+	};
+}
+
+function dispatchAccbal(
+	Route $route,
+	Request $request,
+	\Shipard\Core\Database\DataSourceConnection $db,
+	?\Shipard\Core\Config\ConfigRuntime $configRuntime,
+	?\Shipard\Core\Document\JournalEventDispatcher $journalEventDispatcher,
+	\Shipard\Core\Config\DataSourceConfig $dsConfig,
+): Response {
+	if ($configRuntime === null) {
+		return Response::error('INTERNAL_ERROR', 'ConfigRuntime is required for /_accbal endpoints', 500);
+	}
+	if ($journalEventDispatcher === null) {
+		// Bez journal dispatcheru by se po reaccountu nespustila re-derivace ledgeru.
+		return Response::error('INTERNAL_ERROR', 'JournalEventDispatcher is required for /_accbal endpoints', 500);
+	}
+
+	$ctrl = new \Shipard\Api\Controller\AccbalController($db, $configRuntime, $journalEventDispatcher, $dsConfig);
+	return match ($route->action) {
+		'match' => $ctrl->match($request),
+		default => Response::error('INTERNAL_ERROR', "Unknown accbal action: {$route->action}", 500),
 	};
 }
 

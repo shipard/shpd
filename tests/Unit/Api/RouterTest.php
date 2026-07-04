@@ -818,6 +818,29 @@ class RouterTest extends TestCase
 		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
 	}
 
+	// Accbal endpoints
+
+	public function testAccbalMatch(): void
+	{
+		$result = $this->router->resolve('/api/v1/_accbal/match', 'POST');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'accbal', 'match');
+	}
+
+	public function testAccbalMatchGetNotAllowed(): void
+	{
+		$result = $this->router->resolve('/api/v1/_accbal/match', 'GET');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
+	}
+
+	public function testAccbalUnknownSubpathIs404(): void
+	{
+		$result = $this->router->resolve('/api/v1/_accbal/unmatch', 'POST');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('NOT_FOUND', $result->getPayload()['error']['code']);
+	}
+
 	// Bank
 	public function testBankImportStatementRoute(): void
 	{

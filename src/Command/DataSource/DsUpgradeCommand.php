@@ -20,6 +20,7 @@ use Shipard\Core\Module\ModulePathResolver;
 use Shipard\Core\Module\ModuleResolver;
 use Shipard\Core\Security\DsSecretCipher;
 use Shipard\Core\Utils\JsoncParser;
+use Shipard\Core\Version;
 use Shipard\Module\Core\Mail\AIAnalyzerProvisioner;
 use Shipard\Module\Core\Mail\MailRouterProvisioner;
 use Shipard\Module\Core\Units\UnitsProvisioner;
@@ -73,7 +74,7 @@ class DsUpgradeCommand extends Command
         $dsConfig = $this->dsConfig ?? new DataSourceConfig($dsDir);
         $dsConnection = $this->dsConnection ?? new DataSourceConnection($dsConfig);
 
-        $output->writeln('<info>Shipard Data Source Upgrade v0.1.0</info>', OutputInterface::VERBOSITY_VERBOSE);
+        $output->writeln('<info>Shipard Data Source Upgrade v' . Version::VERSION . '</info>', OutputInterface::VERBOSITY_VERBOSE);
         $output->writeln('Data source: ' . $dsConfig->getName() . ' (' . $dsConfig->getId() . ')', OutputInterface::VERBOSITY_VERBOSE);
         $output->writeln('', OutputInterface::VERBOSITY_VERBOSE);
 

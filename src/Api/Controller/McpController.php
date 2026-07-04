@@ -13,6 +13,7 @@ use Shipard\Api\Request;
 use Shipard\Api\Response;
 use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Database\DataSourceConnection;
+use Shipard\Core\Version;
 
 /**
  * MCP server přes Streamable HTTP (single endpoint POST /api/v1/_mcp).
@@ -24,8 +25,8 @@ class McpController
 	/** Nominální protocolVersion, když ji klient v `initialize` nepošle. */
 	private const string PROTOCOL_VERSION = '2025-06-18';
 
-	/** Verze appky pro serverInfo (dnes hardcoded i v *VersionCommand). */
-	private const string SERVER_VERSION = '0.1.0';
+	/** Verze appky pro serverInfo. */
+	private const string SERVER_VERSION = Version::VERSION;
 
 	public function __construct(
 		private readonly McpToolRegistry $registry,

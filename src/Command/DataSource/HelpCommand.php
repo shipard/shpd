@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Shipard\Command\DataSource;
 
+use Shipard\Core\Version;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -21,7 +22,7 @@ class HelpCommand extends Command
         $this->requireDataSource($output);
 
         $output->writeln('');
-        $output->writeln('<info>Shipard Data Source Tool v0.1.0</info>');
+        $output->writeln('<info>Shipard Data Source Tool v' . Version::VERSION . '</info>');
         $output->writeln('');
         $output->writeln('<comment>Basic:</comment>');
         $output->writeln('  <info>version</info>                 Show Shipard data source tool version');

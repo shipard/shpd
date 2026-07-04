@@ -8,6 +8,7 @@ require_once __DIR__ . '/../vendor/autoload.php';
 use Shipard\Core\Config\ServerConfig;
 use Shipard\Core\Module\ModuleClassLoader;
 use Shipard\Core\Module\ModulePathResolver;
+use Shipard\Core\Version;
 use Symfony\Component\Console\Application;
 
 try {
@@ -21,7 +22,7 @@ try {
 }
 ModuleClassLoader::register($resolver);
 
-$app = new Application('Shipard Server Management', '0.1.0');
+$app = new Application('Shipard Server Management', Version::VERSION);
 $app->add(new \Shipard\Command\Server\VersionCommand());
 $app->add(new \Shipard\Command\Server\HelpCommand());
 $app->add(new \Shipard\Command\Server\ServerInitCommand());

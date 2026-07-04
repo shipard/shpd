@@ -11,6 +11,10 @@ use Shipard\Core\Utils\JsoncParser;
 
 class ConfigCompiler
 {
+    /**
+     * Verze formátu kompilovaného configu — nezávislá na verzi aplikace
+     * (Shipard\Core\Version). Bumpovat při změně struktury kompilátu.
+     */
     private const VERSION = '0.1.0';
 
     /** @param ModuleDefinition[] $modules Resolved modules in dependency order */

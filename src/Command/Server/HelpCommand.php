@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Shipard\Command\Server;
 
+use Shipard\Core\Version;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -19,7 +20,7 @@ class HelpCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $output->writeln('');
-        $output->writeln('<info>Shipard Server Management v0.1.0</info>');
+        $output->writeln('<info>Shipard Server Management v' . Version::VERSION . '</info>');
         $output->writeln('');
         $output->writeln('<comment>Available commands:</comment>');
         $output->writeln('  <info>version</info>        Show Shipard server version');

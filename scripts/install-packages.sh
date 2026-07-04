@@ -180,6 +180,9 @@ pm.max_spare_servers = 4
 
 php_admin_value[error_log] = /var/log/php${PHP_VERSION}-fpm-shipard.log
 php_admin_flag[log_errors] = on
+
+; Versioned system parameters — updated via git pull + FPM reload
+include=$PROJECT_DIR/docs/php/shipard-fpm-common.conf
 EOF
 chmod 0644 "$POOL_FILE"
 

@@ -113,39 +113,46 @@ Vytvoří `/etc/shipard/server.json` s admin DB credentials (ownership
 ## 6. nginx a TLS
 
 Instalační skript aktivoval site ze šablony `docs/nginx/production.conf`.
-Ta je ale **jen výchozí kostra a je potřeba ji doupravit** — počítá se
-s tím, že tuhle část řešíš ručně:
+Živý `/etc/nginx/sites-available/shipard.conf` je po instalaci **ručně
+spravovaný soubor** — git na něj už nedosáhne. Config se proto dělí na
+dvě vrstvy:
+
+### Verzované přes include (spravuje repo)
+
+Systémové parametry žijí ve verzovaných souborech v repu a do site configu
+se **includují**. Změna parametru = `git pull` + reload služby, žádné ruční
+mergování:
 
 ```nginx
-server {
-    listen 443 ssl;
-    server_name *.shipard.cz;
+# V KAŽDÉM server bloku:
+include /opt/shipard/shpd/docs/nginx/shipard-common.conf;
 
-    root /opt/shipard/shpd/public;
-    index index.php;
-
-    location / {
-        try_files $uri /index.php$is_args$args;
-    }
-
-    location ~ \.php$ {
-        fastcgi_pass unix:/run/php/php-fpm.sock;   # skript přepíše na socket poolu shipard
-        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-        fastcgi_param HTTP_HOST $host;
-        fastcgi_param REQUEST_URI $request_uri;
-        include fastcgi_params;
-    }
-}
+# NAVÍC jen v HTTPS (listen 443 ssl) blocích:
+include /opt/shipard/shpd/docs/nginx/shipard-tls.conf;
 ```
 
-Co je potřeba doplnit před nasazením:
+- `shipard-common.conf` — systémové parametry pro všechny bloky
+  (`client_max_body_size 128M` — bez něj padají uploady příloh na 413).
+- `shipard-tls.conf` — TLS policy (TLSv1.3, session cache, HSTS).
+  **Patří výhradně do 443 ssl bloků** — HSTS hlavička poslaná přes plain
+  HTTP je chyba.
+
+Šablony include řádky už obsahují; při ruční tvorbě nebo úpravě configu
+je nezapomeň doplnit. `shpd-server doctor` chybějící include hlásí jako
+warning; `shpd-server upgrade` po změně těchto souborů nginx sám reloadne
+(viz §11). Stejný pattern má PHP-FPM pool — `include=` na
+`docs/php/shipard-fpm-common.conf` (upload limity), generuje ho
+instalační skript.
+
+### Ruční část (per-server, git se jí nedotýká)
 
 - **TLS certifikáty** — šablona má `listen 443 ssl;`, ale žádné
   `ssl_certificate` / `ssl_certificate_key`. Bez nich `nginx -t`
   neprojde. Doplň cesty ke svým certifikátům.
 - **HTTP → HTTPS redirect** — přidej `server { listen 80; ... return 301
   https://$host$request_uri; }` (a případně location pro ACME challenge,
-  pokud budeš certy obnovovat automaticky).
+  pokud budeš certy obnovovat automaticky). Do tohoto bloku TLS include
+  nepatří.
 - **`server_name`** — uprav z `*.shipard.cz` na svou doménu.
 
 Poznámka: `fastcgi_pass` v šabloně míří na výchozí socket, ale instalační
@@ -299,7 +306,11 @@ Příkaz provede (kroky přes `sudo -u shipard -H`, doctor přímo jako root):
 3. frontend build (`npm ci && npm run build`) — jen při změně pod `frontend/`
    (nebo `--full`)
 4. `shpd-server ds-upgrade-all` (vynechatelné přes `--skip-ds-upgrade`)
-5. `shpd-server doctor`
+5. reload služeb — jen při změně verzovaných systémových confů (viz §6):
+   `docs/nginx/**` → `nginx -t && systemctl reload nginx`, `docs/php/**` →
+   `systemctl reload php<ver>-fpm`. Běží jen pod rootem; jinak příkaz
+   vypíše ruční `sudo` příkazy.
+6. `shpd-server doctor`
 
 Bez příchozích commitů skončí `Already up to date.`. Selhání kroku běh
 zastaví (žádný automatický rollback) — dokonči ruční kroky níže. Selhání

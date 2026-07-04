@@ -73,6 +73,9 @@ Read-only health check. Vypíše:
 - **PHP-FPM pool user** (z `/etc/php/*/fpm/pool.d/shipard.conf`)
 - **Filesystem checks** — per-cesta kontrola existence + type + owner + group + mode
   dle [permission kontraktu](operations/permissions.md)
+- **System config includes** — warn-only: živý nginx site a FPM pool
+  includují verzované `shipard-common.conf` / `shipard-fpm-common.conf`
+  (viz [production.md §6](operations/production.md)); nikdy nemění exit code
 - **Data source DB connections** — pokus o `SELECT 1` na každý DS
 
 Žádné side-effecty. Exit code `0` (vše OK) nebo `1` (alespoň jeden issue).
@@ -171,7 +174,10 @@ sudo shpd-server upgrade --skip-ds-upgrade
 
 Orchestruje nasazení nové verze: `git pull --ff-only` → `composer install
 --no-dev --optimize-autoloader` (jen při změně `composer.json`/`composer.lock`)
-→ frontend build (jen při změně pod `frontend/`) → `ds-upgrade-all` → `doctor`.
+→ frontend build (jen při změně pod `frontend/`) → `ds-upgrade-all` →
+reload služeb (jen při změně verzovaných systémových confů: `docs/nginx/**`
+→ `nginx -t && systemctl reload nginx`, `docs/php/**` → `systemctl reload
+php<ver>-fpm`; jen pod rootem, jinak vypíše ruční příkazy) → `doctor`.
 Každý krok běží jako subproces — příkaz aktualizuje kód, ze kterého sám běží,
 takže orchestrátor od pullu dál nenačítá žádné nové třídy; `ds-upgrade-all`
 i `doctor` už běží z nové verze.
@@ -179,8 +185,10 @@ i `doctor` už běží z nové verze.
 Pre-flight: vyžaduje čistý worktree a branch (ne detached HEAD); po fetchi
 vypíše příchozí commity. Bez příchozích commitů (a bez `--full`) skončí
 `Already up to date.` Selhání kroku běh zastaví (žádný automatický rollback);
-selhání doctoru vrátí FAILURE, ale kód zůstává nasazený. Summary:
-`Upgraded <old> → <new> (<N> commits)`.
+selhání doctoru vrátí FAILURE, ale kód zůstává nasazený. Selhání reload
+kroku (typicky `nginx -t` nad rozbitým site configem) taky — kód je
+nasazený, rozbitý je jen config služby; příkaz vypíše ruční reload příkazy.
+Summary: `Upgraded <old> → <new> (<N> commits)`.
 
 Uživatelé: pod rootem běží kroky přes `sudo -u shipard -H`, doctor přímo.
 Přímo pod shipard userem běží kroky bez sudo a doctor se přeskočí

@@ -510,19 +510,20 @@ Každá metoda vrací `bool` — `true` při úspěchu, `false` pokud CLI nástr
 
 ## 9. Konfigurace
 
-### Nginx — velikost uploadu
+### Velikost uploadu — nginx + PHP
 
-```nginx
-# V server bloku
-client_max_body_size 128M;
-```
+Limity žijí ve **verzovaných include souborech** v repu (zdroj pravdy),
+site config a FPM pool je includují — nic se neopisuje ručně:
 
-### PHP — velikost uploadu
+- `docs/nginx/shipard-common.conf` — `client_max_body_size 128M`
+  (include v každém server bloku)
+- `docs/php/shipard-fpm-common.conf` — `upload_max_filesize = 128M`,
+  `post_max_size = 130M` (mírně větší kvůli multipart overhead;
+  `include=` v pool.d/shipard.conf)
 
-```ini
-upload_max_filesize = 128M
-post_max_size = 130M    # Mírně větší než upload_max_filesize (kvůli multipart overhead)
-```
+Změna hodnoty = úprava include souboru + `git pull` + reload služby;
+`shpd-server upgrade` reload provede sám. Chybějící include řádky v živých
+configech hlásí `shpd-server doctor`. Detaily: `docs/operations/production.md` §6.
 
 ### Systémové závislosti
 

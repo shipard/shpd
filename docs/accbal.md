@@ -545,6 +545,51 @@ Mimo Fázi 3 (pozdější témata): zálohy (přijaté/poskytnuté, odpočty, zd
 účty 314/324/…900 jsou v osnově), zápočty, kurzové rozdíly (§6), multi-cíl (jedna
 platba na fakturu + odpočet zálohy), explicitní entita případu.
 
+### 5.7 API — dávkové párování
+
+`POST /api/v1/_accbal/match` — HTTP obal nad `BalanceMatcher::matchAll()`,
+zrcadlo CLI dávky (`accbal-match --all` / filtry). Auth standardně API klíčem.
+Primární konzument: import ze starého Shipardu (závěrečný krok `all` pipeline
+volá match „na dálku"). Destruktivní cesty matcheru (`unmatch`,
+`rematch-partner`) API **nevystavuje** — zůstávají jen v CLI.
+
+Request body (JSON, všechna pole volitelná; vyžaduje `scope: "all"` **nebo**
+aspoň jeden filtr — jinak 400 `VALIDATION`):
+
+```json
+{"scope": "all", "partner": 42, "fiscalYear": 7, "dryRun": true}
+```
+
+Response nese **jen agregát** z `MatchSummary` — per-result řádky (mohou být
+tisíce) se neserializují:
+
+```json
+{
+  "success": true,
+  "data": {
+    "dryRun": false,
+    "candidates": 1234,
+    "allocated": 1100,
+    "planned": 0,
+    "routedUnallocated": 90,
+    "skipped": {"no_open_items": 30, "not_on_clearing": 14},
+    "matchedAmount": 1234567.89
+  }
+}
+```
+
+Sémantika dry-run je stejná jako v CLI: `dryRun: true` vrátí plán bez
+jakéhokoli zápisu — `allocated = 0`, plánované páry v `planned` (přesně jak
+plní `MatchSummary::add()`).
+
+**Timeout:** běh nad migrovanými daty trvá nízké desítky sekund → endpoint je
+synchronní. Controller volá `set_time_limit(0)` (PHP `max_execution_time`) a
+`docs/nginx/shipard-common.conf` nastavuje `fastcgi_read_timeout 600s` (jinak
+nginx utne odpověď po defaultních 60 s → 504). Klient má mít timeout ~600 s.
+
+Kód: `Router::resolveAccbalRoute()`, `src/Api/Controller/AccbalController.php`,
+`dispatchAccbal()` v `public/index.php`.
+
 ---
 
 ## 6. Měny a uzavření případu

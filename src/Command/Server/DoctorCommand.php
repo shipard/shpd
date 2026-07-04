@@ -90,6 +90,10 @@ class DoctorCommand extends Command
         $nginxErrors = $this->checkNginxRouting($output, $expectedSocket);
 
         $output->writeln('');
+        $output->writeln('<info>System config includes</info>');
+        $this->checkSystemConfigIncludes($output);
+
+        $output->writeln('');
         $output->writeln('<info>Data source DB connections</info>');
         $dsErrors = $this->checkDataSourceConnections($spec, $output, $mode);
 
@@ -195,6 +199,66 @@ class DoctorCommand extends Command
             }
         }
         return null;
+    }
+
+    protected function getRepoRoot(): string
+    {
+        return dirname(__DIR__, 3);
+    }
+
+    /**
+     * Warn-only: verifies that the live nginx site and FPM pool configs include
+     * the versioned system parameter files, and that those files exist in the
+     * repo. Never affects the exit code — without the includes the app still
+     * works, only with default (low) upload limits.
+     */
+    protected function checkSystemConfigIncludes(OutputInterface $output): void
+    {
+        $repoRoot = $this->getRepoRoot();
+        $repoFiles = [
+            'docs/nginx/shipard-common.conf',
+            'docs/nginx/shipard-tls.conf',
+            'docs/php/shipard-fpm-common.conf',
+        ];
+        foreach ($repoFiles as $rel) {
+            if (!is_file($repoRoot . '/' . $rel)) {
+                $output->writeln("  ⚠ Include file missing in repo: {$rel}");
+            }
+        }
+
+        $checked = 0;
+
+        $siteFile = $this->getNginxSitesEnabledDir() . '/shipard.conf';
+        if (is_file($siteFile)) {
+            $checked++;
+            $content = (string) @file_get_contents($siteFile);
+            // Strip `# ...` comments so a commented-out include does not count.
+            $stripped = preg_replace('/#[^\n]*/', '', $content) ?? $content;
+            if (str_contains($stripped, 'shipard-common.conf')) {
+                $output->writeln('  ✓ nginx site includes shipard-common.conf');
+            } else {
+                $output->writeln("  ⚠ {$siteFile}: missing include of shipard-common.conf");
+                $output->writeln('    <comment>→ Add to each server block: include /opt/shipard/shpd/docs/nginx/shipard-common.conf;</comment>');
+                $output->writeln('    <comment>  HTTPS (443 ssl) blocks also: include /opt/shipard/shpd/docs/nginx/shipard-tls.conf;</comment>');
+            }
+        }
+
+        foreach (glob($this->getPoolConfigGlob()) ?: [] as $poolFile) {
+            $checked++;
+            $content = (string) @file_get_contents($poolFile);
+            // Strip `; ...` comments so a commented-out include does not count.
+            $stripped = preg_replace('/^\s*;[^\n]*/m', '', $content) ?? $content;
+            if (str_contains($stripped, 'shipard-fpm-common.conf')) {
+                $output->writeln('  ✓ FPM pool includes shipard-fpm-common.conf');
+            } else {
+                $output->writeln("  ⚠ {$poolFile}: missing include of shipard-fpm-common.conf");
+                $output->writeln('    <comment>→ Add to the pool: include=/opt/shipard/shpd/docs/php/shipard-fpm-common.conf</comment>');
+            }
+        }
+
+        if ($checked === 0) {
+            $output->writeln('  (no live configs found — skipped)');
+        }
     }
 
     /**

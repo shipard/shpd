@@ -19,6 +19,7 @@ class TestableDoctorCommand extends DoctorCommand
     public int $stubDbErrors = 0;
     public ?string $fakePoolConfigGlob = null;
     public ?string $fakeNginxSitesEnabledDir = null;
+    public ?string $fakeRepoRoot = null;
 
     public function __construct(string $tempConfigPath, PermissionSpec $spec)
     {
@@ -48,6 +49,11 @@ class TestableDoctorCommand extends DoctorCommand
     protected function getNginxSitesEnabledDir(): string
     {
         return $this->fakeNginxSitesEnabledDir ?? '/dev/null/nonexistent';
+    }
+
+    protected function getRepoRoot(): string
+    {
+        return $this->fakeRepoRoot ?? parent::getRepoRoot();
     }
 }
 
@@ -557,5 +563,147 @@ class DoctorCommandTest extends TestCase
             'nginx routes to shipard socket (1 active site(s))',
             $tester->getDisplay(),
         );
+    }
+
+    // ─── System config includes (warn-only) ─────────────────────────────────
+
+    /** Repo root fixture with all three versioned include files present. */
+    private function makeFakeRepoRoot(): string
+    {
+        $dir = $this->tempRoot . '/repo';
+        mkdir($dir . '/docs/nginx', 0750, true);
+        mkdir($dir . '/docs/php', 0750, true);
+        file_put_contents($dir . '/docs/nginx/shipard-common.conf', "client_max_body_size 128M;\n");
+        file_put_contents($dir . '/docs/nginx/shipard-tls.conf', "ssl_protocols TLSv1.3;\n");
+        file_put_contents($dir . '/docs/php/shipard-fpm-common.conf', "php_admin_value[post_max_size] = 130M\n");
+        return $dir;
+    }
+
+    /**
+     * @return array{command: TestableDoctorCommand, siteFile: string, poolFile: string}
+     */
+    private function includeCheckScenario(): array
+    {
+        $socket = $this->tempRoot . '/run/shipard.sock';
+        mkdir(dirname($socket), 0750, true);
+        file_put_contents($socket, '');
+
+        $spec = $this->makeSpec();
+        $command = $this->commandWithStubs($spec);
+        $command->fakePoolConfigGlob = $this->writeFakePoolConfig($socket);
+        $command->fakeRepoRoot = $this->makeFakeRepoRoot();
+
+        $nginxDir = $this->makeFakeNginxDir();
+        $siteFile = $nginxDir . '/shipard.conf';
+        file_put_contents($siteFile, "location ~ \\.php\$ {\n    fastcgi_pass unix:{$socket};\n}\n");
+        $command->fakeNginxSitesEnabledDir = $nginxDir;
+
+        return [
+            'command' => $command,
+            'siteFile' => $siteFile,
+            'poolFile' => $this->tempRoot . '/pool/shipard.conf',
+        ];
+    }
+
+    public function testIncludeChecksWarnWhenMissing(): void
+    {
+        $s = $this->includeCheckScenario();
+
+        $tester = new CommandTester($s['command']);
+        $tester->execute([]);
+
+        $display = $tester->getDisplay();
+        $this->assertStringContainsString('missing include of shipard-common.conf', $display);
+        $this->assertStringContainsString('include /opt/shipard/shpd/docs/nginx/shipard-common.conf;', $display);
+        $this->assertStringContainsString('missing include of shipard-fpm-common.conf', $display);
+        $this->assertStringContainsString('include=/opt/shipard/shpd/docs/php/shipard-fpm-common.conf', $display);
+    }
+
+    public function testIncludeChecksOkWhenPresent(): void
+    {
+        $s = $this->includeCheckScenario();
+        file_put_contents(
+            $s['siteFile'],
+            "include /opt/shipard/shpd/docs/nginx/shipard-common.conf;\n",
+            FILE_APPEND,
+        );
+        file_put_contents(
+            $s['poolFile'],
+            "include=/opt/shipard/shpd/docs/php/shipard-fpm-common.conf\n",
+            FILE_APPEND,
+        );
+
+        $tester = new CommandTester($s['command']);
+        $tester->execute([]);
+
+        $display = $tester->getDisplay();
+        $this->assertStringContainsString('✓ nginx site includes shipard-common.conf', $display);
+        $this->assertStringContainsString('✓ FPM pool includes shipard-fpm-common.conf', $display);
+        $this->assertStringNotContainsString('missing include', $display);
+    }
+
+    public function testIncludeChecksIgnoreCommentedIncludes(): void
+    {
+        $s = $this->includeCheckScenario();
+        file_put_contents(
+            $s['siteFile'],
+            "# include /opt/shipard/shpd/docs/nginx/shipard-common.conf;\n",
+            FILE_APPEND,
+        );
+        file_put_contents(
+            $s['poolFile'],
+            ";include=/opt/shipard/shpd/docs/php/shipard-fpm-common.conf\n",
+            FILE_APPEND,
+        );
+
+        $tester = new CommandTester($s['command']);
+        $tester->execute([]);
+
+        $display = $tester->getDisplay();
+        $this->assertStringContainsString('missing include of shipard-common.conf', $display);
+        $this->assertStringContainsString('missing include of shipard-fpm-common.conf', $display);
+    }
+
+    public function testIncludeChecksDoNotAffectExitCode(): void
+    {
+        // Same scenario twice — once without and once with the include lines.
+        // The warn-only checks must not change the issue count or exit code.
+        $s = $this->includeCheckScenario();
+        $tester = new CommandTester($s['command']);
+        $exitWithout = $tester->execute([]);
+        $displayWithout = $tester->getDisplay();
+
+        file_put_contents(
+            $s['siteFile'],
+            "include /opt/shipard/shpd/docs/nginx/shipard-common.conf;\n",
+            FILE_APPEND,
+        );
+        file_put_contents(
+            $s['poolFile'],
+            "include=/opt/shipard/shpd/docs/php/shipard-fpm-common.conf\n",
+            FILE_APPEND,
+        );
+        $exitWith = $tester->execute([]);
+        $displayWith = $tester->getDisplay();
+
+        $this->assertSame($exitWith, $exitWithout);
+        preg_match('/Issues found: (\d+)/', $displayWithout, $mWithout);
+        preg_match('/Issues found: (\d+)/', $displayWith, $mWith);
+        $this->assertSame($mWith[1] ?? 'none', $mWithout[1] ?? 'none');
+    }
+
+    public function testIncludeCheckWarnsWhenRepoFileMissing(): void
+    {
+        $s = $this->includeCheckScenario();
+        $emptyRepo = $this->tempRoot . '/empty-repo';
+        mkdir($emptyRepo, 0750, true);
+        $s['command']->fakeRepoRoot = $emptyRepo;
+
+        $tester = new CommandTester($s['command']);
+        $tester->execute([]);
+
+        $display = $tester->getDisplay();
+        $this->assertStringContainsString('Include file missing in repo: docs/nginx/shipard-common.conf', $display);
+        $this->assertStringContainsString('Include file missing in repo: docs/php/shipard-fpm-common.conf', $display);
     }
 }

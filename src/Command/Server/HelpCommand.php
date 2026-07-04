@@ -28,6 +28,7 @@ class HelpCommand extends Command
         $output->writeln('  <info>server-init</info>    Initialize the Shipard server configuration');
         $output->writeln('  <info>ds-create</info>      Create a new data source');
         $output->writeln('  <info>ds-upgrade-all</info> Run ds-upgrade on all data sources');
+        $output->writeln('  <info>upgrade</info>        Deploy a new version (git pull, composer, frontend, ds-upgrade-all, doctor)');
         $output->writeln('  <info>next-table-id</info>  Print the next available table ID');
         $output->writeln('  <info>domain-add</info>      Add a host → data source mapping');
         $output->writeln('  <info>domain-list</info>     List all host → data source mappings');
@@ -43,6 +44,8 @@ class HelpCommand extends Command
         $output->writeln('                                           (--module defaults to install.base)');
         $output->writeln('  ds-upgrade-all [--ds=<id>] [--stop-on-error] [--dry-run]');
         $output->writeln('                                           Upgrade all data sources');
+        $output->writeln('  upgrade [--dry-run] [--full] [--skip-ds-upgrade]');
+        $output->writeln('                                           Deploy a new version from git');
         $output->writeln('  domain-add --host <host> --ds <ds-id>    Map a hostname to a data source');
         $output->writeln('  domain-remove --host <host>              Remove a hostname mapping');
         $output->writeln('  doctor                                   Read-only health check (no options)');

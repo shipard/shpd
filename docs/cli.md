@@ -29,8 +29,9 @@ nad `/etc/shipard/server.json` a `/opt/shipard/data-sources/`.
 shpd-server version
 ```
 
-Vypíše verzi nástroje (např. `Shipard v0.1.0`). Žádné options, žádné
-side-effecty.
+Vypíše verzi nástroje včetně git hashe HEAD (např. `Shipard 0.1.1 (abc1234)`;
+bez dostupného gitu jen `Shipard 0.1.1`). Žádné options, žádné side-effecty.
+Zdroj verze: `Shipard\Core\Version`.
 
 ### `help`
 
@@ -158,6 +159,40 @@ cfgItems modulů — viz [Workflow scénáře](#workflow-scénáře).
 ```bash
 sudo shpd-server ds-upgrade-all -v
 ```
+
+### `upgrade`
+
+```bash
+sudo shpd-server upgrade --dry-run       # náhled: příchozí commity + plán kroků
+sudo shpd-server upgrade                 # reálný běh
+sudo shpd-server upgrade --full          # vynutí composer + frontend build
+sudo shpd-server upgrade --skip-ds-upgrade
+```
+
+Orchestruje nasazení nové verze: `git pull --ff-only` → `composer install
+--no-dev --optimize-autoloader` (jen při změně `composer.json`/`composer.lock`)
+→ frontend build (jen při změně pod `frontend/`) → `ds-upgrade-all` → `doctor`.
+Každý krok běží jako subproces — příkaz aktualizuje kód, ze kterého sám běží,
+takže orchestrátor od pullu dál nenačítá žádné nové třídy; `ds-upgrade-all`
+i `doctor` už běží z nové verze.
+
+Pre-flight: vyžaduje čistý worktree a branch (ne detached HEAD); po fetchi
+vypíše příchozí commity. Bez příchozích commitů (a bez `--full`) skončí
+`Already up to date.` Selhání kroku běh zastaví (žádný automatický rollback);
+selhání doctoru vrátí FAILURE, ale kód zůstává nasazený. Summary:
+`Upgraded <old> → <new> (<N> commits)`.
+
+Uživatelé: pod rootem běží kroky přes `sudo -u shipard -H`, doctor přímo.
+Přímo pod shipard userem běží kroky bez sudo a doctor se přeskočí
+(`sudo shpd-server doctor` ručně). Jiný uživatel na produkci → abort.
+
+| Opce | Význam |
+|------|--------|
+| `--dry-run` | Fetch + výpis příchozích commitů a plánu kroků, nic nemění |
+| `--full` | Vynutí composer i frontend krok bez ohledu na změněné soubory |
+| `--skip-ds-upgrade` | Přeskočí krok `ds-upgrade-all` |
+
+**Verbosity propagace:** `-v` se předává do vnitřního `ds-upgrade-all`.
 
 ### `next-table-id`
 
@@ -622,7 +657,14 @@ Po instalaci spusť `shpd-server doctor` pro ověření kontraktu.
 
 ## Workflow scénáře
 
-### 1. Po `git pull`
+### 1. Nasazení nové verze
+
+```bash
+sudo shpd-server upgrade --dry-run   # náhled
+sudo shpd-server upgrade             # pull + composer + frontend + ds-upgrade-all + doctor
+```
+
+Ve vývoji alternativně:
 
 ```bash
 bash scripts/dev-update.sh

@@ -282,24 +282,44 @@ Předpoklady, aby to fungovalo:
 
 ---
 
-## 11. Po `git pull`
+## 11. Nasazení nové verze
 
-Po nasazení nové verze:
+Nasazení orchestruje `shpd-server upgrade` — jedno spuštění pod rootem:
+
+```bash
+sudo shpd-server upgrade --dry-run   # náhled: příchozí commity + plán kroků
+sudo shpd-server upgrade             # reálný běh
+```
+
+Příkaz provede (kroky přes `sudo -u shipard -H`, doctor přímo jako root):
+
+1. `git fetch` + pre-flight — čistý worktree povinný, `git pull --ff-only`
+2. `composer install --no-dev --optimize-autoloader` — jen když se změnil
+   `composer.json`/`composer.lock` (nebo `--full`)
+3. frontend build (`npm ci && npm run build`) — jen při změně pod `frontend/`
+   (nebo `--full`)
+4. `shpd-server ds-upgrade-all` (vynechatelné přes `--skip-ds-upgrade`)
+5. `shpd-server doctor`
+
+Bez příchozích commitů skončí `Already up to date.`. Selhání kroku běh
+zastaví (žádný automatický rollback) — dokonči ruční kroky níže. Selhání
+doctoru vrátí FAILURE, ale kód už je nasazený.
+
+**Ruční fallback** (co příkaz dělá pod kapotou):
 
 ```bash
 cd /opt/shipard/shpd
 sudo -u shipard git pull
 sudo -u shipard composer install --no-dev --optimize-autoloader
 (cd frontend && sudo -u shipard npm ci && sudo -u shipard npm run build)
-```
-
-Pokud se měnily definice tabulek nebo cfgItems modulů, zaktualizuj DS:
-
-```bash
 sudo -u shipard shpd-server ds-upgrade-all
+sudo shpd-server doctor
 ```
-
-Na závěr `shpd-server doctor`.
 
 > Pozn.: `scripts/dev-update.sh` je určený pro vývoj (`npm install`, bez
-> `--no-dev`) — v produkci použij kroky výše.
+> `--no-dev`) — v produkci použij `shpd-server upgrade`.
+
+> Pozn. k opcache: default `opcache.validate_timestamps=1` znamená, že
+> PHP-FPM si změněné soubory načte sám — reload FPM po upgradu není potřeba.
+> Kdyby se validace timestampů někdy vypnula, patří na konec upgradu
+> `systemctl reload php8.5-fpm`.

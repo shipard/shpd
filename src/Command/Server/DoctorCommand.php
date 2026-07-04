@@ -91,7 +91,7 @@ class DoctorCommand extends Command
 
         $output->writeln('');
         $output->writeln('<info>Data source DB connections</info>');
-        $dsErrors = $this->checkDataSourceConnections($spec, $output);
+        $dsErrors = $this->checkDataSourceConnections($spec, $output, $mode);
 
         $output->writeln('');
         $output->writeln(str_repeat('─', 55));
@@ -142,7 +142,7 @@ class DoctorCommand extends Command
     /**
      * @return int number of DS that failed to connect
      */
-    protected function checkDataSourceConnections(PermissionSpec $spec, OutputInterface $output): int
+    protected function checkDataSourceConnections(PermissionSpec $spec, OutputInterface $output, string $mode): int
     {
         $dsList = $spec->discoverDataSources();
         if (count($dsList) === 0) {
@@ -155,6 +155,9 @@ class DoctorCommand extends Command
             $id = basename($dsDir);
             try {
                 $cfg = new DataSourceConfig($dsDir);
+                if ($mode === 'production' && $cfg->allowsReset()) {
+                    $output->writeln("  ⚠ {$id}: enableReset is set — data source is resettable on a production server.");
+                }
                 $conn = new DataSourceConnection($cfg);
                 $conn->fetchRow('SELECT 1');
                 $output->writeln("  ✓ {$id}");

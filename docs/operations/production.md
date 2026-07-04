@@ -227,6 +227,13 @@ samostatné kroky (stejný sled, jaký v dev provádí dashboard).
 
 Datový zdroj je pak dostupný na `https://<tvoje-doména>/<id>/app/`.
 
+> **Testovací DS na produkci (`enableReset`):** `shpd-ds ds-reset` na
+> produkčním serveru tvrdě odmítá. Zdroj dat určený k opakovaným importním
+> testům označ `"enableReset": true` v jeho `config/main.json` — jen pro něj
+> se reset povolí (s hlasitým warningem, konfirmace zůstává). Před přechodem
+> DS do ostrého provozu flag odstraň; `shpd-server doctor` na zapomenutý flag
+> upozorňuje. Viz [`cli.md`](../cli.md) § `ds-reset`.
+
 ---
 
 ## 9. Namapování domény na datový zdroj

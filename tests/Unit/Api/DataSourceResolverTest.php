@@ -142,12 +142,13 @@ class DataSourceResolverTest extends TestCase
 		}
 	}
 
-	public function testMissingDomainsFileThrows(): void
+	public function testMissingDomainsFileYieldsUnknownHost(): void
 	{
+		// Missing domains.json = no mappings yet → clean UnknownHostException
+		// (404 Unknown host), not a RuntimeException (500).
 		$resolver = $this->makeResolver($this->tempDir . '/nonexistent.json');
 
-		$this->expectException(\RuntimeException::class);
-		$this->expectExceptionMessageMatches('/not found/i');
+		$this->expectException(UnknownHostException::class);
 
 		$resolver->resolve('demo.shipard.cz', '/api/v1/users');
 	}

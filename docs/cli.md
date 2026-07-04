@@ -278,8 +278,15 @@ Vše ostatní se dropuje, **včetně osiřelých tabulek** po odebraných module
 `core_attachments_files`, vyčistí se i obsah `att/` a `cache/thumbnails/`
 (prázdné adresáře `ds-upgrade` následně znovu zajistí).
 
-**Produkční pojistka:** v `production` módu příkaz tvrdě odmítne (`FAILURE`)
-bez jakéhokoliv dropu — je to záměrně destruktivní vývojový/testovací nástroj.
+**Produkční pojistka (`enableReset`):** v `production` módu příkaz tvrdě
+odmítne (`FAILURE`) bez jakéhokoliv dropu i DB spojení — je to záměrně
+destruktivní vývojový/testovací nástroj. Výjimku má jen zdroj dat vědomě
+označený jako testovací: volitelný boolean `"enableReset": true` v jeho
+`config/main.json` guard pro tento konkrétní DS obchází. Při uplatnění příkaz
+vypíše hlasitý warning (`resetting a PRODUCTION data source`); konfirmační
+dotaz zůstává (obchází ho jen `--yes`, ne flag). Flag nikdy nenastavuj na DS
+s ostrými daty — `shpd-server doctor` na něj na produkci upozorňuje. Žádný
+`--force` neexistuje záměrně. V development módu se flag nečte.
 
 | Opce | Význam |
 |------|--------|

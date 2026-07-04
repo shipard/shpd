@@ -121,4 +121,16 @@ class DataSourceConfig
     {
         return $this->data['accountChart'] ?? 'default';
     }
+
+    /**
+     * When true, `shpd-ds ds-reset` is allowed even on a production-mode server.
+     * Marks a disposable testing/alpha data source. The production guard in
+     * DsResetCommand refuses without this flag. Never set it on a data source
+     * holding real data; `shpd-server doctor` warns about it on production.
+     * Optional; defaults to false when missing from main.json.
+     */
+    public function allowsReset(): bool
+    {
+        return $this->data['enableReset'] ?? false;
+    }
 }

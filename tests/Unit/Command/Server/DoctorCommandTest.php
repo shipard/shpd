@@ -31,13 +31,13 @@ class TestableDoctorCommand extends DoctorCommand
         return $this->stubPoolUser;
     }
 
-    protected function checkDataSourceConnections(PermissionSpec $spec, OutputInterface $output): int
+    protected function checkDataSourceConnections(PermissionSpec $spec, OutputInterface $output, string $mode): int
     {
         if ($this->skipDbCheck) {
             $output->writeln('  (skipped in test)');
             return $this->stubDbErrors;
         }
-        return parent::checkDataSourceConnections($spec, $output);
+        return parent::checkDataSourceConnections($spec, $output, $mode);
     }
 
     protected function getPoolConfigGlob(): string
@@ -137,7 +137,7 @@ class DoctorCommandTest extends TestCase
         $exitCode = $tester->execute([]);
 
         $this->assertSame(1, $exitCode);
-        $this->assertStringContainsString('Config file missing', $tester->getDisplay());
+        $this->assertStringContainsString('Config file not found or not accessible', $tester->getDisplay());
     }
 
     public function testReportsModeFromServerJson(): void
@@ -486,6 +486,52 @@ class DoctorCommandTest extends TestCase
         $display = $tester->getDisplay();
         $this->assertStringContainsString('nginx routes to shipard socket (1 active site(s))', $display);
         $this->assertStringNotContainsString('not shipard socket', $display);
+    }
+
+    // ─── enableReset warning ────────────────────────────────────────────────
+
+    private function createDataSourceFixture(PermissionSpec $spec, string $id, bool $enableReset): void
+    {
+        $dsDir = $spec->getDataSourcesDir() . '/' . $id;
+        mkdir($dsDir . '/config', 0750, true);
+        file_put_contents($dsDir . '/config/main.json', json_encode([
+            'id'                => $id,
+            'name'              => 'Test DS',
+            'database_name'     => str_replace('-', '_', $id),
+            'database_user'     => 'shpd_test',
+            'database_password' => 'secret',
+            'created'           => '2026-07-03T10:00:00+02:00',
+            'enableReset'       => $enableReset,
+        ]));
+    }
+
+    public function testEnableResetWarnsOnProduction(): void
+    {
+        $spec = $this->makeSpec();
+        $command = $this->commandWithStubs($spec, 'production');
+        $command->skipDbCheck = false;
+        $this->createDataSourceFixture($spec, 'test-0001-test-0001', enableReset: true);
+
+        $tester = new CommandTester($command);
+        $tester->execute([]);
+
+        $this->assertStringContainsString(
+            'test-0001-test-0001: enableReset is set — data source is resettable on a production server.',
+            $tester->getDisplay(),
+        );
+    }
+
+    public function testEnableResetSilentOnDevelopment(): void
+    {
+        $spec = $this->makeSpec();
+        $command = $this->commandWithStubs($spec, 'development');
+        $command->skipDbCheck = false;
+        $this->createDataSourceFixture($spec, 'test-0001-test-0001', enableReset: true);
+
+        $tester = new CommandTester($command);
+        $tester->execute([]);
+
+        $this->assertStringNotContainsString('enableReset is set', $tester->getDisplay());
     }
 
     public function testSocketPathNormalizationStripsUnixPrefix(): void

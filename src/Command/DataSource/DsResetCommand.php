@@ -118,15 +118,21 @@ class DsResetCommand extends Command
             return Command::FAILURE;
         }
 
-        // 2. Production safety net — refuse hard.
-        if ($this->getServerMode() === 'production') {
+        // 2. Production safety net — refuse hard unless the DS explicitly opts in
+        //    via "enableReset": true in config/main.json (disposable testing DS).
+        $dsConfig = $this->dsConfig ?? new DataSourceConfig($dsDir);
+        $isProduction = $this->getServerMode() === 'production';
+        if ($isProduction && !$dsConfig->allowsReset()) {
             $output->writeln('<error>Refusing to reset a data source in production mode.</error>');
             $output->writeln('ds-reset is a destructive development/testing tool.');
+            $output->writeln('For a disposable testing data source, set "enableReset": true in config/main.json.');
             return Command::FAILURE;
         }
+        if ($isProduction) {
+            $output->writeln('<comment>enableReset is set in config/main.json — resetting a PRODUCTION data source.</comment>');
+        }
 
-        // 3. Build config / connection / module resolver (lazy, as in ds-upgrade).
-        $dsConfig = $this->dsConfig ?? new DataSourceConfig($dsDir);
+        // 3. Build connection / module resolver (lazy, as in ds-upgrade).
         $dsConnection = $this->dsConnection ?? new DataSourceConnection($dsConfig);
         $modulePathResolver = $this->getModulePathResolver();
 

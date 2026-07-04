@@ -144,6 +144,39 @@ class DataSourceConfigTest extends TestCase
         $this->assertFalse($config->shouldSkipProvisioning());
     }
 
+    public function testAllowsResetDefaultsToFalse(): void
+    {
+        $this->createConfig([
+            'id'                => 'abcd-efgh-ijkl-mnop',
+            'name'              => 'Test DS',
+            'database_name'     => 'abcd_efgh_ijkl_mnop',
+            'database_user'     => 'shpd_abcdefgh',
+            'database_password' => 'supersecret',
+            'created'           => '2026-03-12T10:00:00+01:00',
+        ]);
+
+        $config = new DataSourceConfig($this->tempDir);
+
+        $this->assertFalse($config->allowsReset());
+    }
+
+    public function testAllowsResetReadsTrueFromConfig(): void
+    {
+        $this->createConfig([
+            'id'                => 'abcd-efgh-ijkl-mnop',
+            'name'              => 'Test DS',
+            'database_name'     => 'abcd_efgh_ijkl_mnop',
+            'database_user'     => 'shpd_abcdefgh',
+            'database_password' => 'supersecret',
+            'created'           => '2026-03-12T10:00:00+01:00',
+            'enableReset'       => true,
+        ]);
+
+        $config = new DataSourceConfig($this->tempDir);
+
+        $this->assertTrue($config->allowsReset());
+    }
+
     public function testMissingRequiredFieldThrowsException(): void
     {
         $this->createConfig([

@@ -110,7 +110,9 @@ class DsResetCommandTest extends TestCase
         array $tables,
         array &$executedSQLs,
         string $serverMode = 'development',
+        bool $allowsReset = false,
     ): CommandTester {
+        $this->dsConfig->method('allowsReset')->willReturn($allowsReset);
         $this->dsConnection->method('getAllTableNames')->willReturn($tables);
         $this->dsConnection->method('executeSQL')
             ->willReturnCallback(function (string $sql) use (&$executedSQLs): void {
@@ -172,7 +174,37 @@ class DsResetCommandTest extends TestCase
 
         $this->assertSame(Command::FAILURE, $exitCode);
         $this->assertSame([], $executed);
-        $this->assertStringContainsString('production mode', $tester->getDisplay());
+        $this->assertFalse($this->command->upgradeRan);
+
+        $display = $tester->getDisplay();
+        $this->assertStringContainsString('production mode', $display);
+        $this->assertStringContainsString('enableReset', $display);
+    }
+
+    public function testProductionModeAllowedWithEnableResetFlag(): void
+    {
+        $executed = [];
+        $tester = $this->createCommandTester(['keep_me', 'drop_me'], $executed, 'production', allowsReset: true);
+        $exitCode = $tester->execute(['--yes' => true]);
+
+        $this->assertSame(Command::SUCCESS, $exitCode);
+
+        $dropSql = implode("\n", array_filter($executed, fn(string $s) => str_contains($s, 'DROP TABLE')));
+        $this->assertStringContainsString('drop_me', $dropSql);
+
+        $this->assertTrue($this->command->upgradeRan);
+        $this->assertStringContainsString('PRODUCTION', $tester->getDisplay());
+    }
+
+    public function testDevelopmentModeWithoutFlagUnchanged(): void
+    {
+        $executed = [];
+        $tester = $this->createCommandTester(['keep_me', 'drop_me'], $executed);
+        $exitCode = $tester->execute(['--yes' => true]);
+
+        $this->assertSame(Command::SUCCESS, $exitCode);
+        $this->assertTrue($this->command->upgradeRan);
+        $this->assertStringNotContainsString('PRODUCTION', $tester->getDisplay());
     }
 
     public function testConfirmationDeclined(): void

@@ -844,6 +844,9 @@ class AnalysisController
                 ->execute();
             }
 
+            // 6) Volitelná AI klasifikace typu zprávy (message_classification).
+            $this->applyMessageClassification($dibi, $messageNdx, $body);
+
             $dibi->commit();
         } catch (\Throwable $e) {
             $dibi->rollback();
@@ -884,6 +887,65 @@ class AnalysisController
             'ready' => isset($decoded['ready']) ? (float) $decoded['ready'] : $default['ready'],
             'review' => isset($decoded['review']) ? (float) $decoded['review'] : $default['review'],
         ];
+    }
+
+    /**
+     * Zapíše volitelnou AI klasifikaci typu zprávy z `message_classification`
+     * (spec tasks/mail-states-and-classification.md §B1). Běží uvnitř
+     * transakce resultu.
+     *
+     * - Pole chybí (starý analyzer) → žádná změna, zpětná kompatibilita drží.
+     * - Neznámý `primary_type` → warning + ignore; nesmí rozbít uložení
+     *   výsledku (žádná 422).
+     * - AI nikdy nepřepisuje hodnotu nastavenou uživatelem
+     *   (`primary_type_source = 'user'` → UPDATE se nedotkne řádku).
+     *
+     * @param array<string, mixed> $body
+     */
+    private function applyMessageClassification(\Dibi\Connection $dibi, int $messageNdx, array $body): void
+    {
+        $classification = $body['message_classification'] ?? null;
+        if (!is_array($classification)) {
+            return;
+        }
+
+        $primaryType = trim((string) ($classification['primary_type'] ?? ''));
+        if ($primaryType === '') {
+            return;
+        }
+
+        if (!in_array($primaryType, $this->knownPrimaryTypes(), true)) {
+            ErrorLogger::warn('AnalysisController::result ignoring unknown primary_type', [
+                'messageNdx' => $messageNdx,
+                'primary_type' => $primaryType,
+            ]);
+            return;
+        }
+
+        $dibi->update(self::MESSAGES_TABLE, [
+            'primary_type' => $primaryType,
+            'primary_type_source' => 'ai',
+        ])
+        ->where('id = %i', $messageNdx)
+        ->where('primary_type_source != %s', 'user')
+        ->execute();
+    }
+
+    /**
+     * Klíče cfgItem `core.mail.primaryTypes` — server toleruje i typy
+     * s `enabled: false` (prompt AI omezuje na enabled). Bez compiled
+     * configu degraduje na pevný seznam (musí odpovídat primaryTypes.jsonc).
+     *
+     * @return list<string>
+     */
+    private function knownPrimaryTypes(): array
+    {
+        $cfg = $this->configRuntime?->cfgItem('core.mail.primaryTypes');
+        if (is_array($cfg) && $cfg !== []) {
+            return array_map('strval', array_keys($cfg));
+        }
+
+        return ['invoiceReceived', 'other', 'creditNote', 'order', 'quotation', 'statement', 'complaint'];
     }
 
     /**

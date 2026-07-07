@@ -602,6 +602,85 @@ class AnalysisControllerTest extends TestCase
         $this->assertSame(422, $this->statusOf($response));
     }
 
+    // -------------------------------------------------------------------
+    // message_classification (spec mail-states-and-classification §B1)
+    //
+    // Plný /result flow potřebuje reálnou DB (insert do 3 tabulek) — tady
+    // testujeme helper applyMessageClassification přes reflection, stejný
+    // vzor jako validateAndStoreCanonical v AnalysisControllerExchangeTest.
+    // -------------------------------------------------------------------
+
+    private function callApplyClassification(\Dibi\Connection $dibi, array $body): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $ctrl = $this->controller($db);
+        $ref = new \ReflectionClass($ctrl);
+        $method = $ref->getMethod('applyMessageClassification');
+        $method->invoke($ctrl, $dibi, 42, $body);
+    }
+
+    public function testClassificationUpdatesPrimaryTypeWithAiSource(): void
+    {
+        $whereCalls = [];
+        $fluent = $this->createMock(\Dibi\Fluent::class);
+        $fluent->method('__call')->willReturnCallback(
+            function (string $name, array $args) use (&$whereCalls, $fluent) {
+                if ($name === 'where') {
+                    $whereCalls[] = $args;
+                }
+                return $fluent;
+            },
+        );
+        $fluent->expects($this->once())->method('execute');
+
+        $dibi = $this->createMock(\Dibi\Connection::class);
+        $dibi->expects($this->once())
+            ->method('update')
+            ->with(
+                'core_mail_incoming_messages',
+                ['primary_type' => 'other', 'primary_type_source' => 'ai'],
+            )
+            ->willReturn($fluent);
+
+        $this->callApplyClassification($dibi, [
+            'message_classification' => ['primary_type' => 'other', 'confidence' => 0.97],
+        ]);
+
+        // WHERE musí obsahovat guard proti přepsání uživatelské volby
+        $flat = array_map(static fn(array $args): string => implode('|', array_map('strval', $args)), $whereCalls);
+        $this->assertContains('primary_type_source != %s|user', $flat);
+    }
+
+    public function testClassificationIgnoresUnknownPrimaryType(): void
+    {
+        $dibi = $this->createMock(\Dibi\Connection::class);
+        $dibi->expects($this->never())->method('update');
+
+        $this->callApplyClassification($dibi, [
+            'message_classification' => ['primary_type' => 'spam', 'confidence' => 0.9],
+        ]);
+    }
+
+    public function testClassificationSkipsWhenFieldMissing(): void
+    {
+        $dibi = $this->createMock(\Dibi\Connection::class);
+        $dibi->expects($this->never())->method('update');
+
+        $this->callApplyClassification($dibi, ['model_name' => 'claude']);
+    }
+
+    public function testKnownPrimaryTypesFallbackWithoutConfig(): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $ctrl = $this->controller($db); // configRuntime = null
+        $ref = new \ReflectionClass($ctrl);
+        $types = $ref->getMethod('knownPrimaryTypes')->invoke($ctrl);
+
+        $this->assertContains('invoiceReceived', $types);
+        $this->assertContains('other', $types);
+        $this->assertContains('creditNote', $types); // enabled:false typy se tolerují
+    }
+
     public function testResultRequiresModelAndPromptVersion(): void
     {
         $db = $this->createMock(DataSourceConnection::class);

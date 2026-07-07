@@ -255,6 +255,54 @@ class IncomingMessageDocumentTest extends TestCase
         $this->assertSame('invoiceReceived', $data['primary_type']);
     }
 
+    // --- beforeSave: primary_type_source (spec §B2) ----------------------------
+
+    public function testBeforeSaveMarksUserSourceWhenPrimaryTypeChanged(): void
+    {
+        $doc = $this->doc();
+        $data = [
+            'id' => 42,
+            'mailbox' => 1,
+            'sender_email' => 'a@b.cz',
+            'primary_type' => 'invoiceReceived',
+        ];
+
+        $doc->beforeSave($data, ['id' => 42, 'primary_type' => 'other']);
+
+        $this->assertSame('user', $data['primary_type_source']);
+    }
+
+    public function testBeforeSaveKeepsSourceWhenPrimaryTypeUnchanged(): void
+    {
+        $doc = $this->doc();
+        $data = [
+            'id' => 42,
+            'mailbox' => 1,
+            'sender_email' => 'a@b.cz',
+            'primary_type' => 'other',
+        ];
+
+        $doc->beforeSave($data, ['id' => 42, 'primary_type' => 'other']);
+
+        $this->assertArrayNotHasKey('primary_type_source', $data);
+    }
+
+    public function testBeforeSaveRespectsExplicitPrimaryTypeSource(): void
+    {
+        $doc = $this->doc();
+        $data = [
+            'id' => 42,
+            'mailbox' => 1,
+            'sender_email' => 'a@b.cz',
+            'primary_type' => 'invoiceReceived',
+            'primary_type_source' => 'mailbox',
+        ];
+
+        $doc->beforeSave($data, ['id' => 42, 'primary_type' => 'other']);
+
+        $this->assertSame('mailbox', $data['primary_type_source']);
+    }
+
     // --- beforeSave: analysis_state default -----------------------------------
 
     public function testBeforeSaveDefaultsAnalysisStateToNoneWithoutDb(): void

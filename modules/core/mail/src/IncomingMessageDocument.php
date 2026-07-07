@@ -126,6 +126,18 @@ class IncomingMessageDocument extends Document
             }
         } else {
             $data['modified'] = $now;
+
+            // Ruční změna primárního typu → zdroj 'user' (AI klasifikace ji
+            // pak nikdy nepřepíše). Pipeline zapisuje primary_type přímým
+            // UPDATE mimo Document; sem přichází jen UI/API save. Explicitně
+            // poslaný primary_type_source má přednost.
+            if (!isset($data['primary_type_source'])
+                && $originalData !== null
+                && isset($data['primary_type'])
+                && (string) $data['primary_type'] !== (string) ($originalData['primary_type'] ?? '')
+            ) {
+                $data['primary_type_source'] = 'user';
+            }
         }
     }
 

@@ -280,6 +280,62 @@ class DocumentApplierTest extends TestCase
         $this->assertSame(409, $result->statusCode);
     }
 
+    public function testResolveOneAcceptsUseExistingOnArchivedTarget(): void
+    {
+        $captured = null;
+        $db = $this->createMock(Connection::class);
+        $db->method('fetch')->willReturnCallback(function (...$args) use (&$captured) {
+            $captured = $args;
+            return new Row(['id' => 2468]); // záznam existuje — byť v archívu (70)
+        });
+        $applier = $this->buildApplier(db: $db);
+
+        $plan = ['errorCode' => null, 'errorMessage' => null];
+        $issues = [];
+        $ref = new \ReflectionMethod($applier, 'resolveOne');
+        $res = $ref->invokeArgs($applier, [
+            'customer',
+            ['status' => 'notFound'],
+            'useExisting:2468',
+            'base_persons_persons',
+            &$plan,
+            &$issues,
+        ]);
+
+        $this->assertSame(2468, $res['id']);
+        $this->assertNull($plan['errorCode']);
+        // Pin smí mířit i na archiv (70); odmítá se jen Smazáno (90).
+        $this->assertContains(70, $captured);
+        $this->assertNotContains(90, $captured);
+    }
+
+    public function testResolvePinAcceptsLinkableTargetAndWarnsWhenMissing(): void
+    {
+        // a) linkable cíl (např. archivovaná osoba) projde bez issues
+        $db = $this->createMock(Connection::class);
+        $db->method('fetch')->willReturn(new Row(['id' => 77]));
+        $applier = $this->buildApplier(db: $db);
+
+        $issues = [];
+        $ref = new \ReflectionMethod($applier, 'resolvePin');
+        $this->assertSame(77, $ref->invokeArgs($applier, ['partner', 'useExisting:77', &$issues]));
+        $this->assertSame([], $issues);
+
+        // b) smazaný/neexistující cíl → null + warning (žádná tichá ztráta)
+        $db2 = $this->createMock(Connection::class);
+        $db2->method('fetch')->willReturn(null);
+        $applier2 = $this->buildApplier(db: $db2);
+
+        $issues2 = [];
+        $ref2 = new \ReflectionMethod($applier2, 'resolvePin');
+        $id = $ref2->invokeArgs($applier2, ['rows.0.partner', 'useExisting:99', &$issues2]);
+        $this->assertNull($id);
+        $this->assertCount(1, $issues2);
+        $this->assertSame('warning', $issues2[0]['severity']);
+        $this->assertSame('pin_target_missing', $issues2[0]['code']);
+        $this->assertSame('rows.0.partner', $issues2[0]['path']);
+    }
+
     public function testApplyFailsWithSchemaInvalidOnBrokenStructure(): void
     {
         $applier = $this->buildApplier();

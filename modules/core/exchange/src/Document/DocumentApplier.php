@@ -47,6 +47,14 @@ class DocumentApplier
 
     private const ACTIVE_STATES = [10, 40, 80];
 
+    /**
+     * States an explicit `useExisting:<id>` pin may target. Archived (70)
+     * records are legitimate historical references — migrated documents
+     * routinely point at partners/items archived since. Only Deleted (90)
+     * is rejected. Fresh resolve stays limited to ACTIVE_STATES.
+     */
+    private const LINKABLE_STATES = [10, 40, 70, 80];
+
     /** Map canonical vat.mode → docs_core_heads.vat_mode (cfgItem docs.core.vatModes). */
     private const VAT_MODE_MAP = [
         'none'      => 0,
@@ -517,7 +525,9 @@ class DocumentApplier
         // Hlavičkový partner účetního dokladu — nepovinný, pin přes
         // _resolve.partner (useExisting:<id>). Bez pinu zůstává null.
         $plan['resolvedHeadPartner'] = $this->resolvePin(
+            'partner',
             is_array($clientResolve['partner'] ?? null) ? ($clientResolve['partner']['userAction'] ?? null) : null,
+            $issues,
         );
 
         foreach (['supplier', 'customer'] as $partyKey) {
@@ -583,7 +593,9 @@ class DocumentApplier
 
             // Per-řádkový partner — pin přes _resolve.rows[i].partner.
             $plan['resolvedRowPartners'][$i] = $this->resolvePin(
+                "rows.{$i}.partner",
                 is_array($clientRow['partner'] ?? null) ? ($clientRow['partner']['userAction'] ?? null) : null,
+                $issues,
             );
         }
 
@@ -591,12 +603,19 @@ class DocumentApplier
     }
 
     /**
-     * Resolve a `useExisting:<id>` pin against active persons. Returns the id
-     * when valid + active, null otherwise (no pin / malformed / inactive).
-     * Used for the optional accounting-document partners (head + per row),
-     * which are pin-only in MVP — no fresh resolve, no side-create.
+     * Resolve a `useExisting:<id>` pin against linkable persons (anything
+     * except Deleted 90 — archived targets are allowed, see
+     * LINKABLE_STATES). Returns the id when valid + linkable, null
+     * otherwise (no pin / malformed). A pin pointing at a missing or
+     * deleted record emits a warning issue instead of failing silently —
+     * the partner is optional, but the caller must be able to see it was
+     * dropped. Used for the optional accounting-document partners (head +
+     * per row), which are pin-only in MVP — no fresh resolve, no
+     * side-create.
+     *
+     * @param array<int, array{severity: string, path: string, code: string, message: string}> $issues
      */
-    private function resolvePin(?string $userAction): ?int
+    private function resolvePin(string $path, ?string $userAction, array &$issues): ?int
     {
         if (!is_string($userAction) || !str_starts_with($userAction, 'useExisting:')) {
             return null;
@@ -606,7 +625,16 @@ class DocumentApplier
             return null;
         }
         $id = (int) $idStr;
-        return $this->entityActive('base_persons_persons', $id) ? $id : null;
+        if (!$this->entityLinkable('base_persons_persons', $id)) {
+            $issues[] = [
+                'severity' => 'warning',
+                'path'     => $path,
+                'code'     => 'pin_target_missing',
+                'message'  => "Cílový záznam base_persons_persons#{$id} pro „{$path}\" neexistuje nebo je smazaný — partner nebyl nastaven.",
+            ];
+            return null;
+        }
+        return $id;
     }
 
     /**
@@ -658,9 +686,9 @@ class DocumentApplier
                 return ['id' => null, 'autoCreate' => false];
             }
             $id = (int) $idStr;
-            if (!$this->entityActive($existsTable, $id)) {
+            if (!$this->entityLinkable($existsTable, $id)) {
                 $plan['errorCode'] = 'conflict';
-                $plan['errorMessage'] = "Cílový záznam {$existsTable}#{$id} pro „{$path}\" už neexistuje.";
+                $plan['errorMessage'] = "Cílový záznam {$existsTable}#{$id} pro „{$path}\" neexistuje nebo je smazaný.";
                 return ['id' => null, 'autoCreate' => false];
             }
             return ['id' => $id, 'autoCreate' => false];
@@ -728,12 +756,17 @@ class DocumentApplier
         };
     }
 
-    private function entityActive(string $table, int $id): bool
+    /**
+     * True when the record exists in a linkable state (anything except
+     * Deleted 90). Used for validating explicit `useExisting:<id>` pins —
+     * archived (70) targets are allowed, see LINKABLE_STATES.
+     */
+    private function entityLinkable(string $table, int $id): bool
     {
         $row = $this->db->fetch(
-            'SELECT [id] FROM %n WHERE [id] = %i AND [docState] IN (%i, %i, %i)',
+            'SELECT [id] FROM %n WHERE [id] = %i AND [docState] IN (%i, %i, %i, %i)',
             $table, $id,
-            self::ACTIVE_STATES[0], self::ACTIVE_STATES[1], self::ACTIVE_STATES[2],
+            self::LINKABLE_STATES[0], self::LINKABLE_STATES[1], self::LINKABLE_STATES[2], self::LINKABLE_STATES[3],
         );
         return $row !== null;
     }

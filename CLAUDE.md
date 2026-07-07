@@ -190,12 +190,13 @@ Závislosti tečou shora dolů: Command → Document → Module/Config/Database 
 - Kartový kontrakt `{id, source, kind, icon, stateStyle, title, subtitle,
   timestamp, context, actions[]}`. Chování akcí odvozuje frontend z `action.kind`
   (`apply_extracted`/`review_extracted`/`reject_extracted`/`reanalyze`/
-  `open_viewer`/`open_form`). Mail akce bez `label` (FE lokalizuje dle
-  `action.id`); alert akce nesou vlastní label (passthrough).
+  `trash_message`/`archive_message`/`open_viewer`/`open_form`). Mail akce bez
+  `label` (FE lokalizuje dle `action.id`); alert akce nesou vlastní label
+  (passthrough).
 - **Jednoklik apply** posílá `safe` (`applyExtractedDocument(ndx)` bez
   userActions); `unresolved_required` (422) → **fall-through** do
   `DocumentExchangePreviewModal`. **Undo** = `POST …/unapply` (doklad do koše
-  90, extracted → 20, zpráva 40→30). Toast s „Otevřít"/„Vrátit" (app nemá toast
+  90, extracted → 20, zpráva 40→20). Toast s „Otevřít"/„Vrátit" (app nemá toast
   infra → lokální v `Dashboard.svelte`).
 - `RejectReasonPrompt` je sdílený (feed i `ViewerDetail`).
 - **AI shrnutí (fáze 2b)**: `GET /_ui/dashboard/summary` — SSE stream

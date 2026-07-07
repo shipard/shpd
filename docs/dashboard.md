@@ -117,10 +117,10 @@ Prioritní žebříček (sestupně), uvnitř pásma `timestamp` DESC.
 
 | `kind` | Pásmo | Zdroj → mapování |
 |---|---|---|
-| `urgent` | 🔴 | alert `error`; zpráva `docState=70` (chyba AI) |
-| `review` | 🟡 | extracted 20/30; alert `warning` |
+| `urgent` | 🔴 | alert `error`; zpráva `analysis_state=70` (analýza selhala) |
+| `review` | 🟡 | extracted 20/30; alert `warning`; chybová karta s `primary_type=other` |
 | `ready`  | 🟢 | extracted 10 (jednoklik) |
-| `info`   | ℹ️ | alert `info`; „a další…" karta |
+| `info`   | ℹ️ | alert `info`; karta „Není faktura"; „a další…" karta |
 
 ### 4.2 Slovník `kind` akcí (chování odvozuje frontend)
 
@@ -130,6 +130,8 @@ Prioritní žebříček (sestupně), uvnitř pásma `timestamp` DESC.
 | `review_extracted` | otevři `DocumentExchangePreviewModal` | `{extractedNdx}` |
 | `reject_extracted` | `RejectReasonPrompt` → reject | `{extractedNdx}` |
 | `reanalyze` | inline `reanalyze(messageNdx)`, refetch | `{messageNdx}` |
+| `trash_message` | zpráva do Koše (`docState=90`, docState-only save), refetch | `{messageNdx}` |
+| `archive_message` | zpráva do Archivu (`docState=80`, docState-only save), refetch | `{messageNdx}` |
 | `open_viewer` | navigace | `{viewerId, recordId?}` |
 | `open_form` | otevři form | `{table, recordId?/id?}` |
 
@@ -138,15 +140,23 @@ Prioritní žebříček (sestupně), uvnitř pásma `timestamp` DESC.
 ### 5.1 MailSuggestionsSource
 
 Karta **per vytěžený doklad** (`core_mail_extracted_documents.status ∈ {10,20,30}`
-JOIN `core_mail_incoming_messages`):
+JOIN `core_mail_incoming_messages`; `doc_type='other'` se ignoruje — pojistka,
+prompt v2.2.0 takové dokumenty zakazuje):
 
 - **10** → `kind=ready`, `stateStyle=done`; akce `apply` (primary), `review`, `reject`.
 - **20/30** → `kind=review`, `stateStyle=confirmed`/`edit`; akce `review` (primary),
   `reject`. (Jednoklik se u nízké jistoty záměrně nenabízí.)
 
-**Chybové karty** — zprávy `docState=70` (AI selhala) → `kind=urgent`,
-`stateStyle=error`; akce `reanalyze` (primary, `{messageNdx}`) + `open_viewer`
-(`core.mail.incoming`).
+**Chybové karty** — zprávy `analysis_state=70` (analýza selhala) mimo
+Archiv/Koš → `kind=urgent`, `stateStyle=error`; akce `reanalyze` (primary,
+`{messageNdx}`) + `open_viewer` (`core.mail.incoming`). Když už dřívější
+klasifikace určila `primary_type='other'`, karta degraduje na `kind=review`.
+
+**Karty „Není faktura"** — zprávy `analysis_state=30`, `docState=10` (Nová),
+`primary_type='other'` bez akčního extracted docu → `kind=info`,
+`stateStyle=archive`, titulek „Není faktura — {label typu}"; akce
+`trash_message` (primary), `archive_message`, `open_viewer`. Žádné
+auto-zavření ani digest — jedna karta per zpráva s jednoklikovým úklidem.
 
 Titulek: `doc_type` → label z cfgItem `core.mail.extractedDocTypes`. Podtitulek:
 částka + partner z `extracted_json` (kanonický doklad — protistrana dle

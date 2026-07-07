@@ -29,30 +29,35 @@ ho `ai-analyzer-setup` CLI; zobrazí se jednou.
 
 ### Životní cyklus jednoho běhu
 
+Pipeline status žije v `analysis_state` (cfgItem `core.mail.analysisStates`),
+ortogonálně k workflow stavu `docState` — viz sekce "Stavy zprávy".
+
 ```
-1. analyzer GET /queue                  ← seznam zpráv s docState=10
-2. analyzer POST /{ndx}/claim           ← atomicky: docState 10→20, vznikne claim row,
+1. analyzer GET /queue                  ← zprávy s analysis_state=10 mimo Archiv/Koš
+2. analyzer POST /{ndx}/claim           ← atomicky: analysis_state 10→20, vznikne claim row,
                                             response obsahuje plaintext API klíč backendu
                                             (jen v paměti; Cache-Control: no-store)
 3. analyzer GET /{ndx}/payload          ← subject, body, metadata příloh
 4. analyzer GET /{ndx}/attachments/.../content   ← streamuje binární obsah
 5. analyzer ➜ provider (Anthropic, ...) ← analyzer.provider extrahuje, vrátí JSON
 6. analyzer POST /{ndx}/result          ← uloží message_analyses + extracted_documents,
-                                            uvolní claim, docState 20→30 (nebo 20→40
-                                            pokud žádné extracted_documents)
+                                            uvolní claim, analysis_state →30; zpracuje
+                                            volitelnou message_classification; vznikl-li
+                                            aspoň jeden extracted doc a zpráva je stále
+                                            v Nové, docState 10→20 (K řešení)
 ```
 
 Při chybě:
 
 ```
-2'. POST /{ndx}/failed { retryable: true }   ← docState 20→10 (vrátí do queue)
-2'. POST /{ndx}/failed { retryable: false }  ← docState 20→70 ("Chyba AI", manuální zásah)
+2'. POST /{ndx}/failed { retryable: true }   ← analysis_state 20→10 (vrátí do fronty)
+2'. POST /{ndx}/failed { retryable: false }  ← analysis_state 20→70 ("Analýza selhala")
 ```
 
-Pokud analyzer mezi `claim` a `result` spadne, `mail-analysis-reap` (cron 1×/min)
-najde claim s `expires_at < now()`, označí ho `released=true` s reason `expired`
-a vrátí zprávu zpět na `docState=10` (jen pokud je stále ve 20 — manuální
-override má přednost).
+`docState` se při failed nemění. Pokud analyzer mezi `claim` a `result` spadne,
+`mail-analysis-reap` (cron 1×/min) najde claim s `expires_at < now()`, označí ho
+`released=true` s reason `expired` a vrátí `analysis_state` zpět na 10 (jen
+pokud je stále ve 20 — dokončený result/failed má přednost).
 
 ### Atomicita a souběh
 
@@ -63,8 +68,9 @@ per zpráva" tedy vynucuje aplikační kód v claim controlleru.
 
 `POST /result` v jedné transakci: `INSERT message_analyses` → `INSERT
 extracted_documents` (po jednom, status podle confidence vs profile thresholds)
-→ `UPDATE claims SET released=1` → `UPDATE messages SET docState=30/40`. Při
-selhání se vše rollbackuje.
+→ `UPDATE claims SET released=1` → `UPDATE messages SET analysis_state=30`
+(+ podmíněný `docState 10→20` a zápis klasifikace). Při selhání se vše
+rollbackuje.
 
 ## Šifrování API klíčů backendů
 
@@ -86,19 +92,43 @@ JSON response s `Cache-Control: no-store, no-cache, must-revalidate`.
 
 ## Stavy zprávy
 
-`core.mail.docStatesIncoming` v Fázi 3a doplňuje stav 70 "Chyba AI". Plný
-automat:
+Zpráva má **dvě ortogonální osy** (spec
+[tasks/mail-states-and-classification.md](../../../../tasks/mail-states-and-classification.md)):
+
+**Workflow `docState`** (`core.mail.docStatesIncoming`) — stav pro uživatele,
+srovnaný se zbytkem aplikace. Pipeline na něj sahá jediným místem: result
+s dokumenty posune Novou na K řešení.
+
+| Kód | cs | mainState | viewGroup | Poznámka |
+|---|---|---|---|---|
+| 10 | Nová | 1 | active | výchozí |
+| 20 | K řešení | 2 | active | nastavuje result s dokumenty, nebo ručně |
+| 40 | Hotovo | 3 | active | readOnly; auto-transition po review všech docs |
+| 80 | Archiv | 4 | archive | readOnly |
+| 90 | Smazáno | 5 | trash | readOnly |
+
+**Pipeline `analysis_state`** (`core.mail.analysisStates`) — status AI
+analýzy, přežívá Koš i Archiv; řídí ho výhradně pipeline + reanalyze:
 
 ```
-10 (Nová) ──claim──▶ 20 (V analýze) ──result──▶ 30 (Analyzovaná)
-                          │                           │
-                          ├──failed retryable──▶ 10   ├──user resolves all docs──▶ 40 (Zpracovaná)
-                          │                           │
-                          └──failed permanent──▶ 70   └──reanalyze──▶ 10
+0 (Bez analýzy)   koncový — AI vypnutá / netýká se (importy v Hotovo)
 
-70 (Chyba AI) ──reanalyze──▶ 10  nebo manuálně ──▶ 40 / 80 / 90
-30 / 40 / 70 / 80 / 90  (manual transitions per docStatesIncoming.jsonc)
+10 (Ve frontě) ──claim──▶ 20 (Analyzuje se) ──result──▶ 30 (Analyzováno)
+                               │                              │
+                               ├─failed retryable / reaper─▶ 10
+                               │                              └─reanalyze─▶ 10
+                               └─failed permanent─▶ 70 (Analýza selhala) ─reanalyze─▶ 10
 ```
+
+`analysis_state=20` (aktivní claim) drží read-only zámek formuláře —
+`IncomingMessageDocument::validate()` odmítne uložení s form-level chybou
+`analysis_in_progress`. Přechody `docState` (Koš/Archiv) fungují i během
+analýzy; fronta zprávy v Archivu/Koši přirozeně vynechává.
+
+Nová zpráva dostává `analysis_state=10`, pokud analýza není explicitně
+vypnutá (`ai_analysis_enabled=false`) a existuje aktivní AI profil; jinak 0.
+Import (`POST /_mail/import`) s default `docState=40` dostává 0 — pokud
+request nepošle `analysis_state` explicitně.
 
 ## Stavy extrahovaných dokumentů
 
@@ -117,26 +147,45 @@ automat:
 Mapping confidence → status řídí pole `confidence_thresholds` v profilu:
 `{"ready": 0.9, "review": 0.6}`.
 
-## Auto-transition 30 → 40
+## Auto-transition 20 → 40
 
 Když uživatel přes UI přepne všechny extracted documents do `applied/rejected/
 superseded` (a žádný nezůstane v `ready/pending/low`), zpráva sama přejde
-z docState=30 (Analyzovaná) na 40 (Zpracovaná). Trigger: explicit hook
+z docState=20 (K řešení) na 40 (Hotovo). Trigger: explicit hook
 `ExtractedDocumentDocument::afterPersist()` — běží uvnitř save transakce, takže
 přechod je atomický. Stav `ai_failed` přechodu nebrání (admin se může rozhodnout
-zprávu zavřít i s neúspěšnou extrakcí).
+zprávu zavřít i s neúspěšnou extrakcí). Undo apply (unapply) reconciluje
+reverzně: 40 → 20 (`reconcileMessageAfterUnapply`).
+
+## Klasifikace typu zprávy (message_classification)
+
+Od promptu **v2.2.0** analyzer v prvním kroku klasifikuje zprávu jako celek
+a vrací volitelné top-level pole `message_classification: {primary_type,
+confidence}` v `POST /result` (viz api-contract §9.5). Server v transakci
+resultu zapíše `primary_type` + `primary_type_source='ai'` — **jen pokud**
+`primary_type_source != 'user'` (ruční volba uživatele má vždy přednost;
+nastavuje ji dirty-change detekce v `IncomingMessageDocument::beforeSave`).
+Neznámý typ = warning + ignore, uložení výsledku se nikdy nerozbije.
+
+Dokumenty s `doc_type='other'` do `documents` nepatří — ne-faktura vrací
+`documents: []` + klasifikaci `other`; dashboard pak emituje info kartu
+„Není faktura" s akcemi Koš/Archiv (viz docs/dashboard.md).
+
+Enum typů v promptu i output_schema je zatím natvrdo (`invoiceReceived` |
+`other`); generování z `primaryTypes.jsonc` je future work.
 
 ## Reanalýza
 
 `POST /api/v1/_mail/messages/{ndx}/reanalyze` — UI akce viditelná v toolbaru
-detail panelu, jen když docState ∈ {30, 70}. Volitelný `profile_override_ndx`
-v body. Logika:
+detail panelu, jen když `analysis_state ∈ {30, 70}` a zpráva není v Archivu/Koši.
+Volitelný `profile_override_ndx` v body. Logika:
 
-1. Validuj stav (30 nebo 70).
+1. Validuj `analysis_state` (30 nebo 70) a `docState NOT IN (80, 90)`.
 2. Validuj profile_override (pokud zadán) — musí existovat a být `is_active=1`.
-3. UPDATE existing extracted_documents WHERE status IN (10, 20, 30) → `60` (superseded).
-   Statusy 40 (applied) a 50 (rejected) **zůstávají** beze změny.
-4. UPDATE message: `needs_reanalysis=1`, `profile_override`, `docState→10`.
+3. UPDATE existing extracted_documents WHERE status IN (10, 20, 30, 70) → `60`
+   (superseded). Statusy 40 (applied) a 50 (rejected) **zůstávají** beze změny.
+4. UPDATE message: `needs_reanalysis=1`, `profile_override`, `analysis_state→10`.
+   `docState` se nemění.
 
 Analyzer při dalším GET /queue zprávu uvidí včetně override profilu.
 
@@ -153,11 +202,13 @@ Analyzer při dalším GET /queue zprávu uvidí včetně override profilu.
    "Použít" (POST `/_mail/extracted-documents/{id}/apply`), "Zamítnout" (modal
    s povinným důvodem, POST `/_mail/extracted-documents/{id}/reject`).
    Tyto endpointy procházejí přes `ExtractedDocumentDocument::afterPersist`,
-   takže auto-transition zprávy 30→40 funguje atomicky.
+   takže auto-transition zprávy 20→40 funguje atomicky.
 5. **Originál** — raw `.eml` pokud existuje
 
-Toolbar v detailu obsahuje "Otevřít" (form edit) a "Znova analyzovat"
-(podmíněně dle docState).
+Řádek vieweru i hlavička detailu zobrazují badge stavu analýzy (label +
+stateStyle z `core.mail.analysisStates`; hodnota 0 se nezobrazuje). Toolbar
+v detailu obsahuje "Otevřít" (form edit) a "Znova analyzovat" (podmíněně dle
+`analysis_state`, viz Reanalýza).
 
 ## Auto-provisioning
 
@@ -176,6 +227,8 @@ default *se nepřepíše*; admin zachová svůj override.
 ## Reference
 
 - [tasks/mail-phase3a.md](../../../../tasks/mail-phase3a.md) — kompletní spec
+- [tasks/mail-states-and-classification.md](../../../../tasks/mail-states-and-classification.md)
+  — oddělení `analysis_state` od `docState` + klasifikace `primary_type`
 - [docs/operations/secrets.md](../../../../docs/operations/secrets.md) — DsSecretCipher
 - [docs/mail/api-contract.md](../../../../docs/mail/api-contract.md) — API kontrakty
 - [ai-prompts.md](ai-prompts.md) — default prompt + customization guidelines

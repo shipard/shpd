@@ -1,6 +1,10 @@
 # Modul `mail` — Oddělení stavů analýzy + AI klasifikace typu pošty
 
-**Status:** Odsouhlaseno (design diskuse 2026-07-07)
+**Status:** Implementováno 2026-07-07 (commity `feat(mail): oddeleni
+analysis_state od docState`, `feat(mail): AI klasifikace primary_type
+v result endpointu`, `feat(mail): dashboard karta "Neni faktura" +
+trash/archive akce`). Na dev DS zbývá `ds-upgrade` +
+`ai-profile-reload --force`.
 **Cíl:** (A) Oddělit pipeline status AI analýzy od uživatelského workflow
 stavu zprávy — `docState` došlé pošty se srovná se zbytkem aplikace
 (Nová / K řešení / Hotovo / Archiv / Koš), stav analýzy se přesune do

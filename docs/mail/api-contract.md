@@ -216,7 +216,10 @@ Response 200:
 }
 ```
 
-Filtruje `docState=10`, `ai_analysis_enabled NOT FALSE`, bez aktivní claim.
+Filtruje `analysis_state=10` (Ve frontě), `docState NOT IN (80, 90)` — Koš
+a Archiv zprávu z fronty přirozeně vyřadí — `ai_analysis_enabled NOT FALSE`,
+bez aktivní claim. Workflow `docState` se jinak nekontroluje (osy jsou
+ortogonální, viz `modules/core/mail/docs/ai-analysis.md` „Stavy zprávy").
 
 ### 9.2 `POST /_mail/analysis/{ndx}/claim`
 
@@ -230,8 +233,9 @@ Request body:
 ```
 
 `lease_seconds` se clampuje do rozsahu 60–900 s (default 300). Atomicky:
-`SELECT … FOR UPDATE` na zprávu, ověř docState=10 a žádná aktivní claim,
-INSERT claims, UPDATE docState→20, decrypt `backend.api_key`.
+`SELECT … FOR UPDATE` na zprávu, ověř `analysis_state=10` a žádná aktivní
+claim, INSERT claims, UPDATE `analysis_state→20`, decrypt `backend.api_key`.
+`docState` se nemění.
 
 Response 200:
 ```json
@@ -267,7 +271,7 @@ Response headers: `Cache-Control: no-store, no-cache, must-revalidate`,
 `Pragma: no-cache`. Plaintext API klíč žije v paměti analyzeru jen po dobu
 zpracování zprávy.
 
-Chybové kódy: `404 NOT_FOUND`, `409 INVALID_STATE` (docState != 10),
+Chybové kódy: `404 NOT_FOUND`, `409 INVALID_STATE` (analysis_state != 10),
 `409 ALREADY_CLAIMED`, `409 NO_PROFILE`, `409 NO_BACKEND`, `409 BACKEND_KEY_MISSING`,
 `500 SECRETS_UNAVAILABLE`, `500 BACKEND_KEY_CORRUPTED`, `500 INTERNAL_ERROR`
 (generická hláška, detail jen v server-side logu — spec §10 dec.2).
@@ -302,6 +306,10 @@ Headers: `X-Claim-Token`. Request body:
   "cost_usd": 0.0234,
   "overall_confidence": 0.92,
   "analysis_json": { },
+  "message_classification": {
+    "primary_type": "other",
+    "confidence": 0.97
+  },
   "extracted_documents": [
     {
       "doc_type": "invoiceReceived",
@@ -313,15 +321,27 @@ Headers: `X-Claim-Token`. Request body:
 }
 ```
 
+`message_classification` je **volitelné** (prompt v2.2.0+) — starý analyzer
+ho neposílá a nic se nemění, zpětná kompatibilita drží (§8).
+
 Server transakčně:
 
 1. INSERT `core_mail_message_analyses` (status=2 success).
 2. Pro každý extracted dokument: INSERT `core_mail_extracted_documents` se
    `status` určeným z `confidence` vs `profile.confidence_thresholds`.
 3. UPDATE claims SET `released=1, release_reason='result'`.
-4. UPDATE messages SET `docState=30` (Analyzovaná) — nebo `docState=40` (Zpracovaná),
-   pokud `extracted_documents` je prázdný list.
-5. Vynuluj `needs_reanalysis`.
+4. UPDATE messages SET `analysis_state=30` (Analyzováno), vynuluj
+   `needs_reanalysis`.
+5. Workflow: pokud vznikl aspoň jeden extracted dokument **a** zpráva je
+   stále v Nové (`docState=10`), UPDATE `docState=20` (K řešení). Prázdné
+   `extracted_documents` docState **nemění** — zpráva zůstává v Nové
+   (dashboard emituje kartu „Není faktura"). Ruční workflow stav pipeline
+   nikdy nepřepisuje.
+6. `message_classification` (pokud přišla): validace `primary_type` proti
+   klíčům `core.mail.primaryTypes` (tolerují se i `enabled: false` typy;
+   neznámý klíč → server-side warning + pole se ignoruje, **ne** 422).
+   UPDATE `primary_type` + `primary_type_source='ai'` — **jen pokud**
+   `primary_type_source != 'user'` (volba uživatele má vždy přednost).
 
 Response 201: `{ analysis_ndx, extracted_document_ndxs: [...] }`.
 
@@ -340,10 +360,10 @@ Headers: `X-Claim-Token`. Request body:
 ```
 
 Server: INSERT failed `message_analyses` (status=3), uvolni claim
-(`release_reason='failed'`), přepni zprávu:
+(`release_reason='failed'`), přepni stav analýzy (`docState` se nemění):
 
-- `retryable=true` → `docState=10` (vrátí se do queue)
-- `retryable=false` → `docState=70` (Chyba AI, manuální zásah)
+- `retryable=true` → `analysis_state=10` (vrátí se do fronty)
+- `retryable=false` → `analysis_state=70` (Analýza selhala, manuální zásah)
 
 ### 9.7 `POST /_mail/messages/{ndx}/reanalyze`
 
@@ -357,15 +377,17 @@ admin `shpd_ak_…`), ne `_ai_analyzer`. Request body:
 
 `profile_override_ndx` je volitelné. Server validuje:
 
-- Zpráva existuje a je v `docState ∈ {30, 70}` (jinak 409 INVALID_STATE).
+- Zpráva existuje, `analysis_state ∈ {30, 70}` a `docState NOT IN (80, 90)`
+  (jinak 409 INVALID_STATE).
 - Profile override (pokud zadán) existuje a `is_active=1`.
 
 Server v transakci:
 
 1. UPDATE `extracted_documents` SET `status=60 (superseded)` WHERE
-   `message=ndx AND status IN (10, 20, 30)`.  
+   `message=ndx AND status IN (10, 20, 30, 70)`.  
    Statusy 40 (applied) a 50 (rejected) zůstávají beze změny.
-2. UPDATE `messages` SET `docState=10`, `needs_reanalysis=1`, `profile_override`.
+2. UPDATE `messages` SET `analysis_state=10`, `needs_reanalysis=1`,
+   `profile_override`. `docState` se nemění.
 
 Analyzer při dalším GET /queue zprávu uvidí včetně override profilu.
 
@@ -376,7 +398,7 @@ Atomicky:
 
 1. Validuje, že dokument existuje a je v pending stavu (10/20/30).
 2. Prochází přes `ExtractedDocumentDocument::beforeSave` (audit pole) a
-   `afterPersist` (auto-transition zprávy 30→40 když všichni sourozenci
+   `afterPersist` (auto-transition zprávy 20→40 když všichni sourozenci
    jsou applied/rejected/superseded).
 3. Vrací `{ ndx, status, message_ndx }`.
 
@@ -394,8 +416,8 @@ CLI `bin/shpd-ds mail-analysis-reap` (cron 1×/min) vyčistí stale claimy:
 
 - Najde `released=0 AND expires_at < now()`.
 - Označí `released=1, release_reason='expired'`.
-- UPDATE messages SET `docState=10` WHERE `id=msg AND docState=20` (manuální
-  override admin má přednost).
+- UPDATE messages SET `analysis_state=10` WHERE `id=msg AND analysis_state=20`
+  (dokončený result/failed má přednost). `docState` se nemění.
 
 ### 9.11 `POST /_mail/extracted-documents/{ndx}/unapply`
 
@@ -411,7 +433,7 @@ předchozí apply — viz `ExtractedDocumentApplier::unapply`. Transakčně:
 4. Extracted → `status=20` (pending_review), vynulování `target_row_ndx`,
    `applied_at`, `applied_by` (`writeUnapplyTransition` — oddělená od
    `writeStatusTransition`, která povoluje jen pending stavy).
-5. Zpráva `docState 40→30` přes reverzní reconcile
+5. Zpráva `docState 40→20` přes reverzní reconcile
    (`reconcileMessageAfterUnapply`, opak apply auto-transition).
 
 Vrací `{ ndx, status, messageNdx, trashedDocId }`. Chyby: `409 INVALID_STATE` /

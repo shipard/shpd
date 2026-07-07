@@ -1,0 +1,26 @@
+{
+    // core.mail.primaryTypeSources
+    //
+    // Kdo naposledy určil primary_type došlé zprávy
+    // (core_mail_incoming_messages.primary_type_source).
+    // AI nikdy nepřepisuje hodnotu nastavenou uživatelem.
+
+    "mailbox": {
+        "name": "Mailbox default",
+        "name:cs": "Default schránky",
+        "name:en": "Mailbox default",
+        "order": 10
+    },
+    "user": {
+        "name": "User",
+        "name:cs": "Uživatel",
+        "name:en": "User",
+        "order": 20
+    },
+    "ai": {
+        "name": "AI classification",
+        "name:cs": "AI klasifikace",
+        "name:en": "AI classification",
+        "order": 30
+    }
+}

@@ -10,15 +10,16 @@ use Shipard\Core\Document\ValidationResult;
 /**
  * Document třída pro `core_mail_extracted_documents`.
  *
- * Hlavní zodpovědnost: auto-transition zprávy 30 → 40.
+ * Hlavní zodpovědnost: auto-transition zprávy 20 → 40.
  * Když se status extracted documentu mění na `applied` (40), `rejected` (50)
  * nebo `superseded` (60) a žádný sourozenec téže zprávy už není ve stavu
  * `ready_to_apply` (10), `pending_review` (20) ani `low_confidence` (30),
- * automaticky přepneme zprávu z `docState=30` (Analyzovaná) na `docState=40`
- * (Zpracovaná). Stav `ai_failed` (70) přechodu nebrání — admin se může
+ * automaticky přepneme zprávu z `docState=20` (K řešení) na `docState=40`
+ * (Hotovo). Stav `ai_failed` (70) přechodu nebrání — admin se může
  * rozhodnout uzavřít zprávu i s neúspěšnou extrakcí.
  *
- * Spec: tasks/mail-phase3a.md §10 rozhodnutí 4.
+ * Spec: tasks/mail-phase3a.md §10 rozhodnutí 4;
+ * tasks/mail-states-and-classification.md §A4.
  */
 class ExtractedDocumentDocument extends Document
 {
@@ -31,7 +32,7 @@ class ExtractedDocumentDocument extends Document
     public const STATUS_SUPERSEDED     = 60;
     public const STATUS_AI_FAILED      = 70;
 
-    /** Statusy, které stále drží zprávu v "Analyzovaná" (30). */
+    /** Statusy, které stále drží zprávu v "K řešení" (20). */
     private const PENDING_STATUSES = [
         self::STATUS_READY_TO_APPLY,
         self::STATUS_PENDING_REVIEW,
@@ -47,10 +48,10 @@ class ExtractedDocumentDocument extends Document
 
     private const MESSAGES_TABLE = 'core_mail_incoming_messages';
     private const EXTRACTED_TABLE = 'core_mail_extracted_documents';
-    private const DOC_STATE_ANALYZED = 30;
-    private const DOC_STATE_PROCESSED = 40;
-    private const DOC_STATE_MAIN_ANALYZED = 3;
-    private const DOC_STATE_MAIN_PROCESSED = 4;
+    private const DOC_STATE_IN_PROGRESS = 20;
+    private const DOC_STATE_DONE = 40;
+    private const DOC_STATE_MAIN_IN_PROGRESS = 2;
+    private const DOC_STATE_MAIN_DONE = 3;
 
     public function validate(array &$data): ValidationResult
     {
@@ -129,13 +130,13 @@ class ExtractedDocumentDocument extends Document
     }
 
     /**
-     * Pokud zpráva je v `docState=30` (Analyzovaná) a žádný sourozenec není
-     * v pending statusu, přepne ji na `docState=40` (Zpracovaná).
+     * Pokud zpráva je v `docState=20` (K řešení) a žádný sourozenec není
+     * v pending statusu, přepne ji na `docState=40` (Hotovo).
      * Volá se v rámci téže transakce jako save (TableGateway commitne na konci).
      */
     protected function maybeTransitionMessage(int $messageId): void
     {
-        if (!$this->messageIsAnalyzed($messageId)) {
+        if (!$this->messageIsInProgress($messageId)) {
             return;
         }
 
@@ -143,10 +144,10 @@ class ExtractedDocumentDocument extends Document
             return;
         }
 
-        $this->markMessageProcessed($messageId);
+        $this->markMessageDone($messageId);
     }
 
-    protected function messageIsAnalyzed(int $messageId): bool
+    protected function messageIsInProgress(int $messageId): bool
     {
         $row = $this->db->fetch(
             'SELECT %n FROM %n WHERE %n = %i',
@@ -159,7 +160,7 @@ class ExtractedDocumentDocument extends Document
         if ($row === null) {
             return false;
         }
-        return (int) ((array) $row)['docState'] === self::DOC_STATE_ANALYZED;
+        return (int) ((array) $row)['docState'] === self::DOC_STATE_IN_PROGRESS;
     }
 
     protected function countPendingSiblings(int $messageId): int
@@ -174,21 +175,21 @@ class ExtractedDocumentDocument extends Document
         );
     }
 
-    protected function markMessageProcessed(int $messageId): void
+    protected function markMessageDone(int $messageId): void
     {
         $now = date('Y-m-d H:i:s');
         $this->db->update(self::MESSAGES_TABLE, [
-            'docState' => self::DOC_STATE_PROCESSED,
-            'docStateMain' => self::DOC_STATE_MAIN_PROCESSED,
+            'docState' => self::DOC_STATE_DONE,
+            'docStateMain' => self::DOC_STATE_MAIN_DONE,
             'modified' => $now,
         ])->where('%n = %i', 'id', $messageId)->execute();
     }
 
     /**
      * Reverzní reconcile pro unapply — zrcadlí {@see maybeTransitionMessage}.
-     * Když je zpráva `docState=40` (Zpracovaná) a některý sourozenec se právě
+     * Když je zpráva `docState=40` (Hotovo) a některý sourozenec se právě
      * vrátil do pending statusu (unapply vrátil applied doklad na 20), přepne
-     * zprávu zpět na `docState=30` (Analyzovaná). Volá se v rámci téže
+     * zprávu zpět na `docState=20` (K řešení). Volá se v rámci téže
      * transakce jako save vráceného extracted dokladu.
      */
     public function reconcileMessageAfterUnapply(int $messageId): void
@@ -196,16 +197,16 @@ class ExtractedDocumentDocument extends Document
         if ($this->db === null) {
             return;
         }
-        if (!$this->messageIsProcessed($messageId)) {
+        if (!$this->messageIsDone($messageId)) {
             return;
         }
         if ($this->countPendingSiblings($messageId) === 0) {
             return;
         }
-        $this->markMessageAnalyzed($messageId);
+        $this->markMessageInProgress($messageId);
     }
 
-    protected function messageIsProcessed(int $messageId): bool
+    protected function messageIsDone(int $messageId): bool
     {
         $row = $this->db->fetch(
             'SELECT %n FROM %n WHERE %n = %i',
@@ -218,15 +219,15 @@ class ExtractedDocumentDocument extends Document
         if ($row === null) {
             return false;
         }
-        return (int) ((array) $row)['docState'] === self::DOC_STATE_PROCESSED;
+        return (int) ((array) $row)['docState'] === self::DOC_STATE_DONE;
     }
 
-    protected function markMessageAnalyzed(int $messageId): void
+    protected function markMessageInProgress(int $messageId): void
     {
         $now = date('Y-m-d H:i:s');
         $this->db->update(self::MESSAGES_TABLE, [
-            'docState' => self::DOC_STATE_ANALYZED,
-            'docStateMain' => self::DOC_STATE_MAIN_ANALYZED,
+            'docState' => self::DOC_STATE_IN_PROGRESS,
+            'docStateMain' => self::DOC_STATE_MAIN_IN_PROGRESS,
             'modified' => $now,
         ])->where('%n = %i', 'id', $messageId)->execute();
     }

@@ -218,6 +218,7 @@ Evidence → API endpoint → AI analýza do dokladů. Kontrakt endpointu
 | `mail-phase1.md` | Evidence došlé pošty (tabulky, viewer, editor, fake data) |
 | `mail-phase2a.md` | API endpoint `/_mail/incoming` (idempotency, auto-provisioning) |
 | `mail-phase3a.md` | AI analýza (shpd strana): backendy, profily, claims, extrahované doklady |
+| `mail-states-and-classification.md` | Oddělení `analysis_state` od `docState` + AI klasifikace `primary_type`, karta „Není faktura“ |
 | `mail-config-viewers.md` | Viewery a formuláře pro mailové konfigurační tabulky |
 | `ai-profile-reload.md` | CLI `ai-profile-reload` — reload promptu/schématu profilu z JSONC |
 

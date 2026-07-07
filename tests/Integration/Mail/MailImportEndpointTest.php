@@ -18,8 +18,8 @@ use Shipard\Tests\Integration\IntegrationTestCase;
  * je pokrytá unit testy.
  *
  * Na rozdíl od `/_mail/incoming`: JSON tělo (žádný .eml/přílohy), libovolný
- * api_key uživatel, default docState 40 (Zpracovaná) a možnost nastavit
- * sender_person / primary_type / source_type / target_*.
+ * api_key uživatel, default docState 40 (Hotovo, analysis_state 0) a možnost
+ * nastavit sender_person / primary_type / source_type / target_* / analysis_state.
  *
  * Testy si po sobě uklízí přes test prefix `IT:` v subjectu.
  */
@@ -93,8 +93,9 @@ class MailImportEndpointTest extends IntegrationTestCase
         $this->assertNotNull($row);
         $this->assertSame($this->defaultMailboxId, (int) $row['mailbox']);
         $this->assertSame(self::TEST_SENDER, $row['sender_email']);
-        $this->assertSame(40, (int) $row['docState'], 'default docState = 40 (Zpracovaná)');
-        $this->assertSame(4, (int) $row['docStateMain']);
+        $this->assertSame(40, (int) $row['docState'], 'default docState = 40 (Hotovo)');
+        $this->assertSame(3, (int) $row['docStateMain']);
+        $this->assertSame(0, (int) $row['analysis_state'], 'import v Hotovo se neanalyzuje');
         $this->assertSame(1, (int) $row['source_type'], 'default source_type = 1');
         $this->assertSame($this->importerUserId, (int) $row['created_by']);
     }

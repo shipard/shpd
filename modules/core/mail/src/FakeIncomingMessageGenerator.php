@@ -10,8 +10,10 @@ namespace Shipard\Module\Core\Mail;
  * Identifikace: `message_id` začíná prefixem `TEST-MSG-` — podle toho
  * `seed-mail-clear` pozná a smaže. `source_type` je vždy `1` (manual).
  *
- * Distribuce `docState` dle §7.2 specifikace:
- *   60 % Nová (10), 20 % Analyzovaná (30), 15 % Zpracovaná (40), 5 % Archiv (80).
+ * Distribuce `docState` (upravená §7.2 po oddělení analysis_state):
+ *   60 % Nová (10), 20 % K řešení (20), 15 % Hotovo (40), 5 % Archiv (80).
+ * `analysis_state`: Nová → 10 (Ve frontě), K řešení/Hotovo → 30 (Analyzováno),
+ * Archiv → 0 (Bez analýzy).
  */
 class FakeIncomingMessageGenerator
 {
@@ -99,7 +101,7 @@ class FakeIncomingMessageGenerator
             : $company;
 
         $receivedAt = $this->randomReceivedAt();
-        [$docState, $docStateMain] = $this->randomDocState();
+        [$docState, $docStateMain, $analysisState] = $this->randomDocState();
 
         $now = date('Y-m-d H:i:s');
 
@@ -107,6 +109,8 @@ class FakeIncomingMessageGenerator
             'message_id'            => sprintf(self::ID_PREFIX . '%04d', $index),
             'mailbox'               => $mailboxId,
             'primary_type'          => $primaryType,
+            'primary_type_source'   => 'mailbox',
+            'analysis_state'        => $analysisState,
             'subject'               => $subject,
             'sender_email'          => $senderEmail,
             'sender_name'           => $senderName,
@@ -173,22 +177,22 @@ class FakeIncomingMessageGenerator
     }
 
     /**
-     * Distribuce dle spec §7.2:
-     *   60 % docState=10 (Nová, mainState=1)
-     *   20 % docState=30 (Analyzovaná, mainState=3)
-     *   15 % docState=40 (Zpracovaná, mainState=4)
-     *    5 % docState=80 (Archiv, mainState=5)
+     * Distribuce (upravená §7.2 po oddělení analysis_state):
+     *   60 % docState=10 (Nová, mainState=1, ve frontě analýzy)
+     *   20 % docState=20 (K řešení, mainState=2, analyzováno)
+     *   15 % docState=40 (Hotovo, mainState=3, analyzováno)
+     *    5 % docState=80 (Archiv, mainState=4, bez analýzy)
      *
-     * @return array{0: int, 1: int} [docState, docStateMain]
+     * @return array{0: int, 1: int, 2: int} [docState, docStateMain, analysisState]
      */
     private function randomDocState(): array
     {
         $r = random_int(1, 100);
         return match (true) {
-            $r <= 60 => [10, 1],
-            $r <= 80 => [30, 3],
-            $r <= 95 => [40, 4],
-            default  => [80, 5],
+            $r <= 60 => [10, 1, 10],
+            $r <= 80 => [20, 2, 30],
+            $r <= 95 => [40, 3, 30],
+            default  => [80, 4, 0],
         };
     }
 

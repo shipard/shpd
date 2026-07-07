@@ -17,8 +17,8 @@ use Shipard\Module\Core\Mail\ExtractedDocumentDocument;
  *   - 10 → kind=ready  (jednoklik apply + review + reject)
  *   - 20/30 → kind=review (review primary + reject; jednoklik se u nízké
  *     jistoty záměrně nenabízí)
- * Chybové karty: zpráva `docState=70` (AI error) → kind=urgent, akce reanalyze
- * + open_viewer na došlou poštu.
+ * Chybové karty: zpráva `analysis_state=70` (Analýza selhala) mimo Archiv/Koš
+ * → kind=urgent, akce reanalyze + open_viewer na došlou poštu.
  *
  * Titulek: `doc_type` → label z cfgItem `core.mail.extractedDocTypes`.
  * Podtitulek: partner + částka z `extracted_json` (kanonický doklad) + jistota
@@ -34,8 +34,12 @@ final class MailSuggestionsSource implements FeedSource
     private const EXTRACTED_TABLE = 'core_mail_extracted_documents';
     private const MESSAGES_TABLE  = 'core_mail_incoming_messages';
 
-    /** docState zprávy = selhání AI analýzy (core.mail.docStatesIncoming). */
-    private const MESSAGE_AI_ERROR = 70;
+    /** analysis_state zprávy = permanentní selhání AI (core.mail.analysisStates). */
+    private const ANALYSIS_FAILED = 70;
+
+    /** Workflow stavy Archiv/Koš — chybové karty se pro ně neemitují. */
+    private const DOC_STATE_ARCHIVED = 80;
+    private const DOC_STATE_TRASH = 90;
 
     private const DOC_TYPES_CFG_ITEM = 'core.mail.extractedDocTypes';
 
@@ -134,7 +138,8 @@ final class MailSuggestionsSource implements FeedSource
     }
 
     /**
-     * Chybové karty — zprávy, u kterých selhala AI (docState=70).
+     * Chybové karty — zprávy, u kterých permanentně selhala AI
+     * (analysis_state=70), mimo Archiv/Koš.
      *
      * @return list<array<string,mixed>>
      */
@@ -143,10 +148,11 @@ final class MailSuggestionsSource implements FeedSource
         $rows = $ctx->db->fetchAll(
             'SELECT `id` AS `message_ndx`, `subject`, `sender_name`, `received_at`'
             . ' FROM `' . self::MESSAGES_TABLE . '`'
-            . ' WHERE `docState` = %i'
+            . ' WHERE `analysis_state` = %i AND `docState` NOT IN %in'
             . ' ORDER BY `received_at` DESC, `id` DESC'
             . ' LIMIT %i',
-            self::MESSAGE_AI_ERROR,
+            self::ANALYSIS_FAILED,
+            [self::DOC_STATE_ARCHIVED, self::DOC_STATE_TRASH],
             $ctx->maxCards,
         );
 

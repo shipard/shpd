@@ -104,6 +104,14 @@
             "file": "config/docStatesIncoming.jsonc"
         },
         {
+            "id": "core.mail.analysisStates",
+            "file": "config/analysisStates.jsonc"
+        },
+        {
+            "id": "core.mail.primaryTypeSources",
+            "file": "config/primaryTypeSources.jsonc"
+        },
+        {
             "id": "core.mail.extractedDocStates",
             "file": "config/extractedDocStates.jsonc"
         },

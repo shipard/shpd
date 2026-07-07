@@ -58,11 +58,10 @@ class AnalysisClaimReaperTest extends TestCase
             ->with(
                 $this->stringContains('UPDATE'),
                 'core_mail_incoming_messages',
-                'docState', 10,
-                'docStateMain', 1,
+                'analysis_state', 10,
                 'modified', $this->anything(),
                 'id', 100,
-                'docState', 20, // jen pokud zpráva pořád "V analýze"
+                'analysis_state', 20, // jen pokud se analýza pořád "Analyzuje"
             );
 
         $reaper = new AnalysisClaimReaper($db);

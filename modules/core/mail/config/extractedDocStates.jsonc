@@ -5,10 +5,10 @@
     // Používá enumInt — hodnoty jsou tinyint kódy.
     //
     // Auto-transition pravidlo: když status přechází na `applied`, `rejected`
-    // nebo `superseded`, hook `ExtractedDocumentDocument::afterSave()` zkontroluje
+    // nebo `superseded`, hook `ExtractedDocumentDocument::afterPersist()` zkontroluje
     // všechny sourozence; pokud žádný není ve stavu `ready_to_apply`,
-    // `pending_review` ani `low_confidence`, zpráva přechází z `docState=30`
-    // (Analyzovaná) na `docState=40` (Zpracovaná).
+    // `pending_review` ani `low_confidence`, zpráva přechází z `docState=20`
+    // (K řešení) na `docState=40` (Hotovo).
 
     "10": {
         "name": "Ready to apply",

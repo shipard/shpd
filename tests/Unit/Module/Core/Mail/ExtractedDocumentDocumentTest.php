@@ -8,13 +8,14 @@ use PHPUnit\Framework\TestCase;
 use Shipard\Module\Core\Mail\ExtractedDocumentDocument;
 
 /**
- * ExtractedDocumentDocument auto-transition hook (afterSave).
+ * ExtractedDocumentDocument auto-transition hook (afterPersist).
  *
- * Logika podle tasks/mail-phase3a.md §10 rozhodnutí 4:
+ * Logika podle tasks/mail-phase3a.md §10 rozhodnutí 4
+ * (stavy dle tasks/mail-states-and-classification.md §A4):
  *   - status mění na applied/rejected/superseded
  *   - žádný sourozenec není ready_to_apply / pending_review / low_confidence
- *   - zpráva je v docState=30
- *   → přepne zprávu na docState=40
+ *   - zpráva je v docState=20 (K řešení)
+ *   → přepne zprávu na docState=40 (Hotovo)
  *
  * Mockujeme \Dibi\Connection a kontrolujeme volání UPDATE.
  */
@@ -117,19 +118,19 @@ class ExtractedDocumentDocumentTest extends TestCase
         $this->assertSame($existing, $data['applied_at']);
     }
 
-    // --- afterPersist: auto-transition 30 -> 40 -----------------------------
+    // --- afterPersist: auto-transition 20 -> 40 -----------------------------
     //
     // Auto-transition běží v afterPersist (uvnitř transakce, před commitem)
     // pro splnění spec §10 dec.4 atomicity. Mockujeme protected hooks
-    // (messageIsAnalyzed, countPendingSiblings, markMessageProcessed) místo
+    // (messageIsInProgress, countPendingSiblings, markMessageDone) místo
     // přímého Dibi\Connection — final query() ho nelze mockovat. Logika
     // "kdy spustit transition" se ověřuje proti tomuto subclass spy; SQL se
     // exercituje až integration testy proti reálné DB (Fáze D).
 
-    private function spy(bool $isAnalyzed, int $pendingCount): TestableExtractedDoc
+    private function spy(bool $isInProgress, int $pendingCount): TestableExtractedDoc
     {
         $doc = new TestableExtractedDoc();
-        $doc->stubMessageIsAnalyzed = $isAnalyzed;
+        $doc->stubMessageIsInProgress = $isInProgress;
         $doc->stubPendingCount = $pendingCount;
         return $doc;
     }
@@ -143,49 +144,49 @@ class ExtractedDocumentDocumentTest extends TestCase
             'status' => ExtractedDocumentDocument::STATUS_PENDING_REVIEW,
         ]);
 
-        $this->assertSame(0, $doc->messageIsAnalyzedCalls);
-        $this->assertSame(0, $doc->markProcessedCalls);
+        $this->assertSame(0, $doc->messageIsInProgressCalls);
+        $this->assertSame(0, $doc->markDoneCalls);
     }
 
-    public function testAfterPersistDoesNothingWhenMessageNotInState30(): void
+    public function testAfterPersistDoesNothingWhenMessageNotInState20(): void
     {
-        $doc = $this->spy(isAnalyzed: false, pendingCount: 0);
+        $doc = $this->spy(isInProgress: false, pendingCount: 0);
         $doc->afterPersist([
             'id' => 1,
             'message' => 5,
             'status' => ExtractedDocumentDocument::STATUS_APPLIED,
         ]);
 
-        $this->assertSame(1, $doc->messageIsAnalyzedCalls);
+        $this->assertSame(1, $doc->messageIsInProgressCalls);
         $this->assertSame(0, $doc->countPendingCalls);
-        $this->assertSame(0, $doc->markProcessedCalls);
+        $this->assertSame(0, $doc->markDoneCalls);
     }
 
     public function testAfterPersistDoesNothingWhenSiblingsStillPending(): void
     {
-        $doc = $this->spy(isAnalyzed: true, pendingCount: 2);
+        $doc = $this->spy(isInProgress: true, pendingCount: 2);
         $doc->afterPersist([
             'id' => 1,
             'message' => 5,
             'status' => ExtractedDocumentDocument::STATUS_APPLIED,
         ]);
 
-        $this->assertSame(1, $doc->messageIsAnalyzedCalls);
+        $this->assertSame(1, $doc->messageIsInProgressCalls);
         $this->assertSame(1, $doc->countPendingCalls);
-        $this->assertSame(0, $doc->markProcessedCalls);
+        $this->assertSame(0, $doc->markDoneCalls);
     }
 
     public function testAfterPersistTransitionsMessageWhenAllResolved(): void
     {
-        $doc = $this->spy(isAnalyzed: true, pendingCount: 0);
+        $doc = $this->spy(isInProgress: true, pendingCount: 0);
         $doc->afterPersist([
             'id' => 1,
             'message' => 5,
             'status' => ExtractedDocumentDocument::STATUS_APPLIED,
         ]);
 
-        $this->assertSame(1, $doc->markProcessedCalls);
-        $this->assertSame(5, $doc->lastProcessedMessage);
+        $this->assertSame(1, $doc->markDoneCalls);
+        $this->assertSame(5, $doc->lastDoneMessage);
     }
 
     public function testAfterPersistAiFailedDoesNotBlockTransition(): void
@@ -193,26 +194,61 @@ class ExtractedDocumentDocumentTest extends TestCase
         // ai_failed sourozenec NENÍ v PENDING_STATUSES, takže countPendingSiblings
         // vrátí 0 i když takový sourozenec existuje. Tady jen ověřujeme,
         // že na rejected status hook normálně proběhne.
-        $doc = $this->spy(isAnalyzed: true, pendingCount: 0);
+        $doc = $this->spy(isInProgress: true, pendingCount: 0);
         $doc->afterPersist([
             'id' => 1,
             'message' => 5,
             'status' => ExtractedDocumentDocument::STATUS_REJECTED,
         ]);
 
-        $this->assertSame(1, $doc->markProcessedCalls);
+        $this->assertSame(1, $doc->markDoneCalls);
     }
 
     public function testAfterPersistSupersededAlsoTriggersCheck(): void
     {
-        $doc = $this->spy(isAnalyzed: true, pendingCount: 0);
+        $doc = $this->spy(isInProgress: true, pendingCount: 0);
         $doc->afterPersist([
             'id' => 1,
             'message' => 5,
             'status' => ExtractedDocumentDocument::STATUS_SUPERSEDED,
         ]);
 
-        $this->assertSame(1, $doc->markProcessedCalls);
+        $this->assertSame(1, $doc->markDoneCalls);
+    }
+
+    // --- reconcileMessageAfterUnapply: reverzní 40 -> 20 ---------------------
+
+    public function testUnapplyReconcileTransitionsDoneMessageBack(): void
+    {
+        $doc = new TestableUnapplyReconcileDoc();
+        $doc->stubMessageIsDone = true;
+        $doc->stubPendingCount = 1;
+
+        $doc->reconcileMessageAfterUnapply(5);
+
+        $this->assertSame(5, $doc->lastInProgressMessage);
+    }
+
+    public function testUnapplyReconcileDoesNothingWhenMessageNotDone(): void
+    {
+        $doc = new TestableUnapplyReconcileDoc();
+        $doc->stubMessageIsDone = false;
+        $doc->stubPendingCount = 1;
+
+        $doc->reconcileMessageAfterUnapply(5);
+
+        $this->assertNull($doc->lastInProgressMessage);
+    }
+
+    public function testUnapplyReconcileDoesNothingWithoutPendingSiblings(): void
+    {
+        $doc = new TestableUnapplyReconcileDoc();
+        $doc->stubMessageIsDone = true;
+        $doc->stubPendingCount = 0;
+
+        $doc->reconcileMessageAfterUnapply(5);
+
+        $this->assertNull($doc->lastInProgressMessage);
     }
 }
 
@@ -223,17 +259,17 @@ class ExtractedDocumentDocumentTest extends TestCase
  */
 class TestableExtractedDoc extends ExtractedDocumentDocument
 {
-    public bool $stubMessageIsAnalyzed = true;
+    public bool $stubMessageIsInProgress = true;
     public int $stubPendingCount = 0;
-    public int $messageIsAnalyzedCalls = 0;
+    public int $messageIsInProgressCalls = 0;
     public int $countPendingCalls = 0;
-    public int $markProcessedCalls = 0;
-    public ?int $lastProcessedMessage = null;
+    public int $markDoneCalls = 0;
+    public ?int $lastDoneMessage = null;
 
-    protected function messageIsAnalyzed(int $messageId): bool
+    protected function messageIsInProgress(int $messageId): bool
     {
-        $this->messageIsAnalyzedCalls++;
-        return $this->stubMessageIsAnalyzed;
+        $this->messageIsInProgressCalls++;
+        return $this->stubMessageIsInProgress;
     }
 
     protected function countPendingSiblings(int $messageId): int
@@ -242,10 +278,10 @@ class TestableExtractedDoc extends ExtractedDocumentDocument
         return $this->stubPendingCount;
     }
 
-    protected function markMessageProcessed(int $messageId): void
+    protected function markMessageDone(int $messageId): void
     {
-        $this->markProcessedCalls++;
-        $this->lastProcessedMessage = $messageId;
+        $this->markDoneCalls++;
+        $this->lastDoneMessage = $messageId;
     }
 
     public function afterPersist(array $data): void
@@ -268,5 +304,43 @@ class TestableExtractedDoc extends ExtractedDocumentDocument
             return;
         }
         $this->maybeTransitionMessage($messageId);
+    }
+}
+
+/**
+ * Spy pro reverzní reconcile — obchází $this->db check v public metodě
+ * stubem protected hooků, stejný vzor jako TestableExtractedDoc.
+ */
+class TestableUnapplyReconcileDoc extends ExtractedDocumentDocument
+{
+    public bool $stubMessageIsDone = true;
+    public int $stubPendingCount = 0;
+    public ?int $lastInProgressMessage = null;
+
+    protected function messageIsDone(int $messageId): bool
+    {
+        return $this->stubMessageIsDone;
+    }
+
+    protected function countPendingSiblings(int $messageId): int
+    {
+        return $this->stubPendingCount;
+    }
+
+    protected function markMessageInProgress(int $messageId): void
+    {
+        $this->lastInProgressMessage = $messageId;
+    }
+
+    public function reconcileMessageAfterUnapply(int $messageId): void
+    {
+        // Override $this->db check — testy nepředávají db.
+        if (!$this->messageIsDone($messageId)) {
+            return;
+        }
+        if ($this->countPendingSiblings($messageId) === 0) {
+            return;
+        }
+        $this->markMessageInProgress($messageId);
     }
 }

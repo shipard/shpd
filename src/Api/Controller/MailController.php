@@ -213,6 +213,21 @@ class MailController
             $data['source_type'] = (int) $body['source_type'];
         }
 
+        // docState explicitně — beforeSave ho neřeší a DB default by byl 10.
+        // Default 40 (Hotovo); volající pošle 10 pro nenavázané zprávy.
+        $docState = isset($body['docState']) ? (int) $body['docState'] : 40;
+        $data['docState']     = $docState;
+        $data['docStateMain'] = $this->resolveIncomingMainState($docState);
+
+        // analysis_state: explicitní hodnota z requestu má přednost; importy
+        // rovnou v Hotovo (40) se neanalyzují (0). Jinak platí default
+        // z beforeSave (fronta, pokud je AI dostupná).
+        if (isset($body['analysis_state'])) {
+            $data['analysis_state'] = (int) $body['analysis_state'];
+        } elseif ($docState === 40) {
+            $data['analysis_state'] = 0;
+        }
+
         $doc = $this->documentRegistry->getDocument(self::MAIL_TABLE);
         $dibi = $this->db->getDibiConnection();
         $doc->setDb($dibi);
@@ -231,12 +246,6 @@ class MailController
         // Vygeneruje message_id, znormalizuje sender_email, dorovná default
         // primary_type/source_type (pokud je v $data nemáme).
         $doc->beforeSave($data);
-
-        // docState explicitně — beforeSave ho neřeší a DB default by byl 10.
-        // Default 40 (Zpracovaná); volající pošle 10 pro nenavázané zprávy.
-        $docState = isset($body['docState']) ? (int) $body['docState'] : 40;
-        $data['docState']     = $docState;
-        $data['docStateMain'] = $this->resolveIncomingMainState($docState);
 
         $dibi->insert(self::MAIL_TABLE, $data)->execute();
         $messageId = (int) $dibi->getInsertId();
@@ -262,7 +271,7 @@ class MailController
             )->getMainState($docState);
         }
 
-        return [10 => 1, 20 => 2, 30 => 3, 40 => 4, 70 => 7, 80 => 5, 90 => 6][$docState] ?? 1;
+        return [10 => 1, 20 => 2, 40 => 3, 80 => 4, 90 => 5][$docState] ?? 1;
     }
 
     private function verifyAuth(AuthContext $auth): ?Response

@@ -245,7 +245,7 @@ class AnalysisControllerTest extends TestCase
         $dibi = $this->createMock(\Dibi\Connection::class);
         $dibi->method('fetch')->willReturn(new \Dibi\Row([
             'id' => 42,
-            'docState' => 30,  // already analyzed
+            'analysis_state' => 30,  // already analyzed
             'profile_override' => null,
         ]));
         $db->method('getDibiConnection')->willReturn($dibi);
@@ -264,7 +264,7 @@ class AnalysisControllerTest extends TestCase
         $db->method('fetchRow')->willReturn(['login' => '_ai_analyzer']);
         $dibi = $this->createMock(\Dibi\Connection::class);
         $dibi->method('fetch')->willReturnOnConsecutiveCalls(
-            new \Dibi\Row(['id' => 42, 'docState' => 10, 'profile_override' => null]),
+            new \Dibi\Row(['id' => 42, 'analysis_state' => 10, 'profile_override' => null]),
             new \Dibi\Row(['id' => 99]), // active claim already exists
         );
         $db->method('getDibiConnection')->willReturn($dibi);
@@ -287,7 +287,7 @@ class AnalysisControllerTest extends TestCase
         );
         $dibi = $this->createMock(\Dibi\Connection::class);
         $dibi->method('fetch')->willReturnOnConsecutiveCalls(
-            new \Dibi\Row(['id' => 42, 'docState' => 10, 'profile_override' => null]),
+            new \Dibi\Row(['id' => 42, 'analysis_state' => 10, 'profile_override' => null]),
             null,
         );
         $db->method('getDibiConnection')->willReturn($dibi);
@@ -317,7 +317,7 @@ class AnalysisControllerTest extends TestCase
         );
         $dibi = $this->createMock(\Dibi\Connection::class);
         $dibi->method('fetch')->willReturnOnConsecutiveCalls(
-            new \Dibi\Row(['id' => 42, 'docState' => 10, 'profile_override' => null]),
+            new \Dibi\Row(['id' => 42, 'analysis_state' => 10, 'profile_override' => null]),
             null,
         );
         $db->method('getDibiConnection')->willReturn($dibi);
@@ -447,11 +447,31 @@ class AnalysisControllerTest extends TestCase
         $this->assertSame(401, $this->statusOf($response));
     }
 
-    public function testReanalyzeRejectsInvalidState(): void
+    public function testReanalyzeRejectsInvalidAnalysisState(): void
     {
         $db = $this->createMock(DataSourceConnection::class);
         $dibi = $this->createMock(\Dibi\Connection::class);
-        $dibi->method('fetch')->willReturn(new \Dibi\Row(['id' => 42, 'docState' => 10])); // wrong state
+        // analysis_state=10 (ve frontě) — reanalyze vyžaduje 30 nebo 70
+        $dibi->method('fetch')->willReturn(new \Dibi\Row([
+            'id' => 42, 'docState' => 10, 'analysis_state' => 10,
+        ]));
+        $db->method('getDibiConnection')->willReturn($dibi);
+
+        $ctrl = $this->controller($db);
+        $response = $ctrl->reanalyze($this->userAuth(), $this->request('POST', '/x'), 42);
+
+        $this->assertSame(409, $this->statusOf($response));
+        $this->assertSame('INVALID_STATE', $response->getPayload()['error']['code']);
+    }
+
+    public function testReanalyzeRejectsArchivedMessage(): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $dibi = $this->createMock(\Dibi\Connection::class);
+        // analysis_state validní (70), ale zpráva v Archivu → 409
+        $dibi->method('fetch')->willReturn(new \Dibi\Row([
+            'id' => 42, 'docState' => 80, 'analysis_state' => 70,
+        ]));
         $db->method('getDibiConnection')->willReturn($dibi);
 
         $ctrl = $this->controller($db);
@@ -466,7 +486,7 @@ class AnalysisControllerTest extends TestCase
         $db = $this->createMock(DataSourceConnection::class);
         $dibi = $this->createMock(\Dibi\Connection::class);
         $dibi->method('fetch')->willReturnOnConsecutiveCalls(
-            new \Dibi\Row(['id' => 42, 'docState' => 30]),
+            new \Dibi\Row(['id' => 42, 'docState' => 10, 'analysis_state' => 30]),
             null, // profile_override invalid
         );
         $db->method('getDibiConnection')->willReturn($dibi);

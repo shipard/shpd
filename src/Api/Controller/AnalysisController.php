@@ -51,16 +51,21 @@ class AnalysisController
     private const ATTACHMENTS_TABLE = 'core_attachments_files';
     private const HEADS_TABLE = 'docs_core_heads';
 
+    // Workflow stavy zprávy (core.mail.docStatesIncoming) — pipeline na ně
+    // sahá jediným místem: result s dokumenty posouvá Novou na K řešení.
     private const DOC_STATE_NEW = 10;
-    private const DOC_STATE_NEW_MAIN = 1;
-    private const DOC_STATE_ANALYZING = 20;
-    private const DOC_STATE_ANALYZING_MAIN = 2;
-    private const DOC_STATE_ANALYZED = 30;
-    private const DOC_STATE_ANALYZED_MAIN = 3;
-    private const DOC_STATE_PROCESSED = 40;
-    private const DOC_STATE_PROCESSED_MAIN = 4;
-    private const DOC_STATE_AI_FAILED = 70;
-    private const DOC_STATE_AI_FAILED_MAIN = 7;
+    private const DOC_STATE_IN_PROGRESS = 20;
+    private const DOC_STATE_IN_PROGRESS_MAIN = 2;
+    private const DOC_STATE_ARCHIVED = 80;
+    private const DOC_STATE_TRASH = 90;
+
+    // Pipeline status analýzy (core.mail.analysisStates) — ortogonální
+    // ke workflow, řídí ho výhradně pipeline + reanalyze.
+    public const ANALYSIS_NONE = 0;
+    public const ANALYSIS_QUEUED = 10;
+    public const ANALYSIS_ANALYZING = 20;
+    public const ANALYSIS_ANALYZED = 30;
+    public const ANALYSIS_FAILED = 70;
 
     private const DEFAULT_LEASE_SECONDS = 300;
     private const MIN_LEASE_SECONDS = 60;
@@ -202,15 +207,17 @@ class AnalysisController
         );
         $defaultProfileId = $defaultProfile !== null ? (int) $defaultProfile['id'] : null;
 
-        // Najdi zprávy v docState=10, ai_analysis_enabled NOT FALSE (NULL nebo true),
-        // bez aktivní claim. SQL inspirace: NOT EXISTS na claims s released=0
-        // a expires_at v budoucnu.
+        // Najdi zprávy ve frontě (analysis_state=10) mimo Archiv/Koš,
+        // ai_analysis_enabled NOT FALSE (NULL nebo true), bez aktivní claim.
+        // SQL inspirace: NOT EXISTS na claims s released=0 a expires_at
+        // v budoucnu. docState se jinak nekontroluje — workflow je ortogonální.
         $now = date('Y-m-d H:i:s');
         $rows = $this->db->fetchAll(
             'SELECT m.id AS ndx, m.received_at, m.subject, m.sender_email,
                     m.profile_override, m.raw_source_attachment
                FROM %n m
-              WHERE m.docState = %i
+              WHERE m.analysis_state = %i
+                AND m.docState NOT IN %in
                 AND (m.ai_analysis_enabled IS NULL OR m.ai_analysis_enabled = %i)
                 AND NOT EXISTS (
                     SELECT 1 FROM %n c
@@ -221,7 +228,8 @@ class AnalysisController
               ORDER BY m.received_at ASC, m.id ASC
               LIMIT %i',
             self::MESSAGES_TABLE,
-            self::DOC_STATE_NEW,
+            self::ANALYSIS_QUEUED,
+            [self::DOC_STATE_ARCHIVED, self::DOC_STATE_TRASH],
             1,
             self::CLAIMS_TABLE,
             0,
@@ -258,7 +266,8 @@ class AnalysisController
 
         $totalAvailable = (int) $this->db->fetchSingle(
             'SELECT COUNT(*) FROM %n m
-              WHERE m.docState = %i
+              WHERE m.analysis_state = %i
+                AND m.docState NOT IN %in
                 AND (m.ai_analysis_enabled IS NULL OR m.ai_analysis_enabled = %i)
                 AND NOT EXISTS (
                     SELECT 1 FROM %n c
@@ -267,7 +276,8 @@ class AnalysisController
                        AND c.expires_at > %s
                 )',
             self::MESSAGES_TABLE,
-            self::DOC_STATE_NEW,
+            self::ANALYSIS_QUEUED,
+            [self::DOC_STATE_ARCHIVED, self::DOC_STATE_TRASH],
             1,
             self::CLAIMS_TABLE,
             0,
@@ -299,8 +309,9 @@ class AnalysisController
     // -------------------------------------------------------------------
 
     /**
-     * Atomic claim — ověř docState=10, žádná aktivní claim, vytvoř claim
-     * record, přepni docState→20, decryptuj api_key. Spec §3.2.
+     * Atomic claim — ověř analysis_state=10 (ve frontě), žádná aktivní claim,
+     * vytvoř claim record, přepni analysis_state→20, decryptuj api_key.
+     * docState (workflow) se nemění. Spec §3.2.
      */
     public function claim(AuthContext $auth, Request $request, int $messageNdx): Response
     {
@@ -333,7 +344,7 @@ class AnalysisController
             // INSERT do claims (tabulka nemá partial unique). Spec §3.2
             // "Atomicky" + §2.4 popis invariantu max-jedna-aktivní-claim.
             $msgRow = $dibi->fetch(
-                'SELECT id, docState, profile_override FROM %n WHERE id = %i FOR UPDATE',
+                'SELECT id, analysis_state, profile_override FROM %n WHERE id = %i FOR UPDATE',
                 self::MESSAGES_TABLE,
                 $messageNdx,
             );
@@ -341,11 +352,11 @@ class AnalysisController
                 $dibi->rollback();
                 return Response::error('NOT_FOUND', "Message {$messageNdx} not found", 404);
             }
-            if ((int) $msgRow['docState'] !== self::DOC_STATE_NEW) {
+            if ((int) $msgRow['analysis_state'] !== self::ANALYSIS_QUEUED) {
                 $dibi->rollback();
                 return Response::error(
                     'INVALID_STATE',
-                    'Message is not in queue (docState != 10)',
+                    'Message is not queued for analysis (analysis_state != 10)',
                     409,
                 );
             }
@@ -429,10 +440,9 @@ class AnalysisController
                 'released' => 0,
             ])->execute();
 
-            // Přepni zprávu na "V analýze"
+            // Přepni analýzu na "Analyzuje se" — docState zůstává
             $dibi->update(self::MESSAGES_TABLE, [
-                'docState' => self::DOC_STATE_ANALYZING,
-                'docStateMain' => self::DOC_STATE_ANALYZING_MAIN,
+                'analysis_state' => self::ANALYSIS_ANALYZING,
                 'modified' => $now,
             ])->where('id = %i', $messageNdx)->execute();
 
@@ -694,8 +704,11 @@ class AnalysisController
     /**
      * Atomicky uloží výsledek analýzy: vytvoří záznam v message_analyses,
      * pro každý extracted_document vytvoří řádek se status podle confidence
-     * vs profile thresholds, uvolní claim, přepne zprávu 20→30 (nebo 20→40
-     * pokud žádné extracted docs). Spec §3.5.
+     * vs profile thresholds, uvolní claim, přepne analysis_state→30.
+     * docState: jen když je zpráva stále v Nové (10) a vznikl aspoň jeden
+     * extracted document → 10→20 (K řešení). Prázdný result docState nemění
+     * (zpráva zůstává v Nové — dashboard řeší karta „Není faktura");
+     * ruční workflow stav pipeline nikdy nepřepisuje. Spec §3.5.
      */
     public function result(AuthContext $auth, Request $request, int $messageNdx): Response
     {
@@ -811,21 +824,25 @@ class AnalysisController
                 'release_reason' => 'result',
             ])->where('id = %i', (int) $claim['id'])->execute();
 
-            // 4) Přepni zprávu — 20→30 (Analyzovaná) nebo 20→40 (Zpracovaná)
-            // pokud žádné extracted_documents (není co řešit).
-            $msgNewState = count($extractedDocsInput) === 0
-                ? self::DOC_STATE_PROCESSED
-                : self::DOC_STATE_ANALYZED;
-            $msgNewMain = count($extractedDocsInput) === 0
-                ? self::DOC_STATE_PROCESSED_MAIN
-                : self::DOC_STATE_ANALYZED_MAIN;
-
+            // 4) analysis_state → 30 (Analyzováno), vynulovat needs_reanalysis.
             $dibi->update(self::MESSAGES_TABLE, [
-                'docState' => $msgNewState,
-                'docStateMain' => $msgNewMain,
+                'analysis_state' => self::ANALYSIS_ANALYZED,
                 'needs_reanalysis' => 0,
                 'modified' => $now,
             ])->where('id = %i', $messageNdx)->execute();
+
+            // 5) Workflow: Nová → K řešení, jen když vznikl aspoň jeden
+            // extracted document a uživatel mezitím stav ručně nezměnil
+            // (docState != 10 → nechat být).
+            if ($extractedDocsInput !== []) {
+                $dibi->update(self::MESSAGES_TABLE, [
+                    'docState' => self::DOC_STATE_IN_PROGRESS,
+                    'docStateMain' => self::DOC_STATE_IN_PROGRESS_MAIN,
+                ])
+                ->where('id = %i', $messageNdx)
+                ->where('docState = %i', self::DOC_STATE_NEW)
+                ->execute();
+            }
 
             $dibi->commit();
         } catch (\Throwable $e) {
@@ -944,8 +961,8 @@ class AnalysisController
 
     /**
      * Atomicky uloží neúspěch analýzy: vytvoří failed analysis record,
-     * uvolní claim, přepne zprávu 20→10 (retryable) nebo 20→70 (permanent).
-     * Spec §3.6.
+     * uvolní claim, přepne analysis_state 20→10 (retryable) nebo 20→70
+     * (permanent). docState se nemění. Spec §3.6.
      */
     public function failed(AuthContext $auth, Request $request, int $messageNdx): Response
     {
@@ -988,13 +1005,11 @@ class AnalysisController
                 'release_reason' => 'failed',
             ])->where('id = %i', (int) $claim['id'])->execute();
 
-            // retryable=true → vrátíme do queue (10), jinak permanent error (70)
-            $newState = $retryable ? self::DOC_STATE_NEW : self::DOC_STATE_AI_FAILED;
-            $newMain = $retryable ? self::DOC_STATE_NEW_MAIN : self::DOC_STATE_AI_FAILED_MAIN;
+            // retryable=true → zpět do fronty (10), jinak permanent error (70)
+            $newState = $retryable ? self::ANALYSIS_QUEUED : self::ANALYSIS_FAILED;
 
             $dibi->update(self::MESSAGES_TABLE, [
-                'docState' => $newState,
-                'docStateMain' => $newMain,
+                'analysis_state' => $newState,
                 'modified' => $now,
             ])->where('id = %i', $messageNdx)->execute();
 
@@ -1020,10 +1035,11 @@ class AnalysisController
      *
      * Auth: běžný přihlášený uživatel (UI), ne _ai_analyzer.
      *
-     * Validace: zpráva musí být v docState=30 (Analyzovaná) nebo =70 (Chyba AI).
-     * Existující extracted_documents ve statusech 10/20/30 → 60 (superseded).
-     * Statusy 40 (applied) a 50 (rejected) zůstávají beze změny.
-     * Nastaví needs_reanalysis=true, profile_override (volitelné), docState→10.
+     * Validace: analysis_state ∈ {30 Analyzováno, 70 Analýza selhala}
+     * a zpráva není v Archivu/Koši. Existující extracted_documents ve
+     * statusech 10/20/30/70 → 60 (superseded); 40 (applied) a 50 (rejected)
+     * zůstávají. Nastaví analysis_state→10, needs_reanalysis=true,
+     * profile_override (volitelné). docState se nemění.
      */
     public function reanalyze(AuthContext $auth, Request $request, int $messageNdx): Response
     {
@@ -1040,7 +1056,7 @@ class AnalysisController
         $dibi->begin();
         try {
             $msg = $dibi->fetch(
-                'SELECT id, docState FROM %n WHERE id = %i',
+                'SELECT id, docState, analysis_state FROM %n WHERE id = %i',
                 self::MESSAGES_TABLE,
                 $messageNdx,
             );
@@ -1049,12 +1065,17 @@ class AnalysisController
                 return Response::error('NOT_FOUND', "Message {$messageNdx} not found", 404);
             }
 
-            $currentState = (int) $msg['docState'];
-            if ($currentState !== self::DOC_STATE_ANALYZED && $currentState !== self::DOC_STATE_AI_FAILED) {
+            $analysisState = (int) $msg['analysis_state'];
+            $docState = (int) $msg['docState'];
+            if (($analysisState !== self::ANALYSIS_ANALYZED && $analysisState !== self::ANALYSIS_FAILED)
+                || $docState === self::DOC_STATE_ARCHIVED
+                || $docState === self::DOC_STATE_TRASH
+            ) {
                 $dibi->rollback();
                 return Response::error(
                     'INVALID_STATE',
-                    'Reanalyze is only allowed in states 30 (Analyzovaná) or 70 (Chyba AI)',
+                    'Reanalyze requires analysis_state 30 (Analyzováno) or 70 (Analýza selhala)'
+                        . ' and a message outside Archive/Trash',
                     409,
                 );
             }
@@ -1082,7 +1103,7 @@ class AnalysisController
             // Označit pending/ready/low + ai_failed extracted docs jako
             // superseded. AI_FAILED je legitimní cíl pro reanalyze —
             // jinak by ai_failed dokumenty navždy blokovaly auto-transition
-            // zprávy 30→40 (afterPersist v ExtractedDocumentDocument
+            // zprávy 20→40 (afterPersist v ExtractedDocumentDocument
             // počítá s tím, že žádný sibling není v pending stavu).
             $supersededCount = $dibi->update(self::EXTRACTED_TABLE, [
                 'status' => ExtractedDocumentDocument::STATUS_SUPERSEDED,
@@ -1096,10 +1117,9 @@ class AnalysisController
             ])
             ->execute();
 
-            // Vrátit zprávu do queue
+            // Vrátit analýzu do fronty — docState (workflow) zůstává
             $dibi->update(self::MESSAGES_TABLE, [
-                'docState' => self::DOC_STATE_NEW,
-                'docStateMain' => self::DOC_STATE_NEW_MAIN,
+                'analysis_state' => self::ANALYSIS_QUEUED,
                 'needs_reanalysis' => 1,
                 'profile_override' => $profileOverrideNdx,
                 'modified' => $now,

@@ -51,6 +51,7 @@ class IncomingMessagesViewer extends TableViewer
     {
         $sql = 'SELECT m.`id`, m.`message_id`, m.`subject`, m.`sender_email`, m.`sender_name`,'
             . ' m.`primary_type`, m.`received_at`, m.`body_plain`, m.`docState`, m.`docStateMain`,'
+            . ' m.`analysis_state`,'
             . ' m.`mailbox`, mb.`name` AS mailbox_name, mb.`mailbox_id` AS mailbox_code'
             . ' FROM `' . $this->table . '` m'
             . ' LEFT JOIN `core_mail_mailboxes` mb ON mb.`id` = m.`mailbox`';
@@ -121,12 +122,21 @@ class IncomingMessagesViewer extends TableViewer
         $row['t2'] = $senderName !== '' ? $senderName : ($senderEmail !== '' ? $senderEmail : null);
 
         // i2: primární typ (badge s lokalizovaným jménem a barvou dle typu)
+        // + badge stavu AI analýzy (hodnota 0 = Bez analýzy se nezobrazuje)
         $primaryType = (string) ($rowData['primary_type'] ?? 'other');
         $typeLabel = $this->resolvePrimaryTypeLabel($primaryType);
-        $row['i2'] = [
+        $i2 = [[
             'text'  => $typeLabel,
             'class' => self::PRIMARY_TYPE_SPAN_CLASS[$primaryType] ?? 'muted',
-        ];
+        ]];
+        $analysisBadge = $this->buildAnalysisBadge((int) ($rowData['analysis_state'] ?? 0));
+        if ($analysisBadge !== null) {
+            $i2[] = [
+                'text'  => $analysisBadge['label'],
+                'class' => self::STATE_SPAN_CLASS[$analysisBadge['style']] ?? 'muted',
+            ];
+        }
+        $row['i2'] = $i2;
 
         // t3: [mailbox.name] + první řádek body_plain
         $mailboxName = trim((string) ($rowData['mailbox_name'] ?? ''));
@@ -218,9 +228,12 @@ class IncomingMessagesViewer extends TableViewer
             return $actions;
         }
 
-        // Spec §5.3 — "Znova analyzovat" je viditelné jen když docState ∈ {30, 70}.
+        // "Znova analyzovat" je viditelné jen když analysis_state ∈ {30, 70}
+        // (Analyzováno / Analýza selhala) a zpráva není v Archivu/Koši —
+        // zrcadlí validaci AnalysisController::reanalyze.
+        $analysisState = (int) ($selectedRow['analysis_state'] ?? 0);
         $docState = (int) ($selectedRow['docState'] ?? 0);
-        if ($docState !== 30 && $docState !== 70) {
+        if (($analysisState !== 30 && $analysisState !== 70) || $docState === 80 || $docState === 90) {
             return $actions;
         }
 
@@ -304,10 +317,42 @@ class IncomingMessagesViewer extends TableViewer
             'style' => $typeStyle === 'muted' ? 'neutral' : $typeStyle,
         ];
 
+        $analysisBadge = $this->buildAnalysisBadge((int) ($record['analysis_state'] ?? 0));
+        if ($analysisBadge !== null) {
+            $badges[] = [
+                'label' => $analysisBadge['label'],
+                'style' => $analysisBadge['style'] === 'archive' ? 'neutral' : $analysisBadge['style'],
+            ];
+        }
+
         return [
             'title'    => $subject !== '' ? $subject : '(bez předmětu)',
             'subtitle' => $subtitleParts !== [] ? implode(' · ', $subtitleParts) : null,
             'badges'   => $badges,
+        ];
+    }
+
+    /**
+     * Badge stavu AI analýzy z cfgItem `core.mail.analysisStates`.
+     * Hodnota 0 (Bez analýzy) se nezobrazuje → null.
+     *
+     * @return array{label: string, style: string}|null
+     */
+    private function buildAnalysisBadge(int $analysisState): ?array
+    {
+        if ($analysisState === 0 || $this->config === null) {
+            return null;
+        }
+
+        $cfg = $this->config->cfgItem('core.mail.analysisStates');
+        if (!is_array($cfg) || !isset($cfg[(string) $analysisState])) {
+            return null;
+        }
+        $entry = $cfg[(string) $analysisState];
+
+        return [
+            'label' => (string) ($entry['name'] ?? $analysisState),
+            'style' => (string) ($entry['stateStyle'] ?? 'concept'),
         ];
     }
 

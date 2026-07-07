@@ -254,4 +254,120 @@ class IncomingMessageDocumentTest extends TestCase
 
         $this->assertSame('invoiceReceived', $data['primary_type']);
     }
+
+    // --- beforeSave: analysis_state default -----------------------------------
+
+    public function testBeforeSaveDefaultsAnalysisStateToNoneWithoutDb(): void
+    {
+        // Bez db nelze ověřit dostupnost AI profilu → 0 (Bez analýzy)
+        $doc = $this->doc();
+        $data = [
+            'mailbox' => 1,
+            'sender_email' => 'a@b.cz',
+            'received_at' => '2026-04-17 10:00:00',
+        ];
+
+        $doc->beforeSave($data);
+
+        $this->assertSame(0, $data['analysis_state']);
+    }
+
+    public function testBeforeSaveQueuesAnalysisWhenActiveProfileExists(): void
+    {
+        $dibi = $this->createMock(\Dibi\Connection::class);
+        // message_id je vyplněné → jediný fetch je dotaz na aktivní AI profil
+        $dibi->method('fetch')->willReturn(new \Dibi\Row(['id' => 17]));
+        $doc = $this->doc();
+        $doc->setDb($dibi);
+        $data = [
+            'mailbox' => 1,
+            'sender_email' => 'a@b.cz',
+            'received_at' => '2026-04-17 10:00:00',
+            'message_id' => 'MSG-X', // přeskočí generateMessageId
+        ];
+
+        $doc->beforeSave($data);
+
+        $this->assertSame(10, $data['analysis_state']);
+    }
+
+    public function testBeforeSaveSkipsQueueWhenAnalysisDisabled(): void
+    {
+        $dibi = $this->createMock(\Dibi\Connection::class);
+        // primary_type i message_id vyplněné → dotaz na profil se nesmí
+        // vůbec spustit (short-circuit na ai_analysis_enabled=false)
+        $dibi->expects($this->never())->method('fetch');
+        $doc = $this->doc();
+        $doc->setDb($dibi);
+        $data = [
+            'mailbox' => 1,
+            'sender_email' => 'a@b.cz',
+            'received_at' => '2026-04-17 10:00:00',
+            'message_id' => 'MSG-X',
+            'primary_type' => 'other',
+            'ai_analysis_enabled' => false,
+        ];
+
+        $doc->beforeSave($data);
+
+        $this->assertSame(0, $data['analysis_state']);
+    }
+
+    public function testBeforeSaveRespectsCallerProvidedAnalysisState(): void
+    {
+        $doc = $this->doc();
+        $data = [
+            'mailbox' => 1,
+            'sender_email' => 'a@b.cz',
+            'received_at' => '2026-04-17 10:00:00',
+            'analysis_state' => 0, // import explicitně bez analýzy
+        ];
+
+        $doc->beforeSave($data);
+
+        $this->assertSame(0, $data['analysis_state']);
+    }
+
+    // --- validate: read-only zámek při probíhající analýze --------------------
+
+    public function testValidateRejectsUpdateWhileAnalyzing(): void
+    {
+        $dibi = $this->createMock(\Dibi\Connection::class);
+        $dibi->method('fetch')->willReturn(new \Dibi\Row(['analysis_state' => 20]));
+        $doc = $this->doc();
+        $doc->setDb($dibi);
+        $data = [
+            'id' => 42,
+            'mailbox' => 1,
+            'subject' => 'Test',
+            'sender_email' => 'a@b.cz',
+            'received_at' => '2026-04-17 10:00:00',
+        ];
+
+        $result = $doc->validate($data);
+
+        $this->assertFalse($result->isValid());
+        $first = $result->toArray()[0];
+        $this->assertSame('_form', $first['column']);
+        $this->assertSame('analysis_in_progress', $first['code']);
+    }
+
+    public function testValidateAllowsUpdateWhenAnalysisNotRunning(): void
+    {
+        $dibi = $this->createMock(\Dibi\Connection::class);
+        $dibi->method('fetch')->willReturn(new \Dibi\Row(['analysis_state' => 30]));
+        $doc = $this->doc();
+        $doc->setDb($dibi);
+        $data = [
+            'id' => 42,
+            'mailbox' => 1,
+            'subject' => 'Test',
+            'sender_email' => 'a@b.cz',
+            'received_at' => '2026-04-17 10:00:00',
+        ];
+
+        $result = $doc->validate($data);
+
+        $this->assertTrue($result->isValid());
+    }
 }

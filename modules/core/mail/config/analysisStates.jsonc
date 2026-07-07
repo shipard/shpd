@@ -1,0 +1,69 @@
+{
+    // core.mail.analysisStates
+    //
+    // Pipeline status AI analýzy došlé zprávy
+    // (core_mail_incoming_messages.analysis_state). Ortogonální
+    // k docState (workflow Nová / K řešení / Hotovo / Archiv / Koš) —
+    // přežívá Koš i Archiv.
+    //
+    // Přechody řídí výhradně AI pipeline (AnalysisController, reaper):
+    //   0  (none)      — AI vypnutá / netýká se, koncový stav
+    //   10 (queued)    → 20 claim
+    //   20 (analyzing) → 30 result | 10 failed retryable / reaper | 70 failed permanent
+    //   30 (analyzed)  → 10 reanalyze
+    //   70 (failed)    → 10 reanalyze
+    //
+    // Hodnota 20 (analyzing) drží read-only zámek formuláře
+    // (IncomingMessageDocument::validate).
+
+    "0": {
+        "name": "No analysis",
+        "name:cs": "Bez analýzy",
+        "name:en": "No analysis",
+        "stateStyle": "archive",
+        "icon": "info",
+        "description:cs": "AI analýza vypnutá nebo se zprávy netýká",
+        "description:en": "AI analysis disabled or not applicable",
+        "order": 0
+    },
+    "10": {
+        "name": "Queued",
+        "name:cs": "Ve frontě",
+        "name:en": "Queued",
+        "stateStyle": "concept",
+        "icon": "question",
+        "description:cs": "Čeká na analyzer",
+        "description:en": "Waiting for the analyzer",
+        "order": 10
+    },
+    "20": {
+        "name": "Analyzing",
+        "name:cs": "Analyzuje se",
+        "name:en": "Analyzing",
+        "stateStyle": "edit",
+        "icon": "refresh",
+        "description:cs": "Aktivní claim — formulář je dočasně jen pro čtení",
+        "description:en": "Active claim — the form is temporarily read-only",
+        "order": 20
+    },
+    "30": {
+        "name": "Analyzed",
+        "name:cs": "Analyzováno",
+        "name:en": "Analyzed",
+        "stateStyle": "done",
+        "icon": "check",
+        "description:cs": "Výsledek analýzy uložen",
+        "description:en": "Analysis result stored",
+        "order": 30
+    },
+    "70": {
+        "name": "Analysis failed",
+        "name:cs": "Analýza selhala",
+        "name:en": "Analysis failed",
+        "stateStyle": "error",
+        "icon": "warning",
+        "description:cs": "Permanentní chyba — čeká na zásah (Znova analyzovat)",
+        "description:en": "Permanent failure — waiting for intervention (Reanalyze)",
+        "order": 70
+    }
+}

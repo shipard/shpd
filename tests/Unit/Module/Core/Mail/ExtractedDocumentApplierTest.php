@@ -222,7 +222,7 @@ class ExtractedDocumentApplierTest extends TestCase
 
     // ── unapply() guard branches ────────────────────────────────────────────
     //
-    // Happy round-trip (trash + extracted→20 + zpráva→30) potřebuje reálné dibi
+    // Happy round-trip (trash + extracted→20 + zpráva→20) potřebuje reálné dibi
     // (writeUnapplyTransition) → pokryto v Integration/AiExtractedDocumentApplyTest.
     // Tady čistě guard cesty, které se vrací před writeUnapplyTransition.
 

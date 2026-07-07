@@ -9,7 +9,8 @@ use Shipard\Core\Database\DataSourceConnection;
 /**
  * Najde expirované rezervace v `core_mail_analysis_claims` (released=false,
  * expires_at < now), označí je `released=true` s reason `expired` a vrátí
- * jejich zprávy z `docState=20` zpět na `docState=10`.
+ * jejich zprávy z `analysis_state=20` (Analyzuje se) zpět do fronty
+ * (`analysis_state=10`). docState (workflow) se nemění.
  *
  * Volá se 1×/min z cronu (CLI `mail-analysis-reap`). Recovery, když analyzer
  * mezi `claim` a `result` spadne. Spec: tasks/mail-phase3a.md §3.7.
@@ -19,9 +20,8 @@ class AnalysisClaimReaper
     public const RELEASE_REASON_EXPIRED = 'expired';
     private const CLAIMS_TABLE = 'core_mail_analysis_claims';
     private const MESSAGES_TABLE = 'core_mail_incoming_messages';
-    private const DOC_STATE_NEW = 10;
-    private const DOC_STATE_MAIN_NEW = 1;
-    private const DOC_STATE_ANALYZING = 20;
+    private const ANALYSIS_QUEUED = 10;
+    private const ANALYSIS_ANALYZING = 20;
 
     public function __construct(
         private readonly DataSourceConnection $db,
@@ -74,21 +74,19 @@ class AnalysisClaimReaper
                     $claimId,
                 );
 
-                // Zpráva se vrací do queue jen pokud je stále v "Analyzuje se" — admin
-                // mohl mezitím manuálně přepnout, nepřepisujeme jeho stav.
+                // Analýza se vrací do fronty jen pokud je stále "Analyzuje se" —
+                // result/failed mohl mezitím doběhnout, nepřepisujeme jeho stav.
                 $this->db->execute(
-                    'UPDATE %n SET %n = %i, %n = %i, %n = %s WHERE %n = %i AND %n = %i',
+                    'UPDATE %n SET %n = %i, %n = %s WHERE %n = %i AND %n = %i',
                     self::MESSAGES_TABLE,
-                    'docState',
-                    self::DOC_STATE_NEW,
-                    'docStateMain',
-                    self::DOC_STATE_MAIN_NEW,
+                    'analysis_state',
+                    self::ANALYSIS_QUEUED,
                     'modified',
                     $nowStr,
                     'id',
                     $messageId,
-                    'docState',
-                    self::DOC_STATE_ANALYZING,
+                    'analysis_state',
+                    self::ANALYSIS_ANALYZING,
                 );
 
                 $reaped[] = [

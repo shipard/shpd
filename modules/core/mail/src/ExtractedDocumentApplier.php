@@ -204,7 +204,7 @@ final class ExtractedDocumentApplier
      *     jinak 409 `DOC_ADVANCED` (uživatel řeší ručně).
      *
      * Doklad → Koš (`docState=90`) přes Document flow (`saveDocument`), extracted
-     * → 20 + vynulování `target_row_ndx`/`applied_*` a zpráva 40→30 přes reverzní
+     * → 20 + vynulování `target_row_ndx`/`applied_*` a zpráva 40→20 přes reverzní
      * reconcile ({@see writeUnapplyTransition}). Zrcadlí neatomicitu apply:
      * doc-save a status-write jsou dvě transakce; při selhání druhé je doklad
      * už v koši (vratné ručně) a chyba se reportuje.
@@ -273,7 +273,7 @@ final class ExtractedDocumentApplier
             );
         }
 
-        // 2. Extracted → pending_review, vynulovat target/applied_*, zpráva 40→30.
+        // 2. Extracted → pending_review, vynulovat target/applied_*, zpráva 40→20.
         $write = self::writeUnapplyTransition($db, $extractedNdx);
         if (!$write->ok) {
             ErrorLogger::warn('ExtractedDocumentApplier::unapply status update failed after trashing doc', [
@@ -293,7 +293,7 @@ final class ExtractedDocumentApplier
     /**
      * Zapíše undo přechod extracted dokladu 40 → 20 (pending_review) přes
      * Document hooky v jedné transakci: vynuluje `target_row_ndx`/`applied_*`
-     * a reverzně reconciluje zprávu (40→30, opak apply). Oddělená od
+     * a reverzně reconciluje zprávu (40→20, opak apply). Oddělená od
      * {@see writeStatusTransition}, protože ta cíleně povoluje jen přechody
      * z pending stavů (10/20/30) — unapply je jediná legitimní cesta z
      * `applied` (40) zpět.

@@ -15,7 +15,7 @@ use Shipard\Module\Core\Mail\Feed\MailSuggestionsSource;
  *
  * Pokrývají:
  *   - stavy 10/20/30 → správný kind, stateStyle a sada akcí
- *   - zpráva docState=70 → urgent karta + reanalyze/open_viewer
+ *   - zpráva analysis_state=70 → urgent karta + reanalyze/open_viewer
  *   - titulek z cfgItem doc typu + partner z canonical, podtitulek
  *     (částka · jistota · e-mail)
  *   - prázdný vstup → []

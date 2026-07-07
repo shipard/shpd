@@ -100,6 +100,21 @@
             "default": "other",
             "group": "identity"
         },
+        {
+            // Kdo naposledy určil primary_type: mailbox (default schránky /
+            // mail-router), user (ruční změna ve formuláři), ai (klasifikace
+            // z analýzy). AI nikdy nepřepisuje hodnotu nastavenou uživatelem.
+            "id": "primary_type_source",
+            "name": "Primary type source",
+            "name:cs": "Zdroj primárního typu",
+            "name:en": "Primary type source",
+            "type": "enumString",
+            "length": 10,
+            "nullable": false,
+            "cfgItem": "core.mail.primaryTypeSources",
+            "default": "mailbox",
+            "group": "identity"
+        },
 
         // --- headers (RFC822 hlavičky) ---
 
@@ -250,6 +265,19 @@
         // --- AI analysis ---
 
         {
+            // Pipeline status AI analýzy — ortogonální k docState (workflow).
+            // Přežívá Koš i Archiv. Viz config/analysisStates.jsonc.
+            "id": "analysis_state",
+            "name": "Analysis state",
+            "name:cs": "Stav analýzy",
+            "name:en": "Analysis state",
+            "type": "enumInt",
+            "nullable": false,
+            "cfgItem": "core.mail.analysisStates",
+            "default": 0,
+            "group": "ai"
+        },
+        {
             "id": "ai_analysis_enabled",
             "name": "AI analysis enabled",
             "name:cs": "AI analýza povolena",
@@ -367,6 +395,15 @@
             "columns": [
                 {"column": "docStateMain", "order": "ASC"},
                 {"column": "received_at", "order": "DESC"}
+            ]
+        },
+        {
+            // Fronta analyzeru: analysis_state = 10 ORDER BY received_at ASC
+            "id": "idx_analysis_state",
+            "type": "index",
+            "columns": [
+                {"column": "analysis_state", "order": "ASC"},
+                {"column": "received_at", "order": "ASC"}
             ]
         },
         {

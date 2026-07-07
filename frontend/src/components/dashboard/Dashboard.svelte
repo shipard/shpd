@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { t } from '../../i18n/index.js';
   import { translateError } from '../../i18n/errors.js';
-  import { fetchDashboard } from '../../api/dashboard.js';
+  import { fetchDashboard, setMessageDocState } from '../../api/dashboard.js';
   import {
     applyExtractedDocument,
     unapplyExtractedDocument,
@@ -117,6 +117,10 @@
         return;
       case 'reanalyze':
         return reanalyzeFlow(target.messageNdx, card.id);
+      case 'trash_message':
+        return messageStateFlow(target.messageNdx, 90, card.id);
+      case 'archive_message':
+        return messageStateFlow(target.messageNdx, 80, card.id);
       case 'open_viewer':
         return navigationStore.navigateToViewer(target.viewerId, target.recordId ?? null);
       case 'open_form':
@@ -163,6 +167,23 @@
     busyCardId = cardId;
     try {
       const result = await reanalyzeMessage(messageNdx);
+      if (result?.success) {
+        dropCardById(cardId);
+        load();
+      } else {
+        alert(t('dashboard.card.actionFailed', { msg: translateError(result?.error) }));
+      }
+    } finally {
+      busyCardId = null;
+    }
+  }
+
+  // Jednoklik Koš (90) / Archiv (80) z karty „Není faktura".
+  async function messageStateFlow(messageNdx, docState, cardId) {
+    if (busyCardId !== null || !messageNdx) return;
+    busyCardId = cardId;
+    try {
+      const result = await setMessageDocState(messageNdx, docState);
       if (result?.success) {
         dropCardById(cardId);
         load();

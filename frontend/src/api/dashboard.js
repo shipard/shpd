@@ -1,4 +1,4 @@
-import { get } from './client.js';
+import { get, put } from './client.js';
 import { API_BASE_URL } from './config.js';
 import { language } from '../i18n/index.js';
 import { parseSseFrames } from './sse.js';
@@ -12,6 +12,15 @@ const TOKEN_KEY = 'shpd_token';
 export async function fetchDashboard() {
   const res = await get('/_ui/dashboard');
   return res?.success ? res.data : null;
+}
+
+/**
+ * Přepne workflow stav zprávy došlé pošty. Tělo jen s docState = state
+ * transition (FormController), takže projde i pro read-only stavy.
+ * Používají to feed akce trash_message (90) / archive_message (80).
+ */
+export async function setMessageDocState(messageNdx, docState) {
+  return put(`/_ui/form/core_mail_incoming_messages/save/${messageNdx}`, { docState });
 }
 
 /**

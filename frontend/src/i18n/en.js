@@ -336,6 +336,8 @@ export default {
   'dashboard.card.action.reject': 'Reject',
   'dashboard.card.action.reanalyze': 'Re-analyze',
   'dashboard.card.action.openMail': 'Open e-mail',
+  'dashboard.card.action.trash': 'Trash',
+  'dashboard.card.action.archive': 'Archive',
   'dashboard.card.actionFailed': 'Action failed: {msg}',
   'dashboard.toast.applied': 'Draft #{id} created',
   'dashboard.toast.open': 'Open',

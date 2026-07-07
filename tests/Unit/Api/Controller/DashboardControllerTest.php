@@ -250,7 +250,8 @@ final class DashboardControllerTest extends TestCase
                         'first_seen_at' => '2026-06-28 08:00:00', 'last_seen_at' => '2026-06-28 08:00:00',
                     ]];
                 }
-                if (str_contains($sql, 'extracted_documents')) {
+                // NOT EXISTS = dotaz na karty „Není faktura" — tady prázdný
+                if (str_contains($sql, 'extracted_documents') && !str_contains($sql, 'NOT EXISTS')) {
                     return [[
                         'extracted_ndx' => 1, 'message_ndx' => 2, 'doc_type' => 'invoiceReceived',
                         'confidence' => 0.9, 'status' => 10, 'subject' => 'Faktura',
@@ -278,7 +279,7 @@ final class DashboardControllerTest extends TestCase
         $db = $this->createMock(DataSourceConnection::class);
         $db->method('fetchAll')->willReturnCallback(
             static function (string $sql): array {
-                if (!str_contains($sql, 'extracted_documents')) {
+                if (!str_contains($sql, 'extracted_documents') || str_contains($sql, 'NOT EXISTS')) {
                     return [];
                 }
                 $rows = [];
@@ -328,7 +329,7 @@ final class DashboardControllerTest extends TestCase
         $db->method('fetchRow')->willReturn(null);
         $db->method('fetchAll')->willReturnCallback(
             static function (string $sql): array {
-                if (!str_contains($sql, 'extracted_documents')) {
+                if (!str_contains($sql, 'extracted_documents') || str_contains($sql, 'NOT EXISTS')) {
                     return [];
                 }
                 return [[

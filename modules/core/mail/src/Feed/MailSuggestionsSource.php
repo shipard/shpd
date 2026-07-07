@@ -9,16 +9,24 @@ use Shipard\Core\Feed\FeedSource;
 use Shipard\Module\Core\Mail\ExtractedDocumentDocument;
 
 /**
- * Feed zdroj došlé pošty — emituje kartu **per vytěžený doklad** (D5) plus
- * chybové karty per zpráva, u které selhala AI.
+ * Feed zdroj došlé pošty — emituje kartu **per vytěžený doklad** (D5),
+ * chybové karty per zpráva, u které selhala AI, a info karty „Není faktura"
+ * pro AI-klasifikované ne-faktury.
  *
  * Návrhové karty: `core_mail_extracted_documents.status ∈ {10,20,30}` join na
  * `core_mail_incoming_messages` (kontext subject/sender/received_at). Mapování:
  *   - 10 → kind=ready  (jednoklik apply + review + reject)
  *   - 20/30 → kind=review (review primary + reject; jednoklik se u nízké
  *     jistoty záměrně nenabízí)
+ * Doklady s `doc_type='other'` se ignorují (pojistka — prompt v2.2.0 je
+ * zakazuje, starší analýzy je mohly vytvořit).
  * Chybové karty: zpráva `analysis_state=70` (Analýza selhala) mimo Archiv/Koš
- * → kind=urgent, akce reanalyze + open_viewer na došlou poštu.
+ * → kind=urgent, akce reanalyze + open_viewer na došlou poštu. Když už
+ * klasifikace stihla určit `primary_type='other'` (např. při reanalyze),
+ * karta degraduje na kind=review — ne-faktura není urgentní.
+ * Karty „Není faktura": zpráva `analysis_state=30`, `docState=10` (Nová),
+ * `primary_type='other'` a žádný akční extracted doc → kind=info s akcemi
+ * Koš (primary) / Archiv / otevřít v došlé poště.
  *
  * Titulek: `doc_type` → label z cfgItem `core.mail.extractedDocTypes`.
  * Podtitulek: partner + částka z `extracted_json` (kanonický doklad) + jistota
@@ -34,12 +42,16 @@ final class MailSuggestionsSource implements FeedSource
     private const EXTRACTED_TABLE = 'core_mail_extracted_documents';
     private const MESSAGES_TABLE  = 'core_mail_incoming_messages';
 
-    /** analysis_state zprávy = permanentní selhání AI (core.mail.analysisStates). */
+    /** analysis_state zprávy (core.mail.analysisStates). */
+    private const ANALYSIS_ANALYZED = 30;
     private const ANALYSIS_FAILED = 70;
 
-    /** Workflow stavy Archiv/Koš — chybové karty se pro ně neemitují. */
+    /** Workflow stavy zprávy (core.mail.docStatesIncoming). */
+    private const DOC_STATE_NEW = 10;
     private const DOC_STATE_ARCHIVED = 80;
     private const DOC_STATE_TRASH = 90;
+
+    private const PRIMARY_TYPES_CFG_ITEM = 'core.mail.primaryTypes';
 
     private const DOC_TYPES_CFG_ITEM = 'core.mail.extractedDocTypes';
 
@@ -51,6 +63,7 @@ final class MailSuggestionsSource implements FeedSource
         return [
             ...$this->suggestionCards($ctx),
             ...$this->errorCards($ctx),
+            ...$this->notInvoiceCards($ctx),
         ];
     }
 
@@ -68,6 +81,7 @@ final class MailSuggestionsSource implements FeedSource
             . ' FROM `' . self::EXTRACTED_TABLE . '` `e`'
             . ' JOIN `' . self::MESSAGES_TABLE . '` `m` ON `m`.`id` = `e`.`message`'
             . ' WHERE `e`.`status` IN %in'
+            . ' AND `e`.`doc_type` != \'other\''
             . ' ORDER BY `m`.`received_at` DESC, `e`.`id` DESC'
             . ' LIMIT %i',
             [
@@ -139,14 +153,15 @@ final class MailSuggestionsSource implements FeedSource
 
     /**
      * Chybové karty — zprávy, u kterých permanentně selhala AI
-     * (analysis_state=70), mimo Archiv/Koš.
+     * (analysis_state=70), mimo Archiv/Koš. Když dřívější klasifikace už
+     * určila `primary_type='other'`, karta degraduje z urgent na review.
      *
      * @return list<array<string,mixed>>
      */
     private function errorCards(FeedContext $ctx): array
     {
         $rows = $ctx->db->fetchAll(
-            'SELECT `id` AS `message_ndx`, `subject`, `sender_name`, `received_at`'
+            'SELECT `id` AS `message_ndx`, `subject`, `sender_name`, `received_at`, `primary_type`'
             . ' FROM `' . self::MESSAGES_TABLE . '`'
             . ' WHERE `analysis_state` = %i AND `docState` NOT IN %in'
             . ' ORDER BY `received_at` DESC, `id` DESC'
@@ -160,10 +175,11 @@ final class MailSuggestionsSource implements FeedSource
         foreach ($rows as $row) {
             $messageNdx = (int) $row['message_ndx'];
             $subject    = trim((string) ($row['subject'] ?? ''));
+            $isOther    = (string) ($row['primary_type'] ?? '') === 'other';
             $cards[] = [
                 'id'         => 'mail_message:' . $messageNdx,
                 'source'     => 'mail',
-                'kind'       => 'urgent',
+                'kind'       => $isOther ? 'review' : 'urgent',
                 'icon'       => 'warning',
                 'stateStyle' => 'error',
                 'title'      => $ctx->language === 'cs' ? 'Chyba analýzy e-mailu' : 'E-mail analysis failed',
@@ -177,6 +193,86 @@ final class MailSuggestionsSource implements FeedSource
             ];
         }
         return $cards;
+    }
+
+    /**
+     * Karty „Není faktura" — AI klasifikovala zprávu jako `other`, zpráva
+     * zůstala v Nové a nemá žádný akční extracted doc. Jednoklikový úklid:
+     * Koš (primary) / Archiv / otevřít v došlé poště.
+     *
+     * @return list<array<string,mixed>>
+     */
+    private function notInvoiceCards(FeedContext $ctx): array
+    {
+        $rows = $ctx->db->fetchAll(
+            'SELECT `m`.`id` AS `message_ndx`, `m`.`subject`, `m`.`sender_name`,'
+            . ' `m`.`sender_email`, `m`.`received_at`, `m`.`primary_type`'
+            . ' FROM `' . self::MESSAGES_TABLE . '` `m`'
+            . ' WHERE `m`.`analysis_state` = %i'
+            . ' AND `m`.`docState` = %i'
+            . ' AND `m`.`primary_type` = \'other\''
+            . ' AND NOT EXISTS ('
+            . '     SELECT 1 FROM `' . self::EXTRACTED_TABLE . '` `e`'
+            . '     WHERE `e`.`message` = `m`.`id` AND `e`.`status` IN %in'
+            . ' )'
+            . ' ORDER BY `m`.`received_at` DESC, `m`.`id` DESC'
+            . ' LIMIT %i',
+            self::ANALYSIS_ANALYZED,
+            self::DOC_STATE_NEW,
+            [
+                ExtractedDocumentDocument::STATUS_READY_TO_APPLY,
+                ExtractedDocumentDocument::STATUS_PENDING_REVIEW,
+                ExtractedDocumentDocument::STATUS_LOW_CONFIDENCE,
+            ],
+            $ctx->maxCards,
+        );
+
+        $cards = [];
+        foreach ($rows as $row) {
+            $messageNdx = (int) $row['message_ndx'];
+            $target = ['messageNdx' => $messageNdx];
+
+            $subtitleParts = [];
+            $subject = trim((string) ($row['subject'] ?? ''));
+            if ($subject !== '') {
+                $subtitleParts[] = $this->emailSubjectLabel($ctx, $subject);
+            }
+            $sender = trim((string) ($row['sender_name'] ?? '')) !== ''
+                ? trim((string) $row['sender_name'])
+                : trim((string) ($row['sender_email'] ?? ''));
+            if ($sender !== '') {
+                $subtitleParts[] = $sender;
+            }
+
+            $cards[] = [
+                'id'         => 'mail_notinvoice:' . $messageNdx,
+                'source'     => 'mail',
+                'kind'       => 'info',
+                'icon'       => 'info',
+                'stateStyle' => 'archive',
+                'title'      => ($ctx->language === 'cs' ? 'Není faktura — ' : 'Not an invoice — ')
+                    . $this->primaryTypeLabel($ctx, (string) ($row['primary_type'] ?? 'other')),
+                'subtitle'   => implode(' · ', $subtitleParts),
+                'timestamp'  => $this->toAtom($row['received_at'] ?? null),
+                'context'    => ['messageNdx' => $messageNdx],
+                'actions'    => [
+                    ['id' => 'trash',    'kind' => 'trash_message',   'target' => $target, 'primary' => true],
+                    ['id' => 'archive',  'kind' => 'archive_message', 'target' => $target],
+                    ['id' => 'openMail', 'kind' => 'open_viewer',     'target' => ['viewerId' => self::INCOMING_VIEWER, 'recordId' => $messageNdx]],
+                ],
+            ];
+        }
+        return $cards;
+    }
+
+    /** Lokalizovaný label primárního typu z cfgItem; fallback na holý key. */
+    private function primaryTypeLabel(FeedContext $ctx, string $primaryType): string
+    {
+        $cfg = $ctx->config?->cfgItem(self::PRIMARY_TYPES_CFG_ITEM);
+        if (is_array($cfg) && isset($cfg[$primaryType]['name']) && is_string($cfg[$primaryType]['name'])) {
+            return $cfg[$primaryType]['name'];
+        }
+        return $primaryType === 'other' ? ($ctx->language === 'cs' ? 'Ostatní' : 'Other') : $primaryType;
     }
 
     /**

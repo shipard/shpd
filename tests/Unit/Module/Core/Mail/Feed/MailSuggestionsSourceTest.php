@@ -16,6 +16,8 @@ use Shipard\Module\Core\Mail\Feed\MailSuggestionsSource;
  * Pokrývají:
  *   - stavy 10/20/30 → správný kind, stateStyle a sada akcí
  *   - zpráva analysis_state=70 → urgent karta + reanalyze/open_viewer
+ *     (degradace na review při primary_type=other)
+ *   - karta „Není faktura" (kind info, akce trash/archive/open_viewer)
  *   - titulek z cfgItem doc typu + partner z canonical, podtitulek
  *     (částka · jistota · e-mail)
  *   - prázdný vstup → []
@@ -23,17 +25,27 @@ use Shipard\Module\Core\Mail\Feed\MailSuggestionsSource;
 final class MailSuggestionsSourceTest extends TestCase
 {
     /**
-     * Sestaví FeedContext s DB mockem, který rozlišuje SELECT vytěžených
-     * dokladů (suggestion) od SELECTu chybových zpráv podle názvu tabulky.
+     * Sestaví FeedContext s DB mockem, který routuje tři SELECTy zdroje
+     * podle tvaru SQL: notInvoice (NOT EXISTS subquery), suggestion
+     * (JOIN na extracted_documents), error (zbytek — messages tabulka).
      *
      * @param list<array<string,mixed>> $suggestionRows
      * @param list<array<string,mixed>> $errorRows
+     * @param list<array<string,mixed>> $notInvoiceRows
      */
-    private function context(array $suggestionRows, array $errorRows = [], ?ConfigRuntime $config = null, string $lang = 'cs'): FeedContext
-    {
+    private function context(
+        array $suggestionRows,
+        array $errorRows = [],
+        ?ConfigRuntime $config = null,
+        string $lang = 'cs',
+        array $notInvoiceRows = [],
+    ): FeedContext {
         $db = $this->createMock(DataSourceConnection::class);
         $db->method('fetchAll')->willReturnCallback(
-            static function (string $sql) use ($suggestionRows, $errorRows): array {
+            static function (string $sql) use ($suggestionRows, $errorRows, $notInvoiceRows): array {
+                if (str_contains($sql, 'NOT EXISTS')) {
+                    return $notInvoiceRows;
+                }
                 return str_contains($sql, 'extracted_documents') ? $suggestionRows : $errorRows;
             },
         );
@@ -147,6 +159,81 @@ final class MailSuggestionsSourceTest extends TestCase
         $this->assertSame('open_viewer', $actions[1]['kind']);
         $this->assertSame('core.mail.incoming', $actions[1]['target']['viewerId']);
         $this->assertSame(555, $actions[1]['target']['recordId']);
+    }
+
+    public function testErrorCardDegradesToReviewForOtherPrimaryType(): void
+    {
+        $errorRow = [
+            'message_ndx'  => 556,
+            'subject'      => 'Newsletter',
+            'sender_name'  => 'Marketing s.r.o.',
+            'received_at'  => '2026-06-27 09:00:00',
+            'primary_type' => 'other', // klasifikace stihla proběhnout dřív
+        ];
+        $src = new MailSuggestionsSource();
+        $cards = $src->collectCards($this->context([], [$errorRow]));
+
+        $this->assertCount(1, $cards);
+        $this->assertSame('review', $cards[0]['kind']);
+        $this->assertSame('error', $cards[0]['stateStyle']);
+    }
+
+    public function testNotInvoiceCardWithTrashArchiveActions(): void
+    {
+        $row = [
+            'message_ndx'  => 777,
+            'subject'      => 'Nabídka spolupráce',
+            'sender_name'  => 'Obchodník a.s.',
+            'sender_email' => 'obchod@example.com',
+            'received_at'  => '2026-06-29 08:00:00',
+            'primary_type' => 'other',
+        ];
+        $config = $this->createMock(ConfigRuntime::class);
+        $config->method('cfgItem')->willReturnCallback(
+            static fn(string $id): mixed => $id === 'core.mail.primaryTypes'
+                ? ['other' => ['name' => 'Ostatní']]
+                : null,
+        );
+        $src = new MailSuggestionsSource();
+        $cards = $src->collectCards($this->context([], [], $config, 'cs', [$row]));
+
+        $this->assertCount(1, $cards);
+        $card = $cards[0];
+        $this->assertSame('mail_notinvoice:777', $card['id']);
+        $this->assertSame('info', $card['kind']);
+        $this->assertSame('archive', $card['stateStyle']);
+        $this->assertSame('Není faktura — Ostatní', $card['title']);
+        $this->assertStringContainsString('Nabídka spolupráce', $card['subtitle']);
+        $this->assertStringContainsString('Obchodník a.s.', $card['subtitle']);
+        $this->assertSame(777, $card['context']['messageNdx']);
+
+        $actions = $card['actions'];
+        $this->assertSame(['trash', 'archive', 'openMail'], array_column($actions, 'id'));
+        $this->assertSame('trash_message', $actions[0]['kind']);
+        $this->assertTrue($actions[0]['primary']);
+        $this->assertSame(['messageNdx' => 777], $actions[0]['target']);
+        $this->assertSame('archive_message', $actions[1]['kind']);
+        $this->assertSame('open_viewer', $actions[2]['kind']);
+        $this->assertSame('core.mail.incoming', $actions[2]['target']['viewerId']);
+    }
+
+    public function testSuggestionQueryExcludesOtherDocType(): void
+    {
+        // Pojistka — WHERE musí filtrovat doc_type='other' už v SQL.
+        $captured = null;
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchAll')->willReturnCallback(
+            static function (string $sql) use (&$captured): array {
+                if (str_contains($sql, 'JOIN')) {
+                    $captured = $sql;
+                }
+                return [];
+            },
+        );
+        (new MailSuggestionsSource())->collectCards(new FeedContext($db, null, 'cs', 30));
+
+        $this->assertNotNull($captured);
+        $this->assertStringContainsString("`doc_type` != 'other'", $captured);
     }
 
     public function testEmptyInputReturnsNoCards(): void

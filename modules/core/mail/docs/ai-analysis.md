@@ -161,7 +161,9 @@ reverzně: 40 → 20 (`reconcileMessageAfterUnapply`).
 
 Od promptu **v2.2.0** analyzer v prvním kroku klasifikuje zprávu jako celek
 a vrací volitelné top-level pole `message_classification: {primary_type,
-confidence}` v `POST /result` (viz api-contract §9.5). Server v transakci
+confidence}` v `POST /result` (viz api-contract §9.5); protože stávající
+analyzer daemon nové pole nepromotuje, server ho čte i z
+`analysis_json.message_classification`. Server v transakci
 resultu zapíše `primary_type` + `primary_type_source='ai'` — **jen pokud**
 `primary_type_source != 'user'` (ruční volba uživatele má vždy přednost;
 nastavuje ji dirty-change detekce v `IncomingMessageDocument::beforeSave`).

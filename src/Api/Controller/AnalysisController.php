@@ -894,7 +894,12 @@ class AnalysisController
      * (spec tasks/mail-states-and-classification.md §B1). Běží uvnitř
      * transakce resultu.
      *
-     * - Pole chybí (starý analyzer) → žádná změna, zpětná kompatibilita drží.
+     * Analyzer daemon se kvůli klasifikaci neměnil — tělo /result staví sám
+     * a nové top-level pole neposílá. Model output ale předává celý
+     * v `analysis_json`, takže klasifikaci čteme odtud jako fallback;
+     * top-level pole má přednost (budoucí analyzer ho může promotovat).
+     *
+     * - Klasifikace nikde není (starý prompt) → žádná změna.
      * - Neznámý `primary_type` → warning + ignore; nesmí rozbít uložení
      *   výsledku (žádná 422).
      * - AI nikdy nepřepisuje hodnotu nastavenou uživatelem
@@ -905,6 +910,12 @@ class AnalysisController
     private function applyMessageClassification(\Dibi\Connection $dibi, int $messageNdx, array $body): void
     {
         $classification = $body['message_classification'] ?? null;
+        if (!is_array($classification)) {
+            $analysisJson = $body['analysis_json'] ?? null;
+            $classification = is_array($analysisJson)
+                ? ($analysisJson['message_classification'] ?? null)
+                : null;
+        }
         if (!is_array($classification)) {
             return;
         }

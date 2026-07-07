@@ -321,8 +321,11 @@ Headers: `X-Claim-Token`. Request body:
 }
 ```
 
-`message_classification` je **volitelné** (prompt v2.2.0+) — starý analyzer
-ho neposílá a nic se nemění, zpětná kompatibilita drží (§8).
+`message_classification` je **volitelné** (prompt v2.2.0+) — starý prompt
+ho negeneruje a nic se nemění, zpětná kompatibilita drží (§8). Stávající
+analyzer daemon top-level pole neposílá (tělo /result staví sám); server
+proto klasifikaci čte i z `analysis_json.message_classification` (celý
+model output). Top-level pole má přednost.
 
 Server transakčně:
 

@@ -651,6 +651,55 @@ class AnalysisControllerTest extends TestCase
         $this->assertContains('primary_type_source != %s|user', $flat);
     }
 
+    public function testClassificationFallsBackToAnalysisJson(): void
+    {
+        // Analyzer daemon (bez změn) top-level pole neposílá — klasifikace
+        // dorazí jen uvnitř analysis_json (celý model output).
+        $fluent = $this->createMock(\Dibi\Fluent::class);
+        $fluent->method('__call')->willReturnSelf();
+        $fluent->expects($this->once())->method('execute');
+
+        $dibi = $this->createMock(\Dibi\Connection::class);
+        $dibi->expects($this->once())
+            ->method('update')
+            ->with(
+                'core_mail_incoming_messages',
+                ['primary_type' => 'invoiceReceived', 'primary_type_source' => 'ai'],
+            )
+            ->willReturn($fluent);
+
+        $this->callApplyClassification($dibi, [
+            'analysis_json' => [
+                'overall_confidence' => 0.95,
+                'message_classification' => ['primary_type' => 'invoiceReceived', 'confidence' => 0.98],
+                'documents' => [],
+            ],
+        ]);
+    }
+
+    public function testClassificationPrefersTopLevelFieldOverAnalysisJson(): void
+    {
+        $fluent = $this->createMock(\Dibi\Fluent::class);
+        $fluent->method('__call')->willReturnSelf();
+        $fluent->method('execute');
+
+        $dibi = $this->createMock(\Dibi\Connection::class);
+        $dibi->expects($this->once())
+            ->method('update')
+            ->with(
+                'core_mail_incoming_messages',
+                ['primary_type' => 'other', 'primary_type_source' => 'ai'],
+            )
+            ->willReturn($fluent);
+
+        $this->callApplyClassification($dibi, [
+            'message_classification' => ['primary_type' => 'other', 'confidence' => 0.9],
+            'analysis_json' => [
+                'message_classification' => ['primary_type' => 'invoiceReceived', 'confidence' => 0.98],
+            ],
+        ]);
+    }
+
     public function testClassificationIgnoresUnknownPrimaryType(): void
     {
         $dibi = $this->createMock(\Dibi\Connection::class);

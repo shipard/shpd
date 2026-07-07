@@ -38,8 +38,8 @@ abstract class DocDocument extends Document
     /** Snapshots are built/refreshed only in editable confirmed states. */
     private const SNAPSHOT_STATES = [20, 80];
 
-    /** Active doc states for resolver lookups (Koncept, V pořádku, V opravě). */
-    private const ACTIVE_DOC_STATES = [10, 40, 80];
+    /** Deleted doc state — period lookups skip only this; archived periods stay resolvable by date. */
+    private const DOC_STATE_DELETED = 90;
 
     private ?VatRateResolver $vatRateResolver = null;
     private ?OwnCompanyResolver $ownCompanyResolver = null;
@@ -430,11 +430,11 @@ abstract class DocDocument extends Document
         $row = $this->db->fetch(
             'SELECT [id] FROM [economy_codebooks_fiscal_years]
              WHERE [date_begin] <= %d AND [date_end] >= %d
-               AND [docState] IN (%i, %i, %i)
+               AND [docState] != %i
              ORDER BY [date_begin] DESC
              LIMIT 1',
             $accountingDate, $accountingDate,
-            self::ACTIVE_DOC_STATES[0], self::ACTIVE_DOC_STATES[1], self::ACTIVE_DOC_STATES[2],
+            self::DOC_STATE_DELETED,
         );
         return $row !== null ? (int) $row['id'] : null;
     }
@@ -463,10 +463,10 @@ abstract class DocDocument extends Document
             'SELECT [id] FROM [economy_codebooks_vat_periods]
              WHERE [vat_registration] = %i
                AND [date_begin] <= %d AND [date_end] >= %d
-               AND [docState] IN (%i, %i, %i)
+               AND [docState] != %i
              LIMIT 1',
             $vatRegistrationId, $vatDuzp, $vatDuzp,
-            self::ACTIVE_DOC_STATES[0], self::ACTIVE_DOC_STATES[1], self::ACTIVE_DOC_STATES[2],
+            self::DOC_STATE_DELETED,
         );
         return $row !== null ? (int) $row['id'] : null;
     }

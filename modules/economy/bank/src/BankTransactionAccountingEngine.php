@@ -31,8 +31,11 @@ use Shipard\Module\Economy\Accounting\AccountMaskResolver;
  */
 final class BankTransactionAccountingEngine
 {
-    /** Stavy účtu/období považované za aktivní (shodné s doklady). */
+    /** Stavy účtu považované za aktivní (shodné s doklady). */
     private const ACTIVE_DOC_STATES = [10, 40, 80];
+
+    /** Smazáno — lookup fiskálního roku vynechává jen tento stav (archivní roky zůstávají dohledatelné). */
+    private const DOC_STATE_DELETED = 90;
 
     /** Délka chybové masky účtu ('221' → '221???'). */
     private const ACCOUNT_NUMBER_LENGTH = 6;
@@ -326,11 +329,11 @@ final class BankTransactionAccountingEngine
         $row = $this->db->fetch(
             'SELECT [id] FROM [economy_codebooks_fiscal_years]
              WHERE [date_begin] <= %d AND [date_end] >= %d
-               AND [docState] IN (%i, %i, %i)
+               AND [docState] != %i
              ORDER BY [date_begin] DESC
              LIMIT 1',
             $accountingDate, $accountingDate,
-            self::ACTIVE_DOC_STATES[0], self::ACTIVE_DOC_STATES[1], self::ACTIVE_DOC_STATES[2],
+            self::DOC_STATE_DELETED,
         );
         return $row !== null ? (int) $row['id'] : null;
     }

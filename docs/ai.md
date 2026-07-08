@@ -99,6 +99,13 @@ klíč). Per DS může být víc backendů, právě jeden `is_default`. Detaily 
 
 - Klíč je šifrovaný přes `DsSecretCipher` — viz [`operations/secrets.md`](operations/secrets.md).
 - Nastavení klíče: `bin/shpd-ds ai-analyzer-set-key --backend default --api-key <api-key>` (aktivuje backend). Auto-provisioning vytvoří `default` backend při `ds-upgrade`.
+- **Lifecycle:** jediné ruční kroky jsou jednorázové při prvním zřízení DS —
+  `ai-analyzer-set-key` (klíč backendu) a `ai-analyzer-setup` (API klíč
+  analyzeru). Všechno ostatní drží `ds-upgrade` automaticky a bezpodmínečně
+  (i pod `skipProvisioning`): user `_ai_analyzer`, default backend, default
+  profil + version sync profilu ze šablony. `ds-reset` backendy s klíči,
+  profily i uživatele/API klíče zachovává (`keepOnReset`), takže reset ani
+  upgrade žádnou ruční AI akci nevyžadují.
 - **Provider scope:** v1 jen `anthropic`; rozhraní `LlmClient` drží dveře pro
   další providery (lokální, OpenAI) otevřené, aniž by se předčasně abstrahoval
   formát streamu.

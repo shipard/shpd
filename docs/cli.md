@@ -292,12 +292,18 @@ shpd-ds ds-upgrade -v
 **Vypnutí provisioningu (`skipProvisioning`):** volitelný boolean v
 `config/main.json`. Když je `true`, `ds-upgrade` synchronizuje schéma, ale
 přeskočí generování referenčních dat (units, druhy položek, fiskální roky,
-VAT období, číselné řady, mail router, AI analyzer). Určeno pro import dat
+VAT období, číselné řady, mail router). Určeno pro import dat
 z jiného systému, kde tyto údaje dodává sám import. Po dokončení importu
 nastav `skipProvisioning` zpět na `false` a spusť `ds-upgrade` znovu —
 provisionery jsou idempotentní, doplní jen chybějící data. Při zapnutém
 flagu `ds-upgrade` při každém běhu hlásí `[SKIP] Provisioning disabled via
 config`.
+
+**AI analyzer provisioning běží vždy**, i pod `skipProvisioning` — user
+`_ai_analyzer`, default backend, default profil i version sync profilu
+nejsou migrovaná data, ale systémový kontrakt modulů `core.mail`/`core.ai`
+(stejně jako clearing infrastruktura). Na DS bez modulu `core.mail` se
+tiše přeskočí (verbose `[SKIP]`).
 
 #### `ds-reset`
 
@@ -319,8 +325,12 @@ výchozím stavu zůstávají:
 
 - `core.system` — uživatelé, relace, nastavení, API klíče (vč. importního),
   rate limity (login funguje i po resetu),
-- `core.mail` — `core_mail_ai_backends` kvůli zašifrovanému AI klíči
-  (`ai-analyzer-set-key`).
+- `core.ai` — `core_ai_backends` kvůli zašifrovanému AI klíči
+  (`ai-analyzer-set-key`),
+- `core.mail` — `core_mail_ai_profiles`: AI profil je konfigurace (vč.
+  admin úprav a lokálně laděného promptu), ne migrovaná data. Spolu se
+  zachovanými backendy a klíči tak po resetu analyzer funguje bez
+  jakékoliv ruční akce.
 
 Vše ostatní se dropuje, **včetně osiřelých tabulek** po odebraných modulech
 (`dropSet` = existující tabulky − `keepSet`). Pokud se dropuje
@@ -501,6 +511,9 @@ sudo shpd-ds ai-analyzer-bootstrap
 
 Idempotentně zajistí systémového uživatele `_ai_analyzer`, výchozí AI
 backend a výchozí profil.
+
+Totéž automaticky pokrývá `ds-upgrade` (bezpodmínečně, i pod
+`skipProvisioning`) — příkaz slouží pro ruční zásah mimo upgrade.
 
 #### `ai-analyzer-setup`
 
@@ -745,7 +758,9 @@ sudo shpd-ds ds-upgrade             # doplní zbývající referenční data
 `skipProvisioning` se propíše i přes interní `ds-upgrade` v `ds-reset`,
 takže při zapnutém flagu reset rekreuje jen schéma a žádné referenční data
 nevytvoří. Po celou dobu opakovaného testování zůstává flag `true`; na
-`false` se přepne, až je import hotový „naostro".
+`false` se přepne, až je import hotový „naostro". AI analyzer žádnou ruční
+akci nevyžaduje: profil, backend i klíče reset přežívají (`keepOnReset`)
+a `ds-upgrade` je zajišťuje i pod `skipProvisioning`.
 
 ---
 

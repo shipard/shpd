@@ -351,6 +351,7 @@ export default {
   'dashboard.card.action.openMail': 'Otevřít e-mail',
   'dashboard.card.action.trash': 'Do koše',
   'dashboard.card.action.archive': 'Archivovat',
+  'dashboard.card.attachments.more': 'Další přílohy ({n})',
   'dashboard.card.actionFailed': 'Akce se nezdařila: {msg}',
   'dashboard.toast.applied': 'Vytvořen koncept #{id}',
   'dashboard.toast.open': 'Otevřít',

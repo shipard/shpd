@@ -7,6 +7,7 @@
   import { resolveIcon } from '../../icons.js';
   import Icon from '../ui/Icon.svelte';
   import Button from '../ui/Button.svelte';
+  import FeedCardAttachment from './FeedCardAttachment.svelte';
   import { t } from '../../i18n/index.js';
 
   let { card, onAction = () => {}, busy = false } = $props();
@@ -17,6 +18,20 @@
   // klientsky podle action.id (i18n klíče dashboard.card.action.*).
   function actionLabel(action) {
     return action.label ?? t(`dashboard.card.action.${action.id}`);
+  }
+
+  const hiddenAttachments = $derived(
+    (card.attachmentsTotal ?? 0) - (card.attachments?.length ?? 0),
+  );
+
+  // „+N" = syntetická open_viewer akce — otevře zprávu v došlé poště
+  // (stejný handler v Dashboard.svelte jako alert akce).
+  function openMessage() {
+    onAction({
+      id: 'openMail',
+      kind: 'open_viewer',
+      target: { viewerId: 'core.mail.incoming', recordId: card.context?.messageNdx },
+    });
   }
 </script>
 
@@ -31,6 +46,23 @@
     <div class="shpd-feed-card__title">{card.title}</div>
     {#if card.subtitle}
       <div class="shpd-feed-card__subtitle">{card.subtitle}</div>
+    {/if}
+    {#if card.attachments?.length}
+      <div class="shpd-feed-card__attachments">
+        {#each card.attachments as att (att.id)}
+          <FeedCardAttachment {att} />
+        {/each}
+        {#if hiddenAttachments > 0}
+          <button
+            type="button"
+            class="shpd-feed-att__more"
+            title={t('dashboard.card.attachments.more', { n: hiddenAttachments })}
+            aria-label={t('dashboard.card.attachments.more', { n: hiddenAttachments })}
+            disabled={busy}
+            onclick={openMessage}
+          >+{hiddenAttachments}</button>
+        {/if}
+      </div>
     {/if}
     {#if card.actions?.length}
       <div class="shpd-feed-card__actions">
@@ -94,6 +126,39 @@
     font-size: var(--shpd-font-size-sm);
     color: var(--shpd-color-text-secondary);
     margin-top: 2px;
+  }
+
+  /* Řada chipů příloh — na mobilu se zalamuje, nic nepřetéká. */
+  .shpd-feed-card__attachments {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--shpd-space-sm);
+    margin-top: var(--shpd-space-sm);
+  }
+
+  /* „+N" — vzhledem ladí s chipem přílohy (FeedCardAttachment). */
+  .shpd-feed-att__more {
+    padding: var(--shpd-space-xs) var(--shpd-space-sm);
+    border: 1px solid var(--shpd-color-border);
+    border-radius: var(--shpd-radius-sm);
+    background: var(--shpd-color-bg);
+    color: var(--shpd-color-text-secondary);
+    font-size: var(--shpd-font-size-sm);
+    font-family: var(--shpd-font-family);
+    line-height: 1;
+    cursor: pointer;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .shpd-feed-att__more:hover:not(:disabled) {
+    border-color: var(--shpd-color-primary);
+    box-shadow: var(--shpd-shadow-md);
+  }
+
+  .shpd-feed-att__more:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
   }
 
   .shpd-feed-card__actions {

@@ -338,6 +338,7 @@ export default {
   'dashboard.card.action.openMail': 'Open e-mail',
   'dashboard.card.action.trash': 'Trash',
   'dashboard.card.action.archive': 'Archive',
+  'dashboard.card.attachments.more': 'More attachments ({n})',
   'dashboard.card.actionFailed': 'Action failed: {msg}',
   'dashboard.toast.applied': 'Draft #{id} created',
   'dashboard.toast.open': 'Open',

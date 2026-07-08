@@ -55,6 +55,7 @@ final class FormElement
         public readonly ?string $componentName = null,
         public readonly ?string $inputType = null,
         public readonly ?array $lookup = null,
+        public readonly ?array $params = null,
     ) {
         if (!in_array($type, self::ALLOWED_TYPES, true)) {
             throw new \InvalidArgumentException(sprintf(
@@ -169,6 +170,9 @@ final class FormElement
         }
         if ($this->componentName !== null) {
             $result['component_name'] = $this->componentName;
+        }
+        if ($this->params !== null) {
+            $result['params'] = $this->params;
         }
         if ($this->inputType !== null) {
             $result['input_type'] = $this->inputType;

@@ -600,6 +600,19 @@
     min-height: 0;
   }
 
+  /* Tab obsahující fill sloupec (např. náhledy příloh) roztáhne obsah
+     na celou výšku scroll containeru — sekce končí u spodní hrany těla. */
+  .shpd-form-editor__tab-content:has(:global(.shpd-form-column--fill)) {
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+  }
+
+  /* display:flex výše by jinak přebil UA styl pro [hidden]. */
+  .shpd-form-editor__tab-content[hidden] {
+    display: none !important;
+  }
+
   .shpd-form-editor__loading {
     padding: var(--shpd-space-lg);
     color: var(--shpd-color-text-secondary);

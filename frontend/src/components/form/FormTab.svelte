@@ -43,4 +43,10 @@
     gap: var(--shpd-form-section-gap);
     padding: var(--shpd-space-sm) var(--shpd-space-md);
   }
+
+  /* Součást řetězu pro fill sloupce — viz FormEditor / FormSection. */
+  .shpd-form-tab:has(:global(.shpd-form-column--fill)) {
+    flex: 1;
+    min-height: 0;
+  }
 </style>

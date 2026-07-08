@@ -196,6 +196,8 @@ export default {
   'attachments.dropHint': 'Drop files here or click "Upload attachment"',
   'attachments.action.download': 'Download',
   'attachments.action.rename': 'Rename',
+  'attachments.view.empty': 'No attachments',
+  'attachments.view.newRecord': 'Attachment previews will be available after saving the record.',
   'attachments.confirmDelete': 'Really delete attachment "{name}"?',
 
   // ── Server error codes (mapped via i18n/errors.js translateError()) ─────

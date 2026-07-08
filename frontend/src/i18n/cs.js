@@ -205,6 +205,8 @@ export default {
   'attachments.dropHint': 'Přetáhněte soubory sem nebo klikněte na „Nahrát přílohu"',
   'attachments.action.download': 'Stáhnout',
   'attachments.action.rename': 'Přejmenovat',
+  'attachments.view.empty': 'Žádné přílohy',
+  'attachments.view.newRecord': 'Náhledy příloh budou dostupné po uložení záznamu.',
   'attachments.confirmDelete': 'Opravdu smazat přílohu „{name}"?',
 
   // ── Server error codes (mapped via i18n/errors.js translateError()) ─────

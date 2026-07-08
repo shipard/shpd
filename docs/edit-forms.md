@@ -255,10 +255,20 @@ Vlastní HTML uvnitř sloupce; rendruje se přes obě kolony.
 ### 4.6 `component`
 
 ```json
-{ "type": "component", "component_name": "recapitulation" }
+{ "type": "component", "component_name": "attachmentsView", "params": {"table_id": 303} }
 ```
 
-Pojmenovaná Svelte komponenta (např. VAT rekapitulace dokladu). Rendruje se přes obě kolony.
+Pojmenovaná Svelte komponenta. Rendruje se přes obě kolony. Frontend
+ji řeší přes registr `form/formComponents.js` (klíč = `component_name`);
+neznámé jméno se vykreslí jako placeholder `[name]`. Volitelné `params`
+(libovolný objekt) komponenta dostane jako prop; kromě toho vždy dostává
+`parentId` (ID editovaného záznamu, `null` u nového).
+
+Registrované komponenty:
+
+| `component_name` | Komponenta | Params | Použití |
+|---|---|---|---|
+| `attachmentsView` | `FormAttachmentsView` | `table_id` (číselné ID tabulky) | Read-only velké náhledy příloh záznamu (AttachmentGrid `mode="full"`); PDF a obrázky řadí před nenáhledovatelné typy, scrolluje uvnitř (výšku udává fill mechanismus, viz Layout). Např. došlá pošta — pravý sloupec tabu Zpráva. |
 
 ### 4.7 `lookup`
 
@@ -380,6 +390,7 @@ Na úzkém viewportu (<700px) se sloupce lámou pod sebe (`grid-template-columns
   column-gap: var(--shpd-space-md);
   row-gap: var(--shpd-space-sm);
   align-items: baseline;
+  align-content: start; /* při natáhnutí sekcí (vyšší soused) drží řádky nahoře */
 }
 ```
 
@@ -388,6 +399,30 @@ Na úzkém viewportu (<700px) se sloupce lámou pod sebe (`grid-template-columns
 ### Full-span elementy
 
 `separator`, `html`, `component` a `checkbox` se rendují přes obě grid kolony (`grid-column: 1 / -1`). `inline` má vlastní label + flex container, takže do gridu vchází jako dvě běžné kolony.
+
+### Fill sloupce (sloupec jen s komponentami)
+
+Sloupec složený **výhradně z `component` elementů** dostane modifikátor
+`.shpd-form-column--fill` (detekce ve `FormColumn`). Chová se jinak než
+běžný sloupec:
+
+- **Nediktuje výšku řádku sekce** — komponenta uvnitř (např.
+  `FormAttachmentsView`) má scroll container `position: absolute`, takže do
+  intrinsické výšky nepřispívá a jen se roztáhne podle dostupné výšky.
+- **Tab se roztáhne na celou výšku těla formuláře** — přítomnost
+  `--fill` sloupce aktivuje přes `:has()` řetěz
+  `.shpd-form-editor__tab-content` → `.shpd-form-tab` →
+  `.shpd-form-section` → `.shpd-form-section__columns`
+  (`min-height: 100%` / `flex: 1`), takže karta sekce končí u spodní
+  hrany scroll containeru. Tělo formuláře pak scrolluje jen tehdy, když
+  se nevejdou samotná pole — obsah fill sloupce scrolluje uvnitř sebe.
+- Sousedící běžné sloupce drží pole nahoře (`align-content: start`).
+- Na mobilu (<768 px, sloupce pod sebou) se výška od souseda odvodit
+  nedá — komponenta si řeší pevné scroll okno sama (např.
+  `max-height: 60vh` u příloh).
+
+Formuláře bez fill sloupců zůstávají tímto mechanismem nedotčené.
+Použití: `IncomingMessagesForm` — tab Zpráva, pravý sloupec s náhledy příloh.
 
 ### Vizuál sekce
 
@@ -720,7 +755,7 @@ $col->select(string $column, ?string $label = null, ?array $options = null,
 
 $col->separator(?string $label = null, bool $hidden = false): static;
 $col->html(string $content): static;
-$col->component(string $name): static;
+$col->component(string $name, ?array $params = null): static;
 
 // Inline
 $col->inline(): static;        // otevři inline; následné input()/select() jdou do něj

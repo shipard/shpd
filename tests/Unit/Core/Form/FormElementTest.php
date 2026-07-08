@@ -202,6 +202,15 @@ class FormElementTest extends TestCase
 
         $this->assertSame('component', $arr['type']);
         $this->assertSame('recapitulation', $arr['component_name']);
+        $this->assertArrayNotHasKey('params', $arr);
+    }
+
+    public function testComponentParamsSerialization(): void
+    {
+        $el = new FormElement(type: 'component', componentName: 'attachmentsView', params: ['table_id' => 303]);
+        $arr = $el->toArray();
+
+        $this->assertSame(['table_id' => 303], $arr['params']);
     }
 
     // -------- Lookup --------

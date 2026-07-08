@@ -8,6 +8,7 @@
   import LookupInput from '../ui/LookupInput.svelte';
   import FormFieldRow from './FormFieldRow.svelte';
   import FormInline from './FormInline.svelte';
+  import { formComponents } from './formComponents.js';
 
   let {
     element,
@@ -46,8 +47,13 @@
   </div>
 
 {:else if element.type === 'component'}
+  {@const ComponentImpl = formComponents[element.component_name]}
   <div class="shpd-form-component" class:shpd-form-component--hidden={element.hidden}>
-    [{element.component_name}]
+    {#if ComponentImpl}
+      <ComponentImpl params={element.params ?? {}} {parentId} />
+    {:else}
+      <span class="shpd-form-component__placeholder">[{element.component_name}]</span>
+    {/if}
   </div>
 
 {:else if element.type === 'input' && element.input_type === 'checkbox'}
@@ -141,6 +147,13 @@
   }
 
   .shpd-form-component {
+    /* In a --fill column the row is definite (1fr) and 100% fills it; in
+       regular auto-sized rows the percentage resolves to auto (no effect). */
+    height: 100%;
+    min-height: 0;
+  }
+
+  .shpd-form-component__placeholder {
     font-style: italic;
     color: var(--shpd-color-text-secondary);
   }

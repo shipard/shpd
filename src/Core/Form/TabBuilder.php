@@ -317,7 +317,7 @@ final class TabBuilder
         return $this;
     }
 
-    public function component(string $name): static
+    public function component(string $name, ?array $params = null): static
     {
         $this->requireOpenColumn('component()');
         if ($this->inlineBuffer !== null) {
@@ -326,7 +326,7 @@ final class TabBuilder
                 $this->id,
             ));
         }
-        $this->currentElements[] = new FormElement(type: 'component', componentName: $name);
+        $this->currentElements[] = new FormElement(type: 'component', componentName: $name, params: $params);
         return $this;
     }
 

@@ -11,9 +11,15 @@
     onResolveChange,
     parentId = null,
   } = $props();
+
+  // Sloupec složený jen z `component` elementů (např. náhledy příloh)
+  // nediktuje výšku řádku sekce — přizpůsobí se sousednímu sloupci.
+  const fillOnly = $derived(
+    column.elements.length > 0 && column.elements.every((e) => e.type === 'component'),
+  );
 </script>
 
-<div class="shpd-form-column">
+<div class="shpd-form-column" class:shpd-form-column--fill={fillOnly}>
   {#each column.elements as element, i (element.column ?? `${element.type}-${i}`)}
     <FormElement
       {element}
@@ -41,5 +47,19 @@
     column-gap: var(--shpd-space-md);
     row-gap: var(--shpd-space-sm);
     align-items: baseline;
+    /* When a sibling column (e.g. attachment previews) is taller, the section
+       grid stretches this container; without this the rows would spread out
+       to fill it. Keep fields packed at the top instead. */
+    align-content: start;
+  }
+
+  /* Component-only column: stretch the single row so the component can fill
+     the full height given by the sibling column (section grid stretches the
+     container; the component itself must not drive the row height). */
+  .shpd-form-column--fill {
+    grid-template-rows: 1fr;
+    align-content: stretch;
+    align-items: stretch;
+    min-height: 0;
   }
 </style>

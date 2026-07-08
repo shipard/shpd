@@ -137,11 +137,16 @@ Fulltext hledá v `subject`, `sender_email`, `sender_name`, `body_plain`.
 
 ### 6.2 Formulář (`IncomingMessagesForm`)
 
-PHP třída extends `TableForm`. Dva taby:
+PHP třída extends `TableForm`. Tři taby:
 
-1. **Zpráva** — schránka (select), datum doručení, primární typ (select),
-   odesílatel (email + jméno), předmět, tělo (textarea)
-2. **Přílohy** — standardní `AttachmentPanel` (drag & drop, tableId = 303)
+1. **Zpráva** — dva sloupce (1:1). Vlevo primární typ (select),
+   odesílatel (email + jméno), předmět, tělo (textarea); vpravo
+   read-only náhledy příloh (`component` `attachmentsView`, PDF a
+   obrázky nahoře, scroll uvnitř sloupce — fill mechanismus, viz
+   `docs/edit-forms.md` / Layout)
+2. **Přílohy** — standardní `AttachmentPanel` (drag & drop, tableId = 303);
+   správa příloh (upload / mazání / přejmenování)
+3. **Nastavení** — schránka (select, trigger reload) a datum doručení
 
 Změna schránky spustí `recalculate` — pokud uživatel nemá `primary_type`
 vyplněný, doplní se `mailbox.default_primary_type` (fallback `other`).

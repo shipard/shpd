@@ -300,6 +300,7 @@ class JsoncFormLoader
             elements: $elements,
             content: $elData['content'] ?? null,
             componentName: $elData['componentName'] ?? null,
+            params: $elData['params'] ?? null,
             inputType: $inputType,
             lookup: $lookup,
         );

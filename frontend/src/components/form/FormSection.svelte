@@ -61,6 +61,22 @@
     gap: var(--shpd-space-xl);
   }
 
+  /* Sekce s fill sloupcem (např. náhledy příloh) roste na celou výšku
+     tabu; grid se sloupci vyplní zbytek karty a jeho řádek se natáhne
+     (align-content default stretch) — levý sloupec drží pole nahoře
+     (align-content: start), fill sloupec dostane celou výšku. */
+  .shpd-form-section:has(:global(.shpd-form-column--fill)) {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .shpd-form-section:has(:global(.shpd-form-column--fill)) .shpd-form-section__columns {
+    flex: 1;
+    min-height: 0;
+  }
+
   /* Breakpoint 768px ladí s MOBILE_BREAKPOINT v layout.svelte.js
      (konzistentní s ostatní mobilní prací). Na mobilu se sloupce
      skládají pod sebe; gap přepneme z xl (vodorovná mezera mezi

@@ -12,9 +12,10 @@ use Shipard\Core\Form\TableForm;
 /**
  * Formulář pro ruční pořízení / úpravu došlé zprávy.
  *
- * Layout odpovídá spec §6.1 — dva taby:
- *   1) „Zpráva" — všechny hlavičky + tělo
+ * Layout odpovídá spec §6.1 — tři taby:
+ *   1) „Zpráva" — všechny hlavičky + tělo, vpravo read-only náhledy příloh
  *   2) „Přílohy" — standardní attachments panel (tableId = 303)
+ *   3) „Nastavení" — schránka + datum doručení
  *
  * `source_type` (zdroj) ani `message_id` (lidský kód) se v UI neupravují —
  * Form je nevystavuje, Document je nastaví v beforeSave.
@@ -25,16 +26,11 @@ class IncomingMessagesForm extends TableForm
     {
         $mailboxOptions = $this->resolveMailboxOptions();
         $primaryTypeOptions = $this->resolvePrimaryTypeOptions();
+        $tableId = $this->tableDef?->tableId ?? 0;
 
         $basic = $this->tab('basic', 'Zpráva')
             ->section()
                 ->col()
-                    ->select('mailbox',
-                        options: $mailboxOptions,
-                        required: true,
-                        triggers: 'reload',
-                    )
-                    ->datetime('received_at', required: true)
                     ->select('primary_type',
                         options: $primaryTypeOptions,
                         required: true,
@@ -47,9 +43,22 @@ class IncomingMessagesForm extends TableForm
                     ->textarea('body_plain',
                         hint: 'Prostý text zprávy. HTML varianta se v Fázi 1 neupravuje ručně — vzniká jen přes import.',
                     )
+                ->col()
+                    ->component('attachmentsView', params: ['table_id' => $tableId])
             ->build();
 
-        $tabs = [$basic, $this->attachmentsTab()];
+        $settings = $this->tab('settings', 'Nastavení')
+            ->section()
+                ->col()
+                    ->select('mailbox',
+                        options: $mailboxOptions,
+                        required: true,
+                        triggers: 'reload',
+                    )
+                    ->datetime('received_at', required: true)
+            ->build();
+
+        $tabs = [$basic, $this->attachmentsTab(), $settings];
 
         return new FormDefinition(
             table: $this->table,

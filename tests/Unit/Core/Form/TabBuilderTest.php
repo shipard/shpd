@@ -275,6 +275,18 @@ class TabBuilderTest extends TestCase
         $el = $tab->sections[0]->columns[0]->elements[0];
         $this->assertSame('component', $el->type);
         $this->assertSame('recapitulation', $el->componentName);
+        $this->assertNull($el->params);
+    }
+
+    public function testComponentWithParams(): void
+    {
+        $tab = (new TabBuilder('t', 'T'))
+            ->section()->col()->component('attachmentsView', params: ['table_id' => 303])
+            ->build();
+        $el = $tab->sections[0]->columns[0]->elements[0];
+        $this->assertSame('component', $el->type);
+        $this->assertSame('attachmentsView', $el->componentName);
+        $this->assertSame(['table_id' => 303], $el->params);
     }
 
     public function testTriggers(): void

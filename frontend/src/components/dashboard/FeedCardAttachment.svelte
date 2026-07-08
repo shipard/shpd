@@ -14,8 +14,11 @@
   let { att } = $props();
 
   const PREVIEW_DELAY_MS = 300;
-  const PREVIEW_WIDTH = 320;
   const PREVIEW_MARGIN = 8;
+  /* Pod tuhle šířku nemá boční náhled smysl → fallback nad/pod chip. */
+  const PREVIEW_MIN_WIDTH = 280;
+  /* Musí ladit s max-height .shpd-feed-att__preview (90vh). */
+  const PREVIEW_MAX_HEIGHT_VH = 0.9;
 
   // Mime → ikona pro přílohy bez náhledu (mirror AttachmentGrid.attachmentIcon).
   function attachmentIcon(mime) {
@@ -39,18 +42,47 @@
   function openPreview() {
     if (!chipEl) return;
     const rect = chipEl.getBoundingClientRect();
+    const maxHeight = window.innerHeight * PREVIEW_MAX_HEIGHT_VH;
+
+    // Cílová šířka ~3/4 max výšky — většina příloh je portrét (A4 faktury),
+    // širší popup by kolem obrázku nechával prázdné pruhy.
+    const desiredWidth = Math.round(maxHeight * 0.75);
+
+    // Preferovaně vpravo vedle chipu; vlevo jen když tam je víc místa a
+    // vpravo se plná šířka nevejde. Svisle centrovaný na chip s clampem,
+    // aby popup (max 90vh) zůstal ve viewportu.
+    const spaceRight = window.innerWidth - rect.right - 2 * PREVIEW_MARGIN;
+    const spaceLeft = rect.left - 2 * PREVIEW_MARGIN;
+    const side = spaceRight >= Math.min(desiredWidth, spaceLeft) ? 'right' : 'left';
+    const width = Math.min(desiredWidth, side === 'right' ? spaceRight : spaceLeft);
+
+    if (width >= PREVIEW_MIN_WIDTH) {
+      const left = side === 'right'
+        ? rect.right + PREVIEW_MARGIN
+        : rect.left - PREVIEW_MARGIN - width;
+      const halfMax = maxHeight / 2;
+      const centerY = Math.min(
+        Math.max(rect.top + rect.height / 2, PREVIEW_MARGIN + halfMax),
+        window.innerHeight - PREVIEW_MARGIN - halfMax,
+      );
+      previewStyle = `width:${width}px; left:${left}px; top:${centerY}px; transform:translateY(-50%);`;
+      previewOpen = true;
+      return;
+    }
+
+    // Úzké okno bez místa po stranách → nad chipem (kotva přes bottom —
+    // výška popupu je auto), při nedostatku místa nahoře pod ním.
+    const fallbackWidth = Math.min(desiredWidth, window.innerWidth - 2 * PREVIEW_MARGIN);
     const left = Math.min(
-      Math.max(rect.left + rect.width / 2 - PREVIEW_WIDTH / 2, PREVIEW_MARGIN),
-      window.innerWidth - PREVIEW_WIDTH - PREVIEW_MARGIN,
+      Math.max(rect.left + rect.width / 2 - fallbackWidth / 2, PREVIEW_MARGIN),
+      window.innerWidth - fallbackWidth - PREVIEW_MARGIN,
     );
-    // Preferovaně nad chipem (kotva přes bottom — výška popupu je auto),
-    // při nedostatku místa nahoře pod ním; vodorovně clamp do viewportu.
     const spaceAbove = rect.top;
     const spaceBelow = window.innerHeight - rect.bottom;
     const above = spaceAbove >= 320 || spaceAbove >= spaceBelow;
     previewStyle = above
-      ? `left:${left}px; bottom:${window.innerHeight - rect.top + PREVIEW_MARGIN}px;`
-      : `left:${left}px; top:${rect.bottom + PREVIEW_MARGIN}px;`;
+      ? `width:${fallbackWidth}px; left:${left}px; bottom:${window.innerHeight - rect.top + PREVIEW_MARGIN}px;`
+      : `width:${fallbackWidth}px; left:${left}px; top:${rect.bottom + PREVIEW_MARGIN}px;`;
     previewOpen = true;
   }
 
@@ -105,7 +137,7 @@
   </a>
   {#if previewOpen}
     <div class="shpd-feed-att__preview" style={previewStyle}>
-      <img src={thumbnailUrl(att.id, 480)} alt={att.name} />
+      <img src={thumbnailUrl(att.id, 1600)} alt={att.name} />
       <div class="shpd-feed-att__preview-caption">
         <span class="shpd-feed-att__preview-name">{att.name}</span>
         <span class="shpd-feed-att__preview-size">{formatFileSize(att.file_size)}</span>
@@ -163,11 +195,15 @@
     text-overflow: ellipsis;
   }
 
-  /* Fixed — nesmí ho oříznout karta; čistě informační, bez interakce. */
+  /* Fixed — nesmí ho oříznout karta; čistě informační, bez interakce.
+     Šířku počítá openPreview() (inline style, dle volného místa);
+     max-height musí ladit s PREVIEW_MAX_HEIGHT_VH (clamp svislé pozice). */
   .shpd-feed-att__preview {
     position: fixed;
     z-index: 1000;
-    width: 320px;
+    display: flex;
+    flex-direction: column;
+    max-height: 90vh;
     padding: var(--shpd-space-sm);
     border: 1px solid var(--shpd-color-border);
     border-radius: var(--shpd-radius-md);
@@ -180,7 +216,7 @@
     display: block;
     width: 100%;
     height: auto;
-    max-height: 60vh;
+    min-height: 0;
     object-fit: contain;
     border-radius: var(--shpd-radius-sm);
     background: var(--shpd-color-bg-secondary);
@@ -193,6 +229,7 @@
     gap: var(--shpd-space-sm);
     margin-top: var(--shpd-space-xs);
     min-width: 0;
+    flex-shrink: 0;
   }
 
   .shpd-feed-att__preview-name {

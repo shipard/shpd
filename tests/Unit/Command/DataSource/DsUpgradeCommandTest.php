@@ -125,6 +125,43 @@ class DsUpgradeCommandTest extends TestCase
         ]));
     }
 
+    /**
+     * Minimal core.mail + core.ai fixture modules (empty tables) — enough
+     * to pass the module guard in provisionAiAnalyzer(). The real modules
+     * are not used so the test doesn't depend on their table definitions.
+     */
+    private function createAiFixtureModules(): void
+    {
+        foreach ([
+            'core/ai'   => ['id' => 'core.ai', 'dependencies' => []],
+            'core/mail' => ['id' => 'core.mail', 'dependencies' => ['core.ai']],
+        ] as $dir => $def) {
+            $moduleDir = $this->modulesPath . '/' . $dir;
+            mkdir($moduleDir, 0755, true);
+            file_put_contents($moduleDir . '/module.jsonc', json_encode($def + [
+                'name'       => $def['id'],
+                'tables'     => [],
+                'extensions' => [],
+                'config'     => [],
+            ]));
+        }
+    }
+
+    private function createSkipProvisioningConfig(array $modules): DataSourceConfig&MockObject
+    {
+        $dsConfig = $this->createMock(DataSourceConfig::class);
+        $dsConfig->method('getModules')->willReturn($modules);
+        $dsConfig->method('getName')->willReturn('Test DS');
+        $dsConfig->method('getId')->willReturn('test-0001-test-0001');
+        $dsConfig->method('getDatabaseName')->willReturn('test_db');
+        $dsConfig->method('getDatabaseUser')->willReturn('shpd_test0001');
+        $dsConfig->method('getDatabasePassword')->willReturn('secret');
+        $dsConfig->method('getDataSourceDir')->willReturn($this->dsDir);
+        $dsConfig->method('shouldSkipProvisioning')->willReturn(true);
+
+        return $dsConfig;
+    }
+
     private function createCommandTester(): CommandTester
     {
         $command = new TestableDsUpgradeCommand(
@@ -382,15 +419,7 @@ class DsUpgradeCommandTest extends TestCase
 
     public function testUpgradeSkipsProvisioningWhenConfigured(): void
     {
-        $this->dsConfig = $this->createMock(DataSourceConfig::class);
-        $this->dsConfig->method('getModules')->willReturn(['test.unit']);
-        $this->dsConfig->method('getName')->willReturn('Test DS');
-        $this->dsConfig->method('getId')->willReturn('test-0001-test-0001');
-        $this->dsConfig->method('getDatabaseName')->willReturn('test_db');
-        $this->dsConfig->method('getDatabaseUser')->willReturn('shpd_test0001');
-        $this->dsConfig->method('getDatabasePassword')->willReturn('secret');
-        $this->dsConfig->method('getDataSourceDir')->willReturn($this->dsDir);
-        $this->dsConfig->method('shouldSkipProvisioning')->willReturn(true);
+        $this->dsConfig = $this->createSkipProvisioningConfig(['test.unit']);
 
         $this->dsConnection->method('getTableColumns')->willReturn([]);
         $this->dsConnection->method('getTableIndexes')->willReturn([]);
@@ -403,6 +432,50 @@ class DsUpgradeCommandTest extends TestCase
         $display = $tester->getDisplay();
         $this->assertStringContainsString('Provisioning disabled via config', $display);
         $this->assertStringContainsString('Upgrade complete.', $display);
+        // AI analyzer už není součástí gatovaného provisioningu — hláška
+        // ho nesmí uvádět mezi přeskočenými položkami.
+        $this->assertStringNotContainsString('AI analyzer', $display);
+    }
+
+    public function testAiAnalyzerProvisionedUnderSkipProvisioning(): void
+    {
+        $this->createAiFixtureModules();
+        $this->dsConfig = $this->createSkipProvisioningConfig(['test.unit', 'core.mail']);
+
+        // fetchRow → null (mock default) = nic neexistuje, provisioner jde
+        // do CREATE větví přes mocked insertRow.
+        $this->dsConnection->method('getTableColumns')->willReturn([]);
+        $this->dsConnection->method('getTableIndexes')->willReturn([]);
+        $this->dsConnection->method('executeSQL');
+
+        $tester = $this->createCommandTester();
+        $exitCode = $tester->execute([]);
+
+        $this->assertSame(Command::SUCCESS, $exitCode);
+        $display = $tester->getDisplay();
+        $this->assertStringContainsString("[CREATE] user '_ai_analyzer'", $display);
+        $this->assertStringContainsString("[CREATE] backend 'default'", $display);
+        $this->assertStringContainsString("[CREATE] profile 'czech_invoices'", $display);
+        $this->assertStringContainsString('Provisioning disabled via config', $display);
+    }
+
+    public function testAiAnalyzerSkippedWithoutMailModule(): void
+    {
+        $this->dsConfig = $this->createSkipProvisioningConfig(['test.unit']);
+
+        // Bez fixture core.mail/core.ai — guard musí vrátit před prvním
+        // SQL na mail/ai tabulky.
+        $this->dsConnection->method('getTableColumns')->willReturn([]);
+        $this->dsConnection->method('getTableIndexes')->willReturn([]);
+        $this->dsConnection->method('executeSQL');
+        $this->dsConnection->expects($this->never())->method('fetchRow');
+        $this->dsConnection->expects($this->never())->method('insertRow');
+
+        $tester = $this->createCommandTester();
+        $exitCode = $tester->execute([]);
+
+        $this->assertSame(Command::SUCCESS, $exitCode);
+        $this->assertStringNotContainsString('_ai_analyzer', $tester->getDisplay());
     }
 
     private function rmdirRecursive(string $dir): void

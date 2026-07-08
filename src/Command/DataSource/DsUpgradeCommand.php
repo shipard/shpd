@@ -266,11 +266,18 @@ class DsUpgradeCommand extends Command
         // skupinu/účty přeskočí dle number/code).
         $this->provisionClearingInfrastructure($resolvedModules, $dsConnection, $output);
 
+        // AI analyzer (user, backend, profil + version sync ze šablony) se
+        // zajišťuje BEZPODMÍNEČNĚ — i pod skipProvisioning. Není to migrovaná
+        // data, ale systémový kontrakt modulů core.mail/core.ai. Idempotentní;
+        // klíče (backend key, analyzer API key) přežívají ds-reset přes
+        // keepOnReset, takže po resetu není potřeba žádná ruční akce.
+        $this->provisionAiAnalyzer($resolvedModules, $dsConnection, $output);
+
         if ($dsConfig->shouldSkipProvisioning()) {
             $output->writeln('');
             $output->writeln("<comment>[SKIP] Provisioning disabled via config (skipProvisioning=true).</comment>");
             $output->writeln("<comment>       No reference data (units, item kinds, fiscal years, VAT periods,</comment>");
-            $output->writeln("<comment>       number series, mail router, AI analyzer) was generated.</comment>");
+            $output->writeln("<comment>       number series, mail router) was generated.</comment>");
             $output->writeln("<comment>       Set skipProvisioning=false in config/main.json and re-run</comment>");
             $output->writeln("<comment>       ds-upgrade once the import is complete.</comment>");
         } else {
@@ -282,7 +289,6 @@ class DsUpgradeCommand extends Command
             $this->provisionVatPeriods($resolvedModules, $dsConnection, $output);
             $this->provisionDocCoreNumberSeries($resolvedModules, $dsDir, $dsConnection, $output);
             $this->provisionMailRouter($dsConfig, $dsConnection, $output);
-            $this->provisionAiAnalyzer($dsConfig, $dsConnection, $output);
         }
 
         $secretsWarnings = DsSecretCipher::healthCheck($dsConfig);
@@ -353,13 +359,26 @@ class DsUpgradeCommand extends Command
         }
     }
 
+    /**
+     * @param list<\Shipard\Core\Module\ModuleDefinition> $resolvedModules
+     */
     private function provisionAiAnalyzer(
-        DataSourceConfig $dsConfig,
+        array $resolvedModules,
         DataSourceConnection $dsConnection,
         OutputInterface $output,
     ): void {
         $output->writeln('', OutputInterface::VERBOSITY_VERBOSE);
         $output->writeln('Provisioning AI analyzer...', OutputInterface::VERBOSITY_VERBOSE);
+
+        // core.mail deklaruje dependency na core.ai — druhá podmínka je
+        // defenzivní. Bez guardu by bezpodmínečné volání na DS bez mail
+        // modulu spadlo na chybějících tabulkách.
+        if (!$this->isModuleActive($resolvedModules, 'core.mail')
+            || !$this->isModuleActive($resolvedModules, 'core.ai')
+        ) {
+            $output->writeln('  <comment>[SKIP] core.mail / core.ai module not active</comment>', OutputInterface::VERBOSITY_VERBOSE);
+            return;
+        }
 
         $provisioner = new AIAnalyzerProvisioner($dsConnection);
         $result = $provisioner->provision();

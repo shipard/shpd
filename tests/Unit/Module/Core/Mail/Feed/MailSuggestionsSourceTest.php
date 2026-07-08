@@ -20,18 +20,22 @@ use Shipard\Module\Core\Mail\Feed\MailSuggestionsSource;
  *   - karta „Není faktura" (kind info, akce trash/archive/open_viewer)
  *   - titulek z cfgItem doc typu + partner z canonical, podtitulek
  *     (částka · jistota · e-mail)
+ *   - přílohy karet: struktura, řazení, vyloučení raw .eml, filtr dle
+ *     source_attachments + fallback, strop 3 + attachmentsTotal
  *   - prázdný vstup → []
  */
 final class MailSuggestionsSourceTest extends TestCase
 {
     /**
-     * Sestaví FeedContext s DB mockem, který routuje tři SELECTy zdroje
-     * podle tvaru SQL: notInvoice (NOT EXISTS subquery), suggestion
-     * (JOIN na extracted_documents), error (zbytek — messages tabulka).
+     * Sestaví FeedContext s DB mockem, který routuje SELECTy zdroje podle
+     * tvaru SQL: batch příloh (core_attachments_files), notInvoice
+     * (NOT EXISTS subquery), suggestion (JOIN na extracted_documents),
+     * error (zbytek — messages tabulka).
      *
      * @param list<array<string,mixed>> $suggestionRows
      * @param list<array<string,mixed>> $errorRows
      * @param list<array<string,mixed>> $notInvoiceRows
+     * @param list<array<string,mixed>> $attachmentRows
      */
     private function context(
         array $suggestionRows,
@@ -39,10 +43,14 @@ final class MailSuggestionsSourceTest extends TestCase
         ?ConfigRuntime $config = null,
         string $lang = 'cs',
         array $notInvoiceRows = [],
+        array $attachmentRows = [],
     ): FeedContext {
         $db = $this->createMock(DataSourceConnection::class);
         $db->method('fetchAll')->willReturnCallback(
-            static function (string $sql) use ($suggestionRows, $errorRows, $notInvoiceRows): array {
+            static function (string $sql) use ($suggestionRows, $errorRows, $notInvoiceRows, $attachmentRows): array {
+                if (str_contains($sql, 'core_attachments_files')) {
+                    return $attachmentRows;
+                }
                 if (str_contains($sql, 'NOT EXISTS')) {
                     return $notInvoiceRows;
                 }
@@ -50,6 +58,24 @@ final class MailSuggestionsSourceTest extends TestCase
             },
         );
         return new FeedContext($db, $config, $lang, 30);
+    }
+
+    /** @return array<string,mixed> */
+    private function attachmentRow(
+        int $id,
+        int $recordId,
+        string $name,
+        string $mime = 'application/pdf',
+        int $size = 245760,
+    ): array {
+        return [
+            'id'        => $id,
+            'record_id' => $recordId,
+            'name'      => $name,
+            'file_name' => $name,
+            'mime_type' => $mime,
+            'file_size' => $size,
+        ];
     }
 
     private function docTypesConfig(): ConfigRuntime
@@ -261,5 +287,124 @@ final class MailSuggestionsSourceTest extends TestCase
         $src = new MailSuggestionsSource();
         $cards = $src->collectCards($this->context([$row], [], $this->docTypesConfig()));
         $this->assertStringEndsWith('— Odběratel a.s.', $cards[0]['title']);
+    }
+
+    // ── Přílohy karet ────────────────────────────────────────────────────
+
+    public function testCardCarriesAttachmentsWithStructureAndOrder(): void
+    {
+        // Zpráva 101 (suggestionRow ndx=1) se dvěma obsahovými přílohami;
+        // pořadí z batch dotazu (att_order) se zachovává.
+        $atts = [
+            $this->attachmentRow(11, 101, 'Faktura.pdf'),
+            $this->attachmentRow(12, 101, 'scan-001.jpg', 'image/jpeg', 102400),
+        ];
+        $src = new MailSuggestionsSource();
+        $cards = $src->collectCards(
+            $this->context([$this->suggestionRow(10)], [], $this->docTypesConfig(), 'cs', [], $atts),
+        );
+
+        $card = $cards[0];
+        $this->assertSame(2, $card['attachmentsTotal']);
+        $this->assertSame(
+            [
+                ['id' => 11, 'name' => 'Faktura.pdf', 'mime_type' => 'application/pdf', 'file_size' => 245760],
+                ['id' => 12, 'name' => 'scan-001.jpg', 'mime_type' => 'image/jpeg', 'file_size' => 102400],
+            ],
+            $card['attachments'],
+        );
+    }
+
+    public function testRawEmlAttachmentIsExcluded(): void
+    {
+        $row = [
+            'message_ndx'           => 777,
+            'subject'               => 'Nabídka spolupráce',
+            'sender_name'           => 'Obchodník a.s.',
+            'sender_email'          => 'obchod@example.com',
+            'received_at'           => '2026-06-29 08:00:00',
+            'primary_type'          => 'other',
+            'raw_source_attachment' => 99,
+        ];
+        $atts = [
+            $this->attachmentRow(5, 777, 'letak.pdf'),
+            $this->attachmentRow(99, 777, 'message.eml', 'message/rfc822'),
+        ];
+        $src = new MailSuggestionsSource();
+        $cards = $src->collectCards($this->context([], [], null, 'cs', [$row], $atts));
+
+        $this->assertSame([5], array_column($cards[0]['attachments'], 'id'));
+        $this->assertSame(1, $cards[0]['attachmentsTotal']);
+    }
+
+    public function testSuggestionAttachmentsFilteredBySourceAttachments(): void
+    {
+        $row = $this->suggestionRow(10);
+        $row['source_attachments'] = json_encode([12]);
+        $atts = [
+            $this->attachmentRow(11, 101, 'priloha-a.pdf'),
+            $this->attachmentRow(12, 101, 'faktura.pdf'),
+            $this->attachmentRow(13, 101, 'priloha-c.pdf'),
+        ];
+        $src = new MailSuggestionsSource();
+        $cards = $src->collectCards($this->context([$row], [], $this->docTypesConfig(), 'cs', [], $atts));
+
+        $this->assertSame([12], array_column($cards[0]['attachments'], 'id'));
+        $this->assertSame(1, $cards[0]['attachmentsTotal']);
+    }
+
+    public function testSuggestionAttachmentsFallBackOnInvalidSourceAttachments(): void
+    {
+        $atts = [
+            $this->attachmentRow(11, 101, 'priloha-a.pdf'),
+            $this->attachmentRow(12, 101, 'faktura.pdf'),
+        ];
+
+        foreach (['not-json', '[]', json_encode([999])] as $sourceAttachments) {
+            $row = $this->suggestionRow(10);
+            $row['source_attachments'] = $sourceAttachments;
+            $src = new MailSuggestionsSource();
+            $cards = $src->collectCards($this->context([$row], [], $this->docTypesConfig(), 'cs', [], $atts));
+
+            // Nevalidní JSON / prázdné pole / žádný průnik → všechny obsahové přílohy.
+            $this->assertSame([11, 12], array_column($cards[0]['attachments'], 'id'), "source_attachments={$sourceAttachments}");
+        }
+    }
+
+    public function testAttachmentsCappedAtThreeWithTotal(): void
+    {
+        $atts = [];
+        foreach ([21, 22, 23, 24, 25] as $i => $id) {
+            $atts[] = $this->attachmentRow($id, 101, sprintf('priloha-%d.pdf', $i + 1));
+        }
+        $src = new MailSuggestionsSource();
+        $cards = $src->collectCards(
+            $this->context([$this->suggestionRow(10)], [], $this->docTypesConfig(), 'cs', [], $atts),
+        );
+
+        $this->assertSame([21, 22, 23], array_column($cards[0]['attachments'], 'id'));
+        $this->assertSame(5, $cards[0]['attachmentsTotal']);
+    }
+
+    public function testCardWithoutAttachmentsHasNoAttachmentKeys(): void
+    {
+        $src = new MailSuggestionsSource();
+        $cards = $src->collectCards($this->context([$this->suggestionRow(10)], [], $this->docTypesConfig()));
+
+        $this->assertArrayNotHasKey('attachments', $cards[0]);
+        $this->assertArrayNotHasKey('attachmentsTotal', $cards[0]);
+    }
+
+    public function testAttachmentBatchQueryNotRunWithoutCards(): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchAll')->willReturnCallback(
+            function (string $sql): array {
+                $this->assertStringNotContainsString('core_attachments_files', $sql);
+                return [];
+            },
+        );
+        $src = new MailSuggestionsSource();
+        $this->assertSame([], $src->collectCards(new FeedContext($db, null, 'cs', 30)));
     }
 }

@@ -36,11 +36,29 @@ use Shipard\Module\Core\Mail\ExtractedDocumentDocument;
  * Akce se emitují bez `label` — frontend je lokalizuje podle `action.id`
  * (i18n klíče `dashboard.card.action.*`). Podtitulek a titulek jsou naopak
  * složené na serveru (data-driven), lokalizované dle `ctx->language`.
+ *
+ * Přílohy: každá karta s ≥1 obsahovou přílohou zprávy nese volitelná pole
+ * `attachments` (max MAX_CARD_ATTACHMENTS položek `{id, name, mime_type,
+ * file_size}` — struktura shodná s fetchContentAttachments() ve vieweru)
+ * + `attachmentsTotal` (počet před stropem). Návrhové karty filtrují na
+ * `source_attachments` extracted dokladu (fallback všechny obsahové přílohy),
+ * chybové a „Není faktura" karty nesou všechny obsahové přílohy. Raw `.eml`
+ * (`raw_source_attachment`) se vylučuje vždy. Jeden batch dotaz na collect.
  */
 final class MailSuggestionsSource implements FeedSource
 {
     private const EXTRACTED_TABLE = 'core_mail_extracted_documents';
     private const MESSAGES_TABLE  = 'core_mail_incoming_messages';
+    private const ATTACHMENTS_TABLE = 'core_attachments_files';
+
+    /**
+     * tableId tabulky `core_mail_incoming_messages` — viewer používá literál
+     * 303 přímo (IncomingMessagesViewer::fetchContentAttachments), nesjednocovat teď.
+     */
+    private const MESSAGES_TABLE_ID = 303;
+
+    /** Strop počtu příloh na kartě; nad strop frontend kreslí „+N". */
+    private const MAX_CARD_ATTACHMENTS = 3;
 
     /** analysis_state zprávy (core.mail.analysisStates). */
     private const ANALYSIS_ANALYZED = 30;
@@ -60,24 +78,50 @@ final class MailSuggestionsSource implements FeedSource
 
     public function collectCards(FeedContext $ctx): array
     {
-        return [
-            ...$this->suggestionCards($ctx),
-            ...$this->errorCards($ctx),
-            ...$this->notInvoiceCards($ctx),
-        ];
+        $suggestionRows = $this->fetchSuggestionRows($ctx);
+        $errorRows      = $this->fetchErrorRows($ctx);
+        $notInvoiceRows = $this->fetchNotInvoiceRows($ctx);
+
+        $attachmentsByMessage = $this->fetchAttachmentsByMessage(
+            $ctx,
+            [...$suggestionRows, ...$errorRows, ...$notInvoiceRows],
+        );
+
+        $cards = [];
+        foreach ($suggestionRows as $row) {
+            $messageAttachments = $attachmentsByMessage[(int) $row['message_ndx']] ?? [];
+            $cards[] = $this->withAttachments(
+                $this->buildSuggestionCard($ctx, $row),
+                $this->suggestionAttachments($row, $messageAttachments),
+            );
+        }
+        foreach ($errorRows as $row) {
+            $cards[] = $this->withAttachments(
+                $this->buildErrorCard($ctx, $row),
+                $attachmentsByMessage[(int) $row['message_ndx']] ?? [],
+            );
+        }
+        foreach ($notInvoiceRows as $row) {
+            $cards[] = $this->withAttachments(
+                $this->buildNotInvoiceCard($ctx, $row),
+                $attachmentsByMessage[(int) $row['message_ndx']] ?? [],
+            );
+        }
+        return $cards;
     }
 
     /**
-     * Karty z vytěžených dokladů ve stavech 10/20/30.
+     * Řádky vytěžených dokladů ve stavech 10/20/30 pro návrhové karty.
      *
      * @return list<array<string,mixed>>
      */
-    private function suggestionCards(FeedContext $ctx): array
+    private function fetchSuggestionRows(FeedContext $ctx): array
     {
-        $rows = $ctx->db->fetchAll(
+        return $ctx->db->fetchAll(
             'SELECT `e`.`id` AS `extracted_ndx`, `e`.`message` AS `message_ndx`,'
             . ' `e`.`doc_type`, `e`.`extracted_json`, `e`.`confidence`, `e`.`status`,'
-            . ' `m`.`subject`, `m`.`sender_name`, `m`.`received_at`'
+            . ' `e`.`source_attachments`,'
+            . ' `m`.`subject`, `m`.`sender_name`, `m`.`received_at`, `m`.`raw_source_attachment`'
             . ' FROM `' . self::EXTRACTED_TABLE . '` `e`'
             . ' JOIN `' . self::MESSAGES_TABLE . '` `m` ON `m`.`id` = `e`.`message`'
             . ' WHERE `e`.`status` IN %in'
@@ -91,12 +135,6 @@ final class MailSuggestionsSource implements FeedSource
             ],
             $ctx->maxCards,
         );
-
-        $cards = [];
-        foreach ($rows as $row) {
-            $cards[] = $this->buildSuggestionCard($ctx, $row);
-        }
-        return $cards;
     }
 
     /**
@@ -152,16 +190,16 @@ final class MailSuggestionsSource implements FeedSource
     }
 
     /**
-     * Chybové karty — zprávy, u kterých permanentně selhala AI
-     * (analysis_state=70), mimo Archiv/Koš. Když dřívější klasifikace už
-     * určila `primary_type='other'`, karta degraduje z urgent na review.
+     * Řádky zpráv, u kterých permanentně selhala AI (analysis_state=70),
+     * mimo Archiv/Koš — pro chybové karty.
      *
      * @return list<array<string,mixed>>
      */
-    private function errorCards(FeedContext $ctx): array
+    private function fetchErrorRows(FeedContext $ctx): array
     {
-        $rows = $ctx->db->fetchAll(
-            'SELECT `id` AS `message_ndx`, `subject`, `sender_name`, `received_at`, `primary_type`'
+        return $ctx->db->fetchAll(
+            'SELECT `id` AS `message_ndx`, `subject`, `sender_name`, `received_at`, `primary_type`,'
+            . ' `raw_source_attachment`'
             . ' FROM `' . self::MESSAGES_TABLE . '`'
             . ' WHERE `analysis_state` = %i AND `docState` NOT IN %in'
             . ' ORDER BY `received_at` DESC, `id` DESC'
@@ -170,43 +208,48 @@ final class MailSuggestionsSource implements FeedSource
             [self::DOC_STATE_ARCHIVED, self::DOC_STATE_TRASH],
             $ctx->maxCards,
         );
-
-        $cards = [];
-        foreach ($rows as $row) {
-            $messageNdx = (int) $row['message_ndx'];
-            $subject    = trim((string) ($row['subject'] ?? ''));
-            $isOther    = (string) ($row['primary_type'] ?? '') === 'other';
-            $cards[] = [
-                'id'         => 'mail_message:' . $messageNdx,
-                'source'     => 'mail',
-                'kind'       => $isOther ? 'review' : 'urgent',
-                'icon'       => 'warning',
-                'stateStyle' => 'error',
-                'title'      => $ctx->language === 'cs' ? 'Chyba analýzy e-mailu' : 'E-mail analysis failed',
-                'subtitle'   => $subject !== '' ? $this->emailSubjectLabel($ctx, $subject) : (string) ($row['sender_name'] ?? ''),
-                'timestamp'  => $this->toAtom($row['received_at'] ?? null),
-                'context'    => ['messageNdx' => $messageNdx],
-                'actions'    => [
-                    ['id' => 'reanalyze', 'kind' => 'reanalyze', 'target' => ['messageNdx' => $messageNdx], 'primary' => true],
-                    ['id' => 'openMail',  'kind' => 'open_viewer', 'target' => ['viewerId' => self::INCOMING_VIEWER, 'recordId' => $messageNdx]],
-                ],
-            ];
-        }
-        return $cards;
     }
 
     /**
-     * Karty „Není faktura" — AI klasifikovala zprávu jako `other`, zpráva
-     * zůstala v Nové a nemá žádný akční extracted doc. Jednoklikový úklid:
-     * Koš (primary) / Archiv / otevřít v došlé poště.
+     * Chybová karta — AI selhala; kind=urgent, degradace na review, když
+     * dřívější klasifikace už určila `primary_type='other'`.
+     *
+     * @param array<string,mixed> $row
+     * @return array<string,mixed>
+     */
+    private function buildErrorCard(FeedContext $ctx, array $row): array
+    {
+        $messageNdx = (int) $row['message_ndx'];
+        $subject    = trim((string) ($row['subject'] ?? ''));
+        $isOther    = (string) ($row['primary_type'] ?? '') === 'other';
+        return [
+            'id'         => 'mail_message:' . $messageNdx,
+            'source'     => 'mail',
+            'kind'       => $isOther ? 'review' : 'urgent',
+            'icon'       => 'warning',
+            'stateStyle' => 'error',
+            'title'      => $ctx->language === 'cs' ? 'Chyba analýzy e-mailu' : 'E-mail analysis failed',
+            'subtitle'   => $subject !== '' ? $this->emailSubjectLabel($ctx, $subject) : (string) ($row['sender_name'] ?? ''),
+            'timestamp'  => $this->toAtom($row['received_at'] ?? null),
+            'context'    => ['messageNdx' => $messageNdx],
+            'actions'    => [
+                ['id' => 'reanalyze', 'kind' => 'reanalyze', 'target' => ['messageNdx' => $messageNdx], 'primary' => true],
+                ['id' => 'openMail',  'kind' => 'open_viewer', 'target' => ['viewerId' => self::INCOMING_VIEWER, 'recordId' => $messageNdx]],
+            ],
+        ];
+    }
+
+    /**
+     * Řádky zpráv pro karty „Není faktura" — AI klasifikovala zprávu jako
+     * `other`, zpráva zůstala v Nové a nemá žádný akční extracted doc.
      *
      * @return list<array<string,mixed>>
      */
-    private function notInvoiceCards(FeedContext $ctx): array
+    private function fetchNotInvoiceRows(FeedContext $ctx): array
     {
-        $rows = $ctx->db->fetchAll(
+        return $ctx->db->fetchAll(
             'SELECT `m`.`id` AS `message_ndx`, `m`.`subject`, `m`.`sender_name`,'
-            . ' `m`.`sender_email`, `m`.`received_at`, `m`.`primary_type`'
+            . ' `m`.`sender_email`, `m`.`received_at`, `m`.`primary_type`, `m`.`raw_source_attachment`'
             . ' FROM `' . self::MESSAGES_TABLE . '` `m`'
             . ' WHERE `m`.`analysis_state` = %i'
             . ' AND `m`.`docState` = %i'
@@ -226,43 +269,141 @@ final class MailSuggestionsSource implements FeedSource
             ],
             $ctx->maxCards,
         );
+    }
 
-        $cards = [];
+    /**
+     * Karta „Není faktura" — jednoklikový úklid: Koš (primary) / Archiv /
+     * otevřít v došlé poště.
+     *
+     * @param array<string,mixed> $row
+     * @return array<string,mixed>
+     */
+    private function buildNotInvoiceCard(FeedContext $ctx, array $row): array
+    {
+        $messageNdx = (int) $row['message_ndx'];
+        $target = ['messageNdx' => $messageNdx];
+
+        $subtitleParts = [];
+        $subject = trim((string) ($row['subject'] ?? ''));
+        if ($subject !== '') {
+            $subtitleParts[] = $this->emailSubjectLabel($ctx, $subject);
+        }
+        $sender = trim((string) ($row['sender_name'] ?? '')) !== ''
+            ? trim((string) $row['sender_name'])
+            : trim((string) ($row['sender_email'] ?? ''));
+        if ($sender !== '') {
+            $subtitleParts[] = $sender;
+        }
+
+        return [
+            'id'         => 'mail_notinvoice:' . $messageNdx,
+            'source'     => 'mail',
+            'kind'       => 'info',
+            'icon'       => 'info',
+            'stateStyle' => 'archive',
+            'title'      => ($ctx->language === 'cs' ? 'Není faktura — ' : 'Not an invoice — ')
+                . $this->primaryTypeLabel($ctx, (string) ($row['primary_type'] ?? 'other')),
+            'subtitle'   => implode(' · ', $subtitleParts),
+            'timestamp'  => $this->toAtom($row['received_at'] ?? null),
+            'context'    => ['messageNdx' => $messageNdx],
+            'actions'    => [
+                ['id' => 'trash',    'kind' => 'trash_message',   'target' => $target, 'primary' => true],
+                ['id' => 'archive',  'kind' => 'archive_message', 'target' => $target],
+                ['id' => 'openMail', 'kind' => 'open_viewer',     'target' => ['viewerId' => self::INCOMING_VIEWER, 'recordId' => $messageNdx]],
+            ],
+        ];
+    }
+
+    /**
+     * Batch obsahových příloh pro všechny karty — jeden dotaz na celý collect.
+     * Vrací mapu messageNdx → seznam příloh (bez raw `.eml`, řazení
+     * `att_order ASC, name ASC`); struktura položky zrcadlí
+     * IncomingMessagesViewer::fetchContentAttachments().
+     *
+     * @param list<array<string,mixed>> $rows řádky s `message_ndx` + `raw_source_attachment`
+     * @return array<int, list<array{id: int, name: string, mime_type: string, file_size: int}>>
+     */
+    private function fetchAttachmentsByMessage(FeedContext $ctx, array $rows): array
+    {
+        $rawByMessage = [];
         foreach ($rows as $row) {
             $messageNdx = (int) $row['message_ndx'];
-            $target = ['messageNdx' => $messageNdx];
+            $rawByMessage[$messageNdx] = isset($row['raw_source_attachment']) && $row['raw_source_attachment'] !== null
+                ? (int) $row['raw_source_attachment']
+                : null;
+        }
+        if ($rawByMessage === []) {
+            return [];
+        }
 
-            $subtitleParts = [];
-            $subject = trim((string) ($row['subject'] ?? ''));
-            if ($subject !== '') {
-                $subtitleParts[] = $this->emailSubjectLabel($ctx, $subject);
-            }
-            $sender = trim((string) ($row['sender_name'] ?? '')) !== ''
-                ? trim((string) $row['sender_name'])
-                : trim((string) ($row['sender_email'] ?? ''));
-            if ($sender !== '') {
-                $subtitleParts[] = $sender;
-            }
+        $files = $ctx->db->fetchAll(
+            'SELECT `id`, `record_id`, `name`, `file_name`, `mime_type`, `file_size`'
+            . ' FROM `' . self::ATTACHMENTS_TABLE . '`'
+            . ' WHERE `table_id` = %i AND `record_id` IN %in AND `is_deleted` = 0'
+            . ' ORDER BY `att_order` ASC, `name` ASC',
+            self::MESSAGES_TABLE_ID,
+            array_keys($rawByMessage),
+        );
 
-            $cards[] = [
-                'id'         => 'mail_notinvoice:' . $messageNdx,
-                'source'     => 'mail',
-                'kind'       => 'info',
-                'icon'       => 'info',
-                'stateStyle' => 'archive',
-                'title'      => ($ctx->language === 'cs' ? 'Není faktura — ' : 'Not an invoice — ')
-                    . $this->primaryTypeLabel($ctx, (string) ($row['primary_type'] ?? 'other')),
-                'subtitle'   => implode(' · ', $subtitleParts),
-                'timestamp'  => $this->toAtom($row['received_at'] ?? null),
-                'context'    => ['messageNdx' => $messageNdx],
-                'actions'    => [
-                    ['id' => 'trash',    'kind' => 'trash_message',   'target' => $target, 'primary' => true],
-                    ['id' => 'archive',  'kind' => 'archive_message', 'target' => $target],
-                    ['id' => 'openMail', 'kind' => 'open_viewer',     'target' => ['viewerId' => self::INCOMING_VIEWER, 'recordId' => $messageNdx]],
-                ],
+        $byMessage = [];
+        foreach ($files as $f) {
+            $messageNdx = (int) $f['record_id'];
+            $id = (int) $f['id'];
+            if (($rawByMessage[$messageNdx] ?? null) === $id) {
+                continue; // raw .eml není obsahová příloha
+            }
+            $byMessage[$messageNdx][] = [
+                'id'        => $id,
+                'name'      => (string) ($f['name'] ?? $f['file_name']),
+                'mime_type' => (string) ($f['mime_type'] ?? ''),
+                'file_size' => (int) ($f['file_size'] ?? 0),
             ];
         }
-        return $cards;
+        return $byMessage;
+    }
+
+    /**
+     * Přílohy návrhové karty: `source_attachments` (JSON pole ndx) filtruje
+     * obsahové přílohy zprávy — uživatel vidí přímo přílohu, ze které doklad
+     * vznikl. Prázdné/nevalidní pole nebo žádný průnik → fallback na všechny
+     * obsahové přílohy. Pořadí se zachovává dle batch dotazu (att_order).
+     *
+     * @param array<string,mixed> $row
+     * @param list<array{id: int, name: string, mime_type: string, file_size: int}> $messageAttachments
+     * @return list<array{id: int, name: string, mime_type: string, file_size: int}>
+     */
+    private function suggestionAttachments(array $row, array $messageAttachments): array
+    {
+        $sourceNdx = json_decode((string) ($row['source_attachments'] ?? ''), true);
+        if (is_array($sourceNdx) && $sourceNdx !== []) {
+            $wanted = array_map('intval', array_filter($sourceNdx, 'is_numeric'));
+            $filtered = array_values(array_filter(
+                $messageAttachments,
+                static fn(array $att): bool => in_array($att['id'], $wanted, true),
+            ));
+            if ($filtered !== []) {
+                return $filtered;
+            }
+        }
+        return $messageAttachments;
+    }
+
+    /**
+     * Doplní do karty volitelná pole `attachments` (strop MAX_CARD_ATTACHMENTS)
+     * + `attachmentsTotal` (počet před stropem). Karta bez příloh pole nemá.
+     *
+     * @param array<string,mixed> $card
+     * @param list<array{id: int, name: string, mime_type: string, file_size: int}> $attachments
+     * @return array<string,mixed>
+     */
+    private function withAttachments(array $card, array $attachments): array
+    {
+        if ($attachments === []) {
+            return $card;
+        }
+        $card['attachments']      = array_slice($attachments, 0, self::MAX_CARD_ATTACHMENTS);
+        $card['attachmentsTotal'] = count($attachments);
+        return $card;
     }
 
     /** Lokalizovaný label primárního typu z cfgItem; fallback na holý key. */

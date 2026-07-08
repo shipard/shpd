@@ -95,6 +95,10 @@ Fáze 1 (widget MVP) říkala *„přehled, ne přístupový bod"*. Fáze 2 ten 
   "subtitle": "4 200,00 CZK · jistota 94 % · e-mail „Faktura 2026000123\"",
   "timestamp": "2026-06-28T10:00:00+00:00",
   "context": { "messageNdx": 123, "extractedNdx": 456, "confidence": 0.94 },
+  "attachments": [
+    { "id": 12, "name": "Faktura.pdf", "mime_type": "application/pdf", "file_size": 245760 }
+  ],
+  "attachmentsTotal": 5,
   "actions": [
     { "id": "apply",  "kind": "apply_extracted",  "target": { "extractedNdx": 456 }, "primary": true },
     { "id": "review", "kind": "review_extracted", "target": { "extractedNdx": 456 } },
@@ -107,6 +111,11 @@ Fáze 1 (widget MVP) říkala *„přehled, ne přístupový bod"*. Fáze 2 ten 
 - `stateStyle` — reuse globálních `docState_*` CSS tříd (proužek karty).
 - `timestamp` — sekundární řazení uvnitř pásma (ATOM).
 - `context` — volitelná zdrojově-specifická data.
+- `attachments` + `attachmentsTotal` — **volitelná** pole, jen mail karty
+  s ≥1 obsahovou přílohou zprávy (karty bez příloh je nemají vůbec).
+  `attachments` max 3 položky (strop dělá server), struktura položky shodná
+  s `fetchContentAttachments()` ve vieweru; `attachmentsTotal` = počet před
+  stropem — frontend kreslí `+N`, když `attachmentsTotal > attachments.length`.
 - `actions[].label` — u mail akcí **chybí**, frontend ho lokalizuje podle
   `action.id` (i18n `dashboard.card.action.*`); alert akce nesou vlastní
   pre-lokalizovaný `label` (passthrough).
@@ -162,6 +171,23 @@ Titulek: `doc_type` → label z cfgItem `core.mail.extractedDocTypes`. Podtitule
 částka + partner z `extracted_json` (kanonický doklad — protistrana dle
 `selfParty`), + jistota + zdrojový e-mail. Feed je stropovaný, takže N
 `json_decode` je únosné; denormalizace headline do sloupců je pozdější optimalizace.
+
+**Přílohy karet** — všechny tři druhy mail karet nesou volitelná pole
+`attachments`/`attachmentsTotal` (viz §4). Zdroj per druh karty:
+
+- **Návrhová karta**: přílohy z `core_mail_extracted_documents.
+  source_attachments` (JSON pole ndx) — filtr nad obsahovými přílohami
+  zprávy, pořadí dle `att_order`; prázdné/nevalidní pole nebo žádný průnik
+  → fallback na všechny obsahové přílohy zprávy.
+- **Chybová karta / „Není faktura"**: všechny obsahové přílohy zprávy.
+
+Obsahové přílohy = `core_attachments_files` s `table_id=303`
+(`core_mail_incoming_messages`), bez smazaných a bez raw `.eml`
+(`raw_source_attachment`) — stejný výběr jako
+`IncomingMessagesViewer::fetchContentAttachments()`. Batch: **jeden** dotaz
+na celý collect (`record_id IN` přes deduplikované messageNdx všech karet),
+při prázdné množině se nespouští. Strop `MAX_CARD_ATTACHMENTS = 3` dělá
+server (menší payload).
 
 ### 5.2 AlertsSource
 
@@ -270,7 +296,11 @@ frontend/src/components/dashboard/
 ├── Dashboard.svelte      — fetch, layout (feed + tasks widget), review modal,
 │                           reject prompt, toast s undo, fall-through
 ├── Feed.svelte           — seznam karet (řazení ze serveru), prázdný stav
-├── FeedCard.svelte       — jedna karta (kind proužek, ikona, akce)
+├── FeedCard.svelte       — jedna karta (kind proužek, ikona, chipy příloh, akce)
+├── FeedCardAttachment.svelte — chip přílohy: klik otevře v nové záložce
+│                           (PDF/obrázky inline, jinak download), hover
+│                           náhled (jen hover zařízení); „+N" nad strop 3
+│                           je syntetická open_viewer akce na došlou poštu
 ├── RejectReasonPrompt.svelte — sdílený prompt na důvod (feed i ViewerDetail)
 ├── AiSummaryCard.svelte  — AI shrnutí přes SSE (fallback county dle kind, §11)
 └── WidgetCard / WidgetRow — re-use pro tasks widget

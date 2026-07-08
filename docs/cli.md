@@ -268,7 +268,13 @@ opakované spuštění bez efektu, pokud se nic nezměnilo):
 3. **Config compile** — vygeneruje `compiled.{cs,en}.json` z JSONC zdrojů
 4. **Schema sync** — `CREATE TABLE` / `ADD COLUMN` / bezpečný `MODIFY`
    (nikdy nesmaže — viz [docs/table-definitions.md](table-definitions.md))
-5. **Provisioning** — výchozí číselníky a referenční data
+5. **Provisioning** — výchozí číselníky a referenční data. Součástí je i
+   **sync AI profilu** ze šablony v repu
+   (`modules/core/mail/profiles/default_czech_invoices.jsonc`): pokud má
+   šablona novější `prompt_version` než DB, aktualizuje obsahová pole
+   profilu (`[UPDATE] profile ...`). Jen upgrade — nikdy downgrade (DB
+   novější → `[WARN]`, na vědomý downgrade je `ai-profile-reload --force`);
+   admin pole (`name`, `is_default`, `is_active`, `backend`) se nedotýká
 6. **Secrets health** — varuje, pokud `secrets/secrets.key` chybí nebo má špatná práva
 
 Spustit po každém `git pull`, pokud se měnily definice tabulek nebo
@@ -534,13 +540,18 @@ sudo shpd-ds ai-profile-reload --profile=mail-classifier
 sudo shpd-ds ai-profile-reload --dry-run
 ```
 
-Načte AI profil z JSONC šablony do DB. Použít po změně profilu v repu.
+Načte AI profil z JSONC šablony do DB. Běžný upgrade (šablona s novější
+`prompt_version`) probíhá automaticky v rámci `ds-upgrade` — manuální
+příkaz slouží pro `--force` (downgrade / přepis stejné verze), `--dry-run`
+a `--template-path` scénáře. Bez `--force` odmítne stejnou nebo nižší verzi
+šablony; nikdy nepřepisuje admin pole (`name`, `is_default`, `is_active`,
+`backend`).
 
 | Opce | Význam |
 |------|--------|
-| `--profile <kód>` | Konkrétní profil (default: všechny) |
+| `--profile <kód>` | Očekávaný profil — musí odpovídat `profile_id` šablony (default: kód ze šablony) |
 | `--template-path <cesta>` | Override cesty k JSONC šabloně |
-| `--force` | Přepsat i když se hash neliší |
+| `--force` | Přepsat i při stejné či nižší verzi šablony (downgrade) |
 | `--dry-run` | Jen ukázat, co by se změnilo |
 
 #### `mail-analysis-reap`

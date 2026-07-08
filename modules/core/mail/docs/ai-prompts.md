@@ -123,17 +123,22 @@ default profil):
    `supported_doc_types`, `language`.
 2. Bumpni `prompt_version` (semver, např. `v1.1.0` → `v1.2.0`).
 3. Commit do gitu, deploy.
-4. Z DS adresáře spusť reload do DB:
+4. Z DS adresáře spusť `bin/shpd-ds ds-upgrade` — sync profilu ze šablony
+   je součástí provisioning fáze (`[UPDATE] profile 'czech_invoices':
+   v1.1.0 → v1.2.0`). Jen upgrade — se stejnou verzí je no-op, s novější
+   verzí v DB vypíše `[WARN]` a nic nepřepíše (ochrana proti náhodnému
+   downgrade nebo přepisu admin tweaků se zapomenutým bumpem).
+
+   Pro speciální případy zůstává manuální příkaz:
    ```
-   bin/shpd-ds ai-profile-reload [--dry-run]
+   bin/shpd-ds ai-profile-reload [--dry-run] [--force] [--template-path=...]
    ```
    - `--dry-run` ukáže, co se změní, bez zápisu.
-   - Bez `--force` příkaz odmítne stejnou nebo nižší verzi šablony než v DB
-     (ochrana proti náhodnému downgrade nebo přepisu admin tweaků se
-     zapomenutým bumpem).
-   - `--force` přepíše i při stejné/nižší verzi.
-   - Reload **nepřepisuje** `name`, `is_default`, `is_active`, `backend` —
-     admin si je může lokálně upravit.
+   - `--force` přepíše i při stejné/nižší verzi (vědomý downgrade).
+   - `--template-path` reload z jiné šablony než výchozí.
+
+   Sync ani reload **nepřepisují** `name`, `is_default`, `is_active`,
+   `backend` — admin si je může lokálně upravit.
 5. V UI klikni "Znova analyzovat" na vybraných zprávách — vznikne nový run,
    staré `extracted_documents` se označí `superseded`, applied/rejected
    zůstávají. Případně re-queue přes SQL.

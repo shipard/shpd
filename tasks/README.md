@@ -221,6 +221,7 @@ Evidence → API endpoint → AI analýza do dokladů. Kontrakt endpointu
 | `mail-states-and-classification.md` | Oddělení `analysis_state` od `docState` + AI klasifikace `primary_type`, karta „Není faktura“ |
 | `mail-config-viewers.md` | Viewery a formuláře pro mailové konfigurační tabulky |
 | `ai-profile-reload.md` | CLI `ai-profile-reload` — reload promptu/schématu profilu z JSONC |
+| `ai-profile-sync-in-ds-upgrade.md` | Automatický sync AI profilu ze šablony v rámci `ds-upgrade` (upgrade-only) |
 
 Daemony volající endpoint žijí v jiných repech: `mail_router:tasks/phase1.md`
 (mail-router, Python) a `ai_analyzer:tasks/phase1.md` (AI analyzer, Python).

@@ -24,6 +24,13 @@
         "core_mail_analysis_claims"
     ],
 
+    // ds-reset chrání AI profily — je to konfigurace (vč. admin úprav
+    // name/is_default/is_active a lokálně laděného promptu), ne migrovaná
+    // data. Backendy chrání analogicky core.ai.
+    "keepOnReset": [
+        "core_mail_ai_profiles"
+    ],
+
     // core_mail_incoming_messages má viewer core.mail.incoming (Došlá pošta)
     // a zůstává v hlavní navigaci — do settings nepatří.
     // AI backendy se přesunuly do core.ai (i jejich settingsItem + keepOnReset).

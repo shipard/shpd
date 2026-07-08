@@ -390,6 +390,30 @@ class DsUpgradeCommand extends Command
         } else {
             $output->writeln("  [OK]     profile 'czech_invoices' (id={$profile['id']})", OutputInterface::VERBOSITY_VERBOSE);
         }
+
+        // Sync obsahových polí profilu ze šablony v repu — upgrade-only,
+        // nikdy downgrade (na ten je 'ai-profile-reload --force'). Rozbitá
+        // šablona nesmí shodit celý ds-upgrade.
+        try {
+            $sync = $provisioner->syncProfileFromTemplate();
+        } catch (\RuntimeException $e) {
+            $output->writeln("  <comment>[WARN]   profile template — {$e->getMessage()}</comment>");
+            return;
+        }
+
+        match ($sync['status']) {
+            'updated' => $output->writeln(
+                "  [UPDATE] profile '{$sync['profile_id']}': {$sync['old_version']} → {$sync['new_version']}",
+            ),
+            'up_to_date' => $output->writeln(
+                "  [OK]     profile '{$sync['profile_id']}' at {$sync['old_version']}",
+                OutputInterface::VERBOSITY_VERBOSE,
+            ),
+            'db_newer' => $output->writeln(
+                "  <comment>[WARN]   profile '{$sync['profile_id']}': DB version {$sync['old_version']} is newer than template {$sync['new_version']} — not downgrading. Use 'ai-profile-reload --force' if intended.</comment>",
+            ),
+            'not_found' => null,
+        };
     }
 
     /**

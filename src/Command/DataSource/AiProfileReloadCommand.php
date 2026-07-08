@@ -18,8 +18,14 @@ use Symfony\Component\Console\Output\OutputInterface;
  * a language. Nepřepisuje admin-controlled pole (name, is_default, is_active,
  * backend) — admin si je mohl lokálně upravit.
  *
+ * Tenký wrapper nad AIAnalyzerProvisioner::syncProfileFromTemplate() —
+ * tutéž logiku volá automaticky ds-upgrade (upgrade-only). Manuální příkaz
+ * slouží pro --force (downgrade / same-version overwrite), --dry-run
+ * a --template-path scénáře.
+ *
  * Workflow je popsán v modules/core/mail/docs/ai-prompts.md (sekce
- * "Iterativní ladění promptu"). Specifikace: tasks/ai-profile-reload.md.
+ * "Iterativní ladění promptu"). Specifikace: tasks/ai-profile-reload.md,
+ * tasks/ai-profile-sync-in-ds-upgrade.md.
  */
 class AiProfileReloadCommand extends Command
 {
@@ -114,7 +120,7 @@ class AiProfileReloadCommand extends Command
         $force = (bool) $input->getOption('force');
         $dryRun = (bool) $input->getOption('dry-run');
 
-        $cmp = $this->compareVersions($newVersion, $currentVersion);
+        $cmp = AIAnalyzerProvisioner::compareVersions($newVersion, $currentVersion);
 
         if ($cmp === 0 && !$force) {
             $output->writeln(
@@ -141,29 +147,18 @@ class AiProfileReloadCommand extends Command
             return Command::SUCCESS;
         }
 
-        $dsConnection->updateWhere(
-            'core_mail_ai_profiles',
-            [
-                'prompt_template' => (string) $template['prompt_template'],
-                'prompt_version' => $newVersion,
-                'language' => (string) $template['language'],
-                'supported_doc_types' => json_encode(
-                    $template['supported_doc_types'],
-                    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
-                ),
-                'output_schema' => json_encode(
-                    $template['output_schema'],
-                    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
-                ),
-                'confidence_thresholds' => json_encode(
-                    $template['confidence_thresholds'],
-                    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
-                ),
-                'modified' => date('Y-m-d H:i:s'),
-            ],
-            'id = %i',
-            $profileId,
+        $provisioner = new AIAnalyzerProvisioner($dsConnection);
+        $sync = $provisioner->syncProfileFromTemplate(
+            $templatePath !== null ? (string) $templatePath : null,
+            force: $force,
         );
+
+        if ($sync['status'] !== 'updated') {
+            $output->writeln(
+                "<error>Unexpected sync status '{$sync['status']}' for profile '{$profileCode}' — nothing written.</error>",
+            );
+            return Command::FAILURE;
+        }
 
         $output->writeln(
             "<info>Updated profile '{$profileCode}' (id={$profileId}): {$currentVersion} → {$newVersion}</info>",
@@ -171,16 +166,5 @@ class AiProfileReloadCommand extends Command
         $output->writeln('Re-queue messages via UI ("Znova analyzovat") or SQL to apply the new prompt.');
 
         return Command::SUCCESS;
-    }
-
-    /**
-     * SemVer compare s tolerancí na "v" prefix (např. "v1.1.0" vs "1.1.0").
-     * version_compare zachází s nezvyklým prefixem nepředvídatelně, takže
-     * ho odstříhneme manuálně.
-     */
-    private function compareVersions(string $a, string $b): int
-    {
-        $stripped = static fn(string $v): string => ltrim($v, 'vV');
-        return version_compare($stripped($a), $stripped($b));
     }
 }

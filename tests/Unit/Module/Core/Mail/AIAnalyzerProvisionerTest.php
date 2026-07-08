@@ -14,6 +14,32 @@ use Shipard\Module\Core\Mail\AIAnalyzerProvisioner;
  */
 class AIAnalyzerProvisionerTest extends TestCase
 {
+    private ?string $tempTemplate = null;
+
+    protected function tearDown(): void
+    {
+        if ($this->tempTemplate !== null) {
+            @unlink($this->tempTemplate);
+            $this->tempTemplate = null;
+        }
+    }
+
+    private function writeTemplate(string $version, string $promptBody = 'New prompt body'): string
+    {
+        $this->tempTemplate = sys_get_temp_dir() . '/shpd_ai_provisioner_' . uniqid() . '.jsonc';
+        file_put_contents($this->tempTemplate, json_encode([
+            'profile_id' => 'czech_invoices',
+            'name' => 'České faktury (default)',
+            'language' => 'cs',
+            'prompt_version' => $version,
+            'supported_doc_types' => ['invoiceReceived', 'creditNote', 'other'],
+            'confidence_thresholds' => ['ready' => 0.9, 'review' => 0.6],
+            'prompt_template' => $promptBody,
+            'output_schema' => ['type' => 'object'],
+        ], JSON_PRETTY_PRINT));
+        return $this->tempTemplate;
+    }
+
     public function testProvisionsAllOnFreshDs(): void
     {
         $db = $this->createMock(DataSourceConnection::class);
@@ -160,5 +186,110 @@ class AIAnalyzerProvisionerTest extends TestCase
         $schema = json_decode($profile['output_schema'], true);
         $this->assertIsArray($schema);
         $this->assertSame('object', $schema['type']);
+    }
+
+    public function testSyncUpdatesWhenTemplateIsNewer(): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturn(['id' => 33, 'prompt_version' => 'v1.0.0']);
+
+        $captured = null;
+        $db->expects($this->once())
+            ->method('updateWhere')
+            ->willReturnCallback(function (string $table, array $data) use (&$captured): void {
+                $captured = ['table' => $table, 'data' => $data];
+            });
+
+        $provisioner = new AIAnalyzerProvisioner($db);
+        $result = $provisioner->syncProfileFromTemplate($this->writeTemplate('v1.2.0'));
+
+        $this->assertSame('updated', $result['status']);
+        $this->assertSame('czech_invoices', $result['profile_id']);
+        $this->assertSame(33, $result['id']);
+        $this->assertSame('v1.0.0', $result['old_version']);
+        $this->assertSame('v1.2.0', $result['new_version']);
+
+        $this->assertSame('core_mail_ai_profiles', $captured['table']);
+        $data = $captured['data'];
+        $this->assertSame('v1.2.0', $data['prompt_version']);
+        $this->assertSame('New prompt body', $data['prompt_template']);
+        $this->assertSame('cs', $data['language']);
+        $this->assertContains('invoiceReceived', json_decode($data['supported_doc_types'], true));
+        $this->assertSame('object', json_decode($data['output_schema'], true)['type']);
+        $this->assertSame(0.9, json_decode($data['confidence_thresholds'], true)['ready']);
+        $this->assertArrayHasKey('modified', $data);
+
+        // Admin-controlled pole se NESMÍ přepisovat.
+        $this->assertArrayNotHasKey('name', $data);
+        $this->assertArrayNotHasKey('is_default', $data);
+        $this->assertArrayNotHasKey('is_active', $data);
+        $this->assertArrayNotHasKey('backend', $data);
+        $this->assertArrayNotHasKey('id', $data);
+        $this->assertArrayNotHasKey('created', $data);
+    }
+
+    public function testSyncIsNoopWhenVersionsMatch(): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturn(['id' => 33, 'prompt_version' => 'v1.2.0']);
+        $db->expects($this->never())->method('updateWhere');
+
+        $provisioner = new AIAnalyzerProvisioner($db);
+        $result = $provisioner->syncProfileFromTemplate($this->writeTemplate('v1.2.0'));
+
+        $this->assertSame('up_to_date', $result['status']);
+        $this->assertSame('v1.2.0', $result['old_version']);
+    }
+
+    public function testSyncRefusesDowngradeWhenDbIsNewer(): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturn(['id' => 33, 'prompt_version' => 'v2.0.0']);
+        $db->expects($this->never())->method('updateWhere');
+
+        $provisioner = new AIAnalyzerProvisioner($db);
+        $result = $provisioner->syncProfileFromTemplate($this->writeTemplate('v1.2.0'));
+
+        $this->assertSame('db_newer', $result['status']);
+        $this->assertSame('v2.0.0', $result['old_version']);
+        $this->assertSame('v1.2.0', $result['new_version']);
+    }
+
+    public function testSyncReturnsNotFoundWithoutCreating(): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturn(null);
+        $db->expects($this->never())->method('insertRow');
+        $db->expects($this->never())->method('updateWhere');
+
+        $provisioner = new AIAnalyzerProvisioner($db);
+        $result = $provisioner->syncProfileFromTemplate($this->writeTemplate('v1.2.0'));
+
+        $this->assertSame(['status' => 'not_found', 'profile_id' => 'czech_invoices'], $result);
+    }
+
+    public function testSyncToleratesVersionPrefixMismatch(): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        // DB bez "v" prefixu, šablona s ním — pořád jde o upgrade 1.1.0 → 1.2.0
+        $db->method('fetchRow')->willReturn(['id' => 33, 'prompt_version' => '1.1.0']);
+        $db->expects($this->once())->method('updateWhere');
+
+        $provisioner = new AIAnalyzerProvisioner($db);
+        $result = $provisioner->syncProfileFromTemplate($this->writeTemplate('v1.2.0'));
+
+        $this->assertSame('updated', $result['status']);
+    }
+
+    public function testSyncForceWritesEvenAtSameVersion(): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturn(['id' => 33, 'prompt_version' => 'v1.2.0']);
+        $db->expects($this->once())->method('updateWhere');
+
+        $provisioner = new AIAnalyzerProvisioner($db);
+        $result = $provisioner->syncProfileFromTemplate($this->writeTemplate('v1.2.0'), force: true);
+
+        $this->assertSame('updated', $result['status']);
     }
 }

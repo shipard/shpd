@@ -192,6 +192,91 @@ class AIAnalyzerProvisioner
     }
 
     /**
+     * Synchronizuje obsahová pole existujícího profilu z JSONC šablony,
+     * pokud je šablona novější (SemVer na prompt_version). Admin pole
+     * (name, is_default, is_active, backend) nechává netknutá — repo
+     * šablona je source of truth jen pro obsahová pole. Bez $force nikdy
+     * nedowngraduje ani nepřepisuje shodnou verzi; s $force zapíše vždy
+     * (používá `ai-profile-reload --force`). Chybějící profil nevytváří —
+     * od toho je ensureDefaultProfile().
+     *
+     * @return array{
+     *     status: 'updated'|'up_to_date'|'db_newer'|'not_found',
+     *     profile_id: string,
+     *     id?: int,
+     *     old_version?: string,
+     *     new_version?: string
+     * }
+     */
+    public function syncProfileFromTemplate(?string $templatePath = null, bool $force = false): array
+    {
+        $template = self::loadProfileTemplate($templatePath);
+        $profileCode = (string) $template['profile_id'];
+
+        $row = $this->db->fetchRow(
+            'SELECT id, prompt_version FROM core_mail_ai_profiles WHERE profile_id = %s',
+            $profileCode,
+        );
+        if ($row === null) {
+            return ['status' => 'not_found', 'profile_id' => $profileCode];
+        }
+
+        $result = [
+            'profile_id' => $profileCode,
+            'id' => (int) $row['id'],
+            'old_version' => (string) $row['prompt_version'],
+            'new_version' => (string) $template['prompt_version'],
+        ];
+
+        if (!$force) {
+            $cmp = self::compareVersions($result['new_version'], $result['old_version']);
+            if ($cmp === 0) {
+                return ['status' => 'up_to_date'] + $result;
+            }
+            if ($cmp < 0) {
+                return ['status' => 'db_newer'] + $result;
+            }
+        }
+
+        $this->db->updateWhere(
+            'core_mail_ai_profiles',
+            [
+                'prompt_template' => (string) $template['prompt_template'],
+                'prompt_version' => $result['new_version'],
+                'language' => (string) $template['language'],
+                'supported_doc_types' => json_encode(
+                    $template['supported_doc_types'],
+                    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+                ),
+                'output_schema' => json_encode(
+                    $template['output_schema'],
+                    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+                ),
+                'confidence_thresholds' => json_encode(
+                    $template['confidence_thresholds'],
+                    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+                ),
+                'modified' => date('Y-m-d H:i:s'),
+            ],
+            'id = %i',
+            $result['id'],
+        );
+
+        return ['status' => 'updated'] + $result;
+    }
+
+    /**
+     * SemVer compare s tolerancí na "v" prefix (např. "v1.1.0" vs "1.1.0").
+     * version_compare zachází s nezvyklým prefixem nepředvídatelně, takže
+     * ho odstříhneme manuálně. Public — používá i AiProfileReloadCommand
+     * pro guard hlášky a dry-run před samotným zápisem.
+     */
+    public static function compareVersions(string $a, string $b): int
+    {
+        return version_compare(ltrim($a, 'vV'), ltrim($b, 'vV'));
+    }
+
+    /**
      * @return array{
      *     profile_id: string,
      *     name: string,

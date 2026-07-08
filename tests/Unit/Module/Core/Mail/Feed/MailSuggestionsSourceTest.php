@@ -15,9 +15,9 @@ use Shipard\Module\Core\Mail\Feed\MailSuggestionsSource;
  *
  * Pokrývají:
  *   - stavy 10/20/30 → správný kind, stateStyle a sada akcí
- *   - zpráva analysis_state=70 → urgent karta + reanalyze/open_viewer
+ *   - zpráva analysis_state=70 → urgent karta + reanalyze/open_form
  *     (degradace na review při primary_type=other)
- *   - karta „Není faktura" (kind info, akce trash/archive/open_viewer)
+ *   - karta „Není faktura" (kind info, akce trash/archive/open_form)
  *   - titulek z cfgItem doc typu + partner z canonical, podtitulek
  *     (částka · jistota · e-mail)
  *   - přílohy karet: struktura, řazení, vyloučení raw .eml, filtr dle
@@ -182,8 +182,8 @@ final class MailSuggestionsSourceTest extends TestCase
         $this->assertSame('reanalyze', $actions[0]['id']);
         $this->assertSame('reanalyze', $actions[0]['kind']);
         $this->assertSame(['messageNdx' => 555], $actions[0]['target']);
-        $this->assertSame('open_viewer', $actions[1]['kind']);
-        $this->assertSame('core.mail.incoming', $actions[1]['target']['viewerId']);
+        $this->assertSame('open_form', $actions[1]['kind']);
+        $this->assertSame('core_mail_incoming_messages', $actions[1]['target']['table']);
         $this->assertSame(555, $actions[1]['target']['recordId']);
     }
 
@@ -239,8 +239,8 @@ final class MailSuggestionsSourceTest extends TestCase
         $this->assertTrue($actions[0]['primary']);
         $this->assertSame(['messageNdx' => 777], $actions[0]['target']);
         $this->assertSame('archive_message', $actions[1]['kind']);
-        $this->assertSame('open_viewer', $actions[2]['kind']);
-        $this->assertSame('core.mail.incoming', $actions[2]['target']['viewerId']);
+        $this->assertSame('open_form', $actions[2]['kind']);
+        $this->assertSame('core_mail_incoming_messages', $actions[2]['target']['table']);
     }
 
     public function testSuggestionQueryExcludesOtherDocType(): void

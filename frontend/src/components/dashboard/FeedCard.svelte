@@ -24,13 +24,13 @@
     (card.attachmentsTotal ?? 0) - (card.attachments?.length ?? 0),
   );
 
-  // „+N" = syntetická open_viewer akce — otevře zprávu v došlé poště
+  // „+N" = syntetická open_form akce — otevře editační formulář zprávy
   // (stejný handler v Dashboard.svelte jako alert akce).
   function openMessage() {
     onAction({
       id: 'openMail',
-      kind: 'open_viewer',
-      target: { viewerId: 'core.mail.incoming', recordId: card.context?.messageNdx },
+      kind: 'open_form',
+      target: { table: 'core_mail_incoming_messages', recordId: card.context?.messageNdx },
     });
   }
 </script>

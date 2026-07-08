@@ -21,12 +21,12 @@ use Shipard\Module\Core\Mail\ExtractedDocumentDocument;
  * Doklady s `doc_type='other'` se ignorují (pojistka — prompt v2.2.0 je
  * zakazuje, starší analýzy je mohly vytvořit).
  * Chybové karty: zpráva `analysis_state=70` (Analýza selhala) mimo Archiv/Koš
- * → kind=urgent, akce reanalyze + open_viewer na došlou poštu. Když už
+ * → kind=urgent, akce reanalyze + open_form (editační formulář zprávy). Když už
  * klasifikace stihla určit `primary_type='other'` (např. při reanalyze),
  * karta degraduje na kind=review — ne-faktura není urgentní.
  * Karty „Není faktura": zpráva `analysis_state=30`, `docState=10` (Nová),
  * `primary_type='other'` a žádný akční extracted doc → kind=info s akcemi
- * Koš (primary) / Archiv / otevřít v došlé poště.
+ * Koš (primary) / Archiv / otevřít editační formulář zprávy.
  *
  * Titulek: `doc_type` → label z cfgItem `core.mail.extractedDocTypes`.
  * Podtitulek: partner + částka z `extracted_json` (kanonický doklad) + jistota
@@ -72,9 +72,6 @@ final class MailSuggestionsSource implements FeedSource
     private const PRIMARY_TYPES_CFG_ITEM = 'core.mail.primaryTypes';
 
     private const DOC_TYPES_CFG_ITEM = 'core.mail.extractedDocTypes';
-
-    /** Viewer pro navigaci „Otevřít e-mail". */
-    private const INCOMING_VIEWER = 'core.mail.incoming';
 
     public function collectCards(FeedContext $ctx): array
     {
@@ -234,7 +231,7 @@ final class MailSuggestionsSource implements FeedSource
             'context'    => ['messageNdx' => $messageNdx],
             'actions'    => [
                 ['id' => 'reanalyze', 'kind' => 'reanalyze', 'target' => ['messageNdx' => $messageNdx], 'primary' => true],
-                ['id' => 'openMail',  'kind' => 'open_viewer', 'target' => ['viewerId' => self::INCOMING_VIEWER, 'recordId' => $messageNdx]],
+                ['id' => 'openMail',  'kind' => 'open_form', 'target' => ['table' => self::MESSAGES_TABLE, 'recordId' => $messageNdx]],
             ],
         ];
     }
@@ -273,7 +270,7 @@ final class MailSuggestionsSource implements FeedSource
 
     /**
      * Karta „Není faktura" — jednoklikový úklid: Koš (primary) / Archiv /
-     * otevřít v došlé poště.
+     * otevřít editační formulář zprávy.
      *
      * @param array<string,mixed> $row
      * @return array<string,mixed>
@@ -309,7 +306,7 @@ final class MailSuggestionsSource implements FeedSource
             'actions'    => [
                 ['id' => 'trash',    'kind' => 'trash_message',   'target' => $target, 'primary' => true],
                 ['id' => 'archive',  'kind' => 'archive_message', 'target' => $target],
-                ['id' => 'openMail', 'kind' => 'open_viewer',     'target' => ['viewerId' => self::INCOMING_VIEWER, 'recordId' => $messageNdx]],
+                ['id' => 'openMail', 'kind' => 'open_form',       'target' => ['table' => self::MESSAGES_TABLE, 'recordId' => $messageNdx]],
             ],
         ];
     }

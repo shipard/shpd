@@ -158,13 +158,13 @@ prompt v2.2.0 takové dokumenty zakazuje):
 
 **Chybové karty** — zprávy `analysis_state=70` (analýza selhala) mimo
 Archiv/Koš → `kind=urgent`, `stateStyle=error`; akce `reanalyze` (primary,
-`{messageNdx}`) + `open_viewer` (`core.mail.incoming`). Když už dřívější
+`{messageNdx}`) + `open_form` (`core_mail_incoming_messages`). Když už dřívější
 klasifikace určila `primary_type='other'`, karta degraduje na `kind=review`.
 
 **Karty „Není faktura"** — zprávy `analysis_state=30`, `docState=10` (Nová),
 `primary_type='other'` bez akčního extracted docu → `kind=info`,
 `stateStyle=archive`, titulek „Není faktura — {label typu}"; akce
-`trash_message` (primary), `archive_message`, `open_viewer`. Žádné
+`trash_message` (primary), `archive_message`, `open_form`. Žádné
 auto-zavření ani digest — jedna karta per zpráva s jednoklikovým úklidem.
 
 Titulek: `doc_type` → label z cfgItem `core.mail.extractedDocTypes`. Podtitulek:
@@ -300,7 +300,7 @@ frontend/src/components/dashboard/
 ├── FeedCardAttachment.svelte — chip přílohy: klik otevře v nové záložce
 │                           (PDF/obrázky inline, jinak download), hover
 │                           náhled (jen hover zařízení); „+N" nad strop 3
-│                           je syntetická open_viewer akce na došlou poštu
+│                           je syntetická open_form akce (formulář zprávy)
 ├── RejectReasonPrompt.svelte — sdílený prompt na důvod (feed i ViewerDetail)
 ├── AiSummaryCard.svelte  — AI shrnutí přes SSE (fallback county dle kind, §11)
 └── WidgetCard / WidgetRow — re-use pro tasks widget

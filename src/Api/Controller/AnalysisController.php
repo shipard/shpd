@@ -21,6 +21,7 @@ use Shipard\Core\Security\Exception\SecretsKeyInsecureException;
 use Shipard\Core\Security\Exception\SecretsKeyMissingException;
 use Shipard\Module\Core\Attachments\AttachmentService;
 use Shipard\Module\Core\Exchange\Document\DocumentApplier;
+use Shipard\Module\Core\Exchange\Enrich\RowHistoryEnricher;
 use Shipard\Module\Core\Exchange\Schema\SchemaValidator;
 use Shipard\Module\Core\Ai\AIBackendDocument;
 use Shipard\Module\Core\Mail\AIAnalyzerProvisioner;
@@ -89,6 +90,7 @@ class AnalysisController
         private readonly ?DocumentApplier $applier = null,
         private readonly ?ConfigRuntime $configRuntime = null,
         private readonly ?DocumentEventDispatcher $eventDispatcher = null,
+        private readonly ?RowHistoryEnricher $enricher = null,
     ) {}
 
     // -------------------------------------------------------------------
@@ -1011,8 +1013,20 @@ class AnalysisController
         );
 
         if ($schemaIssues === []) {
+            $status = $this->mapConfidenceToStatus($confidence, $thresholds);
+            if ($this->enricher !== null) {
+                // Obohacení řádků z historie (D2 persist) — do extracted_json
+                // se ukládá obohacený canonical. Selhání /result nesmí shodit
+                // (analyzer by zprávu retryoval) → pokračuje se neobohaceně.
+                try {
+                    $extractedJson = $this->enricher->enrich($extractedJson);
+                } catch (\Throwable $e) {
+                    ErrorLogger::logException($e, 'AnalysisController::result row history enrichment failed');
+                }
+                $status = $this->capStatusByRowCoverage($status, $extractedJson);
+            }
             return [
-                $this->mapConfidenceToStatus($confidence, $thresholds),
+                $status,
                 (string) json_encode($extractedJson, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             ];
         }
@@ -1026,6 +1040,31 @@ class AnalysisController
             ExtractedDocumentDocument::STATUS_AI_FAILED,
             (string) json_encode($wrapped, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         ];
+    }
+
+    /**
+     * Strop statusu podle pokrytí řádků (D7): ready_to_apply smí zůstat jen
+     * když má každý item řádek položku — z AI extrakce, nebo návrhem
+     * enrichmentu. Kontační řádky (acc.record) položku nemají validně,
+     * strop se jich netýká.
+     *
+     * @param array<string, mixed> $canonical
+     */
+    private function capStatusByRowCoverage(int $status, array $canonical): int
+    {
+        if ($status !== ExtractedDocumentDocument::STATUS_READY_TO_APPLY) {
+            return $status;
+        }
+        $rows = is_array($canonical['rows'] ?? null) ? $canonical['rows'] : [];
+        foreach ($rows as $row) {
+            if (!is_array($row) || !RowHistoryEnricher::rowExpectsItem($row)) {
+                continue;
+            }
+            if (trim((string) ($row['item']['ourCode'] ?? '')) === '') {
+                return ExtractedDocumentDocument::STATUS_PENDING_REVIEW;
+            }
+        }
+        return $status;
     }
 
     // -------------------------------------------------------------------
@@ -1244,7 +1283,7 @@ class AnalysisController
         // only parses the body and maps the outcome back onto a Response.
         $body = $request->getBody();
         $body = is_array($body) ? $body : [];
-        $service = new ExtractedDocumentApplier($this->db, $this->applier);
+        $service = new ExtractedDocumentApplier($this->db, $this->applier, $this->enricher);
         $outcome = $service->apply(
             $extractedNdx,
             $auth->userId,
@@ -1469,6 +1508,16 @@ class AnalysisController
             'autoCreateMode' => 'safe',
             'targetDocState' => 10,
         ];
+
+        // Fresh obohacení z historie (D2) — přepíše persistnutý enrichment
+        // blok aktuálním stavem DB. Selhání preview neblokuje.
+        if ($this->enricher !== null) {
+            try {
+                $canonical = $this->enricher->enrich($canonical);
+            } catch (\Throwable $e) {
+                ErrorLogger::logException($e, 'AnalysisController::previewExtracted row history enrichment failed');
+            }
+        }
 
         $result = $this->applier->preview($canonical);
         if (!$result->success) {

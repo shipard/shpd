@@ -15,6 +15,9 @@ use Shipard\Core\Document\DocumentRegistry;
 use Shipard\Core\Security\DsSecretCipher;
 use Shipard\Module\Core\Exchange\Common\ApplyResult;
 use Shipard\Module\Core\Exchange\Document\DocumentApplier;
+use Shipard\Module\Core\Exchange\Enrich\RowHistoryEnricher;
+use Shipard\Module\Core\Exchange\Resolve\PartyResolver;
+use Shipard\Module\Core\Exchange\Resolve\ResolveResult;
 use Shipard\Module\Core\Exchange\Schema\SchemaLoader;
 use Shipard\Module\Core\Exchange\Schema\SchemaValidator;
 
@@ -71,13 +74,34 @@ class AnalysisControllerExchangeTest extends TestCase
     private function controller(
         DataSourceConnection $db,
         ?DocumentApplier $applier = null,
+        ?RowHistoryEnricher $enricher = null,
     ): AnalysisController {
         return new AnalysisController(
             $db, $this->config, $this->tmpDir, [],
             new DocumentRegistry(),
             new SchemaValidator(SchemaLoader::default()),
             $applier,
+            null, null,
+            $enricher,
         );
+    }
+
+    /**
+     * Real enricher nad mockovanou DB (RowHistoryEnricher je final — nelze
+     * mockovat) — partner vždy matched, historie dle parametru.
+     *
+     * @param list<array<string, mixed>> $history
+     */
+    private function enricher(array $history): RowHistoryEnricher
+    {
+        $dibi = $this->createMock(\Dibi\Connection::class);
+        $dibi->method('fetchAll')->willReturn(array_map(
+            static fn(array $row) => new \Dibi\Row($row),
+            $history,
+        ));
+        $party = $this->createMock(PartyResolver::class);
+        $party->method('resolve')->willReturn(ResolveResult::matched(42, 'companyId'));
+        return new RowHistoryEnricher($dibi, $party);
     }
 
     private function authed(int $userId = 7): AuthContext
@@ -348,6 +372,106 @@ class AnalysisControllerExchangeTest extends TestCase
         $this->assertSame(10, $status);
         $decoded = json_decode((string) $json, true);
         $this->assertSame(['anything' => 'goes'], $decoded);
+    }
+
+    // ── validateAndStoreCanonical + row history enrichment (D2/D7) ─────────
+
+    public function testValidateAndStoreCanonicalPersistsEnrichedCanonical(): void
+    {
+        // Historie pokryje jediný řádek fixtury (description fallback
+        // item.description) → obohacený canonical se persistne a ready
+        // status zůstává (řádek je pokrytý).
+        $db = $this->createMock(DataSourceConnection::class);
+        $ctrl = $this->controller($db, enricher: $this->enricher([[
+            'description'    => 'Hodinová sazba senior konzultanta',
+            'vat_code'       => 'cz-110',
+            'item_code'      => 'KONZ01',
+            'account_number' => '518100',
+            'doc_head'       => 777,
+        ]]));
+
+        [$status, $json] = $this->callValidate($ctrl, $this->happyCanonical(), 0.95);
+
+        $this->assertSame(10, $status); // STATUS_READY_TO_APPLY
+        $decoded = json_decode((string) $json, true);
+        $this->assertSame('KONZ01', $decoded['rows'][0]['item']['ourCode']);
+        $this->assertSame('518100', $decoded['rows'][0]['account']);
+        $enrichment = $decoded['_resolve']['rows'][0]['enrichment'];
+        $this->assertSame('historyExactRaw', $enrichment['matchedBy']);
+        $this->assertSame(777, $enrichment['sourceDocId']);
+    }
+
+    public function testValidateAndStoreCanonicalCapsStatusWhenRowUncovered(): void
+    {
+        // Prázdná historie → řádek bez item.ourCode zůstane nepokrytý →
+        // strop ready_to_apply → pending_review (D7).
+        $db = $this->createMock(DataSourceConnection::class);
+        $ctrl = $this->controller($db, enricher: $this->enricher([]));
+
+        [$status, $json] = $this->callValidate($ctrl, $this->happyCanonical(), 0.95);
+
+        $this->assertSame(20, $status); // STATUS_PENDING_REVIEW
+        $decoded = json_decode((string) $json, true);
+        $this->assertNull($decoded['rows'][0]['item']['ourCode']);
+        $this->assertNull($decoded['_resolve']['rows'][0]['enrichment']['matchedBy']);
+    }
+
+    public function testValidateAndStoreCanonicalCapIgnoresAccountingRows(): void
+    {
+        // Účetní doklad: kontační řádky item nemají validně → strop se
+        // neuplatní, ready status zůstává.
+        $db = $this->createMock(DataSourceConnection::class);
+        $ctrl = $this->controller($db, enricher: $this->enricher([]));
+
+        $canonical = [
+            'format' => 'shpd.docs.document',
+            'formatVersion' => '1.0',
+            'docType' => 'accountingDocument',
+            'dates' => ['issueDate' => '2026-06-10'],
+            'rows' => [
+                ['operation' => 'acc.record', 'account' => '518100', 'accSide' => 'debit', 'totalPrice' => 50.0],
+                ['operation' => 'acc.record', 'account' => '321001', 'accSide' => 'credit', 'totalPrice' => 50.0],
+            ],
+        ];
+        [$status] = $this->callValidate($ctrl, $canonical, 0.95);
+
+        $this->assertSame(10, $status); // STATUS_READY_TO_APPLY
+    }
+
+    public function testValidateAndStoreCanonicalLowConfidenceNotRaisedByCoverage(): void
+    {
+        // Strop jen snižuje — pokrytý řádek nepovyšuje review/low status.
+        $db = $this->createMock(DataSourceConnection::class);
+        $ctrl = $this->controller($db, enricher: $this->enricher([[
+            'description'    => 'Hodinová sazba senior konzultanta',
+            'vat_code'       => 'cz-110',
+            'item_code'      => 'KONZ01',
+            'account_number' => null,
+            'doc_head'       => 777,
+        ]]));
+
+        [$status] = $this->callValidate($ctrl, $this->happyCanonical(), 0.7);
+        $this->assertSame(20, $status); // STATUS_PENDING_REVIEW dle confidence
+    }
+
+    public function testValidateAndStoreCanonicalSurvivesEnricherFailure(): void
+    {
+        // Enricher spadne na DB → /result nesmí selhat; canonical se uloží
+        // neobohacený a strop (bez pokrytí) konzervativně sníží na review.
+        $dibi = $this->createMock(\Dibi\Connection::class);
+        $dibi->method('fetchAll')->willThrowException(new \RuntimeException('db down'));
+        $party = $this->createMock(PartyResolver::class);
+        $party->method('resolve')->willReturn(ResolveResult::matched(42, 'companyId'));
+
+        $db = $this->createMock(DataSourceConnection::class);
+        $ctrl = $this->controller($db, enricher: new RowHistoryEnricher($dibi, $party));
+
+        [$status, $json] = $this->callValidate($ctrl, $this->happyCanonical(), 0.95);
+
+        $this->assertSame(20, $status); // STATUS_PENDING_REVIEW (konzervativní strop)
+        $decoded = json_decode((string) $json, true);
+        $this->assertArrayNotHasKey('_resolve', $decoded);
+        $this->assertNull($decoded['rows'][0]['item']['ourCode']);
     }
 
     public function testApplyExtractedWithoutApplierFallsBackToStatusUpdate(): void

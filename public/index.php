@@ -347,6 +347,7 @@ function buildMcpRegistry(
 				$documentRegistry,
 				$tables,
 			),
+			\Shipard\Module\Core\Exchange\Enrich\RowHistoryEnricher::create($db->getDibiConnection()),
 		)
 		: null;
 	$registry->register(new \Shipard\Module\Core\Mail\Mcp\MailDraftDocumentTool($draftApplier));
@@ -607,10 +608,16 @@ function dispatchAnalysis(
 			$documentEventDispatcher,
 		)
 		: null;
+	// Obohacení řádků z historie — stejná degradace jako applier (bez
+	// ConfigRuntime se enrichment přeskočí).
+	$enricher = $configRuntime !== null
+		? \Shipard\Module\Core\Exchange\Enrich\RowHistoryEnricher::create($db->getDibiConnection())
+		: null;
 
 	$ctrl = new AnalysisController(
 		$db, $resolved->config, $dsPath, $tables, $documentRegistry,
 		$schemaValidator, $applier, $configRuntime, $documentEventDispatcher,
+		$enricher,
 	);
 	return match ($route->action) {
 		'queue'             => $ctrl->queue($auth, $request),

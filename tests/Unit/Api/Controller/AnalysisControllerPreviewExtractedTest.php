@@ -15,6 +15,9 @@ use Shipard\Core\Document\DocumentRegistry;
 use Shipard\Core\Security\DsSecretCipher;
 use Shipard\Module\Core\Exchange\Common\ApplyResult;
 use Shipard\Module\Core\Exchange\Document\DocumentApplier;
+use Shipard\Module\Core\Exchange\Enrich\RowHistoryEnricher;
+use Shipard\Module\Core\Exchange\Resolve\PartyResolver;
+use Shipard\Module\Core\Exchange\Resolve\ResolveResult;
 use Shipard\Module\Core\Exchange\Schema\SchemaLoader;
 use Shipard\Module\Core\Exchange\Schema\SchemaValidator;
 
@@ -72,12 +75,15 @@ class AnalysisControllerPreviewExtractedTest extends TestCase
     private function controller(
         DataSourceConnection $db,
         ?DocumentApplier $applier = null,
+        ?RowHistoryEnricher $enricher = null,
     ): AnalysisController {
         return new AnalysisController(
             $db, $this->config, $this->tmpDir, [],
             new DocumentRegistry(),
             new SchemaValidator(SchemaLoader::default()),
             $applier,
+            null, null,
+            $enricher,
         );
     }
 
@@ -206,6 +212,51 @@ class AnalysisControllerPreviewExtractedTest extends TestCase
         $payload = $resp->getPayload();
         $this->assertFalse($payload['data']['aiFailed']);
         $this->assertSame('ok', $payload['data']['canonical']['_resolve']['summary']['status']);
+    }
+
+    public function testPreviewExtractedRunsFreshEnrichmentBeforePreview(): void
+    {
+        // Fresh enrichment (D2b) běží po injection source a před preview —
+        // applier už dostane canonical s doplněným řádkem z historie.
+        $canonical = $this->happyCanonical();
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturn([
+            'id' => 3, 'status' => 20, 'message' => 100,
+            'extracted_json' => json_encode($canonical),
+            'source_attachments' => '[]',
+        ]);
+        $db->method('fetchAll')->willReturn([]);
+
+        $dibi = $this->createMock(\Dibi\Connection::class);
+        $dibi->method('fetchAll')->willReturn([new \Dibi\Row([
+            'description'    => 'Hodinová sazba senior konzultanta',
+            'vat_code'       => 'cz-110',
+            'item_code'      => 'KONZ01',
+            'account_number' => '518100',
+            'doc_head'       => 777,
+        ])]);
+        $party = $this->createMock(PartyResolver::class);
+        $party->method('resolve')->willReturn(ResolveResult::matched(42, 'companyId'));
+        $enricher = new RowHistoryEnricher($dibi, $party);
+
+        $captured = null;
+        $applier = $this->createMock(DocumentApplier::class);
+        $applier->expects($this->once())
+            ->method('preview')
+            ->willReturnCallback(function (array $c) use (&$captured) {
+                $captured = $c;
+                return ApplyResult::ok($c);
+            });
+
+        $resp = $this->controller($db, $applier, $enricher)
+            ->previewExtracted($this->authed(), $this->request(), 3);
+        $this->assertSame(200, $this->statusOf($resp));
+
+        $this->assertSame('KONZ01', $captured['rows'][0]['item']['ourCode']);
+        $this->assertSame(
+            'historyExactRaw',
+            $captured['_resolve']['rows'][0]['enrichment']['matchedBy'],
+        );
     }
 
     public function testPreviewExtractedAlsoWorksForRejectedHistory(): void

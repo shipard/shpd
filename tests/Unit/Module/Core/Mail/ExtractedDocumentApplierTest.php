@@ -10,6 +10,9 @@ use Shipard\Core\Document\DocumentResult;
 use Shipard\Core\Document\TableGateway;
 use Shipard\Module\Core\Exchange\Common\ApplyResult;
 use Shipard\Module\Core\Exchange\Document\DocumentApplier;
+use Shipard\Module\Core\Exchange\Enrich\RowHistoryEnricher;
+use Shipard\Module\Core\Exchange\Resolve\PartyResolver;
+use Shipard\Module\Core\Exchange\Resolve\ResolveResult;
 use Shipard\Module\Core\Mail\ExtractedDocumentApplier;
 
 /**
@@ -218,6 +221,78 @@ class ExtractedDocumentApplierTest extends TestCase
         $this->service($db, $applier)->apply(1, 7, ['supplier' => 'useExisting:42']);
         $this->assertSame('strict', $captured['applyOptions']['autoCreateMode']);
         $this->assertSame('useExisting:42', $captured['_resolve']['supplier']['userAction']);
+    }
+
+    // ── row history enrichment (D2c/D3) ─────────────────────────────────────
+
+    public function testApplyRunsEnrichmentBeforeUserActionMerge(): void
+    {
+        // Enrichment doplní řádek z historie; klientův pin se merguje až po
+        // něm a v _resolve zůstává vedle enrichment auditu — reconcile fáze
+        // DocumentApplieru mu pak dá přednost.
+        $canonical = $this->happyCanonical();
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturn([
+            'id' => 1, 'status' => 20, 'message' => 100, 'target_row_ndx' => null,
+            'extracted_json' => json_encode($canonical),
+        ]);
+
+        $dibi = $this->createMock(\Dibi\Connection::class);
+        $dibi->method('fetchAll')->willReturn([new \Dibi\Row([
+            'description'    => 'Hodinová sazba senior konzultanta',
+            'vat_code'       => 'cz-110',
+            'item_code'      => 'KONZ01',
+            'account_number' => '518100',
+            'doc_head'       => 777,
+        ])]);
+        $party = $this->createMock(PartyResolver::class);
+        $party->method('resolve')->willReturn(ResolveResult::matched(42, 'companyId'));
+        $enricher = new RowHistoryEnricher($dibi, $party);
+
+        $captured = null;
+        $applier = $this->createMock(DocumentApplier::class);
+        $applier->method('apply')->willReturnCallback(function (array $passed) use (&$captured) {
+            $captured = $passed;
+            return ApplyResult::error('unresolved_required', 'X', [], 422);
+        });
+
+        $service = new ExtractedDocumentApplier($db, $applier, $enricher);
+        $service->apply(1, 7, ['rows[0].item' => 'useExisting:55']);
+
+        $this->assertNotNull($captured);
+        $this->assertSame('KONZ01', $captured['rows'][0]['item']['ourCode']);
+        $this->assertSame('518100', $captured['rows'][0]['account']);
+        $rowResolve = $captured['_resolve']['rows'][0];
+        $this->assertSame('useExisting:55', $rowResolve['item']['userAction']);
+        $this->assertSame('historyExactRaw', $rowResolve['enrichment']['matchedBy']);
+    }
+
+    public function testApplyContinuesWhenEnrichmentFails(): void
+    {
+        $canonical = $this->happyCanonical();
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturn([
+            'id' => 1, 'status' => 20, 'message' => 100, 'target_row_ndx' => null,
+            'extracted_json' => json_encode($canonical),
+        ]);
+
+        $dibi = $this->createMock(\Dibi\Connection::class);
+        $dibi->method('fetchAll')->willThrowException(new \RuntimeException('db down'));
+        $party = $this->createMock(PartyResolver::class);
+        $party->method('resolve')->willReturn(ResolveResult::matched(42, 'companyId'));
+        $enricher = new RowHistoryEnricher($dibi, $party);
+
+        $captured = null;
+        $applier = $this->createMock(DocumentApplier::class);
+        $applier->method('apply')->willReturnCallback(function (array $passed) use (&$captured) {
+            $captured = $passed;
+            return ApplyResult::ok($passed, savedId: 9999);
+        });
+
+        $outcome = (new ExtractedDocumentApplier($db, $applier, $enricher))->apply(1, 7, null);
+
+        $this->assertTrue($outcome->ok);
+        $this->assertNull($captured['rows'][0]['item']['ourCode']); // neobohaceno
     }
 
     // ── unapply() guard branches ────────────────────────────────────────────

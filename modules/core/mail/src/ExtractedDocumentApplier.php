@@ -8,6 +8,7 @@ use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Document\TableGateway;
 use Shipard\Core\Logging\ErrorLogger;
 use Shipard\Module\Core\Exchange\Document\DocumentApplier;
+use Shipard\Module\Core\Exchange\Enrich\RowHistoryEnricher;
 
 /**
  * Sdílené jádro apply flow extrahovaných dokladů — HTTP-agnostické. Vytvoří
@@ -40,6 +41,7 @@ final class ExtractedDocumentApplier
     public function __construct(
         private readonly DataSourceConnection $db,
         private readonly DocumentApplier $applier,
+        private readonly ?RowHistoryEnricher $enricher = null,
     ) {}
 
     /**
@@ -108,6 +110,17 @@ final class ExtractedDocumentApplier
             $source['kind'] = 'aiExtraction';
         }
         $canonical['source'] = $source;
+
+        // Fresh obohacení řádků z historie (D2) — před merge userActions,
+        // takže klientovy piny mají v reconcile fázi applieru přednost.
+        // Selhání enrichmentu apply nikdy neblokuje.
+        if ($this->enricher !== null) {
+            try {
+                $canonical = $this->enricher->enrich($canonical);
+            } catch (\Throwable $e) {
+                ErrorLogger::logException($e, 'ExtractedDocumentApplier::apply row history enrichment failed');
+            }
+        }
 
         // Merge client userActions into canonical _resolve.
         if ($clientResolveFlat !== null) {

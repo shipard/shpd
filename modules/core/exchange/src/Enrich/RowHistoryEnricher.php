@@ -120,10 +120,11 @@ final class RowHistoryEnricher
     private function enrichRow(array $canonical, int $idx, array $row, array $history): array
     {
         $enrichment = [
-            'matchedBy'   => null,
-            'confidence'  => null,
-            'sourceDocId' => null,
-            'suggested'   => [],
+            'matchedBy'       => null,
+            'confidence'      => null,
+            'sourceDocId'     => null,
+            'sourceDocNumber' => null,
+            'suggested'       => [],
         ];
 
         if (!self::rowExpectsItem($row)) {
@@ -167,6 +168,7 @@ final class RowHistoryEnricher
         $enrichment['matchedBy'] = $matchedBy;
         $enrichment['confidence'] = $confidence;
         $enrichment['sourceDocId'] = (int) $hist['doc_head'];
+        $enrichment['sourceDocNumber'] = ((string) ($hist['doc_number'] ?? '')) ?: null;
         $enrichment['suggested'] = $suggested;
 
         return $this->writeEnrichment($canonical, $idx, $enrichment);
@@ -280,6 +282,7 @@ final class RowHistoryEnricher
     {
         $rows = $this->db->fetchAll(
             'SELECT [r.description], [r.vat_code], [h.id] AS [doc_head],
+                    [h.doc_number] AS [doc_number],
                     [i.code] AS [item_code], [a.number] AS [account_number]
              FROM [docs_core_rows] AS [r]
              JOIN [docs_core_heads] AS [h] ON [h.id] = [r.doc_head]

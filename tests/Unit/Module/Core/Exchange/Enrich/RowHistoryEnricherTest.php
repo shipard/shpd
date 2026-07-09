@@ -41,6 +41,7 @@ class RowHistoryEnricherTest extends TestCase
         ?string $vatCode = 'std21',
         ?string $accountNumber = '518001',
         int $docHead = 1001,
+        ?string $docNumber = 'FP-2026-0042',
     ): array {
         return [
             'description'    => $description,
@@ -48,6 +49,7 @@ class RowHistoryEnricherTest extends TestCase
             'item_code'      => $itemCode,
             'account_number' => $accountNumber,
             'doc_head'       => $docHead,
+            'doc_number'     => $docNumber,
         ];
     }
 
@@ -88,10 +90,26 @@ class RowHistoryEnricherTest extends TestCase
         $this->assertSame('historyExactNorm', $enrichment['matchedBy']);
         $this->assertSame('high', $enrichment['confidence']);
         $this->assertSame(1001, $enrichment['sourceDocId']);
+        $this->assertSame('FP-2026-0042', $enrichment['sourceDocNumber']);
         $this->assertSame(
             ['ourCode' => 'NET500', 'vatCode' => 'std21', 'account' => '518001'],
             $enrichment['suggested'],
         );
+    }
+
+    public function testMissingHistoryDocNumberFallsBackToNull(): void
+    {
+        $enricher = $this->buildEnricher([
+            $this->histRow('Internet 500M', 'NET500', docNumber: null),
+        ]);
+
+        $result = $enricher->enrich($this->canonical([
+            ['description' => 'Internet 500M'],
+        ]));
+
+        $enrichment = $result['_resolve']['rows'][0]['enrichment'];
+        $this->assertSame('historyExactRaw', $enrichment['matchedBy']);
+        $this->assertNull($enrichment['sourceDocNumber']);
     }
 
     public function testRawExactMatchBeatsNormalizedCollision(): void
@@ -145,6 +163,7 @@ class RowHistoryEnricherTest extends TestCase
         $enrichment = $result['_resolve']['rows'][0]['enrichment'];
         $this->assertNull($enrichment['matchedBy']);
         $this->assertNull($enrichment['confidence']);
+        $this->assertNull($enrichment['sourceDocNumber']);
         $this->assertSame([], $enrichment['suggested']);
     }
 

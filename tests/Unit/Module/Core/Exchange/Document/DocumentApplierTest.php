@@ -838,4 +838,61 @@ class DocumentApplierTest extends TestCase
         $data = $this->invokeTransformWithPlan($applier, $canonical, $plan);
         $this->assertSame(77, $data['partner']);
     }
+
+    public function testMapDocTypeValueTranslatesAliasAndPassesThrough(): void
+    {
+        $this->assertSame('invni', DocumentApplier::mapDocTypeValue('invoiceReceived'));
+        $this->assertSame('invno', DocumentApplier::mapDocTypeValue('invoiceIssued'));
+        $this->assertSame('cmnbkp', DocumentApplier::mapDocTypeValue('accountingDocument'));
+        $this->assertSame('invni', DocumentApplier::mapDocTypeValue('invni'));
+        $this->assertSame('xyz', DocumentApplier::mapDocTypeValue('xyz'));
+    }
+
+    public function testPreviewCarriesOverRowEnrichment(): void
+    {
+        // withResolve staví _resolve z fresh resolvu — enrichment audit
+        // (RowHistoryEnricher) z příchozího canonical musí přežít per index.
+        $party = $this->createMock(PartyResolver::class);
+        $party->method('resolve')->willReturn(ResolveResult::matched(42, 'companyId'));
+
+        $unit = $this->createMock(UnitResolver::class);
+        $unit->method('resolve')->willReturn(ResolveResult::matched(3, 'systemCode'));
+
+        $itemResolver = $this->createMock(ItemResolver::class);
+        $itemResolver->method('resolve')->willReturn(ResolveResult::matched(18, 'ourCode'));
+
+        $vat = $this->createMock(VatCodeResolver::class);
+        $vat->method('resolve')->willReturn(new ResolveResult(
+            ResolveStatus::Matched,
+            matchedId: 0,
+            matchedBy: 'cfgItem',
+            createPayload: ['code' => 'highEU', 'pct' => 21.0, 'reverseVatCode' => null, 'noPayTax' => false],
+        ));
+
+        $bank = $this->createMock(BankAccountResolver::class);
+        $bank->method('resolvePartnerBank')->willReturn(ResolveResult::matched(7, 'iban'));
+
+        $applier = $this->buildApplier(party: $party, item: $itemResolver, unit: $unit, vat: $vat, bank: $bank);
+
+        $payload = json_decode(
+            (string) file_get_contents(__DIR__ . '/../../../../../Fixtures/Exchange/invoiceReceived_happy.json'),
+            true,
+        );
+        $enrichment = [
+            'matchedBy'   => 'historyExactNorm',
+            'confidence'  => 'high',
+            'sourceDocId' => 1001,
+            'suggested'   => ['ourCode' => 'NET500'],
+        ];
+        $payload['_resolve'] = ['rows' => [['index' => 0, 'enrichment' => $enrichment]]];
+
+        $result = $applier->preview($payload);
+
+        $this->assertTrue($result->success);
+        $rowResolve = $result->canonical['_resolve']['rows'][0];
+        $this->assertSame(0, $rowResolve['index']);
+        $this->assertSame($enrichment, $rowResolve['enrichment']);
+        // Fresh resolve zůstává nedotčený vedle přeneseného auditu.
+        $this->assertSame('matched', $rowResolve['item']['status']);
+    }
 }

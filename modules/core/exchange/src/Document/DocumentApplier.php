@@ -1127,8 +1127,16 @@ class DocumentApplier
      */
     private function mapDocType(array $canonical): string
     {
-        $raw = (string) ($canonical['docType'] ?? '');
-        return self::DOC_TYPE_MAP[$raw] ?? $raw;
+        return self::mapDocTypeValue((string) ($canonical['docType'] ?? ''));
+    }
+
+    /**
+     * Shared alias→short-code translation for callers outside the applier
+     * (RowHistoryEnricher filters history by docs_core_heads.doc_type).
+     */
+    public static function mapDocTypeValue(string $docType): string
+    {
+        return self::DOC_TYPE_MAP[$docType] ?? $docType;
     }
 
     /**
@@ -1258,8 +1266,44 @@ class DocumentApplier
     {
         $resolve = $resolved + ['issues' => $issues];
         $resolve['summary'] = $this->buildSummary($resolved, $issues);
+        // Per-row enrichment audit (RowHistoryEnricher) is not part of the
+        // fresh resolve — carry it over from the incoming _resolve by index,
+        // otherwise preview/apply responses would drop it.
+        if (is_array($resolve['rows'] ?? null)) {
+            $resolve['rows'] = $this->carryOverEnrichment(
+                $canonical['_resolve']['rows'] ?? null,
+                $resolve['rows'],
+            );
+        }
         $canonical['_resolve'] = $resolve;
         return $canonical;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $freshRows
+     * @return array<int, array<string, mixed>>
+     */
+    private function carryOverEnrichment(mixed $previousRows, array $freshRows): array
+    {
+        if (!is_array($previousRows) || $previousRows === []) {
+            return $freshRows;
+        }
+        $byIndex = [];
+        foreach ($previousRows as $entry) {
+            if (is_array($entry) && isset($entry['index']) && is_array($entry['enrichment'] ?? null)) {
+                $byIndex[(int) $entry['index']] = $entry['enrichment'];
+            }
+        }
+        if ($byIndex === []) {
+            return $freshRows;
+        }
+        foreach ($freshRows as $pos => $entry) {
+            $idx = $entry['index'] ?? null;
+            if (is_int($idx) && isset($byIndex[$idx])) {
+                $freshRows[$pos]['enrichment'] = $byIndex[$idx];
+            }
+        }
+        return $freshRows;
     }
 
     /**

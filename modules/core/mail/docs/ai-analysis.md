@@ -145,7 +145,61 @@ request nepošle `analysis_state` explicitně.
 | 70 | `ai_failed` | AI nemohla extrahovat (nečitelné PDF apod.) |
 
 Mapping confidence → status řídí pole `confidence_thresholds` v profilu:
-`{"ready": 0.9, "review": 0.6}`.
+`{"ready": 0.9, "review": 0.6}`. Status navíc stropuje pokrytí řádků —
+viz „Obohacení řádků z historie" níže.
+
+## Obohacení řádků z historie (Row History Enrichment)
+
+Deterministická vrstva 0 „AI párování položek" — `RowHistoryEnricher`
+(`modules/core/exchange/src/Enrich/`). Řádkům canonical dokumentu bez
+`item.ourCode` doplní trojici `item.ourCode` + `vat.code` + `account`
+podle řádků dřívějších dokladů (docState 20/40) téhož partnera a
+`doc_type`. Bez šablon, bez LLM — paměť jsou finalizované doklady
+v `docs_core_rows`.
+
+Klíčová rozhodnutí (D1–D9, detailně `tasks/row-history-enrichment.md`):
+
+| | |
+|---|---|
+| Doplňuje se | jen prázdná pole; priorita userAction pin > AI extrakce > historie |
+| Historie | řádky partnera + doc_type, docState IN (20, 40), item živý (10/40/80), nejnovější první, limit 200 |
+| Match popisu | exact raw → exact normalizovaný (bez číslic/interpunkce) → Jaccard token-set ≥ 0.6; první zásah vyhrává |
+| Běží | `/result` (persist do `extracted_json`), `previewExtracted` (fresh), `apply` (fresh, před merge userActions) |
+| Selhání | nikdy neshodí endpoint — log + neobohacený canonical |
+
+Fresh běh je idempotentní: vlastní dřívější návrhy (poznané podle
+`enrichment.suggested` == aktuální hodnota) nejdřív odvolá a matchuje
+znovu proti aktuální DB. `DocumentApplier::withResolve()` přenáší
+enrichment blok přes fresh resolve per row index.
+
+Audit per řádek v `_resolve.rows[i].enrichment` (žádná změna schématu,
+`_resolve` má `additionalProperties: true`); blok se zapisuje vždy,
+i pro nenapárované a přeskočené řádky:
+
+```jsonc
+{
+    "matchedBy":  "historyExactRaw" | "historyExactNorm" | "historyFuzzy" | null,
+    "confidence": "high" | "medium" | null,
+    "sourceDocId": 12345,                         // docs_core_heads.id zdroje
+    "suggested":  { "ourCode": "…", "vatCode": "…", "account": "…" },  // co reálně doplnil
+    "skipped":    "hasOurCode" | "noItemRow"      // jen u přeskočených řádků
+}
+```
+
+**Strop statusu (D7):** `/result` sníží `ready_to_apply` na
+`pending_review`, pokud po enrichmentu existuje item řádek bez
+`item.ourCode`. Kontační řádky (`acc.record` / `accSide`) položku
+nemají validně — stropu se netýkají.
+
+**Zpětný zápis supplier codes (D8):** `SupplierCodeCaptureHandler`
+(registrace `documentEventHandlers` v module.jsonc) při přechodu dokladu
+10 → 20 s lineage `aiExtraction` zapíše `INSERT IGNORE` do
+`economy_items_supplier_codes` mapování z canonical řádků s extrahovaným
+`item.supplierCode`, kterým finální řádek přiřadil položku. Doplňuje
+apply-time zápis `DocumentApplier::writeSupplierCodeMappings` (ten pokryje
+řádky vyřešené už při apply, handler ruční přiřazení v Konceptu); překryv
+řeší unique index `(person, supplier_code)`. Párování canonical → finální
+řádky je poziční přes `order_pos` s guardem na shodu popisu.
 
 ## Auto-transition 20 → 40
 

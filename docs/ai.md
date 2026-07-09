@@ -84,6 +84,10 @@ backend na PHP straně resolvuje `AiBackendResolver`. Pozn.: PHP strana neměla
 LLM klienta, dokud nevznikl chat — analýza pošty volá model výhradně z Python
 daemonu.
 
+Výsledek extrakce navíc prochází deterministickým obohacením řádků
+z historie dokladů partnera (`RowHistoryEnricher`, bez LLM volání) — viz
+`modules/core/mail/docs/ai-analysis.md`, sekce „Obohacení řádků z historie".
+
 **Soukromí digestu shrnutí**: prompt shrnutí obsahuje titulky karet
 (partneři/částky z hlaviček dokladů) — stejná data, jaká analyzer LLM už
 posílá při extrakci; žádná nová datová hranice. Plný `extracted_json` se do

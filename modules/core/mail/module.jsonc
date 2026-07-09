@@ -101,6 +101,14 @@
         }
     ],
 
+    "documentEventHandlers": [
+        {
+            "table": "docs_core_heads",
+            "class": "Shipard\\Module\\Core\\Mail\\SupplierCodeCaptureHandler",
+            "events": ["stateChanged"]
+        }
+    ],
+
     "config": [
         {
             "id": "core.mail.primaryTypes",

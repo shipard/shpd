@@ -21,6 +21,7 @@
   import { t } from '../../i18n/index.js';
   import Popover from '../ui/Popover.svelte';
   import ResolveDecisionPanel from './ResolveDecisionPanel.svelte';
+  import { enrichedRowCount, matchKindKey, suggestedFieldKeys } from './enrichBadge.js';
 
   let {
     canonical = null,
@@ -38,6 +39,21 @@
   let resolve = $derived(canonical?._resolve ?? null);
   let summary = $derived(resolve?.summary ?? null);
   let issues = $derived(resolve?.issues ?? []);
+  let enrichedCount = $derived(enrichedRowCount(resolve?.rows));
+
+  // Tooltip enrichment badge: „Doplněno z historie — doklad X (přesná
+  // shoda)" + druhý řádek s výčtem skutečně doplněných polí.
+  function enrichTitle(e) {
+    const docNumber = e.sourceDocNumber ?? `#${e.sourceDocId}`;
+    const kind = t(`exchange.preview.enrich.kind.${matchKindKey(e.matchedBy)}`);
+    const header = t('exchange.preview.enrich.tooltip', { docNumber, kind });
+    const fields = suggestedFieldKeys(e.suggested)
+      .map((key) => t(`exchange.preview.enrich.field.${key}`))
+      .join(', ');
+    return fields
+      ? `${header}\n${t('exchange.preview.enrich.filled', { fields })}`
+      : header;
+  }
 
   function statusKey(status) {
     if (status === 'matched') return 'matched';
@@ -242,6 +258,15 @@
   {/if}
 {/snippet}
 
+{#snippet enrichBadge(e)}
+  {#if e?.matchedBy}
+    <span
+      class="shpd-exchange__enrich shpd-exchange__enrich--{e.confidence}"
+      title={enrichTitle(e)}
+    >⟲</span>
+  {/if}
+{/snippet}
+
 {#snippet partyCard(label, party, partyResolve, path)}
   <div class="shpd-exchange__party">
     <div class="shpd-exchange__party-header">
@@ -368,8 +393,13 @@
 
     {#if (canonical.rows ?? []).length > 0}
       <section class="shpd-exchange__section">
-        <h3 class="shpd-exchange__section-heading">
-          {t('exchange.preview.section.rows')}
+        <h3 class="shpd-exchange__section-heading shpd-exchange__section-heading--split">
+          <span>{t('exchange.preview.section.rows')}</span>
+          {#if enrichedCount > 0}
+            <span class="shpd-exchange__enrich-summary">
+              {t('exchange.preview.enrich.summary', { count: enrichedCount })}
+            </span>
+          {/if}
         </h3>
         <table class="shpd-exchange__rows">
           <thead>
@@ -393,6 +423,7 @@
                     <span class="shpd-exchange__row-code">{row.item.supplierCode}</span>
                   {/if}
                   {@render statusBadge(resolve?.rows?.[i]?.item, `rows[${i}].item`, 'item')}
+                  {@render enrichBadge(resolve?.rows?.[i]?.enrichment)}
                 </td>
                 <td class="num">{row.quantity ?? '—'}</td>
                 <td>
@@ -720,6 +751,49 @@
   .shpd-exchange__status--skipped {
     background: var(--shpd-color-text-muted, #888);
     color: var(--shpd-color-surface, white);
+  }
+
+  /* ── Enrichment badge (Row History Enrichment) ───────────────────────────
+     Neinteraktivní, záměrně výrazně tišší než resolve badge: menší, bez
+     pozadí, jen tónovaný glyph. Tooltip nese detail (zdrojový doklad,
+     stupeň shody, doplněná pole vč. účtu). */
+  .shpd-exchange__enrich {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    margin-left: 2px;
+    font-size: 0.6875rem;
+    line-height: 1;
+    vertical-align: middle;
+    cursor: default;
+    opacity: 0.8;
+  }
+
+  .shpd-exchange__enrich--high {
+    color: var(--shpd-color-state-done-text);
+    background: var(--shpd-color-state-done-bg);
+  }
+
+  .shpd-exchange__enrich--medium {
+    color: var(--shpd-color-state-concept-text);
+    background: var(--shpd-color-state-concept-bg);
+  }
+
+  .shpd-exchange__enrich-summary {
+    text-transform: none;
+    letter-spacing: normal;
+    font-size: 0.75rem;
+    color: var(--shpd-color-text-muted);
+  }
+
+  .shpd-exchange__section-heading--split {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--shpd-space-sm);
   }
 
   /* ── Rows table ──────────────────────────────────────────────────────── */

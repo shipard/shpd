@@ -21,6 +21,9 @@ class TestableDoctorCommand extends DoctorCommand
     public ?string $fakeNginxSitesEnabledDir = null;
     public ?string $fakeRepoRoot = null;
 
+    /** @var array<string, ?string> binary name → fake path (null = missing) */
+    public array $fakeBinaries = [];
+
     public function __construct(string $tempConfigPath, PermissionSpec $spec)
     {
         parent::__construct($spec);
@@ -54,6 +57,15 @@ class TestableDoctorCommand extends DoctorCommand
     protected function getRepoRoot(): string
     {
         return $this->fakeRepoRoot ?? parent::getRepoRoot();
+    }
+
+    protected function findBinary(string $name): ?string
+    {
+        // array_key_exists, ne ?? — hodnota null znamená "binárka chybí".
+        if (array_key_exists($name, $this->fakeBinaries)) {
+            return $this->fakeBinaries[$name];
+        }
+        return '/usr/bin/' . $name;  // default: vše přítomno
     }
 }
 
@@ -705,5 +717,61 @@ class DoctorCommandTest extends TestCase
         $display = $tester->getDisplay();
         $this->assertStringContainsString('Include file missing in repo: docs/nginx/shipard-common.conf', $display);
         $this->assertStringContainsString('Include file missing in repo: docs/php/shipard-fpm-common.conf', $display);
+    }
+
+    // ─── Thumbnail tools check ──────────────────────────────────────────────
+
+    public function testThumbnailToolsAllPresent(): void
+    {
+        $spec = $this->makeSpec();
+        $command = $this->commandWithStubs($spec);
+
+        $tester = new CommandTester($command);
+        $tester->execute([]);
+
+        $display = $tester->getDisplay();
+        $this->assertStringContainsString('Thumbnail tools', $display);
+        $this->assertStringContainsString('✓ pdftocairo (/usr/bin/pdftocairo)', $display);
+        $this->assertStringContainsString('✓ rsvg-convert (/usr/bin/rsvg-convert)', $display);
+        $this->assertStringContainsString('✓ vipsthumbnail (/usr/bin/vipsthumbnail)', $display);
+        $this->assertStringContainsString('✓ vips (/usr/bin/vips)', $display);
+        $this->assertStringNotContainsString('not found in PATH', $display);
+    }
+
+    public function testMissingThumbnailToolReportsErrorWithAptHint(): void
+    {
+        $spec = $this->makeSpec();
+        $command = $this->commandWithStubs($spec);
+        $command->fakeBinaries['vipsthumbnail'] = null;
+
+        $tester = new CommandTester($command);
+        $exitCode = $tester->execute([]);
+
+        $display = $tester->getDisplay();
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('✗ vipsthumbnail: not found in PATH', $display);
+        $this->assertStringContainsString('sudo apt install libvips-tools', $display);
+    }
+
+    public function testMissingToolCountsIntoTotalIssues(): void
+    {
+        // Delta pattern (viz testIncludeChecksDoNotAffectExitCode): healthy tree
+        // bez roota vždy hlásí nějaké nevyhnutelné issues, takže porovnáváme
+        // počet mezi během se všemi binárkami a se dvěma chybějícími.
+        $spec = $this->makeSpec();
+        $command = $this->commandWithStubs($spec);
+
+        $tester = new CommandTester($command);
+        $tester->execute([]);
+        preg_match('/Issues found: (\d+)/', $tester->getDisplay(), $mWithout);
+        $baseline = (int) ($mWithout[1] ?? 0);
+
+        $command->fakeBinaries['pdftocairo'] = null;
+        $command->fakeBinaries['vipsthumbnail'] = null;
+        $exitCode = $tester->execute([]);
+        preg_match('/Issues found: (\d+)/', $tester->getDisplay(), $mWith);
+
+        $this->assertSame(1, $exitCode);
+        $this->assertSame($baseline + 2, (int) ($mWith[1] ?? 0));
     }
 }

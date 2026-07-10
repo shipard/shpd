@@ -14,6 +14,14 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 class DoctorCommand extends Command
 {
+    /** Mapa binárka → apt balíček (hint pro admina). */
+    private const THUMBNAIL_TOOLS = [
+        'pdftocairo'    => 'poppler-utils',
+        'rsvg-convert'  => 'librsvg2-bin',
+        'vipsthumbnail' => 'libvips-tools',
+        'vips'          => 'libvips-tools',
+    ];
+
     protected string $serverConfigPath = '/etc/shipard/server.json';
 
     public function __construct(
@@ -94,13 +102,17 @@ class DoctorCommand extends Command
         $this->checkSystemConfigIncludes($output);
 
         $output->writeln('');
+        $output->writeln('<info>Thumbnail tools</info>');
+        $toolErrors = $this->checkThumbnailTools($output);
+
+        $output->writeln('');
         $output->writeln('<info>Data source DB connections</info>');
         $dsErrors = $this->checkDataSourceConnections($spec, $output, $mode);
 
         $output->writeln('');
         $output->writeln(str_repeat('─', 55));
 
-        $totalIssues = count($issues) + $dsErrors + $fpmErrors + $nginxErrors
+        $totalIssues = count($issues) + $dsErrors + $fpmErrors + $nginxErrors + $toolErrors
                      + ($poolUser !== $shipardUser ? 1 : 0);
         if ($totalIssues === 0) {
             $output->writeln('<info>✓ All checks passed.</info>');
@@ -259,6 +271,48 @@ class DoctorCommand extends Command
         if ($checked === 0) {
             $output->writeln('  (no live configs found — skipped)');
         }
+    }
+
+    /**
+     * Finds a binary in PATH. Pure-PHP scan (no exec) — deterministic and
+     * overridable in tests.
+     */
+    protected function findBinary(string $name): ?string
+    {
+        $path = getenv('PATH') ?: '/usr/local/bin:/usr/bin:/bin';
+        foreach (explode(':', $path) as $dir) {
+            if ($dir === '') {
+                continue;
+            }
+            $candidate = $dir . '/' . $name;
+            if (is_file($candidate) && is_executable($candidate)) {
+                return $candidate;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Checks that the CLI tools used by ThumbnailGenerator are installed.
+     * A missing tool means silent degradation to generic icons — exactly the
+     * kind of issue doctor exists to surface.
+     *
+     * @return int number of missing thumbnail tools
+     */
+    protected function checkThumbnailTools(OutputInterface $output): int
+    {
+        $missing = 0;
+        foreach (self::THUMBNAIL_TOOLS as $tool => $aptPackage) {
+            $binPath = $this->findBinary($tool);
+            if ($binPath !== null) {
+                $output->writeln("  ✓ {$tool} ({$binPath})");
+            } else {
+                $output->writeln("  ✗ {$tool}: not found in PATH");
+                $output->writeln("    <comment>→ Install: sudo apt install {$aptPackage}</comment>");
+                $missing++;
+            }
+        }
+        return $missing;
     }
 
     /**

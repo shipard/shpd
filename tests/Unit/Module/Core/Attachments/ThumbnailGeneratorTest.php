@@ -5,12 +5,27 @@ declare(strict_types=1);
 namespace Shipard\Tests\Unit\Module\Core\Attachments;
 
 use PHPUnit\Framework\TestCase;
+use Shipard\Core\Logging\ErrorLogger;
 use Shipard\Module\Core\Attachments\ThumbnailGenerator;
+
+/**
+ * Test seam: overrides the pdftocairo binary name with one that does not
+ * exist, so runTool() gets exit code 127 from the shell.
+ */
+class TestableThumbnailGenerator extends ThumbnailGenerator
+{
+    public function __construct()
+    {
+        $this->pdftocairoBin = 'shpd-test-missing-binary-x7q';
+    }
+}
 
 class ThumbnailGeneratorTest extends TestCase
 {
     private ThumbnailGenerator $generator;
     private string $tempDir;
+    private string $logPath;
+    private string $prevErrorLog;
 
     protected function setUp(): void
     {
@@ -18,10 +33,18 @@ class ThumbnailGeneratorTest extends TestCase
         $this->tempDir = sys_get_temp_dir() . '/shpd_thumb_test_' . uniqid();
         mkdir($this->tempDir, 0755, true);
         mkdir($this->tempDir . '/cache/thumbnails', 0755, true);
+
+        $this->logPath = $this->tempDir . '/shipard.log';
+        ErrorLogger::setLogPath($this->logPath);
+        // ErrorLogger::write() duplicates every entry to error_log() — redirect
+        // it so warn entries don't pollute the PHPUnit stderr output.
+        $this->prevErrorLog = (string) ini_set('error_log', $this->tempDir . '/php_error.log');
     }
 
     protected function tearDown(): void
     {
+        ErrorLogger::resetForTesting();
+        ini_set('error_log', $this->prevErrorLog);
         $this->rmdirRecursive($this->tempDir);
     }
 
@@ -195,6 +218,57 @@ class ThumbnailGeneratorTest extends TestCase
         $pdf .= "startxref\n{$xrefOffset}\n%%EOF";
 
         return $pdf;
+    }
+
+    // --- Tool failure logging ---
+
+    public function testMissingToolReturnsFalse(): void
+    {
+        $generator = new TestableThumbnailGenerator();
+        $inputPath = $this->tempDir . '/input.pdf';
+        file_put_contents($inputPath, $this->createMinimalPdf());
+        $outputPath = $this->tempDir . '/output.jpg';
+
+        $result = $generator->generatePdf($inputPath, $outputPath, 200, 85, 1);
+
+        $this->assertFalse($result);
+        $this->assertFileDoesNotExist($outputPath);
+    }
+
+    public function testMissingToolLogsWarningWithExitCode127(): void
+    {
+        $generator = new TestableThumbnailGenerator();
+        $inputPath = $this->tempDir . '/input.pdf';
+        file_put_contents($inputPath, $this->createMinimalPdf());
+
+        $generator->generatePdf($inputPath, $this->tempDir . '/output.jpg', 200, 85, 1);
+
+        $this->assertFileExists($this->logPath);
+        $log = (string) file_get_contents($this->logPath);
+        $this->assertStringContainsString('"exitCode":127', $log);
+        $this->assertStringContainsString("tool 'shpd-test-missing-binary-x7q' is not installed", $log);
+        $this->assertStringContainsString('sudo apt install poppler-utils', $log);
+    }
+
+    public function testFailedToolLogsWarning(): void
+    {
+        exec('which pdftocairo 2>/dev/null', $output, $exitCode);
+        if ($exitCode !== 0) {
+            $this->markTestSkipped('pdftocairo not available');
+        }
+
+        $inputPath = $this->tempDir . '/broken.pdf';
+        file_put_contents($inputPath, 'not a pdf');
+        $outputPath = $this->tempDir . '/output.jpg';
+
+        $result = $this->generator->generatePdf($inputPath, $outputPath, 200, 85, 1);
+
+        $this->assertFalse($result);
+        $this->assertFileExists($this->logPath);
+        $log = (string) file_get_contents($this->logPath);
+        $this->assertStringContainsString("tool 'pdftocairo' failed", $log);
+        $this->assertStringContainsString('"exitCode":', $log);
+        $this->assertStringNotContainsString('"exitCode":127', $log);
     }
 
     // --- Unsupported type returns null ---

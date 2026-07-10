@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Shipard\Module\Core\Attachments;
 
+use Shipard\Core\Logging\ErrorLogger;
+
 /**
  * Generates thumbnail images for attachments using CLI tools.
  *
@@ -16,6 +18,11 @@ namespace Shipard\Module\Core\Attachments;
  */
 class ThumbnailGenerator
 {
+    // Binary names as properties — test seam for simulating missing tools.
+    protected string $pdftocairoBin    = 'pdftocairo';
+    protected string $rsvgConvertBin   = 'rsvg-convert';
+    protected string $vipsBin          = 'vips';
+    protected string $vipsthumbnailBin = 'vipsthumbnail';
     /**
      * Get or generate a thumbnail for the given attachment.
      *
@@ -93,7 +100,8 @@ class ThumbnailGenerator
         $tmpPrefix = sys_get_temp_dir() . '/shpd_thumb_' . uniqid();
 
         $cmd = sprintf(
-            'pdftocairo -jpeg -jpegopt quality=%d -f %d -l %d -scale-to-x %d -scale-to-y -1 %s %s 2>/dev/null',
+            '%s -jpeg -jpegopt quality=%d -f %d -l %d -scale-to-x %d -scale-to-y -1 %s %s',
+            $this->pdftocairoBin,
             $quality,
             $page,
             $page,
@@ -102,9 +110,7 @@ class ThumbnailGenerator
             escapeshellarg($tmpPrefix),
         );
 
-        exec($cmd, $output, $exitCode);
-
-        if ($exitCode !== 0) {
+        if (!$this->runTool($cmd, $this->pdftocairoBin, 'poppler-utils')) {
             return false;
         }
 
@@ -142,29 +148,29 @@ class ThumbnailGenerator
 
         // SVG → PNG via rsvg-convert
         $cmd1 = sprintf(
-            'rsvg-convert -w %d %s -o %s 2>/dev/null',
+            '%s -w %d %s -o %s',
+            $this->rsvgConvertBin,
             $width,
             escapeshellarg($inputPath),
             escapeshellarg($tmpPng),
         );
-        exec($cmd1, $output, $exitCode);
-
-        if ($exitCode !== 0 || !file_exists($tmpPng)) {
+        if (!$this->runTool($cmd1, $this->rsvgConvertBin, 'librsvg2-bin') || !file_exists($tmpPng)) {
             @unlink($tmpPng);
             return false;
         }
 
         // PNG → JPEG via vips
         $cmd2 = sprintf(
-            'vips jpegsave %s %s --Q %d 2>/dev/null',
+            '%s jpegsave %s %s --Q %d',
+            $this->vipsBin,
             escapeshellarg($tmpPng),
             escapeshellarg($outputPath),
             $quality,
         );
-        exec($cmd2, $output, $exitCode);
+        $ok = $this->runTool($cmd2, $this->vipsBin, 'libvips-tools');
 
         @unlink($tmpPng);
-        return $exitCode === 0;
+        return $ok;
     }
 
     /**
@@ -173,14 +179,37 @@ class ThumbnailGenerator
     public function generateImage(string $inputPath, string $outputPath, int $width, int $quality): bool
     {
         $cmd = sprintf(
-            'vipsthumbnail %s --size=%d -o %s[Q=%d] 2>/dev/null',
+            '%s %s --size=%d -o %s[Q=%d]',
+            $this->vipsthumbnailBin,
             escapeshellarg($inputPath),
             $width,
             escapeshellarg($outputPath),
             $quality,
         );
 
-        exec($cmd, $output, $exitCode);
-        return $exitCode === 0;
+        return $this->runTool($cmd, $this->vipsthumbnailBin, 'libvips-tools');
+    }
+
+    /**
+     * Runs a CLI tool, captures stdout+stderr, logs a warning on failure.
+     * Exit code 127 (command not found) gets a specific message with apt hint.
+     */
+    protected function runTool(string $cmd, string $tool, string $aptPackage): bool
+    {
+        exec($cmd . ' 2>&1', $output, $exitCode);
+        if ($exitCode === 0) {
+            return true;
+        }
+        $ctx = [
+            'tool'     => $tool,
+            'exitCode' => $exitCode,
+            'output'   => implode("\n", array_slice($output, -5)),
+        ];
+        if ($exitCode === 127) {
+            ErrorLogger::warn("thumbnail: tool '{$tool}' is not installed — sudo apt install {$aptPackage}", $ctx);
+        } else {
+            ErrorLogger::warn("thumbnail: tool '{$tool}' failed", $ctx);
+        }
+        return false;
     }
 }

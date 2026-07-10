@@ -527,6 +527,10 @@ configech hlásí `shpd-server doctor`. Detaily: `docs/operations/production.md`
 
 ### Systémové závislosti
 
+Balíčky pro generování náhledů instaluje `scripts/install-packages.sh`
+automaticky; chybějící binárky hlásí `shpd-server doctor`. Pro ruční
+instalaci:
+
 ```bash
 # Generování náhledů
 apt install poppler-utils    # pdftocairo

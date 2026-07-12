@@ -132,6 +132,36 @@ class RouterTest extends TestCase
 		$this->assertRoute($result, 'auth', 'logout');
 	}
 
+	public function testOidcStart(): void
+	{
+		$result = $this->router->resolve('/api/v1/_auth/oidc/start', 'GET');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'auth', 'oidcStart');
+	}
+
+	public function testOidcCallback(): void
+	{
+		$result = $this->router->resolve('/api/v1/_auth/oidc/callback', 'GET');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'auth', 'oidcCallback');
+	}
+
+	public function testOidcExchange(): void
+	{
+		$result = $this->router->resolve('/api/v1/_auth/oidc/exchange', 'POST');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'auth', 'oidcExchange');
+	}
+
+	public function testMethodNotAllowedOnOidcRoutes(): void
+	{
+		foreach ([['/_auth/oidc/start', 'POST'], ['/_auth/oidc/callback', 'POST'], ['/_auth/oidc/exchange', 'GET']] as [$path, $method]) {
+			$result = $this->router->resolve('/api/v1' . $path, $method);
+			$this->assertInstanceOf(Response::class, $result);
+			$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
+		}
+	}
+
 	// CRUD list & create
 	public function testCrudList(): void
 	{

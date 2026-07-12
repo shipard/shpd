@@ -51,7 +51,8 @@ class AuthMiddleware
 
 	private function isExempt(Route $route, bool $openApiPublic): bool
 	{
-		if ($route->controller === 'auth' && $route->action === 'login') {
+		if ($route->controller === 'auth'
+			&& in_array($route->action, ['login', 'oidcStart', 'oidcCallback', 'oidcExchange'], true)) {
 			return true;
 		}
 		if ($openApiPublic && $route->controller === 'openapi' && $route->action === 'spec') {

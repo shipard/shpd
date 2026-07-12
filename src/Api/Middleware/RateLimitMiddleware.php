@@ -123,8 +123,10 @@ class RateLimitMiddleware
 	/** @return array{0:string, 1:string, 2:int} [key, type, limit] */
 	private function resolveKey(Request $request, AuthContext $auth, Route $route): array
 	{
-		// Login endpoint: rate limit by IP
-		if ($route->controller === 'auth' && $route->action === 'login') {
+		// Login-class endpointy (lokální login, OIDC start/exchange): limit
+		// per IP. oidcCallback zůstává v defaultu — chrání ho single-use state.
+		if ($route->controller === 'auth'
+			&& in_array($route->action, ['login', 'oidcStart', 'oidcExchange'], true)) {
 			$ip   = $request->getClientIp() ?? 'unknown';
 			$key  = hash('sha256', 'login:' . $ip);
 			return [$key, 'login', self::LIMITS['login']];

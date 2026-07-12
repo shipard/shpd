@@ -79,7 +79,7 @@ class DsUpgradeCommand extends Command
         $output->writeln('', OutputInterface::VERBOSITY_VERBOSE);
 
         // Ensure writable directories exist (att, branding, cache)
-        foreach (['att', 'branding', 'cache/thumbnails'] as $subdir) {
+        foreach (['att', 'branding', 'cache/thumbnails', 'cache/oidc'] as $subdir) {
             $dirPath = $dsDir . '/' . $subdir;
             if (!is_dir($dirPath)) {
                 @mkdir($dirPath, 0755, true);

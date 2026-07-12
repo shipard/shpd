@@ -118,6 +118,7 @@ class DsCreateCommand extends Command
         @mkdir($dataSourceDir . '/att', 0755);
         @mkdir($dataSourceDir . '/branding', 0755);
         @mkdir($dataSourceDir . '/cache/thumbnails', 0755, true);
+        @mkdir($dataSourceDir . '/cache/oidc', 0755, true);
 
         $password = $dbManager->generatePassword();
 

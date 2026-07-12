@@ -642,6 +642,16 @@ function dispatchAuth(
 	\Shipard\Core\Database\DataSourceConnection $db,
 	\Shipard\Api\ResolvedDataSource $resolved,
 ): Response {
+	if (str_starts_with($action, 'oidc')) {
+		$oidc = new \Shipard\Api\Controller\OidcController($resolved->config, $resolved->isDevMode());
+		return match ($action) {
+			'oidcStart'    => $oidc->start($request, $db),
+			'oidcCallback' => $oidc->callback($request, $db),
+			'oidcExchange' => $oidc->exchange($request, $db),
+			default        => Response::error('INTERNAL_ERROR', "Unknown auth action: {$action}", 500),
+		};
+	}
+
 	$ctrl = new AuthController();
 	return match ($action) {
 		'login'   => $ctrl->login($request, $db, $resolved->config->getAuthPolicy()),

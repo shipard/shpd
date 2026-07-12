@@ -257,6 +257,27 @@ class Router
 			return new Route('auth', 'logout');
 		}
 
+		if ($subpath === '/_auth/oidc/start') {
+			if ($method !== 'GET') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('auth', 'oidcStart');
+		}
+
+		if ($subpath === '/_auth/oidc/callback') {
+			if ($method !== 'GET') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('auth', 'oidcCallback');
+		}
+
+		if ($subpath === '/_auth/oidc/exchange') {
+			if ($method !== 'POST') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('auth', 'oidcExchange');
+		}
+
 		// Generic CRUD: /api/v1/{table} or /api/v1/{table}/{id}
 		if (!str_starts_with($subpath, '/')) {
 			return Response::error('NOT_FOUND', 'Not found', 404);

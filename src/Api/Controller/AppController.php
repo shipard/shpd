@@ -67,6 +67,8 @@ class AppController
             ? $values['app.shortName']
             : $name;
 
+        $policy = $this->config->getAuthPolicy();
+
         return Response::success([
             'name'        => $name,
             'shortName'   => $shortName,
@@ -76,6 +78,15 @@ class AppController
             // s brandingem — je to jen barva sidebaru, nic citlivého. Klient
             // z něj počítá efektivní vzhled pro follow-uživatele.
             'theme'       => is_array($values['app.theme']) ? $values['app.theme'] : null,
+            // Auth politika pro login obrazovku — jen id + label providerů,
+            // nikdy clientId/secret/issuer.
+            'auth'        => [
+                'local'     => $policy->localLogin,
+                'providers' => array_map(
+                    static fn ($p) => ['id' => $p->id, 'label' => $p->label],
+                    $policy->providers,
+                ),
+            ],
         ]);
     }
 

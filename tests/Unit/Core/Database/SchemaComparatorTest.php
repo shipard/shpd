@@ -49,6 +49,57 @@ class SchemaComparatorTest extends TestCase
         $this->assertCount(0, $ops);
     }
 
+    public function testRelaxingNotNullToNullableIsSafeModify(): void
+    {
+        $def = TableDefinition::fromArray([
+            'tableId' => 1,
+            'name' => 'Test',
+            'columns' => [
+                ['id' => 'id', 'name' => 'ID', 'type' => 'int', 'primaryKey' => true],
+                ['id' => 'name', 'name' => 'Name', 'type' => 'varchar', 'length' => 100, 'nullable' => true],
+            ],
+        ]);
+        $ops = SchemaComparator::compare(
+            $def,
+            ['id' => 'int(11)', 'name' => 'varchar(100)'],
+            [],
+            ['id' => false, 'name' => false],
+        );
+
+        $this->assertCount(1, $ops);
+        $this->assertSame('modify_column', $ops[0]['op']);
+        $this->assertSame('name', $ops[0]['column']->id);
+    }
+
+    public function testTighteningNullableToNotNullIsNeverModified(): void
+    {
+        // Opačný směr (NULL → NOT NULL) není bezpečný — existující NULL
+        // hodnoty by MODIFY rozbily.
+        $def = $this->makeTable();
+        $ops = SchemaComparator::compare(
+            $def,
+            ['id' => 'int(11)', 'name' => 'varchar(100)'],
+            [],
+            ['id' => false, 'name' => true],
+        );
+
+        $this->assertCount(0, $ops);
+    }
+
+    public function testNullabilityIgnoredWhenNotProvided(): void
+    {
+        $def = TableDefinition::fromArray([
+            'tableId' => 1,
+            'name' => 'Test',
+            'columns' => [
+                ['id' => 'id', 'name' => 'ID', 'type' => 'int', 'primaryKey' => true],
+                ['id' => 'name', 'name' => 'Name', 'type' => 'varchar', 'length' => 100, 'nullable' => true],
+            ],
+        ]);
+        $ops = SchemaComparator::compare($def, ['id' => 'int(11)', 'name' => 'varchar(100)'], []);
+        $this->assertCount(0, $ops);
+    }
+
     public function testSafeVarcharExtension(): void
     {
         $def = TableDefinition::fromArray([

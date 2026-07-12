@@ -50,6 +50,22 @@ class DataSourceConnection
         return $columns;
     }
 
+    /** @return array<string, bool> col_name → nullable, empty if table doesn't exist */
+    public function getTableColumnsNullability(string $table): array
+    {
+        if (!$this->tableExists($table)) {
+            return [];
+        }
+
+        $result = $this->connection->query('SHOW COLUMNS FROM `' . $table . '`');
+        $columns = [];
+        foreach ($result->fetchAll() as $row) {
+            $columns[$row['Field']] = strtoupper((string) $row['Null']) === 'YES';
+        }
+
+        return $columns;
+    }
+
     /** @return string[] index names (excluding PRIMARY), empty if table doesn't exist */
     public function getTableIndexes(string $table): array
     {

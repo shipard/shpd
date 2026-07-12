@@ -187,7 +187,8 @@ class DsUpgradeCommand extends Command
         foreach ($tableDefs as $tableName => $tableDef) {
             $existingColumns = $dsConnection->getTableColumns($tableName);
             $existingIndexes = $dsConnection->getTableIndexes($tableName);
-            $ops = SchemaComparator::compare($tableDef, $existingColumns, $existingIndexes);
+            $existingNullability = $dsConnection->getTableColumnsNullability($tableName);
+            $ops = SchemaComparator::compare($tableDef, $existingColumns, $existingIndexes, $existingNullability);
 
             if (empty($ops)) {
                 $output->writeln('  [OK]     ' . $tableName, OutputInterface::VERBOSITY_VERBOSE);

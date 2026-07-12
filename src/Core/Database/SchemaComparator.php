@@ -7,14 +7,16 @@ namespace Shipard\Core\Database;
 class SchemaComparator
 {
     /**
-     * @param array<string, string> $existingColumns  col_name → SQL type string (e.g. 'varchar(100)', 'int(11)')
-     * @param string[]              $existingIndexes   list of existing index names
+     * @param array<string, string> $existingColumns     col_name → SQL type string (e.g. 'varchar(100)', 'int(11)')
+     * @param string[]              $existingIndexes      list of existing index names
+     * @param array<string, bool>   $existingNullability  col_name → nullable; empty = nullability se neporovnává
      * @return array[]  list of operation arrays
      */
     public static function compare(
         TableDefinition $definition,
         array $existingColumns,
         array $existingIndexes,
+        array $existingNullability = [],
     ): array {
         if (empty($existingColumns)) {
             return [['op' => 'create_table', 'definition' => $definition]];
@@ -27,7 +29,12 @@ class SchemaComparator
                 $ops[] = ['op' => 'add_column', 'column' => $col];
             } else {
                 $existingType = strtolower($existingColumns[$col->id]);
-                if (self::isSafeModify($col, $existingType)) {
+                // Uvolnění NOT NULL → NULL je bezpečné; opačný směr nikdy
+                // (existující NULL hodnoty by MODIFY rozbily).
+                $relaxesNullability = $col->nullable
+                    && array_key_exists($col->id, $existingNullability)
+                    && !$existingNullability[$col->id];
+                if (self::isSafeModify($col, $existingType) || $relaxesNullability) {
                     $ops[] = ['op' => 'modify_column', 'column' => $col];
                 }
             }

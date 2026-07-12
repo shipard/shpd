@@ -196,6 +196,7 @@ class AuthMiddlewareTest extends TestCase
 		$this->assertTrue($result->isAuthenticated);
 		$this->assertSame(42, $result->userId);
 		$this->assertSame('api_key', $result->tokenType);
+		$this->assertFalse($result->isAdmin);
 		$this->assertTrue($this->middleware->lastUsedUpdated);
 	}
 
@@ -307,10 +308,12 @@ class AuthMiddlewareTest extends TestCase
 	public function testValidSessionTokenReturnsAuthenticatedContext(): void
 	{
 		$this->middleware->setMockSessionRow([
-			'id'      => 3,
-			'user_id' => 99,
-			'token'   => 'shpd_st_sometoken',
-			'expires' => $this->futureTimestamp(),
+			'id'             => 3,
+			'user_id'        => 99,
+			'token'          => 'shpd_st_sometoken',
+			'expires'        => $this->futureTimestamp(),
+			'user_is_admin'  => 0,
+			'user_is_active' => 1,
 		]);
 
 		$req = $this->req(server: ['HTTP_AUTHORIZATION' => 'Bearer shpd_st_sometoken']);
@@ -321,15 +324,55 @@ class AuthMiddlewareTest extends TestCase
 		$this->assertSame(99, $result->userId);
 		$this->assertSame('session', $result->tokenType);
 		$this->assertSame('shpd_st_sometoken', $result->token);
+		$this->assertFalse($result->isAdmin);
+	}
+
+	public function testAdminSessionSetsIsAdmin(): void
+	{
+		$this->middleware->setMockSessionRow([
+			'id'             => 3,
+			'user_id'        => 99,
+			'token'          => 'shpd_st_sometoken',
+			'expires'        => $this->futureTimestamp(),
+			'user_is_admin'  => 1,
+			'user_is_active' => 1,
+		]);
+
+		$req = $this->req(server: ['HTTP_AUTHORIZATION' => 'Bearer shpd_st_sometoken']);
+		$result = $this->middleware->handle($req, $this->route(), $this->db);
+
+		$this->assertInstanceOf(AuthContext::class, $result);
+		$this->assertTrue($result->isAdmin);
+	}
+
+	public function testInactiveUserSessionReturns401(): void
+	{
+		// Platná session, ale účet mezitím deaktivovaný — musí být odmítnuta.
+		$this->middleware->setMockSessionRow([
+			'id'             => 3,
+			'user_id'        => 99,
+			'token'          => 'shpd_st_sometoken',
+			'expires'        => $this->futureTimestamp(),
+			'user_is_admin'  => 1,
+			'user_is_active' => 0,
+		]);
+
+		$req = $this->req(server: ['HTTP_AUTHORIZATION' => 'Bearer shpd_st_sometoken']);
+		$result = $this->middleware->handle($req, $this->route(), $this->db);
+
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame(401, $this->getStatus($result));
 	}
 
 	public function testExpiredSessionTokenReturns401(): void
 	{
 		$this->middleware->setMockSessionRow([
-			'id'      => 3,
-			'user_id' => 99,
-			'token'   => 'shpd_st_sometoken',
-			'expires' => $this->pastTimestamp(),
+			'id'             => 3,
+			'user_id'        => 99,
+			'token'          => 'shpd_st_sometoken',
+			'expires'        => $this->pastTimestamp(),
+			'user_is_admin'  => 0,
+			'user_is_active' => 1,
 		]);
 
 		$req = $this->req(server: ['HTTP_AUTHORIZATION' => 'Bearer shpd_st_sometoken']);

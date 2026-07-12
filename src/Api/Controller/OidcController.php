@@ -192,6 +192,7 @@ class OidcController
 				'id'        => (int) $user['id'],
 				'login'     => $user['login'],
 				'full_name' => $user['full_name'],
+				'is_admin'  => (bool) ($user['is_admin'] ?? false),
 			],
 		]);
 	}

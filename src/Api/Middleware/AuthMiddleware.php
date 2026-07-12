@@ -96,7 +96,9 @@ class AuthMiddleware
 
 		$this->updateApiKeyLastUsed((int) $row['id'], $db);
 
-		return new AuthContext(true, (int) $row['user_id'], 'api_key', $token);
+		// API klíč není vázán na uživatelskou session — systémové tabulky jsou
+		// integracím zavřené vždy, provisioning jde přes CLI.
+		return new AuthContext(true, (int) $row['user_id'], 'api_key', $token, isAdmin: false);
 	}
 
 	private function handleSession(string $token, DataSourceConnection $db): AuthContext|Response
@@ -111,7 +113,18 @@ class AuthMiddleware
 			return Response::error('UNAUTHORIZED', 'Session token has expired', 401);
 		}
 
-		return new AuthContext(true, (int) $row['user_id'], 'session', $token);
+		// Deaktivace účtu musí zneplatnit i běžící sessions, ne jen další login.
+		if (!$row['user_is_active']) {
+			return Response::error('UNAUTHORIZED', 'Account is inactive', 401);
+		}
+
+		return new AuthContext(
+			true,
+			(int) $row['user_id'],
+			'session',
+			$token,
+			isAdmin: (bool) $row['user_is_admin'],
+		);
 	}
 
 	protected function lookupApiKey(string $keyHash, string $keyPrefix, DataSourceConnection $db): ?array
@@ -126,7 +139,10 @@ class AuthMiddleware
 	protected function lookupSession(string $token, DataSourceConnection $db): ?array
 	{
 		return $db->fetchRow(
-			'SELECT * FROM core_system_sessions WHERE token = %s',
+			'SELECT s.*, u.is_admin AS user_is_admin, u.is_active AS user_is_active'
+			. ' FROM core_system_sessions s'
+			. ' JOIN core_system_users u ON u.id = s.user_id'
+			. ' WHERE s.token = %s',
 			$token,
 		);
 	}

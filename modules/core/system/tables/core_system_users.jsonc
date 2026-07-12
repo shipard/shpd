@@ -67,6 +67,15 @@
             "group": "personal"
         },
         {
+            "id": "is_admin",
+            "name": "Administrator",
+            "name:cs": "Administrátor",
+            "name:en": "Administrator",
+            "type": "boolean",
+            "default": 0,
+            "group": "credentials"
+        },
+        {
             "id": "is_active",
             "name": "Active",
             "name:cs": "Aktivní",

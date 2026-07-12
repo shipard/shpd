@@ -27,7 +27,8 @@ class UserCreateCommand extends Command
              ->addOption('login', null, InputOption::VALUE_REQUIRED, 'Login name')
              ->addOption('password', null, InputOption::VALUE_REQUIRED, 'Password')
              ->addOption('name', null, InputOption::VALUE_REQUIRED, 'Full name')
-             ->addOption('email', null, InputOption::VALUE_OPTIONAL, 'E-mail address');
+             ->addOption('email', null, InputOption::VALUE_OPTIONAL, 'E-mail address')
+             ->addOption('admin', null, InputOption::VALUE_NONE, 'Grant administrator rights');
     }
 
     protected function getDataSourceDir(): string
@@ -48,6 +49,7 @@ class UserCreateCommand extends Command
         $password = $input->getOption('password');
         $fullName = $input->getOption('name');
         $email = $input->getOption('email');
+        $isAdmin = (bool) $input->getOption('admin');
 
         if (empty($login)) {
             $output->writeln('<error>Error: Option --login is required</error>');
@@ -83,6 +85,7 @@ class UserCreateCommand extends Command
             'full_name'     => $fullName,
             'email'         => $email ?: null,
             'is_active'     => 1,
+            'is_admin'      => $isAdmin ? 1 : 0,
         ]);
 
         $output->writeln('User created successfully.');
@@ -90,6 +93,7 @@ class UserCreateCommand extends Command
         $output->writeln("  Login: {$login}");
         $output->writeln("  Name:  {$fullName}");
         $output->writeln('  Email: ' . ($email ?: '(none)'));
+        $output->writeln('  Admin: ' . ($isAdmin ? 'yes' : 'no'));
 
         return Command::SUCCESS;
     }

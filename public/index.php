@@ -272,7 +272,7 @@ function dispatch(
 		: 'https://' . $host;
 
 	return match ($route->controller) {
-		'auth'    => dispatchAuth($route->action, $request, $auth, $db),
+		'auth'    => dispatchAuth($route->action, $request, $auth, $db, $resolved),
 		'crud'       => dispatchCrud($route, $request, $tables, $db, $configRuntime),
 		'attachment'  => dispatchAttachment($route, $request, $auth, $tables, $db, $resolved),
 		'chat'    => dispatchChat($route, $request, $auth, $db, $tables, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
@@ -640,10 +640,11 @@ function dispatchAuth(
 	Request $request,
 	AuthContext $auth,
 	\Shipard\Core\Database\DataSourceConnection $db,
+	\Shipard\Api\ResolvedDataSource $resolved,
 ): Response {
 	$ctrl = new AuthController();
 	return match ($action) {
-		'login'   => $ctrl->login($request, $db),
+		'login'   => $ctrl->login($request, $db, $resolved->config->getAuthPolicy()),
 		'refresh' => $ctrl->refresh($request, $auth, $db),
 		'logout'  => $ctrl->logout($request, $auth, $db),
 		default   => Response::error('INTERNAL_ERROR', "Unknown auth action: {$action}", 500),

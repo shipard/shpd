@@ -6,14 +6,22 @@ namespace Shipard\Api\Controller;
 use Shipard\Api\AuthContext;
 use Shipard\Api\Request;
 use Shipard\Api\Response;
+use Shipard\Api\SessionService;
+use Shipard\Core\Auth\AuthPolicy;
 use Shipard\Core\Database\DataSourceConnection;
 
 class AuthController
 {
-	private const int SESSION_TTL_SECONDS = 86400; // 24 hours
+	public function __construct(
+		private readonly SessionService $sessions = new SessionService(),
+	) {}
 
-	public function login(Request $request, DataSourceConnection $db): Response
+	public function login(Request $request, DataSourceConnection $db, ?AuthPolicy $policy = null): Response
 	{
+		if ($policy !== null && !$policy->localLogin) {
+			return Response::error('AUTH_METHOD_DISABLED', 'Local login is disabled for this data source', 403);
+		}
+
 		$body = $request->getBody();
 		if ($body === null) {
 			return Response::error('BAD_REQUEST', 'Request body is required', 400);
@@ -31,7 +39,10 @@ class AuthController
 
 		$user = $this->findUserByLogin($login, $db);
 
-		if ($user === null || !password_verify($password, (string) $user['password_hash'])) {
+		// NULL password_hash = OIDC/JIT uživatel bez lokálního hesla — stejná
+		// odpověď jako špatné heslo, ať se existence účtu nedá odvodit.
+		if ($user === null || $user['password_hash'] === null
+			|| !password_verify($password, (string) $user['password_hash'])) {
 			return Response::error('UNAUTHORIZED', 'Invalid credentials', 401);
 		}
 
@@ -40,7 +51,7 @@ class AuthController
 		}
 
 		$userId = (int) $user['id'];
-		[$token, $expiresAt] = $this->createSession($userId, $db);
+		[$token, $expiresAt] = $this->createSession($userId, $db, $request->getClientIp());
 
 		return Response::success([
 			'token'      => $token,
@@ -61,7 +72,7 @@ class AuthController
 
 		$this->invalidateSession($auth->token, $db);
 
-		[$token, $expiresAt] = $this->createSession((int) $auth->userId, $db);
+		[$token, $expiresAt] = $this->createSession((int) $auth->userId, $db, $request->getClientIp());
 
 		return Response::success([
 			'token'      => $token,
@@ -89,37 +100,13 @@ class AuthController
 	}
 
 	/** @return array{0: string, 1: string} [token, expires_at ISO-8601] */
-	protected function createSession(int $userId, DataSourceConnection $db): array
+	protected function createSession(int $userId, DataSourceConnection $db, ?string $clientIp = null): array
 	{
-		$token = 'shpd_st_' . $this->generateToken(48);
-		$expiresAt = date('c', time() + self::SESSION_TTL_SECONDS);
-
-		$db->insertRow('core_system_sessions', [
-			'user_id' => $userId,
-			'token'   => $token,
-			'created' => date('Y-m-d H:i:s'),
-			'expires' => date('Y-m-d H:i:s', time() + self::SESSION_TTL_SECONDS),
-		]);
-
-		return [$token, $expiresAt];
+		return $this->sessions->createSession($userId, $db, $clientIp);
 	}
 
 	protected function invalidateSession(string $token, DataSourceConnection $db): void
 	{
-		$db->execute(
-			'DELETE FROM core_system_sessions WHERE token = %s',
-			$token,
-		);
-	}
-
-	protected function generateToken(int $length): string
-	{
-		$chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-		$charCount = strlen($chars);
-		$result = '';
-		for ($i = 0; $i < $length; $i++) {
-			$result .= $chars[random_int(0, $charCount - 1)];
-		}
-		return $result;
+		$this->sessions->invalidateSession($token, $db);
 	}
 }

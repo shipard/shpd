@@ -8,6 +8,7 @@ use Shipard\Api\AuthContext;
 use Shipard\Api\Controller\AuthController;
 use Shipard\Api\Request;
 use Shipard\Api\Response;
+use Shipard\Core\Auth\AuthPolicy;
 use Shipard\Core\Database\DataSourceConnection;
 
 class TestableAuthController extends AuthController
@@ -39,7 +40,7 @@ class TestableAuthController extends AuthController
 		return $this->mockUser;
 	}
 
-	protected function createSession(int $userId, DataSourceConnection $db): array
+	protected function createSession(int $userId, DataSourceConnection $db, ?string $clientIp = null): array
 	{
 		$token = $this->nextToken;
 		$expiresAt = date('c', time() + 86400);
@@ -161,6 +162,48 @@ class AuthControllerTest extends TestCase
 		$req = Request::fromArray('POST', '/api/v1/_auth/login', [], 'not json', []);
 		$response = $this->controller->login($req, $this->db);
 		$this->assertFalse($response->getPayload()['success']);
+	}
+
+	public function testLoginWithLocalDisabledPolicyReturns403(): void
+	{
+		$hash = password_hash('secret123', PASSWORD_DEFAULT);
+		$this->controller->setMockUser([
+			'id'            => 1,
+			'login'         => 'jan.novak',
+			'full_name'     => 'Jan Novák',
+			'password_hash' => $hash,
+			'is_active'     => 1,
+		]);
+		$policy = AuthPolicy::fromArray([
+			'local'     => false,
+			'providers' => [[
+				'id'           => 'entra',
+				'issuer'       => 'https://login.example.com/v2.0',
+				'clientId'     => 'cid',
+				'clientSecret' => 'secret',
+			]],
+		]);
+
+		$response = $this->controller->login($this->req(['login' => 'jan.novak', 'password' => 'secret123']), $this->db, $policy);
+
+		$this->assertSame(403, $this->getStatus($response));
+		$this->assertSame('AUTH_METHOD_DISABLED', $response->getPayload()['error']['code']);
+	}
+
+	public function testLoginWithNullPasswordHashReturns401WithGenericMessage(): void
+	{
+		$this->controller->setMockUser([
+			'id'            => 3,
+			'login'         => 'jit.user',
+			'full_name'     => 'JIT User',
+			'password_hash' => null,
+			'is_active'     => 1,
+		]);
+
+		$response = $this->controller->login($this->req(['login' => 'jit.user', 'password' => 'whatever']), $this->db);
+
+		$this->assertSame(401, $this->getStatus($response));
+		$this->assertSame('Invalid credentials', $response->getPayload()['error']['message']);
 	}
 
 	// --- Refresh ---

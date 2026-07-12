@@ -1,0 +1,90 @@
+{
+    "tableId": 421,
+    "name": "User identities",
+    "name:cs": "Identity uživatelů",
+    "name:en": "User identities",
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+        {
+            "id": "user_id",
+            "name": "User",
+            "name:cs": "Uživatel",
+            "name:en": "User",
+            "type": "int",
+            "nullable": false
+        },
+        {
+            "id": "provider",
+            "name": "Provider",
+            "name:cs": "Poskytovatel",
+            "name:en": "Provider",
+            "type": "varchar",
+            "length": 50,
+            "nullable": false
+        },
+        {
+            "id": "issuer",
+            "name": "Issuer",
+            "type": "varchar",
+            "length": 255,
+            "nullable": false
+        },
+        {
+            "id": "subject",
+            "name": "Subject",
+            "type": "varchar",
+            "length": 255,
+            "nullable": false
+        },
+        {
+            "id": "email_at_link",
+            "name": "E-mail at link time",
+            "name:cs": "E-mail při propojení",
+            "name:en": "E-mail at link time",
+            "type": "varchar",
+            "length": 200,
+            "nullable": true
+        },
+        {
+            "id": "created",
+            "name": "Created",
+            "name:cs": "Vytvořeno",
+            "name:en": "Created",
+            "type": "datetime",
+            "nullable": false
+        },
+        {
+            "id": "last_login",
+            "name": "Last login",
+            "name:cs": "Poslední přihlášení",
+            "name:en": "Last login",
+            "type": "datetime",
+            "nullable": true
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "unq_issuer_subject",
+            "type": "unique",
+            "columns": [
+                {"column": "issuer"},
+                {"column": "subject"}
+            ]
+        },
+        {
+            "id": "idx_user_id",
+            "type": "index",
+            "columns": [
+                {"column": "user_id"}
+            ]
+        }
+    ]
+}

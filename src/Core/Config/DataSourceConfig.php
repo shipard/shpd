@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace Shipard\Core\Config;
 
+use Shipard\Core\Auth\AuthPolicy;
+
 class DataSourceConfig
 {
     private array $data = [];
+    private ?AuthPolicy $authPolicy = null;
 
     public function __construct(private readonly string $dataSourceDir)
     {
@@ -120,6 +123,17 @@ class DataSourceConfig
     public function getAccountChart(): string
     {
         return $this->data['accountChart'] ?? 'default';
+    }
+
+    /**
+     * Per-DS auth policy from the optional `auth` key in main.json — local login
+     * on/off + OIDC providers. Missing key = today's behaviour (local only).
+     * Validated lazily on first access (fail-fast with a clear message), NOT in
+     * load(), so a broken auth section never blocks CLI commands (break-glass).
+     */
+    public function getAuthPolicy(): AuthPolicy
+    {
+        return $this->authPolicy ??= AuthPolicy::fromArray($this->data['auth'] ?? []);
     }
 
     /**

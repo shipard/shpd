@@ -45,7 +45,7 @@
             "name:en": "Password hash",
             "type": "varchar",
             "length": 255,
-            "nullable": false,
+            "nullable": true,
             "group": "credentials"
         },
         {

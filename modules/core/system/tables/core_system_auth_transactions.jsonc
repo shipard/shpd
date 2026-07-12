@@ -1,0 +1,102 @@
+{
+    "tableId": 422,
+    "name": "Auth transactions",
+    "name:cs": "Autentizační transakce",
+    "name:en": "Auth transactions",
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+        {
+            "id": "state",
+            "name": "State",
+            "type": "varchar",
+            "length": 64,
+            "nullable": false
+        },
+        {
+            "id": "provider",
+            "name": "Provider",
+            "name:cs": "Poskytovatel",
+            "name:en": "Provider",
+            "type": "varchar",
+            "length": 50,
+            "nullable": false
+        },
+        {
+            "id": "pkce_verifier",
+            "name": "PKCE verifier",
+            "type": "varchar",
+            "length": 128,
+            "nullable": false
+        },
+        {
+            "id": "nonce",
+            "name": "Nonce",
+            "type": "varchar",
+            "length": 64,
+            "nullable": false
+        },
+        {
+            "id": "handoff_code",
+            "name": "Handoff code",
+            "name:cs": "Předávací kód",
+            "name:en": "Handoff code",
+            "type": "varchar",
+            "length": 64,
+            "nullable": true
+        },
+        {
+            "id": "session_token",
+            "name": "Session token",
+            "type": "varchar",
+            "length": 128,
+            "nullable": true
+        },
+        {
+            "id": "created",
+            "name": "Created",
+            "name:cs": "Vytvořeno",
+            "name:en": "Created",
+            "type": "datetime",
+            "nullable": false
+        },
+        {
+            "id": "expires",
+            "name": "Expires",
+            "name:cs": "Expirace",
+            "name:en": "Expires",
+            "type": "datetime",
+            "nullable": false
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "unq_state",
+            "type": "unique",
+            "columns": [
+                {"column": "state"}
+            ]
+        },
+        {
+            "id": "idx_handoff_code",
+            "type": "index",
+            "columns": [
+                {"column": "handoff_code"}
+            ]
+        },
+        {
+            "id": "idx_expires",
+            "type": "index",
+            "columns": [
+                {"column": "expires"}
+            ]
+        }
+    ]
+}

@@ -27,6 +27,7 @@ Podrobné specifikace jsou v adresáři `docs/`. Přečti příslušný dokument
 | `docs/dashboard.md` | Dashboard — home feed akčních karet (fáze 2), kartový kontrakt, zdroje, akce + undo, tasks widget, API kontrakt |
 | `docs/app-settings.md` | Settings pages + branding — `SettingsStore`, `settingsPages` v module.jsonc, klíče `app.*`, branding sloty, `/_app` endpointy, jak přidat další stránku |
 | `docs/accounting.md` | Účtování dokladů — rowOperations, účtovací předpis, `AccountingEngine`, deník, lifecycle (stav 40), endpoint reaccount, tab Zaúčtování + `JournalViewer` (Fáze 1–3 hotové), DPH analytiky per vatCode + reverse charge + konvence OSS |
+| `docs/auth.md` | Autentizace — auth politika per DS (`auth` v main.json), OIDC relying party (start/callback/exchange, PKCE, handoff), `SessionService`, mapování identit + JIT, break-glass CLI, test s dockerovým Keycloakem |
 
 ## Architektura — rychlý přehled
 

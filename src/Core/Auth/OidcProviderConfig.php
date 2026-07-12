@@ -25,7 +25,7 @@ final readonly class OidcProviderConfig
 		if (!preg_match('/^[a-z0-9-]+$/', $this->id)) {
 			throw new \RuntimeException("Auth policy: provider id '{$this->id}' must match [a-z0-9-]+");
 		}
-		if (!str_starts_with($this->issuer, 'https://')) {
+		if (!self::isAllowedIssuerUrl($this->issuer)) {
 			throw new \RuntimeException("Auth policy: provider '{$this->id}' issuer must be an https URL");
 		}
 		if ($this->clientId === '') {
@@ -34,6 +34,23 @@ final readonly class OidcProviderConfig
 		if ($this->clientSecret === '') {
 			throw new \RuntimeException("Auth policy: provider '{$this->id}' is missing clientSecret");
 		}
+	}
+
+	/**
+	 * https vždy; http výhradně pro localhost/127.0.0.1 — vývoj proti
+	 * dockerovému Keycloaku/Zitadel bez TLS proxy. Stejné pravidlo vynucují
+	 * OidcDiscovery a OidcClient na skutečných HTTP voláních.
+	 */
+	public static function isAllowedIssuerUrl(string $url): bool
+	{
+		if (str_starts_with($url, 'https://')) {
+			return true;
+		}
+		if (!str_starts_with($url, 'http://')) {
+			return false;
+		}
+		$host = (string) parse_url($url, PHP_URL_HOST);
+		return in_array($host, ['localhost', '127.0.0.1'], true);
 	}
 
 	public static function fromArray(array $data): self

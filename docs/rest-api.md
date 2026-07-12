@@ -166,6 +166,9 @@ http://{ip-adresa}/{ds-id}/api/v1/{tabulka}
 | `POST` | `/api/v1/_auth/login` | Přihlášení (email + heslo → token) |
 | `POST` | `/api/v1/_auth/refresh` | Obnovení tokenu |
 | `DELETE` | `/api/v1/_auth/logout` | Odhlášení (invalidace tokenu) |
+| `GET` | `/api/v1/_auth/oidc/start?provider=x` | Start OIDC flow — 302 na authorize URL providera — **veřejné** |
+| `GET` | `/api/v1/_auth/oidc/callback` | Návrat od IdP — 302 na `/app/?login=oidc&code={handoff}` — **veřejné** |
+| `POST` | `/api/v1/_auth/oidc/exchange` | Výměna handoff kódu za token (envelope jako login) — **veřejné** |
 | `GET` | `/api/v1/_ui/settings/page/{pageId}` | Definice + hodnoty settings page (auth) |
 | `POST` | `/api/v1/_ui/settings/page/{pageId}` | Uložení hodnot settings page (auth) |
 | `GET` | `/api/v1/_app/info` | Název/zkrácený název/ikona/logo aplikace — **veřejné** |
@@ -180,6 +183,14 @@ položky). Vrací `{"accountingState": 1|2, "messages": [...]}`. Doklad mimo
 stav 40 → `422 INVALID_DOC_STATE`, neexistující → `404`. Účtování při
 přechodech stavů běží automaticky přes `documentEventHandlers` — endpoint
 je pro ruční přeúčtování (alert / tlačítko v UI od Fáze 3).
+
+**Veřejné `/_auth/oidc` endpointy:** všechny tři OIDC routy jsou výjimky
+z autentizace (`AuthMiddleware::isExempt()`) — celý flow běží před vznikem
+tokenu. `start` a `exchange` sdílí login-class rate limit (10/min/IP);
+`callback` je chráněný single-use state. Session token se do SPA nikdy
+nepředává v URL — jen jednorázový handoff kód s TTL 60 s, který
+`POST /exchange` vymění za standardní login envelope. Detaily:
+[docs/auth.md](auth.md).
 
 **Veřejné `/_app` endpointy:** `GET /_app/info` a `GET /_app/branding/{slot}`
 jsou výjimky z autentizace (`AuthMiddleware::isExempt()`) — login obrazovka

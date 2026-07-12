@@ -24,6 +24,7 @@ let info = $state({
   icon: null,        // { url, hash } | null
   companyLogo: null, // { url, hash } | null
   theme: null,       // { mode, custom } | null — DS default vzhledu
+  auth: null,        // { local, providers: [{id, label}] } | null — pro login obrazovku
 });
 
 async function load() {
@@ -36,6 +37,7 @@ async function load() {
         icon: response.data.icon ?? null,
         companyLogo: response.data.companyLogo ?? null,
         theme: response.data.theme ?? null,
+        auth: response.data.auth ?? null,
       };
       // DS default → theme store (efektivní vzhled pro follow-uživatele).
       themeStore.setDsDefault(info.theme);
@@ -69,6 +71,7 @@ export const appInfoStore = {
   get icon()        { return info.icon; },
   get companyLogo() { return info.companyLogo; },
   get theme()       { return info.theme; },
+  get auth()        { return info.auth; },
   load,
   apply,
 };

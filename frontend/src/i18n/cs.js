@@ -107,6 +107,14 @@ export default {
   'login.submitting': 'Přihlašování…',
   'login.failed': 'Přihlášení se nezdařilo.',
   'login.languagePicker.label': 'Jazyk:',
+  'login.providerHint': 'nebo se přihlaste přes',
+  'login.error.oidc_denied': 'Přihlášení bylo odmítnuto u poskytovatele identity.',
+  'login.error.oidc_invalid_state': 'Přihlášení vypršelo nebo bylo přerušeno. Zkuste to prosím znovu.',
+  'login.error.oidc_no_account': 'K této identitě neexistuje žádný účet. Kontaktujte správce.',
+  'login.error.oidc_email_ambiguous': 'E-mail odpovídá více účtům — propojení musí provést správce.',
+  'login.error.oidc_account_inactive': 'Propojený účet je deaktivovaný.',
+  'login.error.oidc_login_conflict': 'Účet s tímto přihlašovacím jménem už existuje. Kontaktujte správce.',
+  'login.error.oidc_provider_error': 'Komunikace s poskytovatelem identity selhala. Zkuste to prosím znovu.',
 
   // ── Viewer (záložky, hledání, status, reanalyze dialog) ─────────────────
   'viewer.tab.active': 'Aktivní',

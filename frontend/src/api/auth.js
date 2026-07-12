@@ -4,6 +4,7 @@
  */
 
 import { API_BASE_URL } from './config.js';
+import { buildOidcStartUrl } from './oidc.js';
 
 const TOKEN_KEY = 'shpd_token';
 
@@ -44,6 +45,35 @@ export async function refresh() {
       'Accept-Language': 'cs',
       ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
     },
+  });
+
+  return response.json();
+}
+
+/**
+ * URL OIDC start endpointu pro daného providera — plná navigace prohlížeče
+ * (window.location.href), ne fetch; server odpoví 302 na IdP.
+ * @param {string} providerId
+ * @returns {string}
+ */
+export function oidcStartUrl(providerId) {
+  return buildOidcStartUrl(API_BASE_URL, providerId);
+}
+
+/**
+ * Vymění jednorázový handoff kód z OIDC callbacku za session token.
+ * Vrací stejný envelope jako login ({token, expires_at, user}).
+ * @param {string} code
+ * @returns {Promise<object>} API envelope {success, data, error?}
+ */
+export async function exchangeOidc(code) {
+  const response = await fetch(`${API_BASE_URL}/_auth/oidc/exchange`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept-Language': 'cs',
+    },
+    body: JSON.stringify({ code }),
   });
 
   return response.json();

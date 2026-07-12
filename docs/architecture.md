@@ -69,8 +69,8 @@ HTTP request
 | Třída | Účel |
 |-------|------|
 | `CorsMiddleware` | OPTIONS → 204 s CORS hlavičkami. `applyTo(Response)` přidá hlavičky k libovolné odpovědi. Povolená doména: `https://*.shipard.cz`. |
-| `AuthMiddleware` | Ověřuje Bearer token. API klíče (`shpd_ak_`): SHA-256 lookup v DB, kontrola expirace, is_active, IP allowlist, update last_used_at. Session tokeny (`shpd_st_`): kontrola expirace. Vrací `AuthContext`. |
-| `RateLimitMiddleware` | Okno 60 s. Limity: 1000 (api_key), 300 (session), 10 (login per IP), 60 (anon). Ukládá do `core_system_rate_limits`. Nastavuje `X-RateLimit-Limit/Remaining/Reset`. |
+| `AuthMiddleware` | Ověřuje Bearer token. API klíče (`shpd_ak_`): SHA-256 lookup v DB, kontrola expirace, is_active, IP allowlist, update last_used_at. Session tokeny (`shpd_st_`): kontrola expirace. Vrací `AuthContext`. Exempt: login, OIDC routy (`/_auth/oidc/*` — flow běží před vznikem tokenu), veřejné `/_app` GET. Viz `docs/auth.md`. |
+| `RateLimitMiddleware` | Okno 60 s. Limity: 1000 (api_key), 300 (session), 10 (login-class per IP: login, oidcStart, oidcExchange), 60 (anon). Ukládá do `core_system_rate_limits`. Nastavuje `X-RateLimit-Limit/Remaining/Reset`. |
 
 ### Kontrolery
 

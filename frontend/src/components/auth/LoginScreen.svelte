@@ -1,7 +1,8 @@
 <script>
-  import { login } from '../../api/auth.js';
+  import { login, oidcStartUrl } from '../../api/auth.js';
   import { authStore } from '../../stores/auth.svelte.js';
   import { appInfoStore } from '../../stores/appInfo.svelte.js';
+  import { loginNotice } from '../../stores/loginNotice.svelte.js';
   import { brandingUrl } from '../../api/app.js';
   import { language, t } from '../../i18n/index.js';
   import { translateError } from '../../i18n/errors.js';
@@ -11,13 +12,25 @@
   let loginName = $state('');
   let password = $state('');
   let loading = $state(false);
-  let errorMessage = $state('');
+  // Předvyplněná chyba z OIDC redirectu (?login_error=…) — main.js ji uloží
+  // do loginNotice před mountem.
+  let errorMessage = $state(loginNotice.error ? t(`login.error.${loginNotice.error}`) : '');
+
+  // Auth politika z /_app/info: než se načte (null), zobrazuje se lokální
+  // formulář bez provider tlačítek — bezpečný default shodný s dneškem.
+  const localEnabled = $derived(appInfoStore.auth?.local !== false);
+  const providers = $derived(appInfoStore.auth?.providers ?? []);
 
   let loginInput;
 
   $effect(() => {
     loginInput?.focus();
   });
+
+  function startOidc(providerId) {
+    loginNotice.clear();
+    window.location.href = oidcStartUrl(providerId);
+  }
 
   async function handleSubmit() {
     if (loading) return;
@@ -68,45 +81,65 @@
     {/if}
     <h1 class="shpd-login__heading">{appInfoStore.name ?? t('login.heading')}</h1>
 
-    <div class="shpd-login__field">
-      <label class="shpd-login__label" for="login-name">{t('login.username')}</label>
-      <input
-        bind:this={loginInput}
-        id="login-name"
-        class="shpd-login__input"
-        type="text"
-        autocomplete="username"
-        disabled={loading}
-        bind:value={loginName}
-        onkeydown={handleKeydown}
-      />
-    </div>
+    {#if localEnabled}
+      <div class="shpd-login__field">
+        <label class="shpd-login__label" for="login-name">{t('login.username')}</label>
+        <input
+          bind:this={loginInput}
+          id="login-name"
+          class="shpd-login__input"
+          type="text"
+          autocomplete="username"
+          disabled={loading}
+          bind:value={loginName}
+          onkeydown={handleKeydown}
+        />
+      </div>
 
-    <div class="shpd-login__field">
-      <label class="shpd-login__label" for="login-password">{t('login.password')}</label>
-      <input
-        id="login-password"
-        class="shpd-login__input"
-        type="password"
-        autocomplete="current-password"
-        disabled={loading}
-        bind:value={password}
-        onkeydown={handleKeydown}
-      />
-    </div>
+      <div class="shpd-login__field">
+        <label class="shpd-login__label" for="login-password">{t('login.password')}</label>
+        <input
+          id="login-password"
+          class="shpd-login__input"
+          type="password"
+          autocomplete="current-password"
+          disabled={loading}
+          bind:value={password}
+          onkeydown={handleKeydown}
+        />
+      </div>
+    {/if}
 
     {#if errorMessage}
       <div class="shpd-login__error">{errorMessage}</div>
     {/if}
 
-    <button
-      class="shpd-login__button"
-      type="button"
-      disabled={loading}
-      onclick={handleSubmit}
-    >
-      {loading ? t('login.submitting') : t('login.submit')}
-    </button>
+    {#if localEnabled}
+      <button
+        class="shpd-login__button"
+        type="button"
+        disabled={loading}
+        onclick={handleSubmit}
+      >
+        {loading ? t('login.submitting') : t('login.submit')}
+      </button>
+    {/if}
+
+    {#if providers.length > 0}
+      <!-- Oddělovač jen když je vidět i lokální formulář -->
+      {#if localEnabled}
+        <div class="shpd-login__divider">{t('login.providerHint')}</div>
+      {/if}
+      {#each providers as provider (provider.id)}
+        <button
+          class="shpd-login__provider"
+          type="button"
+          onclick={() => startOidc(provider.id)}
+        >
+          {provider.label}
+        </button>
+      {/each}
+    {/if}
 
     <div class="shpd-login__footer">
       <label class="shpd-login__lang-label" for="login-language">
@@ -224,6 +257,41 @@
   .shpd-login__button:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+  }
+
+  .shpd-login__divider {
+    display: flex;
+    align-items: center;
+    gap: var(--shpd-space-sm);
+    margin: var(--shpd-space-lg) 0 var(--shpd-space-md);
+    font-size: var(--shpd-font-size-sm);
+    color: var(--shpd-color-text-secondary);
+  }
+
+  .shpd-login__divider::before,
+  .shpd-login__divider::after {
+    content: '';
+    flex: 1;
+    border-top: 1px solid var(--shpd-color-border);
+  }
+
+  .shpd-login__provider {
+    display: block;
+    width: 100%;
+    margin-top: var(--shpd-space-sm);
+    padding: var(--shpd-space-sm) var(--shpd-space-md);
+    font-size: var(--shpd-font-size-base);
+    font-weight: 500;
+    color: var(--shpd-color-text);
+    background-color: var(--shpd-color-bg);
+    border: 1px solid var(--shpd-color-border);
+    border-radius: var(--shpd-radius-md);
+    transition: border-color 0.15s, background-color 0.15s;
+  }
+
+  .shpd-login__provider:hover {
+    background-color: var(--shpd-color-bg-secondary);
+    border-color: var(--shpd-color-border-focus);
   }
 
   .shpd-login__footer {

@@ -115,7 +115,9 @@ class OidcDiscovery
 
 	private function fetchJson(string $url): array
 	{
-		if (!str_starts_with($url, 'https://')) {
+		// https vždy; http jen pro localhost (dev Keycloak) — viz
+		// OidcProviderConfig::isAllowedIssuerUrl().
+		if (!OidcProviderConfig::isAllowedIssuerUrl($url)) {
 			throw new OidcException('oidc_provider_error', "OIDC endpoint must be https: {$url}");
 		}
 
@@ -154,7 +156,6 @@ class OidcDiscovery
 		$errno = curl_errno($ch);
 		$error = $errno !== 0 ? curl_error($ch) : null;
 		$statusCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-		curl_close($ch);
 
 		return [
 			'statusCode' => $statusCode,

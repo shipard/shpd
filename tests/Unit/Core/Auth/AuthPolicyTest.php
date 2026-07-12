@@ -123,6 +123,15 @@ class AuthPolicyTest extends TestCase
 		AuthPolicy::fromArray(['providers' => [$this->providerData(['issuer' => 'http://idp.example.com'])]]);
 	}
 
+	public function testHttpLocalhostIssuerIsAllowedForDev(): void
+	{
+		$policy = AuthPolicy::fromArray(['providers' => [
+			$this->providerData(['issuer' => 'http://localhost:8080/realms/shipard-dev']),
+		]]);
+
+		$this->assertSame('http://localhost:8080/realms/shipard-dev', $policy->providers[0]->issuer);
+	}
+
 	public function testMissingClientIdIsRejected(): void
 	{
 		$this->expectException(\RuntimeException::class);

@@ -98,6 +98,14 @@ export default {
   'login.submitting': 'Signing in…',
   'login.failed': 'Sign-in failed.',
   'login.languagePicker.label': 'Language:',
+  'login.providerHint': 'or sign in with',
+  'login.error.oidc_denied': 'Sign-in was denied at the identity provider.',
+  'login.error.oidc_invalid_state': 'The sign-in attempt expired or was interrupted. Please try again.',
+  'login.error.oidc_no_account': 'No account is linked to this identity. Contact your administrator.',
+  'login.error.oidc_email_ambiguous': 'The e-mail matches multiple accounts — an administrator must link them.',
+  'login.error.oidc_account_inactive': 'The linked account is inactive.',
+  'login.error.oidc_login_conflict': 'An account with this login already exists. Contact your administrator.',
+  'login.error.oidc_provider_error': 'Communication with the identity provider failed. Please try again.',
 
   // ── Viewer (tabs, search, status, reanalyze dialog) ─────────────────────
   'viewer.tab.active': 'Active',

@@ -134,6 +134,22 @@
         }
     ],
 
+    "alertChecks": [
+        {
+            "id": "core.mail.outbox_health",
+            "name": "Outbound mail queue health",
+            "name:cs": "Zdraví fronty odchozí pošty",
+            "name:en": "Outbound mail queue health",
+            "description": "Failed outbound messages in the last 24 h and stuck pending messages (worker or relay down).",
+            "description:cs": "Selhané odchozí zprávy za posledních 24 h a zaseklé pending zprávy (worker nebo relay leží).",
+            "description:en": "Failed outbound messages in the last 24 h and stuck pending messages (worker or relay down).",
+            "class": "Shipard\\Core\\Mail\\MailOutboxAlertCheck",
+            "severity": "warning",
+            "interval": "15m",
+            "tags": ["mail"]
+        }
+    ],
+
     "documentEventHandlers": [
         {
             "table": "docs_core_heads",

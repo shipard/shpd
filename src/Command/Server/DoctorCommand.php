@@ -6,6 +6,7 @@ namespace Shipard\Command\Server;
 
 use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Database\DataSourceConnection;
+use Shipard\Core\Mail\MailRelayConfig;
 use Shipard\Core\Server\HealthChecker;
 use Shipard\Core\Server\PermissionSpec;
 use Symfony\Component\Console\Command\Command;
@@ -110,9 +111,14 @@ class DoctorCommand extends Command
         $dsErrors = $this->checkDataSourceConnections($spec, $output, $mode);
 
         $output->writeln('');
+        $output->writeln('<info>Outbound mail</info>');
+        $mailErrors = $this->checkMailOutbound($spec, $config, $output);
+
+        $output->writeln('');
         $output->writeln(str_repeat('─', 55));
 
         $totalIssues = count($issues) + $dsErrors + $fpmErrors + $nginxErrors + $toolErrors
+                     + $mailErrors
                      + ($poolUser !== $shipardUser ? 1 : 0);
         if ($totalIssues === 0) {
             $output->writeln('<info>✓ All checks passed.</info>');
@@ -180,6 +186,89 @@ class DoctorCommand extends Command
             } catch (\Throwable $e) {
                 $output->writeln("  ✗ {$id}: " . $e->getMessage());
                 $errors++;
+            }
+        }
+        return $errors;
+    }
+
+    /**
+     * Stav odchozí pošty per DS: relay konfigurace (DS override ?? server
+     * default) / aktivní senders, terminálně selhané zprávy za 24 h,
+     * hloubka fronty a overdue pending (> 30 min = error, fronta stojí).
+     * Chybějící tabulky (před ds-upgrade) = skip, ne chyba.
+     *
+     * @param array $serverConfig dekódovaný server.json
+     * @return int number of errors
+     */
+    protected function checkMailOutbound(PermissionSpec $spec, array $serverConfig, OutputInterface $output): int
+    {
+        $serverRelay = null;
+        try {
+            $relayData = $serverConfig['mail']['relay'] ?? null;
+            if (is_array($relayData)) {
+                $serverRelay = MailRelayConfig::fromArray($relayData);
+            }
+        } catch (\Throwable $e) {
+            $output->writeln('  ✗ server.json mail.relay is invalid: ' . $e->getMessage());
+            return 1;
+        }
+
+        $dsList = $spec->discoverDataSources();
+        if (count($dsList) === 0) {
+            $output->writeln('  (no data sources)');
+            return 0;
+        }
+
+        $errors = 0;
+        foreach ($dsList as $dsDir) {
+            $id = basename($dsDir);
+            try {
+                $cfg = new DataSourceConfig($dsDir);
+                $conn = new DataSourceConnection($cfg);
+
+                $relay = $cfg->getMailRelay() ?? $serverRelay;
+                $senders = (int) $conn->fetchSingle(
+                    'SELECT COUNT(*) FROM core_mail_senders WHERE is_active = 1',
+                );
+
+                $transport = $relay !== null
+                    ? "relay {$relay->host}:{$relay->port}"
+                    : 'no relay';
+                $transport .= ", {$senders} sender(s)";
+
+                if ($relay === null && $senders === 0) {
+                    $output->writeln("  ⚠ {$id}: outbound mail not configured ({$transport})");
+                    continue;
+                }
+
+                $now = new \DateTimeImmutable();
+                $failed = (int) $conn->fetchSingle(
+                    "SELECT COUNT(*) FROM core_mail_outbox WHERE state = 'failed'"
+                    . ' AND id IN (SELECT outbox_id FROM core_mail_outbox_log WHERE ts >= %s)',
+                    $now->modify('-24 hours')->format('Y-m-d H:i:s'),
+                );
+                $pending = (int) $conn->fetchSingle(
+                    "SELECT COUNT(*) FROM core_mail_outbox WHERE state = 'pending'",
+                );
+                $overdue = (int) $conn->fetchSingle(
+                    "SELECT COUNT(*) FROM core_mail_outbox WHERE state = 'pending' AND next_attempt <= %s",
+                    $now->modify('-30 minutes')->format('Y-m-d H:i:s'),
+                );
+
+                if ($overdue > 0) {
+                    $output->writeln("  ✗ {$id}: {$overdue} pending overdue > 30 min ({$transport}, queue {$pending})");
+                    $output->writeln('    <comment>→ Worker not running or transport down — check cron and `shpd-ds mail-send-test`</comment>');
+                    $errors++;
+                } elseif ($failed > 0) {
+                    $output->writeln("  ⚠ {$id}: {$failed} failed in last 24 h ({$transport}, queue {$pending})");
+                    $output->writeln('    <comment>→ Re-queue after fixing: shpd-ds mail-outbox-retry --id N</comment>');
+                } else {
+                    $output->writeln("  ✓ {$id}: {$transport}, queue {$pending}");
+                }
+            } catch (\Throwable $e) {
+                // Tabulky ještě nemusí existovat (před ds-upgrade) nebo DS
+                // nejde připojit — connectivity hlásí checkDataSourceConnections.
+                $output->writeln("  - {$id}: skipped (" . $e->getMessage() . ')');
             }
         }
         return $errors;

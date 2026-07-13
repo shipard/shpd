@@ -1,0 +1,313 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Shipard\Core\Mail;
+
+use Shipard\Core\Database\DataSourceConnection;
+use Shipard\Core\Mail\Exception\MailValidationException;
+use Shipard\Core\Settings\SettingsStore;
+
+/**
+ * Fronta odchozí pošty (D25) — enqueue, stavový automat, exponenciální
+ * backoff, atomický claim a recovery po pádu workeru. Stavy zprávy:
+ * pending → sending → sent | failed (terminal, vrací mail-outbox-retry);
+ * cancelled je rezervován pro budoucí UI.
+ *
+ * Čas se všude předává parametrem (žádné NOW() v SQL) kvůli
+ * testovatelnosti — vzor AlertReconciler.
+ */
+class MailOutboxService
+{
+    public const TABLE = 'core_mail_outbox';
+    public const LOG_TABLE = 'core_mail_outbox_log';
+
+    /** Odklad po 1.–5. selhání (s); 6. selhání je terminální `failed`. */
+    public const BACKOFF = [60, 300, 1800, 7200, 21600];
+    public const MAX_ATTEMPTS = 6;
+
+    /** `sending` starší než tohle = spadlý worker, recovery vrací do `pending`. */
+    public const STALE_SENDING_SEC = 600;
+
+    public const PRIORITY_HIGH = 10;
+
+    private const ERROR_MAX_LEN = 500;
+
+    public function __construct(
+        private readonly DataSourceConnection $db,
+        private readonly TransportResolver $resolver,
+        private readonly MailComposer $composer,
+        private readonly SettingsStore $settings,
+    ) {
+    }
+
+    /**
+     * Zařadí zprávu do fronty se stavem `pending` a okamžitým `next_attempt`.
+     * From doplní z DS defaultu (`mail.defaultFrom`), bez něj validační chyba.
+     *
+     * @return int id řádku outboxu
+     */
+    public function enqueue(OutboundMessage $message, ?\DateTimeImmutable $now = null): int
+    {
+        $now ??= new \DateTimeImmutable();
+
+        $from = trim((string) ($message->from ?? ''));
+        if ($from === '') {
+            $from = trim((string) ($this->settings->get('mail.defaultFrom') ?? ''));
+        }
+        if ($from === '') {
+            throw new MailValidationException(
+                "Outbound message has no from address and setting 'mail.defaultFrom' is not set",
+            );
+        }
+        if (filter_var($from, FILTER_VALIDATE_EMAIL) === false) {
+            throw new MailValidationException("Invalid from address: '{$from}'");
+        }
+
+        $to = trim($message->to);
+        if (filter_var($to, FILTER_VALIDATE_EMAIL) === false) {
+            throw new MailValidationException("Invalid to address: '{$to}'");
+        }
+
+        if (trim($message->subject) === '') {
+            throw new MailValidationException('Outbound message subject must not be empty');
+        }
+        if (trim($message->sourceModule) === '') {
+            throw new MailValidationException('Outbound message sourceModule must not be empty');
+        }
+        if (($message->bodyText ?? '') === '' && ($message->bodyHtml ?? '') === '') {
+            throw new MailValidationException('Outbound message has no body (text nor html)');
+        }
+
+        $attachmentIds = [];
+        foreach ($message->attachments as $attachmentId) {
+            if (!is_int($attachmentId) || $attachmentId <= 0) {
+                throw new MailValidationException('Attachment ids must be positive integers');
+            }
+            $attachmentIds[] = $attachmentId;
+        }
+
+        $nowStr = $now->format('Y-m-d H:i:s');
+
+        return $this->db->insertRow(self::TABLE, [
+            'created'             => $nowStr,
+            'created_by'          => $message->createdBy,
+            'source_module'       => $message->sourceModule,
+            'source_ref'          => $message->sourceRef,
+            'email_from'          => $from,
+            'email_to'            => $to,
+            'recipient_person_id' => $message->recipientPersonId,
+            'subject'             => $message->subject,
+            'body_text'           => $message->bodyText,
+            'body_html'           => $message->bodyHtml,
+            'attachments'         => $attachmentIds === [] ? null : json_encode($attachmentIds),
+            'priority'            => $message->priority,
+            'state'               => 'pending',
+            'attempt_count'       => 0,
+            'next_attempt'        => $nowStr,
+        ]);
+    }
+
+    /**
+     * Enqueue s priority high + okamžitý synchronní pokus o odeslání
+     * v témže requestu (reset hesla nesmí čekat na cron). Selhání pokusu
+     * nikdy nepropaguje — zprávu převezme fronta; validační chyby
+     * z enqueue propagují.
+     *
+     * @return int id řádku outboxu
+     */
+    public function enqueueAndSend(OutboundMessage $message, ?\DateTimeImmutable $now = null): int
+    {
+        $prioritized = new OutboundMessage(
+            to: $message->to,
+            subject: $message->subject,
+            sourceModule: $message->sourceModule,
+            from: $message->from,
+            bodyText: $message->bodyText,
+            bodyHtml: $message->bodyHtml,
+            attachments: $message->attachments,
+            recipientPersonId: $message->recipientPersonId,
+            sourceRef: $message->sourceRef,
+            priority: max($message->priority, self::PRIORITY_HIGH),
+            createdBy: $message->createdBy,
+        );
+
+        $id = $this->enqueue($prioritized, $now);
+
+        try {
+            $this->attemptSend($id, $now);
+        } catch (\Throwable $e) {
+            // Transportní/compose chyby řeší fail větev attemptSend;
+            // tohle chytá neočekávané infra chyby — request nesmí spadnout.
+            error_log("MailOutboxService::enqueueAndSend outbox #{$id}: {$e->getMessage()}");
+        }
+
+        return $id;
+    }
+
+    /**
+     * Jeden pokus o odeslání zprávy. Atomický claim (UPDATE podmíněný
+     * stavem `pending`) — souběžný druhý claim téže zprávy vrátí false.
+     * Úspěch → `sent`; chyba → backoff, po MAX_ATTEMPTS terminální
+     * `failed`. Každý pokus zapíše řádek do logu.
+     */
+    public function attemptSend(int $id, ?\DateTimeImmutable $now = null): bool
+    {
+        $now ??= new \DateTimeImmutable();
+        $nowStr = $now->format('Y-m-d H:i:s');
+
+        $this->db->execute(
+            "UPDATE core_mail_outbox SET state = 'sending', claimed_at = %s WHERE id = %i AND state = 'pending'",
+            $nowStr,
+            $id,
+        );
+        if ($this->db->getAffectedRows() !== 1) {
+            return false;
+        }
+
+        $row = $this->db->fetchRow('SELECT * FROM core_mail_outbox WHERE id = %i', $id);
+        if ($row === null) {
+            return false;
+        }
+
+        $attempt = (int) $row['attempt_count'] + 1;
+        $transportLabel = 'unresolved';
+        $startNs = hrtime(true);
+
+        try {
+            $resolved = $this->resolver->resolve((string) $row['email_from']);
+            $transportLabel = $resolved->label;
+
+            $email = $this->composer->compose($row);
+            $sentMessage = $resolved->transport->send($email);
+
+            $this->insertLogRow($id, $attempt, $nowStr, $transportLabel, 'ok', $sentMessage?->getDebug(), $startNs);
+            $this->db->updateWhere(self::TABLE, [
+                'state'         => 'sent',
+                'sent_at'       => $nowStr,
+                'attempt_count' => $attempt,
+                'claimed_at'    => null,
+                'last_error'    => null,
+            ], 'id = %i', $id);
+
+            return true;
+        } catch (\Throwable $e) {
+            $error = $this->truncate($e->getMessage());
+            $this->insertLogRow($id, $attempt, $nowStr, $transportLabel, 'fail', $error, $startNs);
+
+            if ($attempt >= self::MAX_ATTEMPTS) {
+                $this->db->updateWhere(self::TABLE, [
+                    'state'         => 'failed',
+                    'attempt_count' => $attempt,
+                    'claimed_at'    => null,
+                    'last_error'    => $error,
+                ], 'id = %i', $id);
+            } else {
+                $delay = self::BACKOFF[$attempt - 1];
+                $this->db->updateWhere(self::TABLE, [
+                    'state'         => 'pending',
+                    'attempt_count' => $attempt,
+                    'claimed_at'    => null,
+                    'last_error'    => $error,
+                    'next_attempt'  => $now->modify("+{$delay} seconds")->format('Y-m-d H:i:s'),
+                ], 'id = %i', $id);
+            }
+
+            return false;
+        }
+    }
+
+    /**
+     * Zpracuje due zprávy fronty (worker `mail-outbox-run`). Nejdřív
+     * recovery: `sending` starší STALE_SENDING_SEC (pád workeru) vrací
+     * do `pending`, pak due `pending` v pořadí priorita DESC, stáří ASC.
+     *
+     * @return array{requeued: int, processed: int, sent: int, retried: int, failed: int}
+     */
+    public function processQueue(int $limit = 50, ?\DateTimeImmutable $now = null): array
+    {
+        $now ??= new \DateTimeImmutable();
+        $nowStr = $now->format('Y-m-d H:i:s');
+
+        $this->db->execute(
+            "UPDATE core_mail_outbox SET state = 'pending', claimed_at = NULL"
+            . " WHERE state = 'sending' AND claimed_at < %s",
+            $now->modify('-' . self::STALE_SENDING_SEC . ' seconds')->format('Y-m-d H:i:s'),
+        );
+        $requeued = $this->db->getAffectedRows();
+
+        $rows = $this->db->fetchAll(
+            "SELECT id FROM core_mail_outbox WHERE state = 'pending' AND next_attempt <= %s"
+            . ' ORDER BY priority DESC, created ASC LIMIT %i',
+            $nowStr,
+            $limit,
+        );
+
+        $stats = ['requeued' => $requeued, 'processed' => 0, 'sent' => 0, 'retried' => 0, 'failed' => 0];
+
+        foreach ($rows as $row) {
+            $id = (int) $row['id'];
+            $stats['processed']++;
+
+            if ($this->attemptSend($id, $now)) {
+                $stats['sent']++;
+                continue;
+            }
+
+            $state = (string) $this->db->fetchSingle(
+                'SELECT state FROM core_mail_outbox WHERE id = %i',
+                $id,
+            );
+            if ($state === 'failed') {
+                $stats['failed']++;
+            } else {
+                $stats['retried']++;
+            }
+        }
+
+        return $stats;
+    }
+
+    /** Vrátí `failed` zprávu do fronty s vynulovaným počítadlem (mail-outbox-retry). */
+    public function retry(int $id, ?\DateTimeImmutable $now = null): bool
+    {
+        $now ??= new \DateTimeImmutable();
+
+        $this->db->execute(
+            "UPDATE core_mail_outbox SET state = 'pending', attempt_count = 0,"
+            . " next_attempt = %s, last_error = NULL WHERE id = %i AND state = 'failed'",
+            $now->format('Y-m-d H:i:s'),
+            $id,
+        );
+
+        return $this->db->getAffectedRows() === 1;
+    }
+
+    private function insertLogRow(
+        int $outboxId,
+        int $attempt,
+        string $ts,
+        string $transport,
+        string $result,
+        ?string $smtpResponse,
+        int $startNs,
+    ): void {
+        $this->db->insertRow(self::LOG_TABLE, [
+            'outbox_id'     => $outboxId,
+            'attempt'       => $attempt,
+            'ts'            => $ts,
+            'transport'     => $transport,
+            'result'        => $result,
+            'smtp_response' => $this->truncate($smtpResponse),
+            'duration_ms'   => intdiv(hrtime(true) - $startNs, 1_000_000),
+        ]);
+    }
+
+    private function truncate(?string $text): ?string
+    {
+        if ($text === null || $text === '') {
+            return $text === '' ? null : $text;
+        }
+        return mb_substr($text, 0, self::ERROR_MAX_LEN);
+    }
+}

@@ -1,0 +1,137 @@
+{
+    "tableId": 423,
+    "name": "Mail senders",
+    "name:cs": "Odesílatelé pošty",
+    "name:en": "Mail senders",
+
+    "displayPattern": "{email_from}",
+
+    "columnGroups": [
+        {
+            "id": "identity",
+            "name": "Identity",
+            "name:cs": "Identifikace",
+            "name:en": "Identity"
+        },
+        {
+            "id": "transport",
+            "name": "SMTP transport",
+            "name:cs": "SMTP transport",
+            "name:en": "SMTP transport"
+        },
+        {
+            "id": "status",
+            "name": "Status",
+            "name:cs": "Stav",
+            "name:en": "Status"
+        }
+    ],
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+
+        // --- identity ---
+
+        {
+            "id": "email_from",
+            "name": "From address",
+            "name:cs": "Adresa odesílatele",
+            "name:en": "From address",
+            "type": "varchar",
+            "length": 200,
+            "nullable": false,
+            "group": "identity"
+        },
+
+        // --- transport ---
+
+        {
+            "id": "smtp_host",
+            "name": "SMTP host",
+            "name:cs": "SMTP server",
+            "name:en": "SMTP host",
+            "type": "varchar",
+            "length": 200,
+            "nullable": false,
+            "group": "transport"
+        },
+        {
+            "id": "smtp_port",
+            "name": "SMTP port",
+            "name:cs": "SMTP port",
+            "name:en": "SMTP port",
+            "type": "int",
+            "nullable": false,
+            "default": 587,
+            "group": "transport"
+        },
+        {
+            "id": "smtp_security",
+            "name": "Security",
+            "name:cs": "Zabezpečení",
+            "name:en": "Security",
+            "type": "varchar",
+            "length": 10,
+            "nullable": false,
+            "default": "starttls",
+            "group": "transport"
+        },
+        {
+            "id": "smtp_username",
+            "name": "SMTP username",
+            "name:cs": "SMTP uživatel",
+            "name:en": "SMTP username",
+            "type": "varchar",
+            "length": 200,
+            "nullable": true,
+            "group": "transport"
+        },
+        {
+            "id": "password_enc",
+            "name": "Password (encrypted)",
+            "name:cs": "Heslo (šifrované)",
+            "name:en": "Password (encrypted)",
+            "type": "encrypted_text",
+            "nullable": true,
+            "sensitive": true,
+            "group": "transport"
+        },
+
+        // --- status ---
+
+        {
+            "id": "is_active",
+            "name": "Active",
+            "name:cs": "Aktivní",
+            "name:en": "Active",
+            "type": "boolean",
+            "default": 1,
+            "group": "status"
+        },
+        {
+            "id": "created",
+            "name": "Created",
+            "name:cs": "Vytvořeno",
+            "name:en": "Created",
+            "type": "datetime",
+            "nullable": false,
+            "group": "status"
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "unq_email_from",
+            "type": "unique",
+            "columns": [
+                {"column": "email_from"}
+            ]
+        }
+    ]
+}

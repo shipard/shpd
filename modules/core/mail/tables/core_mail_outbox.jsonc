@@ -1,0 +1,236 @@
+{
+    "tableId": 424,
+    "name": "Mail outbox",
+    "name:cs": "Odchozí pošta",
+    "name:en": "Mail outbox",
+
+    "displayPattern": "{subject}",
+
+    "columnGroups": [
+        {
+            "id": "origin",
+            "name": "Origin",
+            "name:cs": "Původ",
+            "name:en": "Origin"
+        },
+        {
+            "id": "message",
+            "name": "Message",
+            "name:cs": "Zpráva",
+            "name:en": "Message"
+        },
+        {
+            "id": "queue",
+            "name": "Queue",
+            "name:cs": "Fronta",
+            "name:en": "Queue"
+        }
+    ],
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+
+        // --- origin ---
+
+        {
+            "id": "created",
+            "name": "Created",
+            "name:cs": "Vytvořeno",
+            "name:en": "Created",
+            "type": "datetime",
+            "nullable": false,
+            "group": "origin"
+        },
+        {
+            "id": "created_by",
+            "name": "Created by",
+            "name:cs": "Vytvořil",
+            "name:en": "Created by",
+            "type": "int",
+            "nullable": true,
+            "reference": "core_system_users",
+            "group": "origin"
+        },
+        {
+            "id": "source_module",
+            "name": "Source module",
+            "name:cs": "Zdrojový modul",
+            "name:en": "Source module",
+            "type": "varchar",
+            "length": 50,
+            "nullable": false,
+            "group": "origin"
+        },
+        {
+            "id": "source_ref",
+            "name": "Source reference",
+            "name:cs": "Zdrojová reference",
+            "name:en": "Source reference",
+            "type": "varchar",
+            "length": 100,
+            "nullable": true,
+            "group": "origin"
+        },
+
+        // --- message ---
+
+        {
+            "id": "email_from",
+            "name": "From",
+            "name:cs": "Odesílatel",
+            "name:en": "From",
+            "type": "varchar",
+            "length": 200,
+            "nullable": false,
+            "group": "message"
+        },
+        {
+            "id": "email_to",
+            "name": "To",
+            "name:cs": "Příjemce",
+            "name:en": "To",
+            "type": "varchar",
+            "length": 200,
+            "nullable": false,
+            "group": "message"
+        },
+        {
+            "id": "recipient_person_id",
+            "name": "Recipient person",
+            "name:cs": "Osoba příjemce",
+            "name:en": "Recipient person",
+            "type": "int",
+            "nullable": true,
+            "reference": "base_persons_persons",
+            "group": "message"
+        },
+        {
+            "id": "subject",
+            "name": "Subject",
+            "name:cs": "Předmět",
+            "name:en": "Subject",
+            "type": "varchar",
+            "length": 500,
+            "nullable": false,
+            "group": "message"
+        },
+        {
+            "id": "body_text",
+            "name": "Body (text)",
+            "name:cs": "Tělo (text)",
+            "name:en": "Body (text)",
+            "type": "text",
+            "nullable": true,
+            "group": "message"
+        },
+        {
+            "id": "body_html",
+            "name": "Body (HTML)",
+            "name:cs": "Tělo (HTML)",
+            "name:en": "Body (HTML)",
+            "type": "text",
+            "nullable": true,
+            "group": "message"
+        },
+        {
+            "id": "attachments",
+            "name": "Attachments (JSON)",
+            "name:cs": "Přílohy (JSON)",
+            "name:en": "Attachments (JSON)",
+            "type": "text",
+            "nullable": true,
+            "group": "message"
+        },
+
+        // --- queue ---
+
+        {
+            "id": "priority",
+            "name": "Priority",
+            "name:cs": "Priorita",
+            "name:en": "Priority",
+            "type": "tinyint",
+            "default": 0,
+            "group": "queue"
+        },
+        {
+            "id": "state",
+            "name": "State",
+            "name:cs": "Stav",
+            "name:en": "State",
+            "type": "varchar",
+            "length": 20,
+            "nullable": false,
+            "group": "queue"
+        },
+        {
+            "id": "attempt_count",
+            "name": "Attempts",
+            "name:cs": "Počet pokusů",
+            "name:en": "Attempts",
+            "type": "int",
+            "default": 0,
+            "group": "queue"
+        },
+        {
+            "id": "next_attempt",
+            "name": "Next attempt",
+            "name:cs": "Další pokus",
+            "name:en": "Next attempt",
+            "type": "datetime",
+            "nullable": true,
+            "group": "queue"
+        },
+        {
+            "id": "claimed_at",
+            "name": "Claimed at",
+            "name:cs": "Převzato",
+            "name:en": "Claimed at",
+            "type": "datetime",
+            "nullable": true,
+            "group": "queue"
+        },
+        {
+            "id": "sent_at",
+            "name": "Sent at",
+            "name:cs": "Odesláno",
+            "name:en": "Sent at",
+            "type": "datetime",
+            "nullable": true,
+            "group": "queue"
+        },
+        {
+            "id": "last_error",
+            "name": "Last error",
+            "name:cs": "Poslední chyba",
+            "name:en": "Last error",
+            "type": "varchar",
+            "length": 500,
+            "nullable": true,
+            "group": "queue"
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "idx_state",
+            "type": "index",
+            "columns": [
+                {"column": "state"}
+            ]
+        },
+        {
+            "id": "idx_next_attempt",
+            "type": "index",
+            "columns": [
+                {"column": "next_attempt"}
+            ]
+        }
+    ]
+}

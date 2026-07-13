@@ -1,0 +1,88 @@
+{
+    "tableId": 425,
+    "name": "Mail outbox log",
+    "name:cs": "Log odchozí pošty",
+    "name:en": "Mail outbox log",
+
+    "displayPattern": "{outbox_id} / {attempt}",
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+        {
+            "id": "outbox_id",
+            "name": "Outbox message",
+            "name:cs": "Zpráva outboxu",
+            "name:en": "Outbox message",
+            "type": "int",
+            "nullable": false,
+            "reference": "core_mail_outbox"
+        },
+        {
+            "id": "attempt",
+            "name": "Attempt",
+            "name:cs": "Pokus",
+            "name:en": "Attempt",
+            "type": "int",
+            "nullable": false
+        },
+        {
+            "id": "ts",
+            "name": "Timestamp",
+            "name:cs": "Čas",
+            "name:en": "Timestamp",
+            "type": "datetime",
+            "nullable": false
+        },
+        {
+            "id": "transport",
+            "name": "Transport",
+            "name:cs": "Transport",
+            "name:en": "Transport",
+            "type": "varchar",
+            "length": 200,
+            "nullable": false
+        },
+        {
+            "id": "result",
+            "name": "Result",
+            "name:cs": "Výsledek",
+            "name:en": "Result",
+            "type": "varchar",
+            "length": 10,
+            "nullable": false
+        },
+        {
+            "id": "smtp_response",
+            "name": "SMTP response",
+            "name:cs": "Odpověď SMTP",
+            "name:en": "SMTP response",
+            "type": "varchar",
+            "length": 500,
+            "nullable": true
+        },
+        {
+            "id": "duration_ms",
+            "name": "Duration (ms)",
+            "name:cs": "Trvání (ms)",
+            "name:en": "Duration (ms)",
+            "type": "int",
+            "nullable": true
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "idx_outbox_id",
+            "type": "index",
+            "columns": [
+                {"column": "outbox_id"}
+            ]
+        }
+    ]
+}

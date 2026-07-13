@@ -3,9 +3,9 @@
     "name": "Mail",
     "name:cs": "Pošta",
     "name:en": "Mail",
-    "description": "Incoming and outgoing e-mail messages (Phase 1: incoming only)",
-    "description:cs": "Došlá a odeslaná pošta (Fáze 1: pouze došlá)",
-    "description:en": "Incoming and outgoing e-mail messages (Phase 1: incoming only)",
+    "description": "Incoming and outgoing e-mail messages",
+    "description:cs": "Došlá a odchozí pošta",
+    "description:en": "Incoming and outgoing e-mail messages",
 
     "dependencies": [
         "core.system",
@@ -21,14 +21,20 @@
         "core_mail_incoming_idempotency",
         "core_mail_extracted_documents",
         "core_mail_ai_profiles",
-        "core_mail_analysis_claims"
+        "core_mail_analysis_claims",
+        "core_mail_senders",
+        "core_mail_outbox",
+        "core_mail_outbox_log"
     ],
 
     // ds-reset chrání AI profily — je to konfigurace (vč. admin úprav
     // name/is_default/is_active a lokálně laděného promptu), ne migrovaná
     // data. Backendy chrání analogicky core.ai.
+    // Senders jsou konfigurace (transporty per from adresa); outbox a log
+    // jsou data — při resetu se mažou.
     "keepOnReset": [
-        "core_mail_ai_profiles"
+        "core_mail_ai_profiles",
+        "core_mail_senders"
     ],
 
     // core_mail_incoming_messages má viewer core.mail.incoming (Došlá pošta)
@@ -40,7 +46,34 @@
         { "table": "core_mail_incoming_idempotency","section": "other", "subsection": "other.mail", "order": 30 },
         { "table": "core_mail_extracted_documents", "section": "other", "subsection": "other.mail", "order": 35 },
         { "viewer": "core.mail.aiProfiles",         "section": "other", "subsection": "other.mail", "order": 50 },
-        { "table": "core_mail_analysis_claims",     "section": "other", "subsection": "other.mail", "order": 60 }
+        { "table": "core_mail_analysis_claims",     "section": "other", "subsection": "other.mail", "order": 60 },
+        { "table": "core_mail_senders",             "section": "other", "subsection": "other.mail", "order": 70 },
+        { "table": "core_mail_outbox",              "section": "other", "subsection": "other.mail", "order": 75 },
+        { "table": "core_mail_outbox_log",          "section": "other", "subsection": "other.mail", "order": 80 },
+        { "page": "mailOutbound",                   "section": "other", "subsection": "other.mail", "order": 85 }
+    ],
+
+    "settingsPages": [
+        {
+            "id": "mailOutbound",
+            "name": "Outbound mail",
+            "name:cs": "Odchozí pošta",
+            "name:en": "Outbound mail",
+            "icon": "mail",
+            "fields": [
+                {
+                    "id": "mail.defaultFrom",
+                    "type": "text",
+                    "name": "Default from address",
+                    "name:cs": "Výchozí adresa odesílatele",
+                    "name:en": "Default from address",
+                    "hint": "Used when the caller does not specify a from address.",
+                    "hint:cs": "Použije se, když volající neurčí adresu odesílatele.",
+                    "hint:en": "Used when the caller does not specify a from address.",
+                    "maxLength": 200
+                }
+            ]
+        }
     ],
 
     "viewers": [

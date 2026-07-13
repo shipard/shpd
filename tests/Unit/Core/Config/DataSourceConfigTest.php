@@ -190,4 +190,71 @@ class DataSourceConfigTest extends TestCase
 
         new DataSourceConfig($this->tempDir);
     }
+
+    public function testGetMailRelayMissingReturnsNull(): void
+    {
+        $this->createConfig([
+            'id'                => 'abcd-efgh-ijkl-mnop',
+            'name'              => 'Test DS',
+            'database_name'     => 'abcd_efgh_ijkl_mnop',
+            'database_user'     => 'shpd_abcdefgh',
+            'database_password' => 'supersecret',
+            'created'           => '2026-03-12T10:00:00+01:00',
+        ]);
+
+        $config = new DataSourceConfig($this->tempDir);
+
+        $this->assertNull($config->getMailRelay());
+        // druhé čtení jde přes parsed-cache
+        $this->assertNull($config->getMailRelay());
+    }
+
+    public function testGetMailRelayOverride(): void
+    {
+        $this->createConfig([
+            'id'                => 'abcd-efgh-ijkl-mnop',
+            'name'              => 'Test DS',
+            'database_name'     => 'abcd_efgh_ijkl_mnop',
+            'database_user'     => 'shpd_abcdefgh',
+            'database_password' => 'supersecret',
+            'created'           => '2026-03-12T10:00:00+01:00',
+            'mail'              => [
+                'relay' => [
+                    'host'     => 'smtp.customer.example',
+                    'port'     => 465,
+                    'security' => 'tls',
+                    'username' => 'ds-mailer',
+                    'password' => 'pw',
+                ],
+            ],
+        ]);
+
+        $config = new DataSourceConfig($this->tempDir);
+        $relay  = $config->getMailRelay();
+
+        $this->assertNotNull($relay);
+        $this->assertSame('smtp.customer.example', $relay->host);
+        $this->assertSame(465, $relay->port);
+        $this->assertSame('tls', $relay->security);
+        $this->assertSame($relay, $config->getMailRelay());
+    }
+
+    public function testGetMailRelayInvalidThrowsLazily(): void
+    {
+        $this->createConfig([
+            'id'                => 'abcd-efgh-ijkl-mnop',
+            'name'              => 'Test DS',
+            'database_name'     => 'abcd_efgh_ijkl_mnop',
+            'database_user'     => 'shpd_abcdefgh',
+            'database_password' => 'supersecret',
+            'created'           => '2026-03-12T10:00:00+01:00',
+            'mail'              => ['relay' => ['security' => 'bogus']],
+        ]);
+
+        // load nesmí spadnout — validace až při prvním použití
+        $config = new DataSourceConfig($this->tempDir);
+
+        $this->expectException(\RuntimeException::class);
+        $config->getMailRelay();
+    }
 }

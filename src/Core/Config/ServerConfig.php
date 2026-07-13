@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Shipard\Core\Config;
 
+use Shipard\Core\Mail\MailRelayConfig;
+
 class ServerConfig
 {
     private array $data = [];
@@ -129,5 +131,22 @@ class ServerConfig
             );
         }
         return rtrim($url, '/');
+    }
+
+    /**
+     * Server-wide default SMTP relay pro odchozí poštu — nested klíč
+     * `mail.relay`. Null = relay není nakonfigurován (per-DS override
+     * v main.json může platit i tak; merge dělá MailServiceFactory).
+     */
+    public function getMailRelay(): ?MailRelayConfig
+    {
+        $relay = $this->data['mail']['relay'] ?? null;
+        if ($relay === null) {
+            return null;
+        }
+        if (!is_array($relay)) {
+            throw new \RuntimeException("Server config 'mail.relay' must be an object");
+        }
+        return MailRelayConfig::fromArray($relay);
     }
 }

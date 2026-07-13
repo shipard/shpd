@@ -359,4 +359,69 @@ class ServerConfigTest extends TestCase
             }
         }
     }
+
+    public function testGetMailRelayMissingReturnsNull(): void
+    {
+        $path = $this->createConfig([
+            'host'           => '127.0.0.1',
+            'port'           => 3306,
+            'admin_user'     => 'root',
+            'admin_password' => 'secret',
+            'mode'           => 'production',
+        ]);
+
+        $config = new ServerConfig($path);
+        $config->load();
+
+        $this->assertNull($config->getMailRelay());
+    }
+
+    public function testGetMailRelayConfigured(): void
+    {
+        $path = $this->createConfig([
+            'host'           => '127.0.0.1',
+            'port'           => 3306,
+            'admin_user'     => 'root',
+            'admin_password' => 'secret',
+            'mode'           => 'production',
+            'mail'           => [
+                'relay' => [
+                    'host'     => 'relay.example.com',
+                    'username' => 'shipard',
+                    'password' => 'relay-pw',
+                ],
+            ],
+        ]);
+
+        $config = new ServerConfig($path);
+        $config->load();
+        $relay = $config->getMailRelay();
+
+        $this->assertNotNull($relay);
+        $this->assertSame('relay.example.com', $relay->host);
+        $this->assertSame(587, $relay->port);
+        $this->assertSame('starttls', $relay->security);
+        $this->assertSame('shipard', $relay->username);
+        $this->assertSame('relay-pw', $relay->password);
+    }
+
+    public function testGetMailRelayInvalidThrows(): void
+    {
+        $path = $this->createConfig([
+            'host'           => '127.0.0.1',
+            'port'           => 3306,
+            'admin_user'     => 'root',
+            'admin_password' => 'secret',
+            'mode'           => 'production',
+            'mail'           => ['relay' => 'not-an-object'],
+        ]);
+
+        $config = new ServerConfig($path);
+        $config->load();
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/mail\.relay/');
+
+        $config->getMailRelay();
+    }
 }

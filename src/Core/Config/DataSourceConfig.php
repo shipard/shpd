@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace Shipard\Core\Config;
 
 use Shipard\Core\Auth\AuthPolicy;
+use Shipard\Core\Mail\MailRelayConfig;
 
 class DataSourceConfig
 {
     private array $data = [];
     private ?AuthPolicy $authPolicy = null;
+    private ?MailRelayConfig $mailRelay = null;
+    private bool $mailRelayParsed = false;
 
     public function __construct(private readonly string $dataSourceDir)
     {
@@ -134,6 +137,27 @@ class DataSourceConfig
     public function getAuthPolicy(): AuthPolicy
     {
         return $this->authPolicy ??= AuthPolicy::fromArray($this->data['auth'] ?? []);
+    }
+
+    /**
+     * Per-DS SMTP relay override z volitelného klíče `mail.relay` v main.json.
+     * Null = DS nemá override — volající (MailServiceFactory) padá na server
+     * default ze server.json. Validace lazy při prvním použití, ne v load(),
+     * aby rozbitá mail sekce neblokovala ostatní CLI příkazy.
+     */
+    public function getMailRelay(): ?MailRelayConfig
+    {
+        if (!$this->mailRelayParsed) {
+            $relay = $this->data['mail']['relay'] ?? null;
+            if ($relay !== null) {
+                if (!is_array($relay)) {
+                    throw new \RuntimeException("Data source config 'mail.relay' must be an object");
+                }
+                $this->mailRelay = MailRelayConfig::fromArray($relay);
+            }
+            $this->mailRelayParsed = true;
+        }
+        return $this->mailRelay;
     }
 
     /**

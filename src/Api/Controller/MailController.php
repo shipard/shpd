@@ -8,7 +8,9 @@ use Shipard\Api\AuthContext;
 use Shipard\Api\Request;
 use Shipard\Api\Response;
 use Shipard\Core\Config\ConfigRuntime;
+use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Database\DataSourceConnection;
+use Shipard\Core\Security\DsSecretCipher;
 use Shipard\Core\Database\TableDefinition;
 use Shipard\Core\Document\DocStateConfig;
 use Shipard\Core\Document\DocumentRegistry;
@@ -42,9 +44,47 @@ class MailController
         private readonly array $tables,
         private readonly DocumentRegistry $documentRegistry,
         private readonly ?ConfigRuntime $config = null,
+        private readonly ?DataSourceConfig $dsConfig = null,
     ) {
         $this->attachments = new AttachmentService($db, $dsPath, $tables);
         $this->idempotency = new IdempotencyStore($db);
+    }
+
+    /**
+     * `POST /_mail/senders/{id}/password` — jediná cesta, jak nastavit
+     * SMTP heslo senderu. Sloupec `password_enc` je sensitive (generické
+     * CRUD ho nečte ani nezapíše); plaintext z body se zašifruje
+     * DsSecretCipher a uloží. Admin session only — API klíče nikdy
+     * nemají isAdmin.
+     */
+    public function setSenderPassword(AuthContext $auth, Request $request, int $id): Response
+    {
+        if (!$auth->isAuthenticated || !$auth->isAdmin) {
+            return Response::error('FORBIDDEN', 'Administrator session required', 403);
+        }
+
+        $body = $request->getBody();
+        $password = is_array($body) && is_string($body['password'] ?? null) ? $body['password'] : '';
+        if ($password === '') {
+            return Response::error('VALIDATION', "Field 'password' is required and must be a non-empty string", 400);
+        }
+
+        $sender = $this->db->fetchRow('SELECT id FROM core_mail_senders WHERE id = %i', $id);
+        if ($sender === null) {
+            return Response::error('NOT_FOUND', "Sender #{$id} not found", 404);
+        }
+
+        try {
+            $cipher = DsSecretCipher::forConfig($this->dsConfig ?? new DataSourceConfig($this->dsPath));
+            $encrypted = $cipher->encrypt($password);
+        } catch (\Throwable $e) {
+            // Chybu šifrování vracíme bez detailů — nesmí uniknout nic o klíči.
+            return Response::error('INTERNAL_ERROR', 'Failed to encrypt the password: ' . $e->getMessage(), 500);
+        }
+
+        $this->db->updateWhere('core_mail_senders', ['password_enc' => $encrypted], 'id = %i', $id);
+
+        return Response::success(['id' => $id, 'passwordSet' => true]);
     }
 
     public function receiveIncoming(AuthContext $auth, Request $request): Response

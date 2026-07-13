@@ -47,7 +47,7 @@
         { "table": "core_mail_extracted_documents", "section": "other", "subsection": "other.mail", "order": 35 },
         { "viewer": "core.mail.aiProfiles",         "section": "other", "subsection": "other.mail", "order": 50 },
         { "table": "core_mail_analysis_claims",     "section": "other", "subsection": "other.mail", "order": 60 },
-        { "table": "core_mail_senders",             "section": "other", "subsection": "other.mail", "order": 70 },
+        { "viewer": "core.mail.senders",            "section": "other", "subsection": "other.mail", "order": 70 },
         { "table": "core_mail_outbox",              "section": "other", "subsection": "other.mail", "order": 75 },
         { "table": "core_mail_outbox_log",          "section": "other", "subsection": "other.mail", "order": 80 },
         { "page": "mailOutbound",                   "section": "other", "subsection": "other.mail", "order": 85 }
@@ -96,6 +96,15 @@
             "icon": "mail",
             "table": "core_mail_mailboxes",
             "class": "Shipard\\Module\\Core\\Mail\\MailboxesViewer"
+        },
+        {
+            "id": "core.mail.senders",
+            "name": "Mail senders",
+            "name:cs": "Odesílatelé pošty",
+            "name:en": "Mail senders",
+            "icon": "mail",
+            "table": "core_mail_senders",
+            "class": "Shipard\\Module\\Core\\Mail\\SendersViewer"
         },
         {
             "id": "core.mail.aiProfiles",

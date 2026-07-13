@@ -570,11 +570,12 @@ function dispatchMail(
 	?\Shipard\Core\Config\ConfigRuntime $configRuntime = null,
 ): Response {
 	$dsPath = $resolved->config->getDataSourceDir();
-	$ctrl = new MailController($db, $dsPath, $tables, $documentRegistry, $configRuntime);
+	$ctrl = new MailController($db, $dsPath, $tables, $documentRegistry, $configRuntime, $resolved->config);
 	return match ($route->action) {
-		'receiveIncoming' => $ctrl->receiveIncoming($auth, $request),
-		'importMessage'   => $ctrl->importMessage($auth, $request),
-		default           => Response::error('INTERNAL_ERROR', "Unknown mail action: {$route->action}", 500),
+		'receiveIncoming'   => $ctrl->receiveIncoming($auth, $request),
+		'importMessage'     => $ctrl->importMessage($auth, $request),
+		'setSenderPassword' => $ctrl->setSenderPassword($auth, $request, (int) $route->id),
+		default             => Response::error('INTERNAL_ERROR', "Unknown mail action: {$route->action}", 500),
 	};
 }
 

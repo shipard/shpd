@@ -286,6 +286,16 @@ Předpoklady, aby to fungovalo:
   ds-secrets-health`. Detaily v [`secrets.md`](secrets.md).
 - **Logy:** `/opt/shipard/log/shipard.log` (viz [`../logging.md`](../logging.md)).
 - **Firewall:** ven vystav jen 80/443 (a SSH). PHP-FPM socket je lokální.
+- **Cron — odchozí pošta:** worker fronty běží per DS
+  (viz [`../mail/outbound.md`](../mail/outbound.md)):
+
+  ```cron
+  * * * * *  cd /opt/shipard/data-sources/<id> && /usr/bin/php /opt/shipard/app/bin/shpd-ds mail-outbox-run >> /var/log/shipard/mail-outbox-<id>.log 2>&1
+  ```
+
+  Relay se konfiguruje klíčem `mail.relay` v `server.json` (per-DS
+  override v `main.json`); stav fronty hlídá `shpd-server doctor` a alert
+  check `core.mail.outbox_health`.
 
 ---
 

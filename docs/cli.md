@@ -522,6 +522,50 @@ Odstraní idempotency klíče incoming mailů starší než TTL.
 |------|--------|
 | `--days <N>` | TTL v dnech (default: hodnota `IdempotencyStore::TTL_DAYS`) |
 
+#### `mail-outbox-run`
+
+```bash
+shpd-ds mail-outbox-run
+shpd-ds mail-outbox-run --limit 10
+```
+
+Worker fronty odchozí pošty — zpracuje due `pending` zprávy (priorita
+DESC, stáří ASC) a předtím vrátí do fronty `sending` zaseklé po pádu
+workeru (starší 10 min). Spouští se z cronu per DS (každou minutu).
+Exit SUCCESS i při selhaných zprávách (reportuje je alert check
+`core.mail.outbox_health` a doctor); FAILURE jen při infra chybě.
+
+| Opce | Význam |
+|------|--------|
+| `--limit <N>` | Max zpráv v jednom běhu (default 50) |
+
+#### `mail-outbox-retry`
+
+```bash
+shpd-ds mail-outbox-retry --id 42
+```
+
+Vrátí terminálně selhanou (`failed`) zprávu do fronty s vynulovaným
+počítadlem pokusů. Použij po opravě transportu — viz runbook
+[`docs/mail/outbound.md`](mail/outbound.md).
+
+#### `mail-send-test`
+
+```bash
+shpd-ds mail-send-test --to admin@example.com
+shpd-ds mail-send-test --to admin@example.com --from ucet@firma.cz
+```
+
+Smoke test transportu: synchronně odešle testovací zprávu (zapíše se do
+outboxu) a vypíše stav, použitý transport, trvání a SMTP odpověď. Exit
+podle výsledku. Bez `--from` se použije settings klíč `mail.defaultFrom`.
+
+| Opce | Význam |
+|------|--------|
+| `--to <addr>` | Příjemce (povinné) |
+| `--from <addr>` | From adresa — rozhoduje o transportu (sender vs. relay) |
+| `--subject <s>` | Předmět (default `Shipard mail-send-test`) |
+
 ### AI Analyzer
 
 #### `ai-analyzer-bootstrap`

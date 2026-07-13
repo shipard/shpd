@@ -141,6 +141,10 @@ export default {
   'viewer.detail.rejectReasonPlaceholder': 'E.g. False positive, misclassified type…',
   'viewer.detail.applyFailed': 'Failed to apply: {msg}',
   'viewer.detail.rejectFailed': 'Failed to reject: {msg}',
+  'viewer.detail.setPassword': 'Set password',
+  'viewer.detail.setPasswordTitle': 'Set sender password',
+  'viewer.detail.setPasswordLabel': 'New SMTP password:',
+  'viewer.detail.setPasswordFailed': 'Failed to set password: {msg}',
 
   // ── Viewer document detail (content type `document`) ────────────────────
   'viewer.document.section.supplier': 'Supplier',

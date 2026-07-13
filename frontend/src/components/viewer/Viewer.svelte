@@ -13,6 +13,7 @@
   import ViewerDetail from './ViewerDetail.svelte';
   import ViewerToolbar from './ViewerToolbar.svelte';
   import ViewerFilters from './ViewerFilters.svelte';
+  import SetPasswordPrompt from './SetPasswordPrompt.svelte';
   import FormDialog from '../form/FormDialog.svelte';
   import RegistryImportWizard from '../registry/RegistryImportWizard.svelte';
   import Modal from '../ui/Modal.svelte';
@@ -284,6 +285,10 @@
   let importInProgress = $state(false);
   let importFileInput = $state(null);
 
+  // Nastavení hesla SMTP senderu (detail akce setPassword)
+  let passwordDialogOpen = $state(false);
+  let passwordSubmitting = $state(false);
+
   function handleToolbarAction(actionId) {
     if (actionId === 'create') {
       editRecordId = null;
@@ -400,6 +405,27 @@
     reanalyzeDialogOpen = false;
   }
 
+  async function submitSetPassword(password) {
+    if (selectedRowId == null || passwordSubmitting) return;
+    passwordSubmitting = true;
+    try {
+      const result = await post(`/_mail/senders/${selectedRowId}/password`, { password });
+      if (result?.success) {
+        passwordDialogOpen = false;
+        refreshAfterAction();
+      } else {
+        alert(t('viewer.detail.setPasswordFailed', { msg: translateError(result?.error) }));
+      }
+    } finally {
+      passwordSubmitting = false;
+    }
+  }
+
+  function closePasswordDialog() {
+    if (passwordSubmitting) return;
+    passwordDialogOpen = false;
+  }
+
   function handleRegistryWizardClose() {
     registryWizardOpen = false;
   }
@@ -484,6 +510,12 @@
       const result = await reaccountTransaction(recordId);
       if (result?.success) refreshAfterAction();
       else alert(translateError(result?.error));
+      return;
+    }
+    // Nastavit heslo SMTP senderu (SendersViewer) — dialog, plaintext jde
+    // jen na dedikovaný endpoint; sloupec je sensitive, CRUD ho nevidí.
+    if (actionId === 'setPassword') {
+      passwordDialogOpen = true;
       return;
     }
 
@@ -826,6 +858,14 @@
     />
   {/snippet}
 </Modal>
+
+<!-- Nastavení hesla SMTP senderu (detail akce setPassword) -->
+<SetPasswordPrompt
+  open={passwordDialogOpen}
+  submitting={passwordSubmitting}
+  onConfirm={submitSetPassword}
+  onClose={closePasswordDialog}
+/>
 
 <style>
   .shpd-viewer {

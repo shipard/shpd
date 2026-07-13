@@ -177,6 +177,10 @@ class Router
 			return $this->resolveExtractedDocumentsRoute($subpath, $method);
 		}
 
+		if (str_starts_with($subpath, '/_mail/senders/')) {
+			return $this->resolveMailSendersRoute($subpath, $method);
+		}
+
 		if (str_starts_with($subpath, '/_exchange/docs/document/')) {
 			return $this->resolveExchangeRoute($subpath, $method);
 		}
@@ -394,6 +398,23 @@ class Router
 				}
 				return new Route('analysis', 'attachmentContent', null, $ndx, $attNdx);
 			}
+		}
+
+		return Response::error('NOT_FOUND', 'Not found', 404);
+	}
+
+	private function resolveMailSendersRoute(string $subpath, string $method): Route|Response
+	{
+		$rest = substr($subpath, strlen('/_mail/senders/'));
+		if (preg_match('#^(\d+)/password$#', $rest, $m)) {
+			$id = (int) $m[1];
+			if ($id <= 0) {
+				return Response::error('NOT_FOUND', 'Not found', 404);
+			}
+			if ($method !== 'POST') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('mail', 'setSenderPassword', null, $id);
 		}
 
 		return Response::error('NOT_FOUND', 'Not found', 404);

@@ -423,9 +423,11 @@ deklaruje, co je systém a co data.
     "core_system_rate_limits"
 ]
 
-// modules/core/mail/module.jsonc — jen AI backend kvůli zašifrovanému API klíči
+// modules/core/mail/module.jsonc — konfigurace (AI profily, SMTP sendery),
+// ne data (outbox a log se při resetu mažou)
 "keepOnReset": [
-    "core_mail_ai_backends"
+    "core_mail_ai_profiles",
+    "core_mail_senders"
 ]
 ```
 

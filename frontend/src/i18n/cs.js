@@ -150,6 +150,10 @@ export default {
   'viewer.detail.rejectReasonPlaceholder': 'Např. False positive, špatně rozpoznaný typ…',
   'viewer.detail.applyFailed': 'Nepodařilo se uložit: {msg}',
   'viewer.detail.rejectFailed': 'Nepodařilo se zamítnout: {msg}',
+  'viewer.detail.setPassword': 'Nastavit heslo',
+  'viewer.detail.setPasswordTitle': 'Nastavit heslo odesílatele',
+  'viewer.detail.setPasswordLabel': 'Nové SMTP heslo:',
+  'viewer.detail.setPasswordFailed': 'Nepodařilo se nastavit heslo: {msg}',
 
   // ── Viewer detail dokladu (content type `document`) ─────────────────────
   'viewer.document.section.supplier': 'Dodavatel',

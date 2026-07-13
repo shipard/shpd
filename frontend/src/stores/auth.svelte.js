@@ -52,6 +52,10 @@ export const authStore = {
   get token() { return token; },
   get user() { return user; },
   get isAuthenticated() { return isAuthenticated; },
+  // Server je zdroj pravdy (guard + filtr settings navigace) — tohle slouží
+  // jen k nezobrazování mrtvých odkazů v UI. Session z doby před nasazením
+  // is_admin nemá pole v localStorage → false, srovná se dalším loginem.
+  get isAdmin() { return user?.is_admin === true; },
   setAuth,
   clearAuth,
   updateToken,

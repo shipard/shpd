@@ -148,6 +148,20 @@ class AutoFormBuilderTest extends TestCase
         $this->assertNotContains('password_hash', $cols);
     }
 
+    public function testSensitiveColumnsSkipped(): void
+    {
+        $def = $this->makeTableDef([
+            ['id' => 'name',     'name' => 'Name', 'type' => 'varchar', 'length' => 50],
+            ['id' => 'key_hash', 'name' => 'Hash', 'type' => 'varchar', 'length' => 64, 'sensitive' => true],
+        ]);
+
+        $result = (new AutoFormBuilder())->build($def);
+        $cols = array_map(fn($e) => $e->column, $this->elementsOf($result->tabs[0]));
+
+        $this->assertContains('name', $cols);
+        $this->assertNotContains('key_hash', $cols);
+    }
+
     public function testInputTypeDerivedFromColumn(): void
     {
         $def = $this->makeTableDef([

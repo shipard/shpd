@@ -273,6 +273,7 @@ Pravidla a chování:
 | `group` | string | Ne | Ne | ID skupiny sloupců (`columnGroups`) |
 | `collation` | string | Ne | Ne | Collation pro tento sloupec (přetíží globální nastavení DB) |
 | `reference` | string | Ne | Ne | ID cílové tabulky pro referenční vazbu (jen pro UI, žádná DB constraint) |
+| `sensitive` | bool | Ne | Ne | Citlivý sloupec — nikdy neopustí server (viz níže). Výchozí: `false` |
 
 ### Speciální pole pro primární klíč
 
@@ -304,6 +305,27 @@ Pravidla:
 - Cílová tabulka by měla mít definovaný `displayPattern` pro smysluplné zobrazení v UI
 - UI použije referenci pro: výběrové seznamy, prokliky na detail, zobrazení názvu místo ID
 - Validace referenční integrity se řeší na aplikační úrovni
+
+### Citlivé sloupce — `sensitive`
+
+`"sensitive": true` označuje sloupec, jehož hodnota nesmí nikdy opustit server
+(hashe hesel, hashe API klíčů, šifrovaná pověření). Vynucuje `TableAccessGuard`
+(`src/Api/TableAccessGuard.php`) napříč generickými cestami:
+
+- **Čtení**: sloupec se vynechá ze SELECT i odpovědi CRUD `list`/`show`,
+  z `data` ve form meta/save a z metadat tabulky (`/meta/{table}`) —
+  klient o něm neví, negeneruje se do gridů ani formulářů (`AutoFormBuilder`
+  ho přeskakuje).
+- **Zápis**: výskyt sloupce ve vstupu CRUD `create`/`update`/`patch` nebo
+  form save → `400 SENSITIVE_COLUMN`. Žádné tiché zahazování — zápis
+  citlivých hodnot jde vždy jen dedikovaným endpointem (vzor: API klíče).
+- **Filtry a řazení**: `filter[col]`/`sort` nad sensitive sloupcem →
+  `400 SENSITIVE_COLUMN` (jinak by `like`/`gt` fungovaly jako orákulum
+  na extrakci hodnoty po znacích).
+
+Pro uložení citlivé hodnoty v DB použij typ `encrypted_text`
+(per-DS šifrování, viz `docs/operations/secrets.md`); `sensitive: true`
+řeší API vrstvu a s `encrypted_text` se typicky kombinuje.
 
 ---
 

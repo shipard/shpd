@@ -150,6 +150,29 @@ Redirect `/app/?login_error={kod}`, frontend překládá přes
 - Pure helpery `parseOidcRedirect` / `buildOidcStartUrl` v `api/oidc.js`
   (bez závislosti na window — testovatelné v node:test).
 
+## Admin model — is_admin a ochrana systémových tabulek (Fáze 0a)
+
+Minimální model oprávnění (D16): boolean `is_admin` na `core_system_users`
++ plošný guard — CRUD/viewer/form akce nad tabulkami `core_system_*`
+vyžadují admina, jinak `403 FORBIDDEN_SYSTEM_TABLE`. Plné RBAC mimo scope,
+model je s ním dopředně kompatibilní.
+
+- `AuthMiddleware` joinuje session na users: propíše `is_admin` do
+  `AuthContext->isAdmin` a session **neaktivního** účtu odmítne (401) —
+  deaktivace platí okamžitě, ne až od dalšího loginu.
+- **API klíče mají `isAdmin: false` vždy** — integrace do systémových
+  tabulek nemají co dělat, provisioning jde přes CLI.
+- Odpověď `login` i OIDC `exchange` nese `user.is_admin`; frontend přes
+  `authStore.isAdmin` jen nezobrazuje mrtvé odkazy, zdroj pravdy je server
+  (`TableAccessGuard` + server-side filtr settings navigace — položky nad
+  `core_system_*` se ne-adminovi do stromu vůbec nepošlou).
+- CLI: `user-create --admin`, `user-set-admin --login xy [--revoke]`
+  s pojistkou proti odebrání posledního aktivního admina (viz `docs/cli.md`).
+- Citlivé sloupce (`password_hash`, `key_hash`) mají `"sensitive": true` —
+  nikdy neopustí server ani pro admina (viz `docs/table-definitions.md`).
+- **Rollout na existující DS**: po `ds-upgrade` spustit `user-set-admin`
+  pro adminské účty, jinak systémové tabulky v UI zmizí všem.
+
 ## Break-glass (D9/D15)
 
 ```bash

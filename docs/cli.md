@@ -369,6 +369,27 @@ Vytvoří nového uživatele v DS.
 | `--password <heslo>` | **povinné** — heslo |
 | `--name <jméno>` | **povinné** — celé jméno |
 | `--email <email>` | volitelné — e-mailová adresa |
+| `--admin` | volitelné — založit rovnou s administrátorskými právy (`is_admin = 1`) |
+
+#### `user-set-admin`
+
+```bash
+sudo shpd-ds user-set-admin --login=admin
+sudo shpd-ds user-set-admin --login=alice --revoke
+```
+
+Nastaví nebo odebere `is_admin` existujícímu uživateli. Admin je nutný pro
+práci se systémovými tabulkami (`core_system_*`) přes API i UI — po nasazení
+na existující DS je potřeba tento příkaz spustit pro adminské účty, jinak
+sekce Systém v Nastavení zmizí všem.
+
+| Opce | Význam |
+|------|--------|
+| `--login <login>` | **povinné** — login uživatele |
+| `--revoke` | odebrat práva místo udělení |
+
+Pojistka: `--revoke` odmítne odebrat práva poslednímu **aktivnímu** adminovi
+DS (ochrana proti zamčení). Neaktivnímu adminovi lze práva odebrat vždy.
 
 ### API keys
 

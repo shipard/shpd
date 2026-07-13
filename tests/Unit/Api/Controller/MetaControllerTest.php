@@ -142,6 +142,21 @@ class MetaControllerTest extends TestCase
 		$this->assertCount(3, $data['columns']); // id + login + is_active
 	}
 
+	public function testTableExcludesSensitiveColumnsFromMetadata(): void
+	{
+		$def  = $this->makeTable(1, 'Users', [
+			['id' => 'login',         'name' => 'Login', 'type' => 'varchar', 'length' => 100],
+			['id' => 'password_hash', 'name' => 'Hash',  'type' => 'varchar', 'length' => 255, 'sensitive' => true],
+		]);
+		$defs = ['core_system_users' => $def];
+
+		$resp    = $this->ctrl->table('core_system_users', $defs, 'en');
+		$columns = array_column($resp->getPayload()['data']['columns'], 'id');
+
+		$this->assertContains('login', $columns);
+		$this->assertNotContains('password_hash', $columns);
+	}
+
 	public function testTableReturnsNonExistingTable404(): void
 	{
 		$resp = $this->ctrl->table('nonexistent', [], 'en');

@@ -302,4 +302,44 @@ class TableDefinitionTest extends TestCase
 
         $this->assertFalse($col->system);
     }
+
+    public function testSensitiveColumnFlagParsed(): void
+    {
+        $col = ColumnDefinition::fromArray([
+            'id' => 'password_hash', 'name' => 'Hash', 'type' => 'varchar', 'length' => 255, 'sensitive' => true,
+        ]);
+
+        $this->assertTrue($col->sensitive);
+    }
+
+    public function testSensitiveColumnFlagDefaultsFalse(): void
+    {
+        $col = ColumnDefinition::fromArray([
+            'id' => 'x', 'name' => 'X', 'type' => 'tinyint',
+        ]);
+
+        $this->assertFalse($col->sensitive);
+    }
+
+    public function testGetSensitiveColumns(): void
+    {
+        $table = TableDefinition::fromArray([
+            'tableId' => 5,
+            'name'    => 'secrets',
+            'columns' => [
+                ['id' => 'id',       'name' => 'ID',   'type' => 'int', 'autoIncrement' => true, 'primaryKey' => true],
+                ['id' => 'name',     'name' => 'Name', 'type' => 'varchar', 'length' => 100],
+                ['id' => 'key_hash', 'name' => 'Hash', 'type' => 'varchar', 'length' => 64, 'sensitive' => true],
+            ],
+        ]);
+
+        $this->assertSame(['key_hash'], $table->getSensitiveColumns());
+    }
+
+    public function testGetSensitiveColumnsEmptyWhenNoneFlagged(): void
+    {
+        $table = TableDefinition::fromArray($this->coreSystemUsersData());
+
+        $this->assertSame([], $table->getSensitiveColumns());
+    }
 }

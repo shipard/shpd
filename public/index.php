@@ -273,7 +273,7 @@ function dispatch(
 
 	return match ($route->controller) {
 		'auth'    => dispatchAuth($route->action, $request, $auth, $db, $resolved),
-		'crud'       => dispatchCrud($route, $request, $tables, $db, $configRuntime),
+		'crud'       => dispatchCrud($route, $request, $auth, $tables, $db, $configRuntime),
 		'attachment'  => dispatchAttachment($route, $request, $auth, $tables, $db, $resolved),
 		'chat'    => dispatchChat($route, $request, $auth, $db, $tables, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'meta'    => dispatchMeta($route->action, $route->table, $tables, resolveLanguage($request, $resolved->config)),
@@ -283,7 +283,7 @@ function dispatch(
 		'app'     => dispatchApp($route, $auth, $db, $resolved->config),
 		'form'    => dispatchForm($route, $request, $auth, $tables, $db, $formRegistry ?? new FormRegistry(), $configRuntime, $modulePathResolver, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), resolveLanguage($request, $resolved->config), $resolved->config, $lookupRegistry ?? new LookupRegistry(), $documentEventDispatcher),
 		'lookup'  => dispatchLookup($route, $request, $tables, $db, $lookupRegistry ?? new LookupRegistry(), $configRuntime),
-		'viewer'  => dispatchViewer($route, $request, $viewerRegistry, $db, $configRuntime, resolveLanguage($request, $resolved->config)),
+		'viewer'  => dispatchViewer($route, $request, $auth, $viewerRegistry, $db, $configRuntime, resolveLanguage($request, $resolved->config)),
 		'mail'    => dispatchMail($route, $request, $auth, $tables, $db, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $configRuntime),
 		'analysis' => dispatchAnalysis($route, $request, $auth, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher),
 		'exchange' => dispatchExchange($route, $request, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher),
@@ -711,11 +711,12 @@ function dispatchChat(
 function dispatchCrud(
 	Route $route,
 	Request $request,
+	AuthContext $auth,
 	array $tables,
 	\Shipard\Core\Database\DataSourceConnection $db,
 	?\Shipard\Core\Config\ConfigRuntime $configRuntime = null,
 ): Response {
-	$ctrl  = new CrudController($db, $tables, $configRuntime);
+	$ctrl  = new CrudController($db, $tables, $configRuntime, $auth);
 	$table = $route->table ?? '';
 	$id    = $route->id;
 	return match ($route->action) {
@@ -792,8 +793,8 @@ function dispatchSettings(
 ): Response {
 	$ctrl = new SettingsController();
 	return match ($route->action) {
-		'navigation'        => $ctrl->navigation($config, $modulePathResolver, $language, $configRuntime, 'settings'),
-		'accountNavigation' => $ctrl->navigation($config, $modulePathResolver, $language, $configRuntime, 'account'),
+		'navigation'        => $ctrl->navigation($config, $modulePathResolver, $language, $configRuntime, 'settings', $auth),
+		'accountNavigation' => $ctrl->navigation($config, $modulePathResolver, $language, $configRuntime, 'account', $auth),
 		'page'              => $ctrl->page((string) $route->table, $config, $modulePathResolver, $language, $auth, $db),
 		'savePage'          => $ctrl->savePage((string) $route->table, $request, $config, $modulePathResolver, $auth, $db),
 		default             => Response::error('INTERNAL_ERROR', "Unknown settings action: {$route->action}", 500),
@@ -823,6 +824,7 @@ function dispatchApp(
 function dispatchViewer(
 	Route $route,
 	Request $request,
+	AuthContext $auth,
 	ViewerRegistry $registry,
 	\Shipard\Core\Database\DataSourceConnection $db,
 	?\Shipard\Core\Config\ConfigRuntime $config = null,
@@ -831,9 +833,9 @@ function dispatchViewer(
 	$ctrl     = new ViewerController();
 	$viewerId = $route->table ?? '';
 	return match ($route->action) {
-		'meta'   => $ctrl->meta($viewerId, $registry, $db, $config, $language),
-		'rows'   => $ctrl->rows($viewerId, $request, $registry, $db, $config, $language),
-		'detail' => $ctrl->detail($viewerId, (int) $route->id, $registry, $db, $config, $language),
+		'meta'   => $ctrl->meta($viewerId, $auth, $registry, $db, $config, $language),
+		'rows'   => $ctrl->rows($viewerId, $request, $auth, $registry, $db, $config, $language),
+		'detail' => $ctrl->detail($viewerId, (int) $route->id, $auth, $registry, $db, $config, $language),
 		default  => Response::error('INTERNAL_ERROR', "Unknown viewer action: {$route->action}", 500),
 	};
 }
@@ -873,9 +875,9 @@ function dispatchForm(
 
 	$lookupReg = $lookupRegistry ?? new LookupRegistry();
 	return match ($route->action) {
-		'meta'        => $ctrl->meta($table, $route->id, $tables, $db, $formRegistry, $configRuntime, $lookupReg, $modulePathResolver, $language, $queryDefaults),
+		'meta'        => $ctrl->meta($table, $route->id, $tables, $db, $formRegistry, $configRuntime, $lookupReg, $modulePathResolver, $language, $queryDefaults, $auth),
 		'save'        => $ctrl->save($table, $route->id, $request, $tables, $db, $configRuntime, $formRegistry, $modulePathResolver, $lookupReg, $language, $documentRegistry, $dsConfig, $auth, $eventDispatcher),
-		'recalculate' => $ctrl->recalculate($table, $request, $tables, $db, $formRegistry, $configRuntime, $lookupReg, $modulePathResolver, $language),
+		'recalculate' => $ctrl->recalculate($table, $request, $tables, $db, $formRegistry, $configRuntime, $lookupReg, $modulePathResolver, $language, $auth),
 		default       => Response::error('INTERNAL_ERROR', "Unknown form action: {$route->action}", 500),
 	};
 }

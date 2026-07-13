@@ -7,6 +7,7 @@ namespace Shipard\Api\Controller;
 use Shipard\Api\AuthContext;
 use Shipard\Api\Request;
 use Shipard\Api\Response;
+use Shipard\Api\TableAccessGuard;
 use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Database\TableDefinition;
@@ -39,10 +40,16 @@ class FormController
         ModulePathResolver $modulePathResolver,
         string $language = 'en',
         array $newRecordDefaults = [],
+        ?AuthContext $auth = null,
     ): Response {
         $def = $tables[$table] ?? null;
         if ($def === null) {
             return Response::error('TABLE_NOT_FOUND', "Table '{$table}' not found", 404);
+        }
+
+        $guardErr = TableAccessGuard::guardSystemTable($table, $auth ?? new AuthContext(false));
+        if ($guardErr !== null) {
+            return $guardErr;
         }
 
         $data = [];
@@ -53,6 +60,7 @@ class FormController
             if ($data === null) {
                 return Response::error('RECORD_NOT_FOUND', "Record {$id} not found", 404);
             }
+            $data = TableAccessGuard::stripSensitive($data, $def);
         } else {
             // Pro nový záznam sestav výchozí data z defaultů sloupců
             foreach ($def->columns as $col) {
@@ -147,9 +155,19 @@ class FormController
             return Response::error('TABLE_NOT_FOUND', "Table '{$table}' not found", 404);
         }
 
+        $guardErr = TableAccessGuard::guardSystemTable($table, $auth ?? new AuthContext(false));
+        if ($guardErr !== null) {
+            return $guardErr;
+        }
+
         $body = $request->getBody();
         if ($body === null) {
             return Response::error('BAD_REQUEST', 'Request body must be a JSON object', 400);
+        }
+
+        $sensitiveErr = TableAccessGuard::rejectSensitiveInput($body, $def);
+        if ($sensitiveErr !== null) {
+            return $sensitiveErr;
         }
 
         $dsDef    = $def->docStates;
@@ -249,6 +267,9 @@ class FormController
         $saved   = $result->getData();
         $savedId = $saved['id'] ?? $id;
         $record  = $db->fetchRow("SELECT * FROM `{$table}` WHERE `id` = %i", $savedId);
+        if ($record !== null) {
+            $record = TableAccessGuard::stripSensitive($record, $def);
+        }
 
         $httpStatus = ($id === null) ? 201 : 200;
         $dataResolved = $this->resolveLookupValuesForRecord(
@@ -275,10 +296,16 @@ class FormController
         LookupRegistry $lookupRegistry,
         ModulePathResolver $modulePathResolver,
         string $language = 'en',
+        ?AuthContext $auth = null,
     ): Response {
         $def = $tables[$table] ?? null;
         if ($def === null) {
             return Response::error('TABLE_NOT_FOUND', "Table '{$table}' not found", 404);
+        }
+
+        $guardErr = TableAccessGuard::guardSystemTable($table, $auth ?? new AuthContext(false));
+        if ($guardErr !== null) {
+            return $guardErr;
         }
 
         $body = $request->getBody();
@@ -575,6 +602,9 @@ class FormController
         }
 
         $record = $db->fetchRow("SELECT * FROM `{$table}` WHERE `id` = %i", $id);
+        if ($record !== null) {
+            $record = TableAccessGuard::stripSensitive($record, $def);
+        }
         $dataResolved = $this->resolveLookupValuesForRecord(
             $table, $def, $record ?? [], $formRegistry, $db, $config,
             $lookupRegistry, $modulePathResolver, $language, $tables,
@@ -629,6 +659,9 @@ class FormController
         ], 'id = %i', $id);
 
         $record = $db->fetchRow("SELECT * FROM `{$table}` WHERE `id` = %i", $id);
+        if ($record !== null) {
+            $record = TableAccessGuard::stripSensitive($record, $def);
+        }
         $dataResolved = $this->resolveLookupValuesForRecord(
             $table, $def, $record ?? [], $formRegistry, $db, $config,
             $lookupRegistry, $modulePathResolver, $language, $tables,

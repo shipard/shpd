@@ -7,6 +7,7 @@ namespace Shipard\Api\Controller;
 use Shipard\Api\AuthContext;
 use Shipard\Api\Request;
 use Shipard\Api\Response;
+use Shipard\Api\TableAccessGuard;
 use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Database\DataSourceConnection;
@@ -29,6 +30,7 @@ class SettingsController
         string $language,
         ?ConfigRuntime $configRuntime,
         string $kind = 'settings',
+        ?AuthContext $auth = null,
     ): Response {
         if ($configRuntime === null) {
             return Response::success([]);
@@ -49,7 +51,7 @@ class SettingsController
         $sections = $sectionsCfg['sections'];
         usort($sections, fn($a, $b) => ($a['order'] ?? 0) <=> ($b['order'] ?? 0));
 
-        $itemsBySection = $this->collectItems($resolvedModules, $resolver, $language, $kind);
+        $itemsBySection = $this->collectItems($resolvedModules, $resolver, $language, $kind, $auth);
 
         $tree = [];
         foreach ($sections as $section) {
@@ -366,18 +368,41 @@ class SettingsController
      * @param  ModuleDefinition[]  $resolvedModules
      * @return array<string, array>
      */
-    private function collectItems(array $resolvedModules, ModulePathResolver $resolver, string $language, string $kind = 'settings'): array
+    /** Cílová tabulka viewer-položky (z registrace vieweru v modulu), jinak null. */
+    private function viewerTargetTable(ModuleDefinition $module, array $item): ?string
+    {
+        if (($item['viewer'] ?? null) === null) {
+            return null;
+        }
+        foreach ($module->viewers as $v) {
+            if (($v['id'] ?? '') === $item['viewer']) {
+                return $v['table'] ?? null;
+            }
+        }
+        return null;
+    }
+
+    private function collectItems(array $resolvedModules, ModulePathResolver $resolver, string $language, string $kind = 'settings', ?AuthContext $auth = null): array
     {
         $itemsBySection = [];
         $seenViewers = [];
         $seenTables = [];
         $seenPages = [];
+        // Systémové tabulky jsou pro ne-adminy zavřené na CRUD/viewer/form
+        // vrstvě (TableAccessGuard) — mrtvé odkazy do stromu nedáváme.
+        $isAdmin = $auth?->isAdmin ?? false;
 
         foreach ($resolvedModules as $module) {
             $moduleItems = $kind === 'account' ? $module->accountItems : $module->settingsItems;
             foreach ($moduleItems as $item) {
                 $section    = $item['section'];
                 $subsection = $item['subsection'] ?? null;
+
+                $itemTable = $item['table'] ?? $this->viewerTargetTable($module, $item);
+                if (!$isAdmin && $itemTable !== null
+                    && str_starts_with($itemTable, TableAccessGuard::SYSTEM_TABLE_PREFIX)) {
+                    continue;
+                }
 
                 if ($item['viewer'] !== null) {
                     $viewerId = $item['viewer'];

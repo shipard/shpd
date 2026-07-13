@@ -443,4 +443,70 @@ class SettingsControllerTest extends TestCase
         $this->assertSame('page:accountBasic', $tree[0]['children'][0]['id']);
         $this->assertSame('page', $tree[0]['children'][0]['type']);
     }
+
+    // --- settings navigation: filtr systémových tabulek dle is_admin ---
+
+    private function settingsRuntime(): \Shipard\Core\Config\ConfigRuntime
+    {
+        $configRuntime = $this->createMock(\Shipard\Core\Config\ConfigRuntime::class);
+        $configRuntime->method('cfgItem')->willReturnCallback(
+            fn(string $id) => $id === 'global.settingsSections'
+                ? ['sections' => [[
+                    'id' => 'other', 'name' => 'Other', 'order' => 10,
+                    'subsections' => [['id' => 'other.system', 'name' => 'System', 'order' => 10]],
+                ]]]
+                : null,
+        );
+        return $configRuntime;
+    }
+
+    /** @return string[] Item ids across the whole tree (sections + subsections). */
+    private function collectNavItemIds(array $tree): array
+    {
+        $ids = [];
+        $walk = function (array $nodes) use (&$walk, &$ids): void {
+            foreach ($nodes as $node) {
+                if (isset($node['children'])) {
+                    $walk($node['children']);
+                } else {
+                    $ids[] = $node['id'];
+                }
+            }
+        };
+        $walk($tree);
+        return $ids;
+    }
+
+    public function testNavigationHidesSystemTablesFromNonAdmin(): void
+    {
+        $resp = $this->ctrl->navigation(
+            $this->config(), $this->resolver, 'en', $this->settingsRuntime(), 'settings', $this->auth(),
+        );
+        $ids = $this->collectNavItemIds($resp->getPayload()['data']);
+
+        $this->assertNotContains('core_system_users', $ids);
+        $this->assertNotContains('core_system_api_keys', $ids);
+    }
+
+    public function testNavigationHidesSystemTablesWithoutAuthContext(): void
+    {
+        // Bez AuthContextu (starý wiring) = ne-admin — fail closed.
+        $resp = $this->ctrl->navigation(
+            $this->config(), $this->resolver, 'en', $this->settingsRuntime(), 'settings',
+        );
+        $ids = $this->collectNavItemIds($resp->getPayload()['data']);
+
+        $this->assertNotContains('core_system_users', $ids);
+    }
+
+    public function testNavigationShowsSystemTablesToAdmin(): void
+    {
+        $admin = new AuthContext(true, 1, 'session', 'shpd_st_test', isAdmin: true);
+        $resp  = $this->ctrl->navigation(
+            $this->config(), $this->resolver, 'en', $this->settingsRuntime(), 'settings', $admin,
+        );
+        $ids = $this->collectNavItemIds($resp->getPayload()['data']);
+
+        $this->assertContains('core_system_users', $ids);
+    }
 }

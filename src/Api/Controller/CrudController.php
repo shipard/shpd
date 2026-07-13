@@ -3,8 +3,10 @@ declare(strict_types=1);
 
 namespace Shipard\Api\Controller;
 
+use Shipard\Api\AuthContext;
 use Shipard\Api\Request;
 use Shipard\Api\Response;
+use Shipard\Api\TableAccessGuard;
 use Shipard\Api\Validation\InputValidator;
 use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Database\ColumnDefinition;
@@ -27,8 +29,22 @@ class CrudController
 		protected DataSourceConnection $db,
 		private array $tables,
 		private ?ConfigRuntime $config = null,
+		private AuthContext $auth = new AuthContext(false),
 	) {
 		$this->validator = new InputValidator();
+	}
+
+	/**
+	 * Resolves the table definition or fails: 404 for unknown tables,
+	 * 403 for core_system_* tables accessed by a non-admin.
+	 */
+	private function resolveTable(string $table): TableDefinition|Response
+	{
+		$def = $this->tables[$table] ?? null;
+		if ($def === null) {
+			return Response::error('TABLE_NOT_FOUND', "Table '{$table}' not found", 404);
+		}
+		return TableAccessGuard::guardSystemTable($table, $this->auth) ?? $def;
 	}
 
 	// -------------------------------------------------------------------------
@@ -37,9 +53,9 @@ class CrudController
 
 	public function list(string $table, Request $request): Response
 	{
-		$def = $this->tables[$table] ?? null;
-		if ($def === null) {
-			return Response::error('TABLE_NOT_FOUND', "Table '{$table}' not found", 404);
+		$def = $this->resolveTable($table);
+		if ($def instanceof Response) {
+			return $def;
 		}
 
 		$params = $request->getQueryParams();
@@ -77,9 +93,9 @@ class CrudController
 
 	public function show(string $table, int $id, Request $request): Response
 	{
-		$def = $this->tables[$table] ?? null;
-		if ($def === null) {
-			return Response::error('TABLE_NOT_FOUND', "Table '{$table}' not found", 404);
+		$def = $this->resolveTable($table);
+		if ($def instanceof Response) {
+			return $def;
 		}
 
 		$params = $request->getQueryParams();
@@ -98,14 +114,19 @@ class CrudController
 
 	public function create(string $table, Request $request): Response
 	{
-		$def = $this->tables[$table] ?? null;
-		if ($def === null) {
-			return Response::error('TABLE_NOT_FOUND', "Table '{$table}' not found", 404);
+		$def = $this->resolveTable($table);
+		if ($def instanceof Response) {
+			return $def;
 		}
 
 		$body = $request->getBody();
 		if ($body === null) {
 			return Response::error('BAD_REQUEST', 'Request body must be a JSON object', 400);
+		}
+
+		$sensitiveErr = TableAccessGuard::rejectSensitiveInput($body, $def);
+		if ($sensitiveErr !== null) {
+			return $sensitiveErr;
 		}
 
 		$errors = $this->validator->validate($body, $def, 'create', $this->config);
@@ -137,9 +158,9 @@ class CrudController
 
 	public function update(string $table, int $id, Request $request): Response
 	{
-		$def = $this->tables[$table] ?? null;
-		if ($def === null) {
-			return Response::error('TABLE_NOT_FOUND', "Table '{$table}' not found", 404);
+		$def = $this->resolveTable($table);
+		if ($def instanceof Response) {
+			return $def;
 		}
 
 		$existing = $this->fetchById($table, $id, ['id']);
@@ -150,6 +171,11 @@ class CrudController
 		$body = $request->getBody();
 		if ($body === null) {
 			return Response::error('BAD_REQUEST', 'Request body must be a JSON object', 400);
+		}
+
+		$sensitiveErr = TableAccessGuard::rejectSensitiveInput($body, $def);
+		if ($sensitiveErr !== null) {
+			return $sensitiveErr;
 		}
 
 		$errors = $this->validator->validate($body, $def, 'create', $this->config);
@@ -177,9 +203,9 @@ class CrudController
 
 	public function patch(string $table, int $id, Request $request): Response
 	{
-		$def = $this->tables[$table] ?? null;
-		if ($def === null) {
-			return Response::error('TABLE_NOT_FOUND', "Table '{$table}' not found", 404);
+		$def = $this->resolveTable($table);
+		if ($def instanceof Response) {
+			return $def;
 		}
 
 		$existing = $this->fetchById($table, $id, ['id']);
@@ -190,6 +216,11 @@ class CrudController
 		$body = $request->getBody();
 		if ($body === null) {
 			return Response::error('BAD_REQUEST', 'Request body must be a JSON object', 400);
+		}
+
+		$sensitiveErr = TableAccessGuard::rejectSensitiveInput($body, $def);
+		if ($sensitiveErr !== null) {
+			return $sensitiveErr;
 		}
 
 		$errors = $this->validator->validate($body, $def, 'patch', $this->config);
@@ -223,9 +254,9 @@ class CrudController
 
 	public function delete(string $table, int $id): Response
 	{
-		$def = $this->tables[$table] ?? null;
-		if ($def === null) {
-			return Response::error('TABLE_NOT_FOUND', "Table '{$table}' not found", 404);
+		$def = $this->resolveTable($table);
+		if ($def instanceof Response) {
+			return $def;
 		}
 
 		$existing = $this->fetchById($table, $id, ['id']);
@@ -244,9 +275,9 @@ class CrudController
 	 */
 	public function docStateOptions(string $table, int $id): Response
 	{
-		$def = $this->tables[$table] ?? null;
-		if ($def === null) {
-			return Response::error('TABLE_NOT_FOUND', "Table '{$table}' not found", 404);
+		$def = $this->resolveTable($table);
+		if ($def instanceof Response) {
+			return $def;
 		}
 
 		$dsDef = $def->docStates;
@@ -532,6 +563,12 @@ class CrudController
 				return Response::error('BAD_REQUEST', "Unknown filter column: '{$column}'", 400);
 			}
 
+			// Filtr nad sensitive sloupcem = orákulum na extrakci hodnoty
+			// (like/gt po znacích), i když sloupec není v SELECT.
+			if ($colMap[$column]->sensitive) {
+				return Response::error('SENSITIVE_COLUMN', "Column '{$column}' cannot be filtered", 400);
+			}
+
 			$colonPos = strpos((string) $spec, ':');
 			if ($colonPos === false) {
 				return Response::error('BAD_REQUEST', "Invalid filter format for '{$column}': expected 'operator:value'", 400);
@@ -559,7 +596,7 @@ class CrudController
 
 		$colMap = [];
 		foreach ($def->columns as $col) {
-			$colMap[$col->id] = true;
+			$colMap[$col->id] = $col;
 		}
 
 		$sorts = [];
@@ -573,6 +610,9 @@ class CrudController
 
 			if (!isset($colMap[$column])) {
 				return Response::error('BAD_REQUEST', "Unknown sort column: '{$column}'", 400);
+			}
+			if ($colMap[$column]->sensitive) {
+				return Response::error('SENSITIVE_COLUMN', "Column '{$column}' cannot be sorted by", 400);
 			}
 			if ($direction !== 'asc' && $direction !== 'desc') {
 				return Response::error('BAD_REQUEST', "Invalid sort direction: '{$direction}'", 400);
@@ -599,8 +639,9 @@ class CrudController
 		foreach ($row as $key => $value) {
 			$key = (string) $key;
 
-			// Skip password-related columns
-			if (str_contains($key, 'password')) {
+			// Skip password-related and sensitive columns
+			if (str_contains($key, 'password')
+				|| (isset($colMap[$key]) && $colMap[$key]->sensitive)) {
 				continue;
 			}
 
@@ -641,7 +682,7 @@ class CrudController
 	{
 		$result = [];
 		foreach ($def->columns as $col) {
-			if (!str_contains($col->id, 'password')) {
+			if (!$col->sensitive && !str_contains($col->id, 'password')) {
 				$result[] = $col->id;
 			}
 		}

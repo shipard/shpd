@@ -33,6 +33,7 @@ class ColumnDefinition
         public readonly ?string $cfgItem,
         public readonly ?string $reference,
         public readonly bool $system,
+        public readonly bool $sensitive = false,
     ) {}
 
     public static function fromArray(array $data): self
@@ -102,6 +103,7 @@ class ColumnDefinition
                 ? $data['reference']
                 : null,
             system: (bool) ($data['system'] ?? false),
+            sensitive: (bool) ($data['sensitive'] ?? false),
         );
     }
 }

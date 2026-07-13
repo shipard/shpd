@@ -309,6 +309,8 @@ Chybový formát vychází z RFC 7807 (Problem Details), adaptovaný pro obálku
 | `BAD_REQUEST` | Malformed request |
 | `INTERNAL_ERROR` | Neočekávaná chyba serveru |
 | `TABLE_NOT_FOUND` | Tabulka neexistuje nebo není přístupná přes API |
+| `FORBIDDEN_SYSTEM_TABLE` | Tabulky `core_system_*` vyžadují administrátora (`is_admin`); API klíče nemají přístup nikdy (403) |
+| `SENSITIVE_COLUMN` | Sloupec s `"sensitive": true` nelze číst, zapisovat, filtrovat ani podle něj řadit přes generické API (400) |
 
 ---
 

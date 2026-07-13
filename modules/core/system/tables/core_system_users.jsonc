@@ -46,6 +46,7 @@
             "type": "varchar",
             "length": 255,
             "nullable": true,
+            "sensitive": true,
             "group": "credentials"
         },
         {

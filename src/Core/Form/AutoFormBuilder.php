@@ -118,7 +118,7 @@ class AutoFormBuilder
 
     private function shouldSkip(ColumnDefinition $col): bool
     {
-        if ($col->system) {
+        if ($col->system || $col->sensitive) {
             return true;
         }
         if (in_array($col->id, self::SKIP_COLUMNS, true)) {

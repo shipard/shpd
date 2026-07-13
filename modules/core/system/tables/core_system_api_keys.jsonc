@@ -36,7 +36,8 @@
             "name:en": "Key hash",
             "type": "varchar",
             "length": 64,
-            "nullable": false
+            "nullable": false,
+            "sensitive": true
         },
         {
             "id": "key_prefix",

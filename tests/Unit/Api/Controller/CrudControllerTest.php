@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Shipard\Tests\Unit\Api\Controller;
 
 use PHPUnit\Framework\TestCase;
+use Shipard\Api\AuthContext;
 use Shipard\Api\Controller\CrudController;
 use Shipard\Api\Request;
 use Shipard\Api\Response;
@@ -161,13 +162,23 @@ class CrudControllerTest extends TestCase
 		]);
 	}
 
-	private function ctrl(array $tables, array $seed = []): TestableCrudController
+	private function ctrl(array $tables, array $seed = [], ?AuthContext $auth = null): TestableCrudController
 	{
-		$c = new TestableCrudController($this->db, $tables);
+		$c = new TestableCrudController($this->db, $tables, null, $auth ?? new AuthContext(false));
 		foreach ($seed as $table => $rows) {
 			$c->seed($table, $rows);
 		}
 		return $c;
+	}
+
+	private function adminAuth(): AuthContext
+	{
+		return new AuthContext(true, 1, 'session', 'shpd_st_x', isAdmin: true);
+	}
+
+	private function userAuth(): AuthContext
+	{
+		return new AuthContext(true, 2, 'session', 'shpd_st_y', isAdmin: false);
 	}
 
 	private function getStatus(Response $response): int
@@ -505,5 +516,158 @@ class CrudControllerTest extends TestCase
 		$resp = $ctrl->show('flags', 1, $this->req());
 		$this->assertIsBool($resp->getPayload()['data']['active']);
 		$this->assertTrue($resp->getPayload()['data']['active']);
+	}
+
+	// -------------------------------------------------------------------------
+	// System table guard (core_system_*)
+	// -------------------------------------------------------------------------
+
+	private function systemUsersDef(): TableDefinition
+	{
+		return TableDefinition::fromArray([
+			'tableId' => 1,
+			'name'    => 'Users',
+			'columns' => [
+				['id' => 'id',            'name' => 'ID',    'type' => 'int', 'autoIncrement' => true, 'primaryKey' => true],
+				['id' => 'login',         'name' => 'Login', 'type' => 'varchar', 'length' => 100],
+				['id' => 'password_hash', 'name' => 'Hash',  'type' => 'varchar', 'length' => 255, 'nullable' => true, 'sensitive' => true],
+			],
+		]);
+	}
+
+	private function systemCtrl(AuthContext $auth): TestableCrudController
+	{
+		return $this->ctrl(
+			['core_system_users' => $this->systemUsersDef()],
+			['core_system_users' => [['id' => 1, 'login' => 'admin', 'password_hash' => 'secret-hash']]],
+			$auth,
+		);
+	}
+
+	public function testNonAdminGetsForbiddenOnAllSystemTableActions(): void
+	{
+		$ctrl = $this->systemCtrl($this->userAuth());
+
+		$responses = [
+			'list'            => $ctrl->list('core_system_users', $this->req()),
+			'show'            => $ctrl->show('core_system_users', 1, $this->req()),
+			'create'          => $ctrl->create('core_system_users', $this->req('POST', body: '{"login":"x"}')),
+			'update'          => $ctrl->update('core_system_users', 1, $this->req('PUT', body: '{"login":"x"}')),
+			'patch'           => $ctrl->patch('core_system_users', 1, $this->req('PATCH', body: '{"login":"x"}')),
+			'delete'          => $ctrl->delete('core_system_users', 1),
+			'docStateOptions' => $ctrl->docStateOptions('core_system_users', 1),
+		];
+
+		foreach ($responses as $action => $resp) {
+			$this->assertSame(403, $this->getStatus($resp), "action {$action}");
+			$this->assertSame('FORBIDDEN_SYSTEM_TABLE', $resp->getPayload()['error']['code'], "action {$action}");
+		}
+	}
+
+	public function testAdminPassesSystemTableGuard(): void
+	{
+		$ctrl = $this->systemCtrl($this->adminAuth());
+
+		$resp = $ctrl->list('core_system_users', $this->req());
+		$this->assertSame(200, $this->getStatus($resp));
+		$this->assertCount(1, $resp->getPayload()['data']);
+	}
+
+	public function testUnauthenticatedDefaultContextIsBlockedOnSystemTable(): void
+	{
+		// Výchozí AuthContext(false) v ctrl() — guard musí držet i bez wiringu.
+		$ctrl = $this->ctrl(['core_system_users' => $this->systemUsersDef()]);
+		$resp = $ctrl->list('core_system_users', $this->req());
+		$this->assertSame(403, $this->getStatus($resp));
+	}
+
+	public function testNonAdminUnaffectedOnRegularTable(): void
+	{
+		$def  = $this->makeTable('items');
+		$ctrl = $this->ctrl(['items' => $def], ['items' => [['id' => 1, 'name' => 'A']]], $this->userAuth());
+
+		$resp = $ctrl->list('items', $this->req());
+		$this->assertSame(200, $this->getStatus($resp));
+	}
+
+	// -------------------------------------------------------------------------
+	// Sensitive columns
+	// -------------------------------------------------------------------------
+
+	private function secretsDef(): TableDefinition
+	{
+		return TableDefinition::fromArray([
+			'tableId' => 9,
+			'name'    => 'secrets',
+			'columns' => [
+				['id' => 'id',       'name' => 'ID',     'type' => 'int', 'autoIncrement' => true, 'primaryKey' => true],
+				['id' => 'name',     'name' => 'Name',   'type' => 'varchar', 'length' => 100],
+				['id' => 'key_hash', 'name' => 'Hash',   'type' => 'varchar', 'length' => 64, 'sensitive' => true],
+			],
+		]);
+	}
+
+	private function secretsCtrl(): TestableCrudController
+	{
+		return $this->ctrl(
+			['secrets' => $this->secretsDef()],
+			['secrets' => [['id' => 1, 'name' => 'A', 'key_hash' => 'abc123']]],
+		);
+	}
+
+	public function testSensitiveColumnMissingFromListAndShow(): void
+	{
+		$ctrl = $this->secretsCtrl();
+
+		$list = $ctrl->list('secrets', $this->req())->getPayload()['data'];
+		$this->assertArrayNotHasKey('key_hash', $list[0]);
+		$this->assertSame('A', $list[0]['name']);
+
+		$show = $ctrl->show('secrets', 1, $this->req())->getPayload()['data'];
+		$this->assertArrayNotHasKey('key_hash', $show);
+	}
+
+	public function testSensitiveColumnCannotBeRequestedViaFields(): void
+	{
+		$ctrl = $this->secretsCtrl();
+		$resp = $ctrl->list('secrets', $this->req(queryParams: ['fields' => 'name,key_hash']));
+		$this->assertSame(400, $this->getStatus($resp));
+	}
+
+	public function testCreateWithSensitiveColumnReturns400(): void
+	{
+		$ctrl = $this->secretsCtrl();
+		$resp = $ctrl->create('secrets', $this->req('POST', body: '{"name":"B","key_hash":"evil"}'));
+
+		$this->assertSame(400, $this->getStatus($resp));
+		$this->assertSame('SENSITIVE_COLUMN', $resp->getPayload()['error']['code']);
+	}
+
+	public function testPatchWithSensitiveColumnReturns400(): void
+	{
+		$ctrl = $this->secretsCtrl();
+		$resp = $ctrl->patch('secrets', 1, $this->req('PATCH', body: '{"key_hash":"evil"}'));
+
+		$this->assertSame(400, $this->getStatus($resp));
+		$this->assertSame('SENSITIVE_COLUMN', $resp->getPayload()['error']['code']);
+	}
+
+	public function testFilterOnSensitiveColumnReturns400(): void
+	{
+		// like/gt filtr by fungoval jako orákulum na extrakci hodnoty po znacích.
+		$ctrl = $this->secretsCtrl();
+		$resp = $ctrl->list('secrets', $this->req(queryParams: ['filter' => ['key_hash' => 'like:abc']]));
+
+		$this->assertSame(400, $this->getStatus($resp));
+		$this->assertSame('SENSITIVE_COLUMN', $resp->getPayload()['error']['code']);
+	}
+
+	public function testSortOnSensitiveColumnReturns400(): void
+	{
+		$ctrl = $this->secretsCtrl();
+		$resp = $ctrl->list('secrets', $this->req(queryParams: ['sort' => 'key_hash']));
+
+		$this->assertSame(400, $this->getStatus($resp));
+		$this->assertSame('SENSITIVE_COLUMN', $resp->getPayload()['error']['code']);
 	}
 }

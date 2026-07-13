@@ -41,6 +41,11 @@ class MetaController
 
 		$columns = [];
 		foreach ($def->columns as $col) {
+			// Sensitive sloupce nesmí do metadat — klient o nich nemá vědět
+			// (negenerují se do gridů ani formulářů).
+			if ($col->sensitive) {
+				continue;
+			}
 			$columns[] = $this->serializeColumn($col);
 		}
 

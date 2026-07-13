@@ -20,6 +20,18 @@ class TableDefinition
         public readonly bool $stateTransitionsRunDocumentHooks = false,
     ) {}
 
+    /** @return string[] Column ids flagged "sensitive": true */
+    public function getSensitiveColumns(): array
+    {
+        $result = [];
+        foreach ($this->columns as $col) {
+            if ($col->sensitive) {
+                $result[] = $col->id;
+            }
+        }
+        return $result;
+    }
+
     public static function fromArray(array $data): self
     {
         if (!isset($data['tableId']) || !is_int($data['tableId']) || $data['tableId'] <= 0) {

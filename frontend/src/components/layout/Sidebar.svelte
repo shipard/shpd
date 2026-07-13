@@ -103,7 +103,7 @@
   }
 
   function handleItemClick(item) {
-    const navItem = { id: item.id, label: item.label, type: item.type, table: item.table, viewerId: item.viewerId, pageId: item.pageId, filter: item.filter };
+    const navItem = { id: item.id, label: item.label, type: item.type, table: item.table, viewerId: item.viewerId, pageId: item.pageId, panelId: item.panelId, filter: item.filter };
     navigationStore.navigate(navItem);
     onNavigate?.(navItem);
   }

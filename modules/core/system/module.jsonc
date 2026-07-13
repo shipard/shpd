@@ -136,13 +136,37 @@
             ]
         }
     ],
+    // panels — klientské komponenty v navigaci (mapa panelId → komponenta
+    // v ContentArea.svelte). Pro obsah, který nejde poskládat z generických
+    // settings fieldů.
+    "panels": [
+        {
+            "id": "accountSecurity",
+            "name": "Security",
+            "name:cs": "Zabezpečení",
+            "name:en": "Security",
+            "icon": "lock"
+        }
+    ],
+    "viewers": [
+        {
+            "id": "core.system.users",
+            "name": "Users",
+            "name:cs": "Uživatelé",
+            "name:en": "Users",
+            "icon": "users",
+            "table": "core_system_users",
+            "class": "Shipard\\Module\\Core\\System\\UsersViewer"
+        }
+    ],
     "settingsItems": [
         { "page": "appSettings", "section": "app", "order": 10 },
-        { "table": "core_system_users",    "section": "other", "subsection": "other.system", "order": 20 },
+        { "viewer": "core.system.users",   "section": "other", "subsection": "other.system", "order": 20 },
         { "table": "core_system_settings", "section": "other", "subsection": "other.system", "order": 30 }
     ],
     "accountItems": [
-        { "page": "accountBasic", "section": "basic", "order": 10 }
+        { "page": "accountBasic", "section": "basic", "order": 10 },
+        { "panel": "accountSecurity", "section": "basic", "order": 20 }
     ],
     "config": [
         {

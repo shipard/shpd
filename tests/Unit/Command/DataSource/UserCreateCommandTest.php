@@ -130,16 +130,26 @@ class UserCreateCommandTest extends TestCase
         $this->assertStringContainsString('--login is required', $tester->getDisplay());
     }
 
-    public function testMissingPasswordOption(): void
+    public function testMissingPasswordCreatesUserWithoutLocalPassword(): void
     {
+        $this->dsConnection->method('fetchRow')->willReturn(null);
+
+        $captured = null;
+        $this->dsConnection->method('insertRow')
+            ->willReturnCallback(function (string $table, array $data) use (&$captured): int {
+                $captured = $data;
+                return 5;
+            });
+
         $tester = $this->createCommandTester();
         $exitCode = $tester->execute([
-            '--login' => 'admin',
-            '--name'  => 'Admin',
+            '--login' => 'novy',
+            '--name'  => 'Nový uživatel',
         ]);
 
-        $this->assertSame(Command::FAILURE, $exitCode);
-        $this->assertStringContainsString('--password is required', $tester->getDisplay());
+        $this->assertSame(Command::SUCCESS, $exitCode);
+        $this->assertNull($captured['password_hash']);
+        $this->assertStringContainsString('send an invitation', $tester->getDisplay());
     }
 
     public function testMissingNameOption(): void

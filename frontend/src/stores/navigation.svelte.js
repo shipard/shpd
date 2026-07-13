@@ -40,6 +40,7 @@ function navigate(item) {
     table: item.table,
     viewerId: item.viewerId,
     pageId: item.pageId ?? null,
+    panelId: item.panelId ?? null,
     filter: item.filter ?? null,
   };
   // Manuální navigace mimo dashboard widget — pending record vyprší.

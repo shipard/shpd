@@ -25,7 +25,7 @@ class UserCreateCommand extends Command
         $this->setName('user-create')
              ->setDescription('Create a new user in the data source')
              ->addOption('login', null, InputOption::VALUE_REQUIRED, 'Login name')
-             ->addOption('password', null, InputOption::VALUE_REQUIRED, 'Password')
+             ->addOption('password', null, InputOption::VALUE_OPTIONAL, 'Password (omit to create the account without a local password — send an invitation instead)')
              ->addOption('name', null, InputOption::VALUE_REQUIRED, 'Full name')
              ->addOption('email', null, InputOption::VALUE_OPTIONAL, 'E-mail address')
              ->addOption('admin', null, InputOption::VALUE_NONE, 'Grant administrator rights');
@@ -55,10 +55,6 @@ class UserCreateCommand extends Command
             $output->writeln('<error>Error: Option --login is required</error>');
             return Command::FAILURE;
         }
-        if (empty($password)) {
-            $output->writeln('<error>Error: Option --password is required</error>');
-            return Command::FAILURE;
-        }
         if (empty($fullName)) {
             $output->writeln('<error>Error: Option --name is required</error>');
             return Command::FAILURE;
@@ -77,7 +73,9 @@ class UserCreateCommand extends Command
             return Command::FAILURE;
         }
 
-        $passwordHash = password_hash($password, PASSWORD_DEFAULT);
+        // Bez hesla = účet bez lokálního loginu (NULL hash) — heslo si
+        // uživatel nastaví přes pozvánku (POST /_users/{id}/invite).
+        $passwordHash = empty($password) ? null : password_hash($password, PASSWORD_DEFAULT);
 
         $id = $dsConnection->insertRow('core_system_users', [
             'login'         => $login,
@@ -94,6 +92,9 @@ class UserCreateCommand extends Command
         $output->writeln("  Name:  {$fullName}");
         $output->writeln('  Email: ' . ($email ?: '(none)'));
         $output->writeln('  Admin: ' . ($isAdmin ? 'yes' : 'no'));
+        if ($passwordHash === null) {
+            $output->writeln('  Password: (none — send an invitation to let the user set one)');
+        }
 
         return Command::SUCCESS;
     }

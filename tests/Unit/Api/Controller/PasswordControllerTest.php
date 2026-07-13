@@ -515,7 +515,7 @@ class PasswordControllerTest extends TestCase
 			$ownId,
 		);
 
-		$this->assertSame(204, $this->getStatus($response));
+		$this->assertSame(200, $this->getStatus($response));
 		$this->assertCount(1, $this->db->sessions);
 	}
 

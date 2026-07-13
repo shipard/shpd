@@ -9,6 +9,7 @@
   } from '../../api/alerts.js';
   import { reaccountDocument } from '../../api/accounting.js';
   import { importStatement, reaccountTransaction } from '../../api/bank.js';
+  import { inviteUser } from '../../api/security.js';
   import ViewerRow from './ViewerRow.svelte';
   import ViewerDetail from './ViewerDetail.svelte';
   import ViewerToolbar from './ViewerToolbar.svelte';
@@ -516,6 +517,14 @@
     // jen na dedikovaný endpoint; sloupec je sensitive, CRUD ho nevidí.
     if (actionId === 'setPassword') {
       passwordDialogOpen = true;
+      return;
+    }
+    // Poslat pozvánku uživateli (UsersViewer, admin) — mail s linkem na
+    // nastavení hesla. Opakované volání přepošle (starý token zaniká).
+    if (actionId === 'invite') {
+      const result = await inviteUser(recordId);
+      if (result?.success) alert(t('viewer.detail.inviteSent'));
+      else alert(t('viewer.detail.inviteFailed', { msg: translateError(result?.error) }));
       return;
     }
 

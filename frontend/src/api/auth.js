@@ -80,6 +80,44 @@ export async function exchangeOidc(code) {
 }
 
 /**
+ * Zapomenuté heslo — {identifier} je login nebo e-mail. Server vrací vždy
+ * 200 (anti-enumerace), odpověď nic neprozrazuje.
+ * @param {string} identifier
+ * @returns {Promise<object>} API envelope {success, data, error?}
+ */
+export async function forgotPassword(identifier) {
+  const response = await fetch(`${API_BASE_URL}/_auth/password/forgot`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept-Language': 'cs',
+    },
+    body: JSON.stringify({ identifier }),
+  });
+
+  return response.json();
+}
+
+/**
+ * Nastavení hesla přes jednorázový token z mailu (pozvánka i reset).
+ * @param {string} token
+ * @param {string} password
+ * @returns {Promise<object>} API envelope {success, data, error?}
+ */
+export async function resetPassword(token, password) {
+  const response = await fetch(`${API_BASE_URL}/_auth/password/reset`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept-Language': 'cs',
+    },
+    body: JSON.stringify({ token, password }),
+  });
+
+  return response.json();
+}
+
+/**
  * Invalidate the current token (logout).
  * @returns {Promise<object>} API envelope {success, data, error?}
  */

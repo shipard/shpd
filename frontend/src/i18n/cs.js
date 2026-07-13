@@ -115,6 +115,26 @@ export default {
   'login.error.oidc_account_inactive': 'Propojený účet je deaktivovaný.',
   'login.error.oidc_login_conflict': 'Účet s tímto přihlašovacím jménem už existuje. Kontaktujte správce.',
   'login.error.oidc_provider_error': 'Komunikace s poskytovatelem identity selhala. Zkuste to prosím znovu.',
+  'login.notice.password_set': 'Heslo je nastavené, přihlaste se.',
+  'login.forgot.link': 'Zapomenuté heslo?',
+  'login.forgot.intro': 'Zadejte přihlašovací jméno nebo e-mail. Pokud účet existuje, pošleme odkaz na nastavení nového hesla.',
+  'login.forgot.identifier': 'Přihlašovací jméno nebo e-mail',
+  'login.forgot.submit': 'Poslat odkaz',
+  'login.forgot.submitting': 'Odesílání…',
+  'login.forgot.sent': 'Pokud účet existuje, poslali jsme e-mail s odkazem na nastavení hesla.',
+  'login.forgot.backToLogin': 'Zpět na přihlášení',
+
+  // ── Set password (mailový link — pozvánka / reset hesla) ────────────────
+  'setPassword.intro': 'Zvolte si nové heslo pro přihlášení.',
+  'setPassword.password': 'Nové heslo',
+  'setPassword.confirm': 'Potvrzení hesla',
+  'setPassword.policyHint': 'Alespoň {min} znaků; nesmí se shodovat s přihlašovacím jménem.',
+  'setPassword.tooShort': 'Heslo musí mít alespoň {min} znaků.',
+  'setPassword.mismatch': 'Hesla se neshodují.',
+  'setPassword.invalidToken': 'Odkaz je neplatný nebo vypršel. Požádejte o nový přes „Zapomenuté heslo?" na přihlašovací obrazovce, nebo o novou pozvánku.',
+  'setPassword.backToLogin': 'Zpět na přihlášení',
+  'setPassword.submit': 'Nastavit heslo',
+  'setPassword.submitting': 'Ukládání…',
 
   // ── Viewer (záložky, hledání, status, reanalyze dialog) ─────────────────
   'viewer.tab.active': 'Aktivní',
@@ -154,6 +174,8 @@ export default {
   'viewer.detail.setPasswordTitle': 'Nastavit heslo odesílatele',
   'viewer.detail.setPasswordLabel': 'Nové SMTP heslo:',
   'viewer.detail.setPasswordFailed': 'Nepodařilo se nastavit heslo: {msg}',
+  'viewer.detail.inviteSent': 'Pozvánka byla odeslána.',
+  'viewer.detail.inviteFailed': 'Nepodařilo se poslat pozvánku: {msg}',
 
   // ── Viewer detail dokladu (content type `document`) ─────────────────────
   'viewer.document.section.supplier': 'Dodavatel',
@@ -237,6 +259,11 @@ export default {
   'error.INTERNAL_ERROR': 'Vnitřní chyba serveru',
   'error.UPLOAD_ERROR': 'Chyba při nahrávání souboru',
   'error.NETWORK_ERROR': 'Chyba sítě — zkontrolujte připojení',
+  'error.PASSWORD_POLICY': 'Heslo nesplňuje pravidla — alespoň 12 znaků a nesmí se shodovat s přihlašovacím jménem',
+  'error.INVALID_TOKEN': 'Odkaz je neplatný nebo vypršel',
+  'error.NO_LOCAL_PASSWORD': 'Účet nemá lokální heslo — přihlašujete se přes externího poskytovatele',
+  'error.NO_EMAIL': 'Uživatel nemá vyplněný e-mail',
+  'error.MAIL_NOT_CONFIGURED': 'Odchozí pošta není nakonfigurovaná',
 
   // ── Table browser ───────────────────────────────────────────────────────
   'browser.addRecord': 'Nový záznam',
@@ -444,4 +471,23 @@ export default {
 
   // Nastavení účtu — widget vzhledu
   'account.theme.editColor': 'Upravit barvu',
+
+  // Nastavení účtu — panel Zabezpečení (změna hesla + relace)
+  'account.security.title': 'Zabezpečení',
+  'account.security.changePassword': 'Změna hesla',
+  'account.security.currentPassword': 'Současné heslo',
+  'account.security.newPassword': 'Nové heslo',
+  'account.security.confirmPassword': 'Potvrzení hesla',
+  'account.security.policyHint': 'Alespoň {min} znaků; nesmí se shodovat s přihlašovacím jménem.',
+  'account.security.tooShort': 'Heslo musí mít alespoň {min} znaků.',
+  'account.security.mismatch': 'Hesla se neshodují.',
+  'account.security.changed': 'Heslo bylo změněno. Ostatní zařízení byla odhlášena.',
+  'account.security.submit': 'Změnit heslo',
+  'account.security.sessions': 'Moje relace',
+  'account.security.noSessions': 'Žádné relace.',
+  'account.security.created': 'Vytvořeno',
+  'account.security.ipAddress': 'IP adresa',
+  'account.security.current': 'aktuální',
+  'account.security.revoke': 'Odhlásit',
+  'account.security.revokeOthers': 'Odhlásit ostatní zařízení',
 };

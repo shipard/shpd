@@ -31,6 +31,7 @@
 
   /* Soft "chyby" pozadí — např. error notice ramp-up v formálři */
   --shpd-color-danger-soft:   #fef2f2;
+  --shpd-color-success-soft:  #f0fdf4;
 
   /* Doc-state palette — barvy stavů dokumentů (concept, edit, atd.).
    *
@@ -245,6 +246,7 @@
   --shpd-color-warning:       #f59e0b;
   --shpd-color-warning-hover: #fbbf24;
   --shpd-color-danger-soft:   #2d1414;
+  --shpd-color-success-soft:  #14291c;
 
   /* Plochy — tmavá šedá s lehkým modrým nádechem (ne černá).
    *   bg            = obsah (hlavička, seznam, detail panel)

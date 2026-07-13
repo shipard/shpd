@@ -106,6 +106,26 @@ export default {
   'login.error.oidc_account_inactive': 'The linked account is inactive.',
   'login.error.oidc_login_conflict': 'An account with this login already exists. Contact your administrator.',
   'login.error.oidc_provider_error': 'Communication with the identity provider failed. Please try again.',
+  'login.notice.password_set': 'Password set — you can sign in now.',
+  'login.forgot.link': 'Forgot password?',
+  'login.forgot.intro': 'Enter your login or e-mail. If the account exists, we will send a link to set a new password.',
+  'login.forgot.identifier': 'Login or e-mail',
+  'login.forgot.submit': 'Send link',
+  'login.forgot.submitting': 'Sending…',
+  'login.forgot.sent': 'If the account exists, we have sent an e-mail with a link to set a password.',
+  'login.forgot.backToLogin': 'Back to sign in',
+
+  // ── Set password (e-mail link — invitation / password reset) ────────────
+  'setPassword.intro': 'Choose a new password to sign in with.',
+  'setPassword.password': 'New password',
+  'setPassword.confirm': 'Confirm password',
+  'setPassword.policyHint': 'At least {min} characters; must not equal your login.',
+  'setPassword.tooShort': 'The password must be at least {min} characters long.',
+  'setPassword.mismatch': 'The passwords do not match.',
+  'setPassword.invalidToken': 'The link is invalid or has expired. Request a new one via "Forgot password?" on the sign-in screen, or ask for a new invitation.',
+  'setPassword.backToLogin': 'Back to sign in',
+  'setPassword.submit': 'Set password',
+  'setPassword.submitting': 'Saving…',
 
   // ── Viewer (tabs, search, status, reanalyze dialog) ─────────────────────
   'viewer.tab.active': 'Active',
@@ -145,6 +165,8 @@ export default {
   'viewer.detail.setPasswordTitle': 'Set sender password',
   'viewer.detail.setPasswordLabel': 'New SMTP password:',
   'viewer.detail.setPasswordFailed': 'Failed to set password: {msg}',
+  'viewer.detail.inviteSent': 'Invitation sent.',
+  'viewer.detail.inviteFailed': 'Failed to send invitation: {msg}',
 
   // ── Viewer document detail (content type `document`) ────────────────────
   'viewer.document.section.supplier': 'Supplier',
@@ -225,6 +247,11 @@ export default {
   'error.INTERNAL_ERROR': 'Internal server error',
   'error.UPLOAD_ERROR': 'File upload failed',
   'error.NETWORK_ERROR': 'Network error — check your connection',
+  'error.PASSWORD_POLICY': 'The password does not meet the policy — at least 12 characters and must not equal your login',
+  'error.INVALID_TOKEN': 'The link is invalid or has expired',
+  'error.NO_LOCAL_PASSWORD': 'The account has no local password — you sign in via an external provider',
+  'error.NO_EMAIL': 'The user has no e-mail address',
+  'error.MAIL_NOT_CONFIGURED': 'Outbound mail is not configured',
 
   // ── Table browser ───────────────────────────────────────────────────────
   'browser.addRecord': 'New record',
@@ -431,4 +458,23 @@ export default {
 
   // Account settings — appearance widget
   'account.theme.editColor': 'Edit color',
+
+  // Account settings — Security panel (change password + sessions)
+  'account.security.title': 'Security',
+  'account.security.changePassword': 'Change password',
+  'account.security.currentPassword': 'Current password',
+  'account.security.newPassword': 'New password',
+  'account.security.confirmPassword': 'Confirm password',
+  'account.security.policyHint': 'At least {min} characters; must not equal your login.',
+  'account.security.tooShort': 'The password must be at least {min} characters long.',
+  'account.security.mismatch': 'The passwords do not match.',
+  'account.security.changed': 'Password changed. Other devices have been signed out.',
+  'account.security.submit': 'Change password',
+  'account.security.sessions': 'My sessions',
+  'account.security.noSessions': 'No sessions.',
+  'account.security.created': 'Created',
+  'account.security.ipAddress': 'IP address',
+  'account.security.current': 'current',
+  'account.security.revoke': 'Sign out',
+  'account.security.revokeOthers': 'Sign out other devices',
 };

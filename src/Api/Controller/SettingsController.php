@@ -388,6 +388,7 @@ class SettingsController
         $seenViewers = [];
         $seenTables = [];
         $seenPages = [];
+        $seenPanels = [];
         // Systémové tabulky jsou pro ne-adminy zavřené na CRUD/viewer/form
         // vrstvě (TableAccessGuard) — mrtvé odkazy do stromu nedáváme.
         $isAdmin = $auth?->isAdmin ?? false;
@@ -536,6 +537,46 @@ class SettingsController
                     ];
                     if (isset($pageDef['icon'])) {
                         $navItem['icon'] = $pageDef['icon'];
+                    }
+                    if ($item['order'] !== null) {
+                        $navItem['_order'] = $item['order'];
+                    }
+
+                    $itemsBySection[$this->sectionKey($section, $subsection)][] = $navItem;
+                } elseif (($item['panel'] ?? null) !== null) {
+                    // Panel = klientská komponenta (mapa panelId → komponenta
+                    // v ContentArea.svelte); server dodává jen id + label.
+                    $panelId = $item['panel'];
+                    if (isset($seenPanels[$panelId])) {
+                        continue;
+                    }
+
+                    $panelDef = null;
+                    foreach ($module->panels as $p) {
+                        if (($p['id'] ?? '') === $panelId) {
+                            $panelDef = $p;
+                            break;
+                        }
+                    }
+
+                    if ($panelDef === null) {
+                        ErrorLogger::warn('Panel not found in module, skipping', [
+                            'panel_id'  => $panelId,
+                            'module_id' => $module->id,
+                        ]);
+                        continue;
+                    }
+
+                    $seenPanels[$panelId] = true;
+
+                    $navItem = [
+                        'id'      => 'panel:' . $panelId,
+                        'label'   => $this->localizeViewerName($panelDef, $language),
+                        'type'    => 'panel',
+                        'panelId' => $panelId,
+                    ];
+                    if (isset($panelDef['icon'])) {
+                        $navItem['icon'] = $panelDef['icon'];
                     }
                     if ($item['order'] !== null) {
                         $navItem['_order'] = $item['order'];

@@ -199,7 +199,8 @@ class PasswordController
 			return Response::error('NOT_FOUND', 'Session not found', 404);
 		}
 
-		return Response::success(null, 204);
+		// 200 s tělem, ne 204 — frontend client.js parsuje odpověď vždy.
+		return Response::success(['status' => 'ok']);
 	}
 
 	public function sessionsRevokeOthers(Request $request, AuthContext $auth, DataSourceConnection $db): Response

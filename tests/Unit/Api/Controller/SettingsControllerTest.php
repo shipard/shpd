@@ -484,6 +484,8 @@ class SettingsControllerTest extends TestCase
         );
         $ids = $this->collectNavItemIds($resp->getPayload()['data']);
 
+        // Users jsou viewer položka — guard je skrývá přes target tabulku.
+        $this->assertNotContains('viewer:core.system.users', $ids);
         $this->assertNotContains('core_system_users', $ids);
         $this->assertNotContains('core_system_api_keys', $ids);
     }
@@ -496,6 +498,7 @@ class SettingsControllerTest extends TestCase
         );
         $ids = $this->collectNavItemIds($resp->getPayload()['data']);
 
+        $this->assertNotContains('viewer:core.system.users', $ids);
         $this->assertNotContains('core_system_users', $ids);
     }
 
@@ -507,6 +510,6 @@ class SettingsControllerTest extends TestCase
         );
         $ids = $this->collectNavItemIds($resp->getPayload()['data']);
 
-        $this->assertContains('core_system_users', $ids);
+        $this->assertContains('viewer:core.system.users', $ids);
     }
 }

@@ -25,6 +25,7 @@ class ModuleDefinition
         public readonly array $documentEventHandlers = [],
         public readonly array $accountItems = [],
         public readonly array $journalEventHandlers = [],
+        public readonly array $panels = [],
     ) {}
 
     public static function fromArray(array $data): self
@@ -74,6 +75,20 @@ class ModuleDefinition
                 $page['scope']   = (isset($page['scope']) && $page['scope'] === 'user') ? 'user' : 'ds';
                 $page['fields']  = $fields;
                 $settingsPages[] = $page;
+            }
+        }
+
+        // panels — klientské komponenty v navigaci Nastavení/Účtu (protějšek
+        // settingsPages pro obsah, který nejde poskládat z generických
+        // fieldů — např. změna hesla + relace). Server dodává jen id + label,
+        // vykreslení řeší frontend mapou panelId → komponenta.
+        $panels = [];
+        if (isset($data['panels']) && is_array($data['panels'])) {
+            foreach ($data['panels'] as $panel) {
+                if (!is_array($panel)) continue;
+                if (!isset($panel['id']) || !is_string($panel['id']) || $panel['id'] === '') continue;
+                if (!isset($panel['name']) || !is_string($panel['name']) || $panel['name'] === '') continue;
+                $panels[] = $panel;
             }
         }
 
@@ -227,13 +242,16 @@ class ModuleDefinition
             documentEventHandlers: $documentEventHandlers,
             accountItems: $accountItems,
             journalEventHandlers: $journalEventHandlers,
+            panels: $panels,
         );
     }
 
     /**
      * Parser navigačních položek pro Nastavení (settingsItems) i Nastavení
-     * účtu (accountItems) — sdílený tvar: právě jedno z viewer|table|page,
-     * povinná `section`, volitelné `subsection`/`order`.
+     * účtu (accountItems) — sdílený tvar: právě jedno z viewer|table|page|
+     * panel, povinná `section`, volitelné `subsection`/`order`. Panel je
+     * klientská komponenta (registrace v `panels[]`), ne server-driven
+     * stránka — používá ho Nastavení účtu pro Zabezpečení.
      *
      * @param  array<string, mixed> $data
      * @return list<array<string, mixed>>
@@ -245,17 +263,19 @@ class ModuleDefinition
             foreach ($data[$key] as $item) {
                 if (!is_array($item)) continue;
                 if (!isset($item['section'])) continue;
-                // Právě jedno z viewer|table|page.
+                // Právě jedno z viewer|table|page|panel.
                 $targets = count(array_filter([
                     isset($item['viewer']),
                     isset($item['table']),
                     isset($item['page']),
+                    isset($item['panel']),
                 ]));
                 if ($targets !== 1) continue;
                 $items[] = [
                     'viewer'     => $item['viewer'] ?? null,
                     'table'      => $item['table']  ?? null,
                     'page'       => $item['page']   ?? null,
+                    'panel'      => $item['panel']  ?? null,
                     'section'    => (string) $item['section'],
                     'subsection' => isset($item['subsection']) ? (string) $item['subsection'] : null,
                     'order'      => isset($item['order']) ? (int) $item['order'] : null,

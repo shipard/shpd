@@ -76,6 +76,7 @@ import {
   faGauge,
   faRobot,
   faComments,
+  faLock,
 } from '@fortawesome/free-solid-svg-icons';
 
 // ── Akce (toolbary, tlačítka) ──────────────────────────────────
@@ -107,6 +108,7 @@ export const iconAppSettings = faGears;
 export const iconCalculator = faCalculator;
 export const iconUser = faUser;
 export const iconUsers = faUsers;
+export const iconLock = faLock;
 
 // ── Číselníky / moduly (sidebar, navigace) ──────────────────────
 export const iconCompany = faBuilding;
@@ -198,6 +200,7 @@ export const iconMap = {
   'bank': iconBank,
   'hash': iconHash,
   'logout': iconLogout,
+  'lock': iconLock,
   'calculator': iconCalculator,
   'app-settings': iconAppSettings,
   'alert': iconAlert,

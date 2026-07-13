@@ -9,7 +9,9 @@ import { authStore } from './stores/auth.svelte.js'
 import { accountPrefs } from './stores/accountPrefs.svelte.js'
 import { avatarStore } from './stores/avatar.svelte.js'
 import { loginNotice } from './stores/loginNotice.svelte.js'
+import { authAction } from './stores/authAction.svelte.js'
 import { parseOidcRedirect } from './api/oidc.js'
+import { parseAuthAction } from './api/authActions.js'
 import { exchangeOidc } from './api/auth.js'
 
 // Inicializace mobilní detekce (matchMedia listener). Jednou na začátku.
@@ -20,11 +22,20 @@ layoutStore.initLayout()
 appInfoStore.load()
 
 async function boot() {
+  // Mailový link set-password (?auth_action=set-password&token=…): token
+  // do in-memory store PŘED mountem, URL se hned čistí — token nesmí
+  // zůstat v historii. App.svelte pak zobrazí SetPasswordScreen.
+  const startupAction = parseAuthAction(window.location.search)
+  if (startupAction) {
+    history.replaceState(null, '', window.location.pathname)
+    authAction.set(startupAction)
+  }
+
   // OIDC návrat: ?login=oidc&code=… vyměnit za session PŘED mountem
   // (žádný flash login obrazovky), ?login_error=… předat login obrazovce.
   // URL se čistí hned — handoff kód je jednorázový a nesmí přežít reload.
   const oidcRedirect = parseOidcRedirect(window.location.search)
-  if (oidcRedirect) {
+  if (!startupAction && oidcRedirect) {
     history.replaceState(null, '', window.location.pathname)
     if (oidcRedirect.kind === 'handoff') {
       try {

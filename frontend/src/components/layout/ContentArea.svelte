@@ -4,9 +4,20 @@
   import Dashboard from '../dashboard/Dashboard.svelte';
   import ChatView from '../chat/ChatView.svelte';
   import SettingsPage from '../settings/SettingsPage.svelte';
+  import AccountSecurity from '../account/AccountSecurity.svelte';
   import { t } from '../../i18n/index.js';
 
   let { activeItem = null, onOpenThemePanel } = $props();
+
+  // Panel = klientská komponenta registrovaná v module.jsonc `panels[]`;
+  // server posílá jen {type: 'panel', panelId}, mapa je tady.
+  const panelComponents = {
+    accountSecurity: AccountSecurity,
+  };
+
+  const PanelComponent = $derived(
+    activeItem?.type === 'panel' ? (panelComponents[activeItem.panelId] ?? null) : null
+  );
 </script>
 
 <main class="shpd-content">
@@ -20,6 +31,8 @@
     <TableBrowser tab={activeItem} />
   {:else if activeItem?.type === 'page'}
     <SettingsPage tab={activeItem} {onOpenThemePanel} />
+  {:else if PanelComponent}
+    <PanelComponent />
   {:else if activeItem}
     <!-- Placeholder for future content types (form, …) -->
     <div class="shpd-content__empty">

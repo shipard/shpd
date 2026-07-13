@@ -1,5 +1,5 @@
 <script>
-  import { login, oidcStartUrl } from '../../api/auth.js';
+  import { login, oidcStartUrl, forgotPassword } from '../../api/auth.js';
   import { authStore } from '../../stores/auth.svelte.js';
   import { appInfoStore } from '../../stores/appInfo.svelte.js';
   import { loginNotice } from '../../stores/loginNotice.svelte.js';
@@ -15,6 +15,16 @@
   // Předvyplněná chyba z OIDC redirectu (?login_error=…) — main.js ji uloží
   // do loginNotice před mountem.
   let errorMessage = $state(loginNotice.error ? t(`login.error.${loginNotice.error}`) : '');
+  // Úspěšná flash hláška (např. heslo nastavené na SetPasswordScreen).
+  let successMessage = $state(
+    loginNotice.type === 'success' ? t(`login.notice.${loginNotice.code}`) : ''
+  );
+
+  // Inline režim „Zapomenuté heslo?" — identifier + submit, odpověď je vždy
+  // stejná (anti-enumerace řeší server).
+  let forgotMode = $state(false);
+  let forgotIdentifier = $state('');
+  let forgotSent = $state(false);
 
   // Auth politika z /_app/info: než se načte (null), zobrazuje se lokální
   // formulář bez provider tlačítek — bezpečný default shodný s dneškem.
@@ -56,6 +66,40 @@
     }
   }
 
+  function enterForgotMode() {
+    forgotMode = true;
+    forgotSent = false;
+    forgotIdentifier = loginName;
+    errorMessage = '';
+    successMessage = '';
+    loginNotice.clear();
+  }
+
+  function exitForgotMode() {
+    forgotMode = false;
+    forgotSent = false;
+  }
+
+  async function handleForgotSubmit() {
+    if (loading || forgotIdentifier.trim() === '') return;
+
+    loading = true;
+    try {
+      await forgotPassword(forgotIdentifier.trim());
+    } catch {
+      // Odpověď je informačně prázdná — i síťovou chybu skryjeme za
+      // jednotnou hlášku, ať flow nic neprozrazuje.
+    }
+    loading = false;
+    forgotSent = true;
+  }
+
+  function handleForgotKeydown(event) {
+    if (event.key === 'Enter') {
+      handleForgotSubmit();
+    }
+  }
+
   // Discreet picker v patce karty — Phase 1B varianta B. Native <select>:
   // klávesnice + a11y dostupné zadarmo, žádný vlastní open/close state,
   // a v sidebar dropdown už dropdown stejně máme. setMode() reloadne stránku.
@@ -81,6 +125,39 @@
     {/if}
     <h1 class="shpd-login__heading">{appInfoStore.name ?? t('login.heading')}</h1>
 
+    {#if forgotMode}
+      {#if forgotSent}
+        <div class="shpd-login__success">{t('login.forgot.sent')}</div>
+        <button class="shpd-login__button" type="button" onclick={exitForgotMode}>
+          {t('login.forgot.backToLogin')}
+        </button>
+      {:else}
+        <p class="shpd-login__intro">{t('login.forgot.intro')}</p>
+        <div class="shpd-login__field">
+          <label class="shpd-login__label" for="forgot-identifier">{t('login.forgot.identifier')}</label>
+          <input
+            id="forgot-identifier"
+            class="shpd-login__input"
+            type="text"
+            autocomplete="username"
+            disabled={loading}
+            bind:value={forgotIdentifier}
+            onkeydown={handleForgotKeydown}
+          />
+        </div>
+        <button
+          class="shpd-login__button"
+          type="button"
+          disabled={loading}
+          onclick={handleForgotSubmit}
+        >
+          {loading ? t('login.forgot.submitting') : t('login.forgot.submit')}
+        </button>
+        <button class="shpd-login__link" type="button" onclick={exitForgotMode}>
+          {t('login.forgot.backToLogin')}
+        </button>
+      {/if}
+    {:else}
     {#if localEnabled}
       <div class="shpd-login__field">
         <label class="shpd-login__label" for="login-name">{t('login.username')}</label>
@@ -110,6 +187,10 @@
       </div>
     {/if}
 
+    {#if successMessage}
+      <div class="shpd-login__success">{successMessage}</div>
+    {/if}
+
     {#if errorMessage}
       <div class="shpd-login__error">{errorMessage}</div>
     {/if}
@@ -122,6 +203,9 @@
         onclick={handleSubmit}
       >
         {loading ? t('login.submitting') : t('login.submit')}
+      </button>
+      <button class="shpd-login__link" type="button" onclick={enterForgotMode}>
+        {t('login.forgot.link')}
       </button>
     {/if}
 
@@ -139,6 +223,7 @@
           {provider.label}
         </button>
       {/each}
+    {/if}
     {/if}
 
     <div class="shpd-login__footer">
@@ -235,6 +320,37 @@
     background-color: var(--shpd-color-danger-soft);
     border: 1px solid var(--shpd-color-danger);
     border-radius: var(--shpd-radius-md);
+  }
+
+  .shpd-login__success {
+    margin-bottom: var(--shpd-space-md);
+    padding: var(--shpd-space-sm) var(--shpd-space-md);
+    font-size: var(--shpd-font-size-sm);
+    color: var(--shpd-color-success);
+    background-color: var(--shpd-color-success-soft);
+    border: 1px solid var(--shpd-color-success);
+    border-radius: var(--shpd-radius-md);
+  }
+
+  .shpd-login__intro {
+    margin-bottom: var(--shpd-space-md);
+    font-size: var(--shpd-font-size-sm);
+    color: var(--shpd-color-text-secondary);
+  }
+
+  .shpd-login__link {
+    display: block;
+    margin: var(--shpd-space-md) auto 0;
+    font-size: var(--shpd-font-size-sm);
+    color: var(--shpd-color-text-secondary);
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+
+  .shpd-login__link:hover {
+    color: var(--shpd-color-text);
   }
 
   .shpd-login__button {

@@ -173,6 +173,116 @@ model je s ním dopředně kompatibilní.
 - **Rollout na existující DS**: po `ds-upgrade` spustit `user-set-admin`
   pro adminské účty, jinak systémové tabulky v UI zmizí všem.
 
+## Samoobsluha účtů — pozvánky, reset a změna hesla, relace (Fáze 0b)
+
+Kompletní hygiena lokálních účtů nad odchozí poštou (`docs/mail/outbound.md`)
+a admin modelem (0a). Rozhodnutí D19–D21.
+
+### Jednorázové tokeny (D19)
+
+Tabulka `core_system_auth_tokens` (tableId 426, `keepOnReset`): `purpose`
+(`invite` | `password_reset`), `user_id`, `token_hash`, `created`, `expires`,
+`used_at`. V DB je **jen SHA-256 hash** plaintextu (vzor API klíče) —
+plaintext `shpd_pt_` + 32 B base64url jde jednorázově do mailu.
+
+`Shipard\Core\Auth\AuthTokenService`:
+
+- `issue(userId, purpose, ttl)` — smaže nepoužité tokeny stejného
+  purpose+user (poslední odeslaný mail platí) a vloží nový. TTL: reset
+  **1 h** (`RESET_TTL_SECONDS`), pozvánka **7 dní** (`INVITE_TTL_SECONDS`).
+- `validate(token, purposes)` — neburning kontrola (hash + purpose +
+  nepoužitý + neexpirovaný) → user_id. Umožňuje zkontrolovat politiku
+  hesla, aniž by chyba spálila token.
+- `consume(token, purposes)` — atomický `UPDATE … SET used_at` rozhodnutý
+  přes affected rows: single-use i při souběhu. Miss větev uklízí tokeny
+  expirované >30 dní — žádný cron není potřeba.
+
+Pozvánka je technicky reset s delším TTL a jinou šablonou — obě purposes
+konzumuje stejná landing page (`/_auth/password/reset` bere obě).
+
+### Forgot / reset flow (D20 — anti-enumerace)
+
+```
+POST /_auth/password/forgot {identifier}     public, vždy 200
+POST /_auth/password/reset  {token, password} public
+```
+
+- Forgot: přesná shoda loginu, jinak všechny účty s daným e-mailem (v mailu
+  je uveden login — e-mail sdílený více účty dostane mail per účet).
+  Neaktivní, `is_system` a účty bez e-mailu se **tiše přeskočí**; odpověď je
+  vždy `{"status":"ok"}` a mail jde přes outbox
+  (`MailOutboxService::enqueueAndSend()`), takže se existence účtu nedá
+  odvodit ani časově. Selhání enqueue se jen zaloguje.
+- Reset: pořadí validace → politika → consume. Chyba politiky (`400
+  PASSWORD_POLICY`) token nespálí — uživatel heslo opraví a odešle znovu.
+  Neplatný/expirovaný/použitý token → jednotně `400 INVALID_TOKEN`.
+  Úspěch nastaví bcrypt hash a **zneplatní všechny sessions** uživatele
+  (`SessionService::invalidateAllForUser`).
+- Oba endpointy jsou exempt v `AuthMiddleware` a sdílí login rate-limit
+  bucket (10/min/IP) v `RateLimitMiddleware`.
+
+Mailové šablony: `modules/core/system/mail/{cs,en}/{reset,invite}.{txt,html}`,
+renderer `Shipard\Core\Mail\MailTemplate` (soubor + `strtr`, subject =
+první řádek `Subject:` v `.txt`, fallback jazyka na `en`). Placeholders
+`{full_name} {login} {ds_name} {link} {ttl}`; jazyk dle
+`DataSourceConfig::getDefaultLanguage()`, `ds_name` = setting `app.name`
+?? install name. Link: `{scheme}://{host}{devPrefix}/app/?auth_action=
+set-password&token=…` (dev prefix jako u OIDC redirectů).
+
+### Pozvánka (invite)
+
+```
+POST /_users/{id}/invite    admin only (session)
+```
+
+Cíl musí být aktivní, ne-systémový a mít e-mail (`400 NO_EMAIL`). Vydá
+token purpose `invite` (7 dní) + šablonu pozvánky. Opakované volání
+přepošle — starý token zaniká v `issue()`. Chybějící `mail.defaultFrom`
+→ `500 MAIL_NOT_CONFIGURED` (na rozdíl od forgotu se chyba adminovi
+přizná). V UI: detail uživatele v Nastavení (UsersViewer, akce „Poslat
+pozvánku“). Doporučený onboarding: `user-create` **bez** `--password`
+(NULL hash = bez lokálního loginu) → pozvánka.
+
+### Politika hesel (D21)
+
+`Shipard\Core\Auth\PasswordPolicy`: min. **12 znaků** a heslo ≠ login
+(case-insensitive). Nic dalšího — komplexitní pravidla jsou security
+theater. Reset zneplatní všechny sessions; změna hesla všechny kromě
+aktuální.
+
+### Změna hesla a relace
+
+```
+POST   /_auth/password/change          session — {currentPassword, newPassword}
+GET    /_auth/sessions                 session — vlastní relace
+DELETE /_auth/sessions/{id}            session — jen vlastní; cizí id → 404
+POST   /_auth/sessions/revoke-others   session — odhlásí ostatní zařízení
+```
+
+- Change: `password_hash NULL` (OIDC/JIT účet) → `400 NO_LOCAL_PASSWORD`;
+  špatné současné heslo → 401; pak politika; úspěch →
+  `invalidateOthers` (aktuální session žije).
+- Sessions list vrací `{id, created, expires, ip_address, current}` —
+  `current` podle tokenu z `AuthContext`, **token se nikdy nevrací**.
+  Delete cizí session → `404 NOT_FOUND` bez leaku existence.
+- Login envelope (login i OIDC exchange) nese `user.has_password` —
+  frontend podle něj skrývá panel změny hesla.
+
+### Frontend (0b)
+
+- `main.js` boot: `?auth_action=set-password&token=` (parser
+  `api/authActions.js`, pure) → in-memory `authAction` store +
+  `history.replaceState` → `SetPasswordScreen` (App.svelte větev pro
+  nepřihlášené). Úspěch → flash `loginNotice` (typ `success`) na
+  LoginScreen.
+- LoginScreen: odkaz „Zapomenuté heslo?“ (jen při `auth.local`) → inline
+  forgot form; odpověď je vždy „Pokud účet existuje…“.
+- Nastavení účtu → **panel Zabezpečení** (`accountSecurity`): změna hesla
+  (skrytá při `has_password === false`) + moje relace. Panel je nový druh
+  nav položky `panel` — registrace `panels[]` + `accountItems[]` v
+  `module.jsonc`, vykreslení mapou panelId → komponenta v
+  `ContentArea.svelte` (viz `docs/app-settings.md`).
+
 ## Break-glass (D9/D15)
 
 ```bash
@@ -231,7 +341,12 @@ curl -si "http://127.0.0.1/{ds-id}/api/v1/_auth/oidc/start?provider=keycloak-dev
 
 | Soubor | Role |
 |--------|------|
-| `src/Api/SessionService.php` | Mintování/invalidace `shpd_st_` sessions (login, OIDC, break-glass) |
+| `src/Api/SessionService.php` | Mintování/invalidace `shpd_st_` sessions (login, OIDC, break-glass) + hromadné invalidace (reset/change) |
+| `src/Core/Auth/AuthTokenService.php` | Jednorázové tokeny pozvánka/reset (hash v DB, single-use) |
+| `src/Core/Auth/PasswordPolicy.php` | Politika hesel (≥12 znaků, ≠ login) |
+| `src/Api/Controller/PasswordController.php` | Forgot/reset/change, invite, sessions endpointy |
+| `src/Core/Mail/MailTemplate.php` | Minimální renderer mailových šablon (strtr) |
+| `modules/core/system/src/UsersViewer.php` | Settings viewer uživatelů + akce invite |
 | `src/Core/Auth/AuthPolicy.php`, `OidcProviderConfig.php` | Politika + validace konfigurace |
 | `src/Core/Auth/OidcDiscovery.php` | Discovery + JWKS file cache, throttlovaný refresh |
 | `src/Core/Auth/OidcClient.php` | Authorize URL, code exchange, validace id_tokenu |

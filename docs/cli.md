@@ -358,17 +358,22 @@ s ostrými daty — `shpd-server doctor` na něj na produkci upozorňuje. Žádn
 #### `user-create`
 
 ```bash
-sudo shpd-ds user-create --login=admin --password=Tajne123 --name="Admin" --email=admin@example.com
+sudo shpd-ds user-create --login=jan --name="Jan Novák" --email=jan@example.com
+sudo shpd-ds user-create --login=admin --password=Tajne123 --name="Admin" --admin
 ```
 
-Vytvoří nového uživatele v DS.
+Vytvoří nového uživatele v DS. **Doporučení:** heslo nezadávat — účet
+vznikne bez lokálního hesla (NULL hash) a uživatel si ho nastaví sám přes
+pozvánku (akce „Poslat pozvánku“ v detailu uživatele v Nastavení, nebo
+`POST /_users/{id}/invite`). Heslo tak nikdy neputuje mimo pásmo. Viz
+`docs/auth.md`.
 
 | Opce | Význam |
 |------|--------|
 | `--login <login>` | **povinné** — login |
-| `--password <heslo>` | **povinné** — heslo |
+| `--password <heslo>` | volitelné — heslo; bez něj účet čeká na pozvánku |
 | `--name <jméno>` | **povinné** — celé jméno |
-| `--email <email>` | volitelné — e-mailová adresa |
+| `--email <email>` | volitelné — e-mailová adresa (pro pozvánku nutná) |
 | `--admin` | volitelné — založit rovnou s administrátorskými právy (`is_admin = 1`) |
 
 #### `user-set-admin`

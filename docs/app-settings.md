@@ -215,6 +215,26 @@ strom:
 První konzument: page `accountBasic` (scope `user`, pole `account.avatar`,
 `account.theme`, `account.language`) v `core.system`, sekce **Základní**.
 
+### Panel — klientská komponenta v navigaci
+
+Čtvrtý druh nav položky vedle `viewer|table|page`: **`panel`** — pro obsah,
+který nejde poskládat z generických settings fieldů (formuláře s vlastní
+logikou, tabulky akcí). Server dodává jen id + lokalizovaný label + ikonu;
+vykreslení řeší frontend.
+
+- Registrace v `module.jsonc`: `panels: [{id, name, name:cs, icon}]` +
+  položka `{ "panel": "<id>", "section": "...", "order": N }` v
+  `accountItems[]` (nebo `settingsItems[]`).
+- Navigace emituje `{type: 'panel', panelId, label, icon}`
+  (`SettingsController::collectItems()`).
+- Frontend: mapa `panelId → komponenta` v `ContentArea.svelte`
+  (`panelComponents`); `panelId` protéká přes `Sidebar.handleItemClick` a
+  `navigationStore.navigate()`.
+
+První konzument: `accountSecurity` (sekce Základní, ikona `lock`) —
+komponenta `components/account/AccountSecurity.svelte` se změnou hesla a
+správou relací (auth Fáze 0b, viz [`auth.md`](auth.md)).
+
 
 ### Uživatelský avatar (per-user fotka)
 

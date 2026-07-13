@@ -169,6 +169,13 @@ http://{ip-adresa}/{ds-id}/api/v1/{tabulka}
 | `GET` | `/api/v1/_auth/oidc/start?provider=x` | Start OIDC flow — 302 na authorize URL providera — **veřejné** |
 | `GET` | `/api/v1/_auth/oidc/callback` | Návrat od IdP — 302 na `/app/?login=oidc&code={handoff}` — **veřejné** |
 | `POST` | `/api/v1/_auth/oidc/exchange` | Výměna handoff kódu za token (envelope jako login) — **veřejné** |
+| `POST` | `/api/v1/_auth/password/forgot` | Zapomenuté heslo — `{identifier}` (login/e-mail), vždy 200 — **veřejné** |
+| `POST` | `/api/v1/_auth/password/reset` | Nastavení hesla tokenem z mailu (reset i pozvánka) — **veřejné** |
+| `POST` | `/api/v1/_auth/password/change` | Změna hesla — `{currentPassword, newPassword}` (session) |
+| `POST` | `/api/v1/_users/{id}/invite` | Poslání pozvánkového mailu (admin, session) |
+| `GET` | `/api/v1/_auth/sessions` | Vlastní relace — `{id, created, expires, ip_address, current}` (session) |
+| `DELETE` | `/api/v1/_auth/sessions/{id}` | Smazání vlastní relace; cizí id → 404 (session) |
+| `POST` | `/api/v1/_auth/sessions/revoke-others` | Odhlášení ostatních zařízení (session) |
 | `GET` | `/api/v1/_ui/settings/page/{pageId}` | Definice + hodnoty settings page (auth) |
 | `POST` | `/api/v1/_ui/settings/page/{pageId}` | Uložení hodnot settings page (auth) |
 | `GET` | `/api/v1/_app/info` | Název/zkrácený název/ikona/logo aplikace — **veřejné** |
@@ -191,6 +198,13 @@ tokenu. `start` a `exchange` sdílí login-class rate limit (10/min/IP);
 nepředává v URL — jen jednorázový handoff kód s TTL 60 s, který
 `POST /exchange` vymění za standardní login envelope. Detaily:
 [docs/auth.md](auth.md).
+
+**Veřejné `/_auth/password` endpointy:** `forgot` a `reset` jsou exempt
+(`AuthMiddleware::isExempt()`) a sdílí login-class rate limit (10/min/IP).
+Forgot je anti-enumerační — odpověď se neliší pro existující a neexistující
+účet (mail jde přes outbox, ne inline SMTP). Chybové kódy: `PASSWORD_POLICY`,
+`INVALID_TOKEN`, `NO_LOCAL_PASSWORD`, `NO_EMAIL`, `MAIL_NOT_CONFIGURED`.
+Detaily: [docs/auth.md](auth.md).
 
 **Veřejné `/_app` endpointy:** `GET /_app/info` a `GET /_app/branding/{slot}`
 jsou výjimky z autentizace (`AuthMiddleware::isExempt()`) — login obrazovka

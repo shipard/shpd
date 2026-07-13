@@ -28,18 +28,15 @@ class BankPhase1Test extends IntegrationTestCase
         $this->configRuntime = ConfigRuntime::load($this->realDsPath, 'cs');
     }
 
-    protected function tearDown(): void
+    protected function onTearDown(): void
     {
-        if (isset($this->db)) {
-            $dibi = $this->db->getDibiConnection();
-            foreach ($this->txIds as $id) {
-                $dibi->delete('economy_bank_transactions')->where('id = %i', $id)->execute();
-            }
-            foreach ($this->stIds as $id) {
-                $dibi->delete('economy_bank_statements')->where('id = %i', $id)->execute();
-            }
+        $dibi = $this->db->getDibiConnection();
+        foreach ($this->txIds as $id) {
+            $dibi->delete('economy_bank_transactions')->where('id = %i', $id)->execute();
         }
-        parent::tearDown();
+        foreach ($this->stIds as $id) {
+            $dibi->delete('economy_bank_statements')->where('id = %i', $id)->execute();
+        }
     }
 
     private function txViewer(): BankTransactionsViewer

@@ -52,9 +52,9 @@ class StatementImportTest extends IntegrationTestCase
         $this->bankAccountId = (int) $this->dibi->getInsertId();
     }
 
-    protected function tearDown(): void
+    protected function onTearDown(): void
     {
-        if ($this->dibi !== null && $this->bankAccountId > 0) {
+        if ($this->bankAccountId > 0) {
             $stmtIds = $this->dibi->query(
                 'SELECT [id] FROM [economy_bank_statements] WHERE [bank_account] = %i',
                 $this->bankAccountId,
@@ -70,7 +70,6 @@ class StatementImportTest extends IntegrationTestCase
         foreach ($this->personBankAccountIds as $id) {
             $this->dibi->delete('base_persons_bank_accounts')->where('[id] = %i', $id)->execute();
         }
-        parent::tearDown();
     }
 
     private function service(): StatementImportService

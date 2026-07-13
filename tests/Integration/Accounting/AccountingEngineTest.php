@@ -39,7 +39,7 @@ class AccountingEngineTest extends IntegrationTestCase
         );
     }
 
-    protected function tearDown(): void
+    protected function onTearDown(): void
     {
         $dibi = $this->db->getDibiConnection();
         foreach ($this->createdHeads as $id) {
@@ -51,7 +51,6 @@ class AccountingEngineTest extends IntegrationTestCase
         foreach ($this->createdItems as $id) {
             $dibi->delete('economy_items')->where('id = %i', $id)->execute();
         }
-        parent::tearDown();
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────

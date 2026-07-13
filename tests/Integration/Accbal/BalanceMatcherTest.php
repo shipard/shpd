@@ -56,32 +56,29 @@ class BalanceMatcherTest extends IntegrationTestCase
         $this->ensureFiscalPeriod();
     }
 
-    protected function tearDown(): void
+    protected function onTearDown(): void
     {
-        if (isset($this->db)) {
-            $dibi = $this->db->getDibiConnection();
-            foreach ($this->createdTxs as $id) {
-                $dibi->delete('economy_accbal_allocations')
-                    ->where('payment_entry IN (SELECT id FROM economy_accbal_ledger WHERE bank_transaction = %i)', $id)
-                    ->execute();
-                $dibi->delete('economy_accbal_ledger')->where('bank_transaction = %i', $id)->execute();
-                $dibi->delete('economy_accounting_journal')->where('bank_transaction = %i', $id)->execute();
-                $dibi->delete('economy_bank_transactions')->where('id = %i', $id)->execute();
-            }
-            foreach ($this->seededDocs as $id) {
-                $dibi->delete('economy_accbal_allocations')
-                    ->where('request_entry IN (SELECT id FROM economy_accbal_ledger WHERE doc_head = %i)', $id)
-                    ->execute();
-                $dibi->delete('economy_accbal_ledger')->where('doc_head = %i', $id)->execute();
-            }
-            foreach ($this->createdBankAccounts as $id) {
-                $dibi->delete('economy_codebooks_bank_accounts')->where('id = %i', $id)->execute();
-            }
-            foreach ($this->createdAccounts as $id) {
-                $dibi->delete('economy_accounting_accounts')->where('id = %i', $id)->execute();
-            }
+        $dibi = $this->db->getDibiConnection();
+        foreach ($this->createdTxs as $id) {
+            $dibi->delete('economy_accbal_allocations')
+                ->where('payment_entry IN (SELECT id FROM economy_accbal_ledger WHERE bank_transaction = %i)', $id)
+                ->execute();
+            $dibi->delete('economy_accbal_ledger')->where('bank_transaction = %i', $id)->execute();
+            $dibi->delete('economy_accounting_journal')->where('bank_transaction = %i', $id)->execute();
+            $dibi->delete('economy_bank_transactions')->where('id = %i', $id)->execute();
         }
-        parent::tearDown();
+        foreach ($this->seededDocs as $id) {
+            $dibi->delete('economy_accbal_allocations')
+                ->where('request_entry IN (SELECT id FROM economy_accbal_ledger WHERE doc_head = %i)', $id)
+                ->execute();
+            $dibi->delete('economy_accbal_ledger')->where('doc_head = %i', $id)->execute();
+        }
+        foreach ($this->createdBankAccounts as $id) {
+            $dibi->delete('economy_codebooks_bank_accounts')->where('id = %i', $id)->execute();
+        }
+        foreach ($this->createdAccounts as $id) {
+            $dibi->delete('economy_accounting_accounts')->where('id = %i', $id)->execute();
+        }
     }
 
     public function testMatchMovesClearingToReceivablesAndAllocates(): void

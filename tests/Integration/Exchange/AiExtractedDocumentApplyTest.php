@@ -178,7 +178,7 @@ class AiExtractedDocumentApplyTest extends IntegrationTestCase
         return $payload;
     }
 
-    protected function tearDown(): void
+    protected function onTearDown(): void
     {
         $dibi = $this->db->getDibiConnection();
 
@@ -208,8 +208,6 @@ class AiExtractedDocumentApplyTest extends IntegrationTestCase
         if ($this->createdOwnCompany && $this->ownCompanyPersonId !== null) {
             $dibi->query('DELETE FROM base_persons_persons WHERE id = %i', $this->ownCompanyPersonId);
         }
-
-        parent::tearDown();
     }
 
     private function authed(int $userId = 1): AuthContext

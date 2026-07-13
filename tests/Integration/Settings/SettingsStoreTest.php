@@ -24,10 +24,9 @@ class SettingsStoreTest extends IntegrationTestCase
         $this->cleanup();
     }
 
-    protected function tearDown(): void
+    protected function onTearDown(): void
     {
         $this->cleanup();
-        parent::tearDown();
     }
 
     private function cleanup(): void

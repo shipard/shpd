@@ -44,22 +44,19 @@ class BankTransactionAccountingEngineTest extends IntegrationTestCase
         $this->ensureFiscalPeriod();
     }
 
-    protected function tearDown(): void
+    protected function onTearDown(): void
     {
-        if (isset($this->db)) {
-            $dibi = $this->db->getDibiConnection();
-            foreach ($this->createdTxs as $id) {
-                $dibi->delete('economy_accounting_journal')->where('bank_transaction = %i', $id)->execute();
-                $dibi->delete('economy_bank_transactions')->where('id = %i', $id)->execute();
-            }
-            foreach ($this->createdBankAccounts as $id) {
-                $dibi->delete('economy_codebooks_bank_accounts')->where('id = %i', $id)->execute();
-            }
-            foreach ($this->createdAccounts as $id) {
-                $dibi->delete('economy_accounting_accounts')->where('id = %i', $id)->execute();
-            }
+        $dibi = $this->db->getDibiConnection();
+        foreach ($this->createdTxs as $id) {
+            $dibi->delete('economy_accounting_journal')->where('bank_transaction = %i', $id)->execute();
+            $dibi->delete('economy_bank_transactions')->where('id = %i', $id)->execute();
         }
-        parent::tearDown();
+        foreach ($this->createdBankAccounts as $id) {
+            $dibi->delete('economy_codebooks_bank_accounts')->where('id = %i', $id)->execute();
+        }
+        foreach ($this->createdAccounts as $id) {
+            $dibi->delete('economy_accounting_accounts')->where('id = %i', $id)->execute();
+        }
     }
 
     // ── W6.1 Příjem nespárovaný ──────────────────────────────────────────────

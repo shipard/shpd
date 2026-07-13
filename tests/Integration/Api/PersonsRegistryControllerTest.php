@@ -77,7 +77,7 @@ class PersonsRegistryControllerTest extends IntegrationTestCase
         $this->ensureRegistryReachable();
     }
 
-    protected function tearDown(): void
+    protected function onTearDown(): void
     {
         $dibi = $this->db->getDibiConnection();
         foreach ($this->createdPersonIds as $id) {
@@ -98,8 +98,6 @@ class PersonsRegistryControllerTest extends IntegrationTestCase
             $dibi->query('DELETE FROM base_persons_contacts WHERE person = %i', $id);
             $dibi->query('DELETE FROM base_persons_persons WHERE id = %i', $id);
         }
-
-        parent::tearDown();
     }
 
     /**

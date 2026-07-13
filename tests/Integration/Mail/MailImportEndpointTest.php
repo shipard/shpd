@@ -63,12 +63,11 @@ class MailImportEndpointTest extends IntegrationTestCase
         }
     }
 
-    protected function tearDown(): void
+    protected function onTearDown(): void
     {
         foreach ($this->createdMessageIds as $id) {
             $this->db->execute('DELETE FROM core_mail_incoming_messages WHERE id = %i', $id);
         }
-        parent::tearDown();
     }
 
     public function testImportCreatesProcessedMessageWithGeneratedId(): void

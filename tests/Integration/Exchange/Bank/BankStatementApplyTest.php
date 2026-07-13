@@ -72,9 +72,9 @@ class BankStatementApplyTest extends IntegrationTestCase
         $this->bankAccountId = (int) $dibi->getInsertId();
     }
 
-    protected function tearDown(): void
+    protected function onTearDown(): void
     {
-        if (isset($this->db) && $this->bankAccountId > 0) {
+        if ($this->bankAccountId > 0) {
             $dibi = $this->db->getDibiConnection();
             $stmtIds = $dibi->query(
                 'SELECT [id] FROM [economy_bank_statements] WHERE [bank_account] = %i',
@@ -94,7 +94,6 @@ class BankStatementApplyTest extends IntegrationTestCase
                 $dibi->delete('economy_accounting_accounts')->where('id = %i', $id)->execute();
             }
         }
-        parent::tearDown();
     }
 
     /** @param array<string, mixed> $overrides */

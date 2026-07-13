@@ -86,7 +86,7 @@ class AccountingDocumentImportTest extends IntegrationTestCase
         $this->ensureOwnCompany();
     }
 
-    protected function tearDown(): void
+    protected function onTearDown(): void
     {
         $dibi = $this->db->getDibiConnection();
         foreach ($this->createdDocIds as $id) {
@@ -98,7 +98,6 @@ class AccountingDocumentImportTest extends IntegrationTestCase
         if ($this->createdOwnCompany && $this->ownCompanyPersonId !== null) {
             $dibi->query('DELETE FROM base_persons_persons WHERE id = %i', $this->ownCompanyPersonId);
         }
-        parent::tearDown();
     }
 
     public function testImportBalancedAccountingDocumentAtState40(): void

@@ -55,7 +55,7 @@ class MailEndpointTest extends IntegrationTestCase
         $_FILES = [];
     }
 
-    protected function tearDown(): void
+    protected function onTearDown(): void
     {
         foreach ($this->createdIdempotencyKeys as $key) {
             $this->db->execute('DELETE FROM core_mail_incoming_idempotency WHERE idempotency_key = %s', $key);
@@ -68,8 +68,6 @@ class MailEndpointTest extends IntegrationTestCase
 
         $_POST = [];
         $_FILES = [];
-
-        parent::tearDown();
     }
 
     public function testHappyPathCreatesMessageWithAttachments(): void

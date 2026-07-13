@@ -52,7 +52,7 @@ class AccountingLifecycleTest extends IntegrationTestCase
         );
     }
 
-    protected function tearDown(): void
+    protected function onTearDown(): void
     {
         if ($this->headId !== null) {
             $dibi = $this->db->getDibiConnection();
@@ -61,7 +61,6 @@ class AccountingLifecycleTest extends IntegrationTestCase
             $dibi->delete('docs_core_rows')->where('doc_head = %i', $this->headId)->execute();
             $dibi->delete('docs_core_heads')->where('id = %i', $this->headId)->execute();
         }
-        parent::tearDown();
     }
 
     private function journalCount(): int

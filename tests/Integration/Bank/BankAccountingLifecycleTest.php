@@ -65,22 +65,19 @@ class BankAccountingLifecycleTest extends IntegrationTestCase
         );
     }
 
-    protected function tearDown(): void
+    protected function onTearDown(): void
     {
-        if (isset($this->db)) {
-            $dibi = $this->db->getDibiConnection();
-            if ($this->txId !== null) {
-                $dibi->delete('economy_accounting_journal')->where('bank_transaction = %i', $this->txId)->execute();
-                $dibi->delete('economy_bank_transactions')->where('id = %i', $this->txId)->execute();
-            }
-            foreach ($this->createdBankAccounts as $id) {
-                $dibi->delete('economy_codebooks_bank_accounts')->where('id = %i', $id)->execute();
-            }
-            foreach ($this->createdAccounts as $id) {
-                $dibi->delete('economy_accounting_accounts')->where('id = %i', $id)->execute();
-            }
+        $dibi = $this->db->getDibiConnection();
+        if ($this->txId !== null) {
+            $dibi->delete('economy_accounting_journal')->where('bank_transaction = %i', $this->txId)->execute();
+            $dibi->delete('economy_bank_transactions')->where('id = %i', $this->txId)->execute();
         }
-        parent::tearDown();
+        foreach ($this->createdBankAccounts as $id) {
+            $dibi->delete('economy_codebooks_bank_accounts')->where('id = %i', $id)->execute();
+        }
+        foreach ($this->createdAccounts as $id) {
+            $dibi->delete('economy_accounting_accounts')->where('id = %i', $id)->execute();
+        }
     }
 
     public function testFullLifecycle(): void

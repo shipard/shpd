@@ -98,7 +98,7 @@ class DocumentImportSeriesStatesTest extends IntegrationTestCase
         $this->ensureOwnCompany();
     }
 
-    protected function tearDown(): void
+    protected function onTearDown(): void
     {
         $dibi = $this->db->getDibiConnection();
 
@@ -131,8 +131,6 @@ class DocumentImportSeriesStatesTest extends IntegrationTestCase
                 $dibi->insert('docs_core_number_counters', $row)->execute();
             }
         }
-
-        parent::tearDown();
     }
 
     // ── Tests ───────────────────────────────────────────────────────────────

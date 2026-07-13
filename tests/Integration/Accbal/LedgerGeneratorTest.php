@@ -27,20 +27,17 @@ class LedgerGeneratorTest extends IntegrationTestCase
 
     private int $seq = 0;
 
-    protected function tearDown(): void
+    protected function onTearDown(): void
     {
-        if (isset($this->db)) {
-            $dibi = $this->db->getDibiConnection();
-            foreach ($this->docIds as $id) {
-                $dibi->delete('economy_accbal_ledger')->where('doc_head = %i', $id)->execute();
-                $dibi->delete('economy_accounting_journal')->where('doc_head = %i', $id)->execute();
-            }
-            foreach ($this->txIds as $id) {
-                $dibi->delete('economy_accbal_ledger')->where('bank_transaction = %i', $id)->execute();
-                $dibi->delete('economy_accounting_journal')->where('bank_transaction = %i', $id)->execute();
-            }
+        $dibi = $this->db->getDibiConnection();
+        foreach ($this->docIds as $id) {
+            $dibi->delete('economy_accbal_ledger')->where('doc_head = %i', $id)->execute();
+            $dibi->delete('economy_accounting_journal')->where('doc_head = %i', $id)->execute();
         }
-        parent::tearDown();
+        foreach ($this->txIds as $id) {
+            $dibi->delete('economy_accbal_ledger')->where('bank_transaction = %i', $id)->execute();
+            $dibi->delete('economy_accounting_journal')->where('bank_transaction = %i', $id)->execute();
+        }
     }
 
     private function generator(): LedgerGenerator

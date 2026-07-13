@@ -56,7 +56,7 @@ class PersonsApplyE2ETest extends IntegrationTestCase
         );
     }
 
-    protected function tearDown(): void
+    protected function onTearDown(): void
     {
         $dibi = $this->db->getDibiConnection();
         foreach ($this->createdPersonIds as $id) {
@@ -79,8 +79,6 @@ class PersonsApplyE2ETest extends IntegrationTestCase
             $dibi->query('DELETE FROM base_persons_contacts WHERE person = %i', $id);
             $dibi->query('DELETE FROM base_persons_persons WHERE id = %i', $id);
         }
-
-        parent::tearDown();
     }
 
     // ── Fixtures: happy paths ─────────────────────────────────────────────

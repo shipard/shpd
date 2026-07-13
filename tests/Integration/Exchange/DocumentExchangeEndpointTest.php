@@ -94,7 +94,7 @@ class DocumentExchangeEndpointTest extends IntegrationTestCase
         $this->createdOwnCompany = true;
     }
 
-    protected function tearDown(): void
+    protected function onTearDown(): void
     {
         $dibi = $this->db->getDibiConnection();
         foreach ($this->createdDocIds as $id) {
@@ -114,8 +114,6 @@ class DocumentExchangeEndpointTest extends IntegrationTestCase
         if ($this->createdOwnCompany && $this->ownCompanyPersonId !== null) {
             $dibi->query('DELETE FROM base_persons_persons WHERE id = %i', $this->ownCompanyPersonId);
         }
-
-        parent::tearDown();
     }
 
     public function testValidateAcceptsHappyFixture(): void

@@ -1,0 +1,84 @@
+{
+    "tableId": 426,
+    "name": "Auth tokens",
+    "name:cs": "Autentizační tokeny",
+    "name:en": "Auth tokens",
+    // Jednorázové tokeny pro pozvánky a reset hesla (purpose invite |
+    // password_reset). V DB pouze SHA-256 hash plaintextu — vzor API klíče.
+    "hideFromNavigation": true,
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+        {
+            "id": "purpose",
+            "name": "Purpose",
+            "name:cs": "Účel",
+            "name:en": "Purpose",
+            "type": "varchar",
+            "length": 20,
+            "nullable": false
+        },
+        {
+            "id": "user_id",
+            "name": "User",
+            "name:cs": "Uživatel",
+            "name:en": "User",
+            "type": "int",
+            "nullable": false
+        },
+        {
+            "id": "token_hash",
+            "name": "Token hash",
+            "type": "varchar",
+            "length": 64,
+            "nullable": false
+        },
+        {
+            "id": "created",
+            "name": "Created",
+            "name:cs": "Vytvořeno",
+            "name:en": "Created",
+            "type": "datetime",
+            "nullable": false
+        },
+        {
+            "id": "expires",
+            "name": "Expires",
+            "name:cs": "Expirace",
+            "name:en": "Expires",
+            "type": "datetime",
+            "nullable": false
+        },
+        {
+            "id": "used_at",
+            "name": "Used at",
+            "name:cs": "Použito",
+            "name:en": "Used at",
+            "type": "datetime",
+            "nullable": true
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "unq_token_hash",
+            "type": "unique",
+            "columns": [
+                {"column": "token_hash"}
+            ]
+        },
+        {
+            "id": "idx_user_id",
+            "type": "index",
+            "columns": [
+                {"column": "user_id"}
+            ]
+        }
+    ]
+}

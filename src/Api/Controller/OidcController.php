@@ -189,10 +189,11 @@ class OidcController
 			'token'      => (string) $txn['session_token'],
 			'expires_at' => date('c', strtotime((string) $session['expires'])),
 			'user'       => [
-				'id'        => (int) $user['id'],
-				'login'     => $user['login'],
-				'full_name' => $user['full_name'],
-				'is_admin'  => (bool) ($user['is_admin'] ?? false),
+				'id'           => (int) $user['id'],
+				'login'        => $user['login'],
+				'full_name'    => $user['full_name'],
+				'is_admin'     => (bool) ($user['is_admin'] ?? false),
+				'has_password' => ($user['password_hash'] ?? null) !== null,
 			],
 		]);
 	}

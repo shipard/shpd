@@ -57,10 +57,12 @@ class AuthController
 			'token'      => $token,
 			'expires_at' => $expiresAt,
 			'user'       => [
-				'id'        => $userId,
-				'login'     => $user['login'],
-				'full_name' => $user['full_name'],
-				'is_admin'  => (bool) ($user['is_admin'] ?? false),
+				'id'           => $userId,
+				'login'        => $user['login'],
+				'full_name'    => $user['full_name'],
+				'is_admin'     => (bool) ($user['is_admin'] ?? false),
+				// Panel změny hesla se OIDC/JIT účtům bez hesla nezobrazuje.
+				'has_password' => $user['password_hash'] !== null,
 			],
 		]);
 	}

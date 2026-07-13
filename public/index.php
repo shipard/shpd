@@ -273,6 +273,7 @@ function dispatch(
 
 	return match ($route->controller) {
 		'auth'    => dispatchAuth($route->action, $request, $auth, $db, $resolved),
+		'password' => dispatchPassword($route, $request, $auth, $db, $resolved),
 		'crud'       => dispatchCrud($route, $request, $auth, $tables, $db, $configRuntime),
 		'attachment'  => dispatchAttachment($route, $request, $auth, $tables, $db, $resolved),
 		'chat'    => dispatchChat($route, $request, $auth, $db, $tables, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
@@ -659,6 +660,26 @@ function dispatchAuth(
 		'refresh' => $ctrl->refresh($request, $auth, $db),
 		'logout'  => $ctrl->logout($request, $auth, $db),
 		default   => Response::error('INTERNAL_ERROR', "Unknown auth action: {$action}", 500),
+	};
+}
+
+function dispatchPassword(
+	Route $route,
+	Request $request,
+	AuthContext $auth,
+	\Shipard\Core\Database\DataSourceConnection $db,
+	\Shipard\Api\ResolvedDataSource $resolved,
+): Response {
+	$ctrl = new \Shipard\Api\Controller\PasswordController($resolved->config, $resolved->isDevMode());
+	return match ($route->action) {
+		'forgot'               => $ctrl->forgot($request, $db),
+		'reset'                => $ctrl->reset($request, $db),
+		'change'               => $ctrl->change($request, $auth, $db),
+		'invite'               => $ctrl->invite($request, $auth, $db, (int) $route->id),
+		'sessions'             => $ctrl->sessions($request, $auth, $db),
+		'sessionDelete'        => $ctrl->sessionDelete($request, $auth, $db, (int) $route->id),
+		'sessionsRevokeOthers' => $ctrl->sessionsRevokeOthers($request, $auth, $db),
+		default                => Response::error('INTERNAL_ERROR', "Unknown password action: {$route->action}", 500),
 	};
 }
 

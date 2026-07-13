@@ -55,6 +55,11 @@ class AuthMiddleware
 			&& in_array($route->action, ['login', 'oidcStart', 'oidcCallback', 'oidcExchange'], true)) {
 			return true;
 		}
+		// Forgot/reset flow běží z definice bez přihlášení (D20).
+		if ($route->controller === 'password'
+			&& in_array($route->action, ['forgot', 'reset'], true)) {
+			return true;
+		}
 		if ($openApiPublic && $route->controller === 'openapi' && $route->action === 'spec') {
 			return true;
 		}

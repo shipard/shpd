@@ -11,19 +11,21 @@
         "core_system_user_identities",
         "core_system_sessions",
         "core_system_auth_transactions",
+        "core_system_auth_tokens",
         "core_system_settings",
         "core_system_user_settings",
         "core_system_api_keys",
         "core_system_rate_limits"
     ],
     // ds-reset nikdy nesmaže systémové tabulky — login, relace, OIDC identity
-    // a transakce, nastavení (DS i per-user), API klíče (vč. importního)
-    // a rate limity přežijí reset.
+    // a transakce, pozvánkové/reset tokeny, nastavení (DS i per-user),
+    // API klíče (vč. importního) a rate limity přežijí reset.
     "keepOnReset": [
         "core_system_users",
         "core_system_user_identities",
         "core_system_sessions",
         "core_system_auth_transactions",
+        "core_system_auth_tokens",
         "core_system_settings",
         "core_system_user_settings",
         "core_system_api_keys",

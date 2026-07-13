@@ -1,0 +1,11 @@
+Subject: Pozvánka do aplikace {ds_name}
+
+Dobrý den, {full_name},
+
+byl vám vytvořen účet „{login}" v aplikaci {ds_name}. Pro první přihlášení
+si nastavte heslo na této adrese:
+
+{link}
+
+Odkaz platí {ttl} a lze ho použít jen jednou. Pokud vypršel, požádejte
+správce o novou pozvánku.

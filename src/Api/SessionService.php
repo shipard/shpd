@@ -40,6 +40,30 @@ class SessionService
 		);
 	}
 
+	/** Zneplatní všechny sessions uživatele (reset hesla). Vrací počet. */
+	public function invalidateAllForUser(int $userId, DataSourceConnection $db): int
+	{
+		$db->execute(
+			'DELETE FROM core_system_sessions WHERE user_id = %i',
+			$userId,
+		);
+		return $db->getAffectedRows();
+	}
+
+	/**
+	 * Zneplatní všechny sessions uživatele kromě aktuální (změna hesla,
+	 * „odhlásit ostatní zařízení"). Vrací počet.
+	 */
+	public function invalidateOthers(int $userId, string $currentToken, DataSourceConnection $db): int
+	{
+		$db->execute(
+			'DELETE FROM core_system_sessions WHERE user_id = %i AND token != %s',
+			$userId,
+			$currentToken,
+		);
+		return $db->getAffectedRows();
+	}
+
 	public function generateToken(int $length): string
 	{
 		$chars = 'abcdefghijklmnopqrstuvwxyz0123456789';

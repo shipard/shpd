@@ -1,0 +1,11 @@
+Subject: Password reset — {ds_name}
+
+Hello {full_name},
+
+a password reset was requested for your account "{login}" in {ds_name}.
+Set a new password here:
+
+{link}
+
+The link is valid for {ttl} and can be used only once. If you did not
+request a password reset, ignore this e-mail — your password will not change.

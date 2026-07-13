@@ -1,0 +1,11 @@
+Subject: Invitation to {ds_name}
+
+Hello {full_name},
+
+an account "{login}" has been created for you in {ds_name}. To sign in for
+the first time, set your password here:
+
+{link}
+
+The link is valid for {ttl} and can be used only once. If it has expired,
+ask your administrator for a new invitation.

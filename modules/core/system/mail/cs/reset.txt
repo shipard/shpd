@@ -1,0 +1,11 @@
+Subject: Obnovení hesla — {ds_name}
+
+Dobrý den, {full_name},
+
+pro váš účet „{login}" v aplikaci {ds_name} bylo vyžádáno obnovení hesla.
+Nové heslo nastavíte na této adrese:
+
+{link}
+
+Odkaz platí {ttl} a lze ho použít jen jednou. Pokud jste o obnovení hesla
+nežádali, tento e-mail ignorujte — heslo se nezmění.

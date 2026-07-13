@@ -282,6 +282,55 @@ class Router
 			return new Route('auth', 'oidcExchange');
 		}
 
+		if ($subpath === '/_auth/password/forgot') {
+			if ($method !== 'POST') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('password', 'forgot');
+		}
+
+		if ($subpath === '/_auth/password/reset') {
+			if ($method !== 'POST') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('password', 'reset');
+		}
+
+		if ($subpath === '/_auth/password/change') {
+			if ($method !== 'POST') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('password', 'change');
+		}
+
+		if ($subpath === '/_auth/sessions') {
+			if ($method !== 'GET') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('password', 'sessions');
+		}
+
+		if ($subpath === '/_auth/sessions/revoke-others') {
+			if ($method !== 'POST') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('password', 'sessionsRevokeOthers');
+		}
+
+		if (preg_match('#^/_auth/sessions/(\d+)$#', $subpath, $m) === 1) {
+			if ($method !== 'DELETE') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('password', 'sessionDelete', null, (int) $m[1]);
+		}
+
+		if (preg_match('#^/_users/(\d+)/invite$#', $subpath, $m) === 1) {
+			if ($method !== 'POST') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('password', 'invite', null, (int) $m[1]);
+		}
+
 		// Generic CRUD: /api/v1/{table} or /api/v1/{table}/{id}
 		if (!str_starts_with($subpath, '/')) {
 			return Response::error('NOT_FOUND', 'Not found', 404);

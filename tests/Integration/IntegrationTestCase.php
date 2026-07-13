@@ -21,6 +21,16 @@ abstract class IntegrationTestCase extends TestCase
     /** @var array<string, \Shipard\Core\Database\TableDefinition> */
     protected array $tables;
 
+    /**
+     * Table definitions per DS path + language. Definitions come from repo
+     * files and tests never mutate them — one load per (DS, language) for
+     * the whole run instead of one per test method. Intentionally never
+     * freed.
+     *
+     * @var array<string, array<string, \Shipard\Core\Database\TableDefinition>>
+     */
+    private static array $tablesCache = [];
+
     protected function setUp(): void
     {
         $path = getenv('SHIPARD_INTEGRATION_DS_PATH');
@@ -40,15 +50,30 @@ abstract class IntegrationTestCase extends TestCase
         $this->dsConfig = new DataSourceConfig($path);
         $this->db = new DataSourceConnection($this->dsConfig);
 
-        $modulePathResolver = new ModulePathResolver([dirname(__DIR__, 2) . '/modules']);
-        $this->tables = TableLoader::load($this->dsConfig, $modulePathResolver, 'cs');
+        $cacheKey = $path . '|cs';
+        if (!isset(self::$tablesCache[$cacheKey])) {
+            $modulePathResolver = new ModulePathResolver([dirname(__DIR__, 2) . '/modules']);
+            self::$tablesCache[$cacheKey] = TableLoader::load($this->dsConfig, $modulePathResolver, 'cs');
+        }
+        $this->tables = self::$tablesCache[$cacheKey];
     }
 
-    protected function tearDown(): void
+    final protected function tearDown(): void
     {
+        if (isset($this->db)) {
+            $this->onTearDown();
+            $this->db->disconnect();
+        }
         if (isset($this->dsPath) && is_dir($this->dsPath)) {
             $this->rmTree($this->dsPath);
         }
+        unset($this->db, $this->tables, $this->dsConfig);
+        parent::tearDown();
+    }
+
+    /** Subclass cleanup; runs ONLY when setUp completed ($db exists). */
+    protected function onTearDown(): void
+    {
     }
 
     private function rmTree(string $dir): void

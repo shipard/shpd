@@ -28,6 +28,11 @@ class DataSourceConnection
         return $this->connection;
     }
 
+    public function disconnect(): void
+    {
+        $this->connection->disconnect();
+    }
+
     private function tableExists(string $table): bool
     {
         $result = $this->connection->query('SHOW TABLES LIKE %s', $table);

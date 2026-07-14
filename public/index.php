@@ -339,6 +339,24 @@ function buildMcpRegistry(
 	// bez něj injektujeme null → nástroj degraduje na graceful obálku.
 	// Bez event dispatcheru záměrně: draft tool zakládá vždy jen Koncept
 	// (targetDocState=10), nikdy stav 40 → účtování se ho netýká.
+	// Registry target (Spisovna) — jen s aktivním modulem base.registry.
+	$mcpTargetAppliers = [];
+	if ($configRuntime !== null && isset($tables['base_registry_documents'])) {
+		$mcpTargetAppliers['registry'] = new \Shipard\Module\Base\Registry\RegistryApplier(
+			$db,
+			$documentRegistry,
+			new \Shipard\Module\Core\Attachments\AttachmentService(
+				$db,
+				$resolved->config->getDataSourceDir(),
+				$tables,
+			),
+			$configRuntime,
+			new \Shipard\Module\Core\Exchange\Resolve\PartyResolver(
+				$db->getDibiConnection(),
+				new \Shipard\Module\Docs\Core\OwnCompanyResolver($db->getDibiConnection()),
+			),
+		);
+	}
 	$draftApplier = $configRuntime !== null
 		? new \Shipard\Module\Core\Mail\ExtractedDocumentApplier(
 			$db,
@@ -351,6 +369,7 @@ function buildMcpRegistry(
 			),
 			\Shipard\Module\Core\Exchange\Enrich\RowHistoryEnricher::create($db->getDibiConnection()),
 			$configRuntime,
+			$mcpTargetAppliers,
 		)
 		: null;
 	$registry->register(new \Shipard\Module\Core\Mail\Mcp\MailDraftDocumentTool($draftApplier));

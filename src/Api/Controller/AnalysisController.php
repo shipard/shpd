@@ -20,16 +20,21 @@ use Shipard\Core\Security\Exception\InvalidCiphertextException;
 use Shipard\Core\Security\Exception\SecretsKeyInsecureException;
 use Shipard\Core\Security\Exception\SecretsKeyMissingException;
 use Shipard\Module\Core\Attachments\AttachmentService;
+use Shipard\Module\Base\Registry\RegistryApplier;
 use Shipard\Module\Core\Exchange\Document\DocumentApplier;
 use Shipard\Module\Core\Exchange\Enrich\RowHistoryEnricher;
+use Shipard\Module\Core\Exchange\Resolve\PartyResolver;
+use Shipard\Module\Core\Exchange\Schema\SchemaLoader;
 use Shipard\Module\Core\Exchange\Schema\SchemaValidator;
 use Shipard\Module\Core\Ai\AIBackendDocument;
 use Shipard\Module\Core\Mail\AIAnalyzerProvisioner;
 use Shipard\Module\Core\Mail\ExtractedApplyOutcome;
+use Shipard\Module\Core\Mail\ExtractedDocTypes;
 use Shipard\Module\Core\Mail\ExtractedDocumentApplier;
 use Shipard\Module\Core\Mail\ExtractedDocumentDocument;
 use Shipard\Module\Core\Mail\ExtractedDocumentStatusResolver;
 use Shipard\Module\Core\Mail\StatusWriteResult;
+use Shipard\Module\Docs\Core\OwnCompanyResolver;
 
 /**
  * Endpoints `/_mail/analysis/*` — pull-based protokol pro externí AI analyzer.
@@ -52,6 +57,11 @@ class AnalysisController
     private const CLAIMS_TABLE = 'core_mail_analysis_claims';
     private const ATTACHMENTS_TABLE = 'core_attachments_files';
     private const HEADS_TABLE = 'docs_core_heads';
+    private const REGISTRY_TABLE = 'base_registry_documents';
+
+    /** Kontrakt registry extrakce (schéma v modules/base/registry/schemas). */
+    private const REGISTRY_FORMAT_ID = 'shpd.registry.document';
+    private const REGISTRY_FORMAT_VERSION = '1';
 
     // Workflow stavy zprávy (core.mail.docStatesIncoming) — pipeline na ně
     // sahá jediným místem: result s dokumenty posouvá Novou na K řešení.
@@ -75,6 +85,9 @@ class AnalysisController
 
     /** Sdílená pravidla confidence → status (viz ExtractedDocumentStatusResolver). */
     private ?ExtractedDocumentStatusResolver $statusResolver = null;
+
+    /** Lazy validator registry canonicalu (viz registrySchemaValidator()). */
+    private ?SchemaValidator $registrySchemaValidator = null;
 
     /**
      * SchemaValidator + DocumentApplier are intentionally nullable for
@@ -804,6 +817,7 @@ class AnalysisController
                     $extractedJson,
                     $confidence,
                     $thresholds,
+                    trim((string) ($doc['doc_type'] ?? 'other')),
                 );
 
                 $dibi->insert(self::EXTRACTED_TABLE, [
@@ -949,6 +963,10 @@ class AnalysisController
      * forensics) and flagged STATUS_AI_FAILED — never rejected outright,
      * so the user can still see what came out and trigger reanalyze.
      *
+     * Registry targety (dle `extractedDocTypes[doc_type].target`) se
+     * validují proti `shpd.registry.document.v1` a přeskakují enrichment
+     * i row-coverage cap — obojí jsou docs-specifika.
+     *
      * @param array<string, mixed>|null $extractedJson  Raw canonical from AI (or null).
      * @param array{ready: float, review: float} $thresholds
      * @return array{0: int, 1: ?string}  [status, jsonForDb]
@@ -957,6 +975,7 @@ class AnalysisController
         ?array $extractedJson,
         float $confidence,
         array $thresholds,
+        string $docType,
     ): array {
         if ($extractedJson === null) {
             // No canonical at all — keep legacy behaviour: status by
@@ -972,6 +991,10 @@ class AnalysisController
                 $this->statusResolver()->mapConfidenceToStatus($confidence, $thresholds),
                 (string) json_encode($extractedJson, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             ];
+        }
+
+        if (ExtractedDocTypes::targetFor($this->configRuntime, $docType) === ExtractedDocTypes::TARGET_REGISTRY) {
+            return $this->validateAndStoreRegistryCanonical($extractedJson, $confidence, $thresholds);
         }
 
         $schemaIssues = $this->schemaValidator->validate(
@@ -1008,6 +1031,57 @@ class AnalysisController
             ExtractedDocumentDocument::STATUS_AI_FAILED,
             (string) json_encode($wrapped, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         ];
+    }
+
+    /**
+     * Registry větev ingestu: validace proti `shpd.registry.document.v1`
+     * (schéma modulu base.registry), status čistě dle confidence — žádný
+     * RowHistoryEnricher ani capStatusByRowCoverage (docs-specifika).
+     * Invalid výstup dostává stejný forenzní wrapper jako docs cesta.
+     *
+     * @param array<string, mixed> $extractedJson
+     * @param array{ready: float, review: float} $thresholds
+     * @return array{0: int, 1: ?string}  [status, jsonForDb]
+     */
+    private function validateAndStoreRegistryCanonical(
+        array $extractedJson,
+        float $confidence,
+        array $thresholds,
+    ): array {
+        $schemaIssues = $this->registrySchemaValidator()->validate(
+            $extractedJson,
+            self::REGISTRY_FORMAT_ID,
+            self::REGISTRY_FORMAT_VERSION,
+        );
+
+        if ($schemaIssues === []) {
+            return [
+                $this->statusResolver()->mapConfidenceToStatus($confidence, $thresholds),
+                (string) json_encode($extractedJson, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            ];
+        }
+
+        $wrapped = [
+            '_validationError' => 'Canonical schema validation failed',
+            '_validationIssues' => $schemaIssues,
+            '_rawOutput' => $extractedJson,
+        ];
+        return [
+            ExtractedDocumentDocument::STATUS_AI_FAILED,
+            (string) json_encode($wrapped, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        ];
+    }
+
+    /**
+     * SchemaValidator nad schématy base.registry — druhá instance loaderu
+     * mířící do `modules/base/registry/schemas` (soubor drží konvenci
+     * `{formatId}.v{version}.json`, takže SchemaLoader funguje beze změny).
+     */
+    private function registrySchemaValidator(): SchemaValidator
+    {
+        return $this->registrySchemaValidator ??= new SchemaValidator(
+            new SchemaLoader(dirname(__DIR__, 3) . '/modules/base/registry/schemas'),
+        );
     }
 
     // -------------------------------------------------------------------
@@ -1345,16 +1419,30 @@ class AnalysisController
     /**
      * Sestaví sdílený apply/unapply servis včetně mapy target applierů
      * (registrace napevno ve wiringu, vzor FeedSources — žádný plugin
-     * registr). Docs target jede interně přes exchange DocumentApplier.
+     * registr). Docs target jede interně přes exchange DocumentApplier,
+     * `registry` přes RegistryApplier (jen když je modul base.registry
+     * aktivní — poznáme podle přítomnosti tabulky v definicích).
      */
     private function buildExtractedApplier(): ExtractedDocumentApplier
     {
+        $targetAppliers = [];
+        if (isset($this->tables[self::REGISTRY_TABLE])) {
+            $dibi = $this->db->getDibiConnection();
+            $targetAppliers[ExtractedDocTypes::TARGET_REGISTRY] = new RegistryApplier(
+                $this->db,
+                $this->documentRegistry,
+                new AttachmentService($this->db, $this->dsPath, $this->tables),
+                $this->configRuntime,
+                new PartyResolver($dibi, new OwnCompanyResolver($dibi)),
+            );
+        }
+
         return new ExtractedDocumentApplier(
             $this->db,
             $this->applier,
             $this->enricher,
             $this->configRuntime,
-            [],
+            $targetAppliers,
             $this->buildHeadsGateway(),
         );
     }
@@ -1432,6 +1520,23 @@ class AnalysisController
                 'extractedNdx'  => $extractedNdx,
                 'messageNdx'    => (int) $existing['message'],
                 'status'        => $currentStatus,
+            ]);
+        }
+
+        // Registry target: canonical se vrací přímo — source injection,
+        // enrichment i applier->preview (_resolve) jsou docs-specifika,
+        // registry review nemá resolve panel (design §7.8). `target` klíč
+        // dává frontendu branch pro RegistryExtractedPreview.
+        $docType = (string) ($existing['doc_type'] ?? '');
+        if (ExtractedDocTypes::targetFor($this->configRuntime, $docType) === ExtractedDocTypes::TARGET_REGISTRY) {
+            return Response::success([
+                'aiFailed'     => false,
+                'canonical'    => $extractedJson,
+                'attachments'  => $attachments,
+                'extractedNdx' => $extractedNdx,
+                'messageNdx'   => (int) $existing['message'],
+                'status'       => $currentStatus,
+                'target'       => ExtractedDocTypes::TARGET_REGISTRY,
             ]);
         }
 

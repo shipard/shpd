@@ -9,6 +9,7 @@ use Shipard\Api\AuthContext;
 use Shipard\Api\Controller\AnalysisController;
 use Shipard\Api\Request;
 use Shipard\Api\Response;
+use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Document\DocumentRegistry;
@@ -75,15 +76,29 @@ class AnalysisControllerExchangeTest extends TestCase
         DataSourceConnection $db,
         ?DocumentApplier $applier = null,
         ?RowHistoryEnricher $enricher = null,
+        ?ConfigRuntime $configRuntime = null,
     ): AnalysisController {
         return new AnalysisController(
             $db, $this->config, $this->tmpDir, [],
             new DocumentRegistry(),
             new SchemaValidator(SchemaLoader::default()),
             $applier,
-            null, null,
+            $configRuntime, null,
             $enricher,
         );
+    }
+
+    /** ConfigRuntime s extractedDocTypes: insurance jako registry target. */
+    private function configRuntimeWithRegistryTargets(): ConfigRuntime
+    {
+        $config = $this->createMock(ConfigRuntime::class);
+        $config->method('cfgItem')->willReturnMap([
+            ['core.mail.extractedDocTypes', [
+                'invoiceReceived' => ['target' => 'docs'],
+                'insurance'       => ['target' => 'registry', 'docKind' => 'insurance'],
+            ]],
+        ]);
+        return $config;
     }
 
     /**
@@ -293,10 +308,11 @@ class AnalysisControllerExchangeTest extends TestCase
         ?array $canonical,
         float $confidence = 0.95,
         array $thresholds = ['ready' => 0.9, 'review' => 0.6],
+        string $docType = 'invoiceReceived',
     ): array {
         $ref = new \ReflectionClass($ctrl);
         $method = $ref->getMethod('validateAndStoreCanonical');
-        return $method->invoke($ctrl, $canonical, $confidence, $thresholds);
+        return $method->invoke($ctrl, $canonical, $confidence, $thresholds, $docType);
     }
 
     public function testValidateAndStoreCanonicalKeepsValidPayload(): void
@@ -506,5 +522,79 @@ class AnalysisControllerExchangeTest extends TestCase
             // Hit the updateExtractedStatus codepath (good — proves fallback).
             $this->addToAssertionCount(1);
         }
+    }
+
+    // ── validateAndStoreCanonical — registry target ─────────────────────────
+    //
+    // Registry canonical se validuje proti shpd.registry.document.v1
+    // (schéma base.registry) a přeskakuje enrichment i row-coverage cap.
+
+    private function registryCanonical(): array
+    {
+        return [
+            'schema'  => 'shpd.registry.document.v1',
+            'docType' => 'insurance',
+            'title'   => 'Pojistná smlouva — flotila',
+            'summary' => 'Pojištění vozového parku.',
+            'party'   => ['name' => 'Pojišťovna ABC', 'companyId' => '12345678', 'email' => 'info@abc.cz'],
+            'kindFields' => [
+                'insurer'      => 'Pojišťovna ABC',
+                'policyNumber' => 'POJ-1',
+                'validTo'      => '2026-12-31',
+            ],
+            'binderSuggestion' => 'Pojištění',
+        ];
+    }
+
+    public function testValidateRegistryCanonicalKeepsValidPayload(): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $ctrl = $this->controller($db, configRuntime: $this->configRuntimeWithRegistryTargets());
+        $canonical = $this->registryCanonical();
+
+        [$status, $json] = $this->callValidate($ctrl, $canonical, 0.95, docType: 'insurance');
+
+        $this->assertSame(10, $status); // STATUS_READY_TO_APPLY
+        $this->assertSame($canonical, json_decode((string) $json, true)); // beze změn — žádný enrichment
+    }
+
+    public function testValidateRegistryCanonicalForeignKindFieldWrapsAiFailed(): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $ctrl = $this->controller($db, configRuntime: $this->configRuntimeWithRegistryTargets());
+        $canonical = $this->registryCanonical();
+        // additionalProperties: false — přejmenované pole nesmí tiše projít
+        $canonical['kindFields']['policy_number'] = 'POJ-1';
+
+        [$status, $json] = $this->callValidate($ctrl, $canonical, 0.95, docType: 'insurance');
+
+        $this->assertSame(70, $status); // STATUS_AI_FAILED
+        $decoded = json_decode((string) $json, true);
+        $this->assertArrayHasKey('_validationError', $decoded);
+        $this->assertSame($canonical, $decoded['_rawOutput']);
+    }
+
+    public function testValidateRegistryCanonicalUnknownDocTypeWrapsAiFailed(): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $ctrl = $this->controller($db, configRuntime: $this->configRuntimeWithRegistryTargets());
+        $canonical = $this->registryCanonical();
+        $canonical['docType'] = 'somethingElse';
+
+        [$status] = $this->callValidate($ctrl, $canonical, 0.95, docType: 'insurance');
+
+        $this->assertSame(70, $status); // STATUS_AI_FAILED
+    }
+
+    public function testValidateDocsCanonicalUnaffectedByRegistryConfig(): void
+    {
+        // docs typ jde dál docs větví i s configem, který registry typy zná
+        $db = $this->createMock(DataSourceConnection::class);
+        $ctrl = $this->controller($db, configRuntime: $this->configRuntimeWithRegistryTargets());
+        $canonical = $this->happyCanonical();
+
+        [$status] = $this->callValidate($ctrl, $canonical, 0.95, docType: 'invoiceReceived');
+
+        $this->assertSame(10, $status);
     }
 }

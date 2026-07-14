@@ -31,7 +31,8 @@ class AIAnalyzerProvisioner
      * @return array{
      *     user: array{id: int, created: bool},
      *     backend: array{id: int, created: bool},
-     *     profile: array{id: int, created: bool, skipped_reason?: string}
+     *     profile: array{id: int, created: bool, skipped_reason?: string},
+     *     queue_fix: array{fixed: int}
      * }
      */
     public function provision(): array
@@ -39,12 +40,38 @@ class AIAnalyzerProvisioner
         $user = $this->ensureAnalyzerUser();
         $backend = $this->ensureDefaultBackend();
         $profile = $this->ensureDefaultProfile($backend['id']);
+        $queueFix = $this->fixQueuedArchivedMessages();
 
         return [
             'user' => $user,
             'backend' => $backend,
             'profile' => $profile,
+            'queue_fix' => ['fixed' => $queueFix],
         ];
+    }
+
+    /**
+     * Idempotentní datová oprava: zprávy v Archivu/Koši (docState 80/90)
+     * s analysis_state=10 (Ve frontě) nemají ve frontě co dělat — `/queue`
+     * je nikdy nevydá a hrozí hromadná analýza při odarchivování. Vznikaly
+     * zrcadlením archivní pošty před zavedením pravidla docState
+     * v `IncomingMessageDocument::resolveInitialAnalysisState` (spec
+     * tasks/mail-analysis-schema-fixes.md). Hotovo (40) do WHERE nepatří —
+     * tam mohla zpráva dojít legálně workflow cestou.
+     *
+     * @return int Počet opravených řádků (po prvním běhu 0 = no-op).
+     */
+    public function fixQueuedArchivedMessages(): int
+    {
+        $this->db->execute(
+            'UPDATE core_mail_incoming_messages SET analysis_state = %i
+              WHERE analysis_state = %i AND docState IN %in',
+            0,
+            10,
+            [80, 90],
+        );
+
+        return $this->db->getAffectedRows();
     }
 
     /**

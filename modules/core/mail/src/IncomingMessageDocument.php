@@ -30,6 +30,10 @@ class IncomingMessageDocument extends Document
     private const ANALYSIS_QUEUED = 10;
     private const ANALYSIS_ANALYZING = 20;
 
+    /** docState hodnoty (core.mail.docStatesIncoming), ve kterých se frontuje analýza. */
+    private const DOC_STATE_NEW = 10;
+    private const DOC_STATE_OPEN = 20;
+
     public function validate(array &$data): ValidationResult
     {
         $result = new ValidationResult();
@@ -106,7 +110,8 @@ class IncomingMessageDocument extends Document
                 $data['primary_type'] = $this->resolveDefaultPrimaryType($mailbox);
             }
 
-            // analysis_state default — do fronty AI analýzy, pokud je analýza
+            // analysis_state default — do fronty AI analýzy, pokud zpráva
+            // vzniká v aktivním workflow stavu (docState 10/20), analýza je
             // povolená (ai_analysis_enabled NOT FALSE) a dostupná (existuje
             // aktivní AI profil). Jinak 0 (Bez analýzy). Volající může
             // hodnotu předvyplnit (import, seed) — tu nepřepisujeme.
@@ -197,11 +202,21 @@ class IncomingMessageDocument extends Document
     }
 
     /**
-     * Výchozí `analysis_state` nové zprávy: 10 (Ve frontě) když analýza není
-     * explicitně vypnutá a v DS existuje aktivní AI profil, jinak 0.
+     * Výchozí `analysis_state` nové zprávy: 10 (Ve frontě) když zpráva vzniká
+     * v docState 10/20 (Nová/K řešení), analýza není explicitně vypnutá
+     * a v DS existuje aktivní AI profil, jinak 0.
      */
     private function resolveInitialAnalysisState(array $data): int
     {
+        // Frontujeme jen zprávy v aktivním workflow stavu. Zprávy vznikající
+        // rovnou v Hotovo/Archiv/Koši (import, zrcadlení archivu) by /queue
+        // nikdy nevydal — trvale zavádějící "Ve frontě" + riziko hromadné
+        // analýzy při odarchivování. Chybějící docState = DB default 10.
+        $docState = isset($data['docState']) ? (int) $data['docState'] : self::DOC_STATE_NEW;
+        if ($docState !== self::DOC_STATE_NEW && $docState !== self::DOC_STATE_OPEN) {
+            return self::ANALYSIS_NONE;
+        }
+
         if (array_key_exists('ai_analysis_enabled', $data)
             && $data['ai_analysis_enabled'] !== null
             && !$data['ai_analysis_enabled']

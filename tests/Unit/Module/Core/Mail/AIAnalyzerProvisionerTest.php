@@ -188,6 +188,47 @@ class AIAnalyzerProvisionerTest extends TestCase
         $this->assertSame('object', $schema['type']);
     }
 
+    public function testProvisionFixesQueuedArchivedMessages(): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturnOnConsecutiveCalls(
+            ['id' => 1],   // user
+            ['id' => 2],   // backend by backend_id
+            ['id' => 3],   // profile by profile_id
+        );
+
+        $capturedSql = null;
+        $db->expects($this->once())
+            ->method('execute')
+            ->willReturnCallback(function (mixed ...$args) use (&$capturedSql): void {
+                $capturedSql = (string) $args[0];
+            });
+        $db->method('getAffectedRows')->willReturn(268);
+
+        $provisioner = new AIAnalyzerProvisioner($db);
+        $result = $provisioner->provision();
+
+        $this->assertSame(['fixed' => 268], $result['queue_fix']);
+        $this->assertStringContainsString('UPDATE core_mail_incoming_messages', $capturedSql);
+        $this->assertStringContainsString('docState IN %in', $capturedSql);
+    }
+
+    public function testProvisionQueueFixIsNoopOnCleanDs(): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturnOnConsecutiveCalls(
+            ['id' => 1],
+            ['id' => 2],
+            ['id' => 3],
+        );
+        $db->method('getAffectedRows')->willReturn(0);
+
+        $provisioner = new AIAnalyzerProvisioner($db);
+        $result = $provisioner->provision();
+
+        $this->assertSame(['fixed' => 0], $result['queue_fix']);
+    }
+
     public function testSyncUpdatesWhenTemplateIsNewer(): void
     {
         $db = $this->createMock(DataSourceConnection::class);

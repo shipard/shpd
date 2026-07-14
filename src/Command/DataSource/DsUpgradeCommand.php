@@ -411,6 +411,15 @@ class DsUpgradeCommand extends Command
             $output->writeln("  [OK]     profile 'czech_invoices' (id={$profile['id']})", OutputInterface::VERBOSITY_VERBOSE);
         }
 
+        // Datová oprava nafrontovaných archivních zpráv — idempotentní,
+        // po prvním běhu no-op (viz AIAnalyzerProvisioner).
+        $queueFixed = $result['queue_fix']['fixed'] ?? 0;
+        if ($queueFixed > 0) {
+            $output->writeln("  [FIX]    analysis_state 10 → 0 for {$queueFixed} archived/trashed message(s)");
+        } else {
+            $output->writeln('  [OK]     no queued archived messages', OutputInterface::VERBOSITY_VERBOSE);
+        }
+
         // Sync obsahových polí profilu ze šablony v repu — upgrade-only,
         // nikdy downgrade (na ten je 'ai-profile-reload --force'). Rozbitá
         // šablona nesmí shodit celý ds-upgrade.

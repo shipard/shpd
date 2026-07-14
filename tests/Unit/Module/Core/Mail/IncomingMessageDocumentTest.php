@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Shipard\Tests\Unit\Module\Core\Mail;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Shipard\Module\Core\Mail\IncomingMessageDocument;
 
@@ -374,6 +375,81 @@ class IncomingMessageDocumentTest extends TestCase
         $doc->beforeSave($data);
 
         $this->assertSame(0, $data['analysis_state']);
+    }
+
+    // --- beforeSave: analysis_state podle docState -----------------------------
+
+    /** @return array<string, array{int}> */
+    public static function activeDocStates(): array
+    {
+        return ['Nová (10)' => [10], 'K řešení (20)' => [20]];
+    }
+
+    #[DataProvider('activeDocStates')]
+    public function testBeforeSaveQueuesAnalysisForActiveDocStates(int $docState): void
+    {
+        $dibi = $this->createMock(\Dibi\Connection::class);
+        $dibi->method('fetch')->willReturn(new \Dibi\Row(['id' => 17]));
+        $doc = $this->doc();
+        $doc->setDb($dibi);
+        $data = [
+            'mailbox' => 1,
+            'sender_email' => 'a@b.cz',
+            'received_at' => '2026-04-17 10:00:00',
+            'message_id' => 'MSG-X',
+            'docState' => $docState,
+        ];
+
+        $doc->beforeSave($data);
+
+        $this->assertSame(10, $data['analysis_state']);
+    }
+
+    /** @return array<string, array{int}> */
+    public static function inactiveDocStates(): array
+    {
+        return ['Hotovo (40)' => [40], 'Archiv (80)' => [80], 'Koš (90)' => [90]];
+    }
+
+    #[DataProvider('inactiveDocStates')]
+    public function testBeforeSaveSkipsQueueForInactiveDocStates(int $docState): void
+    {
+        $dibi = $this->createMock(\Dibi\Connection::class);
+        // message_id i primary_type vyplněné → dotaz na profil se nesmí
+        // vůbec spustit (short-circuit na docState mimo 10/20)
+        $dibi->expects($this->never())->method('fetch');
+        $doc = $this->doc();
+        $doc->setDb($dibi);
+        $data = [
+            'mailbox' => 1,
+            'sender_email' => 'a@b.cz',
+            'received_at' => '2026-04-17 10:00:00',
+            'message_id' => 'MSG-X',
+            'primary_type' => 'other',
+            'docState' => $docState,
+        ];
+
+        $doc->beforeSave($data);
+
+        $this->assertSame(0, $data['analysis_state']);
+    }
+
+    public function testBeforeSaveExplicitAnalysisStateWinsOverInactiveDocState(): void
+    {
+        // Regrese importu: explicitní analysis_state v requestu má přednost
+        // před pravidlem docState (spec mail-analysis-schema-fixes, bod 3).
+        $doc = $this->doc();
+        $data = [
+            'mailbox' => 1,
+            'sender_email' => 'a@b.cz',
+            'received_at' => '2026-04-17 10:00:00',
+            'docState' => 80,
+            'analysis_state' => 10,
+        ];
+
+        $doc->beforeSave($data);
+
+        $this->assertSame(10, $data['analysis_state']);
     }
 
     // --- validate: read-only zámek při probíhající analýze --------------------

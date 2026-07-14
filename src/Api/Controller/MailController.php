@@ -304,13 +304,12 @@ class MailController
         $data['docState']     = $docState;
         $data['docStateMain'] = $this->resolveIncomingMainState($docState);
 
-        // analysis_state: explicitní hodnota z requestu má přednost; importy
-        // rovnou v Hotovo (40) se neanalyzují (0). Jinak platí default
-        // z beforeSave (fronta, pokud je AI dostupná).
+        // analysis_state: explicitní hodnota z requestu má přednost. Jinak
+        // platí default z beforeSave — fronta jen pro docState 10/20
+        // (Nová/K řešení) s dostupnou AI; import rovnou do Hotovo/Archiv/Koše
+        // dostane 0.
         if (isset($body['analysis_state'])) {
             $data['analysis_state'] = (int) $body['analysis_state'];
-        } elseif ($docState === 40) {
-            $data['analysis_state'] = 0;
         }
 
         $doc = $this->documentRegistry->getDocument(self::MAIL_TABLE);

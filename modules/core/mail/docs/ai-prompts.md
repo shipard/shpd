@@ -24,14 +24,17 @@ Audit běhu: každý `core_mail_message_analyses` row si propíše `profile_ndx`
 `backend_ndx` a `prompt_version`, takže historie je auditovatelná i po pozdějších
 změnách profilu.
 
-## Default prompt (v2.0.0)
+## Default prompt (v3.0.0)
 
 Od `v2.0.0` AI vrací data přímo v kanonickém **`shpd.docs.document.v1`**
 formátu (viz [`docs/exchange-format.md`](../../../../docs/exchange-format.md))
-v poli `documents[].fields`. Předchozí ad-hoc shape (`supplier.ico`,
+v poli `documents[].extracted_json`. Předchozí ad-hoc shape (`supplier.ico`,
 `invoice_number`, `vat_breakdown[]`, `line_items[]` …) byl nahrazen
 canonical strukturou, aby `core.exchange` Applier mohl výstup uložit bez
-další transformační vrstvy.
+další transformační vrstvy. Od `v3.0.0` vrací registry typy (smlouvy,
+pojistky, nabídky, revize, úřední písemnosti) ve formátu
+**`shpd.registry.document.v1`** — cíl je Spisovna (`base.registry`),
+apply jde přes `RegistryApplier`.
 
 Klíčové pokyny v promptu:
 
@@ -59,16 +62,22 @@ JSON Schema **draft-2020-12** (od `v2.0.0`; dřív draft-07). Wrapper:
   "additionalProperties": false,
   "properties": {
     "overall_confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "message_classification": { /* primary_type + confidence, enum enabled typů */ },
     "documents": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["doc_type", "source_attachment_ndxs", "confidence", "fields"],
+        "required": ["doc_type", "source_attachment_ndxs", "confidence", "extracted_json"],
         "properties": {
-          "doc_type": { "enum": ["invoiceReceived", "invoiceIssued", "creditNote", "other"] },
+          "doc_type": { "enum": ["invoiceReceived", "creditNote", "contract", "insurance", "quotation", "certificate", "official"] },
           "source_attachment_ndxs": { "type": "array", "items": { "type": "integer", "minimum": 0 } },
           "confidence": { "type": "number" },
-          "fields": { /* inline shpd.docs.document.v1 schema */ }
+          "extracted_json": {
+            "oneOf": [
+              { /* inline shpd.docs.document.v1 schema */ },
+              { /* inline shpd.registry.document.v1 schema */ }
+            ]
+          }
         }
       }
     }
@@ -76,13 +85,24 @@ JSON Schema **draft-2020-12** (od `v2.0.0`; dřív draft-07). Wrapper:
 }
 ```
 
-**`fields` je inline kopie** `modules/core/exchange/schemas/shpd.docs.document.v1.json`.
+**`extracted_json` je od `v3.0.0` oneOf dvou inline kopií** — struktura se
+volí podle **targetu** typu dokumentu (cfgItem `core.mail.extractedDocTypes`):
+
+- target `docs` (faktury, dobropisy) →
+  `modules/core/exchange/schemas/shpd.docs.document.v1.json`,
+- target `registry` (smlouvy, pojistky, nabídky, revize, úřední
+  písemnosti — Spisovna) →
+  `modules/base/registry/schemas/shpd.registry.document.v1.json`.
+
 Analyzer (`/claim` response) dostává `output_schema` napřímo — neumí
-`$ref` resolve napříč souborům, takže canonical schéma musí být doslovně
-embedded. Drift mezi profilem a canonical souborem hlídá test
+`$ref` resolve napříč souborům, takže obě canonical schémata musí být
+doslovně embedded. Drift mezi profilem a canonical soubory hlídá test
 [`tests/Unit/Module/Core/Mail/ProfileSchemaDriftTest.php`](../../../../tests/Unit/Module/Core/Mail/ProfileSchemaDriftTest.php) —
 selže s odkazem na regeneraci, pokud někdo updatuje jedno a zapomene
-druhé.
+druhé. Shodu `kindFields` registry schématu s `base.registry.docKinds`
+hlídá `tests/Unit/Module/Base/Registry/RegistrySchemaDriftTest.php` —
+názvy polí se **nikdy nesmí lišit** (analyzer plní kindFields přesně dle
+schématu; přejmenované pole = tiché prázdno v metadatech).
 
 Plné schéma viz [`profiles/default_czech_invoices.jsonc`](../profiles/default_czech_invoices.jsonc).
 
@@ -91,13 +111,20 @@ Plné schéma viz [`profiles/default_czech_invoices.jsonc`](../profiles/default_
 ### Přidání nového typu dokumentu
 
 1. Přidej klíč do `core.mail.extractedDocTypes`
-   ([config/extractedDocTypes.jsonc](../config/extractedDocTypes.jsonc)).
+   ([config/extractedDocTypes.jsonc](../config/extractedDocTypes.jsonc))
+   včetně `target` (`docs` / `registry`; registry typy navíc `docKind`
+   z `base.registry.docKinds`) a párový klíč do `primaryTypes.jsonc`.
 2. V profilu rozšiř `supported_doc_types` (JSON pole klíčů).
-3. V `prompt_template` doplň pravidla pro nový typ.
-4. V `output_schema.documents[].doc_type` enum přidej nový klíč. Pole
-   `fields` zůstává jednotné napříč typy — canonical formát je polymorfní
-   podle `fields.docType`, nepotřebuje per-typ branch v output_schema.
-5. Bumpni `prompt_version` (`v2.0.0` → `v2.1.0`).
+3. V `prompt_template` doplň pravidla pro nový typ — u registry typů
+   **vyjmenuj přesné názvy `kindFields`** dle `docKinds.fields`
+   (nesoulad = tiché prázdno, hlídá `RegistrySchemaDriftTest` +
+   `ProfileSchemaDriftTest::testPromptEnumeratesKindFieldsExactly`).
+4. V `output_schema.documents[].doc_type` enum přidej nový klíč a zvol
+   větev `extracted_json.oneOf` podle **targetu** typu: docs typy jedou
+   přes `shpd.docs.document.v1` (polymorfní dle `docType`, bez per-typ
+   branche), registry typy přes `shpd.registry.document.v1` (nový druh =
+   nová if/then větev `kindFields` v registry schématu + kopie embedu).
+5. Bumpni `prompt_version` (`v3.0.0` → `v3.1.0`).
 
 ### Vlastní profil pro jiný jazyk / účel
 
@@ -155,6 +182,23 @@ backendů (`default` Anthropic Claude Sonnet pro běžné případy, druhý back
 s Claude Opus pro náročné dokumenty) a přiřadit je různým profilům.
 
 ## Changelog promptu
+
+### v3.0.0 (2026-07-14)
+
+Spisovna Fáze 2 — extrakce registry typů
+([tasks/registry-phase2.md](../../../../tasks/registry-phase2.md),
+design [docs/registry-mvp.md](../../../../docs/registry-mvp.md) §7):
+
+- Nové `doc_type` hodnoty `contract`, `insurance`, `quotation`,
+  `certificate`, `official` (target `registry` → dokument Spisovny);
+  `primary_type` enum rozšířen o tytéž klíče.
+- `documents[].extracted_json` je nově **oneOf**
+  [`shpd.docs.document.v1`, `shpd.registry.document.v1`] — registry typy
+  vrací `{schema, docType, title, summary, party, kindFields,
+  binderSuggestion}`.
+- Prompt vyjmenovává přesné názvy `kindFields` per druh (dle
+  `base.registry.docKinds`), `summary` 2–3 věty v jazyce profilu,
+  `binderSuggestion` volitelný obecný název šanonu.
 
 ### v2.3.0 (2026-07-14)
 

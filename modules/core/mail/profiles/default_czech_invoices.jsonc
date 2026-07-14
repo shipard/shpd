@@ -1,12 +1,17 @@
-// Výchozí AI profil pro extrakci českých přijatých faktur z došlé pošty.
+// Výchozí AI profil pro extrakci českých přijatých dokladů (faktury,
+// dobropisy) a registry dokumentů (smlouvy, pojistky, nabídky, revize,
+// úřední písemnosti) z došlé pošty.
 //
 // Tento soubor slouží jako šablona — `AIAnalyzerProvisioner` z něj vytvoří
 // řádek v `core_mail_ai_profiles` při prvním ds-upgrade. Reload existujícího
 // profile na novou verzi: `bin/shpd-ds ai-profile-reload --force`.
 //
-// AI vrací canonical `shpd.docs.document.v1` v poli `documents[].extracted_json`.
-// Pole `extracted_json` v `output_schema` je INLINE KOPIE
-// `modules/core/exchange/schemas/shpd.docs.document.v1.json`. Drift hlídá
+// AI vrací v poli `documents[].extracted_json` canonical dle typu dokumentu:
+// `shpd.docs.document.v1` (faktury/dobropisy) nebo `shpd.registry.document.v1`
+// (registry typy). Pole `extracted_json` v `output_schema` je proto oneOf
+// dvou INLINE KOPIÍ: `modules/core/exchange/schemas/shpd.docs.document.v1.json`
+// a `modules/base/registry/schemas/shpd.registry.document.v1.json` (analyzer
+// neresolvuje $ref napříč soubory). Drift obou embedů hlídá
 // `tests/Unit/Module/Core/Mail/ProfileSchemaDriftTest`.
 {
     "profile_id": "czech_invoices",
@@ -14,17 +19,22 @@
     "name:cs": "České faktury (default)",
     "name:en": "Czech invoices (default)",
     "language": "cs",
-    "prompt_version": "v2.3.0",
+    "prompt_version": "v3.0.0",
     "supported_doc_types": [
         "invoiceReceived",
         "creditNote",
+        "contract",
+        "insurance",
+        "quotation",
+        "certificate",
+        "official",
         "other"
     ],
     "confidence_thresholds": {
         "ready": 0.9,
         "review": 0.6
     },
-    "prompt_template": "Jsi asistent pro zpracování došlé pošty českých firem. Tvým úkolem je analyzovat přílohy e-mailové zprávy a extrahovat z nich strukturovaná data o přijatých dokladech (faktury, dobropisy).\n\nKONTEXT ZPRÁVY:\n- Předmět: {{ message.subject }}\n- Odesílatel: {{ message.sender_email }}{% if message.sender_name %} ({{ message.sender_name }}){% endif %}\n- Tělo zprávy: {{ message.body_plain }}\n\nPŘÍLOHY ({{ attachments|length }}):\n{% for att in attachments %}- #{{ att.ndx }}: {{ att.filename }} ({{ att.mime_type }}, {{ att.size_human }})\n{% endfor %}\n\nÚKOL:\n1) TRIAGE: Nejprve rozhodni, zda zpráva JAKO CELEK je přijatou fakturou nebo dobropisem, nebo něčím jiným (newsletter, obchodní sdělení, potvrzení objednávky, neúplné podklady…). Výsledek vrať v top-level poli \"message_classification\" s \"primary_type\" (\"invoiceReceived\" pro fakturu/dobropis, jinak \"other\") a \"confidence\" (0.0–1.0).\n2) EXTRAKCE: Pro každou přílohu, která je přijatou fakturou (invoiceReceived) nebo dobropisem (creditNote), extrahuj všechna pole, která jsi schopen identifikovat, do kanonické struktury \"shpd.docs.document.v1\".\n\nPRAVIDLA:\n- Pole, která nelze určit, VYNECHEJ (neuhaduj, neimprovizuj). Lepší chybějící pole než špatná hodnota.\n- Objekty (\"vat\", \"payment\", \"customer\", …), které nelze určit, VYNECHEJ nebo vrať null — nikdy nevracej prázdné objekty s vymyšleným obsahem.\n- Do struktury nikdy nepřidávej klíče, které nejsou v ukázce níže (schéma má additionalProperties: false — neznámý klíč znamená odmítnutí celého výstupu).\n- attachments[].kind smí být POUZE jedna z hodnot: \"original\" (hlavní dokument), \"scan\" (sken/foto), \"supplement\" (doprovodný materiál), \"preview\" (náhled), \"structured\" (strojově čitelný formát — ISDOC, XML, UBL). Žádnou jinou hodnotu nevymýšlej.\n- Identifikátory (IČO, DIČ, VAT ID, IBAN, EAN, SKU) přebírej beze změny, pokud je vidíš na dokladu.\n- Datumy formátuj jako ISO 8601 (YYYY-MM-DD).\n- Měny jako ISO 4217 uppercase (\"CZK\", \"EUR\").\n- Země jako ISO 3166-1 alpha-2 lowercase (\"cz\", \"sk\", \"de\").\n- selfParty je vždy \"customer\" (jsme příjemce dokladu).\n- source.kind je vždy \"aiExtraction\".\n- source.confidence je tvoje jistota kvalitou extrakce 0.0–1.0.\n- source.promptVersion je \"v2.3.0\".\n- Do \"documents\" patří JEN faktury a dobropisy — NIKDY neemituj dokument s doc_type \"other\". Přílohy, které nejsou faktura/dobropis, do \"documents\" nedávej.\n- Pokud žádná příloha není dokladem, vrať \"documents\": [] a klasifikaci \"other\".\n\nVRAŤ POUZE JSON v této struktuře (žádný úvodní text, žádné markdown bloky):\n\n{\n  \"overall_confidence\": 0.92,\n  \"message_classification\": {\n    \"primary_type\": \"invoiceReceived\",\n    \"confidence\": 0.97\n  },\n  \"documents\": [\n    {\n      \"doc_type\": \"invoiceReceived\",\n      \"source_attachment_ndxs\": [123],\n      \"confidence\": 0.95,\n      \"extracted_json\": {\n        \"format\": \"shpd.docs.document\",\n        \"formatVersion\": \"1.0\",\n        \"source\": {\n          \"kind\": \"aiExtraction\",\n          \"extractedAt\": \"<ISO timestamp from current time>\",\n          \"confidence\": 0.95,\n          \"promptVersion\": \"v2.3.0\"\n        },\n        \"docType\": \"invoiceReceived\",\n        \"docNumber\": \"<supplier's invoice number>\",\n        \"docText\": \"<short description>\",\n        \"selfParty\": \"customer\",\n        \"supplier\": {\n          \"name\": \"Dodavatel s.r.o.\",\n          \"country\": \"cz\",\n          \"companyId\": \"12345678\",\n          \"taxId\": \"CZ12345678\",\n          \"vatId\": \"CZ12345678\",\n          \"courtRegistration\": \"C 12345 vedená u Městského soudu v Praze\",\n          \"address\": {\n            \"street\": \"Hlavní\", \"houseNumber\": \"1\",\n            \"city\": \"Praha\", \"zip\": \"11000\", \"country\": \"cz\"\n          },\n          \"contact\": {\"email\": \"...\", \"phone\": \"...\"},\n          \"bankAccount\": {\n            \"accountNumber\": \"1234567890/0100\",\n            \"iban\": \"CZ65...\", \"bic\": \"...\",\n            \"currency\": \"CZK\"\n          }\n        },\n        \"customer\": null,\n        \"dates\": {\n          \"issueDate\": \"2026-04-15\",\n          \"dueDate\": \"2026-04-29\",\n          \"accountingDate\": \"2026-04-15\",\n          \"taxPointDate\": \"2026-04-15\",\n          \"vatObligationDate\": \"2026-04-15\"\n        },\n        \"currency\": \"CZK\",\n        \"exchangeRate\": null,\n        \"vat\": {\n          \"mode\": \"fromBase\",\n          \"place\": \"domestic\",\n          \"registrationCountry\": \"cz\"\n        },\n        \"payment\": {\n          \"method\": \"bankTransfer\",\n          \"paymentReference\": \"...\",\n          \"specificSymbol\": null,\n          \"constantSymbol\": null\n        },\n        \"notes\": {\n          \"internal\": null,\n          \"onDocument\": \"...\"\n        },\n        \"rows\": [\n          {\n            \"rowKind\": \"item\",\n            \"orderPos\": 1,\n            \"item\": {\n              \"supplierCode\": \"KONZ-001\",\n              \"name\": \"Konzultace\",\n              \"description\": \"Hodinová sazba\"\n            },\n            \"unit\": \"h\",\n            \"quantity\": 10,\n            \"unitPrice\": 1033.06,\n            \"totalPrice\": 10330.58,\n            \"priceCalcMode\": \"fromUnitPrice\",\n            \"discountPct\": null,\n            \"discountAmount\": null,\n            \"vat\": {\"code\": \"cz-110\", \"pct\": 21}\n          }\n        ],\n        \"vatRecap\": [\n          {\n            \"vatCode\": \"cz-110\", \"vatPct\": 21,\n            \"base\": 10330.58, \"tax\": 2169.42, \"total\": 12500.00,\n            \"isReversePair\": false\n          }\n        ],\n        \"totals\": {\n          \"totalBase\": 10330.58,\n          \"totalVat\": 2169.42,\n          \"totalAmount\": 12500.00,\n          \"totalRounding\": 0.00\n        },\n        \"attachments\": [\n          {\n            \"filename\": \"faktura-001.pdf\",\n            \"mimeType\": \"application/pdf\",\n            \"kind\": \"original\"\n          }\n        ]\n      }\n    }\n  ]\n}\n\nTop-level pole \"overall_confidence\", \"message_classification\" a \"documents\" vracej VŽDY, i když je documents prázdný seznam. Pokud žádný doklad neexistuje:\n\n{\"overall_confidence\": 1.0, \"message_classification\": {\"primary_type\": \"other\", \"confidence\": 0.95}, \"documents\": []}\n\nNyní analyzuj přiložené dokumenty a vrať JSON.",
+    "prompt_template": "Jsi asistent pro zpracování došlé pošty českých firem. Tvým úkolem je analyzovat přílohy e-mailové zprávy a extrahovat z nich strukturovaná data o přijatých dokladech (faktury, dobropisy) a trvalých dokumentech firmy (smlouvy, pojistky, nabídky, revize, úřední písemnosti).\n\nKONTEXT ZPRÁVY:\n- Předmět: {{ message.subject }}\n- Odesílatel: {{ message.sender_email }}{% if message.sender_name %} ({{ message.sender_name }}){% endif %}\n- Tělo zprávy: {{ message.body_plain }}\n\nPŘÍLOHY ({{ attachments|length }}):\n{% for att in attachments %}- #{{ att.ndx }}: {{ att.filename }} ({{ att.mime_type }}, {{ att.size_human }})\n{% endfor %}\n\nÚKOL:\n1) TRIAGE: Nejprve rozhodni, čím zpráva JAKO CELEK primárně je. Výsledek vrať v top-level poli \"message_classification\" s \"primary_type\" a \"confidence\" (0.0–1.0). Hodnoty \"primary_type\":\n   - \"invoiceReceived\" — přijatá faktura nebo dobropis\n   - \"contract\" — smlouva (kupní, nájemní, servisní, o dílo, licenční…)\n   - \"insurance\" — pojistná smlouva, pojistka, dodatek pojištění\n   - \"quotation\" — cenová nabídka\n   - \"certificate\" — revize, certifikát, protokol o kontrole či zkoušce\n   - \"official\" — úřední písemnost (úřady, soudy, finanční správa, datovka přeposlaná mailem)\n   - \"other\" — cokoli jiného (newsletter, obchodní sdělení, potvrzení objednávky, neúplné podklady…)\n2) EXTRAKCE DOKLADŮ: Pro každou přílohu, která je přijatou fakturou (invoiceReceived) nebo dobropisem (creditNote), extrahuj všechna pole, která jsi schopen identifikovat, do kanonické struktury \"shpd.docs.document.v1\".\n3) EXTRAKCE DOKUMENTŮ: Pro každou přílohu, která je smlouvou (contract), pojistkou (insurance), cenovou nabídkou (quotation), revizí/certifikátem (certificate) nebo úřední písemností (official), extrahuj data do struktury \"shpd.registry.document.v1\" (viz níže).\n\nPRAVIDLA:\n- Pole, která nelze určit, VYNECHEJ (neuhaduj, neimprovizuj). Lepší chybějící pole než špatná hodnota.\n- Objekty (\"vat\", \"payment\", \"customer\", …), které nelze určit, VYNECHEJ nebo vrať null — nikdy nevracej prázdné objekty s vymyšleným obsahem.\n- Do struktury nikdy nepřidávej klíče, které nejsou v ukázce níže (schéma má additionalProperties: false — neznámý klíč znamená odmítnutí celého výstupu).\n- attachments[].kind smí být POUZE jedna z hodnot: \"original\" (hlavní dokument), \"scan\" (sken/foto), \"supplement\" (doprovodný materiál), \"preview\" (náhled), \"structured\" (strojově čitelný formát — ISDOC, XML, UBL). Žádnou jinou hodnotu nevymýšlej.\n- Identifikátory (IČO, DIČ, VAT ID, IBAN, EAN, SKU) přebírej beze změny, pokud je vidíš na dokladu.\n- Datumy formátuj jako ISO 8601 (YYYY-MM-DD).\n- Měny jako ISO 4217 uppercase (\"CZK\", \"EUR\").\n- Země jako ISO 3166-1 alpha-2 lowercase (\"cz\", \"sk\", \"de\").\n- selfParty je vždy \"customer\" (jsme příjemce dokladu).\n- source.kind je vždy \"aiExtraction\".\n- source.confidence je tvoje jistota kvalitou extrakce 0.0–1.0.\n- source.promptVersion je \"v3.0.0\".\n- Do \"documents\" patří jen podporované typy (invoiceReceived, creditNote, contract, insurance, quotation, certificate, official) — NIKDY neemituj dokument s doc_type \"other\". Přílohy jiných typů do \"documents\" nedávej.\n- Pokud žádná příloha není dokladem ani dokumentem, vrať \"documents\": [] a klasifikaci \"other\".\n\nPRAVIDLA PRO REGISTRY DOKUMENTY (contract/insurance/quotation/certificate/official):\n- \"extracted_json\" má strukturu \"shpd.registry.document.v1\": povinné klíče \"schema\", \"docType\", \"title\"; volitelné \"summary\", \"party\", \"kindFields\", \"binderSuggestion\".\n- \"title\" je krátký lidský název dokumentu (např. \"Pojistná smlouva — flotila vozidel\"), NE název souboru.\n- \"summary\" jsou 2–3 věty česky: co dokument je, co z něj plyne, na co si dát pozor (lhůty, výpovědní doba, automatická prolongace…).\n- \"party\" je protistrana dokumentu: {\"name\", \"companyId\", \"email\"} — companyId je IČO, email kontaktní e-mail protistrany, pokud je uveden.\n- \"kindFields\" obsahuje POUZE následující klíče dle \"docType\" — názvy přebírej PŘESNĚ, nikdy je nepřejmenovávej ani nepřidávej jiné (additionalProperties: false):\n  - contract: \"counterparty\", \"subject\", \"signedDate\", \"contractNumber\", \"validFrom\", \"validTo\", \"noticePeriod\"\n  - insurance: \"insurer\", \"policyNumber\", \"insuredSubject\", \"validFrom\", \"validTo\", \"annualPremium\", \"currency\"\n  - quotation: \"supplier\", \"subject\", \"totalAmount\", \"currency\", \"validUntil\"\n  - certificate: \"subject\", \"issuer\", \"issuedDate\", \"validTo\"\n  - official: \"authority\", \"refNumber\", \"receivedDate\", \"deadline\"\n- Klíče kindFields, jejichž hodnotu v dokumentu nevidíš, VYNECH. Datumy ISO 8601, částky jako čísla.\n- \"noticePeriod\" je výpovědní doba jako text (např. \"3 měsíce\"); \"deadline\" je lhůta k úkonu z úřední písemnosti.\n- \"binderSuggestion\" je volitelný obecný název šanonu, kam by dokument logicky patřil (např. \"Pojištění\", \"Smlouvy\", \"Revize\") — krátké obecné jméno, žádné dlouhé popisy.\n\nVRAŤ POUZE JSON v této struktuře (žádný úvodní text, žádné markdown bloky):\n\n{\n  \"overall_confidence\": 0.92,\n  \"message_classification\": {\n    \"primary_type\": \"invoiceReceived\",\n    \"confidence\": 0.97\n  },\n  \"documents\": [\n    {\n      \"doc_type\": \"invoiceReceived\",\n      \"source_attachment_ndxs\": [123],\n      \"confidence\": 0.95,\n      \"extracted_json\": {\n        \"format\": \"shpd.docs.document\",\n        \"formatVersion\": \"1.0\",\n        \"source\": {\n          \"kind\": \"aiExtraction\",\n          \"extractedAt\": \"<ISO timestamp from current time>\",\n          \"confidence\": 0.95,\n          \"promptVersion\": \"v3.0.0\"\n        },\n        \"docType\": \"invoiceReceived\",\n        \"docNumber\": \"<supplier's invoice number>\",\n        \"docText\": \"<short description>\",\n        \"selfParty\": \"customer\",\n        \"supplier\": {\n          \"name\": \"Dodavatel s.r.o.\",\n          \"country\": \"cz\",\n          \"companyId\": \"12345678\",\n          \"taxId\": \"CZ12345678\",\n          \"vatId\": \"CZ12345678\",\n          \"courtRegistration\": \"C 12345 vedená u Městského soudu v Praze\",\n          \"address\": {\n            \"street\": \"Hlavní\", \"houseNumber\": \"1\",\n            \"city\": \"Praha\", \"zip\": \"11000\", \"country\": \"cz\"\n          },\n          \"contact\": {\"email\": \"...\", \"phone\": \"...\"},\n          \"bankAccount\": {\n            \"accountNumber\": \"1234567890/0100\",\n            \"iban\": \"CZ65...\", \"bic\": \"...\",\n            \"currency\": \"CZK\"\n          }\n        },\n        \"customer\": null,\n        \"dates\": {\n          \"issueDate\": \"2026-04-15\",\n          \"dueDate\": \"2026-04-29\",\n          \"accountingDate\": \"2026-04-15\",\n          \"taxPointDate\": \"2026-04-15\",\n          \"vatObligationDate\": \"2026-04-15\"\n        },\n        \"currency\": \"CZK\",\n        \"exchangeRate\": null,\n        \"vat\": {\n          \"mode\": \"fromBase\",\n          \"place\": \"domestic\",\n          \"registrationCountry\": \"cz\"\n        },\n        \"payment\": {\n          \"method\": \"bankTransfer\",\n          \"paymentReference\": \"...\",\n          \"specificSymbol\": null,\n          \"constantSymbol\": null\n        },\n        \"notes\": {\n          \"internal\": null,\n          \"onDocument\": \"...\"\n        },\n        \"rows\": [\n          {\n            \"rowKind\": \"item\",\n            \"orderPos\": 1,\n            \"item\": {\n              \"supplierCode\": \"KONZ-001\",\n              \"name\": \"Konzultace\",\n              \"description\": \"Hodinová sazba\"\n            },\n            \"unit\": \"h\",\n            \"quantity\": 10,\n            \"unitPrice\": 1033.06,\n            \"totalPrice\": 10330.58,\n            \"priceCalcMode\": \"fromUnitPrice\",\n            \"discountPct\": null,\n            \"discountAmount\": null,\n            \"vat\": {\"code\": \"cz-110\", \"pct\": 21}\n          }\n        ],\n        \"vatRecap\": [\n          {\n            \"vatCode\": \"cz-110\", \"vatPct\": 21,\n            \"base\": 10330.58, \"tax\": 2169.42, \"total\": 12500.00,\n            \"isReversePair\": false\n          }\n        ],\n        \"totals\": {\n          \"totalBase\": 10330.58,\n          \"totalVat\": 2169.42,\n          \"totalAmount\": 12500.00,\n          \"totalRounding\": 0.00\n        },\n        \"attachments\": [\n          {\n            \"filename\": \"faktura-001.pdf\",\n            \"mimeType\": \"application/pdf\",\n            \"kind\": \"original\"\n          }\n        ]\n      }\n    }\n  ]\n}\n\nUkázka registry dokumentu v \"documents\" (pojistná smlouva; stejný tvar mají contract/quotation/certificate/official — liší se jen klíči kindFields dle výčtu výše):\n\n{\n  \"doc_type\": \"insurance\",\n  \"source_attachment_ndxs\": [124],\n  \"confidence\": 0.9,\n  \"extracted_json\": {\n    \"schema\": \"shpd.registry.document.v1\",\n    \"docType\": \"insurance\",\n    \"title\": \"Pojistná smlouva — flotila vozidel\",\n    \"summary\": \"Pojištění vozového parku u Pojišťovny ABC. Platí do 31. 12. 2026, roční pojistné 45 000 Kč. Pozor na automatickou prolongaci, výpověď nejpozději 6 týdnů před koncem období.\",\n    \"party\": {\"name\": \"Pojišťovna ABC a.s.\", \"companyId\": \"12345678\", \"email\": \"info@abc.cz\"},\n    \"kindFields\": {\n      \"insurer\": \"Pojišťovna ABC a.s.\",\n      \"policyNumber\": \"POJ-2026-0042\",\n      \"insuredSubject\": \"Vozový park — 5 vozidel\",\n      \"validFrom\": \"2026-01-01\",\n      \"validTo\": \"2026-12-31\",\n      \"annualPremium\": 45000.0,\n      \"currency\": \"CZK\"\n    },\n    \"binderSuggestion\": \"Pojištění\"\n  }\n}\n\nTop-level pole \"overall_confidence\", \"message_classification\" a \"documents\" vracej VŽDY, i když je documents prázdný seznam. Pokud žádný doklad ani dokument neexistuje:\n\n{\"overall_confidence\": 1.0, \"message_classification\": {\"primary_type\": \"other\", \"confidence\": 0.95}, \"documents\": []}\n\nNyní analyzuj přiložené dokumenty a vrať JSON.",
     "output_schema": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -54,6 +64,11 @@
                         "type": "string",
                         "enum": [
                             "invoiceReceived",
+                            "contract",
+                            "insurance",
+                            "quotation",
+                            "certificate",
+                            "official",
                             "other"
                         ]
                     },
@@ -80,7 +95,12 @@
                             "type": "string",
                             "enum": [
                                 "invoiceReceived",
-                                "creditNote"
+                                "creditNote",
+                                "contract",
+                                "insurance",
+                                "quotation",
+                                "certificate",
+                                "official"
                             ]
                         },
                         "source_attachment_ndxs": {
@@ -96,551 +116,158 @@
                             "maximum": 1
                         },
                         "extracted_json": {
-                            "$schema": "https://json-schema.org/draft/2020-12/schema",
-                            "$id": "https://shipard.cz/schemas/shpd.docs.document.v1.json",
-                            "title": "Shipard canonical document v1",
-                            "type": "object",
-                            "additionalProperties": false,
-                            "required": [
-                                "format",
-                                "formatVersion",
-                                "docType"
-                            ],
-                            "properties": {
-                                "format": {
-                                    "const": "shpd.docs.document"
-                                },
-                                "formatVersion": {
-                                    "type": "string",
-                                    "pattern": "^1\\.[0-9]+$"
-                                },
-                                "source": {
+                            "oneOf": [
+                                {
+                                    "$schema": "https://json-schema.org/draft/2020-12/schema",
+                                    "$id": "https://shipard.cz/schemas/shpd.docs.document.v1.json",
+                                    "title": "Shipard canonical document v1",
                                     "type": "object",
                                     "additionalProperties": false,
-                                    "properties": {
-                                        "kind": {
-                                            "type": "string"
-                                        },
-                                        "extractedAt": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ],
-                                            "format": "date-time"
-                                        },
-                                        "confidence": {
-                                            "type": [
-                                                "number",
-                                                "null"
-                                            ],
-                                            "minimum": 0,
-                                            "maximum": 1
-                                        },
-                                        "mailMessage": {
-                                            "type": [
-                                                "integer",
-                                                "null"
-                                            ]
-                                        },
-                                        "extractedDoc": {
-                                            "type": [
-                                                "integer",
-                                                "null"
-                                            ]
-                                        },
-                                        "promptVersion": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
-                                        },
-                                        "raw": {
-                                            "type": [
-                                                "object",
-                                                "null"
-                                            ],
-                                            "additionalProperties": true
-                                        }
-                                    }
-                                },
-                                "docType": {
-                                    "type": "string",
-                                    "minLength": 1
-                                },
-                                "docNumber": {
-                                    "type": [
-                                        "string",
-                                        "null"
-                                    ]
-                                },
-                                "docText": {
-                                    "type": [
-                                        "string",
-                                        "null"
-                                    ]
-                                },
-                                "selfParty": {
-                                    "enum": [
-                                        "supplier",
-                                        "customer",
-                                        null
-                                    ]
-                                },
-                                "supplier": {
-                                    "$ref": "#/$defs/Party"
-                                },
-                                "customer": {
-                                    "$ref": "#/$defs/Party"
-                                },
-                                "dates": {
-                                    "type": "object",
-                                    "additionalProperties": false,
-                                    "properties": {
-                                        "issueDate": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ],
-                                            "format": "date"
-                                        },
-                                        "dueDate": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ],
-                                            "format": "date"
-                                        },
-                                        "accountingDate": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ],
-                                            "format": "date"
-                                        },
-                                        "taxPointDate": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ],
-                                            "format": "date"
-                                        },
-                                        "vatObligationDate": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ],
-                                            "format": "date"
-                                        },
-                                        "periodFrom": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ],
-                                            "format": "date"
-                                        },
-                                        "periodTo": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ],
-                                            "format": "date"
-                                        }
-                                    }
-                                },
-                                "currency": {
-                                    "type": [
-                                        "string",
-                                        "null"
+                                    "required": [
+                                        "format",
+                                        "formatVersion",
+                                        "docType"
                                     ],
-                                    "pattern": "^[A-Z]{3}$"
-                                },
-                                "exchangeRate": {
-                                    "type": [
-                                        "number",
-                                        "null"
-                                    ],
-                                    "exclusiveMinimum": 0
-                                },
-                                "vat": {
-                                    "type": [
-                                        "object",
-                                        "null"
-                                    ],
-                                    "additionalProperties": false,
                                     "properties": {
-                                        "mode": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
+                                        "format": {
+                                            "const": "shpd.docs.document"
                                         },
-                                        "place": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
-                                        },
-                                        "registrationCountry": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ],
-                                            "pattern": "^[A-Za-z]{2}$"
-                                        }
-                                    }
-                                },
-                                "payment": {
-                                    "type": "object",
-                                    "additionalProperties": false,
-                                    "properties": {
-                                        "method": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
-                                        },
-                                        "paymentReference": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ],
-                                            "maxLength": 35
-                                        },
-                                        "specificSymbol": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
-                                        },
-                                        "constantSymbol": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
-                                        }
-                                    }
-                                },
-                                "notes": {
-                                    "type": "object",
-                                    "additionalProperties": false,
-                                    "properties": {
-                                        "internal": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
-                                        },
-                                        "onDocument": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
-                                        }
-                                    }
-                                },
-                                "rows": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/$defs/Row"
-                                    }
-                                },
-                                "vatRecap": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/$defs/VatRecapEntry"
-                                    }
-                                },
-                                "totals": {
-                                    "type": "object",
-                                    "additionalProperties": false,
-                                    "properties": {
-                                        "totalBase": {
-                                            "type": [
-                                                "number",
-                                                "null"
-                                            ]
-                                        },
-                                        "totalVat": {
-                                            "type": [
-                                                "number",
-                                                "null"
-                                            ]
-                                        },
-                                        "totalAmount": {
-                                            "type": [
-                                                "number",
-                                                "null"
-                                            ]
-                                        },
-                                        "totalRounding": {
-                                            "type": [
-                                                "number",
-                                                "null"
-                                            ]
-                                        }
-                                    }
-                                },
-                                "attachments": {
-                                    "type": "array",
-                                    "items": {
-                                        "$ref": "#/$defs/Attachment"
-                                    }
-                                },
-                                "_resolve": {
-                                    "type": "object",
-                                    "additionalProperties": true
-                                },
-                                "applyOptions": {
-                                    "type": "object",
-                                    "additionalProperties": false,
-                                    "properties": {
-                                        "targetDocState": {
-                                            "type": "integer",
-                                            "enum": [
-                                                10,
-                                                20,
-                                                40,
-                                                30
-                                            ]
-                                        },
-                                        "autoCreateMode": {
-                                            "enum": [
-                                                "strict",
-                                                "safe",
-                                                "liberal"
-                                            ]
-                                        },
-                                        "numberSeriesCode": {
+                                        "formatVersion": {
                                             "type": "string",
-                                            "minLength": 1,
-                                            "description": "Výběr číselné řady v rámci doc_type (%C = docs_core_number_series.doc_number_code). Bez něj platí stávající chování (první aktivní řada). Neznámý kód = apply selže (number_series_not_found), žádný tichý fallback."
+                                            "pattern": "^1\\.[0-9]+$"
                                         },
-                                        "createMissingEntities": {
-                                            "type": "boolean"
-                                        },
-                                        "rejectOnIssues": {
-                                            "type": "array",
-                                            "items": {
-                                                "enum": [
-                                                    "error",
-                                                    "warning"
-                                                ]
+                                        "source": {
+                                            "type": "object",
+                                            "additionalProperties": false,
+                                            "properties": {
+                                                "kind": {
+                                                    "type": "string"
+                                                },
+                                                "extractedAt": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ],
+                                                    "format": "date-time"
+                                                },
+                                                "confidence": {
+                                                    "type": [
+                                                        "number",
+                                                        "null"
+                                                    ],
+                                                    "minimum": 0,
+                                                    "maximum": 1
+                                                },
+                                                "mailMessage": {
+                                                    "type": [
+                                                        "integer",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "extractedDoc": {
+                                                    "type": [
+                                                        "integer",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "promptVersion": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "raw": {
+                                                    "type": [
+                                                        "object",
+                                                        "null"
+                                                    ],
+                                                    "additionalProperties": true
+                                                }
                                             }
                                         },
-                                        "importNumber": {
+                                        "docType": {
+                                            "type": "string",
+                                            "minLength": 1
+                                        },
+                                        "docNumber": {
+                                            "type": [
+                                                "string",
+                                                "null"
+                                            ]
+                                        },
+                                        "docText": {
+                                            "type": [
+                                                "string",
+                                                "null"
+                                            ]
+                                        },
+                                        "selfParty": {
+                                            "enum": [
+                                                "supplier",
+                                                "customer",
+                                                null
+                                            ]
+                                        },
+                                        "supplier": {
+                                            "$ref": "#/$defs/Party"
+                                        },
+                                        "customer": {
+                                            "$ref": "#/$defs/Party"
+                                        },
+                                        "dates": {
                                             "type": "object",
-                                            "description": "Import mode: force the document's own number + sequence instead of generating from the series counter. Used by legacy migration. When present, DocDocument skips assignDocumentNumber and syncs the counter to GREATEST(last_assigned, sequenceNumber).",
+                                            "additionalProperties": false,
                                             "properties": {
-                                                "docNumber": {
-                                                    "type": "string",
-                                                    "minLength": 1,
-                                                    "description": "The document's own number to store verbatim in doc_number."
+                                                "issueDate": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ],
+                                                    "format": "date"
                                                 },
-                                                "sequenceNumber": {
-                                                    "type": "integer",
-                                                    "minimum": 1,
-                                                    "description": "Sequence-in-series, used for counter sync and payment_reference default."
+                                                "dueDate": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ],
+                                                    "format": "date"
+                                                },
+                                                "accountingDate": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ],
+                                                    "format": "date"
+                                                },
+                                                "taxPointDate": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ],
+                                                    "format": "date"
+                                                },
+                                                "vatObligationDate": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ],
+                                                    "format": "date"
+                                                },
+                                                "periodFrom": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ],
+                                                    "format": "date"
+                                                },
+                                                "periodTo": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ],
+                                                    "format": "date"
                                                 }
-                                            },
-                                            "required": [
-                                                "docNumber",
-                                                "sequenceNumber"
-                                            ],
-                                            "additionalProperties": false
-                                        },
-                                        "importOwnBankAccount": {
-                                            "type": [
-                                                "integer",
-                                                "null"
-                                            ],
-                                            "minimum": 1,
-                                            "description": "Import mode: id of our own bank account (economy_codebooks_bank_accounts) to set on the document. For issued invoices confirmed at state 20+, bank_account is required and cannot be carried by the standard self-party flow; the importer resolves it and passes it here."
-                                        }
-                                    }
-                                },
-                                "savedDocId": {
-                                    "type": [
-                                        "integer",
-                                        "null"
-                                    ]
-                                }
-                            },
-                            "$defs": {
-                                "Party": {
-                                    "type": [
-                                        "object",
-                                        "null"
-                                    ],
-                                    "additionalProperties": false,
-                                    "properties": {
-                                        "name": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
-                                        },
-                                        "country": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
-                                        },
-                                        "companyId": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
-                                        },
-                                        "taxId": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
-                                        },
-                                        "vatId": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
-                                        },
-                                        "courtRegistration": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
-                                        },
-                                        "address": {
-                                            "$ref": "#/$defs/Address"
-                                        },
-                                        "contact": {
-                                            "$ref": "#/$defs/Contact"
-                                        },
-                                        "bankAccount": {
-                                            "$ref": "#/$defs/BankAccount"
-                                        },
-                                        "paymentTermDays": {
-                                            "type": [
-                                                "integer",
-                                                "null"
-                                            ],
-                                            "minimum": 0
-                                        }
-                                    }
-                                },
-                                "Address": {
-                                    "type": [
-                                        "object",
-                                        "null"
-                                    ],
-                                    "additionalProperties": false,
-                                    "properties": {
-                                        "street": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
-                                        },
-                                        "houseNumber": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
-                                        },
-                                        "city": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
-                                        },
-                                        "cityPart": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
-                                        },
-                                        "zip": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
-                                        },
-                                        "country": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
-                                        },
-                                        "registryCode": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
-                                        },
-                                        "displayLine": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
-                                        },
-                                        "displayBlock": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
-                                        }
-                                    }
-                                },
-                                "Contact": {
-                                    "type": [
-                                        "object",
-                                        "null"
-                                    ],
-                                    "additionalProperties": false,
-                                    "properties": {
-                                        "email": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
-                                        },
-                                        "phone": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
-                                        },
-                                        "web": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
-                                        }
-                                    }
-                                },
-                                "BankAccount": {
-                                    "type": [
-                                        "object",
-                                        "null"
-                                    ],
-                                    "additionalProperties": false,
-                                    "properties": {
-                                        "accountNumber": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
-                                        },
-                                        "iban": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
-                                        },
-                                        "bic": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
+                                            }
                                         },
                                         "currency": {
                                             "type": [
@@ -648,323 +275,1076 @@
                                                 "null"
                                             ],
                                             "pattern": "^[A-Z]{3}$"
-                                        }
-                                    }
-                                },
-                                "Row": {
-                                    "type": "object",
-                                    "additionalProperties": false,
-                                    "properties": {
-                                        "rowKind": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
                                         },
-                                        "operation": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
-                                        },
-                                        "orderPos": {
-                                            "type": [
-                                                "integer",
-                                                "null"
-                                            ]
-                                        },
-                                        "item": {
-                                            "$ref": "#/$defs/RowItem"
-                                        },
-                                        "unit": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
-                                        },
-                                        "quantity": {
+                                        "exchangeRate": {
                                             "type": [
                                                 "number",
                                                 "null"
-                                            ]
-                                        },
-                                        "unitPrice": {
-                                            "type": [
-                                                "number",
-                                                "null"
-                                            ]
-                                        },
-                                        "totalPrice": {
-                                            "type": [
-                                                "number",
-                                                "null"
-                                            ]
-                                        },
-                                        "priceCalcMode": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
-                                        },
-                                        "discountPct": {
-                                            "type": [
-                                                "number",
-                                                "null"
-                                            ]
-                                        },
-                                        "discountAmount": {
-                                            "type": [
-                                                "number",
-                                                "null"
-                                            ]
+                                            ],
+                                            "exclusiveMinimum": 0
                                         },
                                         "vat": {
-                                            "$ref": "#/$defs/RowVat"
-                                        },
-                                        "computed": {
-                                            "$ref": "#/$defs/RowComputed"
-                                        },
-                                        "description": {
                                             "type": [
-                                                "string",
-                                                "null"
-                                            ]
-                                        },
-                                        "account": {
-                                            "type": [
-                                                "string",
+                                                "object",
                                                 "null"
                                             ],
-                                            "pattern": "^[0-9]+$"
+                                            "additionalProperties": false,
+                                            "properties": {
+                                                "mode": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "place": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "registrationCountry": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ],
+                                                    "pattern": "^[A-Za-z]{2}$"
+                                                }
+                                            }
                                         },
-                                        "accSide": {
-                                            "enum": [
-                                                "debit",
-                                                "credit",
-                                                null
-                                            ]
+                                        "payment": {
+                                            "type": "object",
+                                            "additionalProperties": false,
+                                            "properties": {
+                                                "method": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "paymentReference": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ],
+                                                    "maxLength": 35
+                                                },
+                                                "specificSymbol": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "constantSymbol": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                }
+                                            }
                                         },
-                                        "paymentReference": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ],
-                                            "maxLength": 35
+                                        "notes": {
+                                            "type": "object",
+                                            "additionalProperties": false,
+                                            "properties": {
+                                                "internal": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "onDocument": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                }
+                                            }
                                         },
-                                        "specificSymbol": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ],
-                                            "maxLength": 20
+                                        "rows": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/$defs/Row"
+                                            }
                                         },
-                                        "constantSymbol": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ],
-                                            "maxLength": 10
+                                        "vatRecap": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/$defs/VatRecapEntry"
+                                            }
                                         },
-                                        "dueDate": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ],
-                                            "format": "date"
-                                        }
-                                    }
-                                },
-                                "RowItem": {
-                                    "type": [
-                                        "object",
-                                        "null"
-                                    ],
-                                    "additionalProperties": false,
-                                    "properties": {
-                                        "ourCode": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
+                                        "totals": {
+                                            "type": "object",
+                                            "additionalProperties": false,
+                                            "properties": {
+                                                "totalBase": {
+                                                    "type": [
+                                                        "number",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "totalVat": {
+                                                    "type": [
+                                                        "number",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "totalAmount": {
+                                                    "type": [
+                                                        "number",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "totalRounding": {
+                                                    "type": [
+                                                        "number",
+                                                        "null"
+                                                    ]
+                                                }
+                                            }
                                         },
-                                        "supplierCode": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
+                                        "attachments": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/$defs/Attachment"
+                                            }
                                         },
-                                        "sku": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
+                                        "_resolve": {
+                                            "type": "object",
+                                            "additionalProperties": true
                                         },
-                                        "ean": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
+                                        "applyOptions": {
+                                            "type": "object",
+                                            "additionalProperties": false,
+                                            "properties": {
+                                                "targetDocState": {
+                                                    "type": "integer",
+                                                    "enum": [
+                                                        10,
+                                                        20,
+                                                        40,
+                                                        30
+                                                    ]
+                                                },
+                                                "autoCreateMode": {
+                                                    "enum": [
+                                                        "strict",
+                                                        "safe",
+                                                        "liberal"
+                                                    ]
+                                                },
+                                                "numberSeriesCode": {
+                                                    "type": "string",
+                                                    "minLength": 1,
+                                                    "description": "Výběr číselné řady v rámci doc_type (%C = docs_core_number_series.doc_number_code). Bez něj platí stávající chování (první aktivní řada). Neznámý kód = apply selže (number_series_not_found), žádný tichý fallback."
+                                                },
+                                                "createMissingEntities": {
+                                                    "type": "boolean"
+                                                },
+                                                "rejectOnIssues": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "enum": [
+                                                            "error",
+                                                            "warning"
+                                                        ]
+                                                    }
+                                                },
+                                                "importNumber": {
+                                                    "type": "object",
+                                                    "description": "Import mode: force the document's own number + sequence instead of generating from the series counter. Used by legacy migration. When present, DocDocument skips assignDocumentNumber and syncs the counter to GREATEST(last_assigned, sequenceNumber).",
+                                                    "properties": {
+                                                        "docNumber": {
+                                                            "type": "string",
+                                                            "minLength": 1,
+                                                            "description": "The document's own number to store verbatim in doc_number."
+                                                        },
+                                                        "sequenceNumber": {
+                                                            "type": "integer",
+                                                            "minimum": 1,
+                                                            "description": "Sequence-in-series, used for counter sync and payment_reference default."
+                                                        }
+                                                    },
+                                                    "required": [
+                                                        "docNumber",
+                                                        "sequenceNumber"
+                                                    ],
+                                                    "additionalProperties": false
+                                                },
+                                                "importOwnBankAccount": {
+                                                    "type": [
+                                                        "integer",
+                                                        "null"
+                                                    ],
+                                                    "minimum": 1,
+                                                    "description": "Import mode: id of our own bank account (economy_codebooks_bank_accounts) to set on the document. For issued invoices confirmed at state 20+, bank_account is required and cannot be carried by the standard self-party flow; the importer resolves it and passes it here."
+                                                }
+                                            }
                                         },
-                                        "name": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
-                                        },
-                                        "description": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
-                                        }
-                                    }
-                                },
-                                "RowVat": {
-                                    "type": [
-                                        "object",
-                                        "null"
-                                    ],
-                                    "additionalProperties": false,
-                                    "properties": {
-                                        "code": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
-                                        },
-                                        "pct": {
-                                            "type": [
-                                                "number",
-                                                "null"
-                                            ]
-                                        }
-                                    }
-                                },
-                                "RowComputed": {
-                                    "type": [
-                                        "object",
-                                        "null"
-                                    ],
-                                    "additionalProperties": false,
-                                    "properties": {
-                                        "vatBase": {
-                                            "type": [
-                                                "number",
-                                                "null"
-                                            ]
-                                        },
-                                        "vatAmount": {
-                                            "type": [
-                                                "number",
-                                                "null"
-                                            ]
-                                        },
-                                        "vatTotal": {
-                                            "type": [
-                                                "number",
-                                                "null"
-                                            ]
-                                        }
-                                    }
-                                },
-                                "VatRecapEntry": {
-                                    "type": "object",
-                                    "additionalProperties": false,
-                                    "properties": {
-                                        "vatCode": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
-                                        },
-                                        "vatPct": {
-                                            "type": [
-                                                "number",
-                                                "null"
-                                            ]
-                                        },
-                                        "base": {
-                                            "type": [
-                                                "number",
-                                                "null"
-                                            ]
-                                        },
-                                        "tax": {
-                                            "type": [
-                                                "number",
-                                                "null"
-                                            ]
-                                        },
-                                        "total": {
-                                            "type": [
-                                                "number",
-                                                "null"
-                                            ]
-                                        },
-                                        "isReversePair": {
-                                            "type": [
-                                                "boolean",
-                                                "null"
-                                            ]
-                                        }
-                                    }
-                                },
-                                "Attachment": {
-                                    "type": "object",
-                                    "additionalProperties": false,
-                                    "properties": {
-                                        "filename": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
-                                        },
-                                        "mimeType": {
-                                            "type": [
-                                                "string",
-                                                "null"
-                                            ]
-                                        },
-                                        "size": {
+                                        "savedDocId": {
                                             "type": [
                                                 "integer",
                                                 "null"
-                                            ],
-                                            "minimum": 0
-                                        },
-                                        "sha256": {
+                                            ]
+                                        }
+                                    },
+                                    "$defs": {
+                                        "Party": {
                                             "type": [
-                                                "string",
+                                                "object",
                                                 "null"
                                             ],
-                                            "pattern": "^[a-fA-F0-9]{64}$"
+                                            "additionalProperties": false,
+                                            "properties": {
+                                                "name": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "country": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "companyId": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "taxId": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "vatId": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "courtRegistration": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "address": {
+                                                    "$ref": "#/$defs/Address"
+                                                },
+                                                "contact": {
+                                                    "$ref": "#/$defs/Contact"
+                                                },
+                                                "bankAccount": {
+                                                    "$ref": "#/$defs/BankAccount"
+                                                },
+                                                "paymentTermDays": {
+                                                    "type": [
+                                                        "integer",
+                                                        "null"
+                                                    ],
+                                                    "minimum": 0
+                                                }
+                                            }
                                         },
-                                        "kind": {
+                                        "Address": {
+                                            "type": [
+                                                "object",
+                                                "null"
+                                            ],
+                                            "additionalProperties": false,
+                                            "properties": {
+                                                "street": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "houseNumber": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "city": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "cityPart": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "zip": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "country": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "registryCode": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "displayLine": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "displayBlock": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                }
+                                            }
+                                        },
+                                        "Contact": {
+                                            "type": [
+                                                "object",
+                                                "null"
+                                            ],
+                                            "additionalProperties": false,
+                                            "properties": {
+                                                "email": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "phone": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "web": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                }
+                                            }
+                                        },
+                                        "BankAccount": {
+                                            "type": [
+                                                "object",
+                                                "null"
+                                            ],
+                                            "additionalProperties": false,
+                                            "properties": {
+                                                "accountNumber": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "iban": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "bic": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "currency": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ],
+                                                    "pattern": "^[A-Z]{3}$"
+                                                }
+                                            }
+                                        },
+                                        "Row": {
+                                            "type": "object",
+                                            "additionalProperties": false,
+                                            "properties": {
+                                                "rowKind": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "operation": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "orderPos": {
+                                                    "type": [
+                                                        "integer",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "item": {
+                                                    "$ref": "#/$defs/RowItem"
+                                                },
+                                                "unit": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "quantity": {
+                                                    "type": [
+                                                        "number",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "unitPrice": {
+                                                    "type": [
+                                                        "number",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "totalPrice": {
+                                                    "type": [
+                                                        "number",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "priceCalcMode": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "discountPct": {
+                                                    "type": [
+                                                        "number",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "discountAmount": {
+                                                    "type": [
+                                                        "number",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "vat": {
+                                                    "$ref": "#/$defs/RowVat"
+                                                },
+                                                "computed": {
+                                                    "$ref": "#/$defs/RowComputed"
+                                                },
+                                                "description": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "account": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ],
+                                                    "pattern": "^[0-9]+$"
+                                                },
+                                                "accSide": {
+                                                    "enum": [
+                                                        "debit",
+                                                        "credit",
+                                                        null
+                                                    ]
+                                                },
+                                                "paymentReference": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ],
+                                                    "maxLength": 35
+                                                },
+                                                "specificSymbol": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ],
+                                                    "maxLength": 20
+                                                },
+                                                "constantSymbol": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ],
+                                                    "maxLength": 10
+                                                },
+                                                "dueDate": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ],
+                                                    "format": "date"
+                                                }
+                                            }
+                                        },
+                                        "RowItem": {
+                                            "type": [
+                                                "object",
+                                                "null"
+                                            ],
+                                            "additionalProperties": false,
+                                            "properties": {
+                                                "ourCode": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "supplierCode": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "sku": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "ean": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "name": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "description": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                }
+                                            }
+                                        },
+                                        "RowVat": {
+                                            "type": [
+                                                "object",
+                                                "null"
+                                            ],
+                                            "additionalProperties": false,
+                                            "properties": {
+                                                "code": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "pct": {
+                                                    "type": [
+                                                        "number",
+                                                        "null"
+                                                    ]
+                                                }
+                                            }
+                                        },
+                                        "RowComputed": {
+                                            "type": [
+                                                "object",
+                                                "null"
+                                            ],
+                                            "additionalProperties": false,
+                                            "properties": {
+                                                "vatBase": {
+                                                    "type": [
+                                                        "number",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "vatAmount": {
+                                                    "type": [
+                                                        "number",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "vatTotal": {
+                                                    "type": [
+                                                        "number",
+                                                        "null"
+                                                    ]
+                                                }
+                                            }
+                                        },
+                                        "VatRecapEntry": {
+                                            "type": "object",
+                                            "additionalProperties": false,
+                                            "properties": {
+                                                "vatCode": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "vatPct": {
+                                                    "type": [
+                                                        "number",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "base": {
+                                                    "type": [
+                                                        "number",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "tax": {
+                                                    "type": [
+                                                        "number",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "total": {
+                                                    "type": [
+                                                        "number",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "isReversePair": {
+                                                    "type": [
+                                                        "boolean",
+                                                        "null"
+                                                    ]
+                                                }
+                                            }
+                                        },
+                                        "Attachment": {
+                                            "type": "object",
+                                            "additionalProperties": false,
+                                            "properties": {
+                                                "filename": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "mimeType": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "size": {
+                                                    "type": [
+                                                        "integer",
+                                                        "null"
+                                                    ],
+                                                    "minimum": 0
+                                                },
+                                                "sha256": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ],
+                                                    "pattern": "^[a-fA-F0-9]{64}$"
+                                                },
+                                                "kind": {
+                                                    "enum": [
+                                                        "original",
+                                                        "scan",
+                                                        "supplement",
+                                                        "preview",
+                                                        "structured",
+                                                        null
+                                                    ]
+                                                },
+                                                "ref": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ],
+                                                    "pattern": "^att:[0-9]+$"
+                                                },
+                                                "inline": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                {
+                                    "$schema": "https://json-schema.org/draft/2020-12/schema",
+                                    "$id": "https://shipard.cz/schemas/shpd.registry.document.v1.json",
+                                    "title": "Shipard registry document v1",
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                        "schema",
+                                        "docType",
+                                        "title"
+                                    ],
+                                    "properties": {
+                                        "schema": {
+                                            "const": "shpd.registry.document.v1"
+                                        },
+                                        "docType": {
                                             "enum": [
-                                                "original",
-                                                "scan",
-                                                "supplement",
-                                                "preview",
-                                                "structured",
-                                                null
+                                                "contract",
+                                                "insurance",
+                                                "quotation",
+                                                "certificate",
+                                                "official"
                                             ]
                                         },
-                                        "ref": {
+                                        "title": {
+                                            "type": "string",
+                                            "minLength": 1
+                                        },
+                                        "summary": {
                                             "type": [
                                                 "string",
                                                 "null"
-                                            ],
-                                            "pattern": "^att:[0-9]+$"
+                                            ]
                                         },
-                                        "inline": {
+                                        "party": {
+                                            "type": [
+                                                "object",
+                                                "null"
+                                            ],
+                                            "additionalProperties": false,
+                                            "properties": {
+                                                "name": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "companyId": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                },
+                                                "email": {
+                                                    "type": [
+                                                        "string",
+                                                        "null"
+                                                    ]
+                                                }
+                                            }
+                                        },
+                                        "kindFields": {
+                                            "type": "object"
+                                        },
+                                        "binderSuggestion": {
                                             "type": [
                                                 "string",
                                                 "null"
                                             ]
                                         }
-                                    }
+                                    },
+                                    "allOf": [
+                                        {
+                                            "if": {
+                                                "properties": {
+                                                    "docType": {
+                                                        "const": "contract"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "docType"
+                                                ]
+                                            },
+                                            "then": {
+                                                "properties": {
+                                                    "kindFields": {
+                                                        "type": "object",
+                                                        "additionalProperties": false,
+                                                        "properties": {
+                                                            "counterparty": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "subject": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "signedDate": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ],
+                                                                "format": "date"
+                                                            },
+                                                            "contractNumber": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "validFrom": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ],
+                                                                "format": "date"
+                                                            },
+                                                            "validTo": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ],
+                                                                "format": "date"
+                                                            },
+                                                            "noticePeriod": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ]
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        {
+                                            "if": {
+                                                "properties": {
+                                                    "docType": {
+                                                        "const": "insurance"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "docType"
+                                                ]
+                                            },
+                                            "then": {
+                                                "properties": {
+                                                    "kindFields": {
+                                                        "type": "object",
+                                                        "additionalProperties": false,
+                                                        "properties": {
+                                                            "insurer": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "policyNumber": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "insuredSubject": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "validFrom": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ],
+                                                                "format": "date"
+                                                            },
+                                                            "validTo": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ],
+                                                                "format": "date"
+                                                            },
+                                                            "annualPremium": {
+                                                                "type": [
+                                                                    "number",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "currency": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ]
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        {
+                                            "if": {
+                                                "properties": {
+                                                    "docType": {
+                                                        "const": "quotation"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "docType"
+                                                ]
+                                            },
+                                            "then": {
+                                                "properties": {
+                                                    "kindFields": {
+                                                        "type": "object",
+                                                        "additionalProperties": false,
+                                                        "properties": {
+                                                            "supplier": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "subject": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "totalAmount": {
+                                                                "type": [
+                                                                    "number",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "currency": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "validUntil": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ],
+                                                                "format": "date"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        {
+                                            "if": {
+                                                "properties": {
+                                                    "docType": {
+                                                        "const": "certificate"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "docType"
+                                                ]
+                                            },
+                                            "then": {
+                                                "properties": {
+                                                    "kindFields": {
+                                                        "type": "object",
+                                                        "additionalProperties": false,
+                                                        "properties": {
+                                                            "subject": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "issuer": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "issuedDate": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ],
+                                                                "format": "date"
+                                                            },
+                                                            "validTo": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ],
+                                                                "format": "date"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        {
+                                            "if": {
+                                                "properties": {
+                                                    "docType": {
+                                                        "const": "official"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "docType"
+                                                ]
+                                            },
+                                            "then": {
+                                                "properties": {
+                                                    "kindFields": {
+                                                        "type": "object",
+                                                        "additionalProperties": false,
+                                                        "properties": {
+                                                            "authority": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "refNumber": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ]
+                                                            },
+                                                            "receivedDate": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ],
+                                                                "format": "date"
+                                                            },
+                                                            "deadline": {
+                                                                "type": [
+                                                                    "string",
+                                                                    "null"
+                                                                ],
+                                                                "format": "date"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    ]
                                 }
-                            }
+                            ]
                         }
                     }
                 }

@@ -8,55 +8,112 @@ use PHPUnit\Framework\TestCase;
 use Shipard\Core\Utils\JsoncParser;
 
 /**
- * The AI profile's `output_schema.documents.items.extracted_json` is an
- * inline copy of `modules/core/exchange/schemas/shpd.docs.document.v1.json`.
+ * The AI profile's `output_schema.documents.items.extracted_json` is a
+ * oneOf of two inline schema copies:
+ *   [0] `modules/core/exchange/schemas/shpd.docs.document.v1.json`
+ *   [1] `modules/base/registry/schemas/shpd.registry.document.v1.json`
  * Analyzers receive `output_schema` over the wire (`/claim` response)
- * and don't resolve `$ref` across files, so we keep the canonical schema
- * inlined. This test catches drift when one is updated and the other
- * isn't.
+ * and don't resolve `$ref` across files, so we keep both canonical
+ * schemas inlined. This test catches drift when one is updated and the
+ * other isn't.
  *
- * Repair: copy `shpd.docs.document.v1.json` content into the
- * `extracted_json` value of the profile JSONC.
+ * Repair: copy the canonical file content into the corresponding
+ * `extracted_json.oneOf[...]` branch of the profile JSONC.
  */
 class ProfileSchemaDriftTest extends TestCase
 {
-    public function testProfileFieldsSchemaMatchesCanonical(): void
+    /** @return array{0: array<string, mixed>, 1: string} [profile, modulesRoot] */
+    private function loadProfile(): array
     {
         $modulesRoot = dirname(__DIR__, 5) . '/modules';
+        $profile = JsoncParser::parseFile(
+            $modulesRoot . '/core/mail/profiles/default_czech_invoices.jsonc',
+        );
+        $this->assertIsArray($profile, 'profile JSONC must parse');
+        return [$profile, $modulesRoot];
+    }
+
+    /** @return array<int, mixed> */
+    private function extractedJsonOneOf(array $profile): array
+    {
+        $extractedJson = $profile['output_schema']['properties']['documents']['items']['properties']['extracted_json'] ?? null;
+        $this->assertIsArray($extractedJson, 'profile output_schema.documents.items.properties.extracted_json missing');
+        $this->assertArrayHasKey('oneOf', $extractedJson, 'extracted_json must be a oneOf of [docs, registry] embeds');
+        return $extractedJson['oneOf'];
+    }
+
+    public function testProfileDocsSchemaMatchesCanonical(): void
+    {
+        [$profile, $modulesRoot] = $this->loadProfile();
 
         $canonical = json_decode(
             (string) file_get_contents($modulesRoot . '/core/exchange/schemas/shpd.docs.document.v1.json'),
             true,
         );
-
-        $profile = JsoncParser::parseFile(
-            $modulesRoot . '/core/mail/profiles/default_czech_invoices.jsonc',
-        );
-
-        $this->assertIsArray($canonical, 'canonical schema must be valid JSON');
-        $this->assertIsArray($profile, 'profile JSONC must parse');
-
-        $extractedJson = $profile['output_schema']['properties']['documents']['items']['properties']['extracted_json'] ?? null;
-        $this->assertIsArray($extractedJson, 'profile output_schema.documents.items.properties.extracted_json missing');
+        $this->assertIsArray($canonical, 'docs canonical schema must be valid JSON');
 
         $this->assertSame(
             $canonical,
-            $extractedJson,
-            "Drift between canonical schema and profile's inline `extracted_json`. "
-                . "Copy shpd.docs.document.v1.json content into the profile's `extracted_json`.",
+            $this->extractedJsonOneOf($profile)[0] ?? null,
+            "Drift between docs canonical schema and profile's `extracted_json.oneOf[0]`. "
+                . "Copy shpd.docs.document.v1.json content into the profile.",
+        );
+    }
+
+    public function testProfileRegistrySchemaMatchesCanonical(): void
+    {
+        [$profile, $modulesRoot] = $this->loadProfile();
+
+        $canonical = json_decode(
+            (string) file_get_contents($modulesRoot . '/base/registry/schemas/shpd.registry.document.v1.json'),
+            true,
+        );
+        $this->assertIsArray($canonical, 'registry canonical schema must be valid JSON');
+
+        $this->assertSame(
+            $canonical,
+            $this->extractedJsonOneOf($profile)[1] ?? null,
+            "Drift between registry canonical schema and profile's `extracted_json.oneOf[1]`. "
+                . "Copy shpd.registry.document.v1.json content into the profile.",
         );
     }
 
     public function testProfileMetadata(): void
     {
-        $modulesRoot = dirname(__DIR__, 5) . '/modules';
-        $profile = JsoncParser::parseFile(
-            $modulesRoot . '/core/mail/profiles/default_czech_invoices.jsonc',
-        );
+        [$profile] = $this->loadProfile();
 
         $this->assertSame('czech_invoices', $profile['profile_id']);
-        $this->assertSame('v2.3.0', $profile['prompt_version']);
+        $this->assertSame('v3.0.0', $profile['prompt_version']);
         $this->assertContains('invoiceReceived', $profile['supported_doc_types']);
+        foreach (['contract', 'insurance', 'quotation', 'certificate', 'official'] as $registryType) {
+            $this->assertContains($registryType, $profile['supported_doc_types']);
+        }
         $this->assertSame(0.9, $profile['confidence_thresholds']['ready']);
+    }
+
+    public function testPromptEnumeratesKindFieldsExactly(): void
+    {
+        // Prompt vyjmenovává přesné názvy kindFields per druh — nesoulad
+        // s docKinds znamená tiché prázdno v metadatech. Strojová pojistka
+        // nad textem promptu.
+        [$profile, $modulesRoot] = $this->loadProfile();
+        $prompt = (string) $profile['prompt_template'];
+
+        $docKinds = JsoncParser::parseFile($modulesRoot . '/base/registry/config/docKinds.jsonc');
+        foreach (['contract', 'insurance', 'quotation', 'certificate', 'official'] as $kind) {
+            $expected = sprintf(
+                '- %s: %s',
+                $kind,
+                implode(', ', array_map(static fn(string $f): string => "\"{$f}\"", $docKinds[$kind]['fields'])),
+            );
+            $this->assertStringContainsString(
+                $expected,
+                $prompt,
+                "Prompt must enumerate kindFields of '{$kind}' exactly as in docKinds.jsonc",
+            );
+        }
+
+        $this->assertStringContainsString('"v3.0.0"', $prompt, 'prompt must pin its own version');
+        $this->assertStringNotContainsString('v2.3.0', $prompt, 'stale prompt version reference');
     }
 }

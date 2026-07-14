@@ -49,6 +49,17 @@
         }
     ],
 
+    "documentClasses": [
+        {
+            "table": "base_registry_binders",
+            "class": "Shipard\\Module\\Base\\Registry\\BinderDocument"
+        },
+        {
+            "table": "base_registry_documents",
+            "class": "Shipard\\Module\\Base\\Registry\\RegistryDocumentDocument"
+        }
+    ],
+
     "config": [
         {
             "id": "base.registry.docKinds",

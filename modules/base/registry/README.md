@@ -25,6 +25,9 @@ cenové nabídky, úřední písemnosti. Dokumenty se organizují do **šanonů*
   expirace nad promoted `valid_to`).
 - **`base.registry.sourceKinds`** — zdroj dokumentu (`manual`, `mail`,
   `import`; budoucí `databox`, `scan`).
+- **`base.registry.viewerDetailLabels`** — labely detail tabů vieweru
+  (Obsah / Přílohy / Původ) a sentinelů spodních tabů šanonů
+  (Vše / Nezařazené).
 
 ## Doc states
 
@@ -32,6 +35,17 @@ Obě tabulky používají standardní archivační sadu
 `core.system.docStatesArchive` (10 Koncept, 80 V opravě, 40 V pořádku =
 Zařazeno, 70 V archívu = ukončená platnost, 90 Koš). Žádný vlastní cfgItem
 stavů.
+
+## Zařazení z došlé pošty
+
+`POST /api/v1/_registry/from-message/{ndx}` (Bearer) —
+`FileFromMessageService` vytvoří Koncept dokumentu (title = subject,
+`doc_kind='other'`, `source_kind='mail'`, partner dle jednoznačného matche
+`sender_email`), zkopíruje obsahové přílohy zprávy přes
+`AttachmentService::copyTo` (D8 — kopie, ne přesun) a zprávě nastaví
+`target_*` + přechod 10/20 → 40 (Hotovo). Shodný checksum přílohy u jiného
+živého dokumentu → non-fatal warning `DUPLICATE_IN_REGISTRY`. UI vstup:
+toolbar akce „Zařadit do Spisovny" v detailu zprávy.
 
 ## Navigace
 

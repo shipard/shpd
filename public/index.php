@@ -571,7 +571,27 @@ function dispatchMail(
 	?\Shipard\Core\Config\ConfigRuntime $configRuntime = null,
 ): Response {
 	$dsPath = $resolved->config->getDataSourceDir();
-	$ctrl = new MailController($db, $dsPath, $tables, $documentRegistry, $configRuntime, $resolved->config);
+
+	// Lazy wiring deterministického ISDOC importu (tasks/mail-isdoc-import.md).
+	// Stejná degradace jako dispatchAnalysis: bez ConfigRuntime běží import
+	// bez RowHistoryEnricheru (jen bez obohacení řádků z historie).
+	$isdocImportFactory = static fn(): \Shipard\Module\Core\Mail\IsdocImportService =>
+		new \Shipard\Module\Core\Mail\IsdocImportService(
+			$db,
+			new \Shipard\Module\Core\Exchange\Schema\SchemaValidator(
+				\Shipard\Module\Core\Exchange\Schema\SchemaLoader::default(),
+			),
+			$configRuntime !== null
+				? \Shipard\Module\Core\Exchange\Enrich\RowHistoryEnricher::create($db->getDibiConnection())
+				: null,
+			new \Shipard\Module\Core\Mail\ExtractedDocumentStatusResolver($db),
+			$dsPath,
+		);
+
+	$ctrl = new MailController(
+		$db, $dsPath, $tables, $documentRegistry, $configRuntime, $resolved->config,
+		$isdocImportFactory,
+	);
 	return match ($route->action) {
 		'receiveIncoming'   => $ctrl->receiveIncoming($auth, $request),
 		'importMessage'     => $ctrl->importMessage($auth, $request),

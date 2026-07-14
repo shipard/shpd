@@ -297,6 +297,76 @@ class MailControllerTest extends TestCase
     // Unit úroveň s prázdným DocumentRegistry ji nezachytí — pokrývá ji
     // MailImportEndpointTest::testImportInvalidSenderEmailReturns422.
 
+    // ── ISDOC import hook (tasks/mail-isdoc-import.md) ──────────────────────
+    //
+    // Plný multipart flow pokrývají integrační testy; tady se testuje jen
+    // lazy gate — factory se volá právě tehdy, když je mezi přílohami
+    // kandidát. Orchestrace samotného importu: IsdocImportServiceTest.
+
+    private function invokeRunIsdocImport(MailController $ctrl, array $attachments): void
+    {
+        $ref = new \ReflectionClass($ctrl);
+        $ref->getMethod('runIsdocImport')->invoke($ctrl, 42, $attachments);
+    }
+
+    public function testIsdocImportFactoryInvokedForCandidateAttachment(): void
+    {
+        $factoryCalls = 0;
+        $service = $this->createMock(\Shipard\Module\Core\Mail\IsdocImportService::class);
+        $service->expects($this->once())->method('tryImport')->with(42);
+
+        $db = $this->createMock(DataSourceConnection::class);
+        $ctrl = new MailController(
+            $db, '/tmp/shpd_mail_test', [], new DocumentRegistry(), null, null,
+            function () use (&$factoryCalls, $service) {
+                $factoryCalls++;
+                return $service;
+            },
+        );
+
+        $this->invokeRunIsdocImport($ctrl, [
+            ['id' => 1, 'name' => 'faktura.pdf', 'mime_type' => 'application/pdf'],
+            ['id' => 2, 'name' => 'faktura.isdoc', 'mime_type' => 'application/xml'],
+        ]);
+
+        $this->assertSame(1, $factoryCalls);
+    }
+
+    public function testIsdocImportFactoryNotInvokedWithoutCandidate(): void
+    {
+        $factoryCalls = 0;
+        $db = $this->createMock(DataSourceConnection::class);
+        $ctrl = new MailController(
+            $db, '/tmp/shpd_mail_test', [], new DocumentRegistry(), null, null,
+            function () use (&$factoryCalls) {
+                $factoryCalls++;
+                return $this->createMock(\Shipard\Module\Core\Mail\IsdocImportService::class);
+            },
+        );
+
+        $this->invokeRunIsdocImport($ctrl, [
+            ['id' => 1, 'name' => 'faktura.pdf', 'mime_type' => 'application/pdf'],
+        ]);
+
+        $this->assertSame(0, $factoryCalls);
+    }
+
+    public function testIsdocImportSwallowsFactoryFailure(): void
+    {
+        // Import nikdy nesmí shodit příjem pošty — i výbuch wiringu se polkne.
+        $db = $this->createMock(DataSourceConnection::class);
+        $ctrl = new MailController(
+            $db, '/tmp/shpd_mail_test', [], new DocumentRegistry(), null, null,
+            static fn() => throw new \RuntimeException('wiring failed'),
+        );
+
+        $this->invokeRunIsdocImport($ctrl, [
+            ['id' => 2, 'name' => 'faktura.isdoc', 'mime_type' => 'application/xml'],
+        ]);
+
+        $this->addToAssertionCount(1); // žádná výjimka nepropadla
+    }
+
     protected function tearDown(): void
     {
         $_POST = [];

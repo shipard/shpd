@@ -17,6 +17,12 @@
         "name:en": "User",
         "order": 20
     },
+    "isdoc": {
+        "name": "ISDOC import",
+        "name:cs": "ISDOC import",
+        "name:en": "ISDOC import",
+        "order": 25
+    },
     "ai": {
         "name": "AI classification",
         "name:cs": "AI klasifikace",

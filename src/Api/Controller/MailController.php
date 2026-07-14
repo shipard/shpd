@@ -14,9 +14,11 @@ use Shipard\Core\Security\DsSecretCipher;
 use Shipard\Core\Database\TableDefinition;
 use Shipard\Core\Document\DocStateConfig;
 use Shipard\Core\Document\DocumentRegistry;
+use Shipard\Core\Logging\ErrorLogger;
 use Shipard\Module\Core\Attachments\AttachmentService;
 use Shipard\Module\Core\Mail\IdempotencyStore;
 use Shipard\Module\Core\Mail\IncomingMessageDocument;
+use Shipard\Module\Core\Mail\IsdocImportService;
 use Shipard\Module\Core\Mail\MailRouterProvisioner;
 
 /**
@@ -37,6 +39,9 @@ class MailController
 
     /**
      * @param array<string, TableDefinition> $tables
+     * @param \Closure(): IsdocImportService|null $isdocImportFactory Lazy
+     *        wiring deterministického ISDOC importu — service se staví až
+     *        při prvním kandidátovi (intake bez ISDOC neplatí režii wiringu).
      */
     public function __construct(
         private readonly DataSourceConnection $db,
@@ -45,6 +50,7 @@ class MailController
         private readonly DocumentRegistry $documentRegistry,
         private readonly ?ConfigRuntime $config = null,
         private readonly ?DataSourceConfig $dsConfig = null,
+        private readonly ?\Closure $isdocImportFactory = null,
     ) {
         $this->attachments = new AttachmentService($db, $dsPath, $tables);
         $this->idempotency = new IdempotencyStore($db);
@@ -123,6 +129,7 @@ class MailController
         $attachmentFiles = $this->collectAttachmentFiles();
 
         $uploadedFiles = [];
+        $contentAttachments = [];
         $dibi = $this->db->getDibiConnection();
         $dibi->begin();
 
@@ -158,6 +165,7 @@ class MailController
                     throw new \RuntimeException($attResult['error'] ?? 'Nelze uložit přílohu');
                 }
                 $uploadedFiles[] = $attResult['data'];
+                $contentAttachments[] = $attResult['data'];
             }
 
             $createdRow = $this->db->fetchRow('SELECT message_id FROM %n WHERE id = %i', self::MAIL_TABLE, $messageId);
@@ -180,12 +188,49 @@ class MailController
 
             $dibi->commit();
 
+            // Deterministický ISDOC import (tasks/mail-isdoc-import.md) —
+            // až po commitu intake tx, nikdy nesmí shodit příjem pošty.
+            $this->runIsdocImport($messageId, $contentAttachments);
+
             return Response::success($responseData, 201);
         } catch (\Throwable $e) {
             $dibi->rollback();
             $this->cleanupOrphanedFiles($uploadedFiles);
 
             return Response::error('INTERNAL_ERROR', $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Deterministický import ISDOC příloh místo AI analýzy — běží po
+     * commitu intake tx ve vlastní transakci (viz IsdocImportService).
+     * Invariant: nikdy nesmí shodit příjem pošty; výsledek se do response
+     * intake nepropaguje (mail-router ho nepotřebuje).
+     *
+     * @param list<array<string, mixed>> $contentAttachments Uploady příloh
+     *        bez raw .eml souboru.
+     */
+    private function runIsdocImport(int $messageId, array $contentAttachments): void
+    {
+        if ($this->isdocImportFactory === null) {
+            return;
+        }
+
+        try {
+            $hasCandidate = false;
+            foreach ($contentAttachments as $file) {
+                if (is_array($file) && IsdocImportService::isPotentialIsdocAttachment($file)) {
+                    $hasCandidate = true;
+                    break;
+                }
+            }
+            if (!$hasCandidate) {
+                return;
+            }
+
+            ($this->isdocImportFactory)()->tryImport($messageId, $contentAttachments);
+        } catch (\Throwable $e) {
+            ErrorLogger::logException($e, 'MailController::receiveIncoming ISDOC import failed');
         }
     }
 

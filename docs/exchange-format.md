@@ -40,7 +40,8 @@ najednou:
    Flexibee, atd. — odlišuje se jen vstupní adaptér.
 6. **Mezikrok pro elektronickou fakturaci** — ISDOC, Peppol UBL, e-Faktura
    se rozparsují na canonical, ten se uloží. Stejný flow pro AI extrakci
-   i strukturovaná data.
+   i strukturovaná data. Příchozí ISDOC je implementován — viz `IsdocReader`
+   v sekci Adaptéry (kapitola 4).
 7. **Export pro elektronickou výměnu** — opačný směr: applier (resp. exporter)
    vyrobí canonical z DB záznamu, ten lze serializovat do ISDOC, e-mailem
    přeposlat partnerovi, který má taky Shipard, atd. Spolehlivější než AI
@@ -110,6 +111,20 @@ DB záznam v docs_core_heads + rows + vatRecap + případně nové persons/items
 `validate` a `preview` jsou idempotentní a bez vedlejších efektů. `apply`
 volitelně může vytvořit nové entity (osoby, položky) dle uživatelského pokynu
 v `_resolve.*.userAction`.
+
+### Adaptéry
+
+První implementovaný vstupní adaptér je **ISDOC** (český standard
+e-fakturace): `Shipard\Module\Core\Exchange\Isdoc\IsdocReader` konvertuje
+ISDOC 6.x XML (i `.isdocx` ZIP obal) na canonical se `source.kind='isdoc'`
+a confidence 1.0. Mapuje se jen to, co v ISDOC opravdu je (chybějící pole
+se vynechávají); podporované `DocumentType`: 1 → `invoiceReceived`,
+2 → `creditNote`. Kompletní mapovací tabulka ISDOC → canonical:
+[tasks/mail-isdoc-import.md](../tasks/mail-isdoc-import.md). Použití
+v příjmu pošty (deterministický import místo AI analýzy):
+`modules/core/mail/docs/ai-analysis.md`, sekce „Deterministický ISDOC
+import". Ostatní adaptéry (Peppol UBL, Pohoda, Flexibee, …) zůstávají
+future work.
 
 ## 5. Specifikace `shpd.docs.document.v1`
 

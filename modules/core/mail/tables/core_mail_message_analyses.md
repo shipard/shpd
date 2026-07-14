@@ -23,9 +23,9 @@ s upraveným promptem; znovu analyzováno po upgradu modelu apod.).
 
 | Sloupec | Typ | Popis |
 |---|---|---|
-| `model_name` | varchar(100), NOT NULL | Identifikátor modelu (`claude-sonnet-4`, `gpt-4o`, …) |
-| `model_version` | varchar(100) | Volitelná verze modelu (např. datum snapshotu) |
-| `prompt_version` | varchar(50), NOT NULL | Verze použitého promptu — SemVer nebo git-hash |
+| `model_name` | varchar(100), NOT NULL | Identifikátor modelu (`claude-sonnet-4`, `gpt-4o`, …). Deterministický ISDOC import zapisuje `isdoc` — takový běh nemá profil, backend, cost ani tokens. |
+| `model_version` | varchar(100) | Volitelná verze modelu (např. datum snapshotu; u ISDOC importu `@version` z XML) |
+| `prompt_version` | varchar(50), NOT NULL | Verze použitého promptu — SemVer nebo git-hash (u ISDOC importu konstanta `isdoc`) |
 
 ### Výsledek (result)
 

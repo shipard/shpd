@@ -75,6 +75,13 @@ tabulce. Vazba je polymorfní přes `target_table_id` + `target_row` na
 └──────────────────────────┘
 ```
 
+Výjimka z AI fronty: zpráva s ISDOC přílohou se po intake zpracuje
+**deterministicky** (`IsdocImportService`) — extracted dokument vznikne
+parserem s confidence 1.0, `analysis_state` přeskočí frontu rovnou na 30
+a v tabu Analýzy je záznam `model_name='isdoc'`. Vadný ISDOC → zpráva jde
+normálně do AI fronty. Viz [ai-analysis.md](ai-analysis.md), sekce
+„Deterministický ISDOC import".
+
 ## 4. Datový model
 
 Podrobnosti ke každé tabulce jsou v samostatných Markdown souborech:

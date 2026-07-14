@@ -231,6 +231,46 @@ Dokumenty s `doc_type='other'` do `documents` nepatří — ne-faktura vrací
 Enum typů v promptu i output_schema je zatím natvrdo (`invoiceReceived` |
 `other`); generování z `primaryTypes.jsonc` je future work.
 
+## Deterministický ISDOC import
+
+Když došlá zpráva nese v příloze ISDOC (`.isdoc`, `.isdocx` = ZIP obal, nebo
+XML s root elementem `{http://isdoc.cz/*}Invoice`), extrahuje se doklad
+**deterministicky parserem** místo AI analýzy — ISDOC nese autoritativní
+strukturovaná data, LLM extrakce je u něj zbytečná. Spec:
+[tasks/mail-isdoc-import.md](../../../../tasks/mail-isdoc-import.md).
+
+Datový tok: `MailController::receiveIncoming` po commitu intake transakce
+zavolá `IsdocImportService::tryImport` (lazy wiring — bez ISDOC kandidáta
+se service vůbec nestaví). Service:
+
+1. rozparsuje každou ISDOC přílohu (`IsdocReader`, modul `core.exchange`)
+   na canonical `shpd.docs.document.v1` se `source.kind='isdoc'`,
+2. zvaliduje proti schema a obohatí řádky z historie
+   (`RowHistoryEnricher`, stejné jako `/result`),
+3. ve vlastní transakci s `FOR UPDATE` guardem (`analysis_state IN (0, 10)`
+   — závod s analyzerem prohrává import) zapíše:
+   - záznam do `core_mail_message_analyses` (`status=2`,
+     `model_name='isdoc'`, `prompt_version='isdoc'`, `model_version`
+     z `@version` XML, cost/tokens NULL, `confidence=1.0`),
+   - extracted dokument per ISDOC (`doc_type` dle `DocumentType`:
+     1 → `invoiceReceived`, 2 → `creditNote`; confidence 1.0; status přes
+     sdílený `ExtractedDocumentStatusResolver` — typicky `ready_to_apply`,
+     bez `item.ourCode` `pending_review`),
+   - message: `analysis_state=30`, `primary_type='invoiceReceived'`
+     + `primary_type_source='isdoc'` (jen pokud source není `user`),
+     docState 10→20 jen pokud je stále 10.
+
+Vztah k frontě: úspěšně naimportovaná zpráva se v AI frontě **vůbec
+neobjeví** (analysis_state přeskočí 10 → 30); analyzer daemon nevyžaduje
+změny. Jakýkoli vadný ISDOC / nepodporovaný `DocumentType` (zálohové
+faktury apod.) = celá větev se pro zprávu vzdá a zpráva jde normálně do AI
+fronty (warning v logu, příjem pošty nikdy neselže). Import funguje i v DS
+bez AI backendu/profilu (thresholds fallback `{ready: 0.9, review: 0.6}`).
+
+„Znova analyzovat" (30 → 10) zůstává únikovou cestou k AI, kdyby ISDOC
+výsledek nestačil — např. mix „ISDOC faktura + jiná faktura jen v PDF",
+kterou import záměrně neřeší.
+
 ## Reanalýza
 
 `POST /api/v1/_mail/messages/{ndx}/reanalyze` — UI akce viditelná v toolbaru
@@ -286,6 +326,8 @@ default *se nepřepíše*; admin zachová svůj override.
 - [tasks/mail-phase3a.md](../../../../tasks/mail-phase3a.md) — kompletní spec
 - [tasks/mail-states-and-classification.md](../../../../tasks/mail-states-and-classification.md)
   — oddělení `analysis_state` od `docState` + klasifikace `primary_type`
+- [tasks/mail-isdoc-import.md](../../../../tasks/mail-isdoc-import.md)
+  — deterministický ISDOC import (mapovací tabulka ISDOC → canonical)
 - [docs/operations/secrets.md](../../../../docs/operations/secrets.md) — DsSecretCipher
 - [docs/mail/api-contract.md](../../../../docs/mail/api-contract.md) — API kontrakty
 - [ai-prompts.md](ai-prompts.md) — default prompt + customization guidelines

@@ -148,6 +148,11 @@ export default {
   'viewer.reanalyze.submitting': 'Starting…',
   'viewer.reanalyze.failed': 'Failed to restart analysis: {msg}',
 
+  // ── Viewer (filing a message to the registry) ────────────────────────────
+  'viewer.fileToRegistry.failed': 'Filing to the registry failed: {msg}',
+  'viewer.fileToRegistry.duplicate':
+    'A registry document with an identical attachment already exists — check for a duplicate.',
+
   // ── Viewer detail (extracted documents + reject dialog) ─────────────────
   'viewer.detail.empty': 'No details',
   'viewer.detail.noExtracted': 'No extracted documents.',

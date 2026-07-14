@@ -228,6 +228,21 @@ class IncomingMessagesViewer extends TableViewer
             return $actions;
         }
 
+        // "Zařadit do Spisovny" — ruční dispozice zprávy do base.registry,
+        // viditelná mimo Koš (docState != 90). Obsluha ve Viewer.svelte
+        // (POST /_registry/from-message/{ndx} → FormDialog nad novým Konceptem).
+        if ((int) ($selectedRow['docState'] ?? 0) !== 90) {
+            $fileDef = $mailDefs['fileToRegistry'] ?? ['name' => 'File to registry', 'variant' => 'secondary'];
+            $actions[] = [
+                'id'      => 'fileToRegistry',
+                'label'   => $fileDef['name'] ?? 'File to registry',
+                'variant' => $fileDef['variant'] ?? 'secondary',
+                'meta'    => [
+                    'messageNdx' => (int) $selectedRow['id'],
+                ],
+            ];
+        }
+
         // "Znova analyzovat" je viditelné jen když analysis_state ∈ {30, 70}
         // (Analyzováno / Analýza selhala) a zpráva není v Archivu/Koši —
         // zrcadlí validaci AnalysisController::reanalyze.

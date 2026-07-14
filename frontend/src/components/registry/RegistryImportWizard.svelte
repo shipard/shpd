@@ -26,7 +26,7 @@
     fetchRegistryPerson,
     previewRegistryPerson,
     applyRegistryPerson,
-  } from '../../api/registry.js';
+  } from '../../api/personsRegistry.js';
 
   let {
     open = false,

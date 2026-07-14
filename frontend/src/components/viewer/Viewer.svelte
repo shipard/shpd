@@ -10,6 +10,7 @@
   import { reaccountDocument } from '../../api/accounting.js';
   import { importStatement, reaccountTransaction } from '../../api/bank.js';
   import { inviteUser } from '../../api/security.js';
+  import { fileFromMessage } from '../../api/registry.js';
   import ViewerRow from './ViewerRow.svelte';
   import ViewerDetail from './ViewerDetail.svelte';
   import ViewerToolbar from './ViewerToolbar.svelte';
@@ -100,6 +101,9 @@
   // kde detail.action.target.table cílí na jinou tabulku než viewer
   // (např. alert v core_alerts_alerts otevírá form pro base_persons_persons).
   let formTable = $state(null);
+  // Nenápadná informační notice v hlavičce FormDialogu (např. warning
+  // DUPLICATE_IN_REGISTRY při zařazení zprávy do Spisovny). Null = nic.
+  let formNotice = $state(null);
 
   // --- Search debounce ---
   let searchTimer = null;
@@ -313,10 +317,42 @@
       reanalyzeProfiles = action?.meta?.profiles ?? [];
       reanalyzeProfileNdx = '';
       reanalyzeDialogOpen = true;
+    } else if (actionId === 'fileToRegistry' && selectedRowId != null) {
+      handleFileToRegistry();
     } else if (actionId === 'import_statement') {
       importFileInput?.click();
     } else if (actionId === 'runDue') {
       handleRunDue();
+    }
+  }
+
+  // --- Zařazení zprávy do Spisovny (toolbar akce fileToRegistry) ---
+  let fileToRegistryInProgress = $state(false);
+
+  async function handleFileToRegistry() {
+    if (selectedRowId == null || fileToRegistryInProgress) return;
+    fileToRegistryInProgress = true;
+    try {
+      const result = await fileFromMessage(selectedRowId);
+      if (!result?.success) {
+        alert(t('viewer.fileToRegistry.failed', { msg: translateError(result?.error) }));
+        return;
+      }
+      const { id, warning } = result.data ?? {};
+      // Otevřít FormDialog nad novým Konceptem Spisovny (jiná tabulka než
+      // viewer — stejný vzor jako custom akce open_form). Duplicitní příloha
+      // ve Spisovně se ukáže jako nenápadná notice v dialogu, neblokuje.
+      formTable = 'base_registry_documents';
+      editRecordId = id ?? null;
+      formDefaultData = {};
+      formNotice = warning?.code === 'DUPLICATE_IN_REGISTRY'
+        ? t('viewer.fileToRegistry.duplicate')
+        : null;
+      formOpen = true;
+      // Zpráva mezitím přešla do Hotovo + dostala vazbu target_* — refetch.
+      refreshAfterAction();
+    } finally {
+      fileToRegistryInProgress = false;
     }
   }
 
@@ -554,6 +590,7 @@
     editRecordId = null;
     formTable = null;
     formDefaultData = {};
+    formNotice = null;
   }
 
   function handleFormSaved() {
@@ -692,6 +729,7 @@
     onClose={handleFormClose}
     onSaved={handleFormSaved}
     defaultData={formDefaultData}
+    notice={formNotice}
   />
 {/if}
 

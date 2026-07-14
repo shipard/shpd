@@ -21,6 +21,8 @@
     onClose: () => void;
     onSaved?: (record: Record<string, unknown>, info?: { hasDocStates: boolean }) => void;
     defaultData?: Record<string, unknown>;
+    /** Nenápadná informační notice nad formulářem (neutrální, ne error). */
+    notice?: string | null;
   }
 
   let {
@@ -30,6 +32,7 @@
     onClose,
     onSaved,
     defaultData = {},
+    notice = null,
   }: Props = $props();
 
   // Aktuální titulek a doc_states z formuláře — aktualizuje se přes onFormLoaded
@@ -157,6 +160,9 @@
     summary={hasSummary ? summarySnippet : undefined}
     headerExtra={headerExtraSnippet}
   >
+    {#if notice}
+      <div class="shpd-form-dialog__notice" role="status">{notice}</div>
+    {/if}
     <FormEditor
       {table}
       {recordId}
@@ -168,3 +174,15 @@
     />
   </Modal>
 {/if}
+
+<style>
+  /* Neutrální informační pruh nad formulářem — na rozdíl od červených
+     validačních bannerů ve FormEditor nesignalizuje chybu. */
+  .shpd-form-dialog__notice {
+    padding: var(--shpd-space-sm) var(--shpd-space-md);
+    font-size: var(--shpd-font-size-sm);
+    color: var(--shpd-color-text-secondary);
+    background: var(--shpd-color-bg);
+    border-bottom: 1px solid var(--shpd-color-border);
+  }
+</style>

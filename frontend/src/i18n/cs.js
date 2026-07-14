@@ -157,6 +157,11 @@ export default {
   'viewer.reanalyze.submitting': 'Spouštím…',
   'viewer.reanalyze.failed': 'Nepodařilo se restartovat analýzu: {msg}',
 
+  // ── Viewer (zařazení zprávy do Spisovny) ─────────────────────────────────
+  'viewer.fileToRegistry.failed': 'Zařazení do Spisovny selhalo: {msg}',
+  'viewer.fileToRegistry.duplicate':
+    'Dokument se shodnou přílohou už ve Spisovně existuje — zkontrolujte, zda nejde o duplicitu.',
+
   // ── Viewer detail (extrahované dokumenty + reject dialog) ───────────────
   'viewer.detail.empty': 'Žádné detaily',
   'viewer.detail.noExtracted': 'Žádné extrahované dokumenty.',

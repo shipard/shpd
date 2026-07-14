@@ -18,6 +18,12 @@
             "name:cs": "Znova analyzovat",
             "name:en": "Reanalyze",
             "variant": "secondary"
+        },
+        "fileToRegistry": {
+            "name": "File to registry",
+            "name:cs": "Zařadit do Spisovny",
+            "name:en": "File to registry",
+            "variant": "secondary"
         }
     }
 }

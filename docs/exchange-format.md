@@ -181,7 +181,8 @@ Top-level struktura:
                                    //   applier lowercases pro cfgItem
   "exchangeRate": null,           // required if currency != home
 
-  "vat": {
+  "vat": {                        // celý objekt nullable — nelze-li určit,
+                                   //   vynechat nebo null (ne prázdný objekt)
     "mode":  "fromBase",          // fromBase | fromTotal | none
                                    //   (key z docs.core.vatModes)
     "place": "domestic",          // klíč z docs.core.vatPlaces
@@ -231,6 +232,8 @@ Top-level struktura:
       "size":      123456,
       "sha256":    "…",           // optional, pro dedup
       "kind":      "original",    // original | scan | supplement | preview
+                                   //   | structured (strojově čitelný formát
+                                   //   — ISDOC, UBL, XML export)
       "ref":       "att:42",      // existující core_attachments_files.id, NEBO
       "inline":    null           // "data:application/pdf;base64,…"
                                    //   (mutually exclusive s ref)

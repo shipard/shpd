@@ -154,6 +154,35 @@ Pole `backend` v profilu je FK na `core_ai_backends`. Můžeš mít víc
 backendů (`default` Anthropic Claude Sonnet pro běžné případy, druhý backend
 s Claude Opus pro náročné dokumenty) a přiřadit je různým profilům.
 
+## Changelog promptu
+
+### v2.3.0 (2026-07-14)
+
+Opravy tří opakujících se vzorů `schema_error` z reálného provozu (spec
+[tasks/mail-analysis-schema-fixes.md](../../../../tasks/mail-analysis-schema-fixes.md)):
+
+- `attachments[].kind`: enum ve schématu rozšířen o `structured` (strojově
+  čitelná příloha — ISDOC, XML, UBL) a prompt povolené hodnoty nově
+  vyjmenovává — model si `structured`/`isdoc` dřív vymýšlel sám.
+- Nové pravidlo: objekty (`vat`, `payment`, `customer`, …), které nelze
+  určit, vynechat nebo vrátit `null` — nikdy prázdné objekty s vymyšleným
+  obsahem. Top-level `vat` je ve schématu nově nullable (konzistence se
+  zbytkem schématu).
+- Nové pravidlo: nepřidávat klíče mimo ukázku (`additionalProperties:
+  false`). Ukázka `supplier` doplněna o `courtRegistration` — model si pro
+  rejstříkový údaj dřív vymýšlel klíč `registration`.
+
+### v2.2.0
+
+- Triage celé zprávy: top-level `message_classification`
+  (`primary_type` + `confidence`), viz
+  [ai-analysis.md](ai-analysis.md).
+
+### v2.0.0
+
+- Výstup přímo v kanonickém `shpd.docs.document.v1` (dřív ad-hoc shape),
+  output schema draft-2020-12.
+
 ## Reference
 
 - [ai-analysis.md](ai-analysis.md) — architektura

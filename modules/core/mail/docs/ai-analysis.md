@@ -125,10 +125,17 @@ analýzy, přežívá Koš i Archiv; řídí ho výhradně pipeline + reanalyze:
 `analysis_in_progress`. Přechody `docState` (Koš/Archiv) fungují i během
 analýzy; fronta zprávy v Archivu/Koši přirozeně vynechává.
 
-Nová zpráva dostává `analysis_state=10`, pokud analýza není explicitně
+Nová zpráva dostává `analysis_state=10`, pokud vzniká v docState 10 nebo 20
+(Nová/K řešení; chybějící docState = default Nová), analýza není explicitně
 vypnutá (`ai_analysis_enabled=false`) a existuje aktivní AI profil; jinak 0.
-Import (`POST /_mail/import`) s default `docState=40` dostává 0 — pokud
-request nepošle `analysis_state` explicitně.
+Zprávy vznikající rovnou v Hotovo/Archivu/Koši (import, zrcadlení archivní
+pošty) se nefrontují — `/queue` by je nikdy nevydal (trvale zavádějící
+„Ve frontě") a hrozila by hromadná analýza při odarchivování. Explicitní
+`analysis_state` v requestu (`POST /_mail/import`) má vždy přednost.
+Dříve nafrontované archivní zprávy opravuje idempotentní datový krok
+v `ds-upgrade` (`AIAnalyzerProvisioner::fixQueuedArchivedMessages` —
+jen docState 80/90; Hotovo do opravy nepatří, tam mohla zpráva dojít
+legálně workflow cestou s dokončenou analýzou).
 
 ## Stavy extrahovaných dokumentů
 
@@ -244,7 +251,9 @@ zavolá `IsdocImportService::tryImport` (lazy wiring — bez ISDOC kandidáta
 se service vůbec nestaví). Service:
 
 1. rozparsuje každou ISDOC přílohu (`IsdocReader`, modul `core.exchange`)
-   na canonical `shpd.docs.document.v1` se `source.kind='isdoc'`,
+   na canonical `shpd.docs.document.v1` se `source.kind='isdoc'`
+   (příloha samotná se v canonicalu propíše jako
+   `attachments[].kind='structured'` — strojově čitelný formát),
 2. zvaliduje proti schema a obohatí řádky z historie
    (`RowHistoryEnricher`, stejné jako `/result`),
 3. ve vlastní transakci s `FOR UPDATE` guardem (`analysis_state IN (0, 10)`

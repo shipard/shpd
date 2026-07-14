@@ -92,7 +92,7 @@ class SqlGeneratorTest extends TestCase
 
     public function testTextTypes(): void
     {
-        foreach (['text' => 'TEXT', 'longtext' => 'LONGTEXT', 'json' => 'JSON', 'date' => 'DATE', 'datetime' => 'DATETIME', 'time' => 'TIME', 'encrypted_text' => 'TEXT'] as $phpType => $sqlType) {
+        foreach (['text' => 'TEXT', 'mediumtext' => 'MEDIUMTEXT', 'longtext' => 'LONGTEXT', 'json' => 'JSON', 'date' => 'DATE', 'datetime' => 'DATETIME', 'time' => 'TIME', 'encrypted_text' => 'TEXT'] as $phpType => $sqlType) {
             $col = $this->makeCol(['id' => 'x', 'type' => $phpType]);
             $sql = SqlGenerator::generateAddColumn('t', $col);
             $this->assertStringContainsString($sqlType, $sql, "Expected {$sqlType} for type {$phpType}");

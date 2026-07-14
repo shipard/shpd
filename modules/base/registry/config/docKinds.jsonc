@@ -1,0 +1,68 @@
+{
+    // base.registry.docKinds
+    //
+    // Druhy dokumentů Spisovny. `fields` definují klíče v `metadata` JSON
+    // (a zároveň pole extrakčního output schématu — názvy se NIKDY neliší).
+    // `promote` mapuje vybraná pole na univerzální sloupce tabulky
+    // (kvůli indexům, viewerům a deterministickým alertům).
+    // `expiration.warnDaysBefore` čte promoted `valid_to`.
+
+    "contract": {
+        "name": "Contract",
+        "name:cs": "Smlouva",
+        "name:en": "Contract",
+        "order": 10,
+        "fields": ["counterparty", "subject", "signedDate", "contractNumber",
+                   "validFrom", "validTo", "noticePeriod"],
+        "promote": { "contractNumber": "ref_number",
+                     "validFrom": "valid_from", "validTo": "valid_to" },
+        "expiration": { "warnDaysBefore": [30, 7] }
+    },
+    "insurance": {
+        "name": "Insurance policy",
+        "name:cs": "Pojistná smlouva",
+        "name:en": "Insurance policy",
+        "order": 20,
+        "fields": ["insurer", "policyNumber", "insuredSubject",
+                   "validFrom", "validTo", "annualPremium", "currency"],
+        "promote": { "policyNumber": "ref_number",
+                     "validFrom": "valid_from", "validTo": "valid_to" },
+        "expiration": { "warnDaysBefore": [30, 7] }
+    },
+    "quotation": {
+        "name": "Quotation",
+        "name:cs": "Cenová nabídka",
+        "name:en": "Quotation",
+        "order": 30,
+        "fields": ["supplier", "subject", "totalAmount", "currency", "validUntil"],
+        "promote": { "validUntil": "valid_to" },
+        "expiration": { "warnDaysBefore": [7] }
+    },
+    "certificate": {
+        "name": "Certificate / inspection",
+        "name:cs": "Revize / certifikát",
+        "name:en": "Certificate / inspection",
+        "order": 40,
+        "fields": ["subject", "issuer", "issuedDate", "validTo"],
+        "promote": { "validTo": "valid_to" },
+        "expiration": { "warnDaysBefore": [30, 7] }
+    },
+    "official": {
+        "name": "Official correspondence",
+        "name:cs": "Úřední písemnost",
+        "name:en": "Official correspondence",
+        "order": 50,
+        "fields": ["authority", "refNumber", "receivedDate", "deadline"],
+        "promote": { "refNumber": "ref_number", "deadline": "valid_to" },
+        "expiration": { "warnDaysBefore": [14, 3] }
+    },
+    "other": {
+        "name": "Other",
+        "name:cs": "Ostatní",
+        "name:en": "Other",
+        "order": 999,
+        "fields": [],
+        "promote": {},
+        "expiration": null
+    }
+}

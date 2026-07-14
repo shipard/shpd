@@ -1,0 +1,62 @@
+{
+    "id": "base.registry",
+    "name": "Registry",
+    "name:cs": "Spisovna",
+    "name:en": "Registry",
+    "description": "Registry of permanent company documents (contracts, insurance, certificates...)",
+    "description:cs": "Evidence trvalých dokumentů firmy (smlouvy, pojistky, revize...)",
+    "description:en": "Registry of permanent company documents (contracts, insurance, certificates...)",
+
+    "dependencies": [
+        "core.system",
+        "core.attachments",
+        "base.persons",
+        "core.mail"
+    ],
+
+    "tables": [
+        "base_registry_binders",
+        "base_registry_documents"
+    ],
+
+    // Žádný keepOnReset — šanony i dokumenty jsou migrovaná data ze starého
+    // wkf.docs; re-import po ds-reset je čistý (dedupe metadata.legacyId).
+
+    "settingsItems": [
+        { "viewer": "base.registry.binders", "section": "other", "subsection": "other.registry", "order": 10 }
+    ],
+
+    "viewers": [
+        {
+            "id": "base.registry.documents",
+            "name": "Registry",
+            "name:cs": "Spisovna",
+            "name:en": "Registry",
+            "icon": "folder",
+            "table": "base_registry_documents",
+            "class": "Shipard\\Module\\Base\\Registry\\RegistryDocumentsViewer",
+            "navSection": "_top",
+            "navOrder": 35
+        },
+        {
+            "id": "base.registry.binders",
+            "name": "Binders",
+            "name:cs": "Šanony",
+            "name:en": "Binders",
+            "icon": "folder",
+            "table": "base_registry_binders",
+            "class": "Shipard\\Module\\Base\\Registry\\BindersViewer"
+        }
+    ],
+
+    "config": [
+        {
+            "id": "base.registry.docKinds",
+            "file": "config/docKinds.jsonc"
+        },
+        {
+            "id": "base.registry.sourceKinds",
+            "file": "config/sourceKinds.jsonc"
+        }
+    ]
+}

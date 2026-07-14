@@ -8,7 +8,7 @@ class ColumnDefinition
 {
     private const ALLOWED_TYPES = [
         'tinyint', 'smallint', 'int', 'bigint',
-        'varchar', 'text', 'longtext',
+        'varchar', 'text', 'mediumtext', 'longtext',
         'numeric', 'float',
         'date', 'datetime', 'time',
         'boolean', 'json',

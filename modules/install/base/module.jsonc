@@ -14,6 +14,7 @@
         "core.units",
         "core.exchange",
         "base.persons",
+        "base.registry",
         "economy.codebooks",
         "economy.items",
         "economy.accounting",

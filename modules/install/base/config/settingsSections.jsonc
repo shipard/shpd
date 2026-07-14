@@ -74,6 +74,13 @@
                     "name:cs": "Chat",
                     "name:en": "Chat",
                     "order": 50
+                },
+                {
+                    "id": "other.registry",
+                    "name": "Registry",
+                    "name:cs": "Spisovna",
+                    "name:en": "Registry",
+                    "order": 60
                 }
             ]
         }

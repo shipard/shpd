@@ -1,0 +1,319 @@
+{
+    "tableId": 428,
+    "name": "Registry documents",
+    "name:cs": "Dokumenty spisovny",
+    "name:en": "Registry documents",
+
+    "displayPattern": "{title}",
+
+    "docStates": {
+        "stateColumn": "docState",
+        "mainColumn": "docStateMain",
+        "cfgItem": "core.system.docStatesArchive"
+    },
+
+    "columnGroups": [
+        {
+            "id": "identity",
+            "name": "Identity",
+            "name:cs": "Identifikace",
+            "name:en": "Identity"
+        },
+        {
+            "id": "subject",
+            "name": "Subject",
+            "name:cs": "Subjekt",
+            "name:en": "Subject"
+        },
+        {
+            "id": "validity",
+            "name": "Validity",
+            "name:cs": "Platnost",
+            "name:en": "Validity"
+        },
+        {
+            "id": "content",
+            "name": "Content",
+            "name:cs": "Obsah",
+            "name:en": "Content"
+        },
+        {
+            "id": "source",
+            "name": "Source",
+            "name:cs": "Původ",
+            "name:en": "Source"
+        },
+        {
+            "id": "notes",
+            "name": "Notes",
+            "name:cs": "Poznámky",
+            "name:en": "Notes"
+        }
+    ],
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+
+        // --- identity ---
+
+        {
+            "id": "title",
+            "name": "Title",
+            "name:cs": "Název",
+            "name:en": "Title",
+            "type": "varchar",
+            "length": 250,
+            "nullable": false,
+            "group": "identity"
+        },
+        {
+            "id": "doc_kind",
+            "name": "Kind",
+            "name:cs": "Druh",
+            "name:en": "Kind",
+            "type": "enumString",
+            "length": 30,
+            "cfgItem": "base.registry.docKinds",
+            "nullable": false,
+            "default": "other",
+            "group": "identity"
+        },
+        {
+            "id": "binder",
+            "name": "Binder",
+            "name:cs": "Šanon",
+            "name:en": "Binder",
+            "type": "int",
+            "nullable": true,
+            "reference": "base_registry_binders",
+            "group": "identity"
+        },
+        {
+            "id": "ref_number",
+            "name": "Number / reference",
+            "name:cs": "Číslo / značka",
+            "name:en": "Number / reference",
+            "type": "varchar",
+            "length": 100,
+            "nullable": true,
+            "group": "identity"
+        },
+
+        // --- subject ---
+
+        {
+            "id": "partner",
+            "name": "Partner",
+            "name:cs": "Partner",
+            "name:en": "Partner",
+            "type": "int",
+            "nullable": true,
+            "reference": "base_persons_persons",
+            "group": "subject"
+        },
+
+        // --- validity (promoted, plní beforeSave z metadata dle docKinds.promote) ---
+
+        {
+            "id": "valid_from",
+            "name": "Valid from",
+            "name:cs": "Platnost od",
+            "name:en": "Valid from",
+            "type": "date",
+            "nullable": true,
+            "group": "validity"
+        },
+        {
+            "id": "valid_to",
+            "name": "Valid to / deadline",
+            "name:cs": "Platnost do / lhůta",
+            "name:en": "Valid to / deadline",
+            "type": "date",
+            "nullable": true,
+            "group": "validity"
+        },
+
+        // --- content ---
+
+        {
+            "id": "ai_summary",
+            "name": "Summary (AI)",
+            "name:cs": "Shrnutí (AI)",
+            "name:en": "Summary (AI)",
+            "type": "text",
+            "nullable": true,
+            "group": "content"
+        },
+        {
+            "id": "metadata",
+            "name": "Metadata",
+            "name:cs": "Metadata",
+            "name:en": "Metadata",
+            "type": "json",
+            "nullable": true,
+            "group": "content"
+        },
+        {
+            "id": "extracted_text",
+            "name": "Extracted text",
+            "name:cs": "Extrahovaný text",
+            "name:en": "Extracted text",
+            "type": "mediumtext",
+            "nullable": true,
+            "system": true,
+            "group": "content"
+        },
+
+        // --- source ---
+
+        {
+            "id": "source_kind",
+            "name": "Source",
+            "name:cs": "Zdroj",
+            "name:en": "Source",
+            "type": "enumString",
+            "length": 20,
+            "cfgItem": "base.registry.sourceKinds",
+            "nullable": false,
+            "default": "manual",
+            "group": "source"
+        },
+        {
+            "id": "source_message",
+            "name": "Source message",
+            "name:cs": "Zdrojová zpráva",
+            "name:en": "Source message",
+            "type": "int",
+            "nullable": true,
+            "reference": "core_mail_incoming_messages",
+            "group": "source"
+        },
+        {
+            "id": "extracted_doc",
+            "name": "Extraction",
+            "name:cs": "Extrakce",
+            "name:en": "Extraction",
+            "type": "int",
+            "nullable": true,
+            "reference": "core_mail_extracted_documents",
+            "system": true,
+            "group": "source"
+        },
+
+        // --- notes ---
+
+        {
+            "id": "notice",
+            "name": "Notice",
+            "name:cs": "Poznámka",
+            "name:en": "Notice",
+            "type": "text",
+            "nullable": true,
+            "group": "notes"
+        },
+
+        // --- system ---
+
+        {
+            "id": "docState",
+            "name": "Document state",
+            "name:cs": "Stav dokumentu",
+            "name:en": "Document state",
+            "type": "tinyint",
+            "default": 10,
+            "system": true
+        },
+        {
+            "id": "docStateMain",
+            "name": "Main document state",
+            "name:cs": "Hlavní stav dokumentu",
+            "name:en": "Main document state",
+            "type": "tinyint",
+            "default": 1,
+            "system": true
+        },
+        {
+            "id": "created",
+            "name": "Created",
+            "name:cs": "Vytvořeno",
+            "name:en": "Created",
+            "type": "datetime",
+            "nullable": false,
+            "system": true
+        },
+        {
+            "id": "created_by",
+            "name": "Created by",
+            "name:cs": "Vytvořil",
+            "name:en": "Created by",
+            "type": "int",
+            "nullable": true,
+            "reference": "core_system_users",
+            "system": true
+        },
+        {
+            "id": "modified",
+            "name": "Modified",
+            "name:cs": "Změněno",
+            "name:en": "Modified",
+            "type": "datetime",
+            "nullable": true,
+            "system": true
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "idx_binder",
+            "type": "index",
+            "columns": [
+                {"column": "binder"},
+                {"column": "docStateMain"}
+            ]
+        },
+        {
+            "id": "idx_kind",
+            "type": "index",
+            "columns": [
+                {"column": "doc_kind"}
+            ]
+        },
+        {
+            "id": "idx_partner",
+            "type": "index",
+            "columns": [
+                {"column": "partner"}
+            ]
+        },
+        {
+            "id": "idx_valid_to",
+            "type": "index",
+            "columns": [
+                {"column": "valid_to"},
+                {"column": "docStateMain"}
+            ]
+        },
+        {
+            "id": "ft_head",
+            "type": "fulltext",
+            "columns": [
+                {"column": "title"},
+                {"column": "ref_number"},
+                {"column": "ai_summary"}
+            ]
+        },
+        {
+            "id": "ft_text",
+            "type": "fulltext",
+            "columns": [
+                {"column": "extracted_text"}
+            ]
+        }
+    ]
+}

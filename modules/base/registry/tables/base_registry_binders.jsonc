@@ -1,0 +1,98 @@
+{
+    "tableId": 427,
+    "name": "Binders",
+    "name:cs": "Šanony",
+    "name:en": "Binders",
+
+    "displayPattern": "{name}",
+
+    "docStates": {
+        "stateColumn": "docState",
+        "mainColumn": "docStateMain",
+        "cfgItem": "core.system.docStatesArchive"
+    },
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+        {
+            "id": "name",
+            "name": "Name",
+            "name:cs": "Název",
+            "name:en": "Name",
+            "type": "varchar",
+            "length": 100,
+            "nullable": false
+        },
+        {
+            "id": "icon",
+            "name": "Icon",
+            "name:cs": "Ikona",
+            "name:en": "Icon",
+            "type": "varchar",
+            "length": 30,
+            "nullable": true
+        },
+        {
+            "id": "order_pos",
+            "name": "Order",
+            "name:cs": "Pořadí",
+            "name:en": "Order",
+            "type": "smallint",
+            "default": 0
+        },
+        {
+            "id": "notice",
+            "name": "Notice",
+            "name:cs": "Poznámka",
+            "name:en": "Notice",
+            "type": "varchar",
+            "length": 250,
+            "nullable": true
+        },
+        {
+            "id": "docState",
+            "name": "Document state",
+            "name:cs": "Stav dokumentu",
+            "name:en": "Document state",
+            "type": "tinyint",
+            "default": 10,
+            "system": true
+        },
+        {
+            "id": "docStateMain",
+            "name": "Main document state",
+            "name:cs": "Hlavní stav dokumentu",
+            "name:en": "Main document state",
+            "type": "tinyint",
+            "default": 1,
+            "system": true
+        },
+        {
+            "id": "created",
+            "name": "Created",
+            "name:cs": "Vytvořeno",
+            "name:en": "Created",
+            "type": "datetime",
+            "nullable": false,
+            "system": true
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "idx_name",
+            "type": "index",
+            "columns": [
+                {"column": "docStateMain"},
+                {"column": "order_pos"},
+                {"column": "name"}
+            ]
+        }
+    ]
+}

@@ -1,0 +1,22 @@
+{
+    // base.registry.sourceKinds
+    //
+    // Zdroj dokumentu Spisovny. Budoucí kanály: "databox" (datová schránka),
+    // "scan".
+
+    "manual": {
+        "name": "Manual",
+        "name:cs": "Ruční pořízení",
+        "name:en": "Manual"
+    },
+    "mail": {
+        "name": "E-mail",
+        "name:cs": "Došlá pošta",
+        "name:en": "E-mail"
+    },
+    "import": {
+        "name": "Import",
+        "name:cs": "Import (migrace)",
+        "name:en": "Import"
+    }
+}

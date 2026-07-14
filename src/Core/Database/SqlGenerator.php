@@ -15,6 +15,7 @@ class SqlGenerator
             'bigint'     => 'BIGINT',
             'varchar'    => "VARCHAR({$col->length})",
             'text'       => 'TEXT',
+            'mediumtext' => 'MEDIUMTEXT',
             'longtext'   => 'LONGTEXT',
             'numeric'    => "NUMERIC({$col->precision}, {$col->scale})",
             'float'      => 'FLOAT',

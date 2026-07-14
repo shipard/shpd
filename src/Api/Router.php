@@ -181,6 +181,10 @@ class Router
 			return $this->resolveMailSendersRoute($subpath, $method);
 		}
 
+		if (str_starts_with($subpath, '/_registry/')) {
+			return $this->resolveRegistryRoute($subpath, $method);
+		}
+
 		if (str_starts_with($subpath, '/_exchange/docs/document/')) {
 			return $this->resolveExchangeRoute($subpath, $method);
 		}
@@ -481,6 +485,23 @@ class Router
 				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
 			}
 			return new Route('analysis', 'reanalyze', null, $ndx);
+		}
+
+		return Response::error('NOT_FOUND', 'Not found', 404);
+	}
+
+	private function resolveRegistryRoute(string $subpath, string $method): Route|Response
+	{
+		$rest = substr($subpath, strlen('/_registry/'));
+		if (preg_match('#^from-message/(\d+)$#', $rest, $m)) {
+			$ndx = (int) $m[1];
+			if ($ndx <= 0) {
+				return Response::error('NOT_FOUND', 'Not found', 404);
+			}
+			if ($method !== 'POST') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('registry', 'fromMessage', null, $ndx);
 		}
 
 		return Response::error('NOT_FOUND', 'Not found', 404);

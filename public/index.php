@@ -286,6 +286,7 @@ function dispatch(
 		'lookup'  => dispatchLookup($route, $request, $tables, $db, $lookupRegistry ?? new LookupRegistry(), $configRuntime),
 		'viewer'  => dispatchViewer($route, $request, $auth, $viewerRegistry, $db, $configRuntime, resolveLanguage($request, $resolved->config)),
 		'mail'    => dispatchMail($route, $request, $auth, $tables, $db, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $configRuntime),
+		'registry' => dispatchRegistry($route, $auth, $tables, $db, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $configRuntime),
 		'analysis' => dispatchAnalysis($route, $request, $auth, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher),
 		'exchange' => dispatchExchange($route, $request, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher),
 		'alerts' => dispatchAlerts($route, $request, $db, $alertCheckRegistry, $configRuntime, resolveLanguage($request, $resolved->config)),
@@ -597,6 +598,32 @@ function dispatchMail(
 		'importMessage'     => $ctrl->importMessage($auth, $request),
 		'setSenderPassword' => $ctrl->setSenderPassword($auth, $request, (int) $route->id),
 		default             => Response::error('INTERNAL_ERROR', "Unknown mail action: {$route->action}", 500),
+	};
+}
+
+function dispatchRegistry(
+	Route $route,
+	AuthContext $auth,
+	array $tables,
+	\Shipard\Core\Database\DataSourceConnection $db,
+	\Shipard\Api\ResolvedDataSource $resolved,
+	\Shipard\Core\Document\DocumentRegistry $documentRegistry,
+	?\Shipard\Core\Config\ConfigRuntime $configRuntime = null,
+): Response {
+	$service = new \Shipard\Module\Base\Registry\FileFromMessageService(
+		$db,
+		$documentRegistry,
+		new \Shipard\Module\Core\Attachments\AttachmentService(
+			$db,
+			$resolved->config->getDataSourceDir(),
+			$tables,
+		),
+		$configRuntime,
+	);
+	$ctrl = new \Shipard\Api\Controller\RegistryController($service);
+	return match ($route->action) {
+		'fromMessage' => $ctrl->fromMessage($auth, (int) $route->id),
+		default       => Response::error('INTERNAL_ERROR', "Unknown registry action: {$route->action}", 500),
 	};
 }
 

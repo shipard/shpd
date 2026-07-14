@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Invoice xmlns="http://isdoc.cz/namespace/2013" version="6.0.1">
+    <DocumentType>4</DocumentType>
+    <ID>ZAL-2026-0009</ID>
+    <UUID>d7e8f9a0-4444-4555-c666-777788889999</UUID>
+    <IssueDate>2026-07-04</IssueDate>
+    <LocalCurrencyCode>CZK</LocalCurrencyCode>
+</Invoice>

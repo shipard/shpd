@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<isdoc:Invoice xmlns:isdoc="http://isdoc.cz/namespace/2013" version="6.0.1">
+    <isdoc:DocumentType>2</isdoc:DocumentType>
+    <isdoc:ID>DOB-2026-0003</isdoc:ID>
+    <isdoc:UUID>c9d0e1f2-2222-4333-a444-555566667777</isdoc:UUID>
+    <isdoc:IssuingSystem>Shipard test fixtures</isdoc:IssuingSystem>
+    <isdoc:IssueDate>2026-07-03</isdoc:IssueDate>
+    <isdoc:VATApplicable>true</isdoc:VATApplicable>
+    <isdoc:ElectronicPossibilityAgreementReference/>
+    <isdoc:Note>Dobropis k faktuře 2026100077 — vrácené zboží.</isdoc:Note>
+    <isdoc:LocalCurrencyCode>CZK</isdoc:LocalCurrencyCode>
+    <isdoc:CurrRate>1</isdoc:CurrRate>
+    <isdoc:RefCurrRate>1</isdoc:RefCurrRate>
+    <isdoc:AccountingSupplierParty>
+        <isdoc:Party>
+            <isdoc:PartyIdentification>
+                <isdoc:ID>12345678</isdoc:ID>
+            </isdoc:PartyIdentification>
+            <isdoc:PartyName>
+                <isdoc:Name>Testovací dodavatel s.r.o.</isdoc:Name>
+            </isdoc:PartyName>
+            <isdoc:PostalAddress>
+                <isdoc:StreetName>Smyšlená</isdoc:StreetName>
+                <isdoc:BuildingNumber>12</isdoc:BuildingNumber>
+                <isdoc:CityName>Testov</isdoc:CityName>
+                <isdoc:PostalZone>10000</isdoc:PostalZone>
+                <isdoc:Country>
+                    <isdoc:IdentificationCode>CZ</isdoc:IdentificationCode>
+                    <isdoc:Name>Česká republika</isdoc:Name>
+                </isdoc:Country>
+            </isdoc:PostalAddress>
+            <isdoc:PartyTaxScheme>
+                <isdoc:CompanyID>CZ12345678</isdoc:CompanyID>
+                <isdoc:TaxScheme>VAT</isdoc:TaxScheme>
+            </isdoc:PartyTaxScheme>
+        </isdoc:Party>
+    </isdoc:AccountingSupplierParty>
+    <isdoc:InvoiceLines>
+        <isdoc:InvoiceLine>
+            <isdoc:ID>1</isdoc:ID>
+            <isdoc:InvoicedQuantity unitCode="ks">-1</isdoc:InvoicedQuantity>
+            <isdoc:LineExtensionAmount>-200.00</isdoc:LineExtensionAmount>
+            <isdoc:LineExtensionAmountTaxInclusive>-224.00</isdoc:LineExtensionAmountTaxInclusive>
+            <isdoc:LineExtensionTaxAmount>-24.00</isdoc:LineExtensionTaxAmount>
+            <isdoc:UnitPrice>200.00</isdoc:UnitPrice>
+            <isdoc:UnitPriceTaxInclusive>224.00</isdoc:UnitPriceTaxInclusive>
+            <isdoc:ClassifiedTaxCategory>
+                <isdoc:Percent>12</isdoc:Percent>
+                <isdoc:VATCalculationMethod>0</isdoc:VATCalculationMethod>
+            </isdoc:ClassifiedTaxCategory>
+            <isdoc:Item>
+                <isdoc:Description>Odborná publikace — vratka</isdoc:Description>
+                <isdoc:SellersItemIdentification>
+                    <isdoc:ID>PUB-001</isdoc:ID>
+                </isdoc:SellersItemIdentification>
+            </isdoc:Item>
+        </isdoc:InvoiceLine>
+    </isdoc:InvoiceLines>
+    <isdoc:TaxTotal>
+        <isdoc:TaxSubTotal>
+            <isdoc:TaxableAmount>-200.00</isdoc:TaxableAmount>
+            <isdoc:TaxAmount>-24.00</isdoc:TaxAmount>
+            <isdoc:TaxInclusiveAmount>-224.00</isdoc:TaxInclusiveAmount>
+            <isdoc:TaxCategory>
+                <isdoc:Percent>12</isdoc:Percent>
+            </isdoc:TaxCategory>
+        </isdoc:TaxSubTotal>
+        <isdoc:TaxAmount>-24.00</isdoc:TaxAmount>
+    </isdoc:TaxTotal>
+    <isdoc:LegalMonetaryTotal>
+        <isdoc:TaxExclusiveAmount>-200.00</isdoc:TaxExclusiveAmount>
+        <isdoc:TaxInclusiveAmount>-224.00</isdoc:TaxInclusiveAmount>
+        <isdoc:PayableRoundingAmount>0</isdoc:PayableRoundingAmount>
+        <isdoc:PaidDepositsAmount>0</isdoc:PaidDepositsAmount>
+        <isdoc:PayableAmount>-224.00</isdoc:PayableAmount>
+    </isdoc:LegalMonetaryTotal>
+</isdoc:Invoice>

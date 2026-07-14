@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Order xmlns="http://example.com/orders">
+    <ID>OBJ-1</ID>
+</Order>

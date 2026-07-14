@@ -1226,7 +1226,7 @@ class AnalysisController
         // only parses the body and maps the outcome back onto a Response.
         $body = $request->getBody();
         $body = is_array($body) ? $body : [];
-        $service = new ExtractedDocumentApplier($this->db, $this->applier, $this->enricher);
+        $service = $this->buildExtractedApplier();
         $outcome = $service->apply(
             $extractedNdx,
             $auth->userId,
@@ -1301,14 +1301,7 @@ class AnalysisController
             return Response::error('UNAUTHORIZED', 'Authentication required', 401);
         }
 
-        $headsGateway = $this->buildHeadsGateway();
-        if ($headsGateway === null) {
-            return Response::error('INTERNAL_ERROR', 'Document gateway unavailable', 500);
-        }
-
-        $outcome = ExtractedDocumentApplier::unapply(
-            $this->db, $extractedNdx, $auth->userId, $headsGateway,
-        );
+        $outcome = $this->buildExtractedApplier()->unapply($extractedNdx, $auth->userId);
         if (!$outcome->ok) {
             return Response::error(
                 $outcome->errorCode ?? 'INTERNAL_ERROR',
@@ -1346,6 +1339,23 @@ class AnalysisController
             $this->config,
             $this->eventDispatcher,
             $def->docStates,
+        );
+    }
+
+    /**
+     * Sestaví sdílený apply/unapply servis včetně mapy target applierů
+     * (registrace napevno ve wiringu, vzor FeedSources — žádný plugin
+     * registr). Docs target jede interně přes exchange DocumentApplier.
+     */
+    private function buildExtractedApplier(): ExtractedDocumentApplier
+    {
+        return new ExtractedDocumentApplier(
+            $this->db,
+            $this->applier,
+            $this->enricher,
+            $this->configRuntime,
+            [],
+            $this->buildHeadsGateway(),
         );
     }
 

@@ -350,6 +350,7 @@ function buildMcpRegistry(
 				$tables,
 			),
 			\Shipard\Module\Core\Exchange\Enrich\RowHistoryEnricher::create($db->getDibiConnection()),
+			$configRuntime,
 		)
 		: null;
 	$registry->register(new \Shipard\Module\Core\Mail\Mcp\MailDraftDocumentTool($draftApplier));

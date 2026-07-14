@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Shipard\Tests\Unit\Module\Core\Mail;
 
 use PHPUnit\Framework\TestCase;
+use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Document\DocumentResult;
 use Shipard\Core\Document\TableGateway;
@@ -13,7 +14,11 @@ use Shipard\Module\Core\Exchange\Document\DocumentApplier;
 use Shipard\Module\Core\Exchange\Enrich\RowHistoryEnricher;
 use Shipard\Module\Core\Exchange\Resolve\PartyResolver;
 use Shipard\Module\Core\Exchange\Resolve\ResolveResult;
+use Shipard\Module\Core\Mail\ExtractedDocTypes;
 use Shipard\Module\Core\Mail\ExtractedDocumentApplier;
+use Shipard\Module\Core\Mail\ExtractedTargetApplier;
+use Shipard\Module\Core\Mail\TargetApplyResult;
+use Shipard\Module\Core\Mail\TargetUnapplyResult;
 
 /**
  * Unit tests for the shared apply core extracted out of
@@ -34,6 +39,25 @@ class ExtractedDocumentApplierTest extends TestCase
     private function service(DataSourceConnection $db, DocumentApplier $applier): ExtractedDocumentApplier
     {
         return new ExtractedDocumentApplier($db, $applier);
+    }
+
+    private function unapplyService(DataSourceConnection $db, TableGateway $gw): ExtractedDocumentApplier
+    {
+        return new ExtractedDocumentApplier($db, null, null, null, [], $gw);
+    }
+
+    /** ConfigRuntime mock s extractedDocTypes cfg: contract→registry, invoiceReceived→docs. */
+    private function configWithTargets(): ConfigRuntime
+    {
+        $config = $this->createMock(ConfigRuntime::class);
+        $config->method('cfgItem')->willReturnMap([
+            ['core.mail.extractedDocTypes', [
+                'invoiceReceived' => ['target' => 'docs'],
+                'contract'        => ['target' => 'registry', 'docKind' => 'contract'],
+                'legacy'          => [],
+            ]],
+        ]);
+        return $config;
     }
 
     // ── apply() branches ────────────────────────────────────────────────────
@@ -295,6 +319,135 @@ class ExtractedDocumentApplierTest extends TestCase
         $this->assertNull($captured['rows'][0]['item']['ourCode']); // neobohaceno
     }
 
+    // ── target seam ─────────────────────────────────────────────────────────
+
+    public function testTargetForFallsBackToDocs(): void
+    {
+        $config = $this->configWithTargets();
+        $this->assertSame('docs', ExtractedDocTypes::targetFor(null, 'contract'));
+        $this->assertSame('docs', ExtractedDocTypes::targetFor($config, 'unknownType'));
+        $this->assertSame('docs', ExtractedDocTypes::targetFor($config, 'legacy'));
+        $this->assertSame('docs', ExtractedDocTypes::targetFor($config, 'invoiceReceived'));
+        $this->assertSame('registry', ExtractedDocTypes::targetFor($config, 'contract'));
+        $this->assertSame('contract', ExtractedDocTypes::docKindFor($config, 'contract'));
+        $this->assertNull(ExtractedDocTypes::docKindFor($config, 'invoiceReceived'));
+    }
+
+    public function testApplyRoutesRegistryTargetToTargetApplier(): void
+    {
+        $canonical = ['schema' => 'shpd.registry.document.v1', 'docType' => 'contract', 'title' => 'Smlouva'];
+        $row = [
+            'id' => 1, 'status' => 20, 'message' => 100, 'target_row_ndx' => null,
+            'doc_type' => 'contract', 'extracted_json' => json_encode($canonical),
+        ];
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturn($row);
+
+        $docsApplier = $this->createMock(DocumentApplier::class);
+        $docsApplier->expects($this->never())->method('apply');
+
+        $targetApplier = $this->createMock(ExtractedTargetApplier::class);
+        $targetApplier->expects($this->once())->method('apply')
+            ->with($canonical, $row, 7)
+            ->willReturn(TargetApplyResult::ok(4242));
+
+        // Enrichment/_resolve/applyOptions se u registry targetu přeskakují —
+        // ověřeno passthrough canonicalem (beze změn) v assertu níže.
+        $service = new ExtractedDocumentApplier(
+            $db, $docsApplier, null, $this->configWithTargets(), ['registry' => $targetApplier],
+        );
+        // writeStatusTransition selže na mock dibi — apply loguje a hlásí úspěch
+        // (stejné chování jako docs cesta, recovery doběhne status později).
+        $outcome = $service->apply(1, 7, null);
+
+        $this->assertTrue($outcome->ok);
+        $this->assertSame(4242, $outcome->savedDocId);
+        $this->assertSame($canonical, $outcome->canonical);
+    }
+
+    public function testApplyRegistryTargetErrorPassesThrough(): void
+    {
+        $canonical = ['schema' => 'shpd.registry.document.v1', 'docType' => 'contract', 'title' => 'X'];
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturn([
+            'id' => 1, 'status' => 20, 'message' => 100, 'target_row_ndx' => null,
+            'doc_type' => 'contract', 'extracted_json' => json_encode($canonical),
+        ]);
+        $targetApplier = $this->createMock(ExtractedTargetApplier::class);
+        $targetApplier->method('apply')->willReturn(
+            TargetApplyResult::error('VALIDATION_ERROR', 'title missing', 422),
+        );
+
+        $service = new ExtractedDocumentApplier(
+            $db, null, null, $this->configWithTargets(), ['registry' => $targetApplier],
+        );
+        $outcome = $service->apply(1, 7, null);
+
+        $this->assertFalse($outcome->ok);
+        $this->assertSame('VALIDATION_ERROR', $outcome->errorCode);
+        $this->assertSame(422, $outcome->statusCode);
+    }
+
+    public function testApplyRegistryTargetWithoutWiredApplierFails(): void
+    {
+        $canonical = ['schema' => 'shpd.registry.document.v1', 'docType' => 'contract', 'title' => 'X'];
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturn([
+            'id' => 1, 'status' => 20, 'message' => 100, 'target_row_ndx' => null,
+            'doc_type' => 'contract', 'extracted_json' => json_encode($canonical),
+        ]);
+
+        $service = new ExtractedDocumentApplier($db, null, null, $this->configWithTargets());
+        $outcome = $service->apply(1, 7, null);
+
+        $this->assertFalse($outcome->ok);
+        $this->assertSame('INTERNAL_ERROR', $outcome->errorCode);
+        $this->assertSame(500, $outcome->statusCode);
+    }
+
+    public function testUnapplyRoutesRegistryTargetToTargetApplier(): void
+    {
+        $row = [
+            'id' => 1, 'status' => 40, 'message' => 100, 'target_row_ndx' => 555,
+            'doc_type' => 'contract',
+        ];
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturn($row);
+
+        $gw = $this->createMock(TableGateway::class);
+        $gw->expects($this->never())->method('loadDocument');
+
+        $targetApplier = $this->createMock(ExtractedTargetApplier::class);
+        $targetApplier->expects($this->once())->method('unapply')
+            ->with($row)
+            ->willReturn(TargetUnapplyResult::error('DOC_ADVANCED', 'Document changed since apply', 409));
+
+        $service = new ExtractedDocumentApplier(
+            $db, null, null, $this->configWithTargets(), ['registry' => $targetApplier], $gw,
+        );
+        $outcome = $service->unapply(1, 7);
+
+        $this->assertFalse($outcome->ok);
+        $this->assertSame('DOC_ADVANCED', $outcome->errorCode);
+        $this->assertSame(409, $outcome->statusCode);
+    }
+
+    public function testUnapplyDocsWithoutGatewayFails(): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturn([
+            'id' => 1, 'status' => 40, 'message' => 100, 'target_row_ndx' => 555,
+            'doc_type' => 'invoiceReceived',
+        ]);
+
+        $service = new ExtractedDocumentApplier($db, null, null, $this->configWithTargets());
+        $outcome = $service->unapply(1, 7);
+
+        $this->assertFalse($outcome->ok);
+        $this->assertSame('INTERNAL_ERROR', $outcome->errorCode);
+        $this->assertSame(500, $outcome->statusCode);
+    }
+
     // ── unapply() guard branches ────────────────────────────────────────────
     //
     // Happy round-trip (trash + extracted→20 + zpráva→20) potřebuje reálné dibi
@@ -308,7 +461,7 @@ class ExtractedDocumentApplierTest extends TestCase
         $gw = $this->createMock(TableGateway::class);
         $gw->expects($this->never())->method('loadDocument');
 
-        $outcome = ExtractedDocumentApplier::unapply($db, 999, 7, $gw);
+        $outcome = $this->unapplyService($db, $gw)->unapply(999, 7);
         $this->assertFalse($outcome->ok);
         $this->assertSame('NOT_FOUND', $outcome->errorCode);
         $this->assertSame(404, $outcome->statusCode);
@@ -323,7 +476,7 @@ class ExtractedDocumentApplierTest extends TestCase
         $gw = $this->createMock(TableGateway::class);
         $gw->expects($this->never())->method('loadDocument');
 
-        $outcome = ExtractedDocumentApplier::unapply($db, 1, 7, $gw);
+        $outcome = $this->unapplyService($db, $gw)->unapply(1, 7);
         $this->assertFalse($outcome->ok);
         $this->assertSame('INVALID_STATE', $outcome->errorCode);
         $this->assertSame(409, $outcome->statusCode);
@@ -338,7 +491,7 @@ class ExtractedDocumentApplierTest extends TestCase
         $gw = $this->createMock(TableGateway::class);
         $gw->expects($this->never())->method('loadDocument');
 
-        $outcome = ExtractedDocumentApplier::unapply($db, 1, 7, $gw);
+        $outcome = $this->unapplyService($db, $gw)->unapply(1, 7);
         $this->assertFalse($outcome->ok);
         $this->assertSame('INVALID_STATE', $outcome->errorCode);
     }
@@ -353,7 +506,7 @@ class ExtractedDocumentApplierTest extends TestCase
         $gw->method('loadDocument')->willReturn(null);
         $gw->expects($this->never())->method('saveDocument');
 
-        $outcome = ExtractedDocumentApplier::unapply($db, 1, 7, $gw);
+        $outcome = $this->unapplyService($db, $gw)->unapply(1, 7);
         $this->assertFalse($outcome->ok);
         $this->assertSame('DOC_ADVANCED', $outcome->errorCode);
         $this->assertSame(409, $outcome->statusCode);
@@ -369,7 +522,7 @@ class ExtractedDocumentApplierTest extends TestCase
         $gw->method('loadDocument')->willReturn(['id' => 555, 'docState' => 20]); // Confirmed
         $gw->expects($this->never())->method('saveDocument');
 
-        $outcome = ExtractedDocumentApplier::unapply($db, 1, 7, $gw);
+        $outcome = $this->unapplyService($db, $gw)->unapply(1, 7);
         $this->assertFalse($outcome->ok);
         $this->assertSame('DOC_ADVANCED', $outcome->errorCode);
     }
@@ -391,7 +544,7 @@ class ExtractedDocumentApplierTest extends TestCase
 
         // writeUnapplyTransition pak selže na mock dibi (getDibiConnection),
         // takže výsledek je INTERNAL_ERROR — ale trash krok proběhl a to ověřujeme.
-        ExtractedDocumentApplier::unapply($db, 1, 7, $gw);
+        $this->unapplyService($db, $gw)->unapply(1, 7);
 
         $this->assertNotNull($captured);
         $this->assertSame(90, $captured['docState']);

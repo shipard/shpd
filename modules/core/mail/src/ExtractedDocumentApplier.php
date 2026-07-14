@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Shipard\Module\Core\Mail;
 
+use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Document\TableGateway;
 use Shipard\Core\Logging\ErrorLogger;
@@ -19,6 +20,13 @@ use Shipard\Module\Core\Exchange\Enrich\RowHistoryEnricher;
  * nástroj `mail_draft_document` jely jedním kódem. Controller je nad službou
  * tenká slupka (parse body / auth / mapování na Response); nástroj nad ní
  * staví LLM obálku. Chování HTTP endpointu se refaktorem nemění.
+ *
+ * Target seam: podle `extractedDocTypes[doc_type].target` se apply/unapply
+ * větví — `docs` (default) jede historickou cestou přes exchange
+ * DocumentApplier (enrichment, `_resolve`, applyOptions); ostatní targety
+ * deleguje na mapu `$targetAppliers` ({@see ExtractedTargetApplier}).
+ * Sdílená status mašinerie (writeStatusTransition/writeUnapplyTransition,
+ * auto-transition zprávy) je pro všechny targety společná.
  */
 final class ExtractedDocumentApplier
 {
@@ -38,10 +46,21 @@ final class ExtractedDocumentApplier
     private const DOC_STATE_TRASH = 90;
     private const DOC_STATE_TRASH_MAIN = 5;
 
+    /**
+     * `$applier` je nullable kvůli konstrukci pro unapply-only / registry-only
+     * použití (docs apply bez něj vrací INTERNAL_ERROR). `$headsGateway`
+     * potřebuje jen docs větev unapply — staví ho controller (se všemi
+     * závislostmi jako `FormController::applyStateTransitionViaDocument`).
+     *
+     * @param array<string, ExtractedTargetApplier> $targetAppliers mapa target => applier (bez `docs`)
+     */
     public function __construct(
         private readonly DataSourceConnection $db,
-        private readonly DocumentApplier $applier,
+        private readonly ?DocumentApplier $applier,
         private readonly ?RowHistoryEnricher $enricher = null,
+        private readonly ?ConfigRuntime $config = null,
+        private readonly array $targetAppliers = [],
+        private readonly ?TableGateway $headsGateway = null,
     ) {}
 
     /**
@@ -100,6 +119,21 @@ final class ExtractedDocumentApplier
             return ExtractedApplyOutcome::error(
                 $extractedNdx, $messageNdx, 'CORRUPTED_DATA',
                 'extracted_json cannot be parsed', 500,
+            );
+        }
+
+        // Non-docs target → delegace na registrovaný target applier.
+        // Enrichment, `_resolve` merge, applyOptions i source injection jsou
+        // docs-specifika (exchange canonical) a přeskakují se.
+        $target = ExtractedDocTypes::targetFor($this->config, (string) ($existing['doc_type'] ?? ''));
+        if ($target !== ExtractedDocTypes::TARGET_DOCS) {
+            return $this->applyViaTarget($target, $canonical, $existing, $extractedNdx, $messageNdx, $userId);
+        }
+
+        if ($this->applier === null) {
+            return ExtractedApplyOutcome::error(
+                $extractedNdx, $messageNdx, 'INTERNAL_ERROR',
+                'Document applier unavailable', 500,
             );
         }
 
@@ -175,6 +209,57 @@ final class ExtractedDocumentApplier
     }
 
     /**
+     * Apply přes registrovaný target applier (ne-docs cesta). Target applier
+     * založí cílový záznam včetně zápisu `target_*` na extracted řádek;
+     * status → applied jde sdílenou mašinerií (stejné warn-only chování
+     * jako docs — recovery cesta doběhne status později).
+     *
+     * @param array<string, mixed> $canonical
+     * @param array<string, mixed> $existing
+     */
+    private function applyViaTarget(
+        string $target,
+        array $canonical,
+        array $existing,
+        int $extractedNdx,
+        int $messageNdx,
+        ?int $userId,
+    ): ExtractedApplyOutcome {
+        $targetApplier = $this->targetAppliers[$target] ?? null;
+        if ($targetApplier === null) {
+            return ExtractedApplyOutcome::error(
+                $extractedNdx, $messageNdx, 'INTERNAL_ERROR',
+                "No applier wired for extraction target '{$target}'", 500,
+            );
+        }
+
+        $result = $targetApplier->apply($canonical, $existing, $userId);
+        if (!$result->success) {
+            return ExtractedApplyOutcome::error(
+                $extractedNdx, $messageNdx,
+                $result->errorCode ?? 'INTERNAL_ERROR',
+                $result->errorMessage ?? 'Apply failed',
+                $result->statusCode,
+            );
+        }
+
+        $savedId = (int) ($result->savedId ?? 0);
+        $write = self::writeStatusTransition(
+            $this->db, $extractedNdx, $userId,
+            ExtractedDocumentDocument::STATUS_APPLIED, null,
+        );
+        if (!$write->ok) {
+            ErrorLogger::warn('ExtractedDocumentApplier::apply status update failed after successful apply', [
+                'extractedNdx' => $extractedNdx,
+                'target'       => $target,
+                'savedDocId'   => $savedId,
+            ]);
+        }
+
+        return ExtractedApplyOutcome::ok($extractedNdx, $messageNdx, $savedId, $canonical);
+    }
+
+    /**
      * Re-entry pro už (částečně) aplikovaný doklad: status 40 → idempotent;
      * jinak doběhne status update (recovery po laggnutém zápisu statusu).
      *
@@ -222,16 +307,14 @@ final class ExtractedDocumentApplier
      * doc-save a status-write jsou dvě transakce; při selhání druhé je doklad
      * už v koši (vratné ručně) a chyba se reportuje.
      *
-     * `$headsGateway` je předaný zvenčí (controller ho staví se všemi
-     * závislostmi jako `FormController::applyStateTransitionViaDocument`), takže
-     * unapply nezávisí na `DocumentApplier` — proto static.
+     * Guard + úklid se větví per target: docs cesta výše popsaným způsobem
+     * přes `$this->headsGateway`; ostatní targety delegují na
+     * {@see ExtractedTargetApplier::unapply()} (guard i trash vlastní),
+     * `writeUnapplyTransition` zůstává sdílený.
      */
-    public static function unapply(
-        DataSourceConnection $db,
-        int $extractedNdx,
-        ?int $userId,
-        TableGateway $headsGateway,
-    ): ExtractedApplyOutcome {
+    public function unapply(int $extractedNdx, ?int $userId): ExtractedApplyOutcome
+    {
+        $db = $this->db;
         $existing = $db->fetchRow(
             'SELECT * FROM %n WHERE id = %i',
             self::EXTRACTED_TABLE, $extractedNdx,
@@ -259,8 +342,38 @@ final class ExtractedDocumentApplier
             );
         }
 
+        // Non-docs target → guard + trash deleguje target applier; sdílený
+        // unapply přechod (extracted → 20, target_* NULL, zpráva reverz) níže.
+        $target = ExtractedDocTypes::targetFor($this->config, (string) ($existing['doc_type'] ?? ''));
+        if ($target !== ExtractedDocTypes::TARGET_DOCS) {
+            $targetApplier = $this->targetAppliers[$target] ?? null;
+            if ($targetApplier === null) {
+                return ExtractedApplyOutcome::error(
+                    $extractedNdx, $messageNdx, 'INTERNAL_ERROR',
+                    "No applier wired for extraction target '{$target}'", 500,
+                );
+            }
+            $result = $targetApplier->unapply($existing);
+            if (!$result->success) {
+                return ExtractedApplyOutcome::error(
+                    $extractedNdx, $messageNdx,
+                    $result->errorCode ?? 'INTERNAL_ERROR',
+                    $result->errorMessage ?? 'Unapply failed',
+                    $result->statusCode,
+                );
+            }
+            return $this->finishUnapply($extractedNdx, $messageNdx, (int) ($result->trashedId ?? $targetDocId));
+        }
+
+        if ($this->headsGateway === null) {
+            return ExtractedApplyOutcome::error(
+                $extractedNdx, $messageNdx, 'INTERNAL_ERROR',
+                'Document gateway unavailable', 500,
+            );
+        }
+
         // Cíl musí být stále nedotčený Koncept — jinak řeší uživatel ručně.
-        $doc = $headsGateway->loadDocument($targetDocId);
+        $doc = $this->headsGateway->loadDocument($targetDocId);
         if ($doc === null) {
             return ExtractedApplyOutcome::error(
                 $extractedNdx, $messageNdx, 'DOC_ADVANCED',
@@ -278,7 +391,7 @@ final class ExtractedDocumentApplier
         //    (přiděluje se až 10→20), takže není co vracet.
         $doc['docState']     = self::DOC_STATE_TRASH;
         $doc['docStateMain'] = self::DOC_STATE_TRASH_MAIN;
-        $result = $headsGateway->saveDocument($doc);
+        $result = $this->headsGateway->saveDocument($doc);
         if (!$result->isSuccess()) {
             return ExtractedApplyOutcome::error(
                 $extractedNdx, $messageNdx, 'INTERNAL_ERROR',
@@ -287,7 +400,16 @@ final class ExtractedDocumentApplier
         }
 
         // 2. Extracted → pending_review, vynulovat target/applied_*, zpráva 40→20.
-        $write = self::writeUnapplyTransition($db, $extractedNdx);
+        return $this->finishUnapply($extractedNdx, $messageNdx, $targetDocId);
+    }
+
+    /**
+     * Sdílené dokončení unapply po úspěšném úklidu cíle (libovolný target):
+     * extracted → pending_review, `target_*`/`applied_*` NULL, zpráva reverz.
+     */
+    private function finishUnapply(int $extractedNdx, int $messageNdx, int $targetDocId): ExtractedApplyOutcome
+    {
+        $write = self::writeUnapplyTransition($this->db, $extractedNdx);
         if (!$write->ok) {
             ErrorLogger::warn('ExtractedDocumentApplier::unapply status update failed after trashing doc', [
                 'extractedNdx' => $extractedNdx,

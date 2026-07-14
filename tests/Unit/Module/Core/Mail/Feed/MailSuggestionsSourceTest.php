@@ -262,6 +262,123 @@ final class MailSuggestionsSourceTest extends TestCase
         $this->assertStringContainsString("`doc_type` != 'other'", $captured);
     }
 
+    /** ConfigRuntime s registry targetem (insurance) + docKinds. */
+    private function registryConfig(): ConfigRuntime
+    {
+        $config = $this->createMock(ConfigRuntime::class);
+        $config->method('cfgItem')->willReturnCallback(
+            static fn(string $id): mixed => match ($id) {
+                'core.mail.extractedDocTypes' => [
+                    'invoiceReceived' => ['name' => 'Přijatá faktura', 'target' => 'docs'],
+                    'insurance'       => ['name' => 'Pojistná smlouva', 'target' => 'registry', 'docKind' => 'insurance'],
+                ],
+                'base.registry.docKinds' => [
+                    'insurance' => [
+                        'name'    => 'Pojistná smlouva',
+                        'promote' => ['policyNumber' => 'ref_number', 'validFrom' => 'valid_from', 'validTo' => 'valid_to'],
+                    ],
+                ],
+                default => null,
+            },
+        );
+        return $config;
+    }
+
+    /** @return array<string,mixed> */
+    private function registrySuggestionRow(int $status, int $ndx = 1): array
+    {
+        return [
+            'extracted_ndx'  => $ndx,
+            'message_ndx'    => 100 + $ndx,
+            'doc_type'       => 'insurance',
+            'confidence'     => 0.91,
+            'status'         => $status,
+            'subject'        => 'Pojistná smlouva 2026',
+            'sender_name'    => 'Pojišťovna ABC',
+            'received_at'    => '2026-06-28 10:00:00',
+            'extracted_json' => json_encode([
+                'schema'  => 'shpd.registry.document.v1',
+                'docType' => 'insurance',
+                'title'   => 'Pojistná smlouva — flotila vozidel',
+                'party'   => ['name' => 'Pojišťovna ABC a.s.', 'companyId' => '12345678'],
+                'kindFields' => ['policyNumber' => 'POJ-1', 'validTo' => '2026-12-31'],
+                'binderSuggestion' => 'Pojištění',
+            ]),
+        ];
+    }
+
+    public function testRegistryCardTitleSubtitleTargetAndApplyId(): void
+    {
+        $src = new MailSuggestionsSource();
+        $cards = $src->collectCards($this->context([$this->registrySuggestionRow(10)], [], $this->registryConfig()));
+
+        $this->assertCount(1, $cards);
+        $card = $cards[0];
+        // titulek: {docKind label} — {party.name}
+        $this->assertSame('Pojistná smlouva — Pojišťovna ABC a.s.', $card['title']);
+        // podtitulek: platí do (klíč přes inverzi promote) · jistota · e-mail
+        $this->assertStringContainsString('platí do 31. 12. 2026', $card['subtitle']);
+        $this->assertStringContainsString('jistota 91 %', $card['subtitle']);
+        $this->assertStringContainsString('Pojistná smlouva 2026', $card['subtitle']);
+        $this->assertSame('registry', $card['context']['target']);
+        // apply akce má id apply_registry → FE label „Zařadit"; kind beze změny
+        $this->assertSame('apply_registry', $card['actions'][0]['id']);
+        $this->assertSame('apply_extracted', $card['actions'][0]['kind']);
+        $this->assertTrue($card['actions'][0]['primary']);
+    }
+
+    public function testRegistryCardWithoutPartyUsesKindLabelOnly(): void
+    {
+        $row = $this->registrySuggestionRow(10);
+        $canonical = json_decode((string) $row['extracted_json'], true);
+        unset($canonical['party'], $canonical['kindFields']);
+        $row['extracted_json'] = json_encode($canonical);
+
+        $src = new MailSuggestionsSource();
+        $cards = $src->collectCards($this->context([$row], [], $this->registryConfig()));
+
+        $this->assertSame('Pojistná smlouva', $cards[0]['title']);
+        $this->assertStringNotContainsString('platí do', $cards[0]['subtitle']);
+    }
+
+    public function testRegistryReviewStatusHasNoApplyAction(): void
+    {
+        $src = new MailSuggestionsSource();
+        $cards = $src->collectCards($this->context([$this->registrySuggestionRow(20)], [], $this->registryConfig()));
+
+        $ids = array_column($cards[0]['actions'], 'id');
+        $this->assertSame(['review', 'reject'], $ids);
+    }
+
+    public function testDocsCardKeepsTargetDocsInContext(): void
+    {
+        $src = new MailSuggestionsSource();
+        $cards = $src->collectCards($this->context([$this->suggestionRow(10)], [], $this->registryConfig()));
+
+        $this->assertSame('docs', $cards[0]['context']['target']);
+        $this->assertSame('apply', $cards[0]['actions'][0]['id']);
+    }
+
+    public function testNotInvoiceQueryFiltersPrimaryTypeOther(): void
+    {
+        // Registry primary typy (contract/insurance/…) na kartu „Není faktura"
+        // nesmí spadnout — SQL filtruje primary_type='other' přímo.
+        $captured = null;
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchAll')->willReturnCallback(
+            static function (string $sql) use (&$captured): array {
+                if (str_contains($sql, 'NOT EXISTS')) {
+                    $captured = $sql;
+                }
+                return [];
+            },
+        );
+        (new MailSuggestionsSource())->collectCards(new FeedContext($db, null, 'cs', 30));
+
+        $this->assertNotNull($captured);
+        $this->assertStringContainsString("`primary_type` = 'other'", $captured);
+    }
+
     public function testEmptyInputReturnsNoCards(): void
     {
         $src = new MailSuggestionsSource();

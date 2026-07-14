@@ -24,6 +24,7 @@
   import Modal from '../ui/Modal.svelte';
   import Button from '../ui/Button.svelte';
   import DocumentExchangePreview from './DocumentExchangePreview.svelte';
+  import RegistryExtractedPreview from './RegistryExtractedPreview.svelte';
   import PdfViewerPanel from './PdfViewerPanel.svelte';
   import { previewExtractedDocument } from '../../api/exchange.js';
   import { t } from '../../i18n/index.js';
@@ -101,6 +102,11 @@
     return true;
   }
 
+  // Registry target (Spisovna) — server posílá `target: 'registry'`;
+  // preview je kompaktní bez resolve panelu, apply se negatuje jen ai_failed
+  // (registry canonical žádné `_resolve` nenese).
+  let isRegistry = $derived(data?.target === 'registry');
+
   let canApply = $derived(
     data !== null
       && !data.aiFailed
@@ -149,13 +155,17 @@
         <PdfViewerPanel attachments={data.attachments ?? []} />
       </div>
       <div class="shpd-exchange-modal__preview">
-        <DocumentExchangePreview
-          canonical={data.canonical}
-          aiFailed={data.aiFailed}
-          wrapper={data.wrapper}
-          {userActions}
-          onUserActionsChange={handleUserActionsChange}
-        />
+        {#if isRegistry && !data.aiFailed}
+          <RegistryExtractedPreview canonical={data.canonical} />
+        {:else}
+          <DocumentExchangePreview
+            canonical={data.canonical}
+            aiFailed={data.aiFailed}
+            wrapper={data.wrapper}
+            {userActions}
+            onUserActionsChange={handleUserActionsChange}
+          />
+        {/if}
       </div>
     </div>
   {/if}
@@ -173,7 +183,9 @@
       onclick={() => onReject(extractedNdx)}
     />
     <Button
-      label={t('exchange.preview.actions.apply')}
+      label={isRegistry
+        ? t('exchange.preview.actions.applyRegistry')
+        : t('exchange.preview.actions.apply')}
       variant="success"
       disabled={!canApply}
       onclick={handleApplyClick}

@@ -20,6 +20,7 @@
   import RejectReasonPrompt from './RejectReasonPrompt.svelte';
 
   const HEADS_TABLE = 'docs_core_heads';
+  const REGISTRY_TABLE = 'base_registry_documents';
 
   let data = $state(null);
   let loading = $state(true);
@@ -37,7 +38,8 @@
   let formModal = $state({ open: false, table: '', recordId: null, wasSaved: false });
 
   // Minimální lokální toast (app nemá toast infra). kind: 'applied' → Otevřít+Vrátit.
-  let toast = $state({ visible: false, kind: null, message: '', docId: null, extractedNdx: null });
+  // docTable řídí, kterou tabulku „Otevřít" otevře (docs vs. Spisovna).
+  let toast = $state({ visible: false, kind: null, message: '', docId: null, extractedNdx: null, docTable: null });
   let toastTimer = null;
 
   async function load() {
@@ -62,20 +64,21 @@
 
   function showToast(next) {
     clearTimeout(toastTimer);
-    toast = { visible: true, docId: null, extractedNdx: null, ...next };
+    toast = { visible: true, docId: null, extractedNdx: null, docTable: null, ...next };
     toastTimer = setTimeout(dismissToast, 8000);
   }
 
   function dismissToast() {
     clearTimeout(toastTimer);
-    toast = { visible: false, kind: null, message: '', docId: null, extractedNdx: null };
+    toast = { visible: false, kind: null, message: '', docId: null, extractedNdx: null, docTable: null };
   }
 
   function openCreatedDoc() {
     const docId = toast.docId;
+    const docTable = toast.docTable ?? HEADS_TABLE;
     dismissToast();
     if (docId) {
-      formModal = { open: true, table: HEADS_TABLE, recordId: docId, wasSaved: false };
+      formModal = { open: true, table: docTable, recordId: docId, wasSaved: false };
     }
   }
 
@@ -108,7 +111,7 @@
     const target = action.target ?? {};
     switch (action.kind) {
       case 'apply_extracted':
-        return applyFlow(target.extractedNdx, card.id);
+        return applyFlow(target.extractedNdx, card.id, card.context?.target);
       case 'review_extracted':
         previewNdx = target.extractedNdx;
         return;
@@ -136,8 +139,23 @@
     }
   }
 
+  // Toast payload dle targetu extrakce: registry karty otevírají dokument
+  // Spisovny a nesou vlastní hlášku „Zařazeno…"; docs beze změny.
+  function appliedToast(cardTarget, docId, extractedNdx) {
+    const isRegistry = cardTarget === 'registry';
+    return {
+      kind: 'applied',
+      message: isRegistry
+        ? t('dashboard.toast.appliedRegistry', { id: docId })
+        : t('dashboard.toast.applied', { id: docId }),
+      docId,
+      extractedNdx,
+      docTable: isRegistry ? REGISTRY_TABLE : HEADS_TABLE,
+    };
+  }
+
   // Jednoklik apply (safe mód). Fall-through: nevyřešené reference → review modal.
-  async function applyFlow(extractedNdx, cardId) {
+  async function applyFlow(extractedNdx, cardId, cardTarget = null) {
     if (busyCardId !== null || !extractedNdx) return;
     busyCardId = cardId;
     try {
@@ -145,12 +163,7 @@
       if (result?.success) {
         const docId = result.data?.savedDocId ?? 0;
         dropCardById(cardId);
-        showToast({
-          kind: 'applied',
-          message: t('dashboard.toast.applied', { id: docId }),
-          docId,
-          extractedNdx,
-        });
+        showToast(appliedToast(cardTarget, docId, extractedNdx));
         load();
       } else if (result?.error?.code === 'unresolved_required') {
         previewNdx = extractedNdx; // fall-through — dořeší v modalu
@@ -198,17 +211,15 @@
   // ── Review modal ─────────────────────────────────────────────────────────────
 
   async function handleApplyFromModal(extractedNdx, userActions = null) {
+    const cardTarget = data?.cards?.find(
+      (c) => c.context?.extractedNdx === extractedNdx,
+    )?.context?.target ?? null;
     const result = await applyExtractedDocument(extractedNdx, userActions);
     if (result?.success) {
       const docId = result.data?.savedDocId ?? 0;
       previewNdx = null;
       dropCardByExtracted(extractedNdx);
-      showToast({
-        kind: 'applied',
-        message: t('dashboard.toast.applied', { id: docId }),
-        docId,
-        extractedNdx,
-      });
+      showToast(appliedToast(cardTarget, docId, extractedNdx));
       load();
     } else {
       alert(t('dashboard.card.actionFailed', { msg: translateError(result?.error) }));

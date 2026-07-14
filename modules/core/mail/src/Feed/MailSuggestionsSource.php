@@ -6,6 +6,7 @@ namespace Shipard\Module\Core\Mail\Feed;
 
 use Shipard\Core\Feed\FeedContext;
 use Shipard\Core\Feed\FeedSource;
+use Shipard\Module\Core\Mail\ExtractedDocTypes;
 use Shipard\Module\Core\Mail\ExtractedDocumentDocument;
 
 /**
@@ -72,6 +73,8 @@ final class MailSuggestionsSource implements FeedSource
     private const PRIMARY_TYPES_CFG_ITEM = 'core.mail.primaryTypes';
 
     private const DOC_TYPES_CFG_ITEM = 'core.mail.extractedDocTypes';
+
+    private const DOC_KINDS_CFG_ITEM = 'base.registry.docKinds';
 
     public function collectCards(FeedContext $ctx): array
     {
@@ -144,9 +147,16 @@ final class MailSuggestionsSource implements FeedSource
         $messageNdx   = (int) $row['message_ndx'];
         $status       = (int) $row['status'];
         $confidence   = isset($row['confidence']) ? (float) $row['confidence'] : null;
+        $docType      = (string) ($row['doc_type'] ?? '');
+        $subject      = (string) ($row['subject'] ?? '');
 
         $canonical = json_decode((string) ($row['extracted_json'] ?? ''), true);
         $canonical = is_array($canonical) ? $canonical : [];
+
+        // Target typu řídí prezentaci karty (titulek/podtitulek/label apply
+        // akce) — action kinds i endpointy jsou pro oba targety shodné.
+        $extractionTarget = ExtractedDocTypes::targetFor($ctx->config, $docType);
+        $isRegistry = $extractionTarget === ExtractedDocTypes::TARGET_REGISTRY;
 
         [$kind, $stateStyle, $icon] = match ($status) {
             ExtractedDocumentDocument::STATUS_READY_TO_APPLY => ['ready', 'done', 'check'],
@@ -156,8 +166,10 @@ final class MailSuggestionsSource implements FeedSource
 
         $target = ['extractedNdx' => $extractedNdx];
         if ($status === ExtractedDocumentDocument::STATUS_READY_TO_APPLY) {
+            // Registry apply má vlastní id → FE label „Zařadit" místo „Použít"
+            // (FeedCard lokalizuje podle action.id, kind zůstává apply_extracted).
             $actions = [
-                ['id' => 'apply',  'kind' => 'apply_extracted',  'target' => $target, 'primary' => true],
+                ['id' => $isRegistry ? 'apply_registry' : 'apply', 'kind' => 'apply_extracted', 'target' => $target, 'primary' => true],
                 ['id' => 'review', 'kind' => 'review_extracted', 'target' => $target],
                 ['id' => 'reject', 'kind' => 'reject_extracted', 'target' => $target],
             ];
@@ -174,13 +186,18 @@ final class MailSuggestionsSource implements FeedSource
             'kind'       => $kind,
             'icon'       => $icon,
             'stateStyle' => $stateStyle,
-            'title'      => $this->cardTitle($ctx, (string) ($row['doc_type'] ?? ''), $canonical),
-            'subtitle'   => $this->cardSubtitle($ctx, $canonical, $confidence, (string) ($row['subject'] ?? '')),
+            'title'      => $isRegistry
+                ? $this->registryCardTitle($ctx, $docType, $canonical)
+                : $this->cardTitle($ctx, $docType, $canonical),
+            'subtitle'   => $isRegistry
+                ? $this->registryCardSubtitle($ctx, $docType, $canonical, $confidence, $subject)
+                : $this->cardSubtitle($ctx, $canonical, $confidence, $subject),
             'timestamp'  => $this->toAtom($row['received_at'] ?? null),
             'context'    => [
                 'messageNdx'   => $messageNdx,
                 'extractedNdx' => $extractedNdx,
                 'confidence'   => $confidence,
+                'target'       => $extractionTarget,
             ],
             'actions'    => $actions,
         ];
@@ -454,6 +471,102 @@ final class MailSuggestionsSource implements FeedSource
     private function emailSubjectLabel(FeedContext $ctx, string $subject): string
     {
         return ($ctx->language === 'cs' ? 'e-mail' : 'email') . ' „' . $subject . '"';
+    }
+
+    /**
+     * Titulek registry karty: „{druh dokumentu} — {protistrana}" (druh
+     * z `base.registry.docKinds`, protistrana z `party.name` canonicalu).
+     * Bez protistrany jen label druhu.
+     *
+     * @param array<string,mixed> $canonical
+     */
+    private function registryCardTitle(FeedContext $ctx, string $docType, array $canonical): string
+    {
+        $label = $this->docKindLabel($ctx, $docType);
+        $party = $canonical['party']['name'] ?? null;
+        return is_string($party) && trim($party) !== ''
+            ? ($label . ' — ' . trim($party))
+            : $label;
+    }
+
+    /**
+     * Podtitulek registry karty: „platí do {datum}" · jistota · zdrojový
+     * e-mail. Klíč kindFields nesoucí konec platnosti se hledá **inverzí**
+     * `docKinds[docKind].promote` (hodnota `valid_to`) — jediné místo pravdy
+     * pro mapování polí, žádná duplikace výčtu.
+     *
+     * @param array<string,mixed> $canonical
+     */
+    private function registryCardSubtitle(
+        FeedContext $ctx,
+        string $docType,
+        array $canonical,
+        ?float $confidence,
+        string $subject,
+    ): string {
+        $parts = [];
+
+        $validTo = $this->registryValidTo($ctx, $docType, $canonical);
+        if ($validTo !== null) {
+            $parts[] = ($ctx->language === 'cs' ? 'platí do ' : 'valid until ') . $validTo;
+        }
+        if ($confidence !== null) {
+            $pct = (int) round($confidence * 100);
+            $parts[] = $ctx->language === 'cs' ? "jistota {$pct} %" : "confidence {$pct} %";
+        }
+        $subject = trim($subject);
+        if ($subject !== '') {
+            $parts[] = $this->emailSubjectLabel($ctx, $subject);
+        }
+
+        return implode(' · ', $parts);
+    }
+
+    /** Lokalizovaný label druhu dokumentu z `base.registry.docKinds`; fallback docTypeLabel. */
+    private function docKindLabel(FeedContext $ctx, string $docType): string
+    {
+        $docKind = ExtractedDocTypes::docKindFor($ctx->config, $docType);
+        if ($docKind !== null) {
+            $kinds = $ctx->config?->cfgItem(self::DOC_KINDS_CFG_ITEM);
+            if (is_array($kinds) && isset($kinds[$docKind]['name']) && is_string($kinds[$docKind]['name'])) {
+                return $kinds[$docKind]['name'];
+            }
+        }
+        return $this->docTypeLabel($ctx, $docType);
+    }
+
+    /**
+     * Konec platnosti z kindFields: klíč = inverze promote mapy druhu
+     * (metaKey → 'valid_to'). Vrací lokalizované datum, nebo null.
+     *
+     * @param array<string,mixed> $canonical
+     */
+    private function registryValidTo(FeedContext $ctx, string $docType, array $canonical): ?string
+    {
+        $docKind = ExtractedDocTypes::docKindFor($ctx->config, $docType);
+        if ($docKind === null) {
+            return null;
+        }
+        $kinds = $ctx->config?->cfgItem(self::DOC_KINDS_CFG_ITEM);
+        $promote = is_array($kinds) ? ($kinds[$docKind]['promote'] ?? null) : null;
+        if (!is_array($promote)) {
+            return null;
+        }
+        $metaKey = array_search('valid_to', $promote, true);
+        if (!is_string($metaKey)) {
+            return null;
+        }
+
+        $value = $canonical['kindFields'][$metaKey] ?? null;
+        if (!is_string($value) || trim($value) === '') {
+            return null;
+        }
+        try {
+            $date = new \DateTimeImmutable(trim($value));
+        } catch (\Exception) {
+            return null;
+        }
+        return $ctx->language === 'cs' ? $date->format('j. n. Y') : $date->format('Y-m-d');
     }
 
     /** Lokalizovaný label typu dokladu z cfgItem; fallback na holý key. */

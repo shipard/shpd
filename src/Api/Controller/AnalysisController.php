@@ -28,6 +28,7 @@ use Shipard\Module\Core\Mail\AIAnalyzerProvisioner;
 use Shipard\Module\Core\Mail\ExtractedApplyOutcome;
 use Shipard\Module\Core\Mail\ExtractedDocumentApplier;
 use Shipard\Module\Core\Mail\ExtractedDocumentDocument;
+use Shipard\Module\Core\Mail\ExtractedDocumentStatusResolver;
 use Shipard\Module\Core\Mail\StatusWriteResult;
 
 /**
@@ -71,6 +72,9 @@ class AnalysisController
     private const DEFAULT_LEASE_SECONDS = 300;
     private const MIN_LEASE_SECONDS = 60;
     private const MAX_LEASE_SECONDS = 900;
+
+    /** Sdílená pravidla confidence → status (viz ExtractedDocumentStatusResolver). */
+    private ?ExtractedDocumentStatusResolver $statusResolver = null;
 
     /**
      * SchemaValidator + DocumentApplier are intentionally nullable for
@@ -747,7 +751,7 @@ class AnalysisController
             ? (int) $body['backend_ndx']
             : null;
 
-        $thresholds = $this->resolveThresholds($profileNdx);
+        $thresholds = $this->statusResolver()->thresholdsForProfile($profileNdx);
 
         $dibi = $this->db->getDibiConnection();
         $dibi->begin();
@@ -861,34 +865,9 @@ class AnalysisController
         ], 201);
     }
 
-    /**
-     * @return array{ready: float, review: float}
-     */
-    private function resolveThresholds(?int $profileNdx): array
+    private function statusResolver(): ExtractedDocumentStatusResolver
     {
-        $default = ['ready' => 0.9, 'review' => 0.6];
-        if ($profileNdx === null) {
-            return $default;
-        }
-
-        $row = $this->db->fetchRow(
-            'SELECT confidence_thresholds FROM %n WHERE id = %i',
-            self::PROFILES_TABLE,
-            $profileNdx,
-        );
-        if ($row === null || empty($row['confidence_thresholds'])) {
-            return $default;
-        }
-
-        $decoded = json_decode((string) $row['confidence_thresholds'], true);
-        if (!is_array($decoded)) {
-            return $default;
-        }
-
-        return [
-            'ready' => isset($decoded['ready']) ? (float) $decoded['ready'] : $default['ready'],
-            'review' => isset($decoded['review']) ? (float) $decoded['review'] : $default['review'],
-        ];
+        return $this->statusResolver ??= new ExtractedDocumentStatusResolver($this->db);
     }
 
     /**
@@ -962,20 +941,6 @@ class AnalysisController
     }
 
     /**
-     * @param array{ready: float, review: float} $thresholds
-     */
-    private function mapConfidenceToStatus(float $confidence, array $thresholds): int
-    {
-        if ($confidence >= $thresholds['ready']) {
-            return ExtractedDocumentDocument::STATUS_READY_TO_APPLY;
-        }
-        if ($confidence >= $thresholds['review']) {
-            return ExtractedDocumentDocument::STATUS_PENDING_REVIEW;
-        }
-        return ExtractedDocumentDocument::STATUS_LOW_CONFIDENCE;
-    }
-
-    /**
      * Validate a canonical extracted by AI against shpd.docs.document.v1
      * schema and decide its status. Invalid output is wrapped (for
      * forensics) and flagged STATUS_AI_FAILED — never rejected outright,
@@ -993,7 +958,7 @@ class AnalysisController
         if ($extractedJson === null) {
             // No canonical at all — keep legacy behaviour: status by
             // confidence, NULL extracted_json. (Test result without canonical.)
-            return [$this->mapConfidenceToStatus($confidence, $thresholds), null];
+            return [$this->statusResolver()->mapConfidenceToStatus($confidence, $thresholds), null];
         }
 
         // If no SchemaValidator was wired (e.g. unit tests), skip validation
@@ -1001,7 +966,7 @@ class AnalysisController
         // instantiate the controller without the Exchange dependencies.
         if ($this->schemaValidator === null) {
             return [
-                $this->mapConfidenceToStatus($confidence, $thresholds),
+                $this->statusResolver()->mapConfidenceToStatus($confidence, $thresholds),
                 (string) json_encode($extractedJson, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             ];
         }
@@ -1013,7 +978,7 @@ class AnalysisController
         );
 
         if ($schemaIssues === []) {
-            $status = $this->mapConfidenceToStatus($confidence, $thresholds);
+            $status = $this->statusResolver()->mapConfidenceToStatus($confidence, $thresholds);
             if ($this->enricher !== null) {
                 // Obohacení řádků z historie (D2 persist) — do extracted_json
                 // se ukládá obohacený canonical. Selhání /result nesmí shodit
@@ -1023,7 +988,7 @@ class AnalysisController
                 } catch (\Throwable $e) {
                     ErrorLogger::logException($e, 'AnalysisController::result row history enrichment failed');
                 }
-                $status = $this->capStatusByRowCoverage($status, $extractedJson);
+                $status = $this->statusResolver()->capStatusByRowCoverage($status, $extractedJson);
             }
             return [
                 $status,
@@ -1040,31 +1005,6 @@ class AnalysisController
             ExtractedDocumentDocument::STATUS_AI_FAILED,
             (string) json_encode($wrapped, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         ];
-    }
-
-    /**
-     * Strop statusu podle pokrytí řádků (D7): ready_to_apply smí zůstat jen
-     * když má každý item řádek položku — z AI extrakce, nebo návrhem
-     * enrichmentu. Kontační řádky (acc.record) položku nemají validně,
-     * strop se jich netýká.
-     *
-     * @param array<string, mixed> $canonical
-     */
-    private function capStatusByRowCoverage(int $status, array $canonical): int
-    {
-        if ($status !== ExtractedDocumentDocument::STATUS_READY_TO_APPLY) {
-            return $status;
-        }
-        $rows = is_array($canonical['rows'] ?? null) ? $canonical['rows'] : [];
-        foreach ($rows as $row) {
-            if (!is_array($row) || !RowHistoryEnricher::rowExpectsItem($row)) {
-                continue;
-            }
-            if (trim((string) ($row['item']['ourCode'] ?? '')) === '') {
-                return ExtractedDocumentDocument::STATUS_PENDING_REVIEW;
-            }
-        }
-        return $status;
     }
 
     // -------------------------------------------------------------------

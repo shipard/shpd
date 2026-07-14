@@ -1,0 +1,119 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://shipard.cz/schemas/shpd.registry.document.v1.json",
+    "title": "Shipard registry document v1",
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["schema", "docType", "title"],
+    "properties": {
+        "schema":  { "const": "shpd.registry.document.v1" },
+        "docType": { "enum": ["contract", "insurance", "quotation", "certificate", "official"] },
+        "title":   { "type": "string", "minLength": 1 },
+        "summary": { "type": ["string", "null"] },
+        "party": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "properties": {
+                "name":      { "type": ["string", "null"] },
+                "companyId": { "type": ["string", "null"] },
+                "email":     { "type": ["string", "null"] }
+            }
+        },
+        "kindFields":       { "type": "object" },
+        "binderSuggestion": { "type": ["string", "null"] }
+    },
+    "allOf": [
+        {
+            "if": { "properties": { "docType": { "const": "contract" } }, "required": ["docType"] },
+            "then": {
+                "properties": {
+                    "kindFields": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                            "counterparty":   { "type": ["string", "null"] },
+                            "subject":        { "type": ["string", "null"] },
+                            "signedDate":     { "type": ["string", "null"], "format": "date" },
+                            "contractNumber": { "type": ["string", "null"] },
+                            "validFrom":      { "type": ["string", "null"], "format": "date" },
+                            "validTo":        { "type": ["string", "null"], "format": "date" },
+                            "noticePeriod":   { "type": ["string", "null"] }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "if": { "properties": { "docType": { "const": "insurance" } }, "required": ["docType"] },
+            "then": {
+                "properties": {
+                    "kindFields": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                            "insurer":        { "type": ["string", "null"] },
+                            "policyNumber":   { "type": ["string", "null"] },
+                            "insuredSubject": { "type": ["string", "null"] },
+                            "validFrom":      { "type": ["string", "null"], "format": "date" },
+                            "validTo":        { "type": ["string", "null"], "format": "date" },
+                            "annualPremium":  { "type": ["number", "null"] },
+                            "currency":       { "type": ["string", "null"] }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "if": { "properties": { "docType": { "const": "quotation" } }, "required": ["docType"] },
+            "then": {
+                "properties": {
+                    "kindFields": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                            "supplier":    { "type": ["string", "null"] },
+                            "subject":     { "type": ["string", "null"] },
+                            "totalAmount": { "type": ["number", "null"] },
+                            "currency":    { "type": ["string", "null"] },
+                            "validUntil":  { "type": ["string", "null"], "format": "date" }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "if": { "properties": { "docType": { "const": "certificate" } }, "required": ["docType"] },
+            "then": {
+                "properties": {
+                    "kindFields": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                            "subject":    { "type": ["string", "null"] },
+                            "issuer":     { "type": ["string", "null"] },
+                            "issuedDate": { "type": ["string", "null"], "format": "date" },
+                            "validTo":    { "type": ["string", "null"], "format": "date" }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "if": { "properties": { "docType": { "const": "official" } }, "required": ["docType"] },
+            "then": {
+                "properties": {
+                    "kindFields": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "properties": {
+                            "authority":    { "type": ["string", "null"] },
+                            "refNumber":    { "type": ["string", "null"] },
+                            "receivedDate": { "type": ["string", "null"], "format": "date" },
+                            "deadline":     { "type": ["string", "null"], "format": "date" }
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

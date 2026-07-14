@@ -37,12 +37,40 @@
         "enabled": false,
         "order": 30
     },
+    "contract": {
+        "name": "Contract",
+        "name:cs": "Smlouva",
+        "name:en": "Contract",
+        "enabled": true,
+        "order": 110
+    },
+    "insurance": {
+        "name": "Insurance policy",
+        "name:cs": "Pojistná smlouva",
+        "name:en": "Insurance policy",
+        "enabled": true,
+        "order": 120
+    },
     "quotation": {
         "name": "Quotation",
-        "name:cs": "Nabídka",
+        "name:cs": "Cenová nabídka",
         "name:en": "Quotation",
-        "enabled": false,
-        "order": 40
+        "enabled": true,
+        "order": 130
+    },
+    "certificate": {
+        "name": "Certificate / inspection",
+        "name:cs": "Revize / certifikát",
+        "name:en": "Certificate / inspection",
+        "enabled": true,
+        "order": 140
+    },
+    "official": {
+        "name": "Official correspondence",
+        "name:cs": "Úřední písemnost",
+        "name:en": "Official correspondence",
+        "enabled": true,
+        "order": 150
     },
     "statement": {
         "name": "Statement",

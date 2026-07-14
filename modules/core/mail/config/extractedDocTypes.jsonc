@@ -8,11 +8,18 @@
     // Pozn.: keys odpovídají `core.mail.primaryTypes` — záměrně, aby
     // primary_type zprávy a doc_type extrahovaného dokumentu mohly být
     // párovány bez další translation tabulky.
+    //
+    // `target` určuje, kam apply extrahovaný dokument zakládá:
+    // `docs` = doklady (docs_core_heads, exchange cesta), `registry` =
+    // Spisovna (base_registry_documents, RegistryApplier). Chybějící
+    // target = `docs` (zpětná kompatibilita). Registry typy navíc nesou
+    // `docKind` — klíč do `base.registry.docKinds`.
 
     "invoiceReceived": {
         "name": "Received invoice",
         "name:cs": "Přijatá faktura",
         "name:en": "Received invoice",
+        "target": "docs",
         "enabled": true,
         "order": 10
     },
@@ -20,13 +27,60 @@
         "name": "Credit note",
         "name:cs": "Dobropis",
         "name:en": "Credit note",
+        "target": "docs",
         "enabled": true,
         "order": 20
+    },
+    "contract": {
+        "name": "Contract",
+        "name:cs": "Smlouva",
+        "name:en": "Contract",
+        "target": "registry",
+        "docKind": "contract",
+        "enabled": true,
+        "order": 110
+    },
+    "insurance": {
+        "name": "Insurance policy",
+        "name:cs": "Pojistná smlouva",
+        "name:en": "Insurance policy",
+        "target": "registry",
+        "docKind": "insurance",
+        "enabled": true,
+        "order": 120
+    },
+    "quotation": {
+        "name": "Quotation",
+        "name:cs": "Cenová nabídka",
+        "name:en": "Quotation",
+        "target": "registry",
+        "docKind": "quotation",
+        "enabled": true,
+        "order": 130
+    },
+    "certificate": {
+        "name": "Certificate / inspection",
+        "name:cs": "Revize / certifikát",
+        "name:en": "Certificate / inspection",
+        "target": "registry",
+        "docKind": "certificate",
+        "enabled": true,
+        "order": 140
+    },
+    "official": {
+        "name": "Official correspondence",
+        "name:cs": "Úřední písemnost",
+        "name:en": "Official correspondence",
+        "target": "registry",
+        "docKind": "official",
+        "enabled": true,
+        "order": 150
     },
     "other": {
         "name": "Other",
         "name:cs": "Ostatní",
         "name:en": "Other",
+        "target": "docs",
         "enabled": true,
         "order": 999
     }

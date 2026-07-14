@@ -937,7 +937,10 @@ class AnalysisController
             return array_map('strval', array_keys($cfg));
         }
 
-        return ['invoiceReceived', 'other', 'creditNote', 'order', 'quotation', 'statement', 'complaint'];
+        return [
+            'invoiceReceived', 'other', 'creditNote', 'order', 'quotation', 'statement', 'complaint',
+            'contract', 'insurance', 'certificate', 'official',
+        ];
     }
 
     /**

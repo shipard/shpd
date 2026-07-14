@@ -101,6 +101,10 @@ final class FileFromMessageService
             ];
         }
 
+        // Best-effort fulltext z kopií příloh — až po commitu, selhání
+        // zařazení neblokuje (viz ExtractedTextFiller).
+        new ExtractedTextFiller($this->db, $this->attachments)->fill($documentId);
+
         $result = ['ok' => true, 'id' => $documentId];
         if ($warning !== null) {
             $result['warning'] = $warning;

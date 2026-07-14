@@ -379,6 +379,30 @@ Balíček: `libvips-tools`
 - **Paměť** — zpracovává obrázky po řádcích, nenahrává celý soubor do RAM
 - **Bezpečnost** — menší útočná plocha (ImageMagick měl historicky řadu CVE)
 
+### Extrakce textu: pdftotext (`TextExtractor`)
+
+Pro fulltext (`extracted_text` sloupce, např. Spisovna) extrahuje
+`TextExtractor` plný text přílohy:
+
+```bash
+pdftotext -layout input.pdf -    # PDF → text na stdout
+```
+
+- `application/pdf` → `pdftotext -layout` (drží sloupce tabulek u sebe)
+- `text/*` → přímé čtení souboru
+- ostatní MIME → `null` (žádná OCR — skenované PDF vrátí prázdno)
+
+Výstup je UTF-8 sanitizovaný (nevalidní sekvence a řídicí znaky kromě
+`\n`/`\t` vypuštěné) a zastropovaný na 500 000 znaků. **Best-effort:**
+chybějící binárka, rozbitý soubor i nepodporovaný formát vrací `null`
+a nikdy neblokují volající flow — chybějící `pdftotext` hlásí
+`shpd-server doctor` (balíček `poppler-utils`, sdílený s `pdftocairo`).
+
+Zápis do `base_registry_documents.extracted_text` zajišťuje
+`ExtractedTextFiller` (modul `base.registry`) — volá se po commitu vzniku
+dokumentu, přímým UPDATE mimo Document hooky (nesmí bumpnout `modified`,
+na kterém stojí unapply guard AI cesty).
+
 ---
 
 ## 6. Cache náhledů
@@ -444,6 +468,7 @@ modules/core/attachments/src/
 ├── AttachmentDocument.php     # Document třída (validate, beforeSave)
 ├── AttachmentService.php      # Business logika — upload, download, thumbnail
 ├── FileStorage.php            # Nízkoúrovňové operace se soubory na disku
+├── TextExtractor.php          # Extrakce textu pro fulltext (pdftotext)
 └── ThumbnailGenerator.php     # Generování náhledů (pdftocairo, rsvg, vips)
 ```
 
@@ -550,8 +575,8 @@ automaticky; chybějící binárky hlásí `shpd-server doctor`. Pro ruční
 instalaci:
 
 ```bash
-# Generování náhledů
-apt install poppler-utils    # pdftocairo
+# Generování náhledů + extrakce textu
+apt install poppler-utils    # pdftocairo, pdftotext
 apt install librsvg2-bin     # rsvg-convert
 apt install libvips-tools    # vipsthumbnail, vips
 ```

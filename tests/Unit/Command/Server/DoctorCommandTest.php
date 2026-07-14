@@ -719,7 +719,7 @@ class DoctorCommandTest extends TestCase
         $this->assertStringContainsString('Include file missing in repo: docs/php/shipard-fpm-common.conf', $display);
     }
 
-    // ─── Thumbnail tools check ──────────────────────────────────────────────
+    // ─── Attachment tools check ──────────────────────────────────────────────
 
     public function testThumbnailToolsAllPresent(): void
     {
@@ -730,8 +730,9 @@ class DoctorCommandTest extends TestCase
         $tester->execute([]);
 
         $display = $tester->getDisplay();
-        $this->assertStringContainsString('Thumbnail tools', $display);
+        $this->assertStringContainsString('Attachment tools', $display);
         $this->assertStringContainsString('✓ pdftocairo (/usr/bin/pdftocairo)', $display);
+        $this->assertStringContainsString('✓ pdftotext (/usr/bin/pdftotext)', $display);
         $this->assertStringContainsString('✓ rsvg-convert (/usr/bin/rsvg-convert)', $display);
         $this->assertStringContainsString('✓ vipsthumbnail (/usr/bin/vipsthumbnail)', $display);
         $this->assertStringContainsString('✓ vips (/usr/bin/vips)', $display);

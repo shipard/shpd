@@ -16,8 +16,9 @@ use Symfony\Component\Console\Output\OutputInterface;
 class DoctorCommand extends Command
 {
     /** Mapa binárka → apt balíček (hint pro admina). */
-    private const THUMBNAIL_TOOLS = [
+    private const ATTACHMENT_TOOLS = [
         'pdftocairo'    => 'poppler-utils',
+        'pdftotext'     => 'poppler-utils',
         'rsvg-convert'  => 'librsvg2-bin',
         'vipsthumbnail' => 'libvips-tools',
         'vips'          => 'libvips-tools',
@@ -103,8 +104,8 @@ class DoctorCommand extends Command
         $this->checkSystemConfigIncludes($output);
 
         $output->writeln('');
-        $output->writeln('<info>Thumbnail tools</info>');
-        $toolErrors = $this->checkThumbnailTools($output);
+        $output->writeln('<info>Attachment tools</info>');
+        $toolErrors = $this->checkAttachmentTools($output);
 
         $output->writeln('');
         $output->writeln('<info>Data source DB connections</info>');
@@ -382,16 +383,16 @@ class DoctorCommand extends Command
     }
 
     /**
-     * Checks that the CLI tools used by ThumbnailGenerator are installed.
-     * A missing tool means silent degradation to generic icons — exactly the
-     * kind of issue doctor exists to surface.
+     * Checks that the CLI tools used by ThumbnailGenerator and TextExtractor
+     * are installed. A missing tool means silent degradation (generic icons,
+     * empty extracted text) — exactly the kind of issue doctor surfaces.
      *
-     * @return int number of missing thumbnail tools
+     * @return int number of missing attachment tools
      */
-    protected function checkThumbnailTools(OutputInterface $output): int
+    protected function checkAttachmentTools(OutputInterface $output): int
     {
         $missing = 0;
-        foreach (self::THUMBNAIL_TOOLS as $tool => $aptPackage) {
+        foreach (self::ATTACHMENT_TOOLS as $tool => $aptPackage) {
             $binPath = $this->findBinary($tool);
             if ($binPath !== null) {
                 $output->writeln("  ✓ {$tool} ({$binPath})");

@@ -49,6 +49,13 @@
         }
     ],
 
+    "forms": [
+        {
+            "table": "base_registry_documents",
+            "class": "Shipard\\Module\\Base\\Registry\\RegistryDocumentsForm"
+        }
+    ],
+
     "documentClasses": [
         {
             "table": "base_registry_binders",
@@ -68,6 +75,10 @@
         {
             "id": "base.registry.sourceKinds",
             "file": "config/sourceKinds.jsonc"
+        },
+        {
+            "id": "base.registry.viewerDetailLabels",
+            "file": "config/viewerDetailLabels.jsonc"
         }
     ]
 }

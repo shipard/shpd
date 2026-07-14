@@ -1,0 +1,34 @@
+{
+    // base.registry.viewerDetailLabels
+    //
+    // Labels for RegistryDocumentsViewer — detail tabs (Content / Attachments
+    // / Origin) and the bottom binder-tab bar sentinels (All / Unfiled).
+
+    "tabs": {
+        "content": {
+            "name": "Content",
+            "name:cs": "Obsah",
+            "name:en": "Content"
+        },
+        "attachments": {
+            "name": "Attachments",
+            "name:cs": "Přílohy",
+            "name:en": "Attachments"
+        },
+        "origin": {
+            "name": "Origin",
+            "name:cs": "Původ",
+            "name:en": "Origin"
+        },
+        "allDocuments": {
+            "name": "All",
+            "name:cs": "Vše",
+            "name:en": "All"
+        },
+        "unfiled": {
+            "name": "Unfiled",
+            "name:cs": "Nezařazené",
+            "name:en": "Unfiled"
+        }
+    }
+}

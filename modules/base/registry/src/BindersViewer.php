@@ -80,6 +80,46 @@ class BindersViewer extends TableViewer
         return $row;
     }
 
+    public function renderDetail(int $recordId): array
+    {
+        $record = $this->db->fetchRow(
+            'SELECT b.*, (SELECT COUNT(*) FROM `base_registry_documents` d'
+            . '  WHERE d.`binder` = b.`id` AND d.`docState` != 90) AS `doc_count`'
+            . ' FROM `' . $this->table . '` b WHERE b.`id` = %i',
+            $recordId,
+        );
+
+        if ($record === null) {
+            return ['tabs' => []];
+        }
+
+        $items = [];
+        $this->addItem($items, 'Název', $record['name'] ?? null);
+        $this->addItem($items, 'Ikona', $record['icon'] ?? null);
+        $this->addItem($items, 'Pořadí', (string) ($record['order_pos'] ?? 0));
+        $this->addItem($items, 'Poznámka', $record['notice'] ?? null);
+        $this->addItem($items, 'Počet dokumentů', (string) ($record['doc_count'] ?? 0));
+
+        return [
+            'tabs' => [[
+                'id'      => 'overview',
+                'label'   => $this->defaultOverviewLabel(),
+                'content' => [
+                    'type'   => 'properties',
+                    'groups' => [['title' => 'Šanon', 'items' => $items]],
+                ],
+            ]],
+        ];
+    }
+
+    /** @param array<int, array{label: string, value: string}> $items */
+    private function addItem(array &$items, string $label, mixed $value): void
+    {
+        if ($value !== null && $value !== '') {
+            $items[] = ['label' => $label, 'value' => (string) $value];
+        }
+    }
+
     private function resolveStateStyle(int $docState): string
     {
         if ($this->config === null || $this->docStatesCfgItem === null) {

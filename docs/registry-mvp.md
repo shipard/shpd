@@ -371,10 +371,10 @@ Poznámky:
   formuláři se propíše do metadata). Jednosměrně jednodušší varianta pro
   fázi 1: formulář edituje promoted sloupce + generický JSON editor
   metadat; sync řeší beforeSave.
-- **`extracted_text`** se ve fázi 1 neplní (sloupec připraven), fáze 2 ho
-  plní z analyzeru při AI zařazení; ruční cesta později (samostatný krok
-  by vyžadoval extrakci textu na PHP straně — `pdftotext` je v
-  poppler-utils, viz otevřené body).
+- **`extracted_text`** se ve fázi 1 neplní (sloupec připraven). Fáze 2 ho
+  plní **na PHP straně** přes `pdftotext` (poppler-utils — na serverech už
+  je kvůli thumbnailům) při zařazení; analyzer lokální text nemá, přílohy
+  posílá providerovi binárně. Táž služba jde zavolat i z ruční cesty.
 - **Přílohy** standardně přes `core.attachments` (`table_id = 428`).
 
 ## 6. Fáze 1 — základ bez AI
@@ -489,12 +489,14 @@ Kroky (jedna transakce + kopie souborů s úklidem orphanů, vzor mail ingest):
 
 1. Map na řádek: `title`, `doc_kind` (z extractedDocTypes.docKind),
    `metadata` (kindFields 1:1), promoted sync dle `promote`, `ai_summary`,
-   `extracted_text` (analyzer text), `source_kind='mail'`, `source_message`,
+   `extracted_text` (viz krok 3), `source_kind='mail'`, `source_message`,
    `extracted_doc`, `binder` = návrh (7.5), partner resolve (7.6).
 2. Dokument vzniká rovnou v **`docState=40` (Zařazeno)** — na rozdíl od
    dokladů tu není co finalizovat; jednoklik má být jednoklik. Vratnost
    zajišťuje unapply → Koš.
-3. Kopie příloh dle `source_attachments` (D8, jako 6.4 krok 3).
+3. Kopie příloh dle `source_attachments` (D8, jako 6.4 krok 3) +
+   best-effort extrakce textu kopií přes `pdftotext` do `extracted_text`
+   (selhání extrakce apply neblokuje).
 4. `target_table_id='base_registry_documents'`, `target_row_ndx`,
    status → applied (spustí auto-transition zprávy).
 
@@ -587,9 +589,8 @@ reference) — chybové stavy jdou přímo do toastu.
   šanon / partner / platnost; tím se Spisovna otevře internímu chatu.
 - **Checklisty šanonů** („šanon má obsahovat…") — až po ověření expirací
   v praxi.
-- **Ruční plnění `extracted_text`** pro dokumenty mimo AI cestu
-  (`pdftotext` z poppler-utils při uploadu) — zpřístupní fulltext i ručně
-  pořízeným dokumentům.
+- **Plnění `extracted_text` při uploadu** mimo cestu zařazení (reuse
+  extraktoru z fáze 2) — zpřístupní fulltext i ručně pořízeným dokumentům.
 
 ## 10. Migrace ze starého Shipardu (`wkf.docs`)
 

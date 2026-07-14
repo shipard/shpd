@@ -228,7 +228,7 @@ class IsdocImportServiceTest extends TestCase
         $this->assertSame('FV-2026-0042', $canonical['docNumber']);
         $this->assertSame('att:501', $canonical['attachments'][0]['ref']);
         $this->assertSame('faktura.isdoc', $canonical['attachments'][0]['filename']);
-        $this->assertSame('original', $canonical['attachments'][0]['kind']);
+        $this->assertSame('structured', $canonical['attachments'][0]['kind']);
 
         // 1) analysis_state → 30, 2) primary_type isdoc, 3) docState 10 → 20
         $this->assertCount(3, $this->updates);

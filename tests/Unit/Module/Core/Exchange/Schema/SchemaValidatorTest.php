@@ -83,6 +83,50 @@ class SchemaValidatorTest extends TestCase
         $this->assertContains('pattern', $codes);
     }
 
+    public function testAttachmentKindStructuredIsAccepted(): void
+    {
+        $payload = [
+            'format' => 'shpd.docs.document',
+            'formatVersion' => '1.0',
+            'docType' => 'invoiceReceived',
+            'attachments' => [
+                ['filename' => 'faktura.isdoc', 'kind' => 'structured', 'ref' => 'att:42'],
+            ],
+        ];
+
+        $issues = $this->validator->validate($payload, 'shpd.docs.document', '1');
+        $this->assertSame([], $issues);
+    }
+
+    public function testAttachmentKindUnknownValueIsRejected(): void
+    {
+        $payload = [
+            'format' => 'shpd.docs.document',
+            'formatVersion' => '1.0',
+            'docType' => 'invoiceReceived',
+            'attachments' => [
+                ['filename' => 'faktura.isdoc', 'kind' => 'isdoc'],
+            ],
+        ];
+
+        $issues = $this->validator->validate($payload, 'shpd.docs.document', '1');
+        $codes = array_column($issues, 'code');
+        $this->assertContains('enum', $codes);
+    }
+
+    public function testTopLevelVatNullIsAccepted(): void
+    {
+        $payload = [
+            'format' => 'shpd.docs.document',
+            'formatVersion' => '1.0',
+            'docType' => 'invoiceReceived',
+            'vat' => null,
+        ];
+
+        $issues = $this->validator->validate($payload, 'shpd.docs.document', '1');
+        $this->assertSame([], $issues);
+    }
+
     public function testFullRichPayloadIsAccepted(): void
     {
         $payload = json_decode(

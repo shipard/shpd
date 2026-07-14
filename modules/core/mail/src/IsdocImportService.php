@@ -305,7 +305,9 @@ class IsdocImportService
     {
         $entry = [
             'filename' => (string) ($file['name'] ?? ''),
-            'kind' => 'original',
+            // ISDOC je strojově čitelný formát — 'structured', ne 'original'
+            // (viz docs/exchange-format.md §5, enum attachments[].kind).
+            'kind' => 'structured',
             'ref' => 'att:' . (int) ($file['id'] ?? 0),
         ];
         $mime = trim((string) ($file['mime_type'] ?? ''));

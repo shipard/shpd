@@ -695,6 +695,24 @@ class DocumentApplierTest extends TestCase
         $this->assertArrayNotHasKey('bank_account', $data);
     }
 
+    public function testTransformToleratesNullVat(): void
+    {
+        // Top-level `vat` je od schema fixes nullable — null se musí chovat
+        // stejně jako chybějící objekt (defaulty fromBase/domestic).
+        $applier = $this->buildApplier();
+        $canonical = [
+            'docType'   => 'invoiceReceived',
+            'selfParty' => 'customer',
+            'dates'     => ['issueDate' => '2024-06-01'],
+            'vat'       => null,
+        ];
+
+        $data = $this->invokeTransform($applier, $canonical);
+
+        $this->assertSame(1, $data['vat_mode']);  // fromBase
+        $this->assertSame(0, $data['vat_place']); // domestic
+    }
+
     // ── resolveNumberSeriesFor(): code selection + error path ───────────────
 
     private function invokeResolveSeries(DocumentApplier $applier, string $docType, ?string $seriesCode): ?int

@@ -79,7 +79,7 @@
         "exchangeRate": { "type": ["number", "null"], "exclusiveMinimum": 0 },
 
         "vat": {
-            "type": "object",
+            "type": ["object", "null"],
             "additionalProperties": false,
             "properties": {
                 "mode":                { "type": ["string", "null"] },
@@ -351,7 +351,7 @@
                 "mimeType": { "type": ["string", "null"] },
                 "size":     { "type": ["integer", "null"], "minimum": 0 },
                 "sha256":   { "type": ["string", "null"], "pattern": "^[a-fA-F0-9]{64}$" },
-                "kind":     { "enum": ["original", "scan", "supplement", "preview", null] },
+                "kind":     { "enum": ["original", "scan", "supplement", "preview", "structured", null] },
                 "ref":      { "type": ["string", "null"], "pattern": "^att:[0-9]+$" },
                 "inline":   { "type": ["string", "null"] }
             }

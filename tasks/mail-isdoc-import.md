@@ -153,7 +153,7 @@ opravdu je; chybějící pole vynechat (canonical je má nullable).
 | `totals.totalVat` | `TaxTotal/TaxAmount` | |
 | `totals.totalAmount` | `LegalMonetaryTotal/PayableAmount` | |
 | `totals.totalRounding` | `LegalMonetaryTotal/PayableRoundingAmount` | |
-| `attachments[]` | — | jeden záznam: ISDOC soubor, `kind:'original'`, `ref:'att:<id>'`, `filename`, `mimeType` |
+| `attachments[]` | — | jeden záznam: ISDOC soubor, `kind:'structured'` (do 2026-07 `'original'`; enum rozšířen ve spec mail-analysis-schema-fixes), `ref:'att:<id>'`, `filename`, `mimeType` |
 
 **Party** (`supplier` / `customer`):
 

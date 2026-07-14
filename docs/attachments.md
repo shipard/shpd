@@ -484,6 +484,24 @@ Hlavní business logika. Metody:
   - Sanitizace názvu, výpočet checksumu, uložení souboru, extrakce metadat, INSERT do DB
   - Vrací DocumentResult s vytvořeným záznamem + volitelný warning pro duplicitu
 
+- `copyTo(int $attachmentId, int $targetTableId, int $targetRecordId, ?int $userId): array`
+  - Kopie existující přílohy k jinému záznamu (typicky jiné tabulky) —
+    vzor: zařazení zprávy do Spisovny (D8 — kopie, ne přesun)
+  - Fyzicky zkopíruje soubor přes `FileStorage::copy()` do dnešního
+    adresáře cílové tabulky s **novým 5-char hashem v názvu** (starý hash
+    suffix se nejdřív odřízne, aby se nekumulovaly)
+  - Nový řádek `core_attachments_files`: `name`, `att_order`, `metadata`,
+    `mime_type` převzaté ze zdroje, `checksum` shodný (obsah identický),
+    `created_by = $userId`; zdrojový řádek i soubor zůstávají netknuté
+  - Duplicitní checksum u **cílového** záznamu → non-fatal warning
+    `DUPLICATE_CHECKSUM` (stejná sémantika jako upload)
+  - Selhání kopie souboru → výjimka, žádný DB zápis; selhání INSERTu →
+    zkopírovaný soubor se unlinkne (žádné orphany). Volající s vnější
+    transakcí musí při rollbacku unlinkovat `data.file_path`/`data.file_name`
+    sám (vzor `MailController::cleanupOrphanedFiles`)
+  - Vrací stejný tvar výsledku jako `upload`:
+    `{success, data?, warning?, error?}`
+
 - `download(int $attachmentId): StreamedResponse`
   - Načte záznam, sestaví cestu, vrátí soubor se správnými hlavičkami
 

@@ -26,35 +26,11 @@ class FileStorage
      */
     public function store(string $dsPath, string $tableName, string $originalName, string $tmpPath): FileInfo
     {
-        $now = new \DateTimeImmutable();
-
-        // Build relative directory path: YYYY/MM/DD/table_name
-        $relativeDir = sprintf(
-            '%s/%s/%s/%s',
-            $now->format('Y'),
-            $now->format('m'),
-            $now->format('d'),
-            $tableName,
-        );
-
-        // Full directory on disk
-        $fullDir = $dsPath . '/att/' . $relativeDir;
-        if (!is_dir($fullDir)) {
-            if (!@mkdir($fullDir, 0755, true)) {
-                throw new \RuntimeException(
-                    "Cannot create attachment directory: {$fullDir}. "
-                    . "Check that the 'att/' directory exists in the data source and is writable by the web server. "
-                    . "Run 'shpd-ds ds-upgrade' to create it."
-                );
-            }
-        }
+        [$relativeDir, $fullDir] = $this->buildTargetDir($dsPath, $tableName);
 
         // Sanitize and generate unique filename
         $sanitized = $this->sanitizeFileName($originalName);
-        $ext = $this->extractExtension($sanitized);
-        $base = $ext !== '' ? substr($sanitized, 0, -(strlen($ext) + 1)) : $sanitized;
-        $hash = $this->generateHash();
-        $fileName = $base . '-' . $hash . ($ext !== '' ? '.' . $ext : '');
+        $fileName = $this->buildHashedFileName($sanitized);
 
         // Compute checksum before moving
         $checksum = hash_file('sha256', $tmpPath);
@@ -78,6 +54,98 @@ class FileStorage
             fileSize: (int) $fileSize,
             checksum: $checksum,
         );
+    }
+
+    /**
+     * Copy an already-stored attachment file to the target table's directory.
+     *
+     * Unlike store(), the source file stays untouched (D8 — kopie, ne přesun).
+     * The new filename gets a fresh 5-char hash; the previous hash suffix
+     * (`base-abcde.ext`) is stripped first so hashes do not accumulate.
+     *
+     * @param string $dsPath          Data source directory
+     * @param string $tableName       Target table name (e.g. base_registry_documents)
+     * @param string $sourceFullPath  Absolute path to the existing stored file
+     * @param string $sourceFileName  Stored filename of the source (with its hash)
+     */
+    public function copy(string $dsPath, string $tableName, string $sourceFullPath, string $sourceFileName): FileInfo
+    {
+        if (!is_file($sourceFullPath)) {
+            throw new \RuntimeException("Source attachment file not found: {$sourceFullPath}");
+        }
+
+        [$relativeDir, $fullDir] = $this->buildTargetDir($dsPath, $tableName);
+
+        $fileName = $this->buildHashedFileName($this->stripHashSuffix($sourceFileName));
+
+        $checksum = hash_file('sha256', $sourceFullPath);
+
+        $targetPath = $fullDir . '/' . $fileName;
+        if (!copy($sourceFullPath, $targetPath)) {
+            throw new \RuntimeException("Failed to copy file: {$sourceFullPath} → {$targetPath}");
+        }
+
+        return new FileInfo(
+            filePath: $relativeDir,
+            fileName: $fileName,
+            fileSize: (int) filesize($targetPath),
+            checksum: $checksum,
+        );
+    }
+
+    /**
+     * Build (and create) the dated target directory for a table.
+     *
+     * @return array{0: string, 1: string}  [relativeDir, fullDir]
+     */
+    private function buildTargetDir(string $dsPath, string $tableName): array
+    {
+        $now = new \DateTimeImmutable();
+
+        // Build relative directory path: YYYY/MM/DD/table_name
+        $relativeDir = sprintf(
+            '%s/%s/%s/%s',
+            $now->format('Y'),
+            $now->format('m'),
+            $now->format('d'),
+            $tableName,
+        );
+
+        // Full directory on disk
+        $fullDir = $dsPath . '/att/' . $relativeDir;
+        if (!is_dir($fullDir)) {
+            if (!@mkdir($fullDir, 0755, true)) {
+                throw new \RuntimeException(
+                    "Cannot create attachment directory: {$fullDir}. "
+                    . "Check that the 'att/' directory exists in the data source and is writable by the web server. "
+                    . "Run 'shpd-ds ds-upgrade' to create it."
+                );
+            }
+        }
+
+        return [$relativeDir, $fullDir];
+    }
+
+    /** Append a fresh `-hash` before the extension: `base.ext` → `base-abcde.ext`. */
+    private function buildHashedFileName(string $sanitized): string
+    {
+        $ext = $this->extractExtension($sanitized);
+        $base = $ext !== '' ? substr($sanitized, 0, -(strlen($ext) + 1)) : $sanitized;
+        $hash = $this->generateHash();
+        return $base . '-' . $hash . ($ext !== '' ? '.' . $ext : '');
+    }
+
+    /** Strip a trailing `-abcde` hash suffix from the basename, if present. */
+    private function stripHashSuffix(string $fileName): string
+    {
+        $ext = $this->extractExtension($fileName);
+        $base = $ext !== '' ? substr($fileName, 0, -(strlen($ext) + 1)) : $fileName;
+        $base = (string) preg_replace(
+            '/-[' . self::HASH_CHARSET . ']{' . self::HASH_LENGTH . '}$/',
+            '',
+            $base,
+        );
+        return $base . ($ext !== '' ? '.' . $ext : '');
     }
 
     /**

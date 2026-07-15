@@ -7,6 +7,9 @@ Modul spravuje e-mailovou komunikaci.
 - **Fáze 3a** — AI analýza došlých zpráv (extrakce dokumentů, pull-based protokol
   pro externí analyzer, UI pro review extrahovaných dokumentů, akce "Znova
   analyzovat").
+- **Fáze 3 Spisovny (šum)** — deterministická pravidla odesílatelů s učením ze
+  zpětné vazby (auto-archiv při ingestu, návrhové karty), signál `is_bulk`
+  z hlaviček `.eml`, denní digest karta s „Vrátit vše". Viz `tasks/registry-phase3.md`.
 
 Pozdější fáze: aplikace extrahovaných dokumentů na cílové entity (Fáze 3c),
 další providers (Ollama, ...), odeslaná pošta.
@@ -28,6 +31,7 @@ další providers (Ollama, ...), odeslaná pošta.
 | [core_mail_extracted_documents](tables/core_mail_extracted_documents.md) | Kandidáti na business entity z AI analýzy (Fáze 3a) |
 | [core_mail_ai_profiles](tables/core_mail_ai_profiles.md) | Prompty + JSON schémata + thresholdy per use-case (Fáze 3a); FK `backend` → `core_ai_backends` (modul core/ai) |
 | [core_mail_analysis_claims](tables/core_mail_analysis_claims.md) | Lease mechanismus pro pull protocol (Fáze 3a) |
+| [core_mail_sender_rules](tables/core_mail_sender_rules.md) | Pravidla odesílatelů — auto-archiv šumu při ingestu (Fáze 3 Spisovny) |
 
 ## Zdrojové soubory
 
@@ -43,6 +47,12 @@ další providers (Ollama, ...), odeslaná pošta.
 | [ExtractedDocumentDocument.php](src/ExtractedDocumentDocument.php) | Extrahovaný dokument — atomický auto-transition zprávy 30→40 v `afterPersist` |
 | [AIAnalyzerProvisioner.php](src/AIAnalyzerProvisioner.php) | Bootstrap `_ai_analyzer` + default backend + default profil |
 | [AnalysisClaimReaper.php](src/AnalysisClaimReaper.php) | Reaper expirovaných claimů |
+| [SenderRuleDocument.php](src/SenderRuleDocument.php) | Pravidla odesílatelů — formát dle druhu, lowercase, unikátnost mezi živými |
+| [SenderRulesViewer.php](src/SenderRulesViewer.php) | Settings viewer pravidel odesílatelů |
+| [SenderRuleMatcher.php](src/SenderRuleMatcher.php) | Match odesílatele proti potvrzeným pravidlům (e-mail > doména) |
+| [BulkHeadersDetector.php](src/BulkHeadersDetector.php) | Signál `is_bulk` z hlaviček raw `.eml` (List-Unsubscribe, Precedence, Auto-Submitted, List-Id) |
+| [SenderRuleSuggestionHandler.php](src/SenderRuleSuggestionHandler.php) | Učení: 3+ ručních odklizení téhož odesílatele → návrh pravidla (Koncept) |
+| [Feed/MailDigestSource.php](src/Feed/MailDigestSource.php) | Digest karta auto-archivu + karty návrhů pravidel na dashboardu |
 
 ## Konfigurace
 
@@ -52,6 +62,9 @@ další providers (Ollama, ...), odeslaná pošta.
 | `core.mail.docStatesIncoming` | [config/docStatesIncoming.jsonc](config/docStatesIncoming.jsonc) | Stavy zprávy (10/20/30/40/70/80/90) |
 | `core.mail.extractedDocStates` | [config/extractedDocStates.jsonc](config/extractedDocStates.jsonc) | Stavy review extrahovaných dokumentů |
 | `core.mail.extractedDocTypes` | [config/extractedDocTypes.jsonc](config/extractedDocTypes.jsonc) | Typy extrahovaných dokumentů |
+| `core.mail.senderRulePatternKinds` | [config/senderRulePatternKinds.jsonc](config/senderRulePatternKinds.jsonc) | Druhy vzorů pravidel (`email` \| `domain`) |
+| `core.mail.senderRuleDispositions` | [config/senderRuleDispositions.jsonc](config/senderRuleDispositions.jsonc) | Akce pravidla (zatím jen `archive`) |
+| `core.mail.senderRuleOrigins` | [config/senderRuleOrigins.jsonc](config/senderRuleOrigins.jsonc) | Původ pravidla (`user` \| `suggested`) |
 
 ## Default AI profil
 
@@ -72,6 +85,9 @@ další providers (Ollama, ...), odeslaná pošta.
 | `POST /api/v1/_mail/messages/{ndx}/reanalyze` | UI akce "Znova analyzovat". Auth: běžný uživatel. |
 | `POST /api/v1/_mail/extracted-documents/{ndx}/apply` | UI akce "Použít" — prochází přes `ExtractedDocumentDocument` hooky (auto-transition zprávy 30→40). |
 | `POST /api/v1/_mail/extracted-documents/{ndx}/reject` | UI akce "Zamítnout" — povinný `reason` v body. |
+| `POST /api/v1/_mail/sender-rules/{id}/confirm` | Potvrzení návrhu pravidla (Koncept 10 → 40). Auth: běžný uživatel. |
+| `POST /api/v1/_mail/sender-rules/{id}/reject` | Zamítnutí návrhu pravidla (10 → 90). |
+| `POST /api/v1/_mail/auto-archive/undo` | „Vrátit vše" — obnova zpráv auto-archivovaných v daném dni (body `{date?}`, jen dnešek/včerejšek). |
 
 Kontrakty: [docs/mail/api-contract.md](../../../docs/mail/api-contract.md).
 

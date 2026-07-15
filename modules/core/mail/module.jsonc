@@ -181,6 +181,11 @@
             "table": "docs_core_heads",
             "class": "Shipard\\Module\\Core\\Mail\\SupplierCodeCaptureHandler",
             "events": ["stateChanged"]
+        },
+        {
+            "table": "core_mail_incoming_messages",
+            "class": "Shipard\\Module\\Core\\Mail\\SenderRuleSuggestionHandler",
+            "events": ["stateChanged"]
         }
     ],
 

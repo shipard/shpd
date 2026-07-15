@@ -16,6 +16,7 @@ use Shipard\Core\Document\DocStateConfig;
 use Shipard\Core\Document\DocumentRegistry;
 use Shipard\Core\Logging\ErrorLogger;
 use Shipard\Module\Core\Attachments\AttachmentService;
+use Shipard\Module\Core\Mail\BulkHeadersDetector;
 use Shipard\Module\Core\Mail\IdempotencyStore;
 use Shipard\Module\Core\Mail\IncomingMessageDocument;
 use Shipard\Module\Core\Mail\IsdocImportService;
@@ -125,6 +126,8 @@ class MailController
         if ($rawSourceFile instanceof Response) {
             return $rawSourceFile;
         }
+
+        $fields['is_bulk'] = $this->detectBulkHeaders($rawSourceFile['tmp_name']) ? 1 : 0;
 
         $attachmentFiles = $this->collectAttachmentFiles();
 
@@ -486,6 +489,27 @@ class MailController
     }
 
     /**
+     * Deterministický signál hromadné pošty z hlaviček raw `.eml`.
+     * Čte jen začátek souboru (hlavičky), selhání nikdy neblokuje ingest —
+     * vrací false a zaloguje warn.
+     */
+    private function detectBulkHeaders(string $tmpName): bool
+    {
+        try {
+            // 128 KB s rezervou pokryje hlavičkový blok; tělo nečteme.
+            $head = @file_get_contents($tmpName, false, null, 0, 131072);
+            if ($head === false) {
+                ErrorLogger::warn('MailController::receiveIncoming cannot read raw_source for bulk detection');
+                return false;
+            }
+            return new BulkHeadersDetector()->detect($head);
+        } catch (\Throwable $e) {
+            ErrorLogger::logException($e, 'MailController::receiveIncoming bulk headers detection failed');
+            return false;
+        }
+    }
+
+    /**
      * @return array{name: string, tmp_name: string}|Response
      */
     private function validateRawSource(): array|Response
@@ -556,6 +580,7 @@ class MailController
             'body_plain' => $fields['body_plain'],
             'body_html' => $fields['body_html'],
             'source_type' => $fields['source_type'],
+            'is_bulk' => (int) ($fields['is_bulk'] ?? 0),
             'created_by' => $authorId,
         ];
 

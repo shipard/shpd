@@ -51,7 +51,7 @@ class IncomingMessagesViewer extends TableViewer
     {
         $sql = 'SELECT m.`id`, m.`message_id`, m.`subject`, m.`sender_email`, m.`sender_name`,'
             . ' m.`primary_type`, m.`received_at`, m.`body_plain`, m.`docState`, m.`docStateMain`,'
-            . ' m.`analysis_state`,'
+            . ' m.`analysis_state`, m.`is_bulk`,'
             . ' m.`mailbox`, mb.`name` AS mailbox_name, mb.`mailbox_id` AS mailbox_code'
             . ' FROM `' . $this->table . '` m'
             . ' LEFT JOIN `core_mail_mailboxes` mb ON mb.`id` = m.`mailbox`';
@@ -135,6 +135,9 @@ class IncomingMessagesViewer extends TableViewer
                 'text'  => $analysisBadge['label'],
                 'class' => self::STATE_SPAN_CLASS[$analysisBadge['style']] ?? 'muted',
             ];
+        }
+        if (!empty($rowData['is_bulk'])) {
+            $i2[] = ['text' => 'hromadná', 'class' => 'muted'];
         }
         $row['i2'] = $i2;
 

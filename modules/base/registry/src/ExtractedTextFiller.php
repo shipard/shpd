@@ -19,7 +19,7 @@ use Shipard\Module\Core\Attachments\TextExtractor;
  * je systémový sloupec a nesmí bumpnout `modified` — na
  * `modified <= applied_at` stojí unapply guard AI cesty.
  */
-final class ExtractedTextFiller
+class ExtractedTextFiller
 {
     private const ATTACHMENTS_TABLE = 'core_attachments_files';
     private const REGISTRY_TABLE = 'base_registry_documents';
@@ -31,7 +31,15 @@ final class ExtractedTextFiller
         private readonly TextExtractor $extractor = new TextExtractor(),
     ) {}
 
-    public function fill(int $documentId): void
+    /**
+     * `$clearWhenNoAttachments`: dokument bez obsahových příloh dostane
+     * `extracted_text = NULL` (regenerace po smazání příloh). Když přílohy
+     * existují, ale extrakce nic nedá (chybějící pdftotext, scan bez textu),
+     * stávající text se nikdy nemaže — best-effort jako při zařazení.
+     *
+     * @return array{chars: int, attachments: int}
+     */
+    public function fill(int $documentId, bool $clearWhenNoAttachments = false): array
     {
         try {
             $rows = $this->db->fetchAll(
@@ -42,6 +50,14 @@ final class ExtractedTextFiller
                 self::REGISTRY_TABLE_ID,
                 $documentId,
             );
+
+            if ($rows === [] && $clearWhenNoAttachments) {
+                $this->db->getDibiConnection()
+                    ->update(self::REGISTRY_TABLE, ['extracted_text' => null])
+                    ->where('id = %i', $documentId)
+                    ->execute();
+                return ['chars' => 0, 'attachments' => 0];
+            }
 
             $parts = [];
             foreach ($rows as $att) {
@@ -55,7 +71,7 @@ final class ExtractedTextFiller
                 }
             }
             if ($parts === []) {
-                return;
+                return ['chars' => 0, 'attachments' => count($rows)];
             }
 
             $text = mb_substr(implode("\n\n", $parts), 0, TextExtractor::MAX_LENGTH);
@@ -63,11 +79,13 @@ final class ExtractedTextFiller
                 ->update(self::REGISTRY_TABLE, ['extracted_text' => $text])
                 ->where('id = %i', $documentId)
                 ->execute();
+            return ['chars' => mb_strlen($text), 'attachments' => count($rows)];
         } catch (\Throwable $e) {
             ErrorLogger::warn('ExtractedTextFiller: text extraction failed', [
                 'documentId' => $documentId,
                 'error'      => $e->getMessage(),
             ]);
+            return ['chars' => 0, 'attachments' => 0];
         }
     }
 }

@@ -23,7 +23,7 @@ use Shipard\Module\Core\Attachments\AttachmentService;
  * Přechod zprávy jde přes Document hooky (validate → beforeSave →
  * update → afterPersist), žádný přímý stavový UPDATE.
  */
-final class FileFromMessageService
+class FileFromMessageService
 {
     private const MESSAGES_TABLE = 'core_mail_incoming_messages';
     private const ATTACHMENTS_TABLE = 'core_attachments_files';

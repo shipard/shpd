@@ -125,14 +125,18 @@ abstract class TableForm
      * Create an attachments tab for the current table. The tableId is taken
      * from the loaded table definition.
      */
-    protected function attachmentsTab(string $id = 'attachments', string $label = 'Přílohy'): FormTab
-    {
+    protected function attachmentsTab(
+        string $id = 'attachments',
+        string $label = 'Přílohy',
+        ?string $changeEndpoint = null,
+    ): FormTab {
         $tableId = $this->tableDef?->tableId ?? 0;
         return new FormTab(
             id: $id,
             label: $label,
             type: 'attachments',
             tableId: $tableId,
+            changeEndpoint: $changeEndpoint,
         );
     }
 }

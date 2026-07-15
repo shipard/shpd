@@ -515,6 +515,17 @@ class Router
 			return new Route('registry', 'fromMessage', null, $ndx);
 		}
 
+		if (preg_match('#^documents/(\d+)/extract-text$#', $rest, $m)) {
+			$id = (int) $m[1];
+			if ($id <= 0) {
+				return Response::error('NOT_FOUND', 'Not found', 404);
+			}
+			if ($method !== 'POST') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('registry', 'extractText', null, $id);
+		}
+
 		return Response::error('NOT_FOUND', 'Not found', 404);
 	}
 

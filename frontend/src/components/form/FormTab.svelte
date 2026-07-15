@@ -19,7 +19,7 @@
   {#if tab.type === 'subtable'}
     <FormSubTable element={tab.subtable} {parentId} {disabled} />
   {:else if tab.type === 'attachments'}
-    <AttachmentPanel tableId={tab.table_id} recordId={parentId} {disabled} />
+    <AttachmentPanel tableId={tab.table_id} recordId={parentId} {disabled} changeEndpoint={tab.change_endpoint} />
   {:else}
     {#each tab.sections as section, i (section.title ?? `section-${i}`)}
       <FormSection

@@ -653,19 +653,25 @@ function dispatchRegistry(
 	\Shipard\Core\Document\DocumentRegistry $documentRegistry,
 	?\Shipard\Core\Config\ConfigRuntime $configRuntime = null,
 ): Response {
+	$attachments = new \Shipard\Module\Core\Attachments\AttachmentService(
+		$db,
+		$resolved->config->getDataSourceDir(),
+		$tables,
+	);
 	$service = new \Shipard\Module\Base\Registry\FileFromMessageService(
 		$db,
 		$documentRegistry,
-		new \Shipard\Module\Core\Attachments\AttachmentService(
-			$db,
-			$resolved->config->getDataSourceDir(),
-			$tables,
-		),
+		$attachments,
 		$configRuntime,
 	);
-	$ctrl = new \Shipard\Api\Controller\RegistryController($service);
+	$ctrl = new \Shipard\Api\Controller\RegistryController(
+		$service,
+		new \Shipard\Module\Base\Registry\ExtractedTextFiller($db, $attachments),
+		$db,
+	);
 	return match ($route->action) {
 		'fromMessage' => $ctrl->fromMessage($auth, (int) $route->id),
+		'extractText' => $ctrl->extractText($auth, (int) $route->id),
 		default       => Response::error('INTERNAL_ERROR', "Unknown registry action: {$route->action}", 500),
 	};
 }

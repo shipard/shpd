@@ -62,7 +62,12 @@ class RegistryDocumentsForm extends TableForm
             table: $this->table,
             title: 'Dokument spisovny',
             titleNew: 'Nový dokument spisovny',
-            tabs: [$basic, $this->attachmentsTab(), $metadata],
+            tabs: [
+                $basic,
+                // změna příloh přegeneruje extracted_text (fulltext ft_text)
+                $this->attachmentsTab(changeEndpoint: '/_registry/documents/{id}/extract-text'),
+                $metadata,
+            ],
         );
     }
 

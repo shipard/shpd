@@ -509,6 +509,7 @@
               tableId={tab.table_id}
               recordId={currentId}
               disabled={isDisabled}
+              changeEndpoint={tab.change_endpoint}
             />
           {:else}
             <FormTab

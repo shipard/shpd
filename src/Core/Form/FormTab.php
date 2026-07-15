@@ -13,6 +13,9 @@ final class FormTab
      * @param array{table: string, foreignKey: string, formId: ?string, sort?: ?string}|null $subtable
      *                                  Required for type='subtable'.
      * @param int|null      $tableId    Required for type='attachments'.
+     * @param string|null   $changeEndpoint Only for type='attachments': API path
+     *                                  POSTed (fire-and-forget) after upload/delete;
+     *                                  `{id}` placeholder = record id.
      */
     public function __construct(
         public readonly string $id,
@@ -22,6 +25,7 @@ final class FormTab
         public readonly ?array $subtable = null,
         public readonly ?int $tableId = null,
         public readonly ?string $icon = null,
+        public readonly ?string $changeEndpoint = null,
     ) {
         if (!in_array($type, self::ALLOWED_TYPES, true)) {
             throw new \InvalidArgumentException(sprintf(
@@ -29,6 +33,12 @@ final class FormTab
                 $type,
                 implode(', ', self::ALLOWED_TYPES),
             ));
+        }
+
+        if ($changeEndpoint !== null && $type !== 'attachments') {
+            throw new \InvalidArgumentException(
+                sprintf('FormTab "%s": changeEndpoint is only allowed for type "attachments"', $id),
+            );
         }
 
         if ($type === 'fields') {
@@ -126,6 +136,9 @@ final class FormTab
 
         if ($this->type === 'attachments') {
             $result['table_id'] = $this->tableId;
+            if ($this->changeEndpoint !== null) {
+                $result['change_endpoint'] = $this->changeEndpoint;
+            }
         }
 
         return $result;

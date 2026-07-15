@@ -12,12 +12,21 @@
   import Icon from '../ui/Icon.svelte';
   import { iconUpload, iconDownload, iconDelete, iconEdit, iconFile, iconFilePdf, iconFileImage, iconSpinner } from '../../icons.js';
   import { t } from '../../i18n/index.js';
+  import { post } from '../../api/client.js';
 
   let {
     tableId,
     recordId = null,
     disabled = false,
+    // API path POSTed fire-and-forget after upload/delete; '{id}' = recordId
+    // (server-driven via FormTab.changeEndpoint)
+    changeEndpoint = null,
   } = $props();
+
+  function notifyContentChange() {
+    if (!changeEndpoint || recordId == null) return;
+    post(changeEndpoint.replace('{id}', recordId), {}).catch(() => {});
+  }
 
   let attachments = $state([]);
   let loading = $state(false);
@@ -54,6 +63,7 @@
     }
     uploading = false;
     await fetchAttachments(tableId, recordId);
+    notifyContentChange();
   }
 
   function handleFileInput(e) {
@@ -88,6 +98,7 @@
     if (!confirm(t('attachments.confirmDelete', { name: att.name }))) return;
     await deleteAttachment(att.id);
     await fetchAttachments(tableId, recordId);
+    notifyContentChange();
   }
 
   function startRename(att) {

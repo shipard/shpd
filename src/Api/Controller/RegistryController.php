@@ -6,6 +6,8 @@ namespace Shipard\Api\Controller;
 
 use Shipard\Api\AuthContext;
 use Shipard\Api\Response;
+use Shipard\Core\Database\DataSourceConnection;
+use Shipard\Module\Base\Registry\ExtractedTextFiller;
 use Shipard\Module\Base\Registry\FileFromMessageService;
 
 /**
@@ -22,6 +24,8 @@ class RegistryController
 {
     public function __construct(
         private readonly FileFromMessageService $fileFromMessage,
+        private readonly ExtractedTextFiller $textFiller,
+        private readonly DataSourceConnection $db,
     ) {}
 
     /**
@@ -53,5 +57,31 @@ class RegistryController
             $payload['warning'] = $result['warning'];
         }
         return Response::success($payload);
+    }
+
+    /**
+     * POST /api/v1/_registry/documents/{id}/extract-text
+     *
+     * Přegeneruje `extracted_text` dokumentu z aktuálních příloh
+     * (ExtractedTextFiller — stejná skladba jako při zařazení; bez příloh
+     * text vyčistí). Idempotentní. Odpovědi: 200 {chars, attachments},
+     * 404 NOT_FOUND (neexistuje / Koš).
+     */
+    public function extractText(AuthContext $auth, int $documentId): Response
+    {
+        if (!$auth->isAuthenticated) {
+            return Response::error('UNAUTHORIZED', 'Authentication required', 401);
+        }
+
+        $row = $this->db->fetchRow(
+            'SELECT `id`, `docState` FROM `base_registry_documents` WHERE `id` = %i',
+            $documentId,
+        );
+        if ($row === null || (int) $row['docState'] === 90) {
+            return Response::error('NOT_FOUND', 'Document not found', 404);
+        }
+
+        $result = $this->textFiller->fill($documentId, clearWhenNoAttachments: true);
+        return Response::success($result);
     }
 }

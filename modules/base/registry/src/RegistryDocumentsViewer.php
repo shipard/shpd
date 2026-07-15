@@ -85,10 +85,12 @@ class RegistryDocumentsViewer extends TableViewer
 
         if ($search !== null && $search !== '') {
             $term = '%' . $search . '%';
-            $conditions[] = '(d.`title` LIKE %s OR d.`ref_number` LIKE %s OR d.`ai_summary` LIKE %s)';
+            $conditions[] = '(d.`title` LIKE %s OR d.`ref_number` LIKE %s OR d.`ai_summary` LIKE %s'
+                . ' OR MATCH (d.`extracted_text`) AGAINST (%s))';
             $params[] = $term;
             $params[] = $term;
             $params[] = $term;
+            $params[] = $search;
         }
 
         if ($conditions !== []) {

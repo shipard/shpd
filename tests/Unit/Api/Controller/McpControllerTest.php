@@ -13,6 +13,7 @@ use Shipard\Api\Response;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Module\Base\Persons\Mcp\PersonsGetTool;
 use Shipard\Module\Base\Persons\Mcp\PersonsSearchTool;
+use Shipard\Module\Base\Registry\Mcp\RegistrySearchTool;
 use Shipard\Module\Core\Exchange\Common\ApplyResult;
 use Shipard\Module\Core\Exchange\Document\DocumentApplier;
 use Shipard\Module\Core\Mail\ExtractedDocumentApplier;
@@ -52,6 +53,7 @@ class McpControllerTest extends TestCase
 		$registry->register(new PersonsGetTool());
 		$registry->register(new DocumentsSearchTool());
 		$registry->register(new MailListPendingTool());
+		$registry->register(new RegistrySearchTool());
 		$ctrl = new McpController($registry);
 		$db ??= $this->createMock(DataSourceConnection::class);
 		return [$ctrl, $db];
@@ -236,7 +238,7 @@ class McpControllerTest extends TestCase
 	}
 
 	// tools/list → všechny čtyři nástroje s inputSchema
-	public function testToolsListContainsAllFourTools(): void
+	public function testToolsListContainsAllReadTools(): void
 	{
 		[$ctrl, $db] = $this->controller();
 		$resp = $this->call($ctrl, $this->buildRequest([
@@ -245,7 +247,7 @@ class McpControllerTest extends TestCase
 
 		$tools = $resp->getPayload()['result']['tools'];
 		$names = array_column($tools, 'name');
-		foreach (['persons_search', 'persons_get', 'documents_search', 'mail_list_pending'] as $expected) {
+		foreach (['persons_search', 'persons_get', 'documents_search', 'mail_list_pending', 'registry_search'] as $expected) {
 			$this->assertContains($expected, $names);
 		}
 		foreach ($tools as $t) {
@@ -372,6 +374,124 @@ class McpControllerTest extends TestCase
 		$this->assertCount(20, $sc['items']);
 		$this->assertTrue($sc['pagination']['has_more']);
 		$this->assertNull($sc['items'][0]['partner']);
+	}
+
+	// registry_search: default state=filed + druh → správné WHERE a parametry
+	public function testRegistrySearchDefaultStateAndKindFilter(): void
+	{
+		$capturedSql = '';
+		$capturedParams = [];
+		$db = $this->createMock(DataSourceConnection::class);
+		$db->method('fetchAll')->willReturnCallback(static function (string $sql, ...$params) use (&$capturedSql, &$capturedParams): array {
+			$capturedSql = $sql;
+			$capturedParams = $params;
+			return [];
+		});
+		$db->method('fetchSingle')->willReturn('2026-06-06');
+
+		$result = $this->callTool($db, 'registry_search', ['doc_kind' => 'contract']);
+
+		$this->assertStringContainsString('`d`.`docState` = 40', $capturedSql);
+		$this->assertStringContainsString('`d`.`doc_kind` = %s', $capturedSql);
+		$this->assertSame(['contract', 21, 0], $capturedParams);
+		$this->assertStringContainsString('žádné dokumenty', $result['structuredContent']['summary']);
+	}
+
+	// registry_search: fulltext jde přes oba indexy (ft_head + ft_text)
+	public function testRegistrySearchFulltextUsesBothIndexes(): void
+	{
+		$capturedSql = '';
+		$capturedParams = [];
+		$db = $this->createMock(DataSourceConnection::class);
+		$db->method('fetchAll')->willReturnCallback(static function (string $sql, ...$params) use (&$capturedSql, &$capturedParams): array {
+			$capturedSql = $sql;
+			$capturedParams = $params;
+			return [];
+		});
+		$db->method('fetchSingle')->willReturn('2026-06-06');
+
+		$this->callTool($db, 'registry_search', ['query' => 'výpověď', 'state' => 'active']);
+
+		$this->assertStringContainsString('MATCH (`d`.`title`, `d`.`ref_number`, `d`.`ai_summary`) AGAINST (%s)', $capturedSql);
+		$this->assertStringContainsString('MATCH (`d`.`extracted_text`) AGAINST (%s)', $capturedSql);
+		$this->assertStringContainsString('`d`.`docState` != 90', $capturedSql);
+		$this->assertSame(['výpověď', 'výpověď', 21, 0], $capturedParams);
+	}
+
+	// registry_search: nenalezený šanon → prázdný výsledek se summary, bez SQL na dokumenty
+	public function testRegistrySearchBinderNotFound(): void
+	{
+		$documentQueryRan = false;
+		$db = $this->createMock(DataSourceConnection::class);
+		$db->method('fetchAll')->willReturnCallback(static function (string $sql, ...$p) use (&$documentQueryRan): array {
+			if (str_contains($sql, 'base_registry_documents')) {
+				$documentQueryRan = true;
+			}
+			return []; // binder lookup nic nenajde
+		});
+		$db->method('fetchSingle')->willReturn('2026-06-06');
+
+		$result = $this->callTool($db, 'registry_search', ['binder_name' => 'Neexistující šanon']);
+
+		$sc = $result['structuredContent'];
+		$this->assertSame([], $sc['items']);
+		$this->assertStringContainsString("Šanon 'Neexistující šanon' nebyl nalezen", $sc['summary']);
+		$this->assertFalse($sc['pagination']['has_more']);
+		$this->assertFalse($documentQueryRan);
+	}
+
+	// registry_search: binder filtr + expiring_within_days + mapování expired/labels
+	public function testRegistrySearchBinderAndExpiring(): void
+	{
+		$capturedSql = '';
+		$capturedParams = [];
+		$db = $this->createMock(DataSourceConnection::class);
+		$db->method('fetchAll')->willReturnCallback(static function (string $sql, ...$params) use (&$capturedSql, &$capturedParams): array {
+			if (str_starts_with($sql, 'SELECT `id` FROM `base_registry_binders`')) {
+				return [['id' => 3], ['id' => 4]];
+			}
+			$capturedSql = $sql;
+			$capturedParams = $params;
+			return [
+				['id' => 1, 'title' => 'Nájemní smlouva', 'doc_kind' => 'contract', 'ref_number' => 'S-1', 'partner' => 5, 'partner_name' => 'ACME', 'valid_from' => '2025-01-01', 'valid_to' => '2026-05-01', 'ai_summary' => str_repeat('x', 250), 'docState' => 40, 'binder_name' => 'Smlouvy'],
+				['id' => 2, 'title' => 'Pojistka auta', 'doc_kind' => 'insurance', 'ref_number' => null, 'partner' => null, 'partner_name' => null, 'valid_from' => null, 'valid_to' => '2026-07-01', 'ai_summary' => null, 'docState' => 40, 'binder_name' => 'Smlouvy'],
+			];
+		});
+		$db->method('fetchSingle')->willReturn('2026-06-06');
+
+		$result = $this->callTool($db, 'registry_search', ['binder_name' => 'Smlouvy', 'expiring_within_days' => 30]);
+
+		$this->assertStringContainsString('`d`.`binder` IN %in', $capturedSql);
+		$this->assertStringContainsString('`d`.`valid_to` IS NOT NULL AND `d`.`valid_to` <= %s', $capturedSql);
+		// [horizont dnes+30, binder ids, limit+1, offset]
+		$this->assertSame(['2026-07-06', [3, 4], 21, 0], $capturedParams);
+
+		$items = $result['structuredContent']['items'];
+		$this->assertSame(['type' => 'registry_document', 'id' => 1], $items[0]['ref']);
+		$this->assertSame('Nájemní smlouva — ACME', $items[0]['full_name']);
+		$this->assertSame(['id' => 5, 'full_name' => 'ACME'], $items[0]['partner']);
+		$this->assertSame('Smlouvy', $items[0]['binder']);
+		$this->assertTrue($items[0]['expired']);
+		$this->assertSame(201, mb_strlen($items[0]['ai_summary'])); // zkráceno na 200 + …
+		$this->assertFalse($items[1]['expired']);
+		$this->assertNull($items[1]['partner']);
+		$this->assertStringContainsString('2 dokumentů, z toho 1 s prošlou platností', $result['structuredContent']['summary']);
+	}
+
+	// registry_search: limit se stropuje na 50
+	public function testRegistrySearchLimitCap(): void
+	{
+		$capturedParams = [];
+		$db = $this->createMock(DataSourceConnection::class);
+		$db->method('fetchAll')->willReturnCallback(static function (string $sql, ...$params) use (&$capturedParams): array {
+			$capturedParams = $params;
+			return [];
+		});
+		$db->method('fetchSingle')->willReturn('2026-06-06');
+
+		$this->callTool($db, 'registry_search', ['limit' => 500]);
+
+		$this->assertSame([51, 0], $capturedParams);
 	}
 
 	// mail_list_pending: mapování analysis_status, pending count, summary

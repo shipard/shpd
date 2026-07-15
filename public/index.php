@@ -334,6 +334,10 @@ function buildMcpRegistry(
 	$registry->register(new \Shipard\Module\Base\Persons\Mcp\PersonsGetTool());
 	$registry->register(new \Shipard\Module\Docs\Core\Mcp\DocumentsSearchTool());
 	$registry->register(new \Shipard\Module\Core\Mail\Mcp\MailListPendingTool());
+	// Spisovna — jen s aktivním modulem base.registry.
+	if (isset($tables['base_registry_documents'])) {
+		$registry->register(new \Shipard\Module\Base\Registry\Mcp\RegistrySearchTool());
+	}
 
 	// Zápisový nástroj mail_draft_document nad sdílenou apply službou.
 	// DocumentApplier vyžaduje ConfigRuntime (jako dispatchExchange/Analysis);

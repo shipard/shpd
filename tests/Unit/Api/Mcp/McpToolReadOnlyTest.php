@@ -7,6 +7,7 @@ namespace Shipard\Tests\Unit\Api\Mcp;
 use PHPUnit\Framework\TestCase;
 use Shipard\Module\Base\Persons\Mcp\PersonsGetTool;
 use Shipard\Module\Base\Persons\Mcp\PersonsSearchTool;
+use Shipard\Module\Base\Registry\Mcp\RegistrySearchTool;
 use Shipard\Module\Core\Mail\Mcp\MailDraftDocumentTool;
 use Shipard\Module\Core\Mail\Mcp\MailListPendingTool;
 use Shipard\Module\Docs\Core\Mcp\DocumentsSearchTool;
@@ -23,6 +24,7 @@ class McpToolReadOnlyTest extends TestCase
         $this->assertTrue((new PersonsGetTool())->isReadOnly());
         $this->assertTrue((new DocumentsSearchTool())->isReadOnly());
         $this->assertTrue((new MailListPendingTool())->isReadOnly());
+        $this->assertTrue((new RegistrySearchTool())->isReadOnly());
     }
 
     public function testDraftToolIsNotReadOnly(): void

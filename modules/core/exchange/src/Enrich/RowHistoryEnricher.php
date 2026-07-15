@@ -21,11 +21,18 @@ use Shipard\Module\Docs\Core\OwnCompanyResolver;
  * (D3; userActions se mergují až po enrichmentu a reconcile fáze
  * DocumentApplieru má absolutní přednost).
  *
- * Matchování popisu (D5), první zásah vyhrává, historie nejnovější první:
+ * Matchování (D5) zkouší kandidátní texty řádku v pořadí preference
+ * `description` → `item.description` → `item.name`, tier-major — úroveň
+ * matchování má přednost před pořadím kandidátů (exact zásah na `item.name`
+ * vyhrává nad fuzzy zásahem na `item.description`):
  *
  *   0. exact match syrového textu               → historyExactRaw  / high
  *   1. exact match normalizovaného textu        → historyExactNorm / high
  *   2. Jaccard token-set ≥ FUZZY_THRESHOLD      → historyFuzzy     / medium
+ *
+ * Uvnitř úrovně vyhrává dřívější kandidát, uvnitř kandidáta nejnovější
+ * historie. Vyhrávající kandidátní text (originální, nenormalizovaný tvar)
+ * jde do auditu jako `matchedText`.
  *
  * Audit per řádek jde do `_resolve.rows[i].enrichment` (D6) — blok se
  * zapisuje vždy, i pro nenapárované a přeskočené řádky. Opakovaný běh je
@@ -122,6 +129,7 @@ final class RowHistoryEnricher
         $enrichment = [
             'matchedBy'       => null,
             'confidence'      => null,
+            'matchedText'     => null,
             'sourceDocId'     => null,
             'sourceDocNumber' => null,
             'suggested'       => [],
@@ -136,13 +144,13 @@ final class RowHistoryEnricher
             return $this->writeEnrichment($canonical, $idx, $enrichment);
         }
 
-        $text = $this->rowText($row);
-        $match = $text !== null ? $this->findMatch($text, $history) : null;
+        $candidates = $this->rowTextCandidates($row);
+        $match = $candidates !== [] ? $this->findMatch($candidates, $history) : null;
         if ($match === null) {
             return $this->writeEnrichment($canonical, $idx, $enrichment);
         }
 
-        [$hist, $matchedBy, $confidence] = $match;
+        [$hist, $matchedBy, $confidence, $matchedText] = $match;
 
         $suggested = [];
         $item = is_array($row['item'] ?? null) ? $row['item'] : [];
@@ -167,6 +175,7 @@ final class RowHistoryEnricher
         $canonical['rows'][$idx] = $row;
         $enrichment['matchedBy'] = $matchedBy;
         $enrichment['confidence'] = $confidence;
+        $enrichment['matchedText'] = $matchedText;
         $enrichment['sourceDocId'] = (int) $hist['doc_head'];
         $enrichment['sourceDocNumber'] = ((string) ($hist['doc_number'] ?? '')) ?: null;
         $enrichment['suggested'] = $suggested;
@@ -175,32 +184,51 @@ final class RowHistoryEnricher
     }
 
     /**
+     * Tier-major průchod: úroveň matchování má přednost před pořadím
+     * kandidátů (D1) — exactRaw přes všechny kandidáty, pak exactNorm,
+     * pak fuzzy. Uvnitř úrovně vyhrává dřívější kandidát, uvnitř kandidáta
+     * nejnovější historie (řazení `h.id DESC`).
+     *
+     * @param list<string> $candidates
      * @param list<array<string, mixed>> $history
-     * @return array{0: array<string, mixed>, 1: string, 2: string}|null
+     * @return array{0: array<string, mixed>, 1: string, 2: string, 3: string}|null
      */
-    private function findMatch(string $text, array $history): ?array
+    private function findMatch(array $candidates, array $history): ?array
     {
-        foreach ($history as $hist) {
-            if (trim((string) ($hist['description'] ?? '')) === $text) {
-                return [$hist, 'historyExactRaw', 'high'];
+        foreach ($candidates as $text) {
+            foreach ($history as $hist) {
+                if (trim((string) ($hist['description'] ?? '')) === $text) {
+                    return [$hist, 'historyExactRaw', 'high', $text];
+                }
             }
         }
 
-        $norm = $this->normalizeText($text);
-        if ($norm === '') {
+        // norm => první originální text, který na něj vede (pro matchedText)
+        $norms = [];
+        foreach ($candidates as $text) {
+            $norm = $this->normalizeText($text);
+            if ($norm !== '' && !isset($norms[$norm])) {
+                $norms[$norm] = $text;
+            }
+        }
+        if ($norms === []) {
             return null;
         }
-        foreach ($history as $hist) {
-            if ($this->normalizeText((string) ($hist['description'] ?? '')) === $norm) {
-                return [$hist, 'historyExactNorm', 'high'];
+        foreach ($norms as $norm => $text) {
+            foreach ($history as $hist) {
+                if ($this->normalizeText((string) ($hist['description'] ?? '')) === $norm) {
+                    return [$hist, 'historyExactNorm', 'high', $text];
+                }
             }
         }
 
-        $tokens = $this->tokenize($norm);
-        foreach ($history as $hist) {
-            $histTokens = $this->tokenize($this->normalizeText((string) ($hist['description'] ?? '')));
-            if ($this->jaccard($tokens, $histTokens) >= self::FUZZY_THRESHOLD) {
-                return [$hist, 'historyFuzzy', 'medium'];
+        foreach ($norms as $norm => $text) {
+            $tokens = $this->tokenize($norm);
+            foreach ($history as $hist) {
+                $histTokens = $this->tokenize($this->normalizeText((string) ($hist['description'] ?? '')));
+                if ($this->jaccard($tokens, $histTokens) >= self::FUZZY_THRESHOLD) {
+                    return [$hist, 'historyFuzzy', 'medium', $text];
+                }
             }
         }
 
@@ -208,20 +236,28 @@ final class RowHistoryEnricher
     }
 
     /**
-     * Text řádku pro matchování — stejný fallback řetěz jako
-     * DocumentApplier::transformRows().
+     * Kandidátní texty řádku pro matchování, v pořadí preference — stejné
+     * pořadí jako fallback řetěz v DocumentApplier::transformRows(), ale
+     * zkouší se všechny, ne jen první neprázdný. Neprázdné, trimnuté,
+     * deduplikované.
      *
      * @param array<string, mixed> $row
+     * @return list<string>
      */
-    private function rowText(array $row): ?string
+    private function rowTextCandidates(array $row): array
     {
         $item = is_array($row['item'] ?? null) ? $row['item'] : [];
-        $text = $row['description'] ?? $item['description'] ?? $item['name'] ?? null;
-        if (!is_string($text)) {
-            return null;
+        $candidates = [];
+        foreach ([$row['description'] ?? null, $item['description'] ?? null, $item['name'] ?? null] as $text) {
+            if (!is_string($text)) {
+                continue;
+            }
+            $text = trim($text);
+            if ($text !== '' && !in_array($text, $candidates, true)) {
+                $candidates[] = $text;
+            }
         }
-        $text = trim($text);
-        return $text === '' ? null : $text;
+        return $candidates;
     }
 
     /** Lowercase + odstranění číslic/datumů/částek/interpunkce + collapse whitespace (D5). */

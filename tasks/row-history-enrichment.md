@@ -101,7 +101,9 @@ Kroky `enrich()`:
    ověřit proti `docs.core.docStates` při implementaci).
 3. **Match per řádek** (jen řádky, kde `item.ourCode` je prázdné — D3):
    text řádku = `row.description ?? row.item.description ?? row.item.name`
-   (stejný fallback jako `transformRows`). Stupně dle D5; kandidáti s
+   (stejný fallback jako `transformRows`). *Pozn.: nahrazeno — matchuje se
+   přes všechny kandidátní texty tier-major, viz
+   `enrichment-row-text-candidates.md`.* Stupně dle D5; kandidáti s
    itemem ve stavu mimo `ACTIVE_STATES` (10/40/80) se přeskočí (položka
    mezitím smazána/archivována → nenavrhovat).
 4. **Propsání návrhu** (D1): `row.item.ourCode = item_code`;
@@ -113,6 +115,7 @@ Kroky `enrich()`:
    {
      "matchedBy":  "historyExactRaw" | "historyExactNorm" | "historyFuzzy" | null,
      "confidence": "high" | "medium" | null,
+     "matchedText": "…",  // vyhrávající kandidátní text (originální tvar), null bez zásahu
      "sourceDocId": 12345,
      "suggested": { "ourCode": "…", "vatCode": "…", "account": "…" }  // co reálně doplnil
    }

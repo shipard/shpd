@@ -277,6 +277,140 @@ class RowHistoryEnricherTest extends TestCase
         $enricher->enrich($this->canonical([['description' => 'Internet 500M']]));
     }
 
+    public function testItemNameMatchesWhenDescriptionDoesNot(): void
+    {
+        // Reprodukce lefreal (CEZNET): AI dala do item.description fakturované
+        // období (v historii není), item.name je text z historie → dřív
+        // matchedBy = null, teď exactRaw přes dalšího kandidáta.
+        $enricher = $this->buildEnricher([
+            $this->histRow('Měsíční paušál za Internet - 1000MEGA+', 'NET1000', vatCode: 'cz-110', accountNumber: '518100'),
+        ]);
+
+        $result = $enricher->enrich($this->canonical([
+            ['item' => [
+                'name'        => 'Měsíční paušál za Internet - 1000MEGA+',
+                'description' => 'Fakturované období: 01.07.2026 - 31.07.2026',
+            ]],
+        ]));
+
+        $row = $result['rows'][0];
+        $this->assertSame('NET1000', $row['item']['ourCode']);
+        $this->assertSame('cz-110', $row['vat']['code']);
+        $this->assertSame('518100', $row['account']);
+
+        $enrichment = $result['_resolve']['rows'][0]['enrichment'];
+        $this->assertSame('historyExactRaw', $enrichment['matchedBy']);
+        $this->assertSame('high', $enrichment['confidence']);
+        $this->assertSame('Měsíční paušál za Internet - 1000MEGA+', $enrichment['matchedText']);
+    }
+
+    public function testNameOnlyRowMatches(): void
+    {
+        // Finmago scénář: AI vyplnila jen item.name, description chybí —
+        // funguje beze změny (jediný kandidát).
+        $enricher = $this->buildEnricher([
+            $this->histRow('Konektivita 4LAN', 'LAN01'),
+        ]);
+
+        $result = $enricher->enrich($this->canonical([
+            ['item' => ['name' => 'Konektivita 4LAN']],
+        ]));
+
+        $enrichment = $result['_resolve']['rows'][0]['enrichment'];
+        $this->assertSame('LAN01', $result['rows'][0]['item']['ourCode']);
+        $this->assertSame('historyExactRaw', $enrichment['matchedBy']);
+        $this->assertSame('Konektivita 4LAN', $enrichment['matchedText']);
+    }
+
+    public function testDescriptionCandidatePreferredWithinTier(): void
+    {
+        // Oba kandidáty mají exactRaw zásah na různé historické řádky →
+        // uvnitř úrovně vyhrává dřívější kandidát (item.description),
+        // i když zásah item.name je na novější historii.
+        $enricher = $this->buildEnricher([
+            $this->histRow('Internet 500M', 'NET500', docHead: 3002),
+            $this->histRow('Servisní podpora', 'SUP01', docHead: 3001),
+        ]);
+
+        $result = $enricher->enrich($this->canonical([
+            ['item' => ['name' => 'Internet 500M', 'description' => 'Servisní podpora']],
+        ]));
+
+        $enrichment = $result['_resolve']['rows'][0]['enrichment'];
+        $this->assertSame('SUP01', $result['rows'][0]['item']['ourCode']);
+        $this->assertSame('historyExactRaw', $enrichment['matchedBy']);
+        $this->assertSame('Servisní podpora', $enrichment['matchedText']);
+        $this->assertSame(3001, $enrichment['sourceDocId']);
+    }
+
+    public function testExactOnNameBeatsFuzzyOnDescription(): void
+    {
+        // item.description má jen fuzzy zásah, item.name exactRaw na jiný
+        // řádek → tier-major: exact vyhrává, i když je na pozdějším kandidátovi.
+        $enricher = $this->buildEnricher([
+            $this->histRow('Pronájem kancelářských prostor budova A', 'RENT-A', docHead: 4002),
+            $this->histRow('Údržba serveru', 'SRV01', docHead: 4001),
+        ]);
+
+        $result = $enricher->enrich($this->canonical([
+            ['item' => [
+                'name'        => 'Údržba serveru',
+                'description' => 'Pronájem kancelářských prostor budova B',
+            ]],
+        ]));
+
+        $enrichment = $result['_resolve']['rows'][0]['enrichment'];
+        $this->assertSame('SRV01', $result['rows'][0]['item']['ourCode']);
+        $this->assertSame('historyExactRaw', $enrichment['matchedBy']);
+        $this->assertSame('high', $enrichment['confidence']);
+        $this->assertSame('Údržba serveru', $enrichment['matchedText']);
+    }
+
+    public function testDuplicateCandidatesDeduplicated(): void
+    {
+        // row.description == item.name → jeden kandidát, chování beze změny.
+        $enricher = $this->buildEnricher([
+            $this->histRow('Internet 500M', 'NET500'),
+        ]);
+
+        $result = $enricher->enrich($this->canonical([
+            ['description' => 'Internet 500M', 'item' => ['name' => 'Internet 500M']],
+        ]));
+
+        $enrichment = $result['_resolve']['rows'][0]['enrichment'];
+        $this->assertSame('NET500', $result['rows'][0]['item']['ourCode']);
+        $this->assertSame('historyExactRaw', $enrichment['matchedBy']);
+        $this->assertSame('Internet 500M', $enrichment['matchedText']);
+    }
+
+    public function testMatchedTextOriginalFormOnFuzzyAndNullWhenUnmatched(): void
+    {
+        // Fuzzy vítěz → matchedText nese originální (nenormalizovaný) tvar
+        // kandidáta včetně čísel; nenapárovaný řádek má matchedText null.
+        $enricher = $this->buildEnricher([
+            $this->histRow('Pronájem kancelářských prostor budova A', 'RENT-A'),
+        ]);
+
+        $result = $enricher->enrich($this->canonical([
+            ['item' => [
+                'name'        => 'Pronájem kancelářských prostor budova B 7/2026',
+                'description' => 'Fakturované období: 01.07.2026 - 31.07.2026',
+            ]],
+            ['description' => 'Konzultace vývoje software'],
+        ]));
+
+        $matched = $result['_resolve']['rows'][0]['enrichment'];
+        $this->assertSame('RENT-A', $result['rows'][0]['item']['ourCode']);
+        $this->assertSame('historyFuzzy', $matched['matchedBy']);
+        $this->assertSame('medium', $matched['confidence']);
+        $this->assertSame('Pronájem kancelářských prostor budova B 7/2026', $matched['matchedText']);
+
+        $unmatched = $result['_resolve']['rows'][1]['enrichment'];
+        $this->assertSame(1, $result['_resolve']['rows'][1]['index']);
+        $this->assertNull($unmatched['matchedBy']);
+        $this->assertNull($unmatched['matchedText']);
+    }
+
     public function testDoubleRunIsIdempotent(): void
     {
         // Fresh běh nad už obohaceným canonical: revert vlastních návrhů +

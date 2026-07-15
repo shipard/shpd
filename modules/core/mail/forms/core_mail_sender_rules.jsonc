@@ -1,0 +1,30 @@
+{
+    "title": "Pravidlo odesílatele",
+    "title:cs": "Pravidlo odesílatele",
+    "title:en": "Sender rule",
+    "titleNew": "Nové pravidlo odesílatele",
+    "titleNew:cs": "Nové pravidlo odesílatele",
+    "titleNew:en": "New sender rule",
+    "tabs": [
+        {
+            "id": "basic",
+            "label": "Pravidlo",
+            "label:cs": "Pravidlo",
+            "label:en": "Rule",
+            "sections": [
+                {
+                    "columns": [
+                        {
+                            "elements": [
+                                {"type": "select", "column": "pattern_kind", "required": true},
+                                {"type": "input", "column": "pattern", "required": true},
+                                {"type": "select", "column": "disposition", "required": true},
+                                {"type": "input", "column": "notice"}
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

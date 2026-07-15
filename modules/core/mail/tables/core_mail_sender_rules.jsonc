@@ -1,0 +1,197 @@
+{
+    "tableId": 429,
+    "name": "Sender rules",
+    "name:cs": "Pravidla odesílatelů",
+    "name:en": "Sender rules",
+
+    "displayPattern": "{pattern}",
+
+    "docStates": {
+        "stateColumn": "docState",
+        "mainColumn": "docStateMain",
+        "cfgItem": "core.system.docStatesArchive"
+    },
+
+    "columnGroups": [
+        {
+            "id": "rule",
+            "name": "Rule",
+            "name:cs": "Pravidlo",
+            "name:en": "Rule"
+        },
+        {
+            "id": "stats",
+            "name": "Statistics",
+            "name:cs": "Statistiky",
+            "name:en": "Statistics"
+        },
+        {
+            "id": "status",
+            "name": "Status",
+            "name:cs": "Stav",
+            "name:en": "Status"
+        }
+    ],
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+
+        // --- rule ---
+
+        {
+            "id": "pattern_kind",
+            "name": "Pattern kind",
+            "name:cs": "Druh vzoru",
+            "name:en": "Pattern kind",
+            "type": "enumString",
+            "length": 10,
+            "nullable": false,
+            "cfgItem": "core.mail.senderRulePatternKinds",
+            "default": "email",
+            "group": "rule"
+        },
+        {
+            "id": "pattern",
+            "name": "Pattern",
+            "name:cs": "Vzor",
+            "name:en": "Pattern",
+            "type": "varchar",
+            "length": 190,
+            "nullable": false,
+            "group": "rule"
+        },
+        {
+            "id": "disposition",
+            "name": "Disposition",
+            "name:cs": "Akce",
+            "name:en": "Disposition",
+            "type": "enumString",
+            "length": 20,
+            "nullable": false,
+            "cfgItem": "core.mail.senderRuleDispositions",
+            "default": "archive",
+            "group": "rule"
+        },
+        {
+            "id": "origin",
+            "name": "Origin",
+            "name:cs": "Původ",
+            "name:en": "Origin",
+            "type": "enumString",
+            "length": 10,
+            "nullable": false,
+            "cfgItem": "core.mail.senderRuleOrigins",
+            "default": "user",
+            "group": "rule"
+        },
+        {
+            "id": "notice",
+            "name": "Notice",
+            "name:cs": "Poznámka",
+            "name:en": "Notice",
+            "type": "varchar",
+            "length": 250,
+            "nullable": true,
+            "group": "rule"
+        },
+
+        // --- stats ---
+
+        {
+            "id": "hit_count",
+            "name": "Hit count",
+            "name:cs": "Počet zásahů",
+            "name:en": "Hit count",
+            "type": "int",
+            "nullable": false,
+            "default": 0,
+            "group": "stats"
+        },
+        {
+            "id": "last_hit_at",
+            "name": "Last hit",
+            "name:cs": "Poslední zásah",
+            "name:en": "Last hit",
+            "type": "datetime",
+            "nullable": true,
+            "group": "stats"
+        },
+
+        // --- audit ---
+
+        {
+            "id": "created",
+            "name": "Created",
+            "name:cs": "Vytvořeno",
+            "name:en": "Created",
+            "type": "datetime",
+            "nullable": false,
+            "group": "status"
+        },
+        {
+            "id": "created_by",
+            "name": "Created by",
+            "name:cs": "Vytvořil",
+            "name:en": "Created by",
+            "type": "int",
+            "nullable": true,
+            "reference": "core_system_users",
+            "group": "status"
+        },
+        {
+            "id": "modified",
+            "name": "Modified",
+            "name:cs": "Změněno",
+            "name:en": "Modified",
+            "type": "datetime",
+            "nullable": false,
+            "group": "status"
+        },
+
+        // --- doc state (systémové, bez skupiny) ---
+
+        {
+            "id": "docState",
+            "name": "Document state",
+            "name:cs": "Stav dokumentu",
+            "name:en": "Document state",
+            "type": "tinyint",
+            "default": 10,
+            "system": true
+        },
+        {
+            "id": "docStateMain",
+            "name": "Document state (sort)",
+            "name:cs": "Stav dokumentu (řazení)",
+            "name:en": "Document state (sort)",
+            "type": "tinyint",
+            "default": 1,
+            "system": true
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "idx_match",
+            "type": "index",
+            "columns": [
+                {"column": "docStateMain"},
+                {"column": "pattern_kind"},
+                {"column": "pattern"}
+            ]
+        },
+        {
+            "id": "idx_state",
+            "type": "index",
+            "columns": [
+                {"column": "docState"}
+            ]
+        }
+    ]
+}

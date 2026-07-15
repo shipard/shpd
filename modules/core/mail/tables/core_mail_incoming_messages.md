@@ -32,6 +32,7 @@ Sloupce jsou organizovány do skupin:
 | `external_message_id` | varchar(255) | RFC822 `Message-ID` (pro budoucí deduplikaci) |
 | `in_reply_to` | varchar(255) | Hlavička `In-Reply-To` (ukládáme, ve Fázi 1 nevyužíváme) |
 | `reply_references` | text | Hlavička `References` (ukládáme, ve Fázi 1 nevyužíváme). Pojmenováno se suffixem `reply_`, protože `references` je rezervované slovo SQL. |
+| `is_bulk` | tinyint, default 0 | Signál hromadné pošty z hlaviček `.eml` (`List-Unsubscribe`, `Precedence: bulk\|list`, `Auto-Submitted` ≠ `no`, `List-Id`) — plní `BulkHeadersDetector` při ingestu. Jen signál (D7), sám nikdy nearchivuje. |
 
 ### Tělo (body)
 
@@ -72,6 +73,8 @@ Pár (`target_table_id`, `target_row`) je polymorfní FK — aplikační kód ho
 | `created` | datetime | Čas založení záznamu |
 | `created_by` | int → `core_system_users` | Uživatel, který záznam vytvořil |
 | `modified` | datetime | Čas poslední změny |
+| `auto_disposed_by` | int → `core_mail_sender_rules` | Pravidlo, které zprávu při ingestu auto-archivovalo. NULL = zpráva prošla normálně. Auditní stopa — digest karta i „Vrátit vše" se derivují dotazem. |
+| `auto_disposed_at` | datetime | Čas auto-archivace. Undo obojí nuluje. |
 | `docState` | tinyint (system) | Stav zprávy — viz [docStatesIncoming.jsonc](../config/docStatesIncoming.jsonc) |
 | `docStateMain` | tinyint (system) | Řazení podle stavu |
 
@@ -88,6 +91,7 @@ Pár (`target_table_id`, `target_row`) je polymorfní FK — aplikační kód ho
 | `idx_target` | index | `target_table_id`, `target_row` | Zpětné vyhledávání zpráv ze kterých vznikla entita |
 | `idx_sender_email` | index | `sender_email` | Filtr dle odesílatele |
 | `idx_sender_person` | index | `sender_person` | Filtr dle osoby v systému |
+| `idx_auto_disposed` | index | `auto_disposed_at` | Digest karta a „Vrátit vše" (zprávy auto-archivované v daném dni) |
 
 ## Návaznosti
 
@@ -98,6 +102,7 @@ Pár (`target_table_id`, `target_row`) je polymorfní FK — aplikační kód ho
 | `core_attachments_files` | `messages.raw_source_attachment` → `attachments.id` | Originál `.eml` |
 | `core_attachments_files` | přes `table_id + record_id` | Obsahové přílohy zprávy |
 | `base_persons_persons` | `messages.sender_person` → `persons.id` | Odesílatel v CRM |
+| [core_mail_sender_rules](core_mail_sender_rules.md) | `messages.auto_disposed_by` → `sender_rules.id` | Pravidlo, které zprávu auto-archivovalo |
 
 ## Workflow
 

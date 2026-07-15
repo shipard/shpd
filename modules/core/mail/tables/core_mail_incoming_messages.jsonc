@@ -195,6 +195,18 @@
             "nullable": true,
             "group": "headers"
         },
+        {
+            // Signál z hlaviček .eml (List-Unsubscribe, Precedence,
+            // Auto-Submitted, List-Id) — sám o sobě nikdy nearchivuje (D7).
+            "id": "is_bulk",
+            "name": "Bulk mail",
+            "name:cs": "Hromadná pošta",
+            "name:en": "Bulk mail",
+            "type": "tinyint",
+            "default": 0,
+            "nullable": false,
+            "group": "headers"
+        },
 
         // --- body ---
 
@@ -338,6 +350,28 @@
             "group": "status"
         },
 
+        // --- auto-archiv (pre-triage dle pravidel odesílatelů) ---
+
+        {
+            "id": "auto_disposed_by",
+            "name": "Auto-disposed by rule",
+            "name:cs": "Auto-archivováno pravidlem",
+            "name:en": "Auto-disposed by rule",
+            "type": "int",
+            "nullable": true,
+            "reference": "core_mail_sender_rules",
+            "group": "status"
+        },
+        {
+            "id": "auto_disposed_at",
+            "name": "Auto-disposed at",
+            "name:cs": "Čas auto-archivace",
+            "name:en": "Auto-disposed at",
+            "type": "datetime",
+            "nullable": true,
+            "group": "status"
+        },
+
         // --- doc state (systémové) ---
 
         {
@@ -426,6 +460,14 @@
             "type": "index",
             "columns": [
                 {"column": "sender_person"}
+            ]
+        },
+        {
+            // Digest karta a "Vrátit vše": zprávy auto-archivované v daném dni
+            "id": "idx_auto_disposed",
+            "type": "index",
+            "columns": [
+                {"column": "auto_disposed_at"}
             ]
         }
     ]

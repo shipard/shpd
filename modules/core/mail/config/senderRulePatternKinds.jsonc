@@ -1,0 +1,19 @@
+{
+    // core.mail.senderRulePatternKinds
+    //
+    // Druh vzoru pravidla odesílatele (core_mail_sender_rules.pattern_kind).
+    // Přesný e-mail má při matchování přednost před doménou.
+
+    "email": {
+        "name": "E-mail address",
+        "name:cs": "E-mailová adresa",
+        "name:en": "E-mail address",
+        "order": 10
+    },
+    "domain": {
+        "name": "Domain",
+        "name:cs": "Doména",
+        "name:en": "Domain",
+        "order": 20
+    }
+}

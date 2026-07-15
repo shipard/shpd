@@ -24,17 +24,20 @@
         "core_mail_analysis_claims",
         "core_mail_senders",
         "core_mail_outbox",
-        "core_mail_outbox_log"
+        "core_mail_outbox_log",
+        "core_mail_sender_rules"
     ],
 
     // ds-reset chrání AI profily — je to konfigurace (vč. admin úprav
     // name/is_default/is_active a lokálně laděného promptu), ne migrovaná
     // data. Backendy chrání analogicky core.ai.
     // Senders jsou konfigurace (transporty per from adresa); outbox a log
-    // jsou data — při resetu se mažou.
+    // jsou data — při resetu se mažou. Sender rules (pravidla došlé pošty)
+    // jsou rovněž konfigurace.
     "keepOnReset": [
         "core_mail_ai_profiles",
-        "core_mail_senders"
+        "core_mail_senders",
+        "core_mail_sender_rules"
     ],
 
     // core_mail_incoming_messages má viewer core.mail.incoming (Došlá pošta)
@@ -50,7 +53,8 @@
         { "viewer": "core.mail.senders",            "section": "other", "subsection": "other.mail", "order": 70 },
         { "table": "core_mail_outbox",              "section": "other", "subsection": "other.mail", "order": 75 },
         { "table": "core_mail_outbox_log",          "section": "other", "subsection": "other.mail", "order": 80 },
-        { "page": "mailOutbound",                   "section": "other", "subsection": "other.mail", "order": 85 }
+        { "page": "mailOutbound",                   "section": "other", "subsection": "other.mail", "order": 85 },
+        { "viewer": "core.mail.senderRules",        "section": "other", "subsection": "other.mail", "order": 90 }
     ],
 
     "settingsPages": [
@@ -114,6 +118,15 @@
             "icon": "robot",
             "table": "core_mail_ai_profiles",
             "class": "Shipard\\Module\\Core\\Mail\\AIProfilesViewer"
+        },
+        {
+            "id": "core.mail.senderRules",
+            "name": "Sender rules",
+            "name:cs": "Pravidla odesílatelů",
+            "name:en": "Sender rules",
+            "icon": "mail",
+            "table": "core_mail_sender_rules",
+            "class": "Shipard\\Module\\Core\\Mail\\SenderRulesViewer"
         }
     ],
 
@@ -140,6 +153,10 @@
         {
             "table": "core_mail_extracted_documents",
             "class": "Shipard\\Module\\Core\\Mail\\ExtractedDocumentDocument"
+        },
+        {
+            "table": "core_mail_sender_rules",
+            "class": "Shipard\\Module\\Core\\Mail\\SenderRuleDocument"
         }
     ],
 
@@ -199,6 +216,18 @@
         {
             "id": "core.mail.viewerDefaults",
             "file": "config/viewerDefaults.jsonc"
+        },
+        {
+            "id": "core.mail.senderRulePatternKinds",
+            "file": "config/senderRulePatternKinds.jsonc"
+        },
+        {
+            "id": "core.mail.senderRuleDispositions",
+            "file": "config/senderRuleDispositions.jsonc"
+        },
+        {
+            "id": "core.mail.senderRuleOrigins",
+            "file": "config/senderRuleOrigins.jsonc"
         }
     ]
 }

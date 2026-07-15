@@ -1,0 +1,20 @@
+{
+    // core.mail.senderRuleOrigins
+    //
+    // Původ pravidla odesílatele (core_mail_sender_rules.origin):
+    // založené ručně v nastavení vs. navržené učícím handlerem
+    // z opakovaného ručního košování/archivace.
+
+    "user": {
+        "name": "User",
+        "name:cs": "Uživatel",
+        "name:en": "User",
+        "order": 10
+    },
+    "suggested": {
+        "name": "Suggested",
+        "name:cs": "Navrženo",
+        "name:en": "Suggested",
+        "order": 20
+    }
+}

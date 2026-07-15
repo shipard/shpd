@@ -1,0 +1,14 @@
+{
+    // core.mail.senderRuleDispositions
+    //
+    // Co pravidlo se zprávou udělá (core_mail_sender_rules.disposition).
+    // Zatím jediná hodnota; enumString kvůli budoucímu rozšíření
+    // (např. rovnou do koše, přeskočit jen analýzu).
+
+    "archive": {
+        "name": "Archive",
+        "name:cs": "Archivovat",
+        "name:en": "Archive",
+        "order": 10
+    }
+}

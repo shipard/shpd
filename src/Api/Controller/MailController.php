@@ -21,6 +21,7 @@ use Shipard\Module\Core\Mail\IdempotencyStore;
 use Shipard\Module\Core\Mail\IncomingMessageDocument;
 use Shipard\Module\Core\Mail\IsdocImportService;
 use Shipard\Module\Core\Mail\MailRouterProvisioner;
+use Shipard\Module\Core\Mail\SenderRuleMatcher;
 
 /**
  * Endpoint `POST /_mail/incoming` — příjem došlé pošty z externí služby
@@ -34,6 +35,9 @@ class MailController
 {
     private const MAIL_TABLE = 'core_mail_incoming_messages';
     private const MAIL_TABLE_ID = 303;
+
+    /** docState Archiv (core.mail.docStatesIncoming) — cíl pre-triage. */
+    private const DOC_STATE_ARCHIVED = 80;
 
     private AttachmentService $attachments;
     private IdempotencyStore $idempotency;
@@ -134,10 +138,23 @@ class MailController
         $uploadedFiles = [];
         $contentAttachments = [];
         $dibi = $this->db->getDibiConnection();
+
+        // Pre-triage (Fáze 3, D7): potvrzené pravidlo odesílatele → zpráva
+        // vzniká rovnou v Archivu, bez analýzy, s auditem na zprávě.
+        $matchedRule = new SenderRuleMatcher($dibi)->match($fields['sender_email']);
+
         $dibi->begin();
 
         try {
-            $messageId = $this->insertIncomingMessage($fields, $mailboxId, $auth->userId);
+            $messageId = $this->insertIncomingMessage($fields, $mailboxId, $auth->userId, $matchedRule);
+
+            if ($matchedRule !== null) {
+                $dibi->query(
+                    'UPDATE core_mail_sender_rules SET hit_count = hit_count + 1, last_hit_at = %s WHERE id = %i',
+                    date('Y-m-d H:i:s'),
+                    (int) $matchedRule['id'],
+                );
+            }
 
             $rawResult = $this->attachments->upload(
                 self::MAIL_TABLE_ID,
@@ -193,7 +210,10 @@ class MailController
 
             // Deterministický ISDOC import (tasks/mail-isdoc-import.md) —
             // až po commitu intake tx, nikdy nesmí shodit příjem pošty.
-            $this->runIsdocImport($messageId, $contentAttachments);
+            // Auto-archivovaná zpráva žádné zpracování nedostává.
+            if ($matchedRule === null) {
+                $this->runIsdocImport($messageId, $contentAttachments);
+            }
 
             return Response::success($responseData, 201);
         } catch (\Throwable $e) {
@@ -561,9 +581,17 @@ class MailController
      * Používáme Dibi přímo v rámci aktivní tx místo TableGateway, protože
      * Gateway má vlastní `begin/commit` a my potřebujeme obalit také upload
      * attachmentů do jedné tx.
+     *
+     * @param array<string, mixed>|null $matchedRule Potvrzené pravidlo
+     *        odesílatele (pre-triage) — zpráva pak vzniká rovnou v Archivu
+     *        (80), bez analýzy, s auditem `auto_disposed_*`.
      */
-    private function insertIncomingMessage(array $fields, int $mailboxId, int $authorId): int
-    {
+    private function insertIncomingMessage(
+        array $fields,
+        int $mailboxId,
+        int $authorId,
+        ?array $matchedRule = null,
+    ): int {
         $doc = $this->documentRegistry->getDocument(self::MAIL_TABLE);
         $dibi = $this->db->getDibiConnection();
         $doc->setDb($dibi);
@@ -583,6 +611,15 @@ class MailController
             'is_bulk' => (int) ($fields['is_bulk'] ?? 0),
             'created_by' => $authorId,
         ];
+
+        if ($matchedRule !== null) {
+            $data['docState'] = self::DOC_STATE_ARCHIVED;
+            $data['docStateMain'] = $this->resolveIncomingMainState(self::DOC_STATE_ARCHIVED);
+            // beforeSave by pro docState 80 vrátil 0 sám; explicitně kvůli čitelnosti.
+            $data['analysis_state'] = 0;
+            $data['auto_disposed_by'] = (int) $matchedRule['id'];
+            $data['auto_disposed_at'] = date('Y-m-d H:i:s');
+        }
 
         $validation = $doc->validate($data);
         if (!$validation->isValid()) {

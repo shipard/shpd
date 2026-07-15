@@ -56,6 +56,22 @@
         }
     ],
 
+    "alertChecks": [
+        {
+            "id": "base.registry.expirations",
+            "name": "Registry document expirations",
+            "name:cs": "Expirace dokumentů Spisovny",
+            "name:en": "Registry document expirations",
+            "description": "Filed documents whose valid_to is approaching or past, per docKinds expiration.warnDaysBefore.",
+            "description:cs": "Zařazené dokumenty s blížícím se nebo prošlým valid_to dle expiration.warnDaysBefore druhu.",
+            "description:en": "Filed documents whose valid_to is approaching or past, per docKinds expiration.warnDaysBefore.",
+            "class": "Shipard\\Module\\Base\\Registry\\RegistryExpirationAlertCheck",
+            "severity": "warning",
+            "interval": "6h",
+            "tags": ["registry"]
+        }
+    ],
+
     "documentClasses": [
         {
             "table": "base_registry_binders",

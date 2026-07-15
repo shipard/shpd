@@ -286,6 +286,7 @@ function dispatch(
 		'lookup'  => dispatchLookup($route, $request, $tables, $db, $lookupRegistry ?? new LookupRegistry(), $configRuntime),
 		'viewer'  => dispatchViewer($route, $request, $auth, $viewerRegistry, $db, $configRuntime, resolveLanguage($request, $resolved->config)),
 		'mail'    => dispatchMail($route, $request, $auth, $tables, $db, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $configRuntime),
+		'senderRules' => dispatchSenderRules($route, $request, $auth, $tables, $db, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $configRuntime, $documentEventDispatcher),
 		'registry' => dispatchRegistry($route, $auth, $tables, $db, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $configRuntime),
 		'analysis' => dispatchAnalysis($route, $request, $auth, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher),
 		'exchange' => dispatchExchange($route, $request, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher),
@@ -618,6 +619,28 @@ function dispatchMail(
 		'importMessage'     => $ctrl->importMessage($auth, $request),
 		'setSenderPassword' => $ctrl->setSenderPassword($auth, $request, (int) $route->id),
 		default             => Response::error('INTERNAL_ERROR', "Unknown mail action: {$route->action}", 500),
+	};
+}
+
+function dispatchSenderRules(
+	Route $route,
+	Request $request,
+	AuthContext $auth,
+	array $tables,
+	\Shipard\Core\Database\DataSourceConnection $db,
+	\Shipard\Api\ResolvedDataSource $resolved,
+	\Shipard\Core\Document\DocumentRegistry $documentRegistry,
+	?\Shipard\Core\Config\ConfigRuntime $configRuntime = null,
+	?\Shipard\Core\Document\DocumentEventDispatcher $documentEventDispatcher = null,
+): Response {
+	$ctrl = new \Shipard\Api\Controller\SenderRulesController(
+		$db, $tables, $documentRegistry, $configRuntime, $resolved->config, $documentEventDispatcher,
+	);
+	return match ($route->action) {
+		'confirmRule'     => $ctrl->confirmRule($auth, (int) $route->id),
+		'rejectRule'      => $ctrl->rejectRule($auth, (int) $route->id),
+		'undoAutoArchive' => $ctrl->undoAutoArchive($auth, $request),
+		default           => Response::error('INTERNAL_ERROR', "Unknown senderRules action: {$route->action}", 500),
 	};
 }
 

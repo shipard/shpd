@@ -181,6 +181,17 @@ class Router
 			return $this->resolveMailSendersRoute($subpath, $method);
 		}
 
+		if (str_starts_with($subpath, '/_mail/sender-rules/')) {
+			return $this->resolveMailSenderRulesRoute($subpath, $method);
+		}
+
+		if ($subpath === '/_mail/auto-archive/undo') {
+			if ($method !== 'POST') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('senderRules', 'undoAutoArchive');
+		}
+
 		if (str_starts_with($subpath, '/_registry/')) {
 			return $this->resolveRegistryRoute($subpath, $method);
 		}
@@ -526,6 +537,27 @@ class Router
 				'preview' => 'previewExtracted',
 			};
 			return new Route('analysis', $controllerAction, null, $ndx);
+		}
+
+		return Response::error('NOT_FOUND', 'Not found', 404);
+	}
+
+	private function resolveMailSenderRulesRoute(string $subpath, string $method): Route|Response
+	{
+		$rest = substr($subpath, strlen('/_mail/sender-rules/'));
+		if (preg_match('#^(\d+)/(confirm|reject)$#', $rest, $m)) {
+			$id = (int) $m[1];
+			if ($id <= 0) {
+				return Response::error('NOT_FOUND', 'Not found', 404);
+			}
+			if ($method !== 'POST') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			$controllerAction = match ($m[2]) {
+				'confirm' => 'confirmRule',
+				'reject'  => 'rejectRule',
+			};
+			return new Route('senderRules', $controllerAction, null, $id);
 		}
 
 		return Response::error('NOT_FOUND', 'Not found', 404);

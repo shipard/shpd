@@ -5,9 +5,18 @@ cenové nabídky, úřední písemnosti. Dokumenty se organizují do **šanonů*
 (uživatelská osa) a klasifikují **druhem** (`docKinds`, systémová osa
 řídící metadata a expiraci).
 
-> Autoritativní design MVP (fáze, AI cesta, migrace ze starého `wkf.docs`):
-> [`docs/registry-mvp.md`](../../../docs/registry-mvp.md). Po dokončení MVP
-> se obsah designu přesune sem.
+> MVP (fáze 1–4) je hotové — **tento README je provozní pravda modulu**.
+> Původní design s rozhodnutími D1–D10 a fázováním zůstává jako design
+> record v [`docs/registry-mvp.md`](../../../docs/registry-mvp.md).
+> Zbývá samostatný task migrace starého `wkf.docs`.
+
+## Koncept
+
+- **Dispozice** (D1): každá došlá zpráva končí v právě jedné dispozici
+  (doklad / dokument Spisovny / archiv) — pošta tenduje k prázdnu.
+- **Dvě osy** (D2): `doc_kind` je systémový slovník (řídí metadata, AI
+  extrakci a expirace), **šanon** je uživatelská organizace (ploché
+  složky). Subjekt jen přes `partner`.
 
 ## Tabulky
 
@@ -81,6 +90,64 @@ applierů) na **`RegistryApplier`**:
 **Unapply** (undo z dashboardu): guard — dokument stále ve 40 a
 `modified <= applied_at` (jinak `DOC_ADVANCED` 409) → dokument do Koše
 (90), extracted zpět na 20, zpráva reverz; přílohy se nemažou.
+
+## Fulltext (`extracted_text`)
+
+Sloupec `extracted_text` (mediumtext, system) drží text obsahových příloh
+dokumentu — skládá ho **`ExtractedTextFiller`** (`TextExtractor`
+z core.attachments, pdftotext; oddělovač prázdný řádek, cap 500 000 znaků,
+pořadí dle `att_order`). Zápis jde **přímým UPDATE mimo Document hooky**
+(nesmí bumpnout `modified` — na `modified <= applied_at` stojí unapply
+guard AI cesty). Plní se:
+
+- při zařazení (ruční cesta i `RegistryApplier`) — best-effort po commitu;
+- **`POST /api/v1/_registry/documents/{id}/extract-text`** — přegeneruje
+  z aktuálních příloh, vrací `{chars, attachments}`; bez příloh text
+  vyčistí; 404 pro neexistující dokument nebo Koš. Frontend ho volá po
+  uploadu/smazání přílohy ve formuláři (generický `changeEndpoint` na
+  attachments tabu — `FormTab` → `AttachmentPanel`, fire-and-forget);
+- **`shpd-ds registry-extract-texts [--all] [--limit=N]`** — backfill
+  živých dokumentů; default jen chybějící texty, `--all` přegeneruje vše.
+
+Viewer hledá hlavičku přes LIKE (`title`, `ref_number`, `ai_summary` —
+sloupce indexu `ft_head`) **plus** `MATCH (extracted_text) AGAINST` —
+dokument se najde i podle obsahu PDF.
+
+## Hlídání expirací — alert check
+
+**`base.registry.expirations`** (`RegistryExpirationAlertCheck`, interval
+6h, tags `registry`) hlídá dokumenty ve stavech **40 + 80** s `valid_to`
+v horizontu `expiration.warnDaysBefore` svého druhu (`docKinds`; druh
+s `expiration: null` se nehlídá). Koncepty (10) se nehlídají; přechod do
+70/90 je legitimní umlčení alertu (Ukončení platnosti).
+
+- **Severity:** po termínu → `error`; do `min(warnDaysBefore)` →
+  `warning`; do `max(warnDaysBefore)` → `info`.
+- **`finding_key` = `doc_{id}`** — stabilní napříč běhy i změnou severity
+  (reconciler UPDATEuje); prodloužení `valid_to` nebo přechod do 70/90 →
+  finding se nevrátí → alert se auto-resolvne.
+- Akce `open_form` na dokument; karta se objeví v dashboard feedu přes
+  `AlertsSource` (žádná dashboard práce navíc).
+- `valid_to` má sémantiku „datum, po kterém dokument přestává být
+  v pořádku bez zásahu" (u smluv konec platnosti, u úředních písemností
+  deadline).
+
+## MCP nástroj `registry_search`
+
+Čtecí tier ([`src/Mcp/RegistrySearchTool.php`](src/Mcp/RegistrySearchTool.php),
+registrace v `buildMcpRegistry()` v `public/index.php` s guardem na aktivní
+modul). Otevírá Spisovnu internímu chatu:
+
+- `query` — fulltext přes `ft_head` **i** `ft_text` (hledá v textu příloh);
+- `doc_kind`, `binder_name` (case-insensitive match na živé šanony;
+  nenalezený šanon → prázdný výsledek se srozumitelným summary), `partner`
+  (ID osoby z `persons_search`), `valid_to_before`/`valid_to_after`,
+  `expiring_within_days` (zkratka `valid_to <= dnes+N`; bez parametru se
+  platnost nefiltruje), `state` (`filed` = 40 default | `active` | `all`);
+- výstup: `ref {type: 'registry_document', id}`, `full_name`
+  („{title} — {partner}"), druh + label z cfg, šanon, partner, platnosti,
+  `expired` bool, `ai_summary` zkrácené na ~200 znaků, `state_label`;
+  `limit` cap 50, `has_more` stránkování.
 
 ## Navigace
 

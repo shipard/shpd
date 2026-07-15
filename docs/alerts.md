@@ -202,6 +202,12 @@ Rozdíly oproti singleton checku:
   v `DsUpgradeCommand` zajistí, že existující řádky před přidáním sloupce
   nezůstanou `NULL` (jinak by je SQL predikát ignoroval).
 
+Další per-row check stejného střihu: `base.registry.expirations`
+(`RegistryExpirationAlertCheck`, base.registry) — expirace dokumentů
+Spisovny dle `valid_to` a `docKinds.expiration.warnDaysBefore`, severity
+error/warning/info dle blízkosti termínu, `finding_key = doc_{id}`.
+Detaily v README modulu.
+
 **Konvence pro implementery:**
 
 - `$this->db` — `DataSourceConnection` pro raw SQL.

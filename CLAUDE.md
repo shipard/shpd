@@ -148,7 +148,7 @@ Závislosti tečou shora dolů: Command → Document → Module/Config/Database 
 
 ### CLI příkazy
 - `shpd-server`: `version`, `help`, `ds-create --name`, `server-init`, `next-table-id`
-- `shpd-ds` (z adresáře DS): `version`, `help`, `ds-upgrade`, `ds-secrets-health`, `ds-secrets-rotate [--dry-run]`, `alerts-run [--check=id|--all]`, `alerts-prune [--days=N] [--dry-run]`, `mail-outbox-run [--limit=N]`, `mail-outbox-retry --id N`, `mail-send-test --to x@y [--from ...]`, `user-create [--password]` (bez hesla → poslat pozvánku), `user-set-admin`, `auth-emergency-login`
+- `shpd-ds` (z adresáře DS): `version`, `help`, `ds-upgrade`, `ds-secrets-health`, `ds-secrets-rotate [--dry-run]`, `alerts-run [--check=id|--all]`, `alerts-prune [--days=N] [--dry-run]`, `mail-outbox-run [--limit=N]`, `mail-outbox-retry --id N`, `mail-send-test --to x@y [--from ...]`, `registry-extract-texts [--all] [--limit=N]`, `user-create [--password]` (bez hesla → poslat pozvánku), `user-set-admin`, `auth-emergency-login`
 
 ### Frontend — ikony
 - Font Awesome SVG/JS, tree-shaking přes Vite

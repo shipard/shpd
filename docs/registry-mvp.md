@@ -1,8 +1,10 @@
 # Shipard — Spisovna MVP (`base.registry`)
 
-> **Stav:** Designový dokument pro MVP Spisovny. Slouží jako vodítko pro
-> fázová PRD v `tasks/`. Po dokončení MVP jeho obsah přechází do standardní
-> per-modul dokumentace (`modules/base/registry/README.md` a `tables/*.md`).
+> **Stav: MVP dokončeno (fáze 1–4, 2026-07).** Tento dokument je **design
+> record** — zachycuje schválená rozhodnutí a fázování; nemazat, ale
+> neaktualizovat. Provozní pravda žije v per-modul dokumentaci:
+> [`modules/base/registry/README.md`](../modules/base/registry/README.md)
+> a `tables/*.md`. Mimo MVP zbývá samostatný task migrace `wkf.docs`.
 >
 > **Názvosloví:** V UI a dokumentaci **Spisovna**; identifikátory v kódu
 > anglicky — modul `base.registry`, tabulky `base_registry_*`.

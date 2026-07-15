@@ -13,8 +13,9 @@ Klíčové principy (design `docs/registry-mvp.md`):
   z formuláře.
 - **Přílohy** přes `core.attachments` (`table_id = 428`); při zařazení
   z pošty se soubory **kopírují** (D8), zdrojová zpráva zůstává netknutá.
-- **`extracted_text`** se ve fázi 1 neplní — sloupec + fulltext index jsou
-  připraveny pro AI cestu (fáze 2).
+- **`extracted_text`** plní `ExtractedTextFiller` (zařazení, endpoint
+  extract-text, CLI backfill) — přímým UPDATE mimo Document hooky, aby
+  nebumpnul `modified` (unapply guard AI cesty). Viz README modulu.
 
 ## Struktura
 
@@ -47,7 +48,7 @@ Klíčové principy (design `docs/registry-mvp.md`):
 |---|---|---|
 | `ai_summary` | TEXT NULL | Shrnutí (AI, fáze 2; při ručním pořízení prázdné) |
 | `metadata` | JSON NULL | Druhově specifická pole dle `docKinds.fields` |
-| `extracted_text` | MEDIUMTEXT NULL, system | Extrahovaný text příloh — fáze 1 neplní |
+| `extracted_text` | MEDIUMTEXT NULL, system | Extrahovaný text příloh (`ExtractedTextFiller`, cap 500k) |
 
 ### Původ (source)
 
@@ -74,9 +75,9 @@ Klíčové principy (design `docs/registry-mvp.md`):
 | `idx_binder` | index | binder, docStateMain | Spodní taby vieweru (per šanon, živé) |
 | `idx_kind` | index | doc_kind | Filtr dle druhu |
 | `idx_partner` | index | partner | Dokumenty partnera |
-| `idx_valid_to` | index | valid_to, docStateMain | Expirace (alerts, fáze 4) |
-| `ft_head` | fulltext | title, ref_number, ai_summary | Fulltext vieweru |
-| `ft_text` | fulltext | extracted_text | Fulltext obsahu (fáze 2+) |
+| `idx_valid_to` | index | valid_to, docStateMain | Expirace (`base.registry.expirations`) |
+| `ft_head` | fulltext | title, ref_number, ai_summary | Fulltext vieweru + `registry_search` |
+| `ft_text` | fulltext | extracted_text | Fulltext obsahu příloh (viewer + `registry_search`) |
 
 ## Návaznosti
 

@@ -117,7 +117,7 @@ vystavuje v `tools/list` všechny; filtr je na konzumentovi.
 
 | Tier | `isReadOnly()` | Nástroje |
 |------|----------------|----------|
-| Čtení | `true` | `persons_search`, `persons_get`, `documents_search`, `mail_list_pending` |
+| Čtení | `true` | `persons_search`, `persons_get`, `documents_search`, `mail_list_pending`, `registry_search` |
 | Zápis (koncepty/akce) | `false` | `mail_draft_document` |
 
 ---

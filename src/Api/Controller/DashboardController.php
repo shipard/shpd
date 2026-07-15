@@ -15,6 +15,7 @@ use Shipard\Core\Feed\FeedSource;
 use Shipard\Core\Logging\ErrorLogger;
 use Shipard\Core\Viewer\ViewerRegistry;
 use Shipard\Module\Core\Alerts\Feed\AlertsSource;
+use Shipard\Module\Core\Mail\Feed\MailDigestSource;
 use Shipard\Module\Core\Mail\Feed\MailSuggestionsSource;
 
 /**
@@ -119,6 +120,7 @@ class DashboardController
         /** @var list<FeedSource> $sources — napevno registrované (D10). */
         $sources = [
             new MailSuggestionsSource(),
+            new MailDigestSource(),
             new AlertsSource(),
         ];
 

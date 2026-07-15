@@ -14,6 +14,9 @@ let appActiveItem      = $state(null);
 let settingsActiveItem = $state(null);
 let accountActiveItem  = $state(null);
 let pendingRecordId    = $state(null);
+// Jednorázový hint jako pendingRecordId, ale pro tab (viewGroup) vieweru —
+// digest karta otevírá došlou poštu rovnou na tabu Archiv.
+let pendingViewGroup   = $state(null);
 
 // Aktivní položka pro aktuální mód — jedno místo pro tří-cestnou volbu,
 // sdílené gettery i navigate().
@@ -43,8 +46,9 @@ function navigate(item) {
     panelId: item.panelId ?? null,
     filter: item.filter ?? null,
   };
-  // Manuální navigace mimo dashboard widget — pending record vyprší.
+  // Manuální navigace mimo dashboard widget — pending hinty vyprší.
   pendingRecordId = null;
+  pendingViewGroup = null;
   if (mode === 'settings') {
     settingsActiveItem = normalized;
   } else if (mode === 'account') {
@@ -63,8 +67,9 @@ function navigate(item) {
  * `recordId` se uloží do pendingRecordId, Viewer.svelte ho po mountu
  * vyzvedne a předvybere řádek.
  */
-function navigateToViewer(viewerId, recordId = null) {
+function navigateToViewer(viewerId, recordId = null, viewGroup = null) {
   pendingRecordId = recordId;
+  pendingViewGroup = viewGroup;
   const item = {
     id: 'viewer:' + viewerId,
     label: viewerId,
@@ -90,6 +95,16 @@ function consumePendingRecordId() {
   const id = pendingRecordId;
   pendingRecordId = null;
   return id;
+}
+
+/**
+ * Viewer.svelte při navigaci vyzvedne pendingViewGroup (tab, na kterém se
+ * má otevřít) a vynuluje ho — stejný jednorázový kontrakt jako recordId.
+ */
+function consumePendingViewGroup() {
+  const group = pendingViewGroup;
+  pendingViewGroup = null;
+  return group;
 }
 
 /**
@@ -130,9 +145,11 @@ export const navigationStore = {
   get activeItem() { return currentActiveItem(); },
   get activeId()   { return currentActiveItem()?.id ?? null; },
   get pendingRecordId() { return pendingRecordId; },
+  get pendingViewGroup() { return pendingViewGroup; },
   navigate,
   navigateToViewer,
   consumePendingRecordId,
+  consumePendingViewGroup,
   ensureDefaultActiveItem,
   enterSettings,
   exitSettings,

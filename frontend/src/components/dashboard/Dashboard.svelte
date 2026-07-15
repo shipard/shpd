@@ -9,6 +9,7 @@
     rejectExtractedDocument,
     reanalyzeMessage,
   } from '../../api/exchange.js';
+  import { confirmSenderRule, rejectSenderRule, undoAutoArchive } from '../../api/mail.js';
   import { iconRefresh } from '../../icons.js';
   import { navigationStore } from '../../stores/navigation.svelte.js';
   import Button from '../ui/Button.svelte';
@@ -124,8 +125,14 @@
         return messageStateFlow(target.messageNdx, 90, card.id);
       case 'archive_message':
         return messageStateFlow(target.messageNdx, 80, card.id);
+      case 'confirm_sender_rule':
+        return senderRuleFlow(confirmSenderRule, target.ruleId, card.id);
+      case 'reject_sender_rule':
+        return senderRuleFlow(rejectSenderRule, target.ruleId, card.id);
+      case 'undo_auto_archive':
+        return undoAutoArchiveFlow(target.date ?? null, card.id);
       case 'open_viewer':
-        return navigationStore.navigateToViewer(target.viewerId, target.recordId ?? null);
+        return navigationStore.navigateToViewer(target.viewerId, target.recordId ?? null, target.viewGroup ?? null);
       case 'open_form':
         formModal = {
           open: true,
@@ -182,6 +189,44 @@
       const result = await reanalyzeMessage(messageNdx);
       if (result?.success) {
         dropCardById(cardId);
+        load();
+      } else {
+        alert(t('dashboard.card.actionFailed', { msg: translateError(result?.error) }));
+      }
+    } finally {
+      busyCardId = null;
+    }
+  }
+
+  // Potvrzení / zamítnutí návrhu pravidla odesílatele z review karty.
+  async function senderRuleFlow(apiCall, ruleId, cardId) {
+    if (busyCardId !== null || !ruleId) return;
+    busyCardId = cardId;
+    try {
+      const result = await apiCall(ruleId);
+      if (result?.success) {
+        dropCardById(cardId);
+        load();
+      } else {
+        alert(t('dashboard.card.actionFailed', { msg: translateError(result?.error) }));
+      }
+    } finally {
+      busyCardId = null;
+    }
+  }
+
+  // „Vrátit vše" z digest karty — obnoví dnešní auto-archiv vč. re-queue analýzy.
+  async function undoAutoArchiveFlow(date, cardId) {
+    if (busyCardId !== null) return;
+    busyCardId = cardId;
+    try {
+      const result = await undoAutoArchive(date);
+      if (result?.success) {
+        dropCardById(cardId);
+        showToast({
+          kind: 'reverted',
+          message: t('dashboard.toast.autoArchiveReverted', { count: result.data?.restored ?? 0 }),
+        });
         load();
       } else {
         alert(t('dashboard.card.actionFailed', { msg: translateError(result?.error) }));

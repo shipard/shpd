@@ -642,12 +642,19 @@
     // výše. Stejný vzor jako FormEditor.svelte.
     const pendingRecord = untrack(() => navigationStore.consumePendingRecordId());
 
+    // Pending viewGroup (digest karta → tab Archiv) — stejný jednorázový
+    // kontrakt a untrack() důvody jako pendingRecord výše.
+    const pendingViewGroup = untrack(() => navigationStore.consumePendingViewGroup());
+    if (pendingViewGroup != null) {
+      activeViewGroup = pendingViewGroup;
+    }
+
     // Sequence: meta first (sets activeSeriesId from numberSeries), then rows
     // with that filter, then optional pending-record detail.
     fetchMeta(viewerId).then(() => {
       // Filtry se právě resetovaly na {} — předáváme literál, protože tento
       // $effect nesmí číst jiný $state než tab.viewerId.
-      fetchRowsExplicit(viewerId, '', 'active', activeSeriesId, {}, 0).then(() => {
+      fetchRowsExplicit(viewerId, '', pendingViewGroup ?? 'active', activeSeriesId, {}, 0).then(() => {
         if (pendingRecord != null) {
           selectedRowId = pendingRecord;
           fetchDetail(pendingRecord);

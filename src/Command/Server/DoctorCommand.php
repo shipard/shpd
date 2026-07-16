@@ -7,6 +7,7 @@ namespace Shipard\Command\Server;
 use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Mail\MailRelayConfig;
+use Shipard\Core\Server\CronProvisioner;
 use Shipard\Core\Server\HealthChecker;
 use Shipard\Core\Server\PermissionSpec;
 use Symfony\Component\Console\Command\Command;
@@ -104,6 +105,10 @@ class DoctorCommand extends Command
         $this->checkSystemConfigIncludes($output);
 
         $output->writeln('');
+        $output->writeln('<info>Cron</info>');
+        $cronErrors = $this->checkCron($output, $mode);
+
+        $output->writeln('');
         $output->writeln('<info>Attachment tools</info>');
         $toolErrors = $this->checkAttachmentTools($output);
 
@@ -119,7 +124,7 @@ class DoctorCommand extends Command
         $output->writeln(str_repeat('─', 55));
 
         $totalIssues = count($issues) + $dsErrors + $fpmErrors + $nginxErrors + $toolErrors
-                     + $mailErrors
+                     + $mailErrors + $cronErrors
                      + ($poolUser !== $shipardUser ? 1 : 0);
         if ($totalIssues === 0) {
             $output->writeln('<info>✓ All checks passed.</info>');
@@ -273,6 +278,126 @@ class DoctorCommand extends Command
             }
         }
         return $errors;
+    }
+
+    protected function getCronFilePath(): string
+    {
+        return CronProvisioner::CRON_FILE;
+    }
+
+    protected function getRunDir(): string
+    {
+        return CronProvisioner::RUN_DIR;
+    }
+
+    protected function now(): \DateTimeImmutable
+    {
+        return new \DateTimeImmutable();
+    }
+
+    /**
+     * Systémový cron: soubor existuje a odpovídá aktuální verzi šablony,
+     * heartbeaty slotů nejsou zatuchlé. Zatuchlý minute/five-minutes = error
+     * (cron démon neběží nebo dispatcher padá), daily/weekly jen warn.
+     * Selhané joby v posledním běhu = warn (per-DS problém, ne infra).
+     *
+     * @return int number of cron issues
+     */
+    protected function checkCron(OutputInterface $output, string $mode): int
+    {
+        $hint = '    <comment>→ Run: sudo shpd-server upgrade (or sudo shpd-server cron-install)</comment>';
+
+        $cronFile = $this->getCronFilePath();
+        if (!is_file($cronFile)) {
+            if ($mode !== 'production') {
+                $output->writeln('  (cron not provisioned — skipped)');
+                return 0;
+            }
+            $output->writeln("  ✗ {$cronFile} missing — periodic jobs (mail outbox, alerts) are not running");
+            $output->writeln($hint);
+            return 1;
+        }
+
+        $errors = 0;
+        $content = (string) @file_get_contents($cronFile);
+        $version = CronProvisioner::parseTemplateVersion($content);
+        if ($version !== CronProvisioner::TEMPLATE_VERSION) {
+            $output->writeln(sprintf(
+                '  ✗ %s is outdated (template version %s, expected %d)',
+                $cronFile,
+                $version === null ? 'unknown' : (string) $version,
+                CronProvisioner::TEMPLATE_VERSION,
+            ));
+            $output->writeln($hint);
+            $errors++;
+        } else {
+            $output->writeln("  ✓ {$cronFile} (template version {$version})");
+        }
+
+        $now = $this->now()->getTimestamp();
+        // Čerstvě nainstalovaný cron ještě nemusel odběhnout — chybějící
+        // heartbeat pak není chyba.
+        $justInstalled = ($now - (@filemtime($cronFile) ?: 0)) < 900;
+
+        // slot => [max stáří v sekundách, true = error / false = warn]
+        $limits = [
+            'minute'       => [600, true],
+            'five-minutes' => [1200, true],
+            'daily'        => [2 * 86400, false],
+            'weekly'       => [14 * 86400, false],
+        ];
+        foreach ($limits as $slot => [$maxAge, $strict]) {
+            $hbPath = CronProvisioner::heartbeatPath($slot, $this->getRunDir());
+            if (!is_file($hbPath)) {
+                if ($justInstalled || !$strict) {
+                    $output->writeln("  ⚠ {$slot}: not yet run"
+                        . ($justInstalled ? ' (cron installed recently)' : ''));
+                } else {
+                    $output->writeln("  ✗ {$slot}: heartbeat missing — cron daemon not running or dispatcher failing");
+                    $output->writeln($hint);
+                    $errors++;
+                }
+                continue;
+            }
+
+            $data = json_decode((string) @file_get_contents($hbPath), true);
+            $ts = is_array($data) && is_string($data['ts'] ?? null) ? strtotime($data['ts']) : false;
+            if ($ts === false) {
+                $ts = @filemtime($hbPath) ?: 0;
+            }
+            $age = $now - $ts;
+            $ageText = $this->formatAge($age);
+
+            if ($age > $maxAge) {
+                if ($strict) {
+                    $output->writeln("  ✗ {$slot}: heartbeat stale ({$ageText} old) — cron daemon not running or dispatcher failing");
+                    $errors++;
+                } else {
+                    $output->writeln("  ⚠ {$slot}: heartbeat stale ({$ageText} old)");
+                }
+                continue;
+            }
+
+            $failedCount = is_array($data) ? (int) ($data['failedCount'] ?? 0) : 0;
+            if ($failedCount > 0) {
+                $output->writeln("  ⚠ {$slot}: last run {$ageText} ago, {$failedCount} failed job(s) — see shipard.log");
+            } else {
+                $output->writeln("  ✓ {$slot}: last run {$ageText} ago");
+            }
+        }
+
+        return $errors;
+    }
+
+    private function formatAge(int $seconds): string
+    {
+        $seconds = max(0, $seconds);
+        return match (true) {
+            $seconds < 120 => $seconds . ' s',
+            $seconds < 7200 => intdiv($seconds, 60) . ' min',
+            $seconds < 2 * 86400 => intdiv($seconds, 3600) . ' h',
+            default => intdiv($seconds, 86400) . ' d',
+        };
     }
 
     protected function getPoolConfigGlob(): string

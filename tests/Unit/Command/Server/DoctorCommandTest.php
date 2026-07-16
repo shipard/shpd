@@ -24,6 +24,10 @@ class TestableDoctorCommand extends DoctorCommand
     /** @var array<string, ?string> binary name → fake path (null = missing) */
     public array $fakeBinaries = [];
 
+    public ?string $fakeCronFilePath = null;
+    public ?string $fakeRunDir = null;
+    public ?\DateTimeImmutable $fakeNow = null;
+
     public function __construct(string $tempConfigPath, PermissionSpec $spec)
     {
         parent::__construct($spec);
@@ -66,6 +70,26 @@ class TestableDoctorCommand extends DoctorCommand
             return $this->fakeBinaries[$name];
         }
         return '/usr/bin/' . $name;  // default: vše přítomno
+    }
+
+    protected function getCronFilePath(): string
+    {
+        return $this->fakeCronFilePath ?? '/dev/null/nonexistent/shipard';
+    }
+
+    protected function getRunDir(): string
+    {
+        return $this->fakeRunDir ?? '/dev/null/nonexistent';
+    }
+
+    protected function now(): \DateTimeImmutable
+    {
+        return $this->fakeNow ?? parent::now();
+    }
+
+    public function checkCronPublic(OutputInterface $output, string $mode): int
+    {
+        return $this->checkCron($output, $mode);
     }
 }
 
@@ -774,5 +798,185 @@ class DoctorCommandTest extends TestCase
 
         $this->assertSame(1, $exitCode);
         $this->assertSame($baseline + 2, (int) ($mWith[1] ?? 0));
+    }
+
+    // ─── Cron checks ────────────────────────────────────────────────────────
+
+    /** @return array{TestableDoctorCommand, \Symfony\Component\Console\Output\BufferedOutput} */
+    private function makeCronChecker(): array
+    {
+        $command = new TestableDoctorCommand($this->tempConfigPath, $this->makeSpec());
+        $command->fakeCronFilePath = $this->tempRoot . '/cron.d/shipard';
+        $command->fakeRunDir = $this->tempRoot . '/run';
+        mkdir($this->tempRoot . '/cron.d', 0750, true);
+        mkdir($this->tempRoot . '/run', 0750, true);
+        return [$command, new \Symfony\Component\Console\Output\BufferedOutput()];
+    }
+
+    private function writeCurrentCronFile(TestableDoctorCommand $command, int $mtimeAge = 3600): void
+    {
+        $content = new \Shipard\Core\Server\CronProvisioner()->renderTemplate('/usr/bin/php', '/repo', 'shipard');
+        file_put_contents($command->fakeCronFilePath, $content);
+        touch($command->fakeCronFilePath, time() - $mtimeAge);
+    }
+
+    private function writeHeartbeat(TestableDoctorCommand $command, string $slot, int $ageSeconds, int $failedCount = 0): void
+    {
+        $path = \Shipard\Core\Server\CronProvisioner::heartbeatPath($slot, $command->fakeRunDir);
+        file_put_contents($path, json_encode([
+            'ts' => date('c', time() - $ageSeconds),
+            'slot' => $slot,
+            'failedCount' => $failedCount,
+        ]));
+    }
+
+    public function testCronMissingFileIsErrorInProduction(): void
+    {
+        [$command, $output] = $this->makeCronChecker();
+        $command->fakeCronFilePath = $this->tempRoot . '/cron.d/missing';
+
+        $errors = $command->checkCronPublic($output, 'production');
+
+        $this->assertSame(1, $errors);
+        $display = $output->fetch();
+        $this->assertStringContainsString('missing — periodic jobs', $display);
+        $this->assertStringContainsString('sudo shpd-server upgrade (or sudo shpd-server cron-install)', $display);
+    }
+
+    public function testCronMissingFileIsSkippedInDevelopment(): void
+    {
+        [$command, $output] = $this->makeCronChecker();
+        $command->fakeCronFilePath = $this->tempRoot . '/cron.d/missing';
+
+        $errors = $command->checkCronPublic($output, 'development');
+
+        $this->assertSame(0, $errors);
+        $this->assertStringContainsString('(cron not provisioned — skipped)', $output->fetch());
+    }
+
+    public function testCronCurrentFileAndFreshHeartbeatsPass(): void
+    {
+        [$command, $output] = $this->makeCronChecker();
+        $this->writeCurrentCronFile($command);
+        $this->writeHeartbeat($command, 'minute', 30);
+        $this->writeHeartbeat($command, 'five-minutes', 200);
+        $this->writeHeartbeat($command, 'daily', 3600);
+        $this->writeHeartbeat($command, 'weekly', 86400);
+
+        $errors = $command->checkCronPublic($output, 'production');
+
+        $this->assertSame(0, $errors);
+        $display = $output->fetch();
+        $this->assertStringContainsString('✓ ' . $command->fakeCronFilePath, $display);
+        $this->assertStringContainsString('✓ minute: last run', $display);
+        $this->assertStringContainsString('✓ weekly: last run', $display);
+        $this->assertStringNotContainsString('✗', $display);
+    }
+
+    public function testCronOutdatedMarkerIsError(): void
+    {
+        [$command, $output] = $this->makeCronChecker();
+        file_put_contents($command->fakeCronFilePath, "# hand-written, template version 0\n");
+        touch($command->fakeCronFilePath, time() - 3600);
+        $this->writeHeartbeat($command, 'minute', 30);
+        $this->writeHeartbeat($command, 'five-minutes', 30);
+        $this->writeHeartbeat($command, 'daily', 30);
+        $this->writeHeartbeat($command, 'weekly', 30);
+
+        $errors = $command->checkCronPublic($output, 'production');
+
+        $this->assertSame(1, $errors);
+        $this->assertStringContainsString('is outdated (template version 0, expected', $output->fetch());
+    }
+
+    public function testCronStaleMinuteHeartbeatIsError(): void
+    {
+        [$command, $output] = $this->makeCronChecker();
+        $this->writeCurrentCronFile($command);
+        $this->writeHeartbeat($command, 'minute', 1800);
+        $this->writeHeartbeat($command, 'five-minutes', 30);
+        $this->writeHeartbeat($command, 'daily', 30);
+        $this->writeHeartbeat($command, 'weekly', 30);
+
+        $errors = $command->checkCronPublic($output, 'production');
+
+        $this->assertSame(1, $errors);
+        $display = $output->fetch();
+        $this->assertStringContainsString('✗ minute: heartbeat stale', $display);
+        $this->assertStringContainsString('cron daemon not running', $display);
+    }
+
+    public function testCronStaleWeeklyHeartbeatIsWarnOnly(): void
+    {
+        [$command, $output] = $this->makeCronChecker();
+        $this->writeCurrentCronFile($command);
+        $this->writeHeartbeat($command, 'minute', 30);
+        $this->writeHeartbeat($command, 'five-minutes', 30);
+        $this->writeHeartbeat($command, 'daily', 30);
+        $this->writeHeartbeat($command, 'weekly', 20 * 86400);
+
+        $errors = $command->checkCronPublic($output, 'production');
+
+        $this->assertSame(0, $errors);
+        $this->assertStringContainsString('⚠ weekly: heartbeat stale', $output->fetch());
+    }
+
+    public function testCronMissingHeartbeatAfterRecentInstallIsWarn(): void
+    {
+        [$command, $output] = $this->makeCronChecker();
+        $this->writeCurrentCronFile($command, mtimeAge: 60);
+
+        $errors = $command->checkCronPublic($output, 'production');
+
+        $this->assertSame(0, $errors);
+        $display = $output->fetch();
+        $this->assertStringContainsString('⚠ minute: not yet run (cron installed recently)', $display);
+    }
+
+    public function testCronMissingMinuteHeartbeatOnOldInstallIsError(): void
+    {
+        [$command, $output] = $this->makeCronChecker();
+        $this->writeCurrentCronFile($command, mtimeAge: 7200);
+        $this->writeHeartbeat($command, 'five-minutes', 30);
+
+        $errors = $command->checkCronPublic($output, 'production');
+
+        // minute i five-minutes chybět nesmí; daily/weekly jen warn
+        $this->assertSame(1, $errors);
+        $display = $output->fetch();
+        $this->assertStringContainsString('✗ minute: heartbeat missing', $display);
+        $this->assertStringContainsString('⚠ daily: not yet run', $display);
+        $this->assertStringContainsString('⚠ weekly: not yet run', $display);
+    }
+
+    public function testCronFailedJobsAreWarnOnly(): void
+    {
+        [$command, $output] = $this->makeCronChecker();
+        $this->writeCurrentCronFile($command);
+        $this->writeHeartbeat($command, 'minute', 30, failedCount: 2);
+        $this->writeHeartbeat($command, 'five-minutes', 30);
+        $this->writeHeartbeat($command, 'daily', 30);
+        $this->writeHeartbeat($command, 'weekly', 30);
+
+        $errors = $command->checkCronPublic($output, 'production');
+
+        $this->assertSame(0, $errors);
+        $this->assertStringContainsString('⚠ minute: last run 30 s ago, 2 failed job(s) — see shipard.log', $output->fetch());
+    }
+
+    public function testCronSectionAppearsInFullRun(): void
+    {
+        $this->writeServerJson('development');
+        $spec = $this->makeSpec();
+        $this->buildHealthyTree($spec);
+
+        $command = $this->makeTester($spec);
+        $command->stubPoolUser = $this->testUser;
+        $tester = new CommandTester($command);
+        $tester->execute([]);
+
+        $display = $tester->getDisplay();
+        $this->assertStringContainsString('Cron', $display);
+        $this->assertStringContainsString('(cron not provisioned — skipped)', $display);
     }
 }

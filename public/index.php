@@ -279,7 +279,7 @@ function dispatch(
 		'chat'    => dispatchChat($route, $request, $auth, $db, $tables, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'meta'    => dispatchMeta($route->action, $route->table, $tables, resolveLanguage($request, $resolved->config)),
 		'ui'      => dispatchUi($route->action, $resolved->config, $modulePathResolver, resolveLanguage($request, $resolved->config), $configRuntime),
-		'dashboard' => dispatchDashboard($route, $db, $viewerRegistry, $configRuntime, resolveLanguage($request, $resolved->config), $resolved->config),
+		'dashboard' => dispatchDashboard($route, $db, $viewerRegistry, $configRuntime, resolveLanguage($request, $resolved->config), $resolved->config, $alertCheckRegistry),
 		'settings' => dispatchSettings($route, $request, $auth, $resolved->config, $modulePathResolver, resolveLanguage($request, $resolved->config), $configRuntime, $db),
 		'app'     => dispatchApp($route, $auth, $db, $resolved->config),
 		'form'    => dispatchForm($route, $request, $auth, $tables, $db, $formRegistry ?? new FormRegistry(), $configRuntime, $modulePathResolver, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), resolveLanguage($request, $resolved->config), $resolved->config, $lookupRegistry ?? new LookupRegistry(), $documentEventDispatcher),
@@ -893,10 +893,11 @@ function dispatchDashboard(
 	?\Shipard\Core\Config\ConfigRuntime $configRuntime,
 	string $language,
 	?\Shipard\Core\Config\DataSourceConfig $dsConfig = null,
+	?\Shipard\Core\Alerts\AlertCheckRegistry $alertCheckRegistry = null,
 ): Response {
 	$ctrl = new DashboardController();
 	return match ($route->action) {
-		'index'   => $ctrl->dashboard($registry, $db, $configRuntime, $language),
+		'index'   => $ctrl->dashboard($registry, $db, $configRuntime, $language, $alertCheckRegistry),
 		'summary' => $ctrl->summary(
 			$registry,
 			$db,
@@ -907,6 +908,7 @@ function dispatchDashboard(
 			),
 			$configRuntime,
 			$language,
+			$alertCheckRegistry,
 		),
 		default   => Response::error('INTERNAL_ERROR', "Unknown dashboard action: {$route->action}", 500),
 	};

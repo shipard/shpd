@@ -243,6 +243,13 @@ final class DashboardControllerTest extends TestCase
         $db = $this->createMock(DataSourceConnection::class);
         $db->method('fetchAll')->willReturnCallback(
             static function (string $sql): array {
+                // Agregátní fáze AlertsSource (GROUP BY) — jeden check pod prahem.
+                if (str_contains($sql, 'core_alerts_alerts') && str_contains($sql, 'GROUP BY')) {
+                    return [[
+                        'check_id' => 'chk', 'cnt' => 1, 'max_severity' => 30,
+                        'last_at' => '2026-06-28 08:00:00', 'first_at' => '2026-06-28 08:00:00',
+                    ]];
+                }
                 if (str_contains($sql, 'core_alerts_alerts')) {
                     return [[
                         'id' => 7, 'check_id' => 'chk', 'title' => 'Chyba', 'message' => 'm',

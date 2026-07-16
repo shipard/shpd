@@ -249,6 +249,23 @@ alertu, `subtitle`=zpráva (fallback `check_id`), `timestamp`=`last_seen_at`,
 `id`=`"alert:{id}"`. Alert karty jen navigují; snooze/dismiss zůstává ve viewer
 detailu.
 
+**Agregace per check** — víc než 3 aktivní alerty jednoho `check_id`
+(`GROUP_THRESHOLD = 3`, tj. 4+) se sbalí do **jedné skupinové karty**, která
+individuální karty daného checku plně nahrazuje; 1–3 alerty zůstávají
+individuální. Sběr je dvoufázový: agregát `GROUP BY check_id` (bez LIMITu →
+pravdivý počet i nad `MAX_CARDS`), pak individuální řádky jen pro checky pod
+prahem. Skupinová karta: `id = "alert-group:{check_id}"`, titulek =
+lokalizovaný název checku z `AlertCheckRegistry` (fallback `check_id`, když
+check mezitím zmizel z modulu / registr chybí), podtitulek s pravdivým počtem
+(„27 upozornění"), `kind` dle **nejvyšší** severity ve skupině (stejné
+mapování jako individuální karta — agregace nesnižuje viditelnost),
+`timestamp` = `MAX(last_seen_at)`, `context = {checkId, count, severity,
+group: true}`. Jediná primary akce `open_viewer` na `core.alerts.alerts`,
+zatím bez per-check filtru (preset vieweru později, samostatně); label
+lokalizuje zdroj (passthrough cesta jako u individuálních alert akcí).
+Kartový kontrakt se nemění — obyčejná karta (title/subtitle fallback, bez
+headline), frontend beze změny.
+
 ## 6. Akce a jejich sémantika
 
 ### 6.1 `apply_extracted` — optimistický jednoklik

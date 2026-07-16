@@ -29,6 +29,10 @@ problém, **musí vrátit stejný `finding_key`**. Reconciler ten klíč použí
 pro UPDATE existujícího řádku místo INSERT nového. Singleton checky (problém
 buď je, nebo není) používají `finding_key = ""`.
 
+Aktivní alerty se zobrazují i jako karty feedu dashboardu — vč. agregace
+mnoha alertů jednoho checku do skupinové karty, viz
+[`docs/dashboard.md` §5.2](dashboard.md).
+
 ---
 
 ## 2. Architektura

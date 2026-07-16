@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Shipard\Module\Core\Alerts\Feed;
 
+use Shipard\Core\Alerts\AlertCheckRegistry;
 use Shipard\Core\Feed\FeedContext;
 use Shipard\Core\Feed\FeedSource;
 
@@ -18,6 +19,13 @@ use Shipard\Core\Feed\FeedSource;
  *
  * `title` = titulek alertu, `subtitle` = zpráva alertu (fallback check_id),
  * `timestamp` = `last_seen_at` (fallback `first_seen_at`), `id` = `"alert:{id}"`.
+ *
+ * **Agregace per check**: víc než `GROUP_THRESHOLD` aktivních alertů jednoho
+ * `check_id` se sbalí do jedné skupinové karty (`id = "alert-group:{check_id}"`),
+ * která individuální karty checku plně nahrazuje. Titulek = lokalizovaný název
+ * checku z `AlertCheckRegistry` (fallback `check_id`), kind dle nejvyšší
+ * severity ve skupině, jediná primary akce `open_viewer` na alerts viewer.
+ * Detaily: docs/dashboard.md §5.2.
  */
 final class AlertsSource implements FeedSource
 {
@@ -30,23 +38,55 @@ final class AlertsSource implements FeedSource
     private const SEVERITY_WARNING = 20;
     private const SEVERITY_INFO    = 10;
 
+    /** Nad tolik aktivních alertů jednoho checku → jedna skupinová karta. */
+    private const int GROUP_THRESHOLD = 3;
+
+    /** `null` = titulky skupinových karet degradují na `check_id`. */
+    public function __construct(
+        private readonly ?AlertCheckRegistry $registry = null,
+    ) {}
+
     public function collectCards(FeedContext $ctx): array
     {
-        $rows = $ctx->db->fetchAll(
-            'SELECT `id`, `check_id`, `title`, `message`, `severity`, `actions`,'
-            . ' `first_seen_at`, `last_seen_at`'
+        // Fáze 1 — agregát per check. Malý výsledek (počet checků, ne alertů),
+        // bez LIMITu → skupinové karty mají pravdivý počet i nad MAX_CARDS.
+        $groups = $ctx->db->fetchAll(
+            'SELECT `check_id`, COUNT(*) AS `cnt`, MAX(`severity`) AS `max_severity`,'
+            . ' MAX(`last_seen_at`) AS `last_at`, MAX(`first_seen_at`) AS `first_at`'
             . ' FROM `' . self::TABLE . '`'
             . ' WHERE `alert_state` = %i'
-            . ' ORDER BY `severity` DESC, `last_seen_at` DESC, `id` DESC'
-            . ' LIMIT %i',
+            . ' GROUP BY `check_id`',
             self::STATE_ACTIVE,
-            $ctx->maxCards,
         );
 
         $cards = [];
-        foreach ($rows as $row) {
-            $cards[] = $this->buildCard($row);
+        $individualCheckIds = [];
+        foreach ($groups as $g) {
+            if ((int) $g['cnt'] > self::GROUP_THRESHOLD) {
+                $cards[] = $this->buildGroupCard($ctx, $g);
+            } else {
+                $individualCheckIds[] = (string) $g['check_id'];
+            }
         }
+
+        // Fáze 2 — individuální alerty jen pro checky pod prahem.
+        if ($individualCheckIds !== []) {
+            $rows = $ctx->db->fetchAll(
+                'SELECT `id`, `check_id`, `title`, `message`, `severity`, `actions`,'
+                . ' `first_seen_at`, `last_seen_at`'
+                . ' FROM `' . self::TABLE . '`'
+                . ' WHERE `alert_state` = %i AND `check_id` IN %in'
+                . ' ORDER BY `severity` DESC, `last_seen_at` DESC, `id` DESC'
+                . ' LIMIT %i',
+                self::STATE_ACTIVE,
+                $individualCheckIds,
+                $ctx->maxCards,
+            );
+            foreach ($rows as $row) {
+                $cards[] = $this->buildCard($row);
+            }
+        }
+
         return $cards;
     }
 
@@ -59,11 +99,7 @@ final class AlertsSource implements FeedSource
         $id       = (int) $row['id'];
         $severity = (int) ($row['severity'] ?? self::SEVERITY_WARNING);
 
-        [$kind, $stateStyle, $icon] = match ($severity) {
-            self::SEVERITY_ERROR => ['urgent', 'error', 'alert'],
-            self::SEVERITY_INFO  => ['info', 'concept', 'info'],
-            default              => ['review', 'edit', 'warning'],
-        };
+        [$kind, $stateStyle, $icon] = $this->severityToPresentation($severity);
 
         $message  = trim((string) ($row['message'] ?? ''));
         $checkId  = (string) ($row['check_id'] ?? '');
@@ -86,6 +122,65 @@ final class AlertsSource implements FeedSource
             ],
             'actions'    => $this->passthroughActions($row['actions'] ?? null),
         ];
+    }
+
+    /**
+     * Skupinová karta za check nad prahem — obyčejná karta dle kontraktu
+     * (title/subtitle fallback, bez headline), frontend beze změny.
+     *
+     * @param array<string,mixed> $g  agregátní řádek (check_id, cnt, max_severity, last_at, first_at)
+     * @return array<string,mixed>
+     */
+    private function buildGroupCard(FeedContext $ctx, array $g): array
+    {
+        $checkId  = (string) $g['check_id'];
+        $count    = (int) $g['cnt'];
+        $severity = (int) ($g['max_severity'] ?? self::SEVERITY_WARNING);
+
+        [$kind, $stateStyle, $icon] = $this->severityToPresentation($severity);
+
+        $title = $this->registry?->get($checkId)?->name ?? $checkId;
+        $cs    = $ctx->language === 'cs';
+
+        return [
+            'id'         => 'alert-group:' . $checkId,
+            'source'     => 'alerts',
+            'kind'       => $kind,
+            'icon'       => $icon,
+            'stateStyle' => $stateStyle,
+            'category'   => FeedSource::CATEGORY_OTHER,
+            'title'      => $title,
+            'subtitle'   => $cs ? "{$count} upozornění" : "{$count} alerts",
+            'timestamp'  => $this->toAtom($g['last_at'] ?? null) ?? $this->toAtom($g['first_at'] ?? null),
+            'context'    => [
+                'checkId'  => $checkId,
+                'count'    => $count,
+                'severity' => $severity,
+                'group'    => true,
+            ],
+            'actions'    => [[
+                'id'      => 'open_alerts',
+                'label'   => $cs ? 'Otevřít upozornění' : 'Open alerts',
+                'kind'    => 'open_viewer',
+                'target'  => ['viewerId' => 'core.alerts.alerts'],
+                'primary' => true,
+            ]],
+        ];
+    }
+
+    /**
+     * `severity` → `[kind, stateStyle, icon]` — sdílené individuální i
+     * skupinovou kartou (skupina mapuje `MAX(severity)` stejně).
+     *
+     * @return array{0:string, 1:string, 2:string}
+     */
+    private function severityToPresentation(int $severity): array
+    {
+        return match ($severity) {
+            self::SEVERITY_ERROR => ['urgent', 'error', 'alert'],
+            self::SEVERITY_INFO  => ['info', 'concept', 'info'],
+            default              => ['review', 'edit', 'warning'],
+        };
     }
 
     /**

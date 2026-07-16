@@ -6,6 +6,7 @@ namespace Shipard\Api\Controller;
 
 use Shipard\Api\Response;
 use Shipard\Core\Ai\Exception\LlmException;
+use Shipard\Core\Alerts\AlertCheckRegistry;
 use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Dashboard\DashboardSummaryService;
 use Shipard\Core\Database\DataSourceConnection;
@@ -46,10 +47,11 @@ class DashboardController
         DataSourceConnection $db,
         ?ConfigRuntime $config = null,
         ?string $language = null,
+        ?AlertCheckRegistry $alertRegistry = null,
     ): Response {
         $lang = $language ?? 'en';
 
-        [$cards, $truncated] = $this->collectCards($db, $config, $lang);
+        [$cards, $truncated] = $this->collectCards($db, $config, $lang, $alertRegistry);
         if ($truncated) {
             $cards[] = $this->andMoreCard($lang);
         }
@@ -79,10 +81,11 @@ class DashboardController
         DashboardSummaryService $service,
         ?ConfigRuntime $config = null,
         ?string $language = null,
+        ?AlertCheckRegistry $alertRegistry = null,
     ): Response {
         $lang = $language ?? 'en';
 
-        [$cards] = $this->collectCards($db, $config, $lang);
+        [$cards] = $this->collectCards($db, $config, $lang, $alertRegistry);
         $tasksCount = $this->countActiveByDocState(
             $db, $registry, $config, 'tasks.core', 'tasks.core.docStatesTasks',
         );
@@ -113,15 +116,19 @@ class DashboardController
      *
      * @return array{0: list<array<string,mixed>>, 1: bool}  [karty, zda došlo k ořezu]
      */
-    private function collectCards(DataSourceConnection $db, ?ConfigRuntime $config, string $lang): array
-    {
+    private function collectCards(
+        DataSourceConnection $db,
+        ?ConfigRuntime $config,
+        string $lang,
+        ?AlertCheckRegistry $alertRegistry = null,
+    ): array {
         $ctx = new FeedContext($db, $config, $lang, self::MAX_CARDS);
 
         /** @var list<FeedSource> $sources — napevno registrované (D10). */
         $sources = [
             new MailSuggestionsSource(),
             new MailDigestSource(),
-            new AlertsSource(),
+            new AlertsSource($alertRegistry),
         ];
 
         $cards = [];

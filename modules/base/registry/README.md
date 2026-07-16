@@ -149,6 +149,30 @@ modul). Otevírá Spisovnu internímu chatu:
   `expired` bool, `ai_summary` zkrácené na ~200 znaků, `state_label`;
   `limit` cap 50, `has_more` stránkování.
 
+## Import ze starého Shipardu
+
+**`POST /api/v1/_registry/import`** (`RegistryController::import` →
+[`RegistryImportService`](src/RegistryImportService.php)) — programové
+založení jednoho dokumentu z migračního runneru `wkf.docs`
+(`docs/registry-mvp.md` §10, analogie `/_mail/import`). Auth: libovolný
+api_key (typicky `_legacy_importer`).
+
+- Payload `shpd.registry.document.v1` + import blok: `docKind` (klíč
+  `docKinds`), `title`, `binder` (jméno), `notice`, `validFrom`/`validTo`,
+  `docState` (10/40/70/80, default 40), `created` (ISO 8601, historické),
+  povinný blok `legacy {ndx, id?, kind?, author?, folder?}`.
+- **Zachovává historické `created`** (audit hook doplňuje jen prázdné)
+  a zapisuje cílový `docState` přímo; `docStateMain` odvodí centrálně
+  `TableGateway::saveDocument`.
+- **Idempotence:** dedupe podle `metadata.legacyNdx` + `source_kind='import'`
+  mimo Koš → `200 {id, existed: true}` beze změn.
+- **Šanon** se resolvuje case-insensitive na živé šanony; nenalezený →
+  `binder=NULL` + `warning: "BINDER_NOT_FOUND"`. Endpoint šanony nezakládá
+  — zakládá je runner před dokumenty. Přílohy endpointem netečou (nahrává
+  je attachments klient na tableId 428 po založení).
+- Odpovědi: `201 {id}` / `200 {id, existed}` (+ `warning?`), 422 validace
+  (`details[{field, code}]`).
+
 ## Navigace
 
 - Viewer **Spisovna** (`base.registry.documents`) — root-level položka
@@ -160,4 +184,4 @@ modul). Otevírá Spisovnu internímu chatu:
 
 Modul nemá `keepOnReset` — šanony i dokumenty jsou migrovaná data ze
 starého `wkf.docs`; po `ds-reset` je obnoví re-import (dedupe přes
-`metadata.legacyId`).
+`metadata.legacyNdx`).

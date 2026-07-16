@@ -287,7 +287,7 @@ function dispatch(
 		'viewer'  => dispatchViewer($route, $request, $auth, $viewerRegistry, $db, $configRuntime, resolveLanguage($request, $resolved->config)),
 		'mail'    => dispatchMail($route, $request, $auth, $tables, $db, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $configRuntime),
 		'senderRules' => dispatchSenderRules($route, $request, $auth, $tables, $db, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $configRuntime, $documentEventDispatcher),
-		'registry' => dispatchRegistry($route, $auth, $tables, $db, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $configRuntime),
+		'registry' => dispatchRegistry($route, $request, $auth, $tables, $db, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $configRuntime),
 		'analysis' => dispatchAnalysis($route, $request, $auth, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher),
 		'exchange' => dispatchExchange($route, $request, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher),
 		'alerts' => dispatchAlerts($route, $request, $db, $alertCheckRegistry, $configRuntime, resolveLanguage($request, $resolved->config)),
@@ -650,6 +650,7 @@ function dispatchSenderRules(
 
 function dispatchRegistry(
 	Route $route,
+	Request $request,
 	AuthContext $auth,
 	array $tables,
 	\Shipard\Core\Database\DataSourceConnection $db,
@@ -668,12 +669,20 @@ function dispatchRegistry(
 		$attachments,
 		$configRuntime,
 	);
+	$importService = new \Shipard\Module\Base\Registry\RegistryImportService(
+		$db,
+		$documentRegistry,
+		$tables['base_registry_documents'] ?? null,
+		$configRuntime,
+	);
 	$ctrl = new \Shipard\Api\Controller\RegistryController(
 		$service,
 		new \Shipard\Module\Base\Registry\ExtractedTextFiller($db, $attachments),
 		$db,
+		$importService,
 	);
 	return match ($route->action) {
+		'import'      => $ctrl->import($auth, $request),
 		'fromMessage' => $ctrl->fromMessage($auth, (int) $route->id),
 		'extractText' => $ctrl->extractText($auth, (int) $route->id),
 		default       => Response::error('INTERNAL_ERROR', "Unknown registry action: {$route->action}", 500),

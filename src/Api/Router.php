@@ -504,6 +504,13 @@ class Router
 	private function resolveRegistryRoute(string $subpath, string $method): Route|Response
 	{
 		$rest = substr($subpath, strlen('/_registry/'));
+		if ($rest === 'import') {
+			if ($method !== 'POST') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('registry', 'import');
+		}
+
 		if (preg_match('#^from-message/(\d+)$#', $rest, $m)) {
 			$ndx = (int) $m[1];
 			if ($ndx <= 0) {

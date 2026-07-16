@@ -24,7 +24,7 @@
       onclick={() => onChange(tab)}
     >
       {t(`dashboard.feed.filter.${tab}`)}
-      <span class="shpd-feed-filter__count">({counts[tab] ?? 0})</span>
+      <span class="shpd-feed-filter__count">{counts[tab] ?? 0}</span>
       {#if urgent[tab]}<span class="shpd-feed-filter__dot" aria-hidden="true"></span>{/if}
     </button>
   {/each}
@@ -42,7 +42,7 @@
   .shpd-feed-filter__chip {
     position: relative;
     flex-shrink: 0;
-    padding: var(--shpd-space-xs) var(--shpd-space-md);
+    padding: var(--shpd-space-sm) var(--shpd-space-md);
     border: 1px solid var(--shpd-color-border);
     border-radius: var(--shpd-radius-lg);
     background: none;

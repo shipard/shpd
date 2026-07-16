@@ -1,8 +1,9 @@
 <script>
   /**
-   * Seznam karet feedu. Řazení už přišlo ze serveru (sortAndCap), Feed jen
-   * renderuje. Akce bublou nahoru přes onCardAction(card, action); rodič
-   * (Dashboard) drží preview modal / reject prompt / toast.
+   * Grid karet feedu (auto-fill sloupce, na běžné šířce 2). Řazení už přišlo
+   * ze serveru (sortAndCap), Feed jen renderuje — pořadí = DOM pořadí
+   * (row-major zleva doprava). Akce bublou nahoru přes onCardAction(card,
+   * action); rodič (Dashboard) drží preview modal / reject prompt / toast.
    * emptyText: per-záložkový empty stav filtru; null → globální „Vše zpracováno".
    */
   import { t } from '../../i18n/index.js';
@@ -26,10 +27,15 @@
 {/if}
 
 <style>
+  /* Karty v řádku mají stejnou výšku (stretch) — rozbalený detail vedle
+     sbalené karty nechá u sousedky volné místo dole (záměr, žádný masonry,
+     nerozbíjí prioritní pořadí). */
   .shpd-feed {
-    display: flex;
-    flex-direction: column;
-    gap: var(--shpd-space-sm);
+    display: grid;
+    /* min(360px, 100%) — na displeji užším než 360px nesmí karta přetéct. */
+    grid-template-columns: repeat(auto-fill, minmax(min(360px, 100%), 1fr));
+    gap: var(--shpd-space-md);
+    align-items: stretch;
   }
 
   .shpd-feed__empty {

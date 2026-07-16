@@ -1,10 +1,13 @@
 <script>
   /**
-   * Jedna karta feedu: stavový proužek (kind→stateStyle přes globální
-   * .docState_* třídy), ikona, titulek, podtitulek a řada akčních tlačítek.
+   * Jedna karta feedu: stavový proužek nahoře (kind→stateStyle přes globální
+   * .docState_* třídy), sémantická ikona, strukturovaná hlavička (partner /
+   * typ dokladu / částka / donut jistoty), předmět e-mailu, chipy příloh,
+   * rozbalovací detail a řada akčních tlačítek. Karty bez `headline`
+   * (alerty, chybové, „…a další") renderují dnešní title/subtitle fallback.
    * Chování akcí drží rodič (Dashboard) — FeedCard jen emituje onAction(action).
    */
-  import { resolveIcon } from '../../icons.js';
+  import { resolveIcon, iconMail, iconChevronDown, iconChevronUp } from '../../icons.js';
   import Icon from '../ui/Icon.svelte';
   import Button from '../ui/Button.svelte';
   import FeedCardAttachment from './FeedCardAttachment.svelte';
@@ -22,6 +25,22 @@
 
   const hiddenAttachments = $derived(
     (card.attachmentsTotal ?? 0) - (card.attachments?.length ?? 0),
+  );
+
+  // Rozbalení detailu — lokální stav; nepřežije refetch (feed se po akci
+  // stejně mění), to je OK.
+  let detailOpen = $state(false);
+
+  // Donut jistoty — inline SVG, oblouk přes stroke-dasharray.
+  const DONUT_R = 15.5;
+  const DONUT_C = 2 * Math.PI * DONUT_R;
+  const donutArc = $derived(((card.confidencePct ?? 0) / 100) * DONUT_C);
+  const donutColor = $derived(
+    card.kind === 'ready'
+      ? 'var(--shpd-color-success)'
+      : card.kind === 'review'
+        ? 'var(--shpd-color-warning)'
+        : 'var(--shpd-color-text-secondary)',
   );
 
   // „+N" = syntetická open_form akce — otevře editační formulář zprávy
@@ -43,9 +62,46 @@
     </span>
   {/if}
   <div class="shpd-feed-card__body">
-    <div class="shpd-feed-card__title">{card.title}</div>
-    {#if card.subtitle}
-      <div class="shpd-feed-card__subtitle">{card.subtitle}</div>
+    <div class="shpd-feed-card__head">
+      <div class="shpd-feed-card__heading">
+        {#if card.headline}
+          <div class="shpd-feed-card__title">{card.headline.partnerName}</div>
+          <div class="shpd-feed-card__subtitle">{card.headline.typeLabel}</div>
+        {:else}
+          <div class="shpd-feed-card__title">{card.title}</div>
+          {#if card.subtitle}
+            <div class="shpd-feed-card__subtitle">{card.subtitle}</div>
+          {/if}
+        {/if}
+      </div>
+      {#if card.confidencePct != null}
+        <svg
+          class="shpd-feed-card__donut"
+          style="color: {donutColor}"
+          viewBox="0 0 36 36"
+          role="img"
+          aria-label={t('dashboard.card.confidence', { pct: card.confidencePct })}
+        >
+          <circle class="shpd-feed-card__donut-track" cx="18" cy="18" r={DONUT_R} />
+          <circle
+            class="shpd-feed-card__donut-arc"
+            cx="18"
+            cy="18"
+            r={DONUT_R}
+            stroke-dasharray="{donutArc} {DONUT_C}"
+          />
+          <text class="shpd-feed-card__donut-text" x="18" y="18">{card.confidencePct}</text>
+        </svg>
+      {/if}
+    </div>
+    {#if card.headline?.amountText}
+      <div class="shpd-feed-card__amount">{card.headline.amountText}</div>
+    {/if}
+    {#if card.emailSubject}
+      <div class="shpd-feed-card__subject" title={card.emailSubject}>
+        <Icon icon={iconMail} size="sm" />
+        <span class="shpd-feed-card__subject-text">„{card.emailSubject}"</span>
+      </div>
     {/if}
     {#if card.attachments?.length}
       <div class="shpd-feed-card__attachments">
@@ -63,6 +119,27 @@
           >+{hiddenAttachments}</button>
         {/if}
       </div>
+    {/if}
+    {#if card.details?.length}
+      <button
+        type="button"
+        class="shpd-feed-card__detail-toggle"
+        aria-expanded={detailOpen}
+        onclick={() => (detailOpen = !detailOpen)}
+      >
+        {t(detailOpen ? 'dashboard.card.hideDetail' : 'dashboard.card.showDetail')}
+        <Icon icon={detailOpen ? iconChevronUp : iconChevronDown} size="xs" />
+      </button>
+      {#if detailOpen}
+        <div class="shpd-feed-card__details">
+          {#each card.details as row (row.label)}
+            <div class="shpd-feed-card__detail-row">
+              <span class="shpd-feed-card__detail-label">{row.label}</span>
+              <span class="shpd-feed-card__detail-value">{row.value}</span>
+            </div>
+          {/each}
+        </div>
+      {/if}
     {/if}
     {#if card.actions?.length}
       <div class="shpd-feed-card__actions">
@@ -88,22 +165,31 @@
     display: flex;
     align-items: flex-start;
     gap: var(--shpd-space-sm);
-    padding: var(--shpd-space-md) var(--shpd-space-md) var(--shpd-space-md) calc(var(--shpd-space-md) + 4px);
+    padding: calc(var(--shpd-space-md) + 4px) var(--shpd-space-md) var(--shpd-space-md);
     border: 1px solid var(--shpd-color-border);
     border-radius: var(--shpd-radius-md);
     background: var(--shpd-color-bg);
     color: var(--shpd-color-text);
   }
 
-  /* Levý stavový proužek — 4px, barva z globální .docState_* třídy. */
+  /* Horní stavový proužek — 4px, barva z globální .docState_* třídy.
+     (Návrat na levou pozici = jen jiná geometrie tady, --shpd-row-bar
+     zůstává.) */
   .shpd-feed-card__bar {
     position: absolute;
-    left: 0;
     top: 0;
-    bottom: 0;
-    width: 4px;
-    border-radius: var(--shpd-radius-md) 0 0 var(--shpd-radius-md);
+    left: 0;
+    right: 0;
+    height: 4px;
+    border-radius: var(--shpd-radius-md) var(--shpd-radius-md) 0 0;
     background: var(--shpd-row-bar);
+  }
+
+  /* Dashboardový override: globální .docState_done proužek záměrně nemá
+     (done je default stav ve viewerech), ale s horním proužkem by ready
+     karty byly jediné bez barvy → zelená jen tady. Snadno odstranitelné. */
+  .shpd-feed-card:global(.docState_done) {
+    --shpd-row-bar: var(--shpd-color-success);
   }
 
   .shpd-feed-card__icon {
@@ -117,6 +203,18 @@
     min-width: 0;
   }
 
+  /* Hlavička: blok titulku vlevo, donut jistoty vpravo nahoře. */
+  .shpd-feed-card__head {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--shpd-space-sm);
+  }
+
+  .shpd-feed-card__heading {
+    flex: 1;
+    min-width: 0;
+  }
+
   .shpd-feed-card__title {
     font-weight: 600;
     color: var(--shpd-color-text);
@@ -126,6 +224,58 @@
     font-size: var(--shpd-font-size-sm);
     color: var(--shpd-color-text-secondary);
     margin-top: 2px;
+  }
+
+  .shpd-feed-card__donut {
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+  }
+
+  .shpd-feed-card__donut-track {
+    fill: none;
+    stroke: var(--shpd-color-border);
+    stroke-width: 3;
+  }
+
+  .shpd-feed-card__donut-arc {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 3;
+    stroke-linecap: round;
+    transform: rotate(-90deg);
+    transform-origin: center;
+  }
+
+  .shpd-feed-card__donut-text {
+    fill: var(--shpd-color-text);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-anchor: middle;
+    dominant-baseline: central;
+  }
+
+  .shpd-feed-card__amount {
+    margin-top: var(--shpd-space-xs);
+    font-size: var(--shpd-font-size-xl);
+    font-weight: 700;
+  }
+
+  /* Předmět zdrojového e-mailu — jeden řádek s ellipsis, plný text v title. */
+  .shpd-feed-card__subject {
+    display: flex;
+    align-items: center;
+    gap: var(--shpd-space-xs);
+    margin-top: var(--shpd-space-xs);
+    font-size: var(--shpd-font-size-sm);
+    color: var(--shpd-color-text-secondary);
+    min-width: 0;
+  }
+
+  .shpd-feed-card__subject-text {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   /* Řada chipů příloh — na mobilu se zalamuje, nic nepřetéká. */
@@ -159,6 +309,52 @@
   .shpd-feed-att__more:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+  }
+
+  /* Toggle detailu — textové tlačítko v link vzhledu. */
+  .shpd-feed-card__detail-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--shpd-space-xs);
+    margin-top: var(--shpd-space-sm);
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--shpd-color-primary);
+    font-family: var(--shpd-font-family);
+    font-size: var(--shpd-font-size-sm);
+    cursor: pointer;
+  }
+
+  .shpd-feed-card__detail-toggle:hover {
+    text-decoration: underline;
+  }
+
+  .shpd-feed-card__details {
+    display: flex;
+    flex-direction: column;
+    gap: var(--shpd-space-xs);
+    margin-top: var(--shpd-space-sm);
+    padding: var(--shpd-space-sm);
+    border-radius: var(--shpd-radius-sm);
+    background: var(--shpd-color-bg-secondary);
+  }
+
+  .shpd-feed-card__detail-row {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--shpd-space-sm);
+    font-size: var(--shpd-font-size-sm);
+  }
+
+  .shpd-feed-card__detail-label {
+    color: var(--shpd-color-text-secondary);
+  }
+
+  .shpd-feed-card__detail-value {
+    color: var(--shpd-color-text);
+    font-weight: 500;
+    text-align: right;
   }
 
   .shpd-feed-card__actions {

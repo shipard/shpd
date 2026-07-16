@@ -1,10 +1,10 @@
 <script>
   /**
-   * Chip přílohy na mail kartě feedu — klik otevře přílohu v nové záložce
-   * (PDF/obrázky inline, ostatní download; whitelist zrcadlí
-   * AttachmentController::computeDisposition přes vzor AttachmentGrid).
-   * Hover po krátké prodlevě ukáže plovoucí náhled (jen PDF/obrázky, jen
-   * zařízení s hoverem — na mobilu tap rovnou otevírá).
+   * Chip přílohy na mail kartě feedu — vždy ikona dle typu souboru (bez mini
+   * náhledu), klik otevře přílohu v nové záložce (PDF/obrázky inline, ostatní
+   * download; whitelist zrcadlí AttachmentController::computeDisposition přes
+   * vzor AttachmentGrid). Hover po krátké prodlevě ukáže plovoucí náhled
+   * (jen PDF/obrázky, jen zařízení s hoverem — na mobilu tap rovnou otevírá).
    */
   import { onDestroy } from 'svelte';
   import { thumbnailUrl, downloadUrl, inlineUrl, formatFileSize } from '../../api/attachments.js';
@@ -121,18 +121,9 @@
     onfocusin={showPreviewNow}
     onfocusout={closePreview}
   >
-    {#if inlineRenderable}
-      <img
-        class="shpd-feed-att__thumb"
-        src={thumbnailUrl(att.id, 64)}
-        alt=""
-        loading="lazy"
-      />
-    {:else}
-      <span class="shpd-feed-att__icon">
-        <Icon icon={attachmentIcon(att.mime_type)} size="sm" />
-      </span>
-    {/if}
+    <span class="shpd-feed-att__icon">
+      <Icon icon={attachmentIcon(att.mime_type)} size="sm" />
+    </span>
     <span class="shpd-feed-att__name">{att.name}</span>
   </a>
   {#if previewOpen}
@@ -172,14 +163,6 @@
   .shpd-feed-att__chip:hover {
     border-color: var(--shpd-color-primary);
     box-shadow: var(--shpd-shadow-md);
-  }
-
-  .shpd-feed-att__thumb {
-    width: 18px;
-    height: 18px;
-    border-radius: 2px;
-    object-fit: cover;
-    flex-shrink: 0;
   }
 
   .shpd-feed-att__icon {

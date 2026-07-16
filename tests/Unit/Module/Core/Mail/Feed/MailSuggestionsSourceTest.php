@@ -18,8 +18,8 @@ use Shipard\Module\Core\Mail\Feed\MailSuggestionsSource;
  *   - zpráva analysis_state=70 → urgent karta + reanalyze/open_form
  *     (degradace na review při primary_type=other)
  *   - karta „Není faktura" (kind info, akce trash/archive/open_form)
- *   - titulek z cfgItem doc typu + partner z canonical, podtitulek
- *     (částka · jistota · e-mail)
+ *   - strukturovaná hlavička `headline` (partner/typ/částka) + `confidencePct`
+ *     + `emailSubject` + `details`; fallback na title/subtitle bez partnera
  *   - přílohy karet: struktura, řazení, vyloučení raw .eml, filtr dle
  *     source_attachments + fallback, strop 3 + attachmentsTotal
  *   - prázdný vstup → []
@@ -123,9 +123,16 @@ final class MailSuggestionsSourceTest extends TestCase
         $this->assertSame('done', $card['stateStyle']);
         $this->assertSame('invoices', $card['category']);
         $this->assertSame('Přijatá faktura — ČEZ a.s.', $card['title']);
-        $this->assertStringContainsString('12 500,00 CZK', $card['subtitle']);
-        $this->assertStringContainsString('jistota 94 %', $card['subtitle']);
-        $this->assertStringContainsString('Faktura 2026000123', $card['subtitle']);
+        // Karta s partnerem nese strukturovanou hlavičku; subtitle se neposílá.
+        $this->assertSame(
+            ['partnerName' => 'ČEZ a.s.', 'typeLabel' => 'Přijatá faktura', 'amountText' => '12 500,00 CZK'],
+            $card['headline'],
+        );
+        $this->assertSame(94, $card['confidencePct']);
+        $this->assertSame('Faktura 2026000123', $card['emailSubject']);
+        $this->assertArrayNotHasKey('subtitle', $card);
+        // Default canonical nemá docNumber/dueDate/paymentReference → bez details.
+        $this->assertArrayNotHasKey('details', $card);
         $this->assertSame('2026-06-28T10:00:00+00:00', $card['timestamp']);
 
         $actionIds = array_column($card['actions'], 'id');
@@ -178,7 +185,10 @@ final class MailSuggestionsSourceTest extends TestCase
         $this->assertSame('urgent', $card['kind']);
         $this->assertSame('error', $card['stateStyle']);
         $this->assertSame('other', $card['category']);
-        $this->assertStringContainsString('Nečitelná faktura', $card['subtitle']);
+        // Předmět jde strukturovaně; subtitle nese odesílatele (bez duplikace).
+        $this->assertSame('Dodavatel s.r.o.', $card['subtitle']);
+        $this->assertSame('Nečitelná faktura', $card['emailSubject']);
+        $this->assertArrayNotHasKey('headline', $card);
 
         $actions = $card['actions'];
         $this->assertSame('reanalyze', $actions[0]['id']);
@@ -232,8 +242,10 @@ final class MailSuggestionsSourceTest extends TestCase
         $this->assertSame('archive', $card['stateStyle']);
         $this->assertSame('other', $card['category']);
         $this->assertSame('Není faktura — Ostatní', $card['title']);
-        $this->assertStringContainsString('Nabídka spolupráce', $card['subtitle']);
-        $this->assertStringContainsString('Obchodník a.s.', $card['subtitle']);
+        // Subtitle jen odesílatel; předmět jde strukturovaně v emailSubject.
+        $this->assertSame('Obchodník a.s.', $card['subtitle']);
+        $this->assertSame('Nabídka spolupráce', $card['emailSubject']);
+        $this->assertArrayNotHasKey('headline', $card);
         $this->assertSame(777, $card['context']['messageNdx']);
 
         $actions = $card['actions'];
@@ -310,19 +322,25 @@ final class MailSuggestionsSourceTest extends TestCase
         ];
     }
 
-    public function testRegistryCardTitleSubtitleTargetAndApplyId(): void
+    public function testRegistryCardHeadlineDetailsTargetAndApplyId(): void
     {
         $src = new MailSuggestionsSource();
         $cards = $src->collectCards($this->context([$this->registrySuggestionRow(10)], [], $this->registryConfig()));
 
         $this->assertCount(1, $cards);
         $card = $cards[0];
-        // titulek: {docKind label} — {party.name}
+        // titulek: {docKind label} — {party.name} (fallback + použití mimo kartu)
         $this->assertSame('Pojistná smlouva — Pojišťovna ABC a.s.', $card['title']);
-        // podtitulek: platí do (klíč přes inverzi promote) · jistota · e-mail
-        $this->assertStringContainsString('platí do 31. 12. 2026', $card['subtitle']);
-        $this->assertStringContainsString('jistota 91 %', $card['subtitle']);
-        $this->assertStringContainsString('Pojistná smlouva 2026', $card['subtitle']);
+        // headline z party.name + docKind labelu, bez amountText
+        $this->assertSame(
+            ['partnerName' => 'Pojišťovna ABC a.s.', 'typeLabel' => 'Pojistná smlouva'],
+            $card['headline'],
+        );
+        $this->assertSame(91, $card['confidencePct']);
+        $this->assertSame('Pojistná smlouva 2026', $card['emailSubject']);
+        $this->assertArrayNotHasKey('subtitle', $card);
+        // details: jediný řádek „Platí do" (klíč přes inverzi promote)
+        $this->assertSame([['label' => 'Platí do', 'value' => '31. 12. 2026']], $card['details']);
         $this->assertSame('registry', $card['category']);
         $this->assertSame('registry', $card['context']['target']);
         // apply akce má id apply_registry → FE label „Zařadit"; kind beze změny
@@ -341,7 +359,10 @@ final class MailSuggestionsSourceTest extends TestCase
         $src = new MailSuggestionsSource();
         $cards = $src->collectCards($this->context([$row], [], $this->registryConfig()));
 
+        // Bez party.name se headline neposílá → fallback title/subtitle.
         $this->assertSame('Pojistná smlouva', $cards[0]['title']);
+        $this->assertArrayNotHasKey('headline', $cards[0]);
+        $this->assertArrayNotHasKey('details', $cards[0]);
         $this->assertStringNotContainsString('platí do', $cards[0]['subtitle']);
     }
 
@@ -408,6 +429,70 @@ final class MailSuggestionsSourceTest extends TestCase
         $src = new MailSuggestionsSource();
         $cards = $src->collectCards($this->context([$row], [], $this->docTypesConfig()));
         $this->assertStringEndsWith('— Odběratel a.s.', $cards[0]['title']);
+    }
+
+    // ── Strukturovaná hlavička + details ─────────────────────────────────
+
+    public function testDetailsRowsInFixedOrderFromFullCanonical(): void
+    {
+        $row = $this->suggestionRow(10);
+        $canonical = json_decode((string) $row['extracted_json'], true);
+        $canonical['docNumber'] = '2026000123';
+        $canonical['dates']     = ['dueDate' => '2026-04-29'];
+        $canonical['payment']   = ['paymentReference' => '2026000123'];
+        $row['extracted_json'] = json_encode($canonical);
+
+        $src = new MailSuggestionsSource();
+        $cards = $src->collectCards($this->context([$row], [], $this->docTypesConfig()));
+
+        $this->assertSame(
+            [
+                ['label' => 'Číslo dokladu', 'value' => '2026000123'],
+                ['label' => 'Splatnost', 'value' => '29. 4. 2026'],
+                ['label' => 'Variabilní symbol', 'value' => '2026000123'],
+            ],
+            $cards[0]['details'],
+        );
+    }
+
+    public function testDetailsSkipMissingAndInvalidValues(): void
+    {
+        // docNumber chybí, dueDate nevalidní → oba řádky vynechané, zbyde VS.
+        $row = $this->suggestionRow(10);
+        $canonical = json_decode((string) $row['extracted_json'], true);
+        $canonical['dates']   = ['dueDate' => 'not-a-date'];
+        $canonical['payment'] = ['paymentReference' => '2026000123'];
+        $row['extracted_json'] = json_encode($canonical);
+
+        $src = new MailSuggestionsSource();
+        $cards = $src->collectCards($this->context([$row], [], $this->docTypesConfig()));
+
+        $this->assertSame(
+            [['label' => 'Variabilní symbol', 'value' => '2026000123']],
+            $cards[0]['details'],
+        );
+    }
+
+    public function testCardWithoutPartnerFallsBackToTitleSubtitle(): void
+    {
+        $row = $this->suggestionRow(10);
+        $canonical = json_decode((string) $row['extracted_json'], true);
+        unset($canonical['supplier']);
+        $row['extracted_json'] = json_encode($canonical);
+
+        $src = new MailSuggestionsSource();
+        $cards = $src->collectCards($this->context([$row], [], $this->docTypesConfig()));
+
+        $card = $cards[0];
+        $this->assertArrayNotHasKey('headline', $card);
+        $this->assertSame('Přijatá faktura', $card['title']);
+        // subtitle zůstává dnešní složený (částka · jistota · e-mail)
+        $this->assertStringContainsString('12 500,00 CZK', $card['subtitle']);
+        $this->assertStringContainsString('jistota 94 %', $card['subtitle']);
+        $this->assertStringContainsString('Faktura 2026000123', $card['subtitle']);
+        // emailSubject posílají všechny mail karty, i fallback
+        $this->assertSame('Faktura 2026000123', $card['emailSubject']);
+        $this->assertSame(94, $card['confidencePct']);
     }
 
     // ── Přílohy karet ────────────────────────────────────────────────────

@@ -29,10 +29,15 @@ use Shipard\Module\Core\Mail\ExtractedDocumentDocument;
  * `primary_type='other'` a žádný akční extracted doc → kind=info s akcemi
  * Koš (primary) / Archiv / otevřít editační formulář zprávy.
  *
- * Titulek: `doc_type` → label z cfgItem `core.mail.extractedDocTypes`.
- * Podtitulek: partner + částka z `extracted_json` (kanonický doklad) + jistota
- * + zdrojový e-mail. Feed je stropovaný (maxCards), takže N `json_decode` je
- * únosné; denormalizace headline polí do sloupců je možná optimalizace později.
+ * Návrhové karty s partnerem nesou strukturovanou hlavičku `headline`
+ * ({partnerName, typeLabel, amountText?}) + volitelná pole `confidencePct`
+ * (int 0–100) a `details` ({label, value} — číslo dokladu / splatnost /
+ * variabilní symbol; u registry „Platí do"); `subtitle` se u nich neposílá.
+ * Bez partnera karta padá na dnešní složený `title`/`subtitle` fallback.
+ * Všechny tři druhy mail karet nesou `emailSubject` (holý předmět zprávy).
+ * Data jdou z `extracted_json` (kanonický doklad) — feed je stropovaný
+ * (maxCards), takže N `json_decode` je únosné; denormalizace headline polí
+ * do sloupců je možná optimalizace později.
  *
  * Akce se emitují bez `label` — frontend je lokalizuje podle `action.id`
  * (i18n klíče `dashboard.card.action.*`). Podtitulek a titulek jsou naopak
@@ -148,7 +153,7 @@ final class MailSuggestionsSource implements FeedSource
         $status       = (int) $row['status'];
         $confidence   = isset($row['confidence']) ? (float) $row['confidence'] : null;
         $docType      = (string) ($row['doc_type'] ?? '');
-        $subject      = (string) ($row['subject'] ?? '');
+        $subject      = trim((string) ($row['subject'] ?? ''));
 
         $canonical = json_decode((string) ($row['extracted_json'] ?? ''), true);
         $canonical = is_array($canonical) ? $canonical : [];
@@ -180,7 +185,7 @@ final class MailSuggestionsSource implements FeedSource
             ];
         }
 
-        return [
+        $card = [
             'id'         => 'mail_extracted:' . $extractedNdx,
             'source'     => 'mail',
             'kind'       => $kind,
@@ -190,9 +195,6 @@ final class MailSuggestionsSource implements FeedSource
             'title'      => $isRegistry
                 ? $this->registryCardTitle($ctx, $docType, $canonical)
                 : $this->cardTitle($ctx, $docType, $canonical),
-            'subtitle'   => $isRegistry
-                ? $this->registryCardSubtitle($ctx, $docType, $canonical, $confidence, $subject)
-                : $this->cardSubtitle($ctx, $canonical, $confidence, $subject),
             'timestamp'  => $this->toAtom($row['received_at'] ?? null),
             'context'    => [
                 'messageNdx'   => $messageNdx,
@@ -202,6 +204,45 @@ final class MailSuggestionsSource implements FeedSource
             ],
             'actions'    => $actions,
         ];
+
+        // Strukturovaná hlavička jen když známe partnera — bez něj karta
+        // padá na dnešní složený title/subtitle fallback (bez headline se
+        // subtitle posílá dál, u headline karet už ne — data jsou v ní).
+        $partnerName = $isRegistry
+            ? $this->registryPartyName($canonical)
+            : $this->counterpartyName($canonical);
+        if ($partnerName !== null) {
+            $headline = [
+                'partnerName' => $partnerName,
+                'typeLabel'   => $isRegistry
+                    ? $this->docKindLabel($ctx, $docType)
+                    : $this->docTypeLabel($ctx, $docType),
+            ];
+            $amountText = $isRegistry ? null : $this->formatAmount($canonical);
+            if ($amountText !== null) {
+                $headline['amountText'] = $amountText;
+            }
+            $card['headline'] = $headline;
+        } else {
+            $card['subtitle'] = $isRegistry
+                ? $this->registryCardSubtitle($ctx, $docType, $canonical, $confidence, $subject)
+                : $this->cardSubtitle($ctx, $canonical, $confidence, $subject);
+        }
+
+        if ($confidence !== null) {
+            $card['confidencePct'] = (int) round($confidence * 100);
+        }
+        if ($subject !== '') {
+            $card['emailSubject'] = $subject;
+        }
+        $details = $isRegistry
+            ? $this->registryDetails($ctx, $docType, $canonical)
+            : $this->docsDetails($ctx, $canonical);
+        if ($details !== []) {
+            $card['details'] = $details;
+        }
+
+        return $card;
     }
 
     /**
@@ -237,7 +278,7 @@ final class MailSuggestionsSource implements FeedSource
         $messageNdx = (int) $row['message_ndx'];
         $subject    = trim((string) ($row['subject'] ?? ''));
         $isOther    = (string) ($row['primary_type'] ?? '') === 'other';
-        return [
+        $card = [
             'id'         => 'mail_message:' . $messageNdx,
             'source'     => 'mail',
             'kind'       => $isOther ? 'review' : 'urgent',
@@ -245,7 +286,7 @@ final class MailSuggestionsSource implements FeedSource
             'stateStyle' => 'error',
             'category'   => FeedSource::CATEGORY_OTHER,
             'title'      => $ctx->language === 'cs' ? 'Chyba analýzy e-mailu' : 'E-mail analysis failed',
-            'subtitle'   => $subject !== '' ? $this->emailSubjectLabel($ctx, $subject) : (string) ($row['sender_name'] ?? ''),
+            'subtitle'   => trim((string) ($row['sender_name'] ?? '')),
             'timestamp'  => $this->toAtom($row['received_at'] ?? null),
             'context'    => ['messageNdx' => $messageNdx],
             'actions'    => [
@@ -253,6 +294,10 @@ final class MailSuggestionsSource implements FeedSource
                 ['id' => 'openMail',  'kind' => 'open_form', 'target' => ['table' => self::MESSAGES_TABLE, 'recordId' => $messageNdx]],
             ],
         ];
+        if ($subject !== '') {
+            $card['emailSubject'] = $subject;
+        }
+        return $card;
     }
 
     /**
@@ -299,19 +344,12 @@ final class MailSuggestionsSource implements FeedSource
         $messageNdx = (int) $row['message_ndx'];
         $target = ['messageNdx' => $messageNdx];
 
-        $subtitleParts = [];
         $subject = trim((string) ($row['subject'] ?? ''));
-        if ($subject !== '') {
-            $subtitleParts[] = $this->emailSubjectLabel($ctx, $subject);
-        }
         $sender = trim((string) ($row['sender_name'] ?? '')) !== ''
             ? trim((string) $row['sender_name'])
             : trim((string) ($row['sender_email'] ?? ''));
-        if ($sender !== '') {
-            $subtitleParts[] = $sender;
-        }
 
-        return [
+        $card = [
             'id'         => 'mail_notinvoice:' . $messageNdx,
             'source'     => 'mail',
             'kind'       => 'info',
@@ -320,7 +358,7 @@ final class MailSuggestionsSource implements FeedSource
             'category'   => FeedSource::CATEGORY_OTHER,
             'title'      => ($ctx->language === 'cs' ? 'Není faktura — ' : 'Not an invoice — ')
                 . $this->primaryTypeLabel($ctx, (string) ($row['primary_type'] ?? 'other')),
-            'subtitle'   => implode(' · ', $subtitleParts),
+            'subtitle'   => $sender,
             'timestamp'  => $this->toAtom($row['received_at'] ?? null),
             'context'    => ['messageNdx' => $messageNdx],
             'actions'    => [
@@ -329,6 +367,10 @@ final class MailSuggestionsSource implements FeedSource
                 ['id' => 'openMail', 'kind' => 'open_form',       'target' => ['table' => self::MESSAGES_TABLE, 'recordId' => $messageNdx]],
             ],
         ];
+        if ($subject !== '') {
+            $card['emailSubject'] = $subject;
+        }
+        return $card;
     }
 
     /**
@@ -486,10 +528,20 @@ final class MailSuggestionsSource implements FeedSource
     private function registryCardTitle(FeedContext $ctx, string $docType, array $canonical): string
     {
         $label = $this->docKindLabel($ctx, $docType);
+        $party = $this->registryPartyName($canonical);
+        return $party !== null ? ($label . ' — ' . $party) : $label;
+    }
+
+    /**
+     * Jméno protistrany registry karty z `party.name` canonicalu; null pro
+     * chybějící/prázdné.
+     *
+     * @param array<string,mixed> $canonical
+     */
+    private function registryPartyName(array $canonical): ?string
+    {
         $party = $canonical['party']['name'] ?? null;
-        return is_string($party) && trim($party) !== ''
-            ? ($label . ' — ' . trim($party))
-            : $label;
+        return is_string($party) && trim($party) !== '' ? trim($party) : null;
     }
 
     /**
@@ -561,15 +613,87 @@ final class MailSuggestionsSource implements FeedSource
         }
 
         $value = $canonical['kindFields'][$metaKey] ?? null;
-        if (!is_string($value) || trim($value) === '') {
+        if (!is_string($value)) {
+            return null;
+        }
+        return $this->formatDate($ctx, $value);
+    }
+
+    /** Lokalizované datum (cs `j. n. Y`, en `Y-m-d`); prázdný/nevalidní vstup → null. */
+    private function formatDate(FeedContext $ctx, string $value): ?string
+    {
+        $value = trim($value);
+        if ($value === '') {
             return null;
         }
         try {
-            $date = new \DateTimeImmutable(trim($value));
+            $date = new \DateTimeImmutable($value);
         } catch (\Exception) {
             return null;
         }
         return $ctx->language === 'cs' ? $date->format('j. n. Y') : $date->format('Y-m-d');
+    }
+
+    /**
+     * Řádky expanderu návrhové karty (docs target): číslo dokladu, splatnost,
+     * variabilní symbol — jen neprázdné hodnoty, fixní pořadí. Labely
+     * lokalizuje server (konzistentní s lokalizací titulků karet).
+     *
+     * @param array<string,mixed> $canonical
+     * @return list<array{label: string, value: string}>
+     */
+    private function docsDetails(FeedContext $ctx, array $canonical): array
+    {
+        $rows = [];
+
+        $docNumber = $canonical['docNumber'] ?? null;
+        if (is_string($docNumber) && trim($docNumber) !== '') {
+            $rows[] = [
+                'label' => $ctx->language === 'cs' ? 'Číslo dokladu' : 'Document number',
+                'value' => trim($docNumber),
+            ];
+        }
+
+        $dueDate = $canonical['dates']['dueDate'] ?? null;
+        $dueDate = is_string($dueDate) ? $this->formatDate($ctx, $dueDate) : null;
+        if ($dueDate !== null) {
+            $rows[] = [
+                'label' => $ctx->language === 'cs' ? 'Splatnost' : 'Due date',
+                'value' => $dueDate,
+            ];
+        }
+
+        $reference = $canonical['payment']['paymentReference'] ?? null;
+        if (is_int($reference)) {
+            $reference = (string) $reference;
+        }
+        if (is_string($reference) && trim($reference) !== '') {
+            $rows[] = [
+                'label' => $ctx->language === 'cs' ? 'Variabilní symbol' : 'Payment reference',
+                'value' => trim($reference),
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * Expander registry karty: jediný řádek „Platí do" z konce platnosti
+     * (`registryValidTo`); bez něj se `details` neposílá.
+     *
+     * @param array<string,mixed> $canonical
+     * @return list<array{label: string, value: string}>
+     */
+    private function registryDetails(FeedContext $ctx, string $docType, array $canonical): array
+    {
+        $validTo = $this->registryValidTo($ctx, $docType, $canonical);
+        if ($validTo === null) {
+            return [];
+        }
+        return [[
+            'label' => $ctx->language === 'cs' ? 'Platí do' : 'Valid until',
+            'value' => $validTo,
+        ]];
     }
 
     /** Lokalizovaný label typu dokladu z cfgItem; fallback na holý key. */

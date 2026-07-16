@@ -269,6 +269,7 @@ Home obrazovka + modul úkolů. Reference [`docs/dashboard.md`](../docs/dashboar
 | `dashboard-row-edit-modal.md` | Edit z řádku widgetu Úkoly |
 | `dashboard-card-attachments.md` | Tlačítka příloh na mail kartách feedu (chip + hover náhled) |
 | `dashboard-feed-filter.md` | Filtr kategorií karet feedu (chip bar; Přijaté faktury / Spisovna / Ostatní) |
+| `dashboard-feed-redesign.md` | Redesign karet feedu (grid, strukturovaná hlavička, expander detailu, horní proužek) |
 
 ## Dev dashboard
 

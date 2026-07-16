@@ -93,7 +93,18 @@ Fáze 1 (widget MVP) říkala *„přehled, ne přístupový bod"*. Fáze 2 ten 
   "stateStyle": "done",
   "category": "invoices",
   "title": "Přijatá faktura — ČEZ a.s.",
-  "subtitle": "4 200,00 CZK · jistota 94 % · e-mail „Faktura 2026000123\"",
+  "headline": {
+    "partnerName": "ČEZ a.s.",
+    "typeLabel": "Přijatá faktura",
+    "amountText": "4 200,00 CZK"
+  },
+  "confidencePct": 94,
+  "emailSubject": "Faktura 2026000123",
+  "details": [
+    { "label": "Číslo dokladu", "value": "2026000123" },
+    { "label": "Splatnost", "value": "29. 4. 2026" },
+    { "label": "Variabilní symbol", "value": "2026000123" }
+  ],
   "timestamp": "2026-06-28T10:00:00+00:00",
   "context": { "messageNdx": 123, "extractedNdx": 456, "confidence": 0.94 },
   "attachments": [
@@ -110,6 +121,23 @@ Fáze 1 (widget MVP) říkala *„přehled, ne přístupový bod"*. Fáze 2 ten 
 
 - `id` — stabilní `"{source}:{entityId}"` (dedup / animace mizení po akci).
 - `stateStyle` — reuse globálních `docState_*` CSS tříd (proužek karty).
+- `headline` — **volitelné**, strukturovaná hlavička návrhových karet:
+  `partnerName` (povinný uvnitř objektu — bez partnera se `headline`
+  neposílá a karta padá na title/subtitle fallback), `typeLabel` (povinný),
+  `amountText` (volitelný server-formátovaný string; registry karty ho
+  nemají). **Karta s `headline` neposílá `subtitle`** — jeho dnešní data
+  (částka, jistota, e-mail) jsou strukturovaná. `title` zůstává (fallback
+  + použití mimo kartu).
+- `confidencePct` — **volitelné**, int 0–100; jen návrhové karty se známou
+  jistotou (frontend kreslí donut). `context.confidence` je zdrojově
+  specifický — frontend se váže na toto top-level pole.
+- `emailSubject` — **volitelné**, holý předmět zprávy (bez obalu
+  „e-mail „…""); posílají ho všechny tři druhy mail karet. Frontend přidává
+  ikonu obálky a uvozovky.
+- `details` — **volitelné**, pole `{label, value}` pro rozbalovací detail
+  karty; labely lokalizuje server dle `ctx->language`. Jen neprázdné
+  hodnoty; prázdné pole se neposílá (expander na frontendu se ukazuje jen
+  když `details` existuje).
 - `category` — **volitelné**, výčet `invoices` | `registry` | `other`
   (konstanty `FeedSource::CATEGORY_*`) — řídí klientský filtr feedu
   (`FeedFilter.svelte`). Karta **bez pole** se zobrazuje jen v záložce Vše
@@ -174,10 +202,26 @@ klasifikace určila `primary_type='other'`, karta degraduje na `kind=review`.
 `trash_message` (primary), `archive_message`, `open_form`. Žádné
 auto-zavření ani digest — jedna karta per zpráva s jednoklikovým úklidem.
 
-Titulek: `doc_type` → label z cfgItem `core.mail.extractedDocTypes`. Podtitulek:
-částka + partner z `extracted_json` (kanonický doklad — protistrana dle
-`selfParty`), + jistota + zdrojový e-mail. Feed je stropovaný, takže N
-`json_decode` je únosné; denormalizace headline do sloupců je pozdější optimalizace.
+Titulek: `doc_type` → label z cfgItem `core.mail.extractedDocTypes` + partner
+z `extracted_json` (kanonický doklad — protistrana dle `selfParty`). Feed je
+stropovaný, takže N `json_decode` je únosné; denormalizace headline do sloupců
+je pozdější optimalizace.
+
+**Strukturovaná pole per druh karty** (viz §4):
+
+- **Návrhová karta (docs target)**: `headline.partnerName` =
+  `counterpartyName()` (bez partnera se `headline` neposílá →
+  title/subtitle fallback), `headline.typeLabel` = `docTypeLabel()`,
+  `headline.amountText` = `formatAmount()`; `confidencePct`; `emailSubject`;
+  `details` v pořadí číslo dokladu (`docNumber`), splatnost (`dates.dueDate`,
+  formát cs `j. n. Y` / en `Y-m-d`, nevalidní datum → řádek vynechat),
+  variabilní symbol (`payment.paymentReference`) — jen neprázdné.
+- **Registry karta**: `partnerName` = `party.name`, `typeLabel` =
+  `docKindLabel()`, bez `amountText`; `details` = jediný řádek „Platí do"
+  z `registryValidTo()` (bez něj se `details` neposílá).
+- **Chybová karta / „Není faktura"**: bez `headline`/`details`/
+  `confidencePct`; `emailSubject` ano. Subtitle nedupluje předmět —
+  chybová karta nese `sender_name`, „Není faktura" jen odesílatele.
 
 **Přílohy karet** — všechny tři druhy mail karet nesou volitelná pole
 `attachments`/`attachmentsTotal` (viz §4). Zdroj per druh karty:
@@ -302,14 +346,24 @@ Generované AI shrnutí feedu (fáze 2b, §11). Události:
 frontend/src/components/dashboard/
 ├── Dashboard.svelte      — fetch, layout (feed + tasks widget), review modal,
 │                           reject prompt, toast s undo, fall-through
-├── Feed.svelte           — seznam karet (řazení ze serveru), prázdný stav
-│                           (prop emptyText → per-záložkový empty filtru)
+├── Feed.svelte           — grid karet (auto-fill minmax(360px,1fr) → 2 sloupce
+│                           na desktopu, 1 na mobilu; row-major = serverové
+│                           řazení; stejná výška karet v řádku, žádný masonry),
+│                           prázdný stav (prop emptyText → per-záložkový empty)
 ├── FeedFilter.svelte     — chip bar filtru kategorií (Vše/Faktury/Spisovna/
-│                           Ostatní); čistě prezentační, counts/urgent/filtered
-│                           počítá Dashboard ($derived z doručených karet),
+│                           Ostatní), počet uvnitř chipu bez závorek; čistě
+│                           prezentační, counts/urgent/filtered počítá
+│                           Dashboard ($derived z doručených karet),
 │                           přepínání bez refetche, volba nepřežije reload
-├── FeedCard.svelte       — jedna karta (kind proužek, ikona, chipy příloh, akce)
-├── FeedCardAttachment.svelte — chip přílohy: klik otevře v nové záložce
+├── FeedCard.svelte       — jedna karta: stavový proužek nahoře, sémantická
+│                           ikona, strukturovaná hlavička (headline: partner
+│                           tučně / typ dokladu / částka velkým) + donut
+│                           jistoty (confidencePct, barva dle kind), předmět
+│                           e-mailu (emailSubject + iconMail), chipy příloh,
+│                           expander „Zobrazit detail" (details, lokální
+│                           $state), akce; bez headline fallback title/subtitle
+├── FeedCardAttachment.svelte — chip přílohy s ikonou typu (PDF/obrázek/soubor,
+│                           bez mini náhledu): klik otevře v nové záložce
 │                           (PDF/obrázky inline, jinak download), hover
 │                           náhled (jen hover zařízení); „+N" nad strop 3
 │                           je syntetická open_form akce (formulář zprávy)
@@ -324,7 +378,12 @@ API: `frontend/src/api/dashboard.js` (`fetchDashboard()`,
 `reanalyzeMessage`, `previewExtractedDocument`).
 
 - **Doc-state proužek**: globální `.docState_*` třídy (`styles/base.css`), pruh
-  přes `--shpd-row-bar`. Kind→stateStyle mapuje server.
+  přes `--shpd-row-bar`. Kind→stateStyle mapuje server. Na kartě feedu je pruh
+  **nahoře** (jen dashboard — geometrie v scoped CSS FeedCard, viewery beze
+  změny; návrat vlevo = jen jiná geometrie, `--shpd-row-bar` zůstává). Ready
+  karty (`stateStyle=done`, globálně záměrně bez pruhu) mají dashboardový
+  override `.shpd-feed-card.docState_done → --shpd-row-bar: success` v scoped
+  CSS FeedCard — globální `.docState_done` se nemění.
 - **Toast**: app nemá toast infrastrukturu → minimální lokální toast v
   `Dashboard.svelte` (fixed dole, „Otevřít"/„Vrátit", auto-dismiss ~8 s).
 - **Ikony**: server posílá sémantický `icon` (check/question/warning/info/…),

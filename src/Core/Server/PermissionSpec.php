@@ -24,6 +24,7 @@ final class PermissionSpec
         private readonly string $logDir = '/opt/shipard/log',
         private readonly string $configDir = '/etc/shipard',
         private readonly string $shipardRoot = '/opt/shipard',
+        private readonly string $runDir = '/opt/shipard/run',
     ) {}
 
     /**
@@ -41,6 +42,9 @@ final class PermissionSpec
             ['path' => $this->dataSourcesDir,             'type' => 'dir',  'owner' => 'user', 'group' => 'user', 'mode' => 0750],
             ['path' => $this->logDir,                     'type' => 'dir',  'owner' => 'user', 'group' => 'user', 'mode' => 0750, 'recurse' => true],
             ['path' => $this->logDir . '/shipard.log',    'type' => 'file', 'owner' => 'user', 'group' => 'user', 'mode' => 0640, 'optional' => true],
+            // Locky a heartbeaty cron dispatcheru; optional — servery před
+            // rolloutem cronu adresář nemají a nemají kvůli tomu failovat.
+            ['path' => $this->runDir,                     'type' => 'dir',  'owner' => 'user', 'group' => 'user', 'mode' => 0750, 'optional' => true, 'recurse' => true],
         ];
     }
 

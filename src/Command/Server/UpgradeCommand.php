@@ -116,7 +116,7 @@ class UpgradeCommand extends Command
      * Které kroky se mají provést — čistá funkce kvůli testům.
      *
      * @param string[] $changedFiles
-     * @return array{composer: bool, frontend: bool, dsUpgradeAll: bool, nginxReload: bool, fpmReload: bool}
+     * @return array{composer: bool, frontend: bool, dsUpgradeAll: bool, cronInstall: bool, nginxReload: bool, fpmReload: bool}
      */
     public function computePlan(array $changedFiles, bool $full, bool $skipDsUpgrade): array
     {
@@ -142,6 +142,9 @@ class UpgradeCommand extends Command
             'composer' => $composer,
             'frontend' => $frontend,
             'dsUpgradeAll' => !$skipDsUpgrade,
+            // Vždy — subproces je levný a idempotentní; konvergence cron
+            // souboru nesmí záviset na tom, které cesty se zrovna změnily.
+            'cronInstall' => true,
             'nginxReload' => $nginxReload,
             'fpmReload' => $fpmReload,
         ];
@@ -263,6 +266,9 @@ class UpgradeCommand extends Command
         $output->writeln($plan['dsUpgradeAll']
             ? '  [run]  ds-upgrade-all'
             : '  [skip] ds-upgrade-all (--skip-ds-upgrade)');
+        $output->writeln($euid === 0
+            ? '  [run]  cron install'
+            : '  [skip] cron install (not running as root)');
         $output->writeln(match (true) {
             !$plan['nginxReload'] => '  [skip] nginx reload (no docs/nginx/ changes)',
             $euid !== 0 => '  [skip] nginx reload (not running as root)',
@@ -321,8 +327,11 @@ class UpgradeCommand extends Command
             // Nový proces = nový kód (po pullu).
             $steps[] = ['ds-upgrade-all', $this->wrapUser($shpdServer . ' ds-upgrade-all' . $verbosityFlag, $sudoUser)];
         }
-        // Reload kroky běží přímo jako root (žádný wrapUser — systemctl
-        // potřebuje root, ne shipard uživatele).
+        // Cron install a reload kroky běží přímo jako root (žádný wrapUser —
+        // /etc/cron.d i systemctl potřebují root, ne shipard uživatele).
+        if ($euid === 0) {
+            $steps[] = ['cron install', $shpdServer . ' cron-install'];
+        }
         $nginxReloadCmd = 'nginx -t && systemctl reload nginx';
         $fpmReloadCmd = 'systemctl reload php' . $this->getPhpVersion() . '-fpm';
         $reloadSteps = [];
@@ -388,9 +397,10 @@ class UpgradeCommand extends Command
         }
         $output->writeln('==========================================');
 
-        if ($euid !== 0 && ($plan['nginxReload'] || $plan['fpmReload'])) {
+        if ($euid !== 0) {
             $output->writeln('');
-            $output->writeln('<comment>System config changed — reload the services manually as root:</comment>');
+            $output->writeln('<comment>Root-only steps skipped — run manually as root:</comment>');
+            $output->writeln('  sudo shpd-server cron-install');
             if ($plan['nginxReload']) {
                 $output->writeln('  sudo nginx -t && sudo systemctl reload nginx');
             }

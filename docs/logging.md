@@ -178,7 +178,9 @@ Doporučená konfigurace `/etc/logrotate.d/shipard`:
 
 30 dnů historie, gzip kompresí starších log souborů. Žádný `postrotate`
 hook potřeba — `ErrorLogger` otevírá soubor při každém zápisu (append +
-LOCK_EX), takže rotace bez signálu funguje.
+LOCK_EX), takže rotace bez signálu funguje. Glob `*.log` pokrývá i
+`/opt/shipard/log/cron.log` (stdout redirect slotů z generovaného
+`/etc/cron.d/shipard`).
 
 ### Systemd-tmpfiles (alternativa pro logrotate)
 

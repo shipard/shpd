@@ -417,16 +417,17 @@ State machine guards (HTTP 409 při porušení):
 
 ## 12. Cron
 
-Doporučená cron config (operations TODO — není součástí deploye MVP):
+`alerts-run` běží každých 5 minut přes systémový dispatcher —
+slot `five-minutes` generovaného `/etc/cron.d/shipard` (`shpd-server cron
+--slot=five-minutes`, per DS; soubor spravuje `shpd-server upgrade`,
+živost hlídá `shpd-server doctor`). Žádná ruční cron konfigurace není
+potřeba. Detaily viz [`cli.md`](cli.md) § `cron` a
+[`operations/production.md`](operations/production.md) §10.
 
-```cron
-*/5 * * * * shipard cd /opt/shipard/data-sources/<ds-id> && /opt/shipard/bin/shpd-ds alerts-run >> /var/log/shipard/alerts.log 2>&1
-```
+Jednotlivé checky mají vlastní `interval` (typicky 1h+), runner přeskakuje
+ty, kde `next_run_at > NOW`. Když nic není due, exit 0.
 
-Spouští každých 5 minut. Jednotlivé checky mají vlastní `interval` (typicky
-1h+), runner přeskakuje ty, kde `next_run_at > NOW`. Když nic není due, exit 0.
-
-`alerts-prune` doporučeno týdně.
+`alerts-prune` běží týdně (slot `weekly`).
 
 ---
 
@@ -439,7 +440,6 @@ Following are explicitně **out of scope MVP**:
 - Dashboard widget s agregací alertů (top severity, count by check)
 - Per-user alert subscriptions / visibility
 - Email digesty (denní/týdenní souhrn)
-- Cron config v deployi (operational task — admin si nastaví sám)
 - Frontend tlačítka snooze/dismiss/runCheck v ViewerRow (klik na akce zatím
   jen toast — routing/preset až později)
 - Tab bar pro alerts viewer (filter dropdown stačí)

@@ -106,14 +106,16 @@ enqueue → pending ──claim──▶ sending ──ok──▶ sent
 
 ## Cron
 
-Worker běží per DS (analogicky `alerts-run`):
+`mail-outbox-run` běží každou minutu na všech DS přes systémový dispatcher
+— slot `minute` generovaného `/etc/cron.d/shipard` (`shpd-server cron
+--slot=minute`; soubor spravuje `shpd-server upgrade`, živost hlídá
+`shpd-server doctor`). Žádná ruční cron konfigurace není potřeba —
+detaily viz [`../cli.md`](../cli.md) § `cron`. Slot `daily` navíc denně
+pouští `mail-idempotency-prune`.
 
-```cron
-* * * * *  cd /opt/shipard/data-sources/<id> && /usr/bin/php /opt/shipard/app/bin/shpd-ds mail-outbox-run >> /var/log/shipard/mail-outbox-<id>.log 2>&1
-```
-
-Exit kód je SUCCESS i při selhaných zprávách (selhání reportuje alert
-check a doctor, cron nesmí spamovat MAILTO); FAILURE jen při infra chybě.
+Exit kód workeru je SUCCESS i při selhaných zprávách (selhání reportuje
+alert check a doctor, cron nesmí spamovat MAILTO); FAILURE jen při infra
+chybě.
 
 ## Viditelnost selhání
 

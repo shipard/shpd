@@ -142,7 +142,9 @@ je nezapomeň doplnit. `shpd-server doctor` chybějící include hlásí jako
 warning; `shpd-server upgrade` po změně těchto souborů nginx sám reloadne
 (viz §11). Stejný pattern má PHP-FPM pool — `include=` na
 `docs/php/shipard-fpm-common.conf` (upload limity), generuje ho
-instalační skript.
+instalační skript. Třetí upgrade-spravovaný systémový soubor je
+`/etc/cron.d/shipard` — generuje ho `shpd-server cron-install`
+(idempotentně, marker s verzí šablony), viz §10.
 
 ### Ruční část (per-server, git se jí nedotýká)
 
@@ -286,14 +288,19 @@ Předpoklady, aby to fungovalo:
   ds-secrets-health`. Detaily v [`secrets.md`](secrets.md).
 - **Logy:** `/opt/shipard/log/shipard.log` (viz [`../logging.md`](../logging.md)).
 - **Firewall:** ven vystav jen 80/443 (a SSH). PHP-FPM socket je lokální.
-- **Cron — odchozí pošta:** worker fronty běží per DS
-  (viz [`../mail/outbound.md`](../mail/outbound.md)):
+- **Cron:** všechny periodické úlohy (outbox worker, alerts runner,
+  prune joby) běží přes generovaný `/etc/cron.d/shipard` — čtyři sloty
+  volají dispatcher `shpd-server cron --slot=…`, který sám iteruje
+  aktivní DS. Soubor zapisuje `shpd-server upgrade` (resp. `shpd-server
+  cron-install`), žádné ruční cron řádky se nespravují a
+  `ds-create`/`ds-delete` regeneraci nevyžadují. Dispatcher loguje do
+  `shipard.log`, stdout slotů jde do `/opt/shipard/log/cron.log`
+  (rotovaný stávajícím logrotate pravidlem pro `/opt/shipard/log/*.log`).
+  Živost hlídá `shpd-server doctor` (sekce Cron: existence + verze
+  souboru, stáří heartbeatů v `/opt/shipard/run/`). Sloty a per-DS
+  příkazy viz [`../cli.md`](../cli.md) § `cron`.
 
-  ```cron
-  * * * * *  cd /opt/shipard/data-sources/<id> && /usr/bin/php /opt/shipard/app/bin/shpd-ds mail-outbox-run >> /var/log/shipard/mail-outbox-<id>.log 2>&1
-  ```
-
-  Relay se konfiguruje klíčem `mail.relay` v `server.json` (per-DS
+  Mail relay se konfiguruje klíčem `mail.relay` v `server.json` (per-DS
   override v `main.json`); stav fronty hlídá `shpd-server doctor` a alert
   check `core.mail.outbox_health`.
 
@@ -316,11 +323,14 @@ Příkaz provede (kroky přes `sudo -u shipard -H`, doctor přímo jako root):
 3. frontend build (`npm ci && npm run build`) — jen při změně pod `frontend/`
    (nebo `--full`)
 4. `shpd-server ds-upgrade-all` (vynechatelné přes `--skip-ds-upgrade`)
-5. reload služeb — jen při změně verzovaných systémových confů (viz §6):
+5. `shpd-server cron-install` — idempotentní regenerace
+   `/etc/cron.d/shipard` + `/opt/shipard/run` (viz §10). Běží jen pod
+   rootem; jinak příkaz vypíše ruční `sudo` příkaz.
+6. reload služeb — jen při změně verzovaných systémových confů (viz §6):
    `docs/nginx/**` → `nginx -t && systemctl reload nginx`, `docs/php/**` →
    `systemctl reload php<ver>-fpm`. Běží jen pod rootem; jinak příkaz
    vypíše ruční `sudo` příkazy.
-6. `shpd-server doctor`
+7. `shpd-server doctor`
 
 Bez příchozích commitů skončí `Already up to date.`. Selhání kroku běh
 zastaví (žádný automatický rollback) — dokonči ruční kroky níže. Selhání
@@ -334,6 +344,7 @@ sudo -u shipard git pull
 sudo -u shipard composer install --no-dev --optimize-autoloader
 (cd frontend && sudo -u shipard npm ci && sudo -u shipard npm run build)
 sudo -u shipard shpd-server ds-upgrade-all
+sudo shpd-server cron-install
 sudo shpd-server doctor
 ```
 

@@ -76,6 +76,11 @@ Read-only health check. Vypíše:
 - **System config includes** — warn-only: živý nginx site a FPM pool
   includují verzované `shipard-common.conf` / `shipard-fpm-common.conf`
   (viz [production.md §6](operations/production.md)); nikdy nemění exit code
+- **Cron** — `/etc/cron.d/shipard` existuje a marker odpovídá aktuální
+  verzi šablony; heartbeaty slotů nejsou zatuchlé (`minute` > 10 min,
+  `five-minutes` > 20 min = error; `daily`/`weekly` jen warning; selhané
+  joby z posledního běhu = warning). Na dev serveru bez cron souboru se
+  sekce přeskočí.
 - **Data source DB connections** — pokus o `SELECT 1` na každý DS
 
 Žádné side-effecty. Exit code `0` (vše OK) nebo `1` (alespoň jeden issue).
@@ -175,9 +180,11 @@ sudo shpd-server upgrade --skip-ds-upgrade
 Orchestruje nasazení nové verze: `git pull --ff-only` → `composer install
 --no-dev --optimize-autoloader` (jen při změně `composer.json`/`composer.lock`)
 → frontend build (jen při změně pod `frontend/`) → `ds-upgrade-all` →
-reload služeb (jen při změně verzovaných systémových confů: `docs/nginx/**`
-→ `nginx -t && systemctl reload nginx`, `docs/php/**` → `systemctl reload
-php<ver>-fpm`; jen pod rootem, jinak vypíše ruční příkazy) → `doctor`.
+`cron-install` (vždy, jen pod rootem — idempotentní regenerace
+`/etc/cron.d/shipard`) → reload služeb (jen při změně verzovaných
+systémových confů: `docs/nginx/**` → `nginx -t && systemctl reload nginx`,
+`docs/php/**` → `systemctl reload php<ver>-fpm`; jen pod rootem, jinak
+vypíše ruční příkazy) → `doctor`.
 Každý krok běží jako subproces — příkaz aktualizuje kód, ze kterého sám běží,
 takže orchestrátor od pullu dál nenačítá žádné nové třídy; `ds-upgrade-all`
 i `doctor` už běží z nové verze.
@@ -201,6 +208,64 @@ Přímo pod shipard userem běží kroky bez sudo a doctor se přeskočí
 | `--skip-ds-upgrade` | Přeskočí krok `ds-upgrade-all` |
 
 **Verbosity propagace:** `-v` se předává do vnitřního `ds-upgrade-all`.
+
+### `cron --slot=<slot>`
+
+```bash
+shpd-server cron --slot=minute        # z /etc/cron.d/shipard, ručně jen při ladění
+```
+
+Dispatcher periodických úloh — volá ho generovaný `/etc/cron.d/shipard`
+(viz `cron-install`). Pro každý aktivní DS (adresář v
+`/opt/shipard/data-sources` s `config/main.json`) spustí per-DS příkazy
+slotu subprocesem `shpd-ds <cmd>` s cwd v adresáři DS:
+
+| Slot | Kadence | Příkazy |
+|------|---------|---------|
+| `minute` | každou minutu | `mail-outbox-run` |
+| `five-minutes` | à 5 min | `alerts-run` (self-throttling přes `next_run_at`) |
+| `daily` | denně 03:17 | `mail-idempotency-prune` |
+| `weekly` | neděle 04:43 | `alerts-prune` |
+
+Chování:
+
+- **Lock per slot** (flock na `/opt/shipard/run/cron-<slot>.lock`) —
+  překrývající se běh se tiše ukončí (exit 0, info do logu), minute slot
+  se nehromadí.
+- **Continue-on-error** — chyba jobu na jednom DS nezastaví ostatní;
+  timeout jobu 10 min (SIGTERM, po 5 s SIGKILL).
+- **Heartbeat** — po doběhnutí zapíše
+  `/opt/shipard/run/cron-<slot>.heartbeat` (JSON: timestamp, verze, počty
+  DS/jobů/selhání) — čte ho `doctor`.
+- Loguje do centrálního `shipard.log`; stdout je minimální (cron redirect
+  do `/opt/shipard/log/cron.log` je jen poslední záchrana).
+
+Exit code: **SUCCESS i při selhaných jobech** (reportuje doctor a alert
+checky, cron nesmí spamovat MAILTO); FAILURE jen infra chyba (neznámý
+slot, nečitelný seznam DS, nezapsatelný heartbeat).
+
+| Opce | Význam |
+|------|--------|
+| `--slot <slot>` | Povinné: `minute`, `five-minutes`, `daily`, `weekly` |
+
+### `cron-install`
+
+```bash
+sudo shpd-server cron-install            # zapíše /etc/cron.d/shipard + /opt/shipard/run
+shpd-server cron-install --dry-run       # náhled rendrovaného obsahu, lze bez sudo
+```
+
+Idempotentní generátor `/etc/cron.d/shipard` (marker s verzí šablony,
+přepis jen když se obsah liší, atomicky přes tmp + rename) a runtime
+adresáře `/opt/shipard/run` (0750, owner shipard — locky a heartbeaty).
+Volá ho `shpd-server upgrade` jako subproces; ručně je potřeba jen při
+prvním nasazení nebo když ho doctor ohlásí jako chybějící/zastaralý.
+Cron soubor neobsahuje žádné per-DS řádky — `ds-create`/`ds-delete`
+regeneraci nevyžadují.
+
+| Opce | Význam |
+|------|--------|
+| `--dry-run` | Vypíše cíl a rendrovaný obsah, nic nezapíše. Lze bez sudo. |
 
 ### `next-table-id`
 

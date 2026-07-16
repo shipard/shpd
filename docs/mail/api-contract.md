@@ -118,7 +118,8 @@ Pokud `external_message_id` chybí, klient **nesmí** posílat idempotency key
 3. **No match / expired** → pokračuje ve zpracování. Po commitu tx zapíše key +
    response body do tabulky.
 
-TTL: **7 dní**. Cleanup: `bin/shpd-ds mail-idempotency-prune --days 7` (cron 1×/den).
+TTL: **7 dní**. Cleanup: `bin/shpd-ds mail-idempotency-prune --days 7`
+(běží denně přes slot `daily` systémového cronu, viz `cli.md` § `cron`).
 
 ## 5. Flow na straně Shipardu
 

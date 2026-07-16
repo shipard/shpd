@@ -56,6 +56,7 @@ final class AlertsSourceTest extends TestCase
         $this->assertSame('alerts', $card['source']);
         $this->assertSame('urgent', $card['kind']);
         $this->assertSame('error', $card['stateStyle']);
+        $this->assertSame('other', $card['category']);
         $this->assertSame('Chybí vlastní firma', $card['title']);
         $this->assertSame('Založ vlastní Osobu.', $card['subtitle']);
         $this->assertSame('2026-06-28T12:00:00+00:00', $card['timestamp']);

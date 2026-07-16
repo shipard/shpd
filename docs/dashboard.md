@@ -91,6 +91,7 @@ Fáze 1 (widget MVP) říkala *„přehled, ne přístupový bod"*. Fáze 2 ten 
   "kind": "ready",
   "icon": "check",
   "stateStyle": "done",
+  "category": "invoices",
   "title": "Přijatá faktura — ČEZ a.s.",
   "subtitle": "4 200,00 CZK · jistota 94 % · e-mail „Faktura 2026000123\"",
   "timestamp": "2026-06-28T10:00:00+00:00",
@@ -109,6 +110,12 @@ Fáze 1 (widget MVP) říkala *„přehled, ne přístupový bod"*. Fáze 2 ten 
 
 - `id` — stabilní `"{source}:{entityId}"` (dedup / animace mizení po akci).
 - `stateStyle` — reuse globálních `docState_*` CSS tříd (proužek karty).
+- `category` — **volitelné**, výčet `invoices` | `registry` | `other`
+  (konstanty `FeedSource::CATEGORY_*`) — řídí klientský filtr feedu
+  (`FeedFilter.svelte`). Karta **bez pole** se zobrazuje jen v záložce Vše
+  (bezpečný default; dnes jen „…a další" karta). Mapování: návrhová karta
+  dle `context.target` (docs→invoices, registry→registry); chybové karty,
+  „Není faktura", digest, návrhy pravidel i alert karty → `other`.
 - `timestamp` — sekundární řazení uvnitř pásma (ATOM).
 - `context` — volitelná zdrojově-specifická data.
 - `attachments` + `attachmentsTotal` — **volitelná** pole, jen mail karty
@@ -296,6 +303,11 @@ frontend/src/components/dashboard/
 ├── Dashboard.svelte      — fetch, layout (feed + tasks widget), review modal,
 │                           reject prompt, toast s undo, fall-through
 ├── Feed.svelte           — seznam karet (řazení ze serveru), prázdný stav
+│                           (prop emptyText → per-záložkový empty filtru)
+├── FeedFilter.svelte     — chip bar filtru kategorií (Vše/Faktury/Spisovna/
+│                           Ostatní); čistě prezentační, counts/urgent/filtered
+│                           počítá Dashboard ($derived z doručených karet),
+│                           přepínání bez refetche, volba nepřežije reload
 ├── FeedCard.svelte       — jedna karta (kind proužek, ikona, chipy příloh, akce)
 ├── FeedCardAttachment.svelte — chip přílohy: klik otevře v nové záložce
 │                           (PDF/obrázky inline, jinak download), hover
@@ -344,7 +356,8 @@ Tentýž `formModal` obsluhuje i alert `open_form` akce a toast „Otevřít"
 
 | Stav | Text | i18n |
 |---|---|---|
-| `cards.length === 0` | „Vše zpracováno ✓ — dnes nic nečeká." | `dashboard.feed.empty` |
+| `cards.length === 0` | „Vše zpracováno ✓ — dnes nic nečeká." (bez chip baru) | `dashboard.feed.empty` |
+| prázdná záložka filtru (feed neprázdný) | „V této kategorii nic nečeká." | `dashboard.feed.emptyCategory` |
 | tasks widget prázdný | (beze změny fáze 1) | `dashboard.widget.tasks.empty` |
 
 **Refresh** — fetch při mountu + manuální tlačítko. Žádný polling / SSE.
@@ -392,6 +405,10 @@ jaká analyzer LLM už posílá (viz `ai.md`).
 - **Denormalizace headline** (partner/částka do sloupců místo parse
   `extracted_json`).
 - **Auto-refresh** — polling / SSE, pokud bude potřeba (samostatný task).
+- **Serverový filtr kategorií** — `?category=` parametr + pravdivé DB totály
+  v chipech (dnes klientský filtr nad doručenými kartami, počty = doručené
+  karty, strop `MAX_CARDS` přes všechny kategorie dohromady). Aditivní krok,
+  kontrakt se nemění — až strop začne vadit.
 
 ---
 

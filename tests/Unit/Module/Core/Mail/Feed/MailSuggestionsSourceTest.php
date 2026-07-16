@@ -121,6 +121,7 @@ final class MailSuggestionsSourceTest extends TestCase
         $this->assertSame('mail', $card['source']);
         $this->assertSame('ready', $card['kind']);
         $this->assertSame('done', $card['stateStyle']);
+        $this->assertSame('invoices', $card['category']);
         $this->assertSame('Přijatá faktura — ČEZ a.s.', $card['title']);
         $this->assertStringContainsString('12 500,00 CZK', $card['subtitle']);
         $this->assertStringContainsString('jistota 94 %', $card['subtitle']);
@@ -176,6 +177,7 @@ final class MailSuggestionsSourceTest extends TestCase
         $this->assertSame('mail_message:555', $card['id']);
         $this->assertSame('urgent', $card['kind']);
         $this->assertSame('error', $card['stateStyle']);
+        $this->assertSame('other', $card['category']);
         $this->assertStringContainsString('Nečitelná faktura', $card['subtitle']);
 
         $actions = $card['actions'];
@@ -228,6 +230,7 @@ final class MailSuggestionsSourceTest extends TestCase
         $this->assertSame('mail_notinvoice:777', $card['id']);
         $this->assertSame('info', $card['kind']);
         $this->assertSame('archive', $card['stateStyle']);
+        $this->assertSame('other', $card['category']);
         $this->assertSame('Není faktura — Ostatní', $card['title']);
         $this->assertStringContainsString('Nabídka spolupráce', $card['subtitle']);
         $this->assertStringContainsString('Obchodník a.s.', $card['subtitle']);
@@ -320,6 +323,7 @@ final class MailSuggestionsSourceTest extends TestCase
         $this->assertStringContainsString('platí do 31. 12. 2026', $card['subtitle']);
         $this->assertStringContainsString('jistota 91 %', $card['subtitle']);
         $this->assertStringContainsString('Pojistná smlouva 2026', $card['subtitle']);
+        $this->assertSame('registry', $card['category']);
         $this->assertSame('registry', $card['context']['target']);
         // apply akce má id apply_registry → FE label „Zařadit"; kind beze změny
         $this->assertSame('apply_registry', $card['actions'][0]['id']);

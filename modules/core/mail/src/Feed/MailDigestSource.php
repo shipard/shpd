@@ -95,6 +95,7 @@ final class MailDigestSource implements FeedSource
             'kind'       => 'info',
             'icon'       => 'info',
             'stateStyle' => 'archive',
+            'category'   => FeedSource::CATEGORY_OTHER,
             'title'      => $title,
             'subtitle'   => $sample,
             'timestamp'  => $this->toAtom($summary[0]['last_at'] ?? null),
@@ -142,6 +143,7 @@ final class MailDigestSource implements FeedSource
             'kind'       => 'review',
             'icon'       => 'question',
             'stateStyle' => 'concept',
+            'category'   => FeedSource::CATEGORY_OTHER,
             'title'      => $cs
                 ? "Vždy archivovat poštu od {$pattern}?"
                 : "Always archive mail from {$pattern}?",

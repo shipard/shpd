@@ -200,7 +200,12 @@ class DashboardController
         return $counts;
     }
 
-    /** Závěrečná info karta při ořezu feedu — navigace na došlou poštu. */
+    /**
+     * Závěrečná info karta při ořezu feedu — navigace na došlou poštu.
+     *
+     * Záměrně bez `category` — karty bez kategorie frontend zobrazuje jen
+     * v záložce Vše (bezpečný default, docs/dashboard.md §4).
+     */
     private function andMoreCard(string $lang): array
     {
         return [

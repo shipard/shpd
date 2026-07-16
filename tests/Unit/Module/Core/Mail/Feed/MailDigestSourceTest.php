@@ -75,6 +75,7 @@ final class MailDigestSourceTest extends TestCase
         $card = $cards[0];
         $this->assertSame('info', $card['kind']);
         $this->assertSame('archive', $card['stateStyle']);
+        $this->assertSame('other', $card['category']);
         $this->assertStringContainsString('5 zpráv automaticky archivováno', $card['title']);
         $this->assertSame('a@x.cz · b@y.cz', $card['subtitle']);
 
@@ -148,6 +149,7 @@ final class MailDigestSourceTest extends TestCase
         $card = $cards[0];
         $this->assertSame('mail_rule_suggestion:7', $card['id']);
         $this->assertSame('review', $card['kind']);
+        $this->assertSame('other', $card['category']);
         $this->assertSame('Vždy archivovat poštu od news@example.com?', $card['title']);
         $this->assertSame('Navrženo po 3 ručních odklizeních · E-mailová adresa', $card['subtitle']);
         $this->assertSame(7, $card['context']['ruleId']);

@@ -385,7 +385,12 @@ export default {
   'dashboard.aiSummary.counts.ready': '{count, plural, one {# ready to apply} other {# ready to apply}}',
   // Feed
   'dashboard.feed.empty': 'All caught up ✓ — nothing waiting today.',
+  'dashboard.feed.emptyCategory': 'Nothing waiting in this category.',
   'dashboard.feed.andMore': '…and more unprocessed mail',
+  'dashboard.feed.filter.all': 'All',
+  'dashboard.feed.filter.invoices': 'Received invoices',
+  'dashboard.feed.filter.registry': 'Registry',
+  'dashboard.feed.filter.other': 'Other',
   'dashboard.card.action.apply': 'Apply',
   'dashboard.card.action.apply_registry': 'File',
   'dashboard.card.action.review': 'Review',

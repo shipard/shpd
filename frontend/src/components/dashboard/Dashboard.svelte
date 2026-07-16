@@ -18,6 +18,7 @@
   import AiSummaryCard from './AiSummaryCard.svelte';
   import WidgetCard from './WidgetCard.svelte';
   import Feed from './Feed.svelte';
+  import FeedFilter from './FeedFilter.svelte';
   import RejectReasonPrompt from './RejectReasonPrompt.svelte';
 
   const HEADS_TABLE = 'docs_core_heads';
@@ -26,6 +27,35 @@
   let data = $state(null);
   let loading = $state(true);
   let error = $state(null);
+
+  // Filtr feedu — čistě klientský, drží se jen ve stavu komponenty (neresetuje
+  // se v load(), takže přežije manuální Obnovit; reload aplikace → 'all').
+  // Karty bez `category` (např. „…a další") se zobrazují jen v záložce Vše.
+  let feedFilter = $state('all');
+
+  const CATEGORIES = ['invoices', 'registry', 'other'];
+
+  let feedCounts = $derived.by(() => {
+    const c = { all: data?.cards?.length ?? 0, invoices: 0, registry: 0, other: 0 };
+    for (const card of data?.cards ?? []) {
+      if (CATEGORIES.includes(card.category)) c[card.category]++;
+    }
+    return c;
+  });
+
+  let feedUrgent = $derived.by(() => {
+    const u = { invoices: false, registry: false, other: false };
+    for (const card of data?.cards ?? []) {
+      if (card.kind === 'urgent' && CATEGORIES.includes(card.category)) u[card.category] = true;
+    }
+    return u;
+  });
+
+  let filteredCards = $derived(
+    feedFilter === 'all'
+      ? (data?.cards ?? [])
+      : (data?.cards ?? []).filter((c) => c.category === feedFilter),
+  );
 
   // Karta s právě běžící inline akcí (apply/reanalyze) → disabluje její tlačítka.
   let busyCardId = $state(null);
@@ -344,7 +374,23 @@
   {:else if data}
     <AiSummaryCard summary={data.summary} />
 
-    <Feed cards={data.cards} {busyCardId} onCardAction={handleCardAction} />
+    {#if (data.cards?.length ?? 0) > 0}
+      <FeedFilter
+        value={feedFilter}
+        counts={feedCounts}
+        urgent={feedUrgent}
+        onChange={(v) => (feedFilter = v)}
+      />
+    {/if}
+
+    <Feed
+      cards={filteredCards}
+      {busyCardId}
+      onCardAction={handleCardAction}
+      emptyText={feedFilter !== 'all' && (data.cards?.length ?? 0) > 0
+        ? t('dashboard.feed.emptyCategory')
+        : null}
+    />
 
     {#if data.tasks}
       <WidgetCard

@@ -186,6 +186,7 @@ final class MailSuggestionsSource implements FeedSource
             'kind'       => $kind,
             'icon'       => $icon,
             'stateStyle' => $stateStyle,
+            'category'   => $isRegistry ? FeedSource::CATEGORY_REGISTRY : FeedSource::CATEGORY_INVOICES,
             'title'      => $isRegistry
                 ? $this->registryCardTitle($ctx, $docType, $canonical)
                 : $this->cardTitle($ctx, $docType, $canonical),
@@ -242,6 +243,7 @@ final class MailSuggestionsSource implements FeedSource
             'kind'       => $isOther ? 'review' : 'urgent',
             'icon'       => 'warning',
             'stateStyle' => 'error',
+            'category'   => FeedSource::CATEGORY_OTHER,
             'title'      => $ctx->language === 'cs' ? 'Chyba analýzy e-mailu' : 'E-mail analysis failed',
             'subtitle'   => $subject !== '' ? $this->emailSubjectLabel($ctx, $subject) : (string) ($row['sender_name'] ?? ''),
             'timestamp'  => $this->toAtom($row['received_at'] ?? null),
@@ -315,6 +317,7 @@ final class MailSuggestionsSource implements FeedSource
             'kind'       => 'info',
             'icon'       => 'info',
             'stateStyle' => 'archive',
+            'category'   => FeedSource::CATEGORY_OTHER,
             'title'      => ($ctx->language === 'cs' ? 'Není faktura — ' : 'Not an invoice — ')
                 . $this->primaryTypeLabel($ctx, (string) ($row['primary_type'] ?? 'other')),
             'subtitle'   => implode(' · ', $subtitleParts),

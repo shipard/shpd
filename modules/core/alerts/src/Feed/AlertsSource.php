@@ -75,6 +75,7 @@ final class AlertsSource implements FeedSource
             'kind'       => $kind,
             'icon'       => $icon,
             'stateStyle' => $stateStyle,
+            'category'   => FeedSource::CATEGORY_OTHER,
             'title'      => (string) ($row['title'] ?? ''),
             'subtitle'   => $subtitle,
             'timestamp'  => $this->toAtom($row['last_seen_at'] ?? null) ?? $this->toAtom($row['first_seen_at'] ?? null),

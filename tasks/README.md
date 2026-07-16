@@ -268,6 +268,7 @@ Home obrazovka + modul úkolů. Reference [`docs/dashboard.md`](../docs/dashboar
 | `dashboard-phase2b.md` | Generované AI shrnutí (SSE endpoint, cache dle hashe feedu) |
 | `dashboard-row-edit-modal.md` | Edit z řádku widgetu Úkoly |
 | `dashboard-card-attachments.md` | Tlačítka příloh na mail kartách feedu (chip + hover náhled) |
+| `dashboard-feed-filter.md` | Filtr kategorií karet feedu (chip bar; Přijaté faktury / Spisovna / Ostatní) |
 
 ## Dev dashboard
 

@@ -398,7 +398,12 @@ export default {
   'dashboard.aiSummary.counts.ready': '{count, plural, one {# připravená k použití} few {# připravené k použití} many {# připravených k použití} other {# připravených k použití}}',
   // Feed
   'dashboard.feed.empty': 'Vše zpracováno ✓ — dnes nic nečeká.',
+  'dashboard.feed.emptyCategory': 'V této kategorii nic nečeká.',
   'dashboard.feed.andMore': '…a další nezpracovaná pošta',
+  'dashboard.feed.filter.all': 'Vše',
+  'dashboard.feed.filter.invoices': 'Přijaté faktury',
+  'dashboard.feed.filter.registry': 'Spisovna',
+  'dashboard.feed.filter.other': 'Ostatní',
   'dashboard.card.action.apply': 'Použít',
   'dashboard.card.action.apply_registry': 'Zařadit',
   'dashboard.card.action.review': 'Zkontrolovat',

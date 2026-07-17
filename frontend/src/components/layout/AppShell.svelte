@@ -3,8 +3,10 @@
   import ContentArea from './ContentArea.svelte';
   import MobileTopBar from './MobileTopBar.svelte';
   import ThemePanel from './ThemePanel.svelte';
+  import ChatPanel from '../chat/ChatPanel.svelte';
   import { navigationStore } from '../../stores/navigation.svelte.js';
   import { layoutStore } from '../../stores/layout.svelte.js';
+  import { chatPanelStore } from '../../stores/chatPanel.svelte.js';
 
   let { onLogout } = $props();
 
@@ -78,6 +80,12 @@
     onClose={() => { themePanelOpen = false; }}
     collapsed={sidebarCollapsed}
   />
+
+  <!-- Boční AI chat panel — mimo mobilní/desktop větve, geometrii si řeší
+       sám přes layoutStore.isMobile. Otevírá ho dashboardový ChatLauncher. -->
+  {#if chatPanelStore.isOpen}
+    <ChatPanel />
+  {/if}
 </div>
 
 <style>

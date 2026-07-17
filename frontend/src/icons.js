@@ -77,6 +77,7 @@ import {
   faRobot,
   faComments,
   faLock,
+  faArrowUpRightFromSquare,
 } from '@fortawesome/free-solid-svg-icons';
 
 // ── Akce (toolbary, tlačítka) ──────────────────────────────────
@@ -100,6 +101,7 @@ export const iconClose = faXmark; // ✕ — zavření drawera / panelu (význam
 export const iconCollapse = faAnglesLeft;
 export const iconExpand = faAnglesRight;
 export const iconMore = faEllipsisVertical;
+export const iconOpenExternal = faArrowUpRightFromSquare; // ⧉ — otevřít v plném zobrazení (chat panel → sekce Chat)
 
 // ── Auth / uživatelé ────────────────────────────────────────────
 export const iconLogout = faArrowRightFromBracket;

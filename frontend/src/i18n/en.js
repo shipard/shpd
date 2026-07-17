@@ -419,6 +419,8 @@ export default {
   'dashboard.reject.label': 'Reason for rejection',
   'dashboard.reject.placeholder': 'Why not use this document…',
   'dashboard.reject.confirm': 'Reject',
+  'dashboard.chatLauncher.placeholder': 'Ask the AI assistant…',
+  'dashboard.chatLauncher.send': 'Send',
 
   // ── Registry import wizard (Add company from registry) ──────────────────
   // Registry (Spisovna) — extraction preview + doc kind and kindFields labels
@@ -491,6 +493,10 @@ export default {
   'chat.toolResults': 'Tools returned results',
   'chat.input.placeholder': 'Type a message… (Enter to send, Shift+Enter for newline)',
   'chat.input.send': 'Send',
+  'chat.panel.title': 'AI assistant',
+  'chat.panel.openFull': 'Open in Chat',
+  'chat.panel.new': 'New conversation',
+  'chat.panel.close': 'Close',
   'chat.rename.title': 'Rename conversation',
   'chat.rename.placeholder': 'Conversation title',
   'chat.delete.title': 'Delete conversation',

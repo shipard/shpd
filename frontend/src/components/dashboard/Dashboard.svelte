@@ -16,6 +16,7 @@
   import FormDialog from '../form/FormDialog.svelte';
   import DocumentExchangePreviewModal from '../exchange/DocumentExchangePreviewModal.svelte';
   import AiSummaryCard from './AiSummaryCard.svelte';
+  import ChatLauncher from './ChatLauncher.svelte';
   import WidgetCard from './WidgetCard.svelte';
   import Feed from './Feed.svelte';
   import FeedFilter from './FeedFilter.svelte';
@@ -400,6 +401,8 @@
       />
     {/if}
   {/if}
+
+  <ChatLauncher />
 </div>
 
 <DocumentExchangePreviewModal
@@ -448,6 +451,11 @@
     display: flex;
     flex-direction: column;
     gap: var(--shpd-space-lg);
+    /* min-height + margin-top:auto na launcheru drží ChatLauncher u spodní
+       hrany viewportu i při krátkém obsahu; při dlouhém obsahu ho
+       position:sticky nechá „plavat" nad kartami během scrollu. */
+    min-height: 100%;
+    box-sizing: border-box;
   }
 
   .shpd-dashboard__header {
@@ -469,11 +477,13 @@
     color: var(--shpd-color-text-secondary);
   }
 
-  /* Minimální toast — fixed dole na střed, auto-dismiss ~8 s. */
+  /* Minimální toast — fixed dole na střed, auto-dismiss ~8 s.
+     Bottom offset ~72px (výška launcheru + mezera) — vyskakuje nad
+     ChatLauncherem, nepřekrývají se. */
   .shpd-toast {
     position: fixed;
     left: 50%;
-    bottom: var(--shpd-space-lg);
+    bottom: calc(var(--shpd-space-lg) + 72px);
     transform: translateX(-50%);
     z-index: 1000;
     display: flex;

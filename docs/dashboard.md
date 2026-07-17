@@ -386,6 +386,10 @@ frontend/src/components/dashboard/
 │                           je syntetická open_form akce (formulář zprávy)
 ├── RejectReasonPrompt.svelte — sdílený prompt na důvod (feed i ViewerDetail)
 ├── AiSummaryCard.svelte  — AI shrnutí přes SSE (fallback county dle kind, §11)
+├── ChatLauncher.svelte   — plovoucí chat input (pill, sticky dole na středu,
+│                           width min(560px,100%)): odeslání →
+│                           chatStore.newConversation() + chatPanelStore.open()
+│                           + chatStore.send(); skrytý, když je panel otevřený
 └── WidgetCard / WidgetRow — re-use pro tasks widget
 ```
 
@@ -403,6 +407,15 @@ API: `frontend/src/api/dashboard.js` (`fetchDashboard()`,
   CSS FeedCard — globální `.docState_done` se nemění.
 - **Toast**: app nemá toast infrastrukturu → minimální lokální toast v
   `Dashboard.svelte` (fixed dole, „Otevřít"/„Vrátit", auto-dismiss ~8 s).
+  Bottom offset `calc(var(--shpd-space-lg) + 72px)` — vyskakuje nad
+  ChatLauncherem, nepřekrývají se.
+- **Boční AI chat panel**: `ChatPanel.svelte` (components/chat/) mountovaný
+  v **AppShellu** (ne v Dashboardu — přežije navigaci), otevíraný z
+  ChatLauncheru přes mini store `stores/chatPanel.svelte.js`. Non-modální
+  overlay zprava `width: min(480px, 90vw)`, z-index 80 (pod drawerem
+  90/100, ThemePanelem 200, Modalem/FormDialogem 1000); mobil fullscreen
+  pod top barem. Obsah = sdílený `chatStore` + `<ChatThread />` — detaily
+  `docs/chat.md` §7.
 - **Ikony**: server posílá sémantický `icon` (check/question/warning/info/…),
   frontend překládá přes `resolveIcon()` (`icons.js`, fallback `iconTable`).
 

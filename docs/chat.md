@@ -138,6 +138,14 @@ nástrojů.
   jen kontrolované tagy). Nula XSS plochy, nula nové závislosti.
 - **Backend:** v1 výchozí (žádný výběr modelu v UI). **401 uprostřed streamu**
   (vypršení tokenu) → srozumitelná chyba; plný refresh-retry je odložený.
+- **Dashboardový launcher + boční panel** — dashboard má dole plovoucí
+  textový input (`ChatLauncher.svelte`); odeslání založí novou konverzaci,
+  otevře boční `ChatPanel.svelte` (mountovaný v AppShellu, non-modální
+  overlay zprava, z-index 80 — přežije navigaci) a pošle zprávu. Panel
+  sdílí tentýž `chatStore` singleton jako sekce Chat — perzistence,
+  streaming i error handling jsou reuse; „Otevřít v Chatu" (⧉) naviguje
+  do sekce Chat se stejným vláknem. Otevřenost drží mini store
+  `chatPanel.svelte.js`. Viz `docs/dashboard.md` §8.
 
 ---
 

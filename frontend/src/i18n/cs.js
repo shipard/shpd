@@ -432,6 +432,8 @@ export default {
   'dashboard.reject.label': 'Důvod zamítnutí',
   'dashboard.reject.placeholder': 'Proč tento doklad nepoužít…',
   'dashboard.reject.confirm': 'Zamítnout',
+  'dashboard.chatLauncher.placeholder': 'Zeptejte se AI asistenta…',
+  'dashboard.chatLauncher.send': 'Odeslat',
 
   // ── Registry import wizard (Přidat firmu z registru) ────────────────────
   // Registry (Spisovna) — preview extrakce + labely druhů a kindFields
@@ -504,6 +506,10 @@ export default {
   'chat.toolResults': 'Nástroje vrátily výsledky',
   'chat.input.placeholder': 'Napište zprávu… (Enter odešle, Shift+Enter nový řádek)',
   'chat.input.send': 'Odeslat',
+  'chat.panel.title': 'AI asistent',
+  'chat.panel.openFull': 'Otevřít v Chatu',
+  'chat.panel.new': 'Nová konverzace',
+  'chat.panel.close': 'Zavřít',
   'chat.rename.title': 'Přejmenovat konverzaci',
   'chat.rename.placeholder': 'Název konverzace',
   'chat.delete.title': 'Smazat konverzaci',

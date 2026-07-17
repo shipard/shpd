@@ -60,15 +60,18 @@
     bottom: var(--shpd-space-lg);
     margin-top: auto; /* krátký obsah → launcher u spodní hrany */
     align-self: center;
-    width: min(560px, 100%);
+    width: min(680px, 100%);
     z-index: 10; /* nad kartami feedu */
     display: flex;
     align-items: center;
     gap: var(--shpd-space-sm);
-    padding: var(--shpd-space-xs) var(--shpd-space-xs) var(--shpd-space-xs) var(--shpd-space-md);
+    padding: var(--shpd-space-sm) var(--shpd-space-sm) var(--shpd-space-sm) var(--shpd-space-lg);
     border: 1px solid var(--shpd-color-border);
     border-radius: 999px;
-    background: var(--shpd-color-bg);
+    background: color-mix(in srgb, var(--shpd-color-bg) 82%, transparent);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    transition: background 0.15s ease, border-color 0.15s ease;
     box-shadow: var(--shpd-shadow-lg, 0 4px 16px rgba(0, 0, 0, 0.2));
     box-sizing: border-box;
   }
@@ -86,6 +89,11 @@
 
   .shpd-chat-launcher__field:focus {
     outline: none;
+  }
+
+  .shpd-chat-launcher:hover,
+  .shpd-chat-launcher:focus-within {
+    background: var(--shpd-color-bg);
   }
 
   .shpd-chat-launcher:focus-within {

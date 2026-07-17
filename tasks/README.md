@@ -271,6 +271,7 @@ Home obrazovka + modul úkolů. Reference [`docs/dashboard.md`](../docs/dashboar
 | `dashboard-feed-filter.md` | Filtr kategorií karet feedu (chip bar; Přijaté faktury / Spisovna / Ostatní) |
 | `dashboard-feed-redesign.md` | Redesign karet feedu (grid, strukturovaná hlavička, expander detailu, horní proužek) |
 | `dashboard-alert-grouping.md` | Agregace alertů jednoho checku do skupinové karty feedu (práh > 3) |
+| `dashboard-chat-panel.md` | Plovoucí chat launcher + boční AI chat panel (AppShell overlay zprava) |
 
 ## Dev dashboard
 

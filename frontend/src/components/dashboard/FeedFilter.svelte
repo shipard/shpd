@@ -44,8 +44,8 @@
     flex-shrink: 0;
     padding: var(--shpd-space-sm) var(--shpd-space-md);
     border: 1px solid var(--shpd-color-border);
-    border-radius: var(--shpd-radius-lg);
-    background: none;
+    border-radius: 999px;
+    background: var(--shpd-color-bg);
     color: var(--shpd-color-text);
     font: inherit;
     font-size: var(--shpd-font-size-sm);

@@ -215,6 +215,40 @@ class JournalViewerTest extends TestCase
         $this->assertSame('Datum', $byId['accounting_date']['label'], 'cs labely');
     }
 
+    public function testSortableColumns(): void
+    {
+        $columns = $this->makeViewer()->getGridColumns();
+
+        $sortable = array_column(
+            array_filter($columns, static fn (array $c): bool => ($c['sortable'] ?? false) === true),
+            'id',
+        );
+        $this->assertSame(['accounting_date', 'account_number', 'money_dr', 'money_cr'], $sortable);
+    }
+
+    public function testInjectedSortOverridesOrderByWithUniqueTail(): void
+    {
+        $viewer = $this->makeViewer();
+        $viewer->setSort(['column' => 'money_dr', 'dir' => 'desc']);
+        $viewer->selectRows(null, [], 0);
+
+        $sql = $this->queries[0]['sql'];
+        $this->assertStringContainsString('ORDER BY j.`money_dr` DESC, j.`id` DESC', $sql);
+        $this->assertStringNotContainsString('j.`accounting_date` DESC', $sql);
+    }
+
+    public function testSortOutsideMapKeepsDefaultOrder(): void
+    {
+        $viewer = $this->makeViewer();
+        $viewer->setSort(['column' => 'text', 'dir' => 'asc']);
+        $viewer->selectRows(null, [], 0);
+
+        $this->assertStringContainsString(
+            'ORDER BY j.`accounting_date` DESC, j.`id` DESC',
+            $this->queries[0]['sql'],
+        );
+    }
+
     public function testRenderGridRowMapsCellsWithFormatting(): void
     {
         $row = $this->makeViewer()->renderGridRow($this->journalRow());

@@ -36,7 +36,16 @@ class JournalViewer extends TableViewer
             $sql .= ' WHERE ' . implode(' AND ', $conditions);
         }
 
-        $sql .= ' ORDER BY j.`accounting_date` DESC, j.`id` DESC';
+        $sql .= ' ' . $this->buildSortedOrderBy(
+            [
+                'accounting_date' => 'j.`accounting_date`',
+                'account_number'  => 'j.`account_number`',
+                'money_dr'        => 'j.`money_dr`',
+                'money_cr'        => 'j.`money_cr`',
+            ],
+            'ORDER BY j.`accounting_date` DESC, j.`id` DESC',
+            'j.`id`',
+        );
 
         [$offset, $limit] = $this->buildPaginationLimit($pageNumber);
         $sql .= ' LIMIT ' . $offset . ', ' . $limit;
@@ -161,11 +170,11 @@ class JournalViewer extends TableViewer
         $cs = $this->language === 'cs';
 
         return [
-            ['id' => 'accounting_date', 'label' => $cs ? 'Datum' : 'Date', 'width' => 96],
+            ['id' => 'accounting_date', 'label' => $cs ? 'Datum' : 'Date', 'width' => 96, 'sortable' => true],
             ['id' => 'doc_number', 'label' => $cs ? 'Doklad' : 'Document'],
-            ['id' => 'account_number', 'label' => $cs ? 'Účet' : 'Account', 'width' => 80],
-            ['id' => 'money_dr', 'label' => 'MD', 'width' => 110, 'align' => 'right'],
-            ['id' => 'money_cr', 'label' => 'DAL', 'width' => 110, 'align' => 'right'],
+            ['id' => 'account_number', 'label' => $cs ? 'Účet' : 'Account', 'width' => 80, 'sortable' => true],
+            ['id' => 'money_dr', 'label' => 'MD', 'width' => 110, 'align' => 'right', 'sortable' => true],
+            ['id' => 'money_cr', 'label' => 'DAL', 'width' => 110, 'align' => 'right', 'sortable' => true],
             ['id' => 'payment_reference', 'label' => $cs ? 'VS' : 'Reference', 'width' => 130],
             ['id' => 'partner_name', 'label' => $cs ? 'Osoba' : 'Person'],
             ['id' => 'text', 'label' => 'Text', 'grow' => true],

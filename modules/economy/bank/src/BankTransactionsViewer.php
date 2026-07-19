@@ -12,26 +12,21 @@ use Shipard\Core\Viewer\TableViewer;
  *
  * Stavové taby přes $docStatesCfgItem = economy.bank.txStates. Bez akce
  * „nový" — transakce vzniká importem/migrací; editace (operation / partner /
- * message a stavové přechody) přes Open na vybraném řádku. Tab/akce
- * Zaúčtování je Fáze 3 (zatím nepřidáno).
+ * message a stavové přechody) přes Open na vybraném řádku.
  *
- * LIST nejoinuje (buildViewGroupFilter pracuje s nekvalifikovaným docState);
- * protistranu ukazuje z denormalizovaného counterparty_name. JOINy jen
- * v renderDetail nad jedním řádkem.
+ * selectRows joinuje base_persons_persons (partner_name pro render
+ * i hledání v partnerově full_name); docState po JOINu qualifikujeme
+ * aliasem t. Ostatní JOINy jen v renderDetail nad jedním řádkem.
+ *
+ * Grid layout (F2, docs/viewer-grid.md §7.3, D11): default grid, bez
+ * footeru (SUM přes mix měn nedává smysl); stav = proužek (docStateMain
+ * systém) + badge sloupec Zaúčtování. Sortable Datum a Částka — sort dle
+ * `amount` řadí absolutní hodnotu sloupce (bez direction znaménka),
+ * záměrně: velikost transakce.
  */
 class BankTransactionsViewer extends TableViewer
 {
     protected ?string $docStatesCfgItem = 'economy.bank.txStates';
-
-    private const STATE_SPAN_CLASS = [
-        'concept'   => 'warning',
-        'confirmed' => 'primary',
-        'done'      => 'success',
-        'edit'      => 'warning',
-        'archive'   => 'muted',
-        'trash'     => 'muted',
-        'cancelled' => 'danger',
-    ];
 
     public function selectRows(?string $search, array $filters, int $pageNumber): array
     {
@@ -85,7 +80,11 @@ class BankTransactionsViewer extends TableViewer
             $sql .= ' WHERE ' . implode(' AND ', $conditions);
         }
 
-        $sql .= ' ORDER BY t.`docStateMain` ASC, t.`date_transaction` DESC, t.`id` DESC';
+        $sql .= ' ' . $this->buildSortedOrderBy(
+            ['date_transaction' => 't.`date_transaction`', 'amount' => 't.`amount`'],
+            'ORDER BY t.`docStateMain` ASC, t.`date_transaction` DESC, t.`id` DESC',
+            't.`id`',
+        );
 
         [$offset, $limit] = $this->buildPaginationLimit($pageNumber);
         $sql .= ' LIMIT ' . $offset . ', ' . $limit;
@@ -129,12 +128,74 @@ class BankTransactionsViewer extends TableViewer
             $row['i2'] = [['text' => $this->language === 'en' ? 'posted' : 'zaúčtováno', 'class' => 'muted']];
         }
 
+        $row['stateStyle'] = $this->stateStyleFor($rowData);
+
+        return $row;
+    }
+
+    // ── Grid layout (F2, docs/viewer-grid.md §7.3) ──────────────────────────
+
+    /** Transakce se na desktopu otevírají jako tabulka; list zůstává mobilním formátem. */
+    public function getDefaultLayout(): string
+    {
+        return 'grid';
+    }
+
+    public function getGridColumns(): ?array
+    {
+        $cs = $this->language !== 'en';
+
+        return [
+            ['id' => 'date_transaction', 'label' => $cs ? 'Datum' : 'Date', 'width' => 96, 'sortable' => true],
+            ['id' => 'amount', 'label' => $cs ? 'Částka' : 'Amount', 'width' => 130, 'align' => 'right', 'sortable' => true],
+            ['id' => 'counterparty_name', 'label' => $cs ? 'Protistrana' : 'Counterparty', 'grow' => true],
+            ['id' => 'partner_name', 'label' => 'Partner'],
+            ['id' => 'payment_reference', 'label' => $cs ? 'VS' : 'Reference', 'width' => 120],
+            ['id' => 'operation', 'label' => $cs ? 'Operace' : 'Operation', 'width' => 110],
+            ['id' => 'accounting', 'label' => $cs ? 'Zaúčtování' : 'Accounting', 'width' => 120],
+        ];
+    }
+
+    public function renderGridRow(array $rowData): array
+    {
+        $cs = $this->language !== 'en';
+
+        // Chybu účtování nese badge — řádek se nečervená (rowClass), chybových
+        // může být hodně (D11). Proužek patří stavu transakce (docState).
+        $accState = (int) ($rowData['accounting_state'] ?? 0);
+        $accounting = match ($accState) {
+            1       => ['text' => $cs ? 'zaúčtováno' : 'posted', 'badge' => 'success'],
+            2       => ['text' => $cs ? 'chyba účtování' : 'posting error', 'badge' => 'danger'],
+            default => null,
+        };
+
+        $sign = (int) ($rowData['direction'] ?? 0) === 2 ? '−' : '+';
+
+        return [
+            'id'         => (int) $rowData['id'],
+            'stateStyle' => $this->stateStyleFor($rowData),
+            'cells' => [
+                'date_transaction'  => $this->formatDate($rowData['date_transaction'] ?? null),
+                'amount' => [
+                    ['text' => $sign . $this->formatMoney($rowData['amount'] ?? 0), 'class' => 'amount'],
+                    ['text' => strtoupper((string) ($rowData['currency'] ?? '')), 'class' => 'muted'],
+                ],
+                'counterparty_name' => (string) ($rowData['counterparty_name'] ?? ''),
+                'partner_name'      => (string) ($rowData['partner_name'] ?? ''),
+                'payment_reference' => (string) ($rowData['payment_reference'] ?? ''),
+                'operation'         => $this->enumLabel('economy.bank.txOperations', $rowData['operation'] ?? null, 'string'),
+                'accounting'        => $accounting,
+            ],
+        ];
+    }
+
+    /** stateStyle řádku z docState přes txStates config — sdílené list/grid. */
+    private function stateStyleFor(array $rowData): string
+    {
         $docState = (int) ($rowData['docState'] ?? 10);
         $cfg = DocStateConfig::fromCfgItem($this->config?->cfgItem($this->docStatesCfgItem));
         $stateData = $cfg->getState($docState);
-        $row['stateStyle'] = $stateData['stateStyle'] ?? 'concept';
-
-        return $row;
+        return $stateData['stateStyle'] ?? 'concept';
     }
 
     public function renderDetail(int $recordId): array

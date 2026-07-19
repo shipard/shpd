@@ -1,6 +1,8 @@
 <script>
   import Icon from '../ui/Icon.svelte';
+  import SpanBadge from './SpanBadge.svelte';
   import { resolveIcon } from '../../icons.js';
+  import { normalizeSpans } from './viewerSpans.js';
 
   let { row, index, selected = false, onclick } = $props();
 
@@ -10,19 +12,21 @@
     (selected ? ' shpd-viewer-row--selected' : '') +
     (row.stateStyle ? ` docState_${row.stateStyle}` : '')
   );
-
-  /**
-   * Normalize a field value into an array of span objects.
-   * Handles: null, string, object {text, class?, icon?}, or array of those.
-   */
-  function normalizeSpans(value) {
-    if (value == null) return null;
-    if (typeof value === 'string') return [{ text: value }];
-    if (Array.isArray(value)) return value;
-    if (typeof value === 'object' && value.text != null) return [value];
-    return null;
-  }
 </script>
+
+<!-- Render spanů jednoho pole (t1/i1/t2/i2/t3). Span s `badge` se kreslí
+     jako pilulka (SpanBadge, má přednost před `class`); sep=true vkládá
+     mezi spany oddělovač ` · ` (jen t2). -->
+{#snippet spanList(value, sep = false)}
+  {#each normalizeSpans(value) ?? [] as span, i}
+    {#if sep && i > 0}<span class="shpd-viewer-row__sep"> · </span>{/if}
+    {#if span.badge}
+      <SpanBadge style={span.badge} text={span.text} />
+    {:else}
+      <span class={span.class ? `shpd-viewer-row__span--${span.class}` : ''}>{span.text}</span>
+    {/if}
+  {/each}
+{/snippet}
 
 <button
   class={rowClass}
@@ -46,15 +50,11 @@
         <span class="shpd-viewer-row__index">{index}</span>
       {/if}
       <span class="shpd-viewer-row__t1">
-        {#each normalizeSpans(row.t1) ?? [] as span}
-          <span class={span.class ? `shpd-viewer-row__span--${span.class}` : ''}>{span.text}</span>
-        {/each}
+        {@render spanList(row.t1)}
       </span>
       {#if row.i1 != null}
         <span class="shpd-viewer-row__i1">
-          {#each normalizeSpans(row.i1) ?? [] as span}
-            <span class={span.class ? `shpd-viewer-row__span--${span.class}` : ''}>{span.text}</span>
-          {/each}
+          {@render spanList(row.i1)}
         </span>
       {/if}
     </div>
@@ -63,16 +63,11 @@
     {#if row.t2 != null || row.i2 != null}
       <div class="shpd-viewer-row__line shpd-viewer-row__line--secondary">
         <span class="shpd-viewer-row__t2">
-          {#each normalizeSpans(row.t2) ?? [] as span, i}
-            {#if i > 0}<span class="shpd-viewer-row__sep"> · </span>{/if}
-            <span class={span.class ? `shpd-viewer-row__span--${span.class}` : ''}>{span.text}</span>
-          {/each}
+          {@render spanList(row.t2, true)}
         </span>
         {#if row.i2 != null}
           <span class="shpd-viewer-row__i2">
-            {#each normalizeSpans(row.i2) ?? [] as span}
-              <span class={span.class ? `shpd-viewer-row__span--${span.class}` : ''}>{span.text}</span>
-            {/each}
+            {@render spanList(row.i2)}
           </span>
         {/if}
       </div>
@@ -82,9 +77,7 @@
     {#if row.t3 != null}
       <div class="shpd-viewer-row__line shpd-viewer-row__line--tertiary">
         <span class="shpd-viewer-row__t3">
-          {#each normalizeSpans(row.t3) ?? [] as span}
-            <span class={span.class ? `shpd-viewer-row__span--${span.class}` : ''}>{span.text}</span>
-          {/each}
+          {@render spanList(row.t3)}
         </span>
       </div>
     {/if}

@@ -26,6 +26,8 @@
   import { translateError } from '../../i18n/errors.js';
   import { navigationStore } from '../../stores/navigation.svelte.js';
   import { layoutStore } from '../../stores/layout.svelte.js';
+  import { getViewerLayout, setViewerLayout } from '../../utils/viewerLayout.js';
+  import { iconTable, iconList } from '../../icons.js';
   import { untrack } from 'svelte';
 
   let { tab } = $props();
@@ -92,6 +94,16 @@
   // null = init po přepnutí tabu ještě neproběhl; layout-change $effect
   // pak nesmí střílet (initial fetch řeší tab-change flow).
   let prevLayout = null;
+  // Toggle list ↔ grid je na desktopu, když viewer podporuje oba layouty
+  // (docs/viewer-grid.md §7.2, D10). Volba se persistuje per-DS/viewer.
+  let hasLayoutToggle = $derived(
+    !layoutStore.isMobile && (meta?.layouts ?? []).length > 1
+  );
+
+  // --- Řazení gridu (D9) — {column, dir} | null (výchozí řazení vieweru).
+  // Cyklus asc → desc → výchozí; přežívá viewGroup/filtry/hledání,
+  // resetuje se při přepnutí vieweru a při přechodu na list layout.
+  let activeSort = $state(null);
 
   // Active search term used for API calls (updated after debounce)
   let activeSearch = $state('');
@@ -159,7 +171,7 @@
    * Fetch rows from the API.
    * Takes explicit parameters to avoid reading $state inside $effect.
    */
-  async function fetchRowsExplicit(viewerId, search, viewGroup, seriesId, filterValues, page, layout = 'list', append = false) {
+  async function fetchRowsExplicit(viewerId, search, viewGroup, seriesId, filterValues, page, layout = 'list', sort = null, append = false) {
     if (append) {
       loadingMore = true;
     } else {
@@ -168,8 +180,12 @@
 
     let path = `/_ui/viewer/${viewerId}/rows?page=${page}`;
     // layout=grid jen explicitně — list query zůstává beze změny.
+    // Sort má smysl jen v gridu (list má vlastní pevné řazení).
     if (layout === 'grid') {
       path += '&layout=grid';
+      if (sort != null) {
+        path += `&sort=${encodeURIComponent(`${sort.column}:${sort.dir}`)}`;
+      }
     }
     if (search) {
       path += `&search=${encodeURIComponent(search)}`;
@@ -211,7 +227,7 @@
 
   /** Convenience wrapper — call from event handlers, NOT from $effect */
   function fetchRows(append = false) {
-    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, pageNumber, effectiveLayout, append);
+    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, pageNumber, effectiveLayout, activeSort, append);
   }
 
   async function fetchDetail(id) {
@@ -237,7 +253,7 @@
     selectedRowId = null;
     detail = null;
     pageNumber = 0;
-    fetchRowsExplicit(tab.viewerId, activeSearch, viewGroup, activeSeriesId, activeFilters, 0, effectiveLayout);
+    fetchRowsExplicit(tab.viewerId, activeSearch, viewGroup, activeSeriesId, activeFilters, 0, effectiveLayout, activeSort);
   }
 
   function handleSeriesTabClick(seriesId) {
@@ -246,7 +262,7 @@
     selectedRowId = null;
     detail = null;
     pageNumber = 0;
-    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, seriesId, activeFilters, 0, effectiveLayout);
+    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, seriesId, activeFilters, 0, effectiveLayout, activeSort);
   }
 
   function handleFilterChange(filterId, value) {
@@ -265,7 +281,7 @@
     }
     activeFilters = next;
     pageNumber = 0;
-    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, next, 0, effectiveLayout);
+    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, next, 0, effectiveLayout, activeSort);
   }
 
   function handleSearchInput(e) {
@@ -276,7 +292,7 @@
       selectedRowId = null;
       detail = null;
       pageNumber = 0;
-      fetchRowsExplicit(tab.viewerId, value, activeViewGroup, activeSeriesId, activeFilters, 0, effectiveLayout);
+      fetchRowsExplicit(tab.viewerId, value, activeViewGroup, activeSeriesId, activeFilters, 0, effectiveLayout, activeSort);
     }, 300);
   }
 
@@ -289,7 +305,7 @@
     selectedRowId = null;
     detail = null;
     pageNumber = 0;
-    fetchRowsExplicit(tab.viewerId, '', activeViewGroup, activeSeriesId, activeFilters, 0, effectiveLayout);
+    fetchRowsExplicit(tab.viewerId, '', activeViewGroup, activeSeriesId, activeFilters, 0, effectiveLayout, activeSort);
   }
 
   function handleRowClick(row) {
@@ -315,6 +331,30 @@
     fetchRows(true);
   }
 
+  // Klik na sortable hlavičku gridu — cyklus asc → desc → výchozí (null);
+  // jiný sloupec začíná asc. Výběr/drawer se NEruší (řazení nemění
+  // identitu záznamů); footer je na pořadí nezávislý.
+  function handleSortChange(colId) {
+    if (activeSort?.column === colId) {
+      activeSort = activeSort.dir === 'asc' ? { column: colId, dir: 'desc' } : null;
+    } else {
+      activeSort = { column: colId, dir: 'asc' };
+    }
+    pageNumber = 0;
+    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, 0, effectiveLayout, activeSort);
+  }
+
+  // Toggle list ↔ grid (D10). Jen přepne stav a persistuje volbu — refetch
+  // řeší stávající layout-change $effect (ruční fetch = dvojí fetch).
+  function handleLayoutToggle() {
+    const target = activeLayout === 'grid' ? 'list' : 'grid';
+    if (target === 'list') {
+      activeSort = null;
+    }
+    activeLayout = target;
+    setViewerLayout(tab.viewerId, target);
+  }
+
   function handleDrawerClose() {
     selectedRowId = null;
     detail = null;
@@ -325,7 +365,7 @@
     const { scrollTop, scrollHeight, clientHeight } = listEl;
     if (scrollHeight - scrollTop - clientHeight < 100) {
       pageNumber += 1;
-      fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, pageNumber, effectiveLayout, true);
+      fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, pageNumber, effectiveLayout, activeSort, true);
     }
   }
 
@@ -432,7 +472,7 @@
       }
       // Refresh rows so any newly created alerts appear.
       pageNumber = 0;
-      fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, 0, effectiveLayout);
+      fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, 0, effectiveLayout, activeSort);
       if (selectedRowId != null) {
         fetchDetail(selectedRowId);
       }
@@ -479,7 +519,7 @@
         reanalyzeDialogOpen = false;
         // Refresh detail i list — zpráva mohla změnit stav
         pageNumber = 0;
-        fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, 0, effectiveLayout);
+        fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, 0, effectiveLayout, activeSort);
         fetchDetail(selectedRowId);
       } else {
         alert(t('viewer.reanalyze.failed', { msg: translateError(result?.error) }));
@@ -525,7 +565,7 @@
     // — fetchDetail still highlights it in the detail panel even if it's
     // scrolled out of view.
     pageNumber = 0;
-    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, 0, effectiveLayout);
+    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, 0, effectiveLayout, activeSort);
     if (personId != null) {
       selectedRowId = personId;
       fetchDetail(personId);
@@ -537,13 +577,13 @@
       fetchDetail(selectedRowId);
       // Také refresh list — apply/reject mohlo přepnout stav zprávy 30→40
       pageNumber = 0;
-      fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, 0, effectiveLayout);
+      fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, 0, effectiveLayout, activeSort);
     }
   }
 
   function refreshAfterAction() {
     pageNumber = 0;
-    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, 0, effectiveLayout);
+    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, 0, effectiveLayout, activeSort);
     if (selectedRowId != null) {
       fetchDetail(selectedRowId);
     }
@@ -647,7 +687,7 @@
 
   function handleFormSaved() {
     pageNumber = 0;
-    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, 0, effectiveLayout);
+    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, 0, effectiveLayout, activeSort);
     if (selectedRowId != null) {
       fetchDetail(selectedRowId);
     }
@@ -677,6 +717,7 @@
     pageNumber = 0;
     hasMore = false;
     activeLayout = 'list';
+    activeSort = null;
     footer = null;
     // Sentinel: init nového vieweru běží — layout-change $effect nesmí
     // střílet, dokud fetchMeta().then nenastaví prevLayout.
@@ -716,11 +757,16 @@
       // effectiveLayout přepočítá a layout-change $effect se probudí,
       // uvidí shodu a neudělá druhý fetch.
       const isMobile = untrack(() => layoutStore.isMobile);
-      const defaultLayout = untrack(() => meta)?.defaultLayout ?? 'list';
-      const supportsGrid = (untrack(() => meta)?.layouts ?? []).includes('grid');
-      const layout = isMobile || !supportsGrid ? 'list' : defaultLayout;
+      const layouts = untrack(() => meta)?.layouts ?? [];
+      // Persistovaná volba (toggle, D10) má přednost před defaultLayout;
+      // hodnota mimo meta.layouts se ignoruje.
+      const persisted = getViewerLayout(viewerId);
+      const chosenLayout = persisted !== null && layouts.includes(persisted)
+        ? persisted
+        : (untrack(() => meta)?.defaultLayout ?? 'list');
+      const layout = isMobile || !layouts.includes('grid') ? 'list' : chosenLayout;
       prevLayout = layout;
-      activeLayout = defaultLayout;
+      activeLayout = chosenLayout;
 
       // Filtry se právě resetovaly na {} — předáváme literál, protože tento
       // $effect nesmí číst jiný $state než tab.viewerId.
@@ -745,10 +791,14 @@
     }
     prevLayout = layout;
     untrack(() => {
+      // List má vlastní pevné řazení — sort patří jen gridu (D9).
+      if (layout === 'list') {
+        activeSort = null;
+      }
       selectedRowId = null;
       detail = null;
       pageNumber = 0;
-      fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, 0, layout);
+      fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, 0, layout, activeSort);
     });
   });
 
@@ -877,17 +927,30 @@
         </div>
       {/if}
 
-      <!-- Search -->
+      <!-- Search (+ toggle layoutu, když viewer umí list i grid — D10) -->
       <div class="shpd-viewer__search">
-        <input
-          class="shpd-viewer__search-input"
-          type="text"
-          placeholder={t('viewer.search.placeholder')}
-          oninput={handleSearchInput}
-          bind:this={searchInputEl}
-        />
-        {#if activeSearch}
-          <button class="shpd-viewer__search-clear" onclick={handleSearchClear} aria-label={t('viewer.search.clear')}>×</button>
+        <div class="shpd-viewer__search-box">
+          <input
+            class="shpd-viewer__search-input"
+            type="text"
+            placeholder={t('viewer.search.placeholder')}
+            oninput={handleSearchInput}
+            bind:this={searchInputEl}
+          />
+          {#if activeSearch}
+            <button class="shpd-viewer__search-clear" onclick={handleSearchClear} aria-label={t('viewer.search.clear')}>×</button>
+          {/if}
+        </div>
+        {#if hasLayoutToggle}
+          <!-- Ikona ukazuje CÍLOVÝ layout (v gridu list a naopak). -->
+          <Button
+            iconOnly
+            variant="ghost"
+            size="sm"
+            icon={isGrid ? iconList : iconTable}
+            label={t(isGrid ? 'viewer.layout.showList' : 'viewer.layout.showGrid')}
+            onclick={handleLayoutToggle}
+          />
         {/if}
       </div>
 
@@ -911,6 +974,8 @@
           {hasMore}
           {loadingRows}
           {loadingMore}
+          sort={activeSort}
+          onSortChange={handleSortChange}
           onRowClick={handleRowClick}
           onRowDblClick={handleRowDblClick}
           onLoadMore={handleGridLoadMore}
@@ -1132,12 +1197,20 @@
     font-weight: 600;
   }
 
-  /* Search */
+  /* Search — flex řádek: input box (flex 1) + volitelný layout toggle. */
   .shpd-viewer__search {
-    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--shpd-space-sm);
     padding: var(--shpd-space-sm) var(--shpd-space-md);
     border-bottom: 1px solid var(--shpd-color-border);
     flex-shrink: 0;
+  }
+
+  .shpd-viewer__search-box {
+    position: relative;
+    flex: 1;
+    min-width: 0;
   }
 
   .shpd-viewer__search-input {
@@ -1161,7 +1234,7 @@
 
   .shpd-viewer__search-clear {
     position: absolute;
-    right: calc(var(--shpd-space-md) + 4px);
+    right: 4px;
     top: 50%;
     transform: translateY(-50%);
     width: 20px;

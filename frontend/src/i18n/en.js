@@ -137,6 +137,8 @@ export default {
   'viewer.search.clear': 'Clear search',
   'viewer.endOfList': "That's all",
   'viewer.drawer.close': 'Close detail',
+  'viewer.layout.showGrid': 'Show as table',
+  'viewer.layout.showList': 'Show as list',
   'viewer.selectRecord': 'Select a record',
   'viewer.back': 'Back to list',
   'viewer.more': 'More actions',

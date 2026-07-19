@@ -40,6 +40,7 @@ import {
   faTags,
   faFolderOpen,
   faTable,
+  faList,
   faBars,
   faAnglesLeft,
   faAnglesRight,
@@ -123,6 +124,7 @@ export const iconTag = faTag;
 export const iconTags = faTags;
 export const iconFolder = faFolderOpen;
 export const iconTable = faTable;
+export const iconList = faList;
 export const iconMail = faEnvelope;
 export const iconRuler = faRulerCombined;
 export const iconBox = faCube;
@@ -191,6 +193,7 @@ export const iconMap = {
   'tags': iconTags,
   'folder': iconFolder,
   'table': iconTable,
+  'list': iconList,
   'mail': iconMail,
   'ruler': iconRuler,
   'box': iconBox,

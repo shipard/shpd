@@ -146,6 +146,8 @@ export default {
   'viewer.search.clear': 'Vymazat hledání',
   'viewer.endOfList': 'To je všechno',
   'viewer.drawer.close': 'Zavřít detail',
+  'viewer.layout.showGrid': 'Zobrazit jako tabulku',
+  'viewer.layout.showList': 'Zobrazit jako seznam',
   'viewer.selectRecord': 'Vyberte záznam',
   'viewer.back': 'Zpět na seznam',
   'viewer.more': 'Další akce',

@@ -17,6 +17,10 @@
     hasMore = false,
     loadingRows = false,
     loadingMore = false,
+    /** Aktivní řazení {column, dir} | null — cyklus počítá Viewer.svelte,
+     *  grid jen hlásí klik na sortable hlavičku přes onSortChange(colId). */
+    sort = null,
+    onSortChange,
     onRowClick,
     onRowDblClick,
     onLoadMore,
@@ -99,8 +103,18 @@
             <th class="shpd-grid__th shpd-grid__th--index">#</th>
           {/if}
           {#each columns as col (col.id)}
-            <th class="shpd-grid__th" class:shpd-grid__th--num={col.align === 'right'}>
-              {col.label}
+            <th
+              class="shpd-grid__th"
+              class:shpd-grid__th--num={col.align === 'right'}
+              aria-sort={sort?.column === col.id ? (sort.dir === 'desc' ? 'descending' : 'ascending') : undefined}
+            >
+              {#if col.sortable}
+                <button class="shpd-grid__th-btn" type="button" onclick={() => onSortChange?.(col.id)}>
+                  {col.label}{#if sort?.column === col.id}<span class="shpd-grid__sort-arrow">{sort.dir === 'desc' ? '↓' : '↑'}</span>{/if}
+                </button>
+              {:else}
+                {col.label}
+              {/if}
             </th>
           {/each}
         </tr>
@@ -192,6 +206,31 @@
   .shpd-grid__th--index {
     color: var(--shpd-color-text-secondary);
     font-weight: 400;
+  }
+
+  /* Sortable hlavička — button kvůli a11y (klikatelné th by neneslo
+     klávesnici), vizuálně splývá s ostatními th (inherit font/weight).
+     U align:right sloupců drží zarovnání šířkou 100 %. */
+  .shpd-grid__th-btn {
+    padding: 0;
+    border: none;
+    background: none;
+    font: inherit;
+    font-weight: inherit;
+    color: inherit;
+    text-align: inherit;
+    width: 100%;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .shpd-grid__th-btn:hover {
+    color: var(--shpd-color-primary);
+  }
+
+  .shpd-grid__sort-arrow {
+    margin-left: 2px;
+    color: var(--shpd-color-primary);
   }
 
   .shpd-grid__tr {

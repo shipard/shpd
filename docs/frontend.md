@@ -397,6 +397,21 @@ Modal wrapper — otevírá se z TableBrowser (tlačítko / dvojklik). Po ulože
 
 Viewer je specializovaný prohlížeč pro složitější tabulky — na rozdíl od generického `TableBrowser` (který funguje čistě z metadat) viewer implementuje vlastní renderování řádků, filtrování a detail panel. Každý viewer je PHP třída dědící `TableViewer`.
 
+### Grid layout (tabulka)
+
+Vedle výchozího list layoutu (t1/i1/t2/i2/t3) umí viewer **grid** — klasickou
+tabulku se sloupci, sticky hlavičkou, volitelným součtovým footerem a detailem
+v non-modálním slide-over draweru. Layout je prezentační režim jednoho vieweru
+(ne jiná třída): `selectRows()`, filtry, search i detail zůstávají sdílené,
+viewer navíc implementuje `getGridColumns()` + `renderGridRow()` (volitelně
+`getDefaultLayout()`, `renderGridFooter()`, `getGridOptions()`). Meta pak vrací
+`layouts`/`defaultLayout`/`grid`, endpoint `rows` přijímá `layout=grid`.
+Na mobilu (≤ 768 px) grid degraduje na list — `renderRow()` zůstává povinný.
+Buňky používají stejný span formát jako list vč. badge varianty
+(`{text, badge: style}` → pilulka, sdílená `SpanBadge.svelte` +
+`viewerSpans.js`). Kompletní kontrakty a rozhodnutí: `docs/viewer-grid.md`.
+Pilot: `JournalViewer` (účetní deník, grid jako default + footer Σ MD/DAL).
+
 ### Mobilní viewer (list/detail)
 
 Na ≤ 768px se viewer přepne z dvoupanelu na list/detail přepínání:
@@ -453,6 +468,9 @@ Parametry pro `rows`:
   UI z `ViewerFilters.svelte` — viz níže). `ViewerController::rows` parsuje
   `filter[...]` generericky a předává do `selectRows()` jako
   `[{id, value}, …]`
+- `layout=grid` — grid render řádků (`renderGridRow()`, tvar `cells`);
+  bez parametru list. Na page 0 odpověď obsahuje i `footer`, pokud viewer
+  implementuje `renderGridFooter()`. Viz `docs/viewer-grid.md` §3
 
 ### Tab bar (doc state taby)
 

@@ -12,7 +12,9 @@
   import { inviteUser } from '../../api/security.js';
   import { fileFromMessage } from '../../api/registry.js';
   import ViewerRow from './ViewerRow.svelte';
+  import ViewerGrid from './ViewerGrid.svelte';
   import ViewerDetail from './ViewerDetail.svelte';
+  import ViewerDetailDrawer from './ViewerDetailDrawer.svelte';
   import ViewerToolbar from './ViewerToolbar.svelte';
   import ViewerFilters from './ViewerFilters.svelte';
   import SetPasswordPrompt from './SetPasswordPrompt.svelte';
@@ -72,6 +74,25 @@
   let loadingMore = $state(false);
   let pageNumber = $state(0);
 
+  // --- Layout (list | grid) — docs/viewer-grid.md §4.1 ---
+  // activeLayout = zvolený layout (v F1 jen meta.defaultLayout, toggle je F2).
+  // Efektivní layout degraduje na list na mobilu (D2) a když meta grid
+  // nepodporuje. Tvary řádků obou layoutů se liší → změna efektivního
+  // layoutu = reset page + refetch (layout-change $effect níže).
+  let activeLayout = $state('list');
+  let effectiveLayout = $derived(
+    layoutStore.isMobile || !(meta?.layouts ?? []).includes('grid')
+      ? 'list'
+      : activeLayout
+  );
+  let isGrid = $derived(effectiveLayout === 'grid');
+  // Součtový footer gridu — přichází jen s page 0, append ho nemění (D7).
+  let footer = $state(null);
+  // Předchozí efektivní layout — obyčejná (ne-reaktivní) proměnná.
+  // null = init po přepnutí tabu ještě neproběhl; layout-change $effect
+  // pak nesmí střílet (initial fetch řeší tab-change flow).
+  let prevLayout = null;
+
   // Active search term used for API calls (updated after debounce)
   let activeSearch = $state('');
 
@@ -113,8 +134,10 @@
   let searchInputEl = $state(null);
 
   // --- Derived ---
+  // V grid layoutu zůstává horní toolbar v list kontextu (meta.toolbar) —
+  // detail akce žijí v hlavičce draweru (docs/viewer-grid.md §4.1, §6).
   let toolbarActions = $derived(
-    selectedRowId != null ? detailToolbar : (meta?.toolbar ?? [])
+    !isGrid && selectedRowId != null ? detailToolbar : (meta?.toolbar ?? [])
   );
 
   // --- Data fetching ---
@@ -136,7 +159,7 @@
    * Fetch rows from the API.
    * Takes explicit parameters to avoid reading $state inside $effect.
    */
-  async function fetchRowsExplicit(viewerId, search, viewGroup, seriesId, filterValues, page, append = false) {
+  async function fetchRowsExplicit(viewerId, search, viewGroup, seriesId, filterValues, page, layout = 'list', append = false) {
     if (append) {
       loadingMore = true;
     } else {
@@ -144,6 +167,10 @@
     }
 
     let path = `/_ui/viewer/${viewerId}/rows?page=${page}`;
+    // layout=grid jen explicitně — list query zůstává beze změny.
+    if (layout === 'grid') {
+      path += '&layout=grid';
+    }
     if (search) {
       path += `&search=${encodeURIComponent(search)}`;
     }
@@ -172,6 +199,8 @@
         rows = [...rows, ...result.data.rows];
       } else {
         rows = result.data.rows;
+        // Footer přichází jen s page 0 (grid); list odpověď klíč nemá → null.
+        footer = result.data.footer ?? null;
       }
       hasMore = result.data.hasMore;
     }
@@ -182,7 +211,7 @@
 
   /** Convenience wrapper — call from event handlers, NOT from $effect */
   function fetchRows(append = false) {
-    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, pageNumber, append);
+    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, pageNumber, effectiveLayout, append);
   }
 
   async function fetchDetail(id) {
@@ -208,7 +237,7 @@
     selectedRowId = null;
     detail = null;
     pageNumber = 0;
-    fetchRowsExplicit(tab.viewerId, activeSearch, viewGroup, activeSeriesId, activeFilters, 0);
+    fetchRowsExplicit(tab.viewerId, activeSearch, viewGroup, activeSeriesId, activeFilters, 0, effectiveLayout);
   }
 
   function handleSeriesTabClick(seriesId) {
@@ -217,7 +246,7 @@
     selectedRowId = null;
     detail = null;
     pageNumber = 0;
-    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, seriesId, activeFilters, 0);
+    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, seriesId, activeFilters, 0, effectiveLayout);
   }
 
   function handleFilterChange(filterId, value) {
@@ -236,7 +265,7 @@
     }
     activeFilters = next;
     pageNumber = 0;
-    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, next, 0);
+    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, next, 0, effectiveLayout);
   }
 
   function handleSearchInput(e) {
@@ -247,7 +276,7 @@
       selectedRowId = null;
       detail = null;
       pageNumber = 0;
-      fetchRowsExplicit(tab.viewerId, value, activeViewGroup, activeSeriesId, activeFilters, 0);
+      fetchRowsExplicit(tab.viewerId, value, activeViewGroup, activeSeriesId, activeFilters, 0, effectiveLayout);
     }, 300);
   }
 
@@ -260,7 +289,7 @@
     selectedRowId = null;
     detail = null;
     pageNumber = 0;
-    fetchRowsExplicit(tab.viewerId, '', activeViewGroup, activeSeriesId, activeFilters, 0);
+    fetchRowsExplicit(tab.viewerId, '', activeViewGroup, activeSeriesId, activeFilters, 0, effectiveLayout);
   }
 
   function handleRowClick(row) {
@@ -268,12 +297,35 @@
     fetchDetail(row.id);
   }
 
+  // Dvojklik na grid řádek → edit akce, jen pokud ji detail toolbar nabízí
+  // (u read-only viewerů jako deník je toolbar prázdný — nic se nestane).
+  async function handleRowDblClick(row) {
+    selectedRowId = row.id;
+    await fetchDetail(row.id);
+    if ((detailToolbar ?? []).some(a => a.id === 'edit')) {
+      editRecordId = row.id;
+      formOpen = true;
+    }
+  }
+
+  // Infinite scroll gridu — scroll detekci má ViewerGrid uvnitř, sem jde
+  // jen požadavek na další stránku (stejná logika jako handleScroll listu).
+  function handleGridLoadMore() {
+    pageNumber += 1;
+    fetchRows(true);
+  }
+
+  function handleDrawerClose() {
+    selectedRowId = null;
+    detail = null;
+  }
+
   function handleScroll() {
     if (!listEl || !hasMore || loadingMore || loadingRows) return;
     const { scrollTop, scrollHeight, clientHeight } = listEl;
     if (scrollHeight - scrollTop - clientHeight < 100) {
       pageNumber += 1;
-      fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, pageNumber, true);
+      fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, pageNumber, effectiveLayout, true);
     }
   }
 
@@ -380,7 +432,7 @@
       }
       // Refresh rows so any newly created alerts appear.
       pageNumber = 0;
-      fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, 0);
+      fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, 0, effectiveLayout);
       if (selectedRowId != null) {
         fetchDetail(selectedRowId);
       }
@@ -427,7 +479,7 @@
         reanalyzeDialogOpen = false;
         // Refresh detail i list — zpráva mohla změnit stav
         pageNumber = 0;
-        fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, 0);
+        fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, 0, effectiveLayout);
         fetchDetail(selectedRowId);
       } else {
         alert(t('viewer.reanalyze.failed', { msg: translateError(result?.error) }));
@@ -473,7 +525,7 @@
     // — fetchDetail still highlights it in the detail panel even if it's
     // scrolled out of view.
     pageNumber = 0;
-    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, 0);
+    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, 0, effectiveLayout);
     if (personId != null) {
       selectedRowId = personId;
       fetchDetail(personId);
@@ -485,13 +537,13 @@
       fetchDetail(selectedRowId);
       // Také refresh list — apply/reject mohlo přepnout stav zprávy 30→40
       pageNumber = 0;
-      fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, 0);
+      fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, 0, effectiveLayout);
     }
   }
 
   function refreshAfterAction() {
     pageNumber = 0;
-    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, 0);
+    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, 0, effectiveLayout);
     if (selectedRowId != null) {
       fetchDetail(selectedRowId);
     }
@@ -595,7 +647,7 @@
 
   function handleFormSaved() {
     pageNumber = 0;
-    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, 0);
+    fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, 0, effectiveLayout);
     if (selectedRowId != null) {
       fetchDetail(selectedRowId);
     }
@@ -624,6 +676,11 @@
     activeFilters = {};
     pageNumber = 0;
     hasMore = false;
+    activeLayout = 'list';
+    footer = null;
+    // Sentinel: init nového vieweru běží — layout-change $effect nesmí
+    // střílet, dokud fetchMeta().then nenastaví prevLayout.
+    prevLayout = null;
 
     if (searchInputEl) {
       searchInputEl.value = '';
@@ -652,14 +709,46 @@
     // Sequence: meta first (sets activeSeriesId from numberSeries), then rows
     // with that filter, then optional pending-record detail.
     fetchMeta(viewerId).then(() => {
+      // Efektivní layout pro initial fetch. Čtení meta/isMobile tady už
+      // netrackuje ($effect trackuje jen synchronní čtení), ale isMobile
+      // bereme přes untrack pro jistotu konzistence s disciplínou souboru.
+      // prevLayout se nastavuje PŘED activeLayout — až derived
+      // effectiveLayout přepočítá a layout-change $effect se probudí,
+      // uvidí shodu a neudělá druhý fetch.
+      const isMobile = untrack(() => layoutStore.isMobile);
+      const defaultLayout = untrack(() => meta)?.defaultLayout ?? 'list';
+      const supportsGrid = (untrack(() => meta)?.layouts ?? []).includes('grid');
+      const layout = isMobile || !supportsGrid ? 'list' : defaultLayout;
+      prevLayout = layout;
+      activeLayout = defaultLayout;
+
       // Filtry se právě resetovaly na {} — předáváme literál, protože tento
       // $effect nesmí číst jiný $state než tab.viewerId.
-      fetchRowsExplicit(viewerId, '', pendingViewGroup ?? 'active', activeSeriesId, {}, 0).then(() => {
+      fetchRowsExplicit(viewerId, '', pendingViewGroup ?? 'active', activeSeriesId, {}, 0, layout).then(() => {
         if (pendingRecord != null) {
           selectedRowId = pendingRecord;
           fetchDetail(pendingRecord);
         }
       });
+    });
+  });
+
+  // Změna efektivního layoutu po initu (v F1 jen resize přes mobile
+  // breakpoint; v F2 přibude toggle). Tvary řádků layoutů se liší →
+  // reset stránkování + výběru a refetch. Čte JEN effectiveLayout;
+  // prevLayout je ne-reaktivní guard proti dvojímu fetchi při mountu
+  // (init fetch jde z tab-change $effectu výše).
+  $effect(() => {
+    const layout = effectiveLayout;
+    if (prevLayout === null || layout === prevLayout) {
+      return;
+    }
+    prevLayout = layout;
+    untrack(() => {
+      selectedRowId = null;
+      detail = null;
+      pageNumber = 0;
+      fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, 0, layout);
     });
   });
 
@@ -767,8 +856,10 @@
     class:shpd-viewer__body--mobile={layoutStore.isMobile}
     class:shpd-viewer__body--detail={layoutStore.isMobile && selectedRowId != null}
   >
-    <!-- Left panel: tabs + search + row list -->
-    <div class="shpd-viewer__list-panel">
+    <!-- Left panel: tabs + search + row list.
+         V grid layoutu panel zabírá celou šířku (tabulka je full-width,
+         detail žije v draweru), taby/search/filtry zůstávají stejné. -->
+    <div class="shpd-viewer__list-panel" class:shpd-viewer__list-panel--grid={isGrid}>
 
       <!-- Doc state tab bar (only shown when viewer supports viewGroups) -->
       {#if hasViewGroups && viewTabs().length > 0}
@@ -809,7 +900,22 @@
         />
       {/if}
 
-      <!-- Row list -->
+      <!-- Row list / grid -->
+      {#if isGrid}
+        <ViewerGrid
+          columns={meta?.grid?.columns ?? []}
+          showIndex={meta?.grid?.showIndex ?? true}
+          {rows}
+          {footer}
+          {selectedRowId}
+          {hasMore}
+          {loadingRows}
+          {loadingMore}
+          onRowClick={handleRowClick}
+          onRowDblClick={handleRowDblClick}
+          onLoadMore={handleGridLoadMore}
+        />
+      {:else}
       <div
         class="shpd-viewer__rows"
         bind:this={listEl}
@@ -846,6 +952,7 @@
           {/if}
         {/if}
       </div>
+      {/if}
 
       <!-- Bottom bar: number-series tabs (shown only when >1 series) -->
       {#if hasNumberSeriesTabs}
@@ -864,23 +971,40 @@
       {/if}
     </div>
 
-    <!-- Right panel: detail -->
-    <div class="shpd-viewer__detail-panel">
-      {#if selectedRowId != null}
-        <ViewerDetail
-          {detail}
-          loading={detailLoading}
-          onRefresh={handleDetailRefresh}
-          onAction={handleDetailAction}
-        />
-      {:else}
-        <div class="shpd-viewer__detail-empty">
-          {t('viewer.selectRecord')}
-        </div>
-      {/if}
-    </div>
+    <!-- Right panel: detail. V grid layoutu se nerenderuje — detail
+         žije v non-modálním draweru (ViewerDetailDrawer). -->
+    {#if !isGrid}
+      <div class="shpd-viewer__detail-panel">
+        {#if selectedRowId != null}
+          <ViewerDetail
+            {detail}
+            loading={detailLoading}
+            onRefresh={handleDetailRefresh}
+            onAction={handleDetailAction}
+          />
+        {:else}
+          <div class="shpd-viewer__detail-empty">
+            {t('viewer.selectRecord')}
+          </div>
+        {/if}
+      </div>
+    {/if}
   </div>
 </div>
+
+<!-- Detail drawer gridu — non-modální slide-over zprava (D4). Bez overlay,
+     klik na jiný řádek přepíná detail v otevřeném draweru. -->
+{#if isGrid && selectedRowId != null}
+  <ViewerDetailDrawer
+    {detail}
+    loading={detailLoading}
+    actions={detailToolbar}
+    onToolbarAction={handleToolbarAction}
+    onAction={handleDetailAction}
+    onRefresh={handleDetailRefresh}
+    onClose={handleDrawerClose}
+  />
+{/if}
 
 <!-- Reanalyze dialog — sdílená Modal komponenta (../ui/Modal.svelte). -->
 <Modal
@@ -968,6 +1092,13 @@
     flex-direction: column;
     border-right: 1px solid var(--shpd-color-border);
     overflow: hidden;
+  }
+
+  /* Grid layout — tabulka přes celou šířku body, detail v draweru. */
+  .shpd-viewer__list-panel--grid {
+    width: auto;
+    flex: 1;
+    border-right: none;
   }
 
   /* Doc state tabs */

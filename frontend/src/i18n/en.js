@@ -136,6 +136,7 @@ export default {
   'viewer.filters.all': '— all —',
   'viewer.search.clear': 'Clear search',
   'viewer.endOfList': "That's all",
+  'viewer.drawer.close': 'Close detail',
   'viewer.selectRecord': 'Select a record',
   'viewer.back': 'Back to list',
   'viewer.more': 'More actions',

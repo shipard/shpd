@@ -145,6 +145,7 @@ export default {
   'viewer.filters.all': '— vše —',
   'viewer.search.clear': 'Vymazat hledání',
   'viewer.endOfList': 'To je všechno',
+  'viewer.drawer.close': 'Zavřít detail',
   'viewer.selectRecord': 'Vyberte záznam',
   'viewer.back': 'Zpět na seznam',
   'viewer.more': 'Další akce',

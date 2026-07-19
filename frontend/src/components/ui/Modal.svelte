@@ -17,6 +17,13 @@
     const i = modalStack.indexOf(id);
     if (i !== -1) modalStack.splice(i, 1);
   }
+
+  /** Je otevřený aspoň jeden modal? Pro Esc koordinaci non-modálních
+   *  vrstev (ViewerDetailDrawer) — drawer na Esc nereaguje, dokud je
+   *  nad ním modal. Jediný zdroj pravdy je tento stack. */
+  export function isModalOpen(): boolean {
+    return modalStack.length > 0;
+  }
 </script>
 
 <script lang="ts">

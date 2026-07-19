@@ -30,7 +30,20 @@ class ViewerController
 			return Response::error('VIEWER_CLASS_NOT_FOUND', "Viewer class for '{$viewerId}' not found", 500);
 		}
 
-		return Response::success([
+		// Layouty jsou odvozené: list vždy, grid když viewer deklaruje sloupce.
+		// defaultLayout se validuje proti layouts — nepodporovaná hodnota
+		// (např. 'grid' na list-only vieweru) padá na 'list'.
+		$gridColumns = $viewer->getGridColumns();
+		$layouts     = ['list'];
+		if ($gridColumns !== null) {
+			$layouts[] = 'grid';
+		}
+		$defaultLayout = $viewer->getDefaultLayout();
+		if (!in_array($defaultLayout, $layouts, true)) {
+			$defaultLayout = 'list';
+		}
+
+		$meta = [
 			'id'                 => $def->id,
 			'name'               => $def->name,
 			'table'              => $def->table,
@@ -39,7 +52,18 @@ class ViewerController
 			'viewGroups'         => $viewer->getViewGroups(),
 			'numberSeries'       => $viewer->getNumberSeries(),
 			'newRecordDefaults'  => $viewer->getNewRecordDefaults(),
-		]);
+			'layouts'            => $layouts,
+			'defaultLayout'      => $defaultLayout,
+		];
+
+		if ($gridColumns !== null) {
+			$meta['grid'] = [
+				'columns'   => $gridColumns,
+				'showIndex' => (bool) ($viewer->getGridOptions()['showIndex'] ?? true),
+			];
+		}
+
+		return Response::success($meta);
 	}
 
 	public function rows(string $viewerId, Request $request, AuthContext $auth, ViewerRegistry $registry, DataSourceConnection $db, ?ConfigRuntime $config = null, ?string $language = null): Response
@@ -62,6 +86,13 @@ class ViewerController
 		$params = $request->getQueryParams();
 		$search = isset($params['search']) && is_string($params['search']) ? $params['search'] : null;
 		$page   = max(0, (int) ($params['page'] ?? 0));
+		$layout = isset($params['layout']) && is_string($params['layout']) ? $params['layout'] : 'list';
+
+		// Guard — meta-driven frontend layout=grid na list-only viewer nikdy
+		// nepošle, ručně sestavený request dostane jasnou chybu.
+		if ($layout === 'grid' && $viewer->getGridColumns() === null) {
+			return Response::error('LAYOUT_NOT_SUPPORTED', "Viewer '{$viewerId}' does not support the grid layout", 400);
+		}
 
 		$filters = [];
 		if (isset($params['filter']) && is_array($params['filter'])) {
@@ -78,21 +109,38 @@ class ViewerController
 			$rawRows = array_slice($rawRows, 0, $pageSize);
 		}
 
-		$defaultIcon = $def->icon;
-
 		$rows = [];
-		foreach ($rawRows as $row) {
-			$rendered = $viewer->renderRow($row);
-			if (!isset($rendered['icon']) && $defaultIcon !== null) {
-				$rendered['icon'] = $defaultIcon;
+		if ($layout === 'grid') {
+			// Grid řádky ikonu nemají — default icon se nedoplňuje.
+			foreach ($rawRows as $row) {
+				$rows[] = $viewer->renderGridRow($row);
 			}
-			$rows[] = $rendered;
+		} else {
+			$defaultIcon = $def->icon;
+			foreach ($rawRows as $row) {
+				$rendered = $viewer->renderRow($row);
+				if (!isset($rendered['icon']) && $defaultIcon !== null) {
+					$rendered['icon'] = $defaultIcon;
+				}
+				$rows[] = $rendered;
+			}
 		}
 
-		return Response::success([
+		$result = [
 			'rows'    => $rows,
 			'hasMore' => $hasMore,
-		]);
+		];
+
+		// Součtový footer jen na první stránce — frontend si ho drží
+		// z page 0, další stránky klíč neposílají (D7).
+		if ($layout === 'grid' && $page === 0) {
+			$footer = $viewer->renderGridFooter($search, $filters);
+			if ($footer !== null) {
+				$result['footer'] = $footer;
+			}
+		}
+
+		return Response::success($result);
 	}
 
 	public function detail(string $viewerId, int $recordId, AuthContext $auth, ViewerRegistry $registry, DataSourceConnection $db, ?ConfigRuntime $config = null, ?string $language = null): Response

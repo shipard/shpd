@@ -155,6 +155,64 @@ abstract class TableViewer
     abstract public function renderRow(array $rowData): array;
 
     /**
+     * Column declaration for the grid layout. Null = viewer does not
+     * support grid (list-only). See docs/viewer-grid.md §3.1–§3.2.
+     *
+     * @return list<array{id: string, label: string, width?: int,
+     *                    align?: 'left'|'right', grow?: bool}>|null
+     */
+    public function getGridColumns(): ?array
+    {
+        return null;
+    }
+
+    /**
+     * Optional grid options. Supported keys: showIndex (default true).
+     * See docs/viewer-grid.md §3.5.
+     */
+    public function getGridOptions(): array
+    {
+        return [];
+    }
+
+    /**
+     * Render a single row for the grid layout. Only called when
+     * getGridColumns() !== null. Cell values use the same span format as
+     * renderRow() fields (string, {text, class?, badge?}, or array of
+     * spans); missing/null cell key = empty cell. No icon in grid rows.
+     * See docs/viewer-grid.md §3.3.
+     *
+     * @return array{id: int, cells: array<string, mixed>, stateStyle?: ?string,
+     *               rowClass?: ?string, group?: ?array{key: string, label: string}}
+     */
+    public function renderGridRow(array $rowData): array
+    {
+        return [];
+    }
+
+    /**
+     * Default presentation layout: 'list' | 'grid'. Grid only applies
+     * when the viewer supports it (getGridColumns() !== null) — the
+     * controller validates and falls back to 'list' otherwise.
+     */
+    public function getDefaultLayout(): string
+    {
+        return 'list';
+    }
+
+    /**
+     * Optional totals footer — aggregation over the WHOLE filtered set
+     * (separate SELECT SUM(...) with the same WHERE as selectRows()).
+     * Returns a map columnId => cell value (span format), or null.
+     * The controller calls this only for layout=grid and page 0.
+     * See docs/viewer-grid.md §3.5 (D7).
+     */
+    public function renderGridFooter(?string $search, array $filters): ?array
+    {
+        return null;
+    }
+
+    /**
      * Render the detail panel for a selected row.
      * Returns tabs with content.
      *

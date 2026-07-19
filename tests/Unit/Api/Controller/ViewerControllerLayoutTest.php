@@ -30,12 +30,17 @@ class ListOnlyStubViewer extends TableViewer
 }
 
 /**
- * Stub grid vieweru — deklaruje sloupce, grid render i footer.
+ * Stub grid vieweru — deklaruje sloupce (amount sortable), grid render
+ * i footer. Injektovaný sort zachytává do static $lastSort (controller
+ * instanci vieweru neexponuje).
  */
 class GridStubViewer extends TableViewer
 {
+	public static ?array $lastSort = null;
+
 	public function selectRows(?string $search, array $filters, int $pageNumber): array
 	{
+		self::$lastSort = $this->sort;
 		return [['id' => 1, 'amount' => 10], ['id' => 2, 'amount' => 20]];
 	}
 
@@ -48,7 +53,7 @@ class GridStubViewer extends TableViewer
 	{
 		return [
 			['id' => 'name', 'label' => 'Name', 'grow' => true],
-			['id' => 'amount', 'label' => 'Amount', 'width' => 110, 'align' => 'right'],
+			['id' => 'amount', 'label' => 'Amount', 'width' => 110, 'align' => 'right', 'sortable' => true],
 		];
 	}
 
@@ -130,6 +135,7 @@ class ViewerControllerLayoutTest extends TestCase
 		));
 
 		$this->ctrl = new ViewerController();
+		GridStubViewer::$lastSort = null;
 	}
 
 	private function auth(): AuthContext
@@ -211,6 +217,35 @@ class ViewerControllerLayoutTest extends TestCase
 		$this->assertSame('row 1', $data['rows'][0]['t1']);
 		$this->assertSame('table', $data['rows'][0]['icon']);
 		$this->assertArrayNotHasKey('footer', $data);
+	}
+
+	// ── sort ────────────────────────────────────────────────────────────────
+
+	public function testValidSortIsInjectedBeforeSelectRows(): void
+	{
+		$this->ctrl->rows('test.grid', $this->rowsRequest(['layout' => 'grid', 'sort' => 'amount:desc']), $this->auth(), $this->registry, $this->db);
+
+		$this->assertSame(['column' => 'amount', 'dir' => 'desc'], GridStubViewer::$lastSort);
+	}
+
+	public function testInvalidSortValuesAreSilentlyIgnored(): void
+	{
+		// Neexistující sloupec, nevalidní směr, non-sortable sloupec, chybějící
+		// směr — všechno padá na výchozí řazení, žádná chyba (D9).
+		foreach (['foo:asc', 'amount:sideways', 'name:asc', 'amount'] as $sort) {
+			GridStubViewer::$lastSort = null;
+			$response = $this->ctrl->rows('test.grid', $this->rowsRequest(['layout' => 'grid', 'sort' => $sort]), $this->auth(), $this->registry, $this->db);
+
+			$this->assertSame(200, $this->getStatus($response), "sort={$sort}");
+			$this->assertNull(GridStubViewer::$lastSort, "sort={$sort} se nesmí injektovat");
+		}
+	}
+
+	public function testSortIsIgnoredForListLayout(): void
+	{
+		$this->ctrl->rows('test.grid', $this->rowsRequest(['sort' => 'amount:desc']), $this->auth(), $this->registry, $this->db);
+
+		$this->assertNull(GridStubViewer::$lastSort);
 	}
 
 	public function testRowsGridLayoutOnListOnlyViewerIsRejected(): void

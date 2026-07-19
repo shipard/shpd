@@ -94,6 +94,23 @@ class ViewerController
 			return Response::error('LAYOUT_NOT_SUPPORTED', "Viewer '{$viewerId}' does not support the grid layout", 400);
 		}
 
+		// Sort (jen grid layout): `sort=<colId>:<asc|desc>`, colId musí být
+		// sortable sloupec gridu. Nevalidní hodnota se tiše ignoruje — padá
+		// na výchozí řazení vieweru, žádná chyba (D9).
+		if ($layout === 'grid') {
+			$sortParam = $params['sort'] ?? null;
+			if (is_string($sortParam) && $sortParam !== '') {
+				[$sortCol, $sortDir] = array_pad(explode(':', $sortParam, 2), 2, '');
+				$sortable = array_column(
+					array_filter($viewer->getGridColumns(), static fn (array $c): bool => ($c['sortable'] ?? false) === true),
+					'id',
+				);
+				if (in_array($sortDir, ['asc', 'desc'], true) && in_array($sortCol, $sortable, true)) {
+					$viewer->setSort(['column' => $sortCol, 'dir' => $sortDir]);
+				}
+			}
+		}
+
 		$filters = [];
 		if (isset($params['filter']) && is_array($params['filter'])) {
 			foreach ($params['filter'] as $filterId => $value) {

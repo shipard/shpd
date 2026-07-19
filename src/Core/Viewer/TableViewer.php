@@ -32,10 +32,25 @@ abstract class TableViewer
      */
     protected ?string $docStatesCfgItem = null;
 
+    /**
+     * Active grid sort injected by ViewerController, or null (viewer's
+     * default ordering). Shape: {column: string, dir: 'asc'|'desc'}.
+     * The controller validates the column against sortable grid columns
+     * before injecting — selectRows() signature stays unchanged (D9).
+     * See docs/viewer-grid.md §7.1.
+     */
+    protected ?array $sort = null;
+
     public function __construct(
         protected DataSourceConnection $db,
         protected string $table,
     ) {}
+
+    /** Inject the active grid sort — called by ViewerController before selectRows(). */
+    public function setSort(?array $sort): void
+    {
+        $this->sort = $sort;
+    }
 
     /** Inject compiled config — called by ViewerRegistry after construction. */
     public function setConfig(ConfigRuntime $config): void
@@ -351,6 +366,32 @@ abstract class TableViewer
         }
 
         return ['(' . implode(' OR ', $parts) . ')', $params];
+    }
+
+    /**
+     * Build the ORDER BY clause honouring the active grid sort (D9).
+     *
+     * $columnMap maps grid column ids to SQL expressions (grid id is not
+     * necessarily a column of this table — e.g. partner_name → p.`full_name`).
+     * With an active sort whose column is in the map, returns
+     * 'ORDER BY {expr} {DIR}, {uniqueTail} {DIR}'; otherwise returns
+     * $default unchanged. $uniqueTail (typically the qualified `id`) is
+     * ALWAYS appended — the deterministic-pagination rule; it follows the
+     * sort direction for stable keyset behaviour.
+     * See docs/viewer-grid.md §7.1.
+     *
+     * @param array<string, string> $columnMap  grid column id => SQL expression
+     * @param string $default    full default clause incl. 'ORDER BY'
+     * @param string $uniqueTail qualified unique column, e.g. 'j.`id`'
+     */
+    protected function buildSortedOrderBy(array $columnMap, string $default, string $uniqueTail): string
+    {
+        $column = $this->sort['column'] ?? null;
+        if ($column === null || !isset($columnMap[$column])) {
+            return $default;
+        }
+        $dir = strtolower((string) ($this->sort['dir'] ?? 'asc')) === 'desc' ? 'DESC' : 'ASC';
+        return 'ORDER BY ' . $columnMap[$column] . ' ' . $dir . ', ' . $uniqueTail . ' ' . $dir;
     }
 
     /**

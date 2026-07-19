@@ -6,13 +6,16 @@ Cílové use-casy: účetní deník, bankovní transakce, saldokonto — obecně
 data, kde řádek = záznam s mnoha souřadnými hodnotami a list formát
 (t1/t2/t3) je málo hustý.
 
-> **Stav:** Rozhodnutí D1–D8 uzavřena. **Fáze 1 hotová (2026-07-19)** —
+> **Stav:** Rozhodnutí D1–D12 uzavřena. **Fáze 1 hotová (2026-07-19)** —
 > infrastruktura (TableViewer grid metody, ViewerController layout/meta/
 > footer, `ViewerGrid.svelte`, `ViewerDetailDrawer.svelte`, sdílené
 > `viewerSpans.js` + `SpanBadge.svelte`) + pilot `JournalViewer`
 > (grid default, footer Σ MD/DAL); zadání `tasks/viewer-grid-phase1.md`.
-> Fáze 2 (řazení, `BankTransactionsViewer`, toggle ikona) a saldokonto
-> grid následují.
+> **Fáze 2 hotová (2026-07-19)** — řazení (`setSort` +
+> `buildSortedOrderBy`, sort UI), toggle list ↔ grid s localStorage
+> persistencí (`utils/viewerLayout.js`), pilot `BankTransactionsViewer`
+> + sortable sloupce deníku; zadání `tasks/viewer-grid-phase2.md`.
+> Následuje saldokonto grid (kontrakt D12, vstup do accbal Fáze 4).
 
 ---
 
@@ -58,6 +61,10 @@ Důsledky:
 | D6 | Skupinové řádky: řádek nese `group: {key, label}`, hlavičky vkládá frontend při změně klíče — bezstavové přes stránky infinite scrollu. |
 | D7 | Volitelné součty `renderGridFooter()` — agregační SQL přes **celý filtrovaný set** (ne jen načtené řádky), posílané s page 0. |
 | D8 | Fázování: F1 infrastruktura + pilot `JournalViewer` (vč. footeru); F2 řazení + `BankTransactionsViewer` + toggle; saldokonto grid jako vstup do accbal Fáze 4. |
+| D9 | Řazení (F2): sort injektuje controller přes `setSort()` — signatura `selectRows()` se NEmění (20+ implementací). Whitelist = sloupce se `sortable: true`; helper `buildSortedOrderBy()`; frontend cyklus asc → desc → výchozí; sort se posílá jen v grid layoutu. |
+| D10 | Toggle (F2): ikona vedle searche (desktop, `layouts.length > 1`); persistence v localStorage per-DS klíč `shpd_viewer_layout` (mapa viewerId → layout); priorita persisted > `defaultLayout`; mobil dál vynucuje list. |
+| D11 | Bank grid (F2): default grid; **bez footeru** (SUM přes mix měn je nesmysl); částka + měna v jedné buňce (dva spany); stav = proužek (docStateMain) + badge sloupec Zaúčtování. |
+| D12 | Kontrakt skupin: viewer s `group` MUSÍ řadit primárně podle skupinového klíče (`{#each}` klíčuje hlavičky přes `group.key` — nesouvislá skupina = duplicitní klíč = pád renderu). Řazení klikem se u skupinových viewerů omezí na sloupce, které clustering zachovávají. |
 
 ## 3. Backend
 
@@ -252,6 +259,11 @@ hranicích stránek (server je per-page bezstavový). Nově:
 První konzument: saldokonto (skupina = partner). `JournalViewer` group
 nepoužívá (plochý chronologický seznam) — F1 dodává jen frontend logiku.
 
+**Kontrakt řazení (D12):** řádky MUSÍ přicházet seřazené primárně podle
+skupinového klíče — `{#each}` klíčuje hlavičky přes `group.key`, takže
+nesouvislá skupina by vytvořila duplicitní klíč a shodila render. Sloupce,
+jejichž řazení by clustering rozbilo, nesmí být `sortable`.
+
 ## 6. Detail drawer (D4)
 
 Grid potřebuje plnou šířku, ale detail je hodnotný (deník: celý zápis +
@@ -273,20 +285,88 @@ zprava** (~560 px):
 - Mobil drawer nepoužívá — tam platí stávající list/detail full-width
   přepínání.
 
-## 7. Fáze 2+ (výhled, mimo scope F1)
+## 7. Fáze 2 — řazení, toggle, BankTransactionsViewer
 
-- **Řazení klikem na hlavičku** — column meta `sortable: true`, parametr
-  `sort=<col>:<dir>`, viewer zpracuje v `selectRows()` (ORDER BY vždy
-  končí `id` — stávající pravidlo deterministického stránkování).
-- **Toggle layoutů** — ikona vedle searche, viditelná když
-  `layouts.length > 1`; persistence per-viewer (localStorage, později
-  user settings).
-- **`BankTransactionsViewer` grid** — první editovatelný grid (toolbar,
-  dvojklik, přeúčtování).
-- **Saldokonto grid** — skupinové řádky per partner, footer
-  Předpis/Uhrazeno/Zůstatek; podklad pro párovací UI accbal Fáze 4.
-- Dále: CSV export, cell akce (klikatelný doklad v buňce), inline
-  editace buněk — server-driven `cells` formát nic z toho neblokuje.
+### 7.1 Řazení klikem na hlavičku (D9)
+
+**Backend:**
+
+- Sloupec v `getGridColumns()` dostává volitelné `sortable: true`.
+  Frontend třídicí UI ukáže jen na těchto sloupcích.
+- `rows` endpoint: nový parametr `sort=<colId>:<asc|desc>`. Controller ho
+  bere v úvahu **jen pro `layout=grid`**; validuje colId proti sortable
+  sloupcům a směr proti whitelistu — nevalidní hodnota se tiše ignoruje
+  (padá na výchozí řazení vieweru).
+- **Signatura `selectRows()` se nemění** (20+ existujících implementací;
+  PHP nedovoluje přidat parametr abstraktní metodě bez rozbití potomků).
+  Controller místo toho volá `$viewer->setSort(['column' => …, 'dir' =>
+  …])` před `selectRows()`; `TableViewer` drží `protected ?array $sort`.
+- Helper pro viewery:
+
+```php
+/**
+ * ORDER BY klauzule respektující aktivní sort. $columnMap mapuje colId
+ * na SQL výraz (grid id ≠ nutně sloupec — např. partner_name →
+ * p.`full_name`). Bez aktivního sortu (nebo mimo mapu) vrací $default.
+ * Unikátní tail (typicky qualifikované `id`) se připojuje VŽDY —
+ * pravidlo deterministického stránkování.
+ */
+protected function buildSortedOrderBy(array $columnMap, string $default, string $uniqueTail): string
+```
+
+- Řazení nemá vliv na footer (agregace je na pořadí nezávislá).
+
+**Frontend (`ViewerGrid` + `Viewer.svelte`):**
+
+- Klik na sortable hlavičku cykluje **asc → desc → výchozí** (bez sortu);
+  indikátor ↑ / ↓ v hlavičce.
+- `activeSort` state ve `Viewer.svelte` (`{column, dir} | null`), nový
+  explicitní parametr `fetchRowsExplicit`; změna sortu = reset page +
+  refetch (výběr a drawer zůstávají — řazení nemění identitu záznamů).
+- Sort **přežívá** změnu viewGroup tabu / filtrů / hledání (je
+  ortogonální); resetuje se při přepnutí vieweru a při přepnutí layoutu
+  na list (list má vlastní pevné řazení).
+
+### 7.2 Toggle layoutů (D10)
+
+- Ikona vedle searche (desktop only), viditelná když
+  `meta.layouts.length > 1`; přepíná `activeLayout` list ↔ grid —
+  refetch řeší stávající layout-change `$effect`.
+- **Persistence:** localStorage klíč `shpd_viewer_layout` (per-DS přes
+  `storageKey` vzor — `DATA_SOURCE_ID` z `api/config.js`), hodnota JSON
+  mapa `{viewerId: 'list'|'grid'}`. Malý modul
+  `frontend/src/utils/viewerLayout.js` (get/set, try/catch okolo
+  localStorage). Server-side persistence (user settings) až bude potřeba.
+- Inicializace `activeLayout` po fetchMeta: **persisted > `meta.defaultLayout`**
+  (persisted hodnota mimo `meta.layouts` se ignoruje).
+- Mobil beze změny — efektivní layout vynucuje list, toggle se nerenderuje.
+
+### 7.3 Pilot: `BankTransactionsViewer` (D11)
+
+První editovatelný grid — editace beze změny přes stávající mechaniku
+(toolbar Open na výběru, dvojklik → edit, drawer akce, stavové přechody
+ve FormDialogu). Grid default, list přes toggle.
+
+- Sloupce: Datum (`date_transaction`, 96, sortable) · Částka (`amount`,
+  right, 130, sortable — znaménko dle `direction`, druhý span kód měny
+  muted) · Protistrana (`counterparty_name`, grow) · Partner
+  (`partner_name`) · VS (`payment_reference`, 120) · Operace
+  (`operation`, label z cfgItem) · Zaúčtování (badge: `accounting_state`
+  1 → success „zaúčtováno“, 2 → danger „chyba účtování“, jinak prázdné).
+- `stateStyle` z `docStateMain` (jako `renderRow()`) → stavový proužek;
+  viewGroup taby fungují beze změny.
+- **Bez footeru** — SUM přes mix měn nedává smysl. Případný per-měna
+  součet až s měnovým filtrem (mimo scope).
+- Výchozí řazení zůstává `docStateMain ASC, date_transaction DESC, id
+  DESC`; sortable sloupce mapují na `t.`-qualifikované výrazy.
+
+### 7.4 Další výhled (mimo F2)
+
+- **Saldokonto grid** — skupinové řádky per partner (kontrakt D12),
+  footer Předpis/Uhrazeno/Zůstatek; podklad pro párovací UI accbal
+  Fáze 4.
+- CSV export, cell akce (klikatelný doklad v buňce), inline editace
+  buněk — server-driven `cells` formát nic z toho neblokuje.
 
 ## 8. Vztah k `TableBrowser`
 
@@ -308,3 +388,5 @@ práce.
 | `frontend/src/components/viewer/viewerSpans.js` | **Nový** — sdílené spany + badge |
 | `frontend/src/components/viewer/ViewerRow.svelte` | Používá sdílenou utilitu, badge |
 | `modules/economy/accounting/src/JournalViewer.php` | Pilot (F1) |
+| `frontend/src/utils/viewerLayout.js` | **Nový (F2)** — persistence volby layoutu |
+| `modules/economy/bank/src/BankTransactionsViewer.php` | Pilot F2 — první editovatelný grid |

@@ -409,8 +409,20 @@ viewer navíc implementuje `getGridColumns()` + `renderGridRow()` (volitelně
 Na mobilu (≤ 768 px) grid degraduje na list — `renderRow()` zůstává povinný.
 Buňky používají stejný span formát jako list vč. badge varianty
 (`{text, badge: style}` → pilulka, sdílená `SpanBadge.svelte` +
-`viewerSpans.js`). Kompletní kontrakty a rozhodnutí: `docs/viewer-grid.md`.
-Pilot: `JournalViewer` (účetní deník, grid jako default + footer Σ MD/DAL).
+`viewerSpans.js`).
+
+**Řazení** (F2): sloupce se `sortable: true` mají klikatelnou hlavičku
+(cyklus asc → desc → výchozí, indikátor ↑/↓); server dostává
+`sort=<colId>:<asc|desc>`, controller validuje proti sortable sloupcům
+a injektuje přes `TableViewer::setSort()` — viewer řadí helperem
+`buildSortedOrderBy()` (signatura `selectRows()` se nemění). **Toggle
+list ↔ grid** (F2): ikona vedle searche (desktop, `layouts.length > 1`),
+volba se persistuje per-DS v localStorage `shpd_viewer_layout`
+(`utils/viewerLayout.js`), priorita persisted > `defaultLayout`.
+Kompletní kontrakty a rozhodnutí: `docs/viewer-grid.md`. Piloty:
+`JournalViewer` (grid default + footer Σ MD/DAL, 4 sortable sloupce),
+`BankTransactionsViewer` (první editovatelný grid, badge Zaúčtování,
+bez footeru).
 
 ### Mobilní viewer (list/detail)
 
@@ -471,6 +483,9 @@ Parametry pro `rows`:
 - `layout=grid` — grid render řádků (`renderGridRow()`, tvar `cells`);
   bez parametru list. Na page 0 odpověď obsahuje i `footer`, pokud viewer
   implementuje `renderGridFooter()`. Viz `docs/viewer-grid.md` §3
+- `sort=<colId>:<asc|desc>` — řazení gridu (jen s `layout=grid`); colId
+  musí být `sortable` sloupec, nevalidní hodnota se tiše ignoruje.
+  Viz `docs/viewer-grid.md` §7.1
 
 ### Tab bar (doc state taby)
 

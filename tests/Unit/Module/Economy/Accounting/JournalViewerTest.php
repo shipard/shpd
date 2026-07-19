@@ -30,7 +30,12 @@ class JournalViewerTest extends TestCase
                 return $fetchAllRows;
             },
         );
-        $db->method('fetchRow')->willReturn($detailRow);
+        $db->method('fetchRow')->willReturnCallback(
+            function (string $sql, ...$params) use ($detailRow): ?array {
+                $this->queries[] = ['sql' => $sql, 'params' => $params];
+                return $detailRow;
+            },
+        );
 
         $config = $this->createMock(ConfigRuntime::class);
         $config->method('cfgItem')->willReturnCallback(
@@ -188,6 +193,105 @@ class JournalViewerTest extends TestCase
             ],
             $row['i2'],
         );
+    }
+
+    // ── Grid layout (pilot F1) ──────────────────────────────────────────────
+
+    public function testGridDefaultLayoutAndColumnsShape(): void
+    {
+        $viewer = $this->makeViewer();
+
+        $this->assertSame('grid', $viewer->getDefaultLayout());
+
+        $columns = $viewer->getGridColumns();
+        $this->assertSame(
+            ['accounting_date', 'doc_number', 'account_number', 'money_dr', 'money_cr', 'payment_reference', 'partner_name', 'text'],
+            array_column($columns, 'id'),
+        );
+        $byId = array_column($columns, null, 'id');
+        $this->assertSame('right', $byId['money_dr']['align']);
+        $this->assertSame('right', $byId['money_cr']['align']);
+        $this->assertTrue($byId['text']['grow']);
+        $this->assertSame('Datum', $byId['accounting_date']['label'], 'cs labely');
+    }
+
+    public function testRenderGridRowMapsCellsWithFormatting(): void
+    {
+        $row = $this->makeViewer()->renderGridRow($this->journalRow());
+
+        $this->assertSame(42, $row['id']);
+        $this->assertNull($row['stateStyle'], 'Proužek u deníku nenese informaci');
+        $this->assertNull($row['rowClass']);
+        $this->assertSame('28. 5. 2026', $row['cells']['accounting_date']);
+        $this->assertSame(['text' => 'FP-2026-0016', 'class' => 'primary'], $row['cells']['doc_number']);
+        $this->assertSame('518100', $row['cells']['account_number']);
+        $this->assertSame([['text' => '6 000,00', 'class' => 'amount']], $row['cells']['money_dr']);
+        $this->assertNull($row['cells']['money_cr'], 'Nulová strana = prázdná buňka');
+        $this->assertSame('Česká Tech, s.r.o.', $row['cells']['partner_name']);
+        $this->assertSame('Konzultace', $row['cells']['text']);
+    }
+
+    public function testRenderGridRowErrorGetsErrorRowClass(): void
+    {
+        $row = $this->makeViewer()->renderGridRow($this->journalRow(['is_error' => 1]));
+
+        $this->assertSame('error', $row['rowClass']);
+    }
+
+    public function testRenderGridRowForeignCurrencyAppendsMutedSpan(): void
+    {
+        $row = $this->makeViewer()->renderGridRow($this->journalRow([
+            'money_dr'     => '0.00',
+            'money_cr'     => '2450.00',
+            'currency'     => 'eur',
+            'money_cr_cur' => '100.00',
+        ]));
+
+        $this->assertNull($row['cells']['money_dr']);
+        $this->assertSame(
+            [
+                ['text' => '2 450,00', 'class' => 'amount'],
+                ['text' => '100,00 EUR', 'class' => 'muted'],
+            ],
+            $row['cells']['money_cr'],
+        );
+    }
+
+    public function testGridFooterSharesWhereConditionsWithSelectRows(): void
+    {
+        $viewer = $this->makeViewer([], ['sum_dr' => '6000.00', 'sum_cr' => '6000.00']);
+        $search = '518';
+        $filters = [
+            ['id' => 'fiscal_year', 'value' => '3'],
+            ['id' => 'partner', 'value' => 'Tech'],
+            ['id' => 'only_errors', 'value' => '1'],
+        ];
+
+        $viewer->selectRows($search, $filters, 0);
+        $footer = $viewer->renderGridFooter($search, $filters);
+
+        [$rowsQuery, $footerQuery] = $this->queries;
+        $this->assertStringContainsString('SUM(j.`money_dr`)', $footerQuery['sql']);
+        $this->assertSame(
+            $this->extractWhere($rowsQuery['sql']),
+            $this->extractWhere($footerQuery['sql']),
+            'Footer agreguje se stejnou WHERE skladbou jako selectRows',
+        );
+        $this->assertSame($rowsQuery['params'], $footerQuery['params']);
+
+        $this->assertSame('Σ', $footer['accounting_date']);
+        $this->assertSame(['text' => '6 000,00', 'class' => 'amount'], $footer['money_dr']);
+        $this->assertSame(['text' => '6 000,00', 'class' => 'amount'], $footer['money_cr']);
+    }
+
+    /** WHERE část SQL bez ORDER BY/LIMIT — pro porovnání rows vs. footer. */
+    private function extractWhere(string $sql): string
+    {
+        $start = strpos($sql, ' WHERE ');
+        $this->assertNotFalse($start, 'Dotaz má WHERE');
+        $where = substr($sql, $start);
+        $end = strpos($where, ' ORDER BY');
+        return $end !== false ? substr($where, 0, $end) : $where;
     }
 
     // ── renderDetail ────────────────────────────────────────────────────────

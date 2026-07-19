@@ -30,6 +30,28 @@ class JournalViewer extends TableViewer
             . ' FROM `' . $this->table . '` j'
             . ' LEFT JOIN `base_persons_persons` p ON p.`id` = j.`partner`';
 
+        [$conditions, $params] = $this->buildConditions($search, $filters);
+
+        if ($conditions !== []) {
+            $sql .= ' WHERE ' . implode(' AND ', $conditions);
+        }
+
+        $sql .= ' ORDER BY j.`accounting_date` DESC, j.`id` DESC';
+
+        [$offset, $limit] = $this->buildPaginationLimit($pageNumber);
+        $sql .= ' LIMIT ' . $offset . ', ' . $limit;
+
+        return $this->db->fetchAll($sql, ...$params);
+    }
+
+    /**
+     * Skladba WHERE podmínek seznamu — sdílená mezi selectRows()
+     * a renderGridFooter(), aby součty vždy odpovídaly filtrovanému setu.
+     *
+     * @return array{0: list<string>, 1: list<mixed>} [conditions, params]
+     */
+    private function buildConditions(?string $search, array $filters): array
+    {
         $conditions = [];
         $params = [];
 
@@ -70,16 +92,7 @@ class JournalViewer extends TableViewer
             $params[] = $term;
         }
 
-        if ($conditions !== []) {
-            $sql .= ' WHERE ' . implode(' AND ', $conditions);
-        }
-
-        $sql .= ' ORDER BY j.`accounting_date` DESC, j.`id` DESC';
-
-        [$offset, $limit] = $this->buildPaginationLimit($pageNumber);
-        $sql .= ' LIMIT ' . $offset . ', ' . $limit;
-
-        return $this->db->fetchAll($sql, ...$params);
+        return [$conditions, $params];
     }
 
     public function renderRow(array $rowData): array
@@ -133,6 +146,97 @@ class JournalViewer extends TableViewer
         $row['i2'] = $i2;
 
         return $row;
+    }
+
+    // ── Grid layout (pilot F1, docs/viewer-grid.md) ─────────────────────────
+
+    /** Deník se na desktopu otevírá jako tabulka; list zůstává mobilním formátem. */
+    public function getDefaultLayout(): string
+    {
+        return 'grid';
+    }
+
+    public function getGridColumns(): ?array
+    {
+        $cs = $this->language === 'cs';
+
+        return [
+            ['id' => 'accounting_date', 'label' => $cs ? 'Datum' : 'Date', 'width' => 96],
+            ['id' => 'doc_number', 'label' => $cs ? 'Doklad' : 'Document'],
+            ['id' => 'account_number', 'label' => $cs ? 'Účet' : 'Account', 'width' => 80],
+            ['id' => 'money_dr', 'label' => 'MD', 'width' => 110, 'align' => 'right'],
+            ['id' => 'money_cr', 'label' => 'DAL', 'width' => 110, 'align' => 'right'],
+            ['id' => 'payment_reference', 'label' => $cs ? 'VS' : 'Reference', 'width' => 130],
+            ['id' => 'partner_name', 'label' => $cs ? 'Osoba' : 'Person'],
+            ['id' => 'text', 'label' => 'Text', 'grow' => true],
+        ];
+    }
+
+    public function renderGridRow(array $rowData): array
+    {
+        $curCode = strtoupper((string) ($rowData['currency'] ?? ''));
+
+        return [
+            'id'    => (int) $rowData['id'],
+            // Chybu nese rowClass (podbarvení); stavový proužek by u deníku
+            // informaci nepřidal.
+            'stateStyle' => null,
+            'rowClass'   => (int) ($rowData['is_error'] ?? 0) === 1 ? 'error' : null,
+            'cells' => [
+                'accounting_date'   => $this->formatDate($rowData['accounting_date'] ?? null),
+                'doc_number'        => ['text' => (string) ($rowData['doc_number'] ?? ''), 'class' => 'primary'],
+                'account_number'    => (string) ($rowData['account_number'] ?? ''),
+                'money_dr'          => $this->gridAmountCell($rowData['money_dr'] ?? 0, $rowData['money_dr_cur'] ?? 0, $curCode),
+                'money_cr'          => $this->gridAmountCell($rowData['money_cr'] ?? 0, $rowData['money_cr_cur'] ?? 0, $curCode),
+                'payment_reference' => (string) ($rowData['payment_reference'] ?? ''),
+                'partner_name'      => (string) ($rowData['partner_name'] ?? ''),
+                'text'              => (string) ($rowData['text'] ?? ''),
+            ],
+        ];
+    }
+
+    /**
+     * Součty obratů MD/DAL přes celý filtrovaný set — stejná WHERE skladba
+     * jako selectRows() (buildConditions), jinak by footer neodpovídal
+     * zobrazeným filtrům/hledání.
+     */
+    public function renderGridFooter(?string $search, array $filters): ?array
+    {
+        $sql = 'SELECT SUM(j.`money_dr`) AS sum_dr, SUM(j.`money_cr`) AS sum_cr'
+            . ' FROM `' . $this->table . '` j'
+            . ' LEFT JOIN `base_persons_persons` p ON p.`id` = j.`partner`';
+
+        [$conditions, $params] = $this->buildConditions($search, $filters);
+
+        if ($conditions !== []) {
+            $sql .= ' WHERE ' . implode(' AND ', $conditions);
+        }
+
+        $r = $this->db->fetchRow($sql, ...$params);
+
+        return [
+            'accounting_date' => 'Σ',
+            'money_dr' => ['text' => $this->formatMoney($r['sum_dr'] ?? 0), 'class' => 'amount'],
+            'money_cr' => ['text' => $this->formatMoney($r['sum_cr'] ?? 0), 'class' => 'amount'],
+        ];
+    }
+
+    /**
+     * Buňka částky MD/DAL: prázdná při nule; u cizoměnového řádku druhý
+     * span s částkou v měně dokladu a kódem měny.
+     *
+     * @return array|null span(y) buňky, null = prázdná buňka
+     */
+    private function gridAmountCell(mixed $amount, mixed $amountCur, string $curCode): ?array
+    {
+        if ((float) ($amount ?? 0) === 0.0) {
+            return null;
+        }
+        $spans = [['text' => $this->formatMoney($amount), 'class' => 'amount']];
+        if ((float) ($amountCur ?? 0) !== 0.0) {
+            $spans[] = ['text' => $this->formatMoney($amountCur) . ' ' . $curCode, 'class' => 'muted'];
+        }
+        return $spans;
     }
 
     public function renderDetail(int $recordId): array

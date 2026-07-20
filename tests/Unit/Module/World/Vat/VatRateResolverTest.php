@@ -112,12 +112,16 @@ class VatRateResolverTest extends TestCase
 
     public function testResolveVatPctMissingPercentThrows(): void
     {
-        // cz-203 is a hidden output code with no vatPercents entry — looking
-        // it up should fail because there's no rate for any date.
-        $r = $this->realResolver();
+        // Kód existuje ve vatCodes, ale nemá žádný záznam ve vatPercents —
+        // resolveVatPct musí selhat. (V reálném vat-cz.jsonc už žádný takový
+        // kód není — hlídá VatReverseCodeRatesTest — proto syntetický config.)
+        $r = $this->resolverFromArray([
+            'vatCodes'    => ['cz-777' => ['category' => 'standard']],
+            'vatPercents' => [],
+        ]);
         $this->expectException(\LogicException::class);
         $this->expectExceptionMessage("No VAT percentage defined");
-        $r->resolveVatPct('cz', 'cz-203', '2024-06-01');
+        $r->resolveVatPct('cz', 'cz-777', '2024-06-01');
     }
 
     public function testResolveVatPctOutsideValidityRangeThrows(): void

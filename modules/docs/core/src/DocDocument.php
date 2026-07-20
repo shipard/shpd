@@ -173,14 +173,16 @@ abstract class DocDocument extends Document
         // TableGateway only syncs child sets that are present in $data, so
         // omitting them protects existing DB rows from being wiped.
         $vatMode = (int) ($data['vat_mode'] ?? 1);
+        $resolved = $this->resolveVatCodesForDoc($data);
+        $vatCodes = $resolved['codes'] ?? null;
         $rowsForCompute = $this->resolveRowsForCompute($data);
         foreach ($rowsForCompute as &$row) {
             $this->calculateRowPrice($row);
-            $this->calculateRowVat($row, $vatMode);
+            $this->calculateRowVat($row, $vatMode, $vatCodes);
         }
         unset($row);
 
-        $recap = $this->buildVatRecapitulation($data, $rowsForCompute);
+        $recap = $this->buildVatRecapitulation($data, $rowsForCompute, $resolved);
         $data['vatRecap'] = $recap;
 
         $this->sumTotals($data, $recap, $rowsForCompute);
@@ -502,7 +504,12 @@ abstract class DocDocument extends Document
         }
     }
 
-    protected function calculateRowVat(array &$row, int $vatMode): void
+    /**
+     * @param array<string, array<string, mixed>>|null $vatCodes VAT code
+     *        definitions for the document's country (from resolveVatCodesForDoc).
+     *        Null = country/config unresolved → compute without code semantics.
+     */
+    protected function calculateRowVat(array &$row, int $vatMode, ?array $vatCodes = null): void
     {
         $rowKind = (int) ($row['row_kind'] ?? 1);
         if ($rowKind !== 1) {
@@ -523,6 +530,21 @@ abstract class DocDocument extends Document
 
         $pct = (float) $row['vat_pct'];
 
+        // noPayTax kódy (tuzemská PDP, EU pořízení, osvobozená plnění): daň
+        // není součástí částky placené dodavateli, takže celá total_price je
+        // základ — i pro vat_mode 2, kde by zpětný rozpočet byl chybný.
+        $codeDef = $vatCodes[(string) $row['vat_code']] ?? null;
+        if ($codeDef !== null && !empty($codeDef['noPayTax'])) {
+            $row['vat_base']  = $totalPrice;
+            $row['vat_total'] = $totalPrice;
+            // Vstupní samovyměření (reverseVatCode) nese spočtenou daň jako
+            // informativní nárok na odpočet; výstupní PDP / osvobozené = 0.
+            $row['vat_amount'] = !empty($codeDef['reverseVatCode'])
+                ? round($totalPrice * $pct / 100.0, 2)
+                : 0.0;
+            return;
+        }
+
         if ($vatMode === 1) {
             // From base — total_price is the base
             $row['vat_base']   = $totalPrice;
@@ -542,7 +564,7 @@ abstract class DocDocument extends Document
      * @param array<int, array<string, mixed>> $rowsOverride Pre-computed rows; falls back to $data['rows'] when empty.
      * @return array<int, array<string, mixed>>
      */
-    protected function buildVatRecapitulation(array &$data, array $rowsOverride = []): array
+    protected function buildVatRecapitulation(array &$data, array $rowsOverride = [], ?array $resolved = null): array
     {
         $rows = $rowsOverride !== []
             ? $rowsOverride
@@ -551,22 +573,12 @@ abstract class DocDocument extends Document
             return [];
         }
 
-        $vatRegId = $data['vat_registration'] ?? null;
-        $countryCode = $this->resolveCountryFromVatRegistration($vatRegId);
-        if ($countryCode === null) {
+        $resolved ??= $this->resolveVatCodesForDoc($data);
+        if ($resolved === null) {
             return [];
         }
-
-        try {
-            $vatCodes = $this->vatRateResolver()->getVatCodes(
-                $countryCode,
-                direction: null,
-                place: null,
-                includeHidden: true,
-            );
-        } catch (\LogicException) {
-            return [];
-        }
+        $countryCode = $resolved['country'];
+        $vatCodes    = $resolved['codes'];
 
         // 1. Group rows by (vat_code, vat_pct), sum base
         $grouped = [];
@@ -689,6 +701,34 @@ abstract class DocDocument extends Document
             (int) $vatRegId,
         );
         return $row !== null ? (string) $row['country'] : null;
+    }
+
+    /**
+     * Rozliší zemi + definice DPH kódů dokladu na jednom místě, aby řádkový
+     * výpočet (`calculateRowVat`, noPayTax) i rekapitulace sdílely stejný
+     * lookup. Vrací `null`, když zemi nelze dohledat z `vat_registration`
+     * nebo chybí DPH konfigurace — volající to berou jako „počítej řádky bez
+     * sémantiky kódů, rekapitulace je prázdná".
+     *
+     * @return array{country: string, codes: array<string, array<string, mixed>>}|null
+     */
+    private function resolveVatCodesForDoc(array $data): ?array
+    {
+        $countryCode = $this->resolveCountryFromVatRegistration($data['vat_registration'] ?? null);
+        if ($countryCode === null) {
+            return null;
+        }
+        try {
+            $vatCodes = $this->vatRateResolver()->getVatCodes(
+                $countryCode,
+                direction: null,
+                place: null,
+                includeHidden: true,
+            );
+        } catch (\LogicException) {
+            return null;
+        }
+        return ['country' => $countryCode, 'codes' => $vatCodes];
     }
 
     // ── Totals, rounding, exchange ──────────────────────────────────────────

@@ -121,4 +121,71 @@ class DocDocumentRowCalcTest extends TestCase
         $this->assertSame(0.0, $row['vat_amount']);
         $this->assertSame(100.0, $row['vat_total']);
     }
+
+    // ── calculateRowVat: noPayTax kódy (Z3) ─────────────────────────────────
+
+    /** @return array<string, array<string, mixed>> */
+    private function vatCodes(): array
+    {
+        return [
+            // Vstupní samovyměření (PDP, EU pořízení) — noPayTax + reverseVatCode.
+            'cz-115' => ['noPayTax' => 1, 'reverseVatCode' => 'cz-203'],
+            // Výstupní PDP / osvobozené — noPayTax bez reverseVatCode.
+            'cz-150' => ['noPayTax' => 1],
+            // Běžný kód bez noPayTax.
+            'cz-110' => [],
+        ];
+    }
+
+    public function testCalculateRowVatSelfAssessedInputFromBase(): void
+    {
+        $row = ['row_kind' => 1, 'total_price' => 1000, 'vat_code' => 'cz-115', 'vat_pct' => 21];
+        $this->doc()->calculateRowVatPub($row, 1, $this->vatCodes());
+
+        $this->assertSame(1000.0, $row['vat_base']);
+        $this->assertSame(210.0, $row['vat_amount']);
+        $this->assertSame(1000.0, $row['vat_total']);
+    }
+
+    public function testCalculateRowVatSelfAssessedInputFromTotalUsesFullBase(): void
+    {
+        // Mode 2: total_price je celý základ, žádný zpětný rozpočet.
+        $row = ['row_kind' => 1, 'total_price' => 1000, 'vat_code' => 'cz-115', 'vat_pct' => 21];
+        $this->doc()->calculateRowVatPub($row, 2, $this->vatCodes());
+
+        $this->assertSame(1000.0, $row['vat_base']);
+        $this->assertSame(210.0, $row['vat_amount']);
+        $this->assertSame(1000.0, $row['vat_total']);
+    }
+
+    public function testCalculateRowVatOutputPdpHasZeroAmount(): void
+    {
+        $row = ['row_kind' => 1, 'total_price' => 1900, 'vat_code' => 'cz-150', 'vat_pct' => 21];
+        $this->doc()->calculateRowVatPub($row, 1, $this->vatCodes());
+
+        $this->assertSame(1900.0, $row['vat_base']);
+        $this->assertSame(0.0, $row['vat_amount']);
+        $this->assertSame(1900.0, $row['vat_total']);
+    }
+
+    public function testCalculateRowVatOrdinaryCodeWithDefsUnchanged(): void
+    {
+        $row = ['row_kind' => 1, 'total_price' => 200, 'vat_code' => 'cz-110', 'vat_pct' => 21];
+        $this->doc()->calculateRowVatPub($row, 1, $this->vatCodes());
+
+        $this->assertSame(200.0, $row['vat_base']);
+        $this->assertSame(42.0, $row['vat_amount']);
+        $this->assertSame(242.0, $row['vat_total']);
+    }
+
+    public function testCalculateRowVatNullDefsUnchanged(): void
+    {
+        // Bez definic kódů (nedohledaná země) — noPayTax se neuplatní.
+        $row = ['row_kind' => 1, 'total_price' => 1000, 'vat_code' => 'cz-115', 'vat_pct' => 21];
+        $this->doc()->calculateRowVatPub($row, 1, null);
+
+        $this->assertSame(1000.0, $row['vat_base']);
+        $this->assertSame(210.0, $row['vat_amount']);
+        $this->assertSame(1210.0, $row['vat_total']);
+    }
 }

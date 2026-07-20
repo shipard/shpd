@@ -59,9 +59,10 @@ class TestableDocsHeadsDocument extends DocsHeadsDocument
         $this->calculateRowPrice($row);
     }
 
-    public function calculateRowVatPub(array &$row, int $vatMode): void
+    /** @param array<string, array<string, mixed>>|null $vatCodes */
+    public function calculateRowVatPub(array &$row, int $vatMode, ?array $vatCodes = null): void
     {
-        $this->calculateRowVat($row, $vatMode);
+        $this->calculateRowVat($row, $vatMode, $vatCodes);
     }
 
     /** @return array<int, array<string, mixed>> */
@@ -70,9 +71,9 @@ class TestableDocsHeadsDocument extends DocsHeadsDocument
         return $this->buildVatRecapitulation($data);
     }
 
-    public function sumTotalsPub(array &$data, array $recap): void
+    public function sumTotalsPub(array &$data, array $recap, array $rows = []): void
     {
-        $this->sumTotals($data, $recap);
+        $this->sumTotals($data, $recap, $rows);
     }
 
     public function applyTotalRoundingPub(array &$data): void

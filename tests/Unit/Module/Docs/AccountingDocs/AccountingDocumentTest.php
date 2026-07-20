@@ -14,13 +14,18 @@ use Shipard\Module\Docs\AccountingDocs\AccountingDocument;
  */
 class AccountingDocumentTest extends TestCase
 {
-    /** Testovací subclass zpřístupňující protected sumTotals. */
+    /** Testovací subclass zpřístupňující protected sumTotals + applyDomesticAmounts. */
     private function doc(): AccountingDocument
     {
         return new class extends AccountingDocument {
             public function sumTotalsPub(array &$data, array $rows): void
             {
                 $this->sumTotals($data, [], $rows);
+            }
+
+            public function applyDomesticAmountsPub(array &$data, array &$rows, array $recap): void
+            {
+                $this->applyDomesticAmounts($data, $rows, $recap);
             }
         };
     }
@@ -114,5 +119,25 @@ class AccountingDocumentTest extends TestCase
         $this->assertSame(1250.0, $data['total_base']);
         $this->assertSame(0.0, $data['total_vat']);
         $this->assertSame(0.0, $data['total_rounding']);
+    }
+
+    /**
+     * cmnbkp má hook headTotalsIncludeRowsOutsideRecap()=false, takže Z1
+     * fallback v applyDomesticAmounts nesmí sečíst obě strany kontace do
+     * total_base_dom (base-class by z prázdného recapu přičetl všechny řádky).
+     */
+    public function testDomesticAmountsDoNotIncludeRowsOutsideRecap(): void
+    {
+        $data = ['total_amount' => 1000.0, 'exchange_rate' => 1.0];
+        // Dvě kontační strany, obě s vat_base — kdyby se fallback aplikoval,
+        // total_base_dom by bylo 2000 (MD+DAL), ne 0.
+        $rows = [
+            ['row_kind' => 1, 'acc_side' => 0, 'vat_base' => 1000.0, 'vat_amount' => 0.0],
+            ['row_kind' => 1, 'acc_side' => 1, 'vat_base' => 1000.0, 'vat_amount' => 0.0],
+        ];
+        $this->doc()->applyDomesticAmountsPub($data, $rows, []);
+
+        $this->assertSame(0.0, $data['total_base_dom']);
+        $this->assertSame(0.0, $data['total_vat_dom']);
     }
 }

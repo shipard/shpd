@@ -725,9 +725,55 @@ abstract class DocDocument extends Document
     // ── Totals, rounding, exchange ──────────────────────────────────────────
 
     /**
-     * Součty hlavičky z rekapitulace DPH. Báze ignoruje $rows (faktury
-     * sčítají přes recap); subclassy bez DPH (cmnbkp) si přes $rows počítají
-     * součty z řádků.
+     * Zda mají součty hlavičky zahrnout i řádky mimo DPH rekapitulaci (řádky
+     * bez kódu, doklady z období neplátcovství). Faktury ano — jinak by
+     * doklad bez DPH měl total_* = 0 a deník bez strany 321. Subclassy s
+     * vlastní logikou součtů (cmnbkp sčítá z řádků) hook vypnou.
+     */
+    protected function headTotalsIncludeRowsOutsideRecap(): bool
+    {
+        return true;
+    }
+
+    /**
+     * Součet řádkových hodnot těch item řádků, jejichž skupina
+     * (`vatGroupKey`) není v rekapitulaci — tj. řádky bez `vat_code`, nebo
+     * všechny řádky když je recap prázdný (neplátce / nedohledaná země).
+     * Po Z3 mají bezkódové řádky vat_amount 0 a vat_total = vat_base, takže
+     * fallback je konzistentní se součty z recapu.
+     *
+     * @param array<int, array<string, mixed>> $rows
+     * @param array<int, array<string, mixed>> $recap
+     * @return array{base: float, vat: float, total: float, base_dom: float, vat_dom: float}
+     */
+    private function sumRowsOutsideRecap(array $rows, array $recap): array
+    {
+        $recapKeys = [];
+        foreach ($recap as $r) {
+            $recapKeys[$this->vatGroupKey($r['vat_code'] ?? '', $r['vat_pct'] ?? 0)] = true;
+        }
+
+        $sum = ['base' => 0.0, 'vat' => 0.0, 'total' => 0.0, 'base_dom' => 0.0, 'vat_dom' => 0.0];
+        foreach ($rows as $row) {
+            if ((int) ($row['row_kind'] ?? 1) !== 1) {
+                continue;
+            }
+            if (isset($recapKeys[$this->vatGroupKey($row['vat_code'] ?? '', $row['vat_pct'] ?? 0)])) {
+                continue;
+            }
+            $sum['base']     += (float) ($row['vat_base'] ?? 0);
+            $sum['vat']      += (float) ($row['vat_amount'] ?? 0);
+            $sum['total']    += (float) ($row['vat_total'] ?? 0);
+            $sum['base_dom'] += (float) ($row['vat_base_dom'] ?? 0);
+            $sum['vat_dom']  += (float) ($row['vat_amount_dom'] ?? 0);
+        }
+        return $sum;
+    }
+
+    /**
+     * Součty hlavičky z rekapitulace DPH. Doplněné o řádky mimo rekapitulaci
+     * (bezkódové / doklady bez DPH) přes sumRowsOutsideRecap, jinak by měly
+     * total_* = 0. Subclassy bez DPH (cmnbkp) mají vlastní override.
      *
      * @param array<int, array<string, mixed>> $rows Řádky po compute pipeline.
      */
@@ -741,6 +787,13 @@ abstract class DocDocument extends Document
             if (!empty($r['sum_base']))  { $base  += (float) $r['base']; }
             if (!empty($r['sum_tax']))   { $vat   += (float) $r['tax']; }
             if (!empty($r['sum_total'])) { $total += (float) $r['total']; }
+        }
+
+        if ($this->headTotalsIncludeRowsOutsideRecap()) {
+            $extra = $this->sumRowsOutsideRecap($rows, $recap);
+            $base  += $extra['base'];
+            $vat   += $extra['vat'];
+            $total += $extra['total'];
         }
 
         $data['total_base']     = round($base, 2);
@@ -809,11 +862,18 @@ abstract class DocDocument extends Document
 
         // 2. Head: base/vat as recap sums (same sum flags as sumTotals — NOT
         //    an independent rate conversion), amount by rate, rounding derived.
+        //    Řádky mimo rekapitulaci (bezkódové) se přičtou z jejich _dom
+        //    hodnot spočtených v kroku 1 — stejný fallback jako sumTotals.
         $baseDom = 0.0;
         $vatDom  = 0.0;
         foreach ($recap as $r) {
             if (!empty($r['sum_base'])) { $baseDom += (float) ($r['base_dom'] ?? 0); }
             if (!empty($r['sum_tax']))  { $vatDom  += (float) ($r['tax_dom']  ?? 0); }
+        }
+        if ($this->headTotalsIncludeRowsOutsideRecap()) {
+            $extra = $this->sumRowsOutsideRecap($rows, $recap);
+            $baseDom += $extra['base_dom'];
+            $vatDom  += $extra['vat_dom'];
         }
         $data['total_base_dom']     = round($baseDom, 2);
         $data['total_vat_dom']      = round($vatDom, 2);

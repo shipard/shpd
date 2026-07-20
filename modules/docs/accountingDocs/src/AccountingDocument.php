@@ -29,6 +29,16 @@ class AccountingDocument extends DocsHeadsDocument
         return false;
     }
 
+    /**
+     * cmnbkp má vlastní sumTotals (Σ MD z řádků) a nesmí do součtů přičítat
+     * řádky mimo DPH rekapitulaci — jinak by base-class fallback v
+     * applyDomesticAmounts sečetl obě strany kontace do total_base_dom.
+     */
+    protected function headTotalsIncludeRowsOutsideRecap(): bool
+    {
+        return false;
+    }
+
     public function validate(array &$data): ValidationResult
     {
         // cmnbkp je bez DPH (useTax:0): vat_mode 0 vypne v bázi požadavek na

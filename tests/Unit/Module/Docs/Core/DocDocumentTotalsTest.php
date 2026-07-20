@@ -138,4 +138,66 @@ class DocDocumentTotalsTest extends TestCase
         $this->assertSame(200.0, $data['total_amount_dom']);
         $this->assertSame(0.0, $data['total_rounding_dom']);
     }
+
+    // ── Z1: řádky mimo DPH rekapitulaci ─────────────────────────────────────
+
+    public function testSumTotalsFromRowsWhenRecapEmpty(): void
+    {
+        // Doklad z období neplátcovství — řádky bez kódu, prázdná rekapitulace.
+        // Po Z3 mají bezkódové řádky vat_amount 0 a vat_total = vat_base.
+        $recap = [];
+        $rows = [
+            ['row_kind' => 1, 'vat_code' => null, 'vat_pct' => null,
+             'vat_base' => 9490.0, 'vat_amount' => 0.0, 'vat_total' => 9490.0],
+        ];
+        $data = [];
+        $this->doc()->sumTotalsPub($data, $recap, $rows);
+
+        $this->assertSame(9490.0, $data['total_base']);
+        $this->assertSame(0.0, $data['total_vat']);
+        $this->assertSame(9490.0, $data['total_amount']);
+    }
+
+    public function testSumTotalsMixedRecapAndOutsideRows(): void
+    {
+        // Kódový řádek jde přes recap; bezkódový přes fallback z řádků.
+        $recap = [
+            ['vat_code' => 'cz-110', 'vat_pct' => 21.0, 'base' => 1000.0, 'tax' => 210.0,
+             'total' => 1210.0, 'sum_base' => 1, 'sum_tax' => 1, 'sum_total' => 1],
+        ];
+        $rows = [
+            ['row_kind' => 1, 'vat_code' => 'cz-110', 'vat_pct' => 21,
+             'vat_base' => 1000.0, 'vat_amount' => 210.0, 'vat_total' => 1210.0],
+            ['row_kind' => 1, 'vat_code' => null, 'vat_pct' => null,
+             'vat_base' => 500.0, 'vat_amount' => 0.0, 'vat_total' => 500.0],
+        ];
+        $data = [];
+        $this->doc()->sumTotalsPub($data, $recap, $rows);
+
+        $this->assertSame(1500.0, $data['total_base']);
+        $this->assertSame(210.0, $data['total_vat']);
+        $this->assertSame(1710.0, $data['total_amount']);
+    }
+
+    public function testApplyDomesticAmountsIncludesRowsOutsideRecap(): void
+    {
+        // Prázdný recap, bezkódový řádek — _dom součty z řádků; invariant platí.
+        $recap = [];
+        $rows = [
+            ['row_kind' => 1, 'vat_code' => null, 'vat_pct' => null,
+             'vat_base' => 100.0, 'vat_amount' => 0.0, 'vat_total' => 100.0],
+        ];
+        $data = ['total_amount' => 100.0, 'exchange_rate' => 25.0];
+        $this->doc()->applyDomesticAmountsPub($data, $rows, $recap);
+
+        $this->assertSame(2500.0, $data['total_base_dom']);
+        $this->assertSame(0.0, $data['total_vat_dom']);
+        $this->assertSame(2500.0, $data['total_amount_dom']);
+        // base_dom + vat_dom + rounding_dom == amount_dom
+        $this->assertSame(0.0, $data['total_rounding_dom']);
+        $this->assertSame(
+            $data['total_amount_dom'],
+            round($data['total_base_dom'] + $data['total_vat_dom'] + $data['total_rounding_dom'], 2),
+        );
+    }
 }

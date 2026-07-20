@@ -73,11 +73,13 @@ class DocDocumentVatRecapTest extends TestCase
                         'category' => 'exempt', 'place' => 'domestic', 'direction' => 'output',
                     ],
                 ],
+                // Reverse kód cz-203 zde ZÁMĚRNĚ nemá vatPercents záznam —
+                // pár musí dědit sazbu primární skupiny (cz-115), ne volat
+                // rate resolver (ten by na chybějící sazbu vyhodil výjimku).
                 'vatPercents' => [
                     ['code' => 'cz-110', 'from' => '0000-00-00', 'to' => '0000-00-00', 'value' => 21],
                     ['code' => 'cz-111', 'from' => '0000-00-00', 'to' => '0000-00-00', 'value' => 12],
                     ['code' => 'cz-115', 'from' => '0000-00-00', 'to' => '0000-00-00', 'value' => 21],
-                    ['code' => 'cz-203', 'from' => '0000-00-00', 'to' => '0000-00-00', 'value' => 21],
                     ['code' => 'cz-123', 'from' => '0000-00-00', 'to' => '0000-00-00', 'value' => 0],
                 ],
                 'vatNotes' => [],
@@ -195,8 +197,11 @@ class DocDocumentVatRecapTest extends TestCase
         $this->assertSame(0, $recap[0]['sum_tax']);
         $this->assertSame(0, $recap[0]['is_reverse_pair']);
 
-        // Paired cz-203 — base=200, tax=42 (21%), all sum_*=0, is_reverse_pair=1
+        // Paired cz-203 — sazbu i daň dědí z primární skupiny (21 %), base=200,
+        // tax=42, all sum_*=0, is_reverse_pair=1. cz-203 nemá vlastní
+        // vatPercents (viz buildConfig) — důkaz, že se resolver nevolá.
         $this->assertSame('cz-203', $recap[1]['vat_code']);
+        $this->assertSame(21.0, $recap[1]['vat_pct']);
         $this->assertSame(200.0, $recap[1]['base']);
         $this->assertSame(42.0, $recap[1]['tax']);
         $this->assertSame(0, $recap[1]['sum_base']);
@@ -326,7 +331,7 @@ class DocDocumentVatRecapTest extends TestCase
         $this->assertSame(3025.0, $recap[0]['total_dom']);
     }
 
-    public function testUnknownVatCodeIsSkipped(): void
+    public function testUnknownVatCodeThrows(): void
     {
         $doc = $this->buildDoc();
         $data = [
@@ -336,9 +341,10 @@ class DocDocumentVatRecapTest extends TestCase
             'vat_registration' => 1,
             'vat_duzp' => '2026-05-06',
         ];
-        $recap = $doc->buildVatRecapitulationPub($data);
 
-        $this->assertSame([], $recap);
+        // Neznámý kód je datová chyba — nesmí tiše vypadnout ze součtů.
+        $this->expectException(\DomainException::class);
+        $doc->buildVatRecapitulationPub($data);
     }
 
     public function testDifferentCodesProduceMultipleRows(): void

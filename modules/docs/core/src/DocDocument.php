@@ -577,8 +577,7 @@ abstract class DocDocument extends Document
         if ($resolved === null) {
             return [];
         }
-        $countryCode = $resolved['country'];
-        $vatCodes    = $resolved['codes'];
+        $vatCodes = $resolved['codes'];
 
         // 1. Group rows by (vat_code, vat_pct), sum base
         $grouped = [];
@@ -618,7 +617,9 @@ abstract class DocDocument extends Document
         foreach ($grouped as $entry) {
             $code = $entry['vat_code'];
             if (!isset($vatCodes[$code])) {
-                continue;
+                // Řádek s neexistujícím DPH kódem je datová chyba, kterou musí
+                // uživatel opravit — ne tichá ztráta skupiny ze součtů.
+                throw new \DomainException("Neznámý DPH kód '{$code}' — opravte řádky dokladu.");
             }
             $codeDef = $vatCodes[$code];
 
@@ -652,29 +653,19 @@ abstract class DocDocument extends Document
             $primary['total_dom'] = round($primary['total'] * $exchRate, 2);
             $recap[] = $primary;
 
-            // Reverse charge — generate paired (oddanění) row
+            // Reverse charge — generate paired (oddanění) row. Samovyměření je
+            // z definice ve stejné sazbě jako nárok na odpočet, takže pár dědí
+            // vat_pct i daň primární skupiny — žádný rate resolver není třeba.
             if ($selfAssessed) {
                 $reverseCodeKey = (string) $codeDef['reverseVatCode'];
                 $reverseDef     = $vatCodes[$reverseCodeKey];
 
-                try {
-                    $reversePct = $this->vatRateResolver()->resolveVatPct(
-                        $countryCode,
-                        $reverseCodeKey,
-                        (string) ($data['vat_duzp'] ?? date('Y-m-d')),
-                    );
-                } catch (\LogicException) {
-                    // Unknown rate for date — skip pair generation rather than crash.
-                    continue;
-                }
-                $reverseTax = $this->applyRounding($base * $reversePct / 100.0, $vatRoundingMode);
-
                 $paired = [
                     'vat_code'        => $reverseCodeKey,
-                    'vat_pct'         => $reversePct,
+                    'vat_pct'         => $entry['vat_pct'],
                     'base'            => $base,
-                    'tax'             => $reverseTax,
-                    'total'           => round($base + $reverseTax, 2),
+                    'tax'             => $tax,
+                    'total'           => round($base + $tax, 2),
                     'sum_base'        => (int) ($reverseDef['sumBase']  ?? 1),
                     'sum_tax'         => (int) ($reverseDef['sumTax']   ?? 1),
                     'sum_total'       => (int) ($reverseDef['sumTotal'] ?? 1),

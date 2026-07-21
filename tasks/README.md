@@ -207,6 +207,8 @@ Saldokonto nad účetním deníkem. Designový dokument
 | `accbal-phase2b-ledger-generator.md` | 2b | Generátor saldo pohybů z deníku + allocations |
 | `accbal-phase3-matcher.md` | 3 | Matcher — párování úhrad (FIFO alokace, ruční úprava) |
 | `accbal-clearing-infrastructure.md` | — | Clearing účty + saldo skupina pro migrovaný DS |
+| `accbal-ledger-viewgroup-chips.md` | — | Saldo pohyby: chip bar saldokont místo roletky (viewGroups z dat) |
+| `accbal-nav-items.md` | — | Saldokonta v sidebaru — navigation providery + `show_in_navigation` |
 
 ## Došlá pošta (core.mail)
 

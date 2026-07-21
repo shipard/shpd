@@ -35,6 +35,7 @@ use Shipard\Module\Core\Mail\ExtractedDocumentDocument;
  * variabilní symbol; u registry „Platí do"); `subtitle` se u nich neposílá.
  * Bez partnera karta padá na dnešní složený `title`/`subtitle` fallback.
  * Všechny tři druhy mail karet nesou `emailSubject` (holý předmět zprávy).
+ * a volitelné `receivedDateText` (lokalizované datum doručení z `received_at`).
  * Data jdou z `extracted_json` (kanonický doklad) — feed je stropovaný
  * (maxCards), takže N `json_decode` je únosné; denormalizace headline polí
  * do sloupců je možná optimalizace později.
@@ -235,6 +236,10 @@ final class MailSuggestionsSource implements FeedSource
         if ($subject !== '') {
             $card['emailSubject'] = $subject;
         }
+        $receivedDateText = $this->formatDate($ctx, (string) ($row['received_at'] ?? ''));
+        if ($receivedDateText !== null) {
+            $card['receivedDateText'] = $receivedDateText;
+        }
         $details = $isRegistry
             ? $this->registryDetails($ctx, $docType, $canonical)
             : $this->docsDetails($ctx, $canonical);
@@ -296,6 +301,10 @@ final class MailSuggestionsSource implements FeedSource
         ];
         if ($subject !== '') {
             $card['emailSubject'] = $subject;
+        }
+        $receivedDateText = $this->formatDate($ctx, (string) ($row['received_at'] ?? ''));
+        if ($receivedDateText !== null) {
+            $card['receivedDateText'] = $receivedDateText;
         }
         return $card;
     }
@@ -369,6 +378,10 @@ final class MailSuggestionsSource implements FeedSource
         ];
         if ($subject !== '') {
             $card['emailSubject'] = $subject;
+        }
+        $receivedDateText = $this->formatDate($ctx, (string) ($row['received_at'] ?? ''));
+        if ($receivedDateText !== null) {
+            $card['receivedDateText'] = $receivedDateText;
         }
         return $card;
     }

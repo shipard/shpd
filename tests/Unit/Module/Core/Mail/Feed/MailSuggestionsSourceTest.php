@@ -130,6 +130,7 @@ final class MailSuggestionsSourceTest extends TestCase
         );
         $this->assertSame(94, $card['confidencePct']);
         $this->assertSame('Faktura 2026000123', $card['emailSubject']);
+        $this->assertSame('28. 6. 2026', $card['receivedDateText']);
         $this->assertArrayNotHasKey('subtitle', $card);
         // Default canonical nemá docNumber/dueDate/paymentReference → bez details.
         $this->assertArrayNotHasKey('details', $card);
@@ -188,6 +189,7 @@ final class MailSuggestionsSourceTest extends TestCase
         // Předmět jde strukturovaně; subtitle nese odesílatele (bez duplikace).
         $this->assertSame('Dodavatel s.r.o.', $card['subtitle']);
         $this->assertSame('Nečitelná faktura', $card['emailSubject']);
+        $this->assertSame('27. 6. 2026', $card['receivedDateText']);
         $this->assertArrayNotHasKey('headline', $card);
 
         $actions = $card['actions'];

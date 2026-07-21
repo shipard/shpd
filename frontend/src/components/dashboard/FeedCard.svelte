@@ -17,6 +17,14 @@
 
   const stateClass = $derived(card.stateStyle ? `docState_${card.stateStyle}` : '');
 
+  // Podtitulek: typ dokladu (headline) / subtitle (fallback), volitelně
+  // + datum doručení pošty (receivedDateText, jen mail karty).
+  const subLine = $derived(
+    [card.headline ? card.headline.typeLabel : card.subtitle, card.receivedDateText]
+      .filter(Boolean)
+      .join(' · '),
+  );
+
   // Alert akce nesou vlastní lokalizovaný label; mail akce se lokalizují
   // klientsky podle action.id (i18n klíče dashboard.card.action.*).
   function actionLabel(action) {
@@ -64,14 +72,9 @@
   <div class="shpd-feed-card__body">
     <div class="shpd-feed-card__head">
       <div class="shpd-feed-card__heading">
-        {#if card.headline}
-          <div class="shpd-feed-card__title">{card.headline.partnerName}</div>
-          <div class="shpd-feed-card__subtitle">{card.headline.typeLabel}</div>
-        {:else}
-          <div class="shpd-feed-card__title">{card.title}</div>
-          {#if card.subtitle}
-            <div class="shpd-feed-card__subtitle">{card.subtitle}</div>
-          {/if}
+        <div class="shpd-feed-card__title">{card.headline ? card.headline.partnerName : card.title}</div>
+        {#if subLine}
+          <div class="shpd-feed-card__subtitle">{subLine}</div>
         {/if}
       </div>
       {#if card.confidencePct != null}

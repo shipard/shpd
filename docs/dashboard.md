@@ -100,6 +100,7 @@ Fáze 1 (widget MVP) říkala *„přehled, ne přístupový bod"*. Fáze 2 ten 
   },
   "confidencePct": 94,
   "emailSubject": "Faktura 2026000123",
+  "receivedDateText": "28. 6. 2026",
   "details": [
     { "label": "Číslo dokladu", "value": "2026000123" },
     { "label": "Splatnost", "value": "29. 4. 2026" },
@@ -134,6 +135,11 @@ Fáze 1 (widget MVP) říkala *„přehled, ne přístupový bod"*. Fáze 2 ten 
 - `emailSubject` — **volitelné**, holý předmět zprávy (bez obalu
   „e-mail „…""); posílají ho všechny tři druhy mail karet. Frontend přidává
   ikonu obálky a uvozovky.
+- `receivedDateText` — **volitelné**, lokalizované datum doručení zprávy
+  (server-formátované, cs `j. n. Y` / en `Y-m-d`); posílají ho všechny tři
+  druhy mail karet. Frontend ho zobrazuje za typem dokladu / subtitle
+  (oddělené „·“). Na rozdíl od `timestamp` (řadicí pole všech karet,
+  u alertů = last_seen) nese význam „kdy pošta přišla“.
 - `details` — **volitelné**, pole `{label, value}` pro rozbalovací detail
   karty; labely lokalizuje server dle `ctx->language`. Jen neprázdné
   hodnoty; prázdné pole se neposílá (expander na frontendu se ukazuje jen

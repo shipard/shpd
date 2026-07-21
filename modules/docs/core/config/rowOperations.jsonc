@@ -12,16 +12,22 @@
     //                     (payment_reference / specific_symbol /
     //                     constant_symbol / due_date), jinak z hlavičky.
     //
-    // Forma-facing atribut (řídí, jaký vstup účtu formulář ukáže — protějšek
-    // accountSrc z účtovacího předpisu, musí souhlasit):
+    // Forma-facing atributy (řídí vstupy formuláře — protějšky accountSrc /
+    // sideSrc z účtovacího předpisu, musí souhlasit):
     //   rowAccount: "direct" — účet se zadává přímo na řádku (vstup account)
     //   rowAccount: "item"   — účet přijde z položky typu 2 (vstup item)
+    //   rowSide: 1           — strana MD/DAL se zadává na řádku (vstup
+    //                          acc_side; protějšek sideSrc: "row" předpisu).
+    //                          Přepíná formulář do kontačního layoutu bez
+    //                          položkového bloku (množství/cena/DPH).
     //
-    // Kontační řádek = operace má rowAccount NEBO rowPartner NEBO rowPaymentId.
-    // Saldokontní operace (zápočty) mají rowPartner/rowPaymentId, ale žádný
-    // rowAccount — účet je implicitní z kategorie účtovacího předpisu
-    // (resolveCategoryAccount, ekvivalent starého acc-default.json); formulář
-    // proto vstup účtu/položky nezobrazí.
+    // Operace s rowAccount/rowPartner/rowPaymentId bez rowSide (zálohy,
+    // majetek na fakturách) zůstávají v položkovém layoutu — jen dostanou
+    // navíc vstup účtu a/nebo pole saldo identity; stranu určuje krok
+    // předpisu. Saldokontní operace (zápočty) mají rowPartner/rowPaymentId,
+    // ale žádný rowAccount — účet je implicitní z kategorie účtovacího
+    // předpisu (resolveCategoryAccount, ekvivalent starého acc-default.json);
+    // formulář proto vstup účtu/položky nezobrazí.
 
     "sale.services": {
         "name": "Sale of services",
@@ -131,6 +137,7 @@
         "name": "Accounting record",
         "name:cs": "Účetní zápis",
         "name:en": "Accounting record",
+        "rowSide": 1,
         "rowPartner": 1,
         "rowPaymentId": 1,
         "rowAccount": "direct",
@@ -140,6 +147,7 @@
         "name": "Accounting item",
         "name:cs": "Účetní položka",
         "name:en": "Accounting item",
+        "rowSide": 1,
         "rowPartner": 1,
         "rowPaymentId": 1,
         "rowAccount": "item",
@@ -149,6 +157,7 @@
         "name": "Receivable set-off",
         "name:cs": "Zápočet pohledávky",
         "name:en": "Receivable set-off",
+        "rowSide": 1,
         "rowPartner": 1,
         "rowPaymentId": 1,
         "docTypes": { "cmnbkp": {"order": 300} }
@@ -157,6 +166,7 @@
         "name": "Payable set-off",
         "name:cs": "Zápočet závazku",
         "name:en": "Payable set-off",
+        "rowSide": 1,
         "rowPartner": 1,
         "rowPaymentId": 1,
         "docTypes": { "cmnbkp": {"order": 400} }

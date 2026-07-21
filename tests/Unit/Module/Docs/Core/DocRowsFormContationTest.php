@@ -41,20 +41,32 @@ class DocRowsFormContationTest extends TestCase
         $items = [
             'docs.core.rowOperations' => [
                 'acc.record' => [
-                    'name' => 'Účetní zápis', 'rowPartner' => 1, 'rowPaymentId' => 1,
-                    'rowAccount' => 'direct', 'docTypes' => ['cmnbkp' => ['order' => 100]],
+                    'name' => 'Účetní zápis', 'rowSide' => 1, 'rowPartner' => 1,
+                    'rowPaymentId' => 1, 'rowAccount' => 'direct',
+                    'docTypes' => ['cmnbkp' => ['order' => 100]],
                 ],
                 'acc.item' => [
-                    'name' => 'Účetní položka', 'rowPartner' => 1, 'rowPaymentId' => 1,
-                    'rowAccount' => 'item', 'docTypes' => ['cmnbkp' => ['order' => 200]],
+                    'name' => 'Účetní položka', 'rowSide' => 1, 'rowPartner' => 1,
+                    'rowPaymentId' => 1, 'rowAccount' => 'item',
+                    'docTypes' => ['cmnbkp' => ['order' => 200]],
                 ],
                 // saldokontní operace — vlajky bez rowAccount (účet z kategorie)
                 'acc.balanceReceivable' => [
-                    'name' => 'Zápočet pohledávky', 'rowPartner' => 1, 'rowPaymentId' => 1,
-                    'docTypes' => ['cmnbkp' => ['order' => 300]],
+                    'name' => 'Zápočet pohledávky', 'rowSide' => 1, 'rowPartner' => 1,
+                    'rowPaymentId' => 1, 'docTypes' => ['cmnbkp' => ['order' => 300]],
                 ],
                 // faktura — bez rowAccount, ať ověříme, že položková větev zůstává
                 'purchase.goods' => ['name' => 'Nákup zboží', 'docTypes' => ['invni' => ['order' => 100]]],
+                // zálohy / majetek — přímý účet bez rowSide: položkový layout
+                // s inputem účtu, stranu určuje krok předpisu
+                'purchase.advanceDeduction' => [
+                    'name' => 'Odpočet poskytnuté zálohy', 'rowAccount' => 'direct',
+                    'rowPaymentId' => 1, 'docTypes' => ['invni' => ['order' => 400]],
+                ],
+                'purchase.asset' => [
+                    'name' => 'Pořízení majetku', 'rowAccount' => 'direct',
+                    'docTypes' => ['invni' => ['order' => 600]],
+                ],
             ],
             'docs.core.rowKinds' => [
                 '0' => ['name' => 'Textový řádek'],
@@ -208,5 +220,57 @@ class DocRowsFormContationTest extends TestCase
         $this->assertNotNull($this->findElement($def, 'unit_price'));
         $this->assertNull($this->findElement($def, 'account'));
         $this->assertNull($this->findElement($def, 'acc_side'));
+    }
+
+    public function testAdvanceDeductionKeepsItemLayoutWithAccountAndIdentity(): void
+    {
+        // Záloha na faktuře (rowAccount direct + rowPaymentId, bez rowSide):
+        // položkový layout s DPH blokem zůstává, položku nahrazuje vstup
+        // účtu, přibývá platební identita; strana MD/DAL se nezadává —
+        // určuje ji krok předpisu (reverseSign).
+        $data = ['row_kind' => 1, 'doc_head' => 5, 'operation' => 'purchase.advanceDeduction'];
+        $def = $this->form('invni', vatMode: 2)->buildFormDefinition($data, true);
+
+        $account = $this->findElement($def, 'account');
+        $this->assertNotNull($account);
+        $this->assertSame('lookup', $account->type);
+        $this->assertSame('economy_accounting_accounts', $account->lookup['table']);
+        $this->assertSame(['account_level' => 4], $account->lookup['filter']);
+        $this->assertTrue($account->required);
+
+        $this->assertNull($this->findElement($def, 'item'), 'Přímý účet nahrazuje položku');
+        $this->assertNull($this->findElement($def, 'acc_side'), 'Stranu určuje krok předpisu');
+
+        // Položkový + DPH blok zůstává (odpočet nese záporný základ i daň).
+        $this->assertNotNull($this->findElement($def, 'quantity'));
+        $this->assertNotNull($this->findElement($def, 'vat_code'));
+
+        // Platební identita zálohy (payment_reference = číslo zálohového dokladu).
+        $this->assertNotNull($this->findElement($def, 'payment_reference'));
+        $this->assertNotNull($this->findElement($def, 'due_date'));
+        $this->assertNull($this->findElement($def, 'partner'), 'rowPartner operace nemá');
+    }
+
+    public function testAssetShowsAccountWithoutIdentity(): void
+    {
+        // Majetek: přímý účet ano, platební identita ne (bez rowPaymentId).
+        $data = ['row_kind' => 1, 'doc_head' => 5, 'operation' => 'purchase.asset'];
+        $def = $this->form('invni', vatMode: 2)->buildFormDefinition($data, true);
+
+        $this->assertNotNull($this->findElement($def, 'account'));
+        $this->assertNull($this->findElement($def, 'item'));
+        $this->assertNull($this->findElement($def, 'payment_reference'));
+        $this->assertNull($this->findElement($def, 'partner'));
+        $this->assertNotNull($this->findElement($def, 'vat_code'));
+    }
+
+    public function testAdvanceOperationKeepsPriceCalcModeUntouched(): void
+    {
+        // price_calc_mode = 1 vynucuje jen kontační layout (rowSide);
+        // zálohy v položkovém layoutu počítají cenu standardně.
+        $data = ['row_kind' => 1, 'doc_head' => 5, 'operation' => 'purchase.advanceDeduction'];
+        $result = $this->form('invni', vatMode: 2)->recalculate('operation', $data);
+
+        $this->assertArrayNotHasKey('price_calc_mode', $result->data);
     }
 }

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Shipard\Module\Docs\Core;
 
 use Shipard\Core\Form\FormDefinition;
-use Shipard\Core\Form\FormTab;
+use Shipard\Core\Form\TabBuilder;
 use Shipard\Core\Form\RecalculateResult;
 use Shipard\Core\Form\TableForm;
 use Shipard\Module\World\Vat\VatRateResolver;
@@ -37,11 +37,13 @@ class DocRowsForm extends TableForm
             }
         }
 
-        // Kontační řádek účetního dokladu: operace má `rowAccount` NEBO
-        // saldo vlajky (rowPartner/rowPaymentId). Vlastní layout bez položkového
-        // bloku; faktury (běžné operace) jdou stávající větví níže beze změny.
+        // Kontační řádek účetního dokladu: operace se stranou na řádku
+        // (`rowSide` — protějšek sideSrc: "row" předpisu). Vlastní layout bez
+        // položkového bloku; faktury — včetně operací s přímým účtem (zálohy,
+        // majetek), kde stranu určuje krok předpisu — jdou položkovou větví
+        // níže.
         $opAttrs = $this->resolveOperationAttrs((string) ($data['operation'] ?? ''));
-        if (!$isText && $this->isContationOperation($opAttrs)) {
+        if (!$isText && $this->hasRowSideLayout($opAttrs)) {
             $rowAccount = $opAttrs['rowAccount'] ?? null;
             return $this->buildContationDefinition(
                 $operationOptions,
@@ -51,8 +53,10 @@ class DocRowsForm extends TableForm
         }
 
         $showVat = $headHasVat && !$isText;
+        $directAccount = is_array($opAttrs)
+            && ($opAttrs['rowAccount'] ?? null) === 'direct';
 
-        $tab = $this->tab('basic', 'Řádek')
+        $col = $this->tab('basic', 'Řádek')
             ->section()
                 ->col()
                     ->select('row_kind',
@@ -62,19 +66,33 @@ class DocRowsForm extends TableForm
                     )
                     ->select('operation',
                         options: $operationOptions,
+                        triggers: 'reload',
                         required: !$isText,
                         hidden: $isText,
-                    )
-                    ->lookup('item',
-                        table: 'economy_items',
-                        placeholder: 'Hledat položku…',
-                        triggers: 'reload',
-                        hidden: $isText,
-                        editForm: true,
-                        createForm: true,
-                        editTriggers: true,
-                    )
-                    ->input('description')
+                    );
+
+        // Přímý účet (zálohy, majetek) nahrazuje položku — účet definuje
+        // zaúčtování, položka by s ním soupeřila.
+        if ($directAccount) {
+            $col->lookup('account',
+                table: 'economy_accounting_accounts',
+                filter: ['account_level' => 4],
+                placeholder: 'Hledat účet…',
+                required: true,
+            );
+        } else {
+            $col->lookup('item',
+                table: 'economy_items',
+                placeholder: 'Hledat položku…',
+                triggers: 'reload',
+                hidden: $isText,
+                editForm: true,
+                createForm: true,
+                editTriggers: true,
+            );
+        }
+
+        $col->input('description')
 
                     ->separator('Množství a cena', hidden: $isText)
                     ->number('quantity', triggers: 'reload', hidden: $isText)
@@ -109,16 +127,18 @@ class DocRowsForm extends TableForm
                     ->number('vat_amount', readOnly: true, hidden: !$showVat,
                         label: 'Částka DPH (vypočteno)')
                     ->number('vat_total', readOnly: true, hidden: !$showVat,
-                        label: 'Celkem (vypočteno)')
+                        label: 'Celkem (vypočteno)');
 
-                    ->separator('Pořadí')
-                    ->number('order_pos');
+        $this->appendRowIdentityFields($col, $opAttrs);
+
+        $col->separator('Pořadí')
+            ->number('order_pos');
 
         return new FormDefinition(
             table: $this->table,
             title: 'Řádek dokladu',
             titleNew: 'Nový řádek',
-            tabs: [$tab->build()],
+            tabs: [$col->build()],
         );
     }
 
@@ -181,22 +201,7 @@ class DocRowsForm extends TableForm
             ->input('description')
             ->number('price_calc_mode', hidden: true);
 
-        if (!empty($opAttrs['rowPartner']) || !empty($opAttrs['rowPaymentId'])) {
-            $section->separator('Saldo identita');
-        }
-        if (!empty($opAttrs['rowPartner'])) {
-            $section->lookup('partner',
-                table: 'base_persons_persons',
-                placeholder: 'Hledat partnera…',
-            );
-        }
-        if (!empty($opAttrs['rowPaymentId'])) {
-            $section
-                ->input('payment_reference', label: 'Variabilní symbol')
-                ->input('specific_symbol', label: 'Specifický symbol')
-                ->input('constant_symbol', label: 'Konstantní symbol')
-                ->date('due_date', label: 'Splatnost');
-        }
+        $this->appendRowIdentityFields($section, $opAttrs);
 
         $section->separator('Pořadí')->number('order_pos');
 
@@ -227,33 +232,59 @@ class DocRowsForm extends TableForm
     }
 
     /**
-     * Kontační řádek (vč. saldokontních operací) má `price_calc_mode = 1` (z
-     * celkové), aby `calculateRowPrice` nepřepsal ručně zadanou `total_price`
-     * výpočtem z množství × cena.
+     * Kontační řádek má `price_calc_mode = 1` (z celkové), aby
+     * `calculateRowPrice` nepřepsal ručně zadanou `total_price` výpočtem
+     * z množství × cena.
      */
     private function applyContationRowDefaults(array &$data): void
     {
         $attrs = $this->resolveOperationAttrs((string) ($data['operation'] ?? ''));
-        if ($this->isContationOperation($attrs)) {
+        if ($this->hasRowSideLayout($attrs)) {
             $data['price_calc_mode'] = 1;
         }
     }
 
     /**
-     * Kontační řádek = operace nese účet přímo/z položky (`rowAccount`) NEBO
-     * per-řádkovou saldo identitu (`rowPartner`/`rowPaymentId`). Saldokontní
-     * operace (zápočty) mají jen vlajky a účet z kategorie předpisu.
+     * Kontační layout = operace se stranou MD/DAL na řádku (`rowSide`,
+     * protějšek sideSrc: "row" předpisu) — účetní doklad (cmnbkp). Operace
+     * s `rowAccount`/`rowPartner`/`rowPaymentId` bez `rowSide` (zálohy,
+     * majetek na fakturách) zůstávají v položkovém layoutu.
      *
      * @param array<string, mixed>|null $attrs
      */
-    private function isContationOperation(?array $attrs): bool
+    private function hasRowSideLayout(?array $attrs): bool
     {
-        if (!is_array($attrs)) {
-            return false;
+        return is_array($attrs) && !empty($attrs['rowSide']);
+    }
+
+    /**
+     * Per-řádková saldo identita dle vlajek operace (`rowPartner` /
+     * `rowPaymentId`) — sdílené kontačním i položkovým layoutem. Bez vlajek
+     * (běžné fakturní operace, text) nepřidá nic.
+     *
+     * @param array<string, mixed>|null $opAttrs
+     */
+    private function appendRowIdentityFields(TabBuilder $col, ?array $opAttrs): void
+    {
+        if (!is_array($opAttrs)) {
+            return;
         }
-        return isset($attrs['rowAccount'])
-            || !empty($attrs['rowPartner'])
-            || !empty($attrs['rowPaymentId']);
+        if (!empty($opAttrs['rowPartner']) || !empty($opAttrs['rowPaymentId'])) {
+            $col->separator('Saldo identita');
+        }
+        if (!empty($opAttrs['rowPartner'])) {
+            $col->lookup('partner',
+                table: 'base_persons_persons',
+                placeholder: 'Hledat partnera…',
+            );
+        }
+        if (!empty($opAttrs['rowPaymentId'])) {
+            $col
+                ->input('payment_reference', label: 'Variabilní symbol')
+                ->input('specific_symbol', label: 'Specifický symbol')
+                ->input('constant_symbol', label: 'Konstantní symbol')
+                ->date('due_date', label: 'Splatnost');
+        }
     }
 
     /**

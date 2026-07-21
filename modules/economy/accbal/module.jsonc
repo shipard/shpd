@@ -18,7 +18,8 @@
 
     "settingsItems": [
         { "viewer": "economy.accbal.balances",        "section": "accounting" },
-        { "viewer": "economy.accbal.balanceAccounts",  "section": "accounting" }
+        { "viewer": "economy.accbal.balanceAccounts",  "section": "accounting" },
+        { "table": "economy_accbal_allocations", "section": "other", "subsection": "other.system", "order": 40 }
     ],
 
     "viewers": [

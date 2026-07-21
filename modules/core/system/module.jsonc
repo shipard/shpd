@@ -162,6 +162,8 @@
     "settingsItems": [
         { "page": "appSettings", "section": "app", "order": 10 },
         { "viewer": "core.system.users",   "section": "other", "subsection": "other.system", "order": 20 },
+        { "table": "core_system_user_identities",   "section": "other", "subsection": "other.system", "order": 22 },
+        { "table": "core_system_auth_transactions", "section": "other", "subsection": "other.system", "order": 24 },
         { "table": "core_system_settings", "section": "other", "subsection": "other.system", "order": 30 }
     ],
     "accountItems": [

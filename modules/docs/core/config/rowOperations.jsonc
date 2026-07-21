@@ -63,6 +63,61 @@
             "invni": {"order": 300}
         }
     },
+
+    // Zálohy a majetek (vlna C): účet 314xxx/324xxx je analytika, proto
+    // rowAccount: "direct". rowPaymentId na zálohových operacích —
+    // payment_reference řádku nese číslo zálohového dokladu (staré symbol1),
+    // na které naváže saldokontní párování záloh (Fáze 4+). Odpočty jsou na
+    // dokladu záporné (věrný obraz), stranu otáčí reverseSign v předpisu.
+    "purchase.advanceDeduction": {
+        "name": "Advance payment deduction",
+        "name:cs": "Odpočet poskytnuté zálohy",
+        "name:en": "Advance payment deduction",
+        "rowAccount": "direct",
+        "rowPaymentId": 1,
+        "docTypes": {
+            "invni": {"order": 400}
+        }
+    },
+    "purchase.advanceVat": {
+        "name": "Advance payment taxation",
+        "name:cs": "Zdanění poskytnuté zálohy",
+        "name:en": "Advance payment taxation",
+        "rowAccount": "direct",
+        "rowPaymentId": 1,
+        "docTypes": {
+            "invni": {"order": 500}
+        }
+    },
+    "purchase.asset": {
+        "name": "Asset acquisition",
+        "name:cs": "Pořízení majetku",
+        "name:en": "Asset acquisition",
+        "rowAccount": "direct",
+        "docTypes": {
+            "invni": {"order": 600}
+        }
+    },
+    "sale.advanceDeduction": {
+        "name": "Advance payment deduction",
+        "name:cs": "Odpočet přijaté zálohy",
+        "name:en": "Advance payment deduction",
+        "rowAccount": "direct",
+        "rowPaymentId": 1,
+        "docTypes": {
+            "invno": {"order": 300}
+        }
+    },
+    "sale.advanceVat": {
+        "name": "Advance payment taxation",
+        "name:cs": "Zdanění přijaté zálohy",
+        "name:en": "Advance payment taxation",
+        "rowAccount": "direct",
+        "rowPaymentId": 1,
+        "docTypes": {
+            "invno": {"order": 400}
+        }
+    },
     "acc.entry": {
         "name": "Accounting entry",
         "name:cs": "Účetní položka",

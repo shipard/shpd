@@ -133,6 +133,13 @@
                     "operations": ["sale.services", "sale.goods"]},
                 {"accountSrc": "item", "src": "rows", "side": 1,
                     "operation": "acc.entry"},
+                // Zálohy (vlna C): odpočet je na dokladu záporný (věrný
+                // obraz), reverseSign ho otočí na kladný MD 324xxx; zdanění
+                // zálohy je kladný výnosový řádek, DPH jde z rekapitulace.
+                {"src": "rows", "accountSrc": "row", "side": 0, "reverseSign": 1,
+                    "operation": "sale.advanceDeduction"},
+                {"src": "rows", "accountSrc": "row", "side": 1,
+                    "operation": "sale.advanceVat"},
                 {"cat": "vat", "src": "vat", "side": 1},
                 {"cat": "rounding.revenue", "src": "head", "col": "rounding",
                     "side": 1, "sign": "+", "text": "Zaokrouhlení dokladu"},
@@ -147,6 +154,16 @@
                     "operations": ["purchase.goods", "purchase.services", "purchase.other"]},
                 {"accountSrc": "item", "src": "rows", "side": 0,
                     "operation": "acc.entry"},
+                // Zálohy a majetek (vlna C): odpočet je na dokladu záporný
+                // (věrný obraz), reverseSign ho otočí na kladný DAL 314xxx;
+                // zdanění zálohy a pořízení majetku jsou kladné MD řádky
+                // s přímým účtem, DPH jde z rekapitulace.
+                {"src": "rows", "accountSrc": "row", "side": 1, "reverseSign": 1,
+                    "operation": "purchase.advanceDeduction"},
+                {"src": "rows", "accountSrc": "row", "side": 0,
+                    "operation": "purchase.advanceVat"},
+                {"src": "rows", "accountSrc": "row", "side": 0,
+                    "operation": "purchase.asset"},
                 {"cat": "vat", "src": "vat", "side": 0},
                 {"cat": "rounding.cost", "src": "head", "col": "rounding",
                     "side": 0, "sign": "+", "text": "Zaokrouhlení dokladu"},

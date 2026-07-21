@@ -453,6 +453,127 @@ class AccountingEngineTest extends IntegrationTestCase
     }
 
     /**
+     * Vlna C: invni s odpočtem poskytnuté zálohy — odpočet je na dokladu
+     * záporný (−5 000 základ, −1 050 DPH), reverseSign ho otočí na kladný
+     * DAL 314900; rekapitulace záporné řádky netuje (5 000 / 1 050).
+     * Zálohový řádek nese payment_reference (číslo zálohového dokladu).
+     */
+    public function testInvniAdvanceDeductionBooksReversedSide(): void
+    {
+        $headId = $this->insertHead('invni', [
+            'total_base' => 5000.0, 'total_vat' => 1050.0, 'total_amount' => 6050.0,
+            'total_base_dom' => 5000.0, 'total_vat_dom' => 1050.0, 'total_amount_dom' => 6050.0,
+        ]);
+        $this->insertRow($headId, 'purchase.services', 10000.0, 21.0);
+        $this->insertRow($headId, 'purchase.advanceDeduction', -5000.0, 21.0, [
+            'account'           => $this->accountId('314900'),
+            'payment_reference' => 'ZAL-1',
+        ]);
+        $this->insertRecap($headId, 5000.0, 1050.0);
+
+        $result = $this->engine->accountDocument($headId);
+
+        $this->assertSame(1, $result['state'], json_encode($result['messages']));
+        $journal = $this->journalOf($headId);
+        $this->assertCount(4, $journal);
+        $this->assertBalanced($journal);
+
+        $this->assertEqualsWithDelta(10000.0, (float) $this->lineByPrefix($journal, '518')['money_dr'], 0.001);
+        $this->assertEqualsWithDelta(1050.0, (float) $this->lineByPrefix($journal, '343')['money_dr'], 0.001);
+
+        $deduction = $this->lineByPrefix($journal, '314900');
+        $this->assertEqualsWithDelta(5000.0, (float) $deduction['money_cr'], 0.001, 'Odpočet otočený na kladný DAL');
+        $this->assertEqualsWithDelta(0.0, (float) $deduction['money_dr'], 0.001);
+        $this->assertSame('purchase.advanceDeduction', $deduction['operation']);
+        $this->assertSame('ZAL-1', (string) $deduction['payment_reference']);
+
+        $payable = $this->lineByPrefix($journal, '321');
+        $this->assertEqualsWithDelta(6050.0, (float) $payable['money_cr'], 0.001, 'DAL 321 = zbytek k úhradě');
+        $this->assertNull($payable['payment_reference'], 'Závazek nese identitu hlavičky, ne zálohy');
+    }
+
+    /**
+     * Vlna C: invni „daňový doklad k záloze" (vzor starý doklad 56036) —
+     * zdanění zálohy (+7 290 vč. DPH 21 z ceny, 314900) + odpočet tax0
+     * (−7 290, 314100). Netto 0 → žádný řádek 321, deník vyrovnaný.
+     */
+    public function testInvniAdvanceVatDocumentNetsToZero(): void
+    {
+        $headId = $this->insertHead('invni', [
+            'total_base' => -1265.21, 'total_vat' => 1265.21, 'total_amount' => 0.0,
+            'total_base_dom' => -1265.21, 'total_vat_dom' => 1265.21, 'total_amount_dom' => 0.0,
+        ]);
+        $this->insertRow($headId, 'purchase.advanceVat', 6024.79, 21.0, [
+            'account'           => $this->accountId('314900'),
+            'payment_reference' => 'ZAL-2',
+        ]);
+        $this->insertRow($headId, 'purchase.advanceDeduction', -7290.0, 0.0, [
+            'vat_code'          => null,
+            'vat_pct'           => null,
+            'account'           => $this->accountId('314100'),
+            'payment_reference' => 'ZAL-2',
+        ]);
+        $this->insertRecap($headId, 6024.79, 1265.21);
+
+        $result = $this->engine->accountDocument($headId);
+
+        $this->assertSame(1, $result['state'], json_encode($result['messages']));
+        $journal = $this->journalOf($headId);
+        $this->assertCount(3, $journal, 'Netto 0 → žádný řádek 321');
+        $this->assertBalanced($journal);
+
+        $advanceVat = $this->lineByPrefix($journal, '314900');
+        $this->assertEqualsWithDelta(6024.79, (float) $advanceVat['money_dr'], 0.001);
+        $this->assertSame('purchase.advanceVat', $advanceVat['operation']);
+        $this->assertSame('ZAL-2', (string) $advanceVat['payment_reference']);
+
+        $this->assertEqualsWithDelta(1265.21, (float) $this->lineByPrefix($journal, '343')['money_dr'], 0.001);
+
+        $deduction = $this->lineByPrefix($journal, '314100');
+        $this->assertEqualsWithDelta(7290.0, (float) $deduction['money_cr'], 0.001, 'Odpočet tax0 otočený na DAL');
+        $this->assertSame('ZAL-2', (string) $deduction['payment_reference']);
+    }
+
+    /**
+     * Vlna C: invno zrcadlo — odpočet přijaté zálohy tax0 (−3 000, 324100)
+     * se otočí na MD, pohledávka 311 = zbytek k úhradě.
+     */
+    public function testInvnoAdvanceDeductionMirror(): void
+    {
+        $headId = $this->insertHead('invno', [
+            'total_base' => 7000.0, 'total_vat' => 2100.0, 'total_amount' => 9100.0,
+            'total_base_dom' => 7000.0, 'total_vat_dom' => 2100.0, 'total_amount_dom' => 9100.0,
+        ]);
+        $this->insertRow($headId, 'sale.services', 10000.0, 21.0);
+        $this->insertRow($headId, 'sale.advanceDeduction', -3000.0, 0.0, [
+            'vat_code'          => null,
+            'vat_pct'           => null,
+            'account'           => $this->accountId('324100'),
+            'payment_reference' => 'ZAL-3',
+        ]);
+        $this->insertRecap($headId, 10000.0, 2100.0);
+
+        $result = $this->engine->accountDocument($headId);
+
+        $this->assertSame(1, $result['state'], json_encode($result['messages']));
+        $journal = $this->journalOf($headId);
+        $this->assertCount(4, $journal);
+        $this->assertBalanced($journal);
+
+        $this->assertEqualsWithDelta(10000.0, (float) $this->lineByPrefix($journal, '602')['money_cr'], 0.001);
+        $this->assertEqualsWithDelta(2100.0, (float) $this->lineByPrefix($journal, '343')['money_cr'], 0.001);
+
+        $deduction = $this->lineByPrefix($journal, '324100');
+        $this->assertEqualsWithDelta(3000.0, (float) $deduction['money_dr'], 0.001, 'Odpočet otočený na kladný MD');
+        $this->assertSame('sale.advanceDeduction', $deduction['operation']);
+        $this->assertSame('ZAL-3', (string) $deduction['payment_reference']);
+
+        $receivable = $this->lineByPrefix($journal, '311');
+        $this->assertEqualsWithDelta(9100.0, (float) $receivable['money_dr'], 0.001, 'MD 311 = zbytek k úhradě');
+        $this->assertNull($receivable['payment_reference']);
+    }
+
+    /**
      * W2: tuzemský kód účtuje na svou analytiku (343120 výstup, 343110
      * vstup), ne na syntetiku 343.
      */

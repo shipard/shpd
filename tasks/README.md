@@ -209,6 +209,7 @@ Saldokonto nad účetním deníkem. Designový dokument
 | `accbal-clearing-infrastructure.md` | — | Clearing účty + saldo skupina pro migrovaný DS |
 | `accbal-ledger-viewgroup-chips.md` | — | Saldo pohyby: chip bar saldokont místo roletky (viewGroups z dat) |
 | `accbal-nav-items.md` | — | Saldokonta v sidebaru — navigation providery + `show_in_navigation` |
+| `accbal-ledger-grid.md` | — | Saldo pohyby: grid layout se skupinami per partner + footer v HC |
 
 ## Došlá pošta (core.mail)
 

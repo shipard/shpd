@@ -455,8 +455,10 @@ class AccountingEngineTest extends IntegrationTestCase
     /**
      * Vlna C: invni s odpočtem poskytnuté zálohy — odpočet je na dokladu
      * záporný (−5 000 základ, −1 050 DPH), reverseSign ho otočí na kladný
-     * DAL 314900; rekapitulace záporné řádky netuje (5 000 / 1 050).
-     * Zálohový řádek nese payment_reference (číslo zálohového dokladu).
+     * DAL; rekapitulace záporné řádky netuje (5 000 / 1 050). Účet dohledá
+     * kategorie advances.given z rozvrhu DS (D10): vat_amount ≠ 0 → maska
+     * 3149 → 314900. Zálohový řádek nese payment_reference (číslo
+     * zálohového dokladu).
      */
     public function testInvniAdvanceDeductionBooksReversedSide(): void
     {
@@ -466,7 +468,6 @@ class AccountingEngineTest extends IntegrationTestCase
         ]);
         $this->insertRow($headId, 'purchase.services', 10000.0, 21.0);
         $this->insertRow($headId, 'purchase.advanceDeduction', -5000.0, 21.0, [
-            'account'           => $this->accountId('314900'),
             'payment_reference' => 'ZAL-1',
         ]);
         $this->insertRecap($headId, 5000.0, 1050.0);
@@ -494,8 +495,10 @@ class AccountingEngineTest extends IntegrationTestCase
 
     /**
      * Vlna C: invni „daňový doklad k záloze" (vzor starý doklad 56036) —
-     * zdanění zálohy (+7 290 vč. DPH 21 z ceny, 314900) + odpočet tax0
-     * (−7 290, 314100). Netto 0 → žádný řádek 321, deník vyrovnaný.
+     * zdanění zálohy (+7 290 vč. DPH 21 z ceny) + odpočet tax0 (−7 290).
+     * Účty dohledá kategorie (D10): zdaněná daň ≠ 0 → 3149 → 314900,
+     * odpočet tax0 → brutto maska 314 → 314100. Netto 0 → žádný řádek 321,
+     * deník vyrovnaný.
      */
     public function testInvniAdvanceVatDocumentNetsToZero(): void
     {
@@ -504,13 +507,11 @@ class AccountingEngineTest extends IntegrationTestCase
             'total_base_dom' => -1265.21, 'total_vat_dom' => 1265.21, 'total_amount_dom' => 0.0,
         ]);
         $this->insertRow($headId, 'purchase.advanceVat', 6024.79, 21.0, [
-            'account'           => $this->accountId('314900'),
             'payment_reference' => 'ZAL-2',
         ]);
         $this->insertRow($headId, 'purchase.advanceDeduction', -7290.0, 0.0, [
             'vat_code'          => null,
             'vat_pct'           => null,
-            'account'           => $this->accountId('314100'),
             'payment_reference' => 'ZAL-2',
         ]);
         $this->insertRecap($headId, 6024.79, 1265.21);
@@ -535,8 +536,9 @@ class AccountingEngineTest extends IntegrationTestCase
     }
 
     /**
-     * Vlna C: invno zrcadlo — odpočet přijaté zálohy tax0 (−3 000, 324100)
-     * se otočí na MD, pohledávka 311 = zbytek k úhradě.
+     * Vlna C: invno zrcadlo — odpočet přijaté zálohy tax0 (−3 000) se
+     * otočí na MD, pohledávka 311 = zbytek k úhradě. Účet dohledá
+     * kategorie advances.received (D10): tax0 → brutto maska 324 → 324100.
      */
     public function testInvnoAdvanceDeductionMirror(): void
     {
@@ -548,7 +550,6 @@ class AccountingEngineTest extends IntegrationTestCase
         $this->insertRow($headId, 'sale.advanceDeduction', -3000.0, 0.0, [
             'vat_code'          => null,
             'vat_pct'           => null,
-            'account'           => $this->accountId('324100'),
             'payment_reference' => 'ZAL-3',
         ]);
         $this->insertRecap($headId, 10000.0, 2100.0);
@@ -571,6 +572,62 @@ class AccountingEngineTest extends IntegrationTestCase
         $receivable = $this->lineByPrefix($journal, '311');
         $this->assertEqualsWithDelta(9100.0, (float) $receivable['money_dr'], 0.001, 'MD 311 = zbytek k úhradě');
         $this->assertNull($receivable['payment_reference']);
+    }
+
+    /**
+     * D10: řetěz masek ["3249", "324"] kategorie advances.received —
+     * s 3249xx v rozvrhu vyhrává první maska (324900), po jejím dočasném
+     * skrytí (vzor lefreal, který 3249xx nemá) spadne dohledání na
+     * druhou masku (324100). Skryté účty se v finally obnoví.
+     */
+    public function testInvnoAdvanceVatMaskChainFallsBackTo324(): void
+    {
+        $hidden = $this->db->fetchAll(
+            'SELECT id, docState FROM economy_accounting_accounts
+             WHERE number LIKE %like~ AND account_level = 4 AND docState IN (10, 40, 80)',
+            '3249',
+        );
+        if ($hidden === []) {
+            $this->markTestSkipped('Dev DS nemá žádnou aktivní analytiku 3249xx');
+        }
+
+        $headId = $this->insertHead('invno', [
+            'total_base' => 1000.0, 'total_vat' => 210.0, 'total_amount' => 1210.0,
+            'total_base_dom' => 1000.0, 'total_vat_dom' => 210.0, 'total_amount_dom' => 1210.0,
+        ]);
+        $this->insertRow($headId, 'sale.advanceVat', 1000.0, 21.0, [
+            'payment_reference' => 'ZAL-4',
+        ]);
+        $this->insertRecap($headId, 1000.0, 210.0);
+
+        // S 3249xx v rozvrhu: první maska řetězu.
+        $this->assertSame(1, $this->engine->accountDocument($headId)['state']);
+        $advance = $this->lineByPrefix($this->journalOf($headId), '3249');
+        $this->assertEqualsWithDelta(1000.0, (float) $advance['money_cr'], 0.001);
+        $this->assertSame('sale.advanceVat', $advance['operation']);
+        $this->assertSame('ZAL-4', (string) $advance['payment_reference']);
+
+        $dibi = $this->db->getDibiConnection();
+        try {
+            foreach ($hidden as $acc) {
+                $dibi->update('economy_accounting_accounts', ['docState' => 90])
+                    ->where('id = %i', (int) $acc['id'])->execute();
+            }
+
+            $result = $this->engine->accountDocument($headId);
+
+            $this->assertSame(1, $result['state'], json_encode($result['messages']));
+            $journal = $this->journalOf($headId);
+            $this->assertBalanced($journal);
+            $fallback = $this->lineByPrefix($journal, '324100');
+            $this->assertEqualsWithDelta(1000.0, (float) $fallback['money_cr'], 0.001, 'Fallback na masku 324');
+            $this->assertEqualsWithDelta(1210.0, (float) $this->lineByPrefix($journal, '311')['money_dr'], 0.001);
+        } finally {
+            foreach ($hidden as $acc) {
+                $dibi->update('economy_accounting_accounts', ['docState' => (int) $acc['docState']])
+                    ->where('id = %i', (int) $acc['id'])->execute();
+            }
+        }
     }
 
     /**

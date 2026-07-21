@@ -70,8 +70,11 @@
         }
     },
 
-    // Zálohy a majetek (vlna C): účet 314xxx/324xxx je analytika, proto
-    // rowAccount: "direct". rowPaymentId na zálohových operacích —
+    // Zálohy a majetek (vlna C): zálohové operace NEMAJÍ rowAccount —
+    // účet dohledávají kategorie advances.* účtovacího předpisu maskou
+    // nad rozvrhem DS (D10, vzor saldokontních zápočtů), formulář vstup
+    // účtu nezobrazí. Majetek má přímý účet na řádku (analytika per druh
+    // majetku, D9). rowPaymentId na zálohových operacích —
     // payment_reference řádku nese číslo zálohového dokladu (staré symbol1),
     // na které naváže saldokontní párování záloh (Fáze 4+). Odpočty jsou na
     // dokladu záporné (věrný obraz), stranu otáčí reverseSign v předpisu.
@@ -79,7 +82,6 @@
         "name": "Advance payment deduction",
         "name:cs": "Odpočet poskytnuté zálohy",
         "name:en": "Advance payment deduction",
-        "rowAccount": "direct",
         "rowPaymentId": 1,
         "docTypes": {
             "invni": {"order": 400}
@@ -89,7 +91,6 @@
         "name": "Advance payment taxation",
         "name:cs": "Zdanění poskytnuté zálohy",
         "name:en": "Advance payment taxation",
-        "rowAccount": "direct",
         "rowPaymentId": 1,
         "docTypes": {
             "invni": {"order": 500}
@@ -108,7 +109,6 @@
         "name": "Advance payment deduction",
         "name:cs": "Odpočet přijaté zálohy",
         "name:en": "Advance payment deduction",
-        "rowAccount": "direct",
         "rowPaymentId": 1,
         "docTypes": {
             "invno": {"order": 300}
@@ -118,7 +118,6 @@
         "name": "Advance payment taxation",
         "name:cs": "Zdanění přijaté zálohy",
         "name:en": "Advance payment taxation",
-        "rowAccount": "direct",
         "rowPaymentId": 1,
         "docTypes": {
             "invno": {"order": 400}

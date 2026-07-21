@@ -15,6 +15,8 @@
     "categories": {
         "receivables":      {"name:cs": "Pohledávky"},
         "payables":         {"name:cs": "Závazky"},
+        "advances.given":    {"name:cs": "Zálohy poskytnuté"},
+        "advances.received": {"name:cs": "Zálohy přijaté"},
         "vat":              {"name:cs": "DPH"},
         "revenue":          {"name:cs": "Výnosy"},
         "costs":            {"name:cs": "Náklady"},
@@ -40,6 +42,16 @@
 
         {"cat": "receivables",      "accountMask": "311"},
         {"cat": "payables",         "accountMask": "321"},
+
+        // Zálohy (D10): analytiky se liší per DS (msi x14001/x14901,
+        // lefreal x14100/x14900) — dohledává je maska nad rozvrhem DS.
+        // Pořadí záznamů je významové: brutto s query první (loose
+        // porovnání, vat_amount 0.00/NULL → brutto), jinak zdaněná.
+        // Pole = řetěz masek po řadě; lefreal nemá 3249xx → fallback 324.
+        {"cat": "advances.given",    "accountMask": "314",  "query": {"vat_amount": 0}},
+        {"cat": "advances.given",    "accountMask": "3149"},
+        {"cat": "advances.received", "accountMask": "324",  "query": {"vat_amount": 0}},
+        {"cat": "advances.received", "accountMask": ["3249", "324"]},
 
         // Bankovní kategorie (konzumuje bankovní mikroengine ve Fázi 3; teď
         // neškodná konfigurace). 261200/261300 = clearing účty nespárovaných
@@ -133,12 +145,13 @@
                     "operations": ["sale.services", "sale.goods"]},
                 {"accountSrc": "item", "src": "rows", "side": 1,
                     "operation": "acc.entry"},
-                // Zálohy (vlna C): odpočet je na dokladu záporný (věrný
-                // obraz), reverseSign ho otočí na kladný MD 324xxx; zdanění
-                // zálohy je kladný výnosový řádek, DPH jde z rekapitulace.
-                {"src": "rows", "accountSrc": "row", "side": 0, "reverseSign": 1,
+                // Zálohy (vlna C, účet kategorií dle D10): odpočet je na
+                // dokladu záporný (věrný obraz), reverseSign ho otočí na
+                // kladný MD 324xxx; zdanění zálohy je kladný výnosový řádek,
+                // DPH jde z rekapitulace.
+                {"cat": "advances.received", "src": "rows", "side": 0, "reverseSign": 1,
                     "operation": "sale.advanceDeduction"},
-                {"src": "rows", "accountSrc": "row", "side": 1,
+                {"cat": "advances.received", "src": "rows", "side": 1,
                     "operation": "sale.advanceVat"},
                 {"cat": "vat", "src": "vat", "side": 1},
                 {"cat": "rounding.revenue", "src": "head", "col": "rounding",
@@ -156,11 +169,12 @@
                     "operation": "acc.entry"},
                 // Zálohy a majetek (vlna C): odpočet je na dokladu záporný
                 // (věrný obraz), reverseSign ho otočí na kladný DAL 314xxx;
-                // zdanění zálohy a pořízení majetku jsou kladné MD řádky
-                // s přímým účtem, DPH jde z rekapitulace.
-                {"src": "rows", "accountSrc": "row", "side": 1, "reverseSign": 1,
+                // zdanění zálohy a pořízení majetku jsou kladné MD řádky.
+                // Zálohy dohledává kategorie (D10), majetek má přímý účet
+                // na řádku (D9 — analytika per druh majetku).
+                {"cat": "advances.given", "src": "rows", "side": 1, "reverseSign": 1,
                     "operation": "purchase.advanceDeduction"},
-                {"src": "rows", "accountSrc": "row", "side": 0,
+                {"cat": "advances.given", "src": "rows", "side": 0,
                     "operation": "purchase.advanceVat"},
                 {"src": "rows", "accountSrc": "row", "side": 0,
                     "operation": "purchase.asset"},

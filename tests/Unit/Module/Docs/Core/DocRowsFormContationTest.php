@@ -57,12 +57,14 @@ class DocRowsFormContationTest extends TestCase
                 ],
                 // faktura — bez rowAccount, ať ověříme, že položková větev zůstává
                 'purchase.goods' => ['name' => 'Nákup zboží', 'docTypes' => ['invni' => ['order' => 100]]],
-                // zálohy / majetek — přímý účet bez rowSide: položkový layout
-                // s inputem účtu, stranu určuje krok předpisu
+                // záloha — bez rowAccount (účet dohledá kategorie předpisu,
+                // D10) i bez rowSide: položkový layout + saldo identita
                 'purchase.advanceDeduction' => [
-                    'name' => 'Odpočet poskytnuté zálohy', 'rowAccount' => 'direct',
+                    'name' => 'Odpočet poskytnuté zálohy',
                     'rowPaymentId' => 1, 'docTypes' => ['invni' => ['order' => 400]],
                 ],
+                // majetek — přímý účet bez rowSide: položkový layout
+                // s inputem účtu, stranu určuje krok předpisu
                 'purchase.asset' => [
                     'name' => 'Pořízení majetku', 'rowAccount' => 'direct',
                     'docTypes' => ['invni' => ['order' => 600]],
@@ -222,24 +224,19 @@ class DocRowsFormContationTest extends TestCase
         $this->assertNull($this->findElement($def, 'acc_side'));
     }
 
-    public function testAdvanceDeductionKeepsItemLayoutWithAccountAndIdentity(): void
+    public function testAdvanceDeductionKeepsItemLayoutWithIdentityWithoutAccount(): void
     {
-        // Záloha na faktuře (rowAccount direct + rowPaymentId, bez rowSide):
-        // položkový layout s DPH blokem zůstává, položku nahrazuje vstup
-        // účtu, přibývá platební identita; strana MD/DAL se nezadává —
-        // určuje ji krok předpisu (reverseSign).
+        // Záloha na faktuře (rowPaymentId bez rowAccount i rowSide, D10):
+        // položkový layout s DPH blokem zůstává, přibývá platební identita;
+        // vstup účtu se nezobrazuje — účet dohledá kategorie advances.*
+        // účtovacího předpisu. Strana MD/DAL se nezadává — určuje ji krok
+        // předpisu (reverseSign).
         $data = ['row_kind' => 1, 'doc_head' => 5, 'operation' => 'purchase.advanceDeduction'];
         $def = $this->form('invni', vatMode: 2)->buildFormDefinition($data, true);
 
-        $account = $this->findElement($def, 'account');
-        $this->assertNotNull($account);
-        $this->assertSame('lookup', $account->type);
-        $this->assertSame('economy_accounting_accounts', $account->lookup['table']);
-        $this->assertSame(['account_level' => 4], $account->lookup['filter']);
-        $this->assertTrue($account->required);
-
-        $this->assertNull($this->findElement($def, 'item'), 'Přímý účet nahrazuje položku');
+        $this->assertNull($this->findElement($def, 'account'), 'Účet dohledá kategorie předpisu');
         $this->assertNull($this->findElement($def, 'acc_side'), 'Stranu určuje krok předpisu');
+        $this->assertNotNull($this->findElement($def, 'item'), 'Položkový layout zůstává');
 
         // Položkový + DPH blok zůstává (odpočet nese záporný základ i daň).
         $this->assertNotNull($this->findElement($def, 'quantity'));

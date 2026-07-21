@@ -141,6 +141,7 @@ tableId **415**. docStates: archivní sada
 | `id` | int PK | |
 | `bank_account` | int, FK `economy_codebooks_bank_accounts`, not null | |
 | `statement_number` | varchar 40, nullable | číslo výpisu od banky (`docOrderNumber`/`idList` ve starém) |
+| `external_id` | varchar 80, nullable | stabilní identita výpisu (migrace `old:{ndx}`, budoucí API); soubory nenesou → NULL |
 | `period_start` | date, not null | |
 | `period_end` | date, not null | |
 | `opening_balance` | numeric 15,2 | počáteční zůstatek |
@@ -151,6 +152,18 @@ tableId **415**. docStates: archivní sada
 
 Kontrola úplnosti (§4.4): `opening_balance + Σ(příjem) − Σ(výdaj) == closing_balance`
 nad navázanými transakcemi.
+
+**Identita výpisu** (`findOrCreateStatement`): unikátní index
+`unq_external (bank_account, external_id)`, pořadí párování
+1. `(bank_account, external_id)` — přesná identita,
+2. `(bank_account, statement_number, period_start, period_end)` — NULL číslo
+   páruje jen s NULL; nese-li payload external_id, matchují se jen výpisy bez
+   něj (jiné external_id = jiný výpis) a nalezený ho dostane backfillem,
+3. create.
+Klíč jen z periody nestačí — dva výpisy téhož účtu z jednoho dne se slévaly
+(hlavička prvního, transakce obou → nevyrovnáno). Známé omezení: dva
+bezčíselné výpisy bez external_id se stejnou periodou se slijí dál — reálné
+soubory číslo výpisu nesou.
 
 ### 3.3 Extension `economy.bank` → `economy_codebooks_bank_accounts`
 

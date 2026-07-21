@@ -36,7 +36,13 @@ final class StatementImportService
     private const TABLE_TX = 'economy_bank_transactions';
     private const TABLE_STMT = 'economy_bank_statements';
     private const STATEMENT_TABLE_ID = 415;
-    private const ACTIVE_STATES = [10, 40, 80];
+
+    /**
+     * Stavy, ve kterých je entita odkazovatelná (vyloučen jen smazaný 90) —
+     * import zpracovává historická data, archivní účet/osoba je legitimní
+     * cíl reference. Stejná konvence jako `DocumentApplier::LINKABLE_STATES`.
+     */
+    private const LINKABLE_STATES = [10, 40, 70, 80];
 
     private readonly PartnerResolver $partnerResolver;
 
@@ -278,9 +284,11 @@ final class StatementImportService
 
     /**
      * Načte vlastní bankovní účet dle id (exchange/migrace ho zná přímo).
+     * Archivní účet (70) je odkazovatelný — výpis pro později archivovaný
+     * účet je legitimní historické datum (poslední výpis chodí i po uzavření).
      *
      * @return array<string, mixed>
-     * @throws ImportException nenalezen / neaktivní
+     * @throws ImportException nenalezen / smazán
      */
     private function loadBankAccount(int $id): array
     {
@@ -288,10 +296,10 @@ final class StatementImportService
             'SELECT [id], [currency], [code] FROM %n WHERE [id] = %i AND [docState] IN %in',
             self::tableBankAccounts(),
             $id,
-            self::ACTIVE_STATES,
+            self::LINKABLE_STATES,
         )->fetch();
         if ($row === false || $row === null) {
-            throw new ImportException("Bankovní účet #{$id} nenalezen nebo není aktivní.");
+            throw new ImportException("Bankovní účet #{$id} nenalezen nebo smazán.");
         }
         return (array) $row;
     }
@@ -313,6 +321,8 @@ final class StatementImportService
     /**
      * Match našeho účtu (port konceptu `checkBankAccount`) přes account_number
      * / iban / ebanking_id (normalizované). Override z CLI/endpointu má přednost.
+     * Matchuje i archivní účty (70) — importovaný výpis k později archivovanému
+     * účtu je historické datum, ne nová aktivita.
      *
      * @return array<string, mixed>
      * @throws ImportException nenalezen
@@ -334,7 +344,7 @@ final class StatementImportService
             'SELECT [id], [currency], [code], [account_number], [iban], [ebanking_id]'
             . ' FROM %n WHERE [docState] IN %in',
             self::tableBankAccounts(),
-            self::ACTIVE_STATES,
+            self::LINKABLE_STATES,
         )->fetchAll();
 
         foreach ($accounts as $a) {
@@ -354,6 +364,18 @@ final class StatementImportService
         );
     }
 
+    /**
+     * Identita výpisu — pořadí párování:
+     *   1. `(bank_account, external_id)` — přesná identita (migrace, API),
+     *   2. `(bank_account, statement_number, period_start, period_end)` —
+     *      number-aware fallback; NULL číslo páruje jen s NULL. Nese-li
+     *      payload external_id, matchují se jen řádky bez něj (jiné
+     *      external_id = jiný výpis, byť se stejným číslem i periodou) a
+     *      nalezený výpis ho backfillem dostane (vzor transakcí),
+     *   3. jinak create.
+     * Známé omezení: dva bezčíselné výpisy bez external_id se stejnou
+     * periodou se slijí — reálné soubory číslo výpisu nesou.
+     */
     private function findOrCreateStatement(ParsedStatement $parsed, int $accountId, string $currency, int $targetState = 10): int
     {
         $start = $parsed->periodStart->format('Y-m-d');
@@ -365,25 +387,51 @@ final class StatementImportService
         // core.system.docStatesArchive: 10→1, 40→3).
         $stmtStates = DocStateConfig::fromCfgItem($this->config->cfgItem('core.system.docStatesArchive'));
 
-        // Vodící klíč: (bank_account, period_start, period_end).
-        $row = $this->db->query(
-            'SELECT [id], [docState] FROM %n WHERE [bank_account] = %i AND [period_start] = %s AND [period_end] = %s LIMIT 1',
-            self::TABLE_STMT,
-            $accountId,
-            $start,
-            $end,
-        )->fetch();
+        $row = null;
+        if ($parsed->externalId !== null) {
+            $row = $this->db->query(
+                'SELECT [id], [docState], [external_id] FROM %n WHERE [bank_account] = %i AND [external_id] = %s LIMIT 1',
+                self::TABLE_STMT,
+                $accountId,
+                $parsed->externalId,
+            )->fetch();
+        }
+        if ($row === false || $row === null) {
+            $cond = [
+                ['[bank_account] = %i', $accountId],
+                $parsed->statementNumber === null
+                    ? ['[statement_number] IS NULL']
+                    : ['[statement_number] = %s', $parsed->statementNumber],
+                ['[period_start] = %s', $start],
+                ['[period_end] = %s', $end],
+            ];
+            if ($parsed->externalId !== null) {
+                $cond[] = ['[external_id] IS NULL'];
+            }
+            $row = $this->db->query(
+                'SELECT [id], [docState], [external_id] FROM %n WHERE %and LIMIT 1',
+                self::TABLE_STMT,
+                $cond,
+            )->fetch();
+        }
         if ($row !== false && $row !== null) {
             $existingId = (int) $row['id'];
+            $set = [];
+            // Backfill identity: výpis založený před zavedením external_id
+            // (nebo souborem) ho při shodě čísla + periody dostane.
+            if ($parsed->externalId !== null && ($row['external_id'] ?? null) === null) {
+                $set['external_id'] = $parsed->externalId;
+            }
             // Self-healing re-import: koncept (10) povýšit na cílový stav (migrace
             // „hotového" výpisu po opravě / re-importu). Vyšší nebo ručně nastavené
             // stavy (40/80/70/90) neměníme. Souborový import (targetState=10) nikdy
             // nepovyšuje.
             if ($targetState !== 10 && (int) ($row['docState'] ?? 10) === 10) {
-                $this->db->update(self::TABLE_STMT, [
-                    'docState'     => $targetState,
-                    'docStateMain' => $stmtStates->getMainState($targetState),
-                ])->where('[id] = %i', $existingId)->execute();
+                $set['docState'] = $targetState;
+                $set['docStateMain'] = $stmtStates->getMainState($targetState);
+            }
+            if ($set !== []) {
+                $this->db->update(self::TABLE_STMT, $set)->where('[id] = %i', $existingId)->execute();
             }
             return $existingId;
         }
@@ -391,6 +439,7 @@ final class StatementImportService
         $stmtRow = [
             'bank_account'         => $accountId,
             'statement_number'     => $parsed->statementNumber,
+            'external_id'          => $parsed->externalId,
             'period_start'         => $start,
             'period_end'           => $end,
             'opening_balance'      => round($parsed->openingBalance, 2),
@@ -463,18 +512,22 @@ final class StatementImportService
 
     /**
      * Partner transakce: přednost explicitního `partnerId` z migrace (přímý
-     * odkaz ze starého řádku, je-li to aktivní osoba), jinak fallback na
+     * odkaz ze starého řádku, je-li to linkovatelná osoba), jinak fallback na
      * párování přes protiúčet (souborový import partnerId neposílá).
      */
     private function resolvePartner(ParsedTransaction $tx): ?int
     {
-        if ($tx->partnerId !== null && $this->personActive($tx->partnerId)) {
+        if ($tx->partnerId !== null && $this->personLinkable($tx->partnerId)) {
             return $tx->partnerId;
         }
         return $this->partnerResolver->resolve($tx->counterpartyAccount);
     }
 
-    private function personActive(int $id): bool
+    /**
+     * Archivní osoba (70) je odkazovatelná — transakce odkazující později
+     * archivovanou osobu si drží přímou vazbu `partner`.
+     */
+    private function personLinkable(int $id): bool
     {
         if ($id <= 0) {
             return false;
@@ -482,12 +535,19 @@ final class StatementImportService
         $row = $this->db->query(
             'SELECT [id] FROM [base_persons_persons] WHERE [id] = %i AND [docState] IN %in',
             $id,
-            self::ACTIVE_STATES,
+            self::LINKABLE_STATES,
         )->fetch();
         return $row !== false && $row !== null;
     }
 
-    /** sha256 z normalizovaných polí + seqInDay (W4.2). */
+    /**
+     * sha256 z normalizovaných polí + seqInDay (W4.2) + external_id (je-li).
+     * External_id v otisku: obsahově identické opakované platby (paušály se
+     * stejným datem, částkou i textem) napříč výpisy jinak kolidují na
+     * `unq_fingerprint` — seqInDay se počítá od nuly per apply. Podmíněně,
+     * ne `?? ''`: otisk souborových transakcí (bez id) musí zůstat bajtově
+     * shodný s už uloženými, jinak se rozpadne dedup přes fingerprint.
+     */
     private function fingerprint(int $accountId, ParsedTransaction $tx, int $direction, float $amount, string $dateKey, int $seqInDay): string
     {
         $parts = [
@@ -501,6 +561,9 @@ final class StatementImportService
             $tx->message ?? '',
             $seqInDay,
         ];
+        if ($tx->externalId !== null) {
+            $parts[] = $tx->externalId;
+        }
         return hash('sha256', implode('|', $parts));
     }
 

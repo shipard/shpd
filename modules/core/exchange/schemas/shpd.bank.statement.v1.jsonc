@@ -54,6 +54,9 @@
             "required": ["periodStart", "periodEnd"],
             "properties": {
                 "statementNumber": { "type": ["string", "null"] },
+                // Stabilní identita výpisu (migrace `old:{ndx}`) — přesné
+                // párování findOrCreateStatement, dva výpisy z téhož dne se neslijí.
+                "externalId":      { "type": ["string", "null"] },
                 "periodStart":     { "type": "string", "format": "date" },
                 "periodEnd":       { "type": "string", "format": "date" },
                 "openingBalance":  { "type": "number" },

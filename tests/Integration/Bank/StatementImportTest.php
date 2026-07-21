@@ -157,6 +157,22 @@ class StatementImportTest extends IntegrationTestCase
         $this->assertSame(0, $this->txCount());
     }
 
+    public function testArchivedAccountMatchedOnImport(): void
+    {
+        // Archivní účet (70) je odkazovatelný — výpis k později archivovanému
+        // účtu je historické datum, ref-matching ho nesmí vynechat.
+        $this->dibi->update('economy_codebooks_bank_accounts', [
+            'docState'     => 70,
+            'docStateMain' => 4,
+        ])->where('[id] = %i', $this->bankAccountId)->execute();
+
+        $summary = $this->service()->import($this->fixture('camt053.xml'));
+
+        $this->assertSame(2, $summary['created'], 'import na archivní účet projde');
+        $this->assertArrayNotHasKey('error', $summary['statements'][0]);
+        $this->assertSame(2, $this->txCount());
+    }
+
     public function testPartnerMatchedByCounterpartyAccount(): void
     {
         $person = $this->dibi->query('SELECT [id] FROM [base_persons_persons] ORDER BY [id] LIMIT 1')->fetch();

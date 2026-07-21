@@ -11,6 +11,8 @@ namespace Shipard\Module\Economy\Bank\Import;
  * `bankAccountRef` je identifikátor NAŠEHO účtu z výpisu (IBAN / domácí číslo
  * / accountId); import service ho zmatchuje na `economy_codebooks_bank_accounts`.
  * `currency` je null tam, kde formát měnu nenese (GPC/FIO) — doplní se z účtu.
+ * `externalId` je stabilní identita výpisu (migrace `old:{ndx}`, budoucí API);
+ * souborové parsery ji nenesou → null.
  */
 final class ParsedStatement
 {
@@ -24,5 +26,6 @@ final class ParsedStatement
         public readonly float $closingBalance,
         public readonly ?string $currency = null,
         public readonly array $transactions = [],
+        public readonly ?string $externalId = null,
     ) {}
 }

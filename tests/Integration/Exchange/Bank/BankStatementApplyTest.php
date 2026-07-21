@@ -27,6 +27,8 @@ class BankStatementApplyTest extends IntegrationTestCase
     private int $bankAccountId = 0;
     /** @var list<int> */
     private array $createdAccounts = [];
+    /** @var list<int> */
+    private array $createdPersons = [];
 
     protected function setUp(): void
     {
@@ -92,6 +94,9 @@ class BankStatementApplyTest extends IntegrationTestCase
             $dibi->delete('economy_codebooks_bank_accounts')->where('id = %i', $this->bankAccountId)->execute();
             foreach ($this->createdAccounts as $id) {
                 $dibi->delete('economy_accounting_accounts')->where('id = %i', $id)->execute();
+            }
+            foreach ($this->createdPersons as $id) {
+                $dibi->delete('base_persons_persons')->where('id = %i', $id)->execute();
             }
         }
     }
@@ -303,6 +308,280 @@ class BankStatementApplyTest extends IntegrationTestCase
         $rows = $this->txRows();
         $this->assertCount(1, $rows, 'žádné zdvojení');
         $this->assertSame($personId, (int) $rows[0]['partner'], 'partner doplněn backfillem');
+    }
+
+    // ── Fingerprint: obsahově identické transakce napříč výpisy ─────────────
+
+    public function testContentIdenticalTransactionsAcrossStatementsCreateBoth(): void
+    {
+        // Měsíční paušál: stejný den, částka i text ve dvou výpisech → legacy
+        // otisk (bez external_id) by kolidoval na unq_fingerprint a druhá
+        // transakce by tiše skončila v txErrors.
+        $fee = static fn(string $extId): array => [
+            'externalId'      => $extId,
+            'amount'          => -164.00,
+            'dateTransaction' => self::ACC_DATE,
+            'message'         => 'Cena za vedení účtu',
+        ];
+        $statement = static fn(string $number, string $end): array => [
+            'statementNumber' => $number,
+            'periodStart'     => '2026-06-01',
+            'periodEnd'       => $end,
+            'openingBalance'  => 0.0,
+            'closingBalance'  => -164.0,
+            'currency'        => 'CZK',
+        ];
+
+        $first = $this->applier->apply($this->payload([
+            'statement'    => $statement('FEE/2026-06a', '2026-06-15'),
+            'transactions' => [$fee('fee-old-1')],
+            'applyOptions' => ['targetState' => 10],
+        ]));
+        $this->assertTrue($first->success, 'první apply selhal: ' . ($first->errorMessage ?? ''));
+        $this->assertSame(1, $first->canonical['_result']['created']);
+
+        $secondPayload = $this->payload([
+            'statement'    => $statement('FEE/2026-06b', '2026-06-30'),
+            'transactions' => [$fee('fee-old-2')],
+            'applyOptions' => ['targetState' => 10],
+        ]);
+        $second = $this->applier->apply($secondPayload);
+        $this->assertTrue($second->success, 'druhý apply selhal: ' . ($second->errorMessage ?? ''));
+        $this->assertSame(1, $second->canonical['_result']['created'], 'identická transakce druhého výpisu musí vzniknout');
+        $this->assertSame([], $second->canonical['_result']['txErrors'], 'žádná tichá kolize otisku');
+
+        $rows = $this->txRows();
+        $this->assertCount(2, $rows);
+        $this->assertNotSame((int) $rows[0]['statement'], (int) $rows[1]['statement'], 'každá transakce ve svém výpisu');
+
+        // Idempotence s novým formátem otisku: re-apply → external_id match → skip.
+        $third = $this->applier->apply($secondPayload);
+        $this->assertTrue($third->success);
+        $this->assertSame(0, $third->canonical['_result']['created'], 're-apply nezakládá');
+        $this->assertSame(1, $third->canonical['_result']['skipped']);
+        $this->assertCount(2, $this->txRows(), 'žádné zdvojení');
+    }
+
+    // ── Identita výpisu: external_id + number-aware fallback ────────────────
+
+    /** @param array<string, mixed> $stmtOverrides */
+    private function dayStatementPayload(array $stmtOverrides, array $transactions): array
+    {
+        return $this->payload([
+            'statement'    => array_merge([
+                'statementNumber' => null,
+                'periodStart'     => self::ACC_DATE,
+                'periodEnd'       => self::ACC_DATE,
+                'openingBalance'  => 0.0,
+                'closingBalance'  => 0.0,
+                'currency'        => 'CZK',
+            ], $stmtOverrides),
+            'transactions' => $transactions,
+            'applyOptions' => ['targetState' => 10],
+        ]);
+    }
+
+    private function statementCount(): int
+    {
+        return (int) $this->db->getDibiConnection()->fetchSingle(
+            'SELECT COUNT(*) FROM economy_bank_statements WHERE bank_account = %i',
+            $this->bankAccountId,
+        );
+    }
+
+    public function testSameDayStatementsWithDifferentNumbersStayApart(): void
+    {
+        // Dva výpisy téhož účtu z jednoho dne (lefreal 425/523) — dřív se slily
+        // do jednoho přes klíč (bank_account, period_start, period_end).
+        $first = $this->applier->apply($this->dayStatementPayload(
+            ['statementNumber' => '16', 'externalId' => 'old:1001', 'closingBalance' => 100.0],
+            [['externalId' => 'day-tx-1', 'amount' => 100.00, 'dateTransaction' => self::ACC_DATE]],
+        ));
+        $second = $this->applier->apply($this->dayStatementPayload(
+            ['statementNumber' => '21', 'externalId' => 'old:1002', 'closingBalance' => -50.0],
+            [['externalId' => 'day-tx-2', 'amount' => -50.00, 'dateTransaction' => self::ACC_DATE]],
+        ));
+
+        $this->assertTrue($first->success, 'první apply selhal: ' . ($first->errorMessage ?? ''));
+        $this->assertTrue($second->success, 'druhý apply selhal: ' . ($second->errorMessage ?? ''));
+        $this->assertNotSame($first->savedId, $second->savedId, 'dva výpisy, žádné slití');
+        $this->assertSame(2, $this->statementCount());
+        $this->assertSame(1, $first->canonical['_result']['reconciliation'], 'první výpis reconciluje');
+        $this->assertSame(1, $second->canonical['_result']['reconciliation'], 'druhý výpis reconciluje');
+
+        $rows = $this->txRows();
+        $this->assertCount(2, $rows);
+        $byExt = array_column($rows, 'statement', 'external_id');
+        $this->assertSame($first->savedId, (int) $byExt['day-tx-1'], 'transakce v prvním výpisu');
+        $this->assertSame($second->savedId, (int) $byExt['day-tx-2'], 'transakce ve druhém výpisu');
+    }
+
+    public function testStatementExternalIdReapplyIsIdempotentWithSelfHealing(): void
+    {
+        $build = fn(int $targetState): array => $this->payload([
+            'statement'    => [
+                'statementNumber' => '31',
+                'externalId'      => 'old:2001',
+                'periodStart'     => self::ACC_DATE,
+                'periodEnd'       => self::ACC_DATE,
+                'openingBalance'  => 0.0,
+                'closingBalance'  => 100.0,
+                'currency'        => 'CZK',
+            ],
+            'transactions' => [['externalId' => 'heal-tx-1', 'amount' => 100.00, 'dateTransaction' => self::ACC_DATE]],
+            'applyOptions' => ['targetState' => $targetState],
+        ]);
+
+        $first = $this->applier->apply($build(10));
+        $this->assertTrue($first->success);
+
+        // Re-apply „hotového" výpisu: match přes external_id, koncept se povýší.
+        $second = $this->applier->apply($build(40));
+        $this->assertTrue($second->success);
+        $this->assertSame($first->savedId, $second->savedId, 'stejná identita → stejný výpis');
+        $this->assertSame(0, $second->canonical['_result']['created'], 're-apply nezakládá');
+        $this->assertSame(1, $second->canonical['_result']['skipped']);
+        $this->assertSame(1, $this->statementCount(), 'žádný duplikát výpisu');
+
+        $stmt = $this->db->getDibiConnection()->fetch(
+            'SELECT docState, docStateMain FROM economy_bank_statements WHERE id = %i',
+            $first->savedId,
+        );
+        $this->assertSame(40, (int) $stmt['docState'], 'self-healing povýšení konceptu');
+        $this->assertSame(3, (int) $stmt['docStateMain']);
+    }
+
+    public function testStatementExternalIdBackfilledOnNumberPeriodMatch(): void
+    {
+        // Výpis založený bez identity (pre-fix data / soubor) ji při shodě
+        // čísla + periody dostane backfillem.
+        $first = $this->applier->apply($this->dayStatementPayload(
+            ['statementNumber' => '77'],
+            [['externalId' => 'bf-tx-1', 'amount' => 10.00, 'dateTransaction' => self::ACC_DATE]],
+        ));
+        $this->assertTrue($first->success);
+        $stored = $this->db->getDibiConnection()->fetchSingle(
+            'SELECT external_id FROM economy_bank_statements WHERE id = %i',
+            $first->savedId,
+        );
+        $this->assertNull($stored, 'bez externalId v payloadu zůstává NULL');
+
+        $second = $this->applier->apply($this->dayStatementPayload(
+            ['statementNumber' => '77', 'externalId' => 'old:777'],
+            [['externalId' => 'bf-tx-1', 'amount' => 10.00, 'dateTransaction' => self::ACC_DATE]],
+        ));
+        $this->assertTrue($second->success);
+        $this->assertSame($first->savedId, $second->savedId, 'match přes číslo + periodu');
+        $this->assertSame(1, $this->statementCount(), 'žádný nový výpis');
+        $stored = $this->db->getDibiConnection()->fetchSingle(
+            'SELECT external_id FROM economy_bank_statements WHERE id = %i',
+            $first->savedId,
+        );
+        $this->assertSame('old:777', $stored, 'external_id doplněn backfillem');
+    }
+
+    public function testSameNumberSamePeriodDifferentExternalIdCreatesSecond(): void
+    {
+        // Guard kroku 2: výpis s JINÝM external_id nesmí unést match přes
+        // shodné číslo + periodu — jiná identita = jiný výpis.
+        $first = $this->applier->apply($this->dayStatementPayload(
+            ['statementNumber' => '16', 'externalId' => 'old:3001'],
+            [['externalId' => 'guard-tx-1', 'amount' => 10.00, 'dateTransaction' => self::ACC_DATE]],
+        ));
+        $second = $this->applier->apply($this->dayStatementPayload(
+            ['statementNumber' => '16', 'externalId' => 'old:3002'],
+            [['externalId' => 'guard-tx-2', 'amount' => 20.00, 'dateTransaction' => self::ACC_DATE]],
+        ));
+
+        $this->assertTrue($first->success);
+        $this->assertTrue($second->success);
+        $this->assertNotSame($first->savedId, $second->savedId, 'jiné external_id → jiný výpis');
+        $this->assertSame(2, $this->statementCount());
+    }
+
+    // ── Linkable states: archiv (70) odkazovatelný, smazáno (90) ne ─────────
+
+    public function testPreviewReportsArchivedAccountAsExisting(): void
+    {
+        // Preview musí být konzistentní s apply — archivní účet je odkazovatelný.
+        $this->db->getDibiConnection()->update('economy_codebooks_bank_accounts', [
+            'docState'     => 70,
+            'docStateMain' => 4,
+        ])->where('id = %i', $this->bankAccountId)->execute();
+
+        $result = $this->applier->preview($this->payload());
+
+        $this->assertTrue($result->success);
+        $this->assertTrue($result->canonical['_preview']['bankAccountExists'], 'archivní účet existuje pro preview');
+        $codes = array_map(static fn($i) => $i['code'], $result->canonical['_resolve']['issues'] ?? []);
+        $this->assertNotContains('bank_account_not_found', $codes);
+    }
+
+
+    public function testApplyToArchivedAccountSucceeds(): void
+    {
+        // Výpis pro později archivovaný účet je legitimní historické datum
+        // (poslední výpis banky chodí po uzavření účtu).
+        $this->db->getDibiConnection()->update('economy_codebooks_bank_accounts', [
+            'docState'     => 70,
+            'docStateMain' => 4,
+        ])->where('id = %i', $this->bankAccountId)->execute();
+
+        $result = $this->applier->apply($this->payload());
+
+        $this->assertTrue($result->success, 'apply na archivní účet selhal: ' . ($result->errorMessage ?? ''));
+        $this->assertGreaterThan(0, $result->savedId);
+        $this->assertSame(2, $result->canonical['_result']['created']);
+        $this->assertCount(2, $this->txRows(), 'výpis + transakce vzniknou i pro archivní účet');
+    }
+
+    public function testApplyToDeletedAccountFails(): void
+    {
+        $this->db->getDibiConnection()->update('economy_codebooks_bank_accounts', [
+            'docState'     => 90,
+            'docStateMain' => 5,
+        ])->where('id = %i', $this->bankAccountId)->execute();
+
+        $result = $this->applier->apply($this->payload());
+
+        $this->assertFalse($result->success, 'smazaný účet nesmí projít');
+        $this->assertSame('apply_failed', $result->errorCode);
+        $this->assertStringContainsString('smazán', (string) $result->errorMessage);
+        $this->assertCount(0, $this->txRows(), 'žádné transakce pro smazaný účet');
+    }
+
+    public function testArchivedPartnerIdKeepsLink(): void
+    {
+        // Transakce odkazující archivovanou osobu si drží přímou vazbu partner
+        // (fallback přes protiúčet by tady selhal — účet bez vazby na osobu).
+        $dibi = $this->db->getDibiConnection();
+        $dibi->insert('base_persons_persons', [
+            'person_id'    => 'ITF4A' . substr(uniqid(), -5),
+            'person_type'  => 2,
+            'full_name'    => 'IT F4 archivní partner',
+            'last_name'    => 'IT F4 archivní partner',
+            'first_name'   => '',
+            'docState'     => 70,
+            'docStateMain' => 4,
+        ])->execute();
+        $personId = (int) $dibi->getInsertId();
+        $this->createdPersons[] = $personId;
+
+        $result = $this->applier->apply($this->payload([
+            'transactions' => [[
+                'externalId'          => 'ptx-archived-1',
+                'amount'              => 100.00,
+                'dateTransaction'     => self::ACC_DATE,
+                'counterpartyAccount' => '9359200456/2700',
+                'partnerId'           => $personId,
+            ]],
+        ]));
+        $this->assertTrue($result->success, 'apply selhal: ' . ($result->errorMessage ?? ''));
+
+        $rows = $this->txRows();
+        $this->assertCount(1, $rows);
+        $this->assertSame($personId, (int) $rows[0]['partner'], 'archivní partner si drží vazbu');
+        $this->assertSame(0, $result->canonical['_result']['unmatchedPartner']);
     }
 
     // ── validate / preview bez zápisu ────────────────────────────────────────

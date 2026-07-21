@@ -37,7 +37,12 @@ class BankStatementApplier
     public const FORMAT_ID = 'shpd.bank.statement';
     public const FORMAT_VERSION = '1';
 
-    private const ACTIVE_STATES = [10, 40, 80];
+    /**
+     * Stavy, ve kterých je účet odkazovatelný (vyloučen jen smazaný 90) —
+     * konzistentní s apply (`StatementImportService::LINKABLE_STATES`):
+     * výpis pro archivní účet je legitimní historické datum.
+     */
+    private const LINKABLE_STATES = [10, 40, 70, 80];
 
     public function __construct(
         private readonly Connection $db,
@@ -108,13 +113,13 @@ class BankStatementApplier
 
         $issues = $this->semanticIssues($canonical);
         $bankAccountId = (int) ($canonical['bankAccountId'] ?? 0);
-        $accountExists = $this->accountActive($bankAccountId);
+        $accountExists = $this->accountLinkable($bankAccountId);
         if (!$accountExists) {
             $issues[] = [
                 'severity' => 'error',
                 'path'     => 'bankAccountId',
                 'code'     => 'bank_account_not_found',
-                'message'  => "Bankovní účet #{$bankAccountId} neexistuje nebo není aktivní.",
+                'message'  => "Bankovní účet #{$bankAccountId} neexistuje nebo je smazán.",
             ];
         }
 
@@ -245,6 +250,7 @@ class BankStatementApplier
         return new ParsedStatement(
             bankAccountRef: (string) ($canonical['bankAccountId'] ?? ''),
             statementNumber: isset($s['statementNumber']) ? (string) $s['statementNumber'] : null,
+            externalId: isset($s['externalId']) ? (string) $s['externalId'] : null,
             periodStart: new \DateTimeImmutable((string) $s['periodStart']),
             periodEnd: new \DateTimeImmutable((string) $s['periodEnd']),
             openingBalance: (float) ($s['openingBalance'] ?? 0),
@@ -254,7 +260,7 @@ class BankStatementApplier
         );
     }
 
-    private function accountActive(int $id): bool
+    private function accountLinkable(int $id): bool
     {
         if ($id <= 0) {
             return false;
@@ -262,7 +268,7 @@ class BankStatementApplier
         $row = $this->db->query(
             'SELECT [id] FROM [economy_codebooks_bank_accounts] WHERE [id] = %i AND [docState] IN %in',
             $id,
-            self::ACTIVE_STATES,
+            self::LINKABLE_STATES,
         )->fetch();
         return $row !== false && $row !== null;
     }

@@ -26,6 +26,10 @@
             "type": "int", "nullable": false, "reference": "economy_codebooks_bank_accounts", "group": "basic"},
         {"id": "statement_number", "name": "Statement number", "name:cs": "Číslo výpisu", "name:en": "Statement number",
             "type": "varchar", "length": 40, "nullable": true, "group": "basic"},
+        // Stabilní identita výpisu (migrace `old:{ndx}`, budoucí API importy);
+        // soubory id nenesou → NULL. Zrcadlí external_id transakcí.
+        {"id": "external_id", "name": "External ID", "name:cs": "Externí ID", "name:en": "External ID",
+            "type": "varchar", "length": 80, "nullable": true, "group": "basic"},
         {"id": "period_start", "name": "Period start", "name:cs": "Začátek období", "name:en": "Period start",
             "type": "date", "nullable": false, "group": "basic"},
         {"id": "period_end", "name": "Period end", "name:cs": "Konec období", "name:en": "Period end",
@@ -51,6 +55,8 @@
     ],
 
     "indexes": [
+        {"id": "unq_external", "type": "unique", "columns": [
+            {"column": "bank_account"}, {"column": "external_id"}]},
         {"id": "idx_account_period", "type": "index", "columns": [
             {"column": "bank_account"}, {"column": "period_end"}]},
         {"id": "idx_doc_state", "type": "index", "columns": [

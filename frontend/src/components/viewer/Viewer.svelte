@@ -66,7 +66,11 @@
     return tabs;
   });
 
-  let hasViewGroups = $derived((meta?.viewGroups ?? []).length > 0);
+  // Fixní viewGroup ze sidebar položky (tab.fixedViewGroup, např. saldokonto
+  // Pohledávky) chip lištu skrývá — skupina je daná napevno, není co přepínat.
+  let hasViewGroups = $derived(
+    (tab.fixedViewGroup ?? null) == null && (meta?.viewGroups ?? []).length > 0
+  );
 
   // --- Number series tabs ---
   // Lišta se ukáže jen když je víc než 1 řada; při jedné se filter stejně
@@ -704,10 +708,16 @@
     // Viz docs/edit-forms.md sekce 19.
   }
 
-  // Re-initialize ONLY when the viewer tab changes.
-  // IMPORTANT: this $effect must not read any $state other than tab.viewerId.
+  // Re-initialize ONLY when the navigation item changes.
+  // IMPORTANT: this $effect must not read any $state other than the tab
+  // props on the next lines. Trackuje IDENTITU POLOŽKY (tab.id), ne jen
+  // tab.viewerId — dvě sidebar položky můžou sdílet viewer (Pohledávky /
+  // Závazky nad economy.accbal.ledger, liší se jen fixedViewGroup)
+  // a přepnutí mezi nimi musí viewer reinicializovat.
   $effect(() => {
+    void tab.id;
     const viewerId = tab.viewerId;
+    const fixedViewGroup = tab.fixedViewGroup ?? null;
 
     // Reset all state
     meta = null;
@@ -776,10 +786,16 @@
       activeLayout = chosenLayout;
 
       // Výchozí viewGroup zná až meta — docState viewery vrací 'active',
-      // datové (LedgerViewer) kód první skupiny. pendingViewGroup (digest
-      // karta → tab Archiv) má přednost. Stejnou hodnotou nastavíme i
-      // activeViewGroup, jinak se nezvýrazní správný chip.
-      const viewGroup = pendingViewGroup ?? untrack(() => meta)?.defaultViewGroup ?? 'active';
+      // datové (LedgerViewer) kód první skupiny. Fixní skupina ze sidebar
+      // položky přebíjí všechno (položka je napevno filtrovaná), jinak má
+      // přednost pendingViewGroup (digest karta → tab Archiv). Stejnou
+      // hodnotou nastavíme i activeViewGroup — všechny další fetche
+      // (hledání, filtry, refresh) ji pak posílají samy; u fixní skupiny
+      // ji nemá jak změnit ani uživatel (chip lišta je skrytá).
+      const viewGroup = fixedViewGroup
+        ?? pendingViewGroup
+        ?? untrack(() => meta)?.defaultViewGroup
+        ?? 'active';
       activeViewGroup = viewGroup;
 
       // Filtry se právě resetovaly na {} — předáváme literál, protože tento

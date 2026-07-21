@@ -65,6 +65,10 @@
         }
     ],
 
+    "navigationProviders": [
+        { "class": "Shipard\\Module\\Economy\\Accbal\\BalancesNavigationProvider" }
+    ],
+
     "journalEventHandlers": [
         {
             "class": "Shipard\\Module\\Economy\\Accbal\\JournalLedgerHandler",

@@ -6,10 +6,13 @@ namespace Shipard\Api\Controller;
 use Shipard\Api\Response;
 use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Config\DataSourceConfig;
+use Shipard\Core\Database\DataSourceConnection;
+use Shipard\Core\Logging\ErrorLogger;
 use Shipard\Core\Module\ModuleDefinition;
 use Shipard\Core\Module\ModuleLoader;
 use Shipard\Core\Module\ModulePathResolver;
 use Shipard\Core\Module\ModuleResolver;
+use Shipard\Core\Navigation\NavigationItemsProvider;
 use Shipard\Core\I18n\ConfigLocalizer;
 use Shipard\Core\Utils\JsoncParser;
 
@@ -64,6 +67,7 @@ class NavigationController
         ModulePathResolver $resolver,
         string $language,
         ?ConfigRuntime $configRuntime = null,
+        ?DataSourceConnection $db = null,
     ): Response {
         $allModules      = ModuleLoader::loadAllModules($resolver);
         $errors          = [];
@@ -153,6 +157,10 @@ class NavigationController
             $hiddenTables,
             $tablesWithViewer,
         );
+
+        // Dynamické položky z navigation providerů (data-driven, např.
+        // saldokonta) — stejné bucketování _section/_order jako statické.
+        $items = array_merge($items, $this->collectProviderItems($resolvedModules, $db, $language));
 
         // Bucket by navSection. `_top` → root-level leaves; unknown → fallback.
         $topLeaves = [];
@@ -294,6 +302,50 @@ class NavigationController
             }
         }
 
+        return $items;
+    }
+
+    /**
+     * Dynamické položky z navigation providerů modulů (`navigationProviders`
+     * v module.jsonc, třídy implementující NavigationItemsProvider).
+     *
+     * Bez DB spojení (settings/account mód, degradovaný kontext) se providery
+     * přeskočí. Navigace nesmí spadnout: chybějící/nevalidní třída → warn,
+     * výjimka z provideru → logException a pokračuje se dalším providerem.
+     *
+     * @param  ModuleDefinition[]  $resolvedModules
+     * @return array<int, array<string, mixed>>
+     */
+    private function collectProviderItems(array $resolvedModules, ?DataSourceConnection $db, string $language): array
+    {
+        if ($db === null) {
+            return [];
+        }
+
+        $items = [];
+        foreach ($resolvedModules as $module) {
+            foreach ($module->navigationProviders as $reg) {
+                $class = $reg['class'];
+                try {
+                    if (!class_exists($class) || !is_subclass_of($class, NavigationItemsProvider::class)) {
+                        ErrorLogger::warn("Navigation provider '{$class}' missing or not a NavigationItemsProvider", [
+                            'module' => $module->id,
+                        ]);
+                        continue;
+                    }
+                    $provider = new $class();
+                    foreach ($provider->items($db, $language) as $item) {
+                        // Bucketování počítá s _section/_order — doplnit defaulty,
+                        // ať neúplná položka provider nerozbije sort/merge.
+                        $item['_section'] ??= self::FALLBACK_SECTION;
+                        $item['_order']   ??= self::NAV_ORDER_DEFAULT;
+                        $items[] = $item;
+                    }
+                } catch (\Throwable $e) {
+                    ErrorLogger::logException($e, "Navigation provider '{$class}' failed");
+                }
+            }
+        }
         return $items;
     }
 

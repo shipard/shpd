@@ -572,4 +572,38 @@ class ModuleDefinitionTest extends TestCase
             'keepOnReset' => ['key' => 'core_system_users'],
         ]);
     }
+
+    public function testNavigationProvidersParsed(): void
+    {
+        $def = ModuleDefinition::fromArray([
+            'id'   => 'economy.accbal',
+            'name' => 'Open items',
+            'navigationProviders' => [
+                ['class' => 'Shipard\\Module\\Economy\\Accbal\\BalancesNavigationProvider'],
+            ],
+        ]);
+
+        $this->assertSame(
+            [['class' => 'Shipard\\Module\\Economy\\Accbal\\BalancesNavigationProvider']],
+            $def->navigationProviders,
+        );
+    }
+
+    public function testNavigationProvidersAbsentDefaultsToEmpty(): void
+    {
+        $def = ModuleDefinition::fromArray(['id' => 'base.persons', 'name' => 'Persons']);
+
+        $this->assertSame([], $def->navigationProviders);
+    }
+
+    public function testNavigationProvidersMissingClassThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("navigationProviders[0] requires 'class'");
+        ModuleDefinition::fromArray([
+            'id'   => 'economy.accbal',
+            'name' => 'Open items',
+            'navigationProviders' => [['klass' => 'Foo\\Bar']],
+        ]);
+    }
 }

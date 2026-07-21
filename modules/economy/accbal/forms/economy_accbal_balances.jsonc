@@ -22,6 +22,7 @@
 
                                 {"type": "separator", "label": "Nastavení", "label:cs": "Nastavení", "label:en": "Settings"},
                                 {"type": "input", "column": "sort_order"},
+                                {"type": "input", "column": "show_in_navigation"},
                                 {"type": "input", "column": "valid_from"},
                                 {"type": "input", "column": "valid_to"}
                             ]

@@ -45,6 +45,9 @@ function navigate(item) {
     pageId: item.pageId ?? null,
     panelId: item.panelId ?? null,
     filter: item.filter ?? null,
+    // Napevno daný viewGroup vieweru (sidebar položky saldokont) — viewer
+    // pak skryje chip lištu a všechny fetche filtruje touto hodnotou.
+    fixedViewGroup: item.fixedViewGroup ?? null,
   };
   // Manuální navigace mimo dashboard widget — pending hinty vyprší.
   pendingRecordId = null;
@@ -77,6 +80,7 @@ function navigateToViewer(viewerId, recordId = null, viewGroup = null) {
     table: null,
     viewerId,
     filter: null,
+    fixedViewGroup: null,
   };
   if (mode === 'settings') {
     settingsActiveItem = item;

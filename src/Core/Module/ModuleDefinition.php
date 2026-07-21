@@ -26,6 +26,7 @@ class ModuleDefinition
         public readonly array $accountItems = [],
         public readonly array $journalEventHandlers = [],
         public readonly array $panels = [],
+        public readonly array $navigationProviders = [],
     ) {}
 
     public static function fromArray(array $data): self
@@ -196,6 +197,23 @@ class ModuleDefinition
             }
         }
 
+        // navigationProviders — třídy dodávající dynamické položky hlavní
+        // navigace z dat (NavigationItemsProvider). Registrace je jen {class};
+        // instancování a merge dělá NavigationController.
+        $navigationProviders = [];
+        if (isset($data['navigationProviders']) && is_array($data['navigationProviders'])) {
+            foreach ($data['navigationProviders'] as $idx => $reg) {
+                if (!is_array($reg)
+                    || !isset($reg['class']) || !is_string($reg['class']) || $reg['class'] === ''
+                ) {
+                    throw new \InvalidArgumentException(
+                        "Module '{$data['id']}': navigationProviders[{$idx}] requires 'class'",
+                    );
+                }
+                $navigationProviders[] = ['class' => $reg['class']];
+            }
+        }
+
         // keepOnReset — names of this module's OWN tables that `ds-reset`
         // must not drop (system/config tables vs. data). Items must be
         // strings and must be tables owned by this module (catches typos
@@ -243,6 +261,7 @@ class ModuleDefinition
             accountItems: $accountItems,
             journalEventHandlers: $journalEventHandlers,
             panels: $panels,
+            navigationProviders: $navigationProviders,
         );
     }
 

@@ -19,6 +19,7 @@
         "name": "Pohledávky",
         "short_name": "Pohledávky",
         "sort_order": 10,
+        "show_in_navigation": 1,
         "accounts": [
             {"account_number": "311", "acc_side": 0, "amounts_sign": 1, "bal_side": 0, "modify_sign": false, "note": "Pohledávka vzniká"},
             {"account_number": "311", "acc_side": 1, "amounts_sign": 1, "bal_side": 1, "modify_sign": false, "note": "Pohledávka se hradí"}
@@ -29,6 +30,7 @@
         "name": "Závazky",
         "short_name": "Závazky",
         "sort_order": 20,
+        "show_in_navigation": 1,
         "accounts": [
             {"account_number": "321", "acc_side": 1, "amounts_sign": 1, "bal_side": 0, "modify_sign": false, "note": "Závazek vzniká"},
             {"account_number": "321", "acc_side": 0, "amounts_sign": 1, "bal_side": 1, "modify_sign": false, "note": "Závazek se hradí"},

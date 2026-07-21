@@ -9,7 +9,9 @@ use Shipard\Api\Controller\NavigationController;
 use Shipard\Api\Response;
 use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Config\DataSourceConfig;
+use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\I18n\ConfigLocalizer;
+use Shipard\Core\Logging\ErrorLogger;
 use Shipard\Core\Module\ModulePathResolver;
 use Shipard\Core\Utils\JsoncParser;
 
@@ -32,10 +34,15 @@ class NavigationControllerTest extends TestCase
         mkdir($this->dsDir . '/config', 0755, true);
         $this->resolver = new ModulePathResolver([dirname(__DIR__, 4) . '/modules']);
         $this->ctrl     = new NavigationController();
+        // Provider testy logují (missing class) — log do tempu, ne /opt.
+        ErrorLogger::resetForTesting();
+        ErrorLogger::setLogPath($this->dsDir . '/test.log');
     }
 
     protected function tearDown(): void
     {
+        ErrorLogger::resetForTesting();
+        @unlink($this->dsDir . '/test.log');
         @unlink($this->dsDir . '/config/main.json');
         @rmdir($this->dsDir . '/config');
         @rmdir($this->dsDir);
@@ -305,6 +312,112 @@ class NavigationControllerTest extends TestCase
         $this->assertSame('viewer:base.persons', $basic['children'][0]['id']);
         $this->assertSame('viewer', $basic['children'][0]['type']);
         $this->assertSame('base.persons', $basic['children'][0]['viewerId']);
+    }
+
+    // --- navigation providers (dynamické datové položky) ---
+
+    public function testProviderItemsMergedIntoSection(): void
+    {
+        // Reálný BalancesNavigationProvider (registrace v economy.accbal) nad
+        // mockovaným DB spojením — dvě saldokonta se show_in_navigation.
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchAll')->willReturn([
+            ['code' => 'receivables', 'name' => 'Pohledávky', 'short_name' => 'Pohledávky'],
+            ['code' => 'payables',    'name' => 'Závazky z obchodních vztahů', 'short_name' => null],
+        ]);
+
+        $resp = $this->ctrl->navigation(
+            $this->config(['install.base']),
+            $this->resolver,
+            'cs',
+            $this->configRuntime('cs'),
+            $db,
+        );
+        $children = $this->node($resp->getPayload()['data'], 'accounting')['children'];
+        $ids      = array_column($children, 'id');
+
+        // Saldokonta hned za Saldo pohyby (navOrder 30 → _order 31+),
+        // v pořadí ze SELECTU (sort_order).
+        $ledgerPos = array_search('viewer:economy.accbal.ledger', $ids, true);
+        $this->assertIsInt($ledgerPos);
+        $this->assertSame('accbal-balance:receivables', $ids[$ledgerPos + 1] ?? null);
+        $this->assertSame('accbal-balance:payables', $ids[$ledgerPos + 2] ?? null);
+
+        $receivables = $children[$ledgerPos + 1];
+        $this->assertSame('Pohledávky', $receivables['label']);
+        $this->assertSame('viewer', $receivables['type']);
+        $this->assertSame('economy.accbal.ledger', $receivables['viewerId']);
+        $this->assertSame('calculator', $receivables['icon']);
+        $this->assertSame('receivables', $receivables['fixedViewGroup']);
+        // Interní klíče nesmí proleakovat do API výstupu.
+        $this->assertArrayNotHasKey('_section', $receivables);
+        $this->assertArrayNotHasKey('_order', $receivables);
+
+        // Label fallback: prázdný short_name → plný name.
+        $this->assertSame('Závazky z obchodních vztahů', $children[$ledgerPos + 2]['label']);
+    }
+
+    public function testProviderSkippedWithoutDb(): void
+    {
+        // Bez DB spojení (settings/account mód, degradace) se providery
+        // přeskočí — žádné accbal-balance položky, navigace jinak celá.
+        $children = $this->node($this->tree(['install.base']), 'accounting')['children'];
+        foreach (array_column($children, 'id') as $id) {
+            $this->assertStringStartsNotWith('accbal-balance:', $id);
+        }
+    }
+
+    public function testProviderDbFailureDoesNotBreakNavigation(): void
+    {
+        // DS před ds-upgrade (chybějící sloupec) — provider chytá výjimku
+        // z dotazu sám a vrací prázdno; statická navigace stojí beze změny.
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchAll')->willThrowException(new \RuntimeException('Unknown column show_in_navigation'));
+
+        $resp = $this->ctrl->navigation(
+            $this->config(['install.base']),
+            $this->resolver,
+            'cs',
+            $this->configRuntime('cs'),
+            $db,
+        );
+        $tree = $resp->getPayload()['data'];
+
+        $this->assertContains('economy.accbal.ledger', $this->allViewerIds($tree));
+        $ids = array_column($this->node($tree, 'accounting')['children'], 'id');
+        $this->assertNotContains('accbal-balance:receivables', $ids);
+    }
+
+    public function testMissingProviderClassDoesNotBreakNavigation(): void
+    {
+        // Fixture modul registruje neexistující provider třídu — controller
+        // zaloguje warn a navigace se sestaví bez ní.
+        $root = sys_get_temp_dir() . '/shpd_navprov_' . uniqid('', true);
+        $dir  = $root . '/test/navprov';
+        mkdir($dir, 0755, true);
+        file_put_contents($dir . '/module.jsonc', json_encode([
+            'id'                  => 'test.navprov',
+            'name'                => 'Nav provider fixture',
+            'dependencies'        => [],
+            'tables'              => [],
+            'navigationProviders' => [['class' => 'Acme\\MissingProvider']],
+        ]));
+        $resolver = new ModulePathResolver([$root, dirname(__DIR__, 4) . '/modules']);
+
+        $resp = $this->ctrl->navigation(
+            $this->config(['test.navprov', 'base.persons']),
+            $resolver,
+            'cs',
+            $this->configRuntime('cs'),
+            $this->createMock(DataSourceConnection::class),
+        );
+        $tree = $resp->getPayload()['data'];
+        $this->assertContains('base.persons', $this->allViewerIds($tree));
+
+        @unlink($dir . '/module.jsonc');
+        @rmdir($dir);
+        @rmdir($root . '/test');
+        @rmdir($root);
     }
 
     // --- fixture helpers ---

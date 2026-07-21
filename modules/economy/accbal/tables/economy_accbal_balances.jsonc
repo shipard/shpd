@@ -33,6 +33,8 @@
 
         {"id": "sort_order", "name": "Order", "name:cs": "Pořadí", "name:en": "Order",
             "type": "smallint", "default": 0, "nullable": false, "group": "settings"},
+        {"id": "show_in_navigation", "name": "Show in navigation", "name:cs": "Zobrazit v navigaci", "name:en": "Show in navigation",
+            "type": "boolean", "default": 0, "nullable": false, "group": "settings"},
         {"id": "valid_from", "name": "Valid from", "name:cs": "Platnost od", "name:en": "Valid from",
             "type": "date", "nullable": true, "group": "settings"},
         {"id": "valid_to", "name": "Valid to", "name:cs": "Platnost do", "name:en": "Valid to",

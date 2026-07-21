@@ -54,12 +54,13 @@ class BalancesProvisioner
             }
 
             $balanceId = $this->db->insertRow('economy_accbal_balances', [
-                'code'         => $code,
-                'name'         => (string) ($group['name'] ?? $code),
-                'short_name'   => isset($group['short_name']) ? (string) $group['short_name'] : null,
-                'sort_order'   => (int) ($group['sort_order'] ?? 0),
-                'docState'     => 40,
-                'docStateMain' => 3,
+                'code'               => $code,
+                'name'               => (string) ($group['name'] ?? $code),
+                'short_name'         => isset($group['short_name']) ? (string) $group['short_name'] : null,
+                'sort_order'         => (int) ($group['sort_order'] ?? 0),
+                'show_in_navigation' => !empty($group['show_in_navigation']) ? 1 : 0,
+                'docState'           => 40,
+                'docStateMain'       => 3,
             ]);
 
             $accounts = is_array($group['accounts'] ?? null) ? $group['accounts'] : [];

@@ -279,7 +279,7 @@ function dispatch(
 		'chat'    => dispatchChat($route, $request, $auth, $db, $tables, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'meta'    => dispatchMeta($route->action, $route->table, $tables, resolveLanguage($request, $resolved->config)),
 		'ui'      => dispatchUi($route->action, $resolved->config, $modulePathResolver, resolveLanguage($request, $resolved->config), $configRuntime, $db),
-		'dashboard' => dispatchDashboard($route, $db, $viewerRegistry, $configRuntime, resolveLanguage($request, $resolved->config), $resolved->config, $alertCheckRegistry),
+		'dashboard' => dispatchDashboard($route, $db, $configRuntime, resolveLanguage($request, $resolved->config), $resolved->config, $alertCheckRegistry),
 		'settings' => dispatchSettings($route, $request, $auth, $resolved->config, $modulePathResolver, resolveLanguage($request, $resolved->config), $configRuntime, $db),
 		'app'     => dispatchApp($route, $auth, $db, $resolved->config),
 		'form'    => dispatchForm($route, $request, $auth, $tables, $db, $formRegistry ?? new FormRegistry(), $configRuntime, $modulePathResolver, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), resolveLanguage($request, $resolved->config), $resolved->config, $lookupRegistry ?? new LookupRegistry(), $documentEventDispatcher),
@@ -892,7 +892,6 @@ function dispatchUi(
 function dispatchDashboard(
 	Route $route,
 	\Shipard\Core\Database\DataSourceConnection $db,
-	ViewerRegistry $registry,
 	?\Shipard\Core\Config\ConfigRuntime $configRuntime,
 	string $language,
 	?\Shipard\Core\Config\DataSourceConfig $dsConfig = null,
@@ -900,9 +899,8 @@ function dispatchDashboard(
 ): Response {
 	$ctrl = new DashboardController();
 	return match ($route->action) {
-		'index'   => $ctrl->dashboard($registry, $db, $configRuntime, $language, $alertCheckRegistry),
+		'index'   => $ctrl->dashboard($db, $configRuntime, $language, $alertCheckRegistry),
 		'summary' => $ctrl->summary(
-			$registry,
 			$db,
 			new \Shipard\Core\Dashboard\DashboardSummaryService(
 				$db,

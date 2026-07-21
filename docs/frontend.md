@@ -702,24 +702,17 @@ Nové viewery přidávají moduly přes `module.jsonc.viewers[]` — jakmile je 
 ## 7.5 Dashboard
 
 Home obrazovka aplikace — výchozí pohled po loginu (`type: 'dashboard'` jako root-level
-leaf v sidebar navigaci). Tři widgety (Upozornění / Aktuální došlá pošta /
-Aktivní úkoly) a statická „AI shrnutí" karta nahoře.
+leaf v sidebar navigaci). Prioritizovaný feed akčních karet (došlá pošta +
+alerty) s generovaným AI shrnutím dne nahoře a plovoucím AI chat launcherem.
 
-Komponenty: `Dashboard.svelte` (top-level fetch + grid), `AiSummaryCard.svelte`
-(robot ikona, text z countů, ICU plurály), `WidgetCard.svelte` (sdílený shell
-pro 3 widgety), `WidgetRow.svelte` (řádek s doc-state pruhem 4px). API klient:
-`api/dashboard.js → fetchDashboard()`.
+Komponenty: `Dashboard.svelte` (top-level fetch + layout), `AiSummaryCard.svelte`,
+`Feed.svelte` / `FeedCard.svelte` / `FeedFilter.svelte`, `ChatLauncher.svelte`.
+API klient: `api/dashboard.js → fetchDashboard()`, `streamDashboardSummary()`.
 
-Backend: `DashboardController::dashboard()` agreguje `selectRows()`+`renderRow()`
-ze tří existujících viewerů (`core.alerts.alerts`, `core.mail.incoming`,
-`tasks.core`) + samostatný COUNT pro celkový počet otevřených záznamů.
-
-Klik na widget řádek emituje akci přes `onItemAction` callback z `WidgetCard`
-do `Dashboard.svelte`. Pro Alerts/Mail (`action.kind = 'open_viewer'`) dashboard
-zavolá `navigationStore.navigateToViewer(viewerId, recordId)`; pro Tasks
-(`action.kind = 'open_form'`) mountuje `<FormDialog table recordId>` rovnou
-nad sebou a po close refetchuje **jen pokud došlo k save** (sledováno přes
-`wasSaved` flag z `onSaved` callbacku). Detaily v [`dashboard.md`](dashboard.md).
+Akce karet `open_form` (a toast „Otevřít“) mountují `<FormDialog table recordId>`
+rovnou nad dashboardem a po close refetchují **jen pokud došlo k save**
+(sledováno přes `wasSaved` flag z `onSaved` callbacku). Detaily v
+[`dashboard.md`](dashboard.md).
 
 ---
 
@@ -734,7 +727,7 @@ nad sebou a po close refetchuje **jen pokud došlo k save** (sledováno přes
 | `GET/POST /_ui/settings/page/{pageId}` | Settings page — definice + hodnoty / uložení (viz [`app-settings.md`](app-settings.md)) |
 | `GET /_app/info` | Veřejné info aplikace — název, zkrácený název, ikona, logo (titulek, favicon, sidebar, login) |
 | `GET/POST/DELETE /_app/branding/{slot}` | Branding obrázky — GET veřejný s immutable cache, zápis s auth |
-| `GET /_ui/dashboard` | Agregát alerts/mail/tasks pro home obrazovku (viz [`dashboard.md`](dashboard.md)) |
+| `GET /_ui/dashboard` | Feed akčních karet pro home obrazovku (viz [`dashboard.md`](dashboard.md)) |
 | `GET /_ui/viewer/{id}/meta` | Metadata vieweru (name, table, filters, toolbar, viewGroups, numberSeries) |
 | `GET /_ui/viewer/{id}/rows` | Záznamy vieweru (page, search, filter) |
 | `GET /_ui/viewer/{id}/detail/{recordId}` | Detail panel záznamu (tabs) |

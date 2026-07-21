@@ -14,142 +14,17 @@ use Shipard\Core\Ai\LlmChatResult;
 use Shipard\Core\Ai\LlmClient;
 use Shipard\Core\Dashboard\DashboardSummaryService;
 use Shipard\Core\Database\DataSourceConnection;
-use Shipard\Core\Viewer\ViewerRegistry;
 
 /**
  * Unit testy pro DashboardController.
  *
  * Pokrývají:
- *   - happy path: 3 widgety, agregovaný summary, items převedené z renderRow()
- *   - prázdná data: 0 items / 0 count u všech widgetů
- *   - flattenTextField — všechny varianty t1/t2 (null, string, {text,class}, list)
- *   - renderRowToWidgetItem — fallback na widget icon, action templates
- *     (open_viewer i open_form), title fallback `#id` při prázdném t1
- *   - countActiveByDocState přes mockovaný ConfigRuntime
+ *   - sortAndCap / countByKind (čisté transformace)
+ *   - dashboard() — tvar feedu, zapojení zdrojů, ořez + „a další“ karta
+ *   - summary() — SSE události (text/done/error), degradace
  */
 final class DashboardControllerTest extends TestCase
 {
-    public function testFlattenString(): void
-    {
-        $ctrl = new DashboardController();
-        $this->assertSame('hello', $ctrl->flattenTextField('hello', ' '));
-    }
-
-    public function testFlattenNullAndEmpty(): void
-    {
-        $ctrl = new DashboardController();
-        $this->assertNull($ctrl->flattenTextField(null, ' '));
-        $this->assertNull($ctrl->flattenTextField('', ' '));
-    }
-
-    public function testFlattenStyledSpanObject(): void
-    {
-        $ctrl = new DashboardController();
-        $val = ['text' => 'Subject', 'class' => 'bold'];
-        $this->assertSame('Subject', $ctrl->flattenTextField($val, ' '));
-    }
-
-    public function testFlattenListOfMixedSpans(): void
-    {
-        $ctrl = new DashboardController();
-        $val = [
-            ['text' => 'Warning', 'class' => 'danger'],
-            'Plain',
-            ['text' => 'core.alerts.missing_person'],
-        ];
-        $this->assertSame('Warning · Plain · core.alerts.missing_person', $ctrl->flattenTextField($val, ' · '));
-    }
-
-    public function testFlattenEmptyListReturnsNull(): void
-    {
-        $ctrl = new DashboardController();
-        $this->assertNull($ctrl->flattenTextField([], ' '));
-    }
-
-    public function testRenderRowToWidgetItemUsesT1WhenPresent(): void
-    {
-        $ctrl = new DashboardController();
-        $rendered = [
-            'id'         => 42,
-            't1'         => 'Hello world',
-            't2'         => [['text' => 'warning', 'class' => 'danger']],
-            'stateStyle' => 'edit',
-            'icon'       => 'alert',
-        ];
-
-        $item = $ctrl->renderRowToWidgetItem(
-            $rendered,
-            ['kind' => 'open_viewer', 'viewerId' => 'core.alerts.alerts'],
-            'fallback-icon',
-        );
-
-        $this->assertSame(42, $item['id']);
-        $this->assertSame('Hello world', $item['title']);
-        $this->assertSame('warning', $item['subtitle']);
-        $this->assertSame('edit', $item['stateStyle']);
-        $this->assertSame('alert', $item['icon']);
-        $this->assertSame([
-            'kind'     => 'open_viewer',
-            'viewerId' => 'core.alerts.alerts',
-            'recordId' => 42,
-        ], $item['action']);
-    }
-
-    public function testRenderRowToWidgetItemFallsBackOnEmptyT1AndWidgetIcon(): void
-    {
-        $ctrl = new DashboardController();
-        $rendered = ['id' => 17];  // No t1, no icon
-
-        $item = $ctrl->renderRowToWidgetItem(
-            $rendered,
-            ['kind' => 'open_form', 'table' => 'tasks_core_tasks'],
-            'list-check',
-        );
-
-        $this->assertSame('#17', $item['title']);
-        $this->assertNull($item['subtitle']);
-        $this->assertSame('list-check', $item['icon']);  // Falls back to widget icon
-        $this->assertNull($item['stateStyle']);
-    }
-
-    public function testRenderRowToWidgetItemWithFormAction(): void
-    {
-        $ctrl = new DashboardController();
-        $rendered = ['id' => 33, 't1' => 'Připravit reporty'];
-
-        $item = $ctrl->renderRowToWidgetItem(
-            $rendered,
-            ['kind' => 'open_form', 'table' => 'tasks_core_tasks'],
-            'list-check',
-        );
-
-        $this->assertSame([
-            'kind'     => 'open_form',
-            'table'    => 'tasks_core_tasks',
-            'recordId' => 33,
-        ], $item['action']);
-        $this->assertArrayNotHasKey('viewerId', $item['action']);
-    }
-
-    public function testRenderRowToWidgetItemWithViewerAction(): void
-    {
-        $ctrl = new DashboardController();
-        $rendered = ['id' => 7, 't1' => 'Chybí vlastní Osoba'];
-
-        $item = $ctrl->renderRowToWidgetItem(
-            $rendered,
-            ['kind' => 'open_viewer', 'viewerId' => 'core.alerts.alerts'],
-            'alert',
-        );
-
-        $this->assertSame([
-            'kind'     => 'open_viewer',
-            'viewerId' => 'core.alerts.alerts',
-            'recordId' => 7,
-        ], $item['action']);
-        $this->assertArrayNotHasKey('table', $item['action']);
-    }
-
     // ── sortAndCap / countByKind (čisté funkce) ──────────────────────────────
 
     /** @return array<string,mixed> */
@@ -217,13 +92,12 @@ final class DashboardControllerTest extends TestCase
 
     public function testDashboardEmptyFeedShape(): void
     {
-        // Prázdný registry + DB mock vracející prázdné sady → žádné karty.
-        $registry = new ViewerRegistry();
+        // DB mock vracející prázdné sady → žádné karty.
         $db = $this->createMock(DataSourceConnection::class);
         $db->method('fetchAll')->willReturn([]);
 
         $ctrl = new DashboardController();
-        $response = $ctrl->dashboard($registry, $db, null, 'cs');
+        $response = $ctrl->dashboard($db, null, 'cs');
 
         $payload = $response->getPayload();
         $this->assertTrue($payload['success']);
@@ -233,13 +107,12 @@ final class DashboardControllerTest extends TestCase
         $this->assertNull($data['summary']['aiText']);
         $this->assertSame(['urgent' => 0, 'review' => 0, 'ready' => 0], $data['summary']['counts']);
         $this->assertSame([], $data['cards']);
-        $this->assertArrayHasKey('tasks', $data);
+        $this->assertArrayNotHasKey('tasks', $data);
         $this->assertArrayNotHasKey('widgets', $data);
     }
 
     public function testDashboardWiresBothSourcesAndSorts(): void
     {
-        $registry = new ViewerRegistry();
         $db = $this->createMock(DataSourceConnection::class);
         $db->method('fetchAll')->willReturnCallback(
             static function (string $sql): array {
@@ -271,7 +144,7 @@ final class DashboardControllerTest extends TestCase
         );
 
         $ctrl = new DashboardController();
-        $data = $ctrl->dashboard($registry, $db, null, 'cs')->getPayload()['data'];
+        $data = $ctrl->dashboard($db, null, 'cs')->getPayload()['data'];
 
         $this->assertCount(2, $data['cards']);
         // urgent (alert) před ready (mail)
@@ -282,7 +155,6 @@ final class DashboardControllerTest extends TestCase
 
     public function testDashboardAppendsAndMoreCardWhenTruncated(): void
     {
-        $registry = new ViewerRegistry();
         $db = $this->createMock(DataSourceConnection::class);
         $db->method('fetchAll')->willReturnCallback(
             static function (string $sql): array {
@@ -303,7 +175,7 @@ final class DashboardControllerTest extends TestCase
         );
 
         $ctrl = new DashboardController();
-        $data = $ctrl->dashboard($registry, $db, null, 'cs')->getPayload()['data'];
+        $data = $ctrl->dashboard($db, null, 'cs')->getPayload()['data'];
 
         $this->assertCount(31, $data['cards']); // 30 + „a další" karta
         $last = $data['cards'][30];
@@ -370,7 +242,7 @@ final class DashboardControllerTest extends TestCase
 
         $ctrl = new DashboardController();
         $out  = $this->runProducer(
-            $ctrl->summary(new ViewerRegistry(), $db, $this->summaryService($db, $llm), null, 'cs'),
+            $ctrl->summary($db, $this->summaryService($db, $llm), null, 'cs'),
         );
 
         $this->assertStringContainsString('event: done', $out);
@@ -393,7 +265,7 @@ final class DashboardControllerTest extends TestCase
 
         $ctrl = new DashboardController();
         $out  = $this->runProducer(
-            $ctrl->summary(new ViewerRegistry(), $db, $this->summaryService($db, $llm), null, 'cs'),
+            $ctrl->summary($db, $this->summaryService($db, $llm), null, 'cs'),
         );
 
         $this->assertStringContainsString('event: text', $out);
@@ -413,7 +285,7 @@ final class DashboardControllerTest extends TestCase
 
         $ctrl = new DashboardController();
         $out  = $this->runProducer(
-            $ctrl->summary(new ViewerRegistry(), $db, $this->summaryService($db, $llm), null, 'cs'),
+            $ctrl->summary($db, $this->summaryService($db, $llm), null, 'cs'),
         );
 
         $this->assertStringContainsString('event: error', $out);

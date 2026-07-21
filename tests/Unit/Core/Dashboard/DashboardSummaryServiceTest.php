@@ -70,19 +70,19 @@ final class DashboardSummaryServiceTest extends TestCase
     public function testDigestIsStableForSameInputs(): void
     {
         $svc = $this->service();
-        $a = $svc->buildDigest($this->sampleCards(), 4, 'cs', self::TODAY);
-        $b = $svc->buildDigest($this->sampleCards(), 4, 'cs', self::TODAY);
+        $a = $svc->buildDigest($this->sampleCards(), 'cs', self::TODAY);
+        $b = $svc->buildDigest($this->sampleCards(), 'cs', self::TODAY);
         $this->assertSame($this->hashDigest($a), $this->hashDigest($b));
     }
 
     public function testDigestChangesWithChangedCard(): void
     {
         $svc = $this->service();
-        $a = $svc->buildDigest($this->sampleCards(), 4, 'cs', self::TODAY);
+        $a = $svc->buildDigest($this->sampleCards(), 'cs', self::TODAY);
 
         $cards = $this->sampleCards();
         $cards[0]['title'] = 'Jiný titulek';
-        $b = $svc->buildDigest($cards, 4, 'cs', self::TODAY);
+        $b = $svc->buildDigest($cards, 'cs', self::TODAY);
 
         $this->assertNotSame($this->hashDigest($a), $this->hashDigest($b));
     }
@@ -90,27 +90,27 @@ final class DashboardSummaryServiceTest extends TestCase
     public function testDigestChangesWithDate(): void
     {
         $svc = $this->service();
-        $a = $svc->buildDigest($this->sampleCards(), 4, 'cs', self::TODAY);
-        $b = $svc->buildDigest($this->sampleCards(), 4, 'cs', '2026-07-03');
+        $a = $svc->buildDigest($this->sampleCards(), 'cs', self::TODAY);
+        $b = $svc->buildDigest($this->sampleCards(), 'cs', '2026-07-03');
         $this->assertNotSame($this->hashDigest($a), $this->hashDigest($b));
     }
 
     public function testDigestChangesWithLanguage(): void
     {
         $svc = $this->service();
-        $a = $svc->buildDigest($this->sampleCards(), 4, 'cs', self::TODAY);
-        $b = $svc->buildDigest($this->sampleCards(), 4, 'en', self::TODAY);
+        $a = $svc->buildDigest($this->sampleCards(), 'cs', self::TODAY);
+        $b = $svc->buildDigest($this->sampleCards(), 'en', self::TODAY);
         $this->assertNotSame($this->hashDigest($a), $this->hashDigest($b));
     }
 
     public function testDigestIgnoresInfoCards(): void
     {
         $svc = $this->service();
-        $a = $svc->buildDigest($this->sampleCards(), 4, 'cs', self::TODAY);
+        $a = $svc->buildDigest($this->sampleCards(), 'cs', self::TODAY);
 
         $cards   = $this->sampleCards();
         $cards[] = ['id' => 'mail_more', 'kind' => 'info', 'title' => '…a další'];
-        $b = $svc->buildDigest($cards, 4, 'cs', self::TODAY);
+        $b = $svc->buildDigest($cards, 'cs', self::TODAY);
 
         $this->assertSame($this->hashDigest($a), $this->hashDigest($b));
     }
@@ -121,7 +121,7 @@ final class DashboardSummaryServiceTest extends TestCase
         for ($i = 0; $i < 10; $i++) {
             $cards[] = ['id' => "mail_{$i}", 'kind' => 'review', 'title' => "Karta {$i}", 'subtitle' => ''];
         }
-        $digest = $this->service()->buildDigest($cards, 0, 'cs', self::TODAY);
+        $digest = $this->service()->buildDigest($cards, 'cs', self::TODAY);
         $this->assertSame(10, $digest['counts']['review']);
         $this->assertCount(6, $digest['topCards']);
     }
@@ -139,14 +139,14 @@ final class DashboardSummaryServiceTest extends TestCase
         $llm = $this->createMock(LlmClient::class);
         $llm->expects($this->never())->method('streamChat');
 
-        $result = $this->service($db, $llm)->stream([], 5, 'cs', static fn (string $d) => null);
+        $result = $this->service($db, $llm)->stream([], 'cs', static fn (string $d) => null);
         $this->assertSame(['text' => null, 'cached' => false], $result);
     }
 
     public function testCacheHitReturnsStoredTextWithoutLlm(): void
     {
         $svc  = $this->service(); // jen na výpočet očekávaného hashe
-        $hash = $this->hashDigest($svc->buildDigest($this->sampleCards(), 4, 'cs', date('Y-m-d')));
+        $hash = $this->hashDigest($svc->buildDigest($this->sampleCards(), 'cs', date('Y-m-d')));
 
         $db = $this->createMock(DataSourceConnection::class);
         $db->method('fetchRow')->willReturn([
@@ -158,7 +158,7 @@ final class DashboardSummaryServiceTest extends TestCase
         $llm = $this->createMock(LlmClient::class);
         $llm->expects($this->never())->method('streamChat');
 
-        $result = $this->service($db, $llm)->stream($this->sampleCards(), 4, 'cs', static fn (string $d) => null);
+        $result = $this->service($db, $llm)->stream($this->sampleCards(), 'cs', static fn (string $d) => null);
         $this->assertSame(['text' => 'Uložené shrnutí.', 'cached' => true], $result);
     }
 
@@ -191,7 +191,7 @@ final class DashboardSummaryServiceTest extends TestCase
 
         $deltas = [];
         $result = $this->service($db, $llm, $backends)->stream(
-            $this->sampleCards(), 4, 'cs',
+            $this->sampleCards(), 'cs',
             static function (string $d) use (&$deltas): void { $deltas[] = $d; },
         );
 
@@ -218,7 +218,7 @@ final class DashboardSummaryServiceTest extends TestCase
         $llm = $this->createMock(LlmClient::class);
         $llm->method('streamChat')->willReturn(new LlmChatResult('Nové shrnutí.', 10, 5, 'end_turn', 'm'));
 
-        $result = $this->service($db, $llm, $backends)->stream($this->sampleCards(), 4, 'cs', static fn (string $d) => null);
+        $result = $this->service($db, $llm, $backends)->stream($this->sampleCards(), 'cs', static fn (string $d) => null);
         $this->assertSame(['text' => 'Nové shrnutí.', 'cached' => false], $result);
     }
 
@@ -234,7 +234,7 @@ final class DashboardSummaryServiceTest extends TestCase
         $llm = $this->createMock(LlmClient::class);
         $llm->expects($this->never())->method('streamChat');
 
-        $result = $this->service($db, $llm, $backends)->stream($this->sampleCards(), 4, 'cs', static fn (string $d) => null);
+        $result = $this->service($db, $llm, $backends)->stream($this->sampleCards(), 'cs', static fn (string $d) => null);
         $this->assertSame(['text' => null, 'cached' => false], $result);
     }
 
@@ -251,7 +251,7 @@ final class DashboardSummaryServiceTest extends TestCase
         $llm = $this->createMock(LlmClient::class);
         $llm->expects($this->never())->method('streamChat');
 
-        $result = $this->service($db, $llm, $backends)->stream($this->sampleCards(), 4, 'cs', static fn (string $d) => null);
+        $result = $this->service($db, $llm, $backends)->stream($this->sampleCards(), 'cs', static fn (string $d) => null);
         $this->assertSame(['text' => null, 'cached' => false], $result);
     }
 
@@ -268,7 +268,7 @@ final class DashboardSummaryServiceTest extends TestCase
         $llm = $this->createMock(LlmClient::class);
         $llm->expects($this->never())->method('streamChat');
 
-        $result = $this->service($db, $llm, $backends)->stream($this->sampleCards(), 4, 'cs', static fn (string $d) => null);
+        $result = $this->service($db, $llm, $backends)->stream($this->sampleCards(), 'cs', static fn (string $d) => null);
         $this->assertSame(['text' => null, 'cached' => false], $result);
     }
 
@@ -292,7 +292,7 @@ final class DashboardSummaryServiceTest extends TestCase
             },
         );
 
-        $this->service($db, $llm, $backends)->stream($this->sampleCards(), 4, 'cs', static fn (string $d) => null);
+        $this->service($db, $llm, $backends)->stream($this->sampleCards(), 'cs', static fn (string $d) => null);
 
         $this->assertInstanceOf(LlmChatParams::class, $captured);
         $this->assertSame('claude-x', $captured->model);
@@ -303,7 +303,6 @@ final class DashboardSummaryServiceTest extends TestCase
         $this->assertStringContainsString('2 až 4 věty', (string) $captured->system);
         $userContent = (string) $captured->messages[0]['content'];
         $this->assertStringContainsString('Faktura po splatnosti', $userContent);
-        $this->assertStringContainsString('Aktivní úkoly: 4', $userContent);
         $this->assertStringContainsString(date('Y-m-d'), $userContent);
     }
 }

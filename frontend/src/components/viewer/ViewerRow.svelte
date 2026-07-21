@@ -136,7 +136,7 @@
   }
 
   /* Doc-state proužky řeší globální .docState_* třídy v styles/base.css
-   * (společné pro ViewerRow i WidgetRow v dashboardu). */
+   */
 
   /* Levý sloupec — drží jen ikonu typu záznamu, vertikálně
    * vystředěnou v celé výšce řádku.

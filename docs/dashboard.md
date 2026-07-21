@@ -3,7 +3,7 @@
 Home obrazovka aplikace — výchozí pohled po přihlášení. Od fáze 2 je to
 **prioritizovaný feed akčních karet**: uživatel vidí, co má řešit, a provede
 akci **přímo z feedu** (apply / review / reject / reanalyze) bez procházení
-viewerů. Úkoly zůstávají jako sekundární widget pod feedem.
+viewerů.
 
 Fáze 2 pokrývá jeden tok — **došlá pošta → doklad** — plus deterministické
 alerty jako druhý zdroj. Fáze 2b přidává **generované AI shrnutí dne** nad
@@ -24,9 +24,6 @@ feedem (SSE, cache dle hashe feedu, tichá degradace na statické county — §1
 │     4 200 Kč · jistota 94 %   [Použít][Zkontrolovat][Zamítnout]│
 │  🟡 Přijatá faktura — Dodavatel                               │
 │     jistota 62 %                     [Zkontrolovat][Zamítnout] │
-├──────────────────────────────────────────────────────────────┤
-│  ✓ Aktivní úkoly (5)                          [Otevřít všechny]│
-│    Item 1 · Item 2 · …                                        │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -55,12 +52,12 @@ Fáze 1 (widget MVP) říkala *„přehled, ne přístupový bod"*. Fáze 2 ten 
         └──────────┬───────────┘
         ┌──────────┴───────────┐
         ▼                      ▼
- MailSuggestionsSource     AlertsSource        buildTasksWidget()
- collectCards(ctx)         collectCards(ctx)   (re-use fáze 1)
-        │                      │                     │
-        └──────────┬───────────┘                     │
-                   ▼ sortAndCap (žebříček + čas)      │
-              cards[]  ────────────────────────────► tasks
+ MailSuggestionsSource     AlertsSource
+ collectCards(ctx)         collectCards(ctx)
+        │                      │
+        └──────────┬───────────┘
+                   ▼ sortAndCap (žebříček + čas)
+              cards[]
                    ▼
               Feed.svelte ── FeedCard × N
                               │
@@ -79,8 +76,6 @@ Fáze 1 (widget MVP) říkala *„přehled, ne přístupový bod"*. Fáze 2 ten 
 - **Řazení + strop** dělá `DashboardController::sortAndCap()`: seřaď dle
   `KIND_ORDER` (urgent/review/ready/info), uvnitř pásma `timestamp` DESC, ořízni
   na `MAX_CARDS` (~30); při ořezu přidej info kartu „a další…".
-- **Tasks** zůstávají jako sekundární widget pod feedem — re-use fáze 1
-  (`buildTasksWidget` + `fetchWidgetItems` + `renderRowToWidgetItem`).
 
 ## 4. Kartový kontrakt
 
@@ -326,8 +321,7 @@ Logika (`ExtractedDocumentApplier::unapply`):
   "data": {
     "generatedAt": "2026-06-28T08:42:11+00:00",
     "summary": { "aiText": null, "counts": { "urgent": 1, "review": 4, "ready": 3 } },
-    "cards": [ /* seřazené dle žebříčku, strop MAX_CARDS ~30 */ ],
-    "tasks": { /* tasks widget block z fáze 1 (viz §9) */ }
+    "cards": [ /* seřazené dle žebříčku, strop MAX_CARDS ~30 */ ]
   }
 }
 ```
@@ -367,7 +361,7 @@ Generované AI shrnutí feedu (fáze 2b, §11). Události:
 
 ```
 frontend/src/components/dashboard/
-├── Dashboard.svelte      — fetch, layout (feed + tasks widget), review modal,
+├── Dashboard.svelte      — fetch, layout, review modal,
 │                           reject prompt, toast s undo, fall-through
 ├── Feed.svelte           — grid karet (auto-fill minmax(360px,1fr) → 2 sloupce
 │                           na desktopu, 1 na mobilu; row-major = serverové
@@ -392,11 +386,10 @@ frontend/src/components/dashboard/
 │                           je syntetická open_form akce (formulář zprávy)
 ├── RejectReasonPrompt.svelte — sdílený prompt na důvod (feed i ViewerDetail)
 ├── AiSummaryCard.svelte  — AI shrnutí přes SSE (fallback county dle kind, §11)
-├── ChatLauncher.svelte   — plovoucí chat input (pill, sticky dole na středu,
-│                           width min(560px,100%)): odeslání →
-│                           chatStore.newConversation() + chatPanelStore.open()
-│                           + chatStore.send(); skrytý, když je panel otevřený
-└── WidgetCard / WidgetRow — re-use pro tasks widget
+└── ChatLauncher.svelte   — plovoucí chat input (pill, sticky dole na středu,
+                            width min(560px,100%)): odeslání →
+                            chatStore.newConversation() + chatPanelStore.open()
+                            + chatStore.send(); skrytý, když je panel otevřený
 ```
 
 API: `frontend/src/api/dashboard.js` (`fetchDashboard()`,
@@ -425,27 +418,20 @@ API: `frontend/src/api/dashboard.js` (`fetchDashboard()`,
 - **Ikony**: server posílá sémantický `icon` (check/question/warning/info/…),
   frontend překládá přes `resolveIcon()` (`icons.js`, fallback `iconTable`).
 
-## 9. Tasks widget (pod feedem)
+## 9. Form modal nad dashboardem
 
-Beze změny proti fázi 1 — `buildTasksWidget` vrací blok
-`{id, type, title, icon, count, items[], openAllAction}`; `items[]` z
-`renderRow()` přes `renderRowToWidgetItem` (title z `t1`, subtitle z `t2`,
-`action` = `{kind:'open_form', table:'tasks_core_tasks', recordId}`). `count` je
-samostatný `SELECT COUNT(*)` (může být > `items.length`, strop 7).
-
-**Form modal nad dashboardem.** `Dashboard.svelte` drží
-`formModal = {open, table, recordId, wasSaved}` a mountuje `<FormDialog>`.
-Refetch po close je podmíněný (`wasSaved` se nastaví jen v `onSaved`):
+`Dashboard.svelte` drží `formModal = {open, table, recordId, wasSaved}` a
+mountuje `<FormDialog>` — obsluhuje `open_form` akce karet (alerty, chybové
+karty, „Není faktura“…) a toast „Otevřít“ (otevře vytvořený Koncept nad
+`docs_core_heads`). Refetch po close je podmíněný (`wasSaved` se nastaví jen
+v `onSaved`):
 
 | Scénář | Refetch? |
 |---|---|
-| Klik na úkol → close bez editace | Ne |
+| Otevření záznamu → close bez editace | Ne |
 | Edit → **Uložit** → close | Ano |
-| **Hotovo** v FormStateBar (closeForm: 1) | Ano |
+| **Hotovo** ve FormStateBar (closeForm: 1) | Ano |
 | Edit + Esc/× → confirm OK | Ne |
-
-Tentýž `formModal` obsluhuje i alert `open_form` akce a toast „Otevřít"
-(otevře vytvořený Koncept nad `docs_core_heads`).
 
 ## 10. Empty stavy a refresh
 
@@ -453,7 +439,6 @@ Tentýž `formModal` obsluhuje i alert `open_form` akce a toast „Otevřít"
 |---|---|---|
 | `cards.length === 0` | „Vše zpracováno ✓ — dnes nic nečeká." (bez chip baru) | `dashboard.feed.empty` |
 | prázdná záložka filtru (feed neprázdný) | „V této kategorii nic nečeká." | `dashboard.feed.emptyCategory` |
-| tasks widget prázdný | (beze změny fáze 1) | `dashboard.widget.tasks.empty` |
 
 **Refresh** — fetch při mountu + manuální tlačítko. Žádný polling / SSE.
 
@@ -465,7 +450,7 @@ viditelný generativní AI prvek na home obrazovce.
 
 **Backend** — `DashboardSummaryService` (`src/Core/Dashboard/`):
 
-- **Vstup (digest)**: county dle kind + počet aktivních úkolů + top ~6 karet
+- **Vstup (digest)**: county dle kind + top ~6 karet
   (kind, id, titulek, subtitle) + dnešní datum (`Y-m-d`) + jazyk. Nikdy plný
   `extracted_json` (D13). Digest je kanonický — tentýž slouží pro hash i prompt.
 - **Cache** (D12): `core_ai_dashboard_summary` (modul `core.ai`), jeden řádek

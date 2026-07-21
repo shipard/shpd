@@ -52,9 +52,9 @@ final readonly class DashboardSummaryService
      * @param callable(string): void     $onDelta
      * @return array{text: ?string, cached: bool}
      */
-    public function stream(array $cards, int $tasksCount, string $language, callable $onDelta): array
+    public function stream(array $cards, string $language, callable $onDelta): array
     {
-        $digest = $this->buildDigest($cards, $tasksCount, $language, date('Y-m-d'));
+        $digest = $this->buildDigest($cards, $language, date('Y-m-d'));
         if ($this->isEmpty($digest)) {
             return ['text' => null, 'cached' => false];
         }
@@ -108,10 +108,10 @@ final readonly class DashboardSummaryService
      * info cards ("…a další") carry no signal.
      *
      * @param list<array<string, mixed>> $cards
-     * @return array{date: string, language: string, counts: array{urgent: int, review: int, ready: int}, tasks: int, topCards: list<array{kind: string, id: string, title: string, subtitle: string}>}
+     * @return array{date: string, language: string, counts: array{urgent: int, review: int, ready: int}, topCards: list<array{kind: string, id: string, title: string, subtitle: string}>}
      * @internal Public pro účely testů (stabilita hashe) — čistá transformace.
      */
-    public function buildDigest(array $cards, int $tasksCount, string $language, string $today): array
+    public function buildDigest(array $cards, string $language, string $today): array
     {
         $counts   = ['urgent' => 0, 'review' => 0, 'ready' => 0];
         $topCards = [];
@@ -135,7 +135,6 @@ final readonly class DashboardSummaryService
             'date'     => $today,
             'language' => $language,
             'counts'   => $counts,
-            'tasks'    => $tasksCount,
             'topCards' => $topCards,
         ];
     }
@@ -163,7 +162,7 @@ final readonly class DashboardSummaryService
     }
 
     /**
-     * Serializes the digest for the user message — counts, tasks, and the top
+     * Serializes the digest for the user message — counts and the top
      * cards with title/subtitle. Deliberately compact; never the full
      * extracted_json (D13).
      *
@@ -175,7 +174,6 @@ final readonly class DashboardSummaryService
         $lines  = [
             'Datum: ' . $digest['date'],
             "Počty karet: naléhavé={$counts['urgent']}, ke kontrole={$counts['review']}, připravené={$counts['ready']}",
-            'Aktivní úkoly: ' . $digest['tasks'],
         ];
 
         if ($digest['topCards'] !== []) {

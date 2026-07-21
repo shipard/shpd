@@ -17,7 +17,6 @@
   import DocumentExchangePreviewModal from '../exchange/DocumentExchangePreviewModal.svelte';
   import AiSummaryCard from './AiSummaryCard.svelte';
   import ChatLauncher from './ChatLauncher.svelte';
-  import WidgetCard from './WidgetCard.svelte';
   import Feed from './Feed.svelte';
   import FeedFilter from './FeedFilter.svelte';
   import RejectReasonPrompt from './RejectReasonPrompt.svelte';
@@ -327,21 +326,6 @@
     }
   }
 
-  // ── Tasks widget (flat action shape z fáze 1) ────────────────────────────────
-
-  function handleItemAction(action) {
-    if (!action || !action.kind) return;
-    if (action.kind === 'open_viewer') {
-      navigationStore.navigateToViewer(action.viewerId, action.recordId ?? null);
-    } else if (action.kind === 'open_form') {
-      formModal = { open: true, table: action.table, recordId: action.recordId ?? null, wasSaved: false };
-    }
-  }
-
-  function handleOpenAllAction(action) {
-    if (action?.viewerId) navigationStore.navigateToViewer(action.viewerId);
-  }
-
   function handleFormSaved() {
     formModal.wasSaved = true;
   }
@@ -392,14 +376,6 @@
         ? t('dashboard.feed.emptyCategory')
         : null}
     />
-
-    {#if data.tasks}
-      <WidgetCard
-        widget={data.tasks}
-        onItemAction={handleItemAction}
-        onOpenAllAction={handleOpenAllAction}
-      />
-    {/if}
   {/if}
 
   <ChatLauncher />

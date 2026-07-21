@@ -6,8 +6,8 @@ import { parseSseFrames } from './sse.js';
 const TOKEN_KEY = 'shpd_token';
 
 /**
- * Fetch dashboard data — agregát alerts/mail/tasks + AI summary counts.
- * Vrací `{ generatedAt, summary, widgets }` nebo null při selhání.
+ * Fetch dashboard data — feed akčních karet + AI summary counts.
+ * Vrací `{ generatedAt, summary, cards }` nebo null při selhání.
  */
 export async function fetchDashboard() {
   const res = await get('/_ui/dashboard');

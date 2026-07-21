@@ -371,11 +371,7 @@ export default {
   // ── Dashboard ────────────────────────────────────────────────────────────
   'dashboard.title': 'Dashboard',
   'dashboard.refresh': 'Refresh',
-  'dashboard.openAll': 'Open all',
   'dashboard.error.failed': 'Failed to load dashboard.',
-  'dashboard.widget.alerts.empty': 'All clear ✓',
-  'dashboard.widget.mail.empty': 'No new messages',
-  'dashboard.widget.tasks.empty': 'No active tasks',
   'dashboard.aiSummary.title': "Today's summary",
   'dashboard.aiSummary.intro': 'You currently have:',
   'dashboard.aiSummary.empty': 'All clear — nothing pending today.',

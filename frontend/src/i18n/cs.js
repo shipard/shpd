@@ -384,11 +384,7 @@ export default {
   // ── Dashboard ────────────────────────────────────────────────────────────
   'dashboard.title': 'Dashboard',
   'dashboard.refresh': 'Obnovit',
-  'dashboard.openAll': 'Otevřít všechny',
   'dashboard.error.failed': 'Načtení dashboardu selhalo.',
-  'dashboard.widget.alerts.empty': 'Vše v pořádku ✓',
-  'dashboard.widget.mail.empty': 'Žádné nové zprávy',
-  'dashboard.widget.tasks.empty': 'Žádné aktivní úkoly',
   'dashboard.aiSummary.title': 'Dnešní shrnutí',
   'dashboard.aiSummary.intro': 'Aktuálně máte:',
   'dashboard.aiSummary.empty': 'Vše je v klidu, dnes nic nečeká.',

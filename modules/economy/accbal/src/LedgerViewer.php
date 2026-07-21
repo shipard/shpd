@@ -15,6 +15,11 @@ use Shipard\Core\Viewer\TableViewer;
  *
  * ViewGroups (chip lišta nahoře) = saldokonta z economy_accbal_balances,
  * identita přes `code`. Filtry: partner, variabilní symbol, jen otevřené.
+ *
+ * Grid layout (výchozí, docs/viewer-grid.md §7.4): skupinové řádky per
+ * partner (D6/D12 — řazení primárně dle partnera, sdílené i listem),
+ * footer se součty Předpisy/Úhrady/Zůstatek v domácí měně (D7). Datum
+ * pohybu přes LEFT JOIN na deník (journal_row → accounting_date).
  */
 class LedgerViewer extends TableViewer
 {
@@ -39,12 +44,47 @@ class LedgerViewer extends TableViewer
         $sql = 'SELECT l.`id`, l.`balance`, l.`bal_side`, l.`source_kind`, l.`doc_head`,'
             . ' l.`bank_transaction`, l.`journal_row`, l.`account_number`, l.`partner`,'
             . ' l.`payment_reference`, l.`due_date`, l.`currency`, l.`amount`, l.`amount_hc`,'
-            . ' l.`text`, b.`name` AS balance_name, p.`full_name` AS partner_name,'
+            . ' l.`text`, b.`name` AS balance_name, b.`short_name` AS balance_short_name,'
+            . ' p.`full_name` AS partner_name, j.`accounting_date`,'
             . ' (' . self::RESIDUAL_SQL . ') AS residual'
             . ' FROM `' . $this->table . '` l'
             . ' LEFT JOIN `economy_accbal_balances` b ON b.`id` = l.`balance`'
-            . ' LEFT JOIN `base_persons_persons` p ON p.`id` = l.`partner`';
+            . ' LEFT JOIN `base_persons_persons` p ON p.`id` = l.`partner`'
+            . ' LEFT JOIN `economy_accounting_journal` j ON j.`id` = l.`journal_row`';
 
+        [$conditions, $params, $onlyOpen] = $this->buildConditions($filters);
+
+        if ($conditions !== []) {
+            $sql .= ' WHERE ' . implode(' AND ', $conditions);
+        }
+        if ($onlyOpen) {
+            $sql .= ' HAVING residual <> 0';
+        }
+
+        // Primární řazení dle partnera je tvrdý kontrakt skupin gridu (D12):
+        // nesouvislá skupina = duplicitní group.key = pád renderu. Pohyby bez
+        // partnera na konec (ISNULL), l.partner jistí shodná jména. Platí
+        // i pro list — selectRows je sdílené (D1), list tím získává totéž
+        // seskupení. Uvnitř partnera role a datum pohybu.
+        $sql .= ' ORDER BY ISNULL(p.`full_name`) ASC, p.`full_name` ASC, l.`partner` ASC,'
+            . ' l.`bal_side` ASC, j.`accounting_date` ASC, l.`id` ASC';
+
+        [$offset, $limit] = $this->buildPaginationLimit($pageNumber);
+        $sql .= ' LIMIT ' . $offset . ', ' . $limit;
+
+        return $this->db->fetchAll($sql, ...$params);
+    }
+
+    /**
+     * Skladba WHERE podmínek seznamu — sdílená mezi selectRows()
+     * a renderGridFooter(), aby součty vždy odpovídaly filtrovanému setu.
+     * `only_open` se vrací zvlášť: neřeší se ve WHERE, ale přes HAVING
+     * (selectRows) / subselect (footer) nad per-row residual výrazem.
+     *
+     * @return array{0: list<string>, 1: list<mixed>, 2: bool} [conditions, params, onlyOpen]
+     */
+    private function buildConditions(array $filters): array
+    {
         $conditions = [];
         $params = [];
         $onlyOpen = false;
@@ -75,19 +115,7 @@ class LedgerViewer extends TableViewer
             }
         }
 
-        if ($conditions !== []) {
-            $sql .= ' WHERE ' . implode(' AND ', $conditions);
-        }
-        if ($onlyOpen) {
-            $sql .= ' HAVING residual <> 0';
-        }
-
-        $sql .= ' ORDER BY l.`balance` ASC, l.`bal_side` ASC, l.`id` ASC';
-
-        [$offset, $limit] = $this->buildPaginationLimit($pageNumber);
-        $sql .= ' LIMIT ' . $offset . ', ' . $limit;
-
-        return $this->db->fetchAll($sql, ...$params);
+        return [$conditions, $params, $onlyOpen];
     }
 
     public function renderRow(array $rowData): array
@@ -104,6 +132,10 @@ class LedgerViewer extends TableViewer
         ];
 
         $t2 = [];
+        $date = $this->formatDate($rowData['accounting_date'] ?? null);
+        if ($date !== null) {
+            $t2[] = ['text' => $date];
+        }
         $t2[] = [
             'text'  => $balSide === 0 ? ($this->language === 'cs' ? 'Předpis' : 'Request')
                                       : ($this->language === 'cs' ? 'Úhrada' : 'Payment'),
@@ -135,6 +167,130 @@ class LedgerViewer extends TableViewer
         $row['i2'] = $i2;
 
         return $row;
+    }
+
+    // ── Grid layout (docs/viewer-grid.md §7.4 — skupiny per partner) ────────
+
+    /** Saldo pohyby se na desktopu otevírají jako tabulka; list zůstává mobilním formátem. */
+    public function getDefaultLayout(): string
+    {
+        return 'grid';
+    }
+
+    /**
+     * Bez `sortable` sloupců (záměr): skupiny per partner vyžadují primární
+     * řazení dle partnera (D12) — sort klikem by clustering rozbil
+     * (buildSortedOrderBy neumí prefixovat skupinový klíč). Partner není
+     * sloupec — nese ho hlavička skupiny.
+     */
+    public function getGridColumns(): ?array
+    {
+        $cs = $this->language === 'cs';
+
+        return [
+            ['id' => 'accounting_date', 'label' => $cs ? 'Datum' : 'Date', 'width' => 96],
+            ['id' => 'role', 'label' => 'Role', 'width' => 90],
+            ['id' => 'payment_reference', 'label' => $cs ? 'VS' : 'Reference', 'width' => 110],
+            ['id' => 'due_date', 'label' => $cs ? 'Splatnost' : 'Due date', 'width' => 96],
+            ['id' => 'amount', 'label' => $cs ? 'Částka' : 'Amount', 'width' => 130, 'align' => 'right'],
+            ['id' => 'residual', 'label' => $cs ? 'Zbývá' : 'Open', 'width' => 120, 'align' => 'right'],
+            ['id' => 'text', 'label' => 'Text', 'grow' => true],
+            // Se zvoleným chipem redundantní, na „Vše" užitečné.
+            ['id' => 'balance', 'label' => $cs ? 'Saldokonto' : 'Balance', 'width' => 140],
+        ];
+    }
+
+    public function renderGridRow(array $rowData): array
+    {
+        $cs = $this->language === 'cs';
+        $balSide = (int) ($rowData['bal_side'] ?? 0);
+        $curCode = strtoupper((string) ($rowData['currency'] ?? ''));
+
+        $partnerName = trim((string) ($rowData['partner_name'] ?? ''));
+        $residual = (float) ($rowData['residual'] ?? 0);
+        $balanceShort = trim((string) ($rowData['balance_short_name'] ?? ''));
+
+        return [
+            'id'         => (int) $rowData['id'],
+            'stateStyle' => $balSide === 0 ? 'primary' : 'done',
+            // Skupinová hlavička per partner — klíč z FK (stabilní i při
+            // shodných jménech), pohyby bez partnera sdílí skupinu 'p0'.
+            'group' => [
+                'key'   => 'p' . (int) ($rowData['partner'] ?? 0),
+                'label' => $partnerName !== '' ? $partnerName : ($cs ? '(Bez partnera)' : '(No partner)'),
+            ],
+            'cells' => [
+                'accounting_date' => $this->formatDate($rowData['accounting_date'] ?? null),
+                'role' => $balSide === 0
+                    ? ['text' => $cs ? 'Předpis' : 'Request', 'badge' => 'primary']
+                    : ['text' => $cs ? 'Úhrada' : 'Payment', 'badge' => 'success'],
+                'payment_reference' => (string) ($rowData['payment_reference'] ?? ''),
+                'due_date' => $this->formatDate($rowData['due_date'] ?? null),
+                'amount' => [
+                    ['text' => $this->formatMoney($rowData['amount'] ?? 0), 'class' => 'amount'],
+                    ['text' => $curCode, 'class' => 'muted'],
+                ],
+                'residual' => abs($residual) > 0.0001
+                    ? ['text' => $this->formatMoney($residual), 'class' => 'amount']
+                    : null,
+                'text'    => (string) ($rowData['text'] ?? ''),
+                'balance' => $balanceShort !== '' ? $balanceShort : trim((string) ($rowData['balance_name'] ?? '')),
+            ],
+        ];
+    }
+
+    /**
+     * Součty přes CELÝ filtrovaný set (D7) v domácí měně — vždy amount_hc;
+     * residual výraz (měna dokladu, allocations) do součtů NEvstupuje,
+     * zůstatek = Σ předpisů − Σ úhrad. WHERE skladba sdílená se selectRows()
+     * (buildConditions); filtr „Jen otevřené" (tam HAVING nad per-row
+     * residualem) se replikuje subselectem — agreguje se jen přes řádky,
+     * které jím prošly.
+     */
+    public function renderGridFooter(?string $search, array $filters): ?array
+    {
+        $cs = $this->language === 'cs';
+
+        [$conditions, $params, $onlyOpen] = $this->buildConditions($filters);
+
+        $inner = 'SELECT l.`bal_side`, l.`amount_hc`, l.`home_currency`'
+            . ($onlyOpen ? ', (' . self::RESIDUAL_SQL . ') AS residual' : '')
+            . ' FROM `' . $this->table . '` l'
+            . ' LEFT JOIN `economy_accbal_balances` b ON b.`id` = l.`balance`'
+            . ' LEFT JOIN `base_persons_persons` p ON p.`id` = l.`partner`';
+        if ($conditions !== []) {
+            $inner .= ' WHERE ' . implode(' AND ', $conditions);
+        }
+
+        $sql = 'SELECT'
+            . ' SUM(CASE WHEN x.`bal_side` = 0 THEN x.`amount_hc` ELSE 0 END) AS sum_requests,'
+            . ' SUM(CASE WHEN x.`bal_side` = 1 THEN x.`amount_hc` ELSE 0 END) AS sum_payments,'
+            . ' MAX(x.`home_currency`) AS home_currency'
+            . ' FROM (' . $inner . ') x'
+            . ($onlyOpen ? ' WHERE x.`residual` <> 0' : '');
+
+        $r = $this->db->fetchRow($sql, ...$params);
+
+        $requests = (float) ($r['sum_requests'] ?? 0);
+        $payments = (float) ($r['sum_payments'] ?? 0);
+        // Domácí měna je přes filtrovaný set jednotná (měna DS) — MAX ji jen
+        // vytáhne. Kód uvádíme, ať je zřejmé, že jde o HC (sloupec Částka je
+        // v měně dokladu); prázdný set → bez kódu.
+        $hc = strtoupper((string) ($r['home_currency'] ?? ''));
+        $hc = $hc !== '' ? ' ' . $hc : '';
+
+        return [
+            'residual' => [
+                ['text' => $cs ? 'Zůstatek' : 'Balance', 'class' => 'muted'],
+                ['text' => $this->formatMoney($requests - $payments) . $hc, 'class' => 'amount'],
+            ],
+            'text' => [
+                ['text' => $cs ? 'Předpisy' : 'Requests', 'class' => 'muted'],
+                ['text' => $this->formatMoney($requests) . $hc],
+                ['text' => $cs ? 'Úhrady' : 'Payments', 'class' => 'muted'],
+                ['text' => $this->formatMoney($payments) . $hc],
+            ],
+        ];
     }
 
     public function renderDetail(int $recordId): array

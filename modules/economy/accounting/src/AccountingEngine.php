@@ -559,8 +559,11 @@ final class AccountingEngine
     }
 
     /**
-     * Kategorie kroku → maska (první záznam v accounts se shodnou cat a
+     * Kategorie kroku → masky (první záznam v accounts se shodnou cat a
      * vyhovující query nad zdrojovým záznamem) → účet v rozvrhu.
+     * `accountMask` smí být řetězec nebo pole — řetěz masek zkoušených po
+     * řadě, první dohledaná vyhrává (fallback pro rozvrhy bez jemnější
+     * analytiky, např. 3249 → 324).
      *
      * @return array{id?: int, number: string, is_error?: bool}
      */
@@ -569,7 +572,7 @@ final class AccountingEngine
         $cat = (string) ($step['cat'] ?? '');
         $rules = $this->resolveRules();
 
-        $mask = null;
+        $masks = [];
         foreach ($rules['accounts'] ?? [] as $entry) {
             if (!is_array($entry) || ($entry['cat'] ?? null) !== $cat) {
                 continue;
@@ -577,11 +580,11 @@ final class AccountingEngine
             if (!$this->matchesQuery($entry, $record)) {
                 continue;
             }
-            $mask = (string) ($entry['accountMask'] ?? '');
+            $masks = self::masksOf($entry);
             break;
         }
 
-        if ($mask === null || $mask === '') {
+        if ($masks === []) {
             $this->addMessage(
                 'account_not_found',
                 "Předpis nemá masku pro kategorii '{$cat}'",
@@ -592,7 +595,7 @@ final class AccountingEngine
             $hint = '';
             foreach ($rules['accounts'] ?? [] as $entry) {
                 if (is_array($entry) && ($entry['cat'] ?? null) === $cat) {
-                    $hint = substr((string) ($entry['accountMask'] ?? ''), 0, 3);
+                    $hint = substr(self::masksOf($entry)[0] ?? '', 0, 3);
                 }
             }
             return [
@@ -601,20 +604,41 @@ final class AccountingEngine
             ];
         }
 
-        $account = $this->maskResolver->resolve($mask, (string) ($head['accounting_date'] ?? ''));
-        if ($account === null) {
-            $this->addMessage(
-                'account_not_found',
-                "Účet nenalezen pro masku {$mask}",
-                $rowId,
-            );
-            return [
-                'number'   => str_pad($mask, self::ACCOUNT_NUMBER_LENGTH, '?'),
-                'is_error' => true,
-            ];
+        foreach ($masks as $mask) {
+            $account = $this->maskResolver->resolve($mask, (string) ($head['accounting_date'] ?? ''));
+            if ($account !== null) {
+                return $account;
+            }
         }
 
-        return $account;
+        $this->addMessage(
+            'account_not_found',
+            'Účet nenalezen pro masku ' . implode(', ', $masks),
+            $rowId,
+        );
+        return [
+            'number'   => str_pad($masks[0], self::ACCOUNT_NUMBER_LENGTH, '?'),
+            'is_error' => true,
+        ];
+    }
+
+    /**
+     * Masky záznamu accounts jako neprázdný seznam — `accountMask` je
+     * řetězec nebo pole řetězců; prázdné hodnoty se zahodí.
+     *
+     * @param array<string, mixed> $entry
+     * @return list<string>
+     */
+    private static function masksOf(array $entry): array
+    {
+        $raw = $entry['accountMask'] ?? [];
+        $masks = [];
+        foreach (is_array($raw) ? $raw : [$raw] as $mask) {
+            if ((string) $mask !== '') {
+                $masks[] = (string) $mask;
+            }
+        }
+        return $masks;
     }
 
     // ── Seskupení a zápis ───────────────────────────────────────────────────

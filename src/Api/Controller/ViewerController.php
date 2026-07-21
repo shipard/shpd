@@ -50,6 +50,7 @@ class ViewerController
 			'filters'            => $viewer->getFilters(),
 			'toolbar'            => $viewer->getToolbarActions(null),
 			'viewGroups'         => $viewer->getViewGroups(),
+			'defaultViewGroup'   => $viewer->getDefaultViewGroup(),
 			'numberSeries'       => $viewer->getNumberSeries(),
 			'newRecordDefaults'  => $viewer->getNewRecordDefaults(),
 			'layouts'            => $layouts,

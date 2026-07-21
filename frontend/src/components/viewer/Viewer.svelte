@@ -36,8 +36,11 @@
   let meta = $state(null);
   let loadingMeta = $state(true);
 
-  // --- Doc state tabs ---
-  let activeViewGroup = $state('active'); // 'active' | 'archive' | 'trash' | 'all'
+  // --- View group tabs (docState skupiny nebo datové skupiny z backendu) ---
+  // 'active' | 'archive' | 'trash' | 'all' | datové id (např. kód saldokonta).
+  // Počáteční 'active' je jen pre-meta placeholder — skutečný default přijde
+  // z meta.defaultViewGroup po fetchMeta() (init $effect níže).
+  let activeViewGroup = $state('active');
 
   // --- Number series tabs (bottom bar) ---
   // `null` = no series filter (viewer doesn't expose series or list is empty).
@@ -50,13 +53,15 @@
     trash:   'viewer.tab.trash',
   };
 
-  // Tabs to display: viewGroups from meta + always the "all" tab
+  // Tabs to display: viewGroups from meta + always the "all" tab.
+  // Položka je buď string (docState skupiny — i18n mapování tady), nebo
+  // objekt {id, label} s labelem už lokalizovaným backendem (datové
+  // skupiny, např. saldokonta v Saldo pohybech).
   let viewTabs = $derived(() => {
     const groups = meta?.viewGroups ?? [];
-    const tabs = groups.map(vg => ({
-      id: vg,
-      label: VIEW_GROUP_LABEL_KEYS[vg] ? t(VIEW_GROUP_LABEL_KEYS[vg]) : vg,
-    }));
+    const tabs = groups.map(vg => typeof vg === 'string'
+      ? { id: vg, label: VIEW_GROUP_LABEL_KEYS[vg] ? t(VIEW_GROUP_LABEL_KEYS[vg]) : vg }
+      : { id: vg.id, label: vg.label });
     tabs.push({ id: 'all', label: t('viewer.tab.all') });
     return tabs;
   });
@@ -711,6 +716,8 @@
     detail = null;
     detailToolbar = [];
     activeSearch = '';
+    // Pre-meta placeholder — bez meta se tab lišta nerenderuje; skutečný
+    // default (meta.defaultViewGroup) se nastaví po fetchMeta() níže.
     activeViewGroup = 'active';
     activeSeriesId = null;
     activeFilters = {};
@@ -768,9 +775,16 @@
       prevLayout = layout;
       activeLayout = chosenLayout;
 
+      // Výchozí viewGroup zná až meta — docState viewery vrací 'active',
+      // datové (LedgerViewer) kód první skupiny. pendingViewGroup (digest
+      // karta → tab Archiv) má přednost. Stejnou hodnotou nastavíme i
+      // activeViewGroup, jinak se nezvýrazní správný chip.
+      const viewGroup = pendingViewGroup ?? untrack(() => meta)?.defaultViewGroup ?? 'active';
+      activeViewGroup = viewGroup;
+
       // Filtry se právě resetovaly na {} — předáváme literál, protože tento
       // $effect nesmí číst jiný $state než tab.viewerId.
-      fetchRowsExplicit(viewerId, '', pendingViewGroup ?? 'active', activeSeriesId, {}, 0, layout).then(() => {
+      fetchRowsExplicit(viewerId, '', viewGroup, activeSeriesId, {}, 0, layout).then(() => {
         if (pendingRecord != null) {
           selectedRowId = pendingRecord;
           fetchDetail(pendingRecord);
@@ -1166,12 +1180,17 @@
     border-right: none;
   }
 
-  /* Doc state tabs */
+  /* View group tabs. Datové skupiny (saldokonta, ~9 chipů) se do 400px
+     panelu nevejdou — horizontální scroll bez zalomení se skrytým
+     scrollbarem, vzor FeedFilter na dashboardu. */
   .shpd-viewer__tabs {
     display: flex;
     border-bottom: 1px solid var(--shpd-color-border);
     background-color: var(--shpd-color-bg);
     flex-shrink: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
   }
 
   .shpd-viewer__tab {
@@ -1184,6 +1203,7 @@
     color: var(--shpd-color-text-secondary);
     cursor: pointer;
     white-space: nowrap;
+    flex-shrink: 0;
     transition: color 0.12s, border-color 0.12s;
   }
 

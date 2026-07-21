@@ -13,11 +13,20 @@ use Shipard\Core\Viewer\TableViewer;
  * žádné docState taby. Reziduum počítá z allocations přes LEFT JOIN —
  * ve Fázi 2b jsou allocations prázdné, takže vše je plně „otevřené".
  *
- * Filtry: skupina (balance), partner, variabilní symbol, jen otevřené.
+ * ViewGroups (chip lišta nahoře) = saldokonta z economy_accbal_balances,
+ * identita přes `code`. Filtry: partner, variabilní symbol, jen otevřené.
  */
 class LedgerViewer extends TableViewer
 {
     protected ?string $docStatesCfgItem = null;
+
+    /**
+     * Per-request cache saldokont pro viewGroups — meta volá getViewGroups()
+     * i getDefaultViewGroup(), dotaz do DB stačí jednou.
+     *
+     * @var list<array{id: string, label: string}>|null
+     */
+    private ?array $viewGroups = null;
 
     /** Reziduum pohybu = amount − Σ allocations, kde figuruje (jako request i payment). */
     private const RESIDUAL_SQL =
@@ -46,9 +55,15 @@ class LedgerViewer extends TableViewer
             if ($value === null || $value === '') {
                 continue;
             }
-            if ($id === 'balance') {
-                $conditions[] = 'l.`balance` = %i';
-                $params[] = (int) $value;
+            if ($id === 'viewGroup') {
+                // 'all' = bez podmínky; 'active' defenzivně také — stale
+                // frontend z otevřené session může po nasazení poslat
+                // starý docState default.
+                $vg = (string) $value;
+                if ($vg !== 'all' && $vg !== 'active') {
+                    $conditions[] = 'b.`code` = %s';
+                    $params[] = $vg;
+                }
             } elseif ($id === 'partner') {
                 $conditions[] = 'p.`full_name` LIKE %s';
                 $params[] = '%' . (string) $value . '%';
@@ -215,21 +230,42 @@ class LedgerViewer extends TableViewer
     {
         $cs = $this->language === 'cs';
 
-        $balanceOptions = [];
-        $balances = $this->db->fetchAll(
-            'SELECT `id`, `name` FROM `economy_accbal_balances`'
-            . ' WHERE `docState` != 90 ORDER BY `sort_order` ASC, `name` ASC',
-        );
-        foreach ($balances as $b) {
-            $balanceOptions[] = ['value' => (int) $b['id'], 'label' => (string) $b['name']];
-        }
-
         return [
-            ['id' => 'balance', 'label' => $cs ? 'Saldokonto' : 'Balance', 'type' => 'select', 'options' => $balanceOptions],
             ['id' => 'partner', 'label' => 'Partner', 'type' => 'text'],
             ['id' => 'payment_reference', 'label' => $cs ? 'Variabilní symbol' : 'Payment reference', 'type' => 'text'],
             ['id' => 'only_open', 'label' => $cs ? 'Jen otevřené' : 'Open only', 'type' => 'checkbox'],
         ];
+    }
+
+    /**
+     * Skupiny = saldokonta dle sort_order; identita `code` (stabilní napříč
+     * DS, čitelná v URL, bez kolize s rezervovanými 'active'/'archive'/
+     * 'trash'/'all'), label short_name s fallbackem na name — stejná
+     * konvence jako sidebar (accbal-nav-items).
+     */
+    public function getViewGroups(): array
+    {
+        if ($this->viewGroups === null) {
+            $balances = $this->db->fetchAll(
+                'SELECT `code`, `name`, `short_name` FROM `economy_accbal_balances`'
+                . ' WHERE `docState` != 90 ORDER BY `sort_order` ASC, `name` ASC',
+            );
+            $this->viewGroups = [];
+            foreach ($balances as $b) {
+                $shortName = trim((string) ($b['short_name'] ?? ''));
+                $this->viewGroups[] = [
+                    'id'    => (string) $b['code'],
+                    'label' => $shortName !== '' ? $shortName : (string) $b['name'],
+                ];
+            }
+        }
+        return $this->viewGroups;
+    }
+
+    public function getDefaultViewGroup(): string
+    {
+        $groups = $this->getViewGroups();
+        return $groups !== [] ? $groups[0]['id'] : 'all';
     }
 
     public function getToolbarActions(?array $selectedRow): array

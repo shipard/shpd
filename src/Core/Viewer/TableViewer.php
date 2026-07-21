@@ -69,7 +69,12 @@ abstract class TableViewer
      * Derived automatically from $docStatesCfgItem if set.
      * Returns empty array when docStates are not supported.
      *
-     * @return string[]  e.g. ['active', 'archive', 'trash']
+     * An item is either a plain string id ('active', 'archive', …) that the
+     * frontend maps to an i18n label, or an object {id, label} with the
+     * label already localized by the backend — used by data-driven groups
+     * (e.g. LedgerViewer derives groups from economy_accbal_balances).
+     *
+     * @return list<string|array{id: string, label: string}>
      */
     public function getViewGroups(): array
     {
@@ -84,6 +89,16 @@ abstract class TableViewer
             }
         }
         return $groups;
+    }
+
+    /**
+     * ViewGroup the frontend pre-selects when the viewer opens. Exposed in
+     * meta as `defaultViewGroup`. Data-driven viewers override this
+     * (e.g. LedgerViewer returns the first balance's code).
+     */
+    public function getDefaultViewGroup(): string
+    {
+        return 'active';
     }
 
     /**

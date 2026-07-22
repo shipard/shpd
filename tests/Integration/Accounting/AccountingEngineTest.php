@@ -28,6 +28,9 @@ class AccountingEngineTest extends IntegrationTestCase
     /** @var list<int> */
     private array $createdItems = [];
 
+    /** @var list<int> */
+    private array $createdAccounts = [];
+
     private ?AccountingEngine $engine = null;
 
     protected function setUp(): void
@@ -50,6 +53,9 @@ class AccountingEngineTest extends IntegrationTestCase
         }
         foreach ($this->createdItems as $id) {
             $dibi->delete('economy_items')->where('id = %i', $id)->execute();
+        }
+        foreach ($this->createdAccounts as $id) {
+            $dibi->delete('economy_accounting_accounts')->where('id = %i', $id)->execute();
         }
     }
 
@@ -1193,6 +1199,66 @@ class AccountingEngineTest extends IntegrationTestCase
         $this->assertSame(['AAA', 'BBB'], $vs);
     }
 
+    public function testCmnbkpAccountRecordOnArchivedAccountBooks(): void
+    {
+        // Linkable states: historický doklad smí účtovat na archivní účet
+        // (70) — vzor msi 221xxx (zrušené termínované vklady).
+        $archivedId = $this->insertTempAccount('899IT901', 70, 4);
+        $headId = $this->insertHead('cmnbkp', [
+            'partner'        => null,
+            'total_base'     => 100.0, 'total_vat' => 0.0, 'total_amount' => 100.0,
+            'total_base_dom' => 100.0, 'total_vat_dom' => 0.0, 'total_amount_dom' => 100.0,
+        ]);
+        $this->insertAccRow($headId, 'acc.record', 100.0, 0, [
+            'account' => $archivedId, 'order_pos' => 0,
+        ]);
+        $this->insertAccRow($headId, 'acc.record', 100.0, 1, [
+            'account' => $this->accountId('321100'), 'order_pos' => 1,
+        ]);
+
+        $result = $this->engine->accountDocument($headId);
+
+        $this->assertSame(1, $result['state'], json_encode($result['messages']));
+        $journal = $this->journalOf($headId);
+        $this->assertCount(2, $journal);
+        $this->assertBalanced($journal);
+
+        $line = $this->lineByPrefix($journal, '899IT901');
+        $this->assertSame($archivedId, (int) $line['account']);
+        $this->assertEqualsWithDelta(100.0, (float) $line['money_dr'], 0.001);
+    }
+
+    public function testCmnbkpAccountRecordOnDeletedAccountFailsLoudly(): void
+    {
+        // Smazaný účet (90) je jediný neodkazovatelný stav — chybový řádek.
+        $deletedId = $this->insertTempAccount('899IT902', 90, 5);
+        $headId = $this->insertHead('cmnbkp', [
+            'partner'        => null,
+            'total_base'     => 100.0, 'total_vat' => 0.0, 'total_amount' => 100.0,
+            'total_base_dom' => 100.0, 'total_vat_dom' => 0.0, 'total_amount_dom' => 100.0,
+        ]);
+        $this->insertAccRow($headId, 'acc.record', 100.0, 0, [
+            'account' => $deletedId, 'order_pos' => 0,
+        ]);
+        $this->insertAccRow($headId, 'acc.record', 100.0, 1, [
+            'account' => $this->accountId('321100'), 'order_pos' => 1,
+        ]);
+
+        $result = $this->engine->accountDocument($headId);
+
+        $this->assertSame(2, $result['state']);
+        $codes = array_column($result['messages'], 'code');
+        $this->assertContains('row_account_missing', $codes);
+
+        $errorLines = array_values(array_filter(
+            $this->journalOf($headId),
+            fn($l) => (int) $l['is_error'] === 1,
+        ));
+        $this->assertCount(1, $errorLines);
+        $this->assertSame('??????', $errorLines[0]['account_number']);
+        $this->assertNull($errorLines[0]['account']);
+    }
+
     public function testCmnbkpAccountFromItem(): void
     {
         // acc.item: účet přijde z položky typu 2 (Účetní položka).
@@ -1313,6 +1379,26 @@ class AccountingEngineTest extends IntegrationTestCase
         if ($row === null) {
             $this->markTestSkipped("Dev DS nemá analytický účet {$prefix}*");
         }
+    }
+
+    /** Dočasný účet rozvrhu (alfanumerický prefix 899IT — v reálném rozvrhu neexistuje). */
+    private function insertTempAccount(string $number, int $docState, int $docStateMain): int
+    {
+        $dibi = $this->db->getDibiConnection();
+        $dibi->insert('economy_accounting_accounts', array_merge(
+            \Shipard\Module\Economy\Accounting\AccountDocument::deriveStructure($number),
+            [
+                'number'       => $number,
+                'name'         => "IT test účet {$number}",
+                'short_name'   => $number,
+                'account_kind' => 1,
+                'docState'     => $docState,
+                'docStateMain' => $docStateMain,
+            ],
+        ))->execute();
+        $id = (int) $dibi->getInsertId();
+        $this->createdAccounts[] = $id;
+        return $id;
     }
 
     private function insertAccEntryItem(?int $accountId): int

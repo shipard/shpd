@@ -448,15 +448,24 @@ Pořadí:
 SELECT id, number FROM economy_accounting_accounts
 WHERE number LIKE '{mask}%'
   AND account_level = 4                         -- jen analytické účty
-  AND docStateMain <= 2                         -- aktivní (ne archiv/koš)
+  AND docState IN (10, 40, 70, 80)              -- linkable (vyloučen jen smazaný 90)
   AND (valid_from IS NULL OR valid_from <= :accounting_date)
   AND (valid_to   IS NULL OR valid_to   >= :accounting_date)
-ORDER BY number
+ORDER BY docState = 70, number                  -- aktivní před archivem
 LIMIT 1
 ```
 
 Deterministické: první účet podle čísla vzestupně. Praktický důsledek shodný
 se starým systémem: `602` najde `602000` dřív než `602100`.
+
+Archivní účet (70) je **jen fallback**: jakýkoliv aktivní účet vyhovující
+masce vyhrává (i číselně vyšší), archiv se dohledá až když aktivní neexistuje
+— historické doklady na zrušené účty (např. úvěrové 221xxx) se tak zaúčtují,
+ale běžnému účtování archiv výsledek masky nikdy nezmění. Stejná konvence
+LINKABLE_STATES platí pro přímé účty řádků/položek (`acc.record`, `acc.item`
+— lookup podle id, smazaný 90 → chybový řádek) i pro import dokladů
+(`AccountResolver` v core.exchange, lookup podle čísla). UI výběr účtů
+(`AccountsLookup`) zůstává aktivní-only.
 
 ### Nenalezený účet
 

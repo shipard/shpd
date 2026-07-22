@@ -11,11 +11,14 @@ namespace Shipard\Module\Economy\Accounting;
  *
  * Maska → první aktivní analytický účet (account_level = 4) dle čísla
  * vzestupně (602 najde 602000 dřív než 602100), platný k účetnímu datu.
+ * Archivní účet (70) je jen fallback — bere se, až když masce nevyhovuje
+ * žádný aktivní účet (historické doklady na zrušené účty); smazaný (90)
+ * se nedohledá nikdy. Konvence LINKABLE_STATES viz StatementImportService.
  * Per-instance cache; pro per-run izolaci stačí novou instanci na běh.
  */
 final class AccountMaskResolver
 {
-    private const ACTIVE_DOC_STATES = [10, 40, 80];
+    private const LINKABLE_STATES = [10, 40, 70, 80];
 
     /** @var array<string, array{id: int, number: string}|null> mask|date → resolved account */
     private array $cache = [];
@@ -37,13 +40,13 @@ final class AccountMaskResolver
         $row = $this->db->fetch(
             'SELECT [id], [number] FROM [economy_accounting_accounts]
              WHERE [number] LIKE %like~ AND [account_level] = 4
-               AND [docState] IN (%i, %i, %i)
+               AND [docState] IN %in
                AND ([valid_from] IS NULL OR [valid_from] <= %s)
                AND ([valid_to] IS NULL OR [valid_to] >= %s)
-             ORDER BY [number]
+             ORDER BY [docState] = 70, [number]
              LIMIT 1',
             $mask,
-            self::ACTIVE_DOC_STATES[0], self::ACTIVE_DOC_STATES[1], self::ACTIVE_DOC_STATES[2],
+            self::LINKABLE_STATES,
             $accountingDate,
             $accountingDate,
         );

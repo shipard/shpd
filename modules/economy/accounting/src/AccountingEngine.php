@@ -36,6 +36,13 @@ final class AccountingEngine
 
     private const ITEM_TYPE_ACC_ENTRY = 2;
 
+    /**
+     * Stavy, ve kterých je účet rozvrhu odkazovatelný — historické doklady
+     * smí účtovat na archivní (70) účty, vyloučen je jen smazaný (90).
+     * Stejná konvence jako `StatementImportService::LINKABLE_STATES`.
+     */
+    private const LINKABLE_STATES = [10, 40, 70, 80];
+
     /** Per-run dohledávač účtů dle masky (cache se nuluje s novým během). */
     private AccountMaskResolver $maskResolver;
 
@@ -508,8 +515,10 @@ final class AccountingEngine
         }
 
         $account = $this->db->fetch(
-            'SELECT [id], [number] FROM [economy_accounting_accounts] WHERE [id] = %i',
+            'SELECT [id], [number] FROM [economy_accounting_accounts]
+             WHERE [id] = %i AND [docState] IN %in',
             $accountId,
+            self::LINKABLE_STATES,
         );
         if ($account === null) {
             $this->addMessage(
@@ -525,8 +534,9 @@ final class AccountingEngine
 
     /**
      * Účet přímo z řádku dokladu (pohyb acc.record, accountSrc:'row').
-     * Nevyplněný / v rozvrhu neexistující → chybový řádek (maska '??????',
-     * is_error) + message — stejný vzor jako resolveItemAccount.
+     * Nevyplněný / v rozvrhu neexistující či smazaný → chybový řádek (maska
+     * '??????', is_error) + message — stejný vzor jako resolveItemAccount.
+     * Archivní účet (70) se dohledá — historická data, viz LINKABLE_STATES.
      *
      * @return array{id?: int, number: string, is_error?: bool}
      */
@@ -543,8 +553,10 @@ final class AccountingEngine
         }
 
         $account = $this->db->fetch(
-            'SELECT [id], [number] FROM [economy_accounting_accounts] WHERE [id] = %i',
+            'SELECT [id], [number] FROM [economy_accounting_accounts]
+             WHERE [id] = %i AND [docState] IN %in',
             $accountId,
+            self::LINKABLE_STATES,
         );
         if ($account === null) {
             $this->addMessage(

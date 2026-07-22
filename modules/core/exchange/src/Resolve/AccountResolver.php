@@ -12,16 +12,22 @@ use Dibi\Connection;
  *
  * Used by accounting-document import (acc.record rows): the canonical row
  * carries the account `number` verbatim from the legacy system; we look up
- * the active account row by exact number. No fuzzy matching, no userAction —
+ * the account row by exact number. No fuzzy matching, no userAction —
  * the number is authoritative. Not found → null (caller emits a warning and
  * the row reaches the journal as an error line, never blocking the import).
+ *
+ * Unlike the other fresh-resolve probes (which stay ACTIVE_STATES), this one
+ * accepts LINKABLE_STATES: the number is a historic reference, and posting a
+ * 2015 document to a since-archived loan account is legitimate. Only deleted
+ * (90) is out. When the same number exists in several states, a non-archived
+ * row wins.
  *
  * Per-run cache keyed by number — a document repeats the same accounts across
  * rows (518100 / 321100 / …).
  */
 class AccountResolver
 {
-    private const ACTIVE_STATES = [10, 40, 80];
+    private const LINKABLE_STATES = [10, 40, 70, 80];
 
     /** @var array<string, ?int> */
     private array $cache = [];
@@ -42,10 +48,10 @@ class AccountResolver
 
         $row = $this->db->fetch(
             'SELECT [id] FROM [economy_accounting_accounts]
-             WHERE [number] = %s AND [docState] IN (%i, %i, %i)
-             ORDER BY [id] LIMIT 1',
+             WHERE [number] = %s AND [docState] IN %in
+             ORDER BY [docState] = 70, [id] LIMIT 1',
             $number,
-            self::ACTIVE_STATES[0], self::ACTIVE_STATES[1], self::ACTIVE_STATES[2],
+            self::LINKABLE_STATES,
         );
 
         return $this->cache[$number] = ($row !== null ? (int) $row['id'] : null);

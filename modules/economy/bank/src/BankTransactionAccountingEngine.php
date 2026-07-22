@@ -31,8 +31,13 @@ use Shipard\Module\Economy\Accounting\AccountMaskResolver;
  */
 final class BankTransactionAccountingEngine
 {
-    /** Stavy účtu považované za aktivní (shodné s doklady). */
-    private const ACTIVE_DOC_STATES = [10, 40, 80];
+    /**
+     * Stavy, ve kterých je účet rozvrhu odkazovatelný — re-účtování
+     * historických transakcí na dnes archivní (70) účet je legitimní,
+     * vyloučen jen smazaný (90). Konvence LINKABLE_STATES viz
+     * StatementImportService; shodné s doklady (AccountingEngine).
+     */
+    private const LINKABLE_STATES = [10, 40, 70, 80];
 
     /** Smazáno — lookup fiskálního roku vynechává jen tento stav (archivní roky zůstávají dohledatelné). */
     private const DOC_STATE_DELETED = 90;
@@ -151,7 +156,8 @@ final class BankTransactionAccountingEngine
 
     /**
      * Bankovní strana: účet z bank_account.accounting_account (221xxx).
-     * Prázdné / neexistuje / neaktivní → chybový řádek.
+     * Prázdné / neexistuje / smazaný → chybový řádek; archivní se dohledá
+     * (historické transakce, viz LINKABLE_STATES).
      *
      * @param array<string, mixed> $tx
      * @return array{id?: int, number: string, is_error?: bool}
@@ -162,9 +168,9 @@ final class BankTransactionAccountingEngine
         $account = $accountId > 0
             ? $this->db->fetch(
                 'SELECT [id], [number] FROM [economy_accounting_accounts]
-                 WHERE [id] = %i AND [docState] IN (%i, %i, %i)',
+                 WHERE [id] = %i AND [docState] IN %in',
                 $accountId,
-                self::ACTIVE_DOC_STATES[0], self::ACTIVE_DOC_STATES[1], self::ACTIVE_DOC_STATES[2],
+                self::LINKABLE_STATES,
             )
             : null;
 

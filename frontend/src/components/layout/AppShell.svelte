@@ -91,7 +91,12 @@
 <style>
   .shpd-shell {
     display: flex;
+    /* 100dvh (dynamic viewport height) řeší ořez spodku shellu pod
+       adresní lištou mobilních prohlížečů (sticky launcher, composer) —
+       stejný pattern jako fullscreen Modal. Staré prohlížeče dvh
+       ignorují a zůstanou na 100vh. */
     height: 100vh;
+    height: 100dvh;
     overflow: hidden;
     position: relative;
   }

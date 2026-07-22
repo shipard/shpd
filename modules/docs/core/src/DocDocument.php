@@ -983,12 +983,27 @@ abstract class DocDocument extends Document
      * match — otherwise the sync would miss and the next new doc would not
      * continue from the imported sequence.
      *
-     * @param array<string, mixed> $importNumber {docNumber: string, sequenceNumber: int}
+     * Explicit sequenceNumber = null means the number sits outside the series
+     * formula (migrated duplicate keys get a suffixed docNumber): stored with
+     * sequence_number = NULL — UNIQUE treats NULLs as distinct, so any count
+     * of them coexists in unq_series_seq — and the counter is NOT synced (an
+     * out-of-formula number must never advance the series).
+     *
+     * @param array<string, mixed> $importNumber {docNumber: string, sequenceNumber: int|null}
      */
     protected function applyImportNumber(array &$data, array $importNumber): void
     {
         $docNumber = (string) ($importNumber['docNumber'] ?? '');
-        $sequence  = (int) ($importNumber['sequenceNumber'] ?? 0);
+
+        if (array_key_exists('sequenceNumber', $importNumber)
+            && $importNumber['sequenceNumber'] === null
+            && $docNumber !== '') {
+            $data['doc_number']      = $docNumber;
+            $data['sequence_number'] = null;
+            return;
+        }
+
+        $sequence = (int) ($importNumber['sequenceNumber'] ?? 0);
 
         if ($docNumber === '' || $sequence <= 0) {
             // Defensive: malformed import payload — fall back to normal

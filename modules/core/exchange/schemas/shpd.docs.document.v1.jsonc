@@ -175,9 +175,9 @@
                             "description": "The document's own number to store verbatim in doc_number."
                         },
                         "sequenceNumber": {
-                            "type": "integer",
+                            "type": ["integer", "null"],
                             "minimum": 1,
-                            "description": "Sequence-in-series, used for counter sync and payment_reference default."
+                            "description": "Sequence-in-series, used for counter sync and payment_reference default. Explicit null = number outside the series formula (migrated duplicate-key documents, docNumber suffixed): stored with sequence_number = NULL, counter not synced."
                         }
                     },
                     "required": ["docNumber", "sequenceNumber"],

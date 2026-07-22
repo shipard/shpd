@@ -679,6 +679,51 @@ class DocumentApplierTest extends TestCase
         $this->assertSame(17, $data['bank_account']);
     }
 
+    public function testTransformPreservesExplicitNullSequenceNumber(): void
+    {
+        // Migrated duplicate keys: number outside the series formula travels
+        // as sequenceNumber = null and must NOT be coerced to 0 (which would
+        // trigger DocDocument's malformed-payload fallback).
+        $applier = $this->buildApplier();
+        $canonical = [
+            'docType'   => 'invoiceReceived',
+            'selfParty' => 'customer',
+            'dates'     => ['issueDate' => '2024-06-01'],
+            'applyOptions' => [
+                'importNumber' => ['docNumber' => '2024-0042-2', 'sequenceNumber' => null],
+            ],
+        ];
+
+        $data = $this->invokeTransform($applier, $canonical);
+
+        $this->assertSame(
+            ['docNumber' => '2024-0042-2', 'sequenceNumber' => null],
+            $data['_importNumber'],
+        );
+    }
+
+    public function testTransformCoercesMissingSequenceNumberToZero(): void
+    {
+        // Absent key (as opposed to explicit null) keeps the legacy behavior:
+        // 0 → DocDocument falls back to normal number assignment.
+        $applier = $this->buildApplier();
+        $canonical = [
+            'docType'   => 'invoiceReceived',
+            'selfParty' => 'customer',
+            'dates'     => ['issueDate' => '2024-06-01'],
+            'applyOptions' => [
+                'importNumber' => ['docNumber' => '2024-0042'],
+            ],
+        ];
+
+        $data = $this->invokeTransform($applier, $canonical);
+
+        $this->assertSame(
+            ['docNumber' => '2024-0042', 'sequenceNumber' => 0],
+            $data['_importNumber'],
+        );
+    }
+
     public function testTransformOmitsImportFieldsWhenNotRequested(): void
     {
         $applier = $this->buildApplier();

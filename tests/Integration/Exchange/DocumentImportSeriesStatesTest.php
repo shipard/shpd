@@ -23,7 +23,10 @@ use Shipard\Tests\Integration\IntegrationTestCase;
  *      účtování (accounting_state ≠ 0; deník existuje právě když state 40),
  *   3. import na stav 30 (Storno) → číslo+counter ano, deník ne,
  *   4. neznámý kód řady → apply-level error number_series_not_found (422),
- *      žádný doklad.
+ *      žádný doklad,
+ *   5. importNumber se sequenceNumber = null (duplicitní klíče migrace) →
+ *      doc_number verbatim, sequence_number = NULL (dva NULL v unq_series_seq
+ *      nekolidují), čítač řady se nehne.
  *
  * Test po sobě uklízí: snapshot/restore number_counters pro dotčené řady +
  * smazání vytvořených dokladů/řádků/rekapitulace/deníku/partnera/položek.
@@ -226,6 +229,64 @@ class DocumentImportSeriesStatesTest extends IntegrationTestCase
         $this->assertSame(0, (int) $head['accounting_state']);
     }
 
+    public function testNullSequenceImportsDuplicateKeysWithoutCounterBump(): void
+    {
+        // D14-B: pravé duplicity klíče (řada, rok, sekvence) ve zdrojových
+        // datech — první doklad drží sekvenci, další jdou se sufixovaným
+        // číslem a sequence_number = NULL, mimo formuli řady i čítač.
+        $seq = random_int(900_000_000, 999_999_999);
+        $ourNumber = self::FIXTURE_PREFIX . '-NULL-' . $seq;
+
+        // 1. Držitel sekvence: normální import, čítač → N.
+        $result1 = $this->applier->apply($this->buildCanonical('5', 40, $ourNumber, $seq));
+        $this->assertTrue(
+            $result1->success,
+            'apply 1 selhal: ' . $result1->errorCode . ' — ' . $result1->errorMessage . ' / ' . json_encode($result1->canonical['_resolve']['issues'] ?? []),
+        );
+        $this->createdDocIds[] = $doc1Id = (int) $result1->savedId;
+        $head1 = $this->db->fetchRow('SELECT * FROM docs_core_heads WHERE id = %i', $doc1Id);
+        $this->trackPartner($head1);
+        $this->assertSame($seq, (int) $head1['sequence_number']);
+
+        // 2. Duplicita: sufixované číslo, sequence null → uloží se bez
+        //    unq_series_seq kolize, čítač zůstává na N.
+        $result2 = $this->applier->apply($this->buildCanonical('5', 40, $ourNumber . '-2', null));
+        $this->assertTrue(
+            $result2->success,
+            'apply 2 (null sekvence) selhal: ' . $result2->errorCode . ' — ' . $result2->errorMessage . ' / ' . json_encode($result2->canonical['_resolve']['issues'] ?? []),
+        );
+        $this->createdDocIds[] = $doc2Id = (int) $result2->savedId;
+        $head2 = $this->db->fetchRow('SELECT * FROM docs_core_heads WHERE id = %i', $doc2Id);
+        $this->trackPartner($head2);
+
+        $this->assertSame($ourNumber . '-2', (string) $head2['doc_number']);
+        $this->assertNull($head2['sequence_number']);
+        // Stejný klíč (řada, rok) jako držitel sekvence — jinak by NULL
+        // v unikátu nic nedokazoval.
+        $this->assertSame((int) $head1['number_series'], (int) $head2['number_series']);
+        $this->assertSame((int) $head1['fiscal_year'], (int) $head2['fiscal_year']);
+
+        // 3. Druhý NULL v témže klíči (UNIQUE bere NULL jako distinct).
+        $result3 = $this->applier->apply($this->buildCanonical('5', 40, $ourNumber . '-3', null));
+        $this->assertTrue(
+            $result3->success,
+            'apply 3 (druhý NULL) selhal: ' . $result3->errorCode . ' — ' . $result3->errorMessage . ' / ' . json_encode($result3->canonical['_resolve']['issues'] ?? []),
+        );
+        $this->createdDocIds[] = $doc3Id = (int) $result3->savedId;
+        $head3 = $this->db->fetchRow('SELECT * FROM docs_core_heads WHERE id = %i', $doc3Id);
+        $this->trackPartner($head3);
+        $this->assertNull($head3['sequence_number']);
+
+        // Čítač se od dokladu 1 nehnul — číslo mimo formuli ho nesmí syncnout.
+        $counter = $this->db->fetchRow(
+            'SELECT last_assigned FROM docs_core_number_counters
+             WHERE number_series = %i AND fiscal_year <=> %iN',
+            $this->seriesCode5Id, $head1['fiscal_year'] ?? null,
+        );
+        $this->assertNotNull($counter);
+        $this->assertSame($seq, (int) $counter['last_assigned']);
+    }
+
     public function testApplyWithUnknownSeriesCodeFailsCleanly(): void
     {
         $seq = random_int(900_000_000, 999_999_999);
@@ -281,7 +342,7 @@ class DocumentImportSeriesStatesTest extends IntegrationTestCase
     /**
      * @return array<string, mixed>
      */
-    private function buildCanonical(string $seriesCode, int $targetState, string $ourNumber, int $sequence): array
+    private function buildCanonical(string $seriesCode, int $targetState, string $ourNumber, ?int $sequence): array
     {
         $payload = json_decode(
             (string) file_get_contents(dirname(__DIR__, 2) . '/Fixtures/Exchange/invoiceReceived_happy.json'),

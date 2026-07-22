@@ -969,7 +969,13 @@ class DocumentApplier
             // import mode → dropped by the array_filter below.
             '_importNumber'        => is_array($importNumber) ? [
                 'docNumber'      => (string) ($importNumber['docNumber'] ?? ''),
-                'sequenceNumber' => (int) ($importNumber['sequenceNumber'] ?? 0),
+                // Explicit null = number outside the series formula (migrated
+                // duplicate keys) — must survive to DocDocument, `?? 0` would
+                // coerce it to 0 and trigger the malformed-payload fallback.
+                'sequenceNumber' => (array_key_exists('sequenceNumber', $importNumber)
+                        && $importNumber['sequenceNumber'] === null)
+                    ? null
+                    : (int) ($importNumber['sequenceNumber'] ?? 0),
             ] : null,
             // Import mode: our own bank account (issued invoices need it at
             // state 20+; standard self-party flow can't carry it).

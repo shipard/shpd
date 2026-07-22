@@ -69,6 +69,36 @@ class DocDocumentImportNumberTest extends TestCase
         $this->assertSame([3, 7, null], $doc->executedSql[1]['args']);
     }
 
+    public function testNullSequenceStoresNumberWithoutCounterSync(): void
+    {
+        // Migrated duplicate key: docNumber suffixed, number outside the
+        // series formula → sequence_number = NULL, counter must NOT move.
+        $doc = new TestableDocsHeadsDocument();
+        $doc->setDb($this->dbWithResetScope('fiscal_year'));
+
+        $data = ['number_series' => 1, 'fiscal_year' => 100];
+        $doc->applyImportNumberPub($data, ['docNumber' => '2024-0042-2', 'sequenceNumber' => null]);
+
+        $this->assertSame('2024-0042-2', $data['doc_number']);
+        $this->assertArrayHasKey('sequence_number', $data);
+        $this->assertNull($data['sequence_number']);
+        $this->assertSame([], $doc->executedSql, 'Counter sync must be skipped for null sequence');
+    }
+
+    public function testNullSequenceWithEmptyDocNumberFallsBack(): void
+    {
+        // Null sequence alone is not a licence to store an empty number —
+        // the malformed-payload guard still applies.
+        $doc = new TestableDocsHeadsDocument();
+        $doc->setDb($this->dbWithResetScope('fiscal_year'));
+
+        $data = ['number_series' => 1, 'fiscal_year' => 100, 'docState' => 10];
+        $doc->applyImportNumberPub($data, ['docNumber' => '', 'sequenceNumber' => null]);
+
+        $this->assertArrayNotHasKey('doc_number', $data);
+        $this->assertSame([], $doc->executedSql);
+    }
+
     public function testMalformedPayloadFallsBackToStateTransition(): void
     {
         // Empty docNumber → defensive fallback to processStateTransition with

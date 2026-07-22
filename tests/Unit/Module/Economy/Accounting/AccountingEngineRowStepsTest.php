@@ -278,4 +278,144 @@ class AccountingEngineRowStepsTest extends TestCase
         );
         $this->assertSame('314900', $account['number']);
     }
+
+    // ── D12: kurzové rozdíly — kategorie maskou, dva zápisy per řádek ───────
+
+    private const FX_RULES = [
+        ['cat' => 'fx.loss',     'accountMask' => '563'],
+        ['cat' => 'fx.gain',     'accountMask' => '663'],
+        ['cat' => 'receivables', 'accountMask' => '311'],
+        ['cat' => 'payables',    'accountMask' => '321'],
+    ];
+
+    private const FX_CHART = [
+        '563' => ['id' => 70, 'number' => '563100'],
+        '663' => ['id' => 71, 'number' => '663100'],
+        '311' => ['id' => 72, 'number' => '311100'],
+        '321' => ['id' => 73, 'number' => '321100'],
+    ];
+
+    /**
+     * Engine pro FX kroky: rozvrh maskou (engineWithChart) + rowOperations
+     * s vlajkami identity — FX operace razítkují partnera i platební
+     * identitu z řádku na oba zápisy.
+     */
+    private function fxEngine(): AccountingEngine
+    {
+        $db = $this->createMock(\Dibi\Connection::class);
+        $db->method('fetch')->willReturnCallback(
+            function (...$args) {
+                $sql = (string) ($args[0] ?? '');
+                if (str_contains($sql, 'economy_accounting_accounts') && str_contains($sql, 'LIKE')) {
+                    $mask = (string) ($args[1] ?? '');
+                    return isset(self::FX_CHART[$mask]) ? new \Dibi\Row(self::FX_CHART[$mask]) : null;
+                }
+                return null;
+            },
+        );
+
+        $config = $this->createMock(ConfigRuntime::class);
+        $config->method('cfgItem')->willReturnMap([
+            ['economy.accounting.rules.cz', ['accounts' => self::FX_RULES]],
+            ['docs.core.rowOperations', [
+                'acc.fxLossReceivable' => ['rowPartner' => 1, 'rowPaymentId' => 1],
+                'acc.fxGainPayable'    => ['rowPartner' => 1, 'rowPaymentId' => 1],
+            ]],
+        ]);
+
+        $engine = new AccountingEngine($db, $config);
+        $prop = new \ReflectionProperty(AccountingEngine::class, 'maskResolver');
+        $prop->setValue($engine, new AccountMaskResolver($db));
+        return $engine;
+    }
+
+    public function testFxCategoriesResolveByMask(): void
+    {
+        $engine = $this->fxEngine();
+
+        $loss = $this->resolveCategoryAccount($engine, 'fx.loss', []);
+        $this->assertSame(['id' => 70, 'number' => '563100'], $loss);
+
+        $gain = $this->resolveCategoryAccount($engine, 'fx.gain', []);
+        $this->assertSame(['id' => 71, 'number' => '663100'], $gain);
+
+        $this->assertSame([], $this->messagesOf($engine));
+    }
+
+    public function testFxLossReceivableTwoStepsStampIdentityOnBothLines(): void
+    {
+        // Vzor ze zdroje (lefreal doc 719): 50 806,73, person 11,
+        // symbol1 1300001 → MD 563100 / DAL 311100. Jeden řádek projde
+        // oběma kroky operace — každý vyrobí jeden zápis s fixní stranou,
+        // identita řádku (partner, payment_reference) na obou.
+        $engine = $this->fxEngine();
+        $row = [
+            'id'                => 21,
+            'operation'         => 'acc.fxLossReceivable',
+            'description'       => 'Kurzová ztráta',
+            'vat_base_dom'      => 50806.73,
+            'vat_base'          => 50806.73,
+            'partner'           => 11,
+            'payment_reference' => '1300001',
+            'specific_symbol'   => null,
+            'constant_symbol'   => null,
+            'due_date'          => null,
+        ];
+        $mdStep  = ['src' => 'rows', 'cat' => 'fx.loss',     'side' => 0, 'operation' => 'acc.fxLossReceivable'];
+        $dalStep = ['src' => 'rows', 'cat' => 'receivables', 'side' => 1, 'operation' => 'acc.fxLossReceivable'];
+
+        $lines = [
+            ...$this->buildRowLines($engine, $mdStep, [$row]),
+            ...$this->buildRowLines($engine, $dalStep, [$row]),
+        ];
+
+        $this->assertCount(2, $lines);
+        [$md, $dal] = $lines;
+
+        $this->assertSame(0, $md['side']);
+        $this->assertSame('563100', $md['account_number']);
+        $this->assertEqualsWithDelta(50806.73, $md['money_dr'], 0.001);
+
+        $this->assertSame(1, $dal['side']);
+        $this->assertSame('311100', $dal['account_number']);
+        $this->assertEqualsWithDelta(50806.73, $dal['money_cr'], 0.001);
+
+        foreach ($lines as $line) {
+            $this->assertSame(11, $line['partner'], 'partner z řádku, ne z hlavičky');
+            $this->assertSame('1300001', $line['payment_reference']);
+            $this->assertFalse($line['is_error']);
+            $this->assertSame('acc.fxLossReceivable', $line['operation']);
+        }
+    }
+
+    public function testFxGainPayableMirrorsSides(): void
+    {
+        $engine = $this->fxEngine();
+        $row = [
+            'id'                => 22,
+            'operation'         => 'acc.fxGainPayable',
+            'vat_base_dom'      => 1200.0,
+            'vat_base'          => 1200.0,
+            'partner'           => 11,
+            'payment_reference' => '2400007',
+        ];
+        $mdStep  = ['src' => 'rows', 'cat' => 'payables', 'side' => 0, 'operation' => 'acc.fxGainPayable'];
+        $dalStep = ['src' => 'rows', 'cat' => 'fx.gain',  'side' => 1, 'operation' => 'acc.fxGainPayable'];
+
+        $lines = [
+            ...$this->buildRowLines($engine, $mdStep, [$row]),
+            ...$this->buildRowLines($engine, $dalStep, [$row]),
+        ];
+
+        $this->assertCount(2, $lines);
+        [$md, $dal] = $lines;
+
+        $this->assertSame('321100', $md['account_number']);
+        $this->assertEqualsWithDelta(1200.0, $md['money_dr'], 0.001);
+        $this->assertSame('663100', $dal['account_number']);
+        $this->assertEqualsWithDelta(1200.0, $dal['money_cr'], 0.001);
+        foreach ($lines as $line) {
+            $this->assertSame('2400007', $line['payment_reference']);
+        }
+    }
 }

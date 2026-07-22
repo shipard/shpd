@@ -1217,6 +1217,104 @@ class AccountingEngineTest extends IntegrationTestCase
         $this->assertEqualsWithDelta(500.0, (float) $md['money_dr'], 0.001);
     }
 
+    public function testCmnbkpFxLossReceivableTwoLinesWithIdentity(): void
+    {
+        // Kurzová ztráta — pohledávka (D12): jeden řádek → dva zápisy
+        // MD 563xxx (fx.loss) / DAL 311xxx (receivables), strany fixní
+        // z kroků předpisu, identita (partner, payment_reference = staré
+        // symbol1) na obou. Vzor ze zdroje: lefreal doc 719.
+        $this->requireAccountWithPrefix('563');
+        $this->requireAccountWithPrefix('311');
+        $headId = $this->insertHead('cmnbkp', [
+            'partner'           => null,
+            'payment_reference' => null,
+            'total_base'      => 50806.73, 'total_vat' => 0.0, 'total_amount' => 50806.73,
+            'total_base_dom'  => 50806.73, 'total_vat_dom' => 0.0, 'total_amount_dom' => 50806.73,
+        ]);
+        $partnerId = $this->anyPartnerId();
+        // FX řádek nenese stranu (rowSide: 0 — form volbu nenabízí).
+        $this->insertAccRow($headId, 'acc.fxLossReceivable', 50806.73, 0, [
+            'acc_side' => null, 'order_pos' => 0,
+            'partner' => $partnerId, 'payment_reference' => '1300001',
+        ]);
+
+        $result = $this->engine->accountDocument($headId);
+
+        $this->assertSame(1, $result['state'], json_encode($result['messages']));
+        $this->assertSame([], $result['messages']);
+
+        $journal = $this->journalOf($headId);
+        $this->assertCount(2, $journal);
+        $this->assertBalanced($journal);
+
+        $md = $this->lineByPrefix($journal, '563');
+        $this->assertEqualsWithDelta(50806.73, (float) $md['money_dr'], 0.001);
+        $this->assertEqualsWithDelta(0.0, (float) $md['money_cr'], 0.001);
+
+        $dal = $this->lineByPrefix($journal, '311');
+        $this->assertEqualsWithDelta(50806.73, (float) $dal['money_cr'], 0.001);
+        $this->assertEqualsWithDelta(0.0, (float) $dal['money_dr'], 0.001);
+
+        // Identita na OBOU zápisech — saldo strana je párovatelná accbal
+        // FX fází, P&L strana dohledatelná k případu.
+        foreach ([$md, $dal] as $line) {
+            $this->assertSame($partnerId, (int) $line['partner']);
+            $this->assertSame('1300001', (string) $line['payment_reference']);
+        }
+    }
+
+    public function testCmnbkpFxGainPayableMirrorsSides(): void
+    {
+        // Zrcadlo: kurzový zisk — závazek → MD 321xxx (payables) /
+        // DAL 663xxx (fx.gain), identita na obou.
+        $this->requireAccountWithPrefix('663');
+        $this->requireAccountWithPrefix('321');
+        $headId = $this->insertHead('cmnbkp', [
+            'partner'           => null,
+            'payment_reference' => null,
+            'total_base'      => 1234.56, 'total_vat' => 0.0, 'total_amount' => 1234.56,
+            'total_base_dom'  => 1234.56, 'total_vat_dom' => 0.0, 'total_amount_dom' => 1234.56,
+        ]);
+        $partnerId = $this->anyPartnerId();
+        $this->insertAccRow($headId, 'acc.fxGainPayable', 1234.56, 0, [
+            'acc_side' => null, 'order_pos' => 0,
+            'partner' => $partnerId, 'payment_reference' => '2400007',
+        ]);
+
+        $result = $this->engine->accountDocument($headId);
+
+        $this->assertSame(1, $result['state'], json_encode($result['messages']));
+        $journal = $this->journalOf($headId);
+        $this->assertCount(2, $journal);
+        $this->assertBalanced($journal);
+
+        $md = $this->lineByPrefix($journal, '321');
+        $this->assertEqualsWithDelta(1234.56, (float) $md['money_dr'], 0.001);
+        $dal = $this->lineByPrefix($journal, '663');
+        $this->assertEqualsWithDelta(1234.56, (float) $dal['money_cr'], 0.001);
+
+        foreach ([$md, $dal] as $line) {
+            $this->assertSame($partnerId, (int) $line['partner']);
+            $this->assertSame('2400007', (string) $line['payment_reference']);
+        }
+    }
+
+    /**
+     * FX kategorie dohledávají analytiku maskou per DS — test potřebuje
+     * v rozvrhu aspoň jeden analytický účet s daným prefixem, jinak skip.
+     */
+    private function requireAccountWithPrefix(string $prefix): void
+    {
+        $row = $this->db->fetchRow(
+            'SELECT id FROM economy_accounting_accounts WHERE number LIKE %s'
+            . ' AND account_level = 4 LIMIT 1',
+            $prefix . '%',
+        );
+        if ($row === null) {
+            $this->markTestSkipped("Dev DS nemá analytický účet {$prefix}*");
+        }
+    }
+
     private function insertAccEntryItem(?int $accountId): int
     {
         $kind = $this->db->fetchRow('SELECT id FROM economy_items_kinds ORDER BY id LIMIT 1');

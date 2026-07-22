@@ -55,6 +55,13 @@ class DocRowsFormContationTest extends TestCase
                     'name' => 'Zápočet pohledávky', 'rowSide' => 1, 'rowPartner' => 1,
                     'rowPaymentId' => 1, 'docTypes' => ['cmnbkp' => ['order' => 300]],
                 ],
+                // kurzový rozdíl — rowSide: 0 (kontační layout bez volby
+                // strany, strany fixní z kroků předpisu, D12)
+                'acc.fxLossReceivable' => [
+                    'name' => 'Kurzová ztráta — pohledávka', 'rowSide' => 0,
+                    'rowPartner' => 1, 'rowPaymentId' => 1,
+                    'docTypes' => ['cmnbkp' => ['order' => 500]],
+                ],
                 // faktura — bez rowAccount, ať ověříme, že položková větev zůstává
                 'purchase.goods' => ['name' => 'Nákup zboží', 'docTypes' => ['invni' => ['order' => 100]]],
                 // záloha — bez rowAccount (účet dohledá kategorie předpisu,
@@ -191,6 +198,46 @@ class DocRowsFormContationTest extends TestCase
         $pcm = $this->findElement($def, 'price_calc_mode');
         $this->assertNotNull($pcm);
         $this->assertTrue($pcm->hidden);
+    }
+
+    public function testFxOpUsesContationLayoutWithoutSideSelect(): void
+    {
+        // Kurzový rozdíl (rowSide: 0, D12) — kontační layout, ale bez volby
+        // strany MD/DAL: strany jsou fixní z kroků předpisu, částka kladná,
+        // směr nese volba operace. Účet implicitní z kategorií (563/663 ×
+        // 311/321), saldo identita z vlajek.
+        $data = ['row_kind' => 1, 'doc_head' => 5, 'operation' => 'acc.fxLossReceivable'];
+        $def = $this->form('cmnbkp')->buildFormDefinition($data, true);
+
+        // Kontační layout: částka + saldo identita ano.
+        $this->assertNotNull($this->findElement($def, 'total_price'));
+        $this->assertNotNull($this->findElement($def, 'partner'));
+        $this->assertNotNull($this->findElement($def, 'payment_reference'));
+        $this->assertNotNull($this->findElement($def, 'due_date'));
+
+        // Bez volby strany, bez vstupu účtu/položky.
+        $this->assertNull($this->findElement($def, 'acc_side'), 'Strany jsou fixní z kroků předpisu');
+        $this->assertNull($this->findElement($def, 'account'));
+        $this->assertNull($this->findElement($def, 'item'));
+
+        // Položkový / DPH blok se nestaví.
+        $this->assertNull($this->findElement($def, 'quantity'));
+        $this->assertNull($this->findElement($def, 'vat_code'));
+
+        // price_calc_mode skryté (částka přímo).
+        $pcm = $this->findElement($def, 'price_calc_mode');
+        $this->assertNotNull($pcm);
+        $this->assertTrue($pcm->hidden);
+    }
+
+    public function testFxOpRecalculateSetsPriceCalcMode(): void
+    {
+        // rowSide: 0 je pořád kontační řádek — price_calc_mode = 1, ať se
+        // ručně zadaná částka nepřepíše výpočtem z množství × cena.
+        $data = ['row_kind' => 1, 'doc_head' => 5, 'operation' => 'acc.fxLossReceivable'];
+        $result = $this->form('cmnbkp')->recalculate('operation', $data);
+
+        $this->assertSame(1, $result->data['price_calc_mode']);
     }
 
     public function testBalanceOpRecalculateSetsPriceCalcMode(): void

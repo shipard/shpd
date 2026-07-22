@@ -22,6 +22,8 @@
         "costs":            {"name:cs": "Náklady"},
         "rounding.cost":    {"name:cs": "Zaokrouhlení — náklad"},
         "rounding.revenue": {"name:cs": "Zaokrouhlení — výnos"},
+        "fx.loss":          {"name:cs": "Kurzové ztráty"},
+        "fx.gain":          {"name:cs": "Kurzové zisky"},
 
         "bank.unmatched.in":  {"name:cs": "Banka — nespárovaný příjem"},
         "bank.unmatched.out": {"name:cs": "Banka — nespárovaný výdaj"},
@@ -135,7 +137,12 @@
         {"cat": "vat", "accountMask": "343", "query": {"vat_code_country": "cz"}},
 
         {"cat": "rounding.cost",    "accountMask": "548"},
-        {"cat": "rounding.revenue", "accountMask": "648"}
+        {"cat": "rounding.revenue", "accountMask": "648"},
+
+        // Kurzové rozdíly (vlna D, D12): analytiky per DS dohledá maska
+        // (msi 563xxx/663xxx dle rozvrhu, lefreal 563100/663100).
+        {"cat": "fx.loss", "accountMask": "563"},
+        {"cat": "fx.gain", "accountMask": "663"}
     ],
 
     "documents": [
@@ -194,7 +201,21 @@
                 // (receivables → 311, payables → 321), strana z řádku (acc_side),
                 // identita per řádek (vlajky rowPartner/rowPaymentId operace).
                 {"src": "rows", "cat": "receivables", "sideSrc": "row", "operation": "acc.balanceReceivable"},
-                {"src": "rows", "cat": "payables",    "sideSrc": "row", "operation": "acc.balancePayable"}
+                {"src": "rows", "cat": "payables",    "sideSrc": "row", "operation": "acc.balancePayable"},
+                // Kurzové rozdíly (vlna D, D12): dva kroky per operace —
+                // jeden řádek generuje dva zápisy (P&L × saldo), strany fixní
+                // (side na kroku), částky kladné, směr nese volba operace.
+                // Identita (partner, payment_reference = staré symbol1) se
+                // razítkuje z řádku na OBA zápisy (vlajky operace) — saldo
+                // strana je párovatelná accbal FX fází.
+                {"src": "rows", "cat": "fx.loss",     "side": 0, "operation": "acc.fxLossReceivable"},
+                {"src": "rows", "cat": "receivables", "side": 1, "operation": "acc.fxLossReceivable"},
+                {"src": "rows", "cat": "receivables", "side": 0, "operation": "acc.fxGainReceivable"},
+                {"src": "rows", "cat": "fx.gain",     "side": 1, "operation": "acc.fxGainReceivable"},
+                {"src": "rows", "cat": "fx.loss",     "side": 0, "operation": "acc.fxLossPayable"},
+                {"src": "rows", "cat": "payables",    "side": 1, "operation": "acc.fxLossPayable"},
+                {"src": "rows", "cat": "payables",    "side": 0, "operation": "acc.fxGainPayable"},
+                {"src": "rows", "cat": "fx.gain",     "side": 1, "operation": "acc.fxGainPayable"}
             ]
         }
     ]

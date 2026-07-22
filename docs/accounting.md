@@ -163,6 +163,44 @@ položka, ne předpis.
   deníku (viz sekce 7.4). Měkce proto, že konfigurace položky se může změnit
   nezávisle na dokladu.
 
+### Vlajky operací (vlna C/D)
+
+Operace může deklarovat atributy, které řídí formulář řádku (`DocRowsForm`)
+a razítkování identity v enginu (`resolveRowIdentity`):
+
+| vlajka | význam |
+|---|---|
+| `rowPartner: 1` | řádek nese vlastního partnera — engine ho razítkuje z řádku místo z hlavičky, formulář ukáže lookup |
+| `rowPaymentId: 1` | řádek nese vlastní platební identitu (`payment_reference` / `specific_symbol` / `constant_symbol` / `due_date`) |
+| `rowAccount: "direct"` | účet se zadává přímo na řádku (majetek — analytika per druh) |
+| `rowAccount: "item"` | účet přijde z položky typu 2 |
+| `rowSide: 1` | strana MD/DAL se zadává na řádku (`acc_side`; protějšek `sideSrc: "row"` předpisu). Přepíná formulář do kontačního layoutu bez položkového bloku |
+| `rowSide: 0` | kontační layout, ale **bez volby strany**: stranu nesou fixní kroky předpisu, částky řádků kladné — směr = volba operace (kurzové rozdíly) |
+
+Vlajka `rowSide` chybí = položkový layout (faktury) — i s
+`rowAccount`/`rowPartner`/`rowPaymentId` (zálohy, majetek); stranu určuje
+krok předpisu. Saldokontní operace bez `rowAccount` mají účet implicitní
+z kategorie předpisu — formulář vstup účtu/položky nestaví.
+
+### Kurzové rozdíly saldokonta (vlna D, D12)
+
+Čtyři operace na `cmnbkp`, všechny `rowSide: 0`, `rowPartner: 1`,
+`rowPaymentId: 1`, bez `rowAccount`:
+
+| operace | MD | DAL |
+|---|---|---|
+| `acc.fxLossReceivable` (Kurzová ztráta — pohledávka) | `fx.loss` (563) | `receivables` (311) |
+| `acc.fxGainReceivable` (Kurzový zisk — pohledávka) | `receivables` (311) | `fx.gain` (663) |
+| `acc.fxLossPayable` (Kurzová ztráta — závazek) | `fx.loss` (563) | `payables` (321) |
+| `acc.fxGainPayable` (Kurzový zisk — závazek) | `payables` (321) | `fx.gain` (663) |
+
+Jeden řádek generuje **dva zápisy** deníku — v předpisu jsou na operaci dva
+kroky s fixní `side`, oba `src: rows` filtrované `operation`. Kategorie
+`fx.loss`/`fx.gain` dohledávají analytiku maskou 563/663 per DS. Identita
+řádku (partner, `payment_reference` = číslo párované faktury, staré
+`symbol1`) se razítkuje na oba zápisy — saldo strana je párovatelná accbal
+FX fází.
+
 ---
 
 ## 3. Změny ve stávajících tabulkách
@@ -261,11 +299,12 @@ categories  jen názvy kategorií pro dokumentaci/UI
 | pole | význam |
 |---|---|
 | `cat` | kategorie → dohledání masky v `accounts`. Nepovinné, pokud je `accountSrc` |
-| `accountSrc` | alternativní zdroj účtu mimo kategorie. Zatím jediná hodnota: `"item"` = účet z položky řádku (`acc.entry`) |
+| `accountSrc` | alternativní zdroj účtu mimo kategorie: `"item"` = účet z položky řádku (`acc.entry`, `acc.item`), `"row"` = přímý účet řádku (`acc.record`, `purchase.asset`) |
 | `src` | `"rows"` (řádky dokladu) \| `"vat"` (DPH rekapitulace) \| `"head"` (hlavička) |
 | `col` | pro `head`: `"total"` (default) \| `"rounding"`. Pro `rows`/`vat` se nepoužívá (MVP) |
 | `operation` / `operations` | filtr pohybu řádku (jen `src: rows`) |
 | `side` | 0 = MD (Má dáti), 1 = DAL |
+| `sideSrc` | `"row"` = strana z `acc_side` řádku (kontační operace s `rowSide: 1`); jinak platí fixní `side` kroku |
 | `sign` | `"+"` / `"-"` — krok platí jen pro kladnou / zápornou částku |
 | `reverseSign` | 1 = otočit znaménko částky (typicky se `sign: "-"`) |
 | `query` | obecný filtr `{sloupec: hodnota}` nad zdrojovým záznamem (head/row) |

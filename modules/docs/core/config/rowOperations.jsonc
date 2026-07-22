@@ -20,6 +20,11 @@
     //                          acc_side; protějšek sideSrc: "row" předpisu).
     //                          Přepíná formulář do kontačního layoutu bez
     //                          položkového bloku (množství/cena/DPH).
+    //   rowSide: 0           — kontační layout, ale BEZ volby strany: stranu
+    //                          nesou fixní kroky předpisu (side na kroku),
+    //                          částky řádků kladné — směr = volba operace
+    //                          (kurzové rozdíly). Vlajka chybí = položkový
+    //                          layout.
     //
     // Operace s rowAccount/rowPartner/rowPaymentId bez rowSide (zálohy,
     // majetek na fakturách) zůstávají v položkovém layoutu — jen dostanou
@@ -169,5 +174,48 @@
         "rowPartner": 1,
         "rowPaymentId": 1,
         "docTypes": { "cmnbkp": {"order": 400} }
+    },
+
+    // Kurzové rozdíly saldokonta (vlna D, D12): jedna operace = dva zápisy
+    // deníku (P&L strana kategorií fx.loss/fx.gain × saldo strana kategorií
+    // receivables/payables) — proto rowSide: 0 (strany fixní z kroků
+    // předpisu, částky kladné, směr nese volba operace). payment_reference
+    // řádku = číslo párované faktury (staré symbol1) — saldo strana je
+    // párovatelná accbal FX fází.
+    "acc.fxLossReceivable": {
+        "name": "FX loss — receivable",
+        "name:cs": "Kurzová ztráta — pohledávka",
+        "name:en": "FX loss — receivable",
+        "rowSide": 0,
+        "rowPartner": 1,
+        "rowPaymentId": 1,
+        "docTypes": { "cmnbkp": {"order": 500} }
+    },
+    "acc.fxGainReceivable": {
+        "name": "FX gain — receivable",
+        "name:cs": "Kurzový zisk — pohledávka",
+        "name:en": "FX gain — receivable",
+        "rowSide": 0,
+        "rowPartner": 1,
+        "rowPaymentId": 1,
+        "docTypes": { "cmnbkp": {"order": 600} }
+    },
+    "acc.fxLossPayable": {
+        "name": "FX loss — payable",
+        "name:cs": "Kurzová ztráta — závazek",
+        "name:en": "FX loss — payable",
+        "rowSide": 0,
+        "rowPartner": 1,
+        "rowPaymentId": 1,
+        "docTypes": { "cmnbkp": {"order": 700} }
+    },
+    "acc.fxGainPayable": {
+        "name": "FX gain — payable",
+        "name:cs": "Kurzový zisk — závazek",
+        "name:en": "FX gain — payable",
+        "rowSide": 0,
+        "rowPartner": 1,
+        "rowPaymentId": 1,
+        "docTypes": { "cmnbkp": {"order": 800} }
     }
 }

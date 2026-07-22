@@ -37,11 +37,12 @@ class DocRowsForm extends TableForm
             }
         }
 
-        // Kontační řádek účetního dokladu: operace se stranou na řádku
-        // (`rowSide` — protějšek sideSrc: "row" předpisu). Vlastní layout bez
-        // položkového bloku; faktury — včetně operací s přímým účtem (zálohy,
-        // majetek), kde stranu určuje krok předpisu — jdou položkovou větví
-        // níže.
+        // Kontační řádek účetního dokladu: operace s deklarovanou vlajkou
+        // `rowSide` (1 = strana na řádku, protějšek sideSrc: "row" předpisu;
+        // 0 = strany fixní z kroků předpisu — kurzové rozdíly). Vlastní layout
+        // bez položkového bloku; faktury — včetně operací s přímým účtem
+        // (zálohy, majetek), kde stranu určuje krok předpisu — jdou položkovou
+        // větví níže.
         $opAttrs = $this->resolveOperationAttrs((string) ($data['operation'] ?? ''));
         if (!$isText && $this->hasRowSideLayout($opAttrs)) {
             $rowAccount = $opAttrs['rowAccount'] ?? null;
@@ -153,6 +154,10 @@ class DocRowsForm extends TableForm
      * účet implicitní z kategorie účtovacího předpisu (311/321) — vstup se
      * nestaví.
      *
+     * Select strany MD/DAL se zobrazí jen při `rowSide: 1`. Operace s
+     * `rowSide: 0` (kurzové rozdíly) mají strany fixní z kroků předpisu —
+     * řádek nese jen kladnou částku, směr určuje volba operace.
+     *
      * @param list<array{value: string, label: string}> $operationOptions
      * @param array<string, mixed> $opAttrs
      */
@@ -192,11 +197,14 @@ class DocRowsForm extends TableForm
             );
         }
 
-        $section
-            ->select('acc_side',
+        if (!empty($opAttrs['rowSide'])) {
+            $section->select('acc_side',
                 options: $this->resolveCfgItemOptions('docs.core.accSides'),
                 required: true,
-            )
+            );
+        }
+
+        $section
             ->number('total_price', label: 'Částka', required: true)
             ->input('description')
             ->number('price_calc_mode', hidden: true);
@@ -245,16 +253,18 @@ class DocRowsForm extends TableForm
     }
 
     /**
-     * Kontační layout = operace se stranou MD/DAL na řádku (`rowSide`,
-     * protějšek sideSrc: "row" předpisu) — účetní doklad (cmnbkp). Operace
-     * s `rowAccount`/`rowPartner`/`rowPaymentId` bez `rowSide` (zálohy,
+     * Kontační layout = operace s deklarovanou vlajkou `rowSide` — účetní
+     * doklad (cmnbkp). `rowSide: 1` = strana MD/DAL na řádku (protějšek
+     * sideSrc: "row" předpisu); `rowSide: 0` = strany fixní z kroků předpisu
+     * (kurzové rozdíly), select strany se nestaví. Operace s
+     * `rowAccount`/`rowPartner`/`rowPaymentId` bez `rowSide` (zálohy,
      * majetek na fakturách) zůstávají v položkovém layoutu.
      *
      * @param array<string, mixed>|null $attrs
      */
     private function hasRowSideLayout(?array $attrs): bool
     {
-        return is_array($attrs) && !empty($attrs['rowSide']);
+        return is_array($attrs) && isset($attrs['rowSide']);
     }
 
     /**

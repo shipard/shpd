@@ -30,6 +30,10 @@ test('matchKindKey: ExactRaw i ExactNorm → exact, Fuzzy → fuzzy', () => {
   assert.equal(matchKindKey('historyFuzzy'), 'fuzzy');
 });
 
+test('matchKindKey: DominantItem → dominant', () => {
+  assert.equal(matchKindKey('historyDominantItem'), 'dominant');
+});
+
 test('suggestedFieldKeys: plná trojice v deterministickém pořadí', () => {
   assert.deepEqual(
     suggestedFieldKeys({ account: '518001', vatCode: 'std21', ourCode: 'NET500' }),

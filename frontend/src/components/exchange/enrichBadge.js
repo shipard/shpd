@@ -9,8 +9,12 @@ export function enrichedRowCount(resolveRows) {
   return resolveRows.filter((r) => r?.enrichment?.matchedBy != null).length;
 }
 
-/** Klíč stupně shody pro i18n: 'exact' (ExactRaw/ExactNorm) | 'fuzzy'. */
+/**
+ * Klíč stupně shody pro i18n:
+ * 'exact' (ExactRaw/ExactNorm) | 'fuzzy' | 'dominant' (DominantItem).
+ */
 export function matchKindKey(matchedBy) {
+  if (matchedBy === 'historyDominantItem') return 'dominant';
   return matchedBy === 'historyFuzzy' ? 'fuzzy' : 'exact';
 }
 

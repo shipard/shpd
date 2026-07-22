@@ -42,10 +42,17 @@
   let enrichedCount = $derived(enrichedRowCount(resolve?.rows));
 
   // Tooltip enrichment badge: „Doplněno z historie — doklad X (přesná
-  // shoda)" + druhý řádek s výčtem skutečně doplněných polí.
+  // shoda)" + druhý řádek s výčtem skutečně doplněných polí. U dominance
+  // nese kind i podíl položky na řádcích historie (enrichment.dominance).
   function enrichTitle(e) {
     const docNumber = e.sourceDocNumber ?? `#${e.sourceDocId}`;
-    const kind = t(`exchange.preview.enrich.kind.${matchKindKey(e.matchedBy)}`);
+    const kindKey = matchKindKey(e.matchedBy);
+    const kind =
+      kindKey === 'dominant' && e.dominance?.share != null
+        ? t('exchange.preview.enrich.kind.dominantShare', {
+            share: Math.round(e.dominance.share * 100),
+          })
+        : t(`exchange.preview.enrich.kind.${kindKey}`);
     const header = t('exchange.preview.enrich.tooltip', { docNumber, kind });
     const fields = suggestedFieldKeys(e.suggested)
       .map((key) => t(`exchange.preview.enrich.field.${key}`))
@@ -780,6 +787,12 @@
   .shpd-exchange__enrich--medium {
     color: var(--shpd-color-state-concept-text);
     background: var(--shpd-color-state-concept-bg);
+  }
+
+  /* Dominance (historyDominantItem) — nejslabší signál, neutrální šeď. */
+  .shpd-exchange__enrich--low {
+    color: var(--shpd-color-state-confirmed-text);
+    background: var(--shpd-color-state-confirmed-bg);
   }
 
   .shpd-exchange__enrich-summary {

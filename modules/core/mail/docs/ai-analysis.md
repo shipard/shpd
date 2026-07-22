@@ -171,6 +171,7 @@ Klíčová rozhodnutí (D1–D9, detailně `tasks/row-history-enrichment.md`):
 | Doplňuje se | jen prázdná pole; priorita userAction pin > AI extrakce > historie |
 | Historie | řádky partnera + doc_type, docState IN (20, 40), item živý (10/40/80), nejnovější první, limit 200 |
 | Match popisu | exact raw → exact normalizovaný (bez číslic/interpunkce) → Jaccard token-set ≥ 0.6; první zásah vyhrává |
+| Dominantní položka | úroveň 3, fallback bez textového signálu (`tasks/enrichment-dominant-item.md`): historie ≥ 10 řádků a jedna položka ≥ 80 % z nich → `historyDominantItem` / `low`, trojice z nejnovějšího výskytu. Guard přes částku: total řádku > max historických `total_price` dominantní položky → bez návrhu (chybějící total řádku → guard se neuplatní) |
 | Běží | `/result` (persist do `extracted_json`), `previewExtracted` (fresh), `apply` (fresh, před merge userActions) |
 | Selhání | nikdy neshodí endpoint — log + neobohacený canonical |
 
@@ -185,19 +186,22 @@ i pro nenapárované a přeskočené řádky:
 
 ```jsonc
 {
-    "matchedBy":  "historyExactRaw" | "historyExactNorm" | "historyFuzzy" | null,
-    "confidence": "high" | "medium" | null,
+    "matchedBy":  "historyExactRaw" | "historyExactNorm" | "historyFuzzy" | "historyDominantItem" | null,
+    "confidence": "high" | "medium" | "low" | null,
     "sourceDocId": 12345,                         // docs_core_heads.id zdroje
     "sourceDocNumber": "FP-2026-0042",            // doc_number zdroje (pro UI badge)
     "suggested":  { "ourCode": "…", "vatCode": "…", "account": "…" },  // co reálně doplnil
+    "dominance":  { "share": 0.94, "rows": 179 }, // jen u historyDominantItem (podklad tooltip badge)
     "skipped":    "hasOurCode" | "noItemRow"      // jen u přeskočených řádků
 }
 ```
 
 **Strop statusu (D7):** `/result` sníží `ready_to_apply` na
 `pending_review`, pokud po enrichmentu existuje item řádek bez
-`item.ourCode`. Kontační řádky (`acc.record` / `accSide`) položku
-nemají validně — stropu se netýkají.
+`item.ourCode`, **nebo** řádek doplněný enrichmentem s confidence `low`
+(dominance nemá textový signál — uživatel návrh potvrzuje, viz
+`tasks/enrichment-dominant-item.md` D5). Kontační řádky (`acc.record` /
+`accSide`) položku nemají validně — stropu se netýkají.
 
 **Zpětný zápis supplier codes (D8):** `SupplierCodeCaptureHandler`
 (registrace `documentEventHandlers` v module.jsonc) při přechodu dokladu

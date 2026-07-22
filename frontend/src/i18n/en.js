@@ -288,6 +288,8 @@ export default {
   'exchange.preview.enrich.filled': 'Filled: {fields}',
   'exchange.preview.enrich.kind.exact': 'exact match',
   'exchange.preview.enrich.kind.fuzzy': 'similar text',
+  'exchange.preview.enrich.kind.dominant': 'frequent supplier item',
+  'exchange.preview.enrich.kind.dominantShare': 'frequent supplier item, {share}% of rows',
   'exchange.preview.enrich.field.item': 'item',
   'exchange.preview.enrich.field.vat': 'VAT',
   'exchange.preview.enrich.field.account': 'account',

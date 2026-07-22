@@ -301,6 +301,8 @@ export default {
   'exchange.preview.enrich.filled': 'Doplněno: {fields}',
   'exchange.preview.enrich.kind.exact': 'přesná shoda',
   'exchange.preview.enrich.kind.fuzzy': 'podobný text',
+  'exchange.preview.enrich.kind.dominant': 'častá položka dodavatele',
+  'exchange.preview.enrich.kind.dominantShare': 'častá položka dodavatele, {share} % řádků',
   'exchange.preview.enrich.field.item': 'položka',
   'exchange.preview.enrich.field.vat': 'DPH',
   'exchange.preview.enrich.field.account': 'účet',

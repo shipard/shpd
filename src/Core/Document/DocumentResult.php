@@ -15,9 +15,13 @@ class DocumentResult
         private ?string $domainErrorCode = null,
     ) {}
 
-    public static function ok(array $data): self
+    /**
+     * Volitelný $validation nese neblokující warningy z Document::validate()
+     * do success response (errory by uložení zastavily už ve validationFailed).
+     */
+    public static function ok(array $data, ?ValidationResult $validation = null): self
     {
-        return new self(true, $data);
+        return new self(true, $data, $validation);
     }
 
     public static function validationFailed(ValidationResult $validation): self

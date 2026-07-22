@@ -21,6 +21,18 @@ class DocumentResultTest extends TestCase
         $this->assertNull($result->getErrorMessage());
     }
 
+    public function testOkCarriesValidationWarnings(): void
+    {
+        $validation = new ValidationResult();
+        $validation->addWarning('partner_bank', 'Doplňte bankovní spojení', 'partner_bank_recommended');
+
+        $result = DocumentResult::ok(['id' => 1], $validation);
+
+        $this->assertTrue($result->isSuccess());
+        $this->assertSame($validation, $result->getValidation());
+        $this->assertCount(1, $result->getValidation()->getWarnings());
+    }
+
     public function testValidationFailed(): void
     {
         $validation = new ValidationResult();

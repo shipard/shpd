@@ -482,13 +482,39 @@ položka má `{field, code, message}` (wire formát je snake_case; `field` mapuj
     "details": [
       {"field": "partner",          "code": "required",              "message": "Partner je povinný"},
       {"field": "vat_registration", "code": "required",              "message": "Registrace DPH je povinná"},
-      {"field": "partner_bank",     "code": "partner_bank_required", "message": "Bankovní spojení dodavatele…"},
       {"field": "rows",             "code": "no_rows",               "message": "Doklad musí mít alespoň jeden řádek"},
       {"field": "_form",            "code": "no_own_company",        "message": "Není nastavena vlastní firma…"}
     ]
   }
 }
 ```
+
+### Warningy (neblokující)
+
+`ValidationResult::addWarning()` (vlna D) přidá doporučení, které **neblokuje
+uložení** — `isValid()` počítá jen errory. Warningy putují v **success**
+response obou save cest (uložení i přechod stavu přes gateway) jako
+volitelné pole `warnings[]` se stejným tvarem položek jako `details[]`:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 42,
+    "data": { "...": "..." },
+    "dataResolved": { "...": "..." },
+    "warnings": [
+      {"field": "partner_bank", "code": "partner_bank_recommended", "message": "Bankovní spojení dodavatele…"}
+    ]
+  }
+}
+```
+
+Klíč chybí, když žádné warningy nejsou. Frontend je zatím **nezobrazuje**
+(follow-up až s toast/banner infrastrukturou) — neznámý klíč ignoruje.
+První uživatel: FPB bez bankovního spojení dodavatele
+(`partner_bank_recommended`, dřív blokující `partner_bank_required` — hard
+požadavek se přesune do budoucího platebního flow).
 
 ### Kontrakt `field`
 

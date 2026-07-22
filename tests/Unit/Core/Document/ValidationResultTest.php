@@ -91,4 +91,46 @@ class ValidationResultTest extends TestCase
         $this->assertCount(2, $result->getErrors());
         $this->assertCount(2, $result->toArray());
     }
+
+    public function testWarningKeepsResultValid(): void
+    {
+        $result = new ValidationResult();
+        $result->addWarning('partner_bank', 'Doplňte bankovní spojení', 'partner_bank_recommended');
+
+        $this->assertTrue($result->isValid());
+        $this->assertEmpty($result->getErrors());
+        $this->assertSame([], $result->toArray());
+        $this->assertCount(1, $result->getWarnings());
+    }
+
+    public function testWarningsToArrayFormat(): void
+    {
+        $result = new ValidationResult();
+        $result->addWarning('partner_bank', 'Doplňte bankovní spojení', 'partner_bank_recommended');
+
+        $expected = [
+            ['column' => 'partner_bank', 'message' => 'Doplňte bankovní spojení', 'code' => 'partner_bank_recommended'],
+        ];
+        $this->assertSame($expected, $result->warningsToArray());
+    }
+
+    public function testWarningsAndErrorsAreSeparate(): void
+    {
+        $result = new ValidationResult();
+        $result->addError('customer_id', 'Odběratel je povinný', 'required');
+        $result->addWarning('partner_bank', 'Doplňte bankovní spojení', 'partner_bank_recommended');
+
+        $this->assertFalse($result->isValid());
+        $this->assertCount(1, $result->getErrors());
+        $this->assertCount(1, $result->getWarnings());
+        $this->assertSame('required', $result->toArray()[0]['code']);
+        $this->assertSame('partner_bank_recommended', $result->warningsToArray()[0]['code']);
+    }
+
+    public function testAddWarningReturnsSelf(): void
+    {
+        $result = new ValidationResult();
+        $returned = $result->addWarning('partner_bank', 'Doplňte bankovní spojení');
+        $this->assertSame($result, $returned);
+    }
 }

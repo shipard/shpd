@@ -22,6 +22,7 @@ use Shipard\Core\Form\TableForm;
 use Shipard\Core\Module\ModulePathResolver;
 use Shipard\Core\Document\DocStateConfig;
 use Shipard\Core\Document\DocumentRegistry;
+use Shipard\Core\Document\DocumentResult;
 use Shipard\Core\Document\TableGateway;
 
 class FormController
@@ -276,11 +277,35 @@ class FormController
             $table, $def, $record ?? [], $formRegistry, $db, $config,
             $lookupRegistry, $modulePathResolver, $language, $tables,
         );
-        return Response::success([
+        $payload = [
             'id'           => $savedId,
             'data'         => $record,
             'dataResolved' => $dataResolved,
-        ], $httpStatus);
+        ];
+        $warnings = $this->validationWarnings($result);
+        if ($warnings !== null) {
+            $payload['warnings'] = $warnings;
+        }
+        return Response::success($payload, $httpStatus);
+    }
+
+    /**
+     * Neblokující warningy z Document::validate() pro success response —
+     * stejný tvar položek jako errors ve 422 (field/code/message). Null,
+     * když žádné nejsou (klíč `warnings` se do response nepřidá).
+     *
+     * @return list<array{field: string, code: string, message: string}>|null
+     */
+    private function validationWarnings(DocumentResult $result): ?array
+    {
+        $warnings = $result->getValidation()?->getWarnings() ?? [];
+        if ($warnings === []) {
+            return null;
+        }
+        return array_map(
+            fn($w) => ['field' => $w->column, 'code' => $w->code ?: 'WARNING', 'message' => $w->message],
+            $warnings,
+        );
     }
 
     /**
@@ -609,11 +634,16 @@ class FormController
             $table, $def, $record ?? [], $formRegistry, $db, $config,
             $lookupRegistry, $modulePathResolver, $language, $tables,
         );
-        return Response::success([
+        $payload = [
             'id'           => $id,
             'data'         => $record,
             'dataResolved' => $dataResolved,
-        ]);
+        ];
+        $warnings = $this->validationWarnings($result);
+        if ($warnings !== null) {
+            $payload['warnings'] = $warnings;
+        }
+        return Response::success($payload);
     }
 
     private function applyStateTransition(

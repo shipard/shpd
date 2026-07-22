@@ -159,7 +159,7 @@ class TableGateway
             );
         }
 
-        return DocumentResult::ok($data);
+        return DocumentResult::ok($data, $validation);
     }
 
     public function deleteDocument(int $id): DocumentResult

@@ -35,26 +35,37 @@ class ReceivedInvoiceDocumentTest extends TestCase
         ];
     }
 
-    public function testConfirmedRequiresAnyPartnerBankInfo(): void
+    /** @return list<array{column: string, message: string, code: string}> */
+    private function bankWarnings(array $warnings): array
+    {
+        return array_values(array_filter(
+            $warnings,
+            fn (array $w) => $w['code'] === 'partner_bank_recommended',
+        ));
+    }
+
+    public function testConfirmedWithoutPartnerBankInfoWarnsButSaves(): void
     {
         $doc = new ReceivedInvoiceDocument();
         $doc->setDb($this->dbWithOwn());
 
         $data = $this->confirmedData();
         // No partner_bank, partner_bank_account, or partner_bank_iban set
-        $errors = $doc->validate($data)->toArray();
+        $result = $doc->validate($data);
 
-        $matched = array_filter(
-            $errors,
-            fn (array $e) => $e['code'] === 'partner_bank_required',
-        );
-        $this->assertNotEmpty($matched, 'Confirmed FPB without partner bank info must fail');
-        // Bound to the partner_bank column (header-tab lookup) so the UI shows it
-        // next to that field + colors the Hlavička tab — not a form-level error.
-        $this->assertSame('partner_bank', array_values($matched)[0]['column']);
+        // Missing supplier bank info must not block the save (historical /
+        // imported invoices are already paid) — warning only, doc stays valid.
+        $this->assertTrue($result->isValid());
+        $this->assertEmpty($result->toArray());
+
+        $matched = $this->bankWarnings($result->warningsToArray());
+        $this->assertNotEmpty($matched, 'Confirmed FPB without partner bank info must warn');
+        // Bound to the partner_bank column (header-tab lookup) so a future UI
+        // can show it next to that field — not as a form-level entry.
+        $this->assertSame('partner_bank', $matched[0]['column']);
     }
 
-    public function testPartnerBankIdSatisfiesRequirement(): void
+    public function testPartnerBankIdSatisfiesRecommendation(): void
     {
         $doc = new ReceivedInvoiceDocument();
         $doc->setDb($this->dbWithOwn());
@@ -62,12 +73,11 @@ class ReceivedInvoiceDocumentTest extends TestCase
         $data = $this->confirmedData();
         $data['partner_bank'] = 42;
 
-        $errors = $doc->validate($data)->toArray();
-        $matched = array_filter($errors, fn (array $e) => $e['code'] === 'partner_bank_required');
-        $this->assertEmpty($matched);
+        $result = $doc->validate($data);
+        $this->assertEmpty($this->bankWarnings($result->warningsToArray()));
     }
 
-    public function testPartnerBankAccountNumberSatisfiesRequirement(): void
+    public function testPartnerBankAccountNumberSatisfiesRecommendation(): void
     {
         $doc = new ReceivedInvoiceDocument();
         $doc->setDb($this->dbWithOwn());
@@ -75,12 +85,11 @@ class ReceivedInvoiceDocumentTest extends TestCase
         $data = $this->confirmedData();
         $data['partner_bank_account'] = '123456/0100';
 
-        $errors = $doc->validate($data)->toArray();
-        $matched = array_filter($errors, fn (array $e) => $e['code'] === 'partner_bank_required');
-        $this->assertEmpty($matched);
+        $result = $doc->validate($data);
+        $this->assertEmpty($this->bankWarnings($result->warningsToArray()));
     }
 
-    public function testPartnerBankIbanSatisfiesRequirement(): void
+    public function testPartnerBankIbanSatisfiesRecommendation(): void
     {
         $doc = new ReceivedInvoiceDocument();
         $doc->setDb($this->dbWithOwn());
@@ -88,27 +97,28 @@ class ReceivedInvoiceDocumentTest extends TestCase
         $data = $this->confirmedData();
         $data['partner_bank_iban'] = 'CZ6508000000192000145399';
 
-        $errors = $doc->validate($data)->toArray();
-        $matched = array_filter($errors, fn (array $e) => $e['code'] === 'partner_bank_required');
-        $this->assertEmpty($matched);
+        $result = $doc->validate($data);
+        $this->assertEmpty($this->bankWarnings($result->warningsToArray()));
     }
 
-    public function testCashPaymentDoesNotRequirePartnerBankInfo(): void
+    public function testCashPaymentDoesNotWarnAboutPartnerBankInfo(): void
     {
         $doc = new ReceivedInvoiceDocument();
         $doc->setDb($this->dbWithOwn());
 
         // Confirmed, no bank info, but paid in cash (payment_method = 0) —
-        // supplier bank info is irrelevant, so no error.
+        // supplier bank info is irrelevant, so no warning.
         $data = $this->confirmedData();
         $data['payment_method'] = 0;
 
-        $errors = $doc->validate($data)->toArray();
-        $matched = array_filter($errors, fn (array $e) => $e['code'] === 'partner_bank_required');
-        $this->assertEmpty($matched, 'Cash-paid FPB must not require supplier bank info');
+        $result = $doc->validate($data);
+        $this->assertEmpty(
+            $this->bankWarnings($result->warningsToArray()),
+            'Cash-paid FPB must not warn about supplier bank info',
+        );
     }
 
-    public function testBankTransferRequiresPartnerBankInfo(): void
+    public function testBankTransferWithoutPartnerBankInfoWarns(): void
     {
         $doc = new ReceivedInvoiceDocument();
         $doc->setDb($this->dbWithOwn());
@@ -117,12 +127,15 @@ class ReceivedInvoiceDocumentTest extends TestCase
         $data = $this->confirmedData();
         $data['payment_method'] = 1;
 
-        $errors = $doc->validate($data)->toArray();
-        $matched = array_filter($errors, fn (array $e) => $e['code'] === 'partner_bank_required');
-        $this->assertNotEmpty($matched, 'Bank-transfer FPB without supplier bank info must fail');
+        $result = $doc->validate($data);
+        $this->assertTrue($result->isValid());
+        $this->assertNotEmpty(
+            $this->bankWarnings($result->warningsToArray()),
+            'Bank-transfer FPB without supplier bank info must warn',
+        );
     }
 
-    public function testKonceptDoesNotRequirePartnerBankInfo(): void
+    public function testKonceptDoesNotWarnAboutPartnerBankInfo(): void
     {
         $doc = new ReceivedInvoiceDocument();
         $doc->setDb($this->dbWithOwn());
@@ -133,10 +146,9 @@ class ReceivedInvoiceDocumentTest extends TestCase
             'issue_date'      => '2026-05-06',
             'accounting_date' => '2026-05-06',
         ];
-        $errors = $doc->validate($data)->toArray();
+        $result = $doc->validate($data);
 
-        $matched = array_filter($errors, fn (array $e) => $e['code'] === 'partner_bank_required');
-        $this->assertEmpty($matched);
+        $this->assertEmpty($this->bankWarnings($result->warningsToArray()));
     }
 
     public function testInheritsParentValidation(): void

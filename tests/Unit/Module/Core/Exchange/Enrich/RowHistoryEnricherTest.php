@@ -42,15 +42,53 @@ class RowHistoryEnricherTest extends TestCase
         ?string $accountNumber = '518001',
         int $docHead = 1001,
         ?string $docNumber = 'FP-2026-0042',
+        float|string|null $totalPrice = null,
     ): array {
         return [
             'description'    => $description,
             'vat_code'       => $vatCode,
+            'total_price'    => $totalPrice,
             'item_code'      => $itemCode,
             'account_number' => $accountNumber,
             'doc_head'       => $docHead,
             'doc_number'     => $docNumber,
         ];
+    }
+
+    /**
+     * Historie pro dominance scénáře: $dominantCount řádků s položkou MAT
+     * (unikátní texty, disjunktní s čímkoli v testovacích řádcích) +
+     * $otherCount řádků s položkou OTHER. Nejnovější první (h.id DESC),
+     * nejnovější MAT řádek má doc_head 9999 / FP-2026-9999.
+     *
+     * @param list<float|string|null> $dominantTotals total_price MAT řádků v pořadí
+     * @return list<array<string, mixed>>
+     */
+    private function dominanceHistory(
+        int $dominantCount,
+        int $otherCount = 0,
+        array $dominantTotals = [],
+    ): array {
+        $rows = [];
+        for ($i = 0; $i < $dominantCount; $i++) {
+            $rows[] = $this->histRow(
+                "Spojovací materiál šarže {$i}",
+                'MAT',
+                accountNumber: '501001',
+                docHead: 9999 - $i,
+                docNumber: 'FP-2026-' . (9999 - $i),
+                totalPrice: $dominantTotals[$i] ?? null,
+            );
+        }
+        for ($i = 0; $i < $otherCount; $i++) {
+            $rows[] = $this->histRow(
+                "Zhodnocení budovy etapa {$i}",
+                'OTHER',
+                docHead: 8999 - $i,
+                docNumber: 'FP-2026-' . (8999 - $i),
+            );
+        }
+        return $rows;
     }
 
     /**
@@ -468,5 +506,147 @@ class RowHistoryEnricherTest extends TestCase
         $enrichment = $result['_resolve']['rows'][0]['enrichment'];
         $this->assertNull($enrichment['matchedBy']);
         $this->assertSame([], $enrichment['suggested']);
+    }
+
+    // ── Úroveň 3 — dominantní položka partnera ──────────────────────────────
+
+    public function testDominantItemSuggestedWhenTextTiersFail(): void
+    {
+        // UNI HOBBY scénář: texty disjunktní, ale 10/12 řádků historie má
+        // stejnou položku → historyDominantItem / low, trojice z nejnovějšího
+        // MAT řádku, matchedText null, audit dominance {share, rows}.
+        $enricher = $this->buildEnricher($this->dominanceHistory(10, 2));
+
+        $result = $enricher->enrich($this->canonical([
+            ['description' => 'Hmoždinky, vruty a silikon'],
+        ]));
+
+        $row = $result['rows'][0];
+        $this->assertSame('MAT', $row['item']['ourCode']);
+        $this->assertSame('std21', $row['vat']['code']);
+        $this->assertSame('501001', $row['account']);
+
+        $enrichment = $result['_resolve']['rows'][0]['enrichment'];
+        $this->assertSame('historyDominantItem', $enrichment['matchedBy']);
+        $this->assertSame('low', $enrichment['confidence']);
+        $this->assertNull($enrichment['matchedText']);
+        $this->assertSame(9999, $enrichment['sourceDocId']);
+        $this->assertSame('FP-2026-9999', $enrichment['sourceDocNumber']);
+        $this->assertSame(['share' => 0.83, 'rows' => 12], $enrichment['dominance']);
+    }
+
+    public function testDominanceBelowShareThresholdNoSuggestion(): void
+    {
+        // Dělená dominance 7:5 → podíl 0.58 < 0.8, žádný návrh (D4).
+        $enricher = $this->buildEnricher($this->dominanceHistory(7, 5));
+
+        $result = $enricher->enrich($this->canonical([
+            ['description' => 'Hmoždinky, vruty a silikon'],
+        ]));
+
+        $this->assertArrayNotHasKey('item', $result['rows'][0]);
+        $enrichment = $result['_resolve']['rows'][0]['enrichment'];
+        $this->assertNull($enrichment['matchedBy']);
+        $this->assertArrayNotHasKey('dominance', $enrichment);
+    }
+
+    public function testDominanceBelowMinRowsNoSuggestion(): void
+    {
+        // Scénář Svatoňová: malá historie (6 řádků) — i 100% podíl propadne.
+        $enricher = $this->buildEnricher($this->dominanceHistory(6));
+
+        $result = $enricher->enrich($this->canonical([
+            ['description' => 'Hmoždinky, vruty a silikon'],
+        ]));
+
+        $this->assertArrayNotHasKey('item', $result['rows'][0]);
+        $this->assertNull($result['_resolve']['rows'][0]['enrichment']['matchedBy']);
+    }
+
+    public function testDominanceAmountGuardSuppresses(): void
+    {
+        // Guard přes částku (D3): max historických total_price MAT je 1200
+        // (NULL hodnoty se z maxima vynechají). Řádek 0 nad max → potlačeno;
+        // řádek 1 bez totalPrice → guard se neuplatní; řádek 2 pod max → projde.
+        $enricher = $this->buildEnricher($this->dominanceHistory(
+            10,
+            dominantTotals: [1200.0, '850.00', null, 320.0],
+        ));
+
+        $result = $enricher->enrich($this->canonical([
+            ['description' => 'Vestavěná pergola vč. montáže', 'totalPrice' => 25000.0],
+            ['description' => 'Hmoždinky, vruty a silikon'],
+            ['description' => 'Spárovací hmota a lepidlo', 'totalPrice' => 500.0],
+        ]));
+
+        $this->assertArrayNotHasKey('item', $result['rows'][0]);
+        $this->assertNull($result['_resolve']['rows'][0]['enrichment']['matchedBy']);
+
+        $this->assertSame('MAT', $result['rows'][1]['item']['ourCode']);
+        $this->assertSame(
+            'historyDominantItem',
+            $result['_resolve']['rows'][1]['enrichment']['matchedBy'],
+        );
+
+        $this->assertSame('MAT', $result['rows'][2]['item']['ourCode']);
+        $this->assertSame(
+            'historyDominantItem',
+            $result['_resolve']['rows'][2]['enrichment']['matchedBy'],
+        );
+    }
+
+    public function testTextMatchBeatsDominance(): void
+    {
+        // Fuzzy zásah existuje → vyhraje historyFuzzy, dominance se
+        // nekonzultuje (fallback až když textové úrovně selžou).
+        $history = $this->dominanceHistory(11);
+        $history[] = $this->histRow('Pronájem kancelářských prostor budova A', 'RENT-A', docHead: 8000);
+        $enricher = $this->buildEnricher($history);
+
+        $result = $enricher->enrich($this->canonical([
+            ['description' => 'Pronájem kancelářských prostor budova B'],
+        ]));
+
+        $enrichment = $result['_resolve']['rows'][0]['enrichment'];
+        $this->assertSame('RENT-A', $result['rows'][0]['item']['ourCode']);
+        $this->assertSame('historyFuzzy', $enrichment['matchedBy']);
+        $this->assertSame('medium', $enrichment['confidence']);
+        $this->assertArrayNotHasKey('dominance', $enrichment);
+    }
+
+    public function testDominanceRowWithoutTextCandidates(): void
+    {
+        // Dominance nevyžaduje kandidátní texty — řádek bez description/name
+        // návrh dostane (textové úrovně se bez kandidátů vůbec nezkouší).
+        $enricher = $this->buildEnricher($this->dominanceHistory(12));
+
+        $result = $enricher->enrich($this->canonical([
+            ['totalPrice' => 480.0],
+        ]));
+
+        $enrichment = $result['_resolve']['rows'][0]['enrichment'];
+        $this->assertSame('MAT', $result['rows'][0]['item']['ourCode']);
+        $this->assertSame('historyDominantItem', $enrichment['matchedBy']);
+        $this->assertNull($enrichment['matchedText']);
+        $this->assertSame(['share' => 1.0, 'rows' => 12], $enrichment['dominance']);
+    }
+
+    public function testDoubleRunIsIdempotentWithDominance(): void
+    {
+        // Fresh běh nad canonical obohaceným dominancí: revert vlastních
+        // návrhů + nové matchování musí dát identický výstup (D2).
+        $enricher = $this->buildEnricher($this->dominanceHistory(10, 2));
+
+        $first = $enricher->enrich($this->canonical([
+            ['description' => 'Hmoždinky, vruty a silikon'],
+        ]));
+        $second = $enricher->enrich($first);
+
+        $this->assertSame($first, $second);
+        $this->assertSame('MAT', $second['rows'][0]['item']['ourCode']);
+        $this->assertSame(
+            'historyDominantItem',
+            $second['_resolve']['rows'][0]['enrichment']['matchedBy'],
+        );
     }
 }

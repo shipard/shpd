@@ -26,13 +26,19 @@ use Shipard\Module\Docs\Core\OwnCompanyResolver;
  * matchování má přednost před pořadím kandidátů (exact zásah na `item.name`
  * vyhrává nad fuzzy zásahem na `item.description`):
  *
- *   0. exact match syrového textu               → historyExactRaw  / high
- *   1. exact match normalizovaného textu        → historyExactNorm / high
- *   2. Jaccard token-set ≥ FUZZY_THRESHOLD      → historyFuzzy     / medium
+ *   0. exact match syrového textu               → historyExactRaw      / high
+ *   1. exact match normalizovaného textu        → historyExactNorm     / high
+ *   2. Jaccard token-set ≥ FUZZY_THRESHOLD      → historyFuzzy         / medium
+ *   3. dominantní položka partnera (bez textu)  → historyDominantItem  / low
  *
  * Uvnitř úrovně vyhrává dřívější kandidát, uvnitř kandidáta nejnovější
  * historie. Vyhrávající kandidátní text (originální, nenormalizovaný tvar)
  * jde do auditu jako `matchedText`.
+ *
+ * Úroveň 3 je čistě statistický fallback pro dodavatele, jejichž texty
+ * řádků se neopakují (spotřební materiál, PHM), ale položka je v historii
+ * prakticky konstantní — viz findDominantItem() a
+ * `tasks/enrichment-dominant-item.md`.
  *
  * Audit per řádek jde do `_resolve.rows[i].enrichment` (D6) — blok se
  * zapisuje vždy, i pro nenapárované a přeskočené řádky. Opakovaný běh je
@@ -54,6 +60,12 @@ final class RowHistoryEnricher
 
     private const HISTORY_LIMIT = 200;
     private const FUZZY_THRESHOLD = 0.6;
+
+    /** Minimální počet řádků historie pro statistiku dominance. */
+    private const DOMINANCE_MIN_ROWS = 10;
+
+    /** Minimální podíl dominantní položky na řádcích historie. */
+    private const DOMINANCE_MIN_SHARE = 0.8;
 
     public function __construct(
         private readonly Connection $db,
@@ -146,6 +158,7 @@ final class RowHistoryEnricher
 
         $candidates = $this->rowTextCandidates($row);
         $match = $candidates !== [] ? $this->findMatch($candidates, $history) : null;
+        $match ??= $this->findDominantItem($history, $row);
         if ($match === null) {
             return $this->writeEnrichment($canonical, $idx, $enrichment);
         }
@@ -179,6 +192,9 @@ final class RowHistoryEnricher
         $enrichment['sourceDocId'] = (int) $hist['doc_head'];
         $enrichment['sourceDocNumber'] = ((string) ($hist['doc_number'] ?? '')) ?: null;
         $enrichment['suggested'] = $suggested;
+        if (isset($match[4])) {
+            $enrichment['dominance'] = $match[4];
+        }
 
         return $this->writeEnrichment($canonical, $idx, $enrichment);
     }
@@ -233,6 +249,69 @@ final class RowHistoryEnricher
         }
 
         return null;
+    }
+
+    /**
+     * Úroveň 3 — dominantní položka partnera (D1). Bez textového signálu:
+     * pokud historie má >= DOMINANCE_MIN_ROWS řádků a jedna položka pokrývá
+     * >= DOMINANCE_MIN_SHARE z nich, navrhne se s confidence `low`.
+     *
+     * Guard přes částku (D3): návrh se potlačí, když total řádku převyšuje
+     * maximum historických total_price dominantní položky — chytá majetkové
+     * / investiční řádky u jinak materiálových dodavatelů. Chybějící částka
+     * na řádku canonical → guard se neuplatní (navrhne se).
+     *
+     * Vrací stejný tvar jako findMatch() + pátý prvek s podkladem pro audit
+     * klíč `dominance` (D8); matchedText je null (žádný text se nematchoval).
+     * Hist řádek = nejnovější výskyt dominantní položky (řazení h.id DESC).
+     *
+     * @param list<array<string, mixed>> $history
+     * @param array<string, mixed> $row
+     * @return array{0: array<string, mixed>, 1: string, 2: string, 3: null, 4: array{share: float, rows: int}}|null
+     */
+    private function findDominantItem(array $history, array $row): ?array
+    {
+        $total = count($history);
+        if ($total < self::DOMINANCE_MIN_ROWS) {
+            return null;
+        }
+
+        $counts = [];
+        foreach ($history as $hist) {
+            $counts[(string) $hist['item_code']] = ($counts[(string) $hist['item_code']] ?? 0) + 1;
+        }
+        arsort($counts);
+        $dominantCode = (string) array_key_first($counts);
+        $share = $counts[$dominantCode] / $total;
+        // Při prahu 0.8 nemůže mít podíl dvě položky zároveň — tie netřeba řešit.
+        if ($share < self::DOMINANCE_MIN_SHARE) {
+            return null;
+        }
+
+        $dominant = null;
+        $maxTotalPrice = null;
+        foreach ($history as $hist) {
+            if ((string) $hist['item_code'] !== $dominantCode) {
+                continue;
+            }
+            $dominant ??= $hist;
+            $histTotal = $hist['total_price'] ?? null;
+            if ($histTotal !== null && is_numeric($histTotal)
+                && ($maxTotalPrice === null || (float) $histTotal > $maxTotalPrice)) {
+                $maxTotalPrice = (float) $histTotal;
+            }
+        }
+
+        $rowTotal = $row['totalPrice'] ?? null;
+        if ($maxTotalPrice !== null && $rowTotal !== null && is_numeric($rowTotal)
+            && (float) $rowTotal > $maxTotalPrice) {
+            return null;
+        }
+
+        return [$dominant, 'historyDominantItem', 'low', null, [
+            'share' => round($share, 2),
+            'rows'  => $total,
+        ]];
     }
 
     /**
@@ -317,7 +396,7 @@ final class RowHistoryEnricher
     private function loadHistory(int $partnerId, string $docType): array
     {
         $rows = $this->db->fetchAll(
-            'SELECT [r.description], [r.vat_code], [h.id] AS [doc_head],
+            'SELECT [r.description], [r.vat_code], [r.total_price], [h.id] AS [doc_head],
                     [h.doc_number] AS [doc_number],
                     [i.code] AS [item_code], [a.number] AS [account_number]
              FROM [docs_core_rows] AS [r]

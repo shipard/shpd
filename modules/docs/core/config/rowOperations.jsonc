@@ -25,6 +25,12 @@
     //                          částky řádků kladné — směr = volba operace
     //                          (kurzové rozdíly). Vlajka chybí = položkový
     //                          layout.
+    //   selfBalancing: 1     — kroky předpisu pokrývají OBĚ strany (jeden
+    //                          řádek → MD i DAL stejnou částkou, FX čtveřice).
+    //                          Kontrola vyrovnanosti (AccountingDocument)
+    //                          počítá řádek do MD i DAL a acc_side ignoruje;
+    //                          součty ho počítají jednou do Σ MD. Parita
+    //                          vlajky s kroky předpisu je hlídaná testem.
     //
     // Operace s rowAccount/rowPartner/rowPaymentId bez rowSide (zálohy,
     // majetek na fakturách) zůstávají v položkovém layoutu — jen dostanou
@@ -187,6 +193,7 @@
         "name:cs": "Kurzová ztráta — pohledávka",
         "name:en": "FX loss — receivable",
         "rowSide": 0,
+        "selfBalancing": 1,
         "rowPartner": 1,
         "rowPaymentId": 1,
         "docTypes": { "cmnbkp": {"order": 500} }
@@ -196,6 +203,7 @@
         "name:cs": "Kurzový zisk — pohledávka",
         "name:en": "FX gain — receivable",
         "rowSide": 0,
+        "selfBalancing": 1,
         "rowPartner": 1,
         "rowPaymentId": 1,
         "docTypes": { "cmnbkp": {"order": 600} }
@@ -205,6 +213,7 @@
         "name:cs": "Kurzová ztráta — závazek",
         "name:en": "FX loss — payable",
         "rowSide": 0,
+        "selfBalancing": 1,
         "rowPartner": 1,
         "rowPaymentId": 1,
         "docTypes": { "cmnbkp": {"order": 700} }
@@ -214,6 +223,7 @@
         "name:cs": "Kurzový zisk — závazek",
         "name:en": "FX gain — payable",
         "rowSide": 0,
+        "selfBalancing": 1,
         "rowPartner": 1,
         "rowPaymentId": 1,
         "docTypes": { "cmnbkp": {"order": 800} }

@@ -5,15 +5,34 @@ declare(strict_types=1);
 namespace Shipard\Tests\Unit\Module\Docs\AccountingDocs;
 
 use PHPUnit\Framework\TestCase;
+use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Module\Docs\AccountingDocs\AccountingDocument;
 
 /**
  * Subclass cmnbkp — vyrovnanost, nepovinný hlavičkový partner, součty z řádků.
  * Bez DB: validate s db=null přeskočí kontrolu vlastní firmy; resolveRowsForCompute
- * čte řádky z $data['rows'].
+ * čte řádky z $data['rows']. Testy samovyvažujících operací (FX) injektují
+ * ConfigRuntime s docs.core.rowOperations — bez configu vlajka selfBalancing
+ * vyjde false a chování je původní.
  */
 class AccountingDocumentTest extends TestCase
 {
+    private ?string $tmpDir = null;
+
+    protected function tearDown(): void
+    {
+        if ($this->tmpDir === null) {
+            return;
+        }
+        foreach (glob($this->tmpDir . '/config/configuration/*') ?: [] as $f) {
+            unlink($f);
+        }
+        rmdir($this->tmpDir . '/config/configuration');
+        rmdir($this->tmpDir . '/config');
+        rmdir($this->tmpDir);
+        $this->tmpDir = null;
+    }
+
     /** Testovací subclass zpřístupňující protected sumTotals + applyDomesticAmounts. */
     private function doc(): AccountingDocument
     {
@@ -28,6 +47,40 @@ class AccountingDocumentTest extends TestCase
                 $this->applyDomesticAmounts($data, $rows, $recap);
             }
         };
+    }
+
+    /**
+     * Dokument s injektovaným configem — rowOperations s FX operací
+     * (selfBalancing: 1) a běžnými kontačními operacemi (vzor
+     * DocRowOperationsValidateTest::buildConfig).
+     */
+    private function docWithConfig(): AccountingDocument
+    {
+        $this->tmpDir = sys_get_temp_dir() . '/shpd_accdoc_test_' . uniqid();
+        mkdir($this->tmpDir . '/config/configuration', 0755, true);
+
+        $items = [
+            'docs.core.rowOperations' => [
+                'acc.record' => [
+                    'name' => 'Účetní zápis', 'rowSide' => 1,
+                    'rowAccount' => 'direct',
+                    'docTypes' => ['cmnbkp' => ['order' => 100]],
+                ],
+                'acc.fxLossReceivable' => [
+                    'name' => 'Kurzová ztráta — pohledávka',
+                    'rowSide' => 0, 'selfBalancing' => 1,
+                    'docTypes' => ['cmnbkp' => ['order' => 500]],
+                ],
+            ],
+        ];
+        file_put_contents(
+            $this->tmpDir . '/config/configuration/compiled.cs.json',
+            json_encode(['_meta' => ['language' => 'cs'], 'items' => $items]),
+        );
+
+        $doc = $this->doc();
+        $doc->setConfig(ConfigRuntime::load($this->tmpDir, 'cs'));
+        return $doc;
     }
 
     /**
@@ -102,6 +155,86 @@ class AccountingDocumentTest extends TestCase
         $this->assertContains('account_required', $codes);
         $this->assertContains('amount_required', $codes);
         $this->assertContains('item_required', $codes);
+    }
+
+    // ── Samovyvažující operace (FX, selfBalancing: 1) ───────────────────────
+
+    public function testSelfBalancingFxRowAloneIsBalanced(): void
+    {
+        // FX řádek stranu nenese (rowSide: 0) — obě strany účtují kroky
+        // předpisu, kontrola ho počítá do MD i DAL.
+        $data = $this->head40([
+            ['row_kind' => 1, 'operation' => 'acc.fxLossReceivable', 'total_price' => 50806.73],
+        ]);
+
+        $result = $this->docWithConfig()->validate($data);
+
+        $this->assertNotContains('unbalanced', $this->codes($result));
+        $this->assertNotContains('acc_side_required', $this->codes($result));
+    }
+
+    public function testSelfBalancingFxRowIgnoresStoredAccSide(): void
+    {
+        // Migrace může poslat acc_side ze zdroje — vlajka má přednost,
+        // řádek se dál počítá do obou stran.
+        $data = $this->head40([
+            ['row_kind' => 1, 'operation' => 'acc.fxLossReceivable', 'acc_side' => 1, 'total_price' => 100.0],
+        ]);
+
+        $result = $this->docWithConfig()->validate($data);
+
+        $this->assertNotContains('unbalanced', $this->codes($result));
+    }
+
+    public function testSelfBalancingFxRowCombinesWithContationRows(): void
+    {
+        $data = $this->head40([
+            ['row_kind' => 1, 'operation' => 'acc.record', 'acc_side' => 0, 'account' => 10, 'total_price' => 1000.0],
+            ['row_kind' => 1, 'operation' => 'acc.record', 'acc_side' => 1, 'account' => 20, 'total_price' => 1000.0],
+            ['row_kind' => 1, 'operation' => 'acc.fxLossReceivable', 'total_price' => 500.0],
+        ]);
+
+        $result = $this->docWithConfig()->validate($data);
+
+        $this->assertNotContains('unbalanced', $this->codes($result));
+    }
+
+    public function testSelfBalancingFxRowZeroAmountFails(): void
+    {
+        $data = $this->head40([
+            ['row_kind' => 1, 'operation' => 'acc.fxLossReceivable', 'total_price' => 0.0],
+        ]);
+
+        $result = $this->docWithConfig()->validate($data);
+
+        $this->assertContains('amount_required', $this->codes($result));
+    }
+
+    public function testOneSidedAccRecordStillFailsWithConfig(): void
+    {
+        // Kontrola se vlajkou nesmí otupit: jednostranná kontace bez
+        // protistrany dál padá na unbalanced.
+        $data = $this->head40([
+            ['row_kind' => 1, 'operation' => 'acc.record', 'acc_side' => 1, 'account' => 20, 'total_price' => 600.0],
+        ]);
+
+        $result = $this->docWithConfig()->validate($data);
+
+        $this->assertContains('unbalanced', $this->codes($result));
+    }
+
+    public function testSumTotalsCountsSelfBalancingOnceRegardlessOfAccSide(): void
+    {
+        // Bez vlajky by řádek s acc_side = 1 do Σ MD nespadl → total_amount 0.
+        $doc = $this->docWithConfig();
+        $data = [];
+        $rows = [
+            ['row_kind' => 1, 'operation' => 'acc.fxLossReceivable', 'acc_side' => 1, 'total_price' => 50806.73],
+        ];
+
+        $doc->sumTotalsPub($data, $rows);
+
+        $this->assertSame(50806.73, $data['total_amount']);
     }
 
     public function testSumTotalsFromDebitRows(): void

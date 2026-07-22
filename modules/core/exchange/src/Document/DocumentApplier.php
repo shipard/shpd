@@ -1026,6 +1026,12 @@ class DocumentApplier
      */
     private function transformRows(array $rows, array $plan, array $sideIds): array
     {
+        // Kontační operace (vlajka rowSide v docs.core.rowOperations) účtují
+        // částku přímo — detekce nesmí stát jen na přítomnosti accSide:
+        // operace s rowSide: 0 (FX) stranu z konstrukce nenesou.
+        $cfgOps = $this->config->cfgItem('docs.core.rowOperations');
+        $cfgOps = is_array($cfgOps) ? $cfgOps : [];
+
         $out = [];
         $orderPos = 0;
         foreach ($rows as $i => $row) {
@@ -1035,6 +1041,8 @@ class DocumentApplier
             if (!is_array($row)) continue;
 
             $orderPos++;
+            $contation = isset($row['accSide'])
+                || isset($cfgOps[(string) ($row['operation'] ?? '')]['rowSide']);
             $itemId = $sideIds['rowItems'][$i] ?? ($plan['resolvedRowItems'][$i] ?? null);
             $unitId = $plan['resolvedRowUnits'][$i] ?? null;
             $vat = $plan['resolvedRowVatCodes'][$i] ?? null;
@@ -1057,9 +1065,10 @@ class DocumentApplier
                 'quantity'        => $row['quantity'] ?? null,
                 'unit_price'      => $row['unitPrice'] ?? null,
                 'total_price'     => $row['totalPrice'] ?? null,
-                // Kontační řádek (má accSide) účtuje částku přímo → fromTotal,
+                // Kontační řádek (accSide nebo operace s vlajkou rowSide —
+                // FX řádky stranu nenesou) účtuje částku přímo → fromTotal,
                 // jinak by calculateRowPrice přepsal total_price z qty×unit (0).
-                'price_calc_mode' => isset($row['accSide'])
+                'price_calc_mode' => $contation
                                       ? 1
                                       : (self::PRICE_CALC_MODE_MAP[(string) ($row['priceCalcMode'] ?? 'fromUnitPrice')] ?? 0),
                 'discount_pct'    => $row['discountPct'] ?? null,

@@ -21,6 +21,18 @@ final class DocRowOperationRules
     public const OPERATION_ACC_ENTRY = 'acc.entry';
 
     /**
+     * Samovyvažující pohyb (`selfBalancing: 1`, FX čtveřice): kroky předpisu
+     * pokrývají obě strany, řádek stranu nenese. Kontrola vyrovnanosti ho
+     * počítá do MD i DAL a `acc_side` ignoruje (migrace ho může poslat).
+     *
+     * @param array<string, mixed> $cfgOperations cfgItem docs.core.rowOperations
+     */
+    public static function isSelfBalancing(string $operation, array $cfgOperations): bool
+    {
+        return !empty($cfgOperations[$operation]['selfBalancing']);
+    }
+
+    /**
      * @param array<string, mixed> $row
      * @param array<string, mixed> $cfgOperations cfgItem docs.core.rowOperations
      * @return list<array{column: string, message: string, code: string}>

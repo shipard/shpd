@@ -182,6 +182,145 @@ class AccountingDocumentImportTest extends IntegrationTestCase
         }
     }
 
+    /**
+     * FX doklad (kurzová ztráta — pohledávka): jeden samovyvažující řádek
+     * (selfBalancing: 1 — obě strany účtují kroky předpisu, řádek stranu
+     * nenese). Přesně cesta třetího re-importu (2026-07-22): apply → save
+     * na stavu 40 (kontrola vyrovnanosti!) → dispatcher → zaúčtování.
+     * Před fixem padal save na `_form: unbalanced`.
+     */
+    public function testImportFxSelfBalancingRowAtState40(): void
+    {
+        $docId = $this->applyFxLossReceivable(withAccSide: false);
+
+        $head = $this->db->fetchRow('SELECT * FROM docs_core_heads WHERE id = %i', $docId);
+        $this->assertSame(40, (int) $head['docState']);
+        // sumTotals: samovyvažující řádek se počítá jednou do Σ MD.
+        $this->assertEqualsWithDelta(50806.73, (float) $head['total_amount'], 0.001);
+
+        $this->assertFxJournalBalanced($head);
+    }
+
+    /**
+     * Migrace posílá accSide verbatim ze zdroje (old_shipard nesl FX řádek
+     * jednostranně) — uložená strana se u samovyvažující operace ignoruje,
+     * doklad projde a total_amount není 0.
+     */
+    public function testImportFxRowWithSourceAccSideStillBalances(): void
+    {
+        $docId = $this->applyFxLossReceivable(withAccSide: true);
+
+        $head = $this->db->fetchRow('SELECT * FROM docs_core_heads WHERE id = %i', $docId);
+        $this->assertSame(40, (int) $head['docState']);
+        $this->assertEqualsWithDelta(50806.73, (float) $head['total_amount'], 0.001);
+
+        $this->assertFxJournalBalanced($head);
+    }
+
+    /** Apply kanonického FX dokladu, vrací id hlavičky (a registruje úklid). */
+    private function applyFxLossReceivable(bool $withAccSide): int
+    {
+        // FX kategorie dohledávají analytiku maskou (563/311) — bez účtů skip.
+        foreach (['563', '311'] as $prefix) {
+            if (!$this->hasAccountWithPrefix($prefix)) {
+                $this->markTestSkipped("DS nemá analytický účet s prefixem {$prefix}.");
+            }
+        }
+
+        $seq = random_int(900_000_000, 999_999_999);
+        $ourNumber = self::FIXTURE_PREFIX . '-FX-' . $seq;
+
+        $fxRow = [
+            'operation'        => 'acc.fxLossReceivable',
+            'totalPrice'       => 50806.73,
+            'paymentReference' => '1300001',
+        ];
+        if ($withAccSide) {
+            $fxRow['accSide'] = 'credit';
+        }
+
+        $canonical = [
+            'format'        => 'shpd.docs.document',
+            'formatVersion' => '1.0',
+            'docType'       => 'accountingDocument',
+            'source'        => ['kind' => 'import'],
+            'dates'         => ['issueDate' => '2026-06-10', 'accountingDate' => '2026-06-10'],
+            'rows'          => [$fxRow],
+            '_resolve'      => [
+                'rows' => [0 => ['partner' => ['userAction' => 'useExisting:' . $this->partnerId]]],
+            ],
+            'applyOptions'  => [
+                'targetDocState' => 40,
+                'importNumber'   => ['docNumber' => $ourNumber, 'sequenceNumber' => $seq],
+            ],
+        ];
+
+        $result = $this->applier->apply($canonical);
+        $this->assertTrue(
+            $result->success,
+            'apply selhal: ' . $result->errorCode . ' — ' . $result->errorMessage
+            . ' / ' . json_encode($result->canonical['_resolve']['issues'] ?? []),
+        );
+        $docId = (int) $result->savedId;
+        $this->createdDocIds[] = $docId;
+        return $docId;
+    }
+
+    /**
+     * Deník FX dokladu: 2 zápisy (MD 563xxx / DAL 311xxx), vyrovnané,
+     * identita (partner + payment_reference) na obou.
+     *
+     * @param array<string, mixed>|\Dibi\Row $head
+     */
+    private function assertFxJournalBalanced(mixed $head): void
+    {
+        $this->assertContains((int) $head['accounting_state'], [1, 2]);
+        if ((int) $head['accounting_state'] !== 1) {
+            return;
+        }
+
+        $journal = $this->db->fetchAll(
+            'SELECT * FROM economy_accounting_journal WHERE doc_head = %i',
+            (int) $head['id'],
+        );
+        $this->assertCount(2, $journal);
+
+        $dr = array_sum(array_map(fn($l) => (float) $l['money_dr'], $journal));
+        $cr = array_sum(array_map(fn($l) => (float) $l['money_cr'], $journal));
+        $this->assertEqualsWithDelta(50806.73, $dr, 0.001);
+        $this->assertEqualsWithDelta($dr, $cr, 0.001);
+
+        $md = $this->lineByPrefix($journal, '563');
+        $this->assertEqualsWithDelta(50806.73, (float) $md['money_dr'], 0.001);
+        $dal = $this->lineByPrefix($journal, '311');
+        $this->assertEqualsWithDelta(50806.73, (float) $dal['money_cr'], 0.001);
+
+        foreach ([$md, $dal] as $line) {
+            $this->assertSame($this->partnerId, (int) $line['partner']);
+            $this->assertSame('1300001', (string) $line['payment_reference']);
+        }
+    }
+
+    /** @param array<int, mixed> $journal */
+    private function lineByPrefix(array $journal, string $prefix): mixed
+    {
+        foreach ($journal as $line) {
+            if (str_starts_with((string) $line['account_number'], $prefix)) {
+                return $line;
+            }
+        }
+        $this->fail("Deník nemá zápis na účtu s prefixem {$prefix}.");
+    }
+
+    private function hasAccountWithPrefix(string $prefix): bool
+    {
+        return $this->db->fetchRow(
+            'SELECT id FROM economy_accounting_accounts WHERE number LIKE %s'
+            . ' AND account_level = 4 AND docState IN (%i, %i, %i) LIMIT 1',
+            $prefix . '%', 10, 40, 80,
+        ) !== null;
+    }
+
     private function accountId(string $number): int
     {
         $row = $this->db->fetchRow(

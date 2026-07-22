@@ -6,6 +6,7 @@ namespace Shipard\Module\Docs\AccountingDocs;
 
 use Shipard\Core\Document\ValidationError;
 use Shipard\Core\Document\ValidationResult;
+use Shipard\Module\Docs\Core\DocRowOperationRules;
 use Shipard\Module\Docs\Core\DocsHeadsDocument;
 
 /**
@@ -63,18 +64,26 @@ class AccountingDocument extends DocsHeadsDocument
     /**
      * Součty z řádků: total_amount = Σ total_price řádků na straně MD
      * (acc_side = 0). Vyrovnaný doklad má Σ MD == Σ DAL, takže total_amount
-     * je hodnota dokladu. Bez DPH a zaokrouhlení.
+     * je hodnota dokladu. Samovyvažující řádek (FX) účtuje MD i DAL stejnou
+     * částkou — do Σ MD se počítá jednou, uložený acc_side se ignoruje
+     * (migrace ho může poslat ze zdroje). Bez DPH a zaokrouhlení.
      *
      * @param array<int, array<string, mixed>> $rows
      */
     protected function sumTotals(array &$data, array $recap, array $rows = []): void
     {
+        $cfgOps = $this->rowOperationsCfg();
+
         $sumDr = 0.0;
         foreach ($rows as $row) {
             if ((int) ($row['row_kind'] ?? 1) !== 1) {
                 continue;
             }
-            if ((int) ($row['acc_side'] ?? 0) === 0) {
+            $selfBalancing = DocRowOperationRules::isSelfBalancing(
+                (string) ($row['operation'] ?? ''),
+                $cfgOps,
+            );
+            if ($selfBalancing || (int) ($row['acc_side'] ?? 0) === 0) {
                 $sumDr += (float) ($row['total_price'] ?? 0);
             }
         }
@@ -88,11 +97,16 @@ class AccountingDocument extends DocsHeadsDocument
     /**
      * Kontrola vyrovnanosti při potvrzení (stav 40): každý kontační řádek
      * musí mít stranu, účet (acc.record) nebo položku (acc.item) a nenulovou
-     * částku; Σ MD musí být rovno Σ DAL. Chyby řádků konvencí
+     * částku; Σ MD musí být rovno Σ DAL. Samovyvažující operace
+     * (`selfBalancing: 1` — kroky předpisu pokrývají obě strany, FX) stranu
+     * nenesou: řádek se počítá do MD i DAL stejnou částkou a případný
+     * uložený acc_side se ignoruje. Chyby řádků konvencí
      * `rows.{index}.{column}`, nevyrovnanost jako form-level chyba.
      */
     private function validateBalance(array &$data, ValidationResult $result): void
     {
+        $cfgOps = $this->rowOperationsCfg();
+
         $sumDr = 0.0;
         $sumCr = 0.0;
 
@@ -105,6 +119,16 @@ class AccountingDocument extends DocsHeadsDocument
             $total = (float) ($row['total_price'] ?? 0);
             $op    = (string) ($row['operation'] ?? '');
 
+            if ($total === 0.0) {
+                $result->addError("rows.{$i}.total_price", 'Částka řádku nesmí být nulová', 'amount_required');
+            }
+
+            if (DocRowOperationRules::isSelfBalancing($op, $cfgOps)) {
+                $sumDr += $total;
+                $sumCr += $total;
+                continue;
+            }
+
             if ($side === null || $side === '') {
                 $result->addError("rows.{$i}.acc_side", 'Vyberte stranu (Má dáti / Dal)', 'acc_side_required');
             }
@@ -113,9 +137,6 @@ class AccountingDocument extends DocsHeadsDocument
             }
             if ($op === 'acc.item' && empty($row['item'])) {
                 $result->addError("rows.{$i}.item", 'Účetní položka musí mít vyplněnou položku', 'item_required');
-            }
-            if ($total === 0.0) {
-                $result->addError("rows.{$i}.total_price", 'Částka řádku nesmí být nulová', 'amount_required');
             }
 
             if ((int) $side === 0) {
@@ -132,5 +153,17 @@ class AccountingDocument extends DocsHeadsDocument
                 'unbalanced',
             );
         }
+    }
+
+    /**
+     * cfgItem docs.core.rowOperations; bez configu (unit testy, degradovaný
+     * běh) prázdné pole — žádná operace pak není samovyvažující.
+     *
+     * @return array<string, mixed>
+     */
+    private function rowOperationsCfg(): array
+    {
+        $cfg = $this->config?->cfgItem('docs.core.rowOperations');
+        return is_array($cfg) ? $cfg : [];
     }
 }

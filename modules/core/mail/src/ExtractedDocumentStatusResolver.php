@@ -95,6 +95,13 @@ class ExtractedDocumentStatusResolver
      * enrichmentu. Kontační řádky (acc.record) položku nemají validně,
      * strop se jich netýká.
      *
+     * Řádek doplněný enrichmentem s confidence `low` (dominantní položka
+     * partnera, bez textového signálu) se jako pokrytý nepočítá — dokument
+     * zůstává pending_review a uživatel návrh potvrzuje
+     * (`tasks/enrichment-dominant-item.md`, D5). Textové matche
+     * (`high`/`medium`) beze změny; řádky s ourCode od AI mají
+     * `confidence: null` → stropu se netýkají.
+     *
      * @param array<string, mixed> $canonical
      */
     public function capStatusByRowCoverage(int $status, array $canonical): int
@@ -103,14 +110,44 @@ class ExtractedDocumentStatusResolver
             return $status;
         }
         $rows = is_array($canonical['rows'] ?? null) ? $canonical['rows'] : [];
-        foreach ($rows as $row) {
+        $enrichments = $this->enrichmentsByRowIndex($canonical);
+        foreach ($rows as $idx => $row) {
             if (!is_array($row) || !RowHistoryEnricher::rowExpectsItem($row)) {
                 continue;
             }
             if (trim((string) ($row['item']['ourCode'] ?? '')) === '') {
                 return ExtractedDocumentDocument::STATUS_PENDING_REVIEW;
             }
+            if (($enrichments[$idx]['confidence'] ?? null) === 'low') {
+                return ExtractedDocumentDocument::STATUS_PENDING_REVIEW;
+            }
         }
         return $status;
+    }
+
+    /**
+     * Enrichment audit bloky z `_resolve.rows` mapované na index řádku
+     * canonical (jen array entries s array `enrichment`).
+     *
+     * @param array<string, mixed> $canonical
+     * @return array<int, array<string, mixed>>
+     */
+    private function enrichmentsByRowIndex(array $canonical): array
+    {
+        $resolveRows = $canonical['_resolve']['rows'] ?? null;
+        if (!is_array($resolveRows)) {
+            return [];
+        }
+        $map = [];
+        foreach ($resolveRows as $entry) {
+            if (!is_array($entry) || !is_array($entry['enrichment'] ?? null)) {
+                continue;
+            }
+            $idx = $entry['index'] ?? null;
+            if (is_int($idx)) {
+                $map[$idx] = $entry['enrichment'];
+            }
+        }
+        return $map;
     }
 }

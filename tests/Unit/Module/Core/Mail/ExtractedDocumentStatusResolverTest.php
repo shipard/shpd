@@ -162,4 +162,70 @@ class ExtractedDocumentStatusResolverTest extends TestCase
             ),
         );
     }
+
+    public function testCapDowngradesReadyWhenRowEnrichedWithLowConfidence(): void
+    {
+        // Dominance návrh (historyDominantItem / low) vyplní ourCode, ale
+        // řádek se jako pokrytý nepočítá — dokument zůstává pending_review
+        // (tasks/enrichment-dominant-item.md, D5).
+        $canonical = [
+            'rows' => [
+                ['rowKind' => 'item', 'item' => ['ourCode' => 'MAT']],
+            ],
+            '_resolve' => ['rows' => [
+                ['index' => 0, 'enrichment' => [
+                    'matchedBy'  => 'historyDominantItem',
+                    'confidence' => 'low',
+                    'suggested'  => ['ourCode' => 'MAT'],
+                ]],
+            ]],
+        ];
+
+        $this->assertSame(
+            ExtractedDocumentDocument::STATUS_PENDING_REVIEW,
+            $this->resolver()->capStatusByRowCoverage(
+                ExtractedDocumentDocument::STATUS_READY_TO_APPLY,
+                $canonical,
+            ),
+        );
+    }
+
+    public function testCapKeepsReadyForTextMatchesAndSkippedRows(): void
+    {
+        // Textové matche (high/medium) i řádky s ourCode od AI
+        // (skipped: hasOurCode, confidence: null) stropu nepodléhají.
+        $canonical = [
+            'rows' => [
+                ['rowKind' => 'item', 'item' => ['ourCode' => 'NET500']],
+                ['rowKind' => 'item', 'item' => ['ourCode' => 'RENT-A']],
+                ['rowKind' => 'item', 'item' => ['ourCode' => 'X1']],
+            ],
+            '_resolve' => ['rows' => [
+                ['index' => 0, 'enrichment' => [
+                    'matchedBy'  => 'historyExactRaw',
+                    'confidence' => 'high',
+                    'suggested'  => ['ourCode' => 'NET500'],
+                ]],
+                ['index' => 1, 'enrichment' => [
+                    'matchedBy'  => 'historyFuzzy',
+                    'confidence' => 'medium',
+                    'suggested'  => ['ourCode' => 'RENT-A'],
+                ]],
+                ['index' => 2, 'enrichment' => [
+                    'matchedBy'  => null,
+                    'confidence' => null,
+                    'skipped'    => 'hasOurCode',
+                    'suggested'  => [],
+                ]],
+            ]],
+        ];
+
+        $this->assertSame(
+            ExtractedDocumentDocument::STATUS_READY_TO_APPLY,
+            $this->resolver()->capStatusByRowCoverage(
+                ExtractedDocumentDocument::STATUS_READY_TO_APPLY,
+                $canonical,
+            ),
+        );
+    }
 }

@@ -61,9 +61,8 @@ Fáze 1 (widget MVP) říkala *„přehled, ne přístupový bod"*. Fáze 2 ten 
                    ▼
               Feed.svelte ── FeedCard × N
                               │
-                              ├─ apply_extracted  → apply(ndx) → toast+undo
-                              │     └─ nevyřešeno → review modal (fall-through)
                               ├─ review_extracted → DocumentExchangePreviewModal
+                              │     └─ Použít → apply(ndx) → FormDialog/toast
                               ├─ reject_extracted → RejectReasonPrompt → reject
                               ├─ reanalyze        → reanalyze(msgNdx)
                               └─ open_viewer/open_form → navigace
@@ -269,32 +268,42 @@ headline), frontend beze změny.
 
 ## 6. Akce a jejich sémantika
 
-### 6.1 `apply_extracted` — optimistický jednoklik
+### 6.1 Vystavení — „Použít“ v review modalu
 
-1. Karta ve stavu 10 ukáže primární **„Použít"**.
-2. Klik → `applyExtractedDocument(ndx)` (bez `userActions` → `safe` mód,
-   `targetDocState=10`).
-3. **Úspěch** → toast *„Vytvořen koncept #123 [Otevřít] [Vrátit]"*, karta zmizí
-   (optimisticky), refetch.
-4. **Reference nevyřešeny** — backend vrátí `unresolved_required` (HTTP 422) →
-   frontend **automaticky otevře `DocumentExchangePreviewModal`** místo chyby.
-   Uživatel dořeší reference a potvrdí odtud (`handleApplyFromModal` posílá
-   nasbírané `userActions` → strict mód).
+Jednoklikové `apply_extracted` z karty bylo odstraněno — karta ve stavu 10 má
+primární **„Zkontrolovat“** stejně jako 20/30 (uživatel extrakci před
+potvrzením vždy vidí v náhledu; stav 10 se liší jen vizuálně — kind/ikona).
+Vystavení:
+
+1. „Zkontrolovat“ otevře `DocumentExchangePreviewModal`; „Použít“ →
+   `applyExtractedDocument(ndx, userActions)` — nasbíraná rozhodnutí referencí
+   → strict mód; bez nich safe mód (`targetDocState=10`).
+2. **Úspěch, target docs** → vystavený Koncept se rovnou otevře ve
+   `FormDialog` (uživatel ho zkontroluje a může rovnou uzavřít 10→20);
+   žádný toast.
+3. **Úspěch, target registry** → toast *„Dokument #123 zařazen do Spisovny
+   [Otevřít]“*.
+4. Karta zmizí optimisticky, refetch.
 
 ### 6.2 `review_extracted` — review modal
 
 Otevře `DocumentExchangePreviewModal` na `extractedNdx` (PDF vlevo, kanonický
 náhled vpravo, resolve panel, `Použít` gated `canApply`). `onReject(ndx)` →
-`RejectReasonPrompt`.
+`RejectReasonPrompt`. „Použít“ volá `onApply(ndx, userActions, target)` —
+target (`docs`/`registry`) z preview endpointu řídí post-apply UX (§6.1).
 
 ### 6.3 `reject_extracted` — prompt na důvod
 
 Sdílená komponenta `RejectReasonPrompt` (povinný neprázdný důvod) →
 `rejectExtractedDocument(ndx, reason)`. Používá ji feed i modal i ViewerDetail.
 
-### 6.4 Undo — `unapply`
+### 6.4 `unapply` — bez UI, endpoint zachován
 
-`POST /_mail/extracted-documents/{ndx}/unapply` (viz §7). Toast „Vrátit" po apply.
+`POST /_mail/extracted-documents/{ndx}/unapply` (viz §7) ztratil UI — toast
+„Vrátit“ po apply byl odstraněn. Endpoint zůstává jako záchranná brzda
+(MCP / ruční volání). **Známý dluh**: shodí-li uživatel vystavený Koncept
+do Koše ručně z formuláře, reverzní reconciliace (extracted 40→20, zpráva
+40→30) neproběhne — dělá ji jen tento endpoint.
 Logika (`ExtractedDocumentApplier::unapply`):
 
 1. Extracted musí být `status=40` (applied) s `target_row_ndx > 0`, jinak
@@ -362,7 +371,8 @@ Generované AI shrnutí feedu (fáze 2b, §11). Události:
 ```
 frontend/src/components/dashboard/
 ├── Dashboard.svelte      — fetch, layout, review modal,
-│                           reject prompt, toast s undo, fall-through
+│                           reject prompt, form po vystavení,
+│                           toast (registry / auto-archiv)
 ├── Feed.svelte           — grid karet (auto-fill minmax(360px,1fr) → 2 sloupce
 │                           na desktopu, 1 na mobilu; row-major = serverové
 │                           řazení; stejná výška karet v řádku, žádný masonry),
@@ -405,7 +415,7 @@ API: `frontend/src/api/dashboard.js` (`fetchDashboard()`,
   override `.shpd-feed-card.docState_done → --shpd-row-bar: success` v scoped
   CSS FeedCard — globální `.docState_done` se nemění.
 - **Toast**: app nemá toast infrastrukturu → minimální lokální toast v
-  `Dashboard.svelte` (fixed dole, „Otevřít"/„Vrátit", auto-dismiss ~8 s).
+  `Dashboard.svelte` (fixed dole, „Otevřít“ u registry, auto-dismiss ~8 s).
   Bottom offset `calc(var(--shpd-space-lg) + 72px)` — vyskakuje nad
   ChatLauncherem, nepřekrývají se.
 - **Boční AI chat panel**: `ChatPanel.svelte` (components/chat/) mountovaný
@@ -422,8 +432,9 @@ API: `frontend/src/api/dashboard.js` (`fetchDashboard()`,
 
 `Dashboard.svelte` drží `formModal = {open, table, recordId, wasSaved}` a
 mountuje `<FormDialog>` — obsluhuje `open_form` akce karet (alerty, chybové
-karty, „Není faktura“…) a toast „Otevřít“ (otevře vytvořený Koncept nad
-`docs_core_heads`). Refetch po close je podmíněný (`wasSaved` se nastaví jen
+karty, „Není faktura“…) vystavenou fakturu po apply z review
+modalu (rovnou, bez toastu) a toast „Otevřít“ u Spisovny
+(`base_registry_documents`). Refetch po close je podmíněný (`wasSaved` se nastaví jen
 v `onSaved`):
 
 | Scénář | Refetch? |

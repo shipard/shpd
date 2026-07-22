@@ -5,7 +5,6 @@
   import { fetchDashboard, setMessageDocState } from '../../api/dashboard.js';
   import {
     applyExtractedDocument,
-    unapplyExtractedDocument,
     rejectExtractedDocument,
     reanalyzeMessage,
   } from '../../api/exchange.js';
@@ -57,20 +56,23 @@
       : (data?.cards ?? []).filter((c) => c.category === feedFilter),
   );
 
-  // Karta s právě běžící inline akcí (apply/reanalyze) → disabluje její tlačítka.
+  // Karta s právě běžící inline akcí (reanalyze, koš/archiv, pravidla)
+  // → disabluje její tlačítka.
   let busyCardId = $state(null);
 
-  // Review modal (fall-through i „Zkontrolovat") a reject prompt drží extractedNdx.
+  // Review modal („Zkontrolovat“) a reject prompt drží extractedNdx.
   let previewNdx = $state(null);
   let rejectNdx = $state(null);
   let rejectSubmitting = $state(false);
 
-  // Form modal (alert open_form + toast „Otevřít"). wasSaved viz handleFormClose.
+  // Form modal — alert open_form, toast „Otevřít“ (registry) a vystavená
+  // faktura po apply z review modalu. wasSaved viz handleFormClose.
   let formModal = $state({ open: false, table: '', recordId: null, wasSaved: false });
 
-  // Minimální lokální toast (app nemá toast infra). kind: 'applied' → Otevřít+Vrátit.
-  // docTable řídí, kterou tabulku „Otevřít" otevře (docs vs. Spisovna).
-  let toast = $state({ visible: false, kind: null, message: '', docId: null, extractedNdx: null, docTable: null });
+  // Minimální lokální toast (app nemá toast infra). kind: 'applied' → Otevřít.
+  // docTable řídí, kterou tabulku „Otevřít“ otevře — dnes jen Spisovna;
+  // vystavená faktura (docs) se místo toastu otevírá rovnou ve FormDialogu.
+  let toast = $state({ visible: false, kind: null, message: '', docId: null, docTable: null });
   let toastTimer = null;
 
   async function load() {
@@ -95,13 +97,13 @@
 
   function showToast(next) {
     clearTimeout(toastTimer);
-    toast = { visible: true, docId: null, extractedNdx: null, docTable: null, ...next };
+    toast = { visible: true, docId: null, docTable: null, ...next };
     toastTimer = setTimeout(dismissToast, 8000);
   }
 
   function dismissToast() {
     clearTimeout(toastTimer);
-    toast = { visible: false, kind: null, message: '', docId: null, extractedNdx: null, docTable: null };
+    toast = { visible: false, kind: null, message: '', docId: null, docTable: null };
   }
 
   function openCreatedDoc() {
@@ -110,19 +112,6 @@
     dismissToast();
     if (docId) {
       formModal = { open: true, table: docTable, recordId: docId, wasSaved: false };
-    }
-  }
-
-  async function undoApply() {
-    const ndx = toast.extractedNdx;
-    dismissToast();
-    if (!ndx) return;
-    const result = await unapplyExtractedDocument(ndx);
-    if (result?.success) {
-      showToast({ kind: 'reverted', message: t('dashboard.toast.reverted') });
-      load();
-    } else {
-      alert(t('dashboard.card.actionFailed', { msg: translateError(result?.error) }));
     }
   }
 
@@ -141,8 +130,6 @@
   function handleCardAction(card, action) {
     const target = action.target ?? {};
     switch (action.kind) {
-      case 'apply_extracted':
-        return applyFlow(target.extractedNdx, card.id, card.context?.target);
       case 'review_extracted':
         previewNdx = target.extractedNdx;
         return;
@@ -173,42 +160,6 @@
         return;
       default:
         console.warn('Unknown card action kind:', action.kind);
-    }
-  }
-
-  // Toast payload dle targetu extrakce: registry karty otevírají dokument
-  // Spisovny a nesou vlastní hlášku „Zařazeno…"; docs beze změny.
-  function appliedToast(cardTarget, docId, extractedNdx) {
-    const isRegistry = cardTarget === 'registry';
-    return {
-      kind: 'applied',
-      message: isRegistry
-        ? t('dashboard.toast.appliedRegistry', { id: docId })
-        : t('dashboard.toast.applied', { id: docId }),
-      docId,
-      extractedNdx,
-      docTable: isRegistry ? REGISTRY_TABLE : HEADS_TABLE,
-    };
-  }
-
-  // Jednoklik apply (safe mód). Fall-through: nevyřešené reference → review modal.
-  async function applyFlow(extractedNdx, cardId, cardTarget = null) {
-    if (busyCardId !== null || !extractedNdx) return;
-    busyCardId = cardId;
-    try {
-      const result = await applyExtractedDocument(extractedNdx);
-      if (result?.success) {
-        const docId = result.data?.savedDocId ?? 0;
-        dropCardById(cardId);
-        showToast(appliedToast(cardTarget, docId, extractedNdx));
-        load();
-      } else if (result?.error?.code === 'unresolved_required') {
-        previewNdx = extractedNdx; // fall-through — dořeší v modalu
-      } else {
-        alert(t('dashboard.card.actionFailed', { msg: translateError(result?.error) }));
-      }
-    } finally {
-      busyCardId = null;
     }
   }
 
@@ -285,16 +236,26 @@
 
   // ── Review modal ─────────────────────────────────────────────────────────────
 
-  async function handleApplyFromModal(extractedNdx, userActions = null) {
-    const cardTarget = data?.cards?.find(
-      (c) => c.context?.extractedNdx === extractedNdx,
-    )?.context?.target ?? null;
+  // Apply z review modalu — jediná cesta vystavení extrakce (target přichází
+  // z modalu, který ho má z preview endpointu). Docs → vystavený Koncept se
+  // rovnou otevře ve FormDialogu (kontrola + případné uzavření); registry →
+  // toast „Zařazeno… [Otevřít]“ (u Spisovny není co uzavírat).
+  async function handleApplyFromModal(extractedNdx, userActions = null, target = 'docs') {
     const result = await applyExtractedDocument(extractedNdx, userActions);
     if (result?.success) {
       const docId = result.data?.savedDocId ?? 0;
       previewNdx = null;
       dropCardByExtracted(extractedNdx);
-      showToast(appliedToast(cardTarget, docId, extractedNdx));
+      if (target === 'registry') {
+        showToast({
+          kind: 'applied',
+          message: t('dashboard.toast.appliedRegistry', { id: docId }),
+          docId,
+          docTable: REGISTRY_TABLE,
+        });
+      } else if (docId) {
+        formModal = { open: true, table: HEADS_TABLE, recordId: docId, wasSaved: false };
+      }
       load();
     } else {
       alert(t('dashboard.card.actionFailed', { msg: translateError(result?.error) }));
@@ -415,7 +376,6 @@
     <span class="shpd-toast__msg">{toast.message}</span>
     {#if toast.kind === 'applied'}
       <button type="button" class="shpd-toast__action" onclick={openCreatedDoc}>{t('dashboard.toast.open')}</button>
-      <button type="button" class="shpd-toast__action" onclick={undoApply}>{t('dashboard.toast.undo')}</button>
     {/if}
     <button type="button" class="shpd-toast__close" onclick={dismissToast} aria-label={t('common.cancel')}>×</button>
   </div>

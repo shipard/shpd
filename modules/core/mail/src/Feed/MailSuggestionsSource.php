@@ -16,9 +16,11 @@ use Shipard\Module\Core\Mail\ExtractedDocumentDocument;
  *
  * Návrhové karty: `core_mail_extracted_documents.status ∈ {10,20,30}` join na
  * `core_mail_incoming_messages` (kontext subject/sender/received_at). Mapování:
- *   - 10 → kind=ready  (jednoklik apply + review + reject)
- *   - 20/30 → kind=review (review primary + reject; jednoklik se u nízké
- *     jistoty záměrně nenabízí)
+ *   - 10 → kind=ready (vizuální odlišení „AI si je jistá“)
+ *   - 20/30 → kind=review
+ *   Akce jsou pro všechny stavy shodné: review (primary) + reject —
+ *   vystavení jde vždy přes review modal, jednoklikové apply z karty
+ *   bylo odstraněno.
  * Doklady s `doc_type='other'` se ignorují (pojistka — prompt v2.2.0 je
  * zakazuje, starší analýzy je mohly vytvořit).
  * Chybové karty: zpráva `analysis_state=70` (Analýza selhala) mimo Archiv/Koš
@@ -171,20 +173,13 @@ final class MailSuggestionsSource implements FeedSource
         };
 
         $target = ['extractedNdx' => $extractedNdx];
-        if ($status === ExtractedDocumentDocument::STATUS_READY_TO_APPLY) {
-            // Registry apply má vlastní id → FE label „Zařadit" místo „Použít"
-            // (FeedCard lokalizuje podle action.id, kind zůstává apply_extracted).
-            $actions = [
-                ['id' => $isRegistry ? 'apply_registry' : 'apply', 'kind' => 'apply_extracted', 'target' => $target, 'primary' => true],
-                ['id' => 'review', 'kind' => 'review_extracted', 'target' => $target],
-                ['id' => 'reject', 'kind' => 'reject_extracted', 'target' => $target],
-            ];
-        } else {
-            $actions = [
-                ['id' => 'review', 'kind' => 'review_extracted', 'target' => $target, 'primary' => true],
-                ['id' => 'reject', 'kind' => 'reject_extracted', 'target' => $target],
-            ];
-        }
+        // Vystavení jde vždy přes review modal (kontrola náhledu před
+        // potvrzením) — jednoklikové apply z karty bylo odstraněno, stav 10
+        // se liší jen vizuálně (kind/ikona).
+        $actions = [
+            ['id' => 'review', 'kind' => 'review_extracted', 'target' => $target, 'primary' => true],
+            ['id' => 'reject', 'kind' => 'reject_extracted', 'target' => $target],
+        ];
 
         $card = [
             'id'         => 'mail_extracted:' . $extractedNdx,

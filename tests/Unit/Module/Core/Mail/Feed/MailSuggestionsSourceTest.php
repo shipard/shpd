@@ -137,9 +137,9 @@ final class MailSuggestionsSourceTest extends TestCase
         $this->assertSame('2026-06-28T10:00:00+00:00', $card['timestamp']);
 
         $actionIds = array_column($card['actions'], 'id');
-        $this->assertSame(['apply', 'review', 'reject'], $actionIds);
+        $this->assertSame(['review', 'reject'], $actionIds);
         $this->assertTrue($card['actions'][0]['primary']);
-        $this->assertSame('apply_extracted', $card['actions'][0]['kind']);
+        $this->assertSame('review_extracted', $card['actions'][0]['kind']);
         $this->assertSame(['extractedNdx' => 1], $card['actions'][0]['target']);
         $this->assertSame(1, $card['context']['extractedNdx']);
         $this->assertSame(101, $card['context']['messageNdx']);
@@ -345,9 +345,9 @@ final class MailSuggestionsSourceTest extends TestCase
         $this->assertSame([['label' => 'Platí do', 'value' => '31. 12. 2026']], $card['details']);
         $this->assertSame('registry', $card['category']);
         $this->assertSame('registry', $card['context']['target']);
-        // apply akce má id apply_registry → FE label „Zařadit"; kind beze změny
-        $this->assertSame('apply_registry', $card['actions'][0]['id']);
-        $this->assertSame('apply_extracted', $card['actions'][0]['kind']);
+        // vystavení jen přes review modal — primary akce je review i ve stavu 10
+        $this->assertSame('review', $card['actions'][0]['id']);
+        $this->assertSame('review_extracted', $card['actions'][0]['kind']);
         $this->assertTrue($card['actions'][0]['primary']);
     }
 
@@ -383,7 +383,7 @@ final class MailSuggestionsSourceTest extends TestCase
         $cards = $src->collectCards($this->context([$this->suggestionRow(10)], [], $this->registryConfig()));
 
         $this->assertSame('docs', $cards[0]['context']['target']);
-        $this->assertSame('apply', $cards[0]['actions'][0]['id']);
+        $this->assertSame('review', $cards[0]['actions'][0]['id']);
     }
 
     public function testNotInvoiceQueryFiltersPrimaryTypeOther(): void

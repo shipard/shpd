@@ -425,7 +425,8 @@ CLI `bin/shpd-ds mail-analysis-reap` (cron 1×/min) vyčistí stale claimy:
 
 ### 9.11 `POST /_mail/extracted-documents/{ndx}/unapply`
 
-UI akce „Vrátit" (dashboard feed undo). Auth: běžný uživatelský token. Vratí
+Bez UI (toast „Vrátit“ byl z dashboardu odstraněn) — záchranná brzda pro
+MCP / ruční volání. Auth: běžný uživatelský token. Vratí
 předchozí apply — viz `ExtractedDocumentApplier::unapply`. Transakčně:
 
 1. Extracted musí být `status=40` (applied) s `target_row_ndx > 0`, jinak

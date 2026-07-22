@@ -65,26 +65,8 @@
   let rejectDialogDoc = $state(null);
   let rejectSubmitting = $state(false);
 
-  // --- Extracted documents — apply confirmation ---
+  // --- Extracted documents — apply jde výhradně přes preview modal ---
   let actionInFlightNdx = $state(null);
-
-  async function applyDocument(doc) {
-    if (actionInFlightNdx !== null) return;
-    actionInFlightNdx = doc.ndx;
-    try {
-      // Dedikovaný endpoint, který prochází přes Document hooks (validate,
-      // beforeSave, afterPersist) — generic PATCH by je obešel a auto-transition
-      // zprávy 30→40 by se nespustil.
-      const result = await post(`/_mail/extracted-documents/${doc.ndx}/apply`, {});
-      if (result?.success) {
-        onRefresh?.();
-      } else {
-        alert(t('viewer.detail.applyFailed', { msg: translateError(result?.error) }));
-      }
-    } finally {
-      actionInFlightNdx = null;
-    }
-  }
 
   function openRejectDialog(doc) {
     rejectDialogDoc = doc;
@@ -120,18 +102,28 @@
     previewModalNdx = null;
   }
 
-  // Apply from modal — Phase 3b passes accumulated userActions (flat
-  // {path: action} map) for backend strict-mode resolution. Phase 2
-  // callsite (inline "Použít" button) still uses post() directly with
-  // empty body → safe mode.
-  async function handleApplyFromModal(extractedNdx, userActions = null) {
+  // Apply from modal — the only apply entry point (the inline button was
+  // removed; the user always confirms over the split-view preview).
+  // `userActions` (flat {path: action} map) drives backend strict-mode
+  // resolution. On success for the docs target the created Koncept opens
+  // right away in the Viewer's FormDialog via the generic `open_form`
+  // detail-action branch (same pattern as fileToRegistry).
+  async function handleApplyFromModal(extractedNdx, userActions = null, target = 'docs') {
     if (actionInFlightNdx !== null) return;
     actionInFlightNdx = extractedNdx;
     try {
       const result = await applyExtractedDocument(extractedNdx, userActions);
       if (result?.success) {
+        const savedDocId = result.data?.savedDocId ?? 0;
         closePreviewModal();
         onRefresh?.();
+        if (target !== 'registry' && savedDocId) {
+          onAction?.('openCreatedDoc', {
+            id: 'openCreatedDoc',
+            kind: 'open_form',
+            target: { table: 'docs_core_heads', mode: 'edit', id: savedDocId },
+          });
+        }
       } else {
         // unresolved_required after a successful preview means DB state
         // shifted between preview and apply (rare race). Keep the modal
@@ -328,15 +320,6 @@
                     size="sm"
                     onclick={() => openPreviewModal(doc)}
                   />
-                  {#if doc.can_apply}
-                    <Button
-                      label={t('viewer.detail.apply')}
-                      variant="success"
-                      size="sm"
-                      disabled={actionInFlightNdx === doc.ndx}
-                      onclick={() => applyDocument(doc)}
-                    />
-                  {/if}
                   {#if doc.can_reject}
                     <Button
                       label={t('viewer.detail.reject')}

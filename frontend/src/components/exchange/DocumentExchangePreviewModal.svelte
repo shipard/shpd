@@ -17,7 +17,8 @@
   //   - `canApply` is true only when all non-matched references have a
   //     decision (or are explicitly skipped). Unit / vatCode badges don't
   //     gate apply — the applier has fallback defaults.
-  //   - "Použít" passes `userActions` to onApply for the API call.
+  //   - "Použít" passes `userActions` and the doc target ('docs' /
+  //     'registry') to onApply — parents branch post-apply UX on it.
   //
   // Mobile (<768px): single column with PDF/Preview tab switcher.
 
@@ -114,7 +115,7 @@
   );
 
   function handleApplyClick() {
-    onApply(extractedNdx, userActions);
+    onApply(extractedNdx, userActions, data?.target ?? 'docs');
   }
 </script>
 

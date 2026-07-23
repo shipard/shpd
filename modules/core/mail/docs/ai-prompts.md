@@ -24,7 +24,7 @@ Audit běhu: každý `core_mail_message_analyses` row si propíše `profile_ndx`
 `backend_ndx` a `prompt_version`, takže historie je auditovatelná i po pozdějších
 změnách profilu.
 
-## Default prompt (v3.1.0)
+## Default prompt (v3.2.0)
 
 Od `v2.0.0` AI vrací data přímo v kanonickém **`shpd.docs.document.v1`**
 formátu (viz [`docs/exchange-format.md`](../../../../docs/exchange-format.md))
@@ -43,7 +43,7 @@ Klíčové pokyny v promptu:
   ISO 3166-1 alpha-2 lowercase (`cz`).
 - `selfParty` vždy `"customer"` (jsme příjemce přijaté faktury).
 - `source.kind` vždy `"aiExtraction"`, `source.promptVersion` vždy
-  shodná s `prompt_version` profilu (`v3.1.0`).
+  shodná s `prompt_version` profilu (`v3.2.0`).
 - VAT kódy v řádcích jsou klíče z `world.vat.{country}.vatCodes`
   cfgItem (`cz-110`, `cz-111`, …) — ne sazby v procentech.
 - `totals.totalRounding` = zaokrouhlení celkové částky se znaménkem
@@ -127,7 +127,7 @@ Plné schéma viz [`profiles/default_czech_invoices.jsonc`](../profiles/default_
    přes `shpd.docs.document.v1` (polymorfní dle `docType`, bez per-typ
    branche), registry typy přes `shpd.registry.document.v1` (nový druh =
    nová if/then větev `kindFields` v registry schématu + kopie embedu).
-5. Bumpni `prompt_version` (`v3.0.0` → `v3.1.0`).
+5. Bumpni `prompt_version` (`v3.1.0` → `v3.2.0`).
 
 ### Vlastní profil pro jiný jazyk / účel
 
@@ -185,6 +185,25 @@ backendů (`default` Anthropic Claude Sonnet pro běžné případy, druhý back
 s Claude Opus pro náročné dokumenty) a přiřadit je různým profilům.
 
 ## Changelog promptu
+
+### v3.2.0 (2026-07-23)
+
+Podpora účtenek / zjednodušených daňových dokladů — účtenky za palivo
+(sken z kopírky) model klasifikoval jako `other` s vysokou jistotou, protože
+prompt znal jen „přijatou fakturu nebo dobropis“:
+
+- TRIAGE i extrakční krok nově explicitně zahrnují účtenku / zjednodušený
+  daňový doklad (paragon) — klasifikuje i extrahuje se jako `invoiceReceived`.
+- Nový blok „PRAVIDLA PRO ÚČTENKY“: chybějící odběratel je v pořádku
+  (`customer: null`, `selfParty` zůstává `customer`), `docNumber` = číslo
+  účtenky, `issueDate` = `taxPointDate` = datum prodeje, `dueDate` se vynechává
+  (uhrazeno na místě), `payment.method` = `card`/`cash` dle dokladu.
+- Limit 10 000 Kč pro zjednodušený doklad je v promptu jen popisně — model
+  ho nevymáhá, extrahuje i účtenky nad limit.
+
+Žádná změna schématu ani PHP kódu: canonical schéma `customer` nevyžaduje
+a `DocumentApplier` při `selfParty=customer` resolvuje odběratele jako
+`resolveSelfParty()`; `card`/`cash` jsou v `PAYMENT_METHOD_MAP`.
 
 ### v3.1.0 (2026-07-23)
 

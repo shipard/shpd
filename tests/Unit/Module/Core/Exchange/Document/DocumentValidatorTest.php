@@ -174,6 +174,59 @@ class DocumentValidatorTest extends TestCase
         $this->assertNull($this->findByCode($issues, 'totals_mismatch'));
     }
 
+    public function testTotalsRoundedToWholeProducesNoWarning(): void
+    {
+        // FEINKOST scénář: recap dá 1709.05, deklarováno celých 1709.00 —
+        // zaokrouhlení celkové částky, warning nesmí vystřelit.
+        $issues = $this->v->validate([
+            'docType' => 'invoiceReceived',
+            'supplier' => ['name' => 'V'],
+            'dates' => ['issueDate' => '2026-04-15'],
+            'rows' => [
+                ['totalPrice' => 45.00, 'vat' => ['pct' => 12]],
+                ['totalPrice' => 1664.05, 'vat' => ['pct' => 21]],
+            ],
+            'vatRecap' => [
+                ['vatPct' => 12, 'base' => 40.18, 'tax' => 4.82, 'total' => 45.00],
+                ['vatPct' => 21, 'base' => 1375.25, 'tax' => 288.80, 'total' => 1664.05],
+            ],
+            'totals' => ['totalAmount' => 1709.00],
+        ]);
+        $this->assertNull($this->findByCode($issues, 'totals_mismatch'));
+    }
+
+    public function testTotalsNonWholeDeclaredWithSmallDiffStillWarns(): void
+    {
+        // Necelá deklarovaná částka nemůže být zaokrouhlením na celé
+        // jednotky — diff 0.05 nad tolerancí musí dál warnovat.
+        $issues = $this->v->validate([
+            'docType' => 'invoiceReceived',
+            'supplier' => ['name' => 'V'],
+            'dates' => ['issueDate' => '2026-04-15'],
+            'rows' => [
+                ['totalPrice' => 1000.00, 'vat' => ['pct' => 21]],
+            ],
+            'totals' => ['totalAmount' => 1209.95], // sumWithVat = 1210.00
+        ]);
+        $this->assertNotNull($this->findByCode($issues, 'totals_mismatch'));
+    }
+
+    public function testTotalsWholeDeclaredDiffAtLeastOneStillWarns(): void
+    {
+        // Celá deklarovaná částka, ale diff přesně 1.00 — to už není
+        // zaokrouhlení (pásmo je ostře < 1.00).
+        $issues = $this->v->validate([
+            'docType' => 'invoiceReceived',
+            'supplier' => ['name' => 'V'],
+            'dates' => ['issueDate' => '2026-04-15'],
+            'rows' => [
+                ['totalPrice' => 1000.00, 'vat' => ['pct' => 21]],
+            ],
+            'totals' => ['totalAmount' => 1209.00], // sumWithVat = 1210.00
+        ]);
+        $this->assertNotNull($this->findByCode($issues, 'totals_mismatch'));
+    }
+
     public function testFullValidPayloadProducesNoErrors(): void
     {
         $payload = json_decode(

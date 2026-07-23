@@ -998,6 +998,10 @@ class DocumentApplier
                                        ? strtolower((string) $canonical['currency'])
                                        : null,
             'exchange_rate'        => $canonical['exchangeRate'] ?? null,
+            // Odvozeno z čísel (computed vs declared), extrahovaný
+            // totals.totalRounding je jen informativní. Null → klíč vypadne
+            // přes array_filter níže a platí default 0 (bez zaokrouhlení).
+            'total_rounding_mode'  => $this->deriveTotalRoundingMode($canonical),
             'payment_method'       => $paymentMethod,
             'payment_reference'    => $canonical['payment']['paymentReference'] ?? null,
             'specific_symbol'      => $canonical['payment']['specificSymbol'] ?? null,
@@ -1016,6 +1020,98 @@ class DocumentApplier
             static fn($v, $k) => $v !== null || in_array($k, ['rows'], true),
             ARRAY_FILTER_USE_BOTH,
         ) + ['rows' => $data['rows']];
+    }
+
+    /**
+     * Odvodí `total_rounding_mode` z rozdílu mezi spočtenou a deklarovanou
+     * celkovou částkou. Konzervativně: mod se nastaví jen když se computed
+     * a declared liší o > 0,01 a < 1,00 a některý mod declared přesně
+     * reprodukuje; jinak null (default 0, případný totals_mismatch warning
+     * z validátoru zůstává v platnosti).
+     *
+     * Computed se bere z nejautoritativnějšího dostupného zdroje:
+     * Σ vatRecap[].total → totalBase + totalVat → Σ řádků s DPH per řádek.
+     * Matematický mod (1) má u shodného výsledku přednost před směrovými
+     * (3 = ceil, 4 = floor). DocDocument si pak total_amount/total_rounding
+     * dopočte sám z řádků — tady se výpočet neduplikuje, jen se volí mod.
+     *
+     * @param array<string, mixed> $canonical
+     */
+    private function deriveTotalRoundingMode(array $canonical): ?int
+    {
+        $totals = $canonical['totals'] ?? null;
+        if (!is_array($totals) || !isset($totals['totalAmount']) || !is_numeric($totals['totalAmount'])) {
+            return null;
+        }
+        $declared = round((float) $totals['totalAmount'], 2);
+
+        $computed = null;
+
+        // 1. Σ vatRecap[].total — jen když má total všechny řádky rekapitulace.
+        $vatRecap = $canonical['vatRecap'] ?? null;
+        if (is_array($vatRecap) && count($vatRecap) > 0) {
+            $acc = 0.0;
+            $complete = true;
+            foreach ($vatRecap as $r) {
+                if (!is_array($r) || !isset($r['total']) || !is_numeric($r['total'])) {
+                    $complete = false;
+                    break;
+                }
+                $acc += (float) $r['total'];
+            }
+            if ($complete) {
+                $computed = round($acc, 2);
+            }
+        }
+
+        // 2. totalBase + totalVat
+        if ($computed === null
+            && isset($totals['totalBase']) && is_numeric($totals['totalBase'])
+            && isset($totals['totalVat']) && is_numeric($totals['totalVat'])) {
+            $computed = round((float) $totals['totalBase'] + (float) $totals['totalVat'], 2);
+        }
+
+        // 3. Σ řádků: totalPrice × (1 + vat.pct/100) — jako validator, varianta 2.
+        if ($computed === null) {
+            $rows = $canonical['rows'] ?? null;
+            if (is_array($rows)) {
+                $acc = 0.0;
+                $hasAny = false;
+                foreach ($rows as $row) {
+                    if (!is_array($row) || !isset($row['totalPrice']) || !is_numeric($row['totalPrice'])) {
+                        continue;
+                    }
+                    $hasAny = true;
+                    $pct = $row['vat']['pct'] ?? null;
+                    $acc += (float) $row['totalPrice']
+                        * ($pct !== null && is_numeric($pct) ? 1.0 + ((float) $pct) / 100.0 : 1.0);
+                }
+                if ($hasAny) {
+                    $computed = round($acc, 2);
+                }
+            }
+        }
+
+        if ($computed === null) {
+            return null;
+        }
+
+        $diff = abs($declared - $computed);
+        if ($diff <= 0.01 || $diff >= 1.00) {
+            return null;
+        }
+
+        $eps = 0.001;
+        if (abs(round($computed, 0) - $declared) <= $eps) {
+            return 1;
+        }
+        if (abs(ceil($computed) - $declared) <= $eps) {
+            return 3;
+        }
+        if (abs(floor($computed) - $declared) <= $eps) {
+            return 4;
+        }
+        return null;
     }
 
     /**

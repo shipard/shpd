@@ -497,6 +497,12 @@
               {t('exchange.preview.totals.total')}:
               <strong>{formatMoney(canonical.totals.totalAmount, canonical.currency)}</strong>
             </div>
+            {#if canonical.totals.totalRounding}
+              <div>
+                {t('exchange.preview.totals.rounding')}:
+                <strong>{formatMoney(canonical.totals.totalRounding, canonical.currency)}</strong>
+              </div>
+            {/if}
           </div>
         {/if}
       </section>

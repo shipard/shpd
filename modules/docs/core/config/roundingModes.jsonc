@@ -4,6 +4,8 @@
     //   0 = bez zaokrouhlení
     //   1 = matematicky na 1 (celé Kč)
     //   2 = matematicky na 0,01 (haléře)
+    //   3 = nahoru na 1 (ceil)
+    //   4 = dolů na 1 (floor)
 
     "0": {
         "name": "No rounding",
@@ -19,5 +21,15 @@
         "name": "Round to 0.01",
         "name:cs": "Matematicky na 0,01",
         "name:en": "Round to 0.01"
+    },
+    "3": {
+        "name": "Round up to 1",
+        "name:cs": "Nahoru na 1",
+        "name:en": "Round up to 1"
+    },
+    "4": {
+        "name": "Round down to 1",
+        "name:cs": "Dolů na 1",
+        "name:en": "Round down to 1"
     }
 }

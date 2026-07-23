@@ -813,9 +813,15 @@ abstract class DocDocument extends Document
 
     protected function applyRounding(float $amount, int $mode): float
     {
+        // Módy 3/4 mají u záporných částek (dobropisy) matematickou sémantiku
+        // PHP ceil/floor: ceil(-1709.05) = -1709.0. Derivace modu v Exchange
+        // applieru vybírá mod porovnáním výsledku s deklarovanou částkou,
+        // takže směr vždy odpovídá faktuře.
         return match ($mode) {
             1       => (float) round($amount, 0),  // Whole units
             2       => round($amount, 2),          // 0.01
+            3       => ceil($amount),              // Up to whole units
+            4       => floor($amount),             // Down to whole units
             default => round($amount, 2),          // No rounding (still 2 decimals)
         };
     }

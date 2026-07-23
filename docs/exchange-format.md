@@ -255,7 +255,19 @@ vypočtené hodnoty. Důvod, proč jsou v canonical:
   je kontroluje).
 - **Validace** — applier porovná deklarované totals s vypočtenými, pokud
   se liší, vyrobí warning `totals_mismatch` v `_resolve.issues`. Silný
-  signál chybné extrakce řádků.
+  signál chybné extrakce řádků. Výjimka: deklarovaná **celá** částka
+  v pásmu < 1,00 od vypočtené varianty projde bez warningu — jde
+  o zaokrouhlení celkové částky faktury.
+
+`totals.totalRounding` nese zaokrouhlení celkové částky se znaménkem
+(zaokrouhleno dolů = záporné, např. `-0.05`). I ono je informativní —
+applier z něj **nečte**; `total_rounding_mode` dokladu (matematicky /
+nahoru / dolů na celé jednotky) si odvozuje nezávisle porovnáním
+vypočtené a deklarované částky (`DocumentApplier::deriveTotalRoundingMode`,
+konzervativně jen pro rozdíl > 0,01 a < 1,00, který některý mod přesně
+reprodukuje). Výslednou částku a `total_rounding` pak dopočte
+`DocDocument` sám. Platí pro AI extrakci i ISDOC
+(`PayableRoundingAmount`) — obě cesty jdou přes týž applier.
 
 ### Polymorfismus podle `docType`
 

@@ -83,7 +83,7 @@ class ProfileSchemaDriftTest extends TestCase
         [$profile] = $this->loadProfile();
 
         $this->assertSame('czech_invoices', $profile['profile_id']);
-        $this->assertSame('v3.0.0', $profile['prompt_version']);
+        $this->assertSame('v3.1.0', $profile['prompt_version']);
         $this->assertContains('invoiceReceived', $profile['supported_doc_types']);
         foreach (['contract', 'insurance', 'quotation', 'certificate', 'official'] as $registryType) {
             $this->assertContains($registryType, $profile['supported_doc_types']);
@@ -113,7 +113,7 @@ class ProfileSchemaDriftTest extends TestCase
             );
         }
 
-        $this->assertStringContainsString('"v3.0.0"', $prompt, 'prompt must pin its own version');
+        $this->assertStringContainsString('"v3.1.0"', $prompt, 'prompt must pin its own version');
         $this->assertStringNotContainsString('v2.3.0', $prompt, 'stale prompt version reference');
     }
 }

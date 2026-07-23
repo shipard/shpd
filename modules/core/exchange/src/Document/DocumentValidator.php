@@ -88,6 +88,11 @@ final class DocumentValidator
      *   3. Sum of `vatRecap[].total`                — most authoritative
      *      when available (per-rate breakdown with `total` = base + tax).
      *
+     * Rounding-aware: a variant also passes when the declared amount is a
+     * whole number less than 1.00 away from it — the invoice total was
+     * rounded to whole currency units (DocumentApplier then derives
+     * `total_rounding_mode` independently from the same numbers).
+     *
      * @param array<int, array{severity: string, path: string, code: string, message: string}> $issues
      */
     private function checkTotalsCoherence(array $canonical, array &$issues): void
@@ -142,10 +147,19 @@ final class DocumentValidator
             }
         }
 
+        // Celá deklarovaná částka v pásmu < 1,00 od varianty je vždy její
+        // floor/ceil/round podoba — pokrývá zaokrouhlení celkové částky
+        // (total_rounding_mode 1/3/4) bez výčtu módů. Nezávisí na
+        // extrahovaném totals.totalRounding.
         $tolerance = 0.01;
-        $matchBase = abs($sumBase - $declaredF) <= $tolerance;
-        $matchWithVat = abs($sumWithVat - $declaredF) <= $tolerance;
-        $matchRecap = $sumVatRecap !== null && abs($sumVatRecap - $declaredF) <= $tolerance;
+        $declaredIsWhole = abs($declaredF - round($declaredF, 0)) <= 0.001;
+        $matches = static fn (float $v): bool =>
+            abs($v - $declaredF) <= $tolerance
+            || ($declaredIsWhole && abs($v - $declaredF) < 1.00);
+
+        $matchBase = $matches($sumBase);
+        $matchWithVat = $matches($sumWithVat);
+        $matchRecap = $sumVatRecap !== null && $matches($sumVatRecap);
 
         if ($matchBase || $matchWithVat || $matchRecap) {
             return;

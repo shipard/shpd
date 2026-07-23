@@ -11,7 +11,10 @@
     //     `source.raw` is the one exception (opaque vendor payload).
     //   - `vatRecap` and `totals` are *informative* — Applier recomputes them
     //     via DocDocument::beforeSave. Validator compares declared vs.
-    //     computed and emits `totals_mismatch` warning.
+    //     computed and emits `totals_mismatch` warning; a whole-number
+    //     `totalAmount` less than 1.00 away from a computed variant passes
+    //     (rounded invoice total — Applier derives `total_rounding_mode`
+    //     from the numbers, `totals.totalRounding` itself is informative).
 
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "https://shipard.cz/schemas/shpd.docs.document.v1.json",

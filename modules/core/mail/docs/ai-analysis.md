@@ -215,6 +215,19 @@ apply-time zápis `DocumentApplier::writeSupplierCodeMappings` (ten pokryje
 řeší unique index `(person, supplier_code)`. Párování canonical → finální
 řádky je poziční přes `order_pos` s guardem na shodu popisu.
 
+## Zaokrouhlení celkové částky při apply
+
+Faktury se zaokrouhlenou částkou k úhradě (typicky na celé Kč):
+`DocumentApplier::transform` odvozuje `total_rounding_mode` dokladu
+nezávisle z čísel — porovnáním vypočtené částky (Σ `vatRecap[].total` →
+`totalBase + totalVat` → Σ řádků s DPH) s deklarovanou
+`totals.totalAmount`. Extrahovaný `totals.totalRounding` je jen
+informativní (review modal ho zobrazuje v součtech). Konzervativní
+kritérium a detaily: `docs/exchange-format.md` (sekce vatRecap/totals)
+a [tasks/mail-invoice-rounding.md](../../../../tasks/mail-invoice-rounding.md).
+Platí i pro ISDOC větev (`PayableRoundingAmount`) — apply jde přes týž
+applier.
+
 ## Auto-transition 20 → 40
 
 Když uživatel přes UI přepne všechny extracted documents do `applied/rejected/

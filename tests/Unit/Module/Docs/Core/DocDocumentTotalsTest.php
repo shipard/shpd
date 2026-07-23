@@ -66,6 +66,24 @@ class DocDocumentTotalsTest extends TestCase
         $this->assertSame(123.45, $this->doc()->applyRoundingPub(123.454, 2));
     }
 
+    public function testApplyRoundingUpToWholeUnits(): void
+    {
+        $this->assertSame(124.0, $this->doc()->applyRoundingPub(123.05, 3));
+        $this->assertSame(124.0, $this->doc()->applyRoundingPub(123.95, 3));
+        $this->assertSame(123.0, $this->doc()->applyRoundingPub(123.00, 3));
+        // Záporné částky (dobropisy): matematická sémantika ceil
+        $this->assertSame(-1709.0, $this->doc()->applyRoundingPub(-1709.05, 3));
+    }
+
+    public function testApplyRoundingDownToWholeUnits(): void
+    {
+        $this->assertSame(123.0, $this->doc()->applyRoundingPub(123.05, 4));
+        $this->assertSame(123.0, $this->doc()->applyRoundingPub(123.95, 4));
+        $this->assertSame(123.0, $this->doc()->applyRoundingPub(123.00, 4));
+        // Záporné částky (dobropisy): matematická sémantika floor
+        $this->assertSame(-1710.0, $this->doc()->applyRoundingPub(-1709.05, 4));
+    }
+
     public function testApplyTotalRoundingComputesDiff(): void
     {
         $data = ['total_amount' => 1234.56, 'total_rounding_mode' => 1];
@@ -83,6 +101,44 @@ class DocDocumentTotalsTest extends TestCase
 
         $this->assertSame(100.0, $data['total_amount']);
         $this->assertSame(0.0, $data['total_rounding']);
+    }
+
+    public function testApplyTotalRoundingUpComputesDiff(): void
+    {
+        $data = ['total_amount' => 1708.40, 'total_rounding_mode' => 3];
+        $this->doc()->applyTotalRoundingPub($data);
+
+        $this->assertSame(1709.0, $data['total_amount']);
+        $this->assertEqualsWithDelta(0.60, $data['total_rounding'], 0.001);
+    }
+
+    public function testApplyTotalRoundingDownComputesDiff(): void
+    {
+        $data = ['total_amount' => 1709.05, 'total_rounding_mode' => 4];
+        $this->doc()->applyTotalRoundingPub($data);
+
+        $this->assertSame(1709.0, $data['total_amount']);
+        $this->assertEqualsWithDelta(-0.05, $data['total_rounding'], 0.001);
+    }
+
+    public function testApplyTotalRoundingUpNegativeAmount(): void
+    {
+        // Dobropis: ceil(-1709.05) = -1709.0, diff +0.05
+        $data = ['total_amount' => -1709.05, 'total_rounding_mode' => 3];
+        $this->doc()->applyTotalRoundingPub($data);
+
+        $this->assertSame(-1709.0, $data['total_amount']);
+        $this->assertEqualsWithDelta(0.05, $data['total_rounding'], 0.001);
+    }
+
+    public function testApplyTotalRoundingDownNegativeAmount(): void
+    {
+        // Dobropis: floor(-1709.05) = -1710.0, diff -0.95
+        $data = ['total_amount' => -1709.05, 'total_rounding_mode' => 4];
+        $this->doc()->applyTotalRoundingPub($data);
+
+        $this->assertSame(-1710.0, $data['total_amount']);
+        $this->assertEqualsWithDelta(-0.95, $data['total_rounding'], 0.001);
     }
 
     public function testApplyDomesticAmountsHeadFromRecapSums(): void

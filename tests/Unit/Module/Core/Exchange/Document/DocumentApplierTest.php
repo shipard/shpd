@@ -758,6 +758,150 @@ class DocumentApplierTest extends TestCase
         $this->assertSame(0, $data['vat_place']); // domestic
     }
 
+    // ── transform(): derivace total_rounding_mode ────────────────────────────
+
+    /**
+     * @param array<string, mixed> $extra Merged over the minimal canonical.
+     * @return array<string, mixed>
+     */
+    private function transformWithTotals(array $extra): array
+    {
+        $applier = $this->buildApplier();
+        $canonical = array_merge([
+            'docType'   => 'invoiceReceived',
+            'selfParty' => 'customer',
+            'dates'     => ['issueDate' => '2026-07-01'],
+        ], $extra);
+
+        return $this->invokeTransform($applier, $canonical);
+    }
+
+    public function testDeriveRoundingModeFromRecapFeinkost(): void
+    {
+        // Reálný scénář z alfy (extracted doc 42): recap 45.00 + 1664.05
+        // = 1709.05, deklarováno 1709.00 → matematické zaokrouhlení (mode 1).
+        $data = $this->transformWithTotals([
+            'vatRecap' => [
+                ['vatCode' => 'cz-120', 'vatPct' => 12, 'total' => 45.00],
+                ['vatCode' => 'cz-110', 'vatPct' => 21, 'total' => 1664.05],
+            ],
+            'totals' => [
+                'totalBase' => 1522.95, 'totalVat' => 186.10,
+                'totalAmount' => 1709.00, 'totalRounding' => -0.05,
+            ],
+        ]);
+
+        $this->assertSame(1, $data['total_rounding_mode']);
+    }
+
+    public function testDeriveRoundingModeCeil(): void
+    {
+        // computed 1708.40, declared 1709.00 → round dá 1708, ceil sedí → 3.
+        $data = $this->transformWithTotals([
+            'vatRecap' => [['vatPct' => 21, 'total' => 1708.40]],
+            'totals'   => ['totalAmount' => 1709.00],
+        ]);
+
+        $this->assertSame(3, $data['total_rounding_mode']);
+    }
+
+    public function testDeriveRoundingModeFloor(): void
+    {
+        // computed 1709.55, declared 1709.00 → round dá 1710, ceil 1710,
+        // floor sedí → 4.
+        $data = $this->transformWithTotals([
+            'vatRecap' => [['vatPct' => 21, 'total' => 1709.55]],
+            'totals'   => ['totalAmount' => 1709.00],
+        ]);
+
+        $this->assertSame(4, $data['total_rounding_mode']);
+    }
+
+    public function testDeriveRoundingModePrefersMathOverCeil(): void
+    {
+        // computed X.50: round half-up i ceil dají týž výsledek — mode 1
+        // je konvence (D4).
+        $data = $this->transformWithTotals([
+            'vatRecap' => [['vatPct' => 21, 'total' => 1709.50]],
+            'totals'   => ['totalAmount' => 1710.00],
+        ]);
+
+        $this->assertSame(1, $data['total_rounding_mode']);
+    }
+
+    public function testDeriveRoundingModeSkippedWhenDiffTooLarge(): void
+    {
+        // Rozdíl 1.95 není zaokrouhlení — mode se nenastaví, warning
+        // z validátoru zůstává.
+        $data = $this->transformWithTotals([
+            'vatRecap' => [['vatPct' => 21, 'total' => 1709.05]],
+            'totals'   => ['totalAmount' => 1711.00],
+        ]);
+
+        $this->assertArrayNotHasKey('total_rounding_mode', $data);
+    }
+
+    public function testDeriveRoundingModeSkippedWhenWithinTolerance(): void
+    {
+        $data = $this->transformWithTotals([
+            'vatRecap' => [['vatPct' => 21, 'total' => 1709.05]],
+            'totals'   => ['totalAmount' => 1709.05],
+        ]);
+
+        $this->assertArrayNotHasKey('total_rounding_mode', $data);
+    }
+
+    public function testDeriveRoundingModeSkippedWithoutTotals(): void
+    {
+        $data = $this->transformWithTotals([]);
+
+        $this->assertArrayNotHasKey('total_rounding_mode', $data);
+    }
+
+    public function testDeriveRoundingModeFallsBackToBasePlusVat(): void
+    {
+        // Bez recapu se computed bere z totalBase + totalVat.
+        $data = $this->transformWithTotals([
+            'totals' => [
+                'totalBase' => 1522.95, 'totalVat' => 186.10,
+                'totalAmount' => 1709.00,
+            ],
+        ]);
+
+        $this->assertSame(1, $data['total_rounding_mode']);
+    }
+
+    public function testDeriveRoundingModeIncompleteRecapFallsBackToBasePlusVat(): void
+    {
+        // Recap s řádkem bez numeric total se nepoužije — nastupuje
+        // totalBase + totalVat.
+        $data = $this->transformWithTotals([
+            'vatRecap' => [
+                ['vatPct' => 12, 'total' => 45.00],
+                ['vatPct' => 21], // total chybí
+            ],
+            'totals' => [
+                'totalBase' => 1522.95, 'totalVat' => 186.10,
+                'totalAmount' => 1709.00,
+            ],
+        ]);
+
+        $this->assertSame(1, $data['total_rounding_mode']);
+    }
+
+    public function testDeriveRoundingModeFallsBackToRows(): void
+    {
+        // Bez recapu i totalBase/totalVat se computed sčítá z řádků
+        // s DPH per řádek: 999.67 × 1.21 = 1209.60 → declared 1209.00
+        // je floor → mode 4.
+        $data = $this->transformWithTotals([
+            'rows'   => [['totalPrice' => 999.67, 'vat' => ['pct' => 21]]],
+            'totals' => ['totalAmount' => 1209.00],
+        ]);
+
+        $this->assertSame(4, $data['total_rounding_mode']);
+    }
+
     // ── resolveNumberSeriesFor(): code selection + error path ───────────────
 
     private function invokeResolveSeries(DocumentApplier $applier, string $docType, ?string $seriesCode): ?int

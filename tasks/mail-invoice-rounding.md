@@ -1,6 +1,6 @@
 # Task: Zaokrouhlení celkové částky u faktur z došlé pošty
 
-**Status:** Design uzavřen (D1–D8 potvrzeno), připraveno k implementaci
+**Status:** implementováno (2026-07-23), zbývá ruční test na alfě (msi-zlin, doc 42) + nasazení promptu v3.1.0 přes `ds-upgrade`
 **Cíl:** Faktury se zaokrouhlenou částkou k úhradě (typicky na celé Kč)
 projdou review a apply bez falešného `totals_mismatch` warningu a vzniklý
 doklad reprodukuje částku z faktury — přes existující mechanismus

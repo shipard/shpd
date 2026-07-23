@@ -24,7 +24,7 @@ Audit běhu: každý `core_mail_message_analyses` row si propíše `profile_ndx`
 `backend_ndx` a `prompt_version`, takže historie je auditovatelná i po pozdějších
 změnách profilu.
 
-## Default prompt (v3.0.0)
+## Default prompt (v3.1.0)
 
 Od `v2.0.0` AI vrací data přímo v kanonickém **`shpd.docs.document.v1`**
 formátu (viz [`docs/exchange-format.md`](../../../../docs/exchange-format.md))
@@ -43,9 +43,12 @@ Klíčové pokyny v promptu:
   ISO 3166-1 alpha-2 lowercase (`cz`).
 - `selfParty` vždy `"customer"` (jsme příjemce přijaté faktury).
 - `source.kind` vždy `"aiExtraction"`, `source.promptVersion` vždy
-  shodná s `prompt_version` profilu (`v2.0.0`).
+  shodná s `prompt_version` profilu (`v3.1.0`).
 - VAT kódy v řádcích jsou klíče z `world.vat.{country}.vatCodes`
   cfgItem (`cz-110`, `cz-111`, …) — ne sazby v procentech.
+- `totals.totalRounding` = zaokrouhlení celkové částky se znaménkem
+  (dolů = záporné); zaokrouhlení nikdy nepatří jako položkový řádek
+  do `rows`.
 - Když žádná příloha není dokladem, vrať `documents: []`.
 
 Plný prompt v [`profiles/default_czech_invoices.jsonc`](../profiles/default_czech_invoices.jsonc)
@@ -182,6 +185,18 @@ backendů (`default` Anthropic Claude Sonnet pro běžné případy, druhý back
 s Claude Opus pro náročné dokumenty) a přiřadit je různým profilům.
 
 ## Changelog promptu
+
+### v3.1.0 (2026-07-23)
+
+Zaokrouhlení celkové částky faktury (spec
+[tasks/mail-invoice-rounding.md](../../../../tasks/mail-invoice-rounding.md)):
+
+- Nové pravidlo pro `totals.totalRounding`: rozdíl mezi součtem položek
+  s DPH a částkou k úhradě se vrací se znaménkem (zaokrouhleno dolů =
+  záporná hodnota); bez zaokrouhlení `0` nebo pole vynechat.
+- Explicitní zákaz vracet zaokrouhlení jako položkový řádek v `rows` —
+  patří výhradně do `totals.totalRounding` (jinak falešná položka na
+  dokladu a rozbitá derivace `total_rounding_mode` v applieru).
 
 ### v3.0.0 (2026-07-14)
 

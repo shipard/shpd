@@ -298,6 +298,7 @@ export default {
   'exchange.preview.section.issues': 'Upozornění',
   'exchange.preview.enrich.tooltip': 'Doplněno z historie — doklad {docNumber} ({kind})',
   'exchange.preview.enrich.filled': 'Doplněno: {fields}',
+  'exchange.preview.enrich.item': 'Položka: {code} — {name}',
   'exchange.preview.enrich.kind.exact': 'přesná shoda',
   'exchange.preview.enrich.kind.fuzzy': 'podobný text',
   'exchange.preview.enrich.kind.dominant': 'častá položka dodavatele',

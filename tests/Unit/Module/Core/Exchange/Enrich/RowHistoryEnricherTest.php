@@ -43,12 +43,14 @@ class RowHistoryEnricherTest extends TestCase
         int $docHead = 1001,
         ?string $docNumber = 'FP-2026-0042',
         float|string|null $totalPrice = null,
+        ?string $itemName = null,
     ): array {
         return [
             'description'    => $description,
             'vat_code'       => $vatCode,
             'total_price'    => $totalPrice,
             'item_code'      => $itemCode,
+            'item_name'      => $itemName ?? ('Položka ' . $itemCode),
             'account_number' => $accountNumber,
             'doc_head'       => $docHead,
             'doc_number'     => $docNumber,
@@ -340,6 +342,7 @@ class RowHistoryEnricherTest extends TestCase
         $this->assertSame('historyExactRaw', $enrichment['matchedBy']);
         $this->assertSame('high', $enrichment['confidence']);
         $this->assertSame('Měsíční paušál za Internet - 1000MEGA+', $enrichment['matchedText']);
+        $this->assertSame('Položka NET1000', $enrichment['itemName']);
     }
 
     public function testNameOnlyRowMatches(): void
@@ -447,6 +450,7 @@ class RowHistoryEnricherTest extends TestCase
         $this->assertSame(1, $result['_resolve']['rows'][1]['index']);
         $this->assertNull($unmatched['matchedBy']);
         $this->assertNull($unmatched['matchedText']);
+        $this->assertNull($unmatched['itemName']);
     }
 
     public function testDoubleRunIsIdempotent(): void
@@ -530,6 +534,7 @@ class RowHistoryEnricherTest extends TestCase
         $this->assertSame('historyDominantItem', $enrichment['matchedBy']);
         $this->assertSame('low', $enrichment['confidence']);
         $this->assertNull($enrichment['matchedText']);
+        $this->assertSame('Položka MAT', $enrichment['itemName']);
         $this->assertSame(9999, $enrichment['sourceDocId']);
         $this->assertSame('FP-2026-9999', $enrichment['sourceDocNumber']);
         $this->assertSame(['share' => 0.83, 'rows' => 12], $enrichment['dominance']);

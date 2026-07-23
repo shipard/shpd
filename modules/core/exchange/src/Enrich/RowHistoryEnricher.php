@@ -33,7 +33,7 @@ use Shipard\Module\Docs\Core\OwnCompanyResolver;
  *
  * Uvnitř úrovně vyhrává dřívější kandidát, uvnitř kandidáta nejnovější
  * historie. Vyhrávající kandidátní text (originální, nenormalizovaný tvar)
- * jde do auditu jako `matchedText`.
+ * jde do auditu jako `matchedText`; jméno navržené položky jako `itemName`.
  *
  * Úroveň 3 je čistě statistický fallback pro dodavatele, jejichž texty
  * řádků se neopakují (spotřební materiál, PHM), ale položka je v historii
@@ -142,6 +142,7 @@ final class RowHistoryEnricher
             'matchedBy'       => null,
             'confidence'      => null,
             'matchedText'     => null,
+            'itemName'        => null,
             'sourceDocId'     => null,
             'sourceDocNumber' => null,
             'suggested'       => [],
@@ -189,6 +190,7 @@ final class RowHistoryEnricher
         $enrichment['matchedBy'] = $matchedBy;
         $enrichment['confidence'] = $confidence;
         $enrichment['matchedText'] = $matchedText;
+        $enrichment['itemName'] = ((string) ($hist['item_name'] ?? '')) ?: null;
         $enrichment['sourceDocId'] = (int) $hist['doc_head'];
         $enrichment['sourceDocNumber'] = ((string) ($hist['doc_number'] ?? '')) ?: null;
         $enrichment['suggested'] = $suggested;
@@ -398,7 +400,8 @@ final class RowHistoryEnricher
         $rows = $this->db->fetchAll(
             'SELECT [r.description], [r.vat_code], [r.total_price], [h.id] AS [doc_head],
                     [h.doc_number] AS [doc_number],
-                    [i.code] AS [item_code], [a.number] AS [account_number]
+                    [i.code] AS [item_code], [i.name] AS [item_name],
+                    [a.number] AS [account_number]
              FROM [docs_core_rows] AS [r]
              JOIN [docs_core_heads] AS [h] ON [h.id] = [r.doc_head]
              JOIN [economy_items] AS [i]

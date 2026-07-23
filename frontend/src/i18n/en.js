@@ -285,6 +285,7 @@ export default {
   'exchange.preview.section.issues': 'Issues',
   'exchange.preview.enrich.tooltip': 'Filled from history — document {docNumber} ({kind})',
   'exchange.preview.enrich.filled': 'Filled: {fields}',
+  'exchange.preview.enrich.item': 'Item: {code} — {name}',
   'exchange.preview.enrich.kind.exact': 'exact match',
   'exchange.preview.enrich.kind.fuzzy': 'similar text',
   'exchange.preview.enrich.kind.dominant': 'frequent supplier item',

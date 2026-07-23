@@ -42,7 +42,8 @@
   let enrichedCount = $derived(enrichedRowCount(resolve?.rows));
 
   // Tooltip enrichment badge: „Doplněno z historie — doklad X (přesná
-  // shoda)" + druhý řádek s výčtem skutečně doplněných polí. U dominance
+  // shoda)" + řádek „Položka: kód — jméno“ (enrichment.itemName) +
+  // řádek s výčtem skutečně doplněných polí. U dominance
   // nese kind i podíl položky na řádcích historie (enrichment.dominance).
   function enrichTitle(e) {
     const docNumber = e.sourceDocNumber ?? `#${e.sourceDocId}`;
@@ -57,9 +58,17 @@
     const fields = suggestedFieldKeys(e.suggested)
       .map((key) => t(`exchange.preview.enrich.field.${key}`))
       .join(', ');
-    return fields
-      ? `${header}\n${t('exchange.preview.enrich.filled', { fields })}`
-      : header;
+    const lines = [header];
+    if (e.suggested?.ourCode) {
+      lines.push(
+        t('exchange.preview.enrich.item', {
+          code: e.suggested.ourCode,
+          name: e.itemName ?? '\u2014',
+        }),
+      );
+    }
+    if (fields) lines.push(t('exchange.preview.enrich.filled', { fields }));
+    return lines.join('\n');
   }
 
   function statusKey(status) {

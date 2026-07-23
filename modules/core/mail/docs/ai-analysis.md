@@ -188,6 +188,8 @@ i pro nenapárované a přeskočené řádky:
 {
     "matchedBy":  "historyExactRaw" | "historyExactNorm" | "historyFuzzy" | "historyDominantItem" | null,
     "confidence": "high" | "medium" | "low" | null,
+    "matchedText": "…",                            // vyhrávající kandidátní text (null u dominance)
+    "itemName":   "Materiál",                      // jméno navržené položky (pro UI tooltip)
     "sourceDocId": 12345,                         // docs_core_heads.id zdroje
     "sourceDocNumber": "FP-2026-0042",            // doc_number zdroje (pro UI badge)
     "suggested":  { "ourCode": "…", "vatCode": "…", "account": "…" },  // co reálně doplnil

@@ -10,12 +10,15 @@ use Dibi\Connection;
  * Maps a free-form unit token from canonical (`"h"`, `"ks"`, `"kWh"`) to
  * a `core_units.id`. Strategy:
  *
- *   1. Normalize the input (lowercase, strip whitespace).
+ *   1. Normalize the input (lowercase, strip whitespace and trailing dots).
  *   2. Apply the alias map ({@see ALIASES}) to translate canonical / local
  *      synonyms onto the Shipard `system_code` we ship in unitsSeed.
  *   3. Look that `system_code` up in `core_units` (active rows only).
  *   4. Fall back to a case-insensitive lookup on `core_units.shortcut`
  *      (matches user-defined units).
+ *   5. Last resort: case-insensitive lookup on `core_units.name` —
+ *      supplier documents often carry the full unit name („Kus“)
+ *      instead of the shortcut („ks“).
  *
  * No `canCreate` — units are a closed system codebook in Shipard, the
  * user adds them via the Settings viewer, not implicitly via apply.
@@ -54,6 +57,9 @@ class UnitResolver
 
         // Czech shortcuts
         'ks'   => 'pcs',
+        'kus'  => 'pcs',
+        'kusy' => 'pcs',
+        'kusů' => 'pcs',
         'hod'  => 'hr',
         'den'  => 'day',
         'měs'  => 'mnth',
@@ -79,7 +85,10 @@ class UnitResolver
             return ResolveResult::notFound();
         }
 
-        $lower = mb_strtolower($token);
+        $lower = rtrim(mb_strtolower($token), '.');
+        if ($lower === '') {
+            return ResolveResult::notFound();
+        }
         $systemCode = self::ALIASES[$lower] ?? null;
 
         // First try resolving via system_code (either via alias or directly).
@@ -108,6 +117,18 @@ class UnitResolver
         );
         if ($row !== null) {
             return ResolveResult::matched((int) $row['id'], 'shortcut');
+        }
+
+        // Last resort: match on the unit name (e.g. "Kus" → pcs).
+        $row = $this->db->fetch(
+            'SELECT [id] FROM [core_units]
+             WHERE LOWER([name]) = %s AND [docState] IN (%i, %i, %i)
+             LIMIT 1',
+            $lower,
+            self::ACTIVE_STATES[0], self::ACTIVE_STATES[1], self::ACTIVE_STATES[2],
+        );
+        if ($row !== null) {
+            return ResolveResult::matched((int) $row['id'], 'name');
         }
 
         return ResolveResult::notFound();

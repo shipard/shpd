@@ -54,6 +54,56 @@ class UnitResolverTest extends TestCase
         $this->assertSame('alias', $r->matchedBy);
     }
 
+    public function testCzechNameKusMapsToPcsViaAlias(): void
+    {
+        $db = $this->createMock(Connection::class);
+        $db->expects($this->once())
+            ->method('fetch')
+            ->with($this->stringContains('system_code'), 'pcs', 10, 40, 80)
+            ->willReturn(new Row(['id' => 1]));
+
+        $r = (new UnitResolver($db))->resolve('Kus');
+        $this->assertSame(1, $r->matchedId);
+        $this->assertSame('alias', $r->matchedBy);
+    }
+
+    public function testTrailingDotIsStrippedBeforeLookup(): void
+    {
+        $db = $this->createMock(Connection::class);
+        $db->expects($this->once())
+            ->method('fetch')
+            ->with($this->stringContains('system_code'), 'pcs', 10, 40, 80)
+            ->willReturn(new Row(['id' => 1]));
+
+        $r = (new UnitResolver($db))->resolve('ks.');
+        $this->assertSame(1, $r->matchedId);
+        $this->assertSame('alias', $r->matchedBy);
+    }
+
+    public function testDotOnlyInputReturnsNotFoundWithoutDb(): void
+    {
+        $db = $this->createMock(Connection::class);
+        $db->expects($this->never())->method('fetch');
+
+        $this->assertSame(ResolveStatus::NotFound, (new UnitResolver($db))->resolve('.')->status);
+    }
+
+    public function testNameFallbackUsedWhenSystemCodeAndShortcutMiss(): void
+    {
+        $db = $this->createMock(Connection::class);
+        $db->expects($this->exactly(3))
+            ->method('fetch')
+            ->willReturnOnConsecutiveCalls(
+                null,                      // system_code misses
+                null,                      // shortcut misses
+                new Row(['id' => 5]),      // name hits
+            );
+
+        $r = (new UnitResolver($db))->resolve('Paleta');
+        $this->assertSame(5, $r->matchedId);
+        $this->assertSame('name', $r->matchedBy);
+    }
+
     public function testShortcutFallbackUsedWhenSystemCodeMisses(): void
     {
         $db = $this->createMock(Connection::class);

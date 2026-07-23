@@ -114,7 +114,7 @@ Zbytek pojmosloví (Canonical, Schema, Resolve, Apply, Lineage) viz
 
   // ── Cena ────────────────────────────────────────────────────────────────
   "salesPriceNoVat": 1000.00,             // number >= 0 nebo null (necenený)
-  "unit":            "h",                 // ISO code nebo lokální zkratka;
+  "unit":            "h",                 // ISO code, lokální zkratka nebo název;
                                           //   UnitResolver mapuje na core_units.id
 
   // ── Per-partner dodavatelské kódy ───────────────────────────────────────
@@ -461,7 +461,10 @@ pokud `matchedBy: "itemTypeFallback"`.
 ### 7.3 Unit resolve
 
 `UnitResolver::resolve(unit)` per existující implementace. Vrací
-`matched` s `core_units.id` nebo `notFound`.
+`matched` s `core_units.id` nebo `notFound`. Pořadí lookupů: alias mapa
+(včet. českých tvarů „kus/kusy/kusů“) → `system_code` → `shortcut`
+(case-insensitive) → `name` (case-insensitive); vstup se normalizuje
+(lowercase, trim, odstranění koncových teček, např. „ks.“).
 
 Pokud `notFound`, ItemApplier emit warning issue `unit_unknown` a použije
 fallback `system_code: pcs`. Item se uloží, jen s flagem v issues.

@@ -41,6 +41,39 @@
   let issues = $derived(resolve?.issues ?? []);
   let enrichedCount = $derived(enrichedRowCount(resolve?.rows));
 
+  // ── DPH & platba: lokalizace canonical enum klíčů ──────────────────────
+  // Canonical nese stringové klíče (fromBase, domestic, bankTransfer, …);
+  // schema je nevaliduje (volný string), neznámý klíč proto zobrazíme
+  // surově. Chybějící vat.mode / vat.place ukazujeme jako applierův
+  // default (fromBase / domestic) se ztlumeným „(výchozí)“ — uživatel
+  // vidí, co se při uložení reálně použije (DocumentApplier::VAT_*_MAP).
+  const VAT_MODE_KEYS = ['none', 'fromBase', 'fromTotal'];
+  const VAT_PLACE_KEYS = ['domestic', 'intracom', 'thirdCountry'];
+  const PAYMENT_METHOD_KEYS = ['cash', 'bankTransfer', 'card', 'cashOnDelivery', 'setOff'];
+
+  function enumLabel(prefix, keys, value) {
+    if (value === null || value === undefined) return null;
+    return keys.includes(value) ? t(`exchange.preview.${prefix}.${value}`) : String(value);
+  }
+
+  function enumWithDefault(prefix, keys, value, fallback) {
+    const isDefault = value === null || value === undefined;
+    return {
+      text: enumLabel(prefix, keys, isDefault ? fallback : value),
+      isDefault,
+    };
+  }
+
+  let vatModeDisplay = $derived(
+    enumWithDefault('vatMode', VAT_MODE_KEYS, canonical?.vat?.mode ?? null, 'fromBase'),
+  );
+  let vatPlaceDisplay = $derived(
+    enumWithDefault('vatPlace', VAT_PLACE_KEYS, canonical?.vat?.place ?? null, 'domestic'),
+  );
+  let paymentMethodLabel = $derived(
+    enumLabel('paymentMethod', PAYMENT_METHOD_KEYS, canonical?.payment?.method ?? null),
+  );
+
   // Tooltip enrichment badge: „Doplněno z historie — doklad X (přesná
   // shoda)" + řádek „Položka: kód — jméno“ (enrichment.itemName) +
   // řádek s výčtem skutečně doplněných polí. U dominance
@@ -329,10 +362,14 @@
   </div>
 {/snippet}
 
-{#snippet field(label, value)}
+{#snippet field(label, value, hint = null)}
   <div class="shpd-exchange__field">
     <span class="shpd-exchange__field-label">{label}</span>
-    <span class="shpd-exchange__field-value">{value ?? '—'}</span>
+    <span class="shpd-exchange__field-value">
+      {value ?? '—'}{#if hint}
+        <span class="shpd-exchange__field-hint">{hint}</span>
+      {/if}
+    </span>
   </div>
 {/snippet}
 
@@ -403,8 +440,18 @@
       {@render field(t('exchange.preview.field.taxPointDate'), formatDate(canonical.dates?.taxPointDate))}
       {@render field(t('exchange.preview.field.vatObligationDate'), formatDate(canonical.dates?.vatObligationDate))}
       {@render field(t('exchange.preview.field.currency'), canonical.currency)}
-      {@render field(t('exchange.preview.field.paymentMethod'), canonical.payment?.method)}
+      {@render field(t('exchange.preview.field.paymentMethod'), paymentMethodLabel)}
       {@render field(t('exchange.preview.field.paymentReference'), canonical.payment?.paymentReference)}
+      {@render field(
+        t('exchange.preview.field.vatMode'),
+        vatModeDisplay.text,
+        vatModeDisplay.isDefault ? t('exchange.preview.defaultHint') : null,
+      )}
+      {@render field(
+        t('exchange.preview.field.vatPlace'),
+        vatPlaceDisplay.text,
+        vatPlaceDisplay.isDefault ? t('exchange.preview.defaultHint') : null,
+      )}
     </section>
 
     {#if (canonical.rows ?? []).length > 0}
@@ -694,6 +741,12 @@
 
   .shpd-exchange__field-value {
     font-size: 0.875rem;
+  }
+
+  .shpd-exchange__field-hint {
+    margin-left: 4px;
+    font-size: 0.75rem;
+    color: var(--shpd-color-text-muted);
   }
 
   /* ── Status badges ───────────────────────────────────────────────────── */

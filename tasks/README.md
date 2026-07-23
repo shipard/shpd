@@ -322,6 +322,21 @@ Větší PRD typicky obsahují:
 Menší tasky stačí jako jednostránkové prompty s nadpisem „Co je potřeba
 udělat" a check-listem „Hotovo když".
 
+### Citlivé údaje z reálných dat
+
+Task fily (a jakékoli commitované soubory — docs, commit messages)
+**nikdy nesmí obsahovat citlivé údaje z reálných dat** testovacích ani
+produkčních prostředí: jména firem a osob, čísla dokladů/faktur, reálné
+částky, e-mailové adresy, identifikátory zdrojů dat (DS ID, názvy DS)
+ani přímé odkazy na konkrétní záznamy (id řádků). Tasky jsou trvalý
+záznam v gitu (GitHub) a po dokončení se nemažou.
+
+Diagnostické příklady **anonymizuj se zachováním poměrů** (např.
+Σ řádků 1 000,05 → částka 1 000,00, zaokrouhlení −0,05) — vypovídací
+hodnota pro implementaci zůstane, identifikace zdroje ne. Konkrétní
+testovací případ (DS, id záznamu) si drž mimo repo (chat, lokální
+poznámky).
+
 ### Referencování externích repozitářů
 
 Když task v `nov_shipard/tasks/` odkazuje na něco v jiném repu, používej

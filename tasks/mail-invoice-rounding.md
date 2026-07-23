@@ -1,6 +1,6 @@
 # Task: Zaokrouhlení celkové částky u faktur z došlé pošty
 
-**Status:** implementováno (2026-07-23), zbývá ruční test na alfě (msi-zlin, doc 42) + nasazení promptu v3.1.0 přes `ds-upgrade`
+**Status:** implementováno (2026-07-23), zbývá ruční test na alfě (typový případ z diagnostiky) + nasazení promptu v3.1.0 přes `ds-upgrade`
 **Cíl:** Faktury se zaokrouhlenou částkou k úhradě (typicky na celé Kč)
 projdou review a apply bez falešného `totals_mismatch` warningu a vzniklý
 doklad reprodukuje částku z faktury — přes existující mechanismus
@@ -21,26 +21,27 @@ doklad reprodukuje částku z faktury — přes existující mechanismus
   v `modules/economy/accounting/config/accountingRules.cz.jsonc` — tento
   task se jich nedotýká.
 
-## Kontext — diagnostika z alfy (DS msi-zlin, 07/2026)
+## Kontext — diagnostika z alfy (07/2026)
 
-Extracted doc **id 42** (FEINKOST ZLÍN s.r.o., faktura 260011244):
+Reálná přijatá faktura z testovacího prostředí (hodnoty
+anonymizované, poměry zachované):
 
 ```
-totals:   totalBase 1522.95, totalVat 186.10,
-          totalAmount 1709.00, totalRounding −0.05
-vatRecap: 45.00 (cz-120) + 1664.05 (cz-110) = 1709.05
-Σ řádků:  1709.05
+totals:   totalBase 889.69, totalVat 110.36,
+          totalAmount 1000.00, totalRounding −0.05
+vatRecap: 48.40 (cz-120) + 951.65 (cz-110) = 1000.05
+Σ řádků:  1000.05
 ```
 
 AI zaokrouhlení extrahovala správně (`totalRounding: −0.05`), ale dál
 s ním nikdo nepracuje:
 
 1. **`DocumentValidator::checkTotalsCoherence`** porovnává deklarovaných
-   1709,00 proti třem variantám (Σ `row.totalPrice`, Σ s DPH per řádek,
-   Σ `vatRecap[].total`) s tolerancí 0,01 — všechny dají 1709,05 →
+   1 000,00 proti třem variantám (Σ `row.totalPrice`, Σ s DPH per řádek,
+   Σ `vatRecap[].total`) s tolerancí 0,01 — všechny dají 1 000,05 →
    falešný warning `totals_mismatch` v review modalu.
 2. **`DocumentApplier::transform`** nemapuje z `totals` nic; vzniklý
-   doklad má `total_rounding_mode = 0` → dopočte se na 1709,05, tedy
+   doklad má `total_rounding_mode = 0` → dopočte se na 1 000,05, tedy
    **jiná částka k úhradě než na faktuře**.
 3. **Review modal** zaokrouhlení v součtech nezobrazuje (i18n klíč
    `exchange.preview.totals.rounding` existuje, nepoužitý).
@@ -99,7 +100,7 @@ má tutéž díru za parserem — apply jde přes stejný `DocumentApplier`.
 ```
 
 Pozn.: u záporných částek (dobropisy) platí matematická sémantika PHP
-`ceil`/`floor` (`ceil(-1709.05) = -1709.0`) — derivace v applieru
+`ceil`/`floor` (`ceil(-1000.05) = -1000.0`) — derivace v applieru
 (bod 2) mod vybírá porovnáním výsledku s declared, takže vždy sedí;
 sémantiku zdokumentovat v komentáři.
 
@@ -132,9 +133,9 @@ Porovnání `==` s tolerancí 0,001 (float). Mode 1 zároveň absorbuje
 haléřový nesoulad mezi zde spočteným `computed` a tím, co si následně
 dopočte `DocDocument` z řádků — výpočet se neduplikuje, jen se volí mod.
 
-FEINKOST: computed 1709,05, declared 1709,00, diff −0,05 →
-`round(1709.05) = 1709` → **mode 1**; `DocDocument` pak sám dopočte
-`total_amount = 1709.00`, `total_rounding = −0.05`. ✓
+Typový případ: computed 1 000,05, declared 1 000,00, diff −0,05 →
+`round(1000.05) = 1000` → **mode 1**; `DocDocument` pak sám dopočte
+`total_amount = 1000.00`, `total_rounding = −0.05`. ✓
 
 ### 3. Validator — rounding-aware koherence
 
@@ -192,7 +193,7 @@ nezobrazí).
   (případně nový `DocDocumentRoundingTest`): módy 3 a 4 —
   `applyTotalRoundingPub` nahoru/dolů, kladné i záporné částky.
 - `tests/Unit/Module/Core/Exchange/Document/DocumentApplierTest.php`:
-  derivace modu — FEINKOST scénář (recap → mode 1), ceil scénář
+  derivace modu — typový scénář (recap → mode 1), ceil scénář
   (declared = computed + 0,60 → mode 3), floor scénář, diff ≥ 1,00 →
   bez modu, shoda v toleranci → bez modu, chybějící totals → bez modu,
   fallback pořadí computed (recap → base+vat → řádky).
@@ -215,15 +216,16 @@ vendor/bin/phpunit --filter 'DocumentApplierTest|DocumentValidatorTest|DocDocume
 cd frontend && timeout 90 npm run build 2>&1 | tail -10
 ```
 
-Ruční test na alfě: msi-zlin, zpráva s extracted doc 42 (FEINKOST) —
-review modal bez `totals_mismatch`, zobrazené Zaokrouhlení −0,05 CZK;
-po apply doklad s `total_rounding_mode = 1`, `total_amount = 1709.00`,
-`total_rounding = −0.05`.
+Ruční test na alfě: typový případ z diagnostiky — review modal bez
+`totals_mismatch`, zobrazené Zaokrouhlení −0,05 CZK; po apply doklad
+s `total_rounding_mode = 1` a `total_amount` / `total_rounding`
+odpovídající faktuře.
 
 ## Vedlejší nález (mimo scope, k samostatnému prověření)
 
-U extracted doc 42 je nejspíš špatně extrahovaný `vat.mode`: řádky nesou
-ceny **s DPH** (Σ řádků = 1664,05 + 45,00 = recap totals s daní), ale AI
-vrátila `fromBase` — při apply by se DPH přičetla podruhé (~1918 Kč).
+U diagnostikovaného případu je nejspíš špatně extrahovaný `vat.mode`:
+řádky nesou ceny **s DPH** (Σ řádků = Σ recap totals s daní, ne
+totalBase), ale AI vrátila `fromBase` — při apply by se DPH přičetla
+podruhé (celková částka o celou sazbu vyšší).
 Kandidát na samostatný prompt fix (pravidlo pro rozpoznání cen s DPH /
 `fromTotal`), se zaokrouhlením nesouvisí.

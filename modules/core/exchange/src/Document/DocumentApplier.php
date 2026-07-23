@@ -382,11 +382,13 @@ class DocumentApplier
         $customerResult = null;
         $supplierBankResult = null;
         $supplierPersonId = null;
+        $supplierCountry = '';
 
         if (!$isAccountingDoc) {
             $selfParty = $canonical['selfParty'] ?? null;
             $supplier = is_array($canonical['supplier'] ?? null) ? $canonical['supplier'] : [];
             $customer = is_array($canonical['customer'] ?? null) ? $canonical['customer'] : [];
+            $supplierCountry = strtolower((string) ($supplier['country'] ?? ''));
 
             $supplierResult = $selfParty === 'supplier'
                 ? $this->partyResolver->resolveSelfParty()
@@ -449,9 +451,22 @@ class DocumentApplier
                 }
             }
             if (is_array($row['vat'] ?? null) && !empty($row['vat']['code'])) {
+                // Země pro resolve DPH kódu — kaskáda: explicitní
+                // vat.registrationCountry → prefix z kódu (konvence
+                // „{země}-{číslo}“, např. cz-110; nese registraci přímo,
+                // proto vyhrává nad zemí dodavatele) → supplier.country.
+                // Model smí top-level "vat" vynechat (nullable od v2.3.0),
+                // bez fallbacku by pak KAŽDÝ řádek skončil vat_code_unknown.
+                $rowVatCountry = $vatCountry;
+                if ($rowVatCountry === '' && preg_match('/^([a-z]{2})-/i', (string) $row['vat']['code'], $m) === 1) {
+                    $rowVatCountry = strtolower($m[1]);
+                }
+                if ($rowVatCountry === '') {
+                    $rowVatCountry = $supplierCountry;
+                }
                 $vatR = $this->vatCodeResolver->resolve(
                     (string) $row['vat']['code'],
-                    $vatCountry !== '' ? $vatCountry : null,
+                    $rowVatCountry !== '' ? $rowVatCountry : null,
                     is_string($taxPointDate) ? $taxPointDate : null,
                     isset($row['vat']['pct']) ? (float) $row['vat']['pct'] : null,
                 );

@@ -1102,4 +1102,106 @@ class DocumentApplierTest extends TestCase
         // Fresh resolve zůstává nedotčený vedle přeneseného auditu.
         $this->assertSame('matched', $rowResolve['item']['status']);
     }
+
+    /**
+     * Kaskáda země pro resolve DPH kódu řádku, když model top-level "vat"
+     * vynechá (nullable od promptu v2.3.0): prefix z kódu „{země}-{číslo}“.
+     * Bez fallbacku by každý řádek skončil vat_code_unknown (reálný případ:
+     * účtenka OMV, extracted doc 9 na alfě).
+     */
+    public function testRowVatCountryFallsBackToCodePrefixWhenVatObjectMissing(): void
+    {
+        $party = $this->createMock(PartyResolver::class);
+        $party->method('resolve')->willReturn(ResolveResult::matched(42, 'companyId'));
+        $party->method('resolveSelfParty')->willReturn(ResolveResult::matched(1, 'self'));
+        $unit = $this->createMock(UnitResolver::class);
+        $unit->method('resolve')->willReturn(ResolveResult::matched(3, 'systemCode'));
+        $item = $this->createMock(ItemResolver::class);
+        $item->method('resolve')->willReturn(ResolveResult::matched(18, 'ourCode'));
+        $bank = $this->createMock(BankAccountResolver::class);
+        $bank->method('resolvePartnerBank')->willReturn(ResolveResult::matched(7, 'iban'));
+
+        $vat = $this->createMock(VatCodeResolver::class);
+        $vat->expects($this->once())->method('resolve')
+            ->with('cz-110', 'cz', $this->anything(), $this->anything())
+            ->willReturn(new ResolveResult(
+                ResolveStatus::Matched,
+                matchedId: 0,
+                matchedBy: 'cfgItem',
+                createPayload: ['code' => 'cz-110', 'pct' => 21.0, 'reverseVatCode' => null, 'noPayTax' => false],
+            ));
+
+        $applier = $this->buildApplier(party: $party, item: $item, unit: $unit, vat: $vat, bank: $bank);
+
+        $payload = json_decode(
+            (string) file_get_contents(__DIR__ . '/../../../../../Fixtures/Exchange/invoiceReceived_happy.json'),
+            true,
+        );
+        unset($payload['vat']);
+        $result = $applier->preview($payload);
+
+        $this->assertTrue($result->success);
+        $resolve = $result->canonical['_resolve'];
+        $this->assertSame('matched', $resolve['rows'][0]['vatCode']['status']);
+        $codes = array_column($resolve['issues'] ?? [], 'code');
+        $this->assertNotContains('vat_code_unknown', $codes);
+    }
+
+    /** Bez prefixu v kódu se použije země dodavatele. */
+    public function testRowVatCountryFallsBackToSupplierCountryWithoutPrefix(): void
+    {
+        $party = $this->createMock(PartyResolver::class);
+        $party->method('resolve')->willReturn(ResolveResult::matched(42, 'companyId'));
+        $party->method('resolveSelfParty')->willReturn(ResolveResult::matched(1, 'self'));
+        $unit = $this->createMock(UnitResolver::class);
+        $unit->method('resolve')->willReturn(ResolveResult::matched(3, 'systemCode'));
+        $item = $this->createMock(ItemResolver::class);
+        $item->method('resolve')->willReturn(ResolveResult::matched(18, 'ourCode'));
+        $bank = $this->createMock(BankAccountResolver::class);
+        $bank->method('resolvePartnerBank')->willReturn(ResolveResult::matched(7, 'iban'));
+
+        $vat = $this->createMock(VatCodeResolver::class);
+        $vat->expects($this->once())->method('resolve')
+            ->with('special110', 'sk', $this->anything(), $this->anything())
+            ->willReturn(ResolveResult::notFound());
+
+        $applier = $this->buildApplier(party: $party, item: $item, unit: $unit, vat: $vat, bank: $bank);
+
+        $payload = json_decode(
+            (string) file_get_contents(__DIR__ . '/../../../../../Fixtures/Exchange/invoiceReceived_happy.json'),
+            true,
+        );
+        unset($payload['vat']);
+        $payload['supplier']['country'] = 'SK';
+        $payload['rows'][0]['vat']['code'] = 'special110';
+        $applier->preview($payload);
+    }
+
+    /** Explicitní vat.registrationCountry má přednost před prefixem kódu. */
+    public function testExplicitVatRegistrationCountryBeatsCodePrefix(): void
+    {
+        $party = $this->createMock(PartyResolver::class);
+        $party->method('resolve')->willReturn(ResolveResult::matched(42, 'companyId'));
+        $party->method('resolveSelfParty')->willReturn(ResolveResult::matched(1, 'self'));
+        $unit = $this->createMock(UnitResolver::class);
+        $unit->method('resolve')->willReturn(ResolveResult::matched(3, 'systemCode'));
+        $item = $this->createMock(ItemResolver::class);
+        $item->method('resolve')->willReturn(ResolveResult::matched(18, 'ourCode'));
+        $bank = $this->createMock(BankAccountResolver::class);
+        $bank->method('resolvePartnerBank')->willReturn(ResolveResult::matched(7, 'iban'));
+
+        $vat = $this->createMock(VatCodeResolver::class);
+        $vat->expects($this->once())->method('resolve')
+            ->with('cz-110', 'de', $this->anything(), $this->anything())
+            ->willReturn(ResolveResult::notFound());
+
+        $applier = $this->buildApplier(party: $party, item: $item, unit: $unit, vat: $vat, bank: $bank);
+
+        $payload = json_decode(
+            (string) file_get_contents(__DIR__ . '/../../../../../Fixtures/Exchange/invoiceReceived_happy.json'),
+            true,
+        );
+        $payload['vat']['registrationCountry'] = 'DE';
+        $applier->preview($payload);
+    }
 }

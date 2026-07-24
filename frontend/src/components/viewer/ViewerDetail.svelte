@@ -10,6 +10,7 @@
   import { attachmentViewStore } from '../../stores/attachmentView.svelte.js';
   import DocumentDetail from './DocumentDetail.svelte';
   import Icon from '../ui/Icon.svelte';
+  import SandboxedHtml from '../ui/SandboxedHtml.svelte';
   import { resolveIcon } from '../../icons.js';
   import { t } from '../../i18n/index.js';
   import { translateError } from '../../i18n/errors.js';
@@ -284,6 +285,9 @@
         <div class="shpd-detail__html">
           {@html content.html}
         </div>
+
+      {:else if content?.type === 'untrusted-html'}
+        <SandboxedHtml html={content.html} title={t('viewer.detail.mailBody')} />
 
       {:else if content?.type === 'extracted-documents'}
         <div class="shpd-extracted">

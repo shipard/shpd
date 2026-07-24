@@ -624,7 +624,8 @@ Typy obsahu:
 |---|---|
 | `properties` | label/value grid ve skupinách |
 | `table` | tabulka (`columns` + `rows`); `columns[].align: "right"` = číselný sloupec (zarovnání doprava + `tabular-nums`, header i buňky); `rows[]._class` = klasifikace řádku — `error` (červené podbarvení, chybové řádky deníku) nebo `total` (tučný součtový řádek s horní linkou); `_class` není sloupec, do buněk se nerenderuje |
-| `html` | surové HTML — **bez sanitizace**, backend musí hodnoty escapovat; scoped styly komponenty se na `{@html}` nevztahují, vzhled jde přes globální CSS proměnné (vzor: stavový blok tabu Zaúčtování) |
+| `html` | surové HTML — **bez sanitizace**, backend musí hodnoty escapovat; **pouze pro trusted, backend-generovaný obsah** — pro cizí HTML použít `untrusted-html`; scoped styly komponenty se na `{@html}` nevztahují, vzhled jde přes globální CSS proměnné (vzor: stavový blok tabu Zaúčtování) |
+| `untrusted-html` | HTML z nedůvěryhodného zdroje (tělo e-mailu); renderuje se v sandboxovaném `<iframe srcdoc>` bez `allow-scripts` (`SandboxedHtml.svelte`): izolace skriptů i CSS oběma směry, odkazy do nového tabu (`<base target="_blank">`, whitelist protokolů — `javascript:` apod. se zahazuje), odstranění `meta refresh`, auto-height dle obsahu. **Nikdy nerozšiřovat sandbox o `allow-scripts`** — s `allow-same-origin` by skript z e-mailu četl Bearer token z localStorage |
 | `heading` | mezititulek sekce (`text`) |
 | `attachment-grid` | plochý grid příloh (`attachments`: `id`, `name`, `mime_type`, `file_size` v bajtech); přepínání miniatury/velké náhledy přes sdílený store `attachmentView.svelte.js` |
 | `composite` | seznam `blocks[]` — každý blok je libovolný z ostatních typů, renderuje se rekurzivně týmž snippetem |

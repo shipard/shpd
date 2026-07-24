@@ -183,6 +183,7 @@ export default {
   'viewer.detail.setPasswordFailed': 'Nepodařilo se nastavit heslo: {msg}',
   'viewer.detail.inviteSent': 'Pozvánka byla odeslána.',
   'viewer.detail.inviteFailed': 'Nepodařilo se poslat pozvánku: {msg}',
+  'viewer.detail.mailBody': 'Tělo zprávy',
 
   // ── Viewer detail dokladu (content type `document`) ─────────────────────
   'viewer.document.section.supplier': 'Dodavatel',

@@ -71,6 +71,31 @@ class FakeIncomingMessageGenerator
     ];
 
     /**
+     * Obsahové bloky HTML těl — každý pokrývá jeden bod smoke testu
+     * sandboxovaného renderingu (tasks/mail-html-sandbox.md).
+     */
+    private const HTML_BODY_BLOCKS = [
+        // Bezpečnostní payloady — v sandboxu se nesmí nic spustit.
+        '<script>alert(1)</script>'
+            . '<img src=x onerror=alert(1)>'
+            . '<p><a href="javascript:alert(1)">Klikněte zde pro výhru</a></p>',
+        // Globální CSS kolize — nesmí prosáknout do aplikace.
+        '<style>body { background: #fdecea; } .shpd-btn, .shpd-sidebar { display: none !important; } h1 { color: #b03030; }</style>'
+            . '<h1>Akční nabídka</h1><p>Slevy až 70 % na vybrané služby platí jen do konce měsíce.</p>',
+        // Odkazy — https do nového tabu, mailto, in-page kotva.
+        '<p><a href="https://www.example.com/cenik">Aktuální ceník ke stažení</a></p>'
+            . '<p><a href="mailto:obchod@example.com">Napište nám</a> nebo přejděte na <a href="#detail">detail níže</a>.</p>'
+            . '<h2 id="detail">Detail nabídky</h2><p>Podrobné podmínky naleznete v přiloženém dokumentu.</p>',
+        // Obrázky — data URI (load event) + nedostupný remote (error event),
+        // obojí musí přeměřit auto-height.
+        '<p><img src="data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'480\' height=\'120\'%3E%3Crect width=\'480\' height=\'120\' fill=\'%234a90d9\'/%3E%3C/svg%3E" width="480" height="120" alt="Banner"></p>'
+            . '<p><img src="https://mail.example.invalid/tracking.png" alt="Nedostupný obrázek"></p>',
+        // Meta refresh — komponenta ho musí odstranit (žádná auto-navigace).
+        '<meta http-equiv="refresh" content="0;url=https://www.example.com/pryc">'
+            . '<p>Vaše relace vypršela, za okamžik budete přesměrováni…</p>',
+    ];
+
+    /**
      * Vygeneruje jednu zprávu pro zadanou schránku.
      *
      * @param int    $index               Pořadové číslo zprávy (pro `message_id`)
@@ -120,7 +145,7 @@ class FakeIncomingMessageGenerator
             'in_reply_to'           => null,
             'reply_references'      => null,
             'body_plain'            => $this->generateBody($subject),
-            'body_html'             => null,
+            'body_html'             => $this->generateHtmlBody($subject),
             'raw_source_attachment' => null,
             'target_table_id'       => null,
             'target_row'            => null,
@@ -194,6 +219,27 @@ class FakeIncomingMessageGenerator
             $r <= 95 => [40, 3, 30],
             default  => [80, 4, 0],
         };
+    }
+
+    /**
+     * HTML tělo pro ~polovinu zpráv — content tab ho preferuje před plain
+     * a renderuje jako `untrusted-html` (sandboxovaný iframe). Zbytek zpráv
+     * zůstává plain-only, aby zůstala pokrytá i fallback větev.
+     */
+    private function generateHtmlBody(string $subject): ?string
+    {
+        if (random_int(1, 100) > 50) {
+            return null;
+        }
+
+        $safeSubject = htmlspecialchars($subject, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+        return '<!DOCTYPE html><html><body>'
+            . '<p>Dobrý den,</p>'
+            . '<p>v příloze naleznete dokument k předmětu „' . $safeSubject . '“.</p>'
+            . self::pick(self::HTML_BODY_BLOCKS)
+            . '<p>S pozdravem,<br>Fakturační oddělení</p>'
+            . '</body></html>';
     }
 
     private function generateBody(string $subject): string

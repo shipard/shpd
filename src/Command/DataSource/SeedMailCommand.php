@@ -7,6 +7,7 @@ namespace Shipard\Command\DataSource;
 use Shipard\Api\TableLoader;
 use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Database\DataSourceConnection;
+use Shipard\Core\Module\ModulePathResolver;
 use Shipard\Module\Core\Attachments\AttachmentService;
 use Shipard\Module\Core\Mail\FakeIncomingMessageGenerator;
 use Shipard\Module\Core\Mail\FakeMailboxGenerator;
@@ -88,7 +89,7 @@ class SeedMailCommand extends Command
         }
 
         // Table defs — AttachmentService potřebuje mapu tableId → tableName
-        $tableDefs = TableLoader::load($dsConfig, $modulesPath, 'cs');
+        $tableDefs = TableLoader::load($dsConfig, new ModulePathResolver([$modulesPath]), 'cs');
 
         $output->writeln('<info>Seeding core.mail test data...</info>');
         $output->writeln('  Messages:         ' . $count);

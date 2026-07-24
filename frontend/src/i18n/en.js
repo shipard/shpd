@@ -174,6 +174,7 @@ export default {
   'viewer.detail.setPasswordFailed': 'Failed to set password: {msg}',
   'viewer.detail.inviteSent': 'Invitation sent.',
   'viewer.detail.inviteFailed': 'Failed to send invitation: {msg}',
+  'viewer.detail.mailBody': 'Message body',
 
   // ── Viewer document detail (content type `document`) ────────────────────
   'viewer.document.section.supplier': 'Supplier',

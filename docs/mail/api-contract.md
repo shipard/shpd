@@ -169,8 +169,10 @@ index).
 - API klíče se ukládají pouze jako sha256 hash, plaintext se zobrazí jen při
   vytvoření.
 - IP whitelist volitelný přes `mail-router-setup --ip=<address>`.
-- `body_html` se v UI renderuje sandboxovaně (iframe nebo prefiltrace) — raw
-  HTML se v DB ukládá beze změny.
+- `body_html` se v UI renderuje sandboxovaně — detail ho posílá jako content
+  type `untrusted-html` a frontend renderuje v `<iframe srcdoc>` bez
+  `allow-scripts` (`SandboxedHtml.svelte`, viz `docs/frontend.md` — Typy
+  obsahu). Raw HTML se v DB ukládá beze změny.
 - Antivir scan **neproběhne v Shipardu** — očekává se na straně mail-routeru
   před odesláním.
 - Rate limit na `/_mail/incoming` zatím není — mail-router je trusted. Pojistka

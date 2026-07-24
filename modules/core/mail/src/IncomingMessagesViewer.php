@@ -408,10 +408,12 @@ class IncomingMessagesViewer extends TableViewer
         $bodyHtml = (string) ($record['body_html'] ?? '');
         $bodyPlain = (string) ($record['body_plain'] ?? '');
 
-        // Tělo: preferujeme HTML, fallback na plain. Frontend ho renderuje sanitovaně.
+        // Tělo: preferujeme HTML, fallback na plain. HTML je nedůvěryhodný
+        // vstup (e-mail) — frontend ho renderuje v sandboxovaném iframe
+        // (SandboxedHtml.svelte), do DB se ukládá raw (api-contract §7).
         $bodyContent = null;
         if ($bodyHtml !== '') {
-            $bodyContent = ['type' => 'html', 'html' => $bodyHtml];
+            $bodyContent = ['type' => 'untrusted-html', 'html' => $bodyHtml];
         } elseif ($bodyPlain !== '') {
             $bodyContent = [
                 'type' => 'html',

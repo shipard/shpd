@@ -154,17 +154,34 @@ class McpController
 		];
 	}
 
+	/**
+	 * Jedna položka do textového kanálu: `#id popisek — doplňky`. `#id` jen
+	 * když položka nese `ref` (agregační skupiny typu „měsíc" ho nemají).
+	 * Doplňky jsou volitelné klíče, které nástroje plní — bez `value`/
+	 * `share_pct` by byl žebříček z `documents_aggregate` v textovém kanálu
+	 * seznam popisků bez čísel.
+	 */
 	private function compactLine(array $item): string
 	{
-		$id = $item['ref']['id'] ?? null;
-		$parts = ['#' . (string) $id . ' ' . (string) ($item['full_name'] ?? '')];
+		$id    = $item['ref']['id'] ?? null;
+		$label = trim((string) ($item['full_name'] ?? ''));
+		$head  = $id !== null ? '#' . (string) $id . ' ' . $label : $label;
+
+		$parts = [];
 		if (!empty($item['company_id'])) {
 			$parts[] = 'IČO ' . (string) $item['company_id'];
 		}
 		if (!empty($item['vat_id'])) {
 			$parts[] = 'DIČ ' . (string) $item['vat_id'];
 		}
-		return trim(implode(' — ', [array_shift($parts), implode(', ', $parts)]), " —");
+		if (isset($item['value'])) {
+			$parts[] = trim((string) $item['value'] . ' ' . (string) ($item['currency'] ?? ''));
+		}
+		if (isset($item['share_pct'])) {
+			$parts[] = (string) $item['share_pct'] . ' %';
+		}
+
+		return trim(implode(' — ', [$head, implode(', ', $parts)]), " —");
 	}
 
 	private function result(mixed $id, array $result): Response

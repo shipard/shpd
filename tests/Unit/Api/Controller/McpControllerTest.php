@@ -19,6 +19,7 @@ use Shipard\Module\Core\Exchange\Document\DocumentApplier;
 use Shipard\Module\Core\Mail\ExtractedDocumentApplier;
 use Shipard\Module\Core\Mail\Mcp\MailDraftDocumentTool;
 use Shipard\Module\Core\Mail\Mcp\MailListPendingTool;
+use Shipard\Module\Docs\Core\Mcp\DocumentsAggregateTool;
 use Shipard\Module\Docs\Core\Mcp\DocumentsSearchTool;
 
 class McpControllerTest extends TestCase
@@ -52,6 +53,7 @@ class McpControllerTest extends TestCase
 		$registry->register(new PersonsSearchTool());
 		$registry->register(new PersonsGetTool());
 		$registry->register(new DocumentsSearchTool());
+		$registry->register(new DocumentsAggregateTool());
 		$registry->register(new MailListPendingTool());
 		$registry->register(new RegistrySearchTool());
 		$ctrl = new McpController($registry);
@@ -247,7 +249,7 @@ class McpControllerTest extends TestCase
 
 		$tools = $resp->getPayload()['result']['tools'];
 		$names = array_column($tools, 'name');
-		foreach (['persons_search', 'persons_get', 'documents_search', 'mail_list_pending', 'registry_search'] as $expected) {
+		foreach (['persons_search', 'persons_get', 'documents_search', 'documents_aggregate', 'mail_list_pending', 'registry_search'] as $expected) {
 			$this->assertContains($expected, $names);
 		}
 		foreach ($tools as $t) {
@@ -374,6 +376,50 @@ class McpControllerTest extends TestCase
 		$this->assertCount(20, $sc['items']);
 		$this->assertTrue($sc['pagination']['has_more']);
 		$this->assertNull($sc['items'][0]['partner']);
+	}
+
+	// documents_aggregate: textový kanál nese míru i podíl (bez nich by byl
+	// žebříček seznam popisků bez čísel), `#id` jen u položek s ref
+	public function testDocumentsAggregateCompactTextCarriesValueAndShare(): void
+	{
+		$db = $this->createMock(DataSourceConnection::class);
+		$db->method('fetchAll')->willReturn([
+			['dim_key' => 1, 'label_raw' => 'Acme s.r.o.', 'measure_value' => '1204000.00', 'doc_count' => 42, 'currency' => 'czk'],
+		]);
+		$db->method('fetchRow')->willReturn(['total_value' => '4816000.00', 'total_docs' => 120, 'currency_count' => 1, 'currency' => 'czk']);
+
+		$result = $this->callTool($db, 'documents_aggregate', ['dimension' => 'partner', 'doc_type' => 'invni']);
+		$text = $result['content'][0]['text'];
+
+		$this->assertStringContainsString('#1 Acme s.r.o. — 1204000.00 CZK, 25 %', $text);
+		$this->assertSame(['type' => 'person', 'id' => 1], $result['structuredContent']['items'][0]['ref']);
+	}
+
+	// documents_aggregate: skupina bez ref (typ dokladu) nedostane osiřelé `#`
+	public function testDocumentsAggregateCompactTextWithoutRefHasNoHash(): void
+	{
+		$db = $this->createMock(DataSourceConnection::class);
+		$db->method('fetchAll')->willReturn([
+			['dim_key' => 'invni', 'measure_value' => '500.00', 'doc_count' => 2, 'currency' => 'czk'],
+		]);
+		$db->method('fetchRow')->willReturn(['total_value' => '500.00', 'total_docs' => 2, 'currency_count' => 1, 'currency' => 'czk']);
+
+		$result = $this->callTool($db, 'documents_aggregate', ['dimension' => 'doc_type']);
+		$lines = explode("\n", $result['content'][0]['text']);
+
+		$this->assertSame('invni — 500.00 CZK, 100 %', $lines[1]);
+	}
+
+	// documents_aggregate: chybějící dimension → -32602
+	public function testDocumentsAggregateWithoutDimensionIsInvalidParams(): void
+	{
+		[$ctrl, $db] = $this->controller();
+		$resp = $this->call($ctrl, $this->buildRequest([
+			'jsonrpc' => '2.0', 'id' => 77, 'method' => 'tools/call',
+			'params' => ['name' => 'documents_aggregate', 'arguments' => []],
+		]), $db);
+
+		$this->assertSame(JsonRpcError::INVALID_PARAMS, $resp->getPayload()['error']['code']);
 	}
 
 	// registry_search: default state=filed + druh → správné WHERE a parametry

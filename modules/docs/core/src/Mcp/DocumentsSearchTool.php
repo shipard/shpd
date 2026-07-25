@@ -11,8 +11,10 @@ use Shipard\Core\Document\DocStateConfig;
  * Čtecí MCP nástroj: vyhledávání dokladů (faktury vydané/přijaté) v
  * `docs_core_heads` dle partnera, typu, účetního období, stavu a po
  * splatnosti. Období filtruje `accounting_date`. `overdue` je příznak (ne
- * samostatný nástroj) a NEznamená „neuhrazeno" — systém bez saldokonta stav
- * úhrady nezná.
+ * samostatný nástroj) a znamená jen „po splatnosti" — stav úhrady tento
+ * nástroj nevrací, takže z něj „neuhrazeno" nevyčteš.
+ *
+ * Součty, počty a žebříčky nad doklady patří do `documents_aggregate`.
  */
 final class DocumentsSearchTool implements McpTool
 {
@@ -32,12 +34,15 @@ final class DocumentsSearchTool implements McpTool
 	public function description(): string
 	{
 		return 'Vyhledá doklady (faktury vydané/přijaté) podle partnera, typu, '
-			. 'účetního období, stavu a po splatnosti. `partner` je ID osoby z '
-			. '`persons_search`. Období filtruje účetní datum. `overdue=true` '
-			. 'vrátí doklady po splatnosti (datum splatnosti < dnes, nestornované) '
-			. '— POZOR: to NENÍ totéž co „neuhrazené"; systém bez saldokonta stav '
-			. 'úhrady nezná, nelze říct, jestli je faktura zaplacená. Nepoužívej '
-			. 'pro osoby (`persons_search`/`persons_get`) ani pro došlou poštu '
+			. 'účetního období, stavu a po splatnosti — vrací seznam konkrétních '
+			. 'dokladů. `partner` je ID osoby z `persons_search`. Období filtruje '
+			. 'účetní datum. `overdue=true` vrátí doklady po splatnosti (datum '
+			. 'splatnosti < dnes, nestornované) — POZOR: „po splatnosti" NENÍ totéž '
+			. 'co „neuhrazené"; tento nástroj stav úhrady nevrací, netvrď tedy, že '
+			. 'je faktura zaplacená nebo nezaplacená. Na součty, počty a žebříčky '
+			. '(„největší dodavatelé", „obrat po měsících") použij '
+			. '`documents_aggregate`. Nepoužívej pro osoby '
+			. '(`persons_search`/`persons_get`) ani pro došlou poštu '
 			. '(`mail_list_pending`).';
 	}
 
@@ -50,7 +55,7 @@ final class DocumentsSearchTool implements McpTool
 				'doc_type'             => ['type' => 'string', 'description' => "Typ dokladu, např. 'invno' (faktura vydaná) nebo 'invni' (faktura přijatá)"],
 				'accounting_date_from' => ['type' => 'string', 'description' => 'Účetní datum od (YYYY-MM-DD)'],
 				'accounting_date_to'   => ['type' => 'string', 'description' => 'Účetní datum do (YYYY-MM-DD)'],
-				'overdue'              => ['type' => 'boolean', 'default' => false, 'description' => "Jen doklady po splatnosti (due_date < dnes, nestornované). NE 'neuhrazené'."],
+				'overdue'              => ['type' => 'boolean', 'default' => false, 'description' => "Jen doklady po splatnosti (due_date < dnes, nestornované). Po splatnosti NENÍ 'neuhrazené' — stav úhrady tento nástroj nevrací."],
 				'state'                => ['type' => 'string', 'enum' => ['active', 'done', 'all'], 'default' => 'active', 'description' => 'active = bez smazaných; done = jen V pořádku; all = vč. smazaných'],
 				'query'                => ['type' => 'string', 'description' => 'Volný text přes doc_number / partner_doc_number'],
 				'limit'                => ['type' => 'integer', 'minimum' => 1, 'maximum' => self::MAX_LIMIT, 'default' => self::DEFAULT_LIMIT],

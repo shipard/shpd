@@ -106,6 +106,13 @@ Wire (`tools/call` result):
 `content` text je vždy (univerzálně podporováno); `structuredContent` aditivně
 pro klienty, co ho umí.
 
+**Kompaktní řádek položky** (`McpController::compactLine()`) je
+`#id popisek — doplňky`. `#id` se vypíše jen u položek s `ref`; doplňky jsou
+volitelné klíče, které položka nese — `company_id` (IČO), `vat_id` (DIČ),
+`value` + `currency` a `share_pct`. Nástroj, jehož číselný výstup má do
+textového kanálu dojít, používá tyto klíče (viz `documents_aggregate`) —
+`structuredContent` čtou jen některé klienty, `content` všechny.
+
 ---
 
 ## 5. Tiery podle rizika
@@ -117,7 +124,7 @@ vystavuje v `tools/list` všechny; filtr je na konzumentovi.
 
 | Tier | `isReadOnly()` | Nástroje |
 |------|----------------|----------|
-| Čtení | `true` | `persons_search`, `persons_get`, `documents_search`, `mail_list_pending`, `registry_search` |
+| Čtení | `true` | `persons_search`, `persons_get`, `documents_search`, `documents_aggregate`, `mail_list_pending`, `registry_search` |
 | Zápis (koncepty/akce) | `false` | `mail_draft_document` |
 
 ---

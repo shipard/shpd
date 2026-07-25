@@ -61,13 +61,18 @@ samostatnosti dostane AI. Vnitřní chat v1 nabízí modelu **jen čtecí tier**
 
 | Tier | Brzda | Nástroje |
 |------|-------|----------|
-| **Čtení** | žádná (bezpečné) | `persons_search`, `persons_get`, `documents_search`, `mail_list_pending` |
+| **Čtení** | žádná (bezpečné) | `persons_search`, `persons_get`, `documents_search`, `documents_aggregate`, `mail_list_pending`, `registry_search` |
 | **Koncepty** | zápis do `docState` Konceptu (10) + lidská revize; `autoCreateMode='safe'` (nezakládá master data) | `mail_draft_document` |
 | **Akce** | (potvrzení / zatím nezavedeno) | — |
 
+`documents_search` vrací **konkrétní doklady**, `documents_aggregate` **součty
+a počty** seskupené podle dimenze (partner / typ dokladu / fiskální měsíc /
+období DPH) — žebříčky a časové řady. Agregace patří do SQL, ne do sčítání
+odstránkovaných výsledků modelem.
+
 Katalog roste podle schopností systému: nástroj smí tvrdit jen to, co data
-umí pravdivě zodpovědět (např. „po splatnosti" ano, „neuhrazeno" ne — chybí
-saldokonto).
+umí pravdivě zodpovědět — a jen to, co vrací **on sám** (např. „po splatnosti"
+ano, „neuhrazeno" ne: stav úhrady žádný z dokladových nástrojů nevrací).
 
 ---
 

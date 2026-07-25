@@ -515,7 +515,9 @@ export default {
   'chat.tool.personsSearch': '🔍 Searching people…',
   'chat.tool.personsGet': '🔍 Loading person detail…',
   'chat.tool.documentsSearch': '🔍 Searching documents…',
+  'chat.tool.documentsAggregate': '📊 Computing totals…',
   'chat.tool.mailListPending': '🔍 Checking incoming mail…',
+  'chat.tool.registrySearch': '🔍 Searching the registry…',
   'chat.tool.generic': '🔧 Using tool {name}…',
   // ── Settings pages (Settings → property pages) ─────────────────────────
   'settingsPage.loadFailed': 'Failed to load the settings page.',

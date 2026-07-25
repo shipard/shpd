@@ -10,7 +10,9 @@ const TOOL_LABEL_KEYS = {
   persons_search: 'chat.tool.personsSearch',
   persons_get: 'chat.tool.personsGet',
   documents_search: 'chat.tool.documentsSearch',
+  documents_aggregate: 'chat.tool.documentsAggregate',
   mail_list_pending: 'chat.tool.mailListPending',
+  registry_search: 'chat.tool.registrySearch',
 };
 
 /**

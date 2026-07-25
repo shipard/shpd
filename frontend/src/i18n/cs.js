@@ -528,7 +528,9 @@ export default {
   'chat.tool.personsSearch': '🔍 Hledám osoby…',
   'chat.tool.personsGet': '🔍 Načítám detail osoby…',
   'chat.tool.documentsSearch': '🔍 Hledám doklady…',
+  'chat.tool.documentsAggregate': '📊 Počítám součty…',
   'chat.tool.mailListPending': '🔍 Procházím došlou poštu…',
+  'chat.tool.registrySearch': '🔍 Prohledávám Spisovnu…',
   'chat.tool.generic': '🔧 Používám nástroj {name}…',
   // ── Settings pages (Nastavení → stránky vlastností) ────────────────────
   'settingsPage.loadFailed': 'Stránku nastavení se nepodařilo načíst.',

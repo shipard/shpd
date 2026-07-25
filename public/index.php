@@ -317,7 +317,7 @@ function dispatchMcp(
 
 /**
  * Builds the in-process MCP tool registry shared by /_mcp (dispatchMcp) and the
- * chat tool-use loop (dispatchChat). All five tools are registered; the chat
+ * chat tool-use loop (dispatchChat). Every tool is registered here; the chat
  * loop filters to read-only tools itself via McpTool::isReadOnly().
  *
  * @param array<string, \Shipard\Core\Database\TableDefinition> $tables
@@ -333,6 +333,7 @@ function buildMcpRegistry(
 	$registry->register(new \Shipard\Module\Base\Persons\Mcp\PersonsSearchTool());
 	$registry->register(new \Shipard\Module\Base\Persons\Mcp\PersonsGetTool());
 	$registry->register(new \Shipard\Module\Docs\Core\Mcp\DocumentsSearchTool());
+	$registry->register(new \Shipard\Module\Docs\Core\Mcp\DocumentsAggregateTool());
 	$registry->register(new \Shipard\Module\Core\Mail\Mcp\MailListPendingTool());
 	// Spisovna — jen s aktivním modulem base.registry.
 	if (isset($tables['base_registry_documents'])) {

@@ -10,6 +10,7 @@ use Shipard\Module\Base\Persons\Mcp\PersonsSearchTool;
 use Shipard\Module\Base\Registry\Mcp\RegistrySearchTool;
 use Shipard\Module\Core\Mail\Mcp\MailDraftDocumentTool;
 use Shipard\Module\Core\Mail\Mcp\MailListPendingTool;
+use Shipard\Module\Docs\Core\Mcp\DocumentsAggregateTool;
 use Shipard\Module\Docs\Core\Mcp\DocumentsSearchTool;
 
 /**
@@ -23,6 +24,7 @@ class McpToolReadOnlyTest extends TestCase
         $this->assertTrue((new PersonsSearchTool())->isReadOnly());
         $this->assertTrue((new PersonsGetTool())->isReadOnly());
         $this->assertTrue((new DocumentsSearchTool())->isReadOnly());
+        $this->assertTrue((new DocumentsAggregateTool())->isReadOnly());
         $this->assertTrue((new MailListPendingTool())->isReadOnly());
         $this->assertTrue((new RegistrySearchTool())->isReadOnly());
     }

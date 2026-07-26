@@ -38,15 +38,19 @@ class VatPeriodsProvisionerTest extends TestCase
 
         $db->method('fetchRow')->willReturnCallback(
             function (string $sql, mixed ...$params) use ($store): ?array {
+                // Overlap lookup: params are (regId, candidate.date_end, candidate.date_begin)
                 if (str_contains($sql, 'economy_codebooks_vat_periods')
                     && str_contains($sql, 'vat_registration')
                     && str_contains($sql, 'date_begin')
+                    && str_contains($sql, 'date_end')
                 ) {
                     $regId = (int) ($params[0] ?? 0);
-                    $needle = (string) ($params[1] ?? '');
+                    $candEnd = (string) ($params[1] ?? '');
+                    $candBegin = (string) ($params[2] ?? '');
                     foreach ($store->tables['economy_codebooks_vat_periods'] as $row) {
                         if ((int) ($row['vat_registration'] ?? 0) === $regId
-                            && ($row['date_begin'] ?? '') === $needle
+                            && ($row['date_begin'] ?? '') <= $candEnd
+                            && ($row['date_end'] ?? '') >= $candBegin
                         ) {
                             return $row;
                         }
@@ -81,6 +85,40 @@ class VatPeriodsProvisionerTest extends TestCase
             'valid_to'        => $validTo,
             'docState'        => $docState,
         ];
+    }
+
+    /** @return array<string, mixed> */
+    private function makePeriod(
+        int $id,
+        int $regId,
+        string $name,
+        string $dateBegin,
+        string $dateEnd,
+        int $docState = 40,
+    ): array {
+        return [
+            'id'               => $id,
+            'vat_registration' => $regId,
+            'name'             => $name,
+            'date_begin'       => $dateBegin,
+            'date_end'         => $dateEnd,
+            'locked'           => 0,
+            'docState'         => $docState,
+            'docStateMain'     => $docState === 90 ? 4 : 3,
+        ];
+    }
+
+    /**
+     * Count rows whose range intersects the given interval.
+     *
+     * @param list<array<string, mixed>> $rows
+     */
+    private function countOverlapping(array $rows, string $begin, string $end): int
+    {
+        return count(array_filter(
+            $rows,
+            fn(array $r) => ($r['date_begin'] ?? '') <= $end && ($r['date_end'] ?? '') >= $begin,
+        ));
     }
 
     public function testNoRegistrationsResultsInZero(): void
@@ -264,5 +302,86 @@ class VatPeriodsProvisionerTest extends TestCase
         $reg2Rows = array_filter($rows, fn(array $r) => (int) $r['vat_registration'] === 2);
         $this->assertCount(24, $reg1Rows);
         $this->assertCount(8, $reg2Rows);
+    }
+
+    public function testQuarterlyExistingPeriodBlocksMonthlyCandidates(): void
+    {
+        // Imported quarterly history + monthly registration: Q1/2026 must block
+        // January, February AND March candidates, not just January.
+        $store = $this->recordingDb(
+            [$this->makeReg(1, 1, '2026-01-01', null)],
+            [$this->makePeriod(100, 1, 'Q1/2026', '2026-01-01', '2026-03-31')],
+        );
+        $provisioner = new VatPeriodsProvisioner($store->db);
+        $result = $provisioner->provision(new \DateTimeImmutable('2026-04-15'));
+
+        // Apr..Dec 2026 = 9 + 12 in 2027 = 21 created; Jan/Feb/Mar counted as existing
+        $this->assertSame(21, $result['vatPeriods']['created']);
+        $this->assertSame(3, $result['vatPeriods']['existing']);
+
+        // Nothing new may reach into the existing quarter
+        $rows = $store->tables['economy_codebooks_vat_periods'];
+        $this->assertSame(1, $this->countOverlapping($rows, '2026-01-01', '2026-03-31'));
+        $this->assertSame('04/2026', $rows[1]['name']);
+    }
+
+    public function testMonthlyExistingPeriodBlocksQuarterlyCandidate(): void
+    {
+        // Reverse direction: a single imported month blocks the whole quarter.
+        $store = $this->recordingDb(
+            [$this->makeReg(1, 2, '2026-01-01', null)],
+            [$this->makePeriod(100, 1, '02/2026', '2026-02-01', '2026-02-28')],
+        );
+        $provisioner = new VatPeriodsProvisioner($store->db);
+        $result = $provisioner->provision(new \DateTimeImmutable('2026-04-15'));
+
+        // Q2..Q4 2026 = 3 + 4 in 2027 = 7 created; Q1/2026 counted as existing
+        $this->assertSame(7, $result['vatPeriods']['created']);
+        $this->assertSame(1, $result['vatPeriods']['existing']);
+
+        $rows = $store->tables['economy_codebooks_vat_periods'];
+        $this->assertSame(1, $this->countOverlapping($rows, '2026-01-01', '2026-03-31'));
+        $this->assertSame('Q2/2026', $rows[1]['name']);
+    }
+
+    public function testNonAlignedImportedPeriodBlocksOverlappingCandidate(): void
+    {
+        // Real import case: a partial entry period not aligned to month boundaries.
+        $store = $this->recordingDb(
+            [$this->makeReg(1, 1, '2026-01-01', null)],
+            [$this->makePeriod(100, 1, '11-12/2026', '2026-11-02', '2026-12-31')],
+        );
+        $provisioner = new VatPeriodsProvisioner($store->db);
+        $result = $provisioner->provision(new \DateTimeImmutable('2026-04-15'));
+
+        // Jan..Oct 2026 = 10 + 12 in 2027 = 22 created; Nov + Dec counted as existing
+        $this->assertSame(22, $result['vatPeriods']['created']);
+        $this->assertSame(2, $result['vatPeriods']['existing']);
+
+        $rows = $store->tables['economy_codebooks_vat_periods'];
+        $this->assertSame(1, $this->countOverlapping($rows, '2026-11-02', '2026-12-31'));
+    }
+
+    public function testDeletedOverlappingPeriodStillBlocks(): void
+    {
+        // "Deleted stays deleted" holds for overlap too: a soft-deleted quarter
+        // blocks all three monthly candidates inside it.
+        $store = $this->recordingDb(
+            [$this->makeReg(1, 1, '2026-01-01', null)],
+            [$this->makePeriod(100, 1, 'Q1/2026', '2026-01-01', '2026-03-31', 90)],
+        );
+        $provisioner = new VatPeriodsProvisioner($store->db);
+        $result = $provisioner->provision(new \DateTimeImmutable('2026-04-15'));
+
+        $this->assertSame(21, $result['vatPeriods']['created']);
+        $this->assertSame(3, $result['vatPeriods']['existing']);
+
+        $rows = $store->tables['economy_codebooks_vat_periods'];
+        $overlapping = array_values(array_filter(
+            $rows,
+            fn(array $r) => ($r['date_begin'] ?? '') <= '2026-03-31' && ($r['date_end'] ?? '') >= '2026-01-01',
+        ));
+        $this->assertCount(1, $overlapping);
+        $this->assertSame(90, $overlapping[0]['docState']);
     }
 }

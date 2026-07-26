@@ -11,8 +11,19 @@ use Shipard\Core\Database\DataSourceConnection;
  *
  * Pro každou registraci s `docState IN (10, 40, 80)` doplní chybějící
  * období v aktuálním a následujícím kalendářním roce, omezené
- * `valid_from`/`valid_to`. Lookup před insertem ignoruje docState —
- * smazaná období (`docState=90`) se proto nikdy nevracejí.
+ * `valid_from`/`valid_to`.
+ *
+ * Lookup před insertem je **překryvový** (`date_begin <= kandidát.date_end
+ * AND date_end >= kandidát.date_begin`), ne rovnostní na `date_begin`:
+ * v tabulce mohou být období importovaná ze starého Shipardu s jinou
+ * frekvencí, než má registrace v `tax_period_kind` — rovnostní lookup by je
+ * nenašel a založil období překrývající se s existujícím.
+ *
+ * Lookup **ignoruje docState** — smazaná období (`docState=90`) se proto
+ * nikdy nevracejí. S překryvovou semantikou platí tento invariant šířeji:
+ * smazané období blokuje generování všeho, co se s ním překrývá (smazané
+ * Q1 u čtvrtletní registrace přepnuté na měsíční zablokuje leden, únor
+ * i březen).
  */
 class VatPeriodsProvisioner
 {
@@ -96,10 +107,18 @@ class VatPeriodsProvisioner
                 continue;
             }
 
+            // Idempotence přes PŘEKRYV, ne rovnost date_begin: v tabulce mohou být
+            // období importovaná ze starého Shipardu s jinou frekvencí, než jakou má
+            // registrace v `tax_period_kind` (např. čtvrtletní historie + měsíční
+            // registrace). Rovnostní lookup by je nenašel a vygeneroval by období
+            // překrývající se s existujícím → nedeterministické dohledání v
+            // DocDocument::resolveVatPeriodId() (LIMIT 1 bez ORDER BY).
             $row = $this->db->fetchRow(
                 'SELECT `id` FROM `economy_codebooks_vat_periods`'
-                . ' WHERE `vat_registration` = %i AND `date_begin` = %d',
+                . ' WHERE `vat_registration` = %i'
+                . ' AND `date_begin` <= %d AND `date_end` >= %d',
                 $regId,
+                $candidate['date_end']->format('Y-m-d'),
                 $candidate['date_begin']->format('Y-m-d'),
             );
             if ($row !== null) {

@@ -143,10 +143,16 @@ Při každém běhu `bin/shpd-ds ds-upgrade` se po fiskálních rocích spustí
    čtvrtletní → 4 období per rok s názvem `"QN/YYYY"`.
 4. Vygenerované období dostává `docState=40, docStateMain=3, locked=0`.
 
-**Idempotence**: lookup před insertem je podle `vat_registration` +
-`date_begin` a **ignoruje docState**. Pokud uživatel přes UI smaže
-období (`docState=90`), další `ds-upgrade` ho nikdy nevygeneruje znovu —
-smazané období zůstává smazané.
+**Idempotence**: lookup před insertem je **překryvový** — podle
+`vat_registration` + `date_begin <= kandidát.date_end AND date_end >=
+kandidát.date_begin` — a **ignoruje docState**. Překryv místo rovnosti
+`date_begin` proto, že v tabulce mohou být období importovaná ze starého
+Shipardu s jinou frekvencí, než má registrace v `tax_period_kind`
+(např. čtvrtletní historie + měsíční registrace); rovnostní lookup by je
+nenašel a založil období překrývající se s existujícím. Pokud uživatel
+přes UI smaže období (`docState=90`), další `ds-upgrade` ho nikdy
+nevygeneruje znovu — smazané období zůstává smazané a blokuje i
+generování všech kandidátů, kteří se s ním překrývají.
 
 Generátor počítá podle **kalendářního** (ne fiskálního) roku — období
 DPH jsou kalendářní entita; pokud má firma fiskální rok jiný než
@@ -162,7 +168,10 @@ speciální případy:
 - Změna frekvence (`tax_period_kind`) u existující registrace —
   uživatel manuálně smaže nesedící stará období, další `ds-upgrade`
   doplní chybějící podle aktuální frekvence; provisioner do existujících
-  záznamů nesahá
+  záznamů nesahá. **Úklid musí být úplný**: kvůli překryvovému lookupu
+  provisioner nevytvoří kandidáty, kteří se překrývají se zbylými
+  (nesmazanými) starými obdobími — zapomenuté čtvrtletí zablokuje
+  všechny tři měsíce v něm
 
 Editace `valid_from`/`valid_to` po vygenerování období se neprojeví
 zpětně — provisioner nikdy neupravuje existující záznamy. Uživatel si

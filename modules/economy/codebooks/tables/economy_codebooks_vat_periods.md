@@ -33,9 +33,13 @@ Záznamy vznikají automaticky při `bin/shpd-ds ds-upgrade` přes
 - Kalendářní (ne fiskální) periody — nezávislé na `economy_codebooks_fiscal_years`.
 - Provisioner generuje období s `docState=40, docStateMain=3, locked=0`;
   manuálně přes UI vzniknou jako `Koncept` (10).
-- Idempotence: lookup před insertem je `WHERE vat_registration AND date_begin`
-  a **ignoruje docState** — smazané období (`docState=90`) zůstává smazané,
-  další `ds-upgrade` ho znovu nevytvoří.
+- Idempotence: lookup před insertem je **překryvový**
+  (`vat_registration` + `date_begin <= kandidát.date_end AND date_end >=
+  kandidát.date_begin`) a **ignoruje docState**. Důvody: (a) v tabulce
+  mohou být období importovaná ze starého Shipardu s jinou frekvencí, než
+  má registrace — rovnostní lookup by je nenašel a založil překryv;
+  (b) smazané období (`docState=90`) zůstává smazané a blokuje i generování
+  překrývajících se kandidátů.
 
 ## Související
 

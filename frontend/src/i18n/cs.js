@@ -525,6 +525,8 @@ export default {
   'chat.rename.placeholder': 'Název konverzace',
   'chat.delete.title': 'Smazat konverzaci',
   'chat.delete.confirm': 'Opravdu smazat tuto konverzaci? Akci nelze vrátit.',
+  'chat.copyTable': 'Kopírovat tabulku',
+  'chat.copied': 'Zkopírováno',
   'chat.tool.personsSearch': '🔍 Hledám osoby…',
   'chat.tool.personsGet': '🔍 Načítám detail osoby…',
   'chat.tool.documentsSearch': '🔍 Hledám doklady…',

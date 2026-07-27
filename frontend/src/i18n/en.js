@@ -512,6 +512,8 @@ export default {
   'chat.rename.placeholder': 'Conversation title',
   'chat.delete.title': 'Delete conversation',
   'chat.delete.confirm': 'Really delete this conversation? This cannot be undone.',
+  'chat.copyTable': 'Copy table',
+  'chat.copied': 'Copied',
   'chat.tool.personsSearch': '🔍 Searching people…',
   'chat.tool.personsGet': '🔍 Loading person detail…',
   'chat.tool.documentsSearch': '🔍 Searching documents…',

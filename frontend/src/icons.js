@@ -14,6 +14,7 @@ import {
   faPlus,
   faPen,
   faTrash,
+  faCopy,
   faFloppyDisk,
   faXmark,
   faCheck,
@@ -91,6 +92,7 @@ export const iconConfirm = faCheck;
 export const iconSearch = faMagnifyingGlass;
 export const iconFilter = faFilter;
 export const iconRefresh = faArrowsRotate;
+export const iconCopy = faCopy;
 
 // ── Navigace ────────────────────────────────────────────────────
 export const iconChevronLeft = faChevronLeft;

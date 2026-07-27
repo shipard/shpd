@@ -5,50 +5,50 @@
    * carries no XSS surface.
    */
   import { parseMarkdown } from './markdown.js';
+  import TableBlock from './TableBlock.svelte';
 
   let { text = '' } = $props();
 
   const blocks = $derived(parseMarkdown(text));
 </script>
 
+{#snippet inline(spans)}
+  {#each spans as span}
+    {#if span.type === 'strong'}<strong>{span.text}</strong>
+    {:else if span.type === 'em'}<em>{span.text}</em>
+    {:else if span.type === 'code'}<code>{span.text}</code>
+    {:else}{span.text}{/if}
+  {/each}
+{/snippet}
+
 <div class="shpd-md">
   {#each blocks as block}
     {#if block.type === 'paragraph'}
-      <p>
-        {#each block.spans as span}
-          {#if span.type === 'strong'}<strong>{span.text}</strong>
-          {:else if span.type === 'em'}<em>{span.text}</em>
-          {:else if span.type === 'code'}<code>{span.text}</code>
-          {:else}{span.text}{/if}
-        {/each}
-      </p>
+      <p>{@render inline(block.spans)}</p>
     {:else if block.type === 'code_block'}
       <pre><code>{block.text}</code></pre>
+    {:else if block.type === 'heading'}
+      <!-- Visual cap: model headings must not blow up the bubble layout. -->
+      {#if block.level <= 2}
+        <h3>{@render inline(block.spans)}</h3>
+      {:else if block.level === 3}
+        <h4>{@render inline(block.spans)}</h4>
+      {:else}
+        <h5>{@render inline(block.spans)}</h5>
+      {/if}
+    {:else if block.type === 'table'}
+      <TableBlock header={block.header} rows={block.rows} align={block.align} />
     {:else if block.type === 'list'}
       {#if block.ordered}
         <ol>
           {#each block.items as item}
-            <li>
-              {#each item as span}
-                {#if span.type === 'strong'}<strong>{span.text}</strong>
-                {:else if span.type === 'em'}<em>{span.text}</em>
-                {:else if span.type === 'code'}<code>{span.text}</code>
-                {:else}{span.text}{/if}
-              {/each}
-            </li>
+            <li>{@render inline(item)}</li>
           {/each}
         </ol>
       {:else}
         <ul>
           {#each block.items as item}
-            <li>
-              {#each item as span}
-                {#if span.type === 'strong'}<strong>{span.text}</strong>
-                {:else if span.type === 'em'}<em>{span.text}</em>
-                {:else if span.type === 'code'}<code>{span.text}</code>
-                {:else}{span.text}{/if}
-              {/each}
-            </li>
+            <li>{@render inline(item)}</li>
           {/each}
         </ul>
       {/if}
@@ -71,6 +71,26 @@
   .shpd-md :global(ol) {
     margin: 0 0 var(--shpd-space-sm);
     padding-left: var(--shpd-space-lg);
+  }
+  .shpd-md :global(h3),
+  .shpd-md :global(h4),
+  .shpd-md :global(h5) {
+    margin: var(--shpd-space-sm) 0 var(--shpd-space-xs);
+    line-height: 1.3;
+  }
+  .shpd-md :global(h3:first-child),
+  .shpd-md :global(h4:first-child),
+  .shpd-md :global(h5:first-child) {
+    margin-top: 0;
+  }
+  .shpd-md :global(h3) {
+    font-size: 1.1em;
+  }
+  .shpd-md :global(h4) {
+    font-size: 1.05em;
+  }
+  .shpd-md :global(h5) {
+    font-size: 1em;
   }
   .shpd-md :global(code) {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;

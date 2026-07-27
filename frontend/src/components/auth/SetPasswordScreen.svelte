@@ -19,7 +19,7 @@
   // INVALID_TOKEN je terminální — formulář nahradí hláška s návratem na login.
   let tokenInvalid = $state(false);
 
-  let passwordInput;
+  let passwordInput = $state(null);
 
   $effect(() => {
     passwordInput?.focus();

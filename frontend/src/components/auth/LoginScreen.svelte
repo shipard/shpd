@@ -31,7 +31,7 @@
   const localEnabled = $derived(appInfoStore.auth?.local !== false);
   const providers = $derived(appInfoStore.auth?.providers ?? []);
 
-  let loginInput;
+  let loginInput = $state(null);
 
   $effect(() => {
     loginInput?.focus();

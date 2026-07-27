@@ -101,7 +101,9 @@ jen `anthropic`; rozhraní drží dveře pro další.
   (`module.jsonc`), s built-in fallbackem. K němu se **při každém požadavku
   přilepí aktuální datum** + instrukce „neodhaduj podle tréninkových dat, ověř
   nástrojem; pokud nemáš nástroj, řekni to". Bez data model pokládá současný rok
-  za budoucnost.
+  za budoucnost. Základ (cfgItem i fallback) dále instruuje model vracet
+  tabulková data jako **GFM pipe tabulku** a členit delší text markdown
+  nadpisy — frontend obojí renderuje nativně (§7).
 
 ---
 
@@ -135,7 +137,23 @@ nástrojů.
   se zobrazuje jako čip s lidským popiskem (`toolLabels.js`).
 - **`Markdown`** renderuje **bezpečnou podmnožinu** markdownu do Svelte elementů
   — **žádné `{@html}` ze syrového výstupu modelu** (text se escapuje, emitují se
-  jen kontrolované tagy). Nula XSS plochy, nula nové závislosti.
+  jen kontrolované tagy). Nula XSS plochy, nula nové závislosti. Podporované
+  konstrukce: odstavce, bold/italic/inline code, fenced code bloky, seznamy,
+  **nadpisy** `#`–`######` (vizuálně zastropované na `h3`–`h5`, ať nerozbíjí
+  bubliny) a **GFM pipe tabulky** (hlavička + delimiter řádek; alignment
+  z delimiteru, kratší řádky se doplní, delší oříznou).
+- **`TableBlock`** vykresluje tabulkový token jako nativní `<table>` se zebra
+  řádky v wrapperu s `overflow-x: auto` (úzký boční panel). V rohu **copy
+  tlačítko** (hover/focus-within, na dotykových zařízeních trvale):
+  `clipboardTable.js` zapíše dual-format `ClipboardItem` — `text/html`
+  (skutečná `<table>` pro paste do Excelu/Sheets/Wordu) + `text/plain` (TSV);
+  bez `ClipboardItem` fallback na TSV `writeText`. Feedback „Zkopírováno"
+  ~2 s. HTML pro clipboard se staví přes `document.createElement` +
+  `textContent`, nikdy string konkatenací textu modelu.
+- **Streaming a tabulky:** parser běží nad celým akumulovaným textem při každé
+  deltě — rozepsaná tabulka se krátce ukáže jako odstavec a „přeskočí" do
+  `<table>` po doručení delimiter řádku (přijaté v1 chování, žádný speciální
+  kód).
 - **Backend:** v1 výchozí (žádný výběr modelu v UI). **401 uprostřed streamu**
   (vypršení tokenu) → srozumitelná chyba; plný refresh-retry je odložený.
 - **Dashboardový launcher + boční panel** — dashboard má dole plovoucí
@@ -154,7 +172,9 @@ nástrojů.
 - Chat nabízí modelu **jen čtecí tier** + bezpečnostní invariant (§2).
 - Zápisové nástroje (`mail_draft_document`) chat zatím **nenabízí** — přijdou
   jako vlastní fáze se zastavením a potvrzením u zápisu.
-- Žádné `{@html}` z modelu (§7).
+- Žádné `{@html}` z modelu (§7). Platí i pro tabulky: buňky jsou textově
+  bindované spany, `text-align` jen z whitelistovaných hodnot parseru a HTML
+  pro clipboard se staví přes DOM API (`textContent`), ne string konkatenací.
 
 ---
 

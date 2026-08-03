@@ -1,5 +1,7 @@
 # Task: Validační hlášky formulářů — zobrazení a kontrakt
 
+**Stav:** hotovo
+
 ## Motivace
 
 Dnes uživatel při kliknutí na **Potvrdit** (případně **V pořádku** nebo

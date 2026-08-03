@@ -1,5 +1,7 @@
 # Task: `docs.core` — Fáze 3: Formulář a viewer dokladu
 
+**Stav:** hotovo
+
 ## Kontext
 
 Pokračujeme z **Fáze 2** (`docs-core-phase2.md` — hotovo). Doklady jsou

@@ -1,5 +1,7 @@
 # Task: Exchange Format — Fáze 3b: Interakce s `_resolve`
 
+**Stav:** hotovo
+
 ## Kontext
 
 Pokračujeme z **Fáze 3a** (`tasks/exchange-format-phase3a.md` — hotovo).

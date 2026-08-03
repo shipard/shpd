@@ -1,5 +1,7 @@
 # Task: Modul `world.vat` — DPH model (CZ)
 
+**Stav:** hotovo
+
 ## Kontext
 
 Připravujeme dokladový systém. DPH model je jeho fundamentem — bez něj nelze

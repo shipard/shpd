@@ -1,5 +1,7 @@
 # Task: Sémantické sekce sidebaru (Nákup / Prodej / Účtárna)
 
+**Stav:** hotovo
+
 ## Status / Cíl
 
 Dnes je navigační strom sidebaru generovaný **mechanicky podle prefixu

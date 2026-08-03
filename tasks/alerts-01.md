@@ -1,5 +1,7 @@
 # Task: Implementace modulu `core.alerts` — MVP
 
+**Stav:** hotovo
+
 Cílem je vytvořit nový subsystém Upozornění (Alerts), který bude uživateli oznamovat
 problémy, které systém "ví", ale uživatel je nevidí (chybějící základní nastavení DS,
 nespárované bankovní platby, IoT zařízení s vybitou baterií, doklady viset ve stavu

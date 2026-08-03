@@ -1,5 +1,7 @@
 # Spisovna — import endpoint `POST /_registry/import`
 
+**Stav:** hotovo
+
 ## Kontext
 
 Migrace starého modulu `wkf.docs` (Dokumenty) do Spisovny — design

@@ -1,5 +1,7 @@
 # Dev-update skript a git hooks
 
+**Stav:** hotovo
+
 ## Status / Cíl
 
 Odstranit ruční kroky po `git pull`. Vytvořit jeden shell skript, který

@@ -1,5 +1,7 @@
 # Task: next-table-id across all roots + --range flag — Phase 4 of third-party modules support
 
+**Stav:** hotovo
+
 ## Context
 
 `bin/shpd-server next-table-id` allocates a globally-unique `tableId` for new

@@ -37,7 +37,7 @@ class PersonsRegistryControllerTest extends IntegrationTestCase
     private const TEST_COMPANY_ID_PREFIX = 'IT-REG-';
     /** Known-good CZ company in ARES — Výkupna železáctví Jan Trnka s.r.o. */
     private const PROBE_COUNTRY = 'cz';
-    private const PROBE_COMPANY_ID = '46343504';
+    private const PROBE_COMPANY_ID = '12345678';
 
     private PersonsRegistryController $ctrl;
     private PersonsRegistryClient $client;

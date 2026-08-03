@@ -1,6 +1,7 @@
 # Modul `mail` — Fáze 3a: AI analýza (shpd strana)
 
-**Status:** Odsouhlaseno (rozhodnutí v §10 potvrzena)
+**Stav:** hotovo
+
 **Cíl fáze:** Rozšířit shpd o podporu AI analýzy došlých zpráv. Nové
 tabulky pro extrahované dokumenty a AI konfiguraci, pull-based API
 endpointy pro externí analyzer, UI integraci (nový tab + akce "Znova

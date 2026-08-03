@@ -1,5 +1,7 @@
 # `ds-upgrade` — tichý default, akce jen s `-v`
 
+**Stav:** hotovo
+
 ## Status / Cíl
 
 `shpd-ds ds-upgrade` je příliš ukecaný — i no-op upgrade vypisuje

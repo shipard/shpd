@@ -1,5 +1,7 @@
 # Banka — Fáze 3: účetní mikroengine + UI účtování
 
+**Stav:** hotovo
+
 > **Stav: ✅ Hotovo.** Commity: `20ae31d` (extrakce sdíleného
 > `AccountMaskResolver`), `3fdeb54` (W1 `BankTransactionAccountingEngine`),
 > `595720d` (W2 `BankTransactionEventHandler` + lifecycle), `08e5ae5`

@@ -1,5 +1,7 @@
 # Task: Mobilní formuláře — modál fullscreen (fáze 3a)
 
+**Stav:** hotovo
+
 ## Status / Cíl
 
 Třetí oblast responzivního designu: editační formuláře na telefonu

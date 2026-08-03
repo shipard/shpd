@@ -1,5 +1,7 @@
 # Task: Import-mód čísla dokladu + oprava validace bankovního spojení
 
+**Stav:** hotovo
+
 ## Kontext
 
 Migrace ze starého Shipardu přivádí historické doklady přes exchange formát

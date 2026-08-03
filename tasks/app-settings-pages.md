@@ -1,5 +1,7 @@
 # Nastavení aplikace — settings pages + branding (název, ikona, logo)
 
+**Stav:** hotovo
+
 ## Kontext
 
 Uživatel si dnes nemůže v UI nastavit základní vlastnosti zdroje dat — název je v `config/main.json` (editace jen v terminálu), zkrácený název, ikona prohlížeče a firemní logo neexistují vůbec. Sidebar má natvrdo `Shipard`, `frontend/index.html` natvrdo `<title>Shipard</title>`, favicon žádný.

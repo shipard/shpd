@@ -1,5 +1,7 @@
 # Účetní doklady (cmnbkp) — Fáze 4a (nov_shipard): Exchange + Applier
 
+**Stav:** hotovo
+
 ## Kontext
 
 Poslední fáze — import účetních dokladů ze starého Shipardu. Párový úkol;

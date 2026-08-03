@@ -1,5 +1,7 @@
 # Task: Exchange Format — Fáze 1: Core modul a apply pipeline
 
+**Stav:** hotovo
+
 ## Kontext
 
 Stavíme **kanonický výměnný formát** pro doklady — `shpd.docs.document.v1`.

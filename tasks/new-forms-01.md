@@ -1,5 +1,7 @@
 # Task: Nový layout system editačních formulářů — PR 1
 
+**Stav:** hotovo
+
 Implementace nového layout systému editačních formulářů (sekce, sloupce, label-left, auto-šířka labelů). Tento PR zahrnuje:
 
 - nový JSON wire format (sekce → sloupce → elementy)

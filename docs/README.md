@@ -4,6 +4,7 @@ Technické specifikace projektu Shipard.
 
 | Dokument | Obsah |
 |----------|-------|
+| [roadmap.md](roadmap.md) | **Roadmapa** — milníky podle schopností uživatele, pravidlo prioritizace, vědomě odložené věci |
 | [architecture.md](architecture.md) | Mapa tříd, vrstvy, závislosti, tok dat — jak komponenty spolupracují |
 | [modules.md](modules.md) | Modulový systém — struktura, závislosti, JSONC formát, i18n, kompilace konfigurace, CLI příkaz `ds-upgrade` |
 | [table-definitions.md](table-definitions.md) | Formát definice databázových tabulek — datové typy, sloupce, indexy, extensions, validace, bezpečné změny |
@@ -53,6 +54,10 @@ Provozní a operační dokumentace (nasazení, oprávnění, bezpečnost).
 | [migration-guide.md](migration-guide.md) | Migrace DS mezi servery — checklist pro přenos celého data-source (co tvoří DS, kritické secrets); detailní postupy v `operations/` |
 | [operations/permissions.md](operations/permissions.md) | Permission kontrakt pro `/opt/shipard` a `/etc/shipard` — `PermissionSpec`, `shpd-server doctor` / `fix-permissions`, single-user model |
 | [operations/secrets.md](operations/secrets.md) | Šifrované secrets v DS — AES-256-GCM, per-DS klíč, `encrypted_text` sloupce v jakémkoli modulu |
+
+## Archiv
+
+Historické dokumenty, které už neřídí vývoj — [`archive/`](archive/).
 
 ---
 

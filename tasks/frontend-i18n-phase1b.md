@@ -1,5 +1,7 @@
 # Frontend i18n — Fáze 1B (překlad UI chrome + LoginScreen)
 
+**Stav:** hotovo
+
 ## Status / Cíl fáze
 
 Po Fázi 1A (kostra i18n) zůstává napříč Svelte komponentami **hardcoded

@@ -1,5 +1,7 @@
 # Fáze 1: Přihlášení a aplikační shell — Tasky pro Claude Code
 
+**Stav:** hotovo
+
 Tasky jsou seřazeny v pořadí implementace. Každý task je samostatně spustitelný v Claude Code.
 
 ---

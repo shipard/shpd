@@ -1,5 +1,7 @@
 # Dev dashboard — server akce a per-DS upgrade
 
+**Stav:** hotovo
+
 ## Status / Cíl
 
 Fáze 4 dev dashboardu. Doplnit do UI tři akce, které dnes vyžadují

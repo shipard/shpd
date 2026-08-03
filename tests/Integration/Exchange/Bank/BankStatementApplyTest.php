@@ -391,7 +391,7 @@ class BankStatementApplyTest extends IntegrationTestCase
 
     public function testSameDayStatementsWithDifferentNumbersStayApart(): void
     {
-        // Dva výpisy téhož účtu z jednoho dne (lefreal 425/523) — dřív se slily
+        // Dva výpisy téhož účtu z jednoho dne (DS B 425/523) — dřív se slily
         // do jednoho přes klíč (bank_account, period_start, period_end).
         $first = $this->applier->apply($this->dayStatementPayload(
             ['statementNumber' => '16', 'externalId' => 'old:1001', 'closingBalance' => 100.0],

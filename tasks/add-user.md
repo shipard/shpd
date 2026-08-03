@@ -1,5 +1,7 @@
 # Task: CLI příkaz `shpd-ds user-create`
 
+**Stav:** hotovo
+
 ```
 Create a new CLI command `user-create` for the `shpd-ds` tool that creates a user in the data source's `core_system_users` table.
 
@@ -44,7 +46,7 @@ Create `src/Command/DataSource/UserCreateCommand.php`:
 ### Example usage
 
 ```bash
-cd /opt/shipard/data-sources/4l3j-z0bz-kz39-echj
+cd /opt/shipard/data-sources/abcd-efgh-ijkl-mnop
 shpd-ds user-create --login admin --password heslo123 --name "Administrator" --email admin@example.com
 ```
 

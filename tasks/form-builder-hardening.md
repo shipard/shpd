@@ -1,5 +1,7 @@
 # Task: Form builder hardening
 
+**Stav:** hotovo
+
 **Motivace:** V `IncomingMessagesForm.php` vznikly dva tiché bugy:
 
 1. `inputType: 'datetime-local'` místo `'datetime'` → frontend switch nenašel

@@ -1,5 +1,7 @@
 # `ds-upgrade` — vypnutelný provisioning přes `config/main.json`
 
+**Stav:** hotovo
+
 ## Status / Cíl
 
 `shpd-ds ds-upgrade` po synchronizaci schématu automaticky generuje

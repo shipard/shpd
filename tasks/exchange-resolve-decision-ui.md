@@ -1,5 +1,7 @@
 # Task: Exchange UI — rebuild rozhodování o canCreate/ambiguous/notFound + smart totals heuristika
 
+**Stav:** hotovo
+
 ## Kontext
 
 Pokračujeme po **Fázi 3b** (`tasks/exchange-format-phase3b.md` — hotovo).

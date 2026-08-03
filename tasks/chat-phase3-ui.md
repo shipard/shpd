@@ -1,5 +1,7 @@
 # Task: Chat — Svelte UI (Fáze 3)
 
+**Stav:** hotovo
+
 ## Kontext
 
 Backend chatu je hotový (perzistence + streamovaná tool-use smyčka). Tato fáze

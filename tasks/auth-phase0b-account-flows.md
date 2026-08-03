@@ -1,5 +1,7 @@
 # Auth Fáze 0b — pozvánky, reset hesla, změna hesla, správa sessions
 
+**Stav:** hotovo
+
 ## Kontext
 
 Lokální účty dnes nemají žádnou samoobsluhu: heslo nastavuje admin při

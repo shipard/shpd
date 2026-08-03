@@ -1,5 +1,7 @@
 # Spisovna — Fáze 1: modul `base.registry` (základ bez AI)
 
+**Stav:** hotovo
+
 ## Kontext
 
 Spisovna je evidence trvalých dokumentů firmy (smlouvy, pojistky, revize,

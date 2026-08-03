@@ -1,9 +1,11 @@
 # cmnbkp: FX operace v kontrole vyrovnanosti při uložení
 
+**Stav:** hotovo
+
 > **Status:** implementováno (2026-07-22), zbývá re-run docs fáze
 > migrace v old_shipard · **Modul:** docs.accountingDocs
 > **Návaznost:** `docs-wave-d-validation-fx.md` (D12), old_shipard
-> task 22; nález třetího re-importu 2026-07-22 (3 msi + ~170 lefreal
+> task 22; nález třetího re-importu 2026-07-22 (3 DS A + ~170 DS B
 > FX dokladů selhává na `_form: Doklad není vyrovnaný`)
 
 ## Kontext
@@ -55,5 +57,5 @@ neapplikuje.
 
 - [x] Doklad s jediným FX řádkem se uloží a zaúčtuje (MD = DAL).
 - [x] Jednostranné kontace dál validaci neprojdou.
-- [ ] Po re-runu docs fáze: 3 msi + ~170 lefreal FX dokladů
+- [ ] Po re-runu docs fáze: 3 DS A + ~170 DS B FX dokladů
       importováno, cmnbkp počty = zdroj.

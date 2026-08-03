@@ -1,5 +1,7 @@
 # Task: Exchange Format — Fáze 3a: Vizualizace canonical s PDF split-view
 
+**Stav:** hotovo
+
 ## Kontext
 
 Pokračujeme z **Fází 2** (`tasks/exchange-format-phase2.md` — hotovo).

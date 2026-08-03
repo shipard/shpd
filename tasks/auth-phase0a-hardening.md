@@ -1,5 +1,7 @@
 # Auth Fáze 0a — is_admin a ochrana systémových tabulek
 
+**Stav:** naplánováno — rate limiting a evidence neúspěšných přihlášení chybí
+
 ## Kontext
 
 nov_shipard nemá žádný koncept oprávnění. `core_system_users` je v settings

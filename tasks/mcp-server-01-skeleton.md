@@ -1,5 +1,7 @@
 # Task: MCP server — skeleton + persons_search (Fáze 1)
 
+**Stav:** hotovo
+
 ## Kontext
 
 Začínáme integraci AI do Shipardu. Cílový stav (z designové diskuze): uživatel

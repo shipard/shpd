@@ -1,5 +1,7 @@
 # Dev dashboard — vytvoření DS přes UI
 
+**Stav:** hotovo
+
 ## Status / Cíl
 
 Přidat do dev dashboardu stránku `/_dev/ds-create/` s formulářem pro

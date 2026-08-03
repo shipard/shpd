@@ -1,5 +1,7 @@
 # Task: Doklady — Fáze 6: Per-typ moduly `docs.invoicesOut` a `docs.invoicesIn`
 
+**Stav:** hotovo
+
 ## Kontext
 
 Pokračujeme z **Fáze 5** (`docs-core-phase3.md` — hotovo). Doklady mají

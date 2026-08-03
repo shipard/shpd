@@ -1,5 +1,7 @@
 # Import dokladů: výběr číselné řady + cílové stavy 40/30
 
+**Stav:** hotovo
+
 ## Kontext
 
 Revize importu dokladů ze starého Shipardu odhalila tři problémy, z nichž dva

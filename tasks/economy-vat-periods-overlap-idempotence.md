@@ -1,6 +1,6 @@
 # Task: `VatPeriodsProvisioner` — idempotence přes překryv
 
-**Status:** ✅ Implementováno 2026-07-26 — zbývá ověřit no-op `ds-upgrade` po Fázi 23 importu
+**Stav:** hotovo
 
 ## Cíl
 

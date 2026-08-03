@@ -1,5 +1,7 @@
 # Task: MCP server — draft nástroj mail_draft_document (Fáze 3)
 
+**Stav:** hotovo
+
 ## Kontext
 
 První **zápisový** nástroj katalogu. Doručuje původní headline: agent z

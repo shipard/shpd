@@ -319,16 +319,16 @@ class RowHistoryEnricherTest extends TestCase
 
     public function testItemNameMatchesWhenDescriptionDoesNot(): void
     {
-        // Reprodukce lefreal (CEZNET): AI dala do item.description fakturované
+        // Reprodukce DS B (dodavatel A): AI dala do item.description fakturované
         // období (v historii není), item.name je text z historie → dřív
         // matchedBy = null, teď exactRaw přes dalšího kandidáta.
         $enricher = $this->buildEnricher([
-            $this->histRow('Měsíční paušál za Internet - 1000MEGA+', 'NET1000', vatCode: 'cz-110', accountNumber: '518100'),
+            $this->histRow('Měsíční paušál za Internet - TARIF+', 'NET1000', vatCode: 'cz-110', accountNumber: '518100'),
         ]);
 
         $result = $enricher->enrich($this->canonical([
             ['item' => [
-                'name'        => 'Měsíční paušál za Internet - 1000MEGA+',
+                'name'        => 'Měsíční paušál za Internet - TARIF+',
                 'description' => 'Fakturované období: 01.07.2026 - 31.07.2026',
             ]],
         ]));
@@ -341,13 +341,13 @@ class RowHistoryEnricherTest extends TestCase
         $enrichment = $result['_resolve']['rows'][0]['enrichment'];
         $this->assertSame('historyExactRaw', $enrichment['matchedBy']);
         $this->assertSame('high', $enrichment['confidence']);
-        $this->assertSame('Měsíční paušál za Internet - 1000MEGA+', $enrichment['matchedText']);
+        $this->assertSame('Měsíční paušál za Internet - TARIF+', $enrichment['matchedText']);
         $this->assertSame('Položka NET1000', $enrichment['itemName']);
     }
 
     public function testNameOnlyRowMatches(): void
     {
-        // Finmago scénář: AI vyplnila jen item.name, description chybí —
+        // DS C scénář: AI vyplnila jen item.name, description chybí —
         // funguje beze změny (jediný kandidát).
         $enricher = $this->buildEnricher([
             $this->histRow('Konektivita 4LAN', 'LAN01'),

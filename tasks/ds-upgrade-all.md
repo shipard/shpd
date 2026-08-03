@@ -1,5 +1,7 @@
 # `ds-upgrade-all` příkaz a kompletní CLI dokumentace
 
+**Stav:** hotovo
+
 ## Status / Cíl
 
 Nový příkaz `shpd-server ds-upgrade-all`, který v jednom volání zaktualizuje

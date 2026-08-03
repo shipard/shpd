@@ -1,5 +1,7 @@
 # Task: Pokladny a vlastní bankovní spojení
 
+**Stav:** hotovo
+
 ## Kontext
 
 Implementujeme dva nové číselníky v existujícím modulu `economy.codebooks`,

@@ -282,7 +282,7 @@ class ServerConfigTest extends TestCase
             'mode'           => 'production',
             'registry'       => [
                 'persons' => [
-                    'baseUrl' => 'https://dev-sebik.shpd.dev/e3bz-axkw-5tiw-hxaj/www/data.shipard.org/persons',
+                    'baseUrl' => 'https://dev-example.shpd.dev/abcd-efgh-ijkl-mnop/www/data.shipard.org/persons',
                 ],
             ],
         ]);
@@ -291,7 +291,7 @@ class ServerConfigTest extends TestCase
         $config->load();
 
         $this->assertSame(
-            'https://dev-sebik.shpd.dev/e3bz-axkw-5tiw-hxaj/www/data.shipard.org/persons',
+            'https://dev-example.shpd.dev/abcd-efgh-ijkl-mnop/www/data.shipard.org/persons',
             $config->getRegistryPersonsBaseUrl(),
         );
     }

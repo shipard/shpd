@@ -1,5 +1,7 @@
 # Task: Editační formuláře — Fáze 3 (Frontend)
 
+**Stav:** hotovo
+
 ## Kontext
 
 Backend je hotový (Fáze 1 + 2). Nyní implementujeme frontend pro nový systém formulářů.

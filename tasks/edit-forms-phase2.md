@@ -1,5 +1,7 @@
 # Task: Editační formuláře — Fáze 2 (PersonsForm + JSONC sub-formy)
 
+**Stav:** hotovo
+
 ## Kontext
 
 Fáze 1 (backend jádro) je hotová. Nyní implementujeme konkrétní formuláře pro modul `base.persons`:

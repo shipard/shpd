@@ -1,5 +1,7 @@
 # Přejmenování platebních symbolů: `variable_symbol` → `payment_reference`
 
+**Stav:** hotovo
+
 ## Kontext
 
 Variabilní symbol je česká instance obecného evropského konceptu **payment reference**

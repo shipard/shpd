@@ -1,5 +1,7 @@
 # Dev dashboard — MVP seznam datových zdrojů
 
+**Stav:** hotovo
+
 ## Status / Cíl
 
 V development módu zpřístupnit jednoduchou webovou stránku, která vypíše

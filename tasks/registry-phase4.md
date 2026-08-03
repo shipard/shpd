@@ -1,5 +1,7 @@
 # Spisovna — Fáze 4: aparát (expirace, fulltext, MCP)
 
+**Stav:** hotovo
+
 ## Kontext
 
 Poslední fáze MVP Spisovny dle `docs/registry-mvp.md` §9: **deterministický

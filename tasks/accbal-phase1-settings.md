@@ -1,5 +1,7 @@
 # accbal Fáze 1 — nastavení saldokont
 
+**Stav:** hotovo
+
 > PRD pro jednu Claude Code session. Design: `docs/accbal.md` (§3.1, §3.2, §9
 > Fáze 1). Prerekvizita Fáze 0 (`tasks/accbal-phase0-payment-identity.md`) je
 > hotová — deník nese symboly + splatnost, bankovní transakce mají

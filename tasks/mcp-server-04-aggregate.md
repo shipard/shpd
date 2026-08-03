@@ -1,6 +1,7 @@
 # Task: MCP nástroj `documents_aggregate` (agregace dokladů)
 
-**Status:** zadání k implementaci
+**Stav:** hotovo
+
 **Cíl:** dát vnitřnímu chatu schopnost odpovídat na agregační dotazy nad doklady
 („10 největších dodavatelů za 2025", „obrat po měsících", „kolik jsme fakturovali
 firmě X"). Dnes to model nesvede — má jen `documents_search`, takže by musel

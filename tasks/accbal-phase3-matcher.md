@@ -1,5 +1,7 @@
 # Saldokonto — Fáze 3: matcher (párování úhrad)
 
+**Stav:** hotovo
+
 ## Kontext
 
 Saldokonto (`economy.accbal`) páruje úhrady proti předpisům (pohledávky,

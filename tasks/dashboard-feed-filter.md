@@ -1,5 +1,7 @@
 # Dashboard — filtr kategorií karet feedu
 
+**Stav:** hotovo
+
 ## Status
 
 Implementováno (2026-07-16). Návrh schválen Annou téhož dne. Testy + frontend

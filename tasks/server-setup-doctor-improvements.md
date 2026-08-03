@@ -1,5 +1,7 @@
 # Doctor — nginx/FPM kontroly + fix install skriptu
 
+**Stav:** hotovo
+
 ## Status / Cíl
 
 Reakce na reálnou situaci po nasazení [`server-setup-permissions.md`](server-setup-permissions.md):

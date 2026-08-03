@@ -1,15 +1,17 @@
 # Oprava DPH okrajů dokladů — nulové součty, samovyměření, noPayTax řádky
 
+**Stav:** naplánováno — opravy Z1–Z3 v `DocDocument` (nulové součty, samovyměření, noPayTax)
+
 > **Status:** navrženo · **Modul:** docs.core, world.vat · **Typ:** oprava chyb
 > **Návaznost:** `world-vat-cz.md` (DPH konfigurace), nálezy z dev DS
-> btpg-peg5-b0tr-chln (msi-zlin) a 4dnh-5isz-m4f5-gwa3 (lefreal)
+> aaaa-bbbb-cccc-dddd (DS A) a eeee-ffff-gggg-hhhh (DS B)
 
 ## Cíl
 
 Opravit tři spolu související chyby výpočtu DPH a součtů v `DocDocument`,
 které na importovaných datech způsobují nevyrovnaný nebo prázdný účetní
-deník (alerty `economy.accounting.accounting_errors`: 1 830 na msi-zlin,
-409 na lefreal) — a které **kazí i nově pořízené doklady** (doklady bez
+deník (alerty `economy.accounting.accounting_errors`: 1 830 na DS A,
+409 na DS B) — a které **kazí i nově pořízené doklady** (doklady bez
 DPH, tuzemská PDP, EU pořízení, osvobozená plnění na výstupu).
 
 ## Diagnóza (ověřeno na dev DS)
@@ -23,9 +25,9 @@ deník nedostane stranu 321 (částka závazku jde z hlavičky) → deník jen
 s MD stranou. Stejný kontrakt „hlavička jen z rekapitulace" má i
 `applyDomesticAmounts()` (bod 2 v jeho docblocku) — `_dom` součty jsou
 nulové ze stejného důvodu.
-*Důkaz:* doklad 21310028 (id 72, msi-zlin): řádek `acc.entry`
+*Důkaz:* doklad A (DS A): řádek `acc.entry`
 vat_base 9 490 / vat_code NULL, hlavička 0/0/0, deník jen MD 518001.
-Rozsah: 918 dokladů msi-zlin, 279 lefreal.
+Rozsah: 918 dokladů DS A, 279 DS B.
 
 **Z2 — Samovyměření (reverse charge) se tiše ztrácí.**
 `buildVatRecapitulation()` generuje k samovyměřovacím kódům párový řádek
@@ -38,22 +40,22 @@ nevyrovnáno přesně o daň (poměr MD/DAL = 1,21 u 21 %).
 Downstream je připraveno: `AccountingEngine` účtuje `is_reverse_pair`
 na opačnou stranu kroku (řádek ~283) a `accountingRules.cz.jsonc` má
 masky pro všechny reverse kódy (343203, 343204, …).
-*Důkaz:* doklad 22610152 (id 31673): recap jen primární cz-115
+*Důkaz:* doklad B: recap jen primární cz-115
 (tax 1 355,73, sum_tax 0), deník MD 511001 + MD 343115 / DAL 321001,
-chybí DAL 343203. Rozsah: 447 dokladů msi-zlin, 67 lefreal.
+chybí DAL 343203. Rozsah: 447 dokladů DS A, 67 DS B.
 
 **Z3 — `calculateRowVat()` ignoruje sémantiku `noPayTax`.**
 Řádková DPH se počítá jen podle `vat_mode`, bez znalosti definice kódu.
 U PDP/osvobozených kódů tak řádek dostane `vat_amount`/`vat_total`, jako
-by šlo o běžnou daň — na vydané PDP faktuře (msi-zlin fakturuje stavební
+by šlo o běžnou daň — na vydané PDP faktuře (DS A fakturuje stavební
 práce dle §92e běžně) pak řádek tvrdí `vat_total = základ × 1,21`,
 zatímco hlavička i deník správně nesou jen základ. Lže tisk faktury,
 řádková data i kontrolní sestavy.
-*Důkaz:* invno 11310045 (id 75): řádek cz-150 vat_amount 399 /
+*Důkaz:* doklad C: řádek cz-150 vat_amount 399 /
 vat_total 2 299, hlavička správně 1 900; starý Shipard měl na řádku
 tax 0,00 / priceTotal 1 900. U vstupní PDP (cz-115) starý Shipard nechává
 tax spočtenou (nárok na odpočet), ale priceTotal = základ.
-Rozsah: 649 invno msi-zlin + řádky všech PDP invni.
+Rozsah: 649 invno DS A + řádky všech PDP invni.
 
 ## Scope
 

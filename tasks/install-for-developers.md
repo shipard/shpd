@@ -1,5 +1,7 @@
 # Task: Dokumentace a instalační skript pro nové vývojáře
 
+**Stav:** hotovo
+
 ## Kontext
 
 Chceme projekt Shipard zpřístupnit dalším vývojářům. Cíl: člověk se základními znalostmi Linuxu si za pár minut rozjede vývojové prostředí a může nám dávat zpětnou vazbu.

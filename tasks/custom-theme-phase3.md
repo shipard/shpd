@@ -1,5 +1,7 @@
 # Task: Vlastní vzhledy — Fáze 3 (per-user persistence + Nastavení účtu)
 
+**Stav:** hotovo
+
 ## Status / Cíl
 
 Fáze 1 a 2 (`custom-theme-phase1.md`, `custom-theme-phase2.md`) přinesly

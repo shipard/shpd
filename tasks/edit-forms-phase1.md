@@ -1,5 +1,7 @@
 # Task: Editační formuláře — Fáze 1 (Backend jádro)
 
+**Stav:** hotovo
+
 ## Kontext
 
 Implementujeme nový systém editačních formulářů dle `docs/edit-forms.md`. Tato task pokrývá **Fázi 1** — backend jádro bez konkrétních formulářů.

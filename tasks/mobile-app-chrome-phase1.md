@@ -1,5 +1,7 @@
 # Task: Mobilní app chrome — drawer sidebar + top bar (fáze 1)
 
+**Stav:** hotovo
+
 ## Status / Cíl
 
 První kus responzivního designu pro telefon (~380px). Na mobilu (viewport

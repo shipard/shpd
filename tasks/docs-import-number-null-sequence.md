@@ -1,5 +1,7 @@
 # docs.core: import čísla bez sekvence (sequence_number NULL) pro duplicity migrace
 
+**Stav:** hotovo
+
 Stav: hotovo (2026-07-22). Moduly: core.exchange, docs.core.
 
 > **Odchylka od scope:** navíc bylo nutné povolit null v JSON schematu
@@ -13,7 +15,7 @@ Stav: hotovo (2026-07-22). Moduly: core.exchange, docs.core.
 
 > **Kontext:** old_shipard task `modules/imports/newShipard/tasks/`
 > `22-wave-d-import-fixes.md`, dodatek **D14-B** — pravé duplicity klíče
-> `(řada, rok, sekvence)` ve zdrojových datech (15 msi + 3 lefreal
+> `(řada, rok, sekvence)` ve zdrojových datech (15 DS A + 3 DS B
 > klíčů po přečíslování třídy A) se importují s docNumber sufixem
 > (`…-2`) a **bez sekvence**: `sequence_number = NULL` v
 > `unq_series_seq` nekoliduje (sloupec je nullable, UNIQUE v MariaDB

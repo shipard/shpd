@@ -1,5 +1,7 @@
 # accbal Fáze 2a — událost `journalWritten` (core)
 
+**Stav:** hotovo
+
 > PRD pro jednu Claude Code session. Design: `docs/accbal.md` (§4.1, §10 #8).
 > Toto je core mechanismus odložený z Fáze 0 — sám o sobě nemá saldo logiku.
 > Konzumenta (generátor pohybů) přidá Fáze 2b.

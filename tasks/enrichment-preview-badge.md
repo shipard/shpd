@@ -1,6 +1,7 @@
 # Enrichment badge v preview extrahovaného dokladu
 
-**Status:** Design uzavřen (D1–D7 potvrzeno), připraveno k implementaci
+**Stav:** hotovo
+
 **Cíl:** Uživatel v náhledu extrahovaného dokladu vidí, které řádky byly
 doplněny z historie (Row History Enrichment), odkud návrh pochází a co přesně
 bylo doplněno — včetně účtu, který tabulka řádků jinak nezobrazuje. Data už

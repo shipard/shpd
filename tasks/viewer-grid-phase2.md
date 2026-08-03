@@ -1,5 +1,7 @@
 # Viewer grid — Fáze 2: řazení + toggle + BankTransactionsViewer
 
+**Stav:** hotovo
+
 > PRD pro jednu Claude Code session. Design: `docs/viewer-grid.md` —
 > závazné jsou §7.1 (řazení, D9), §7.2 (toggle, D10), §7.3 (bank pilot,
 > D11) a kontrakt D12 v §5. Staví na hotové F1

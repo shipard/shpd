@@ -1,5 +1,7 @@
 # Účtování dokladů — Fáze 1: pohyby a sloupce
 
+**Stav:** hotovo
+
 ## Kontext
 
 Začínáme implementovat automatické účtování dokladů podle návrhu v

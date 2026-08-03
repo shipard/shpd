@@ -1,5 +1,7 @@
 # Task: `docs.core.stale_in_repair` — druhý reálný alert check
 
+**Stav:** hotovo
+
 Cílem je přidat druhý check do systému Upozornění: detekce dokladů, které visí
 ve stavu **80 V opravě** déle než 24 hodin. To vyžaduje:
 

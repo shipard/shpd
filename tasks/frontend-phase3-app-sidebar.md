@@ -1,5 +1,7 @@
 # Fáze 3: Dynamická navigace ze serveru — Tasky pro Claude Code
 
+**Stav:** hotovo
+
 Navigace v sidebar se automaticky vygeneruje z modulového systému na serveru a frontend ji načte přes API.
 
 ---

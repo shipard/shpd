@@ -1,5 +1,7 @@
 # Účetní doklady (cmnbkp) — Doplněk Fáze 2: saldokontní operace (operation-default účet)
 
+**Stav:** hotovo
+
 ## Kontext
 
 Při ladění importu (Fáze 4) vyšlo najevo, že starý cmnbkp používá **třetí

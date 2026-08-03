@@ -1,5 +1,7 @@
 # Task: `docs.core` — Fáze 2: Výpočty a životní cyklus
 
+**Stav:** hotovo
+
 ## Kontext
 
 Pokračujeme z **Fáze 1** (`docs-core-phase1.md` — hotovo), kde vznikla kostra

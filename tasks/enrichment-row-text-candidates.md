@@ -1,6 +1,7 @@
 # Task: Enrichment řádků z historie — matchování přes více kandidátních textů
 
-**Status:** implementováno, čeká na ověření na alfě (krok 3 Ověření)
+**Stav:** hotovo
+
 **Cíl:** `RowHistoryEnricher` musí napárovat položku z historie i v případě,
 že AI extrakce vyplnila `item.description` textem, který v historii není
 (např. fakturované období), zatímco `item.name` v historii je.
@@ -12,21 +13,21 @@
 - Testy: `tests/Unit/Module/Core/Exchange/Enrich/RowHistoryEnricherTest.php`
 - Souvisí: `mail-phase3a.md` (AI analýza), `docs/mail/api-contract.md`
 
-## Kontext — diagnostika z alfy (DS lefreal vs. finmago, 07/2026)
+## Kontext — diagnostika z alfy (DS B vs. DS C, 07/2026)
 
 Reprodukováno na reálných datech serveru ns-alpha:
 
-**lefreal, zpráva „CEZNET-INTERNEXT - Faktura - 26063631“ (nefunguje):**
-- AI extrakce: `item.name` = „Měsíční paušál za Internet - 1000MEGA+“,
+**DS B, zpráva „Dodavatel A - Faktura - <číslo>“ (nefunguje):**
+- AI extrakce: `item.name` = „Měsíční paušál za Internet - TARIF+“,
   `item.description` = „Fakturované období: 01.07.2026 - 31.07.2026“
-- Historie partnera (ČEZNET, 9 faktur `invni` ve stavu 40):
-  `docs_core_rows.description` = „Měsíční paušál za Internet - 1000MEGA+“
+- Historie partnera (Dodavatel A, 9 faktur `invni` ve stavu 40):
+  `docs_core_rows.description` = „Měsíční paušál za Internet - TARIF+“
 - `rowText()` preferuje `item.description` → matchuje se fakturované období
   → všechny tři úrovně selhaly (normalizace: „fakturované období“ vs.
   „měsíční paušál za internet mega“, Jaccard 0)
 - Výsledek: `enrichment.matchedBy = null`, položka se nepřiřadila
 
-**finmago, faktura 4LAN (funguje):**
+**DS C, faktura 4LAN (funguje):**
 - AI extrakce: jen `item.name`, `item.description` chybí
 - `rowText()` spadne na `item.name` → `historyExactRaw` zasáhne
 
@@ -149,7 +150,7 @@ pracuje jen se `suggested` hodnotami; nový klíč je čistě auditní.
 
 Nové případy v `RowHistoryEnricherTest`:
 
-1. **testItemNameMatchesWhenDescriptionDoesNot** — reprodukce lefreal:
+1. **testItemNameMatchesWhenDescriptionDoesNot** — reprodukce DS B:
    `item.description` = fakturované období (v historii není),
    `item.name` = text z historie → `historyExactRaw`, trojice se propsala.
 2. **testDescriptionCandidatePreferredWithinTier** — oba kandidáty mají
@@ -180,15 +181,15 @@ je zachováno, mění se jen šíře prohledávání).
 1. `php -l modules/core/exchange/src/Enrich/RowHistoryEnricher.php`
 2. `vendor/bin/phpunit --filter 'RowHistoryEnricherTest'`
 3. Po nasazení na alfu: re-analyzáza (nebo preview/apply) zprávy 6480
-   v DS lefreal → `_resolve.rows[0].enrichment.matchedBy = historyExactRaw`,
-   `matchedText = „Měsíční paušál za Internet - 1000MEGA+“`,
+   v DS B → `_resolve.rows[0].enrichment.matchedBy = historyExactRaw`,
+   `matchedText = „Měsíční paušál za Internet - TARIF+“`,
    `suggested.ourCode = 518100`, `suggested.vatCode = cz-110`.
 
 ## Akceptace
 
-- [x] Lefreal scénář (description mimo historii, name v historii) se páruje
+- [x] DS B scénář (description mimo historii, name v historii) se páruje
       — `testItemNameMatchesWhenDescriptionDoesNot`
-- [x] Finmago scénář (jen name) funguje beze změny — `testNameOnlyRowMatches`
+- [x] DS C scénář (jen name) funguje beze změny — `testNameOnlyRowMatches`
 - [x] Exact zásah na pozdějším kandidátovi vyhrává nad fuzzy na dřívějším
       — `testExactOnNameBeatsFuzzyOnDescription`
 - [x] `enrichment.matchedText` v auditu (vyhrávající kandidát / `null`)

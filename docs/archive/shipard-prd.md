@@ -1,5 +1,9 @@
 # Shipard — Product Requirements Document
 
+> **Archivováno.** Tento dokument popisuje původní záměr projektu ve verzi 0.1.0
+> (backend + CLI, bez frontendu) a je zachovaný jako historický záznam.
+> Aktuální směr projektu řeší [`docs/roadmap.md`](../roadmap.md).
+
 ## 1. Přehled projektu
 
 **Název produktu:** Shipard

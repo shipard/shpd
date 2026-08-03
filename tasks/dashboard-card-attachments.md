@@ -1,5 +1,7 @@
 # Dashboard — tlačítka příloh na mail kartách feedu
 
+**Stav:** hotovo
+
 ## Status
 
 Navrženo a schváleno Annou (2026-07-08). Připraveno k implementaci.

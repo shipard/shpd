@@ -1,5 +1,7 @@
 # shpd-server upgrade — orchestrace nasazení nové verze + centrální Version
 
+**Stav:** hotovo
+
 ## Kontext
 
 Nasazení nové verze na produkci dnes znamená ručně provést kroky z

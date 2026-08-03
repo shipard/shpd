@@ -1,5 +1,7 @@
 # Task: Položky a měrné jednotky — Fáze 1
 
+**Stav:** hotovo
+
 ## Kontext
 
 Implementujeme dva nové moduly jako základ pro budoucí dokladový systém (faktury, objednávky, sklad):

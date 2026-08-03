@@ -1,5 +1,7 @@
 # Fáze 2: Prohlížeč tabulek — Tasky pro Claude Code
 
+**Stav:** hotovo
+
 Navazuje na Fázi 1. Po dokončení budou klikatelné položky v sidebar otevírat prohlížeče tabulek s reálnými daty z API.
 
 ---

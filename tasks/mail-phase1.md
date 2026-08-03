@@ -1,6 +1,7 @@
 # Modul `mail` — Fáze 1: Došlá pošta (evidence + UI)
 
-**Status:** Odsouhlaseno 17. 4. 2026
+**Stav:** hotovo
+
 **Cíl fáze:** Plně funkční evidence došlé pošty v aplikaci — datový model, prohlížeč, editor s drag & drop, testovací data. Externí služby (mail-router, AI analyzátor) jsou samostatné fáze.
 
 ---

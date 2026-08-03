@@ -1,5 +1,7 @@
 # Task: Období DPH — registrace a období
 
+**Stav:** hotovo
+
 ## Kontext
 
 Implementujeme dvě nové tabulky v existujícím modulu `economy.codebooks` jako poslední číselník před spuštěním práce na dokladech:

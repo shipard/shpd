@@ -1,5 +1,7 @@
 # Dashboard — redesign karet feedu (grid, strukturovaná hlavička, detail)
 
+**Stav:** hotovo
+
 ## Status
 
 Navrženo a schváleno Annou (2026-07-16). Implementováno (2026-07-16) —

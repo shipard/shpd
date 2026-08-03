@@ -45,11 +45,11 @@
         {"cat": "receivables",      "accountMask": "311"},
         {"cat": "payables",         "accountMask": "321"},
 
-        // Zálohy (D10): analytiky se liší per DS (msi x14001/x14901,
-        // lefreal x14100/x14900) — dohledává je maska nad rozvrhem DS.
+        // Zálohy (D10): analytiky se liší per DS (např. x14001/x14901
+        // vs. x14100/x14900) — dohledává je maska nad rozvrhem DS.
         // Pořadí záznamů je významové: brutto s query první (loose
         // porovnání, vat_amount 0.00/NULL → brutto), jinak zdaněná.
-        // Pole = řetěz masek po řadě; lefreal nemá 3249xx → fallback 324.
+        // Pole = řetěz masek po řadě; některé rozvrhy nemají 3249xx → fallback 324.
         {"cat": "advances.given",    "accountMask": "314",  "query": {"vat_amount": 0}},
         {"cat": "advances.given",    "accountMask": "3149"},
         {"cat": "advances.received", "accountMask": "324",  "query": {"vat_amount": 0}},
@@ -140,7 +140,7 @@
         {"cat": "rounding.revenue", "accountMask": "648"},
 
         // Kurzové rozdíly (vlna D, D12): analytiky per DS dohledá maska
-        // (msi 563xxx/663xxx dle rozvrhu, lefreal 563100/663100).
+        // (dle rozvrhu 563xxx/663xxx, resp. 563100/663100).
         {"cat": "fx.loss", "accountMask": "563"},
         {"cat": "fx.gain", "accountMask": "663"}
     ],

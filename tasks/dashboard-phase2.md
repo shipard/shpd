@@ -1,5 +1,7 @@
 # Task: Dashboard — fáze 2 (domovský feed)
 
+**Stav:** hotovo
+
 ## Status / Cíl fáze
 
 Přestavět domovskou obrazovku z pasivní mřížky tří widgetů (fáze 1) na

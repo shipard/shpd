@@ -1,5 +1,7 @@
 # Task: Doklady — Rozdělení editačního formuláře na per-typ varianty
 
+**Stav:** hotovo
+
 ## Motivace
 
 Faktury vydané (`docs.invoicesOut`, `doc_type = 'invno'`) a faktury přijaté

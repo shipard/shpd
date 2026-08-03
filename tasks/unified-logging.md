@@ -1,5 +1,7 @@
 # Task: Unifikované logování
 
+**Stav:** hotovo
+
 ## Kontext
 
 Při debugování poslední chyby v dokladech (po Fázi 6 doklady MVP) jsme do
@@ -136,7 +138,7 @@ nezavolá `error_log()`. Threshold je porovnání číselných hodnot
 ### Format záznamu — single-line JSON
 
 ```json
-{"ts":"2026-05-07T12:34:56+02:00","level":"error","ds":"4l3j-z0bz-kz39-echj","request":"GET /api/v1/_ui/form/docs_core_heads/meta/2","msg":"Database query failed","exception":{"class":"Dibi\\DriverException","message":"Unknown column 'docState' in 'WHERE'","at":"vendor/dibi/dibi/src/Dibi/Drivers/MySqliDriver.php:179","trace":["#0 ...","#1 ..."]},"ctx":{}}
+{"ts":"2026-05-07T12:34:56+02:00","level":"error","ds":"abcd-efgh-ijkl-mnop","request":"GET /api/v1/_ui/form/docs_core_heads/meta/2","msg":"Database query failed","exception":{"class":"Dibi\\DriverException","message":"Unknown column 'docState' in 'WHERE'","at":"vendor/dibi/dibi/src/Dibi/Drivers/MySqliDriver.php:179","trace":["#0 ...","#1 ..."]},"ctx":{}}
 ```
 
 Pole:
@@ -172,7 +174,7 @@ Pro lidské čtení v dev shellu:
 ```bash
 tail -f /opt/shipard/log/shipard.log | jq -c .
 tail -f /opt/shipard/log/shipard.log | jq 'select(.level=="error")'
-tail -f /opt/shipard/log/shipard.log | jq 'select(.ds=="4l3j-z0bz-kz39-echj")'
+tail -f /opt/shipard/log/shipard.log | jq 'select(.ds=="abcd-efgh-ijkl-mnop")'
 ```
 
 ### `ds_id` lifecycle
@@ -663,7 +665,7 @@ tail -f /opt/shipard/log/shipard.log | jq -c .
 tail -f /opt/shipard/log/shipard.log | jq 'select(.level == "error")'
 
 # Jeden konkrétní DS
-tail -f /opt/shipard/log/shipard.log | jq 'select(.ds == "4l3j-z0bz-kz39-echj")'
+tail -f /opt/shipard/log/shipard.log | jq 'select(.ds == "abcd-efgh-ijkl-mnop")'
 
 # Kolik chyb za den
 grep '"level":"error"' /opt/shipard/log/shipard.log | wc -l

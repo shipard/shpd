@@ -1,5 +1,7 @@
 # Task: Economy.accounting — Účtový rozvrh (Fáze 1)
 
+**Stav:** hotovo
+
 ## Kontext
 
 Zakládáme nový modul **`economy.accounting`** a jeho první tabulku

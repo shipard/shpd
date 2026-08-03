@@ -1,5 +1,7 @@
 # Odchozí pošta — modul core.mail outbound (fronta, transporty, senders)
 
+**Stav:** hotovo
+
 ## Kontext
 
 nov_shipard umí poštu jen přijímat (`/_mail/incoming` z mail-routeru).

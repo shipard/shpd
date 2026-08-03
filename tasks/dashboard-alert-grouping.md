@@ -1,5 +1,7 @@
 # Dashboard — agregace alertů do skupinových karet feedu
 
+**Stav:** naplánováno — design schválen 2026-07-16, neimplementováno
+
 ## Status
 
 Navrženo a schváleno Annou (2026-07-16). Připraveno k implementaci.

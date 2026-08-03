@@ -1,6 +1,7 @@
 # Modul `mail` — Fáze 2a: API endpoint `/_mail/incoming`
 
-**Status:** Draft k odsouhlasení
+**Stav:** hotovo
+
 **Cíl fáze:** Implementovat HTTP endpoint pro příjem došlé pošty z externí služby `shipard-mail-router`. Rozhodnutí z designové fáze jsou v konverzaci ze 17. 4. 2026.
 
 **Návaznost:**
@@ -212,7 +213,7 @@ Flags:
   --force    Rotate key even if one already exists (old key becomes inactive)
 
 Output:
-  API Key created for data source 4l3j-z0bz-kz39-echj:
+  API Key created for data source abcd-efgh-ijkl-mnop:
 
     shpd_ak_AbCdEf1234567890xxxxxxxxxxxxxxxxxxxx
 

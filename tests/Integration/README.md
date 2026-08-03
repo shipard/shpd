@@ -5,7 +5,7 @@ data-source. Nespouštějí se automaticky s `vendor/bin/phpunit` — je potřeb
 explicitně vybrat testsuite:
 
 ```bash
-SHIPARD_INTEGRATION_DS_PATH=/opt/shipard/data-sources/4l3j-z0bz-kz39-echj \
+SHIPARD_INTEGRATION_DS_PATH=/opt/shipard/data-sources/abcd-efgh-ijkl-mnop \
   vendor/bin/phpunit --testsuite Integration
 ```
 

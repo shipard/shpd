@@ -1,5 +1,7 @@
 # Task: Hlavička formuláře — strukturované info (HeaderInfo)
 
+**Stav:** hotovo
+
 ## Motivace
 
 Dnešní hlavička editačního modalu obsahuje jen statický titulek (`title` /

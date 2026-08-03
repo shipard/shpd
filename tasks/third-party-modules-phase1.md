@@ -1,5 +1,7 @@
 # Task: ModulePathResolver — Phase 1 of third-party modules support
 
+**Stav:** hotovo
+
 ## Context
 
 Currently the Shipard module system assumes a single base path for all modules,

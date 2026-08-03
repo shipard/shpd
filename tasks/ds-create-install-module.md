@@ -1,5 +1,7 @@
 # `ds-create --module` + UI výběr instalačního modulu
 
+**Stav:** hotovo
+
 ## Status / Cíl
 
 Fix existujícího bugu: `shpd-server ds-create` aktuálně zapisuje do

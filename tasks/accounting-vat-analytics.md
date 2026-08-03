@@ -1,5 +1,7 @@
 # Účtování dokladů — DPH analytiky per vatCode
 
+**Stav:** hotovo
+
 ## Stav: hotovo ✓ (2026-06-11)
 
 Všech 5 balíčků implementováno, commity na stable:

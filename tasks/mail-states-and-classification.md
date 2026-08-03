@@ -1,6 +1,7 @@
 # Modul `mail` — Oddělení stavů analýzy + AI klasifikace typu pošty
 
-**Status:** Implementováno 2026-07-07 (commity `feat(mail): oddeleni
+**Stav:** hotovo
+
 analysis_state od docState`, `feat(mail): AI klasifikace primary_type
 v result endpointu`, `feat(mail): dashboard karta "Neni faktura" +
 trash/archive akce`). Na dev DS zbývá `ds-upgrade` +

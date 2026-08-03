@@ -1,5 +1,7 @@
 # Task: Vlastní vzhledy — Fáze 2 (gradienty + opacity + stránkování presetů)
 
+**Stav:** hotovo
+
 ## Motivace
 
 Fáze 1 (`custom-theme-phase1.md`) přinesla custom téma sidebaru se

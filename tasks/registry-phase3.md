@@ -1,9 +1,11 @@
 # Spisovna — Fáze 3: šum (sender rules, is_bulk, digest)
 
+**Stav:** hotovo
+
 ## Kontext
 
 Data z alfy potvrzují motivaci: drtivá většina analyzovaných zpráv končí
-jako `other` (lefreal 63/71, msi-zlin 15/18) a každá dnes generuje úklidovou
+jako `other` (DS B 63/71, DS A 15/18) a každá dnes generuje úklidovou
 kartu „Není faktura" — feed zaplavuje balast. Tato fáze přidává
 **deterministické** zpracování šumu dle `docs/registry-mvp.md` §8 a D6/D7:
 pravidla odesílatelů s učením ze zpětné vazby, hlavičkový signál `is_bulk`

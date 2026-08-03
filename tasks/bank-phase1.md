@@ -1,5 +1,7 @@
 # Banka — Fáze 1: datový model + generalizace deníku
 
+**Stav:** hotovo
+
 > **Stav: ✅ Hotovo.** Commity: `1691c4a` (modul + tabulky + cfgItemy + formy),
 > `3cf1592` (W4 účet + ID v ebankingu), `61f1273` (W5 generalizace deníku —
 > polymorfní zdroj), `fb4a8d5` (W7 clearing 261200/261300 + `bank.*`),

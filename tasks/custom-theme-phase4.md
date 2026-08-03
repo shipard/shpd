@@ -1,5 +1,7 @@
 # Task: Vlastní vzhledy — Fáze 4 (DS-wide default vzhledu)
 
+**Stav:** hotovo
+
 ## Status / Cíl
 
 Fáze 1–3 daly uživateli vlastní vzhled sidebaru s persistencí

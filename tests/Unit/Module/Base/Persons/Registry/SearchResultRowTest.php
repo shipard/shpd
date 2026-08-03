@@ -31,22 +31,22 @@ class SearchResultRowTest extends TestCase
     {
         $row = SearchResultRow::fromRegistryResponse([
             'country'            => 'CZ',
-            'oid'                => '46343504',
-            'fullName'           => 'MSI Zlín s.r.o.',
-            'vatID'              => 'CZ46343504',
+            'oid'                => '12345678',
+            'fullName'           => 'Zkušební firma s.r.o.',
+            'vatID'              => 'CZ12345678',
             'valid'              => 1,
-            'validFrom'          => '1992-04-16',
+            'validFrom'          => '2000-01-01',
             'validTo'            => null,
-            'primaryAddressText' => 'nám. T. G. Masaryka 1281, 76001',
+            'primaryAddressText' => 'Zkušební 1, 10000',
         ]);
 
         $this->assertNotNull($row);
         $this->assertSame('cz', $row->country);
-        $this->assertSame('46343504', $row->companyId);
-        $this->assertSame('MSI Zlín s.r.o.', $row->fullName);
-        $this->assertSame('CZ46343504', $row->vatId);
+        $this->assertSame('12345678', $row->companyId);
+        $this->assertSame('Zkušební firma s.r.o.', $row->fullName);
+        $this->assertSame('CZ12345678', $row->vatId);
         $this->assertTrue($row->isValid);
-        $this->assertSame('1992-04-16', $row->validFrom);
+        $this->assertSame('2000-01-01', $row->validFrom);
         $this->assertNull($row->validTo);
     }
 

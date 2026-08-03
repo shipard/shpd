@@ -7,9 +7,9 @@
 
 Migrace klasifikuje řádek jako `item` jen při vazbě na položku
 (`item > 0`), jinak `text` — a textový řádek ztrácí operaci, částky
-i účetní význam. Zasažené třídy (ověřeno na msi-zlin + lefreal):
+i účetní význam. Zasažené třídy (ověřeno na DS A + DS B):
 
-| stará operace | význam | msi | lefreal | starý deník |
+| stará operace | význam | DS A | DS B | starý deník |
 |---|---|---|---|---|
 | 1020101 | Odpočet poskytnuté zálohy (invni, záporné částky) | 449 | 88 | DAL 314901 (tax≠0: 232×) / DAL 314001 (tax=0: 249×) |
 | 1020104 | Zdanění poskytnuté zálohy (invni) | 212 | 57 | MD 314901 + DPH z rekapitulace |
@@ -22,7 +22,7 @@ i účetní význam. Zasažené třídy (ověřeno na msi-zlin + lefreal):
 **Dopad je dvojí a druhý je zákeřnější:** na invni rozbitý deník (alerty),
 na invno **tiché podhodnocení/nadhodnocení** — ztracený řádek zmizí
 z řádků i součtů zároveň, deník je vyrovnaný a alert nevznikne. Kontrola
-old↔new součtů po číselných řadách (msi): invni v novém **−15,7 M**
+old↔new součtů po číselných řadách (DS A): invni v novém **−15,7 M**
 (ztracené kladné řádky), invno místy **+0,5 až +1 M na řadu** (ztracené
 záporné odpočty → nadhodnocené pohledávky).
 
@@ -85,7 +85,7 @@ objeví jiná analytika, pravidlo se ověří proti tamnímu
 `e10doc_debs_journal` stejným dotazem (do PRD jako kontrolní krok).
 
 **D6 — Oprava dat = plný re-import obou dev DS** po nasazení (ds-reset +
-`all`). Vyřeší zároveň 252 konceptových dokladů lefreal (kolize kódů
+`all`). Vyřeší zároveň 252 konceptových dokladů DS B (kolize kódů
 účtů) a definitivně srovná slité výpisy. Akceptační kritérium: old↔new
 kontrola součtů po číselných řadách (COUNT + SUM per `LEFT(doc_number,3)`)
 sedí na korunu u invni i invno (modulo koncepty/storna), účetní alerty
@@ -110,8 +110,8 @@ vzorových dokladech 49264, 56036 (invni) a vzorku 1010101 (invno);
 
 ## Dodatek 2026-07-20: per-DS analytiky (D9, D10 — D8 zrušeno)
 
-Kontrolní dotaz D5 na lefreal odhalil, že analytiky nejsou univerzální:
-zálohy účtuje na 314900/314100/324100 (msi: 314901/314001/324901/324001)
+Kontrolní dotaz D5 na DS B odhalil, že analytiky nejsou univerzální:
+zálohy účtuje na 314900/314100/324100 (DS A: 314901/314001/324901/324001)
 a majetek dokonce **per řádek** (042100 i 042500 pro tutéž operaci, dle
 druhu majetku). Strany a struktura ověřeny se shodou na obou DS —
 výchozí předpis (D4) platí beze změny až na náhradu `accountSrc: "row"`
@@ -126,7 +126,7 @@ a nová strana má ekvivalent starého `acc-default.json` —
 `resolveCategoryAccount` + `maskResolver` (`LIKE prefix%`, první aktivní
 analytika rozvrhu DS). Ověřeno proti rozvrhům obou DS: maska `314` →
 314001/314100, `3149` → 314901/314900, `324` → 324001/324100 — vše
-přesně dle starého deníku; `3249` → 324901 na msi, na lefreal analytika
+přesně dle starého deníku; `3249` → 324901 na DS A, na DS B analytika
 neexistuje (účtují 324100 = výsledek masky `324`).
 
 Zálohové operace tedy **nemají** `rowAccount` (jako saldokontní zápočty;
@@ -152,7 +152,7 @@ už ne jako zdroj konfigurace.
 kategorie per-řádkovou analytiku dle druhu majetku vyjádřit neumí): DocsRunner dohledá MD účet řádku joinem na
 `e10doc_debs_journal` přes `document` + `property` + částku (deníkové
 řádky majetku nesou `property` — silný klíč). Právě jedna shoda = účet;
-jinak chyba dokladu (hlasitě, dle D3d). Rozsah je malý (msi 257 + lefreal
+jinak chyba dokladu (hlasitě, dle D3d). Rozsah je malý (DS A 257 + DS B
 5 řádků), per-řádkový lookup je levný.
 
 Pro úplnějsí budoucnost: per-DS mapování kategorií účtů na nové straně

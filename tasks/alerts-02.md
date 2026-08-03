@@ -1,5 +1,7 @@
 # Task: `detail.actions` v Vieweru — akce na detailu záznamu (alerts první konzument)
 
+**Stav:** hotovo
+
 Stávající `core.alerts` modul má všechny backendové endpointy pro snooze /
 dismiss / unsnooze / re-check, frontendové helpery v `frontend/src/api/alerts.js`,
 i `runDueAlertChecks` integrované v top toolbaru. **Chybí UI tlačítka per alert**:

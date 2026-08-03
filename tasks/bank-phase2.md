@@ -1,5 +1,7 @@
 # Banka — Fáze 2: import výpisu ze souboru + deduplikace
 
+**Stav:** hotovo
+
 > **Stav: ✅ Hotovo.** Commity: `7f06ebf` (W1–W3 DTO + detekce formátu +
 > parsery CAMT/GPC/FIO), `9cb28e4` (W4–W6 import service — dedup, fingerprint,
 > reconciliace, partner), `33eb811` (W5.2 alert reconciliace),

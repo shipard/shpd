@@ -1,5 +1,7 @@
 # Task: Lookup pole ve formulářích — typeahead pro FK na velké tabulky
 
+**Stav:** hotovo
+
 ## Motivace
 
 Dnes se odkazové (FK) sloupce ve formulářích řeší jako `select` s předem

@@ -1,5 +1,7 @@
 # Účetní doklady (cmnbkp) — Fáze 1: Schéma řádků + typ dokladu
 
+**Stav:** hotovo
+
 ## Kontext
 
 Nový Shipard má zatím jen faktury vydané (`invno`) a přijaté (`invni`).

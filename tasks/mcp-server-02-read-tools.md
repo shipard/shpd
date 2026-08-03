@@ -1,5 +1,7 @@
 # Task: MCP server — zbývající čtecí nástroje (Fáze 2)
 
+**Stav:** hotovo
+
 ## Kontext
 
 Fáze 1 (`mcp-server-01-skeleton.md`) postavila kostru MCP serveru a první čtecí

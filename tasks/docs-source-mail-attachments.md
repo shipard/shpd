@@ -1,5 +1,7 @@
 # Task: Doklady — přílohy navázaných došlých zpráv v detailu
 
+**Stav:** hotovo
+
 ## Kontext
 
 Ve starém Shipardu se v detailu dokladu (přijatá faktura) zobrazují PDF přílohy

@@ -1,5 +1,7 @@
 # Task: Extrakce AI backendů do core/ai
 
+**Stav:** hotovo
+
 ## Kontext
 
 Vnitřní chat (orchestrátor) bude potřebovat LLM backend — provider, model,

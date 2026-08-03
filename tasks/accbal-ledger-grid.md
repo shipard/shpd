@@ -1,5 +1,7 @@
 # Task: Saldo pohyby — grid layout se skupinami per partner
 
+**Stav:** hotovo
+
 ## Status / cíl
 
 Zapnout **tabulkový (grid) layout** na vieweru `economy.accbal.ledger` —

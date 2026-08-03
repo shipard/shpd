@@ -1,5 +1,7 @@
 # Viewer systém — Tasky pro Claude Code
 
+**Stav:** hotovo
+
 Implementace viewer systému — rozšířeného prohlížeče záznamů s formátovanými řádky, fulltextovým hledáním, nekonečným skrolováním a detailním panelem.
 
 ---

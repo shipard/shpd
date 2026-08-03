@@ -1,5 +1,7 @@
 # Task: Rozšíření `base.persons` — vlastní firma a obchodní rejstřík
 
+**Stav:** hotovo
+
 ## Kontext
 
 Připravujeme dokladový systém (faktury vydané a přijaté). Ten potřebuje na hlavičku

@@ -1,5 +1,7 @@
 # Task: accountChart varianta `"none"` (přeskočení seedu standardní osnovy)
 
+**Stav:** hotovo
+
 ## Kontext
 
 `AccountChartProvisioner` seeduje standardní účtovou osnovu při `ds-upgrade`

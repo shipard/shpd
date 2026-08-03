@@ -1,5 +1,7 @@
 # Task: Chat — perzistenční skelet (Fáze 1)
 
+**Stav:** hotovo
+
 ## Kontext
 
 První fáze vnitřního chatu (orchestrátoru). Z designové diskuze je uzavřeno:

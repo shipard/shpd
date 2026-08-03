@@ -1,6 +1,7 @@
 # Obohacení řádků extrahovaných dokladů z historie (Row History Enrichment)
 
-**Status:** Design uzavřen (D1–D9 potvrzeno), připraveno k implementaci
+**Stav:** hotovo
+
 **Cíl:** Řádky AI-extrahovaných dokladů (item + vat_code + account) se automaticky
 předvyplní podle historie vystavených dokladů téhož dodavatele. Uživatel u
 opakovaných faktur (internet, nájem, …) položky nepřiřazuje ručně — systém je

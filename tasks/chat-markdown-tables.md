@@ -1,8 +1,9 @@
 # Chat — markdown tabulky, nadpisy a kopírování tabulek
 
+**Stav:** hotovo
+
 ## Status / Cíl
 
-**Status:** připraveno k implementaci (design odsouhlasen D1–D5, 2026-07-27)
 
 Chat renderuje odpovědi modelu vlastním bezpečným markdown parserem
 (`frontend/src/components/chat/markdown.js`), který nezná GFM pipe tabulky ani

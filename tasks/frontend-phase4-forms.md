@@ -1,5 +1,7 @@
 # Fáze 4: Editační formuláře — Tasky pro Claude Code
 
+**Stav:** hotovo
+
 Navazuje na Fázi 2. Po dokončení bude možné vytvářet a editovat záznamy v jakékoliv tabulce přes formuláře generované z metadat.
 
 ---

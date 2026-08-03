@@ -1,5 +1,7 @@
 # Banka — Fáze 4 (nová strana): výměnný formát + applier pro migraci výpisů
 
+**Stav:** hotovo
+
 > **Stav: ✅ Hotovo** (nová strana). Commity:
 > - `b9e19dd` — W1 schéma `shpd.bank.statement.v1` (.jsonc+.json) + W5.1
 > - `fd1f72a` — W2 refaktor `StatementImportService` (`applyParsedStatement`

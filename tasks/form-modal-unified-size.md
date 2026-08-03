@@ -1,5 +1,7 @@
 # Task: Sjednocení velikosti editačních modalů
 
+**Stav:** hotovo
+
 ## Status / Cíl
 
 Všechny editační modaly mají dnes dvě velikosti řízené flagem `fullSize`

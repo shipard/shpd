@@ -1,5 +1,7 @@
 # Systémové nginx/FPM parametry jako verzované include soubory
 
+**Stav:** hotovo
+
 ## Kontext
 
 Import příloh ze starého Shipardu padá na `413 Request Entity Too Large` od

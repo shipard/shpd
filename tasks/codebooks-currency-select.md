@@ -1,5 +1,7 @@
 # Roletky měny a země napříč aplikací + sjednotný label enum options
 
+**Stav:** hotovo
+
 ## Status
 
 Hotovo (2026-06-25). Implementováno na `stable` ve třech commitech

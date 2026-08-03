@@ -1,5 +1,7 @@
 # Task: Mail — import endpoint (Fáze 4)
 
+**Stav:** hotovo
+
 ## Kontext
 
 Importer ze starého Shipardu (`old_shipard:modules/imports/newShipard/`) potřebuje

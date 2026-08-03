@@ -1,5 +1,7 @@
 # Účtování dokladů — Fáze 2: deník a engine
 
+**Stav:** hotovo
+
 ## Kontext
 
 Fáze 1 (pohyby, `_dom` sloupce, `accounting_account` na položkách) je hotová

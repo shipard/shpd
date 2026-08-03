@@ -1,5 +1,7 @@
 # Spisovna — Fáze 2: AI cesta (target `registry`)
 
+**Stav:** hotovo
+
 ## Kontext
 
 Fáze 1 je hotová a nasazená: modul `base.registry` (tabulky 427/428, cfgItem

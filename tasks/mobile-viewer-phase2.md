@@ -1,5 +1,7 @@
 # Task: Mobilní viewer — list/detail přepínání + akce v top baru (fáze 2)
 
+**Stav:** hotovo
+
 ## Status / Cíl
 
 Druhá fáze responzivního designu. Navazuje na `mobile-app-chrome-phase1.md`

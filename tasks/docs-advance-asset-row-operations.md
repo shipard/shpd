@@ -1,5 +1,7 @@
 # Řádkové operace pro zálohy a majetek (vlna C — nová strana)
 
+**Stav:** hotovo
+
 > **Status:** navrženo · **Moduly:** docs.core, economy.accounting
 > **Typ:** rozšíření konfigurace + testy · **Design:**
 > `docs/design-import-row-operations.md` (D1, D2, D4 — tento PRD je
@@ -79,7 +81,7 @@ Rebuild kompilované konfigurace + `ds-upgrade` na obou dev DS (změny
   2. invni „daňový doklad k záloze": purchase.advanceVat (+7 290, účet
      314901, DPH 21 z ceny) + purchase.advanceDeduction (−7 290, tax0,
      účet 314001) → MD 314901 + MD 343 / DAL 314001, žádný 321 (netto 0),
-     vyrovnáno. (Vzor: starý doklad 56036.)
+     vyrovnáno. (Vzor: starý zálohový doklad.)
   3. invno zrcadlo: sale.services + sale.advanceDeduction (tax0, 324001)
      → DAL 6xx / MD 324001 / MD 311 zbytek, vyrovnáno.
 - PHPUnit vždy s úzkým `--filter`.
@@ -124,7 +126,7 @@ z přímého účtu na kategorie — revize už implementovaných bodů:
      (`vat_amount 0.00/NULL` → brutto maska, jinak zdaněná);
    - integrace: scénáře 1–3 přejít na kategorie (účty se dohledají
      z rozvrhu dev DS, ne z fixtur) + scénář „rozvrh bez 3249“ →
-     fallback na 324 (vzor lefreal).
+     fallback na 324 (vzor DS B).
 
 Body 1–2 původního Scope zůstávají jinak v platnosti; ds-upgrade +
 rebuild cfg po změně .jsonc znovu na obou DS.
@@ -132,7 +134,7 @@ rebuild cfg po změně .jsonc znovu na obou DS.
 ### Hotovo když (dodatek)
 
 - [x] Zálohové operace bez inputu účtu ve formuláři; účet dohledává
-      kategorie (msi: 314001/314901/324001/324901, lefreal:
+      kategorie (DS A: 314001/314901/324001/324901, DS B:
       314100/314900/324100/324100 — ověřeno simulací masek 2026-07-21
       přes AccountMaskResolver proti rozvrhům btpg a 4dnh, shoda 8/8).
 - [x] `accountMask` jako pole funguje (unit řetěz + error, integrační
@@ -149,7 +151,7 @@ rebuild cfg po změně .jsonc znovu na obou DS.
       `DocRowsFormContationTest`; ruční proklik na dev DS zbývá.)
 - [x] Integrační scénáře 1–3 zelené (deník dle D4, vyrovnaný, správné
       strany a payment_reference). Účty ve fixturách: seedované analytiky
-      314900/314100/324100 (PRD čísla x14901/x14001 jsou msi-specifické).
+      314900/314100/324100 (PRD čísla x14901/x14001 jsou DS A-specifické).
 - [x] Rebuild cfg + ds-upgrade na btpg i 4dnh proběhly (+ 4l3j pro
       integrační testy).
 - [x] Připraveno pro old_shipard task 21 (operace applier přijímá —

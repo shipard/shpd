@@ -224,7 +224,7 @@ class AccountingEngineRowStepsTest extends TestCase
 
     public function testMaskChainFallsBackToNextMask(): void
     {
-        // Rozvrh bez 3249xx (vzor lefreal) — řetěz ["3249", "324"] spadne
+        // Rozvrh bez 3249xx (vzor DS B) — řetěz ["3249", "324"] spadne
         // na druhou masku.
         $engine = $this->engineWithChart(
             ['324' => ['id' => 50, 'number' => '324100']],
@@ -344,7 +344,7 @@ class AccountingEngineRowStepsTest extends TestCase
 
     public function testFxLossReceivableTwoStepsStampIdentityOnBothLines(): void
     {
-        // Vzor ze zdroje (lefreal doc 719): 50 806,73, person 11,
+        // Vzor ze zdroje (DS B doc 719): 50 806,73, person 11,
         // symbol1 1300001 → MD 563100 / DAL 311100. Jeden řádek projde
         // oběma kroky operace — každý vyrobí jeden zápis s fixní stranou,
         // identita řádku (partner, payment_reference) na obou.

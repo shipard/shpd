@@ -1,5 +1,7 @@
 # Task: Exchange Format pro Osoby — Fáze 1
 
+**Stav:** hotovo
+
 ## Kontext
 
 Stavíme **kanonický výměnný formát pro Osoby** — `shpd.persons.person.v1`.

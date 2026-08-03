@@ -1,6 +1,7 @@
 # Install hardening + nástroje pro náhledy (D1–D5)
 
-**Status:** implementováno (commity 0141b44, 0c41163, 259d5fb) — zbývá manuální verifikace idempotence na čistém prostředí
+**Stav:** hotovo
+
 **Vzniklo z:** debugging na ns-alpha — PDF náhledy se tiše negenerovaly (chybějící binárky), opakované spuštění `install-packages.sh` přepsalo nginx konfiguraci
 
 ---

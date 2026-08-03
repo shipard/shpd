@@ -1,5 +1,7 @@
 # Task: Restrukturalizace editačního formuláře osob
 
+**Stav:** hotovo
+
 ## Status / Cíl
 
 Zpřehlednit editační formulář osoby (`base_persons_persons`):

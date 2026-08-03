@@ -1,5 +1,7 @@
 # Task: Exchange Format — Fáze 2: Napojení AI analyzeru
 
+**Stav:** hotovo
+
 ## Kontext
 
 Pokračujeme z **Fáze 1** (`tasks/exchange-format-phase1.md` — hotovo).

@@ -189,8 +189,8 @@ class PersonsRegistryClientTest extends TestCase
             'formatVersion' => '1.0',
             'personType' => 'company',
             'country' => 'cz',
-            'companyId' => '46343504',
-            'name' => ['fullName' => 'MSI Zlín s.r.o.'],
+            'companyId' => '12345678',
+            'name' => ['fullName' => 'Zkušební firma s.r.o.'],
             'addresses' => [],
             'bankAccounts' => [],
             'contacts' => [],
@@ -198,12 +198,12 @@ class PersonsRegistryClientTest extends TestCase
         $client = new FakeRegistryClient('https://example.org/persons');
         $client->scriptResponse(json_encode($canonical));
 
-        $result = $client->fetchPerson('cz', '46343504');
+        $result = $client->fetchPerson('cz', '12345678');
 
         $this->assertSame($canonical, $result);
         $this->assertCount(1, $client->capturedUrls);
         $this->assertSame(
-            'https://example.org/persons/cz/46343504/json?formatMode=ns',
+            'https://example.org/persons/cz/12345678/json?formatMode=ns',
             $client->capturedUrls[0],
         );
     }

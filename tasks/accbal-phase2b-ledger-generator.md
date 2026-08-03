@@ -1,5 +1,7 @@
 # accbal Fáze 2b — generování saldo pohybů z deníku
 
+**Stav:** hotovo
+
 > PRD pro jednu Claude Code session. Design: `docs/accbal.md` (§3.3, §3.4,
 > §4.2, §4.3, §4.4). Staví na hotové Fázi 0/1/2a — deník nese symboly +
 > splatnost, enginy vyšlou `journalWritten(sourceKind, sourceId)`, settings

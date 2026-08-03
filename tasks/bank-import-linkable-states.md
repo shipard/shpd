@@ -1,12 +1,14 @@
 # Bank import: archivní účty a osoby jsou odkazovatelné (linkable states)
 
+**Stav:** hotovo
+
 > **Status:** navrženo · **Modul:** economy.bank · **Typ:** oprava chyby
 > **Návaznost:** `19-bank-negative-amounts.md` (old_shipard, imports.newShipard),
 > konvence linkovatelnosti osob (`entityLinkable()` = `[10, 40, 70, 80]`)
 
 ## Kontext
 
-Re-import bankovních výpisů (msi-zlin, `btpg-peg5-b0tr-chln`) padá na:
+Re-import bankovních výpisů (DS A, `aaaa-bbbb-cccc-dddd`) padá na:
 
 ```
 HTTP 422: apply_failed — Bankovní účet #2 nenalezen nebo není aktivní.
@@ -32,7 +34,7 @@ historické datum — a platí to i v ostrém provozu (poslední výpis banky
 chodí po uzavření účtu). Stejné pravidlo už máme u osob: archivní entita
 je odkazovatelná, jen se nenabízí pro novou aktivitu.
 
-**Rozsah (msi-zlin):** 10 archivních účtů se **304 výpisy** ve zdrojových
+**Rozsah (DS A):** 10 archivních účtů se **304 výpisy** ve zdrojových
 datech, na nové straně 0 — ztraceno tiše už při prvním importu.
 738 bankovních řádků odkazuje archivované osoby (dnes na nové straně
 580 transakcí bez partnera). Stejná ztráta bude v datech alfy.
@@ -83,7 +85,7 @@ společně s rozhodnutím o alfě z tasku 19.
       `[10, 40, 70, 80]`.
 - [ ] Testy: archivní účet apply OK, smazaný účet 422, archivní partner
       se linkuje.
-- [ ] Po re-runu: msi-zlin má výpisy i pro 10 archivních účtů (6 719 +
+- [ ] Po re-runu: DS A má výpisy i pro 10 archivních účtů (6 719 +
       304 = 7 023 výpisů), rekonciliace nevyrovnaná jen u old ndx 3477.
 - [ ] Transakce bez partnera výrazně pod 580 (zbytek = řádky bez osoby /
       smazané osoby ve zdroji).

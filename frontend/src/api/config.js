@@ -30,10 +30,10 @@ function detectDsId() {
 
 const dsId = detectDsId();
 
-/** DS ID prefix for API requests, e.g. '/4l3j-z0bz-kz39-echj' or '' */
+/** DS ID prefix for API requests, e.g. '/abcd-efgh-ijkl-mnop' or '' */
 export const DS_PREFIX = dsId ? `/${dsId}` : '';
 
-/** Full base URL for API requests, e.g. '/4l3j-z0bz-kz39-echj/api/v1' or '/api/v1' */
+/** Full base URL for API requests, e.g. '/abcd-efgh-ijkl-mnop/api/v1' or '/api/v1' */
 export const API_BASE_URL = `${DS_PREFIX}/api/v1`;
 
 /** The detected data source ID, or null in production mode */

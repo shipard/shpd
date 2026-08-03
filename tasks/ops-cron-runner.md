@@ -1,5 +1,7 @@
 # Ops: systémový cron runner (`shpd-server cron`)
 
+**Stav:** hotovo
+
 ## Kontext
 
 Na alfě se zjistilo, že alerts runner nikdy neběžel — a při bližším pohledu

@@ -1,5 +1,7 @@
 # Task: Přidání `reference` a `displayPattern`
 
+**Stav:** hotovo
+
 Přečti `docs/table-definitions.md` — konkrétně:
 - Sekci 4 (Metadata tabulky) — nové pole `displayPattern`
 - Sekci 5 (Definice sloupců) — nové pole `reference`

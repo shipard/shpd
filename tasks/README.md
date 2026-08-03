@@ -13,6 +13,27 @@ jednotlivých subsystémů žijí v [`docs/`](../docs/README.md).
 
 ---
 
+<!-- STAV:BEGIN — generováno scripts/tasks-index.py, needituj ručně -->
+
+## Stav
+
+Celkem 176 tasků: **naplánováno** 5 · **částečně** 1 · **hotovo** 170.
+
+Zdroj pravdy je řádek `**Stav:**` v hlavičce každého tasku; tato
+tabulka je generovaná (`scripts/tasks-index.py`). Hotové tasky se
+nevypisují — níže je jen to, co není dokončené.
+
+| Task | Stav | Poznámka |
+|------|------|----------|
+| `ai-profile-sync-in-ds-upgrade.md` | naplánováno | sync není v `DsUpgradeCommand` |
+| `auth-phase0a-hardening.md` | naplánováno | rate limiting a evidence neúspěšných přihlášení chybí |
+| `dashboard-alert-grouping.md` | naplánováno | design schválen 2026-07-16, neimplementováno |
+| `docs-vat-totals-reverse-charge.md` | naplánováno | opravy Z1–Z3 v `DocDocument` (nulové součty, samovyměření, noPayTax) |
+| `mail-analysis-schema-fixes.md` | naplánováno | návrh 2026-07-14; `schema_error` není v kódu |
+| `mail-invoice-rounding.md` | částečně | implementováno, zbývá ověření a nasazení promptu |
+
+<!-- STAV:END -->
+
 ## Server, CLI a provoz
 
 Nasazení, oprávnění, správa datových zdrojů, dev workflow, logování,
@@ -299,6 +320,31 @@ Vývojářský nástroj v development módu (`/_dev/`).
 
 ## Konvence
 
+### Hlavička se stavem
+
+Každý task má hned za nadpisem H1 řádek:
+
+```
+**Stav:** hotovo
+**Stav:** částečně — krátká poznámka, co zbývá
+**Stav:** naplánováno — krátká poznámka
+**Stav:** zrušeno — proč
+```
+
+Tento řádek je **zdroj pravdy**. Souhrnná tabulka na začátku tohoto
+souboru se z něj generuje:
+
+```bash
+python3 scripts/tasks-index.py          # přegeneruje souhrn
+python3 scripts/tasks-index.py --check  # jen ověří
+```
+
+`--check` běží v `pre-commit` hooku, takže se index nemůže rozejít
+s hlavičkami. Rozejit se **může** hlavička s kódem — to žádný
+skript neuhlídá. Proto: **poslední krok každé implementace je aktualizace
+hlavičky tasku**, ve stejném commitu jako kód. Audit v srpnu 2026 našel osm
+tasků, které tvrdily „k implementaci“ u věcí, co byly dávno v kódu.
+
 ### Pojmenování souborů
 
 - **Fázové PRD:** `<oblast>-phase<N>[<sub>].md` (`mail-phase2a.md`,
@@ -336,6 +382,30 @@ Diagnostické příklady **anonymizuj se zachováním poměrů** (např.
 hodnota pro implementaci zůstane, identifikace zdroje ne. Konkrétní
 testovací případ (DS, id záznamu) si drž mimo repo (chat, lokální
 poznámky).
+
+### Automatická kontrola citlivých údajů
+
+`pre-commit` hook spouští `scripts/check-sensitive.py`, který hlásí:
+
+- **vzor ID datového zdroje** (`xxxx-xxxx-xxxx-xxxx`), pokud nevypadá syntetické
+  (všechny čtyři skupiny z `DUMMY_GROUPS` — např. `test-test-test-test`)
+- **vlastní termíny** ze souboru `.git/sensitive-terms` — jeden na řádek,
+  `#` je komentář
+
+`.git/sensitive-terms` **není v gitu** — právě proto do něj patří skutečné
+názvy firem, datových zdrojů a dodavatelů. Kdyby byl commitovaný, vrátil
+by ty názvy do veřejného repozitáře. Nový klon si ho musí vytvořit znovu —
+bez něj se kontrola názvů přeskakuje a skript to oznámí.
+
+Rozsah kontroly:
+
+```bash
+python3 scripts/check-sensitive.py        # staged soubory (hook)
+python3 scripts/check-sensitive.py --all  # celý strom (audit)
+```
+
+Kontrola **nezachytí** názvy produktů, tarifů a předměty zpráv — ty nejdou
+odlišit od obecných pojmů. Ty hlídej očima při psaní diagnostiky.
 
 ### Referencování externích repozitářů
 

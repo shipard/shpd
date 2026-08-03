@@ -1,5 +1,7 @@
 # Task: Saldo pohyby — chip bar saldokont místo roletky
 
+**Stav:** hotovo
+
 ## Status / cíl
 
 Prohlížeč Saldo pohybů (`economy.accbal.ledger`) dnes vybírá saldokonto

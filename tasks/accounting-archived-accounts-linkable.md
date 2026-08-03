@@ -1,6 +1,8 @@
 # Účtování na archivní účty rozvrhu (linkable states v AccountingEngine)
 
-> **Status:** implementováno (zbývá re-import msi) · **Modul:** economy.accounting · **Typ:** oprava
+**Stav:** hotovo
+
+> **Status:** implementováno (zbývá re-import DS A) · **Modul:** economy.accounting · **Typ:** oprava
 > **Návaznost:** vzor `bank-import-linkable-states.md` (třetí výskyt
 > téhož vzoru); nález D15.1a z tasku 22 (old_shipard)
 
@@ -9,7 +11,7 @@
 Historické doklady účtované na dnes archivní účty rozvrhu selžou:
 `AccountingEngine` dohledává účty (přímý účet řádku i maskový resolver
 kategorií) s filtrem `docState IN (10, 40, 80)` — archiv (70) vypadne.
-Na msi tak po D6 selhalo 7 dokladů (1639, 1797, 2707, 3015, 3172, 4405,
+Na DS A tak po D6 selhalo 7 dokladů (1639, 1797, 2707, 3015, 3172, 4405,
 5024) s účty **221101–221105, 231001**, které ve zdroji i v novém
 rozvrhu existují jako archivní (staré 9000 → nové 70; `AccountsRunner`
 je importuje správně, LocalIdMap má všech 839 účtů).
@@ -59,7 +61,7 @@ Průzkum ukázal jinou topologii filtrů, než task předpokládal:
   `docStateMain <= 2` vs. skutečný filtr).
 
 Simulace masek (314/3149/324/3249/563/663/504/518/548/311/321/343)
-proběhla na obou dev DS (btpg = MSI Zlín, 4dnh = Lef Real): rozšíření
+proběhla na obou dev DS (btpg = DS A Zlín, 4dnh = Lef Real): rozšíření
 o stav 70 **nemění výsledek žádné masky**; preference aktivních to
 navíc garantuje strukturálně. Na btpg je 7 archivních účtů:
 221101–105, 231001, 531901.
@@ -77,6 +79,6 @@ navíc garantuje strukturálně. Na btpg je 7 archivních účtů:
 
 ## Hotovo když
 
-- [ ] 7 msi dokladů s účty 221xxx/231001 se po re-importu zaúčtuje.
+- [ ] 7 DS A dokladů s účty 221xxx/231001 se po re-importu zaúčtuje.
 - [x] Simulace masek na obou DS beze změny výsledků pro aktivní účty.
 - [x] Testy zelené (úzké filtry).

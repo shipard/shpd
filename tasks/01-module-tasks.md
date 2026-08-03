@@ -1,5 +1,7 @@
 # Zadání — Modul `tasks.core` (Úkoly / To-Do)
 
+**Stav:** hotovo
+
 ## Cíl
 
 Přidat do aplikace sekci **Úkoly** — to-do list, kde si uživatelé vytvářejí

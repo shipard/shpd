@@ -1,5 +1,7 @@
 # Viewer grid — Fáze 1: infrastruktura + pilot JournalViewer
 
+**Stav:** hotovo
+
 > PRD pro jednu Claude Code session. Design: `docs/viewer-grid.md`
 > (rozhodnutí D1–D8, API kontrakty §3, frontend §4–§6). Staví na
 > stávajícím viewer systému (`docs/frontend.md` §7) — nic z něj se

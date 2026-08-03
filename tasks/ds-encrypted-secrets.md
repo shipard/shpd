@@ -1,6 +1,7 @@
 # DS encrypted secrets — generický šifrovací mechanismus
 
-**Status:** Draft k odsouhlasení
+**Stav:** hotovo
+
 **Cíl:** Zavést infrastrukturu pro šifrované ukládání citlivých dat
 v DB. Per-DS šifrovací klíč v adresáři zdroje dat — přežije migrační
 workflow (tarball + DB dump na jiný server) bez zásahu admina.

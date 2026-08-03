@@ -44,7 +44,7 @@ class RegistryPersonImporterTest extends TestCase
             ->willReturn(ApplyResult::ok($this->minimalCanonical(), savedId: 1234));
 
         $importer = new RegistryPersonImporter($registry, $applier);
-        $result = $importer->ensureImported('cz', '46343504');
+        $result = $importer->ensureImported('cz', '12345678');
 
         $this->assertSame(1234, $result->personId);
         $this->assertTrue($result->created, 'fresh insert must report created=true');
@@ -71,7 +71,7 @@ class RegistryPersonImporterTest extends TestCase
         );
 
         $importer = new RegistryPersonImporter($registry, $applier);
-        $result = $importer->ensureImported('cz', '46343504');
+        $result = $importer->ensureImported('cz', '12345678');
 
         $this->assertSame(9876, $result->personId);
         $this->assertFalse($result->created, 'matched existing must report created=false');
@@ -92,7 +92,7 @@ class RegistryPersonImporterTest extends TestCase
         $importer = new RegistryPersonImporter($registry, $applier);
 
         try {
-            $importer->ensureImported('cz', '46343504');
+            $importer->ensureImported('cz', '12345678');
             $this->fail('Expected RegistryImportException');
         } catch (RegistryImportException $e) {
             $this->assertSame('person_exists', $e->applierErrorCode);
@@ -113,7 +113,7 @@ class RegistryPersonImporterTest extends TestCase
         $importer = new RegistryPersonImporter($registry, $applier);
 
         $this->expectException(RegistryUnavailableException::class);
-        $importer->ensureImported('cz', '46343504');
+        $importer->ensureImported('cz', '12345678');
     }
 
     public function testRegistryNotFoundPropagates(): void
@@ -141,7 +141,7 @@ class RegistryPersonImporterTest extends TestCase
         $importer = new RegistryPersonImporter($registry, $applier);
 
         $this->expectException(RegistryInvalidResponseException::class);
-        $importer->ensureImported('cz', '46343504');
+        $importer->ensureImported('cz', '12345678');
     }
 
     // ── Apply failures wrap into RegistryImportException ───────────────────
@@ -163,11 +163,11 @@ class RegistryPersonImporterTest extends TestCase
         $importer = new RegistryPersonImporter($registry, $applier);
 
         try {
-            $importer->ensureImported('cz', '46343504');
+            $importer->ensureImported('cz', '12345678');
             $this->fail('Expected RegistryImportException');
         } catch (RegistryImportException $e) {
             $this->assertSame('validation_failed', $e->applierErrorCode);
-            $this->assertStringContainsString('cz/46343504', $e->getMessage());
+            $this->assertStringContainsString('cz/12345678', $e->getMessage());
             $this->assertStringContainsString('validation_failed', $e->getMessage());
             // Enriched canonical with issues is preserved for caller inspection.
             $this->assertSame($enriched, $e->canonical);
@@ -188,7 +188,7 @@ class RegistryPersonImporterTest extends TestCase
 
         $this->expectException(RegistryImportException::class);
         $this->expectExceptionMessageMatches('/person_id_conflict/');
-        $importer->ensureImported('cz', '46343504');
+        $importer->ensureImported('cz', '12345678');
     }
 
     // ── Defensive: success result without savedId is an importer error ─────
@@ -207,7 +207,7 @@ class RegistryPersonImporterTest extends TestCase
 
         $this->expectException(RegistryImportException::class);
         $this->expectExceptionMessageMatches('/savedId is missing/');
-        $importer->ensureImported('cz', '46343504');
+        $importer->ensureImported('cz', '12345678');
     }
 
     // ── ApplyOptions overwrite: importer is authoritative ──────────────────
@@ -235,7 +235,7 @@ class RegistryPersonImporterTest extends TestCase
         );
 
         $importer = new RegistryPersonImporter($registry, $applier);
-        $importer->ensureImported('cz', '46343504');
+        $importer->ensureImported('cz', '12345678');
 
         $this->assertSame('createOnly', $captured['applyOptions']['mergeStrategy']);
         $this->assertSame(40, $captured['applyOptions']['targetDocState']);
@@ -251,8 +251,8 @@ class RegistryPersonImporterTest extends TestCase
             'formatVersion' => '1.0',
             'personType'    => 'company',
             'country'       => 'cz',
-            'companyId'     => '46343504',
-            'name'          => ['fullName' => 'MSI Zlín s.r.o.'],
+            'companyId'     => '12345678',
+            'name'          => ['fullName' => 'Zkušební firma s.r.o.'],
         ];
     }
 }

@@ -1,5 +1,7 @@
 # Účetní doklady (cmnbkp) — Fáze 2: Účetní backend (engine + předpis + subclass)
 
+**Stav:** hotovo
+
 ## Kontext
 
 Fáze 1 (hotová) připravila schéma: `docs_core_rows` nese saldo identitu

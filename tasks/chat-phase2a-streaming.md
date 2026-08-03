@@ -1,5 +1,7 @@
 # Task: Chat — streamovaný chat bez nástrojů (Fáze 2a)
 
+**Stav:** hotovo
+
 ## Kontext
 
 První „živá" fáze chatu: uživatel napíše zprávu, model odpoví a tokeny se

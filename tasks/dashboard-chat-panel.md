@@ -1,5 +1,7 @@
 # Dashboard — plovoucí chat launcher + boční AI chat panel
 
+**Stav:** hotovo
+
 ## Status
 
 Implementováno (2026-07-17). Navrženo a schváleno Annou (2026-07-17).

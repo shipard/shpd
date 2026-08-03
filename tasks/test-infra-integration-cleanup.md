@@ -1,5 +1,7 @@
 # Test infra — úklid integračních testů (spojení, paměť, skip bez env)
 
+**Stav:** hotovo
+
 ## Kontext
 
 Infrastruktura integračních testů (`tests/Integration/IntegrationTestCase.php`)

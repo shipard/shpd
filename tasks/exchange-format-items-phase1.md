@@ -1,5 +1,7 @@
 # Task: Exchange Format pro Položky — Fáze 1
 
+**Stav:** hotovo
+
 ## Kontext
 
 Stavíme **kanonický výměnný formát pro Položky** — `shpd.items.item.v1`.

@@ -583,7 +583,7 @@ class AccountingEngineTest extends IntegrationTestCase
     /**
      * D10: řetěz masek ["3249", "324"] kategorie advances.received —
      * s 3249xx v rozvrhu vyhrává první maska (324900), po jejím dočasném
-     * skrytí (vzor lefreal, který 3249xx nemá) spadne dohledání na
+     * skrytí (vzor DS B, který 3249xx nemá) spadne dohledání na
      * druhou masku (324100). Skryté účty se v finally obnoví.
      */
     public function testInvnoAdvanceVatMaskChainFallsBackTo324(): void
@@ -1202,7 +1202,7 @@ class AccountingEngineTest extends IntegrationTestCase
     public function testCmnbkpAccountRecordOnArchivedAccountBooks(): void
     {
         // Linkable states: historický doklad smí účtovat na archivní účet
-        // (70) — vzor msi 221xxx (zrušené termínované vklady).
+        // (70) — vzor DS A 221xxx (zrušené termínované vklady).
         $archivedId = $this->insertTempAccount('899IT901', 70, 4);
         $headId = $this->insertHead('cmnbkp', [
             'partner'        => null,
@@ -1288,7 +1288,7 @@ class AccountingEngineTest extends IntegrationTestCase
         // Kurzová ztráta — pohledávka (D12): jeden řádek → dva zápisy
         // MD 563xxx (fx.loss) / DAL 311xxx (receivables), strany fixní
         // z kroků předpisu, identita (partner, payment_reference = staré
-        // symbol1) na obou. Vzor ze zdroje: lefreal doc 719.
+        // symbol1) na obou. Vzor ze zdroje: DS B doc 719.
         $this->requireAccountWithPrefix('563');
         $this->requireAccountWithPrefix('311');
         $headId = $this->insertHead('cmnbkp', [

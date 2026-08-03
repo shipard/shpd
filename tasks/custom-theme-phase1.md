@@ -1,5 +1,7 @@
 # Task: Vlastní vzhledy — Fáze 1 (custom theme sidebaru)
 
+**Stav:** hotovo
+
 ## Motivace
 
 Aplikace dnes podporuje light / dark / auto režim. Pro tento typ

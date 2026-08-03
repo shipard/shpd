@@ -1,5 +1,7 @@
 # Task: Ikony a pořadová čísla v řádcích vieweru
 
+**Stav:** hotovo
+
 ## Status / Cíl
 
 Přidat do každého řádku vieweru:

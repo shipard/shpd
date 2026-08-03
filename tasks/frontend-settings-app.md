@@ -1,5 +1,7 @@
 # Task: Nastavení aplikace
 
+**Stav:** hotovo
+
 ## Kontext
 
 Číselníky (Fiskální období, DPH, Pokladny, Bankovní spojení, Sklady,

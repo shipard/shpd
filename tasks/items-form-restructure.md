@@ -1,5 +1,7 @@
 # Task: Restrukturalizace editačního formuláře položek
 
+**Stav:** hotovo
+
 ## Status / Cíl
 
 Sladit editační formulář položky (`economy_items`) s ostatními formuláři

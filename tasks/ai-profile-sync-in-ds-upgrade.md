@@ -1,6 +1,7 @@
 # Task: Automatický sync AI profilu v `ds-upgrade`
 
-**Status:** k implementaci (Claude Code)
+**Stav:** naplánováno — sync není v `DsUpgradeCommand`
+
 **Schválená rozhodnutí:** D1–D5 (viz níže)
 
 ## Cíl

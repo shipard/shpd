@@ -1,5 +1,7 @@
 # Task: Refactor callsites to ModulePathResolver — Phase 2 of third-party modules support
 
+**Stav:** hotovo
+
 ## Context
 
 Phase 1 introduced `Shipard\Core\Module\ModulePathResolver` (see

@@ -1,5 +1,7 @@
 # accbal Fáze 0 — platební identita v účetním deníku
 
+**Stav:** hotovo
+
 > PRD pro jednu Claude Code session. Design: `docs/accbal.md` (§3.5, §3.6).
 > Saldokonto samo se **neimplementuje** — tohle je prerekvizita, která dostane
 > párovací symboly a splatnost do deníku a sjednotí symboly napříč zdroji.

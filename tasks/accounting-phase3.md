@@ -1,5 +1,7 @@
 # Účtování dokladů — Fáze 3: UI
 
+**Stav:** hotovo
+
 ## Kontext
 
 Fáze 2 je hotová: deník se generuje při přechodu dokladu do stavu 40,

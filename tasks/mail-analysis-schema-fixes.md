@@ -1,6 +1,7 @@
 # Modul `mail` — Opravy AI analýzy: schéma, prompt, frontování podle docState
 
-**Status:** Návrh 2026-07-14, k implementaci.
+**Stav:** naplánováno — návrh 2026-07-14; `schema_error` není v kódu
+
 **Cíl:** Odstranit dvě třídy problémů AI analýzy zjištěné diagnostikou
 reálného provozu na alfě (14. 7. 2026):
 
@@ -11,7 +12,7 @@ alfě (prompt v2.2.0) padá na validaci výstupu modelu proti
 1. `attachments[].kind`: model u strojově čitelné přílohy (ISDOC XML)
    vrací `'structured'`/`'isdoc'`, enum zná jen
    `original/scan/supplement/preview/null` a prompt povolené hodnoty
-   nikde nevyjmenovává (4 výskyty; zpráva lefreal 6481 selhala 3×
+   nikde nevyjmenovává (4 výskyty; zpráva DS B 6481 selhala 3×
    identicky).
 2. `supplier.registration`: `Party` má `additionalProperties: false`
    a pro rejstříkový údaj pole `courtRegistration` — to ale chybí
@@ -23,7 +24,7 @@ alfě (prompt v2.2.0) padá na validaci výstupu modelu proti
 `IncomingMessageDocument::resolveInitialAnalysisState` ignoruje
 `docState`: kouká jen na `ai_analysis_enabled` + existenci aktivního
 AI profilu. Zrcadlení archivní pošty do DS, kde už profil existoval,
-tak nafrontovalo tisíce zpráv (firma 11 127, lefreal 268), které
+tak nafrontovalo tisíce zpráv (firma 11 127, DS B 268), které
 `/queue` nikdy nevydá (filtruje Archiv/Koš) — trvale zavádějící stav
 „Ve frontě" a latentní riziko hromadné analýzy při odarchivování.
 
@@ -198,10 +199,10 @@ s dokončenou analýzou; stav 10+40 reálná data nemají.
 ## Nasazení a ověření na alfě (po merge do stable)
 
 1. `ds-upgrade` na všech 4 DS (datová oprava: očekávaný dopad
-   firma ~11 127, lefreal ~268 řádků; msi-zlin a finmago 0).
+   firma ~11 127, DS B ~268 řádků; DS A a DS C 0).
 2. `ai-profile-reload --force` na všech 4 DS (v2.3.0).
 3. Reanalyze dříve selhaných zpráv přes UI („Znova analyzovat"):
-   msi-zlin 76960 (ISDOC kind), lefreal 6481 (kind 3× retry),
+   DS A 76960 (ISDOC kind), DS B 6481 (kind 3× retry),
    6490/6491/6493 (registration), 6497 (vat null) — všechny musí
    skončit v `analysis_state=30` bez `schema_error`.
 4. Kontrola: `SELECT analysis_state, COUNT(*)` per DS — žádné

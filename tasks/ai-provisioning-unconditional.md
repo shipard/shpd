@@ -1,6 +1,7 @@
 # Task: AI analyzer provisioning bezpodmínečně v `ds-upgrade` + profily přežívají `ds-reset`
 
-**Status:** k implementaci (Claude Code)
+**Stav:** hotovo
+
 **Schválená rozhodnutí:** D1–D5 (viz níže)
 
 ## Cíl

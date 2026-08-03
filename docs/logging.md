@@ -120,7 +120,7 @@ tail -f /opt/shipard/log/shipard.log | jq -c .
 tail -f /opt/shipard/log/shipard.log | jq 'select(.level == "error")'
 
 # Jeden konkrétní DS
-tail -f /opt/shipard/log/shipard.log | jq 'select(.ds == "4l3j-z0bz-kz39-echj")'
+tail -f /opt/shipard/log/shipard.log | jq 'select(.ds == "abcd-efgh-ijkl-mnop")'
 
 # Kolik chyb za den
 grep '"level":"error"' /opt/shipard/log/shipard.log | wc -l

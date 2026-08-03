@@ -1,5 +1,7 @@
 # Frontend i18n — Fáze 1A (kostra vícejazyčnosti)
 
+**Stav:** hotovo
+
 ## Status / Cíl fáze
 
 Zavedení vícejazyčnosti do frontend SPA. Cílem této fáze je **kostra

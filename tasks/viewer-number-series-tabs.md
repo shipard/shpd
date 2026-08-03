@@ -1,5 +1,7 @@
 # Task: Spodní taby s číselnými řadami ve vieveru
 
+**Stav:** hotovo
+
 ## Status / Cíl
 
 Přidat do per-type doc viewerů (`ReceivedInvoicesViewer`, `IssuedInvoicesViewer`,

@@ -1,6 +1,7 @@
 # Task: Enrichment řádků z historie — dominantní položka dodavatele
 
-**Status:** Design uzavřen (D1–D8 potvrzeno), připraveno k implementaci
+**Stav:** hotovo
+
 **Cíl:** `RowHistoryEnricher` navrhne položku i u dodavatelů, jejichž texty
 řádků se neopakují (spotřební materiál, PHM), ale položka je v historii
 prakticky konstantní. Nová úroveň matchování „dominantní položka partnera"
@@ -18,7 +19,7 @@ prakticky konstantní. Nová úroveň matchování „dominantní položka partn
 - Frontend badge: `frontend/src/components/exchange/enrichBadge.js` +
   `DocumentExchangePreview.svelte` (`tasks/enrichment-preview-badge.md`)
 
-## Kontext — diagnostika z alfy (DS msi-zlin, 07/2026)
+## Kontext — diagnostika z alfy (DS A, 07/2026)
 
 Textové matchování strukturálně selhává u dvou tříd dodavatelů:
 
@@ -216,10 +217,10 @@ Filtry úzké (`--filter RowHistoryEnricherTest` apod.).
 ## Ověření na alfě
 
 Po nasazení: re-analýza (nebo preview) nové faktury UNI HOBBY v DS
-msi-zlin → `_resolve.rows[*].enrichment.matchedBy = historyDominantItem`,
+DS A → `_resolve.rows[*].enrichment.matchedBy = historyDominantItem`,
 `suggested.ourCode = 16` (Materiál), status extracted dokumentu
 `pending_review`; badge v preview ukazuje nový druh shody.
-(Pozn.: k 07/2026 v msi-zlin žádný extracted doc od UNI HOBBY není —
+(Pozn.: k 07/2026 v DS A žádný extracted doc od UNI HOBBY není —
 ověření vyžaduje novou došlou fakturu nebo re-analýzu po příchodu.)
 
 ---

@@ -1,5 +1,7 @@
 # Task: Documentation for third-party modules — Phase 5 (final) of third-party modules support
 
+**Stav:** hotovo
+
 ## Context
 
 Phases 1–4 implemented the third-party modules feature:

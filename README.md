@@ -21,6 +21,8 @@ Jak rozjet vývojové prostředí na Ubuntu LTS za pár minut: [DEVELOPERS.md](D
 
 Technické specifikace, architektura a formáty konfigurace: [docs/](docs/)
 
+Kam projekt směřuje a v jakém pořadí: [docs/roadmap.md](docs/roadmap.md)
+
 ## Technologie
 
 - **PHP 8.5** — strict types, PSR-4

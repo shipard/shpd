@@ -1,5 +1,7 @@
 # Dashboard — edit z widget řádku (Tasks)
 
+**Stav:** hotovo
+
 ## Status / cíl
 
 Klik na řádek v widgetu **Aktivní úkoly** dnes naviguje na Tasks viewer.

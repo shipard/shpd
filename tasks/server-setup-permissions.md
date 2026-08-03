@@ -1,5 +1,7 @@
 # Server setup, módy a oprávnění
 
+**Stav:** hotovo
+
 ## Status / Cíl
 
 Vyřešit dlouhodobou bolest s oprávněními a uživateli na shpd serveru.

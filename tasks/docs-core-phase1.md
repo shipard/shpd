@@ -1,5 +1,7 @@
 # Task: `docs.core` — Fáze 1: Skeleton modulu
 
+**Stav:** hotovo
+
 ## Kontext
 
 Implementujeme jádro dokladového systému — společný modul `docs.core` pro

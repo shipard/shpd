@@ -1,5 +1,7 @@
 # ds-reset — povolení na produkci přes `enableReset` flag
 
+**Stav:** hotovo
+
 ## Kontext
 
 Alpha provoz (`ns-alpha`) běží se `server.json` `mode=production`, ale na testovacích

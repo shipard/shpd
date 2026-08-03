@@ -1,5 +1,7 @@
 # Task: Mobilní formuláře — inline skupiny pod sebe (fáze 3b)
 
+**Stav:** hotovo
+
 ## Status / Cíl
 
 Pokračování responzivních formulářů. Fáze 3a udělala modál fullscreen.

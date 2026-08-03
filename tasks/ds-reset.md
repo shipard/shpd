@@ -1,5 +1,7 @@
 # `ds-reset` — reset datového zdroje pro opakované testování importů
 
+**Stav:** hotovo
+
 ## Status / Cíl
 
 Nový příkaz `shpd-ds ds-reset`, který uvede datový zdroj do čistého stavu

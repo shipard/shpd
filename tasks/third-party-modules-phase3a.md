@@ -1,5 +1,7 @@
 # Task: Read extraModulesPath from server.json — Phase 3a of third-party modules support
 
+**Stav:** hotovo
+
 ## Context
 
 Phases 1 and 2 introduced `ModulePathResolver` and wired it through the system

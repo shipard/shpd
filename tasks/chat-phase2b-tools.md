@@ -1,5 +1,7 @@
 # Task: Chat — tool-use smyčka (Fáze 2b)
 
+**Stav:** hotovo
+
 ## Kontext
 
 Na ověřený streamovaný chat (2a) sadíme **tool-use smyčku** — chat poprvé sáhne

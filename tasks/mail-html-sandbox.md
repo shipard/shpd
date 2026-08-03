@@ -1,5 +1,7 @@
 # Task: Sandboxovaný rendering HTML těla došlé pošty
 
+**Stav:** hotovo
+
 ## Status / Cíl
 
 Tělo HTML zprávy v detailu Došlé pošty se dnes renderuje přes

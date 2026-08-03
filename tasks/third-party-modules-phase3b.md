@@ -1,5 +1,7 @@
 # Task: Custom module class autoloader — Phase 3b of third-party modules support
 
+**Stav:** hotovo
+
 ## Context
 
 After Phases 1–3a, the system has a `ModulePathResolver` that knows about a

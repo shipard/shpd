@@ -1,5 +1,7 @@
 # Task: Dvouúrovňové sekce v Nastavení aplikace + přesun položek
 
+**Stav:** hotovo
+
 ## Status / cíl
 
 Rozšířit navigaci Nastavení aplikace (`settings` mód) o **dvě úrovně sekcí**

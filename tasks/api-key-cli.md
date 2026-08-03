@@ -1,5 +1,7 @@
 # Task: CLI příkazy pro správu API klíčů
 
+**Stav:** hotovo
+
 ## Kontext
 
 V novém Shipardu už existují role-specifické příkazy pro generování API

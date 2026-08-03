@@ -2,18 +2,18 @@
 
 > **Status:** k diskusi (D11–D15; D11 rozhodnuto) · **Datum:** 2026-07-21
 > **Návaznost:** `design-import-row-operations.md` (vlna C),
-> akceptační protokol D6 (msi 112 chyb, lefreal 145 chyb)
+> akceptační protokol D6 (DS A 112 chyb, DS B 145 chyb)
 
 ## Výchozí stav po D6
 
-Vlny A + C ověřeny: deník msi **0 nevyrovnaných** (z 1 830), lefreal 4
-haléřové; invno lefreal 988/988 se sumami na korunu; banka finálně
+Vlny A + C ověřeny: deník DS A **0 nevyrovnaných** (z 1 830), DS B 4
+haléřové; invno DS B 988/988 se sumami na korunu; banka finálně
 zelená (7 024/1, 1 943/3); vzorové doklady vlny C účtují identicky se
 starým vč. `payment_reference`. Zbylé chyby tvoří pět tříd.
 
 ## D11 — `partner_bank`: povinnost se stěhuje k platbě (ROZHODNUTO)
 
-**Dopad:** 38 (msi) + 113 (lefreal) nenaimportovaných invni.
+**Dopad:** 38 (DS A) + 113 (DS B) nenaimportovaných invni.
 **Místo:** `modules/docs/invoicesIn/src/ReceivedInvoiceDocument.php` —
 `addError('partner_bank', …)` při stavech 20/40/80 a `paymentMethod = 1`.
 **Řešení (potvrzeno):** import i běžné uložení **neblokovat** — validace
@@ -29,7 +29,7 @@ smysl ani při ručním pořízení.
 ~295 řádků) — deník i saldo za tyto doklady chybí.
 **Data:** starý řádek nese částku, partnera a `symbol1` = číslo párované
 faktury; starý deník generuje **dva zápisy**: P&L strana (563/663)
-× saldo strana (311/321). Analytiky per DS (lefreal 563100/311100) —
+× saldo strana (311/321). Analytiky per DS (DS B 563100/311100) —
 přesný případ pro maskové kategorie.
 
 **Varianta A (doporučená):** čtyři první-class operace
@@ -51,19 +51,19 @@ pravděpodobně `acc.record` + join (jsou marginální a bez saldo vazby).
 
 ## D13 — Parse čísla: fallback přes řady docTypu (MECHANICKÉ)
 
-**Dopad:** 41 msi dokladů (0 lefreal). Všech 41 = tentýž mechanismus:
+**Dopad:** 41 DS A dokladů (0 DS B). Všech 41 = tentýž mechanismus:
 doklad je ve zdroji přilinkovaný ke špatné řadě (`dbCounter` → docKeyId
 nesedí s 5. znakem čísla; např. 601300001 pod řadou „Otevření" kódu 9,
 601910001 tamtéž). Číslo je u historických dat ground truth.
 **Řešení:** když parse proti formuli přilinkované řady selže, zkusit
 formule ostatních řad téhož docType; právě jedna shoda → použít ji
 (+ warn s oběma řadami), nula či víc → chyba jako dnes. Poznámka:
-řada kódu 0 („Počáteční stavy") už ve zdroji msi existuje (INSERT
+řada kódu 0 („Počáteční stavy") už ve zdroji DS A existuje (INSERT
 2026-07-21) — fallback ji dohledá.
 
 ## D14 — Duplicitní `(řada, rok, pořadí)` (INVESTIGACE)
 
-**Dopad:** 15 msi + 2 lefreal chyb, vždy pár dokladů na stejném klíči
+**Dopad:** 15 DS A + 2 DS B chyb, vždy pár dokladů na stejném klíči
 (`'2-10-7'`, `'4-12-307'`, …). Hypotéza 1: část je downstream D13 —
 špatně přilinkovaný doklad se parsuje do cizí řady a koliduje s jejím
 právoplatným číslem → po D13 zmizí. Hypotéza 2: skutečné duplicitní
@@ -74,18 +74,18 @@ s dvojicemi starých ndx a rozhodnout adresně. Kandidát na kořen 244
 
 ## D15 — Drobné (ENUMERACE + ADRESNÉ OPRAVY)
 
-1. **`account_not_found`** — 15 msi + 2 lefreal: přímý účet řádku
+1. **`account_not_found`** — 15 DS A + 2 DS B: přímý účet řádku
    (majetek z joinu na starý deník) není v novém rozvrhu. Prověřit
    `AccountsRunner`: importuje celý rozvrh vč. archivních účtů?
    (Podezření na stejný vzor jako linkable states.)
-2. **Nevyrovnaný při apply** — 2 msi + 1 lefreal: doklady s reálným
+2. **Nevyrovnaný při apply** — 2 DS A + 1 DS B: doklady s reálným
    nesouladem deklarovaných součtů; enumerovat, patrně vady zdroje →
    oprava zdroje či akceptace.
-3. **4 haléřové rozdíly deníku** (lefreal cmnbkp 601410041, 601690001,
+3. **4 haléřové rozdíly deníku** (DS B cmnbkp 601410041, 601690001,
    601790001, 602690003): starý deník vyrovnaný, náš ±0,01–0,03 —
    per-řádkové zaokrouhlení vs. stará agregace; diff po řádcích na
    jednom dokladu a rozhodnout (agregační krok / rounding zápis).
-4. **1 datum validace** (msi) — enumerovat.
+4. **1 datum validace** (DS A) — enumerovat.
 
 ## Akceptace vlny D
 

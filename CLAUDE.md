@@ -14,6 +14,7 @@ Podrobné specifikace jsou v adresáři `docs/`. Přečti příslušný dokument
 
 | Dokument | Obsah |
 |----------|-------|
+| `docs/roadmap.md` | **Roadmapa** — milníky, pravidlo prioritizace. Než začneš nový task: ověř, do kterého milníku patří |
 | `docs/architecture.md` | Mapa tříd, vrstvy, závislosti, tok dat — přečti pokud potřebuješ pochopit jak komponenty spolupracují |
 | `docs/modules.md` | Modulový systém — struktura modulů, závislosti, JSONC formát, vícejazyčnost (i18n), kompilace konfigurace, CLI příkaz `ds-upgrade` |
 | `docs/table-definitions.md` | Formát definice databázových tabulek — datové typy, sloupce, indexy, extensions, validace, bezpečné změny |
@@ -322,8 +323,6 @@ php bin/shpd-ds version         # vyžaduje CWD s config/main.json
 
 ## Otevřené úkoly
 
-- PostgreSQL driver v DatabaseManager/SqlGenerator
-- `ds-delete`, `ds-list` příkazy
-- Webové API + frontend
-- Detekce chybějících překladů (validační nástroj)
-- Servisní chod pro výmaz nepotřebných tabulek/sloupců
+Směr a priority řeší **[`docs/roadmap.md`](docs/roadmap.md)** — tady už se seznam nedrží,
+rozcházel se se skutečností. Stav jednotlivých zadání je v `tasks/README.md`
+(generovaný souhrn) a v hlavičce `**Stav:**` každého task filu.

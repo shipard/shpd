@@ -1,5 +1,7 @@
 # Task: Dashboard — fáze 2b (generované AI shrnutí)
 
+**Stav:** hotovo
+
 ## Status / Cíl fáze
 
 Nahradit statický text v `AiSummaryCard` **generovaným shrnutím dne** —

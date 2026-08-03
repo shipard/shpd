@@ -114,7 +114,7 @@ class PersonsRegistryControllerTest extends TestCase
     public function testSearchDecoratesResultsWithExistsInDb(): void
     {
         $rows = [
-            $this->makeSearchRow('46343504', 'Foo a.s.'),
+            $this->makeSearchRow('12345678', 'Foo a.s.'),
             $this->makeSearchRow('11111111', 'Bar s.r.o.'),
         ];
         $client = $this->createMock(PersonsRegistryClient::class);
@@ -137,7 +137,7 @@ class PersonsRegistryControllerTest extends TestCase
         $this->assertSame(200, $this->getStatus($response));
         $data = $response->getPayload()['data'];
         $this->assertCount(2, $data['results']);
-        $this->assertSame('46343504', $data['results'][0]['companyId']);
+        $this->assertSame('12345678', $data['results'][0]['companyId']);
         $this->assertTrue($data['results'][0]['existsInDb']);
         $this->assertSame('11111111', $data['results'][1]['companyId']);
         $this->assertFalse($data['results'][1]['existsInDb']);
@@ -184,19 +184,19 @@ class PersonsRegistryControllerTest extends TestCase
         $canonical = [
             'format'    => 'shpd.persons.person',
             'version'   => 1,
-            'companyId' => '46343504',
+            'companyId' => '12345678',
         ];
         $client = $this->createMock(PersonsRegistryClient::class);
         $client->expects($this->once())
             ->method('fetchPerson')
-            ->with('cz', '46343504')
+            ->with('cz', '12345678')
             ->willReturn($canonical);
 
         $applier = $this->createMock(PersonApplier::class);
         $db = $this->createMock(DataSourceConnection::class);
 
         $ctrl = $this->makeController($client, $applier, $db);
-        $response = $ctrl->fetchPerson('cz', '46343504');
+        $response = $ctrl->fetchPerson('cz', '12345678');
 
         $this->assertSame(200, $this->getStatus($response));
         $this->assertSame($canonical, $response->getPayload()['data']);
@@ -228,7 +228,7 @@ class PersonsRegistryControllerTest extends TestCase
         $ctrl = $this->makeController(
             $client, $this->createMock(PersonApplier::class), $this->createMock(DataSourceConnection::class),
         );
-        $response = $ctrl->fetchPerson('cz', '46343504');
+        $response = $ctrl->fetchPerson('cz', '12345678');
 
         $this->assertSame(503, $this->getStatus($response));
         $this->assertSame('REGISTRY_UNAVAILABLE', $response->getPayload()['error']['code']);
@@ -244,7 +244,7 @@ class PersonsRegistryControllerTest extends TestCase
         $ctrl = $this->makeController(
             $client, $this->createMock(PersonApplier::class), $this->createMock(DataSourceConnection::class),
         );
-        $response = $ctrl->fetchPerson('cz', '46343504');
+        $response = $ctrl->fetchPerson('cz', '12345678');
 
         $this->assertSame(502, $this->getStatus($response));
         $this->assertSame('REGISTRY_INVALID_RESPONSE', $response->getPayload()['error']['code']);
@@ -260,7 +260,7 @@ class PersonsRegistryControllerTest extends TestCase
         $ctrl = $this->makeController(
             $client, $this->createMock(PersonApplier::class), $this->createMock(DataSourceConnection::class),
         );
-        $response = $ctrl->fetchPerson('xx', '46343504');
+        $response = $ctrl->fetchPerson('xx', '12345678');
 
         $this->assertSame(400, $this->getStatus($response));
         $this->assertSame('BAD_REQUEST', $response->getPayload()['error']['code']);
@@ -298,7 +298,7 @@ class PersonsRegistryControllerTest extends TestCase
 
     public function testImportSuccessReturnsPersonIdAndCreatedTrue(): void
     {
-        $canonical = ['format' => 'shpd.persons.person', 'companyId' => '46343504'];
+        $canonical = ['format' => 'shpd.persons.person', 'companyId' => '12345678'];
         $client = $this->createMock(PersonsRegistryClient::class);
         $client->method('fetchPerson')->willReturn($canonical);
 
@@ -310,7 +310,7 @@ class PersonsRegistryControllerTest extends TestCase
         $ctrl = $this->makeController($client, $applier, $this->createMock(DataSourceConnection::class));
         $response = $ctrl->import($this->buildRequest(
             'POST', '/api/v1/persons/registry/import',
-            ['country' => 'cz', 'companyId' => '46343504'],
+            ['country' => 'cz', 'companyId' => '12345678'],
         ));
 
         $this->assertSame(200, $this->getStatus($response));
@@ -321,7 +321,7 @@ class PersonsRegistryControllerTest extends TestCase
 
     public function testImportPersonExistsReturnsExistingIdAndCreatedFalse(): void
     {
-        $canonical = ['format' => 'shpd.persons.person', 'companyId' => '46343504'];
+        $canonical = ['format' => 'shpd.persons.person', 'companyId' => '12345678'];
         $client = $this->createMock(PersonsRegistryClient::class);
         $client->method('fetchPerson')->willReturn($canonical);
 
@@ -337,7 +337,7 @@ class PersonsRegistryControllerTest extends TestCase
         $ctrl = $this->makeController($client, $applier, $this->createMock(DataSourceConnection::class));
         $response = $ctrl->import($this->buildRequest(
             'POST', '/api/v1/persons/registry/import',
-            ['country' => 'cz', 'companyId' => '46343504'],
+            ['country' => 'cz', 'companyId' => '12345678'],
         ));
 
         $this->assertSame(200, $this->getStatus($response));
@@ -377,7 +377,7 @@ class PersonsRegistryControllerTest extends TestCase
         );
         $response = $ctrl->import($this->buildRequest(
             'POST', '/api/v1/persons/registry/import',
-            ['country' => 'cz', 'companyId' => '46343504'],
+            ['country' => 'cz', 'companyId' => '12345678'],
         ));
 
         $this->assertSame(503, $this->getStatus($response));
@@ -396,7 +396,7 @@ class PersonsRegistryControllerTest extends TestCase
         );
         $response = $ctrl->import($this->buildRequest(
             'POST', '/api/v1/persons/registry/import',
-            ['country' => 'cz', 'companyId' => '46343504'],
+            ['country' => 'cz', 'companyId' => '12345678'],
         ));
 
         $this->assertSame(502, $this->getStatus($response));
@@ -405,7 +405,7 @@ class PersonsRegistryControllerTest extends TestCase
 
     public function testImportApplyFailureReturns422WithDetails(): void
     {
-        $canonical = ['format' => 'shpd.persons.person', 'companyId' => '46343504'];
+        $canonical = ['format' => 'shpd.persons.person', 'companyId' => '12345678'];
         $client = $this->createMock(PersonsRegistryClient::class);
         $client->method('fetchPerson')->willReturn($canonical);
 
@@ -420,7 +420,7 @@ class PersonsRegistryControllerTest extends TestCase
         $ctrl = $this->makeController($client, $applier, $this->createMock(DataSourceConnection::class));
         $response = $ctrl->import($this->buildRequest(
             'POST', '/api/v1/persons/registry/import',
-            ['country' => 'cz', 'companyId' => '46343504'],
+            ['country' => 'cz', 'companyId' => '12345678'],
         ));
 
         $this->assertSame(422, $this->getStatus($response));
@@ -443,7 +443,7 @@ class PersonsRegistryControllerTest extends TestCase
         );
         $response = $ctrl->import($this->buildRequest(
             'POST', '/api/v1/persons/registry/import',
-            ['country' => 'xx', 'companyId' => '46343504'],
+            ['country' => 'xx', 'companyId' => '12345678'],
         ));
 
         $this->assertSame(400, $this->getStatus($response));

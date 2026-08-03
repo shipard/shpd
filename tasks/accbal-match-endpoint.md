@@ -1,5 +1,7 @@
 # API endpoint POST /_accbal/match — vzdálené spuštění matcheru
 
+**Stav:** hotovo
+
 ## Kontext
 
 Po importu ze starého Shipardu je dnes nutné ručně na cílovém serveru spustit

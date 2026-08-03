@@ -1,5 +1,7 @@
 # Task: `ai-profile-reload` CLI příkaz
 
+**Stav:** hotovo
+
 **Motivace:** Při ladění promptu pro AI extraction (Fáze 3a/3b) potřebujeme
 opakovaně updateovat `prompt_template`, `prompt_version` a `output_schema`
 existujícího profilu v DB ze JSONC šablony v repu. Workflow:

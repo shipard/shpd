@@ -1,5 +1,7 @@
 # Účetní doklady (cmnbkp) — Fáze 3: UI (Viewer, Form, řádky, sekce Účtárna)
 
+**Stav:** hotovo
+
 ## Kontext
 
 Fáze 2 (hotová) dodala kompletní účetní backend: `cmnbkp` jde přes API

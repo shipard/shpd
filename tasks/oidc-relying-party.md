@@ -1,5 +1,7 @@
 # OIDC Relying Party — přihlášení přes externí identity providery
 
+**Stav:** hotovo
+
 ## Kontext
 
 Autentizace v nov_shipard je dnes pouze lokální: `core_system_users`

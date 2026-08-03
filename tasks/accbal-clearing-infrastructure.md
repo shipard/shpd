@@ -1,5 +1,7 @@
 # accbal — Clearing infrastruktura pro migrovaný DS
 
+**Stav:** hotovo
+
 > PRD pro jednu Claude Code session (**nov_shipard**). Zajistit, aby clearing
 > účty (261200/261300) a saldo skupina `unmatched_payments` existovaly i na
 > migrovaném DS, kde je provisioning vypnutý (`skipProvisioning`). Design:

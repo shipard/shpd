@@ -1,5 +1,7 @@
 # Task: Mobilní footer formulářů — kebab pro vedlejší akce (fáze 3c)
 
+**Stav:** hotovo
+
 ## Status / Cíl
 
 Doladění responzivních formulářů. Footer formuláře (`FormStateBar`) má

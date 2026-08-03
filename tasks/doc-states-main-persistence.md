@@ -1,5 +1,7 @@
 # docStateMain — centralizace dopočtu do persistenční vrstvy
 
+**Stav:** hotovo
+
 ## Kontext
 
 Import ze starého shipardu (a obecně každá zápisová cesta přes exchange Applier) zakládá

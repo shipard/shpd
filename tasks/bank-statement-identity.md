@@ -1,5 +1,7 @@
 # Bank import: identita výpisu — slévání výpisů ze stejného dne
 
+**Stav:** hotovo
+
 > **Status:** navrženo · **Modul:** economy.bank (+ malá změna
 > old_shipard runneru) · **Typ:** oprava chyby, obsahuje schema změnu
 > **Návaznost:** `bank-import-fingerprint-collision.md`, task 20
@@ -13,15 +15,15 @@ ignoruje**. Dva výpisy téhož účtu se stejným (jednodenním) obdobím se
 slijí do jednoho: hlavička zůstane z prvního, transakce se nasypou do
 obou → nevyrovnáno o netto druhého výpisu.
 
-Ověřeno na lefreal (`4dnh-5isz-m4f5-gwa3`), účet 2 (archivní ČS-K CZK):
+Ověřeno na DS B (`eeee-ffff-gggg-hhhh`), účet 2 (archivní ČS-K CZK):
 
 - nový výpis **425** (nr 16) = staré výpisy 32115016 + 32115021
   (oba 19. 2. 2015) → rozdíl +500 000,
 - nový výpis **523** (nr 86) = staré 32115085 + 32115090
   (oba 12. 11. 2015) → rozdíl −8 671.
 
-Rozsah: lefreal 2 páry (přesně odpovídá skupinám „stejný účet + den"
-ve zdroji), msi-zlin 0. Riziko trvá pro alfu a ostrý provoz (souborový
+Rozsah: DS B 2 páry (přesně odpovídá skupinám „stejný účet + den"
+ve zdroji), DS A 0. Riziko trvá pro alfu a ostrý provoz (souborový
 import dvou výpisů z jednoho dne).
 
 ## Řešení (doporučené: plná identita přes external_id)
@@ -62,9 +64,9 @@ passthrough). Jednořádková změna + passthrough v
 
 ## Oprava dat
 
-Slité výpisy 425/523 na lefreal **tento fix sám nerozplete** (transakce
+Slité výpisy 425/523 na DS B **tento fix sám nerozplete** (transakce
 už visí na slitém výpisu; backfill `statement` nepřepisuje) — spraví je
-plný re-import lefreal po vlně C (spolu s 252 koncepty z tasku 20).
+plný re-import DS B po vlně C (spolu s 252 koncepty z tasku 20).
 Do té doby zůstávají 2 známé alerty. Alfa: zkontrolovat skupiny
 „účet + den" ve zdrojích alfy v rámci rozhodnutí o opravě alfy.
 

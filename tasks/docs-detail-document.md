@@ -1,5 +1,7 @@
 # Task: Doklady — detail jako „textová faktura" (content type `document`)
 
+**Stav:** hotovo
+
 ## Status / Cíl
 
 Detail dokladu ve viewerech nad `docs_core_heads` (Doklady, Faktury vydané,

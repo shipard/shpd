@@ -1,5 +1,7 @@
 # Task: Ikony položek menu ve sbaleném sidebaru
 
+**Stav:** hotovo
+
 ## Status / Cíl
 
 Ve sbaleném sidebaru (48 px) zobrazit ikony všech klikatelných položek

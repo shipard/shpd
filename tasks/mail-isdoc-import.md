@@ -1,6 +1,7 @@
 # Modul `mail` — Deterministický import ISDOC příloh místo AI analýzy
 
-**Status:** Návrh 2026-07-14, k implementaci.
+**Stav:** hotovo
+
 **Cíl:** Když došlá zpráva obsahuje v příloze ISDOC (český standard
 e-fakturace, XML), extrahovat doklad **deterministicky parserem** místo
 AI analýzy. ISDOC nese autoritativní strukturovaná data — LLM extrakce
@@ -8,7 +9,7 @@ je u něj zbytečná (cena, latence, riziko chyb). Zpráva s úspěšně
 naparsovaným ISDOCem do AI fronty vůbec nejde.
 
 **Motivace z reálných dat (alpha, 14. 7. 2026):** 822 příloh `.isdoc`
-napříč 4 DS (firma 485, msi-zlin 170, lefreal 107, finmago 60).
+napříč 4 DS (firma 485, DS A 170, DS B 107, DS C 60).
 Typický vzor: e-mail nese ISDOC + PDF vizualizaci téže faktury.
 
 **Návaznost:**

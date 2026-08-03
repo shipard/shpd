@@ -1,5 +1,7 @@
 # Backend i18n — Fáze 1C (lokalizace server-driven labels)
 
+**Stav:** hotovo
+
 ## Status / Cíl fáze
 
 Po Fázi 1B zůstávají v UI tři kategorie textů, které **negeneruje

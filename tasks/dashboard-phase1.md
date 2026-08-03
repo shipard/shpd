@@ -1,5 +1,7 @@
 # Task: Dashboard — fáze 1 (MVP)
 
+**Stav:** hotovo
+
 ## Status / Cíl fáze
 
 Přidat **Dashboard** jako home obrazovku aplikace — výchozí pohled po loginu

@@ -1,12 +1,14 @@
 # Bank import: fingerprint kolize obsahově identických transakcí napříč výpisy
 
+**Stav:** hotovo
+
 > **Status:** navrženo · **Modul:** economy.bank · **Typ:** oprava chyby
 > **Návaznost:** `bank-import-linkable-states.md`, task 19 (old_shipard),
 > W4.2 (fingerprint dedup design)
 
 ## Kontext
 
-Po re-importu banky (msi-zlin) zůstává výpis **5/2022 ČS** (id 3285)
+Po re-importu banky (DS A) zůstává výpis **5/2022 ČS**
 prázdný — jeho dvě transakce (`old:149248/149249`, poplatky 149 + 15 Kč)
 v DB nejsou a výpis je nevyrovnaný o 164 Kč.
 
@@ -21,7 +23,7 @@ nekonzultuje → jde se na INSERT → **unikátní index
 `saveDocument` neuspěje → chyba se posbírá do `$txErrors` a smyčka
 pokračuje → transakce tiše chybí.
 
-Rozsah: msi-zlin 1 pár (2 transakce, výpis 3285); lefreal ověřit po
+Rozsah: DS A 1 pár (2 transakce, výpis 3285); DS B ověřit po
 doběhnutí tamního re-importu (1 318 výpisů archivních účtů teprve čeká).
 Kolize je deterministická — opakuje se při každém re-importu a nastane
 u kohokoli s pravidelnými poplatky, kde se datum transakce sejde napříč
@@ -66,11 +68,11 @@ výpis" nerozhodnutelné bez id banky.
 
 ## Oprava dat (po nasazení)
 
-- msi-zlin: `forget --entity=bank-statement` + `bank-statements`
+- DS A: `forget --entity=bank-statement` + `bank-statements`
   (chybějící pár vznikne, výpis 3285 se vyrovná). Ověřím read-only:
   nevyrovnaný zůstane jen old ndx 3477 (zdrojový 1Kč rozdíl) —
   a stav dorovnat v checklistu tasku 19.
-- lefreal: první forget+rerun vůbec (archivní účty) — až s tímto fixem,
+- DS B: první forget+rerun vůbec (archivní účty) — až s tímto fixem,
   ať se kolize nezanesou.
 - Mimo scope: výpis old ndx 670 (překlep 02/03 v `dateIssue` zdroje →
   `periodEnd < periodStart` → validace 422) — oprava zdrojového data
@@ -79,10 +81,10 @@ výpis" nerozhodnutelné bez id banky.
 ## Hotovo když
 
 - [x] Obsahově identické transakce dvou výpisů se stejným dnem vzniknou
-      obě (test; na lefreal ověřeno i na datech — výpis 3285 obdoba).
-- [x] Po re-importu msi-zlin: výpis 3285 má 2 transakce a reconciluje;
+      obě (test; na DS B ověřeno i na datech — výpis 3285 obdoba).
+- [x] Po re-importu DS A: výpis 3285 má 2 transakce a reconciluje;
       nevyrovnaný jen old ndx 3477. Ověřeno read-only 2026-07-20.
-- [x] Lefreal: výpisy archivních účtů naimportované (1 318 = přesně zdroj,
+- [x] DS B: výpisy archivních účtů naimportované (1 318 = přesně zdroj,
       vč. rozpadů slitých párů dle `bank-statement-identity.md`)
       a rekonciliace nevyrovnaná jen u 3 výpisů s nulovými zdrojovými
       zůstatky. Ověřeno read-only 2026-07-20 po importu FIO účtů

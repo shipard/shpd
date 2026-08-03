@@ -1,5 +1,7 @@
 # Vlna D — validace partner_bank a kurzové operace (nová strana)
 
+**Stav:** hotovo
+
 > **Status:** hotovo (2026-07-22) · **Moduly:** docs.invoicesIn, docs.core,
 > economy.accounting · **Design:** `docs/design-import-wave-d.md`
 > (D11 rozhodnuto, D12 varianta A potvrzena)
@@ -48,7 +50,7 @@ všechny `rowPartner: 1`, `rowPaymentId: 1`, bez `rowAccount`):
 - oba zápisy operace nesou identitu řádku (partner,
   `payment_reference`) — saldo strana je párovatelná accbal FX fází.
 
-Vzor ze zdroje (lefreal doc 719): řádek 50 806,73, person 11,
+Vzor ze zdroje (DS B doc 719): řádek 50 806,73, person 11,
 symbol1 1300001 → MD 563100 / DAL 311100.
 
 ### 4. Nasazení a testy
@@ -68,7 +70,7 @@ symbol1 1300001 → MD 563100 / DAL 311100.
       → `DocumentResult::ok(…, $validation)` → success response `warnings[]`
       (FE zatím nezobrazuje; viz `docs/edit-forms.md` sekce 8).
 - [x] Čtyři FX operace na cmnbkp, účty výhradně kategoriemi
-      (msi 563xxx/663xxx dle rozvrhu, lefreal 563100/663100).
+      (DS A 563xxx/663xxx dle rozvrhu, DS B 563100/663100).
       Nová sémantika `rowSide: 0` = kontační layout bez volby strany
       (viz `docs/accounting.md` sekce 2).
 - [x] Integrační scénáře zelené, identita řádku na obou zápisech

@@ -1,5 +1,7 @@
 # Task: Viewery a formuláře pro mailové konfigurační tabulky
 
+**Stav:** hotovo
+
 ## Status / cíl
 
 Vytvořit plnohodnotné **viewery** (seznam + detail) a **editační formuláře**

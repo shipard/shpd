@@ -1,5 +1,7 @@
 # Task: Saldokonta v sidebaru — datově řízené položky navigace
 
+**Stav:** hotovo
+
 ## Status / cíl
 
 Vybraná saldokonta (typicky Pohledávky a Závazky) dostanou **vlastní položku

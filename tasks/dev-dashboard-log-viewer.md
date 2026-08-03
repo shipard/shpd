@@ -1,5 +1,7 @@
 # Dev dashboard — log viewer
 
+**Stav:** hotovo
+
 ## Status / Cíl
 
 Doplnění dev dashboardu o log viewer na URL `/_dev/logs/`. Pohodlné

@@ -126,8 +126,8 @@ kdokoli na internetu — a zůstane to tam.** Do hlášení proto nikdy nedávej
 
 **Jak to obejít:** napiš, *kdy* (datum a přibližný čas) a *co* jsi dělal,
 a doplň třeba „faktura od dodavatele ze Slovenska, tři položky, dvě sazby
-DPH".
-screenshotech citlivé údaje začerni — stačí obdélníky v malování.
+DPH". Na screenshotech citlivé údaje začerni — stačí obdélníky
+v malování.
 
 Když si nejsi jistý, jestli to jde napsat veřejně, napiš nám na
 **podpora@shipard.cz** a hlášení založíme za tebe.

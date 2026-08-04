@@ -13,9 +13,9 @@ projdi ho podle postupu níž.
 
 ## Kdy to potřebuješ
 
-Zpráva s fakturou dorazila a analýza skončila — v **Došlé poště** je ve
-stavu **Analyzovaná**, na **Dashboardu** se objevila karta s procentem
-**Jistoty** a tlačítkem **Zkontrolovat**.
+Zpráva s fakturou dorazila a analýza skončila — v **Došlé poště** má
+badge **Analyzováno** a stav **K řešení**, na **Dashboardu** se objevila
+karta s procentem **Jistoty** a tlačítkem **Zkontrolovat**.
 
 ## Postup
 
@@ -50,7 +50,7 @@ stavu **Analyzovaná**, na **Dashboardu** se objevila karta s procentem
 
 6. **Použij, nebo zamítni.**
    - **Použít** — vznikne **Faktura přijatá** ve stavu **Koncept**
-     a zpráva přejde na **Zpracovaná**.
+     a zpráva přejde na **Hotovo**.
    - **Zamítnout** — když to faktura vůbec není (reklama, upomínka)
      nebo je vytěžení nepoužitelné. Důvod je povinný a uloží se k návrhu:
      *špatně rozpoznaný typ*, *není to faktura*.
@@ -93,7 +93,7 @@ ve stavech *K použití*, *Čeká na review* a *Nízká jistota* jako
 
 **Co udělá Zamítnout.** Návrh dostane stav **Zamítnuto**, důvod se uloží k němu a v **Došlé poště** ho u zprávy pak vidíš jako
 *Důvod zamítnutí*. Karta z Dashboardu zmizí. Zpráva a přílohy zůstávají —
-zamítá se návrh dokladu, ne e-mail. Zpráva přejde na **Zpracovaná**,
+zamítá se návrh dokladu, ne e-mail. Zpráva přejde na **Hotovo**,
 pokud u ní nezbývá žádný další návrh k vyřízení.
 
 **Zamítnutí se z rozhraní nevrací.** Když jsi zamítl omylem, spusť

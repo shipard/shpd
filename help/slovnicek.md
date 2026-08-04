@@ -38,10 +38,10 @@ poštu a přijaté faktury.
 | AI to přečetla, načtení faktury | **Analýza** / **vytěžení** | Co AI udělá s přiloženou fakturou: přečte ji a nabídne hotový doklad |
 | co z toho vypadlo, rozečtená faktura | **Vytěžený doklad** | Výsledek analýzy — ještě není doklad, je to návrh ke kontrole |
 | jak si je tím AI jistá, spolehlivost | **Jistota** (v procentech) | Odhad modelu, jak dobře fakturu přečetl. Nízká jistota = kontroluj pečlivě. Vysoká jistota **není** záruka správnosti |
-| ještě se to nezpracovalo | stav **Nová** | Zpráva přišla, analýza ještě nezačala |
-| právě se to čte | stav **V analýze** | Pracuje na tom AI. Tenhle stav nastavuje systém, ručně do něj nevstoupíš |
-| přečteno, čeká na mě | stav **Analyzovaná** | Analýza hotová, čeká se na tvou kontrolu a potvrzení |
-| hotovo, už jsem to udělal | stav **Zpracovaná** | Ze zprávy už vznikl doklad. Zpráva se dál needituje |
+| ještě jsem to neřešil | stav **Nová** | Zpráva přišla a nikdo se jí ještě nezabýval |
+| čeká to na mě | stav **K řešení** | Je z čeho udělat doklad, nebo zpráva potřebuje tvoje rozhodnutí. Shipard sem zprávu přepne sám, jakmile z ní AI něco vytáhla |
+| hotovo, už jsem to vyřídil | stav **Hotovo** | Vyřízeno — doklad vznikl, nebo jsi návrh zamítl. Zpráva se dál needituje |
+| co s tím dělá AI | badge **Ve frontě** · **Analyzuje se** · **Analyzováno** · **Analýza selhala** | Jak daleko je strojové čtení. Je to **jiná věc** než stav zprávy: badge říká, jak daleko je AI, stav říká, jak daleko jsi ty |
 | uklidit z cesty | stav **Archiv** | Zpráva, se kterou už nic nebude — reklama, nevyžádaná pošta |
 | elektronická faktura, XML faktura | **ISDOC** | Strojově čitelný formát faktury. Když ho dodavatel přiloží, Shipard ho použije přímo a AI analýzu vůbec nepotřebuje — je to přesnější |
 | účtenka, paragon | **Zjednodušený daňový doklad** | Doklad z prodejny bez tvých údajů. Shipard je zpracovává také |

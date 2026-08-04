@@ -235,20 +235,21 @@ Doklady (faktury, objednávky, …) přidávají stavy Potvrzeno a Storno:
 
 ## 8.1 Došlá pošta — `core.mail.docStatesIncoming`
 
-Stavy životního cyklu došlé zprávy (tabulka `core_mail_incoming_messages`). Pipeline: **Nová → V analýze → Analyzovaná → Zpracovaná**, s možností archivace nebo přesunu do koše z kteréhokoli aktivního stavu.
+Workflow stavy došlé zprávy (tabulka `core_mail_incoming_messages`): **Nová → K řešení → Hotovo**, s možností archivace nebo přesunu do koše z kteréhokoli aktivního stavu. Tato sada používá klíče `stateName` / `actionName` (ne `name`).
 
 | docState | Název | mainState | viewGroup | readOnly | Přechody do |
 |----------|-------|-----------|-----------|----------|-------------|
 | 10 | Nová | 1 | active | — | 20, 40, 80, 90 |
-| 20 | V analýze | 2 | active | 1 | 30, 10 |
-| 30 | Analyzovaná | 3 | active | — | 40, 10, 80, 90 |
-| 40 | Zpracovaná | 4 | active | 1 | 80, 90 |
-| 80 | Archiv | 5 | archive | 1 | 10, 90 |
-| 90 | Smazáno | 6 | trash | 1 | 10 |
+| 20 | K řešení | 2 | active | — | 40, 10, 80, 90 |
+| 40 | Hotovo | 3 | active | 1 | 80, 90, 10 |
+| 80 | Archiv | 4 | archive | 1 | 10, 90 |
+| 90 | Smazáno | 5 | trash | 1 | 10 |
 
-**V analýze (20):** stav nastavuje výhradně AI pipeline (Fáze 3 modulu `core.mail`). Z UI manuálně nedostupný — `goto` z jiných stavů nikam do 20 vede z běžného workflow (jen ze 10 při zařazení do analýzy přes fronton, ale to je rovněž automatické).
+**Stav analýzy je ortogonální a není to `docState`.** Pipeline drží svůj status ve sloupci `analysis_state` (cfgItem `core.mail.analysisStates`: *Bez analýzy* 0, *Ve frontě* 10, *Analyzuje se* 20, *Analyzováno* 30, *Analýza selhala* 70). `IncomingMessagesViewer` z něj vykresluje samostatný badge v řádku. Změna jednoho stavu nesmí implikovat změnu druhého.
 
-**Zpracovaná (40):** z došlé zprávy již vznikla business entita (přijatá faktura apod.) — odkaz je držen ve sloupcích `target_table_id` / `target_row` na `core_mail_incoming_messages`.
+**K řešení (20):** editovatelný stav. `POST /result` přepne zprávu 10→20 automaticky, když vznikl aspoň jeden extracted dokument a zpráva je stále v Nové.
+
+**Hotovo (40):** zpráva je vyřízená — všechny extracted dokumenty opustily pending stavy (apply nebo reject). Přechod dělá `ExtractedDocumentDocument::maybeTransitionMessage()` až když nezbývá žádný pending sibling. Vznikl-li doklad, odkaz je v `target_table_id` / `target_row`.
 
 Konfigurační soubor: `modules/core/mail/config/docStatesIncoming.jsonc`
 

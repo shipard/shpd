@@ -58,8 +58,7 @@ datum, dodavatel nebo položky.
    - **datum a přibližný čas** doručení zprávy.
 
    Jak a kam hlásit — a co do veřejného hlášení nepatří — je
-   v [TESTERS.md](../../TESTERS.md). Podle času si záznam v datech najdeme
-   sami, takže fakturu přikládat nemusíš.
+   v [TESTERS.md](../../TESTERS.md).
 
 ## Na co narazíš
 

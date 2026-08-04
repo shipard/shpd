@@ -25,7 +25,8 @@ proto tě tu chceme — abys nám řekl, kde to drhne.
 týden: nemažeme ho, a když se změní vnitřní struktura aplikace, data
 převedeme. O rozdělanou práci nepřijdeš. Přesto ti u alfa verze
 doporučujeme nemít Shipard jako jediné místo, kde tvoje účetnictví
-existuje — daňové přiznání se z něj zatím podávat nedá.
+existuje — daňové přiznání se z něj zatím podávat nedá
+([co dalšího zatím nejde](help/co-dnes-nejde.md)).
 
 ---
 
@@ -144,18 +145,22 @@ ne tvoje.
 
 ---
 
-## 7. Malý slovníček
+## 7. Kde se to naučit
 
-Občas používáme názvy, které nemusí být samozřejmé:
+Návody „jak se co v Shipardu dělá“ jsou v
+[uživatelské dokumentaci](help/README.md). Vzniká postupně — nejdřív
+zpracování došlé pošty a přijaté faktury, tedy to, co tě jako testera
+čeká nejdřív.
 
-| Pojem | Co to znamená |
-|---|---|
-| **Datový zdroj** (DS) | Jedna firma či organizace se svými daty. Ty máš svůj, oddělený od ostatních. |
-| **Doklad** | Faktura, pokladní doklad — cokoli, co se eviduje a účtuje. |
-| **Viewer** | Seznamová obrazovka (např. přehled faktur). Občas nám to slovo uteče i do rozhraní. |
-| **Spisovna** | Evidence dokumentů, které nejsou doklady — smlouvy, výpisy, úřední pošta. |
-| **Saldokonto** | Přehled, kdo komu kolik dluží — nezaplacené faktury proti přijatým platbám. |
-| **Vytěžení / analýza** | To, co AI udělá s příchozí fakturou: přečte ji a nabídne hotový doklad. |
+Dvě stránky se vyplatí přečíst hned:
+
+- [Slovníček](help/slovnicek.md) — co který název znamená a jak se
+  jmenuje v rozhraní.
+- [Co Shipard dnes neumí](help/co-dnes-nejde.md) — než začneš hledat
+  funkci, která zatím neexistuje.
+
+Zeptat se můžeš i **Chatu** v aplikaci — vestavěný asistent odpovídá
+z téže dokumentace a vidí přitom tvoje data.
 
 ---
 

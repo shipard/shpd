@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
-# pre-commit: ověří, že generovaný souhrn stavů v tasks/README.md odpovídá
-# hlavičkám `**Stav:**` v jednotlivých task filech.
+# pre-commit: ověří citlivé údaje ve staged souborech, soulad generovaných
+# souhrnů (tasks/README.md, help/README.md) se zdroji pravdy a metadata
+# stránek uživatelské dokumentace.
 #
 # Zdroj pravdy je hlavička v task filu. Když se rozejde s indexem, commit
 # se zastaví a stačí spustit generátor.
@@ -27,6 +28,17 @@ if ! python3 "$REPO_ROOT/scripts/tasks-index.py" --check; then
     echo "==> Commit zastaven: souhrn stavů tasků není aktuální."
     echo "    Spusť:  python3 scripts/tasks-index.py"
     echo "    Pak:    git add tasks/README.md"
+    echo ""
+    exit 1
+fi
+
+if ! python3 "$REPO_ROOT/scripts/help-index.py" --check; then
+    echo ""
+    echo "==> Commit zastaven: rozcestník uživatelské dokumentace není"
+    echo "    aktuální, nebo chybí stránce metadata."
+    echo "    Spusť:  python3 scripts/help-index.py"
+    echo "    Pak:    git add help/README.md"
+    echo "    Pravidla: docs/help-authoring.md"
     echo ""
     exit 1
 fi

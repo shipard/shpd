@@ -23,6 +23,7 @@ Technické specifikace projektu Shipard.
 | [chat.md](chat.md) | Vnitřní AI asistent — orchestrační SSE smyčka, kontrakt událostí, LLM klient, výběr backendu, datový model konverzací, frontend konzumace |
 | [design-system.md](design-system.md) | Design system — paleta barev, doc-state konvence, badge systém, avatary, CSS proměnné |
 | [documentation.md](documentation.md) | Pravidla pro dokumentaci modulů a tabulek — kde leží README.md, co obsahuje .md k tabulce, vzory |
+| [help-authoring.md](help-authoring.md) | Pravidla pro **uživatelskou** dokumentaci v [`help/`](../help/README.md) — žánrová hranice, front matter, šablona stránky, generovaný rozcestník |
 | [cli.md](cli.md) | CLI nástroje — kompletní reference `shpd-server` a `shpd-ds` příkazů, pomocných skriptů a workflow scénářů |
 | [logging.md](logging.md) | Logging — centralizovaný `ErrorLogger`, JSON řádky (jeden per záznam), cesta a konfigurace logu; žádné přímé `error_log()` |
 | [exchange-format.md](exchange-format.md) | Výměnný formát pro doklady — kanonický JSON `shpd.docs.document.v1`, validate/preview/apply pipeline, resolvery, merge strategie |
@@ -34,6 +35,10 @@ Technické specifikace projektu Shipard.
 | [accbal.md](accbal.md) | **Designový dokument** modulu `economy.accbal`: saldokonto postavené nad účetním deníkem — nastavení skupin a účtů, generátor pohybů z deníku (předpisy/úhrady) + allocations, clearing nespárovaných plateb, událost `journalWritten`. Fáze 0–2 hotové, matcher (Fáze 3) v přípravě. |
 
 Nginx konfigurace jsou v [`nginx/`](nginx/) (app.conf, development.conf, production.conf).
+
+**Tady jsou technické specifikace.** Návody pro uživatele („jak to udělám“)
+žijí v [`help/`](../help/README.md) — pravidla pro jejich psaní v
+[help-authoring.md](help-authoring.md).
 
 ## Dokumenty k jednotlivým modulům
 

@@ -16,6 +16,7 @@ Podrobné specifikace jsou v adresáři `docs/`. Přečti příslušný dokument
 |----------|-------|
 | `docs/roadmap.md` | **Roadmapa** — milníky, pravidlo prioritizace. Než začneš nový task: ověř, do kterého milníku patří |
 | `tasks/README.md` | **Konvence pro tasky** — hlavička `**Stav:**`, struktura zadání, anonymizace citlivých údajů, pojmenování souborů |
+| `docs/help-authoring.md` | **Uživatelská dokumentace** v `help/` — žánrová hranice proti `docs/`, front matter stránky, šablona, generovaný rozcestník. Přečti před psaním čehokoli do `help/` |
 | `docs/architecture.md` | Mapa tříd, vrstvy, závislosti, tok dat — přečti pokud potřebuješ pochopit jak komponenty spolupracují |
 | `docs/modules.md` | Modulový systém — struktura modulů, závislosti, JSONC formát, vícejazyčnost (i18n), kompilace konfigurace, CLI příkaz `ds-upgrade` |
 | `docs/table-definitions.md` | Formát definice databázových tabulek — datové typy, sloupce, indexy, extensions, validace, bezpečné změny |
@@ -78,6 +79,24 @@ Než začneš nový task: ověř v `docs/roadmap.md`, do kterého milníku patř
 položka z M0 (věcná správnost) má přednost před vším ostatním.
 
 Podrobnosti: `tasks/README.md` → Hlavička se stavem.
+
+### Uživatelská dokumentace (`help/`)
+
+`help/` odpovídá na otázku **„jak to udělám“**, `docs/` na **„jak je to
+udělané“**. Do `help/` nepatří názvy tříd, tabulek, endpointů ani hodnoty
+`docState` — uživatel pracuje se stavem **V pořádku**, ne s `docState=40`.
+
+Čte to člověk na GitHubu **i** vnitřní AI asistent, proto:
+
+- Názvy sekcí, tlačítek a stavů **ověř ve zdroji** popisků (`module.jsonc`
+  `name:cs`, `frontend/src/i18n/cs.js`), neodhaduj je.
+- Co nefunguje, patří do `help/co-dnes-nejde.md`. Bez toho si asistent
+  chybějící funkci vymyslí.
+- Uživatelská stránka se aktualizuje **ve stejném commitu** jako změna
+  funkce, kterou popisuje. Poté `python3 scripts/help-index.py`
+  (pre-commit hook ověřuje rozcestník i metadata stránek).
+
+Formát hlavičky stránky a šablona: `docs/help-authoring.md`.
 
 ### Konfigurace na serveru
 - Server config: `/etc/shipard/server.json` (práva 0600)

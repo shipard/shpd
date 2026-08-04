@@ -26,6 +26,8 @@ Jak rozjet vývojové prostředí na Ubuntu LTS za pár minut: [DEVELOPERS.md](D
 
 ## Dokumentace
 
+Jak se v Shipardu dělají věci (návody pro uživatele): [help/](help/README.md)
+
 Technické specifikace, architektura a formáty konfigurace: [docs/](docs/)
 
 Kam projekt směřuje a v jakém pořadí: [docs/roadmap.md](docs/roadmap.md)

@@ -2,7 +2,7 @@
 
 ## Projekt
 
-Modulární multi-tenant SaaS účetní systém. Backend + CLI utility, bez frontendu.
+Modulární multi-tenant SaaS účetní systém — backend a CLI utility, webové API a Svelte 5 frontend.
 
 - **Namespace:** `Shipard\` → `src/`, testy `Shipard\Tests\` → `tests/`
 - **PHP 8.5+**, strict_types povinně, PSR-4 autoloading
@@ -15,6 +15,7 @@ Podrobné specifikace jsou v adresáři `docs/`. Přečti příslušný dokument
 | Dokument | Obsah |
 |----------|-------|
 | `docs/roadmap.md` | **Roadmapa** — milníky, pravidlo prioritizace. Než začneš nový task: ověř, do kterého milníku patří |
+| `tasks/README.md` | **Konvence pro tasky** — hlavička `**Stav:**`, struktura zadání, anonymizace citlivých údajů, pojmenování souborů |
 | `docs/architecture.md` | Mapa tříd, vrstvy, závislosti, tok dat — přečti pokud potřebuješ pochopit jak komponenty spolupracují |
 | `docs/modules.md` | Modulový systém — struktura modulů, závislosti, JSONC formát, vícejazyčnost (i18n), kompilace konfigurace, CLI příkaz `ds-upgrade` |
 | `docs/table-definitions.md` | Formát definice databázových tabulek — datové typy, sloupce, indexy, extensions, validace, bezpečné změny |
@@ -55,6 +56,28 @@ modules/{skupina}/{modul}/src/  # Document třídy modulů (PersonDocument, Issu
 Závislosti tečou shora dolů: Command → Document → Module/Config/Database → I18n/Utils.
 
 ## Klíčové konvence
+
+### Tasky a jejich stav
+
+Zadání žijí v `tasks/`, každé má hned za nadpisem H1 řádek `**Stav:**`
+(`hotovo` / `částečně` / `naplánováno` / `zrušeno`). Tento řádek je **zdroj pravdy**
+o stavu — generuje se z něj souhrn nedokončených tasků v `tasks/README.md`.
+
+**Poslední krok každé implementace je aktualizace `**Stav:**` v příslušném
+tasku — ve stejném commitu jako kód.** Poté:
+
+```bash
+python3 scripts/tasks-index.py
+```
+
+Pre-commit hook ověří, že souhrn odpovídá hlavičkám. Rozpor hlavičky **s kódem** ale
+neuhlídá žádný skript — jen tento návyk. Audit v srpnu 2026 našel osm tasků,
+které tvrdily „k implementaci“ u věcí dávno v kódu.
+
+Než začneš nový task: ověř v `docs/roadmap.md`, do kterého milníku patří. Otevřená
+položka z M0 (věcná správnost) má přednost před vším ostatním.
+
+Podrobnosti: `tasks/README.md` → Hlavička se stavem.
 
 ### Konfigurace na serveru
 - Server config: `/etc/shipard/server.json` (práva 0600)
@@ -320,6 +343,13 @@ php bin/shpd-ds version         # vyžaduje CWD s config/main.json
 - void metody v mocku: jen `->method('foo')` bez `willReturn`
 - JSONC parser: testovat komentáře v řetězcích, trailing čárky
 - I18n: testovat fallback chain (cs → en → holé pole)
+
+**Sekvence po dokončení tasku:**
+
+1. `php -l` na změněných PHP souborech
+2. `vendor/bin/phpunit --filter 'ClassName'` cíleně, pak celá sada
+3. `cd frontend && npm run build` — pokud se měnil frontend
+4. **Aktualizovat `**Stav:**` v task filu** + `python3 scripts/tasks-index.py`
 
 ## Otevřené úkoly
 

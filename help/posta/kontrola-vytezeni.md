@@ -8,8 +8,8 @@ related: [slovnicek.md, co-dnes-nejde.md]
 # Kontrola vytěženého dokladu
 
 AI přečte přijatou fakturu a nabídne hotový návrh dokladu. **Návrh není
-doklad** — vzniká teprve tím, že ho potvrdíš. Tahle stránka je o těch pěti
-minutách mezi jedním a druhým.
+doklad** — doklad vznikne teprve tím, že návrh potvrdíš. Než to uděláš,
+projdi ho podle postupu níž.
 
 ## Kdy to potřebuješ
 
@@ -19,12 +19,13 @@ stavu **Analyzovaná**, na **Dashboardu** se objevila karta s procentem
 
 ## Postup
 
-1. **Otevři náhled.** Z Dashboardu tlačítkem **Zkontrolovat**. Nebo
-   v **Došlé poště** otevři zprávu a u vytěženého dokladu klikni na
-   **Zobrazit detail**.
+1. **Otevři náhled.** Na **Dashboardu** u karty s fakturou klikni na
+   **Zkontrolovat**.
 
-2. **Přepni na tab PDF a najdi originál.** Náhled dokladu má taby **PDF**
-   a **Náhled** — mezi nimi budeš při kontrole přepínat.
+2. **Zorientuj se v náhledu.** Vlevo je **PDF** faktury, jak přišla,
+   vpravo data, která z ní AI přečetla. Kontrola je porovnávání levé
+   strany s pravou. Na telefonu a v úzkém okně se místo dvou sloupců
+   objeví taby **PDF** a **Náhled**.
 
 3. **Zkontroluj v tomhle pořadí.** Nezačínej řádky; začni tím, co se
    nejhůř opravuje později:
@@ -51,8 +52,8 @@ stavu **Analyzovaná**, na **Dashboardu** se objevila karta s procentem
    - **Použít** — vznikne **Faktura přijatá** ve stavu **Koncept**
      a zpráva přejde na **Zpracovaná**.
    - **Zamítnout** — když to faktura vůbec není (reklama, upomínka)
-     nebo je vytěžení nepoužitelné. Důvod je povinný; piš ho tak, aby dal
-     smysl i nám: *špatně rozpoznaný typ*, *není to faktura*.
+     nebo je vytěžení nepoužitelné. Důvod je povinný a uloží se k návrhu:
+     *špatně rozpoznaný typ*, *není to faktura*.
 
 7. **Dokonči doklad.** Koncept je pořád plně editovatelný — co jsi
    v náhledu jen zaregistroval, oprav teď. Zaúčtuje se teprve přechodem
@@ -90,13 +91,24 @@ z EU) se rozpad daně v **DPH rekapitulaci** opravuje. Zkontroluj, že
 ve stavech *K použití*, *Čeká na review* a *Nízká jistota* jako
 **Nahrazeno**. Co jsi už použil nebo zamítl, zůstane.
 
-**Zamítnutí nemaže poštu.** Zpráva a přílohy zůstávají v **Došlé poště**.
-Zamítá se návrh dokladu, ne e-mail.
+**Co udělá Zamítnout.** Návrh dostane stav **Zamítnuto**, důvod se uloží k němu a v **Došlé poště** ho u zprávy pak vidíš jako
+*Důvod zamítnutí*. Karta z Dashboardu zmizí. Zpráva a přílohy zůstávají —
+zamítá se návrh dokladu, ne e-mail. Zpráva přejde na **Zpracovaná**,
+pokud u ní nezbývá žádný další návrh k vyřízení.
+
+**Zamítnutí se z rozhraní nevrací.** Když jsi zamítl omylem, spusť
+**Znovu analyzovat** — dostaneš nový návrh a ten zamítnutý zůstane
+ležet vedle něj. Důvod zamítnutí nikam neodchází, zůstává jen v tvojí
+agendě — když AI čte něco opakovaně špatně, nahlas to zvlášť.
+
+**Ke stejnému náhledu se dostaneš i z Došlé pošty.** Otevři zprávu
+a u vytěženého dokladu klikni na **Zobrazit detail**. Hodí se, když
+karta na Dashboardu už není — třeba když se vracíš k něčemu staršímu.
 
 **Vytěžení nespustíš na přání.** Analýza běží automaticky po doručení
 zprávy. Ruční cesta je jen **Znovu analyzovat** u už doručené zprávy.
 
-**Když dodavatel umí ISDOC, poproš ho o něj.** Přiloženou fakturu ve
+**Když dodavatel umí ISDOC, popros ho o něj.** Přiloženou fakturu ve
 formátu ISDOC Shipard převezme přímo, bez AI — a je to přesnější než
 cokoli popsané na téhle stránce.
 

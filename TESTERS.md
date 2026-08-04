@@ -126,7 +126,7 @@ kdokoli na internetu — a zůstane to tam.** Do hlášení proto nikdy nedávej
 
 **Jak to obejít:** napiš, *kdy* (datum a přibližný čas) a *co* jsi dělal,
 a doplň třeba „faktura od dodavatele ze Slovenska, tři položky, dvě sazby
-DPH". My si podle času najdeme konkrétní záznam v datech sami. Na
+DPH".
 screenshotech citlivé údaje začerni — stačí obdélníky v malování.
 
 Když si nejsi jistý, jestli to jde napsat veřejně, napiš nám na

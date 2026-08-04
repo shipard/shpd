@@ -8,10 +8,17 @@ Navržen pro správu více nezávislých datových zdrojů (firem, organizací)
 na jednom serveru s plnou izolací dat.
 
 > **Stav:** alfa. Hlavní subsystémy běží, ale projekt se aktivně vyvíjí
-> a leccos se ještě mění. Vyzkoušet a nahlásit problémy můžeš podle
-> [DEVELOPERS.md](DEVELOPERS.md).
+> a leccos se ještě mění. Hledáme testery — jak se připojit a jak hlásit
+> problémy je v [TESTERS.md](TESTERS.md) (uživatelé)
+> a [DEVELOPERS.md](DEVELOPERS.md) (vývojáři).
 
 ---
+
+## Chci to vyzkoušet
+
+Nejsi vývojář a chceš si Shipard zkusit na vlastní agendě? Aplikaci
+provozujeme, stačí prohlížeč — jak si říct o přístup, co si zkusit
+a jak nahlásit chybu: [TESTERS.md](TESTERS.md)
 
 ## Pro vývojáře
 

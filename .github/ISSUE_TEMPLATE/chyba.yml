@@ -1,0 +1,79 @@
+name: 🐞 Hlášení chyby
+description: Něco nefunguje, počítá špatně nebo se chová jinak, než bys čekal
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Díky, že si našel čas to nahlásit.
+
+        ⚠️ **Tenhle repozitář je veřejný — hlášení uvidí kdokoli na internetu.**
+        Neuváděj jména skutečných partnerů, čísla faktur, čísla účtů ani částky.
+        Místo toho napiš datum a čas a popiš situaci obecně („faktura ze Slovenska,
+        tři položky, dvě sazby DPH") — konkrétní záznam si podle času najdeme sami.
+        Na screenshotech citlivé údaje začerni.
+
+  - type: checkboxes
+    id: no-sensitive-data
+    attributes:
+      label: Citlivá data
+      options:
+        - label: Hlášení ani přiložené screenshoty neobsahují reálná jména partnerů, čísla dokladů, čísla účtů ani částky
+          required: true
+
+  - type: input
+    id: where
+    attributes:
+      label: Kde se to stalo
+      description: Obrazovka nebo část aplikace — např. „Došlá pošta", „Faktury vydané", „Dashboard"
+      placeholder: Došlá pošta — náhled dokladu před uložením
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Co jsem dělal
+      description: Kroky, kterými se k tomu dostaneš. Klidně jako odrážky.
+      placeholder: |
+        1. Otevřel jsem Došlou poštu
+        2. U zprávy jsem klikl na Vytvořit doklad
+        3. …
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Co jsem čekal
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Co se stalo místo toho
+      description: Pokud se objevila chybová hláška, opiš ji (nebo přilož screenshot).
+    validations:
+      required: true
+
+  - type: input
+    id: when
+    attributes:
+      label: Kdy se to stalo
+      description: Datum a přibližný čas — podle toho dohledáme záznam v logu.
+      placeholder: 4. 8. 2026 kolem 9:15
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Prohlížeč a zařízení
+      placeholder: Chrome na Windows / Safari na iPhonu
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshot a cokoli dalšího
+      description: Obrázek sem můžeš přetáhnout myší. Citlivé údaje prosím začerni.

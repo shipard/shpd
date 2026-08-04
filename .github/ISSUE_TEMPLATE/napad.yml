@@ -1,0 +1,43 @@
+name: 💡 Nápad na vylepšení
+description: Něco chybí, jde to nešikovně, nebo víš, jak by to mohlo být lepší
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Nemusíš mít hotové řešení — nejcennější je popis toho, co potřebuješ udělat
+        a proč to dnes nejde.
+
+        ⚠️ **Repozitář je veřejný.** Neuváděj jména skutečných partnerů, čísla
+        dokladů ani částky.
+
+  - type: checkboxes
+    id: no-sensitive-data
+    attributes:
+      label: Citlivá data
+      options:
+        - label: Text ani screenshoty neobsahují reálná jména partnerů, čísla dokladů ani částky
+          required: true
+
+  - type: textarea
+    id: need
+    attributes:
+      label: Co potřebuju udělat
+      description: Popiš úkol ze svojí práce, ne funkci aplikace.
+      placeholder: Potřebuju vystavit fakturu v eurech partnerovi v Německu.
+    validations:
+      required: true
+
+  - type: textarea
+    id: today
+    attributes:
+      label: Jak to řeším dnes
+      description: Co děláš teď — v Shipardu, v Excelu, ručně, jinde?
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: Jak by to podle tebe mohlo fungovat
+      description: Nepovinné. Pokud máš představu, sem s ní.

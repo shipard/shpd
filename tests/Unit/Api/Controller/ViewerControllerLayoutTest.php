@@ -159,7 +159,7 @@ class ViewerControllerLayoutTest extends TestCase
 
 	public function testMetaListOnlyViewerHasOnlyListLayoutAndNoGridKey(): void
 	{
-		$response = $this->ctrl->meta('test.listOnly', $this->auth(), $this->registry, $this->db);
+		$response = $this->ctrl->meta('test.listOnly', $this->auth(), $this->registry, [], $this->db);
 		$data     = $response->getPayload()['data'];
 
 		$this->assertSame(['list'], $data['layouts']);
@@ -169,7 +169,7 @@ class ViewerControllerLayoutTest extends TestCase
 
 	public function testMetaGridViewerHasBothLayoutsColumnsAndShowIndex(): void
 	{
-		$response = $this->ctrl->meta('test.grid', $this->auth(), $this->registry, $this->db);
+		$response = $this->ctrl->meta('test.grid', $this->auth(), $this->registry, [], $this->db);
 		$data     = $response->getPayload()['data'];
 
 		$this->assertSame(['list', 'grid'], $data['layouts']);
@@ -180,7 +180,7 @@ class ViewerControllerLayoutTest extends TestCase
 
 	public function testMetaInvalidDefaultLayoutFallsBackToList(): void
 	{
-		$response = $this->ctrl->meta('test.badDefault', $this->auth(), $this->registry, $this->db);
+		$response = $this->ctrl->meta('test.badDefault', $this->auth(), $this->registry, [], $this->db);
 		$data     = $response->getPayload()['data'];
 
 		$this->assertSame(['list'], $data['layouts']);
@@ -191,7 +191,7 @@ class ViewerControllerLayoutTest extends TestCase
 
 	public function testRowsGridLayoutReturnsCellsShapeWithoutIconAndFooter(): void
 	{
-		$response = $this->ctrl->rows('test.grid', $this->rowsRequest(['layout' => 'grid']), $this->auth(), $this->registry, $this->db);
+		$response = $this->ctrl->rows('test.grid', $this->rowsRequest(['layout' => 'grid']), $this->auth(), $this->registry, [], $this->db);
 		$data     = $response->getPayload()['data'];
 
 		$this->assertSame(200, $this->getStatus($response));
@@ -203,7 +203,7 @@ class ViewerControllerLayoutTest extends TestCase
 
 	public function testRowsGridFooterOnlyOnPageZero(): void
 	{
-		$response = $this->ctrl->rows('test.grid', $this->rowsRequest(['layout' => 'grid', 'page' => '1']), $this->auth(), $this->registry, $this->db);
+		$response = $this->ctrl->rows('test.grid', $this->rowsRequest(['layout' => 'grid', 'page' => '1']), $this->auth(), $this->registry, [], $this->db);
 		$data     = $response->getPayload()['data'];
 
 		$this->assertArrayNotHasKey('footer', $data);
@@ -211,7 +211,7 @@ class ViewerControllerLayoutTest extends TestCase
 
 	public function testRowsWithoutLayoutParamKeepsListShapeAndDefaultIcon(): void
 	{
-		$response = $this->ctrl->rows('test.grid', $this->rowsRequest([]), $this->auth(), $this->registry, $this->db);
+		$response = $this->ctrl->rows('test.grid', $this->rowsRequest([]), $this->auth(), $this->registry, [], $this->db);
 		$data     = $response->getPayload()['data'];
 
 		$this->assertSame('row 1', $data['rows'][0]['t1']);
@@ -223,7 +223,7 @@ class ViewerControllerLayoutTest extends TestCase
 
 	public function testValidSortIsInjectedBeforeSelectRows(): void
 	{
-		$this->ctrl->rows('test.grid', $this->rowsRequest(['layout' => 'grid', 'sort' => 'amount:desc']), $this->auth(), $this->registry, $this->db);
+		$this->ctrl->rows('test.grid', $this->rowsRequest(['layout' => 'grid', 'sort' => 'amount:desc']), $this->auth(), $this->registry, [], $this->db);
 
 		$this->assertSame(['column' => 'amount', 'dir' => 'desc'], GridStubViewer::$lastSort);
 	}
@@ -234,7 +234,7 @@ class ViewerControllerLayoutTest extends TestCase
 		// směr — všechno padá na výchozí řazení, žádná chyba (D9).
 		foreach (['foo:asc', 'amount:sideways', 'name:asc', 'amount'] as $sort) {
 			GridStubViewer::$lastSort = null;
-			$response = $this->ctrl->rows('test.grid', $this->rowsRequest(['layout' => 'grid', 'sort' => $sort]), $this->auth(), $this->registry, $this->db);
+			$response = $this->ctrl->rows('test.grid', $this->rowsRequest(['layout' => 'grid', 'sort' => $sort]), $this->auth(), $this->registry, [], $this->db);
 
 			$this->assertSame(200, $this->getStatus($response), "sort={$sort}");
 			$this->assertNull(GridStubViewer::$lastSort, "sort={$sort} se nesmí injektovat");
@@ -243,14 +243,14 @@ class ViewerControllerLayoutTest extends TestCase
 
 	public function testSortIsIgnoredForListLayout(): void
 	{
-		$this->ctrl->rows('test.grid', $this->rowsRequest(['sort' => 'amount:desc']), $this->auth(), $this->registry, $this->db);
+		$this->ctrl->rows('test.grid', $this->rowsRequest(['sort' => 'amount:desc']), $this->auth(), $this->registry, [], $this->db);
 
 		$this->assertNull(GridStubViewer::$lastSort);
 	}
 
 	public function testRowsGridLayoutOnListOnlyViewerIsRejected(): void
 	{
-		$response = $this->ctrl->rows('test.listOnly', $this->rowsRequest(['layout' => 'grid']), $this->auth(), $this->registry, $this->db);
+		$response = $this->ctrl->rows('test.listOnly', $this->rowsRequest(['layout' => 'grid']), $this->auth(), $this->registry, [], $this->db);
 
 		$this->assertSame(400, $this->getStatus($response));
 		$this->assertSame('LAYOUT_NOT_SUPPORTED', $response->getPayload()['error']['code']);

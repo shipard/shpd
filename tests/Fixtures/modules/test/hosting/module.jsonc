@@ -1,0 +1,17 @@
+// Fixture pro SettingsControllerTest — settings položka nad adminOnly
+// tabulkou (hosting D9): ne-adminovi se nesmí objevit v navigaci.
+{
+    "id": "test.hosting",
+    "name": "Test Hosting",
+    "description": "Fixture module: adminOnly table exposed as a settings item.",
+
+    "dependencies": [],
+
+    "tables": [
+        "test_hosting_servers"
+    ],
+
+    "settingsItems": [
+        { "table": "test_hosting_servers", "section": "other", "subsection": "other.system", "order": 50 }
+    ]
+}

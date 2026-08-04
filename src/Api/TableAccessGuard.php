@@ -13,13 +13,29 @@ final class TableAccessGuard
 {
 	public const SYSTEM_TABLE_PREFIX = 'core_system_';
 
-	/** 403 pro ne-admina na core_system_* tabulce, jinak null. */
-	public static function guardSystemTable(string $table, AuthContext $auth): ?Response
+	/**
+	 * 403 pro ne-admina, jinak null. Dvě větve:
+	 *  - core_system_* tabulky (prefix match) → FORBIDDEN_SYSTEM_TABLE,
+	 *  - tabulky s "adminOnly": true v definici → FORBIDDEN_ADMIN_ONLY
+	 *    (viz docs/hosting.md, rozhodnutí D9).
+	 * Bez TableDefinition ($def === null) se vynucuje jen prefix.
+	 */
+	public static function guardTable(string $table, AuthContext $auth, ?TableDefinition $def = null): ?Response
 	{
-		if (str_starts_with($table, self::SYSTEM_TABLE_PREFIX) && !$auth->isAdmin) {
+		if ($auth->isAdmin) {
+			return null;
+		}
+		if (str_starts_with($table, self::SYSTEM_TABLE_PREFIX)) {
 			return Response::error(
 				'FORBIDDEN_SYSTEM_TABLE',
 				'System tables require administrator rights',
+				403,
+			);
+		}
+		if ($def?->adminOnly === true) {
+			return Response::error(
+				'FORBIDDEN_ADMIN_ONLY',
+				'Table requires administrator rights',
 				403,
 			);
 		}

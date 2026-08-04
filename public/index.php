@@ -280,11 +280,11 @@ function dispatch(
 		'meta'    => dispatchMeta($route->action, $route->table, $tables, resolveLanguage($request, $resolved->config)),
 		'ui'      => dispatchUi($route->action, $resolved->config, $modulePathResolver, resolveLanguage($request, $resolved->config), $configRuntime, $db),
 		'dashboard' => dispatchDashboard($route, $db, $configRuntime, resolveLanguage($request, $resolved->config), $resolved->config, $alertCheckRegistry),
-		'settings' => dispatchSettings($route, $request, $auth, $resolved->config, $modulePathResolver, resolveLanguage($request, $resolved->config), $configRuntime, $db),
+		'settings' => dispatchSettings($route, $request, $auth, $resolved->config, $modulePathResolver, resolveLanguage($request, $resolved->config), $configRuntime, $db, $tables),
 		'app'     => dispatchApp($route, $auth, $db, $resolved->config),
 		'form'    => dispatchForm($route, $request, $auth, $tables, $db, $formRegistry ?? new FormRegistry(), $configRuntime, $modulePathResolver, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), resolveLanguage($request, $resolved->config), $resolved->config, $lookupRegistry ?? new LookupRegistry(), $documentEventDispatcher),
 		'lookup'  => dispatchLookup($route, $request, $tables, $db, $lookupRegistry ?? new LookupRegistry(), $configRuntime),
-		'viewer'  => dispatchViewer($route, $request, $auth, $viewerRegistry, $db, $configRuntime, resolveLanguage($request, $resolved->config)),
+		'viewer'  => dispatchViewer($route, $request, $auth, $viewerRegistry, $tables, $db, $configRuntime, resolveLanguage($request, $resolved->config)),
 		'mail'    => dispatchMail($route, $request, $auth, $tables, $db, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $configRuntime),
 		'senderRules' => dispatchSenderRules($route, $request, $auth, $tables, $db, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $configRuntime, $documentEventDispatcher),
 		'registry' => dispatchRegistry($route, $request, $auth, $tables, $db, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $configRuntime),
@@ -929,11 +929,12 @@ function dispatchSettings(
 	string $language,
 	?\Shipard\Core\Config\ConfigRuntime $configRuntime,
 	\Shipard\Core\Database\DataSourceConnection $db,
+	array $tables = [],
 ): Response {
 	$ctrl = new SettingsController();
 	return match ($route->action) {
-		'navigation'        => $ctrl->navigation($config, $modulePathResolver, $language, $configRuntime, 'settings', $auth),
-		'accountNavigation' => $ctrl->navigation($config, $modulePathResolver, $language, $configRuntime, 'account', $auth),
+		'navigation'        => $ctrl->navigation($config, $modulePathResolver, $language, $configRuntime, 'settings', $auth, $tables),
+		'accountNavigation' => $ctrl->navigation($config, $modulePathResolver, $language, $configRuntime, 'account', $auth, $tables),
 		'page'              => $ctrl->page((string) $route->table, $config, $modulePathResolver, $language, $auth, $db),
 		'savePage'          => $ctrl->savePage((string) $route->table, $request, $config, $modulePathResolver, $auth, $db),
 		default             => Response::error('INTERNAL_ERROR', "Unknown settings action: {$route->action}", 500),
@@ -965,6 +966,7 @@ function dispatchViewer(
 	Request $request,
 	AuthContext $auth,
 	ViewerRegistry $registry,
+	array $tables,
 	\Shipard\Core\Database\DataSourceConnection $db,
 	?\Shipard\Core\Config\ConfigRuntime $config = null,
 	string $language = 'en',
@@ -972,9 +974,9 @@ function dispatchViewer(
 	$ctrl     = new ViewerController();
 	$viewerId = $route->table ?? '';
 	return match ($route->action) {
-		'meta'   => $ctrl->meta($viewerId, $auth, $registry, $db, $config, $language),
-		'rows'   => $ctrl->rows($viewerId, $request, $auth, $registry, $db, $config, $language),
-		'detail' => $ctrl->detail($viewerId, (int) $route->id, $auth, $registry, $db, $config, $language),
+		'meta'   => $ctrl->meta($viewerId, $auth, $registry, $tables, $db, $config, $language),
+		'rows'   => $ctrl->rows($viewerId, $request, $auth, $registry, $tables, $db, $config, $language),
+		'detail' => $ctrl->detail($viewerId, (int) $route->id, $auth, $registry, $tables, $db, $config, $language),
 		default  => Response::error('INTERNAL_ERROR', "Unknown viewer action: {$route->action}", 500),
 	};
 }

@@ -18,6 +18,7 @@ class TableDefinition
         public readonly array $childTables,
         public readonly ?DocStatesDefinition $docStates,
         public readonly bool $stateTransitionsRunDocumentHooks = false,
+        public readonly bool $adminOnly = false,
     ) {}
 
     /** @return string[] Column ids flagged "sensitive": true */
@@ -78,6 +79,7 @@ class TableDefinition
                 ? DocStatesDefinition::fromArray($data['docStates'])
                 : null,
             stateTransitionsRunDocumentHooks: (bool) ($data['stateTransitionsRunDocumentHooks'] ?? false),
+            adminOnly: (bool) ($data['adminOnly'] ?? false),
         );
     }
 }

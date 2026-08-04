@@ -13,14 +13,14 @@ use Shipard\Core\Viewer\ViewerRegistry;
 
 class ViewerController
 {
-	public function meta(string $viewerId, AuthContext $auth, ViewerRegistry $registry, DataSourceConnection $db, ?ConfigRuntime $config = null, ?string $language = null): Response
+	public function meta(string $viewerId, AuthContext $auth, ViewerRegistry $registry, array $tables, DataSourceConnection $db, ?ConfigRuntime $config = null, ?string $language = null): Response
 	{
 		$def = $registry->get($viewerId);
 		if ($def === null) {
 			return Response::error('VIEWER_NOT_FOUND', "Viewer '{$viewerId}' not found", 404);
 		}
 
-		$guardErr = TableAccessGuard::guardSystemTable($def->table, $auth);
+		$guardErr = TableAccessGuard::guardTable($def->table, $auth, $tables[$def->table] ?? null);
 		if ($guardErr !== null) {
 			return $guardErr;
 		}
@@ -67,14 +67,14 @@ class ViewerController
 		return Response::success($meta);
 	}
 
-	public function rows(string $viewerId, Request $request, AuthContext $auth, ViewerRegistry $registry, DataSourceConnection $db, ?ConfigRuntime $config = null, ?string $language = null): Response
+	public function rows(string $viewerId, Request $request, AuthContext $auth, ViewerRegistry $registry, array $tables, DataSourceConnection $db, ?ConfigRuntime $config = null, ?string $language = null): Response
 	{
 		$def = $registry->get($viewerId);
 		if ($def === null) {
 			return Response::error('VIEWER_NOT_FOUND', "Viewer '{$viewerId}' not found", 404);
 		}
 
-		$guardErr = TableAccessGuard::guardSystemTable($def->table, $auth);
+		$guardErr = TableAccessGuard::guardTable($def->table, $auth, $tables[$def->table] ?? null);
 		if ($guardErr !== null) {
 			return $guardErr;
 		}
@@ -161,14 +161,14 @@ class ViewerController
 		return Response::success($result);
 	}
 
-	public function detail(string $viewerId, int $recordId, AuthContext $auth, ViewerRegistry $registry, DataSourceConnection $db, ?ConfigRuntime $config = null, ?string $language = null): Response
+	public function detail(string $viewerId, int $recordId, AuthContext $auth, ViewerRegistry $registry, array $tables, DataSourceConnection $db, ?ConfigRuntime $config = null, ?string $language = null): Response
 	{
 		$def = $registry->get($viewerId);
 		if ($def === null) {
 			return Response::error('VIEWER_NOT_FOUND', "Viewer '{$viewerId}' not found", 404);
 		}
 
-		$guardErr = TableAccessGuard::guardSystemTable($def->table, $auth);
+		$guardErr = TableAccessGuard::guardTable($def->table, $auth, $tables[$def->table] ?? null);
 		if ($guardErr !== null) {
 			return $guardErr;
 		}

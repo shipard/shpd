@@ -31,6 +31,7 @@ class SettingsController
         ?ConfigRuntime $configRuntime,
         string $kind = 'settings',
         ?AuthContext $auth = null,
+        array $tables = [],
     ): Response {
         if ($configRuntime === null) {
             return Response::success([]);
@@ -51,7 +52,7 @@ class SettingsController
         $sections = $sectionsCfg['sections'];
         usort($sections, fn($a, $b) => ($a['order'] ?? 0) <=> ($b['order'] ?? 0));
 
-        $itemsBySection = $this->collectItems($resolvedModules, $resolver, $language, $kind, $auth);
+        $itemsBySection = $this->collectItems($resolvedModules, $resolver, $language, $kind, $auth, $tables);
 
         $tree = [];
         foreach ($sections as $section) {
@@ -382,15 +383,16 @@ class SettingsController
         return null;
     }
 
-    private function collectItems(array $resolvedModules, ModulePathResolver $resolver, string $language, string $kind = 'settings', ?AuthContext $auth = null): array
+    private function collectItems(array $resolvedModules, ModulePathResolver $resolver, string $language, string $kind = 'settings', ?AuthContext $auth = null, array $tables = []): array
     {
         $itemsBySection = [];
         $seenViewers = [];
         $seenTables = [];
         $seenPages = [];
         $seenPanels = [];
-        // Systémové tabulky jsou pro ne-adminy zavřené na CRUD/viewer/form
-        // vrstvě (TableAccessGuard) — mrtvé odkazy do stromu nedáváme.
+        // Systémové (core_system_*) a adminOnly tabulky jsou pro ne-adminy
+        // zavřené na CRUD/viewer/form vrstvě (TableAccessGuard) — mrtvé
+        // odkazy do stromu nedáváme.
         $isAdmin = $auth?->isAdmin ?? false;
 
         foreach ($resolvedModules as $module) {
@@ -401,7 +403,8 @@ class SettingsController
 
                 $itemTable = $item['table'] ?? $this->viewerTargetTable($module, $item);
                 if (!$isAdmin && $itemTable !== null
-                    && str_starts_with($itemTable, TableAccessGuard::SYSTEM_TABLE_PREFIX)) {
+                    && (str_starts_with($itemTable, TableAccessGuard::SYSTEM_TABLE_PREFIX)
+                        || ($tables[$itemTable] ?? null)?->adminOnly === true)) {
                     continue;
                 }
 

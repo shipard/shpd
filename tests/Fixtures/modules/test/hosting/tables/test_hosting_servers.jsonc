@@ -1,0 +1,26 @@
+// Fixture tabulka — existuje jen v testech. "adminOnly": true → guard
+// vrací ne-adminovi 403 a settings navigace položku nepošle.
+{
+    "tableId": 9002,
+    "name": "test_hosting_servers",
+    "displayPattern": "{name}",
+    "adminOnly": true,
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "primaryKey": true,
+            "autoIncrement": true,
+            "nullable": false,
+            "system": true
+        },
+        {
+            "id": "name",
+            "name": "Name",
+            "type": "varchar",
+            "length": 100,
+            "nullable": false
+        }
+    ]
+}

@@ -31,9 +31,22 @@ class TableAccessGuardTest extends TestCase
 		return $prop->getValue($response);
 	}
 
+	private function adminOnlyDef(): TableDefinition
+	{
+		return TableDefinition::fromArray([
+			'tableId'   => 10,
+			'name'      => 'hosting_core_servers',
+			'adminOnly' => true,
+			'columns'   => [
+				['id' => 'id',   'name' => 'ID',   'type' => 'int', 'autoIncrement' => true, 'primaryKey' => true],
+				['id' => 'name', 'name' => 'Name', 'type' => 'varchar', 'length' => 100],
+			],
+		]);
+	}
+
 	public function testNonAdminBlockedOnSystemTable(): void
 	{
-		$resp = TableAccessGuard::guardSystemTable('core_system_users', new AuthContext(true, 1, 'session', 't'));
+		$resp = TableAccessGuard::guardTable('core_system_users', new AuthContext(true, 1, 'session', 't'));
 
 		$this->assertInstanceOf(Response::class, $resp);
 		$this->assertSame(403, $this->getStatus($resp));
@@ -43,12 +56,42 @@ class TableAccessGuardTest extends TestCase
 	public function testAdminPassesSystemTable(): void
 	{
 		$auth = new AuthContext(true, 1, 'session', 't', isAdmin: true);
-		$this->assertNull(TableAccessGuard::guardSystemTable('core_system_users', $auth));
+		$this->assertNull(TableAccessGuard::guardTable('core_system_users', $auth));
 	}
 
 	public function testNonAdminPassesRegularTable(): void
 	{
-		$this->assertNull(TableAccessGuard::guardSystemTable('base_persons', new AuthContext(false)));
+		$this->assertNull(TableAccessGuard::guardTable('base_persons', new AuthContext(false)));
+	}
+
+	public function testNonAdminBlockedOnAdminOnlyTable(): void
+	{
+		$resp = TableAccessGuard::guardTable(
+			'hosting_core_servers', new AuthContext(true, 2, 'session', 't'), $this->adminOnlyDef(),
+		);
+
+		$this->assertInstanceOf(Response::class, $resp);
+		$this->assertSame(403, $this->getStatus($resp));
+		$this->assertSame('FORBIDDEN_ADMIN_ONLY', $resp->getPayload()['error']['code']);
+	}
+
+	public function testAdminPassesAdminOnlyTable(): void
+	{
+		$auth = new AuthContext(true, 1, 'session', 't', isAdmin: true);
+		$this->assertNull(TableAccessGuard::guardTable('hosting_core_servers', $auth, $this->adminOnlyDef()));
+	}
+
+	public function testNonAdminPassesAdminOnlyTableWithoutDef(): void
+	{
+		// Bez TableDefinition guard vynucuje jen prefix — flagovaná tabulka projde.
+		$auth = new AuthContext(true, 2, 'session', 't');
+		$this->assertNull(TableAccessGuard::guardTable('hosting_core_servers', $auth, null));
+	}
+
+	public function testNonAdminPassesRegularTableWithDef(): void
+	{
+		$auth = new AuthContext(true, 2, 'session', 't');
+		$this->assertNull(TableAccessGuard::guardTable('secrets', $auth, $this->secretsDef()));
 	}
 
 	public function testStripSensitiveRemovesFlaggedColumns(): void

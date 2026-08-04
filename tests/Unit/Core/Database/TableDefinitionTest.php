@@ -342,4 +342,19 @@ class TableDefinitionTest extends TestCase
 
         $this->assertSame([], $table->getSensitiveColumns());
     }
+
+    public function testAdminOnlyFlagParsed(): void
+    {
+        $data = $this->coreSystemUsersData();
+        $data['adminOnly'] = true;
+
+        $this->assertTrue(TableDefinition::fromArray($data)->adminOnly);
+    }
+
+    public function testAdminOnlyFlagDefaultsFalse(): void
+    {
+        $table = TableDefinition::fromArray($this->coreSystemUsersData());
+
+        $this->assertFalse($table->adminOnly);
+    }
 }

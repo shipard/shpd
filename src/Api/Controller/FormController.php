@@ -48,7 +48,7 @@ class FormController
             return Response::error('TABLE_NOT_FOUND', "Table '{$table}' not found", 404);
         }
 
-        $guardErr = TableAccessGuard::guardSystemTable($table, $auth ?? new AuthContext(false));
+        $guardErr = TableAccessGuard::guardTable($table, $auth ?? new AuthContext(false), $def);
         if ($guardErr !== null) {
             return $guardErr;
         }
@@ -156,7 +156,7 @@ class FormController
             return Response::error('TABLE_NOT_FOUND', "Table '{$table}' not found", 404);
         }
 
-        $guardErr = TableAccessGuard::guardSystemTable($table, $auth ?? new AuthContext(false));
+        $guardErr = TableAccessGuard::guardTable($table, $auth ?? new AuthContext(false), $def);
         if ($guardErr !== null) {
             return $guardErr;
         }
@@ -328,7 +328,7 @@ class FormController
             return Response::error('TABLE_NOT_FOUND', "Table '{$table}' not found", 404);
         }
 
-        $guardErr = TableAccessGuard::guardSystemTable($table, $auth ?? new AuthContext(false));
+        $guardErr = TableAccessGuard::guardTable($table, $auth ?? new AuthContext(false), $def);
         if ($guardErr !== null) {
             return $guardErr;
         }

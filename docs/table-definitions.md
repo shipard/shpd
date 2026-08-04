@@ -182,6 +182,7 @@ Název souboru (bez přípony) odpovídá názvu tabulky v databázi.
 | `columns` | object[] | Ano | — | Definice sloupců |
 | `indexes` | object[] | Ne | — | Definice indexů |
 | `hideFromNavigation` | bool | Ne | Ne | Skrýt tabulku ze sidebaru (hlavního i Nastavení). Používá se pro sub-tabulky spravované jen přes parent záznam (např. fiskální měsíce). Výchozí: `false` |
+| `adminOnly` | bool | Ne | Ne | Tabulka jen pro administrátory — ne-admin dostane 403 na CRUD/viewer/form a položka se mu nezobrazí v navigaci Nastavení. Výchozí: `false` |
 
 ### `tableId` — unikátní numerické ID
 
@@ -256,6 +257,33 @@ Pravidla a chování:
 - Pokud na tabulku odkazuje viewer (`module.jsonc` → `viewers[].table`), je skrytý i ten viewer — jinak by se viewer zobrazoval pro tabulku, kterou designér označil jako skrytou
 - Pokud tabulka s `hideFromNavigation: true` figuruje současně v `module.jsonc` → `settingsItems[]`, je to konfigurační chyba a položka se přeskočí s warningem v logu
 - Flag se výslovně netýká `_meta` ani `_ui/form` API — tabulka zůstává běžně dostupná pro CRUD a editaci, jen ji nezobrazujíme jako vstupní bod v sidebaru
+
+### `adminOnly` — tabulka jen pro administrátory
+
+Nepovinný boolean flag. Pokud `true`, `TableAccessGuard` vrací ne-adminovi
+403 (`FORBIDDEN_ADMIN_ONLY`) na všech generických cestách — CRUD
+(list/show/create/update/patch/delete), viewer (meta/rows/detail) i form
+(meta/save/recalculate). Navigace Nastavení položku nad takovou tabulkou
+ne-adminovi vůbec nepošle (server-side filtr — žádné mrtvé odkazy).
+
+```jsonc
+{
+    "tableId": 5001,
+    "name": "Servers",
+    "adminOnly": true
+    // ...
+}
+```
+
+Kdy použít: modulové tabulky s citlivým obsahem, které nemají být přístupné
+běžným uživatelům — např. evidence hosting modulu (`hosting_core_*`).
+Analogie k systémovým tabulkám: prefix `core_system_` chrání guard automaticky
+(kód `FORBIDDEN_SYSTEM_TABLE`), `adminOnly` je explicitní opt-in pro tabulky
+mimo tento prefix. Jde o nejhrubší stupeň budoucího RBAC — jediná hranice je
+`is_admin`.
+
+Zdroj pravdy je server; UI jen nezobrazuje mrtvé odkazy. Viz `docs/hosting.md`
+rozhodnutí D9 a `docs/auth.md` §Admin model.
 
 ---
 

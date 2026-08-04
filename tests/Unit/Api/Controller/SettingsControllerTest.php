@@ -512,4 +512,68 @@ class SettingsControllerTest extends TestCase
 
         $this->assertContains('viewer:core.system.users', $ids);
     }
+
+    // --- settings navigation: filtr adminOnly tabulek (hosting D9) ---
+
+    /** Config s fixture modulem test.hosting (adminOnly tabulka v settings). */
+    private function hostingConfig(): DataSourceConfig
+    {
+        file_put_contents($this->dsDir . '/config/main.json', json_encode([
+            'id'                => 'test-test-test-test',
+            'name'              => 'Testovací firma',
+            'database_name'     => 'x',
+            'database_user'     => 'x',
+            'database_password' => 'x',
+            'created'           => '2026-01-01T00:00:00+00:00',
+            'modules'           => ['core.system', 'test.hosting'],
+        ]));
+        return new DataSourceConfig($this->dsDir);
+    }
+
+    private function hostingResolver(): ModulePathResolver
+    {
+        return new ModulePathResolver([
+            dirname(__DIR__, 4) . '/modules',
+            dirname(__DIR__, 3) . '/Fixtures/modules',
+        ]);
+    }
+
+    /** @return array<string, \Shipard\Core\Database\TableDefinition> */
+    private function hostingTables(): array
+    {
+        return [
+            'test_hosting_servers' => \Shipard\Core\Database\TableDefinition::fromArray([
+                'tableId'   => 9002,
+                'name'      => 'test_hosting_servers',
+                'adminOnly' => true,
+                'columns'   => [
+                    ['id' => 'id',   'name' => 'ID',   'type' => 'int', 'autoIncrement' => true, 'primaryKey' => true],
+                    ['id' => 'name', 'name' => 'Name', 'type' => 'varchar', 'length' => 100],
+                ],
+            ]),
+        ];
+    }
+
+    public function testNavigationHidesAdminOnlyTablesFromNonAdmin(): void
+    {
+        $resp = $this->ctrl->navigation(
+            $this->hostingConfig(), $this->hostingResolver(), 'en', $this->settingsRuntime(),
+            'settings', $this->auth(), $this->hostingTables(),
+        );
+        $ids = $this->collectNavItemIds($resp->getPayload()['data']);
+
+        $this->assertNotContains('test_hosting_servers', $ids);
+    }
+
+    public function testNavigationShowsAdminOnlyTablesToAdmin(): void
+    {
+        $admin = new AuthContext(true, 1, 'session', 'shpd_st_test', isAdmin: true);
+        $resp  = $this->ctrl->navigation(
+            $this->hostingConfig(), $this->hostingResolver(), 'en', $this->settingsRuntime(),
+            'settings', $admin, $this->hostingTables(),
+        );
+        $ids = $this->collectNavItemIds($resp->getPayload()['data']);
+
+        $this->assertContains('test_hosting_servers', $ids);
+    }
 }

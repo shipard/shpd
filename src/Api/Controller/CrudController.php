@@ -36,7 +36,7 @@ class CrudController
 
 	/**
 	 * Resolves the table definition or fails: 404 for unknown tables,
-	 * 403 for core_system_* tables accessed by a non-admin.
+	 * 403 for core_system_* or adminOnly tables accessed by a non-admin.
 	 */
 	private function resolveTable(string $table): TableDefinition|Response
 	{
@@ -44,7 +44,7 @@ class CrudController
 		if ($def === null) {
 			return Response::error('TABLE_NOT_FOUND', "Table '{$table}' not found", 404);
 		}
-		return TableAccessGuard::guardSystemTable($table, $this->auth) ?? $def;
+		return TableAccessGuard::guardTable($table, $this->auth, $def) ?? $def;
 	}
 
 	// -------------------------------------------------------------------------

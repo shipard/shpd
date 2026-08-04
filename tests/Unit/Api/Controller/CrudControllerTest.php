@@ -591,6 +591,61 @@ class CrudControllerTest extends TestCase
 	}
 
 	// -------------------------------------------------------------------------
+	// Admin-only table guard ("adminOnly": true, hosting D9)
+	// -------------------------------------------------------------------------
+
+	private function adminOnlyDef(): TableDefinition
+	{
+		return TableDefinition::fromArray([
+			'tableId'   => 10,
+			'name'      => 'hosting_core_servers',
+			'adminOnly' => true,
+			'columns'   => [
+				['id' => 'id',   'name' => 'ID',   'type' => 'int', 'autoIncrement' => true, 'primaryKey' => true],
+				['id' => 'name', 'name' => 'Name', 'type' => 'varchar', 'length' => 100],
+			],
+		]);
+	}
+
+	private function adminOnlyCtrl(AuthContext $auth): TestableCrudController
+	{
+		return $this->ctrl(
+			['hosting_core_servers' => $this->adminOnlyDef()],
+			['hosting_core_servers' => [['id' => 1, 'name' => 'srv1']]],
+			$auth,
+		);
+	}
+
+	public function testNonAdminGetsForbiddenOnAllAdminOnlyTableActions(): void
+	{
+		$ctrl = $this->adminOnlyCtrl($this->userAuth());
+
+		$responses = [
+			'list'            => $ctrl->list('hosting_core_servers', $this->req()),
+			'show'            => $ctrl->show('hosting_core_servers', 1, $this->req()),
+			'create'          => $ctrl->create('hosting_core_servers', $this->req('POST', body: '{"name":"x"}')),
+			'update'          => $ctrl->update('hosting_core_servers', 1, $this->req('PUT', body: '{"name":"x"}')),
+			'patch'           => $ctrl->patch('hosting_core_servers', 1, $this->req('PATCH', body: '{"name":"x"}')),
+			'delete'          => $ctrl->delete('hosting_core_servers', 1),
+			'docStateOptions' => $ctrl->docStateOptions('hosting_core_servers', 1),
+		];
+
+		foreach ($responses as $action => $resp) {
+			$this->assertSame(403, $this->getStatus($resp), "action {$action}");
+			$this->assertSame('FORBIDDEN_ADMIN_ONLY', $resp->getPayload()['error']['code'], "action {$action}");
+		}
+	}
+
+	public function testAdminPassesAdminOnlyTableGuard(): void
+	{
+		$ctrl = $this->adminOnlyCtrl($this->adminAuth());
+
+		$resp = $ctrl->list('hosting_core_servers', $this->req());
+		$this->assertSame(200, $this->getStatus($resp));
+		$this->assertCount(1, $resp->getPayload()['data']);
+	}
+
+	// -------------------------------------------------------------------------
 	// Sensitive columns
 	// -------------------------------------------------------------------------
 

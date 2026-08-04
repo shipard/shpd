@@ -53,6 +53,15 @@ class FormControllerGuardTest extends TestCase
 					['id' => 'key_hash', 'name' => 'Hash', 'type' => 'varchar', 'length' => 64, 'sensitive' => true],
 				],
 			]),
+			'hosting_core_servers' => TableDefinition::fromArray([
+				'tableId'   => 10,
+				'name'      => 'hosting_core_servers',
+				'adminOnly' => true,
+				'columns'   => [
+					['id' => 'id',   'name' => 'ID',   'type' => 'int', 'autoIncrement' => true, 'primaryKey' => true],
+					['id' => 'name', 'name' => 'Name', 'type' => 'varchar', 'length' => 100],
+				],
+			]),
 		];
 	}
 
@@ -116,6 +125,41 @@ class FormControllerGuardTest extends TestCase
 		);
 
 		$this->assertSame(403, $this->getStatus($resp));
+	}
+
+	public function testMetaOnAdminOnlyTableRequiresAdmin(): void
+	{
+		$resp = $this->ctrl->meta(
+			'hosting_core_servers', null, $this->tables(), $this->db,
+			$this->formRegistry, null, $this->lookupRegistry, $this->resolver,
+			'en', [], $this->nonAdmin(),
+		);
+
+		$this->assertSame(403, $this->getStatus($resp));
+		$this->assertSame('FORBIDDEN_ADMIN_ONLY', $resp->getPayload()['error']['code']);
+	}
+
+	public function testSaveOnAdminOnlyTableRequiresAdmin(): void
+	{
+		$resp = $this->ctrl->save(
+			'hosting_core_servers', null, $this->req('POST', '{"name":"x"}'), $this->tables(), $this->db,
+			null, $this->formRegistry, $this->resolver, $this->lookupRegistry, 'en',
+			null, null, $this->nonAdmin(),
+		);
+
+		$this->assertSame(403, $this->getStatus($resp));
+		$this->assertSame('FORBIDDEN_ADMIN_ONLY', $resp->getPayload()['error']['code']);
+	}
+
+	public function testRecalculateOnAdminOnlyTableRequiresAdmin(): void
+	{
+		$resp = $this->ctrl->recalculate(
+			'hosting_core_servers', $this->req('POST', '{"changedColumn":"name","data":{}}'), $this->tables(), $this->db,
+			$this->formRegistry, null, $this->lookupRegistry, $this->resolver, 'en', $this->nonAdmin(),
+		);
+
+		$this->assertSame(403, $this->getStatus($resp));
+		$this->assertSame('FORBIDDEN_ADMIN_ONLY', $resp->getPayload()['error']['code']);
 	}
 
 	public function testSaveWithSensitiveColumnReturns400(): void

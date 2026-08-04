@@ -77,8 +77,7 @@ nám vědět, co to bylo za fakturu.
 
 **Nic nedorazilo.** Zkontroluj v tomhle pořadí: sedí adresa, na kterou jsi
 posílal? Byla faktura opravdu jako příloha, ne jen odkaz ke stažení? Neuvízl
-e-mail u tvého poskytovatele? Pak napiš na **podpora@shipard.cz** —
-u ztracené pošty se umíme podívat, jestli k nám vůbec dorazila.
+e-mail u tvého poskytovatele?
 
 **Doručenou zprávu Shipard nemaže.** Ani po vytvoření dokladu, ani po
 zamítnutí návrhu. Zpráva i s přílohami zůstává v **Došlé poště** jako důkaz,

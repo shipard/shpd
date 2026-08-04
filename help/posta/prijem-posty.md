@@ -60,7 +60,7 @@ odklidíš poštu od stejného odesílatele do Archivu nebo Koše, Shipard
 navrhne pravidlo a na Dashboardu ti ho nabídne k **Potvrzení**. Od potvrzení
 dál se pošta od té adresy archivuje sama, bez analýzy.
 
-- Navržené pravidlo je vždy na konkrétní adresu. Pravidlo na celou domménu
+- Navržené pravidlo je vždy na konkrétní adresu. Pravidlo na celou doménu
   si můžeš založit sám, ale Shipard ti ho nikdy nenavrhne — na domény je
   úmyslně opatrný.
 - Do těch tří odklizení se počítají **jen tvoje ruční akce**. Co Shipard

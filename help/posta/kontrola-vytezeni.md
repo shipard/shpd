@@ -55,8 +55,9 @@ karta s procentem **Jistoty** a tlačítkem **Zkontrolovat**.
      nebo je vytěžení nepoužitelné. Důvod je povinný a uloží se k návrhu:
      *špatně rozpoznaný typ*, *není to faktura*.
 
-7. **Dokonči doklad.** Koncept je pořád plně editovatelný — co jsi
-   v náhledu jen zaregistroval, oprav teď. Zaúčtuje se teprve přechodem
+7. **Dokonči doklad.** Koncept se ti po **Použít** hned otevře
+   v editačním formuláři a je plně editovatelný — co jsi v náhledu jen
+   zaregistroval, oprav teď. Zaúčtuje se teprve přechodem
    na stav **V pořádku**.
 
 ## Na co narazíš
@@ -114,6 +115,8 @@ cokoli popsané na téhle stránce.
 
 ## Souvisí
 
+- [Když AI přečte fakturu špatně](kdyz-ai-cte-spatne.md) — kde se která
+  chyba opravuje
 - [Slovníček](../slovnicek.md) — co znamenají stavy a názvy sekcí
 - [Co Shipard dnes neumí](../co-dnes-nejde.md) — kde ještě nemusí
   souhlasit čísla

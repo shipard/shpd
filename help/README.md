@@ -30,6 +30,7 @@ Tyhle stránky slouží dvěma čtenářům: tobě a vestavěnému AI asistentov
 
 | Stránka | Co v ní najdeš |
 |---------|----------------|
+| [Když AI přečte fakturu špatně](posta/kdyz-ai-cte-spatne.md) | Kde se která chyba opravuje, kdy návrh spíš zamítnout a co z chyby nahlásit. |
 | [Kontrola vytěženého dokladu](posta/kontrola-vytezeni.md) | Jak porovnat návrh dokladu s originálem faktury, co kontrolovat první a kdy návrh zamítnout. |
 | [Příjem pošty](posta/prijem-posty.md) | Jak dostat fakturu do Shipardu, co se s ní pak děje a jak si poradit s poštou, která faktura není. |
 

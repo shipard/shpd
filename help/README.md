@@ -31,6 +31,7 @@ Tyhle stránky slouží dvěma čtenářům: tobě a vestavěnému AI asistentov
 | Stránka | Co v ní najdeš |
 |---------|----------------|
 | [Kontrola vytěženého dokladu](posta/kontrola-vytezeni.md) | Jak porovnat návrh dokladu s originálem faktury, co kontrolovat první a kdy návrh zamítnout. |
+| [Příjem pošty](posta/prijem-posty.md) | Jak dostat fakturu do Shipardu, co se s ní pak děje a jak si poradit s poštou, která faktura není. |
 
 <!-- OBSAH:END -->
 

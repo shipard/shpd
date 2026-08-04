@@ -8,7 +8,7 @@ related: [slovnicek.md]
 # Co Shipard dnes neumí
 
 Shipard je ve stavu **alfa**. Tahle stránka je záměrně na jednom místě, ať
-nemusíš hledat funkci, která ještě neexistuje — a ať ti ji nikdo nesliboval.
+nemusíš hledat funkci, která ještě neexistuje — a ať ti ji nikdo neslibuje.
 
 Seznam se mění. Když něco nenajdeš ani tady, ani v dokumentaci, napiš na
 **podpora@shipard.cz**.
@@ -56,7 +56,7 @@ je v [TESTERS.md](../TESTERS.md).
   pravdu.
 - **Nedá se to nastavit „na dodavatele".** Zvyklosti se sice zohledňují
   z tvé dosavadní historie, ale nemáš žádnou obrazovku, kde bys pravidla
-  pro konkrétního dodavatele zadala ručně.
+  pro konkrétního dodavatele zadal ručně.
 - **Vytěžení se nedá spustit znovu na vlastní žádost** — analýza běží
   automaticky po doručení zprávy.
 

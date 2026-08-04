@@ -26,6 +26,12 @@ Tyhle stránky slouží dvěma čtenářům: tobě a vestavěnému AI asistentov
 | [Co Shipard dnes neumí](co-dnes-nejde.md) | Poctivý seznam chybějících funkcí a míst, kde ještě nemusí souhlasit čísla. |
 | [Slovníček](slovnicek.md) | Co která věc v Shipardu znamená a jak se jmenuje v rozhraní. |
 
+### Došlá pošta
+
+| Stránka | Co v ní najdeš |
+|---------|----------------|
+| [Kontrola vytěženého dokladu](posta/kontrola-vytezeni.md) | Jak porovnat návrh dokladu s originálem faktury, co kontrolovat první a kdy návrh zamítnout. |
+
 <!-- OBSAH:END -->
 
 ---

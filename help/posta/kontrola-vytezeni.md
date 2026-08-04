@@ -55,7 +55,7 @@ stavu **Analyzovaná**, na **Dashboardu** se objevila karta s procentem
      smysl i nám: *špatně rozpoznaný typ*, *není to faktura*.
 
 7. **Dokonči doklad.** Koncept je pořád plně editovatelný — co jsi
-   v náhledu jen zaregistrovala, oprav teď. Zaúčtuje se teprve přechodem
+   v náhledu jen zaregistroval, oprav teď. Zaúčtuje se teprve přechodem
    na stav **V pořádku**.
 
 ## Na co narazíš
@@ -74,7 +74,7 @@ sebou. Badge u vytěženého dokladu se z něj odvozuje:
 nepřišla z faktury, ale z tvých starších dokladů od stejného dodavatele —
 *přesná shoda*, *podobný text* nebo *častá položka dodavatele*. První dvě
 bývají spolehlivé; **častou položku ověřuj vždy** — znamená jen „tohle
-u tohohle dodavatele býváš zvyklá", ne že to je na téhle faktuře.
+u tohohle dodavatele býváš zvyklý", ne že to je na téhle faktuře.
 
 **Faktury s cenami včetně DPH.** U dokladů, kde jsou jednotkové ceny
 uvedené s daní (typicky drobný prodej, občerstvení), se daň může spočítat
@@ -88,7 +88,7 @@ z EU) se rozpad daně v **DPH rekapitulaci** opravuje. Zkontroluj, že
 
 **Znovu analyzovat nic neztratí.** Opakovaná analýza označí staré návrhy
 ve stavech *K použití*, *Čeká na review* a *Nízká jistota* jako
-**Nahrazeno**. Co jsi už použila nebo zamítla, zůstane.
+**Nahrazeno**. Co jsi už použil nebo zamítl, zůstane.
 
 **Zamítnutí nemaže poštu.** Zpráva a přílohy zůstávají v **Došlé poště**.
 Zamítá se návrh dokladu, ne e-mail.
@@ -105,4 +105,4 @@ cokoli popsané na téhle stránce.
 - [Slovníček](../slovnicek.md) — co znamenají stavy a názvy sekcí
 - [Co Shipard dnes neumí](../co-dnes-nejde.md) — kde ještě nemusí
   souhlasit čísla
-- [Pro testery](../../TESTERS.md) — jak nahlásit rozdíl, který jsi našla
+- [Pro testery](../../TESTERS.md) — jak nahlásit rozdíl, který jsi našel

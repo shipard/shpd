@@ -106,7 +106,9 @@ narazíš* se vynechá, když není co napsat.
 
 ## 5. Pravidla psaní
 
-- **Jazyk:** čeština, tykání (shodně s [`TESTERS.md`](../TESTERS.md)).
+- **Jazyk:** čeština, tykání, oslovovaný v **mužském rodě** — shodně
+  s [`TESTERS.md`](../TESTERS.md) („co jsi dělal, co jsi čekal“). Nemíchat
+  rody v rámci stránky ani mezi stránkami.
 - **Slovník rozhraní:** názvy sekcí, tlačítek a stavů musí souhlasit
   s popisky v aplikaci — server-driven labely v `module.jsonc`
   (`name:cs`) a frontendové v `frontend/src/i18n/cs.js`. Když popisek

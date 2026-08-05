@@ -7,8 +7,11 @@ Vychází z myšlenek modulu `hosting` ze starého Shipardu, ale nekopíruje ho 
 přebírá pull-based provisioning a princip „hosting je sám Shipard DS",
 vynechává fakturaci, helpdesk a HW evidenci.
 
-> **Stav:** Design schválen (D1–D12), implementace nezačala.
-> Fázování v §8; každá fáze dostane vlastní PRD.
+> **Stav:** Design schválen (D1–D12). **Fáze 0 hotová** (2026-08-05):
+> `adminOnly` mechanismus (task 0a), modul `hosting.core` + `install.hosting`,
+> tabulky servers / data_sources / ds_users, admin viewery, portálový endpoint
+> `/_hosting/portal/my-datasources` + `PortalScreen` (task 0b). Fáze 1+
+> nezačaly; fázování v §8, každá fáze dostane vlastní PRD.
 
 ---
 

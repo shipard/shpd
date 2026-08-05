@@ -1,6 +1,10 @@
 # Hosting — Task 0b: skeleton modulu, evidence, portálová obrazovka
 
-**Stav:** naplánováno — prerekvizita `hosting-00-admin-only-tables.md` (flag `adminOnly`) splněna
+**Stav:** hotovo — 2026-08-05; unique index `web_id` založen rovnou (MariaDB
+nullable unique funguje, odklad na Fázi 3 nebyl potřeba), subsekce
+`other.hosting` přidána i do `install.base` (settings položky v nedefinované
+subsekci se tiše zahodí), bonus fix: `ds-upgrade` mail-router provisioning
+guard na aktivní `core.mail` (na DS s `install.hosting` padal)
 
 > PRD pro jednu Claude Code session. Design: `docs/hosting.md`,
 > rozhodnutí **D1, D8, D9, D10, D11**; portál a přístupový model §6,
@@ -183,13 +187,13 @@ Ke každé tabulce `.md` dle `docs/documentation.md`.
 
 ## Hotovo když
 
-- [ ] Nový DS s `install.hosting` projde `ds-upgrade`; admin v Nastavení
+- [x] Nový DS s `install.hosting` projde `ds-upgrade`; admin v Nastavení
       vidí a edituje servery / zdroje dat / vazby uživatelů
-- [ ] Ne-admin dostane na generické CRUD/viewer/form nad
+- [x] Ne-admin dostane na generické CRUD/viewer/form nad
       `hosting_core_*` 403 (`FORBIDDEN_ADMIN_ONLY` z tasku 0a)
-- [ ] `GET /_hosting/portal/my-datasources` vrací přihlášenému jen jeho
+- [x] `GET /_hosting/portal/my-datasources` vrací přihlášenému jen jeho
       aktivní DS; na DS bez hosting modulu 404
-- [ ] `/_app/info` nese `hasPortal`; ne-admin po přihlášení vidí
+- [x] `/_app/info` nese `hasPortal`; ne-admin po přihlášení vidí
       portálovou obrazovku s kartami a funkčními vstupními tlačítky,
       admin standardní aplikaci
-- [ ] i18n check zelený, testy zelené, `.md` dokumentace tabulek existuje
+- [x] i18n check zelený, testy zelené, `.md` dokumentace tabulek existuje

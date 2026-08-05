@@ -63,6 +63,24 @@ abstract class TableForm
         return null;
     }
 
+    /**
+     * Opt-in whitelist sensitive sloupců editovatelných tímto formem.
+     *
+     * TableAccessGuard normálně odmítá zápis sensitive sloupců přes
+     * form save (400 SENSITIVE_COLUMN) — sloupce vyjmenované zde projdou.
+     * Konvence pro takové pole: input startuje prázdný (data ho nikdy
+     * neobsahují — stripSensitive), placeholder `●●●●●● (zadat pro
+     * změnu)`, prázdný submit hodnotu nemění (Document beforeSave
+     * prázdnou hodnotu unsetne — vzor HostingDataSourceDocument).
+     * Šifrování/uložení zůstává odpovědností Document třídy.
+     *
+     * @return list<string>
+     */
+    public function getEditableSensitiveColumns(): array
+    {
+        return [];
+    }
+
     public function recalculate(string $changedColumn, array $data): RecalculateResult
     {
         $isNew = !isset($data['id']) || $data['id'] === null;

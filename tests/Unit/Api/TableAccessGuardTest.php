@@ -115,4 +115,26 @@ class TableAccessGuardTest extends TestCase
 	{
 		$this->assertNull(TableAccessGuard::rejectSensitiveInput(['name' => 'A'], $this->secretsDef()));
 	}
+
+	public function testWhitelistedSensitiveColumnPasses(): void
+	{
+		$this->assertNull(TableAccessGuard::rejectSensitiveInput(
+			['name' => 'A', 'key_hash' => 'x'],
+			$this->secretsDef(),
+			['key_hash'],
+		));
+	}
+
+	public function testWhitelistOfOtherColumnDoesNotHelp(): void
+	{
+		$resp = TableAccessGuard::rejectSensitiveInput(
+			['name' => 'A', 'key_hash' => 'x'],
+			$this->secretsDef(),
+			['some_other_column'],
+		);
+
+		$this->assertInstanceOf(Response::class, $resp);
+		$this->assertSame(400, $this->getStatus($resp));
+		$this->assertSame('SENSITIVE_COLUMN', $resp->getPayload()['error']['code']);
+	}
 }

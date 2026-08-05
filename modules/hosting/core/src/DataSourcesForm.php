@@ -27,6 +27,18 @@ class DataSourcesForm extends TableForm
                     ->input('install_module')
                     ->select('lifecycle', options: $this->resolveLifecycleOptions(), required: true)
                     ->select('owner', options: $this->resolveOwnerOptions())
+            ->section('Pošta')
+                ->col()
+                    // Sensitive pole (opt-in přes getEditableSensitiveColumns):
+                    // data ho nikdy neobsahují, input startuje prázdný, prázdný
+                    // submit hodnotu nemění. Slouží pro ruční backfill tokenů
+                    // existujících DS; provisioning ho plní confirmem.
+                    ->input(
+                        'mail_token',
+                        placeholder: '●●●●●● (zadat pro změnu)',
+                        hint: 'Token DS pro příjem pošty (shpd_ak_…). Normálně ho hlásí provisioning; ručně jen backfill.',
+                        inputType: 'password',
+                    )
             ->build();
 
         return new FormDefinition(
@@ -35,6 +47,17 @@ class DataSourcesForm extends TableForm
             titleNew: 'Nový zdroj dat',
             tabs: [$basic, $this->attachmentsTab()],
         );
+    }
+
+    /**
+     * mail_token je jediné sensitive pole editovatelné tímto formem —
+     * ruční backfill tokenu (D4); šifrování řeší HostingDataSourceDocument.
+     *
+     * @return list<string>
+     */
+    public function getEditableSensitiveColumns(): array
+    {
+        return ['mail_token'];
     }
 
     /**

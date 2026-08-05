@@ -54,11 +54,18 @@ final class TableAccessGuard
 	/**
 	 * 400 pokud vstup obsahuje sensitive sloupec — zápis jde vždy jen
 	 * dedikovaným endpointem, žádné tiché zahazování.
+	 *
+	 * `$allowed` = opt-in whitelist z formu (TableForm::
+	 * getEditableSensitiveColumns) — jen form save s registrovanou form
+	 * třídou může sensitive sloupec explicitně povolit; CRUD cesty
+	 * volají bez whitelistu.
+	 *
+	 * @param list<string> $allowed
 	 */
-	public static function rejectSensitiveInput(array $body, TableDefinition $def): ?Response
+	public static function rejectSensitiveInput(array $body, TableDefinition $def, array $allowed = []): ?Response
 	{
 		foreach ($def->getSensitiveColumns() as $col) {
-			if (array_key_exists($col, $body)) {
+			if (array_key_exists($col, $body) && !in_array($col, $allowed, true)) {
 				return Response::error(
 					'SENSITIVE_COLUMN',
 					"Column '{$col}' cannot be written through the generic API",

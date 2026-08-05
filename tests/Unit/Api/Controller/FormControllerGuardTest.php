@@ -173,4 +173,65 @@ class FormControllerGuardTest extends TestCase
 		$this->assertSame(400, $this->getStatus($resp));
 		$this->assertSame('SENSITIVE_COLUMN', $resp->getPayload()['error']['code']);
 	}
+
+	public function testFormWhitelistAllowsSensitiveColumnPastGuard(): void
+	{
+		// Form s opt-in whitelistem (getEditableSensitiveColumns) pustí
+		// whitelistovaný sensitive sloupec za guard. Mock DB nechá save
+		// spadnout až v gateway (500) — důkaz, že 400 SENSITIVE_COLUMN
+		// nenastalo.
+		$registry = new FormRegistry([
+			['table' => 'secrets', 'class' => SensitiveWhitelistTestForm::class],
+		]);
+		$db = $this->createMock(DataSourceConnection::class);
+		$db->method('getDibiConnection')->willReturn($this->createMock(\Dibi\Connection::class));
+
+		$resp = $this->ctrl->save(
+			'secrets', null, $this->req('POST', '{"name":"A","key_hash":"new-secret"}'), $this->tables(), $db,
+			null, $registry, $this->resolver, $this->lookupRegistry, 'en',
+			null, null, $this->nonAdmin(),
+		);
+
+		$code = $resp->getPayload()['error']['code'] ?? null;
+		$this->assertNotSame('SENSITIVE_COLUMN', $code);
+		$this->assertNotSame(400, $this->getStatus($resp));
+	}
+
+	public function testFormWhitelistDoesNotCoverOtherSensitiveColumns(): void
+	{
+		// Whitelist jiného sloupce nepomůže — key_hash zůstává blokovaný.
+		$registry = new FormRegistry([
+			['table' => 'secrets', 'class' => OtherWhitelistTestForm::class],
+		]);
+
+		$resp = $this->ctrl->save(
+			'secrets', null, $this->req('POST', '{"name":"A","key_hash":"evil"}'), $this->tables(), $this->db,
+			null, $registry, $this->resolver, $this->lookupRegistry, 'en',
+			null, null, $this->nonAdmin(),
+		);
+
+		$this->assertSame(400, $this->getStatus($resp));
+		$this->assertSame('SENSITIVE_COLUMN', $resp->getPayload()['error']['code']);
+	}
+}
+
+class SensitiveWhitelistTestForm extends \Shipard\Core\Form\TableForm
+{
+	public function buildFormDefinition(array $data, bool $isNew): \Shipard\Core\Form\FormDefinition
+	{
+		return new \Shipard\Core\Form\FormDefinition(table: $this->table, title: 'Secrets', titleNew: 'New', tabs: []);
+	}
+
+	public function getEditableSensitiveColumns(): array
+	{
+		return ['key_hash'];
+	}
+}
+
+class OtherWhitelistTestForm extends SensitiveWhitelistTestForm
+{
+	public function getEditableSensitiveColumns(): array
+	{
+		return ['some_other_column'];
+	}
 }

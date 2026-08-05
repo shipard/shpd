@@ -1818,3 +1818,40 @@ Dopořučení:
 - Pro extra **subtable** nebo **attachments** taby použij stejný hook — vrací se z něj `list<FormTab>`, který může obsahovat i `$this->subtableTab(...)` nebo `$this->attachmentsTab(...)`.
 - `IssuedInvoiceForm` (FVB) hook používá taky, ale s užším obsahem: jen sekce „Měna“ s `home_currency` (readOnly). `vat_registration` a `bank_account` zůstávají v hlavičce — u vydaných faktur se mění podle odběratele a měny dokladu, nepatří mezi „zřídka měněná“ nastavení. Strukturu má smysl držet stejnou jako u FPB — další pole (např. připomínkový režim, AI checks) se přidávají jako sekce navrch.
 - Generický `DocsHeadsForm` hook nepřepisuje, nemění default `[]`. Může ho zapnout kdykoli bez úpravy base třídy.
+
+## 24. Editovatelná sensitive pole (opt-in whitelist)
+
+Sloupce se `"sensitive": true` v definici tabulky standardně **nelze zapsat
+přes generické API** — `TableAccessGuard::rejectSensitiveInput()` vrací
+`400 SENSITIVE_COLUMN` v CRUD i form save cestě a `stripSensitive()` je
+odstraňuje z každé odpovědi (data, form meta, list).
+
+Form třída může editaci konkrétních sensitive sloupců **explicitně povolit**:
+
+```php
+class DataSourcesForm extends TableForm
+{
+    public function getEditableSensitiveColumns(): array
+    {
+        return ['mail_token'];
+    }
+}
+```
+
+`FormController::save()` si whitelist vyžádá od registrované form třídy a
+předá ho guardu — jen vyjmenované sloupce projdou, ostatní sensitive sloupce
+zůstávají blokované. CRUD cesty volají guard bez whitelistu, tam platí plný
+zákaz vždy. Bez registrované PHP form třídy (JSONC/Auto formulář) whitelist
+neexistuje.
+
+Konvence pro takové pole (viz CLAUDE.md → Citlivá data):
+
+- input startuje **prázdný** — data ho nikdy neobsahují (`stripSensitive`),
+- `placeholder: '●●●●●● (zadat pro změnu)'`, typicky `inputType: 'password'`,
+- **prázdný submit hodnotu nemění** — Document třída v `beforeSave()`
+  prázdnou hodnotu unsetne (vzor `HostingDataSourceDocument`),
+- šifrování (`encrypted_text` + `DsSecretCipher`) zůstává odpovědností
+  Document třídy, guard ani form s hodnotou nic nedělají.
+
+První uživatel: `mail_token` v `DataSourcesForm` (hosting, ruční backfill
+mail tokenů — `tasks/hosting-04-mail-router.md`).

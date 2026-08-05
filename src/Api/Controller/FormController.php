@@ -166,7 +166,12 @@ class FormController
             return Response::error('BAD_REQUEST', 'Request body must be a JSON object', 400);
         }
 
-        $sensitiveErr = TableAccessGuard::rejectSensitiveInput($body, $def);
+        // Form může opt-in whitelistem povolit editaci konkrétních sensitive
+        // sloupců (TableForm::getEditableSensitiveColumns) — např. mail_token
+        // na hosting DS. Bez registrované form třídy platí plný zákaz.
+        $sensitiveAllowed = $formRegistry->createForm($table, $body, $db, $config)
+            ?->getEditableSensitiveColumns() ?? [];
+        $sensitiveErr = TableAccessGuard::rejectSensitiveInput($body, $def, $sensitiveAllowed);
         if ($sensitiveErr !== null) {
             return $sensitiveErr;
         }

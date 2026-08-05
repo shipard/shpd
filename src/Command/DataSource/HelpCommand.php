@@ -37,6 +37,9 @@ class HelpCommand extends Command
         $output->writeln('  <info>ds-secrets-health</info>       Check health of the per-DS secrets infrastructure');
         $output->writeln('  <info>ds-secrets-rotate</info>       Rotate the per-DS secrets.key — re-encrypts all encrypted_text columns');
         $output->writeln('');
+        $output->writeln('<comment>Hosting:</comment>');
+        $output->writeln('  <info>hosting-oidc-init</info>       Generate the OIDC OP RSA signing key (secrets/oidc-op.key)');
+        $output->writeln('');
         $output->writeln('<comment>Mail:</comment>');
         $output->writeln('  <info>mail-router-bootstrap</info>   Ensure _mail_router system user and default mailbox exist');
         $output->writeln('  <info>mail-router-setup</info>       Generate (or rotate) the API key used by the external mail-router');

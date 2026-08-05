@@ -53,7 +53,7 @@ a **V pořádku**.
    takže se nic neztratilo.
 
    Rutinně to dělat nemusíš — když se účtování nepovede, Shipard tě na to
-   upozorní na Dashboardu.
+   upozorní v Dashboardu.
 
 ## Na co narazíš
 

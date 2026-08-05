@@ -35,12 +35,23 @@
     "settingsPages": [
         {
             "id": "hostingOidc",
-            "name": "OIDC provider",
-            "name:cs": "OIDC provider",
-            "name:en": "OIDC provider",
+            "name": "Hosting",
+            "name:cs": "Hosting",
+            "name:en": "Hosting",
             "icon": "lock",
             "adminOnly": true,
             "fields": [
+                {
+                    "id": "hosting.baseDomain",
+                    "type": "text",
+                    "name": "Base domain",
+                    "name:cs": "Základní doména",
+                    "name:en": "Base domain",
+                    "hint": "Domain for new data sources — url_app is derived as https://{web_id}.{baseDomain} (e.g. shpd.dev).",
+                    "hint:cs": "Doména nových zdrojů dat — url_app se odvozuje jako https://{web_id}.{baseDomain} (např. shpd.dev).",
+                    "hint:en": "Domain for new data sources — url_app is derived as https://{web_id}.{baseDomain} (e.g. shpd.dev).",
+                    "maxLength": 100
+                },
                 {
                     "id": "hosting.oidc.issuer",
                     "type": "text",

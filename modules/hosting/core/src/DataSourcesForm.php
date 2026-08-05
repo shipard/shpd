@@ -11,18 +11,22 @@ class DataSourcesForm extends TableForm
 {
     public function buildFormDefinition(array $data, bool $isNew): FormDefinition
     {
+        // ds_id a url_app nejsou required — u požadavku (lifecycle request)
+        // je generuje HostingDataSourceDocument::beforeSave; povinnost polí
+        // požadavku hlídá validate().
         $basic = $this->tab('basic', 'Základní údaje')
             ->section('Identifikace')
                 ->col()
-                    ->input('ds_id', required: true, hint: 'Formát xxxx-xxxx-xxxx-xxxx.')
+                    ->input('ds_id', hint: 'Formát xxxx-xxxx-xxxx-xxxx. Prázdné u požadavku = vygeneruje se.')
                     ->input('name', required: true)
-                    ->input('web_id', hint: 'Slug pro mail adresy. Prázdné = nepřidělen.')
+                    ->input('web_id', hint: 'Slug pro mail adresy a URL aplikace. Prázdné = nepřidělen.')
             ->section('Umístění')
                 ->col()
                     ->select('server', options: $this->resolveServerOptions())
-                    ->input('url_app', required: true)
+                    ->input('url_app', hint: 'Prázdné u požadavku = odvodí se z web_id a základní domény.')
                     ->input('install_module')
                     ->select('lifecycle', options: $this->resolveLifecycleOptions(), required: true)
+                    ->select('owner', options: $this->resolveOwnerOptions())
             ->build();
 
         return new FormDefinition(
@@ -52,6 +56,33 @@ class DataSourcesForm extends TableForm
                 'value' => (int) $row['id'],
                 'label' => (string) $row['name'] . ' (' . $row['fqdn'] . ')',
             ];
+        }
+        return $options;
+    }
+
+    /**
+     * Vlastník DS (U1) — záměrně select s přednačtenými options (vzor
+     * DsUsersForm), ne lookup: LookupController nemá TableAccessGuard
+     * a lookup na core_system_users by vystavil seznam uživatelů
+     * ne-admin portálovým účtům.
+     *
+     * @return list<array{value: int, label: string}>
+     */
+    private function resolveOwnerOptions(): array
+    {
+        if ($this->db === null) {
+            return [];
+        }
+        $rows = $this->db->fetchAll(
+            'SELECT `id`, `full_name`, `login` FROM `core_system_users`'
+            . ' WHERE `is_active` = 1 AND `is_system` = 0'
+            . ' ORDER BY `full_name` ASC, `login` ASC',
+        );
+        $options = [];
+        foreach ($rows as $row) {
+            $name = trim((string) ($row['full_name'] ?? ''));
+            $label = $name !== '' ? $name . ' (' . $row['login'] . ')' : (string) $row['login'];
+            $options[] = ['value' => (int) $row['id'], 'label' => $label];
         }
         return $options;
     }

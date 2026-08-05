@@ -50,7 +50,7 @@ class DataSourceResolver
 		$slashPos = strpos($trimmed, '/');
 		$dsId = $slashPos !== false ? substr($trimmed, 0, $slashPos) : $trimmed;
 
-		if (!preg_match('/^[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}$/', $dsId)) {
+		if (!preg_match(\Shipard\Core\Utils\IdGenerator::ID_PATTERN, $dsId)) {
 			throw new UnknownDataSourceException($dsId);
 		}
 

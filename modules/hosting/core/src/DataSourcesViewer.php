@@ -32,6 +32,7 @@ class DataSourcesViewer extends TableViewer
         'request'   => 'warning',
         'creating'  => 'info',
         'suspended' => 'danger',
+        'failed'    => 'danger',
     ];
 
     /** @var array<int, string> */
@@ -162,6 +163,25 @@ class DataSourcesViewer extends TableViewer
         }
         if (!empty($record['install_module'])) {
             $placement[] = ['label' => $isCs ? 'Install modul' : 'Install module', 'value' => (string) $record['install_module']];
+        }
+        if (!empty($record['owner'])) {
+            $ownerRow = $this->db->fetchRow(
+                'SELECT `full_name`, `login` FROM `core_system_users` WHERE `id` = %i',
+                (int) $record['owner'],
+            );
+            if ($ownerRow !== null) {
+                $ownerName = trim((string) ($ownerRow['full_name'] ?? ''));
+                $placement[] = [
+                    'label' => $isCs ? 'Vlastník' : 'Owner',
+                    'value' => $ownerName !== '' ? $ownerName . ' (' . $ownerRow['login'] . ')' : (string) $ownerRow['login'],
+                ];
+            }
+        }
+        if (!empty($record['provision_error'])) {
+            $placement[] = [
+                'label' => $isCs ? 'Chyba provisioningu' : 'Provisioning error',
+                'value' => (string) $record['provision_error'],
+            ];
         }
 
         return [

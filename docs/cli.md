@@ -111,11 +111,12 @@ sudo shpd-server fix-permissions
 shpd-server doctor    # ověř že vše zelené
 ```
 
-### `ds-create --name <název> [--module <id>]`
+### `ds-create --name <název> [--module <id>] [--ds-id <id>]`
 
 ```bash
 sudo shpd-server ds-create --name "Moje firma s.r.o."
 sudo shpd-server ds-create --name "Moje firma s.r.o." --module=install.base
+sudo shpd-server ds-create --name "Moje firma s.r.o." --ds-id ab12-cd34-ef56-gh78   # provisioning agent
 ```
 
 Vytvoří nový datový zdroj:
@@ -133,6 +134,7 @@ aby se založilo schéma a načetla výchozí konfigurace modulů.
 |------|--------|
 | `--name <název>` | **povinné** — lidsky čitelný název DS |
 | `--module <id>` | volitelné (default: `install.base`) — install modul k aktivaci. Musí odpovídat adresáři `modules/install/<suffix>/`, jehož `module.jsonc` má id `install.<suffix>`. Seznam dostupných modulů: `ls modules/install/`. |
+| `--ds-id <id>` | volitelné — explicitní ID místo generovaného (formát `xxxx-xxxx-xxxx-xxxx`, a-z0-9). Používá agent `hosting-sync` (ID generuje hosting). Existující adresář = chyba. |
 
 Vytvořený `config/main.json` bude obsahovat `"modules": ["<id>"]`. Install
 modul je top-level bundle, který deklaruje své závislosti (`core.system`,
@@ -223,9 +225,16 @@ slotu subprocesem `shpd-ds <cmd>` s cwd v adresáři DS:
 | Slot | Kadence | Příkazy |
 |------|---------|---------|
 | `minute` | každou minutu | `mail-outbox-run` |
+| `two-minutes` | à 2 min | server-level: `hosting-sync` |
 | `five-minutes` | à 5 min | `alerts-run` (self-throttling přes `next_run_at`) |
 | `daily` | denně 03:17 | `mail-idempotency-prune` |
 | `weekly` | neděle 04:43 | `alerts-prune` |
+
+Kromě per-DS jobů má slot volitelně **server-level příkazy**
+(`CronCommand::SERVER_SLOT_JOBS`) — spouští se subprocesem
+`shpd-server <cmd>` **jednou za běh slotu**, ne per DS. První uživatel:
+`hosting-sync` (na serveru bez sekce `hosting` v server.json rychlý
+exit 0).
 
 Chování:
 
@@ -246,7 +255,7 @@ slot, nečitelný seznam DS, nezapsatelný heartbeat).
 
 | Opce | Význam |
 |------|--------|
-| `--slot <slot>` | Povinné: `minute`, `five-minutes`, `daily`, `weekly` |
+| `--slot <slot>` | Povinné: `minute`, `two-minutes`, `five-minutes`, `daily`, `weekly` |
 
 ### `cron-install`
 
@@ -286,12 +295,47 @@ sudo shpd-server domain-remove --host firma1.shipard.cz
 ```
 
 Mapování hostname → DS ID. Načítá se při HTTP requestu pro výběr DS.
+Zápis `domains.json` je atomický (tmp + rename). `domain-add` je
+idempotentní: stejný host → stejný DS = no-op (exit 0), stejný host →
+jiný DS = chyba.
 
 | Příkaz | Opce |
 |--------|------|
 | `domain-add` | `--host <hostname>` (povinné), `--ds <ds-id>` (povinné) |
 | `domain-list` | bez opcí |
 | `domain-remove` | `--host <hostname>` (povinné) |
+
+### `hosting-sync`
+
+```bash
+shpd-server hosting-sync              # jeden běh: reconcile + fronta + confirm
+shpd-server hosting-sync --dry-run    # vypíše frontu bez akcí (queue?peek=1)
+```
+
+Pull agent hostingu (D3, `docs/hosting.md` §5.2). Vyžaduje sekci
+`hosting` v `/etc/shipard/server.json` (§5.1: `url`, `serverId`,
+`apiKey` = `shpd_hk_…` z `hosting-server-key`); bez ní informativně
+skončí s exit 0 — hosting je plně opt-in. Periodicky ho spouští
+`shpd-server cron --slot=two-minutes`.
+
+Jeden běh:
+
+1. **Reconcile** — POST inventura lokálních DS (id, name, modules)
+   + verze shpd; hosting aktualizuje `last_seen`/`last_version`
+   a rozdíly loguje.
+2. **Fronta** — GET požadavky (`lifecycle` request/creating) → pro každý:
+   `ds-create --ds-id` (existující adresář = skip) → `ds-upgrade` →
+   `domain-add` → merge `auth.providers` do `main.json` (provider
+   `shipard-id`, `autoLinkEmail: false`, atomicky, 0600) → `user-create`
+   vlastníka (`--admin --if-not-exists` + předpropojená identita) →
+   POST confirm `ok`/`failed` (chyba jednoho požadavku nezastaví další).
+
+HTTPS povinné (`http` jen pro localhost dev); `--dry-run` frontu
+nepřeklápí a payload neobsahuje client_secret.
+
+| Opce | Význam |
+|------|--------|
+| `--dry-run` | Vypíše frontu požadavků bez jakýchkoli akcí. |
 
 ---
 
@@ -440,6 +484,10 @@ pozvánku (akce „Poslat pozvánku“ v detailu uživatele v Nastavení, nebo
 | `--name <jméno>` | **povinné** — celé jméno |
 | `--email <email>` | volitelné — e-mailová adresa (pro pozvánku nutná) |
 | `--admin` | volitelné — založit rovnou s administrátorskými právy (`is_admin = 1`) |
+| `--if-not-exists` | volitelné — existující login není chyba (info + exit 0, pokračuje se případným propojením identity). Pro idempotentní provisioning (agent `hosting-sync`). |
+| `--identity-issuer <url>` | volitelné (jen s `--identity-subject`) — po založení/nalezení uživatele zajistí řádek `core_system_user_identities` `(issuer, subject)` → user. Existující vazba na téhož uživatele = no-op; na **jiného** uživatele = chyba. Issuer se ukládá bez trailing slash. |
+| `--identity-subject <sub>` | volitelné (jen s `--identity-issuer`) — OIDC subject identity |
+| `--identity-provider <id>` | volitelné (default `oidc`) — hodnota sloupce `provider` identity; agent posílá `shipard-id` (shodné s `auth.providers[].id`) |
 
 #### `user-set-admin`
 
@@ -711,6 +759,58 @@ sudo shpd-ds mail-analysis-reap
 Uvolní vypršené AI analysis claims (zaseknutí workeři) a re-queueuje
 postižené zprávy. Bezpečné spouštět opakovaně (např. z cronu).
 
+### Hosting
+
+Příkazy pro DS s modulem `hosting.core` (centrální správa DS —
+`docs/hosting.md`). Spouštějí se z adresáře **hosting DS**.
+
+#### `hosting-oidc-init`
+
+```bash
+sudo shpd-ds hosting-oidc-init
+```
+
+Vygeneruje privátní klíč OIDC OP (`secrets/oidc-op.key`, RS256) a vypíše
+kid. Další krok: nastavit issuer v Nastavení → Hosting
+(`hosting.oidc.issuer`).
+
+#### `hosting-oidc-client`
+
+```bash
+sudo shpd-ds hosting-oidc-client --ds abcd-efgh-ijkl-mnop --redirect-uri https://firma.example.com/api/v1/_auth/oidc/callback --generate
+```
+
+Registrace/aktualizace OIDC klienta OP: nastaví `oidc_client_secret`
+(šifrovaný přes Document hook) a `oidc_redirect_uri` na řádku
+`hosting_core_data_sources`. `--generate` vytiskne secret **jednou** —
+patří do `auth.providers` klientského DS. Alternativa `--secret <s>`
+uloží dodanou hodnotu. Fáze 2: pro nové DS z portálu tohle dělá
+`HostingDataSourceDocument::beforeSave` + agent automaticky.
+
+| Opce | Význam |
+|------|--------|
+| `--ds <ds-id>` | **povinné** — klientský DS (ds_id) |
+| `--redirect-uri <url>` | registrovaná redirect URI (exact match) |
+| `--secret <s>` / `--generate` | uložit dodaný secret / vygenerovat a vytisknout jednou |
+
+#### `hosting-server-key`
+
+```bash
+sudo shpd-ds hosting-server-key --server 3 --generate
+sudo shpd-ds hosting-server-key --server 3 --revoke
+```
+
+API klíč serveru pro provisioning endpointy `/_hosting/server/*` (D3).
+`--generate` vytvoří token `shpd_hk_…`, na řádek `hosting_core_servers`
+uloží jen prefix + SHA-256 hash a token vytiskne **jednou** — patří do
+`hosting.apiKey` v server.json DS serveru. `--revoke` klíč zneplatní
+(server se okamžitě odpojí).
+
+| Opce | Význam |
+|------|--------|
+| `--server <ndx>` | **povinné** — id řádku serveru (`hosting_core_servers.id`) |
+| `--generate` / `--revoke` | právě jedna z opcí |
+
 ### Seed (testovací data)
 
 > Seed příkazy jsou určené pro vývoj a demo. **Nepouštět na produkční DS.**
@@ -896,6 +996,32 @@ nevytvoří. Po celou dobu opakovaného testování zůstává flag `true`; na
 `false` se přepne, až je import hotový „naostro". AI analyzer žádnou ruční
 akci nevyžaduje: profil, backend i klíče reset přežívají (`keepOnReset`)
 a `ds-upgrade` je zajišťuje i pod `skipProvisioning`.
+
+### 8. Připojení DS serveru k hostingu
+
+```bash
+# Na hostingu (portál):
+# 1. založit řádek serveru (Nastavení → Hosting → Servery),
+#    zaškrtnout „Smí zakládat DS" (can_provision)
+# 2. vygenerovat klíč serveru
+cd /opt/shipard/data-sources/<hosting-ds-id>
+sudo shpd-ds hosting-server-key --server <ndx> --generate   # token vytiskne jednou
+# 3. nastavit hosting.baseDomain (Nastavení → Hosting)
+
+# Na DS serveru:
+# 4. /etc/shipard/server.json — přidat sekci:
+#    "hosting": {
+#        "url": "https://portal.example.com",
+#        "serverId": <ndx>,
+#        "apiKey": "shpd_hk_…"
+#    }
+# 5. přegenerovat cron (slot two-minutes) a ověřit
+sudo shpd-server cron-install
+shpd-server hosting-sync --dry-run     # náhled fronty, bez akcí
+```
+
+Od té chvíle agent každé 2 minuty rekonciliuje a zpracovává požadavky na
+nové DS z portálu. Viz `docs/hosting.md` §5.
 
 ---
 

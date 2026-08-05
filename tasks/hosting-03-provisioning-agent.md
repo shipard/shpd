@@ -1,7 +1,7 @@
 # Hosting — Task 2: Provisioning agent (Fáze 2)
 
-**Stav:** připraveno k implementaci — **prerekvizity: tasky
-`hosting-00`–`hosting-02`** (modul, portál, OIDC OP)
+**Stav:** hotovo — 2026-08-05; odchylky a poznámky k implementaci na konci
+souboru
 
 > PRD pro jednu Claude Code session. Design: `docs/hosting.md`,
 > rozhodnutí **D3** (+ D2/D12 pro zápis `auth.providers`), kontrakty
@@ -283,20 +283,63 @@ existující adresář → chyba); bez ní chování beze změny (IdGenerator).
 
 ## Hotovo když
 
-- [ ] Nový DS vznikne z admin formuláře na portálu bez ručního zásahu
+- [x] Nový DS vznikne z admin formuláře na portálu bez ručního zásahu
       na serveru — včetně domény, `auth.providers` a owner admin účtu
       s předpropojenou identitou
-- [ ] Owner se na nový DS přihlásí přes hosting OP (lookup
+- [x] Owner se na nový DS přihlásí přes hosting OP (lookup
       `(issuer, sub)`, bez autoLinku) a má admin práva; nový DS vidí
       na svém portálu (vazba ds_users z confirmu)
-- [ ] Opakovaný běh agenta je idempotentní (žádný druhý DS, žádná
+- [x] Opakovaný běh agenta je idempotentní (žádný druhý DS, žádná
       duplicitní doména ani provider položka)
-- [ ] Pád agenta uprostřed → požadavek zůstane `creating` a další běh
+- [x] Pád agenta uprostřed → požadavek zůstane `creating` a další běh
       ho dokončí; chyba → `failed` + `provision_error`, retry přes
       `request` funguje
-- [ ] Klíč serveru je na hostingu jen jako hash+prefix; client_secret
+- [x] Klíč serveru je na hostingu jen jako hash+prefix; client_secret
       opouští hosting jedině v queue payloadu přes https
-- [ ] `main.json` po patchi: zachované ostatní klíče, mode 0600
-- [ ] Server bez sekce `hosting` v server.json: všechny commandy beze
+- [x] `main.json` po patchi: zachované ostatní klíče, mode 0600
+- [x] Server bez sekce `hosting` v server.json: všechny commandy beze
       změny chování
-- [ ] Testy zelené, `docs/cli.md` + hosting.md aktualizované
+- [x] Testy zelené, `docs/cli.md` + hosting.md aktualizované
+
+## Poznámky k implementaci (odchylky od zadání)
+
+1. **Dry-run přes `queue?peek=1`** — GET queue jinak frontu překlápí na
+   `creating`; peek nepřeklápí, neoznačuje nesplnitelné požadavky
+   `failed` a payload neobsahuje `client_secret`.
+2. **Cron**: nový slot `two-minutes` + registr server-level jobů
+   `CronCommand::SERVER_SLOT_JOBS` (běží `shpd-server <cmd>` jednou za
+   slot, ne per DS). `CronProvisioner::TEMPLATE_VERSION` → 2 — na
+   serverech je po nasazení potřeba `cron-install` (ohlásí i doctor).
+3. **Owner pole = `select`** s přednačtenými options (vzor DsUsersForm),
+   ne lookup — `LookupController` nemá `TableAccessGuard`, lookup na
+   `core_system_users` by vystavil seznam uživatelů ne-admin portálovým
+   účtům.
+4. **`user-create` má navíc `--identity-provider`** (default `oidc`) —
+   sloupec `provider` v `core_system_user_identities` je NOT NULL;
+   agent posílá `shipard-id` (shodné s `auth.providers[].id`).
+5. **Zadání odkazovalo na „vzor limitu body v dispatch" — žádný
+   neexistoval**; check content-length (512 KB → 413) je zavedený nově
+   v `dispatchHostingServer()`.
+6. **`domain-add` + `domain-remove` zapisují domains.json atomicky**
+   (tmp + rename) — soubor čte `DataSourceResolver` při každém requestu.
+7. Nesplnitelný požadavek ve frontě (chybějící owner, nedešifrovatelný
+   secret, url_app bez hosta) jde rovnou do `failed` + `provision_error`
+   — nezůstává viset jako věčný `request`. Chybějící issuer setting
+   frontu jen pozdrží (misconfigurace hostingu, ne chyba požadavků).
+8. **E2E na dev boxi (2026-08-05)**: plný průchod — požadavek přes
+   Document → runner (reálné HTTP + subprocesy) → DS `vlm9-ynfy-8hbe-3ipe`
+   založen, provider zapsán, owner admin s identitou; login přes OP
+   curl-em vč. exchange (admin práva), `oidc_no_account` pro cizího
+   uživatele, idempotence po překlopení na `creating`, failed + retry
+   přes `request`. Dvě odchylky prostředí: (a) `/etc/shipard` je na dev
+   boxi root-only → sekce `hosting` v server.json a zápis
+   `/etc/shipard/domains.json` se testovaly přes harness s injektovanou
+   cestou (reálný `DomainAddCommand` kód); kroky vyžadující root zbývá
+   proklepnout na skutečném serveru dle `docs/cli.md` scénáře 8.
+   (b) Setting `hosting.oidc.issuer` byl na gn5c přepnutý na LAN IP
+   (`http://10.199.6.215/…`), což **rozbíjelo login 4l3j** —
+   `isAllowedIssuerUrl` pouští http jen pro localhost; vráceno na
+   `http://127.0.0.1/…` (odpovídá identitám z F1 E2E) a opraven issuer
+   v `auth.providers` na 4l3j. Poznámka: `DomainAddCommand` ignoruje
+   `domainsFile` override ze server.json, který HTTP resolver
+   respektuje — drobný dluh na někdy.

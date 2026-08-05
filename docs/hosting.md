@@ -15,7 +15,14 @@ vynechává fakturaci, helpdesk a HW evidenci.
 > `hosting-oidc-init`/`hosting-oidc-client`, endpointy discovery/jwks/
 > authorize/approve/token, `hosting_core_oidc_codes`, issuer setting
 > `hosting.oidc.issuer`, SPA `op_auth` flow (task `hosting-02-oidc-op`).
-> Fáze 2+ nezačaly; fázování v §8, každá fáze dostane vlastní PRD.
+> **Fáze 2 hotová** (2026-08-05): provisioning agent — endpointy
+> `/_hosting/server/reconcile|queue|confirm` + klíče serverů `shpd_hk_`
+> (CLI `hosting-server-key`), požadavek na nový DS z admin formuláře
+> (beforeSave generuje ds_id/secret/URL, setting `hosting.baseDomain`),
+> `shpd-server hosting-sync` + cron slot `two-minutes`, `ds-create
+> --ds-id`, `user-create --if-not-exists` + předpropojení identity
+> (task `hosting-03-provisioning-agent`).
+> Fáze 3+ nezačaly; fázování v §8, každá fáze dostane vlastní PRD.
 
 ---
 
@@ -120,7 +127,7 @@ funkční jen když je na DS aktivní `hosting.core`. Auth režimy:
 |---|---|
 | `/_hosting/oidc/*` (discovery, jwks, authorize, token) | exempt v `AuthMiddleware` (vzor `/_auth/oidc/*`); authorize vyžaduje session uživatele na hostingu (redirect na login portálu) |
 | `/_hosting/portal/*` (my-datasources, my-summary) | session uživatele hostingu; server vrací **jen řádky daného uživatele** (D10) |
-| `/_hosting/server/*` | `shpd_ak_` API klíč hostingu vázaný na řádek serveru |
+| `/_hosting/server/*` | `shpd_hk_` klíč serveru (vlastní prefix; prefix + SHA-256 hash na `hosting_core_servers`, validuje `HostingServerController` sám — `core_system_api_keys` jsou vázané na uživatele a `AuthContext` identitu klíče nenese) |
 | `/_hosting/mail/lookup` | `shpd_ak_` API klíč vázaný na řádek mail-routeru |
 | `/_hosting/ai-gw/*` | gateway token (vlastní tabulka, ne `core_system_api_keys` — jiná audience) |
 
@@ -155,33 +162,51 @@ Poznámky:
 
 ### 5.1 Klientská konfigurace DS serveru
 
-`/etc/shipard/server.json`, nová volitelná sekce:
+`/etc/shipard/server.json`, volitelná sekce (implementace:
+`ServerConfig::getHosting()` → readonly `HostingConfig`):
 
 ```jsonc
 "hosting": {
-    "url": "https://portal.example.com",   // base URL hosting DS
-    "serverId": "…",                        // identita přidělená hostingem
-    "apiKey": "shpd_ak_…"                   // klíč serveru vydaný hostingem
+    "url": "https://portal.example.com",   // base URL hosting DS (https; http jen localhost dev)
+    "serverId": 3,                          // ndx řádku hosting_core_servers (informativní/log)
+    "apiKey": "shpd_hk_…"                   // klíč serveru z `shpd-ds hosting-server-key --generate`
 }
 ```
 
-Bez sekce se nic nemění — hosting je plně opt-in.
+Bez sekce se nic nemění — hosting je plně opt-in. Klíče serverů mají
+vlastní prefix `shpd_hk_` (na hostingu jen prefix + SHA-256 hash);
+postup připojení serveru: `docs/cli.md` → Workflow scénář 8.
 
 ### 5.2 `shpd-server hosting-sync` (D3)
 
-Jeden běh (cron, řádově minuty):
+Jeden běh (cron slot `two-minutes`; `--dry-run` = náhled fronty přes
+`queue?peek=1` — nepřeklápí stavy a neposílá client_secret):
 
-1. **Rekonciliace** — POST inventura: seznam lokálních DS (id, moduly,
-   verze), verze shpd. Hosting aktualizuje `last_seen`, páruje evidenci
-   s realitou, hlásí rozdíly do svého logu.
-2. **Provisioning** — GET fronta požadavků pro tento server → pro každý:
-   `ds-create` → `ds-upgrade` → `domain-add` → zápis `auth.providers`
-   (OP hostingu) do `main.json` → `mail-router-setup` → zápis AI backend
-   řádku (gateway token z požadavku, D5) → POST confirm s výsledky
-   (ds_id, doména, **mail token** pro D4). Idempotentní — confirm až po
-   úspěchu všech kroků, opakovaný požadavek nesmí založit DS dvakrát.
+1. **Rekonciliace** — `POST /_hosting/server/reconcile`, body
+   `{version, dataSources: [{ds_id, name, modules}]}`. Hosting
+   aktualizuje `last_seen` + `last_version`, rozdíly evidence ↔ realita
+   jen loguje (F2).
+2. **Provisioning** — `GET /_hosting/server/queue` → požadavky serveru
+   (`lifecycle` request/creating; servírování = překlopení na `creating`
+   + `claimed_at`; `can_provision = false` → prázdná fronta). Payload
+   per item: `{request_id, ds_id, name, install_module, web_id, host,
+   owner: {email, name, sub}, oidc: {issuer, client_id, client_secret,
+   label}}` — `sub` = (string) id vlastníka (přesně co OP dává do
+   id_tokenu), issuer ze settingu (D12), secret dešifrovaný (jediné
+   místo, kde opouští hosting — https, jednorázově). Pro každý požadavek
+   (chyba jednoho nezastaví další): `ds-create --ds-id` (existující
+   adresář = skip) → `ds-upgrade` → `domain-add` → merge položky
+   `{id: "shipard-id", label, issuer, clientId, clientSecret,
+   autoLinkEmail: false}` do `auth.providers` (atomicky, 0600; U2 —
+   identita se předpropojuje) → `user-create --admin --if-not-exists
+   --identity-provider shipard-id --identity-issuer … --identity-subject
+   {sub}` → `POST /_hosting/server/confirm` `{request_id, ds_id,
+   status: "ok"|"failed", error?}`. Confirm `ok` → `lifecycle = active`
+   + vazba vlastníka v `hosting_core_ds_users` (role `admin`, U1);
+   `failed` → `lifecycle = failed` + `provision_error`, retry = admin
+   přepne zpět na `request`. Mail-router a AI kroky doplní Fáze 3/4.
 3. **Stats push** (D7) — malý agregát per DS (počty z dashboard feedu /
-   alertů). Bez osobních dat — jen čísla.
+   alertů). Bez osobních dat — jen čísla. Fáze 5.
 
 ### 5.3 Mail lookup (D4)
 

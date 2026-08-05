@@ -1,10 +1,16 @@
 # Hosting — Task 0b: skeleton modulu, evidence, portálová obrazovka
 
-**Stav:** hotovo — 2026-08-05; unique index `web_id` založen rovnou (MariaDB
-nullable unique funguje, odklad na Fázi 3 nebyl potřeba), subsekce
-`other.hosting` přidána i do `install.base` (settings položky v nedefinované
-subsekci se tiše zahodí), bonus fix: `ds-upgrade` mail-router provisioning
-guard na aktivní `core.mail` (na DS s `install.hosting` padal)
+**Stav:** hotovo — 2026-08-05; odchylky viz sekce Poznámky k implementaci níže
+
+## Poznámky k implementaci
+
+- Unique index `web_id` založen rovnou — MariaDB nullable unique funguje,
+  odklad na Fázi 3 nebyl potřeba.
+- Subsekce `other.hosting` přidána i do `install.base` — settings položky
+  v nedefinované subsekci se tiše zahodí (smíšený/dev DS by je neviděl).
+- Bonus fix: `ds-upgrade` mail-router provisioning dostal guard na aktivní
+  `core.mail` — na DS s `install.hosting` (první bez mail modulu) padal.
+- Dev hosting DS `gn5c-mm2v-pd5m-u43x` založen pro smoke testy.
 
 > PRD pro jednu Claude Code session. Design: `docs/hosting.md`,
 > rozhodnutí **D1, D8, D9, D10, D11**; portál a přístupový model §6,

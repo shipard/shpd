@@ -18,6 +18,16 @@ class StubHostingSyncRunner extends HostingSyncRunner
     /** @var array<string, array{statusCode: int, body: string, error: ?string}> URL substring → odpověď */
     public array $httpResponses = [];
     public ?\Closure $onProcess = null;
+    /** null = reálná rezoluce modulů (repo modules); closure = deterministický stub. */
+    public ?\Closure $onModuleCheck = null;
+
+    protected function isModuleActiveForDs(string $dsDir, string $moduleId): bool
+    {
+        if ($this->onModuleCheck !== null) {
+            return ($this->onModuleCheck)($dsDir, $moduleId);
+        }
+        return parent::isModuleActiveForDs($dsDir, $moduleId);
+    }
 
     protected function performHttpRequest(string $method, string $url, ?array $body): array
     {
@@ -48,6 +58,8 @@ class HostingSyncRunnerTest extends TestCase
     private const EXISTING_DS = 'aaaa-aaaa-aaaa-aaaa';
     private const NEW_DS = 'bbbb-bbbb-bbbb-bbbb';
     private const ISSUER = 'http://127.0.0.1/gggg-gggg-gggg-gggg/api/v1/_hosting/oidc';
+    private const MAIL_TOKEN = 'shpd_ak_00112233445566778899aabbccddeeff';
+    private const MAIL_SETUP_JSON = '{"api_key":"' . self::MAIL_TOKEN . '","user_id":3}';
 
     private string $dataSourcesDir;
 
@@ -122,10 +134,14 @@ class HostingSyncRunnerTest extends TestCase
     {
         $runner = $this->makeRunner();
         $runner->httpResponses['queue'] = $this->queueResponse([$this->queueItem()]);
+        $runner->onModuleCheck = static fn(): bool => true; // core.mail aktivní
         // ds-create simulace: založí adresář s main.json (jako reálný příkaz).
         $runner->onProcess = function (array $argv): array {
             if ($argv[1] === 'ds-create') {
                 $this->createDs(self::NEW_DS, 'Nová firma', ['install.base']);
+            }
+            if ($argv[1] === 'mail-router-setup') {
+                return ['exitCode' => 0, 'output' => self::MAIL_SETUP_JSON];
             }
             return ['exitCode' => 0, 'output' => ''];
         };
@@ -140,11 +156,11 @@ class HostingSyncRunnerTest extends TestCase
         $this->assertSame(self::EXISTING_DS, $reconcile['body']['dataSources'][0]['ds_id']);
         $this->assertSame(['install.base', 'core.mail'], $reconcile['body']['dataSources'][0]['modules']);
 
-        // Kroky v pořadí: ds-create → ds-upgrade → domain-add → user-create.
+        // Kroky v pořadí: ds-create → … → user-create → mail-router-setup.
         $labels = array_map(static fn(array $c): string => $c['argv'][1], $runner->processCalls);
-        $this->assertSame(['ds-create', 'ds-upgrade', 'domain-add', 'user-create'], $labels);
+        $this->assertSame(['ds-create', 'ds-upgrade', 'domain-add', 'user-create', 'mail-router-setup'], $labels);
 
-        [$dsCreate, $dsUpgrade, $domainAdd, $userCreate] = $runner->processCalls;
+        [$dsCreate, $dsUpgrade, $domainAdd, $userCreate, $mailSetup] = $runner->processCalls;
         $this->assertSame('/fake/bin/shpd-server', $dsCreate['argv'][0]);
         $this->assertContains('--ds-id', $dsCreate['argv']);
         $this->assertContains(self::NEW_DS, $dsCreate['argv']);
@@ -154,6 +170,9 @@ class HostingSyncRunnerTest extends TestCase
         $this->assertContains('--identity-subject', $userCreate['argv']);
         $this->assertContains('7', $userCreate['argv']);
         $this->assertContains(HostingSyncRunner::PROVIDER_ID, $userCreate['argv']);
+        $this->assertContains('--json', $mailSetup['argv']);
+        $this->assertNotContains('--force', $mailSetup['argv']);
+        $this->assertSame($this->dataSourcesDir . '/' . self::NEW_DS, $mailSetup['cwd']);
 
         // auth.providers v main.json nového DS, mode 0600, ostatní klíče netknuté.
         $mainFile = $this->dataSourcesDir . '/' . self::NEW_DS . '/config/main.json';
@@ -167,10 +186,13 @@ class HostingSyncRunnerTest extends TestCase
         $this->assertSame('db', $config['database_name']);
         $this->assertSame(0600, fileperms($mainFile) & 0777);
 
-        // Confirm ok.
+        // Confirm ok + mail_token z kroku f. (D4).
         $confirm = $runner->httpCalls[2];
         $this->assertStringContainsString('/confirm', $confirm['url']);
-        $this->assertSame(['request_id' => 12, 'ds_id' => self::NEW_DS, 'status' => 'ok'], $confirm['body']);
+        $this->assertSame(
+            ['request_id' => 12, 'ds_id' => self::NEW_DS, 'status' => 'ok', 'mail_token' => self::MAIL_TOKEN],
+            $confirm['body'],
+        );
     }
 
     public function testExistingDsDirectorySkipsDsCreate(): void
@@ -178,12 +200,15 @@ class HostingSyncRunnerTest extends TestCase
         $this->createDs(self::NEW_DS, 'Nová firma', ['install.base']);
         $runner = $this->makeRunner();
         $runner->httpResponses['queue'] = $this->queueResponse([$this->queueItem()]);
+        $runner->onModuleCheck = static fn(): bool => false; // bez core.mail
 
         $this->assertTrue($runner->run());
 
         $labels = array_map(static fn(array $c): string => $c['argv'][1], $runner->processCalls);
         $this->assertSame(['ds-upgrade', 'domain-add', 'user-create'], $labels);
         $this->assertSame('ok', $runner->httpCalls[2]['body']['status']);
+        // Bez core.mail confirm token nenese.
+        $this->assertArrayNotHasKey('mail_token', $runner->httpCalls[2]['body']);
     }
 
     public function testStepFailureConfirmsFailedAndContinuesWithNextRequest(): void
@@ -199,6 +224,7 @@ class HostingSyncRunnerTest extends TestCase
                 'host' => 'druha.shpd.dev',
             ]),
         ]);
+        $runner->onModuleCheck = static fn(): bool => false;
         $runner->onProcess = static function (array $argv, ?string $cwd): array {
             if ($argv[1] === 'domain-add' && in_array('nova.shpd.dev', $argv, true)) {
                 return ['exitCode' => 1, 'output' => "Host 'nova.shpd.dev' is already mapped to data source 'zzzz-zzzz-zzzz-zzzz'"];
@@ -268,6 +294,98 @@ class HostingSyncRunnerTest extends TestCase
 
         $this->assertFalse($runner->run());
         $this->assertSame([], $runner->httpCalls);
+    }
+
+    // -------------------------------------------------------------------------
+    // Krok f. — mail-router-setup (D4)
+    // -------------------------------------------------------------------------
+
+    public function testMailSetupRetriesWithForceOnExistingKey(): void
+    {
+        $this->createDs(self::NEW_DS, 'Nová firma', ['install.base']);
+        $runner = $this->makeRunner();
+        $runner->httpResponses['queue'] = $this->queueResponse([$this->queueItem()]);
+        $runner->onModuleCheck = static fn(): bool => true;
+        // Retry po pádu za krokem f.: bez --force selže na existující klíč,
+        // s --force projde. Výstup má okolo JSON i dekorace (stderr mix).
+        $runner->onProcess = static function (array $argv): array {
+            if ($argv[1] !== 'mail-router-setup') {
+                return ['exitCode' => 0, 'output' => ''];
+            }
+            if (!in_array('--force', $argv, true)) {
+                return ['exitCode' => 1, 'output' => 'Error: An active mail-router API key already exists. Use --force to rotate it.'];
+            }
+            return ['exitCode' => 0, 'output' => "some stderr noise\n" . self::MAIL_SETUP_JSON . "\n"];
+        };
+
+        $this->assertTrue($runner->run());
+
+        $mailCalls = array_values(array_filter(
+            $runner->processCalls,
+            static fn(array $c): bool => $c['argv'][1] === 'mail-router-setup',
+        ));
+        $this->assertCount(2, $mailCalls);
+        $this->assertNotContains('--force', $mailCalls[0]['argv']);
+        $this->assertContains('--force', $mailCalls[1]['argv']);
+
+        $confirm = $runner->httpCalls[2];
+        $this->assertSame('ok', $confirm['body']['status']);
+        $this->assertSame(self::MAIL_TOKEN, $confirm['body']['mail_token']);
+    }
+
+    public function testMailSetupFailureConfirmsFailed(): void
+    {
+        $this->createDs(self::NEW_DS, 'Nová firma', ['install.base']);
+        $runner = $this->makeRunner();
+        $runner->httpResponses['queue'] = $this->queueResponse([$this->queueItem()]);
+        $runner->onModuleCheck = static fn(): bool => true;
+        $runner->onProcess = static fn(array $argv): array => $argv[1] === 'mail-router-setup'
+            ? ['exitCode' => 1, 'output' => 'boom']
+            : ['exitCode' => 0, 'output' => ''];
+
+        $this->assertFalse($runner->run());
+
+        $confirm = $runner->httpCalls[2];
+        $this->assertSame('failed', $confirm['body']['status']);
+        $this->assertStringContainsString('mail-router-setup failed', $confirm['body']['error']);
+        $this->assertArrayNotHasKey('mail_token', $confirm['body']);
+    }
+
+    public function testMailSetupUnparsableOutputConfirmsFailed(): void
+    {
+        $this->createDs(self::NEW_DS, 'Nová firma', ['install.base']);
+        $runner = $this->makeRunner();
+        $runner->httpResponses['queue'] = $this->queueResponse([$this->queueItem()]);
+        $runner->onModuleCheck = static fn(): bool => true;
+        $runner->onProcess = static fn(array $argv): array => $argv[1] === 'mail-router-setup'
+            ? ['exitCode' => 0, 'output' => 'not json at all']
+            : ['exitCode' => 0, 'output' => ''];
+
+        $this->assertFalse($runner->run());
+        $this->assertStringContainsString('no parsable api_key', $runner->httpCalls[2]['body']['error']);
+    }
+
+    public function testCoreMailGatingResolvesTransitiveDependencies(): void
+    {
+        // Reálná rezoluce přes repo modules: install.base → … → core.mail;
+        // samotný core.system core.mail nemá.
+        $runner = new class(
+            new HostingConfig('http://127.0.0.1/x', 1, 'shpd_hk_' . str_repeat('a', 43)),
+            $this->dataSourcesDir,
+            '/fake/bin/shpd-server',
+            '/fake/bin/shpd-ds',
+        ) extends HostingSyncRunner {
+            public function checkModule(string $dsDir, string $moduleId): bool
+            {
+                return $this->isModuleActiveForDs($dsDir, $moduleId);
+            }
+        };
+
+        $this->createDs('dddd-dddd-dddd-dddd', 'S mailem', ['install.base']);
+        $this->createDs('ffff-ffff-ffff-ffff', 'Bez mailu', ['core.system']);
+
+        $this->assertTrue($runner->checkModule($this->dataSourcesDir . '/dddd-dddd-dddd-dddd', 'core.mail'));
+        $this->assertFalse($runner->checkModule($this->dataSourcesDir . '/ffff-ffff-ffff-ffff', 'core.mail'));
     }
 
     private function rmdirRecursive(string $dir): void

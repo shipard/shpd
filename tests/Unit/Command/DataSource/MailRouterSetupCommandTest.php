@@ -164,6 +164,55 @@ class MailRouterSetupCommandTest extends TestCase
         $this->assertStringContainsString('Allowed source IP: 10.0.0.5', $tester->getDisplay());
     }
 
+    public function testJsonOutputIsSingleJsonObject(): void
+    {
+        $this->dsConnection->method('fetchRow')->willReturnOnConsecutiveCalls(
+            null,          // user lookup → miss (created line se v json módu tiskne na stderr/potlačí)
+            null,          // active key lookup → none
+        );
+        $this->dsConnection->method('insertRow')->willReturnOnConsecutiveCalls(2, 99);
+
+        $tester = $this->tester();
+        $exitCode = $tester->execute(['--json' => true]);
+
+        $this->assertSame(Command::SUCCESS, $exitCode);
+        // Stdout = jediný JSON objekt, žádné dekorace.
+        $decoded = json_decode(trim($tester->getDisplay()), true);
+        $this->assertIsArray($decoded);
+        $this->assertSame(['api_key', 'user_id'], array_keys($decoded));
+        $this->assertMatchesRegularExpression('/^shpd_ak_[0-9a-f]{32}$/', $decoded['api_key']);
+        $this->assertSame(2, $decoded['user_id']);
+    }
+
+    public function testJsonWithForceRotatesSilently(): void
+    {
+        $this->dsConnection->method('fetchRow')->willReturnOnConsecutiveCalls(
+            ['id' => 2],
+            ['id' => 50],  // existing active key
+        );
+        $this->dsConnection->expects($this->once())->method('execute');
+        $this->dsConnection->method('insertRow')->willReturn(99);
+
+        $tester = $this->tester();
+        $exitCode = $tester->execute(['--force' => true, '--json' => true]);
+
+        $this->assertSame(Command::SUCCESS, $exitCode);
+        $decoded = json_decode(trim($tester->getDisplay()), true);
+        $this->assertIsArray($decoded);
+        $this->assertMatchesRegularExpression('/^shpd_ak_[0-9a-f]{32}$/', $decoded['api_key']);
+    }
+
+    public function testWithoutJsonOutputIsUnchanged(): void
+    {
+        $this->dsConnection->method('fetchRow')->willReturnOnConsecutiveCalls(['id' => 2], null);
+        $this->dsConnection->method('insertRow')->willReturn(99);
+
+        $tester = $this->tester();
+        $tester->execute([]);
+
+        $this->assertStringContainsString('IMPORTANT: This is the only time', $tester->getDisplay());
+    }
+
     public function testRejectsInvalidIp(): void
     {
         // User lookup may happen before IP validation — provide a valid mock

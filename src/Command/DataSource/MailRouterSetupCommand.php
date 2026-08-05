@@ -10,11 +10,16 @@ use Shipard\Module\Core\Mail\MailRouterProvisioner;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
+use Symfony\Component\Console\Output\ConsoleOutputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
 /**
  * Vygeneruje (nebo zrotuje) API klíč pro systémového uživatele `_mail_router`.
  * Plaintext klíč se zobrazí jen jednou — ukládá se pouze sha256 hash.
+ *
+ * S `--json` je stdout jediný JSON objekt {"api_key": ..., "user_id": N}
+ * (žádné dekorace, chyby jdou na stderr) — strojové rozhraní pro
+ * provisioning agenta `hosting-sync` (D4).
  */
 class MailRouterSetupCommand extends Command
 {
@@ -30,7 +35,8 @@ class MailRouterSetupCommand extends Command
         $this->setName('mail-router-setup')
              ->setDescription('Generate (or rotate) the API key used by the external mail-router')
              ->addOption('force', null, InputOption::VALUE_NONE, 'Deactivate existing active key and create a new one')
-             ->addOption('ip', null, InputOption::VALUE_REQUIRED, 'Restrict the key to a single source IP address');
+             ->addOption('ip', null, InputOption::VALUE_REQUIRED, 'Restrict the key to a single source IP address')
+             ->addOption('json', null, InputOption::VALUE_NONE, 'Print a single JSON object {"api_key", "user_id"} to stdout');
     }
 
     protected function getDataSourceDir(): string
@@ -40,10 +46,17 @@ class MailRouterSetupCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        $json = (bool) $input->getOption('json');
+        // V json módu jdou lidské hlášky (chyby, poznámky) na stderr, aby
+        // stdout zůstal parsovatelný. CommandTester dává OutputInterface bez
+        // getErrorOutput() — fallback na hlavní output.
+        $err = $output instanceof ConsoleOutputInterface ? $output->getErrorOutput() : $output;
+        $human = $json ? $err : $output;
+
         $dsDir = $this->getDataSourceDir();
 
         if ($this->dsConfig === null && !file_exists($dsDir . '/config/main.json')) {
-            $output->writeln('<error>Error: Not a Shipard data source directory</error>');
+            $human->writeln('<error>Error: Not a Shipard data source directory</error>');
             return Command::FAILURE;
         }
 
@@ -53,14 +66,14 @@ class MailRouterSetupCommand extends Command
         $provisioner = new MailRouterProvisioner($dsConnection);
         $user = $provisioner->ensureRouterUser();
 
-        if ($user['created']) {
+        if ($user['created'] && !$json) {
             $output->writeln("<info>Created system user '_mail_router' (id={$user['id']})</info>");
         }
 
         $force = (bool) $input->getOption('force');
         $ip = $input->getOption('ip');
         if ($ip !== null && filter_var((string) $ip, FILTER_VALIDATE_IP) === false) {
-            $output->writeln('<error>Error: --ip value is not a valid IP address</error>');
+            $human->writeln('<error>Error: --ip value is not a valid IP address</error>');
             return Command::FAILURE;
         }
 
@@ -72,7 +85,7 @@ class MailRouterSetupCommand extends Command
         );
 
         if ($existingActive !== null && !$force) {
-            $output->writeln('<error>Error: An active mail-router API key already exists. Use --force to rotate it.</error>');
+            $human->writeln('<error>Error: An active mail-router API key already exists. Use --force to rotate it.</error>');
             return Command::FAILURE;
         }
 
@@ -85,7 +98,9 @@ class MailRouterSetupCommand extends Command
                 'mail-router',
                 1,
             );
-            $output->writeln('<comment>Existing key deactivated.</comment>');
+            if (!$json) {
+                $output->writeln('<comment>Existing key deactivated.</comment>');
+            }
         }
 
         $plaintext = self::generateToken();
@@ -106,6 +121,14 @@ class MailRouterSetupCommand extends Command
             'created' => $now,
             'modified' => $now,
         ]);
+
+        if ($json) {
+            $output->writeln((string) json_encode(
+                ['api_key' => $plaintext, 'user_id' => (int) $user['id']],
+                JSON_UNESCAPED_SLASHES,
+            ));
+            return Command::SUCCESS;
+        }
 
         $output->writeln('');
         $output->writeln('<info>API Key created for data source ' . $dsConfig->getId() . ':</info>');

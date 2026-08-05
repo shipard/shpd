@@ -308,6 +308,55 @@ class HostingServerControllerTest extends TestCase
         $this->assertSame('active', $this->db->dataSources[$reqId]['lifecycle']);
     }
 
+    public function testConfirmOkStoresMailTokenEncrypted(): void
+    {
+        $reqId = $this->addRequest(['server' => $this->serverId, 'lifecycle' => 'creating']);
+        $token = 'shpd_ak_' . str_repeat('c', 32);
+
+        $resp = $this->confirm($reqId, 'bbbb-bbbb-bbbb-bbbb', 'ok', mailToken: $token);
+        $this->assertSame(200, $this->getStatus($resp));
+
+        $stored = (string) $this->db->dataSources[$reqId]['mail_token'];
+        $this->assertNotSame($token, $stored);
+        $this->assertSame($token, $this->cipher->decrypt($stored));
+    }
+
+    public function testConfirmWithoutMailTokenLeavesColumnUntouched(): void
+    {
+        $reqId = $this->addRequest([
+            'server' => $this->serverId,
+            'lifecycle' => 'creating',
+            'mail_token' => $this->cipher->encrypt('shpd_ak_' . str_repeat('d', 32)),
+        ]);
+
+        $this->confirm($reqId, 'bbbb-bbbb-bbbb-bbbb', 'ok');
+
+        $this->assertSame(
+            'shpd_ak_' . str_repeat('d', 32),
+            $this->cipher->decrypt((string) $this->db->dataSources[$reqId]['mail_token']),
+        );
+    }
+
+    public function testConfirmMailTokenOverwritesOnActiveReconfirm(): void
+    {
+        // Retry agenta rotuje token — hosting drží poslední, i když už je
+        // DS active (lifecycle update se přeskočí, token ne).
+        $reqId = $this->addRequest([
+            'server' => $this->serverId,
+            'lifecycle' => 'active',
+            'mail_token' => $this->cipher->encrypt('shpd_ak_' . str_repeat('d', 32)),
+        ]);
+        $newToken = 'shpd_ak_' . str_repeat('e', 32);
+
+        $resp = $this->confirm($reqId, 'bbbb-bbbb-bbbb-bbbb', 'ok', mailToken: $newToken);
+        $this->assertSame(200, $this->getStatus($resp));
+
+        $this->assertSame(
+            $newToken,
+            $this->cipher->decrypt((string) $this->db->dataSources[$reqId]['mail_token']),
+        );
+    }
+
     public function testConfirmForeignRequestIs403(): void
     {
         $reqId = $this->addRequest(['server' => $this->otherServerId]);
@@ -362,11 +411,19 @@ class HostingServerControllerTest extends TestCase
         ], $overrides));
     }
 
-    private function confirm(int $requestId, string $dsId, string $status, ?string $error = null): Response
-    {
+    private function confirm(
+        int $requestId,
+        string $dsId,
+        string $status,
+        ?string $error = null,
+        ?string $mailToken = null,
+    ): Response {
         $body = ['request_id' => $requestId, 'ds_id' => $dsId, 'status' => $status];
         if ($error !== null) {
             $body['error'] = $error;
+        }
+        if ($mailToken !== null) {
+            $body['mail_token'] = $mailToken;
         }
         return $this->controller->confirm(
             $this->req('POST', 'confirm', body: $body),

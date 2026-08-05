@@ -198,7 +198,11 @@ class HostingServerController
     /**
      * POST /_hosting/server/confirm
      *
-     * Body: {request_id: int, ds_id: string, status: "ok"|"failed", error?: string}
+     * Body: {request_id: int, ds_id: string, status: "ok"|"failed",
+     *        error?: string, mail_token?: string}
+     *
+     * mail_token (D4) = shpd_ak_ klíč z kroku mail-router-setup agenta;
+     * ukládá se šifrovaně a přepisuje předchozí hodnotu.
      *
      * @param array<string, \Shipard\Core\Database\TableDefinition> $tables
      */
@@ -239,6 +243,19 @@ class HostingServerController
         $lifecycle = (string) $row['lifecycle'];
 
         if ($status === 'ok') {
+            // D4: mail token z kroku mail-router-setup — ukládá se šifrovaně
+            // a NEPODMÍNĚNĚ (i při idempotentním re-confirmu už aktivního DS;
+            // retry agenta token rotuje, hosting musí držet ten poslední).
+            $mailToken = trim((string) ($body['mail_token'] ?? ''));
+            if ($mailToken !== '') {
+                $cipher = $this->cipher ?? DsSecretCipher::forConfig($this->config);
+                $db->updateWhere(
+                    'hosting_core_data_sources',
+                    ['mail_token' => $cipher->encrypt($mailToken), 'modified' => $now],
+                    'id = %i',
+                    (int) $row['id'],
+                );
+            }
             if ($lifecycle !== 'active') {
                 $db->updateWhere(
                     'hosting_core_data_sources',

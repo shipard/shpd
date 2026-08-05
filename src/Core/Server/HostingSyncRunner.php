@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace Shipard\Core\Server;
 
 use Shipard\Core\Auth\OidcProviderConfig;
+use Shipard\Core\Config\ServerConfig;
+use Shipard\Core\Module\ModuleLoader;
+use Shipard\Core\Module\ModulePathResolver;
+use Shipard\Core\Module\ModuleResolver;
 use Shipard\Core\Utils\IdGenerator;
 use Shipard\Core\Version;
 
@@ -15,7 +19,9 @@ use Shipard\Core\Version;
  *   2. Queue — GET fronta požadavků; pro každý postupně (chyba jednoho
  *      nezastaví další): ds-create --ds-id → ds-upgrade → domain-add →
  *      merge auth.providers do main.json → user-create ownera
- *      s předpropojenou identitou → confirm ok/failed.
+ *      s předpropojenou identitou → mail-router-setup --json (D4, jen
+ *      s aktivním core.mail; token jde do confirm body jako mail_token)
+ *      → confirm ok/failed.
  *   3. Stats push (D7) — Fáze 5, zatím nic.
  *
  * Idempotence: existující adresář DS = ds-create se přeskočí, ostatní
@@ -100,7 +106,8 @@ class HostingSyncRunner
             $dsId = (string) ($item['ds_id'] ?? '');
             $this->logLine(sprintf('Provisioning #%d %s "%s"…', $requestId, $dsId, (string) ($item['name'] ?? '')));
 
-            $error = $this->provisionRequest($item);
+            $result = $this->provisionRequest($item);
+            $error = $result['error'];
 
             $confirmBody = ['request_id' => $requestId, 'ds_id' => $dsId, 'status' => $error === null ? 'ok' : 'failed'];
             if ($error !== null) {
@@ -108,6 +115,11 @@ class HostingSyncRunner
                 $this->logLine('<error>  failed: ' . $error . '</error>');
                 $allOk = false;
             } else {
+                // D4: mail token jde hostingu jen při úspěchu kroku f.;
+                // bez core.mail confirm token nenese.
+                if ($result['mailToken'] !== null) {
+                    $confirmBody['mail_token'] = $result['mailToken'];
+                }
                 $this->logLine('  done.');
             }
             if ($this->callHosting('POST', 'confirm', $confirmBody) === null) {
@@ -126,9 +138,22 @@ class HostingSyncRunner
 
     /**
      * @param array<string, mixed> $item
+     * @return array{error: ?string, mailToken: ?string} error = zpráva pro
+     *     confirm failed (null = úspěch); mailToken = shpd_ak_ token z kroku
+     *     f. pro confirm body (null = DS bez core.mail nebo chyba)
+     */
+    private function provisionRequest(array $item): array
+    {
+        $mailToken = null;
+        $error = $this->provisionSteps($item, $mailToken);
+        return ['error' => $error, 'mailToken' => $mailToken];
+    }
+
+    /**
+     * @param array<string, mixed> $item
      * @return string|null chybová zpráva pro confirm failed, null = úspěch
      */
-    private function provisionRequest(array $item): ?string
+    private function provisionSteps(array $item, ?string &$mailToken): ?string
     {
         $dsId = (string) ($item['ds_id'] ?? '');
         $name = (string) ($item['name'] ?? '');
@@ -207,7 +232,7 @@ class HostingSyncRunner
         }
 
         // e. Admin účet vlastníka bez hesla + předpropojená identita (U1+U2).
-        return $this->runStep('user-create', [
+        $error = $this->runStep('user-create', [
             $this->shpdDsPath, 'user-create',
             '--login', $ownerEmail,
             '--email', $ownerEmail,
@@ -218,6 +243,112 @@ class HostingSyncRunner
             '--identity-issuer', $issuer,
             '--identity-subject', $ownerSub,
         ], $dsDir);
+        if ($error !== null) {
+            return $error;
+        }
+
+        // f. Mail token pro mail-router (D4) — jen s aktivním core.mail.
+        return $this->mintMailToken($dsDir, $mailToken);
+    }
+
+    /**
+     * Krok f. — `mail-router-setup --json` v adresáři DS; token jde do
+     * confirm body. Retry po pádu za tímto krokem: existující klíč shodí
+     * běh bez --force, druhý pokus rotuje s --force (neškodné — token na
+     * hostingu stejně přepíše tento confirm, DS ještě poštu nepřijímá).
+     */
+    private function mintMailToken(string $dsDir, ?string &$mailToken): ?string
+    {
+        if (!$this->isModuleActiveForDs($dsDir, 'core.mail')) {
+            $this->logLine('  mail-router-setup skipped — core.mail not active.');
+            return null;
+        }
+
+        $this->logLine('  mail-router-setup…');
+        $result = $this->runProcess([$this->shpdDsPath, 'mail-router-setup', '--json'], $dsDir);
+        if ($result['exitCode'] !== 0) {
+            $this->logLine('  mail-router-setup retry with --force…');
+            $result = $this->runProcess([$this->shpdDsPath, 'mail-router-setup', '--json', '--force'], $dsDir);
+        }
+        if ($result['exitCode'] !== 0) {
+            $tail = trim($result['output']);
+            return sprintf(
+                'mail-router-setup failed (exit %d)%s',
+                $result['exitCode'],
+                $tail !== '' ? ': ' . $tail : '',
+            );
+        }
+
+        $token = $this->parseMailSetupOutput($result['output']);
+        if ($token === null) {
+            return 'mail-router-setup returned no parsable api_key JSON';
+        }
+        $mailToken = $token;
+        return null;
+    }
+
+    /**
+     * Výstup subprocesu prokládá stdout a stderr — vzít poslední JSON
+     * objekt s validním api_key, dekorace okolo ignorovat.
+     */
+    private function parseMailSetupOutput(string $output): ?string
+    {
+        if (!preg_match_all('/\{[^{}]*\}/', $output, $matches)) {
+            return null;
+        }
+        foreach (array_reverse($matches[0]) as $candidate) {
+            $decoded = json_decode($candidate, true);
+            if (!is_array($decoded)) {
+                continue;
+            }
+            $apiKey = (string) ($decoded['api_key'] ?? '');
+            if (preg_match('/^shpd_ak_[0-9a-f]{32}$/', $apiKey)) {
+                return $apiKey;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Aktivní modul DS vč. tranzitivních závislostí — main.json nese jen
+     * přímé moduly (install.*), rezoluce přes ModuleLoader/ModuleResolver
+     * (vzor DsUpgradeCommand::isModuleActive). Protected seam pro testy.
+     * Fallback bez server.json = jen repo modules (vzor bin/shpd-ds).
+     */
+    protected function isModuleActiveForDs(string $dsDir, string $moduleId): bool
+    {
+        $config = json_decode((string) @file_get_contents($dsDir . '/config/main.json'), true);
+        $direct = is_array($config['modules'] ?? null)
+            ? array_values(array_map(strval(...), $config['modules']))
+            : [];
+        if ($direct === []) {
+            return false;
+        }
+        if (in_array($moduleId, $direct, true)) {
+            return true;
+        }
+
+        try {
+            $sc = new ServerConfig();
+            $sc->load();
+            $resolver = ModulePathResolver::fromServerConfig($sc, dirname(__DIR__, 3) . '/modules');
+        } catch (\Throwable) {
+            $resolver = new ModulePathResolver([dirname(__DIR__, 3) . '/modules']);
+        }
+
+        try {
+            $errors = [];
+            $resolved = ModuleResolver::resolve(ModuleLoader::loadAllModules($resolver), $direct, $errors);
+        } catch (\Throwable $e) {
+            $this->logLine('<error>  module resolution failed: ' . $e->getMessage() . '</error>');
+            return false;
+        }
+        foreach ($resolved as $module) {
+            if ($module->id === $moduleId) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

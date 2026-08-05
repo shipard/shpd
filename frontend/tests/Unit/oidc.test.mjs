@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildOidcStartUrl, parseOidcRedirect } from '../../src/api/oidc.js';
+import { buildOidcStartUrl, parseOidcRedirect, parseOpAuth } from '../../src/api/oidc.js';
 
 test('buildOidcStartUrl composes start URL with encoded provider', () => {
   assert.equal(
@@ -46,4 +46,15 @@ test('parseOidcRedirect prefers handoff over error', () => {
     parseOidcRedirect('?login=oidc&code=abc&login_error=oidc_denied'),
     { kind: 'handoff', code: 'abc' },
   );
+});
+
+test('parseOpAuth extracts transaction token', () => {
+  assert.equal(parseOpAuth('?op_auth=abc-123_XYZ'), 'abc-123_XYZ');
+  assert.equal(parseOpAuth('?foo=bar&op_auth=t1'), 't1');
+});
+
+test('parseOpAuth ignores missing or empty param', () => {
+  assert.equal(parseOpAuth(''), null);
+  assert.equal(parseOpAuth('?foo=bar'), null);
+  assert.equal(parseOpAuth('?op_auth='), null);
 });

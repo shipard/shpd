@@ -39,3 +39,14 @@ export function parseOidcRedirect(search) {
 
   return null;
 }
+
+/**
+ * Rozpozná příchod od OIDC OP hostingu (session bridge D10):
+ *   ?op_auth={txn} → txn string, jinak null.
+ * @param {string} search window.location.search (včetně '?')
+ * @returns {string|null}
+ */
+export function parseOpAuth(search) {
+  const txn = new URLSearchParams(search).get('op_auth');
+  return txn || null;
+}

@@ -260,6 +260,7 @@ export default {
   'error.NO_LOCAL_PASSWORD': 'The account has no local password — you sign in via an external provider',
   'error.NO_EMAIL': 'The user has no e-mail address',
   'error.MAIL_NOT_CONFIGURED': 'Outbound mail is not configured',
+  'error.OIDC_TXN_INVALID': 'The sign-in request is invalid or has expired — try again from the source application',
 
   // ── Table browser ───────────────────────────────────────────────────────
   'browser.addRecord': 'New record',
@@ -563,4 +564,9 @@ export default {
   'portal.empty': 'No data source has been assigned to you yet. Contact your hosting administrator.',
   'portal.enter': 'Enter',
   'portal.role.admin': 'admin',
+
+  // OIDC OP approval (D10) — ?op_auth= session bridge screen
+  'opAuth.redirecting': 'Redirecting…',
+  'opAuth.error': 'Sign-in could not be completed.',
+  'opAuth.backToPortal': 'Back to portal',
 };

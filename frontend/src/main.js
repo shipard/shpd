@@ -10,7 +10,8 @@ import { accountPrefs } from './stores/accountPrefs.svelte.js'
 import { avatarStore } from './stores/avatar.svelte.js'
 import { loginNotice } from './stores/loginNotice.svelte.js'
 import { authAction } from './stores/authAction.svelte.js'
-import { parseOidcRedirect } from './api/oidc.js'
+import { opAuth } from './stores/opAuth.svelte.js'
+import { parseOidcRedirect, parseOpAuth } from './api/oidc.js'
 import { parseAuthAction } from './api/authActions.js'
 import { exchangeOidc } from './api/auth.js'
 
@@ -51,6 +52,16 @@ async function boot() {
     } else {
       loginNotice.set(oidcRedirect.error)
     }
+  }
+
+  // Příchod od OIDC OP hostingu (?op_auth={txn}, session bridge D10):
+  // txn do in-memory store PŘED mountem, URL se hned čistí. Schválení
+  // (approve → window.location) dělá OpAuthScreen — se session hned,
+  // bez session až po loginu (in-memory store login přežije).
+  const opAuthTxn = parseOpAuth(window.location.search)
+  if (!startupAction && !oidcRedirect && opAuthTxn) {
+    history.replaceState(null, '', window.location.pathname)
+    opAuth.set(opAuthTxn)
   }
 
   // Per-user preference (vzhled, jazyk) — jen když už jsme přihlášení

@@ -272,6 +272,7 @@ export default {
   'error.NO_LOCAL_PASSWORD': 'Účet nemá lokální heslo — přihlašujete se přes externího poskytovatele',
   'error.NO_EMAIL': 'Uživatel nemá vyplněný e-mail',
   'error.MAIL_NOT_CONFIGURED': 'Odchozí pošta není nakonfigurovaná',
+  'error.OIDC_TXN_INVALID': 'Přihlašovací požadavek je neplatný nebo vypršel — zkuste to znovu ze zdrojové aplikace',
 
   // ── Table browser ───────────────────────────────────────────────────────
   'browser.addRecord': 'Nový záznam',
@@ -576,4 +577,9 @@ export default {
   'portal.empty': 'Zatím nemáte přiřazený žádný zdroj dat. Obraťte se na správce hostingu.',
   'portal.enter': 'Vstoupit',
   'portal.role.admin': 'správce',
+
+  // OIDC OP schválení (D10) — obrazovka ?op_auth= session bridge
+  'opAuth.redirecting': 'Přesměrování…',
+  'opAuth.error': 'Přihlášení se nepodařilo dokončit.',
+  'opAuth.backToPortal': 'Zpět na portál',
 };

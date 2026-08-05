@@ -289,7 +289,7 @@ class DsUpgradeCommand extends Command
             $this->provisionFiscalYears($resolvedModules, $dsDir, $dsConnection, $output);
             $this->provisionVatPeriods($resolvedModules, $dsConnection, $output);
             $this->provisionDocCoreNumberSeries($resolvedModules, $dsDir, $dsConnection, $output);
-            $this->provisionMailRouter($dsConfig, $dsConnection, $output);
+            $this->provisionMailRouter($resolvedModules, $dsConfig, $dsConnection, $output);
         }
 
         $secretsWarnings = DsSecretCipher::healthCheck($dsConfig);
@@ -331,13 +331,24 @@ class DsUpgradeCommand extends Command
         }
     }
 
+    /**
+     * @param list<\Shipard\Core\Module\ModuleDefinition> $resolvedModules
+     */
     private function provisionMailRouter(
+        array $resolvedModules,
         DataSourceConfig $dsConfig,
         DataSourceConnection $dsConnection,
         OutputInterface $output,
     ): void {
         $output->writeln('', OutputInterface::VERBOSITY_VERBOSE);
         $output->writeln('Provisioning mail router...', OutputInterface::VERBOSITY_VERBOSE);
+
+        // Bez core.mail neexistuje core_mail_mailboxes — DS bez mail modulu
+        // (např. install.hosting) by tu spadl.
+        if (!$this->isModuleActive($resolvedModules, 'core.mail')) {
+            $output->writeln('  <comment>[SKIP] core.mail module not active</comment>', OutputInterface::VERBOSITY_VERBOSE);
+            return;
+        }
 
         $provisioner = new MailRouterProvisioner($dsConnection);
         $result = $provisioner->provision($dsConfig->getId());

@@ -74,6 +74,10 @@ class ModuleDefinition
                 }
 
                 $page['scope']   = (isset($page['scope']) && $page['scope'] === 'user') ? 'user' : 'ds';
+                // adminOnly — stránku vidí a ukládá jen admin (403 pro
+                // ostatní, skrytí z navigace). Pro DS s ne-admin uživateli
+                // (hosting portál) u citlivých klíčů typu hosting.oidc.issuer.
+                $page['adminOnly'] = (bool) ($page['adminOnly'] ?? false);
                 $page['fields']  = $fields;
                 $settingsPages[] = $page;
             }

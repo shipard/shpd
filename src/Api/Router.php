@@ -201,6 +201,13 @@ class Router
 			return new Route('hostingPortal', 'myDatasources');
 		}
 
+		// OIDC Provider hostingu (D2) — gating (modul + issuer setting) dělá
+		// kontroler; discovery cesta odpovídá RP skládání
+		// rtrim(issuer,'/') + '/.well-known/openid-configuration'.
+		if (str_starts_with($subpath, '/_hosting/oidc/')) {
+			return $this->resolveHostingOidcRoute($subpath, $method);
+		}
+
 		if (str_starts_with($subpath, '/_registry/')) {
 			return $this->resolveRegistryRoute($subpath, $method);
 		}
@@ -508,6 +515,28 @@ class Router
 		}
 
 		return Response::error('NOT_FOUND', 'Not found', 404);
+	}
+
+	private function resolveHostingOidcRoute(string $subpath, string $method): Route|Response
+	{
+		$rest = substr($subpath, strlen('/_hosting/oidc/'));
+
+		$actions = [
+			'.well-known/openid-configuration' => ['GET', 'discovery'],
+			'jwks'                             => ['GET', 'jwks'],
+			'authorize'                        => ['GET', 'authorize'],
+			'approve'                          => ['POST', 'approve'],
+			'token'                            => ['POST', 'token'],
+		];
+		if (!isset($actions[$rest])) {
+			return Response::error('NOT_FOUND', 'Not found', 404);
+		}
+
+		[$expectedMethod, $action] = $actions[$rest];
+		if ($method !== $expectedMethod) {
+			return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+		}
+		return new Route('hostingOidc', $action);
 	}
 
 	private function resolveRegistryRoute(string $subpath, string $method): Route|Response

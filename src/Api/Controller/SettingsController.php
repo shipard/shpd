@@ -132,6 +132,12 @@ class SettingsController
             return Response::error('NOT_FOUND', "Settings page not found: {$pageId}", 404);
         }
 
+        // adminOnly stránky (např. hosting.oidc.issuer) nesmí číst ne-admin —
+        // hosting DS má z definice ne-admin portálové uživatele.
+        if (($pageDef['adminOnly'] ?? false) && !$auth->isAdmin) {
+            return Response::error('FORBIDDEN', 'Admin access required', 403);
+        }
+
         if (($pageDef['scope'] ?? 'ds') === 'user' && $auth->userId === null) {
             return Response::error('UNAUTHORIZED', 'User scope requires a user session', 401);
         }
@@ -180,6 +186,10 @@ class SettingsController
         $pageDef = $this->findPage($pageId, $config, $resolver);
         if ($pageDef === null) {
             return Response::error('NOT_FOUND', "Settings page not found: {$pageId}", 404);
+        }
+
+        if (($pageDef['adminOnly'] ?? false) && !$auth->isAdmin) {
+            return Response::error('FORBIDDEN', 'Admin access required', 403);
         }
 
         if (($pageDef['scope'] ?? 'ds') === 'user' && $auth->userId === null) {
@@ -527,6 +537,12 @@ class SettingsController
                             'page_id'   => $pageId,
                             'module_id' => $module->id,
                         ]);
+                        continue;
+                    }
+
+                    // adminOnly stránka je pro ne-adminy zavřená v page/
+                    // savePage — mrtvý odkaz do stromu nedáváme.
+                    if (($pageDef['adminOnly'] ?? false) && !$isAdmin) {
                         continue;
                     }
 

@@ -32,6 +32,12 @@
             "name": "Status",
             "name:cs": "Stav",
             "name:en": "Status"
+        },
+        {
+            "id": "oidc",
+            "name": "OIDC",
+            "name:cs": "OIDC",
+            "name:en": "OIDC"
         }
     ],
 
@@ -141,6 +147,30 @@
             "type": "datetime",
             "nullable": false,
             "group": "status"
+        },
+
+        // --- OIDC klient (D2) — klient OP je aktivní jen s vyplněným
+        // secretem i redirect URI; secret šifruje HostingDataSourceDocument ---
+
+        {
+            "id": "oidc_client_secret",
+            "name": "OIDC client secret",
+            "name:cs": "OIDC client secret",
+            "name:en": "OIDC client secret",
+            "type": "encrypted_text",
+            "nullable": true,
+            "sensitive": true,
+            "group": "oidc"
+        },
+        {
+            "id": "oidc_redirect_uri",
+            "name": "OIDC redirect URI",
+            "name:cs": "OIDC redirect URI",
+            "name:en": "OIDC redirect URI",
+            "type": "varchar",
+            "length": 250,
+            "nullable": true,
+            "group": "oidc"
         },
 
         // --- doc state (systémové) ---

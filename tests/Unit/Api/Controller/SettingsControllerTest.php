@@ -229,6 +229,45 @@ class SettingsControllerTest extends TestCase
         $this->assertSame(404, $this->getStatus($resp));
     }
 
+    // --- adminOnly stránky (hostingOidc) ---
+
+    public function testPageAdminOnlyReturns403ForNonAdmin(): void
+    {
+        $this->useHostingModules();
+        $resp = $this->ctrl->page('hostingOidc', $this->config(), $this->resolver, 'cs', $this->auth(), $this->mockDb());
+
+        $this->assertSame(403, $this->getStatus($resp));
+    }
+
+    public function testPageAdminOnlyAllowsAdmin(): void
+    {
+        $this->useHostingModules();
+        $admin = new AuthContext(true, 1, 'session', 'shpd_st_test', isAdmin: true);
+        $resp = $this->ctrl->page('hostingOidc', $this->config(), $this->resolver, 'cs', $admin, $this->mockDb());
+
+        $this->assertSame(200, $this->getStatus($resp));
+        $this->assertSame('hostingOidc', $resp->getPayload()['data']['definition']['id']);
+    }
+
+    public function testSavePageAdminOnlyReturns403ForNonAdmin(): void
+    {
+        $this->useHostingModules();
+        $resp = $this->ctrl->savePage(
+            'hostingOidc', $this->saveRequest(['values' => ['hosting.oidc.issuer' => 'https://x/api/v1/_hosting/oidc']]),
+            $this->config(), $this->resolver, $this->auth(), $this->mockDb(),
+        );
+
+        $this->assertSame(403, $this->getStatus($resp));
+    }
+
+    /** Přepne DS na moduly s hosting.core (stránka hostingOidc). */
+    private function useHostingModules(): void
+    {
+        $main = json_decode((string) file_get_contents($this->dsDir . '/config/main.json'), true);
+        $main['modules'] = ['core.system', 'hosting.core'];
+        file_put_contents($this->dsDir . '/config/main.json', json_encode($main));
+    }
+
     // --- account page (scope user, theme/language pole) ---
 
     public function testPageUserScopeRequiresUserId(): void

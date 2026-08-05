@@ -296,6 +296,7 @@ function dispatch(
 		'bank'    => dispatchBank($route, $request, $auth, $tables, $db, $resolved, $configRuntime, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher, $journalEventDispatcher),
 		'personsRegistry' => dispatchPersonsRegistry($route, $request, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $serverConfig),
 		'hostingPortal' => dispatchHostingPortal($route, $auth, $db, $tables),
+		'hostingOidc' => dispatchHostingOidc($route, $request, $auth, $db, $tables, $resolved),
 		'mcp'     => dispatchMcp($request, $auth, $resolved->connection, $tables, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'openapi' => (new OpenApiController())->spec($auth, $openApiPublic, $tables, $baseUrl),
 		default   => Response::error('INTERNAL_ERROR', "Unknown controller: {$route->controller}", 500),
@@ -445,6 +446,30 @@ function dispatchHostingPortal(
 	return match ($route->action) {
 		'myDatasources' => $ctrl->myDatasources($auth, $db, $tables),
 		default         => Response::error('INTERNAL_ERROR', "Unknown hostingPortal action: {$route->action}", 500),
+	};
+}
+
+/**
+ * @param array<string, \Shipard\Core\Database\TableDefinition> $tables
+ */
+function dispatchHostingOidc(
+	Route $route,
+	Request $request,
+	AuthContext $auth,
+	\Shipard\Core\Database\DataSourceConnection $db,
+	array $tables,
+	\Shipard\Api\ResolvedDataSource $resolved,
+): Response {
+	$ctrl = new \Shipard\Api\Controller\HostingOidcController($resolved->config, $resolved->isDevMode());
+	return match ($route->action) {
+		'discovery' => $ctrl->discovery($request, $db, $tables),
+		'jwks'      => $ctrl->jwks($db, $tables),
+		'authorize' => $ctrl->authorize($request, $db, $tables),
+		'approve'   => $ctrl->approve($request, $auth, $db, $tables),
+		// Token endpoint je form-encoded — Request::getBody() umí jen JSON,
+		// $_POST plní PHP samo.
+		'token'     => $ctrl->token($request, $_POST, $db, $tables),
+		default     => Response::error('INTERNAL_ERROR', "Unknown hostingOidc action: {$route->action}", 500),
 	};
 }
 

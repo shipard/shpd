@@ -124,12 +124,15 @@ class RateLimitMiddleware
 	private function resolveKey(Request $request, AuthContext $auth, Route $route): array
 	{
 		// Login-class endpointy (lokální login, OIDC start/exchange, forgot/
-		// reset hesla): limit per IP. oidcCallback zůstává v defaultu —
-		// chrání ho single-use state.
+		// reset hesla, OP authorize/approve/token): limit per IP.
+		// oidcCallback zůstává v defaultu — chrání ho single-use state.
+		// OP discovery/jwks zůstávají v defaultu — RP je cachuje.
 		if (($route->controller === 'auth'
 				&& in_array($route->action, ['login', 'oidcStart', 'oidcExchange'], true))
 			|| ($route->controller === 'password'
-				&& in_array($route->action, ['forgot', 'reset'], true))) {
+				&& in_array($route->action, ['forgot', 'reset'], true))
+			|| ($route->controller === 'hostingOidc'
+				&& in_array($route->action, ['authorize', 'approve', 'token'], true))) {
 			$ip   = $request->getClientIp() ?? 'unknown';
 			$key  = hash('sha256', 'login:' . $ip);
 			return [$key, 'login', self::LIMITS['login']];

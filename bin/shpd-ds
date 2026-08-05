@@ -56,5 +56,6 @@ $app->add(new \Shipard\Command\DataSource\AccbalMatchCommand());
 $app->add(new \Shipard\Command\DataSource\DsSecretsHealthCommand());
 $app->add(new \Shipard\Command\DataSource\DsSecretsRotateCommand());
 $app->add(new \Shipard\Command\DataSource\HostingOidcInitCommand());
+$app->add(new \Shipard\Command\DataSource\HostingOidcClientCommand());
 $app->setDefaultCommand('help');
 $app->run();

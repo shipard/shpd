@@ -19,13 +19,13 @@ class HostingModuleDefinitionTest extends TestCase
 {
     private const MODULE_PATH = '/modules/hosting/core';
 
-    public function testModuleDeclaresThreeTables(): void
+    public function testModuleDeclaresFourTables(): void
     {
         $module = ModuleLoader::loadModule(dirname(__DIR__, 5) . self::MODULE_PATH);
 
         $this->assertSame('hosting.core', $module->id);
         $this->assertSame(
-            ['hosting_core_servers', 'hosting_core_data_sources', 'hosting_core_ds_users'],
+            ['hosting_core_servers', 'hosting_core_data_sources', 'hosting_core_ds_users', 'hosting_core_oidc_codes'],
             $module->tables,
         );
     }
@@ -52,8 +52,17 @@ class HostingModuleDefinitionTest extends TestCase
         $def = TableDefinition::fromArray($raw);
 
         $columnIds = array_map(static fn ($c) => $c->id, $def->columns);
-        foreach (['ds_id', 'name', 'web_id', 'server', 'url_app', 'install_module', 'lifecycle'] as $expected) {
+        foreach (['ds_id', 'name', 'web_id', 'server', 'url_app', 'install_module', 'lifecycle',
+            'oidc_client_secret', 'oidc_redirect_uri'] as $expected) {
             $this->assertContains($expected, $columnIds);
+        }
+
+        // OIDC secret nesmí uniknout do API/form odpovědí (D2) — sensitive
+        // flag hlídá TableAccessGuard.
+        foreach ($def->columns as $col) {
+            if ($col->id === 'oidc_client_secret') {
+                $this->assertTrue($col->sensitive, 'oidc_client_secret musí být sensitive');
+            }
         }
 
         $uniqueIndexes = [];

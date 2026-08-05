@@ -121,6 +121,10 @@ exempt nejsou.
    settingsSections, pokud přibyla sekce).
 5. Hodnoty čti v PHP přes `new SettingsStore($db)->get('klíč')` s fallbackem
    na rozumný default — klíč nemusí existovat.
+6. Citlivá stránka, kterou nesmí číst ani ukládat ne-admin (na DS s ne-admin
+   uživateli, typicky hosting portál): `"adminOnly": true` na stránce —
+   `SettingsController` vrací 403 v `page`/`savePage` a položku skrývá
+   z navigace. První uživatel: `hostingOidc` (`hosting.oidc.issuer`).
 
 Další typy polí (`select`, `checkbox`, `textarea`) přijdou s první
 stránkou, která je potřebuje — struktura definice je na to připravená

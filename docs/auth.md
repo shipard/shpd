@@ -138,6 +138,32 @@ Redirect `/app/?login_error={kod}`, frontend překládá přes
 | `oidc_account_inactive` | Propojený uživatel je deaktivovaný |
 | `oidc_login_conflict` | JIT: login (= e-mail) už existuje |
 
+### Shipard ID jako provider (hosting OP)
+
+Hosting DS umí vystupovat jako OIDC Provider (`docs/hosting.md` §5.4,
+D2/D10/D12) — centrální „Shipard ID" pro ostatní DS. RP strana se nemění:
+hosting OP je běžná položka `auth.providers` klientského DS:
+
+```json
+{
+    "id": "shipard-id",
+    "label": "Shipard ID",
+    "issuer": "https://portal.example.com/api/v1/_hosting/oidc",
+    "clientId": "<ds_id klientského DS>",
+    "clientSecret": "<z shpd-ds hosting-oidc-client --generate>",
+    "autoLinkEmail": true
+}
+```
+
+Dev tvar issueru: `http://127.0.0.1/{hosting-ds-id}/api/v1/_hosting/oidc`
+(http je povolené jen pro localhost/127.0.0.1). Redirect URI klienta
+registruje na hostingu `shpd-ds hosting-oidc-client` a musí přesně
+odpovídat odvození RP: dev
+`http://{host}/{ds-id}/api/v1/_auth/oidc/callback`, prod
+`https://{host}/api/v1/_auth/oidc/callback`. OP vydává id_token s claimy
+`sub`/`email`/`email_verified: true`/`name`/`nonce`, takže `autoLinkEmail`
+i `jitProvision` fungují dle politiky DS.
+
 ## Frontend
 
 - `main.js` při bootu (před mountem) detekuje `?login=oidc&code=` →

@@ -60,6 +60,13 @@ class AuthMiddleware
 			&& in_array($route->action, ['forgot', 'reset'], true)) {
 			return true;
 		}
+		// OIDC OP hostingu (D2): protokolové endpointy jsou z definice bez
+		// tokenu; approve záměrně NE — vyžaduje Bearer session (session
+		// bridge D10).
+		if ($route->controller === 'hostingOidc'
+			&& in_array($route->action, ['discovery', 'jwks', 'authorize', 'token'], true)) {
+			return true;
+		}
 		if ($openApiPublic && $route->controller === 'openapi' && $route->action === 'spec') {
 			return true;
 		}

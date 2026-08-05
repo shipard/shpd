@@ -1,9 +1,10 @@
 # Tabulka: Hosting — zdroje dat (hosting_core_data_sources)
 
 Evidence zdrojů dat (DS) spravovaných hostingem. Fáze 0 = ručně plněná
-evidence + zdroj portálového seznamu „moje DS". Sloupce pro mail token
-a OIDC client_secret **záměrně chybí** — přijdou ve svých fázích (3, 1)
-jako aditivní změny schématu.
+evidence + zdroj portálového seznamu „moje DS". Fáze 1 přidala OIDC
+klientské sloupce (řádek = klient OIDC OP, `client_id` = `ds_id`).
+Sloupce pro mail token **záměrně chybí** — přijdou ve Fázi 3 jako
+aditivní změna schématu.
 
 `tableId = 431`. Stavový model: `core.system.docStatesArchive`.
 **`adminOnly = true`** (D9) — portáloví uživatelé se k datům dostanou
@@ -27,6 +28,16 @@ výhradně přes `/_hosting/portal/*` (D10).
 | `url_app` | varchar(200), NOT NULL | URL aplikace — cíl vstupního tlačítka na portálu |
 | `install_module` | varchar(50) | Install modul DS (např. `install.base`) — evidence pro provisioning |
 | `lifecycle` | enumString(10), NOT NULL, default `active` | Klíč v [`hosting.core.dsLifecycle`](../config/dsLifecycle.jsonc) — request, creating, active, suspended. Fáze 0 používá jen `active`; request/creating řídí provisioning frontu Fáze 2. |
+
+### OIDC (oidc)
+
+Klient OIDC OP (D2) je aktivní, jen když jsou vyplněné **oba** sloupce —
+`authorize` jinak klienta odmítne (400, bez redirectu).
+
+| Sloupec | Typ | Popis |
+|---|---|---|
+| `oidc_client_secret` | encrypted_text, **sensitive** | Client secret pro token endpoint (`client_secret_post`). Šifruje `HostingDataSourceDocument::beforeSave`; plní CLI `hosting-oidc-client`. Nikdy se nevrací v API/form odpovědích. |
+| `oidc_redirect_uri` | varchar(250) | Registrovaná redirect URI klienta — **exact match** proti `authorize` požadavku. Fáze 1 plní admin ručně (CLI), Fáze 2 provisioning agent. |
 
 ### Stav (status)
 

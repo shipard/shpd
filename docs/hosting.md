@@ -10,8 +10,12 @@ vynechává fakturaci, helpdesk a HW evidenci.
 > **Stav:** Design schválen (D1–D12). **Fáze 0 hotová** (2026-08-05):
 > `adminOnly` mechanismus (task 0a), modul `hosting.core` + `install.hosting`,
 > tabulky servers / data_sources / ds_users, admin viewery, portálový endpoint
-> `/_hosting/portal/my-datasources` + `PortalScreen` (task 0b). Fáze 1+
-> nezačaly; fázování v §8, každá fáze dostane vlastní PRD.
+> `/_hosting/portal/my-datasources` + `PortalScreen` (task 0b).
+> **Fáze 1 hotová** (2026-08-05): OIDC OP — `OpKeyStore` + CLI
+> `hosting-oidc-init`/`hosting-oidc-client`, endpointy discovery/jwks/
+> authorize/approve/token, `hosting_core_oidc_codes`, issuer setting
+> `hosting.oidc.issuer`, SPA `op_auth` flow (task `hosting-02-oidc-op`).
+> Fáze 2+ nezačaly; fázování v §8, každá fáze dostane vlastní PRD.
 
 ---
 
@@ -191,20 +195,45 @@ reload. Hosting down ⇒ jede se na stale lookup, pošta se neztrácí.
 
 ### 5.4 OIDC OP (D2, D12)
 
-- `GET /_hosting/oidc/.well-known/openid-configuration` (přesná cesta
-  discovery vůči issuer URL se doladí v PRD), `GET /_hosting/oidc/jwks`,
-  `GET /_hosting/oidc/authorize`, `POST /_hosting/oidc/token`.
-- **Issuer je explicitní setting hostingu** (D12) — zapisuje se při zřízení,
-  discovery i id_tokeny ho používají doslovně; odvození z requestu se
-  nepoužívá. Nesoulad hostname requestu vs. issuer = warning do logu.
+**Implementováno ve Fázi 1** (`HostingOidcController`,
+`tasks/hosting-02-oidc-op.md`).
+
+- `GET /_hosting/oidc/.well-known/openid-configuration`,
+  `GET /_hosting/oidc/jwks`, `GET /_hosting/oidc/authorize`,
+  `POST /_hosting/oidc/approve`, `POST /_hosting/oidc/token`. Gating:
+  neaktivní modul nebo nevyplněný issuer setting → 404.
+- **Issuer je explicitní setting `hosting.oidc.issuer`** (D12, settings
+  stránka „OIDC provider", `adminOnly`) — trvalá forma
+  `https://{host}/api/v1/_hosting/oidc`; discovery i id_tokeny ho používají
+  doslovně, odvození z requestu se nepoužívá. Nesoulad hostname requestu
+  vs. issuer = warning do logu. RP porovnává `iss` claim byte-exact.
 - Jen authorization code + PKCE S256, `client_secret_post`, RS256 id_token
-  s claimy `sub` (= user id hostingu, stabilní), `email`, `email_verified`,
-  `name`, `nonce`. Přesně to, co náš RP validuje — nic navíc.
+  (kid v hlavičce — povinný pro RP keyset lookup) s claimy `sub` (= user id
+  hostingu, stabilní), `email`, `email_verified: true`, `name`, `nonce`.
+  Přesně to, co náš RP validuje — nic navíc.
+- Podpisový klíč: `secrets/oidc-op.key` (PEM RSA 3072, 0600, `OpKeyStore`),
+  zakládá `shpd-ds hosting-oidc-init`. Nikdy v DB ani logu.
 - Klienti (jednotlivé DS) = řádky v `hosting_core_data_sources`
-  (client_id = ds_id, client_secret generovaný při provisioningu).
-- `authorize` bez session → redirect na login portálu a zpět; se session
-  SSO průlet (D10). Mechanismus návratu doladí PRD; portálový login je
-  běžný login hosting DS.
+  (client_id = ds_id, `oidc_client_secret` encrypted_text + sensitive,
+  `oidc_redirect_uri` exact match). Fáze 1 plní `shpd-ds
+  hosting-oidc-client --ds … --redirect-uri … --generate`; Fáze 2 agent.
+- **Session bridge (D10):** SPA drží session token v localStorage, browser
+  GET na `authorize` tedy hlavičku nenese. `authorize` (exempt) validuje
+  požadavek, založí transakci v `hosting_core_oidc_codes` (TTL 10 min)
+  a přesměruje na `/app/?op_auth={txn}`; SPA se session zavolá
+  `POST /_hosting/oidc/approve` (Bearer, NENÍ exempt) → server naváže
+  uživatele, vydá kód (TTL 60 s) a vrátí RP redirect URL; SPA provede
+  `window.location`. Bez session SPA nejdřív ukáže LoginScreen (`op_auth`
+  přežije login). SSO = tiché schválení bez interakce.
+- Kód je single-use (token endpoint řádek smaže před validací), transakce
+  single-use (`user IS NULL` guard v approve). Selhání token endpointu →
+  400 `{"error":"invalid_grant"}` (OAuth tvar, bez rozlišení důvodu).
+- Rate limit: authorize/approve/token v login bucketu (10/min/IP);
+  discovery/jwks v defaultu (RP je cachuje).
+- Vědomá volba: OP je čistě identitní autorita — kód vydá kterémukoli
+  přihlášenému uživateli hostingu bez kontroly `hosting_core_ds_users`.
+  O vpuštění do DS rozhoduje RP (`IdentityMapper`: autoLink/JIT/
+  `oidc_no_account`). Centrální gating přes ds_users = případný v2 flag.
 
 Výsledný login flow na DS: LoginScreen → „Přihlásit přes {hosting}" →
 portál (session tam) → id_token → RP `IdentityMapper` `(issuer, sub)`,

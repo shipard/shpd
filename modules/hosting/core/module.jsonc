@@ -14,13 +14,46 @@
     "tables": [
         "hosting_core_servers",
         "hosting_core_data_sources",
-        "hosting_core_ds_users"
+        "hosting_core_ds_users",
+        "hosting_core_oidc_codes"
+    ],
+
+    "documentClasses": [
+        {
+            "table": "hosting_core_data_sources",
+            "class": "Shipard\\Module\\Hosting\\Core\\HostingDataSourceDocument"
+        }
     ],
 
     "settingsItems": [
         { "viewer": "hosting.core.servers",     "section": "other", "subsection": "other.hosting", "order": 10 },
         { "viewer": "hosting.core.dataSources", "section": "other", "subsection": "other.hosting", "order": 20 },
-        { "viewer": "hosting.core.dsUsers",     "section": "other", "subsection": "other.hosting", "order": 30 }
+        { "viewer": "hosting.core.dsUsers",     "section": "other", "subsection": "other.hosting", "order": 30 },
+        { "page": "hostingOidc",                "section": "other", "subsection": "other.hosting", "order": 40 }
+    ],
+
+    "settingsPages": [
+        {
+            "id": "hostingOidc",
+            "name": "OIDC provider",
+            "name:cs": "OIDC provider",
+            "name:en": "OIDC provider",
+            "icon": "lock",
+            "adminOnly": true,
+            "fields": [
+                {
+                    "id": "hosting.oidc.issuer",
+                    "type": "text",
+                    "name": "Issuer URL",
+                    "name:cs": "Issuer URL",
+                    "name:en": "Issuer URL",
+                    "hint": "Permanent value, e.g. https://host/api/v1/_hosting/oidc (dev: http://127.0.0.1/{ds-id}/api/v1/_hosting/oidc). Changing it invalidates all linked identities on client data sources (D12).",
+                    "hint:cs": "Trvalá hodnota, např. https://host/api/v1/_hosting/oidc (dev: http://127.0.0.1/{ds-id}/api/v1/_hosting/oidc). Změna zneplatní všechny navázané identity na klientských DS (D12).",
+                    "hint:en": "Permanent value, e.g. https://host/api/v1/_hosting/oidc (dev: http://127.0.0.1/{ds-id}/api/v1/_hosting/oidc). Changing it invalidates all linked identities on client data sources (D12).",
+                    "maxLength": 200
+                }
+            ]
+        }
     ],
 
     "viewers": [

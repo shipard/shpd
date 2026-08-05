@@ -500,6 +500,57 @@ class RouterTest extends TestCase
 		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
 	}
 
+	// Hosting OIDC OP routes (D2)
+
+	public function testHostingOidcDiscoveryGet(): void
+	{
+		$result = $this->router->resolve('/api/v1/_hosting/oidc/.well-known/openid-configuration', 'GET');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'hostingOidc', 'discovery');
+	}
+
+	public function testHostingOidcJwksGet(): void
+	{
+		$result = $this->router->resolve('/api/v1/_hosting/oidc/jwks', 'GET');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'hostingOidc', 'jwks');
+	}
+
+	public function testHostingOidcAuthorizeGet(): void
+	{
+		$result = $this->router->resolve('/api/v1/_hosting/oidc/authorize', 'GET');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'hostingOidc', 'authorize');
+	}
+
+	public function testHostingOidcApprovePost(): void
+	{
+		$result = $this->router->resolve('/api/v1/_hosting/oidc/approve', 'POST');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'hostingOidc', 'approve');
+	}
+
+	public function testHostingOidcTokenPost(): void
+	{
+		$result = $this->router->resolve('/api/v1/_hosting/oidc/token', 'POST');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'hostingOidc', 'token');
+	}
+
+	public function testHostingOidcTokenGetNotAllowed(): void
+	{
+		$result = $this->router->resolve('/api/v1/_hosting/oidc/token', 'GET');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
+	}
+
+	public function testHostingOidcUnknownPathIs404(): void
+	{
+		$result = $this->router->resolve('/api/v1/_hosting/oidc/unknown', 'GET');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('NOT_FOUND', $result->getPayload()['error']['code']);
+	}
+
 	// Analysis routes (Fáze 3a)
 
 	public function testAnalysisQueueGet(): void

@@ -1,0 +1,127 @@
+{
+    "tableId": 433,
+    "name": "OIDC OP transactions",
+    "name:cs": "OIDC OP transakce",
+    "name:en": "OIDC OP transactions",
+
+    // Čistě transakční tabulka OIDC providera (D2, D10) — bez docStates,
+    // vzor core_system_auth_transactions. Úklid expirovaných řádků je
+    // oportunistický DELETE při každém authorize.
+    "adminOnly": true,
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+        {
+            "id": "txn",
+            "name": "Transaction",
+            "name:cs": "Transakce",
+            "name:en": "Transaction",
+            "type": "varchar",
+            "length": 64,
+            "nullable": false
+        },
+        {
+            "id": "client",
+            "name": "Client",
+            "name:cs": "Klient",
+            "name:en": "Client",
+            "type": "int",
+            "nullable": false,
+            "reference": "hosting_core_data_sources"
+        },
+        {
+            "id": "user",
+            "name": "User",
+            "name:cs": "Uživatel",
+            "name:en": "User",
+            "type": "int",
+            "nullable": true,
+            "reference": "core_system_users"
+        },
+        {
+            "id": "code",
+            "name": "Authorization code",
+            "name:cs": "Autorizační kód",
+            "name:en": "Authorization code",
+            "type": "varchar",
+            "length": 64,
+            "nullable": true
+        },
+        {
+            "id": "state",
+            "name": "State",
+            "type": "varchar",
+            "length": 200,
+            "nullable": false
+        },
+        {
+            "id": "nonce",
+            "name": "Nonce",
+            "type": "varchar",
+            "length": 64,
+            "nullable": false
+        },
+        {
+            "id": "code_challenge",
+            "name": "Code challenge",
+            "type": "varchar",
+            "length": 128,
+            "nullable": false
+        },
+        {
+            "id": "redirect_uri",
+            "name": "Redirect URI",
+            "type": "varchar",
+            "length": 250,
+            "nullable": false
+        },
+        {
+            "id": "expires",
+            "name": "Expires",
+            "name:cs": "Expirace",
+            "name:en": "Expires",
+            "type": "datetime",
+            "nullable": false
+        },
+        {
+            "id": "created",
+            "name": "Created",
+            "name:cs": "Vytvořeno",
+            "name:en": "Created",
+            "type": "datetime",
+            "nullable": false
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "unq_txn",
+            "type": "unique",
+            "columns": [
+                {"column": "txn"}
+            ]
+        },
+        // MariaDB unikátní index povoluje víc NULL hodnot — code se plní
+        // až při approve.
+        {
+            "id": "unq_code",
+            "type": "unique",
+            "columns": [
+                {"column": "code"}
+            ]
+        },
+        {
+            "id": "idx_expires",
+            "type": "index",
+            "columns": [
+                {"column": "expires"}
+            ]
+        }
+    ]
+}

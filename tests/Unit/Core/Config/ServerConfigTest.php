@@ -424,4 +424,65 @@ class ServerConfigTest extends TestCase
 
         $config->getMailRelay();
     }
+
+    public function testGetHostingMissingReturnsNull(): void
+    {
+        $path = $this->createConfig([
+            'host'           => '127.0.0.1',
+            'port'           => 3306,
+            'admin_user'     => 'root',
+            'admin_password' => 'secret',
+            'mode'           => 'production',
+        ]);
+
+        $config = new ServerConfig($path);
+        $config->load();
+
+        $this->assertNull($config->getHosting());
+    }
+
+    public function testGetHostingConfigured(): void
+    {
+        $path = $this->createConfig([
+            'host'           => '127.0.0.1',
+            'port'           => 3306,
+            'admin_user'     => 'root',
+            'admin_password' => 'secret',
+            'mode'           => 'production',
+            'hosting'        => [
+                'url'      => 'https://portal.example.com/',
+                'serverId' => 3,
+                'apiKey'   => 'shpd_hk_' . str_repeat('a', 43),
+            ],
+        ]);
+
+        $config = new ServerConfig($path);
+        $config->load();
+        $hosting = $config->getHosting();
+
+        $this->assertNotNull($hosting);
+        $this->assertSame('https://portal.example.com', $hosting->url);
+        $this->assertSame(3, $hosting->serverId);
+        $this->assertStringStartsWith('shpd_hk_', $hosting->apiKey);
+    }
+
+    public function testGetHostingInvalidThrows(): void
+    {
+        $path = $this->createConfig([
+            'host'           => '127.0.0.1',
+            'port'           => 3306,
+            'admin_user'     => 'root',
+            'admin_password' => 'secret',
+            'mode'           => 'production',
+            'hosting'        => ['url' => 'https://portal.example.com', 'serverId' => 1, 'apiKey' => 'wrong-prefix'],
+        ]);
+
+        $config = new ServerConfig($path);
+        $config->load();
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/shpd_hk_/');
+
+        $config->getHosting();
+    }
 }

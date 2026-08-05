@@ -116,6 +116,9 @@ class HostingServerController
     /**
      * GET /_hosting/server/queue
      *
+     * ?peek=1 (dry-run agenta): frontu nepřeklápí na creating, nesplnitelné
+     * požadavky neoznačuje failed a payload neobsahuje client_secret.
+     *
      * @param array<string, \Shipard\Core\Database\TableDefinition> $tables
      */
     public function queue(Request $request, DataSourceConnection $db, array $tables): Response
@@ -159,9 +162,22 @@ class HostingServerController
             self::ACTIVE_DOC_STATES,
         );
 
+        $peek = (string) ($request->getQueryParams()['peek'] ?? '') === '1';
+
         $now = date('Y-m-d H:i:s');
         $requests = [];
         foreach ($rows as $row) {
+            if ($peek) {
+                $requests[] = [
+                    'request_id' => (int) $row['id'],
+                    'ds_id' => (string) $row['ds_id'],
+                    'name' => (string) $row['name'],
+                    'install_module' => (string) ($row['install_module'] ?? ''),
+                    'web_id' => (string) ($row['web_id'] ?? ''),
+                    'lifecycle' => (string) $row['lifecycle'],
+                ];
+                continue;
+            }
             $item = $this->buildQueueItem($db, $row, $issuer, $label);
             if ($item === null) {
                 continue;

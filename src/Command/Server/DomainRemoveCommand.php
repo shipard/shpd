@@ -65,6 +65,10 @@ class DomainRemoveCommand extends Command
 
 	protected function saveDomainsFile(string $path, array $map): void
 	{
-		file_put_contents($path, json_encode($map, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+		// Atomicky (tmp + rename) — soubor čte DataSourceResolver při každém
+		// HTTP requestu, roztržený zápis by položil živý provoz.
+		$tmp = $path . '.tmp';
+		file_put_contents($tmp, json_encode($map, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+		rename($tmp, $path);
 	}
 }

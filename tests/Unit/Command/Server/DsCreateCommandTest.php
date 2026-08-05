@@ -208,6 +208,41 @@ class DsCreateCommandTest extends TestCase
         $this->assertStringContainsString('install.base', $tester->getDisplay());
     }
 
+    public function testDsCreateWithExplicitDsId(): void
+    {
+        $tester = $this->createCommandTester();
+        $exitCode = $tester->execute(['--name' => 'Test', '--ds-id' => 'ab12-cd34-ef56-gh78']);
+
+        $this->assertSame(0, $exitCode);
+        $this->assertDirectoryExists($this->tempDir . '/ab12-cd34-ef56-gh78');
+        $config = json_decode(file_get_contents($this->tempDir . '/ab12-cd34-ef56-gh78/config/main.json'), true);
+        $this->assertSame('ab12-cd34-ef56-gh78', $config['id']);
+        $this->assertSame('ab12_cd34_ef56_gh78', $config['database_name']);
+    }
+
+    public function testDsCreateRejectsInvalidDsIdFormat(): void
+    {
+        $tester = $this->createCommandTester();
+
+        foreach (['short', 'ABCD-EFGH-IJKL-MNOP', 'ab12-cd34-ef56', 'ab12_cd34_ef56_gh78'] as $invalid) {
+            $exitCode = $tester->execute(['--name' => 'Test', '--ds-id' => $invalid]);
+            $this->assertSame(1, $exitCode, "ds-id '{$invalid}' should be rejected");
+            $this->assertStringContainsString('Invalid --ds-id', $tester->getDisplay());
+        }
+        $this->assertCount(0, glob($this->tempDir . '/*', GLOB_ONLYDIR));
+    }
+
+    public function testDsCreateRejectsExistingDsIdDirectory(): void
+    {
+        mkdir($this->tempDir . '/ab12-cd34-ef56-gh78', 0755, true);
+        $tester = $this->createCommandTester();
+
+        $exitCode = $tester->execute(['--name' => 'Test', '--ds-id' => 'ab12-cd34-ef56-gh78']);
+
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('already exists', $tester->getDisplay());
+    }
+
     public function testDsCreateGeneratesSecretsKey(): void
     {
         DsSecretCipher::resetCache();

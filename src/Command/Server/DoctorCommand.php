@@ -342,6 +342,7 @@ class DoctorCommand extends Command
         // slot => [max stáří v sekundách, true = error / false = warn]
         $limits = [
             'minute'       => [600, true],
+            'two-minutes'  => [900, true],
             'five-minutes' => [1200, true],
             'daily'        => [2 * 86400, false],
             'weekly'       => [14 * 86400, false],

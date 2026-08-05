@@ -28,7 +28,11 @@ class UserCreateCommand extends Command
              ->addOption('password', null, InputOption::VALUE_OPTIONAL, 'Password (omit to create the account without a local password — send an invitation instead)')
              ->addOption('name', null, InputOption::VALUE_REQUIRED, 'Full name')
              ->addOption('email', null, InputOption::VALUE_OPTIONAL, 'E-mail address')
-             ->addOption('admin', null, InputOption::VALUE_NONE, 'Grant administrator rights');
+             ->addOption('admin', null, InputOption::VALUE_NONE, 'Grant administrator rights')
+             ->addOption('if-not-exists', null, InputOption::VALUE_NONE, 'Existing login is not an error — reuse the account (idempotent provisioning)')
+             ->addOption('identity-issuer', null, InputOption::VALUE_REQUIRED, 'OIDC issuer for pre-linked identity (requires --identity-subject)')
+             ->addOption('identity-subject', null, InputOption::VALUE_REQUIRED, 'OIDC subject for pre-linked identity (requires --identity-issuer)')
+             ->addOption('identity-provider', null, InputOption::VALUE_REQUIRED, 'Provider id stored with the identity (default: oidc)', 'oidc');
     }
 
     protected function getDataSourceDir(): string
@@ -50,6 +54,9 @@ class UserCreateCommand extends Command
         $fullName = $input->getOption('name');
         $email = $input->getOption('email');
         $isAdmin = (bool) $input->getOption('admin');
+        $ifNotExists = (bool) $input->getOption('if-not-exists');
+        $identityIssuer = $input->getOption('identity-issuer');
+        $identitySubject = $input->getOption('identity-subject');
 
         if (empty($login)) {
             $output->writeln('<error>Error: Option --login is required</error>');
@@ -57,6 +64,10 @@ class UserCreateCommand extends Command
         }
         if (empty($fullName)) {
             $output->writeln('<error>Error: Option --name is required</error>');
+            return Command::FAILURE;
+        }
+        if (($identityIssuer === null) !== ($identitySubject === null)) {
+            $output->writeln('<error>Error: --identity-issuer and --identity-subject must be used together</error>');
             return Command::FAILURE;
         }
 
@@ -68,34 +79,104 @@ class UserCreateCommand extends Command
             $login,
         );
 
-        if ($existing !== null) {
+        if ($existing !== null && !$ifNotExists) {
             $output->writeln("<error>Error: User with login '{$login}' already exists.</error>");
             return Command::FAILURE;
         }
 
-        // Bez hesla = účet bez lokálního loginu (NULL hash) — heslo si
-        // uživatel nastaví přes pozvánku (POST /_users/{id}/invite).
-        $passwordHash = empty($password) ? null : password_hash($password, PASSWORD_DEFAULT);
+        if ($existing !== null) {
+            $id = (int) $existing['id'];
+            $output->writeln("User with login '{$login}' already exists (ID {$id}) — nothing to create.");
+        } else {
+            // Bez hesla = účet bez lokálního loginu (NULL hash) — heslo si
+            // uživatel nastaví přes pozvánku (POST /_users/{id}/invite).
+            $passwordHash = empty($password) ? null : password_hash($password, PASSWORD_DEFAULT);
 
-        $id = $dsConnection->insertRow('core_system_users', [
-            'login'         => $login,
-            'password_hash' => $passwordHash,
-            'full_name'     => $fullName,
-            'email'         => $email ?: null,
-            'is_active'     => 1,
-            'is_admin'      => $isAdmin ? 1 : 0,
-        ]);
+            $id = $dsConnection->insertRow('core_system_users', [
+                'login'         => $login,
+                'password_hash' => $passwordHash,
+                'full_name'     => $fullName,
+                'email'         => $email ?: null,
+                'is_active'     => 1,
+                'is_admin'      => $isAdmin ? 1 : 0,
+            ]);
 
-        $output->writeln('User created successfully.');
-        $output->writeln("  ID:    {$id}");
-        $output->writeln("  Login: {$login}");
-        $output->writeln("  Name:  {$fullName}");
-        $output->writeln('  Email: ' . ($email ?: '(none)'));
-        $output->writeln('  Admin: ' . ($isAdmin ? 'yes' : 'no'));
-        if ($passwordHash === null) {
-            $output->writeln('  Password: (none — send an invitation to let the user set one)');
+            $output->writeln('User created successfully.');
+            $output->writeln("  ID:    {$id}");
+            $output->writeln("  Login: {$login}");
+            $output->writeln("  Name:  {$fullName}");
+            $output->writeln('  Email: ' . ($email ?: '(none)'));
+            $output->writeln('  Admin: ' . ($isAdmin ? 'yes' : 'no'));
+            if ($passwordHash === null) {
+                $output->writeln('  Password: (none — send an invitation to let the user set one)');
+            }
+        }
+
+        if ($identityIssuer !== null && $identitySubject !== null) {
+            $linked = $this->ensureIdentity(
+                $dsConnection,
+                $output,
+                $id,
+                (string) $input->getOption('identity-provider'),
+                (string) $identityIssuer,
+                (string) $identitySubject,
+                is_string($email) && $email !== '' ? $email : null,
+            );
+            if (!$linked) {
+                return Command::FAILURE;
+            }
         }
 
         return Command::SUCCESS;
+    }
+
+    /**
+     * Předpropojení identity (U2): zajistí řádek core_system_user_identities
+     * (issuer, subject) → user. Existující vazba na téhož uživatele = no-op
+     * (idempotence agenta), na jiného uživatele = chyba.
+     */
+    private function ensureIdentity(
+        DataSourceConnection $dsConnection,
+        OutputInterface $output,
+        int $userId,
+        string $provider,
+        string $issuer,
+        string $subject,
+        ?string $email,
+    ): bool {
+        $issuer = rtrim($issuer, '/');
+
+        $existing = $dsConnection->fetchRow(
+            'SELECT id, user_id FROM core_system_user_identities WHERE issuer = %s AND subject = %s',
+            $issuer,
+            $subject,
+        );
+
+        if ($existing !== null) {
+            if ((int) $existing['user_id'] !== $userId) {
+                $output->writeln(
+                    "<error>Error: identity ({$issuer}, {$subject}) is already linked to user ID "
+                    . "{$existing['user_id']} — refusing to relink.</error>",
+                );
+                return false;
+            }
+            $output->writeln('Identity already linked — nothing to do.');
+            return true;
+        }
+
+        $dsConnection->insertRow('core_system_user_identities', [
+            'user_id'       => $userId,
+            'provider'      => $provider,
+            'issuer'        => $issuer,
+            'subject'       => $subject,
+            'email_at_link' => $email,
+            'created'       => date('Y-m-d H:i:s'),
+            'last_login'    => null,
+        ]);
+
+        $output->writeln('Identity linked:');
+        $output->writeln("  Issuer:  {$issuer}");
+        $output->writeln("  Subject: {$subject}");
+        return true;
     }
 }

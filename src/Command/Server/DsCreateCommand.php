@@ -36,6 +36,12 @@ class DsCreateCommand extends Command
                  InputOption::VALUE_REQUIRED,
                  'Install module id (e.g. install.base)',
                  'install.base',
+             )
+             ->addOption(
+                 'ds-id',
+                 null,
+                 InputOption::VALUE_REQUIRED,
+                 'Explicit data source ID (xxxx-xxxx-xxxx-xxxx) — used by the hosting provisioning agent',
              );
     }
 
@@ -94,10 +100,24 @@ class DsCreateCommand extends Command
             return Command::FAILURE;
         }
 
-        // Generate unique ID
-        $generator = new IdGenerator();
+        // Explicit ID from the hosting agent (D3), otherwise generate one.
         $dataSourcesDir = $this->getDataSourcesDir();
-        $id = $generator->generate($dataSourcesDir);
+        $dsIdOption = $input->getOption('ds-id');
+        if ($dsIdOption !== null && $dsIdOption !== '') {
+            $id = (string) $dsIdOption;
+            if (!preg_match(IdGenerator::ID_PATTERN, $id)) {
+                $output->writeln('<error>Invalid --ds-id: ' . $id . '</error>');
+                $output->writeln('<comment>Must match pattern: xxxx-xxxx-xxxx-xxxx (a-z0-9)</comment>');
+                return Command::FAILURE;
+            }
+            if (is_dir($dataSourcesDir . '/' . $id)) {
+                $output->writeln('<error>Data source directory already exists: ' . $id . '</error>');
+                return Command::FAILURE;
+            }
+        } else {
+            $generator = new IdGenerator();
+            $id = $generator->generate($dataSourcesDir);
+        }
 
         $dbName = IdGenerator::toDatabaseName($id);
         $dbUser = IdGenerator::toDatabaseUser($id);

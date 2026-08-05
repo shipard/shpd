@@ -859,6 +859,7 @@ class DoctorCommandTest extends TestCase
         [$command, $output] = $this->makeCronChecker();
         $this->writeCurrentCronFile($command);
         $this->writeHeartbeat($command, 'minute', 30);
+        $this->writeHeartbeat($command, 'two-minutes', 60);
         $this->writeHeartbeat($command, 'five-minutes', 200);
         $this->writeHeartbeat($command, 'daily', 3600);
         $this->writeHeartbeat($command, 'weekly', 86400);
@@ -879,6 +880,7 @@ class DoctorCommandTest extends TestCase
         file_put_contents($command->fakeCronFilePath, "# hand-written, template version 0\n");
         touch($command->fakeCronFilePath, time() - 3600);
         $this->writeHeartbeat($command, 'minute', 30);
+        $this->writeHeartbeat($command, 'two-minutes', 30);
         $this->writeHeartbeat($command, 'five-minutes', 30);
         $this->writeHeartbeat($command, 'daily', 30);
         $this->writeHeartbeat($command, 'weekly', 30);
@@ -894,6 +896,7 @@ class DoctorCommandTest extends TestCase
         [$command, $output] = $this->makeCronChecker();
         $this->writeCurrentCronFile($command);
         $this->writeHeartbeat($command, 'minute', 1800);
+        $this->writeHeartbeat($command, 'two-minutes', 30);
         $this->writeHeartbeat($command, 'five-minutes', 30);
         $this->writeHeartbeat($command, 'daily', 30);
         $this->writeHeartbeat($command, 'weekly', 30);
@@ -911,6 +914,7 @@ class DoctorCommandTest extends TestCase
         [$command, $output] = $this->makeCronChecker();
         $this->writeCurrentCronFile($command);
         $this->writeHeartbeat($command, 'minute', 30);
+        $this->writeHeartbeat($command, 'two-minutes', 30);
         $this->writeHeartbeat($command, 'five-minutes', 30);
         $this->writeHeartbeat($command, 'daily', 30);
         $this->writeHeartbeat($command, 'weekly', 20 * 86400);
@@ -937,6 +941,7 @@ class DoctorCommandTest extends TestCase
     {
         [$command, $output] = $this->makeCronChecker();
         $this->writeCurrentCronFile($command, mtimeAge: 7200);
+        $this->writeHeartbeat($command, 'two-minutes', 30);
         $this->writeHeartbeat($command, 'five-minutes', 30);
 
         $errors = $command->checkCronPublic($output, 'production');
@@ -954,6 +959,7 @@ class DoctorCommandTest extends TestCase
         [$command, $output] = $this->makeCronChecker();
         $this->writeCurrentCronFile($command);
         $this->writeHeartbeat($command, 'minute', 30, failedCount: 2);
+        $this->writeHeartbeat($command, 'two-minutes', 30);
         $this->writeHeartbeat($command, 'five-minutes', 30);
         $this->writeHeartbeat($command, 'daily', 30);
         $this->writeHeartbeat($command, 'weekly', 30);

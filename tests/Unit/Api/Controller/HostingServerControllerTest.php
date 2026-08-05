@@ -188,6 +188,29 @@ class HostingServerControllerTest extends TestCase
         $this->assertSame('creating', $this->db->dataSources[$reqId]['lifecycle']);
     }
 
+    public function testQueuePeekDoesNotClaimAndOmitsSecret(): void
+    {
+        $reqId = $this->addRequest(['server' => $this->serverId]);
+
+        $resp = $this->controller->queue(
+            Request::fromArray('GET', '/api/v1/_hosting/server/queue', ['peek' => '1'], '', [
+                'HTTP_HOST' => '127.0.0.1',
+                'HTTP_AUTHORIZATION' => 'Bearer ' . $this->token,
+            ]),
+            $this->db,
+            $this->tables(),
+        );
+
+        $requests = $resp->getPayload()['data']['requests'];
+        $this->assertCount(1, $requests);
+        $this->assertArrayNotHasKey('oidc', $requests[0]);
+        $this->assertArrayNotHasKey('owner', $requests[0]);
+        $this->assertSame('bbbb-bbbb-bbbb-bbbb', $requests[0]['ds_id']);
+        // Peek frontu nepřeklápí.
+        $this->assertSame('request', $this->db->dataSources[$reqId]['lifecycle']);
+        $this->assertNull($this->db->dataSources[$reqId]['claimed_at']);
+    }
+
     public function testQueueEmptyWithoutCanProvision(): void
     {
         $this->db->servers[$this->serverId]['can_provision'] = 0;

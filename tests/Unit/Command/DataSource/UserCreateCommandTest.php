@@ -187,6 +187,154 @@ class UserCreateCommandTest extends TestCase
         $this->assertTrue(password_verify('plaintext_password', $capturedData['password_hash']));
     }
 
+    // -------------------------------------------------------------------------
+    // --if-not-exists + identity options (D3 provisioning agent)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Mock DB: login lookup + identity lookup dle SQL podřetězce, inserty
+     * se zachytávají per tabulka.
+     *
+     * @param array<string, mixed>|null $existingUser řádek pro login lookup
+     * @param array<string, mixed>|null $existingIdentity řádek pro (issuer, subject) lookup
+     * @param array<string, list<array<string, mixed>>> $inserts referenční zásobník insertů
+     */
+    private function mockDb(?array $existingUser, ?array $existingIdentity, array &$inserts): void
+    {
+        $this->dsConnection->method('fetchRow')->willReturnCallback(
+            function (mixed ...$args) use ($existingUser, $existingIdentity): ?array {
+                $sql = (string) $args[0];
+                if (str_contains($sql, 'core_system_user_identities')) {
+                    return $existingIdentity;
+                }
+                return $existingUser;
+            },
+        );
+        $this->dsConnection->method('insertRow')->willReturnCallback(
+            function (string $table, array $data) use (&$inserts): int {
+                $inserts[$table][] = $data;
+                return $table === 'core_system_users' ? 42 : 100;
+            },
+        );
+    }
+
+    public function testIfNotExistsWithExistingLoginSucceedsWithoutInsert(): void
+    {
+        $inserts = [];
+        $this->mockDb(['id' => 5], null, $inserts);
+
+        $tester = $this->createCommandTester();
+        $exitCode = $tester->execute([
+            '--login' => 'admin',
+            '--name'  => 'Admin',
+            '--if-not-exists' => true,
+        ]);
+
+        $this->assertSame(Command::SUCCESS, $exitCode);
+        $this->assertSame([], $inserts);
+        $this->assertStringContainsString('already exists (ID 5) — nothing to create', $tester->getDisplay());
+    }
+
+    public function testIdentityOptionsRequireEachOther(): void
+    {
+        $tester = $this->createCommandTester();
+        $exitCode = $tester->execute([
+            '--login' => 'admin',
+            '--name'  => 'Admin',
+            '--identity-issuer' => 'https://portal.example.com',
+        ]);
+
+        $this->assertSame(Command::FAILURE, $exitCode);
+        $this->assertStringContainsString('must be used together', $tester->getDisplay());
+    }
+
+    public function testNewUserWithIdentityCreatesBothRows(): void
+    {
+        $inserts = [];
+        $this->mockDb(null, null, $inserts);
+
+        $tester = $this->createCommandTester();
+        $exitCode = $tester->execute([
+            '--login' => 'owner@example.com',
+            '--email' => 'owner@example.com',
+            '--name'  => 'Owner',
+            '--admin' => true,
+            '--identity-provider' => 'shipard-id',
+            '--identity-issuer'   => 'https://portal.example.com/api/v1/_hosting/oidc/',
+            '--identity-subject'  => '7',
+        ]);
+
+        $this->assertSame(Command::SUCCESS, $exitCode);
+        $this->assertCount(1, $inserts['core_system_users']);
+        $this->assertSame(1, $inserts['core_system_users'][0]['is_admin']);
+
+        $identity = $inserts['core_system_user_identities'][0];
+        $this->assertSame(42, $identity['user_id']);
+        $this->assertSame('shipard-id', $identity['provider']);
+        // Issuer se kanonizuje bez trailing slash — stejně jako RP config.
+        $this->assertSame('https://portal.example.com/api/v1/_hosting/oidc', $identity['issuer']);
+        $this->assertSame('7', $identity['subject']);
+        $this->assertSame('owner@example.com', $identity['email_at_link']);
+        $this->assertStringContainsString('Identity linked', $tester->getDisplay());
+    }
+
+    public function testExistingUserWithIfNotExistsGetsIdentityLinked(): void
+    {
+        $inserts = [];
+        $this->mockDb(['id' => 5], null, $inserts);
+
+        $tester = $this->createCommandTester();
+        $exitCode = $tester->execute([
+            '--login' => 'owner@example.com',
+            '--name'  => 'Owner',
+            '--if-not-exists' => true,
+            '--identity-issuer'  => 'https://portal.example.com',
+            '--identity-subject' => '7',
+        ]);
+
+        $this->assertSame(Command::SUCCESS, $exitCode);
+        $this->assertArrayNotHasKey('core_system_users', $inserts);
+        $this->assertSame(5, $inserts['core_system_user_identities'][0]['user_id']);
+    }
+
+    public function testExistingIdentityForSameUserIsNoOp(): void
+    {
+        $inserts = [];
+        $this->mockDb(['id' => 5], ['id' => 9, 'user_id' => 5], $inserts);
+
+        $tester = $this->createCommandTester();
+        $exitCode = $tester->execute([
+            '--login' => 'owner@example.com',
+            '--name'  => 'Owner',
+            '--if-not-exists' => true,
+            '--identity-issuer'  => 'https://portal.example.com',
+            '--identity-subject' => '7',
+        ]);
+
+        $this->assertSame(Command::SUCCESS, $exitCode);
+        $this->assertSame([], $inserts);
+        $this->assertStringContainsString('Identity already linked', $tester->getDisplay());
+    }
+
+    public function testExistingIdentityForDifferentUserFails(): void
+    {
+        $inserts = [];
+        $this->mockDb(['id' => 5], ['id' => 9, 'user_id' => 6], $inserts);
+
+        $tester = $this->createCommandTester();
+        $exitCode = $tester->execute([
+            '--login' => 'owner@example.com',
+            '--name'  => 'Owner',
+            '--if-not-exists' => true,
+            '--identity-issuer'  => 'https://portal.example.com',
+            '--identity-subject' => '7',
+        ]);
+
+        $this->assertSame(Command::FAILURE, $exitCode);
+        $this->assertSame([], $inserts);
+        $this->assertStringContainsString('already linked to user ID 6', $tester->getDisplay());
+    }
+
     private function rmdirRecursive(string $dir): void
     {
         if (!is_dir($dir)) {

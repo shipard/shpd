@@ -57,6 +57,12 @@ class DomainAddCommand extends Command
 		$map = $this->loadDomainsFile($domainsFile);
 
 		if (isset($map[$host])) {
+			// Idempotence (D3): stejný host → stejný DS je no-op, agent
+			// hosting-sync smí krok bezpečně opakovat. Jiný DS zůstává chybou.
+			if ($map[$host] === $dsId) {
+				$output->writeln("<info>Already mapped:</info> <comment>{$host}</comment> → <comment>{$dsId}</comment>");
+				return Command::SUCCESS;
+			}
 			$output->writeln("<error>Host '{$host}' is already mapped to data source '{$map[$host]}'</error>");
 			return Command::FAILURE;
 		}
@@ -92,6 +98,10 @@ class DomainAddCommand extends Command
 			mkdir($dir, 0755, true);
 		}
 
-		file_put_contents($path, json_encode($map, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+		// Atomicky (tmp + rename) — soubor čte DataSourceResolver při každém
+		// HTTP requestu, roztržený zápis by položil živý provoz.
+		$tmp = $path . '.tmp';
+		file_put_contents($tmp, json_encode($map, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+		rename($tmp, $path);
 	}
 }

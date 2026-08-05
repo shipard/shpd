@@ -145,16 +145,32 @@ class DomainCommandsTest extends TestCase
 		$this->assertSame('eeee-ffff-0000-1111', $map['b.shipard.cz']);
 	}
 
-	public function testAddDuplicateHostFails(): void
+	public function testAddSameHostSameDsIsIdempotentNoOp(): void
 	{
+		// D3: agent hosting-sync smí domain-add bezpečně opakovat.
 		$this->createDs('a3f2-b8c1-d4e7-f9a0', 'Firma 1');
 		$tester = $this->addTester();
 		$tester->execute(['--host' => 'firma1.shipard.cz', '--ds' => 'a3f2-b8c1-d4e7-f9a0']);
 
 		$code = $tester->execute(['--host' => 'firma1.shipard.cz', '--ds' => 'a3f2-b8c1-d4e7-f9a0']);
 
+		$this->assertSame(0, $code);
+		$this->assertStringContainsString('Already mapped', $tester->getDisplay());
+		$this->assertCount(1, $this->loadDomains());
+	}
+
+	public function testAddDuplicateHostDifferentDsFails(): void
+	{
+		$this->createDs('a3f2-b8c1-d4e7-f9a0', 'Firma 1');
+		$this->createDs('eeee-ffff-0000-1111', 'Firma 2');
+		$tester = $this->addTester();
+		$tester->execute(['--host' => 'firma1.shipard.cz', '--ds' => 'a3f2-b8c1-d4e7-f9a0']);
+
+		$code = $tester->execute(['--host' => 'firma1.shipard.cz', '--ds' => 'eeee-ffff-0000-1111']);
+
 		$this->assertSame(1, $code);
 		$this->assertStringContainsString('already mapped', $tester->getDisplay());
+		$this->assertSame('a3f2-b8c1-d4e7-f9a0', $this->loadDomains()['firma1.shipard.cz']);
 	}
 
 	public function testAddNonexistentDsFails(): void

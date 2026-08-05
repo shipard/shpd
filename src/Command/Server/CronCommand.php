@@ -15,8 +15,9 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 /**
  * Dispatcher periodických úloh — volá ho /etc/cron.d/shipard. Pro každý
- * aktivní data source spustí per-DS příkazy slotu subprocesem (shpd-ds),
- * s lockem proti překryvu běhů a heartbeat souborem pro doctor.
+ * aktivní data source spustí per-DS příkazy slotu subprocesem (shpd-ds);
+ * server-level příkazy slotu (SERVER_SLOT_JOBS, shpd-server) běží jednou
+ * za běh. Lock proti překryvu běhů a heartbeat soubor pro doctor.
  *
  * Exit kód: SUCCESS i při selhaných jobech (reportuje doctor/alerty),
  * FAILURE jen infra chyba (neznámý slot, nečitelný seznam DS, heartbeat
@@ -27,9 +28,15 @@ class CronCommand extends Command
     /** slot → per-DS shpd-ds příkazy; deklarativní registr v module.jsonc až bude jobů víc */
     public const SLOT_JOBS = [
         'minute'       => ['mail-outbox-run'],
+        'two-minutes'  => [],
         'five-minutes' => ['alerts-run'],
         'daily'        => ['mail-idempotency-prune'],
         'weekly'       => ['alerts-prune'],
+    ];
+
+    /** slot → server-level shpd-server příkazy — jednou za běh slotu, ne per DS */
+    public const SERVER_SLOT_JOBS = [
+        'two-minutes' => ['hosting-sync'],
     ];
 
     private const JOB_TIMEOUT_SECONDS = 600;
@@ -52,6 +59,11 @@ class CronCommand extends Command
     protected function getShpdDsPath(): string
     {
         return dirname(__DIR__, 3) . '/bin/shpd-ds';
+    }
+
+    protected function getShpdServerPath(): string
+    {
+        return dirname(__DIR__, 3) . '/bin/shpd-server';
     }
 
     protected function getRunDir(): string
@@ -126,14 +138,38 @@ class CronCommand extends Command
         ));
 
         $jobs = self::SLOT_JOBS[$slot];
+        $serverJobs = self::SERVER_SLOT_JOBS[$slot] ?? [];
         ErrorLogger::info('cron slot started', [
             'slot' => $slot,
             'dsCount' => count($candidates),
             'jobs' => $jobs,
+            'serverJobs' => $serverJobs,
         ]);
 
         $jobsRun = 0;
         $failures = [];
+
+        // Server-level joby (shpd-server) — jednou za běh slotu, ne per DS.
+        foreach ($serverJobs as $job) {
+            $result = $this->runServerJob($job);
+            $jobsRun++;
+            if ($result['exitCode'] !== 0 || $result['timedOut']) {
+                $failures[] = [
+                    'ds' => '(server)',
+                    'job' => $job,
+                    'exitCode' => $result['exitCode'],
+                    'timedOut' => $result['timedOut'],
+                ];
+                ErrorLogger::error('cron server job failed', [
+                    'slot' => $slot,
+                    'job' => $job,
+                    'exitCode' => $result['exitCode'],
+                    'timedOut' => $result['timedOut'],
+                    'outputTail' => $result['output'],
+                ]);
+            }
+        }
+
         foreach ($candidates as $d) {
             $id = basename($d);
             // DS mohl zmizet během běhu (ds-delete) — přeskočit, ne selhat.
@@ -219,12 +255,31 @@ class CronCommand extends Command
      */
     protected function runJob(string $dsDir, string $job): array
     {
+        return $this->runProcessJob([$this->getShpdDsPath(), $job], $dsDir);
+    }
+
+    /**
+     * Spustí server-level `shpd-server <job>` — jednou za běh slotu.
+     *
+     * @return array{exitCode: int, timedOut: bool, output: string}
+     */
+    protected function runServerJob(string $job): array
+    {
+        return $this->runProcessJob([$this->getShpdServerPath(), $job], null);
+    }
+
+    /**
+     * @param list<string> $argv
+     * @return array{exitCode: int, timedOut: bool, output: string}
+     */
+    private function runProcessJob(array $argv, ?string $cwd): array
+    {
         $descriptors = [
             0 => ['file', '/dev/null', 'r'],
             1 => ['pipe', 'w'],
             2 => ['pipe', 'w'],
         ];
-        $process = @proc_open([$this->getShpdDsPath(), $job], $descriptors, $pipes, $dsDir);
+        $process = @proc_open($argv, $descriptors, $pipes, $cwd);
         if (!is_resource($process)) {
             return ['exitCode' => -1, 'timedOut' => false, 'output' => 'proc_open failed'];
         }

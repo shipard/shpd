@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Shipard\Core\Config;
 
 use Shipard\Core\Mail\MailRelayConfig;
+use Shipard\Core\Server\HostingConfig;
 
 class ServerConfig
 {
@@ -148,5 +149,22 @@ class ServerConfig
             throw new \RuntimeException("Server config 'mail.relay' must be an object");
         }
         return MailRelayConfig::fromArray($relay);
+    }
+
+    /**
+     * Napojení na hosting (D3) — volitelná sekce `hosting`. Null = server
+     * není spravovaný hostingem; validace až při použití, chybějící sekce
+     * nesmí rozbít ostatní commandy.
+     */
+    public function getHosting(): ?HostingConfig
+    {
+        $hosting = $this->data['hosting'] ?? null;
+        if ($hosting === null) {
+            return null;
+        }
+        if (!is_array($hosting)) {
+            throw new \RuntimeException("Server config 'hosting' must be an object");
+        }
+        return HostingConfig::fromArray($hosting);
     }
 }

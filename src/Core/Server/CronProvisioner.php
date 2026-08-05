@@ -11,16 +11,17 @@ namespace Shipard\Core\Server;
  */
 final class CronProvisioner
 {
-    public const TEMPLATE_VERSION = 1;
+    public const TEMPLATE_VERSION = 2;
     public const CRON_FILE = '/etc/cron.d/shipard';
     public const RUN_DIR = '/opt/shipard/run';
     public const CRON_LOG = '/opt/shipard/log/cron.log';
 
-    public const SLOTS = ['minute', 'five-minutes', 'daily', 'weekly'];
+    public const SLOTS = ['minute', 'two-minutes', 'five-minutes', 'daily', 'weekly'];
 
     /** slot → cron časový předpis; daily/weekly mimo celé hodiny */
     private const SCHEDULE = [
         'minute'       => '* * * * *',
+        'two-minutes'  => '*/2 * * * *',
         'five-minutes' => '*/5 * * * *',
         'daily'        => '17 3 * * *',
         'weekly'       => '43 4 * * 0',

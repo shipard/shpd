@@ -54,6 +54,13 @@ class TestableCronCommand extends CronCommand
         return $this->jobResults[$id . ' ' . $job]
             ?? ['exitCode' => 0, 'timedOut' => false, 'output' => ''];
     }
+
+    protected function runServerJob(string $job): array
+    {
+        $this->callLog[] = ['ds' => '(server)', 'job' => $job];
+        return $this->jobResults['(server) ' . $job]
+            ?? ['exitCode' => 0, 'timedOut' => false, 'output' => ''];
+    }
 }
 
 /** Timeout test potřebuje reálný runJob s podvrženou binárkou a krátkým limitem. */
@@ -130,6 +137,38 @@ class CronCommandTest extends TestCase
         return $data;
     }
 
+    public function testTwoMinutesSlotRunsServerJobOncePerRun(): void
+    {
+        // Server-level job (hosting-sync) běží jednou za slot, ne per DS.
+        $this->createDs('aaaa-bbbb-cccc-dddd');
+        $this->createDs('eeee-ffff-0000-1111');
+        [$cmd, $tester] = $this->makeTester();
+
+        $exit = $tester->execute(['--slot' => 'two-minutes']);
+
+        $this->assertSame(0, $exit);
+        $this->assertSame([['ds' => '(server)', 'job' => 'hosting-sync']], $cmd->callLog);
+
+        $hb = $this->readHeartbeat('two-minutes');
+        $this->assertSame(1, $hb['jobsRun']);
+        $this->assertSame(0, $hb['failedCount']);
+    }
+
+    public function testFailedServerJobIsReportedInHeartbeat(): void
+    {
+        [$cmd, $tester] = $this->makeTester();
+        $cmd->setJobResults(['(server) hosting-sync' => ['exitCode' => 1, 'timedOut' => false, 'output' => 'boom']]);
+
+        $exit = $tester->execute(['--slot' => 'two-minutes']);
+
+        // Selhání jobu není infra chyba — exit SUCCESS, reportuje doctor.
+        $this->assertSame(0, $exit);
+        $hb = $this->readHeartbeat('two-minutes');
+        $this->assertSame(1, $hb['failedCount']);
+        $this->assertSame('(server)', $hb['failures'][0]['ds']);
+        $this->assertSame('hosting-sync', $hb['failures'][0]['job']);
+    }
+
     public function testMissingSlotFailsWithoutHeartbeat(): void
     {
         [, $tester] = $this->makeTester();
@@ -148,7 +187,7 @@ class CronCommandTest extends TestCase
         $exit = $tester->execute(['--slot' => 'hourly']);
 
         $this->assertSame(1, $exit);
-        $this->assertStringContainsString('minute, five-minutes, daily, weekly', $tester->getDisplay());
+        $this->assertStringContainsString('minute, two-minutes, five-minutes, daily, weekly', $tester->getDisplay());
     }
 
     public function testEmptyDsListSucceedsAndWritesHeartbeat(): void

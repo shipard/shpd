@@ -57,8 +57,10 @@ je v [TESTERS.md](../TESTERS.md).
 - **Nedá se to nastavit „na dodavatele".** Zvyklosti se sice zohledňují
   z tvé dosavadní historie, ale nemáš žádnou obrazovku, kde bys pravidla
   pro konkrétního dodavatele zadal ručně.
-- **Vytěžení se nedá spustit znovu na vlastní žádost** — analýza běží
-  automaticky po doručení zprávy.
+- **Analýzu nespustíš, kdy se ti zachce.** První běží automaticky po
+  doručení zprávy; ručně jde jen **Znovu analyzovat** u zprávy, která už
+  je analyzovaná nebo u které analýza selhala. Zprávu v Archivu nebo
+  v koši znovu analyzovat nelze.
 
 Když dodavatel přiloží fakturu ve formátu **ISDOC**, AI se nepoužije vůbec
 a data se převezmou přímo — je to přesnější. Vyplatí se o ISDOC dodavatele
@@ -82,6 +84,9 @@ požádat.
 - **Datový zdroj se nedá smazat z rozhraní.** Napiš na podporu.
 - **Převod dat ze starého Shipardu neděláš sám.** Import existuje, ale
   spouštíme ho my a s tebou pak porovnáme kontrolní součty.
+- **Adresu pro příjem pošty v aplikaci neuvidíš.** Přijde ti e-mailem
+  s přístupy; když se ztratí, pošleme ji znovu. Zobrazení v aplikaci se
+  chystá.
 - **Uživatele a přístupy zakládáme ručně.** Viz [TESTERS.md](../TESTERS.md).
 
 ---

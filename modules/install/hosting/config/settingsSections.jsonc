@@ -1,0 +1,38 @@
+{
+    // Sekce Nastavení pro dedikovaný hosting DS (D11) — osekaná kopie
+    // install.base: jen app + other (hosting evidence žije v other.hosting).
+    "sections": [
+        {
+            "id": "app",
+            "name": "Application",
+            "name:cs": "Aplikace",
+            "name:en": "Application",
+            "icon": "settings",
+            "order": 1
+        },
+        {
+            "id": "other",
+            "name": "Other",
+            "name:cs": "Ostatní",
+            "name:en": "Other",
+            "icon": "dots",
+            "order": 100,
+            "subsections": [
+                {
+                    "id": "other.system",
+                    "name": "System",
+                    "name:cs": "Systém",
+                    "name:en": "System",
+                    "order": 10
+                },
+                {
+                    "id": "other.hosting",
+                    "name": "Hosting",
+                    "name:cs": "Hosting",
+                    "name:en": "Hosting",
+                    "order": 20
+                }
+            ]
+        }
+    ]
+}

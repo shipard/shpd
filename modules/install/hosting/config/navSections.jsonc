@@ -1,0 +1,15 @@
+{
+    // Sekce hlavního sidebaru pro hosting DS — minimum: hosting evidence
+    // je v Nastavení (settingsItems), v hlavní navigaci zbývá jen system
+    // fallback pro případné viewery bez navSection.
+    "sections": [
+        {
+            "id": "system",
+            "name": "System",
+            "name:cs": "Systém",
+            "name:en": "System",
+            "icon": "settings",
+            "order": 50
+        }
+    ]
+}

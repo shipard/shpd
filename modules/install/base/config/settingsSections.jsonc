@@ -81,6 +81,13 @@
                     "name:cs": "Spisovna",
                     "name:en": "Registry",
                     "order": 60
+                },
+                {
+                    "id": "other.hosting",
+                    "name": "Hosting",
+                    "name:cs": "Hosting",
+                    "name:en": "Hosting",
+                    "order": 70
                 }
             ]
         }

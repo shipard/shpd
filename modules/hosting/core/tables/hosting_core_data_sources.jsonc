@@ -1,0 +1,193 @@
+{
+    "tableId": 431,
+    "name": "Hosting data sources",
+    "name:cs": "Hosting — zdroje dat",
+    "name:en": "Hosting data sources",
+
+    "adminOnly": true,
+
+    "displayPattern": "{name}",
+
+    "docStates": {
+        "stateColumn": "docState",
+        "mainColumn": "docStateMain",
+        "cfgItem": "core.system.docStatesArchive"
+    },
+
+    "columnGroups": [
+        {
+            "id": "identity",
+            "name": "Identity",
+            "name:cs": "Identifikace",
+            "name:en": "Identity"
+        },
+        {
+            "id": "placement",
+            "name": "Placement",
+            "name:cs": "Umístění",
+            "name:en": "Placement"
+        },
+        {
+            "id": "status",
+            "name": "Status",
+            "name:cs": "Stav",
+            "name:en": "Status"
+        }
+    ],
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+
+        // --- identity ---
+
+        {
+            "id": "ds_id",
+            "name": "Data source ID",
+            "name:cs": "ID zdroje dat",
+            "name:en": "Data source ID",
+            "type": "varchar",
+            "length": 19,
+            "nullable": false,
+            "group": "identity"
+        },
+        {
+            "id": "name",
+            "name": "Name",
+            "name:cs": "Název",
+            "name:en": "Name",
+            "type": "varchar",
+            "length": 200,
+            "nullable": false,
+            "group": "identity"
+        },
+        {
+            "id": "web_id",
+            "name": "Web ID",
+            "name:cs": "Web ID",
+            "name:en": "Web ID",
+            "type": "varchar",
+            "length": 50,
+            "nullable": true,
+            "group": "identity"
+        },
+
+        // --- placement ---
+
+        {
+            "id": "server",
+            "name": "Server",
+            "name:cs": "Server",
+            "name:en": "Server",
+            "type": "int",
+            "nullable": true,
+            "reference": "hosting_core_servers",
+            "group": "placement"
+        },
+        {
+            "id": "url_app",
+            "name": "Application URL",
+            "name:cs": "URL aplikace",
+            "name:en": "Application URL",
+            "type": "varchar",
+            "length": 200,
+            "nullable": false,
+            "group": "placement"
+        },
+        {
+            "id": "install_module",
+            "name": "Install module",
+            "name:cs": "Install modul",
+            "name:en": "Install module",
+            "type": "varchar",
+            "length": 50,
+            "nullable": true,
+            "group": "placement"
+        },
+        {
+            "id": "lifecycle",
+            "name": "Lifecycle",
+            "name:cs": "Lifecycle",
+            "name:en": "Lifecycle",
+            "type": "enumString",
+            "length": 10,
+            "cfgItem": "hosting.core.dsLifecycle",
+            "nullable": false,
+            "default": "active",
+            "group": "placement"
+        },
+
+        // --- audit ---
+
+        {
+            "id": "created",
+            "name": "Created",
+            "name:cs": "Vytvořeno",
+            "name:en": "Created",
+            "type": "datetime",
+            "nullable": false,
+            "group": "status"
+        },
+        {
+            "id": "modified",
+            "name": "Modified",
+            "name:cs": "Změněno",
+            "name:en": "Modified",
+            "type": "datetime",
+            "nullable": false,
+            "group": "status"
+        },
+
+        // --- doc state (systémové) ---
+
+        {
+            "id": "docState",
+            "name": "Document state",
+            "name:cs": "Stav dokumentu",
+            "name:en": "Document state",
+            "type": "tinyint",
+            "default": 40,
+            "system": true
+        },
+        {
+            "id": "docStateMain",
+            "name": "Document state (sort)",
+            "name:cs": "Stav dokumentu (řazení)",
+            "name:en": "Document state (sort)",
+            "type": "tinyint",
+            "default": 3,
+            "system": true
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "unq_ds_id",
+            "type": "unique",
+            "columns": [
+                {"column": "ds_id"}
+            ]
+        },
+        // MariaDB unikátní index povoluje víc NULL hodnot — nullable unique
+        // na web_id tedy funguje bez partial indexu.
+        {
+            "id": "unq_web_id",
+            "type": "unique",
+            "columns": [
+                {"column": "web_id"}
+            ]
+        },
+        {
+            "id": "idx_lifecycle",
+            "type": "index",
+            "columns": [
+                {"column": "lifecycle"}
+            ]
+        }
+    ]
+}

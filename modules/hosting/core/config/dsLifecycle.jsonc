@@ -1,0 +1,12 @@
+{
+    // hosting.core.dsLifecycle
+    //
+    // Lifecycle stavy pro `enumString` sloupec `hosting_core_data_sources.lifecycle`.
+    // Fáze 0 používá jen `active` — zbytek je připravený pro provisioning
+    // frontu Fáze 2 (request = starý docState 1100, creating = inProgress).
+
+    "request":   {"name": "Requested",  "name:cs": "Požadavek",    "name:en": "Requested"},
+    "creating":  {"name": "Creating",   "name:cs": "Zakládá se",   "name:en": "Creating"},
+    "active":    {"name": "Active",     "name:cs": "Aktivní",      "name:en": "Active"},
+    "suspended": {"name": "Suspended",  "name:cs": "Pozastavený",  "name:en": "Suspended"}
+}

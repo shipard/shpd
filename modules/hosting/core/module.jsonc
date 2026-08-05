@@ -1,0 +1,81 @@
+{
+    "id": "hosting.core",
+    "name": "Hosting",
+    "name:cs": "Hosting",
+    "name:en": "Hosting",
+    "description": "Central management of Shipard data sources — servers, data sources, user↔DS links, portal for users",
+    "description:cs": "Centrální správa zdrojů dat Shipard — servery, zdroje dat, vazby uživatel↔DS, portál pro uživatele",
+    "description:en": "Central management of Shipard data sources — servers, data sources, user↔DS links, portal for users",
+
+    "dependencies": [
+        "core.system"
+    ],
+
+    "tables": [
+        "hosting_core_servers",
+        "hosting_core_data_sources",
+        "hosting_core_ds_users"
+    ],
+
+    "settingsItems": [
+        { "viewer": "hosting.core.servers",     "section": "other", "subsection": "other.hosting", "order": 10 },
+        { "viewer": "hosting.core.dataSources", "section": "other", "subsection": "other.hosting", "order": 20 },
+        { "viewer": "hosting.core.dsUsers",     "section": "other", "subsection": "other.hosting", "order": 30 }
+    ],
+
+    "viewers": [
+        {
+            "id": "hosting.core.servers",
+            "name": "Servers",
+            "name:cs": "Servery",
+            "name:en": "Servers",
+            "icon": "server",
+            "table": "hosting_core_servers",
+            "class": "Shipard\\Module\\Hosting\\Core\\ServersViewer"
+        },
+        {
+            "id": "hosting.core.dataSources",
+            "name": "Data sources",
+            "name:cs": "Zdroje dat",
+            "name:en": "Data sources",
+            "icon": "database",
+            "table": "hosting_core_data_sources",
+            "class": "Shipard\\Module\\Hosting\\Core\\DataSourcesViewer"
+        },
+        {
+            "id": "hosting.core.dsUsers",
+            "name": "Data source users",
+            "name:cs": "Uživatelé zdrojů dat",
+            "name:en": "Data source users",
+            "icon": "users",
+            "table": "hosting_core_ds_users",
+            "class": "Shipard\\Module\\Hosting\\Core\\DsUsersViewer"
+        }
+    ],
+
+    "forms": [
+        {
+            "table": "hosting_core_servers",
+            "class": "Shipard\\Module\\Hosting\\Core\\ServersForm"
+        },
+        {
+            "table": "hosting_core_data_sources",
+            "class": "Shipard\\Module\\Hosting\\Core\\DataSourcesForm"
+        },
+        {
+            "table": "hosting_core_ds_users",
+            "class": "Shipard\\Module\\Hosting\\Core\\DsUsersForm"
+        }
+    ],
+
+    "config": [
+        {
+            "id": "hosting.core.dsLifecycle",
+            "file": "config/dsLifecycle.jsonc"
+        },
+        {
+            "id": "hosting.core.dsUserRoles",
+            "file": "config/dsUserRoles.jsonc"
+        }
+    ]
+}

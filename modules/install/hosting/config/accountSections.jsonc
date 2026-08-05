@@ -1,0 +1,14 @@
+{
+    // Navigační sekce módu "Nastavení účtu" pro hosting DS — shodné
+    // s install.base (jen sekce Základní).
+    "sections": [
+        {
+            "id": "basic",
+            "name": "Basic",
+            "name:cs": "Základní",
+            "name:en": "Basic",
+            "icon": "settings",
+            "order": 10
+        }
+    ]
+}

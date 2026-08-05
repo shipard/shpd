@@ -1,0 +1,20 @@
+{
+    "id": "install.hosting",
+    "name": "Hosting installation",
+    "name:cs": "Instalace hostingu",
+    "name:en": "Hosting installation",
+    "description": "Dedicated hosting data source — servers, data sources, portal (D11)",
+    "description:cs": "Dedikovaný hosting zdroj dat — servery, zdroje dat, portál (D11)",
+    "description:en": "Dedicated hosting data source — servers, data sources, portal (D11)",
+    "dependencies": [
+        "core.system",
+        "core.alerts",
+        "hosting.core"
+    ],
+
+    "config": [
+        { "id": "global.settingsSections", "file": "config/settingsSections.jsonc" },
+        { "id": "global.accountSections", "file": "config/accountSections.jsonc" },
+        { "id": "global.navSections", "file": "config/navSections.jsonc" }
+    ]
+}

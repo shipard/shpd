@@ -1,0 +1,125 @@
+{
+    "tableId": 430,
+    "name": "Hosting servers",
+    "name:cs": "Hosting — servery",
+    "name:en": "Hosting servers",
+
+    "adminOnly": true,
+
+    "displayPattern": "{name}",
+
+    "docStates": {
+        "stateColumn": "docState",
+        "mainColumn": "docStateMain",
+        "cfgItem": "core.system.docStatesArchive"
+    },
+
+    "columnGroups": [
+        {
+            "id": "identity",
+            "name": "Identity",
+            "name:cs": "Identifikace",
+            "name:en": "Identity"
+        },
+        {
+            "id": "status",
+            "name": "Status",
+            "name:cs": "Stav",
+            "name:en": "Status"
+        }
+    ],
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+
+        // --- identity ---
+
+        {
+            "id": "name",
+            "name": "Name",
+            "name:cs": "Název",
+            "name:en": "Name",
+            "type": "varchar",
+            "length": 100,
+            "nullable": false,
+            "group": "identity"
+        },
+        {
+            "id": "fqdn",
+            "name": "FQDN",
+            "name:cs": "FQDN",
+            "name:en": "FQDN",
+            "type": "varchar",
+            "length": 200,
+            "nullable": false,
+            "group": "identity"
+        },
+        {
+            "id": "note",
+            "name": "Note",
+            "name:cs": "Poznámka",
+            "name:en": "Note",
+            "type": "text",
+            "nullable": true,
+            "group": "identity"
+        },
+
+        // --- audit ---
+
+        {
+            "id": "created",
+            "name": "Created",
+            "name:cs": "Vytvořeno",
+            "name:en": "Created",
+            "type": "datetime",
+            "nullable": false,
+            "group": "status"
+        },
+        {
+            "id": "modified",
+            "name": "Modified",
+            "name:cs": "Změněno",
+            "name:en": "Modified",
+            "type": "datetime",
+            "nullable": false,
+            "group": "status"
+        },
+
+        // --- doc state (systémové) ---
+
+        {
+            "id": "docState",
+            "name": "Document state",
+            "name:cs": "Stav dokumentu",
+            "name:en": "Document state",
+            "type": "tinyint",
+            "default": 40,
+            "system": true
+        },
+        {
+            "id": "docStateMain",
+            "name": "Document state (sort)",
+            "name:cs": "Stav dokumentu (řazení)",
+            "name:en": "Document state (sort)",
+            "type": "tinyint",
+            "default": 3,
+            "system": true
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "unq_fqdn",
+            "type": "unique",
+            "columns": [
+                {"column": "fqdn"}
+            ]
+        }
+    ]
+}

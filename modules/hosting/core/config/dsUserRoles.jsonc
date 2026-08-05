@@ -1,0 +1,10 @@
+{
+    // hosting.core.dsUserRoles
+    //
+    // Role vazby uživatel ↔ zdroj dat pro `enumString` sloupec
+    // `hosting_core_ds_users.role`. Fáze 0: jen informativní badge na
+    // portálu; žádná autorizační logika se z role zatím neodvozuje.
+
+    "admin":  {"name": "Administrator", "name:cs": "Správce", "name:en": "Administrator"},
+    "member": {"name": "Member",        "name:cs": "Člen",    "name:en": "Member"}
+}

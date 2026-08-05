@@ -34,6 +34,12 @@ Tyhle stránky slouží dvěma čtenářům: tobě a vestavěnému AI asistentov
 | [Kontrola vytěženého dokladu](posta/kontrola-vytezeni.md) | Jak porovnat návrh dokladu s originálem faktury, co kontrolovat první a kdy návrh zamítnout. |
 | [Příjem pošty](posta/prijem-posty.md) | Jak dostat fakturu do Shipardu, co se s ní pak děje a jak si poradit s poštou, která faktura není. |
 
+### Faktury přijaté
+
+| Stránka | Co v ní najdeš |
+|---------|----------------|
+| [Dokončení dokladu](faktury-prijate/dokonceni-dokladu.md) | Co se děje po Použít — od Konceptu přes Potvrzeno k V pořádku a co se tím spustí. |
+
 <!-- OBSAH:END -->
 
 ---

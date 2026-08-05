@@ -2,7 +2,7 @@
 title: Dokončení dokladu
 summary: Co se děje po Použít — od Konceptu přes Potvrzeno k V pořádku a co se tím spustí.
 keywords: [dokončení, koncept, potvrzeno, v pořádku, číslo faktury, číselná řada, zaúčtování, saldokonto, uzamčení dokladu]
-related: [posta/kontrola-vytezeni.md, slovnicek.md]
+related: [posta/kontrola-vytezeni.md, faktury-prijate/oprava-dokladu.md, slovnicek.md]
 ---
 
 # Dokončení dokladu
@@ -86,6 +86,7 @@ pro přechody.
 
 **Doklad ve V pořádku se needituje — a je to tak správně.** Když je v něm
 chyba, nepřepisuje se: převedeš ho na **V opravě**, opravíš a vrátíš zpět.
+Postup je v [Opravě dokladu](oprava-dokladu.md).
 
 **Odchodem ze stavu V pořádku se doklad odúčtuje.** Zápis v Účetním deníku
 i pohyby v saldokontu zmizí a po návratu na V pořádku se vytvoří znovu
@@ -103,4 +104,6 @@ a podle něj se dohledávají duplicity.
 
 - [Kontrola vytěženého dokladu](../posta/kontrola-vytezeni.md) — co dělat
   před vznikem dokladu
+- [Oprava dokladu](oprava-dokladu.md) — když je chyba v dokladu, který už
+  je V pořádku
 - [Slovníček](../slovnicek.md) — přehled stavů dokladu

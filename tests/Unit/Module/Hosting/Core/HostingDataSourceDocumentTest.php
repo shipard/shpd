@@ -157,6 +157,47 @@ class HostingDataSourceDocumentTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // beforeSave — mail_token (D4, stejný kontrakt jako oidc_client_secret)
+    // -------------------------------------------------------------------------
+
+    public function testMailTokenIsEncryptedOnSave(): void
+    {
+        $doc = $this->createDocument();
+        $data = ['id' => 5, 'mail_token' => 'shpd_ak_' . str_repeat('a', 32)];
+
+        $doc->beforeSave($data, ['id' => 5]);
+
+        $this->assertNotSame('shpd_ak_' . str_repeat('a', 32), $data['mail_token']);
+        $this->assertSame(
+            'shpd_ak_' . str_repeat('a', 32),
+            $this->cipher->decrypt((string) $data['mail_token']),
+        );
+    }
+
+    public function testEmptyMailTokenSubmitIsRemoved(): void
+    {
+        $doc = $this->createDocument();
+
+        $data = ['id' => 5, 'mail_token' => ''];
+        $doc->beforeSave($data, ['id' => 5]);
+        $this->assertArrayNotHasKey('mail_token', $data);
+
+        $data = ['id' => 5, 'mail_token' => null];
+        $doc->beforeSave($data, ['id' => 5]);
+        $this->assertArrayNotHasKey('mail_token', $data);
+    }
+
+    public function testAbsentMailTokenIsNotTouched(): void
+    {
+        $doc = $this->createDocument();
+        $data = ['id' => 5, 'name' => 'Edit'];
+
+        $doc->beforeSave($data, ['id' => 5, 'name' => 'Old']);
+
+        $this->assertArrayNotHasKey('mail_token', $data);
+    }
+
+    // -------------------------------------------------------------------------
     // validate
     // -------------------------------------------------------------------------
 

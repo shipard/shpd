@@ -38,6 +38,12 @@
             "name": "OIDC",
             "name:cs": "OIDC",
             "name:en": "OIDC"
+        },
+        {
+            "id": "mail",
+            "name": "Mail",
+            "name:cs": "Pošta",
+            "name:en": "Mail"
         }
     ],
 
@@ -202,6 +208,21 @@
             "length": 250,
             "nullable": true,
             "group": "oidc"
+        },
+
+        // --- mail-router (D4) — token pro /_mail/incoming DS, mintuje agent
+        // (mail-router-setup) a hlásí confirmem; šifruje HostingDataSourceDocument;
+        // servíruje ho jen lookup endpoint pro mail-routery ---
+
+        {
+            "id": "mail_token",
+            "name": "Mail token",
+            "name:cs": "Mail token",
+            "name:en": "Mail token",
+            "type": "encrypted_text",
+            "nullable": true,
+            "sensitive": true,
+            "group": "mail"
         },
 
         // --- doc state (systémové) ---

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Shipard\Api\Controller;
 
+use Shipard\Api\HostingApiKeyAuthenticator;
 use Shipard\Api\Request;
 use Shipard\Api\Response;
 use Shipard\Core\Config\DataSourceConfig;
@@ -42,7 +43,7 @@ use Shipard\Core\Settings\SettingsStore;
 class HostingServerController
 {
     /** Ne-archivní stavy modelu core.system.docStatesArchive. */
-    private const ACTIVE_DOC_STATES = [10, 40, 80];
+    private const ACTIVE_DOC_STATES = HostingApiKeyAuthenticator::ACTIVE_DOC_STATES;
 
     public function __construct(
         private readonly DataSourceConfig $config,
@@ -318,42 +319,18 @@ class HostingServerController
 
     /**
      * Bearer shpd_hk_… → řádek serveru, jinak 401. Update last_seen.
+     * Validace sdílená s mail-router endpointy — HostingApiKeyAuthenticator.
      *
      * @return array<string, mixed>|Response
      */
     private function authenticate(Request $request, DataSourceConnection $db): array|Response
     {
-        $header = (string) ($request->getHeader('authorization') ?? '');
-        if (!str_starts_with($header, 'Bearer ')) {
-            return Response::error('UNAUTHORIZED', 'Server key required', 401);
-        }
-        $token = trim(substr($header, strlen('Bearer ')));
-        if (!str_starts_with($token, 'shpd_hk_')) {
-            return Response::error('UNAUTHORIZED', 'Server key required', 401);
-        }
-
-        $keyPart = substr($token, strlen('shpd_hk_'));
-        $prefix = substr($keyPart, 0, 12);
-        $row = $db->fetchRow(
-            'SELECT * FROM hosting_core_servers WHERE api_key_prefix = %s',
-            $prefix,
-        );
-        if ($row === null
-            || ($row['api_key_hash'] ?? null) === null
-            || !hash_equals((string) $row['api_key_hash'], hash('sha256', $token))
-            || !in_array((int) $row['docState'], self::ACTIVE_DOC_STATES, true)
-        ) {
-            return Response::error('UNAUTHORIZED', 'Invalid server key', 401);
-        }
-
-        $db->updateWhere(
+        $authenticator = new HostingApiKeyAuthenticator(
             'hosting_core_servers',
-            ['last_seen' => date('Y-m-d H:i:s')],
-            'id = %i',
-            (int) $row['id'],
+            errorMessage: 'Server key required',
+            invalidMessage: 'Invalid server key',
         );
-
-        return $row;
+        return $authenticator->authenticate($request, $db);
     }
 
     /**

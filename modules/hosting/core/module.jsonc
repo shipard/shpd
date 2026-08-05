@@ -15,19 +15,25 @@
         "hosting_core_servers",
         "hosting_core_data_sources",
         "hosting_core_ds_users",
-        "hosting_core_oidc_codes"
+        "hosting_core_oidc_codes",
+        "hosting_core_mail_routers"
     ],
 
     "documentClasses": [
         {
             "table": "hosting_core_data_sources",
             "class": "Shipard\\Module\\Hosting\\Core\\HostingDataSourceDocument"
+        },
+        {
+            "table": "hosting_core_mail_routers",
+            "class": "Shipard\\Module\\Hosting\\Core\\MailRouterDocument"
         }
     ],
 
     "settingsItems": [
         { "viewer": "hosting.core.servers",     "section": "other", "subsection": "other.hosting", "order": 10 },
         { "viewer": "hosting.core.dataSources", "section": "other", "subsection": "other.hosting", "order": 20 },
+        { "viewer": "hosting.core.mailRouters", "section": "other", "subsection": "other.hosting", "order": 25 },
         { "viewer": "hosting.core.dsUsers",     "section": "other", "subsection": "other.hosting", "order": 30 },
         { "page": "hostingOidc",                "section": "other", "subsection": "other.hosting", "order": 40 }
     ],
@@ -94,6 +100,15 @@
             "icon": "users",
             "table": "hosting_core_ds_users",
             "class": "Shipard\\Module\\Hosting\\Core\\DsUsersViewer"
+        },
+        {
+            "id": "hosting.core.mailRouters",
+            "name": "Mail routers",
+            "name:cs": "Mail-routery",
+            "name:en": "Mail routers",
+            "icon": "mail",
+            "table": "hosting_core_mail_routers",
+            "class": "Shipard\\Module\\Hosting\\Core\\MailRoutersViewer"
         }
     ],
 
@@ -109,6 +124,10 @@
         {
             "table": "hosting_core_ds_users",
             "class": "Shipard\\Module\\Hosting\\Core\\DsUsersForm"
+        },
+        {
+            "table": "hosting_core_mail_routers",
+            "class": "Shipard\\Module\\Hosting\\Core\\MailRoutersForm"
         }
     ],
 

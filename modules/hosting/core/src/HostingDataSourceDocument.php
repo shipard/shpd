@@ -15,8 +15,8 @@ use Shipard\Core\Utils\IdGenerator;
  *
  * Zodpovědnosti navíc proti DefaultDocument:
  *
- * 1. Šifrování `oidc_client_secret` přes DsSecretCipher v `beforeSave()`
- *    (vzor AIBackendDocument, viz docs/operations/secrets.md):
+ * 1. Šifrování `oidc_client_secret` a `mail_token` přes DsSecretCipher
+ *    v `beforeSave()` (vzor AIBackendDocument, viz docs/operations/secrets.md):
  *      - sloupec chybí v $data      → UPDATE ho nezahrne
  *      - null nebo ''               → unset (placeholder submit beze změny)
  *      - hodnota                    → encrypt; cipher injektuje CLI přes
@@ -91,12 +91,14 @@ class HostingDataSourceDocument extends Document
             $this->prepareRequest($data);
         }
 
-        if (array_key_exists('oidc_client_secret', $data)) {
-            $value = $data['oidc_client_secret'];
-            if ($value === null || $value === '') {
-                unset($data['oidc_client_secret']);
-            } else {
-                $data['oidc_client_secret'] = $this->secretCipher()->encrypt((string) $value);
+        foreach (['oidc_client_secret', 'mail_token'] as $secretColumn) {
+            if (array_key_exists($secretColumn, $data)) {
+                $value = $data[$secretColumn];
+                if ($value === null || $value === '') {
+                    unset($data[$secretColumn]);
+                } else {
+                    $data[$secretColumn] = $this->secretCipher()->encrypt((string) $value);
+                }
             }
         }
 
@@ -165,7 +167,7 @@ class HostingDataSourceDocument extends Document
             return $this->cipher;
         }
         throw new \RuntimeException(
-            'HostingDataSourceDocument: cannot save oidc_client_secret '
+            'HostingDataSourceDocument: cannot save an encrypted column '
             . 'without DsSecretCipher. Call setSecretCipher() before saving.',
         );
     }

@@ -5,8 +5,8 @@ evidence + zdroj portálového seznamu „moje DS". Fáze 1 přidala OIDC
 klientské sloupce (řádek = klient OIDC OP, `client_id` = `ds_id`).
 Fáze 2 přidala provisioning sloupce (`owner`, `provision_error`,
 `claimed_at`) — řádek s `lifecycle = request` je požadavek ve frontě
-pro agenta `hosting-sync`. Sloupce pro mail token **záměrně chybí** —
-přijdou ve Fázi 3 jako aditivní změna schématu.
+pro agenta `hosting-sync`. Fáze 3 (D4) přidala `mail_token` — token
+DS pro `/_mail/incoming`, který hosting brokeruje mail-routerům.
 
 `tableId = 431`. Stavový model: `core.system.docStatesArchive`.
 **`adminOnly = true`** (D9) — portáloví uživatelé se k datům dostanou
@@ -20,7 +20,7 @@ výhradně přes `/_hosting/portal/*` (D10).
 |---|---|---|
 | `ds_id` | varchar(19), NOT NULL, UNIQUE | ID zdroje dat ve formátu `xxxx-xxxx-xxxx-xxxx` |
 | `name` | varchar(200), NOT NULL | Lidský název DS (zobrazuje se na portálu) |
-| `web_id` | varchar(50), UNIQUE | Slug pro mail adresy a hezké URL. NULL = nepřidělen; zatím jen evidence (mail-router = Fáze 3). |
+| `web_id` | varchar(50), UNIQUE | Slug pro mail adresy a hezké URL. NULL = nepřidělen. Fáze 3: vyplněný `web_id` = alias klíče v lookup odpovědi pro mail-routery. |
 
 ### Umístění (placement)
 
@@ -41,6 +41,12 @@ Klient OIDC OP (D2) je aktivní, jen když jsou vyplněné **oba** sloupce —
 |---|---|---|
 | `oidc_client_secret` | encrypted_text, **sensitive** | Client secret pro token endpoint (`client_secret_post`). Šifruje `HostingDataSourceDocument::beforeSave`; plní CLI `hosting-oidc-client`. Nikdy se nevrací v API/form odpovědích. |
 | `oidc_redirect_uri` | varchar(250) | Registrovaná redirect URI klienta — **exact match** proti `authorize` požadavku. Fáze 1 plní admin ručně (CLI), Fáze 2 provisioning agent. |
+
+### Pošta (mail)
+
+| Sloupec | Typ | Popis |
+|---|---|---|
+| `mail_token` | encrypted_text, **sensitive** | `shpd_ak_` token DS pro `/_mail/incoming`. Mintuje agent (`mail-router-setup --json`) a hlásí ho confirmem; šifruje `HostingDataSourceDocument::beforeSave`. Dešifrovaný odchází jen endpointem `GET /_hosting/mail/lookup` (klíč mail-routeru, https). Ruční backfill: admin form (opt-in sensitive pole). |
 
 ### Stav (status)
 

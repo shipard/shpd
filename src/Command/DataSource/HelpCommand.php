@@ -40,6 +40,8 @@ class HelpCommand extends Command
         $output->writeln('<comment>Hosting:</comment>');
         $output->writeln('  <info>hosting-oidc-init</info>       Generate the OIDC OP RSA signing key (secrets/oidc-op.key)');
         $output->writeln('  <info>hosting-oidc-client</info>     Register a data source as an OIDC OP client — set client secret and redirect URI');
+        $output->writeln('  <info>hosting-server-key</info>      Generate or revoke the provisioning API key of a hosting server');
+        $output->writeln('  <info>hosting-router-key</info>      Generate or revoke the lookup API key of a hosting mail router');
         $output->writeln('');
         $output->writeln('<comment>Mail:</comment>');
         $output->writeln('  <info>mail-router-bootstrap</info>   Ensure _mail_router system user and default mailbox exist');

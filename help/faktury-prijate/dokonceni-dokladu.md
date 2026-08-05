@@ -74,7 +74,7 @@ Uvolněné číslo připadne tomu dokladu, který potvrdíš nejdřív. Vrátí�
 do Konceptu dva doklady a potvrdíš je v jiném pořadí, vymění si čísla.
 U dokladu, který už jsi někam nahlásil nebo poslal, proto číslo neměň.
 
-**Chybu účtování spravuš bez rozebírání dokladu.** Když doplníš, co
+**Chybu účtování spravíš bez rozebírání dokladu.** Když doplníš, co
 chybělo u položky nebo účtu, vrať se na doklad a dej **Přeúčtovat**.
 Doklad zůstane ve **V pořádku** a účetní zápis se vytvoří znovu; jakmile
 projde, upozornění na Dashboardu zmizí samo.

@@ -335,6 +335,10 @@ function buildMcpRegistry(
 	$registry->register(new \Shipard\Module\Docs\Core\Mcp\DocumentsSearchTool());
 	$registry->register(new \Shipard\Module\Docs\Core\Mcp\DocumentsAggregateTool());
 	$registry->register(new \Shipard\Module\Core\Mail\Mcp\MailListPendingTool());
+	// Uživatelská dokumentace z help/ — čte soubory aplikace, ne DB, takže
+	// bez závislostí a nezávisle na modulech DS.
+	$registry->register(new \Shipard\Module\Core\Help\Mcp\HelpSearchTool());
+	$registry->register(new \Shipard\Module\Core\Help\Mcp\HelpGetPageTool());
 	// Spisovna — jen s aktivním modulem base.registry.
 	if (isset($tables['base_registry_documents'])) {
 		$registry->register(new \Shipard\Module\Base\Registry\Mcp\RegistrySearchTool());

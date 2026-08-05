@@ -113,6 +113,11 @@ volitelné klíče, které položka nese — `company_id` (IČO), `vat_id` (DIČ
 textového kanálu dojít, používá tyto klíče (viz `documents_aggregate`) —
 `structuredContent` čtou jen některé klienty, `content` všechny.
 
+Popisek položky bere `compactLine()` z **`label`**, s fallbackem na `full_name`
+(osoby). Volitelný klíč **`text`** je víceřádkový obsah položky — připojí se
+pod hlavičku a používá ho nástroj, jehož výstupem je sám text
+(`help_get_page`); bez něj by do textového kanálu nedošel.
+
 ---
 
 ## 5. Tiery podle rizika
@@ -124,7 +129,7 @@ vystavuje v `tools/list` všechny; filtr je na konzumentovi.
 
 | Tier | `isReadOnly()` | Nástroje |
 |------|----------------|----------|
-| Čtení | `true` | `persons_search`, `persons_get`, `documents_search`, `documents_aggregate`, `mail_list_pending`, `registry_search` |
+| Čtení | `true` | `persons_search`, `persons_get`, `documents_search`, `documents_aggregate`, `mail_list_pending`, `registry_search`, `help_search`, `help_get_page` |
 | Zápis (koncepty/akce) | `false` | `mail_draft_document` |
 
 ---

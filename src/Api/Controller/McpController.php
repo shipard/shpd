@@ -160,11 +160,16 @@ class McpController
 	 * Doplňky jsou volitelné klíče, které nástroje plní — bez `value`/
 	 * `share_pct` by byl žebříček z `documents_aggregate` v textovém kanálu
 	 * seznam popisků bez čísel.
+	 *
+	 * Popisek: `label`, s fallbackem na `full_name` (osoby). `text` je
+	 * volitelný víceřádkový obsah položky, který se připojí pod hlavičku —
+	 * bez něj by nástroj vracející text (help_get_page) do textového kanálu
+	 * nedostal nic a `structuredContent` čtou jen někteří klienti.
 	 */
 	private function compactLine(array $item): string
 	{
 		$id    = $item['ref']['id'] ?? null;
-		$label = trim((string) ($item['full_name'] ?? ''));
+		$label = trim((string) ($item['label'] ?? $item['full_name'] ?? ''));
 		$head  = $id !== null ? '#' . (string) $id . ' ' . $label : $label;
 
 		$parts = [];
@@ -181,7 +186,12 @@ class McpController
 			$parts[] = (string) $item['share_pct'] . ' %';
 		}
 
-		return trim(implode(' — ', [$head, implode(', ', $parts)]), " —");
+		$line = trim(implode(' — ', [$head, implode(', ', $parts)]), " —");
+		$text = trim((string) ($item['text'] ?? ''));
+		if ($text === '') {
+			return $line;
+		}
+		return $line === '' ? $text : $line . "\n" . $text;
 	}
 
 	private function result(mixed $id, array $result): Response

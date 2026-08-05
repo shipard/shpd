@@ -156,16 +156,21 @@ Nová stránka: vytvoř soubor s hlavičkou → spusť generátor →
 
 ## 7. Vztah k vnitřnímu asistentovi
 
-Asistent se dnes k dokumentaci **nemá jak dostat** — má systémový prompt
-z cfgItem `core.chat.settings` a čtecí MCP nástroje, nic víc (viz
-[`chat.md`](chat.md) §5). Plánovaný krok je čtecí nástroj (`help_search` +
-`help_get_page`) nad `help/`; stránky leží na serveru vedle aplikace, takže
-pro v1 stačí index a fulltext nad několika desítkami krátkých souborů —
-žádné embeddingy, žádná další závislost.
+Asistent se k dokumentaci dostane dvěma čtecími MCP nástroji modulu
+`core.help`: **`help_search`** (najít stránky) a **`help_get_page`** (vrátit
+celou stránku). Implementace je `modules/core/help/src/HelpLibrary.php` —
+čte soubory při každém volání, bez indexu a cache (desítky krátkých
+souborů), a hledá bez ohledu na diakritiku a velikost písmen. Skóre:
+`keywords` > `title` > `summary` > tělo.
+
+Systémový prompt v cfgItem `core.chat.settings` model k `help_search`
+pobízí u dotazů typu „jak se dělá X“.
 
 Formát podle §3 a §4 je na to navržený: `keywords` pro vyhledání, celá
 stránka jako výsledek nástroje bez chunkování, `related` pro dohledání
-navazující úlohy.
+navazující úlohy. Prakticky z toho plyne jediné pravidlo pro autora:
+**`keywords` piš včetně hovorových a nesprávných variant** — váží nejvíc
+a jsou jediná věc, kterou model vidí před tím, než si stránku vyžádá.
 
 ---
 

@@ -61,7 +61,7 @@ samostatnosti dostane AI. Vnitřní chat v1 nabízí modelu **jen čtecí tier**
 
 | Tier | Brzda | Nástroje |
 |------|-------|----------|
-| **Čtení** | žádná (bezpečné) | `persons_search`, `persons_get`, `documents_search`, `documents_aggregate`, `mail_list_pending`, `registry_search` |
+| **Čtení** | žádná (bezpečné) | `persons_search`, `persons_get`, `documents_search`, `documents_aggregate`, `mail_list_pending`, `registry_search`, `help_search`, `help_get_page` |
 | **Koncepty** | zápis do `docState` Konceptu (10) + lidská revize; `autoCreateMode='safe'` (nezakládá master data) | `mail_draft_document` |
 | **Akce** | (potvrzení / zatím nezavedeno) | — |
 

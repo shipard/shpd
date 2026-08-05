@@ -80,6 +80,8 @@ import {
   faComments,
   faLock,
   faArrowUpRightFromSquare,
+  faServer,
+  faDatabase,
 } from '@fortawesome/free-solid-svg-icons';
 
 // ── Akce (toolbary, tlačítka) ──────────────────────────────────
@@ -137,6 +139,8 @@ export const iconVat = faPercent;
 export const iconWallet = faWallet;
 export const iconBank = faBuildingColumns;
 export const iconHash = faHashtag;
+export const iconServer = faServer;
+export const iconDatabase = faDatabase;
 
 // ── Vzhled / theme ─────────────────────────────────────────────
 export const iconThemeLight = faSun;
@@ -206,6 +210,8 @@ export const iconMap = {
   'wallet': iconWallet,
   'bank': iconBank,
   'hash': iconHash,
+  'server': iconServer,
+  'database': iconDatabase,
   'logout': iconLogout,
   'lock': iconLock,
   'calculator': iconCalculator,

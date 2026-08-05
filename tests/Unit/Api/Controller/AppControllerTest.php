@@ -105,6 +105,32 @@ class AppControllerTest extends TestCase
         $this->assertSame('Moje firma s.r.o.', $data['shortName']);
     }
 
+    public function testInfoHasPortalFalseWithoutHostingModule(): void
+    {
+        $data = $this->makeController()->info()->getPayload()['data'];
+        $this->assertFalse($data['hasPortal']);
+    }
+
+    public function testInfoHasPortalTrueWithHostingTable(): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchAll')->willReturn([]);
+        $ctrl = new AppController(
+            $db,
+            new DataSourceConfig($this->dsDir),
+            ['hosting_core_data_sources' => \Shipard\Core\Database\TableDefinition::fromArray([
+                'tableId' => 1,
+                'name'    => 'hosting_core_data_sources',
+                'columns' => [
+                    ['id' => 'id', 'name' => 'ID', 'type' => 'int', 'autoIncrement' => true, 'primaryKey' => true],
+                ],
+            ])],
+        );
+
+        $data = $ctrl->info()->getPayload()['data'];
+        $this->assertTrue($data['hasPortal']);
+    }
+
     public function testInfoThemeNullWhenUnset(): void
     {
         $data = $this->makeController()->info()->getPayload()['data'];

@@ -566,4 +566,14 @@ export default {
   'account.security.current': 'aktuální',
   'account.security.revoke': 'Odhlásit',
   'account.security.revokeOthers': 'Odhlásit ostatní zařízení',
+
+  // Portál hostingu (D10) — obrazovka „moje DS" pro ne-adminy
+  'portal.heading': 'Portál',
+  'portal.subtitle': 'Moje zdroje dat',
+  'portal.loading': 'Načítám…',
+  'portal.error': 'Seznam zdrojů dat se nepodařilo načíst.',
+  'portal.retry': 'Zkusit znovu',
+  'portal.empty': 'Zatím nemáte přiřazený žádný zdroj dat. Obraťte se na správce hostingu.',
+  'portal.enter': 'Vstoupit',
+  'portal.role.admin': 'správce',
 };

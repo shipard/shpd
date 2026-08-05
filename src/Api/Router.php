@@ -214,6 +214,15 @@ class Router
 			return $this->resolveHostingServerRoute($subpath, $method);
 		}
 
+		// Lookup pro mail-routery (D4) — autentizaci klíčem shpd_hk_
+		// routeru i gating dělá kontroler (endpoint je exempt).
+		if ($subpath === '/_hosting/mail/lookup') {
+			if ($method !== 'GET') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('hostingMail', 'lookup');
+		}
+
 		if (str_starts_with($subpath, '/_registry/')) {
 			return $this->resolveRegistryRoute($subpath, $method);
 		}

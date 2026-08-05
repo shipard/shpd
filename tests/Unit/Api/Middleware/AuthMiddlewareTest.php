@@ -181,6 +181,17 @@ class AuthMiddlewareTest extends TestCase
 		}
 	}
 
+	public function testHostingMailLookupIsExempt(): void
+	{
+		// Auth klíčem shpd_hk_ routeru si dělá HostingMailController sám.
+		$route = new Route('hostingMail', 'lookup');
+		$req = $this->req(server: ['HTTP_AUTHORIZATION' => 'Token malformed']);
+		$result = $this->middleware->handle($req, $route, $this->db);
+
+		$this->assertInstanceOf(AuthContext::class, $result);
+		$this->assertFalse($result->isAuthenticated);
+	}
+
 	public function testOpenApiRequiresAuthWhenNotPublic(): void
 	{
 		// Even without a token, openapi is not exempt → anonymous (but controllers must check)

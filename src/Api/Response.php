@@ -93,7 +93,8 @@ class Response
 
 		http_response_code($this->status);
 
-		if ($this->status === 204 || $this->bodyType === 'redirect') {
+		// 204 a 304 jsou bez těla (304 = conditional GET, ETag shoda).
+		if ($this->status === 204 || $this->status === 304 || $this->bodyType === 'redirect') {
 			return;
 		}
 

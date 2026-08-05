@@ -74,6 +74,11 @@ class AuthMiddleware
 			&& in_array($route->action, ['reconcile', 'queue', 'confirm'], true)) {
 			return true;
 		}
+		// Lookup pro mail-routery (D4): klíče shpd_hk_ vázané na řádek
+		// routeru validuje HostingMailController sám (stejný princip).
+		if ($route->controller === 'hostingMail' && $route->action === 'lookup') {
+			return true;
+		}
 		if ($openApiPublic && $route->controller === 'openapi' && $route->action === 'spec') {
 			return true;
 		}

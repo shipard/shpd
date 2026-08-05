@@ -588,6 +588,29 @@ class RouterTest extends TestCase
 		$this->assertSame('NOT_FOUND', $result->getPayload()['error']['code']);
 	}
 
+	// Hosting mail lookup route (D4)
+
+	public function testHostingMailLookupGet(): void
+	{
+		$result = $this->router->resolve('/api/v1/_hosting/mail/lookup', 'GET');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'hostingMail', 'lookup');
+	}
+
+	public function testHostingMailLookupPostNotAllowed(): void
+	{
+		$result = $this->router->resolve('/api/v1/_hosting/mail/lookup', 'POST');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
+	}
+
+	public function testHostingMailUnknownPathIs404(): void
+	{
+		$result = $this->router->resolve('/api/v1/_hosting/mail/unknown', 'GET');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('NOT_FOUND', $result->getPayload()['error']['code']);
+	}
+
 	// Analysis routes (Fáze 3a)
 
 	public function testAnalysisQueueGet(): void

@@ -186,13 +186,13 @@ Formát hlavičky stránky a šablona: `docs/help-authoring.md`.
   - Controller: `$cipher->decrypt($row['col'])` až těsně před použitím
 - Vzor: `tests/Fixtures/Module/Test/Secrets/TestSecretDocument.php`
 - **Anti-patterny:** necachuj plaintext (session/cookie/log), neposílej ho do view/template, nepřenášej v URL/query
-- Form pro editaci citlivého pole: prázdné pole + placeholder `●●●●●● (zadat pro změnu)`, prázdný submit nemění hodnotu
+- Form pro editaci citlivého pole: prázdné pole + placeholder `●●●●●● (zadat pro změnu)`, prázdný submit nemění hodnotu; zápis přes form save povoluje **opt-in whitelist** `TableForm::getEditableSensitiveColumns()` (jinak 400 SENSITIVE_COLUMN) — viz `docs/edit-forms.md` kap. 24
 - Backup, migrace, rotace, troubleshooting: `docs/operations/secrets.md`
 - **Commitované texty** (tasky, docs, commit messages): nikdy citlivé údaje z reálných dat (jména firem/osob, čísla faktur, reálné částky, názvy DS, id záznamů) — diagnostické příklady anonymizovat se zachováním poměrů; viz `tasks/README.md` → Konvence
 
 ### CLI příkazy
 - `shpd-server`: `version`, `help`, `ds-create --name [--module] [--ds-id]`, `server-init`, `next-table-id`, `hosting-sync [--dry-run]`
-- `shpd-ds` (z adresáře DS): `version`, `help`, `ds-upgrade`, `ds-secrets-health`, `ds-secrets-rotate [--dry-run]`, `alerts-run [--check=id|--all]`, `alerts-prune [--days=N] [--dry-run]`, `mail-outbox-run [--limit=N]`, `mail-outbox-retry --id N`, `mail-send-test --to x@y [--from ...]`, `registry-extract-texts [--all] [--limit=N]`, `user-create [--password] [--if-not-exists] [--identity-issuer/-subject/-provider]` (bez hesla → poslat pozvánku), `user-set-admin`, `auth-emergency-login`, `hosting-oidc-init`, `hosting-oidc-client`, `hosting-server-key`
+- `shpd-ds` (z adresáře DS): `version`, `help`, `ds-upgrade`, `ds-secrets-health`, `ds-secrets-rotate [--dry-run]`, `alerts-run [--check=id|--all]`, `alerts-prune [--days=N] [--dry-run]`, `mail-outbox-run [--limit=N]`, `mail-outbox-retry --id N`, `mail-send-test --to x@y [--from ...]`, `registry-extract-texts [--all] [--limit=N]`, `user-create [--password] [--if-not-exists] [--identity-issuer/-subject/-provider]` (bez hesla → poslat pozvánku), `user-set-admin`, `auth-emergency-login`, `hosting-oidc-init`, `hosting-oidc-client`, `hosting-server-key`, `hosting-router-key`
 
 ### Frontend — ikony
 - Font Awesome SVG/JS, tree-shaking přes Vite

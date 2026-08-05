@@ -618,6 +618,7 @@ mailbox. Spouští se jednou před prvním nasazením mail integrace.
 sudo shpd-ds mail-router-setup
 sudo shpd-ds mail-router-setup --force
 sudo shpd-ds mail-router-setup --ip 203.0.113.10
+sudo shpd-ds mail-router-setup --force --json
 ```
 
 Vygeneruje (nebo rotuje) API klíč pro externí mail-router.
@@ -626,6 +627,7 @@ Vygeneruje (nebo rotuje) API klíč pro externí mail-router.
 |------|--------|
 | `--force` | Deaktivovat stávající aktivní klíč a vygenerovat nový |
 | `--ip <addr>` | Omezit klíč na konkrétní zdrojovou IP |
+| `--json` | Stdout = jediný JSON objekt `{"api_key": "shpd_ak_…", "user_id": N}`, chyby na stderr — strojové rozhraní pro provisioning agenta (D4) |
 
 #### `mail-idempotency-prune`
 
@@ -809,6 +811,25 @@ uloží jen prefix + SHA-256 hash a token vytiskne **jednou** — patří do
 | Opce | Význam |
 |------|--------|
 | `--server <ndx>` | **povinné** — id řádku serveru (`hosting_core_servers.id`) |
+| `--generate` / `--revoke` | právě jedna z opcí |
+
+#### `hosting-router-key`
+
+```bash
+sudo shpd-ds hosting-router-key --router 1 --generate
+sudo shpd-ds hosting-router-key --router 1 --revoke
+```
+
+API klíč mail-routeru pro lookup endpoint `/_hosting/mail/lookup` (D4) —
+zrcadlo `hosting-server-key` nad `hosting_core_mail_routers`.
+`--generate` vytvoří token `shpd_hk_…`, uloží jen prefix + SHA-256 hash
+a token vytiskne **jednou** — patří do `lookup_sync.api_key`
+v config.yaml na mail-router stroji. `--revoke` klíč zneplatní (router
+jede dál na stale lookup).
+
+| Opce | Význam |
+|------|--------|
+| `--router <ndx>` | **povinné** — id řádku routeru (`hosting_core_mail_routers.id`) |
 | `--generate` / `--revoke` | právě jedna z opcí |
 
 ### Seed (testovací data)
@@ -1022,6 +1043,32 @@ shpd-server hosting-sync --dry-run     # náhled fronty, bez akcí
 
 Od té chvíle agent každé 2 minuty rekonciliuje a zpracovává požadavky na
 nové DS z portálu. Viz `docs/hosting.md` §5.
+
+### 9. Připojení mail-routeru k hostingu
+
+```bash
+# Na hostingu (portál):
+# 1. založit řádek routeru (Nastavení → Hosting → Mail-routery),
+#    vyplnit obsluhované domény (čárkami oddělené)
+# 2. vygenerovat klíč routeru
+cd /opt/shipard/data-sources/<hosting-ds-id>
+sudo shpd-ds hosting-router-key --router <ndx> --generate   # token vytiskne jednou
+
+# Na mail-router stroji:
+# 3. /etc/shipard-mail-router/config.yaml — přidat sekci:
+#    lookup_sync:
+#      url:     https://portal.example.com/api/v1/_hosting/mail/lookup
+#      api_key: shpd_hk_…
+# 4. zapnout timer a ověřit
+sudo systemctl enable --now shipard-mail-router-lookup-sync.timer
+sudo -u shipard-mail-router /opt/shipard-mail-router/venv/bin/shipard-mail-router-lookup-sync
+cat /etc/shipard-mail-router/lookup.json
+```
+
+Od té chvíle si router každé 2 minuty stahuje lookup — nový DS založený
+z portálu (s aktivním `core.mail`) přijímá poštu bez ručního zásahu.
+Detailní postup vč. backfillu existujících DS:
+`docs/operations/mail-router.md`.
 
 ---
 

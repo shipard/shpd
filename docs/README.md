@@ -57,6 +57,7 @@ Provozní a operační dokumentace (nasazení, oprávnění, bezpečnost).
 | Dokument | Obsah |
 |----------|-------|
 | [migration-guide.md](migration-guide.md) | Migrace DS mezi servery — checklist pro přenos celého data-source (co tvoří DS, kritické secrets); detailní postupy v `operations/` |
+| [operations/mail-router.md](operations/mail-router.md) | Připojení mail-routeru k hostingu (D4) — řádek routeru + klíč, config `lookup_sync`, timer, ruční backfill `mail_token`, diagnostika lookup endpointu |
 | [operations/permissions.md](operations/permissions.md) | Permission kontrakt pro `/opt/shipard` a `/etc/shipard` — `PermissionSpec`, `shpd-server doctor` / `fix-permissions`, single-user model |
 | [operations/secrets.md](operations/secrets.md) | Šifrované secrets v DS — AES-256-GCM, per-DS klíč, `encrypted_text` sloupce v jakémkoli modulu |
 

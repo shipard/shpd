@@ -22,7 +22,12 @@ vynechává fakturaci, helpdesk a HW evidenci.
 > `shpd-server hosting-sync` + cron slot `two-minutes`, `ds-create
 > --ds-id`, `user-create --if-not-exists` + předpropojení identity
 > (task `hosting-03-provisioning-agent`).
-> Fáze 3+ nezačaly; fázování v §8, každá fáze dostane vlastní PRD.
+> **Fáze 3 hotová** (2026-08-05): mail-router — tabulka mail_routers +
+> `hosting-router-key`, sdílený `HostingApiKeyAuthenticator`, endpoint
+> `/_hosting/mail/lookup` (ETag/304), krok `mail-router-setup --json`
+> v agentu + `mail_token` v confirmu (šifrovaně), `lookup-sync` v repu
+> `mail_router` (task `hosting-04-mail-router`).
+> Fáze 4+ nezačaly; fázování v §8, každá fáze dostane vlastní PRD.
 
 ---
 
@@ -128,7 +133,7 @@ funkční jen když je na DS aktivní `hosting.core`. Auth režimy:
 | `/_hosting/oidc/*` (discovery, jwks, authorize, token) | exempt v `AuthMiddleware` (vzor `/_auth/oidc/*`); authorize vyžaduje session uživatele na hostingu (redirect na login portálu) |
 | `/_hosting/portal/*` (my-datasources, my-summary) | session uživatele hostingu; server vrací **jen řádky daného uživatele** (D10) |
 | `/_hosting/server/*` | `shpd_hk_` klíč serveru (vlastní prefix; prefix + SHA-256 hash na `hosting_core_servers`, validuje `HostingServerController` sám — `core_system_api_keys` jsou vázané na uživatele a `AuthContext` identitu klíče nenese) |
-| `/_hosting/mail/lookup` | `shpd_ak_` API klíč vázaný na řádek mail-routeru |
+| `/_hosting/mail/lookup` | `shpd_hk_` klíč routeru (stejné schéma jako klíče serverů; prefix + SHA-256 hash na `hosting_core_mail_routers`, sdílená validace `HostingApiKeyAuthenticator`) |
 | `/_hosting/ai-gw/*` | gateway token (vlastní tabulka, ne `core_system_api_keys` — jiná audience) |
 
 ## 4. Datový model (náčrt — tableId přidělí `next-table-id` v PRD)
@@ -208,15 +213,26 @@ Jeden běh (cron slot `two-minutes`; `--dry-run` = náhled fronty přes
 3. **Stats push** (D7) — malý agregát per DS (počty z dashboard feedu /
    alertů). Bez osobních dat — jen čísla. Fáze 5.
 
-### 5.3 Mail lookup (D4)
+### 5.3 Mail lookup (D4) — hotovo (Fáze 3)
 
-`GET /_hosting/mail/lookup` (klíč mail-routeru) → JSON ve formátu dnešního
-`lookup.json` (`hosts` + `data_sources`: ds_id i web-id slug → `api_url`,
-`api_token`). ETag/If-None-Match, ať je cron laciný.
+`GET /_hosting/mail/lookup` (klíč routeru `shpd_hk_`, CLI
+`hosting-router-key`) → **přesně** formát `lookup.json` (žádný success
+envelope): `hosts` = domény z řádku routeru, `data_sources` = aktivní DS
+(`lifecycle = active`, živý docState) s vyplněným `mail_token`
+(dešifrovaný do `api_token`; ds_id i web-id slug → `api_url` z `url_app`).
+ETag = sha256 kanonizovaného obsahu, `If-None-Match` shoda → 304 bez body.
 
-Na mail-router stroji nový proces/cron **`lookup-sync`** (repo `mail_router`):
-poll → při změně atomický zápis (temp + rename) → existující mtime-watch
-reload. Hosting down ⇒ jede se na stale lookup, pošta se neztrácí.
+Token mintuje agent v kroku f. provisioningu (`mail-router-setup --json`,
+jen s aktivním `core.mail`; retry po pádu rotuje s `--force`) a hlásí ho
+v confirm body (`mail_token`) — hosting ho ukládá šifrovaně
+(`HostingDataSourceDocument`) a přepisuje nepodmíněně. Ruční backfill
+existujícího DS: admin form (opt-in sensitive pole, viz
+`docs/operations/mail-router.md`).
+
+Na mail-router stroji oneshot **`lookup-sync`** (repo `mail_router`,
+systemd timer à 2 min): validace před zápisem → atomický zápis (temp +
+rename) → existující mtime-watch reload. Hosting down ⇒ jede se na stale
+lookup, pošta se neztrácí.
 
 ### 5.4 OIDC OP (D2, D12)
 

@@ -32,6 +32,11 @@ Content-Type: multipart/form-data; boundary=...
 ### 2.1 Autentizace
 
 - **API klíč** typu `shpd_ak_` vydaný přes `bin/shpd-ds mail-router-setup`.
+  Na hostovaných DS ho mintuje provisioning agent (`mail-router-setup
+  --json`) a distribuci na mail-router řeší hosting — lookup endpoint
+  `/_hosting/mail/lookup` + proces `lookup-sync` (D4, `docs/hosting.md`
+  §5.3, `docs/operations/mail-router.md`); ruční editace `lookup.json`
+  zůstává pro nenapojené routery.
 - Kontroluje se existence klíče (hash v `core_system_api_keys`), platnost a
   optional IP whitelist.
 - Controller navíc vynucuje, aby uživatel klíče byl systémový `_mail_router`

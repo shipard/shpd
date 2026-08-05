@@ -67,6 +67,13 @@ class AuthMiddleware
 			&& in_array($route->action, ['discovery', 'jwks', 'authorize', 'token'], true)) {
 			return true;
 		}
+		// Provisioning API pro DS servery (D3): klíče shpd_hk_ jsou vázané
+		// na řádek serveru, ne uživatele — validuje je HostingServerController
+		// sám (AuthContext ne-uživatelské principály nenese).
+		if ($route->controller === 'hostingServer'
+			&& in_array($route->action, ['reconcile', 'queue', 'confirm'], true)) {
+			return true;
+		}
 		if ($openApiPublic && $route->controller === 'openapi' && $route->action === 'spec') {
 			return true;
 		}

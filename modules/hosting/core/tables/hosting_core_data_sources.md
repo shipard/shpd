@@ -3,8 +3,10 @@
 Evidence zdrojů dat (DS) spravovaných hostingem. Fáze 0 = ručně plněná
 evidence + zdroj portálového seznamu „moje DS". Fáze 1 přidala OIDC
 klientské sloupce (řádek = klient OIDC OP, `client_id` = `ds_id`).
-Sloupce pro mail token **záměrně chybí** — přijdou ve Fázi 3 jako
-aditivní změna schématu.
+Fáze 2 přidala provisioning sloupce (`owner`, `provision_error`,
+`claimed_at`) — řádek s `lifecycle = request` je požadavek ve frontě
+pro agenta `hosting-sync`. Sloupce pro mail token **záměrně chybí** —
+přijdou ve Fázi 3 jako aditivní změna schématu.
 
 `tableId = 431`. Stavový model: `core.system.docStatesArchive`.
 **`adminOnly = true`** (D9) — portáloví uživatelé se k datům dostanou
@@ -27,7 +29,8 @@ výhradně přes `/_hosting/portal/*` (D10).
 | `server` | int → [hosting_core_servers](hosting_core_servers.md) | Server, na kterém DS běží. NULL = zatím nepřiřazen. |
 | `url_app` | varchar(200), NOT NULL | URL aplikace — cíl vstupního tlačítka na portálu |
 | `install_module` | varchar(50) | Install modul DS (např. `install.base`) — evidence pro provisioning |
-| `lifecycle` | enumString(10), NOT NULL, default `active` | Klíč v [`hosting.core.dsLifecycle`](../config/dsLifecycle.jsonc) — request, creating, active, suspended. Fáze 0 používá jen `active`; request/creating řídí provisioning frontu Fáze 2. |
+| `lifecycle` | enumString(10), NOT NULL, default `active` | Klíč v [`hosting.core.dsLifecycle`](../config/dsLifecycle.jsonc) — request, creating, active, suspended, failed. Frontu Fáze 2 řídí request → creating → active/failed; retry po `failed` = admin přepne zpět na `request`. |
+| `owner` | int → core_system_users | Vlastník DS (U1) — vybírá se v admin formuláři požadavku; při confirmu `ok` dostane vazbu v `hosting_core_ds_users` (role `admin`) a předpropojenou identitu na novém DS (U2). |
 
 ### OIDC (oidc)
 
@@ -43,6 +46,8 @@ Klient OIDC OP (D2) je aktivní, jen když jsou vyplněné **oba** sloupce —
 
 | Sloupec | Typ | Popis |
 |---|---|---|
+| `provision_error` | text | Chybová zpráva posledního neúspěšného provisioningu (confirm `failed`); confirm `ok` ji nuluje |
+| `claimed_at` | datetime | Čas, kdy si agent požadavek převzal z fronty (request → creating) |
 | `created` | datetime, NOT NULL | Čas vytvoření záznamu |
 | `modified` | datetime, NOT NULL | Čas poslední změny |
 

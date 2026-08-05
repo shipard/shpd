@@ -8,5 +8,6 @@
     "request":   {"name": "Requested",  "name:cs": "Požadavek",    "name:en": "Requested"},
     "creating":  {"name": "Creating",   "name:cs": "Zakládá se",   "name:en": "Creating"},
     "active":    {"name": "Active",     "name:cs": "Aktivní",      "name:en": "Active"},
-    "suspended": {"name": "Suspended",  "name:cs": "Pozastavený",  "name:en": "Suspended"}
+    "suspended": {"name": "Suspended",  "name:cs": "Pozastavený",  "name:en": "Suspended"},
+    "failed":    {"name": "Failed",     "name:cs": "Selhalo",      "name:en": "Failed"}
 }

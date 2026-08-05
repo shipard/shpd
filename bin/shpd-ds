@@ -57,5 +57,6 @@ $app->add(new \Shipard\Command\DataSource\DsSecretsHealthCommand());
 $app->add(new \Shipard\Command\DataSource\DsSecretsRotateCommand());
 $app->add(new \Shipard\Command\DataSource\HostingOidcInitCommand());
 $app->add(new \Shipard\Command\DataSource\HostingOidcClientCommand());
+$app->add(new \Shipard\Command\DataSource\HostingServerKeyCommand());
 $app->setDefaultCommand('help');
 $app->run();

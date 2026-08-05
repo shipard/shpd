@@ -70,6 +70,62 @@
             "group": "identity"
         },
 
+        // --- klíč serveru (D3) — prefix + SHA-256 hash tokenu `shpd_hk_…`,
+        // plaintext se nikam neukládá; plní CLI `hosting-server-key` ---
+
+        {
+            "id": "api_key_prefix",
+            "name": "API key prefix",
+            "name:cs": "API klíč — prefix",
+            "name:en": "API key prefix",
+            "type": "varchar",
+            "length": 12,
+            "nullable": true,
+            "group": "status"
+        },
+        {
+            "id": "api_key_hash",
+            "name": "API key hash",
+            "name:cs": "API klíč — hash",
+            "name:en": "API key hash",
+            "type": "varchar",
+            "length": 64,
+            "nullable": true,
+            "sensitive": true,
+            "group": "status"
+        },
+
+        // --- provisioning agent (D3) ---
+
+        {
+            "id": "can_provision",
+            "name": "Can provision",
+            "name:cs": "Smí zakládat DS",
+            "name:en": "Can provision",
+            "type": "boolean",
+            "default": 0,
+            "group": "status"
+        },
+        {
+            "id": "last_seen",
+            "name": "Last seen",
+            "name:cs": "Naposledy viděn",
+            "name:en": "Last seen",
+            "type": "datetime",
+            "nullable": true,
+            "group": "status"
+        },
+        {
+            "id": "last_version",
+            "name": "Last version",
+            "name:cs": "Poslední verze",
+            "name:en": "Last version",
+            "type": "varchar",
+            "length": 30,
+            "nullable": true,
+            "group": "status"
+        },
+
         // --- audit ---
 
         {

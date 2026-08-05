@@ -551,6 +551,43 @@ class RouterTest extends TestCase
 		$this->assertSame('NOT_FOUND', $result->getPayload()['error']['code']);
 	}
 
+	// Hosting server provisioning routes (D3)
+
+	public function testHostingServerReconcilePost(): void
+	{
+		$result = $this->router->resolve('/api/v1/_hosting/server/reconcile', 'POST');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'hostingServer', 'reconcile');
+	}
+
+	public function testHostingServerQueueGet(): void
+	{
+		$result = $this->router->resolve('/api/v1/_hosting/server/queue', 'GET');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'hostingServer', 'queue');
+	}
+
+	public function testHostingServerConfirmPost(): void
+	{
+		$result = $this->router->resolve('/api/v1/_hosting/server/confirm', 'POST');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'hostingServer', 'confirm');
+	}
+
+	public function testHostingServerQueuePostNotAllowed(): void
+	{
+		$result = $this->router->resolve('/api/v1/_hosting/server/queue', 'POST');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
+	}
+
+	public function testHostingServerUnknownPathIs404(): void
+	{
+		$result = $this->router->resolve('/api/v1/_hosting/server/unknown', 'GET');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('NOT_FOUND', $result->getPayload()['error']['code']);
+	}
+
 	// Analysis routes (Fáze 3a)
 
 	public function testAnalysisQueueGet(): void

@@ -297,6 +297,7 @@ function dispatch(
 		'personsRegistry' => dispatchPersonsRegistry($route, $request, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $serverConfig),
 		'hostingPortal' => dispatchHostingPortal($route, $auth, $db, $tables),
 		'hostingOidc' => dispatchHostingOidc($route, $request, $auth, $db, $tables, $resolved),
+		'hostingServer' => dispatchHostingServer($route, $request, $db, $tables, $resolved),
 		'mcp'     => dispatchMcp($request, $auth, $resolved->connection, $tables, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'openapi' => (new OpenApiController())->spec($auth, $openApiPublic, $tables, $baseUrl),
 		default   => Response::error('INTERNAL_ERROR', "Unknown controller: {$route->controller}", 500),
@@ -470,6 +471,31 @@ function dispatchHostingOidc(
 		// $_POST plní PHP samo.
 		'token'     => $ctrl->token($request, $_POST, $db, $tables),
 		default     => Response::error('INTERNAL_ERROR', "Unknown hostingOidc action: {$route->action}", 500),
+	};
+}
+
+/**
+ * @param array<string, \Shipard\Core\Database\TableDefinition> $tables
+ */
+function dispatchHostingServer(
+	Route $route,
+	Request $request,
+	\Shipard\Core\Database\DataSourceConnection $db,
+	array $tables,
+	\Shipard\Api\ResolvedDataSource $resolved,
+): Response {
+	// Endpointy jsou exempt (auth dělá kontroler) — velikost body omezit
+	// už tady; rekonciliační inventura se do limitu vejde s velkou rezervou.
+	$contentLength = (int) ($request->getHeader('content-length') ?? '0');
+	if ($contentLength > 524288) {
+		return Response::error('PAYLOAD_TOO_LARGE', 'Request body too large', 413);
+	}
+	$ctrl = new \Shipard\Api\Controller\HostingServerController($resolved->config);
+	return match ($route->action) {
+		'reconcile' => $ctrl->reconcile($request, $db, $tables),
+		'queue'     => $ctrl->queue($request, $db, $tables),
+		'confirm'   => $ctrl->confirm($request, $db, $tables),
+		default     => Response::error('INTERNAL_ERROR', "Unknown hostingServer action: {$route->action}", 500),
 	};
 }
 

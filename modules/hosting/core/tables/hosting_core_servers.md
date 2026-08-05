@@ -1,9 +1,9 @@
 # Tabulka: Hosting — servery (hosting_core_servers)
 
 Evidence DS serverů spravovaných hostingem. Fáze 0 = ručně plněná
-evidence; API klíče, příznaky „smí zakládat DS", `last_seen` a verze
-z rekonciliace přijdou ve Fázi 2 (provisioning agent) — schema changes
-jsou aditivně bezpečné.
+evidence; Fáze 2 (provisioning agent) doplnila API klíč serveru
+(`shpd_hk_…`, jen prefix + hash), příznak „smí zakládat DS" a stavové
+sloupce z rekonciliace (`last_seen`, `last_version`).
 
 `tableId = 430`. Stavový model: `core.system.docStatesArchive`.
 **`adminOnly = true`** (D9) — generické CRUD/viewer/form cesty vrací
@@ -23,6 +23,11 @@ ne-adminovi 403.
 
 | Sloupec | Typ | Popis |
 |---|---|---|
+| `api_key_prefix` | varchar(12) | Prefix API klíče serveru (`shpd_hk_` + první znaky) pro rychlý lookup |
+| `api_key_hash` | varchar(64), sensitive | SHA-256 hash celého tokenu; plaintext se neukládá, plní CLI `hosting-server-key` |
+| `can_provision` | boolean, default 0 | Smí server zakládat DS z fronty požadavků (Fáze 2) |
+| `last_seen` | datetime | Čas poslední rekonciliace agenta `hosting-sync` |
+| `last_version` | varchar(30) | Verze shpd nahlášená agentem při rekonciliaci |
 | `created` | datetime, NOT NULL | Čas vytvoření záznamu |
 | `modified` | datetime, NOT NULL | Čas poslední změny |
 

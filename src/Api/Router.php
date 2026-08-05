@@ -208,6 +208,12 @@ class Router
 			return $this->resolveHostingOidcRoute($subpath, $method);
 		}
 
+		// Provisioning API pro DS servery (D3) — autentizaci klíčem
+		// shpd_hk_ i gating dělá kontroler (endpointy jsou exempt).
+		if (str_starts_with($subpath, '/_hosting/server/')) {
+			return $this->resolveHostingServerRoute($subpath, $method);
+		}
+
 		if (str_starts_with($subpath, '/_registry/')) {
 			return $this->resolveRegistryRoute($subpath, $method);
 		}
@@ -537,6 +543,26 @@ class Router
 			return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
 		}
 		return new Route('hostingOidc', $action);
+	}
+
+	private function resolveHostingServerRoute(string $subpath, string $method): Route|Response
+	{
+		$rest = substr($subpath, strlen('/_hosting/server/'));
+
+		$actions = [
+			'reconcile' => ['POST', 'reconcile'],
+			'queue'     => ['GET', 'queue'],
+			'confirm'   => ['POST', 'confirm'],
+		];
+		if (!isset($actions[$rest])) {
+			return Response::error('NOT_FOUND', 'Not found', 404);
+		}
+
+		[$expectedMethod, $action] = $actions[$rest];
+		if ($method !== $expectedMethod) {
+			return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+		}
+		return new Route('hostingServer', $action);
 	}
 
 	private function resolveRegistryRoute(string $subpath, string $method): Route|Response

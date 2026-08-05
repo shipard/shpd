@@ -167,6 +167,20 @@ class AuthMiddlewareTest extends TestCase
 		$this->assertSame(401, $this->getStatus($result));
 	}
 
+	public function testHostingServerEndpointsAreExempt(): void
+	{
+		// Auth klíčem shpd_hk_ si dělá HostingServerController sám — exempt
+		// route propustí i request s vadnou hlavičkou.
+		foreach (['reconcile', 'queue', 'confirm'] as $action) {
+			$route = new Route('hostingServer', $action);
+			$req = $this->req(server: ['HTTP_AUTHORIZATION' => 'Token malformed']);
+			$result = $this->middleware->handle($req, $route, $this->db);
+
+			$this->assertInstanceOf(AuthContext::class, $result);
+			$this->assertFalse($result->isAuthenticated);
+		}
+	}
+
 	public function testOpenApiRequiresAuthWhenNotPublic(): void
 	{
 		// Even without a token, openapi is not exempt → anonymous (but controllers must check)

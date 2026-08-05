@@ -484,6 +484,22 @@ class RouterTest extends TestCase
 		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
 	}
 
+	// Hosting portal routes (D10)
+
+	public function testHostingPortalMyDatasourcesGet(): void
+	{
+		$result = $this->router->resolve('/api/v1/_hosting/portal/my-datasources', 'GET');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'hostingPortal', 'myDatasources');
+	}
+
+	public function testHostingPortalMyDatasourcesPostNotAllowed(): void
+	{
+		$result = $this->router->resolve('/api/v1/_hosting/portal/my-datasources', 'POST');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
+	}
+
 	// Analysis routes (Fáze 3a)
 
 	public function testAnalysisQueueGet(): void

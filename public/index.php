@@ -295,6 +295,7 @@ function dispatch(
 		'accounting' => dispatchAccounting($route, $request, $db, $configRuntime, $journalEventDispatcher),
 		'bank'    => dispatchBank($route, $request, $auth, $tables, $db, $resolved, $configRuntime, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher, $journalEventDispatcher),
 		'personsRegistry' => dispatchPersonsRegistry($route, $request, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $serverConfig),
+		'hostingPortal' => dispatchHostingPortal($route, $auth, $db, $tables),
 		'mcp'     => dispatchMcp($request, $auth, $resolved->connection, $tables, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'openapi' => (new OpenApiController())->spec($auth, $openApiPublic, $tables, $baseUrl),
 		default   => Response::error('INTERNAL_ERROR', "Unknown controller: {$route->controller}", 500),
@@ -428,6 +429,22 @@ function dispatchBank(
 		'importStatement' => $ctrl->importStatement($auth),
 		'reaccount'       => $ctrl->reaccount($request),
 		default           => Response::error('INTERNAL_ERROR', "Unknown bank action: {$route->action}", 500),
+	};
+}
+
+/**
+ * @param array<string, \Shipard\Core\Database\TableDefinition> $tables
+ */
+function dispatchHostingPortal(
+	Route $route,
+	AuthContext $auth,
+	\Shipard\Core\Database\DataSourceConnection $db,
+	array $tables,
+): Response {
+	$ctrl = new \Shipard\Api\Controller\HostingPortalController();
+	return match ($route->action) {
+		'myDatasources' => $ctrl->myDatasources($auth, $db, $tables),
+		default         => Response::error('INTERNAL_ERROR', "Unknown hostingPortal action: {$route->action}", 500),
 	};
 }
 

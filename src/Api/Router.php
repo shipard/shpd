@@ -192,6 +192,15 @@ class Router
 			return new Route('senderRules', 'undoAutoArchive');
 		}
 
+		// Portál hostingu (D10) — funguje jen s aktivním modulem hosting.core,
+		// gating na chybějící tabulku dělá kontroler (router je module-unaware).
+		if ($subpath === '/_hosting/portal/my-datasources') {
+			if ($method !== 'GET') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('hostingPortal', 'myDatasources');
+		}
+
 		if (str_starts_with($subpath, '/_registry/')) {
 			return $this->resolveRegistryRoute($subpath, $method);
 		}

@@ -182,7 +182,7 @@ Název souboru (bez přípony) odpovídá názvu tabulky v databázi.
 | `columns` | object[] | Ano | — | Definice sloupců |
 | `indexes` | object[] | Ne | — | Definice indexů |
 | `hideFromNavigation` | bool | Ne | Ne | Skrýt tabulku ze sidebaru (hlavního i Nastavení). Používá se pro sub-tabulky spravované jen přes parent záznam (např. fiskální měsíce). Výchozí: `false` |
-| `adminOnly` | bool | Ne | Ne | Tabulka jen pro administrátory — ne-admin dostane 403 na CRUD/viewer/form a položka se mu nezobrazí v navigaci Nastavení. Výchozí: `false` |
+| `adminOnly` | bool | Ne | Ne | Tabulka jen pro administrátory — ne-admin dostane 403 na CRUD/viewer/form/lookup a položka se mu nezobrazí v navigaci Nastavení. Výchozí: `false` |
 
 ### `tableId` — unikátní numerické ID
 
@@ -262,8 +262,8 @@ Pravidla a chování:
 
 Nepovinný boolean flag. Pokud `true`, `TableAccessGuard` vrací ne-adminovi
 403 (`FORBIDDEN_ADMIN_ONLY`) na všech generických cestách — CRUD
-(list/show/create/update/patch/delete), viewer (meta/rows/detail) i form
-(meta/save/recalculate). Navigace Nastavení položku nad takovou tabulkou
+(list/show/create/update/patch/delete), viewer (meta/rows/detail), form
+(meta/save/recalculate) i lookup (search/resolve). Navigace Nastavení položku nad takovou tabulkou
 ne-adminovi vůbec nepošle (server-side filtr — žádné mrtvé odkazy).
 
 ```jsonc

@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Shipard\Api\Controller;
 
+use Shipard\Api\AuthContext;
 use Shipard\Api\Request;
 use Shipard\Api\Response;
+use Shipard\Api\TableAccessGuard;
 use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Database\TableDefinition;
@@ -24,6 +26,7 @@ class LookupController
     public function search(
         string $table,
         Request $request,
+        AuthContext $auth,
         array $tables,
         DataSourceConnection $db,
         LookupRegistry $lookupRegistry,
@@ -32,6 +35,11 @@ class LookupController
         $def = $tables[$table] ?? null;
         if ($def === null) {
             return Response::error('TABLE_NOT_FOUND', "Table '{$table}' not found", 404);
+        }
+
+        $guardErr = TableAccessGuard::guardTable($table, $auth, $def);
+        if ($guardErr !== null) {
+            return $guardErr;
         }
 
         $lookup = $lookupRegistry->create($table, $db, $config, $def);
@@ -79,6 +87,7 @@ class LookupController
     public function resolve(
         string $table,
         Request $request,
+        AuthContext $auth,
         array $tables,
         DataSourceConnection $db,
         LookupRegistry $lookupRegistry,
@@ -87,6 +96,11 @@ class LookupController
         $def = $tables[$table] ?? null;
         if ($def === null) {
             return Response::error('TABLE_NOT_FOUND', "Table '{$table}' not found", 404);
+        }
+
+        $guardErr = TableAccessGuard::guardTable($table, $auth, $def);
+        if ($guardErr !== null) {
+            return $guardErr;
         }
 
         $lookup = $lookupRegistry->create($table, $db, $config, $def);

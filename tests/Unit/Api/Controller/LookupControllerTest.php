@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Shipard\Tests\Unit\Api\Controller;
 
 use PHPUnit\Framework\TestCase;
+use Shipard\Api\AuthContext;
 use Shipard\Api\Controller\LookupController;
 use Shipard\Api\Request;
 use Shipard\Core\Database\DataSourceConnection;
@@ -40,6 +41,11 @@ class LookupControllerTest extends TestCase
         return Request::fromArray('GET', '/api/v1/_ui/lookup/test_table/search', $queryParams, '', []);
     }
 
+    private function auth(): AuthContext
+    {
+        return new AuthContext(true, 2, 'session', 'shpd_st_t');
+    }
+
     private function registryWith(string $table, TableLookup $instance): LookupRegistry
     {
         $registry = new LookupRegistry();
@@ -52,7 +58,7 @@ class LookupControllerTest extends TestCase
         $tables = ['t' => $this->makeTable('Test')];
         $registry = $this->registryWith('t', new FakeControllerLookup());
 
-        $resp = $this->ctrl->search('t', $this->makeRequest(['q' => 'foo']), $tables, $this->db, $registry, null);
+        $resp = $this->ctrl->search('t', $this->makeRequest(['q' => 'foo']), $this->auth(), $tables, $this->db, $registry, null);
         $payload = $resp->getPayload();
 
         $this->assertTrue($payload['success']);
@@ -66,7 +72,7 @@ class LookupControllerTest extends TestCase
     {
         $registry = new LookupRegistry();
 
-        $resp = $this->ctrl->search('unknown', $this->makeRequest(), [], $this->db, $registry, null);
+        $resp = $this->ctrl->search('unknown', $this->makeRequest(), $this->auth(), [], $this->db, $registry, null);
         $payload = $resp->getPayload();
 
         $this->assertFalse($payload['success']);
@@ -78,7 +84,7 @@ class LookupControllerTest extends TestCase
         $tables = ['t' => $this->makeTable('Test')];
         $registry = new LookupRegistry();
 
-        $resp = $this->ctrl->search('t', $this->makeRequest(), $tables, $this->db, $registry, null);
+        $resp = $this->ctrl->search('t', $this->makeRequest(), $this->auth(), $tables, $this->db, $registry, null);
         $payload = $resp->getPayload();
 
         $this->assertFalse($payload['success']);
@@ -90,7 +96,7 @@ class LookupControllerTest extends TestCase
         $tables = ['t' => $this->makeTable('Test')];
         $registry = $this->registryWith('t', new FakeControllerLookup());
 
-        $resp = $this->ctrl->search('t', $this->makeRequest(['limit' => '500']), $tables, $this->db, $registry, null);
+        $resp = $this->ctrl->search('t', $this->makeRequest(['limit' => '500']), $this->auth(), $tables, $this->db, $registry, null);
 
         $this->assertSame(50, $resp->getPayload()['data']['limit']);
     }
@@ -100,7 +106,7 @@ class LookupControllerTest extends TestCase
         $tables = ['t' => $this->makeTable('Test')];
         $registry = $this->registryWith('t', new FakeControllerLookup());
 
-        $resp = $this->ctrl->search('t', $this->makeRequest(['limit' => '0']), $tables, $this->db, $registry, null);
+        $resp = $this->ctrl->search('t', $this->makeRequest(['limit' => '0']), $this->auth(), $tables, $this->db, $registry, null);
 
         $this->assertSame('BAD_REQUEST', $resp->getPayload()['error']['code']);
     }
@@ -110,7 +116,7 @@ class LookupControllerTest extends TestCase
         $tables = ['t' => $this->makeTable('Test')];
         $registry = $this->registryWith('t', new FakeControllerLookup());
 
-        $resp = $this->ctrl->search('t', $this->makeRequest(['limit' => 'abc']), $tables, $this->db, $registry, null);
+        $resp = $this->ctrl->search('t', $this->makeRequest(['limit' => 'abc']), $this->auth(), $tables, $this->db, $registry, null);
 
         $this->assertSame('BAD_REQUEST', $resp->getPayload()['error']['code']);
     }
@@ -123,6 +129,7 @@ class LookupControllerTest extends TestCase
         $resp = $this->ctrl->search(
             't',
             $this->makeRequest(['filter' => ['person' => '42']]),
+            $this->auth(),
             $tables,
             $this->db,
             $registry,
@@ -141,6 +148,7 @@ class LookupControllerTest extends TestCase
         $this->ctrl->search(
             't',
             $this->makeRequest(['filter' => ['person' => '42', 'rogue' => '1']]),
+            $this->auth(),
             $tables,
             $this->db,
             $registry,
@@ -156,7 +164,7 @@ class LookupControllerTest extends TestCase
         $registry = $this->registryWith('t', new FakeControllerLookup());
 
         $req = Request::fromArray('GET', '/r', ['ids' => '1,2,abc'], '', []);
-        $resp = $this->ctrl->resolve('t', $req, $tables, $this->db, $registry, null);
+        $resp = $this->ctrl->resolve('t', $req, $this->auth(), $tables, $this->db, $registry, null);
 
         $this->assertTrue($resp->getPayload()['success']);
         $this->assertSame([1, 2, 'abc'], FakeControllerLookup::$lastResolveIds);
@@ -168,7 +176,7 @@ class LookupControllerTest extends TestCase
         $registry = $this->registryWith('t', new FakeControllerLookup());
 
         $req = Request::fromArray('GET', '/r', ['ids' => ''], '', []);
-        $resp = $this->ctrl->resolve('t', $req, $tables, $this->db, $registry, null);
+        $resp = $this->ctrl->resolve('t', $req, $this->auth(), $tables, $this->db, $registry, null);
 
         $this->assertSame(['items' => []], $resp->getPayload()['data']);
     }

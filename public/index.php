@@ -283,7 +283,7 @@ function dispatch(
 		'settings' => dispatchSettings($route, $request, $auth, $resolved->config, $modulePathResolver, resolveLanguage($request, $resolved->config), $configRuntime, $db, $tables),
 		'app'     => dispatchApp($route, $auth, $db, $resolved->config, $tables),
 		'form'    => dispatchForm($route, $request, $auth, $tables, $db, $formRegistry ?? new FormRegistry(), $configRuntime, $modulePathResolver, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), resolveLanguage($request, $resolved->config), $resolved->config, $lookupRegistry ?? new LookupRegistry(), $documentEventDispatcher),
-		'lookup'  => dispatchLookup($route, $request, $tables, $db, $lookupRegistry ?? new LookupRegistry(), $configRuntime),
+		'lookup'  => dispatchLookup($route, $request, $auth, $tables, $db, $lookupRegistry ?? new LookupRegistry(), $configRuntime),
 		'viewer'  => dispatchViewer($route, $request, $auth, $viewerRegistry, $tables, $db, $configRuntime, resolveLanguage($request, $resolved->config)),
 		'mail'    => dispatchMail($route, $request, $auth, $tables, $db, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $configRuntime),
 		'senderRules' => dispatchSenderRules($route, $request, $auth, $tables, $db, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $configRuntime, $documentEventDispatcher),
@@ -1098,6 +1098,7 @@ function dispatchForm(
 function dispatchLookup(
 	Route $route,
 	Request $request,
+	AuthContext $auth,
 	array $tables,
 	\Shipard\Core\Database\DataSourceConnection $db,
 	LookupRegistry $lookupRegistry,
@@ -1106,8 +1107,8 @@ function dispatchLookup(
 	$ctrl  = new \Shipard\Api\Controller\LookupController();
 	$table = $route->table ?? '';
 	return match ($route->action) {
-		'search'  => $ctrl->search($table, $request, $tables, $db, $lookupRegistry, $configRuntime),
-		'resolve' => $ctrl->resolve($table, $request, $tables, $db, $lookupRegistry, $configRuntime),
+		'search'  => $ctrl->search($table, $request, $auth, $tables, $db, $lookupRegistry, $configRuntime),
+		'resolve' => $ctrl->resolve($table, $request, $auth, $tables, $db, $lookupRegistry, $configRuntime),
 		default   => Response::error('INTERNAL_ERROR', "Unknown lookup action: {$route->action}", 500),
 	};
 }

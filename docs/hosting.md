@@ -38,7 +38,7 @@ vynechává fakturaci, helpdesk a HW evidenci.
 | D6 | Vlastní AI klíč zůstává **rovnocennou cestou** — gateway je jen jiná data v `core_ai_backends` (`base_url` = gateway, `api_key` = gateway token). Nulová změna kódu na straně DS — `base_url` respektuje PHP `AnthropicLlmClient` i Python `ai_analyzer`. |
 | D7 | Přehled napříč DS = **push agregátů** z DS do hostingu (agent, cron). On-demand fetch lze doplnit kdykoli později. |
 | D8 | Portálové účty = `core_system_users` hosting DS. Žádná nová tabulka uživatelů — OP autentizuje proti běžné user bázi hostingu (lokální login, pozvánky/reset z Fáze 0b fungují beze změny). |
-| D9 | **Admin-only tabulky**: definice tabulky může deklarovat `"adminOnly": true`; `TableAccessGuard` to vynucuje plošně (CRUD/viewer/form → 403 pro ne-admina) stejně jako dnes prefix `core_system_`. Všechny `hosting_core_*` tabulky flag nesou. Malé rozšíření jádra s hodnotou i mimo hosting; nejhrubší stupeň budoucího RBAC. |
+| D9 | **Admin-only tabulky**: definice tabulky může deklarovat `"adminOnly": true`; `TableAccessGuard` to vynucuje plošně (CRUD/viewer/form/lookup → 403 pro ne-admina) stejně jako dnes prefix `core_system_`. Všechny `hosting_core_*` tabulky flag nesou. Malé rozšíření jádra s hodnotou i mimo hosting; nejhrubší stupeň budoucího RBAC. |
 | D10 | **Jedno přihlášení** = session na hosting DS. Ne-admin po přihlášení vidí **pouze portál** — dedikované endpointy `/_hosting/portal/*` scopované na session uživatele (žádné generické viewery nad hosting tabulkami); admin navíc standardní aplikaci s hosting viewery (= administrace hostingu). OIDC `authorize` používá tutéž session — SSO: uživatel se session proletí na DS bez zastávky. |
 | D11 | Hosting DS je **dedikovaný** — install modul `install.hosting`; vlastní agenda provozovatele (účetnictví, pošta…) žije v samostatném běžném DS. Doporučení, ne tvrdý zámek — D9+D10 chrání i smíšený případ. |
 | D12 | OIDC **issuer je explicitně uložený v nastavení hostingu**, ne odvozovaný z requestu. `(issuer, sub)` je klíč identit na všech DS — změna domény portálu ho nesmí tiše zneplatnit. Doménu portálu volit s rozmyslem hned na začátku. |
@@ -325,8 +325,8 @@ identity na všech DS.
 - API klíče serverů/routerů: jen SHA-256 hash (vzor `core_system_api_keys`).
 - OP privátní klíč mimo DB, v `secrets/`.
 - `adminOnly` tabulky (D9): skutečná bariéra je na serveru
-  (`TableAccessGuard`), UI jen nezobrazuje mrtvé odkazy — stejný princip
-  jako Fáze 0a.
+  (`TableAccessGuard` na všech datových cestách — CRUD/viewer/form/lookup),
+  UI jen nezobrazuje mrtvé odkazy — stejný princip jako Fáze 0a.
 - `hosting_core_ds_stats` záměrně jen čísla — žádné názvy partnerů, částky,
   předměty mailů.
 - Rate-limit na OP endpointech (login-class bucket jako u `/_auth/*`).

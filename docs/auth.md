@@ -179,7 +179,7 @@ i `jitProvision` fungují dle politiky DS.
 ## Admin model — is_admin a ochrana systémových tabulek (Fáze 0a)
 
 Minimální model oprávnění (D16): boolean `is_admin` na `core_system_users`
-+ plošný guard — CRUD/viewer/form akce nad tabulkami `core_system_*`
++ plošný guard — CRUD/viewer/form/lookup akce nad tabulkami `core_system_*`
 vyžadují admina, jinak `403 FORBIDDEN_SYSTEM_TABLE`. Plné RBAC mimo scope,
 model je s ním dopředně kompatibilní.
 

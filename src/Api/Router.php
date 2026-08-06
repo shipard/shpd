@@ -214,6 +214,12 @@ class Router
 			return $this->resolveHostingServerRoute($subpath, $method);
 		}
 
+		// AI gateway (D5) — autentizaci gateway tokenem shpd_gw_ i gating
+		// dělá kontroler (endpoint je exempt); jiné cesty pod ai-gw → 404.
+		if (str_starts_with($subpath, '/_hosting/ai-gw/')) {
+			return $this->resolveHostingAiGatewayRoute($subpath, $method);
+		}
+
 		// Lookup pro mail-routery (D4) — autentizaci klíčem shpd_hk_
 		// routeru i gating dělá kontroler (endpoint je exempt).
 		if ($subpath === '/_hosting/mail/lookup') {
@@ -572,6 +578,21 @@ class Router
 			return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
 		}
 		return new Route('hostingServer', $action);
+	}
+
+	private function resolveHostingAiGatewayRoute(string $subpath, string $method): Route|Response
+	{
+		$rest = substr($subpath, strlen('/_hosting/ai-gw/'));
+
+		// Jediná cesta — klienti Anthropicu appendují /v1/messages
+		// k base_url; cokoli jiného pod ai-gw je 404.
+		if ($rest !== 'v1/messages') {
+			return Response::error('NOT_FOUND', 'Not found', 404);
+		}
+		if ($method !== 'POST') {
+			return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+		}
+		return new Route('hostingAiGateway', 'messages');
 	}
 
 	private function resolveRegistryRoute(string $subpath, string $method): Route|Response

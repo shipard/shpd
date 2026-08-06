@@ -190,6 +190,39 @@ class RateLimitMiddlewareTest extends TestCase
 		$this->assertSame(429, $this->getStatus($result));
 	}
 
+	// ── AI gateway bucket (D5) ────────────────────────────────────────────────
+
+	public function testAiGatewayUsesOwnBucketKeyedByToken(): void
+	{
+		$ref    = new \ReflectionClass(RateLimitMiddleware::class);
+		$method = $ref->getMethod('resolveKey');
+		$mw     = new TestableRateLimitMiddleware();
+		$auth   = AuthContext::anonymous();
+		$rt     = new Route('hostingAiGateway', 'messages');
+
+		$reqA = Request::fromArray('POST', '/api/v1/_hosting/ai-gw/v1/messages', [], '', [
+			'REMOTE_ADDR' => '10.0.0.5', 'HTTP_X_API_KEY' => 'shpd_gw_tokenA',
+		]);
+		$reqB = Request::fromArray('POST', '/api/v1/_hosting/ai-gw/v1/messages', [], '', [
+			'REMOTE_ADDR' => '10.0.0.5', 'HTTP_X_API_KEY' => 'shpd_gw_tokenB',
+		]);
+
+		[$keyA, $typeA, $limitA] = $method->invoke($mw, $reqA, $auth, $rt);
+		[$keyB] = $method->invoke($mw, $reqB, $auth, $rt);
+
+		$this->assertSame('ai_gw', $typeA);
+		$this->assertSame(300, $limitA);
+		// Izolace per token — dva DS na jedné egress IP nesdílí bucket.
+		$this->assertNotSame($keyA, $keyB);
+
+		// Bez x-api-key spadne na IP, ale zůstává v ai_gw bucketu (ne anon).
+		$reqNoKey = Request::fromArray('POST', '/api/v1/_hosting/ai-gw/v1/messages', [], '', [
+			'REMOTE_ADDR' => '10.0.0.5',
+		]);
+		[, $typeNoKey] = $method->invoke($mw, $reqNoKey, $auth, $rt);
+		$this->assertSame('ai_gw', $typeNoKey);
+	}
+
 	// ── Remaining count ───────────────────────────────────────────────────────
 
 	public function testRemainingDecrementsWithEachRequest(): void

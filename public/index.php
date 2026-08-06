@@ -299,6 +299,7 @@ function dispatch(
 		'hostingOidc' => dispatchHostingOidc($route, $request, $auth, $db, $tables, $resolved),
 		'hostingServer' => dispatchHostingServer($route, $request, $db, $tables, $resolved),
 		'hostingMail' => dispatchHostingMail($route, $request, $db, $tables, $resolved),
+		'hostingAiGateway' => dispatchHostingAiGateway($route, $request, $db, $tables, $resolved),
 		'mcp'     => dispatchMcp($request, $auth, $resolved->connection, $tables, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'openapi' => (new OpenApiController())->spec($auth, $openApiPublic, $tables, $baseUrl),
 		default   => Response::error('INTERNAL_ERROR', "Unknown controller: {$route->controller}", 500),
@@ -513,6 +514,29 @@ function dispatchHostingMail(
 	return match ($route->action) {
 		'lookup' => $ctrl->lookup($request, $db, $tables),
 		default  => Response::error('INTERNAL_ERROR', "Unknown hostingMail action: {$route->action}", 500),
+	};
+}
+
+function dispatchHostingAiGateway(
+	Route $route,
+	Request $request,
+	\Shipard\Core\Database\DataSourceConnection $db,
+	array $tables,
+	\Shipard\Api\ResolvedDataSource $resolved,
+): Response {
+	// Endpoint je exempt (auth gateway tokenem dělá kontroler) — velikost
+	// body omezit už tady; limit dle kontraktu Anthropic Messages (D5).
+	// Chybová odpověď v Anthropic formátu — klienti jí rozumí.
+	$contentLength = (int) ($request->getHeader('content-length') ?? '0');
+	if ($contentLength > 33554432) { // 32 MiB
+		return \Shipard\Api\HostingAiGatewayTokenAuthenticator::anthropicError(
+			'request_too_large', 'Request body too large', 413,
+		);
+	}
+	$ctrl = new \Shipard\Api\Controller\HostingAiGatewayController($resolved->config);
+	return match ($route->action) {
+		'messages' => $ctrl->messages($request, $db, $tables),
+		default    => Response::error('INTERNAL_ERROR', "Unknown hostingAiGateway action: {$route->action}", 500),
 	};
 }
 

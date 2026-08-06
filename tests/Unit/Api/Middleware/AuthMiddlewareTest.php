@@ -192,6 +192,18 @@ class AuthMiddlewareTest extends TestCase
 		$this->assertFalse($result->isAuthenticated);
 	}
 
+	public function testHostingAiGatewayMessagesIsExempt(): void
+	{
+		// Auth gateway tokenem shpd_gw_ si dělá HostingAiGatewayController
+		// sám — i klient posílající navíc Authorization header musí projít.
+		$route = new Route('hostingAiGateway', 'messages');
+		$req = $this->req(server: ['HTTP_AUTHORIZATION' => 'Bearer whatever']);
+		$result = $this->middleware->handle($req, $route, $this->db);
+
+		$this->assertInstanceOf(AuthContext::class, $result);
+		$this->assertFalse($result->isAuthenticated);
+	}
+
 	public function testOpenApiRequiresAuthWhenNotPublic(): void
 	{
 		// Even without a token, openapi is not exempt → anonymous (but controllers must check)

@@ -611,6 +611,31 @@ class RouterTest extends TestCase
 		$this->assertSame('NOT_FOUND', $result->getPayload()['error']['code']);
 	}
 
+	// AI gateway route (D5)
+
+	public function testHostingAiGatewayMessagesPost(): void
+	{
+		$result = $this->router->resolve('/api/v1/_hosting/ai-gw/v1/messages', 'POST');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'hostingAiGateway', 'messages');
+	}
+
+	public function testHostingAiGatewayMessagesGetNotAllowed(): void
+	{
+		$result = $this->router->resolve('/api/v1/_hosting/ai-gw/v1/messages', 'GET');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
+	}
+
+	public function testHostingAiGatewayUnknownPathIs404(): void
+	{
+		foreach (['/api/v1/_hosting/ai-gw/v1/complete', '/api/v1/_hosting/ai-gw/admin'] as $path) {
+			$result = $this->router->resolve($path, 'POST');
+			$this->assertInstanceOf(Response::class, $result);
+			$this->assertSame('NOT_FOUND', $result->getPayload()['error']['code']);
+		}
+	}
+
 	// Analysis routes (Fáze 3a)
 
 	public function testAnalysisQueueGet(): void

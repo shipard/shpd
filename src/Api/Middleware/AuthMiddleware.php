@@ -79,6 +79,12 @@ class AuthMiddleware
 		if ($route->controller === 'hostingMail' && $route->action === 'lookup') {
 			return true;
 		}
+		// AI gateway (D5): gateway tokeny shpd_gw_ validuje
+		// HostingAiGatewayController sám; bez exemption by klient posílající
+		// Authorization header dostal Shipard 401 ještě před controllerem.
+		if ($route->controller === 'hostingAiGateway' && $route->action === 'messages') {
+			return true;
+		}
 		if ($openApiPublic && $route->controller === 'openapi' && $route->action === 'spec') {
 			return true;
 		}

@@ -18,6 +18,7 @@ class RateLimitMiddleware
 		'api_key' => 1000,
 		'session' => 300,
 		'login'   => 10,   // per IP, for login endpoint
+		'ai_gw'   => 300,  // AI gateway, per gateway token (D5)
 		'default' => 60,   // unauthenticated non-login requests
 	];
 
@@ -136,6 +137,18 @@ class RateLimitMiddleware
 			$ip   = $request->getClientIp() ?? 'unknown';
 			$key  = hash('sha256', 'login:' . $ip);
 			return [$key, 'login', self::LIMITS['login']];
+		}
+
+		// AI gateway (D5): requesty jsou exempt (anonymní pro AuthContext) —
+		// bez vlastního bucketu by všechny DS klienti jednoho serveru (jedna
+		// egress IP) sdíleli anon default 60/min. Klíč per (nevalidovaný)
+		// gateway token = izolace per DS; spray bez klíče degraduje na
+		// per-value buckety, řádky jsou okenní.
+		if ($route->controller === 'hostingAiGateway') {
+			$id  = $request->getHeader('x-api-key')
+				?? ('ip:' . ($request->getClientIp() ?? 'unknown'));
+			$key = hash('sha256', 'aigw:' . $id);
+			return [$key, 'ai_gw', self::LIMITS['ai_gw']];
 		}
 
 		if ($auth->isAuthenticated && $auth->token !== null) {

@@ -27,6 +27,12 @@ Tyhle stránky slouží dvěma čtenářům: tobě a vestavěnému AI asistentov
 | [Co Shipard umí](co-shipard-umi.md) | Úplný přehled agend, které v aplikaci jsou — a u kterých z nich už je napsaný návod. |
 | [Slovníček](slovnicek.md) | Co která věc v Shipardu znamená a jak se jmenuje v rozhraní. |
 
+### Položky
+
+| Stránka | Co v ní najdeš |
+|---------|----------------|
+| [Založení položky](polozky/zalozeni-polozky.md) | Jak přidat položku do katalogu, co je povinné, co Shipard doplní sám a co na položce vědomě není. |
+
 ### Došlá pošta
 
 | Stránka | Co v ní najdeš |

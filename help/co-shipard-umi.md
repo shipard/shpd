@@ -1,7 +1,7 @@
 ---
 title: Co Shipard umí
 summary: Úplný přehled agend, které v aplikaci jsou — a u kterých z nich už je napsaný návod.
-keywords: [umí, neumí to, jde, zvládne, dokáže, podporuje, existuje, má, obsahuje, co všechno, seznam funkcí, přehled funkcí, agendy, moduly, sekce, menu, kde najdu, co tam je, vystavit fakturu, faktura odběrateli, vydané faktury, osoby, dodavatele, odběratele, položky, spisovna, smlouvy, úkoly, účetní deník, účtový rozvrh, bankovní výpis, saldokonto]
+keywords: [umí, neumí to, jde, zvládne, dokáže, podporuje, existuje, má, obsahuje, co všechno, seznam funkcí, přehled funkcí, agendy, moduly, sekce, menu, kde najdu, co tam je, vystavit fakturu, faktura odběrateli, vydané faktury, osoby, dodavatele, odběratele, spisovna, smlouvy, úkoly, účetní deník, účtový rozvrh, bankovní výpis, saldokonto]
 related: [co-dnes-nejde.md, slovnicek.md]
 ---
 
@@ -36,7 +36,7 @@ Položky, které jsou v menu samostatně, nad ostatními sekcemi.
 | Agenda | Co s ní uděláš | Návod |
 |---|---|---|
 | **Osoby** | Dodavatelé, odběratelé i fyzické osoby v jedné evidenci. Firmu si doplníš z veřejného registru podle IČO. Ke každé osobě vedeš kontakty, adresy a bankovní spojení | — |
-| **Položky** | Co se na dokladech fakturuje — jeden řádek dokladu je položka. U položky se drží i to, čím se účtuje (druhy položek a měrné jednotky se nastavují v Nastavení) | — |
+| **Položky** | Co se na dokladech fakturuje — jeden řádek dokladu je položka. U položky se drží i to, čím se účtuje (druhy položek a měrné jednotky se nastavují v Nastavení) | [Založení položky](polozky/zalozeni-polozky.md) |
 
 ---
 

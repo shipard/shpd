@@ -7,8 +7,10 @@ rozcestník po oblastech a vloží ho do help/README.md mezi značky
 OBSAH:BEGIN / OBSAH:END.
 
 Kromě indexu ověřuje konzistenci: povinné klíče, soulad `title` s H1,
-existenci cílů v `related` a to, že každý podadresář help/ je vědomě
-zaveden v SECTIONS.
+existenci cílů v `related` i v odkazech v těle stránky, to, že každý
+podadresář help/ je vědomě zaveden v SECTIONS, a soulad katalogu agend
+(help/co-shipard-umi.md) s levým menu aplikace — každá úlohová stránka
+z něj musí být odkázaná a každá agenda z menu v něm musí mít řádek.
 
 Pravidla pro psaní stránek: docs/help-authoring.md
 
@@ -21,6 +23,7 @@ Volá se z git hooku (pre-commit) v režimu --check.
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
@@ -47,6 +50,24 @@ REQUIRED_KEYS = ("title", "summary", "keywords")
 
 # Nad tolik řádků stránka přestává být jedna úloha (viz docs/help-authoring.md).
 LONG_PAGE_LINES = 200
+
+# Katalog agend — stránka, která říká, co aplikace umí a k čemu už je návod.
+# Bez odkazu z něj uživatel ani asistent novou stránku nenajde.
+CATALOG = "co-shipard-umi.md"
+
+# Stránky, které nejsou úlohou, takže odkaz z katalogu nepotřebují.
+# Nová výjimka se přidává vědomě — jinak --check zastaví commit.
+CATALOG_EXEMPT = {CATALOG, "co-dnes-nejde.md", "slovnicek.md"}
+
+# Položky levého menu, které nejsou viewer modulu — drží je
+# NavigationController, takže je v module.jsonc nenajdeme.
+CATALOG_EXTRA_AGENDAS = {"Dashboard", "Chat"}
+
+# Řádek tabulky katalogu: `| **Agenda** | …`
+CATALOG_ROW_RE = re.compile(r"^\|\s*\*\*(.+?)\*\*\s*\|")
+
+# Odkaz v markdownu — použitý pro kontrolu cest i pro obsah katalogu.
+LINK_RE = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
 
 H1_RE = re.compile(r"^#\s+(.+?)\s*$")
 KEY_RE = re.compile(r"^([a-z_]+):\s*(.*)$")
@@ -123,6 +144,135 @@ def parse_page(path: Path) -> tuple[Page | None, list[str]]:
     return Page(rel, meta, h1, len(lines)), errors
 
 
+def strip_jsonc(text: str) -> str:
+    """Odstraní // a /* */ komentáře mimo stringy a koncové čárky.
+
+    Komentáře se hledají znak po znaku, aby `//` uvnitř stringu (třeba
+    v URL) neodřízlo zbytek řádku.
+    """
+    out: list[str] = []
+    i, n = 0, len(text)
+    in_string = False
+    while i < n:
+        ch = text[i]
+        if in_string:
+            out.append(ch)
+            if ch == "\\" and i + 1 < n:
+                out.append(text[i + 1])
+                i += 2
+                continue
+            if ch == '"':
+                in_string = False
+            i += 1
+            continue
+        if ch == '"':
+            in_string = True
+            out.append(ch)
+            i += 1
+            continue
+        if ch == "/" and i + 1 < n and text[i + 1] == "/":
+            while i < n and text[i] != "\n":
+                i += 1
+            continue
+        if ch == "/" and i + 1 < n and text[i + 1] == "*":
+            i += 2
+            while i + 1 < n and not (text[i] == "*" and text[i + 1] == "/"):
+                i += 1
+            i += 2
+            continue
+        out.append(ch)
+        i += 1
+    return re.sub(r",(\s*[}\]])", r"\1", "".join(out))
+
+
+def nav_agendas() -> tuple[dict[str, str], list[str]]:
+    """Agendy levého menu: {český popisek: id vieweru}.
+
+    Zdroj pravdy je `navSection` u vieweru v module.jsonc — stejně jako
+    ho čte NavigationController.
+    """
+    agendas: dict[str, str] = {}
+    errors: list[str] = []
+    for path in sorted((REPO_ROOT / "modules").glob("*/*/module.jsonc")):
+        rel = path.relative_to(REPO_ROOT).as_posix()
+        try:
+            data = json.loads(strip_jsonc(path.read_text(encoding="utf-8")))
+        except ValueError as exc:
+            errors.append(f"{rel}: nejde přečíst pro kontrolu katalogu ({exc})")
+            continue
+        for viewer in data.get("viewers", []):
+            if "navSection" not in viewer:
+                continue
+            label = (
+                viewer.get("name:cs")
+                or viewer.get("name")
+                or viewer.get("id", "?")
+            )
+            agendas[label] = viewer.get("id", "?")
+    return agendas, errors
+
+
+def link_errors(all_pages: list[Page]) -> list[str]:
+    """Relativní odkazy v těle stránek musí mířit na existující soubor."""
+    errors: list[str] = []
+    for page in all_pages:
+        path = HELP_DIR / page.rel_path
+        text = path.read_text(encoding="utf-8")
+        for target in LINK_RE.findall(text):
+            if target.startswith(("http://", "https://", "mailto:", "#")):
+                continue
+            clean = target.split("#", 1)[0]
+            if not clean:
+                continue
+            if not (path.parent / clean).is_file():
+                errors.append(
+                    f"{page.rel_path}: odkaz míří na neexistující `{target}`"
+                )
+    return errors
+
+
+def catalog_errors(all_pages: list[Page]) -> list[str]:
+    """Katalog agend musí odkazovat na všechny úlohové stránky a sedět na menu."""
+    catalog = HELP_DIR / CATALOG
+    if not catalog.is_file():
+        return [
+            f"help/{CATALOG} chybí — když se katalog přejmenoval, uprav "
+            "CATALOG v scripts/help-index.py"
+        ]
+
+    text = catalog.read_text(encoding="utf-8")
+    errors: list[str] = []
+
+    linked = {target.split("#", 1)[0] for target in LINK_RE.findall(text)}
+    for page in all_pages:
+        if page.rel_path in CATALOG_EXEMPT or page.rel_path in linked:
+            continue
+        errors.append(
+            f"{page.rel_path}: není odkázaná z help/{CATALOG} "
+            "(sloupec Návod)"
+        )
+
+    rows = {
+        m.group(1)
+        for m in (CATALOG_ROW_RE.match(line) for line in text.splitlines())
+        if m
+    }
+    agendas, nav_err = nav_agendas()
+    errors.extend(nav_err)
+    for label, viewer_id in sorted(agendas.items()):
+        if label not in rows:
+            errors.append(
+                f"help/{CATALOG}: chybí řádek pro agendu „{label}“ "
+                f"(viewer {viewer_id}) — nová agenda v menu patří do katalogu"
+            )
+    for label in sorted(rows - set(agendas) - CATALOG_EXTRA_AGENDAS):
+        errors.append(
+            f"help/{CATALOG}: řádek „{label}“ neodpovídá žádné agendě "
+            "v levém menu — zmizela z aplikace, nebo se přejmenovala?"
+        )
+    return errors
+
+
 def collect() -> tuple[list[tuple[str, list[Page]]], list[str], list[str]]:
     sections: list[tuple[str, list[Page]]] = []
     errors: list[str] = []
@@ -170,6 +320,9 @@ def collect() -> tuple[list[tuple[str, list[Page]]], list[str], list[str]]:
                     f"{page.rel_path}: `related` míří na neexistující "
                     f"`{target}`"
                 )
+
+    errors.extend(link_errors(all_pages))
+    errors.extend(catalog_errors(all_pages))
 
     return sections, errors, warnings
 

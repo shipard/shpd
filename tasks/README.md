@@ -32,6 +32,10 @@ nevypisují — níže je jen to, co není dokončené.
 | `mail-analysis-schema-fixes.md` | naplánováno | návrh 2026-07-14; `schema_error` není v kódu |
 | `mail-invoice-rounding.md` | částečně | implementováno, zbývá ověření a nasazení promptu |
 
+**Bez hlavičky `**Stav:**` nebo s neznámým stavem:**
+
+- `hosting-05-ai-gateway.md (neznámý stav: hotovo (2026-08-06; commity `hosting: ai tokens + usage tables…`,)`
+
 <!-- STAV:END -->
 
 ## Server, CLI a provoz

@@ -1,7 +1,7 @@
 ---
 title: Založení osoby
-summary: Jak přidat dodavatele nebo odběratele — natažením z registru podle IČO, nebo ručně.
-keywords: [osoby, osoba, nová osoba, založit osobu, přidat osobu, dodavatele, dodavatel, odběratele, odběratel, partner, protistrana, firma, fyzická osoba, IČO, DIČ, z registru, natáhnout firmu, přidat firmu z registru, vlastní firma, chybí vlastní osoba, splatnost, kontakty, adresy, bankovní účet osoby, kód osoby]
+summary: Jak přidat dodavatele nebo odběratele — natažením české firmy z registru podle IČO, nebo ručně.
+keywords: [osoby, osoba, nová osoba, založit osobu, přidat osobu, dodavatele, dodavatel, odběratele, odběratel, partner, protistrana, firma, fyzická osoba, IČO, DIČ, z registru, natáhnout firmu, přidat firmu z registru, zahraniční dodavatel, slovenská firma, německá firma, firma z EU, vlastní firma, chybí vlastní osoba, splatnost, kontakty, adresy, bankovní účet osoby, kód osoby]
 related: [posta/kontrola-vytezeni.md, co-shipard-umi.md, slovnicek.md]
 ---
 
@@ -18,18 +18,20 @@ vědět, co se tím založí. Nebo ti Dashboard hlásí **Chybí vlastní Osoba*
 
 ## Postup
 
-**Firmu ručně nepřepisuj — natáhni ji z registru.**
+**České firmě údaje nepřepisuj ručně — natáhni ji z registru.**
 
 1. V **Základní → Osoby** dej **Z registru**. Otevře se dialog **Přidat
    firmu z registru**.
-2. Do vyhledávání napiš **IČO nebo název firmy**.
+2. Do vyhledávání napiš **IČO nebo název firmy**. Registr zná **jen
+   české firmy** — zahraničního partnera zadej ručně (níž).
 3. Vyber firmu z výsledků a dej **Pokračovat**.
 4. Projdi náhled: **Základní údaje** (**Název**, **IČO**, **DIČ**, **DIČ
    pro DPH**), **Sídlo** a **Související záznamy** — tam je vidět, kolik
    se s firmou přinese adres, bankovních účtů a kontaktů.
 5. Dej **Uložit**. Osoba i všechny její záznamy vzniknou najednou.
 
-**Fyzickou osobu — a firmu, kterou registr nezná — zadáš ručně.**
+**Fyzickou osobu, zahraniční firmu — a českou firmu, kterou registr
+nezná — zadáš ručně.**
 
 1. Dej **Přidat** a vyber **Typ osoby**: *Firma*, nebo *Fyzická osoba*.
    Formulář se podle toho překlopí, tak si typ zvol jako první.

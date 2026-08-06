@@ -88,7 +88,7 @@ na tebe, zbytek je už vyřízený:
 | součet daní dole na faktuře | **Rekapitulace DPH** | Rozpis základu a daně po jednotlivých sazbách |
 | daň platí odběratel, přenesená daň | **Reverse charge** / **samovyměření** | Režim, kdy daň neodvádí dodavatel, ale odběratel. Typicky u zboží z EU nebo u stavebních prací |
 | dodavatel, odběratel, partner | **Osoba** (sekce *Základní*) | Jedna evidence pro firmy i fyzické osoby |
-| natáhnout firmu podle IČO | **Z registru** | Tlačítko v Osobách; otevře dialog **Přidat firmu z registru**, kde stačí IČO nebo název. Existující osobu nepřepíše |
+| natáhnout českou firmu podle IČO | **Z registru** | Tlačítko v Osobách; otevře dialog **Přidat firmu z registru**, kde stačí IČO nebo název. Existující osobu nepřepíše |
 
 ---
 

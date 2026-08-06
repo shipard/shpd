@@ -31,7 +31,7 @@ Tyhle stránky slouží dvěma čtenářům: tobě a vestavěnému AI asistentov
 
 | Stránka | Co v ní najdeš |
 |---------|----------------|
-| [Založení osoby](osoby/zalozeni-osoby.md) | Jak přidat dodavatele nebo odběratele — natažením z registru podle IČO, nebo ručně. |
+| [Založení osoby](osoby/zalozeni-osoby.md) | Jak přidat dodavatele nebo odběratele — natažením české firmy z registru podle IČO, nebo ručně. |
 
 ### Položky
 

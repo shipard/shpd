@@ -19,7 +19,7 @@ class HostingModuleDefinitionTest extends TestCase
 {
     private const MODULE_PATH = '/modules/hosting/core';
 
-    public function testModuleDeclaresSevenTables(): void
+    public function testModuleDeclaresEightTables(): void
     {
         $module = ModuleLoader::loadModule(dirname(__DIR__, 5) . self::MODULE_PATH);
 
@@ -33,6 +33,7 @@ class HostingModuleDefinitionTest extends TestCase
                 'hosting_core_mail_routers',
                 'hosting_core_ai_tokens',
                 'hosting_core_ai_usage',
+                'hosting_core_ds_stats',
             ],
             $module->tables,
         );
@@ -159,6 +160,30 @@ class HostingModuleDefinitionTest extends TestCase
             'stream', 'duration_ms', 'created'] as $expected) {
             $this->assertContains($expected, $columnIds);
         }
+    }
+
+    public function testDsStatsTableIsSnapshotWithUniqueDataSource(): void
+    {
+        $raw = JsoncParser::parseFile(
+            dirname(__DIR__, 5) . self::MODULE_PATH . '/tables/hosting_core_ds_stats.jsonc',
+        );
+        $def = TableDefinition::fromArray($raw);
+
+        // Snapshot (D7) — bez docStates, jeden řádek per DS (unique).
+        $this->assertNull($def->docStates);
+        $columnIds = array_map(static fn ($c) => $c->id, $def->columns);
+        $this->assertNotContains('docState', $columnIds);
+        foreach (['data_source', 'alerts_count', 'mail_count', 'collected_at'] as $expected) {
+            $this->assertContains($expected, $columnIds);
+        }
+
+        $uniqueIndexes = [];
+        foreach ($def->indexes as $index) {
+            if ($index->type === 'unique') {
+                $uniqueIndexes[] = $index->id;
+            }
+        }
+        $this->assertContains('unq_data_source', $uniqueIndexes);
     }
 
     public function testInstallHostingHasMinimalDependencies(): void

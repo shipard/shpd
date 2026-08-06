@@ -568,6 +568,7 @@ class Router
 			'reconcile' => ['POST', 'reconcile'],
 			'queue'     => ['GET', 'queue'],
 			'confirm'   => ['POST', 'confirm'],
+			'stats'     => ['POST', 'stats'],
 		];
 		if (!isset($actions[$rest])) {
 			return Response::error('NOT_FOUND', 'Not found', 404);

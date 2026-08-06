@@ -8,6 +8,7 @@ use Shipard\Core\Feed\FeedContext;
 use Shipard\Core\Feed\FeedSource;
 use Shipard\Module\Core\Mail\ExtractedDocTypes;
 use Shipard\Module\Core\Mail\ExtractedDocumentDocument;
+use Shipard\Module\Core\Mail\IncomingMessageDocument;
 
 /**
  * Feed zdroj došlé pošty — emituje kartu **per vytěžený doklad** (D5),
@@ -68,15 +69,6 @@ final class MailSuggestionsSource implements FeedSource
 
     /** Strop počtu příloh na kartě; nad strop frontend kreslí „+N". */
     private const MAX_CARD_ATTACHMENTS = 3;
-
-    /** analysis_state zprávy (core.mail.analysisStates). */
-    private const ANALYSIS_ANALYZED = 30;
-    private const ANALYSIS_FAILED = 70;
-
-    /** Workflow stavy zprávy (core.mail.docStatesIncoming). */
-    private const DOC_STATE_NEW = 10;
-    private const DOC_STATE_ARCHIVED = 80;
-    private const DOC_STATE_TRASH = 90;
 
     private const PRIMARY_TYPES_CFG_ITEM = 'core.mail.primaryTypes';
 
@@ -260,8 +252,8 @@ final class MailSuggestionsSource implements FeedSource
             . ' WHERE `analysis_state` = %i AND `docState` NOT IN %in'
             . ' ORDER BY `received_at` DESC, `id` DESC'
             . ' LIMIT %i',
-            self::ANALYSIS_FAILED,
-            [self::DOC_STATE_ARCHIVED, self::DOC_STATE_TRASH],
+            IncomingMessageDocument::ANALYSIS_FAILED,
+            [IncomingMessageDocument::DOC_STATE_ARCHIVED, IncomingMessageDocument::DOC_STATE_TRASH],
             $ctx->maxCards,
         );
     }
@@ -325,8 +317,8 @@ final class MailSuggestionsSource implements FeedSource
             . ' )'
             . ' ORDER BY `m`.`received_at` DESC, `m`.`id` DESC'
             . ' LIMIT %i',
-            self::ANALYSIS_ANALYZED,
-            self::DOC_STATE_NEW,
+            IncomingMessageDocument::ANALYSIS_ANALYZED,
+            IncomingMessageDocument::DOC_STATE_NEW,
             [
                 ExtractedDocumentDocument::STATUS_READY_TO_APPLY,
                 ExtractedDocumentDocument::STATUS_PENDING_REVIEW,

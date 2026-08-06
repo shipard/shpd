@@ -71,7 +71,7 @@ class AuthMiddleware
 		// na řádek serveru, ne uživatele — validuje je HostingServerController
 		// sám (AuthContext ne-uživatelské principály nenese).
 		if ($route->controller === 'hostingServer'
-			&& in_array($route->action, ['reconcile', 'queue', 'confirm'], true)) {
+			&& in_array($route->action, ['reconcile', 'queue', 'confirm', 'stats'], true)) {
 			return true;
 		}
 		// Lookup pro mail-routery (D4): klíče shpd_hk_ vázané na řádek

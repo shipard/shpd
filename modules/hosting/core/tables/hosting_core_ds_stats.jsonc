@@ -1,0 +1,68 @@
+{
+    "tableId": 437,
+    "name": "Hosting data source stats",
+    "name:cs": "Hosting — statistiky zdrojů dat",
+    "name:en": "Hosting data source stats",
+
+    "adminOnly": true,
+
+    "displayPattern": "{id}",
+
+    // Snapshot push agregátů z DS serverů (D7) — jeden řádek per DS (unique
+    // data_source, upsert, žádná historie). Bez docStates, bez document class
+    // a bez formu; řádky píše výhradně HostingServerController (akce stats).
+    // Záměrně jen počty — žádné názvy, částky, předměty (§7 docs/hosting.md).
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+        {
+            "id": "data_source",
+            "name": "Data source",
+            "name:cs": "Zdroj dat",
+            "name:en": "Data source",
+            "type": "int",
+            "nullable": false,
+            "reference": "hosting_core_data_sources"
+        },
+        {
+            "id": "alerts_count",
+            "name": "Active alerts",
+            "name:cs": "Aktivní upozornění",
+            "name:en": "Active alerts",
+            "type": "int",
+            "nullable": true
+        },
+        {
+            "id": "mail_count",
+            "name": "Pending mail",
+            "name:cs": "Pošta k řešení",
+            "name:en": "Pending mail",
+            "type": "int",
+            "nullable": true
+        },
+        {
+            "id": "collected_at",
+            "name": "Collected at",
+            "name:cs": "Sesbíráno",
+            "name:en": "Collected at",
+            "type": "datetime",
+            "nullable": false
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "unq_data_source",
+            "type": "unique",
+            "columns": [
+                {"column": "data_source"}
+            ]
+        }
+    ]
+}

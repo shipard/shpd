@@ -30,6 +30,9 @@ use Shipard\Core\Settings\SettingsStore;
  *   POST /_hosting/server/confirm    výsledek provisioningu: ok →
  *        lifecycle active + vazba owner v hosting_core_ds_users (U1);
  *        failed → lifecycle failed + provision_error
+ *   POST /_hosting/server/stats      push agregátů per DS (D7) → upsert
+ *        hosting_core_ds_stats; kadenci řídí stats_wanted v reconcile
+ *        response (nejstarší snapshot serveru starší než ~10 min)
  *
  * Autentizace: `Authorization: Bearer shpd_hk_…` — prefix lookup na
  * hosting_core_servers + hash_equals nad sha256 celého tokenu (vzor
@@ -47,6 +50,9 @@ class HostingServerController
 {
     /** Ne-archivní stavy modelu core.system.docStatesArchive. */
     private const ACTIVE_DOC_STATES = HostingApiKeyAuthenticator::ACTIVE_DOC_STATES;
+
+    /** Snapshot starší než tolik minut → reconcile chce nový stats push (D7). */
+    private const STATS_FRESH_MINUTES = 10;
 
     public function __construct(
         private readonly DataSourceConfig $config,
@@ -114,7 +120,7 @@ class HostingServerController
             ]);
         }
 
-        return Response::success(['ok' => true]);
+        return Response::success(['ok' => true, 'stats_wanted' => $this->statsWanted($db, (int) $server['id'], $tables)]);
     }
 
     /**
@@ -317,6 +323,78 @@ class HostingServerController
         return Response::success(['ok' => true, 'lifecycle' => 'failed']);
     }
 
+    /**
+     * POST /_hosting/server/stats
+     *
+     * Body: {stats: [{ds_id: string, alerts: int|null, mail: int|null}]}
+     *
+     * Snapshot upsert (D7) — jeden řádek per DS (unique data_source),
+     * collected_at = now. Neznámé/cizí ds_id se přeskočí s warningem do
+     * logu (vzor reconcile). Jen počty — nic jiného se nepřijímá.
+     *
+     * @param array<string, \Shipard\Core\Database\TableDefinition> $tables
+     */
+    public function stats(Request $request, DataSourceConnection $db, array $tables): Response
+    {
+        $gate = $this->gate($tables);
+        if ($gate !== null) {
+            return $gate;
+        }
+        // Tabulka snapshotů přišla až s Fází 5 — hosting bez ds-upgrade
+        // nesmí shodit starší akce, proto check per-action a ne v gate().
+        if (!isset($tables['hosting_core_ds_stats'])) {
+            return Response::error('NOT_FOUND', 'Not found', 404);
+        }
+        $server = $this->authenticate($request, $db);
+        if ($server instanceof Response) {
+            return $server;
+        }
+
+        $body = $request->getBody() ?? [];
+        if (!is_array($body['stats'] ?? null)) {
+            return Response::error('VALIDATION_ERROR', 'stats array is required', 422);
+        }
+
+        $now = date('Y-m-d H:i:s');
+        $accepted = 0;
+        foreach ($body['stats'] as $item) {
+            $dsId = is_array($item) ? (string) ($item['ds_id'] ?? '') : '';
+            if ($dsId === '') {
+                continue;
+            }
+            $ds = $db->fetchRow(
+                'SELECT id FROM hosting_core_data_sources WHERE ds_id = %s AND server = %i',
+                $dsId,
+                (int) $server['id'],
+            );
+            if ($ds === null) {
+                ErrorLogger::warn('hosting stats: neznámé nebo cizí ds_id — položka přeskočena', [
+                    'server' => (int) $server['id'],
+                    'dsId' => $dsId,
+                ]);
+                continue;
+            }
+
+            $values = [
+                'alerts_count' => is_numeric($item['alerts'] ?? null) ? (int) $item['alerts'] : null,
+                'mail_count' => is_numeric($item['mail'] ?? null) ? (int) $item['mail'] : null,
+                'collected_at' => $now,
+            ];
+            $existing = $db->fetchRow(
+                'SELECT id FROM hosting_core_ds_stats WHERE data_source = %i',
+                (int) $ds['id'],
+            );
+            if ($existing !== null) {
+                $db->updateWhere('hosting_core_ds_stats', $values, 'id = %i', (int) $existing['id']);
+            } else {
+                $db->insertRow('hosting_core_ds_stats', $values + ['data_source' => (int) $ds['id']]);
+            }
+            $accepted++;
+        }
+
+        return Response::success(['ok' => true, 'accepted' => $accepted]);
+    }
+
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
@@ -335,6 +413,35 @@ class HostingServerController
             return Response::error('NOT_FOUND', 'Not found', 404);
         }
         return null;
+    }
+
+    /**
+     * Kadence stats pushe (D7): true, když server nemá žádný snapshot nebo
+     * je nejstarší `collected_at` jeho aktivních DS starší než
+     * STATS_FRESH_MINUTES. Bez tabulky (hosting bez ds-upgrade) → false,
+     * agent by stejně neměl kam pushovat.
+     *
+     * @param array<string, \Shipard\Core\Database\TableDefinition> $tables
+     */
+    private function statsWanted(DataSourceConnection $db, int $serverId, array $tables): bool
+    {
+        if (!isset($tables['hosting_core_ds_stats'])) {
+            return false;
+        }
+        $oldest = $db->fetchSingle(
+            'SELECT MIN(st.collected_at) FROM hosting_core_ds_stats st'
+            . ' JOIN hosting_core_data_sources ds ON ds.id = st.data_source'
+            . ' WHERE ds.server = %i AND ds.lifecycle = %s',
+            $serverId,
+            'active',
+        );
+        if ($oldest === null) {
+            return true;
+        }
+        if ($oldest instanceof \DateTimeInterface) {
+            $oldest = $oldest->format('Y-m-d H:i:s');
+        }
+        return (string) $oldest < date('Y-m-d H:i:s', time() - self::STATS_FRESH_MINUTES * 60);
     }
 
     /**

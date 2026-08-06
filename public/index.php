@@ -497,6 +497,7 @@ function dispatchHostingServer(
 		'reconcile' => $ctrl->reconcile($request, $db, $tables),
 		'queue'     => $ctrl->queue($request, $db, $tables),
 		'confirm'   => $ctrl->confirm($request, $db, $tables),
+		'stats'     => $ctrl->stats($request, $db, $tables),
 		default     => Response::error('INTERNAL_ERROR', "Unknown hostingServer action: {$route->action}", 500),
 	};
 }

@@ -25,14 +25,18 @@ class IncomingMessageDocument extends Document
     private const ID_PREFIX = 'MSG-';
     private const MAIL_TABLE_ID = 303;
 
-    /** analysis_state hodnoty (core.mail.analysisStates). */
-    private const ANALYSIS_NONE = 0;
-    private const ANALYSIS_QUEUED = 10;
-    private const ANALYSIS_ANALYZING = 20;
+    /** analysis_state hodnoty (core.mail.analysisStates) — kanonické místo, žádné další kopie. */
+    public const ANALYSIS_NONE = 0;
+    public const ANALYSIS_QUEUED = 10;
+    public const ANALYSIS_ANALYZING = 20;
+    public const ANALYSIS_ANALYZED = 30;
+    public const ANALYSIS_FAILED = 70;
 
-    /** docState hodnoty (core.mail.docStatesIncoming), ve kterých se frontuje analýza. */
-    private const DOC_STATE_NEW = 10;
-    private const DOC_STATE_OPEN = 20;
+    /** docState hodnoty (core.mail.docStatesIncoming) — kanonické místo, žádné další kopie. */
+    public const DOC_STATE_NEW = 10;
+    public const DOC_STATE_OPEN = 20;
+    public const DOC_STATE_ARCHIVED = 80;
+    public const DOC_STATE_TRASH = 90;
 
     public function validate(array &$data): ValidationResult
     {

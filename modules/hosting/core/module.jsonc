@@ -18,7 +18,8 @@
         "hosting_core_oidc_codes",
         "hosting_core_mail_routers",
         "hosting_core_ai_tokens",
-        "hosting_core_ai_usage"
+        "hosting_core_ai_usage",
+        "hosting_core_ds_stats"
     ],
 
     "documentClasses": [

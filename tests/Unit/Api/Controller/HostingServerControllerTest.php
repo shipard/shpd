@@ -151,6 +151,56 @@ class HostingServerControllerTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // reconcile — stats_wanted (D7)
+    // -------------------------------------------------------------------------
+
+    public function testReconcileStatsWantedTrueWithoutSnapshot(): void
+    {
+        $this->db->addDataSource(['ds_id' => 'cccc-cccc-cccc-cccc', 'name' => 'Live', 'server' => $this->serverId]);
+
+        $resp = $this->reconcile();
+        $this->assertTrue($resp->getPayload()['data']['stats_wanted']);
+    }
+
+    public function testReconcileStatsWantedFalseWithFreshSnapshot(): void
+    {
+        $dsId = $this->db->addDataSource(['ds_id' => 'cccc-cccc-cccc-cccc', 'name' => 'Live', 'server' => $this->serverId]);
+        $this->db->addDsStat(['data_source' => $dsId, 'collected_at' => date('Y-m-d H:i:s')]);
+        // Starý snapshot cizího serveru kadenci tohoto serveru neovlivňuje.
+        $foreignId = $this->db->addDataSource(['ds_id' => 'ffff-ffff-ffff-ffff', 'name' => 'F', 'server' => $this->otherServerId]);
+        $this->db->addDsStat(['data_source' => $foreignId, 'collected_at' => date('Y-m-d H:i:s', time() - 3600)]);
+
+        $resp = $this->reconcile();
+        $this->assertFalse($resp->getPayload()['data']['stats_wanted']);
+    }
+
+    public function testReconcileStatsWantedTrueWithStaleSnapshot(): void
+    {
+        // Dva DS — kadenci určuje nejstarší snapshot.
+        $freshId = $this->db->addDataSource(['ds_id' => 'cccc-cccc-cccc-cccc', 'name' => 'Fresh', 'server' => $this->serverId]);
+        $this->db->addDsStat(['data_source' => $freshId, 'collected_at' => date('Y-m-d H:i:s')]);
+        $staleId = $this->db->addDataSource(['ds_id' => 'dddd-dddd-dddd-dddd', 'name' => 'Stale', 'server' => $this->serverId]);
+        $this->db->addDsStat(['data_source' => $staleId, 'collected_at' => date('Y-m-d H:i:s', time() - 11 * 60)]);
+
+        $resp = $this->reconcile();
+        $this->assertTrue($resp->getPayload()['data']['stats_wanted']);
+    }
+
+    public function testReconcileStatsWantedFalseWithoutStatsTable(): void
+    {
+        // Hosting před ds-upgrade: agent nemá kam pushovat.
+        $this->db->addDataSource(['ds_id' => 'cccc-cccc-cccc-cccc', 'name' => 'Live', 'server' => $this->serverId]);
+
+        $resp = $this->controller->reconcile(
+            $this->req('POST', 'reconcile', body: ['version' => '0.1.0', 'dataSources' => []]),
+            $this->db,
+            $this->tables(withStats: false),
+        );
+        $this->assertSame(200, $this->getStatus($resp));
+        $this->assertFalse($resp->getPayload()['data']['stats_wanted']);
+    }
+
+    // -------------------------------------------------------------------------
     // queue
     // -------------------------------------------------------------------------
 
@@ -513,8 +563,109 @@ class HostingServerControllerTest extends TestCase
     }
 
     // -------------------------------------------------------------------------
+    // stats (D7)
+    // -------------------------------------------------------------------------
+
+    public function testStatsInsertsSnapshot(): void
+    {
+        $dsId = $this->db->addDataSource(['ds_id' => 'cccc-cccc-cccc-cccc', 'name' => 'Live', 'server' => $this->serverId]);
+
+        $resp = $this->stats([['ds_id' => 'cccc-cccc-cccc-cccc', 'alerts' => 3, 'mail' => 5]]);
+
+        $this->assertSame(200, $this->getStatus($resp));
+        $this->assertSame(1, $resp->getPayload()['data']['accepted']);
+        $this->assertCount(1, $this->db->dsStats);
+        $row = array_values($this->db->dsStats)[0];
+        $this->assertSame($dsId, (int) $row['data_source']);
+        $this->assertSame(3, $row['alerts_count']);
+        $this->assertSame(5, $row['mail_count']);
+        $this->assertNotNull($row['collected_at']);
+    }
+
+    public function testStatsUpsertOverwritesExistingRow(): void
+    {
+        $this->db->addDataSource(['ds_id' => 'cccc-cccc-cccc-cccc', 'name' => 'Live', 'server' => $this->serverId]);
+
+        $this->stats([['ds_id' => 'cccc-cccc-cccc-cccc', 'alerts' => 3, 'mail' => 5]]);
+        $resp = $this->stats([['ds_id' => 'cccc-cccc-cccc-cccc', 'alerts' => 0, 'mail' => null]]);
+
+        $this->assertSame(1, $resp->getPayload()['data']['accepted']);
+        // Snapshot — druhý push přepisuje řádek, tabulka neroste.
+        $this->assertCount(1, $this->db->dsStats);
+        $row = array_values($this->db->dsStats)[0];
+        $this->assertSame(0, $row['alerts_count']);
+        $this->assertNull($row['mail_count']);
+    }
+
+    public function testStatsSkipsUnknownAndForeignDsIds(): void
+    {
+        $this->db->addDataSource(['ds_id' => 'cccc-cccc-cccc-cccc', 'name' => 'Live', 'server' => $this->serverId]);
+        $this->db->addDataSource(['ds_id' => 'ffff-ffff-ffff-ffff', 'name' => 'F', 'server' => $this->otherServerId]);
+
+        $resp = $this->stats([
+            ['ds_id' => 'cccc-cccc-cccc-cccc', 'alerts' => 1, 'mail' => 1],
+            ['ds_id' => 'ffff-ffff-ffff-ffff', 'alerts' => 2, 'mail' => 2],
+            ['ds_id' => 'zzzz-zzzz-zzzz-zzzz', 'alerts' => 3, 'mail' => 3],
+            'garbage',
+        ]);
+
+        $this->assertSame(200, $this->getStatus($resp));
+        $this->assertSame(1, $resp->getPayload()['data']['accepted']);
+        $this->assertCount(1, $this->db->dsStats);
+    }
+
+    public function testStatsWithoutStatsArrayIs422(): void
+    {
+        $resp = $this->controller->stats(
+            $this->req('POST', 'stats', body: ['foo' => 'bar']),
+            $this->db,
+            $this->tables(),
+        );
+        $this->assertSame(422, $this->getStatus($resp));
+    }
+
+    public function testStatsWithoutStatsTableIs404(): void
+    {
+        $resp = $this->controller->stats(
+            $this->req('POST', 'stats', body: ['stats' => []]),
+            $this->db,
+            $this->tables(withStats: false),
+        );
+        $this->assertSame(404, $this->getStatus($resp));
+    }
+
+    public function testStatsMissingAuthorizationHeaderIs401(): void
+    {
+        $resp = $this->controller->stats(
+            $this->req('POST', 'stats', body: ['stats' => []], token: false),
+            $this->db,
+            $this->tables(),
+        );
+        $this->assertSame(401, $this->getStatus($resp));
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
+
+    /** @param list<mixed> $items */
+    private function stats(array $items): Response
+    {
+        return $this->controller->stats(
+            $this->req('POST', 'stats', body: ['stats' => $items]),
+            $this->db,
+            $this->tables(),
+        );
+    }
+
+    private function reconcile(): Response
+    {
+        return $this->controller->reconcile(
+            $this->req('POST', 'reconcile', body: ['version' => '0.1.0', 'dataSources' => []]),
+            $this->db,
+            $this->tables(),
+        );
+    }
 
     /** Řádek požadavku se všemi náležitostmi; overrides umí i nully. */
     private function addRequest(array $overrides = []): int
@@ -553,13 +704,18 @@ class HostingServerControllerTest extends TestCase
         );
     }
 
-    private function tables(): array
+    /** @param bool $withStats false = hosting před ds-upgrade (bez ds_stats) */
+    private function tables(bool $withStats = true): array
     {
-        return [
+        $tables = [
             'hosting_core_servers' => $this->makeTable('hosting_core_servers'),
             'hosting_core_data_sources' => $this->makeTable('hosting_core_data_sources'),
             'hosting_core_ds_users' => $this->makeTable('hosting_core_ds_users'),
         ];
+        if ($withStats) {
+            $tables['hosting_core_ds_stats'] = $this->makeTable('hosting_core_ds_stats');
+        }
+        return $tables;
     }
 
     private function makeTable(string $name): TableDefinition

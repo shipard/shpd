@@ -25,6 +25,8 @@ class InMemoryHostingServerDb extends DataSourceConnection
     public array $users = [];
     /** @var array<int, array> */
     public array $aiTokens = [];
+    /** @var array<int, array> */
+    public array $dsStats = [];
     /** @var array<string, string> Hodnoty JSON-encoded jako v core_system_settings. */
     public array $settings = [];
     private int $nextId = 1;
@@ -88,11 +90,22 @@ class InMemoryHostingServerDb extends DataSourceConnection
         ]);
     }
 
+    public function addDsStat(array $row): int
+    {
+        return $this->insert($this->dsStats, $row + [
+            'data_source' => 0,
+            'alerts_count' => null,
+            'mail_count' => null,
+            'collected_at' => date('Y-m-d H:i:s'),
+        ]);
+    }
+
     public function insertRow(string $table, array $data): int
     {
         return match ($table) {
             'hosting_core_ds_users' => $this->insert($this->dsUsers, $data),
             'hosting_core_ai_tokens' => $this->insert($this->aiTokens, $data),
+            'hosting_core_ds_stats' => $this->insert($this->dsStats, $data),
             default => throw new \LogicException("InMemoryHostingServerDb: unexpected insert into {$table}"),
         };
     }
@@ -122,8 +135,26 @@ class InMemoryHostingServerDb extends DataSourceConnection
             }
             return null;
         }
+        // stats: WHERE ds_id = %s AND server = %i — dřív než generická
+        // větev `id =` ('ds_id =' ji obsahuje jako podřetězec).
+        if (str_contains($sql, 'hosting_core_data_sources') && str_contains($sql, 'ds_id =')) {
+            foreach ($this->dataSources as $row) {
+                if ((string) $row['ds_id'] === (string) $args[1] && (int) ($row['server'] ?? 0) === (int) $args[2]) {
+                    return $row;
+                }
+            }
+            return null;
+        }
         if (str_contains($sql, 'hosting_core_data_sources') && str_contains($sql, 'id =')) {
             return $this->dataSources[(int) $args[1]] ?? null;
+        }
+        if (str_contains($sql, 'hosting_core_ds_stats') && str_contains($sql, 'data_source =')) {
+            foreach ($this->dsStats as $row) {
+                if ((int) $row['data_source'] === (int) $args[1]) {
+                    return $row;
+                }
+            }
+            return null;
         }
         // queue ai sekce: WHERE data_source = %i AND active = 1
         //                 AND docState IN %in ORDER BY id DESC
@@ -155,6 +186,25 @@ class InMemoryHostingServerDb extends DataSourceConnection
 
         if (str_contains($sql, 'core_system_settings')) {
             return $this->settings[(string) $args[1]] ?? null;
+        }
+
+        // reconcile stats_wanted: MIN(st.collected_at) přes join na aktivní DS serveru
+        if (str_contains($sql, 'MIN(st.collected_at)')) {
+            $min = null;
+            foreach ($this->dsStats as $stat) {
+                $ds = $this->dataSources[(int) $stat['data_source']] ?? null;
+                if ($ds === null
+                    || (int) ($ds['server'] ?? 0) !== (int) $args[1]
+                    || $ds['lifecycle'] !== $args[2]
+                ) {
+                    continue;
+                }
+                $collected = (string) $stat['collected_at'];
+                if ($min === null || $collected < $min) {
+                    $min = $collected;
+                }
+            }
+            return $min;
         }
 
         throw new \LogicException("InMemoryHostingServerDb: unexpected fetchSingle: {$sql}");
@@ -205,6 +255,12 @@ class InMemoryHostingServerDb extends DataSourceConnection
         if ($table === 'hosting_core_data_sources') {
             if (isset($this->dataSources[$id])) {
                 $this->dataSources[$id] = array_merge($this->dataSources[$id], $data);
+            }
+            return;
+        }
+        if ($table === 'hosting_core_ds_stats') {
+            if (isset($this->dsStats[$id])) {
+                $this->dsStats[$id] = array_merge($this->dsStats[$id], $data);
             }
             return;
         }

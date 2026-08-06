@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Shipard\Module\Core\Alerts\Feed;
 
 use Shipard\Core\Alerts\AlertCheckRegistry;
+use Shipard\Core\Alerts\AlertReconciler;
 use Shipard\Core\Feed\FeedContext;
 use Shipard\Core\Feed\FeedSource;
 
@@ -31,8 +32,8 @@ final class AlertsSource implements FeedSource
 {
     private const TABLE = 'core_alerts_alerts';
 
-    /** alert_state Active — viz core.alerts.alertStates. */
-    private const STATE_ACTIVE = 10;
+    /** alert_state Active — kanonická hodnota žije v AlertReconciler. */
+    private const STATE_ACTIVE = AlertReconciler::STATE_ACTIVE;
 
     private const SEVERITY_ERROR   = 30;
     private const SEVERITY_WARNING = 20;

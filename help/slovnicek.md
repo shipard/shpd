@@ -58,7 +58,7 @@ na tebe, zbytek je už vyřízený:
 
 | Odznak | Co znamená |
 |---|---|
-| **K použití** | Jistota 90 % a víc. Zkontroluj Součty a Datumy, zbytek námátkou |
+| **K použití** | Jistota 90 % a víc. Zkontroluj Součty a Datumy, zbytek namátkou |
 | **Čeká na review** | Jistota 60–90 %. Projdi všechny sekce náhledu |
 | **Nízká jistota** | Pod 60 %. Čti řádek po řádku, nebo zamítni a zadej ručně |
 | **Použito** | Z návrhu už vznikl doklad |
@@ -82,7 +82,7 @@ na tebe, zbytek je už vyřízený:
 | zrušit fakturu, škrtnout | stav **Storno** | Doklad zůstává v evidenci, ale neplatí. Nemazat — storno je správná cesta |
 | číslování faktur | **Číselná řada** | Předpis, podle kterého Shipard přiděluje čísla dokladů. Číslo se přiděluje při přechodu z Konceptu |
 | řádek faktury, co se fakturuje | **Položka** | Jeden řádek dokladu — množství, jednotková cena, sazba DPH |
-| datum, odkud se počítá DPH | **DUZP** | Datum uskutečnění zdaňitelného plnění. Určuje, do jakého období DPH doklad spadne |
+| datum, odkud se počítá DPH | **DUZP** | Datum uskutečnění zdanitelného plnění. Určuje, do jakého období DPH doklad spadne |
 | datum, kdy to patří do účetí | **Účetní datum** | Datum účetního případu. Vedle něj jsou na dokladu ještě **Datum vystavení** a **Datum splatnosti** |
 | kód pro kontrolní hlášení | **Kód DPH** | Označení režimu plnění u řádku. Není to sazba — sazba je procento, kód říká, jak se plnění vykazuje |
 | součet daní dole na faktuře | **Rekapitulace DPH** | Rozpis základu a daně po jednotlivých sazbách |

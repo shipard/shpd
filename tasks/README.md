@@ -17,7 +17,7 @@ jednotlivých subsystémů žijí v [`docs/`](../docs/README.md).
 
 ## Stav
 
-Celkem 182 tasků: **naplánováno** 5 · **částečně** 1 · **hotovo** 176.
+Celkem 183 tasků: **naplánováno** 5 · **částečně** 1 · **hotovo** 177.
 
 Zdroj pravdy je řádek `**Stav:**` v hlavičce každého tasku; tato
 tabulka je generovaná (`scripts/tasks-index.py`). Hotové tasky se
@@ -31,10 +31,6 @@ nevypisují — níže je jen to, co není dokončené.
 | `docs-vat-totals-reverse-charge.md` | naplánováno | opravy Z1–Z3 v `DocDocument` (nulové součty, samovyměření, noPayTax) |
 | `mail-analysis-schema-fixes.md` | naplánováno | návrh 2026-07-14; `schema_error` není v kódu |
 | `mail-invoice-rounding.md` | částečně | implementováno, zbývá ověření a nasazení promptu |
-
-**Bez hlavičky `**Stav:**` nebo s neznámým stavem:**
-
-- `hosting-05-ai-gateway.md (neznámý stav: hotovo (2026-08-06; commity `hosting: ai tokens + usage tables…`,)`
 
 <!-- STAV:END -->
 

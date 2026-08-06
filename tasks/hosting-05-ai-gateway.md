@@ -1,8 +1,6 @@
 # Hosting — Task 4: AI gateway (Fáze 4)
 
-**Stav:** hotovo (2026-08-06; commity `hosting: ai tokens + usage tables…`,
-`hosting: AI gateway passthrough…`, `hosting: ai step in provisioning…` —
-odchylky a zbývající ověření viz poznámky na konci)
+**Stav:** hotovo — 2026-08-06; odchylky a zbývající ověření na konci
 
 > PRD pro jednu Claude Code session. Design: `docs/hosting.md`,
 > rozhodnutí **D5, D6**, kontrakt §5.5. Fáze 4 z §8: nový DS má

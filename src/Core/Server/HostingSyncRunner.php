@@ -248,7 +248,14 @@ class HostingSyncRunner
         }
 
         // f. Mail token pro mail-router (D4) — jen s aktivním core.mail.
-        return $this->mintMailToken($dsDir, $mailToken);
+        $error = $this->mintMailToken($dsDir, $mailToken);
+        if ($error !== null) {
+            return $error;
+        }
+
+        // g. AI gateway backend (D5) — jen s `ai` sekcí payloadu a aktivním
+        //    core.ai.
+        return $this->setupAiBackend($dsDir, $item);
     }
 
     /**
@@ -284,6 +291,50 @@ class HostingSyncRunner
             return 'mail-router-setup returned no parsable api_key JSON';
         }
         $mailToken = $token;
+        return null;
+    }
+
+    /**
+     * Krok g. — `ai-analyzer-set-key --base-url` v adresáři DS zapíše
+     * gateway backend (D5). Idempotentní (set-key je upsert nad default
+     * backendem, který zakládá AIAnalyzerProvisioner při ds-upgrade).
+     * api_key v argv je lokální root kontext (proc_open s argv polem, žádný
+     * shell) — do logu ani confirm.error ale nesmí: failure tail se maskuje.
+     *
+     * @param array<string, mixed> $item
+     */
+    private function setupAiBackend(string $dsDir, array $item): ?string
+    {
+        $ai = is_array($item['ai'] ?? null) ? $item['ai'] : null;
+        if ($ai === null) {
+            return null;
+        }
+        $apiKey = (string) ($ai['api_key'] ?? '');
+        $baseUrl = (string) ($ai['base_url'] ?? '');
+        if ($apiKey === '' || $baseUrl === '') {
+            return 'Queue payload ai section is missing api_key/base_url';
+        }
+
+        if (!$this->isModuleActiveForDs($dsDir, 'core.ai')) {
+            $this->logLine('  ai-analyzer-set-key skipped — core.ai not active.');
+            return null;
+        }
+
+        $this->logLine('  ai-analyzer-set-key…');
+        $result = $this->runProcess([
+            $this->shpdDsPath, 'ai-analyzer-set-key',
+            '--backend', 'default',
+            '--api-key', $apiKey,
+            '--base-url', $baseUrl,
+        ], $dsDir);
+        if ($result['exitCode'] !== 0) {
+            $tail = trim(str_replace($apiKey, '***', $result['output']));
+            return sprintf(
+                'ai-analyzer-set-key failed (exit %d)%s',
+                $result['exitCode'],
+                $tail !== '' ? ': ' . $tail : '',
+            );
+        }
         return null;
     }
 

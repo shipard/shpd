@@ -150,6 +150,63 @@ class AiAnalyzerSetKeyCommandTest extends TestCase
         $this->assertStringNotContainsString('sk-ant-plaintext-secret', $tester->getDisplay());
     }
 
+    public function testBaseUrlIsStoredWhenGiven(): void
+    {
+        $this->dsConnection->method('fetchRow')->willReturn(['id' => 17]);
+
+        $captured = null;
+        $this->dsConnection->method('updateWhere')
+            ->willReturnCallback(function (string $table, array $data) use (&$captured): void {
+                $captured = $data;
+            });
+
+        $tester = $this->tester();
+        $exitCode = $tester->execute([
+            '--api-key' => 'shpd_gw_' . str_repeat('a', 43),
+            '--base-url' => 'https://portal.example.com/api/v1/_hosting/ai-gw',
+        ]);
+
+        $this->assertSame(Command::SUCCESS, $exitCode);
+        $this->assertSame('https://portal.example.com/api/v1/_hosting/ai-gw', $captured['base_url']);
+        $this->assertStringContainsString('Base URL set to', $tester->getDisplay());
+    }
+
+    public function testEmptyBaseUrlResetsToNull(): void
+    {
+        $this->dsConnection->method('fetchRow')->willReturn(['id' => 17]);
+
+        $captured = null;
+        $this->dsConnection->method('updateWhere')
+            ->willReturnCallback(function (string $table, array $data) use (&$captured): void {
+                $captured = $data;
+            });
+
+        $tester = $this->tester();
+        $exitCode = $tester->execute(['--api-key' => 'sk-ant-test', '--base-url' => '']);
+
+        $this->assertSame(Command::SUCCESS, $exitCode);
+        $this->assertArrayHasKey('base_url', $captured);
+        $this->assertNull($captured['base_url']);
+        $this->assertStringContainsString('Base URL cleared', $tester->getDisplay());
+    }
+
+    public function testOmittedBaseUrlLeavesColumnUntouched(): void
+    {
+        $this->dsConnection->method('fetchRow')->willReturn(['id' => 17]);
+
+        $captured = null;
+        $this->dsConnection->method('updateWhere')
+            ->willReturnCallback(function (string $table, array $data) use (&$captured): void {
+                $captured = $data;
+            });
+
+        $tester = $this->tester();
+        $exitCode = $tester->execute(['--api-key' => 'sk-ant-test']);
+
+        $this->assertSame(Command::SUCCESS, $exitCode);
+        $this->assertArrayNotHasKey('base_url', $captured);
+    }
+
     public function testFailsWhenSecretsKeyMissing(): void
     {
         // Smažeme secrets.key — DsSecretCipher::forConfig hodí výjimku

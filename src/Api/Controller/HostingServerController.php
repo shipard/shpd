@@ -9,6 +9,9 @@ use Shipard\Api\Request;
 use Shipard\Api\Response;
 use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Database\DataSourceConnection;
+use Shipard\Core\Hosting\AiGwKeyStore;
+use Shipard\Core\Hosting\AiGwToken;
+use Shipard\Core\Hosting\HostingUrls;
 use Shipard\Core\Logging\ErrorLogger;
 use Shipard\Core\Security\DsSecretCipher;
 use Shipard\Core\Settings\SettingsStore;
@@ -406,7 +409,7 @@ class HostingServerController
             $email = (string) $owner['login'];
         }
 
-        return [
+        $item = [
             'request_id' => (int) $row['id'],
             'ds_id' => (string) $row['ds_id'],
             'name' => (string) $row['name'],
@@ -426,5 +429,82 @@ class HostingServerController
                 'label' => $label,
             ],
         ];
+
+        // AI gateway (D5): sekce jen když je gateway zřízená (org klíč
+        // existuje). Selhání AI sekce provisioning neblokuje — DS vznikne
+        // bez AI, backfill přes hosting-ai-token + ai-analyzer-set-key.
+        $ai = $this->buildAiSection($db, $row, $issuer);
+        if ($ai !== null) {
+            $item['ai'] = $ai;
+        }
+
+        return $item;
+    }
+
+    /**
+     * Sekce `ai` queue payloadu — lazy mint gateway tokenu: existující
+     * aktivní token se dešifruje z token_encrypted (retry-stabilní,
+     * re-provisioning), jinak se mintuje nový řádek. Pokrývá i požadavky
+     * vzniklé před zavedením gateway.
+     *
+     * @param array<string, mixed> $row
+     * @return array{base_url: string, api_key: string}|null
+     */
+    private function buildAiSection(DataSourceConnection $db, array $row, string $issuer): ?array
+    {
+        if (!AiGwKeyStore::exists($this->config->getDataSourceDir())) {
+            return null;
+        }
+
+        try {
+            $cipher = $this->cipher ?? DsSecretCipher::forConfig($this->config);
+
+            $tokenRow = $db->fetchRow(
+                'SELECT * FROM hosting_core_ai_tokens'
+                . ' WHERE data_source = %i AND active = 1 AND docState IN %in'
+                . ' ORDER BY id DESC',
+                (int) $row['id'],
+                self::ACTIVE_DOC_STATES,
+            );
+
+            $token = null;
+            if ($tokenRow !== null && ($tokenRow['token_encrypted'] ?? null) !== null) {
+                try {
+                    $token = $cipher->decrypt((string) $tokenRow['token_encrypted']);
+                } catch (\Throwable $e) {
+                    ErrorLogger::warn('hosting queue: gateway token nejde dešifrovat — mintuje se nový', [
+                        'requestId' => (int) $row['id'],
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+
+            if ($token === null) {
+                $minted = AiGwToken::mint();
+                $now = date('Y-m-d H:i:s');
+                $db->insertRow('hosting_core_ai_tokens', [
+                    'data_source' => (int) $row['id'],
+                    'token_prefix' => $minted['prefix'],
+                    'token_hash' => $minted['hash'],
+                    'token_encrypted' => $cipher->encrypt($minted['token']),
+                    'active' => 1,
+                    'note' => 'provisioning',
+                    'created' => $now,
+                    'modified' => $now,
+                ]);
+                $token = $minted['token'];
+            }
+
+            return [
+                'base_url' => HostingUrls::aiGwBaseUrl($issuer),
+                'api_key' => $token,
+            ];
+        } catch (\Throwable $e) {
+            ErrorLogger::warn('hosting queue: ai sekci nelze sestavit — požadavek jde bez AI', [
+                'requestId' => (int) $row['id'],
+                'error' => $e->getMessage(),
+            ]);
+            return null;
+        }
     }
 }

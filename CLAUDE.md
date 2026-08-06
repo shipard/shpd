@@ -192,7 +192,7 @@ Formát hlavičky stránky a šablona: `docs/help-authoring.md`.
 
 ### CLI příkazy
 - `shpd-server`: `version`, `help`, `ds-create --name [--module] [--ds-id]`, `server-init`, `next-table-id`, `hosting-sync [--dry-run]`
-- `shpd-ds` (z adresáře DS): `version`, `help`, `ds-upgrade`, `ds-secrets-health`, `ds-secrets-rotate [--dry-run]`, `alerts-run [--check=id|--all]`, `alerts-prune [--days=N] [--dry-run]`, `mail-outbox-run [--limit=N]`, `mail-outbox-retry --id N`, `mail-send-test --to x@y [--from ...]`, `registry-extract-texts [--all] [--limit=N]`, `user-create [--password] [--if-not-exists] [--identity-issuer/-subject/-provider]` (bez hesla → poslat pozvánku), `user-set-admin`, `auth-emergency-login`, `hosting-oidc-init`, `hosting-oidc-client`, `hosting-server-key`, `hosting-router-key`
+- `shpd-ds` (z adresáře DS): `version`, `help`, `ds-upgrade`, `ds-secrets-health`, `ds-secrets-rotate [--dry-run]`, `alerts-run [--check=id|--all]`, `alerts-prune [--days=N] [--dry-run]`, `mail-outbox-run [--limit=N]`, `mail-outbox-retry --id N`, `mail-send-test --to x@y [--from ...]`, `registry-extract-texts [--all] [--limit=N]`, `user-create [--password] [--if-not-exists] [--identity-issuer/-subject/-provider]` (bez hesla → poslat pozvánku), `user-set-admin`, `auth-emergency-login`, `hosting-oidc-init`, `hosting-oidc-client`, `hosting-server-key`, `hosting-router-key`, `hosting-ai-gw-init`, `hosting-ai-token`
 
 ### Frontend — ikony
 - Font Awesome SVG/JS, tree-shaking přes Vite

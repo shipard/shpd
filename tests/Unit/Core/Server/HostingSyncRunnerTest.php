@@ -365,6 +365,125 @@ class HostingSyncRunnerTest extends TestCase
         $this->assertStringContainsString('no parsable api_key', $runner->httpCalls[2]['body']['error']);
     }
 
+    // -------------------------------------------------------------------------
+    // Krok g. — ai-analyzer-set-key (D5)
+    // -------------------------------------------------------------------------
+
+    private const GW_TOKEN = 'shpd_gw_' . 'abcdefghijkl' . 'mnopqrstuvwxyz0123456789ABCDEFG';
+    private const GW_BASE_URL = 'http://127.0.0.1/gggg-gggg-gggg-gggg/api/v1/_hosting/ai-gw';
+
+    /** @return array<string, mixed> */
+    private function queueItemWithAi(): array
+    {
+        return $this->queueItem([
+            'ai' => ['base_url' => self::GW_BASE_URL, 'api_key' => self::GW_TOKEN],
+        ]);
+    }
+
+    public function testAiSetupRunsSetKeyWithBaseUrl(): void
+    {
+        $this->createDs(self::NEW_DS, 'Nová firma', ['install.base']);
+        $runner = $this->makeRunner();
+        $runner->httpResponses['queue'] = $this->queueResponse([$this->queueItemWithAi()]);
+        $runner->onModuleCheck = static fn(): bool => true;
+        $runner->onProcess = static fn(array $argv): array => $argv[1] === 'mail-router-setup'
+            ? ['exitCode' => 0, 'output' => self::MAIL_SETUP_JSON]
+            : ['exitCode' => 0, 'output' => ''];
+
+        $this->assertTrue($runner->run());
+
+        $aiCalls = array_values(array_filter(
+            $runner->processCalls,
+            static fn(array $c): bool => $c['argv'][1] === 'ai-analyzer-set-key',
+        ));
+        $this->assertCount(1, $aiCalls);
+        $argv = $aiCalls[0]['argv'];
+        $this->assertSame('/fake/bin/shpd-ds', $argv[0]);
+        $this->assertSame(
+            ['--backend', 'default', '--api-key', self::GW_TOKEN, '--base-url', self::GW_BASE_URL],
+            array_slice($argv, 2),
+        );
+        $this->assertSame($this->dataSourcesDir . '/' . self::NEW_DS, $aiCalls[0]['cwd']);
+
+        $this->assertSame('ok', $runner->httpCalls[2]['body']['status']);
+    }
+
+    public function testAiSetupSkippedWithoutCoreAi(): void
+    {
+        $this->createDs(self::NEW_DS, 'Nová firma', ['install.base']);
+        $runner = $this->makeRunner();
+        $runner->httpResponses['queue'] = $this->queueResponse([$this->queueItemWithAi()]);
+        $runner->onModuleCheck = static fn(string $dsDir, string $moduleId): bool => $moduleId !== 'core.ai';
+        $runner->onProcess = static fn(array $argv): array => $argv[1] === 'mail-router-setup'
+            ? ['exitCode' => 0, 'output' => self::MAIL_SETUP_JSON]
+            : ['exitCode' => 0, 'output' => ''];
+
+        $this->assertTrue($runner->run());
+
+        $labels = array_map(static fn(array $c): string => $c['argv'][1], $runner->processCalls);
+        $this->assertNotContains('ai-analyzer-set-key', $labels);
+        $this->assertSame('ok', $runner->httpCalls[2]['body']['status']);
+    }
+
+    public function testAiSetupSkippedWithoutAiSection(): void
+    {
+        $this->createDs(self::NEW_DS, 'Nová firma', ['install.base']);
+        $runner = $this->makeRunner();
+        $runner->httpResponses['queue'] = $this->queueResponse([$this->queueItem()]);
+        $runner->onModuleCheck = static fn(): bool => false;
+
+        $this->assertTrue($runner->run());
+
+        $labels = array_map(static fn(array $c): string => $c['argv'][1], $runner->processCalls);
+        $this->assertNotContains('ai-analyzer-set-key', $labels);
+    }
+
+    public function testAiSetupFailureMasksKeyInConfirmError(): void
+    {
+        $this->createDs(self::NEW_DS, 'Nová firma', ['install.base']);
+        $logLines = [];
+        $runner = new StubHostingSyncRunner(
+            new HostingConfig('http://127.0.0.1/gggg-gggg-gggg-gggg', 1, 'shpd_hk_' . str_repeat('a', 43)),
+            $this->dataSourcesDir,
+            '/fake/bin/shpd-server',
+            '/fake/bin/shpd-ds',
+            static function (string $line) use (&$logLines): void {
+                $logLines[] = $line;
+            },
+        );
+        $runner->httpResponses['queue'] = $this->queueResponse([$this->queueItemWithAi()]);
+        $runner->onModuleCheck = static fn(): bool => true;
+        // Selhání s api_key ve výstupu (např. echo argv v error hlášce).
+        $runner->onProcess = static fn(array $argv): array => $argv[1] === 'ai-analyzer-set-key'
+            ? ['exitCode' => 1, 'output' => 'Error: cannot store key ' . self::GW_TOKEN . ' (db gone)']
+            : ($argv[1] === 'mail-router-setup'
+                ? ['exitCode' => 0, 'output' => self::MAIL_SETUP_JSON]
+                : ['exitCode' => 0, 'output' => '']);
+
+        $this->assertFalse($runner->run());
+
+        $confirm = $runner->httpCalls[2];
+        $this->assertSame('failed', $confirm['body']['status']);
+        $this->assertStringContainsString('ai-analyzer-set-key failed', $confirm['body']['error']);
+        // Token nesmí uniknout do confirm.error ani do logu — maskuje se.
+        $this->assertStringNotContainsString(self::GW_TOKEN, $confirm['body']['error']);
+        $this->assertStringContainsString('***', $confirm['body']['error']);
+        $this->assertStringNotContainsString(self::GW_TOKEN, implode("\n", $logLines));
+    }
+
+    public function testAiSectionWithMissingFieldsConfirmsFailed(): void
+    {
+        $this->createDs(self::NEW_DS, 'Nová firma', ['install.base']);
+        $runner = $this->makeRunner();
+        $runner->httpResponses['queue'] = $this->queueResponse([
+            $this->queueItem(['ai' => ['base_url' => self::GW_BASE_URL]]),
+        ]);
+        $runner->onModuleCheck = static fn(): bool => false;
+
+        $this->assertFalse($runner->run());
+        $this->assertStringContainsString('ai section is missing', $runner->httpCalls[2]['body']['error']);
+    }
+
     public function testCoreMailGatingResolvesTransitiveDependencies(): void
     {
         // Reálná rezoluce přes repo modules: install.base → … → core.mail;

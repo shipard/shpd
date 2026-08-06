@@ -108,6 +108,17 @@ klíč). Per DS může být víc backendů, právě jeden `is_default`. Detaily 
 
 - Klíč je šifrovaný přes `DsSecretCipher` — viz [`operations/secrets.md`](operations/secrets.md).
 - Nastavení klíče: `bin/shpd-ds ai-analyzer-set-key --backend default --api-key <api-key>` (aktivuje backend). Auto-provisioning vytvoří `default` backend při `ds-upgrade`.
+- **AI přes hosting gateway (D5/D6):** DS hostovaný pod portálem může místo
+  vlastního klíče používat AI gateway hostingu — backend má `base_url` =
+  gateway (`…/api/v1/_hosting/ai-gw`) a `api_key` = gateway token
+  (`shpd_gw_…`). Na straně DS se nemění žádný kód: `AnthropicLlmClient`
+  i Python analyzer si na `base_url` sami připojují `/v1/messages`
+  a autentizují se `x-api-key`. Zápis: `ai-analyzer-set-key --backend
+  default --api-key shpd_gw_… --base-url https://portal…/_hosting/ai-gw`
+  (u nových DS to dělá provisioning agent automaticky). **Vlastní klíč
+  zůstává rovnocennou cestou** (D6) — `--base-url ''` vrátí backend na
+  přímé Anthropic API. Detaily gateway: [`hosting.md`](hosting.md) §5.5,
+  runbook [`operations/ai-gateway.md`](operations/ai-gateway.md).
 - **Lifecycle:** jediné ruční kroky jsou jednorázové při prvním zřízení DS —
   `ai-analyzer-set-key` (klíč backendu) a `ai-analyzer-setup` (API klíč
   analyzeru). Všechno ostatní drží `ds-upgrade` automaticky a bezpodmínečně

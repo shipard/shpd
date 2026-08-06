@@ -723,12 +723,15 @@ sudo shpd-ds ai-analyzer-set-key --backend=openai-gpt4 --api-key=sk-xxx
 ```
 
 Nastaví (nebo rotuje) API klíč na konkrétním AI backendu. Klíč se před
-uložením zašifruje přes `DsSecretCipher`.
+uložením zašifruje přes `DsSecretCipher`. `--base-url` směruje backend na
+AI gateway hostingu (D5/D6) — klíčem je pak gateway token `shpd_gw_…`;
+prázdná hodnota (`--base-url ''`) vrací backend na přímé Anthropic API.
 
 | Opce | Význam |
 |------|--------|
 | `--backend <kód>` | Backend code (default: `default`) |
 | `--api-key <klíč>` | **povinné** — plaintext API klíč |
+| `--base-url <url>` | base URL API (AI gateway); `''` = reset na přímé Anthropic; nezadaná = beze změny |
 
 #### `ai-profile-reload`
 
@@ -831,6 +834,44 @@ jede dál na stale lookup).
 |------|--------|
 | `--router <ndx>` | **povinné** — id řádku routeru (`hosting_core_mail_routers.id`) |
 | `--generate` / `--revoke` | právě jedna z opcí |
+
+#### `hosting-ai-gw-init`
+
+```bash
+sudo shpd-ds hosting-ai-gw-init --set-key    # klíč z promptu (skrytý vstup) / STDIN
+sudo shpd-ds hosting-ai-gw-init --status     # existence + mtime + práva, nikdy obsah
+echo "sk-ant-…" | sudo shpd-ds hosting-ai-gw-init --set-key   # non-TTY pipe
+```
+
+Klíč organizace pro AI gateway (D5) — `secrets/ai-gw-anthropic.key`
+(0600, vzor `hosting-oidc-init`). Klíč se čte z promptu/STDIN, **nikdy
+z argv** (shell history). Opakovaný `--set-key` = rotace (gateway čte
+soubor per-request).
+
+| Opce | Význam |
+|------|--------|
+| `--set-key` / `--status` | právě jedna z opcí |
+
+#### `hosting-ai-token`
+
+```bash
+sudo shpd-ds hosting-ai-token --ds 7 --generate [--note "backfill vlm9"]
+sudo shpd-ds hosting-ai-token --revoke 3
+```
+
+Gateway token DS pro AI gateway `/_hosting/ai-gw/v1/messages` (D5).
+`--generate` vytvoří token `shpd_gw_…`, na řádek `hosting_core_ai_tokens`
+uloží prefix + SHA-256 hash + šifrovaný plaintext (queue payload)
+a token vytiskne **jednou** — patří do `ai-analyzer-set-key --api-key`
+na klientském DS. Určeno pro ruční backfill existujících DS; nové
+požadavky mintuje queue payload sám. `--revoke` nastaví `active = 0`
+(gateway token okamžitě odmítá, 401).
+
+| Opce | Význam |
+|------|--------|
+| `--ds <ndx>` | id řádku DS (`hosting_core_data_sources.id`) — povinné pro `--generate` |
+| `--generate` / `--revoke <ndx>` | právě jedna z opcí; revoke bere id řádku tokenu |
+| `--note <text>` | volitelná poznámka na řádek tokenu |
 
 ### Seed (testovací data)
 

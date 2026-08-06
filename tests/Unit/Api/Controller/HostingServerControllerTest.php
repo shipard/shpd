@@ -25,6 +25,20 @@ class HostingServerControllerTest extends TestCase
     private int $otherServerId;
     private int $ownerId;
     private string $token;
+    /** @var list<string> */
+    private array $tempDirs = [];
+
+    protected function tearDown(): void
+    {
+        \Shipard\Core\Hosting\AiGwKeyStore::resetCache();
+        foreach ($this->tempDirs as $dir) {
+            $keyFile = \Shipard\Core\Hosting\AiGwKeyStore::keyFilePath($dir);
+            @unlink($keyFile);
+            @rmdir(dirname($keyFile));
+            @rmdir($dir);
+        }
+        $this->tempDirs = [];
+    }
 
     protected function setUp(): void
     {
@@ -248,6 +262,113 @@ class HostingServerControllerTest extends TestCase
         $resp = $this->controller->queue($this->req('GET', 'queue'), $this->db, $this->tables());
         $this->assertSame([], $resp->getPayload()['data']['requests']);
         $this->assertSame('failed', $this->db->dataSources[$reqId]['lifecycle']);
+    }
+
+    // -------------------------------------------------------------------------
+    // queue — ai sekce (D5)
+    // -------------------------------------------------------------------------
+
+    public function testQueueWithoutOrgKeyHasNoAiSection(): void
+    {
+        // Default mock config → AiGwKeyStore::exists false.
+        $this->addRequest(['server' => $this->serverId]);
+
+        $resp = $this->controller->queue($this->req('GET', 'queue'), $this->db, $this->tables());
+        $this->assertArrayNotHasKey('ai', $resp->getPayload()['data']['requests'][0]);
+        $this->assertSame([], $this->db->aiTokens);
+    }
+
+    public function testQueueWithOrgKeyMintsGatewayToken(): void
+    {
+        $reqId = $this->addRequest(['server' => $this->serverId]);
+        $controller = $this->controllerWithOrgKey();
+
+        $resp = $controller->queue($this->req('GET', 'queue'), $this->db, $this->tables());
+        $item = $resp->getPayload()['data']['requests'][0];
+
+        $this->assertArrayHasKey('ai', $item);
+        $this->assertSame(
+            'http://127.0.0.1/gggg-gggg-gggg-gggg/api/v1/_hosting/ai-gw',
+            $item['ai']['base_url'],
+        );
+        $token = $item['ai']['api_key'];
+        $this->assertMatchesRegularExpression('/^shpd_gw_[A-Za-z0-9_-]{43}$/', $token);
+
+        // Mint založil řádek: prefix + hash sedí s tokenem, plaintext jen
+        // šifrovaně.
+        $this->assertCount(1, $this->db->aiTokens);
+        $row = array_values($this->db->aiTokens)[0];
+        $this->assertSame($reqId, $row['data_source']);
+        $this->assertSame(substr($token, strlen('shpd_gw_'), 12), $row['token_prefix']);
+        $this->assertSame(hash('sha256', $token), $row['token_hash']);
+        $this->assertSame($token, $this->cipher->decrypt((string) $row['token_encrypted']));
+    }
+
+    public function testQueueReusesExistingActiveToken(): void
+    {
+        $reqId = $this->addRequest(['server' => $this->serverId]);
+        $existing = 'shpd_gw_' . str_repeat('e', 43);
+        $this->db->addAiToken([
+            'data_source' => $reqId,
+            'token_prefix' => substr($existing, strlen('shpd_gw_'), 12),
+            'token_hash' => hash('sha256', $existing),
+            'token_encrypted' => $this->cipher->encrypt($existing),
+        ]);
+
+        $resp = $this->controllerWithOrgKey()->queue($this->req('GET', 'queue'), $this->db, $this->tables());
+
+        // Retry-stabilní: stejný token, žádný nový řádek.
+        $this->assertSame($existing, $resp->getPayload()['data']['requests'][0]['ai']['api_key']);
+        $this->assertCount(1, $this->db->aiTokens);
+    }
+
+    public function testQueueUndecryptableTokenMintsNewOne(): void
+    {
+        $reqId = $this->addRequest(['server' => $this->serverId]);
+        $this->db->addAiToken([
+            'data_source' => $reqId,
+            'token_prefix' => 'xxxxxxxxxxxx',
+            'token_hash' => str_repeat('0', 64),
+            'token_encrypted' => 'v1:not:decryptable:garbage',
+        ]);
+
+        $resp = $this->controllerWithOrgKey()->queue($this->req('GET', 'queue'), $this->db, $this->tables());
+
+        $token = $resp->getPayload()['data']['requests'][0]['ai']['api_key'];
+        $this->assertMatchesRegularExpression('/^shpd_gw_/', $token);
+        $this->assertCount(2, $this->db->aiTokens);
+    }
+
+    public function testQueuePeekHasNoAiSection(): void
+    {
+        $this->addRequest(['server' => $this->serverId]);
+
+        $resp = $this->controllerWithOrgKey()->queue(
+            Request::fromArray('GET', '/api/v1/_hosting/server/queue', ['peek' => '1'], '', [
+                'HTTP_HOST' => '127.0.0.1',
+                'HTTP_AUTHORIZATION' => 'Bearer ' . $this->token,
+            ]),
+            $this->db,
+            $this->tables(),
+        );
+
+        // Peek payload nesmí nést plaintext token — ai sekce tam nepatří.
+        $this->assertArrayNotHasKey('ai', $resp->getPayload()['data']['requests'][0]);
+        $this->assertSame([], $this->db->aiTokens);
+    }
+
+    /** Controller s configem ukazujícím na temp DS dir s org klíčem. */
+    private function controllerWithOrgKey(): HostingServerController
+    {
+        $tempDir = sys_get_temp_dir() . '/shpd_hsc_aigw_' . uniqid();
+        mkdir($tempDir, 0755, true);
+        \Shipard\Core\Hosting\AiGwKeyStore::write($tempDir, 'sk-ant-org-key');
+        $this->tempDirs[] = $tempDir;
+
+        $config = $this->createMock(DataSourceConfig::class);
+        $config->method('getDataSourceDir')->willReturn($tempDir);
+
+        return new HostingServerController($config, cipher: $this->cipher);
     }
 
     // -------------------------------------------------------------------------

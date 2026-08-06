@@ -23,6 +23,8 @@ class InMemoryHostingServerDb extends DataSourceConnection
     public array $dsUsers = [];
     /** @var array<int, array> */
     public array $users = [];
+    /** @var array<int, array> */
+    public array $aiTokens = [];
     /** @var array<string, string> Hodnoty JSON-encoded jako v core_system_settings. */
     public array $settings = [];
     private int $nextId = 1;
@@ -74,10 +76,23 @@ class InMemoryHostingServerDb extends DataSourceConnection
         return $this->insert($this->users, $row + ['is_active' => 1, 'email' => null]);
     }
 
+    public function addAiToken(array $row): int
+    {
+        return $this->insert($this->aiTokens, $row + [
+            'data_source' => 0,
+            'token_prefix' => '',
+            'token_hash' => '',
+            'token_encrypted' => null,
+            'active' => 1,
+            'docState' => 40,
+        ]);
+    }
+
     public function insertRow(string $table, array $data): int
     {
         return match ($table) {
             'hosting_core_ds_users' => $this->insert($this->dsUsers, $data),
+            'hosting_core_ai_tokens' => $this->insert($this->aiTokens, $data),
             default => throw new \LogicException("InMemoryHostingServerDb: unexpected insert into {$table}"),
         };
     }
@@ -109,6 +124,19 @@ class InMemoryHostingServerDb extends DataSourceConnection
         }
         if (str_contains($sql, 'hosting_core_data_sources') && str_contains($sql, 'id =')) {
             return $this->dataSources[(int) $args[1]] ?? null;
+        }
+        // queue ai sekce: WHERE data_source = %i AND active = 1
+        //                 AND docState IN %in ORDER BY id DESC
+        if (str_contains($sql, 'hosting_core_ai_tokens') && str_contains($sql, 'data_source =')) {
+            foreach (array_reverse($this->aiTokens, true) as $row) {
+                if ((int) $row['data_source'] === (int) $args[1]
+                    && (int) $row['active'] === 1
+                    && in_array((int) $row['docState'], (array) $args[2], true)
+                ) {
+                    return $row;
+                }
+            }
+            return null;
         }
         if (str_contains($sql, 'core_system_users')) {
             $row = $this->users[(int) $args[1]] ?? null;

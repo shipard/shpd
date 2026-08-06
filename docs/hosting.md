@@ -280,17 +280,34 @@ Výsledný login flow na DS: LoginScreen → „Přihlásit přes {hosting}" →
 portál (session tam) → id_token → RP `IdentityMapper` `(issuer, sub)`,
 `autoLinkEmail`/`jitProvision` dle politiky DS.
 
-### 5.5 AI gateway (D5/D6)
+### 5.5 AI gateway (D5/D6) — implementováno
 
 - `POST /_hosting/ai-gw/v1/messages` — klienti si na `base_url` sami
-  připojují `/v1/messages`, gateway tedy servíruje tuto cestu.
-- Ověří gateway token → nahradí autorizaci skutečným klíčem organizace
-  (uložen jako `encrypted_text` v nastavení hostingu) → passthrough na
-  `api.anthropic.com` včetně SSE streamu → z odpovědi vytěží `usage`
-  → zápis do `hosting_core_ai_usage`.
-- Provisioning zapíše do nového DS: backend `default` s `base_url` =
-  gateway a `api_key` = gateway token. Vlastní klíč = uživatel si backend
-  přepne/založí jiný (D6).
+  připojují `/v1/messages`, gateway tedy servíruje přesně tuto cestu
+  (`HostingAiGatewayController`); jiné cesty pod `/_hosting/ai-gw/` → 404.
+- Ověří gateway token (`x-api-key`, prefix `shpd_gw_` — prefix lookup +
+  `hash_equals` nad sha256 celého tokenu v `hosting_core_ai_tokens`,
+  `active` + lifecycle DS `active`; selhání → 401 v **Anthropic error
+  formátu**) → nahradí ho klíčem organizace ze
+  **`secrets/ai-gw-anthropic.key`** (0600, `AiGwKeyStore` — stejné
+  zacházení jako privátní klíč OP, nikdy v DB; plní CLI
+  `hosting-ai-gw-init --set-key`) → passthrough na `api.anthropic.com`
+  včetně SSE streamu → z odpovědi paralelně vytěží `usage`
+  (`GwUsageExtractor`: SSE `message_start` + `message_delta`, non-SSE JSON)
+  → zápis do `hosting_core_ai_usage` (vždy, i chybové odpovědi
+  s `http_status`; selhání meteringu odpověď neshodí).
+- Forward headers jsou allowlist (`content-type`, `anthropic-version`,
+  `anthropic-beta`) — `authorization`/cookies se nikdy nepropustí; body
+  limit 32 MiB; vlastní rate-limit bucket `ai_gw` per token (300/min).
+- Provisioning: queue payload nese sekci `ai` (`base_url` odvozená
+  z issueru — `HostingUrls::aiGwBaseUrl`, `api_key` = gateway token) jen
+  když org klíč existuje. Token se mintuje **lazy při stavbě queue
+  payloadu** (existující aktivní token se dešifruje z `token_encrypted`
+  — retry-stabilní; jinak nový řádek). Agent (krok g.) na DS s aktivním
+  `core.ai` spustí `ai-analyzer-set-key --backend default --api-key …
+  --base-url …`. Ruční backfill: `hosting-ai-token --ds <ndx> --generate`.
+- Vlastní klíč = uživatel si backend přepne/založí jiný (D6) — gateway je
+  jen jiná data v `core_ai_backends`, na straně DS se nemění žádný kód.
 - Vědomý limit v1: streamované proxy spojení drží PHP-FPM worker. Pro
   desítky klientů OK; při růstu se gateway vydělí do samostatného daemonu
   (rozhraní se nemění — je to jen `base_url`).
@@ -336,10 +353,14 @@ identity na všech DS.
 
 ## 7. Bezpečnostní poznámky
 
-- Hosting DB drží citlivé hodnoty (mail tokeny DS, klíč organizace pro AI,
+- Hosting DB drží citlivé hodnoty (mail tokeny DS, gateway tokeny,
   client_secrets) — vše `encrypted_text` (per-DS šifrování hostingu).
 - API klíče serverů/routerů: jen SHA-256 hash (vzor `core_system_api_keys`).
-- OP privátní klíč mimo DB, v `secrets/`.
+  Gateway tokeny (`shpd_gw_`): prefix + SHA-256 hash pro runtime validaci,
+  navíc šifrovaný plaintext (`token_encrypted`) pro opakované servírování
+  v queue payloadu.
+- OP privátní klíč i klíč organizace pro AI (`ai-gw-anthropic.key`) mimo
+  DB, v `secrets/` (0600).
 - `adminOnly` tabulky (D9): skutečná bariéra je na serveru
   (`TableAccessGuard` na všech datových cestách — CRUD/viewer/form/lookup),
   UI jen nezobrazuje mrtvé odkazy — stejný princip jako Fáze 0a.

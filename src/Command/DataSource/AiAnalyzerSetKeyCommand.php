@@ -40,7 +40,8 @@ class AiAnalyzerSetKeyCommand extends Command
         $this->setName('ai-analyzer-set-key')
              ->setDescription('Set (or rotate) the API key on an AI backend; encrypts via DsSecretCipher')
              ->addOption('backend', null, InputOption::VALUE_REQUIRED, 'Backend code (default: "default")', 'default')
-             ->addOption('api-key', null, InputOption::VALUE_REQUIRED, 'Plaintext API key to encrypt and store');
+             ->addOption('api-key', null, InputOption::VALUE_REQUIRED, 'Plaintext API key to encrypt and store')
+             ->addOption('base-url', null, InputOption::VALUE_REQUIRED, 'Base URL of the API (empty string resets to direct Anthropic)');
     }
 
     protected function getDataSourceDir(): string
@@ -88,9 +89,18 @@ class AiAnalyzerSetKeyCommand extends Command
 
         $backendId = (int) $row['id'];
 
-        $this->encryptAndStoreKey($dsConnection, $backendId, $cipher, (string) $apiKey);
+        // --base-url: hodnota → nastavit (AI gateway, D5/D6); prázdný string
+        // → NULL = přímé Anthropic; nezadaná option → sloupec netknout.
+        $baseUrl = $input->getOption('base-url');
+
+        $this->encryptAndStoreKey($dsConnection, $backendId, $cipher, (string) $apiKey, $baseUrl);
 
         $output->writeln("<info>API key updated for backend '{$backendCode}' (id={$backendId}).</info>");
+        if ($baseUrl !== null) {
+            $output->writeln($baseUrl !== ''
+                ? "Base URL set to: {$baseUrl}"
+                : 'Base URL cleared (direct Anthropic).');
+        }
         $output->writeln('Backend is now active and ready for AI analyzer claims.');
 
         return Command::SUCCESS;
@@ -108,6 +118,7 @@ class AiAnalyzerSetKeyCommand extends Command
         DsSecretCipher $cipher,
         #[SensitiveParameter]
         string $apiKey,
+        ?string $baseUrl = null,
     ): void {
         $doc = new AIBackendDocument();
         $doc->setSecretCipher($cipher);
@@ -126,13 +137,18 @@ class AiAnalyzerSetKeyCommand extends Command
             throw new \RuntimeException('Internal error: api_key disappeared after encryption.');
         }
 
+        $update = [
+            'api_key' => $data['api_key'],
+            'is_active' => 1,
+            'modified' => $now,
+        ];
+        if ($baseUrl !== null) {
+            $update['base_url'] = $baseUrl !== '' ? $baseUrl : null;
+        }
+
         $dsConnection->updateWhere(
             'core_ai_backends',
-            [
-                'api_key' => $data['api_key'],
-                'is_active' => 1,
-                'modified' => $now,
-            ],
+            $update,
             'id = %i',
             $backendId,
         );

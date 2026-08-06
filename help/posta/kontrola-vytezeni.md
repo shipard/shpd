@@ -43,10 +43,19 @@ karta s procentem **Jistoty** a tlačítkem **Zkontrolovat**.
    Když je prázdná, nic to nezaručuje — jen tam nic nenašel.
 
 5. **Rozhodni nejasné reference.** U dodavatele, položky nebo bankovního
-   účtu může být místo hodnoty výzva k rozhodnutí — **Vybrat
-   existujícího…**, **Vytvořit nového**, u řádku **Vynechat řádek**.
-   Dokud něco zůstává nerozhodnuté, tlačítko **Použít** je nedostupné
-   s poznámkou *Některé reference vyžadují rozhodnutí*.
+   účtu může být místo hodnoty rozhodovací panel. Nabízí:
+
+   - seznam **Kandidáti** s tlačítky **Použít #číslo**, když AI našla víc
+     možných záznamů,
+   - vyhledávací pole **Hledat…**, kde si záznam najdeš sám,
+   - **Vytvořit novou osobu**, **Vytvořit novou položku** nebo
+     **Vytvořit nový účet** — podle toho, čeho se rozhodnutí týká,
+   - **Vynechat řádek**, ale jen u řádku faktury.
+
+   Rozhodnutí se pak ukáže jako **Vybráno: …** a vezmeš ho zpět
+   tlačítkem **Zrušit výběr**. Dokud něco zůstává nerozhodnuté, tlačítko
+   **Použít** je zašedlé — bez vysvětlení, takže když nejde kliknout,
+   hledej nedořešenou referenci.
 
 6. **Použij, nebo zamítni.**
    - **Použít** — vznikne **Faktura přijatá** ve stavu **Koncept**
@@ -87,6 +96,11 @@ kontroluj celkovou částku vždy.
 **Reverse charge.** U dokladů se samovyměřením (typicky zboží nebo služba
 z EU) se rozpad daně v **DPH rekapitulaci** opravuje. Zkontroluj, že
 **Celkem** odpovídá tomu, co máš zaplatit.
+
+**U bankovního účtu musí být nejdřív rozhodnutý dodavatel.** Dokud není,
+panel u účtu místo vyhledávání napíše *Nejdřív vyber nebo vytvoř
+dodavatele.* a nabídne jedině vytvoření nového účtu — účet se totiž
+zakládá k někomu.
 
 **Znovu analyzovat nic neztratí.** Opakovaná analýza označí staré návrhy
 ve stavech *K použití*, *Čeká na review* a *Nízká jistota* jako

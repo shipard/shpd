@@ -507,6 +507,135 @@ class HostingSyncRunnerTest extends TestCase
         $this->assertFalse($runner->checkModule($this->dataSourcesDir . '/ffff-ffff-ffff-ffff', 'core.mail'));
     }
 
+    // -------------------------------------------------------------------------
+    // Stats push (D7)
+    // -------------------------------------------------------------------------
+
+    /** Reconcile response se stats_wanted. */
+    private function reconcileResponse(bool $statsWanted): array
+    {
+        return [
+            'statusCode' => 200,
+            'body' => (string) json_encode(['success' => true, 'data' => ['ok' => true, 'stats_wanted' => $statsWanted]]),
+            'error' => null,
+        ];
+    }
+
+    /** @return list<array{argv: list<string>, cwd: ?string}> */
+    private function statsProcessCalls(StubHostingSyncRunner $runner): array
+    {
+        return array_values(array_filter(
+            $runner->processCalls,
+            static fn(array $c): bool => $c['argv'][1] === 'hosting-stats',
+        ));
+    }
+
+    /** @return list<array{method: string, url: string, body: ?array}> */
+    private function statsHttpCalls(StubHostingSyncRunner $runner): array
+    {
+        return array_values(array_filter(
+            $runner->httpCalls,
+            static fn(array $c): bool => str_contains($c['url'], '/stats'),
+        ));
+    }
+
+    public function testStatsStepSkippedWithoutStatsWanted(): void
+    {
+        // Default reconcile response stats_wanted nenese → krok 3 neběží.
+        $runner = $this->makeRunner();
+
+        $this->assertTrue($runner->run());
+        $this->assertSame([], $this->statsProcessCalls($runner));
+        $this->assertSame([], $this->statsHttpCalls($runner));
+    }
+
+    public function testStatsWantedCollectsPerDsAndPushes(): void
+    {
+        $this->createDs('cccc-cccc-cccc-cccc', 'Bez mailu', ['core.system']);
+        $runner = $this->makeRunner();
+        $runner->httpResponses['reconcile'] = $this->reconcileResponse(true);
+        $runner->onProcess = static function (array $argv, ?string $cwd): array {
+            $output = str_contains((string) $cwd, self::EXISTING_DS)
+                ? '{"alerts":2,"mail":3}'
+                : '{"alerts":1,"mail":null}';
+            return ['exitCode' => 0, 'output' => $output];
+        };
+
+        $this->assertTrue($runner->run());
+
+        $calls = $this->statsProcessCalls($runner);
+        $this->assertCount(2, $calls);
+        $this->assertSame(['/fake/bin/shpd-ds', 'hosting-stats', '--json'], $calls[0]['argv']);
+        $this->assertSame($this->dataSourcesDir . '/' . self::EXISTING_DS, $calls[0]['cwd']);
+        $this->assertSame($this->dataSourcesDir . '/cccc-cccc-cccc-cccc', $calls[1]['cwd']);
+
+        $push = $this->statsHttpCalls($runner);
+        $this->assertCount(1, $push);
+        $this->assertSame('POST', $push[0]['method']);
+        $this->assertSame(
+            ['stats' => [
+                ['ds_id' => self::EXISTING_DS, 'alerts' => 2, 'mail' => 3],
+                ['ds_id' => 'cccc-cccc-cccc-cccc', 'alerts' => 1, 'mail' => null],
+            ]],
+            $push[0]['body'],
+        );
+    }
+
+    public function testForceStatsRunsStepWithoutStatsWanted(): void
+    {
+        $runner = $this->makeRunner();
+        $runner->onProcess = static fn(): array => ['exitCode' => 0, 'output' => '{"alerts":0,"mail":0}'];
+
+        $this->assertTrue($runner->run(forceStats: true));
+
+        $this->assertCount(1, $this->statsProcessCalls($runner));
+        $this->assertCount(1, $this->statsHttpCalls($runner));
+    }
+
+    public function testStatsFailureOfOneDsDoesNotStopOthers(): void
+    {
+        $this->createDs('cccc-cccc-cccc-cccc', 'Zdravý DS', ['core.system']);
+        $runner = $this->makeRunner();
+        $runner->httpResponses['reconcile'] = $this->reconcileResponse(true);
+        $runner->onProcess = static function (array $argv, ?string $cwd): array {
+            if (str_contains((string) $cwd, self::EXISTING_DS)) {
+                return ['exitCode' => 1, 'output' => 'boom'];
+            }
+            return ['exitCode' => 0, 'output' => '{"alerts":1,"mail":2}'];
+        };
+
+        // Selhání sběru jednoho DS běh neshodí — push jde s tím, co se sebralo.
+        $this->assertTrue($runner->run());
+
+        $push = $this->statsHttpCalls($runner);
+        $this->assertCount(1, $push);
+        $this->assertSame(
+            [['ds_id' => 'cccc-cccc-cccc-cccc', 'alerts' => 1, 'mail' => 2]],
+            $push[0]['body']['stats'],
+        );
+    }
+
+    public function testStatsEmptyCollectionSkipsPost(): void
+    {
+        $runner = $this->makeRunner();
+        $runner->httpResponses['reconcile'] = $this->reconcileResponse(true);
+        $runner->onProcess = static fn(): array => ['exitCode' => 1, 'output' => 'boom'];
+
+        $this->assertTrue($runner->run());
+        $this->assertSame([], $this->statsHttpCalls($runner));
+    }
+
+    public function testStatsUnparsableOutputSkipsDs(): void
+    {
+        $runner = $this->makeRunner();
+        $runner->httpResponses['reconcile'] = $this->reconcileResponse(true);
+        $runner->onProcess = static fn(): array => ['exitCode' => 0, 'output' => 'no json here'];
+
+        $this->assertTrue($runner->run());
+        $this->assertCount(1, $this->statsProcessCalls($runner));
+        $this->assertSame([], $this->statsHttpCalls($runner));
+    }
+
     private function rmdirRecursive(string $dir): void
     {
         if (!is_dir($dir)) {

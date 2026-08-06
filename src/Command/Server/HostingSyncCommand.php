@@ -33,7 +33,8 @@ class HostingSyncCommand extends Command
     {
         $this->setName('hosting-sync')
              ->setDescription('Sync with the hosting: reconcile local data sources and provision queued requests')
-             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'List the provisioning queue without any action');
+             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'List the provisioning queue without any action')
+             ->addOption('stats', null, InputOption::VALUE_NONE, 'Force the stats push step even when the hosting does not ask for it');
     }
 
     protected function getDataSourcesDir(): string
@@ -82,6 +83,10 @@ class HostingSyncCommand extends Command
             },
         );
 
-        return $runner->run((bool) $input->getOption('dry-run')) ? Command::SUCCESS : Command::FAILURE;
+        $ok = $runner->run(
+            (bool) $input->getOption('dry-run'),
+            forceStats: (bool) $input->getOption('stats'),
+        );
+        return $ok ? Command::SUCCESS : Command::FAILURE;
     }
 }

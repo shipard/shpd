@@ -22,7 +22,10 @@ use Shipard\Core\Version;
  *      s předpropojenou identitou → mail-router-setup --json (D4, jen
  *      s aktivním core.mail; token jde do confirm body jako mail_token)
  *      → confirm ok/failed.
- *   3. Stats push (D7) — Fáze 5, zatím nic.
+ *   3. Stats push (D7) — jen když reconcile response nese
+ *      stats_wanted=true (nebo ruční --stats): `hosting-stats --json`
+ *      per lokální DS, nasbírané počty jedním POST …/stats. Selhání
+ *      jednoho DS krok nezastaví; prázdný sběr se neposílá.
  *
  * Idempotence: existující adresář DS = ds-create se přeskočí, ostatní
  * kroky jsou idempotentní samy (ds-upgrade, domain-add no-op na stejný
@@ -55,7 +58,7 @@ class HostingSyncRunner
         $this->log = $log ?? static function (string $message): void {};
     }
 
-    public function run(bool $dryRun = false): bool
+    public function run(bool $dryRun = false, bool $forceStats = false): bool
     {
         if (!OidcProviderConfig::isAllowedIssuerUrl($this->hosting->url)) {
             $this->logLine('<error>hosting.url must be https (http only for localhost): ' . $this->hosting->url . '</error>');
@@ -127,9 +130,95 @@ class HostingSyncRunner
             }
         }
 
-        // 3. Stats push (D7) — Fáze 5: agregát per DS (počty z feedu/alertů).
+        // 3. Stats push (D7) — kadenci řídí hosting přes stats_wanted,
+        // agent je stateless; --stats krok vynutí ručně.
+        if ($forceStats || (bool) ($reconcile['stats_wanted'] ?? false)) {
+            if (!$this->pushStats($inventory)) {
+                $allOk = false;
+            }
+        }
 
         return $allOk;
+    }
+
+    // -------------------------------------------------------------------------
+    // Stats push (D7)
+    // -------------------------------------------------------------------------
+
+    /**
+     * `hosting-stats --json` v adresáři každého lokálního DS z inventury;
+     * selhání jednoho DS → skip + log (nesmí shodit běh). Nasbírané počty
+     * jedním POST …/stats, prázdný sběr se neposílá.
+     *
+     * @param list<array{ds_id: string, name: string, modules: list<string>}> $inventory
+     */
+    private function pushStats(array $inventory): bool
+    {
+        $this->logLine(sprintf('Stats: collecting from %d data source(s)…', count($inventory)));
+
+        $collected = [];
+        foreach ($inventory as $item) {
+            $dsId = $item['ds_id'];
+            $dsDir = $this->dataSourcesDir . '/' . $dsId;
+            $result = $this->runProcess([$this->shpdDsPath, 'hosting-stats', '--json'], $dsDir);
+            if ($result['exitCode'] !== 0) {
+                $this->logLine(sprintf(
+                    '<error>  %s: hosting-stats failed (exit %d) — skipped</error>',
+                    $dsId,
+                    $result['exitCode'],
+                ));
+                continue;
+            }
+            $stats = $this->parseStatsOutput($result['output']);
+            if ($stats === null) {
+                $this->logLine(sprintf('<error>  %s: hosting-stats returned no parsable JSON — skipped</error>', $dsId));
+                continue;
+            }
+            $collected[] = ['ds_id' => $dsId, 'alerts' => $stats['alerts'], 'mail' => $stats['mail']];
+        }
+
+        if ($collected === []) {
+            $this->logLine('Stats: nothing collected, push skipped.');
+            return true;
+        }
+
+        $response = $this->callHosting('POST', 'stats', ['stats' => $collected]);
+        if ($response === null) {
+            return false;
+        }
+        $this->logLine(sprintf(
+            'Stats: pushed %d snapshot(s), hosting accepted %d.',
+            count($collected),
+            (int) ($response['accepted'] ?? 0),
+        ));
+        return true;
+    }
+
+    /**
+     * Poslední flat JSON objekt s klíči alerts + mail z výstupu subprocesu
+     * (stdout/stderr se prokládají — stejný přístup jako parseMailSetupOutput).
+     *
+     * @return array{alerts: int|null, mail: int|null}|null
+     */
+    private function parseStatsOutput(string $output): ?array
+    {
+        if (!preg_match_all('/\{[^{}]*\}/', $output, $matches)) {
+            return null;
+        }
+        foreach (array_reverse($matches[0]) as $candidate) {
+            $decoded = json_decode($candidate, true);
+            if (!is_array($decoded)
+                || !array_key_exists('alerts', $decoded)
+                || !array_key_exists('mail', $decoded)
+            ) {
+                continue;
+            }
+            return [
+                'alerts' => is_numeric($decoded['alerts']) ? (int) $decoded['alerts'] : null,
+                'mail' => is_numeric($decoded['mail']) ? (int) $decoded['mail'] : null,
+            ];
+        }
+        return null;
     }
 
     // -------------------------------------------------------------------------

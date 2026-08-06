@@ -103,6 +103,24 @@ class HelpLibraryTest extends TestCase
         $this->assertSame([], $this->library()->search('kontrolní hlášení'));
     }
 
+    /**
+     * Regrese: číselný token v dotazu se v PHP stane int klíčem pole —
+     * bez přetypování spadne str_contains() na TypeError. Uživatel se
+     * přitom na čísla ptá běžně („účet 343“).
+     */
+    public function testNumericQueryTokenDoesNotCrash(): void
+    {
+        $hits = $this->library()->search('jistota 343');
+
+        $this->assertCount(1, $hits);
+        $this->assertSame('slovnicek.md', $hits[0]['page']->path);
+    }
+
+    public function testQueryWithOnlyNumbersReturnsNothing(): void
+    {
+        $this->assertSame([], $this->library()->search('343 518'));
+    }
+
     public function testShortQueryTokensAreIgnored(): void
     {
         $this->assertSame([], $this->library()->search('a v'));

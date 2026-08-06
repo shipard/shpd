@@ -180,7 +180,16 @@ final class HelpLibrary
 		return $score;
 	}
 
-	/** @return list<string> */
+	/**
+	 * Tokeny dotazu, deduplikované.
+	 *
+	 * `array_map('strval', ...)` na konci není kosmetika: PHP převádí
+	 * číselné klíče pole na int, takže bez přetypování by dotaz s číslem
+	 * („účet 343“, „nebývá to maska 518“) poslal do `str_contains()`
+	 * int a shodil hledání na TypeError.
+	 *
+	 * @return list<string>
+	 */
 	private function tokenize(string $query): array
 	{
 		$parts = preg_split('/[^\p{L}\p{N}]+/u', $this->normalize($query)) ?: [];
@@ -190,7 +199,7 @@ final class HelpLibrary
 				$tokens[$part] = true;
 			}
 		}
-		return array_keys($tokens);
+		return array_map('strval', array_keys($tokens));
 	}
 
 	/** Malá písmena bez diakritiky. */

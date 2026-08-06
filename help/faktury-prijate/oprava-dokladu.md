@@ -41,8 +41,10 @@ Nebo faktura neplatí celá a potřebuješ ji zrušit.
 
 ## Na co narazíš
 
-**Když je chyba jen v účtování, doklad do opravy netahej.** Chybí-li
-nastavení u položky nebo účtu, doplň ho a dej u dokladu **Přeúčtovat**.
+**Když je chyba jen v účtování, doklad do opravy netahej.** Sprav to, na co
+si Shipard stěžuje — hlášky vysvětluje
+[Když se doklad nezaúčtuje](../uctarna/kdyz-se-doklad-nezauctuje.md) —
+a dej u dokladu **Přeúčtovat**.
 Doklad zůstane ve **V pořádku** a — na rozdíl od opravy — se párování
 s platbou nerozpojí.
 

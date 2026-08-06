@@ -48,8 +48,9 @@ a **V pořádku**.
    formuláři účetní zápis není. Otevři **Nákup → Faktury přijaté**, klikni
    na doklad a přepni na záložku **Zaúčtování**. Je tam odznak
    **Zaúčtováno**, **Neúčtováno** nebo **Chyba účtování**, pod ním
-   samotný zápis a u chyby i její důvod — obvykle chybějící nastavení
-   u položky nebo účtu. Doklad zůstává uložený, jen není zaúčtovaný,
+   samotný zápis a u chyby i její důvod — co která hláška znamená, je
+   v [Když se doklad nezaúčtuje](../uctarna/kdyz-se-doklad-nezauctuje.md).
+   Doklad zůstává uložený, jen není zaúčtovaný,
    takže se nic neztratilo.
 
    Rutinně to dělat nemusíš — když se účtování nepovede, Shipard tě na to
@@ -75,7 +76,9 @@ do Konceptu dva doklady a potvrdíš je v jiném pořadí, vymění si čísla.
 U dokladu, který už jsi někam nahlásil nebo poslal, proto číslo neměň.
 
 **Chybu účtování spravíš bez rozebírání dokladu.** Když doplníš, co
-chybělo u položky nebo účtu, vrať se na doklad a dej **Přeúčtovat**.
+podle hlášky chybělo (viz
+[Když se doklad nezaúčtuje](../uctarna/kdyz-se-doklad-nezauctuje.md)),
+vrať se na doklad a dej **Přeúčtovat**.
 Doklad zůstane ve **V pořádku** a účetní zápis se vytvoří znovu; jakmile
 projde, upozornění na Dashboardu zmizí samo.
 

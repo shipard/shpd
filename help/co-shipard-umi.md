@@ -54,7 +54,7 @@ Položky, které jsou v menu samostatně, nad ostatními sekcemi.
 | Agenda | Co s ní uděláš | Návod |
 |---|---|---|
 | **Účetní doklady** | Ruční účetní zápis pro to, co není faktura. Řádky zadáváš sám na stranu **MD** nebo **DAL** s účtem, partner je nepovinný, DPH se tu neřeší. Při potvrzení Shipard kontroluje, že je doklad vyrovnaný — součet MD musí odpovídat součtu DAL | — |
-| **Účetní deník** | Účetní zápisy, které vznikly z dokladů a z bankovních transakcí. Účty nezadáváš, skládají se automaticky | — |
+| **Účetní deník** | Účetní zápisy, které vznikly z dokladů a z bankovních transakcí. Účty nezadáváš, skládají se automaticky | [Když se doklad nezaúčtuje](uctarna/kdyz-se-doklad-nezauctuje.md) |
 | **Účtový rozvrh** | Účty, na které se účtuje. Zakládá se z předpřipravené šablony — zvlášť pro podnikatele a zvlášť pro neziskové organizace — a můžeš ho doplňovat i účty vyřazovat | — |
 | **Bankovní výpisy** | Naimportuješ výpis z banky. Podporované formáty jsou **CAMT**, **GPC** a **FIO**; jiný formát Shipard zatím nepřečte | — |
 | **Bankovní transakce** | Jednotlivé pohyby z výpisů. Podle nich se páruje úhrada s fakturou; platbu, ke které se faktura nenašla, Shipard odloží na **clearing účet** | — |

@@ -1,0 +1,180 @@
+{
+    "tableId": 435,
+    "name": "Hosting AI gateway tokens",
+    "name:cs": "Hosting — AI gateway tokeny",
+    "name:en": "Hosting AI gateway tokens",
+
+    "adminOnly": true,
+
+    "displayPattern": "{token_prefix}",
+
+    "docStates": {
+        "stateColumn": "docState",
+        "mainColumn": "docStateMain",
+        "cfgItem": "core.system.docStatesArchive"
+    },
+
+    "columnGroups": [
+        {
+            "id": "identity",
+            "name": "Identity",
+            "name:cs": "Identifikace",
+            "name:en": "Identity"
+        },
+        {
+            "id": "status",
+            "name": "Status",
+            "name:cs": "Stav",
+            "name:en": "Status"
+        }
+    ],
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+
+        // --- identity ---
+
+        {
+            "id": "data_source",
+            "name": "Data source",
+            "name:cs": "Zdroj dat",
+            "name:en": "Data source",
+            "type": "int",
+            "nullable": false,
+            "reference": "hosting_core_data_sources",
+            "group": "identity"
+        },
+        {
+            "id": "note",
+            "name": "Note",
+            "name:cs": "Poznámka",
+            "name:en": "Note",
+            "type": "varchar",
+            "length": 200,
+            "nullable": true,
+            "group": "identity"
+        },
+
+        // --- gateway token (D5) — prefix + SHA-256 hash tokenu `shpd_gw_…`
+        // pro runtime validaci; token_encrypted drží plaintext šifrovaně,
+        // aby ho queue payload mohl servírovat opakovaně (retry-stabilní
+        // provisioning, vzor mail_token) ---
+
+        {
+            "id": "token_prefix",
+            "name": "Token prefix",
+            "name:cs": "Token — prefix",
+            "name:en": "Token prefix",
+            "type": "varchar",
+            "length": 12,
+            "nullable": false,
+            "sensitive": true,
+            "group": "status"
+        },
+        {
+            "id": "token_hash",
+            "name": "Token hash",
+            "name:cs": "Token — hash",
+            "name:en": "Token hash",
+            "type": "varchar",
+            "length": 64,
+            "nullable": false,
+            "sensitive": true,
+            "group": "status"
+        },
+        {
+            "id": "token_encrypted",
+            "name": "Token (encrypted)",
+            "name:cs": "Token (šifrovaný)",
+            "name:en": "Token (encrypted)",
+            "type": "encrypted_text",
+            "nullable": true,
+            "sensitive": true,
+            "group": "status"
+        },
+        {
+            "id": "active",
+            "name": "Active",
+            "name:cs": "Aktivní",
+            "name:en": "Active",
+            "type": "boolean",
+            "nullable": false,
+            "default": 1,
+            "group": "status"
+        },
+        {
+            "id": "last_used",
+            "name": "Last used",
+            "name:cs": "Naposledy použit",
+            "name:en": "Last used",
+            "type": "datetime",
+            "nullable": true,
+            "group": "status"
+        },
+
+        // --- audit ---
+
+        {
+            "id": "created",
+            "name": "Created",
+            "name:cs": "Vytvořeno",
+            "name:en": "Created",
+            "type": "datetime",
+            "nullable": false,
+            "group": "status"
+        },
+        {
+            "id": "modified",
+            "name": "Modified",
+            "name:cs": "Změněno",
+            "name:en": "Modified",
+            "type": "datetime",
+            "nullable": false,
+            "group": "status"
+        },
+
+        // --- doc state (systémové) ---
+
+        {
+            "id": "docState",
+            "name": "Document state",
+            "name:cs": "Stav dokumentu",
+            "name:en": "Document state",
+            "type": "tinyint",
+            "default": 40,
+            "system": true
+        },
+        {
+            "id": "docStateMain",
+            "name": "Document state (sort)",
+            "name:cs": "Stav dokumentu (řazení)",
+            "name:en": "Document state (sort)",
+            "type": "tinyint",
+            "default": 3,
+            "system": true
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "unq_token_prefix",
+            "type": "unique",
+            "columns": [
+                {"column": "token_prefix"}
+            ]
+        },
+        {
+            "id": "idx_data_source",
+            "type": "index",
+            "columns": [
+                {"column": "data_source"}
+            ]
+        }
+    ]
+}

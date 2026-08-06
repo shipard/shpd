@@ -19,7 +19,7 @@ class HostingModuleDefinitionTest extends TestCase
 {
     private const MODULE_PATH = '/modules/hosting/core';
 
-    public function testModuleDeclaresFiveTables(): void
+    public function testModuleDeclaresSevenTables(): void
     {
         $module = ModuleLoader::loadModule(dirname(__DIR__, 5) . self::MODULE_PATH);
 
@@ -31,6 +31,8 @@ class HostingModuleDefinitionTest extends TestCase
                 'hosting_core_ds_users',
                 'hosting_core_oidc_codes',
                 'hosting_core_mail_routers',
+                'hosting_core_ai_tokens',
+                'hosting_core_ai_usage',
             ],
             $module->tables,
         );
@@ -103,6 +105,59 @@ class HostingModuleDefinitionTest extends TestCase
             if ($col->id === 'api_key_hash') {
                 $this->assertTrue($col->sensitive, 'api_key_hash musí být sensitive');
             }
+        }
+    }
+
+    public function testAiTokensTableShape(): void
+    {
+        $raw = JsoncParser::parseFile(
+            dirname(__DIR__, 5) . self::MODULE_PATH . '/tables/hosting_core_ai_tokens.jsonc',
+        );
+        $def = TableDefinition::fromArray($raw);
+
+        $columnIds = array_map(static fn ($c) => $c->id, $def->columns);
+        foreach (['data_source', 'token_prefix', 'token_hash', 'token_encrypted',
+            'active', 'note', 'last_used'] as $expected) {
+            $this->assertContains($expected, $columnIds);
+        }
+
+        // Token nesmí uniknout do API/form odpovědí (D5) — sensitive flag
+        // hlídá TableAccessGuard.
+        foreach ($def->columns as $col) {
+            if ($col->id === 'token_prefix' || $col->id === 'token_hash') {
+                $this->assertTrue($col->sensitive, "{$col->id} musí být sensitive");
+            }
+            if ($col->id === 'token_encrypted') {
+                $this->assertTrue($col->sensitive, 'token_encrypted musí být sensitive');
+                $this->assertSame('encrypted_text', $col->type, 'token_encrypted musí být encrypted_text');
+            }
+        }
+
+        $uniqueIndexes = [];
+        foreach ($def->indexes as $index) {
+            if ($index->type === 'unique') {
+                $uniqueIndexes[] = $index->id;
+            }
+        }
+        $this->assertContains('unq_token_prefix', $uniqueIndexes);
+    }
+
+    public function testAiUsageTableIsAppendOnlyLog(): void
+    {
+        $raw = JsoncParser::parseFile(
+            dirname(__DIR__, 5) . self::MODULE_PATH . '/tables/hosting_core_ai_usage.jsonc',
+        );
+        $def = TableDefinition::fromArray($raw);
+
+        // Append-only log — bez docStates a bez docState sloupců.
+        $this->assertNull($def->docStates);
+        $columnIds = array_map(static fn ($c) => $c->id, $def->columns);
+        $this->assertNotContains('docState', $columnIds);
+
+        foreach (['data_source', 'model', 'input_tokens', 'output_tokens',
+            'cache_creation_tokens', 'cache_read_tokens', 'http_status',
+            'stream', 'duration_ms', 'created'] as $expected) {
+            $this->assertContains($expected, $columnIds);
         }
     }
 

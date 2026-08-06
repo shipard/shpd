@@ -16,7 +16,9 @@
         "hosting_core_data_sources",
         "hosting_core_ds_users",
         "hosting_core_oidc_codes",
-        "hosting_core_mail_routers"
+        "hosting_core_mail_routers",
+        "hosting_core_ai_tokens",
+        "hosting_core_ai_usage"
     ],
 
     "documentClasses": [
@@ -27,6 +29,10 @@
         {
             "table": "hosting_core_mail_routers",
             "class": "Shipard\\Module\\Hosting\\Core\\MailRouterDocument"
+        },
+        {
+            "table": "hosting_core_ai_tokens",
+            "class": "Shipard\\Module\\Hosting\\Core\\HostingAiTokenDocument"
         }
     ],
 
@@ -35,7 +41,9 @@
         { "viewer": "hosting.core.dataSources", "section": "other", "subsection": "other.hosting", "order": 20 },
         { "viewer": "hosting.core.mailRouters", "section": "other", "subsection": "other.hosting", "order": 25 },
         { "viewer": "hosting.core.dsUsers",     "section": "other", "subsection": "other.hosting", "order": 30 },
-        { "page": "hostingOidc",                "section": "other", "subsection": "other.hosting", "order": 40 }
+        { "page": "hostingOidc",                "section": "other", "subsection": "other.hosting", "order": 40 },
+        { "viewer": "hosting.core.aiTokens",    "section": "other", "subsection": "other.hosting", "order": 50 },
+        { "viewer": "hosting.core.aiUsage",     "section": "other", "subsection": "other.hosting", "order": 60 }
     ],
 
     "settingsPages": [
@@ -109,6 +117,24 @@
             "icon": "mail",
             "table": "hosting_core_mail_routers",
             "class": "Shipard\\Module\\Hosting\\Core\\MailRoutersViewer"
+        },
+        {
+            "id": "hosting.core.aiTokens",
+            "name": "AI gateway tokens",
+            "name:cs": "AI gateway — tokeny",
+            "name:en": "AI gateway tokens",
+            "icon": "lock",
+            "table": "hosting_core_ai_tokens",
+            "class": "Shipard\\Module\\Hosting\\Core\\AiTokensViewer"
+        },
+        {
+            "id": "hosting.core.aiUsage",
+            "name": "AI usage",
+            "name:cs": "AI gateway — spotřeba",
+            "name:en": "AI usage",
+            "icon": "robot",
+            "table": "hosting_core_ai_usage",
+            "class": "Shipard\\Module\\Hosting\\Core\\AiUsageViewer"
         }
     ],
 
@@ -128,6 +154,10 @@
         {
             "table": "hosting_core_mail_routers",
             "class": "Shipard\\Module\\Hosting\\Core\\MailRoutersForm"
+        },
+        {
+            "table": "hosting_core_ai_tokens",
+            "class": "Shipard\\Module\\Hosting\\Core\\AiTokensForm"
         }
     ],
 

@@ -59,5 +59,7 @@ $app->add(new \Shipard\Command\DataSource\HostingOidcInitCommand());
 $app->add(new \Shipard\Command\DataSource\HostingOidcClientCommand());
 $app->add(new \Shipard\Command\DataSource\HostingServerKeyCommand());
 $app->add(new \Shipard\Command\DataSource\HostingRouterKeyCommand());
+$app->add(new \Shipard\Command\DataSource\HostingAiGwInitCommand());
+$app->add(new \Shipard\Command\DataSource\HostingAiTokenCommand());
 $app->setDefaultCommand('help');
 $app->run();

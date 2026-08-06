@@ -1,0 +1,121 @@
+{
+    "tableId": 436,
+    "name": "Hosting AI usage",
+    "name:cs": "Hosting — spotřeba AI",
+    "name:en": "Hosting AI usage",
+
+    "adminOnly": true,
+
+    "displayPattern": "{model}",
+
+    // Append-only log průchodů AI gatewayí (D5) — bez docStates, bez document
+    // class a bez formu; řádky vkládá výhradně HostingAiGatewayController.
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+        {
+            "id": "data_source",
+            "name": "Data source",
+            "name:cs": "Zdroj dat",
+            "name:en": "Data source",
+            "type": "int",
+            "nullable": false,
+            "reference": "hosting_core_data_sources"
+        },
+        {
+            "id": "model",
+            "name": "Model",
+            "name:cs": "Model",
+            "name:en": "Model",
+            "type": "varchar",
+            "length": 60,
+            "nullable": false
+        },
+        {
+            "id": "input_tokens",
+            "name": "Input tokens",
+            "name:cs": "Vstupní tokeny",
+            "name:en": "Input tokens",
+            "type": "int",
+            "nullable": false,
+            "default": 0
+        },
+        {
+            "id": "output_tokens",
+            "name": "Output tokens",
+            "name:cs": "Výstupní tokeny",
+            "name:en": "Output tokens",
+            "type": "int",
+            "nullable": false,
+            "default": 0
+        },
+        {
+            "id": "cache_creation_tokens",
+            "name": "Cache creation tokens",
+            "name:cs": "Tokeny — zápis cache",
+            "name:en": "Cache creation tokens",
+            "type": "int",
+            "nullable": false,
+            "default": 0
+        },
+        {
+            "id": "cache_read_tokens",
+            "name": "Cache read tokens",
+            "name:cs": "Tokeny — čtení cache",
+            "name:en": "Cache read tokens",
+            "type": "int",
+            "nullable": false,
+            "default": 0
+        },
+        {
+            "id": "http_status",
+            "name": "HTTP status",
+            "name:cs": "HTTP status",
+            "name:en": "HTTP status",
+            "type": "int",
+            "nullable": false
+        },
+        {
+            "id": "stream",
+            "name": "Stream",
+            "name:cs": "Stream",
+            "name:en": "Stream",
+            "type": "boolean",
+            "nullable": false,
+            "default": 0
+        },
+        {
+            "id": "duration_ms",
+            "name": "Duration (ms)",
+            "name:cs": "Trvání (ms)",
+            "name:en": "Duration (ms)",
+            "type": "int",
+            "nullable": true
+        },
+        {
+            "id": "created",
+            "name": "Created",
+            "name:cs": "Vytvořeno",
+            "name:en": "Created",
+            "type": "datetime",
+            "nullable": false
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "idx_ds_created",
+            "type": "index",
+            "columns": [
+                {"column": "data_source"},
+                {"column": "created"}
+            ]
+        }
+    ]
+}

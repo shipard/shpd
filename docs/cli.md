@@ -308,8 +308,9 @@ jiný DS = chyba.
 ### `hosting-sync`
 
 ```bash
-shpd-server hosting-sync              # jeden běh: reconcile + fronta + confirm
+shpd-server hosting-sync              # jeden běh: reconcile + fronta + confirm + stats
 shpd-server hosting-sync --dry-run    # vypíše frontu bez akcí (queue?peek=1)
+shpd-server hosting-sync --stats      # vynutí stats krok i bez stats_wanted
 ```
 
 Pull agent hostingu (D3, `docs/hosting.md` §5.2). Vyžaduje sekci
@@ -329,13 +330,19 @@ Jeden běh:
    `shipard-id`, `autoLinkEmail: false`, atomicky, 0600) → `user-create`
    vlastníka (`--admin --if-not-exists` + předpropojená identita) →
    POST confirm `ok`/`failed` (chyba jednoho požadavku nezastaví další).
+3. **Stats push** (D7) — jen když reconcile response vrátí
+   `stats_wanted: true` (nejstarší snapshot serveru starší ~10 min)
+   nebo běh dostal `--stats`: `shpd-ds hosting-stats --json` per
+   lokální DS → jedním POST `…/stats` (selhání jednoho DS = skip
+   + log, prázdný sběr se neposílá).
 
 HTTPS povinné (`http` jen pro localhost dev); `--dry-run` frontu
-nepřeklápí a payload neobsahuje client_secret.
+nepřeklápí, payload neobsahuje client_secret a stats krok neběží.
 
 | Opce | Význam |
 |------|--------|
 | `--dry-run` | Vypíše frontu požadavků bez jakýchkoli akcí. |
+| `--stats` | Vynutí stats krok i bez `stats_wanted` z reconcile. |
 
 ---
 
@@ -872,6 +879,28 @@ požadavky mintuje queue payload sám. `--revoke` nastaví `active = 0`
 | `--ds <ndx>` | id řádku DS (`hosting_core_data_sources.id`) — povinné pro `--generate` |
 | `--generate` / `--revoke <ndx>` | právě jedna z opcí; revoke bere id řádku tokenu |
 | `--note <text>` | volitelná poznámka na řádek tokenu |
+
+#### `hosting-stats`
+
+```bash
+shpd-ds hosting-stats             # lidsky čitelný výpis počtů
+shpd-ds hosting-stats --json      # {"alerts": N|null, "mail": N|null}
+```
+
+Read-only agregát „kolik čeho čeká" pro hosting (D7) — počty se
+sémantikou karet dashboard feedu, ale laciné COUNTy bez per-user
+kontextu: `alerts` = aktivní alerty, `mail` = extrahované doklady
+ve stavech 10/20/30 (bez `doc_type = 'other'`) + zprávy s trvale
+selhanou AI analýzou mimo Archiv/Koš. Chybějící tabulky modulu →
+`null` (modul na DS není aktivní). Jen SELECTy, nic nezapisuje.
+
+S `--json` je stdout jediný JSON objekt — strojové rozhraní pro
+stats krok agenta `hosting-sync`; hosting snapshoty upsertuje do
+`hosting_core_ds_stats` a portál z nich kreslí badge „k řešení".
+
+| Opce | Význam |
+|------|--------|
+| `--json` | Stdout = jediný JSON objekt (chyby jdou na stderr). |
 
 ### Seed (testovací data)
 

@@ -438,10 +438,15 @@ class HostingServerController
         if ($oldest === null) {
             return true;
         }
-        if ($oldest instanceof \DateTimeInterface) {
-            $oldest = $oldest->format('Y-m-d H:i:s');
+        // Dibi vrací datetime dle konfigurace i jako string s 'T'
+        // oddělovačem — porovnávat přes timestamp, ne lexikograficky.
+        $oldestTs = $oldest instanceof \DateTimeInterface
+            ? $oldest->getTimestamp()
+            : strtotime((string) $oldest);
+        if ($oldestTs === false) {
+            return true;
         }
-        return (string) $oldest < date('Y-m-d H:i:s', time() - self::STATS_FRESH_MINUTES * 60);
+        return $oldestTs < time() - self::STATS_FRESH_MINUTES * 60;
     }
 
     /**

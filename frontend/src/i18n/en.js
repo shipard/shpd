@@ -564,6 +564,10 @@ export default {
   'portal.empty': 'No data source has been assigned to you yet. Contact your hosting administrator.',
   'portal.enter': 'Enter',
   'portal.role.admin': 'admin',
+  // Stats badge (D7) — counts only, from the last pushed snapshot
+  'portal.stats.pending': '{count} to resolve',
+  'portal.stats.allDone': 'All clear',
+  'portal.stats.tooltip': '{alerts, plural, one {# alert} other {# alerts}} · {mail, plural, one {# mail item} other {# mail items}}',
 
   // OIDC OP approval (D10) — ?op_auth= session bridge screen
   'opAuth.redirecting': 'Redirecting…',

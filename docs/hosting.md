@@ -7,7 +7,8 @@ Vychází z myšlenek modulu `hosting` ze starého Shipardu, ale nekopíruje ho 
 přebírá pull-based provisioning a princip „hosting je sám Shipard DS",
 vynechává fakturaci, helpdesk a HW evidenci.
 
-> **Stav:** Design schválen (D1–D12). **Fáze 0 hotová** (2026-08-05):
+> **Stav:** **Design D1–D12 kompletně implementován (Fáze 0–5 hotové).**
+> **Fáze 0 hotová** (2026-08-05):
 > `adminOnly` mechanismus (task 0a), modul `hosting.core` + `install.hosting`,
 > tabulky servers / data_sources / ds_users, admin viewery, portálový endpoint
 > `/_hosting/portal/my-datasources` + `PortalScreen` (task 0b).
@@ -27,7 +28,14 @@ vynechává fakturaci, helpdesk a HW evidenci.
 > `/_hosting/mail/lookup` (ETag/304), krok `mail-router-setup --json`
 > v agentu + `mail_token` v confirmu (šifrovaně), `lookup-sync` v repu
 > `mail_router` (task `hosting-04-mail-router`).
-> Fáze 4+ nezačaly; fázování v §8, každá fáze dostane vlastní PRD.
+> **Fáze 4 hotová** (2026-08-06): AI gateway — passthrough endpoint
+> `/_hosting/ai-gw/v1/messages` s metering, tabulky ai_tokens/ai_usage,
+> CLI `hosting-ai-gw-init`/`hosting-ai-token`, ai sekce queue payloadu +
+> krok `ai-analyzer-set-key --base-url` v agentu (task `hosting-05-ai-gateway`).
+> **Fáze 5 hotová** (2026-08-06): přehled napříč DS — `shpd-ds
+> hosting-stats`, stats krok agenta řízený `stats_wanted` z reconcile,
+> tabulka ds_stats (snapshot upsert), badge „k řešení" na portálu
+> (task `hosting-06-stats`).
 
 ---
 
@@ -138,8 +146,9 @@ funkční jen když je na DS aktivní `hosting.core`. Auth režimy:
 
 ## 4. Datový model (náčrt — tableId přidělí `next-table-id` v PRD)
 
-Skupina `modules/hosting/core/`, tabulky `hosting_core_*`. Všechny
-s docStates dle konvence a **všechny s `"adminOnly": true`** (D9) —
+Skupina `modules/hosting/core/`, tabulky `hosting_core_*`. DocStates dle
+konvence (výjimky: append-only log `ai_usage` a snapshot `ds_stats` je
+nemají) a **všechny s `"adminOnly": true`** (D9) —
 generické CRUD/viewer/form cesty jsou pro ne-adminy uzavřené, portál jde
 výhradně přes `/_hosting/portal/*`.
 
@@ -149,7 +158,7 @@ výhradně přes `/_hosting/portal/*`.
 | `hosting_core_data_sources` | Evidence DS: ds_id (`xxxx-xxxx-…`), název, web-id slug, server (FK), doména/URL aplikace, install modul, lifecycle stav (požadavek → zakládá se → aktivní → …), mail token (`encrypted_text`, D4), časy |
 | `hosting_core_ds_users` | Vazba uživatel (FK `core_system_users` hostingu) ↔ DS + role (admin/člen). Zdroj pro portálový seznam „moje DS" |
 | `hosting_core_mail_routers` | Mail-routery: název, obsluhované domény, hash API klíče, last_seen |
-| `hosting_core_ds_stats` | Push agregáty per DS (D7): počty karet feedu / alertů / nové pošty, timestamp. Malé, bez osobních dat |
+| `hosting_core_ds_stats` | Push agregáty per DS (D7): `alerts_count` + `mail_count` (NULL = modul na DS neaktivní), `collected_at`. Snapshot — jeden řádek per DS (unique `data_source`, upsert, bez historie). Malé, bez osobních dat |
 | `hosting_core_ai_tokens` | Gateway tokeny: DS (FK), hash tokenu, aktivní, expirace |
 | `hosting_core_ai_usage` | Metering: DS, model, input/output tokeny, timestamp, (rezerva: cache-read tokeny). Schéma připravené na limity v2 |
 
@@ -210,8 +219,18 @@ Jeden běh (cron slot `two-minutes`; `--dry-run` = náhled fronty přes
    + vazba vlastníka v `hosting_core_ds_users` (role `admin`, U1);
    `failed` → `lifecycle = failed` + `provision_error`, retry = admin
    přepne zpět na `request`. Mail-router a AI kroky doplní Fáze 3/4.
-3. **Stats push** (D7) — malý agregát per DS (počty z dashboard feedu /
-   alertů). Bez osobních dat — jen čísla. Fáze 5.
+3. **Stats push** (D7) — jen když reconcile response nese
+   `stats_wanted: true` (hosting ho vrací, když je nejstarší snapshot
+   jeho aktivních DS starší než ~10 min nebo žádný nemá; kadenci tedy
+   řídí hosting, agent je stateless) nebo běh dostal `--stats`. Pro
+   každý lokální DS z inventury `shpd-ds hosting-stats --json` →
+   `{"alerts": N|null, "mail": N|null}` (COUNTy se sémantikou feed
+   karet, NULL = modul neaktivní; selhání jednoho DS = skip + log).
+   Nasbírané jedním `POST /_hosting/server/stats`
+   `{stats: [{ds_id, alerts, mail}]}` → upsert do
+   `hosting_core_ds_stats` (`collected_at = now`; cizí/neznámé ds_id
+   skip + warning), response `{ok, accepted}`. Prázdný sběr se
+   neposílá. Bez osobních dat — jen čísla.
 
 ### 5.3 Mail lookup (D4) — hotovo (Fáze 3)
 
@@ -378,6 +397,9 @@ identity na všech DS.
 | **3 — Mail-router** | `/_hosting/mail/lookup`, mail token flow v agentovi (mint + report), `lookup-sync` v repu `mail_router` | Nový DS přijímá poštu bez ruční editace `lookup.json` |
 | **4 — AI gateway** | ai-gw passthrough + tokeny + metering, krok v provisioningu (backend řádek) | Nový DS má funkční AI (chat, analýza pošty) od založení; hosting vidí spotřebu per DS |
 | **5 — Přehled** | Stats push v agentovi, `hosting_core_ds_stats`, agregáty na portálu | Uživatel na portálu vidí, kolik čeho v jednotlivých DS čeká |
+
+**Všechny fáze 0–5 jsou hotové** — data dokončení a rozsah viz stavový
+blok v hlavičce dokumentu.
 
 Pořadí 1↔2 lze prohodit; OP dřív znamená, že provisioning zapisuje
 `auth.providers` od první verze a DS se rodí rovnou s centrálním loginem.

@@ -577,6 +577,10 @@ export default {
   'portal.empty': 'Zatím nemáte přiřazený žádný zdroj dat. Obraťte se na správce hostingu.',
   'portal.enter': 'Vstoupit',
   'portal.role.admin': 'správce',
+  // Stats badge (D7) — jen počty z posledního push snapshotu
+  'portal.stats.pending': '{count} k řešení',
+  'portal.stats.allDone': 'Vše vyřízeno',
+  'portal.stats.tooltip': '{alerts, plural, one {# upozornění} few {# upozornění} many {# upozornění} other {# upozornění}} · {mail, plural, one {# pošta k řešení} few {# pošty k řešení} many {# pošty k řešení} other {# pošty k řešení}}',
 
   // OIDC OP schválení (D10) — obrazovka ?op_auth= session bridge
   'opAuth.redirecting': 'Přesměrování…',

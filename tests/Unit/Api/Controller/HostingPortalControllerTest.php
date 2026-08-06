@@ -86,8 +86,81 @@ class HostingPortalControllerTest extends TestCase
                 'name'    => 'Alfa s.r.o.',
                 'url_app' => 'https://alfa.example.com',
                 'role'    => 'admin',
+                'stats'   => null,
             ],
         ], $payload['data']['items']);
+    }
+
+    public function testStatsSnapshotIsPassedThrough(): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchAll')->willReturn([
+            [
+                'id'           => '7',
+                'ds_id'        => 'abcd-efgh-ijkl-mnop',
+                'name'         => 'Alfa s.r.o.',
+                'url_app'      => 'https://alfa.example.com',
+                'role'         => 'member',
+                'alerts_count' => '3',
+                'mail_count'   => null,
+                'collected_at' => '2026-08-06 10:00:00',
+            ],
+        ]);
+
+        $response = $this->controller->myDatasources($this->userAuth(42), $db, $this->hostingTables());
+
+        $stats = $response->getPayload()['data']['items'][0]['stats'];
+        $this->assertSame(3, $stats['alerts']);
+        $this->assertNull($stats['mail']);
+        // ISO 8601 s offsetem — klient počítá stáří přes Date.parse.
+        $this->assertStringStartsWith('2026-08-06T10:00:00', $stats['collected_at']);
+        $this->assertMatchesRegularExpression('/[+-]\d{2}:\d{2}$/', $stats['collected_at']);
+    }
+
+    public function testDsWithoutSnapshotHasNullStats(): void
+    {
+        // LEFT JOIN bez řádku → sloupce ze ds_stats jsou NULL.
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchAll')->willReturn([
+            [
+                'id'           => '7',
+                'ds_id'        => 'abcd-efgh-ijkl-mnop',
+                'name'         => 'Alfa s.r.o.',
+                'url_app'      => 'https://alfa.example.com',
+                'role'         => 'member',
+                'alerts_count' => null,
+                'mail_count'   => null,
+                'collected_at' => null,
+            ],
+        ]);
+
+        $response = $this->controller->myDatasources($this->userAuth(42), $db, $this->hostingTables());
+
+        $this->assertNull($response->getPayload()['data']['items'][0]['stats']);
+    }
+
+    public function testNoStatsJoinWithoutDsStatsTable(): void
+    {
+        // Hosting před ds-upgrade — dotaz nesmí na chybějící tabulku sáhnout.
+        $capturedSql = null;
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchAll')->willReturnCallback(
+            function (string $sql, ...$args) use (&$capturedSql) {
+                $capturedSql = $sql;
+                return [[
+                    'id' => '7', 'ds_id' => 'x', 'name' => 'X', 'url_app' => '', 'role' => 'member',
+                ]];
+            },
+        );
+
+        $response = $this->controller->myDatasources(
+            $this->userAuth(42),
+            $db,
+            $this->hostingTables(withStats: false),
+        );
+
+        $this->assertStringNotContainsString('hosting_core_ds_stats', (string) $capturedSql);
+        $this->assertNull($response->getPayload()['data']['items'][0]['stats']);
     }
 
     public function testQueryScopesToUserActiveLifecycleAndLiveDocStates(): void
@@ -107,6 +180,7 @@ class HostingPortalControllerTest extends TestCase
         $this->controller->myDatasources($this->userAuth(42), $db, $this->hostingTables());
 
         $this->assertNotNull($capturedSql);
+        $this->assertStringContainsString('LEFT JOIN `hosting_core_ds_stats`', $capturedSql);
         $this->assertStringContainsString('du.`user` = %i', $capturedSql);
         $this->assertStringContainsString('ds.`lifecycle` = %s', $capturedSql);
         $this->assertStringContainsString('du.`docState` IN %in', $capturedSql);
@@ -133,13 +207,20 @@ class HostingPortalControllerTest extends TestCase
         return new AuthContext(true, $userId, 'session', 'tok', isAdmin: false);
     }
 
-    /** @return array<string, TableDefinition> */
-    private function hostingTables(): array
+    /**
+     * @param bool $withStats false = hosting před ds-upgrade (bez ds_stats)
+     * @return array<string, TableDefinition>
+     */
+    private function hostingTables(bool $withStats = true): array
     {
-        return [
+        $tables = [
             'hosting_core_data_sources' => $this->makeTable('hosting_core_data_sources'),
             'hosting_core_ds_users'     => $this->makeTable('hosting_core_ds_users'),
         ];
+        if ($withStats) {
+            $tables['hosting_core_ds_stats'] = $this->makeTable('hosting_core_ds_stats');
+        }
+        return $tables;
     }
 
     private function makeTable(string $name): TableDefinition

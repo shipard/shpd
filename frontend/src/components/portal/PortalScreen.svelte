@@ -11,10 +11,30 @@
   import { brandingUrl } from '../../api/app.js';
   import { t } from '../../i18n/index.js';
   import Icon from '../ui/Icon.svelte';
-  import { iconDatabase, iconLogout, iconOpenExternal } from '../../icons.js';
+  import { iconDatabase, iconLogout, iconOpenExternal, iconSuccess } from '../../icons.js';
 
   let items = $state(null);   // null = načítá se
   let error = $state(false);
+
+  // Snapshot starší než hodina se nevydává za aktuální — badge se nekreslí
+  // vůbec (D7, tasks/hosting-06-stats.md).
+  const STATS_FRESH_MS = 60 * 60 * 1000;
+
+  function freshStats(ds) {
+    if (!ds.stats?.collected_at) return null;
+    // NaN neprojde; záporné age (drobný clock skew) je čerstvé.
+    const age = Date.now() - Date.parse(ds.stats.collected_at);
+    if (!(age < STATS_FRESH_MS)) return null;
+    return ds.stats;
+  }
+
+  function statsTotal(stats) {
+    return (stats.alerts ?? 0) + (stats.mail ?? 0);
+  }
+
+  function statsTitle(stats) {
+    return t('portal.stats.tooltip', { alerts: stats.alerts ?? 0, mail: stats.mail ?? 0 });
+  }
 
   async function load() {
     error = false;
@@ -75,6 +95,7 @@
     {:else}
       <div class="portal__grid">
         {#each items as ds (ds.id)}
+          {@const stats = freshStats(ds)}
           <div class="portal__card">
             <div class="portal__card-icon">
               <Icon icon={iconDatabase} size="lg" />
@@ -86,6 +107,18 @@
                   <span class="portal__badge">{t('portal.role.admin')}</span>
                 {/if}
               </div>
+              {#if stats}
+                <div class="portal__card-stats" title={statsTitle(stats)}>
+                  {#if statsTotal(stats) > 0}
+                    <span class="portal__pending">{t('portal.stats.pending', { count: statsTotal(stats) })}</span>
+                  {:else}
+                    <span class="portal__all-done">
+                      <Icon icon={iconSuccess} size="sm" />
+                      {t('portal.stats.allDone')}
+                    </span>
+                  {/if}
+                </div>
+              {/if}
             </div>
             <a
               class="portal__enter"
@@ -251,6 +284,27 @@
     color: var(--shpd-color-accent);
     background-color: var(--shpd-color-accent-soft);
     border-radius: 999px;
+  }
+
+  .portal__card-stats {
+    margin-top: var(--shpd-space-xs);
+    font-size: var(--shpd-font-size-sm);
+  }
+
+  .portal__pending {
+    display: inline-block;
+    padding: 1px 8px;
+    font-weight: 500;
+    color: var(--shpd-color-accent);
+    background-color: var(--shpd-color-accent-soft);
+    border-radius: 999px;
+  }
+
+  .portal__all-done {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--shpd-space-xs);
+    color: var(--shpd-color-success);
   }
 
   .portal__enter {

@@ -1,0 +1,92 @@
+---
+title: Založení osoby
+summary: Jak přidat dodavatele nebo odběratele — natažením z registru podle IČO, nebo ručně.
+keywords: [osoby, osoba, nová osoba, založit osobu, přidat osobu, dodavatele, dodavatel, odběratele, odběratel, partner, protistrana, firma, fyzická osoba, IČO, DIČ, z registru, natáhnout firmu, přidat firmu z registru, vlastní firma, chybí vlastní osoba, splatnost, kontakty, adresy, bankovní účet osoby, kód osoby]
+related: [posta/kontrola-vytezeni.md, co-shipard-umi.md, slovnicek.md]
+---
+
+# Založení osoby
+
+**Osoby** jsou jedna evidence pro firmy i fyzické osoby — dodavatele,
+odběratele i kohokoli dalšího. Najdeš je v **Základní → Osoby**.
+
+## Kdy to potřebuješ
+
+Potřebuješ do systému partnera, kterého tam ještě nemáš. Nebo ti Shipard
+u vytěžené faktury nabízí u dodavatele **Vytvořit novou osobu** a ty chceš
+vědět, co se tím založí. Nebo ti Dashboard hlásí **Chybí vlastní Osoba**.
+
+## Postup
+
+**Firmu ručně nepřepisuj — natáhni ji z registru.**
+
+1. V **Základní → Osoby** dej **Z registru**. Otevře se dialog **Přidat
+   firmu z registru**.
+2. Do vyhledávání napiš **IČO nebo název firmy**.
+3. Vyber firmu z výsledků a dej **Pokračovat**.
+4. Projdi náhled: **Základní údaje** (**Název**, **IČO**, **DIČ**, **DIČ
+   pro DPH**), **Sídlo** a **Související záznamy** — tam je vidět, kolik
+   se s firmou přinese adres, bankovních účtů a kontaktů.
+5. Dej **Uložit**. Osoba i všechny její záznamy vzniknou najednou.
+
+**Fyzickou osobu — a firmu, kterou registr nezná — zadáš ručně.**
+
+1. Dej **Přidat** a vyber **Typ osoby**: *Firma*, nebo *Fyzická osoba*.
+   Formulář se podle toho překlopí, tak si typ zvol jako první.
+2. **U firmy** vyplň **Celý název** (povinný) a v sekci *Identifikace
+   firmy* **IČO** a **DIČ**. **U fyzické osoby** jsou povinné **Jméno**
+   a **Příjmení**; navíc je tam sekce *Osobní údaje*.
+3. Doplň, co máš, do sekce *Kontaktní údaje* — **E-mail**, **Telefon**,
+   **Webová stránka**.
+4. Ulož: **Uložit jako koncept**, nebo **V pořádku**. Na dokladech se
+   osoba nabízí v obou stavech.
+
+## Na co narazíš
+
+**Kód osoby vyplňovat nemusíš.** Shipard ho vygeneruje sám —
+firmy dostanou `F` a číslo, fyzické osoby `O` a číslo. Najdeš ho na tabu
+**Nastavení**.
+
+**Kontakty, Adresy a Bankovní účty jsou taby na osobě.** Nejsou to
+samostatné evidence; přidávají se až k uložené osobě.
+
+**Registr existující osobu nepřepíše.** Když ve výsledcích hledání vidíš
+u firmy odznak **Firma již existuje**, znamená to, že ji v evidenci máš.
+Vybrat a uložit ji můžeš, ale **nic se nedoplní ani nepřepíše** — dostaneš
+odkaz na záznam, který už máš. Chybějící údaje u dříve založené osoby si
+proto doplň ručně.
+
+**Odznak UKONČENO s datem** ve výsledcích znamená, že subjekt v registru
+zanikl. Založit ho jde — historické doklady na zaniklou firmu jsou
+normální — ale u nové spolupráce je to varování.
+
+**Osoba z vytěžené faktury má jen to, co na faktuře bylo.** Typicky
+název, IČO, DIČ a bankovní účet, ze kterého se bude platit. Sídlo,
+kontakty ani další účty na faktuře nejsou, takže na osobě nebudou —
+doplň si je, až je budeš potřebovat.
+
+**Dodavatele z faktury Shipard hledá v tomhle pořadí:** **IČO**, pak
+**DIČ pro DPH**, pak **DIČ**, a teprve nakonec podle **názvu**. Proto se
+při kontrole vytěženého dokladu vyplatí kontrolovat právě IČO — podle
+názvu se dá splést víc firem, podle IČO ne. Když Shipard najde víc
+kandidátů nebo žádného, zeptá se tě: **Vybrat existujícího…** nebo
+**Vytvořit novou osobu**.
+
+**Splatnost (dny)** na tabu **Nastavení** je předplněná na 14. Z ní se na
+faktuře dopočítá **Datum splatnosti** jako datum vystavení plus tolik dní,
+takže se vyplatí ji u partnerů, se kterými máš dohodnuto něco jiného,
+opravit.
+
+**Vlastní firma se zakládá jako každá jiná osoba.** U čerstvého datového
+zdroje ti Dashboard ukáže upozornění **Chybí vlastní Osoba** s akcí
+**Přidat vlastní Osobu**. Je to normální osoba — natáhni ji z registru —
+jen má na tabu **Nastavení** zaškrtnuté **Vlastní firma**. Bez ní systém
+neví, pod čí hlavičkou doklady vznikají, takže je to první věc, kterou
+v novém datovém zdroji udělej.
+
+## Souvisí
+
+- [Kontrola vytěženého dokladu](../posta/kontrola-vytezeni.md) — kde se
+  dodavatel potvrzuje nebo zakládá z vytěžené faktury
+- [Co Shipard umí](../co-shipard-umi.md) — přehled ostatních agend
+- [Slovníček](../slovnicek.md) — co znamenají stavy a názvy v rozhraní

@@ -39,6 +39,7 @@ END = "<!-- OBSAH:END -->"
 # Nový podadresář se přidává sem vědomě — jinak --check zastaví commit.
 SECTIONS: list[tuple[str, str]] = [
     ("", "Základy"),
+    ("osoby", "Osoby"),
     ("polozky", "Položky"),
     ("posta", "Došlá pošta"),
     ("faktury-prijate", "Faktury přijaté"),

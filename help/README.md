@@ -27,6 +27,12 @@ Tyhle stránky slouží dvěma čtenářům: tobě a vestavěnému AI asistentov
 | [Co Shipard umí](co-shipard-umi.md) | Úplný přehled agend, které v aplikaci jsou — a u kterých z nich už je napsaný návod. |
 | [Slovníček](slovnicek.md) | Co která věc v Shipardu znamená a jak se jmenuje v rozhraní. |
 
+### Osoby
+
+| Stránka | Co v ní najdeš |
+|---------|----------------|
+| [Založení osoby](osoby/zalozeni-osoby.md) | Jak přidat dodavatele nebo odběratele — natažením z registru podle IČO, nebo ručně. |
+
 ### Položky
 
 | Stránka | Co v ní najdeš |

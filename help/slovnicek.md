@@ -1,7 +1,7 @@
 ---
 title: Slovníček
 summary: Co která věc v Shipardu znamená a jak se jmenuje v rozhraní.
-keywords: [slovníček, pojmy, názvy, co to znamená, jak se to jmenuje, terminologie]
+keywords: [slovníček, pojmy, názvy, co to znamená, jak se to jmenuje, terminologie, DUZP, jistota, přeúčtovat, stavy]
 related: [co-dnes-nejde.md]
 ---
 
@@ -44,7 +44,27 @@ poštu a přijaté faktury.
 | co s tím dělá AI | badge **Ve frontě** · **Analyzuje se** · **Analyzováno** · **Analýza selhala** | Jak daleko je strojové čtení. Je to **jiná věc** než stav zprávy: badge říká, jak daleko je AI, stav říká, jak daleko jsi ty |
 | uklidit z cesty | stav **Archiv** | Zpráva, se kterou už nic nebude — reklama, nevyžádaná pošta |
 | elektronická faktura, XML faktura | **ISDOC** | Strojově čitelný formát faktury. Když ho dodavatel přiloží, Shipard ho použije přímo a AI analýzu vůbec nepotřebuje — je to přesnější |
+| obrazovka, kde se to kontroluje | **Náhled dokladu** | Vlevo PDF faktury, jak přišla, vpravo data, která z ní AI přečetla. Na telefonu se z toho stanou taby **PDF** a **Náhled** |
+| co je vyplněné podle mých starších faktur | **Doplněno z historie** | Poznámka u pole: hodnota nepřišla z faktury, ale z tvých dřívějších dokladů od téhož dodavatele |
+| položka nebo dodavatel, které mám potvrdit | **Reference** | Odkaz na záznam v tvé evidenci. Když si AI není jistá, který to je, nabídne **Vybrat existujícího…** nebo **Vytvořit nového** — a dokud nerozhodneš, **Použít** nejde |
+| přečíst to znovu | **Znovu analyzovat** | Spustí novou analýzu už doručené zprávy. Staré návrhy označí jako **Nahrazeno**; co jsi už použil nebo zamítl, nechá být |
+| ať už mi tohle nechodí | **Pravidlo odesílatele** | Po třech tvých ručních odklizeních pošty od stejné adresy Shipard navrhne pravidlo. Potvrzené pravidlo pak poštu od té adresy archivuje samo |
 | účtenka, paragon | **Zjednodušený daňový doklad** | Doklad z prodejny bez tvých údajů. Shipard je zpracovává také |
+
+### Stavy vytěženého návrhu
+
+Odznak u vytěženého dokladu. První tři se odvozují z **Jistoty** a čekají
+na tebe, zbytek je už vyřízený:
+
+| Odznak | Co znamená |
+|---|---|
+| **K použití** | Jistota 90 % a víc. Zkontroluj Součty a Datumy, zbytek námátkou |
+| **Čeká na review** | Jistota 60–90 %. Projdi všechny sekce náhledu |
+| **Nízká jistota** | Pod 60 %. Čti řádek po řádku, nebo zamítni a zadej ručně |
+| **Použito** | Z návrhu už vznikl doklad |
+| **Zamítnuto** | Zamítl jsi ho s důvodem; důvod zůstává u zprávy |
+| **Nahrazeno** | Překryla ho novější analýza |
+| **Chyba AI** | Extrakce se nepovedla — typicky nečitelné PDF |
 
 ---
 
@@ -62,6 +82,9 @@ poštu a přijaté faktury.
 | zrušit fakturu, škrtnout | stav **Storno** | Doklad zůstává v evidenci, ale neplatí. Nemazat — storno je správná cesta |
 | číslování faktur | **Číselná řada** | Předpis, podle kterého Shipard přiděluje čísla dokladů. Číslo se přiděluje při přechodu z Konceptu |
 | řádek faktury, co se fakturuje | **Položka** | Jeden řádek dokladu — množství, jednotková cena, sazba DPH |
+| datum, odkud se počítá DPH | **DUZP** | Datum uskutečnění zdaňitelného plnění. Určuje, do jakého období DPH doklad spadne |
+| datum, kdy to patří do účetí | **Účetní datum** | Datum účetního případu. Vedle něj jsou na dokladu ještě **Datum vystavení** a **Datum splatnosti** |
+| kód pro kontrolní hlášení | **Kód DPH** | Označení režimu plnění u řádku. Není to sazba — sazba je procento, kód říká, jak se plnění vykazuje |
 | součet daní dole na faktuře | **Rekapitulace DPH** | Rozpis základu a daně po jednotlivých sazbách |
 | daň platí odběratel, přenesená daň | **Reverse charge** / **samovyměření** | Režim, kdy daň neodvádí dodavatel, ale odběratel. Typicky u zboží z EU nebo u stavebních prací |
 | dodavatel, odběratel, partner | **Osoba** (sekce *Základní*) | Jedna evidence pro firmy i fyzické osoby |
@@ -78,6 +101,9 @@ poštu a přijaté faktury.
 | výpis z banky, platby | **Bankovní transakce** | Pohyby na bankovních účtech, ze kterých se párují úhrady |
 | přiřadit platbu k faktuře | **Párování** | Spojení bankovní platby s fakturou, kterou uhrazuje |
 | platba, která nikam nesedí | **Clearing účet** | Přechodné místo pro platbu, ke které se zatím nenašla faktura |
+| kde uvidím, jak je doklad zaúčtovaný | záložka **Zaúčtování** | V detailu dokladu. Je v ní odznak stavu účtování a samotný účetní zápis |
+| zaúčtovalo se to? | **Zaúčtováno** · **Neúčtováno** · **Chyba účtování** | Stav účtování dokladu — jiná věc než stav dokladu. Účtuje se doklad ve stavu **V pořádku** |
+| zaúčtovat to znovu | **Přeúčtovat** | Tlačítko u dokladu. Vytvoří účetní zápis znovu, aniž by se doklad musel vyjímat ze **V pořádku** — proto se tím nerozpojí párování s platbou |
 
 ---
 

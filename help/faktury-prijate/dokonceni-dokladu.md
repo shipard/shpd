@@ -23,8 +23,8 @@ Kroky 1–3 se dějí v **editačním formuláři** — tom, který se ti otevř
 a **V pořádku**.
 
 1. **Dokonči Koncept.** Tady je editovatelné všechno: řádky, částky, sazby,
-   datumy, dodavatel. Zkontroluj především **Datum účetního případu**,
-   **DUZP** a **Splatnost** — od nich se odvíjí období a saldokonto.
+   datumy, dodavatel. Zkontroluj především **Účetní datum**,
+   **DUZP** a **Datum splatnosti** — od nich se odvíjí období a saldokonto.
    Doklad z pošty už má nastavenou **číselnou řadu**, takže na ni myslet
    nemusíš.
 

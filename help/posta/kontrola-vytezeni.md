@@ -35,7 +35,7 @@ karta s procentem **Jistoty** a tlačítkem **Zkontrolovat**.
    | **Součty** | **Celkem** především. Pak **Základ**, **DPH**, **Zaokrouhlení** |
    | **DPH rekapitulace** | Sedí rozpad po sazbách? Je tam sazba, která na faktuře není? |
    | **Dodavatel** | **IČO** a **DIČ**. Podle nich se dohledává partner |
-   | **Datumy** | **DUZP** a **Splatnost** — ovlivní přiznání i saldokonto |
+   | **Datumy** | **DUZP** a **Datum splatnosti** — ovlivní přiznání i saldokonto |
    | **Platba** | **Variabilní symbol** a **Bankovní účet** — podle nich se pak páruje platba |
    | **Řádky** | Množství, **Cena/j**, sazba **DPH**. Namátkově, pokud sedí Součty |
 

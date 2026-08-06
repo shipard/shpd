@@ -23,10 +23,12 @@ a ty chceš vědět, co se tím vlastně založí.
 2. **Vyplň Název.** Jediné pole, které za tebe Shipard nedoplní — a to,
    které se pak objeví na dokladu.
 
-3. **Vyber Druh položky.** Povinné. Druh je tvůj vlastní pojmenovaný
-   kbelík — *Konzultace IT*, *Materiál*, *Energie*. Podle druhu se sám
-   vyplní **Typ položky** (*Služba*, *Zásoba*, *Účetní položka*,
-   *Ostatní*); ten se zadat přímo nedá.
+3. **Vyber Druh položky.** Povinné — ale zakládat nic nemusíš: Shipard
+   má připravené čtyři druhy, **Služba**, **Zásoba**, **Účetní položka**
+   a **Ostatní**, a ty na začátek stačí. Vlastní druhy — pojmenované
+   kbelíky jako *Konzultace IT*, *Materiál* nebo *Energie* — si můžeš
+   přidat v Nastavení, když chceš položky členit podrobněji. Podle druhu
+   se sám vyplní **Typ položky**; ten se zadat přímo nedá.
 
 4. **Zkontroluj Jednotku.** Povinná, u nové položky předplněná na **Kus**.
 
@@ -43,6 +45,10 @@ Nepovinné věci, které se snadno přehlédnou: **Popis** má vlastní tab,
 v sekci *Platnost* na prvním tabu.
 
 ## Na co narazíš
+
+**Připravené druhy se jmenují stejně jako typy.** Je jeden na každý typ,
+proto ta shoda — druh *Služba* má typ *Služba*. Jak si založíš vlastní
+druh, název a typ se rozejdou: *Konzultace IT* může být typu *Služba*.
 
 **Typ položky se u používaného druhu už nezmění.** Dokud druh nemá ani
 jednu položku, typ mu přepsat můžeš. Jak ho jednou něco používá, Shipard

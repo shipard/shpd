@@ -368,7 +368,6 @@ export default {
   'exchange.preview.decide.createItem': 'Create new item',
   'exchange.preview.decide.createParty': 'Create new party',
   'exchange.preview.decide.createBankAccount': 'Create new account',
-  'exchange.preview.decide.pickExisting': 'Pick existing…',
   'exchange.preview.decide.skip': 'Skip row',
   'exchange.preview.decide.skipRow': 'Skip row',
   'exchange.preview.decide.candidates': 'Candidates',

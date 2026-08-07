@@ -381,7 +381,6 @@ export default {
   'exchange.preview.decide.createItem': 'Vytvořit novou položku',
   'exchange.preview.decide.createParty': 'Vytvořit novou osobu',
   'exchange.preview.decide.createBankAccount': 'Vytvořit nový účet',
-  'exchange.preview.decide.pickExisting': 'Vybrat existujícího…',
   'exchange.preview.decide.skip': 'Přeskočit řádek',
   'exchange.preview.decide.skipRow': 'Vynechat řádek',
   'exchange.preview.decide.candidates': 'Kandidáti',

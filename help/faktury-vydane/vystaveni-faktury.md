@@ -32,11 +32,12 @@ toho, kdo ti kolik dluží. Nebo zkoušíš, co Shipard u vydané faktury umí a
      založíš ho přímo odsud — viz [Založení osoby](../osoby/zalozeni-osoby.md).
    - **Adresa partnera** a **Bankovní účet partnera** se dají vybrat teprve
      po zvolení partnera.
-   - **Datum vystavení** vyplň sám — předplněné není a je povinné. Jak ho
-     zadáš, doplní se z něj **Účetní datum** a **DUZP**.
-   - **Datum splatnosti** se doplní po volbě partnera podle splatnosti
-     sjednané u něj; když zůstane prázdné, dopočítá se při uložení
-     (bez sjednané splatnosti 14 dní od vystavení). Přepsat jde všechna.
+   - **Datum vystavení** a **Účetní datum** vyplň sám — obojí je povinné
+     a Shipard je nepředplňuje.
+   - **DUZP**, **DPPD** a **Datum splatnosti** nechat prázdné můžeš. Doplní
+     se samy až po **Uložit** — DUZP a DPPD podle data vystavení, splatnost
+     podle splatnosti sjednané u partnera (bez ní 14 dní od vystavení).
+     Přepsat je jde kdykoli.
    - **Registrace DPH** vyplň vždy, když fakturuješ s daní. Bez ní nepůjde
      na řádku zvolit **Kód DPH**.
    - **Náš bankovní účet** je u vydané faktury povinný — je to účet, na který

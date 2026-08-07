@@ -1,7 +1,7 @@
 ---
 title: Co Shipard umí
 summary: Úplný přehled agend, které v aplikaci jsou — a u kterých z nich už je napsaný návod.
-keywords: [umí, neumí to, jde, zvládne, dokáže, podporuje, existuje, má, obsahuje, co všechno, seznam funkcí, přehled funkcí, agendy, moduly, sekce, menu, kde najdu, co tam je, vystavit fakturu, faktura odběrateli, vydané faktury, spisovna, smlouvy, úkoly, účetní deník, účtový rozvrh, bankovní výpis, saldokonto]
+keywords: [umí, neumí to, jde, zvládne, dokáže, podporuje, existuje, má, obsahuje, co všechno, seznam funkcí, přehled funkcí, agendy, moduly, sekce, menu, kde najdu, co tam je, spisovna, smlouvy, úkoly, účetní deník, účtový rozvrh, bankovní výpis, saldokonto]
 related: [co-dnes-nejde.md, slovnicek.md]
 ---
 
@@ -45,7 +45,7 @@ Položky, které jsou v menu samostatně, nad ostatními sekcemi.
 | Agenda | Co s ní uděláš | Návod |
 |---|---|---|
 | **Faktury přijaté** | Doklad od dodavatele. Vznikne z došlé pošty nebo ho zadáš ručně, projde stavy **Koncept** → **Potvrzeno** → **V pořádku**, zaúčtuje se a objeví se v saldokontu | [Dokončení dokladu](faktury-prijate/dokonceni-dokladu.md) · [Oprava dokladu](faktury-prijate/oprava-dokladu.md) |
-| **Faktury vydané** | Doklad pro odběratele. Vystavíš ho ručně, dostane číslo z číselné řady (řady se zakládají v Nastavení), spočítá se rekapitulace DPH, zaúčtuje se a jde do saldokonta. **Hotovou fakturu z Shipardu nedostaneš** — tisk, PDF ani odeslání odběrateli e-mailem zatím nejsou | — |
+| **Faktury vydané** | Doklad pro odběratele. Vystavíš ho ručně, dostane číslo z číselné řady (řady se zakládají v Nastavení), spočítá se rekapitulace DPH, zaúčtuje se a jde do saldokonta. **Hotovou fakturu z Shipardu nedostaneš** — tisk, PDF ani odeslání odběrateli e-mailem zatím nejsou | [Vystavení faktury](faktury-vydane/vystaveni-faktury.md) |
 
 ---
 

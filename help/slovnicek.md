@@ -82,6 +82,8 @@ na tebe, zbytek je už vyřízený:
 | zrušit fakturu, škrtnout | stav **Storno** | Doklad zůstává v evidenci, ale neplatí. Nemazat — storno je správná cesta |
 | číslování faktur | **Číselná řada** | Předpis, podle kterého Shipard přiděluje čísla dokladů. Číslo se přiděluje při přechodu z Konceptu |
 | řádek faktury, co se fakturuje | **Položka** | Jeden řádek dokladu — množství, jednotková cena, sazba DPH |
+| co se na řádku vlastně děje, druh řádku | **Pohyb** | Volba na řádku dokladu — *Prodej služeb*, *Nákup zboží a materiálu*, *Účetní položka* a další. Podle ní se řádek zaúčtuje — účet tedy neurčuje položka, ale pohyb |
+| kam mi mají zaplatit, na jaký účet | **Náš bankovní účet** | Volba na hlavičce dokladu. U vydané faktury povinná — je to účet, na který má odběratel zaplatit. Účty se zakládají v Nastavení → Účetnictví → Bankovní spojení |
 | datum, odkud se počítá DPH | **DUZP** | Datum uskutečnění zdanitelného plnění. Určuje, do jakého období DPH doklad spadne |
 | datum, kdy to patří do účetí | **Účetní datum** | Datum účetního případu. Vedle něj jsou na dokladu ještě **Datum vystavení** a **Datum splatnosti** |
 | kód pro kontrolní hlášení | **Kód DPH** | Označení režimu plnění u řádku. Není to sazba — sazba je procento, kód říká, jak se plnění vykazuje |

@@ -31,6 +31,16 @@ odevzdaného období dopíšeš doklad.
 
 ---
 
+## Vydané faktury: nic pro odběratele
+
+**Vydanou fakturu nevytiskneš, neuložíš do PDF ani neodešleš e-mailem.**
+Vystavit a zaúčtovat ji jde celou — viz
+[Vystavení faktury](faktury-vydane/vystaveni-faktury.md) — ale doklad, který
+drží v ruce odběratel, musíš zatím vyrobit jinde. U vydaných faktur je tak
+Shipard dneska evidence, ne fakturační nástroj.
+
+---
+
 ## Kde ještě nemusí souhlasit čísla
 
 Tohle je pro nás priorita číslo jedna a pracuje se na tom. Do té doby

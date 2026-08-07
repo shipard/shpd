@@ -84,7 +84,7 @@ projde, upozornění na Dashboardu zmizí samo.
 
 **Dokončit to nemusíš hned.** Když formulář zavřeš v Konceptu nebo
 v Potvrzeno, doklad nezmizí — najdeš ho v **Nákup → Faktury přijaté**
-a tlačítkem **Upravit** se vrátíš do stejného formuláře včetně tlačítek
+a tlačítkem **Otevřít** se vrátíš do stejného formuláře včetně tlačítek
 pro přechody.
 
 **Doklad ve V pořádku se needituje — a je to tak správně.** Když je v něm

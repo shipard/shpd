@@ -52,7 +52,13 @@ Tyhle stránky slouží dvěma čtenářům: tobě a vestavěnému AI asistentov
 | Stránka | Co v ní najdeš |
 |---------|----------------|
 | [Dokončení dokladu](faktury-prijate/dokonceni-dokladu.md) | Co se děje po Použít — od Konceptu přes Potvrzeno k V pořádku a co se tím spustí. |
-| [Oprava dokladu](faktury-prijate/oprava-dokladu.md) | Jak opravit nebo zrušit doklad, který už je ve stavu V pořádku, a čemu se přitom vyhnout. |
+| [Oprava dokladu](faktury-prijate/oprava-dokladu.md) | Jak opravit nebo zrušit přijatou fakturu, která už je ve stavu V pořádku, a čemu se přitom vyhnout. |
+
+### Faktury vydané
+
+| Stránka | Co v ní najdeš |
+|---------|----------------|
+| [Vystavení faktury](faktury-vydane/vystaveni-faktury.md) | Jak vystavit fakturu odběrateli — od Přidat po V pořádku — a proč ji z Shipardu zatím nedostaneš na papír. |
 
 ### Účtárna
 

@@ -1,7 +1,7 @@
 ---
 title: Oprava dokladu
-summary: Jak opravit nebo zrušit doklad, který už je ve stavu V pořádku, a čemu se přitom vyhnout.
-keywords: [oprava, opravit doklad, v opravě, storno, stornovat, zrušit fakturu, smazat doklad, přeúčtovat, špatná částka na faktuře]
+summary: Jak opravit nebo zrušit přijatou fakturu, která už je ve stavu V pořádku, a čemu se přitom vyhnout.
+keywords: [oprava, opravit doklad, oprava přijaté faktury, v opravě, storno, stornovat, zrušit fakturu, smazat doklad, přeúčtovat, špatná částka na faktuře]
 related: [faktury-prijate/dokonceni-dokladu.md, slovnicek.md, co-dnes-nejde.md]
 ---
 
@@ -10,6 +10,10 @@ related: [faktury-prijate/dokonceni-dokladu.md, slovnicek.md, co-dnes-nejde.md]
 Doklad ve stavu **V pořádku** je uzamčený — nedá se do něj psát. Není to
 překážka, kterou je potřeba obejít: oprava má vlastní stav, ve kterém se
 doklad odúčtuje, opraví a zaúčtuje znovu.
+
+Stránka je psaná pro **přijaté faktury**. Stavy a přechody jsou u všech
+dokladů stejné, takže postup platí i jinde — co u dalších typů dokladů
+platí metodicky jinak, tady popsané není.
 
 ## Kdy to potřebuješ
 

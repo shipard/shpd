@@ -26,6 +26,13 @@
                     "order": 10
                 },
                 {
+                    "id": "other.mail",
+                    "name": "Mail",
+                    "name:cs": "Pošta",
+                    "name:en": "Mail",
+                    "order": 15
+                },
+                {
                     "id": "other.hosting",
                     "name": "Hosting",
                     "name:cs": "Hosting",

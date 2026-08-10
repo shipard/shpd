@@ -180,12 +180,65 @@ class HealthCheckerTest extends TestCase
         $checker = new HealthChecker($spec);
         $issues = $this->withoutRootOwnerIssues($checker->checkAll());
 
-        $modeIssues = array_filter($issues, static fn($i) => str_contains($i['message'], 'mode'));
-        $this->assertCount(1, $modeIssues);
-        $issue = array_values($modeIssues)[0];
-        $this->assertStringContainsString('secrets.key', $issue['path']);
-        $this->assertSame('mode 0644, expected 0600', $issue['message']);
-        $this->assertTrue($issue['fixable']);
+        // Dva nálezy: explicitní entry pro secrets.key + contentsMaxMode
+        // check rekurzivního scanu secrets/.
+        $modeIssues = array_values(array_filter($issues, static fn($i) => str_contains($i['message'], 'mode')));
+        $this->assertCount(2, $modeIssues);
+        foreach ($modeIssues as $issue) {
+            $this->assertStringContainsString('secrets.key', $issue['path']);
+        }
+        $entryIssue = array_values(array_filter($modeIssues, static fn($i) => str_contains($i['message'], 'expected')))[0];
+        $this->assertSame('mode 0644, expected 0600', $entryIssue['message']);
+        $this->assertTrue($entryIssue['fixable']);
+    }
+
+    public function testSecretsContentsModeAboveMaxIsReported(): void
+    {
+        $spec = $this->makeSpec();
+        $this->buildContractTree($spec);
+        $dsDir = $this->createDsTree($spec, 'aaaa-bbbb-cccc-dddd');
+        // Soubor bez explicitní spec entry — pokrývá ho jen contentsMaxMode.
+        $this->writeFile($dsDir . '/secrets/ai-gw-anthropic.key', 'sk-ant-x', 0640);
+
+        $checker = new HealthChecker($spec);
+        $issues = $this->withoutRootOwnerIssues($checker->checkAll());
+
+        $modeIssues = array_values(array_filter(
+            $issues,
+            static fn($i) => str_ends_with($i['path'], '/secrets/ai-gw-anthropic.key'),
+        ));
+        $this->assertCount(1, $modeIssues, 'unexpected issues: ' . json_encode($issues));
+        $this->assertStringContainsString('mode 0640 exceeds 0600', $modeIssues[0]['message']);
+        $this->assertStringContainsString('chmod 0600', $modeIssues[0]['message']);
+    }
+
+    public function testSecretsContentsModeAtMaxIsClean(): void
+    {
+        $spec = $this->makeSpec();
+        $this->buildContractTree($spec);
+        $dsDir = $this->createDsTree($spec, 'aaaa-bbbb-cccc-dddd');
+        $this->writeFile($dsDir . '/secrets/ai-gw-anthropic.key', 'sk-ant-x', 0600);
+        // Přísnější než max je taky v pořádku.
+        $this->writeFile($dsDir . '/secrets/oidc-op.key', 'pem', 0400);
+
+        $checker = new HealthChecker($spec);
+        $issues = $this->withoutRootOwnerIssues($checker->checkAll());
+
+        $this->assertSame([], $issues, 'unexpected issues: ' . json_encode($issues));
+    }
+
+    public function testContentsMaxModeIgnoresDirsOutsideSecrets(): void
+    {
+        // att/ je recurse bez contentsMaxMode — 0644 soubor nesmí být nález.
+        $spec = $this->makeSpec();
+        $this->buildContractTree($spec);
+        $dsDir = $this->createDsTree($spec, 'aaaa-bbbb-cccc-dddd');
+        $this->writeFile($dsDir . '/att/upload.bin', 'x', 0644);
+
+        $checker = new HealthChecker($spec);
+        $issues = $this->withoutRootOwnerIssues($checker->checkAll());
+
+        $this->assertSame([], $issues, 'unexpected issues: ' . json_encode($issues));
     }
 
     public function testDetectsWrongType(): void

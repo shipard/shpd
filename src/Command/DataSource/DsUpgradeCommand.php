@@ -91,9 +91,12 @@ class DsUpgradeCommand extends Command
         $secretsKeyFile = DsSecretCipher::keyFilePath($dsDir);
         if (!is_file($secretsKeyFile)) {
             try {
-                DsSecretCipher::generateKey($dsDir);
+                $warnings = DsSecretCipher::generateKey($dsDir);
                 $output->writeln('  [INFO] Created secrets/secrets.key — no data migration needed');
                 $output->writeln('         (no encrypted columns existed in this DS yet).');
+                foreach ($warnings as $warning) {
+                    $output->writeln('<comment>  [WARN] ' . $warning . '</comment>');
+                }
             } catch (\RuntimeException $e) {
                 $output->writeln('<error>Failed to initialise secrets key: ' . $e->getMessage() . '</error>');
                 return Command::FAILURE;

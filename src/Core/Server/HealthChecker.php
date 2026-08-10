@@ -117,7 +117,8 @@ final class HealthChecker
         }
 
         if (!empty($entry['recurse']) && $entry['type'] === 'dir') {
-            foreach ($this->scanContents($path, $expectedOwner, $expectedGroup) as $issue) {
+            $contentsMaxMode = isset($entry['contentsMaxMode']) ? (int) $entry['contentsMaxMode'] : null;
+            foreach ($this->scanContents($path, $expectedOwner, $expectedGroup, $contentsMaxMode) as $issue) {
                 $issues[] = $issue;
             }
         }
@@ -127,7 +128,9 @@ final class HealthChecker
 
     /**
      * Walks $dir recursively and reports owner/group mismatches against the
-     * expected shipard user. Modes are not enforced inside recursive dirs.
+     * expected shipard user. Modes are not enforced inside recursive dirs —
+     * except when $contentsMaxMode is set (secrets/): every regular file
+     * whose mode grants anything beyond it is reported.
      *
      * Symlinks are not followed (we check the symlink's own ownership, which
      * for lchown semantics is what matters; PHP's `chown` follows symlinks
@@ -135,8 +138,12 @@ final class HealthChecker
      *
      * @return list<array{severity: 'ok'|'warn'|'error', path: string, message: string, fixable: bool}>
      */
-    private function scanContents(string $dir, string $expectedOwner, string $expectedGroup): array
-    {
+    private function scanContents(
+        string $dir,
+        string $expectedOwner,
+        string $expectedGroup,
+        ?int $contentsMaxMode = null,
+    ): array {
         $issues = [];
         try {
             $iter = new \RecursiveIteratorIterator(
@@ -178,6 +185,21 @@ final class HealthChecker
                     'path'     => $path,
                     'message'  => "group {$actualGroup}, expected {$expectedGroup}",
                     'fixable'  => true,
+                ];
+            }
+            $mode = $stat['mode'] & 0777;
+            if ($contentsMaxMode !== null
+                && ($stat['mode'] & 0170000) === 0100000  // regular file
+                && ($mode & ~$contentsMaxMode) !== 0
+            ) {
+                $issues[] = [
+                    'severity' => 'error',
+                    'path'     => $path,
+                    'message'  => sprintf(
+                        'mode %04o exceeds %04o. Fix: chmod %04o %s',
+                        $mode, $contentsMaxMode, $contentsMaxMode, $path,
+                    ),
+                    'fixable'  => false,
                 ];
             }
         }

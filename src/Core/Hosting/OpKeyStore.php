@@ -10,6 +10,7 @@ use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Hosting\Exception\OpKeyInsecureException;
 use Shipard\Core\Hosting\Exception\OpKeyMissingException;
 use Shipard\Core\Security\DsSecretCipher;
+use Shipard\Core\Security\SecretsFileWriter;
 
 /**
  * Podpisový klíč OIDC OP hostingu (D2). Privátní RSA klíč žije v
@@ -86,16 +87,16 @@ final class OpKeyStore
     }
 
     /**
-     * Generate a fresh RSA private key in {dsPath}/secrets/oidc-op.key.
-     * Atomic: creates the directory with 0700 if missing, writes the PEM to
-     * a tmp file with 0600, fsyncs, then renames into place. Fails if the
-     * key already exists. Returns the kid of the new key.
+     * Generate a fresh RSA private key in {dsPath}/secrets/oidc-op.key via
+     * SecretsFileWriter (atomic, 0600, ownership aligned with the DS root).
+     * Fails if the key already exists. Returns the kid of the new key and
+     * ownership warnings.
+     *
+     * @return array{kid: string, warnings: list<string>}
      */
-    public static function generateKey(string $dsPath): string
+    public static function generateKey(string $dsPath): array
     {
-        $secretsDir = DsSecretCipher::secretsDirPath($dsPath);
         $keyFile = self::keyFilePath($dsPath);
-        $tmpFile = $keyFile . '.tmp';
 
         if (is_file($keyFile)) {
             throw new \RuntimeException("oidc-op.key already exists at {$keyFile}");
@@ -116,50 +117,14 @@ final class OpKeyStore
             );
         }
 
-        if (!is_dir($secretsDir)) {
-            if (!@mkdir($secretsDir, 0700, true) && !is_dir($secretsDir)) {
-                throw new \RuntimeException("Failed to create {$secretsDir}");
-            }
-        }
-        @chmod($secretsDir, 0700);
-
-        if (is_file($tmpFile)) {
-            @unlink($tmpFile);
-        }
-
-        $fp = @fopen($tmpFile, 'wb');
-        if ($fp === false) {
-            throw new \RuntimeException("Failed to open {$tmpFile} for writing");
-        }
-        @chmod($tmpFile, 0600);
-
-        try {
-            $written = fwrite($fp, $pem);
-            if ($written !== strlen($pem)) {
-                throw new \RuntimeException(sprintf(
-                    'Short write to %s (%d/%d bytes)',
-                    $tmpFile, (int) $written, strlen($pem),
-                ));
-            }
-            if (!fflush($fp)) {
-                throw new \RuntimeException("fflush failed on {$tmpFile}");
-            }
-            if (!fsync($fp)) {
-                throw new \RuntimeException("fsync failed on {$tmpFile}");
-            }
-        } finally {
-            fclose($fp);
-        }
-
-        if (!@rename($tmpFile, $keyFile)) {
-            @unlink($tmpFile);
-            throw new \RuntimeException("Failed to rename {$tmpFile} to {$keyFile}");
-        }
-        @chmod($keyFile, 0600);
+        $warnings = SecretsFileWriter::write($dsPath, self::KEY_FILENAME, $pem);
 
         unset(self::$cache[$dsPath]);
 
-        return self::fromPrivatePem($pem, $keyFile)->kid();
+        return [
+            'kid' => self::fromPrivatePem($pem, $keyFile)->kid(),
+            'warnings' => $warnings,
+        ];
     }
 
     public function kid(): string

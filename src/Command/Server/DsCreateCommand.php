@@ -167,8 +167,8 @@ class DsCreateCommand extends Command
 
         // Generate per-DS secrets key for encrypted_text columns
         try {
-            DsSecretCipher::generateKey($dataSourceDir);
-            $warnings = DsSecretCipher::healthCheck(new DataSourceConfig($dataSourceDir));
+            $warnings = DsSecretCipher::generateKey($dataSourceDir);
+            $warnings = array_merge($warnings, DsSecretCipher::healthCheck(new DataSourceConfig($dataSourceDir)));
             foreach ($warnings as $warning) {
                 $output->writeln('<comment>  [WARN] ' . $warning . '</comment>');
             }

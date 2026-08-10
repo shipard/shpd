@@ -9,6 +9,7 @@ use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Hosting\Exception\AiGwKeyInsecureException;
 use Shipard\Core\Hosting\Exception\AiGwKeyMissingException;
 use Shipard\Core\Security\DsSecretCipher;
+use Shipard\Core\Security\SecretsFileWriter;
 
 /**
  * Klíč organizace pro AI gateway (D5). API klíč Anthropicu žije v
@@ -87,64 +88,25 @@ final class AiGwKeyStore
     }
 
     /**
-     * Write the org key to {dsPath}/secrets/ai-gw-anthropic.key. Atomic:
-     * creates the directory with 0700 if missing, writes to a tmp file with
-     * 0600, fsyncs, then renames into place. Overwrite is allowed — rotation
-     * goes through the same CLI (`hosting-ai-gw-init --set-key`).
+     * Write the org key to {dsPath}/secrets/ai-gw-anthropic.key via
+     * SecretsFileWriter (atomic, 0600, ownership aligned with the DS root).
+     * Overwrite is allowed — rotation goes through the same CLI
+     * (`hosting-ai-gw-init --set-key`). Returns ownership warnings.
+     *
+     * @return list<string>
      */
-    public static function write(string $dsPath, #[SensitiveParameter] string $key): void
+    public static function write(string $dsPath, #[SensitiveParameter] string $key): array
     {
         $key = trim($key);
         if ($key === '') {
             throw new \InvalidArgumentException('AiGwKeyStore: key must not be empty.');
         }
 
-        $secretsDir = DsSecretCipher::secretsDirPath($dsPath);
-        $keyFile = self::keyFilePath($dsPath);
-        $tmpFile = $keyFile . '.tmp';
-
-        if (!is_dir($secretsDir)) {
-            if (!@mkdir($secretsDir, 0700, true) && !is_dir($secretsDir)) {
-                throw new \RuntimeException("Failed to create {$secretsDir}");
-            }
-        }
-        @chmod($secretsDir, 0700);
-
-        if (is_file($tmpFile)) {
-            @unlink($tmpFile);
-        }
-
-        $fp = @fopen($tmpFile, 'wb');
-        if ($fp === false) {
-            throw new \RuntimeException("Failed to open {$tmpFile} for writing");
-        }
-        @chmod($tmpFile, 0600);
-
-        try {
-            $written = fwrite($fp, $key);
-            if ($written !== strlen($key)) {
-                throw new \RuntimeException(sprintf(
-                    'Short write to %s (%d/%d bytes)',
-                    $tmpFile, (int) $written, strlen($key),
-                ));
-            }
-            if (!fflush($fp)) {
-                throw new \RuntimeException("fflush failed on {$tmpFile}");
-            }
-            if (!fsync($fp)) {
-                throw new \RuntimeException("fsync failed on {$tmpFile}");
-            }
-        } finally {
-            fclose($fp);
-        }
-
-        if (!@rename($tmpFile, $keyFile)) {
-            @unlink($tmpFile);
-            throw new \RuntimeException("Failed to rename {$tmpFile} to {$keyFile}");
-        }
-        @chmod($keyFile, 0600);
+        $warnings = SecretsFileWriter::write($dsPath, self::KEY_FILENAME, $key);
 
         unset(self::$cache[$dsPath]);
+
+        return $warnings;
     }
 
     /**

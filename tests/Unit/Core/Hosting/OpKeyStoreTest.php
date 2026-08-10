@@ -30,7 +30,7 @@ class OpKeyStoreTest extends TestCase
             'database_password' => 'pw',
             'created'           => '2026-01-01 00:00:00',
         ]));
-        self::$generatedKid = OpKeyStore::generateKey(self::$dsDir);
+        self::$generatedKid = OpKeyStore::generateKey(self::$dsDir)['kid'];
     }
 
     public static function tearDownAfterClass(): void

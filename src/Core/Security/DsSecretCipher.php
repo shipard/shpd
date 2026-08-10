@@ -252,65 +252,27 @@ final class DsSecretCipher
     }
 
     /**
-     * Generate a fresh secrets.key in {dsPath}/secrets/. Atomic: creates the
-     * directory with 0700 if missing, writes the key to a tmp file with 0600,
-     * fsyncs, then renames into place. Fails if secrets.key already exists.
+     * Generate a fresh secrets.key in {dsPath}/secrets/ via SecretsFileWriter
+     * (atomic, 0600, ownership aligned with the DS root). Fails if
+     * secrets.key already exists. Returns ownership warnings.
+     *
+     * @return list<string>
      */
-    public static function generateKey(string $dsPath): void
+    public static function generateKey(string $dsPath): array
     {
         self::assertSodiumAesAvailable();
 
-        $secretsDir = self::secretsDirPath($dsPath);
         $keyFile = self::keyFilePath($dsPath);
-        $tmpFile = $keyFile . '.tmp';
 
         if (is_file($keyFile)) {
             throw new \RuntimeException("secrets.key already exists at {$keyFile}");
         }
 
-        if (!is_dir($secretsDir)) {
-            if (!@mkdir($secretsDir, 0700, true) && !is_dir($secretsDir)) {
-                throw new \RuntimeException("Failed to create {$secretsDir}");
-            }
-        }
-        @chmod($secretsDir, 0700);
-
-        if (is_file($tmpFile)) {
-            @unlink($tmpFile);
-        }
-
-        $fp = @fopen($tmpFile, 'wb');
-        if ($fp === false) {
-            throw new \RuntimeException("Failed to open {$tmpFile} for writing");
-        }
-        @chmod($tmpFile, 0600);
-
-        try {
-            $key = random_bytes(self::KEY_BYTES);
-            $written = fwrite($fp, $key);
-            if ($written !== self::KEY_BYTES) {
-                throw new \RuntimeException(sprintf(
-                    'Short write to %s (%d/%d bytes)',
-                    $tmpFile, (int) $written, self::KEY_BYTES,
-                ));
-            }
-            if (!fflush($fp)) {
-                throw new \RuntimeException("fflush failed on {$tmpFile}");
-            }
-            if (!fsync($fp)) {
-                throw new \RuntimeException("fsync failed on {$tmpFile}");
-            }
-        } finally {
-            fclose($fp);
-        }
-
-        if (!@rename($tmpFile, $keyFile)) {
-            @unlink($tmpFile);
-            throw new \RuntimeException("Failed to rename {$tmpFile} to {$keyFile}");
-        }
-        @chmod($keyFile, 0600);
+        $warnings = SecretsFileWriter::write($dsPath, self::KEY_FILENAME, random_bytes(self::KEY_BYTES));
 
         unset(self::$cache[$dsPath]);
+
+        return $warnings;
     }
 
     /**

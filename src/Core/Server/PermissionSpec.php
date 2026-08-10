@@ -12,9 +12,10 @@ namespace Shipard\Core\Server;
  * scans them and reports ownership mismatches; FixPermissions chowns them.
  * Modes inside recursive dirs are left untouched (file modes vary by content
  * type — JSON vs upload vs cache vs log rotation — and aren't part of the
- * contract).
+ * contract). Exception: `contentsMaxMode` on a recursive dir caps the mode
+ * of every file inside (secrets/ — anything above 0600 leaks key material).
  *
- * @phpstan-type SpecEntry array{path: string, type: 'dir'|'file', owner: 'root'|'user', group: 'user', mode: int, optional?: bool, recurse?: bool}
+ * @phpstan-type SpecEntry array{path: string, type: 'dir'|'file', owner: 'root'|'user', group: 'user', mode: int, optional?: bool, recurse?: bool, contentsMaxMode?: int}
  */
 final class PermissionSpec
 {
@@ -58,7 +59,7 @@ final class PermissionSpec
             ['path' => $dsDir . '/config',                    'type' => 'dir',  'owner' => 'user', 'group' => 'user', 'mode' => 0750],
             ['path' => $dsDir . '/config/main.json',          'type' => 'file', 'owner' => 'user', 'group' => 'user', 'mode' => 0600],
             ['path' => $dsDir . '/config/configuration',      'type' => 'dir',  'owner' => 'user', 'group' => 'user', 'mode' => 0750, 'optional' => true, 'recurse' => true],
-            ['path' => $dsDir . '/secrets',                   'type' => 'dir',  'owner' => 'user', 'group' => 'user', 'mode' => 0700, 'optional' => true, 'recurse' => true],
+            ['path' => $dsDir . '/secrets',                   'type' => 'dir',  'owner' => 'user', 'group' => 'user', 'mode' => 0700, 'optional' => true, 'recurse' => true, 'contentsMaxMode' => 0600],
             ['path' => $dsDir . '/secrets/secrets.key',       'type' => 'file', 'owner' => 'user', 'group' => 'user', 'mode' => 0600, 'optional' => true],
             ['path' => $dsDir . '/att',                       'type' => 'dir',  'owner' => 'user', 'group' => 'user', 'mode' => 0750, 'optional' => true, 'recurse' => true],
             ['path' => $dsDir . '/cache',                     'type' => 'dir',  'owner' => 'user', 'group' => 'user', 'mode' => 0750, 'optional' => true, 'recurse' => true],

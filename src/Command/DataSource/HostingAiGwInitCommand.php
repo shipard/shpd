@@ -66,7 +66,7 @@ class HostingAiGwInitCommand extends Command
         $existed = AiGwKeyStore::exists($dsDir);
 
         try {
-            AiGwKeyStore::write($dsDir, $key);
+            $warnings = AiGwKeyStore::write($dsDir, $key);
         } catch (\RuntimeException | \InvalidArgumentException $e) {
             $output->writeln('<error>Error: ' . $e->getMessage() . '</error>');
             return Command::FAILURE;
@@ -74,6 +74,9 @@ class HostingAiGwInitCommand extends Command
 
         $output->writeln('<info>AI gateway org key ' . ($existed ? 'rotated' : 'created')
             . ': ' . AiGwKeyStore::keyFilePath($dsDir) . '</info>');
+        foreach ($warnings as $warning) {
+            $output->writeln('<comment>Warning: ' . $warning . '</comment>');
+        }
         $output->writeln('');
         $output->writeln('<comment>Next steps:</comment>');
         $output->writeln('  1. Issue gateway tokens: shpd-ds hosting-ai-token --ds <ndx> --generate');

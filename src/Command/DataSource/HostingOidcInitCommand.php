@@ -39,14 +39,17 @@ class HostingOidcInitCommand extends Command
         }
 
         try {
-            $kid = OpKeyStore::generateKey($dsDir);
+            $result = OpKeyStore::generateKey($dsDir);
         } catch (\RuntimeException $e) {
             $output->writeln('<error>Error: ' . $e->getMessage() . '</error>');
             return Command::FAILURE;
         }
 
         $output->writeln('<info>OIDC OP key created: ' . OpKeyStore::keyFilePath($dsDir) . '</info>');
-        $output->writeln("kid: {$kid}");
+        $output->writeln("kid: {$result['kid']}");
+        foreach ($result['warnings'] as $warning) {
+            $output->writeln('<comment>Warning: ' . $warning . '</comment>');
+        }
         $output->writeln('');
         $output->writeln('<comment>Next steps:</comment>');
         $output->writeln('  1. Set the issuer: Settings -> Hosting -> OIDC provider (hosting.oidc.issuer)');

@@ -9,6 +9,7 @@ use SensitiveParameter;
 use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Hosting\Exception\OpKeyInsecureException;
 use Shipard\Core\Hosting\Exception\OpKeyMissingException;
+use Shipard\Core\Hosting\Exception\OpKeyUnreadableException;
 use Shipard\Core\Security\DsSecretCipher;
 use Shipard\Core\Security\SecretsFileWriter;
 
@@ -44,8 +45,9 @@ final class OpKeyStore
      * disk and validates permissions; subsequent calls return the cached
      * instance.
      *
-     * @throws OpKeyMissingException
-     * @throws OpKeyInsecureException
+     * @throws OpKeyMissingException    soubor neexistuje (OP nezřízen)
+     * @throws OpKeyInsecureException   příliš volná práva / nevalidní PEM
+     * @throws OpKeyUnreadableException existuje, ale nejde přečíst
      */
     public static function forConfig(DataSourceConfig $config): self
     {
@@ -73,8 +75,10 @@ final class OpKeyStore
 
         $pem = @file_get_contents($keyFile);
         if ($pem === false) {
-            throw new OpKeyMissingException(
-                "Failed to read oidc-op.key at {$keyFile}"
+            // Typicky root:root 0600 po CLI spuštěném pod rootem — perms
+            // check výše projde (mode JE 0600), čtení selže na EACCES.
+            throw new OpKeyUnreadableException(
+                "Failed to read oidc-op.key at {$keyFile} — check the file owner. Fix: chown <ds-owner>: {$keyFile}"
             );
         }
 

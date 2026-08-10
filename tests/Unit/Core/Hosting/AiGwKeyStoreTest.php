@@ -9,6 +9,7 @@ use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Hosting\AiGwKeyStore;
 use Shipard\Core\Hosting\Exception\AiGwKeyInsecureException;
 use Shipard\Core\Hosting\Exception\AiGwKeyMissingException;
+use Shipard\Core\Hosting\Exception\AiGwKeyUnreadableException;
 
 class AiGwKeyStoreTest extends TestCase
 {
@@ -79,7 +80,9 @@ class AiGwKeyStoreTest extends TestCase
         AiGwKeyStore::write($this->tempDir, 'x');
         file_put_contents(AiGwKeyStore::keyFilePath($this->tempDir), "  \n");
 
-        $this->expectException(AiGwKeyMissingException::class);
+        // Unreadable, ne Missing — prázdný soubor je chyba konfigurace
+        // (gateway 500 + log), ne „nezřízeno" (404).
+        $this->expectException(AiGwKeyUnreadableException::class);
         $this->expectExceptionMessageMatches('/empty/');
         AiGwKeyStore::read($this->config());
     }

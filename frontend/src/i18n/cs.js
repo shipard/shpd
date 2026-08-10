@@ -273,6 +273,9 @@ export default {
   'error.NO_EMAIL': 'Uživatel nemá vyplněný e-mail',
   'error.MAIL_NOT_CONFIGURED': 'Odchozí pošta není nakonfigurovaná',
   'error.OIDC_TXN_INVALID': 'Přihlašovací požadavek je neplatný nebo vypršel — zkuste to znovu ze zdrojové aplikace',
+  'error.LLM_ERROR': 'AI model vrátil chybu: {message}',
+  'error.STREAM_ERROR': 'Přenos odpovědi selhal ({message}) — odpověď se nemusela uložit',
+  'error.CREATE_FAILED': 'Konverzaci se nepodařilo založit',
 
   // ── Table browser ───────────────────────────────────────────────────────
   'browser.addRecord': 'Nový záznam',

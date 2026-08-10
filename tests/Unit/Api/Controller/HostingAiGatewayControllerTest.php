@@ -10,6 +10,9 @@ use Shipard\Api\Request;
 use Shipard\Api\Response;
 use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Database\TableDefinition;
+use Shipard\Core\Hosting\Exception\AiGwKeyMissingException;
+use Shipard\Core\Hosting\Exception\AiGwKeyUnreadableException;
+use Shipard\Core\Logging\ErrorLogger;
 use Shipard\Tests\Fixtures\Module\Hosting\InMemoryHostingAiGatewayDb;
 
 /**
@@ -21,6 +24,7 @@ class StubHostingAiGatewayController extends HostingAiGatewayController
 {
     public bool $orgKeyExists = true;
     public string $orgKey = 'sk-ant-org-key';
+    public ?\Throwable $readOrgKeyThrows = null;
     public string $rawBody = '{"model":"claude-sonnet-4-5","messages":[]}';
 
     public int $upstreamStatus = 200;
@@ -50,6 +54,9 @@ class StubHostingAiGatewayController extends HostingAiGatewayController
 
     protected function readOrgKey(): string
     {
+        if ($this->readOrgKeyThrows !== null) {
+            throw $this->readOrgKeyThrows;
+        }
         return $this->orgKey;
     }
 
@@ -212,6 +219,47 @@ class HostingAiGatewayControllerTest extends TestCase
         $this->ctrl->orgKeyExists = false;
         $resp = $this->ctrl->messages($this->req(), $this->db, $this->tables());
         $this->assertSame(404, $this->getStatus($resp));
+    }
+
+    public function testOrgKeyMissingOnReadReturns404(): void
+    {
+        // Soubor zmizel mezi gatingem a čtením — pořád „nezřízeno", 404.
+        $this->ctrl->readOrgKeyThrows = new AiGwKeyMissingException('gone');
+        $resp = $this->ctrl->messages($this->req(), $this->db, $this->tables());
+        $this->assertSame(404, $this->getStatus($resp));
+    }
+
+    /**
+     * root:root 0600 po CLI pod rootem: gating (file_exists) projde, čtení
+     * selže. Dřív tichý 404 bez logu — teď error log + 500 v Anthropic
+     * formátu a žádný usage řádek (k upstreamu nedošlo).
+     */
+    public function testUnreadableOrgKeyReturns500WithAnthropicErrorAndLogs(): void
+    {
+        $logFile = sys_get_temp_dir() . '/shpd-aigw-test-' . uniqid() . '.log';
+        ErrorLogger::setLogPath($logFile);
+
+        try {
+            $this->ctrl->readOrgKeyThrows = new AiGwKeyUnreadableException(
+                'Failed to read ai-gw-anthropic.key (owner root, runtime shipard)',
+            );
+            $resp = $this->ctrl->messages($this->req(), $this->db, $this->tables());
+
+            $this->assertSame(500, $this->getStatus($resp));
+            $payload = $resp->getPayload();
+            $this->assertSame('error', $payload['type']);
+            $this->assertSame('api_error', $payload['error']['type']);
+            $this->assertSame('gateway key unavailable', $payload['error']['message']);
+
+            $this->assertSame([], $this->db->usage, 'usage must not be recorded without an upstream call');
+
+            $log = (string) file_get_contents($logFile);
+            $this->assertStringContainsString('ai-gw: org key unavailable', $log);
+            $this->assertStringContainsString('owner root', $log);
+        } finally {
+            ErrorLogger::resetForTesting();
+            @unlink($logFile);
+        }
     }
 
     // -------------------------------------------------------------------------

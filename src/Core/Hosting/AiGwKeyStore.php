@@ -8,6 +8,7 @@ use SensitiveParameter;
 use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Hosting\Exception\AiGwKeyInsecureException;
 use Shipard\Core\Hosting\Exception\AiGwKeyMissingException;
+use Shipard\Core\Hosting\Exception\AiGwKeyUnreadableException;
 use Shipard\Core\Security\DsSecretCipher;
 use Shipard\Core\Security\SecretsFileWriter;
 
@@ -43,8 +44,9 @@ final class AiGwKeyStore
      * disk and validates permissions; subsequent calls return the cached
      * value.
      *
-     * @throws AiGwKeyMissingException
-     * @throws AiGwKeyInsecureException
+     * @throws AiGwKeyMissingException    soubor neexistuje (gateway nezřízená)
+     * @throws AiGwKeyInsecureException   příliš volná práva
+     * @throws AiGwKeyUnreadableException existuje, ale nejde přečíst / je prázdný
      */
     public static function read(DataSourceConfig $config): string
     {
@@ -72,15 +74,18 @@ final class AiGwKeyStore
 
         $key = @file_get_contents($keyFile);
         if ($key === false) {
-            throw new AiGwKeyMissingException(
-                "Failed to read ai-gw-anthropic.key at {$keyFile}"
-            );
+            // Typicky root:root 0600 po CLI spuštěném pod rootem — perms
+            // check výše projde (mode JE 0600), čtení selže na EACCES.
+            throw new AiGwKeyUnreadableException(sprintf(
+                'Failed to read ai-gw-anthropic.key at %s (owner %s, runtime %s). Fix: chown <ds-owner>: %s',
+                $keyFile, self::fileOwnerName($keyFile), self::processUserName(), $keyFile,
+            ));
         }
 
         $key = trim($key);
         if ($key === '') {
-            throw new AiGwKeyMissingException(
-                "ai-gw-anthropic.key at {$keyFile} is empty"
+            throw new AiGwKeyUnreadableException(
+                "ai-gw-anthropic.key at {$keyFile} is empty. Re-run 'shpd-ds hosting-ai-gw-init --set-key'."
             );
         }
 
@@ -115,5 +120,25 @@ final class AiGwKeyStore
     public static function resetCache(): void
     {
         self::$cache = [];
+    }
+
+    private static function fileOwnerName(string $path): string
+    {
+        $uid = @fileowner($path);
+        if ($uid === false) {
+            return 'unknown';
+        }
+        return function_exists('posix_getpwuid')
+            ? (posix_getpwuid($uid)['name'] ?? (string) $uid)
+            : (string) $uid;
+    }
+
+    private static function processUserName(): string
+    {
+        if (!function_exists('posix_geteuid')) {
+            return 'unknown';
+        }
+        $uid = posix_geteuid();
+        return posix_getpwuid($uid)['name'] ?? (string) $uid;
     }
 }

@@ -91,7 +91,9 @@ async function send(text) {
     onTextDelta: (delta) => { streamingText += delta; },
     onToolCall: (call) => { streamingTools = [...streamingTools, call]; },
     onComplete: () => finalizeTurn(id),
-    onError: (err) => { error = err; finalizeTurn(id); },
+    // openConversation() uvnitř finalizeTurn nuluje `error` — chybu nastavit
+    // až PO refetchi, jinak zmizí dřív, než ji uživatel uvidí.
+    onError: async (err) => { await finalizeTurn(id); error = err; },
   });
 }
 

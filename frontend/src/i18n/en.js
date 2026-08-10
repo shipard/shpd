@@ -261,6 +261,9 @@ export default {
   'error.NO_EMAIL': 'The user has no e-mail address',
   'error.MAIL_NOT_CONFIGURED': 'Outbound mail is not configured',
   'error.OIDC_TXN_INVALID': 'The sign-in request is invalid or has expired — try again from the source application',
+  'error.LLM_ERROR': 'The AI model returned an error: {message}',
+  'error.STREAM_ERROR': 'The response stream failed ({message}) — the reply may not have been saved',
+  'error.CREATE_FAILED': 'Could not create the conversation',
 
   // ── Table browser ───────────────────────────────────────────────────────
   'browser.addRecord': 'New record',

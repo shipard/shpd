@@ -85,6 +85,11 @@ export async function sendMessageStream(conversationId, text, handlers = {}) {
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buf = '';
+  // Stream musí skončit terminálním frame (message-complete | error) — konec
+  // bez něj (backend umřel před prvním eventem, prázdné tělo) by jinak byl
+  // tichý: žádný callback, spinner navěky.
+  let terminated = false;
+  const markTerminated = () => { terminated = true; };
 
   try {
     for (;;) {
@@ -102,15 +107,20 @@ export async function sendMessageStream(conversationId, text, handlers = {}) {
         } catch {
           continue; // skip malformed frame, keep streaming
         }
-        dispatchFrame(frame.event, data, { onTextDelta, onToolCall, onComplete, onError });
+        dispatchFrame(frame.event, data, { onTextDelta, onToolCall, onComplete, onError, markTerminated });
       }
     }
   } catch {
     onError?.({ code: 'STREAM_ERROR', message: 'stream interrupted' });
+    return;
+  }
+
+  if (!terminated) {
+    onError?.({ code: 'STREAM_ERROR', message: 'stream ended unexpectedly' });
   }
 }
 
-function dispatchFrame(event, data, { onTextDelta, onToolCall, onComplete, onError }) {
+function dispatchFrame(event, data, { onTextDelta, onToolCall, onComplete, onError, markTerminated }) {
   switch (event) {
     case 'text-delta':
       onTextDelta?.(data.text ?? '');
@@ -119,9 +129,11 @@ function dispatchFrame(event, data, { onTextDelta, onToolCall, onComplete, onErr
       onToolCall?.({ name: data.name, arguments: data.arguments ?? {} });
       break;
     case 'message-complete':
+      markTerminated?.();
       onComplete?.(data);
       break;
     case 'error':
+      markTerminated?.();
       onError?.({ code: data.code ?? 'LLM_ERROR', message: data.message ?? '' });
       break;
     // unknown events ignored

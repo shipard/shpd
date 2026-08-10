@@ -10,7 +10,7 @@ use Shipard\Api\Response;
 use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Hosting\AiGwKeyStore;
-use Shipard\Core\Hosting\Exception\AiGwKeyInsecureException;
+use Shipard\Core\Hosting\Exception\AiGwKeyException;
 use Shipard\Core\Hosting\Exception\AiGwKeyMissingException;
 use Shipard\Core\Hosting\GwUsageExtractor;
 use Shipard\Core\Logging\ErrorLogger;
@@ -69,11 +69,15 @@ class HostingAiGatewayController
         try {
             $orgKey = $this->readOrgKey();
         } catch (AiGwKeyMissingException) {
+            // Soubor neexistuje = gateway nezřízená → stejné 404 jako gating.
             return Response::error('NOT_FOUND', 'Not found', 404);
-        } catch (AiGwKeyInsecureException $e) {
-            ErrorLogger::warn('ai-gw: org key insecure', ['error' => $e->getMessage()]);
+        } catch (AiGwKeyException $e) {
+            // Unreadable (špatný vlastník po CLI pod rootem) / insecure /
+            // prázdný klíč — chyba konfigurace, nikdy tiché 404. Usage řádek
+            // se záměrně nezapisuje: k upstream requestu vůbec nedošlo.
+            ErrorLogger::error('ai-gw: org key unavailable', ['error' => $e->getMessage()]);
             return HostingAiGatewayTokenAuthenticator::anthropicError(
-                'api_error', 'AI gateway is misconfigured', 500,
+                'api_error', 'gateway key unavailable', 500,
             );
         }
 

@@ -213,22 +213,30 @@ class DevDashboardController
 		$module   = is_string($body['module'] ?? null) && trim($body['module']) !== ''
 			? trim($body['module'])
 			: 'install.base';
+		$language = is_string($body['language'] ?? null) ? trim($body['language']) : '';
+		$country  = is_string($body['country'] ?? null) ? trim($body['country']) : '';
 
-		$errors = $this->validateDsCreateInput($name, $login, $password, $module);
+		$errors = $this->validateDsCreateInput($name, $login, $password, $module, $language, $country);
 		if ($errors) {
 			return Response::error('VALIDATION', implode(' ', $errors), 400);
 		}
 
-		return Response::stream(function () use ($name, $login, $password, $seed, $module) {
-			$this->runDsCreatePipeline($name, $login, $password, $seed, $module);
+		return Response::stream(function () use ($name, $login, $password, $seed, $module, $language, $country) {
+			$this->runDsCreatePipeline($name, $login, $password, $seed, $module, $language, $country);
 		});
 	}
 
 	/**
 	 * @return list<string>
 	 */
-	private function validateDsCreateInput(string $name, string $login, string $password, string $module): array
-	{
+	private function validateDsCreateInput(
+		string $name,
+		string $login,
+		string $password,
+		string $module,
+		string $language,
+		string $country,
+	): array {
 		$errors = [];
 
 		if ($name === '') {
@@ -262,6 +270,16 @@ class DevDashboardController
 			}
 		}
 
+		// Same shape rules as DsCreateCommand — fail here with a 400 instead
+		// of letting the error surface mid-stream from the subprocess.
+		if (!in_array($language, ['cs', 'en'], true)) {
+			$errors[] = 'Language is required (cs|en).';
+		}
+
+		if (!preg_match('/^[a-z]{2}$/', $country)) {
+			$errors[] = 'Country is required (ISO 3166-1 alpha-2, e.g. cz).';
+		}
+
 		return $errors;
 	}
 
@@ -281,6 +299,8 @@ class DevDashboardController
 		string $password,
 		bool $seed,
 		string $module,
+		string $language,
+		string $country,
 	): void {
 		$shpdServer = $this->getShpdServerPath();
 		$shpdDs     = $this->getShpdDsPath();
@@ -288,10 +308,12 @@ class DevDashboardController
 		// ── 1. ds-create ────────────────────────────────────────────────
 		$this->emitStep('Creating data source...');
 		$cmd = sprintf(
-			'%s ds-create --name=%s --module=%s --no-ansi 2>&1',
+			'%s ds-create --name=%s --module=%s --language=%s --country=%s --no-ansi 2>&1',
 			escapeshellarg($shpdServer),
 			escapeshellarg($name),
 			escapeshellarg($module),
+			escapeshellarg($language),
+			escapeshellarg($country),
 		);
 		[$exitCode, $output] = $this->streamCommand($cmd);
 
@@ -707,7 +729,7 @@ class DevDashboardController
 				td.className = 'empty';
 				td.appendChild(document.createTextNode('No data sources found. Run '));
 				var code = document.createElement('code');
-				code.textContent = 'sudo shpd-server ds-create --name <n>';
+				code.textContent = 'sudo shpd-server ds-create --name <n> --language cs --country cz';
 				td.appendChild(code);
 				tr.appendChild(td);
 				bodyEl.replaceChildren(tr);
@@ -1856,6 +1878,22 @@ class DevDashboardController
 						<div class="err" id="err-name"></div>
 					</div>
 					<div class="field">
+						<label for="f-language">Default language <span class="req">*</span></label>
+						<select id="f-language" name="language" required>
+							<option value="cs" selected>Čeština (cs)</option>
+							<option value="en">English (en)</option>
+						</select>
+						<div class="err" id="err-language"></div>
+					</div>
+					<div class="field">
+						<label for="f-country">Country <span class="req">*</span></label>
+						<select id="f-country" name="country" required>
+							<option value="cz" selected>Česko (cz)</option>
+							<option value="sk">Slovensko (sk)</option>
+						</select>
+						<div class="err" id="err-country"></div>
+					</div>
+					<div class="field">
 						<label for="f-module">Install module <span class="req">*</span></label>
 						<select id="f-module" name="module" required>
 							<option value="">Loading modules...</option>
@@ -1905,6 +1943,8 @@ class DevDashboardController
 			var nameInput    = document.getElementById('f-name');
 			var loginInput   = document.getElementById('f-login');
 			var seedInput    = document.getElementById('f-seed');
+			var languageSel  = document.getElementById('f-language');
+			var countrySel   = document.getElementById('f-country');
 			var moduleSel    = document.getElementById('f-module');
 			var moduleHint   = document.getElementById('module-hint');
 			var formError    = document.getElementById('formError');
@@ -1934,10 +1974,12 @@ class DevDashboardController
 				document.getElementById('err-name').textContent = '';
 				document.getElementById('err-login').textContent = '';
 				document.getElementById('err-password').textContent = '';
+				document.getElementById('err-language').textContent = '';
+				document.getElementById('err-country').textContent = '';
 				document.getElementById('err-module').textContent = '';
 			}
 
-			function validateClient(name, login, password, module) {
+			function validateClient(name, login, password, module, language, country) {
 				var errs = {};
 				if (!name) errs.name = 'Name is required.';
 				else if (name.length > 200) errs.name = 'Name is too long (max 200 characters).';
@@ -1949,6 +1991,10 @@ class DevDashboardController
 				if (!password) errs.password = 'Admin password is required.';
 				else if (password.length < 4) errs.password = 'Admin password must be at least 4 characters.';
 
+				if (!language) errs.language = 'Please select a default language.';
+
+				if (!country) errs.country = 'Please select a country.';
+
 				if (!module) errs.module = 'Please select an install module.';
 
 				return errs;
@@ -1958,6 +2004,8 @@ class DevDashboardController
 				if (errs.name) document.getElementById('err-name').textContent = errs.name;
 				if (errs.login) document.getElementById('err-login').textContent = errs.login;
 				if (errs.password) document.getElementById('err-password').textContent = errs.password;
+				if (errs.language) document.getElementById('err-language').textContent = errs.language;
+				if (errs.country) document.getElementById('err-country').textContent = errs.country;
 				if (errs.module) document.getElementById('err-module').textContent = errs.module;
 			}
 
@@ -1966,6 +2014,8 @@ class DevDashboardController
 				loginInput.disabled = busy;
 				pwInput.disabled = busy;
 				seedInput.disabled = busy;
+				languageSel.disabled = busy;
+				countrySel.disabled = busy;
 				moduleSel.disabled = busy;
 				togglePw.disabled = busy;
 				submitBtn.disabled = busy;
@@ -2105,9 +2155,11 @@ class DevDashboardController
 				var login    = loginInput.value.trim();
 				var password = pwInput.value;
 				var seed     = seedInput.checked;
+				var language = languageSel.value;
+				var country  = countrySel.value;
 				var module   = moduleSel.value;
 
-				var errs = validateClient(name, login, password, module);
+				var errs = validateClient(name, login, password, module, language, country);
 				if (Object.keys(errs).length > 0) {
 					showFieldErrors(errs);
 					return;
@@ -2122,7 +2174,7 @@ class DevDashboardController
 					var response = await fetch('/_dev/api/ds-create', {
 						method: 'POST',
 						headers: { 'Content-Type': 'application/json' },
-						body: JSON.stringify({ name: name, login: login, password: password, seed: seed, module: module }),
+						body: JSON.stringify({ name: name, login: login, password: password, seed: seed, module: module, language: language, country: country }),
 					});
 
 					if (!response.ok) {

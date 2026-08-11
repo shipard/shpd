@@ -111,12 +111,12 @@ sudo shpd-server fix-permissions
 shpd-server doctor    # ověř že vše zelené
 ```
 
-### `ds-create --name <název> [--module <id>] [--ds-id <id>]`
+### `ds-create --name <název> --language <cs|en> --country <cc> [--module <id>] [--ds-id <id>]`
 
 ```bash
-sudo shpd-server ds-create --name "Moje firma s.r.o."
-sudo shpd-server ds-create --name "Moje firma s.r.o." --module=install.base
-sudo shpd-server ds-create --name "Moje firma s.r.o." --ds-id ab12-cd34-ef56-gh78   # provisioning agent
+sudo shpd-server ds-create --name "Moje firma s.r.o." --language cs --country cz
+sudo shpd-server ds-create --name "Moje firma s.r.o." --language cs --country cz --module=install.base
+sudo shpd-server ds-create --name "Moje firma s.r.o." --language cs --country cz --ds-id ab12-cd34-ef56-gh78   # provisioning agent
 ```
 
 Vytvoří nový datový zdroj:
@@ -125,7 +125,9 @@ Vytvoří nový datový zdroj:
 - vytvoří `/opt/shipard/data-sources/<id>/` (config, att, cache)
 - vytvoří MariaDB databázi a runtime DB uživatele
 - vygeneruje `secrets/secrets.key` pro per-DS šifrování `encrypted_text` sloupců
-- zapíše `config/main.json` (práva 0600) se zvoleným install modulem
+- zapíše `config/main.json` (práva 0600) se zvoleným install modulem,
+  jazykem (`defaultLanguage`) a zemí (`country`) — vrstva A dle
+  `docs/ds-setup.md` §5.1
 
 Po vytvoření je třeba spustit `shpd-ds ds-upgrade` z adresáře nového DS,
 aby se založilo schéma a načetla výchozí konfigurace modulů.
@@ -133,8 +135,13 @@ aby se založilo schéma a načetla výchozí konfigurace modulů.
 | Opce | Význam |
 |------|--------|
 | `--name <název>` | **povinné** — lidsky čitelný název DS |
+| `--language <cs\|en>` | **povinné** — výchozí jazyk DS, ISO 639-1. Zapíše se do `main.json` → `defaultLanguage`. |
+| `--country <cc>` | **povinné** — země subjektu, ISO 3166-1 alpha-2 lower-case (např. `cz`, `sk`). Validuje se jen tvar (`^[a-z]{2}$`) — sémantika proti `world.base.countries` patří volajícím (formulář hostingu, dev dashboard), cfgItem v okamžiku `ds-create` ještě není zkompilovaný. |
 | `--module <id>` | volitelné (default: `install.base`) — install modul k aktivaci. Musí odpovídat adresáři `modules/install/<suffix>/`, jehož `module.jsonc` má id `install.<suffix>`. Seznam dostupných modulů: `ls modules/install/`. |
 | `--ds-id <id>` | volitelné — explicitní ID místo generovaného (formát `xxxx-xxxx-xxxx-xxxx`, a-z0-9). Používá agent `hosting-sync` (ID generuje hosting). Existující adresář = chyba. |
+
+Oba povinné přepínače se validují **před** jakoukoli mutací — chybějící
+nebo nevalidní hodnota nenechá po sobě adresář ani databázi.
 
 Vytvořený `config/main.json` bude obsahovat `"modules": ["<id>"]`. Install
 modul je top-level bundle, který deklaruje své závislosti (`core.system`,
@@ -338,6 +345,11 @@ Jeden běh:
 
 HTTPS povinné (`http` jen pro localhost dev); `--dry-run` frontu
 nepřeklápí, payload neobsahuje client_secret a stats krok neběží.
+
+> ⚠️ **Dočasně rozbité (do ds-setup Task 02):** agent zatím nepředává
+> nové povinné přepínače `--language`/`--country`, takže krok `ds-create`
+> selže a provisioning z hostingu neprojde. Task 02 doplní oba parametry
+> do queue payloadu a jejich předání agentem; tuto poznámku pak odstraní.
 
 | Opce | Význam |
 |------|--------|
@@ -1032,7 +1044,7 @@ sudo shpd-server ds-upgrade-all   # když se měnily moduly nebo definice tabule
 ### 2. Vytvoření nového DS
 
 ```bash
-sudo shpd-server ds-create --name "Moje firma s.r.o."
+sudo shpd-server ds-create --name "Moje firma s.r.o." --language cs --country cz
 cd /opt/shipard/data-sources/<id>
 sudo shpd-ds ds-upgrade
 sudo shpd-ds user-create --login=admin --password=... --name="Admin"

@@ -105,6 +105,27 @@ class DataSourceConfig
     }
 
     /**
+     * Country of the legal entity this DS runs on behalf of. ISO 3166-1
+     * alpha-2 lower-case (e.g. 'cz', 'sk'). Steers which company registry
+     * is queried, which VAT rate set applies and address formatting.
+     *
+     * Transitional: data sources created before ds-setup Task 01 have no
+     * `country` key, so 'cz' is returned as a fallback and ds-upgrade emits
+     * a warning. Once all data sources are re-imported (ds-setup.md D9) the
+     * fallback goes away and a missing value becomes a config error.
+     */
+    public function getCountry(): string
+    {
+        return $this->hasCountry() ? $this->data['country'] : 'cz';
+    }
+
+    /** False for data sources created before the `country` key existed. */
+    public function hasCountry(): bool
+    {
+        return isset($this->data['country']) && $this->data['country'] !== '';
+    }
+
+    /**
      * When true, `shpd-ds ds-upgrade` syncs the schema but SKIPS auto-provisioning
      * of reference data (units, item kinds, fiscal years, VAT periods, number series,
      * mail router, AI analyzer). Intended for data migration / import from another

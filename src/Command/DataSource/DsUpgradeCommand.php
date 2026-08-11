@@ -300,6 +300,14 @@ class DsUpgradeCommand extends Command
             $output->writeln('<comment>  [WARN] ' . $warning . '</comment>');
         }
 
+        // Warning, ne chyba — ds-upgrade musí na DS založených před
+        // ds-setup Task 01 dál projít (fallback zanikne po reimportu, D9).
+        if (!$dsConfig->hasCountry()) {
+            $output->writeln('<comment>  [WARN] main.json neobsahuje `country` — '
+                . 'používá se přechodný fallback \'cz\'. Doplň hodnotu ručně nebo '
+                . 'reimportem (docs/ds-setup.md D9).</comment>');
+        }
+
         return Command::SUCCESS;
     }
 

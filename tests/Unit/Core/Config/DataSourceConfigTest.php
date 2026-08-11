@@ -94,6 +94,59 @@ class DataSourceConfigTest extends TestCase
         $this->assertSame('cs', $config->getDefaultLanguage());
     }
 
+    public function testCountryReadsFromConfig(): void
+    {
+        $this->createConfig([
+            'id'                => 'abcd-efgh-ijkl-mnop',
+            'name'              => 'Test DS',
+            'database_name'     => 'abcd_efgh_ijkl_mnop',
+            'database_user'     => 'shpd_abcdefgh',
+            'database_password' => 'supersecret',
+            'created'           => '2026-03-12T10:00:00+01:00',
+            'country'           => 'sk',
+        ]);
+
+        $config = new DataSourceConfig($this->tempDir);
+
+        $this->assertSame('sk', $config->getCountry());
+        $this->assertTrue($config->hasCountry());
+    }
+
+    public function testCountryMissingFallsBackToCz(): void
+    {
+        $this->createConfig([
+            'id'                => 'abcd-efgh-ijkl-mnop',
+            'name'              => 'Test DS',
+            'database_name'     => 'abcd_efgh_ijkl_mnop',
+            'database_user'     => 'shpd_abcdefgh',
+            'database_password' => 'supersecret',
+            'created'           => '2026-03-12T10:00:00+01:00',
+        ]);
+
+        $config = new DataSourceConfig($this->tempDir);
+
+        $this->assertSame('cz', $config->getCountry());
+        $this->assertFalse($config->hasCountry());
+    }
+
+    public function testCountryEmptyStringFallsBackToCz(): void
+    {
+        $this->createConfig([
+            'id'                => 'abcd-efgh-ijkl-mnop',
+            'name'              => 'Test DS',
+            'database_name'     => 'abcd_efgh_ijkl_mnop',
+            'database_user'     => 'shpd_abcdefgh',
+            'database_password' => 'supersecret',
+            'created'           => '2026-03-12T10:00:00+01:00',
+            'country'           => '',
+        ]);
+
+        $config = new DataSourceConfig($this->tempDir);
+
+        $this->assertSame('cz', $config->getCountry());
+        $this->assertFalse($config->hasCountry());
+    }
+
     public function testShouldSkipProvisioningDefaultsToFalse(): void
     {
         $this->createConfig([

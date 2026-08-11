@@ -36,6 +36,7 @@ ALLOWED = {
     "a3f2-b8c1-d4e7-f9a0",
     "x9y8-w7v6-u5t4-s3r2",
     "shpd-font-size-base",
+    "ab12-cd34-ef56-gh78",  # příklad --ds-id v docs/cli.md a DsCreateCommandTest
 }
 
 # Skupiny, ze kterých se skládají zjevně syntetická ID (testovací fixtures,

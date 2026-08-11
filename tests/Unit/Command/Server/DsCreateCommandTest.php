@@ -110,7 +110,7 @@ class DsCreateCommandTest extends TestCase
     {
         $tester = $this->createCommandTester();
 
-        $exitCode = $tester->execute(['--name' => 'My Test DS']);
+        $exitCode = $tester->execute(['--name' => 'My Test DS', '--language' => 'cs', '--country' => 'cz']);
 
         $this->assertSame(0, $exitCode);
         $output = $tester->getDisplay();
@@ -118,10 +118,60 @@ class DsCreateCommandTest extends TestCase
         $this->assertStringContainsString('My Test DS', $output);
     }
 
+    public function testDsCreateRequiresLanguage(): void
+    {
+        $this->databaseManager = $this->createMock(DatabaseManager::class);
+        $this->databaseManager->expects($this->never())->method('createDatabase');
+        $tester = $this->createCommandTester();
+
+        $exitCode = $tester->execute(['--name' => 'Test', '--country' => 'cz']);
+
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('--language is required', $tester->getDisplay());
+        $this->assertCount(0, glob($this->tempDir . '/*', GLOB_ONLYDIR));
+    }
+
+    public function testDsCreateRequiresCountry(): void
+    {
+        $this->databaseManager = $this->createMock(DatabaseManager::class);
+        $this->databaseManager->expects($this->never())->method('createDatabase');
+        $tester = $this->createCommandTester();
+
+        $exitCode = $tester->execute(['--name' => 'Test', '--language' => 'cs']);
+
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('--country is required', $tester->getDisplay());
+        $this->assertCount(0, glob($this->tempDir . '/*', GLOB_ONLYDIR));
+    }
+
+    public function testDsCreateRejectsInvalidLanguage(): void
+    {
+        $tester = $this->createCommandTester();
+
+        foreach (['de', 'CS', 'czech'] as $invalid) {
+            $exitCode = $tester->execute(['--name' => 'Test', '--language' => $invalid, '--country' => 'cz']);
+            $this->assertSame(1, $exitCode, "language '{$invalid}' should be rejected");
+            $this->assertStringContainsString('Invalid --language', $tester->getDisplay());
+        }
+        $this->assertCount(0, glob($this->tempDir . '/*', GLOB_ONLYDIR));
+    }
+
+    public function testDsCreateRejectsInvalidCountry(): void
+    {
+        $tester = $this->createCommandTester();
+
+        foreach (['CZ', 'cze', 'c1', 'č'] as $invalid) {
+            $exitCode = $tester->execute(['--name' => 'Test', '--language' => 'cs', '--country' => $invalid]);
+            $this->assertSame(1, $exitCode, "country '{$invalid}' should be rejected");
+            $this->assertStringContainsString('Invalid --country', $tester->getDisplay());
+        }
+        $this->assertCount(0, glob($this->tempDir . '/*', GLOB_ONLYDIR));
+    }
+
     public function testDsCreateWritesConfigFile(): void
     {
         $tester = $this->createCommandTester();
-        $tester->execute(['--name' => 'Test']);
+        $tester->execute(['--name' => 'Test', '--language' => 'cs', '--country' => 'cz']);
 
         $dirs = glob($this->tempDir . '/*', GLOB_ONLYDIR);
         $this->assertCount(1, $dirs);
@@ -131,17 +181,20 @@ class DsCreateCommandTest extends TestCase
 
         $config = json_decode(file_get_contents($configFile), true);
         $this->assertSame('Test', $config['name']);
+        $this->assertSame('cs', $config['defaultLanguage']);
+        $this->assertSame('cz', $config['country']);
         $this->assertArrayHasKey('id', $config);
         $this->assertArrayHasKey('database_name', $config);
         $this->assertArrayHasKey('database_user', $config);
         $this->assertArrayHasKey('database_password', $config);
         $this->assertArrayHasKey('created', $config);
+        $this->assertSame(0600, fileperms($configFile) & 0777);
     }
 
     public function testDsCreateIdFormat(): void
     {
         $tester = $this->createCommandTester();
-        $tester->execute(['--name' => 'Test']);
+        $tester->execute(['--name' => 'Test', '--language' => 'cs', '--country' => 'cz']);
 
         $dirs = glob($this->tempDir . '/*', GLOB_ONLYDIR);
         $dirName = basename($dirs[0]);
@@ -152,7 +205,7 @@ class DsCreateCommandTest extends TestCase
     public function testDsCreateWritesDefaultModuleInMainJson(): void
     {
         $tester = $this->createCommandTester();
-        $exitCode = $tester->execute(['--name' => 'Test']);
+        $exitCode = $tester->execute(['--name' => 'Test', '--language' => 'cs', '--country' => 'cz']);
         $this->assertSame(0, $exitCode);
 
         $dirs = glob($this->tempDir . '/*', GLOB_ONLYDIR);
@@ -164,7 +217,7 @@ class DsCreateCommandTest extends TestCase
     {
         $this->createInstallModule('foo');
         $tester = $this->createCommandTester();
-        $exitCode = $tester->execute(['--name' => 'Test', '--module' => 'install.foo']);
+        $exitCode = $tester->execute(['--name' => 'Test', '--language' => 'cs', '--country' => 'cz', '--module' => 'install.foo']);
         $this->assertSame(0, $exitCode);
 
         $dirs = glob($this->tempDir . '/*', GLOB_ONLYDIR);
@@ -175,7 +228,7 @@ class DsCreateCommandTest extends TestCase
     public function testDsCreateRejectsInvalidModuleFormat(): void
     {
         $tester = $this->createCommandTester();
-        $exitCode = $tester->execute(['--name' => 'Test', '--module' => 'core.system']);
+        $exitCode = $tester->execute(['--name' => 'Test', '--language' => 'cs', '--country' => 'cz', '--module' => 'core.system']);
 
         $this->assertSame(1, $exitCode);
         $this->assertStringContainsString('Invalid install module id', $tester->getDisplay());
@@ -185,7 +238,7 @@ class DsCreateCommandTest extends TestCase
     public function testDsCreateRejectsNonExistentModule(): void
     {
         $tester = $this->createCommandTester();
-        $exitCode = $tester->execute(['--name' => 'Test', '--module' => 'install.nope']);
+        $exitCode = $tester->execute(['--name' => 'Test', '--language' => 'cs', '--country' => 'cz', '--module' => 'install.nope']);
 
         $this->assertSame(1, $exitCode);
         $this->assertStringContainsString('Install module not found', $tester->getDisplay());
@@ -195,7 +248,7 @@ class DsCreateCommandTest extends TestCase
     public function testDsCreateRejectsNonExistentModuleListsAvailable(): void
     {
         $tester = $this->createCommandTester();
-        $exitCode = $tester->execute(['--name' => 'Test', '--module' => 'install.zzz']);
+        $exitCode = $tester->execute(['--name' => 'Test', '--language' => 'cs', '--country' => 'cz', '--module' => 'install.zzz']);
 
         $this->assertSame(1, $exitCode);
         $this->assertStringContainsString('Available: install.base', $tester->getDisplay());
@@ -204,14 +257,24 @@ class DsCreateCommandTest extends TestCase
     public function testDsCreateOutputContainsModule(): void
     {
         $tester = $this->createCommandTester();
-        $tester->execute(['--name' => 'Test']);
+        $tester->execute(['--name' => 'Test', '--language' => 'cs', '--country' => 'cz']);
         $this->assertStringContainsString('install.base', $tester->getDisplay());
+    }
+
+    public function testDsCreateOutputContainsLanguageAndCountry(): void
+    {
+        $tester = $this->createCommandTester();
+        $tester->execute(['--name' => 'Test', '--language' => 'en', '--country' => 'sk']);
+
+        $output = $tester->getDisplay();
+        $this->assertStringContainsString('Language:', $output);
+        $this->assertStringContainsString('Country:', $output);
     }
 
     public function testDsCreateWithExplicitDsId(): void
     {
         $tester = $this->createCommandTester();
-        $exitCode = $tester->execute(['--name' => 'Test', '--ds-id' => 'ab12-cd34-ef56-gh78']);
+        $exitCode = $tester->execute(['--name' => 'Test', '--language' => 'cs', '--country' => 'cz', '--ds-id' => 'ab12-cd34-ef56-gh78']);
 
         $this->assertSame(0, $exitCode);
         $this->assertDirectoryExists($this->tempDir . '/ab12-cd34-ef56-gh78');
@@ -225,7 +288,7 @@ class DsCreateCommandTest extends TestCase
         $tester = $this->createCommandTester();
 
         foreach (['short', 'ABCD-EFGH-IJKL-MNOP', 'ab12-cd34-ef56', 'ab12_cd34_ef56_gh78'] as $invalid) {
-            $exitCode = $tester->execute(['--name' => 'Test', '--ds-id' => $invalid]);
+            $exitCode = $tester->execute(['--name' => 'Test', '--language' => 'cs', '--country' => 'cz', '--ds-id' => $invalid]);
             $this->assertSame(1, $exitCode, "ds-id '{$invalid}' should be rejected");
             $this->assertStringContainsString('Invalid --ds-id', $tester->getDisplay());
         }
@@ -237,7 +300,7 @@ class DsCreateCommandTest extends TestCase
         mkdir($this->tempDir . '/ab12-cd34-ef56-gh78', 0755, true);
         $tester = $this->createCommandTester();
 
-        $exitCode = $tester->execute(['--name' => 'Test', '--ds-id' => 'ab12-cd34-ef56-gh78']);
+        $exitCode = $tester->execute(['--name' => 'Test', '--language' => 'cs', '--country' => 'cz', '--ds-id' => 'ab12-cd34-ef56-gh78']);
 
         $this->assertSame(1, $exitCode);
         $this->assertStringContainsString('already exists', $tester->getDisplay());
@@ -247,7 +310,7 @@ class DsCreateCommandTest extends TestCase
     {
         DsSecretCipher::resetCache();
         $tester = $this->createCommandTester();
-        $exitCode = $tester->execute(['--name' => 'Secrets Test']);
+        $exitCode = $tester->execute(['--name' => 'Secrets Test', '--language' => 'cs', '--country' => 'cz']);
         $this->assertSame(0, $exitCode);
 
         $dirs = glob($this->tempDir . '/*', GLOB_ONLYDIR);

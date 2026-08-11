@@ -12,7 +12,10 @@ instalačních parametrů z admin formuláře do `ds-create` (D7). Zbytek mechan
 dashboardu.
 
 > **Stav:** **Fáze 0 (diskuse) hotová, rozhodnutí D1–D9 schválená
-> (2026-08-11). Implementace nezačala.** Fázování viz §8, otevřené body §10.
+> (2026-08-11). Z Fáze 1 hotová vrstva A bez hostingu (Task 01 —
+> `getCountry()`, `ds-create --language --country`, dev dashboard, `[WARN]`
+> v `ds-upgrade`); hosting čeká na Task 02 — do té doby provisioning agent
+> nezaloží DS.** Fázování viz §8, otevřené body §10.
 
 ---
 

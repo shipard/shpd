@@ -31,6 +31,18 @@ class DsCreateCommand extends Command
              ->setDescription('Create a new data source')
              ->addOption('name', null, InputOption::VALUE_REQUIRED, 'Name of the data source')
              ->addOption(
+                 'language',
+                 null,
+                 InputOption::VALUE_REQUIRED,
+                 'Default language, ISO 639-1 (cs|en)',
+             )
+             ->addOption(
+                 'country',
+                 null,
+                 InputOption::VALUE_REQUIRED,
+                 'Country of the legal entity, ISO 3166-1 alpha-2 (e.g. cz, sk)',
+             )
+             ->addOption(
                  'module',
                  null,
                  InputOption::VALUE_REQUIRED,
@@ -66,6 +78,33 @@ class DsCreateCommand extends Command
 
         if (empty($name)) {
             $output->writeln('<error>Option --name is required</error>');
+            return Command::FAILURE;
+        }
+
+        // Layer A parameters (docs/ds-setup.md D1) — both mandatory, validated
+        // before any mutation below (mkdir, createDatabase). Shape-only checks:
+        // the world.base.countries cfgItem is not compiled yet at ds-create
+        // time, so semantic validation belongs to the callers (hosting form,
+        // dev dashboard).
+        $language = (string) ($input->getOption('language') ?? '');
+        if ($language === '') {
+            $output->writeln('<error>Option --language is required (cs|en)</error>');
+            return Command::FAILURE;
+        }
+        if (!in_array($language, ['cs', 'en'], true)) {
+            $output->writeln('<error>Invalid --language: ' . $language . '</error>');
+            $output->writeln('<comment>Must be one of: cs, en</comment>');
+            return Command::FAILURE;
+        }
+
+        $country = (string) ($input->getOption('country') ?? '');
+        if ($country === '') {
+            $output->writeln('<error>Option --country is required (ISO 3166-1 alpha-2, e.g. cz)</error>');
+            return Command::FAILURE;
+        }
+        if (!preg_match('/^[a-z]{2}$/', $country)) {
+            $output->writeln('<error>Invalid --country: ' . $country . '</error>');
+            $output->writeln('<comment>Must be two lower-case letters (ISO 3166-1 alpha-2, e.g. cz)</comment>');
             return Command::FAILURE;
         }
 
@@ -155,6 +194,8 @@ class DsCreateCommand extends Command
             'id'                => $id,
             'name'              => $name,
             'modules'           => [$moduleId],
+            'defaultLanguage'   => $language,
+            'country'           => $country,
             'database_name'     => $dbName,
             'database_user'     => $dbUser,
             'database_password' => $password,
@@ -184,6 +225,8 @@ class DsCreateCommand extends Command
         $output->writeln("  ID:            <comment>{$id}</comment>");
         $output->writeln("  Name:          <comment>{$name}</comment>");
         $output->writeln("  Module:        <comment>{$moduleId}</comment>");
+        $output->writeln("  Language:      <comment>{$language}</comment>");
+        $output->writeln("  Country:       <comment>{$country}</comment>");
         $output->writeln("  Database:      <comment>{$dbName}</comment>");
         $output->writeln("  DB User:       <comment>{$dbUser}</comment>");
         $output->writeln("  Directory:     <comment>{$dataSourceDir}</comment>");

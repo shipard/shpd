@@ -1,6 +1,6 @@
 # ds-setup — Task 01: Vrstva A (jazyk a země v `main.json`)
 
-**Stav:** naplánováno
+**Stav:** hotovo
 
 > PRD pro jednu Claude Code session. Design: `docs/ds-setup.md`,
 > rozhodnutí **D1**, kontrakt **§5.1**. Tenhle task je vědomě první a

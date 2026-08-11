@@ -426,6 +426,62 @@ class DevDashboardControllerTest extends TestCase
 		$this->assertStringContainsString('Name is required', $msg);
 		$this->assertStringContainsString('Admin login is required', $msg);
 		$this->assertStringContainsString('Admin password is required', $msg);
+		$this->assertStringContainsString('Language is required', $msg);
+		$this->assertStringContainsString('Country is required', $msg);
+	}
+
+	public function testDsCreateValidationMissingLanguage(): void
+	{
+		$resp = $this->ctrl->dispatch($this->makeJsonRequest('POST', '/_dev/api/ds-create', [
+			'name'     => 'Test DS',
+			'login'    => 'admin',
+			'password' => 'admin',
+			'country'  => 'cz',
+		]));
+		$this->assertSame(400, $this->getStatus($resp));
+		$payload = $this->getPayloadRaw($resp);
+		$this->assertStringContainsString('Language is required', $payload['error']['message']);
+	}
+
+	public function testDsCreateValidationInvalidLanguage(): void
+	{
+		$resp = $this->ctrl->dispatch($this->makeJsonRequest('POST', '/_dev/api/ds-create', [
+			'name'     => 'Test DS',
+			'login'    => 'admin',
+			'password' => 'admin',
+			'language' => 'de',
+			'country'  => 'cz',
+		]));
+		$this->assertSame(400, $this->getStatus($resp));
+		$payload = $this->getPayloadRaw($resp);
+		$this->assertStringContainsString('Language is required', $payload['error']['message']);
+	}
+
+	public function testDsCreateValidationMissingCountry(): void
+	{
+		$resp = $this->ctrl->dispatch($this->makeJsonRequest('POST', '/_dev/api/ds-create', [
+			'name'     => 'Test DS',
+			'login'    => 'admin',
+			'password' => 'admin',
+			'language' => 'cs',
+		]));
+		$this->assertSame(400, $this->getStatus($resp));
+		$payload = $this->getPayloadRaw($resp);
+		$this->assertStringContainsString('Country is required', $payload['error']['message']);
+	}
+
+	public function testDsCreateValidationInvalidCountry(): void
+	{
+		$resp = $this->ctrl->dispatch($this->makeJsonRequest('POST', '/_dev/api/ds-create', [
+			'name'     => 'Test DS',
+			'login'    => 'admin',
+			'password' => 'admin',
+			'language' => 'cs',
+			'country'  => 'CZE',
+		]));
+		$this->assertSame(400, $this->getStatus($resp));
+		$payload = $this->getPayloadRaw($resp);
+		$this->assertStringContainsString('Country is required', $payload['error']['message']);
 	}
 
 	public function testDsCreateGetReturns404(): void
@@ -527,6 +583,8 @@ class DevDashboardControllerTest extends TestCase
 			'name'     => 'Test',
 			'login'    => 'admin',
 			'password' => 'admin',
+			'language' => 'cs',
+			'country'  => 'cz',
 		]));
 
 		$this->streamToString($resp);
@@ -548,11 +606,37 @@ class DevDashboardControllerTest extends TestCase
 			'name'     => 'Test',
 			'login'    => 'admin',
 			'password' => 'admin',
+			'language' => 'cs',
+			'country'  => 'cz',
 			'module'   => 'install.foo',
 		]));
 
 		$this->streamToString($resp);
 		$this->assertStringContainsString('install.foo', $ctrl->commandsRun[0]);
+	}
+
+	public function testDsCreatePipelinePassesLanguageAndCountryFlags(): void
+	{
+		$ctrl = $this->makeTestableCtrl();
+		$ctrl->commandResults = [
+			[0, "  Directory:     /tmp/test/abc123\n"],
+			[0, ""],
+			[0, ""],
+		];
+
+		$resp = $ctrl->dispatch($this->makeJsonRequest('POST', '/_dev/api/ds-create', [
+			'name'     => 'Test',
+			'login'    => 'admin',
+			'password' => 'admin',
+			'language' => 'en',
+			'country'  => 'sk',
+		]));
+
+		$this->streamToString($resp);
+		$this->assertStringContainsString('--language=', $ctrl->commandsRun[0]);
+		$this->assertStringContainsString("'en'", $ctrl->commandsRun[0]);
+		$this->assertStringContainsString('--country=', $ctrl->commandsRun[0]);
+		$this->assertStringContainsString("'sk'", $ctrl->commandsRun[0]);
 	}
 
 	// -------------------------------------------------------------------------
@@ -586,6 +670,8 @@ class DevDashboardControllerTest extends TestCase
 			'name'     => 'Test',
 			'login'    => 'admin',
 			'password' => 'admin',
+			'language' => 'cs',
+			'country'  => 'cz',
 			'seed'     => false,
 		]));
 
@@ -609,6 +695,8 @@ class DevDashboardControllerTest extends TestCase
 			'name'     => 'Test',
 			'login'    => 'admin',
 			'password' => 'admin',
+			'language' => 'cs',
+			'country'  => 'cz',
 		]));
 
 		$out = $this->streamToString($resp);
@@ -629,6 +717,8 @@ class DevDashboardControllerTest extends TestCase
 			'name'     => 'Test',
 			'login'    => 'admin',
 			'password' => 'admin',
+			'language' => 'cs',
+			'country'  => 'cz',
 		]));
 
 		$out = $this->streamToString($resp);
@@ -651,6 +741,8 @@ class DevDashboardControllerTest extends TestCase
 			'name'     => 'Test',
 			'login'    => 'admin',
 			'password' => 'admin',
+			'language' => 'cs',
+			'country'  => 'cz',
 		]));
 
 		$out = $this->streamToString($resp);
@@ -669,6 +761,8 @@ class DevDashboardControllerTest extends TestCase
 			'name'     => 'Test',
 			'login'    => 'admin',
 			'password' => 'admin',
+			'language' => 'cs',
+			'country'  => 'cz',
 		]));
 
 		$out = $this->streamToString($resp);
@@ -691,6 +785,8 @@ class DevDashboardControllerTest extends TestCase
 			'name'     => 'Test',
 			'login'    => 'admin',
 			'password' => 'admin',
+			'language' => 'cs',
+			'country'  => 'cz',
 			'seed'     => true,
 		]));
 
@@ -714,6 +810,8 @@ class DevDashboardControllerTest extends TestCase
 			'name'     => 'Test',
 			'login'    => 'admin',
 			'password' => 'secret123',
+			'language' => 'cs',
+			'country'  => 'cz',
 		]));
 
 		$out = $this->streamToString($resp);

@@ -64,6 +64,11 @@ je v [TESTERS.md](../TESTERS.md).
 - **Vytěžení není zaručeně správné.** Je to návrh ke kontrole, ne hotový
   doklad. Vysoká **Jistota** znamená, že model neměl pochybnost — ne že má
   pravdu.
+- **Z jednoho e-mailu vznikne nejvýše jeden návrh dokumentu.** Když zpráva
+  nese víc dokumentů (dvě faktury, faktura + smlouva), AI vytěží jen ten
+  hlavní; ostatní nálezy uvidíš na kartě jako poznámku a založíš je ručně.
+  Je to vědomé omezení, ne chyba čtení — víc faktur pošli každou
+  samostatným e-mailem.
 - **Nedá se to nastavit „na dodavatele".** Zvyklosti se sice zohledňují
   z tvé dosavadní historie, ale nemáš žádnou obrazovku, kde bys pravidla
   pro konkrétního dodavatele zadal ručně.

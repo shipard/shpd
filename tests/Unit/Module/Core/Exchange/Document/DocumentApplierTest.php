@@ -594,12 +594,13 @@ class DocumentApplierTest extends TestCase
 
     public function testIdempotentReplayReturnsExistingSavedDocId(): void
     {
-        // extracted_document row exists with target_row_ndx + status=40
+        // Zpráva už nese docs target (target_table_id + target_row) —
+        // opakovaný apply vrací existující savedDocId bez ukládání.
         $db = $this->createMock(Connection::class);
         $db->expects($this->once())
             ->method('fetch')
-            ->with($this->stringContains('core_mail_extracted_documents'), 678)
-            ->willReturn(new Row(['target_row_ndx' => 1234, 'status' => 40]));
+            ->with($this->stringContains('core_mail_incoming_messages'), 678)
+            ->willReturn(new Row(['target_table_id' => 'docs_core_heads', 'target_row' => 1234]));
 
         // Heads gateway must NEVER be called — idempotent fast-path
         $heads = $this->createMock(TransactionlessTableGateway::class);
@@ -608,7 +609,7 @@ class DocumentApplierTest extends TestCase
         $applier = $this->buildApplier(db: $db, heads: $heads);
 
         $payload = $this->payloadWithCanCreateSupplier(['full_name' => 'X']);
-        $payload['source']['extractedDoc'] = 678;
+        $payload['source']['message'] = 678;
         $result = $applier->apply($payload);
 
         $this->assertTrue($result->success);
@@ -616,12 +617,12 @@ class DocumentApplierTest extends TestCase
         $this->assertSame('alreadyApplied', $result->canonical['_resolve']['summary']['status']);
     }
 
-    public function testIdempotentSkippedWhenStatusNotApplied(): void
+    public function testIdempotentSkippedWhenMessageHasNoDocsTarget(): void
     {
-        // target_row_ndx already set but status still pending (20) — applier
-        // must NOT short-circuit; it should proceed normally.
+        // Zpráva bez targetu (target_row NULL) — applier NESMÍ short-circuitnout,
+        // pokračuje normální cestou.
         $db = $this->createMock(Connection::class);
-        $db->method('fetch')->willReturn(new Row(['target_row_ndx' => 1234, 'status' => 20]));
+        $db->method('fetch')->willReturn(new Row(['target_table_id' => null, 'target_row' => null]));
 
         $resolvers = $this->buildAutoCreateResolvers(['full_name' => 'X']);
         $applier = $this->buildApplier(
@@ -629,8 +630,30 @@ class DocumentApplierTest extends TestCase
             vat: $resolvers['vat'], bank: $resolvers['bank'],
         );
         $payload = $this->payloadWithCanCreateSupplier(['full_name' => 'X']);
-        $payload['source']['extractedDoc'] = 678;
+        $payload['source']['message'] = 678;
         // No applyOptions → strict mode → expected to fail with unresolved_required
+        $result = $applier->apply($payload);
+
+        $this->assertFalse($result->success);
+        $this->assertSame('unresolved_required', $result->errorCode);
+    }
+
+    public function testIdempotentSkippedWhenTargetIsDifferentTable(): void
+    {
+        // Target míří jinam (registry) — docs apply se nesmí tvářit jako
+        // už aplikovaný.
+        $db = $this->createMock(Connection::class);
+        $db->method('fetch')->willReturn(
+            new Row(['target_table_id' => 'base_registry_documents', 'target_row' => 55]),
+        );
+
+        $resolvers = $this->buildAutoCreateResolvers(['full_name' => 'X']);
+        $applier = $this->buildApplier(
+            db: $db, party: $resolvers['party'], item: $resolvers['item'], unit: $resolvers['unit'],
+            vat: $resolvers['vat'], bank: $resolvers['bank'],
+        );
+        $payload = $this->payloadWithCanCreateSupplier(['full_name' => 'X']);
+        $payload['source']['message'] = 678;
         $result = $applier->apply($payload);
 
         $this->assertFalse($result->success);

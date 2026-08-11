@@ -1,0 +1,33 @@
+{
+    // core.mail.analysisResolutions
+    //
+    // Verdikt uživatele nad dokumentovým návrhem AI analýzy. Hodnota se
+    // ukládá do sloupce `core_mail_message_analyses.resolution` (enumInt,
+    // NULL = otevřený návrh / běh bez návrhu). Kódy záměrně shodné
+    // s někdejšími stavy extrahovaných dokumentů (40 applied, 50 rejected).
+    //
+    // Confidence pásma (ready/review/low) nejsou perzistentní stav —
+    // počítají se za běhu z `confidence` vs. thresholds profilu
+    // (AnalysisConfidenceResolver).
+
+    "40": {
+        "name": "Applied",
+        "name:cs": "Použito",
+        "name:en": "Applied",
+        "stateStyle": "done",
+        "icon": "check",
+        "description": "The proposal was applied — the target entity exists.",
+        "description:cs": "Návrh byl použit — cílová entita existuje.",
+        "description:en": "The proposal was applied — the target entity exists."
+    },
+    "50": {
+        "name": "Rejected",
+        "name:cs": "Zamítnuto",
+        "name:en": "Rejected",
+        "stateStyle": "cancelled",
+        "icon": "warning",
+        "description": "The user rejected the proposal (rejected_reason is required).",
+        "description:cs": "Uživatel návrh zamítl (rejected_reason je povinný).",
+        "description:en": "The user rejected the proposal (rejected_reason is required)."
+    }
+}

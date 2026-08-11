@@ -9,7 +9,6 @@ use Shipard\Command\DataSource\HostingStatsCommand;
 use Shipard\Core\Alerts\AlertReconciler;
 use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Database\DataSourceConnection;
-use Shipard\Module\Core\Mail\ExtractedDocumentDocument;
 use Shipard\Module\Core\Mail\IncomingMessageDocument;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Tester\CommandTester;
@@ -34,7 +33,7 @@ class HostingStatsCommandTest extends TestCase
 {
     private const ALL_TABLES = [
         'core_alerts_alerts',
-        'core_mail_extracted_documents',
+        'core_mail_message_analyses',
         'core_mail_incoming_messages',
         'core_system_users',
     ];
@@ -61,10 +60,12 @@ class HostingStatsCommandTest extends TestCase
                 if (str_contains($sql, 'core_alerts_alerts')) {
                     return 2;
                 }
-                if (str_contains($sql, 'core_mail_extracted_documents')) {
+                // Zprávy s otevřeným návrhem (derived open_proposal flag).
+                if (str_contains($sql, 'open_proposal')) {
                     return 3;
                 }
-                if (str_contains($sql, 'core_mail_incoming_messages')) {
+                // Zprávy s trvale selhanou analýzou.
+                if (str_contains($sql, 'analysis_state')) {
                     return 4;
                 }
                 throw new \LogicException("unexpected fetchSingle: {$sql}");
@@ -97,23 +98,23 @@ class HostingStatsCommandTest extends TestCase
         $queries = [];
         $this->tester(self::ALL_TABLES, $queries)->execute(['--json' => true]);
 
-        [$alerts, $extracted, $failed] = $queries;
+        [$alerts, $suggestions, $failed] = $queries;
 
         // Aktivní alerty — jen STATE_ACTIVE.
         $this->assertStringContainsString('`alert_state` = %i', $alerts['sql']);
         $this->assertSame([AlertReconciler::STATE_ACTIVE], $alerts['args']);
 
-        // Extrahované doklady: stavy 10/20/30 (40+ se nepočítá), bez 'other'
+        // Návrhy: zprávy v 10/20 s otevřeným dokumentovým návrhem poslední
+        // úspěšné analýzy (canonical bez verdiktu, proposed_type != 'other')
         // — stejná sémantika jako feed karty.
-        $this->assertStringContainsString('`status` IN %in', $extracted['sql']);
-        $this->assertStringContainsString("`doc_type` != 'other'", $extracted['sql']);
+        $this->assertStringContainsString('core_mail_message_analyses', $suggestions['sql']);
+        $this->assertStringContainsString('`canonical_json` IS NOT NULL', $suggestions['sql']);
+        $this->assertStringContainsString('`resolution` IS NULL', $suggestions['sql']);
+        $this->assertStringContainsString("proposed_type`, 'other') != 'other'", $suggestions['sql']);
+        $this->assertStringContainsString('`docState` IN %in', $suggestions['sql']);
         $this->assertSame(
-            [[
-                ExtractedDocumentDocument::STATUS_READY_TO_APPLY,
-                ExtractedDocumentDocument::STATUS_PENDING_REVIEW,
-                ExtractedDocumentDocument::STATUS_LOW_CONFIDENCE,
-            ]],
-            $extracted['args'],
+            [[IncomingMessageDocument::DOC_STATE_NEW, IncomingMessageDocument::DOC_STATE_OPEN]],
+            $suggestions['args'],
         );
 
         // Selhané analýzy mimo Archiv/Koš.
@@ -131,7 +132,7 @@ class HostingStatsCommandTest extends TestCase
     public function testMissingAlertsTableYieldsNull(): void
     {
         $queries = [];
-        $tester = $this->tester(['core_mail_extracted_documents', 'core_mail_incoming_messages'], $queries);
+        $tester = $this->tester(['core_mail_message_analyses', 'core_mail_incoming_messages'], $queries);
         $tester->execute(['--json' => true]);
 
         $decoded = json_decode(trim($tester->getDisplay()), true);
@@ -140,7 +141,7 @@ class HostingStatsCommandTest extends TestCase
 
     public function testMissingMailTablesYieldNull(): void
     {
-        // Stačí jedna chybějící mail tabulka → modul se nepočítá.
+        // Stačí jedna chybějící mail tabulka (analyses) → modul se nepočítá.
         $queries = [];
         $tester = $this->tester(['core_alerts_alerts', 'core_mail_incoming_messages'], $queries);
         $tester->execute(['--json' => true]);

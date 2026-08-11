@@ -6,42 +6,43 @@ namespace Shipard\Module\Core\Mail\Feed;
 
 use Shipard\Core\Feed\FeedContext;
 use Shipard\Core\Feed\FeedSource;
-use Shipard\Module\Core\Mail\ExtractedDocTypes;
-use Shipard\Module\Core\Mail\ExtractedDocumentDocument;
+use Shipard\Module\Core\Mail\AnalysisConfidenceResolver;
 use Shipard\Module\Core\Mail\IncomingMessageDocument;
+use Shipard\Module\Core\Mail\PrimaryTypes;
 
 /**
- * Feed zdroj došlé pošty — emituje kartu **per vytěžený doklad** (D5),
- * chybové karty per zpráva, u které selhala AI, a info karty „Není faktura"
- * pro AI-klasifikované ne-faktury.
+ * Feed zdroj došlé pošty — message-centricky (tasks/mail-message-centric.md
+ * D10): karta = zpráva s otevřeným dokumentovým návrhem poslední úspěšné
+ * analýzy, chybové karty per zpráva, u které selhala AI (nebo poslední běh
+ * vrátil nevalidní canonical), a info karty „Není faktura" pro
+ * AI-klasifikované ne-faktury.
  *
- * Návrhové karty: `core_mail_extracted_documents.status ∈ {10,20,30}` join na
- * `core_mail_incoming_messages` (kontext subject/sender/received_at). Mapování:
- *   - 10 → kind=ready (vizuální odlišení „AI si je jistá“)
- *   - 20/30 → kind=review
- *   Akce jsou pro všechny stavy shodné: review (primary) + reject —
- *   vystavení jde vždy přes review modal, jednoklikové apply z karty
- *   bylo odstraněno.
- * Doklady s `doc_type='other'` se ignorují (pojistka — prompt v2.2.0 je
+ * Návrhové karty: zprávy v docState 10/20 s poslední úspěšnou analýzou
+ * (`canonical_json` NOT NULL, `resolution` IS NULL). Confidence pásmo se
+ * počítá za běhu (AnalysisConfidenceResolver, prahy profilu běhu):
+ *   - ready → kind=ready, akce apply (primary, jednoklik safe) + review + reject
+ *   - review/low → kind=review, akce review (primary) + reject
+ * Návrhy s `proposed_type='other'` se ignorují (pojistka — prompt je
  * zakazuje, starší analýzy je mohly vytvořit).
  * Chybové karty: zpráva `analysis_state=70` (Analýza selhala) mimo Archiv/Koš
- * → kind=urgent, akce reanalyze + open_form (editační formulář zprávy). Když už
- * klasifikace stihla určit `primary_type='other'` (např. při reanalyze),
- * karta degraduje na kind=review — ne-faktura není urgentní.
+ * → kind=urgent, akce reanalyze + open_form; degradace na review, když
+ * klasifikace určila `primary_type='other'`. Otevřený návrh s ai_failed
+ * wrapperem (`_validationError` v canonical_json) emituje chybovou kartu
+ * také — akce reanalyze.
  * Karty „Není faktura": zpráva `analysis_state=30`, `docState=10` (Nová),
- * `primary_type='other'` a žádný akční extracted doc → kind=info s akcemi
+ * `primary_type='other'` bez otevřeného návrhu → kind=info s akcemi
  * Koš (primary) / Archiv / otevřít editační formulář zprávy.
  *
  * Návrhové karty s partnerem nesou strukturovanou hlavičku `headline`
  * ({partnerName, typeLabel, amountText?}) + volitelná pole `confidencePct`
  * (int 0–100) a `details` ({label, value} — číslo dokladu / splatnost /
  * variabilní symbol; u registry „Platí do"); `subtitle` se u nich neposílá.
- * Bez partnera karta padá na dnešní složený `title`/`subtitle` fallback.
- * Všechny tři druhy mail karet nesou `emailSubject` (holý předmět zprávy).
- * a volitelné `receivedDateText` (lokalizované datum doručení z `received_at`).
- * Data jdou z `extracted_json` (kanonický doklad) — feed je stropovaný
- * (maxCards), takže N `json_decode` je únosné; denormalizace headline polí
- * do sloupců je možná optimalizace později.
+ * Bez partnera karta padá na složený `title`/`subtitle` fallback.
+ * Všechny tři druhy mail karet nesou `emailSubject` (holý předmět zprávy)
+ * a volitelné `receivedDateText`. Neprázdné `secondary_findings` běhu →
+ * pole `secondaryFindings` ({type, type_label, note}) — hint na kartě (D7).
+ * Data jdou z `canonical_json` (kanonický doklad) — feed je stropovaný
+ * (maxCards), takže N `json_decode` je únosné.
  *
  * Akce se emitují bez `label` — frontend je lokalizuje podle `action.id`
  * (i18n klíče `dashboard.card.action.*`). Podtitulek a titulek jsou naopak
@@ -49,16 +50,14 @@ use Shipard\Module\Core\Mail\IncomingMessageDocument;
  *
  * Přílohy: každá karta s ≥1 obsahovou přílohou zprávy nese volitelná pole
  * `attachments` (max MAX_CARD_ATTACHMENTS položek `{id, name, mime_type,
- * file_size}` — struktura shodná s fetchContentAttachments() ve vieweru)
- * + `attachmentsTotal` (počet před stropem). Návrhové karty filtrují na
- * `source_attachments` extracted dokladu (fallback všechny obsahové přílohy),
- * chybové a „Není faktura" karty nesou všechny obsahové přílohy. Raw `.eml`
- * (`raw_source_attachment`) se vylučuje vždy. Jeden batch dotaz na collect.
+ * file_size}`) + `attachmentsTotal` (počet před stropem) — vždy **všechny**
+ * obsahové přílohy zprávy (D10; `source_attachments` filtr zanikl). Raw
+ * `.eml` (`raw_source_attachment`) se vylučuje vždy. Jeden batch dotaz.
  */
 final class MailSuggestionsSource implements FeedSource
 {
-    private const EXTRACTED_TABLE = 'core_mail_extracted_documents';
     private const MESSAGES_TABLE  = 'core_mail_incoming_messages';
+    private const ANALYSES_TABLE  = 'core_mail_message_analyses';
     private const ATTACHMENTS_TABLE = 'core_attachments_files';
 
     /**
@@ -71,8 +70,6 @@ final class MailSuggestionsSource implements FeedSource
     private const MAX_CARD_ATTACHMENTS = 3;
 
     private const PRIMARY_TYPES_CFG_ITEM = 'core.mail.primaryTypes';
-
-    private const DOC_TYPES_CFG_ITEM = 'core.mail.extractedDocTypes';
 
     private const DOC_KINDS_CFG_ITEM = 'base.registry.docKinds';
 
@@ -87,12 +84,36 @@ final class MailSuggestionsSource implements FeedSource
             [...$suggestionRows, ...$errorRows, ...$notInvoiceRows],
         );
 
+        $resolver = new AnalysisConfidenceResolver($ctx->db);
+        $thresholdsByProfile = [];
+
         $cards = [];
         foreach ($suggestionRows as $row) {
-            $messageAttachments = $attachmentsByMessage[(int) $row['message_ndx']] ?? [];
+            $attachments = $attachmentsByMessage[(int) $row['message_ndx']] ?? [];
+            $canonical = json_decode((string) ($row['canonical_json'] ?? ''), true);
+            $canonical = is_array($canonical) ? $canonical : [];
+
+            // Nevalidní výstup běhu (forenzní wrapper z /result) → chybová
+            // karta s reanalyze, návrh nelze použít.
+            if (isset($canonical['_validationError'])) {
+                $cards[] = $this->withAttachments($this->buildInvalidOutputCard($ctx, $row), $attachments);
+                continue;
+            }
+
+            $profileKey = $row['profile'] !== null ? (int) $row['profile'] : 0;
+            if (!array_key_exists($profileKey, $thresholdsByProfile)) {
+                $thresholdsByProfile[$profileKey] = $profileKey > 0
+                    ? $resolver->thresholdsForProfile($profileKey)
+                    : $resolver->thresholdsForDefaultProfile();
+            }
+            $band = $resolver->capBandByRowCoverage(
+                $resolver->bandFor((float) ($row['confidence'] ?? 0.0), $thresholdsByProfile[$profileKey]),
+                $canonical,
+            );
+
             $cards[] = $this->withAttachments(
-                $this->buildSuggestionCard($ctx, $row),
-                $this->suggestionAttachments($row, $messageAttachments),
+                $this->buildSuggestionCard($ctx, $row, $canonical, $band),
+                $attachments,
             );
         }
         foreach ($errorRows as $row) {
@@ -111,70 +132,77 @@ final class MailSuggestionsSource implements FeedSource
     }
 
     /**
-     * Řádky vytěžených dokladů ve stavech 10/20/30 pro návrhové karty.
+     * Zprávy s otevřeným dokumentovým návrhem poslední úspěšné analýzy.
      *
      * @return list<array<string,mixed>>
      */
     private function fetchSuggestionRows(FeedContext $ctx): array
     {
         return $ctx->db->fetchAll(
-            'SELECT `e`.`id` AS `extracted_ndx`, `e`.`message` AS `message_ndx`,'
-            . ' `e`.`doc_type`, `e`.`extracted_json`, `e`.`confidence`, `e`.`status`,'
-            . ' `e`.`source_attachments`,'
-            . ' `m`.`subject`, `m`.`sender_name`, `m`.`received_at`, `m`.`raw_source_attachment`'
-            . ' FROM `' . self::EXTRACTED_TABLE . '` `e`'
-            . ' JOIN `' . self::MESSAGES_TABLE . '` `m` ON `m`.`id` = `e`.`message`'
-            . ' WHERE `e`.`status` IN %in'
-            . ' AND `e`.`doc_type` != \'other\''
-            . ' ORDER BY `m`.`received_at` DESC, `e`.`id` DESC'
+            'SELECT `m`.`id` AS `message_ndx`, `m`.`subject`, `m`.`sender_name`,'
+            . ' `m`.`received_at`, `m`.`raw_source_attachment`,'
+            . ' `a`.`id` AS `analysis_ndx`, `a`.`proposed_type`, `a`.`canonical_json`,'
+            . ' `a`.`analysis_json`, `a`.`confidence`, `a`.`profile`'
+            . ' FROM `' . self::MESSAGES_TABLE . '` `m`'
+            . ' JOIN `' . self::ANALYSES_TABLE . '` `a` ON `a`.`id` = ('
+            . '     SELECT `a2`.`id` FROM `' . self::ANALYSES_TABLE . '` `a2`'
+            . '     WHERE `a2`.`message` = `m`.`id` AND `a2`.`status` = 2'
+            . '     ORDER BY `a2`.`analyzed_at` DESC, `a2`.`id` DESC LIMIT 1'
+            . ' )'
+            . ' WHERE `m`.`docState` IN %in'
+            . ' AND `m`.`analysis_state` = %i'
+            . ' AND `a`.`canonical_json` IS NOT NULL'
+            . ' AND `a`.`resolution` IS NULL'
+            . ' AND COALESCE(`a`.`proposed_type`, \'other\') != \'other\''
+            . ' ORDER BY `m`.`received_at` DESC, `m`.`id` DESC'
             . ' LIMIT %i',
-            [
-                ExtractedDocumentDocument::STATUS_READY_TO_APPLY,
-                ExtractedDocumentDocument::STATUS_PENDING_REVIEW,
-                ExtractedDocumentDocument::STATUS_LOW_CONFIDENCE,
-            ],
+            [IncomingMessageDocument::DOC_STATE_NEW, IncomingMessageDocument::DOC_STATE_OPEN],
+            IncomingMessageDocument::ANALYSIS_ANALYZED,
             $ctx->maxCards,
         );
     }
 
     /**
      * @param array<string,mixed> $row
+     * @param array<string,mixed> $canonical
      * @return array<string,mixed>
      */
-    private function buildSuggestionCard(FeedContext $ctx, array $row): array
+    private function buildSuggestionCard(FeedContext $ctx, array $row, array $canonical, string $band): array
     {
-        $extractedNdx = (int) $row['extracted_ndx'];
-        $messageNdx   = (int) $row['message_ndx'];
-        $status       = (int) $row['status'];
-        $confidence   = isset($row['confidence']) ? (float) $row['confidence'] : null;
-        $docType      = (string) ($row['doc_type'] ?? '');
-        $subject      = trim((string) ($row['subject'] ?? ''));
+        $messageNdx  = (int) $row['message_ndx'];
+        $analysisNdx = (int) $row['analysis_ndx'];
+        $confidence  = isset($row['confidence']) ? (float) $row['confidence'] : null;
+        $docType     = (string) ($row['proposed_type'] ?? '');
+        $subject     = trim((string) ($row['subject'] ?? ''));
 
-        $canonical = json_decode((string) ($row['extracted_json'] ?? ''), true);
-        $canonical = is_array($canonical) ? $canonical : [];
+        // Target typu řídí prezentaci karty (titulek/podtitulek) — action
+        // kinds i endpointy jsou pro oba targety shodné.
+        $extractionTarget = PrimaryTypes::targetFor($ctx->config, $docType);
+        $isRegistry = $extractionTarget === PrimaryTypes::TARGET_REGISTRY;
 
-        // Target typu řídí prezentaci karty (titulek/podtitulek/label apply
-        // akce) — action kinds i endpointy jsou pro oba targety shodné.
-        $extractionTarget = ExtractedDocTypes::targetFor($ctx->config, $docType);
-        $isRegistry = $extractionTarget === ExtractedDocTypes::TARGET_REGISTRY;
-
-        [$kind, $stateStyle, $icon] = match ($status) {
-            ExtractedDocumentDocument::STATUS_READY_TO_APPLY => ['ready', 'done', 'check'],
-            ExtractedDocumentDocument::STATUS_LOW_CONFIDENCE => ['review', 'edit', 'warning'],
-            default                                          => ['review', 'confirmed', 'question'],
+        [$kind, $stateStyle, $icon] = match ($band) {
+            AnalysisConfidenceResolver::BAND_READY => ['ready', 'done', 'check'],
+            AnalysisConfidenceResolver::BAND_LOW   => ['review', 'edit', 'warning'],
+            default                                => ['review', 'confirmed', 'question'],
         };
 
-        $target = ['extractedNdx' => $extractedNdx];
-        // Vystavení jde vždy přes review modal (kontrola náhledu před
-        // potvrzením) — jednoklikové apply z karty bylo odstraněno, stav 10
-        // se liší jen vizuálně (kind/ikona).
-        $actions = [
-            ['id' => 'review', 'kind' => 'review_extracted', 'target' => $target, 'primary' => true],
-            ['id' => 'reject', 'kind' => 'reject_extracted', 'target' => $target],
-        ];
+        $target = ['messageNdx' => $messageNdx];
+        // Pásmo ready → jednoklikové apply (safe; 422 unresolved_required
+        // klient řeší fall-through do review modalu). Review/low jde přes
+        // review modal (kontrola náhledu před potvrzením).
+        $actions = $band === AnalysisConfidenceResolver::BAND_READY
+            ? [
+                ['id' => 'apply',  'kind' => 'apply_message',  'target' => $target, 'primary' => true],
+                ['id' => 'review', 'kind' => 'review_message', 'target' => $target],
+                ['id' => 'reject', 'kind' => 'reject_message', 'target' => $target],
+            ]
+            : [
+                ['id' => 'review', 'kind' => 'review_message', 'target' => $target, 'primary' => true],
+                ['id' => 'reject', 'kind' => 'reject_message', 'target' => $target],
+            ];
 
         $card = [
-            'id'         => 'mail_extracted:' . $extractedNdx,
+            'id'         => 'mail_suggestion:' . $messageNdx,
             'source'     => 'mail',
             'kind'       => $kind,
             'icon'       => $icon,
@@ -185,17 +213,17 @@ final class MailSuggestionsSource implements FeedSource
                 : $this->cardTitle($ctx, $docType, $canonical),
             'timestamp'  => $this->toAtom($row['received_at'] ?? null),
             'context'    => [
-                'messageNdx'   => $messageNdx,
-                'extractedNdx' => $extractedNdx,
-                'confidence'   => $confidence,
-                'target'       => $extractionTarget,
+                'messageNdx'  => $messageNdx,
+                'analysisNdx' => $analysisNdx,
+                'confidence'  => $confidence,
+                'target'      => $extractionTarget,
             ],
             'actions'    => $actions,
         ];
 
         // Strukturovaná hlavička jen když známe partnera — bez něj karta
-        // padá na dnešní složený title/subtitle fallback (bez headline se
-        // subtitle posílá dál, u headline karet už ne — data jsou v ní).
+        // padá na složený title/subtitle fallback (bez headline se subtitle
+        // posílá dál, u headline karet už ne — data jsou v ní).
         $partnerName = $isRegistry
             ? $this->registryPartyName($canonical)
             : $this->counterpartyName($canonical);
@@ -233,7 +261,48 @@ final class MailSuggestionsSource implements FeedSource
         if ($details !== []) {
             $card['details'] = $details;
         }
+        $findings = $this->secondaryFindings($ctx, (string) ($row['analysis_json'] ?? ''));
+        if ($findings !== []) {
+            $card['secondaryFindings'] = $findings;
+        }
 
+        return $card;
+    }
+
+    /**
+     * Chybová karta pro otevřený návrh s nevalidním výstupem AI (forenzní
+     * wrapper z /result) — jediná smysluplná akce je reanalyze.
+     *
+     * @param array<string,mixed> $row
+     * @return array<string,mixed>
+     */
+    private function buildInvalidOutputCard(FeedContext $ctx, array $row): array
+    {
+        $messageNdx = (int) $row['message_ndx'];
+        $subject    = trim((string) ($row['subject'] ?? ''));
+        $card = [
+            'id'         => 'mail_invalid:' . $messageNdx,
+            'source'     => 'mail',
+            'kind'       => 'urgent',
+            'icon'       => 'warning',
+            'stateStyle' => 'error',
+            'category'   => FeedSource::CATEGORY_OTHER,
+            'title'      => $ctx->language === 'cs' ? 'Chyba analýzy e-mailu' : 'E-mail analysis failed',
+            'subtitle'   => trim((string) ($row['sender_name'] ?? '')),
+            'timestamp'  => $this->toAtom($row['received_at'] ?? null),
+            'context'    => ['messageNdx' => $messageNdx],
+            'actions'    => [
+                ['id' => 'reanalyze', 'kind' => 'reanalyze', 'target' => ['messageNdx' => $messageNdx], 'primary' => true],
+                ['id' => 'openMail',  'kind' => 'open_form', 'target' => ['table' => self::MESSAGES_TABLE, 'recordId' => $messageNdx]],
+            ],
+        ];
+        if ($subject !== '') {
+            $card['emailSubject'] = $subject;
+        }
+        $receivedDateText = $this->formatDate($ctx, (string) ($row['received_at'] ?? ''));
+        if ($receivedDateText !== null) {
+            $card['receivedDateText'] = $receivedDateText;
+        }
         return $card;
     }
 
@@ -298,7 +367,7 @@ final class MailSuggestionsSource implements FeedSource
 
     /**
      * Řádky zpráv pro karty „Není faktura" — AI klasifikovala zprávu jako
-     * `other`, zpráva zůstala v Nové a nemá žádný akční extracted doc.
+     * `other`, zpráva zůstala v Nové a nemá otevřený dokumentový návrh.
      *
      * @return list<array<string,mixed>>
      */
@@ -311,19 +380,16 @@ final class MailSuggestionsSource implements FeedSource
             . ' WHERE `m`.`analysis_state` = %i'
             . ' AND `m`.`docState` = %i'
             . ' AND `m`.`primary_type` = \'other\''
-            . ' AND NOT EXISTS ('
-            . '     SELECT 1 FROM `' . self::EXTRACTED_TABLE . '` `e`'
-            . '     WHERE `e`.`message` = `m`.`id` AND `e`.`status` IN %in'
-            . ' )'
+            . ' AND COALESCE(('
+            . '     SELECT `a`.`canonical_json` IS NOT NULL AND `a`.`resolution` IS NULL'
+            . '     FROM `' . self::ANALYSES_TABLE . '` `a`'
+            . '     WHERE `a`.`message` = `m`.`id` AND `a`.`status` = 2'
+            . '     ORDER BY `a`.`analyzed_at` DESC, `a`.`id` DESC LIMIT 1'
+            . ' ), 0) = 0'
             . ' ORDER BY `m`.`received_at` DESC, `m`.`id` DESC'
             . ' LIMIT %i',
             IncomingMessageDocument::ANALYSIS_ANALYZED,
             IncomingMessageDocument::DOC_STATE_NEW,
-            [
-                ExtractedDocumentDocument::STATUS_READY_TO_APPLY,
-                ExtractedDocumentDocument::STATUS_PENDING_REVIEW,
-                ExtractedDocumentDocument::STATUS_LOW_CONFIDENCE,
-            ],
             $ctx->maxCards,
         );
     }
@@ -422,32 +488,6 @@ final class MailSuggestionsSource implements FeedSource
     }
 
     /**
-     * Přílohy návrhové karty: `source_attachments` (JSON pole ndx) filtruje
-     * obsahové přílohy zprávy — uživatel vidí přímo přílohu, ze které doklad
-     * vznikl. Prázdné/nevalidní pole nebo žádný průnik → fallback na všechny
-     * obsahové přílohy. Pořadí se zachovává dle batch dotazu (att_order).
-     *
-     * @param array<string,mixed> $row
-     * @param list<array{id: int, name: string, mime_type: string, file_size: int}> $messageAttachments
-     * @return list<array{id: int, name: string, mime_type: string, file_size: int}>
-     */
-    private function suggestionAttachments(array $row, array $messageAttachments): array
-    {
-        $sourceNdx = json_decode((string) ($row['source_attachments'] ?? ''), true);
-        if (is_array($sourceNdx) && $sourceNdx !== []) {
-            $wanted = array_map('intval', array_filter($sourceNdx, 'is_numeric'));
-            $filtered = array_values(array_filter(
-                $messageAttachments,
-                static fn(array $att): bool => in_array($att['id'], $wanted, true),
-            ));
-            if ($filtered !== []) {
-                return $filtered;
-            }
-        }
-        return $messageAttachments;
-    }
-
-    /**
      * Doplní do karty volitelná pole `attachments` (strop MAX_CARD_ATTACHMENTS)
      * + `attachmentsTotal` (počet před stropem). Karta bez příloh pole nemá.
      *
@@ -463,6 +503,34 @@ final class MailSuggestionsSource implements FeedSource
         $card['attachments']      = array_slice($attachments, 0, self::MAX_CARD_ATTACHMENTS);
         $card['attachmentsTotal'] = count($attachments);
         return $card;
+    }
+
+    /**
+     * Hint dalších nálezů běhu (D7): `secondary_findings` z analysis_json —
+     * informativní seznam {type, type_label, note}, žádné entity, žádný stav.
+     *
+     * @return list<array{type: string, type_label: string, note: string}>
+     */
+    private function secondaryFindings(FeedContext $ctx, string $analysisJson): array
+    {
+        $decoded = json_decode($analysisJson, true);
+        $findings = is_array($decoded) ? ($decoded['secondary_findings'] ?? null) : null;
+        if (!is_array($findings)) {
+            return [];
+        }
+        $out = [];
+        foreach ($findings as $f) {
+            if (!is_array($f)) {
+                continue;
+            }
+            $type = trim((string) ($f['type'] ?? ''));
+            $out[] = [
+                'type' => $type,
+                'type_label' => $this->primaryTypeLabel($ctx, $type),
+                'note' => trim((string) ($f['note'] ?? '')),
+            ];
+        }
+        return $out;
     }
 
     /** Lokalizovaný label primárního typu z cfgItem; fallback na holý key. */
@@ -580,7 +648,7 @@ final class MailSuggestionsSource implements FeedSource
     /** Lokalizovaný label druhu dokumentu z `base.registry.docKinds`; fallback docTypeLabel. */
     private function docKindLabel(FeedContext $ctx, string $docType): string
     {
-        $docKind = ExtractedDocTypes::docKindFor($ctx->config, $docType);
+        $docKind = PrimaryTypes::docKindFor($ctx->config, $docType);
         if ($docKind !== null) {
             $kinds = $ctx->config?->cfgItem(self::DOC_KINDS_CFG_ITEM);
             if (is_array($kinds) && isset($kinds[$docKind]['name']) && is_string($kinds[$docKind]['name'])) {
@@ -598,7 +666,7 @@ final class MailSuggestionsSource implements FeedSource
      */
     private function registryValidTo(FeedContext $ctx, string $docType, array $canonical): ?string
     {
-        $docKind = ExtractedDocTypes::docKindFor($ctx->config, $docType);
+        $docKind = PrimaryTypes::docKindFor($ctx->config, $docType);
         if ($docKind === null) {
             return null;
         }
@@ -702,7 +770,7 @@ final class MailSuggestionsSource implements FeedSource
         if ($docType === '') {
             return $ctx->language === 'cs' ? 'Doklad' : 'Document';
         }
-        $cfg = $ctx->config?->cfgItem(self::DOC_TYPES_CFG_ITEM);
+        $cfg = $ctx->config?->cfgItem(self::PRIMARY_TYPES_CFG_ITEM);
         if (is_array($cfg) && isset($cfg[$docType]['name']) && is_string($cfg[$docType]['name'])) {
             return $cfg[$docType]['name'];
         }

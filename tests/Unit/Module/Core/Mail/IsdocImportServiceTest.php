@@ -11,14 +11,14 @@ use Shipard\Module\Core\Exchange\Resolve\PartyResolver;
 use Shipard\Module\Core\Exchange\Resolve\ResolveResult;
 use Shipard\Module\Core\Exchange\Schema\SchemaLoader;
 use Shipard\Module\Core\Exchange\Schema\SchemaValidator;
-use Shipard\Module\Core\Mail\ExtractedDocumentDocument;
-use Shipard\Module\Core\Mail\ExtractedDocumentStatusResolver;
 use Shipard\Module\Core\Mail\IsdocImportService;
 
 /**
- * Deterministický ISDOC import (tasks/mail-isdoc-import.md, krok 3).
- * Reálný IsdocReader + SchemaValidator nad fixtures, mockovaná DB —
- * ověřuje se orchestrace: co se insertne/updatne a kdy se větev vzdá.
+ * Deterministický ISDOC import (tasks/mail-isdoc-import.md, krok 3;
+ * message-centric model z tasks/mail-message-centric.md). Reálný IsdocReader
+ * + SchemaValidator nad fixtures, mockovaná DB — ověřuje se orchestrace:
+ * co se insertne/updatne a kdy se větev vzdá. Canonical návrhu žije přímo
+ * na řádku analýzy (`canonical_json`), žádná extracted tabulka.
  */
 class IsdocImportServiceTest extends TestCase
 {
@@ -104,7 +104,6 @@ class IsdocImportServiceTest extends TestCase
     {
         $db = $this->createMock(DataSourceConnection::class);
         $db->method('getDibiConnection')->willReturn($dibi);
-        $db->method('fetchRow')->willReturn(null); // žádný AI profil → default thresholds
         return $db;
     }
 
@@ -114,7 +113,6 @@ class IsdocImportServiceTest extends TestCase
             $db,
             new SchemaValidator(SchemaLoader::default()),
             $enricher,
-            new ExtractedDocumentStatusResolver($db),
             $this->tmpDir,
         );
     }
@@ -180,7 +178,7 @@ class IsdocImportServiceTest extends TestCase
 
     // ── Úspěšný import ──────────────────────────────────────────────────────
 
-    public function testSuccessfulImportWritesAnalysisExtractedAndStates(): void
+    public function testSuccessfulImportWritesAnalysisWithProposalAndStates(): void
     {
         $files = [
             $this->storedAttachment(500, 'faktura.pdf', '%PDF-fake', 'application/pdf'),
@@ -195,7 +193,8 @@ class IsdocImportServiceTest extends TestCase
         $result = $this->service($this->makeDb($dibi))->tryImport(self::MESSAGE_NDX, $files);
 
         $this->assertTrue($result);
-        $this->assertCount(2, $this->inserts);
+        // Jediný insert — návrh žije na řádku analýzy, žádná extracted tabulka.
+        $this->assertCount(1, $this->inserts);
 
         [$analysesTable, $analysis] = $this->inserts[0];
         $this->assertSame('core_mail_message_analyses', $analysesTable);
@@ -204,27 +203,18 @@ class IsdocImportServiceTest extends TestCase
         $this->assertSame('isdoc', $analysis['model_name']);
         $this->assertSame('6.0.1', $analysis['model_version']);
         $this->assertSame('isdoc', $analysis['prompt_version']);
+        $this->assertSame('invoiceReceived', $analysis['proposed_type']);
         $this->assertSame(1.0, $analysis['confidence']);
         $this->assertNull($analysis['profile']);
         $this->assertNull($analysis['backend']);
         $this->assertArrayNotHasKey('cost_usd', $analysis);
         $this->assertArrayNotHasKey('tokens_input', $analysis);
-        $this->assertSame(1, $analysis['extracted_document_count']);
+        $this->assertArrayNotHasKey('extracted_document_count', $analysis);
         $this->assertSame(5, $analysis['created_by']);
 
-        [$extractedTable, $extracted] = $this->inserts[1];
-        $this->assertSame('core_mail_extracted_documents', $extractedTable);
-        $this->assertSame(self::MESSAGE_NDX, $extracted['message']);
-        $this->assertSame(909, $extracted['analysis']);
-        $this->assertSame('invoiceReceived', $extracted['doc_type']);
-        $this->assertSame('[501]', $extracted['source_attachments']);
-        $this->assertSame(1.0, $extracted['confidence']);
-        // Bez enrichmentu nemá řádek ourCode → strop D7 sráží na pending_review
-        $this->assertSame(ExtractedDocumentDocument::STATUS_PENDING_REVIEW, $extracted['status']);
-
-        $canonical = json_decode((string) $extracted['extracted_json'], true);
+        $canonical = json_decode((string) $analysis['canonical_json'], true);
         $this->assertSame('isdoc', $canonical['source']['kind']);
-        $this->assertSame(self::MESSAGE_NDX, $canonical['source']['mailMessage']);
+        $this->assertSame(self::MESSAGE_NDX, $canonical['source']['message']);
         $this->assertSame('FV-2026-0042', $canonical['docNumber']);
         $this->assertSame('att:501', $canonical['attachments'][0]['ref']);
         $this->assertSame('faktura.isdoc', $canonical['attachments'][0]['filename']);
@@ -242,7 +232,7 @@ class IsdocImportServiceTest extends TestCase
         $this->assertSame(['docState' => 20, 'docStateMain' => 2], $this->updates[2][1]);
     }
 
-    public function testEnrichmentFillsOurCodeAndKeepsReadyToApply(): void
+    public function testEnrichmentFillsOurCodeInCanonical(): void
     {
         $files = [
             $this->storedAttachment(501, 'faktura.isdoc', $this->fixture('invoice_min.isdoc'), 'application/xml'),
@@ -260,15 +250,13 @@ class IsdocImportServiceTest extends TestCase
         $result = $this->service($this->makeDb($dibi), $enricher)->tryImport(self::MESSAGE_NDX, $files);
 
         $this->assertTrue($result);
-        $extracted = $this->inserts[1][1];
-        $this->assertSame(ExtractedDocumentDocument::STATUS_READY_TO_APPLY, $extracted['status']);
-
-        $canonical = json_decode((string) $extracted['extracted_json'], true);
+        $canonical = json_decode((string) $this->inserts[0][1]['canonical_json'], true);
         $this->assertSame('SRV-TEST', $canonical['rows'][0]['item']['ourCode']);
         $this->assertSame('cz-110', $canonical['rows'][0]['vat']['code']);
+        $this->assertSame('historyExactRaw', $canonical['_resolve']['rows'][0]['enrichment']['matchedBy']);
     }
 
-    public function testCreditNoteProducesCreditNoteExtracted(): void
+    public function testCreditNoteProducesCreditNoteProposal(): void
     {
         $files = [
             $this->storedAttachment(502, 'dobropis.isdoc', $this->fixture('credit_note.isdoc'), 'application/xml'),
@@ -278,7 +266,7 @@ class IsdocImportServiceTest extends TestCase
         $result = $this->service($this->makeDb($dibi))->tryImport(self::MESSAGE_NDX, $files);
 
         $this->assertTrue($result);
-        $this->assertSame('creditNote', $this->inserts[1][1]['doc_type']);
+        $this->assertSame('creditNote', $this->inserts[0][1]['proposed_type']);
     }
 
     // ── Guard a ochrana ručních zásahů ──────────────────────────────────────
@@ -411,24 +399,25 @@ class IsdocImportServiceTest extends TestCase
         $result = $this->service($this->makeDb($dibi))->tryImport(self::MESSAGE_NDX, $files);
 
         $this->assertTrue($result);
-        $this->assertSame('[501]', $this->inserts[1][1]['source_attachments']);
+        $canonical = json_decode((string) $this->inserts[0][1]['canonical_json'], true);
+        $this->assertSame('att:501', $canonical['attachments'][0]['ref']);
     }
 
-    public function testTwoIsdocAttachmentsProduceTwoExtractedDocuments(): void
+    public function testTwoIsdocAttachmentsGoToAiQueue(): void
     {
+        // Zpráva má nejvýše jeden dokumentový návrh (D1) — víc ISDOC
+        // dokumentů deterministicky rozhodnout nejde, AI vybere primární.
         $files = [
             $this->storedAttachment(501, 'faktura.isdoc', $this->fixture('invoice_min.isdoc'), 'application/xml'),
             $this->storedAttachment(502, 'dobropis.isdoc', $this->fixture('credit_note.isdoc'), 'application/xml'),
         ];
 
         $dibi = $this->makeDibi($this->messageRow());
-        $result = $this->service($this->makeDb($dibi))->tryImport(self::MESSAGE_NDX, $files);
+        $dibi->expects($this->never())->method('begin');
 
-        $this->assertTrue($result);
-        $this->assertCount(3, $this->inserts); // 1× analysis + 2× extracted
-        $this->assertSame(2, $this->inserts[0][1]['extracted_document_count']);
-        $this->assertSame('invoiceReceived', $this->inserts[1][1]['doc_type']);
-        $this->assertSame('creditNote', $this->inserts[2][1]['doc_type']);
+        $this->assertFalse($this->service($this->makeDb($dibi))->tryImport(self::MESSAGE_NDX, $files));
+        $this->assertSame([], $this->inserts);
+        $this->assertSame([], $this->updates);
     }
 
     public function testExceptionDuringWriteRollsBackAndReturnsFalse(): void
@@ -443,5 +432,185 @@ class IsdocImportServiceTest extends TestCase
         $dibi->expects($this->once())->method('rollback');
 
         $this->assertFalse($this->service($this->makeDb($dibi))->tryImport(self::MESSAGE_NDX, $files));
+    }
+
+    // ── Embedded ISDOC v PDF + dedup identitou (Fáze D) ─────────────────────
+
+    /**
+     * Service s podvrženými embedded canonicaly — seam přes protected
+     * extractEmbeddedCandidates (reálná extrakce vyžaduje pdfdetach + PDF
+     * s /EmbeddedFiles; extrakční vrstvu kryje degradační test níže).
+     *
+     * @param list<array<string, mixed>> $embedded canonicaly per PDF příloha
+     */
+    private function serviceWithEmbedded(DataSourceConnection $db, array $embedded): IsdocImportService
+    {
+        return new class(
+            $db,
+            new SchemaValidator(SchemaLoader::default()),
+            null,
+            $this->tmpDir,
+            null,
+            $embedded,
+        ) extends IsdocImportService {
+            /** @param list<array<string, mixed>> $embeddedCanonicals */
+            public function __construct(
+                DataSourceConnection $db,
+                SchemaValidator $schemaValidator,
+                ?RowHistoryEnricher $enricher,
+                string $dsPath,
+                ?\Shipard\Module\Core\Exchange\Isdoc\IsdocReader $reader,
+                private readonly array $embeddedCanonicals,
+            ) {
+                parent::__construct($db, $schemaValidator, $enricher, $dsPath, $reader);
+            }
+
+            protected function extractEmbeddedCandidates(int $messageNdx, array $file): array
+            {
+                return $this->embeddedCanonicals;
+            }
+        };
+    }
+
+    /** @return array<string, mixed> */
+    private function parsedCanonical(string $fixtureName): array
+    {
+        return new \Shipard\Module\Core\Exchange\Isdoc\IsdocReader()
+            ->fromXmlString($this->fixture($fixtureName));
+    }
+
+    public function testEmbeddedIsdocInPdfImportsWithCarrierAttachment(): void
+    {
+        $files = [
+            $this->storedAttachment(500, 'faktura.pdf', '%PDF-fake', 'application/pdf'),
+        ];
+
+        $dibi = $this->makeDibi($this->messageRow());
+        $service = $this->serviceWithEmbedded(
+            $this->makeDb($dibi),
+            [$this->parsedCanonical('invoice_min.isdoc')],
+        );
+
+        $this->assertTrue($service->tryImport(self::MESSAGE_NDX, $files));
+        $this->assertCount(1, $this->inserts);
+
+        $canonical = json_decode((string) $this->inserts[0][1]['canonical_json'], true);
+        // Embedded je transientní — canonical odkazuje na nosné PDF,
+        // kind original (strojová forma je uvnitř), ne structured.
+        $this->assertSame('att:500', $canonical['attachments'][0]['ref']);
+        $this->assertSame('faktura.pdf', $canonical['attachments'][0]['filename']);
+        $this->assertSame('original', $canonical['attachments'][0]['kind']);
+        $this->assertSame('invoiceReceived', $this->inserts[0][1]['proposed_type']);
+    }
+
+    public function testDuplicateIdentityPrefersStandaloneAttachment(): void
+    {
+        // Táž faktura jako samostatná .isdoc příloha i embedded v PDF
+        // (shodné UUID) → dedup na jeden doklad, preferuje se samostatná
+        // příloha; přílohy zprávy nedotčeny, druhý návrh nevzniká.
+        $files = [
+            $this->storedAttachment(500, 'faktura.pdf', '%PDF-fake', 'application/pdf'),
+            $this->storedAttachment(501, 'faktura.isdoc', $this->fixture('invoice_min.isdoc'), 'application/xml'),
+        ];
+
+        $dibi = $this->makeDibi($this->messageRow());
+        $service = $this->serviceWithEmbedded(
+            $this->makeDb($dibi),
+            [$this->parsedCanonical('invoice_min.isdoc')],
+        );
+
+        $this->assertTrue($service->tryImport(self::MESSAGE_NDX, $files));
+        $this->assertCount(1, $this->inserts);
+
+        $canonical = json_decode((string) $this->inserts[0][1]['canonical_json'], true);
+        $this->assertSame('att:501', $canonical['attachments'][0]['ref']);
+        $this->assertSame('structured', $canonical['attachments'][0]['kind']);
+    }
+
+    public function testTwoDistinctIdentitiesFromPdfGoToAiQueue(): void
+    {
+        // Dvě odlišné identity (faktura + dobropis embedded v jednom PDF)
+        // → větev se celá vzdá, AI vybere primární dokument.
+        $files = [
+            $this->storedAttachment(500, 'balik.pdf', '%PDF-fake', 'application/pdf'),
+        ];
+
+        $dibi = $this->makeDibi($this->messageRow());
+        $dibi->expects($this->never())->method('begin');
+        $service = $this->serviceWithEmbedded(
+            $this->makeDb($dibi),
+            [
+                $this->parsedCanonical('invoice_min.isdoc'),
+                $this->parsedCanonical('credit_note.isdoc'),
+            ],
+        );
+
+        $this->assertFalse($service->tryImport(self::MESSAGE_NDX, $files));
+        $this->assertSame([], $this->inserts);
+    }
+
+    public function testEmbeddedFailingSchemaIsIgnored(): void
+    {
+        // Vadný embedded (schéma) se ignoruje a pokračuje se zbytkem —
+        // tady zbytek není, takže větev bez importu končí false.
+        $files = [
+            $this->storedAttachment(500, 'faktura.pdf', '%PDF-fake', 'application/pdf'),
+        ];
+
+        $broken = $this->parsedCanonical('invoice_min.isdoc');
+        $broken['docType'] = ''; // minLength 1 → schema issue
+
+        $dibi = $this->makeDibi($this->messageRow());
+        $dibi->expects($this->never())->method('begin');
+        $service = $this->serviceWithEmbedded($this->makeDb($dibi), [$broken]);
+
+        $this->assertFalse($service->tryImport(self::MESSAGE_NDX, $files));
+        $this->assertSame([], $this->inserts);
+    }
+
+    public function testMissingPdfdetachDegradesGracefully(): void
+    {
+        // Chybějící binárka → embedded detekce vypnutá (reálná exec cesta,
+        // exit 127), intake neselže, zpráva zůstává v AI frontě.
+        $files = [
+            $this->storedAttachment(500, 'faktura.pdf', '%PDF-fake', 'application/pdf'),
+        ];
+
+        $dibi = $this->makeDibi($this->messageRow());
+        $dibi->expects($this->never())->method('begin');
+
+        $service = new class(
+            $this->makeDb($dibi),
+            new SchemaValidator(SchemaLoader::default()),
+            null,
+            $this->tmpDir,
+        ) extends IsdocImportService {
+            protected string $pdfdetachBin = 'shpd-nonexistent-pdfdetach';
+        };
+
+        $this->assertFalse($service->tryImport(self::MESSAGE_NDX, $files));
+        $this->assertSame([], $this->inserts);
+    }
+
+    public function testPdfDetectionPositiveAndCandidateUnion(): void
+    {
+        $this->assertTrue(IsdocImportService::isPdfAttachment(
+            ['name' => 'faktura.pdf', 'mime_type' => 'application/octet-stream'],
+        ));
+        $this->assertTrue(IsdocImportService::isPdfAttachment(
+            ['name' => 'faktura.bin', 'mime_type' => 'application/pdf'],
+        ));
+        $this->assertFalse(IsdocImportService::isPdfAttachment(
+            ['name' => 'data.xml', 'mime_type' => 'text/xml'],
+        ));
+        $this->assertTrue(IsdocImportService::isPotentialCandidate(
+            ['name' => 'faktura.pdf', 'mime_type' => 'application/pdf'],
+        ));
+        $this->assertTrue(IsdocImportService::isPotentialCandidate(
+            ['name' => 'faktura.isdoc', 'mime_type' => 'application/octet-stream'],
+        ));
+        $this->assertFalse(IsdocImportService::isPotentialCandidate(
+            ['name' => 'message.eml', 'mime_type' => 'message/rfc822'],
+        ));
     }
 }

@@ -17,24 +17,37 @@ v repu není zdroj pravdy pro běžící DS.
 | `prompt_version` | SemVer (`v1.0.0`) — manuálně bumpuj při netriviální změně promptu |
 | `prompt_template` | Vlastní text promptu pro analyzer |
 | `output_schema` | JSON Schema, proti kterému analyzer validuje výstup providera |
-| `supported_doc_types` | JSON pole klíčů z `core.mail.extractedDocTypes` |
-| `confidence_thresholds` | `{"ready": 0.9, "review": 0.6}` — řídí mapping confidence → status extrahovaného dokumentu |
+| `supported_doc_types` | JSON pole klíčů z `core.mail.primaryTypes` |
+| `confidence_thresholds` | `{"ready": 0.9, "review": 0.6}` — prahy runtime confidence pásem návrhu (`ready`/`review`/`low`, počítá `AnalysisConfidenceResolver`; pásmo se nikam nepersistuje) |
 
 Audit běhu: každý `core_mail_message_analyses` row si propíše `profile_ndx`,
 `backend_ndx` a `prompt_version`, takže historie je auditovatelná i po pozdějších
 změnách profilu.
 
-## Default prompt (v3.2.0)
+## Default prompt (v4.0.0)
 
-Od `v2.0.0` AI vrací data přímo v kanonickém **`shpd.docs.document.v1`**
-formátu (viz [`docs/exchange-format.md`](../../../../docs/exchange-format.md))
-v poli `documents[].extracted_json`. Předchozí ad-hoc shape (`supplier.ico`,
-`invoice_number`, `vat_breakdown[]`, `line_items[]` …) byl nahrazen
-canonical strukturou, aby `core.exchange` Applier mohl výstup uložit bez
-další transformační vrstvy. Od `v3.0.0` vrací registry typy (smlouvy,
-pojistky, nabídky, revize, úřední písemnosti) ve formátu
-**`shpd.registry.document.v1`** — cíl je Spisovna (`base.registry`),
-apply jde přes `RegistryApplier`.
+Od `v4.0.0` je analýza **message-centrická**
+([tasks/mail-message-centric.md](../../../../tasks/mail-message-centric.md)
+D1/D11): analyzer zpracovává zprávu **jako celek** — subject, tělo
+i přílohy jsou jeden kontext, tělo zprávy je plnohodnotný zdroj dat
+(platební instrukce, faktura přímo v textu, úřední obsah). Výstup:
+
+- **právě jedna `message_classification`** (`{primary_type, confidence}`)
+  — povinná, server ji vynucuje (422),
+- **nejvýše jeden `document`** — *primární* dokument zprávy. Kritérium
+  primárnosti: business dokument, kvůli kterému zpráva přišla
+  (faktura > smlouva > obchodní podmínky a doprovodné přílohy),
+- ostatní nálezy jako volitelné **`secondary_findings`**
+  (`{type, note}` — typ z enum primary_type + krátká poznámka), nikdy
+  druhý `document`.
+
+Data vrací přímo v kanonickém formátu v poli `document.extracted_json`
+(viz [`docs/exchange-format.md`](../../../../docs/exchange-format.md)):
+**`shpd.docs.document.v1`** pro faktury/dobropisy/účtenky,
+**`shpd.registry.document.v1`** pro registry typy (smlouvy, pojistky,
+nabídky, revize, úřední písemnosti) — cíl je Spisovna (`base.registry`),
+apply jde přes `RegistryApplier`. Data téhož dokumentu z více zdrojů
+(PDF + tělo e-mailu) se slučují.
 
 Klíčové pokyny v promptu:
 
@@ -43,53 +56,68 @@ Klíčové pokyny v promptu:
   ISO 3166-1 alpha-2 lowercase (`cz`).
 - `selfParty` vždy `"customer"` (jsme příjemce přijaté faktury).
 - `source.kind` vždy `"aiExtraction"`, `source.promptVersion` vždy
-  shodná s `prompt_version` profilu (`v3.2.0`).
+  shodná s `prompt_version` profilu (`v4.0.0`).
 - VAT kódy v řádcích jsou klíče z `world.vat.{country}.vatCodes`
   cfgItem (`cz-110`, `cz-111`, …) — ne sazby v procentech.
 - `totals.totalRounding` = zaokrouhlení celkové částky se znaménkem
   (dolů = záporné); zaokrouhlení nikdy nepatří jako položkový řádek
   do `rows`.
-- Když žádná příloha není dokladem, vrať `documents: []`.
+- `document.doc_type` nikdy `other` — když zpráva žádný doklad ani
+  dokument nenese, vrať `document: null` a klasifikaci `other`.
 
 Plný prompt v [`profiles/default_czech_invoices.jsonc`](../profiles/default_czech_invoices.jsonc)
 sekce `prompt_template`.
 
 ## Output schema
 
-JSON Schema **draft-2020-12** (od `v2.0.0`; dřív draft-07). Wrapper:
+JSON Schema **draft-2020-12** (od `v2.0.0`; dřív draft-07). Wrapper (v4):
 
 ```json
 {
   "type": "object",
-  "required": ["overall_confidence", "documents"],
+  "required": ["overall_confidence", "message_classification"],
   "additionalProperties": false,
   "properties": {
     "overall_confidence": { "type": "number", "minimum": 0, "maximum": 1 },
     "message_classification": { /* primary_type + confidence, enum enabled typů */ },
-    "documents": {
+    "secondary_findings": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["doc_type", "source_attachment_ndxs", "confidence", "extracted_json"],
-        "properties": {
-          "doc_type": { "enum": ["invoiceReceived", "creditNote", "contract", "insurance", "quotation", "certificate", "official"] },
-          "source_attachment_ndxs": { "type": "array", "items": { "type": "integer", "minimum": 0 } },
-          "confidence": { "type": "number" },
-          "extracted_json": {
-            "oneOf": [
-              { /* inline shpd.docs.document.v1 schema */ },
-              { /* inline shpd.registry.document.v1 schema */ }
-            ]
+        "required": ["type", "note"],
+        "properties": { "type": { "type": "string" }, "note": { "type": "string" } }
+      }
+    },
+    "document": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["doc_type", "confidence", "extracted_json"],
+          "properties": {
+            "doc_type": { "enum": ["invoiceReceived", "creditNote", "contract", "insurance", "quotation", "certificate", "official"] },
+            "confidence": { "type": "number" },
+            "extracted_json": {
+              "oneOf": [
+                { /* inline shpd.docs.document.v1 schema */ },
+                { /* inline shpd.registry.document.v1 schema */ }
+              ]
+            }
           }
         }
-      }
+      ]
     }
   }
 }
 ```
 
-**`extracted_json` je od `v3.0.0` oneOf dvou inline kopií** — struktura se
-volí podle **targetu** typu dokumentu (cfgItem `core.mail.extractedDocTypes`):
+Pole `documents[]` a `source_attachment_ndxs` z kontraktu **v4 zanikla**
+(přílohy návrhu = všechny obsahové přílohy zprávy; `extracted_documents`
+v `POST /result` server odmítá 422). Názvy polí jsou přesně dle kontraktu
+— analyzer nic nepřejmenovává.
+
+**`extracted_json` je oneOf dvou inline kopií** — struktura se volí podle
+**targetu** typu dokumentu (cfgItem `core.mail.primaryTypes`):
 
 - target `docs` (faktury, dobropisy) →
   `modules/core/exchange/schemas/shpd.docs.document.v1.json`,
@@ -113,21 +141,23 @@ Plné schéma viz [`profiles/default_czech_invoices.jsonc`](../profiles/default_
 
 ### Přidání nového typu dokumentu
 
-1. Přidej klíč do `core.mail.extractedDocTypes`
-   ([config/extractedDocTypes.jsonc](../config/extractedDocTypes.jsonc))
+1. Přidej klíč do `core.mail.primaryTypes`
+   ([config/primaryTypes.jsonc](../config/primaryTypes.jsonc))
    včetně `target` (`docs` / `registry`; registry typy navíc `docKind`
-   z `base.registry.docKinds`) a párový klíč do `primaryTypes.jsonc`.
+   z `base.registry.docKinds`) — jediná klasifikační osa, interpretuje
+   helper `PrimaryTypes`.
 2. V profilu rozšiř `supported_doc_types` (JSON pole klíčů).
 3. V `prompt_template` doplň pravidla pro nový typ — u registry typů
    **vyjmenuj přesné názvy `kindFields`** dle `docKinds.fields`
    (nesoulad = tiché prázdno, hlídá `RegistrySchemaDriftTest` +
    `ProfileSchemaDriftTest::testPromptEnumeratesKindFieldsExactly`).
-4. V `output_schema.documents[].doc_type` enum přidej nový klíč a zvol
-   větev `extracted_json.oneOf` podle **targetu** typu: docs typy jedou
+4. V `output_schema` přidej nový klíč do enum `document.doc_type`
+   (i do enum `message_classification.primary_type`) a zvol větev
+   `extracted_json.oneOf` podle **targetu** typu: docs typy jedou
    přes `shpd.docs.document.v1` (polymorfní dle `docType`, bez per-typ
    branche), registry typy přes `shpd.registry.document.v1` (nový druh =
    nová if/then větev `kindFields` v registry schématu + kopie embedu).
-5. Bumpni `prompt_version` (`v3.1.0` → `v3.2.0`).
+5. Bumpni `prompt_version` (`v4.0.0` → `v4.1.0`).
 
 ### Vlastní profil pro jiný jazyk / účel
 
@@ -138,10 +168,11 @@ Plné schéma viz [`profiles/default_czech_invoices.jsonc`](../profiles/default_
 
 ### Tweak thresholdů
 
-`confidence_thresholds` řídí, do jakého stavu (`ready_to_apply` / `pending_review`
-/ `low_confidence`) se po extrakci dostane dokument. Přísnější DS by mohlo mít
-`{"ready": 0.95, "review": 0.75}`. Změna je živá — projeví se až u nových
-analýz.
+`confidence_thresholds` řídí runtime pásmo návrhu (`ready` / `review` /
+`low`) — pásmo se počítá při každém čtení (`AnalysisConfidenceResolver`),
+nikam se nepersistuje. Přísnější DS by mohlo mít
+`{"ready": 0.95, "review": 0.75}`. Změna je živá — projeví se okamžitě
+i u otevřených návrhů.
 
 ### Iterativní ladění promptu
 
@@ -169,9 +200,10 @@ default profil):
 
    Sync ani reload **nepřepisují** `name`, `is_default`, `is_active`,
    `backend` — admin si je může lokálně upravit.
-5. V UI klikni "Znova analyzovat" na vybraných zprávách — vznikne nový run,
-   staré `extracted_documents` se označí `superseded`, applied/rejected
-   zůstávají. Případně re-queue přes SQL.
+5. V UI klikni "Znova analyzovat" na vybraných zprávách — vznikne nový
+   běh a stane se automaticky aktuálním návrhem (historie se nemění,
+   žádný supersede krok). Zprávu s aplikovaným návrhem a živým targetem
+   reanalyzovat nejde — nejdřív unapply. Případně re-queue přes SQL.
 6. Porovnej kvalitu před / po (`message_analyses.prompt_version` umožňuje
    filtrovat).
 
@@ -185,6 +217,23 @@ backendů (`default` Anthropic Claude Sonnet pro běžné případy, druhý back
 s Claude Opus pro náročné dokumenty) a přiřadit je různým profilům.
 
 ## Changelog promptu
+
+### v4.0.0 (2026-08)
+
+Message-centrický kontrakt v4
+([tasks/mail-message-centric.md](../../../../tasks/mail-message-centric.md)
+D1/D11) — big-bang, bez kompatibilní mezivrstvy:
+
+- Analyzuj zprávu **jako celek** — subject + body + přílohy jsou jeden
+  kontext; tělo zprávy je plnohodnotný zdroj dat.
+- Top-level `documents[]` → **`document`** (0..1) — primární dokument
+  zprávy (faktura > smlouva > doprovodné přílohy); data téhož dokumentu
+  z více zdrojů se slučují.
+- `message_classification` je **povinná** (dřív volitelná).
+- Nové pole `secondary_findings` — informativní seznam dalších nálezů
+  `{type, note}`; nikdy druhý `document`.
+- `source_attachment_ndxs` zaniklo (přílohy návrhu = všechny obsahové
+  přílohy zprávy).
 
 ### v3.2.0 (2026-07-23)
 

@@ -512,6 +512,25 @@ class AnalysisControllerTest extends TestCase
         $this->assertSame(404, $this->statusOf($response));
     }
 
+    public function testReanalyzeRejectsAppliedProposalWithLiveTarget(): void
+    {
+        // Zpráva s target_row > 0 a poslední úspěšnou analýzou resolution=40
+        // (aplikováno) → 409, nejdřív unapply (jinak osiří lineage).
+        $db = $this->createMock(DataSourceConnection::class);
+        $dibi = $this->createMock(\Dibi\Connection::class);
+        $dibi->method('fetch')->willReturnOnConsecutiveCalls(
+            new \Dibi\Row(['id' => 42, 'docState' => 40, 'analysis_state' => 30, 'target_row' => 777]),
+            new \Dibi\Row(['resolution' => 40]),
+        );
+        $db->method('getDibiConnection')->willReturn($dibi);
+
+        $ctrl = $this->controller($db);
+        $response = $ctrl->reanalyze($this->userAuth(), $this->request('POST', '/x'), 42);
+
+        $this->assertSame(409, $this->statusOf($response));
+        $this->assertSame('INVALID_STATE', $response->getPayload()['error']['code']);
+    }
+
     // -------------------------------------------------------------------
     // /failed
     // -------------------------------------------------------------------
@@ -533,15 +552,35 @@ class AnalysisControllerTest extends TestCase
     // -------------------------------------------------------------------
 
     // -------------------------------------------------------------------
-    // /apply + /reject
+    // /apply + /reject + /unapply (message-centricky)
+    //
+    // Guardy jádra (MessageProposalApplier) nad mockovanou DB — plné apply
+    // cesty pokrývá AnalysisControllerExchangeTest.
     // -------------------------------------------------------------------
 
-    public function testApplyExtractedRejectsAnonymous(): void
+    /**
+     * DB mock pro message-centrické akce: fetchRow routuje podle názvu
+     * tabulky (první %n argument) na řádek zprávy / poslední úspěšné analýzy.
+     */
+    private function dbForProposal(?array $message, ?array $analysis): DataSourceConnection
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturnCallback(
+            static fn(string $sql, ...$args) => match ($args[0] ?? null) {
+                'core_mail_incoming_messages' => $message,
+                'core_mail_message_analyses'  => $analysis,
+                default                       => null,
+            },
+        );
+        return $db;
+    }
+
+    public function testApplyMessageRejectsAnonymous(): void
     {
         $db = $this->createMock(DataSourceConnection::class);
         $ctrl = $this->controller($db);
 
-        $response = $ctrl->applyExtracted(
+        $response = $ctrl->applyMessage(
             AuthContext::anonymous(),
             $this->request('POST', '/x'),
             42,
@@ -550,56 +589,127 @@ class AnalysisControllerTest extends TestCase
         $this->assertSame(401, $this->statusOf($response));
     }
 
-    public function testApplyExtractedReturns404WhenNotFound(): void
+    public function testApplyMessageReturns404WhenNotFound(): void
     {
-        $db = $this->createMock(DataSourceConnection::class);
-        $db->method('fetchRow')->willReturn(null);
+        $db = $this->dbForProposal(null, null);
 
         $ctrl = $this->controller($db);
-        $response = $ctrl->applyExtracted($this->userAuth(), $this->request('POST', '/x'), 42);
+        $response = $ctrl->applyMessage($this->userAuth(), $this->request('POST', '/x'), 42);
 
         $this->assertSame(404, $this->statusOf($response));
+        $this->assertSame('NOT_FOUND', $response->getPayload()['error']['code']);
     }
 
-    public function testApplyExtractedRejectsAlreadyApplied(): void
+    public function testApplyMessageRejectsAlreadyResolved(): void
     {
-        $db = $this->createMock(DataSourceConnection::class);
-        $db->method('fetchRow')->willReturn(['id' => 42, 'message' => 5, 'status' => 40]); // already applied
+        // Poslední analýza už nese verdikt (resolution=50) → 409.
+        $db = $this->dbForProposal(
+            ['id' => 42, 'docState' => 20, 'analysis_state' => 30, 'target_row' => null],
+            ['id' => 9, 'resolution' => 50, 'canonical_json' => '{}', 'proposed_type' => 'invoiceReceived'],
+        );
 
         $ctrl = $this->controller($db);
-        $response = $ctrl->applyExtracted($this->userAuth(), $this->request('POST', '/x'), 42);
+        $response = $ctrl->applyMessage($this->userAuth(), $this->request('POST', '/x'), 42);
 
         $this->assertSame(409, $this->statusOf($response));
         $this->assertSame('INVALID_STATE', $response->getPayload()['error']['code']);
     }
 
-    public function testRejectExtractedRequiresReason(): void
+    public function testApplyMessageRejectsTrashedMessage(): void
+    {
+        $db = $this->dbForProposal(
+            ['id' => 42, 'docState' => 90, 'analysis_state' => 30, 'target_row' => null],
+            null,
+        );
+
+        $ctrl = $this->controller($db);
+        $response = $ctrl->applyMessage($this->userAuth(), $this->request('POST', '/x'), 42);
+
+        $this->assertSame(409, $this->statusOf($response));
+        $this->assertSame('INVALID_STATE', $response->getPayload()['error']['code']);
+    }
+
+    public function testRejectMessageRequiresReason(): void
     {
         $db = $this->createMock(DataSourceConnection::class);
         $ctrl = $this->controller($db);
 
-        $response = $ctrl->rejectExtracted(
+        $response = $ctrl->rejectMessage(
             $this->userAuth(),
             $this->request('POST', '/x', [], []),
             42,
         );
 
         $this->assertSame(422, $this->statusOf($response));
-        $this->assertSame('VALIDATION_ERROR', $response->getPayload()['error']['code']);
+        $payload = $response->getPayload();
+        $this->assertSame('VALIDATION_ERROR', $payload['error']['code']);
+        $this->assertSame('reason', $payload['error']['details'][0]['field']);
     }
 
-    public function testRejectExtractedRequiresNonEmptyReason(): void
+    public function testRejectMessageRequiresNonEmptyReason(): void
     {
         $db = $this->createMock(DataSourceConnection::class);
         $ctrl = $this->controller($db);
 
-        $response = $ctrl->rejectExtracted(
+        $response = $ctrl->rejectMessage(
             $this->userAuth(),
             $this->request('POST', '/x', [], ['reason' => '   ']),
             42,
         );
 
         $this->assertSame(422, $this->statusOf($response));
+    }
+
+    public function testRejectMessageWritesResolutionRejected(): void
+    {
+        $db = $this->dbForProposal(
+            ['id' => 42, 'docState' => 20, 'analysis_state' => 30, 'target_row' => null],
+            ['id' => 9, 'resolution' => null, 'canonical_json' => '{}', 'proposed_type' => 'invoiceReceived'],
+        );
+        // writeRejectResolution: analysis update + message update v jedné tx.
+        $fluent = $this->createMock(\Dibi\Fluent::class);
+        $fluent->method('__call')->willReturnSelf();
+        $fluent->method('execute');
+        $dibi = $this->createMock(\Dibi\Connection::class);
+        $dibi->method('update')->willReturn($fluent);
+        $db->method('getDibiConnection')->willReturn($dibi);
+
+        $ctrl = $this->controller($db);
+        $response = $ctrl->rejectMessage(
+            $this->userAuth(),
+            $this->request('POST', '/x', [], ['reason' => 'není faktura']),
+            42,
+        );
+
+        $this->assertSame(200, $this->statusOf($response));
+        $data = $response->getPayload()['data'];
+        $this->assertSame(42, $data['messageNdx']);
+        $this->assertSame(9, $data['analysisNdx']);
+        $this->assertSame(50, $data['resolution']);
+    }
+
+    public function testUnapplyMessageReturns404WhenMessageMissing(): void
+    {
+        $db = $this->dbForProposal(null, null);
+
+        $ctrl = $this->controller($db);
+        $response = $ctrl->unapplyMessage($this->userAuth(), $this->request('POST', '/x'), 42);
+
+        $this->assertSame(404, $this->statusOf($response));
+    }
+
+    public function testUnapplyMessageRejectsWhenLatestProposalNotApplied(): void
+    {
+        $db = $this->dbForProposal(
+            ['id' => 42, 'docState' => 20, 'analysis_state' => 30, 'target_row' => null],
+            ['id' => 9, 'resolution' => null, 'canonical_json' => '{}', 'proposed_type' => 'invoiceReceived'],
+        );
+
+        $ctrl = $this->controller($db);
+        $response = $ctrl->unapplyMessage($this->userAuth(), $this->request('POST', '/x'), 42);
+
+        $this->assertSame(409, $this->statusOf($response));
+        $this->assertSame('INVALID_STATE', $response->getPayload()['error']['code']);
     }
 
     // -------------------------------------------------------------------
@@ -730,7 +840,8 @@ class AnalysisControllerTest extends TestCase
         $this->assertContains('creditNote', $types); // enabled:false typy se tolerují
     }
 
-    public function testResultRequiresModelAndPromptVersion(): void
+    /** DB mock s validním analyzer auth + živou claim pro /result. */
+    private function dbForResult(): DataSourceConnection
     {
         $db = $this->createMock(DataSourceConnection::class);
         $db->method('fetchRow')->willReturnOnConsecutiveCalls(
@@ -742,8 +853,12 @@ class AnalysisControllerTest extends TestCase
                 'expires_at' => date('Y-m-d H:i:s', time() + 300),
             ],
         );
+        return $db;
+    }
 
-        $ctrl = $this->controller($db);
+    public function testResultRequiresModelAndPromptVersion(): void
+    {
+        $ctrl = $this->controller($this->dbForResult());
         $response = $ctrl->result(
             $this->analyzerAuth(),
             $this->request('POST', '/x', ['X-Claim-Token' => 'ct_abc'], []),
@@ -752,5 +867,158 @@ class AnalysisControllerTest extends TestCase
 
         $this->assertSame(422, $this->statusOf($response));
         $this->assertSame('VALIDATION_ERROR', $response->getPayload()['error']['code']);
+    }
+
+    public function testResultRejectsExtractedDocumentsField(): void
+    {
+        // Kontrakt v4: pole extracted_documents se nepřijímá (D11 big-bang).
+        $ctrl = $this->controller($this->dbForResult());
+        $response = $ctrl->result(
+            $this->analyzerAuth(),
+            $this->request('POST', '/x', ['X-Claim-Token' => 'ct_abc'], [
+                'model_name' => 'claude',
+                'prompt_version' => 'v4',
+                'extracted_documents' => [],
+                'message_classification' => ['primary_type' => 'invoiceReceived'],
+            ]),
+            42,
+        );
+
+        $this->assertSame(422, $this->statusOf($response));
+        $payload = $response->getPayload();
+        $this->assertSame('VALIDATION_ERROR', $payload['error']['code']);
+        $this->assertSame('extracted_documents', $payload['error']['details'][0]['field']);
+    }
+
+    public function testResultRequiresMessageClassification(): void
+    {
+        // Kontrakt v4: message_classification s neprázdným primary_type je povinná.
+        $ctrl = $this->controller($this->dbForResult());
+        $response = $ctrl->result(
+            $this->analyzerAuth(),
+            $this->request('POST', '/x', ['X-Claim-Token' => 'ct_abc'], [
+                'model_name' => 'claude',
+                'prompt_version' => 'v4',
+            ]),
+            42,
+        );
+
+        $this->assertSame(422, $this->statusOf($response));
+        $payload = $response->getPayload();
+        $this->assertSame('VALIDATION_ERROR', $payload['error']['code']);
+        $this->assertSame('message_classification', $payload['error']['details'][0]['field']);
+    }
+
+    public function testResultRequiresNonEmptyPrimaryType(): void
+    {
+        $ctrl = $this->controller($this->dbForResult());
+        $response = $ctrl->result(
+            $this->analyzerAuth(),
+            $this->request('POST', '/x', ['X-Claim-Token' => 'ct_abc'], [
+                'model_name' => 'claude',
+                'prompt_version' => 'v4',
+                'message_classification' => ['primary_type' => '  '],
+            ]),
+            42,
+        );
+
+        $this->assertSame(422, $this->statusOf($response));
+        $this->assertSame('message_classification', $response->getPayload()['error']['details'][0]['field']);
+    }
+
+    public function testResultStoresCanonicalAndProposedType(): void
+    {
+        // Happy path bez SchemaValidatoru (passthrough): document.extracted_json
+        // se uloží do canonical_json, doc_type do proposed_type, confidence
+        // návrhu do confidence; INSERT nemá extracted_document_count a
+        // response 201 nese jen analysis_ndx.
+        $db = $this->dbForResult();
+
+        $fluent = $this->createMock(\Dibi\Fluent::class);
+        $fluent->method('__call')->willReturnSelf();
+        $fluent->method('execute');
+
+        $insertValues = null;
+        $dibi = $this->createMock(\Dibi\Connection::class);
+        $dibi->method('insert')->willReturnCallback(
+            function (string $table, array $values) use (&$insertValues, $fluent) {
+                if ($table === 'core_mail_message_analyses') {
+                    $insertValues = $values;
+                }
+                return $fluent;
+            },
+        );
+        $dibi->method('update')->willReturn($fluent);
+        $dibi->method('getInsertId')->willReturn(123);
+        $db->method('getDibiConnection')->willReturn($dibi);
+
+        $ctrl = $this->controller($db);
+        $response = $ctrl->result(
+            $this->analyzerAuth(),
+            $this->request('POST', '/x', ['X-Claim-Token' => 'ct_abc'], [
+                'model_name' => 'claude',
+                'prompt_version' => 'v4',
+                'overall_confidence' => 0.5,
+                'message_classification' => ['primary_type' => 'invoiceReceived', 'confidence' => 0.97],
+                'document' => [
+                    'doc_type' => 'invoiceReceived',
+                    'confidence' => 0.83,
+                    'extracted_json' => ['docNumber' => 'FV-1'],
+                ],
+            ]),
+            42,
+        );
+
+        $this->assertSame(201, $this->statusOf($response));
+        $data = $response->getPayload()['data'];
+        $this->assertSame(123, $data['analysis_ndx']);
+        $this->assertArrayNotHasKey('extracted_document_ndxs', $data);
+
+        $this->assertNotNull($insertValues);
+        $this->assertSame('invoiceReceived', $insertValues['proposed_type']);
+        $this->assertSame(0.83, $insertValues['confidence']); // document.confidence, ne overall
+        $this->assertSame(['docNumber' => 'FV-1'], json_decode((string) $insertValues['canonical_json'], true));
+        $this->assertArrayNotHasKey('extracted_document_count', $insertValues);
+    }
+
+    public function testResultWithoutDocumentStoresOverallConfidence(): void
+    {
+        $db = $this->dbForResult();
+
+        $fluent = $this->createMock(\Dibi\Fluent::class);
+        $fluent->method('__call')->willReturnSelf();
+        $fluent->method('execute');
+
+        $insertValues = null;
+        $dibi = $this->createMock(\Dibi\Connection::class);
+        $dibi->method('insert')->willReturnCallback(
+            function (string $table, array $values) use (&$insertValues, $fluent) {
+                if ($table === 'core_mail_message_analyses') {
+                    $insertValues = $values;
+                }
+                return $fluent;
+            },
+        );
+        $dibi->method('update')->willReturn($fluent);
+        $dibi->method('getInsertId')->willReturn(124);
+        $db->method('getDibiConnection')->willReturn($dibi);
+
+        $ctrl = $this->controller($db);
+        $response = $ctrl->result(
+            $this->analyzerAuth(),
+            $this->request('POST', '/x', ['X-Claim-Token' => 'ct_abc'], [
+                'model_name' => 'claude',
+                'prompt_version' => 'v4',
+                'overall_confidence' => 0.42,
+                'message_classification' => ['primary_type' => 'other', 'confidence' => 0.9],
+            ]),
+            42,
+        );
+
+        $this->assertSame(201, $this->statusOf($response));
+        $this->assertNotNull($insertValues);
+        $this->assertNull($insertValues['canonical_json']);
+        $this->assertNull($insertValues['proposed_type']);
+        $this->assertSame(0.42, $insertValues['confidence']);
     }
 }

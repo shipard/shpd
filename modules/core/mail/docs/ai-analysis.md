@@ -1,15 +1,19 @@
-# Fáze 3a: AI analýza došlých zpráv
+# AI analýza došlých zpráv
 
 Tento dokument popisuje architekturu, datový tok a životní cyklus AI analýzy
-v modulu `core.mail`. Spec: [tasks/mail-phase3a.md](../../../../tasks/mail-phase3a.md).
+v modulu `core.mail`. Specs: [tasks/mail-phase3a.md](../../../../tasks/mail-phase3a.md)
+(protokol, Fáze 3a) a [tasks/mail-message-centric.md](../../../../tasks/mail-message-centric.md)
+(message-centrický model, který extrahované dokumenty nahradil).
 
 ## Cíl
 
-Z došlé zprávy v `core_mail_incoming_messages` strojově extrahovat business
-dokumenty (přijatá faktura, dobropis, …) a nabídnout je uživateli k review/použití.
-Vlastní extrakci dělá **externí analyzer daemon** (samostatný repozitář
-`ai_analyzer`, vyvíjeno v paralelní Fázi 3b). Shipard je server-of-record:
-spravuje frontu, claimy, ukládá výsledky, řídí review workflow.
+Z došlé zprávy v `core_mail_incoming_messages` strojově vytěžit **nejvýše
+jeden dokumentový návrh** (přijatá faktura, dobropis, registry dokument…)
+a nabídnout ho uživateli k review/použití. Jednotkou analýzy je **celá
+zpráva** — subject + body + přílohy jsou jeden kontext (D1). Vlastní
+extrakci dělá **externí analyzer daemon** (samostatný repozitář
+`ai_analyzer`). Shipard je server-of-record: spravuje frontu, claimy,
+ukládá výsledky, řídí review workflow.
 
 ## Pull-based protokol
 
@@ -40,11 +44,12 @@ ortogonálně k workflow stavu `docState` — viz sekce "Stavy zprávy".
 3. analyzer GET /{ndx}/payload          ← subject, body, metadata příloh
 4. analyzer GET /{ndx}/attachments/.../content   ← streamuje binární obsah
 5. analyzer ➜ provider (Anthropic, ...) ← analyzer.provider extrahuje, vrátí JSON
-6. analyzer POST /{ndx}/result          ← uloží message_analyses + extracted_documents,
-                                            uvolní claim, analysis_state →30; zpracuje
-                                            volitelnou message_classification; vznikl-li
-                                            aspoň jeden extracted doc a zpráva je stále
-                                            v Nové, docState 10→20 (K řešení)
+6. analyzer POST /{ndx}/result          ← uloží běh do message_analyses (canonical_json,
+                                            proposed_type, confidence), uvolní claim,
+                                            analysis_state →30; zpracuje povinnou
+                                            message_classification; nese-li běh validní
+                                            dokumentový návrh a zpráva je stále v Nové,
+                                            docState 10→20 (K řešení)
 ```
 
 Při chybě:
@@ -66,11 +71,13 @@ serializuje souběžné claim() přes stejnou zprávu. MariaDB nepodporuje parti
 unique index `(message) WHERE released=0`, invariant "max jedna aktivní claim
 per zpráva" tedy vynucuje aplikační kód v claim controlleru.
 
-`POST /result` v jedné transakci: `INSERT message_analyses` → `INSERT
-extracted_documents` (po jednom, status podle confidence vs profile thresholds)
-→ `UPDATE claims SET released=1` → `UPDATE messages SET analysis_state=30`
-(+ podmíněný `docState 10→20` a zápis klasifikace). Při selhání se vše
-rollbackuje.
+`POST /result` v jedné transakci: `INSERT message_analyses` (status=2,
+`canonical_json` = validovaný + obohacený canonical návrhu, `proposed_type`,
+`confidence`; nevalidní canonical → forenzní wrapper `{_validationError, …}`
+do `canonical_json`, běh se uloží a 201 se vrací) → `UPDATE claims SET
+released=1` → `UPDATE messages SET analysis_state=30` (+ podmíněný
+`docState 10→20` a zápis klasifikace). Při selhání se vše rollbackuje.
+Kontrakt v4 detailně: [docs/mail/api-contract.md §9.5](../../../../docs/mail/api-contract.md).
 
 ## Šifrování API klíčů backendů
 
@@ -97,13 +104,14 @@ Zpráva má **dvě ortogonální osy** (spec
 
 **Workflow `docState`** (`core.mail.docStatesIncoming`) — stav pro uživatele,
 srovnaný se zbytkem aplikace. Pipeline na něj sahá jediným místem: result
-s dokumenty posune Novou na K řešení.
+s dokumentovým návrhem posune Novou na K řešení. Do Hotovo zprávu posouvá
+verdikt uživatele (apply/reject návrhu).
 
 | Kód | cs | mainState | viewGroup | Poznámka |
 |---|---|---|---|---|
 | 10 | Nová | 1 | active | výchozí |
-| 20 | K řešení | 2 | active | nastavuje result s dokumenty, nebo ručně |
-| 40 | Hotovo | 3 | active | readOnly; auto-transition po review všech docs |
+| 20 | K řešení | 2 | active | nastavuje result s dokumentovým návrhem, nebo ručně |
+| 40 | Hotovo | 3 | active | readOnly; nastavuje verdikt (apply i reject), unapply vrací na 20 |
 | 80 | Archiv | 4 | archive | readOnly |
 | 90 | Smazáno | 5 | trash | readOnly |
 
@@ -137,23 +145,33 @@ v `ds-upgrade` (`AIAnalyzerProvisioner::fixQueuedArchivedMessages` —
 jen docState 80/90; Hotovo do opravy nepatří, tam mohla zpráva dojít
 legálně workflow cestou s dokončenou analýzou).
 
-## Stavy extrahovaných dokumentů
+## Dokumentový návrh a verdikt (resolution)
 
-`core.mail.extractedDocStates`:
+Zpráva má **nejvýše jeden otevřený dokumentový návrh**: canonical poslední
+úspěšné analýzy (`canonical_json` na řádku `core_mail_message_analyses`,
+konvence `MAX(analyzed_at), status=2` — žádný flag). Typ návrhu nese
+`proposed_type` (klíč `core.mail.primaryTypes`) — historický záznam běhu,
+na rozdíl od mutable `message.primary_type` se po zápisu nemění.
 
-| Kód | ID | Význam |
-|---|---|---|
-| 10 | `ready_to_apply` | confidence ≥ 0.9 — UI nabízí jen "Použít" |
-| 20 | `pending_review` | 0.6 ≤ confidence < 0.9 — default po extrakci |
-| 30 | `low_confidence` | confidence < 0.6 — vyžaduje pečlivý review |
-| 40 | `applied` | uživatel potvrdil (entita vznikne v Fázi 3c) |
-| 50 | `rejected` | uživatel zamítl jako false positive |
-| 60 | `superseded` | nahrazen novou analýzou (po reanalyze) |
-| 70 | `ai_failed` | AI nemohla extrahovat (nečitelné PDF apod.) |
+**Verdikt uživatele** se zapisuje na řádek analýzy — sloupec `resolution`
+(cfgItem `core.mail.analysisResolutions`):
 
-Mapping confidence → status řídí pole `confidence_thresholds` v profilu:
-`{"ready": 0.9, "review": 0.6}`. Status navíc stropuje pokrytí řádků —
-viz „Obohacení řádků z historie" níže.
+| Kód | Význam |
+|---|---|
+| NULL | otevřený návrh / běh bez návrhu |
+| 40 | `applied` — návrh byl použit, cílová entita existuje |
+| 50 | `rejected` — uživatel zamítl (`rejected_reason` povinný) |
+
+K verdiktu patří `resolved_at` / `resolved_by`. Kódy jsou záměrně shodné
+s někdejšími stavy extrahovaných dokumentů (tabulka
+`core_mail_extracted_documents` zanikla — D2).
+
+**Confidence pásma nejsou perzistentní stav.** Pásmo `ready` / `review` /
+`low` počítá za běhu `AnalysisConfidenceResolver` z `confidence` běhu vs.
+thresholds profilu (`confidence_thresholds`, fallback
+`{"ready": 0.9, "review": 0.6}`), se stropem podle pokrytí řádků — viz
+„Obohacení řádků z historie" níže. Používá ho dashboard (kind karty),
+detail zprávy (badge) a preview; nikam se nezapisuje.
 
 ## Obohacení řádků z historie (Row History Enrichment)
 
@@ -172,7 +190,7 @@ Klíčová rozhodnutí (D1–D9, detailně `tasks/row-history-enrichment.md`):
 | Historie | řádky partnera + doc_type, docState IN (20, 40), item živý (10/40/80), nejnovější první, limit 200 |
 | Match popisu | exact raw → exact normalizovaný (bez číslic/interpunkce) → Jaccard token-set ≥ 0.6; první zásah vyhrává |
 | Dominantní položka | úroveň 3, fallback bez textového signálu (`tasks/enrichment-dominant-item.md`): historie ≥ 10 řádků a jedna položka ≥ 80 % z nich → `historyDominantItem` / `low`, trojice z nejnovějšího výskytu. Guard přes částku: total řádku > max historických `total_price` dominantní položky → bez návrhu (chybějící total řádku → guard se neuplatní) |
-| Běží | `/result` (persist do `extracted_json`), `previewExtracted` (fresh), `apply` (fresh, před merge userActions) |
+| Běží | `/result` (persist do `canonical_json`), `GET /_mail/messages/{ndx}/preview` (fresh), `apply` (fresh, před merge userActions) |
 | Selhání | nikdy neshodí endpoint — log + neobohacený canonical |
 
 Fresh běh je idempotentní: vlastní dřívější návrhy (poznané podle
@@ -198,12 +216,14 @@ i pro nenapárované a přeskočené řádky:
 }
 ```
 
-**Strop statusu (D7):** `/result` sníží `ready_to_apply` na
-`pending_review`, pokud po enrichmentu existuje item řádek bez
-`item.ourCode`, **nebo** řádek doplněný enrichmentem s confidence `low`
-(dominance nemá textový signál — uživatel návrh potvrzuje, viz
-`tasks/enrichment-dominant-item.md` D5). Kontační řádky (`acc.record` /
-`accSide`) položku nemají validně — stropu se netýkají.
+**Strop pásma (D7):** `AnalysisConfidenceResolver::capBandByRowCoverage`
+sníží runtime pásmo `ready` na `review`, pokud po enrichmentu existuje
+item řádek bez `item.ourCode`, **nebo** řádek doplněný enrichmentem
+s confidence `low` (dominance nemá textový signál — uživatel návrh
+potvrzuje, viz `tasks/enrichment-dominant-item.md` D5). Kontační řádky
+(`acc.record` / `accSide`) položku nemají validně — stropu se netýkají.
+Strop se počítá za běhu při každém čtení (feed, detail, preview) — nic
+se nepersistuje.
 
 **Zpětný zápis supplier codes (D8):** `SupplierCodeCaptureHandler`
 (registrace `documentEventHandlers` v module.jsonc) při přechodu dokladu
@@ -228,76 +248,114 @@ a [tasks/mail-invoice-rounding.md](../../../../tasks/mail-invoice-rounding.md).
 Platí i pro ISDOC větev (`PayableRoundingAmount`) — apply jde přes týž
 applier.
 
-## Auto-transition 20 → 40
+## Message-centrické akce (apply / reject / unapply / preview)
 
-Když uživatel přes UI přepne všechny extracted documents do `applied/rejected/
-superseded` (a žádný nezůstane v `ready/pending/low`), zpráva sama přejde
-z docState=20 (K řešení) na 40 (Hotovo). Trigger: explicit hook
-`ExtractedDocumentDocument::afterPersist()` — běží uvnitř save transakce, takže
-přechod je atomický. Stav `ai_failed` přechodu nebrání (admin se může rozhodnout
-zprávu zavřít i s neúspěšnou extrakcí). Undo apply (unapply) reconciluje
-reverzně: 40 → 20 (`reconcileMessageAfterUnapply`).
+Akce nad dokumentovým návrhem operují nad **poslední úspěšnou analýzou**
+zprávy; jádro je HTTP-agnostická služba `MessageProposalApplier` (sdílí ji
+HTTP controller i MCP nástroj `mail_draft_document`), výsledek nese
+`ProposalApplyOutcome`. Guardy: zpráva mimo Archiv/Koš, `analysis_state=30`,
+otevřený návrh (`resolution IS NULL`). Endpointy (detailně
+[docs/mail/api-contract.md §9.8–9.12](../../../../docs/mail/api-contract.md)):
+
+- **`GET /_mail/messages/{ndx}/preview`** — read-only náhled návrhu pro
+  review modal: canonical + fresh enrichment + `applier->preview()`
+  (registry větev vrací canonical přímo). Přílohy v response = **všechny**
+  obsahové přílohy zprávy (D10).
+- **`POST /_mail/messages/{ndx}/apply`** — routing dle `proposed_type`
+  běhu přes `PrimaryTypes::targetFor()`: docs → exchange `DocumentApplier`
+  se server-side injection `source.kind='aiExtraction'` +
+  `source.message={ndx}`; registry → `RegistryApplier` (záznam dostává
+  všechny obsahové přílohy zprávy, D5). Obě větve zapíšou obě strany
+  lineage atomicky (doklad `source_message` ↔ zpráva `target_table_id` /
+  `target_row`); pak verdikt `resolution=40` + zpráva → Hotovo (z 10 i 20).
+  Recovery/idempotence: obsazený `message.target_row` = opakovaný apply
+  jen dokončí zbytek (nevzniká duplicitní entita).
+- **`POST /_mail/messages/{ndx}/reject`** — povinný `reason`;
+  `resolution=50` + `rejected_reason` + `resolved_at/by`; zpráva → Hotovo
+  (symetricky s apply, uživatel může následně Koš/Archiv).
+- **`POST /_mail/messages/{ndx}/unapply`** — reverz apply (bez UI, MCP/API
+  záchranná brzda): cílová entita → Koš (docs guard: stále nedotčený
+  Koncept, jinak 409 `DOC_ADVANCED`), `message.target_*` → NULL,
+  `resolution/resolved_*` → NULL, zpráva 40 → 20.
 
 ## Klasifikace typu zprávy (message_classification)
 
-Od promptu **v2.2.0** analyzer v prvním kroku klasifikuje zprávu jako celek
-a vrací volitelné top-level pole `message_classification: {primary_type,
-confidence}` v `POST /result` (viz api-contract §9.5); protože stávající
-analyzer daemon nové pole nepromotuje, server ho čte i z
-`analysis_json.message_classification`. Server v transakci
-resultu zapíše `primary_type` + `primary_type_source='ai'` — **jen pokud**
-`primary_type_source != 'user'` (ruční volba uživatele má vždy přednost;
-nastavuje ji dirty-change detekce v `IncomingMessageDocument::beforeSave`).
-Neznámý typ = warning + ignore, uložení výsledku se nikdy nerozbije.
+Analyzer v prvním kroku klasifikuje zprávu jako celek a vrací top-level
+pole `message_classification: {primary_type, confidence}` v `POST /result`
+— od kontraktu v4 **povinné** (422 při absenci; prompt v4 ho vždy
+generuje). Server v transakci resultu zapíše `primary_type` +
+`primary_type_source='ai'` — **jen pokud** `primary_type_source != 'user'`
+(ruční volba uživatele má vždy přednost; nastavuje ji dirty-change detekce
+v `IncomingMessageDocument::beforeSave`). Neznámý typ = warning + ignore,
+uložení výsledku se nikdy nerozbije.
 
-Dokumenty s `doc_type='other'` do `documents` nepatří — ne-faktura vrací
-`documents: []` + klasifikaci `other`; dashboard pak emituje info kartu
-„Není faktura" s akcemi Koš/Archiv (viz docs/dashboard.md).
+Dokument s `doc_type='other'` neexistuje — ne-faktura vrací
+`document: null` + klasifikaci `other`; dashboard pak emituje info kartu
+„Není faktura" s akcemi Koš/Archiv (viz docs/dashboard.md). Ostatní nálezy
+vedle primárního dokumentu (smlouva v příloze faktury apod.) vrací analyzer
+jako informativní `secondary_findings` (`{type, note}`, D7) — žijí jen
+v `analysis_json`, žádné entity, žádný stav; UI je ukazuje jako hint na
+kartě a v detailu zprávy.
 
-Enum typů v promptu i output_schema je zatím natvrdo (`invoiceReceived` |
-`other`); generování z `primaryTypes.jsonc` je future work.
+Enum typů v promptu i output_schema je zatím natvrdo; generování
+z `primaryTypes.jsonc` je future work.
 
 ## Deterministický ISDOC import
 
-Když došlá zpráva nese v příloze ISDOC (`.isdoc`, `.isdocx` = ZIP obal, nebo
-XML s root elementem `{http://isdoc.cz/*}Invoice`), extrahuje se doklad
-**deterministicky parserem** místo AI analýzy — ISDOC nese autoritativní
-strukturovaná data, LLM extrakce je u něj zbytečná. Spec:
-[tasks/mail-isdoc-import.md](../../../../tasks/mail-isdoc-import.md).
+Když došlá zpráva nese ISDOC, extrahuje se doklad **deterministicky
+parserem** místo AI analýzy — ISDOC nese autoritativní strukturovaná data,
+LLM extrakce je u něj zbytečná. Specs:
+[tasks/mail-isdoc-import.md](../../../../tasks/mail-isdoc-import.md),
+[tasks/mail-message-centric.md](../../../../tasks/mail-message-centric.md)
+Fáze D (embedded + dedup).
+
+**Detekce kandidátů** (`IsdocImportService`): samostatné přílohy `.isdoc` /
+`.isdocx` (ZIP obal) / XML s root elementem `{http://isdoc.cz/*}Invoice`,
+**plus ISDOC embedded v PDF** (PDF/A-3 `/EmbeddedFiles`) — extrakce
+server-side při intake přes `pdfdetach` (poppler-utils). Chybí-li binárka,
+embedded detekce se vypne s jednorázovým warningem do logu, intake nikdy
+neselže; přítomnost `pdfdetach` kontroluje `shpd-server doctor`. Embedded
+ISDOC je **transientní** — nevytváří se z něj příloha zprávy (nosné PDF na
+zprávě je); do canonicalu jde `attachments[]` odkaz na nosné PDF
+(kind `original`, ne `structured` — strojová forma je uvnitř).
 
 Datový tok: `MailController::receiveIncoming` po commitu intake transakce
-zavolá `IsdocImportService::tryImport` (lazy wiring — bez ISDOC kandidáta
-se service vůbec nestaví). Service:
+zavolá `IsdocImportService::tryImport` (lazy wiring — bez kandidáta se
+service vůbec nestaví). Service:
 
-1. rozparsuje každou ISDOC přílohu (`IsdocReader`, modul `core.exchange`)
-   na canonical `shpd.docs.document.v1` se `source.kind='isdoc'`
-   (příloha samotná se v canonicalu propíše jako
-   `attachments[].kind='structured'` — strojově čitelný formát),
-2. zvaliduje proti schema a obohatí řádky z historie
+1. rozparsuje všechny kandidáty (`IsdocReader`, modul `core.exchange`) na
+   canonical `shpd.docs.document.v1` se `source.kind='isdoc'`,
+2. **deduplikuje identitou** (D8): klíč = element `UUID`, fallback kompozit
+   (`ID` dokladu + DIČ/IČ výstavce + datum vystavení). Shodná identita →
+   jeden doklad, preference zdroje samostatná `.isdoc` příloha > embedded
+   z PDF (deterministické pořadí); přílohy zprávy nedotčeny. Po dedupu
+   **≥ 2 odlišné identity** → větev se celá vzdá → AI fronta (zpráva má
+   nejvýše jeden návrh, D1 — AI vybere primární + `secondary_findings`),
+3. zvaliduje proti schema a obohatí řádky z historie
    (`RowHistoryEnricher`, stejné jako `/result`),
-3. ve vlastní transakci s `FOR UPDATE` guardem (`analysis_state IN (0, 10)`
+4. ve vlastní transakci s `FOR UPDATE` guardem (`analysis_state IN (0, 10)`
    — závod s analyzerem prohrává import) zapíše:
    - záznam do `core_mail_message_analyses` (`status=2`,
      `model_name='isdoc'`, `prompt_version='isdoc'`, `model_version`
-     z `@version` XML, cost/tokens NULL, `confidence=1.0`),
-   - extracted dokument per ISDOC (`doc_type` dle `DocumentType`:
-     1 → `invoiceReceived`, 2 → `creditNote`; confidence 1.0; status přes
-     sdílený `ExtractedDocumentStatusResolver` — typicky `ready_to_apply`,
-     bez `item.ourCode` `pending_review`),
+     z `@version` XML, cost/tokens NULL, `confidence=1.0`,
+     `canonical_json` = canonical návrhu, `proposed_type` dle
+     `DocumentType`: 1 → `invoiceReceived`, 2 → `creditNote`) —
+     žádná jiná entita nevzniká, návrh čeká na verdikt jako u AI,
    - message: `analysis_state=30`, `primary_type='invoiceReceived'`
      + `primary_type_source='isdoc'` (jen pokud source není `user`),
      docState 10→20 jen pokud je stále 10.
 
 Vztah k frontě: úspěšně naimportovaná zpráva se v AI frontě **vůbec
 neobjeví** (analysis_state přeskočí 10 → 30); analyzer daemon nevyžaduje
-změny. Jakýkoli vadný ISDOC / nepodporovaný `DocumentType` (zálohové
-faktury apod.) = celá větev se pro zprávu vzdá a zpráva jde normálně do AI
-fronty (warning v logu, příjem pošty nikdy neselže). Import funguje i v DS
-bez AI backendu/profilu (thresholds fallback `{ready: 0.9, review: 0.6}`).
+změny. Vadná **samostatná** ISDOC příloha / nepodporovaný `DocumentType`
+(zálohové faktury apod.) = celá větev se pro zprávu vzdá a zpráva jde
+normálně do AI fronty (warning v logu, příjem pošty nikdy neselže); vadný
+**embedded** ISDOC se naopak jen ignoruje a pokračuje se zbytkem kandidátů.
+Import funguje i v DS bez AI backendu/profilu (thresholds fallback
+`{ready: 0.9, review: 0.6}`).
 
 „Znova analyzovat" (30 → 10) zůstává únikovou cestou k AI, kdyby ISDOC
-výsledek nestačil — např. mix „ISDOC faktura + jiná faktura jen v PDF",
-kterou import záměrně neřeší.
+výsledek nestačil.
 
 ## Reanalýza
 
@@ -306,29 +364,36 @@ detail panelu, jen když `analysis_state ∈ {30, 70}` a zpráva není v Archivu
 Volitelný `profile_override_ndx` v body. Logika:
 
 1. Validuj `analysis_state` (30 nebo 70) a `docState NOT IN (80, 90)`.
-2. Validuj profile_override (pokud zadán) — musí existovat a být `is_active=1`.
-3. UPDATE existing extracted_documents WHERE status IN (10, 20, 30, 70) → `60`
-   (superseded). Statusy 40 (applied) a 50 (rejected) **zůstávají** beze změny.
+2. Guard aplikovaného návrhu: zprávu, jejíž poslední úspěšná analýza má
+   `resolution=40` a živý target (`target_row` obsazený), reanalyzovat
+   nelze — 409, nejdřív unapply.
+3. Validuj profile_override (pokud zadán) — musí existovat a být `is_active=1`.
 4. UPDATE message: `needs_reanalysis=1`, `profile_override`, `analysis_state→10`.
    `docState` se nemění.
 
+Historie analýz se nemění — „aktuální návrh" je implicitně poslední
+úspěšný běh, žádný supersede krok neexistuje (koncept `superseded` zanikl).
+Reanalýza po rejectu je možná — vznikne nový běh s `resolution=NULL`.
 Analyzer při dalším GET /queue zprávu uvidí včetně override profilu.
 
 ## UI detail panelu
 
-`IncomingMessagesViewer` generuje 5 tabů:
+`IncomingMessagesViewer` generuje 4 taby (labely z cfgItem
+`core.mail.viewerDetailLabels`):
 
-1. **Obsah** — subject, sender, body
-2. **Přílohy** — content attachments (bez raw .eml)
-3. **Analýzy** — list běhů z `core_mail_message_analyses` (čas, model, prompt,
-   confidence, počet extracted docs, cost, duration)
-4. **Extrahované dokumenty** (Fáze 3a) — karty s typem, status badge, confidence,
-   summary; akce per dokument: "Zobrazit detail" (modal s raw JSON),
-   "Použít" (POST `/_mail/extracted-documents/{id}/apply`), "Zamítnout" (modal
-   s povinným důvodem, POST `/_mail/extracted-documents/{id}/reject`).
-   Tyto endpointy procházejí přes `ExtractedDocumentDocument::afterPersist`,
-   takže auto-transition zprávy 20→40 funguje atomicky.
-5. **Originál** — raw `.eml` pokud existuje
+1. **Obsah** — subject, sender, body + sekce obsahových příloh (bez raw .eml)
+2. **Analýzy** — historie běhů z `core_mail_message_analyses` (čas, model,
+   prompt, confidence, sloupec **Návrh** ano/ne z `canonical_json IS NOT
+   NULL`, sloupec **Verdikt** z `resolution`, cost, duration)
+3. **Návrh** — dokumentový návrh poslední úspěšné analýzy (nejvýše jeden,
+   D1): jedna karta s typem, confidence pásmem z runtime resolveru (resp.
+   resolution badge u rozhodnutých), summary z canonicalu, hintem
+   `secondary_findings` a akcemi **Použít** (POST
+   `/_mail/messages/{ndx}/apply`), **Zamítnout** (modal s povinným
+   důvodem, POST `/_mail/messages/{ndx}/reject`) a **Zobrazit detail**
+   (review modal nad `GET /_mail/messages/{ndx}/preview`). Bez návrhu
+   prázdný stav s klasifikací zprávy.
+4. **Originál** — raw `.eml` pokud existuje
 
 Řádek vieweru i hlavička detailu zobrazují badge stavu analýzy (label +
 stateStyle z `core.mail.analysisStates`; hodnota 0 se nezobrazuje). Toolbar
@@ -351,7 +416,10 @@ default *se nepřepíše*; admin zachová svůj override.
 
 ## Reference
 
-- [tasks/mail-phase3a.md](../../../../tasks/mail-phase3a.md) — kompletní spec
+- [tasks/mail-phase3a.md](../../../../tasks/mail-phase3a.md) — spec protokolu (Fáze 3a)
+- [tasks/mail-message-centric.md](../../../../tasks/mail-message-centric.md)
+  — message-centrický model (D1–D12): zánik extrahovaných dokumentů,
+  resolution, secondary_findings, lineage
 - [tasks/mail-states-and-classification.md](../../../../tasks/mail-states-and-classification.md)
   — oddělení `analysis_state` od `docState` + klasifikace `primary_type`
 - [tasks/mail-isdoc-import.md](../../../../tasks/mail-isdoc-import.md)

@@ -7,7 +7,7 @@ namespace Shipard\Module\Core\Exchange\Isdoc;
 /**
  * Deterministická konverze ISDOC 6.x (český standard e-fakturace, XML) na
  * canonical `shpd.docs.document.v1`. Čistá funkce soubor/XML → array, žádné
- * DB závislosti — vazby na zprávu/přílohu (source.mailMessage, attachments)
+ * DB závislosti — vazby na zprávu/přílohu (source.message, attachments)
  * doplňuje volající (IsdocImportService).
  *
  * Zásady (tasks/mail-isdoc-import.md):

@@ -762,6 +762,7 @@ class DoctorCommandTest extends TestCase
         $this->assertStringContainsString('Attachment tools', $display);
         $this->assertStringContainsString('✓ pdftocairo (/usr/bin/pdftocairo)', $display);
         $this->assertStringContainsString('✓ pdftotext (/usr/bin/pdftotext)', $display);
+        $this->assertStringContainsString('✓ pdfdetach (/usr/bin/pdfdetach)', $display);
         $this->assertStringContainsString('✓ rsvg-convert (/usr/bin/rsvg-convert)', $display);
         $this->assertStringContainsString('✓ vipsthumbnail (/usr/bin/vipsthumbnail)', $display);
         $this->assertStringContainsString('✓ vips (/usr/bin/vips)', $display);

@@ -46,10 +46,18 @@ Sloupce jsou organizovány do skupin:
 
 | Sloupec | Typ | Popis |
 |---|---|---|
-| `target_table_id` | varchar(100) | Jméno cílové tabulky (např. `economy_docs_issued_invoices_received`) pro business entitu, která ze zprávy vznikla |
+| `target_table_id` | varchar(100) | Jméno cílové tabulky (`docs_core_heads` / `base_registry_documents` / …) pro business entitu, která ze zprávy vznikla |
 | `target_row` | int | ID záznamu v cílové tabulce |
 
-Pár (`target_table_id`, `target_row`) je polymorfní FK — aplikační kód ho kontroluje, DB úroveň nikoli (Shipard nepoužívá FOREIGN KEY).
+Pár (`target_table_id`, `target_row`) je polymorfní FK — aplikační kód ho
+kontroluje, DB úroveň nikoli (Shipard nepoužívá FOREIGN KEY). Plní ho
+**AI apply** dokumentového návrhu pro **oba targety** (docs
+`DocumentApplier::writeLineageTargets`, registry `RegistryApplier`) —
+atomicky v transakci uložení cílové entity — i ruční zařazení do Spisovny.
+Lineage je **obousměrná** (D6 z mail-message-centric): doklad zpětně nese
+`docs_core_heads.source_message` (registry záznam `source_message`).
+Obsazený `target_row` zároveň slouží jako klíč idempotence apply a guard
+reanalýzy; unapply obě strany nuluje.
 
 ### Zdroj (source)
 
@@ -102,6 +110,8 @@ Pár (`target_table_id`, `target_row`) je polymorfní FK — aplikační kód ho
 | `core_attachments_files` | `messages.raw_source_attachment` → `attachments.id` | Originál `.eml` |
 | `core_attachments_files` | přes `table_id + record_id` | Obsahové přílohy zprávy |
 | `base_persons_persons` | `messages.sender_person` → `persons.id` | Odesílatel v CRM |
+| `docs_core_heads` | `heads.source_message` → `messages.id`; dopředně `target_table_id='docs_core_heads'` + `target_row` | Doklad vzniklý apply návrhu (obousměrná lineage) |
+| `base_registry_documents` | `documents.source_message` → `messages.id`; dopředně `target_*` | Záznam Spisovny vzniklý ze zprávy |
 | [core_mail_sender_rules](core_mail_sender_rules.md) | `messages.auto_disposed_by` → `sender_rules.id` | Pravidlo, které zprávu auto-archivovalo |
 
 ## Workflow
@@ -114,9 +124,12 @@ Hotovo 40 / Archiv 80 / Koš 90) a pipeline `analysis_state`. Detailně viz
    `analysis_state = 10` pokud je AI analýza povolená a dostupná, jinak 0
    (importy v Hotovo mají vždy 0).
 2. **AI analýza** — `analysis_state` 10 → 20 → 30/70 (claim/result/failed);
-   `docState` se posouvá jen resultem s dokumenty: 10 → 20 (K řešení).
-3. **Review** — uživatel použije/zamítne extracted docs; po vyřešení všech
-   auto-transition `docState` 20 → 40 (Hotovo). Ze zprávy vznikne business
-   entita, `target_table_id` a `target_row` se naplní.
+   `docState` se posouvá jen resultem s dokumentovým návrhem: 10 → 20
+   (K řešení).
+3. **Verdikt** — uživatel návrh použije (apply) nebo zamítne (reject);
+   obojí zapíše `resolution` na řádek analýzy a přepne zprávu na
+   `docState = 40` (Hotovo). Při apply vznikne business entita a naplní se
+   `target_table_id` / `target_row` (obousměrná lineage, viz Směrování);
+   unapply celý apply vrátí (40 → 20).
 4. **Archivace / smazání** — `docState` → 80 (Archiv) nebo 90 (Koš); obojí
    vyřadí zprávu z fronty analyzeru, `analysis_state` zůstává.

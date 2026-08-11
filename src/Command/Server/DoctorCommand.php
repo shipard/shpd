@@ -21,6 +21,9 @@ class DoctorCommand extends Command
     private const ATTACHMENT_TOOLS = [
         'pdftocairo'    => 'poppler-utils',
         'pdftotext'     => 'poppler-utils',
+        // Embedded ISDOC v PDF (IsdocImportService) — bez binárky detekce
+        // tiše degraduje, doctor na chybějící nástroj upozorní.
+        'pdfdetach'     => 'poppler-utils',
         'rsvg-convert'  => 'librsvg2-bin',
         'vipsthumbnail' => 'libvips-tools',
         'vips'          => 'libvips-tools',

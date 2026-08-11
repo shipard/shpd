@@ -62,23 +62,29 @@ tabulce. Vazba je polymorfní přes `target_table_id` + `target_row` na
 │ core_mail_incoming_messages │   docState = 10 (Nová)
 │ + core_attachments_files    │   obsahové přílohy + raw .eml
 └────────┬────────────────────┘
-         │  zařazení do fronty (Fáze 3)
-         ▼                            20 (V analýze, readOnly)
+         │  zařazení do AI fronty (analysis_state = 10, ortogonální osa)
+         ▼
 ┌──────────────────────────┐
-│  AI analyzer (Fáze 3)    │─→ core_mail_message_analyses
-└────────┬─────────────────┘        (historie pokusů; MAX(analyzed_at) = aktuální)
-         ▼                           30 (Analyzovaná)
+│  AI analyzer             │─→ core_mail_message_analyses
+└────────┬─────────────────┘        (historie běhů; MAX(analyzed_at) = aktuální
+         │                           návrh: canonical_json + proposed_type)
+         ▼                           docState 10 → 20 (K řešení)
 ┌──────────────────────────┐
-│  Uživatel potvrdí       │  target_table_id, target_row → business entita
-│  a vznikne business       │  (např. economy.docs.issued_invoices_received)
-│  entita (manuálně)       │           40 (Zpracovaná)
-└──────────────────────────┘
+│  Uživatel použije návrh  │  target_table_id, target_row → business entita
+│  (apply) a vznikne       │  (docs_core_heads / base_registry_documents);
+│  business entita         │  doklad zpětně nese source_message
+└──────────────────────────┘           docState → 40 (Hotovo)
 ```
 
-Výjimka z AI fronty: zpráva s ISDOC přílohou se po intake zpracuje
-**deterministicky** (`IsdocImportService`) — extracted dokument vznikne
-parserem s confidence 1.0, `analysis_state` přeskočí frontu rovnou na 30
-a v tabu Analýzy je záznam `model_name='isdoc'`. Vadný ISDOC → zpráva jde
+Zpráva má **nejvýše jeden dokumentový návrh** — canonical poslední úspěšné
+analýzy; verdikt uživatele (Použít/Zamítnout) se zapisuje na řádek analýzy.
+Detaily: [ai-analysis.md](ai-analysis.md).
+
+Výjimka z AI fronty: zpráva s ISDOC (samostatná příloha nebo ISDOC
+embedded v PDF) se po intake zpracuje **deterministicky**
+(`IsdocImportService`) — dokumentový návrh vznikne parserem s confidence
+1.0, `analysis_state` přeskočí frontu rovnou na 30 a v tabu Analýzy je
+záznam `model_name='isdoc'` s canonical návrhem. Vadný ISDOC → zpráva jde
 normálně do AI fronty. Viz [ai-analysis.md](ai-analysis.md), sekce
 „Deterministický ISDOC import".
 
@@ -117,14 +123,16 @@ Definován v [`config/docStatesIncoming.jsonc`](../config/docStatesIncoming.json
 | docState | Název | viewGroup | Přechody do |
 |---|---|---|---|
 | 10 | Nová | active | 20, 40, 80, 90 |
-| 20 | V analýze | active (readOnly) | 30, 10 — nastavuje pouze AI pipeline |
-| 30 | Analyzovaná | active | 40, 10, 80, 90 |
-| 40 | Zpracovaná | active (readOnly) | 80, 90 |
+| 20 | K řešení | active | 40, 10, 80, 90 |
+| 40 | Hotovo | active (readOnly) | 80, 90, 10 |
 | 80 | Archiv | archive | 10, 90 |
-| 90 | Trash | trash | 10 |
+| 90 | Smazáno | trash | 10 |
 
-Stav 20 je nepřístupný z UI — manipuluje s ním výhradně AI pipeline (Fáze 3).
-Do té doby jsou stavy 20 a 30 využívány pouze v testech a seedu.
+Je to čistě uživatelský workflow — status AI analýzy žije v ortogonálním
+sloupci `analysis_state` (cfgItem `core.mail.analysisStates`). Pipeline na
+`docState` sahá jediným místem (result s dokumentovým návrhem: 10 → 20);
+do Hotovo zprávu posouvá verdikt nad návrhem (apply/reject). Viz
+[ai-analysis.md](ai-analysis.md), sekce „Stavy zprávy".
 
 ## 6. Komponenty
 
@@ -138,7 +146,8 @@ PHP třída extends `TableViewer`. Layout řádku 5-slotový:
 - `i2` — badge s názvem primárního typu (barva dle mapy)
 - `t3` — `[mailbox.name]` + první řádek body_plain (preview, zkrácené)
 
-Detail panel: 4 taby — Obsah / Přílohy / Analýzy / Originál.
+Detail panel: 4 taby — Obsah (včetně sekce příloh) / Analýzy / Návrh /
+Originál (labely z cfgItem `core.mail.viewerDetailLabels`).
 
 Fulltext hledá v `subject`, `sender_email`, `sender_name`, `body_plain`.
 

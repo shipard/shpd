@@ -194,18 +194,6 @@
             "reference": "core_mail_incoming_messages",
             "group": "source"
         },
-        {
-            "id": "extracted_doc",
-            "name": "Extraction",
-            "name:cs": "Extrakce",
-            "name:en": "Extraction",
-            "type": "int",
-            "nullable": true,
-            "reference": "core_mail_extracted_documents",
-            "system": true,
-            "group": "source"
-        },
-
         // --- notes ---
 
         {

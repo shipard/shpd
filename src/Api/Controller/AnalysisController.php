@@ -28,12 +28,9 @@ use Shipard\Module\Core\Exchange\Schema\SchemaLoader;
 use Shipard\Module\Core\Exchange\Schema\SchemaValidator;
 use Shipard\Module\Core\Ai\AIBackendDocument;
 use Shipard\Module\Core\Mail\AIAnalyzerProvisioner;
-use Shipard\Module\Core\Mail\ExtractedApplyOutcome;
-use Shipard\Module\Core\Mail\ExtractedDocTypes;
-use Shipard\Module\Core\Mail\ExtractedDocumentApplier;
-use Shipard\Module\Core\Mail\ExtractedDocumentDocument;
-use Shipard\Module\Core\Mail\ExtractedDocumentStatusResolver;
-use Shipard\Module\Core\Mail\StatusWriteResult;
+use Shipard\Module\Core\Mail\MessageProposalApplier;
+use Shipard\Module\Core\Mail\PrimaryTypes;
+use Shipard\Module\Core\Mail\ProposalApplyOutcome;
 use Shipard\Module\Docs\Core\OwnCompanyResolver;
 
 /**
@@ -51,7 +48,6 @@ class AnalysisController
 
     private const MESSAGES_TABLE = 'core_mail_incoming_messages';
     private const ANALYSES_TABLE = 'core_mail_message_analyses';
-    private const EXTRACTED_TABLE = 'core_mail_extracted_documents';
     private const BACKENDS_TABLE = 'core_ai_backends';
     private const PROFILES_TABLE = 'core_mail_ai_profiles';
     private const CLAIMS_TABLE = 'core_mail_analysis_claims';
@@ -82,9 +78,6 @@ class AnalysisController
     private const DEFAULT_LEASE_SECONDS = 300;
     private const MIN_LEASE_SECONDS = 60;
     private const MAX_LEASE_SECONDS = 900;
-
-    /** Sdílená pravidla confidence → status (viz ExtractedDocumentStatusResolver). */
-    private ?ExtractedDocumentStatusResolver $statusResolver = null;
 
     /** Lazy validator registry canonicalu (viz registrySchemaValidator()). */
     private ?SchemaValidator $registrySchemaValidator = null;
@@ -721,13 +714,18 @@ class AnalysisController
     // -------------------------------------------------------------------
 
     /**
-     * Atomicky uloží výsledek analýzy: vytvoří záznam v message_analyses,
-     * pro každý extracted_document vytvoří řádek se status podle confidence
-     * vs profile thresholds, uvolní claim, přepne analysis_state→30.
-     * docState: jen když je zpráva stále v Nové (10) a vznikl aspoň jeden
-     * extracted document → 10→20 (K řešení). Prázdný result docState nemění
-     * (zpráva zůstává v Nové — dashboard řeší karta „Není faktura");
-     * ruční workflow stav pipeline nikdy nepřepisuje. Spec §3.5.
+     * Atomicky uloží výsledek analýzy (kontrakt v4, message-centricky):
+     * vytvoří záznam v message_analyses s canonical návrhem (`document`
+     * 0..1 → canonical_json + proposed_type), uvolní claim, přepne
+     * analysis_state→30. docState: jen když je zpráva stále v Nové (10)
+     * a běh přinesl validní dokument → 10→20 (K řešení). Běh bez dokumentu
+     * docState nemění (zpráva zůstává v Nové — dashboard řeší karta „Není
+     * faktura"); ruční workflow stav pipeline nikdy nepřepisuje.
+     *
+     * `message_classification` je povinná (prompt v4 ji vždy generuje);
+     * pole `extracted_documents` se od v4 nepřijímá (D11 — big-bang, bez
+     * kompatibilní mezivrstvy). `secondary_findings` se strukturálně
+     * nevaliduje — žije jen v analysis_json.
      */
     public function result(AuthContext $auth, Request $request, int $messageNdx): Response
     {
@@ -752,11 +750,29 @@ class AnalysisController
             );
         }
 
-        $extractedDocsInput = is_array($body['extracted_documents'] ?? null)
-            ? $body['extracted_documents']
-            : [];
+        if (array_key_exists('extracted_documents', $body)) {
+            return Response::error(
+                'VALIDATION_ERROR',
+                'extracted_documents is no longer accepted — send document (0..1), contract v4',
+                422,
+                [['field' => 'extracted_documents']],
+            );
+        }
 
-        // Načti profil — pro thresholds
+        $classification = $body['message_classification'] ?? null;
+        if (!is_array($classification)
+            || trim((string) ($classification['primary_type'] ?? '')) === ''
+        ) {
+            return Response::error(
+                'VALIDATION_ERROR',
+                'message_classification with primary_type is required',
+                422,
+                [['field' => 'message_classification']],
+            );
+        }
+
+        $document = is_array($body['document'] ?? null) ? $body['document'] : null;
+
         $profileNdx = isset($body['profile_ndx']) && (int) $body['profile_ndx'] > 0
             ? (int) $body['profile_ndx']
             : null;
@@ -764,14 +780,33 @@ class AnalysisController
             ? (int) $body['backend_ndx']
             : null;
 
-        $thresholds = $this->statusResolver()->thresholdsForProfile($profileNdx);
-
         $dibi = $this->db->getDibiConnection();
         $dibi->begin();
         try {
             $now = date('Y-m-d H:i:s');
 
-            // 1) message_analyses záznam
+            // 1) Canonical návrhu: validace + enrichment. Nevalidní výstup
+            //    dostává forenzní wrapper (dashboard z něj staví chybovou
+            //    kartu), běh se uloží a vrací se 201.
+            $canonicalJson = null;
+            $proposedType = null;
+            $documentValid = false;
+            $docConfidence = null;
+            if ($document !== null) {
+                $proposedType = trim((string) ($document['doc_type'] ?? 'other'));
+                $docConfidence = isset($document['confidence']) ? (float) $document['confidence'] : null;
+                $extractedJson = is_array($document['extracted_json'] ?? null)
+                    ? $document['extracted_json']
+                    : null;
+                [$canonicalJson, $documentValid] = $this->validateAndStoreCanonical(
+                    $extractedJson,
+                    $proposedType,
+                );
+            }
+
+            // 2) message_analyses záznam. `confidence` nese jistotu návrhu
+            //    (document.confidence) — z ní se za běhu počítá pásmo
+            //    ready/review/low; běh bez dokumentu ukládá overall_confidence.
             $dibi->insert(self::ANALYSES_TABLE, [
                 'message' => $messageNdx,
                 'profile' => $profileNdx,
@@ -784,58 +819,18 @@ class AnalysisController
                 'analysis_json' => isset($body['analysis_json'])
                     ? (string) json_encode($body['analysis_json'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
                     : null,
-                'confidence' => isset($body['overall_confidence']) ? (float) $body['overall_confidence'] : null,
+                'canonical_json' => $canonicalJson,
+                'proposed_type' => $proposedType,
+                'confidence' => $docConfidence
+                    ?? (isset($body['overall_confidence']) ? (float) $body['overall_confidence'] : null),
                 'tokens_input' => isset($body['tokens_input']) ? (int) $body['tokens_input'] : null,
                 'tokens_output' => isset($body['tokens_output']) ? (int) $body['tokens_output'] : null,
                 'duration_ms' => isset($body['duration_ms']) ? (int) $body['duration_ms'] : null,
                 'cost_usd' => isset($body['cost_usd']) ? (float) $body['cost_usd'] : null,
-                'extracted_document_count' => count($extractedDocsInput),
                 'created' => $now,
                 'created_by' => $auth->userId,
             ])->execute();
             $analysisNdx = (int) $dibi->getInsertId();
-
-            // 2) extracted_documents — validate each canonical against the
-            //    canonical schema; invalid output is preserved but flagged
-            //    as STATUS_AI_FAILED so UI / reanalyze can deal with it.
-            $extractedNdxs = [];
-            foreach ($extractedDocsInput as $doc) {
-                if (!is_array($doc)) {
-                    continue;
-                }
-                $confidence = isset($doc['confidence']) ? (float) $doc['confidence'] : 0.0;
-
-                $sourceAttachmentNdxs = is_array($doc['source_attachment_ndxs'] ?? null)
-                    ? $doc['source_attachment_ndxs']
-                    : [];
-
-                $extractedJson = is_array($doc['extracted_json'] ?? null)
-                    ? $doc['extracted_json']
-                    : null;
-
-                [$status, $jsonForDb] = $this->validateAndStoreCanonical(
-                    $extractedJson,
-                    $confidence,
-                    $thresholds,
-                    trim((string) ($doc['doc_type'] ?? 'other')),
-                );
-
-                $dibi->insert(self::EXTRACTED_TABLE, [
-                    'message' => $messageNdx,
-                    'analysis' => $analysisNdx,
-                    'doc_type' => trim((string) ($doc['doc_type'] ?? 'other')),
-                    'source_attachments' => json_encode(
-                        array_values(array_map('intval', $sourceAttachmentNdxs)),
-                        JSON_UNESCAPED_UNICODE,
-                    ),
-                    'extracted_json' => $jsonForDb,
-                    'confidence' => $confidence,
-                    'status' => $status,
-                    'created' => $now,
-                    'created_by' => $auth->userId,
-                ])->execute();
-                $extractedNdxs[] = (int) $dibi->getInsertId();
-            }
 
             // 3) Uvolni claim
             $dibi->update(self::CLAIMS_TABLE, [
@@ -851,10 +846,10 @@ class AnalysisController
                 'modified' => $now,
             ])->where('id = %i', $messageNdx)->execute();
 
-            // 5) Workflow: Nová → K řešení, jen když vznikl aspoň jeden
-            // extracted document a uživatel mezitím stav ručně nezměnil
+            // 5) Workflow: Nová → K řešení, jen když běh přinesl validní
+            // dokument a uživatel mezitím stav ručně nezměnil
             // (docState != 10 → nechat být).
-            if ($extractedDocsInput !== []) {
+            if ($documentValid) {
                 $dibi->update(self::MESSAGES_TABLE, [
                     'docState' => self::DOC_STATE_IN_PROGRESS,
                     'docStateMain' => self::DOC_STATE_IN_PROGRESS_MAIN,
@@ -864,7 +859,7 @@ class AnalysisController
                 ->execute();
             }
 
-            // 6) Volitelná AI klasifikace typu zprávy (message_classification).
+            // 6) AI klasifikace typu zprávy (message_classification).
             $this->applyMessageClassification($dibi, $messageNdx, $body);
 
             $dibi->commit();
@@ -875,26 +870,16 @@ class AnalysisController
 
         return Response::success([
             'analysis_ndx' => $analysisNdx,
-            'extracted_document_ndxs' => $extractedNdxs,
         ], 201);
     }
 
-    private function statusResolver(): ExtractedDocumentStatusResolver
-    {
-        return $this->statusResolver ??= new ExtractedDocumentStatusResolver($this->db);
-    }
-
     /**
-     * Zapíše volitelnou AI klasifikaci typu zprávy z `message_classification`
+     * Zapíše AI klasifikaci typu zprávy z `message_classification`
      * (spec tasks/mail-states-and-classification.md §B1). Běží uvnitř
-     * transakce resultu.
+     * transakce resultu. Přítomnost pole vynucuje result() (422) —
+     * kontrakt v4 ho má povinné; fallback čtení z `analysis_json` zůstává
+     * pro robustnost.
      *
-     * Analyzer daemon se kvůli klasifikaci neměnil — tělo /result staví sám
-     * a nové top-level pole neposílá. Model output ale předává celý
-     * v `analysis_json`, takže klasifikaci čteme odtud jako fallback;
-     * top-level pole má přednost (budoucí analyzer ho může promotovat).
-     *
-     * - Klasifikace nikde není (starý prompt) → žádná změna.
      * - Neznámý `primary_type` → warning + ignore; nesmí rozbít uložení
      *   výsledku (žádná 422).
      * - AI nikdy nepřepisuje hodnotu nastavenou uživatelem
@@ -958,43 +943,37 @@ class AnalysisController
     }
 
     /**
-     * Validate a canonical extracted by AI against shpd.docs.document.v1
-     * schema and decide its status. Invalid output is wrapped (for
-     * forensics) and flagged STATUS_AI_FAILED — never rejected outright,
+     * Validate the proposed canonical against shpd.docs.document.v1 schema.
+     * Invalid output is wrapped (for forensics) — never rejected outright,
      * so the user can still see what came out and trigger reanalyze.
      *
-     * Registry targety (dle `extractedDocTypes[doc_type].target`) se
-     * validují proti `shpd.registry.document.v1` a přeskakují enrichment
-     * i row-coverage cap — obojí jsou docs-specifika.
+     * Registry targety (dle `primaryTypes[doc_type].target`) se validují
+     * proti `shpd.registry.document.v1` a přeskakují enrichment
+     * (docs-specifikum). Confidence pásma se nepersistují (D3) — počítá je
+     * za běhu AnalysisConfidenceResolver.
      *
      * @param array<string, mixed>|null $extractedJson  Raw canonical from AI (or null).
-     * @param array{ready: float, review: float} $thresholds
-     * @return array{0: int, 1: ?string}  [status, jsonForDb]
+     * @return array{0: ?string, 1: bool}  [jsonForDb, isValid]
      */
     private function validateAndStoreCanonical(
         ?array $extractedJson,
-        float $confidence,
-        array $thresholds,
         string $docType,
     ): array {
         if ($extractedJson === null) {
-            // No canonical at all — keep legacy behaviour: status by
-            // confidence, NULL extracted_json. (Test result without canonical.)
-            return [$this->statusResolver()->mapConfidenceToStatus($confidence, $thresholds), null];
+            return [null, false];
         }
 
         // If no SchemaValidator was wired (e.g. unit tests), skip validation
-        // and store as-is. This preserves Phase 1 behaviour for tests that
-        // instantiate the controller without the Exchange dependencies.
+        // and store as-is.
         if ($this->schemaValidator === null) {
             return [
-                $this->statusResolver()->mapConfidenceToStatus($confidence, $thresholds),
                 (string) json_encode($extractedJson, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                true,
             ];
         }
 
-        if (ExtractedDocTypes::targetFor($this->configRuntime, $docType) === ExtractedDocTypes::TARGET_REGISTRY) {
-            return $this->validateAndStoreRegistryCanonical($extractedJson, $confidence, $thresholds);
+        if (PrimaryTypes::targetFor($this->configRuntime, $docType) === PrimaryTypes::TARGET_REGISTRY) {
+            return $this->validateAndStoreRegistryCanonical($extractedJson);
         }
 
         $schemaIssues = $this->schemaValidator->validate(
@@ -1004,21 +983,19 @@ class AnalysisController
         );
 
         if ($schemaIssues === []) {
-            $status = $this->statusResolver()->mapConfidenceToStatus($confidence, $thresholds);
             if ($this->enricher !== null) {
-                // Obohacení řádků z historie (D2 persist) — do extracted_json
-                // se ukládá obohacený canonical. Selhání /result nesmí shodit
+                // Obohacení řádků z historie — do canonical_json se ukládá
+                // obohacený canonical. Selhání /result nesmí shodit
                 // (analyzer by zprávu retryoval) → pokračuje se neobohaceně.
                 try {
                     $extractedJson = $this->enricher->enrich($extractedJson);
                 } catch (\Throwable $e) {
                     ErrorLogger::logException($e, 'AnalysisController::result row history enrichment failed');
                 }
-                $status = $this->statusResolver()->capStatusByRowCoverage($status, $extractedJson);
             }
             return [
-                $status,
                 (string) json_encode($extractedJson, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                true,
             ];
         }
 
@@ -1028,26 +1005,22 @@ class AnalysisController
             '_rawOutput' => $extractedJson,
         ];
         return [
-            ExtractedDocumentDocument::STATUS_AI_FAILED,
             (string) json_encode($wrapped, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            false,
         ];
     }
 
     /**
      * Registry větev ingestu: validace proti `shpd.registry.document.v1`
-     * (schéma modulu base.registry), status čistě dle confidence — žádný
-     * RowHistoryEnricher ani capStatusByRowCoverage (docs-specifika).
-     * Invalid výstup dostává stejný forenzní wrapper jako docs cesta.
+     * (schéma modulu base.registry) — žádný RowHistoryEnricher
+     * (docs-specifikum). Invalid výstup dostává stejný forenzní wrapper
+     * jako docs cesta.
      *
      * @param array<string, mixed> $extractedJson
-     * @param array{ready: float, review: float} $thresholds
-     * @return array{0: int, 1: ?string}  [status, jsonForDb]
+     * @return array{0: ?string, 1: bool}  [jsonForDb, isValid]
      */
-    private function validateAndStoreRegistryCanonical(
-        array $extractedJson,
-        float $confidence,
-        array $thresholds,
-    ): array {
+    private function validateAndStoreRegistryCanonical(array $extractedJson): array
+    {
         $schemaIssues = $this->registrySchemaValidator()->validate(
             $extractedJson,
             self::REGISTRY_FORMAT_ID,
@@ -1056,8 +1029,8 @@ class AnalysisController
 
         if ($schemaIssues === []) {
             return [
-                $this->statusResolver()->mapConfidenceToStatus($confidence, $thresholds),
                 (string) json_encode($extractedJson, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                true,
             ];
         }
 
@@ -1067,8 +1040,8 @@ class AnalysisController
             '_rawOutput' => $extractedJson,
         ];
         return [
-            ExtractedDocumentDocument::STATUS_AI_FAILED,
             (string) json_encode($wrapped, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            false,
         ];
     }
 
@@ -1165,10 +1138,12 @@ class AnalysisController
      * Auth: běžný přihlášený uživatel (UI), ne _ai_analyzer.
      *
      * Validace: analysis_state ∈ {30 Analyzováno, 70 Analýza selhala}
-     * a zpráva není v Archivu/Koši. Existující extracted_documents ve
-     * statusech 10/20/30/70 → 60 (superseded); 40 (applied) a 50 (rejected)
-     * zůstávají. Nastaví analysis_state→10, needs_reanalysis=true,
-     * profile_override (volitelné). docState se nemění.
+     * a zpráva není v Archivu/Koši. Zprávu s aplikovaným návrhem
+     * (poslední analýza resolution=40 + živý target) reanalyzovat nelze —
+     * 409, nejdřív unapply. Historie analýz se nemění (superseded jako
+     * koncept zanikl — „aktuální návrh" je implicitně poslední běh).
+     * Nastaví analysis_state→10, needs_reanalysis=true, profile_override
+     * (volitelné). docState se nemění.
      */
     public function reanalyze(AuthContext $auth, Request $request, int $messageNdx): Response
     {
@@ -1185,7 +1160,7 @@ class AnalysisController
         $dibi->begin();
         try {
             $msg = $dibi->fetch(
-                'SELECT id, docState, analysis_state FROM %n WHERE id = %i',
+                'SELECT id, docState, analysis_state, target_row FROM %n WHERE id = %i',
                 self::MESSAGES_TABLE,
                 $messageNdx,
             );
@@ -1209,6 +1184,29 @@ class AnalysisController
                 );
             }
 
+            // Aplikovaný návrh s živým targetem nelze reanalyzovat —
+            // nejdřív unapply (jinak by lineage doklad ↔ zpráva osiřela).
+            $targetRow = isset($msg['target_row']) ? (int) $msg['target_row'] : 0;
+            if ($targetRow > 0) {
+                $latest = $dibi->fetch(
+                    'SELECT resolution FROM %n WHERE message = %i AND status = %i'
+                    . ' ORDER BY analyzed_at DESC, id DESC LIMIT 1',
+                    self::ANALYSES_TABLE,
+                    $messageNdx,
+                    2,
+                );
+                if ($latest !== null
+                    && (int) ($latest['resolution'] ?? 0) === MessageProposalApplier::RESOLUTION_APPLIED
+                ) {
+                    $dibi->rollback();
+                    return Response::error(
+                        'INVALID_STATE',
+                        'Message has an applied proposal with a live target — unapply first',
+                        409,
+                    );
+                }
+            }
+
             // Validuj profile override (pokud zadán)
             if ($profileOverrideNdx !== null) {
                 $profile = $dibi->fetch(
@@ -1229,23 +1227,6 @@ class AnalysisController
 
             $now = date('Y-m-d H:i:s');
 
-            // Označit pending/ready/low + ai_failed extracted docs jako
-            // superseded. AI_FAILED je legitimní cíl pro reanalyze —
-            // jinak by ai_failed dokumenty navždy blokovaly auto-transition
-            // zprávy 20→40 (afterPersist v ExtractedDocumentDocument
-            // počítá s tím, že žádný sibling není v pending stavu).
-            $supersededCount = $dibi->update(self::EXTRACTED_TABLE, [
-                'status' => ExtractedDocumentDocument::STATUS_SUPERSEDED,
-            ])
-            ->where('message = %i', $messageNdx)
-            ->where('status IN %in', [
-                ExtractedDocumentDocument::STATUS_READY_TO_APPLY,
-                ExtractedDocumentDocument::STATUS_PENDING_REVIEW,
-                ExtractedDocumentDocument::STATUS_LOW_CONFIDENCE,
-                ExtractedDocumentDocument::STATUS_AI_FAILED,
-            ])
-            ->execute();
-
             // Vrátit analýzu do fronty — docState (workflow) zůstává
             $dibi->update(self::MESSAGES_TABLE, [
                 'analysis_state' => self::ANALYSIS_QUEUED,
@@ -1263,36 +1244,22 @@ class AnalysisController
         return Response::success([
             'message_ndx' => $messageNdx,
             'profile_override_ndx' => $profileOverrideNdx,
-            'superseded_count' => (int) $supersededCount,
         ]);
     }
 
     // -------------------------------------------------------------------
-    // POST /_mail/extracted-documents/{ndx}/apply  +  /reject
+    // POST /_mail/messages/{ndx}/apply  +  /reject  +  /unapply
     // -------------------------------------------------------------------
     //
-    // Pro UI akce "Použít" / "Zamítnout". Generický CrudController PATCH
-    // obchází Document hooky (validate, beforeSave, afterPersist), takže
-    // by se nespustil auto-transition zprávy 30→40 (spec §10 dec.4).
-    // Tyto dedikované endpointy procházejí přes ExtractedDocumentDocument
-    // a transakčně commitují i hook-vyvolaný UPDATE messages.
+    // Pro UI akce "Použít" / "Zamítnout" nad dokumentovým návrhem poslední
+    // analýzy zprávy. Verdikt se zapisuje na řádek analýzy (resolution),
+    // lineage na zprávu (target_*) a doklad (source_message) — viz
+    // MessageProposalApplier.
 
-    public function applyExtracted(AuthContext $auth, Request $request, int $extractedNdx): Response
+    public function applyMessage(AuthContext $auth, Request $request, int $messageNdx): Response
     {
         if (!$auth->isAuthenticated) {
             return Response::error('UNAUTHORIZED', 'Authentication required', 401);
-        }
-
-        // Without an Applier wired (e.g. ConfigRuntime missing), fall back
-        // to the legacy Phase 1 behaviour — pure status update. Lineage
-        // won't be filled and no doc will be created, but the UI keeps
-        // working.
-        if ($this->applier === null) {
-            $write = ExtractedDocumentApplier::writeStatusTransition(
-                $this->db, $extractedNdx, $auth->userId,
-                ExtractedDocumentDocument::STATUS_APPLIED, null,
-            );
-            return $this->statusWriteToResponse($write, $extractedNdx);
         }
 
         // Apply core lives in the shared service so this HTTP endpoint and
@@ -1300,9 +1267,9 @@ class AnalysisController
         // only parses the body and maps the outcome back onto a Response.
         $body = $request->getBody();
         $body = is_array($body) ? $body : [];
-        $service = $this->buildExtractedApplier();
+        $service = $this->buildProposalApplier();
         $outcome = $service->apply(
-            $extractedNdx,
+            $messageNdx,
             $auth->userId,
             array_key_exists('_resolve', $body) && is_array($body['_resolve']) ? $body['_resolve'] : null,
             is_array($body['applyOptions'] ?? null) ? $body['applyOptions'] : [],
@@ -1312,10 +1279,10 @@ class AnalysisController
     }
 
     /**
-     * Map an {@see ExtractedApplyOutcome} onto the exact Response payloads /
-     * HTTP statuses the endpoint produced before the service extraction.
+     * Map a {@see ProposalApplyOutcome} onto Response payloads / HTTP
+     * statuses.
      */
-    private function outcomeToResponse(ExtractedApplyOutcome $outcome): Response
+    private function outcomeToResponse(ProposalApplyOutcome $outcome): Response
     {
         if (!$outcome->ok) {
             return Response::error(
@@ -1327,9 +1294,9 @@ class AnalysisController
         }
 
         $payload = [
-            'savedDocId'   => (int) ($outcome->savedDocId ?? 0),
-            'extractedNdx' => $outcome->extractedNdx,
-            'messageNdx'   => $outcome->messageNdx,
+            'savedDocId'  => (int) ($outcome->savedDocId ?? 0),
+            'messageNdx'  => $outcome->messageNdx,
+            'analysisNdx' => $outcome->analysisNdx,
         ];
         if ($outcome->idempotent) {
             $payload['idempotent'] = true;
@@ -1341,7 +1308,7 @@ class AnalysisController
         return Response::success($payload);
     }
 
-    public function rejectExtracted(AuthContext $auth, Request $request, int $extractedNdx): Response
+    public function rejectMessage(AuthContext $auth, Request $request, int $messageNdx): Response
     {
         if (!$auth->isAuthenticated) {
             return Response::error('UNAUTHORIZED', 'Authentication required', 401);
@@ -1358,24 +1325,33 @@ class AnalysisController
             );
         }
 
-        $write = ExtractedDocumentApplier::writeStatusTransition(
-            $this->db, $extractedNdx, $auth->userId,
-            ExtractedDocumentDocument::STATUS_REJECTED, $reason,
-        );
-        return $this->statusWriteToResponse($write, $extractedNdx);
+        $outcome = $this->buildProposalApplier()->reject($messageNdx, $auth->userId, $reason);
+        if (!$outcome->ok) {
+            return Response::error(
+                $outcome->errorCode ?? 'INTERNAL_ERROR',
+                $outcome->errorMessage ?? 'Reject failed',
+                $outcome->statusCode,
+            );
+        }
+
+        return Response::success([
+            'messageNdx'  => $outcome->messageNdx,
+            'analysisNdx' => $outcome->analysisNdx,
+            'resolution'  => MessageProposalApplier::RESOLUTION_REJECTED,
+        ]);
     }
 
     /**
-     * Undo apply (dashboard feed „Vrátit"): cílový Koncept do Koše, extracted
-     * zpět na pending_review. Viz {@see ExtractedDocumentApplier::unapply}.
+     * Undo apply: cílová entita do Koše, resolution analýzy → NULL, zpráva
+     * 40→20. Viz {@see MessageProposalApplier::unapply}.
      */
-    public function unapplyExtracted(AuthContext $auth, Request $request, int $extractedNdx): Response
+    public function unapplyMessage(AuthContext $auth, Request $request, int $messageNdx): Response
     {
         if (!$auth->isAuthenticated) {
             return Response::error('UNAUTHORIZED', 'Authentication required', 401);
         }
 
-        $outcome = $this->buildExtractedApplier()->unapply($extractedNdx, $auth->userId);
+        $outcome = $this->buildProposalApplier()->unapply($messageNdx, $auth->userId);
         if (!$outcome->ok) {
             return Response::error(
                 $outcome->errorCode ?? 'INTERNAL_ERROR',
@@ -1385,9 +1361,8 @@ class AnalysisController
         }
 
         return Response::success([
-            'ndx'          => $outcome->extractedNdx,
-            'status'       => ExtractedDocumentDocument::STATUS_PENDING_REVIEW,
             'messageNdx'   => $outcome->messageNdx,
+            'analysisNdx'  => $outcome->analysisNdx,
             'trashedDocId' => (int) ($outcome->savedDocId ?? 0),
         ]);
     }
@@ -1417,18 +1392,19 @@ class AnalysisController
     }
 
     /**
-     * Sestaví sdílený apply/unapply servis včetně mapy target applierů
-     * (registrace napevno ve wiringu, vzor FeedSources — žádný plugin
-     * registr). Docs target jede interně přes exchange DocumentApplier,
-     * `registry` přes RegistryApplier (jen když je modul base.registry
-     * aktivní — poznáme podle přítomnosti tabulky v definicích).
+     * Sestaví sdílený apply/reject/unapply servis včetně mapy target
+     * applierů (registrace napevno ve wiringu, vzor FeedSources — žádný
+     * plugin registr). Docs target jede interně přes exchange
+     * DocumentApplier, `registry` přes RegistryApplier (jen když je modul
+     * base.registry aktivní — poznáme podle přítomnosti tabulky
+     * v definicích).
      */
-    private function buildExtractedApplier(): ExtractedDocumentApplier
+    private function buildProposalApplier(): MessageProposalApplier
     {
         $targetAppliers = [];
         if (isset($this->tables[self::REGISTRY_TABLE])) {
             $dibi = $this->db->getDibiConnection();
-            $targetAppliers[ExtractedDocTypes::TARGET_REGISTRY] = new RegistryApplier(
+            $targetAppliers[PrimaryTypes::TARGET_REGISTRY] = new RegistryApplier(
                 $this->db,
                 $this->documentRegistry,
                 new AttachmentService($this->db, $this->dsPath, $this->tables),
@@ -1437,7 +1413,7 @@ class AnalysisController
             );
         }
 
-        return new ExtractedDocumentApplier(
+        return new MessageProposalApplier(
             $this->db,
             $this->applier,
             $this->enricher,
@@ -1448,78 +1424,63 @@ class AnalysisController
     }
 
     /**
-     * Map a {@see StatusWriteResult} onto the Response shape the legacy
-     * `updateExtractedStatus` produced — used by reject and the no-applier
-     * apply fallback.
-     */
-    private function statusWriteToResponse(StatusWriteResult $write, int $extractedNdx): Response
-    {
-        if ($write->notFound) {
-            return Response::error('NOT_FOUND', "Extracted document {$extractedNdx} not found", 404);
-        }
-        if (!$write->ok) {
-            if ($write->validationErrors !== null) {
-                return Response::error('VALIDATION_ERROR', 'Validation failed', 422, $write->validationErrors);
-            }
-            return Response::error(
-                $write->errorCode ?? 'INTERNAL_ERROR',
-                $write->errorMessage ?? 'Internal server error',
-                $write->statusCode,
-            );
-        }
-        return Response::success([
-            'ndx'         => $extractedNdx,
-            'status'      => $write->newStatus,
-            'message_ndx' => $write->messageNdx,
-        ]);
-    }
-
-    /**
-     * Read-only preview of an extracted document — returns enriched
-     * canonical with `_resolve` populated for the UI split-view modal.
-     * Server-side injection of `source.extractedDoc` + informative
-     * `applyOptions` mirrors {@see applyExtracted} so the preview reflects
-     * how an apply would run (without doing the side-creates/save).
+     * Read-only preview of the message's document proposal (latest
+     * successful analysis) — returns enriched canonical with `_resolve`
+     * populated for the UI split-view modal. Server-side injection of
+     * `source.message` + informative `applyOptions` mirrors
+     * {@see applyMessage} so the preview reflects how an apply would run
+     * (without doing the side-creates/save).
      *
-     * For `STATUS_AI_FAILED` rows (where extracted_json was wrapped during
-     * /result validation), returns the wrapper directly so the UI can
-     * render its dedicated error view.
+     * For runs whose canonical was wrapped during /result validation,
+     * returns the wrapper directly so the UI can render its dedicated
+     * error view. Attachments = **all** content attachments of the message
+     * (D10 z mail-message-centric).
      */
-    public function previewExtracted(AuthContext $auth, Request $request, int $extractedNdx): Response
+    public function previewMessage(AuthContext $auth, Request $request, int $messageNdx): Response
     {
         if (!$auth->isAuthenticated) {
             return Response::error('UNAUTHORIZED', 'Authentication required', 401);
         }
 
-        $existing = $this->db->fetchRow(
+        $message = $this->db->fetchRow(
             'SELECT * FROM %n WHERE id = %i',
-            self::EXTRACTED_TABLE, $extractedNdx,
+            self::MESSAGES_TABLE, $messageNdx,
         );
-        if ($existing === null) {
-            return Response::error('NOT_FOUND', "Extracted document {$extractedNdx} not found", 404);
+        if ($message === null) {
+            return Response::error('NOT_FOUND', "Message {$messageNdx} not found", 404);
         }
 
-        $extractedJson = json_decode((string) ($existing['extracted_json'] ?? ''), true);
-        if (!is_array($extractedJson)) {
-            return Response::error('CORRUPTED_DATA', 'extracted_json cannot be parsed', 500);
+        $analysis = $this->buildProposalApplier()->latestSuccessfulAnalysis($messageNdx);
+        if ($analysis === null) {
+            return Response::error('NO_ANALYSIS', "Message {$messageNdx} has no successful analysis", 404);
+        }
+        $analysisNdx = (int) $analysis['id'];
+
+        if ($analysis['canonical_json'] === null || $analysis['canonical_json'] === '') {
+            return Response::error('NO_PROPOSAL', 'Latest analysis produced no document proposal', 404);
         }
 
-        $attachmentNdxs = $this->parseSourceAttachments((string) ($existing['source_attachments'] ?? '[]'));
-        $attachments = $this->loadAttachmentsMeta($attachmentNdxs);
+        $canonicalJson = json_decode((string) $analysis['canonical_json'], true);
+        if (!is_array($canonicalJson)) {
+            return Response::error('CORRUPTED_DATA', 'canonical_json cannot be parsed', 500);
+        }
 
-        $currentStatus = (int) $existing['status'];
+        $attachments = $this->loadContentAttachmentsMeta($message);
 
-        // ai_failed → return wrapper for the special UI render path
-        if ($currentStatus === ExtractedDocumentDocument::STATUS_AI_FAILED
-            && isset($extractedJson['_validationError'])
-        ) {
-            return Response::success([
-                'aiFailed'      => true,
-                'wrapper'       => $extractedJson,
-                'attachments'   => $attachments,
-                'extractedNdx'  => $extractedNdx,
-                'messageNdx'    => (int) $existing['message'],
-                'status'        => $currentStatus,
+        $base = [
+            'messageNdx'   => $messageNdx,
+            'analysisNdx'  => $analysisNdx,
+            'proposedType' => $analysis['proposed_type'] !== null ? (string) $analysis['proposed_type'] : null,
+            'confidence'   => $analysis['confidence'] !== null ? (float) $analysis['confidence'] : null,
+            'resolution'   => $analysis['resolution'] !== null ? (int) $analysis['resolution'] : null,
+            'attachments'  => $attachments,
+        ];
+
+        // ai_failed wrapper → return it for the special UI render path
+        if (isset($canonicalJson['_validationError'])) {
+            return Response::success($base + [
+                'aiFailed' => true,
+                'wrapper'  => $canonicalJson,
             ]);
         }
 
@@ -1527,16 +1488,12 @@ class AnalysisController
         // enrichment i applier->preview (_resolve) jsou docs-specifika,
         // registry review nemá resolve panel (design §7.8). `target` klíč
         // dává frontendu branch pro RegistryExtractedPreview.
-        $docType = (string) ($existing['doc_type'] ?? '');
-        if (ExtractedDocTypes::targetFor($this->configRuntime, $docType) === ExtractedDocTypes::TARGET_REGISTRY) {
-            return Response::success([
-                'aiFailed'     => false,
-                'canonical'    => $extractedJson,
-                'attachments'  => $attachments,
-                'extractedNdx' => $extractedNdx,
-                'messageNdx'   => (int) $existing['message'],
-                'status'       => $currentStatus,
-                'target'       => ExtractedDocTypes::TARGET_REGISTRY,
+        $proposedType = (string) ($analysis['proposed_type'] ?? '');
+        if (PrimaryTypes::targetFor($this->configRuntime, $proposedType) === PrimaryTypes::TARGET_REGISTRY) {
+            return Response::success($base + [
+                'aiFailed'  => false,
+                'canonical' => $canonicalJson,
+                'target'    => PrimaryTypes::TARGET_REGISTRY,
             ]);
         }
 
@@ -1544,21 +1501,17 @@ class AnalysisController
         // canonical without resolve — the UI can still render the read-only
         // view, just without resolve badges.
         if ($this->applier === null) {
-            return Response::success([
-                'aiFailed'     => false,
-                'canonical'    => $extractedJson,
-                'attachments'  => $attachments,
-                'extractedNdx' => $extractedNdx,
-                'messageNdx'   => (int) $existing['message'],
-                'status'       => $currentStatus,
+            return Response::success($base + [
+                'aiFailed'  => false,
+                'canonical' => $canonicalJson,
             ]);
         }
 
         // Server-controlled injection — applier preview is informative, so
         // applyOptions are advisory (they would only matter for /apply).
-        $canonical = $extractedJson;
+        $canonical = $canonicalJson;
         $canonical['source'] = is_array($canonical['source'] ?? null) ? $canonical['source'] : [];
-        $canonical['source']['extractedDoc'] = $extractedNdx;
+        $canonical['source']['message'] = $messageNdx;
         if (empty($canonical['source']['kind'])) {
             $canonical['source']['kind'] = 'aiExtraction';
         }
@@ -1567,13 +1520,13 @@ class AnalysisController
             'targetDocState' => 10,
         ];
 
-        // Fresh obohacení z historie (D2) — přepíše persistnutý enrichment
+        // Fresh obohacení z historie — přepíše persistnutý enrichment
         // blok aktuálním stavem DB. Selhání preview neblokuje.
         if ($this->enricher !== null) {
             try {
                 $canonical = $this->enricher->enrich($canonical);
             } catch (\Throwable $e) {
-                ErrorLogger::logException($e, 'AnalysisController::previewExtracted row history enrichment failed');
+                ErrorLogger::logException($e, 'AnalysisController::previewMessage row history enrichment failed');
             }
         }
 
@@ -1589,57 +1542,31 @@ class AnalysisController
             );
         }
 
-        return Response::success([
-            'aiFailed'     => false,
-            'canonical'    => $result->canonical,
-            'attachments'  => $attachments,
-            'extractedNdx' => $extractedNdx,
-            'messageNdx'   => (int) $existing['message'],
-            'status'       => $currentStatus,
+        return Response::success($base + [
+            'aiFailed'  => false,
+            'canonical' => $result->canonical,
         ]);
     }
 
     /**
-     * Parse `source_attachments` JSON column into a flat list of positive
-     * attachment ids.
+     * Fetch metadata of all content attachments of a message for the UI PDF
+     * viewer panel — everything on the message except the raw .eml source
+     * and deleted files (D10: karta/preview = všechny obsahové přílohy).
      *
-     * @return list<int>
-     */
-    private function parseSourceAttachments(string $json): array
-    {
-        $decoded = json_decode($json, true);
-        if (!is_array($decoded)) {
-            return [];
-        }
-        $out = [];
-        foreach ($decoded as $v) {
-            $n = (int) $v;
-            if ($n > 0) {
-                $out[] = $n;
-            }
-        }
-        return $out;
-    }
-
-    /**
-     * Fetch attachment metadata for the UI PDF viewer panel. Restricted to
-     * the mail table (table_id = 303) so unrelated attachments can't leak
-     * via crafted source_attachments.
-     *
-     * @param list<int> $ndxs
+     * @param array<string, mixed> $message
      * @return array<int, array{ndx: int, filename: string, mime_type: string, size_bytes: int}>
      */
-    private function loadAttachmentsMeta(array $ndxs): array
+    private function loadContentAttachmentsMeta(array $message): array
     {
-        if ($ndxs === []) {
-            return [];
-        }
+        $rawSourceNdx = isset($message['raw_source_attachment'])
+            ? (int) $message['raw_source_attachment']
+            : 0;
         $rows = $this->db->fetchAll(
             'SELECT id, name, mime_type, file_size
              FROM %n
-             WHERE id IN %in AND table_id = %i AND is_deleted = %i
-             ORDER BY id ASC',
-            self::ATTACHMENTS_TABLE, $ndxs, self::MAIL_TABLE_ID, 0,
+             WHERE table_id = %i AND record_id = %i AND id != %i AND is_deleted = %i
+             ORDER BY att_order ASC, name ASC',
+            self::ATTACHMENTS_TABLE, self::MAIL_TABLE_ID, (int) $message['id'], $rawSourceNdx, 0,
         );
         $out = [];
         foreach ($rows as $row) {

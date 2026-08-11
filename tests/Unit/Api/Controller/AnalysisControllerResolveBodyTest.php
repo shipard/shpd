@@ -19,9 +19,10 @@ use Shipard\Module\Core\Exchange\Schema\SchemaLoader;
 use Shipard\Module\Core\Exchange\Schema\SchemaValidator;
 
 /**
- * Phase 3b unit tests for AnalysisController::applyExtracted — body
- * handling of client `_resolve` overrides and `autoCreateMode` derivation.
- * The expand/merge helpers are also tested directly via reflection.
+ * Unit testy AnalysisController::applyMessage — body handling klientských
+ * `_resolve` overrides a odvození `autoCreateMode`. Expand/merge helpery
+ * žijí v MessageProposalApplier; tady se testuje body→canonical kontrakt
+ * end-to-end přes applyMessage.
  */
 class AnalysisControllerResolveBodyTest extends TestCase
 {
@@ -111,9 +112,41 @@ class AnalysisControllerResolveBodyTest extends TestCase
     }
 
     /**
-     * Spin up the boilerplate: a fetchRow-returning DB stub + an applier
-     * mock that captures the canonical it receives. The captured canonical
-     * is what we assert on for body-handling tests.
+     * DB mock: zpráva s otevřeným návrhem poslední úspěšné analýzy
+     * (canonical = fixture) + dibi pro zápis verdiktu po úspěšném apply.
+     *
+     * @param array<string, mixed> $canonical
+     */
+    private function dbWithOpenProposal(array $canonical): DataSourceConnection
+    {
+        $message  = ['id' => 100, 'docState' => 20, 'analysis_state' => 30, 'target_row' => null];
+        $analysis = [
+            'id' => 11, 'resolution' => null,
+            'canonical_json' => (string) json_encode($canonical),
+            'proposed_type' => 'invoiceReceived',
+        ];
+
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturnCallback(
+            static fn(string $sql, ...$args) => match ($args[0] ?? null) {
+                'core_mail_incoming_messages' => $message,
+                'core_mail_message_analyses'  => $analysis,
+                default                       => null,
+            },
+        );
+
+        $fluent = $this->createMock(\Dibi\Fluent::class);
+        $fluent->method('__call')->willReturnSelf();
+        $fluent->method('execute');
+        $dibi = $this->createMock(\Dibi\Connection::class);
+        $dibi->method('update')->willReturn($fluent);
+        $db->method('getDibiConnection')->willReturn($dibi);
+
+        return $db;
+    }
+
+    /**
+     * Applier mock, který zachytí canonical předaný do apply().
      *
      * @param array<string, mixed> $canonical
      * @return array{0: DocumentApplier, 1: \Closure}
@@ -131,28 +164,17 @@ class AnalysisControllerResolveBodyTest extends TestCase
         return [$applier, function () use (&$captured): ?array { return $captured; }];
     }
 
-    public function testEmptyBodyPreservesPhase2SafeMode(): void
+    public function testEmptyBodyPreservesSafeMode(): void
     {
         $canonical = $this->happyCanonical();
-        $db = $this->createMock(DataSourceConnection::class);
-        $db->method('fetchRow')->willReturn([
-            'id' => 1, 'status' => 20, 'message' => 100, 'target_row_ndx' => null,
-            'extracted_json' => json_encode($canonical),
-        ]);
+        $db = $this->dbWithOpenProposal($canonical);
 
         [$applier, $captured] = $this->captureApplier($canonical);
-        // Status update is invoked after a successful apply; for these
-        // tests we only care about the body→canonical translation, so a
-        // null applier-mock for updateExtractedStatus is irrelevant — the
-        // controller's existing path returns 500 from the DB stub when it
-        // tries to do the dibi update, but only AFTER we've captured the
-        // canonical we want to assert on.
 
-        $resp = $this->controller($db, $applier)->applyExtracted(
-            $this->authed(), $this->requestWithBody([]), 1,
+        $resp = $this->controller($db, $applier)->applyMessage(
+            $this->authed(), $this->requestWithBody([]), 100,
         );
-        // Status update will fail (no DibiConnection), but the body→canonical
-        // contract is what we care about here.
+        $this->assertSame(200, $this->statusOf($resp));
         $c = $captured();
         $this->assertNotNull($c, 'Applier was invoked');
         $this->assertSame('safe', $c['applyOptions']['autoCreateMode']);
@@ -162,15 +184,11 @@ class AnalysisControllerResolveBodyTest extends TestCase
     public function testEmptyResolveObjectSwitchesToStrictMode(): void
     {
         $canonical = $this->happyCanonical();
-        $db = $this->createMock(DataSourceConnection::class);
-        $db->method('fetchRow')->willReturn([
-            'id' => 1, 'status' => 20, 'message' => 100, 'target_row_ndx' => null,
-            'extracted_json' => json_encode($canonical),
-        ]);
+        $db = $this->dbWithOpenProposal($canonical);
 
         [$applier, $captured] = $this->captureApplier($canonical);
-        $this->controller($db, $applier)->applyExtracted(
-            $this->authed(), $this->requestWithBody(['_resolve' => []]), 1,
+        $this->controller($db, $applier)->applyMessage(
+            $this->authed(), $this->requestWithBody(['_resolve' => []]), 100,
         );
         $c = $captured();
         $this->assertSame('strict', $c['applyOptions']['autoCreateMode']);
@@ -179,17 +197,13 @@ class AnalysisControllerResolveBodyTest extends TestCase
     public function testSupplierUserActionPropagatedToCanonical(): void
     {
         $canonical = $this->happyCanonical();
-        $db = $this->createMock(DataSourceConnection::class);
-        $db->method('fetchRow')->willReturn([
-            'id' => 1, 'status' => 20, 'message' => 100, 'target_row_ndx' => null,
-            'extracted_json' => json_encode($canonical),
-        ]);
+        $db = $this->dbWithOpenProposal($canonical);
 
         [$applier, $captured] = $this->captureApplier($canonical);
-        $this->controller($db, $applier)->applyExtracted(
+        $this->controller($db, $applier)->applyMessage(
             $this->authed(),
             $this->requestWithBody(['_resolve' => ['supplier' => 'useExisting:42']]),
-            1,
+            100,
         );
         $c = $captured();
         $this->assertSame('strict', $c['applyOptions']['autoCreateMode']);
@@ -199,17 +213,13 @@ class AnalysisControllerResolveBodyTest extends TestCase
     public function testRowItemSkipExpandsToNestedShape(): void
     {
         $canonical = $this->happyCanonical();
-        $db = $this->createMock(DataSourceConnection::class);
-        $db->method('fetchRow')->willReturn([
-            'id' => 1, 'status' => 20, 'message' => 100, 'target_row_ndx' => null,
-            'extracted_json' => json_encode($canonical),
-        ]);
+        $db = $this->dbWithOpenProposal($canonical);
 
         [$applier, $captured] = $this->captureApplier($canonical);
-        $this->controller($db, $applier)->applyExtracted(
+        $this->controller($db, $applier)->applyMessage(
             $this->authed(),
             $this->requestWithBody(['_resolve' => ['rows[0].item' => 'skip']]),
-            1,
+            100,
         );
         $c = $captured();
         $this->assertSame('skip', $c['_resolve']['rows'][0]['item']['userAction']);
@@ -218,19 +228,15 @@ class AnalysisControllerResolveBodyTest extends TestCase
     public function testExplicitAutoCreateModeOverrideWins(): void
     {
         $canonical = $this->happyCanonical();
-        $db = $this->createMock(DataSourceConnection::class);
-        $db->method('fetchRow')->willReturn([
-            'id' => 1, 'status' => 20, 'message' => 100, 'target_row_ndx' => null,
-            'extracted_json' => json_encode($canonical),
-        ]);
+        $db = $this->dbWithOpenProposal($canonical);
 
         [$applier, $captured] = $this->captureApplier($canonical);
-        $this->controller($db, $applier)->applyExtracted(
+        $this->controller($db, $applier)->applyMessage(
             $this->authed(),
             $this->requestWithBody([
                 'applyOptions' => ['autoCreateMode' => 'liberal'],
             ]),
-            1,
+            100,
         );
         $c = $captured();
         $this->assertSame('liberal', $c['applyOptions']['autoCreateMode']);
@@ -239,17 +245,13 @@ class AnalysisControllerResolveBodyTest extends TestCase
     public function testTargetDocStateOverrideRespected(): void
     {
         $canonical = $this->happyCanonical();
-        $db = $this->createMock(DataSourceConnection::class);
-        $db->method('fetchRow')->willReturn([
-            'id' => 1, 'status' => 20, 'message' => 100, 'target_row_ndx' => null,
-            'extracted_json' => json_encode($canonical),
-        ]);
+        $db = $this->dbWithOpenProposal($canonical);
 
         [$applier, $captured] = $this->captureApplier($canonical);
-        $this->controller($db, $applier)->applyExtracted(
+        $this->controller($db, $applier)->applyMessage(
             $this->authed(),
             $this->requestWithBody(['applyOptions' => ['targetDocState' => 20]]),
-            1,
+            100,
         );
         $c = $captured();
         $this->assertSame(20, $c['applyOptions']['targetDocState']);
@@ -258,14 +260,10 @@ class AnalysisControllerResolveBodyTest extends TestCase
     public function testInvalidResolveValueGracefullySkipped(): void
     {
         $canonical = $this->happyCanonical();
-        $db = $this->createMock(DataSourceConnection::class);
-        $db->method('fetchRow')->willReturn([
-            'id' => 1, 'status' => 20, 'message' => 100, 'target_row_ndx' => null,
-            'extracted_json' => json_encode($canonical),
-        ]);
+        $db = $this->dbWithOpenProposal($canonical);
 
         [$applier, $captured] = $this->captureApplier($canonical);
-        $this->controller($db, $applier)->applyExtracted(
+        $this->controller($db, $applier)->applyMessage(
             $this->authed(),
             $this->requestWithBody([
                 '_resolve' => [
@@ -273,7 +271,7 @@ class AnalysisControllerResolveBodyTest extends TestCase
                     'customer' => ['not', 'a', 'string'], // garbage → ignored
                 ],
             ]),
-            1,
+            100,
         );
         $c = $captured();
         // supplier got through, customer was silently dropped
@@ -284,14 +282,10 @@ class AnalysisControllerResolveBodyTest extends TestCase
     public function testUnknownPathInResolveIsIgnored(): void
     {
         $canonical = $this->happyCanonical();
-        $db = $this->createMock(DataSourceConnection::class);
-        $db->method('fetchRow')->willReturn([
-            'id' => 1, 'status' => 20, 'message' => 100, 'target_row_ndx' => null,
-            'extracted_json' => json_encode($canonical),
-        ]);
+        $db = $this->dbWithOpenProposal($canonical);
 
         [$applier, $captured] = $this->captureApplier($canonical);
-        $this->controller($db, $applier)->applyExtracted(
+        $this->controller($db, $applier)->applyMessage(
             $this->authed(),
             $this->requestWithBody([
                 '_resolve' => [
@@ -299,7 +293,7 @@ class AnalysisControllerResolveBodyTest extends TestCase
                     'rows[99].item' => 'skip',  // valid shape, but row index doesn't exist
                 ],
             ]),
-            1,
+            100,
         );
         $c = $captured();
         $this->assertArrayNotHasKey('mystery.field', $c['_resolve'] ?? []);
@@ -308,8 +302,7 @@ class AnalysisControllerResolveBodyTest extends TestCase
         $this->assertSame('skip', $c['_resolve']['rows'][99]['item']['userAction']);
     }
 
-    // Direct unit tests for the expand/merge helpers moved with the apply
-    // core into ExtractedDocumentApplier — see ExtractedDocumentApplierTest.
-    // The body→canonical contract (above) still exercises them end-to-end
-    // through applyExtracted.
+    // Direct unit tests for the expand/merge helpers live with the apply
+    // core in MessageProposalApplier. The body→canonical contract (above)
+    // still exercises them end-to-end through applyMessage.
 }

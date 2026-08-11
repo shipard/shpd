@@ -812,20 +812,27 @@ class DocsHeadsViewer extends TableViewer
     }
 
     /**
-     * Zprávy došlé pošty, ze kterých tento doklad vznikl (vazba přes
-     * message.target_table_id + target_row; index idx_target). Trash (90)
-     * vynechán. Shodná konvence pro importní i nativní AI flow.
+     * Zprávy došlé pošty, ze kterých tento doklad vznikl. Primární cesta je
+     * FK `heads.source_message` (AI apply flow, D6 z mail-message-centric);
+     * doplněná o reverzní vazbu `message.target_table_id + target_row`
+     * (importy old_shipard, které FK na heads nemají). Trash (90) vynechán.
      *
      * @return list<array{id:int, message_id:string, received_at:?string, raw_source_attachment:?int}>
      */
     private function sourceMessages(int $docId): array
     {
+        $sourceMessage = (int) ($this->db->fetchSingle(
+            'SELECT `source_message` FROM `docs_core_heads` WHERE `id` = %i',
+            $docId,
+        ) ?? 0);
+
         return $this->db->fetchAll(
             'SELECT `id`, `message_id`, `received_at`, `raw_source_attachment`'
             . ' FROM `core_mail_incoming_messages`'
-            . ' WHERE `target_table_id` = %s AND `target_row` = %i AND `docState` != %i'
+            . ' WHERE ((`target_table_id` = %s AND `target_row` = %i) OR `id` = %i)'
+            . ' AND `docState` != %i'
             . ' ORDER BY `received_at` ASC, `id` ASC',
-            'docs_core_heads', $docId, 90,
+            'docs_core_heads', $docId, $sourceMessage, 90,
         );
     }
 

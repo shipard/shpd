@@ -7,7 +7,6 @@ namespace Shipard\Command\DataSource;
 use Shipard\Core\Alerts\AlertReconciler;
 use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Database\DataSourceConnection;
-use Shipard\Module\Core\Mail\ExtractedDocumentDocument;
 use Shipard\Module\Core\Mail\IncomingMessageDocument;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -32,7 +31,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 class HostingStatsCommand extends Command
 {
     private const ALERTS_TABLE = 'core_alerts_alerts';
-    private const EXTRACTED_TABLE = 'core_mail_extracted_documents';
+    private const ANALYSES_TABLE = 'core_mail_message_analyses';
     private const MESSAGES_TABLE = 'core_mail_incoming_messages';
 
     public function __construct(
@@ -75,7 +74,7 @@ class HostingStatsCommand extends Command
         $alerts = in_array(self::ALERTS_TABLE, $tables, true)
             ? $this->countAlerts($dsConnection)
             : null;
-        $mail = in_array(self::EXTRACTED_TABLE, $tables, true) && in_array(self::MESSAGES_TABLE, $tables, true)
+        $mail = in_array(self::ANALYSES_TABLE, $tables, true) && in_array(self::MESSAGES_TABLE, $tables, true)
             ? $this->countMail($dsConnection)
             : null;
 
@@ -100,19 +99,24 @@ class HostingStatsCommand extends Command
 
     /**
      * Stejná sémantika jako MailSuggestionsSource::fetchSuggestionRows()
-     * a fetchErrorRows() — návrhové karty bez docState filtru zprávy,
-     * chybové karty mimo Archiv/Koš.
+     * a fetchErrorRows() — návrhové karty = zprávy v 10/20 s otevřeným
+     * dokumentovým návrhem poslední úspěšné analýzy, chybové karty mimo
+     * Archiv/Koš.
      */
     private function countMail(DataSourceConnection $db): int
     {
         $suggestions = (int) $db->fetchSingle(
-            'SELECT COUNT(*) FROM `' . self::EXTRACTED_TABLE . '`'
-            . ' WHERE `status` IN %in AND `doc_type` != \'other\'',
-            [
-                ExtractedDocumentDocument::STATUS_READY_TO_APPLY,
-                ExtractedDocumentDocument::STATUS_PENDING_REVIEW,
-                ExtractedDocumentDocument::STATUS_LOW_CONFIDENCE,
-            ],
+            'SELECT COUNT(*) FROM ('
+            . 'SELECT `m`.`id`,'
+            . ' (SELECT `a`.`canonical_json` IS NOT NULL AND `a`.`resolution` IS NULL'
+            . '    AND COALESCE(`a`.`proposed_type`, \'other\') != \'other\''
+            . '  FROM `' . self::ANALYSES_TABLE . '` `a`'
+            . '  WHERE `a`.`message` = `m`.`id` AND `a`.`status` = 2'
+            . '  ORDER BY `a`.`analyzed_at` DESC, `a`.`id` DESC LIMIT 1) AS `open_proposal`'
+            . ' FROM `' . self::MESSAGES_TABLE . '` `m`'
+            . ' WHERE `m`.`docState` IN %in'
+            . ') `t` WHERE `t`.`open_proposal` = 1',
+            [IncomingMessageDocument::DOC_STATE_NEW, IncomingMessageDocument::DOC_STATE_OPEN],
         );
 
         $failed = (int) $db->fetchSingle(

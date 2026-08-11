@@ -87,45 +87,38 @@ class RegistrySchemaDriftTest extends TestCase
             'schema docType enum must list exactly the registry doc types',
         );
 
-        $extractedTypes = JsoncParser::parseFile(
-            $this->modulesRoot() . '/core/mail/config/extractedDocTypes.jsonc',
+        // Jediná klasifikační osa (D4 z mail-message-centric): target/docKind
+        // nese cfgItem core.mail.primaryTypes; extractedDocTypes zanikl.
+        // AI prompt se omezuje na enabled typy, proto enum schématu musí
+        // odpovídat enabled registry typům; disabled (complaint) jen čekají.
+        $primaryTypes = JsoncParser::parseFile(
+            $this->modulesRoot() . '/core/mail/config/primaryTypes.jsonc',
         );
+        $this->assertIsArray($primaryTypes, 'primaryTypes JSONC must parse');
+
         $registryTypes = array_keys(array_filter(
-            $extractedTypes,
+            $primaryTypes,
             static fn(array $type): bool => ($type['target'] ?? 'docs') === 'registry',
+        ));
+        $enabledRegistryTypes = array_values(array_filter(
+            $registryTypes,
+            static fn(string $key): bool => ($primaryTypes[$key]['enabled'] ?? true) === true,
         ));
         $this->assertSame(
             self::REGISTRY_DOC_TYPES,
-            $registryTypes,
-            'extractedDocTypes with target=registry must match the schema docType enum',
+            $enabledRegistryTypes,
+            'enabled primaryTypes with target=registry must match the schema docType enum',
         );
 
+        // Každý registry typ (i disabled) musí nést docKind existující
+        // v base.registry.docKinds — PrimaryTypes::docKindFor na tom stojí.
         $docKinds = JsoncParser::parseFile(
             $this->modulesRoot() . '/base/registry/config/docKinds.jsonc',
         );
         foreach ($registryTypes as $docType) {
-            $docKind = $extractedTypes[$docType]['docKind'] ?? null;
-            $this->assertIsString($docKind, "extractedDocTypes['{$docType}'] must declare docKind");
+            $docKind = $primaryTypes[$docType]['docKind'] ?? null;
+            $this->assertIsString($docKind, "primaryTypes['{$docType}'] must declare docKind");
             $this->assertArrayHasKey($docKind, $docKinds, "docKind '{$docKind}' missing in docKinds");
-        }
-    }
-
-    public function testExtractedDocTypesPairWithPrimaryTypes(): void
-    {
-        $extractedTypes = JsoncParser::parseFile(
-            $this->modulesRoot() . '/core/mail/config/extractedDocTypes.jsonc',
-        );
-        $primaryTypes = JsoncParser::parseFile(
-            $this->modulesRoot() . '/core/mail/config/primaryTypes.jsonc',
-        );
-
-        foreach (array_keys($extractedTypes) as $key) {
-            $this->assertArrayHasKey(
-                $key,
-                $primaryTypes,
-                "extractedDocTypes key '{$key}' has no primaryTypes counterpart — "
-                    . 'the key pairing (no translation table) must hold',
-            );
         }
     }
 }

@@ -31,9 +31,9 @@ se ti ji přepisovat do systému ručně.
    → **Analyzuje se** → **Analyzováno**.
 
 4. **Vyzvedni si výsledek na Dashboardu.** Když AI ve zprávě našla fakturu,
-   zpráva se sama přepne na **K řešení** a na Dashboardu se objeví karta
-   s tlačítkem **Zkontrolovat**. Odtud pokračuj podle
-   [Kontrola vytěženého dokladu](kontrola-vytezeni.md).
+   zpráva se sama přepne na **K řešení** a na Dashboardu se objeví karta —
+   u jistého návrhu s tlačítkem **Použít**, jinak **Zkontrolovat**. Odtud
+   pokračuj podle [Kontrola vytěženého dokladu](kontrola-vytezeni.md).
 
 ## Na co narazíš
 
@@ -42,9 +42,18 @@ se ti ji přepisovat do systému ručně.
 špatně; když ho tvůj dodavatel umí, popros ho o něj. Fotku nebo sken
 zkusit můžeš, ale nespoléhej na výsledek a zkontroluj ho o to pečlivěji.
 
-**Víc faktur v jedné zprávě.** Každá dostane vlastní návrh dokladu
-a potvrzuješ je jednotlivě. Zpráva zůstane v **K řešení**, dokud nevyřídíš
-všechny — teprve pak přejde na **Hotovo**.
+**Víc dokumentů v jedné zprávě.** Z jednoho e-mailu vznikne **nejvýše
+jeden návrh** — AI vybere hlavní dokument zprávy (typicky fakturu).
+Když ve zprávě najde ještě něco dalšího (smlouvu vedle faktury, druhou
+fakturu), ukáže to na kartě jako poznámku; dokument z toho automaticky
+nevznikne a založíš ho ručně — viz
+[Co Shipard dnes neumí](../co-dnes-nejde.md). Když posíláš víc faktur,
+pošli každou samostatným e-mailem.
+
+**Dokument do Spisovny.** Když AI pozná smlouvu, pojistku, nabídku,
+revizi nebo úřední písemnost, nabídne na Dashboardu zařazení do
+**Spisovny** místo dokladu. Vzniklý záznam dostane **všechny přílohy
+zprávy** — jedno doručení = jeden záznam, jako v podacím deníku.
 
 **Když to není faktura.** Reklamu, newsletter nebo upomínku AI pozná
 a místo návrhu dokladu se na Dashboardu objeví karta s akcemi **Do koše**

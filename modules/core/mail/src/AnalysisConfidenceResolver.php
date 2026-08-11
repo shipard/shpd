@@ -8,13 +8,18 @@ use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Module\Core\Exchange\Enrich\RowHistoryEnricher;
 
 /**
- * Sdílená pravidla pro status extrahovaného dokumentu: mapování confidence
- * na status podle prahů profilu + strop D7 podle pokrytí řádků položkami.
- * Jediné místo s těmito pravidly — používá AnalysisController (/result)
- * i IsdocImportService (deterministický ISDOC import).
+ * Runtime resolver confidence pásem dokumentového návrhu: mapování
+ * confidence na pásmo podle prahů profilu + strop D7 podle pokrytí řádků
+ * položkami. Pásmo NENÍ perzistentní stav (D3 z mail-message-centric) —
+ * počítá se za běhu; používá dashboard (kind karty), detail zprávy (badge)
+ * a preview. Nikam se nezapisuje.
  */
-class ExtractedDocumentStatusResolver
+class AnalysisConfidenceResolver
 {
+    public const BAND_READY = 'ready';
+    public const BAND_REVIEW = 'review';
+    public const BAND_LOW = 'low';
+
     /**
      * Fallback prahy, když profil neexistuje nebo nemá confidence_thresholds.
      * ISDOC import tak funguje i v DS bez nakonfigurované AI.
@@ -59,8 +64,8 @@ class ExtractedDocumentStatusResolver
     }
 
     /**
-     * Prahy default aktivního profilu DS — zdroj pro importy, které neběží
-     * pod konkrétním profilem (ISDOC). Bez profilu → defaulty.
+     * Prahy default aktivního profilu DS — pro čtení pásma bez vazby na
+     * konkrétní profil (dashboard, detail zprávy). Bez profilu → defaulty.
      *
      * @return array{ready: float, review: float}
      */
@@ -78,36 +83,36 @@ class ExtractedDocumentStatusResolver
     /**
      * @param array{ready: float, review: float} $thresholds
      */
-    public function mapConfidenceToStatus(float $confidence, array $thresholds): int
+    public function bandFor(float $confidence, array $thresholds): string
     {
         if ($confidence >= $thresholds['ready']) {
-            return ExtractedDocumentDocument::STATUS_READY_TO_APPLY;
+            return self::BAND_READY;
         }
         if ($confidence >= $thresholds['review']) {
-            return ExtractedDocumentDocument::STATUS_PENDING_REVIEW;
+            return self::BAND_REVIEW;
         }
-        return ExtractedDocumentDocument::STATUS_LOW_CONFIDENCE;
+        return self::BAND_LOW;
     }
 
     /**
-     * Strop statusu podle pokrytí řádků (D7): ready_to_apply smí zůstat jen
-     * když má každý item řádek položku — z extrakce, nebo návrhem
-     * enrichmentu. Kontační řádky (acc.record) položku nemají validně,
-     * strop se jich netýká.
+     * Strop pásma podle pokrytí řádků (D7): ready smí zůstat jen když má
+     * každý item řádek položku — z extrakce, nebo návrhem enrichmentu.
+     * Kontační řádky (acc.record) položku nemají validně, strop se jich
+     * netýká.
      *
      * Řádek doplněný enrichmentem s confidence `low` (dominantní položka
-     * partnera, bez textového signálu) se jako pokrytý nepočítá — dokument
-     * zůstává pending_review a uživatel návrh potvrzuje
+     * partnera, bez textového signálu) se jako pokrytý nepočítá — návrh
+     * zůstává review a uživatel ho potvrzuje
      * (`tasks/enrichment-dominant-item.md`, D5). Textové matche
      * (`high`/`medium`) beze změny; řádky s ourCode od AI mají
      * `confidence: null` → stropu se netýkají.
      *
      * @param array<string, mixed> $canonical
      */
-    public function capStatusByRowCoverage(int $status, array $canonical): int
+    public function capBandByRowCoverage(string $band, array $canonical): string
     {
-        if ($status !== ExtractedDocumentDocument::STATUS_READY_TO_APPLY) {
-            return $status;
+        if ($band !== self::BAND_READY) {
+            return $band;
         }
         $rows = is_array($canonical['rows'] ?? null) ? $canonical['rows'] : [];
         $enrichments = $this->enrichmentsByRowIndex($canonical);
@@ -116,13 +121,29 @@ class ExtractedDocumentStatusResolver
                 continue;
             }
             if (trim((string) ($row['item']['ourCode'] ?? '')) === '') {
-                return ExtractedDocumentDocument::STATUS_PENDING_REVIEW;
+                return self::BAND_REVIEW;
             }
             if (($enrichments[$idx]['confidence'] ?? null) === 'low') {
-                return ExtractedDocumentDocument::STATUS_PENDING_REVIEW;
+                return self::BAND_REVIEW;
             }
         }
-        return $status;
+        return $band;
+    }
+
+    /**
+     * Pásmo návrhu z řádku analýzy: confidence + prahy profilu běhu
+     * (fallback default profil) + strop pokrytí. Convenience pro čtecí
+     * místa (feed, viewer, preview).
+     *
+     * @param array<string, mixed> $canonical
+     */
+    public function bandForAnalysis(?float $confidence, ?int $profileNdx, array $canonical): string
+    {
+        $thresholds = $profileNdx !== null
+            ? $this->thresholdsForProfile($profileNdx)
+            : $this->thresholdsForDefaultProfile();
+        $band = $this->bandFor($confidence ?? 0.0, $thresholds);
+        return $this->capBandByRowCoverage($band, $canonical);
     }
 
     /**

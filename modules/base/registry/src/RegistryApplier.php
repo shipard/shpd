@@ -12,8 +12,8 @@ use Shipard\Core\Logging\ErrorLogger;
 use Shipard\Module\Core\Attachments\AttachmentService;
 use Shipard\Module\Core\Exchange\Resolve\PartyResolver;
 use Shipard\Module\Core\Exchange\Resolve\ResolveStatus;
-use Shipard\Module\Core\Mail\ExtractedDocTypes;
-use Shipard\Module\Core\Mail\ExtractedTargetApplier;
+use Shipard\Module\Core\Mail\PrimaryTypes;
+use Shipard\Module\Core\Mail\ProposalTargetApplier;
 use Shipard\Module\Core\Mail\TargetApplyResult;
 use Shipard\Module\Core\Mail\TargetUnapplyResult;
 
@@ -30,14 +30,15 @@ use Shipard\Module\Core\Mail\TargetUnapplyResult;
  *   ({@see PartnerEmailMatcher}) → NULL. Žádné auto-zakládání osob.
  * - Šanon (§7.5): historie (nejčastější šanon partner+druh) →
  *   `binderSuggestion` case-insensitive → NULL. Nikdy nezakládá šanon.
- * - `target_table_id`/`target_row_ndx` zapisuje na extracted řádek uvnitř
- *   své transakce (symetrie s `DocumentApplier::writeLineageTargets` —
- *   recovery přes `completeApplied` na tom stojí).
- * - Kopie příloh (D8) + best-effort `extracted_text` po commitu.
+ * - `target_table_id`/`target_row` zapisuje na zprávu uvnitř své transakce
+ *   (symetrie s `DocumentApplier::writeLineageTargets` — recovery přes
+ *   `completeApplied` na tom stojí).
+ * - Kopie příloh + best-effort `extracted_text` po commitu. Záznam dostává
+ *   **všechny** obsahové přílohy zprávy (D5 z mail-message-centric —
+ *   sémantika podacího deníku: jedno doručení = jeden záznam).
  */
-final class RegistryApplier implements ExtractedTargetApplier
+final class RegistryApplier implements ProposalTargetApplier
 {
-    private const EXTRACTED_TABLE = 'core_mail_extracted_documents';
     private const MESSAGES_TABLE = 'core_mail_incoming_messages';
     private const ATTACHMENTS_TABLE = 'core_attachments_files';
     private const REGISTRY_TABLE = 'base_registry_documents';
@@ -60,11 +61,9 @@ final class RegistryApplier implements ExtractedTargetApplier
         private readonly ?PartyResolver $partyResolver = null,
     ) {}
 
-    public function apply(array $canonical, array $extractedRow, ?int $userId): TargetApplyResult
+    public function apply(array $canonical, array $message, string $proposedType, ?int $userId): TargetApplyResult
     {
-        $extractedNdx = (int) ($extractedRow['id'] ?? 0);
-        $messageNdx = (int) ($extractedRow['message'] ?? 0);
-        $docType = (string) ($extractedRow['doc_type'] ?? '');
+        $messageNdx = (int) ($message['id'] ?? 0);
 
         if (trim((string) ($canonical['title'] ?? '')) === '') {
             return TargetApplyResult::error(
@@ -72,16 +71,12 @@ final class RegistryApplier implements ExtractedTargetApplier
             );
         }
 
-        $message = $messageNdx > 0
-            ? $this->db->fetchRow('SELECT * FROM %n WHERE id = %i', self::MESSAGES_TABLE, $messageNdx)
-            : null;
-
-        $docKind = ExtractedDocTypes::docKindFor($this->config, $docType);
+        $docKind = PrimaryTypes::docKindFor($this->config, $proposedType);
         if ($docKind === null) {
             // Misconfig (registry target bez docKind) — dokument vznikne jako
             // 'other', metadata zůstanou 1:1, jen se nepromotují sloupce.
-            ErrorLogger::warn('RegistryApplier: doc_type has no docKind in cfg, falling back to other', [
-                'docType' => $docType, 'extractedNdx' => $extractedNdx,
+            ErrorLogger::warn('RegistryApplier: proposed type has no docKind in cfg, falling back to other', [
+                'proposedType' => $proposedType, 'messageNdx' => $messageNdx,
             ]);
             $docKind = 'other';
         }
@@ -90,7 +85,7 @@ final class RegistryApplier implements ExtractedTargetApplier
         $partner = $this->resolvePartner($party, (string) ($message['sender_email'] ?? ''));
         $binder = $this->suggestBinder($partner, $docKind, $canonical['binderSuggestion'] ?? null);
 
-        $data = $this->buildDocumentData($canonical, $docKind, $partner, $binder, $messageNdx, $extractedNdx, $userId);
+        $data = $this->buildDocumentData($canonical, $docKind, $partner, $binder, $messageNdx, $userId);
 
         $dibi = $this->db->getDibiConnection();
         $copiedFiles = [];
@@ -98,14 +93,14 @@ final class RegistryApplier implements ExtractedTargetApplier
         $dibi->begin();
         try {
             $documentId = $this->insertDocument($data);
-            $this->copyAttachments($extractedRow, $message, $documentId, $userId, $copiedFiles);
+            $this->copyAttachments($message, $documentId, $userId, $copiedFiles);
 
-            // Lineage na extracted řádek uvnitř transakce — symetrie s docs
-            // cestou (DocumentApplier::writeLineageTargets).
-            $dibi->update(self::EXTRACTED_TABLE, [
+            // Lineage na zprávu uvnitř transakce — symetrie s docs cestou
+            // (DocumentApplier::writeLineageTargets).
+            $dibi->update(self::MESSAGES_TABLE, [
                 'target_table_id' => self::REGISTRY_TABLE,
-                'target_row_ndx'  => $documentId,
-            ])->where('id = %i', $extractedNdx)->execute();
+                'target_row'      => $documentId,
+            ])->where('id = %i', $messageNdx)->execute();
 
             $dibi->commit();
         } catch (\Throwable $e) {
@@ -122,15 +117,13 @@ final class RegistryApplier implements ExtractedTargetApplier
 
     /**
      * Guard: dokument stále ve stavu 40 a nezměněný od apply
-     * (`modified <= applied_at`; `extracted_text` fill jde mimo hooky,
+     * (`modified <= resolved_at`; `extracted_text` fill jde mimo hooky,
      * `modified` nebumpuje) — jinak DOC_ADVANCED a řeší uživatel ručně.
      * Úklid: dokument → Koš (90) přes Document hooky, přílohy se nemažou
      * (soft-delete je vratný).
      */
-    public function unapply(array $extractedRow): TargetUnapplyResult
+    public function unapply(int $targetDocId, mixed $resolvedAt): TargetUnapplyResult
     {
-        $targetDocId = (int) ($extractedRow['target_row_ndx'] ?? 0);
-
         $doc = $this->db->fetchRow('SELECT * FROM %n WHERE id = %i', self::REGISTRY_TABLE, $targetDocId);
         if ($doc === null) {
             return TargetUnapplyResult::error('DOC_ADVANCED', 'Target document no longer exists', 409);
@@ -140,7 +133,7 @@ final class RegistryApplier implements ExtractedTargetApplier
         }
 
         $modified = $this->toTimestamp($doc['modified'] ?? null);
-        $appliedAt = $this->toTimestamp($extractedRow['applied_at'] ?? null);
+        $appliedAt = $this->toTimestamp($resolvedAt);
         if ($modified !== null && ($appliedAt === null || $modified > $appliedAt)) {
             return TargetUnapplyResult::error('DOC_ADVANCED', 'Target document was modified since apply', 409);
         }
@@ -174,7 +167,6 @@ final class RegistryApplier implements ExtractedTargetApplier
         ?int $partner,
         ?int $binder,
         int $messageNdx,
-        int $extractedNdx,
         ?int $userId,
     ): array {
         $kindFields = is_array($canonical['kindFields'] ?? null) ? $canonical['kindFields'] : [];
@@ -189,7 +181,6 @@ final class RegistryApplier implements ExtractedTargetApplier
             'ai_summary'     => $summary !== '' ? $summary : null,
             'source_kind'    => 'mail',
             'source_message' => $messageNdx > 0 ? $messageNdx : null,
-            'extracted_doc'  => $extractedNdx,
             'docState'       => self::DOC_STATE_FILED,
             'docStateMain'   => $this->resolveArchiveMainState(self::DOC_STATE_FILED),
             'created_by'     => $userId,
@@ -343,25 +334,19 @@ final class RegistryApplier implements ExtractedTargetApplier
     }
 
     /**
-     * Kopie příloh (D8): primárně dle `source_attachments` extracted řádku;
-     * fallback všechny obsahové přílohy zprávy (bez raw .eml, bez smazaných
-     * — stejný výběr jako ruční cesta Fáze 1).
+     * Kopie příloh (D5): záznam dostává **všechny** obsahové přílohy zprávy
+     * (bez raw .eml, bez smazaných — stejný výběr jako ruční cesta Fáze 1).
      *
-     * @param array<string, mixed>      $extractedRow
-     * @param array<string, mixed>|null $message
+     * @param array<string, mixed> $message
      * @param list<array{file_path: string, file_name: string}> $copiedFiles
      */
     private function copyAttachments(
-        array $extractedRow,
-        ?array $message,
+        array $message,
         int $documentId,
         ?int $userId,
         array &$copiedFiles,
     ): void {
-        $attachmentIds = $this->parseSourceAttachments((string) ($extractedRow['source_attachments'] ?? ''));
-        if ($attachmentIds === [] && $message !== null) {
-            $attachmentIds = $this->contentAttachmentIds($message);
-        }
+        $attachmentIds = $this->contentAttachmentIds($message);
 
         foreach ($attachmentIds as $attId) {
             $result = $this->attachments->copyTo($attId, self::REGISTRY_TABLE_ID, $documentId, $userId);
@@ -375,23 +360,6 @@ final class RegistryApplier implements ExtractedTargetApplier
                 'file_name' => (string) $result['data']['file_name'],
             ];
         }
-    }
-
-    /** @return list<int> */
-    private function parseSourceAttachments(string $json): array
-    {
-        $decoded = json_decode($json, true);
-        if (!is_array($decoded)) {
-            return [];
-        }
-        $ids = [];
-        foreach ($decoded as $value) {
-            $id = (int) $value;
-            if ($id > 0) {
-                $ids[] = $id;
-            }
-        }
-        return $ids;
     }
 
     /**

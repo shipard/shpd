@@ -16,8 +16,8 @@ use Shipard\Module\Base\Registry\RegistryImportService;
  * Endpointy Spisovny (`/_registry/*`).
  *
  * Tenká slupka nad službami modulu base.registry — auth + mapování
- * výsledku služby na Response (vzor AnalysisController::applyExtracted
- * nad ExtractedDocumentApplier).
+ * výsledku služby na Response (vzor AnalysisController::applyMessage
+ * nad MessageProposalApplier).
  *
  * Pozn.: PersonsRegistryController je ARES (obchodní rejstřík) a s tímto
  * controllerem nesouvisí.

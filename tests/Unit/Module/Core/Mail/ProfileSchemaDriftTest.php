@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 use Shipard\Core\Utils\JsoncParser;
 
 /**
- * The AI profile's `output_schema.documents.items.extracted_json` is a
+ * The AI profile's `output_schema.document.oneOf[1].extracted_json` is a
  * oneOf of two inline schema copies:
  *   [0] `modules/core/exchange/schemas/shpd.docs.document.v1.json`
  *   [1] `modules/base/registry/schemas/shpd.registry.document.v1.json`
@@ -36,8 +36,11 @@ class ProfileSchemaDriftTest extends TestCase
     /** @return array<int, mixed> */
     private function extractedJsonOneOf(array $profile): array
     {
-        $extractedJson = $profile['output_schema']['properties']['documents']['items']['properties']['extracted_json'] ?? null;
-        $this->assertIsArray($extractedJson, 'profile output_schema.documents.items.properties.extracted_json missing');
+        // document je oneOf [null, objekt] — objekt s extracted_json je [1].
+        $document = $profile['output_schema']['properties']['document']['oneOf'][1] ?? null;
+        $this->assertIsArray($document, 'profile output_schema.document.oneOf[1] (object variant) missing');
+        $extractedJson = $document['properties']['extracted_json'] ?? null;
+        $this->assertIsArray($extractedJson, 'profile output_schema.document.…extracted_json missing');
         $this->assertArrayHasKey('oneOf', $extractedJson, 'extracted_json must be a oneOf of [docs, registry] embeds');
         return $extractedJson['oneOf'];
     }
@@ -83,7 +86,7 @@ class ProfileSchemaDriftTest extends TestCase
         [$profile] = $this->loadProfile();
 
         $this->assertSame('czech_invoices', $profile['profile_id']);
-        $this->assertSame('v3.2.0', $profile['prompt_version']);
+        $this->assertSame('v4.0.0', $profile['prompt_version']);
         $this->assertContains('invoiceReceived', $profile['supported_doc_types']);
         foreach (['contract', 'insurance', 'quotation', 'certificate', 'official'] as $registryType) {
             $this->assertContains($registryType, $profile['supported_doc_types']);
@@ -113,7 +116,12 @@ class ProfileSchemaDriftTest extends TestCase
             );
         }
 
-        $this->assertStringContainsString('"v3.2.0"', $prompt, 'prompt must pin its own version');
-        $this->assertStringNotContainsString('v3.1.0', $prompt, 'stale prompt version reference');
+        $this->assertStringContainsString('"v4.0.0"', $prompt, 'prompt must pin its own version');
+        $this->assertStringNotContainsString('v3.2.0', $prompt, 'stale prompt version reference');
+        // Kontrakt v4 (mail-message-centric D11): nejvýše jeden document,
+        // žádné plurální documents / source_attachment_ndxs.
+        $this->assertStringNotContainsString('"documents"', $prompt, 'plural documents field is gone in v4');
+        $this->assertStringNotContainsString('source_attachment_ndxs', $prompt, 'source_attachment_ndxs is gone in v4');
+        $this->assertStringContainsString('"secondary_findings"', $prompt, 'prompt must describe secondary_findings');
     }
 }

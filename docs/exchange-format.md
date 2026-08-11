@@ -61,7 +61,7 @@ plánované formáty (samostatné dokumenty / iterace) popisuje sekce 13.
 | **Schema** | Definice struktury konkrétního formátu (`shpd.docs.document.v1`). JSON Schema draft-2020-12 + PHP třída `ExchangeFormat` pro logiku, kterou schema neumí (např. polymorfismus podle `docType`). |
 | **Resolve** | Proces propojení referencí v canonical (Party, Item, Unit, VAT code, BankAccount) s entitami v lokální DB. |
 | **Apply** | Proces uložení canonical dokumentu do DB — orchestruje resolve, transformuje na interní `$data`, deleguje na `TableGateway::saveDocument()`. |
-| **Lineage** | Stopy, odkud doklad vznikl — `source.kind` + `source_extracted_doc` v `docs_core_heads`. |
+| **Lineage** | Stopy, odkud doklad vznikl — `source.kind` + `source_message` v `docs_core_heads`, zpětně `target_*` na zdrojové zprávě. |
 
 ## 3. Architektura — tři vrstvy
 
@@ -142,10 +142,11 @@ Top-level struktura:
                                   //   | import.flexibee | import.pohoda | …
     "extractedAt": "2026-05-14T10:30:00Z",
     "confidence": 0.92,           // jen pro aiExtraction (overall_confidence)
-    "mailMessage": 12345,         // FK na core_mail_incoming_messages, opt.
-    "extractedDoc": 678,          // FK na core_mail_extracted_documents, opt.
-                                  //   — vyplní AI analyzer, applier ho propíše
-                                  //   do docs_core_heads.source_extracted_doc
+    "message": 12345,             // int|null — FK na core_mail_incoming_messages.
+                                  //   Injektuje ho SERVER při apply návrhu
+                                  //   z pošty (nikdy se nevěří klientovi);
+                                  //   applier ho propíše do
+                                  //   docs_core_heads.source_message
     "promptVersion": "v1.1.0",    // pro AI lineage
     "raw": { /* opaque source-specific payload, optional */ }
   },
@@ -455,7 +456,7 @@ Postup:
    `economy_items` row (potřebuje uživatelské doplnění `item_kind`).
 
 Per-partner mapování v `economy_items_supplier_codes` se buduje jednak ručně,
-jednak applierem: když uživatel rozhodne "tato extracted položka odpovídá naší
+jednak applierem: když uživatel rozhodne "tato extrahovaná položka odpovídá naší
 `K-001`" pro `supplierCode: "KONZ-001"` od `personId: 42`, applier zaznamená
 mapping. Příště se napaří automaticky.
 
@@ -623,24 +624,26 @@ POST /api/v1/_exchange/docs/document/apply
   │      - canonical field names → DB column names (camelCase → snake_case)
   │      - currency uppercase → lowercase (cfgItem expects "czk")
   │      - vatRecap, totals vypustit (přepočte beforeSave)
-  │      - source.* → docs_core_heads.source_kind / source_extracted_doc
+  │      - source.* → docs_core_heads.source_kind / source_message /
+  │        source_extracted_at
   │
   ├─ 8. TableGateway.saveDocument('docs_core_heads', $data)
   │      → DocDocument::validate (+ subclass per docType)
   │      → DocDocument::beforeSave (snapshoty, recap, totals, čísla)
   │      → insert/update docs_core_heads + rows + vat_recap
   │
-  ├─ 9. Attach attachments
-  │      - inline → AttachmentService::upload (s linkem na nový doc_head.id)
-  │      - ref:<id> → re-link existing attachment z extracted_doc na
-  │        nový doc_head
+  ├─ 9. Attachments — u dokladu z pošty se přílohy NEkopírují: zůstávají
+  │      na zdrojové zprávě a detail dokladu je zobrazuje jako skupinu
+  │      „mail" přes lineage (DocsHeadsViewer::sourceAttachmentGroups,
+  │      heads.source_message + reverzní message.target_*)
   │
-  ├─ 10. Lineage update
-  │      - core_mail_extracted_documents.target_table_id = 'docs_core_heads'
-  │      - core_mail_extracted_documents.target_row_ndx  = $newDocId
-  │      - core_mail_extracted_documents.status          = 40 (applied)
-  │      - core_mail_extracted_documents.applied_at      = now()
-  │      (jen pokud source.extractedDoc je vyplněn)
+  ├─ 10. Lineage update (writeLineageTargets — jen pokud source.message
+  │      je vyplněn; D6 z mail-message-centric)
+  │      - core_mail_incoming_messages.target_table_id = 'docs_core_heads'
+  │      - core_mail_incoming_messages.target_row      = $newDocId
+  │      (druhá strana vazby k heads.source_message; zapisuje se atomicky
+  │       v téže transakci. Verdikt analýzy — resolution — a docState
+  │       zprávy sem záměrně NEpatří, ty píše MessageProposalApplier)
   │
   ├─ 11. COMMIT
   │
@@ -679,7 +682,7 @@ chybí, applier selže (validace v `DocDocument::validate`).
 | Mode | Chování |
 |---|---|
 | `strict` (default) | Bez explicit `userAction` → `422 unresolved_required`. Vhodné pro UI flow, kde uživatel rozhoduje. |
-| `safe` | Autocreate, pokud `createPayload` splňuje per-tabulka guard (Party: `company_id`; Item: `name`; BankAccount: `iban` nebo `account_number`). Jinak `unresolved_required`. Vhodné pro AI flow (`AnalysisController::applyExtracted` posílá `safe`). |
+| `safe` | Autocreate, pokud `createPayload` splňuje per-tabulka guard (Party: `company_id`; Item: `name`; BankAccount: `iban` nebo `account_number`). Jinak `unresolved_required`. Vhodné pro AI flow (apply návrhu zprávy bez klientských userActions jede `safe`). |
 | `liberal` | Autocreate vždy. Žádný safety guard. Pro budoucí B2B import / testovací cesty. |
 
 `userAction` přebíjí mode — explicit `useExisting:<id>` nebo `create`
@@ -734,18 +737,21 @@ preview indikoval `canCreate` / `ambiguous`).
 
 ## 12. Source lineage
 
-Stopy o tom, odkud doklad vznikl, jsou na **dvou místech**:
+Vazba doklad ↔ zdrojová zpráva je **obousměrná** a obě strany zapisuje
+apply atomicky (D6 z `tasks/mail-message-centric.md`):
 
-**1. `core_mail_extracted_documents.target_table_id` / `target_row_ndx`**
-(existující sloupce, vyplní applier při AI flow).
-Forward lookup z analýzy → výsledný doklad.
+**1. `core_mail_incoming_messages.target_table_id` / `target_row`** —
+forward lookup ze zprávy → výsledná entita (docs i registry). Zapisuje
+`DocumentApplier::writeLineageTargets` (resp. `RegistryApplier`) uvnitř
+save transakce. Zároveň slouží jako klíč **idempotence** apply — obsazený
+target = opakovaný apply vrátí existující entitu, nevzniká duplicita.
 
-**2. Nové sloupce v `docs_core_heads`:**
+**2. Sloupce v `docs_core_heads`:**
 
 | Sloupec | Typ | Význam |
 |---------|-----|--------|
-| `source_kind` | `varchar(40) nullable` | `aiExtraction` / `isdoc` / `manual` / `import.flexibee` / … (řízeno cfgItem `docs.core.sourceKinds`) |
-| `source_extracted_doc` | `int nullable` ref `core_mail_extracted_documents` | Plněno jen pro `source_kind = 'aiExtraction'`. |
+| `source_kind` | `enumString(40) nullable` | `aiExtraction` / `isdoc` / `manual` / `import.flexibee` / … (řízeno cfgItem `docs.core.sourceKinds`) |
+| `source_message` | `int nullable` ref `core_mail_incoming_messages`, index `idx_source_message` | Zdrojová zpráva došlé pošty; plní server-side injection `source.message` při apply návrhu. |
 | `source_extracted_at` | `datetime nullable` | Časový bod extrakce / importu. |
 
 Reverse lookup z dokladu → původ. Pro doklady ručně pořízené přes UI je

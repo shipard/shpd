@@ -89,6 +89,11 @@ strojově „od pohledu", ale přebírá se přesně. Viz
 **Zamítnutí není konečné.** Zamítnutý návrh zůstane u zprávy, ale
 **Znovu analyzovat** ti vytvoří nový. Zpráva ani přílohy se nemažou.
 
+**AI vytěží jen hlavní dokument zprávy.** Když e-mail nese víc dokumentů
+(faktura + smlouva, dvě faktury), návrh vznikne jen z toho hlavního —
+ostatní uvidíš na kartě jako poznámku a založíš je ručně. Není to chyba
+čtení; viz [Co Shipard dnes neumí](../co-dnes-nejde.md).
+
 ## Souvisí
 
 - [Kontrola vytěženého dokladu](kontrola-vytezeni.md) — jak chybu najít

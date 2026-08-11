@@ -46,7 +46,7 @@ class SupplierCodeCaptureHandler extends AbstractDocumentEventHandler
 
         // Lineage + partner čteme z DB — $data nemusí nést všechny sloupce.
         $head = $this->db->fetch(
-            'SELECT [partner], [source_kind], [source_extracted_doc]
+            'SELECT [partner], [source_kind], [source_message]
              FROM [docs_core_heads] WHERE [id] = %i',
             $docId,
         );
@@ -54,12 +54,12 @@ class SupplierCodeCaptureHandler extends AbstractDocumentEventHandler
             return;
         }
         $partnerId = (int) ($head['partner'] ?? 0);
-        $extractedNdx = (int) ($head['source_extracted_doc'] ?? 0);
-        if (($head['source_kind'] ?? null) !== 'aiExtraction' || $extractedNdx <= 0 || $partnerId <= 0) {
+        $messageNdx = (int) ($head['source_message'] ?? 0);
+        if (($head['source_kind'] ?? null) !== 'aiExtraction' || $messageNdx <= 0 || $partnerId <= 0) {
             return;
         }
 
-        $canonicalRows = $this->loadCanonicalRows($extractedNdx);
+        $canonicalRows = $this->loadCanonicalRows($messageNdx);
         if ($canonicalRows === []) {
             return;
         }
@@ -103,18 +103,25 @@ class SupplierCodeCaptureHandler extends AbstractDocumentEventHandler
     }
 
     /**
+     * Canonical návrhu = poslední úspěšná analýza zdrojové zprávy
+     * (konvence MAX(analyzed_at), viz MessageProposalApplier).
+     *
      * @return array<int, mixed>
      */
-    private function loadCanonicalRows(int $extractedNdx): array
+    private function loadCanonicalRows(int $messageNdx): array
     {
-        $extracted = $this->db?->fetch(
-            'SELECT [extracted_json] FROM [core_mail_extracted_documents] WHERE [id] = %i',
-            $extractedNdx,
+        $analysis = $this->db?->fetch(
+            'SELECT [canonical_json] FROM [core_mail_message_analyses]
+             WHERE [message] = %i AND [status] = %i
+             ORDER BY [analyzed_at] DESC, [id] DESC
+             LIMIT 1',
+            $messageNdx,
+            2,
         );
-        if ($extracted === null) {
+        if ($analysis === null) {
             return [];
         }
-        $canonical = json_decode((string) ($extracted['extracted_json'] ?? ''), true);
+        $canonical = json_decode((string) ($analysis['canonical_json'] ?? ''), true);
         if (!is_array($canonical) || !is_array($canonical['rows'] ?? null)) {
             return [];
         }

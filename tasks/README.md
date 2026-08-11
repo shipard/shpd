@@ -17,7 +17,7 @@ jednotlivých subsystémů žijí v [`docs/`](../docs/README.md).
 
 ## Stav
 
-Celkem 193 tasků: **naplánováno** 6 · **částečně** 1 · **hotovo** 186.
+Celkem 194 tasků: **naplánováno** 6 · **částečně** 2 · **hotovo** 186.
 
 Zdroj pravdy je řádek `**Stav:**` v hlavičce každého tasku; tato
 tabulka je generovaná (`scripts/tasks-index.py`). Hotové tasky se
@@ -32,6 +32,7 @@ nevypisují — níže je jen to, co není dokončené.
 | `ds-setup-07-feed-card.md` | naplánováno |  |
 | `mail-analysis-schema-fixes.md` | naplánováno | návrh 2026-07-14; `schema_error` není v kódu |
 | `mail-invoice-rounding.md` | částečně | implementováno, zbývá ověření a nasazení promptu |
+| `mail-message-centric.md` | částečně | Fáze A–D v tomto repozitáři hotové (schéma, /result v4, |
 
 <!-- STAV:END -->
 

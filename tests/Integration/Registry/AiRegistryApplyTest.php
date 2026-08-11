@@ -16,15 +16,16 @@ use Shipard\Module\Core\Attachments\AttachmentService;
 use Shipard\Module\Core\Exchange\Document\DocumentApplier;
 use Shipard\Module\Core\Exchange\Schema\SchemaLoader;
 use Shipard\Module\Core\Exchange\Schema\SchemaValidator;
-use Shipard\Module\Core\Mail\ExtractedDocumentDocument;
+use Shipard\Module\Core\Mail\MessageProposalApplier;
 use Shipard\Tests\Integration\IntegrationTestCase;
 
 /**
- * End-to-end pokrytí AI cesty Spisovny (Fáze 2, target `registry`):
- * extracted document s registry canonicalem → applyExtracted →
- * RegistryApplier → dokument v base_registry_documents (rovnou 40) +
- * kopie příloh + extracted_text + lineage; unapply → Koš + reverz +
- * guard DOC_ADVANCED. Spustitelné s
+ * End-to-end pokrytí AI cesty Spisovny (target `registry`, message-centricky
+ * po tasks/mail-message-centric.md): analýza s registry canonicalem →
+ * applyMessage → RegistryApplier → dokument v base_registry_documents
+ * (rovnou 40) + kopie VŠECH obsahových příloh zprávy + extracted_text +
+ * lineage (source_message ↔ messages.target_*) + resolution 40; unapply →
+ * Koš + reverz + guard DOC_ADVANCED. Spustitelné s
  * `SHIPARD_INTEGRATION_DS_PATH=/opt/shipard/data-sources/<id>`.
  */
 class AiRegistryApplyTest extends IntegrationTestCase
@@ -41,7 +42,6 @@ class AiRegistryApplyTest extends IntegrationTestCase
 
     private int $messageRowId = 0;
     private int $analysisRowId = 0;
-    private int $extractedRowId = 0;
 
     /** @var list<int> */
     private array $createdDocumentIds = [];
@@ -65,13 +65,14 @@ class AiRegistryApplyTest extends IntegrationTestCase
         }
         $this->mailboxId = (int) $mailbox['id'];
 
-        if (($this->configRuntime->cfgItem('core.mail.extractedDocTypes')['insurance']['target'] ?? null) !== 'registry') {
+        // Registry target žije v cfgItem core.mail.primaryTypes (D4 — jediná
+        // klasifikační osa, extractedDocTypes zanikl).
+        if (($this->configRuntime->cfgItem('core.mail.primaryTypes')['insurance']['target'] ?? null) !== 'registry') {
             $this->markTestSkipped('compiled config missing registry targets — run ds-upgrade.');
         }
 
-        // DocumentApplier je pro registry cestu nevyužitý, ale controller bez
-        // něj degraduje na plain status update (Phase 1 fallback) — wiring
-        // musí odpovídat produkci.
+        // DocumentApplier je pro registry cestu nevyužitý, ale wiring musí
+        // odpovídat produkci (docs větev MessageProposalApplier ho vyžaduje).
         $applier = DocumentApplier::create(
             $this->db->getDibiConnection(),
             $this->configRuntime,
@@ -95,9 +96,6 @@ class AiRegistryApplyTest extends IntegrationTestCase
     {
         $dibi = $this->db->getDibiConnection();
 
-        if ($this->extractedRowId > 0) {
-            $dibi->delete('core_mail_extracted_documents')->where('id = %i', $this->extractedRowId)->execute();
-        }
         if ($this->analysisRowId > 0) {
             $dibi->delete('core_mail_message_analyses')->where('id = %i', $this->analysisRowId)->execute();
         }
@@ -123,7 +121,7 @@ class AiRegistryApplyTest extends IntegrationTestCase
     // Fixtures
     // -------------------------------------------------------------------------
 
-    /** Zpráva ve 20 (K řešení) — apply ji přes afterPersist posune na 40. */
+    /** Zpráva ve 20 (K řešení), analysis_state 30 — apply ji posune na 40. */
     private function createMessage(string $senderEmail): int
     {
         $now = date('Y-m-d H:i:s');
@@ -149,37 +147,29 @@ class AiRegistryApplyTest extends IntegrationTestCase
     }
 
     /**
+     * Poslední úspěšná analýza s registry canonicalem (canonical_json +
+     * proposed_type) — nositel návrhu; extracted řádek zanikl.
+     *
      * @param array<string, mixed> $canonical
-     * @param list<int> $sourceAttachments
      */
-    private function provisionExtracted(array $canonical, array $sourceAttachments = []): int
+    private function provisionAnalysis(array $canonical, string $proposedType = 'insurance'): int
     {
         $now = date('Y-m-d H:i:s');
         $dibi = $this->db->getDibiConnection();
 
         $dibi->insert('core_mail_message_analyses', [
-            'message'                  => $this->messageRowId,
-            'analyzed_at'              => $now,
-            'status'                   => 2,
-            'model_name'               => 'fixture',
-            'prompt_version'           => 'v3.0.0',
-            'extracted_document_count' => 1,
-            'created'                  => $now,
+            'message'        => $this->messageRowId,
+            'analyzed_at'    => $now,
+            'status'         => 2,
+            'model_name'     => 'fixture',
+            'prompt_version' => 'v4.0.0',
+            'canonical_json' => json_encode($canonical, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'proposed_type'  => $proposedType,
+            'confidence'     => 0.93,
+            'created'        => $now,
         ])->execute();
         $this->analysisRowId = (int) $dibi->getInsertId();
-
-        $dibi->insert('core_mail_extracted_documents', [
-            'message'            => $this->messageRowId,
-            'analysis'           => $this->analysisRowId,
-            'doc_type'           => 'insurance',
-            'source_attachments' => json_encode($sourceAttachments),
-            'extracted_json'     => json_encode($canonical, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-            'confidence'         => 0.93,
-            'status'             => ExtractedDocumentDocument::STATUS_READY_TO_APPLY,
-            'created'            => $now,
-        ])->execute();
-        $this->extractedRowId = (int) $dibi->getInsertId();
-        return $this->extractedRowId;
+        return $this->analysisRowId;
     }
 
     /** @return array<string, mixed> */
@@ -259,13 +249,24 @@ class AiRegistryApplyTest extends IntegrationTestCase
 
     private function request(): Request
     {
-        return Request::fromArray('POST', '/api/v1/_mail/extracted-documents/x/apply', [], '', ['HTTP_HOST' => 'test']);
+        return Request::fromArray('POST', '/api/v1/_mail/messages/x/apply', [], '', ['HTTP_HOST' => 'test']);
     }
 
     private function statusOf(Response $response): int
     {
         $ref = new \ReflectionClass($response);
         return (int) $ref->getProperty('status')->getValue($response);
+    }
+
+    /** @return array<string, mixed> Řádek analýzy (verdikt čteme SELECTem). */
+    private function analysisRow(): array
+    {
+        $row = $this->db->fetchRow(
+            'SELECT * FROM core_mail_message_analyses WHERE id = %i',
+            $this->analysisRowId,
+        );
+        $this->assertNotNull($row);
+        return $row;
     }
 
     // -------------------------------------------------------------------------
@@ -280,10 +281,13 @@ class AiRegistryApplyTest extends IntegrationTestCase
         $binderId = $this->createBinder(self::PREFIX . ' Pojištění');
 
         $messageId = $this->createMessage($senderEmail);
-        $att = $this->uploadAttachment($messageId, 'pojistka.txt', self::PREFIX . ' fulltext pojistné smlouvy');
-        $extractedNdx = $this->provisionExtracted($this->insuranceCanonical($companyId), [$att['id']]);
+        // Dvě obsahové přílohy — záznam Spisovny dostává VŠECHNY (D5,
+        // sémantika podacího deníku), žádný per-návrh výběr už neexistuje.
+        $att1 = $this->uploadAttachment($messageId, 'pojistka.txt', self::PREFIX . ' fulltext pojistné smlouvy');
+        $att2 = $this->uploadAttachment($messageId, 'dodatek.txt', self::PREFIX . ' dodatek ke smlouvě');
+        $this->provisionAnalysis($this->insuranceCanonical($companyId));
 
-        $resp = $this->controller->applyExtracted($this->authed(), $this->request(), $extractedNdx);
+        $resp = $this->controller->applyMessage($this->authed(), $this->request(), $messageId);
         $this->assertSame(200, $this->statusOf($resp), 'apply: ' . json_encode($resp->getPayload()));
         $docId = (int) $resp->getPayload()['data']['savedDocId'];
         $this->createdDocumentIds[] = $docId;
@@ -298,7 +302,6 @@ class AiRegistryApplyTest extends IntegrationTestCase
         $this->assertStringContainsString('prolongaci', (string) $doc['ai_summary']);
         $this->assertSame('mail', (string) $doc['source_kind']);
         $this->assertSame($messageId, (int) $doc['source_message']);
-        $this->assertSame($extractedNdx, (int) $doc['extracted_doc']);
         $this->assertSame(1, (int) $doc['created_by']);
 
         // 2. metadata = kindFields 1:1, promoted sloupce doplněné beforeSave.
@@ -315,94 +318,104 @@ class AiRegistryApplyTest extends IntegrationTestCase
         // 4. Binder: bez historie padá na case-insensitive match jména.
         $this->assertSame($binderId, (int) $doc['binder']);
 
-        // 5. Kopie přílohy (D8) — shodný checksum na dokumentu.
+        // 5. Kopie VŠECH obsahových příloh zprávy — shodné checksums.
         $copied = $this->db->fetchAll(
             'SELECT checksum FROM core_attachments_files'
             . ' WHERE table_id = %i AND record_id = %i AND is_deleted = 0',
             self::REGISTRY_TABLE_ID, $docId,
         );
-        $this->assertCount(1, $copied);
-        $this->assertSame($att['checksum'], (string) $copied[0]['checksum']);
+        $this->assertCount(2, $copied);
+        $copiedChecksums = array_map(static fn($row) => (string) $row['checksum'], $copied);
+        sort($copiedChecksums);
+        $expected = [$att1['checksum'], $att2['checksum']];
+        sort($expected);
+        $this->assertSame($expected, $copiedChecksums);
 
         // 6. extracted_text z kopie (text/plain → přímé čtení, bez pdftotext).
         $this->assertStringContainsString('fulltext pojistné smlouvy', (string) $doc['extracted_text']);
 
-        // 7. Lineage + status na extracted řádku.
-        $extracted = $this->db->fetchRow('SELECT * FROM core_mail_extracted_documents WHERE id = %i', $extractedNdx);
-        $this->assertSame('base_registry_documents', (string) $extracted['target_table_id']);
-        $this->assertSame($docId, (int) $extracted['target_row_ndx']);
-        $this->assertSame(ExtractedDocumentDocument::STATUS_APPLIED, (int) $extracted['status']);
-        $this->assertNotNull($extracted['applied_at']);
+        // 7. Lineage na zprávě + verdikt na analýze.
+        $message = $this->db->fetchRow('SELECT * FROM core_mail_incoming_messages WHERE id = %i', $messageId);
+        $this->assertSame('base_registry_documents', (string) $message['target_table_id']);
+        $this->assertSame($docId, (int) $message['target_row']);
+        $analysis = $this->analysisRow();
+        $this->assertSame(MessageProposalApplier::RESOLUTION_APPLIED, (int) $analysis['resolution']);
+        $this->assertNotNull($analysis['resolved_at']);
+        $this->assertSame(1, (int) $analysis['resolved_by']);
 
-        // 8. Zpráva auto-transition 20 → 40 (jediný pending child vyřešen).
-        $message = $this->db->fetchRow('SELECT docState FROM core_mail_incoming_messages WHERE id = %i', $messageId);
+        // 8. Zpráva → Hotovo (20 → 40).
         $this->assertSame(40, (int) $message['docState']);
 
         // 9. Druhý apply je idempotentní (recovery cesta completeApplied).
-        $again = $this->controller->applyExtracted($this->authed(), $this->request(), $extractedNdx);
+        $again = $this->controller->applyMessage($this->authed(), $this->request(), $messageId);
         $this->assertSame(200, $this->statusOf($again));
         $this->assertTrue((bool) ($again->getPayload()['data']['idempotent'] ?? false));
         $this->assertSame($docId, (int) $again->getPayload()['data']['savedDocId']);
     }
 
-    public function testUnapplyRoundTripTrashesDocumentAndRestoresExtracted(): void
+    public function testUnapplyRoundTripTrashesDocumentAndReopensProposal(): void
     {
         $companyId = '98' . substr((string) (microtime(true) * 10000), -6);
         $messageId = $this->createMessage('it-regai-' . uniqid() . '@example.com');
-        $extractedNdx = $this->provisionExtracted($this->insuranceCanonical($companyId));
+        $this->provisionAnalysis($this->insuranceCanonical($companyId));
 
-        $apply = $this->controller->applyExtracted($this->authed(), $this->request(), $extractedNdx);
+        $apply = $this->controller->applyMessage($this->authed(), $this->request(), $messageId);
         $this->assertSame(200, $this->statusOf($apply), 'apply: ' . json_encode($apply->getPayload()));
         $docId = (int) $apply->getPayload()['data']['savedDocId'];
         $this->createdDocumentIds[] = $docId;
 
-        $undo = $this->controller->unapplyExtracted($this->authed(), $this->request(), $extractedNdx);
+        $undo = $this->controller->unapplyMessage($this->authed(), $this->request(), $messageId);
         $this->assertSame(200, $this->statusOf($undo), 'unapply: ' . json_encode($undo->getPayload()));
 
-        // Dokument v Koši, extracted zpět na 20 s vynulovanými target_*.
+        // Dokument v Koši, zpráva s vynulovanými target_*.
         $doc = $this->db->fetchRow('SELECT * FROM base_registry_documents WHERE id = %i', $docId);
         $this->assertSame(90, (int) $doc['docState']);
         $this->assertSame(5, (int) $doc['docStateMain']);
 
-        $extracted = $this->db->fetchRow('SELECT * FROM core_mail_extracted_documents WHERE id = %i', $extractedNdx);
-        $this->assertSame(ExtractedDocumentDocument::STATUS_PENDING_REVIEW, (int) $extracted['status']);
-        $this->assertNull($extracted['target_row_ndx']);
-        $this->assertNull($extracted['applied_at']);
+        $message = $this->db->fetchRow('SELECT * FROM core_mail_incoming_messages WHERE id = %i', $messageId);
+        $this->assertNull($message['target_table_id']);
+        $this->assertTrue($message['target_row'] === null || (int) $message['target_row'] === 0);
 
-        // Zpráva reverz 40 → 20 (znovu má pending child).
-        $message = $this->db->fetchRow('SELECT docState FROM core_mail_incoming_messages WHERE id = %i', $messageId);
+        // Analýza: návrh znovu otevřený (resolution/resolved_* NULL).
+        $analysis = $this->analysisRow();
+        $this->assertNull($analysis['resolution']);
+        $this->assertNull($analysis['resolved_at']);
+
+        // Zpráva reverz 40 → 20 (K řešení).
         $this->assertSame(20, (int) $message['docState']);
 
         // Opakovaný unapply → 409 INVALID_STATE.
-        $again = $this->controller->unapplyExtracted($this->authed(), $this->request(), $extractedNdx);
+        $again = $this->controller->unapplyMessage($this->authed(), $this->request(), $messageId);
         $this->assertSame(409, $this->statusOf($again));
     }
 
     public function testUnapplyGuardsAgainstDocumentModifiedSinceApply(): void
     {
         $companyId = '97' . substr((string) (microtime(true) * 10000), -6);
-        $this->createMessage('it-regai-' . uniqid() . '@example.com');
-        $extractedNdx = $this->provisionExtracted($this->insuranceCanonical($companyId));
+        $messageId = $this->createMessage('it-regai-' . uniqid() . '@example.com');
+        $this->provisionAnalysis($this->insuranceCanonical($companyId));
 
-        $apply = $this->controller->applyExtracted($this->authed(), $this->request(), $extractedNdx);
+        $apply = $this->controller->applyMessage($this->authed(), $this->request(), $messageId);
         $this->assertSame(200, $this->statusOf($apply), 'apply: ' . json_encode($apply->getPayload()));
         $docId = (int) $apply->getPayload()['data']['savedDocId'];
         $this->createdDocumentIds[] = $docId;
 
-        // Mezitímní editace dokumentu (bump modified za applied_at).
+        // Mezitímní editace dokumentu (bump modified za resolved_at).
         $this->db->getDibiConnection()->update('base_registry_documents', [
             'modified' => date('Y-m-d H:i:s', time() + 3600),
         ])->where('id = %i', $docId)->execute();
 
-        $undo = $this->controller->unapplyExtracted($this->authed(), $this->request(), $extractedNdx);
+        $undo = $this->controller->unapplyMessage($this->authed(), $this->request(), $messageId);
         $this->assertSame(409, $this->statusOf($undo));
         $this->assertSame('DOC_ADVANCED', (string) ($undo->getPayload()['error']['code'] ?? ''));
 
-        // Dokument zůstal ve 40, extracted zůstal applied.
+        // Dokument zůstal ve 40, verdikt zůstal applied, target živý.
         $doc = $this->db->fetchRow('SELECT docState FROM base_registry_documents WHERE id = %i', $docId);
         $this->assertSame(40, (int) $doc['docState']);
-        $extracted = $this->db->fetchRow('SELECT status FROM core_mail_extracted_documents WHERE id = %i', $extractedNdx);
-        $this->assertSame(ExtractedDocumentDocument::STATUS_APPLIED, (int) $extracted['status']);
+        $this->assertSame(MessageProposalApplier::RESOLUTION_APPLIED, (int) $this->analysisRow()['resolution']);
+        $this->assertSame($docId, (int) $this->db->fetchRow(
+            'SELECT target_row FROM core_mail_incoming_messages WHERE id = %i', $messageId,
+        )['target_row']);
     }
 
     private function dateOf(mixed $value): string

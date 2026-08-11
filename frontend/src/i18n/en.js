@@ -156,14 +156,19 @@ export default {
   'viewer.fileToRegistry.duplicate':
     'A registry document with an identical attachment already exists — check for a duplicate.',
 
-  // ── Viewer detail (extracted documents + reject dialog) ─────────────────
+  // ── Viewer detail (document proposal + reject dialog) ───────────────────
   'viewer.detail.empty': 'No details',
-  'viewer.detail.noExtracted': 'No extracted documents.',
-  'viewer.detail.applied': 'Applied: {date}',
+  'viewer.detail.noProposal': 'No document proposal — the message is classified as {type}.',
+  'viewer.detail.proposalFailed': 'Extraction failed',
+  'viewer.detail.band.ready': 'Ready to apply',
+  'viewer.detail.band.review': 'Pending review',
+  'viewer.detail.band.low': 'Low confidence',
+  'viewer.detail.resolvedAt': 'Resolved: {date}',
   'viewer.detail.rejected': 'Rejection reason: {reason}',
   'viewer.detail.showDetail': 'Show detail',
+  'viewer.detail.apply': 'Apply',
   'viewer.detail.reject': 'Reject',
-  'viewer.detail.rejectTitle': 'Reject document',
+  'viewer.detail.rejectTitle': 'Reject proposal',
   'viewer.detail.rejectReasonLabel': 'Rejection reason (required):',
   'viewer.detail.rejectReasonPlaceholder': 'E.g. False positive, misclassified type…',
   'viewer.detail.applyFailed': 'Failed to apply: {msg}',
@@ -411,6 +416,7 @@ export default {
   'dashboard.feed.filter.invoices': 'Received invoices',
   'dashboard.feed.filter.registry': 'Registry',
   'dashboard.feed.filter.other': 'Other',
+  'dashboard.card.action.apply': 'Apply',
   'dashboard.card.action.review': 'Review',
   'dashboard.card.action.reject': 'Reject',
   'dashboard.card.action.reanalyze': 'Re-analyze',

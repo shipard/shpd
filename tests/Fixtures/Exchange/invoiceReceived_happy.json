@@ -6,8 +6,7 @@
         "kind": "aiExtraction",
         "extractedAt": "2026-05-14T10:30:00Z",
         "confidence": 0.92,
-        "mailMessage": 12345,
-        "extractedDoc": 678,
+        "message": 12345,
         "promptVersion": "v1.1.0"
     },
 

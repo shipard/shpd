@@ -165,14 +165,19 @@ export default {
   'viewer.fileToRegistry.duplicate':
     'Dokument se shodnou přílohou už ve Spisovně existuje — zkontrolujte, zda nejde o duplicitu.',
 
-  // ── Viewer detail (extrahované dokumenty + reject dialog) ───────────────
+  // ── Viewer detail (dokumentový návrh + reject dialog) ───────────────────
   'viewer.detail.empty': 'Žádné detaily',
-  'viewer.detail.noExtracted': 'Žádné extrahované dokumenty.',
-  'viewer.detail.applied': 'Použito: {date}',
+  'viewer.detail.noProposal': 'Žádný návrh dokumentu — zpráva je klasifikovaná jako {type}.',
+  'viewer.detail.proposalFailed': 'Chyba extrakce',
+  'viewer.detail.band.ready': 'K použití',
+  'viewer.detail.band.review': 'Čeká na review',
+  'viewer.detail.band.low': 'Nízká jistota',
+  'viewer.detail.resolvedAt': 'Rozhodnuto: {date}',
   'viewer.detail.rejected': 'Důvod zamítnutí: {reason}',
   'viewer.detail.showDetail': 'Zobrazit detail',
+  'viewer.detail.apply': 'Použít',
   'viewer.detail.reject': 'Zamítnout',
-  'viewer.detail.rejectTitle': 'Zamítnout dokument',
+  'viewer.detail.rejectTitle': 'Zamítnout návrh',
   'viewer.detail.rejectReasonLabel': 'Důvod zamítnutí (povinné):',
   'viewer.detail.rejectReasonPlaceholder': 'Např. False positive, špatně rozpoznaný typ…',
   'viewer.detail.applyFailed': 'Nepodařilo se uložit: {msg}',
@@ -424,6 +429,7 @@ export default {
   'dashboard.feed.filter.invoices': 'Přijaté faktury',
   'dashboard.feed.filter.registry': 'Spisovna',
   'dashboard.feed.filter.other': 'Ostatní',
+  'dashboard.card.action.apply': 'Použít',
   'dashboard.card.action.review': 'Zkontrolovat',
   'dashboard.card.action.reject': 'Zamítnout',
   'dashboard.card.action.reanalyze': 'Znovu analyzovat',

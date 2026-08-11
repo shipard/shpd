@@ -25,8 +25,8 @@ Položky, které jsou v menu samostatně, nad ostatními sekcemi.
 |---|---|---|
 | **Dashboard** | Domovská obrazovka. Ukazuje, co je právě potřeba udělat — nová pošta k vyřízení, upozornění z kontrol, rozdělané doklady. Většina práce začíná tady | — |
 | **Chat** | Vestavěný AI asistent. Odpovídá na otázky o tvých datech i na to, jak se v Shipardu co dělá. Jen čte — nic nezaloží ani nezmění | — |
-| **Došlá pošta** | Faktury a dokumenty, které přišly na tvou adresu pro příjem pošty. AI je přečte a připraví z nich buď návrh dokladu, nebo dokument do Spisovny | [Příjem pošty](posta/prijem-posty.md) · [Kontrola vytěženého dokladu](posta/kontrola-vytezeni.md) · [Když AI přečte fakturu špatně](posta/kdyz-ai-cte-spatne.md) |
-| **Spisovna** | Evidence dokumentů, které nejsou doklady — smlouvy, pojistky, revize. Řadí se do **Šanonů**. AI je pozná v došlé poště a nabídne je na Dashboardu k zařazení stejně jako faktury; zprávu zařadíš i ručně tlačítkem **Zařadit do Spisovny**. U dokumentů s platností Shipard hlídá datum **Platí do** a včas upozorní | — |
+| **Došlá pošta** | Faktury a dokumenty, které přišly na tvou adresu pro příjem pošty. AI zprávu přečte celou a připraví z ní nejvýše jeden návrh — doklad, nebo dokument do Spisovny; co našla navíc, ukáže jako poznámku | [Příjem pošty](posta/prijem-posty.md) · [Kontrola vytěženého dokladu](posta/kontrola-vytezeni.md) · [Když AI přečte fakturu špatně](posta/kdyz-ai-cte-spatne.md) |
+| **Spisovna** | Evidence dokumentů, které nejsou doklady — smlouvy, pojistky, revize. Řadí se do **Šanonů**. AI je pozná v došlé poště a nabídne je na Dashboardu k zařazení stejně jako faktury; záznam zařazený z pošty dostane všechny přílohy zprávy. Zprávu zařadíš i ručně tlačítkem **Zařadit do Spisovny**. U dokumentů s platností Shipard hlídá datum **Platí do** a včas upozorní | — |
 | **Úkoly** | Úkoly si můžeš zakládat a evidovat. Nikde jinde se dnes neobjevují — na Dashboard nechodí a žádná další agenda s nimi nepracuje | — |
 
 ---

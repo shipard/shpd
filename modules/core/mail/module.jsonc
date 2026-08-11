@@ -19,7 +19,6 @@
         "core_mail_incoming_messages",
         "core_mail_message_analyses",
         "core_mail_incoming_idempotency",
-        "core_mail_extracted_documents",
         "core_mail_ai_profiles",
         "core_mail_analysis_claims",
         "core_mail_senders",
@@ -47,7 +46,6 @@
         { "viewer": "core.mail.mailboxes",          "section": "other", "subsection": "other.mail", "order": 10 },
         { "table": "core_mail_message_analyses",    "section": "other", "subsection": "other.mail", "order": 20 },
         { "table": "core_mail_incoming_idempotency","section": "other", "subsection": "other.mail", "order": 30 },
-        { "table": "core_mail_extracted_documents", "section": "other", "subsection": "other.mail", "order": 35 },
         { "viewer": "core.mail.aiProfiles",         "section": "other", "subsection": "other.mail", "order": 50 },
         { "table": "core_mail_analysis_claims",     "section": "other", "subsection": "other.mail", "order": 60 },
         { "viewer": "core.mail.senders",            "section": "other", "subsection": "other.mail", "order": 70 },
@@ -151,10 +149,6 @@
             "class": "Shipard\\Module\\Core\\Mail\\AIProfileDocument"
         },
         {
-            "table": "core_mail_extracted_documents",
-            "class": "Shipard\\Module\\Core\\Mail\\ExtractedDocumentDocument"
-        },
-        {
             "table": "core_mail_sender_rules",
             "class": "Shipard\\Module\\Core\\Mail\\SenderRuleDocument"
         }
@@ -207,12 +201,8 @@
             "file": "config/primaryTypeSources.jsonc"
         },
         {
-            "id": "core.mail.extractedDocStates",
-            "file": "config/extractedDocStates.jsonc"
-        },
-        {
-            "id": "core.mail.extractedDocTypes",
-            "file": "config/extractedDocTypes.jsonc"
+            "id": "core.mail.analysisResolutions",
+            "file": "config/analysisResolutions.jsonc"
         },
         {
             "id": "core.mail.viewerDetailLabels",

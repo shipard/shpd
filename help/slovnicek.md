@@ -36,7 +36,7 @@ poštu a přijaté faktury.
 |---|---|---|
 | e-maily, co přišlo | **Došlá pošta** | Zprávy, které do systému přišly na tvou adresu pro příjem pošty |
 | AI to přečetla, načtení faktury | **Analýza** / **vytěžení** | Co AI udělá s přiloženou fakturou: přečte ji a nabídne hotový doklad |
-| co z toho vypadlo, rozečtená faktura | **Vytěžený doklad** | Výsledek analýzy — ještě není doklad, je to návrh ke kontrole |
+| co z toho vypadlo, rozečtená faktura, vytěžený doklad | **Návrh** (záložka **Návrh** u zprávy) | Výsledek analýzy — ještě není doklad, je to návrh ke kontrole. Z jednoho e-mailu vznikne nejvýše jeden; co AI našla navíc, je na kartě jen poznámka |
 | jak si je tím AI jistá, spolehlivost | **Jistota** (v procentech) | Odhad modelu, jak dobře fakturu přečetl. Nízká jistota = kontroluj pečlivě. Vysoká jistota **není** záruka správnosti |
 | ještě jsem to neřešil | stav **Nová** | Zpráva přišla a nikdo se jí ještě nezabýval |
 | čeká to na mě | stav **K řešení** | Je z čeho udělat doklad, nebo zpráva potřebuje tvoje rozhodnutí. Shipard sem zprávu přepne sám, jakmile z ní AI něco vytáhla |
@@ -47,24 +47,23 @@ poštu a přijaté faktury.
 | obrazovka, kde se to kontroluje | **Náhled dokladu** | Vlevo PDF faktury, jak přišla, vpravo data, která z ní AI přečetla. Na telefonu se z toho stanou taby **PDF** a **Náhled** |
 | co je vyplněné podle mých starších faktur | **Doplněno z historie** | Poznámka u pole: hodnota nepřišla z faktury, ale z tvých dřívějších dokladů od téhož dodavatele |
 | položka nebo dodavatel, které mám potvrdit | **Reference** | Odkaz na záznam v tvé evidenci. Když si AI není jistá, který to je, nabídne kandidáty, vyhledávání a **Vytvořit novou osobu** nebo **položku** — a dokud nerozhodneš, **Použít** je zašedlé |
-| přečíst to znovu | **Znovu analyzovat** | Spustí novou analýzu už doručené zprávy. Staré návrhy označí jako **Nahrazeno**; co jsi už použil nebo zamítl, nechá být |
+| přečíst to znovu | **Znovu analyzovat** | Spustí novou analýzu už doručené zprávy. Nový návrh nahradí ten dosavadní; starší běhy zůstávají na záložce **Analýzy**. Zprávu s už použitým návrhem znovu analyzovat nejde |
 | ať už mi tohle nechodí | **Pravidlo odesílatele** | Po třech tvých ručních odklizeních pošty od stejné adresy Shipard navrhne pravidlo. Potvrzené pravidlo pak poštu od té adresy archivuje samo |
 | účtenka, paragon | **Zjednodušený daňový doklad** | Doklad z prodejny bez tvých údajů. Shipard je zpracovává také |
 
-### Stavy vytěženého návrhu
+### Stavy návrhu
 
-Odznak u vytěženého dokladu. První tři se odvozují z **Jistoty** a čekají
-na tebe, zbytek je už vyřízený:
+Odznak u návrhu na záložce **Návrh**. První tři se odvozují z **Jistoty**
+a čekají na tebe, zbytek je už vyřízený:
 
 | Odznak | Co znamená |
 |---|---|
-| **K použití** | Jistota 90 % a víc. Zkontroluj Součty a Datumy, zbytek namátkou |
+| **K použití** | Jistota 90 % a víc. Zkontroluj Součty a Datumy, zbytek namátkou. Na Dashboardu má karta rovnou tlačítko **Použít** |
 | **Čeká na review** | Jistota 60–90 %. Projdi všechny sekce náhledu |
 | **Nízká jistota** | Pod 60 %. Čti řádek po řádku, nebo zamítni a zadej ručně |
 | **Použito** | Z návrhu už vznikl doklad |
 | **Zamítnuto** | Zamítl jsi ho s důvodem; důvod zůstává u zprávy |
-| **Nahrazeno** | Překryla ho novější analýza |
-| **Chyba AI** | Extrakce se nepovedla — typicky nečitelné PDF |
+| **Chyba extrakce** | Extrakce se nepovedla — typicky nečitelné PDF. Zkus **Znovu analyzovat** |
 
 ---
 

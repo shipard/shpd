@@ -4,8 +4,10 @@ Historie AI analýz došlých zpráv. Vztah 1:N na [core_mail_incoming_messages]
 — každá zpráva může mít více pokusů o analýzu (první pokus selhal, druhý uspěl
 s upraveným promptem; znovu analyzováno po upgradu modelu apod.).
 
-**Fáze 1** tabulku pouze zakládá. **Fáze 3a** přidává `profile`, `backend`,
-`cost_usd`, `extracted_document_count` — viz níže.
+Od message-centrického modelu ([tasks/mail-message-centric.md](../../../../tasks/mail-message-centric.md))
+je řádek analýzy zároveň **nositelem dokumentového návrhu** (`canonical_json`
++ `proposed_type`) a **verdiktu uživatele** (`resolution` + spol.) — tabulka
+`core_mail_extracted_documents` zanikla.
 
 ## Struktura
 
@@ -31,9 +33,23 @@ s upraveným promptem; znovu analyzováno po upgradu modelu apod.).
 
 | Sloupec | Typ | Popis |
 |---|---|---|
-| `analysis_json` | longtext | Strukturovaný výstup AI — JSON s extrahovanými poli (hlavička faktury, řádky apod.). NULL u `status = failed`. |
-| `confidence` | numeric(4,3) | Sebehodnocení modelu v rozsahu `0.000`–`1.000` |
+| `analysis_json` | longtext | Strukturovaný výstup AI — surový JSON běhu (vč. `message_classification` a `secondary_findings`). NULL u `status = failed`. |
+| `confidence` | numeric(4,3) | Confidence dokumentového návrhu (`document.confidence`; běh bez dokumentu `overall_confidence`) v rozsahu `0.000`–`1.000` |
+| `canonical_json` | longtext, NULL | Validovaný + obohacený canonical návrhu (`shpd.docs.document.v1`, resp. `shpd.registry.document.v1`). NULL = běh žádný dokument nenavrhl. Při selhání validace forenzní wrapper `{_validationError, _validationIssues, _rawOutput}`. |
+| `proposed_type` | enumString(30), NULL, cfgItem `core.mail.primaryTypes` | Typ dokumentu navržený tímto během. Historický záznam — na rozdíl od mutable `message.primary_type` se po zápisu nemění. Ve wire kontraktu se pole jmenuje `doc_type`. |
 | `error_message` | text | Detail chyby u `status = failed` |
+
+### Verdikt (resolution)
+
+Verdikt uživatele nad dokumentovým návrhem běhu — zapisuje ho
+`MessageProposalApplier` (apply/reject), unapply ho vrací na NULL.
+
+| Sloupec | Typ | Popis |
+|---|---|---|
+| `resolution` | enumInt, NULL, cfgItem `core.mail.analysisResolutions` | NULL = otevřený návrh / běh bez návrhu; `40` = applied (cílová entita existuje); `50` = rejected |
+| `rejected_reason` | text, NULL | Povinný při `resolution = 50` |
+| `resolved_at` | datetime, NULL | Čas verdiktu |
+| `resolved_by` | int → `core_system_users`, NULL | Kdo rozhodl |
 
 ### Telemetrie (telemetry)
 
@@ -43,7 +59,6 @@ s upraveným promptem; znovu analyzováno po upgradu modelu apod.).
 | `tokens_output` | int | Počet výstupních tokenů |
 | `duration_ms` | int | Trvání volání v milisekundách |
 | `cost_usd` | numeric(10,6) | Self-reported cena volání v USD (analyzer ji počítá z provider price-listu) |
-| `extracted_document_count` | int, default 0 | Počet `core_mail_extracted_documents` vzniklých z tohoto běhu |
 
 ### Auditní pole (status)
 
@@ -59,19 +74,24 @@ s upraveným promptem; znovu analyzováno po upgradu modelu apod.).
 | `idx_message` | index | `message` | Vyhledávání analýz pro zprávu |
 | `idx_message_analyzed` | index | `message`, `analyzed_at` DESC | „Current" analýza = `MAX(analyzed_at)` per message |
 
-## Současná analýza
+## Současná analýza = aktuální návrh
 
-Žádný flag `is_current` — aktuální analýza se určuje dotazem:
+Žádný flag `is_current` — **poslední úspěšný běh je aktuální dokumentový
+návrh zprávy** (konvence D2 z mail-message-centric):
 
 ```sql
 SELECT * FROM core_mail_message_analyses
-WHERE message = :messageId
-ORDER BY analyzed_at DESC
+WHERE message = :messageId AND status = 2
+ORDER BY analyzed_at DESC, id DESC
 LIMIT 1
 ```
 
-Viewer zprávy `IncomingMessagesViewer::renderDetail()` tímto způsobem určuje, která
-analýza se zobrazí jako výchozí v tabu "Analýzy".
+Nad tímto řádkem operují všechny message-centrické akce
+(preview/apply/reject/unapply — `MessageProposalApplier`), dashboard feed
+(`MailSuggestionsSource`) i tab „Návrh" v detailu zprávy. Reanalýza jen
+přidá nový běh — starý zůstává v historii (koncept `superseded` zanikl,
+je implicitní). Tab „Analýzy" ukazuje u každého běhu sloupec **Návrh**
+(ano/ne z `canonical_json IS NOT NULL`) a **Verdikt** (`resolution`).
 
 ## Mazání
 

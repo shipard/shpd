@@ -1,17 +1,18 @@
 <script>
   // Full-screen modal hosting the PDF + canonical preview split-view.
   //
-  // Phase 3a UX flow:
-  //   - User clicks "Detail" on an extracted document in ViewerDetail
-  //   - This modal opens, calls previewExtractedDocument(ndx)
-  //   - Left: PDF / image attachments via PdfViewerPanel
+  // Message-centric UX flow (tasks/mail-message-centric.md):
+  //   - User clicks "Detail" / "Zkontrolovat" on the message's proposal
+  //   - This modal opens, calls previewMessage(messageNdx)
+  //   - Left: PDF / image attachments via PdfViewerPanel — all content
+  //     attachments of the message (D10)
   //   - Right: canonical visualization via DocumentExchangePreview
   //   - Footer: Zavřít / Zamítnout / Použít (Použít disabled for ai_failed)
   //
   // Apply / reject delegate to parent callbacks — parent still owns the
-  // actual API call (existing applyDocument/rejectDoc in ViewerDetail).
+  // actual API call (Dashboard / ViewerDetail).
   //
-  // Phase 3b additions:
+  // Resolve decisions:
   //   - `userActions` state accumulates the resolve-decision choices from
   //     clickable badges in DocumentExchangePreview.
   //   - `canApply` is true only when all non-matched references have a
@@ -27,12 +28,12 @@
   import DocumentExchangePreview from './DocumentExchangePreview.svelte';
   import RegistryExtractedPreview from './RegistryExtractedPreview.svelte';
   import PdfViewerPanel from './PdfViewerPanel.svelte';
-  import { previewExtractedDocument } from '../../api/exchange.js';
+  import { previewMessage } from '../../api/exchange.js';
   import { t } from '../../i18n/index.js';
 
   let {
     open = false,
-    extractedNdx = null,
+    messageNdx = null,
     onClose = () => {},
     onApply = () => {},
     onReject = () => {},
@@ -43,13 +44,13 @@
   let data = $state(null);
   let mobileTab = $state('pdf'); // 'pdf' | 'preview'
 
-  // Phase 3b: accumulated decisions from clickable status badges. Flat
-  // {path: action} map — see api/exchange.js applyExtractedDocument.
+  // Accumulated decisions from clickable status badges. Flat
+  // {path: action} map — see api/exchange.js applyMessage.
   let userActions = $state({});
 
   $effect(() => {
-    if (open && extractedNdx !== null && extractedNdx !== undefined) {
-      void loadPreview(extractedNdx);
+    if (open && messageNdx !== null && messageNdx !== undefined) {
+      void loadPreview(messageNdx);
     } else {
       data = null;
       error = null;
@@ -63,7 +64,7 @@
     data = null;
     userActions = {};
     try {
-      const result = await previewExtractedDocument(ndx);
+      const result = await previewMessage(ndx);
       if (result?.success) {
         data = result.data;
       } else {
@@ -115,7 +116,7 @@
   );
 
   function handleApplyClick() {
-    onApply(extractedNdx, userActions, data?.target ?? 'docs');
+    onApply(messageNdx, userActions, data?.target ?? 'docs');
   }
 </script>
 
@@ -181,7 +182,7 @@
       label={t('exchange.preview.actions.reject')}
       variant="danger"
       disabled={data === null}
-      onclick={() => onReject(extractedNdx)}
+      onclick={() => onReject(messageNdx)}
     />
     <Button
       label={isRegistry

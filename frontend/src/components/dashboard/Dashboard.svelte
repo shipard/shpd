@@ -4,8 +4,8 @@
   import { translateError } from '../../i18n/errors.js';
   import { fetchDashboard, setMessageDocState } from '../../api/dashboard.js';
   import {
-    applyExtractedDocument,
-    rejectExtractedDocument,
+    applyMessage,
+    rejectMessage,
     reanalyzeMessage,
   } from '../../api/exchange.js';
   import { confirmSenderRule, rejectSenderRule, undoAutoArchive } from '../../api/mail.js';
@@ -60,7 +60,7 @@
   // → disabluje její tlačítka.
   let busyCardId = $state(null);
 
-  // Review modal („Zkontrolovat“) a reject prompt drží extractedNdx.
+  // Review modal („Zkontrolovat“) a reject prompt drží messageNdx.
   let previewNdx = $state(null);
   let rejectNdx = $state(null);
   let rejectSubmitting = $state(false);
@@ -121,8 +121,8 @@
     if (data?.cards) data.cards = data.cards.filter((c) => c.id !== cardId);
   }
 
-  function dropCardByExtracted(extractedNdx) {
-    if (data?.cards) data.cards = data.cards.filter((c) => c.context?.extractedNdx !== extractedNdx);
+  function dropCardByMessage(messageNdx) {
+    if (data?.cards) data.cards = data.cards.filter((c) => c.context?.messageNdx !== messageNdx);
   }
 
   // ── Akce karet ──────────────────────────────────────────────────────────────
@@ -130,11 +130,13 @@
   function handleCardAction(card, action) {
     const target = action.target ?? {};
     switch (action.kind) {
-      case 'review_extracted':
-        previewNdx = target.extractedNdx;
+      case 'apply_message':
+        return applyFlow(card, target.messageNdx);
+      case 'review_message':
+        previewNdx = target.messageNdx;
         return;
-      case 'reject_extracted':
-        rejectNdx = target.extractedNdx;
+      case 'reject_message':
+        rejectNdx = target.messageNdx;
         return;
       case 'reanalyze':
         return reanalyzeFlow(target.messageNdx, card.id);
@@ -161,6 +163,45 @@
       default:
         console.warn('Unknown card action kind:', action.kind);
     }
+  }
+
+  // Jednoklik apply z karty (pásmo ready) — safe mode bez userActions.
+  // 422 unresolved_required → fall-through do review modalu, kde uživatel
+  // reference dořeší; ostatní chyby → alert.
+  async function applyFlow(card, messageNdx) {
+    if (busyCardId !== null || !messageNdx) return;
+    busyCardId = card.id;
+    try {
+      const result = await applyMessage(messageNdx, null);
+      if (result?.success) {
+        finishApply(messageNdx, result.data?.savedDocId ?? 0, card.context?.target ?? 'docs');
+      } else if (result?.error?.code === 'unresolved_required') {
+        previewNdx = messageNdx;
+      } else {
+        alert(t('dashboard.card.actionFailed', { msg: translateError(result?.error) }));
+      }
+    } finally {
+      busyCardId = null;
+    }
+  }
+
+  // Společné dokončení apply (jednoklik i modal): docs → vystavený Koncept
+  // se rovnou otevře ve FormDialogu (kontrola + případné uzavření);
+  // registry → toast „Zařazeno… [Otevřít]“ (u Spisovny není co uzavírat).
+  function finishApply(messageNdx, docId, target) {
+    previewNdx = null;
+    dropCardByMessage(messageNdx);
+    if (target === 'registry') {
+      showToast({
+        kind: 'applied',
+        message: t('dashboard.toast.appliedRegistry', { id: docId }),
+        docId,
+        docTable: REGISTRY_TABLE,
+      });
+    } else if (docId) {
+      formModal = { open: true, table: HEADS_TABLE, recordId: docId, wasSaved: false };
+    }
+    load();
   }
 
   async function reanalyzeFlow(messageNdx, cardId) {
@@ -236,35 +277,20 @@
 
   // ── Review modal ─────────────────────────────────────────────────────────────
 
-  // Apply z review modalu — jediná cesta vystavení extrakce (target přichází
-  // z modalu, který ho má z preview endpointu). Docs → vystavený Koncept se
-  // rovnou otevře ve FormDialogu (kontrola + případné uzavření); registry →
-  // toast „Zařazeno… [Otevřít]“ (u Spisovny není co uzavírat).
-  async function handleApplyFromModal(extractedNdx, userActions = null, target = 'docs') {
-    const result = await applyExtractedDocument(extractedNdx, userActions);
+  // Apply z review modalu (target přichází z modalu, který ho má z preview
+  // endpointu).
+  async function handleApplyFromModal(messageNdx, userActions = null, target = 'docs') {
+    const result = await applyMessage(messageNdx, userActions);
     if (result?.success) {
-      const docId = result.data?.savedDocId ?? 0;
-      previewNdx = null;
-      dropCardByExtracted(extractedNdx);
-      if (target === 'registry') {
-        showToast({
-          kind: 'applied',
-          message: t('dashboard.toast.appliedRegistry', { id: docId }),
-          docId,
-          docTable: REGISTRY_TABLE,
-        });
-      } else if (docId) {
-        formModal = { open: true, table: HEADS_TABLE, recordId: docId, wasSaved: false };
-      }
-      load();
+      finishApply(messageNdx, result.data?.savedDocId ?? 0, target);
     } else {
       alert(t('dashboard.card.actionFailed', { msg: translateError(result?.error) }));
     }
   }
 
-  function handleRejectFromModal(extractedNdx) {
+  function handleRejectFromModal(messageNdx) {
     previewNdx = null;
-    rejectNdx = extractedNdx;
+    rejectNdx = messageNdx;
   }
 
   // ── Reject prompt ────────────────────────────────────────────────────────────
@@ -274,10 +300,10 @@
     if (!ndx || rejectSubmitting) return;
     rejectSubmitting = true;
     try {
-      const result = await rejectExtractedDocument(ndx, reason);
+      const result = await rejectMessage(ndx, reason);
       if (result?.success) {
         rejectNdx = null;
-        dropCardByExtracted(ndx);
+        dropCardByMessage(ndx);
         load();
       } else {
         alert(t('dashboard.card.actionFailed', { msg: translateError(result?.error) }));
@@ -344,7 +370,7 @@
 
 <DocumentExchangePreviewModal
   open={previewNdx !== null}
-  extractedNdx={previewNdx}
+  messageNdx={previewNdx}
   onClose={() => (previewNdx = null)}
   onApply={handleApplyFromModal}
   onReject={handleRejectFromModal}

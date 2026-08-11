@@ -22,7 +22,7 @@ může pro různé typy pošty zvolit jiný model.
 
 | Sloupec | Typ | Popis |
 |---|---|---|
-| `supported_doc_types` | text, NOT NULL | JSON pole klíčů z `core.mail.extractedDocTypes` |
+| `supported_doc_types` | text, NOT NULL | JSON pole klíčů z `core.mail.primaryTypes` |
 | `language` | varchar(5), NOT NULL, default `cs` | ISO 639-1 — pro user-facing texty v promptu |
 
 ### Prompt
@@ -42,7 +42,7 @@ může pro různé typy pošty zvolit jiný model.
 
 | Sloupec | Typ | Popis |
 |---|---|---|
-| `confidence_thresholds` | text, NOT NULL | JSON `{"ready": 0.9, "review": 0.6}` — server podle něj nastaví `extracted_documents.status` |
+| `confidence_thresholds` | text, NOT NULL | JSON `{"ready": 0.9, "review": 0.6}` — prahy runtime confidence pásem návrhu (`AnalysisConfidenceResolver`; pásmo se nepersistuje) |
 
 ### Příznaky (flags)
 

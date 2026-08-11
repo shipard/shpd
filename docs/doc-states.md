@@ -247,9 +247,9 @@ Workflow stavy došlé zprávy (tabulka `core_mail_incoming_messages`): **Nová 
 
 **Stav analýzy je ortogonální a není to `docState`.** Pipeline drží svůj status ve sloupci `analysis_state` (cfgItem `core.mail.analysisStates`: *Bez analýzy* 0, *Ve frontě* 10, *Analyzuje se* 20, *Analyzováno* 30, *Analýza selhala* 70). `IncomingMessagesViewer` z něj vykresluje samostatný badge v řádku. Změna jednoho stavu nesmí implikovat změnu druhého.
 
-**K řešení (20):** editovatelný stav. `POST /result` přepne zprávu 10→20 automaticky, když vznikl aspoň jeden extracted dokument a zpráva je stále v Nové.
+**K řešení (20):** editovatelný stav. `POST /result` přepne zprávu 10→20 automaticky, když běh přinesl validní dokumentový návrh a zpráva je stále v Nové.
 
-**Hotovo (40):** zpráva je vyřízená — všechny extracted dokumenty opustily pending stavy (apply nebo reject). Přechod dělá `ExtractedDocumentDocument::maybeTransitionMessage()` až když nezbývá žádný pending sibling. Vznikl-li doklad, odkaz je v `target_table_id` / `target_row`.
+**Hotovo (40):** zpráva je vyřízená — uživatel návrh použil nebo zamítl (verdikt `resolution` na řádku analýzy). Přechod dělá `MessageProposalApplier` atomicky se zápisem verdiktu; unapply ho vrací (40→20). Vznikl-li doklad, odkaz je v `target_table_id` / `target_row`.
 
 Konfigurační soubor: `modules/core/mail/config/docStatesIncoming.jsonc`
 

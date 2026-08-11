@@ -1,22 +1,25 @@
 /**
  * API helpers for the canonical document exchange flow.
  *
- * Wraps the `/_mail/extracted-documents/{ndx}/{preview|apply}` endpoints
- * — symmetric, server-injects `source.extractedDoc` and `applyOptions`,
- * tolerates `ai_failed` rows by returning a wrapper payload.
+ * Wraps the message-centric `/_mail/messages/{ndx}/{preview|apply|reject|unapply}`
+ * endpoints — the document proposal lives on the message's latest successful
+ * analysis (tasks/mail-message-centric.md). Server injects `source.message`
+ * and `applyOptions`, tolerates invalid AI output by returning a wrapper
+ * payload.
  *
  * Direct callers of `/_exchange/docs/document/{validate,preview,apply}`
  * (e.g. external integrations) should not use this module; it's tailored
  * to the AnalysisController-mediated UI flow.
  */
 
-import { post } from './client.js';
+import { get, post } from './client.js';
 import { API_BASE_URL } from './config.js';
 
 /**
- * Fetch a read-only preview of an extracted document.
+ * Fetch a read-only preview of the message's document proposal (latest
+ * successful analysis).
  *
- * @param {number} extractedNdx
+ * @param {number} messageNdx
  * @returns {Promise<{
  *   success: boolean,
  *   data?: {
@@ -24,69 +27,73 @@ import { API_BASE_URL } from './config.js';
  *     canonical?: object,
  *     wrapper?: object,
  *     attachments: Array<{ndx: number, filename: string, mime_type: string, size_bytes: number}>,
- *     extractedNdx: number,
  *     messageNdx: number,
- *     status: number,
+ *     analysisNdx: number,
+ *     proposedType: string|null,
+ *     confidence: number|null,
+ *     resolution: number|null,
+ *     target?: string,
  *   },
  *   error?: object,
  * }>}
  */
-export async function previewExtractedDocument(extractedNdx) {
-  return await post(`/_mail/extracted-documents/${extractedNdx}/preview`, {});
+export async function previewMessage(messageNdx) {
+  return await get(`/_mail/messages/${messageNdx}/preview`);
 }
 
 /**
- * Apply an extracted document.
+ * Apply the message's document proposal.
  *
  * Body shape and backend behaviour:
  *   - `userActions = null` → POST body `{}`. Backend derives
- *     `autoCreateMode = "safe"` (Phase 2 / CLI backward compat).
+ *     `autoCreateMode = "safe"` (one-click apply from the feed card).
  *   - `userActions = {}` (empty object) → POST body `{_resolve: {}}`.
  *     Backend sees the `_resolve` key and switches to
- *     `autoCreateMode = "strict"` — 3b-aware client with no decisions
+ *     `autoCreateMode = "strict"` — review-aware client with no decisions
  *     (every reference must already be `matched`).
  *   - `userActions = {path: action, ...}` → POST body `{_resolve: ...}`.
  *     Backend expands flat paths to nested `_resolve.{path}.userAction`,
  *     mode = strict.
  *
  * userActions tvar: `{"supplier": "useExisting:42", "rows[0].item": "create"}`.
- * Backend (AnalysisController::expandUserActions) handles the flat → nested
- * translation.
+ * Backend (MessageProposalApplier::expandUserActions) handles the flat →
+ * nested translation.
  *
- * @param {number} extractedNdx
+ * @param {number} messageNdx
  * @param {object|null} [userActions]  Flat {path: action} map, or null
- *                                      for Phase 2 / non-3b callers.
+ *                                      for safe one-click apply.
  */
-export async function applyExtractedDocument(extractedNdx, userActions = null) {
+export async function applyMessage(messageNdx, userActions = null) {
   const body = userActions !== null ? { _resolve: userActions } : {};
-  return await post(`/_mail/extracted-documents/${extractedNdx}/apply`, body);
+  return await post(`/_mail/messages/${messageNdx}/apply`, body);
 }
 
 /**
- * Reject an extracted document — UI flow Phase 2.
+ * Reject the message's document proposal.
  *
- * @param {number} extractedNdx
+ * @param {number} messageNdx
  * @param {string} reason  Required, non-empty
  */
-export async function rejectExtractedDocument(extractedNdx, reason) {
-  return await post(`/_mail/extracted-documents/${extractedNdx}/reject`, { reason });
+export async function rejectMessage(messageNdx, reason) {
+  return await post(`/_mail/messages/${messageNdx}/reject`, { reason });
 }
 
 /**
- * Undo an apply — trashes the created draft and returns the extracted document
- * to pending_review. Dashboard feed „Vrátit". Backend guards: applied (40) with
- * an untouched draft target (docState=10), else 409.
+ * Undo an apply — trashes the created entity, clears the message lineage
+ * and reopens the proposal (resolution → NULL). No UI — MCP / manual
+ * escape hatch. Backend guards: applied proposal with an untouched docs
+ * draft target (docState=10) / unmodified registry document, else 409.
  *
- * @param {number} extractedNdx
- * @returns {Promise<{success: boolean, data?: {ndx: number, status: number, messageNdx: number, trashedDocId: number}, error?: object}>}
+ * @param {number} messageNdx
+ * @returns {Promise<{success: boolean, data?: {messageNdx: number, analysisNdx: number, trashedDocId: number}, error?: object}>}
  */
-export async function unapplyExtractedDocument(extractedNdx) {
-  return await post(`/_mail/extracted-documents/${extractedNdx}/unapply`, {});
+export async function unapplyMessage(messageNdx) {
+  return await post(`/_mail/messages/${messageNdx}/unapply`, {});
 }
 
 /**
  * Re-run AI analysis for a message (dashboard feed urgent card „Znovu
- * analyzovat"). Supersedes pending extracted docs and re-queues the message.
+ * analyzovat"). Re-queues the message; the latest run stays in history.
  *
  * @param {number} messageNdx
  * @param {number|null} [profileOverrideNdx]  Optional AI profile override.

@@ -14,16 +14,18 @@ use Shipard\Core\Module\ModulePathResolver;
 use Shipard\Module\Core\Exchange\Document\DocumentApplier;
 use Shipard\Module\Core\Exchange\Schema\SchemaLoader;
 use Shipard\Module\Core\Exchange\Schema\SchemaValidator;
-use Shipard\Module\Core\Mail\ExtractedDocumentDocument;
+use Shipard\Module\Core\Mail\MessageProposalApplier;
 use Shipard\Tests\Integration\IntegrationTestCase;
 
 /**
- * End-to-end pokrytí Fáze 2 — AI extracted document → applyExtracted →
- * canonical → DocumentApplier → docs_core_heads + partner + supplier_codes
- * mapping + bidirectional lineage. Spustitelné s
+ * End-to-end pokrytí message-centrického apply (tasks/mail-message-centric.md):
+ * analýza s canonical návrhem → applyMessage → DocumentApplier →
+ * docs_core_heads + partner + supplier_codes mapping + lineage
+ * (heads.source_message ↔ messages.target_*) + verdikt na analýze
+ * (resolution 40) — a unapply reverz. Spustitelné s
  * `SHIPARD_INTEGRATION_DS_PATH=/opt/shipard/data-sources/<id>`.
  */
-class AiExtractedDocumentApplyTest extends IntegrationTestCase
+class AiProposalApplyTest extends IntegrationTestCase
 {
     private const FIXTURE_PREFIX = 'IT-AIX';
 
@@ -31,7 +33,6 @@ class AiExtractedDocumentApplyTest extends IntegrationTestCase
     private ConfigRuntime $configRuntime;
     private int $analysisRowId = 0;
     private int $messageRowId = 0;
-    private int $extractedRowId = 0;
 
     /** @var list<int> */
     private array $createdDocIds = [];
@@ -101,13 +102,15 @@ class AiExtractedDocumentApplyTest extends IntegrationTestCase
     }
 
     /**
-     * Provision the mailbox-message-analysis chain that an extracted_document
-     * row hangs off. Returns the extracted_document id ready to be applied.
+     * Provisioning message-centrického návrhu: zpráva (analysis_state 30,
+     * K řešení 20) + poslední úspěšná analýza s canonical_json. Vrací ndx
+     * zprávy — akce se od refaktoru volají nad zprávou, ne nad extracted
+     * řádkem (ten zanikl).
      *
-     * @param array<string, mixed> $canonical  Canonical payload to be stored
-     *                                          in extracted_documents.extracted_json.
+     * @param array<string, mixed> $canonical  Canonical návrhu (nebo
+     *                                          _validationError wrapper).
      */
-    private function provisionExtractedDocument(array $canonical): int
+    private function provisionProposal(array $canonical, string $proposedType = 'invoiceReceived'): int
     {
         $dibi = $this->db->getDibiConnection();
         $now = date('Y-m-d H:i:s');
@@ -121,15 +124,16 @@ class AiExtractedDocumentApplyTest extends IntegrationTestCase
         $dibi->insert('core_mail_incoming_messages', [
             'message_id' => self::FIXTURE_PREFIX . '-MSG-' . uniqid(),
             'mailbox' => $mailboxId,
-            'primary_type' => 'invoice',
+            'primary_type' => $proposedType,
             'subject' => self::FIXTURE_PREFIX . ' Test invoice',
             'sender_email' => 'vendor@example.cz',
             'received_at' => $now,
             'source_type' => 2,
             'ai_analysis_enabled' => 1,
             'needs_reanalysis' => 0,
-            'docState' => 30, // Analyzed
-            'docStateMain' => 3,
+            'analysis_state' => 30, // Analyzováno
+            'docState' => 20,       // K řešení
+            'docStateMain' => 2,
             'created' => $now,
             'modified' => $now,
         ])->execute();
@@ -140,25 +144,15 @@ class AiExtractedDocumentApplyTest extends IntegrationTestCase
             'analyzed_at' => $now,
             'status' => 2,
             'model_name' => 'fixture',
-            'prompt_version' => 'v2.0.0',
-            'extracted_document_count' => 1,
+            'prompt_version' => 'v4.0.0',
+            'canonical_json' => json_encode($canonical, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            'proposed_type' => $proposedType,
+            'confidence' => 0.95,
             'created' => $now,
         ])->execute();
         $this->analysisRowId = (int) $dibi->getInsertId();
 
-        $dibi->insert('core_mail_extracted_documents', [
-            'message' => $this->messageRowId,
-            'analysis' => $this->analysisRowId,
-            'doc_type' => 'invoiceReceived',
-            'source_attachments' => '[]',
-            'extracted_json' => json_encode($canonical, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
-            'confidence' => 0.95,
-            'status' => ExtractedDocumentDocument::STATUS_PENDING_REVIEW,
-            'created' => $now,
-        ])->execute();
-        $this->extractedRowId = (int) $dibi->getInsertId();
-
-        return $this->extractedRowId;
+        return $this->messageRowId;
     }
 
     /**
@@ -182,9 +176,6 @@ class AiExtractedDocumentApplyTest extends IntegrationTestCase
     {
         $dibi = $this->db->getDibiConnection();
 
-        if ($this->extractedRowId > 0) {
-            $dibi->query('DELETE FROM core_mail_extracted_documents WHERE id = %i', $this->extractedRowId);
-        }
         if ($this->analysisRowId > 0) {
             $dibi->query('DELETE FROM core_mail_message_analyses WHERE id = %i', $this->analysisRowId);
         }
@@ -217,7 +208,7 @@ class AiExtractedDocumentApplyTest extends IntegrationTestCase
 
     private function request(): Request
     {
-        return Request::fromArray('POST', '/api/v1/_mail/extracted-documents/x/apply', [], '', ['HTTP_HOST' => 'test']);
+        return Request::fromArray('POST', '/api/v1/_mail/messages/x/apply', [], '', ['HTTP_HOST' => 'test']);
     }
 
     private function statusOf(Response $response): int
@@ -226,14 +217,38 @@ class AiExtractedDocumentApplyTest extends IntegrationTestCase
         return (int) $ref->getProperty('status')->getValue($response);
     }
 
+    /** @return array<string, mixed> Řádek poslední analýzy (verdikt čteme SELECTem). */
+    private function analysisRow(): array
+    {
+        $row = $this->db->fetchRow(
+            'SELECT * FROM core_mail_message_analyses WHERE id = %i',
+            $this->analysisRowId,
+        );
+        $this->assertNotNull($row);
+        return $row;
+    }
+
+    /** Zaeviduje partner/item vytvořené apply-em pro úklid v tearDown. */
+    private function trackCreatedFromDoc(int $savedDocId): void
+    {
+        $this->createdDocIds[] = $savedDocId;
+        $head = $this->db->fetchRow('SELECT partner FROM docs_core_heads WHERE id = %i', $savedDocId);
+        if ($head !== null) {
+            $this->createdPersonIds[] = (int) $head['partner'];
+        }
+        foreach ($this->db->fetchAll('SELECT item FROM docs_core_rows WHERE doc_head = %i', $savedDocId) as $r) {
+            $this->createdItemIds[] = (int) $r['item'];
+        }
+    }
+
     // ── Tests ───────────────────────────────────────────────────────────────
 
-    public function testApplyExtractedCreatesDocWithBidirectionalLineage(): void
+    public function testApplyCreatesDocWithBidirectionalLineage(): void
     {
         $suffix = (string) uniqid();
-        $extractedNdx = $this->provisionExtractedDocument($this->buildCanonical($suffix));
+        $messageNdx = $this->provisionProposal($this->buildCanonical($suffix));
 
-        $resp = $this->controller->applyExtracted($this->authed(), $this->request(), $extractedNdx);
+        $resp = $this->controller->applyMessage($this->authed(), $this->request(), $messageNdx);
         $this->assertSame(
             200,
             $this->statusOf($resp),
@@ -250,7 +265,7 @@ class AiExtractedDocumentApplyTest extends IntegrationTestCase
         $this->assertNotNull($head);
         $this->assertSame('invni', (string) $head['doc_type']);
         $this->assertSame('aiExtraction', (string) $head['source_kind']);
-        $this->assertSame($extractedNdx, (int) $head['source_extracted_doc']);
+        $this->assertSame($messageNdx, (int) $head['source_message']);
         $this->assertNotNull($head['source_extracted_at']);
 
         // 2. Partner was autocreated (companyId present → safe mode allowed)
@@ -273,45 +288,37 @@ class AiExtractedDocumentApplyTest extends IntegrationTestCase
         );
         $this->assertNotNull($mapping);
 
-        // 5. Bidirectional lineage on extracted_document
-        $extracted = $this->db->fetchRow(
-            'SELECT * FROM core_mail_extracted_documents WHERE id = %i',
-            $extractedNdx,
-        );
-        $this->assertSame('docs_core_heads', (string) $extracted['target_table_id']);
-        $this->assertSame($savedDocId, (int) $extracted['target_row_ndx']);
-        $this->assertSame(ExtractedDocumentDocument::STATUS_APPLIED, (int) $extracted['status']);
-        $this->assertNotNull($extracted['applied_at']);
-        $this->assertSame(1, (int) $extracted['applied_by']);
-
-        // 6. Message auto-transition to 40 (Processed) — only pending child
+        // 5. Reverzní lineage na zprávě (target_*).
         $message = $this->db->fetchRow(
-            'SELECT docState FROM core_mail_incoming_messages WHERE id = %i',
-            $this->messageRowId,
+            'SELECT * FROM core_mail_incoming_messages WHERE id = %i',
+            $messageNdx,
         );
+        $this->assertSame('docs_core_heads', (string) $message['target_table_id']);
+        $this->assertSame($savedDocId, (int) $message['target_row']);
+
+        // 6. Verdikt na analýze: resolution 40 + resolved_at/by.
+        $analysis = $this->analysisRow();
+        $this->assertSame(MessageProposalApplier::RESOLUTION_APPLIED, (int) $analysis['resolution']);
+        $this->assertNotNull($analysis['resolved_at']);
+        $this->assertSame(1, (int) $analysis['resolved_by']);
+
+        // 7. Zpráva → Hotovo (40/3).
         $this->assertSame(40, (int) $message['docState']);
+        $this->assertSame(3, (int) $message['docStateMain']);
     }
 
-    public function testApplyExtractedIdempotentOnSecondClick(): void
+    public function testApplyIdempotentOnSecondClick(): void
     {
         $suffix = (string) uniqid();
-        $extractedNdx = $this->provisionExtractedDocument($this->buildCanonical($suffix));
+        $messageNdx = $this->provisionProposal($this->buildCanonical($suffix));
 
-        $first = $this->controller->applyExtracted($this->authed(), $this->request(), $extractedNdx);
+        $first = $this->controller->applyMessage($this->authed(), $this->request(), $messageNdx);
         $this->assertSame(200, $this->statusOf($first));
         $savedDocId = (int) $first->getPayload()['data']['savedDocId'];
-        $this->createdDocIds[] = $savedDocId;
-
-        // Capture the partner + item ids for cleanup before second call
-        $head = $this->db->fetchRow('SELECT partner FROM docs_core_heads WHERE id = %i', $savedDocId);
-        $this->createdPersonIds[] = (int) $head['partner'];
-        $rows = $this->db->fetchAll('SELECT item FROM docs_core_rows WHERE doc_head = %i', $savedDocId);
-        foreach ($rows as $r) {
-            $this->createdItemIds[] = (int) $r['item'];
-        }
+        $this->trackCreatedFromDoc($savedDocId);
 
         // Second call — should idempotently return the same savedDocId
-        $second = $this->controller->applyExtracted($this->authed(), $this->request(), $extractedNdx);
+        $second = $this->controller->applyMessage($this->authed(), $this->request(), $messageNdx);
         $this->assertSame(200, $this->statusOf($second));
         $secondPayload = $second->getPayload();
         $this->assertSame($savedDocId, (int) $secondPayload['data']['savedDocId']);
@@ -319,86 +326,81 @@ class AiExtractedDocumentApplyTest extends IntegrationTestCase
 
         // No duplicate rows in docs_core_heads
         $heads = $this->db->fetchAll(
-            'SELECT id FROM docs_core_heads WHERE source_extracted_doc = %i',
-            $extractedNdx,
+            'SELECT id FROM docs_core_heads WHERE source_message = %i',
+            $messageNdx,
         );
         $this->assertCount(1, $heads);
     }
 
-    public function testApplyExtractedRejectsAiFailedDocument(): void
+    public function testApplyRejectsAiFailedProposal(): void
     {
-        // Force ai_failed status via direct DB
-        $extractedNdx = $this->provisionExtractedDocument(['format' => 'shpd.docs.document', 'formatVersion' => '1.0', 'docType' => 'invoiceReceived']);
-        $this->db->getDibiConnection()->query(
-            'UPDATE core_mail_extracted_documents SET status = %i WHERE id = %i',
-            ExtractedDocumentDocument::STATUS_AI_FAILED, $extractedNdx,
-        );
+        // /result uložil forenzní wrapper (nevalidní AI výstup) — apply
+        // musí odmítnout a poslat uživatele na reanalýzu.
+        $messageNdx = $this->provisionProposal([
+            '_validationError' => 'Canonical schema validation failed',
+            '_validationIssues' => [['path' => 'docType', 'message' => 'missing']],
+            '_rawOutput' => ['format' => 'shpd.docs.document'],
+        ]);
 
-        $resp = $this->controller->applyExtracted($this->authed(), $this->request(), $extractedNdx);
+        $resp = $this->controller->applyMessage($this->authed(), $this->request(), $messageNdx);
         $this->assertSame(422, $this->statusOf($resp));
         $this->assertSame('AI_OUTPUT_INVALID', $resp->getPayload()['error']['code']);
+
+        // Nic se nezapsalo: bez targetu, bez verdiktu.
+        $message = $this->db->fetchRow(
+            'SELECT target_row, docState FROM core_mail_incoming_messages WHERE id = %i', $messageNdx,
+        );
+        $this->assertTrue($message['target_row'] === null || (int) $message['target_row'] === 0);
+        $this->assertSame(20, (int) $message['docState']);
+        $this->assertNull($this->analysisRow()['resolution']);
     }
 
     // ── unapply (undo) round-trip ────────────────────────────────────────────
 
-    /** Zaeviduje partner/item vytvořené apply-em pro úklid v tearDown. */
-    private function trackCreatedFromDoc(int $savedDocId): void
-    {
-        $this->createdDocIds[] = $savedDocId;
-        $head = $this->db->fetchRow('SELECT partner FROM docs_core_heads WHERE id = %i', $savedDocId);
-        if ($head !== null) {
-            $this->createdPersonIds[] = (int) $head['partner'];
-        }
-        foreach ($this->db->fetchAll('SELECT item FROM docs_core_rows WHERE doc_head = %i', $savedDocId) as $r) {
-            $this->createdItemIds[] = (int) $r['item'];
-        }
-    }
-
-    public function testUnapplyRoundTripTrashesDocAndRestoresExtracted(): void
+    public function testUnapplyRoundTripTrashesDocAndReopensProposal(): void
     {
         $suffix = (string) uniqid();
-        $extractedNdx = $this->provisionExtractedDocument($this->buildCanonical($suffix));
+        $messageNdx = $this->provisionProposal($this->buildCanonical($suffix));
 
-        $apply = $this->controller->applyExtracted($this->authed(), $this->request(), $extractedNdx);
+        $apply = $this->controller->applyMessage($this->authed(), $this->request(), $messageNdx);
         $this->assertSame(200, $this->statusOf($apply), 'apply: ' . json_encode($apply->getPayload()));
         $savedDocId = (int) $apply->getPayload()['data']['savedDocId'];
         $this->trackCreatedFromDoc($savedDocId);
 
-        // Apply posunul zprávu na 40 (jediný pending child vyřešen).
+        // Apply posunul zprávu na Hotovo (40).
         $this->assertSame(40, (int) $this->db->fetchRow(
-            'SELECT docState FROM core_mail_incoming_messages WHERE id = %i', $this->messageRowId,
+            'SELECT docState FROM core_mail_incoming_messages WHERE id = %i', $messageNdx,
         )['docState']);
 
-        $undo = $this->controller->unapplyExtracted($this->authed(), $this->request(), $extractedNdx);
+        $undo = $this->controller->unapplyMessage($this->authed(), $this->request(), $messageNdx);
         $this->assertSame(200, $this->statusOf($undo), 'unapply: ' . json_encode($undo->getPayload()));
-        $undoData = $undo->getPayload()['data'];
-        $this->assertSame($savedDocId, (int) $undoData['trashedDocId']);
-        $this->assertSame(ExtractedDocumentDocument::STATUS_PENDING_REVIEW, (int) $undoData['status']);
+        $this->assertSame($savedDocId, (int) $undo->getPayload()['data']['trashedDocId']);
 
-        // Doklad → Koš (90), ne hard-delete.
-        $this->assertSame(90, (int) $this->db->fetchRow(
-            'SELECT docState FROM docs_core_heads WHERE id = %i', $savedDocId,
-        )['docState']);
+        // Doklad → Koš (90/5), ne hard-delete.
+        $doc = $this->db->fetchRow('SELECT docState, docStateMain FROM docs_core_heads WHERE id = %i', $savedDocId);
+        $this->assertSame(90, (int) $doc['docState']);
+        $this->assertSame(5, (int) $doc['docStateMain']);
 
-        // Extracted → pending_review, target/applied_* vynulované.
-        $extracted = $this->db->fetchRow('SELECT * FROM core_mail_extracted_documents WHERE id = %i', $extractedNdx);
-        $this->assertSame(ExtractedDocumentDocument::STATUS_PENDING_REVIEW, (int) $extracted['status']);
-        $this->assertNull($extracted['target_row_ndx']);
-        $this->assertNull($extracted['applied_at']);
-        $this->assertNull($extracted['applied_by']);
+        // Zpráva: target_* vynulované, reverz 40 → 20 (K řešení).
+        $message = $this->db->fetchRow('SELECT * FROM core_mail_incoming_messages WHERE id = %i', $messageNdx);
+        $this->assertNull($message['target_table_id']);
+        $this->assertTrue($message['target_row'] === null || (int) $message['target_row'] === 0);
+        $this->assertSame(20, (int) $message['docState']);
+        $this->assertSame(2, (int) $message['docStateMain']);
 
-        // Zpráva zpět na 30 (Analyzovaná) — reverzní reconcile.
-        $this->assertSame(30, (int) $this->db->fetchRow(
-            'SELECT docState FROM core_mail_incoming_messages WHERE id = %i', $this->messageRowId,
-        )['docState']);
+        // Analýza: návrh znovu otevřený (resolution/resolved_* NULL).
+        $analysis = $this->analysisRow();
+        $this->assertNull($analysis['resolution']);
+        $this->assertNull($analysis['resolved_at']);
+        $this->assertNull($analysis['resolved_by']);
     }
 
-    public function testUnapplyRejectsNonApplied(): void
+    public function testUnapplyRejectsUnappliedProposal(): void
     {
         $suffix = (string) uniqid();
-        $extractedNdx = $this->provisionExtractedDocument($this->buildCanonical($suffix)); // status 20
+        $messageNdx = $this->provisionProposal($this->buildCanonical($suffix)); // resolution NULL
 
-        $resp = $this->controller->unapplyExtracted($this->authed(), $this->request(), $extractedNdx);
+        $resp = $this->controller->unapplyMessage($this->authed(), $this->request(), $messageNdx);
         $this->assertSame(409, $this->statusOf($resp));
         $this->assertSame('INVALID_STATE', $resp->getPayload()['error']['code']);
     }
@@ -406,9 +408,10 @@ class AiExtractedDocumentApplyTest extends IntegrationTestCase
     public function testUnapplyRejectsAdvancedDocument(): void
     {
         $suffix = (string) uniqid();
-        $extractedNdx = $this->provisionExtractedDocument($this->buildCanonical($suffix));
+        $messageNdx = $this->provisionProposal($this->buildCanonical($suffix));
 
-        $apply = $this->controller->applyExtracted($this->authed(), $this->request(), $extractedNdx);
+        $apply = $this->controller->applyMessage($this->authed(), $this->request(), $messageNdx);
+        $this->assertSame(200, $this->statusOf($apply), 'apply: ' . json_encode($apply->getPayload()));
         $savedDocId = (int) $apply->getPayload()['data']['savedDocId'];
         $this->trackCreatedFromDoc($savedDocId);
 
@@ -417,8 +420,14 @@ class AiExtractedDocumentApplyTest extends IntegrationTestCase
             'UPDATE docs_core_heads SET docState = 20 WHERE id = %i', $savedDocId,
         );
 
-        $resp = $this->controller->unapplyExtracted($this->authed(), $this->request(), $extractedNdx);
+        $resp = $this->controller->unapplyMessage($this->authed(), $this->request(), $messageNdx);
         $this->assertSame(409, $this->statusOf($resp));
         $this->assertSame('DOC_ADVANCED', $resp->getPayload()['error']['code']);
+
+        // Verdikt zůstal netknutý (resolution 40, target živý).
+        $this->assertSame(MessageProposalApplier::RESOLUTION_APPLIED, (int) $this->analysisRow()['resolution']);
+        $this->assertSame($savedDocId, (int) $this->db->fetchRow(
+            'SELECT target_row FROM core_mail_incoming_messages WHERE id = %i', $messageNdx,
+        )['target_row']);
     }
 }

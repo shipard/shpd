@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Shipard\Tests\Unit\Module\Base\Registry;
 
 use PHPUnit\Framework\TestCase;
+use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Document\DocumentRegistry;
 use Shipard\Module\Core\Attachments\AttachmentService;
@@ -13,8 +14,9 @@ use Shipard\Module\Core\Exchange\Resolve\ResolveResult;
 use Shipard\Module\Base\Registry\RegistryApplier;
 
 /**
- * Unit testy mappingu, partner resolve a binder návrhu RegistryApplieru.
- * Plný apply/unapply round-trip (transakce, kopie příloh, extracted_text)
+ * Unit testy mappingu, partner resolve a binder návrhu RegistryApplieru
+ * (message-centric ProposalTargetApplier). Plný apply/unapply round-trip
+ * (transakce, kopie příloh, extracted_text, zápis target_* na zprávu)
  * potřebuje reálné dibi → Integration/Registry.
  */
 class RegistryApplierTest extends TestCase
@@ -22,12 +24,13 @@ class RegistryApplierTest extends TestCase
     private function applier(
         ?DataSourceConnection $db = null,
         ?PartyResolver $partyResolver = null,
+        ?ConfigRuntime $config = null,
     ): RegistryApplier {
         return new RegistryApplier(
             $db ?? $this->createMock(DataSourceConnection::class),
             $this->createMock(DocumentRegistry::class),
             $this->createMock(AttachmentService::class),
-            null,
+            $config,
             $partyResolver,
         );
     }
@@ -57,7 +60,7 @@ class RegistryApplierTest extends TestCase
     public function testBuildDocumentDataMapsCanonical(): void
     {
         $data = $this->applier()->buildDocumentData(
-            $this->insuranceCanonical(), 'insurance', 42, 7, 100, 55, 9,
+            $this->insuranceCanonical(), 'insurance', 42, 7, 100, 9,
         );
 
         $this->assertSame('Pojistná smlouva — flotila vozidel', $data['title']);
@@ -73,7 +76,8 @@ class RegistryApplierTest extends TestCase
         $this->assertSame('Pojištění vozového parku. Platí do konce roku.', $data['ai_summary']);
         $this->assertSame('mail', $data['source_kind']);
         $this->assertSame(100, $data['source_message']);
-        $this->assertSame(55, $data['extracted_doc']);
+        // Vazba na extracted dokument zanikla — lineage nese jen source_message.
+        $this->assertArrayNotHasKey('extracted_doc', $data);
         $this->assertSame(9, $data['created_by']);
         // vznik rovnou v Zařazeno (40), docStateMain z fallback mapy
         $this->assertSame(40, $data['docState']);
@@ -88,7 +92,7 @@ class RegistryApplierTest extends TestCase
             'title'   => 'Výzva k doplnění',
         ];
 
-        $data = $this->applier()->buildDocumentData($canonical, 'official', null, null, 0, 55, null);
+        $data = $this->applier()->buildDocumentData($canonical, 'official', null, null, 0, null);
 
         $this->assertSame([], $data['metadata']);
         $this->assertNull($data['ai_summary']);
@@ -210,7 +214,8 @@ class RegistryApplierTest extends TestCase
     {
         $result = $this->applier()->apply(
             ['schema' => 'shpd.registry.document.v1', 'docType' => 'contract'],
-            ['id' => 1, 'message' => 100, 'doc_type' => 'contract'],
+            ['id' => 100, 'sender_email' => 'a@b.cz'],
+            'contract',
             7,
         );
 
@@ -226,7 +231,7 @@ class RegistryApplierTest extends TestCase
         $db = $this->createMock(DataSourceConnection::class);
         $db->method('fetchRow')->willReturn(null);
 
-        $result = $this->applier($db)->unapply(['target_row_ndx' => 555, 'applied_at' => '2026-07-14 10:00:00']);
+        $result = $this->applier($db)->unapply(555, '2026-07-14 10:00:00');
 
         $this->assertFalse($result->success);
         $this->assertSame('DOC_ADVANCED', $result->errorCode);
@@ -238,7 +243,7 @@ class RegistryApplierTest extends TestCase
         $db = $this->createMock(DataSourceConnection::class);
         $db->method('fetchRow')->willReturn(['id' => 555, 'docState' => 80, 'modified' => null]);
 
-        $result = $this->applier($db)->unapply(['target_row_ndx' => 555, 'applied_at' => '2026-07-14 10:00:00']);
+        $result = $this->applier($db)->unapply(555, '2026-07-14 10:00:00');
 
         $this->assertFalse($result->success);
         $this->assertSame('DOC_ADVANCED', $result->errorCode);
@@ -251,9 +256,7 @@ class RegistryApplierTest extends TestCase
             'id' => 555, 'docState' => 40, 'modified' => '2026-07-14 12:00:00',
         ]);
 
-        $result = $this->applier($db)->unapply([
-            'target_row_ndx' => 555, 'applied_at' => '2026-07-14 10:00:00',
-        ]);
+        $result = $this->applier($db)->unapply(555, '2026-07-14 10:00:00');
 
         $this->assertFalse($result->success);
         $this->assertSame('DOC_ADVANCED', $result->errorCode);
@@ -269,9 +272,7 @@ class RegistryApplierTest extends TestCase
 
         // Guard projde; trash save pak spadne na mock dibi → INTERNAL_ERROR
         // (≠ DOC_ADVANCED), což je přesně hranice unit testu bez reálné DB.
-        $result = $this->applier($db)->unapply([
-            'target_row_ndx' => 555, 'applied_at' => '2026-07-14 10:00:00',
-        ]);
+        $result = $this->applier($db)->unapply(555, '2026-07-14 10:00:00');
 
         $this->assertFalse($result->success);
         $this->assertSame('INTERNAL_ERROR', $result->errorCode);

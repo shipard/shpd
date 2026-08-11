@@ -216,7 +216,6 @@ class NavigationControllerTest extends TestCase
         $tableIds = $this->allTableIds($this->tree(['install.base']));
 
         foreach ([
-            'core_mail_extracted_documents',
             'core_chat_messages',
             'economy_codebooks_vat_periods',
             'core_system_users',

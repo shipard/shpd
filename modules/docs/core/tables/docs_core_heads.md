@@ -73,10 +73,15 @@ canonical dokumentu; pro doklady ručně pořízené přes UI zůstává NULL
 | Sloupec | Typ | Popis |
 |---|---|---|
 | `source_kind` | enumString(40), nullable, cfgItem `docs.core.sourceKinds` | `aiExtraction` / `isdoc` / `peppolUbl` / `manual` / `import.flexibee` / `import.pohoda` |
-| `source_extracted_doc` | int, nullable, ref → `core_mail_extracted_documents` | Vyplněn jen pro `source_kind = aiExtraction` (reverse lookup z dokladu → původ) |
+| `source_message` | int, nullable, ref → `core_mail_incoming_messages`, index `idx_source_message` | Zdrojová zpráva došlé pošty (reverse lookup z dokladu → původ). Plní applier ze server-injektovaného `source.message` při apply návrhu. |
 | `source_extracted_at` | datetime, nullable | Časový bod extrakce / importu |
 
-Forward lookup (extrakce → výsledný doklad) je v `core_mail_extracted_documents.target_table_id` / `target_row_ndx`.
+Vazba je obousměrná (D6 z `tasks/mail-message-centric.md`): forward lookup
+(zpráva → výsledný doklad) je v `core_mail_incoming_messages.target_table_id`
+/ `target_row` — obě strany zapisuje apply atomicky
+(`DocumentApplier::writeLineageTargets`). Přes `source_message` skládá
+`DocsHeadsViewer::sourceAttachmentGroups` skupinu „mail" příloh v detailu
+dokladu.
 
 ### `snapshots` — system
 
@@ -116,6 +121,7 @@ dokladů visících ve stavu 80 V opravě déle než 24 h). Backfill existujíc�
 - `idx_doc_state_changed` — `(docState, doc_state_changed_at)`, predikát
   alert checku `docs.core.stale_in_repair`
 - `idx_partner` — `(partner)`
+- `idx_source_message` — `(source_message)`, lineage doklad ← zpráva
 - `idx_accounting_date`, `idx_vat_duzp` — pro reporty
 - `ft_doc_text` FULLTEXT — `doc_text`
 

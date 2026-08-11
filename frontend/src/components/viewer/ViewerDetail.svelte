@@ -1,6 +1,5 @@
 <script>
-  import { post } from '../../api/client.js';
-  import { applyExtractedDocument } from '../../api/exchange.js';
+  import { applyMessage, rejectMessage } from '../../api/exchange.js';
   import { navigationStore } from '../../stores/navigation.svelte.js';
   import Button from '../ui/Button.svelte';
   import Popover from '../ui/Popover.svelte';
@@ -57,33 +56,31 @@
     detail?.tabs?.find(t => t.id === activeTabId)?.content ?? null
   );
 
-  // --- Extracted documents — Exchange preview modal (Phase 3a) ---
-  // Visual split-view (PDF + canonical) replaces the old raw JSON dump.
+  // --- Návrh (message-centric) — Exchange preview modal ---
+  // Visual split-view (PDF + canonical); drží messageNdx zprávy s návrhem.
   let previewModalNdx = $state(null);
 
-  // --- Extracted documents — reject dialog state ---
-  // Reason drží sdílená RejectReasonPrompt komponenta; tady jen který doklad.
-  let rejectDialogDoc = $state(null);
+  // --- Návrh — reject dialog state ---
+  // Reason drží sdílená RejectReasonPrompt komponenta; tady jen messageNdx.
+  let rejectDialogNdx = $state(null);
   let rejectSubmitting = $state(false);
 
-  // --- Extracted documents — apply jde výhradně přes preview modal ---
+  // Právě běžící apply — disabluje tlačítka karty návrhu.
   let actionInFlightNdx = $state(null);
 
-  function openRejectDialog(doc) {
-    rejectDialogDoc = doc;
+  function openRejectDialog(messageNdx) {
+    rejectDialogNdx = messageNdx;
   }
 
   function closeRejectDialog() {
-    rejectDialogDoc = null;
+    rejectDialogNdx = null;
   }
 
   async function submitReject(reason) {
-    if (!rejectDialogDoc || rejectSubmitting) return;
+    if (!rejectDialogNdx || rejectSubmitting) return;
     rejectSubmitting = true;
     try {
-      const result = await post(`/_mail/extracted-documents/${rejectDialogDoc.ndx}/reject`, {
-        reason,
-      });
+      const result = await rejectMessage(rejectDialogNdx, reason);
       if (result?.success) {
         closeRejectDialog();
         onRefresh?.();
@@ -95,25 +92,51 @@
     }
   }
 
-  function openPreviewModal(doc) {
-    previewModalNdx = doc.ndx;
+  function openPreviewModal(messageNdx) {
+    previewModalNdx = messageNdx;
   }
 
   function closePreviewModal() {
     previewModalNdx = null;
   }
 
-  // Apply from modal — the only apply entry point (the inline button was
-  // removed; the user always confirms over the split-view preview).
-  // `userActions` (flat {path: action} map) drives backend strict-mode
-  // resolution. On success for the docs target the created Koncept opens
-  // right away in the Viewer's FormDialog via the generic `open_form`
-  // detail-action branch (same pattern as fileToRegistry).
-  async function handleApplyFromModal(extractedNdx, userActions = null, target = 'docs') {
+  // Apply návrhu — safe mode; 422 unresolved_required z přímého apply
+  // (tlačítko Použít na kartě) → fall-through do review modalu, kde
+  // uživatel reference dořeší.
+  async function applyProposal(messageNdx) {
     if (actionInFlightNdx !== null) return;
-    actionInFlightNdx = extractedNdx;
+    actionInFlightNdx = messageNdx;
     try {
-      const result = await applyExtractedDocument(extractedNdx, userActions);
+      const result = await applyMessage(messageNdx, null);
+      if (result?.success) {
+        onRefresh?.();
+        const savedDocId = result.data?.savedDocId ?? 0;
+        if (savedDocId) {
+          onAction?.('openCreatedDoc', {
+            id: 'openCreatedDoc',
+            kind: 'open_form',
+            target: { table: 'docs_core_heads', mode: 'edit', id: savedDocId },
+          });
+        }
+      } else if (result?.error?.code === 'unresolved_required') {
+        openPreviewModal(messageNdx);
+      } else {
+        alert(t('viewer.detail.applyFailed', { msg: translateError(result?.error) }));
+      }
+    } finally {
+      actionInFlightNdx = null;
+    }
+  }
+
+  // Apply from modal. `userActions` (flat {path: action} map) drives backend
+  // strict-mode resolution. On success for the docs target the created
+  // Koncept opens right away in the Viewer's FormDialog via the generic
+  // `open_form` detail-action branch (same pattern as fileToRegistry).
+  async function handleApplyFromModal(messageNdx, userActions = null, target = 'docs') {
+    if (actionInFlightNdx !== null) return;
+    actionInFlightNdx = messageNdx;
+    try {
+      const result = await applyMessage(messageNdx, userActions);
       if (result?.success) {
         const savedDocId = result.data?.savedDocId ?? 0;
         closePreviewModal();
@@ -142,14 +165,9 @@
 
   // Reject from modal — closes the preview modal first so the reject
   // dialog isn't obscured underneath.
-  function handleRejectFromModal(extractedNdx) {
-    const doc = (detail?.tabs ?? [])
-      .flatMap((tab) => tab.content?.documents ?? [])
-      .find((d) => d.ndx === extractedNdx);
-    if (doc) {
-      closePreviewModal();
-      openRejectDialog(doc);
-    }
+  function handleRejectFromModal(messageNdx) {
+    closePreviewModal();
+    openRejectDialog(messageNdx);
   }
 </script>
 
@@ -289,53 +307,87 @@
       {:else if content?.type === 'untrusted-html'}
         <SandboxedHtml html={content.html} title={t('viewer.detail.mailBody')} />
 
-      {:else if content?.type === 'extracted-documents'}
+      {:else if content?.type === 'proposal'}
+        <!-- Dokumentový návrh poslední analýzy (message-centric) — jedna
+             karta, nebo prázdný stav s klasifikací zprávy. -->
         <div class="shpd-extracted">
-          {#if (content.documents ?? []).length === 0}
-            <div class="shpd-extracted__empty">{t('viewer.detail.noExtracted')}</div>
+          {#if !content.proposal}
+            <div class="shpd-extracted__empty">
+              {t('viewer.detail.noProposal', {
+                type: content.classification?.primary_type_label ?? '',
+              })}
+            </div>
           {:else}
-            {#each content.documents as doc (doc.ndx)}
-              <div class="shpd-extracted__card">
-                <div class="shpd-extracted__header">
-                  <span class="shpd-extracted__type">{doc.doc_type_label}</span>
-                  <span class="shpd-extracted__badge shpd-extracted__badge--{doc.status_style}">
-                    {doc.status_label}
+            {@const doc = content.proposal}
+            <div class="shpd-extracted__card">
+              <div class="shpd-extracted__header">
+                <span class="shpd-extracted__type">{doc.proposed_type_label}</span>
+                {#if doc.ai_failed}
+                  <span class="shpd-extracted__badge shpd-extracted__badge--error">
+                    {t('viewer.detail.proposalFailed')}
                   </span>
-                  {#if doc.confidence !== null}
-                    <span class="shpd-extracted__confidence">{(doc.confidence * 100).toFixed(0)}%</span>
-                  {/if}
+                {:else if doc.resolution !== null}
+                  <span class="shpd-extracted__badge shpd-extracted__badge--{doc.resolution_style}">
+                    {doc.resolution_label}
+                  </span>
+                {:else if doc.band}
+                  <span class="shpd-extracted__badge shpd-extracted__badge--{doc.band === 'ready' ? 'done' : doc.band === 'low' ? 'edit' : 'confirmed'}">
+                    {t(`viewer.detail.band.${doc.band}`)}
+                  </span>
+                {/if}
+                {#if doc.confidence !== null}
+                  <span class="shpd-extracted__confidence">{(doc.confidence * 100).toFixed(0)}%</span>
+                {/if}
+              </div>
+
+              {#if doc.summary}
+                <div class="shpd-extracted__summary">{doc.summary}</div>
+              {/if}
+
+              {#if (doc.secondary_findings ?? []).length > 0}
+                <div class="shpd-extracted__meta">
+                  {#each doc.secondary_findings as finding}
+                    <div>+ {finding.type_label}{finding.note ? ` — ${finding.note}` : ''}</div>
+                  {/each}
                 </div>
+              {/if}
 
-                {#if doc.summary}
-                  <div class="shpd-extracted__summary">{doc.summary}</div>
-                {/if}
+              {#if doc.resolution !== null && doc.resolved_at}
+                <div class="shpd-extracted__meta">{t('viewer.detail.resolvedAt', { date: doc.resolved_at })}</div>
+              {/if}
+              {#if doc.rejected_reason}
+                <div class="shpd-extracted__meta">{t('viewer.detail.rejected', { reason: doc.rejected_reason })}</div>
+              {/if}
 
-                {#if doc.applied_at}
-                  <div class="shpd-extracted__meta">{t('viewer.detail.applied', { date: doc.applied_at })}</div>
+              <div class="shpd-extracted__actions">
+                {#if doc.can_apply}
+                  <Button
+                    label={t('viewer.detail.apply')}
+                    variant="success"
+                    size="sm"
+                    disabled={actionInFlightNdx === doc.messageNdx}
+                    onclick={() => applyProposal(doc.messageNdx)}
+                  />
                 {/if}
-                {#if doc.rejected_reason}
-                  <div class="shpd-extracted__meta">{t('viewer.detail.rejected', { reason: doc.rejected_reason })}</div>
-                {/if}
-
-                <div class="shpd-extracted__actions">
+                {#if !doc.ai_failed}
                   <Button
                     label={t('viewer.detail.showDetail')}
                     variant="secondary"
                     size="sm"
-                    onclick={() => openPreviewModal(doc)}
+                    onclick={() => openPreviewModal(doc.messageNdx)}
                   />
-                  {#if doc.can_reject}
-                    <Button
-                      label={t('viewer.detail.reject')}
-                      variant="danger"
-                      size="sm"
-                      disabled={actionInFlightNdx === doc.ndx}
-                      onclick={() => openRejectDialog(doc)}
-                    />
-                  {/if}
-                </div>
+                {/if}
+                {#if doc.can_reject}
+                  <Button
+                    label={t('viewer.detail.reject')}
+                    variant="danger"
+                    size="sm"
+                    disabled={actionInFlightNdx === doc.messageNdx}
+                    onclick={() => openRejectDialog(doc.messageNdx)}
+                  />
+                {/if}
               </div>
-            {/each}
+            </div>
           {/if}
         </div>
 
@@ -427,10 +479,10 @@
       {/if}
     {/if}
 
-    <!-- Phase 3a: full-screen Exchange preview (PDF + canonical split). -->
+    <!-- Full-screen Exchange preview (PDF + canonical split). -->
     <DocumentExchangePreviewModal
       open={previewModalNdx !== null}
-      extractedNdx={previewModalNdx}
+      messageNdx={previewModalNdx}
       onClose={closePreviewModal}
       onApply={handleApplyFromModal}
       onReject={handleRejectFromModal}
@@ -438,7 +490,7 @@
 
     <!-- Reject reason dialog — sdílená komponenta (Feed i ViewerDetail). -->
     <RejectReasonPrompt
-      open={rejectDialogDoc !== null}
+      open={rejectDialogNdx !== null}
       submitting={rejectSubmitting}
       title={t('viewer.detail.rejectTitle')}
       reasonLabel={t('viewer.detail.rejectReasonLabel')}

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Shipard\Module\Core\Mail;
 
 /**
- * Výsledek {@see ExtractedTargetApplier::unapply()}. `trashedId` = id
+ * Výsledek {@see ProposalTargetApplier::unapply()}. `trashedId` = id
  * cílového záznamu přesunutého do Koše (soft-delete, vratné).
  */
 final class TargetUnapplyResult

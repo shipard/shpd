@@ -15,8 +15,7 @@
                 "kind":          { "type": "string" },
                 "extractedAt":   { "type": ["string", "null"], "format": "date-time" },
                 "confidence":    { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
-                "mailMessage":   { "type": ["integer", "null"] },
-                "extractedDoc":  { "type": ["integer", "null"] },
+                "message":       { "type": ["integer", "null"] },
                 "promptVersion": { "type": ["string", "null"] },
                 "raw": {
                     "type": ["object", "null"],

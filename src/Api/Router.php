@@ -173,10 +173,6 @@ class Router
 			return $this->resolveMailMessagesRoute($subpath, $method);
 		}
 
-		if (str_starts_with($subpath, '/_mail/extracted-documents/')) {
-			return $this->resolveExtractedDocumentsRoute($subpath, $method);
-		}
-
 		if (str_starts_with($subpath, '/_mail/senders/')) {
 			return $this->resolveMailSendersRoute($subpath, $method);
 		}
@@ -528,15 +524,28 @@ class Router
 	private function resolveMailMessagesRoute(string $subpath, string $method): Route|Response
 	{
 		$rest = substr($subpath, strlen('/_mail/messages/'));
-		if (preg_match('#^(\d+)/reanalyze$#', $rest, $m)) {
+
+		// Message-centrické akce nad dokumentovým návrhem poslední analýzy
+		// (tasks/mail-message-centric.md A4). Preview je GET (read-only),
+		// zbytek POST.
+		if (preg_match('#^(\d+)/(reanalyze|apply|unapply|reject|preview)$#', $rest, $m)) {
 			$ndx = (int) $m[1];
+			$action = $m[2];
 			if ($ndx <= 0) {
 				return Response::error('NOT_FOUND', 'Not found', 404);
 			}
-			if ($method !== 'POST') {
+			$expectedMethod = $action === 'preview' ? 'GET' : 'POST';
+			if ($method !== $expectedMethod) {
 				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
 			}
-			return new Route('analysis', 'reanalyze', null, $ndx);
+			$controllerAction = match ($action) {
+				'reanalyze' => 'reanalyze',
+				'apply'     => 'applyMessage',
+				'unapply'   => 'unapplyMessage',
+				'reject'    => 'rejectMessage',
+				'preview'   => 'previewMessage',
+			};
+			return new Route('analysis', $controllerAction, null, $ndx);
 		}
 
 		return Response::error('NOT_FOUND', 'Not found', 404);
@@ -630,30 +639,6 @@ class Router
 				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
 			}
 			return new Route('registry', 'extractText', null, $id);
-		}
-
-		return Response::error('NOT_FOUND', 'Not found', 404);
-	}
-
-	private function resolveExtractedDocumentsRoute(string $subpath, string $method): Route|Response
-	{
-		$rest = substr($subpath, strlen('/_mail/extracted-documents/'));
-		if (preg_match('#^(\d+)/(apply|unapply|reject|preview)$#', $rest, $m)) {
-			$ndx = (int) $m[1];
-			$action = $m[2];
-			if ($ndx <= 0) {
-				return Response::error('NOT_FOUND', 'Not found', 404);
-			}
-			if ($method !== 'POST') {
-				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
-			}
-			$controllerAction = match ($action) {
-				'apply'   => 'applyExtracted',
-				'unapply' => 'unapplyExtracted',
-				'reject'  => 'rejectExtracted',
-				'preview' => 'previewExtracted',
-			};
-			return new Route('analysis', $controllerAction, null, $ndx);
 		}
 
 		return Response::error('NOT_FOUND', 'Not found', 404);

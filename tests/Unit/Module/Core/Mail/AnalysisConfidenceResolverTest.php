@@ -6,20 +6,19 @@ namespace Shipard\Tests\Unit\Module\Core\Mail;
 
 use PHPUnit\Framework\TestCase;
 use Shipard\Core\Database\DataSourceConnection;
-use Shipard\Module\Core\Mail\ExtractedDocumentDocument;
-use Shipard\Module\Core\Mail\ExtractedDocumentStatusResolver;
+use Shipard\Module\Core\Mail\AnalysisConfidenceResolver;
 
 /**
- * Sdílená pravidla confidence → status extrahovaného dokumentu (krok 2
- * tasks/mail-isdoc-import.md). Chování mapování a stropu D7 je zamčené
- * i přes AnalysisControllerExchangeTest (validateAndStoreCanonical) —
- * tady se testuje resolver přímo, hlavně thresholds fallbacky.
+ * Runtime mapování confidence → pásmo návrhu (tasks/mail-message-centric.md
+ * D3): prahy profilu s fallbacky + strop D7 podle pokrytí řádků položkami.
+ * Pásmo se počítá za běhu, nikam se nezapisuje — testuje se resolver přímo,
+ * hlavně thresholds fallbacky a hranice stropu.
  */
-class ExtractedDocumentStatusResolverTest extends TestCase
+class AnalysisConfidenceResolverTest extends TestCase
 {
-    private function resolver(?DataSourceConnection $db = null): ExtractedDocumentStatusResolver
+    private function resolver(?DataSourceConnection $db = null): AnalysisConfidenceResolver
     {
-        return new ExtractedDocumentStatusResolver(
+        return new AnalysisConfidenceResolver(
             $db ?? $this->createMock(DataSourceConnection::class),
         );
     }
@@ -29,7 +28,7 @@ class ExtractedDocumentStatusResolverTest extends TestCase
     public function testThresholdsForNullProfileReturnsDefaults(): void
     {
         $this->assertSame(
-            ExtractedDocumentStatusResolver::DEFAULT_THRESHOLDS,
+            AnalysisConfidenceResolver::DEFAULT_THRESHOLDS,
             $this->resolver()->thresholdsForProfile(null),
         );
     }
@@ -53,7 +52,7 @@ class ExtractedDocumentStatusResolverTest extends TestCase
         $db->method('fetchRow')->willReturn(['confidence_thresholds' => 'not json']);
 
         $this->assertSame(
-            ExtractedDocumentStatusResolver::DEFAULT_THRESHOLDS,
+            AnalysisConfidenceResolver::DEFAULT_THRESHOLDS,
             $this->resolver($db)->thresholdsForProfile(17),
         );
     }
@@ -65,7 +64,7 @@ class ExtractedDocumentStatusResolverTest extends TestCase
         $db->method('fetchRow')->willReturn(null);
 
         $this->assertSame(
-            ExtractedDocumentStatusResolver::DEFAULT_THRESHOLDS,
+            AnalysisConfidenceResolver::DEFAULT_THRESHOLDS,
             $this->resolver($db)->thresholdsForDefaultProfile(),
         );
     }
@@ -84,25 +83,18 @@ class ExtractedDocumentStatusResolverTest extends TestCase
         );
     }
 
-    // ── mapování confidence ─────────────────────────────────────────────────
+    // ── mapování confidence na pásmo ────────────────────────────────────────
 
-    public function testMapConfidenceToStatus(): void
+    public function testBandFor(): void
     {
         $resolver = $this->resolver();
-        $thresholds = ExtractedDocumentStatusResolver::DEFAULT_THRESHOLDS;
+        $thresholds = AnalysisConfidenceResolver::DEFAULT_THRESHOLDS;
 
-        $this->assertSame(
-            ExtractedDocumentDocument::STATUS_READY_TO_APPLY,
-            $resolver->mapConfidenceToStatus(1.0, $thresholds),
-        );
-        $this->assertSame(
-            ExtractedDocumentDocument::STATUS_PENDING_REVIEW,
-            $resolver->mapConfidenceToStatus(0.7, $thresholds),
-        );
-        $this->assertSame(
-            ExtractedDocumentDocument::STATUS_LOW_CONFIDENCE,
-            $resolver->mapConfidenceToStatus(0.3, $thresholds),
-        );
+        $this->assertSame(AnalysisConfidenceResolver::BAND_READY, $resolver->bandFor(1.0, $thresholds));
+        $this->assertSame(AnalysisConfidenceResolver::BAND_READY, $resolver->bandFor(0.9, $thresholds));
+        $this->assertSame(AnalysisConfidenceResolver::BAND_REVIEW, $resolver->bandFor(0.7, $thresholds));
+        $this->assertSame(AnalysisConfidenceResolver::BAND_REVIEW, $resolver->bandFor(0.6, $thresholds));
+        $this->assertSame(AnalysisConfidenceResolver::BAND_LOW, $resolver->bandFor(0.3, $thresholds));
     }
 
     // ── strop D7 ────────────────────────────────────────────────────────────
@@ -114,9 +106,9 @@ class ExtractedDocumentStatusResolverTest extends TestCase
         ]];
 
         $this->assertSame(
-            ExtractedDocumentDocument::STATUS_PENDING_REVIEW,
-            $this->resolver()->capStatusByRowCoverage(
-                ExtractedDocumentDocument::STATUS_READY_TO_APPLY,
+            AnalysisConfidenceResolver::BAND_REVIEW,
+            $this->resolver()->capBandByRowCoverage(
+                AnalysisConfidenceResolver::BAND_READY,
                 $canonical,
             ),
         );
@@ -129,9 +121,9 @@ class ExtractedDocumentStatusResolverTest extends TestCase
         ]];
 
         $this->assertSame(
-            ExtractedDocumentDocument::STATUS_READY_TO_APPLY,
-            $this->resolver()->capStatusByRowCoverage(
-                ExtractedDocumentDocument::STATUS_READY_TO_APPLY,
+            AnalysisConfidenceResolver::BAND_READY,
+            $this->resolver()->capBandByRowCoverage(
+                AnalysisConfidenceResolver::BAND_READY,
                 $canonical,
             ),
         );
@@ -144,20 +136,20 @@ class ExtractedDocumentStatusResolverTest extends TestCase
         ]];
 
         $this->assertSame(
-            ExtractedDocumentDocument::STATUS_READY_TO_APPLY,
-            $this->resolver()->capStatusByRowCoverage(
-                ExtractedDocumentDocument::STATUS_READY_TO_APPLY,
+            AnalysisConfidenceResolver::BAND_READY,
+            $this->resolver()->capBandByRowCoverage(
+                AnalysisConfidenceResolver::BAND_READY,
                 $canonical,
             ),
         );
     }
 
-    public function testCapLeavesNonReadyStatusAlone(): void
+    public function testCapLeavesNonReadyBandAlone(): void
     {
         $this->assertSame(
-            ExtractedDocumentDocument::STATUS_LOW_CONFIDENCE,
-            $this->resolver()->capStatusByRowCoverage(
-                ExtractedDocumentDocument::STATUS_LOW_CONFIDENCE,
+            AnalysisConfidenceResolver::BAND_LOW,
+            $this->resolver()->capBandByRowCoverage(
+                AnalysisConfidenceResolver::BAND_LOW,
                 ['rows' => [['rowKind' => 'item', 'item' => []]]],
             ),
         );
@@ -166,7 +158,7 @@ class ExtractedDocumentStatusResolverTest extends TestCase
     public function testCapDowngradesReadyWhenRowEnrichedWithLowConfidence(): void
     {
         // Dominance návrh (historyDominantItem / low) vyplní ourCode, ale
-        // řádek se jako pokrytý nepočítá — dokument zůstává pending_review
+        // řádek se jako pokrytý nepočítá — návrh zůstává review
         // (tasks/enrichment-dominant-item.md, D5).
         $canonical = [
             'rows' => [
@@ -182,9 +174,9 @@ class ExtractedDocumentStatusResolverTest extends TestCase
         ];
 
         $this->assertSame(
-            ExtractedDocumentDocument::STATUS_PENDING_REVIEW,
-            $this->resolver()->capStatusByRowCoverage(
-                ExtractedDocumentDocument::STATUS_READY_TO_APPLY,
+            AnalysisConfidenceResolver::BAND_REVIEW,
+            $this->resolver()->capBandByRowCoverage(
+                AnalysisConfidenceResolver::BAND_READY,
                 $canonical,
             ),
         );
@@ -221,11 +213,51 @@ class ExtractedDocumentStatusResolverTest extends TestCase
         ];
 
         $this->assertSame(
-            ExtractedDocumentDocument::STATUS_READY_TO_APPLY,
-            $this->resolver()->capStatusByRowCoverage(
-                ExtractedDocumentDocument::STATUS_READY_TO_APPLY,
+            AnalysisConfidenceResolver::BAND_READY,
+            $this->resolver()->capBandByRowCoverage(
+                AnalysisConfidenceResolver::BAND_READY,
                 $canonical,
             ),
+        );
+    }
+
+    // ── bandForAnalysis (convenience) ───────────────────────────────────────
+
+    public function testBandForAnalysisUsesProfileThresholdsAndCap(): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturn([
+            'confidence_thresholds' => '{"ready": 0.8, "review": 0.4}',
+        ]);
+
+        // 0.85 ≥ profile ready 0.8 → ready; canonical bez řádků strop nesráží.
+        $this->assertSame(
+            AnalysisConfidenceResolver::BAND_READY,
+            $this->resolver($db)->bandForAnalysis(0.85, 17, []),
+        );
+
+        // Řádek bez ourCode → strop D7 sráží ready na review.
+        $this->assertSame(
+            AnalysisConfidenceResolver::BAND_REVIEW,
+            $this->resolver($db)->bandForAnalysis(0.85, 17, [
+                'rows' => [['rowKind' => 'item', 'item' => ['name' => 'X']]],
+            ]),
+        );
+    }
+
+    public function testBandForAnalysisWithoutProfileFallsBackToDefaultProfile(): void
+    {
+        // Žádný default profil v DS → default thresholds; null confidence → 0.0 → low.
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturn(null);
+
+        $this->assertSame(
+            AnalysisConfidenceResolver::BAND_LOW,
+            $this->resolver($db)->bandForAnalysis(null, null, []),
+        );
+        $this->assertSame(
+            AnalysisConfidenceResolver::BAND_REVIEW,
+            $this->resolver($db)->bandForAnalysis(0.7, null, []),
         );
     }
 }

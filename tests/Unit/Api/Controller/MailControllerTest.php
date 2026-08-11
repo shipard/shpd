@@ -334,6 +334,8 @@ class MailControllerTest extends TestCase
 
     public function testIsdocImportFactoryNotInvokedWithoutCandidate(): void
     {
+        // PDF je kandidát vždy (nosič embedded ISDOC, PDF/A-3) — bez kandidáta
+        // znamená jen přílohy mimo ISDOC/XML/PDF (obrázky apod.).
         $factoryCalls = 0;
         $db = $this->createMock(DataSourceConnection::class);
         $ctrl = new MailController(
@@ -345,7 +347,7 @@ class MailControllerTest extends TestCase
         );
 
         $this->invokeRunIsdocImport($ctrl, [
-            ['id' => 1, 'name' => 'faktura.pdf', 'mime_type' => 'application/pdf'],
+            ['id' => 1, 'name' => 'scan.jpg', 'mime_type' => 'image/jpeg'],
         ]);
 
         $this->assertSame(0, $factoryCalls);

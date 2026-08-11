@@ -529,13 +529,13 @@
             "group": "lineage"
         },
         {
-            "id": "source_extracted_doc",
-            "name": "Source extracted document",
-            "name:cs": "Zdrojový extrahovaný dokument",
-            "name:en": "Source extracted document",
+            "id": "source_message",
+            "name": "Source mail message",
+            "name:cs": "Zdrojová zpráva",
+            "name:en": "Source mail message",
             "type": "int",
             "nullable": true,
-            "reference": "core_mail_extracted_documents",
+            "reference": "core_mail_incoming_messages",
             "system": true,
             "group": "lineage"
         },
@@ -685,6 +685,13 @@
             "id": "idx_vat_duzp",
             "type": "index",
             "columns": [{"column": "vat_duzp"}]
+        },
+
+        // lineage — mail group of attachments in doc detail (AI apply flow)
+        {
+            "id": "idx_source_message",
+            "type": "index",
+            "columns": [{"column": "source_message"}]
         },
 
         // fulltext on doc_text

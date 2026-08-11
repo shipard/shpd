@@ -120,7 +120,7 @@ badge (`shpd-detail__badge--{stateStyle}` resp. `shpd-form-state-badge.docState_
 | stateStyle | Pruh v seznamu | Badge v detailu | Význam |
 |---|---|---|---|
 | `confirmed` | žádný | tichá šedá | „V pořádku" — default stav, neruší |
-| `done` | žádný | zelená | „Hotovo" — pozitivní cílový stav (např. extracted document applied) |
+| `done` | žádný | zelená | „Hotovo" — pozitivní cílový stav (např. použitý dokumentový návrh z pošty) |
 | `concept` | žlutá `#facc15` | žlutá | Rozpracováno, dopiš to |
 | `edit` | fialová `#a78bfa` | fialová | Právě se edituje (v opravě) |
 | `archive` | šedá `#cbd5e1` | šedá | Archív — tichý, mimo aktivní práci |
@@ -195,7 +195,7 @@ Frontend má **tři vrstvy badge** s podobnou paletou:
 | Komponenta | CSS prefix | Účel |
 |---|---|---|
 | `ViewerDetail.svelte` (hlavička) | `.shpd-detail__badge--*` | Badge v hlavičce detailu (typ záznamu, stav, VIP atd.) |
-| `ViewerDetail.svelte` (extracted docs) | `.shpd-extracted__badge--*` | Badge stavu u extrahovaných dokumentů |
+| `ViewerDetail.svelte` (tab Návrh) | `.shpd-extracted__badge--*` | Badge pásma/verdiktu u dokumentového návrhu zprávy |
 | `FormStateBadge.svelte` | `.shpd-form-state-badge.docState_*` | Stavový badge v hlavičce editačního formuláře |
 
 Všechny tři používají **stejnou doc-state paletu** (concept, edit, confirmed,

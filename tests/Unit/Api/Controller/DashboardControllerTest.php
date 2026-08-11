@@ -111,9 +111,29 @@ final class DashboardControllerTest extends TestCase
         $this->assertArrayNotHasKey('widgets', $data);
     }
 
+    /**
+     * Řádek návrhové karty MailSuggestionsSource — zpráva s otevřeným
+     * dokumentovým návrhem poslední úspěšné analýzy (message-centricky,
+     * canonical na řádku analýzy).
+     *
+     * @return array<string,mixed>
+     */
+    private static function suggestionRow(int $messageNdx, int $analysisNdx, string $subject): array
+    {
+        return [
+            'message_ndx' => $messageNdx, 'subject' => $subject, 'sender_name' => 'X',
+            'received_at' => '2026-06-28 09:00:00', 'raw_source_attachment' => null,
+            'analysis_ndx' => $analysisNdx, 'proposed_type' => 'invoiceReceived',
+            'canonical_json' => '{}', 'analysis_json' => null,
+            'confidence' => 0.95, 'profile' => null,
+        ];
+    }
+
     public function testDashboardWiresBothSourcesAndSorts(): void
     {
         $db = $this->createMock(DataSourceConnection::class);
+        // Prahy pásem (AnalysisConfidenceResolver) — fetchRow → null = defaulty.
+        $db->method('fetchRow')->willReturn(null);
         $db->method('fetchAll')->willReturnCallback(
             static function (string $sql): array {
                 // Agregátní fáze AlertsSource (GROUP BY) — jeden check pod prahem.
@@ -130,14 +150,10 @@ final class DashboardControllerTest extends TestCase
                         'first_seen_at' => '2026-06-28 08:00:00', 'last_seen_at' => '2026-06-28 08:00:00',
                     ]];
                 }
-                // NOT EXISTS = dotaz na karty „Není faktura" — tady prázdný
-                if (str_contains($sql, 'extracted_documents') && !str_contains($sql, 'NOT EXISTS')) {
-                    return [[
-                        'extracted_ndx' => 1, 'message_ndx' => 2, 'doc_type' => 'invoiceReceived',
-                        'confidence' => 0.9, 'status' => 10, 'subject' => 'Faktura',
-                        'sender_name' => 'X', 'received_at' => '2026-06-28 09:00:00',
-                        'extracted_json' => '{}',
-                    ]];
+                // `proposed_type` nese jen dotaz na návrhové karty (JOIN na
+                // poslední úspěšnou analýzu); error/notInvoice/attachments ne.
+                if (str_contains($sql, 'proposed_type')) {
+                    return [self::suggestionRow(2, 1, 'Faktura')];
                 }
                 return [];
             },
@@ -149,26 +165,22 @@ final class DashboardControllerTest extends TestCase
         $this->assertCount(2, $data['cards']);
         // urgent (alert) před ready (mail)
         $this->assertSame('alert:7', $data['cards'][0]['id']);
-        $this->assertSame('mail_extracted:1', $data['cards'][1]['id']);
+        $this->assertSame('mail_suggestion:2', $data['cards'][1]['id']);
         $this->assertSame(['urgent' => 1, 'review' => 0, 'ready' => 1], $data['summary']['counts']);
     }
 
     public function testDashboardAppendsAndMoreCardWhenTruncated(): void
     {
         $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturn(null);
         $db->method('fetchAll')->willReturnCallback(
             static function (string $sql): array {
-                if (!str_contains($sql, 'extracted_documents') || str_contains($sql, 'NOT EXISTS')) {
+                if (!str_contains($sql, 'proposed_type')) {
                     return [];
                 }
                 $rows = [];
                 for ($i = 1; $i <= 35; $i++) {
-                    $rows[] = [
-                        'extracted_ndx' => $i, 'message_ndx' => 100 + $i, 'doc_type' => 'invoiceReceived',
-                        'confidence' => 0.9, 'status' => 10, 'subject' => "F$i",
-                        'sender_name' => 'X', 'received_at' => '2026-06-28 09:00:00',
-                        'extracted_json' => '{}',
-                    ];
+                    $rows[] = self::suggestionRow(100 + $i, $i, "F$i");
                 }
                 return $rows;
             },
@@ -208,15 +220,10 @@ final class DashboardControllerTest extends TestCase
         $db->method('fetchRow')->willReturn(null);
         $db->method('fetchAll')->willReturnCallback(
             static function (string $sql): array {
-                if (!str_contains($sql, 'extracted_documents') || str_contains($sql, 'NOT EXISTS')) {
+                if (!str_contains($sql, 'proposed_type')) {
                     return [];
                 }
-                return [[
-                    'extracted_ndx' => 1, 'message_ndx' => 2, 'doc_type' => 'invoiceReceived',
-                    'confidence' => 0.9, 'status' => 10, 'subject' => 'Faktura',
-                    'sender_name' => 'X', 'received_at' => '2026-06-28 09:00:00',
-                    'extracted_json' => '{}',
-                ]];
+                return [self::suggestionRow(2, 1, 'Faktura')];
             },
         );
         return $db;

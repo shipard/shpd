@@ -26,6 +26,12 @@
             "name:en": "Result"
         },
         {
+            "id": "resolution",
+            "name": "Resolution",
+            "name:cs": "Verdikt",
+            "name:en": "Resolution"
+        },
+        {
             "id": "telemetry",
             "name": "Telemetry",
             "name:cs": "Telemetrie",
@@ -156,6 +162,33 @@
             "group": "result"
         },
         {
+            // Validovaný + obohacený canonical návrhu dokumentu
+            // (shpd.docs.document.v1, resp. shpd.registry.document.v1).
+            // NULL = běh žádný dokument nenavrhl. Při selhání validace
+            // wrapper {_validationError, _validationIssues, _rawOutput}.
+            "id": "canonical_json",
+            "name": "Proposed document (JSON)",
+            "name:cs": "Návrh dokumentu (JSON)",
+            "name:en": "Proposed document (JSON)",
+            "type": "longtext",
+            "nullable": true,
+            "group": "result"
+        },
+        {
+            // Typ dokumentu navržený tímto během (klíč core.mail.primaryTypes).
+            // Historický záznam — na rozdíl od mutable message.primary_type se
+            // po zápisu nemění. Ve wire kontraktu se pole jmenuje doc_type.
+            "id": "proposed_type",
+            "name": "Proposed type",
+            "name:cs": "Navržený typ",
+            "name:en": "Proposed type",
+            "type": "enumString",
+            "length": 30,
+            "cfgItem": "core.mail.primaryTypes",
+            "nullable": true,
+            "group": "result"
+        },
+        {
             "id": "error_message",
             "name": "Error message",
             "name:cs": "Chybová zpráva",
@@ -163,6 +196,49 @@
             "type": "text",
             "nullable": true,
             "group": "result"
+        },
+
+        // --- resolution ---
+
+        {
+            // NULL = otevřený návrh / bez návrhu, 40 = applied, 50 = rejected.
+            "id": "resolution",
+            "name": "Resolution",
+            "name:cs": "Verdikt",
+            "name:en": "Resolution",
+            "type": "enumInt",
+            "cfgItem": "core.mail.analysisResolutions",
+            "nullable": true,
+            "group": "resolution"
+        },
+        {
+            // Povinný při resolution = 50 (rejected).
+            "id": "rejected_reason",
+            "name": "Rejected reason",
+            "name:cs": "Důvod zamítnutí",
+            "name:en": "Rejected reason",
+            "type": "text",
+            "nullable": true,
+            "group": "resolution"
+        },
+        {
+            "id": "resolved_at",
+            "name": "Resolved at",
+            "name:cs": "Čas verdiktu",
+            "name:en": "Resolved at",
+            "type": "datetime",
+            "nullable": true,
+            "group": "resolution"
+        },
+        {
+            "id": "resolved_by",
+            "name": "Resolved by",
+            "name:cs": "Rozhodl",
+            "name:en": "Resolved by",
+            "type": "int",
+            "nullable": true,
+            "reference": "core_system_users",
+            "group": "resolution"
         },
 
         // --- telemetry ---
@@ -205,17 +281,6 @@
             "nullable": true,
             "group": "telemetry"
         },
-        {
-            "id": "extracted_document_count",
-            "name": "Extracted documents",
-            "name:cs": "Extrahovaných dokumentů",
-            "name:en": "Extracted documents",
-            "type": "int",
-            "nullable": false,
-            "default": 0,
-            "group": "telemetry"
-        },
-
         // --- audit ---
 
         {

@@ -5,23 +5,22 @@ declare(strict_types=1);
 namespace Shipard\Module\Core\Mail;
 
 /**
- * HTTP-agnostický výsledek {@see ExtractedDocumentApplier::apply()}. Nese vše,
- * co dříve vracel `AnalysisController::applyExtracted` (úspěch i rozlišitelné
- * chybové cesty), takže HTTP slupka i MCP nástroj nad ním postaví vlastní
- * prezentaci (Response / obálka).
+ * HTTP-agnostický výsledek {@see MessageProposalApplier}. Nese úspěch
+ * i rozlišitelné chybové cesty, takže HTTP slupka i MCP nástroj nad ním
+ * postaví vlastní prezentaci (Response / obálka).
  *
  * `statusCode` je HTTP-like hint pro controller mapper; `canonical` u chyby
  * typicky nese `_resolve.issues` (co dořešit), u úspěchu enriched payload.
  */
-final class ExtractedApplyOutcome
+final class ProposalApplyOutcome
 {
     /**
      * @param array<string, mixed>|null $canonical
      */
     private function __construct(
         public readonly bool $ok,
-        public readonly int $extractedNdx,
         public readonly int $messageNdx,
+        public readonly ?int $analysisNdx,
         public readonly ?int $savedDocId,
         public readonly ?string $errorCode,
         public readonly ?string $errorMessage,
@@ -35,8 +34,8 @@ final class ExtractedApplyOutcome
      * @param array<string, mixed>|null $canonical
      */
     public static function ok(
-        int $extractedNdx,
         int $messageNdx,
+        ?int $analysisNdx,
         ?int $savedDocId,
         ?array $canonical,
         bool $idempotent = false,
@@ -44,8 +43,8 @@ final class ExtractedApplyOutcome
     ): self {
         return new self(
             ok: true,
-            extractedNdx: $extractedNdx,
             messageNdx: $messageNdx,
+            analysisNdx: $analysisNdx,
             savedDocId: $savedDocId,
             errorCode: null,
             errorMessage: null,
@@ -60,8 +59,8 @@ final class ExtractedApplyOutcome
      * @param array<string, mixed>|null $canonical
      */
     public static function error(
-        int $extractedNdx,
         int $messageNdx,
+        ?int $analysisNdx,
         string $errorCode,
         ?string $errorMessage,
         int $statusCode,
@@ -69,8 +68,8 @@ final class ExtractedApplyOutcome
     ): self {
         return new self(
             ok: false,
-            extractedNdx: $extractedNdx,
             messageNdx: $messageNdx,
+            analysisNdx: $analysisNdx,
             savedDocId: null,
             errorCode: $errorCode,
             errorMessage: $errorMessage,

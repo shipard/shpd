@@ -36,8 +36,10 @@
                 "kind":          { "type": "string" },
                 "extractedAt":   { "type": ["string", "null"], "format": "date-time" },
                 "confidence":    { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
-                "mailMessage":   { "type": ["integer", "null"] },
-                "extractedDoc":  { "type": ["integer", "null"] },
+                // Lineage: zdrojová zpráva došlé pošty (core_mail_incoming_messages).
+                // Applier ji propíše do docs_core_heads.source_message; server ji
+                // injektuje sám (nikdy nevěří klientovi).
+                "message":       { "type": ["integer", "null"] },
                 "promptVersion": { "type": ["string", "null"] },
                 "raw": {
                     // Vendor-specific opaque payload (e.g. ISDOC <Header>,

@@ -95,7 +95,7 @@ z historie dokladů partnera (`RowHistoryEnricher`, bez LLM volání) — viz
 
 **Soukromí digestu shrnutí**: prompt shrnutí obsahuje titulky karet
 (partneři/částky z hlaviček dokladů) — stejná data, jaká analyzer LLM už
-posílá při extrakci; žádná nová datová hranice. Plný `extracted_json` se do
+posílá při extrakci; žádná nová datová hranice. Plný `canonical_json` se do
 promptu nikdy nedává.
 
 ---

@@ -23,9 +23,10 @@ use Shipard\Module\Core\Exchange\Schema\SchemaLoader;
 use Shipard\Module\Core\Exchange\Schema\SchemaValidator;
 
 /**
- * Phase 2 unit tests for AnalysisController — canonical schema validation
- * in /result, full applyExtracted pipeline (delegate to DocumentApplier),
- * idempotent / recovery branches.
+ * Unit testy AnalysisController po message-centric refaktoru — canonical
+ * validace v /result (validateAndStoreCanonical, nová signatura), plná
+ * applyMessage pipeline (delegace na DocumentApplier přes
+ * MessageProposalApplier), idempotentní / guard větve.
  */
 class AnalysisControllerExchangeTest extends TestCase
 {
@@ -88,12 +89,12 @@ class AnalysisControllerExchangeTest extends TestCase
         );
     }
 
-    /** ConfigRuntime s extractedDocTypes: insurance jako registry target. */
+    /** ConfigRuntime s primaryTypes: insurance jako registry target. */
     private function configRuntimeWithRegistryTargets(): ConfigRuntime
     {
         $config = $this->createMock(ConfigRuntime::class);
         $config->method('cfgItem')->willReturnMap([
-            ['core.mail.extractedDocTypes', [
+            ['core.mail.primaryTypes', [
                 'invoiceReceived' => ['target' => 'docs'],
                 'insurance'       => ['target' => 'registry', 'docKind' => 'insurance'],
             ]],
@@ -144,76 +145,139 @@ class AnalysisControllerExchangeTest extends TestCase
         );
     }
 
-    // ── applyExtracted branches ─────────────────────────────────────────────
+    /**
+     * DB mock pro message-centrické akce: fetchRow routuje podle názvu
+     * tabulky (první %n argument) na řádek zprávy / poslední úspěšné analýzy.
+     */
+    private function dbForProposal(?array $message, ?array $analysis): DataSourceConnection
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturnCallback(
+            static fn(string $sql, ...$args) => match ($args[0] ?? null) {
+                'core_mail_incoming_messages' => $message,
+                'core_mail_message_analyses'  => $analysis,
+                default                       => null,
+            },
+        );
+        return $db;
+    }
 
-    public function testApplyExtractedReturns401WhenUnauthenticated(): void
+    /** Zpráva připravená na apply (mimo Archiv/Koš, analysis_state=30). */
+    private function openMessage(int $ndx = 100): array
+    {
+        return ['id' => $ndx, 'docState' => 20, 'analysis_state' => 30, 'target_row' => null];
+    }
+
+    /** Otevřený návrh (resolution NULL) s daným canonicalem. */
+    private function openAnalysis(?string $canonicalJson, string $proposedType = 'invoiceReceived'): array
+    {
+        return [
+            'id' => 11, 'resolution' => null,
+            'canonical_json' => $canonicalJson, 'proposed_type' => $proposedType,
+        ];
+    }
+
+    /** Dibi mock pro zápis verdiktu (writeResolution) po úspěšném apply. */
+    private function wireResolutionDibi(DataSourceConnection $db): void
+    {
+        $fluent = $this->createMock(\Dibi\Fluent::class);
+        $fluent->method('__call')->willReturnSelf();
+        $fluent->method('execute');
+        $dibi = $this->createMock(\Dibi\Connection::class);
+        $dibi->method('update')->willReturn($fluent);
+        $db->method('getDibiConnection')->willReturn($dibi);
+    }
+
+    // ── applyMessage branches ───────────────────────────────────────────────
+
+    public function testApplyMessageReturns401WhenUnauthenticated(): void
     {
         $db = $this->createMock(DataSourceConnection::class);
         $ctrl = $this->controller($db);
 
         $auth = new AuthContext(false, null, null);
-        $resp = $ctrl->applyExtracted($auth, $this->request('POST', '/_mail/extracted-documents/1/apply'), 1);
+        $resp = $ctrl->applyMessage($auth, $this->request('POST', '/_mail/messages/1/apply'), 1);
         $this->assertSame(401, $this->statusOf($resp));
     }
 
-    public function testApplyExtractedReturns404WhenRowMissing(): void
+    public function testApplyMessageReturns404WhenMessageMissing(): void
     {
-        $db = $this->createMock(DataSourceConnection::class);
-        $db->method('fetchRow')->willReturn(null);
+        $db = $this->dbForProposal(null, null);
 
         $applier = $this->createMock(DocumentApplier::class);
         $applier->expects($this->never())->method('apply');
 
-        $resp = $this->controller($db, $applier)->applyExtracted(
+        $resp = $this->controller($db, $applier)->applyMessage(
             $this->authed(), $this->request('POST', '/x'), 999,
         );
         $this->assertSame(404, $this->statusOf($resp));
     }
 
-    public function testApplyExtractedReturns422WhenStatusAiFailed(): void
+    public function testApplyMessageReturns422WhenCanonicalIsAiFailedWrapper(): void
     {
-        $db = $this->createMock(DataSourceConnection::class);
-        $db->method('fetchRow')->willReturn(['id' => 1, 'status' => 70, 'message' => 100]);
+        // Forenzní wrapper z /result → nelze aplikovat, jen reanalyzovat.
+        $wrapper = json_encode([
+            '_validationError' => 'Canonical schema validation failed',
+            '_validationIssues' => [],
+            '_rawOutput' => ['garbage' => true],
+        ]);
+        $db = $this->dbForProposal($this->openMessage(), $this->openAnalysis($wrapper));
 
         $applier = $this->createMock(DocumentApplier::class);
         $applier->expects($this->never())->method('apply');
 
-        $resp = $this->controller($db, $applier)->applyExtracted(
-            $this->authed(), $this->request('POST', '/x'), 1,
+        $resp = $this->controller($db, $applier)->applyMessage(
+            $this->authed(), $this->request('POST', '/x'), 100,
         );
         $this->assertSame(422, $this->statusOf($resp));
         $this->assertSame('AI_OUTPUT_INVALID', $resp->getPayload()['error']['code']);
     }
 
-    public function testApplyExtractedReturns409WhenStatusRejected(): void
+    public function testApplyMessageReturns409WhenProposalRejected(): void
     {
-        $db = $this->createMock(DataSourceConnection::class);
-        $db->method('fetchRow')->willReturn([
-            'id' => 1, 'status' => 50, 'message' => 100, 'target_row_ndx' => null,
-        ]);
+        $analysis = $this->openAnalysis('{}');
+        $analysis['resolution'] = 50;
+        $db = $this->dbForProposal($this->openMessage(), $analysis);
 
         $applier = $this->createMock(DocumentApplier::class);
         $applier->expects($this->never())->method('apply');
 
-        $resp = $this->controller($db, $applier)->applyExtracted(
-            $this->authed(), $this->request('POST', '/x'), 1,
+        $resp = $this->controller($db, $applier)->applyMessage(
+            $this->authed(), $this->request('POST', '/x'), 100,
         );
         $this->assertSame(409, $this->statusOf($resp));
         $this->assertSame('INVALID_STATE', $resp->getPayload()['error']['code']);
     }
 
-    public function testApplyExtractedIdempotentWhenAlreadyApplied(): void
+    public function testApplyMessageReturns422WhenNoProposal(): void
     {
-        $db = $this->createMock(DataSourceConnection::class);
-        $db->method('fetchRow')->willReturn([
-            'id' => 1, 'status' => 40, 'message' => 100, 'target_row_ndx' => 1234,
-        ]);
+        // Poslední úspěšná analýza bez dokumentového návrhu (canonical NULL).
+        $db = $this->dbForProposal($this->openMessage(), $this->openAnalysis(null));
 
         $applier = $this->createMock(DocumentApplier::class);
         $applier->expects($this->never())->method('apply');
 
-        $resp = $this->controller($db, $applier)->applyExtracted(
-            $this->authed(), $this->request('POST', '/x'), 1,
+        $resp = $this->controller($db, $applier)->applyMessage(
+            $this->authed(), $this->request('POST', '/x'), 100,
+        );
+        $this->assertSame(422, $this->statusOf($resp));
+        $this->assertSame('NO_PROPOSAL', $resp->getPayload()['error']['code']);
+    }
+
+    public function testApplyMessageIdempotentWhenAlreadyApplied(): void
+    {
+        // target_row obsazený + resolution=40 → idempotentní úspěch bez apply.
+        $message = $this->openMessage();
+        $message['target_row'] = 1234;
+        $analysis = $this->openAnalysis('{}');
+        $analysis['resolution'] = 40;
+        $db = $this->dbForProposal($message, $analysis);
+
+        $applier = $this->createMock(DocumentApplier::class);
+        $applier->expects($this->never())->method('apply');
+
+        $resp = $this->controller($db, $applier)->applyMessage(
+            $this->authed(), $this->request('POST', '/x'), 100,
         );
         $this->assertSame(200, $this->statusOf($resp));
         $payload = $resp->getPayload();
@@ -222,56 +286,71 @@ class AnalysisControllerExchangeTest extends TestCase
         $this->assertTrue($payload['data']['idempotent']);
     }
 
-    public function testApplyExtractedForwardsUnresolvedRequiredFromApplier(): void
+    public function testApplyMessageRecoversWhenResolutionWriteLagged(): void
+    {
+        // target_row obsazený, ale verdikt ještě nezapsaný → recovery cesta
+        // doběhne resolution a hlásí recovered.
+        $message = $this->openMessage();
+        $message['target_row'] = 1234;
+        $db = $this->dbForProposal($message, $this->openAnalysis('{}'));
+        $this->wireResolutionDibi($db);
+
+        $applier = $this->createMock(DocumentApplier::class);
+        $applier->expects($this->never())->method('apply');
+
+        $resp = $this->controller($db, $applier)->applyMessage(
+            $this->authed(), $this->request('POST', '/x'), 100,
+        );
+        $this->assertSame(200, $this->statusOf($resp));
+        $payload = $resp->getPayload();
+        $this->assertSame(1234, $payload['data']['savedDocId']);
+        $this->assertTrue($payload['data']['recovered']);
+    }
+
+    public function testApplyMessageForwardsUnresolvedRequiredFromApplier(): void
     {
         $canonical = $this->happyCanonical();
-        $db = $this->createMock(DataSourceConnection::class);
-        $db->method('fetchRow')->willReturn([
-            'id' => 1, 'status' => 20, 'message' => 100, 'target_row_ndx' => null,
-            'extracted_json' => json_encode($canonical),
-        ]);
+        $db = $this->dbForProposal(
+            $this->openMessage(),
+            $this->openAnalysis((string) json_encode($canonical)),
+        );
 
         $applier = $this->createMock(DocumentApplier::class);
         $applier->expects($this->once())
             ->method('apply')
             ->willReturn(ApplyResult::error('unresolved_required', 'Doplň userAction', ['x' => 1], 422));
 
-        $resp = $this->controller($db, $applier)->applyExtracted(
-            $this->authed(), $this->request('POST', '/x'), 1,
+        $resp = $this->controller($db, $applier)->applyMessage(
+            $this->authed(), $this->request('POST', '/x'), 100,
         );
         $this->assertSame(422, $this->statusOf($resp));
         $this->assertSame('unresolved_required', $resp->getPayload()['error']['code']);
     }
 
-    public function testApplyExtractedForwardsCorruptedJson(): void
+    public function testApplyMessageForwardsCorruptedJson(): void
     {
-        $db = $this->createMock(DataSourceConnection::class);
-        $db->method('fetchRow')->willReturn([
-            'id' => 1, 'status' => 20, 'message' => 100, 'target_row_ndx' => null,
-            'extracted_json' => 'not-json',
-        ]);
+        $db = $this->dbForProposal($this->openMessage(), $this->openAnalysis('not-json'));
 
         $applier = $this->createMock(DocumentApplier::class);
         $applier->expects($this->never())->method('apply');
 
-        $resp = $this->controller($db, $applier)->applyExtracted(
-            $this->authed(), $this->request('POST', '/x'), 1,
+        $resp = $this->controller($db, $applier)->applyMessage(
+            $this->authed(), $this->request('POST', '/x'), 100,
         );
         $this->assertSame(500, $this->statusOf($resp));
         $this->assertSame('CORRUPTED_DATA', $resp->getPayload()['error']['code']);
     }
 
-    public function testApplyExtractedInjectsSourceAndApplyOptionsForApplier(): void
+    public function testApplyMessageInjectsSourceAndApplyOptionsForApplier(): void
     {
         $canonical = $this->happyCanonical();
-        // Strip source.extractedDoc so we can verify controller injection.
-        unset($canonical['source']['extractedDoc']);
+        // Strip source.message so we can verify server-side injection.
+        unset($canonical['source']['message']);
 
-        $db = $this->createMock(DataSourceConnection::class);
-        $db->method('fetchRow')->willReturn([
-            'id' => 1, 'status' => 20, 'message' => 100, 'target_row_ndx' => null,
-            'extracted_json' => json_encode($canonical),
-        ]);
+        $db = $this->dbForProposal(
+            $this->openMessage(42),
+            $this->openAnalysis((string) json_encode($canonical)),
+        );
 
         $captured = null;
         $applier = $this->createMock(DocumentApplier::class);
@@ -282,37 +361,80 @@ class AnalysisControllerExchangeTest extends TestCase
                 return ApplyResult::error('unresolved_required', 'X', [], 422);
             });
 
-        $this->controller($db, $applier)->applyExtracted(
+        $this->controller($db, $applier)->applyMessage(
             $this->authed(), $this->request('POST', '/x'), 42,
         );
 
         $this->assertNotNull($captured);
-        $this->assertSame(42, $captured['source']['extractedDoc']);
+        $this->assertSame(42, $captured['source']['message']);
         $this->assertSame('aiExtraction', $captured['source']['kind']);
         $this->assertSame('safe', $captured['applyOptions']['autoCreateMode']);
         $this->assertSame(10, $captured['applyOptions']['targetDocState']);
     }
 
+    public function testApplyMessageSuccessWritesResolutionAndReturnsSavedDocId(): void
+    {
+        $canonical = $this->happyCanonical();
+        $db = $this->dbForProposal(
+            $this->openMessage(),
+            $this->openAnalysis((string) json_encode($canonical)),
+        );
+        $this->wireResolutionDibi($db);
+
+        $applier = $this->createMock(DocumentApplier::class);
+        $applier->expects($this->once())
+            ->method('apply')
+            ->willReturn(ApplyResult::ok($canonical, savedId: 777));
+
+        $resp = $this->controller($db, $applier)->applyMessage(
+            $this->authed(), $this->request('POST', '/x'), 100,
+        );
+        $this->assertSame(200, $this->statusOf($resp));
+        $data = $resp->getPayload()['data'];
+        $this->assertSame(777, $data['savedDocId']);
+        $this->assertSame(100, $data['messageNdx']);
+        $this->assertSame(11, $data['analysisNdx']);
+        $this->assertArrayHasKey('canonical', $data);
+    }
+
+    public function testApplyMessageWithoutApplierReturnsInternalError(): void
+    {
+        // Fallback „bez applieru jen status update" zanikl — docs apply bez
+        // DocumentApplieru je INTERNAL_ERROR 500.
+        $db = $this->dbForProposal(
+            $this->openMessage(),
+            $this->openAnalysis((string) json_encode($this->happyCanonical())),
+        );
+
+        $ctrl = new AnalysisController(
+            $db, $this->config, $this->tmpDir, [], new DocumentRegistry(),
+            new SchemaValidator(SchemaLoader::default()),
+            null,
+        );
+
+        $resp = $ctrl->applyMessage($this->authed(), $this->request('POST', '/x'), 100);
+        $this->assertSame(500, $this->statusOf($resp));
+        $this->assertSame('INTERNAL_ERROR', $resp->getPayload()['error']['code']);
+    }
+
     // ── result() canonical validation via reflection ────────────────────────
     //
-    // result() needs message_analyses + extracted_documents + claims + …
-    // table state; full pipeline is covered by integration tests. Here we
-    // unit-test the validateAndStoreCanonical helper directly — it carries
-    // the entire Phase 2 validation logic.
+    // result() needs message_analyses + claims + … table state; full pipeline
+    // is covered by integration tests. Here we unit-test the
+    // validateAndStoreCanonical helper directly — nová signatura
+    // (?array $extractedJson, string $docType): array{0: ?string, 1: bool}.
 
     /**
-     * @return array{0: int, 1: ?string}
+     * @return array{0: ?string, 1: bool}
      */
     private function callValidate(
         AnalysisController $ctrl,
         ?array $canonical,
-        float $confidence = 0.95,
-        array $thresholds = ['ready' => 0.9, 'review' => 0.6],
         string $docType = 'invoiceReceived',
     ): array {
         $ref = new \ReflectionClass($ctrl);
         $method = $ref->getMethod('validateAndStoreCanonical');
-        return $method->invoke($ctrl, $canonical, $confidence, $thresholds, $docType);
+        return $method->invoke($ctrl, $canonical, $docType);
     }
 
     public function testValidateAndStoreCanonicalKeepsValidPayload(): void
@@ -321,9 +443,9 @@ class AnalysisControllerExchangeTest extends TestCase
         $ctrl = $this->controller($db);
         $canonical = $this->happyCanonical();
 
-        [$status, $json] = $this->callValidate($ctrl, $canonical, 0.95);
+        [$json, $valid] = $this->callValidate($ctrl, $canonical);
 
-        $this->assertSame(10, $status); // STATUS_READY_TO_APPLY
+        $this->assertTrue($valid);
         $decoded = json_decode((string) $json, true);
         $this->assertSame('shpd.docs.document', $decoded['format']);
         $this->assertArrayNotHasKey('_validationError', $decoded);
@@ -340,9 +462,9 @@ class AnalysisControllerExchangeTest extends TestCase
             'docType' => 'invoiceReceived',
         ];
 
-        [$status, $json] = $this->callValidate($ctrl, $broken, 0.95);
+        [$json, $valid] = $this->callValidate($ctrl, $broken);
 
-        $this->assertSame(70, $status); // STATUS_AI_FAILED
+        $this->assertFalse($valid);
         $decoded = json_decode((string) $json, true);
         $this->assertSame('Canonical schema validation failed', $decoded['_validationError']);
         $this->assertIsArray($decoded['_validationIssues']);
@@ -350,53 +472,41 @@ class AnalysisControllerExchangeTest extends TestCase
         $this->assertSame($broken, $decoded['_rawOutput']);
     }
 
-    public function testValidateAndStoreCanonicalLowConfidenceValid(): void
+    public function testValidateAndStoreCanonicalNullPayload(): void
     {
-        $db = $this->createMock(DataSourceConnection::class);
-        $ctrl = $this->controller($db);
-        $canonical = $this->happyCanonical();
-
-        [$status, $json] = $this->callValidate($ctrl, $canonical, 0.4);
-
-        $this->assertSame(30, $status); // STATUS_LOW_CONFIDENCE
-        $this->assertNotNull($json);
-    }
-
-    public function testValidateAndStoreCanonicalNullPayloadKeepsLegacyBehaviour(): void
-    {
+        // Běh bez dokumentu → nic se neukládá, dokument nevalidní.
         $db = $this->createMock(DataSourceConnection::class);
         $ctrl = $this->controller($db);
 
-        [$status, $json] = $this->callValidate($ctrl, null, 0.95);
+        [$json, $valid] = $this->callValidate($ctrl, null);
 
-        $this->assertSame(10, $status);
         $this->assertNull($json);
+        $this->assertFalse($valid);
     }
 
     public function testValidateAndStoreCanonicalWithoutSchemaValidatorPassesThrough(): void
     {
-        // No SchemaValidator wired — invalid payload should still pass
-        // through (Phase 1 backward compat). Status comes from confidence.
+        // No SchemaValidator wired (unit testy) — payload projde beze změn
+        // a považuje se za validní.
         $db = $this->createMock(DataSourceConnection::class);
         $ctrl = new AnalysisController(
             $db, $this->config, $this->tmpDir, [], new DocumentRegistry(),
             null, null,
         );
 
-        [$status, $json] = $this->callValidate($ctrl, ['anything' => 'goes'], 0.95);
+        [$json, $valid] = $this->callValidate($ctrl, ['anything' => 'goes']);
 
-        $this->assertSame(10, $status);
+        $this->assertTrue($valid);
         $decoded = json_decode((string) $json, true);
         $this->assertSame(['anything' => 'goes'], $decoded);
     }
 
-    // ── validateAndStoreCanonical + row history enrichment (D2/D7) ─────────
+    // ── validateAndStoreCanonical + row history enrichment ─────────────────
 
     public function testValidateAndStoreCanonicalPersistsEnrichedCanonical(): void
     {
         // Historie pokryje jediný řádek fixtury (description fallback
-        // item.description) → obohacený canonical se persistne a ready
-        // status zůstává (řádek je pokrytý).
+        // item.description) → do canonical_json se uloží obohacený canonical.
         $db = $this->createMock(DataSourceConnection::class);
         $ctrl = $this->controller($db, enricher: $this->enricher([[
             'description'    => 'Hodinová sazba senior konzultanta',
@@ -406,9 +516,9 @@ class AnalysisControllerExchangeTest extends TestCase
             'doc_head'       => 777,
         ]]));
 
-        [$status, $json] = $this->callValidate($ctrl, $this->happyCanonical(), 0.95);
+        [$json, $valid] = $this->callValidate($ctrl, $this->happyCanonical());
 
-        $this->assertSame(10, $status); // STATUS_READY_TO_APPLY
+        $this->assertTrue($valid);
         $decoded = json_decode((string) $json, true);
         $this->assertSame('KONZ01', $decoded['rows'][0]['item']['ourCode']);
         $this->assertSame('518100', $decoded['rows'][0]['account']);
@@ -417,63 +527,10 @@ class AnalysisControllerExchangeTest extends TestCase
         $this->assertSame(777, $enrichment['sourceDocId']);
     }
 
-    public function testValidateAndStoreCanonicalCapsStatusWhenRowUncovered(): void
-    {
-        // Prázdná historie → řádek bez item.ourCode zůstane nepokrytý →
-        // strop ready_to_apply → pending_review (D7).
-        $db = $this->createMock(DataSourceConnection::class);
-        $ctrl = $this->controller($db, enricher: $this->enricher([]));
-
-        [$status, $json] = $this->callValidate($ctrl, $this->happyCanonical(), 0.95);
-
-        $this->assertSame(20, $status); // STATUS_PENDING_REVIEW
-        $decoded = json_decode((string) $json, true);
-        $this->assertNull($decoded['rows'][0]['item']['ourCode']);
-        $this->assertNull($decoded['_resolve']['rows'][0]['enrichment']['matchedBy']);
-    }
-
-    public function testValidateAndStoreCanonicalCapIgnoresAccountingRows(): void
-    {
-        // Účetní doklad: kontační řádky item nemají validně → strop se
-        // neuplatní, ready status zůstává.
-        $db = $this->createMock(DataSourceConnection::class);
-        $ctrl = $this->controller($db, enricher: $this->enricher([]));
-
-        $canonical = [
-            'format' => 'shpd.docs.document',
-            'formatVersion' => '1.0',
-            'docType' => 'accountingDocument',
-            'dates' => ['issueDate' => '2026-06-10'],
-            'rows' => [
-                ['operation' => 'acc.record', 'account' => '518100', 'accSide' => 'debit', 'totalPrice' => 50.0],
-                ['operation' => 'acc.record', 'account' => '321001', 'accSide' => 'credit', 'totalPrice' => 50.0],
-            ],
-        ];
-        [$status] = $this->callValidate($ctrl, $canonical, 0.95);
-
-        $this->assertSame(10, $status); // STATUS_READY_TO_APPLY
-    }
-
-    public function testValidateAndStoreCanonicalLowConfidenceNotRaisedByCoverage(): void
-    {
-        // Strop jen snižuje — pokrytý řádek nepovyšuje review/low status.
-        $db = $this->createMock(DataSourceConnection::class);
-        $ctrl = $this->controller($db, enricher: $this->enricher([[
-            'description'    => 'Hodinová sazba senior konzultanta',
-            'vat_code'       => 'cz-110',
-            'item_code'      => 'KONZ01',
-            'account_number' => null,
-            'doc_head'       => 777,
-        ]]));
-
-        [$status] = $this->callValidate($ctrl, $this->happyCanonical(), 0.7);
-        $this->assertSame(20, $status); // STATUS_PENDING_REVIEW dle confidence
-    }
-
     public function testValidateAndStoreCanonicalSurvivesEnricherFailure(): void
     {
         // Enricher spadne na DB → /result nesmí selhat; canonical se uloží
-        // neobohacený a strop (bez pokrytí) konzervativně sníží na review.
+        // neobohacený a zůstává validní (pásma řeší runtime resolver).
         $dibi = $this->createMock(\Dibi\Connection::class);
         $dibi->method('fetchAll')->willThrowException(new \RuntimeException('db down'));
         $party = $this->createMock(PartyResolver::class);
@@ -482,52 +539,18 @@ class AnalysisControllerExchangeTest extends TestCase
         $db = $this->createMock(DataSourceConnection::class);
         $ctrl = $this->controller($db, enricher: new RowHistoryEnricher($dibi, $party));
 
-        [$status, $json] = $this->callValidate($ctrl, $this->happyCanonical(), 0.95);
+        [$json, $valid] = $this->callValidate($ctrl, $this->happyCanonical());
 
-        $this->assertSame(20, $status); // STATUS_PENDING_REVIEW (konzervativní strop)
+        $this->assertTrue($valid);
         $decoded = json_decode((string) $json, true);
         $this->assertArrayNotHasKey('_resolve', $decoded);
         $this->assertNull($decoded['rows'][0]['item']['ourCode']);
     }
 
-    public function testApplyExtractedWithoutApplierFallsBackToStatusUpdate(): void
-    {
-        // No applier wired (Phase 1 compat). Controller delegates to
-        // updateExtractedStatus and that needs DibiConnection — for unit
-        // testing we just assert the early branch returns *some* response
-        // without invoking applier logic.
-        $db = $this->createMock(DataSourceConnection::class);
-        $db->method('fetchRow')->willReturn([
-            'id' => 1, 'status' => 20, 'message' => 100, 'target_row_ndx' => null,
-        ]);
-
-        // applier param omitted → null
-        $ctrl = new AnalysisController(
-            $db, $this->config, $this->tmpDir, [], new DocumentRegistry(),
-            new SchemaValidator(SchemaLoader::default()),
-            null,
-        );
-
-        // Call will fail somewhere inside updateExtractedStatus because
-        // DibiConnection isn't really set up; that's fine — we only care
-        // about NOT having reached AI_OUTPUT_INVALID or any of the Phase 2
-        // applier branches.
-        try {
-            $resp = $ctrl->applyExtracted($this->authed(), $this->request('POST', '/x'), 1);
-            $payload = $resp->getPayload();
-            // Should not return AI_OUTPUT_INVALID — that means we hit the
-            // Phase 1 path correctly.
-            $this->assertNotSame('AI_OUTPUT_INVALID', $payload['error']['code'] ?? '');
-        } catch (\Throwable $e) {
-            // Hit the updateExtractedStatus codepath (good — proves fallback).
-            $this->addToAssertionCount(1);
-        }
-    }
-
     // ── validateAndStoreCanonical — registry target ─────────────────────────
     //
     // Registry canonical se validuje proti shpd.registry.document.v1
-    // (schéma base.registry) a přeskakuje enrichment i row-coverage cap.
+    // (schéma base.registry, target dle PrimaryTypes) a přeskakuje enrichment.
 
     private function registryCanonical(): array
     {
@@ -552,9 +575,9 @@ class AnalysisControllerExchangeTest extends TestCase
         $ctrl = $this->controller($db, configRuntime: $this->configRuntimeWithRegistryTargets());
         $canonical = $this->registryCanonical();
 
-        [$status, $json] = $this->callValidate($ctrl, $canonical, 0.95, docType: 'insurance');
+        [$json, $valid] = $this->callValidate($ctrl, $canonical, docType: 'insurance');
 
-        $this->assertSame(10, $status); // STATUS_READY_TO_APPLY
+        $this->assertTrue($valid);
         $this->assertSame($canonical, json_decode((string) $json, true)); // beze změn — žádný enrichment
     }
 
@@ -566,9 +589,9 @@ class AnalysisControllerExchangeTest extends TestCase
         // additionalProperties: false — přejmenované pole nesmí tiše projít
         $canonical['kindFields']['policy_number'] = 'POJ-1';
 
-        [$status, $json] = $this->callValidate($ctrl, $canonical, 0.95, docType: 'insurance');
+        [$json, $valid] = $this->callValidate($ctrl, $canonical, docType: 'insurance');
 
-        $this->assertSame(70, $status); // STATUS_AI_FAILED
+        $this->assertFalse($valid);
         $decoded = json_decode((string) $json, true);
         $this->assertArrayHasKey('_validationError', $decoded);
         $this->assertSame($canonical, $decoded['_rawOutput']);
@@ -581,9 +604,9 @@ class AnalysisControllerExchangeTest extends TestCase
         $canonical = $this->registryCanonical();
         $canonical['docType'] = 'somethingElse';
 
-        [$status] = $this->callValidate($ctrl, $canonical, 0.95, docType: 'insurance');
+        [, $valid] = $this->callValidate($ctrl, $canonical, docType: 'insurance');
 
-        $this->assertSame(70, $status); // STATUS_AI_FAILED
+        $this->assertFalse($valid);
     }
 
     public function testValidateDocsCanonicalUnaffectedByRegistryConfig(): void
@@ -593,8 +616,8 @@ class AnalysisControllerExchangeTest extends TestCase
         $ctrl = $this->controller($db, configRuntime: $this->configRuntimeWithRegistryTargets());
         $canonical = $this->happyCanonical();
 
-        [$status] = $this->callValidate($ctrl, $canonical, 0.95, docType: 'invoiceReceived');
+        [, $valid] = $this->callValidate($ctrl, $canonical, docType: 'invoiceReceived');
 
-        $this->assertSame(10, $status);
+        $this->assertTrue($valid);
     }
 }

@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Shipard\Module\Core\Mail;
 
 /**
- * Výsledek {@see ExtractedTargetApplier::apply()}. Tvar drží mapování
- * 1:1 na {@see ExtractedApplyOutcome} factory (`ok`/`error`).
+ * Výsledek {@see ProposalTargetApplier::apply()}. Tvar drží mapování
+ * 1:1 na {@see ProposalApplyOutcome} factory (`ok`/`error`).
  */
 final class TargetApplyResult
 {

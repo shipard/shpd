@@ -27,6 +27,10 @@ class TestableSupplierCodeCaptureHandler extends SupplierCodeCaptureHandler
 class SupplierCodeCaptureHandlerTest extends TestCase
 {
     /**
+     * Canonical návrhu žije na řádku poslední úspěšné analýzy zprávy
+     * (message-centric model) — mock routuje fetch podle tabulky:
+     * docs_core_heads → hlavička, core_mail_message_analyses → canonical.
+     *
      * @param array<string, mixed>|null $head
      * @param array<string, mixed>|null $canonical
      * @param list<array<string, mixed>> $finalRows
@@ -40,7 +44,7 @@ class SupplierCodeCaptureHandlerTest extends TestCase
                     return $head !== null ? new Row($head) : null;
                 }
                 return $canonical !== null
-                    ? new Row(['extracted_json' => json_encode($canonical)])
+                    ? new Row(['canonical_json' => json_encode($canonical)])
                     : null;
             },
         );
@@ -59,7 +63,7 @@ class SupplierCodeCaptureHandlerTest extends TestCase
      */
     private function aiHead(): array
     {
-        return ['partner' => 42, 'source_kind' => 'aiExtraction', 'source_extracted_doc' => 678];
+        return ['partner' => 42, 'source_kind' => 'aiExtraction', 'source_message' => 678];
     }
 
     public function testConfirmWithLineageCapturesSupplierCodes(): void
@@ -91,7 +95,7 @@ class SupplierCodeCaptureHandlerTest extends TestCase
     public function testNoOpForNonAiExtractionDocument(): void
     {
         $handler = $this->handler(
-            ['partner' => 42, 'source_kind' => 'manual', 'source_extracted_doc' => 0],
+            ['partner' => 42, 'source_kind' => 'manual', 'source_message' => 0],
             ['rows' => [['item' => ['supplierCode' => 'X-1', 'name' => 'X']]]],
             [['order_pos' => 1, 'item' => 18, 'description' => 'X']],
         );
@@ -141,9 +145,15 @@ class SupplierCodeCaptureHandlerTest extends TestCase
         $this->assertSame([], $handler->sqlCalls);
     }
 
-    public function testMissingHeadOrExtractedIsNoOp(): void
+    public function testMissingHeadOrAnalysisIsNoOp(): void
     {
+        // Chybějící hlavička dokladu.
         $handler = $this->handler(null, null, []);
+        $handler->onStateChanged('docs_core_heads', ['id' => 555], 10, 20);
+        $this->assertSame([], $handler->sqlCalls);
+
+        // Hlavička s lineage, ale zpráva bez úspěšné analýzy (canonical chybí).
+        $handler = $this->handler($this->aiHead(), null, []);
         $handler->onStateChanged('docs_core_heads', ['id' => 555], 10, 20);
         $this->assertSame([], $handler->sqlCalls);
     }

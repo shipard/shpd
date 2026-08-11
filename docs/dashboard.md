@@ -34,8 +34,8 @@ Fáze 1 (widget MVP) říkala *„přehled, ne přístupový bod"*. Fáze 2 ten 
 
 - Feed je **místo, kde se akce odehraje**, ne jen odkaz do vieweru.
 - Bezpečné je to proto, že `apply` zakládá jen **Koncept** (`docState=10`),
-  nic nefinalizuje, vše je auditovatelné (`source.aiExtraction`, `applied_by`)
-  a `apply` je **vratné** (undo, §6.4).
+  nic nefinalizuje, vše je auditovatelné (`source_kind='aiExtraction'`,
+  `resolved_by` na analýze) a `apply` je **vratné** (unapply, §6.5).
 - Deterministika zůstává deterministická: **pravidla (alerts) pro stav, AI
   (analyzer) pro jazyk a nejednoznačnost.** Oba zdroje padají do téhož feedu.
 - **Řadí a stropuje server** (`sortAndCap`), frontend jen renderuje.
@@ -61,10 +61,13 @@ Fáze 1 (widget MVP) říkala *„přehled, ne přístupový bod"*. Fáze 2 ten 
                    ▼
               Feed.svelte ── FeedCard × N
                               │
-                              ├─ review_extracted → DocumentExchangePreviewModal
-                              │     └─ Použít → apply(ndx) → FormDialog/toast
-                              ├─ reject_extracted → RejectReasonPrompt → reject
-                              ├─ reanalyze        → reanalyze(msgNdx)
+                              ├─ apply_message   → jednoklik apply (safe);
+                              │     422 unresolved_required → fall-through
+                              │     do DocumentExchangePreviewModal
+                              ├─ review_message  → DocumentExchangePreviewModal
+                              │     └─ Použít → applyMessage(ndx) → FormDialog/toast
+                              ├─ reject_message  → RejectReasonPrompt → reject
+                              ├─ reanalyze       → reanalyzeMessage(msgNdx)
                               └─ open_viewer/open_form → navigace
 ```
 
@@ -80,7 +83,7 @@ Fáze 1 (widget MVP) říkala *„přehled, ne přístupový bod"*. Fáze 2 ten 
 
 ```json
 {
-  "id": "mail_extracted:456",
+  "id": "mail_suggestion:123",
   "source": "mail",
   "kind": "ready",
   "icon": "check",
@@ -100,16 +103,19 @@ Fáze 1 (widget MVP) říkala *„přehled, ne přístupový bod"*. Fáze 2 ten 
     { "label": "Splatnost", "value": "29. 4. 2026" },
     { "label": "Variabilní symbol", "value": "2026000123" }
   ],
+  "secondaryFindings": [
+    { "type": "contract", "type_label": "Smlouva", "note": "Rámcová smlouva v příloze smlouva.pdf" }
+  ],
   "timestamp": "2026-06-28T10:00:00+00:00",
-  "context": { "messageNdx": 123, "extractedNdx": 456, "confidence": 0.94 },
+  "context": { "messageNdx": 123, "analysisNdx": 456, "confidence": 0.94, "target": "docs" },
   "attachments": [
     { "id": 12, "name": "Faktura.pdf", "mime_type": "application/pdf", "file_size": 245760 }
   ],
   "attachmentsTotal": 5,
   "actions": [
-    { "id": "apply",  "kind": "apply_extracted",  "target": { "extractedNdx": 456 }, "primary": true },
-    { "id": "review", "kind": "review_extracted", "target": { "extractedNdx": 456 } },
-    { "id": "reject", "kind": "reject_extracted", "target": { "extractedNdx": 456 } }
+    { "id": "apply",  "kind": "apply_message",  "target": { "messageNdx": 123 }, "primary": true },
+    { "id": "review", "kind": "review_message", "target": { "messageNdx": 123 } },
+    { "id": "reject", "kind": "reject_message", "target": { "messageNdx": 123 } }
   ]
 }
 ```
@@ -138,6 +144,10 @@ Fáze 1 (widget MVP) říkala *„přehled, ne přístupový bod"*. Fáze 2 ten 
   karty; labely lokalizuje server dle `ctx->language`. Jen neprázdné
   hodnoty; prázdné pole se neposílá (expander na frontendu se ukazuje jen
   když `details` existuje).
+- `secondaryFindings` — **volitelné**, pole `{type, type_label, note}`
+  z `analysis_json.secondary_findings` běhu (D7) — informativní hint
+  dalších nálezů ve zprávě („+ smlouva v příloze"), žádné entity, žádné
+  akce. Frontend kreslí hint řádek na kartě.
 - `category` — **volitelné**, výčet `invoices` | `registry` | `other`
   (konstanty `FeedSource::CATEGORY_*`) — řídí klientský filtr feedu
   (`FeedFilter.svelte`). Karta **bez pole** se zobrazuje jen v záložce Vše
@@ -161,21 +171,23 @@ Prioritní žebříček (sestupně), uvnitř pásma `timestamp` DESC.
 
 | `kind` | Pásmo | Zdroj → mapování |
 |---|---|---|
-| `urgent` | 🔴 | alert `error`; zpráva `analysis_state=70` (analýza selhala) |
-| `review` | 🟡 | extracted 20/30; alert `warning`; chybová karta s `primary_type=other` |
-| `ready`  | 🟢 | extracted 10 (jednoklik) |
+| `urgent` | 🔴 | alert `error`; zpráva `analysis_state=70` (analýza selhala); nevalidní výstup AI (`mail_invalid`) |
+| `review` | 🟡 | otevřený návrh v pásmu `review`/`low` (runtime resolver); alert `warning`; chybová karta s `primary_type=other` |
+| `ready`  | 🟢 | otevřený návrh v pásmu `ready` (jednoklik apply) |
 | `info`   | ℹ️ | alert `info`; karta „Není faktura"; „a další…" karta |
 
 ### 4.2 Slovník `kind` akcí (chování odvozuje frontend)
 
 | Action `kind` | Chování | Cíl |
 |---|---|---|
-| `apply_extracted` | inline apply (safe) + fall-through do modalu | `{extractedNdx}` |
-| `review_extracted` | otevři `DocumentExchangePreviewModal` | `{extractedNdx}` |
-| `reject_extracted` | `RejectReasonPrompt` → reject | `{extractedNdx}` |
-| `reanalyze` | inline `reanalyze(messageNdx)`, refetch | `{messageNdx}` |
+| `apply_message` | jednoklik apply (safe, bez userActions); `422 unresolved_required` → fall-through do review modalu | `{messageNdx}` |
+| `review_message` | otevři `DocumentExchangePreviewModal` | `{messageNdx}` |
+| `reject_message` | `RejectReasonPrompt` → reject | `{messageNdx}` |
+| `reanalyze` | inline `reanalyzeMessage(messageNdx)`, refetch | `{messageNdx}` |
 | `trash_message` | zpráva do Koše (`docState=90`, docState-only save), refetch | `{messageNdx}` |
 | `archive_message` | zpráva do Archivu (`docState=80`, docState-only save), refetch | `{messageNdx}` |
+| `confirm_sender_rule` / `reject_sender_rule` | potvrzení/zamítnutí návrhu pravidla odesílatele, refetch | `{ruleId}` |
+| `undo_auto_archive` | „Vrátit vše" z digest karty auto-archivu, toast + refetch | `{date?}` |
 | `open_viewer` | navigace | `{viewerId, recordId?}` |
 | `open_form` | otevři form | `{table, recordId?/id?}` |
 
@@ -183,29 +195,46 @@ Prioritní žebříček (sestupně), uvnitř pásma `timestamp` DESC.
 
 ### 5.1 MailSuggestionsSource
 
-Karta **per vytěžený doklad** (`core_mail_extracted_documents.status ∈ {10,20,30}`
-JOIN `core_mail_incoming_messages`; `doc_type='other'` se ignoruje — pojistka,
-prompt v2.2.0 takové dokumenty zakazuje):
+Message-centricky (D10 z `tasks/mail-message-centric.md`): karta =
+**zpráva s otevřeným dokumentovým návrhem** poslední úspěšné analýzy —
+zprávy v docState 10/20, `analysis_state=30`, poslední úspěšný běh
+(`MAX(analyzed_at)`, status=2) s `canonical_json IS NOT NULL` a
+`resolution IS NULL`. Návrhy s `proposed_type='other'` se ignorují —
+pojistka, prompt je zakazuje. Confidence pásmo se počítá za běhu
+(`AnalysisConfidenceResolver`, prahy profilu běhu + strop pokrytí řádků):
 
-- **10** → `kind=ready`, `stateStyle=done`; akce `apply` (primary), `review`, `reject`.
-- **20/30** → `kind=review`, `stateStyle=confirmed`/`edit`; akce `review` (primary),
-  `reject`. (Jednoklik se u nízké jistoty záměrně nenabízí.)
+- pásmo **ready** → `kind=ready`, `stateStyle=done`; akce `apply`
+  (primary, jednoklik safe), `review`, `reject`.
+- pásmo **review/low** → `kind=review`, `stateStyle=confirmed`/`edit`;
+  akce `review` (primary), `reject`. (Jednoklik se u nižší jistoty
+  záměrně nenabízí.)
 
-**Chybové karty** — zprávy `analysis_state=70` (analýza selhala) mimo
-Archiv/Koš → `kind=urgent`, `stateStyle=error`; akce `reanalyze` (primary,
-`{messageNdx}`) + `open_form` (`core_mail_incoming_messages`). Když už dřívější
-klasifikace určila `primary_type='other'`, karta degraduje na `kind=review`.
+Karta má `id = "mail_suggestion:{messageNdx}"`, akční targety
+`{messageNdx}`.
+
+**Chybové karty** — dva zdroje, obě `kind=urgent`, `stateStyle=error`,
+akce `reanalyze` (primary, `{messageNdx}`) + `open_form`
+(`core_mail_incoming_messages`):
+
+- zprávy `analysis_state=70` (analýza selhala) mimo Archiv/Koš
+  (`id = "mail_message:{ndx}"`); když už dřívější klasifikace určila
+  `primary_type='other'`, karta degraduje na `kind=review`;
+- otevřený návrh s nevalidním výstupem AI — forenzní wrapper
+  `_validationError` v `canonical_json` (`id = "mail_invalid:{ndx}"`);
+  návrh nelze použít, jediná smysluplná akce je reanalyze.
 
 **Karty „Není faktura"** — zprávy `analysis_state=30`, `docState=10` (Nová),
-`primary_type='other'` bez akčního extracted docu → `kind=info`,
+`primary_type='other'` bez otevřeného návrhu → `kind=info`,
 `stateStyle=archive`, titulek „Není faktura — {label typu}"; akce
 `trash_message` (primary), `archive_message`, `open_form`. Žádné
 auto-zavření ani digest — jedna karta per zpráva s jednoklikovým úklidem.
+(Sémantika beze změny proti extracted éře.)
 
-Titulek: `doc_type` → label z cfgItem `core.mail.extractedDocTypes` + partner
-z `extracted_json` (kanonický doklad — protistrana dle `selfParty`). Feed je
-stropovaný, takže N `json_decode` je únosné; denormalizace headline do sloupců
-je pozdější optimalizace.
+Titulek: `proposed_type` → label z cfgItem `core.mail.primaryTypes`
+(registry typy label druhu z `base.registry.docKinds`) + partner
+z `canonical_json` (kanonický doklad — protistrana dle `selfParty`,
+registry `party.name`). Feed je stropovaný, takže N `json_decode` je
+únosné; denormalizace headline do sloupců je pozdější optimalizace.
 
 **Strukturovaná pole per druh karty** (viz §4):
 
@@ -222,15 +251,14 @@ je pozdější optimalizace.
 - **Chybová karta / „Není faktura"**: bez `headline`/`details`/
   `confidencePct`; `emailSubject` ano. Subtitle nedupluje předmět —
   chybová karta nese `sender_name`, „Není faktura" jen odesílatele.
+- **Návrhová karta s neprázdnými `secondary_findings`** běhu navíc nese
+  `secondaryFindings` (viz §4) — hint dalších nálezů, D7.
 
-**Přílohy karet** — všechny tři druhy mail karet nesou volitelná pole
-`attachments`/`attachmentsTotal` (viz §4). Zdroj per druh karty:
-
-- **Návrhová karta**: přílohy z `core_mail_extracted_documents.
-  source_attachments` (JSON pole ndx) — filtr nad obsahovými přílohami
-  zprávy, pořadí dle `att_order`; prázdné/nevalidní pole nebo žádný průnik
-  → fallback na všechny obsahové přílohy zprávy.
-- **Chybová karta / „Není faktura"**: všechny obsahové přílohy zprávy.
+**Přílohy karet** — všechny druhy mail karet nesou volitelná pole
+`attachments`/`attachmentsTotal` (viz §4); zdroj je pro všechny stejný:
+**všechny obsahové přílohy zprávy** (D10 — `source_attachments` filtr
+zanikl spolu s extracted documents; tím zmizel i ISDOC zobrazovací bug,
+kdy PDF sourozenec `.isdoc` přílohy nebyl na kartě vidět).
 
 Obsahové přílohy = `core_attachments_files` s `table_id=303`
 (`core_mail_incoming_messages`), bez smazaných a bez raw `.eml`
@@ -268,55 +296,60 @@ headline), frontend beze změny.
 
 ## 6. Akce a jejich sémantika
 
-### 6.1 Vystavení — „Použít“ v review modalu
+### 6.1 `apply_message` — jednoklik „Použít" z karty (pásmo ready)
 
-Jednoklikové `apply_extracted` z karty bylo odstraněno — karta ve stavu 10 má
-primární **„Zkontrolovat“** stejně jako 20/30 (uživatel extrakci před
-potvrzením vždy vidí v náhledu; stav 10 se liší jen vizuálně — kind/ikona).
-Vystavení:
+Karta s návrhem v pásmu **ready** má primární akci **„Použít"** rovnou na
+kartě: `applyMessage(messageNdx, null)` — **safe mód** bez userActions
+(`targetDocState=10`). Odpověď `422 unresolved_required` → **fall-through**
+do `DocumentExchangePreviewModal`, kde uživatel reference dořeší; ostatní
+chyby → alert. Post-apply UX sdílí `finishApply` (viz 6.2, kroky 2–4).
 
-1. „Zkontrolovat“ otevře `DocumentExchangePreviewModal`; „Použít“ →
-   `applyExtractedDocument(ndx, userActions)` — nasbíraná rozhodnutí referencí
+### 6.2 Vystavení — „Použít" v review modalu
+
+1. „Zkontrolovat" otevře `DocumentExchangePreviewModal`; „Použít" →
+   `applyMessage(messageNdx, userActions)` — nasbíraná rozhodnutí referencí
    → strict mód; bez nich safe mód (`targetDocState=10`).
 2. **Úspěch, target docs** → vystavený Koncept se rovnou otevře ve
    `FormDialog` (uživatel ho zkontroluje a může rovnou uzavřít 10→20);
    žádný toast.
 3. **Úspěch, target registry** → toast *„Dokument #123 zařazen do Spisovny
    [Otevřít]“*.
-4. Karta zmizí optimisticky, refetch.
+4. Karta zmizí optimisticky, refetch. Zpráva přešla na Hotovo, verdikt
+   `resolution=40` je zapsaný na analýze.
 
-### 6.2 `review_extracted` — review modal
+### 6.3 `review_message` — review modal
 
-Otevře `DocumentExchangePreviewModal` na `extractedNdx` (PDF vlevo, kanonický
-náhled vpravo, resolve panel, `Použít` gated `canApply`). `onReject(ndx)` →
-`RejectReasonPrompt`. „Použít“ volá `onApply(ndx, userActions, target)` —
-target (`docs`/`registry`) z preview endpointu řídí post-apply UX (§6.1).
+Otevře `DocumentExchangePreviewModal` na `messageNdx` (modal si sám stáhne
+`GET /_mail/messages/{ndx}/preview`; PDF vlevo, kanonický náhled vpravo,
+resolve panel, `Použít` gated `canApply`, panel příloh = všechny obsahové
+přílohy zprávy). `onReject(ndx)` → `RejectReasonPrompt`. „Použít“ volá
+`onApply(messageNdx, userActions, target)` — target (`docs`/`registry`)
+z preview endpointu řídí post-apply UX (§6.2).
 
-### 6.3 `reject_extracted` — prompt na důvod
+### 6.4 `reject_message` — prompt na důvod
 
 Sdílená komponenta `RejectReasonPrompt` (povinný neprázdný důvod) →
-`rejectExtractedDocument(ndx, reason)`. Používá ji feed i modal i ViewerDetail.
+`rejectMessage(messageNdx, reason)`. Používá ji feed i modal i ViewerDetail.
+Zapíše `resolution=50` + `rejected_reason`, zpráva → Hotovo.
 
-### 6.4 `unapply` — bez UI, endpoint zachován
+### 6.5 `unapply` — bez UI, endpoint zachován
 
-`POST /_mail/extracted-documents/{ndx}/unapply` (viz §7) ztratil UI — toast
-„Vrátit“ po apply byl odstraněn. Endpoint zůstává jako záchranná brzda
-(MCP / ruční volání). **Známý dluh**: shodí-li uživatel vystavený Koncept
-do Koše ručně z formuláře, reverzní reconciliace (extracted 40→20, zpráva
-40→30) neproběhne — dělá ji jen tento endpoint.
-Logika (`ExtractedDocumentApplier::unapply`):
+`POST /_mail/messages/{ndx}/unapply` (viz §7) nemá UI — zůstává jako
+záchranná brzda (MCP / ruční volání). **Známý dluh**: shodí-li uživatel
+vystavený Koncept do Koše ručně z formuláře, reverzní reconciliace
+(resolution → NULL, zpráva 40→20) neproběhne — dělá ji jen tento endpoint.
+Logika (`MessageProposalApplier::unapply`):
 
-1. Extracted musí být `status=40` (applied) s `target_row_ndx > 0`, jinak
-   `409 INVALID_STATE`.
+1. Poslední úspěšná analýza musí mít `resolution=40` (applied) a zpráva
+   `target_row > 0`, jinak `409 INVALID_STATE`.
 2. Cílový doklad musí být **stále nedotčený Koncept** (`docState=10`), jinak
-   `409 DOC_ADVANCED` (uživatel řeší ručně).
-3. Cílový doklad → **Koš** (`docState=90`, ne hard-delete — vratné) přes Document
-   flow. Koncept nespotřeboval číslo dokladu (přiděluje se až 10→20), takže není
-   co vracet.
-4. Extracted → `status=20` (pending_review — vždy, ať se před re-apply znovu
-   zkontroluje), vynulování `target_row_ndx`/`applied_*`.
-5. Zpráva `docState 40→30` přes reverzní reconcile
-   (`ExtractedDocumentDocument::reconcileMessageAfterUnapply`, opak apply).
+   `409 DOC_ADVANCED` (uživatel řeší ručně); registry cíl guard
+   `modified <= resolved_at`.
+3. Cílová entita → **Koš** (`docState=90`, ne hard-delete — vratné) přes
+   Document flow. Koncept nespotřeboval číslo dokladu (přiděluje se až
+   10→20), takže není co vracet.
+4. Analysis `resolution`/`rejected_reason`/`resolved_at/by` → NULL,
+   zpráva `target_table_id`/`target_row` → NULL, `docState 40→20`.
 
 ## 7. API kontrakt
 
@@ -359,11 +392,12 @@ Generované AI shrnutí feedu (fáze 2b, §11). Události:
 - **Backend chybí / bez API klíče / klíč nejde dešifrovat** → `done{text:null}`
   (tichá degradace, log server-side).
 
-### `POST /_mail/extracted-documents/{ndx}/unapply`
+### `POST /_mail/messages/{ndx}/unapply`
 
-**Auth**: běžný uživatelský token. Transakčně vratí apply — viz §6.4.
+**Auth**: běžný uživatelský token. Transakčně vrátí apply — viz §6.5
+a `docs/mail/api-contract.md` §9.11.
 
-**Odpovědi**: `200 { ndx, status, messageNdx, trashedDocId }`,
+**Odpovědi**: `200 { messageNdx, analysisNdx, trashedDocId }`,
 `409 INVALID_STATE` / `409 DOC_ADVANCED`, `404 NOT_FOUND`, `500 INTERNAL_ERROR`.
 
 ## 8. Frontend komponenty
@@ -387,6 +421,7 @@ frontend/src/components/dashboard/
 │                           tučně / typ dokladu / částka velkým) + donut
 │                           jistoty (confidencePct, barva dle kind), předmět
 │                           e-mailu (emailSubject + iconMail), chipy příloh,
+│                           hint řádek dalších nálezů (secondaryFindings),
 │                           expander „Zobrazit detail" (details, lokální
 │                           $state), akce; bez headline fallback title/subtitle
 ├── FeedCardAttachment.svelte — chip přílohy s ikonou typu (PDF/obrázek/soubor,
@@ -403,9 +438,10 @@ frontend/src/components/dashboard/
 ```
 
 API: `frontend/src/api/dashboard.js` (`fetchDashboard()`,
-`streamDashboardSummary()` — SSE konzument dle vzoru `chat.js`), `api/exchange.js`
-(`applyExtractedDocument`, `unapplyExtractedDocument`, `rejectExtractedDocument`,
-`reanalyzeMessage`, `previewExtractedDocument`).
+`setMessageDocState()`, `streamDashboardSummary()` — SSE konzument dle
+vzoru `chat.js`), `api/exchange.js` (`previewMessage`, `applyMessage`,
+`rejectMessage`, `unapplyMessage`, `reanalyzeMessage` — wrappery
+message-centrických `/_mail/messages/{ndx}/*` endpointů).
 
 - **Doc-state proužek**: globální `.docState_*` třídy (`styles/base.css`), pruh
   přes `--shpd-row-bar`. Kind→stateStyle mapuje server. Na kartě feedu je pruh
@@ -463,7 +499,7 @@ viditelný generativní AI prvek na home obrazovce.
 
 - **Vstup (digest)**: county dle kind + top ~6 karet
   (kind, id, titulek, subtitle) + dnešní datum (`Y-m-d`) + jazyk. Nikdy plný
-  `extracted_json` (D13). Digest je kanonický — tentýž slouží pro hash i prompt.
+  `canonical_json` (D13). Digest je kanonický — tentýž slouží pro hash i prompt.
 - **Cache** (D12): `core_ai_dashboard_summary` (modul `core.ai`), jeden řádek
   per jazyk `{language UNIQUE, input_hash, text, input_tokens, output_tokens,
   generated_at}`. Klíč = `sha256(digest)`; **datum v digestu** realizuje
@@ -492,9 +528,8 @@ jaká analyzer LLM už posílá (viz `ai.md`).
 
 - **Module-driven feed zdroje** přes `module.jsonc` (zatím napevno, D10).
 - **Tasks jako plnohodnotný zdroj karet** — až přibude assignee.
-- **Vizuální seskupení multi-doc karet** (N dokladů z jednoho e-mailu).
 - **Denormalizace headline** (partner/částka do sloupců místo parse
-  `extracted_json`).
+  `canonical_json`).
 - **Auto-refresh** — polling / SSE, pokud bude potřeba (samostatný task).
 - **Serverový filtr kategorií** — `?category=` parametr + pravdivé DB totály
   v chipech (dnes klientský filtr nad doručenými kartami, počty = doručené

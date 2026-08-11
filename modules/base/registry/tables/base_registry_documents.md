@@ -13,6 +13,8 @@ Klíčové principy (design `docs/registry-mvp.md`):
   z formuláře.
 - **Přílohy** přes `core.attachments` (`table_id = 428`); při zařazení
   z pošty se soubory **kopírují** (D8), zdrojová zpráva zůstává netknutá.
+  Záznam dostává **všechny obsahové přílohy zprávy** (jedno doručení =
+  jeden záznam, D5 z `tasks/mail-message-centric.md`).
 - **`extracted_text`** plní `ExtractedTextFiller` (zařazení, endpoint
   extract-text, CLI backfill) — přímým UPDATE mimo Document hooky, aby
   nebumpnul `modified` (unapply guard AI cesty). Viz README modulu.
@@ -55,8 +57,7 @@ Klíčové principy (design `docs/registry-mvp.md`):
 | Sloupec | Typ | Popis |
 |---|---|---|
 | `source_kind` | CHAR(20) ascii NOT NULL, default `manual` | cfgItem `base.registry.sourceKinds` |
-| `source_message` | INT NULL → `core_mail_incoming_messages` | Zdrojová zpráva při zařazení z pošty |
-| `extracted_doc` | INT NULL → `core_mail_extracted_documents`, system | Extrakce (AI cesta, fáze 2) |
+| `source_message` | INT NULL → `core_mail_incoming_messages` | Zdrojová zpráva při zařazení z pošty (ruční i AI apply) |
 
 ### Poznámky (notes) + systém
 
@@ -85,8 +86,7 @@ Klíčové principy (design `docs/registry-mvp.md`):
 |---|---|---|
 | [`base_registry_binders`](base_registry_binders.md) | `binder` | Šanon |
 | `base_persons_persons` | `partner` | Subjekt dokumentu |
-| `core_mail_incoming_messages` | `source_message`; zpětně `target_table_id='base_registry_documents'` + `target_row` | Zařazení z došlé pošty |
-| `core_mail_extracted_documents` | `extracted_doc` | AI extrakce (fáze 2) |
+| `core_mail_incoming_messages` | `source_message`; zpětně `target_table_id='base_registry_documents'` + `target_row` | Zařazení z došlé pošty (obousměrná lineage; AI cesta = apply návrhu přes `RegistryApplier`) |
 | `core_attachments_files` | `table_id=428, record_id=id` | Přílohy (kopie souborů, D8) |
 | `core_system_users` | `created_by` | Audit |
 

@@ -724,51 +724,86 @@ class RouterTest extends TestCase
 		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
 	}
 
-	public function testExtractedDocumentApplyPost(): void
+	// Message-centrické akce (tasks/mail-message-centric.md) — apply/unapply/
+	// reject/preview žijí nad zprávou; /_mail/extracted-documents/* zaniklo.
+
+	public function testMailMessagesApplyPost(): void
 	{
-		$result = $this->router->resolve('/api/v1/_mail/extracted-documents/55/apply', 'POST');
+		$result = $this->router->resolve('/api/v1/_mail/messages/55/apply', 'POST');
 		$this->assertInstanceOf(Route::class, $result);
 		$this->assertSame('analysis', $result->controller);
-		$this->assertSame('applyExtracted', $result->action);
+		$this->assertSame('applyMessage', $result->action);
 		$this->assertSame(55, $result->id);
 	}
 
-	public function testExtractedDocumentRejectPost(): void
+	public function testMailMessagesUnapplyPost(): void
 	{
-		$result = $this->router->resolve('/api/v1/_mail/extracted-documents/55/reject', 'POST');
-		$this->assertInstanceOf(Route::class, $result);
-		$this->assertSame('rejectExtracted', $result->action);
-		$this->assertSame(55, $result->id);
-	}
-
-	public function testExtractedDocumentPreviewPost(): void
-	{
-		$result = $this->router->resolve('/api/v1/_mail/extracted-documents/55/preview', 'POST');
+		$result = $this->router->resolve('/api/v1/_mail/messages/55/unapply', 'POST');
 		$this->assertInstanceOf(Route::class, $result);
 		$this->assertSame('analysis', $result->controller);
-		$this->assertSame('previewExtracted', $result->action);
+		$this->assertSame('unapplyMessage', $result->action);
 		$this->assertSame(55, $result->id);
 	}
 
-	public function testExtractedDocumentPreviewGetNotAllowed(): void
+	public function testMailMessagesRejectPost(): void
 	{
-		$result = $this->router->resolve('/api/v1/_mail/extracted-documents/55/preview', 'GET');
+		$result = $this->router->resolve('/api/v1/_mail/messages/55/reject', 'POST');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertSame('rejectMessage', $result->action);
+		$this->assertSame(55, $result->id);
+	}
+
+	public function testMailMessagesPreviewGet(): void
+	{
+		// Preview je read-only → GET (na rozdíl od ostatních akcí).
+		$result = $this->router->resolve('/api/v1/_mail/messages/55/preview', 'GET');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertSame('analysis', $result->controller);
+		$this->assertSame('previewMessage', $result->action);
+		$this->assertSame(55, $result->id);
+	}
+
+	public function testMailMessagesPreviewPostNotAllowed(): void
+	{
+		$result = $this->router->resolve('/api/v1/_mail/messages/55/preview', 'POST');
 		$this->assertInstanceOf(Response::class, $result);
 		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
 	}
 
-	public function testExtractedDocumentUnknownActionReturns404(): void
+	public function testMailMessagesApplyGetNotAllowed(): void
 	{
-		$result = $this->router->resolve('/api/v1/_mail/extracted-documents/55/whatever', 'POST');
+		$result = $this->router->resolve('/api/v1/_mail/messages/55/apply', 'GET');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
+	}
+
+	public function testMailMessagesUnknownActionReturns404(): void
+	{
+		$result = $this->router->resolve('/api/v1/_mail/messages/55/whatever', 'POST');
 		$this->assertInstanceOf(Response::class, $result);
 		$this->assertSame('NOT_FOUND', $result->getPayload()['error']['code']);
 	}
 
-	public function testExtractedDocumentApplyGetNotAllowed(): void
+	public function testMailMessagesZeroNdxReturns404(): void
 	{
-		$result = $this->router->resolve('/api/v1/_mail/extracted-documents/55/apply', 'GET');
+		$result = $this->router->resolve('/api/v1/_mail/messages/0/apply', 'POST');
 		$this->assertInstanceOf(Response::class, $result);
-		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
+		$this->assertSame('NOT_FOUND', $result->getPayload()['error']['code']);
+	}
+
+	public function testExtractedDocumentsRoutesAreGone(): void
+	{
+		// Tabulka core_mail_extracted_documents zanikla — celý podstrom je 404.
+		foreach ([
+			['/api/v1/_mail/extracted-documents/55/apply', 'POST'],
+			['/api/v1/_mail/extracted-documents/55/reject', 'POST'],
+			['/api/v1/_mail/extracted-documents/55/preview', 'POST'],
+			['/api/v1/_mail/extracted-documents/55/preview', 'GET'],
+		] as [$path, $method]) {
+			$result = $this->router->resolve($path, $method);
+			$this->assertInstanceOf(Response::class, $result);
+			$this->assertSame('NOT_FOUND', $result->getPayload()['error']['code'], "expected 404 for {$method} {$path}");
+		}
 	}
 
 	// Exchange endpoints

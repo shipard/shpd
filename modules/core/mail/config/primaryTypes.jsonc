@@ -1,18 +1,28 @@
 {
     // core.mail.primaryTypes
     //
-    // Primární typy došlých zpráv. Hodnota se ukládá do sloupce
-    // `primary_type` (enumString). Nové záznamy dostávají typ buď z
-    // výchozí hodnoty schránky (`mail_mailboxes.default_primary_type`),
-    // nebo ruční volbou ve formuláři.
+    // Typy dokumentů v došlé poště — jediná klasifikační osa (D4 z
+    // tasks/mail-message-centric.md). Hodnota se ukládá do sloupce
+    // `core_mail_incoming_messages.primary_type` (mutable klasifikace
+    // zprávy) a `core_mail_message_analyses.proposed_type` (historický
+    // typ návrhu daného běhu). Nové záznamy dostávají typ buď z výchozí
+    // hodnoty schránky (`mail_mailboxes.default_primary_type`), nebo
+    // ruční volbou ve formuláři, nebo z AI klasifikace.
+    //
+    // `target` určuje, kam apply návrhu zakládá cílovou entitu:
+    // `docs` = doklady (docs_core_heads, exchange cesta), `registry` =
+    // Spisovna (base_registry_documents, RegistryApplier). Chybějící
+    // target = `docs`. Registry typy navíc nesou `docKind` — klíč do
+    // `base.registry.docKinds`. Interpretuje helper PrimaryTypes.
     //
     // `enabled: false` označuje typy připravené pro budoucí fáze —
-    // ve Fázi 1 se v UI nenabízejí.
+    // v UI se nenabízejí.
 
     "invoiceReceived": {
         "name": "Received invoice",
         "name:cs": "Přijatá faktura",
         "name:en": "Received invoice",
+        "target": "docs",
         "enabled": true,
         "order": 10
     },
@@ -20,6 +30,7 @@
         "name": "Other",
         "name:cs": "Ostatní",
         "name:en": "Other",
+        "target": "docs",
         "enabled": true,
         "order": 999
     },
@@ -27,13 +38,15 @@
         "name": "Credit note",
         "name:cs": "Dobropis",
         "name:en": "Credit note",
-        "enabled": false,
+        "target": "docs",
+        "enabled": true,
         "order": 20
     },
     "order": {
         "name": "Order",
         "name:cs": "Objednávka",
         "name:en": "Order",
+        "target": "docs",
         "enabled": false,
         "order": 30
     },
@@ -41,6 +54,8 @@
         "name": "Contract",
         "name:cs": "Smlouva",
         "name:en": "Contract",
+        "target": "registry",
+        "docKind": "contract",
         "enabled": true,
         "order": 110
     },
@@ -48,6 +63,8 @@
         "name": "Insurance policy",
         "name:cs": "Pojistná smlouva",
         "name:en": "Insurance policy",
+        "target": "registry",
+        "docKind": "insurance",
         "enabled": true,
         "order": 120
     },
@@ -55,6 +72,8 @@
         "name": "Quotation",
         "name:cs": "Cenová nabídka",
         "name:en": "Quotation",
+        "target": "registry",
+        "docKind": "quotation",
         "enabled": true,
         "order": 130
     },
@@ -62,6 +81,8 @@
         "name": "Certificate / inspection",
         "name:cs": "Revize / certifikát",
         "name:en": "Certificate / inspection",
+        "target": "registry",
+        "docKind": "certificate",
         "enabled": true,
         "order": 140
     },
@@ -69,6 +90,8 @@
         "name": "Official correspondence",
         "name:cs": "Úřední písemnost",
         "name:en": "Official correspondence",
+        "target": "registry",
+        "docKind": "official",
         "enabled": true,
         "order": 150
     },
@@ -76,6 +99,7 @@
         "name": "Statement",
         "name:cs": "Výpis / Saldo",
         "name:en": "Statement",
+        "target": "docs",
         "enabled": false,
         "order": 50
     },
@@ -83,6 +107,8 @@
         "name": "Complaint",
         "name:cs": "Reklamace",
         "name:en": "Complaint",
+        "target": "registry",
+        "docKind": "other",
         "enabled": false,
         "order": 60
     }

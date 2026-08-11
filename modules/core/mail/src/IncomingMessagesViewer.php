@@ -188,11 +188,11 @@ class IncomingMessagesViewer extends TableViewer
             'content' => $this->buildAnalysesTab((int) $record['id']),
         ];
 
-        // Tab 3 — Extrahované dokumenty (Fáze 3a)
+        // Tab 3 — Návrh (dokumentový návrh poslední analýzy)
         $tabs[] = [
-            'id'      => 'extracted',
-            'label'   => $this->detailTabLabel('core.mail.viewerDetailLabels', 'extractedDocuments', 'Extracted documents'),
-            'content' => $this->buildExtractedDocumentsTab((int) $record['id']),
+            'id'      => 'proposal',
+            'label'   => $this->detailTabLabel('core.mail.viewerDetailLabels', 'proposal', 'Proposal'),
+            'content' => $this->buildProposalTab($record),
         ];
 
         // Tab 4 — Originál (raw .eml)
@@ -500,7 +500,8 @@ class IncomingMessagesViewer extends TableViewer
     {
         $analyses = $this->db->fetchAll(
             'SELECT `id`, `analyzed_at`, `status`, `model_name`, `model_version`, `prompt_version`,'
-            . ' `confidence`, `cost_usd`, `duration_ms`, `extracted_document_count`, `error_message`'
+            . ' `confidence`, `cost_usd`, `duration_ms`, `canonical_json` IS NOT NULL AS `has_proposal`,'
+            . ' `resolution`, `error_message`'
             . ' FROM `core_mail_message_analyses`'
             . ' WHERE `message` = %i'
             . ' ORDER BY `analyzed_at` DESC',
@@ -512,6 +513,7 @@ class IncomingMessagesViewer extends TableViewer
         }
 
         $statusLabels = [1 => 'Probíhá', 2 => 'Úspěch', 3 => 'Selhala'];
+        $resolutionMap = $this->loadAnalysisResolutions();
         $rows = [];
         foreach ($analyses as $a) {
             $confidence = $a['confidence'] !== null ? number_format((float) $a['confidence'], 3) : '—';
@@ -519,6 +521,7 @@ class IncomingMessagesViewer extends TableViewer
             $duration = $a['duration_ms'] !== null
                 ? number_format((int) $a['duration_ms'] / 1000, 1) . ' s'
                 : '—';
+            $resolution = $a['resolution'] !== null ? (int) $a['resolution'] : null;
 
             $rows[] = [
                 'analyzed_at' => $this->formatDateTime($a['analyzed_at'] ?? null),
@@ -526,7 +529,10 @@ class IncomingMessagesViewer extends TableViewer
                 'model'       => trim(($a['model_name'] ?? '') . ' ' . ($a['model_version'] ?? '')),
                 'prompt'      => $a['prompt_version'] ?? '',
                 'confidence'  => $confidence,
-                'extracted'   => (string) ($a['extracted_document_count'] ?? 0),
+                'proposal'    => !empty($a['has_proposal']) ? 'ano' : 'ne',
+                'resolution'  => $resolution !== null
+                    ? ($resolutionMap[$resolution]['name'] ?? (string) $resolution)
+                    : '—',
                 'cost'        => $cost,
                 'duration'    => $duration,
             ];
@@ -540,7 +546,8 @@ class IncomingMessagesViewer extends TableViewer
                 ['id' => 'model',       'label' => 'Model'],
                 ['id' => 'prompt',      'label' => 'Prompt'],
                 ['id' => 'confidence',  'label' => 'Jistota'],
-                ['id' => 'extracted',   'label' => 'Doc.'],
+                ['id' => 'proposal',    'label' => 'Návrh'],
+                ['id' => 'resolution',  'label' => 'Verdikt'],
                 ['id' => 'cost',        'label' => 'Cena'],
                 ['id' => 'duration',    'label' => 'Trvání'],
             ],
@@ -549,86 +556,134 @@ class IncomingMessagesViewer extends TableViewer
     }
 
     /**
-     * Spec §5.2 — Tab "Extrahované dokumenty". Vrací custom content type
-     * `extracted-documents`, který frontend renderuje s badge typu, status
-     * badge (barva + ikona), confidence a per-row akce "Použít" / "Zamítnout".
-     *
-     * Status mapping na barvy/ikony viz config/extractedDocStates.jsonc.
+     * Tab „Návrh" — dokumentový návrh poslední úspěšné analýzy (D1: nejvýše
+     * jeden). Vrací custom content type `proposal` s jednou kartou: typ,
+     * confidence pásmo (runtime resolver), summary z canonicalu, verdikt
+     * (resolution badge), hint dalších nálezů (`secondary_findings`)
+     * a akce Použít / Zamítnout / Detail. Bez návrhu prázdný stav
+     * s klasifikací zprávy.
      */
-    private function buildExtractedDocumentsTab(int $messageId): array
+    private function buildProposalTab(array $record): array
     {
-        $rows = $this->db->fetchAll(
-            'SELECT `id`, `doc_type`, `source_attachments`, `confidence`, `status`,'
-            . ' `extracted_json`, `rejected_reason`, `applied_at`, `created`'
-            . ' FROM `core_mail_extracted_documents`'
-            . ' WHERE `message` = %i'
-            . ' ORDER BY `created` DESC, `id` DESC',
-            $messageId,
+        $messageId = (int) $record['id'];
+        $analysis = $this->db->fetchRow(
+            'SELECT * FROM `core_mail_message_analyses`'
+            . ' WHERE `message` = %i AND `status` = %i'
+            . ' ORDER BY `analyzed_at` DESC, `id` DESC LIMIT 1',
+            $messageId, 2,
         );
 
-        if ($rows === []) {
+        if ($analysis === null || $analysis['canonical_json'] === null || $analysis['canonical_json'] === '') {
             return [
-                'type' => 'html',
-                'html' => '<p class="muted">Pro tuto zprávu zatím nebyly extrahovány žádné dokumenty.</p>',
+                'type' => 'proposal',
+                'proposal' => null,
+                'classification' => [
+                    'primary_type' => (string) ($record['primary_type'] ?? 'other'),
+                    'primary_type_label' => $this->primaryTypeLabelFor((string) ($record['primary_type'] ?? 'other')),
+                ],
             ];
         }
 
-        $stateMap = $this->loadExtractedDocStates();
-        $typeMap = $this->loadExtractedDocTypes();
+        $canonical = json_decode((string) $analysis['canonical_json'], true);
+        $canonical = is_array($canonical) ? $canonical : [];
+        $aiFailed = isset($canonical['_validationError']);
 
-        $documents = [];
-        foreach ($rows as $r) {
-            $statusKey = (int) $r['status'];
-            $state = $stateMap[$statusKey] ?? null;
-            $docType = (string) $r['doc_type'];
-            $typeMeta = $typeMap[$docType] ?? null;
+        $proposedType = (string) ($analysis['proposed_type'] ?? 'other');
+        $confidence = $analysis['confidence'] !== null ? (float) $analysis['confidence'] : null;
+        $resolution = $analysis['resolution'] !== null ? (int) $analysis['resolution'] : null;
+        $resolutionMap = $this->loadAnalysisResolutions();
 
-            $sourceNdxs = [];
-            if (!empty($r['source_attachments'])) {
-                $decoded = json_decode((string) $r['source_attachments'], true);
-                if (is_array($decoded)) {
-                    $sourceNdxs = array_values(array_map('intval', $decoded));
-                }
-            }
-
-            $summary = $this->summarizeExtractedJson($r['extracted_json'] ?? null);
-
-            $documents[] = [
-                'ndx' => (int) $r['id'],
-                'doc_type' => $docType,
-                'doc_type_label' => $typeMeta['name'] ?? $docType,
-                'confidence' => $r['confidence'] !== null
-                    ? round((float) $r['confidence'], 3)
-                    : null,
-                'status' => $statusKey,
-                'status_label' => $state['name'] ?? (string) $statusKey,
-                'status_style' => $state['stateStyle'] ?? 'concept',
-                'status_icon' => $state['icon'] ?? null,
-                'source_attachment_ndxs' => $sourceNdxs,
-                'summary' => $summary,
-                'extracted_json' => $r['extracted_json'] ?? null,
-                'applied_at' => $this->formatDateTime($r['applied_at'] ?? null),
-                'rejected_reason' => $r['rejected_reason'] ?? null,
-                'can_apply' => in_array($statusKey, [10, 20, 30], true),
-                'can_reject' => in_array($statusKey, [10, 20, 30], true),
-            ];
+        $band = null;
+        if (!$aiFailed && $resolution === null) {
+            $resolver = new AnalysisConfidenceResolver($this->db);
+            $profileNdx = $analysis['profile'] !== null ? (int) $analysis['profile'] : null;
+            $band = $resolver->bandForAnalysis($confidence, $profileNdx, $canonical);
         }
+
+        $docState = (int) ($record['docState'] ?? 0);
+        $actionable = !$aiFailed
+            && $resolution === null
+            && (int) ($record['analysis_state'] ?? 0) === 30
+            && $docState !== 80 && $docState !== 90;
 
         return [
-            'type' => 'extracted-documents',
-            'documents' => $documents,
+            'type' => 'proposal',
+            'proposal' => [
+                'analysisNdx'        => (int) $analysis['id'],
+                'messageNdx'         => $messageId,
+                'ai_failed'          => $aiFailed,
+                'proposed_type'      => $proposedType,
+                'proposed_type_label' => $this->primaryTypeLabelFor($proposedType),
+                'confidence'         => $confidence !== null ? round($confidence, 3) : null,
+                'band'               => $band,
+                'summary'            => $aiFailed ? null : $this->summarizeExtractedJson((string) $analysis['canonical_json']),
+                'resolution'         => $resolution,
+                'resolution_label'   => $resolution !== null
+                    ? ($resolutionMap[$resolution]['name'] ?? (string) $resolution)
+                    : null,
+                'resolution_style'   => $resolution !== null
+                    ? ($resolutionMap[$resolution]['stateStyle'] ?? 'concept')
+                    : null,
+                'resolved_at'        => $this->formatDateTime($analysis['resolved_at'] ?? null),
+                'rejected_reason'    => $analysis['rejected_reason'] ?? null,
+                'secondary_findings' => $this->secondaryFindingsFor($analysis),
+                'can_apply'          => $actionable,
+                'can_reject'         => $actionable,
+            ],
+            'classification' => [
+                'primary_type' => (string) ($record['primary_type'] ?? 'other'),
+                'primary_type_label' => $this->primaryTypeLabelFor((string) ($record['primary_type'] ?? 'other')),
+            ],
         ];
+    }
+
+    /**
+     * Informativní hint dalších nálezů běhu (D7): pole `{type, note}`
+     * z analysis_json, typ přeložený přes primaryTypes. Žádné entity,
+     * žádný stav.
+     *
+     * @param array<string, mixed> $analysis
+     * @return list<array{type: string, type_label: string, note: string}>
+     */
+    private function secondaryFindingsFor(array $analysis): array
+    {
+        $analysisJson = json_decode((string) ($analysis['analysis_json'] ?? ''), true);
+        $findings = is_array($analysisJson) ? ($analysisJson['secondary_findings'] ?? null) : null;
+        if (!is_array($findings)) {
+            return [];
+        }
+        $out = [];
+        foreach ($findings as $f) {
+            if (!is_array($f)) {
+                continue;
+            }
+            $type = trim((string) ($f['type'] ?? ''));
+            $out[] = [
+                'type' => $type,
+                'type_label' => $this->primaryTypeLabelFor($type),
+                'note' => trim((string) ($f['note'] ?? '')),
+            ];
+        }
+        return $out;
+    }
+
+    /** Label typu z cfgItem `core.mail.primaryTypes` (fallback klíč). */
+    private function primaryTypeLabelFor(string $type): string
+    {
+        $cfg = $this->config?->cfgItem('core.mail.primaryTypes');
+        $entry = is_array($cfg) ? ($cfg[$type] ?? null) : null;
+        return is_array($entry) ? (string) ($entry['name'] ?? $type) : $type;
     }
 
     /**
      * @return array<int, array{name: string, stateStyle: string, icon: ?string}>
      */
-    private function loadExtractedDocStates(): array
+    private function loadAnalysisResolutions(): array
     {
         if ($this->config === null) {
             return [];
         }
-        $cfg = $this->config->cfgItem('core.mail.extractedDocStates');
+        $cfg = $this->config->cfgItem('core.mail.analysisResolutions');
         if ($cfg === null) {
             return [];
         }
@@ -639,25 +694,6 @@ class IncomingMessagesViewer extends TableViewer
                 'stateStyle' => (string) ($entry['stateStyle'] ?? 'concept'),
                 'icon' => $entry['icon'] ?? null,
             ];
-        }
-        return $out;
-    }
-
-    /**
-     * @return array<string, array{name: string}>
-     */
-    private function loadExtractedDocTypes(): array
-    {
-        if ($this->config === null) {
-            return [];
-        }
-        $cfg = $this->config->cfgItem('core.mail.extractedDocTypes');
-        if ($cfg === null) {
-            return [];
-        }
-        $out = [];
-        foreach ($cfg as $key => $entry) {
-            $out[(string) $key] = ['name' => (string) ($entry['name'] ?? $key)];
         }
         return $out;
     }

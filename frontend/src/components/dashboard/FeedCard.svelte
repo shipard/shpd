@@ -106,6 +106,17 @@
         <span class="shpd-feed-card__subject-text">„{card.emailSubject}"</span>
       </div>
     {/if}
+    {#if card.secondaryFindings?.length}
+      <!-- Hint dalších nálezů běhu (D7 z mail-message-centric) — jen
+           informativní řádek, žádné akce. -->
+      <div class="shpd-feed-card__findings">
+        {#each card.secondaryFindings as finding}
+          <div class="shpd-feed-card__finding">
+            + {finding.type_label}{finding.note ? ` — ${finding.note}` : ''}
+          </div>
+        {/each}
+      </div>
+    {/if}
     {#if card.attachments?.length}
       <div class="shpd-feed-card__attachments">
         {#each card.attachments as att (att.id)}
@@ -273,6 +284,19 @@
     font-size: var(--shpd-font-size-sm);
     color: var(--shpd-color-text-secondary);
     min-width: 0;
+  }
+
+  /* Hint dalších nálezů (secondary_findings) — tlumený informativní řádek. */
+  .shpd-feed-card__findings {
+    margin-top: var(--shpd-space-xs);
+    font-size: var(--shpd-font-size-sm);
+    color: var(--shpd-color-text-secondary);
+  }
+
+  .shpd-feed-card__finding {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .shpd-feed-card__subject-text {

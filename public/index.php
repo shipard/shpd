@@ -374,7 +374,7 @@ function buildMcpRegistry(
 		);
 	}
 	$draftApplier = $configRuntime !== null
-		? new \Shipard\Module\Core\Mail\ExtractedDocumentApplier(
+		? new \Shipard\Module\Core\Mail\MessageProposalApplier(
 			$db,
 			\Shipard\Module\Core\Exchange\Document\DocumentApplier::create(
 				$db->getDibiConnection(),
@@ -751,7 +751,6 @@ function dispatchMail(
 			$configRuntime !== null
 				? \Shipard\Module\Core\Exchange\Enrich\RowHistoryEnricher::create($db->getDibiConnection())
 				: null,
-			new \Shipard\Module\Core\Mail\ExtractedDocumentStatusResolver($db),
 			$dsPath,
 		);
 
@@ -879,10 +878,10 @@ function dispatchAnalysis(
 		'result'            => $ctrl->result($auth, $request, (int) $route->id),
 		'failed'            => $ctrl->failed($auth, $request, (int) $route->id),
 		'reanalyze'         => $ctrl->reanalyze($auth, $request, (int) $route->id),
-		'applyExtracted'    => $ctrl->applyExtracted($auth, $request, (int) $route->id),
-		'unapplyExtracted'  => $ctrl->unapplyExtracted($auth, $request, (int) $route->id),
-		'rejectExtracted'   => $ctrl->rejectExtracted($auth, $request, (int) $route->id),
-		'previewExtracted'  => $ctrl->previewExtracted($auth, $request, (int) $route->id),
+		'applyMessage'      => $ctrl->applyMessage($auth, $request, (int) $route->id),
+		'unapplyMessage'    => $ctrl->unapplyMessage($auth, $request, (int) $route->id),
+		'rejectMessage'     => $ctrl->rejectMessage($auth, $request, (int) $route->id),
+		'previewMessage'    => $ctrl->previewMessage($auth, $request, (int) $route->id),
 		default             => Response::error('INTERNAL_ERROR', "Unknown analysis action: {$route->action}", 500),
 	};
 }

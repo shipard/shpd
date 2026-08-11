@@ -242,7 +242,7 @@ class MailController
         try {
             $hasCandidate = false;
             foreach ($contentAttachments as $file) {
-                if (is_array($file) && IsdocImportService::isPotentialIsdocAttachment($file)) {
+                if (is_array($file) && IsdocImportService::isPotentialCandidate($file)) {
                     $hasCandidate = true;
                     break;
                 }

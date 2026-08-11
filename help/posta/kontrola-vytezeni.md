@@ -15,7 +15,8 @@ projdi ho podle postupu níž.
 
 Zpráva s fakturou dorazila a analýza skončila — v **Došlé poště** má
 badge **Analyzováno** a stav **K řešení**, na **Dashboardu** se objevila
-karta s procentem **Jistoty** a tlačítkem **Zkontrolovat**.
+karta s procentem **Jistoty**. U jistých návrhů má karta rovnou tlačítko
+**Použít**, u ostatních je hlavní **Zkontrolovat**.
 
 ## Postup
 
@@ -72,14 +73,27 @@ karta s procentem **Jistoty** a tlačítkem **Zkontrolovat**.
 ## Na co narazíš
 
 **Jistota není správnost.** Procento říká, jak si byl model jistý sám
-sebou. Badge u vytěženého dokladu se z něj odvozuje:
+sebou. Badge u návrhu se z něj odvozuje:
 
 | Badge | Jistota | Co to znamená pro tebe |
 |---|---|---|
 | **K použití** | 90 % a víc | Zkontroluj Součty a Datumy. Zbytek namátkou |
 | **Čeká na review** | 60–90 % | Projdi všechny sekce z kroku 3 |
 | **Nízká jistota** | pod 60 % | Čti řádek po řádku, nebo zamítni a zadej ručně |
-| **Chyba AI** | — | Extrakce se nepovedla, typicky nečitelné PDF. Zkus **Znovu analyzovat** |
+| **Chyba extrakce** | — | Extrakce se nepovedla, typicky nečitelné PDF. Zkus **Znovu analyzovat** |
+
+**Jistý návrh můžeš použít rovnou z karty.** U návrhu s badge **K použití**
+má karta na Dashboardu tlačítko **Použít** — doklad vznikne na jeden klik,
+bez otevírání náhledu. Když v návrhu zbývá nerozhodnutá reference
+(dodavatel, položka…), Shipard místo uložení otevře náhled ke kontrole
+a rozhodneš ji tam. Náhled si i u jistého návrhu můžeš otevřít sám
+tlačítkem **Zkontrolovat**.
+
+**Z jednoho e-mailu vznikne nejvýše jeden návrh.** AI vytěží hlavní
+dokument zprávy (typicky fakturu). Když ve zprávě najde ještě něco dalšího
+— třeba smlouvu v příloze vedle faktury — ukáže to na kartě jen jako
+poznámku; dokument z toho nevznikne a založíš ho ručně. Viz
+[Co Shipard dnes neumí](../co-dnes-nejde.md).
 
 **Doplněno z historie.** U některých polí najdeš poznámku, že hodnota
 nepřišla z faktury, ale z tvých starších dokladů od stejného dodavatele —
@@ -102,23 +116,25 @@ panel u účtu místo vyhledávání napíše *Nejdřív vyber nebo vytvoř
 dodavatele.* a nabídne jedině vytvoření nového účtu — účet se totiž
 zakládá k někomu.
 
-**Znovu analyzovat nic neztratí.** Opakovaná analýza označí staré návrhy
-ve stavech *K použití*, *Čeká na review* a *Nízká jistota* jako
-**Nahrazeno**. Co jsi už použil nebo zamítl, zůstane.
+**Znovu analyzovat nic neztratí.** Opakovaná analýza vytvoří nový návrh,
+který ten dosavadní nahradí; starší běhy zůstávají u zprávy vidět na
+záložce **Analýzy**. Zprávu s návrhem, který jsi už **použil**, znovu
+analyzovat nejde — nejdřív by ses musel dokladu zbavit přes podporu.
 
 **Co udělá Zamítnout.** Návrh dostane stav **Zamítnuto**, důvod se uloží k němu a v **Došlé poště** ho u zprávy pak vidíš jako
 *Důvod zamítnutí*. Karta z Dashboardu zmizí. Zpráva a přílohy zůstávají —
-zamítá se návrh dokladu, ne e-mail. Zpráva přejde na **Hotovo**,
-pokud u ní nezbývá žádný další návrh k vyřízení.
+zamítá se návrh dokladu, ne e-mail. Zpráva přejde na **Hotovo**.
 
 **Zamítnutí se z rozhraní nevrací.** Když jsi zamítl omylem, spusť
-**Znovu analyzovat** — dostaneš nový návrh a ten zamítnutý zůstane
-ležet vedle něj. Důvod zamítnutí nikam neodchází, zůstává jen v tvojí
-agendě — když AI čte něco opakovaně špatně, nahlas to zvlášť.
+**Znovu analyzovat** — dostaneš nový návrh; ten zamítnutý zůstane
+i s důvodem v historii na záložce **Analýzy**. Důvod zamítnutí nikam
+neodchází, zůstává jen v tvojí agendě — když AI čte něco opakovaně
+špatně, nahlas to zvlášť.
 
-**Ke stejnému náhledu se dostaneš i z Došlé pošty.** Otevři zprávu
-a u vytěženého dokladu klikni na **Zobrazit detail**. Hodí se, když
-karta na Dashboardu už není — třeba když se vracíš k něčemu staršímu.
+**Ke stejnému náhledu se dostaneš i z Došlé pošty.** Otevři zprávu,
+přepni na záložku **Návrh** a klikni na **Zobrazit detail**. Hodí se,
+když karta na Dashboardu už není — třeba když se vracíš k něčemu
+staršímu. Na záložce jsou i tlačítka **Použít** a **Zamítnout**.
 
 **Vytěžení nespustíš na přání.** Analýza běží automaticky po doručení
 zprávy. Ruční cesta je jen **Znovu analyzovat** u už doručené zprávy.

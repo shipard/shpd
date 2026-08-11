@@ -11,31 +11,38 @@ use Shipard\Core\Feed\FeedContext;
 use Shipard\Module\Core\Mail\Feed\MailSuggestionsSource;
 
 /**
- * Unit testy pro MailSuggestionsSource.
+ * Unit testy pro MailSuggestionsSource (message-centric, D10).
  *
  * Pokrývají:
- *   - stavy 10/20/30 → správný kind, stateStyle a sada akcí
+ *   - confidence pásmo (AnalysisConfidenceResolver) → kind, stateStyle a sada
+ *     akcí: ready → apply (primary) + review + reject; review/low → review
+ *     (primary) + reject; strop D7 podle pokrytí řádků
  *   - zpráva analysis_state=70 → urgent karta + reanalyze/open_form
  *     (degradace na review při primary_type=other)
+ *   - otevřený návrh s ai_failed wrapperem (_validationError) → chybová
+ *     karta mail_invalid s reanalyze
  *   - karta „Není faktura" (kind info, akce trash/archive/open_form)
  *   - strukturovaná hlavička `headline` (partner/typ/částka) + `confidencePct`
- *     + `emailSubject` + `details`; fallback na title/subtitle bez partnera
- *   - přílohy karet: struktura, řazení, vyloučení raw .eml, filtr dle
- *     source_attachments + fallback, strop 3 + attachmentsTotal
+ *     + `emailSubject` + `details` + `secondaryFindings`; fallback na
+ *     title/subtitle bez partnera
+ *   - přílohy karet: struktura, vyloučení raw .eml, strop 3 + attachmentsTotal
+ *     (vždy všechny obsahové přílohy — source_attachments filtr zanikl)
  *   - prázdný vstup → []
  */
 final class MailSuggestionsSourceTest extends TestCase
 {
     /**
      * Sestaví FeedContext s DB mockem, který routuje SELECTy zdroje podle
-     * tvaru SQL: batch příloh (core_attachments_files), notInvoice
-     * (NOT EXISTS subquery), suggestion (JOIN na extracted_documents),
-     * error (zbytek — messages tabulka).
+     * tvaru SQL: batch příloh (core_attachments_files), suggestion (JOIN na
+     * poslední úspěšnou analýzu), notInvoice (COALESCE(( subquery), error
+     * (zbytek — messages tabulka). fetchRow (thresholds resolveru) vrací
+     * default null → DEFAULT_THRESHOLDS, nebo řádky z $profileRows.
      *
      * @param list<array<string,mixed>> $suggestionRows
      * @param list<array<string,mixed>> $errorRows
      * @param list<array<string,mixed>> $notInvoiceRows
      * @param list<array<string,mixed>> $attachmentRows
+     * @param list<array<string,mixed>|null> $profileRows po sobě jdoucí návraty fetchRow
      */
     private function context(
         array $suggestionRows,
@@ -44,19 +51,26 @@ final class MailSuggestionsSourceTest extends TestCase
         string $lang = 'cs',
         array $notInvoiceRows = [],
         array $attachmentRows = [],
+        array $profileRows = [],
     ): FeedContext {
         $db = $this->createMock(DataSourceConnection::class);
         $db->method('fetchAll')->willReturnCallback(
-            static function (string $sql) use ($suggestionRows, $errorRows, $notInvoiceRows, $attachmentRows): array {
+            static function (mixed ...$args) use ($suggestionRows, $errorRows, $notInvoiceRows, $attachmentRows): array {
+                $sql = (string) $args[0];
                 if (str_contains($sql, 'core_attachments_files')) {
                     return $attachmentRows;
                 }
-                if (str_contains($sql, 'NOT EXISTS')) {
-                    return $notInvoiceRows;
+                if (str_contains($sql, 'JOIN')) {
+                    return $suggestionRows;
                 }
-                return str_contains($sql, 'extracted_documents') ? $suggestionRows : $errorRows;
+                return str_contains($sql, 'COALESCE((') ? $notInvoiceRows : $errorRows;
             },
         );
+        if ($profileRows !== []) {
+            $db->method('fetchRow')->willReturnOnConsecutiveCalls(...$profileRows);
+        } else {
+            $db->method('fetchRow')->willReturn(null); // žádný AI profil → default thresholds
+        }
         return new FeedContext($db, $config, $lang, 30);
     }
 
@@ -78,30 +92,32 @@ final class MailSuggestionsSourceTest extends TestCase
         ];
     }
 
-    private function docTypesConfig(): ConfigRuntime
+    private function primaryTypesConfig(): ConfigRuntime
     {
         $config = $this->createMock(ConfigRuntime::class);
         $config->method('cfgItem')->willReturnCallback(
-            static fn(string $id): mixed => $id === 'core.mail.extractedDocTypes'
-                ? ['invoiceReceived' => ['name' => 'Přijatá faktura']]
+            static fn(string $id): mixed => $id === 'core.mail.primaryTypes'
+                ? ['invoiceReceived' => ['name' => 'Přijatá faktura', 'target' => 'docs']]
                 : null,
         );
         return $config;
     }
 
     /** @return array<string,mixed> */
-    private function suggestionRow(int $status, int $ndx = 1): array
+    private function suggestionRow(float $confidence = 0.94, int $messageNdx = 101): array
     {
         return [
-            'extracted_ndx'  => $ndx,
-            'message_ndx'    => 100 + $ndx,
-            'doc_type'       => 'invoiceReceived',
-            'confidence'     => 0.94,
-            'status'         => $status,
-            'subject'        => 'Faktura 2026000123',
-            'sender_name'    => 'ČEZ a.s.',
-            'received_at'    => '2026-06-28 10:00:00',
-            'extracted_json' => json_encode([
+            'message_ndx'           => $messageNdx,
+            'analysis_ndx'          => 900 + $messageNdx,
+            'proposed_type'         => 'invoiceReceived',
+            'confidence'            => $confidence,
+            'profile'               => null,
+            'subject'               => 'Faktura 2026000123',
+            'sender_name'           => 'ČEZ a.s.',
+            'received_at'           => '2026-06-28 10:00:00',
+            'raw_source_attachment' => null,
+            'analysis_json'         => null,
+            'canonical_json'        => json_encode([
                 'selfParty' => 'customer',
                 'supplier'  => ['name' => 'ČEZ a.s.'],
                 'currency'  => 'CZK',
@@ -110,17 +126,20 @@ final class MailSuggestionsSourceTest extends TestCase
         ];
     }
 
-    public function testStatus10ReadyWithApplyReviewReject(): void
+    // ── Confidence pásma → kind + akce ───────────────────────────────────
+
+    public function testReadyBandProducesApplyReviewReject(): void
     {
         $src = new MailSuggestionsSource();
-        $cards = $src->collectCards($this->context([$this->suggestionRow(10)], [], $this->docTypesConfig()));
+        $cards = $src->collectCards($this->context([$this->suggestionRow(0.94)], [], $this->primaryTypesConfig()));
 
         $this->assertCount(1, $cards);
         $card = $cards[0];
-        $this->assertSame('mail_extracted:1', $card['id']);
+        $this->assertSame('mail_suggestion:101', $card['id']);
         $this->assertSame('mail', $card['source']);
         $this->assertSame('ready', $card['kind']);
         $this->assertSame('done', $card['stateStyle']);
+        $this->assertSame('check', $card['icon']);
         $this->assertSame('invoices', $card['category']);
         $this->assertSame('Přijatá faktura — ČEZ a.s.', $card['title']);
         // Karta s partnerem nese strukturovanou hlavičku; subtitle se neposílá.
@@ -136,19 +155,25 @@ final class MailSuggestionsSourceTest extends TestCase
         $this->assertArrayNotHasKey('details', $card);
         $this->assertSame('2026-06-28T10:00:00+00:00', $card['timestamp']);
 
+        // Ready → jednoklikové apply (primary) + review + reject.
         $actionIds = array_column($card['actions'], 'id');
-        $this->assertSame(['review', 'reject'], $actionIds);
+        $this->assertSame(['apply', 'review', 'reject'], $actionIds);
         $this->assertTrue($card['actions'][0]['primary']);
-        $this->assertSame('review_extracted', $card['actions'][0]['kind']);
-        $this->assertSame(['extractedNdx' => 1], $card['actions'][0]['target']);
-        $this->assertSame(1, $card['context']['extractedNdx']);
+        $this->assertSame('apply_message', $card['actions'][0]['kind']);
+        $this->assertSame(['messageNdx' => 101], $card['actions'][0]['target']);
+        $this->assertSame('review_message', $card['actions'][1]['kind']);
+        $this->assertSame('reject_message', $card['actions'][2]['kind']);
+
         $this->assertSame(101, $card['context']['messageNdx']);
+        $this->assertSame(1001, $card['context']['analysisNdx']);
+        $this->assertSame(0.94, $card['context']['confidence']);
+        $this->assertSame('docs', $card['context']['target']);
     }
 
-    public function testStatus20ReviewWithoutApply(): void
+    public function testReviewBandWithoutApply(): void
     {
         $src = new MailSuggestionsSource();
-        $cards = $src->collectCards($this->context([$this->suggestionRow(20)], [], $this->docTypesConfig()));
+        $cards = $src->collectCards($this->context([$this->suggestionRow(0.7)], [], $this->primaryTypesConfig()));
 
         $card = $cards[0];
         $this->assertSame('review', $card['kind']);
@@ -156,17 +181,78 @@ final class MailSuggestionsSourceTest extends TestCase
         $actionIds = array_column($card['actions'], 'id');
         $this->assertSame(['review', 'reject'], $actionIds);
         $this->assertTrue($card['actions'][0]['primary']);
+        $this->assertSame('review_message', $card['actions'][0]['kind']);
     }
 
-    public function testStatus30ReviewEditStyle(): void
+    public function testLowBandReviewEditStyle(): void
     {
         $src = new MailSuggestionsSource();
-        $cards = $src->collectCards($this->context([$this->suggestionRow(30)], [], $this->docTypesConfig()));
+        $cards = $src->collectCards($this->context([$this->suggestionRow(0.3)], [], $this->primaryTypesConfig()));
 
         $card = $cards[0];
         $this->assertSame('review', $card['kind']);
         $this->assertSame('edit', $card['stateStyle']);
+        $this->assertSame('warning', $card['icon']);
         $this->assertSame(['review', 'reject'], array_column($card['actions'], 'id'));
+    }
+
+    public function testRowCoverageCapsReadyToReview(): void
+    {
+        // Vysoká confidence, ale item řádek bez ourCode → strop D7 sráží
+        // pásmo na review — žádný jednoklik apply.
+        $row = $this->suggestionRow(0.95);
+        $canonical = json_decode((string) $row['canonical_json'], true);
+        $canonical['rows'] = [['rowKind' => 'item', 'item' => ['name' => 'Elektřina']]];
+        $row['canonical_json'] = json_encode($canonical);
+
+        $src = new MailSuggestionsSource();
+        $cards = $src->collectCards($this->context([$row], [], $this->primaryTypesConfig()));
+
+        $this->assertSame('review', $cards[0]['kind']);
+        $this->assertSame(['review', 'reject'], array_column($cards[0]['actions'], 'id'));
+    }
+
+    public function testProfileThresholdsAreUsedForBand(): void
+    {
+        // Běh s profilem 17 (ready práh 0.8) → 0.85 stačí na ready.
+        $row = $this->suggestionRow(0.85);
+        $row['profile'] = 17;
+
+        $src = new MailSuggestionsSource();
+        $cards = $src->collectCards($this->context(
+            [$row], [], $this->primaryTypesConfig(), 'cs', [], [],
+            [['confidence_thresholds' => '{"ready": 0.8, "review": 0.4}']],
+        ));
+
+        $this->assertSame('ready', $cards[0]['kind']);
+        $this->assertSame('apply', $cards[0]['actions'][0]['id']);
+    }
+
+    // ── Chybové karty ────────────────────────────────────────────────────
+
+    public function testInvalidAiOutputProducesUrgentReanalyzeCard(): void
+    {
+        // Otevřený návrh s forenzním wrapperem z /result → karta mail_invalid.
+        $row = $this->suggestionRow();
+        $row['canonical_json'] = json_encode(['_validationError' => ['issues' => ['x']]]);
+
+        $src = new MailSuggestionsSource();
+        $cards = $src->collectCards($this->context([$row], [], $this->primaryTypesConfig()));
+
+        $this->assertCount(1, $cards);
+        $card = $cards[0];
+        $this->assertSame('mail_invalid:101', $card['id']);
+        $this->assertSame('urgent', $card['kind']);
+        $this->assertSame('error', $card['stateStyle']);
+        $this->assertSame('Chyba analýzy e-mailu', $card['title']);
+        $this->assertSame('ČEZ a.s.', $card['subtitle']);
+        $this->assertSame(['messageNdx' => 101], $card['context']);
+
+        $actions = $card['actions'];
+        $this->assertSame('reanalyze', $actions[0]['kind']);
+        $this->assertTrue($actions[0]['primary']);
+        $this->assertSame(['messageNdx' => 101], $actions[0]['target']);
+        $this->assertSame('open_form', $actions[1]['kind']);
     }
 
     public function testMessageAiErrorProducesUrgentCard(): void
@@ -218,6 +304,8 @@ final class MailSuggestionsSourceTest extends TestCase
         $this->assertSame('error', $cards[0]['stateStyle']);
     }
 
+    // ── Karta „Není faktura" ─────────────────────────────────────────────
+
     public function testNotInvoiceCardWithTrashArchiveActions(): void
     {
         $row = [
@@ -260,13 +348,17 @@ final class MailSuggestionsSourceTest extends TestCase
         $this->assertSame('core_mail_incoming_messages', $actions[2]['target']['table']);
     }
 
-    public function testSuggestionQueryExcludesOtherDocType(): void
+    // ── SQL pojistky ─────────────────────────────────────────────────────
+
+    public function testSuggestionQueryExcludesOtherProposedType(): void
     {
-        // Pojistka — WHERE musí filtrovat doc_type='other' už v SQL.
+        // Pojistka — WHERE musí filtrovat proposed_type='other' už v SQL
+        // (prompt 'other' návrhy zakazuje, starší analýzy je mohly vytvořit).
         $captured = null;
         $db = $this->createMock(DataSourceConnection::class);
         $db->method('fetchAll')->willReturnCallback(
-            static function (string $sql) use (&$captured): array {
+            static function (mixed ...$args) use (&$captured): array {
+                $sql = (string) $args[0];
                 if (str_contains($sql, 'JOIN')) {
                     $captured = $sql;
                 }
@@ -276,8 +368,35 @@ final class MailSuggestionsSourceTest extends TestCase
         (new MailSuggestionsSource())->collectCards(new FeedContext($db, null, 'cs', 30));
 
         $this->assertNotNull($captured);
-        $this->assertStringContainsString("`doc_type` != 'other'", $captured);
+        $this->assertStringContainsString("COALESCE(`a`.`proposed_type`, 'other') != 'other'", $captured);
+        $this->assertStringContainsString('`a`.`resolution` IS NULL', $captured);
+        $this->assertStringContainsString('`a`.`canonical_json` IS NOT NULL', $captured);
     }
+
+    public function testNotInvoiceQueryFiltersPrimaryTypeOtherWithoutOpenProposal(): void
+    {
+        // Registry primary typy na kartu „Není faktura" nesmí spadnout — SQL
+        // filtruje primary_type='other'; otevřený návrh poslední analýzy
+        // kartu potlačí přes COALESCE(derived flag)=0.
+        $captured = null;
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchAll')->willReturnCallback(
+            static function (mixed ...$args) use (&$captured): array {
+                $sql = (string) $args[0];
+                if (str_contains($sql, 'COALESCE((')) {
+                    $captured = $sql;
+                }
+                return [];
+            },
+        );
+        (new MailSuggestionsSource())->collectCards(new FeedContext($db, null, 'cs', 30));
+
+        $this->assertNotNull($captured);
+        $this->assertStringContainsString("`primary_type` = 'other'", $captured);
+        $this->assertStringContainsString('), 0) = 0', $captured);
+    }
+
+    // ── Registry target ──────────────────────────────────────────────────
 
     /** ConfigRuntime s registry targetem (insurance) + docKinds. */
     private function registryConfig(): ConfigRuntime
@@ -285,7 +404,7 @@ final class MailSuggestionsSourceTest extends TestCase
         $config = $this->createMock(ConfigRuntime::class);
         $config->method('cfgItem')->willReturnCallback(
             static fn(string $id): mixed => match ($id) {
-                'core.mail.extractedDocTypes' => [
+                'core.mail.primaryTypes' => [
                     'invoiceReceived' => ['name' => 'Přijatá faktura', 'target' => 'docs'],
                     'insurance'       => ['name' => 'Pojistná smlouva', 'target' => 'registry', 'docKind' => 'insurance'],
                 ],
@@ -302,32 +421,27 @@ final class MailSuggestionsSourceTest extends TestCase
     }
 
     /** @return array<string,mixed> */
-    private function registrySuggestionRow(int $status, int $ndx = 1): array
+    private function registrySuggestionRow(float $confidence = 0.91, int $messageNdx = 101): array
     {
-        return [
-            'extracted_ndx'  => $ndx,
-            'message_ndx'    => 100 + $ndx,
-            'doc_type'       => 'insurance',
-            'confidence'     => 0.91,
-            'status'         => $status,
-            'subject'        => 'Pojistná smlouva 2026',
-            'sender_name'    => 'Pojišťovna ABC',
-            'received_at'    => '2026-06-28 10:00:00',
-            'extracted_json' => json_encode([
-                'schema'  => 'shpd.registry.document.v1',
-                'docType' => 'insurance',
-                'title'   => 'Pojistná smlouva — flotila vozidel',
-                'party'   => ['name' => 'Pojišťovna ABC a.s.', 'companyId' => '12345678'],
-                'kindFields' => ['policyNumber' => 'POJ-1', 'validTo' => '2026-12-31'],
-                'binderSuggestion' => 'Pojištění',
-            ]),
-        ];
+        $row = $this->suggestionRow($confidence, $messageNdx);
+        $row['proposed_type'] = 'insurance';
+        $row['subject'] = 'Pojistná smlouva 2026';
+        $row['sender_name'] = 'Pojišťovna ABC';
+        $row['canonical_json'] = json_encode([
+            'schema'  => 'shpd.registry.document.v1',
+            'docType' => 'insurance',
+            'title'   => 'Pojistná smlouva — flotila vozidel',
+            'party'   => ['name' => 'Pojišťovna ABC a.s.', 'companyId' => '12345678'],
+            'kindFields' => ['policyNumber' => 'POJ-1', 'validTo' => '2026-12-31'],
+            'binderSuggestion' => 'Pojištění',
+        ]);
+        return $row;
     }
 
-    public function testRegistryCardHeadlineDetailsTargetAndApplyId(): void
+    public function testRegistryCardHeadlineDetailsTargetAndActions(): void
     {
         $src = new MailSuggestionsSource();
-        $cards = $src->collectCards($this->context([$this->registrySuggestionRow(10)], [], $this->registryConfig()));
+        $cards = $src->collectCards($this->context([$this->registrySuggestionRow()], [], $this->registryConfig()));
 
         $this->assertCount(1, $cards);
         $card = $cards[0];
@@ -345,18 +459,18 @@ final class MailSuggestionsSourceTest extends TestCase
         $this->assertSame([['label' => 'Platí do', 'value' => '31. 12. 2026']], $card['details']);
         $this->assertSame('registry', $card['category']);
         $this->assertSame('registry', $card['context']['target']);
-        // vystavení jen přes review modal — primary akce je review i ve stavu 10
-        $this->assertSame('review', $card['actions'][0]['id']);
-        $this->assertSame('review_extracted', $card['actions'][0]['kind']);
+        // Action kinds jsou pro oba targety shodné — 0.91 ≥ 0.9 → ready → apply.
+        $this->assertSame(['apply', 'review', 'reject'], array_column($card['actions'], 'id'));
+        $this->assertSame('apply_message', $card['actions'][0]['kind']);
         $this->assertTrue($card['actions'][0]['primary']);
     }
 
     public function testRegistryCardWithoutPartyUsesKindLabelOnly(): void
     {
-        $row = $this->registrySuggestionRow(10);
-        $canonical = json_decode((string) $row['extracted_json'], true);
+        $row = $this->registrySuggestionRow();
+        $canonical = json_decode((string) $row['canonical_json'], true);
         unset($canonical['party'], $canonical['kindFields']);
-        $row['extracted_json'] = json_encode($canonical);
+        $row['canonical_json'] = json_encode($canonical);
 
         $src = new MailSuggestionsSource();
         $cards = $src->collectCards($this->context([$row], [], $this->registryConfig()));
@@ -368,10 +482,10 @@ final class MailSuggestionsSourceTest extends TestCase
         $this->assertStringNotContainsString('platí do', $cards[0]['subtitle']);
     }
 
-    public function testRegistryReviewStatusHasNoApplyAction(): void
+    public function testRegistryReviewBandHasNoApplyAction(): void
     {
         $src = new MailSuggestionsSource();
-        $cards = $src->collectCards($this->context([$this->registrySuggestionRow(20)], [], $this->registryConfig()));
+        $cards = $src->collectCards($this->context([$this->registrySuggestionRow(0.7)], [], $this->registryConfig()));
 
         $ids = array_column($cards[0]['actions'], 'id');
         $this->assertSame(['review', 'reject'], $ids);
@@ -380,31 +494,12 @@ final class MailSuggestionsSourceTest extends TestCase
     public function testDocsCardKeepsTargetDocsInContext(): void
     {
         $src = new MailSuggestionsSource();
-        $cards = $src->collectCards($this->context([$this->suggestionRow(10)], [], $this->registryConfig()));
+        $cards = $src->collectCards($this->context([$this->suggestionRow()], [], $this->registryConfig()));
 
         $this->assertSame('docs', $cards[0]['context']['target']);
-        $this->assertSame('review', $cards[0]['actions'][0]['id']);
     }
 
-    public function testNotInvoiceQueryFiltersPrimaryTypeOther(): void
-    {
-        // Registry primary typy (contract/insurance/…) na kartu „Není faktura"
-        // nesmí spadnout — SQL filtruje primary_type='other' přímo.
-        $captured = null;
-        $db = $this->createMock(DataSourceConnection::class);
-        $db->method('fetchAll')->willReturnCallback(
-            static function (string $sql) use (&$captured): array {
-                if (str_contains($sql, 'NOT EXISTS')) {
-                    $captured = $sql;
-                }
-                return [];
-            },
-        );
-        (new MailSuggestionsSource())->collectCards(new FeedContext($db, null, 'cs', 30));
-
-        $this->assertNotNull($captured);
-        $this->assertStringContainsString("`primary_type` = 'other'", $captured);
-    }
+    // ── Fallbacky ────────────────────────────────────────────────────────
 
     public function testEmptyInputReturnsNoCards(): void
     {
@@ -415,37 +510,37 @@ final class MailSuggestionsSourceTest extends TestCase
     public function testDocTypeFallbackWhenConfigMissing(): void
     {
         $src = new MailSuggestionsSource();
-        // Bez configu → title padne na holý doc_type key.
-        $cards = $src->collectCards($this->context([$this->suggestionRow(10)], [], null));
+        // Bez configu → title padne na holý proposed_type key.
+        $cards = $src->collectCards($this->context([$this->suggestionRow()], [], null));
         $this->assertStringStartsWith('invoiceReceived — ', $cards[0]['title']);
     }
 
     public function testCounterpartyFollowsSelfParty(): void
     {
-        $row = $this->suggestionRow(10);
-        $row['extracted_json'] = json_encode([
+        $row = $this->suggestionRow();
+        $row['canonical_json'] = json_encode([
             'selfParty' => 'supplier',                 // my jsme dodavatel → protistrana customer
             'supplier'  => ['name' => 'Naše firma'],
             'customer'  => ['name' => 'Odběratel a.s.'],
         ]);
         $src = new MailSuggestionsSource();
-        $cards = $src->collectCards($this->context([$row], [], $this->docTypesConfig()));
+        $cards = $src->collectCards($this->context([$row], [], $this->primaryTypesConfig()));
         $this->assertStringEndsWith('— Odběratel a.s.', $cards[0]['title']);
     }
 
-    // ── Strukturovaná hlavička + details ─────────────────────────────────
+    // ── Strukturovaná hlavička + details + secondary findings ───────────
 
     public function testDetailsRowsInFixedOrderFromFullCanonical(): void
     {
-        $row = $this->suggestionRow(10);
-        $canonical = json_decode((string) $row['extracted_json'], true);
+        $row = $this->suggestionRow();
+        $canonical = json_decode((string) $row['canonical_json'], true);
         $canonical['docNumber'] = '2026000123';
         $canonical['dates']     = ['dueDate' => '2026-04-29'];
         $canonical['payment']   = ['paymentReference' => '2026000123'];
-        $row['extracted_json'] = json_encode($canonical);
+        $row['canonical_json'] = json_encode($canonical);
 
         $src = new MailSuggestionsSource();
-        $cards = $src->collectCards($this->context([$row], [], $this->docTypesConfig()));
+        $cards = $src->collectCards($this->context([$row], [], $this->primaryTypesConfig()));
 
         $this->assertSame(
             [
@@ -460,14 +555,14 @@ final class MailSuggestionsSourceTest extends TestCase
     public function testDetailsSkipMissingAndInvalidValues(): void
     {
         // docNumber chybí, dueDate nevalidní → oba řádky vynechané, zbyde VS.
-        $row = $this->suggestionRow(10);
-        $canonical = json_decode((string) $row['extracted_json'], true);
+        $row = $this->suggestionRow();
+        $canonical = json_decode((string) $row['canonical_json'], true);
         $canonical['dates']   = ['dueDate' => 'not-a-date'];
         $canonical['payment'] = ['paymentReference' => '2026000123'];
-        $row['extracted_json'] = json_encode($canonical);
+        $row['canonical_json'] = json_encode($canonical);
 
         $src = new MailSuggestionsSource();
-        $cards = $src->collectCards($this->context([$row], [], $this->docTypesConfig()));
+        $cards = $src->collectCards($this->context([$row], [], $this->primaryTypesConfig()));
 
         $this->assertSame(
             [['label' => 'Variabilní symbol', 'value' => '2026000123']],
@@ -477,18 +572,18 @@ final class MailSuggestionsSourceTest extends TestCase
 
     public function testCardWithoutPartnerFallsBackToTitleSubtitle(): void
     {
-        $row = $this->suggestionRow(10);
-        $canonical = json_decode((string) $row['extracted_json'], true);
+        $row = $this->suggestionRow();
+        $canonical = json_decode((string) $row['canonical_json'], true);
         unset($canonical['supplier']);
-        $row['extracted_json'] = json_encode($canonical);
+        $row['canonical_json'] = json_encode($canonical);
 
         $src = new MailSuggestionsSource();
-        $cards = $src->collectCards($this->context([$row], [], $this->docTypesConfig()));
+        $cards = $src->collectCards($this->context([$row], [], $this->primaryTypesConfig()));
 
         $card = $cards[0];
         $this->assertArrayNotHasKey('headline', $card);
         $this->assertSame('Přijatá faktura', $card['title']);
-        // subtitle zůstává dnešní složený (částka · jistota · e-mail)
+        // subtitle zůstává složený (částka · jistota · e-mail)
         $this->assertStringContainsString('12 500,00 CZK', $card['subtitle']);
         $this->assertStringContainsString('jistota 94 %', $card['subtitle']);
         $this->assertStringContainsString('Faktura 2026000123', $card['subtitle']);
@@ -497,19 +592,46 @@ final class MailSuggestionsSourceTest extends TestCase
         $this->assertSame(94, $card['confidencePct']);
     }
 
+    public function testSecondaryFindingsFromAnalysisJson(): void
+    {
+        // Neprázdné secondary_findings běhu → hint {type, type_label, note} (D7).
+        $row = $this->suggestionRow();
+        $row['analysis_json'] = json_encode([
+            'secondary_findings' => [
+                ['type' => 'other', 'note' => 'Příloha obsahuje i všeobecné podmínky.'],
+            ],
+        ]);
+
+        $src = new MailSuggestionsSource();
+        $cards = $src->collectCards($this->context([$row], [], $this->primaryTypesConfig()));
+
+        $this->assertSame(
+            [['type' => 'other', 'type_label' => 'Ostatní', 'note' => 'Příloha obsahuje i všeobecné podmínky.']],
+            $cards[0]['secondaryFindings'],
+        );
+    }
+
+    public function testCardWithoutSecondaryFindingsHasNoKey(): void
+    {
+        $src = new MailSuggestionsSource();
+        $cards = $src->collectCards($this->context([$this->suggestionRow()], [], $this->primaryTypesConfig()));
+        $this->assertArrayNotHasKey('secondaryFindings', $cards[0]);
+    }
+
     // ── Přílohy karet ────────────────────────────────────────────────────
 
-    public function testCardCarriesAttachmentsWithStructureAndOrder(): void
+    public function testCardCarriesAllContentAttachmentsWithStructureAndOrder(): void
     {
-        // Zpráva 101 (suggestionRow ndx=1) se dvěma obsahovými přílohami;
-        // pořadí z batch dotazu (att_order) se zachovává.
+        // Zpráva 101 se dvěma obsahovými přílohami; pořadí z batch dotazu
+        // (att_order) se zachovává; source_attachments filtr zanikl —
+        // karta nese vždy všechny obsahové přílohy.
         $atts = [
             $this->attachmentRow(11, 101, 'Faktura.pdf'),
             $this->attachmentRow(12, 101, 'scan-001.jpg', 'image/jpeg', 102400),
         ];
         $src = new MailSuggestionsSource();
         $cards = $src->collectCards(
-            $this->context([$this->suggestionRow(10)], [], $this->docTypesConfig(), 'cs', [], $atts),
+            $this->context([$this->suggestionRow()], [], $this->primaryTypesConfig(), 'cs', [], $atts),
         );
 
         $card = $cards[0];
@@ -545,40 +667,6 @@ final class MailSuggestionsSourceTest extends TestCase
         $this->assertSame(1, $cards[0]['attachmentsTotal']);
     }
 
-    public function testSuggestionAttachmentsFilteredBySourceAttachments(): void
-    {
-        $row = $this->suggestionRow(10);
-        $row['source_attachments'] = json_encode([12]);
-        $atts = [
-            $this->attachmentRow(11, 101, 'priloha-a.pdf'),
-            $this->attachmentRow(12, 101, 'faktura.pdf'),
-            $this->attachmentRow(13, 101, 'priloha-c.pdf'),
-        ];
-        $src = new MailSuggestionsSource();
-        $cards = $src->collectCards($this->context([$row], [], $this->docTypesConfig(), 'cs', [], $atts));
-
-        $this->assertSame([12], array_column($cards[0]['attachments'], 'id'));
-        $this->assertSame(1, $cards[0]['attachmentsTotal']);
-    }
-
-    public function testSuggestionAttachmentsFallBackOnInvalidSourceAttachments(): void
-    {
-        $atts = [
-            $this->attachmentRow(11, 101, 'priloha-a.pdf'),
-            $this->attachmentRow(12, 101, 'faktura.pdf'),
-        ];
-
-        foreach (['not-json', '[]', json_encode([999])] as $sourceAttachments) {
-            $row = $this->suggestionRow(10);
-            $row['source_attachments'] = $sourceAttachments;
-            $src = new MailSuggestionsSource();
-            $cards = $src->collectCards($this->context([$row], [], $this->docTypesConfig(), 'cs', [], $atts));
-
-            // Nevalidní JSON / prázdné pole / žádný průnik → všechny obsahové přílohy.
-            $this->assertSame([11, 12], array_column($cards[0]['attachments'], 'id'), "source_attachments={$sourceAttachments}");
-        }
-    }
-
     public function testAttachmentsCappedAtThreeWithTotal(): void
     {
         $atts = [];
@@ -587,7 +675,7 @@ final class MailSuggestionsSourceTest extends TestCase
         }
         $src = new MailSuggestionsSource();
         $cards = $src->collectCards(
-            $this->context([$this->suggestionRow(10)], [], $this->docTypesConfig(), 'cs', [], $atts),
+            $this->context([$this->suggestionRow()], [], $this->primaryTypesConfig(), 'cs', [], $atts),
         );
 
         $this->assertSame([21, 22, 23], array_column($cards[0]['attachments'], 'id'));
@@ -597,7 +685,7 @@ final class MailSuggestionsSourceTest extends TestCase
     public function testCardWithoutAttachmentsHasNoAttachmentKeys(): void
     {
         $src = new MailSuggestionsSource();
-        $cards = $src->collectCards($this->context([$this->suggestionRow(10)], [], $this->docTypesConfig()));
+        $cards = $src->collectCards($this->context([$this->suggestionRow()], [], $this->primaryTypesConfig()));
 
         $this->assertArrayNotHasKey('attachments', $cards[0]);
         $this->assertArrayNotHasKey('attachmentsTotal', $cards[0]);
@@ -607,8 +695,8 @@ final class MailSuggestionsSourceTest extends TestCase
     {
         $db = $this->createMock(DataSourceConnection::class);
         $db->method('fetchAll')->willReturnCallback(
-            function (string $sql): array {
-                $this->assertStringNotContainsString('core_attachments_files', $sql);
+            function (mixed ...$args): array {
+                $this->assertStringNotContainsString('core_attachments_files', (string) $args[0]);
                 return [];
             },
         );

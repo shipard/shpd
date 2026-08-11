@@ -300,12 +300,14 @@ Response headers: `Content-Type` z attachment metadat, `Content-Disposition: att
 
 ### 9.5 `POST /_mail/analysis/{ndx}/result`
 
-Headers: `X-Claim-Token`. Request body:
+Kontrakt v4 (message-centrický, `tasks/mail-message-centric.md` D11):
+jednotkou analýzy je celá zpráva, výsledkem **nejvýše jeden** dokumentový
+návrh. Headers: `X-Claim-Token`. Request body:
 ```json
 {
   "model_name": "claude-sonnet-4-5",
   "model_version": "20260101",
-  "prompt_version": "v1.0.0",
+  "prompt_version": "v4.0.0",
   "profile_ndx": 17,
   "backend_ndx": 5,
   "tokens_input": 4500,
@@ -315,46 +317,58 @@ Headers: `X-Claim-Token`. Request body:
   "overall_confidence": 0.92,
   "analysis_json": { },
   "message_classification": {
-    "primary_type": "other",
+    "primary_type": "invoiceReceived",
     "confidence": 0.97
   },
-  "extracted_documents": [
-    {
-      "doc_type": "invoiceReceived",
-      "source_attachment_ndxs": [456],
-      "extracted_json": { },
-      "confidence": 0.94
-    }
+  "document": {
+    "doc_type": "invoiceReceived",
+    "extracted_json": { },
+    "confidence": 0.94
+  },
+  "secondary_findings": [
+    { "type": "contract", "note": "Rámcová smlouva v příloze smlouva.pdf" }
   ]
 }
 ```
 
-`message_classification` je **volitelné** (prompt v2.2.0+) — starý prompt
-ho negeneruje a nic se nemění, zpětná kompatibilita drží (§8). Stávající
-analyzer daemon top-level pole neposílá (tělo /result staví sám); server
-proto klasifikaci čte i z `analysis_json.message_classification` (celý
-model output). Top-level pole má přednost.
+- `message_classification` je **povinná** (422 při absenci; prompt v4 ji
+  vždy generuje). Fallback čtení z `analysis_json.message_classification`
+  zůstává pro robustnost, top-level pole má přednost.
+- `document` je volitelný (0..1) — primární dokument zprávy. Pole
+  `doc_type` se ukládá do sloupce `proposed_type`.
+- `secondary_findings` je volitelný informativní seznam dalších nálezů
+  (`{type, note}`) — server ho strukturálně nevaliduje nad rámec tvaru,
+  žije jen v `analysis_json`.
+- Pole `extracted_documents` server od v4 **nepřijímá** (422) — big-bang,
+  bez kompatibilní mezivrstvy. `source_attachment_ndxs` z kontraktu zaniklo
+  (přílohy návrhu = všechny obsahové přílohy zprávy).
 
 Server transakčně:
 
-1. INSERT `core_mail_message_analyses` (status=2 success).
-2. Pro každý extracted dokument: INSERT `core_mail_extracted_documents` se
-   `status` určeným z `confidence` vs `profile.confidence_thresholds`.
-3. UPDATE claims SET `released=1, release_reason='result'`.
-4. UPDATE messages SET `analysis_state=30` (Analyzováno), vynuluj
+1. Validace `document.extracted_json` proti canonical schématu
+   (`shpd.docs.document.v1`, registry typy proti
+   `shpd.registry.document.v1`) + enrichment (`RowHistoryEnricher`);
+   INSERT `core_mail_message_analyses` (status=2, `canonical_json`,
+   `proposed_type`, `confidence` = `document.confidence`, u běhu bez
+   dokumentu `overall_confidence`). Nevalidní canonical → forenzní wrapper
+   `{_validationError, _validationIssues, _rawOutput}` do `canonical_json`,
+   běh se uloží (dashboard emituje chybovou kartu), 201 se vrací.
+   Confidence pásma (ready/review/low) se **nepersistují** — počítají se
+   za běhu z `confidence` vs. thresholds profilu.
+2. UPDATE claims SET `released=1, release_reason='result'`.
+3. UPDATE messages SET `analysis_state=30` (Analyzováno), vynuluj
    `needs_reanalysis`.
-5. Workflow: pokud vznikl aspoň jeden extracted dokument **a** zpráva je
-   stále v Nové (`docState=10`), UPDATE `docState=20` (K řešení). Prázdné
-   `extracted_documents` docState **nemění** — zpráva zůstává v Nové
-   (dashboard emituje kartu „Není faktura"). Ruční workflow stav pipeline
-   nikdy nepřepisuje.
-6. `message_classification` (pokud přišla): validace `primary_type` proti
-   klíčům `core.mail.primaryTypes` (tolerují se i `enabled: false` typy;
+4. Workflow: `document` přítomen a validní **a** zpráva stále v Nové
+   (`docState=10`) → UPDATE `docState=20` (K řešení). Běh bez dokumentu
+   docState **nemění** — zpráva zůstává v Nové (dashboard emituje kartu
+   „Není faktura"). Ruční workflow stav pipeline nikdy nepřepisuje.
+5. `message_classification`: validace `primary_type` proti klíčům
+   `core.mail.primaryTypes` (tolerují se i `enabled: false` typy;
    neznámý klíč → server-side warning + pole se ignoruje, **ne** 422).
    UPDATE `primary_type` + `primary_type_source='ai'` — **jen pokud**
    `primary_type_source != 'user'` (volba uživatele má vždy přednost).
 
-Response 201: `{ analysis_ndx, extracted_document_ndxs: [...] }`.
+Response 201: `{ analysis_ndx }`.
 
 ### 9.6 `POST /_mail/analysis/{ndx}/failed`
 
@@ -390,36 +404,48 @@ admin `shpd_ak_…`), ne `_ai_analyzer`. Request body:
 
 - Zpráva existuje, `analysis_state ∈ {30, 70}` a `docState NOT IN (80, 90)`
   (jinak 409 INVALID_STATE).
+- Zpráva nemá aplikovaný návrh s živým targetem (poslední úspěšná analýza
+  `resolution=40` + `target_row` obsazený) — jinak 409 INVALID_STATE,
+  nejdřív unapply.
 - Profile override (pokud zadán) existuje a `is_active=1`.
 
-Server v transakci:
-
-1. UPDATE `extracted_documents` SET `status=60 (superseded)` WHERE
-   `message=ndx AND status IN (10, 20, 30, 70)`.  
-   Statusy 40 (applied) a 50 (rejected) zůstávají beze změny.
-2. UPDATE `messages` SET `analysis_state=10`, `needs_reanalysis=1`,
-   `profile_override`. `docState` se nemění.
+Server v transakci: UPDATE `messages` SET `analysis_state=10`,
+`needs_reanalysis=1`, `profile_override`. `docState` se nemění. Historie
+analýz se nemění — „aktuální návrh" je implicitně poslední úspěšný běh
+(koncept superseded zanikl).
 
 Analyzer při dalším GET /queue zprávu uvidí včetně override profilu.
 
-### 9.8 `POST /_mail/extracted-documents/{ndx}/apply`
+### 9.8 `POST /_mail/messages/{ndx}/apply`
 
-UI akce "Použít" na extrahovaném dokumentu. Auth: běžný uživatelský token.
-Atomicky:
+UI akce „Použít" nad dokumentovým návrhem **poslední úspěšné analýzy**
+zprávy. Auth: běžný uživatelský token. Body volitelně `{ "_resolve":
+{cesta: userAction}, "applyOptions": {autoCreateMode, targetDocState} }` —
+prázdné tělo = safe mode (viz `docs/exchange-format.md`).
 
-1. Validuje, že dokument existuje a je v pending stavu (10/20/30).
-2. Prochází přes `ExtractedDocumentDocument::beforeSave` (audit pole) a
-   `afterPersist` (auto-transition zprávy 20→40 když všichni sourozenci
-   jsou applied/rejected/superseded).
-3. Vrací `{ ndx, status, message_ndx }`.
+Guardy: zpráva mimo Archiv/Koš, `analysis_state=30`, otevřený návrh
+(`resolution IS NULL`), validní `canonical_json`; `message.target_row`
+obsazený → idempotent/recovery cesta. Routing dle `proposed_type` běhu →
+`PrimaryTypes::targetFor()` (docs = exchange `DocumentApplier` s injection
+`source.kind='aiExtraction'` + `source.message`; registry =
+`RegistryApplier` se **všemi** obsahovými přílohami zprávy). Obě větve
+zapíšou obě strany lineage atomicky (doklad `source_message` ↔ zpráva
+`target_table_id`/`target_row`), pak verdikt: analysis `resolution=40` +
+`resolved_at/by`, zpráva `docState → 40` (z 10 i 20).
 
-Generický `PATCH /core_mail_extracted_documents/{id}` Document hooky obchází
-a tudíž **nesmí** být použit pro tuto akci — auto-transition by se nespustil.
+Vrací `{ savedDocId, messageNdx, analysisNdx }` + jeden z `idempotent: true`
+/ `recovered: true` / `canonical`. Chyby: `404 NOT_FOUND`,
+`409 INVALID_STATE`, `422 NO_PROPOSAL` / `AI_OUTPUT_INVALID` /
+`unresolved_required` (s `canonical._resolve.issues`), `500`.
 
-### 9.9 `POST /_mail/extracted-documents/{ndx}/reject`
+### 9.9 `POST /_mail/messages/{ndx}/reject`
 
-UI akce "Zamítnout". Request body: `{ "reason": "…" }` — povinné, neprázdné.
-Stejný transakční flow jako apply, navíc nastaví `rejected_reason`.
+UI akce „Zamítnout". Request body: `{ "reason": "…" }` — povinné, neprázdné.
+Zapíše na poslední úspěšnou analýzu `resolution=50` + `rejected_reason` +
+`resolved_at/by`; zpráva `docState → 40` (Hotovo — symetricky s apply,
+uživatel může následně Koš/Archiv). Reanalýza po rejectu zůstává možná
+(vznikne nový běh s `resolution=NULL`). Vrací
+`{ messageNdx, analysisNdx, resolution: 50 }`.
 
 ### 9.10 Reaper expirovaných claimů
 
@@ -430,26 +456,35 @@ CLI `bin/shpd-ds mail-analysis-reap` (cron 1×/min) vyčistí stale claimy:
 - UPDATE messages SET `analysis_state=10` WHERE `id=msg AND analysis_state=20`
   (dokončený result/failed má přednost). `docState` se nemění.
 
-### 9.11 `POST /_mail/extracted-documents/{ndx}/unapply`
+### 9.11 `POST /_mail/messages/{ndx}/unapply`
 
-Bez UI (toast „Vrátit“ byl z dashboardu odstraněn) — záchranná brzda pro
-MCP / ruční volání. Auth: běžný uživatelský token. Vratí
-předchozí apply — viz `ExtractedDocumentApplier::unapply`. Transakčně:
+Bez UI — záchranná brzda pro MCP / ruční volání. Auth: běžný uživatelský
+token. Vrátí předchozí apply — viz `MessageProposalApplier::unapply`.
+Transakčně:
 
-1. Extracted musí být `status=40` (applied) s `target_row_ndx > 0`, jinak
-   **409 `INVALID_STATE`**.
-2. Cílový doklad (`target_row_ndx`) musí být **stále nedotčený Koncept**
-   (`docState=10`), jinak **409 `DOC_ADVANCED`** (uživatel řeší ručně).
-3. Cílový doklad → **Koš** (`docState=90`, ne hard-delete — vratné) přes
+1. Poslední úspěšná analýza musí mít `resolution=40` (applied) a zpráva
+   `target_row > 0`, jinak **409 `INVALID_STATE`**.
+2. Docs cíl musí být **stále nedotčený Koncept** (`docState=10`), jinak
+   **409 `DOC_ADVANCED`** (uživatel řeší ručně); registry cíl guard
+   `modified <= resolved_at`.
+3. Cílová entita → **Koš** (`docState=90`, ne hard-delete — vratné) přes
    Document flow. Koncept nespotřeboval číslo dokladu (přiděluje se až 10→20).
-4. Extracted → `status=20` (pending_review), vynulování `target_row_ndx`,
-   `applied_at`, `applied_by` (`writeUnapplyTransition` — oddělená od
-   `writeStatusTransition`, která povoluje jen pending stavy).
-5. Zpráva `docState 40→20` přes reverzní reconcile
-   (`reconcileMessageAfterUnapply`, opak apply auto-transition).
+4. Analysis `resolution`/`rejected_reason`/`resolved_at/by` → NULL,
+   zpráva `target_table_id`/`target_row` → NULL, `docState 40→20`.
 
-Vrací `{ ndx, status, messageNdx, trashedDocId }`. Chyby: `409 INVALID_STATE` /
-`409 DOC_ADVANCED`, `404 NOT_FOUND`, `500 INTERNAL_ERROR`.
+Vrací `{ messageNdx, analysisNdx, trashedDocId }`. Chyby: `409 INVALID_STATE`
+/ `409 DOC_ADVANCED`, `404 NOT_FOUND`, `500 INTERNAL_ERROR`.
+
+### 9.12 `GET /_mail/messages/{ndx}/preview`
+
+Read-only náhled návrhu poslední úspěšné analýzy pro review modal. Auth:
+běžný uživatelský token. Vrací `{ messageNdx, analysisNdx, proposedType,
+confidence, resolution, attachments, … }` + `aiFailed`/`wrapper` (nevalidní
+výstup), nebo `canonical` (docs: s fresh enrichmentem a `_resolve`
+z `applier->preview()`; registry: passthrough + `target: "registry"`).
+`attachments` = **všechny** obsahové přílohy zprávy
+(`{ndx, filename, mime_type, size_bytes}`). Chyby: `404 NOT_FOUND` /
+`NO_ANALYSIS` / `NO_PROPOSAL`, `500 CORRUPTED_DATA`.
 
 ## 10. Známé limity
 

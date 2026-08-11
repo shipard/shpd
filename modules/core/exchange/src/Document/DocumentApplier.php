@@ -344,10 +344,9 @@ class DocumentApplier
             // which row.item ids ended up actually linked.
             $this->writeSupplierCodeMappings($canonical, $plan, $sideCreatedIds);
 
-            // Lineage targets only — status / applied_at update lives in
-            // AnalysisController::applyExtracted so the
-            // ExtractedDocumentDocument hooks (incl. message 30→40
-            // auto-transition) fire. See Phase 2 spec.
+            // Lineage targets only — analysis resolution / message docState
+            // update lives in MessageProposalApplier so the verdict write
+            // stays one place. See tasks/mail-message-centric.md D6.
             $this->writeLineageTargets($canonical, $savedDocId);
 
             $this->db->commit();
@@ -1024,7 +1023,7 @@ class DocumentApplier
             'notice'               => $canonical['notes']['internal'] ?? null,
             'doc_notice'           => $canonical['notes']['onDocument'] ?? null,
             'source_kind'          => $canonical['source']['kind'] ?? null,
-            'source_extracted_doc' => $canonical['source']['extractedDoc'] ?? null,
+            'source_message'       => $canonical['source']['message'] ?? null,
             'source_extracted_at'  => $this->mapExtractedAt($canonical['source']['extractedAt'] ?? null),
             'docState'             => $targetDocState,
             'rows'                 => $this->transformRows($canonical['rows'] ?? [], $plan, $sideIds),
@@ -1300,53 +1299,57 @@ class DocumentApplier
     // ── Lineage update ─────────────────────────────────────────────────────
 
     /**
-     * Stamp the extracted_document with target_table_id + target_row_ndx
-     * (where the canonical went). Status and applied_at are intentionally
-     * NOT touched here — those move through ExtractedDocumentDocument hooks
-     * in AnalysisController so message auto-transition (30→40) runs.
-     * See exchange-format-phase2.md §"Lineage targets vs status update split".
+     * Stamp the source message with target_table_id + target_row (where the
+     * canonical went) — the reverse side of heads.source_message, written
+     * atomically inside the doc-save transaction (D6 z mail-message-centric).
+     * Analysis resolution / message docState are intentionally NOT touched
+     * here — those move through MessageProposalApplier so the verdict write
+     * stays one place.
      *
      * @param array<string, mixed> $canonical
      */
     private function writeLineageTargets(array $canonical, int $savedDocId): void
     {
-        $extractedDoc = $canonical['source']['extractedDoc'] ?? null;
-        if (!is_int($extractedDoc) || $extractedDoc <= 0) {
+        $messageNdx = $canonical['source']['message'] ?? null;
+        if (!is_int($messageNdx) || $messageNdx <= 0) {
             return;
         }
         $this->executeSql(
-            'UPDATE [core_mail_extracted_documents]
+            'UPDATE [core_mail_incoming_messages]
              SET [target_table_id] = %s,
-                 [target_row_ndx] = %i
+                 [target_row] = %i
              WHERE [id] = %i',
-            'docs_core_heads', $savedDocId, $extractedDoc,
+            'docs_core_heads', $savedDocId, $messageNdx,
         );
     }
 
     /**
-     * Idempotency pre-check for apply(). If the canonical's
-     * source.extractedDoc already has target_row_ndx set AND status = 40
-     * (Applied), return the existing savedDocId without re-saving. Saves
-     * a duplicate INSERT on retries / double-clicks.
+     * Idempotency pre-check for apply(). If the canonical's source.message
+     * already points at a docs target (target_table_id + target_row set),
+     * return the existing savedDocId without re-saving. Saves a duplicate
+     * INSERT on retries / double-clicks.
      *
      * @param array<string, mixed> $canonical
      */
     private function checkIdempotent(array $canonical): ?ApplyResult
     {
-        $extractedNdx = $canonical['source']['extractedDoc'] ?? null;
-        if (!is_int($extractedNdx) || $extractedNdx <= 0) {
+        $messageNdx = $canonical['source']['message'] ?? null;
+        if (!is_int($messageNdx) || $messageNdx <= 0) {
             return null;
         }
         $row = $this->db->fetch(
-            'SELECT [target_row_ndx], [status]
-             FROM [core_mail_extracted_documents]
+            'SELECT [target_table_id], [target_row]
+             FROM [core_mail_incoming_messages]
              WHERE [id] = %i',
-            $extractedNdx,
+            $messageNdx,
         );
-        if ($row === null || empty($row['target_row_ndx']) || (int) $row['status'] !== 40) {
+        if ($row === null
+            || empty($row['target_row'])
+            || (string) $row['target_table_id'] !== 'docs_core_heads'
+        ) {
             return null;
         }
-        $existingId = (int) $row['target_row_ndx'];
+        $existingId = (int) $row['target_row'];
 
         $enriched = $canonical;
         $enriched['savedDocId'] = $existingId;

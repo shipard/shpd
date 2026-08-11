@@ -2,7 +2,7 @@
     // core.mail.viewerDetailLabels
     //
     // Detail labels for IncomingMessagesViewer. No shared "overview" —
-    // tabs are Content / Analyses / Extracted / Original. The `attachments`
+    // tabs are Content / Analyses / Proposal / Original. The `attachments`
     // key is not a tab anymore — it labels the attachments section heading
     // inside the Content tab.
 
@@ -22,10 +22,10 @@
             "name:cs": "Analýzy",
             "name:en": "Analyses"
         },
-        "extractedDocuments": {
-            "name": "Extracted documents",
-            "name:cs": "Extrahované dokumenty",
-            "name:en": "Extracted documents"
+        "proposal": {
+            "name": "Proposal",
+            "name:cs": "Návrh",
+            "name:en": "Proposal"
         },
         "original": {
             "name": "Original",

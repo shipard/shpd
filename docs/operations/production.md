@@ -276,6 +276,16 @@ Předpoklady, aby to fungovalo:
 > jen u přístupu přes hostname. Když host v mapě není (nebo mapa ještě
 > neexistuje), aplikace vrátí `404 Unknown host`.
 
+> **Servery s provisioning agentem** (sekce `hosting` v `server.json`):
+> `domain-add` pouští cron agent jako shipard user a atomický zápis
+> (tmp + rename) vyžaduje zápis na **adresář** mapy — root-managed
+> `/etc/shipard` agentovi nestačí. Přesměruj umístění klíčem
+> `domainsFile` v `server.json` na app-writable cestu (např.
+> `/opt/shipard/domains.json`) a soubor tam přesuň; stejný klíč čte
+> HTTP resolver i všechny `domain-*` commandy (`dataSources` funguje
+> obdobně pro adresář zdrojů dat). Nezapisovatelný adresář hlásí
+> `shpd-server doctor`.
+
 ---
 
 ## 10. Zálohování a provoz

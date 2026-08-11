@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Shipard\Command\Server;
 
+use Shipard\Core\Server\DomainsFile;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Helper\Table;
 use Symfony\Component\Console\Input\InputInterface;
@@ -10,9 +11,6 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 class DomainListCommand extends Command
 {
-	private const DATA_SOURCES_DIR = '/opt/shipard/data-sources';
-	private const DOMAINS_FILE     = '/etc/shipard/domains.json';
-
 	public function __construct(
 		private readonly ?string $domainsFile    = null,
 		private readonly ?string $dataSourcesDir = null,
@@ -28,19 +26,18 @@ class DomainListCommand extends Command
 
 	protected function execute(InputInterface $input, OutputInterface $output): int
 	{
-		$domainsFile    = $this->domainsFile    ?? self::DOMAINS_FILE;
-		$dataSourcesDir = $this->dataSourcesDir ?? self::DATA_SOURCES_DIR;
+		$domainsFile    = DomainsFile::effectiveDomainsFile($this->domainsFile);
+		$dataSourcesDir = DomainsFile::effectiveDataSourcesDir($this->dataSourcesDir);
 
 		if (!file_exists($domainsFile)) {
 			$output->writeln('<comment>No domains file found. Use domain-add to create mappings.</comment>');
 			return Command::SUCCESS;
 		}
 
-		$content = file_get_contents($domainsFile);
-		$map     = json_decode($content, true);
-
-		if (json_last_error() !== JSON_ERROR_NONE || !is_array($map)) {
-			$output->writeln('<error>Invalid JSON in domains file</error>');
+		try {
+			$map = DomainsFile::load($domainsFile);
+		} catch (\RuntimeException $e) {
+			$output->writeln('<error>' . $e->getMessage() . '</error>');
 			return Command::FAILURE;
 		}
 

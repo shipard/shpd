@@ -8,6 +8,7 @@ use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Mail\MailRelayConfig;
 use Shipard\Core\Server\CronProvisioner;
+use Shipard\Core\Server\DomainsFile;
 use Shipard\Core\Server\HealthChecker;
 use Shipard\Core\Server\PermissionSpec;
 use Symfony\Component\Console\Command\Command;
@@ -103,6 +104,10 @@ class DoctorCommand extends Command
         $output->writeln('');
         $output->writeln('<info>System config includes</info>');
         $this->checkSystemConfigIncludes($output);
+
+        $output->writeln('');
+        $output->writeln('<info>Hosting domains file</info>');
+        $this->checkHostingDomainsFile($config, $shipardUser, $output);
 
         $output->writeln('');
         $output->writeln('<info>Cron</info>');
@@ -278,6 +283,77 @@ class DoctorCommand extends Command
             }
         }
         return $errors;
+    }
+
+    /**
+     * Servery s provisioning agentem (sekce `hosting` v server.json):
+     * `hosting-sync` běží z cronu jako shipard user a krok domain-add
+     * zapisuje domains soubor atomicky (tmp + rename) — potřebuje tedy
+     * zápis na ADRESÁŘ souboru. Výchozí /etc/shipard je root-managed
+     * (root:shipard 750), pro agenta read-only → doporučení je override
+     * `domainsFile` v server.json do app-writable cesty. Warn-only —
+     * bez agenta se domény přidávají ručně (sudo) a nález neplatí.
+     */
+    protected function checkHostingDomainsFile(array $config, string $shipardUser, OutputInterface $output): void
+    {
+        if (!isset($config['hosting'])) {
+            $output->writeln('  (server not hosting-managed — skipped)');
+            return;
+        }
+
+        $domainsFile = is_string($config['domainsFile'] ?? null)
+            ? $config['domainsFile']
+            : DomainsFile::DEFAULT_DOMAINS_FILE;
+        $dir = dirname($domainsFile);
+
+        $writable = $this->isWritableByUser($dir, $shipardUser);
+        if ($writable === null) {
+            $output->writeln("  ⚠ cannot stat {$dir} — verify manually that '{$shipardUser}' can write {$domainsFile}");
+            return;
+        }
+        if ($writable) {
+            $output->writeln("  ✓ {$domainsFile} (directory writable by {$shipardUser})");
+            return;
+        }
+
+        $output->writeln("  ⚠ {$domainsFile}: directory {$dir} not writable by '{$shipardUser}' — hosting-sync domain-add will fail");
+        $output->writeln("    <comment>→ Point 'domainsFile' in server.json to an app-writable path (e.g. /opt/shipard/domains.json)</comment>");
+        $output->writeln('    <comment>  and move the existing file there; /etc/shipard stays root-managed.</comment>');
+    }
+
+    /**
+     * Zápisové oprávnění uživatele k cestě z owner/group/mode — doctor
+     * typicky neběží pod tím uživatelem, `is_writable()` nelze použít.
+     * Null = nelze zjistit (stat selhal / uživatel neexistuje).
+     */
+    protected function isWritableByUser(string $path, string $user): ?bool
+    {
+        $stat = @stat($path);
+        if ($stat === false) {
+            return null;
+        }
+        $pw = posix_getpwnam($user);
+        if ($pw === false) {
+            return null;
+        }
+        if ($pw['uid'] === 0) {
+            return true;
+        }
+
+        if ($stat['uid'] === $pw['uid']) {
+            return ($stat['mode'] & 0200) !== 0;
+        }
+
+        $inGroup = $stat['gid'] === $pw['gid'];
+        if (!$inGroup) {
+            $group = posix_getgrgid($stat['gid']);
+            $inGroup = is_array($group) && in_array($user, $group['members'] ?? [], true);
+        }
+        if ($inGroup) {
+            return ($stat['mode'] & 0020) !== 0;
+        }
+
+        return ($stat['mode'] & 0002) !== 0;
     }
 
     protected function getCronFilePath(): string

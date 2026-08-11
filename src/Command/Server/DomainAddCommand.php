@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Shipard\Command\Server;
 
+use Shipard\Core\Server\DomainsFile;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
@@ -10,9 +11,6 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 class DomainAddCommand extends Command
 {
-	private const DATA_SOURCES_DIR = '/opt/shipard/data-sources';
-	private const DOMAINS_FILE     = '/etc/shipard/domains.json';
-
 	public function __construct(
 		private readonly ?string $domainsFile     = null,
 		private readonly ?string $dataSourcesDir  = null,
@@ -43,8 +41,8 @@ class DomainAddCommand extends Command
 			return Command::FAILURE;
 		}
 
-		$domainsFile    = $this->domainsFile    ?? self::DOMAINS_FILE;
-		$dataSourcesDir = $this->dataSourcesDir ?? self::DATA_SOURCES_DIR;
+		$domainsFile    = DomainsFile::effectiveDomainsFile($this->domainsFile);
+		$dataSourcesDir = DomainsFile::effectiveDataSourcesDir($this->dataSourcesDir);
 
 		// Validate DS exists
 		$dsDir = $dataSourcesDir . '/' . $dsId;
@@ -53,23 +51,29 @@ class DomainAddCommand extends Command
 			return Command::FAILURE;
 		}
 
-		// Load existing domains (create empty if missing)
-		$map = $this->loadDomainsFile($domainsFile);
+		// Selhání čtení/zápisu = FAILURE s hláškou — agent hosting-sync pak
+		// korektně confirmne failed, místo dřívějšího tichého SUCCESS
+		// s nezapsanou doménou (nález č. 3 z adopce).
+		try {
+			$map = $this->loadDomainsFile($domainsFile);
 
-		if (isset($map[$host])) {
-			// Idempotence (D3): stejný host → stejný DS je no-op, agent
-			// hosting-sync smí krok bezpečně opakovat. Jiný DS zůstává chybou.
-			if ($map[$host] === $dsId) {
-				$output->writeln("<info>Already mapped:</info> <comment>{$host}</comment> → <comment>{$dsId}</comment>");
-				return Command::SUCCESS;
+			if (isset($map[$host])) {
+				// Idempotence (D3): stejný host → stejný DS je no-op, agent
+				// hosting-sync smí krok bezpečně opakovat. Jiný DS zůstává chybou.
+				if ($map[$host] === $dsId) {
+					$output->writeln("<info>Already mapped:</info> <comment>{$host}</comment> → <comment>{$dsId}</comment>");
+					return Command::SUCCESS;
+				}
+				$output->writeln("<error>Host '{$host}' is already mapped to data source '{$map[$host]}'</error>");
+				return Command::FAILURE;
 			}
-			$output->writeln("<error>Host '{$host}' is already mapped to data source '{$map[$host]}'</error>");
+
+			$map[$host] = $dsId;
+			$this->saveDomainsFile($domainsFile, $map);
+		} catch (\RuntimeException $e) {
+			$output->writeln('<error>' . $e->getMessage() . '</error>');
 			return Command::FAILURE;
 		}
-
-		$map[$host] = $dsId;
-
-		$this->saveDomainsFile($domainsFile, $map);
 
 		$output->writeln("<info>Added:</info> <comment>{$host}</comment> → <comment>{$dsId}</comment>");
 		return Command::SUCCESS;
@@ -77,31 +81,11 @@ class DomainAddCommand extends Command
 
 	protected function loadDomainsFile(string $path): array
 	{
-		if (!file_exists($path)) {
-			return [];
-		}
-
-		$content = file_get_contents($path);
-		$data    = json_decode($content, true);
-
-		if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
-			throw new \RuntimeException("Invalid JSON in domains file: {$path}");
-		}
-
-		return $data;
+		return DomainsFile::load($path);
 	}
 
 	protected function saveDomainsFile(string $path, array $map): void
 	{
-		$dir = dirname($path);
-		if (!is_dir($dir)) {
-			mkdir($dir, 0755, true);
-		}
-
-		// Atomicky (tmp + rename) — soubor čte DataSourceResolver při každém
-		// HTTP requestu, roztržený zápis by položil živý provoz.
-		$tmp = $path . '.tmp';
-		file_put_contents($tmp, json_encode($map, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
-		rename($tmp, $path);
+		DomainsFile::save($path, $map);
 	}
 }

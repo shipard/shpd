@@ -91,7 +91,7 @@ try {
 	}
 
 	// ── 3. Resolve data source ────────────────────────────────────────────────
-	$resolver = new DataSourceResolver($serverConfig->getDomainsFile());
+	$resolver = new DataSourceResolver($serverConfig->getDomainsFile(), $serverConfig->getDataSourcesDir());
 	$resolved = $resolver->resolve($request->getHost(), $request->getPath());
 
 	// DS is now known — propagate to logger

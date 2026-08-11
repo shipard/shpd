@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Shipard\Command\Server;
 
+use Shipard\Core\Server\DomainsFile;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
@@ -10,8 +11,6 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 class DomainRemoveCommand extends Command
 {
-	private const DOMAINS_FILE = '/etc/shipard/domains.json';
-
 	public function __construct(
 		private readonly ?string $domainsFile = null,
 	) {
@@ -34,30 +33,31 @@ class DomainRemoveCommand extends Command
 			return Command::FAILURE;
 		}
 
-		$domainsFile = $this->domainsFile ?? self::DOMAINS_FILE;
+		$domainsFile = DomainsFile::effectiveDomainsFile($this->domainsFile);
 
 		if (!file_exists($domainsFile)) {
 			$output->writeln("<error>Host '{$host}' not found (domains file does not exist)</error>");
 			return Command::FAILURE;
 		}
 
-		$content = file_get_contents($domainsFile);
-		$map     = json_decode($content, true);
+		// Selhání čtení/zápisu = FAILURE s hláškou, nikdy tichý SUCCESS
+		// (stejné hardening jako domain-add, nález č. 3 z adopce).
+		try {
+			$map = DomainsFile::load($domainsFile);
 
-		if (json_last_error() !== JSON_ERROR_NONE || !is_array($map)) {
-			$output->writeln('<error>Invalid JSON in domains file</error>');
+			if (!isset($map[$host])) {
+				$output->writeln("<error>Host '{$host}' not found in domains file</error>");
+				return Command::FAILURE;
+			}
+
+			$dsId = $map[$host];
+			unset($map[$host]);
+
+			$this->saveDomainsFile($domainsFile, $map);
+		} catch (\RuntimeException $e) {
+			$output->writeln('<error>' . $e->getMessage() . '</error>');
 			return Command::FAILURE;
 		}
-
-		if (!isset($map[$host])) {
-			$output->writeln("<error>Host '{$host}' not found in domains file</error>");
-			return Command::FAILURE;
-		}
-
-		$dsId = $map[$host];
-		unset($map[$host]);
-
-		$this->saveDomainsFile($domainsFile, $map);
 
 		$output->writeln("<info>Removed:</info> <comment>{$host}</comment> (was → <comment>{$dsId}</comment>)");
 		return Command::SUCCESS;
@@ -65,10 +65,6 @@ class DomainRemoveCommand extends Command
 
 	protected function saveDomainsFile(string $path, array $map): void
 	{
-		// Atomicky (tmp + rename) — soubor čte DataSourceResolver při každém
-		// HTTP requestu, roztržený zápis by položil živý provoz.
-		$tmp = $path . '.tmp';
-		file_put_contents($tmp, json_encode($map, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
-		rename($tmp, $path);
+		DomainsFile::save($path, $map);
 	}
 }

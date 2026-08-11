@@ -91,6 +91,11 @@ class TestableDoctorCommand extends DoctorCommand
     {
         return $this->checkCron($output, $mode);
     }
+
+    public function checkHostingDomainsFilePublic(array $config, string $user, OutputInterface $output): void
+    {
+        $this->checkHostingDomainsFile($config, $user, $output);
+    }
 }
 
 class DoctorCommandTest extends TestCase
@@ -984,5 +989,73 @@ class DoctorCommandTest extends TestCase
         $display = $tester->getDisplay();
         $this->assertStringContainsString('Cron', $display);
         $this->assertStringContainsString('(cron not provisioned — skipped)', $display);
+    }
+
+    // ── Hosting domains file (nález č. 3 z adopce) ─────────────────────────
+
+    public function testDomainsFileCheckSkippedWithoutHostingSection(): void
+    {
+        $command = $this->makeTester($this->makeSpec());
+        $output = new \Symfony\Component\Console\Output\BufferedOutput();
+
+        $command->checkHostingDomainsFilePublic(['mode' => 'production'], $this->testUser, $output);
+
+        $this->assertStringContainsString('not hosting-managed — skipped', $output->fetch());
+    }
+
+    public function testDomainsFileWritableDirPasses(): void
+    {
+        $dir = $this->tempRoot . '/writable';
+        mkdir($dir, 0755, true);
+        $command = $this->makeTester($this->makeSpec());
+        $output = new \Symfony\Component\Console\Output\BufferedOutput();
+
+        $command->checkHostingDomainsFilePublic(
+            ['hosting' => ['portal_url' => 'x'], 'domainsFile' => $dir . '/domains.json'],
+            $this->testUser,
+            $output,
+        );
+
+        $this->assertStringContainsString('✓', $output->fetch());
+    }
+
+    public function testDomainsFileUnwritableDirWarnsWithOverrideHint(): void
+    {
+        if (posix_geteuid() === 0) {
+            $this->markTestSkipped('root writes anywhere');
+        }
+        // Atomický zápis (tmp + rename) potřebuje write na ADRESÁŘI — vzor
+        // z alfy: /etc/shipard root:shipard 750, agent běží jako shipard.
+        $dir = $this->tempRoot . '/readonly';
+        mkdir($dir, 0500, true);
+        $command = $this->makeTester($this->makeSpec());
+        $output = new \Symfony\Component\Console\Output\BufferedOutput();
+
+        $command->checkHostingDomainsFilePublic(
+            ['hosting' => ['portal_url' => 'x'], 'domainsFile' => $dir . '/domains.json'],
+            $this->testUser,
+            $output,
+        );
+
+        $display = $output->fetch();
+        $this->assertStringContainsString('⚠', $display);
+        $this->assertStringContainsString('not writable', $display);
+        $this->assertStringContainsString("domainsFile", $display);
+    }
+
+    public function testDomainsFileCheckAppearsInFullRun(): void
+    {
+        $this->writeServerJson('development');
+        $spec = $this->makeSpec();
+        $this->buildHealthyTree($spec);
+
+        $command = $this->makeTester($spec);
+        $command->stubPoolUser = $this->testUser;
+        $tester = new CommandTester($command);
+        $tester->execute([]);
+
+        $display = $tester->getDisplay();
+        $this->assertStringContainsString('Hosting domains file', $display);
+        $this->assertStringContainsString('not hosting-managed — skipped', $display);
     }
 }

@@ -11,6 +11,15 @@
 
 ## Kontext
 
+0. **Nález č. 3 (fáze 7 adopce):** `DomainAddCommand::saveDomainsFile`
+   nekontroluje výsledek `file_put_contents`/`rename`. Agent
+   `hosting-sync` běží z cronu jako `shipard`, `/etc/shipard` je
+   `root:shipard 750` → zápis selže PHP warningem, command vytiskne
+   „Added" a vrátí SUCCESS, confirm projde — a nový DS je nedostupný
+   (UNKNOWN_HOST). Zároveň platí dluh z hosting-03: command ignoruje
+   `domainsFile`/`dataSources` override ze server.json, který resolver
+   respektuje.
+
 1. CLI commandy zapisující do `secrets/` (`hosting-oidc-init`,
    `hosting-ai-gw-init`) vytvoří soubor pod uživatelem, který command
    spustil — typicky root. Runtime (PHP-FPM) běží jako vlastník DS
@@ -59,6 +68,24 @@ Nový check per DS: každý soubor v `secrets/` musí mít vlastníka
 shodného s DS root adresářem a mode ≤ 0600. Nález = warning s fix
 příkazem.
 
+### DomainAddCommand (nález č. 3)
+
+- `saveDomainsFile`: kontrolovat návratové hodnoty `mkdir`,
+  `file_put_contents` i `rename` — selhání = výjimka → Command::FAILURE
+  s jasnou hláškou (cesta + uživatel + hint na práva). Agent pak
+  korektně confirmne `failed` s touto zprávou.
+- Respektovat `domainsFile` a `dataSources` override ze
+  `ServerConfig` (stejně jako HTTP resolver) — konstanty jen jako
+  default. Dluh evidovaný od hosting-03.
+- Doctor check (server-level): soubor domén (efektivní cesta po
+  override) musí být zapisovatelný uživatelem cron agenta — jinak
+  warning s doporučením: pro agent-managed servery přesunout
+  domains.json přes override do app-writable cesty; `/etc/shipard`
+  zůstává root-managed.
+- `docs/operations/hosting-adopt-existing.md` + `production.md`:
+  poznámka o umístění domains.json na serverech s provisioning
+  agentem.
+
 ### Gateway error handling
 
 V `HostingAiGatewayController`: čtení org klíče do try/catch —
@@ -75,6 +102,13 @@ skončit viditelnou chybou v chatu (a error stavem zprávy, pokud
 existuje), ne tichým koncem bez assistant zprávy.
 
 ## Testy
+
+- Regresní test k `HostingDataSourceDocument::beforeSave` (oprava pasti
+  z fáze 7 adopce, už zapatchováno přímo): přechod existujícího řádku
+  do `request` s prázdným `ds_id` → `prepareRequest` proběhne;
+  adoptovaný řádek s vyplněným `ds_id` přepnutý do `request` →
+  generování ds_id/secretu se NEspustí (jen případná doplnění prázdných
+  URL dle stávající logiky prepareRequest).
 
 - SecretsFileWriter: odvození vlastníka, warning větev (non-root);
   chown větev aspoň smoke pod možnostmi test prostředí.
@@ -117,3 +151,26 @@ existuje), ne tichým koncem bez assistant zprávy.
   `STREAM_ERROR`. Chybová zpráva je transientní (nepersistuje se do
   konverzace — error kind zprávy neexistuje, vědomě mimo rozsah).
 - Ruční smoke chatu v prohlížeči proti rozbité gateway zbývá na alfě.
+
+## Poznámky k implementaci — nálezy z reálného testování (2026-08-11)
+
+- **Nález č. 3 (`DomainAddCommand`)**: zápis sjednocen do
+  `Core/Server/DomainsFile` (load/save s kontrolou každého kroku,
+  hláška s cestou + uživatelem + hintem na `domainsFile` override);
+  stejné hardening dostal i `domain-remove` (identická tichá díra)
+  a `domain-list` sdílí load. Overrides: nový
+  `ServerConfig::getDataSourcesDir()` (klíč `dataSources`),
+  `domain-*` commandy čtou efektivní cesty ze server.json
+  a `public/index.php` předává resolveru nově i `dataSources`
+  (dřív jen `domainsFile` — tvrzení „resolver respektuje" platilo
+  jen napůl).
+- Doctor: check `Hosting domains file` — jen pro servery se sekcí
+  `hosting`; ověřuje zápis na **adresář** mapy (atomický tmp + rename
+  zápis na souboru nestačí) výpočtem z owner/group/mode, warn-only.
+- Docs: poznámka o umístění domains.json na agent-managed serverech
+  ve `hosting-adopt-existing.md` (fáze 7) a `production.md` (§9).
+- **Regresní testy k fixu `6d7ea84`** (beforeSave přechod do request):
+  fix byl zapatchovaný bez testů a rozbil
+  `testUpdateDoesNotGenerate` (fixture bez `ds_id` v originalData
+  nově legitimně generuje) — test opraven (ds_id vyplněné) + dva nové
+  testy: prázdné ds_id generuje, adoptovaný řádek s ds_id nedotčen.

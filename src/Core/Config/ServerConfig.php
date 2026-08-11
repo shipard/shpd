@@ -83,6 +83,11 @@ class ServerConfig
         return $this->data['domainsFile'] ?? '/etc/shipard/domains.json';
     }
 
+    public function getDataSourcesDir(): string
+    {
+        return $this->data['dataSources'] ?? '/opt/shipard/data-sources';
+    }
+
     public function getLogFile(): string
     {
         return $this->data['logFile'] ?? '/opt/shipard/log/shipard.log';

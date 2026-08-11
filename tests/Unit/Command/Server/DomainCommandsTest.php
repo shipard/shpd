@@ -183,6 +183,44 @@ class DomainCommandsTest extends TestCase
 		$this->assertStringContainsString('does not exist', $tester->getDisplay());
 	}
 
+	public function testAddUnwritableDomainsDirFails(): void
+	{
+		// Nález č. 3 z adopce: dřív tichý SUCCESS „Added" i když zápis
+		// selhal a doména se nezapsala (agent z cronu do root-owned dir).
+		if (posix_geteuid() === 0) {
+			$this->markTestSkipped('root writes anywhere');
+		}
+		$this->createDs('a3f2-b8c1-d4e7-f9a0', 'Firma 1');
+		chmod($this->tempDir, 0500);
+
+		$tester = $this->addTester();
+		$code = $tester->execute(['--host' => 'firma1.shipard.cz', '--ds' => 'a3f2-b8c1-d4e7-f9a0']);
+		chmod($this->tempDir, 0755);
+
+		$this->assertSame(1, $code);
+		$this->assertStringContainsString('Failed to write', $tester->getDisplay());
+		$this->assertStringNotContainsString('Added', $tester->getDisplay());
+		$this->assertFileDoesNotExist($this->domainsFile);
+	}
+
+	public function testRemoveUnwritableDomainsDirFails(): void
+	{
+		if (posix_geteuid() === 0) {
+			$this->markTestSkipped('root writes anywhere');
+		}
+		file_put_contents($this->domainsFile, json_encode(['firma1.shipard.cz' => 'a3f2-b8c1-d4e7-f9a0']));
+		chmod($this->tempDir, 0500);
+
+		$tester = $this->removeTester();
+		$code = $tester->execute(['--host' => 'firma1.shipard.cz']);
+		chmod($this->tempDir, 0755);
+
+		$this->assertSame(1, $code);
+		$this->assertStringContainsString('Failed to write', $tester->getDisplay());
+		// Mapa zůstala nedotčená.
+		$this->assertSame(['firma1.shipard.cz' => 'a3f2-b8c1-d4e7-f9a0'], $this->loadDomains());
+	}
+
 	// ── domain-list ───────────────────────────────────────────────────────────
 
 	public function testListShowsNoFileMessage(): void

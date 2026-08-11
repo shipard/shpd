@@ -234,6 +234,17 @@ class HostingServerControllerTest extends TestCase
         $this->assertSame('request', $this->db->dataSources[$foreignId]['lifecycle']);
     }
 
+    public function testQueuePayloadCarriesLanguageAndCountry(): void
+    {
+        $this->addRequest(['server' => $this->serverId, 'language' => 'en', 'country' => 'sk']);
+
+        $resp = $this->controller->queue($this->req('GET', 'queue'), $this->db, $this->tables());
+
+        $item = $resp->getPayload()['data']['requests'][0];
+        $this->assertSame('en', $item['language']);
+        $this->assertSame('sk', $item['country']);
+    }
+
     public function testQueueLabelComesFromAppName(): void
     {
         $this->db->setSetting('app.name', 'Můj hosting');
@@ -270,6 +281,9 @@ class HostingServerControllerTest extends TestCase
         $this->assertArrayNotHasKey('oidc', $requests[0]);
         $this->assertArrayNotHasKey('owner', $requests[0]);
         $this->assertSame('bbbb-bbbb-bbbb-bbbb', $requests[0]['ds_id']);
+        // Peek má ukazovat, co reálně poletí — včetně vrstvy A.
+        $this->assertSame('cs', $requests[0]['language']);
+        $this->assertSame('cz', $requests[0]['country']);
         // Peek frontu nepřeklápí.
         $this->assertSame('request', $this->db->dataSources[$reqId]['lifecycle']);
         $this->assertNull($this->db->dataSources[$reqId]['claimed_at']);

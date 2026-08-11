@@ -110,6 +110,8 @@ class HostingSyncRunnerTest extends TestCase
             'name' => 'Nová firma',
             'install_module' => 'install.base',
             'web_id' => 'nova',
+            'language' => 'cs',
+            'country' => 'cz',
             'host' => 'nova.shpd.dev',
             'owner' => ['email' => 'owner@example.com', 'name' => 'Owner User', 'sub' => '7'],
             'oidc' => [
@@ -164,6 +166,10 @@ class HostingSyncRunnerTest extends TestCase
         $this->assertSame('/fake/bin/shpd-server', $dsCreate['argv'][0]);
         $this->assertContains('--ds-id', $dsCreate['argv']);
         $this->assertContains(self::NEW_DS, $dsCreate['argv']);
+        $this->assertContains('--language', $dsCreate['argv']);
+        $this->assertContains('cs', $dsCreate['argv']);
+        $this->assertContains('--country', $dsCreate['argv']);
+        $this->assertContains('cz', $dsCreate['argv']);
         $this->assertSame($this->dataSourcesDir . '/' . self::NEW_DS, $dsUpgrade['cwd']);
         $this->assertContains('nova.shpd.dev', $domainAdd['argv']);
         $this->assertContains('--if-not-exists', $userCreate['argv']);
@@ -286,6 +292,23 @@ class HostingSyncRunnerTest extends TestCase
         $confirm = $runner->httpCalls[2];
         $this->assertSame('failed', $confirm['body']['status']);
         $this->assertStringContainsString('Invalid ds_id', $confirm['body']['error']);
+    }
+
+    public function testMissingCountryInPayloadConfirmsFailedWithoutTouchingDisk(): void
+    {
+        // Hosting starší verze než DS server (bez vrstvy A v payloadu) musí
+        // skončit hlasitě — žádný ds-create s odhadnutou zemí.
+        $runner = $this->makeRunner();
+        $runner->httpResponses['queue'] = $this->queueResponse([
+            $this->queueItem(['country' => '']),
+        ]);
+
+        $this->assertFalse($runner->run());
+
+        $this->assertSame([], $runner->processCalls);
+        $confirm = $runner->httpCalls[2];
+        $this->assertSame('failed', $confirm['body']['status']);
+        $this->assertStringContainsString('missing language or country', $confirm['body']['error']);
     }
 
     public function testNonLocalhostHttpUrlIsRejected(): void

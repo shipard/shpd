@@ -1,6 +1,6 @@
 # ds-setup — Task 02: Přenos jazyka a země z hostingu
 
-**Stav:** naplánováno
+**Stav:** hotovo
 
 > PRD pro jednu Claude Code session. Design: `docs/ds-setup.md`,
 > rozhodnutí **D1, D7**, kontrakt **§5.6**. Navazuje bezprostředně na

@@ -8,7 +8,10 @@
     "description:en": "Central management of Shipard data sources — servers, data sources, user↔DS links, portal for users",
 
     "dependencies": [
-        "core.system"
+        "core.system",
+        // Config-only modul — cfgItems world.base.languages/countries pro
+        // sloupce language/country na hosting_core_data_sources (vrstva A).
+        "world.base"
     ],
 
     "tables": [

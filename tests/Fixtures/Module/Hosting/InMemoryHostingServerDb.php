@@ -65,6 +65,9 @@ class InMemoryHostingServerDb extends DataSourceConnection
             'owner' => null,
             'web_id' => null,
             'install_module' => null,
+            // Zrcadlí sloupcové defaulty po ALTER (ds-setup Task 02).
+            'language' => 'cs',
+            'country' => 'cz',
             'url_app' => '',
             'oidc_client_secret' => null,
             'oidc_redirect_uri' => null,

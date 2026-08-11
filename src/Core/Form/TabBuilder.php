@@ -230,6 +230,7 @@ final class TabBuilder
         bool $required = false,
         bool $readOnly = false,
         bool $hidden = false,
+        ?string $hint = null,
     ): static {
         $this->pushElement(new FormElement(
             type: 'select',
@@ -240,6 +241,7 @@ final class TabBuilder
             hidden: $hidden,
             triggers: $triggers,
             options: $options,
+            hint: $hint,
         ));
         return $this;
     }

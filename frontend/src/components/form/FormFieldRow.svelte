@@ -8,6 +8,9 @@
   </label>
   <div class="shpd-form-field-row__input">
     {@render children()}
+    {#if element.hint}
+      <p class="shpd-form-field-row__hint">{element.hint}</p>
+    {/if}
   </div>
 {/if}
 
@@ -36,5 +39,10 @@
   }
   .shpd-form-field-row__input {
     min-width: 0;
+  }
+  .shpd-form-field-row__hint {
+    margin: var(--shpd-space-xs) 0 0;
+    font-size: var(--shpd-font-size-sm);
+    color: var(--shpd-color-text-secondary);
   }
 </style>

@@ -59,6 +59,8 @@ class HostingDataSourceDocumentTest extends TestCase
             'web_id' => 'nova',
             'server' => 3,
             'install_module' => 'install.base',
+            'language' => 'cs',
+            'country' => 'cz',
             'lifecycle' => 'request',
             'owner' => 7,
         ], $overrides);
@@ -255,6 +257,8 @@ class HostingDataSourceDocumentTest extends TestCase
             'web_id' => '',
             'server' => null,
             'install_module' => '',
+            'language' => '',
+            'country' => '',
             'owner' => null,
         ]);
 
@@ -265,6 +269,8 @@ class HostingDataSourceDocumentTest extends TestCase
         $this->assertContains('web_id', $columns);
         $this->assertContains('server', $columns);
         $this->assertContains('install_module', $columns);
+        $this->assertContains('language', $columns);
+        $this->assertContains('country', $columns);
         $this->assertContains('owner', $columns);
     }
 

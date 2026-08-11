@@ -89,6 +89,34 @@
             "group": "identity"
         },
 
+        // --- vrstva A (ds-setup D1/D7) — defaulty jen kvůli ALTER TABLE na
+        // existujících řádcích, povinnost hlídá HostingDataSourceDocument ---
+
+        {
+            "id": "language",
+            "name": "Language",
+            "name:cs": "Jazyk",
+            "name:en": "Language",
+            "type": "enumString",
+            "length": 2,
+            "nullable": false,
+            "default": "cs",
+            "cfgItem": "world.base.languages",
+            "group": "identity"
+        },
+        {
+            "id": "country",
+            "name": "Country",
+            "name:cs": "Země",
+            "name:en": "Country",
+            "type": "enumString",
+            "length": 2,
+            "nullable": false,
+            "default": "cz",
+            "cfgItem": "world.base.countries",
+            "group": "identity"
+        },
+
         // --- placement ---
 
         {

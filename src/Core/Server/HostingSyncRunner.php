@@ -17,7 +17,8 @@ use Shipard\Core\Version;
  *
  *   1. Reconcile — POST inventura lokálních DS (id, name, modules) + verze.
  *   2. Queue — GET fronta požadavků; pro každý postupně (chyba jednoho
- *      nezastaví další): ds-create --ds-id → ds-upgrade → domain-add →
+ *      nezastaví další): ds-create --ds-id --language --country →
+ *      ds-upgrade → domain-add →
  *      merge auth.providers do main.json → user-create ownera
  *      s předpropojenou identitou → mail-router-setup --json (D4, jen
  *      s aktivním core.mail; token jde do confirm body jako mail_token)
@@ -247,6 +248,8 @@ class HostingSyncRunner
         $dsId = (string) ($item['ds_id'] ?? '');
         $name = (string) ($item['name'] ?? '');
         $module = (string) ($item['install_module'] ?? '');
+        $language = (string) ($item['language'] ?? '');
+        $country = (string) ($item['country'] ?? '');
         $host = (string) ($item['host'] ?? '');
         $owner = is_array($item['owner'] ?? null) ? $item['owner'] : [];
         $oidc = is_array($item['oidc'] ?? null) ? $item['oidc'] : [];
@@ -257,6 +260,11 @@ class HostingSyncRunner
         }
         if ($name === '' || $module === '') {
             return 'Queue payload is missing name or install_module';
+        }
+        // Vrstva A (ds-setup D1/D7) — hosting starší verze bez těchto polí
+        // musí skončit hlasitě, ne založením DS s odhadnutou zemí.
+        if ($language === '' || $country === '') {
+            return 'Queue payload is missing language or country';
         }
         if (!preg_match('/^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/i', $host)) {
             return "Invalid host in queue payload: '{$host}'";
@@ -280,7 +288,14 @@ class HostingSyncRunner
         if (!is_dir($dsDir)) {
             $error = $this->runStep(
                 'ds-create',
-                [$this->shpdServerPath, 'ds-create', '--ds-id', $dsId, '--name', $name, '--module', $module],
+                [
+                    $this->shpdServerPath, 'ds-create',
+                    '--ds-id', $dsId,
+                    '--name', $name,
+                    '--module', $module,
+                    '--language', $language,
+                    '--country', $country,
+                ],
                 null,
             );
             if ($error !== null) {

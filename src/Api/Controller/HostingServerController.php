@@ -184,6 +184,8 @@ class HostingServerController
                     'name' => (string) $row['name'],
                     'install_module' => (string) ($row['install_module'] ?? ''),
                     'web_id' => (string) ($row['web_id'] ?? ''),
+                    'language' => (string) ($row['language'] ?? ''),
+                    'country' => (string) ($row['country'] ?? ''),
                     'lifecycle' => (string) $row['lifecycle'],
                 ];
                 continue;
@@ -527,6 +529,8 @@ class HostingServerController
             'name' => (string) $row['name'],
             'install_module' => (string) ($row['install_module'] ?? ''),
             'web_id' => (string) ($row['web_id'] ?? ''),
+            'language' => (string) ($row['language'] ?? ''),
+            'country' => (string) ($row['country'] ?? ''),
             'host' => $host,
             'owner' => [
                 'email' => $email,

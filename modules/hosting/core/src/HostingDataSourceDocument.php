@@ -48,7 +48,13 @@ class HostingDataSourceDocument extends Document
             return $result;
         }
 
-        foreach (['web_id' => 'Web ID', 'install_module' => 'Install modul'] as $column => $label) {
+        $required = [
+            'web_id'         => 'Web ID',
+            'install_module' => 'Install modul',
+            'language'       => 'Jazyk',
+            'country'        => 'Země',
+        ];
+        foreach ($required as $column => $label) {
             if (trim((string) ($data[$column] ?? '')) === '') {
                 $result->addError($column, "{$label} je pro požadavek povinný.", 'REQUIRED');
             }

@@ -209,13 +209,16 @@ Jeden běh (cron slot `two-minutes`; `--dry-run` = náhled fronty přes
 2. **Provisioning** — `GET /_hosting/server/queue` → požadavky serveru
    (`lifecycle` request/creating; servírování = překlopení na `creating`
    + `claimed_at`; `can_provision = false` → prázdná fronta). Payload
-   per item: `{request_id, ds_id, name, install_module, web_id, host,
-   owner: {email, name, sub}, oidc: {issuer, client_id, client_secret,
-   label}}` — `sub` = (string) id vlastníka (přesně co OP dává do
-   id_tokenu), issuer ze settingu (D12), secret dešifrovaný (jediné
-   místo, kde opouští hosting — https, jednorázově). Pro každý požadavek
-   (chyba jednoho nezastaví další): `ds-create --ds-id` (existující
-   adresář = skip) → `ds-upgrade` → `domain-add` → merge položky
+   per item: `{request_id, ds_id, name, install_module, web_id,
+   language, country, host, owner: {email, name, sub},
+   oidc: {issuer, client_id, client_secret, label}}` — `language`
+   a `country` = vrstva A z admin formuláře (ds-setup D1/D7; chybějící
+   hodnota = chyba požadavku, agent nedoplňuje default), `sub` =
+   (string) id vlastníka (přesně co OP dává do id_tokenu), issuer ze
+   settingu (D12), secret dešifrovaný (jediné místo, kde opouští
+   hosting — https, jednorázově). Pro každý požadavek (chyba jednoho
+   nezastaví další): `ds-create --ds-id --language --country`
+   (existující adresář = skip) → `ds-upgrade` → `domain-add` → merge položky
    `{id: "shipard-id", label, issuer, clientId, clientSecret,
    autoLinkEmail: false}` do `auth.providers` (atomicky, 0600; U2 —
    identita se předpropojuje) → `user-create --admin --if-not-exists

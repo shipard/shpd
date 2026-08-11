@@ -332,7 +332,8 @@ Jeden běh:
    + verze shpd; hosting aktualizuje `last_seen`/`last_version`
    a rozdíly loguje.
 2. **Fronta** — GET požadavky (`lifecycle` request/creating) → pro každý:
-   `ds-create --ds-id` (existující adresář = skip) → `ds-upgrade` →
+   `ds-create --ds-id --language --country` (existující adresář = skip,
+   chybějící jazyk/země v payloadu = chyba požadavku) → `ds-upgrade` →
    `domain-add` → merge `auth.providers` do `main.json` (provider
    `shipard-id`, `autoLinkEmail: false`, atomicky, 0600) → `user-create`
    vlastníka (`--admin --if-not-exists` + předpropojená identita) →
@@ -345,11 +346,6 @@ Jeden běh:
 
 HTTPS povinné (`http` jen pro localhost dev); `--dry-run` frontu
 nepřeklápí, payload neobsahuje client_secret a stats krok neběží.
-
-> ⚠️ **Dočasně rozbité (do ds-setup Task 02):** agent zatím nepředává
-> nové povinné přepínače `--language`/`--country`, takže krok `ds-create`
-> selže a provisioning z hostingu neprojde. Task 02 doplní oba parametry
-> do queue payloadu a jejich předání agentem; tuto poznámku pak odstraní.
 
 | Opce | Význam |
 |------|--------|

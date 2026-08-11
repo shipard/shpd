@@ -150,6 +150,14 @@ class DataSourcesViewer extends TableViewer
         if (!empty($record['web_id'])) {
             $identity[] = ['label' => 'Web ID', 'value' => (string) $record['web_id']];
         }
+        $identity[] = [
+            'label' => $isCs ? 'Jazyk' : 'Language',
+            'value' => $this->resolveCfgLabel('world.base.languages', (string) ($record['language'] ?? '')),
+        ];
+        $identity[] = [
+            'label' => $isCs ? 'Země' : 'Country',
+            'value' => $this->resolveCfgLabel('world.base.countries', (string) ($record['country'] ?? '')),
+        ];
 
         $placement = [
             ['label' => $isCs ? 'URL aplikace' : 'Application URL', 'value' => (string) $record['url_app']],
@@ -237,7 +245,13 @@ class DataSourcesViewer extends TableViewer
 
     private function resolveLifecycleLabel(string $key): string
     {
-        $cfg = $this->config?->cfgItem('hosting.core.dsLifecycle');
+        return $this->resolveCfgLabel('hosting.core.dsLifecycle', $key);
+    }
+
+    /** Lokalizovaný název položky cfgItemu; fallback na samotný kód. */
+    private function resolveCfgLabel(string $cfgItemId, string $key): string
+    {
+        $cfg = $this->config?->cfgItem($cfgItemId);
         if (is_array($cfg) && isset($cfg[$key]['name'])) {
             return (string) $cfg[$key]['name'];
         }

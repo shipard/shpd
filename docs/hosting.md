@@ -62,6 +62,12 @@ netdata), evidence HW/LXC v plné šíři, automatizace TLS certifikátů
 a web-proxy konfigurace, pozastavení/mazání DS lifecycle, RBAC jemnější
 než `is_admin`.
 
+**Podoblast:** nastavení čerstvě založeného DS (vlastní Osoba, registrace
+DPH, bankovní spojení, účtová osnova) řeší [`ds-setup.md`](ds-setup.md).
+Hosting do něj přispívá výhradně přenosem jazyka a země z admin
+formuláře do `ds-create` (tam D7); vlastní nastavení probíhá až
+v cílovém DS.
+
 ---
 
 ## 1. Motivace

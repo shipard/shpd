@@ -37,6 +37,11 @@ Od Fáze 3 implementuje rozhraní **`KeyValueStore`** (`get`/`getMany`/`set`/
 si vybírá store podle `scope` stránky a nezávisí na konkrétní třídě. Viz
 sekci 8.
 
+CLI cesta ke klíčům: **`bin/shpd-ds ds-setting get|set|list`**
+([docs/cli.md](cli.md)) — drží whitelist deklarovaných klíčů (settingsPages
+scope `ds` + parametry vrstvy C z [docs/ds-setup.md](ds-setup.md) §5.2)
+a u parametrů vrstvy C validuje hodnoty při zápisu.
+
 ### Pravidla ukládání (`savePage`)
 
 - Ukládají se **jen textová pole definovaná ve stránce** (whitelist);

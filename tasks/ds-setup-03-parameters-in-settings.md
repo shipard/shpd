@@ -1,6 +1,6 @@
 # ds-setup — Task 03: Parametry osnovy a fiskálního roku do settings
 
-**Stav:** naplánováno
+**Stav:** hotovo
 
 > PRD pro jednu Claude Code session. Design: `docs/ds-setup.md`,
 > rozhodnutí **D2, D6, D9**, kontrakt **§5.2**. Tenhle task zavádí

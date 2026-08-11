@@ -17,9 +17,17 @@ use Shipard\Core\Database\DataSourceConnection;
  */
 class FiscalYearsProvisioner
 {
+    /**
+     * $yearStartMonth = rozhodnutí per DS (settings klíč
+     * `economy.fiscalYearStartMonth`, docs/ds-setup.md §5.2). Null padá na
+     * cfgItem — vzniklo kvůli volajícím, kteří rozhodnutí předávají přímo
+     * (ds-upgrade ze settings, průvodce ve Fázi 4) a cfgItem k tomu
+     * použít nemohou.
+     */
     public function __construct(
         private readonly DataSourceConnection $db,
         private readonly ConfigRuntime $config,
+        private readonly ?int $yearStartMonth = null,
     ) {}
 
     /**
@@ -29,10 +37,13 @@ class FiscalYearsProvisioner
     {
         $referenceDate ??= new \DateTimeImmutable('today');
 
-        $cfg = $this->config->cfgItem('economy.codebooks.fiscalConfig');
-        $yearStartMonth = is_array($cfg) && isset($cfg['yearStartMonth'])
-            ? (int) $cfg['yearStartMonth']
-            : 1;
+        $yearStartMonth = $this->yearStartMonth;
+        if ($yearStartMonth === null) {
+            $cfg = $this->config->cfgItem('economy.codebooks.fiscalConfig');
+            $yearStartMonth = is_array($cfg) && isset($cfg['yearStartMonth'])
+                ? (int) $cfg['yearStartMonth']
+                : 1;
+        }
         if ($yearStartMonth < 1 || $yearStartMonth > 12) {
             $yearStartMonth = 1;
         }

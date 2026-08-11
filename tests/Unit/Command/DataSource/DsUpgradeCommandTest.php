@@ -147,6 +147,40 @@ class DsUpgradeCommandTest extends TestCase
         }
     }
 
+    /**
+     * Minimal economy.accounting fixture module (empty tables) — enough to
+     * pass the module guard in provisionAccountChart() and to gate the
+     * [TODO] block of undecided layer C parameters.
+     */
+    private function createEconomyAccountingFixtureModule(): void
+    {
+        $moduleDir = $this->modulesPath . '/economy/accounting';
+        mkdir($moduleDir, 0755, true);
+        file_put_contents($moduleDir . '/module.jsonc', json_encode([
+            'id'           => 'economy.accounting',
+            'name'         => 'economy.accounting',
+            'dependencies' => [],
+            'tables'       => [],
+            'extensions'   => [],
+            'config'       => [],
+        ]));
+    }
+
+    private function createProvisioningConfig(array $modules): DataSourceConfig&MockObject
+    {
+        $dsConfig = $this->createMock(DataSourceConfig::class);
+        $dsConfig->method('getModules')->willReturn($modules);
+        $dsConfig->method('getName')->willReturn('Test DS');
+        $dsConfig->method('getId')->willReturn('test-0001-test-0001');
+        $dsConfig->method('getDatabaseName')->willReturn('test_db');
+        $dsConfig->method('getDatabaseUser')->willReturn('shpd_test0001');
+        $dsConfig->method('getDatabasePassword')->willReturn('secret');
+        $dsConfig->method('getDataSourceDir')->willReturn($this->dsDir);
+        $dsConfig->method('shouldSkipProvisioning')->willReturn(false);
+
+        return $dsConfig;
+    }
+
     private function createSkipProvisioningConfig(array $modules): DataSourceConfig&MockObject
     {
         $dsConfig = $this->createMock(DataSourceConfig::class);
@@ -476,6 +510,52 @@ class DsUpgradeCommandTest extends TestCase
 
         $this->assertSame(Command::SUCCESS, $exitCode);
         $this->assertStringNotContainsString('_ai_analyzer', $tester->getDisplay());
+    }
+
+    public function testUndecidedAccountChartSkipsSeedAndReportsTodo(): void
+    {
+        $this->createEconomyAccountingFixtureModule();
+        $this->dsConfig = $this->createProvisioningConfig(['test.unit', 'economy.accounting']);
+
+        // fetchSingle → null (mock default) = žádný settings klíč = nerozhodnuto.
+        $this->dsConnection->method('getTableColumns')->willReturn([]);
+        $this->dsConnection->method('getTableIndexes')->willReturn([]);
+        $this->dsConnection->method('executeSQL');
+
+        $tester = $this->createCommandTester();
+        $exitCode = $tester->execute([]);
+
+        $this->assertSame(Command::SUCCESS, $exitCode);
+        $display = $tester->getDisplay();
+        $this->assertStringContainsString('economy.accountChart není rozhodnuto', $display);
+        $this->assertStringContainsString('[TODO] Nerozhodnuté parametry', $display);
+        $this->assertStringContainsString('ds-setting set economy.accountChart default', $display);
+        // economy.codebooks není aktivní — jeho parametr do [TODO] nepatří.
+        $this->assertStringNotContainsString('economy.fiscalYearStartMonth', $display);
+    }
+
+    public function testDecidedAccountChartDoesNotReportTodo(): void
+    {
+        $this->createEconomyAccountingFixtureModule();
+        $this->dsConfig = $this->createProvisioningConfig(['test.unit', 'economy.accounting']);
+
+        $this->dsConnection->method('getTableColumns')->willReturn([]);
+        $this->dsConnection->method('getTableIndexes')->willReturn([]);
+        $this->dsConnection->method('executeSQL');
+        $this->dsConnection->method('fetchSingle')->willReturnCallback(
+            fn(mixed ...$args): mixed => ($args[1] ?? null) === 'economy.accountChart' ? '"default"' : null,
+        );
+
+        $tester = $this->createCommandTester();
+        $exitCode = $tester->execute([]);
+
+        $this->assertSame(Command::SUCCESS, $exitCode);
+        $display = $tester->getDisplay();
+        $this->assertStringNotContainsString('není rozhodnuto', $display);
+        $this->assertStringNotContainsString('[TODO]', $display);
+        // Seed soubor ve fixture modulu není — provisioner to hlásí, ale
+        // rozhodnutý klíč se jako nerozhodnutý objevit nesmí.
+        $this->assertStringContainsString('Account chart seed file not found', $display);
     }
 
     private function rmdirRecursive(string $dir): void

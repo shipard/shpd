@@ -138,18 +138,6 @@ class DataSourceConfig
     }
 
     /**
-     * Standardní účtová osnova k naseedování při ds-upgrade:
-     * 'default' (firemní) | 'npo' (neziskové organizace) | 'none' (seed se přeskočí,
-     * osnova přijde importem nebo se nepoužívá).
-     * Volba je jednorázová při zakládání DS.
-     * Optional; defaults to 'default' when missing from main.json.
-     */
-    public function getAccountChart(): string
-    {
-        return $this->data['accountChart'] ?? 'default';
-    }
-
-    /**
      * Per-DS auth policy from the optional `auth` key in main.json — local login
      * on/off + OIDC providers. Missing key = today's behaviour (local only).
      * Validated lazily on first access (fail-fast with a clear message), NOT in

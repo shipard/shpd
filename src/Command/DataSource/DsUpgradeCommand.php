@@ -19,6 +19,8 @@ use Shipard\Core\Module\ModuleLoader;
 use Shipard\Core\Module\ModulePathResolver;
 use Shipard\Core\Module\ModuleResolver;
 use Shipard\Core\Security\DsSecretCipher;
+use Shipard\Core\Settings\LayerCParameters;
+use Shipard\Core\Settings\SettingsStore;
 use Shipard\Core\Utils\JsoncParser;
 use Shipard\Core\Version;
 use Shipard\Module\Core\Mail\AIAnalyzerProvisioner;
@@ -277,6 +279,10 @@ class DsUpgradeCommand extends Command
         // keepOnReset, takže po resetu není potřeba žádná ruční akce.
         $this->provisionAiAnalyzer($resolvedModules, $dsConnection, $output);
 
+        // Parametry vrstvy C (docs/ds-setup.md §5.2) — jedna instance kvůli
+        // request-level cache; provisionery jen čtou, žádný set se tu neděje.
+        $settings = new SettingsStore($dsConnection);
+
         if ($dsConfig->shouldSkipProvisioning()) {
             $output->writeln('');
             $output->writeln("<comment>[SKIP] Provisioning disabled via config (skipProvisioning=true).</comment>");
@@ -287,9 +293,9 @@ class DsUpgradeCommand extends Command
         } else {
             $this->provisionUnits($resolvedModules, $dsConnection, $output);
             $this->provisionItemKinds($resolvedModules, $dsConnection, $output);
-            $this->provisionAccountChart($resolvedModules, $dsConfig, $dsConnection, $output);
+            $this->provisionAccountChart($resolvedModules, $settings, $dsConnection, $output);
             $this->provisionAccbalBalances($resolvedModules, $dsConnection, $output);
-            $this->provisionFiscalYears($resolvedModules, $dsDir, $dsConnection, $output);
+            $this->provisionFiscalYears($resolvedModules, $dsDir, $settings, $dsConnection, $output);
             $this->provisionVatPeriods($resolvedModules, $dsConnection, $output);
             $this->provisionDocCoreNumberSeries($resolvedModules, $dsDir, $dsConnection, $output);
             $this->provisionMailRouter($resolvedModules, $dsConfig, $dsConnection, $output);
@@ -306,6 +312,29 @@ class DsUpgradeCommand extends Command
             $output->writeln('<comment>  [WARN] main.json neobsahuje `country` — '
                 . 'používá se přechodný fallback \'cz\'. Doplň hodnotu ručně nebo '
                 . 'reimportem (docs/ds-setup.md D9).</comment>');
+        }
+
+        // Nerozhodnuté parametry vrstvy C — [TODO], ne [WARN]: není to
+        // porucha, je to nedokončené nastavení (D2/D6). Na nastaveném DS ticho.
+        $undecided = [];
+        foreach (LayerCParameters::SPECS as $paramKey => $spec) {
+            if (!$this->isModuleActive($resolvedModules, $spec['module'])) {
+                continue;
+            }
+            if ($settings->get($paramKey) === null) {
+                $undecided[$paramKey] = $spec['example'];
+            }
+        }
+        if ($undecided !== []) {
+            $output->writeln('<comment>  [TODO] Nerozhodnuté parametry (docs/ds-setup.md §5.2):</comment>');
+            foreach ($undecided as $paramKey => $example) {
+                $output->writeln(sprintf(
+                    '<comment>         %-29s bin/shpd-ds ds-setting set %s %s</comment>',
+                    $paramKey,
+                    $paramKey,
+                    $example,
+                ));
+            }
         }
 
         return Command::SUCCESS;
@@ -518,7 +547,7 @@ class DsUpgradeCommand extends Command
      */
     private function provisionAccountChart(
         array $resolvedModules,
-        DataSourceConfig $dsConfig,
+        SettingsStore $settings,
         DataSourceConnection $dsConnection,
         OutputInterface $output,
     ): void {
@@ -530,7 +559,15 @@ class DsUpgradeCommand extends Command
             return;
         }
 
-        $variant = $dsConfig->getAccountChart();
+        // Absence klíče = nerozhodnuto (D2) — bez rozhodnutí se neseeduje (D6).
+        // Vypisuje se vždy (ne jen verbose): na čerstvém DS to chce vidět každý.
+        $variant = $settings->get('economy.accountChart');
+        if ($variant === null) {
+            $output->writeln('  <comment>[SKIP] economy.accountChart není rozhodnuto '
+                . '— osnova se neseeduje (docs/ds-setup.md D6).</comment>');
+            return;
+        }
+
         if ($variant === 'none') {
             $output->writeln(
                 "  <comment>[SKIP] accountChart='none' — standardní osnova se neseeduje.</comment>",
@@ -545,8 +582,10 @@ class DsUpgradeCommand extends Command
             default   => null,
         };
         if ($file === null) {
-            $output->writeln("  <comment>[WARN] Unknown accountChart variant '{$variant}' — falling back to 'default'.</comment>");
-            $file = 'accountChartDefault.jsonc';
+            // Hodnotu validuje ds-setting při zápisu — neznámá varianta je
+            // porucha, ne stav k tichému dorovnání na default.
+            $output->writeln("  <comment>[WARN] Unknown economy.accountChart variant '{$variant}' — nothing seeded.</comment>");
+            return;
         }
 
         $seedFile = $this->getModulePathResolver()->getPath('economy.accounting') . '/config/' . $file;
@@ -623,6 +662,7 @@ class DsUpgradeCommand extends Command
     private function provisionFiscalYears(
         array $resolvedModules,
         string $dsDir,
+        SettingsStore $settings,
         DataSourceConnection $dsConnection,
         OutputInterface $output,
     ): void {
@@ -640,8 +680,17 @@ class DsUpgradeCommand extends Command
             return;
         }
 
+        // Absence klíče = nerozhodnuto (D2) — fiskální roky se odkládají za
+        // rozhodnutí o prvním měsíci (D6). Vypisuje se vždy (ne jen verbose).
+        $startMonth = $settings->get('economy.fiscalYearStartMonth');
+        if ($startMonth === null) {
+            $output->writeln('  <comment>[SKIP] economy.fiscalYearStartMonth není rozhodnuto '
+                . '— fiskální roky se neseedují (docs/ds-setup.md D6).</comment>');
+            return;
+        }
+
         $config = ConfigRuntime::load($dsDir, 'cs');
-        $provisioner = new FiscalYearsProvisioner($dsConnection, $config);
+        $provisioner = new FiscalYearsProvisioner($dsConnection, $config, (int) $startMonth);
         $result = $provisioner->provision();
 
         $this->logProvisioningResult($output, 'fiscal years', $result['fiscalYears']);

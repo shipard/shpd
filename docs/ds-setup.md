@@ -14,7 +14,12 @@ dashboardu.
 > **Stav:** **Fáze 0 (diskuse) hotová, rozhodnutí D1–D9 schválená
 > (2026-08-11). Fáze 1 (vrstva A) hotová — Task 01 (`getCountry()`,
 > `ds-create --language --country`, dev dashboard, `[WARN]` v `ds-upgrade`)
-> + Task 02 (sloupce na hostingu, formulář, queue payload, agent).**
+> + Task 02 (sloupce na hostingu, formulář, queue payload, agent).
+> Z Fáze 2 hotový Task 03 — klíče `economy.accountChart`
+> a `economy.fiscalYearStartMonth` (`LayerCParameters`), CLI `ds-setting`,
+> odložený provisioning osnovy a fiskálních roků, `[TODO]` výpis
+> v `ds-upgrade`, konec `getAccountChart()`. Zbývá `economy.homeCurrency`
+> (Task 04) a `economy.vatPayer` (vat-payer-01).**
 > Fázování viz §8, otevřené body §10.
 
 ---

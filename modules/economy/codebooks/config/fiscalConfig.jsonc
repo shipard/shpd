@@ -1,6 +1,8 @@
 {
     // První měsíc fiskálního roku (1 = leden, 7 = červenec, …).
-    // Pro CZ/SK je výchozí leden. Per-DS override přijde v budoucnu
-    // (mechanismus zatím není implementován).
+    // Pro CZ/SK je výchozí leden. Per-DS rozhodnutí nese settings klíč
+    // `economy.fiscalYearStartMonth` (bin/shpd-ds ds-setting, docs/ds-setup.md
+    // §5.2) — tenhle cfgItem je jen fallback pro volání FiscalYearsProvisioner
+    // bez explicitní hodnoty.
     "yearStartMonth": 1
 }

@@ -477,6 +477,38 @@ s ostrými daty — `shpd-server doctor` na něj na produkci upozorňuje. Žádn
 | `--dry-run` | vypsat `[keep]`/`[drop]` a počty, nic neměnit |
 | `--yes`, `-y` | přeskočit potvrzovací dotaz |
 
+#### `ds-setting`
+
+```bash
+cd /opt/shipard/data-sources/<id>
+shpd-ds ds-setting list                                        # všechny uložené klíče
+shpd-ds ds-setting get economy.accountChart                    # hodnota, exit 1 když klíč není
+sudo shpd-ds ds-setting set economy.accountChart default       # nastavení
+sudo shpd-ds ds-setting set economy.accountChart --unset       # smazání klíče
+```
+
+CLI přístup ke klíčům `core_system_settings` (scope ds, přes
+`SettingsStore` — viz [docs/app-settings.md](app-settings.md)). Do
+příchodu průvodce nastavením (ds-setup Fáze 4) je to **jediná cesta**
+k parametrům vrstvy C ([docs/ds-setup.md](ds-setup.md) §5.2):
+
+| Klíč | Hodnoty | Význam |
+|------|---------|--------|
+| `economy.accountChart` | `default` \| `npo` \| `none` | varianta účtové osnovy k naseedování |
+| `economy.fiscalYearStartMonth` | 1–12 | první měsíc fiskálního roku (1 = leden) |
+
+**Absence klíče = nerozhodnuto** (D2): `ds-upgrade` bez rozhodnutí osnovu
+ani fiskální roky neseeduje a na konci vypíše `[TODO]` blok s hotovými
+příkazy k nastavení. `set($key, --unset)` klíč maže — vrací parametr do
+nerozhodnutého stavu (existující naseedované řádky se **nemažou**,
+provisionery neuklízí).
+
+`set` drží **whitelist**: parametry vrstvy C + klíče deklarované
+v `settingsPages` aktivních modulů (scope `ds`). Neznámý klíč → chyba
+s výpisem povolených; hodnoty parametrů vrstvy C se validují při zápisu.
+Klíče se strukturovanými hodnotami spravovanými aplikací (typy `image`,
+`avatar`, `theme` — branding, vzhled) přes CLI nastavit nejdou.
+
 ### Users
 
 #### `user-create`
@@ -1044,6 +1076,21 @@ sudo shpd-server ds-create --name "Moje firma s.r.o." --language cs --country cz
 cd /opt/shipard/data-sources/<id>
 sudo shpd-ds ds-upgrade
 sudo shpd-ds user-create --login=admin --password=... --name="Admin"
+```
+
+### 2b. Nastavení čerstvého DS z konzole
+
+Čerstvý DS nemá účtovou osnovu ani fiskální roky — parametry vrstvy C
+jsou nerozhodnuté a `ds-upgrade` je na konci hlásí jako `[TODO]`
+s hotovými příkazy. Do příchodu průvodce (ds-setup Fáze 4) se nastavují
+z konzole:
+
+```bash
+cd /opt/shipard/data-sources/<id>
+sudo shpd-ds ds-upgrade                                       # → [TODO] blok
+sudo shpd-ds ds-setting set economy.accountChart default      # nebo npo / none
+sudo shpd-ds ds-setting set economy.fiscalYearStartMonth 1
+sudo shpd-ds ds-upgrade                                       # naseeduje osnovu a roky
 ```
 
 ### 3. Upgrade všech DS najednou

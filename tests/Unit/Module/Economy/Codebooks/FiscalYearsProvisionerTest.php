@@ -197,6 +197,43 @@ class FiscalYearsProvisionerTest extends TestCase
         $this->assertCount(0, $store->tables['economy_codebooks_fiscal_months']);
     }
 
+    public function testExplicitYearStartMonthWinsOverCfgItem(): void
+    {
+        $store = $this->recordingDb();
+        $config = $this->buildConfig(1); // cfgItem říká leden
+
+        $provisioner = new FiscalYearsProvisioner($store->db, $config, 7);
+        $provisioner->provision(new \DateTimeImmutable('2026-04-15'));
+
+        $year = $store->tables['economy_codebooks_fiscal_years'][0];
+        $this->assertSame('2025-07-01', $year['date_begin']);
+        $this->assertSame('2025-2026', $year['name']);
+    }
+
+    public function testNullYearStartMonthFallsBackToCfgItem(): void
+    {
+        $store = $this->recordingDb();
+        $config = $this->buildConfig(7);
+
+        $provisioner = new FiscalYearsProvisioner($store->db, $config, null);
+        $provisioner->provision(new \DateTimeImmutable('2026-04-15'));
+
+        $year = $store->tables['economy_codebooks_fiscal_years'][0];
+        $this->assertSame('2025-07-01', $year['date_begin']);
+    }
+
+    public function testExplicitYearStartMonthOutOfRangeClampsToJanuary(): void
+    {
+        $store = $this->recordingDb();
+        $config = $this->buildConfig(7);
+
+        $provisioner = new FiscalYearsProvisioner($store->db, $config, 0);
+        $provisioner->provision(new \DateTimeImmutable('2026-04-15'));
+
+        $year = $store->tables['economy_codebooks_fiscal_years'][0];
+        $this->assertSame('2026-01-01', $year['date_begin']);
+    }
+
     public function testGeneratedMonthsHaveCorrectShape(): void
     {
         $store = $this->recordingDb();

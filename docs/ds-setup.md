@@ -232,6 +232,14 @@ stavu“ je součást existujícího API.
 `app-settings.md` výslovně volatelný z HTTP i CLI — tentýž klíč tedy čte
 průvodce ve frontendu i provisioner v `ds-upgrade`. Žádná nová infrastruktura.
 
+**CLI přístup ke klíčům.** `SettingsStore` dnes není použitý z žádného
+commandu. Do doby, než existuje průvodce (Fáze 4), by tedy nebylo jak
+parametr rozhodnout — a každý DS založený v tom okně by zůstal bez
+osnovy. Proto `ds-setting get|set|list` (Fáze 2) a výpis nerozhodnutých
+parametrů na konci `ds-upgrade` včetně příkazů k jejich nastavení —
+`ds-upgrade` tak slouží jako provizorní checklist a zároveň si na něm
+ověříme obsah budoucích setup checků.
+
 **Call sites k přepojení:** `LedgerGenerator` čte dnes
 `$this->dsConfig?->getDefaultCurrency()`; `DocsHeadsFormBase` a
 `ReceivedInvoiceForm` mají zadrátovaný fallback `'czk'`. Po Fázi 2 čtou
@@ -367,7 +375,7 @@ DPH nevyžaduje. Chybí tedy jen:
    `"default": 1` na úrovni definice tabulky — odvozený default patří do
    formuláře, ne do schématu.
 3. Skrytí DPH z UI u neplátce (sloupce vieweru, sekce formuláře, sestavy).
-4. `VatPeriodsProvisioner` u neplátce období negeneruje.
+4. Provisioning období DPH **v okamžiku vzniku registrace**. `VatPeriodsProvisioner` iteruje registrace, takže na DS bez registrace už dnes nic nevyrobí — „u neplátce negenerovat“ tedy není co implementovat. Chybí opačný směr: dokud se období generují jen při `ds-upgrade`, má uživatel po založení registrace registraci a nulová období. Patří do `vat-payer-01`, průvodce pak volá hotovou věc.
 
 **Proč varianta 1 a ne `neplátce` jako `taxpayer_kind`:** registrace je
 časově omezený fakt (`valid_from`/`valid_to`), takže **absence v intervalu je

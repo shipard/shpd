@@ -87,7 +87,12 @@ class HostingDataSourceDocument extends Document
         $now = date('Y-m-d H:i:s');
         $isNew = empty($data['id']);
 
-        if ($isNew && (string) ($data['lifecycle'] ?? '') === 'request') {
+        // Příprava požadavku: nový řádek ve stavu request, NEBO přechod
+        // existujícího řádku do request s prázdným ds_id (= řádek založený
+        // omylem v jiném stavu; adoptované DS mají ds_id vždy vyplněné).
+        $wantsRequest = (string) ($data['lifecycle'] ?? '') === 'request';
+        $dsIdEmpty = (string) ($data['ds_id'] ?? ($originalData['ds_id'] ?? '')) === '';
+        if ($wantsRequest && ($isNew || $dsIdEmpty)) {
             $this->prepareRequest($data);
         }
 

@@ -137,13 +137,52 @@ class HostingDataSourceDocumentTest extends TestCase
 
     public function testUpdateDoesNotGenerate(): void
     {
+        // Řádek s vyplněným ds_id (normální stav — adoptované i vzniklé
+        // z requestu ho mají) editovaný ve stavu request negeneruje nic.
         $doc = $this->createDocument();
         $data = ['id' => 5, 'lifecycle' => 'request', 'name' => 'Edit'];
 
-        $doc->beforeSave($data, ['id' => 5, 'name' => 'Old']);
+        $doc->beforeSave($data, ['id' => 5, 'name' => 'Old', 'ds_id' => 'aaaa-bbbb-cccc-dddd']);
 
         $this->assertArrayNotHasKey('ds_id', $data);
         $this->assertArrayNotHasKey('oidc_client_secret', $data);
+    }
+
+    // -------------------------------------------------------------------------
+    // beforeSave — přechod existujícího řádku do request (fix 6d7ea84,
+    // past z fáze 7 adopce: řádek omylem založený v jiném stavu)
+    // -------------------------------------------------------------------------
+
+    public function testTransitionToRequestWithEmptyDsIdGenerates(): void
+    {
+        $doc = $this->createDocument();
+        $data = $this->requestData(['id' => 5]);
+
+        $doc->beforeSave($data, ['id' => 5, 'name' => 'Nová firma', 'lifecycle' => 'draft', 'ds_id' => '']);
+
+        $this->assertMatchesRegularExpression(IdGenerator::ID_PATTERN, $data['ds_id']);
+        $this->assertNotEmpty($data['oidc_client_secret']);
+        $this->assertSame('https://nova.shpd.dev', $data['url_app']);
+    }
+
+    public function testTransitionToRequestWithFilledDsIdDoesNotGenerate(): void
+    {
+        // Adoptovaný řádek (ds_id vždy vyplněné) přepnutý do request nesmí
+        // dostat nové ds_id ani secret — přegenerování by odpojilo živý DS.
+        $doc = $this->createDocument();
+        $data = ['id' => 5, 'lifecycle' => 'request', 'name' => 'Adoptovaný'];
+
+        $doc->beforeSave($data, [
+            'id' => 5,
+            'name' => 'Adoptovaný',
+            'lifecycle' => 'active',
+            'ds_id' => 'aaaa-bbbb-cccc-dddd',
+            'oidc_client_secret' => 'stored-encrypted-secret',
+        ]);
+
+        $this->assertArrayNotHasKey('ds_id', $data);
+        $this->assertArrayNotHasKey('oidc_client_secret', $data);
+        $this->assertArrayNotHasKey('url_app', $data);
     }
 
     public function testEmptySecretSubmitIsRemoved(): void

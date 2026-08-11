@@ -17,7 +17,7 @@ jednotlivých subsystémů žijí v [`docs/`](../docs/README.md).
 
 ## Stav
 
-Celkem 188 tasků: **naplánováno** 5 · **částečně** 1 · **hotovo** 182.
+Celkem 189 tasků: **naplánováno** 6 · **částečně** 1 · **hotovo** 182.
 
 Zdroj pravdy je řádek `**Stav:**` v hlavičce každého tasku; tato
 tabulka je generovaná (`scripts/tasks-index.py`). Hotové tasky se
@@ -30,6 +30,7 @@ nevypisují — níže je jen to, co není dokončené.
 | `dashboard-alert-grouping.md` | naplánováno | design schválen 2026-07-16, neimplementováno |
 | `docs-vat-totals-reverse-charge.md` | naplánováno | opravy Z1–Z3 v `DocDocument` (nulové součty, samovyměření, noPayTax) |
 | `mail-analysis-schema-fixes.md` | naplánováno | návrh 2026-07-14; `schema_error` není v kódu |
+| `vat-payer-01-non-vat-payer.md` | naplánováno |  |
 | `mail-invoice-rounding.md` | částečně | implementováno, zbývá ověření a nasazení promptu |
 
 <!-- STAV:END -->

@@ -19,7 +19,7 @@ dashboardu.
 > a `economy.fiscalYearStartMonth` (`LayerCParameters`), CLI `ds-setting`,
 > odložený provisioning osnovy a fiskálních roků, `[TODO]` výpis
 > v `ds-upgrade`, konec `getAccountChart()`. Zbývá `economy.homeCurrency`
-> (Task 04) a `economy.vatPayer` (vat-payer-01).**
+> (Task 04) a `economy.vatAgenda` (vat-payer-01).**
 > Fázování viz §8, otevřené body §10.
 
 ---
@@ -32,7 +32,9 @@ dashboardu.
 | D2 | Všechny ostatní parametry (účtová osnova, domácí měna, první měsíc fiskálního roku, plátcovství DPH) žijí v `core_system_settings` přes `SettingsStore`. **Absence klíče = nerozhodnuto.** |
 | D3 | Stav nastavení se **nikde nepamatuje** — dopočítává se. Checklist má dva druhy položek: chybějící business řádek (`COUNT = 0`) a nerozhodnutý parametr (chybí klíč). Žádný příznak „průvodce dokončen“. |
 | D4 | Průvodce je **UI nad checklistem**, ne samostatná evidence. Nový setup check = nový krok průvodce. Průvodce je přeskočitelný a neblokující. |
-| D5 | Plátcovství DPH ([Issue #17](https://github.com/shipard/shpd/issues/17)) = **varianta 1**: absence Registrace DPH pro dané datum znamená neplátce. Globální příznak `economy.vatPayer` řídí výchozí `vat_mode` a skrytí DPH z UI — **ne pravdu**; tou zůstávají (ne)existující registrace. |
+| D5 | Plátcovství DPH ([Issue #17](https://github.com/shipard/shpd/issues/17)) = **varianta 1**: absence Registrace DPH pro dané datum znamená neplátce. Příznak se jmenuje `economy.vatAgenda` („vede agendu DPH“) — záměrně ve tvaru předvolby, ne faktu, aby ho nikdo později nepoužil jako zdroj pravdy o plátcovství. |
+| D10 | **Příznak řídí budoucnost a navigaci; renderování existujících dat řídí doklad sám** (`vat_mode`). Tím je přechod plátce ⇄ neplátce vyřešený bez zvláštní práce a bývalý plátce nepřestane vidět svá stará data o DPH. |
+| D11 | Navigace agendy DPH (Registrace, Období) se skrývá jen tehdy, když je příznak neplátce **a zároveň nikdy neexistovala žádná registrace** (`COUNT(*) = 0` včetně ukončených). Samotný příznak jako podmínka nestačí. |
 | D6 | Provisioning fiskálních roků se **odkládá** za rozhodnutí o prvním měsíci. Čerstvý DS chvíli nemá fiskální roky — nevadí, doklad se stejně nepotvrdí bez vlastní Osoby. |
 | D7 | Hosting přispívá **výhradně vrstvou A** — dva sloupce na `hosting_core_data_sources`, pole ve formuláři, položky v queue payloadu, předání v `HostingSyncRunner`. Žádný ARES v provisioning agentovi, žádné business řádky. |
 | D8 | Setup alerty se ve feedu dashboardu agregují **podle tagu** (ne podle `check_id`) do jedné karty; její primární akce otevírá panel průvodce — nový druh akce `open_panel`. |
@@ -126,8 +128,8 @@ Kompletní seznam toho, co musí být nastaveno, než je DS použitelný. Sloupe
 | Země | A | `main.json` → `country` (nové) | — (povinný parametr `ds-create`) | zakladatel |
 | Vlastní Osoba | C | `base_persons_persons.is_own = 1` | `COUNT(*) = 0` nad aktivními | registr (ARES/RPO) |
 | Sídlo vlastní Osoby | C | `base_persons_addresses`, `address_type = 1` | vlastní Osoba bez adresy typu sídlo | registr |
-| Plátcovství DPH | C | settings `economy.vatPayer` | chybí klíč | uživatel |
-| Registrace DPH | C | `economy_codebooks_vat_registrations` | `vatPayer = true` ∧ `COUNT(*) = 0` | registr plátců + doptání na frekvenci |
+| Plátcovství DPH | C | settings `economy.vatAgenda` | chybí klíč | uživatel |
+| Registrace DPH | C | `economy_codebooks_vat_registrations` | `vatAgenda = true` ∧ `COUNT(*) = 0` | registr plátců + doptání na frekvenci |
 | Vlastní bankovní účet | C | `economy_codebooks_bank_accounts` | `COUNT(*) = 0` nad aktivními | překlop z bank. spojení vlastní Osoby |
 | Účtová osnova | C | settings `economy.accountChart` | chybí klíč | uživatel |
 | První měsíc fisk. roku | C | settings `economy.fiscalYearStartMonth` | chybí klíč | uživatel |
@@ -231,7 +233,7 @@ stavu“ je součást existujícího API.
 | `economy.accountChart` | `default` \| `npo` \| `none` | varianta účtové osnovy | `AccountChartProvisioner` |
 | `economy.homeCurrency` | string, ISO 4217 lower | domácí měna dokladů | `LedgerGenerator`, `DocsHeadsFormBase`, `ReceivedInvoiceForm` |
 | `economy.fiscalYearStartMonth` | int 1–12 | první měsíc fiskálního roku | `FiscalYearsProvisioner` |
-| `economy.vatPayer` | bool | plátcovství DPH | `VatPeriodsProvisioner`, formuláře dokladů (výchozí `vat_mode`), viditelnost DPH v UI |
+| `economy.vatAgenda` | bool | plátcovství DPH | `VatPeriodsProvisioner`, formuláře dokladů (výchozí `vat_mode`), viditelnost DPH v UI |
 
 `SettingsStore` bere v konstruktoru jen `DataSourceConnection` a je podle
 `app-settings.md` výslovně volatelný z HTTP i CLI — tentýž klíč tedy čte
@@ -268,8 +270,8 @@ ve feedu (D8) i pro sběr kroků průvodce (D4). Singleton checky, tedy
 |---|---|---|---|
 | `base.persons.missing_own_person` | `base.persons` | *existuje dnes* | `open_form` (preset `is_own`, `person_type`) |
 | `base.persons.missing_own_headquarters` | `base.persons` | vlastní Osoba bez adresy `address_type = 1` | `open_form` |
-| `economy.codebooks.undecided_vat_payer` | `economy.codebooks` | chybí `economy.vatPayer` | `open_panel` |
-| `economy.codebooks.missing_vat_registration` | `economy.codebooks` | `vatPayer = true` ∧ `COUNT(*) = 0` | `open_form` |
+| `economy.codebooks.undecided_vat_agenda` | `economy.codebooks` | chybí `economy.vatAgenda` | `open_panel` |
+| `economy.codebooks.missing_vat_registration` | `economy.codebooks` | `vatAgenda = true` ∧ `COUNT(*) = 0` | `open_form` |
 | `economy.codebooks.missing_own_bank_account` | `economy.codebooks` | `COUNT(*) = 0` aktivních | `open_form` |
 | `economy.codebooks.undecided_fiscal_year_start` | `economy.codebooks` | chybí `economy.fiscalYearStartMonth` | `open_panel` |
 | `economy.codebooks.undecided_home_currency` | `economy.codebooks` | chybí `economy.homeCurrency` | `open_panel` |
@@ -302,7 +304,7 @@ Kroky, v pořadí danom závislostmi:
    `PersonApplier` ten příznak už dnes zapisuje, takže není potřeba žádný
    dodatečný update. Jedním applyem vznikne Osoba, sídlo, bankovní spojení
    a DIČ.
-3. **Plátcovství DPH** → `economy.vatPayer`. Při `true` navazuje předvyplněná
+3. **Plátcovství DPH** → `economy.vatAgenda`. Při `true` navazuje předvyplněná
    Registrace DPH: `valid_from` z registru plátců, `country`/`region`
    z vrstvy A, `vat_id` z kanonického payloadu. **Frekvence přiznání
    a kontrolního hlášení (`tax_period_kind`, `report_period_kind`) v registru
@@ -375,11 +377,27 @@ Rozhodnutí D5 je menší změna, než se zdálo: **`vat_mode = 0` („Bez DPH�
 existuje** (`docs.core.vatModes`) a `DocDocument::validate` při něm Registraci
 DPH nevyžaduje. Chybí tedy jen:
 
-1. Globální příznak `economy.vatPayer` (§5.2).
+1. Globální příznak `economy.vatAgenda` (§5.2).
 2. Výchozí `vat_mode` na novém dokladu odvozený z příznaku. Sloupec má
    `"default": 1` na úrovni definice tabulky — odvozený default patří do
    formuláře, ne do schématu.
-3. Skrytí DPH z UI u neplátce (sloupce vieweru, sekce formuláře, sestavy).
+3. Viditelnost agendy DPH v **navigaci** podle D11 a skrytí sekce „DPH“
+   v hlavičce dokladu, když se s DPH nepracuje.
+
+   Skrývání **jednotlivých polí** už implementované je: `DocsHeadsFormBase`
+   počítá `$hasVat = $vatMode !== 0` a věší `hidden: !$hasVat` na
+   `vat_calc_source`, `vat_place`, `vat_registration`, `vat_duzp`, `vat_dppd`;
+   `DocRowsForm` dělá totéž. Vede to z `vat_mode` dokladu, tedy přesně
+   podle D10 — nesáhat na to.
+
+   **Mimo rozsah, protože není co skrývat:** viewery dokladů DPH sloupce
+   nemají, tiskové šablony faktur v repu neexistují a DPH výstupy
+   (přiznání, kontrolní hlášení) jsou neimplementovaný milník M1.
+
+   **Účtování žádnou změnu nepotřebuje:** `AccountingEngine::buildVatLines()`
+   staví řádky z `docs_core_vat_recap` a `buildRowLines()` bere
+   `vat_base_dom`, takže doklad s `vat_mode = 0` zaúčtuje plnou částku
+   a na 343xxx nesáhne.
 4. Provisioning období DPH **v okamžiku vzniku registrace**. `VatPeriodsProvisioner` iteruje registrace, takže na DS bez registrace už dnes nic nevyrobí — „u neplátce negenerovat“ tedy není co implementovat. Chybí opačný směr: dokud se období generují jen při `ds-upgrade`, má uživatel po založení registrace registraci a nulová období. Patří do `vat-payer-01`, průvodce pak volá hotovou věc.
 
 **Proč varianta 1 a ne `neplátce` jako `taxpayer_kind`:** registrace je
@@ -417,7 +435,7 @@ daty a současně s plným checklistem, protože „nerozhodnuto“ se pozná pr
 absenci klíče.
 
 Import zapisuje: `economy.accountChart`, `economy.homeCurrency`,
-`economy.fiscalYearStartMonth`, `economy.vatPayer`. Import už dnes běží pod
+`economy.fiscalYearStartMonth`, `economy.vatAgenda`. Import už dnes běží pod
 `skipProvisioning: true`, takže se ta odpovědnost k němu logicky pojí.
 
 Vrstvu A (`language`, `country`) zapisuje `ds-create`, tedy krok před importem.

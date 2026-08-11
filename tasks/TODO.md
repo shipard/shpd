@@ -36,3 +36,27 @@ jednotkové ceny řádků odpovídají koncovým cenám z faktury.
 **Priorita:** střední — u dodavatelů s koncovými cenami to bude bít
 opakovaně a výsledný doklad je věcně špatně (ne jen kosmetický
 warning).
+
+---
+
+## Země vlastního subjektu má dva zdroje
+
+**Zjištěno:** 08/2026 při přípravě `vat-payer-01`.
+
+`AccountingEngine::resolveOwnCompanyCountry()` bere zemi z **adresy sídla
+vlastní Osoby** (`OwnCompanyResolver::getOwnHeadquartersAddress()`)
+s natvrdo zadrátovaným fallbackem `'cz'`. Task `ds-setup-01` přitom
+zavedl `DataSourceConfig::getCountry()` jako parametr vrstvy A
+(`docs/ds-setup.md` D1).
+
+**Proč to není jen kosmetika:** na čerstvém DS adresa sídla neexistuje,
+dokud ji nezaloží průvodce, takže engine tiše počítá s `'cz'`. U slovenské
+firmy to znamená špatně vyhodnocené vat kódy ještě předtím, než si toho kdo
+všimne.
+
+**Směr řešení:** země subjektu (vrstva A) a země sídla nejsou totéž, takže
+ne slepé sjednocení. Nejspíš: primárně `getCountry()`, adresa sídla jako
+upřesnění tam, kde na něm záleží, a fallback `'cz'` zrušit.
+
+**Priorita:** nízká dokud jsou všechny zdroje české; roste s prvním
+nečeským DS. Vědomě **mimo oblast** `ds-setup` (rozhodnutí Anny).

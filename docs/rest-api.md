@@ -199,7 +199,13 @@ setup checky **naživo** přes `SetupChecklist` (ne z tabulky alertů) a vrací
 `{items, parameters, currencyOptions}` — položky v pořadí
 `SetupChecklist::ORDER`, u parametrových položek pole `parameter` s klíčem
 vrstvy C; `parameters` obsahuje hodnoty všech klíčů
-z `LayerCParameters::keys()` včetně `null` (nerozhodnuto). `POST
+z `LayerCParameters::keys()` včetně `null` (nerozhodnuto). Položka může
+nést nepovinné pole `suggestion: {value, reason}` — serverový návrh hodnoty
+parametru s lokalizovaným zdůvodněním (zatím jen `undecided_vat_agenda`
+podle DIČ vlastní Osoby); je to předvolba pro UI, ne uložená hodnota.
+`actions` položek jsou **panelová serializace** — u `missing_own_person`
+controller předřazuje primární akci `kind: "registry_import_own"`, která
+existuje jen v téhle odpovědi, nikdy v `core_alerts_alerts` ani ve feedu. `POST
 /_setup/parameters` s body `{"values": {"economy.accountChart": "npo"}}`
 zapíše parametry (`null` = smazání klíče, validace přes
 `LayerCParameters::validate()`, neznámý klíč / špatná hodnota → `422

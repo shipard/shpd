@@ -15,6 +15,8 @@ use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Module\ModuleDefinition;
 use Shipard\Core\Module\ModulePathResolver;
+use Shipard\Module\Base\Persons\Checks\MissingOwnPersonCheck;
+use Shipard\Module\Economy\Codebooks\Checks\UndecidedVatAgendaCheck;
 use Shipard\Tests\Fixtures\Core\Settings\SetupChecklistFindingCheck;
 
 /**
@@ -51,20 +53,28 @@ class SetupControllerTest extends TestCase
     /**
      * Mock DB: settings čtení vrací $settings (jinak null/0), zápisy se
      * zachytávají do $this->writes. $insertRowThrows simuluje spadlý
-     * provisioner.
+     * provisioner. $ownVatId je odpověď na dotaz `SELECT vat_id` vlastní
+     * Osoby (suggestion u vatAgenda) — null simuluje žádnou vlastní Osobu,
+     * '' Osobu bez DIČ.
      *
      * @param array<string, mixed> $settings klíč → hodnota
      */
-    private function makeDb(array $settings = [], bool $insertRowThrows = false): MockObject&DataSourceConnection
-    {
+    private function makeDb(
+        array $settings = [],
+        bool $insertRowThrows = false,
+        ?string $ownVatId = null,
+    ): MockObject&DataSourceConnection {
         $db = $this->createMock(DataSourceConnection::class);
 
         $db->method('fetchSingle')->willReturnCallback(
-            static function (mixed ...$args) use ($settings): mixed {
+            static function (mixed ...$args) use ($settings, $ownVatId): mixed {
                 if (str_contains((string) $args[0], 'core_system_settings')) {
                     return array_key_exists($args[1] ?? '', $settings)
                         ? json_encode($settings[$args[1]])
                         : null;
+                }
+                if (str_contains((string) $args[0], 'SELECT vat_id')) {
+                    return $ownVatId;
                 }
                 return 0;   // COUNT dotazy checků → vše "chybí"
             },
@@ -107,15 +117,17 @@ class SetupControllerTest extends TestCase
     }
 
     /**
-     * Registry se dvěma vždy-svítícími setup checky v přeházeném pořadí
-     * registrace — GET je musí vrátit dle SetupChecklist::ORDER.
+     * Registry se setup checky v přeházeném pořadí registrace — GET je musí
+     * vrátit dle SetupChecklist::ORDER. missing_own_person a
+     * undecided_vat_agenda jsou reálné checky (testují se panelové akce
+     * a suggestion nad jejich skutečnými findingy), zbytek fixture.
      */
     private function makeRegistry(): AlertCheckRegistry
     {
-        $entry = static fn(string $id): array => [
+        $entry = static fn(string $id, string $class = SetupChecklistFindingCheck::class): array => [
             'id'       => $id,
             'name'     => "Name of {$id}",
-            'class'    => SetupChecklistFindingCheck::class,
+            'class'    => $class,
             'severity' => 'warning',
             'interval' => '5m',
             'tags'     => ['setup'],
@@ -125,14 +137,32 @@ class SetupControllerTest extends TestCase
             ModuleDefinition::fromArray([
                 'id'          => 'economy.codebooks',
                 'name'        => 'Codebooks',
-                'alertChecks' => [$entry('economy.codebooks.undecided_home_currency')],
+                'alertChecks' => [
+                    $entry('economy.codebooks.undecided_home_currency'),
+                    $entry('economy.codebooks.undecided_vat_agenda', UndecidedVatAgendaCheck::class),
+                ],
             ]),
             ModuleDefinition::fromArray([
                 'id'          => 'base.persons',
                 'name'        => 'Persons',
-                'alertChecks' => [$entry('base.persons.missing_own_person')],
+                'alertChecks' => [$entry('base.persons.missing_own_person', MissingOwnPersonCheck::class)],
             ]),
         ], 'cs');
+    }
+
+    /**
+     * Položka checklistu podle checkId — fail, když v odpovědi není.
+     *
+     * @return array<string, mixed>
+     */
+    private function findItem(Response $response, string $checkId): array
+    {
+        foreach ($response->getPayload()['data']['items'] as $item) {
+            if ($item['checkId'] === $checkId) {
+                return $item;
+            }
+        }
+        $this->fail("Checklist item {$checkId} not found in response");
     }
 
     private function makeController(MockObject&DataSourceConnection $db): SetupController
@@ -283,5 +313,62 @@ class SetupControllerTest extends TestCase
         $this->assertSame(200, $this->getStatus($resp));
         $this->assertNotEmpty($resp->getPayload()['data']['warnings']);
         $this->assertNotEmpty($this->writes['execute']);
+    }
+
+    public function testMissingOwnPersonHasRegistryImportAsPrimaryPanelAction(): void
+    {
+        $resp = $this->makeController($this->makeDb())->checklist(self::auth());
+
+        $this->assertSame(200, $this->getStatus($resp));
+        $actions = $this->findItem($resp, 'base.persons.missing_own_person')['actions'];
+        $this->assertCount(2, $actions);
+
+        // Primární cesta je registr — akci skládá až SetupController,
+        // check ji nenese (regrese v MissingOwnPersonCheckTest).
+        $this->assertSame('import_own_person_from_registry', $actions[0]['id']);
+        $this->assertSame('registry_import_own', $actions[0]['kind']);
+        $this->assertTrue($actions[0]['primary']);
+        $this->assertSame('Načíst z registru', $actions[0]['label']);
+
+        // Ruční formulář zůstává jako sekundární záloha pro subjekty,
+        // které v registru nejsou — preset z checku beze změny.
+        $this->assertSame('create_own_person', $actions[1]['id']);
+        $this->assertSame('open_form', $actions[1]['kind']);
+        $this->assertFalse($actions[1]['primary']);
+        $this->assertSame('Zadat ručně', $actions[1]['label']);
+        $this->assertSame(['is_own' => true, 'person_type' => 2], $actions[1]['target']['preset']);
+    }
+
+    public function testVatAgendaSuggestionFromOwnPersonVatId(): void
+    {
+        $resp = $this->makeController($this->makeDb(ownVatId: 'CZ12345678'))->checklist(self::auth());
+
+        $item = $this->findItem($resp, 'economy.codebooks.undecided_vat_agenda');
+        $this->assertTrue($item['suggestion']['value']);
+        // DIČ musí být v důvodu vidět — uživatel má vědět, z čeho návrh vychází.
+        $this->assertStringContainsString('CZ12345678', $item['suggestion']['reason']);
+
+        // Návrh je jen předvolba v UI — parametr dál drží null (D2).
+        $this->assertNull($resp->getPayload()['data']['parameters']['economy.vatAgenda']);
+    }
+
+    public function testVatAgendaSuggestionAbsentWithEmptyVatId(): void
+    {
+        $resp = $this->makeController($this->makeDb(ownVatId: ''))->checklist(self::auth());
+
+        $this->assertArrayNotHasKey(
+            'suggestion',
+            $this->findItem($resp, 'economy.codebooks.undecided_vat_agenda'),
+        );
+    }
+
+    public function testVatAgendaSuggestionAbsentWithoutOwnPerson(): void
+    {
+        $resp = $this->makeController($this->makeDb())->checklist(self::auth());
+
+        $this->assertArrayNotHasKey(
+            'suggestion',
+            $this->findItem($resp, 'economy.codebooks.undecided_vat_agenda'),
+        );
     }
 }

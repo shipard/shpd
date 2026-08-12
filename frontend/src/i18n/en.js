@@ -478,6 +478,8 @@ export default {
   'registry.field.deadline': 'Deadline',
 
   'registry.wizard.title': 'Add company from registry',
+  'registry.wizard.titleOwn': 'Load own company from registry',
+  'registry.wizard.ownIntro': 'Find the entity this data source will operate on behalf of — it will be created as the own Person including its registered office, bank accounts and VAT ID.',
   'registry.wizard.search.placeholder': 'Company ID or name',
   'registry.wizard.search.empty': 'Start typing a company ID or name',
   'registry.wizard.search.loading': 'Searching the registry…',

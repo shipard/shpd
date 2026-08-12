@@ -318,23 +318,36 @@ plocha: vyjmenuje, co chybí, a čtyři parametry vrstvy C umí rozhodnout sám.
 Zbývá doplnit to, co panel dnes jen odkazuje na prázdný formulář — a to jsou
 tři věci, ne osm.
 
-**1. Vlastní Osoba z registru** (Task 08). Reuse existující cesty:
+**1. Vlastní Osoba z registru** (Task 08, hotové). Reuse existující cesty:
 `RegistryImportWizard.svelte` → `personsRegistry.js` → `PersonsRegistryClient`
 → kanonický `shpd.persons.person.v1` → `_exchange/persons/person/preview` →
-`apply`. Panel wizard otevře v režimu `asOwn`, který do payloadu doplní
-`status.isOwn = true`; `PersonApplier` ten příznak zapisuje (ř. 422), takže
-**jedním applyem vznikne Osoba, sídlo, bankovní spojení i DIČ**. Import
-funguje jen tehdy, když žádná vlastní Osoba není (D16) — gate je implicitní,
-protože právě tehdy položka checklistu svítí. Ruční formulář zůstává jako
-sekundární akce pro subjekty, které v registru nejsou.
+`apply`. Wizard má prop `asOwn` — jediná funkce `withApplyPolicy()` skládá
+merge politiku (`createOnly`, `targetDocState: 40`) a v tomto režimu doplní
+`status.isOwn = true` do payloadu pro preview i apply; `PersonApplier` ten
+příznak zapisuje (ř. 422), takže **jedním applyem vznikne Osoba, sídlo,
+bankovní spojení i DIČ**. Panel ho otevírá primární akcí
+`registry_import_own` („Načíst z registru") u položky `missing_own_person`;
+akce vzniká **až při serializaci v `SetupController::panelActions()`**, ne
+v checku — finding checku putuje cronem do `core_alerts_alerts` a feed ani
+viewer alertů tenhle kind neumí. Akce z checku (`open_form`) v panelu
+zůstává jako sekundární „Zadat ručně" pro subjekty, které v registru nejsou.
+Import funguje jen tehdy, když žádná vlastní Osoba není (D16) — gate je
+implicitní, protože právě tehdy položka checklistu svítí; `existsInDb` gate
+wizardu platí beze změny.
 
 **2. Registrace DPH z DIČ** (Task 09). `vat_id` a `country`/`region`
 z vrstvy A se předvyplní. **Registr nevrací datum registrace ani příznak
 plátce** — kanonický formát má jen `vatId`, žádné `vatRegistration` ani
 `vatPayer`. `valid_from`, `tax_period_kind` a `report_period_kind` se tedy
 musí zeptat. Přítomnost `vatId` se používá jako **návrh** hodnoty
-`economy.vatAgenda` (`suggestion` v položce checklistu) — předvolba v UI,
-ne uložená hodnota; rozhodnutí zůstává na uživateli (D2, D5).
+`economy.vatAgenda` — to dodal už Task 08: položka `undecided_vat_agenda`
+v odpovědi `GET /_setup/checklist` nese nepovinné pole
+`suggestion: {value, reason}` (zdroj: `vat_id` aktivní vlastní Osoby, DIČ
+je v lokalizovaném `reason` vidět; prázdné DIČ nebo žádná Osoba → pole
+chybí). Panel z něj jen předvybere draft — **předvolba v UI, ne uložená
+hodnota**; rozhodnutí zůstává na uživateli (D2, D5) a položka v checklistu
+svítí, dokud volbu nepotvrdí. Pole je obecné, ale vyplňuje se zatím jen
+u tohohle checku.
 
 **3. Můstek do číselníku bankovních účtů** (Task 09). Překlop z
 `base_persons_bank_accounts` vlastní Osoby do
@@ -484,7 +497,7 @@ Vrstvu A (`language`, `country`) zapisuje `ds-create`, tedy krok před importem.
 | **1 — Vrstva A** | `country` v `DataSourceConfig`, přepínače `ds-create --language --country`, hosting (dva sloupce, formulář, queue payload, agent) | Nový DS vznikne z hostingu i z konzole s vyplněným jazykem a zemí v `main.json` |
 | **2 — Parametry do settings** | Čtyři klíče, provisionery a formuláře je čtou, odložený provisioning osnovy a fiskálních roků (D6), konec `getAccountChart()`/`getDefaultCurrency()` | `ds-upgrade` na čerstvém DS osnovu ani roky nenaseeduje; naseeduje je, jakmile klíč existuje |
 | **3 — Setup checky a panel** | Sedm nových checků + služba `SetupChecklist` (D12) + zákaz snooze/dismiss (D13); panel `dsSetup` „Co ještě chybí nastavit“ s ovládáním parametrů (D14); tagová agregace ve feedu (D8) a akce `open_panel` | Čerstvý DS ukazuje jednu kartu „Dokončit nastavení“, panel vyjmenuje chybějící položky a uživatel v něm rozhodne všechny čtyři parametry vrstvy C bez konzole |
-| **4 — Průvodce** | Panel `dsSetup`, kroky 1–7 (§5.4), reuse registrové cesty, můstek do číselníku bankovních účtů (field typy už dodala Fáze 3) | Uživatel projde od čerstvého DS k potvrditelné vydané faktuře bez opuštění průvodce |
+| **4 — Průvodce** | Rozšíření panelu `dsSetup` (D15, §5.4): vlastní Osoba z registru + návrh `vatAgenda` (Task 08, hotové), registrace DPH a můstek do číselníku bankovních účtů (Task 09) | Uživatel projde od čerstvého DS k potvrditelné vydané faktuře bez opuštění panelu |
 | **5 — Nabídky** | Generátor základních Položek, název a logo v průvodci | Uživatel dostane volitelný startovní obsah, aniž by na něj cokoli tlačilo |
 
 Fáze 2 a 3 jsou navzájem nezávislé (checky nad chybějícími řádky nepotřebují

@@ -13,6 +13,7 @@
   import Select from '../ui/Select.svelte';
   import Button from '../ui/Button.svelte';
   import FormDialog from '../form/FormDialog.svelte';
+  import RegistryImportWizard from '../registry/RegistryImportWizard.svelte';
   import { iconListCheck, iconSuccess, iconWarning } from '../../icons.js';
   import { fetchSetupChecklist, saveSetupParameters } from '../../api/setup.js';
 
@@ -33,6 +34,10 @@
   // Form modal pro open_form akce checků — stejný vzor jako feed karta
   // (Dashboard.svelte): FormDialog + wasSaved → reload po zavření.
   let formModal = $state({ open: false, table: '', recordId: null, defaultData: {}, wasSaved: false });
+
+  // Registry wizard v režimu asOwn — akce registry_import_own u položky
+  // „Chybí vlastní Osoba". Stejný wasSaved → reload vzor jako formModal.
+  let registryModal = $state({ open: false, wasSaved: false });
 
   const CHART_KEY = 'economy.accountChart';
   const VAT_KEY = 'economy.vatAgenda';
@@ -73,7 +78,22 @@
     parameters = data.parameters ?? {};
     currencyOptions = data.currencyOptions ?? currencyOptions;
     draft = { ...parameters };
+    // Serverový návrh (suggestion) předvybere hodnotu jen v draftu —
+    // na server se nic nepíše, dokud uživatel volbu nepotvrdí kliknutím
+    // (D2: absence klíče = nerozhodnuto). Položka v checklistu zůstává.
+    for (const item of items) {
+      if (item.parameter && item.suggestion && (parameters[item.parameter] ?? null) === null) {
+        draft[item.parameter] = item.suggestion.value;
+      }
+    }
   }
+
+  // Důvod návrhu k zobrazení u ovládání parametru.
+  const suggestionByKey = $derived(
+    Object.fromEntries(
+      items.filter((it) => it.parameter && it.suggestion).map((it) => [it.parameter, it.suggestion]),
+    ),
+  );
 
   async function load() {
     loading = true;
@@ -135,6 +155,10 @@
       };
       return;
     }
+    if (action?.kind === 'registry_import_own') {
+      registryModal = { open: true, wasSaved: false };
+      return;
+    }
     console.warn('Unknown setup item action kind:', action?.kind);
   }
 
@@ -148,9 +172,18 @@
     if (shouldRefetch) load();
   }
 
-  function primaryAction(item) {
-    const actions = Array.isArray(item.actions) ? item.actions : [];
-    return actions.find((a) => a?.primary) ?? actions[0] ?? null;
+  function handleRegistrySaved() {
+    registryModal.wasSaved = true;
+  }
+
+  function handleRegistryClose() {
+    const shouldRefetch = registryModal.wasSaved;
+    registryModal = { open: false, wasSaved: false };
+    if (shouldRefetch) load();
+  }
+
+  function itemActions(item) {
+    return Array.isArray(item.actions) ? item.actions : [];
   }
 
   onMount(load);
@@ -199,13 +232,16 @@
 
               {#if item.parameter}
                 {@render parameterControl(item.parameter)}
-              {:else if primaryAction(item)}
+              {:else if itemActions(item).length > 0}
                 <div class="shpd-ds-setup__item-actions">
-                  <Button
-                    label={primaryAction(item).label ?? t('setup.openForm')}
-                    size="sm"
-                    onclick={() => runAction(primaryAction(item))}
-                  />
+                  {#each itemActions(item) as action (action.id)}
+                    <Button
+                      label={action.label ?? t('setup.openForm')}
+                      size="sm"
+                      variant={action.primary ? 'primary' : 'secondary'}
+                      onclick={() => runAction(action)}
+                    />
+                  {/each}
                 </div>
               {/if}
             </li>
@@ -268,6 +304,10 @@
       <!-- u selectů chybu renderuje Select sám -->
       <p class="shpd-ds-setup__field-error">{fieldErrors[key]}</p>
     {/if}
+    {#if suggestionByKey[key]}
+      <!-- Předvybraný návrh ze serveru — uživatel má vidět, z čeho vychází. -->
+      <p class="shpd-ds-setup__suggestion">{suggestionByKey[key].reason}</p>
+    {/if}
     <p class="shpd-ds-setup__hint">{t(`setup.hint.${key}`)}</p>
   </div>
 {/snippet}
@@ -280,6 +320,15 @@
     open={formModal.open}
     onSaved={handleFormSaved}
     onClose={handleFormClose}
+  />
+{/if}
+
+{#if registryModal.open}
+  <RegistryImportWizard
+    open={registryModal.open}
+    asOwn={true}
+    onSaved={handleRegistrySaved}
+    onClose={handleRegistryClose}
   />
 {/if}
 
@@ -375,6 +424,9 @@
 
   .shpd-ds-setup__item-actions {
     margin-top: var(--shpd-space-sm);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--shpd-space-sm);
   }
 
   .shpd-ds-setup__control {
@@ -416,6 +468,12 @@
     margin-top: var(--shpd-space-xs);
     font-size: var(--shpd-font-size-xs, 0.75rem);
     color: var(--shpd-color-text-secondary);
+  }
+
+  .shpd-ds-setup__suggestion {
+    margin-top: var(--shpd-space-xs);
+    font-size: var(--shpd-font-size-sm);
+    color: var(--shpd-color-text);
   }
 
   .shpd-ds-setup__field-error {

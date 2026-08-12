@@ -134,12 +134,17 @@ class SetupController
                 'title'     => $finding->title,
                 'message'   => $finding->message,
                 'severity'  => $finding->severity,
-                'actions'   => $finding->actions,
+                // Panelové akce se skládají TADY, ne v checku — finding
+                // checku putuje cronem do core_alerts_alerts a feed/viewer
+                // alertů umí jen open_form/open_viewer/open_panel.
+                'actions'   => $this->panelActions($item['checkId'], $finding->actions),
                 // U položek nad nerozhodnutým parametrem klíč vrstvy C —
                 // panel podle něj vykreslí ovládání. Mapování drží server.
                 'parameter' => SetupChecklist::PARAMETER_BY_CHECK[$item['checkId']] ?? null,
             ];
         }
+
+        $items = $this->attachVatAgendaSuggestion($items);
 
         return [
             'items'           => $items,
@@ -148,6 +153,83 @@ class SetupController
             'parameters'      => $settings->getMany(LayerCParameters::keys()),
             'currencyOptions' => $this->currencyOptions(),
         ];
+    }
+
+    /**
+     * Panelové úpravy akcí položky. U `missing_own_person` se předřadí
+     * primární akce `registry_import_own` (import vlastní Osoby z registru,
+     * docs/ds-setup.md §5.4/D16) a akce z checku se degradují na sekundární
+     * „Zadat ručně". Jen tady, ne v checku — kind `registry_import_own` umí
+     * obsloužit jedině panel; v alertech/feedu by skončil s console.warn.
+     *
+     * @param list<array<string, mixed>> $checkActions
+     * @return list<array<string, mixed>>
+     */
+    private function panelActions(string $checkId, array $checkActions): array
+    {
+        if ($checkId !== 'base.persons.missing_own_person') {
+            return $checkActions;
+        }
+
+        $isCs = $this->language === 'cs';
+
+        $secondary = array_map(
+            static fn(array $action): array => [
+                'label'   => $isCs ? 'Zadat ručně' : 'Enter manually',
+                'primary' => false,
+            ] + $action,
+            $checkActions,
+        );
+
+        return [
+            [
+                'id'      => 'import_own_person_from_registry',
+                'label'   => $isCs ? 'Načíst z registru' : 'Load from registry',
+                'kind'    => 'registry_import_own',
+                'target'  => [],
+                'primary' => true,
+            ],
+            ...$secondary,
+        ];
+    }
+
+    /**
+     * Návrh hodnoty `economy.vatAgenda` podle DIČ vlastní Osoby (D5:
+     * přítomnost DIČ = použitelný default, ne pravda). Jen předvolba v UI —
+     * `parameters` dál drží null, dokud uživatel nepotvrdí (D2).
+     *
+     * @param list<array<string, mixed>> $items
+     * @return list<array<string, mixed>>
+     */
+    private function attachVatAgendaSuggestion(array $items): array
+    {
+        foreach ($items as $i => $item) {
+            if ($item['checkId'] !== 'economy.codebooks.undecided_vat_agenda') {
+                continue;
+            }
+            // Stejná definice aktivní vlastní Osoby jako MissingOwnPersonCheck
+            // (docState 10 = Koncept, 40 = V pořádku).
+            $vatId = $this->db->fetchSingle(
+                'SELECT vat_id FROM base_persons_persons'
+                    . ' WHERE is_own = %i AND docState IN %in'
+                    . ' ORDER BY id LIMIT 1',
+                1,
+                [10, 40],
+            );
+            if (!is_string($vatId) || trim($vatId) === '') {
+                break;
+            }
+            $vatId = trim($vatId);
+            $items[$i]['suggestion'] = [
+                'value'  => true,
+                'reason' => $this->language === 'cs'
+                    ? "Vlastní Osoba má vyplněné DIČ {$vatId} — pravděpodobně jste plátce DPH."
+                    : "The own Person has VAT ID {$vatId} filled in — you are probably a VAT payer.",
+            ];
+            break;
+        }
+
+        return $items;
     }
 
     /**

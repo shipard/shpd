@@ -1,6 +1,6 @@
 # ds-setup — Task 08: Vlastní Osoba z registru
 
-**Stav:** naplánováno
+**Stav:** hotovo
 
 > PRD pro jednu Claude Code session. Design: `docs/ds-setup.md`,
 > rozhodnutí **D4, D15**, kontrakt **§5.4**. Začátek Fáze 4.

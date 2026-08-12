@@ -491,6 +491,8 @@ export default {
   'registry.field.deadline': 'Lhůta',
 
   'registry.wizard.title': 'Přidat firmu z registru',
+  'registry.wizard.titleOwn': 'Načíst vlastní firmu z registru',
+  'registry.wizard.ownIntro': 'Vyhledejte subjekt, pod jehož hlavičkou bude tento zdroj dat fungovat — vznikne jako vlastní Osoba včetně sídla, bankovních spojení a DIČ.',
   'registry.wizard.search.placeholder': 'IČO nebo název firmy',
   'registry.wizard.search.empty': 'Začněte psát IČO nebo název firmy',
   'registry.wizard.search.loading': 'Hledám v registru…',

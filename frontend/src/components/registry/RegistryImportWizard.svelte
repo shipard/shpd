@@ -14,6 +14,11 @@
   // existsInDb gates selection on the search screen so we never reach
   // apply with a duplicate (the applier would reject anyway, but the
   // upfront gate makes the UX explicit).
+  //
+  // asOwn: režim „vlastní firma" pro panel dsSetup (docs/ds-setup.md §5.4).
+  // Jediné odchylky: status.isOwn = true v payloadu a jiný titulek + intro.
+  // Merge politika i existsInDb gate platí beze změny — vlastní Osoba se
+  // importuje jen když v DB žádná není.
 
   import Modal from '../ui/Modal.svelte';
   import Button from '../ui/Button.svelte';
@@ -30,9 +35,25 @@
 
   let {
     open = false,
+    asOwn = false,
     onClose = () => {},
     onSaved = (_personId) => {},
   } = $props();
+
+  // Jediné místo, kde se ke kanonickému payloadu přidává merge politika
+  // (a v asOwn režimu příznak vlastní osoby). Preview i apply ji skládají
+  // odtud — dvě rozjetá místa by byla přesně ta chyba, na kterou upozorňuje
+  // tasks/ds-setup-08-registry-import.md.
+  function withApplyPolicy(c) {
+    const out = {
+      ...c,
+      applyOptions: { mergeStrategy: 'createOnly', targetDocState: 40 },
+    };
+    if (asOwn) {
+      out.status = { ...(out.status ?? {}), isOwn: true };
+    }
+    return out;
+  }
 
   // ── Screen + transient state ──────────────────────────────────────────
   let screen = $state('search'); // 'search' | 'preview'
@@ -161,9 +182,9 @@
         previewError = t('registry.wizard.preview.error', { msg: translateError(fetched?.error) });
         return;
       }
-      // Inject merge policy before preview so apply sees the same options.
-      const c = { ...fetched.data };
-      c.applyOptions = { mergeStrategy: 'createOnly', targetDocState: 40 };
+      // Inject merge policy (and asOwn flag) before preview so apply sees
+      // the same payload shape.
+      const c = withApplyPolicy(fetched.data);
 
       const previewed = await previewRegistryPerson(c);
       if (!previewed?.success) {
@@ -218,11 +239,7 @@
     applying = true;
     applyError = null;
     try {
-      const toApply = {
-        ...canonical,
-        applyOptions: { mergeStrategy: 'createOnly', targetDocState: 40 },
-      };
-      const result = await applyRegistryPerson(toApply);
+      const result = await applyRegistryPerson(withApplyPolicy(canonical));
       if (!result?.success) {
         applyError = t('registry.wizard.preview.applyError', { msg: translateError(result?.error) });
         return;
@@ -247,8 +264,11 @@
   let displayName = $derived(canonical?.name?.fullName ?? selectedRow?.fullName ?? '');
 </script>
 
-<Modal title={t('registry.wizard.title')} {open} {onClose} width="full">
+<Modal title={t(asOwn ? 'registry.wizard.titleOwn' : 'registry.wizard.title')} {open} {onClose} width="full">
   {#if screen === 'search'}
+    {#if asOwn}
+      <p class="shpd-registry-wizard__own-intro">{t('registry.wizard.ownIntro')}</p>
+    {/if}
     <div class="shpd-registry-wizard__search-input-wrap">
       <input
         bind:this={inputEl}
@@ -432,6 +452,14 @@
 </Modal>
 
 <style>
+  .shpd-registry-wizard__own-intro {
+    margin: 0;
+    padding: var(--shpd-space-md) var(--shpd-space-lg) 0;
+    color: var(--shpd-color-text-secondary);
+    font-size: var(--shpd-font-size-sm);
+    flex-shrink: 0;
+  }
+
   .shpd-registry-wizard__search-input-wrap {
     padding: var(--shpd-space-md) var(--shpd-space-lg);
     border-bottom: 1px solid var(--shpd-color-border);

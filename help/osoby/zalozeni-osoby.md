@@ -14,7 +14,8 @@ odběratele i kohokoli dalšího. Najdeš je v **Základní → Osoby**.
 
 Potřebuješ do systému partnera, kterého tam ještě nemáš. Nebo ti Shipard
 u vytěžené faktury nabízí u dodavatele **Vytvořit novou osobu** a ty chceš
-vědět, co se tím založí. Nebo ti Dashboard hlásí **Chybí vlastní Osoba**.
+vědět, co se tím založí. Nebo ti karta **Dokončit nastavení** na Dashboardu
+hlásí, že chybí vlastní Osoba.
 
 ## Postup
 
@@ -79,12 +80,16 @@ faktuře dopočítá **Datum splatnosti** jako datum vystavení plus tolik dní,
 takže se vyplatí ji u partnerů, se kterými máš dohodnuto něco jiného,
 opravit.
 
-**Vlastní firma se zakládá jako každá jiná osoba.** U čerstvého datového
-zdroje ti Dashboard ukáže upozornění **Chybí vlastní Osoba** s akcí
-**Přidat vlastní Osobu**. Je to normální osoba — natáhni ji z registru —
-jen má na tabu **Nastavení** zaškrtnuté **Vlastní firma**. Bez ní systém
-neví, pod čí hlavičkou doklady vznikají, takže je to první věc, kterou
-v novém datovém zdroji udělej.
+**Vlastní firma se zakládá z panelu Nastavení zdroje dat.** U čerstvého
+datového zdroje ti Dashboard ukáže kartu **Dokončit nastavení**, která
+panel otevře. U položky **Chybí vlastní Osoba** dej **Načíst z registru**
+— otevře se dialog **Načíst vlastní firmu z registru**, vyhledej svou firmu
+podle IČO a ulož. Vznikne najednou i se sídlem, bankovními účty a DIČ
+a rovnou označená jako **Vlastní firma** (zaškrtnutí na tabu **Nastavení**).
+Firmu, kterou registr nezná, zadáš přes **Zadat ručně** — formulář se otevře
+se zaškrtnutou **Vlastní firmou** předem. Bez vlastní firmy systém neví,
+pod čí hlavičkou doklady vznikají, takže je to první věc, kterou v novém
+datovém zdroji udělej.
 
 ## Souvisí
 

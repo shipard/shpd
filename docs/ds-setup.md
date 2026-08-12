@@ -32,8 +32,9 @@ dashboardu.
 > Fáze 3 je kompletní. Fáze 4 hotová: Task 08 (vlastní Osoba z registru,
 > režim `asOwn`, návrh `vatAgenda` podle DIČ) + Task 09 (předvyplněná
 > Registrace DPH, můstek bankovních účtů do číselníku, D17) — viz §5.4.
-> Další je Fáze 5 (nabídky).**
-> Fázování viz §8, otevřené body §10.
+> Fáze 5 hotová: Task 10 (sekce „Volitelné“ v panelu + nabídka účetních
+> položek per varianta osnovy, D18/D19) — **oblast ds-setup je kompletní**.**
+> Fázování viz §8, uzavřené body §10.
 
 ---
 
@@ -389,7 +390,8 @@ i účet, který už v číselníku je.
 Vrstva A (jazyk, země) se v panelu nezobrazuje — změnit se nedá a pro
 rozhodování nic nepřináší.
 
-Nabídky (základní Položky, název a logo) jsou Fáze 5, viz §10.
+Nabídky (Fáze 5, hotová) žijí v sekci „Volitelné“ panelu — viz §10;
+název a logo řeší existující settings stránka Aplikace.
 
 ### 5.5 Agregovaná karta feedu
 
@@ -526,7 +528,7 @@ Vrstvu A (`language`, `country`) zapisuje `ds-create`, tedy krok před importem.
 | **2 — Parametry do settings** | Čtyři klíče, provisionery a formuláře je čtou, odložený provisioning osnovy a fiskálních roků (D6), konec `getAccountChart()`/`getDefaultCurrency()` | `ds-upgrade` na čerstvém DS osnovu ani roky nenaseeduje; naseeduje je, jakmile klíč existuje |
 | **3 — Setup checky a panel** | Sedm nových checků + služba `SetupChecklist` (D12) + zákaz snooze/dismiss (D13); panel `dsSetup` „Co ještě chybí nastavit“ s ovládáním parametrů (D14); tagová agregace ve feedu (D8) a akce `open_panel` | Čerstvý DS ukazuje jednu kartu „Dokončit nastavení“, panel vyjmenuje chybějící položky a uživatel v něm rozhodne všechny čtyři parametry vrstvy C bez konzole |
 | **4 — Průvodce** | Rozšíření panelu `dsSetup` (D15, §5.4): vlastní Osoba z registru + návrh `vatAgenda` (Task 08, hotové), registrace DPH a můstek do číselníku bankovních účtů (Task 09, hotové) | Uživatel projde od čerstvého DS k potvrditelné vydané faktuře bez opuštění panelu |
-| **5 — Nabídky** | Nabídka účetních položek (`item_type = 2`) ve dvou sadách podle variantu osnovy, jako jednorázová akce v sekci „Volitelné“ (D18, D19) | Uživatel umí zaúčtovat bankovní poplatek, kurzový rozdíl a zaokrouhlení přímo z řádku dokladu, aniž by na něj cokoli tlačilo |
+| **5 — Nabídky** | Nabídka účetních položek (`item_type = 2`) ve dvou sadách podle variantu osnovy, jako jednorázová akce v sekci „Volitelné“ (D18, D19) — Task 10, hotové | Uživatel umí zaúčtovat bankovní poplatek, kurzový rozdíl a zaokrouhlení přímo z řádku dokladu, aniž by na něj cokoli tlačilo |
 
 Fáze 2 a 3 jsou navzájem nezávislé (checky nad chybějícími řádky nepotřebují
 settings) a dají se prohodit nebo dělat paralelně; Fáze 4 potřebuje obě.
@@ -575,7 +577,18 @@ Všechny body, které §0 nechávala otevřené, jsou rozhodnuté:
   `acc.entry` má `accountSrc: item` a bez nich vzniká `item_account_missing`.
   Sady jsou **dvě**, jedna per varianta osnovy, protože obě osnovy používají
   stejná čísla pro jiné účty (`548100` = Ostatní provozní náklady versus
-  Manka a škody).
+  Manka a škody). Implementace (Task 10, hotové):
+  `modules/economy/items/config/accountingItems{Default,Npo}.jsonc` — sedm
+  položek (`UP-BANK` bankovní poplatky, `UP-URN`/`UP-URV` úroky,
+  `UP-KZN`/`UP-KZV` kurzové rozdíly, `UP-ZAON`/`UP-ZAOV` zaokrouhlení;
+  zaokrouhlovací účty jsou konvence, dedikovaný účet žádná osnova nemá).
+  Mzdy, odvody a daň z příjmů jsou vědomě vynechané — mzdová agenda
+  v aplikaci není; rozšíření = řádek v seedu. Generování je
+  `POST /_setup/accounting-items` přes `ItemDocument` (druh `accounting`,
+  jednotka `pcs`, `source_kind = 'setup.accountingItems'`, docState Koncept);
+  nabídku servíruje `GET /_setup/accounting-items-offer` s gaty
+  `chart_undecided` / `chart_none` / `accounting_inactive` a příznakem
+  `exists` per kód — opakované generování je bezpečné.
 - **Pořadí kroků průvodce** → bezpředmětné. Krokový průvodce se nestaví (D15),
   pořadí drží `SetupChecklist::ORDER` a řídí se závislostmi.
 

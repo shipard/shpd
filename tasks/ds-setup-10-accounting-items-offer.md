@@ -1,6 +1,6 @@
 # ds-setup — Task 10: Nabídka účetních položek
 
-**Stav:** naplánováno
+**Stav:** hotovo
 
 > PRD pro jednu Claude Code session. Design: `docs/ds-setup.md`,
 > rozhodnutí **D18, D19**, §10. Fáze 5 a poslední task oblasti.

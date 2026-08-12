@@ -183,6 +183,8 @@ http://{ip-adresa}/{ds-id}/api/v1/{tabulka}
 | `GET` | `/api/v1/_setup/vat-registration-prefill` | Návrh hodnot Registrace DPH z vlastní Osoby + vrstvy A (auth) |
 | `GET` | `/api/v1/_setup/bank-account-candidates` | Bankovní spojení vlastní Osoby k překlopení do číselníku (auth) |
 | `POST` | `/api/v1/_setup/bank-accounts` | Překlop vybraných spojení do číselníku bankovních účtů (auth) |
+| `GET` | `/api/v1/_setup/accounting-items-offer` | Nabídka účetních položek dle varianty osnovy (auth) |
+| `POST` | `/api/v1/_setup/accounting-items` | Jednorázové vygenerování vybraných účetních položek (auth) |
 | `GET` | `/api/v1/_app/info` | Název/zkrácený název/ikona/logo aplikace — **veřejné** |
 | `GET` | `/api/v1/_app/branding/{slot}` | Binární obsah branding slotu — **veřejné**, immutable cache |
 | `POST` | `/api/v1/_app/branding/{slot}` | Upload obrázku slotu (multipart, pole `file`) — auth |
@@ -234,7 +236,23 @@ existsInCodebook}]}`; `existsInCodebook` se pozná podle IBAN, bez něj podle
 `economy_codebooks_bank_accounts` přes `BankAccountDocument` (kódy `BU1…`
 se generují sekvenčně s posunem přes existující, měna se normalizuje,
 `is_default` drží per-currency unikátnost z dokumentu). Neznámé id nebo
-účet už v číselníku → `422 VALIDATION_ERROR` s `details` a neuloží se nic. `POST
+účet už v číselníku → `422 VALIDATION_ERROR` s `details` a neuloží se nic.
+
+**`GET /_setup/accounting-items-offer`** — nabídka účetních položek pro
+sekci „Volitelné" panelu (ds-setup D18/D19 — jednorázová akce, ne
+provisioner, ne alert): `{available, chartVariant, candidates: [{code,
+name, accountNumber, exists}], unavailableReason}`. Sada se vybírá podle
+varianty `economy.accountChart` (`default`/`npo` mají **stejná čísla pro
+jiné účty**, filtr podle existence čísla by byl chyba); nerozhodnuto →
+`unavailableReason: 'chart_undecided'`, `none` → `'chart_none'`, chybějící
+extension `accounting_account` (neaktivní `economy.accounting`) →
+`'accounting_inactive'`. **`POST /_setup/accounting-items`** s body
+`{"codes": ["UP-BANK", …]}` vybrané položky založí přes `ItemDocument`
+(druh `accounting` → `item_type = 2`, jednotka `pcs`, `source_kind =
+'setup.accountingItems'`); odpověď `{created, skipped: [{code, reason,
+accountNumber?}]}` — existující kód a účet chybějící v osnově se přeskočí
+s důvodem, chybějící druh `accounting` → `409 ITEM_KIND_MISSING` (nic
+nevznikne), nedostupná nabídka → `409 OFFER_UNAVAILABLE`. `POST
 /_setup/parameters` s body `{"values": {"economy.accountChart": "npo"}}`
 zapíše parametry (`null` = smazání klíče, validace přes
 `LayerCParameters::validate()`, neznámý klíč / špatná hodnota → `422

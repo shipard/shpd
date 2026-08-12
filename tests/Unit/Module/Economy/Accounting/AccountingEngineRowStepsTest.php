@@ -418,4 +418,55 @@ class AccountingEngineRowStepsTest extends TestCase
             $this->assertSame('2400007', $line['payment_reference']);
         }
     }
+
+    // ── Task 10 (ds-setup): acc.entry s vygenerovanou účetní položkou ───────
+
+    /**
+     * Regrese k tasks/ds-setup-10: řádek s operací acc.entry a položkou
+     * z nabídky (item_type = 2 přes druh 'accounting', vyplněný
+     * accounting_account) se zaúčtuje na účet položky BEZ hlášky
+     * item_account_missing — přesně to, kvůli čemu nabídka vznikla.
+     */
+    public function testAccEntryWithGeneratedAccountingItemBooksOnItemAccount(): void
+    {
+        $db = $this->createMock(\Dibi\Connection::class);
+        $db->method('fetch')->willReturnCallback(
+            static function (...$args) {
+                $sql = (string) ($args[0] ?? '');
+                if (str_contains($sql, 'economy_accounting_accounts')) {
+                    return new \Dibi\Row(['id' => 42, 'number' => '568201']);
+                }
+                if (str_contains($sql, 'economy_items')) {
+                    return new \Dibi\Row(['item_type' => 2, 'accounting_account' => 42]);
+                }
+                return null;
+            },
+        );
+        $config = $this->createMock(ConfigRuntime::class);
+        $config->method('cfgItem')->willReturnMap([
+            ['docs.core.rowOperations', ['acc.entry' => []]],
+        ]);
+        $engine = new AccountingEngine($db, $config);
+
+        // Krok z accountingRules.cz.jsonc pro invno/invni.
+        $step = ['src' => 'rows', 'accountSrc' => 'item', 'sideSrc' => 'row', 'operation' => 'acc.entry'];
+        $rows = [[
+            'id'           => 21,
+            'operation'    => 'acc.entry',
+            'description'  => 'Bankovní poplatky',
+            'item'         => 7,
+            'acc_side'     => 0,
+            'vat_base_dom' => 150.0,
+            'vat_base'     => 150.0,
+        ]];
+
+        $lines = $this->buildRowLines($engine, $step, $rows);
+
+        $this->assertCount(1, $lines);
+        $this->assertSame('568201', $lines[0]['account_number']);
+        $this->assertFalse($lines[0]['is_error']);
+        $this->assertSame(0, $lines[0]['side']);
+        $this->assertEqualsWithDelta(150.0, $lines[0]['money_dr'], 0.001);
+        $this->assertSame([], $this->messagesOf($engine));
+    }
 }

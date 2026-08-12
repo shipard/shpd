@@ -23,5 +23,10 @@
         "name": "Supplier catalog",
         "name:cs": "Katalog dodavatele",
         "name:en": "Supplier catalog"
+    },
+    "setup.accountingItems": {
+        "name": "Setup — accounting items",
+        "name:cs": "Nastavení — účetní položky",
+        "name:en": "Setup — accounting items"
     }
 }

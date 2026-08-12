@@ -21,6 +21,7 @@ use Shipard\Core\Module\ModulePathResolver;
 use Shipard\Core\Settings\LayerCParameters;
 use Shipard\Core\Settings\SettingsStore;
 use Shipard\Core\Settings\SetupChecklist;
+use Shipard\Core\Utils\JsoncParser;
 use Shipard\Module\Economy\Accounting\AccountChartProvisioner;
 use Shipard\Module\Economy\Codebooks\FiscalYearsProvisioner;
 
@@ -31,6 +32,8 @@ use Shipard\Module\Economy\Codebooks\FiscalYearsProvisioner;
  *   GET  /_setup/vat-registration-prefill  — návrh hodnot Registrace DPH z vlastní Osoby + vrstvy A
  *   GET  /_setup/bank-account-candidates   — bankovní spojení vlastní Osoby k překlopení do číselníku
  *   POST /_setup/bank-accounts             — překlop vybraných spojení do economy_codebooks_bank_accounts
+ *   GET  /_setup/accounting-items-offer    — nabídka účetních položek dle varianty osnovy (D18/D19)
+ *   POST /_setup/accounting-items          — jednorázové vygenerování vybraných účetních položek
  *
  * Backend panelu dsSetup (docs/ds-setup.md D12/D14, Fáze 4 §5.4). Auth:
  * přihlášený uživatel, bez adminOnly — v jednouživatelských DS by to
@@ -42,6 +45,11 @@ class SetupController
     private const ACTIVE_DOC_STATES = [10, 40];
 
     private const CODEBOOK_TABLE = 'economy_codebooks_bank_accounts';
+
+    private const ITEMS_TABLE = 'economy_items';
+
+    /** source_kind vygenerovaných účetních položek (config/sourceKinds.jsonc). */
+    private const ITEMS_SOURCE_KIND = 'setup.accountingItems';
 
     /** Memo pro ownPerson() — null = zatím nenačteno, false = žádná není. */
     private array|false|null $ownPersonCache = null;
@@ -331,6 +339,287 @@ class SetupController
     }
 
     /**
+     * GET /_setup/accounting-items-offer — nabídka účetních položek pro
+     * sekci „Volitelné" panelu (D18: jednorázová akce, ne provisioner;
+     * D19: není to alert — žádný check, žádná položka checklistu).
+     *
+     * Sada se vybírá podle varianty osnovy, NE filtrem podle existence
+     * čísel — obě osnovy používají stejná čísla pro jiné účty (548100 =
+     * Ostatní provozní náklady versus Manka a škody).
+     */
+    public function accountingItemsOffer(AuthContext $auth): Response
+    {
+        if (!$auth->isAuthenticated) {
+            return Response::error('UNAUTHORIZED', 'Authentication required', 401);
+        }
+
+        $variant = $this->accountChartVariant();
+        $reason  = $this->accountingItemsUnavailableReason($variant);
+        if ($reason !== null) {
+            return Response::success([
+                'available'         => false,
+                'chartVariant'      => $variant,
+                'candidates'        => [],
+                'unavailableReason' => $reason,
+            ]);
+        }
+
+        $seed = $this->loadAccountingItemsSeed((string) $variant);
+        if ($seed === null) {
+            return Response::error('INTERNAL_ERROR', 'Accounting items seed file not found', 500);
+        }
+
+        $existing = $this->existingItemCodes(array_keys($seed));
+
+        $candidates = [];
+        foreach ($seed as $code => $entry) {
+            $candidates[] = [
+                'code'          => $code,
+                'name'          => $this->seedName($entry, $code),
+                'accountNumber' => (string) ($entry['account'] ?? ''),
+                'exists'        => isset($existing[$code]),
+            ];
+        }
+
+        return Response::success([
+            'available'         => true,
+            'chartVariant'      => $variant,
+            'candidates'        => $candidates,
+            'unavailableReason' => null,
+        ]);
+    }
+
+    /**
+     * POST /_setup/accounting-items — body {"codes": ["UP-BANK", ...]}.
+     * Jednorázově vygeneruje vybrané účetní položky. Každá jde přes
+     * ItemDocument (TableGateway) — item_type = 2 denormalizuje beforeSave
+     * z druhu, kód i účet projdou stejnou validací jako u ručního pořízení.
+     *
+     * Existující kód → skipped (opakované generování je bezpečné); účet
+     * ze seedu v osnově chybí → skipped s důvodem (položka s prázdným
+     * účtem by v acc.entry tiše nefungovala).
+     */
+    public function generateAccountingItems(Request $request, AuthContext $auth): Response
+    {
+        if (!$auth->isAuthenticated) {
+            return Response::error('UNAUTHORIZED', 'Authentication required', 401);
+        }
+
+        $body  = $request->getBody();
+        $codes = $body['codes'] ?? null;
+        if (!is_array($codes) || $codes === [] || $codes !== array_filter($codes, is_string(...))) {
+            return Response::error('BAD_REQUEST', '`codes` must be a non-empty list of strings', 400);
+        }
+        $codes = array_values(array_unique($codes));
+
+        $variant = $this->accountChartVariant();
+        $reason  = $this->accountingItemsUnavailableReason($variant);
+        if ($reason !== null) {
+            return Response::error('OFFER_UNAVAILABLE', "Accounting items offer is not available: {$reason}", 409);
+        }
+
+        $seed = $this->loadAccountingItemsSeed((string) $variant);
+        if ($seed === null) {
+            return Response::error('INTERNAL_ERROR', 'Accounting items seed file not found', 500);
+        }
+
+        // Druh 'accounting' je podmínka funkčnosti, ne kosmetika —
+        // resolveItemAccount() kontroluje item_type = 2 a položka s jiným
+        // druhem by tiše nefungovala. Hlasitá chyba, žádný fallback.
+        $kindId = $this->db->fetchSingle(
+            'SELECT id FROM economy_items_kinds WHERE system_code = %s',
+            'accounting',
+        );
+        if (!$kindId) {
+            return Response::error(
+                'ITEM_KIND_MISSING',
+                "Item kind with system_code 'accounting' not found — run ds-upgrade first",
+                409,
+            );
+        }
+
+        $unitId = $this->db->fetchSingle(
+            'SELECT id FROM core_units WHERE system_code = %s',
+            'pcs',
+        );
+        if (!$unitId) {
+            return Response::error(
+                'UNIT_MISSING',
+                "Unit with system_code 'pcs' not found — run ds-upgrade first",
+                409,
+            );
+        }
+
+        $existing = $this->existingItemCodes(array_keys($seed));
+
+        $created = [];
+        $skipped = [];
+        foreach ($codes as $code) {
+            $entry = $seed[$code] ?? null;
+            if ($entry === null) {
+                $skipped[] = ['code' => $code, 'reason' => 'unknown_code'];
+                continue;
+            }
+            if (isset($existing[$code])) {
+                $skipped[] = ['code' => $code, 'reason' => 'already_exists'];
+                continue;
+            }
+
+            // Stejná kritéria jako validace ItemDocument (aktivní analytický
+            // účet) — účet mimo osnovu položku přeskočí, nezaloží ji rozbitou.
+            $number    = (string) ($entry['account'] ?? '');
+            $accountId = $this->db->fetchSingle(
+                'SELECT id FROM economy_accounting_accounts'
+                    . ' WHERE number = %s AND account_level = 4 AND docState IN %in',
+                $number,
+                [10, 40, 80],
+            );
+            if (!$accountId) {
+                $skipped[] = ['code' => $code, 'reason' => 'account_not_found', 'accountNumber' => $number];
+                continue;
+            }
+
+            $payload = [
+                'code'                => $code,
+                'name'                => $this->seedName($entry, $code),
+                'item_kind'           => (int) $kindId,
+                'unit'                => (int) $unitId,
+                'sales_price_no_vat'  => null,
+                'accounting_account'  => (int) $accountId,
+                'source_kind'         => self::ITEMS_SOURCE_KIND,
+                'source_ref'          => $code,
+                'source_imported_at'  => date('Y-m-d H:i:s'),
+                // Koncept jako u ručně pořízené položky (žádné kopírování
+                // docState 40 z provisioneru osnovy); main dopočítá gateway.
+                'docState'            => 10,
+            ];
+
+            $result = $this->saveItemRow($payload);
+            if (!$result->isSuccess()) {
+                ErrorLogger::error('SetupController: accounting item generation failed', [
+                    'code'    => $code,
+                    'message' => $result->getErrorMessage(),
+                ]);
+                return Response::error(
+                    'SAVE_FAILED',
+                    "Saving accounting item {$code} failed: " . ($result->getErrorMessage() ?? 'unknown error'),
+                    500,
+                );
+            }
+            $saved     = $result->getData() ?? [];
+            $created[] = ['id' => (int) ($saved['id'] ?? 0), 'code' => $code, 'name' => $payload['name']];
+        }
+
+        return Response::success(['created' => $created, 'skipped' => $skipped]);
+    }
+
+    /** Hodnota economy.accountChart, nebo null = nerozhodnuto. */
+    private function accountChartVariant(): ?string
+    {
+        $variant = (new SettingsStore($this->db))->get('economy.accountChart');
+        return is_string($variant) && $variant !== '' ? $variant : null;
+    }
+
+    /**
+     * Proč nabídka účetních položek není dostupná; null = dostupná.
+     * accounting_inactive: sloupec accounting_account je extension
+     * z economy.accounting — bez aktivního modulu neexistuje a položky
+     * by neměly kam dostat účet.
+     */
+    private function accountingItemsUnavailableReason(?string $variant): ?string
+    {
+        if ($variant === null) {
+            return 'chart_undecided';
+        }
+        if ($variant === 'none') {
+            return 'chart_none';
+        }
+
+        $def = $this->tables[self::ITEMS_TABLE] ?? null;
+        foreach ($def?->columns ?? [] as $column) {
+            if ($column->id === 'accounting_account') {
+                return null;
+            }
+        }
+        return 'accounting_inactive';
+    }
+
+    /**
+     * Seed sady podle varianty osnovy, klíčovaný kódem položky.
+     * Dva soubory, ne jeden s filtrem — viz komentář u accountingItemsOffer.
+     *
+     * @return array<string, array<string, mixed>>|null null = soubor chybí / nečitelný
+     */
+    private function loadAccountingItemsSeed(string $variant): ?array
+    {
+        $file = match ($variant) {
+            'default' => 'accountingItemsDefault.jsonc',
+            'npo'     => 'accountingItemsNpo.jsonc',
+            default   => null,
+        };
+        $modulePath = $this->modulePathResolver->getPath('economy.items');
+        if ($file === null || $modulePath === null) {
+            return null;
+        }
+        $path = $modulePath . '/config/' . $file;
+        if (!is_file($path)) {
+            ErrorLogger::error('SetupController: accounting items seed not found', ['file' => $file]);
+            return null;
+        }
+
+        $seed = JsoncParser::parseFile($path);
+        if (!is_array($seed)) {
+            return null;
+        }
+
+        $byCode = [];
+        foreach ($seed as $entry) {
+            if (is_array($entry) && !empty($entry['code'])) {
+                $byCode[(string) $entry['code']] = $entry;
+            }
+        }
+        return $byCode;
+    }
+
+    /**
+     * Kódy z $codes, které už v economy_items existují (unq_code) → set.
+     *
+     * @param list<string> $codes
+     * @return array<string, true>
+     */
+    private function existingItemCodes(array $codes): array
+    {
+        if ($codes === []) {
+            return [];
+        }
+        $set = [];
+        $rows = $this->db->fetchAll(
+            'SELECT code FROM ' . self::ITEMS_TABLE . ' WHERE code IN %in',
+            $codes,
+        );
+        foreach ($rows as $row) {
+            $set[(string) ($row['code'] ?? '')] = true;
+        }
+        return $set;
+    }
+
+    /**
+     * Lokalizovaný název ze seed záznamu — fallback chain jazyk → en → holé
+     * pole (stejně jako ConfigLocalizer).
+     *
+     * @param array<string, mixed> $entry
+     */
+    private function seedName(array $entry, string $code): string
+    {
+        foreach (['name:' . $this->language, 'name:en', 'name'] as $key) {
+            if (!empty($entry[$key])) {
+                return (string) $entry[$key];
+            }
+        }
+        return $code;
+    }
+
+    /**
      * Aktivní vlastní Osoba (is_own, docState 10/40) — memoizovaně; jeden
      * request se na ni ptá z více míst (suggestion, panelové akce, prefill,
      * můstek). null = žádná není.
@@ -489,7 +778,17 @@ class SetupController
      */
     protected function saveBankAccountRow(array $payload): DocumentResult
     {
-        $gateway = $this->buildBankAccountsGateway();
+        $gateway = $this->buildGateway(self::CODEBOOK_TABLE);
+        if ($gateway === null) {
+            return DocumentResult::error('Table definition or document registry unavailable');
+        }
+        return $gateway->saveDocument($payload);
+    }
+
+    /** Uložení jedné položky přes ItemDocument — stejný seam vzor. */
+    protected function saveItemRow(array $payload): DocumentResult
+    {
+        $gateway = $this->buildGateway(self::ITEMS_TABLE);
         if ($gateway === null) {
             return DocumentResult::error('Table definition or document registry unavailable');
         }
@@ -497,14 +796,14 @@ class SetupController
     }
 
     /** Paralela k AnalysisController::buildHeadsGateway(). */
-    private function buildBankAccountsGateway(): ?TableGateway
+    private function buildGateway(string $table): ?TableGateway
     {
-        $def = $this->tables[self::CODEBOOK_TABLE] ?? null;
+        $def = $this->tables[$table] ?? null;
         if ($def === null || $this->documentRegistry === null) {
             return null;
         }
         return new TableGateway(
-            self::CODEBOOK_TABLE,
+            $table,
             $this->db->getDibiConnection(),
             $this->documentRegistry,
             $def->childTables,

@@ -607,6 +607,8 @@ function dispatchSetup(
 		'vatRegistrationPrefill'  => $ctrl->vatRegistrationPrefill($auth),
 		'bankAccountCandidates'   => $ctrl->bankAccountCandidates($auth),
 		'bridgeBankAccounts'      => $ctrl->bridgeBankAccounts($request, $auth),
+		'accountingItemsOffer'    => $ctrl->accountingItemsOffer($auth),
+		'generateAccountingItems' => $ctrl->generateAccountingItems($request, $auth),
 		default                   => Response::error('INTERNAL_ERROR', "Unknown setup action: {$route->action}", 500),
 	};
 }

@@ -38,7 +38,30 @@ později spolu s VAT modulem a `economy.docs`.
 | Klíč | Soubor | Popis |
 |---|---|---|
 | `economy.items.itemTypes` | [config/itemTypes.jsonc](config/itemTypes.jsonc) | Typ položky — služba / zásoba / účetní / ostatní |
-| `economy.items.sourceKinds` | [config/sourceKinds.jsonc](config/sourceKinds.jsonc) | Klíče pro sloupec `source_kind` v `economy_items` — `manual`, `aiExtraction`, `import.oldShipard`, `import.csv`, `import.supplierCatalog` |
+| `economy.items.sourceKinds` | [config/sourceKinds.jsonc](config/sourceKinds.jsonc) | Klíče pro sloupec `source_kind` v `economy_items` — `manual`, `aiExtraction`, `import.oldShipard`, `import.csv`, `import.supplierCatalog`, `setup.accountingItems` |
+
+## Účetní položky (item_type = 2)
+
+Řádek dokladu s operací `acc.entry` (na interním dokladu `acc.item`) se
+účtuje **přímo na účet uvedený na položce** — účtovací předpis má
+`accountSrc: "item"` a `AccountingEngine::resolveItemAccount()` vyžaduje
+položku typu Účetní položka s vyplněným účtem, jinak vznikne chybový řádek
+deníku (`item_account_missing`). Slouží pro bankovní poplatky, úroky,
+kurzové rozdíly nebo zaokrouhlení.
+
+Sloupec `accounting_account` **není** přímý sloupec `economy_items` — je to
+extension z `modules/economy/accounting/extensions/economy_items.jsonc`
+(účetnictví zná položky, položky o účetnictví nevědí).
+
+Startovní sadu sedmi účetních položek lze **jednorázově vygenerovat
+z panelu Nastavení zdroje dat** (sekce „Volitelné", ds-setup Task 10,
+D18/D19 — není to provisioner, smazané položky se nevracejí). Seed sady
+jsou **dvě**, jedna per varianta osnovy
+([config/accountingItemsDefault.jsonc](config/accountingItemsDefault.jsonc),
+[config/accountingItemsNpo.jsonc](config/accountingItemsNpo.jsonc)) —
+obě osnovy používají stejná čísla pro jiné účty, takže filtr podle
+existence čísla by byl chyba. Vygenerované položky nesou
+`source_kind = 'setup.accountingItems'` a `source_ref` s kódem ze seedu.
 
 ## Seedovaná data
 

@@ -16,6 +16,7 @@
   import RegistryImportWizard from '../registry/RegistryImportWizard.svelte';
   import VatRegistrationPrefillDialog from './VatRegistrationPrefillDialog.svelte';
   import BankAccountBridgeDialog from './BankAccountBridgeDialog.svelte';
+  import AccountingItemsOffer from './AccountingItemsOffer.svelte';
   import { iconListCheck, iconSuccess, iconWarning } from '../../icons.js';
   import { fetchSetupChecklist, saveSetupParameters } from '../../api/setup.js';
 
@@ -298,6 +299,14 @@
           </ul>
         </details>
       {/if}
+
+      <!-- Nabídky (D18/D19): samostatná sekce mimo checklist — nesplněná
+           nabídka není problém a nikdy nic nerozsvítí. -->
+      <div class="shpd-ds-setup__optional">
+        <h3 class="shpd-ds-setup__optional-title">{t('setup.optional.title')}</h3>
+        <p class="shpd-ds-setup__optional-intro">{t('setup.optional.intro')}</p>
+        <AccountingItemsOffer />
+      </div>
     {/if}
   </div>
 </div>
@@ -541,5 +550,23 @@
     font-weight: 600;
     color: var(--shpd-color-text);
     margin-bottom: var(--shpd-space-sm);
+  }
+
+  .shpd-ds-setup__optional {
+    margin-top: var(--shpd-space-xl, 2rem);
+    padding-top: var(--shpd-space-lg);
+    border-top: 1px solid var(--shpd-color-border);
+  }
+
+  .shpd-ds-setup__optional-title {
+    font-size: var(--shpd-font-size-base);
+    font-weight: 600;
+    color: var(--shpd-color-text);
+  }
+
+  .shpd-ds-setup__optional-intro {
+    margin: var(--shpd-space-xs) 0 var(--shpd-space-md);
+    font-size: var(--shpd-font-size-sm);
+    color: var(--shpd-color-text-secondary);
   }
 </style>

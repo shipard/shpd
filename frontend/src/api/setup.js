@@ -46,3 +46,26 @@ export function fetchBankAccountCandidates() {
 export function bridgeBankAccounts(personBankAccountIds, defaultId) {
   return post('/_setup/bank-accounts', { personBankAccountIds, defaultId });
 }
+
+/**
+ * Nabídka účetních položek pro sekci „Volitelné" (D18/D19 — jednorázová
+ * akce, ne provisioner ani alert).
+ *
+ * @returns {Promise<{success: boolean, data?: {available: boolean,
+ *   chartVariant: string|null, unavailableReason: string|null,
+ *   candidates: Array<{code: string, name: string, accountNumber: string,
+ *   exists: boolean}>}, error?: object}>}
+ */
+export function fetchAccountingItemsOffer() {
+  return get('/_setup/accounting-items-offer');
+}
+
+/**
+ * @param {string[]} codes kódy kandidátů ze seedu (UP-BANK, …)
+ * @returns {Promise<{success: boolean, data?: {created: Array<{id: number,
+ *   code: string, name: string}>, skipped: Array<{code: string,
+ *   reason: string, accountNumber?: string}>}, error?: object}>}
+ */
+export function generateAccountingItems(codes) {
+  return post('/_setup/accounting-items', { codes });
+}

@@ -815,6 +815,22 @@ class Router
 			return new Route('setup', 'bridgeBankAccounts');
 		}
 
+		// GET /_setup/accounting-items-offer
+		if ($rest === '/accounting-items-offer') {
+			if ($method !== 'GET') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('setup', 'accountingItemsOffer');
+		}
+
+		// POST /_setup/accounting-items
+		if ($rest === '/accounting-items') {
+			if ($method !== 'POST') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('setup', 'generateAccountingItems');
+		}
+
 		return Response::error('NOT_FOUND', 'Not found', 404);
 	}
 

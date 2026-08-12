@@ -163,6 +163,11 @@ položka, ne předpis.
   deníku (viz sekce 7.4). Měkce proto, že konfigurace položky se může změnit
   nezávisle na dokladu.
 
+Startovní sadu účetních položek (bankovní poplatky, úroky, kurzové rozdíly,
+zaokrouhlení) lze na čerstvém DS **vygenerovat z panelu Nastavení zdroje
+dat**, sekce „Volitelné" — dvě seed sady per varianta osnovy, viz
+`docs/ds-setup.md` §10 a `modules/economy/items/README.md`.
+
 ### Vlajky operací (vlna C/D)
 
 Operace může deklarovat atributy, které řídí formulář řádku (`DocRowsForm`)

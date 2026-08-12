@@ -14,6 +14,7 @@ use Shipard\Core\Alerts\AlertCheckRegistry;
 use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Database\DataSourceConnection;
+use Shipard\Core\Database\TableDefinition;
 use Shipard\Core\Document\DocumentResult;
 use Shipard\Core\Module\ModuleDefinition;
 use Shipard\Core\Module\ModulePathResolver;
@@ -63,12 +64,17 @@ class SetupControllerTest extends TestCase
      * provisioner. $ownPerson je řádek aktivní vlastní Osoby (fetchRow nad
      * base_persons_persons; null = žádná není), $personBankAccounts její
      * bankovní spojení, $codebookAccounts aktivní řádky číselníku
-     * economy_codebooks_bank_accounts.
+     * economy_codebooks_bank_accounts. Pro nabídku účetních položek:
+     * $itemKindId (druh 'accounting'; null = chybí), $unitId (jednotka
+     * 'pcs'), $accountIdsByNumber (číslo účtu → id v osnově)
+     * a $existingItems (řádky s existujícími kódy v economy_items).
      *
      * @param array<string, mixed> $settings klíč → hodnota
      * @param array<string, mixed>|null $ownPerson
      * @param list<array<string, mixed>> $personBankAccounts
      * @param list<array<string, mixed>> $codebookAccounts
+     * @param array<string, int> $accountIdsByNumber
+     * @param list<array<string, mixed>> $existingItems
      */
     private function makeDb(
         array $settings = [],
@@ -76,11 +82,21 @@ class SetupControllerTest extends TestCase
         ?array $ownPerson = null,
         array $personBankAccounts = [],
         array $codebookAccounts = [],
+        ?int $itemKindId = null,
+        ?int $unitId = null,
+        array $accountIdsByNumber = [],
+        array $existingItems = [],
     ): MockObject&DataSourceConnection {
         $db = $this->createMock(DataSourceConnection::class);
 
         $db->method('fetchSingle')->willReturnCallback(
-            static function (mixed ...$args) use ($settings, $codebookAccounts): mixed {
+            static function (mixed ...$args) use (
+                $settings,
+                $codebookAccounts,
+                $itemKindId,
+                $unitId,
+                $accountIdsByNumber,
+            ): mixed {
                 $sql = (string) $args[0];
                 if (str_contains($sql, 'core_system_settings')) {
                     return array_key_exists($args[1] ?? '', $settings)
@@ -94,11 +110,20 @@ class SetupControllerTest extends TestCase
                         0,
                     );
                 }
+                if (str_contains($sql, 'economy_items_kinds')) {
+                    return $itemKindId;
+                }
+                if (str_contains($sql, 'core_units')) {
+                    return $unitId;
+                }
+                if (str_contains($sql, 'economy_accounting_accounts')) {
+                    return $accountIdsByNumber[(string) ($args[1] ?? '')] ?? null;
+                }
                 return 0;   // COUNT dotazy checků → vše "chybí"
             },
         );
         $db->method('fetchAll')->willReturnCallback(
-            static function (mixed ...$args) use ($settings, $personBankAccounts, $codebookAccounts): array {
+            static function (mixed ...$args) use ($settings, $personBankAccounts, $codebookAccounts, $existingItems): array {
                 $sql = (string) $args[0];
                 // SettingsStore::getMany — vrátit řádky existujících klíčů.
                 if (str_contains($sql, 'core_system_settings')) {
@@ -113,6 +138,9 @@ class SetupControllerTest extends TestCase
                 }
                 if (str_contains($sql, 'economy_codebooks_bank_accounts')) {
                     return $codebookAccounts;
+                }
+                if (str_contains($sql, 'FROM economy_items')) {
+                    return $existingItems;
                 }
                 return [];
             },
@@ -209,9 +237,34 @@ class SetupControllerTest extends TestCase
         return $config;
     }
 
+    /**
+     * Minimální definice economy_items — pro dostupnost nabídky účetních
+     * položek stačí, aby existoval sloupec accounting_account (extension
+     * z economy.accounting); $withAccountingColumn = false simuluje DS bez
+     * aktivního modulu účetnictví.
+     */
+    private static function itemsTableDef(bool $withAccountingColumn = true): TableDefinition
+    {
+        $columns = [
+            ['id' => 'id', 'name' => 'ID', 'type' => 'int', 'autoIncrement' => true, 'primaryKey' => true],
+            ['id' => 'code', 'name' => 'Code', 'type' => 'varchar', 'length' => 25, 'nullable' => false],
+        ];
+        if ($withAccountingColumn) {
+            $columns[] = ['id' => 'accounting_account', 'name' => 'Account', 'type' => 'int', 'nullable' => true];
+        }
+        return TableDefinition::fromArray(['tableId' => 320, 'name' => 'Items', 'columns' => $columns]);
+    }
+
+    /** @return array<string, TableDefinition> */
+    private static function defaultTables(): array
+    {
+        return ['economy_items' => self::itemsTableDef()];
+    }
+
     private function makeController(
         MockObject&DataSourceConnection $db,
         ?DataSourceConfig $dsConfig = null,
+        ?array $tables = null,
     ): SetupController {
         return new SetupController(
             $db,
@@ -220,7 +273,34 @@ class SetupControllerTest extends TestCase
             'cs',
             new ModulePathResolver([dirname(__DIR__, 4) . '/modules']),
             $dsConfig,
+            $tables ?? self::defaultTables(),
         );
+    }
+
+    /**
+     * Controller se zachytáváním generovaných účetních položek — seam
+     * saveItemRow místo TableGateway (stejný vzor jako makeBridgeController).
+     */
+    private function makeItemsController(MockObject&DataSourceConnection $db): SetupController
+    {
+        return new class(
+            $db,
+            $this->makeRegistry(),
+            $this->makeConfig(),
+            'cs',
+            new ModulePathResolver([dirname(__DIR__, 4) . '/modules']),
+            null,
+            ['economy_items' => self::itemsTableDef()],
+        ) extends SetupController {
+            /** @var list<array<string, mixed>> */
+            public array $savedItems = [];
+
+            protected function saveItemRow(array $payload): DocumentResult
+            {
+                $this->savedItems[] = $payload;
+                return DocumentResult::ok(['id' => 200 + count($this->savedItems)] + $payload);
+            }
+        };
     }
 
     /**
@@ -698,5 +778,196 @@ class SetupControllerTest extends TestCase
         $actions = $this->findItem($resp, 'economy.codebooks.missing_own_bank_account')['actions'];
         $this->assertCount(1, $actions);
         $this->assertSame('open_form', $actions[0]['kind']);
+    }
+
+    // ── Task 10: nabídka účetních položek ────────────────────────────────
+
+    /** @return array<string, mixed> kandidát podle kódu, fail když chybí */
+    private function findCandidate(Response $response, string $code): array
+    {
+        foreach ($response->getPayload()['data']['candidates'] as $candidate) {
+            if ($candidate['code'] === $code) {
+                return $candidate;
+            }
+        }
+        $this->fail("Candidate {$code} not found in offer response");
+    }
+
+    private static function itemsRequest(array $body): Request
+    {
+        return Request::fromArray('POST', '/_setup/accounting-items', [], json_encode($body), []);
+    }
+
+    public function testAccountingItemsOfferUnavailableReasons(): void
+    {
+        // Nerozhodnutá osnova → chart_undecided.
+        $resp = $this->makeController($this->makeDb())->accountingItemsOffer(self::auth());
+        $data = $resp->getPayload()['data'];
+        $this->assertFalse($data['available']);
+        $this->assertSame('chart_undecided', $data['unavailableReason']);
+        $this->assertSame([], $data['candidates']);
+
+        // Vlastní osnova (none) → chart_none, bez osnovy není na co účtovat.
+        $resp = $this->makeController($this->makeDb(['economy.accountChart' => 'none']))
+            ->accountingItemsOffer(self::auth());
+        $this->assertSame('chart_none', $resp->getPayload()['data']['unavailableReason']);
+
+        // Chybějící extension accounting_account (economy.accounting
+        // neaktivní) → accounting_inactive i s rozhodnutou osnovou.
+        $resp = $this->makeController(
+            $this->makeDb(['economy.accountChart' => 'default']),
+            tables: ['economy_items' => self::itemsTableDef(withAccountingColumn: false)],
+        )->accountingItemsOffer(self::auth());
+        $this->assertSame('accounting_inactive', $resp->getPayload()['data']['unavailableReason']);
+    }
+
+    public function testAccountingItemsCandidatesFollowChartVariant(): void
+    {
+        // Regresní test na past se stejnými čísly: obě osnovy používají
+        // 548100/648100 pro JINÉ účty, sada se musí vybírat podle varianty.
+        $resp = $this->makeController($this->makeDb(['economy.accountChart' => 'default']))
+            ->accountingItemsOffer(self::auth());
+        $data = $resp->getPayload()['data'];
+        $this->assertTrue($data['available']);
+        $this->assertSame('default', $data['chartVariant']);
+        $this->assertCount(7, $data['candidates']);
+        $this->assertSame('548100', $this->findCandidate($resp, 'UP-ZAON')['accountNumber']);
+        $this->assertSame('568201', $this->findCandidate($resp, 'UP-BANK')['accountNumber']);
+
+        $resp = $this->makeController($this->makeDb(['economy.accountChart' => 'npo']))
+            ->accountingItemsOffer(self::auth());
+        $this->assertSame('549100', $this->findCandidate($resp, 'UP-ZAON')['accountNumber']);
+        $this->assertSame('549100', $this->findCandidate($resp, 'UP-BANK')['accountNumber']);
+    }
+
+    public function testAccountingItemsOfferMarksExistingCodes(): void
+    {
+        $resp = $this->makeController($this->makeDb(
+            ['economy.accountChart' => 'default'],
+            existingItems: [['code' => 'UP-BANK']],
+        ))->accountingItemsOffer(self::auth());
+
+        $this->assertTrue($this->findCandidate($resp, 'UP-BANK')['exists']);
+        $this->assertFalse($this->findCandidate($resp, 'UP-KZN')['exists']);
+    }
+
+    public function testGenerateAccountingItemsCreatesItemsViaDocument(): void
+    {
+        $ctrl = $this->makeItemsController($this->makeDb(
+            ['economy.accountChart' => 'default'],
+            itemKindId: 5,
+            unitId: 9,
+            accountIdsByNumber: ['568201' => 42, '563100' => 43],
+        ));
+
+        $resp = $ctrl->generateAccountingItems(
+            self::itemsRequest(['codes' => ['UP-BANK', 'UP-KZN']]),
+            self::auth(),
+        );
+
+        $this->assertSame(200, $this->getStatus($resp));
+        $data = $resp->getPayload()['data'];
+        $this->assertSame(['UP-BANK', 'UP-KZN'], array_column($data['created'], 'code'));
+        $this->assertSame([], $data['skipped']);
+
+        $this->assertCount(2, $ctrl->savedItems);
+        [$bank, $fx] = $ctrl->savedItems;
+        $this->assertSame('UP-BANK', $bank['code']);
+        $this->assertSame('Bankovní poplatky', $bank['name']);
+        $this->assertSame(5, $bank['item_kind']);
+        $this->assertSame(9, $bank['unit']);
+        $this->assertSame(42, $bank['accounting_account']);
+        $this->assertSame(43, $fx['accounting_account']);
+        $this->assertNull($bank['sales_price_no_vat']);
+        $this->assertSame('setup.accountingItems', $bank['source_kind']);
+        $this->assertSame('UP-BANK', $bank['source_ref']);
+        $this->assertNotEmpty($bank['source_imported_at']);
+        // Koncept jako u ručního pořízení, ne 40 z provisioneru osnovy.
+        $this->assertSame(10, $bank['docState']);
+        // item_type se neposílá — denormalizuje ho ItemDocument::beforeSave z druhu.
+        $this->assertArrayNotHasKey('item_type', $bank);
+    }
+
+    public function testGenerateSkipsMissingAccountButCreatesOthers(): void
+    {
+        // 563100 v osnově chybí → UP-KZN přeskočená s důvodem, UP-BANK vznikne.
+        $ctrl = $this->makeItemsController($this->makeDb(
+            ['economy.accountChart' => 'default'],
+            itemKindId: 5,
+            unitId: 9,
+            accountIdsByNumber: ['568201' => 42],
+        ));
+
+        $resp = $ctrl->generateAccountingItems(
+            self::itemsRequest(['codes' => ['UP-BANK', 'UP-KZN']]),
+            self::auth(),
+        );
+
+        $this->assertSame(200, $this->getStatus($resp));
+        $data = $resp->getPayload()['data'];
+        $this->assertSame(['UP-BANK'], array_column($data['created'], 'code'));
+        $this->assertSame(
+            [['code' => 'UP-KZN', 'reason' => 'account_not_found', 'accountNumber' => '563100']],
+            $data['skipped'],
+        );
+        $this->assertCount(1, $ctrl->savedItems);
+    }
+
+    public function testGenerateFailsLoudlyWithoutAccountingKind(): void
+    {
+        // Druh 'accounting' chybí → hlasitá chyba, nic nevznikne. Položka
+        // s jiným druhem by v resolveItemAccount() tiše nefungovala.
+        $ctrl = $this->makeItemsController($this->makeDb(
+            ['economy.accountChart' => 'default'],
+            itemKindId: null,
+            unitId: 9,
+            accountIdsByNumber: ['568201' => 42],
+        ));
+
+        $resp = $ctrl->generateAccountingItems(
+            self::itemsRequest(['codes' => ['UP-BANK']]),
+            self::auth(),
+        );
+
+        $this->assertSame(409, $this->getStatus($resp));
+        $this->assertSame('ITEM_KIND_MISSING', $resp->getPayload()['error']['code']);
+        $this->assertSame([], $ctrl->savedItems);
+    }
+
+    public function testGenerateSkipsExistingCodeWithoutError(): void
+    {
+        // Opakované generování je bezpečné — existující kód není chyba.
+        $ctrl = $this->makeItemsController($this->makeDb(
+            ['economy.accountChart' => 'default'],
+            itemKindId: 5,
+            unitId: 9,
+            accountIdsByNumber: ['568201' => 42],
+            existingItems: [['code' => 'UP-BANK']],
+        ));
+
+        $resp = $ctrl->generateAccountingItems(
+            self::itemsRequest(['codes' => ['UP-BANK']]),
+            self::auth(),
+        );
+
+        $this->assertSame(200, $this->getStatus($resp));
+        $data = $resp->getPayload()['data'];
+        $this->assertSame([], $data['created']);
+        $this->assertSame([['code' => 'UP-BANK', 'reason' => 'already_exists']], $data['skipped']);
+        $this->assertSame([], $ctrl->savedItems);
+    }
+
+    public function testGenerateUnavailableWithoutChartConflicts(): void
+    {
+        $ctrl = $this->makeItemsController($this->makeDb());
+
+        $resp = $ctrl->generateAccountingItems(
+            self::itemsRequest(['codes' => ['UP-BANK']]),
+            self::auth(),
+        );
+
+        $this->assertSame(409, $this->getStatus($resp));
+        $this->assertSame('OFFER_UNAVAILABLE', $resp->getPayload()['error']['code']);
+        $this->assertSame([], $ctrl->savedItems);
     }
 }

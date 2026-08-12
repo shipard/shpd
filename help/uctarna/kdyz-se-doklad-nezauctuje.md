@@ -39,7 +39,7 @@ Poznáš to dvěma způsoby:
 |---|---|
 | *Doklad nemá přiřazený fiskální rok/měsíc — zkontroluj účetní datum a číselník období* | **Účetní datum** dokladu míří mimo založená období. Buď je datum špatné a opravíš ho na dokladu, nebo období chybí a založí se v **Nastavení → Účetnictví → Fiskální období** |
 | *Účet nenalezen pro masku …* | V **Účtárna → Účtový rozvrh** není analytický účet, na který by se zápis vešel. Doplň ho. U masky začínající **343** jde o analytiku k jednomu kódu DPH |
-| *Položka řádku není typu Účetní položka nebo nemá vyplněný účet* | Řádek má **Pohyb** *Účetní položka*, takže účet se bere z položky. Buď u řádku změň Pohyb na běžný nákup či prodej, nebo položce doplň **Účet** (jde to jen u položek typu *Účetní položka*) |
+| *Položka řádku není typu Účetní položka nebo nemá vyplněný účet* | Řádek má **Pohyb** *Účetní položka*, takže účet se bere z položky. Buď u řádku změň Pohyb na běžný nákup či prodej, nebo položce doplň **Účet** (jde to jen u položek typu *Účetní položka*). Startovní sadu takových položek — bankovní poplatky, úroky, kurzové rozdíly, zaokrouhlení — vygeneruješ jedním tlačítkem v **Nastavení zdroje dat**, sekce **Volitelné** |
 | *Účet uvedený na položce řádku v rozvrhu neexistuje* · *Účet uvedený na řádku v rozvrhu neexistuje* | Účet, na který se odkazuje, byl z rozvrhu vyřazen. Vyber jiný |
 | *Řádek účetního zápisu nemá vyplněný účet* | Ruční **Účetní doklad** — u řádku kontace chybí účet |
 | *Deník není vyrovnaný: MD … ≠ DAL …* | Ruční **Účetní doklad** — chybí protistrana nebo nesedí částka. Doklad musí mít součet MD stejný jako součet DAL |

@@ -1,0 +1,29 @@
+// Nabídka účetních položek pro NEZISKOVOU osnovu (accountChartNpo).
+//
+// Jednorázová nabídka z panelu Nastavení zdroje dat (ds-setup Task 10, D18)
+// — NENÍ to provisioner: smazané položky se uživateli nevracejí. Generátor
+// (SetupController, POST /_setup/accounting-items) ke každému záznamu doplní:
+//   item_kind  = druh se system_code 'accounting' (item_type = 2)
+//   unit       = jednotka se system_code 'pcs'
+//   accounting_account = id účtu podle čísla `account` v aktuální osnově
+//   source_kind = 'setup.accountingItems', source_ref = code
+//
+// POZOR: čísla účtů zrcadlí accountChartNpo.jsonc a NESMÍ se sdílet
+// s podnikatelskou sadou (accountingItemsDefault.jsonc) — obě osnovy
+// používají stejná čísla pro jiné účty (548100 je tady Manka a škody,
+// 648100 Zúčtování fondů). Proto dva soubory, ne jeden s filtrem.
+//
+// Dvě položky na 549100 jsou v pořádku — nezisková osnova dedikovaný účet
+// pro bankovní poplatky ani zaokrouhlení nemá (Jiné ostatní náklady).
+// Zaokrouhlení je KONVENCE, ne pravidlo: 549100/649100 je pragmatická volba.
+//
+// Vědomě vynechané: mzdy, odvody, daň z příjmů — viz podnikatelská sada.
+[
+    {"code": "UP-BANK", "name:cs": "Bankovní poplatky",      "name:en": "Bank fees",          "account": "549100"},
+    {"code": "UP-URN",  "name:cs": "Úroky placené",          "name:en": "Interest paid",      "account": "544100"},
+    {"code": "UP-URV",  "name:cs": "Úroky přijaté",          "name:en": "Interest received",  "account": "644100"},
+    {"code": "UP-KZN",  "name:cs": "Kurzová ztráta",         "name:en": "FX loss",            "account": "545100"},
+    {"code": "UP-KZV",  "name:cs": "Kurzový zisk",           "name:en": "FX gain",            "account": "645100"},
+    {"code": "UP-ZAON", "name:cs": "Zaokrouhlení (náklad)",  "name:en": "Rounding (expense)", "account": "549100"},
+    {"code": "UP-ZAOV", "name:cs": "Zaokrouhlení (výnos)",   "name:en": "Rounding (income)",  "account": "649100"}
+]

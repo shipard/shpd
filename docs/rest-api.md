@@ -259,7 +259,10 @@ zapíše parametry (`null` = smazání klíče, validace přes
 VALIDATION_ERROR` s `details[{field, code, message}]`), pak okamžitě spustí
 dotčené provisionery (osnova, fiskální roky — gate na oba klíče). Selhání
 provisioneru parametr neodukládá — odpověď je 200 s neprázdným polem
-`warnings`. Odpověď má stejný tvar jako GET (+ `warnings`). Auth: přihlášený
+`warnings`. Na DS se `skipProvisioning: true` v `main.json` se provisionery
+přeskočí úplně — parametry se uloží a odpověď nese informativní varování,
+pokud by některý zapsaný klíč provisioner spustil; seed dorovná `ds-upgrade`
+po zapnutí provisioningu. Odpověď má stejný tvar jako GET (+ `warnings`). Auth: přihlášený
 uživatel, bez `adminOnly`.
 
 **Veřejné `/_auth/oidc` endpointy:** všechny tři OIDC routy jsou výjimky

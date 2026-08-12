@@ -465,6 +465,50 @@ class SetupControllerTest extends TestCase
         $this->assertNotEmpty($this->writes['execute']);
     }
 
+    public function testSaveWithSkipProvisioningStoresKeysWithoutSeeding(): void
+    {
+        // Tvar, který pošle importér ze starého Shipardu — všechny čtyři
+        // klíče vrstvy C najednou na DS se skipProvisioning: true.
+        $resp = $this->makeController($this->makeDb(), $this->makeSkipProvisioningConfig())
+            ->saveParameters(
+                self::postRequest(['values' => [
+                    'economy.accountChart'         => 'default',
+                    'economy.fiscalYearStartMonth' => 1,
+                    'economy.homeCurrency'         => 'czk',
+                    'economy.vatAgenda'            => true,
+                ]]),
+                self::auth(),
+            );
+
+        $this->assertSame(200, $this->getStatus($resp));
+        // Klíče se uložily, ale žádný provisioner neběžel.
+        $this->assertNotEmpty($this->writes['execute']);
+        $this->assertSame([], $this->writes['insertRow']);
+        // Právě jedno informativní varování o vypnutém provisioningu.
+        $warnings = $resp->getPayload()['data']['warnings'];
+        $this->assertCount(1, $warnings);
+        $this->assertStringContainsString('skipProvisioning', $warnings[0]);
+    }
+
+    public function testSaveNonTriggeringKeyWithSkipProvisioningWarnsNothing(): void
+    {
+        // Samotné vatAgenda žádný provisioner nespouští — varování by bylo šum.
+        $resp = $this->makeController($this->makeDb(), $this->makeSkipProvisioningConfig())
+            ->saveParameters(self::postRequest(['values' => ['economy.vatAgenda' => true]]), self::auth());
+
+        $this->assertSame(200, $this->getStatus($resp));
+        $this->assertNotEmpty($this->writes['execute']);
+        $this->assertSame([], $this->writes['insertRow']);
+        $this->assertSame([], $resp->getPayload()['data']['warnings']);
+    }
+
+    private function makeSkipProvisioningConfig(): MockObject&DataSourceConfig
+    {
+        $dsConfig = $this->createMock(DataSourceConfig::class);
+        $dsConfig->method('shouldSkipProvisioning')->willReturn(true);
+        return $dsConfig;
+    }
+
     public function testMissingOwnPersonHasRegistryImportAsPrimaryPanelAction(): void
     {
         $resp = $this->makeController($this->makeDb())->checklist(self::auth());

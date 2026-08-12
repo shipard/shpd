@@ -1007,6 +1007,16 @@ class SetupController
      */
     private function runProvisioners(array $writtenKeys, SettingsStore $settings): array
     {
+        if ($this->dsConfig?->shouldSkipProvisioning() === true) {
+            // Provisionery by běžely jen pro tyhle klíče — bez nich by varování
+            // bylo šum (samotné vatAgenda žádný provisioner nespouští).
+            $triggering = ['economy.accountChart', 'economy.fiscalYearStartMonth', 'economy.homeCurrency'];
+            if (array_intersect($writtenKeys, $triggering) !== []) {
+                return [$this->warnProvisioningDisabled()];
+            }
+            return [];
+        }
+
         $warnings = [];
 
         if (in_array('economy.accountChart', $writtenKeys, true)) {
@@ -1075,6 +1085,13 @@ class SetupController
             return [$this->warnProvisionerFailed('fiscalYears')];
         }
         return [];
+    }
+
+    private function warnProvisioningDisabled(): string
+    {
+        return $this->language === 'cs'
+            ? 'Provisioning je na tomto zdroji dat vypnutý (skipProvisioning) — parametry jsou uložené, seed proběhne až po jeho zapnutí přes ds-upgrade.'
+            : 'Provisioning is disabled on this data source (skipProvisioning) — the parameters are saved; seeding will run once it is re-enabled via ds-upgrade.';
     }
 
     private function warnProvisionerFailed(string $what): string

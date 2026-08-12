@@ -515,6 +515,10 @@ absenci klíče.
 Import zapisuje: `economy.accountChart`, `economy.homeCurrency`,
 `economy.fiscalYearStartMonth`, `economy.vatAgenda`. Import už dnes běží pod
 `skipProvisioning: true`, takže se ta odpovědnost k němu logicky pojí.
+Zápisovou cestou je `POST /_setup/parameters` — jediná validovaná vzdálená
+cesta ke čtyřem klíčům. `runProvisioners` na DS se `skipProvisioning`
+provisionery přeskakuje: parametry se uloží, seed dorovná `ds-upgrade` až
+po zapnutí provisioningu.
 
 Vrstvu A (`language`, `country`) zapisuje `ds-create`, tedy krok před importem.
 

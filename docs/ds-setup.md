@@ -54,6 +54,8 @@ dashboardu.
 | D15 | **Fáze 4 rozšiřuje panel `dsSetup`, nestaví samostatný krokový průvodce.** Pořadí `SetupChecklist::ORDER` uživateli říká, co je další na řadě, a položky mizí, jak se plní — krokování by přidávalo dojem, ne informaci, a znamenalo by ovládání parametrů podruhé. Vedený režim se dá dodělat nad hotovým panelem, kdyby se ukázal jako potřeba. |
 | D16 | **Registrový import vlastní Osoby funguje jen tehdy, když žádná není** — žádný merge do existující. Gate je implicitní: položka `missing_own_person` svítí právě tehdy, když vlastní Osoba neexistuje. |
 | D17 | **Můstek bankovních účtů je zaškrtávací seznam**, ne návrh jednoho účtu k potvrzení — uživatel překlopí víc účtů naráz. Účty se `source = 2` (Registr DPH API) jsou předvybrané, protože jsou oficiálně zveřejněné. |
+| D18 | **Nabídky jsou jednorázové akce z panelu, ne provisionery.** Provisionery jsou idempotentní a dorovnávají — smazané položky by `ds-upgrade` uživateli vracel. |
+| D19 | **Nabídky nejsou alerty.** Nesplněná nabídka není problém a nemá nic rozsvítit — žádný check, žádná položka v `SetupChecklist::ORDER`, žádná karta ve feedu. V panelu žijí jako samostatná sekce „Volitelné“. |
 | D6 | Provisioning fiskálních roků se **odkládá** za rozhodnutí o prvním měsíci **a o domácí měně** (Task 04 — měna je součástí zakládaného záznamu, seedovat s odhadnutou by obcházelo D2). Čerstvý DS chvíli nemá fiskální roky — nevadí, doklad se stejně nepotvrdí bez vlastní Osoby. |
 | D7 | Hosting přispívá **výhradně vrstvou A** — dva sloupce na `hosting_core_data_sources`, pole ve formuláři, položky v queue payloadu, předání v `HostingSyncRunner`. Žádný ARES v provisioning agentovi, žádné business řádky. |
 | D8 | Setup alerty se ve feedu dashboardu agregují **podle tagu** (ne podle `check_id`) do jedné karty; její primární akce otevírá panel průvodce — nový druh akce `open_panel`. |
@@ -524,7 +526,7 @@ Vrstvu A (`language`, `country`) zapisuje `ds-create`, tedy krok před importem.
 | **2 — Parametry do settings** | Čtyři klíče, provisionery a formuláře je čtou, odložený provisioning osnovy a fiskálních roků (D6), konec `getAccountChart()`/`getDefaultCurrency()` | `ds-upgrade` na čerstvém DS osnovu ani roky nenaseeduje; naseeduje je, jakmile klíč existuje |
 | **3 — Setup checky a panel** | Sedm nových checků + služba `SetupChecklist` (D12) + zákaz snooze/dismiss (D13); panel `dsSetup` „Co ještě chybí nastavit“ s ovládáním parametrů (D14); tagová agregace ve feedu (D8) a akce `open_panel` | Čerstvý DS ukazuje jednu kartu „Dokončit nastavení“, panel vyjmenuje chybějící položky a uživatel v něm rozhodne všechny čtyři parametry vrstvy C bez konzole |
 | **4 — Průvodce** | Rozšíření panelu `dsSetup` (D15, §5.4): vlastní Osoba z registru + návrh `vatAgenda` (Task 08, hotové), registrace DPH a můstek do číselníku bankovních účtů (Task 09, hotové) | Uživatel projde od čerstvého DS k potvrditelné vydané faktuře bez opuštění panelu |
-| **5 — Nabídky** | Generátor základních Položek, název a logo v průvodci | Uživatel dostane volitelný startovní obsah, aniž by na něj cokoli tlačilo |
+| **5 — Nabídky** | Nabídka účetních položek (`item_type = 2`) ve dvou sadách podle variantu osnovy, jako jednorázová akce v sekci „Volitelné“ (D18, D19) | Uživatel umí zaúčtovat bankovní poplatek, kurzový rozdíl a zaokrouhlení přímo z řádku dokladu, aniž by na něj cokoli tlačilo |
 
 Fáze 2 a 3 jsou navzájem nezávislé (checky nad chybějícími řádky nepotřebují
 settings) a dají se prohodit nebo dělat paralelně; Fáze 4 potřebuje obě.
@@ -556,25 +558,37 @@ plátcovství DPH → domácí měna → setup checky → tagová agregace → f
 
 ---
 
-## 10. Otevřené body
+## 10. Uzavřené otevřené body
 
-- **Nabídky vs. checklist.** „Chceš vygenerovat základní Položky?“ není
-  problém, ale nabídka — nesplněná nabídka nemá nikdy nic rozsvítit. Návrh:
-  nabídky **nejsou alerty**, nejdou do checklistu ani do feedu a žijí výhradně
-  jako kroky průvodce (a tedy jen do prvního dokončení průvodce). Alternativou
-  je nový druh alertu (`kind: offer`, jednorázový, mizí po `dismiss` — alerty
-  to mechanicky umí), ale je to víc mašinerie za málo. **K potvrzení před
-  Fází 5.**
-- **Jak se průvodce otevírá poprvé.** Karta ve feedu (D8) ho zpřístupňuje, ale
-  otevře se sama, nebo si ho uživatel musí kliknout? Návrh: neotevírat
-  automaticky — D4 říká neblokující, a automatické otevření je půl kroku
-  k blokujícímu wizardu.
-- **Rozsah základních Položek.** Co je „základní položka“ pro účetní firmu bez
-  skladu? Kandidáti: práce/služba, doprava, zaokrouhlení. Seed patří do
-  `economy.items` po vzoru `itemKindsSeed.jsonc`, ale obsah je věcné
-  rozhodnutí.
-- **Pořadí kroků 5–7 průvodce.** Osnova, fiskální rok a měna jsou navzájem
-  nezávislé; pořadí je zatím zvolené odhadem.
+Všechny body, které §0 nechávala otevřené, jsou rozhodnuté:
+
+- **Nabídky vs. checklist** → D19. Nabídky nejsou alerty a žijí jako samostatná
+  sekce „Volitelné" v panelu, mimo `SetupChecklist::ORDER` i mimo feed.
+  Zvažovaný `kind: offer` v alertech se nedělá — je to víc mašinerie za málo.
+- **Jak se panel otevírá poprvé** → neotevírá se sám. Zpřístupňuje ho
+  agregovaná karta feedu (D8) a položka v Nastavení. Automatické otevření je
+  půl kroku k blokujícímu wizardu, což D4 vylučuje.
+- **Rozsah nabízených Položek** → jen **účetní položky** (`item_type = 2`).
+  Fakturační položky typu Služba („Práce", „Doprava") se nedělají:
+  `docs_core_rows.item` je nullable a účet běžného řádku se bere z masek podle
+  operace, takže bez nich nic nespadne. Účetní položky naopak funkční jsou —
+  `acc.entry` má `accountSrc: item` a bez nich vzniká `item_account_missing`.
+  Sady jsou **dvě**, jedna per varianta osnovy, protože obě osnovy používají
+  stejná čísla pro jiné účty (`548100` = Ostatní provozní náklady versus
+  Manka a škody).
+- **Pořadí kroků průvodce** → bezpředmětné. Krokový průvodce se nestaví (D15),
+  pořadí drží `SetupChecklist::ORDER` a řídí se závislostmi.
+
+### Co zůstává mimo oblast
+
+Zaznamenané v [`tasks/TODO.md`](../tasks/TODO.md), ne v této oblasti:
+
+- dvojí zdroj země vlastního subjektu (`AccountingEngine::resolveOwnCompanyCountry()`
+  versus `DataSourceConfig::getCountry()`)
+- `dismiss` alertu není trvalý — `AlertReconciler` ho při dalším běhu obnoví
+- settings stránky neumí field typy `select` a `checkbox` (D14 je pro tuto
+  oblast nepotřebuje)
+
 
 ---
 

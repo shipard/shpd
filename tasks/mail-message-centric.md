@@ -2,9 +2,11 @@
 
 **Stav:** částečně — Fáze A–D v tomto repozitáři hotové (schéma, /result v4,
 message-centrické endpointy, dashboard + UI, ISDOC embedded/dedup, testy,
-dokumentace); zbývá Fáze B3 (`ai_analyzer` daemon, jiný repozitář)
-a koordinované nasazení na alfě (stop daemon → upgrade → ds-reset
-+ přeimport → start daemonu).
+dokumentace) a Fáze B3 hotová v repu `ai_analyzer` (commit `3af1913`,
+E2E ověřeno proti dev DS vč. faktury z těla e-mailu; při adaptaci opraven
+i skrytý bug čtení /payload — subject/body byly proti reálnému serveru
+prázdné). Zbývá jen koordinované nasazení na alfě (stop daemon → upgrade
+→ ds-reset + přeimport → start daemonu) a ruční proklik UI.
 
 **Poznámky k implementaci (odchylky od PRD):**
 

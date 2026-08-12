@@ -353,6 +353,7 @@ Podporované `kind` v MVP:
 |---|---|---|
 | `open_form` | `{table, mode: "create"\|"edit", id?, preset?}` | Otevři form pro vytvoření/úpravu záznamu. |
 | `open_viewer` | `{viewerId}` | Naviguj do daného vieweru. |
+| `open_panel` | `{panelId}` | Přepni do Nastavení a otevři panel (`navigationStore.navigateToPanel`). Používá agregovaná setup karta feedu (`ds-setup.md` D8). |
 
 `primary: true` označuje hlavní akci — frontend ji vyrenderuje jako primary button.
 Maximálně **jedna** akce s `primary: true` per alert (validuje `AlertFinding` ctor).

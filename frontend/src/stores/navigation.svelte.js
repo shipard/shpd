@@ -92,6 +92,31 @@ function navigateToViewer(viewerId, recordId = null, viewGroup = null) {
 }
 
 /**
+ * Naviguj na panel v Nastavení (akce `open_panel` z karty feedu).
+ *
+ * enterSettings() je nutné: dashboard běží v režimu `app` a navigate()
+ * zapisuje podle aktuálního mode — bez přepnutí by panel skončil
+ * v appActiveItem a viditelně by se nestalo nic. `id` musí být
+ * 'panel:' + panelId, přesně jak ho skládá SettingsController, jinak se
+ * položka v sidebaru nezvýrazní. Label bere lokalizovaný z akce karty,
+ * degradace na panelId jako u navigateToViewer.
+ */
+function navigateToPanel(panelId, label = null) {
+  enterSettings();
+  settingsActiveItem = {
+    id: 'panel:' + panelId,
+    label: label ?? panelId,
+    type: 'panel',
+    table: null,
+    viewerId: null,
+    pageId: null,
+    panelId,
+    filter: null,
+    fixedViewGroup: null,
+  };
+}
+
+/**
  * Viewer.svelte po mountu vyzvedne pendingRecordId, pokud existuje,
  * a vynuluje ho — aby další navigace bez recordId nedostala stale hodnotu.
  */
@@ -152,6 +177,7 @@ export const navigationStore = {
   get pendingViewGroup() { return pendingViewGroup; },
   navigate,
   navigateToViewer,
+  navigateToPanel,
   consumePendingRecordId,
   consumePendingViewGroup,
   ensureDefaultActiveItem,

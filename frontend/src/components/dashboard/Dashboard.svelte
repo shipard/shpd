@@ -152,6 +152,8 @@
         return undoAutoArchiveFlow(target.date ?? null, card.id);
       case 'open_viewer':
         return navigationStore.navigateToViewer(target.viewerId, target.recordId ?? null, target.viewGroup ?? null);
+      case 'open_panel':
+        return navigationStore.navigateToPanel(target.panelId, action.label ?? null);
       case 'open_form':
         formModal = {
           open: true,

@@ -1,6 +1,6 @@
 # ds-setup — Task 07: Agregovaná karta feedu a akce `open_panel`
 
-**Stav:** naplánováno
+**Stav:** hotovo
 
 > PRD pro jednu Claude Code session. Design: `docs/ds-setup.md`,
 > rozhodnutí **D8, D12**, kontrakt **§5.5**. Poslední kus Fáze 3 —

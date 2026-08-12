@@ -27,8 +27,9 @@ dashboardu.
 > nových setup checků (§5.3), služba `SetupChecklist` (D12) a zákaz
 > snooze/dismiss pro setup alerty (D13) — a Task 06 — panel `dsSetup`
 > v Nastavení (D14): `GET /_setup/checklist`, `POST /_setup/parameters`
-> s okamžitým během provisionerů, `DsSetup.svelte`. Karta ve feedu je
-> Task 07.**
+> s okamžitým během provisionerů, `DsSetup.svelte`. Task 07 (agregovaná
+> karta feedu `alert-group:setup` + akce `open_panel`, D8) hotový —
+> Fáze 3 je kompletní; další je Fáze 4 (průvodce).**
 > Fázování viz §8, otevřené body §10.
 
 ---
@@ -359,17 +360,21 @@ Dnešní agregace v `AlertsSource` je `GROUP BY check_id` s prahem
 Proto **nová osa agregace podle tagu** (D8), jako rozšíření `AlertsSource`,
 ne jako nový feed zdroj:
 
-- Alerty, jejichž check nese `tags: ["setup"]`, se sbalí do **jedné karty**
-  bez ohledu na počet a plně nahradí individuální karty daných checků.
-- `id = "alert-group:setup"`, titulek *„Dokončit nastavení“*, podtitulek
-  s pravdivým počtem, `kind` podle nejvyšší severity ve skupině (agregace
-  nesnižuje viditelnost — stejné pravidlo jako u agregace per check),
-  `timestamp = MAX(last_seen_at)`, `context = {tag: 'setup', count, severity,
-  group: true}`.
+- Alerty, jejichž check nese `'setup'` v `tags` (checky mohou mít i další
+  tagy), se sbalí do **jedné karty** bez ohledu na počet — bez prahu,
+  od jedné položky — a plně nahradí individuální karty daných checků.
+- `id = "alert-group:setup"`, titulek *„Dokončit nastavení“*, `kind` podle
+  nejvyšší severity ve skupině (agregace nesnižuje viditelnost — stejné
+  pravidlo jako u agregace per check), `timestamp = MAX(last_seen_at)`,
+  `context = {tag: 'setup', count, severity, group: true}`.
+- **Podtitulek podle počtu**: jedna nesplněná položka → její `title`
+  (u posledního zbývajícího kroku říká konkrétně, co chybí), dvě a víc →
+  počet se správným skloňováním (2–4 položky / 5+ položek).
 - Sběr zůstává dvoufázový; tagová skupina se vyhodnocuje **před** skupinami
-  per check, aby setup alerty nespadly do obou.
+  per check (fáze 0), aby setup alerty nespadly do obou.
 - Lookup do `AlertCheckRegistry` (kvůli tagům a lokalizovaným názvům) tam už
-  pro titulky skupinových karet je.
+  pro titulky skupinových karet je. Bez registry (`null`) se tagová
+  agregace **přeskočí** — fail-open, alerty projdou individuálně.
 
 **Primární akce = `open_panel`** — nový druh akce vedle `open_form`
 a `open_viewer`. Payload `{panelId}`. Ve frontendu je to malé: mapa

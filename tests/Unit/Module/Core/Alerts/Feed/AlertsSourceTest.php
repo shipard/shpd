@@ -34,8 +34,15 @@ final class AlertsSourceTest extends TestCase
      * @param list<array<string,mixed>> $groups
      * @param list<array<string,mixed>> $rows
      */
-    private function context(array $groups, array $rows = [], string $lang = 'cs', ?int &$fetchCalls = null): FeedContext
-    {
+    private function context(
+        array $groups,
+        array $rows = [],
+        string $lang = 'cs',
+        ?int &$fetchCalls = null,
+        ?array $setupAgg = null,
+        ?string $setupTitle = null,
+        ?int &$fetchRowCalls = null,
+    ): FeedContext {
         $db = $this->createMock(DataSourceConnection::class);
         $db->method('fetchAll')->willReturnCallback(
             static function (mixed ...$args) use ($groups, $rows, &$fetchCalls): array {
@@ -43,6 +50,15 @@ final class AlertsSourceTest extends TestCase
                 return str_contains((string) $args[0], 'GROUP BY') ? $groups : $rows;
             },
         );
+        // Fáze 0 (tagová agregace setup checků) — agregát přes fetchRow,
+        // title jediné položky přes fetchSingle.
+        $db->method('fetchRow')->willReturnCallback(
+            static function (mixed ...$args) use ($setupAgg, &$fetchRowCalls): ?array {
+                $fetchRowCalls = ($fetchRowCalls ?? 0) + 1;
+                return $setupAgg;
+            },
+        );
+        $db->method('fetchSingle')->willReturn($setupTitle);
         return new FeedContext($db, null, $lang, 30);
     }
 
@@ -285,5 +301,181 @@ final class AlertsSourceTest extends TestCase
         $en = $src->collectCards($this->context([$this->groupRow('x.y.z', 4, 20)], [], 'en'))[0];
         $this->assertSame('Open alerts', $en['actions'][0]['label']);
         $this->assertSame('4 alerts', $en['subtitle']);
+    }
+
+    // ── Agregace podle tagu setup (ds-setup D8, Task 07) ────────────────────
+
+    /** Osm reálných setup check id z SetupChecklist::ORDER. */
+    private const SETUP_IDS = [
+        'base.persons.missing_own_person',
+        'base.persons.missing_own_headquarters',
+        'economy.codebooks.undecided_vat_agenda',
+        'economy.codebooks.missing_vat_registration',
+        'economy.codebooks.missing_own_bank_account',
+        'economy.accounting.undecided_account_chart',
+        'economy.codebooks.undecided_fiscal_year_start',
+        'economy.codebooks.undecided_home_currency',
+    ];
+
+    /**
+     * Registry se setup checky + volitelně netagovanými — checky mohou mít
+     * i další tagy, zdroj musí filtrovat in_array, ne rovnost.
+     *
+     * @param list<string> $setupIds
+     * @param list<string> $plainIds
+     */
+    private function setupRegistry(array $setupIds = self::SETUP_IDS, array $plainIds = []): AlertCheckRegistry
+    {
+        $entries = [];
+        foreach ($setupIds as $id) {
+            $entries[] = [
+                'id'       => $id,
+                'name'     => "Name {$id}",
+                'class'    => 'X',
+                'interval' => '5m',
+                'tags'     => ['setup', 'onboarding'],
+            ];
+        }
+        foreach ($plainIds as $id) {
+            $entries[] = ['id' => $id, 'name' => "Name {$id}", 'class' => 'X', 'interval' => '1h'];
+        }
+        return new AlertCheckRegistry([ModuleDefinition::fromArray([
+            'id'          => 'test.fixture',
+            'name'        => 'Fixture',
+            'alertChecks' => $entries,
+        ])], 'cs');
+    }
+
+    /** @return array<string,mixed> agregátní řádek fáze 0 */
+    private function setupAgg(
+        int $cnt,
+        int $maxSeverity = 20,
+        ?string $lastAt = '2026-06-28 12:00:00',
+        ?string $firstAt = '2026-06-01 08:00:00',
+    ): array {
+        return ['cnt' => $cnt, 'max_severity' => $maxSeverity, 'last_at' => $lastAt, 'first_at' => $firstAt];
+    }
+
+    public function testEightSetupAlertsCollapseIntoSingleSetupCard(): void
+    {
+        // Osm aktivních setup alertů (každý check jeden — pod per-check
+        // prahem) → JEDNA karta, žádná individuální karta žádného z checků.
+        $groups = array_map(fn(string $id): array => $this->groupRow($id, 1, 20), self::SETUP_IDS);
+
+        $src = new AlertsSource($this->setupRegistry());
+        $cards = $src->collectCards($this->context($groups, setupAgg: $this->setupAgg(8)));
+
+        $this->assertCount(1, $cards);
+        $card = $cards[0];
+        $this->assertSame('alert-group:setup', $card['id']);
+        $this->assertSame('Dokončit nastavení', $card['title']);
+        $this->assertSame('8 položek', $card['subtitle']);
+        $this->assertSame('review', $card['kind']);
+        $this->assertSame(
+            ['tag' => 'setup', 'count' => 8, 'severity' => 20, 'group' => true],
+            $card['context'],
+        );
+
+        $this->assertCount(1, $card['actions']);
+        $action = $card['actions'][0];
+        $this->assertSame('open_panel', $action['kind']);
+        $this->assertSame(['panelId' => 'dsSetup'], $action['target']);
+        $this->assertTrue($action['primary']);
+        $this->assertSame('Otevřít nastavení', $action['label']);
+    }
+
+    public function testSingleSetupAlertSubtitleShowsItsTitle(): void
+    {
+        // Poslední zbývající krok → karta říká konkrétně, co chybí.
+        $src = new AlertsSource($this->setupRegistry());
+        $cards = $src->collectCards($this->context(
+            [$this->groupRow(self::SETUP_IDS[0], 1, 20)],
+            setupAgg: $this->setupAgg(1),
+            setupTitle: 'Chybí vlastní Osoba',
+        ));
+
+        $this->assertCount(1, $cards);
+        $this->assertSame('Chybí vlastní Osoba', $cards[0]['subtitle']);
+        $this->assertSame(1, $cards[0]['context']['count']);
+    }
+
+    public function testSetupSubtitlePluralization(): void
+    {
+        $src = new AlertsSource($this->setupRegistry());
+
+        $two = $src->collectCards($this->context([], setupAgg: $this->setupAgg(2)))[0];
+        $this->assertSame('2 položky', $two['subtitle']);
+
+        $five = $src->collectCards($this->context([], setupAgg: $this->setupAgg(5)))[0];
+        $this->assertSame('5 položek', $five['subtitle']);
+
+        $en = $src->collectCards($this->context([], lang: 'en', setupAgg: $this->setupAgg(5)))[0];
+        $this->assertSame('5 items', $en['subtitle']);
+        $this->assertSame('Finish setup', $en['title']);
+        $this->assertSame('Open setup', $en['actions'][0]['label']);
+    }
+
+    public function testSetupAndRegularAlertsDoNotOverlap(): void
+    {
+        // Setup alert + běžný check nad prahem + běžný check pod prahem →
+        // tři karty, každá jednou; setup check nemá individuální kartu.
+        $groups = [
+            $this->groupRow(self::SETUP_IDS[0], 1, 20),
+            $this->groupRow('docs.core.stale_in_repair', 4, 20),
+            $this->groupRow('base.persons.missing_own_person2', 1, 30),
+        ];
+        $row = $this->alertRow(30);
+        $row['check_id'] = 'base.persons.missing_own_person2';
+
+        $src = new AlertsSource($this->setupRegistry(
+            [self::SETUP_IDS[0]],
+            ['docs.core.stale_in_repair', 'base.persons.missing_own_person2'],
+        ));
+        $cards = $src->collectCards($this->context(
+            $groups,
+            [$row],
+            setupAgg: $this->setupAgg(1),
+            setupTitle: 'Chybí vlastní Osoba',
+        ));
+
+        $this->assertSame(
+            ['alert-group:setup', 'alert-group:docs.core.stale_in_repair', 'alert:1'],
+            array_column($cards, 'id'),
+        );
+    }
+
+    public function testSetupCardKindFollowsMaxSeverity(): void
+    {
+        // Jeden error mezi warningy → karta je urgent (agregace nesnižuje
+        // viditelnost).
+        $src = new AlertsSource($this->setupRegistry());
+        $card = $src->collectCards($this->context([], setupAgg: $this->setupAgg(3, 30)))[0];
+
+        $this->assertSame('urgent', $card['kind']);
+        $this->assertSame('error', $card['stateStyle']);
+    }
+
+    public function testNullRegistrySkipsTagAggregation(): void
+    {
+        // Bez registry tagy neznáme → fail-open: žádný agregátní dotaz,
+        // alerty projdou individuálně.
+        $fetchRowCalls = null;
+        $src = new AlertsSource();
+        $cards = $src->collectCards($this->context(
+            [$this->groupRow('base.persons.missing_own_person', 1, 30)],
+            [$this->alertRow(30)],
+            fetchRowCalls: $fetchRowCalls,
+        ));
+
+        $this->assertNull($fetchRowCalls);
+        $this->assertSame(['alert:1'], array_column($cards, 'id'));
+    }
+
+    public function testNoActiveSetupAlertsNoSetupCard(): void
+    {
+        $src = new AlertsSource($this->setupRegistry());
+        $cards = $src->collectCards($this->context([], setupAgg: $this->setupAgg(0)));
+
+        $this->assertSame([], $cards);
     }
 }

@@ -26,6 +26,13 @@ use Shipard\Core\Feed\FeedSource;
  * která individuální karty checku plně nahrazuje. Titulek = lokalizovaný název
  * checku z `AlertCheckRegistry` (fallback `check_id`), kind dle nejvyšší
  * severity ve skupině, jediná primary akce `open_viewer` na alerts viewer.
+ *
+ * **Agregace podle tagu `setup`** (ds-setup.md D8, fáze 0 před oběma dalšími):
+ * všechny aktivní alerty checků s `tags: ["setup"]` se sbalí do JEDNÉ karty
+ * `alert-group:setup` bez prahu (od jedné položky) a dotčené checky se
+ * vyřadí z per-check agregace i z individuálních karet. Primární akce
+ * `open_panel` → panel dsSetup. Bez registry se tagy nedají zjistit →
+ * fáze 0 se přeskočí (fail-open, alerty projdou individuálně).
  * Detaily: docs/dashboard.md §5.2.
  */
 final class AlertsSource implements FeedSource
@@ -49,6 +56,26 @@ final class AlertsSource implements FeedSource
 
     public function collectCards(FeedContext $ctx): array
     {
+        $cards = [];
+
+        // Fáze 0 — tagová agregace setup checků (D8). Bez prahu: osm
+        // samostatných setup karet nechceme nikdy. Karta se přidává mimo
+        // LIMIT fáze 2, takže ji nápor jiných alertů nevytlačí.
+        $setupCheckIds = $this->setupCheckIds();
+        if ($setupCheckIds !== []) {
+            $agg = $ctx->db->fetchRow(
+                'SELECT COUNT(*) AS `cnt`, MAX(`severity`) AS `max_severity`,'
+                . ' MAX(`last_seen_at`) AS `last_at`, MAX(`first_seen_at`) AS `first_at`'
+                . ' FROM `' . self::TABLE . '`'
+                . ' WHERE `alert_state` = %i AND `check_id` IN %in',
+                self::STATE_ACTIVE,
+                $setupCheckIds,
+            );
+            if ($agg !== null && (int) ($agg['cnt'] ?? 0) > 0) {
+                $cards[] = $this->buildSetupCard($ctx, $agg, $setupCheckIds);
+            }
+        }
+
         // Fáze 1 — agregát per check. Malý výsledek (počet checků, ne alertů),
         // bez LIMITu → skupinové karty mají pravdivý počet i nad MAX_CARDS.
         $groups = $ctx->db->fetchAll(
@@ -60,9 +87,12 @@ final class AlertsSource implements FeedSource
             self::STATE_ACTIVE,
         );
 
-        $cards = [];
         $individualCheckIds = [];
         foreach ($groups as $g) {
+            // Setup checky pokrývá karta z fáze 0 — nesmí se objevit podruhé.
+            if (in_array((string) $g['check_id'], $setupCheckIds, true)) {
+                continue;
+            }
             if ((int) $g['cnt'] > self::GROUP_THRESHOLD) {
                 $cards[] = $this->buildGroupCard($ctx, $g);
             } else {
@@ -167,6 +197,101 @@ final class AlertsSource implements FeedSource
                 'primary' => true,
             ]],
         ];
+    }
+
+    /**
+     * `check_id` všech checků s tagem `setup` — checky mohou nést i další
+     * tagy, proto in_array, ne rovnost. Bez registry tagy neznáme → [].
+     *
+     * @return list<string>
+     */
+    private function setupCheckIds(): array
+    {
+        if ($this->registry === null) {
+            return [];
+        }
+        $ids = [];
+        foreach ($this->registry->getAll() as $def) {
+            if (in_array('setup', $def->tags, true)) {
+                $ids[] = $def->id;
+            }
+        }
+        return $ids;
+    }
+
+    /**
+     * Jedna karta za všechny aktivní setup alerty (ds-setup.md §5.5).
+     * Podtitulek: jediná položka → její title (u posledního zbývajícího
+     * kroku říká konkrétně, co chybí), víc položek → počet. Primární akce
+     * `open_panel` vede do panelu dsSetup v Nastavení.
+     *
+     * @param array<string,mixed> $agg  agregátní řádek (cnt, max_severity, last_at, first_at)
+     * @param list<string> $setupCheckIds
+     * @return array<string,mixed>
+     */
+    private function buildSetupCard(FeedContext $ctx, array $agg, array $setupCheckIds): array
+    {
+        $count    = (int) $agg['cnt'];
+        $severity = (int) ($agg['max_severity'] ?? self::SEVERITY_WARNING);
+        $cs       = $ctx->language === 'cs';
+
+        [$kind, $stateStyle, $icon] = $this->severityToPresentation($severity);
+
+        if ($count === 1) {
+            // Druhý dotaz jen v téhle větvi — čitelnější než MIN(title) trik.
+            $subtitle = (string) $ctx->db->fetchSingle(
+                'SELECT `title` FROM `' . self::TABLE . '`'
+                . ' WHERE `alert_state` = %i AND `check_id` IN %in'
+                . ' LIMIT 1',
+                self::STATE_ACTIVE,
+                $setupCheckIds,
+            );
+        } else {
+            $subtitle = $this->pluralizeItems($count, $cs);
+        }
+
+        return [
+            'id'         => 'alert-group:setup',
+            'source'     => 'alerts',
+            'kind'       => $kind,
+            'icon'       => $icon,
+            'stateStyle' => $stateStyle,
+            'category'   => FeedSource::CATEGORY_OTHER,
+            'title'      => $cs ? 'Dokončit nastavení' : 'Finish setup',
+            'subtitle'   => $subtitle,
+            'timestamp'  => $this->toAtom($agg['last_at'] ?? null) ?? $this->toAtom($agg['first_at'] ?? null),
+            'context'    => [
+                'tag'      => 'setup',
+                'count'    => $count,
+                'severity' => $severity,
+                'group'    => true,
+            ],
+            'actions'    => [[
+                'id'      => 'open_setup_panel',
+                'label'   => $cs ? 'Otevřít nastavení' : 'Open setup',
+                'kind'    => 'open_panel',
+                'target'  => ['panelId' => 'dsSetup'],
+                'primary' => true,
+            ]],
+        ];
+    }
+
+    /**
+     * Počet položek se správným skloňováním — čeština má tři tvary
+     * (1 položka / 2–4 položky / 5+ položek), karta je na dashboardu
+     * vidět pořád. Jediné místo, žádné inline ternáry u volajících.
+     */
+    private function pluralizeItems(int $count, bool $cs): string
+    {
+        if (!$cs) {
+            return $count === 1 ? '1 item' : "{$count} items";
+        }
+        $noun = match (true) {
+            $count === 1               => 'položka',
+            $count >= 2 && $count <= 4 => 'položky',
+            default                    => 'položek',
+        };
+        return "{$count} {$noun}";
     }
 
     /**

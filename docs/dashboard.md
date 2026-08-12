@@ -294,6 +294,22 @@ lokalizuje zdroj (passthrough cesta jako u individuálních alert akcí).
 Kartový kontrakt se nemění — obyčejná karta (title/subtitle fallback, bez
 headline), frontend beze změny.
 
+**Agregace podle tagu `setup`** (ds-setup.md D8) — fáze 0 **před** oběma
+fázemi výše. Aktivní alerty všech checků s `'setup'` v `tags` (checky
+z registry; check může nést i další tagy) se sbalí do **jedné** karty
+`id = "alert-group:setup"` — **bez prahu**, od jedné položky, a dotčené
+`check_id` se vyřadí z per-check agregace i z individuálních karet
+(nikdy setup karta + individuální duplicity). Titulek „Dokončit
+nastavení", podtitulek: jedna položka → její `title` (říká konkrétně, co
+chybí), víc → počet se správným skloňováním (2–4 položky / 5+ položek).
+`kind` dle `MAX(severity)`, `context = {tag: 'setup', count, severity,
+group: true}`, jediná primary akce **`open_panel`** s `{panelId:
+'dsSetup'}` — frontend přepne do Nastavení
+(`navigationStore.navigateToPanel`). Karta se přidává mimo LIMIT fáze 2.
+Bez registry (null) se tagová agregace přeskočí — fail-open, alerty
+projdou individuálně. Karta čerpá z tabulky alertů (D12), může být až
+5 minut za skutečností; panel sám spouští checky naživo.
+
 ## 6. Akce a jejich sémantika
 
 ### 6.1 `apply_message` — jednoklik „Použít" z karty (pásmo ready)

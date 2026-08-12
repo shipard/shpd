@@ -1043,8 +1043,8 @@ function dispatchSettings(
 ): Response {
 	$ctrl = new SettingsController();
 	return match ($route->action) {
-		'navigation'        => $ctrl->navigation($config, $modulePathResolver, $language, $configRuntime, 'settings', $auth, $tables),
-		'accountNavigation' => $ctrl->navigation($config, $modulePathResolver, $language, $configRuntime, 'account', $auth, $tables),
+		'navigation'        => $ctrl->navigation($config, $modulePathResolver, $language, $configRuntime, 'settings', $auth, $tables, $db),
+		'accountNavigation' => $ctrl->navigation($config, $modulePathResolver, $language, $configRuntime, 'account', $auth, $tables, $db),
 		'page'              => $ctrl->page((string) $route->table, $config, $modulePathResolver, $language, $auth, $db),
 		'savePage'          => $ctrl->savePage((string) $route->table, $request, $config, $modulePathResolver, $auth, $db),
 		default             => Response::error('INTERNAL_ERROR', "Unknown settings action: {$route->action}", 500),

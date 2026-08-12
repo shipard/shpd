@@ -1,6 +1,6 @@
 # vat-payer — Task 01: Neplátce DPH (Issue #17)
 
-**Stav:** naplánováno
+**Stav:** hotovo
 
 > PRD pro jednu Claude Code session. Design: `docs/ds-setup.md`,
 > rozhodnutí **D5, D10, D11**, kontrakt **§5.2** a **§6**.

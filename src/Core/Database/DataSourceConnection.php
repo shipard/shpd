@@ -11,14 +11,19 @@ class DataSourceConnection
 {
     private Connection $connection;
 
-    public function __construct(DataSourceConfig $config)
+    /**
+     * Dibi Connection varianta obalí EXISTUJÍCÍ spojení místo otevírání
+     * nového — pro kód, který dostává jen dibi (Document hooky) a volá
+     * služby stavěné na DataSourceConnection (provisionery, SettingsStore).
+     */
+    public function __construct(DataSourceConfig|Connection $source)
     {
-        $this->connection = new Connection([
+        $this->connection = $source instanceof Connection ? $source : new Connection([
             'driver'   => 'mysqli',
             'host'     => 'localhost',
-            'database' => $config->getDatabaseName(),
-            'username' => $config->getDatabaseUser(),
-            'password' => $config->getDatabasePassword(),
+            'database' => $source->getDatabaseName(),
+            'username' => $source->getDatabaseUser(),
+            'password' => $source->getDatabasePassword(),
             'charset'  => 'utf8mb4',
         ]);
     }

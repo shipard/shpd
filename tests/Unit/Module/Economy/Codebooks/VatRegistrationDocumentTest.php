@@ -184,4 +184,36 @@ class VatRegistrationDocumentTest extends TestCase
         $data['vat_id'] = null;
         $this->assertTrue($this->doc()->validate($data)->isValid());
     }
+
+    // ── afterSave — období DPH hned po uložení registrace (vat-payer-01) ────
+
+    public function testAfterSaveWithoutDbIsNoOp(): void
+    {
+        $this->doc()->afterSave(['id' => 1]);
+        $this->addToAssertionCount(1);
+    }
+
+    public function testAfterSaveRunsVatPeriodsProvisioner(): void
+    {
+        $db = $this->createMock(\Dibi\Connection::class);
+        // Provisioner se ptá na registrace — prázdný výsledek = no-op seed,
+        // ale dotaz musí proběhnout (důkaz, že hook provisioner spustil).
+        $db->expects($this->once())->method('fetchAll')->willReturn([]);
+
+        $doc = $this->doc();
+        $doc->setDb($db);
+        $doc->afterSave(['id' => 1]);
+    }
+
+    public function testAfterSaveSwallowsProvisionerFailure(): void
+    {
+        // afterSave běží po commitu — pád provisioneru nesmí shodit uložení.
+        $db = $this->createMock(\Dibi\Connection::class);
+        $db->method('fetchAll')->willThrowException(new \RuntimeException('boom'));
+
+        $doc = $this->doc();
+        $doc->setDb($db);
+        $doc->afterSave(['id' => 1]);
+        $this->addToAssertionCount(1);
+    }
 }

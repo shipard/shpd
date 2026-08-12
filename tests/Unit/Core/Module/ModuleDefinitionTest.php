@@ -149,7 +149,28 @@ class ModuleDefinitionTest extends TestCase
         $this->assertSame('accounting', $def->settingsItems[0]['section']);
         $this->assertNull($def->settingsItems[0]['subsection']);
         $this->assertNull($def->settingsItems[0]['order']);
+        $this->assertNull($def->settingsItems[0]['visibilityClass']);
         $this->assertSame(5, $def->settingsItems[1]['order']);
+    }
+
+    public function testSettingsItemsVisibilityClassParsed(): void
+    {
+        $def = ModuleDefinition::fromArray([
+            'id'   => 'economy.codebooks',
+            'name' => 'Codebooks',
+            'settingsItems' => [
+                [
+                    'viewer'          => 'economy.codebooks.vatRegistrations',
+                    'section'         => 'accounting',
+                    'visibilityClass' => 'Shipard\\Module\\Economy\\Codebooks\\VatAgendaNavGate',
+                ],
+            ],
+        ]);
+
+        $this->assertSame(
+            'Shipard\\Module\\Economy\\Codebooks\\VatAgendaNavGate',
+            $def->settingsItems[0]['visibilityClass'],
+        );
     }
 
     public function testSettingsItemsSubsectionParsed(): void

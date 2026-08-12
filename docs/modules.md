@@ -454,6 +454,7 @@ viz `modules/install/base/config/settingsSections.jsonc`) a odkazuje na
 | `section` | string | Ano | ID sekce v Nastavení |
 | `subsection` | string | Ne | ID podsekce |
 | `order` | int | Ne | Pořadí v rámci sekce |
+| `visibilityClass` | string | Ne | FQCN implementace `Shipard\Core\Navigation\NavItemVisibilityGate` — runtime podmínka viditelnosti odvozená z dat (protějšek `navigationProviders`, který položky přidává). Fail-open: bez DB, při chybějící třídě i při výjimce se položka zobrazí. První konzument: `VatAgendaNavGate` (agenda DPH u neplátce bez jediné registrace, `ds-setup.md` D11) |
 
 Položky s vadnou strukturou (chybějící `section`, víc než jeden cíl) se
 tolerantně přeskakují. Tabulky/viewery uvedené v `settingsItems` se

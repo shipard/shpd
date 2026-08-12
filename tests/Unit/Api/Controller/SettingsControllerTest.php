@@ -615,4 +615,119 @@ class SettingsControllerTest extends TestCase
 
         $this->assertContains('test_hosting_servers', $ids);
     }
+
+    // --- settings navigation: runtime visibility gate (NavItemVisibilityGate) ---
+
+    /** Config s reálným modulem economy.codebooks (nese VatAgendaNavGate). */
+    private function codebooksConfig(): DataSourceConfig
+    {
+        file_put_contents($this->dsDir . '/config/main.json', json_encode([
+            'id'                => 'test-test-test-test',
+            'name'              => 'Testovací firma',
+            'database_name'     => 'x',
+            'database_user'     => 'x',
+            'database_password' => 'x',
+            'created'           => '2026-01-01T00:00:00+00:00',
+            'modules'           => ['economy.codebooks'],
+        ]));
+        return new DataSourceConfig($this->dsDir);
+    }
+
+    private function accountingRuntime(): \Shipard\Core\Config\ConfigRuntime
+    {
+        $configRuntime = $this->createMock(\Shipard\Core\Config\ConfigRuntime::class);
+        $configRuntime->method('cfgItem')->willReturnCallback(
+            fn(string $id) => $id === 'global.settingsSections'
+                ? ['sections' => [
+                    ['id' => 'accounting', 'name' => 'Accounting', 'order' => 10],
+                    ['id' => 'warehouses', 'name' => 'Warehouses', 'order' => 20],
+                ]]
+                : null,
+        );
+        return $configRuntime;
+    }
+
+    /**
+     * @param mixed $vatAgenda hodnota klíče economy.vatAgenda (null = klíč není)
+     */
+    private function gateDb(mixed $vatAgenda, int $registrationCount): DataSourceConnection
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchSingle')->willReturnCallback(
+            static function (mixed ...$args) use ($vatAgenda, $registrationCount): mixed {
+                if (($args[1] ?? null) === 'economy.vatAgenda') {
+                    return $vatAgenda === null ? null : json_encode($vatAgenda);
+                }
+                if (str_contains((string) $args[0], 'COUNT(*)')) {
+                    return $registrationCount;
+                }
+                return null;
+            },
+        );
+        return $db;
+    }
+
+    public function testNavigationHidesVatAgendaForNonPayerWithoutRegistrations(): void
+    {
+        $resp = $this->ctrl->navigation(
+            $this->codebooksConfig(), $this->resolver, 'en', $this->accountingRuntime(),
+            'settings', $this->auth(), [], $this->gateDb(false, 0),
+        );
+        $ids = $this->collectNavItemIds($resp->getPayload()['data']);
+
+        $this->assertNotContains('viewer:economy.codebooks.vatRegistrations', $ids);
+        $this->assertNotContains('economy_codebooks_vat_periods', $ids);
+        // Ostatní položky modulu gate nefiltruje.
+        $this->assertContains('viewer:economy.codebooks.fiscalYears', $ids);
+    }
+
+    public function testNavigationShowsVatAgendaWhenRegistrationEverExisted(): void
+    {
+        $resp = $this->ctrl->navigation(
+            $this->codebooksConfig(), $this->resolver, 'en', $this->accountingRuntime(),
+            'settings', $this->auth(), [], $this->gateDb(false, 1),
+        );
+        $ids = $this->collectNavItemIds($resp->getPayload()['data']);
+
+        $this->assertContains('viewer:economy.codebooks.vatRegistrations', $ids);
+        $this->assertContains('economy_codebooks_vat_periods', $ids);
+    }
+
+    public function testNavigationShowsVatAgendaWhenUndecided(): void
+    {
+        $resp = $this->ctrl->navigation(
+            $this->codebooksConfig(), $this->resolver, 'en', $this->accountingRuntime(),
+            'settings', $this->auth(), [], $this->gateDb(null, 0),
+        );
+        $ids = $this->collectNavItemIds($resp->getPayload()['data']);
+
+        $this->assertContains('viewer:economy.codebooks.vatRegistrations', $ids);
+    }
+
+    public function testNavigationShowsVatAgendaWithoutDb(): void
+    {
+        // Fail-open: degradovaný kontext bez DB nesmí schovávat funkčnost.
+        $resp = $this->ctrl->navigation(
+            $this->codebooksConfig(), $this->resolver, 'en', $this->accountingRuntime(),
+            'settings', $this->auth(), [],
+        );
+        $ids = $this->collectNavItemIds($resp->getPayload()['data']);
+
+        $this->assertContains('viewer:economy.codebooks.vatRegistrations', $ids);
+    }
+
+    public function testNavigationShowsVatAgendaWhenGateThrows(): void
+    {
+        // Fail-open: výjimka z gate se loguje a položka se zobrazí.
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchSingle')->willThrowException(new \RuntimeException('db down'));
+
+        $resp = $this->ctrl->navigation(
+            $this->codebooksConfig(), $this->resolver, 'en', $this->accountingRuntime(),
+            'settings', $this->auth(), [], $db,
+        );
+        $ids = $this->collectNavItemIds($resp->getPayload()['data']);
+
+        $this->assertContains('viewer:economy.codebooks.vatRegistrations', $ids);
+    }
 }

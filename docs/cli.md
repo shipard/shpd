@@ -496,6 +496,7 @@ k parametrům vrstvy C ([docs/ds-setup.md](ds-setup.md) §5.2):
 |------|---------|--------|
 | `economy.accountChart` | `default` \| `npo` \| `none` | varianta účtové osnovy k naseedování |
 | `economy.fiscalYearStartMonth` | 1–12 | první měsíc fiskálního roku (1 = leden) |
+| `economy.vatAgenda` | `true` \| `false` | vede agendu DPH — předvolba (výchozí režim DPH nových dokladů, viditelnost agendy DPH v Nastavení), **ne** zdroj pravdy o plátcovství; tou jsou Registrace DPH |
 
 **Absence klíče = nerozhodnuto** (D2): `ds-upgrade` bez rozhodnutí osnovu
 ani fiskální roky neseeduje a na konci vypíše `[TODO]` blok s hotovými
@@ -1090,8 +1091,14 @@ cd /opt/shipard/data-sources/<id>
 sudo shpd-ds ds-upgrade                                       # → [TODO] blok
 sudo shpd-ds ds-setting set economy.accountChart default      # nebo npo / none
 sudo shpd-ds ds-setting set economy.fiscalYearStartMonth 1
+sudo shpd-ds ds-setting set economy.vatAgenda true            # neplátce DPH: false
 sudo shpd-ds ds-upgrade                                       # naseeduje osnovu a roky
 ```
+
+Neplátce DPH (`economy.vatAgenda false`) dostane nové doklady s výchozím
+režimem „Bez DPH" a agenda DPH (Registrace, Období) se mu schová
+z Nastavení — dokud nikdy neměl žádnou registraci. Historické doklady
+a ukončené registrace zůstávají viditelné vždy (docs/ds-setup.md D10/D11).
 
 ### 3. Upgrade všech DS najednou
 

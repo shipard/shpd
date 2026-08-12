@@ -10,6 +10,7 @@ use Shipard\Core\Form\FormHeaderInfo;
 use Shipard\Core\Form\FormTab;
 use Shipard\Core\Form\RecalculateResult;
 use Shipard\Core\Form\TableForm;
+use Shipard\Core\Settings\SettingsStore;
 
 /**
  * Abstraktní base formulář nad `docs_core_heads`.
@@ -34,6 +35,40 @@ use Shipard\Core\Form\TableForm;
  */
 abstract class DocsHeadsFormBase extends TableForm
 {
+    /** Per-instance cache — viz vatAgendaDisabled(). */
+    private ?bool $vatAgendaDisabled = null;
+
+    /**
+     * True, když je DS vědomě nastavený jako neplátce
+     * (`economy.vatAgenda === false`). Řídí JEN default nového dokladu
+     * a skrytí sekce „DPH" u dokladů bez DPH — renderování existujících
+     * dat řídí vat_mode dokladu (ds-setup.md D10), proto se přes tenhle
+     * příznak NIKDY nepřepojuje $hasVat. Nerozhodnutý klíč (null) se
+     * chová jako dnešek, ne jako false.
+     */
+    protected function vatAgendaDisabled(): bool
+    {
+        if ($this->vatAgendaDisabled === null) {
+            $this->vatAgendaDisabled = $this->db !== null
+                && (new SettingsStore($this->db))->get('economy.vatAgenda') === false;
+        }
+        return $this->vatAgendaDisabled;
+    }
+
+    /**
+     * HTTP cesta nového dokladu: FormController před tímhle hookem předvyplní
+     * column defaults ze schématu (vat_mode = 1), takže odvození defaultu
+     * z `economy.vatAgenda` musí přepsat právě a jen tu schéma-hodnotu —
+     * mutace odsud se propíší do response `data`. Ostatní cesty (data už
+     * vat_mode nesou) řeší applyClientDefaults.
+     */
+    public function applyNewRecordDefaults(array &$data): void
+    {
+        if ($this->vatAgendaDisabled() && (int) ($data['vat_mode'] ?? 1) === 1) {
+            $data['vat_mode'] = 0;
+        }
+    }
+
     public function buildFormDefinition(array $data, bool $isNew): FormDefinition
     {
         $this->applyClientDefaults($data, $isNew);
@@ -264,7 +299,10 @@ abstract class DocsHeadsFormBase extends TableForm
             $data['issue_date'] = date('Y-m-d');
         }
         if (!isset($data['vat_mode'])) {
-            $data['vat_mode'] = 1;
+            // Neplátce (economy.vatAgenda === false) → „Bez DPH"; nerozhodnutý
+            // klíč zachovává dnešní default. Jen default — explicitní hodnota
+            // v datech vyhrává (import, kopie dokladu).
+            $data['vat_mode'] = $this->vatAgendaDisabled() ? 0 : 1;
         }
         if (!isset($data['vat_calc_source'])) {
             $data['vat_calc_source'] = 0;
@@ -294,6 +332,11 @@ abstract class DocsHeadsFormBase extends TableForm
     {
         $vatMode = (int) ($data['vat_mode'] ?? 1);
         $hasVat = $vatMode !== 0;
+        // Sekce „DPH" zmizí jen u neplátce (economy.vatAgenda === false)
+        // A ZÁROVEŇ dokladu bez DPH — doklad z doby plátcovství musí svůj
+        // režim dál ukazovat (ds-setup.md D10), proto podmínka na $hasVat
+        // a proto se $hasVat samotné na příznak nikdy nepřepojuje.
+        $vatSectionHidden = !$hasVat && $this->vatAgendaDisabled();
         $docCurrency = strtolower((string) ($data['doc_currency'] ?? 'czk'));
         $homeCurrency = strtolower((string) ($data['home_currency'] ?? 'czk'));
         $hasForeignCurrency = $docCurrency !== '' && $homeCurrency !== ''
@@ -347,10 +390,11 @@ abstract class DocsHeadsFormBase extends TableForm
                     ->date('period_from', hint: 'Volitelné, např. pronájem za období')
                     ->date('period_to')
 
-                    ->separator('DPH')
+                    ->separator('DPH', hidden: $vatSectionHidden)
                     ->select('vat_mode',
                         options: $this->resolveCfgItemOptions('docs.core.vatModes'),
                         triggers: 'reload',
+                        hidden: $vatSectionHidden,
                     )
                     ->select('vat_calc_source',
                         options: $this->resolveCfgItemOptions('docs.core.vatCalcSources'),
@@ -362,7 +406,8 @@ abstract class DocsHeadsFormBase extends TableForm
                         hidden: !$hasVat,
                     )
                     ->select('vat_registration',
-                        options: $this->resolveVatRegistrationOptions(),
+                        // U skryté sekce nemá smysl dotaz na registrace do DB.
+                        options: $vatSectionHidden ? [] : $this->resolveVatRegistrationOptions(),
                         triggers: 'reload',
                         hidden: !$hasVat,
                     )

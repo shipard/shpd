@@ -302,6 +302,9 @@ class ModuleDefinition
                     'section'    => (string) $item['section'],
                     'subsection' => isset($item['subsection']) ? (string) $item['subsection'] : null,
                     'order'      => isset($item['order']) ? (int) $item['order'] : null,
+                    // Runtime gate viditelnosti (NavItemVisibilityGate) —
+                    // vyhodnocuje SettingsController, fail-open.
+                    'visibilityClass' => isset($item['visibilityClass']) ? (string) $item['visibilityClass'] : null,
                 ];
             }
         }

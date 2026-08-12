@@ -534,6 +534,38 @@ class DsUpgradeCommandTest extends TestCase
         $this->assertStringNotContainsString('economy.fiscalYearStartMonth', $display);
     }
 
+    public function testUndecidedCodebooksParamsReportedAsTodo(): void
+    {
+        // Fixture modul s id economy.codebooks — gate pro fiscalYearStartMonth
+        // a vatAgenda v [TODO] výpisu (LayerCParameters::SPECS se iterují celé).
+        $moduleDir = $this->modulesPath . '/economy/codebooks';
+        mkdir($moduleDir, 0755, true);
+        file_put_contents($moduleDir . '/module.jsonc', json_encode([
+            'id'           => 'economy.codebooks',
+            'name'         => 'economy.codebooks',
+            'dependencies' => [],
+            'tables'       => [],
+            'extensions'   => [],
+            'config'       => [],
+        ]));
+        $this->dsConfig = $this->createProvisioningConfig(['test.unit', 'economy.codebooks']);
+
+        $this->dsConnection->method('getTableColumns')->willReturn([]);
+        $this->dsConnection->method('getTableIndexes')->willReturn([]);
+        $this->dsConnection->method('executeSQL');
+
+        $tester = $this->createCommandTester();
+        $exitCode = $tester->execute([]);
+
+        $this->assertSame(Command::SUCCESS, $exitCode);
+        $display = $tester->getDisplay();
+        $this->assertStringContainsString('[TODO] Nerozhodnuté parametry', $display);
+        $this->assertStringContainsString('ds-setting set economy.fiscalYearStartMonth 1', $display);
+        $this->assertStringContainsString('ds-setting set economy.vatAgenda true', $display);
+        // economy.accounting není aktivní — jeho parametr do [TODO] nepatří.
+        $this->assertStringNotContainsString('economy.accountChart', $display);
+    }
+
     public function testDecidedAccountChartDoesNotReportTodo(): void
     {
         $this->createEconomyAccountingFixtureModule();

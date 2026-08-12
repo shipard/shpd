@@ -17,6 +17,7 @@ use Shipard\Core\Module\ModuleDefinition;
 use Shipard\Core\Module\ModuleLoader;
 use Shipard\Core\Module\ModulePathResolver;
 use Shipard\Core\Module\ModuleResolver;
+use Shipard\Core\Navigation\NavItemVisibilityGate;
 use Shipard\Core\Settings\KeyValueStore;
 use Shipard\Core\Settings\SettingsStore;
 use Shipard\Core\Settings\UserSettingsStore;
@@ -32,6 +33,7 @@ class SettingsController
         string $kind = 'settings',
         ?AuthContext $auth = null,
         array $tables = [],
+        ?DataSourceConnection $db = null,
     ): Response {
         if ($configRuntime === null) {
             return Response::success([]);
@@ -52,7 +54,7 @@ class SettingsController
         $sections = $sectionsCfg['sections'];
         usort($sections, fn($a, $b) => ($a['order'] ?? 0) <=> ($b['order'] ?? 0));
 
-        $itemsBySection = $this->collectItems($resolvedModules, $resolver, $language, $kind, $auth, $tables);
+        $itemsBySection = $this->collectItems($resolvedModules, $resolver, $language, $kind, $auth, $tables, $db);
 
         $tree = [];
         foreach ($sections as $section) {
@@ -393,13 +395,46 @@ class SettingsController
         return null;
     }
 
-    private function collectItems(array $resolvedModules, ModulePathResolver $resolver, string $language, string $kind = 'settings', ?AuthContext $auth = null, array $tables = []): array
+    /**
+     * Vyhodnotí NavItemVisibilityGate položky s memoizací per třída.
+     * Fail-open: chybějící/špatná třída i výjimka z gate = zobrazit (log).
+     *
+     * @param array<string, bool> $gateResults
+     */
+    private function gateAllowsItem(string $gateClass, DataSourceConnection $db, array &$gateResults): bool
+    {
+        if (array_key_exists($gateClass, $gateResults)) {
+            return $gateResults[$gateClass];
+        }
+
+        $visible = true;
+        if (!class_exists($gateClass) || !is_subclass_of($gateClass, NavItemVisibilityGate::class)) {
+            ErrorLogger::warn('Nav visibility gate missing or not a NavItemVisibilityGate, showing item', [
+                'class' => $gateClass,
+            ]);
+        } else {
+            try {
+                /** @var NavItemVisibilityGate $gate */
+                $gate = new $gateClass();
+                $visible = $gate->isVisible($db);
+            } catch (\Throwable $e) {
+                ErrorLogger::logException($e, "Nav visibility gate '{$gateClass}' failed — showing item");
+            }
+        }
+
+        return $gateResults[$gateClass] = $visible;
+    }
+
+    private function collectItems(array $resolvedModules, ModulePathResolver $resolver, string $language, string $kind = 'settings', ?AuthContext $auth = null, array $tables = [], ?DataSourceConnection $db = null): array
     {
         $itemsBySection = [];
         $seenViewers = [];
         $seenTables = [];
         $seenPages = [];
         $seenPanels = [];
+        // Memo výsledků visibility gate — jedna instance / jeden dotaz per
+        // třída per request (VatAgendaNavGate sdílí obě položky agendy DPH).
+        $gateResults = [];
         // Systémové (core_system_*) a adminOnly tabulky jsou pro ne-adminy
         // zavřené na CRUD/viewer/form vrstvě (TableAccessGuard) — mrtvé
         // odkazy do stromu nedáváme.
@@ -410,6 +445,15 @@ class SettingsController
             foreach ($moduleItems as $item) {
                 $section    = $item['section'];
                 $subsection = $item['subsection'] ?? null;
+
+                // Runtime visibility gate (NavItemVisibilityGate) — fail-open:
+                // bez DB (degradovaný kontext) se položka zobrazí.
+                $gateClass = $item['visibilityClass'] ?? null;
+                if ($gateClass !== null && $db !== null
+                    && !$this->gateAllowsItem($gateClass, $db, $gateResults)
+                ) {
+                    continue;
+                }
 
                 $itemTable = $item['table'] ?? $this->viewerTargetTable($module, $item);
                 if (!$isAdmin && $itemTable !== null

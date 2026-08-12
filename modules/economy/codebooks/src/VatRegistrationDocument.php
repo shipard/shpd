@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Shipard\Module\Economy\Codebooks;
 
+use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Document\Document;
 use Shipard\Core\Document\ValidationResult;
+use Shipard\Core\Logging\ErrorLogger;
 
 class VatRegistrationDocument extends Document
 {
@@ -65,5 +67,33 @@ class VatRegistrationDocument extends Document
         }
 
         return $result;
+    }
+
+    /**
+     * Po uložení registrace hned dogenerovat období DPH — bez toho by
+     * uživatel po založení registrace čekal na další ds-upgrade. Hook na
+     * dokumentu (ne ve formuláři), aby fungoval i pro apply z exchange
+     * a budoucí volání z průvodce. Provisioner je idempotentní (překryvový
+     * lookup), opakované uložení nic nezduplikuje.
+     *
+     * afterSave běží po commitu — chyba provisioningu NESMÍ shodit uložení
+     * registrace (bublala by uživateli jako 500 nad už uloženými daty);
+     * jen log, období dorovná další ds-upgrade.
+     */
+    public function afterSave(array $data): void
+    {
+        if ($this->db === null) {
+            return;
+        }
+
+        try {
+            $provisioner = new VatPeriodsProvisioner(new DataSourceConnection($this->db));
+            $provisioner->provision();
+        } catch (\Throwable $e) {
+            ErrorLogger::logException(
+                $e,
+                'VatPeriodsProvisioner failed after saving VAT registration #' . (int) ($data['id'] ?? 0),
+            );
+        }
     }
 }

@@ -22,12 +22,16 @@
 
     "settingsItems": [
         { "viewer": "economy.codebooks.fiscalYears",      "section": "accounting" },
-        { "viewer": "economy.codebooks.vatRegistrations", "section": "accounting" },
+        // Agenda DPH se skrývá u neplátce bez jediné registrace (D11) —
+        // runtime gate, viz VatAgendaNavGate.
+        { "viewer": "economy.codebooks.vatRegistrations", "section": "accounting",
+          "visibilityClass": "Shipard\\Module\\Economy\\Codebooks\\VatAgendaNavGate" },
         { "viewer": "economy.codebooks.cashDesks",        "section": "accounting" },
         { "viewer": "economy.codebooks.bankAccounts",     "section": "accounting" },
         { "viewer": "economy.codebooks.warehouses",       "section": "warehouses" },
         { "viewer": "economy.codebooks.costCenters",      "section": "warehouses" },
-        { "table":  "economy_codebooks_vat_periods",      "section": "accounting" }
+        { "table":  "economy_codebooks_vat_periods",      "section": "accounting",
+          "visibilityClass": "Shipard\\Module\\Economy\\Codebooks\\VatAgendaNavGate" }
     ],
 
     "viewers": [

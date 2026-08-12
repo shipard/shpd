@@ -14,6 +14,12 @@ namespace Shipard\Core\Settings;
  *
  * Absence klíče v core_system_settings = nerozhodnuto; provisionery pak
  * neseedují (D6). Žádný fallback na main.json (D9).
+ *
+ * `economy.vatAgenda` je PŘEDVOLBA („vede agendu DPH" — řídí výchozí
+ * vat_mode nových dokladů a viditelnost agendy DPH v navigaci), NE zdroj
+ * pravdy o plátcovství. Tou jsou (ne)existující Registrace DPH pro dané
+ * datum (D5); renderování existujících dokladů řídí jejich vlastní
+ * vat_mode (D10).
  */
 final class LayerCParameters
 {
@@ -33,6 +39,10 @@ final class LayerCParameters
             'module'  => 'economy.codebooks',
             'example' => '1',
         ],
+        'economy.vatAgenda' => [
+            'module'  => 'economy.codebooks',
+            'example' => 'true',
+        ],
     ];
 
     /** @return list<string> */
@@ -48,7 +58,7 @@ final class LayerCParameters
      *
      * @throws \InvalidArgumentException s výčtem povolených hodnot
      */
-    public static function validate(string $key, string $raw): string|int
+    public static function validate(string $key, string $raw): string|int|bool
     {
         switch ($key) {
             case 'economy.accountChart':
@@ -67,6 +77,17 @@ final class LayerCParameters
                     );
                 }
                 return (int) $raw;
+
+            case 'economy.vatAgenda':
+                if (in_array($raw, ['true', '1'], true)) {
+                    return true;
+                }
+                if (in_array($raw, ['false', '0'], true)) {
+                    return false;
+                }
+                throw new \InvalidArgumentException(
+                    "Invalid value '{$raw}' for {$key}. Allowed: true, false",
+                );
         }
 
         throw new \InvalidArgumentException("Unknown layer C parameter: {$key}");

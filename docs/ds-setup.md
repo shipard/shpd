@@ -18,8 +18,10 @@ dashboardu.
 > Z Fáze 2 hotový Task 03 — klíče `economy.accountChart`
 > a `economy.fiscalYearStartMonth` (`LayerCParameters`), CLI `ds-setting`,
 > odložený provisioning osnovy a fiskálních roků, `[TODO]` výpis
-> v `ds-upgrade`, konec `getAccountChart()`. Zbývá `economy.homeCurrency`
-> (Task 04) a `economy.vatAgenda` (vat-payer-01).**
+> v `ds-upgrade`, konec `getAccountChart()` — a `vat-payer-01` (§6 body
+> 1–4: klíč `economy.vatAgenda`, default `vat_mode`, skrytí sekce DPH
+> a navigace přes nový `NavItemVisibilityGate`, období DPH při uložení
+> registrace). Zbývá `economy.homeCurrency` (Task 04).**
 > Fázování viz §8, otevřené body §10.
 
 ---
@@ -398,7 +400,15 @@ DPH nevyžaduje. Chybí tedy jen:
    staví řádky z `docs_core_vat_recap` a `buildRowLines()` bere
    `vat_base_dom`, takže doklad s `vat_mode = 0` zaúčtuje plnou částku
    a na 343xxx nesáhne.
-4. Provisioning období DPH **v okamžiku vzniku registrace**. `VatPeriodsProvisioner` iteruje registrace, takže na DS bez registrace už dnes nic nevyrobí — „u neplátce negenerovat“ tedy není co implementovat. Chybí opačný směr: dokud se období generují jen při `ds-upgrade`, má uživatel po založení registrace registraci a nulová období. Patří do `vat-payer-01`, průvodce pak volá hotovou věc.
+4. Provisioning období DPH **v okamžiku vzniku registrace**. `VatPeriodsProvisioner` iteruje registrace, takže na DS bez registrace už dnes nic nevyrobí — „u neplátce negenerovat” tedy není co implementovat. Chybí opačný směr: dokud se období generují jen při `ds-upgrade`, má uživatel po založení registrace registraci a nulová období. Patří do `vat-payer-01`, průvodce pak volá hotovou věc.
+
+   **Vědomý limit — změna frekvence.** Lookup provisioneru je překryvový
+   (záměrně, chrání `resolveVatPeriodId()` před nedeterminismem), takže
+   po změně `tax_period_kind` existující období **blokují** kandidáty nové
+   frekvence ve svém rozsahu — měsíční období se po přepnutí ze čtvrtletní
+   objeví až za horizontem už vygenerovaných let. Stará období se nemažou
+   (mohou nést doklady); případný úklid/přegenerování je věcné rozhodnutí
+   mimo `vat-payer-01`.
 
 **Proč varianta 1 a ne `neplátce` jako `taxpayer_kind`:** registrace je
 časově omezený fakt (`valid_from`/`valid_to`), takže **absence v intervalu je

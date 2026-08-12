@@ -18,6 +18,8 @@ module.jsonc (settingsPages + settingsItems)        deklarace
         │
         ▼
 GET /_ui/settings/navigation     → nav item { type: 'page', pageId }
+   (položky s `visibilityClass` filtruje runtime gate
+    NavItemVisibilityGate — viz docs/modules.md, Pole settingsItems)
 GET /_ui/settings/page/{pageId}  → { definition, values }
 POST /_ui/settings/page/{pageId} → uložení textových polí (whitelist)
         │

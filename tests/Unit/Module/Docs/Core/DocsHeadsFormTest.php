@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Shipard\Tests\Unit\Module\Docs\Core;
 
 use PHPUnit\Framework\TestCase;
+use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Form\FormDefinition;
 use Shipard\Core\Form\FormElement;
 use Shipard\Core\Form\FormTab;
@@ -482,5 +483,145 @@ class DocsHeadsFormTest extends TestCase
         $html = (string) $this->findElementByType($def, 'snapshots', 'html')->content;
         $this->assertStringNotContainsString('<script>x</script>', $html);
         $this->assertStringContainsString('&lt;script&gt;', $html);
+    }
+
+    // ── Neplátce DPH — economy.vatAgenda (vat-payer-01, ds-setup D10) ────────
+
+    /**
+     * @param list<string>|null $queries zachytávané SQL dotazy fetchAll
+     */
+    private function createFormWithVatAgenda(?bool $vatAgenda, ?array &$queries = null): DocsHeadsForm
+    {
+        $form = $this->createForm();
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchSingle')->willReturnCallback(
+            static function (mixed ...$args) use ($vatAgenda): mixed {
+                if (($args[1] ?? null) === 'economy.vatAgenda') {
+                    return $vatAgenda === null ? null : json_encode($vatAgenda);
+                }
+                return null;
+            },
+        );
+        $db->method('fetchAll')->willReturnCallback(
+            static function (mixed ...$args) use (&$queries): array {
+                if ($queries !== null) {
+                    $queries[] = (string) $args[0];
+                }
+                return [];
+            },
+        );
+        $form->setDb($db);
+        return $form;
+    }
+
+    private function findSeparator(FormDefinition $def, string $tabId, string $label): ?FormElement
+    {
+        $tab = $this->findTab($def, $tabId);
+        if ($tab === null) {
+            return null;
+        }
+        foreach ($tab->sections as $section) {
+            foreach ($section->columns as $col) {
+                foreach ($col->elements as $el) {
+                    if ($el->type === 'separator' && $el->label === $label) {
+                        return $el;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    public function testNonPayerRewritesSchemaDefaultVatMode(): void
+    {
+        $form = $this->createFormWithVatAgenda(false);
+        $data = ['vat_mode' => 1]; // column default ze schématu (FormController prefill)
+
+        $form->applyNewRecordDefaults($data);
+
+        $this->assertSame(0, $data['vat_mode']);
+    }
+
+    public function testPayerKeepsSchemaDefaultVatMode(): void
+    {
+        $form = $this->createFormWithVatAgenda(true);
+        $data = ['vat_mode' => 1];
+
+        $form->applyNewRecordDefaults($data);
+
+        $this->assertSame(1, $data['vat_mode']);
+    }
+
+    public function testUndecidedVatAgendaKeepsSchemaDefaultVatMode(): void
+    {
+        // Nerozhodnutý klíč (null) se nesmí chovat jako false.
+        $form = $this->createFormWithVatAgenda(null);
+        $data = ['vat_mode' => 1];
+
+        $form->applyNewRecordDefaults($data);
+
+        $this->assertSame(1, $data['vat_mode']);
+    }
+
+    public function testExplicitNonDefaultVatModeSurvivesNonPayerDefaults(): void
+    {
+        $form = $this->createFormWithVatAgenda(false);
+        $data = ['vat_mode' => 2];
+
+        $form->applyNewRecordDefaults($data);
+
+        $this->assertSame(2, $data['vat_mode']);
+    }
+
+    public function testNonPayerNewDocumentBuildDerivesNoVat(): void
+    {
+        // Build cesta bez prefillu (applyClientDefaults) odvozuje default z klíče.
+        $form = $this->createFormWithVatAgenda(false);
+        $def = $form->buildFormDefinition([], true);
+
+        $this->assertTrue($this->findSeparator($def, 'basic', 'DPH')->hidden);
+        $this->assertTrue($this->findElement($def, 'basic', 'vat_mode')->hidden);
+    }
+
+    public function testVatSectionHiddenForNonPayerNoVatDocument(): void
+    {
+        $form = $this->createFormWithVatAgenda(false);
+        $def = $form->buildFormDefinition(['vat_mode' => 0], false);
+
+        $this->assertTrue($this->findSeparator($def, 'basic', 'DPH')->hidden);
+        $this->assertTrue($this->findElement($def, 'basic', 'vat_mode')->hidden);
+    }
+
+    public function testVatSectionVisibleForHistoricalVatDocumentOfNonPayer(): void
+    {
+        // D10: doklad z doby plátcovství ukazuje svá DPH data, i když je
+        // firma dnes neplátcem — build cesta hodnotu v datech nepřepisuje.
+        $form = $this->createFormWithVatAgenda(false);
+        $def = $form->buildFormDefinition(['vat_mode' => 1], false);
+
+        $this->assertFalse($this->findSeparator($def, 'basic', 'DPH')->hidden);
+        $this->assertFalse($this->findElement($def, 'basic', 'vat_mode')->hidden);
+        $this->assertFalse($this->findElement($def, 'basic', 'vat_registration')->hidden);
+    }
+
+    public function testVatSectionVisibleWhenUndecided(): void
+    {
+        $form = $this->createFormWithVatAgenda(null);
+        $def = $form->buildFormDefinition(['vat_mode' => 0], false);
+
+        $this->assertFalse($this->findSeparator($def, 'basic', 'DPH')->hidden);
+        $this->assertFalse($this->findElement($def, 'basic', 'vat_mode')->hidden);
+    }
+
+    public function testHiddenVatSectionSkipsRegistrationQuery(): void
+    {
+        $queries = [];
+        $form = $this->createFormWithVatAgenda(false, $queries);
+
+        $form->buildFormDefinition(['vat_mode' => 0], false);
+
+        foreach ($queries as $sql) {
+            $this->assertStringNotContainsString('vat_registrations', $sql);
+        }
     }
 }

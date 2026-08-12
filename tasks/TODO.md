@@ -88,3 +88,30 @@ zakázaný (`ds-setup.md` D13), takže se jich chování dismissu netýká.
 
 **Priorita:** nízká, ale je to tichá nekonzistence mezi kódem a dokumentovaným
 záměrem — čím dřív se rozhodne, tím míň řádků bude třeba uklidit.
+
+---
+
+## Settings stránky neumí pole typu `select` a `checkbox`
+
+**Zjištěno:** 08/2026 při návrhu panelu `dsSetup` (`docs/ds-setup.md` D14).
+
+`ModuleDefinition::fromArray()` whitelistuje field typy
+`text`, `image`, `theme`, `language`, `avatar`; `app-settings.md` odkládá
+`select` a `checkbox` na „první stránku, která je potřebuje“.
+
+**Proč to není úkol oblasti `ds-setup`:** parametry vrstvy C se ovládají
+v ručně psaném panelu, který si select vyrenderuje sám (D14). Zůstává to
+tedy jako obecná mezera settings stránek, ne jako blokace.
+
+**Směr řešení:** rozšířit whitelist, doplnit větev v
+`SettingsController::savePage()` (vzor `language` — validace proti seznamu
+povolených hodnot) a render ve `SettingsPage.svelte`. U `select` rozhodnout,
+jestli se volby berou z literálního `options` v module.jsonc, nebo z `cfgItem`
+(`world.base.currencies` a spol.) — druhá varianta je lokalizovaná, ale
+vyžaduje přístup ke `ConfigRuntime` při sestavování definice stránky.
+
+**Poznámka k `checkbox`:** tříhodnotové příznaky (nerozhodnuto / ano / ne)
+checkbox neunese — pro ty je správná odpověď `select` s prázdnou volbou
+(typ `text` už dnes mapuje prázdný string na `null`, tedy smazání klíče).
+
+**Priorita:** nízká, dokud žádná settings stránka takové pole nepotřebuje.

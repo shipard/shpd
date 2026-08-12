@@ -44,6 +44,7 @@ dashboardu.
 | D11 | Navigace agendy DPH (Registrace, Období) se skrývá jen tehdy, když je příznak neplátce **a zároveň nikdy neexistovala žádná registrace** (`COUNT(*) = 0` včetně ukončených). Samotný příznak jako podmínka nestačí. |
 | D12 | **Hybrid dvou čtecích cest nad jednou implementací checku.** Karta ve feedu čerpá z tabulky alertů (naplní cron, slot `five-minutes`), **panel checklistu spouští checky naživo** přes službu `SetupChecklist`. Důvod: checky mají vlastní `interval` a runner přeskakuje ty, kde `next_run_at > NOW`, takže panel by uživateli hlásil chybějící nastavení ještě dlouho poté, co ho doplní. |
 | D13 | **`snooze` a `dismiss` jsou pro alerty s `tags: ["setup"]` zakázané** (409, stejný vzor jako existující state guardy v `AlertsController`). Bez toho by si uživatel mohl položku checklistu odklikat, což je proti D3. |
+| D14 | **Parametry vrstvy C se ovládají v panelu `dsSetup`, ne na generické settings stránce.** Panel je ručně psaná Svelte komponenta (vzor `accountSecurity`), takže si ovládání vyrenderuje sám a field typy `select`/`checkbox` nejsou potřeba — vypadávají z oblasti. Důvody: parametry potřebují vysvětlující UI, které deklarativní pole neunese (osnovu po naseedování nepřepneš, měna platí jen pro nové záznamy); `vatAgenda` je tříhodnotový (`null`/`true`/`false`) a checkbox nerozhodnuto neunese vůbec; panel je v Nastavení, takže požadavek §5.2 na editovatelnost je splněný bez druhé UI plochy. |
 | D6 | Provisioning fiskálních roků se **odkládá** za rozhodnutí o prvním měsíci **a o domácí měně** (Task 04 — měna je součástí zakládaného záznamu, seedovat s odhadnutou by obcházelo D2). Čerstvý DS chvíli nemá fiskální roky — nevadí, doklad se stejně nepotvrdí bez vlastní Osoby. |
 | D7 | Hosting přispívá **výhradně vrstvou A** — dva sloupce na `hosting_core_data_sources`, pole ve formuláři, položky v queue payloadu, předání v `HostingSyncRunner`. Žádný ARES v provisioning agentovi, žádné business řádky. |
 | D8 | Setup alerty se ve feedu dashboardu agregují **podle tagu** (ne podle `check_id`) do jedné karty; její primární akce otevírá panel průvodce — nový druh akce `open_panel`. |
@@ -268,12 +269,10 @@ dokladu, `doc_currency` se odvozuje z `home_currency`),
 `FiscalYearsProvisioner`u). Defenzivní fallbacky `?? 'czk'` při čtení
 `$data` ve formulářích zůstaly — hodnotu vždy plní `applyDefaults()`.
 
-**Editovatelnost mimo průvodce.** Parametry mají být vidět a měnitelné
-i v Nastavení, tedy na settings stránce. To vyžaduje **field typy `select` a
-`checkbox`**, které dnes neexistují — `app-settings.md` je výslovně odkládá na
-„první stránku, která je potřebuje“. Tou stránkou je tato oblast. Parser
-`ModuleDefinition::fromArray()` typy whitelistuje, takže jde o rozšíření
-whitelistu + render ve `SettingsPage.svelte`, ne o architektonickou změnu.
+**Editovatelnost mimo průvodce.** Parametry jsou vidět a měnitelné v panelu
+`dsSetup`, který je sám položkou Nastavení (D14). Generická settings stránka
+se pro ně nestaví a field typy `select`/`checkbox` tato oblast nepotřebuje —
+panel je ručně psaná komponenta a ovládání si vyrenderuje sám.
 
 ### 5.3 Setup checky
 
@@ -478,7 +477,7 @@ Vrstvu A (`language`, `country`) zapisuje `ds-create`, tedy krok před importem.
 |---|---|---|
 | **1 — Vrstva A** | `country` v `DataSourceConfig`, přepínače `ds-create --language --country`, hosting (dva sloupce, formulář, queue payload, agent) | Nový DS vznikne z hostingu i z konzole s vyplněným jazykem a zemí v `main.json` |
 | **2 — Parametry do settings** | Čtyři klíče, provisionery a formuláře je čtou, odložený provisioning osnovy a fiskálních roků (D6), konec `getAccountChart()`/`getDefaultCurrency()` | `ds-upgrade` na čerstvém DS osnovu ani roky nenaseeduje; naseeduje je, jakmile klíč existuje |
-| **3 — Setup checky a panel** | Sedm nových checků + služba `SetupChecklist` (D12) + zákaz snooze/dismiss (D13); field typy `select` a `checkbox`; panel „Co ještě chybí nastavit“ umící parametry nastavit; tagová agregace ve feedu (D8) a akce `open_panel` | Čerstvý DS ukazuje jednu kartu „Dokončit nastavení“, panel vyjmenuje chybějící položky a uživatel v něm rozhodne všechny čtyři parametry vrstvy C bez konzole |
+| **3 — Setup checky a panel** | Sedm nových checků + služba `SetupChecklist` (D12) + zákaz snooze/dismiss (D13); panel `dsSetup` „Co ještě chybí nastavit“ s ovládáním parametrů (D14); tagová agregace ve feedu (D8) a akce `open_panel` | Čerstvý DS ukazuje jednu kartu „Dokončit nastavení“, panel vyjmenuje chybějící položky a uživatel v něm rozhodne všechny čtyři parametry vrstvy C bez konzole |
 | **4 — Průvodce** | Panel `dsSetup`, kroky 1–7 (§5.4), reuse registrové cesty, můstek do číselníku bankovních účtů (field typy už dodala Fáze 3) | Uživatel projde od čerstvého DS k potvrditelné vydané faktuře bez opuštění průvodce |
 | **5 — Nabídky** | Generátor základních Položek, název a logo v průvodci | Uživatel dostane volitelný startovní obsah, aniž by na něj cokoli tlačilo |
 
@@ -498,7 +497,7 @@ plátcovství DPH → domácí měna → setup checky → tagová agregace → f
 
 | Modul / projekt | Dopad |
 |---|---|
-| `core.system` | `SettingsStore` beze změny (jen nový konzument); field typy `select`/`checkbox` v `ModuleDefinition` + `SettingsPage.svelte`; panel `dsSetup` v `settingsItems` |
+| `core.system` | `SettingsStore` beze změny (jen nový konzument); panel `dsSetup` v `panels` + `settingsItems` |
 | `core.alerts` | Bez změny jádra — nové checky jsou data. Nový druh akce `open_panel` je kontrakt mezi `AlertFinding` a frontendem |
 | `base.persons` | Zobecnění `MissingOwnPersonCheck`, nový check na sídlo |
 | `economy.codebooks` | Pět checků, čtení `economy.*` klíčů ve `FiscalYearsProvisioner` a `VatPeriodsProvisioner` |
@@ -507,7 +506,7 @@ plátcovství DPH → domácí měna → setup checky → tagová agregace → f
 | `docs.core` / `docs.invoicesOut` / `docs.invoicesIn` | Odvozený default `vat_mode`, skrytí DPH u neplátce, `home_currency` ze settings |
 | `hosting.core` | Dva sloupce, formulář, queue payload (§5.6) |
 | jádro (`src/`) | `DataSourceConfig::getCountry()`, `ds-create` přepínače, `HostingSyncRunner`, `DevDashboardController`, `AlertsSource` (tagová agregace) |
-| frontend | Panel průvodce, `open_panel` v akcích karet, render `select`/`checkbox` |
+| frontend | Panel `dsSetup` (checklist + ovládání parametrů) a panel průvodce, `open_panel` v akcích karet |
 | import ze starého Shipardu | Zápis čtyř settings klíčů (§7.2) |
 
 ---

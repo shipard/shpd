@@ -14,6 +14,8 @@
   import Button from '../ui/Button.svelte';
   import FormDialog from '../form/FormDialog.svelte';
   import RegistryImportWizard from '../registry/RegistryImportWizard.svelte';
+  import VatRegistrationPrefillDialog from './VatRegistrationPrefillDialog.svelte';
+  import BankAccountBridgeDialog from './BankAccountBridgeDialog.svelte';
   import { iconListCheck, iconSuccess, iconWarning } from '../../icons.js';
   import { fetchSetupChecklist, saveSetupParameters } from '../../api/setup.js';
 
@@ -38,6 +40,10 @@
   // Registry wizard v režimu asOwn — akce registry_import_own u položky
   // „Chybí vlastní Osoba". Stejný wasSaved → reload vzor jako formModal.
   let registryModal = $state({ open: false, wasSaved: false });
+
+  // Dialogy Task 09: prefill Registrace DPH a můstek bankovních účtů.
+  let vatModal = $state({ open: false, wasSaved: false });
+  let bankModal = $state({ open: false, wasSaved: false });
 
   const CHART_KEY = 'economy.accountChart';
   const VAT_KEY = 'economy.vatAgenda';
@@ -159,6 +165,14 @@
       registryModal = { open: true, wasSaved: false };
       return;
     }
+    if (action?.kind === 'prefill_vat_registration') {
+      vatModal = { open: true, wasSaved: false };
+      return;
+    }
+    if (action?.kind === 'bridge_bank_accounts') {
+      bankModal = { open: true, wasSaved: false };
+      return;
+    }
     console.warn('Unknown setup item action kind:', action?.kind);
   }
 
@@ -179,6 +193,26 @@
   function handleRegistryClose() {
     const shouldRefetch = registryModal.wasSaved;
     registryModal = { open: false, wasSaved: false };
+    if (shouldRefetch) load();
+  }
+
+  function handleVatSaved() {
+    vatModal.wasSaved = true;
+  }
+
+  function handleVatClose() {
+    const shouldRefetch = vatModal.wasSaved;
+    vatModal = { open: false, wasSaved: false };
+    if (shouldRefetch) load();
+  }
+
+  function handleBankSaved() {
+    bankModal.wasSaved = true;
+  }
+
+  function handleBankClose() {
+    const shouldRefetch = bankModal.wasSaved;
+    bankModal = { open: false, wasSaved: false };
     if (shouldRefetch) load();
   }
 
@@ -329,6 +363,22 @@
     asOwn={true}
     onSaved={handleRegistrySaved}
     onClose={handleRegistryClose}
+  />
+{/if}
+
+{#if vatModal.open}
+  <VatRegistrationPrefillDialog
+    open={vatModal.open}
+    onSaved={handleVatSaved}
+    onClose={handleVatClose}
+  />
+{/if}
+
+{#if bankModal.open}
+  <BankAccountBridgeDialog
+    open={bankModal.open}
+    onSaved={handleBankSaved}
+    onClose={handleBankClose}
   />
 {/if}
 

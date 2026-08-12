@@ -791,6 +791,30 @@ class Router
 			return new Route('setup', 'parameters');
 		}
 
+		// GET /_setup/vat-registration-prefill
+		if ($rest === '/vat-registration-prefill') {
+			if ($method !== 'GET') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('setup', 'vatRegistrationPrefill');
+		}
+
+		// GET /_setup/bank-account-candidates
+		if ($rest === '/bank-account-candidates') {
+			if ($method !== 'GET') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('setup', 'bankAccountCandidates');
+		}
+
+		// POST /_setup/bank-accounts
+		if ($rest === '/bank-accounts') {
+			if ($method !== 'POST') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('setup', 'bridgeBankAccounts');
+		}
+
 		return Response::error('NOT_FOUND', 'Not found', 404);
 	}
 

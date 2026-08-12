@@ -78,9 +78,13 @@ toho, kdo ti kolik dluží. Nebo zkoušíš, co Shipard u vydané faktury umí a
 
 **Než vystavíš první fakturu, potřebuješ nastavené tři věci.** Vlastní firmu
 v **Osobách** — bez ní Shipard při Potvrzení napíše, že vlastní firma není
-nastavená a doklad nepotvrdí. Dál **Registraci DPH** a **Bankovní spojení**,
-obojí v **Nastavení → Účetnictví**. Číselnou řadu pro vydané faktury Shipard
-zakládá sám, o tu se starat nemusíš.
+nastavená a doklad nepotvrdí. Dál **Registraci DPH** a **Bankovní spojení**.
+Nejrychlejší cesta je karta **Dokončit nastavení** na Dashboardu — otevře
+panel **Nastavení zdroje dat**, který registraci předvyplní z údajů vlastní
+firmy (doplníš jen datum a frekvence) a bankovní účty **převezme** z jejích
+bankovních spojení. Ručně obojí najdeš v **Nastavení → Účetnictví**.
+Číselnou řadu pro vydané faktury Shipard zakládá sám, o tu se starat
+nemusíš.
 
 **Nabídka Kód DPH je prázdná.** Řádek si bere údaje o DPH z *uloženého*
 dokladu, takže musí být vybraná **Registrace DPH** a hlavička uložená. Když

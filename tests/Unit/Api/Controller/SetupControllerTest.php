@@ -12,10 +12,14 @@ use Shipard\Api\Request;
 use Shipard\Api\Response;
 use Shipard\Core\Alerts\AlertCheckRegistry;
 use Shipard\Core\Config\ConfigRuntime;
+use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Database\DataSourceConnection;
+use Shipard\Core\Document\DocumentResult;
 use Shipard\Core\Module\ModuleDefinition;
 use Shipard\Core\Module\ModulePathResolver;
 use Shipard\Module\Base\Persons\Checks\MissingOwnPersonCheck;
+use Shipard\Module\Economy\Codebooks\Checks\MissingOwnBankAccountCheck;
+use Shipard\Module\Economy\Codebooks\Checks\MissingVatRegistrationCheck;
 use Shipard\Module\Economy\Codebooks\Checks\UndecidedVatAgendaCheck;
 use Shipard\Tests\Fixtures\Core\Settings\SetupChecklistFindingCheck;
 
@@ -27,6 +31,9 @@ class SetupControllerTest extends TestCase
 {
     /** Zachycené zápisy z mock DB — viz makeDb(). */
     private array $writes = [];
+
+    /** Vzorová aktivní vlastní Osoba pro makeDb(ownPerson: …). */
+    private const OWN_PERSON = ['id' => 7, 'full_name' => 'Vzorová firma s.r.o.', 'vat_id' => 'CZ12345678'];
 
     protected function setUp(): void
     {
@@ -53,46 +60,68 @@ class SetupControllerTest extends TestCase
     /**
      * Mock DB: settings čtení vrací $settings (jinak null/0), zápisy se
      * zachytávají do $this->writes. $insertRowThrows simuluje spadlý
-     * provisioner. $ownVatId je odpověď na dotaz `SELECT vat_id` vlastní
-     * Osoby (suggestion u vatAgenda) — null simuluje žádnou vlastní Osobu,
-     * '' Osobu bez DIČ.
+     * provisioner. $ownPerson je řádek aktivní vlastní Osoby (fetchRow nad
+     * base_persons_persons; null = žádná není), $personBankAccounts její
+     * bankovní spojení, $codebookAccounts aktivní řádky číselníku
+     * economy_codebooks_bank_accounts.
      *
      * @param array<string, mixed> $settings klíč → hodnota
+     * @param array<string, mixed>|null $ownPerson
+     * @param list<array<string, mixed>> $personBankAccounts
+     * @param list<array<string, mixed>> $codebookAccounts
      */
     private function makeDb(
         array $settings = [],
         bool $insertRowThrows = false,
-        ?string $ownVatId = null,
+        ?array $ownPerson = null,
+        array $personBankAccounts = [],
+        array $codebookAccounts = [],
     ): MockObject&DataSourceConnection {
         $db = $this->createMock(DataSourceConnection::class);
 
         $db->method('fetchSingle')->willReturnCallback(
-            static function (mixed ...$args) use ($settings, $ownVatId): mixed {
-                if (str_contains((string) $args[0], 'core_system_settings')) {
+            static function (mixed ...$args) use ($settings, $codebookAccounts): mixed {
+                $sql = (string) $args[0];
+                if (str_contains($sql, 'core_system_settings')) {
                     return array_key_exists($args[1] ?? '', $settings)
                         ? json_encode($settings[$args[1]])
                         : null;
                 }
-                if (str_contains((string) $args[0], 'SELECT vat_id')) {
-                    return $ownVatId;
+                if (str_contains($sql, 'MAX(sort_order)')) {
+                    return array_reduce(
+                        $codebookAccounts,
+                        static fn(int $max, array $row): int => max($max, (int) ($row['sort_order'] ?? 0)),
+                        0,
+                    );
                 }
                 return 0;   // COUNT dotazy checků → vše "chybí"
             },
         );
         $db->method('fetchAll')->willReturnCallback(
-            static function (mixed ...$args) use ($settings): array {
+            static function (mixed ...$args) use ($settings, $personBankAccounts, $codebookAccounts): array {
+                $sql = (string) $args[0];
                 // SettingsStore::getMany — vrátit řádky existujících klíčů.
-                if (str_contains((string) $args[0], 'core_system_settings')) {
+                if (str_contains($sql, 'core_system_settings')) {
                     $rows = [];
                     foreach ($settings as $key => $value) {
                         $rows[] = ['key' => $key, 'value' => json_encode($value)];
                     }
                     return $rows;
                 }
+                if (str_contains($sql, 'base_persons_bank_accounts')) {
+                    return $personBankAccounts;
+                }
+                if (str_contains($sql, 'economy_codebooks_bank_accounts')) {
+                    return $codebookAccounts;
+                }
                 return [];
             },
         );
-        $db->method('fetchRow')->willReturn(null);
+        $db->method('fetchRow')->willReturnCallback(
+            static fn(mixed ...$args): ?array => str_contains((string) $args[0], 'base_persons_persons')
+                ? $ownPerson
+                : null,
+        );
         $db->method('execute')->willReturnCallback(
             function (mixed ...$args): void {
                 $this->writes['execute'][] = $args;
@@ -140,6 +169,8 @@ class SetupControllerTest extends TestCase
                 'alertChecks' => [
                     $entry('economy.codebooks.undecided_home_currency'),
                     $entry('economy.codebooks.undecided_vat_agenda', UndecidedVatAgendaCheck::class),
+                    $entry('economy.codebooks.missing_vat_registration', MissingVatRegistrationCheck::class),
+                    $entry('economy.codebooks.missing_own_bank_account', MissingOwnBankAccountCheck::class),
                 ],
             ]),
             ModuleDefinition::fromArray([
@@ -165,22 +196,55 @@ class SetupControllerTest extends TestCase
         $this->fail("Checklist item {$checkId} not found in response");
     }
 
-    private function makeController(MockObject&DataSourceConnection $db): SetupController
+    private function makeConfig(): ConfigRuntime
     {
         $config = $this->createMock(ConfigRuntime::class);
         $config->method('cfgItem')->willReturnCallback(
-            static fn(string $id): mixed => $id === 'world.base.currencies'
-                ? ['czk' => ['name' => 'Koruna česká'], 'eur' => ['name' => 'Euro']]
-                : null,
+            static fn(string $id): mixed => match ($id) {
+                'world.base.currencies'            => ['czk' => ['name' => 'Koruna česká'], 'eur' => ['name' => 'Euro']],
+                'economy.codebooks.vatPeriodKinds' => ['1' => ['name' => 'Měsíční'], '2' => ['name' => 'Čtvrtletní']],
+                default                            => null,
+            },
         );
+        return $config;
+    }
 
+    private function makeController(
+        MockObject&DataSourceConnection $db,
+        ?DataSourceConfig $dsConfig = null,
+    ): SetupController {
         return new SetupController(
             $db,
             $this->makeRegistry(),
-            $config,
+            $this->makeConfig(),
             'cs',
             new ModulePathResolver([dirname(__DIR__, 4) . '/modules']),
+            $dsConfig,
         );
+    }
+
+    /**
+     * Controller se zachytáváním překlopů bankovních účtů — seam
+     * saveBankAccountRow místo TableGateway (unit test nemá dibi spojení).
+     */
+    private function makeBridgeController(MockObject&DataSourceConnection $db): SetupController
+    {
+        return new class(
+            $db,
+            $this->makeRegistry(),
+            $this->makeConfig(),
+            'cs',
+            new ModulePathResolver([dirname(__DIR__, 4) . '/modules']),
+        ) extends SetupController {
+            /** @var list<array<string, mixed>> */
+            public array $savedRows = [];
+
+            protected function saveBankAccountRow(array $payload): DocumentResult
+            {
+                $this->savedRows[] = $payload;
+                return DocumentResult::ok(['id' => 100 + count($this->savedRows)] + $payload);
+            }
+        };
     }
 
     public function testChecklistRequiresAuthentication(): void
@@ -200,13 +264,19 @@ class SetupControllerTest extends TestCase
         $data = $resp->getPayload()['data'];
 
         // Pořadí dle SetupChecklist::ORDER, ne dle registrace v registry.
+        // undecided_vat_agenda mlčí (parametr je rozhodnutý), zbytek svítí.
         $this->assertSame(
-            ['base.persons.missing_own_person', 'economy.codebooks.undecided_home_currency'],
+            [
+                'base.persons.missing_own_person',
+                'economy.codebooks.missing_vat_registration',
+                'economy.codebooks.missing_own_bank_account',
+                'economy.codebooks.undecided_home_currency',
+            ],
             array_column($data['items'], 'checkId'),
         );
-        // Parametrová položka nese klíč vrstvy C, řádková null.
+        // Parametrová položka nese klíč vrstvy C, řádkové null.
         $this->assertNull($data['items'][0]['parameter']);
-        $this->assertSame('economy.homeCurrency', $data['items'][1]['parameter']);
+        $this->assertSame('economy.homeCurrency', $data['items'][3]['parameter']);
 
         // parameters = VŠECHNY klíče LayerCParameters, včetně null.
         $this->assertSame(
@@ -341,7 +411,7 @@ class SetupControllerTest extends TestCase
 
     public function testVatAgendaSuggestionFromOwnPersonVatId(): void
     {
-        $resp = $this->makeController($this->makeDb(ownVatId: 'CZ12345678'))->checklist(self::auth());
+        $resp = $this->makeController($this->makeDb(ownPerson: self::OWN_PERSON))->checklist(self::auth());
 
         $item = $this->findItem($resp, 'economy.codebooks.undecided_vat_agenda');
         $this->assertTrue($item['suggestion']['value']);
@@ -354,7 +424,8 @@ class SetupControllerTest extends TestCase
 
     public function testVatAgendaSuggestionAbsentWithEmptyVatId(): void
     {
-        $resp = $this->makeController($this->makeDb(ownVatId: ''))->checklist(self::auth());
+        $resp = $this->makeController($this->makeDb(ownPerson: ['vat_id' => '', 'full_name' => 'X', 'id' => 7]))
+            ->checklist(self::auth());
 
         $this->assertArrayNotHasKey(
             'suggestion',
@@ -370,5 +441,262 @@ class SetupControllerTest extends TestCase
             'suggestion',
             $this->findItem($resp, 'economy.codebooks.undecided_vat_agenda'),
         );
+    }
+
+    // ── Task 09: prefill Registrace DPH ──────────────────────────────────
+
+    public function testVatPrefillReturnsValuesFromOwnPersonAndLayerA(): void
+    {
+        $dsConfig = $this->createMock(DataSourceConfig::class);
+        $dsConfig->method('getCountry')->willReturn('sk');
+
+        $resp = $this->makeController($this->makeDb(ownPerson: self::OWN_PERSON), $dsConfig)
+            ->vatRegistrationPrefill(self::auth());
+
+        $this->assertSame(200, $this->getStatus($resp));
+        $data = $resp->getPayload()['data'];
+
+        $this->assertSame('CZ12345678', $data['values']['vat_id']);
+        $this->assertSame('sk', $data['values']['country']);
+        $this->assertSame('eu', $data['values']['region']);
+        $this->assertSame('Vzorová firma s.r.o.', $data['values']['name']);
+        $this->assertSame(0, $data['values']['taxpayer_kind']);
+        // Registr datum registrace ani frekvence nevrací — musí zůstat
+        // prázdné, uživatel je doplní vědomě (D2/D5).
+        $this->assertNull($data['values']['valid_from']);
+        $this->assertNull($data['values']['tax_period_kind']);
+        $this->assertNull($data['values']['report_period_kind']);
+
+        // Frekvence z cfgItem — jen 1/2, rezervovaná 0 se nenabízí.
+        $this->assertSame([1, 2], array_column($data['periodKindOptions'], 'value'));
+    }
+
+    public function testVatPrefillWithoutOwnPersonConflicts(): void
+    {
+        $resp = $this->makeController($this->makeDb())->vatRegistrationPrefill(self::auth());
+
+        $this->assertSame(409, $this->getStatus($resp));
+        $this->assertSame('NO_OWN_PERSON', $resp->getPayload()['error']['code']);
+    }
+
+    public function testMissingVatRegistrationActionOnlyWithOwnPerson(): void
+    {
+        // Check svítí jen u plátce (vatAgenda === true). S vlastní Osobou:
+        // primární prefill akce, open_form z checku degradovaný na
+        // sekundární „Zadat ručně".
+        $vatPayer = ['economy.vatAgenda' => true];
+        $resp = $this->makeController($this->makeDb($vatPayer, ownPerson: self::OWN_PERSON))
+            ->checklist(self::auth());
+        $actions = $this->findItem($resp, 'economy.codebooks.missing_vat_registration')['actions'];
+        $this->assertCount(2, $actions);
+        $this->assertSame('prefill_vat_registration', $actions[0]['kind']);
+        $this->assertTrue($actions[0]['primary']);
+        $this->assertSame('open_form', $actions[1]['kind']);
+        $this->assertFalse($actions[1]['primary']);
+
+        // Bez vlastní Osoby není z čeho předvyplňovat — akce z checku beze změny.
+        $resp = $this->makeController($this->makeDb($vatPayer))->checklist(self::auth());
+        $actions = $this->findItem($resp, 'economy.codebooks.missing_vat_registration')['actions'];
+        $this->assertCount(1, $actions);
+        $this->assertSame('open_form', $actions[0]['kind']);
+        $this->assertTrue($actions[0]['primary']);
+    }
+
+    // ── Task 09: kandidáti a můstek bankovních účtů ──────────────────────
+
+    /** @return list<array<string, mixed>> dvě bankovní spojení vlastní Osoby */
+    private static function personAccounts(): array
+    {
+        return [
+            [
+                'id' => 12, 'name' => 'Hlavní účet', 'account_number' => '123456789/0100',
+                'iban' => 'CZ6501000000000123456789', 'bic' => 'KOMBCZPP', 'currency' => 'CZK',
+                'source' => 2, 'order_pos' => 1, 'valid_from' => '2020-05-01', 'valid_to' => null,
+            ],
+            [
+                'id' => 13, 'name' => null, 'account_number' => '987654321/0300',
+                'iban' => null, 'bic' => null, 'currency' => null,
+                'source' => 0, 'order_pos' => null, 'valid_from' => null, 'valid_to' => null,
+            ],
+        ];
+    }
+
+    public function testBankCandidatesMarkExistingByIbanAndAccountNumber(): void
+    {
+        $resp = $this->makeController($this->makeDb(
+            ownPerson: self::OWN_PERSON,
+            personBankAccounts: self::personAccounts(),
+            codebookAccounts: [
+                // První účet už v číselníku podle IBAN, druhý podle čísla
+                // účtu (IBAN v číselníku chybí).
+                ['iban' => 'CZ6501000000000123456789', 'account_number' => '', 'code' => 'BU1', 'sort_order' => 1],
+                ['iban' => '', 'account_number' => '987654321/0300', 'code' => 'BU2', 'sort_order' => 2],
+            ],
+        ))->bankAccountCandidates(self::auth());
+
+        $this->assertSame(200, $this->getStatus($resp));
+        $candidates = $resp->getPayload()['data']['candidates'];
+        $this->assertCount(2, $candidates);
+
+        $this->assertTrue($candidates[0]['existsInCodebook']);
+        $this->assertTrue($candidates[1]['existsInCodebook']);
+        $this->assertSame(2, $candidates[0]['source']);
+        $this->assertSame('czk', $candidates[0]['currency']);
+        $this->assertSame('2020-05-01', $candidates[0]['validFrom']);
+    }
+
+    public function testBankCandidatesNotInCodebookAndWithoutOwnPerson(): void
+    {
+        $resp = $this->makeController($this->makeDb(
+            ownPerson: self::OWN_PERSON,
+            personBankAccounts: self::personAccounts(),
+        ))->bankAccountCandidates(self::auth());
+        $candidates = $resp->getPayload()['data']['candidates'];
+        $this->assertFalse($candidates[0]['existsInCodebook']);
+        $this->assertFalse($candidates[1]['existsInCodebook']);
+
+        $resp = $this->makeController($this->makeDb())->bankAccountCandidates(self::auth());
+        $this->assertSame(409, $this->getStatus($resp));
+        $this->assertSame('NO_OWN_PERSON', $resp->getPayload()['error']['code']);
+    }
+
+    private static function bridgeRequest(array $body): Request
+    {
+        return Request::fromArray('POST', '/_setup/bank-accounts', [], json_encode($body), []);
+    }
+
+    public function testBridgeCreatesRowsWithUniqueCodesAndSingleDefault(): void
+    {
+        $ctrl = $this->makeBridgeController($this->makeDb(
+            ownPerson: self::OWN_PERSON,
+            personBankAccounts: self::personAccounts(),
+            // Obsazený kód BU1 — sekvence se posune, nekoliduje ani neselže.
+            codebookAccounts: [
+                ['iban' => 'CZ111', 'account_number' => '1/0100', 'code' => 'BU1', 'sort_order' => 5],
+            ],
+        ));
+
+        $resp = $ctrl->bridgeBankAccounts(
+            self::bridgeRequest(['personBankAccountIds' => [12, 13], 'defaultId' => 13]),
+            self::auth(),
+        );
+
+        $this->assertSame(200, $this->getStatus($resp));
+        $this->assertCount(2, $ctrl->savedRows);
+
+        // Pořadí dle order_pos (null až nakonec): 12 (order_pos 1) před 13.
+        [$first, $second] = $ctrl->savedRows;
+        $this->assertSame('BU2', $first['code']);
+        $this->assertSame('BU3', $second['code']);
+        $this->assertSame(6, $first['sort_order']);
+        $this->assertSame(7, $second['sort_order']);
+        $this->assertSame(40, $first['docState']);
+
+        // Měna normalizovaná na malá, chybějící → default czk.
+        $this->assertSame('czk', $first['currency']);
+        $this->assertSame('czk', $second['currency']);
+
+        // bank_name se nedopočítává — v payloadu vůbec není.
+        $this->assertArrayNotHasKey('bank_name', $first);
+
+        // Výchozí je právě řádek z defaultId.
+        $this->assertSame(0, $first['is_default']);
+        $this->assertSame(1, $second['is_default']);
+
+        // Prázdný název → fallback z posledního čtyřčíslí účtu.
+        $this->assertSame('Hlavní účet', $first['name']);
+        $this->assertSame('Účet …0300', $second['name']);
+
+        // valid_from se překlápí 1:1.
+        $this->assertSame('2020-05-01', $first['valid_from']);
+
+        $this->assertSame(['BU2', 'BU3'], array_column($resp->getPayload()['data']['created'], 'code'));
+    }
+
+    public function testBridgeSingleAccountBecomesDefaultAutomatically(): void
+    {
+        $ctrl = $this->makeBridgeController($this->makeDb(
+            ownPerson: self::OWN_PERSON,
+            personBankAccounts: self::personAccounts(),
+        ));
+
+        $resp = $ctrl->bridgeBankAccounts(
+            self::bridgeRequest(['personBankAccountIds' => [12]]),
+            self::auth(),
+        );
+
+        $this->assertSame(200, $this->getStatus($resp));
+        $this->assertSame(1, $ctrl->savedRows[0]['is_default']);
+    }
+
+    public function testBridgeRejectsAccountAlreadyInCodebook(): void
+    {
+        $ctrl = $this->makeBridgeController($this->makeDb(
+            ownPerson: self::OWN_PERSON,
+            personBankAccounts: self::personAccounts(),
+            codebookAccounts: [
+                ['iban' => 'CZ6501000000000123456789', 'account_number' => '', 'code' => 'BU1', 'sort_order' => 1],
+            ],
+        ));
+
+        $resp = $ctrl->bridgeBankAccounts(
+            self::bridgeRequest(['personBankAccountIds' => [12, 13], 'defaultId' => 12]),
+            self::auth(),
+        );
+
+        // All-or-nothing: duplicitní účet odmítne celou dávku, nic se neuloží.
+        $this->assertSame(422, $this->getStatus($resp));
+        $this->assertSame('ALREADY_IN_CODEBOOK', $resp->getPayload()['error']['details'][0]['code']);
+        $this->assertSame([], $ctrl->savedRows);
+    }
+
+    public function testBridgeRejectsForeignAccountId(): void
+    {
+        $ctrl = $this->makeBridgeController($this->makeDb(
+            ownPerson: self::OWN_PERSON,
+            personBankAccounts: self::personAccounts(),
+        ));
+
+        $resp = $ctrl->bridgeBankAccounts(
+            self::bridgeRequest(['personBankAccountIds' => [12, 999]]),
+            self::auth(),
+        );
+
+        $this->assertSame(422, $this->getStatus($resp));
+        $this->assertSame('UNKNOWN_ACCOUNT', $resp->getPayload()['error']['details'][0]['code']);
+        $this->assertSame([], $ctrl->savedRows);
+    }
+
+    public function testBridgeWithoutOwnPersonConflicts(): void
+    {
+        $ctrl = $this->makeBridgeController($this->makeDb());
+
+        $resp = $ctrl->bridgeBankAccounts(
+            self::bridgeRequest(['personBankAccountIds' => [12]]),
+            self::auth(),
+        );
+
+        $this->assertSame(409, $this->getStatus($resp));
+        $this->assertSame('NO_OWN_PERSON', $resp->getPayload()['error']['code']);
+    }
+
+    public function testMissingOwnBankAccountActionGatedOnPersonAccounts(): void
+    {
+        // Vlastní Osoba s účty → primární bridge akce + sekundární ruční.
+        $resp = $this->makeController($this->makeDb(
+            ownPerson: self::OWN_PERSON,
+            personBankAccounts: self::personAccounts(),
+        ))->checklist(self::auth());
+        $actions = $this->findItem($resp, 'economy.codebooks.missing_own_bank_account')['actions'];
+        $this->assertSame('bridge_bank_accounts', $actions[0]['kind']);
+        $this->assertTrue($actions[0]['primary']);
+        $this->assertSame('open_form', $actions[1]['kind']);
+        $this->assertFalse($actions[1]['primary']);
+
+        // Osoba bez bankovních spojení → není co překlápět, akce beze změny.
+        $resp = $this->makeController($this->makeDb(ownPerson: self::OWN_PERSON))->checklist(self::auth());
+        $actions = $this->findItem($resp, 'economy.codebooks.missing_own_bank_account')['actions'];
+        $this->assertCount(1, $actions);
+        $this->assertSame('open_form', $actions[0]['kind']);
     }
 }

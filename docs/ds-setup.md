@@ -29,7 +29,10 @@ dashboardu.
 > v Nastavení (D14): `GET /_setup/checklist`, `POST /_setup/parameters`
 > s okamžitým během provisionerů, `DsSetup.svelte`. Task 07 (agregovaná
 > karta feedu `alert-group:setup` + akce `open_panel`, D8) hotový —
-> Fáze 3 je kompletní; další je Fáze 4 (průvodce).**
+> Fáze 3 je kompletní. Fáze 4 hotová: Task 08 (vlastní Osoba z registru,
+> režim `asOwn`, návrh `vatAgenda` podle DIČ) + Task 09 (předvyplněná
+> Registrace DPH, můstek bankovních účtů do číselníku, D17) — viz §5.4.
+> Další je Fáze 5 (nabídky).**
 > Fázování viz §8, otevřené body §10.
 
 ---
@@ -336,28 +339,50 @@ Import funguje jen tehdy, když žádná vlastní Osoba není (D16) — gate je
 implicitní, protože právě tehdy položka checklistu svítí; `existsInDb` gate
 wizardu platí beze změny.
 
-**2. Registrace DPH z DIČ** (Task 09). `vat_id` a `country`/`region`
-z vrstvy A se předvyplní. **Registr nevrací datum registrace ani příznak
+**2. Registrace DPH z DIČ** (Task 09, hotové). Položka
+`missing_vat_registration` má primární akci `prefill_vat_registration`
+(jen s aktivní vlastní Osobou — bez ní není z čeho předvyplňovat a zbývá
+ruční cesta). Dialog čte `GET /_setup/vat-registration-prefill`: `vat_id`
+a `name` z vlastní Osoby, `country` z vrstvy A
+(`DataSourceConfig::getCountry()`), `region` default `eu`,
+`taxpayer_kind = 0`. **Registr nevrací datum registrace ani příznak
 plátce** — kanonický formát má jen `vatId`, žádné `vatRegistration` ani
-`vatPayer`. `valid_from`, `tax_period_kind` a `report_period_kind` se tedy
-musí zeptat. Přítomnost `vatId` se používá jako **návrh** hodnoty
-`economy.vatAgenda` — to dodal už Task 08: položka `undecided_vat_agenda`
-v odpovědi `GET /_setup/checklist` nese nepovinné pole
-`suggestion: {value, reason}` (zdroj: `vat_id` aktivní vlastní Osoby, DIČ
-je v lokalizovaném `reason` vidět; prázdné DIČ nebo žádná Osoba → pole
-chybí). Panel z něj jen předvybere draft — **předvolba v UI, ne uložená
-hodnota**; rozhodnutí zůstává na uživateli (D2, D5) a položka v checklistu
-svítí, dokud volbu nepotvrdí. Pole je obecné, ale vyplňuje se zatím jen
-u tohohle checku.
+`vatPayer`. `valid_from`, `tax_period_kind` a `report_period_kind` proto
+přijdou **null** a dialog se na ně zeptá (nápověda u data varuje před
+„dnes"; frekvence jsou select z cfgItem `vatPeriodKinds`, rezervovaná
+hodnota `0` v něm není). Uložení jde přes generický
+`POST /_ui/form/economy_codebooks_vat_registrations/save`, tedy přes
+`VatRegistrationDocument` — hook `afterSave` hned dogeneruje období DPH.
+Přítomnost `vatId` se používá jako **návrh** hodnoty `economy.vatAgenda`
+— to dodal už Task 08: položka `undecided_vat_agenda` v odpovědi
+`GET /_setup/checklist` nese nepovinné pole `suggestion: {value, reason}`
+(zdroj: `vat_id` aktivní vlastní Osoby, DIČ je v lokalizovaném `reason`
+vidět; prázdné DIČ nebo žádná Osoba → pole chybí). Panel z něj jen
+předvybere draft — **předvolba v UI, ne uložená hodnota**; rozhodnutí
+zůstává na uživateli (D2, D5) a položka v checklistu svítí, dokud volbu
+nepotvrdí. Pole je obecné, ale vyplňuje se zatím jen u tohohle checku.
 
-**3. Můstek do číselníku bankovních účtů** (Task 09). Překlop z
+**3. Můstek do číselníku bankovních účtů** (Task 09, hotové). Překlop z
 `base_persons_bank_accounts` vlastní Osoby do
 `economy_codebooks_bank_accounts` — dvě různé tabulky, přičemž na vydanou
-fakturu jde ta číselníková. Mapování je téměř 1:1 (`accountNumber`, `iban`,
-`bic`, `currency`); dogeneruje se povinný `code` a `name` a nastaví
-`is_default`. Uživatel vybírá **zaškrtávacím seznamem**, takže může
-překlopit víc účtů naráz; `bankAccounts[].source = 2` (Registr DPH API)
-označuje oficiálně zveřejněné účty a ty se nabízejí předvybrané.
+fakturu jde ta číselníková; překlop je **kopie, žádné FK**, a je to
+zamýšlené. Položka `missing_own_bank_account` má primární akci
+`bridge_bank_accounts` (jen když má vlastní Osoba aspoň jedno spojení).
+Dialog čte `GET /_setup/bank-account-candidates` (příznak
+`existsInCodebook` podle IBAN, bez něj podle čísla účtu — už překlopené
+účty jsou zašedlé) a ukládá `POST /_setup/bank-accounts`
+`{personBankAccountIds, defaultId}`. Uživatel vybírá **zaškrtávacím
+seznamem** (D17), takže může překlopit víc účtů naráz; `source = 2`
+(Registr DPH API) označuje oficiálně zveřejněné účty a ty se nabízejí
+předvybrané. Mapování je téměř 1:1 (`account_number`, `iban`, `bic`,
+`currency`, `valid_from/to`); `code` se generuje sekvenčně (`BU1`, `BU2`,
+… s posunem přes existující kódy), `name` má fallback z posledního
+čtyřčíslí účtu, `bank_name` zůstává `null` (není z čeho, číselník bank
+neexistuje) a `sort_order` navazuje na maximum v číselníku. Každý řádek
+jde přes `BankAccountDocument` (TableGateway) — validace, normalizace měny
+na malá písmena i per-currency unikátnost `is_default` (`afterPersist`) se
+přebírají z dokumentu. Server odmítne (`422`, all-or-nothing) cizí id
+i účet, který už v číselníku je.
 
 Vrstva A (jazyk, země) se v panelu nezobrazuje — změnit se nedá a pro
 rozhodování nic nepřináší.
@@ -498,7 +523,7 @@ Vrstvu A (`language`, `country`) zapisuje `ds-create`, tedy krok před importem.
 | **1 — Vrstva A** | `country` v `DataSourceConfig`, přepínače `ds-create --language --country`, hosting (dva sloupce, formulář, queue payload, agent) | Nový DS vznikne z hostingu i z konzole s vyplněným jazykem a zemí v `main.json` |
 | **2 — Parametry do settings** | Čtyři klíče, provisionery a formuláře je čtou, odložený provisioning osnovy a fiskálních roků (D6), konec `getAccountChart()`/`getDefaultCurrency()` | `ds-upgrade` na čerstvém DS osnovu ani roky nenaseeduje; naseeduje je, jakmile klíč existuje |
 | **3 — Setup checky a panel** | Sedm nových checků + služba `SetupChecklist` (D12) + zákaz snooze/dismiss (D13); panel `dsSetup` „Co ještě chybí nastavit“ s ovládáním parametrů (D14); tagová agregace ve feedu (D8) a akce `open_panel` | Čerstvý DS ukazuje jednu kartu „Dokončit nastavení“, panel vyjmenuje chybějící položky a uživatel v něm rozhodne všechny čtyři parametry vrstvy C bez konzole |
-| **4 — Průvodce** | Rozšíření panelu `dsSetup` (D15, §5.4): vlastní Osoba z registru + návrh `vatAgenda` (Task 08, hotové), registrace DPH a můstek do číselníku bankovních účtů (Task 09) | Uživatel projde od čerstvého DS k potvrditelné vydané faktuře bez opuštění panelu |
+| **4 — Průvodce** | Rozšíření panelu `dsSetup` (D15, §5.4): vlastní Osoba z registru + návrh `vatAgenda` (Task 08, hotové), registrace DPH a můstek do číselníku bankovních účtů (Task 09, hotové) | Uživatel projde od čerstvého DS k potvrditelné vydané faktuře bez opuštění panelu |
 | **5 — Nabídky** | Generátor základních Položek, název a logo v průvodci | Uživatel dostane volitelný startovní obsah, aniž by na něj cokoli tlačilo |
 
 Fáze 2 a 3 jsou navzájem nezávislé (checky nad chybějícími řádky nepotřebují

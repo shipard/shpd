@@ -33,6 +33,18 @@ přijde s dokladovým systémem).
 | [economy_codebooks_cash_desks](tables/economy_codebooks_cash_desks.md) | Pokladny pro hotovostní operace |
 | [economy_codebooks_bank_accounts](tables/economy_codebooks_bank_accounts.md) | Vlastní bankovní účty (firma) |
 
+**Číselník bankovních účtů vs. bankovní spojení Osob.** Vedle
+`economy_codebooks_bank_accounts` existuje `base_persons_bank_accounts`
+(modul `base.persons`) — bankovní spojení libovolné Osoby včetně
+partnerských. Jsou to **dvě různé tabulky se dvěma rolemi**: na vydanou
+fakturu jde výhradně účet z **číselníku**, spojení Osoby je evidence.
+Číselník se dá naplnit překlopem bankovních spojení vlastní Osoby přes
+panel Nastavení zdroje dat (`POST /_setup/bank-accounts`, ds-setup Task
+09) — překlop je **kopie bez FK vazby**, žádná synchronizace se nekoná
+a je to zamýšlené; `SetupController` řádky ukládá přes `BankAccountDocument`,
+takže platí stejná validace i per-currency unikátnost `is_default` jako
+při ručním pořízení.
+
 ## Zdrojové soubory
 
 | Soubor | Popis |

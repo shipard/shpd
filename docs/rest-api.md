@@ -180,6 +180,9 @@ http://{ip-adresa}/{ds-id}/api/v1/{tabulka}
 | `POST` | `/api/v1/_ui/settings/page/{pageId}` | Uložení hodnot settings page (auth) |
 | `GET` | `/api/v1/_setup/checklist` | Živý setup checklist + hodnoty parametrů vrstvy C (auth) |
 | `POST` | `/api/v1/_setup/parameters` | Zápis parametrů vrstvy C + okamžitý běh provisionerů (auth) |
+| `GET` | `/api/v1/_setup/vat-registration-prefill` | Návrh hodnot Registrace DPH z vlastní Osoby + vrstvy A (auth) |
+| `GET` | `/api/v1/_setup/bank-account-candidates` | Bankovní spojení vlastní Osoby k překlopení do číselníku (auth) |
+| `POST` | `/api/v1/_setup/bank-accounts` | Překlop vybraných spojení do číselníku bankovních účtů (auth) |
 | `GET` | `/api/v1/_app/info` | Název/zkrácený název/ikona/logo aplikace — **veřejné** |
 | `GET` | `/api/v1/_app/branding/{slot}` | Binární obsah branding slotu — **veřejné**, immutable cache |
 | `POST` | `/api/v1/_app/branding/{slot}` | Upload obrázku slotu (multipart, pole `file`) — auth |
@@ -203,9 +206,35 @@ z `LayerCParameters::keys()` včetně `null` (nerozhodnuto). Položka může
 nést nepovinné pole `suggestion: {value, reason}` — serverový návrh hodnoty
 parametru s lokalizovaným zdůvodněním (zatím jen `undecided_vat_agenda`
 podle DIČ vlastní Osoby); je to předvolba pro UI, ne uložená hodnota.
-`actions` položek jsou **panelová serializace** — u `missing_own_person`
-controller předřazuje primární akci `kind: "registry_import_own"`, která
-existuje jen v téhle odpovědi, nikdy v `core_alerts_alerts` ani ve feedu. `POST
+`actions` položek jsou **panelová serializace** — controller předřazuje
+primární akce s kindy, které existují jen v téhle odpovědi, nikdy
+v `core_alerts_alerts` ani ve feedu: `registry_import_own`
+(`missing_own_person`), `prefill_vat_registration`
+(`missing_vat_registration`, jen s aktivní vlastní Osobou)
+a `bridge_bank_accounts` (`missing_own_bank_account`, jen když má vlastní
+Osoba aspoň jedno bankovní spojení). Akce z checku zůstává jako sekundární
+„Zadat ručně".
+
+**`GET /_setup/vat-registration-prefill`** — návrh hodnot Registrace DPH:
+`{values: {vat_id, country, region, name, taxpayer_kind, valid_from: null,
+tax_period_kind: null, report_period_kind: null}, periodKindOptions}`.
+Zdroj: aktivní vlastní Osoba (`vat_id`, `name`) a vrstva A (`country`);
+datum a frekvence registr nevrací, zůstávají na uživateli. Bez vlastní
+Osoby → `409 NO_OWN_PERSON`. **Uložení jde přes existující
+`POST /_ui/form/economy_codebooks_vat_registrations/save`**, aby se chytil
+hook `VatRegistrationDocument` → `VatPeriodsProvisioner` (období DPH
+vzniknou hned).
+
+**`GET /_setup/bank-account-candidates`** — `{candidates: [{id, name,
+accountNumber, iban, bic, currency, source, validFrom, validTo,
+existsInCodebook}]}`; `existsInCodebook` se pozná podle IBAN, bez něj podle
+čísla účtu. Bez vlastní Osoby → `409 NO_OWN_PERSON`. **`POST
+/_setup/bank-accounts`** s body `{"personBankAccountIds": [12, 13],
+"defaultId": 12}` vybraná spojení překlopí do
+`economy_codebooks_bank_accounts` přes `BankAccountDocument` (kódy `BU1…`
+se generují sekvenčně s posunem přes existující, měna se normalizuje,
+`is_default` drží per-currency unikátnost z dokumentu). Neznámé id nebo
+účet už v číselníku → `422 VALIDATION_ERROR` s `details` a neuloží se nic. `POST
 /_setup/parameters` s body `{"values": {"economy.accountChart": "npo"}}`
 zapíše parametry (`null` = smazání klíče, validace přes
 `LayerCParameters::validate()`, neznámý klíč / špatná hodnota → `422

@@ -1,6 +1,6 @@
 # ds-setup — Task 09: Můstky do číselníků DPH a bankovních účtů
 
-**Stav:** naplánováno
+**Stav:** hotovo
 
 > PRD pro jednu Claude Code session. Design: `docs/ds-setup.md`,
 > rozhodnutí **D5, D15, D17**, kontrakt **§5.4** body 2 a 3.

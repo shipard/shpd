@@ -291,7 +291,7 @@ function dispatch(
 		'analysis' => dispatchAnalysis($route, $request, $auth, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher),
 		'exchange' => dispatchExchange($route, $request, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher),
 		'alerts' => dispatchAlerts($route, $request, $db, $alertCheckRegistry, $configRuntime, resolveLanguage($request, $resolved->config)),
-		'setup' => dispatchSetup($route, $request, $auth, $db, $alertCheckRegistry, $configRuntime, $modulePathResolver, resolveLanguage($request, $resolved->config)),
+		'setup' => dispatchSetup($route, $request, $auth, $db, $alertCheckRegistry, $configRuntime, $modulePathResolver, resolveLanguage($request, $resolved->config), $tables, $resolved->config, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher),
 		'accbal'  => dispatchAccbal($route, $request, $db, $configRuntime, $journalEventDispatcher, $resolved->config),
 		'accounting' => dispatchAccounting($route, $request, $db, $configRuntime, $journalEventDispatcher),
 		'bank'    => dispatchBank($route, $request, $auth, $tables, $db, $resolved, $configRuntime, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher, $journalEventDispatcher),
@@ -578,6 +578,10 @@ function dispatchSetup(
 	?\Shipard\Core\Config\ConfigRuntime $configRuntime,
 	ModulePathResolver $modulePathResolver,
 	string $language,
+	array $tables = [],
+	?\Shipard\Core\Config\DataSourceConfig $dsConfig = null,
+	?\Shipard\Core\Document\DocumentRegistry $documentRegistry = null,
+	?\Shipard\Core\Document\DocumentEventDispatcher $eventDispatcher = null,
 ): Response {
 	if ($registry === null) {
 		return Response::error('INTERNAL_ERROR', 'AlertCheckRegistry is required for /_setup endpoints', 500);
@@ -586,11 +590,24 @@ function dispatchSetup(
 		return Response::error('INTERNAL_ERROR', 'ConfigRuntime is required for /_setup endpoints', 500);
 	}
 
-	$ctrl = new \Shipard\Api\Controller\SetupController($db, $registry, $configRuntime, $language, $modulePathResolver);
+	$ctrl = new \Shipard\Api\Controller\SetupController(
+		$db,
+		$registry,
+		$configRuntime,
+		$language,
+		$modulePathResolver,
+		$dsConfig,
+		$tables,
+		$documentRegistry,
+		$eventDispatcher,
+	);
 	return match ($route->action) {
-		'checklist'  => $ctrl->checklist($auth),
-		'parameters' => $ctrl->saveParameters($request, $auth),
-		default      => Response::error('INTERNAL_ERROR', "Unknown setup action: {$route->action}", 500),
+		'checklist'               => $ctrl->checklist($auth),
+		'parameters'              => $ctrl->saveParameters($request, $auth),
+		'vatRegistrationPrefill'  => $ctrl->vatRegistrationPrefill($auth),
+		'bankAccountCandidates'   => $ctrl->bankAccountCandidates($auth),
+		'bridgeBankAccounts'      => $ctrl->bridgeBankAccounts($request, $auth),
+		default                   => Response::error('INTERNAL_ERROR', "Unknown setup action: {$route->action}", 500),
 	};
 }
 

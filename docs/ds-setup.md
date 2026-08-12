@@ -48,6 +48,8 @@ dashboardu.
 | D12 | **Hybrid dvou čtecích cest nad jednou implementací checku.** Karta ve feedu čerpá z tabulky alertů (naplní cron, slot `five-minutes`), **panel checklistu spouští checky naživo** přes službu `SetupChecklist`. Důvod: checky mají vlastní `interval` a runner přeskakuje ty, kde `next_run_at > NOW`, takže panel by uživateli hlásil chybějící nastavení ještě dlouho poté, co ho doplní. |
 | D13 | **`snooze` a `dismiss` jsou pro alerty s `tags: ["setup"]` zakázané** (409, stejný vzor jako existující state guardy v `AlertsController`). Bez toho by si uživatel mohl položku checklistu odklikat, což je proti D3. |
 | D14 | **Parametry vrstvy C se ovládají v panelu `dsSetup`, ne na generické settings stránce.** Panel je ručně psaná Svelte komponenta (vzor `accountSecurity`), takže si ovládání vyrenderuje sám a field typy `select`/`checkbox` nejsou potřeba — vypadávají z oblasti. Důvody: parametry potřebují vysvětlující UI, které deklarativní pole neunese (osnovu po naseedování nepřepneš, měna platí jen pro nové záznamy); `vatAgenda` je tříhodnotový (`null`/`true`/`false`) a checkbox nerozhodnuto neunese vůbec; panel je v Nastavení, takže požadavek §5.2 na editovatelnost je splněný bez druhé UI plochy. |
+| D15 | **Fáze 4 rozšiřuje panel `dsSetup`, nestaví samostatný krokový průvodce.** Pořadí `SetupChecklist::ORDER` uživateli říká, co je další na řadě, a položky mizí, jak se plní — krokování by přidávalo dojem, ne informaci, a znamenalo by ovládání parametrů podruhé. Vedený režim se dá dodělat nad hotovým panelem, kdyby se ukázal jako potřeba. |
+| D16 | **Registrový import vlastní Osoby funguje jen tehdy, když žádná není** — žádný merge do existující. Gate je implicitní: položka `missing_own_person` svítí právě tehdy, když vlastní Osoba neexistuje. |
 | D6 | Provisioning fiskálních roků se **odkládá** za rozhodnutí o prvním měsíci **a o domácí měně** (Task 04 — měna je součástí zakládaného záznamu, seedovat s odhadnutou by obcházelo D2). Čerstvý DS chvíli nemá fiskální roky — nevadí, doklad se stejně nepotvrdí bez vlastní Osoby. |
 | D7 | Hosting přispívá **výhradně vrstvou A** — dva sloupce na `hosting_core_data_sources`, pole ve formuláři, položky v queue payloadu, předání v `HostingSyncRunner`. Žádný ARES v provisioning agentovi, žádné business řádky. |
 | D8 | Setup alerty se ve feedu dashboardu agregují **podle tagu** (ne podle `check_id`) do jedné karty; její primární akce otevírá panel průvodce — nový druh akce `open_panel`. |
@@ -309,47 +311,44 @@ v tabulce popisuje cílový stav.
 **Severity `warning`**, ne `error`. Nejde o poruchu, jde o nedokončené
 nastavení; `error` je vyhrazený pro věci, které se rozbily.
 
-### 5.4 Průvodce — nav položka typu `panel`
+### 5.4 Doplnění identity — rozšíření panelu
 
-Průvodce je klientská komponenta, ne generická settings stránka — má vlastní
-krokovou logiku a volá provisionery. To je přesně případ pro nav položku typu
-**`panel`** (precedent `accountSecurity`): server dodá `panels: [{id, name,
-icon}]` + položku v `settingsItems` sekce `app`, frontend mapuje `panelId` →
-komponenta přes `panelComponents` v `ContentArea.svelte`.
+Fáze 4 **nestaví druhou plochu** (D15). Panel `dsSetup` z Fáze 3 už je ta
+plocha: vyjmenuje, co chybí, a čtyři parametry vrstvy C umí rozhodnout sám.
+Zbývá doplnit to, co panel dnes jen odkazuje na prázdný formulář — a to jsou
+tři věci, ne osm.
 
-Kroky, v pořadí danom závislostmi:
+**1. Vlastní Osoba z registru** (Task 08). Reuse existující cesty:
+`RegistryImportWizard.svelte` → `personsRegistry.js` → `PersonsRegistryClient`
+→ kanonický `shpd.persons.person.v1` → `_exchange/persons/person/preview` →
+`apply`. Panel wizard otevře v režimu `asOwn`, který do payloadu doplní
+`status.isOwn = true`; `PersonApplier` ten příznak zapisuje (ř. 422), takže
+**jedním applyem vznikne Osoba, sídlo, bankovní spojení i DIČ**. Import
+funguje jen tehdy, když žádná vlastní Osoba není (D16) — gate je implicitní,
+protože právě tehdy položka checklistu svítí. Ruční formulář zůstává jako
+sekundární akce pro subjekty, které v registru nejsou.
 
-1. **Rekapitulace A** — jazyk a země, read-only (nelze měnit; ukazuje se, aby
-   uživatel věděl, z jakého registru se bude tahat).
-2. **Vlastní Osoba z registru.** Reuse existující cesty: `personsRegistry.js`
-   → `PersonsRegistryClient` (ARES + RPO + registr plátců DPH) → kanonický
-   `shpd.persons.person.v1` → `_exchange/persons/person/preview` → `apply`.
-   Průvodce do kanonického payloadu doplní `status.isOwn = true` —
-   `PersonApplier` ten příznak už dnes zapisuje, takže není potřeba žádný
-   dodatečný update. Jedním applyem vznikne Osoba, sídlo, bankovní spojení
-   a DIČ.
-3. **Plátcovství DPH** → `economy.vatAgenda`. Při `true` navazuje předvyplněná
-   Registrace DPH: `valid_from` z registru plátců, `country`/`region`
-   z vrstvy A, `vat_id` z kanonického payloadu. **Frekvence přiznání
-   a kontrolního hlášení (`tax_period_kind`, `report_period_kind`) v registru
-   nejsou — na ty se musí zeptat.**
-4. **Vlastní bankovní účet** — překlop z `base_persons_bank_accounts` vlastní
-   Osoby do `economy_codebooks_bank_accounts`. Mapování je téměř 1:1
-   (`accountNumber`, `iban`, `bic`, `currency`); průvodce dogeneruje povinný
-   `code` a `name` a nastaví `is_default`. **Tento můstek je snadné
-   přehlédnout — jsou to dvě různé tabulky a na vydanou fakturu jde ta
-   číselníková.**
-5. **Účtová osnova** → `economy.accountChart` + synchronní běh
-   `AccountChartProvisioner` (bere `$dsConnection` + seed soubor, tedy je
-   volatelný z HTTP).
-6. **Fiskální rok** → `economy.fiscalYearStartMonth` + běh
-   `FiscalYearsProvisioner` (bere `$dsConnection` + `ConfigRuntime`, také
-   z HTTP dostupný). Do tohoto okamžiku DS fiskální roky nemá (D6).
-7. **Domácí měna** → `economy.homeCurrency`.
-8. **Nabídky** — základní Položky, název a logo aplikace (§10).
+**2. Registrace DPH z DIČ** (Task 09). `vat_id` a `country`/`region`
+z vrstvy A se předvyplní. **Registr nevrací datum registrace ani příznak
+plátce** — kanonický formát má jen `vatId`, žádné `vatRegistration` ani
+`vatPayer`. `valid_from`, `tax_period_kind` a `report_period_kind` se tedy
+musí zeptat. Přítomnost `vatId` se používá jako **návrh** hodnoty
+`economy.vatAgenda` (`suggestion` v položce checklistu) — předvolba v UI,
+ne uložená hodnota; rozhodnutí zůstává na uživateli (D2, D5).
 
-Průvodce je **přeskočitelný v každém kroku**; nedokončené kroky zůstanou
-v checklistu. Opětovné otevření průvodce začíná u první nesplněné položky.
+**3. Můstek do číselníku bankovních účtů** (Task 09). Překlop z
+`base_persons_bank_accounts` vlastní Osoby do
+`economy_codebooks_bank_accounts` — dvě různé tabulky, přičemž na vydanou
+fakturu jde ta číselníková. Mapování je téměř 1:1 (`accountNumber`, `iban`,
+`bic`, `currency`); dogeneruje se povinný `code` a `name` a nastaví
+`is_default`. Uživatel vybírá **zaškrtávacím seznamem**, takže může
+překlopit víc účtů naráz; `bankAccounts[].source = 2` (Registr DPH API)
+označuje oficiálně zveřejněné účty a ty se nabízejí předvybrané.
+
+Vrstva A (jazyk, země) se v panelu nezobrazuje — změnit se nedá a pro
+rozhodování nic nepřináší.
+
+Nabídky (základní Položky, název a logo) jsou Fáze 5, viz §10.
 
 ### 5.5 Agregovaná karta feedu
 

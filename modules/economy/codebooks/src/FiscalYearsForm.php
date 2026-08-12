@@ -7,13 +7,19 @@ namespace Shipard\Module\Economy\Codebooks;
 use Shipard\Core\Form\EnumOptionsHelper;
 use Shipard\Core\Form\FormDefinition;
 use Shipard\Core\Form\TableForm;
+use Shipard\Core\Settings\SettingsStore;
 
 class FiscalYearsForm extends TableForm
 {
     public function buildFormDefinition(array $data, bool $isNew): FormDefinition
     {
         if ($isNew && empty($data['currency'])) {
-            $data['currency'] = 'czk';
+            // Settings `economy.homeCurrency` (ds-setup.md §5.2); nerozhodnutý
+            // klíč → 'czk'. Jen default nového záznamu, uložená data nese sloupec.
+            $value = $this->db !== null
+                ? (new SettingsStore($this->db))->get('economy.homeCurrency')
+                : null;
+            $data['currency'] = is_string($value) && $value !== '' ? $value : 'czk';
         }
 
         $basic = $this->tab('basic', $this->defaultGeneralTabLabel())

@@ -6,6 +6,7 @@ namespace Shipard\Core\Document;
 
 use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Config\DataSourceConfig;
+use Shipard\Core\Settings\SettingsStore;
 
 abstract class Document
 {
@@ -14,6 +15,7 @@ abstract class Document
     protected ?\Dibi\Connection $db = null;
     protected ?ConfigRuntime $config = null;
     protected ?DataSourceConfig $dsConfig = null;
+    protected ?SettingsStore $settings = null;
 
     /**
      * Přechod docState detekovaný v beforeSave (DocDocument::trackStateChange).
@@ -38,6 +40,16 @@ abstract class Document
     public function setDsConfig(DataSourceConfig $dsConfig): void
     {
         $this->dsConfig = $dsConfig;
+    }
+
+    /**
+     * Sdílená instance per gateway/dávka (cache SettingsStore je per instance)
+     * — dokument si NIKDY nekonstruuje vlastní store, při dávkovém zpracování
+     * by to byl jeden dotaz na doklad.
+     */
+    public function setSettings(SettingsStore $settings): void
+    {
+        $this->settings = $settings;
     }
 
     public function validate(array &$data): ValidationResult

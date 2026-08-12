@@ -1,6 +1,6 @@
 # ds-setup — Task 04: Domácí měna do settings
 
-**Stav:** naplánováno
+**Stav:** hotovo
 
 > PRD pro jednu Claude Code session. Design: `docs/ds-setup.md`,
 > rozhodnutí **D2, D9**, kontrakt **§5.2**. Poslední parametr vrstvy C —

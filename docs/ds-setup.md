@@ -21,7 +21,9 @@ dashboardu.
 > v `ds-upgrade`, konec `getAccountChart()` — a `vat-payer-01` (§6 body
 > 1–4: klíč `economy.vatAgenda`, default `vat_mode`, skrytí sekce DPH
 > a navigace přes nový `NavItemVisibilityGate`, období DPH při uložení
-> registrace). Zbývá `economy.homeCurrency` (Task 04).**
+> registrace). Task 04 (`economy.homeCurrency`, konec
+> `getDefaultCurrency()`) hotový — vrstva C je parametricky kompletní
+> a `main.json` je čistě vrstva A.**
 > Fázování viz §8, otevřené body §10.
 
 ---
@@ -37,7 +39,7 @@ dashboardu.
 | D5 | Plátcovství DPH ([Issue #17](https://github.com/shipard/shpd/issues/17)) = **varianta 1**: absence Registrace DPH pro dané datum znamená neplátce. Příznak se jmenuje `economy.vatAgenda` („vede agendu DPH“) — záměrně ve tvaru předvolby, ne faktu, aby ho nikdo později nepoužil jako zdroj pravdy o plátcovství. |
 | D10 | **Příznak řídí budoucnost a navigaci; renderování existujících dat řídí doklad sám** (`vat_mode`). Tím je přechod plátce ⇄ neplátce vyřešený bez zvláštní práce a bývalý plátce nepřestane vidět svá stará data o DPH. |
 | D11 | Navigace agendy DPH (Registrace, Období) se skrývá jen tehdy, když je příznak neplátce **a zároveň nikdy neexistovala žádná registrace** (`COUNT(*) = 0` včetně ukončených). Samotný příznak jako podmínka nestačí. |
-| D6 | Provisioning fiskálních roků se **odkládá** za rozhodnutí o prvním měsíci. Čerstvý DS chvíli nemá fiskální roky — nevadí, doklad se stejně nepotvrdí bez vlastní Osoby. |
+| D6 | Provisioning fiskálních roků se **odkládá** za rozhodnutí o prvním měsíci **a o domácí měně** (Task 04 — měna je součástí zakládaného záznamu, seedovat s odhadnutou by obcházelo D2). Čerstvý DS chvíli nemá fiskální roky — nevadí, doklad se stejně nepotvrdí bez vlastní Osoby. |
 | D7 | Hosting přispívá **výhradně vrstvou A** — dva sloupce na `hosting_core_data_sources`, pole ve formuláři, položky v queue payloadu, předání v `HostingSyncRunner`. Žádný ARES v provisioning agentovi, žádné business řádky. |
 | D8 | Setup alerty se ve feedu dashboardu agregují **podle tagu** (ne podle `check_id`) do jedné karty; její primární akce otevírá panel průvodce — nový druh akce `open_panel`. |
 | D9 | **Bez backfillu existujících DS.** Zdroje dat se přeimportují ze starého Shipardu a import si parametry vrstvy C zapisuje sám (§7.2). |
@@ -219,9 +221,10 @@ sémantická validace tedy patří výš (formulář hostingu, dev dashboard).
 Tři volající `ds-create` je předají všichni: `HostingSyncRunner` (z queue
 payloadu), `DevDashboardController` (z formuláře dev dashboardu) a ruční CLI.
 
-**Getterům `getAccountChart()` a `getDefaultCurrency()` končí platnost** — po
-Fázi 2 je nikdo nečte a klíče v `main.json` jsou mrtvé (D9: žádný backfill,
-žádný fallback na ně).
+**Gettery `getAccountChart()` a `getDefaultCurrency()` jsou z repa venku**
+(Task 03 a Task 04) a klíče `accountChart`/`defaultCurrency` v `main.json`
+jsou mrtvé (D9: žádný backfill, žádný fallback na ně). Od Tasku 04 je
+`main.json` čistě vrstva A — identita, DB credentials, moduly, jazyk a země.
 
 ### 5.2 Vrstva C — settings klíče a jejich čtenáři
 
@@ -233,7 +236,7 @@ stavu“ je součást existujícího API.
 | Klíč | Typ | Obsah | Čtenáři |
 |---|---|---|---|
 | `economy.accountChart` | `default` \| `npo` \| `none` | varianta účtové osnovy | `AccountChartProvisioner` |
-| `economy.homeCurrency` | string, ISO 4217 lower | domácí měna dokladů | `LedgerGenerator`, `DocsHeadsFormBase`, `ReceivedInvoiceForm` |
+| `economy.homeCurrency` | string, ISO 4217 lower | domácí měna dokladů | `DocsHeadsFormBase`, `DocDocument`, `JournalLedgerHandler` → `LedgerGenerator`, `FiscalYearsForm`, `DsUpgradeCommand` (gate fiskálních roků) |
 | `economy.fiscalYearStartMonth` | int 1–12 | první měsíc fiskálního roku | `FiscalYearsProvisioner` |
 | `economy.vatAgenda` | bool | plátcovství DPH | `VatPeriodsProvisioner`, formuláře dokladů (výchozí `vat_mode`), viditelnost DPH v UI |
 
@@ -249,10 +252,16 @@ parametrů na konci `ds-upgrade` včetně příkazů k jejich nastavení —
 `ds-upgrade` tak slouží jako provizorní checklist a zároveň si na něm
 ověříme obsah budoucích setup checků.
 
-**Call sites k přepojení:** `LedgerGenerator` čte dnes
-`$this->dsConfig?->getDefaultCurrency()`; `DocsHeadsFormBase` a
-`ReceivedInvoiceForm` mají zadrátovaný fallback `'czk'`. Po Fázi 2 čtou
-`economy.homeCurrency`.
+**Call sites (přepojeno v Tasku 04):** `economy.homeCurrency` čtou
+`DocsHeadsFormBase::applyDefaults()` (default `home_currency` nového
+dokladu, `doc_currency` se odvozuje z `home_currency`),
+`DocDocument::applyHomeCurrency()` (přes `SettingsStore` injektovaný
+`TableGateway`em — sdílená instance per gateway, žádný dotaz per doklad),
+`JournalLedgerHandler` (předává měnu `LedgerGenerator`u jako string),
+`FiscalYearsForm` (default měny nového fiskálního roku) a
+`DsUpgradeCommand::provisionFiscalYears()` (gate + předání
+`FiscalYearsProvisioner`u). Defenzivní fallbacky `?? 'czk'` při čtení
+`$data` ve formulářích zůstaly — hodnotu vždy plní `applyDefaults()`.
 
 **Editovatelnost mimo průvodce.** Parametry mají být vidět a měnitelné
 i v Nastavení, tedy na settings stránce. To vyžaduje **field typy `select` a

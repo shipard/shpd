@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Shipard\Tests\Integration\Accbal;
 
+use Shipard\Core\Settings\SettingsStore;
 use Shipard\Module\Economy\Accbal\AccbalSourceCleanupHandler;
 use Shipard\Module\Economy\Accbal\LedgerGenerator;
 use Shipard\Tests\Integration\IntegrationTestCase;
@@ -42,10 +43,12 @@ class LedgerGeneratorTest extends IntegrationTestCase
 
     private function generator(): LedgerGenerator
     {
+        // Stejné odvození jako JournalLedgerHandler — settings, ne main.json.
+        $value = (new SettingsStore($this->db))->get('economy.homeCurrency');
         return new LedgerGenerator(
             $this->db->getDibiConnection(),
             null,
-            $this->dsConfig,
+            is_string($value) && $value !== '' ? $value : null,
         );
     }
 

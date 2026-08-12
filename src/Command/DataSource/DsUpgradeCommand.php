@@ -681,16 +681,26 @@ class DsUpgradeCommand extends Command
         }
 
         // Absence klíče = nerozhodnuto (D2) — fiskální roky se odkládají za
-        // rozhodnutí o prvním měsíci (D6). Vypisuje se vždy (ne jen verbose).
+        // rozhodnutí o prvním měsíci (D6) I o domácí měně: měna je součástí
+        // zakládaného záznamu, seedovat s odhadnutou by D2 obcházelo.
+        // Vypisuje se vždy (ne jen verbose).
         $startMonth = $settings->get('economy.fiscalYearStartMonth');
+        $homeCurrency = $settings->get('economy.homeCurrency');
+        $missing = [];
         if ($startMonth === null) {
-            $output->writeln('  <comment>[SKIP] economy.fiscalYearStartMonth není rozhodnuto '
+            $missing[] = 'economy.fiscalYearStartMonth';
+        }
+        if (!is_string($homeCurrency) || $homeCurrency === '') {
+            $missing[] = 'economy.homeCurrency';
+        }
+        if ($missing !== []) {
+            $output->writeln('  <comment>[SKIP] ' . implode(', ', $missing) . ' není rozhodnuto '
                 . '— fiskální roky se neseedují (docs/ds-setup.md D6).</comment>');
             return;
         }
 
         $config = ConfigRuntime::load($dsDir, 'cs');
-        $provisioner = new FiscalYearsProvisioner($dsConnection, $config, (int) $startMonth);
+        $provisioner = new FiscalYearsProvisioner($dsConnection, $config, (int) $startMonth, $homeCurrency);
         $result = $provisioner->provision();
 
         $this->logProvisioningResult($output, 'fiscal years', $result['fiscalYears']);

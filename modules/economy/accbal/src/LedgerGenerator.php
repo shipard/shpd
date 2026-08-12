@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Shipard\Module\Economy\Accbal;
 
 use Shipard\Core\Config\ConfigRuntime;
-use Shipard\Core\Config\DataSourceConfig;
 
 /**
  * Generátor saldo pohybů (economy_accbal_ledger) z účetního deníku.
@@ -30,17 +29,22 @@ final class LedgerGenerator
     /** Aktivní docState (archivní sada) pro nastavení saldokont. */
     private const ACTIVE_STATES = [10, 40, 80];
 
+    /**
+     * $homeCurrency = rozhodnutí per DS (settings klíč `economy.homeCurrency`,
+     * docs/ds-setup.md §5.2) — předává volající (JournalLedgerHandler),
+     * generator si settings nečte sám. Null = nerozhodnuto → 'czk'.
+     */
     public function __construct(
         private readonly \Dibi\Connection $db,
         private readonly ?ConfigRuntime $config,
-        private readonly ?DataSourceConfig $dsConfig = null,
+        private readonly ?string $homeCurrency = null,
     ) {}
 
     public function generate(string $sourceKind, int $sourceId): void
     {
         $accounts = $this->loadBalanceAccounts();
         $journalRows = $this->loadJournalRows($sourceKind, $sourceId);
-        $homeCurrency = strtolower((string) ($this->dsConfig?->getDefaultCurrency() ?? 'czk'));
+        $homeCurrency = strtolower($this->homeCurrency ?? 'czk');
 
         $desired = $this->buildDesired($sourceKind, $sourceId, $accounts, $journalRows, $homeCurrency);
 

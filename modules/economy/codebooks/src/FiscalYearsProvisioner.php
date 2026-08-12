@@ -23,11 +23,16 @@ class FiscalYearsProvisioner
      * cfgItem — vzniklo kvůli volajícím, kteří rozhodnutí předávají přímo
      * (ds-upgrade ze settings, průvodce ve Fázi 4) a cfgItem k tomu
      * použít nemohou.
+     *
+     * $currency = rozhodnutí per DS (settings klíč `economy.homeCurrency`,
+     * §5.2) — předává volající, provisioner si settings nečte sám.
+     * Null → 'czk' (defenzivní; ds-upgrade bez rozhodnuté měny neseeduje).
      */
     public function __construct(
         private readonly DataSourceConnection $db,
         private readonly ConfigRuntime $config,
         private readonly ?int $yearStartMonth = null,
+        private readonly ?string $currency = null,
     ) {}
 
     /**
@@ -123,7 +128,7 @@ class FiscalYearsProvisioner
                 'doc_number_prefix' => $year['doc_number_prefix'],
                 'date_begin'        => $year['date_begin']->format('Y-m-d'),
                 'date_end'          => $year['date_end']->format('Y-m-d'),
-                'currency'          => 'czk',
+                'currency'          => $this->currency ?? 'czk',
                 'locked'            => 0,
                 'docState'          => 40,
                 'docStateMain'      => 3,

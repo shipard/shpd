@@ -95,16 +95,6 @@ class DataSourceConfig
     }
 
     /**
-     * Default currency for documents created in this DS — used as fallback for
-     * `home_currency` on document headers. ISO 4217 lower-case (e.g. 'czk', 'eur').
-     * Optional; defaults to 'czk' when missing from main.json.
-     */
-    public function getDefaultCurrency(): string
-    {
-        return $this->data['defaultCurrency'] ?? 'czk';
-    }
-
-    /**
      * Country of the legal entity this DS runs on behalf of. ISO 3166-1
      * alpha-2 lower-case (e.g. 'cz', 'sk'). Steers which company registry
      * is queried, which VAT rate set applies and address formatting.

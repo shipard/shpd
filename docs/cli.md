@@ -1091,6 +1091,7 @@ cd /opt/shipard/data-sources/<id>
 sudo shpd-ds ds-upgrade                                       # → [TODO] blok
 sudo shpd-ds ds-setting set economy.accountChart default      # nebo npo / none
 sudo shpd-ds ds-setting set economy.fiscalYearStartMonth 1
+sudo shpd-ds ds-setting set economy.homeCurrency czk
 sudo shpd-ds ds-setting set economy.vatAgenda true            # neplátce DPH: false
 sudo shpd-ds ds-upgrade                                       # naseeduje osnovu a roky
 ```

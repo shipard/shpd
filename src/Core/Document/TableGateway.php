@@ -6,10 +6,15 @@ namespace Shipard\Core\Document;
 
 use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Config\DataSourceConfig;
+use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Logging\ErrorLogger;
+use Shipard\Core\Settings\SettingsStore;
 
 class TableGateway
 {
+    /** Lazy, sdílený všemi dokumenty gatewaye — viz injectDocServices(). */
+    private ?SettingsStore $settings = null;
+
     public function __construct(
         private string $tableId,
         private \Dibi\Connection $db,
@@ -30,6 +35,10 @@ class TableGateway
         if ($this->dsConfig !== null) {
             $doc->setDsConfig($this->dsConfig);
         }
+        // Jedna instance per gateway → cache settings přežívá dávku dokladů.
+        $doc->setSettings(
+            $this->settings ??= new SettingsStore(new DataSourceConnection($this->db)),
+        );
     }
 
     public function loadRecord(int $id): ?array

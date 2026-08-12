@@ -197,6 +197,18 @@ class FiscalYearsProvisionerTest extends TestCase
         $this->assertCount(0, $store->tables['economy_codebooks_fiscal_months']);
     }
 
+    public function testExplicitCurrencySetsSeededYearCurrency(): void
+    {
+        $store = $this->recordingDb();
+        $config = $this->buildConfig(1);
+
+        $provisioner = new FiscalYearsProvisioner($store->db, $config, 1, 'eur');
+        $provisioner->provision(new \DateTimeImmutable('2026-04-15'));
+
+        $year = $store->tables['economy_codebooks_fiscal_years'][0];
+        $this->assertSame('eur', $year['currency']);
+    }
+
     public function testExplicitYearStartMonthWinsOverCfgItem(): void
     {
         $store = $this->recordingDb();

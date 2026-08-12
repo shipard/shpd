@@ -401,7 +401,10 @@ abstract class DocDocument extends Document
     protected function applyHomeCurrency(array &$data): void
     {
         if (empty($data['home_currency'])) {
-            $data['home_currency'] = $this->dsConfig?->getDefaultCurrency() ?? 'czk';
+            // Settings `economy.homeCurrency` (ds-setup.md §5.2); nerozhodnutý
+            // klíč → 'czk', tedy dnešní chování. Store injektuje TableGateway.
+            $value = $this->settings?->get('economy.homeCurrency');
+            $data['home_currency'] = is_string($value) && $value !== '' ? $value : 'czk';
         }
         if (empty($data['doc_currency'])) {
             $data['doc_currency'] = $data['home_currency'];

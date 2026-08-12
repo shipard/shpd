@@ -10,6 +10,7 @@ use Shipard\Core\Form\FormDefinition;
 use Shipard\Core\Form\FormElement;
 use Shipard\Core\Form\FormTab;
 use Shipard\Module\Docs\Core\DocsHeadsForm;
+use Shipard\Tests\Fixtures\Module\Docs\Core\TestableDocsHeadsForm;
 
 class DocsHeadsFormTest extends TestCase
 {
@@ -490,14 +491,24 @@ class DocsHeadsFormTest extends TestCase
     /**
      * @param list<string>|null $queries zachytávané SQL dotazy fetchAll
      */
-    private function createFormWithVatAgenda(?bool $vatAgenda, ?array &$queries = null): DocsHeadsForm
+    private function createFormWithVatAgenda(?bool $vatAgenda, ?array &$queries = null): TestableDocsHeadsForm
     {
-        $form = $this->createForm();
+        return $this->createFormWithSettings(['economy.vatAgenda' => $vatAgenda], $queries);
+    }
+
+    /**
+     * @param array<string, mixed> $settings hodnoty settings klíčů (null = nerozhodnutý klíč)
+     * @param list<string>|null $queries zachytávané SQL dotazy fetchAll
+     */
+    private function createFormWithSettings(array $settings, ?array &$queries = null): TestableDocsHeadsForm
+    {
+        $form = new TestableDocsHeadsForm('docs_core_heads');
         $db = $this->createMock(DataSourceConnection::class);
         $db->method('fetchSingle')->willReturnCallback(
-            static function (mixed ...$args) use ($vatAgenda): mixed {
-                if (($args[1] ?? null) === 'economy.vatAgenda') {
-                    return $vatAgenda === null ? null : json_encode($vatAgenda);
+            static function (mixed ...$args) use ($settings): mixed {
+                $key = $args[1] ?? null;
+                if (is_string($key) && array_key_exists($key, $settings) && $settings[$key] !== null) {
+                    return json_encode($settings[$key]);
                 }
                 return null;
             },
@@ -623,5 +634,42 @@ class DocsHeadsFormTest extends TestCase
         foreach ($queries as $sql) {
             $this->assertStringNotContainsString('vat_registrations', $sql);
         }
+    }
+
+    // ── Domácí měna — economy.homeCurrency (ds-setup Task 04) ────────────────
+
+    public function testDecidedHomeCurrencyFillsBothCurrenciesOnNewDocument(): void
+    {
+        $form = $this->createFormWithSettings(['economy.homeCurrency' => 'eur']);
+        $data = [];
+
+        $form->applyClientDefaultsPub($data, true);
+
+        $this->assertSame('eur', $data['home_currency']);
+        $this->assertSame('eur', $data['doc_currency']);
+    }
+
+    public function testUndecidedHomeCurrencyDefaultsToCzk(): void
+    {
+        // Nerozhodnutý klíč (null) = dnešní chování.
+        $form = $this->createFormWithSettings(['economy.homeCurrency' => null]);
+        $data = [];
+
+        $form->applyClientDefaultsPub($data, true);
+
+        $this->assertSame('czk', $data['home_currency']);
+        $this->assertSame('czk', $data['doc_currency']);
+    }
+
+    public function testExplicitDocCurrencySurvivesHomeCurrencyDefault(): void
+    {
+        // Explicitní doc_currency (import, kopie dokladu) se nepřebíjí.
+        $form = $this->createFormWithSettings(['economy.homeCurrency' => 'eur']);
+        $data = ['doc_currency' => 'usd'];
+
+        $form->applyClientDefaultsPub($data, true);
+
+        $this->assertSame('eur', $data['home_currency']);
+        $this->assertSame('usd', $data['doc_currency']);
     }
 }

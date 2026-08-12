@@ -111,6 +111,9 @@ class DocRowsDocument extends Document
         if ($this->dsConfig !== null) {
             $headDoc->setDsConfig($this->dsConfig);
         }
+        if ($this->settings !== null) {
+            $headDoc->setSettings($this->settings);
+        }
 
         // Skip validate() — the head may legitimately not satisfy confirm-time
         // validations while in Concept (e.g. no rows yet, no partner). We only

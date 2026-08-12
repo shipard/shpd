@@ -16,6 +16,7 @@ class LayerCParametersTest extends TestCase
         $this->assertContains('economy.accountChart', $keys);
         $this->assertContains('economy.fiscalYearStartMonth', $keys);
         $this->assertContains('economy.vatAgenda', $keys);
+        $this->assertContains('economy.homeCurrency', $keys);
     }
 
     public function testAccountChartAcceptsWhitelistedVariants(): void
@@ -62,6 +63,24 @@ class LayerCParametersTest extends TestCase
         foreach (['yes', 'ano', 'TRUE', ''] as $invalid) {
             try {
                 LayerCParameters::validate('economy.vatAgenda', $invalid);
+                $this->fail("value '{$invalid}' should be rejected");
+            } catch (\InvalidArgumentException) {
+                $this->addToAssertionCount(1);
+            }
+        }
+    }
+
+    public function testHomeCurrencyAcceptsLowerCaseIsoCode(): void
+    {
+        $this->assertSame('czk', LayerCParameters::validate('economy.homeCurrency', 'czk'));
+        $this->assertSame('eur', LayerCParameters::validate('economy.homeCurrency', 'eur'));
+    }
+
+    public function testHomeCurrencyRejectsWrongShape(): void
+    {
+        foreach (['CZK', 'cz', 'czks', ''] as $invalid) {
+            try {
+                LayerCParameters::validate('economy.homeCurrency', $invalid);
                 $this->fail("value '{$invalid}' should be rejected");
             } catch (\InvalidArgumentException) {
                 $this->addToAssertionCount(1);

@@ -7,7 +7,7 @@ namespace Shipard\Tests\Unit\Module\Docs\Core;
 use Dibi\Connection;
 use Dibi\Row;
 use PHPUnit\Framework\TestCase;
-use Shipard\Core\Config\DataSourceConfig;
+use Shipard\Core\Settings\SettingsStore;
 use Shipard\Tests\Fixtures\Module\Docs\Core\TestableDocsHeadsDocument;
 
 class DocDocumentDefaultsTest extends TestCase
@@ -74,13 +74,10 @@ class DocDocumentDefaultsTest extends TestCase
         $this->assertSame('2026-01-29', $data['due_date']); // +14 days fallback
     }
 
-    public function testApplyHomeCurrencyFromDsConfig(): void
+    public function testApplyHomeCurrencyFromSettings(): void
     {
-        $cfg = $this->createMock(DataSourceConfig::class);
-        $cfg->method('getDefaultCurrency')->willReturn('eur');
-
         $doc = new TestableDocsHeadsDocument();
-        $doc->setDsConfig($cfg);
+        $doc->setSettings($this->createSettingsWithHomeCurrency('eur'));
 
         $data = [];
         $doc->applyHomeCurrencyPub($data);
@@ -89,7 +86,7 @@ class DocDocumentDefaultsTest extends TestCase
         $this->assertSame('eur', $data['doc_currency']);
     }
 
-    public function testApplyHomeCurrencyFallbackCzkWithoutConfig(): void
+    public function testApplyHomeCurrencyFallbackCzkWithoutSettings(): void
     {
         $doc = new TestableDocsHeadsDocument();
         $data = [];
@@ -99,19 +96,38 @@ class DocDocumentDefaultsTest extends TestCase
         $this->assertSame('czk', $data['doc_currency']);
     }
 
+    public function testApplyHomeCurrencyFallbackCzkWhenUndecided(): void
+    {
+        // Nerozhodnutý klíč (null) = dnešní chování.
+        $doc = new TestableDocsHeadsDocument();
+        $doc->setSettings($this->createSettingsWithHomeCurrency(null));
+
+        $data = [];
+        $doc->applyHomeCurrencyPub($data);
+
+        $this->assertSame('czk', $data['home_currency']);
+        $this->assertSame('czk', $data['doc_currency']);
+    }
+
     public function testApplyHomeCurrencyDoesNotOverrideExisting(): void
     {
-        $cfg = $this->createMock(DataSourceConfig::class);
-        $cfg->method('getDefaultCurrency')->willReturn('czk');
-
         $doc = new TestableDocsHeadsDocument();
-        $doc->setDsConfig($cfg);
+        $doc->setSettings($this->createSettingsWithHomeCurrency('czk'));
 
         $data = ['home_currency' => 'usd', 'doc_currency' => 'eur'];
         $doc->applyHomeCurrencyPub($data);
 
         $this->assertSame('usd', $data['home_currency']);
         $this->assertSame('eur', $data['doc_currency']);
+    }
+
+    private function createSettingsWithHomeCurrency(?string $currency): SettingsStore
+    {
+        $settings = $this->createMock(SettingsStore::class);
+        $settings->method('get')->willReturnCallback(
+            static fn(string $key): mixed => $key === 'economy.homeCurrency' ? $currency : null,
+        );
+        return $settings;
     }
 
     public function testResolveFiscalYearIdReturnsNullWithoutDb(): void

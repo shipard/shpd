@@ -38,6 +38,9 @@ abstract class DocsHeadsFormBase extends TableForm
     /** Per-instance cache — viz vatAgendaDisabled(). */
     private ?bool $vatAgendaDisabled = null;
 
+    /** Per-instance cache — viz homeCurrency(). */
+    private ?string $homeCurrency = null;
+
     /**
      * True, když je DS vědomě nastavený jako neplátce
      * (`economy.vatAgenda === false`). Řídí JEN default nového dokladu
@@ -53,6 +56,23 @@ abstract class DocsHeadsFormBase extends TableForm
                 && (new SettingsStore($this->db))->get('economy.vatAgenda') === false;
         }
         return $this->vatAgendaDisabled;
+    }
+
+    /**
+     * Domácí měna DS ze settings `economy.homeCurrency` (ds-setup.md §5.2).
+     * Nerozhodnutý klíč (null) → 'czk', tedy dnešní chování — nerozhodnuto
+     * nesmí měnit sémantiku existujících dokladů. Řídí JEN default nového
+     * dokladu; existující data nesou měnu ve sloupcích.
+     */
+    protected function homeCurrency(): string
+    {
+        if ($this->homeCurrency === null) {
+            $value = $this->db !== null
+                ? (new SettingsStore($this->db))->get('economy.homeCurrency')
+                : null;
+            $this->homeCurrency = is_string($value) && $value !== '' ? $value : 'czk';
+        }
+        return $this->homeCurrency;
     }
 
     /**
@@ -319,11 +339,12 @@ abstract class DocsHeadsFormBase extends TableForm
         if (!isset($data['vat_rounding_mode'])) {
             $data['vat_rounding_mode'] = 2;
         }
-        if (empty($data['doc_currency'])) {
-            $data['doc_currency'] = 'czk';
-        }
         if (empty($data['home_currency'])) {
-            $data['home_currency'] = 'czk';
+            $data['home_currency'] = $this->homeCurrency();
+        }
+        if (empty($data['doc_currency'])) {
+            // Domácí doklad je v domácí měně; explicitní hodnota vyhrává.
+            $data['doc_currency'] = $data['home_currency'];
         }
     }
 

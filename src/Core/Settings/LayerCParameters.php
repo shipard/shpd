@@ -8,9 +8,9 @@ namespace Shipard\Core\Settings;
  * Parametry vrstvy C (docs/ds-setup.md §5.2, D2) — jediné místo pravdy.
  *
  * Sdílí ho `[TODO]` výpis nerozhodnutých parametrů v ds-upgrade, whitelist
- * a validace hodnot v `ds-setting` a (Fáze 3) setup checky. Navazující
- * tasky sem přidávají další klíče (`economy.vatPayer`,
- * `economy.homeCurrency`) — nikam jinam.
+ * a validace hodnot v `ds-setting` a (Fáze 3) setup checky. Sada klíčů je
+ * po ds-setup Tasku 04 kompletní — případné další parametry vrstvy C patří
+ * sem, nikam jinam.
  *
  * Absence klíče v core_system_settings = nerozhodnuto; provisionery pak
  * neseedují (D6). Žádný fallback na main.json (D9).
@@ -42,6 +42,12 @@ final class LayerCParameters
         'economy.vatAgenda' => [
             'module'  => 'economy.codebooks',
             'example' => 'true',
+        ],
+        // Změna na běžícím DS mění jen NOVÉ záznamy — existující doklady
+        // a fiskální roky mají měnu uloženou a nikdo je nepřepočítává.
+        'economy.homeCurrency' => [
+            'module'  => 'economy.codebooks',
+            'example' => 'czk',
         ],
     ];
 
@@ -88,6 +94,16 @@ final class LayerCParameters
                 throw new \InvalidArgumentException(
                     "Invalid value '{$raw}' for {$key}. Allowed: true, false",
                 );
+
+            case 'economy.homeCurrency':
+                // Jen tvar (ISO 4217 lower-case) — ds-setting běží před
+                // kompilací configu, world číselník tu není k dispozici.
+                if (!preg_match('/^[a-z]{3}$/', $raw)) {
+                    throw new \InvalidArgumentException(
+                        "Invalid value '{$raw}' for {$key}. Allowed: three-letter lower-case ISO 4217 code (e.g. czk)",
+                    );
+                }
+                return $raw;
         }
 
         throw new \InvalidArgumentException("Unknown layer C parameter: {$key}");

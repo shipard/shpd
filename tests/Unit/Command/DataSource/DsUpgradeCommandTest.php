@@ -534,10 +534,13 @@ class DsUpgradeCommandTest extends TestCase
         $this->assertStringNotContainsString('economy.fiscalYearStartMonth', $display);
     }
 
-    public function testUndecidedCodebooksParamsReportedAsTodo(): void
+    /**
+     * Minimal economy.codebooks fixture module (empty tables) — enough to
+     * pass the module guards in provisionFiscalYears()/provisionVatPeriods()
+     * and to gate its layer C parameters in the [TODO] block.
+     */
+    private function createEconomyCodebooksFixtureModule(): void
     {
-        // Fixture modul s id economy.codebooks — gate pro fiscalYearStartMonth
-        // a vatAgenda v [TODO] výpisu (LayerCParameters::SPECS se iterují celé).
         $moduleDir = $this->modulesPath . '/economy/codebooks';
         mkdir($moduleDir, 0755, true);
         file_put_contents($moduleDir . '/module.jsonc', json_encode([
@@ -548,6 +551,13 @@ class DsUpgradeCommandTest extends TestCase
             'extensions'   => [],
             'config'       => [],
         ]));
+    }
+
+    public function testUndecidedCodebooksParamsReportedAsTodo(): void
+    {
+        // Fixture modul s id economy.codebooks — gate pro fiscalYearStartMonth,
+        // vatAgenda a homeCurrency v [TODO] výpisu (SPECS se iterují celé).
+        $this->createEconomyCodebooksFixtureModule();
         $this->dsConfig = $this->createProvisioningConfig(['test.unit', 'economy.codebooks']);
 
         $this->dsConnection->method('getTableColumns')->willReturn([]);
@@ -562,8 +572,110 @@ class DsUpgradeCommandTest extends TestCase
         $this->assertStringContainsString('[TODO] Nerozhodnuté parametry', $display);
         $this->assertStringContainsString('ds-setting set economy.fiscalYearStartMonth 1', $display);
         $this->assertStringContainsString('ds-setting set economy.vatAgenda true', $display);
+        $this->assertStringContainsString('ds-setting set economy.homeCurrency czk', $display);
         // economy.accounting není aktivní — jeho parametr do [TODO] nepatří.
         $this->assertStringNotContainsString('economy.accountChart', $display);
+    }
+
+    // ── Gate fiskálních roků — oba klíče (ds-setup Task 04) ──────────────────
+
+    public function testFiscalYearsSkippedWhenHomeCurrencyUndecided(): void
+    {
+        $this->createEconomyCodebooksFixtureModule();
+        $this->dsConfig = $this->createProvisioningConfig(['test.unit', 'economy.codebooks']);
+
+        $this->dsConnection->method('getTableColumns')->willReturn([]);
+        $this->dsConnection->method('getTableIndexes')->willReturn([]);
+        $this->dsConnection->method('executeSQL');
+        $this->dsConnection->method('fetchSingle')->willReturnCallback(
+            static fn(mixed ...$args): mixed => ($args[1] ?? null) === 'economy.fiscalYearStartMonth' ? '1' : null,
+        );
+        $insertedYears = $this->captureFiscalYearInserts();
+
+        $tester = $this->createCommandTester();
+        $exitCode = $tester->execute([]);
+
+        $this->assertSame(Command::SUCCESS, $exitCode);
+        $display = $tester->getDisplay();
+        // [SKIP] jmenuje právě chybějící klíč — rozhodnutý měsíc v něm není.
+        $this->assertStringContainsString('[SKIP] economy.homeCurrency není rozhodnuto', $display);
+        $this->assertStringNotContainsString('economy.fiscalYearStartMonth není rozhodnuto', $display);
+        $this->assertSame([], $insertedYears->rows);
+    }
+
+    public function testFiscalYearsSkippedWhenStartMonthUndecided(): void
+    {
+        $this->createEconomyCodebooksFixtureModule();
+        $this->dsConfig = $this->createProvisioningConfig(['test.unit', 'economy.codebooks']);
+
+        $this->dsConnection->method('getTableColumns')->willReturn([]);
+        $this->dsConnection->method('getTableIndexes')->willReturn([]);
+        $this->dsConnection->method('executeSQL');
+        $this->dsConnection->method('fetchSingle')->willReturnCallback(
+            static fn(mixed ...$args): mixed => ($args[1] ?? null) === 'economy.homeCurrency' ? '"eur"' : null,
+        );
+        $insertedYears = $this->captureFiscalYearInserts();
+
+        $tester = $this->createCommandTester();
+        $exitCode = $tester->execute([]);
+
+        $this->assertSame(Command::SUCCESS, $exitCode);
+        $this->assertStringContainsString(
+            '[SKIP] economy.fiscalYearStartMonth není rozhodnuto',
+            $tester->getDisplay(),
+        );
+        $this->assertSame([], $insertedYears->rows);
+    }
+
+    public function testFiscalYearsSeededWithDecidedCurrency(): void
+    {
+        $this->createEconomyCodebooksFixtureModule();
+        $this->dsConfig = $this->createProvisioningConfig(['test.unit', 'economy.codebooks']);
+
+        $this->dsConnection->method('getTableColumns')->willReturn([]);
+        $this->dsConnection->method('getTableIndexes')->willReturn([]);
+        $this->dsConnection->method('executeSQL');
+        $this->dsConnection->method('fetchSingle')->willReturnCallback(
+            static fn(mixed ...$args): mixed => match ($args[1] ?? null) {
+                'economy.fiscalYearStartMonth' => '1',
+                'economy.homeCurrency'         => '"eur"',
+                default                        => null,
+            },
+        );
+        $insertedYears = $this->captureFiscalYearInserts();
+
+        $tester = $this->createCommandTester();
+        $exitCode = $tester->execute([]);
+
+        $this->assertSame(Command::SUCCESS, $exitCode);
+        $this->assertStringNotContainsString('fiskální roky se neseedují', $tester->getDisplay());
+        $this->assertNotSame([], $insertedYears->rows);
+        foreach ($insertedYears->rows as $row) {
+            $this->assertSame('eur', $row['currency']);
+        }
+    }
+
+    /**
+     * Zachytí insertRow do economy_codebooks_fiscal_years (ostatní tabulky
+     * ignoruje — VatPeriodsProvisioner apod. běží ve stejném průchodu).
+     *
+     * @return object{rows: list<array<string, mixed>>}
+     */
+    private function captureFiscalYearInserts(): object
+    {
+        $captured = new class {
+            /** @var list<array<string, mixed>> */
+            public array $rows = [];
+        };
+        $this->dsConnection->method('insertRow')->willReturnCallback(
+            static function (string $table, array $row) use ($captured): int {
+                if ($table === 'economy_codebooks_fiscal_years') {
+                    $captured->rows[] = $row;
+                }
+                return 1;
+            },
+        );
+        return $captured;
     }
 
     public function testDecidedAccountChartDoesNotReportTodo(): void

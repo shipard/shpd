@@ -1,6 +1,6 @@
 # ds-setup — Task 05: Setup checky a služba `SetupChecklist`
 
-**Stav:** naplánováno
+**Stav:** hotovo
 
 > PRD pro jednu Claude Code session. Design: `docs/ds-setup.md`,
 > rozhodnutí **D3, D12, D13**, kontrakt **§5.3**. Začátek Fáze 3.

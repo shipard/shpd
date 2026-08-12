@@ -86,6 +86,19 @@
             "severity": "warning",
             "interval": "1h",
             "tags": ["accounting"]
+        },
+        {
+            "id": "economy.accounting.undecided_account_chart",
+            "name": "Account chart not chosen",
+            "name:cs": "Nezvolena účtová osnova",
+            "name:en": "Account chart not chosen",
+            "description": "Choose the account chart variant; until decided, the chart is not seeded and documents cannot be posted.",
+            "description:cs": "Vyber variantu účtové osnovy — do rozhodnutí se osnova neseeduje a doklady nejde zaúčtovat.",
+            "description:en": "Choose the account chart variant; until decided, the chart is not seeded and documents cannot be posted.",
+            "class": "Shipard\\Module\\Economy\\Accounting\\Checks\\UndecidedAccountChartCheck",
+            "severity": "warning",
+            "interval": "5m",
+            "tags": ["setup"]
         }
     ],
 

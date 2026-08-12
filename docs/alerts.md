@@ -317,6 +317,13 @@ curl -X POST /api/v1/_alerts/alerts/42/snooze -d '{"days":7}'
 už uplynulo, alert přepne zpět na Active. **Žádný background job** —
 expirace se vyhodnotí jen když check potvrdí, že problém stále existuje.
 
+**Setup alerty snooze ani dismiss nepodporují.** Alerty checků
+s `tags: ["setup"]` vrací na oba endpointy **409** s kódem `SETUP_ALERT`
+— položka checklistu zmizí sama doplněním nastavení a odklikat ji by bylo
+proti principu „stav se dopočítává, nepamatuje“
+([`ds-setup.md`](ds-setup.md) D3/D13). Guard je fail-open: alert
+s `check_id`, který v registry není, se nezakazuje.
+
 ---
 
 ## 9. `actions` JSON schéma
@@ -430,6 +437,12 @@ potřeba. Detaily viz [`cli.md`](cli.md) § `cron` a
 
 Jednotlivé checky mají vlastní `interval` (typicky 1h+), runner přeskakuje
 ty, kde `next_run_at > NOW`. Když nic není due, exit 0.
+
+Setup checky (`tags: ["setup"]`) mají záměrně krátký `interval` (`5m`,
+tedy každý běh slotu) — jsou to levné `COUNT`/settings dotazy a karta
+„Dokončit nastavení“ ve feedu čerpá z tabulky alertů, delší interval by
+jen zvětšoval prodlevu mezi doplněním nastavení a zmizením karty
+([`ds-setup.md`](ds-setup.md) D12).
 
 `alerts-prune` běží týdně (slot `weekly`).
 

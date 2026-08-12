@@ -126,7 +126,20 @@
             "description:en": "Detects missing own legal entity (set up after creating a new data source).",
             "class": "Shipard\\Module\\Base\\Persons\\Checks\\MissingOwnPersonCheck",
             "severity": "warning",
-            "interval": "1h",
+            "interval": "5m",
+            "tags": ["setup"]
+        },
+        {
+            "id": "base.persons.missing_own_headquarters",
+            "name": "Own Person has no registered office",
+            "name:cs": "Vlastní Osoba nemá sídlo",
+            "name:en": "Own Person has no registered office",
+            "description": "The own Person needs a Registered office address; it is printed on documents.",
+            "description:cs": "Vlastní Osoba potřebuje adresu typu Sídlo — tiskne se na doklady.",
+            "description:en": "The own Person needs a Registered office address; it is printed on documents.",
+            "class": "Shipard\\Module\\Base\\Persons\\Checks\\MissingOwnHeadquartersCheck",
+            "severity": "warning",
+            "interval": "5m",
             "tags": ["setup"]
         }
     ]

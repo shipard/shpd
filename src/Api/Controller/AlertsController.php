@@ -152,11 +152,14 @@ class AlertsController
         }
 
         $alert = $this->db->fetchRow(
-            'SELECT id, alert_state FROM %n WHERE id = %i',
+            'SELECT id, alert_state, check_id FROM %n WHERE id = %i',
             self::ALERTS_TABLE, $id,
         );
         if ($alert === null) {
             return Response::error('NOT_FOUND', 'Alert not found', 404);
+        }
+        if ($this->isSetupAlert((string) ($alert['check_id'] ?? ''))) {
+            return $this->setupAlertError();
         }
         if (!in_array((int) $alert['alert_state'], [AlertReconciler::STATE_ACTIVE, AlertReconciler::STATE_SNOOZED], true)) {
             return Response::error(
@@ -193,11 +196,14 @@ class AlertsController
         }
 
         $alert = $this->db->fetchRow(
-            'SELECT id, alert_state FROM %n WHERE id = %i',
+            'SELECT id, alert_state, check_id FROM %n WHERE id = %i',
             self::ALERTS_TABLE, $id,
         );
         if ($alert === null) {
             return Response::error('NOT_FOUND', 'Alert not found', 404);
+        }
+        if ($this->isSetupAlert((string) ($alert['check_id'] ?? ''))) {
+            return $this->setupAlertError();
         }
         if (!in_array((int) $alert['alert_state'], [AlertReconciler::STATE_ACTIVE, AlertReconciler::STATE_SNOOZED], true)) {
             return Response::error(
@@ -265,6 +271,28 @@ class AlertsController
     // ── Helpers ──────────────────────────────────────────────────────────
 
     /** Decode JSON sloupce + zjednoduš na key conventions vhodné pro frontend. */
+    /**
+     * D13 (docs/ds-setup.md): alerty checků s `tags: ["setup"]` nejde
+     * snoozovat ani dismissovat — položka checklistu zmizí sama doplněním
+     * nastavení, odklikat ji je proti D3 (stav se dopočítává, nepamatuje).
+     * Chybějící definice v registry → fail-open (nezakazovat).
+     */
+    private function isSetupAlert(string $checkId): bool
+    {
+        $def = $this->registry->get($checkId);
+        return $def !== null && in_array('setup', $def->tags, true);
+    }
+
+    private function setupAlertError(): Response
+    {
+        return Response::error(
+            'SETUP_ALERT',
+            'Setup alerts cannot be snoozed or dismissed'
+            . ' — the item disappears once the setting is filled in',
+            409,
+        );
+    }
+
     private function decorateAlert(array $row): array
     {
         $actions = null;

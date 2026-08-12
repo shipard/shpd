@@ -156,6 +156,74 @@
         }
     ],
 
+    "alertChecks": [
+        {
+            "id": "economy.codebooks.undecided_vat_agenda",
+            "name": "VAT agenda not decided",
+            "name:cs": "Nerozhodnutá agenda DPH",
+            "name:en": "VAT agenda not decided",
+            "description": "Decide whether the company keeps a VAT agenda; it drives the default VAT mode of new documents.",
+            "description:cs": "Urči, jestli firma vede agendu DPH — řídí výchozí režim DPH nových dokladů.",
+            "description:en": "Decide whether the company keeps a VAT agenda; it drives the default VAT mode of new documents.",
+            "class": "Shipard\\Module\\Economy\\Codebooks\\Checks\\UndecidedVatAgendaCheck",
+            "severity": "warning",
+            "interval": "5m",
+            "tags": ["setup"]
+        },
+        {
+            "id": "economy.codebooks.missing_vat_registration",
+            "name": "VAT registration is missing",
+            "name:cs": "Chybí Registrace DPH",
+            "name:en": "VAT registration is missing",
+            "description": "The company keeps a VAT agenda but has no VAT registration; documents with VAT cannot be confirmed.",
+            "description:cs": "Firma vede agendu DPH, ale nemá Registraci DPH — doklad s DPH nejde potvrdit.",
+            "description:en": "The company keeps a VAT agenda but has no VAT registration; documents with VAT cannot be confirmed.",
+            "class": "Shipard\\Module\\Economy\\Codebooks\\Checks\\MissingVatRegistrationCheck",
+            "severity": "warning",
+            "interval": "5m",
+            "tags": ["setup"]
+        },
+        {
+            "id": "economy.codebooks.missing_own_bank_account",
+            "name": "Own bank account is missing",
+            "name:cs": "Chybí vlastní bankovní účet",
+            "name:en": "Own bank account is missing",
+            "description": "Add the company bank account to the codebook; issued invoices cannot be confirmed without it.",
+            "description:cs": "Založ bankovní spojení firmy do číselníku — bez něj nejde potvrdit vydaná faktura.",
+            "description:en": "Add the company bank account to the codebook; issued invoices cannot be confirmed without it.",
+            "class": "Shipard\\Module\\Economy\\Codebooks\\Checks\\MissingOwnBankAccountCheck",
+            "severity": "warning",
+            "interval": "5m",
+            "tags": ["setup"]
+        },
+        {
+            "id": "economy.codebooks.undecided_fiscal_year_start",
+            "name": "Fiscal year start month not chosen",
+            "name:cs": "Nezvolen první měsíc fiskálního roku",
+            "name:en": "Fiscal year start month not chosen",
+            "description": "Choose the fiscal year start month; until decided, fiscal years are not created.",
+            "description:cs": "Zvol první měsíc fiskálního roku — do rozhodnutí se fiskální roky nezakládají.",
+            "description:en": "Choose the fiscal year start month; until decided, fiscal years are not created.",
+            "class": "Shipard\\Module\\Economy\\Codebooks\\Checks\\UndecidedFiscalYearStartCheck",
+            "severity": "warning",
+            "interval": "5m",
+            "tags": ["setup"]
+        },
+        {
+            "id": "economy.codebooks.undecided_home_currency",
+            "name": "Home currency not chosen",
+            "name:cs": "Nezvolena domácí měna",
+            "name:en": "Home currency not chosen",
+            "description": "Choose the home currency of the books; new documents and fiscal years use it.",
+            "description:cs": "Zvol domácí měnu účetnictví — používají ji nové doklady a fiskální roky.",
+            "description:en": "Choose the home currency of the books; new documents and fiscal years use it.",
+            "class": "Shipard\\Module\\Economy\\Codebooks\\Checks\\UndecidedHomeCurrencyCheck",
+            "severity": "warning",
+            "interval": "5m",
+            "tags": ["setup"]
+        }
+    ],
+
     "config": [
         {
             "id": "economy.codebooks.fiscalPeriodTypes",

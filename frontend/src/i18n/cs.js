@@ -276,6 +276,7 @@ export default {
   'error.LLM_ERROR': 'AI model vrátil chybu: {message}',
   'error.STREAM_ERROR': 'Přenos odpovědi selhal ({message}) — odpověď se nemusela uložit',
   'error.CREATE_FAILED': 'Konverzaci se nepodařilo založit',
+  'error.SETUP_ALERT': 'Upozornění na chybějící nastavení nejde odložit ani zavřít — zmizí samo, jakmile nastavení doplníte',
 
   // ── Table browser ───────────────────────────────────────────────────────
   'browser.addRecord': 'Nový záznam',

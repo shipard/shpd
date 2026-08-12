@@ -23,7 +23,10 @@ dashboardu.
 > a navigace přes nový `NavItemVisibilityGate`, období DPH při uložení
 > registrace). Task 04 (`economy.homeCurrency`, konec
 > `getDefaultCurrency()`) hotový — vrstva C je parametricky kompletní
-> a `main.json` je čistě vrstva A.**
+> a `main.json` je čistě vrstva A. Z Fáze 3 hotový Task 05 — sedm
+> nových setup checků (§5.3), služba `SetupChecklist` (D12) a zákaz
+> snooze/dismiss pro setup alerty (D13); panel a karta ve feedu jsou
+> Task 06/07.**
 > Fázování viz §8, otevřené body §10.
 
 ---
@@ -294,6 +297,12 @@ ve feedu (D8) i pro sběr kroků průvodce (D4). Singleton checky, tedy
 relevantní: `missing_vat_registration` mlčí u neplátce, checky nad osnovou
 mlčí při rozhodnutí `none`. Žádný nový mechanismus — check si sám přečte
 settings.
+
+**Akce `open_panel` dodá až Task 06/07** (panel zatím neexistuje).
+Checky nad nerozhodnutým parametrem proto od Tasku 05 vracejí **prázdné
+`actions`** — karta/řádek se zobrazí bez tlačítka. Checky nad chybějícím
+řádkem (`open_form`) akce nesou od začátku. Sloupec „Primární akce"
+v tabulce popisuje cílový stav.
 
 **Severity `warning`**, ne `error`. Nejde o poruchu, jde o nedokončené
 nastavení; `error` je vyhrazený pro věci, které se rozbily.

@@ -264,6 +264,7 @@ export default {
   'error.LLM_ERROR': 'The AI model returned an error: {message}',
   'error.STREAM_ERROR': 'The response stream failed ({message}) — the reply may not have been saved',
   'error.CREATE_FAILED': 'Could not create the conversation',
+  'error.SETUP_ALERT': 'Setup alerts cannot be snoozed or dismissed — the item disappears once the setting is filled in',
 
   // ── Table browser ───────────────────────────────────────────────────────
   'browser.addRecord': 'New record',

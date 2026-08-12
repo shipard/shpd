@@ -60,3 +60,31 @@ upřesnění tam, kde na něm záleží, a fallback `'cz'` zrušit.
 
 **Priorita:** nízká dokud jsou všechny zdroje české; roste s prvním
 nečeským DS. Vědomě **mimo oblast** `ds-setup` (rozhodnutí Anny).
+
+---
+
+## `dismiss` alertu není trvalý — check ho při dalším běhu obnoví
+
+**Zjištěno:** 08/2026 při přípravě Fáze 3 `ds-setup`.
+
+`AlertReconciler::mergeFindings()` si existující řádky tahá
+`WHERE check_id = %s AND alert_state IN (ACTIVE, SNOOZED)`. Dismissnutý řádek
+v lookupu není, takže `$existingRow === null` a vloží se **nový** řádek se
+stavem `ACTIVE`. Index `idx_check_finding_state` je `type: "index"` nad
+`(check_id, finding_key, alert_state)`, takže ani nekoliduje.
+
+**Proti záměru:** komentář v `AlertsController` říká
+`Max 1 rok snooze (deliberate "navždy" je dismiss, ne snooze)` — dismiss má
+tedy být trvalý, ale fakticky funguje jako „skryj do dalšího běhu“
+a v tabulce se hromadí mrtvé řádky.
+
+**Směr řešení:** buď zahrnout `DISMISSED` do lookupu a dismissnutý řádek
+neoživovat (dismiss = trvalé potlačení této `finding_key`), nebo dismiss
+přeznačit na „potlač do změny obsahu findingu“. Rozhodnutí je věcné, ne
+technické — u různých checků se hodí různě.
+
+**Pro `ds-setup` to není blokující:** setup checky mají snooze i dismiss
+zakázaný (`ds-setup.md` D13), takže se jich chování dismissu netýká.
+
+**Priorita:** nízká, ale je to tichá nekonzistence mezi kódem a dokumentovaným
+záměrem — čím dřív se rozhodne, tím míň řádků bude třeba uklidit.

@@ -146,6 +146,13 @@
             "name:cs": "Zabezpečení",
             "name:en": "Security",
             "icon": "lock"
+        },
+        {
+            "id": "dsSetup",
+            "name": "Data source setup",
+            "name:cs": "Nastavení zdroje dat",
+            "name:en": "Data source setup",
+            "icon": "list-check"
         }
     ],
     "viewers": [
@@ -160,6 +167,7 @@
         }
     ],
     "settingsItems": [
+        { "panel": "dsSetup", "section": "app", "order": 5 },
         { "page": "appSettings", "section": "app", "order": 10 },
         { "viewer": "core.system.users",   "section": "other", "subsection": "other.system", "order": 20 },
         { "table": "core_system_user_identities",   "section": "other", "subsection": "other.system", "order": 22 },

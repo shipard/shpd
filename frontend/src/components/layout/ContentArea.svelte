@@ -5,6 +5,7 @@
   import ChatView from '../chat/ChatView.svelte';
   import SettingsPage from '../settings/SettingsPage.svelte';
   import AccountSecurity from '../account/AccountSecurity.svelte';
+  import DsSetup from '../settings/DsSetup.svelte';
   import { t } from '../../i18n/index.js';
 
   let { activeItem = null, onOpenThemePanel } = $props();
@@ -13,6 +14,7 @@
   // server posílá jen {type: 'panel', panelId}, mapa je tady.
   const panelComponents = {
     accountSecurity: AccountSecurity,
+    dsSetup: DsSetup,
   };
 
   const PanelComponent = $derived(

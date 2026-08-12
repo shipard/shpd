@@ -130,6 +130,25 @@ class SetupChecklistTest extends TestCase
         $this->assertSame([], $items);
     }
 
+    public function testParameterByCheckCoversAllUndecidedChecksInOrder(): void
+    {
+        // Regresní: nový parametrový check v ORDER nesmí zůstat bez ovládání
+        // v panelu — a mapa nesmí odkazovat na check, který v ORDER není.
+        foreach (SetupChecklist::ORDER as $checkId) {
+            if (str_contains($checkId, '.undecided_')) {
+                $this->assertArrayHasKey(
+                    $checkId,
+                    SetupChecklist::PARAMETER_BY_CHECK,
+                    "undecided check '{$checkId}' nemá mapovaný parametr",
+                );
+            }
+        }
+        foreach (SetupChecklist::PARAMETER_BY_CHECK as $checkId => $parameter) {
+            $this->assertContains($checkId, SetupChecklist::ORDER);
+            $this->assertContains($parameter, \Shipard\Core\Settings\LayerCParameters::keys());
+        }
+    }
+
     public function testDoesNotWriteToAlertsTable(): void
     {
         // Regresní test na D12: živý běh panelu nesmí zapisovat do DB —

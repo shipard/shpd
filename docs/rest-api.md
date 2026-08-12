@@ -178,6 +178,8 @@ http://{ip-adresa}/{ds-id}/api/v1/{tabulka}
 | `POST` | `/api/v1/_auth/sessions/revoke-others` | Odhlášení ostatních zařízení (session) |
 | `GET` | `/api/v1/_ui/settings/page/{pageId}` | Definice + hodnoty settings page (auth) |
 | `POST` | `/api/v1/_ui/settings/page/{pageId}` | Uložení hodnot settings page (auth) |
+| `GET` | `/api/v1/_setup/checklist` | Živý setup checklist + hodnoty parametrů vrstvy C (auth) |
+| `POST` | `/api/v1/_setup/parameters` | Zápis parametrů vrstvy C + okamžitý běh provisionerů (auth) |
 | `GET` | `/api/v1/_app/info` | Název/zkrácený název/ikona/logo aplikace — **veřejné** |
 | `GET` | `/api/v1/_app/branding/{slot}` | Binární obsah branding slotu — **veřejné**, immutable cache |
 | `POST` | `/api/v1/_app/branding/{slot}` | Upload obrázku slotu (multipart, pole `file`) — auth |
@@ -190,6 +192,22 @@ položky). Vrací `{"accountingState": 1|2, "messages": [...]}`. Doklad mimo
 stav 40 → `422 INVALID_DOC_STATE`, neexistující → `404`. Účtování při
 přechodech stavů běží automaticky přes `documentEventHandlers` — endpoint
 je pro ruční přeúčtování (alert / tlačítko v UI od Fáze 3).
+
+**`/_setup` endpointy** — backend panelu `dsSetup`
+([docs/ds-setup.md](ds-setup.md) D12/D14). `GET /_setup/checklist` spouští
+setup checky **naživo** přes `SetupChecklist` (ne z tabulky alertů) a vrací
+`{items, parameters, currencyOptions}` — položky v pořadí
+`SetupChecklist::ORDER`, u parametrových položek pole `parameter` s klíčem
+vrstvy C; `parameters` obsahuje hodnoty všech klíčů
+z `LayerCParameters::keys()` včetně `null` (nerozhodnuto). `POST
+/_setup/parameters` s body `{"values": {"economy.accountChart": "npo"}}`
+zapíše parametry (`null` = smazání klíče, validace přes
+`LayerCParameters::validate()`, neznámý klíč / špatná hodnota → `422
+VALIDATION_ERROR` s `details[{field, code, message}]`), pak okamžitě spustí
+dotčené provisionery (osnova, fiskální roky — gate na oba klíče). Selhání
+provisioneru parametr neodukládá — odpověď je 200 s neprázdným polem
+`warnings`. Odpověď má stejný tvar jako GET (+ `warnings`). Auth: přihlášený
+uživatel, bez `adminOnly`.
 
 **Veřejné `/_auth/oidc` endpointy:** všechny tři OIDC routy jsou výjimky
 z autentizace (`AuthMiddleware::isExempt()`) — celý flow běží před vznikem

@@ -48,6 +48,20 @@ final class SetupChecklist
         'economy.codebooks.undecided_home_currency',
     ];
 
+    /**
+     * Mapa check → klíč vrstvy C pro checky nad nerozhodnutým parametrem.
+     * Čte ji SetupController (`GET /_setup/checklist` pole `parameter`),
+     * aby panel věděl, jaké ovládání k položce vykreslit — mapování patří
+     * na server, ne do Svelte. Mění se spolu s ORDER; pokrytí všech
+     * `undecided_*` checků hlídá regresní test v SetupChecklistTest.
+     */
+    public const PARAMETER_BY_CHECK = [
+        'economy.codebooks.undecided_vat_agenda'        => 'economy.vatAgenda',
+        'economy.accounting.undecided_account_chart'    => 'economy.accountChart',
+        'economy.codebooks.undecided_fiscal_year_start' => 'economy.fiscalYearStartMonth',
+        'economy.codebooks.undecided_home_currency'     => 'economy.homeCurrency',
+    ];
+
     private const SETUP_TAG = 'setup';
 
     public function __construct(

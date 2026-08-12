@@ -1,6 +1,6 @@
 # ds-setup — Task 06: Panel „Co ještě chybí nastavit"
 
-**Stav:** naplánováno
+**Stav:** hotovo
 
 > PRD pro jednu Claude Code session. Design: `docs/ds-setup.md`,
 > rozhodnutí **D3, D12, D14**, kontrakt **§4** a **§5.2**. Druhý kus

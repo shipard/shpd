@@ -253,6 +253,10 @@ class Router
 			return $this->resolveAlertsRoute($subpath, $method);
 		}
 
+		if (str_starts_with($subpath, '/_setup')) {
+			return $this->resolveSetupRoute($subpath, $method);
+		}
+
 		if (str_starts_with($subpath, '/_accbal')) {
 			return $this->resolveAccbalRoute($subpath, $method);
 		}
@@ -776,6 +780,30 @@ class Router
 				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
 			}
 			return new Route('alerts', $m[2], null, $id);
+		}
+
+		return Response::error('NOT_FOUND', 'Not found', 404);
+	}
+
+	/** Routy panelu dsSetup (docs/ds-setup.md D14). */
+	private function resolveSetupRoute(string $subpath, string $method): Route|Response
+	{
+		$rest = substr($subpath, strlen('/_setup'));
+
+		// GET /_setup/checklist
+		if ($rest === '/checklist') {
+			if ($method !== 'GET') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('setup', 'checklist');
+		}
+
+		// POST /_setup/parameters
+		if ($rest === '/parameters') {
+			if ($method !== 'POST') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('setup', 'parameters');
 		}
 
 		return Response::error('NOT_FOUND', 'Not found', 404);

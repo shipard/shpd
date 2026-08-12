@@ -291,6 +291,7 @@ function dispatch(
 		'analysis' => dispatchAnalysis($route, $request, $auth, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher),
 		'exchange' => dispatchExchange($route, $request, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher),
 		'alerts' => dispatchAlerts($route, $request, $db, $alertCheckRegistry, $configRuntime, resolveLanguage($request, $resolved->config)),
+		'setup' => dispatchSetup($route, $request, $auth, $db, $alertCheckRegistry, $configRuntime, $modulePathResolver, resolveLanguage($request, $resolved->config)),
 		'accbal'  => dispatchAccbal($route, $request, $db, $configRuntime, $journalEventDispatcher, $resolved->config),
 		'accounting' => dispatchAccounting($route, $request, $db, $configRuntime, $journalEventDispatcher),
 		'bank'    => dispatchBank($route, $request, $auth, $tables, $db, $resolved, $configRuntime, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher, $journalEventDispatcher),
@@ -565,6 +566,31 @@ function dispatchAlerts(
 		'dismiss'   => $ctrl->dismiss((int) $route->id),
 		'unsnooze'  => $ctrl->unsnooze((int) $route->id),
 		default     => Response::error('INTERNAL_ERROR', "Unknown alerts action: {$route->action}", 500),
+	};
+}
+
+function dispatchSetup(
+	Route $route,
+	Request $request,
+	AuthContext $auth,
+	\Shipard\Core\Database\DataSourceConnection $db,
+	?\Shipard\Core\Alerts\AlertCheckRegistry $registry,
+	?\Shipard\Core\Config\ConfigRuntime $configRuntime,
+	ModulePathResolver $modulePathResolver,
+	string $language,
+): Response {
+	if ($registry === null) {
+		return Response::error('INTERNAL_ERROR', 'AlertCheckRegistry is required for /_setup endpoints', 500);
+	}
+	if ($configRuntime === null) {
+		return Response::error('INTERNAL_ERROR', 'ConfigRuntime is required for /_setup endpoints', 500);
+	}
+
+	$ctrl = new \Shipard\Api\Controller\SetupController($db, $registry, $configRuntime, $language, $modulePathResolver);
+	return match ($route->action) {
+		'checklist'  => $ctrl->checklist($auth),
+		'parameters' => $ctrl->saveParameters($request, $auth),
+		default      => Response::error('INTERNAL_ERROR', "Unknown setup action: {$route->action}", 500),
 	};
 }
 

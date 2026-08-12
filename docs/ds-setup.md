@@ -25,8 +25,10 @@ dashboardu.
 > `getDefaultCurrency()`) hotový — vrstva C je parametricky kompletní
 > a `main.json` je čistě vrstva A. Z Fáze 3 hotový Task 05 — sedm
 > nových setup checků (§5.3), služba `SetupChecklist` (D12) a zákaz
-> snooze/dismiss pro setup alerty (D13); panel a karta ve feedu jsou
-> Task 06/07.**
+> snooze/dismiss pro setup alerty (D13) — a Task 06 — panel `dsSetup`
+> v Nastavení (D14): `GET /_setup/checklist`, `POST /_setup/parameters`
+> s okamžitým během provisionerů, `DsSetup.svelte`. Karta ve feedu je
+> Task 07.**
 > Fázování viz §8, otevřené body §10.
 
 ---
@@ -179,7 +181,7 @@ nevznikne; nabídky checky vědomě nemají).
    │                                                              │
    │   setup checky (tags: ["setup"])                             │
    │      │  dopočítávají stav z dat a settings                   │
-   │      ├──► panel „Průvodce nastavením“   (settingsItems)      │
+   │      ├──► panel „Nastavení zdroje dat“  (settingsItems)      │
    │      ├──► jedna agregovaná karta feedu  (open_panel)         │
    │      └──► viewer alertů (snooze/dismiss jako dnes)           │
    │                                                              │

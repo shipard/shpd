@@ -137,6 +137,12 @@ Další typy polí (`select`, `checkbox`, `textarea`) přijdou s první
 stránkou, která je potřebuje — struktura definice je na to připravená
 (parser v `ModuleDefinition::fromArray()` whitelistuje typy).
 
+**Parametry vrstvy C (osnova, agenda DPH, fiskální rok, měna) settings
+stránku nemají a mít nebudou** — ovládají se v ručně psaném panelu
+`dsSetup` (`GET/POST /_setup/*`, komponenta `DsSetup.svelte`), protože
+potřebují vysvětlující UI a `vatAgenda` je tříhodnotová
+([docs/ds-setup.md](ds-setup.md) D14). Nehledej je mezi field typy.
+
 ## 7. Testy
 
 - `tests/Integration/Settings/SettingsStoreTest.php` — get/set/delete,

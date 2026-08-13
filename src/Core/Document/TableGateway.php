@@ -77,6 +77,16 @@ class TableGateway
             $originalData = $this->loadDocument((int) $data['id']);
         }
 
+        // Chybějící docState v update payloadu = stav se nemění. Injektáž před
+        // validate/beforeSave zajistí, že všechny Document hooky vidí efektivní
+        // stav — payload bez docState se nikdy netváří jako Koncept (10).
+        if ($this->docStates !== null && $originalData !== null) {
+            $stateCol = $this->docStates->stateColumn;
+            if (!array_key_exists($stateCol, $data) && isset($originalData[$stateCol])) {
+                $data[$stateCol] = (int) $originalData[$stateCol];
+            }
+        }
+
         $validation = $doc->validate($data);
         if (!$validation->isValid()) {
             return DocumentResult::validationFailed($validation);

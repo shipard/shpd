@@ -307,6 +307,65 @@ class TableGatewayTest extends TestCase
         $this->assertArrayNotHasKey('docStateMain', $gw->insertCalls[0]['data']);
     }
 
+    // --- saveDocument — injektáž efektivního docState na update ---------------
+
+    public function testSaveDocumentInjectsOriginalDocStateIntoUpdatePayload(): void
+    {
+        $doc = new TrackingDocument();
+        $gw = $this->makeGatewayWithDocStates(
+            $doc,
+            new DocStatesDefinition('docState', 'docStateMain', 'core.system.docStatesArchive'),
+            ['10' => ['mainState' => 1], '20' => ['mainState' => 2]],
+        );
+        $gw->storedRows[5] = ['id' => 5, 'title' => 'Invoice', 'docState' => 20, 'docStateMain' => 2];
+
+        // Data-save z formuláře: docState je system sloupec, v payloadu chybí.
+        $result = $gw->saveDocument(['id' => 5, 'title' => 'Invoice edited']);
+
+        $this->assertTrue($result->isSuccess());
+        // Hooky (beforeSave) už vidí efektivní stav — ne fallback na Koncept.
+        $this->assertSame(20, $doc->beforeSaveData['docState']);
+        // UPDATE dostane původní docState + přepočtený docStateMain.
+        $this->assertCount(1, $gw->updateCalls);
+        $this->assertSame(20, $gw->updateCalls[0]['data']['docState']);
+        $this->assertSame(2, $gw->updateCalls[0]['data']['docStateMain']);
+    }
+
+    public function testSaveDocumentInsertWithoutDocStateStaysUntouched(): void
+    {
+        $doc = new TrackingDocument();
+        $gw = $this->makeGatewayWithDocStates(
+            $doc,
+            new DocStatesDefinition('docState', 'docStateMain', 'core.system.docStatesArchive'),
+            ['10' => ['mainState' => 1]],
+        );
+
+        $result = $gw->saveDocument(['title' => 'Invoice']);
+
+        $this->assertTrue($result->isSuccess());
+        // Insert bez docState: žádná injektáž, žádný dopočet docStateMain.
+        $this->assertArrayNotHasKey('docState', $doc->beforeSaveData);
+        $this->assertArrayNotHasKey('docState', $gw->insertCalls[0]['data']);
+        $this->assertArrayNotHasKey('docStateMain', $gw->insertCalls[0]['data']);
+    }
+
+    public function testSaveDocumentExplicitDocStateInPayloadWinsOverOriginal(): void
+    {
+        $gw = $this->makeGatewayWithDocStates(
+            new DefaultDocument(),
+            new DocStatesDefinition('docState', 'docStateMain', 'core.system.docStatesArchive'),
+            ['10' => ['mainState' => 1], '20' => ['mainState' => 2]],
+        );
+        $gw->storedRows[5] = ['id' => 5, 'title' => 'Invoice', 'docState' => 20, 'docStateMain' => 2];
+
+        // State-only PUT: explicitní docState v payloadu se nesmí přepsat.
+        $result = $gw->saveDocument(['id' => 5, 'docState' => 10]);
+
+        $this->assertTrue($result->isSuccess());
+        $this->assertSame(10, $gw->updateCalls[0]['data']['docState']);
+        $this->assertSame(1, $gw->updateCalls[0]['data']['docStateMain']);
+    }
+
     // --- saveDocument — with child rows -------------------------------------
 
     public function testSaveDocumentSyncsChildRows(): void

@@ -490,6 +490,16 @@ sekcí**, ne podle prefixu module ID. Mechanismus je paralelní k Nastavení:
   položky nad tabulkami s prefixem `core_system_` nebo s `adminOnly: true`
   v definici tabulky — tentýž zdroj pravdy, který na datech vynucuje
   `TableAccessGuard`. Navigace tak jen zrcadlí serverové bariéry.
+  **Pozor na sémantiku vrstev:** viewer-level `adminOnly` je **úklid
+  navigace, ne serverová bariéra** — data chrání jen table-level
+  `adminOnly` / prefix `core_system_` (`TableAccessGuard`). Typický
+  případ: viewer dosažitelný ne-adminům jinou cestou (dashboard karta
+  s akcí `open_viewer`/`open_form`) — vzor `core.alerts.alerts`
+  (task `hosting-07b`, D7): viewer `adminOnly`, tabulka bez.
+- **Root leaf Chat** se emituje jen při aktivním `core.chat`
+  (`core_chat_conversations` v runtime tabulkách) a ne-adminovi na DS
+  s aktivním `hosting.core` se nevrací — identické s capability `chat`
+  v `GET /_ui/dashboard` (viz [dashboard.md](dashboard.md)).
 - **Fallback:** viewer/tabulka bez `navSection` (nebo s neznámou sekcí) padá do
   sekce `system`. Prázdné sekce se ve výstupu vynechají.
 

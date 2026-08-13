@@ -75,6 +75,16 @@ Fáze 1 (widget MVP) říkala *„přehled, ne přístupový bod"*. Fáze 2 ten 
   (`src/Core/Feed/`). Dva konzumenti registrované napevno v controlleru (D10);
   žádný plugin-registr. `MailSuggestionsSource` (`modules/core/mail/src/Feed/`),
   `AlertsSource` (`modules/core/alerts/src/Feed/`).
+- **Degradace dle modulů** (task `hosting-07b`): zdroj se vůbec nezaregistruje,
+  když jeho klíčová tabulka na DS není — mail zdroje vyžadují
+  `core_mail_incoming_messages`, `AlertsSource` `core_alerts_alerts`
+  (mapa tabulka → zdroj žije v `collectCards()`, `$tables` = runtime
+  `TableDefinition` mapa z dispatche). Dashboard tak nepadá na DS bez
+  `core.mail` (hosting DS).
+- **Per-source izolace**: `collectCards()` obaluje každý zdroj try-catch —
+  `\Throwable` se zaloguje (`Dashboard feed source failed: <class>`) a feed
+  pokračuje ostatními zdroji. Dashboard nevrátí 500, dokud funguje aspoň
+  jeho obálka.
 - **Řazení + strop** dělá `DashboardController::sortAndCap()`: seřaď dle
   `KIND_ORDER` (urgent/review/ready/info), uvnitř pásma `timestamp` DESC, ořízni
   na `MAX_CARDS` (~30); při ořezu přidej info kartu „a další…".
@@ -379,7 +389,8 @@ Logika (`MessageProposalApplier::unapply`):
   "data": {
     "generatedAt": "2026-06-28T08:42:11+00:00",
     "summary": { "aiText": null, "counts": { "urgent": 1, "review": 4, "ready": 3 } },
-    "cards": [ /* seřazené dle žebříčku, strop MAX_CARDS ~30 */ ]
+    "cards": [ /* seřazené dle žebříčku, strop MAX_CARDS ~30 */ ],
+    "capabilities": { "mailUpload": true, "chat": true }
   }
 }
 ```
@@ -389,6 +400,14 @@ Logika (`MessageProposalApplier::unapply`):
   actionable pásma (urgent/review/ready).
 - Přetečení stropu → karty se ořežou a přidá se závěrečná info karta
   „…a další nezpracovaná pošta" s `open_viewer` na `core.mail.incoming`.
+- `capabilities` (task `hosting-07b`, D9): frontend podle nich skrývá
+  ovládání funkcí, které na DS neexistují nebo uživateli nepatří.
+  `mailUpload` = přítomnost `core_mail_incoming_messages` (tlačítko Nahrát,
+  drag&drop, `MailUploadModal`); `chat` = přítomnost
+  `core_chat_conversations` **a** (`admin` nebo hosting neaktivní) —
+  výraz identický s podmínkou Chat root leafu v `NavigationController`
+  (D5 z hosting-07), aby `ChatLauncher` neobcházel skrytý nav leaf.
+  Chybějící pole (starší server) frontend čte jako obě `true`.
 
 ### `GET /_ui/dashboard/summary` (SSE)
 

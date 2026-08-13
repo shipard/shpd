@@ -41,6 +41,11 @@ vynechává fakturaci, helpdesk a HW evidenci.
 > ne-admin dostává serverem ořezanou navigaci (odvozené `adminOnly`),
 > landing = první root leaf; `PortalScreen` a `hasPortal` zanikly
 > (task `hosting-07-portal-in-shell`).
+> **Dashboard module guards** (2026-08-13): feed zdroje se registrují dle
+> přítomnosti modulu + per-source izolace (dashboard nepadá na hosting DS
+> bez core.mail), response nese `capabilities {mailUpload, chat}`, Chat
+> leaf vyžaduje aktivní core.chat, viewer Upozornění `adminOnly` na
+> deklaraci (task `hosting-07b-dashboard-module-guards`).
 
 ---
 

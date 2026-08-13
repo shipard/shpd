@@ -221,10 +221,13 @@ Formát hlavičky stránky a šablona: `docs/help-authoring.md`.
 - Ne-adminovi `NavigationController` strom ořezává (odvozené `adminOnly`:
   prefix `core_system_`, `adminOnly` na TableDefinition — tentýž zdroj
   pravdy jako `TableAccessGuard` — + explicitní `adminOnly: true` na
-  deklaraci vieweru/panelu); `$auth === null` filtruje fail-closed. Chat
-  se ne-adminovi na DS s aktivním `hosting.core` nevrací. Landing po
-  přihlášení = první root-level leaf stromu
-  (`navigationStore.ensureDefaultActiveItem(navTree)`).
+  deklaraci vieweru/panelu); `$auth === null` filtruje fail-closed.
+  Viewer-level `adminOnly` = úklid navigace, ne serverová bariéra
+  (vzor `core.alerts.alerts` — ne-admin alerty obsluhuje přes dashboard
+  feed). Chat leaf jen s aktivním `core.chat` a ne pro ne-admina na DS
+  s aktivním `hosting.core` — výraz identický s capability `chat`
+  v `GET /_ui/dashboard`. Landing po přihlášení = první root-level leaf
+  stromu (`navigationStore.ensureDefaultActiveItem(navTree)`).
 - `hideFromNavigation: true` funguje i na **vieweru** (nejen na tabulce) —
   skryje jen ten viewer; sdílenou tabulku dál zobrazují ostatní viewery
   (souhrnný `docs.core.heads` skrytý, Faktury přijaté/vydané nad sdílenou
@@ -237,9 +240,13 @@ Formát hlavičky stránky a šablona: `docs/help-authoring.md`.
 - Home obrazovka, výchozí po loginu (root-level leaf, `type: 'dashboard'`).
   **Prioritizovaný feed akčních karet** + tasks widget pod ním (fáze 1 widget
   mřížka nahrazena).
-- `GET /_ui/dashboard` → `{summary{aiText,counts}, cards[], tasks}`. Karty
-  agregují napevno registrované `FeedSource` zdroje (`MailSuggestionsSource`,
-  `AlertsSource` — `src/Core/Feed/` + moduly). **Řadí a stropuje server**
+- `GET /_ui/dashboard` → `{summary{aiText,counts}, cards[], capabilities}`.
+  Karty agregují napevno registrované `FeedSource` zdroje
+  (`MailSuggestionsSource`, `AlertsSource` — `src/Core/Feed/` + moduly);
+  zdroj se registruje jen při přítomnosti jeho klíčové tabulky na DS
+  a výjimka jednoho zdroje feed neshodí (per-source izolace).
+  `capabilities {mailUpload, chat}` řídí skrytí tlačítka Nahrát /
+  drag&drop / ChatLauncheru na frontendu. **Řadí a stropuje server**
   (`sortAndCap` dle `KIND_ORDER` urgent/review/ready/info + `timestamp` DESC,
   `MAX_CARDS ~30` + „a další…" karta). `buildTasksWidget` re-use fáze 1.
 - Kartový kontrakt `{id, source, kind, icon, stateStyle, title, subtitle,

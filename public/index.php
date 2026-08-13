@@ -279,7 +279,7 @@ function dispatch(
 		'chat'    => dispatchChat($route, $request, $auth, $db, $tables, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'meta'    => dispatchMeta($route->action, $route->table, $tables, resolveLanguage($request, $resolved->config)),
 		'ui'      => dispatchUi($route->action, $resolved->config, $modulePathResolver, resolveLanguage($request, $resolved->config), $configRuntime, $db, $auth, $tables),
-		'dashboard' => dispatchDashboard($route, $db, $configRuntime, resolveLanguage($request, $resolved->config), $resolved->config, $alertCheckRegistry),
+		'dashboard' => dispatchDashboard($route, $db, $configRuntime, resolveLanguage($request, $resolved->config), $resolved->config, $alertCheckRegistry, $tables, $auth),
 		'settings' => dispatchSettings($route, $request, $auth, $resolved->config, $modulePathResolver, resolveLanguage($request, $resolved->config), $configRuntime, $db, $tables),
 		'app'     => dispatchApp($route, $auth, $db, $resolved->config, $tables),
 		'form'    => dispatchForm($route, $request, $auth, $tables, $db, $formRegistry ?? new FormRegistry(), $configRuntime, $modulePathResolver, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), resolveLanguage($request, $resolved->config), $resolved->config, $lookupRegistry ?? new LookupRegistry(), $documentEventDispatcher),
@@ -1059,10 +1059,12 @@ function dispatchDashboard(
 	string $language,
 	?\Shipard\Core\Config\DataSourceConfig $dsConfig = null,
 	?\Shipard\Core\Alerts\AlertCheckRegistry $alertCheckRegistry = null,
+	array $tables = [],
+	?AuthContext $auth = null,
 ): Response {
 	$ctrl = new DashboardController();
 	return match ($route->action) {
-		'index'   => $ctrl->dashboard($db, $configRuntime, $language, $alertCheckRegistry),
+		'index'   => $ctrl->dashboard($db, $configRuntime, $language, $alertCheckRegistry, $tables, $auth),
 		'summary' => $ctrl->summary(
 			$db,
 			new \Shipard\Core\Dashboard\DashboardSummaryService(
@@ -1073,6 +1075,7 @@ function dispatchDashboard(
 			$configRuntime,
 			$language,
 			$alertCheckRegistry,
+			$tables,
 		),
 		default   => Response::error('INTERNAL_ERROR', "Unknown dashboard action: {$route->action}", 500),
 	};

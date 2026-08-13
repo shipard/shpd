@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Shipard\Api\Controller;
 
+use Shipard\Api\AuthContext;
 use Shipard\Api\Response;
 use Shipard\Core\Ai\Exception\LlmException;
 use Shipard\Core\Alerts\AlertCheckRegistry;
@@ -36,23 +37,38 @@ class DashboardController
     /** Prioritní žebříček pásem karet (nižší = výše). Sekundárně timestamp DESC. */
     private const array KIND_ORDER = ['urgent' => 0, 'review' => 1, 'ready' => 2, 'info' => 3];
 
+    /**
+     * @param array<string, \Shipard\Core\Database\TableDefinition> $tables
+     *        Runtime definice tabulek — řídí registraci zdrojů (D8)
+     *        a capabilities (D9). Prázdná mapa = fail-closed.
+     */
     public function dashboard(
         DataSourceConnection $db,
         ?ConfigRuntime $config = null,
         ?string $language = null,
         ?AlertCheckRegistry $alertRegistry = null,
+        array $tables = [],
+        ?AuthContext $auth = null,
     ): Response {
         $lang = $language ?? 'en';
 
-        [$cards, $truncated] = $this->collectCards($db, $config, $lang, $alertRegistry);
+        [$cards, $truncated] = $this->collectCards($db, $config, $lang, $alertRegistry, $tables);
         if ($truncated) {
             $cards[] = $this->andMoreCard($lang);
         }
 
         return Response::success([
-            'generatedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
-            'summary'     => ['aiText' => null, 'counts' => $this->countByKind($cards)],
-            'cards'       => $cards,
+            'generatedAt'  => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
+            'summary'      => ['aiText' => null, 'counts' => $this->countByKind($cards)],
+            'cards'        => $cards,
+            // Capabilities (D9) — frontend podle nich skrývá upload a
+            // ChatLauncher. `chat` musí zůstat identický s podmínkou Chat
+            // root leafu v NavigationController (D5 + D10).
+            'capabilities' => [
+                'mailUpload' => isset($tables['core_mail_incoming_messages']),
+                'chat'       => isset($tables['core_chat_conversations'])
+                    && (($auth?->isAdmin ?? false) || !isset($tables['hosting_core_data_sources'])),
+            ],
         ]);
     }
 
@@ -71,10 +87,11 @@ class DashboardController
         ?ConfigRuntime $config = null,
         ?string $language = null,
         ?AlertCheckRegistry $alertRegistry = null,
+        array $tables = [],
     ): Response {
         $lang = $language ?? 'en';
 
-        [$cards] = $this->collectCards($db, $config, $lang, $alertRegistry);
+        [$cards] = $this->collectCards($db, $config, $lang, $alertRegistry, $tables);
 
         return Response::stream(
             function () use ($service, $cards, $lang): void {
@@ -107,20 +124,34 @@ class DashboardController
         ?ConfigRuntime $config,
         string $lang,
         ?AlertCheckRegistry $alertRegistry = null,
+        array $tables = [],
     ): array {
         $ctx = new FeedContext($db, $config, $lang, self::MAX_CARDS);
 
-        /** @var list<FeedSource> $sources — napevno registrované (D10). */
-        $sources = [
-            new MailSuggestionsSource(),
-            new MailDigestSource(),
-            new AlertsSource($alertRegistry),
-        ];
+        // Zdroje se registrují podle přítomnosti klíčové tabulky na DS (D8) —
+        // dashboard nesmí padat na DS bez core.mail / core.alerts (hosting DS).
+        // Mapování tabulka → zdroj drží controller; zdroje zůstávají napevno
+        // registrované (dashboard.md D10), žádné nové rozhraní na FeedSource.
+        /** @var list<FeedSource> $sources */
+        $sources = [];
+        if (isset($tables['core_mail_incoming_messages'])) {
+            $sources[] = new MailSuggestionsSource();
+            $sources[] = new MailDigestSource();
+        }
+        if (isset($tables['core_alerts_alerts'])) {
+            $sources[] = new AlertsSource($alertRegistry);
+        }
 
         $cards = [];
         foreach ($sources as $src) {
-            foreach ($src->collectCards($ctx) as $card) {
-                $cards[] = $card;
+            // Per-source izolace (D8): výjimka jednoho zdroje se zaloguje
+            // a feed pokračuje ostatními zdroji.
+            try {
+                foreach ($src->collectCards($ctx) as $card) {
+                    $cards[] = $card;
+                }
+            } catch (\Throwable $e) {
+                ErrorLogger::logException($e, 'Dashboard feed source failed: ' . $src::class);
             }
         }
 

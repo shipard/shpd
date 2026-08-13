@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Shipard\Tests\Unit\Api\Controller;
 
 use PHPUnit\Framework\TestCase;
+use Shipard\Api\AuthContext;
 use Shipard\Api\Controller\DashboardController;
 use Shipard\Api\Response;
 use Shipard\Core\Ai\AiBackendResolver;
@@ -14,6 +15,8 @@ use Shipard\Core\Ai\LlmChatResult;
 use Shipard\Core\Ai\LlmClient;
 use Shipard\Core\Dashboard\DashboardSummaryService;
 use Shipard\Core\Database\DataSourceConnection;
+use Shipard\Core\Database\TableDefinition;
+use Shipard\Core\Logging\ErrorLogger;
 
 /**
  * Unit testy pro DashboardController.
@@ -25,6 +28,52 @@ use Shipard\Core\Database\DataSourceConnection;
  */
 final class DashboardControllerTest extends TestCase
 {
+    private string $logPath;
+
+    protected function setUp(): void
+    {
+        // Per-source izolace loguje výjimky — log do tempu, ne /opt.
+        $this->logPath = sys_get_temp_dir() . '/shpd_dashctrl_' . uniqid('', true) . '.log';
+        ErrorLogger::resetForTesting();
+        ErrorLogger::setLogPath($this->logPath);
+    }
+
+    protected function tearDown(): void
+    {
+        ErrorLogger::resetForTesting();
+        @unlink($this->logPath);
+    }
+
+    /**
+     * Runtime mapa tabulek pro dashboard() — hodnoty jsou minimální
+     * TableDefinition, controller dělá jen isset().
+     *
+     * @return array<string, TableDefinition>
+     */
+    private function tables(string ...$names): array
+    {
+        $map = [];
+        foreach ($names as $name) {
+            $map[$name] = new TableDefinition(
+                tableId: 999,
+                name: $name,
+                displayPattern: null,
+                columnGroups: [],
+                columns: [],
+                indexes: [],
+                childTables: [],
+                docStates: null,
+            );
+        }
+        return $map;
+    }
+
+    /** Mapa běžného DS — mail i alerty aktivní. */
+    private function fullTables(): array
+    {
+        return $this->tables('core_mail_incoming_messages', 'core_alerts_alerts');
+    }
+
     // ── sortAndCap / countByKind (čisté funkce) ──────────────────────────────
 
     /** @return array<string,mixed> */
@@ -97,7 +146,7 @@ final class DashboardControllerTest extends TestCase
         $db->method('fetchAll')->willReturn([]);
 
         $ctrl = new DashboardController();
-        $response = $ctrl->dashboard($db, null, 'cs');
+        $response = $ctrl->dashboard($db, null, 'cs', null, $this->fullTables());
 
         $payload = $response->getPayload();
         $this->assertTrue($payload['success']);
@@ -160,7 +209,7 @@ final class DashboardControllerTest extends TestCase
         );
 
         $ctrl = new DashboardController();
-        $data = $ctrl->dashboard($db, null, 'cs')->getPayload()['data'];
+        $data = $ctrl->dashboard($db, null, 'cs', null, $this->fullTables())->getPayload()['data'];
 
         $this->assertCount(2, $data['cards']);
         // urgent (alert) před ready (mail)
@@ -187,13 +236,151 @@ final class DashboardControllerTest extends TestCase
         );
 
         $ctrl = new DashboardController();
-        $data = $ctrl->dashboard($db, null, 'cs')->getPayload()['data'];
+        $data = $ctrl->dashboard($db, null, 'cs', null, $this->fullTables())->getPayload()['data'];
 
         $this->assertCount(31, $data['cards']); // 30 + „a další" karta
         $last = $data['cards'][30];
         $this->assertSame('mail_more', $last['id']);
         $this->assertSame('info', $last['kind']);
         $this->assertSame('open_viewer', $last['actions'][0]['kind']);
+    }
+
+    // ── degradace dle modulů + per-source izolace + capabilities (07b) ──────
+
+    /** DB mock z testDashboardWiresBothSourcesAndSorts — mail i alert karta. */
+    private function bothSourcesDb(): DataSourceConnection
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturn(null);
+        $db->method('fetchAll')->willReturnCallback(
+            static function (string $sql): array {
+                if (str_contains($sql, 'core_alerts_alerts') && str_contains($sql, 'GROUP BY')) {
+                    return [[
+                        'check_id' => 'chk', 'cnt' => 1, 'max_severity' => 30,
+                        'last_at' => '2026-06-28 08:00:00', 'first_at' => '2026-06-28 08:00:00',
+                    ]];
+                }
+                if (str_contains($sql, 'core_alerts_alerts')) {
+                    return [[
+                        'id' => 7, 'check_id' => 'chk', 'title' => 'Chyba', 'message' => 'm',
+                        'severity' => 30, 'actions' => null,
+                        'first_seen_at' => '2026-06-28 08:00:00', 'last_seen_at' => '2026-06-28 08:00:00',
+                    ]];
+                }
+                if (str_contains($sql, 'proposed_type')) {
+                    return [self::suggestionRow(2, 1, 'Faktura')];
+                }
+                return [];
+            },
+        );
+        return $db;
+    }
+
+    public function testMailSourcesSkippedWithoutMailTable(): void
+    {
+        // DS bez core.mail (hosting DS): mail zdroje se nezaregistrují —
+        // žádný dotaz na mail tabulky, response 200 jen s alert kartami.
+        $ctrl = new DashboardController();
+        $data = $ctrl->dashboard(
+            $this->bothSourcesDb(),
+            null,
+            'cs',
+            null,
+            $this->tables('core_alerts_alerts'),
+        )->getPayload()['data'];
+
+        $this->assertSame(['alert:7'], array_column($data['cards'], 'id'));
+    }
+
+    public function testAlertsSourceSkippedWithoutAlertsTable(): void
+    {
+        $ctrl = new DashboardController();
+        $data = $ctrl->dashboard(
+            $this->bothSourcesDb(),
+            null,
+            'cs',
+            null,
+            $this->tables('core_mail_incoming_messages'),
+        )->getPayload()['data'];
+
+        $this->assertSame(['mail_suggestion:2'], array_column($data['cards'], 'id'));
+    }
+
+    public function testNoTablesYieldsEmptyFeedNotError(): void
+    {
+        // Prázdná mapa (degradovaný kontext) = žádné zdroje, žádný dotaz,
+        // žádná chyba — DB mock bez stubů by na volání spadl.
+        $ctrl = new DashboardController();
+        $data = $ctrl->dashboard(
+            $this->createMock(DataSourceConnection::class),
+            null,
+            'cs',
+        )->getPayload()['data'];
+
+        $this->assertSame([], $data['cards']);
+    }
+
+    public function testFailingSourceIsIsolated(): void
+    {
+        // Mail dotaz vyhodí výjimku (vzor: chybějící tabulka → Dibi
+        // exception) — zaloguje se a feed pokračuje alert kartami.
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturn(null);
+        $db->method('fetchAll')->willReturnCallback(
+            static function (string $sql): array {
+                if (str_contains($sql, 'core_alerts_alerts') && str_contains($sql, 'GROUP BY')) {
+                    return [[
+                        'check_id' => 'chk', 'cnt' => 1, 'max_severity' => 30,
+                        'last_at' => '2026-06-28 08:00:00', 'first_at' => '2026-06-28 08:00:00',
+                    ]];
+                }
+                if (str_contains($sql, 'core_alerts_alerts')) {
+                    return [[
+                        'id' => 7, 'check_id' => 'chk', 'title' => 'Chyba', 'message' => 'm',
+                        'severity' => 30, 'actions' => null,
+                        'first_seen_at' => '2026-06-28 08:00:00', 'last_seen_at' => '2026-06-28 08:00:00',
+                    ]];
+                }
+                throw new \RuntimeException("Table 'x.core_mail_incoming_messages' doesn't exist");
+            },
+        );
+
+        $ctrl = new DashboardController();
+        $data = $ctrl->dashboard($db, null, 'cs', null, $this->fullTables())->getPayload()['data'];
+
+        $this->assertSame(['alert:7'], array_column($data['cards'], 'id'));
+        $this->assertStringContainsString('Dashboard feed source failed', (string) file_get_contents($this->logPath));
+    }
+
+    public function testCapabilitiesReflectTablesAndAuth(): void
+    {
+        $ctrl  = new DashboardController();
+        $db    = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturn(null);
+        $db->method('fetchAll')->willReturn([]);
+        $admin    = new AuthContext(isAuthenticated: true, userId: 1, isAdmin: true);
+        $nonAdmin = new AuthContext(isAuthenticated: true, userId: 2, isAdmin: false);
+
+        $caps = fn(array $tables, ?AuthContext $auth) => $ctrl
+            ->dashboard($db, null, 'cs', null, $tables, $auth)
+            ->getPayload()['data']['capabilities'];
+
+        // Běžný DS s mail + chat: obě true (bez ohledu na admin flag).
+        $this->assertSame(
+            ['mailUpload' => true, 'chat' => true],
+            $caps($this->tables('core_mail_incoming_messages', 'core_chat_conversations'), $nonAdmin),
+        );
+        // DS bez mail/chat modulů: obě false.
+        $this->assertSame(
+            ['mailUpload' => false, 'chat' => false],
+            $caps($this->tables('core_alerts_alerts'), $admin),
+        );
+        // Aktivní chat + hosting: ne-admin false (D5), admin true.
+        $hostingTables = $this->tables('core_chat_conversations', 'hosting_core_data_sources');
+        $this->assertFalse($caps($hostingTables, $nonAdmin)['chat']);
+        $this->assertTrue($caps($hostingTables, $admin)['chat']);
+        // $auth null (degradace) = fail-closed jako ne-admin.
+        $this->assertFalse($caps($hostingTables, null)['chat']);
     }
 
     // ── summary() — SSE AI shrnutí (fáze 2b) ─────────────────────────────────
@@ -272,7 +459,7 @@ final class DashboardControllerTest extends TestCase
 
         $ctrl = new DashboardController();
         $out  = $this->runProducer(
-            $ctrl->summary($db, $this->summaryService($db, $llm), null, 'cs'),
+            $ctrl->summary($db, $this->summaryService($db, $llm), null, 'cs', null, $this->fullTables()),
         );
 
         $this->assertStringContainsString('event: text', $out);
@@ -292,7 +479,7 @@ final class DashboardControllerTest extends TestCase
 
         $ctrl = new DashboardController();
         $out  = $this->runProducer(
-            $ctrl->summary($db, $this->summaryService($db, $llm), null, 'cs'),
+            $ctrl->summary($db, $this->summaryService($db, $llm), null, 'cs', null, $this->fullTables()),
         );
 
         $this->assertStringContainsString('event: error', $out);

@@ -80,9 +80,6 @@ class AppController
             // s brandingem — je to jen barva sidebaru, nic citlivého. Klient
             // z něj počítá efektivní vzhled pro follow-uživatele.
             'theme'       => is_array($values['app.theme']) ? $values['app.theme'] : null,
-            // Aktivní modul hosting.core → frontend ukáže ne-adminům
-            // portálovou obrazovku (D10). Jen bool — endpoint je veřejný.
-            'hasPortal'   => isset($this->tables['hosting_core_data_sources']),
             // Auth politika pro login obrazovku — jen id + label providerů,
             // nikdy clientId/secret/issuer.
             'auth'        => [

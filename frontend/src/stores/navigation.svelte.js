@@ -137,14 +137,32 @@ function consumePendingViewGroup() {
 }
 
 /**
- * Nastav Dashboard jako výchozí activeItem v app módu — voláno
- * po initializaci, pokud zatím není nic vybraného. Settings mód
- * tím neovlivňujeme.
+ * Nastav výchozí activeItem v app módu — voláno po loadu navigace, pokud
+ * zatím není nic vybraného. Výchozí = první root-level leaf stromu (uzel
+ * s `type`; sekce bez `type` se přeskočí) — na hosting DS portál, jinde
+ * Dashboard (D6). Fallback při prázdném/chybějícím stromu: Dashboard.
+ * Settings/account mód tím neovlivňujeme.
  */
-function ensureDefaultActiveItem() {
-  if (mode === 'app' && appActiveItem === null) {
-    appActiveItem = { ...DASHBOARD_ITEM };
+function ensureDefaultActiveItem(navTree = null) {
+  if (mode !== 'app' || appActiveItem !== null) {
+    return;
   }
+  const leaf = Array.isArray(navTree) ? navTree.find((n) => n?.type) : null;
+  if (!leaf) {
+    appActiveItem = { ...DASHBOARD_ITEM };
+    return;
+  }
+  appActiveItem = {
+    id: leaf.id,
+    label: leaf.label,
+    type: leaf.type,
+    table: leaf.table ?? null,
+    viewerId: leaf.viewerId ?? null,
+    pageId: leaf.pageId ?? null,
+    panelId: leaf.panelId ?? null,
+    filter: leaf.filter ?? null,
+    fixedViewGroup: leaf.fixedViewGroup ?? null,
+  };
 }
 
 function enterSettings() {

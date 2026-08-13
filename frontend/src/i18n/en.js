@@ -634,7 +634,6 @@ export default {
   'account.security.revokeOthers': 'Sign out other devices',
 
   // Hosting portal (D10) — "my data sources" screen for non-admins
-  'portal.heading': 'Portal',
   'portal.subtitle': 'My data sources',
   'portal.loading': 'Loading…',
   'portal.error': 'Failed to load the list of data sources.',

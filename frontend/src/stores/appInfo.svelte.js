@@ -25,7 +25,6 @@ let info = $state({
   companyLogo: null, // { url, hash } | null
   theme: null,       // { mode, custom } | null — DS default vzhledu
   auth: null,        // { local, providers: [{id, label}] } | null — pro login obrazovku
-  hasPortal: false,  // aktivní modul hosting.core → ne-admin dostane portál (D10)
 });
 
 async function load() {
@@ -39,7 +38,6 @@ async function load() {
         companyLogo: response.data.companyLogo ?? null,
         theme: response.data.theme ?? null,
         auth: response.data.auth ?? null,
-        hasPortal: response.data.hasPortal === true,
       };
       // DS default → theme store (efektivní vzhled pro follow-uživatele).
       themeStore.setDsDefault(info.theme);
@@ -74,7 +72,6 @@ export const appInfoStore = {
   get companyLogo() { return info.companyLogo; },
   get theme()       { return info.theme; },
   get auth()        { return info.auth; },
-  get hasPortal()   { return info.hasPortal; },
   load,
   apply,
 };

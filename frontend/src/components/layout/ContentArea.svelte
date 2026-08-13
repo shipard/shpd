@@ -6,6 +6,7 @@
   import SettingsPage from '../settings/SettingsPage.svelte';
   import AccountSecurity from '../account/AccountSecurity.svelte';
   import DsSetup from '../settings/DsSetup.svelte';
+  import PortalContent from '../portal/PortalContent.svelte';
   import { t } from '../../i18n/index.js';
 
   let { activeItem = null, onOpenThemePanel } = $props();
@@ -15,6 +16,7 @@
   const panelComponents = {
     accountSecurity: AccountSecurity,
     dsSetup: DsSetup,
+    hostingPortal: PortalContent,
   };
 
   const PanelComponent = $derived(

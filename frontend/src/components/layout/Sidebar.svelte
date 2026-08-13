@@ -80,9 +80,10 @@
         // (Dashboard) má `type` a žádné children — netřeba expandovat.
         expanded = new Set(navTree.filter(g => g.children).map(g => g.id));
         // Po loadu app navigace (ne settings) zajistíme, že je něco vybráno —
-        // typicky Dashboard u čerstvého loginu.
+        // první root-level leaf stromu (na hosting DS portál, jinde
+        // Dashboard, D6).
         if (navigationStore.mode === 'app') {
-          navigationStore.ensureDefaultActiveItem();
+          navigationStore.ensureDefaultActiveItem(navTree);
         }
       } catch {
         error = t('sidebar.navigationLoadFailed');
@@ -417,7 +418,9 @@
           </button>
         {/if}
 
-        {#if navigationStore.mode !== 'settings'}
+        <!-- Nastavení aplikace jen adminovi — server settings pages už
+             chrání, tady se jen skrývá mrtvý odkaz (princip D9). -->
+        {#if navigationStore.mode !== 'settings' && authStore.isAdmin}
           <button class="shpd-sidebar__user-menu-item" onclick={handleAppSettings} role="menuitem">
             <Icon icon={iconAppSettings} size="sm" />
             <span>{t('sidebar.appSettings')}</span>

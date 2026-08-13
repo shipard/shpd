@@ -647,7 +647,6 @@ export default {
   'account.security.revokeOthers': 'Odhlásit ostatní zařízení',
 
   // Portál hostingu (D10) — obrazovka „moje DS" pro ne-adminy
-  'portal.heading': 'Portál',
   'portal.subtitle': 'Moje zdroje dat',
   'portal.loading': 'Načítám…',
   'portal.error': 'Seznam zdrojů dat se nepodařilo načíst.',

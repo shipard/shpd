@@ -53,6 +53,35 @@ class HostingModuleDefinitionTest extends TestCase
         }
     }
 
+    public function testServersTableShape(): void
+    {
+        $raw = JsoncParser::parseFile(
+            dirname(__DIR__, 5) . self::MODULE_PATH . '/tables/hosting_core_servers.jsonc',
+        );
+        $def = TableDefinition::fromArray($raw);
+
+        $columnIds = array_map(static fn ($c) => $c->id, $def->columns);
+        foreach (['name', 'fqdn', 'can_provision', 'provision_default'] as $expected) {
+            $this->assertContains($expected, $columnIds);
+        }
+    }
+
+    public function testServersHaveDocumentClass(): void
+    {
+        // Jediný default server (hosting-08 D1) vynucuje HostingServerDocument
+        // v afterPersist — bez registrace by servery jely přes DefaultDocument.
+        $module = ModuleLoader::loadModule(dirname(__DIR__, 5) . self::MODULE_PATH);
+
+        $byTable = [];
+        foreach ($module->documentClasses as $dc) {
+            $byTable[$dc['table']] = $dc['class'];
+        }
+        $this->assertSame(
+            'Shipard\Module\Hosting\Core\HostingServerDocument',
+            $byTable['hosting_core_servers'] ?? null,
+        );
+    }
+
     public function testDataSourcesTableShape(): void
     {
         $raw = JsoncParser::parseFile(

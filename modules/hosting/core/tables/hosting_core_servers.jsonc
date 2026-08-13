@@ -107,6 +107,15 @@
             "group": "status"
         },
         {
+            "id": "provision_default",
+            "name": "Default for new DS",
+            "name:cs": "Výchozí pro nové DS",
+            "name:en": "Default for new DS",
+            "type": "boolean",
+            "default": 0,
+            "group": "status"
+        },
+        {
             "id": "last_seen",
             "name": "Last seen",
             "name:cs": "Naposledy viděn",

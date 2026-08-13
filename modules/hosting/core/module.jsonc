@@ -27,6 +27,10 @@
 
     "documentClasses": [
         {
+            "table": "hosting_core_servers",
+            "class": "Shipard\\Module\\Hosting\\Core\\HostingServerDocument"
+        },
+        {
             "table": "hosting_core_data_sources",
             "class": "Shipard\\Module\\Hosting\\Core\\HostingDataSourceDocument"
         },

@@ -17,6 +17,7 @@ class ServersForm extends TableForm
                     ->input('name', required: true)
                     ->input('fqdn', required: true)
                     ->checkbox('can_provision')
+                    ->checkbox('provision_default')
                     ->textarea('note')
             ->build();
 

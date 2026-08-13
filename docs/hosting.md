@@ -46,6 +46,11 @@ vynechává fakturaci, helpdesk a HW evidenci.
 > bez core.mail), response nese `capabilities {mailUpload, chat}`, Chat
 > leaf vyžaduje aktivní core.chat, viewer Upozornění `adminOnly` na
 > deklaraci (task `hosting-07b-dashboard-module-guards`).
+> **Self-service zakládání DS** (2026-08-13): wizard na portálu —
+> `provision_default` na serverech (feature switch), `selfService`
+> install moduly, web_id validace + blocklist, portálové endpointy
+> create-meta/check-web-id/create-datasource, pending karty s pollingem
+> (task `hosting-08-self-service-ds`, sekce 6.1).
 
 ---
 
@@ -223,7 +228,9 @@ Jeden běh (cron slot `two-minutes`; `--dry-run` = náhled fronty přes
    language, country, host, owner: {email, name, sub},
    oidc: {issuer, client_id, client_secret, label}}` — `language`
    a `country` = vrstva A z admin formuláře (ds-setup D1/D7; chybějící
-   hodnota = chyba požadavku, agent nedoplňuje default), `sub` =
+   hodnota = chyba požadavku, agent nedoplňuje default; požadavek může
+   vzniknout i self-service z portálu — sekce 6.1, payload beze změny),
+   `sub` =
    (string) id vlastníka (přesně co OP dává do id_tokenu), issuer ze
    settingu (D12), secret dešifrovaný (jediné místo, kde opouští
    hosting — https, jednorázově). Pro každý požadavek (chyba jednoho
@@ -392,7 +399,52 @@ v1: `is_admin` je jediný stupeň — admin hostingu má i `core_system_*`
 Branding portálu = existující app-settings (název, logo) — starý
 `hostings` číselník není potřeba, jeden hosting DS = jeden hosting.
 
-### 6.1 Doména portálu
+### 6.1 Self-service zakládání DS (task `hosting-08-self-service-ds`)
+
+Každý přihlášený uživatel hostingu (admin i ne-admin) si může z portálu
+založit nový DS. Modal wizard (název, web_id se živou kontrolou, země/jazyk
+s defaults cz/cs) vytvoří řádek `hosting_core_data_sources` s `lifecycle =
+request` a `owner` = session uživatel — o zbytek se stará existující
+provisioning pipeline Fáze 2 (payload i confirm beze změny).
+
+- **Feature switch = default server.** Boolean `provision_default` na
+  `hosting_core_servers` („Výchozí pro nové DS"); smí ho mít jen server
+  s `can_provision`, nejvýše jeden — uložení řádku s příznakem ostatním
+  příznak shodí (`HostingServerDocument::afterPersist`, poslední vyhrává).
+  Bez default serveru se tlačítko na portálu nekreslí a create vrací
+  `no_server`.
+- **Install moduly** pro self-service označuje top-level
+  `"selfService": true` v jejich `module.jsonc` (`install.base` ano,
+  `install.hosting` ne). Roletka ve wizardu se kreslí jen při >1 nabízeném;
+  při jediném se použije implicitně.
+  `InstallModuleRegistry::list($language, $selfServiceOnly)` filtruje
+  a lokalizuje name/description.
+- **web_id**: 3–50 znaků `a-z0-9-`, bez krajních pomlček (subdoména —
+  DNS/certifikáty), normalizace trim+lowercase, blocklist rezervovaných
+  hodnot (`www`, `mail`, `api`, …) — vše v `HostingDataSourceDocument`
+  (platí i pro adminský formulář; kontroly běží jen při novém řádku nebo
+  změně hodnoty, editace se zachovaným web_id projde). Sdílená pravidla
+  `checkWebIdRules()` používá i živá kontrola.
+- **Portálové endpointy** (guard = modul aktivní + session): `GET
+  /_hosting/portal/create-meta` (canCreate + reason
+  `no_server|open_request|max_owned`, nabídka modulů/jazyků/zemí), `GET
+  /_hosting/portal/check-web-id?value=…` (informativní; autorita je
+  validace při create), `POST /_hosting/portal/create-datasource` (limity
+  znovu, zápis přes `TableGateway::saveDocument`, validace 422
+  s per-field detaily).
+- **Limity**: max 1 otevřený požadavek (request/creating) na uživatele;
+  strop vlastněných DS = setting `hosting.selfService.maxOwned`
+  (text field na settings page Hosting; prázdné = 5, 0 = bez limitu).
+- **Pending karty**: `my-datasources` vrací i vlastní řádky
+  request/creating/failed (`state: creating|failed`, bez stats, bez
+  vstupu); frontend při existenci creating karty polluje po ~15 s,
+  failed se ukazuje bez detailu chyby (detail vidí admin v evidenci,
+  retry = admin).
+
+Release kroky: `ds-upgrade` na hosting DS (nový sloupec serverů);
+zapnutí = admin označí server příznakem „Výchozí pro nové DS".
+
+### 6.2 Doména portálu
 
 Hosting DS je obyčejný DS — doména se přidá standardně:
 

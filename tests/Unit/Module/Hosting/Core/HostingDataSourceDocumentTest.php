@@ -21,15 +21,19 @@ class HostingDataSourceDocumentTest extends TestCase
 
     /**
      * @param array<string, mixed> $settings dekódované hodnoty core_system_settings
+     * @param list<string> $takenWebIds obsazené web_id v evidenci
+     * @param array<int, string> $originalWebIds web_id existujících řádků dle id
      */
     private function createDocument(
         array $settings = ['hosting.baseDomain' => 'shpd.dev'],
         array $activeUserIds = [7],
         array $existingDsIds = [],
+        array $takenWebIds = [],
+        array $originalWebIds = [],
     ): HostingDataSourceDocument {
         $db = $this->createMock(\Dibi\Connection::class);
         $db->method('fetchSingle')->willReturnCallback(
-            function (mixed ...$args) use ($settings, $activeUserIds, $existingDsIds): mixed {
+            function (mixed ...$args) use ($settings, $activeUserIds, $existingDsIds, $takenWebIds, $originalWebIds): mixed {
                 $sql = (string) $args[0];
                 if (str_contains($sql, 'core_system_settings')) {
                     $key = (string) $args[1];
@@ -37,6 +41,12 @@ class HostingDataSourceDocumentTest extends TestCase
                 }
                 if (str_contains($sql, 'core_system_users')) {
                     return in_array((int) $args[1], $activeUserIds, true) ? (int) $args[1] : null;
+                }
+                if (str_contains($sql, 'SELECT web_id FROM hosting_core_data_sources')) {
+                    return $originalWebIds[(int) $args[1]] ?? null;
+                }
+                if (str_contains($sql, 'WHERE web_id')) {
+                    return in_array((string) $args[1], $takenWebIds, true) ? 1 : null;
                 }
                 if (str_contains($sql, 'hosting_core_data_sources')) {
                     return in_array((string) $args[1], $existingDsIds, true) ? 1 : null;
@@ -316,5 +326,120 @@ class HostingDataSourceDocumentTest extends TestCase
         $data = ['id' => 5, 'lifecycle' => 'request', 'name' => 'Edit'];
 
         $this->assertTrue($doc->validate($data)->isValid());
+    }
+
+    // -------------------------------------------------------------------------
+    // validate — web_id formát, blocklist, duplicita (hosting-08 D3)
+    // -------------------------------------------------------------------------
+
+    /** @return array<string, array{string}> */
+    public static function invalidWebIdProvider(): array
+    {
+        return [
+            'příliš krátké'    => ['ab'],
+            'příliš dlouhé'    => [str_repeat('a', 51)],
+            'podtržítko'       => ['nova_firma'],
+            'pomlčka na kraji' => ['-nova'],
+            'pomlčka na konci' => ['nova-'],
+            'diakritika'       => ['firmička'],
+            'tečka'            => ['nova.firma'],
+        ];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('invalidWebIdProvider')]
+    public function testInvalidWebIdFormatFails(string $webId): void
+    {
+        $doc = $this->createDocument();
+        $data = $this->requestData(['web_id' => $webId]);
+
+        $result = $doc->validate($data);
+        $this->assertFalse($result->isValid());
+        $this->assertSame('web_id', $result->getErrors()[0]->column);
+    }
+
+    public function testUppercaseWebIdIsNormalizedAndPasses(): void
+    {
+        $doc = $this->createDocument();
+        $data = $this->requestData(['web_id' => '  NoVa-Firma ']);
+
+        $this->assertTrue($doc->validate($data)->isValid());
+        $this->assertSame('nova-firma', $data['web_id']);
+    }
+
+    public function testReservedWebIdFailsOnInsert(): void
+    {
+        $doc = $this->createDocument();
+        $data = $this->requestData(['web_id' => 'home']);
+
+        $result = $doc->validate($data);
+        $this->assertFalse($result->isValid());
+        $this->assertSame('RESERVED', $result->getErrors()[0]->code);
+    }
+
+    public function testReservedWebIdFailsOnChange(): void
+    {
+        $doc = $this->createDocument(originalWebIds: [5 => 'stara-firma']);
+        $data = ['id' => 5, 'name' => 'Edit', 'web_id' => 'home'];
+
+        $result = $doc->validate($data);
+        $this->assertFalse($result->isValid());
+        $this->assertSame('RESERVED', $result->getErrors()[0]->code);
+    }
+
+    public function testUnchangedWebIdPassesEvenWhenReserved(): void
+    {
+        // Historický řádek s dnes už rezervovanou/nevyhovující hodnotou —
+        // editace beze změny web_id musí projít (PRD 5c).
+        $doc = $this->createDocument(originalWebIds: [5 => 'home']);
+        $data = ['id' => 5, 'name' => 'Edit', 'web_id' => 'home'];
+
+        $this->assertTrue($doc->validate($data)->isValid());
+    }
+
+    public function testDuplicateWebIdFailsOnInsert(): void
+    {
+        $doc = $this->createDocument(takenWebIds: ['nova']);
+        $data = $this->requestData(['web_id' => 'nova']);
+
+        $result = $doc->validate($data);
+        $this->assertFalse($result->isValid());
+        $this->assertSame('DUPLICATE', $result->getErrors()[0]->code);
+    }
+
+    public function testDuplicateWebIdFailsOnChange(): void
+    {
+        $doc = $this->createDocument(takenWebIds: ['obsazene'], originalWebIds: [5 => 'stara-firma']);
+        $data = ['id' => 5, 'name' => 'Edit', 'web_id' => 'obsazene'];
+
+        $result = $doc->validate($data);
+        $this->assertFalse($result->isValid());
+        $this->assertSame('DUPLICATE', $result->getErrors()[0]->code);
+    }
+
+    // -------------------------------------------------------------------------
+    // beforeSave — normalizace web_id před odvozením url_app
+    // -------------------------------------------------------------------------
+
+    public function testBeforeSaveNormalizesWebIdBeforeDerivingUrlApp(): void
+    {
+        $doc = $this->createDocument();
+        $data = $this->requestData(['web_id' => ' NoVa ']);
+
+        $doc->beforeSave($data);
+
+        $this->assertSame('nova', $data['web_id']);
+        $this->assertSame('https://nova.shpd.dev', $data['url_app']);
+    }
+
+    // -------------------------------------------------------------------------
+    // checkWebIdRules — sdílená pravidla pro portálový check-web-id
+    // -------------------------------------------------------------------------
+
+    public function testCheckWebIdRules(): void
+    {
+        $this->assertNull(HostingDataSourceDocument::checkWebIdRules('nova-firma'));
+        $this->assertSame('format', HostingDataSourceDocument::checkWebIdRules('ab'));
+        $this->assertSame('format', HostingDataSourceDocument::checkWebIdRules('nova_firma'));
+        $this->assertSame('reserved', HostingDataSourceDocument::checkWebIdRules('www'));
     }
 }

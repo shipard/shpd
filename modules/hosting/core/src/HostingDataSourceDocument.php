@@ -32,7 +32,43 @@ use Shipard\Core\Utils\IdGenerator;
  */
 class HostingDataSourceDocument extends Document
 {
+    /**
+     * Formát web_id (hosting-08 D3): 3–50 znaků, a–z, 0–9, pomlčka; nesmí
+     * začínat ani končit pomlčkou. Bez podtržítka — z web_id se odvozuje
+     * subdoména (DNS/certifikáty).
+     */
+    public const WEB_ID_PATTERN = '/^[a-z0-9][a-z0-9-]{1,48}[a-z0-9]$/';
+
+    /** Rezervované hodnoty web_id — kolidují s infrastrukturními subdoménami. */
+    public const RESERVED_WEB_IDS = [
+        'www', 'mail', 'smtp', 'imap', 'api', 'portal', 'admin', 'home',
+        'ns', 'dev', 'test', 'app', 'auth', 'oidc',
+    ];
+
     private ?DsSecretCipher $cipher = null;
+
+    public static function normalizeWebId(string $webId): string
+    {
+        return mb_strtolower(trim($webId));
+    }
+
+    /**
+     * Formát + blocklist web_id — jediné místo s pravidly, sdílené validací
+     * dokumentu a portálovým endpointem check-web-id. Očekává normalizovanou
+     * hodnotu (normalizeWebId).
+     *
+     * @return null|'format'|'reserved'
+     */
+    public static function checkWebIdRules(string $webId): ?string
+    {
+        if (preg_match(self::WEB_ID_PATTERN, $webId) !== 1) {
+            return 'format';
+        }
+        if (in_array($webId, self::RESERVED_WEB_IDS, true)) {
+            return 'reserved';
+        }
+        return null;
+    }
 
     public function setSecretCipher(DsSecretCipher $cipher): void
     {
@@ -44,6 +80,55 @@ class HostingDataSourceDocument extends Document
         $result = new ValidationResult();
 
         $isNew = empty($data['id']);
+
+        // web_id (D3): normalizace + formát/blocklist/duplicita — na rozdíl
+        // od request bloku níže běží i pro adminské editace, ale jen u nového
+        // řádku nebo při ZMĚNĚ hodnoty. Editace se zachovaným web_id projde
+        // vždy, i kdyby hodnota dnešním pravidlům nevyhovovala (historické
+        // řádky, např. `home` z doby před blocklistem).
+        if (isset($data['web_id']) && is_string($data['web_id'])) {
+            $data['web_id'] = self::normalizeWebId($data['web_id']);
+            $webId = $data['web_id'];
+
+            $changed = $isNew;
+            if (!$isNew && $this->db !== null) {
+                $original = $this->db->fetchSingle(
+                    'SELECT web_id FROM hosting_core_data_sources WHERE id = %i',
+                    (int) $data['id'],
+                );
+                $changed = (string) $original !== $webId;
+            }
+
+            if ($webId !== '' && $changed) {
+                $ruleError = self::checkWebIdRules($webId);
+                if ($ruleError === 'format') {
+                    $result->addError(
+                        'web_id',
+                        'Web ID musí mít 3–50 znaků: malá písmena a–z, číslice a pomlčka; nesmí začínat ani končit pomlčkou.',
+                        'INVALID',
+                    );
+                } elseif ($ruleError === 'reserved') {
+                    $result->addError('web_id', 'Tento identifikátor je rezervovaný.', 'RESERVED');
+                } elseif ($this->db !== null) {
+                    // Hezká hláška; unikátní index unq_web_id zůstává poslední
+                    // autoritou (race mezi SELECTem a INSERTem).
+                    $taken = $isNew
+                        ? $this->db->fetchSingle(
+                            'SELECT id FROM hosting_core_data_sources WHERE web_id = %s',
+                            $webId,
+                        )
+                        : $this->db->fetchSingle(
+                            'SELECT id FROM hosting_core_data_sources WHERE web_id = %s AND id != %i',
+                            $webId,
+                            (int) $data['id'],
+                        );
+                    if ($taken !== null && $taken !== false) {
+                        $result->addError('web_id', 'Tento identifikátor je už obsazený.', 'DUPLICATE');
+                    }
+                }
+            }
+        }
+
         if (!$isNew || (string) ($data['lifecycle'] ?? '') !== 'request') {
             return $result;
         }
@@ -92,6 +177,13 @@ class HostingDataSourceDocument extends Document
     {
         $now = date('Y-m-d H:i:s');
         $isNew = empty($data['id']);
+
+        // Normalizace web_id i zde (defenzivně pro přímá volání hooků mimo
+        // gateway) — musí předejít prepareRequest, které z web_id odvozuje
+        // url_app.
+        if (isset($data['web_id']) && is_string($data['web_id'])) {
+            $data['web_id'] = self::normalizeWebId($data['web_id']);
+        }
 
         // Příprava požadavku: nový řádek ve stavu request, NEBO přechod
         // existujícího řádku do request s prázdným ds_id (= řádek založený

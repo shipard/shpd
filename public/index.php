@@ -278,7 +278,7 @@ function dispatch(
 		'attachment'  => dispatchAttachment($route, $request, $auth, $tables, $db, $resolved),
 		'chat'    => dispatchChat($route, $request, $auth, $db, $tables, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'meta'    => dispatchMeta($route->action, $route->table, $tables, resolveLanguage($request, $resolved->config)),
-		'ui'      => dispatchUi($route->action, $resolved->config, $modulePathResolver, resolveLanguage($request, $resolved->config), $configRuntime, $db),
+		'ui'      => dispatchUi($route->action, $resolved->config, $modulePathResolver, resolveLanguage($request, $resolved->config), $configRuntime, $db, $auth, $tables),
 		'dashboard' => dispatchDashboard($route, $db, $configRuntime, resolveLanguage($request, $resolved->config), $resolved->config, $alertCheckRegistry),
 		'settings' => dispatchSettings($route, $request, $auth, $resolved->config, $modulePathResolver, resolveLanguage($request, $resolved->config), $configRuntime, $db, $tables),
 		'app'     => dispatchApp($route, $auth, $db, $resolved->config, $tables),
@@ -1039,12 +1039,15 @@ function dispatchUi(
 	string $language,
 	?\Shipard\Core\Config\ConfigRuntime $configRuntime = null,
 	?\Shipard\Core\Database\DataSourceConnection $db = null,
+	?AuthContext $auth = null,
+	array $tables = [],
 ): Response {
 	$ctrl = new NavigationController();
 	return match ($action) {
 		// $db jen pro app navigaci — navigation providery (data-driven položky);
 		// settings/account navigace jde přes SettingsController bez providerů.
-		'navigation' => $ctrl->navigation($config, $modulePathResolver, $language, $configRuntime, $db),
+		// $auth + $tables: ne-adminovi se strom ořezává (adminOnly, D4).
+		'navigation' => $ctrl->navigation($config, $modulePathResolver, $language, $configRuntime, $db, $auth, $tables),
 		default      => Response::error('INTERNAL_ERROR', "Unknown UI action: {$action}", 500),
 	};
 }

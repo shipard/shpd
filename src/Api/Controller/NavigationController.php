@@ -3,7 +3,9 @@ declare(strict_types=1);
 
 namespace Shipard\Api\Controller;
 
+use Shipard\Api\AuthContext;
 use Shipard\Api\Response;
+use Shipard\Api\TableAccessGuard;
 use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Database\DataSourceConnection;
@@ -26,8 +28,18 @@ use Shipard\Core\Utils\JsoncParser;
  * sekce dle navSections.order a položky dle navOrder.
  *
  * Sentinel `navSection: "_top"` = root-level leaf nad sekcemi (Došlá pošta,
- * Úkoly). Dashboard a Chat zůstávají hardcoded root leaves (nejsou viewery).
+ * Úkoly). Dashboard a Chat jsou syntetické root leaves (nejsou viewery) —
+ * řadí se společně s `_top` položkami přes `_order` 20/25. Panel modulu
+ * (`panels[]` v module.jsonc), který deklaruje `navSection`, vstupuje do
+ * hlavní navigace jako item `{type: 'panel'}` — portál hostingu.
  * Co nemá `navSection` (nebo má neznámou sekci) → fallback do `system`.
+ *
+ * Ne-adminovi se navigace ořezává podle týchž bariér, které na datech
+ * vynucuje TableAccessGuard (prefix core_system_, adminOnly na runtime
+ * TableDefinition) + explicitní `adminOnly: true` na deklaraci vieweru/
+ * panelu. `$auth === null` (degradovaný kontext) filtruje jako ne-admin
+ * (fail-closed). Chat se ne-adminovi na DS s aktivním hosting.core
+ * nevrací (D5).
  *
  * API tvar odpovědi (id/label/children/type/icon/viewerId/table) je shodný
  * s dřívějším prefix-groupingem — Sidebar.svelte se nemění.
@@ -62,13 +74,21 @@ class NavigationController
         'api_keys',
     ];
 
+    /**
+     * @param array<string, \Shipard\Core\Database\TableDefinition> $tables
+     *        Runtime definice tabulek — zdroj pravdy pro `adminOnly`
+     *        (stejný jako TableAccessGuard::guardTable()).
+     */
     public function navigation(
         DataSourceConfig $config,
         ModulePathResolver $resolver,
         string $language,
         ?ConfigRuntime $configRuntime = null,
         ?DataSourceConnection $db = null,
+        ?AuthContext $auth = null,
+        array $tables = [],
     ): Response {
+        $isAdmin = $auth?->isAdmin ?? false;
         $allModules      = ModuleLoader::loadAllModules($resolver);
         $errors          = [];
         $resolvedModules = ModuleResolver::resolve($allModules, $config->getModules(), $errors);
@@ -156,11 +176,13 @@ class NavigationController
             $hiddenViewers,
             $hiddenTables,
             $tablesWithViewer,
+            $isAdmin,
+            $tables,
         );
 
         // Dynamické položky z navigation providerů (data-driven, např.
         // saldokonta) — stejné bucketování _section/_order jako statické.
-        $items = array_merge($items, $this->collectProviderItems($resolvedModules, $db, $language));
+        $items = array_merge($items, $this->collectProviderItems($resolvedModules, $db, $language, $isAdmin, $tables));
 
         // Bucket by navSection. `_top` → root-level leaves; unknown → fallback.
         $topLeaves = [];
@@ -175,6 +197,29 @@ class NavigationController
                 $sec = self::FALLBACK_SECTION;
             }
             $buckets[$sec][] = $item;
+        }
+
+        // Dashboard a Chat — syntetické root leaves (nejsou viewery), řadí se
+        // společně s `_top` položkami: portál hostingu 10, Dashboard 20,
+        // Chat 25, stávající _top viewery 30+. Na běžném DS tak pořadí
+        // zůstává Dashboard → Chat → pošta → … (D3/D6).
+        $topLeaves[] = [
+            'id'     => 'dashboard',
+            'label'  => 'Dashboard',
+            'type'   => 'dashboard',
+            'icon'   => 'dashboard',
+            '_order' => 20,
+        ];
+        // Chat se ne-adminovi na DS s aktivním hosting.core nevrací (D5) —
+        // stejná detekce hostingu jako AppController (hosting_core_data_sources).
+        if ($isAdmin || !isset($tables['hosting_core_data_sources'])) {
+            $topLeaves[] = [
+                'id'     => 'chat',
+                'label'  => 'Chat',
+                'type'   => 'chat',
+                'icon'   => 'chat',
+                '_order' => 25,
+            ];
         }
 
         $this->sortItems($topLeaves);
@@ -198,23 +243,9 @@ class NavigationController
             ];
         }
 
-        // Root-level leaves: Dashboard, Chat (hardcoded — not viewers), then the
-        // `_top` viewers (Došlá pošta, Úkoly) ordered by navOrder, then sections.
-        // Výsledek: Dashboard → Chat → <_top> → <sekce…>.
+        // Root-level leaves (portál, Dashboard, Chat, _top viewery — už
+        // seřazené dle _order), pak sekce.
         $groups = array_merge(array_map([$this, 'cleanItem'], $topLeaves), $tree);
-
-        array_unshift($groups, [
-            'id'    => 'chat',
-            'label' => 'Chat',
-            'type'  => 'chat',
-            'icon'  => 'chat',
-        ]);
-        array_unshift($groups, [
-            'id'    => 'dashboard',
-            'label' => 'Dashboard',
-            'type'  => 'dashboard',
-            'icon'  => 'dashboard',
-        ]);
 
         return Response::success($groups);
     }
@@ -235,10 +266,13 @@ class NavigationController
         array $hiddenViewers,
         array $hiddenTables,
         array $tablesWithViewer,
+        bool $isAdmin,
+        array $tables,
     ): array {
         $items       = [];
         $seenViewers = [];
         $seenTables  = [];
+        $seenPanels  = [];
 
         foreach ($resolvedModules as $module) {
             $modulePath = $resolver->getPath($module->id);
@@ -253,6 +287,10 @@ class NavigationController
                     continue;
                 }
                 $seenViewers[$viewerId] = true;
+
+                if ($this->isItemForbidden($viewer['table'] ?? null, $viewer, $isAdmin, $tables)) {
+                    continue;
+                }
 
                 $label = $viewer['name:' . $language]
                     ?? $viewer['name:en']
@@ -285,6 +323,10 @@ class NavigationController
                 }
                 $seenTables[$tableName] = true;
 
+                if ($this->isItemForbidden($tableName, null, $isAdmin, $tables)) {
+                    continue;
+                }
+
                 $meta = $this->loadTableMeta($modulePath, $tableName, $language);
 
                 $item = [
@@ -300,9 +342,67 @@ class NavigationController
                 }
                 $items[] = $item;
             }
+
+            // Panels declaring navSection enter the main navigation as
+            // {type: 'panel'} items (portál hostingu). Panels without
+            // navSection stay settings/account-only — fully backwards
+            // compatible. Item shape mirrors SettingsController.
+            foreach ($module->panels as $panel) {
+                $panelId = $panel['id'];
+                if (!isset($panel['navSection']) || isset($seenPanels[$panelId])) {
+                    continue;
+                }
+                $seenPanels[$panelId] = true;
+
+                if ($this->isItemForbidden(null, $panel, $isAdmin, $tables)) {
+                    continue;
+                }
+
+                $item = [
+                    'id'       => 'panel:' . $panelId,
+                    'label'    => $panel['name:' . $language]
+                        ?? $panel['name:en']
+                        ?? $panel['name']
+                        ?? $panelId,
+                    'type'     => 'panel',
+                    'panelId'  => $panelId,
+                    '_section' => (string) $panel['navSection'],
+                    '_order'   => isset($panel['navOrder']) ? (int) $panel['navOrder'] : self::NAV_ORDER_DEFAULT,
+                ];
+                if (isset($panel['icon'])) {
+                    $item['icon'] = $panel['icon'];
+                }
+                $items[] = $item;
+            }
         }
 
         return $items;
+    }
+
+    /**
+     * Zrcadlí bariéry TableAccessGuard::guardTable() pro navigaci (D4):
+     * ne-adminovi se nevrací item nad tabulkou s prefixem core_system_
+     * nebo s adminOnly na runtime TableDefinition, ani item, jehož
+     * deklarace (viewer/panel v module.jsonc) nese `adminOnly: true`.
+     * Admin: žádná filtrace.
+     *
+     * @param array<string, \Shipard\Core\Database\TableDefinition> $tables
+     */
+    private function isItemForbidden(?string $table, ?array $decl, bool $isAdmin, array $tables): bool
+    {
+        if ($isAdmin) {
+            return false;
+        }
+        if (!empty($decl['adminOnly'])) {
+            return true;
+        }
+        if ($table === null) {
+            return false;
+        }
+        if (str_starts_with($table, TableAccessGuard::SYSTEM_TABLE_PREFIX)) {
+            return true;
+        }
+        return isset($tables[$table]) && $tables[$table]->adminOnly === true;
     }
 
     /**
@@ -316,8 +416,13 @@ class NavigationController
      * @param  ModuleDefinition[]  $resolvedModules
      * @return array<int, array<string, mixed>>
      */
-    private function collectProviderItems(array $resolvedModules, ?DataSourceConnection $db, string $language): array
-    {
+    private function collectProviderItems(
+        array $resolvedModules,
+        ?DataSourceConnection $db,
+        string $language,
+        bool $isAdmin,
+        array $tables,
+    ): array {
         if ($db === null) {
             return [];
         }
@@ -335,6 +440,9 @@ class NavigationController
                     }
                     $provider = new $class();
                     foreach ($provider->items($db, $language) as $item) {
+                        if ($this->isItemForbidden($item['table'] ?? null, null, $isAdmin, $tables)) {
+                            continue;
+                        }
                         // Bucketování počítá s _section/_order — doplnit defaulty,
                         // ať neúplná položka provider nerozbije sort/merge.
                         $item['_section'] ??= self::FALLBACK_SECTION;

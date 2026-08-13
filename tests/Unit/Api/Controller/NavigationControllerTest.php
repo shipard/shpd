@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Shipard\Tests\Unit\Api\Controller;
 
 use PHPUnit\Framework\TestCase;
+use Shipard\Api\AuthContext;
 use Shipard\Api\Controller\NavigationController;
 use Shipard\Api\Response;
+use Shipard\Core\Database\TableDefinition;
 use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Database\DataSourceConnection;
@@ -419,6 +421,109 @@ class NavigationControllerTest extends TestCase
         @rmdir($root);
     }
 
+    // --- adminOnly filtrace (D4) + Chat gating (D5) + panely v navigaci ---
+
+    public function testAdminOnlyItemsHiddenFromNonAdmin(): void
+    {
+        $modRoot  = $this->makeAdminFixtureModule();
+        $resolver = new ModulePathResolver([$modRoot, dirname(__DIR__, 4) . '/modules']);
+        $tables   = ['test_navadm_secrets' => $this->tableDef(adminOnly: true)];
+
+        // Ne-admin: viewer nad adminOnly tabulkou, viewer nad core_system_*
+        // i viewer s adminOnly na deklaraci zmizí; běžný viewer zůstává.
+        $tree = $this->treeWith(['test.navadm'], $resolver, $this->nonAdmin(), $tables);
+        $ids  = $this->allViewerIds($tree);
+        $this->assertNotContains('test.navadm.secrets', $ids);
+        $this->assertNotContains('test.navadm.sysusers', $ids);
+        $this->assertNotContains('test.navadm.declared', $ids);
+        $this->assertContains('test.navadm.plain', $ids);
+
+        // Admin: žádná filtrace.
+        $tree = $this->treeWith(['test.navadm'], $resolver, $this->admin(), $tables);
+        $ids  = $this->allViewerIds($tree);
+        $this->assertContains('test.navadm.secrets', $ids);
+        $this->assertContains('test.navadm.sysusers', $ids);
+        $this->assertContains('test.navadm.declared', $ids);
+
+        $this->cleanupModuleRoot($modRoot, 'test/navadm');
+    }
+
+    public function testAdminOnlyFallbackTableHiddenFromNonAdmin(): void
+    {
+        // Tabulka bez vieweru (generický fallback item) s adminOnly na
+        // runtime TableDefinition se ne-adminovi neemituje.
+        $modRoot  = $this->makeAdminFixtureModule();
+        $resolver = new ModulePathResolver([$modRoot, dirname(__DIR__, 4) . '/modules']);
+        $tables   = ['test_navadm_bare' => $this->tableDef(adminOnly: true)];
+
+        $tree = $this->treeWith(['test.navadm'], $resolver, $this->nonAdmin(), $tables);
+        $this->assertNotContains('test_navadm_bare', $this->allTableIds($tree));
+
+        $tree = $this->treeWith(['test.navadm'], $resolver, $this->admin(), $tables);
+        $this->assertContains('test_navadm_bare', $this->allTableIds($tree));
+
+        $this->cleanupModuleRoot($modRoot, 'test/navadm');
+    }
+
+    public function testNullAuthFiltersAsNonAdmin(): void
+    {
+        // Degradovaný kontext ($auth === null) = fail-closed, filtruje
+        // jako ne-admin.
+        $modRoot  = $this->makeAdminFixtureModule();
+        $resolver = new ModulePathResolver([$modRoot, dirname(__DIR__, 4) . '/modules']);
+        $tables   = ['test_navadm_secrets' => $this->tableDef(adminOnly: true)];
+
+        $tree = $this->treeWith(['test.navadm'], $resolver, null, $tables);
+        $ids  = $this->allViewerIds($tree);
+        $this->assertNotContains('test.navadm.secrets', $ids);
+        $this->assertNotContains('test.navadm.declared', $ids);
+
+        $this->cleanupModuleRoot($modRoot, 'test/navadm');
+    }
+
+    public function testPanelWithNavSectionEmittedAsOrderedRootLeaf(): void
+    {
+        // Panel s navSection _top a navOrder 10 = první root leaf, před
+        // Dashboardem (20) a Chatem (25); panel bez navSection se v hlavní
+        // navigaci neobjeví (zůstává settings/account-only).
+        $modRoot  = $this->makePanelFixtureModule();
+        $resolver = new ModulePathResolver([$modRoot, dirname(__DIR__, 4) . '/modules']);
+
+        $tree = $this->treeWith(['test.navpanel'], $resolver, $this->nonAdmin(), []);
+
+        $this->assertSame('panel:testPortal', $tree[0]['id']);
+        $this->assertSame('panel', $tree[0]['type']);
+        $this->assertSame('testPortal', $tree[0]['panelId']);
+        $this->assertSame('Můj portál', $tree[0]['label']);
+        $this->assertSame('database', $tree[0]['icon']);
+        $this->assertSame('dashboard', $tree[1]['type']);
+        $this->assertSame('chat', $tree[2]['type']);
+
+        $allIds = array_map(fn($n) => $n['id'], $tree);
+        $this->assertNotContains('panel:testHiddenPanel', $allIds);
+
+        $this->cleanupModuleRoot($modRoot, 'test/navpanel');
+    }
+
+    public function testChatGatedForNonAdminOnHostingDs(): void
+    {
+        $hosting = ['hosting_core_data_sources' => $this->tableDef(adminOnly: true)];
+
+        // Ne-admin na DS s aktivním hosting.core → Chat chybí, Dashboard je.
+        $tree = $this->treeWith(['install.base'], $this->resolver, $this->nonAdmin(), $hosting);
+        $ids  = array_map(fn($n) => $n['id'], $tree);
+        $this->assertNotContains('chat', $ids);
+        $this->assertContains('dashboard', $ids);
+
+        // Admin na hosting DS Chat má.
+        $tree = $this->treeWith(['install.base'], $this->resolver, $this->admin(), $hosting);
+        $this->assertContains('chat', array_map(fn($n) => $n['id'], $tree));
+
+        // Ne-admin bez hostingu Chat má.
+        $tree = $this->treeWith(['install.base'], $this->resolver, $this->nonAdmin(), []);
+        $this->assertContains('chat', array_map(fn($n) => $n['id'], $tree));
+    }
+
     // --- fixture helpers ---
 
     /** Creates a temp module root with a viewer that has NO navSection. */
@@ -449,6 +554,138 @@ class NavigationControllerTest extends TestCase
         @unlink($root . '/test/navfallback/module.jsonc');
         @rmdir($root . '/test/navfallback');
         @rmdir($root . '/test');
+        @rmdir($root);
+    }
+
+    // --- helpers pro adminOnly / panel testy ---
+
+    /** tree() s auth + tables — plná signatura navigation(). */
+    private function treeWith(array $modules, ModulePathResolver $resolver, ?AuthContext $auth, array $tables): array
+    {
+        $resp = $this->ctrl->navigation(
+            $this->config($modules),
+            $resolver,
+            'cs',
+            $this->configRuntime('cs'),
+            null,
+            $auth,
+            $tables,
+        );
+        $this->assertInstanceOf(Response::class, $resp);
+        return $resp->getPayload()['data'];
+    }
+
+    private function admin(): AuthContext
+    {
+        return new AuthContext(isAuthenticated: true, userId: 1, isAdmin: true);
+    }
+
+    private function nonAdmin(): AuthContext
+    {
+        return new AuthContext(isAuthenticated: true, userId: 2, isAdmin: false);
+    }
+
+    /** Minimální runtime TableDefinition — pro navigaci stačí adminOnly flag. */
+    private function tableDef(bool $adminOnly): TableDefinition
+    {
+        return new TableDefinition(
+            tableId: 999,
+            name: 'test',
+            displayPattern: null,
+            columnGroups: [],
+            columns: [],
+            indexes: [],
+            childTables: [],
+            docStates: null,
+            stateTransitionsRunDocumentHooks: false,
+            adminOnly: $adminOnly,
+        );
+    }
+
+    /**
+     * Fixture modul se čtyřmi viewery (adminOnly tabulka / core_system_
+     * tabulka / adminOnly na deklaraci / běžný) a jednou tabulkou bez
+     * vieweru (fallback item pro adminOnly test).
+     */
+    private function makeAdminFixtureModule(): string
+    {
+        $root = sys_get_temp_dir() . '/shpd_navadm_' . uniqid('', true);
+        $dir  = $root . '/test/navadm';
+        mkdir($dir, 0755, true);
+        file_put_contents($dir . '/module.jsonc', json_encode([
+            'id'           => 'test.navadm',
+            'name'         => 'AdminOnly nav fixture',
+            'dependencies' => [],
+            'tables'       => ['test_navadm_bare'],
+            'viewers'      => [
+                [
+                    'id'    => 'test.navadm.secrets',
+                    'name'  => 'Secrets',
+                    'table' => 'test_navadm_secrets',
+                    'class' => 'Acme\\Nope',
+                    'navSection' => 'basic',
+                ],
+                [
+                    'id'    => 'test.navadm.sysusers',
+                    'name'  => 'System users',
+                    'table' => 'core_system_users',
+                    'class' => 'Acme\\Nope',
+                    'navSection' => 'basic',
+                ],
+                [
+                    'id'        => 'test.navadm.declared',
+                    'name'      => 'Declared admin-only',
+                    'table'     => 'test_navadm_public',
+                    'class'     => 'Acme\\Nope',
+                    'navSection' => 'basic',
+                    'adminOnly' => true,
+                ],
+                [
+                    'id'    => 'test.navadm.plain',
+                    'name'  => 'Plain',
+                    'table' => 'test_navadm_plain',
+                    'class' => 'Acme\\Nope',
+                    'navSection' => 'basic',
+                ],
+            ],
+        ]));
+        return $root;
+    }
+
+    /** Fixture modul s panelem v hlavní navigaci + panelem bez navSection. */
+    private function makePanelFixtureModule(): string
+    {
+        $root = sys_get_temp_dir() . '/shpd_navpanel_' . uniqid('', true);
+        $dir  = $root . '/test/navpanel';
+        mkdir($dir, 0755, true);
+        file_put_contents($dir . '/module.jsonc', json_encode([
+            'id'           => 'test.navpanel',
+            'name'         => 'Panel nav fixture',
+            'dependencies' => [],
+            'tables'       => [],
+            'panels'       => [
+                [
+                    'id'         => 'testPortal',
+                    'name'       => 'My portal',
+                    'name:cs'    => 'Můj portál',
+                    'icon'       => 'database',
+                    'navSection' => '_top',
+                    'navOrder'   => 10,
+                ],
+                [
+                    'id'   => 'testHiddenPanel',
+                    'name' => 'Settings-only panel',
+                ],
+            ],
+        ]));
+        return $root;
+    }
+
+    private function cleanupModuleRoot(string $root, string $relDir): void
+    {
+        @unlink($root . '/' . $relDir . '/module.jsonc');
+        @rmdir($root . '/' . $relDir);
+        @rmdir(dirname($root . '/' . $relDir));
         @rmdir($root);
     }
 }

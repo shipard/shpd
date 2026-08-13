@@ -476,7 +476,20 @@ sekcí**, ne podle prefixu module ID. Mechanismus je paralelní k Nastavení:
   navSections a pořadí v sekci (int). Tabulky bez vieweru (generický fallback
   item) je mohou nést v `tables/*.jsonc`.
 - **Sentinel `navSection: "_top"`** = root-level leaf nad sekcemi (Došlá pošta,
-  Úkoly). Řadí se dle `navOrder`, vkládá za hardcoded Dashboard/Chat.
+  Úkoly). Řadí se dle `navOrder` společně se syntetickými Dashboard
+  (`_order` 20) a Chat (`_order` 25) — položka s `navOrder` < 20 se zobrazí
+  před Dashboardem (portál hostingu má 10).
+- **Panel v hlavní navigaci:** panel z `panels[]` (viz
+  [app-settings.md](app-settings.md) — „Panel — klientská komponenta
+  v navigaci"), který deklaruje `navSection` (+ volitelně `navOrder`),
+  se emituje i do hlavní navigace jako `{type: 'panel', panelId}`. Panel
+  bez `navSection` zůstává jen v Nastavení/Účtu. Vzor: `hostingPortal`
+  v `hosting.core` (`navSection: "_top"`, `navOrder: 10`).
+- **`adminOnly` na deklaraci vieweru/panelu:** ne-adminovi se položka
+  nevrací. Nezávisle na tom `NavigationController` ne-adminovi ořezává
+  položky nad tabulkami s prefixem `core_system_` nebo s `adminOnly: true`
+  v definici tabulky — tentýž zdroj pravdy, který na datech vynucuje
+  `TableAccessGuard`. Navigace tak jen zrcadlí serverové bariéry.
 - **Fallback:** viewer/tabulka bez `navSection` (nebo s neznámou sekcí) padá do
   sekce `system`. Prázdné sekce se ve výstupu vynechají.
 

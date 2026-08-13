@@ -242,6 +242,10 @@ vykreslení řeší frontend.
 - Registrace v `module.jsonc`: `panels: [{id, name, name:cs, icon}]` +
   položka `{ "panel": "<id>", "section": "...", "order": N }` v
   `accountItems[]` (nebo `settingsItems[]`).
+- Panel může vstoupit i do **hlavní navigace**: deklaruje-li `navSection`
+  (+ volitelně `navOrder`, `adminOnly`), emituje ho `NavigationController`
+  jako root leaf / položku sekce — vzor `hostingPortal` v `hosting.core`
+  (viz [modules.md](modules.md) — sekce hlavního sidebaru).
 - Navigace emituje `{type: 'panel', panelId, label, icon}`
   (`SettingsController::collectItems()`).
 - Frontend: mapa `panelId → komponenta` v `ContentArea.svelte`

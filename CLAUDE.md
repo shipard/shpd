@@ -214,8 +214,17 @@ Formát hlavičky stránky a šablona: `docs/help-authoring.md`.
 - `navSection` + `navOrder` se deklarují na vieweru v `module.jsonc`
   `viewers[]` (tabulky bez vieweru v `tables/*.jsonc`). Sentinel
   `navSection: "_top"` = root-level leaf nad sekcemi (Došlá pošta, Úkoly);
-  Dashboard a Chat jsou hardcoded root leaves. Bez `navSection` → fallback
-  do sekce `system`.
+  Dashboard a Chat jsou syntetické root leaves (`_order` 20/25) řazené
+  společně s `_top` položkami. Panel z `panels[]` s `navSection` vstupuje
+  do hlavní navigace jako `{type:'panel'}` (portál hostingu, `_top`/10).
+  Bez `navSection` → fallback do sekce `system`.
+- Ne-adminovi `NavigationController` strom ořezává (odvozené `adminOnly`:
+  prefix `core_system_`, `adminOnly` na TableDefinition — tentýž zdroj
+  pravdy jako `TableAccessGuard` — + explicitní `adminOnly: true` na
+  deklaraci vieweru/panelu); `$auth === null` filtruje fail-closed. Chat
+  se ne-adminovi na DS s aktivním `hosting.core` nevrací. Landing po
+  přihlášení = první root-level leaf stromu
+  (`navigationStore.ensureDefaultActiveItem(navTree)`).
 - `hideFromNavigation: true` funguje i na **vieweru** (nejen na tabulce) —
   skryje jen ten viewer; sdílenou tabulku dál zobrazují ostatní viewery
   (souhrnný `docs.core.heads` skrytý, Faktury přijaté/vydané nad sdílenou

@@ -36,6 +36,11 @@ vynechává fakturaci, helpdesk a HW evidenci.
 > hosting-stats`, stats krok agenta řízený `stats_wanted` z reconcile,
 > tabulka ds_stats (snapshot upsert), badge „k řešení" na portálu
 > (task `hosting-06-stats`).
+> **Portál v app shellu** (2026-08-13): revize D10 — jednotný AppShell pro
+> všechny přihlášené, portál = panel `hostingPortal` v hlavní navigaci,
+> ne-admin dostává serverem ořezanou navigaci (odvozené `adminOnly`),
+> landing = první root leaf; `PortalScreen` a `hasPortal` zanikly
+> (task `hosting-07-portal-in-shell`).
 
 ---
 
@@ -52,7 +57,7 @@ vynechává fakturaci, helpdesk a HW evidenci.
 | D7 | Přehled napříč DS = **push agregátů** z DS do hostingu (agent, cron). On-demand fetch lze doplnit kdykoli později. |
 | D8 | Portálové účty = `core_system_users` hosting DS. Žádná nová tabulka uživatelů — OP autentizuje proti běžné user bázi hostingu (lokální login, pozvánky/reset z Fáze 0b fungují beze změny). |
 | D9 | **Admin-only tabulky**: definice tabulky může deklarovat `"adminOnly": true`; `TableAccessGuard` to vynucuje plošně (CRUD/viewer/form/lookup → 403 pro ne-admina) stejně jako dnes prefix `core_system_`. Všechny `hosting_core_*` tabulky flag nesou. Malé rozšíření jádra s hodnotou i mimo hosting; nejhrubší stupeň budoucího RBAC. |
-| D10 | **Jedno přihlášení** = session na hosting DS. Ne-admin po přihlášení vidí **pouze portál** — dedikované endpointy `/_hosting/portal/*` scopované na session uživatele (žádné generické viewery nad hosting tabulkami); admin navíc standardní aplikaci s hosting viewery (= administrace hostingu). OIDC `authorize` používá tutéž session — SSO: uživatel se session proletí na DS bez zastávky. |
+| D10 | **Jedno přihlášení** = session na hosting DS. ~~Ne-admin po přihlášení vidí pouze portál~~ *(revize 2026-08-13, task `hosting-07-portal-in-shell`)*: ne-admin vidí **app shell s navigací ořezanou na to, co mu server dovolí** — portálová data jdou dál výhradně přes dedikované endpointy `/_hosting/portal/*` scopované na session uživatele (žádné generické viewery nad hosting tabulkami); admin navíc standardní aplikaci s hosting viewery (= administrace hostingu). OIDC `authorize` používá tutéž session — SSO: uživatel se session proletí na DS bez zastávky. |
 | D11 | Hosting DS je **dedikovaný** — install modul `install.hosting`; vlastní agenda provozovatele (účetnictví, pošta…) žije v samostatném běžném DS. Doporučení, ne tvrdý zámek — D9+D10 chrání i smíšený případ. |
 | D12 | OIDC **issuer je explicitně uložený v nastavení hostingu**, ne odvozovaný z requestu. `(issuer, sub)` je klíč identit na všech DS — změna domény portálu ho nesmí tiše zneplatnit. Doménu portálu volit s rozmyslem hned na začátku. |
 
@@ -343,24 +348,40 @@ portál (session tam) → id_token → RP `IdentityMapper` `(issuer, sub)`,
 ## 6. Portál a přístupový model (D8–D11)
 
 Frontend hosting DS, žádná zvláštní aplikace. **Jedno přihlášení = session
-na hosting DS**; co uživatel vidí, řídí `is_admin`:
+na hosting DS**; všichni přihlášení dostávají **jednotný app shell**
+(sidebar + obsah) — revize D10, task `hosting-07-portal-in-shell`.
+Přehled „Moje zdroje dat" je **panel hlavní navigace** (`hostingPortal`
+v `panels[]` modulu, `navSection: "_top"`, `navOrder: 10`) — první
+root-level leaf na hosting DS, vidí ho i admin. Zobrazuje **jen DS
+uživatele** z `hosting_core_ds_users` (název, vstupní tlačítko, agregát
+z `hosting_core_ds_stats`); data výhradně z `/_hosting/portal/*`.
 
-- **Ne-admin (portálový uživatel)**: frontend na DS s aktivním
-  `hosting.core` renderuje místo standardního app shellu **portálovou
-  obrazovku** — seznam „moje DS" (název, doména, vstupní tlačítko,
-  agregát z `hosting_core_ds_stats`). Data výhradně z
-  `/_hosting/portal/*`; příznak režimu nese login envelope / `/_app/info`
-  (vzor `is_admin`). Typický portálový uživatel jinak hosting DS vůbec
+- **Ne-admin (portálový uživatel)**: navigace je serverem **ořezaná na
+  to, co mu server dovolí** — model odvozeného `adminOnly`:
+  `NavigationController` ne-adminovi nevrací položky nad tabulkami
+  s prefixem `core_system_` nebo s `adminOnly` na `TableDefinition`
+  (tentýž zdroj pravdy jako `TableAccessGuard`, D9) ani položky
+  s explicitním `adminOnly: true` na deklaraci vieweru/panelu. Na
+  dedikovaném hosting DS tak zbývá portál + Dashboard (budoucí hosting
+  alerty přes existující feed); root leaf **Chat se ne-adminovi na DS
+  s aktivním `hosting.core` nevrací**. Zadarmo tím získává Nastavení
+  účtu (heslo, avatar, vzhled, jazyk); „Nastavení aplikace" v user menu
+  vidí jen admin. Landing po přihlášení = **první root-level leaf**
+  stromu navigace (obecné pravidlo — na hosting DS portál, jinde
+  Dashboard). Typický portálový uživatel jinak hosting DS vůbec
   „nepoužívá" — přichází přes OIDC redirect ze svého DS a se session
   proletí bez zastávky (SSO).
 - **Admin hostingu**: standardní aplikace s hosting viewery (servery,
   zdroje dat — včetně založení nového: formulář vytvoří řádek ve stavu
-  „požadavek", zbytek udělá agent —, mail-routery, AI spotřeba) + přístup
-  na portálovou obrazovku.
+  „požadavek", zbytek udělá agent —, mail-routery, AI spotřeba);
+  portálový přehled má jako první položku navigace.
 
-Bariéry nejsou v UI, ale na serveru: `adminOnly` tabulky (D9) + portálové
-endpointy scopované na session uživatele (D10). Vědomý kompromis v1:
-`is_admin` je jediný stupeň — admin hostingu má i `core_system_*`
+Bariéry byly vždy na serveru: `adminOnly` tabulky (D9) + portálové
+endpointy scopované na session uživatele (D10) — navigace je nyní jen
+zrcadlí. Důsledek pro smíšený DS (D11): ne-admin nově vidí svoji
+legitimní agendu (dřív viděl jen portál), ale přichází o Chat —
+akceptováno, dedikovaný hosting DS je doporučený stav. Vědomý kompromis
+v1: `is_admin` je jediný stupeň — admin hostingu má i `core_system_*`
 (uživatelé, API klíče); jemnější RBAC mimo scope.
 
 Branding portálu = existující app-settings (název, logo) — starý

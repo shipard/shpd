@@ -126,6 +126,46 @@ class InstallModuleRegistryTest extends TestCase
         $this->assertSame(['alpha', 'Bravo', 'Zebra'], $names);
     }
 
+    public function testSelfServiceOnlyFiltersModules(): void
+    {
+        $this->createInstallModule('base', ['selfService' => true]);
+        $this->createInstallModule('hosting');
+        $this->createInstallModule('other', ['selfService' => false]);
+
+        $reg = new InstallModuleRegistry(new ModulePathResolver([$this->tmpDir]));
+
+        $filtered = $reg->list(selfServiceOnly: true);
+        $this->assertCount(1, $filtered);
+        $this->assertSame('install.base', $filtered[0]['id']);
+
+        // Bez filtru se vrací všechny — zpětná kompatibilita.
+        $this->assertCount(3, $reg->list());
+    }
+
+    public function testListLocalizesNameAndDescription(): void
+    {
+        $this->createInstallModule('base', [
+            'name'           => 'Base installation',
+            'name:cs'        => 'Základní instalace',
+            'description'    => 'Base set',
+            'description:cs' => 'Základní sada',
+        ]);
+
+        $reg = new InstallModuleRegistry(new ModulePathResolver([$this->tmpDir]));
+
+        $cs = $reg->list(language: 'cs');
+        $this->assertSame('Základní instalace', $cs[0]['name']);
+        $this->assertSame('Základní sada', $cs[0]['description']);
+
+        // Jazyk bez varianty → fallback chain (en → holé pole).
+        $de = $reg->list(language: 'de');
+        $this->assertSame('Base installation', $de[0]['name']);
+
+        // Bez jazyka → holá pole (zpětná kompatibilita).
+        $bare = $reg->list();
+        $this->assertSame('Base installation', $bare[0]['name']);
+    }
+
     public function testExistsReturnsTrueForValidId(): void
     {
         $this->createInstallModule('base');

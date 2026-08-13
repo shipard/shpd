@@ -6,6 +6,10 @@
     "description": "Base set of modules for system operation",
     "description:cs": "Základní sada modulů pro provoz systému",
     "description:en": "Base set of modules for system operation",
+
+    // Nabízí se v self-service zakládání DS z portálu (hosting-08 D2).
+    "selfService": true,
+
     "dependencies": [
         "core.system",
         "core.alerts",

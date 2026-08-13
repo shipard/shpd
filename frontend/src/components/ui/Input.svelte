@@ -8,6 +8,7 @@
     maxlength?: number;
     disabled?: boolean;
     error?: string | null;
+    oninput?: (event: Event) => void;
   }
 
   let {
@@ -19,6 +20,7 @@
     maxlength,
     disabled = false,
     error = null,
+    oninput,
   }: Props = $props();
 </script>
 
@@ -32,6 +34,7 @@
   {required}
   {maxlength}
   {disabled}
+  {oninput}
 />
 {#if error}
   <span class="shpd-input__error">{error}</span>

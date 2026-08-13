@@ -270,6 +270,10 @@ export default {
   'error.LLM_ERROR': 'The AI model returned an error: {message}',
   'error.STREAM_ERROR': 'The response stream failed ({message}) — the reply may not have been saved',
   'error.CREATE_FAILED': 'Could not create the conversation',
+  // Self-service DS creation (hosting-08)
+  'error.NO_SERVER': 'Creating data sources is not available right now — contact your administrator',
+  'error.OPEN_REQUEST': 'Your previous request is still being processed',
+  'error.MAX_OWNED': 'You have reached the maximum number of data sources',
   'error.SETUP_ALERT': 'Setup alerts cannot be snoozed or dismissed — the item disappears once the setting is filled in',
 
   // ── Table browser ───────────────────────────────────────────────────────
@@ -645,6 +649,30 @@ export default {
   'portal.stats.pending': '{count} to resolve',
   'portal.stats.allDone': 'All clear',
   'portal.stats.tooltip': '{alerts, plural, one {# alert} other {# alerts}} · {mail, plural, one {# mail item} other {# mail items}}',
+
+  // Self-service DS creation (hosting-08)
+  'portal.create.button': 'New data source',
+  'portal.create.title': 'New data source',
+  'portal.create.name': 'Name',
+  'portal.create.webId': 'Web address',
+  'portal.create.webIdPlaceholder': 'my-company',
+  'portal.create.webIdHint': '3–50 characters: lowercase a–z, digits and hyphen; must not start or end with a hyphen.',
+  'portal.create.webIdChecking': 'Checking availability…',
+  'portal.create.webIdAvailable': 'The address is available.',
+  'portal.create.webIdFormat': 'The address does not match the required format.',
+  'portal.create.webIdReserved': 'This identifier is reserved.',
+  'portal.create.webIdTaken': 'This identifier is already taken.',
+  'portal.create.country': 'Country',
+  'portal.create.language': 'Language',
+  'portal.create.installModule': 'Edition',
+  'portal.create.submit': 'Create',
+  'portal.create.toast': 'Request created — the data source is being prepared.',
+  'portal.create.reasonOpenRequest': 'Your previous request is still being processed.',
+  'portal.create.reasonMaxOwned': 'You have reached the maximum number of data sources.',
+  // Pending cards (D5)
+  'portal.state.creating': 'Being prepared…',
+  'portal.state.failed': 'Creation failed',
+  'portal.state.failedHint': 'Contact your administrator.',
 
   // OIDC OP approval (D10) — ?op_auth= session bridge screen
   'opAuth.redirecting': 'Redirecting…',

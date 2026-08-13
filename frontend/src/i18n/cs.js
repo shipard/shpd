@@ -283,6 +283,10 @@ export default {
   'error.STREAM_ERROR': 'Přenos odpovědi selhal ({message}) — odpověď se nemusela uložit',
   'error.CREATE_FAILED': 'Konverzaci se nepodařilo založit',
   'error.SETUP_ALERT': 'Upozornění na chybějící nastavení nejde odložit ani zavřít — zmizí samo, jakmile nastavení doplníte',
+  // Self-service zakládání DS (hosting-08)
+  'error.NO_SERVER': 'Zakládání zdrojů dat teď není dostupné — kontaktujte správce',
+  'error.OPEN_REQUEST': 'Předchozí požadavek se ještě zpracovává',
+  'error.MAX_OWNED': 'Dosáhli jste maximálního počtu zdrojů dat',
 
   // ── Table browser ───────────────────────────────────────────────────────
   'browser.addRecord': 'Nový záznam',
@@ -658,6 +662,30 @@ export default {
   'portal.stats.pending': '{count} k řešení',
   'portal.stats.allDone': 'Vše vyřízeno',
   'portal.stats.tooltip': '{alerts, plural, one {# upozornění} few {# upozornění} many {# upozornění} other {# upozornění}} · {mail, plural, one {# pošta k řešení} few {# pošty k řešení} many {# pošty k řešení} other {# pošty k řešení}}',
+
+  // Self-service zakládání DS (hosting-08)
+  'portal.create.button': 'Nový zdroj dat',
+  'portal.create.title': 'Nový zdroj dat',
+  'portal.create.name': 'Název',
+  'portal.create.webId': 'Webová adresa',
+  'portal.create.webIdPlaceholder': 'moje-firma',
+  'portal.create.webIdHint': '3–50 znaků: malá písmena a–z, číslice a pomlčka; nesmí začínat ani končit pomlčkou.',
+  'portal.create.webIdChecking': 'Kontroluji dostupnost…',
+  'portal.create.webIdAvailable': 'Adresa je volná.',
+  'portal.create.webIdFormat': 'Adresa nevyhovuje formátu.',
+  'portal.create.webIdReserved': 'Tento identifikátor je rezervovaný.',
+  'portal.create.webIdTaken': 'Tento identifikátor je už obsazený.',
+  'portal.create.country': 'Země',
+  'portal.create.language': 'Jazyk',
+  'portal.create.installModule': 'Výbava',
+  'portal.create.submit': 'Založit',
+  'portal.create.toast': 'Požadavek založen — zdroj dat se připravuje.',
+  'portal.create.reasonOpenRequest': 'Předchozí požadavek se ještě zpracovává.',
+  'portal.create.reasonMaxOwned': 'Dosáhli jste maximálního počtu zdrojů dat.',
+  // Pending karty (D5)
+  'portal.state.creating': 'Připravuje se…',
+  'portal.state.failed': 'Založení se nepodařilo',
+  'portal.state.failedHint': 'Kontaktujte správce.',
 
   // OIDC OP schválení (D10) — obrazovka ?op_auth= session bridge
   'opAuth.redirecting': 'Přesměrování…',

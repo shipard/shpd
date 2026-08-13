@@ -1,15 +1,15 @@
 ---
 title: Příjem pošty
 summary: Jak dostat fakturu do Shipardu, co se s ní pak děje a jak si poradit s poštou, která faktura není.
-keywords: [příjem pošty, přeposlat fakturu, adresa pro poštu, kam poslat fakturu, nedorazilo, reklama, newsletter, hromadná pošta, pravidlo odesílatele, ISDOC]
+keywords: [příjem pošty, přeposlat fakturu, adresa pro poštu, kam poslat fakturu, nahrát soubor, nahrání z dashboardu, přetáhnout soubor, nedorazilo, reklama, newsletter, hromadná pošta, pravidlo odesílatele, ISDOC]
 related: [posta/kontrola-vytezeni.md, slovnicek.md, co-dnes-nejde.md]
 ---
 
 # Příjem pošty
 
 Shipard nemá schránku, do které bys chodil číst e-maily. Faktury mu
-přeposíláš na adresu, kterou jsi dostal, a on je sám přečte a připraví
-z nich doklady.
+přeposíláš na adresu, kterou jsi dostal, nebo je nahraješ přímo
+z Dashboardu — a on je sám přečte a připraví z nich doklady.
 
 ## Kdy to potřebuješ
 
@@ -24,7 +24,9 @@ se ti ji přepisovat do systému ručně.
 
 2. **Přepošli fakturu na tuhle adresu.** Buď přepošli celý e-mail od
    dodavatele, nebo napiš nový a přilož PDF. Předmět ani text psát nemusíš —
-   Shipardu jde o přílohu.
+   Shipardu jde o přílohu. **Máš-li fakturu jako soubor na disku**, nemusíš
+   nic posílat: na **Dashboardu** klikni na **Nahrát**, nebo soubory
+   přetáhni myší kamkoli na plochu Dashboardu.
 
 3. **Podívej se do Došlé pošty.** Zpráva se objeví se stavem **Nová**
    a u ní badge, který ukazuje, jak daleko je strojové čtení: **Ve frontě**
@@ -36,6 +38,16 @@ se ti ji přepisovat do systému ručně.
    pokračuj podle [Kontrola vytěženého dokladu](kontrola-vytezeni.md).
 
 ## Na co narazíš
+
+**Nahrání z Dashboardu.** Tlačítko **Nahrát** (vedle **Obnovit**) otevře
+okno, kam soubory přetáhneš nebo je vybereš tlačítkem **Vybrat soubory**;
+totéž okno se otevře, když soubory přetáhneš rovnou na plochu Dashboardu.
+U více souborů si vybereš, jestli vznikne **Jedna zpráva** se všemi
+soubory, nebo **Každý soubor zvlášť** (výchozí — každá faktura je pak
+samostatná zpráva s vlastní analýzou). Najednou lze nahrát nejvýše
+20 souborů. Nahraná zpráva se tváří jako běžná pošta: najdeš ji v **Došlé
+poště** (jako odesílatel jsi uveden ty), AI ji přečte a výsledek si
+vyzvedneš na Dashboardu úplně stejně.
 
 **Co posílat.** Ověřené je **PDF**. Nejlepší je **ISDOC** — strojově
 čitelnou fakturu Shipard převezme přímo, bez AI, takže nemá co přečíst

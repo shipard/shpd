@@ -9,7 +9,7 @@
     reanalyzeMessage,
   } from '../../api/exchange.js';
   import { confirmSenderRule, rejectSenderRule, undoAutoArchive } from '../../api/mail.js';
-  import { iconRefresh } from '../../icons.js';
+  import { iconRefresh, iconUpload } from '../../icons.js';
   import { navigationStore } from '../../stores/navigation.svelte.js';
   import Button from '../ui/Button.svelte';
   import FormDialog from '../form/FormDialog.svelte';
@@ -18,6 +18,7 @@
   import ChatLauncher from './ChatLauncher.svelte';
   import Feed from './Feed.svelte';
   import FeedFilter from './FeedFilter.svelte';
+  import MailUploadModal from './MailUploadModal.svelte';
   import RejectReasonPrompt from './RejectReasonPrompt.svelte';
 
   const HEADS_TABLE = 'docs_core_heads';
@@ -74,6 +75,11 @@
   // vystavená faktura (docs) se místo toastu otevírá rovnou ve FormDialogu.
   let toast = $state({ visible: false, kind: null, message: '', docId: null, docTable: null });
   let toastTimer = null;
+
+  // Ruční nahrání (tasks/mail-dashboard-upload.md) — modal otevírá tlačítko
+  // Nahrát i drop na plochu dashboardu; drop nikdy neukládá rovnou (D1).
+  let uploadModal = $state({ open: false, files: [] });
+  let dragActive = $state(false);
 
   async function load() {
     loading = true;
@@ -315,6 +321,44 @@
     }
   }
 
+  // ── Ruční nahrání ────────────────────────────────────────────────────────────
+
+  function closeUploadModal() {
+    uploadModal = { open: false, files: [] };
+  }
+
+  function handleUploaded(count) {
+    closeUploadModal();
+    showToast({ kind: 'uploaded', message: t('dashboard.toast.uploaded', { count }) });
+    load();
+  }
+
+  // Drag textu apod. overlay nespouští — reagujeme jen na soubory.
+  function dragHasFiles(event) {
+    return Array.from(event.dataTransfer?.types ?? []).includes('Files');
+  }
+
+  function handleDashboardDragOver(event) {
+    if (uploadModal.open || !dragHasFiles(event)) return;
+    event.preventDefault();
+    dragActive = true;
+  }
+
+  function handleDashboardDragLeave(event) {
+    // Ignoruj přechody mezi dětmi plochy — jen skutečné opuštění (vč. okna).
+    if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) {
+      dragActive = false;
+    }
+  }
+
+  function handleDashboardDrop(event) {
+    if (uploadModal.open || !dragHasFiles(event)) return;
+    event.preventDefault();
+    dragActive = false;
+    const dropped = Array.from(event.dataTransfer?.files ?? []);
+    if (dropped.length > 0) uploadModal = { open: true, files: dropped };
+  }
+
   function handleFormSaved() {
     formModal.wasSaved = true;
   }
@@ -328,18 +372,39 @@
   onMount(load);
 </script>
 
-<div class="shpd-dashboard">
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div
+  class="shpd-dashboard"
+  ondragover={handleDashboardDragOver}
+  ondragleave={handleDashboardDragLeave}
+  ondrop={handleDashboardDrop}
+>
   <header class="shpd-dashboard__header">
     <h1 class="shpd-dashboard__title">{t('dashboard.title')}</h1>
-    <Button
-      variant="ghost"
-      size="sm"
-      icon={iconRefresh}
-      label={t('dashboard.refresh')}
-      onclick={load}
-      disabled={loading}
-    />
+    <div class="shpd-dashboard__actions">
+      <Button
+        variant="ghost"
+        size="sm"
+        icon={iconUpload}
+        label={t('dashboard.upload.button')}
+        onclick={() => (uploadModal = { open: true, files: [] })}
+      />
+      <Button
+        variant="ghost"
+        size="sm"
+        icon={iconRefresh}
+        label={t('dashboard.refresh')}
+        onclick={load}
+        disabled={loading}
+      />
+    </div>
   </header>
+
+  {#if dragActive}
+    <div class="shpd-dashboard__drop-overlay" aria-hidden="true">
+      <span class="shpd-dashboard__drop-overlay-text">{t('dashboard.upload.dropOverlay')}</span>
+    </div>
+  {/if}
 
   {#if loading && !data}
     <div class="shpd-dashboard__loading">{t('common.loading')}</div>
@@ -376,6 +441,13 @@
   onClose={() => (previewNdx = null)}
   onApply={handleApplyFromModal}
   onReject={handleRejectFromModal}
+/>
+
+<MailUploadModal
+  open={uploadModal.open}
+  initialFiles={uploadModal.files}
+  onClose={closeUploadModal}
+  onUploaded={handleUploaded}
 />
 
 <RejectReasonPrompt
@@ -420,12 +492,46 @@
        position:sticky nechá „plavat" nad kartami během scrollu. */
     min-height: 100%;
     box-sizing: border-box;
+    /* Kotva pro drop overlay ručního nahrání */
+    position: relative;
   }
 
   .shpd-dashboard__header {
     display: flex;
     align-items: center;
     justify-content: space-between;
+  }
+
+  .shpd-dashboard__actions {
+    display: flex;
+    align-items: center;
+    gap: var(--shpd-space-sm);
+  }
+
+  /* Poloprůhledný overlay během dragu souborů nad plochou dashboardu.
+     pointer-events: none — dragleave/drop dál cílí na .shpd-dashboard. */
+  .shpd-dashboard__drop-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    background: color-mix(in srgb, var(--shpd-color-primary) 8%, transparent);
+    outline: 2px dashed var(--shpd-color-primary);
+    outline-offset: -8px;
+    border-radius: var(--shpd-radius-md);
+  }
+
+  .shpd-dashboard__drop-overlay-text {
+    padding: var(--shpd-space-sm) var(--shpd-space-lg);
+    background: var(--shpd-color-bg);
+    border: 1px solid var(--shpd-color-primary);
+    border-radius: var(--shpd-radius-md);
+    color: var(--shpd-color-text);
+    font-size: var(--shpd-font-size-md, 1rem);
+    box-shadow: var(--shpd-shadow-lg, 0 4px 16px rgba(0, 0, 0, 0.25));
   }
 
   .shpd-dashboard__title {

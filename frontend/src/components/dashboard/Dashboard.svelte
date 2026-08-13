@@ -81,6 +81,12 @@
   let uploadModal = $state({ open: false, files: [] });
   let dragActive = $state(false);
 
+  // Capabilities ze serveru (07b D9) — skrývají ovládání funkcí, které na
+  // DS neexistují nebo uživateli nepatří (upload bez core.mail, chat bez
+  // core.chat / pro ne-admina na hosting DS). Default true = zpětná
+  // kompatibilita se starším serverem bez pole (jen přechodně při deployi).
+  const caps = $derived(data?.capabilities ?? { mailUpload: true, chat: true });
+
   async function load() {
     loading = true;
     error = null;
@@ -339,7 +345,7 @@
   }
 
   function handleDashboardDragOver(event) {
-    if (uploadModal.open || !dragHasFiles(event)) return;
+    if (!caps.mailUpload || uploadModal.open || !dragHasFiles(event)) return;
     event.preventDefault();
     dragActive = true;
   }
@@ -352,7 +358,7 @@
   }
 
   function handleDashboardDrop(event) {
-    if (uploadModal.open || !dragHasFiles(event)) return;
+    if (!caps.mailUpload || uploadModal.open || !dragHasFiles(event)) return;
     event.preventDefault();
     dragActive = false;
     const dropped = Array.from(event.dataTransfer?.files ?? []);
@@ -382,13 +388,15 @@
   <header class="shpd-dashboard__header">
     <h1 class="shpd-dashboard__title">{t('dashboard.title')}</h1>
     <div class="shpd-dashboard__actions">
-      <Button
-        variant="ghost"
-        size="sm"
-        icon={iconUpload}
-        label={t('dashboard.upload.button')}
-        onclick={() => (uploadModal = { open: true, files: [] })}
-      />
+      {#if caps.mailUpload}
+        <Button
+          variant="ghost"
+          size="sm"
+          icon={iconUpload}
+          label={t('dashboard.upload.button')}
+          onclick={() => (uploadModal = { open: true, files: [] })}
+        />
+      {/if}
       <Button
         variant="ghost"
         size="sm"
@@ -432,7 +440,9 @@
     />
   {/if}
 
-  <ChatLauncher />
+  {#if caps.chat}
+    <ChatLauncher />
+  {/if}
 </div>
 
 <DocumentExchangePreviewModal
@@ -443,12 +453,14 @@
   onReject={handleRejectFromModal}
 />
 
-<MailUploadModal
-  open={uploadModal.open}
-  initialFiles={uploadModal.files}
-  onClose={closeUploadModal}
-  onUploaded={handleUploaded}
-/>
+{#if caps.mailUpload}
+  <MailUploadModal
+    open={uploadModal.open}
+    initialFiles={uploadModal.files}
+    onClose={closeUploadModal}
+    onUploaded={handleUploaded}
+  />
+{/if}
 
 <RejectReasonPrompt
   open={rejectNdx !== null}

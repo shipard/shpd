@@ -780,6 +780,7 @@ function dispatchMail(
 	return match ($route->action) {
 		'receiveIncoming'   => $ctrl->receiveIncoming($auth, $request),
 		'importMessage'     => $ctrl->importMessage($auth, $request),
+		'uploadMessages'    => $ctrl->uploadMessages($auth, $request),
 		'setSenderPassword' => $ctrl->setSenderPassword($auth, $request, (int) $route->id),
 		default             => Response::error('INTERNAL_ERROR', "Unknown mail action: {$route->action}", 500),
 	};

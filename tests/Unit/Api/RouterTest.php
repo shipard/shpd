@@ -791,6 +791,24 @@ class RouterTest extends TestCase
 		$this->assertSame('NOT_FOUND', $result->getPayload()['error']['code']);
 	}
 
+	// Ruční nahrání z dashboardu (tasks/mail-dashboard-upload.md) — literál
+	// 'upload' před parsováním {ndx}.
+
+	public function testMailMessagesUploadPost(): void
+	{
+		$result = $this->router->resolve('/api/v1/_mail/messages/upload', 'POST');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertSame('mail', $result->controller);
+		$this->assertSame('uploadMessages', $result->action);
+	}
+
+	public function testMailMessagesUploadGetNotAllowed(): void
+	{
+		$result = $this->router->resolve('/api/v1/_mail/messages/upload', 'GET');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
+	}
+
 	public function testExtractedDocumentsRoutesAreGone(): void
 	{
 		// Tabulka core_mail_extracted_documents zanikla — celý podstrom je 404.

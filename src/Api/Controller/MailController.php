@@ -39,6 +39,12 @@ class MailController
     /** docState Archiv (core.mail.docStatesIncoming) — cíl pre-triage. */
     private const DOC_STATE_ARCHIVED = 80;
 
+    /** Strop souborů v jedné dávce ručního uploadu (D6). */
+    private const UPLOAD_MAX_FILES = 20;
+
+    /** Systémové účty, kterým upload endpoint nepatří — je pro UI uživatele. */
+    private const UPLOAD_FORBIDDEN_LOGINS = [MailRouterProvisioner::ROUTER_LOGIN, '_ai_analyzer'];
+
     private AttachmentService $attachments;
     private IdempotencyStore $idempotency;
 
@@ -255,6 +261,185 @@ class MailController
         } catch (\Throwable $e) {
             ErrorLogger::logException($e, 'MailController::receiveIncoming ISDOC import failed');
         }
+    }
+
+    /**
+     * `POST /_mail/messages/upload` — ruční nahrání souborů z dashboardu
+     * (tasks/mail-dashboard-upload.md). Multipart: `mode` (single|perFile)
+     * + `attachments[]`; vznikne 1..N zpráv s defaulty dle D4, celá dávka
+     * v jedné transakci. Pre-triage pravidel odesílatele se přeskakuje —
+     * odesílatelem je přihlášený uživatel (D8).
+     */
+    public function uploadMessages(AuthContext $auth, Request $request): Response
+    {
+        if (!$auth->isAuthenticated) {
+            return Response::error('UNAUTHORIZED', 'Authentication required', 401);
+        }
+
+        $user = $this->db->fetchRow(
+            'SELECT login, email, full_name FROM core_system_users WHERE id = %i',
+            $auth->userId,
+        );
+        if ($user === null) {
+            return Response::error('UNAUTHORIZED', 'Authentication required', 401);
+        }
+        if (in_array((string) ($user['login'] ?? ''), self::UPLOAD_FORBIDDEN_LOGINS, true)) {
+            return Response::error('FORBIDDEN', 'This endpoint is for interactive users, not system accounts', 403);
+        }
+
+        $mode = trim((string) ($_POST['mode'] ?? ''));
+        if ($mode !== 'single' && $mode !== 'perFile') {
+            return Response::error('VALIDATION_ERROR', "mode musí být 'single' nebo 'perFile'", 422, [['field' => 'mode']]);
+        }
+
+        $files = $this->collectAttachmentFiles();
+        if ($files === []) {
+            return Response::error('VALIDATION_ERROR', 'Chybí soubory (pole attachments[])', 422, [['field' => 'attachments']]);
+        }
+        if (count($files) > self::UPLOAD_MAX_FILES) {
+            return Response::error(
+                'TOO_MANY_FILES',
+                'Najednou lze nahrát nejvýše ' . self::UPLOAD_MAX_FILES . ' souborů',
+                422,
+                [['field' => 'attachments']],
+            );
+        }
+
+        $mailboxResolved = $this->resolveMailbox('');
+        if ($mailboxResolved instanceof Response) {
+            return $mailboxResolved;
+        }
+        $mailboxId = $mailboxResolved;
+
+        $sender = $this->resolveUploadSender($user, $mailboxId);
+        if ($sender instanceof Response) {
+            return $sender;
+        }
+
+        // D4: single = jedna zpráva se všemi soubory, perFile = zpráva per soubor.
+        $plans = [];
+        if ($mode === 'single') {
+            $subject = self::subjectFromFilename($files[0]['name']);
+            if (count($files) > 1) {
+                $subject .= ' (+' . (count($files) - 1) . ')';
+            }
+            $plans[] = ['subject' => $subject, 'files' => $files];
+        } else {
+            foreach ($files as $file) {
+                $plans[] = ['subject' => self::subjectFromFilename($file['name']), 'files' => [$file]];
+            }
+        }
+
+        $fields = [
+            'sender_email' => $sender['email'],
+            'sender_name' => $sender['name'],
+            'received_at' => date('Y-m-d H:i:s'),
+            'external_message_id' => null,
+            'in_reply_to' => null,
+            'reply_references' => null,
+            'body_plain' => null,
+            'body_html' => null,
+            'source_type' => 1,
+            'is_bulk' => 0,
+        ];
+
+        $uploadedFiles = [];
+        $dibi = $this->db->getDibiConnection();
+
+        $dibi->begin();
+
+        try {
+            $messages = [];
+            $isdocBatches = [];
+
+            foreach ($plans as $plan) {
+                $messageId = $this->insertIncomingMessage(
+                    ['subject' => $plan['subject']] + $fields,
+                    $mailboxId,
+                    $auth->userId,
+                );
+
+                $contentAttachments = [];
+                foreach ($plan['files'] as $att) {
+                    $attResult = $this->attachments->upload(
+                        self::MAIL_TABLE_ID,
+                        $messageId,
+                        $att['name'],
+                        $att['tmp_name'],
+                        $auth->userId,
+                    );
+                    if (!$attResult['success']) {
+                        throw new \RuntimeException($attResult['error'] ?? 'Nelze uložit přílohu');
+                    }
+                    $uploadedFiles[] = $attResult['data'];
+                    $contentAttachments[] = $attResult['data'];
+                }
+
+                $createdRow = $this->db->fetchRow('SELECT message_id FROM %n WHERE id = %i', self::MAIL_TABLE, $messageId);
+                $messages[] = [
+                    'ndx' => $messageId,
+                    'message_id' => (string) ($createdRow['message_id'] ?? ''),
+                    'subject' => $plan['subject'],
+                ];
+                $isdocBatches[$messageId] = $contentAttachments;
+            }
+
+            $dibi->commit();
+
+            // Deterministický ISDOC import až po commitu dávky (D8) —
+            // nikdy nesmí shodit upload.
+            foreach ($isdocBatches as $messageId => $contentAttachments) {
+                $this->runIsdocImport($messageId, $contentAttachments);
+            }
+
+            return Response::success(['mode' => $mode, 'messages' => $messages], 201);
+        } catch (\Throwable $e) {
+            $dibi->rollback();
+            $this->cleanupOrphanedFiles($uploadedFiles);
+
+            return Response::error('INTERNAL_ERROR', $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * D4: odesílatel = přihlášený uživatel; bez platného e-mailu fallback
+     * na adresu default schránky.
+     *
+     * @param array<string, mixed> $user Řádek z core_system_users
+     * @return array{email: string, name: ?string}|Response
+     */
+    private function resolveUploadSender(array $user, int $mailboxId): array|Response
+    {
+        $email = trim((string) ($user['email'] ?? ''));
+        if ($email === '' || filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+            $mailbox = $this->db->fetchRow(
+                'SELECT email_address FROM core_mail_mailboxes WHERE id = %i',
+                $mailboxId,
+            );
+            $email = trim((string) ($mailbox['email_address'] ?? ''));
+        }
+        if ($email === '' || filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+            return Response::error(
+                'VALIDATION_ERROR',
+                'Nelze určit e-mail odesílatele — uživatel ani default schránka nemají platnou adresu',
+                422,
+                [['field' => 'sender_email']],
+            );
+        }
+
+        $name = trim((string) ($user['full_name'] ?? ''));
+        if ($name === '') {
+            $name = trim((string) ($user['login'] ?? ''));
+        }
+
+        return ['email' => $email, 'name' => $name !== '' ? $name : null];
+    }
+
+    /** Předmět z názvu souboru: basename bez přípony, prázdný → '(bez předmětu)'. */
+    private static function subjectFromFilename(string $name): string
+    {
+        $base = trim(pathinfo(basename($name), PATHINFO_FILENAME));
+        return $base !== '' ? $base : '(bez předmětu)';
     }
 
     /**

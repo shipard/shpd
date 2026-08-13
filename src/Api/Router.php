@@ -525,6 +525,15 @@ class Router
 	{
 		$rest = substr($subpath, strlen('/_mail/messages/'));
 
+		// Ruční nahrání souborů z dashboardu (tasks/mail-dashboard-upload.md).
+		// Literál před parsováním {ndx} — 'upload' není číselné ndx.
+		if ($rest === 'upload') {
+			if ($method !== 'POST') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('mail', 'uploadMessages');
+		}
+
 		// Message-centrické akce nad dokumentovým návrhem poslední analýzy
 		// (tasks/mail-message-centric.md A4). Preview je GET (read-only),
 		// zbytek POST.

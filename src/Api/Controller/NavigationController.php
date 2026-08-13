@@ -38,8 +38,8 @@ use Shipard\Core\Utils\JsoncParser;
  * vynucuje TableAccessGuard (prefix core_system_, adminOnly na runtime
  * TableDefinition) + explicitní `adminOnly: true` na deklaraci vieweru/
  * panelu. `$auth === null` (degradovaný kontext) filtruje jako ne-admin
- * (fail-closed). Chat se ne-adminovi na DS s aktivním hosting.core
- * nevrací (D5).
+ * (fail-closed). Chat leaf se emituje jen při aktivním core.chat (07b D10)
+ * a ne-adminovi na DS s aktivním hosting.core se nevrací (D5).
  *
  * API tvar odpovědi (id/label/children/type/icon/viewerId/table) je shodný
  * s dřívějším prefix-groupingem — Sidebar.svelte se nemění.
@@ -210,9 +210,12 @@ class NavigationController
             'icon'   => 'dashboard',
             '_order' => 20,
         ];
-        // Chat se ne-adminovi na DS s aktivním hosting.core nevrací (D5) —
-        // stejná detekce hostingu jako AppController (hosting_core_data_sources).
-        if ($isAdmin || !isset($tables['hosting_core_data_sources'])) {
+        // Chat leaf jen při aktivním core.chat (07b D10) a zároveň ne pro
+        // ne-admina na DS s aktivním hosting.core (D5). Výraz musí zůstat
+        // identický s capability `chat` v DashboardController::dashboard().
+        if (isset($tables['core_chat_conversations'])
+            && ($isAdmin || !isset($tables['hosting_core_data_sources']))
+        ) {
             $topLeaves[] = [
                 'id'     => 'chat',
                 'label'  => 'Chat',

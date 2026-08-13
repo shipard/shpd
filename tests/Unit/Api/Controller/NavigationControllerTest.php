@@ -83,6 +83,17 @@ class NavigationControllerTest extends TestCase
         return $cfg;
     }
 
+    /**
+     * Výchozí runtime mapa tabulek — běžný DS s aktivním core.chat
+     * (Chat leaf vyžaduje core_chat_conversations, 07b D10).
+     *
+     * @return array<string, TableDefinition>
+     */
+    private function defaultTables(): array
+    {
+        return ['core_chat_conversations' => $this->tableDef(adminOnly: false)];
+    }
+
     /** @param string[] $modules @return array<int, array> the navigation tree */
     private function tree(array $modules, string $language = 'cs', ?ConfigRuntime $cfg = null): array
     {
@@ -91,6 +102,9 @@ class NavigationControllerTest extends TestCase
             $this->resolver,
             $language,
             $cfg ?? $this->configRuntime($language),
+            null,
+            null,
+            $this->defaultTables(),
         );
         $this->assertInstanceOf(Response::class, $resp);
         return $resp->getPayload()['data'];
@@ -272,7 +286,15 @@ class NavigationControllerTest extends TestCase
         // configRuntime === null → controller uses its built-in PHP
         // SECTIONS_FALLBACK (degraded but functional, no crash). Call the
         // controller directly so the tree() helper does not substitute a mock.
-        $resp = $this->ctrl->navigation($this->config(['install.base']), $this->resolver, 'cs', null);
+        $resp = $this->ctrl->navigation(
+            $this->config(['install.base']),
+            $this->resolver,
+            'cs',
+            null,
+            null,
+            null,
+            $this->defaultTables(),
+        );
         $tree = $resp->getPayload()['data'];
         $ids  = array_map(fn($n) => $n['id'], $tree);
 
@@ -489,7 +511,7 @@ class NavigationControllerTest extends TestCase
         $modRoot  = $this->makePanelFixtureModule();
         $resolver = new ModulePathResolver([$modRoot, dirname(__DIR__, 4) . '/modules']);
 
-        $tree = $this->treeWith(['test.navpanel'], $resolver, $this->nonAdmin(), []);
+        $tree = $this->treeWith(['test.navpanel'], $resolver, $this->nonAdmin(), $this->defaultTables());
 
         $this->assertSame('panel:testPortal', $tree[0]['id']);
         $this->assertSame('panel', $tree[0]['type']);
@@ -507,36 +529,46 @@ class NavigationControllerTest extends TestCase
 
     public function testChatGatedForNonAdminOnHostingDs(): void
     {
-        $hosting = ['hosting_core_data_sources' => $this->tableDef(adminOnly: true)];
+        // Chat leaf = core.chat aktivní && (admin || hosting neaktivní) —
+        // D5 z hosting-07 + D10 z 07b, identické s capability `chat`
+        // v DashboardController.
+        $chatAndHosting = $this->defaultTables()
+            + ['hosting_core_data_sources' => $this->tableDef(adminOnly: true)];
 
         // Ne-admin na DS s aktivním hosting.core → Chat chybí, Dashboard je.
-        $tree = $this->treeWith(['install.base'], $this->resolver, $this->nonAdmin(), $hosting);
+        $tree = $this->treeWith(['install.base'], $this->resolver, $this->nonAdmin(), $chatAndHosting);
         $ids  = array_map(fn($n) => $n['id'], $tree);
         $this->assertNotContains('chat', $ids);
         $this->assertContains('dashboard', $ids);
 
-        // Admin na hosting DS Chat má.
-        $tree = $this->treeWith(['install.base'], $this->resolver, $this->admin(), $hosting);
+        // Admin na hosting DS s aktivním chatem Chat má.
+        $tree = $this->treeWith(['install.base'], $this->resolver, $this->admin(), $chatAndHosting);
         $this->assertContains('chat', array_map(fn($n) => $n['id'], $tree));
 
-        // Ne-admin bez hostingu Chat má.
-        $tree = $this->treeWith(['install.base'], $this->resolver, $this->nonAdmin(), []);
+        // Ne-admin bez hostingu (chat aktivní) Chat má.
+        $tree = $this->treeWith(['install.base'], $this->resolver, $this->nonAdmin(), $this->defaultTables());
         $this->assertContains('chat', array_map(fn($n) => $n['id'], $tree));
+
+        // Bez core.chat Chat chybí i adminovi bez hostingu (07b D10).
+        $tree = $this->treeWith(['install.base'], $this->resolver, $this->admin(), []);
+        $this->assertNotContains('chat', array_map(fn($n) => $n['id'], $tree));
     }
 
     public function testHostingPortalPanelOrderInProductionTree(): void
     {
-        // Reálný hosting.core: portál(10) → Dashboard(20) → Chat(25) → _top
-        // viewery (30+). Hosting viewery jsou v settingsItems → v hlavní
-        // navigaci nejsou ani adminovi.
+        // Reálný hosting.core: portál(10) → Dashboard(20) → _top viewery
+        // (30+). Dedikovaný hosting DS nemá core.chat → Chat leaf chybí
+        // i adminovi (07b D10). Hosting viewery jsou v settingsItems →
+        // v hlavní navigaci nejsou ani adminovi.
         $hosting = ['hosting_core_data_sources' => $this->tableDef(adminOnly: true)];
 
         $tree = $this->treeWith(['install.base', 'hosting.core'], $this->resolver, $this->admin(), $hosting);
         $ids  = array_map(fn($n) => $n['id'], $tree);
         $this->assertSame(
-            ['panel:hostingPortal', 'dashboard', 'chat', 'viewer:core.mail.incoming'],
-            array_slice($ids, 0, 4),
+            ['panel:hostingPortal', 'dashboard', 'viewer:core.mail.incoming'],
+            array_slice($ids, 0, 3),
         );
+        $this->assertNotContains('chat', $ids);
         $this->assertSame('Moje zdroje dat', $tree[0]['label']);
         $this->assertSame('panel', $tree[0]['type']);
         $this->assertSame('hostingPortal', $tree[0]['panelId']);

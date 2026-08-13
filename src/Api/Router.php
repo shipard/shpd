@@ -197,6 +197,28 @@ class Router
 			return new Route('hostingPortal', 'myDatasources');
 		}
 
+		// Self-service zakládání DS z portálu (hosting-08 D4).
+		if ($subpath === '/_hosting/portal/create-meta') {
+			if ($method !== 'GET') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('hostingPortal', 'createMeta');
+		}
+
+		if ($subpath === '/_hosting/portal/check-web-id') {
+			if ($method !== 'GET') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('hostingPortal', 'checkWebId');
+		}
+
+		if ($subpath === '/_hosting/portal/create-datasource') {
+			if ($method !== 'POST') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('hostingPortal', 'createDatasource');
+		}
+
 		// OIDC Provider hostingu (D2) — gating (modul + issuer setting) dělá
 		// kontroler; discovery cesta odpovídá RP skládání
 		// rtrim(issuer,'/') + '/.well-known/openid-configuration'.

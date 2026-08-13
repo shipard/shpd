@@ -264,6 +264,7 @@ class HostingDataSourceDocumentTest extends TestCase
     {
         $doc = $this->createDocument();
         $data = $this->requestData([
+            'name' => '',
             'web_id' => '',
             'server' => null,
             'install_module' => '',
@@ -276,6 +277,7 @@ class HostingDataSourceDocumentTest extends TestCase
         $this->assertFalse($result->isValid());
 
         $columns = array_map(fn($e) => $e->column, $result->getErrors());
+        $this->assertContains('name', $columns);
         $this->assertContains('web_id', $columns);
         $this->assertContains('server', $columns);
         $this->assertContains('install_module', $columns);

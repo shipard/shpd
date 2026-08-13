@@ -500,6 +500,36 @@ class RouterTest extends TestCase
 		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
 	}
 
+	// Hosting portal self-service routes (hosting-08 D4)
+
+	public function testHostingPortalCreateMetaGet(): void
+	{
+		$result = $this->router->resolve('/api/v1/_hosting/portal/create-meta', 'GET');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'hostingPortal', 'createMeta');
+	}
+
+	public function testHostingPortalCheckWebIdGet(): void
+	{
+		$result = $this->router->resolve('/api/v1/_hosting/portal/check-web-id', 'GET');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'hostingPortal', 'checkWebId');
+	}
+
+	public function testHostingPortalCreateDatasourcePost(): void
+	{
+		$result = $this->router->resolve('/api/v1/_hosting/portal/create-datasource', 'POST');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'hostingPortal', 'createDatasource');
+	}
+
+	public function testHostingPortalCreateDatasourceGetNotAllowed(): void
+	{
+		$result = $this->router->resolve('/api/v1/_hosting/portal/create-datasource', 'GET');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
+	}
+
 	// Hosting OIDC OP routes (D2)
 
 	public function testHostingOidcDiscoveryGet(): void

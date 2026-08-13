@@ -296,7 +296,7 @@ function dispatch(
 		'accounting' => dispatchAccounting($route, $request, $db, $configRuntime, $journalEventDispatcher),
 		'bank'    => dispatchBank($route, $request, $auth, $tables, $db, $resolved, $configRuntime, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher, $journalEventDispatcher),
 		'personsRegistry' => dispatchPersonsRegistry($route, $request, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $serverConfig),
-		'hostingPortal' => dispatchHostingPortal($route, $auth, $db, $tables),
+		'hostingPortal' => dispatchHostingPortal($route, $request, $auth, $db, $tables, $resolved, $modulePathResolver, $configRuntime, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'hostingOidc' => dispatchHostingOidc($route, $request, $auth, $db, $tables, $resolved),
 		'hostingServer' => dispatchHostingServer($route, $request, $db, $tables, $resolved),
 		'hostingMail' => dispatchHostingMail($route, $request, $db, $tables, $resolved),
@@ -442,13 +442,22 @@ function dispatchBank(
  */
 function dispatchHostingPortal(
 	Route $route,
+	Request $request,
 	AuthContext $auth,
 	\Shipard\Core\Database\DataSourceConnection $db,
 	array $tables,
+	\Shipard\Api\ResolvedDataSource $resolved,
+	ModulePathResolver $modulePathResolver,
+	?\Shipard\Core\Config\ConfigRuntime $configRuntime,
+	\Shipard\Core\Document\DocumentRegistry $documentRegistry,
 ): Response {
 	$ctrl = new \Shipard\Api\Controller\HostingPortalController();
+	$installModules = new \Shipard\Core\Module\InstallModuleRegistry($modulePathResolver);
 	return match ($route->action) {
 		'myDatasources' => $ctrl->myDatasources($auth, $db, $tables),
+		'createMeta'    => $ctrl->createMeta($auth, $db, $tables, $installModules, $configRuntime, resolveLanguage($request, $resolved->config)),
+		'checkWebId'    => $ctrl->checkWebId($request, $auth, $db, $tables),
+		'createDatasource' => $ctrl->createDatasource($request, $auth, $db, $tables, $installModules, $configRuntime, $resolved->config, $documentRegistry),
 		default         => Response::error('INTERNAL_ERROR', "Unknown hostingPortal action: {$route->action}", 500),
 	};
 }

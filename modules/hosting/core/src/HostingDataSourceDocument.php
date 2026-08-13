@@ -134,6 +134,7 @@ class HostingDataSourceDocument extends Document
         }
 
         $required = [
+            'name'           => 'Název',
             'web_id'         => 'Web ID',
             'install_module' => 'Install modul',
             'language'       => 'Jazyk',

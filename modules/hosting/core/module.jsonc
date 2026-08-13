@@ -84,6 +84,17 @@
                     "hint:cs": "Trvalá hodnota, např. https://host/api/v1/_hosting/oidc (dev: http://127.0.0.1/{ds-id}/api/v1/_hosting/oidc). Změna zneplatní všechny navázané identity na klientských DS (D12).",
                     "hint:en": "Permanent value, e.g. https://host/api/v1/_hosting/oidc (dev: http://127.0.0.1/{ds-id}/api/v1/_hosting/oidc). Changing it invalidates all linked identities on client data sources (D12).",
                     "maxLength": 200
+                },
+                {
+                    "id": "hosting.selfService.maxOwned",
+                    "type": "text",
+                    "name": "Max owned data sources",
+                    "name:cs": "Strop vlastněných zdrojů dat",
+                    "name:en": "Max owned data sources",
+                    "hint": "Max data sources owned by one portal user (self-service). Empty = 5, 0 = no limit.",
+                    "hint:cs": "Kolik zdrojů dat smí jeden uživatel portálu vlastnit (self-service). Prázdné = 5, 0 = bez limitu.",
+                    "hint:en": "Max data sources owned by one portal user (self-service). Empty = 5, 0 = no limit.",
+                    "maxLength": 10
                 }
             ]
         }

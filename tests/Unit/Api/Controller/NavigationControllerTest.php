@@ -524,6 +524,34 @@ class NavigationControllerTest extends TestCase
         $this->assertContains('chat', array_map(fn($n) => $n['id'], $tree));
     }
 
+    public function testHostingPortalPanelOrderInProductionTree(): void
+    {
+        // Reálný hosting.core: portál(10) → Dashboard(20) → Chat(25) → _top
+        // viewery (30+). Hosting viewery jsou v settingsItems → v hlavní
+        // navigaci nejsou ani adminovi.
+        $hosting = ['hosting_core_data_sources' => $this->tableDef(adminOnly: true)];
+
+        $tree = $this->treeWith(['install.base', 'hosting.core'], $this->resolver, $this->admin(), $hosting);
+        $ids  = array_map(fn($n) => $n['id'], $tree);
+        $this->assertSame(
+            ['panel:hostingPortal', 'dashboard', 'chat', 'viewer:core.mail.incoming'],
+            array_slice($ids, 0, 4),
+        );
+        $this->assertSame('Moje zdroje dat', $tree[0]['label']);
+        $this->assertSame('panel', $tree[0]['type']);
+        $this->assertSame('hostingPortal', $tree[0]['panelId']);
+
+        // Ne-admin: portál + Dashboard ano, Chat ne (D5), žádné hosting
+        // viewery.
+        $tree = $this->treeWith(['install.base', 'hosting.core'], $this->resolver, $this->nonAdmin(), $hosting);
+        $ids  = array_map(fn($n) => $n['id'], $tree);
+        $this->assertSame(['panel:hostingPortal', 'dashboard'], array_slice($ids, 0, 2));
+        $this->assertNotContains('chat', $ids);
+        foreach ($this->allViewerIds($tree) as $viewerId) {
+            $this->assertStringStartsNotWith('hosting.', $viewerId);
+        }
+    }
+
     // --- fixture helpers ---
 
     /** Creates a temp module root with a viewer that has NO navSection. */

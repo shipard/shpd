@@ -85,6 +85,21 @@
         }
     ],
 
+    // Portálový přehled „Moje zdroje dat" — root-level leaf hlavní navigace
+    // pro všechny přihlášené (D1/D2, tasks/hosting-07-portal-in-shell.md).
+    // Data čte z /_hosting/portal/my-datasources (scopováno na uživatele).
+    "panels": [
+        {
+            "id": "hostingPortal",
+            "name": "My data sources",
+            "name:cs": "Moje zdroje dat",
+            "name:en": "My data sources",
+            "icon": "database",
+            "navSection": "_top",
+            "navOrder": 10
+        }
+    ],
+
     "viewers": [
         {
             "id": "hosting.core.servers",

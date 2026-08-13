@@ -146,6 +146,45 @@ class DocDocumentValidateTest extends TestCase
         $this->assertNotEmpty($matched);
     }
 
+    public function testConfirmedHeaderOnlySaveReadsRowsFromDb(): void
+    {
+        // Header-only data-save ve 20: rows nejsou v payloadu (spravuje je
+        // sub-form), řádky existují v DB → no_rows nesmí falešně padnout.
+        $db = $this->createMock(Connection::class);
+        $db->method('fetch')->willReturn(new Row(['id' => 1])); // own person
+        $db->method('fetchAll')->willReturn([
+            new Row(['id' => 7, 'row_kind' => 1, 'total_price' => 100]),
+        ]);
+        $doc = new TestableDocsHeadsDocument();
+        $doc->setDb($db);
+
+        $data = $this->confirmedData();
+        unset($data['rows']);
+        $data['id'] = 42;
+
+        $this->assertTrue($doc->validate($data)->isValid());
+    }
+
+    public function testConfirmedHeaderOnlySaveFailsWithoutRowsInDb(): void
+    {
+        $db = $this->createMock(Connection::class);
+        $db->method('fetch')->willReturn(new Row(['id' => 1])); // own person
+        $db->method('fetchAll')->willReturn([]);
+        $doc = new TestableDocsHeadsDocument();
+        $doc->setDb($db);
+
+        $data = $this->confirmedData();
+        unset($data['rows']);
+        $data['id'] = 42;
+
+        $errors = $doc->validate($data)->toArray();
+        $matched = array_filter(
+            $errors,
+            fn(array $e) => $e['column'] === 'rows' && $e['code'] === 'no_rows',
+        );
+        $this->assertNotEmpty($matched);
+    }
+
     public function testConfirmedRequiresExchangeRateForForeignCurrency(): void
     {
         $doc = new TestableDocsHeadsDocument();

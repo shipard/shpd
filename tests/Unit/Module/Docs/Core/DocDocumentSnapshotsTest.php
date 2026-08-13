@@ -276,6 +276,35 @@ class DocDocumentSnapshotsTest extends TestCase
         $this->assertSame('Nový Partner', $customer['name']);
     }
 
+    public function testMaintainSnapshotsDataSaveWithoutDocStateFallsBackToOriginal(): void
+    {
+        // Data-save bez docState v payloadu (volání mimo gateway, např.
+        // recomputeHeader): efektivní stav je stav z originálu (20) —
+        // snapshoty se při změně partnera musí přestavět, ne přeskočit.
+        $db = $this->dbReturning([
+            new Row(['id' => 60, 'full_name' => 'Nový Partner']),
+            new Row(['id' => 1]),
+            new Row(['id' => 1]),
+            null,
+            new Row(['id' => 1, 'full_name' => 'Naše firma']),
+        ]);
+        $doc = new TestableDocsHeadsDocument();
+        $doc->setDb($db);
+        $doc->setConfig($this->buildConfig());
+
+        $data = [
+            'doc_type' => 'invno', 'partner' => 60,
+            'partner_address' => null, 'bank_account' => null, 'vat_registration' => null,
+            'supplier_snapshot' => ['name' => 'Naše firma'],
+            'customer_snapshot' => ['name' => 'Starý Partner'],
+        ];
+        $original = ['docState' => 20, 'partner' => 50];
+        $doc->maintainSnapshotsPub($data, $original);
+
+        $customer = json_decode($data['customer_snapshot'], true);
+        $this->assertSame('Nový Partner', $customer['name']);
+    }
+
     public function testMaintainSnapshotsKeepsExistingWhenUnchanged(): void
     {
         $doc = new TestableDocsHeadsDocument();

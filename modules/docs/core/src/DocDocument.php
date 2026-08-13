@@ -79,8 +79,9 @@ abstract class DocDocument extends Document
             if ($vatMode !== 0 && empty($data['vat_registration'])) {
                 $result->addError('vat_registration', 'Registrace DPH je povinná', 'required');
             }
-            $rows = $data['rows'] ?? null;
-            if (!is_array($rows) || count($rows) === 0) {
+            // Header-only save (řádky spravuje sub-form, v payloadu nejsou)
+            // nesmí falešně padat na no_rows — fallback čte řádky z DB.
+            if (count($this->resolveRowsForCompute($data)) === 0) {
                 $result->addError('rows', 'Doklad musí mít alespoň jeden řádek', 'no_rows');
             }
             if (!empty($data['doc_currency']) && !empty($data['home_currency'])
@@ -963,16 +964,19 @@ abstract class DocDocument extends Document
 
     protected function processStateTransition(array &$data, ?array $originalData): void
     {
-        $newState = (int) ($data['docState'] ?? 10);
-        $oldState = (int) ($originalData['docState'] ?? $newState);
-
-        if ($oldState === 10 && $newState === 20) {
+        // Jediné místo pravdy pro detekci přechodu je trackStateChange (běží
+        // v beforeSave jako první, se správným fallbackem na originál).
+        // Data-save bez změny stavu nesmí nikdy sáhnout na číslo dokladu.
+        $t = $this->stateTransition;
+        if ($t === null) {
+            return;
+        }
+        if ($t['old'] === 10 && $t['new'] === 20) {
             $this->assignDocumentNumber($data);
             return;
         }
-        if ($oldState === 20 && $newState === 10) {
+        if ($t['old'] === 20 && $t['new'] === 10) {
             $this->releaseDocumentNumber($data, $originalData);
-            return;
         }
     }
 
@@ -1257,7 +1261,9 @@ abstract class DocDocument extends Document
 
     protected function maintainSnapshots(array &$data, ?array $originalData): void
     {
-        $newState = (int) ($data['docState'] ?? 10);
+        // Chybějící docState v payloadu = stav se nemění (gateway ho injektuje,
+        // fallback na originál kryje volání mimo gateway — recomputeHeader).
+        $newState = (int) ($data['docState'] ?? $originalData['docState'] ?? 10);
         if (!in_array($newState, self::SNAPSHOT_STATES, true)) {
             return;
         }

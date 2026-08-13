@@ -184,6 +184,59 @@ class DocDocumentNumberingTest extends TestCase
         $doc->assignDocumentNumberPub($data);
     }
 
+    // ── data-save bez docState — regresní testy falešného release ──────────
+
+    public function testDataSaveWithoutDocStateNeverTouchesNumber(): void
+    {
+        // Release i assign čtou z DB (max_seq / series) — když se fetch nikdy
+        // nezavolá, na číslo dokladu se prokazatelně nesáhlo.
+        $db = $this->createMock(Connection::class);
+        $db->expects($this->never())->method('fetch');
+
+        $doc = new TestableDocsHeadsDocument();
+        $doc->setDb($db);
+
+        // Data-save z formuláře: docState je system sloupec, v payloadu chybí.
+        // Doklad je v Potvrzeno (20) s přiděleným číslem.
+        $data = ['id' => 42, 'sequence_number' => 5, 'doc_number' => '126A0005'];
+        $original = [
+            'docState' => 20, 'number_series' => 1, 'fiscal_year' => 100,
+            'sequence_number' => 5, 'doc_number' => '126A0005',
+        ];
+
+        $doc->trackStateChangePub($data, $original);
+        $doc->processStateTransitionPub($data, $original);
+
+        $this->assertSame(5, $data['sequence_number']);
+        $this->assertSame('126A0005', $data['doc_number']);
+        $this->assertArrayNotHasKey('supplier_snapshot', $data);
+        $this->assertSame([], $doc->executedSql); // počítadlo nedekrementováno
+    }
+
+    public function testDataSaveWithInjectedUnchangedDocStateNeverTouchesNumber(): void
+    {
+        // Gateway injektuje efektivní stav do payloadu — stav 20 → 20 beze
+        // změny pořád nesmí být přechod.
+        $db = $this->createMock(Connection::class);
+        $db->expects($this->never())->method('fetch');
+
+        $doc = new TestableDocsHeadsDocument();
+        $doc->setDb($db);
+
+        $data = ['id' => 42, 'docState' => 20, 'sequence_number' => 5, 'doc_number' => '126A0005'];
+        $original = [
+            'docState' => 20, 'number_series' => 1, 'fiscal_year' => 100,
+            'sequence_number' => 5, 'doc_number' => '126A0005',
+        ];
+
+        $doc->trackStateChangePub($data, $original);
+        $doc->processStateTransitionPub($data, $original);
+
+        $this->assertSame(5, $data['sequence_number']);
+        $this->assertSame('126A0005', $data['doc_number']);
+        $this->assertSame([], $doc->executedSql);
+    }
+
     // ── releaseDocumentNumber ──────────────────────────────────────────────
 
     public function testReleaseDocumentNumberLastInSeries(): void

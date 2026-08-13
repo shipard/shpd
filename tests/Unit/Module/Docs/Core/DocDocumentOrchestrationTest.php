@@ -60,6 +60,7 @@ class DocDocumentOrchestrationTest extends TestCase
         $doc = new TestableDocsHeadsDocument();
         // No DB, no config — insert with no original data, default 10→10
         $data = ['docState' => 10];
+        $doc->trackStateChangePub($data, null);
         $doc->processStateTransitionPub($data, null);
 
         // No exception thrown — just no-op
@@ -96,6 +97,7 @@ class DocDocumentOrchestrationTest extends TestCase
             'doc_type'        => 'invno',
             'accounting_date' => '2026-05-06',
         ];
+        $doc->trackStateChangePub($data, ['docState' => 10]);
         $doc->processStateTransitionPub($data, ['docState' => 10]);
 
         $this->assertSame(6, $data['sequence_number']);
@@ -112,6 +114,7 @@ class DocDocumentOrchestrationTest extends TestCase
 
         $data = ['id' => 42, 'docState' => 10, 'sequence_number' => 5, 'doc_number' => '126A0005'];
         $original = ['docState' => 20, 'number_series' => 1, 'fiscal_year' => 100, 'sequence_number' => 5];
+        $doc->trackStateChangePub($data, $original);
         $doc->processStateTransitionPub($data, $original);
 
         $this->assertNull($data['sequence_number']);
@@ -122,6 +125,7 @@ class DocDocumentOrchestrationTest extends TestCase
     {
         $doc = new TestableDocsHeadsDocument();
         $data = ['docState' => 40, 'sequence_number' => 5, 'doc_number' => '126A0005'];
+        $doc->trackStateChangePub($data, ['docState' => 20]);
         $doc->processStateTransitionPub($data, ['docState' => 20]);
 
         // No changes — Confirmed → Done is just a state flag
@@ -133,6 +137,7 @@ class DocDocumentOrchestrationTest extends TestCase
     {
         $doc = new TestableDocsHeadsDocument();
         $data = ['docState' => 30, 'sequence_number' => 5];
+        $doc->trackStateChangePub($data, ['docState' => 40]);
         $doc->processStateTransitionPub($data, ['docState' => 40]);
 
         $this->assertSame(5, $data['sequence_number']);

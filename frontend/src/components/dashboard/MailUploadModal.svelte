@@ -28,31 +28,39 @@
   let dragOver = $state(false);
   let fileInput = $state(null);
 
-  // Reset výběru při každém otevření; initialFiles přichází z dropu na dashboard.
-  $effect(() => {
-    if (open) {
-      files = [];
-      errorMsg = null;
-      limitHit = false;
-      dragOver = false;
-      addFiles(initialFiles);
-    }
-  });
-
-  function addFiles(list) {
-    const incoming = Array.from(list ?? []);
-    const next = [...files];
+  // Čisté sloučení výběru — effect(open) nesmí číst stav `files` (zápis do
+  // něj by effect spouštěl znovu → effect_update_depth_exceeded), proto
+  // merge dostává aktuální seznam parametrem.
+  function mergeFiles(current, incoming) {
+    const list = [...current];
     let refused = false;
-    for (const file of incoming) {
+    for (const file of Array.from(incoming ?? [])) {
       // Duplicitní přidání téhož souboru (name+size) se ignoruje.
-      if (next.some((f) => f.name === file.name && f.size === file.size)) continue;
-      if (next.length >= MAX_FILES) {
+      if (list.some((f) => f.name === file.name && f.size === file.size)) continue;
+      if (list.length >= MAX_FILES) {
         refused = true;
         continue;
       }
-      next.push(file);
+      list.push(file);
     }
-    files = next;
+    return { list, refused };
+  }
+
+  // Reset výběru při každém otevření; initialFiles přichází z dropu na dashboard.
+  $effect(() => {
+    if (open) {
+      errorMsg = null;
+      dragOver = false;
+      submitting = false;
+      const { list, refused } = mergeFiles([], initialFiles);
+      files = list;
+      limitHit = refused;
+    }
+  });
+
+  function addFiles(incoming) {
+    const { list, refused } = mergeFiles(files, incoming);
+    files = list;
     limitHit = refused;
   }
 

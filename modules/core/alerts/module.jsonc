@@ -26,7 +26,11 @@
             "table": "core_alerts_alerts",
             "class": "Shipard\\Module\\Core\\Alerts\\AlertsViewer",
             "navSection": "system",
-            "navOrder": 10
+            "navOrder": 10,
+            // Úklid navigace, ne serverová bariéra (07b D7): tabulka zůstává
+            // bez adminOnly — ne-admin alerty čte a obsluhuje přes dashboard
+            // feed (akce open_viewer/open_form musí fungovat).
+            "adminOnly": true
         }
     ],
 

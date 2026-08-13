@@ -94,7 +94,13 @@ class NavigationControllerTest extends TestCase
         return ['core_chat_conversations' => $this->tableDef(adminOnly: false)];
     }
 
-    /** @param string[] $modules @return array<int, array> the navigation tree */
+    /**
+     * Plný strom admina na běžném DS (layout testy) — admin auth, protože
+     * ne-adminovi se strom ořezává (adminOnly viewery, např. Upozornění);
+     * ne-admin varianty testují treeWith() explicitně.
+     *
+     * @param string[] $modules @return array<int, array> the navigation tree
+     */
     private function tree(array $modules, string $language = 'cs', ?ConfigRuntime $cfg = null): array
     {
         $resp = $this->ctrl->navigation(
@@ -103,7 +109,7 @@ class NavigationControllerTest extends TestCase
             $language,
             $cfg ?? $this->configRuntime($language),
             null,
-            null,
+            $this->admin(),
             $this->defaultTables(),
         );
         $this->assertInstanceOf(Response::class, $resp);
@@ -292,7 +298,7 @@ class NavigationControllerTest extends TestCase
             'cs',
             null,
             null,
-            null,
+            $this->admin(),
             $this->defaultTables(),
         );
         $tree = $resp->getPayload()['data'];
@@ -552,6 +558,19 @@ class NavigationControllerTest extends TestCase
         // Bez core.chat Chat chybí i adminovi bez hostingu (07b D10).
         $tree = $this->treeWith(['install.base'], $this->resolver, $this->admin(), []);
         $this->assertNotContains('chat', array_map(fn($n) => $n['id'], $tree));
+    }
+
+    public function testAlertsViewerAdminOnlyInNavigation(): void
+    {
+        // D7 (07b): viewer Upozornění nese adminOnly na deklaraci — ne-admin
+        // ho nedostane na žádném DS (alerty obsluhuje přes dashboard feed),
+        // admin ano. Tabulka core_alerts_alerts bariéru nemá (feed akce
+        // open_viewer/open_form ne-adminovi fungují dál).
+        $tree = $this->treeWith(['install.base'], $this->resolver, $this->nonAdmin(), $this->defaultTables());
+        $this->assertNotContains('core.alerts.alerts', $this->allViewerIds($tree));
+
+        $tree = $this->treeWith(['install.base'], $this->resolver, $this->admin(), $this->defaultTables());
+        $this->assertContains('core.alerts.alerts', $this->allViewerIds($tree));
     }
 
     public function testHostingPortalPanelOrderInProductionTree(): void

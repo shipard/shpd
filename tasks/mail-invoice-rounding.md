@@ -1,6 +1,6 @@
 # Task: Zaokrouhlení celkové částky u faktur z došlé pošty
 
-**Stav:** částečně — implementováno, zbývá ověření a nasazení promptu
+**Stav:** hotovo — implementováno v 0e69c87, prompt v4.0.0 nasazen (dev + alfa), ověřeno na dev DS 14. 8. 2026 (oba směry zaokrouhlení, derivace modu, kontace 548/648)
 
 **Cíl:** Faktury se zaokrouhlenou částkou k úhradě (typicky na celé Kč)
 projdou review a apply bez falešného `totals_mismatch` warningu a vzniklý

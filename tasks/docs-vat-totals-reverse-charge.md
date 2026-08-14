@@ -1,8 +1,8 @@
 # Oprava DPH okrajů dokladů — nulové součty, samovyměření, noPayTax řádky
 
-**Stav:** naplánováno — opravy Z1–Z3 v `DocDocument` (nulové součty, samovyměření, noPayTax)
+**Stav:** hotovo — implementováno 20. 7. 2026 (c011ad8, 7202b7e, bb7a5b3, d55199c), ověřeno na dev DS 14. 8. 2026
 
-> **Status:** navrženo · **Modul:** docs.core, world.vat · **Typ:** oprava chyb
+> **Status:** hotovo · **Modul:** docs.core, world.vat · **Typ:** oprava chyb
 > **Návaznost:** `world-vat-cz.md` (DPH konfigurace), nálezy z dev DS
 > aaaa-bbbb-cccc-dddd (DS A) a eeee-ffff-gggg-hhhh (DS B)
 
@@ -172,16 +172,16 @@ tisková data). Plošnou opravu dat řeší re-import (viz Mimo scope).
 
 ## Hotovo když
 
-- [ ] Doklad jen s bezkódovými řádky má po uložení nenulové
+- [x] Doklad jen s bezkódovými řádky má po uložení nenulové
       `total_base/total_amount` (= Σ řádků) a vyrovnaný deník s DAL 321.
-- [ ] Doklad s `cz-115` řádkem má v rekapitulaci pár `cz-203`
+- [x] Doklad s `cz-115` řádkem má v rekapitulaci pár `cz-203`
       (`is_reverse_pair = 1`, stejná sazba) a vyrovnaný deník
       s DAL 343203.
-- [ ] Řádek s `noPayTax` kódem má `vat_total = vat_base`; výstupní kódy
+- [x] Řádek s `noPayTax` kódem má `vat_total = vat_base`; výstupní kódy
       mají `vat_amount = 0`, vstupní samovyměřovací spočtenou.
-- [ ] Neznámý `vat_code` při uložení vyhodí DomainException (neztratí se
+- [x] Neznámý `vat_code` při uložení vyhodí DomainException (neztratí se
       ze součtů).
-- [ ] Všechny reverse kódy mají sazby ve `vat-cz.jsonc`.
-- [ ] `cmnbkp` zápočty beze změny chování (test).
-- [ ] Nové i stávající unit testy zelené (úzké filtry),
+- [x] Všechny reverse kódy mají sazby ve `vat-cz.jsonc`.
+- [x] `cmnbkp` zápočty beze změny chování (test).
+- [x] Nové i stávající unit testy zelené (úzké filtry),
       `npm run check:i18n` netřeba (bez frontend změn).

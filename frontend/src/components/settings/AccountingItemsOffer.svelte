@@ -10,6 +10,8 @@
   import { onMount } from 'svelte';
   import Button from '../ui/Button.svelte';
   import Checkbox from '../ui/Checkbox.svelte';
+  import Icon from '../ui/Icon.svelte';
+  import { iconChevronDown, iconChevronRight } from '../../icons.js';
   import { t } from '../../i18n/index.js';
   import { translateError } from '../../i18n/errors.js';
   import { fetchAccountingItemsOffer, generateAccountingItems } from '../../api/setup.js';
@@ -18,6 +20,7 @@
   let loadError = $state(null);
   let offer = $state(null);
   let checked = $state({});   // code → bool
+  let expanded = $state({});  // group id → bool; default sbaleno
 
   let generating = $state(false);
   let generateError = $state(null);
@@ -37,6 +40,7 @@
           preselect[c.code] = !c.exists;
         }
         checked = preselect;
+        expanded = {};   // po (re)loadu vše sbalené
       } else {
         loadError = translateError(result?.error);
       }
@@ -50,6 +54,40 @@
   const selectedCodes = $derived(
     (offer?.candidates ?? []).filter((c) => !c.exists && checked[c.code]).map((c) => c.code),
   );
+
+  // Sekce = skupiny ze serveru (přicházejí seřazené dle order) + syntetická
+  // „Ostatní" na konci pro kandidáty s neznámou skupinou (rozbitý seed
+  // nabídku nerozbije, jen odsune položky na konec).
+  const sections = $derived.by(() => {
+    const byId = new Map((offer?.groups ?? []).map((g) => [g.id, { ...g, candidates: [] }]));
+    const other = { id: '_other', name: t('setup.offer.items.group.other'), candidates: [] };
+    for (const c of offer?.candidates ?? []) {
+      (byId.get(c.group) ?? other).candidates.push(c);
+    }
+    const list = [...byId.values()].filter((s) => s.candidates.length > 0);
+    if (other.candidates.length > 0) list.push(other);
+    return list;
+  });
+
+  // Tri-state hlavičky: existující položky se do dostupných nepočítají.
+  function sectionStats(section) {
+    const available = section.candidates.filter((c) => !c.exists);
+    const selected = available.filter((c) => checked[c.code]).length;
+    return { available: available.length, selected };
+  }
+
+  function toggleSection(section) {
+    const { available, selected } = sectionStats(section);
+    if (available === 0) return;
+    const value = selected < available;   // část/nic → vybrat vše, vše → odebrat
+    for (const c of section.candidates) {
+      if (!c.exists) checked[c.code] = value;
+    }
+  }
+
+  function toggleExpand(id) {
+    expanded[id] = !expanded[id];
+  }
 
   const unavailableText = $derived.by(() => {
     const reason = offer?.unavailableReason;
@@ -123,21 +161,65 @@
       </div>
     {/if}
 
-    <ul class="shpd-items-offer__list">
-      {#each offer.candidates as candidate (candidate.code)}
-        <li class="shpd-items-offer__row" class:shpd-items-offer__row--exists={candidate.exists}>
-          <Checkbox
-            bind:checked={checked[candidate.code]}
-            disabled={candidate.exists || generating}
-          />
-          <span class="shpd-items-offer__name">{candidate.name}</span>
-          <span class="shpd-items-offer__account">{candidate.accountNumber}</span>
-          {#if candidate.exists}
-            <span class="shpd-items-offer__badge">{t('setup.offer.items.exists')}</span>
+    <div class="shpd-items-offer__groups">
+      {#each sections as section (section.id)}
+        {@const stats = sectionStats(section)}
+        <section class="shpd-items-offer__group">
+          <!-- Klik na checkbox přepíná výběr skupiny (preventDefault drží
+               nativní checkbox jako čistě zobrazovací), zbytek hlavičky
+               sbaluje/rozbaluje. -->
+          <div
+            class="shpd-items-offer__group-head"
+            role="button"
+            tabindex="0"
+            aria-expanded={!!expanded[section.id]}
+            onclick={() => toggleExpand(section.id)}
+            onkeydown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                toggleExpand(section.id);
+              }
+            }}
+          >
+            <span
+              class="shpd-items-offer__group-check"
+              onclick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!generating) toggleSection(section);
+              }}
+            >
+              <Checkbox
+                checked={stats.available > 0 && stats.selected === stats.available}
+                indeterminate={stats.selected > 0 && stats.selected < stats.available}
+                disabled={stats.available === 0 || generating}
+              />
+            </span>
+            <span class="shpd-items-offer__group-name">{section.name}</span>
+            <span class="shpd-items-offer__group-count">{stats.selected}/{stats.available}</span>
+            <Icon icon={expanded[section.id] ? iconChevronDown : iconChevronRight} size="sm" />
+          </div>
+
+          {#if expanded[section.id]}
+            <ul class="shpd-items-offer__list">
+              {#each section.candidates as candidate (candidate.code)}
+                <li class="shpd-items-offer__row" class:shpd-items-offer__row--exists={candidate.exists}>
+                  <Checkbox
+                    bind:checked={checked[candidate.code]}
+                    disabled={candidate.exists || generating}
+                  />
+                  <span class="shpd-items-offer__name">{candidate.name}</span>
+                  <span class="shpd-items-offer__account">{candidate.accountNumber}</span>
+                  {#if candidate.exists}
+                    <span class="shpd-items-offer__badge">{t('setup.offer.items.exists')}</span>
+                  {/if}
+                </li>
+              {/each}
+            </ul>
           {/if}
-        </li>
+        </section>
       {/each}
-    </ul>
+    </div>
 
     {#if generateError}
       <p class="shpd-items-offer__state shpd-items-offer__state--error">{generateError}</p>
@@ -210,10 +292,49 @@
     color: var(--shpd-color-text-secondary);
   }
 
+  .shpd-items-offer__groups {
+    margin-top: var(--shpd-space-sm);
+    display: flex;
+    flex-direction: column;
+    gap: var(--shpd-space-xs);
+  }
+
+  .shpd-items-offer__group {
+    border: 1px solid var(--shpd-color-border);
+    border-radius: var(--shpd-radius-md);
+    background-color: var(--shpd-color-bg);
+  }
+
+  .shpd-items-offer__group-head {
+    display: flex;
+    align-items: center;
+    gap: var(--shpd-space-sm);
+    padding: var(--shpd-space-xs) var(--shpd-space-sm);
+    cursor: pointer;
+    user-select: none;
+    color: var(--shpd-color-text-secondary);
+  }
+
+  .shpd-items-offer__group-check :global(.shpd-checkbox) {
+    margin-bottom: 0;
+  }
+
+  .shpd-items-offer__group-name {
+    flex: 1;
+    font-weight: 600;
+    color: var(--shpd-color-text);
+  }
+
+  .shpd-items-offer__group-count {
+    font-size: var(--shpd-font-size-sm);
+    font-variant-numeric: tabular-nums;
+  }
+
   .shpd-items-offer__list {
     list-style: none;
-    margin: var(--shpd-space-sm) 0 0;
-    padding: 0;
+    /* Odsazení pod název skupiny: checkbox hlavičky (18px) + gap. */
+    margin: 0;
+    padding: 0 var(--shpd-space-sm) var(--shpd-space-sm) calc(18px + 2 * var(--shpd-space-sm));
     display: flex;
     flex-direction: column;
     gap: var(--shpd-space-xs);

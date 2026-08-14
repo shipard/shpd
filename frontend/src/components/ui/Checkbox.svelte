@@ -3,12 +3,14 @@
     checked?: boolean;
     label?: string;
     disabled?: boolean;
+    indeterminate?: boolean;
   }
 
   let {
     checked = $bindable(false),
     label,
     disabled = false,
+    indeterminate = false,
   }: Props = $props();
 </script>
 
@@ -17,6 +19,7 @@
     class="shpd-checkbox__native"
     type="checkbox"
     bind:checked
+    {indeterminate}
     {disabled}
   />
   <span class="shpd-checkbox__box" aria-hidden="true"></span>
@@ -76,6 +79,22 @@
     border-top: none;
     border-left: none;
     transform: rotate(45deg) translateY(-1px);
+  }
+
+  /* Indeterminate (tri-state) — vodorovná čárka, vizuál jako checked. */
+  .shpd-checkbox__native:indeterminate + .shpd-checkbox__box {
+    background-color: var(--shpd-color-primary);
+    border-color: var(--shpd-color-primary);
+  }
+
+  .shpd-checkbox__native:indeterminate + .shpd-checkbox__box::after {
+    content: '';
+    display: block;
+    width: 9px;
+    height: 0;
+    border: none;
+    border-top: 2px solid white;
+    transform: none;
   }
 
   .shpd-checkbox__native:focus-visible + .shpd-checkbox__box {

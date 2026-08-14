@@ -6,6 +6,7 @@ namespace Shipard\Api\Controller;
 use Shipard\Api\Request;
 use Shipard\Api\Response;
 use Shipard\Api\SessionService;
+use Shipard\Core\Auth\GithubOauthClient;
 use Shipard\Core\Auth\IdentityMapper;
 use Shipard\Core\Auth\OidcClient;
 use Shipard\Core\Auth\OidcDiscovery;
@@ -41,6 +42,7 @@ class OidcController
 		private readonly SessionService $sessions = new SessionService(),
 		private readonly IdentityMapper $mapper = new IdentityMapper(),
 		private readonly ?OidcClient $client = null,
+		private readonly ?GithubOauthClient $github = null,
 	) {}
 
 	public function start(Request $request, DataSourceConnection $db): Response
@@ -79,13 +81,17 @@ class OidcController
 		]);
 
 		try {
-			$url = $this->oidcClient()->buildAuthorizeUrl(
-				$provider,
-				$state,
-				$nonce,
-				$codeChallenge,
-				$this->callbackUri($request),
-			);
+			// github: bez PKCE a nonce (OAuth apps je nepodporují) — transakce
+			// je nese dál (vygenerované, nepoužité), CSRF drží single-use state.
+			$url = $provider->kind === 'github'
+				? $this->githubClient()->buildAuthorizeUrl($provider, $state, $this->callbackUri($request))
+				: $this->oidcClient()->buildAuthorizeUrl(
+					$provider,
+					$state,
+					$nonce,
+					$codeChallenge,
+					$this->callbackUri($request),
+				);
 		} catch (OidcException $e) {
 			ErrorLogger::warn('OIDC start failed', ['provider' => $provider->id, 'error' => $e->getMessage()]);
 			return $this->redirectError($request, $e->errorCode);
@@ -125,14 +131,18 @@ class OidcController
 		}
 
 		try {
-			$client = $this->oidcClient();
-			$tokens = $client->exchangeCode(
-				$provider,
-				$code,
-				(string) $txn['pkce_verifier'],
-				$this->callbackUri($request),
-			);
-			$identity = $client->validateIdToken($provider, (string) $tokens['id_token'], (string) $txn['nonce']);
+			if ($provider->kind === 'github') {
+				$identity = $this->githubClient()->fetchIdentity($provider, $code, $this->callbackUri($request));
+			} else {
+				$client = $this->oidcClient();
+				$tokens = $client->exchangeCode(
+					$provider,
+					$code,
+					(string) $txn['pkce_verifier'],
+					$this->callbackUri($request),
+				);
+				$identity = $client->validateIdToken($provider, (string) $tokens['id_token'], (string) $txn['nonce']);
+			}
 			$userId = $this->mapper->resolve($identity, $provider, $db);
 		} catch (OidcException $e) {
 			ErrorLogger::warn('OIDC callback failed', ['provider' => $provider->id, 'code' => $e->errorCode, 'error' => $e->getMessage()]);
@@ -225,6 +235,11 @@ class OidcController
 		return $this->client ?? new OidcClient(
 			new OidcDiscovery($this->config->getDataSourceDir() . '/cache/oidc'),
 		);
+	}
+
+	protected function githubClient(): GithubOauthClient
+	{
+		return $this->github ?? new GithubOauthClient();
 	}
 
 	/** Absolutní base URL požadavku vč. dev prefixu `/{ds-id}`. */

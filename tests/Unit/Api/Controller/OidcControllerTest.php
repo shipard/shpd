@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use Shipard\Api\Controller\OidcController;
 use Shipard\Api\Request;
 use Shipard\Api\Response;
+use Shipard\Core\Auth\GithubOauthClient;
 use Shipard\Core\Auth\OidcClient;
 use Shipard\Core\Auth\OidcDiscovery;
 use Shipard\Core\Auth\OidcException;
@@ -66,6 +67,23 @@ class StubOidcClient extends OidcClient
 	}
 }
 
+/** GithubOauthClient bez HTTP — vrací předpřipravenou identitu, nebo hází. */
+class StubGithubClient extends GithubOauthClient
+{
+	public ?OidcIdentity $identity = null;
+	public ?OidcException $failWith = null;
+	public array $fetchCalls = [];
+
+	public function fetchIdentity(OidcProviderConfig $provider, string $code, string $redirectUri): OidcIdentity
+	{
+		$this->fetchCalls[] = ['code' => $code, 'redirectUri' => $redirectUri];
+		if ($this->failWith !== null) {
+			throw $this->failWith;
+		}
+		return $this->identity ?? throw new \LogicException('StubGithubClient: no identity set');
+	}
+}
+
 class OidcControllerTest extends TestCase
 {
 	private const DS_ID = 'abcd-efgh-ijkl-mnop';
@@ -73,6 +91,7 @@ class OidcControllerTest extends TestCase
 	private string $dsDir;
 	private InMemoryAuthDb $db;
 	private StubOidcClient $client;
+	private StubGithubClient $github;
 	private OidcController $controller;
 
 	protected function setUp(): void
@@ -88,23 +107,35 @@ class OidcControllerTest extends TestCase
 			'created'           => '2026-01-01 00:00:00',
 			'auth'              => [
 				'local'     => true,
-				'providers' => [[
-					'id'            => 'test',
-					'label'         => 'Test IdP',
-					'issuer'        => 'https://idp.example.com/realm',
-					'clientId'      => 'cid',
-					'clientSecret'  => 'secret',
-					'autoLinkEmail' => true,
-				]],
+				'providers' => [
+					[
+						'id'            => 'test',
+						'label'         => 'Test IdP',
+						'issuer'        => 'https://idp.example.com/realm',
+						'clientId'      => 'cid',
+						'clientSecret'  => 'secret',
+						'autoLinkEmail' => true,
+					],
+					[
+						'id'            => 'github',
+						'label'         => 'GitHub',
+						'kind'          => 'github',
+						'clientId'      => 'gh-cid',
+						'clientSecret'  => 'gh-secret',
+						'autoLinkEmail' => true,
+					],
+				],
 			],
 		]));
 
 		$this->db = InMemoryAuthDb::create();
 		$this->client = new StubOidcClient();
+		$this->github = new StubGithubClient();
 		$this->controller = new OidcController(
 			new DataSourceConfig($this->dsDir),
 			devMode: true,
 			client: $this->client,
+			github: $this->github,
 		);
 	}
 
@@ -389,6 +420,71 @@ class OidcControllerTest extends TestCase
 		$txn = $this->startedTransaction();
 		$response = $this->controller->callback(
 			$this->req('GET', '/_auth/oidc/callback', ['state' => $txn['state'], 'code' => 'authcode-1']),
+			$this->db,
+		);
+
+		$this->assertStringContainsString('login_error=oidc_provider_error', $response->getHeaders()['Location']);
+	}
+
+	// --- github kind (D3) ---
+
+	public function testStartWithGithubProviderUsesGithubAuthorizeUrl(): void
+	{
+		$response = $this->controller->start(
+			$this->req('GET', '/_auth/oidc/start', ['provider' => 'github']),
+			$this->db,
+		);
+
+		$this->assertSame(302, $this->getStatus($response));
+		$location = $response->getHeaders()['Location'];
+		$this->assertStringStartsWith('https://github.com/login/oauth/authorize?', $location);
+
+		$txn = array_values($this->db->transactions)[0];
+		parse_str((string) parse_url($location, PHP_URL_QUERY), $params);
+		$this->assertSame('gh-cid', $params['client_id']);
+		$this->assertSame($txn['state'], $params['state']);
+		$this->assertSame('github', $txn['provider']);
+		// Bez PKCE a nonce v URL — GitHub OAuth apps je nepodporují.
+		$this->assertArrayNotHasKey('code_challenge', $params);
+		$this->assertArrayNotHasKey('nonce', $params);
+	}
+
+	public function testGithubCallbackMapsIdentityAndIssuesHandoff(): void
+	{
+		$userId = $this->db->addUser(['login' => 'jan', 'email' => 'jan@example.com', 'is_active' => 1, 'full_name' => 'Jan']);
+		$this->db->addIdentity(['user_id' => $userId, 'issuer' => 'https://github.com', 'subject' => '123456']);
+		$this->github->identity = new OidcIdentity('https://github.com', '123456', 'jan@example.com', true, 'Jan');
+
+		$this->controller->start($this->req('GET', '/_auth/oidc/start', ['provider' => 'github']), $this->db);
+		$txn = array_values($this->db->transactions)[0];
+
+		$response = $this->controller->callback(
+			$this->req('GET', '/_auth/oidc/callback', ['state' => $txn['state'], 'code' => 'gh-code']),
+			$this->db,
+		);
+
+		$this->assertSame(302, $this->getStatus($response));
+		$this->assertStringStartsWith(
+			'http://127.0.0.1/' . self::DS_ID . '/app/?login=oidc&code=',
+			$response->getHeaders()['Location'],
+		);
+		$this->assertSame('gh-code', $this->github->fetchCalls[0]['code']);
+		// OIDC klient se pro github vůbec nevolá.
+		$this->assertSame([], $this->client->exchangeCalls);
+
+		$session = array_values($this->db->sessions)[0];
+		$this->assertSame($userId, $session['user_id']);
+	}
+
+	public function testGithubCallbackProviderFailureRedirectsProviderError(): void
+	{
+		$this->github->failWith = new OidcException('oidc_provider_error', 'token exchange failed');
+
+		$this->controller->start($this->req('GET', '/_auth/oidc/start', ['provider' => 'github']), $this->db);
+		$txn = array_values($this->db->transactions)[0];
+
+		$response = $this->controller->callback(
+			$this->req('GET', '/_auth/oidc/callback', ['state' => $txn['state'], 'code' => 'gh-code']),
 			$this->db,
 		);
 

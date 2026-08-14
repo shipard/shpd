@@ -85,6 +85,66 @@ class AuthPolicyTest extends TestCase
 		$this->assertNull($policy->getProvider('unknown'));
 	}
 
+	// --- Provider kind (github) ---
+
+	public function testKindDefaultsToOidc(): void
+	{
+		$policy = AuthPolicy::fromArray(['providers' => [$this->providerData()]]);
+
+		$this->assertSame('oidc', $policy->providers[0]->kind);
+	}
+
+	public function testGithubKindForcesIssuerAndDefaultScopes(): void
+	{
+		$data = $this->providerData(['id' => 'github', 'kind' => 'github']);
+		unset($data['issuer']); // pro github nepovinný
+		$policy = AuthPolicy::fromArray(['providers' => [$data]]);
+		$provider = $policy->providers[0];
+
+		$this->assertSame('github', $provider->kind);
+		$this->assertSame('https://github.com', $provider->issuer);
+		$this->assertSame(['read:user', 'user:email'], $provider->scopes);
+	}
+
+	public function testGithubKindIgnoresConfiguredIssuer(): void
+	{
+		$policy = AuthPolicy::fromArray(['providers' => [
+			$this->providerData(['id' => 'github', 'kind' => 'github', 'issuer' => 'https://evil.example.com']),
+		]]);
+
+		$this->assertSame('https://github.com', $policy->providers[0]->issuer);
+	}
+
+	public function testGithubKindKeepsExplicitScopes(): void
+	{
+		$policy = AuthPolicy::fromArray(['providers' => [
+			$this->providerData(['id' => 'github', 'kind' => 'github', 'scopes' => ['read:user']]),
+		]]);
+
+		$this->assertSame(['read:user'], $policy->providers[0]->scopes);
+	}
+
+	public function testUnknownKindIsRejected(): void
+	{
+		$this->expectException(\RuntimeException::class);
+		$this->expectExceptionMessage("unknown kind 'saml'");
+		AuthPolicy::fromArray(['providers' => [$this->providerData(['kind' => 'saml'])]]);
+	}
+
+	public function testGithubKindConstructorRejectsForeignIssuer(): void
+	{
+		$this->expectException(\RuntimeException::class);
+		$this->expectExceptionMessage('must use issuer https://github.com');
+		new OidcProviderConfig(
+			id: 'github',
+			label: 'GitHub',
+			issuer: 'https://evil.example.com',
+			clientId: 'cid',
+			clientSecret: 'secret',
+			kind: 'github',
+		);
+	}
+
 	// --- Validation failures ---
 
 	public function testLocalFalseWithoutProvidersIsRejected(): void

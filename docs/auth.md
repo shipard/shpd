@@ -92,6 +92,57 @@ Klíčové vlastnosti:
   `http://{host}/{ds-id}/api/v1/_auth/oidc/callback`, produkce
   `https://{host}/api/v1/_auth/oidc/callback`.
 
+### Návrat po loginu (`return_to`)
+
+`GET /_auth/oidc/start` přijímá volitelný parametr `return` — query-suffix
+(tvar `?klic=hodnota&…`), který callback po úspěšném loginu připojí
+k handoff redirectu: `/app/?login=oidc&code={handoff}&klic=hodnota`.
+
+- Hodnota se ukládá do transakce (sloupec `return_to`, varchar 200,
+  nullable) a validuje **na startu i v callbacku** (defense in depth):
+  začíná `?`, délka ≤ 200, jen páry
+  `[A-Za-z0-9_-]+=[A-Za-z0-9_-]+` oddělené `&` — žádné cesty, žádná plná
+  URL, žádné procentové kódování. Open redirect nemá kudy; nevalidní
+  hodnota se ignoruje (start projde, log warn).
+- Použití: **OP flow kontinuita** — LoginScreen hostingu při pending
+  `opAuth.txn` staví start URL s `return=?op_auth={txn}`, takže rozjednaná
+  OP transakce přežije plnou navigaci na externího IdP (in-memory store by
+  ji ztratil). `main.js` na kombinovaném příchodu
+  `?login=oidc&code=…&op_auth=…` po úspěšném exchange naplní `opAuth`
+  store → App zobrazí OpAuthScreen → approve → návrat do klientského DS.
+- Budoucí použití ať validační pravidlo rozšiřuje vědomě
+  (`OidcController::isValidReturnTo`).
+
+### GitHub jako provider (`kind: "github"`)
+
+Provider může mít `kind` (default `"oidc"`, chování beze změny). GitHub
+nemluví OIDC — bez discovery, id_tokenu a JWKS — identitu skládá
+`GithubOauthClient` (`src/Core/Auth/`) z REST API: token exchange →
+`GET /user` → `GET /user/emails`.
+
+- **Identita:** `issuer = "https://github.com"` (syntetická konstanta,
+  vynucená i při odlišné hodnotě v configu — identity klíč nesmí být věc
+  konfigurace), `subject` = numerické `user.id` (login se dá přejmenovat),
+  e-mail jen `primary && verified` (jinak `email_verified: false` →
+  autoLink nenastane, flow skončí `oidc_no_account`).
+- **Bez PKCE a nonce** — GitHub OAuth apps je nepodporují; CSRF drží
+  single-use `state` transakce. Default scopes `["read:user", "user:email"]`.
+- Všechna API volání s `User-Agent: shipard` (GitHub bez něj vrací 403).
+- `IdentityMapper` i navazující flow (session, handoff, return_to) beze
+  změny — `fetchIdentity` vrací standardní `OidcIdentity`.
+
+```json
+{
+    "id": "github",
+    "label": "GitHub",
+    "kind": "github",
+    "clientId": "<z GitHub OAuth App>",
+    "clientSecret": "<z GitHub OAuth App>",
+    "autoLinkEmail": true,
+    "jitProvision": false
+}
+```
+
 ### Validace id_tokenu (`OidcClient::validateIdToken`)
 
 - Podpis proti JWKS providera přes `firebase/php-jwt`.
@@ -169,9 +220,13 @@ i `jitProvision` fungují dle politiky DS.
 - `main.js` při bootu (před mountem) detekuje `?login=oidc&code=` →
   `exchangeOidc()` → `authStore.setAuth()` → `history.replaceState` (kód
   nesmí přežít reload). `?login_error=` → `loginNotice` store → LoginScreen.
+  Kombinovaný příchod `…&op_auth=…` (return_to kontinuita) po úspěšném
+  exchange navíc naplní `opAuth` store; při neúspěchu se opAuth nenastavuje
+  (txn na hostingu doexpiruje sama).
 - `LoginScreen.svelte`: z `appInfoStore.auth` — `local: false` skryje
   formulář; tlačítka providerů (label z konfigurace) navigují na
-  `oidcStartUrl(id)` (plná navigace, ne fetch). Oddělovač
+  `oidcStartUrl(id, returnTo)` (plná navigace, ne fetch); `returnTo`
+  = `?op_auth={txn}` při pending OP transakci. Oddělovač
   (`login.providerHint`) jen když je vidět obojí.
 - Pure helpery `parseOidcRedirect` / `buildOidcStartUrl` v `api/oidc.js`
   (bez závislosti na window — testovatelné v node:test).

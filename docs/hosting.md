@@ -325,6 +325,62 @@ Výsledný login flow na DS: LoginScreen → „Přihlásit přes {hosting}" →
 portál (session tam) → id_token → RP `IdentityMapper` `(issuer, sub)`,
 `autoLinkEmail`/`jitProvision` dle politiky DS.
 
+#### Federované přihlašování hostingu (Google, GitHub) — runbook
+
+Hosting DS je sám relying party vůči externím IdP (task
+`hosting-09-federated-login`): uživatel se na hosting — a skrze Shipard Id
+do všech svých DS — přihlásí bez hesla. Klientské DS se nemění a o federaci
+nevědí. Návrat do rozjednané OP transakce po plné navigaci na IdP zajišťuje
+`return_to` (`docs/auth.md` → Návrat po loginu).
+
+**Google** (config-only, běžný OIDC provider):
+
+1. Google Cloud Console → OAuth client (typ **Web application**),
+   Authorized redirect URI: `https://{hosting-host}/api/v1/_auth/oidc/callback`.
+2. Položka `auth.providers` v `config/main.json` hosting DS:
+
+```json
+{
+    "id": "google",
+    "label": "Google",
+    "issuer": "https://accounts.google.com",
+    "clientId": "<z Google Cloud Console>",
+    "clientSecret": "<z Google Cloud Console>",
+    "autoLinkEmail": true,
+    "jitProvision": false
+}
+```
+
+**GitHub** (`kind: "github"`, viz `docs/auth.md` → GitHub jako provider):
+
+1. GitHub → Settings → Developer settings → **OAuth App**, Authorization
+   callback URL: táž jako u Google.
+2. Položka `auth.providers`:
+
+```json
+{
+    "id": "github",
+    "label": "GitHub",
+    "kind": "github",
+    "clientId": "<z GitHub OAuth App>",
+    "clientSecret": "<z GitHub OAuth App>",
+    "autoLinkEmail": true,
+    "jitProvision": false
+}
+```
+
+Provozní poznámky:
+
+- `autoLinkEmail: true, jitProvision: false` (D4 tasku) — externí IdP je
+  jen způsob přihlášení **existujících** účtů (pozvánka/self-service),
+  nikoli otevřená registrace. Cizí účet skončí `oidc_no_account`.
+- Editace `config/main.json` hosting DS = mutace na alfě (per-action
+  schválení, provádí David). Restart není třeba — config se čte
+  per-request. Před zapnutím: `ds-upgrade` (sloupec `return_to`
+  v `core_system_auth_transactions`).
+- Lokální login heslem na hostingu zůstává zapnutý; případné
+  `local: false` je provozní rozhodnutí, ne součást rolloutu (D5 tasku).
+
 ### 5.5 AI gateway (D5/D6) — implementováno
 
 - `POST /_hosting/ai-gw/v1/messages` — klienti si na `base_url` sami

@@ -2,9 +2,10 @@
 
 **Stav:** částečně — derivace + prompt v4.1.0 hotové 14. 8. 2026
 (D1–D5 v kódu, commity 0a7feaa / 7bdc03f / 9617062); ověření na dev DS
-odkrylo starší chybu rekapitulace v mode 2 (viz Dodatek níže), která
-blokuje akceptaci — doklad `!0000000008` vyšel 1746,01 místo 1746,00.
-Zbývá: oprava dle Dodatku, přepočet `!0000000008`, hledání vzoru na alfě
+odkrylo starší chybu rekapitulace v mode 2 (viz Dodatek níže) — doklad
+`!0000000008` vyšel 1746,01 místo 1746,00. Oprava dle Dodatku
+implementována 14. 8. 2026 (daň rozdílem Σ vat_total − Σ vat_base).
+Zbývá: přepočet `!0000000008` na dev DS, hledání vzoru na alfě
 
 **Cíl:** Doklady z AI analýzy, jejichž položkové řádky jsou v cenách
 **s DPH** (koncové/maloobchodní ceny — účtenky, PHM, občerstvení),
@@ -276,12 +277,17 @@ ručně pořízený doklad v režimu „Z ceny celkem" se zbytkem po rozpočtu
 
 ### Hotovo když (dodatek)
 
-- [ ] Rekapitulace v mode 2: `tax = Σ vat_total − Σ vat_base`,
+- [x] Rekapitulace v mode 2: `tax = Σ vat_total − Σ vat_base`,
       `total = Σ vat_total` (per skupina, ne-noPayTax).
 - [ ] `!0000000008` po přepočtu (uložení dokladu) má
       1442,98 / 303,02 / 1746,00 a deník je vyrovnaný na 1746,00
-      (DAL 321100).
-- [ ] Mode 0/1 a noPayTax/samovyměření beze změn — regrese
+      (DAL 321100) — **zbývá ověřit na dev DS**.
+- [x] Mode 0/1 a noPayTax/samovyměření beze změn — regrese
       `DocDocumentVatRecapTest`, `DocDocumentTotalsTest`,
-      `DocDocumentPdpOutputTest` zelené.
-- [ ] Nový test s čísly se zbytkem po rozpočtu zelený.
+      `DocDocumentPdpOutputTest` (+ `DocDocumentDomesticAmountsTest`)
+      zelené, celá Unit sada 4015 testů.
+- [x] Nový test s čísly se zbytkem po rozpočtu zelený — účtenka
+      1442,98 / 303,02 / 1746,00 i víceřádková skupina (139,26);
+      oba na starém kódu červené (303,03 / 139,25), stávající
+      `testVatInclusiveModeAggregatesBaseNotTotal` nově deklaruje
+      `vat_mode 2`, noPayTax v mode 2 explicitně kryt.

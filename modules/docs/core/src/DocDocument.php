@@ -582,8 +582,9 @@ abstract class DocDocument extends Document
             return [];
         }
         $vatCodes = $resolved['codes'];
+        $vatMode = (int) ($data['vat_mode'] ?? 1);
 
-        // 1. Group rows by (vat_code, vat_pct), sum base
+        // 1. Group rows by (vat_code, vat_pct), sum base + total
         $grouped = [];
         foreach ($rows as $row) {
             $rowKind = (int) ($row['row_kind'] ?? 1);
@@ -600,13 +601,16 @@ abstract class DocDocument extends Document
                     'vat_code' => (string) $row['vat_code'],
                     'vat_pct'  => (float) ($row['vat_pct'] ?? 0),
                     'base'     => 0.0,
+                    'total'    => 0.0,
                 ];
             }
-            // Use the per-row vat_base computed by calculateRowVat(), which
-            // already respects vat_mode. For "Ze základu" (mode 0/1) it equals
-            // total_price; for "Z ceny celkem" (mode 2) it is the VAT-exclusive
-            // base back-calculated from the VAT-inclusive total_price.
-            $grouped[$key]['base'] += (float) ($row['vat_base'] ?? $row['total_price'] ?? 0);
+            // Use the per-row vat_base/vat_total computed by calculateRowVat(),
+            // which already respect vat_mode. For "Ze základu" (mode 0/1)
+            // vat_base equals total_price; for "Z ceny celkem" (mode 2) it is
+            // the VAT-exclusive base back-calculated from the VAT-inclusive
+            // total_price and vat_total carries the printed row total.
+            $grouped[$key]['base']  += (float) ($row['vat_base'] ?? $row['total_price'] ?? 0);
+            $grouped[$key]['total'] += (float) ($row['vat_total'] ?? $row['total_price'] ?? 0);
         }
 
         // 2. For each group build primary line + optional reverse charge pair
@@ -635,9 +639,22 @@ abstract class DocDocument extends Document
             // jen daň placená dodavateli, u noPayTax tedy zůstává jen základ.
             $selfAssessed = !empty($codeDef['reverseVatCode'])
                 && isset($vatCodes[(string) $codeDef['reverseVatCode']]);
-            $tax = (empty($codeDef['noPayTax']) || $selfAssessed)
-                ? $this->applyRounding($base * $entry['vat_pct'] / 100.0, $vatRoundingMode)
-                : 0.0;
+            if ($vatMode === 2 && empty($codeDef['noPayTax'])) {
+                // Z ceny celkem: daň rozdílem Σ vat_total − Σ vat_base (§ 37
+                // připouští obojí; součet per-row hodnot garantuje shodu
+                // rekapitulace s řádky vytištěnými na dokladu). Zdola by
+                // zpětný rozpočet se zbytkem dal jinou daň (1442,98 × 21 %
+                // = 303,03 místo 303,02) a doklad by ujel o haléř.
+                // vat_rounding_mode se neaplikuje — daň je rozdíl dvou už
+                // zaokrouhlených částek. noPayTax skupiny zůstávají zdola:
+                // u nich je základ autoritativní z definice (calculateRowVat
+                // drží base = totalPrice i v mode 2) a daň je informativní.
+                $tax = round(round($entry['total'], 2) - $base, 2);
+            } elseif (empty($codeDef['noPayTax']) || $selfAssessed) {
+                $tax = $this->applyRounding($base * $entry['vat_pct'] / 100.0, $vatRoundingMode);
+            } else {
+                $tax = 0.0;
+            }
             $payableTax = empty($codeDef['noPayTax']) ? $tax : 0.0;
 
             $primary = [

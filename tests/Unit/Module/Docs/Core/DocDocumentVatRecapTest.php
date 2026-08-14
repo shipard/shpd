@@ -223,6 +223,7 @@ class DocDocumentVatRecapTest extends TestCase
     {
         $doc = $this->buildDoc();
         $data = [
+            'vat_mode' => 2,
             'rows' => [
                 [
                     'row_kind'    => 1,
@@ -245,6 +246,109 @@ class DocDocumentVatRecapTest extends TestCase
         $this->assertSame(6250.0, $recap[0]['base']);
         $this->assertSame(750.0, $recap[0]['tax']);
         $this->assertSame(7000.0, $recap[0]['total']);
+    }
+
+    /**
+     * "Z ceny celkem" se zbytkem po zpětném rozpočtu (referenční účtenka PHM
+     * z docs-vat-mode-derivation): daň v rekapitulaci musí být rozdíl
+     * Σ vat_total − Σ vat_base (303,02), ne zdola ze základu skupiny
+     * (1442,98 × 21 % = 303,0258 → 303,03) — jinak doklad ujede o haléř
+     * proti předloze (1746,01 místo 1746,00).
+     */
+    public function testVatInclusiveModeRemainderTaxByDifference(): void
+    {
+        $doc = $this->buildDoc();
+        $data = [
+            'vat_mode' => 2,
+            'rows' => [
+                [
+                    'row_kind'    => 1,
+                    'vat_code'    => 'cz-110',
+                    'vat_pct'     => 21,
+                    'total_price' => 1746.00, // VAT-inclusive
+                    'vat_base'    => 1442.98, // 1746 / 1.21 = 1442.9752…
+                    'vat_amount'  => 303.02,
+                    'vat_total'   => 1746.00,
+                ],
+            ],
+            'vat_registration' => 1,
+            'vat_duzp' => '2026-05-06',
+            'exchange_rate' => 1.0,
+        ];
+        $recap = $doc->buildVatRecapitulationPub($data);
+
+        $this->assertCount(1, $recap);
+        $this->assertSame(1442.98, $recap[0]['base']);
+        $this->assertSame(303.02, $recap[0]['tax']);
+        $this->assertSame(1746.00, $recap[0]['total']);
+    }
+
+    /**
+     * Víceřádková skupina v mode 2 se zbytky na obou řádcích: rekapitulace
+     * == součet per-row hodnot přesně (base 102,02 + 561,07; total 123,45
+     * + 678,90), daň rozdílem 139,26 — zdola by vyšlo
+     * round(663,09 × 21 %) = 139,25.
+     */
+    public function testVatInclusiveModeMultiRowGroupSumsRowTotals(): void
+    {
+        $doc = $this->buildDoc();
+        $data = [
+            'vat_mode' => 2,
+            'rows' => [
+                [
+                    'row_kind' => 1, 'vat_code' => 'cz-110', 'vat_pct' => 21,
+                    'total_price' => 123.45,
+                    'vat_base' => 102.02, 'vat_amount' => 21.43, 'vat_total' => 123.45,
+                ],
+                [
+                    'row_kind' => 1, 'vat_code' => 'cz-110', 'vat_pct' => 21,
+                    'total_price' => 678.90,
+                    'vat_base' => 561.07, 'vat_amount' => 117.83, 'vat_total' => 678.90,
+                ],
+            ],
+            'vat_registration' => 1,
+            'vat_duzp' => '2026-05-06',
+            'exchange_rate' => 1.0,
+        ];
+        $recap = $doc->buildVatRecapitulationPub($data);
+
+        $this->assertCount(1, $recap);
+        $this->assertSame(663.09, $recap[0]['base']);
+        $this->assertSame(139.26, $recap[0]['tax']);
+        $this->assertSame(802.35, $recap[0]['total']);
+    }
+
+    /**
+     * noPayTax / samovyměření v mode 2 zůstává beze změny: základ je
+     * autoritativní (calculateRowVat drží base = totalPrice i v mode 2),
+     * informativní daň se dál počítá zdola — shodná očekávání jako
+     * testReverseChargeGeneratesPair v mode 1.
+     */
+    public function testVatInclusiveModeKeepsNoPayTaxGroupFromBase(): void
+    {
+        $doc = $this->buildDoc();
+        $data = [
+            'vat_mode' => 2,
+            'rows' => [
+                [
+                    'row_kind' => 1, 'vat_code' => 'cz-115', 'vat_pct' => 21,
+                    'total_price' => 200,
+                    'vat_base' => 200.0, 'vat_amount' => 42.0, 'vat_total' => 200.0,
+                ],
+            ],
+            'vat_registration' => 1,
+            'vat_duzp' => '2026-05-06',
+            'exchange_rate' => 1.0,
+        ];
+        $recap = $doc->buildVatRecapitulationPub($data);
+
+        $this->assertCount(2, $recap);
+        $this->assertSame(200.0, $recap[0]['base']);
+        $this->assertSame(42.0, $recap[0]['tax']);
+        $this->assertSame(200.0, $recap[0]['total']);
+        $this->assertSame('cz-203', $recap[1]['vat_code']);
+        $this->assertSame(42.0, $recap[1]['tax']);
+        $this->assertSame(242.0, $recap[1]['total']);
     }
 
     /**

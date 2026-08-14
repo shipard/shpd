@@ -586,7 +586,9 @@ Všechny body, které §0 nechávala otevřené, jsou rozhodnuté:
   zaokrouhlovací účty jsou konvence, dedikovaný účet žádná osnova nemá.
   Generování je `POST /_setup/accounting-items` přes `ItemDocument`
   (druh `accounting`, jednotka `pcs`,
-  `source_kind = 'setup.accountingItems'`, docState Koncept);
+  `source_kind = 'setup.accountingItems'`, docState rovnou V pořádku —
+  záznam je kurátorský a kompletní, Koncept by jen čekal na ruční
+  potvrzení);
   nabídku servíruje `GET /_setup/accounting-items-offer` s gaty
   `chart_undecided` / `chart_none` / `accounting_inactive` a příznakem
   `exists` per kód — opakované generování je bezpečné.

@@ -990,7 +990,7 @@ class SetupControllerTest extends TestCase
         $this->assertSame('568201', $bank['source_ref']);
         $this->assertNotEmpty($bank['source_imported_at']);
         // Koncept jako u ručního pořízení, ne 40 z provisioneru osnovy.
-        $this->assertSame(10, $bank['docState']);
+        $this->assertSame(40, $bank['docState']);
         // item_type se neposílá — denormalizuje ho ItemDocument::beforeSave z druhu.
         $this->assertArrayNotHasKey('item_type', $bank);
     }

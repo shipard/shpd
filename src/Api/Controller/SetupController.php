@@ -514,9 +514,10 @@ class SetupController
                 'source_kind'         => self::ITEMS_SOURCE_KIND,
                 'source_ref'          => $code,
                 'source_imported_at'  => date('Y-m-d H:i:s'),
-                // Koncept jako u ručně pořízené položky (žádné kopírování
-                // docState 40 z provisioneru osnovy); main dopočítá gateway.
-                'docState'            => 10,
+                // Rovnou V pořádku jako u provisioneru osnovy — záznam je
+                // kurátorský a kompletní, Koncept by jen čekal na ruční
+                // potvrzení, které nemá co ověřit.
+                'docState'            => 40,
             ];
 
             $result = $this->saveItemRow($payload);

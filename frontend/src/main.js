@@ -23,10 +23,14 @@ layoutStore.initLayout()
 appInfoStore.load()
 
 async function boot() {
+  // Snapshot query stringu — větve níž čistí URL přes replaceState, parsery
+  // proto nesmí číst window.location.search až po nich.
+  const search = window.location.search
+
   // Mailový link set-password (?auth_action=set-password&token=…): token
   // do in-memory store PŘED mountem, URL se hned čistí — token nesmí
   // zůstat v historii. App.svelte pak zobrazí SetPasswordScreen.
-  const startupAction = parseAuthAction(window.location.search)
+  const startupAction = parseAuthAction(search)
   if (startupAction) {
     history.replaceState(null, '', window.location.pathname)
     authAction.set(startupAction)
@@ -35,7 +39,7 @@ async function boot() {
   // OIDC návrat: ?login=oidc&code=… vyměnit za session PŘED mountem
   // (žádný flash login obrazovky), ?login_error=… předat login obrazovce.
   // URL se čistí hned — handoff kód je jednorázový a nesmí přežít reload.
-  const oidcRedirect = parseOidcRedirect(window.location.search)
+  const oidcRedirect = parseOidcRedirect(search)
   if (!startupAction && oidcRedirect) {
     history.replaceState(null, '', window.location.pathname)
     if (oidcRedirect.kind === 'handoff') {
@@ -43,6 +47,14 @@ async function boot() {
         const response = await exchangeOidc(oidcRedirect.code)
         if (response?.success) {
           authStore.setAuth(response)
+          // Kombinovaný příchod ?login=oidc&code=…&op_auth=… (return_to
+          // kontinuita): session + rozjednaná OP transakce → App zobrazí
+          // rovnou OpAuthScreen. Při neúspěšném exchange se opAuth
+          // nenastavuje — txn na hostingu doexpiruje sama.
+          const opTxn = parseOpAuth(search)
+          if (opTxn) {
+            opAuth.set(opTxn)
+          }
         } else {
           loginNotice.set('oidc_invalid_state')
         }
@@ -58,7 +70,7 @@ async function boot() {
   // txn do in-memory store PŘED mountem, URL se hned čistí. Schválení
   // (approve → window.location) dělá OpAuthScreen — se session hned,
   // bez session až po loginu (in-memory store login přežije).
-  const opAuthTxn = parseOpAuth(window.location.search)
+  const opAuthTxn = parseOpAuth(search)
   if (!startupAction && !oidcRedirect && opAuthTxn) {
     history.replaceState(null, '', window.location.pathname)
     opAuth.set(opAuthTxn)

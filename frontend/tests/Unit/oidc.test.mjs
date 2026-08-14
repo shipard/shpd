@@ -18,6 +18,18 @@ test('buildOidcStartUrl composes start URL with encoded provider', () => {
   );
 });
 
+test('buildOidcStartUrl appends encoded returnTo suffix', () => {
+  assert.equal(
+    buildOidcStartUrl('/api/v1', 'google', '?op_auth=txn-1'),
+    '/api/v1/_auth/oidc/start?provider=google&return=%3Fop_auth%3Dtxn-1',
+  );
+  // bez returnTo (null/undefined) beze změny
+  assert.equal(
+    buildOidcStartUrl('/api/v1', 'google', null),
+    '/api/v1/_auth/oidc/start?provider=google',
+  );
+});
+
 test('parseOidcRedirect detects handoff code', () => {
   assert.deepEqual(
     parseOidcRedirect('?login=oidc&code=abc123'),
@@ -57,4 +69,10 @@ test('parseOpAuth ignores missing or empty param', () => {
   assert.equal(parseOpAuth(''), null);
   assert.equal(parseOpAuth('?foo=bar'), null);
   assert.equal(parseOpAuth('?op_auth='), null);
+});
+
+test('combined return_to arrival yields both handoff and op_auth', () => {
+  const search = '?login=oidc&code=H&op_auth=T';
+  assert.deepEqual(parseOidcRedirect(search), { kind: 'handoff', code: 'H' });
+  assert.equal(parseOpAuth(search), 'T');
 });

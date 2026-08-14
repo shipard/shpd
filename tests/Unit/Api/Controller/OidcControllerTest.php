@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Shipard\Tests\Unit\Api\Controller;
 
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Shipard\Api\Controller\OidcController;
 use Shipard\Api\Request;
@@ -182,6 +183,102 @@ class OidcControllerTest extends TestCase
 
 		$states = array_column($this->db->transactions, 'state');
 		$this->assertNotContains('old-state', $states);
+	}
+
+	// --- return_to (D1 — návrat do OP transakce) ---
+
+	#[DataProvider('returnToProvider')]
+	public function testIsValidReturnTo(string $value, bool $expected): void
+	{
+		$method = new \ReflectionMethod(OidcController::class, 'isValidReturnTo');
+		$this->assertSame($expected, $method->invoke(null, $value));
+	}
+
+	public static function returnToProvider(): array
+	{
+		return [
+			'op_auth pár'          => ['?op_auth=abc', true],
+			'více párů'            => ['?op_auth=abc&x=1', true],
+			'prázdné'              => ['', false],
+			'cesta'                => ['/cesta', false],
+			'trailing ampersand'   => ['?a=b&', false],
+			'plná URL'             => ['https://evil.example/x', false],
+			'fragment'             => ['?a=b#f', false],
+			'procentové kódování'  => ['?a=%2F', false],
+			'přes 200 znaků'       => ['?a=' . str_repeat('b', 200), false],
+			'protocol-relative'    => ['//x', false],
+			'bez otazníku'         => ['op_auth=abc', false],
+		];
+	}
+
+	public function testStartStoresValidReturnTo(): void
+	{
+		$response = $this->controller->start(
+			$this->req('GET', '/_auth/oidc/start', ['provider' => 'test', 'return' => '?op_auth=txn-1']),
+			$this->db,
+		);
+
+		$this->assertSame(302, $this->getStatus($response));
+		$txn = array_values($this->db->transactions)[0];
+		$this->assertSame('?op_auth=txn-1', $txn['return_to']);
+	}
+
+	public function testStartIgnoresInvalidReturn(): void
+	{
+		$response = $this->controller->start(
+			$this->req('GET', '/_auth/oidc/start', ['provider' => 'test', 'return' => 'https://evil.example/x']),
+			$this->db,
+		);
+
+		// Start projde, transakce ale return_to nenese.
+		$this->assertSame(302, $this->getStatus($response));
+		$txn = array_values($this->db->transactions)[0];
+		$this->assertNull($txn['return_to']);
+	}
+
+	public function testCallbackAppendsReturnToSuffix(): void
+	{
+		$userId = $this->db->addUser(['login' => 'jan', 'email' => 'jan@example.com', 'is_active' => 1, 'full_name' => 'Jan']);
+		$this->db->addIdentity(['user_id' => $userId, 'issuer' => 'https://idp.example.com/realm', 'subject' => 'user-42']);
+		$this->client->identity = new OidcIdentity('https://idp.example.com/realm', 'user-42', 'jan@example.com', true, 'Jan');
+
+		$this->controller->start(
+			$this->req('GET', '/_auth/oidc/start', ['provider' => 'test', 'return' => '?op_auth=txn-1']),
+			$this->db,
+		);
+		$txn = array_values($this->db->transactions)[0];
+
+		$response = $this->controller->callback(
+			$this->req('GET', '/_auth/oidc/callback', ['state' => $txn['state'], 'code' => 'authcode-1']),
+			$this->db,
+		);
+
+		$location = $response->getHeaders()['Location'];
+		$this->assertStringStartsWith('http://127.0.0.1/' . self::DS_ID . '/app/?login=oidc&code=', $location);
+		parse_str((string) parse_url($location, PHP_URL_QUERY), $params);
+		$this->assertSame('txn-1', $params['op_auth']);
+	}
+
+	public function testCallbackIgnoresInvalidStoredReturnTo(): void
+	{
+		$userId = $this->db->addUser(['login' => 'jan', 'email' => 'jan@example.com', 'is_active' => 1, 'full_name' => 'Jan']);
+		$this->db->addIdentity(['user_id' => $userId, 'issuer' => 'https://idp.example.com/realm', 'subject' => 'user-42']);
+		$this->client->identity = new OidcIdentity('https://idp.example.com/realm', 'user-42', 'jan@example.com', true, 'Jan');
+
+		$txn = $this->startedTransaction();
+		// Podvržený řádek (starší kód / přímý zápis) — callback musí validovat znovu.
+		$this->db->transactions[$txn['id']]['return_to'] = '?redirect=x&url=https://evil';
+
+		$response = $this->controller->callback(
+			$this->req('GET', '/_auth/oidc/callback', ['state' => $txn['state'], 'code' => 'authcode-1']),
+			$this->db,
+		);
+
+		$location = $response->getHeaders()['Location'];
+		parse_str((string) parse_url($location, PHP_URL_QUERY), $params);
+		$this->assertArrayNotHasKey('redirect', $params);
+		$this->assertArrayNotHasKey('url', $params);
+		$this->assertArrayHasKey('code', $params);
 	}
 
 	// --- callback ---

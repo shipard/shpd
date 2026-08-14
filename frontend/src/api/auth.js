@@ -54,10 +54,11 @@ export async function refresh() {
  * URL OIDC start endpointu pro daného providera — plná navigace prohlížeče
  * (window.location.href), ne fetch; server odpoví 302 na IdP.
  * @param {string} providerId
+ * @param {string|null} [returnTo] query-suffix pro návrat po loginu ('?op_auth=…')
  * @returns {string}
  */
-export function oidcStartUrl(providerId) {
-  return buildOidcStartUrl(API_BASE_URL, providerId);
+export function oidcStartUrl(providerId, returnTo = null) {
+  return buildOidcStartUrl(API_BASE_URL, providerId, returnTo);
 }
 
 /**

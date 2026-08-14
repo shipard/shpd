@@ -5,13 +5,20 @@
 
 /**
  * URL start endpointu pro plnou navigaci (ne fetch) — prohlížeč následuje
- * 302 na authorize URL providera.
+ * 302 na authorize URL providera. Volitelný returnTo (query-suffix tvaru
+ * '?klic=hodnota', např. '?op_auth={txn}') server po úspěšném loginu
+ * připojí k handoff redirectu — kontinuita OP flow přes plnou navigaci.
  * @param {string} apiBaseUrl např. '/api/v1' nebo '/{ds-id}/api/v1'
  * @param {string} providerId
+ * @param {string|null} [returnTo]
  * @returns {string}
  */
-export function buildOidcStartUrl(apiBaseUrl, providerId) {
-  return `${apiBaseUrl}/_auth/oidc/start?provider=${encodeURIComponent(providerId)}`;
+export function buildOidcStartUrl(apiBaseUrl, providerId, returnTo = null) {
+  let url = `${apiBaseUrl}/_auth/oidc/start?provider=${encodeURIComponent(providerId)}`;
+  if (returnTo) {
+    url += `&return=${encodeURIComponent(returnTo)}`;
+  }
+  return url;
 }
 
 /**

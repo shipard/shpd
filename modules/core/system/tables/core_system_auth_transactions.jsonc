@@ -59,6 +59,13 @@
             "nullable": true
         },
         {
+            "id": "return_to",
+            "name": "Return to",
+            "type": "varchar",
+            "length": 200,
+            "nullable": true
+        },
+        {
             "id": "created",
             "name": "Created",
             "name:cs": "Vytvořeno",

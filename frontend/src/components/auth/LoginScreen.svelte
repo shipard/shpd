@@ -1,6 +1,7 @@
 <script>
   import { login, oidcStartUrl, forgotPassword } from '../../api/auth.js';
   import { authStore } from '../../stores/auth.svelte.js';
+  import { opAuth } from '../../stores/opAuth.svelte.js';
   import { appInfoStore } from '../../stores/appInfo.svelte.js';
   import { loginNotice } from '../../stores/loginNotice.svelte.js';
   import { brandingUrl } from '../../api/app.js';
@@ -39,7 +40,10 @@
 
   function startOidc(providerId) {
     loginNotice.clear();
-    window.location.href = oidcStartUrl(providerId);
+    // Rozjednaná OP transakce (?op_auth=…) by plnou navigaci na IdP
+    // nepřežila — server ji vrátí v handoff redirectu (return_to).
+    const returnTo = opAuth.txn ? `?op_auth=${opAuth.txn}` : null;
+    window.location.href = oidcStartUrl(providerId, returnTo);
   }
 
   async function handleSubmit() {

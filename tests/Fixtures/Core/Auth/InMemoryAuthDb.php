@@ -63,7 +63,7 @@ class InMemoryAuthDb extends DataSourceConnection
 			// Nullable sloupce vrací reálná DB vždy — doplnit jako NULL.
 			'core_system_auth_transactions' => $this->insert(
 				$this->transactions,
-				$data + ['handoff_code' => null, 'session_token' => null],
+				$data + ['handoff_code' => null, 'session_token' => null, 'return_to' => null],
 			),
 			'core_system_sessions'          => $this->insert($this->sessions, $data),
 			'core_system_auth_tokens'       => $this->insert($this->authTokens, $data),

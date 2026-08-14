@@ -17,9 +17,12 @@ use Shipard\Core\Logging\ErrorLogger;
 /**
  * OIDC relying party endpointy (D1, D11, D13):
  *
- *   GET  /_auth/oidc/start?provider=x  302 na authorize URL providera
+ *   GET  /_auth/oidc/start?provider=x  302 na authorize URL providera;
+ *                                      volitelné `return=` (validovaný
+ *                                      query-suffix) se uloží do transakce
  *   GET  /_auth/oidc/callback          návrat od IdP → session + handoff kód,
  *                                      302 na /app/?login=oidc&code={handoff}
+ *                                      (+ return_to suffix, např. &op_auth=…)
  *   POST /_auth/oidc/exchange          {code} → login envelope (token nikdy v URL)
  *
  * Chybové větve callbacku končí 302 na /app/?login_error={kod} — kódy viz
@@ -59,11 +62,18 @@ class OidcController
 		$codeVerifier = $this->urlSafeToken(48);
 		$codeChallenge = $this->base64url(hash('sha256', $codeVerifier, true));
 
+		$returnTo = (string) ($request->getQueryParams()['return'] ?? '');
+		if ($returnTo !== '' && !self::isValidReturnTo($returnTo)) {
+			ErrorLogger::warn('OIDC start: invalid return param ignored', ['provider' => $provider->id]);
+			$returnTo = '';
+		}
+
 		$db->insertRow('core_system_auth_transactions', [
 			'state'         => $state,
 			'provider'      => $provider->id,
 			'pkce_verifier' => $codeVerifier,
 			'nonce'         => $nonce,
+			'return_to'     => $returnTo !== '' ? $returnTo : null,
 			'created'       => date('Y-m-d H:i:s'),
 			'expires'       => date('Y-m-d H:i:s', time() + self::TRANSACTION_TTL_SECONDS),
 		]);
@@ -140,7 +150,15 @@ class OidcController
 			(int) $txn['id'],
 		);
 
-		return Response::redirect($this->appUrl($request) . '?login=oidc&code=' . rawurlencode($handoffCode));
+		$redirect = $this->appUrl($request) . '?login=oidc&code=' . rawurlencode($handoffCode);
+		// Defense in depth: hodnota z DB se validuje znovu — mohla vzniknout
+		// starším kódem nebo přímým zápisem.
+		$returnTo = (string) ($txn['return_to'] ?? '');
+		if ($returnTo !== '' && self::isValidReturnTo($returnTo)) {
+			$redirect .= '&' . substr($returnTo, 1);
+		}
+
+		return Response::redirect($redirect);
 	}
 
 	public function exchange(Request $request, DataSourceConnection $db): Response
@@ -225,6 +243,19 @@ class OidcController
 	private function appUrl(Request $request): string
 	{
 		return $this->baseUrl($request) . '/app/';
+	}
+
+	/**
+	 * Návratový suffix (`?klic=hodnota&…`) pro pokračování po loginu — dnes
+	 * `?op_auth={txn}` (OP flow kontinuita). Jen klíč=hodnota páry bez
+	 * URL-významových znaků: žádné cesty, žádná plná URL, žádné procentové
+	 * kódování — open redirect nemá kudy. Budoucí použití ať pravidlo
+	 * rozšiřuje vědomě.
+	 */
+	private static function isValidReturnTo(string $v): bool
+	{
+		return strlen($v) <= 200
+			&& preg_match('/^\?[A-Za-z0-9_\-]+=[A-Za-z0-9_\-]+(&[A-Za-z0-9_\-]+=[A-Za-z0-9_\-]+)*$/', $v) === 1;
 	}
 
 	private function redirectError(Request $request, string $errorCode): Response

@@ -37,7 +37,8 @@ Pipeline status žije v `analysis_state` (cfgItem `core.mail.analysisStates`),
 ortogonálně k workflow stavu `docState` — viz sekce "Stavy zprávy".
 
 ```
-1. analyzer GET /queue                  ← zprávy s analysis_state=10 mimo Archiv/Koš
+1. analyzer GET /queue                  ← zprávy s analysis_state=10 mimo Archiv/Koš,
+                                            z povolených schránek (viz "Stavy zprávy")
 2. analyzer POST /{ndx}/claim           ← atomicky: analysis_state 10→20, vznikne claim row,
                                             response obsahuje plaintext API klíč backendu
                                             (jen v paměti; Cache-Control: no-store)
@@ -134,8 +135,14 @@ analýzy, přežívá Koš i Archiv; řídí ho výhradně pipeline + reanalyze:
 analýzy; fronta zprávy v Archivu/Koši přirozeně vynechává.
 
 Nová zpráva dostává `analysis_state=10`, pokud vzniká v docState 10 nebo 20
-(Nová/K řešení; chybějící docState = default Nová), analýza není explicitně
-vypnutá (`ai_analysis_enabled=false`) a existuje aktivní AI profil; jinak 0.
+(Nová/K řešení; chybějící docState = default Nová), analýza není vypnutá
+a existuje aktivní AI profil; jinak 0. Zda je analýza vypnutá, se dědí
+s precedencí **zpráva > schránka > default povoleno**: explicitní
+message-level `ai_analysis_enabled` (true/false) rozhoduje vždy; při `NULL`
+rozhoduje flag schránky `mailboxes.ai_analysis_disabled`; obojí neurčené =
+povoleno. Stejnou precedenci vynucuje `/queue` (výdej i `total_available`) —
+zprávu z vypnuté schránky nevydá, ledaže má `ai_analysis_enabled=1`, takže
+vypnutí schránky působí okamžitě i na už nafrontované zprávy.
 Zprávy vznikající rovnou v Hotovo/Archivu/Koši (import, zrcadlení archivní
 pošty) se nefrontují — `/queue` by je nikdy nevydal (trvale zavádějící
 „Ve frontě") a hrozila by hromadná analýza při odarchivování. Explicitní
@@ -369,7 +376,10 @@ Volitelný `profile_override_ndx` v body. Logika:
    nelze — 409, nejdřív unapply.
 3. Validuj profile_override (pokud zadán) — musí existovat a být `is_active=1`.
 4. UPDATE message: `needs_reanalysis=1`, `profile_override`, `analysis_state→10`.
-   `docState` se nemění.
+   `docState` se nemění. Zpráva ze schránky s `ai_analysis_disabled=1` bez
+   message-level `ai_analysis_enabled=1` dostane navíc `ai_analysis_enabled=1` —
+   explicitní záměr uživatele přebíjí default schránky, jinak by `/queue`
+   zprávu tiše nikdy nevydal.
 
 Historie analýz se nemění — „aktuální návrh" je implicitně poslední
 úspěšný běh, žádný supersede krok neexistuje (koncept `superseded` zanikl).

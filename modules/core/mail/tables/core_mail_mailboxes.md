@@ -23,6 +23,7 @@ Sloupce jsou organizovány do skupin:
 | Sloupec | Typ | Popis |
 |---|---|---|
 | `default_primary_type` | enumString(30) | Výchozí primární typ nově doručených zpráv — viz [primaryTypes.jsonc](../config/primaryTypes.jsonc). Nullable, při prázdné hodnotě se použije `other`. |
+| `ai_analysis_disabled` | boolean | Zakázat AI analýzu příchozích zpráv schránky. Zprávy se nefrontují a `/queue` je nevydává; explicitní message-level `ai_analysis_enabled=1` (nastavuje i reanalyze) je výjimka. Viz [ai-analysis.md](../docs/ai-analysis.md). |
 | `is_default` | boolean | Příznak výchozí schránky DS. Došlá pošta bez explicitního `mailbox` pole půjde do ní. Smí být `true` pro nejvýš jednu schránku per DS (vynuceno aplikačně v `MailboxDocument::validate`). |
 
 ### Stav (status)

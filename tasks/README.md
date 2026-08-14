@@ -17,7 +17,7 @@ jednotlivých subsystémů žijí v [`docs/`](../docs/README.md).
 
 ## Stav
 
-Celkem 207 tasků: **naplánováno** 5 · **částečně** 4 · **hotovo** 198.
+Celkem 208 tasků: **naplánováno** 3 · **částečně** 4 · **hotovo** 201.
 
 Zdroj pravdy je řádek `**Stav:**` v hlavičce každého tasku; tato
 tabulka je generovaná (`scripts/tasks-index.py`). Hotové tasky se
@@ -28,11 +28,9 @@ nevypisují — níže je jen to, co není dokončené.
 | `ai-profile-sync-in-ds-upgrade.md` | naplánováno | sync není v `DsUpgradeCommand` |
 | `auth-phase0a-hardening.md` | naplánováno | rate limiting a evidence neúspěšných přihlášení chybí |
 | `dashboard-alert-grouping.md` | naplánováno | design schválen 2026-07-16, neimplementováno |
-| `docs-vat-totals-reverse-charge.md` | naplánováno | opravy Z1–Z3 v `DocDocument` (nulové součty, samovyměření, noPayTax) |
-| `mail-analysis-schema-fixes.md` | naplánováno | návrh 2026-07-14; `schema_error` není v kódu |
 | `doc-number-release-on-data-save.md` | částečně | kód + testy hotové 2026-08-13; zbývá D2 (reset test DS), ruční proklik a read-only verifikace na alfě |
+| `docs-vat-mode-derivation.md` | částečně | implementace + prompt v4.1.0 hotové 14. 8. 2026 |
 | `hosting-09-federated-login.md` | částečně | kód + testy + docs hotové 2026-08-14 (commity 1–3); zbývá ds-upgrade na hostingu, zapnutí Google/GitHub na alfě dle runbooku (mutace — David) a ruční E2E řetěz |
-| `mail-invoice-rounding.md` | částečně | implementováno, zbývá ověření a nasazení promptu |
 | `mail-message-centric.md` | částečně | Fáze A–D v tomto repozitáři hotové (schéma, /result v4, |
 
 <!-- STAV:END -->

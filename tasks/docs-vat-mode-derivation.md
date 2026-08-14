@@ -1,6 +1,9 @@
 # Oprava dvojího počítání DPH — derivace `vat_mode` u cen s DPH
 
-**Stav:** naplánováno — rozhodnutí D1–D6 potvrzena 14. 8. 2026
+**Stav:** částečně — implementace + prompt v4.1.0 hotové 14. 8. 2026
+(D1–D5 v kódu, commity na stable); zbývá nasazení a ověření na dev DS
+(reanalýza zprávy 3, apply → 1442,98 / 303,02 / 1746,00) a hledání
+vzoru na alfě
 
 **Cíl:** Doklady z AI analýzy, jejichž položkové řádky jsou v cenách
 **s DPH** (koncové/maloobchodní ceny — účtenky, PHM, občerstvení),
@@ -185,16 +188,20 @@ Regrese: `DocDocumentTotalsTest`, `DocDocumentVatRecapTest`,
 
 ## Hotovo když
 
-- [ ] Referenční účtenka projde applierem s `vat_mode 2` a doklad
-      po apply má 1442,98 / 303,02 / 1746,00 (shoda s předlohou).
-- [ ] Korektní „zdola" faktury procházejí beze změny (žádná falešná
+- [x] Referenční účtenka projde applierem s `vat_mode 2` — unit test
+      derivace i transform; doklad po apply má 1442,98 / 303,02 /
+      1746,00 (shoda s předlohou) — **zbývá ověřit na dev DS**.
+- [x] Korektní „zdola" faktury procházejí beze změny (žádná falešná
       derivace) — regrese na stávajících fixtures.
-- [ ] noPayTax doklady (PDP, EU pořízení) derivace nezasahuje.
-- [ ] Korekce viditelná v `_resolve.issues` (review modal ji zobrazí).
-- [ ] Validátor warnuje jen tam, kde derivace neměla data.
+- [x] noPayTax doklady (PDP, EU pořízení) derivace nezasahuje.
+- [x] Korekce viditelná v `_resolve.issues` (`vat_mode_derived`
+      z preview i apply; review modal issues rendruje generic).
+- [x] Validátor warnuje jen tam, kde derivace neměla data
+      (`vat_mode_suspect` přes sdílenou `VatModeDerivation`).
 - [ ] Prompt v4.1.0 nasazen (`ds-upgrade` + `ai-profile-reload
-      --force` na dev i alfě), verze bumpnutá na všech 3 místech.
-- [ ] PHPUnit (exchange + docs + mail) zelené, úzké filtry.
+      --force` na dev i alfě) — verze bumpnutá na všech 3 místech ✓.
+- [x] PHPUnit (exchange + docs + mail) zelené, úzké filtry i celá
+      Unit sada (4012 testů).
 
 ## Nasazení a ověření
 

@@ -186,6 +186,19 @@ Top-level struktura:
                                    //   vynechat nebo null (ne prázdný objekt)
     "mode":  "fromBase",          // fromBase | fromTotal | none
                                    //   (key z docs.core.vatModes)
+                                   //   Applier mode deterministicky ověřuje
+                                   //   proti číslům (VatModeDerivation): sedí-li
+                                   //   Σ rows[].totalPrice právě na Σ vatRecap
+                                   //   total (fallback totals.totalAmount −
+                                   //   totalRounding), a ne na base, jsou řádky
+                                   //   v cenách s DPH → vat_mode dokladu se
+                                   //   nastaví na 2 (fromTotal) bez ohledu na
+                                   //   deklarovaný mode; zrcadlově pro opačný
+                                   //   směr. AI extraktory mode u koncových cen
+                                   //   (účtenky, PHM) vracejí špatně a daň by se
+                                   //   počítala dvakrát. Canonical zůstává
+                                   //   nedotčený, korekce je v _resolve.issues
+                                   //   jako warning `vat_mode_derived`.
     "place": "domestic",          // klíč z docs.core.vatPlaces
     "registrationCountry": "CZ"   // ISO země — resolver dohledá
                                    //   economy_codebooks_vat_registrations

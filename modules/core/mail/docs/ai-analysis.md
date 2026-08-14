@@ -255,6 +255,22 @@ a [tasks/mail-invoice-rounding.md](../../../../tasks/mail-invoice-rounding.md).
 Platí i pro ISDOC větev (`PayableRoundingAmount`) — apply jde přes týž
 applier.
 
+## Režim výpočtu DPH při apply (derivace vat_mode)
+
+U dokladů s řádky v koncových cenách (účtenky, PHM, maloobchod) AI
+vrací `vat.mode: "fromBase"`, ačkoli `rows[].totalPrice` už daň
+obsahuje — počítat DPH zdola by ji na doklad dalo podruhé.
+`DocumentApplier` proto `vat_mode` hlavičky deterministicky derivuje
+(`VatModeDerivation`): sedí-li Σ řádků právě na Σ `vatRecap[].total`
+(a ne na base), nastaví režim „shora" (fromTotal) bez ohledu na
+deklarovaný mode — a zrcadlově. Korekce se v review modalu zobrazí
+jako warning **`vat_mode_derived`** v `_resolve.issues` (preview
+i apply). Když derivace nemá dost dat (chybí recap i `totalBase`),
+validátor místo toho warnuje **`vat_mode_suspect`**. Prompt v4.1.0
+navíc učí model mode u koncových cen vracet rovnou správně — derivace
+zůstává pojistka. Detaily: `docs/exchange-format.md` (sekce vat)
+a [tasks/docs-vat-mode-derivation.md](../../../../tasks/docs-vat-mode-derivation.md).
+
 ## Message-centrické akce (apply / reject / unapply / preview)
 
 Akce nad dokumentovým návrhem operují nad **poslední úspěšnou analýzou**

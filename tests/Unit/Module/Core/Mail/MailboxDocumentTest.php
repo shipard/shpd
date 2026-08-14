@@ -207,6 +207,44 @@ class MailboxDocumentTest extends TestCase
         $this->assertSame(0, $data['is_default']);
     }
 
+    public function testBeforeSaveCoercesAiAnalysisDisabledToInt(): void
+    {
+        $doc = $this->doc();
+        $data = [
+            'mailbox_id' => 'default',
+            'ai_analysis_disabled' => true,
+        ];
+
+        $doc->beforeSave($data);
+
+        $this->assertSame(1, $data['ai_analysis_disabled']);
+    }
+
+    public function testBeforeSaveCoercesFalseyAiAnalysisDisabledToZero(): void
+    {
+        $doc = $this->doc();
+        $data = [
+            'mailbox_id' => 'default',
+            'ai_analysis_disabled' => false,
+        ];
+
+        $doc->beforeSave($data);
+
+        $this->assertSame(0, $data['ai_analysis_disabled']);
+    }
+
+    public function testBeforeSaveLeavesAiAnalysisDisabledUnsetWhenAbsent(): void
+    {
+        $doc = $this->doc();
+        $data = [
+            'mailbox_id' => 'default',
+        ];
+
+        $doc->beforeSave($data);
+
+        $this->assertArrayNotHasKey('ai_analysis_disabled', $data);
+    }
+
     public function testBeforeSaveFillsAuditFieldsForNewRecord(): void
     {
         $doc = $this->doc();

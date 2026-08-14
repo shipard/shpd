@@ -98,6 +98,15 @@
             "group": "config"
         },
         {
+            "id": "ai_analysis_disabled",
+            "name": "Disable AI analysis",
+            "name:cs": "Zakázat AI analýzu příchozích zpráv",
+            "name:en": "Disable AI analysis of incoming messages",
+            "type": "boolean",
+            "default": 0,
+            "group": "config"
+        },
+        {
             "id": "is_default",
             "name": "Default mailbox",
             "name:cs": "Výchozí schránka",

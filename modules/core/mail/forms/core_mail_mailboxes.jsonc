@@ -23,6 +23,7 @@
 
                                 {"type": "separator", "label": "Konfigurace", "label:cs": "Konfigurace", "label:en": "Configuration"},
                                 {"type": "select", "column": "default_primary_type"},
+                                {"type": "input", "column": "ai_analysis_disabled"},
                                 {"type": "input", "column": "is_default"}
                             ]
                         }

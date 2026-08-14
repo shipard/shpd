@@ -64,6 +64,10 @@ class MailboxDocument extends Document
             $data['is_default'] = $data['is_default'] ? 1 : 0;
         }
 
+        if (isset($data['ai_analysis_disabled'])) {
+            $data['ai_analysis_disabled'] = $data['ai_analysis_disabled'] ? 1 : 0;
+        }
+
         if ($isNew) {
             if (empty($data['created'])) {
                 $data['created'] = $now;

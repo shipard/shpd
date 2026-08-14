@@ -1,6 +1,6 @@
 # Modul `mail` — Opravy AI analýzy: schéma, prompt, frontování podle docState
 
-**Stav:** naplánováno — návrh 2026-07-14; `schema_error` není v kódu
+**Stav:** hotovo — schéma/prompt/frontování realizováno v ed59dfa (kind structured, nullable vat, pravidla promptu, docState gate + datová oprava v ds-upgrade); `schema_error` a ISDOC follow-up nahrazeny message-centric designem (daemon: error_type schema_error → /failed → analysis_state 70; server: forenzní wrapper nevalidního canonicalu v /result; ISDOC structured v IsdocImportService). Ověřeno 14. 8. 2026: testy zelené, alfa 0 nafrontovaných archivovaných zpráv.
 
 **Cíl:** Odstranit dvě třídy problémů AI analýzy zjištěné diagnostikou
 reálného provozu na alfě (14. 7. 2026):

@@ -324,7 +324,8 @@ class IncomingMessageDocumentTest extends TestCase
     public function testBeforeSaveQueuesAnalysisWhenActiveProfileExists(): void
     {
         $dibi = $this->createMock(\Dibi\Connection::class);
-        // message_id je vyplněné → jediný fetch je dotaz na aktivní AI profil
+        // Row bez ai_analysis_disabled → flag schránky vyhodnocen jako 0;
+        // dotaz na aktivní AI profil vrací id 17
         $dibi->method('fetch')->willReturn(new \Dibi\Row(['id' => 17]));
         $doc = $this->doc();
         $doc->setDb($dibi);
@@ -375,6 +376,78 @@ class IncomingMessageDocumentTest extends TestCase
         $doc->beforeSave($data);
 
         $this->assertSame(0, $data['analysis_state']);
+    }
+
+    // --- beforeSave: analysis_state podle flagu schránky ----------------------
+
+    /**
+     * Mock připojení: dotaz na flag schránky vrací zadanou hodnotu
+     * `ai_analysis_disabled`, ostatní dotazy (aktivní profil) Row(['id' => 17]).
+     */
+    private function dbWithMailboxFlag(int $disabled): \Dibi\Connection
+    {
+        $dibi = $this->createMock(\Dibi\Connection::class);
+        $dibi->method('fetch')->willReturnCallback(
+            static function (...$args) use ($disabled): \Dibi\Row {
+                if (in_array('ai_analysis_disabled', $args, true)) {
+                    return new \Dibi\Row(['ai_analysis_disabled' => $disabled]);
+                }
+                return new \Dibi\Row(['id' => 17]);
+            },
+        );
+        return $dibi;
+    }
+
+    public function testBeforeSaveSkipsQueueWhenMailboxAnalysisDisabled(): void
+    {
+        $doc = $this->doc();
+        $doc->setDb($this->dbWithMailboxFlag(1));
+        $data = [
+            'mailbox' => 1,
+            'sender_email' => 'a@b.cz',
+            'received_at' => '2026-04-17 10:00:00',
+            'message_id' => 'MSG-X',
+            'primary_type' => 'other',
+        ];
+
+        $doc->beforeSave($data);
+
+        $this->assertSame(0, $data['analysis_state']);
+    }
+
+    public function testBeforeSaveExplicitEnabledWinsOverDisabledMailbox(): void
+    {
+        $doc = $this->doc();
+        $doc->setDb($this->dbWithMailboxFlag(1));
+        $data = [
+            'mailbox' => 1,
+            'sender_email' => 'a@b.cz',
+            'received_at' => '2026-04-17 10:00:00',
+            'message_id' => 'MSG-X',
+            'primary_type' => 'other',
+            'ai_analysis_enabled' => true,
+        ];
+
+        $doc->beforeSave($data);
+
+        $this->assertSame(10, $data['analysis_state']);
+    }
+
+    public function testBeforeSaveQueuesAnalysisWhenMailboxAnalysisEnabled(): void
+    {
+        $doc = $this->doc();
+        $doc->setDb($this->dbWithMailboxFlag(0));
+        $data = [
+            'mailbox' => 1,
+            'sender_email' => 'a@b.cz',
+            'received_at' => '2026-04-17 10:00:00',
+            'message_id' => 'MSG-X',
+            'primary_type' => 'other',
+        ];
+
+        $doc->beforeSave($data);
+
+        $this->assertSame(10, $data['analysis_state']);
     }
 
     // --- beforeSave: analysis_state podle docState -----------------------------

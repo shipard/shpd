@@ -205,7 +205,8 @@ class IncomingMessageDocument extends Document
     /**
      * Výchozí `analysis_state` nové zprávy: 10 (Ve frontě) když zpráva vzniká
      * v docState 10/20 (Nová/K řešení), analýza není explicitně vypnutá
-     * a v DS existuje aktivní AI profil, jinak 0.
+     * (message-level `ai_analysis_enabled`, jinak flag schránky
+     * `ai_analysis_disabled`) a v DS existuje aktivní AI profil, jinak 0.
      */
     private function resolveInitialAnalysisState(array $data): int
     {
@@ -218,14 +219,29 @@ class IncomingMessageDocument extends Document
             return self::ANALYSIS_NONE;
         }
 
-        if (array_key_exists('ai_analysis_enabled', $data)
-            && $data['ai_analysis_enabled'] !== null
-            && !$data['ai_analysis_enabled']
-        ) {
+        $explicitEnabled = array_key_exists('ai_analysis_enabled', $data)
+            && $data['ai_analysis_enabled'] !== null;
+        if ($explicitEnabled && !$data['ai_analysis_enabled']) {
             return self::ANALYSIS_NONE;
         }
         if ($this->db === null) {
             return self::ANALYSIS_NONE;
+        }
+
+        // Flag schránky — jen když message-level hodnota není explicitní
+        // (explicitní true/false má přednost, NULL dědí ze schránky).
+        $mailboxId = isset($data['mailbox']) ? (int) $data['mailbox'] : 0;
+        if (!$explicitEnabled && $mailboxId > 0) {
+            $mb = $this->db->fetch(
+                'SELECT %n FROM %n WHERE %n = %i',
+                'ai_analysis_disabled',
+                'core_mail_mailboxes',
+                'id',
+                $mailboxId,
+            );
+            if ($mb !== null && !empty(((array) $mb)['ai_analysis_disabled'])) {
+                return self::ANALYSIS_NONE;
+            }
         }
 
         $profile = $this->db->fetch(

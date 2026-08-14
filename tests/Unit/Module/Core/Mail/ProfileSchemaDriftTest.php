@@ -86,7 +86,7 @@ class ProfileSchemaDriftTest extends TestCase
         [$profile] = $this->loadProfile();
 
         $this->assertSame('czech_general', $profile['profile_id']);
-        $this->assertSame('v4.0.0', $profile['prompt_version']);
+        $this->assertSame('v4.1.0', $profile['prompt_version']);
         $this->assertContains('invoiceReceived', $profile['supported_doc_types']);
         foreach (['contract', 'insurance', 'quotation', 'certificate', 'official'] as $registryType) {
             $this->assertContains($registryType, $profile['supported_doc_types']);
@@ -116,7 +116,8 @@ class ProfileSchemaDriftTest extends TestCase
             );
         }
 
-        $this->assertStringContainsString('"v4.0.0"', $prompt, 'prompt must pin its own version');
+        $this->assertStringContainsString('"v4.1.0"', $prompt, 'prompt must pin its own version');
+        $this->assertStringNotContainsString('v4.0.0', $prompt, 'stale prompt version reference');
         $this->assertStringNotContainsString('v3.2.0', $prompt, 'stale prompt version reference');
         // Kontrakt v4 (mail-message-centric D11): nejvýše jeden document,
         // žádné plurální documents / source_attachment_ndxs.

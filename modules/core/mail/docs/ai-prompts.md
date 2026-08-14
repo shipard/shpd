@@ -24,7 +24,7 @@ Audit běhu: každý `core_mail_message_analyses` row si propíše `profile_ndx`
 `backend_ndx` a `prompt_version`, takže historie je auditovatelná i po pozdějších
 změnách profilu.
 
-## Default prompt (v4.0.0)
+## Default prompt (v4.1.0)
 
 Od `v4.0.0` je analýza **message-centrická**
 ([tasks/mail-message-centric.md](../../../../tasks/mail-message-centric.md)
@@ -56,7 +56,7 @@ Klíčové pokyny v promptu:
   ISO 3166-1 alpha-2 lowercase (`cz`).
 - `selfParty` vždy `"customer"` (jsme příjemce přijaté faktury).
 - `source.kind` vždy `"aiExtraction"`, `source.promptVersion` vždy
-  shodná s `prompt_version` profilu (`v4.0.0`).
+  shodná s `prompt_version` profilu (`v4.1.0`).
 - VAT kódy v řádcích jsou klíče z `world.vat.{country}.vatCodes`
   cfgItem (`cz-110`, `cz-111`, …) — ne sazby v procentech.
 - `totals.totalRounding` = zaokrouhlení celkové částky se znaménkem
@@ -157,7 +157,7 @@ Plné schéma viz [`profiles/czech_general.jsonc`](../profiles/czech_general.jso
    přes `shpd.docs.document.v1` (polymorfní dle `docType`, bez per-typ
    branche), registry typy přes `shpd.registry.document.v1` (nový druh =
    nová if/then větev `kindFields` v registry schématu + kopie embedu).
-5. Bumpni `prompt_version` (`v4.0.0` → `v4.1.0`).
+5. Bumpni `prompt_version` (`v4.1.0` → `v4.2.0`).
 
 ### Vlastní profil pro jiný jazyk / účel
 
@@ -217,6 +217,25 @@ backendů (`default` Anthropic Claude Sonnet pro běžné případy, druhý back
 s Claude Opus pro náročné dokumenty) a přiřadit je různým profilům.
 
 ## Changelog promptu
+
+### v4.1.0 (2026-08-14)
+
+Režim výpočtu DPH u dokladů s koncovými cenami
+([tasks/docs-vat-mode-derivation.md](../../../../tasks/docs-vat-mode-derivation.md)
+D2/D3) — u účtenek (PHM, maloobchod) model vracel `vat.mode: "fromBase"`,
+ačkoli řádky nesou ceny včetně DPH, a daň se na dokladu počítala podruhé:
+
+- Nové pravidlo pro `vat.mode`: ceny řádků uvedené včetně DPH (součet
+  položek odpovídá částce k úhradě, ne základu daně) → `"fromTotal"`;
+  čísla z dokladu se vždy opisují, nikdy nepřepočítávají na základ.
+- PRAVIDLA PRO ÚČTENKY: `rows[].priceCalcMode: "fromTotal"`, když je
+  autoritativní celková cena řádku (PHM — qty × jednotková cena nemusí
+  kvůli zaokrouhlení u stojanu sedět na celkovou), `totalPrice` se opisuje
+  přesně z dokladu.
+
+Prompt je pojistka první linie — nezávisle na něm `DocumentApplier`
+`vat_mode` deterministicky derivuje z poměru součtu řádků a rekapitulace
+(`VatModeDerivation`, issue `vat_mode_derived`).
 
 ### v4.0.0 (2026-08)
 

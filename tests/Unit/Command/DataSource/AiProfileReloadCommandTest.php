@@ -74,8 +74,8 @@ class AiProfileReloadCommandTest extends TestCase
     private function writeTemplate(string $version, string $promptBody = 'New prompt body'): void
     {
         $tpl = [
-            'profile_id' => 'czech_invoices',
-            'name' => 'České faktury (default)',
+            'profile_id' => 'czech_general',
+            'name' => 'Obecná analýza pošty (česky)',
             'language' => 'cs',
             'prompt_version' => $version,
             'supported_doc_types' => ['invoiceReceived', 'creditNote', 'other'],
@@ -107,7 +107,7 @@ class AiProfileReloadCommandTest extends TestCase
 
         $this->assertSame(Command::FAILURE, $exitCode);
         $output = $tester->getDisplay();
-        $this->assertStringContainsString("'czech_invoices' not found", $output);
+        $this->assertStringContainsString("'czech_general' not found", $output);
         $this->assertStringContainsString('ai-analyzer-bootstrap', $output);
     }
 

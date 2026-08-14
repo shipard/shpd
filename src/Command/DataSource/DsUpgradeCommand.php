@@ -454,12 +454,19 @@ class DsUpgradeCommand extends Command
             $output->writeln("  [OK]     backend 'default' (id={$backend['id']})", OutputInterface::VERBOSITY_VERBOSE);
         }
 
+        // Jednorázový rename legacy profilu (czech_invoices → czech_general),
+        // po prvním běhu 0 řádků = žádný výpis (viz AIAnalyzerProvisioner).
+        $renamed = $result['profile_rename']['renamed'] ?? 0;
+        if ($renamed > 0) {
+            $output->writeln("  [RENAME] profile 'czech_invoices' → '{$profile['profile_id']}'");
+        }
+
         if ($profile['created']) {
-            $output->writeln("  [CREATE] profile 'czech_invoices' (id={$profile['id']})");
+            $output->writeln("  [CREATE] profile '{$profile['profile_id']}' (id={$profile['id']})");
         } elseif (isset($profile['skipped_reason'])) {
-            $output->writeln("  <comment>[SKIP]   profile 'czech_invoices' — {$profile['skipped_reason']}</comment>");
+            $output->writeln("  <comment>[SKIP]   profile '{$profile['profile_id']}' — {$profile['skipped_reason']}</comment>");
         } else {
-            $output->writeln("  [OK]     profile 'czech_invoices' (id={$profile['id']})", OutputInterface::VERBOSITY_VERBOSE);
+            $output->writeln("  [OK]     profile '{$profile['profile_id']}' (id={$profile['id']})", OutputInterface::VERBOSITY_VERBOSE);
         }
 
         // Datová oprava nafrontovaných archivních zpráv — idempotentní,

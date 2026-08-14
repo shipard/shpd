@@ -44,13 +44,13 @@ class AiProfileReloadCommand extends Command
                  'profile',
                  null,
                  InputOption::VALUE_REQUIRED,
-                 'Profile code (default: code from template, typically "czech_invoices")',
+                 'Profile code (default: code from template, typically "czech_general")',
              )
              ->addOption(
                  'template-path',
                  null,
                  InputOption::VALUE_REQUIRED,
-                 'Path to JSONC template (default: modules/core/mail/profiles/default_czech_invoices.jsonc)',
+                 'Path to JSONC template (default: modules/core/mail/profiles/czech_general.jsonc)',
              )
              ->addOption(
                  'force',

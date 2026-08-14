@@ -489,8 +489,31 @@ class DsUpgradeCommandTest extends TestCase
         $display = $tester->getDisplay();
         $this->assertStringContainsString("[CREATE] user '_ai_analyzer'", $display);
         $this->assertStringContainsString("[CREATE] backend 'default'", $display);
-        $this->assertStringContainsString("[CREATE] profile 'czech_invoices'", $display);
+        $this->assertStringContainsString("[CREATE] profile 'czech_general'", $display);
         $this->assertStringContainsString('Provisioning disabled via config', $display);
+        // Čistý DS — legacy profil neexistuje, RENAME se nevypisuje.
+        $this->assertStringNotContainsString('[RENAME]', $display);
+    }
+
+    public function testAiAnalyzerRenamesLegacyProfile(): void
+    {
+        $this->createAiFixtureModules();
+        $this->dsConfig = $this->createSkipProvisioningConfig(['test.unit', 'core.mail']);
+
+        $this->dsConnection->method('getTableColumns')->willReturn([]);
+        $this->dsConnection->method('getTableIndexes')->willReturn([]);
+        $this->dsConnection->method('executeSQL');
+        // 1. getAffectedRows = rename legacy profilu, 2. = queue fix
+        $this->dsConnection->method('getAffectedRows')->willReturnOnConsecutiveCalls(1, 0);
+
+        $tester = $this->createCommandTester();
+        $exitCode = $tester->execute([]);
+
+        $this->assertSame(Command::SUCCESS, $exitCode);
+        $this->assertStringContainsString(
+            "[RENAME] profile 'czech_invoices' → 'czech_general'",
+            $tester->getDisplay(),
+        );
     }
 
     public function testAiAnalyzerSkippedWithoutMailModule(): void

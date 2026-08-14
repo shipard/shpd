@@ -32,6 +32,7 @@ final class DocumentValidator
         $this->checkCommonRequired($canonical, $issues);
         $this->checkPerDocType($canonical, $issues);
         $this->checkTotalsCoherence($canonical, $issues);
+        $this->checkVatModeSuspect($canonical, $issues);
         $this->checkPartnerDocNumber($canonical, $issues);
 
         return $issues;
@@ -174,6 +175,75 @@ final class DocumentValidator
             'path'     => 'totals.totalAmount',
             'code'     => 'totals_mismatch',
             'message'  => "Deklarovaná částka {$declaredF} neodpovídá žádné vypočtené variantě ({$detail}).",
+        ];
+    }
+
+    /**
+     * Podezření na ceny s DPH při deklarovaném `fromBase`: součet
+     * položkových řádků sedí na deklarovanou částku k úhradě, ale řádky
+     * nesou kladnou sazbu DPH — počítat daň zdola by ji na doklad dalo
+     * podruhé. Warning vzniká **jen** když {@see VatModeDerivation} nemá
+     * dost dat na korekci (typicky chybí recap i totals.totalBase) —
+     * jinak DocumentApplier `vat_mode` sám opraví a ohlásí
+     * `vat_mode_derived`, warning by korekci dubloval.
+     *
+     * @param array<int, array{severity: string, path: string, code: string, message: string}> $issues
+     */
+    private function checkVatModeSuspect(array $canonical, array &$issues): void
+    {
+        if ((string) ($canonical['vat']['mode'] ?? 'fromBase') !== 'fromBase') {
+            return;
+        }
+        if (VatModeDerivation::derive($canonical) !== null) {
+            return;
+        }
+
+        $totals = $canonical['totals'] ?? null;
+        if (!is_array($totals) || !isset($totals['totalAmount']) || !is_numeric($totals['totalAmount'])) {
+            return;
+        }
+        $rows = $canonical['rows'] ?? null;
+        $rowSum = VatModeDerivation::sumItemRows($rows);
+        if ($rowSum === null) {
+            return;
+        }
+
+        $hasPositivePct = false;
+        $rowCount = 0;
+        foreach ((array) $rows as $row) {
+            if (!is_array($row) || (string) ($row['rowKind'] ?? 'item') !== 'item' || isset($row['accSide'])) {
+                continue;
+            }
+            $rowCount++;
+            $pct = $row['vat']['pct'] ?? null;
+            if ($pct !== null && is_numeric($pct) && (float) $pct > 0) {
+                $hasPositivePct = true;
+            }
+        }
+        if (!$hasPositivePct) {
+            return;
+        }
+
+        $rounding = isset($totals['totalRounding']) && is_numeric($totals['totalRounding'])
+            ? (float) $totals['totalRounding']
+            : 0.0;
+        $declaredTotal = round((float) $totals['totalAmount'] - $rounding, 2);
+        $eps = VatModeDerivation::tolerance($rowCount);
+        if (abs($rowSum - $declaredTotal) > $eps) {
+            return;
+        }
+        // Sedí-li součet zároveň na totalBase, nejde vzor rozlišit od 0%
+        // dokladu — derivace by v takové konstelaci taky mlčela.
+        if (isset($totals['totalBase']) && is_numeric($totals['totalBase'])
+            && abs($rowSum - round((float) $totals['totalBase'], 2)) <= $eps) {
+            return;
+        }
+
+        $issues[] = [
+            'severity' => 'warning',
+            'path'     => 'vat.mode',
+            'code'     => 'vat_mode_suspect',
+            'message'  => 'Součet řádků odpovídá částce k úhradě, ale režim výpočtu je zdola (fromBase) — řádky vypadají jako ceny s DPH, zkontrolujte režim výpočtu.',
         ];
     }
 

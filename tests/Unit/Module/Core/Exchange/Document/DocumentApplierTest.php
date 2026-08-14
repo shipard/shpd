@@ -925,6 +925,148 @@ class DocumentApplierTest extends TestCase
         $this->assertSame(4, $data['total_rounding_mode']);
     }
 
+    // ── transform() + preview(): derivace vat_mode ───────────────────────────
+
+    /**
+     * Řádky v koncových cenách (účtenka PHM): Σ řádků sedí na recap total.
+     *
+     * @return array<string, mixed>
+     */
+    private function receiptVatFragment(): array
+    {
+        return [
+            'vat'  => ['mode' => 'fromBase', 'place' => 'domestic'],
+            'rows' => [
+                [
+                    'rowKind'    => 'item',
+                    'quantity'   => 45,
+                    'unitPrice'  => 38.80,
+                    'totalPrice' => 1746.00,
+                    'vat'        => ['code' => 'cz-110', 'pct' => 21],
+                ],
+            ],
+            'vatRecap' => [
+                ['vatCode' => 'cz-110', 'vatPct' => 21, 'base' => 1442.98, 'tax' => 303.02, 'total' => 1746.00],
+            ],
+            'totals' => ['totalBase' => 1442.98, 'totalVat' => 303.02, 'totalAmount' => 1746.00],
+        ];
+    }
+
+    public function testTransformDerivesVatModeFromTotalOnReceipt(): void
+    {
+        $data = $this->transformWithTotals($this->receiptVatFragment());
+        $this->assertSame(2, $data['vat_mode']);
+    }
+
+    public function testTransformKeepsDeclaredModeWhenRowsMatchBase(): void
+    {
+        // Korektní „zdola" faktura — derivace potvrdí deklarovaný mode.
+        $data = $this->transformWithTotals([
+            'vat'      => ['mode' => 'fromBase'],
+            'rows'     => [['rowKind' => 'item', 'totalPrice' => 10330.58, 'vat' => ['pct' => 21]]],
+            'vatRecap' => [['vatPct' => 21, 'base' => 10330.58, 'tax' => 2169.42, 'total' => 12500.00]],
+            'totals'   => ['totalBase' => 10330.58, 'totalVat' => 2169.42, 'totalAmount' => 12500.00],
+        ]);
+        $this->assertSame(1, $data['vat_mode']);
+    }
+
+    public function testTransformDerivesVatModeFromBaseWhenDeclaredFromTotal(): void
+    {
+        // Opačný směr: deklarováno shora, ale řádky sedí na base → mode 1.
+        $data = $this->transformWithTotals([
+            'vat'      => ['mode' => 'fromTotal'],
+            'rows'     => [['rowKind' => 'item', 'totalPrice' => 10330.58, 'vat' => ['pct' => 21]]],
+            'vatRecap' => [['vatPct' => 21, 'base' => 10330.58, 'tax' => 2169.42, 'total' => 12500.00]],
+        ]);
+        $this->assertSame(1, $data['vat_mode']);
+    }
+
+    public function testTransformKeepsVatModeNoneUntouched(): void
+    {
+        // Deklarovaný mode none (bez DPH) derivace nikdy nepřebíjí.
+        $fragment = $this->receiptVatFragment();
+        $fragment['vat']['mode'] = 'none';
+        $data = $this->transformWithTotals($fragment);
+        $this->assertSame(0, $data['vat_mode']);
+    }
+
+    /**
+     * @return array{0: \PHPUnit\Framework\MockObject\MockObject&PartyResolver, 1: \PHPUnit\Framework\MockObject\MockObject&ItemResolver, 2: \PHPUnit\Framework\MockObject\MockObject&UnitResolver, 3: \PHPUnit\Framework\MockObject\MockObject&VatCodeResolver, 4: \PHPUnit\Framework\MockObject\MockObject&BankAccountResolver}
+     */
+    private function buildMatchedResolvers(): array
+    {
+        $party = $this->createMock(PartyResolver::class);
+        $party->method('resolve')->willReturn(ResolveResult::matched(42, 'companyId'));
+        $item = $this->createMock(ItemResolver::class);
+        $item->method('resolve')->willReturn(ResolveResult::matched(18, 'ourCode'));
+        $unit = $this->createMock(UnitResolver::class);
+        $unit->method('resolve')->willReturn(ResolveResult::matched(3, 'systemCode'));
+        $vat = $this->createMock(VatCodeResolver::class);
+        $vat->method('resolve')->willReturn(new ResolveResult(
+            ResolveStatus::Matched,
+            matchedId: 0,
+            matchedBy: 'cfgItem',
+            createPayload: ['code' => 'highEU', 'pct' => 21.0, 'reverseVatCode' => null, 'noPayTax' => false],
+        ));
+        $bank = $this->createMock(BankAccountResolver::class);
+        $bank->method('resolvePartnerBank')->willReturn(ResolveResult::matched(7, 'iban'));
+        return [$party, $item, $unit, $vat, $bank];
+    }
+
+    public function testPreviewAddsVatModeDerivedIssueOnReceipt(): void
+    {
+        [$party, $item, $unit, $vat, $bank] = $this->buildMatchedResolvers();
+        $applier = $this->buildApplier(party: $party, item: $item, unit: $unit, vat: $vat, bank: $bank);
+
+        $payload = json_decode(
+            (string) file_get_contents(__DIR__ . '/../../../../../Fixtures/Exchange/invoiceReceived_happy.json'),
+            true,
+        );
+        $payload = array_merge($payload, $this->receiptVatFragment());
+
+        $result = $applier->preview($payload);
+
+        $this->assertTrue($result->success);
+        $issues = $result->canonical['_resolve']['issues'] ?? [];
+        $derived = array_values(array_filter($issues, static fn($i) => $i['code'] === 'vat_mode_derived'));
+        $this->assertCount(1, $derived);
+        $this->assertSame('warning', $derived[0]['severity']);
+        $this->assertSame('vat.mode', $derived[0]['path']);
+        $this->assertStringContainsString('fromTotal', $derived[0]['message']);
+        // Korekce nesmí spustit duplicitní vat_mode_suspect z validátoru.
+        $this->assertNull($this->findIssueByCode($issues, 'vat_mode_suspect'));
+    }
+
+    public function testPreviewHasNoVatModeIssueOnHappyFixture(): void
+    {
+        [$party, $item, $unit, $vat, $bank] = $this->buildMatchedResolvers();
+        $applier = $this->buildApplier(party: $party, item: $item, unit: $unit, vat: $vat, bank: $bank);
+
+        $payload = json_decode(
+            (string) file_get_contents(__DIR__ . '/../../../../../Fixtures/Exchange/invoiceReceived_happy.json'),
+            true,
+        );
+        $result = $applier->preview($payload);
+
+        $issues = $result->canonical['_resolve']['issues'] ?? [];
+        $this->assertNull($this->findIssueByCode($issues, 'vat_mode_derived'));
+        $this->assertNull($this->findIssueByCode($issues, 'vat_mode_suspect'));
+    }
+
+    /**
+     * @param array<int, array{severity: string, path: string, code: string, message: string}> $issues
+     * @return array{severity: string, path: string, code: string, message: string}|null
+     */
+    private function findIssueByCode(array $issues, string $code): ?array
+    {
+        foreach ($issues as $issue) {
+            if (($issue['code'] ?? null) === $code) {
+                return $issue;
+            }
+        }
+        return null;
+    }
+
     // ── resolveNumberSeriesFor(): code selection + error path ───────────────
 
     private function invokeResolveSeries(DocumentApplier $applier, string $docType, ?string $seriesCode): ?int

@@ -241,6 +241,7 @@ class DocumentApplier
 
         // 2. Semantic checks + resolve. Both contribute to _resolve.issues.
         $issues = $this->documentValidator->validate($canonical);
+        $this->appendVatModeIssue($canonical, $issues);
         $resolved = $this->resolveAll($canonical, $issues);
         $enriched = $this->withResolve($canonical, $resolved, $issues);
 
@@ -277,6 +278,7 @@ class DocumentApplier
             );
         }
         $validatorIssues = $this->documentValidator->validate($canonical);
+        $this->appendVatModeIssue($canonical, $validatorIssues);
 
         // 3. Re-run resolve (fresh DB read; client's _resolve might be stale).
         $resolved = $this->resolveAll($canonical, $validatorIssues);
@@ -951,7 +953,14 @@ class DocumentApplier
             };
 
         $vatRegistrationId = $this->resolveVatRegistrationFor($canonical);
+        // Derivace přebíjí deklarovaný mode (kromě none) — koriguje se jen
+        // interní vat_mode, canonical vč. totals zůstává nedotčený a
+        // DocDocument si base/VAT/totals přepočítá při apply sám.
         $vatMode = self::VAT_MODE_MAP[(string) ($canonical['vat']['mode'] ?? 'fromBase')] ?? 1;
+        $derivedVatMode = VatModeDerivation::derive($canonical);
+        if ($derivedVatMode !== null && $vatMode !== 0) {
+            $vatMode = $derivedVatMode;
+        }
         $vatPlace = self::VAT_PLACE_MAP[(string) ($canonical['vat']['place'] ?? 'domestic')] ?? 0;
         $paymentMethod = self::PAYMENT_METHOD_MAP[(string) ($canonical['payment']['method'] ?? 'bankTransfer')] ?? 1;
 
@@ -1034,6 +1043,36 @@ class DocumentApplier
             static fn($v, $k) => $v !== null || in_array($k, ['rows'], true),
             ARRAY_FILTER_USE_BOTH,
         ) + ['rows' => $data['rows']];
+    }
+
+    /**
+     * Když derivace ({@see VatModeDerivation}) přebije deklarovaný
+     * `vat.mode`, přidá do `_resolve.issues` warning `vat_mode_derived`,
+     * aby korekce byla viditelná v review modalu. Volá se z preview()
+     * i apply() — transform() běží až v transakci, po sestavení
+     * `_resolve` bloku (a preview transform vůbec nevolá).
+     *
+     * @param array<string, mixed> $canonical
+     * @param array<int, array{severity: string, path: string, code: string, message: string}> $issues
+     */
+    private function appendVatModeIssue(array $canonical, array &$issues): void
+    {
+        $declared = self::VAT_MODE_MAP[(string) ($canonical['vat']['mode'] ?? 'fromBase')] ?? 1;
+        if ($declared === 0) {
+            return;
+        }
+        $derived = VatModeDerivation::derive($canonical);
+        if ($derived === null || $derived === $declared) {
+            return;
+        }
+        $issues[] = [
+            'severity' => 'warning',
+            'path'     => 'vat.mode',
+            'code'     => 'vat_mode_derived',
+            'message'  => $derived === 2
+                ? 'Řádky jsou v cenách s DPH — režim výpočtu odvozen shora (fromTotal).'
+                : 'Řádky jsou v cenách bez DPH — režim výpočtu odvozen zdola (fromBase).',
+        ];
     }
 
     /**

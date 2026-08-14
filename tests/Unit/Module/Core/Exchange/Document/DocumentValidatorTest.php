@@ -227,6 +227,110 @@ class DocumentValidatorTest extends TestCase
         $this->assertNotNull($this->findByCode($issues, 'totals_mismatch'));
     }
 
+    public function testVatModeSuspectWarnsWhenDerivationLacksData(): void
+    {
+        // Řádky v cenách s DPH, mode fromBase, ale chybí recap i totalBase
+        // → derivace nemá reference, warning musí vystřelit.
+        $issues = $this->v->validate([
+            'docType' => 'invoiceReceived',
+            'supplier' => ['name' => 'V'],
+            'dates' => ['issueDate' => '2026-04-15'],
+            'vat' => ['mode' => 'fromBase'],
+            'rows' => [
+                ['rowKind' => 'item', 'totalPrice' => 1746.00, 'vat' => ['pct' => 21]],
+            ],
+            'totals' => ['totalAmount' => 1746.00],
+        ]);
+        $w = $this->findByCode($issues, 'vat_mode_suspect');
+        $this->assertNotNull($w);
+        $this->assertSame('warning', $w['severity']);
+        $this->assertSame('vat.mode', $w['path']);
+    }
+
+    public function testVatModeSuspectSilentWhenDerivationHasRecap(): void
+    {
+        // S kompletním recapem derivace v applieru koriguje sama —
+        // validátor mlčí, jinak by warning dubloval vat_mode_derived.
+        $issues = $this->v->validate([
+            'docType' => 'invoiceReceived',
+            'supplier' => ['name' => 'V'],
+            'dates' => ['issueDate' => '2026-04-15'],
+            'vat' => ['mode' => 'fromBase'],
+            'rows' => [
+                ['rowKind' => 'item', 'totalPrice' => 1746.00, 'vat' => ['pct' => 21]],
+            ],
+            'vatRecap' => [
+                ['vatPct' => 21, 'base' => 1442.98, 'tax' => 303.02, 'total' => 1746.00],
+            ],
+            'totals' => ['totalAmount' => 1746.00],
+        ]);
+        $this->assertNull($this->findByCode($issues, 'vat_mode_suspect'));
+    }
+
+    public function testVatModeSuspectSilentWhenDerivationHasTotals(): void
+    {
+        // totalBase + totalAmount stačí derivaci (fallback reference).
+        $issues = $this->v->validate([
+            'docType' => 'invoiceReceived',
+            'supplier' => ['name' => 'V'],
+            'dates' => ['issueDate' => '2026-04-15'],
+            'vat' => ['mode' => 'fromBase'],
+            'rows' => [
+                ['rowKind' => 'item', 'totalPrice' => 1746.00, 'vat' => ['pct' => 21]],
+            ],
+            'totals' => ['totalBase' => 1442.98, 'totalAmount' => 1746.00],
+        ]);
+        $this->assertNull($this->findByCode($issues, 'vat_mode_suspect'));
+    }
+
+    public function testVatModeSuspectSilentWithoutPositivePct(): void
+    {
+        // Bez kladné sazby na řádcích není co zdvojit (0 % / bez DPH).
+        $issues = $this->v->validate([
+            'docType' => 'invoiceReceived',
+            'supplier' => ['name' => 'V'],
+            'dates' => ['issueDate' => '2026-04-15'],
+            'vat' => ['mode' => 'fromBase'],
+            'rows' => [
+                ['rowKind' => 'item', 'totalPrice' => 1746.00, 'vat' => ['pct' => 0]],
+                ['rowKind' => 'item', 'totalPrice' => 100.00],
+            ],
+            'totals' => ['totalAmount' => 1846.00],
+        ]);
+        $this->assertNull($this->findByCode($issues, 'vat_mode_suspect'));
+    }
+
+    public function testVatModeSuspectSilentWhenModeIsFromTotal(): void
+    {
+        $issues = $this->v->validate([
+            'docType' => 'invoiceReceived',
+            'supplier' => ['name' => 'V'],
+            'dates' => ['issueDate' => '2026-04-15'],
+            'vat' => ['mode' => 'fromTotal'],
+            'rows' => [
+                ['rowKind' => 'item', 'totalPrice' => 1746.00, 'vat' => ['pct' => 21]],
+            ],
+            'totals' => ['totalAmount' => 1746.00],
+        ]);
+        $this->assertNull($this->findByCode($issues, 'vat_mode_suspect'));
+    }
+
+    public function testVatModeSuspectSilentWhenRowsMatchBaseToo(): void
+    {
+        // Σ řádků sedí i na totalBase → nerozlišitelné od 0% dokladu.
+        $issues = $this->v->validate([
+            'docType' => 'invoiceReceived',
+            'supplier' => ['name' => 'V'],
+            'dates' => ['issueDate' => '2026-04-15'],
+            'vat' => ['mode' => 'fromBase'],
+            'rows' => [
+                ['rowKind' => 'item', 'totalPrice' => 1000.00, 'vat' => ['pct' => 21]],
+            ],
+            'totals' => ['totalBase' => 1000.00, 'totalAmount' => 1000.00],
+        ]);
+        $this->assertNull($this->findByCode($issues, 'vat_mode_suspect'));
+    }
+
     public function testFullValidPayloadProducesNoErrors(): void
     {
         $payload = json_decode(

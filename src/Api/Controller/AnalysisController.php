@@ -47,6 +47,7 @@ class AnalysisController
     public const MAIL_TABLE_ID = 303;
 
     private const MESSAGES_TABLE = 'core_mail_incoming_messages';
+    private const MAILBOXES_TABLE = 'core_mail_mailboxes';
     private const ANALYSES_TABLE = 'core_mail_message_analyses';
     private const BACKENDS_TABLE = 'core_ai_backends';
     private const PROFILES_TABLE = 'core_mail_ai_profiles';
@@ -220,17 +221,21 @@ class AnalysisController
         $defaultProfileId = $defaultProfile !== null ? (int) $defaultProfile['id'] : null;
 
         // Najdi zprávy ve frontě (analysis_state=10) mimo Archiv/Koš,
-        // ai_analysis_enabled NOT FALSE (NULL nebo true), bez aktivní claim.
-        // SQL inspirace: NOT EXISTS na claims s released=0 a expires_at
-        // v budoucnu. docState se jinak nekontroluje — workflow je ortogonální.
+        // ai_analysis_enabled NOT FALSE (NULL nebo true), schránka bez
+        // ai_analysis_disabled (explicitní message-level enabled=1 flag
+        // schránky přebíjí), bez aktivní claim. SQL inspirace: NOT EXISTS
+        // na claims s released=0 a expires_at v budoucnu. docState se
+        // jinak nekontroluje — workflow je ortogonální.
         $now = date('Y-m-d H:i:s');
         $rows = $this->db->fetchAll(
             'SELECT m.id AS ndx, m.received_at, m.subject, m.sender_email,
                     m.profile_override, m.raw_source_attachment
                FROM %n m
+               JOIN %n mb ON mb.id = m.mailbox
               WHERE m.analysis_state = %i
                 AND m.docState NOT IN %in
                 AND (m.ai_analysis_enabled IS NULL OR m.ai_analysis_enabled = %i)
+                AND (mb.ai_analysis_disabled = %i OR m.ai_analysis_enabled = %i)
                 AND NOT EXISTS (
                     SELECT 1 FROM %n c
                      WHERE c.message = m.id
@@ -240,8 +245,11 @@ class AnalysisController
               ORDER BY m.received_at ASC, m.id ASC
               LIMIT %i',
             self::MESSAGES_TABLE,
+            self::MAILBOXES_TABLE,
             self::ANALYSIS_QUEUED,
             [self::DOC_STATE_ARCHIVED, self::DOC_STATE_TRASH],
+            1,
+            0,
             1,
             self::CLAIMS_TABLE,
             0,
@@ -278,9 +286,11 @@ class AnalysisController
 
         $totalAvailable = (int) $this->db->fetchSingle(
             'SELECT COUNT(*) FROM %n m
+               JOIN %n mb ON mb.id = m.mailbox
               WHERE m.analysis_state = %i
                 AND m.docState NOT IN %in
                 AND (m.ai_analysis_enabled IS NULL OR m.ai_analysis_enabled = %i)
+                AND (mb.ai_analysis_disabled = %i OR m.ai_analysis_enabled = %i)
                 AND NOT EXISTS (
                     SELECT 1 FROM %n c
                      WHERE c.message = m.id
@@ -288,8 +298,11 @@ class AnalysisController
                        AND c.expires_at > %s
                 )',
             self::MESSAGES_TABLE,
+            self::MAILBOXES_TABLE,
             self::ANALYSIS_QUEUED,
             [self::DOC_STATE_ARCHIVED, self::DOC_STATE_TRASH],
+            1,
+            0,
             1,
             self::CLAIMS_TABLE,
             0,
@@ -1160,7 +1173,8 @@ class AnalysisController
         $dibi->begin();
         try {
             $msg = $dibi->fetch(
-                'SELECT id, docState, analysis_state, target_row FROM %n WHERE id = %i',
+                'SELECT id, docState, analysis_state, target_row, mailbox,'
+                . ' ai_analysis_enabled FROM %n WHERE id = %i',
                 self::MESSAGES_TABLE,
                 $messageNdx,
             );
@@ -1228,12 +1242,30 @@ class AnalysisController
             $now = date('Y-m-d H:i:s');
 
             // Vrátit analýzu do fronty — docState (workflow) zůstává
-            $dibi->update(self::MESSAGES_TABLE, [
+            $update = [
                 'analysis_state' => self::ANALYSIS_QUEUED,
                 'needs_reanalysis' => 1,
                 'profile_override' => $profileOverrideNdx,
                 'modified' => $now,
-            ])->where('id = %i', $messageNdx)->execute();
+            ];
+
+            // Zpráva ze schránky s vypnutou analýzou: explicitní záměr
+            // uživatele přebíjí default schránky — bez message-level
+            // ai_analysis_enabled=1 by ji /queue nikdy nevydal.
+            $enabled = $msg['ai_analysis_enabled'] ?? null;
+            if ($enabled === null || !(int) $enabled) {
+                $mb = $dibi->fetch(
+                    'SELECT ai_analysis_disabled FROM %n WHERE id = %i',
+                    self::MAILBOXES_TABLE,
+                    (int) $msg['mailbox'],
+                );
+                if ($mb !== null && (int) $mb['ai_analysis_disabled'] === 1) {
+                    $update['ai_analysis_enabled'] = 1;
+                }
+            }
+
+            $dibi->update(self::MESSAGES_TABLE, $update)
+                ->where('id = %i', $messageNdx)->execute();
 
             $dibi->commit();
         } catch (\Throwable $e) {

@@ -206,6 +206,47 @@ class AnalysisControllerTest extends TestCase
         $this->assertTrue($payload['data']['messages'][0]['has_raw_source']);
     }
 
+    public function testQueueFiltersDisabledMailboxes(): void
+    {
+        // SQL obou dotazů (výdej i COUNT) musí nést JOIN na schránku
+        // a podmínku "schránka povolena NEBO message-level enabled=1".
+        // Reálné vyhodnocení SQL kryjí integration testy.
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturnOnConsecutiveCalls(
+            ['login' => '_ai_analyzer'],
+            ['id' => 1],
+        );
+        $queueArgs = null;
+        $db->method('fetchAll')->willReturnCallback(
+            static function (...$args) use (&$queueArgs): array {
+                $queueArgs = $args;
+                return [];
+            },
+        );
+        $countArgs = null;
+        $db->method('fetchSingle')->willReturnCallback(
+            static function (...$args) use (&$countArgs): int {
+                $countArgs = $args;
+                return 0;
+            },
+        );
+
+        $ctrl = $this->controller($db);
+        $ctrl->queue($this->analyzerAuth(), $this->request('GET', '/_mail/analysis/queue'));
+
+        foreach (['výdej' => $queueArgs, 'COUNT' => $countArgs] as $label => $args) {
+            $this->assertNotNull($args, $label);
+            $sql = (string) $args[0];
+            $this->assertStringContainsString('JOIN %n mb ON mb.id = m.mailbox', $sql, $label);
+            $this->assertStringContainsString(
+                '(mb.ai_analysis_disabled = %i OR m.ai_analysis_enabled = %i)',
+                $sql,
+                $label,
+            );
+            $this->assertContains('core_mail_mailboxes', $args, $label);
+        }
+    }
+
     // -------------------------------------------------------------------
     // /claim — pre-decrypt branches (no real DB needed)
     // -------------------------------------------------------------------
@@ -529,6 +570,91 @@ class AnalysisControllerTest extends TestCase
 
         $this->assertSame(409, $this->statusOf($response));
         $this->assertSame('INVALID_STATE', $response->getPayload()['error']['code']);
+    }
+
+    /**
+     * Mock dibi pro happy-path reanalyze: fetch vrací postupně řádek zprávy
+     * a (volitelně) flag schránky; update data se zachytí do $captured.
+     */
+    private function dibiForReanalyze(array $msgRow, ?array $mailboxRow, ?array &$captured): \Dibi\Connection
+    {
+        $rows = [new \Dibi\Row($msgRow)];
+        if ($mailboxRow !== null) {
+            $rows[] = new \Dibi\Row($mailboxRow);
+        }
+        $fluent = $this->createMock(\Dibi\Fluent::class);
+        $fluent->method('__call')->willReturnSelf();
+        $dibi = $this->createMock(\Dibi\Connection::class);
+        $dibi->method('fetch')->willReturnOnConsecutiveCalls(...$rows);
+        $dibi->method('update')->willReturnCallback(
+            static function (string $table, array $data) use (&$captured, $fluent): \Dibi\Fluent {
+                $captured = $data;
+                return $fluent;
+            },
+        );
+        return $dibi;
+    }
+
+    public function testReanalyzeSetsEnabledOverrideForDisabledMailbox(): void
+    {
+        $captured = null;
+        $dibi = $this->dibiForReanalyze(
+            ['id' => 42, 'docState' => 20, 'analysis_state' => 30, 'target_row' => null,
+                'mailbox' => 5, 'ai_analysis_enabled' => null],
+            ['ai_analysis_disabled' => 1],
+            $captured,
+        );
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('getDibiConnection')->willReturn($dibi);
+
+        $ctrl = $this->controller($db);
+        $response = $ctrl->reanalyze($this->userAuth(), $this->request('POST', '/x'), 42);
+
+        $this->assertSame(200, $this->statusOf($response));
+        $this->assertNotNull($captured);
+        $this->assertSame(1, $captured['ai_analysis_enabled']);
+        $this->assertSame(10, $captured['analysis_state']);
+    }
+
+    public function testReanalyzeKeepsOverrideUntouchedWhenAlreadyEnabled(): void
+    {
+        // Message-level enabled=1 → flag schránky se vůbec nedotazuje
+        $captured = null;
+        $dibi = $this->dibiForReanalyze(
+            ['id' => 42, 'docState' => 20, 'analysis_state' => 30, 'target_row' => null,
+                'mailbox' => 5, 'ai_analysis_enabled' => 1],
+            null,
+            $captured,
+        );
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('getDibiConnection')->willReturn($dibi);
+
+        $ctrl = $this->controller($db);
+        $response = $ctrl->reanalyze($this->userAuth(), $this->request('POST', '/x'), 42);
+
+        $this->assertSame(200, $this->statusOf($response));
+        $this->assertNotNull($captured);
+        $this->assertArrayNotHasKey('ai_analysis_enabled', $captured);
+    }
+
+    public function testReanalyzeKeepsOverrideUntouchedForEnabledMailbox(): void
+    {
+        $captured = null;
+        $dibi = $this->dibiForReanalyze(
+            ['id' => 42, 'docState' => 20, 'analysis_state' => 30, 'target_row' => null,
+                'mailbox' => 5, 'ai_analysis_enabled' => null],
+            ['ai_analysis_disabled' => 0],
+            $captured,
+        );
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('getDibiConnection')->willReturn($dibi);
+
+        $ctrl = $this->controller($db);
+        $response = $ctrl->reanalyze($this->userAuth(), $this->request('POST', '/x'), 42);
+
+        $this->assertSame(200, $this->statusOf($response));
+        $this->assertNotNull($captured);
+        $this->assertArrayNotHasKey('ai_analysis_enabled', $captured);
     }
 
     // -------------------------------------------------------------------

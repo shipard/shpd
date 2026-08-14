@@ -1,6 +1,6 @@
-// Výchozí AI profil pro extrakci českých přijatých dokladů (faktury,
-// dobropisy) a registry dokumentů (smlouvy, pojistky, nabídky, revize,
-// úřední písemnosti) z došlé pošty.
+// Výchozí AI profil pro obecnou analýzu české došlé pošty — extrakce
+// přijatých dokladů (faktury, dobropisy, účtenky) a registry dokumentů
+// (smlouvy, pojistky, nabídky, revize, úřední písemnosti).
 //
 // Tento soubor slouží jako šablona — `AIAnalyzerProvisioner` z něj vytvoří
 // řádek v `core_mail_ai_profiles` při prvním ds-upgrade. Reload existujícího
@@ -16,10 +16,10 @@
 // neresolvuje $ref napříč soubory). Drift obou embedů hlídá
 // `tests/Unit/Module/Core/Mail/ProfileSchemaDriftTest`.
 {
-    "profile_id": "czech_invoices",
-    "name": "České faktury (default)",
-    "name:cs": "České faktury (default)",
-    "name:en": "Czech invoices (default)",
+    "profile_id": "czech_general",
+    "name": "Obecná analýza pošty (česky)",
+    "name:cs": "Obecná analýza pošty (česky)",
+    "name:en": "General mail analysis (Czech)",
     "language": "cs",
     "prompt_version": "v4.0.0",
     "supported_doc_types": [

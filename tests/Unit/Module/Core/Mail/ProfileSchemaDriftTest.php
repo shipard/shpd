@@ -27,7 +27,7 @@ class ProfileSchemaDriftTest extends TestCase
     {
         $modulesRoot = dirname(__DIR__, 5) . '/modules';
         $profile = JsoncParser::parseFile(
-            $modulesRoot . '/core/mail/profiles/default_czech_invoices.jsonc',
+            $modulesRoot . '/core/mail/profiles/czech_general.jsonc',
         );
         $this->assertIsArray($profile, 'profile JSONC must parse');
         return [$profile, $modulesRoot];
@@ -85,7 +85,7 @@ class ProfileSchemaDriftTest extends TestCase
     {
         [$profile] = $this->loadProfile();
 
-        $this->assertSame('czech_invoices', $profile['profile_id']);
+        $this->assertSame('czech_general', $profile['profile_id']);
         $this->assertSame('v4.0.0', $profile['prompt_version']);
         $this->assertContains('invoiceReceived', $profile['supported_doc_types']);
         foreach (['contract', 'insurance', 'quotation', 'certificate', 'official'] as $registryType) {

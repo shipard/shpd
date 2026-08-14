@@ -28,8 +28,8 @@ class AIAnalyzerProvisionerTest extends TestCase
     {
         $this->tempTemplate = sys_get_temp_dir() . '/shpd_ai_provisioner_' . uniqid() . '.jsonc';
         file_put_contents($this->tempTemplate, json_encode([
-            'profile_id' => 'czech_invoices',
-            'name' => 'České faktury (default)',
+            'profile_id' => 'czech_general',
+            'name' => 'Obecná analýza pošty (česky)',
             'language' => 'cs',
             'prompt_version' => $version,
             'supported_doc_types' => ['invoiceReceived', 'creditNote', 'other'],
@@ -63,7 +63,7 @@ class AIAnalyzerProvisionerTest extends TestCase
 
         $this->assertSame(['id' => 42, 'created' => true], $result['user']);
         $this->assertSame(['id' => 17, 'created' => true], $result['backend']);
-        $this->assertSame(['id' => 33, 'created' => true], $result['profile']);
+        $this->assertSame(['id' => 33, 'profile_id' => 'czech_general', 'created' => true], $result['profile']);
     }
 
     public function testIsIdempotentWhenAllExist(): void
@@ -81,7 +81,7 @@ class AIAnalyzerProvisionerTest extends TestCase
 
         $this->assertSame(['id' => 1, 'created' => false], $result['user']);
         $this->assertSame(['id' => 2, 'created' => false], $result['backend']);
-        $this->assertSame(['id' => 3, 'created' => false], $result['profile']);
+        $this->assertSame(['id' => 3, 'profile_id' => 'czech_general', 'created' => false], $result['profile']);
     }
 
     public function testSkipsBackendWhenAnotherIsDefault(): void
@@ -113,7 +113,7 @@ class AIAnalyzerProvisionerTest extends TestCase
         $db->method('fetchRow')->willReturnOnConsecutiveCalls(
             ['id' => 1],                                                // user
             ['id' => 17],                                               // backend default exists
-            null,                                                       // profile 'czech_invoices' missing
+            null,                                                       // profile 'czech_general' missing
             ['id' => 88, 'profile_id' => 'english_invoices'],           // ALE jiný profil je default
         );
         $db->expects($this->never())->method('insertRow');
@@ -170,7 +170,7 @@ class AIAnalyzerProvisionerTest extends TestCase
         $this->assertArrayHasKey('core_mail_ai_profiles', $insertedRows);
         $profile = $insertedRows['core_mail_ai_profiles'];
 
-        $this->assertSame('czech_invoices', $profile['profile_id']);
+        $this->assertSame('czech_general', $profile['profile_id']);
         $this->assertSame('cs', $profile['language']);
         $this->assertSame('v4.0.0', $profile['prompt_version']);
 
@@ -197,20 +197,75 @@ class AIAnalyzerProvisionerTest extends TestCase
             ['id' => 3],   // profile by profile_id
         );
 
-        $capturedSql = null;
-        $db->expects($this->once())
+        // provision() volá execute 2×: rename legacy profilu + queue fix
+        $capturedSqls = [];
+        $db->expects($this->exactly(2))
             ->method('execute')
-            ->willReturnCallback(function (mixed ...$args) use (&$capturedSql): void {
-                $capturedSql = (string) $args[0];
+            ->willReturnCallback(function (mixed ...$args) use (&$capturedSqls): void {
+                $capturedSqls[] = (string) $args[0];
             });
-        $db->method('getAffectedRows')->willReturn(268);
+        $db->method('getAffectedRows')->willReturnOnConsecutiveCalls(
+            0,   // rename — žádný legacy profil
+            268, // queue fix
+        );
 
         $provisioner = new AIAnalyzerProvisioner($db);
         $result = $provisioner->provision();
 
         $this->assertSame(['fixed' => 268], $result['queue_fix']);
-        $this->assertStringContainsString('UPDATE core_mail_incoming_messages', $capturedSql);
-        $this->assertStringContainsString('docState IN %in', $capturedSql);
+        $queueSql = $capturedSqls[1];
+        $this->assertStringContainsString('UPDATE core_mail_incoming_messages', $queueSql);
+        $this->assertStringContainsString('docState IN %in', $queueSql);
+    }
+
+    public function testRenameLegacyProfileRenamesIdAndName(): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+
+        $captured = null;
+        $db->expects($this->once())
+            ->method('execute')
+            ->willReturnCallback(function (mixed ...$args) use (&$captured): void {
+                $captured = $args;
+            });
+        $db->method('getAffectedRows')->willReturn(1);
+
+        $provisioner = new AIAnalyzerProvisioner($db);
+        $renamed = $provisioner->renameLegacyProfile();
+
+        $this->assertSame(1, $renamed);
+        $this->assertStringContainsString('UPDATE core_mail_ai_profiles', (string) $captured[0]);
+        // params: nové id, nový name, modified, staré id
+        $this->assertSame('czech_general', $captured[1]);
+        $this->assertSame('Obecná analýza pošty (česky)', $captured[2]);
+        $this->assertSame('czech_invoices', $captured[4]);
+    }
+
+    public function testProvisionReportsRenameAndSecondRunIsNoop(): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturnOnConsecutiveCalls(
+            ['id' => 1],   // user
+            ['id' => 2],   // backend by backend_id
+            ['id' => 3],   // profile by profile_id (po renamu už existuje)
+        );
+        $db->method('getAffectedRows')->willReturnOnConsecutiveCalls(
+            1, // rename — legacy profil přejmenován
+            0, // queue fix
+        );
+        $db->expects($this->never())->method('insertRow');
+
+        $provisioner = new AIAnalyzerProvisioner($db);
+        $result = $provisioner->provision();
+
+        $this->assertSame(['renamed' => 1], $result['profile_rename']);
+        $this->assertSame(['id' => 3, 'profile_id' => 'czech_general', 'created' => false], $result['profile']);
+
+        // Druhý běh: rename už nic nematchne.
+        $db2 = $this->createMock(DataSourceConnection::class);
+        $db2->method('getAffectedRows')->willReturn(0);
+
+        $this->assertSame(0, (new AIAnalyzerProvisioner($db2))->renameLegacyProfile());
     }
 
     public function testProvisionQueueFixIsNoopOnCleanDs(): void
@@ -245,7 +300,7 @@ class AIAnalyzerProvisionerTest extends TestCase
         $result = $provisioner->syncProfileFromTemplate($this->writeTemplate('v1.2.0'));
 
         $this->assertSame('updated', $result['status']);
-        $this->assertSame('czech_invoices', $result['profile_id']);
+        $this->assertSame('czech_general', $result['profile_id']);
         $this->assertSame(33, $result['id']);
         $this->assertSame('v1.0.0', $result['old_version']);
         $this->assertSame('v1.2.0', $result['new_version']);
@@ -306,7 +361,7 @@ class AIAnalyzerProvisionerTest extends TestCase
         $provisioner = new AIAnalyzerProvisioner($db);
         $result = $provisioner->syncProfileFromTemplate($this->writeTemplate('v1.2.0'));
 
-        $this->assertSame(['status' => 'not_found', 'profile_id' => 'czech_invoices'], $result);
+        $this->assertSame(['status' => 'not_found', 'profile_id' => 'czech_general'], $result);
     }
 
     public function testSyncToleratesVersionPrefixMismatch(): void

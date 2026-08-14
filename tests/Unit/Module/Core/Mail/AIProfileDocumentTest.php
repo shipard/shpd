@@ -17,8 +17,8 @@ class AIProfileDocumentTest extends TestCase
     private function validData(): array
     {
         return [
-            'profile_id' => 'czech_invoices',
-            'name' => 'České faktury',
+            'profile_id' => 'czech_general',
+            'name' => 'Obecná analýza pošty (česky)',
             'backend' => 1,
             'prompt_template' => 'Jsi asistent…',
             'output_schema' => '{"type":"object"}',

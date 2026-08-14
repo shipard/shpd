@@ -20,8 +20,12 @@ class AIAnalyzerProvisioner
 {
     public const ANALYZER_LOGIN = '_ai_analyzer';
     public const DEFAULT_BACKEND_ID = 'default';
-    public const DEFAULT_PROFILE_ID = 'czech_invoices';
-    public const DEFAULT_PROFILE_TEMPLATE = __DIR__ . '/../profiles/default_czech_invoices.jsonc';
+    public const DEFAULT_PROFILE_ID = 'czech_general';
+    public const DEFAULT_PROFILE_TEMPLATE = __DIR__ . '/../profiles/czech_general.jsonc';
+
+    /** Původní id default profilu — jen pro jednorázový rename krok. */
+    private const LEGACY_PROFILE_ID = 'czech_invoices';
+    private const DEFAULT_PROFILE_NAME = 'Obecná analýza pošty (česky)';
 
     public function __construct(
         private readonly DataSourceConnection $db,
@@ -31,7 +35,8 @@ class AIAnalyzerProvisioner
      * @return array{
      *     user: array{id: int, created: bool},
      *     backend: array{id: int, created: bool},
-     *     profile: array{id: int, created: bool, skipped_reason?: string},
+     *     profile_rename: array{renamed: int},
+     *     profile: array{id: int, profile_id: string, created: bool, skipped_reason?: string},
      *     queue_fix: array{fixed: int}
      * }
      */
@@ -39,15 +44,41 @@ class AIAnalyzerProvisioner
     {
         $user = $this->ensureAnalyzerUser();
         $backend = $this->ensureDefaultBackend();
+        $renamed = $this->renameLegacyProfile();
         $profile = $this->ensureDefaultProfile($backend['id']);
         $queueFix = $this->fixQueuedArchivedMessages();
 
         return [
             'user' => $user,
             'backend' => $backend,
+            'profile_rename' => ['renamed' => $renamed],
             'profile' => $profile,
             'queue_fix' => ['fixed' => $queueFix],
         ];
+    }
+
+    /**
+     * Jednorázový idempotentní rename default profilu `czech_invoices` →
+     * `czech_general` (spec tasks/mail-ai-profile-rename.md D2). Profil už
+     * dávno není fakturový — analyzuje došlou poštu obecně. Přepisuje se
+     * i `name`, jen v rámci tohoto kroku — běžný sync uživatelské úpravy
+     * názvu nepřepisuje. Po přejmenování navždy matchne 0 řádků.
+     *
+     * @return int Počet přejmenovaných řádků (po prvním běhu 0 = no-op).
+     */
+    public function renameLegacyProfile(): int
+    {
+        $this->db->execute(
+            'UPDATE core_mail_ai_profiles
+                SET profile_id = %s, name = %s, modified = %s
+              WHERE profile_id = %s',
+            self::DEFAULT_PROFILE_ID,
+            self::DEFAULT_PROFILE_NAME,
+            date('Y-m-d H:i:s'),
+            self::LEGACY_PROFILE_ID,
+        );
+
+        return $this->db->getAffectedRows();
     }
 
     /**
@@ -154,12 +185,13 @@ class AIAnalyzerProvisioner
     }
 
     /**
-     * Vytvoří default profil `czech_invoices` ze šablony
-     * `modules/core/mail/profiles/default_czech_invoices.jsonc`. Když
-     * profil tohoto kódu existuje, beze změny ho přeskočí (admin může mít
-     * upravený prompt).
+     * Vytvoří default profil `czech_general` ze šablony
+     * `modules/core/mail/profiles/czech_general.jsonc`. Když profil tohoto
+     * kódu existuje, beze změny ho přeskočí (admin může mít upravený
+     * prompt). `profile_id` ve výsledku je kód provisionovaného default
+     * profilu (pro výpisy v ds-upgrade), ne kód případného cizího defaultu.
      *
-     * @return array{id: int, created: bool, skipped_reason?: string}
+     * @return array{id: int, profile_id: string, created: bool, skipped_reason?: string}
      */
     public function ensureDefaultProfile(int $backendId): array
     {
@@ -169,7 +201,7 @@ class AIAnalyzerProvisioner
         );
 
         if ($row !== null) {
-            return ['id' => (int) $row['id'], 'created' => false];
+            return ['id' => (int) $row['id'], 'profile_id' => self::DEFAULT_PROFILE_ID, 'created' => false];
         }
 
         $existingDefault = $this->db->fetchRow(
@@ -180,6 +212,7 @@ class AIAnalyzerProvisioner
         if ($existingDefault !== null) {
             return [
                 'id' => (int) $existingDefault['id'],
+                'profile_id' => self::DEFAULT_PROFILE_ID,
                 'created' => false,
                 'skipped_reason' => "Another profile is already marked as default: {$existingDefault['profile_id']}",
             ];
@@ -215,7 +248,7 @@ class AIAnalyzerProvisioner
             'modified' => $now,
         ]);
 
-        return ['id' => $id, 'created' => true];
+        return ['id' => $id, 'profile_id' => (string) $template['profile_id'], 'created' => true];
     }
 
     /**

@@ -394,7 +394,7 @@ opakované spuštění bez efektu, pokud se nic nezměnilo):
    (nikdy nesmaže — viz [docs/table-definitions.md](table-definitions.md))
 5. **Provisioning** — výchozí číselníky a referenční data. Součástí je i
    **sync AI profilu** ze šablony v repu
-   (`modules/core/mail/profiles/default_czech_invoices.jsonc`): pokud má
+   (`modules/core/mail/profiles/czech_general.jsonc`): pokud má
    šablona novější `prompt_version` než DB, aktualizuje obsahová pole
    profilu (`[UPDATE] profile ...`). Jen upgrade — nikdy downgrade (DB
    novější → `[WARN]`, na vědomý downgrade je `ai-profile-reload --force`);

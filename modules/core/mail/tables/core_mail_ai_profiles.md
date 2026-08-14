@@ -3,7 +3,7 @@
 Profil popisuje **co** se v došlé poště analyzuje — jaký prompt, jaké
 výstupní JSON schéma, jaké typy dokumentů profil pokrývá, v jakém jazyce
 a s jakými prahy jistoty. Per DS obvykle 1–2 profily (např.
-`czech_invoices`, `english_invoices`).
+`czech_general`, `english_invoices`).
 
 Profil je vždy vázán na konkrétní backend (provider + model) — admin tak
 může pro různé typy pošty zvolit jiný model.
@@ -14,7 +14,7 @@ může pro různé typy pošty zvolit jiný model.
 
 | Sloupec | Typ | Popis |
 |---|---|---|
-| `profile_id` | varchar(50), NOT NULL, UNIQUE | Lidský identifikátor (`czech_invoices`) |
+| `profile_id` | varchar(50), NOT NULL, UNIQUE | Lidský identifikátor (`czech_general`) |
 | `name` | varchar(100), NOT NULL | Zobrazovaný název v UI |
 | `backend` | int → `core_ai_backends`, NOT NULL | Backend, přes který profil běží |
 
@@ -68,8 +68,8 @@ může pro různé typy pošty zvolit jiný model.
 
 ## Životní cyklus
 
-1. **Auto-provisioning** při `ds-upgrade`: vznikne profil `czech_invoices`
-   (default) ze šablony `modules/core/mail/profiles/default_czech_invoices.jsonc`.
+1. **Auto-provisioning** při `ds-upgrade`: vznikne profil `czech_general`
+   (default) ze šablony `modules/core/mail/profiles/czech_general.jsonc`.
 2. **Editace**: admin upravuje `prompt_template`, `output_schema`,
    `confidence_thresholds` přímo v UI / DB. Při netriviální změně se zvedá
    `prompt_version` (manuálně, není vynucováno).

@@ -1,8 +1,8 @@
 # AI prompty — default profil + guidelines pro customizaci
 
-## Default profil `czech_invoices`
+## Default profil `czech_general`
 
-Šablona: [profiles/default_czech_invoices.jsonc](../profiles/default_czech_invoices.jsonc).
+Šablona: [profiles/czech_general.jsonc](../profiles/czech_general.jsonc).
 Při prvním `ds-upgrade` z ní `AIAnalyzerProvisioner` vytvoří záznam v
 `core_mail_ai_profiles`. Pozdější editace probíhá přímo v DB / UI; soubor
 v repu není zdroj pravdy pro běžící DS.
@@ -11,7 +11,7 @@ v repu není zdroj pravdy pro běžící DS.
 
 | Pole | Popis |
 |---|---|
-| `profile_id` | Lidský identifikátor (`czech_invoices`) |
+| `profile_id` | Lidský identifikátor (`czech_general`) |
 | `name` | UI název |
 | `language` | ISO 639-1 (`cs`) — řídí jazyk uživatelských textů v promptu |
 | `prompt_version` | SemVer (`v1.0.0`) — manuálně bumpuj při netriviální změně promptu |
@@ -65,7 +65,7 @@ Klíčové pokyny v promptu:
 - `document.doc_type` nikdy `other` — když zpráva žádný doklad ani
   dokument nenese, vrať `document: null` a klasifikaci `other`.
 
-Plný prompt v [`profiles/default_czech_invoices.jsonc`](../profiles/default_czech_invoices.jsonc)
+Plný prompt v [`profiles/czech_general.jsonc`](../profiles/czech_general.jsonc)
 sekce `prompt_template`.
 
 ## Output schema
@@ -135,7 +135,7 @@ hlídá `tests/Unit/Module/Base/Registry/RegistrySchemaDriftTest.php` —
 názvy polí se **nikdy nesmí lišit** (analyzer plní kindFields přesně dle
 schématu; přejmenované pole = tiché prázdno v metadatech).
 
-Plné schéma viz [`profiles/default_czech_invoices.jsonc`](../profiles/default_czech_invoices.jsonc).
+Plné schéma viz [`profiles/czech_general.jsonc`](../profiles/czech_general.jsonc).
 
 ## Customization guidelines
 
@@ -179,13 +179,13 @@ i u otevřených návrhů.
 Workflow pro ladění promptu z JSONC šablony v repu (zdroj pravdy pro
 default profil):
 
-1. Uprav `modules/core/mail/profiles/default_czech_invoices.jsonc` —
+1. Uprav `modules/core/mail/profiles/czech_general.jsonc` —
    `prompt_template`, případně `output_schema`, `confidence_thresholds`,
    `supported_doc_types`, `language`.
 2. Bumpni `prompt_version` (semver, např. `v1.1.0` → `v1.2.0`).
 3. Commit do gitu, deploy.
 4. Z DS adresáře spusť `bin/shpd-ds ds-upgrade` — sync profilu ze šablony
-   je součástí provisioning fáze (`[UPDATE] profile 'czech_invoices':
+   je součástí provisioning fáze (`[UPDATE] profile 'czech_general':
    v1.1.0 → v1.2.0`). Jen upgrade — se stejnou verzí je no-op, s novější
    verzí v DB vypíše `[WARN]` a nic nepřepíše (ochrana proti náhodnému
    downgrade nebo přepisu admin tweaků se zapomenutým bumpem).
@@ -313,4 +313,4 @@ Opravy tří opakujících se vzorů `schema_error` z reálného provozu (spec
 ## Reference
 
 - [ai-analysis.md](ai-analysis.md) — architektura
-- [profiles/default_czech_invoices.jsonc](../profiles/default_czech_invoices.jsonc)
+- [profiles/czech_general.jsonc](../profiles/czech_general.jsonc)

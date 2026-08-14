@@ -418,8 +418,10 @@ Při každém `ds-upgrade` se zavolá `AIAnalyzerProvisioner::provision()`:
 2. Default backend (`backend_id=default`, `provider=anthropic`,
    `model=claude-sonnet-4-5`, `api_key=NULL`, `is_active=0`) — admin doplní
    klíč přes `ai-analyzer-set-key`, čímž `is_active=1`.
-3. Default profil (`profile_id=czech_invoices`) ze šablony
-   `profiles/default_czech_invoices.jsonc`.
+3. Default profil (`profile_id=czech_general`) ze šablony
+   `profiles/czech_general.jsonc`. Před lookupem běží jednorázový rename
+   legacy id `czech_invoices` → `czech_general` (včetně `name`; ds-upgrade
+   vypíše `[RENAME]`, po prvním běhu no-op).
 
 Bootstrap je idempotentní — když existuje jiný profil/backend s `is_default=1`,
 default *se nepřepíše*; admin zachová svůj override.

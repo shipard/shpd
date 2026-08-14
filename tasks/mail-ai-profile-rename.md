@@ -1,6 +1,6 @@
 # Modul `mail` — Přejmenování AI profilu `czech_invoices` → `czech_general`
 
-**Stav:** k implementaci
+**Stav:** hotovo
 **Repo:** `nov_shipard` (jediné dotčené — `ai_analyzer` profile_id jen loguje,
 `old_shipard` se profilů nedotýká)
 
@@ -113,11 +113,11 @@ UPDATE core_mail_ai_profiles
 
 ## Hotovo když
 
-- [ ] Šablona `profiles/czech_general.jsonc` s novým id a názvem;
+- [x] Šablona `profiles/czech_general.jsonc` s novým id a názvem;
       stará šablona neexistuje.
-- [ ] `ds-upgrade` na DS se starým profilem vypíše RENAME a profil má
+- [x] `ds-upgrade` na DS se starým profilem vypíše RENAME a profil má
       nové id + název; opakovaný běh nic nemění.
-- [ ] `ds-upgrade` na čistém DS založí profil `czech_general`.
-- [ ] `grep -rn czech_invoices` v repu nachází jen historickou poznámku
+- [x] `ds-upgrade` na čistém DS založí profil `czech_general`.
+- [x] `grep -rn czech_invoices` v repu nachází jen historickou poznámku
       v `modules/core/exchange/README.md` (+ tento task).
-- [ ] PHPUnit zelené.
+- [x] PHPUnit zelené.

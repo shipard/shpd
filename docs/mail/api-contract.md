@@ -201,7 +201,7 @@ state pak vyžadují navíc hlavičku `X-Claim-Token: ct_…`.
 
 ### 9.1 `GET /_mail/analysis/queue`
 
-Query: `?limit=5&profile_id=czech_invoices` (oba volitelné, default `limit=5`).
+Query: `?limit=5&profile_id=czech_general` (oba volitelné, default `limit=5`).
 
 Response 200:
 ```json
@@ -254,7 +254,7 @@ Response 200:
     "expires_at": "2026-04-26T10:05:00",
     "profile": {
       "profile_ndx": 17,
-      "profile_id": "czech_invoices",
+      "profile_id": "czech_general",
       "prompt_version": "v1.0.0",
       "prompt_template": "…",
       "output_schema": { },

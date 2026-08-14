@@ -68,8 +68,8 @@ další providers (Ollama, ...), odeslaná pošta.
 
 ## Default AI profil
 
-[profiles/default_czech_invoices.jsonc](profiles/default_czech_invoices.jsonc) — šablona, ze které
-`AIAnalyzerProvisioner` při `ds-upgrade` vytvoří první profil `czech_invoices`.
+[profiles/czech_general.jsonc](profiles/czech_general.jsonc) — šablona, ze které
+`AIAnalyzerProvisioner` při `ds-upgrade` vytvoří první profil `czech_general`.
 
 ## API endpointy
 

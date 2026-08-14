@@ -1,29 +1,74 @@
 // Nabídka účetních položek pro NEZISKOVOU osnovu (accountChartNpo).
 //
-// Jednorázová nabídka z panelu Nastavení zdroje dat (ds-setup Task 10, D18)
-// — NENÍ to provisioner: smazané položky se uživateli nevracejí. Generátor
-// (SetupController, POST /_setup/accounting-items) ke každému záznamu doplní:
+// Jednorázová nabídka z panelu Nastavení zdroje dat (ds-setup Task 10 D18,
+// rozšířeno Taskem 11) — NENÍ to provisioner: smazané položky se uživateli
+// nevracejí. Generátor (SetupController, POST /_setup/accounting-items)
+// ke každému záznamu doplní:
 //   item_kind  = druh se system_code 'accounting' (item_type = 2)
 //   unit       = jednotka se system_code 'pcs'
 //   accounting_account = id účtu podle čísla `account` v aktuální osnově
 //   source_kind = 'setup.accountingItems', source_ref = code
+//
+// Formát: {groups, items}. Skupiny řídí sbalitelné sekce v UI nabídky
+// (řazení dle `order`), každá položka odkazuje `group` na id skupiny.
+//
+// Kódy položek = čísla účtů. Když na jeden účet míří víc položek, dostane
+// druhá a další písmenný sufix (Z = zaokrouhlení, B = bankovní poplatky) —
+// tady 549100B/549100Z vedle 549100 a 649100Z; nezisková osnova dedikovaný
+// účet pro bankovní poplatky ani zaokrouhlení nemá (Jiné ostatní náklady).
+// Zaokrouhlení je KONVENCE, ne pravidlo: 549100/649100 je pragmatická volba.
 //
 // POZOR: čísla účtů zrcadlí accountChartNpo.jsonc a NESMÍ se sdílet
 // s podnikatelskou sadou (accountingItemsDefault.jsonc) — obě osnovy
 // používají stejná čísla pro jiné účty (548100 je tady Manka a škody,
 // 648100 Zúčtování fondů). Proto dva soubory, ne jeden s filtrem.
 //
-// Dvě položky na 549100 jsou v pořádku — nezisková osnova dedikovaný účet
-// pro bankovní poplatky ani zaokrouhlení nemá (Jiné ostatní náklady).
-// Zaokrouhlení je KONVENCE, ne pravidlo: 549100/649100 je pragmatická volba.
+// 538100 tady znamená „Ostatní daně a poplatky" (NPO osnova) — nemá nic
+// společného se zrušenou daní z převodu nemovitostí z podnikatelské sady.
 //
-// Vědomě vynechané: mzdy, odvody, daň z příjmů — viz podnikatelská sada.
-[
-    {"code": "UP-BANK", "name:cs": "Bankovní poplatky",      "name:en": "Bank fees",          "account": "549100"},
-    {"code": "UP-URN",  "name:cs": "Úroky placené",          "name:en": "Interest paid",      "account": "544100"},
-    {"code": "UP-URV",  "name:cs": "Úroky přijaté",          "name:en": "Interest received",  "account": "644100"},
-    {"code": "UP-KZN",  "name:cs": "Kurzová ztráta",         "name:en": "FX loss",            "account": "545100"},
-    {"code": "UP-KZV",  "name:cs": "Kurzový zisk",           "name:en": "FX gain",            "account": "645100"},
-    {"code": "UP-ZAON", "name:cs": "Zaokrouhlení (náklad)",  "name:en": "Rounding (expense)", "account": "549100"},
-    {"code": "UP-ZAOV", "name:cs": "Zaokrouhlení (výnos)",   "name:en": "Rounding (income)",  "account": "649100"}
-]
+// Mzdová agenda je záměrně UVNITŘ (revize rozhodnutí z Tasku 10): agenda
+// v aplikaci není, ale mzdy se účtují — položky stačí.
+{
+    "groups": [
+        {"id": "finance",    "name:cs": "Finanční operace",   "name:en": "Financial operations",  "order": 10},
+        {"id": "materials",  "name:cs": "Materiál a energie", "name:en": "Materials & energy",    "order": 20},
+        {"id": "operations", "name:cs": "Služby a provoz",    "name:en": "Services & operations", "order": 30},
+        {"id": "payroll",    "name:cs": "Mzdová agenda",      "name:en": "Payroll",               "order": 40},
+        {"id": "taxes",      "name:cs": "Daně",               "name:en": "Taxes",                 "order": 50},
+        {"id": "sanctions",  "name:cs": "Sankce a dary",      "name:en": "Penalties & gifts",     "order": 60},
+        {"id": "assets",     "name:cs": "Majetek",            "name:en": "Assets",                "order": 70}
+    ],
+    "items": [
+        {"code": "549100B", "group": "finance",    "name:cs": "Bankovní poplatky",                             "name:en": "Bank fees",                                "account": "549100"},
+        {"code": "544100",  "group": "finance",    "name:cs": "Úroky placené",                                 "name:en": "Interest paid",                            "account": "544100"},
+        {"code": "644100",  "group": "finance",    "name:cs": "Úroky přijaté",                                 "name:en": "Interest received",                        "account": "644100"},
+        {"code": "545100",  "group": "finance",    "name:cs": "Kurzová ztráta",                                "name:en": "FX loss",                                  "account": "545100"},
+        {"code": "645100",  "group": "finance",    "name:cs": "Kurzový zisk",                                  "name:en": "FX gain",                                  "account": "645100"},
+        {"code": "549100Z", "group": "finance",    "name:cs": "Zaokrouhlení (náklad)",                         "name:en": "Rounding (expense)",                       "account": "549100"},
+        {"code": "649100Z", "group": "finance",    "name:cs": "Zaokrouhlení (výnos)",                          "name:en": "Rounding (income)",                        "account": "649100"},
+        {"code": "501100",  "group": "materials",  "name:cs": "Spotřeba materiálu",                            "name:en": "Materials consumed",                       "account": "501100"},
+        {"code": "502100",  "group": "materials",  "name:cs": "Spotřeba energie",                              "name:en": "Energy consumed",                          "account": "502100"},
+        {"code": "503100",  "group": "materials",  "name:cs": "Spotřeba ostatních neskladovatelných dodávek",  "name:en": "Other non-storable supplies",              "account": "503100"},
+        {"code": "518100",  "group": "operations", "name:cs": "Ostatní služby",                                "name:en": "Other services",                           "account": "518100"},
+        {"code": "511100",  "group": "operations", "name:cs": "Opravy a udržování",                            "name:en": "Repairs & maintenance",                    "account": "511100"},
+        {"code": "512100",  "group": "operations", "name:cs": "Cestovné",                                      "name:en": "Travel expenses",                          "account": "512100"},
+        {"code": "513100",  "group": "operations", "name:cs": "Náklady na reprezentaci",                       "name:en": "Entertainment expenses",                   "account": "513100"},
+        {"code": "549100",  "group": "operations", "name:cs": "Jiné ostatní náklady",                          "name:en": "Other miscellaneous expenses",             "account": "549100"},
+        {"code": "521100",  "group": "payroll",    "name:cs": "Mzdové náklady",                                "name:en": "Wages",                                    "account": "521100"},
+        {"code": "524100",  "group": "payroll",    "name:cs": "Zákonné sociální pojištění",                    "name:en": "Statutory social insurance",               "account": "524100"},
+        {"code": "527100",  "group": "payroll",    "name:cs": "Zákonné sociální náklady",                      "name:en": "Statutory social costs",                   "account": "527100"},
+        {"code": "331100",  "group": "payroll",    "name:cs": "Hrubá mzda",                                    "name:en": "Gross wages",                              "account": "331100"},
+        {"code": "331200",  "group": "payroll",    "name:cs": "Čistá mzda",                                    "name:en": "Net wages",                                "account": "331200"},
+        {"code": "336100",  "group": "payroll",    "name:cs": "Zúčtování s institucí sociálního zabezpečení",  "name:en": "Social security institution settlement",   "account": "336100"},
+        {"code": "336200",  "group": "payroll",    "name:cs": "Zúčtování s institucemi zdravotního pojištění", "name:en": "Health insurance institutions settlement", "account": "336200"},
+        {"code": "342100",  "group": "payroll",    "name:cs": "Ostatní přímé daně",                            "name:en": "Other direct taxes",                       "account": "342100"},
+        {"code": "341100",  "group": "taxes",      "name:cs": "Daň z příjmů",                                  "name:en": "Income tax",                               "account": "341100"},
+        {"code": "531100",  "group": "taxes",      "name:cs": "Daň silniční",                                  "name:en": "Road tax",                                 "account": "531100"},
+        {"code": "532100",  "group": "taxes",      "name:cs": "Daň z nemovitostí",                             "name:en": "Real-estate tax",                          "account": "532100"},
+        {"code": "538100",  "group": "taxes",      "name:cs": "Ostatní daně a poplatky",                       "name:en": "Other taxes & fees",                       "account": "538100"},
+        {"code": "541100",  "group": "sanctions",  "name:cs": "Smluvní pokuty a úroky z prodlení",             "name:en": "Contractual penalties & default interest", "account": "541100"},
+        {"code": "542100",  "group": "sanctions",  "name:cs": "Ostatní pokuty a penále",                       "name:en": "Other fines & penalties",                  "account": "542100"},
+        {"code": "546100",  "group": "sanctions",  "name:cs": "Poskytnuté dary",                               "name:en": "Gifts provided",                           "account": "546100"},
+        {"code": "042100",  "group": "assets",     "name:cs": "Pořízení dlouhodobého hmotného majetku",        "name:en": "Acquisition of tangible fixed assets",     "account": "042100"}
+    ]
+}

@@ -474,6 +474,7 @@
     {"number":"518203","name":"Poštovné","short_name":"Poštovné","account_kind":2,"costs_type":1,"results_type":1},
     {"number":"518204","name":"Reklama","short_name":"Reklama","account_kind":2,"costs_type":1,"results_type":1},
     {"number":"518205","name":"Nájemné","short_name":"Nájemné","account_kind":2,"costs_type":1,"results_type":1},
+    {"number":"518206","name":"Software a cloudové služby","short_name":"Software a cloud","account_kind":2,"costs_type":1,"results_type":1},
     {"number":"518211","name":"Účetní a daňové služby","short_name":"Účetní a daňové služby","account_kind":2,"costs_type":1,"results_type":1},
     {"number":"518212","name":"Právní a notářské služby","short_name":"Právní a notářské služby","account_kind":2,"costs_type":1,"results_type":1},
     {"number":"518301","name":"Finanční leasing vozidel","short_name":"Fin. leasing vozidel","account_kind":2,"costs_type":1,"results_type":1},

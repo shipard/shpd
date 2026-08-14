@@ -359,6 +359,7 @@ class SetupController
             return Response::success([
                 'available'         => false,
                 'chartVariant'      => $variant,
+                'groups'            => [],
                 'candidates'        => [],
                 'unavailableReason' => $reason,
             ]);
@@ -369,21 +370,44 @@ class SetupController
             return Response::error('INTERNAL_ERROR', 'Accounting items seed file not found', 500);
         }
 
-        $existing = $this->existingItemCodes(array_keys($seed));
+        $existing = $this->existingItemCodes(array_keys($seed['items']));
 
         $candidates = [];
-        foreach ($seed as $code => $entry) {
+        $usedGroups = [];
+        foreach ($seed['items'] as $code => $entry) {
+            // Klíč pole: PHP numerický stringový kód (568201) drží jako int.
+            $code         = (string) $code;
+            $group        = (string) ($entry['group'] ?? '');
             $candidates[] = [
                 'code'          => $code,
                 'name'          => $this->seedName($entry, $code),
                 'accountNumber' => (string) ($entry['account'] ?? ''),
+                'group'         => $group,
                 'exists'        => isset($existing[$code]),
             ];
+            $usedGroups[$group] = true;
         }
+
+        // Jen skupiny s aspoň jedním kandidátem — prázdná sekce v UI nemá co
+        // říct. Neznámou skupinu kandidáta klient zobrazí v sekci „Ostatní".
+        $groups = [];
+        foreach ($seed['groups'] as $entry) {
+            $id = (string) $entry['id'];
+            if (!isset($usedGroups[$id])) {
+                continue;
+            }
+            $groups[] = [
+                'id'    => $id,
+                'name'  => $this->localizedField($entry, 'name', $id),
+                'order' => (int) ($entry['order'] ?? 0),
+            ];
+        }
+        usort($groups, static fn (array $a, array $b): int => $a['order'] <=> $b['order']);
 
         return Response::success([
             'available'         => true,
             'chartVariant'      => $variant,
+            'groups'            => $groups,
             'candidates'        => $candidates,
             'unavailableReason' => null,
         ]);
@@ -422,6 +446,7 @@ class SetupController
         if ($seed === null) {
             return Response::error('INTERNAL_ERROR', 'Accounting items seed file not found', 500);
         }
+        $items = $seed['items'];
 
         // Druh 'accounting' je podmínka funkčnosti, ne kosmetika —
         // resolveItemAccount() kontroluje item_type = 2 a položka s jiným
@@ -450,12 +475,12 @@ class SetupController
             );
         }
 
-        $existing = $this->existingItemCodes(array_keys($seed));
+        $existing = $this->existingItemCodes(array_keys($items));
 
         $created = [];
         $skipped = [];
         foreach ($codes as $code) {
-            $entry = $seed[$code] ?? null;
+            $entry = $items[$code] ?? null;
             if ($entry === null) {
                 $skipped[] = ['code' => $code, 'reason' => 'unknown_code'];
                 continue;
@@ -545,10 +570,13 @@ class SetupController
     }
 
     /**
-     * Seed sady podle varianty osnovy, klíčovaný kódem položky.
+     * Seed sady podle varianty osnovy — tvar {groups, items} (Task 11),
+     * items klíčované kódem položky. Starý tvar (plochý seznam) se
+     * nepodporuje, jediný konzument je tento kontroler.
      * Dva soubory, ne jeden s filtrem — viz komentář u accountingItemsOffer.
      *
-     * @return array<string, array<string, mixed>>|null null = soubor chybí / nečitelný
+     * @return array{groups: list<array<string, mixed>>, items: array<string, array<string, mixed>>}|null
+     *         null = soubor chybí / nečitelný / bez items
      */
     private function loadAccountingItemsSeed(string $variant): ?array
     {
@@ -568,17 +596,37 @@ class SetupController
         }
 
         $seed = JsoncParser::parseFile($path);
-        if (!is_array($seed)) {
+        if (!is_array($seed) || !is_array($seed['items'] ?? null)) {
             return null;
         }
 
-        $byCode = [];
-        foreach ($seed as $entry) {
-            if (is_array($entry) && !empty($entry['code'])) {
-                $byCode[(string) $entry['code']] = $entry;
+        $groups   = [];
+        $groupIds = [];
+        foreach ((array) ($seed['groups'] ?? []) as $entry) {
+            if (is_array($entry) && !empty($entry['id'])) {
+                $groups[] = $entry;
+                $groupIds[(string) $entry['id']] = true;
             }
         }
-        return $byCode;
+
+        $byCode = [];
+        foreach ($seed['items'] as $entry) {
+            if (!is_array($entry) || empty($entry['code'])) {
+                continue;
+            }
+            // Neznámá skupina je chyba seedu, ne důvod položku zahodit —
+            // offer ji vrátí tak, jak je, klient ji zobrazí v sekci Ostatní.
+            $group = (string) ($entry['group'] ?? '');
+            if (!isset($groupIds[$group])) {
+                ErrorLogger::error('SetupController: accounting items seed entry has unknown group', [
+                    'file'  => $file,
+                    'code'  => (string) $entry['code'],
+                    'group' => $group,
+                ]);
+            }
+            $byCode[(string) $entry['code']] = $entry;
+        }
+        return ['groups' => $groups, 'items' => $byCode];
     }
 
     /**
@@ -611,12 +659,23 @@ class SetupController
      */
     private function seedName(array $entry, string $code): string
     {
-        foreach (['name:' . $this->language, 'name:en', 'name'] as $key) {
+        return $this->localizedField($entry, 'name', $code);
+    }
+
+    /**
+     * Lokalizované pole z JSONC záznamu — `{base}:{jazyk}` → `{base}:en` →
+     * `{base}` → $fallback (stejný chain jako ConfigLocalizer).
+     *
+     * @param array<string, mixed> $entry
+     */
+    private function localizedField(array $entry, string $base, string $fallback): string
+    {
+        foreach ([$base . ':' . $this->language, $base . ':en', $base] as $key) {
             if (!empty($entry[$key])) {
                 return (string) $entry[$key];
             }
         }
-        return $code;
+        return $fallback;
     }
 
     /**

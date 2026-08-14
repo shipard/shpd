@@ -582,17 +582,25 @@ Všechny body, které §0 nechávala otevřené, jsou rozhodnuté:
   Sady jsou **dvě**, jedna per varianta osnovy, protože obě osnovy používají
   stejná čísla pro jiné účty (`548100` = Ostatní provozní náklady versus
   Manka a škody). Implementace (Task 10, hotové):
-  `modules/economy/items/config/accountingItems{Default,Npo}.jsonc` — sedm
-  položek (`UP-BANK` bankovní poplatky, `UP-URN`/`UP-URV` úroky,
-  `UP-KZN`/`UP-KZV` kurzové rozdíly, `UP-ZAON`/`UP-ZAOV` zaokrouhlení;
-  zaokrouhlovací účty jsou konvence, dedikovaný účet žádná osnova nemá).
-  Mzdy, odvody a daň z příjmů jsou vědomě vynechané — mzdová agenda
-  v aplikaci není; rozšíření = řádek v seedu. Generování je
-  `POST /_setup/accounting-items` přes `ItemDocument` (druh `accounting`,
-  jednotka `pcs`, `source_kind = 'setup.accountingItems'`, docState Koncept);
+  `modules/economy/items/config/accountingItems{Default,Npo}.jsonc`;
+  zaokrouhlovací účty jsou konvence, dedikovaný účet žádná osnova nemá.
+  Generování je `POST /_setup/accounting-items` přes `ItemDocument`
+  (druh `accounting`, jednotka `pcs`,
+  `source_kind = 'setup.accountingItems'`, docState Koncept);
   nabídku servíruje `GET /_setup/accounting-items-offer` s gaty
   `chart_undecided` / `chart_none` / `accounting_inactive` a příznakem
   `exists` per kód — opakované generování je bezpečné.
+  **D18-rev (Task 11):** sada rozšířena z původních sedmi finančních
+  položek na 54 (podnikatelská) / 31 (NPO) ve skupinách — seed má tvar
+  `{groups, items}`, offer navíc vrací `groups` a `group` u kandidáta,
+  UI je člení do sbalitelných sekcí s tri-state checkboxem. Kódy položek =
+  čísla účtů (víc položek na jednom účtu → písmenný sufix, `548100Z`
+  zaokrouhlení, NPO `549100B` bankovní poplatky); původní kódy `UP-*`
+  zanikly bez migrace. Mzdová agenda je nově zařazena (revize „vědomého
+  vynechání" z Tasku 10 — agenda v aplikaci není, ale účtuje se);
+  daň z příjmů zůstává jen jako závazkový účet 341100. Podnikatelská
+  osnova dostala nový účet `518206` Software a cloudové služby
+  (NPO drží jednu analytiku služeb 518100).
 - **Pořadí kroků průvodce** → bezpředmětné. Krokový průvodce se nestaví (D15),
   pořadí drží `SetupChecklist::ORDER` a řídí se závislostmi.
 

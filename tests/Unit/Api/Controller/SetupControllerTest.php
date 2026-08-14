@@ -868,31 +868,94 @@ class SetupControllerTest extends TestCase
     public function testAccountingItemsCandidatesFollowChartVariant(): void
     {
         // Regresní test na past se stejnými čísly: obě osnovy používají
-        // 548100/648100 pro JINÉ účty, sada se musí vybírat podle varianty.
+        // stejná čísla pro JINÉ účty, sada se musí vybírat podle varianty
+        // (v NPO míří na 549100 tři položky s různými kódy).
         $resp = $this->makeController($this->makeDb(['economy.accountChart' => 'default']))
             ->accountingItemsOffer(self::auth());
         $data = $resp->getPayload()['data'];
         $this->assertTrue($data['available']);
         $this->assertSame('default', $data['chartVariant']);
-        $this->assertCount(7, $data['candidates']);
-        $this->assertSame('548100', $this->findCandidate($resp, 'UP-ZAON')['accountNumber']);
-        $this->assertSame('568201', $this->findCandidate($resp, 'UP-BANK')['accountNumber']);
+        $this->assertCount(54, $data['candidates']);
+        $this->assertSame('548100', $this->findCandidate($resp, '548100Z')['accountNumber']);
+        $this->assertSame('568201', $this->findCandidate($resp, '568201')['accountNumber']);
 
         $resp = $this->makeController($this->makeDb(['economy.accountChart' => 'npo']))
             ->accountingItemsOffer(self::auth());
-        $this->assertSame('549100', $this->findCandidate($resp, 'UP-ZAON')['accountNumber']);
-        $this->assertSame('549100', $this->findCandidate($resp, 'UP-BANK')['accountNumber']);
+        $this->assertCount(31, $resp->getPayload()['data']['candidates']);
+        $this->assertSame('549100', $this->findCandidate($resp, '549100Z')['accountNumber']);
+        $this->assertSame('549100', $this->findCandidate($resp, '549100B')['accountNumber']);
+        $this->assertSame('549100', $this->findCandidate($resp, '549100')['accountNumber']);
+    }
+
+    public function testAccountingItemsOfferReturnsOrderedGroups(): void
+    {
+        $resp = $this->makeController($this->makeDb(['economy.accountChart' => 'default']))
+            ->accountingItemsOffer(self::auth());
+        $data = $resp->getPayload()['data'];
+
+        // Skupiny seřazené dle order, název lokalizovaný (jazyk cs).
+        $this->assertSame(
+            ['finance', 'services', 'materials', 'operations', 'insurance', 'payroll', 'taxes', 'assets'],
+            array_column($data['groups'], 'id'),
+        );
+        $this->assertSame($data['groups'], array_values($data['groups']));
+        $orders = array_column($data['groups'], 'order');
+        $sorted = $orders;
+        sort($sorted);
+        $this->assertSame($sorted, $orders);
+        $this->assertSame('Finanční operace', $data['groups'][0]['name']);
+
+        // Kandidát nese group odkazující na existující skupinu.
+        $groupIds = array_flip(array_column($data['groups'], 'id'));
+        foreach ($data['candidates'] as $candidate) {
+            $this->assertArrayHasKey($candidate['group'], $groupIds, "candidate {$candidate['code']}");
+        }
     }
 
     public function testAccountingItemsOfferMarksExistingCodes(): void
     {
         $resp = $this->makeController($this->makeDb(
             ['economy.accountChart' => 'default'],
-            existingItems: [['code' => 'UP-BANK']],
+            existingItems: [['code' => '568201']],
         ))->accountingItemsOffer(self::auth());
 
-        $this->assertTrue($this->findCandidate($resp, 'UP-BANK')['exists']);
-        $this->assertFalse($this->findCandidate($resp, 'UP-KZN')['exists']);
+        $this->assertTrue($this->findCandidate($resp, '568201')['exists']);
+        $this->assertFalse($this->findCandidate($resp, '563100')['exists']);
+    }
+
+    public function testAccountingItemsSeedsMatchCharts(): void
+    {
+        // Konzistence seed ↔ osnova: každý account existuje v příslušném
+        // chart JSONC, každá položka odkazuje na deklarovanou skupinu,
+        // počty dle Tasku 11 (default 54/8, NPO 31/7).
+        $modules = dirname(__DIR__, 4) . '/modules';
+        $charts  = [
+            'default' => "{$modules}/economy/accounting/config/accountChartDefault.jsonc",
+            'npo'     => "{$modules}/economy/accounting/config/accountChartNpo.jsonc",
+        ];
+        $seeds = [
+            'default' => ["{$modules}/economy/items/config/accountingItemsDefault.jsonc", 54, 8],
+            'npo'     => ["{$modules}/economy/items/config/accountingItemsNpo.jsonc", 31, 7],
+        ];
+
+        foreach ($seeds as $variant => [$seedFile, $itemCount, $groupCount]) {
+            $chart   = \Shipard\Core\Utils\JsoncParser::parseFile($charts[$variant]);
+            $numbers = array_flip(array_column($chart, 'number'));
+
+            $seed = \Shipard\Core\Utils\JsoncParser::parseFile($seedFile);
+            $this->assertCount($groupCount, $seed['groups'], $variant);
+            $this->assertCount($itemCount, $seed['items'], $variant);
+
+            $groupIds = array_flip(array_column($seed['groups'], 'id'));
+            $codes    = [];
+            foreach ($seed['items'] as $item) {
+                $code = $item['code'];
+                $this->assertArrayNotHasKey($code, $codes, "{$variant}: duplicate code {$code}");
+                $codes[$code] = true;
+                $this->assertArrayHasKey($item['group'], $groupIds, "{$variant}: item {$code}");
+                $this->assertArrayHasKey($item['account'], $numbers, "{$variant}: item {$code} account {$item['account']}");
+            }
+        }
     }
 
     public function testGenerateAccountingItemsCreatesItemsViaDocument(): void
@@ -905,18 +968,18 @@ class SetupControllerTest extends TestCase
         ));
 
         $resp = $ctrl->generateAccountingItems(
-            self::itemsRequest(['codes' => ['UP-BANK', 'UP-KZN']]),
+            self::itemsRequest(['codes' => ['568201', '563100']]),
             self::auth(),
         );
 
         $this->assertSame(200, $this->getStatus($resp));
         $data = $resp->getPayload()['data'];
-        $this->assertSame(['UP-BANK', 'UP-KZN'], array_column($data['created'], 'code'));
+        $this->assertSame(['568201', '563100'], array_column($data['created'], 'code'));
         $this->assertSame([], $data['skipped']);
 
         $this->assertCount(2, $ctrl->savedItems);
         [$bank, $fx] = $ctrl->savedItems;
-        $this->assertSame('UP-BANK', $bank['code']);
+        $this->assertSame('568201', $bank['code']);
         $this->assertSame('Bankovní poplatky', $bank['name']);
         $this->assertSame(5, $bank['item_kind']);
         $this->assertSame(9, $bank['unit']);
@@ -924,7 +987,7 @@ class SetupControllerTest extends TestCase
         $this->assertSame(43, $fx['accounting_account']);
         $this->assertNull($bank['sales_price_no_vat']);
         $this->assertSame('setup.accountingItems', $bank['source_kind']);
-        $this->assertSame('UP-BANK', $bank['source_ref']);
+        $this->assertSame('568201', $bank['source_ref']);
         $this->assertNotEmpty($bank['source_imported_at']);
         // Koncept jako u ručního pořízení, ne 40 z provisioneru osnovy.
         $this->assertSame(10, $bank['docState']);
@@ -934,7 +997,8 @@ class SetupControllerTest extends TestCase
 
     public function testGenerateSkipsMissingAccountButCreatesOthers(): void
     {
-        // 563100 v osnově chybí → UP-KZN přeskočená s důvodem, UP-BANK vznikne.
+        // 563100 v osnově chybí → kurzová ztráta přeskočená s důvodem,
+        // bankovní poplatky vzniknou.
         $ctrl = $this->makeItemsController($this->makeDb(
             ['economy.accountChart' => 'default'],
             itemKindId: 5,
@@ -943,18 +1007,47 @@ class SetupControllerTest extends TestCase
         ));
 
         $resp = $ctrl->generateAccountingItems(
-            self::itemsRequest(['codes' => ['UP-BANK', 'UP-KZN']]),
+            self::itemsRequest(['codes' => ['568201', '563100']]),
             self::auth(),
         );
 
         $this->assertSame(200, $this->getStatus($resp));
         $data = $resp->getPayload()['data'];
-        $this->assertSame(['UP-BANK'], array_column($data['created'], 'code'));
+        $this->assertSame(['568201'], array_column($data['created'], 'code'));
         $this->assertSame(
-            [['code' => 'UP-KZN', 'reason' => 'account_not_found', 'accountNumber' => '563100']],
+            [['code' => '563100', 'reason' => 'account_not_found', 'accountNumber' => '563100']],
             $data['skipped'],
         );
         $this->assertCount(1, $ctrl->savedItems);
+    }
+
+    public function testGenerateTwoItemsOnSameAccount(): void
+    {
+        // Kolizní sufix (548100 + 548100Z) — dvě položky s různými kódy
+        // na stejný účet se vygenerují obě, bez konfliktu.
+        $ctrl = $this->makeItemsController($this->makeDb(
+            ['economy.accountChart' => 'default'],
+            itemKindId: 5,
+            unitId: 9,
+            accountIdsByNumber: ['548100' => 77],
+        ));
+
+        $resp = $ctrl->generateAccountingItems(
+            self::itemsRequest(['codes' => ['548100', '548100Z']]),
+            self::auth(),
+        );
+
+        $this->assertSame(200, $this->getStatus($resp));
+        $data = $resp->getPayload()['data'];
+        $this->assertSame(['548100', '548100Z'], array_column($data['created'], 'code'));
+        $this->assertSame([], $data['skipped']);
+
+        [$other, $rounding] = $ctrl->savedItems;
+        $this->assertSame(77, $other['accounting_account']);
+        $this->assertSame(77, $rounding['accounting_account']);
+        $this->assertSame('548100Z', $rounding['code']);
+        $this->assertSame('548100Z', $rounding['source_ref']);
+        $this->assertSame('Zaokrouhlení (náklad)', $rounding['name']);
     }
 
     public function testGenerateFailsLoudlyWithoutAccountingKind(): void
@@ -969,7 +1062,7 @@ class SetupControllerTest extends TestCase
         ));
 
         $resp = $ctrl->generateAccountingItems(
-            self::itemsRequest(['codes' => ['UP-BANK']]),
+            self::itemsRequest(['codes' => ['568201']]),
             self::auth(),
         );
 
@@ -986,18 +1079,18 @@ class SetupControllerTest extends TestCase
             itemKindId: 5,
             unitId: 9,
             accountIdsByNumber: ['568201' => 42],
-            existingItems: [['code' => 'UP-BANK']],
+            existingItems: [['code' => '568201']],
         ));
 
         $resp = $ctrl->generateAccountingItems(
-            self::itemsRequest(['codes' => ['UP-BANK']]),
+            self::itemsRequest(['codes' => ['568201']]),
             self::auth(),
         );
 
         $this->assertSame(200, $this->getStatus($resp));
         $data = $resp->getPayload()['data'];
         $this->assertSame([], $data['created']);
-        $this->assertSame([['code' => 'UP-BANK', 'reason' => 'already_exists']], $data['skipped']);
+        $this->assertSame([['code' => '568201', 'reason' => 'already_exists']], $data['skipped']);
         $this->assertSame([], $ctrl->savedItems);
     }
 
@@ -1006,7 +1099,7 @@ class SetupControllerTest extends TestCase
         $ctrl = $this->makeItemsController($this->makeDb());
 
         $resp = $ctrl->generateAccountingItems(
-            self::itemsRequest(['codes' => ['UP-BANK']]),
+            self::itemsRequest(['codes' => ['568201']]),
             self::auth(),
         );
 

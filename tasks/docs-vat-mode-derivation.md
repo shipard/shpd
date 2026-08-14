@@ -1,9 +1,10 @@
 # Oprava dvojího počítání DPH — derivace `vat_mode` u cen s DPH
 
-**Stav:** částečně — implementace + prompt v4.1.0 hotové 14. 8. 2026
-(D1–D5 v kódu, commity na stable); zbývá nasazení a ověření na dev DS
-(reanalýza zprávy 3, apply → 1442,98 / 303,02 / 1746,00) a hledání
-vzoru na alfě
+**Stav:** částečně — derivace + prompt v4.1.0 hotové 14. 8. 2026
+(D1–D5 v kódu, commity 0a7feaa / 7bdc03f / 9617062); ověření na dev DS
+odkrylo starší chybu rekapitulace v mode 2 (viz Dodatek níže), která
+blokuje akceptaci — doklad `!0000000008` vyšel 1746,01 místo 1746,00.
+Zbývá: oprava dle Dodatku, přepočet `!0000000008`, hledání vzoru na alfě
 
 **Cíl:** Doklady z AI analýzy, jejichž položkové řádky jsou v cenách
 **s DPH** (koncové/maloobchodní ceny — účtenky, PHM, občerstvení),
@@ -214,3 +215,73 @@ Regrese: `DocDocumentTotalsTest`, `DocDocumentVatRecapTest`,
 4. Alfa: po dokončení message-centric nasazení vyhledat vzor
    dotazem z TODO (Σ řádků ≈ recap.total) nad reálnými analýzami
    a namátkou ověřit review karty.
+
+---
+
+## Dodatek (14. 8. 2026): rekapitulace v mode 2 počítá daň zdola
+
+**Rozhodnutí D1–D3 dodatku potvrzena 14. 8. 2026.**
+
+### Zjištění
+
+Ověření na dev DS (doklad `!0000000008` z reanalyzované účtenky):
+derivace `vat_mode 2` proběhla správně a **řádek** je spočtený správně
+(`vat_base 1442,98`, `vat_amount 303,02 = 1746 − 1442,98`,
+`vat_total 1746,00`) — ale **rekapitulace** má tax 303,03
+a total 1746,01. Součty hlavičky se sčítají z rekapitulace, takže
+doklad skončil 1442,98 / 303,03 / **1746,01** — o haléř vedle předlohy.
+
+### Příčina
+
+`DocDocument::buildVatRecapitulation` si z řádků agreguje **jen
+`vat_base`** a daň pak vždy dopočítává zdola:
+`tax = applyRounding(base × pct / 100, vat_rounding_mode)`,
+`total = base + payableTax` — bez ohledu na `vat_mode`. Per-row
+`vat_amount`/`vat_total` (v mode 2 spočtené správně rozdílem dle
+§ 37 ZDPH) se zahodí: 1442,98 × 21 % = 303,0258 → 303,03.
+
+Stávající test `testVatInclusiveModeAggregatesBaseNotTotal` chybu
+neodhalil, protože používá čísla beze zbytku (7000 / 1,12 = 6250,00
+přesně) — zdola i shora vyjde totéž. Chyba se projeví, kdykoli zpětný
+rozpočet základu nese zaokrouhlovací zbytek, tj. u reálných koncových
+cen prakticky vždy.
+
+**Rozsah:** není to jen AI pipeline — stejný haléřový posun má každý
+ručně pořízený doklad v režimu „Z ceny celkem" se zbytkem po rozpočtu
+(i vydaná faktura 12610005 z testu prošla jen díky šťastným číslům).
+
+### Rozhodnutí
+
+1. **D1 — Rekapitulace respektuje `vat_mode` i při výpočtu daně.**
+   Skupiny akumulují kromě `vat_base` i Σ `vat_total` řádků. Pro běžné
+   (ne-noPayTax) skupiny při `vat_mode 2` (z `$data['vat_mode']`):
+   `total = round(Σ vat_total, 2)`, `tax = round(total − base, 2)`
+   — daň rozdílem, ne sazbou. Mode 0/1 beze změny. Samovyměření /
+   noPayTax beze změny (základ je tam autoritativní z definice —
+   `calculateRowVat` u nich drží `base = totalPrice` i v mode 2
+   a informativní daň se správně počítá zdola). Záměrně **součet
+   per-row hodnot**, ne skupinový zpětný rozpočet z Σ totalů —
+   garantuje shodu rekapitulace se součtem řádků vytištěných na
+   dokladu (§ 37 připouští obojí). `vat_rounding_mode` se v mode 2
+   na daň neaplikuje — daň je rozdíl dvou už zaokrouhlených částek.
+2. **D2 — Testy:** nový případ s čísly účtenky se zbytkem
+   (1746 / 21 % → 1442,98 / 303,02 / 1746,00); víceřádková skupina
+   mode 2 se zbytky (recap == Σ řádků přesně); regrese — stávající
+   testy zelené beze změn hodnot (vč.
+   `testVatInclusiveModeAggregatesBaseNotTotal`, který přestane být
+   slepý jen náhodou čísel); noPayTax scénáře beze změny.
+3. **D3 — Zařazení:** jeden commit
+   `fix(docs): rekapitulace DPH v rezimu z ceny celkem pocita dan rozdilem`
+   (oprava + testy).
+
+### Hotovo když (dodatek)
+
+- [ ] Rekapitulace v mode 2: `tax = Σ vat_total − Σ vat_base`,
+      `total = Σ vat_total` (per skupina, ne-noPayTax).
+- [ ] `!0000000008` po přepočtu (uložení dokladu) má
+      1442,98 / 303,02 / 1746,00 a deník je vyrovnaný na 1746,00
+      (DAL 321100).
+- [ ] Mode 0/1 a noPayTax/samovyměření beze změn — regrese
+      `DocDocumentVatRecapTest`, `DocDocumentTotalsTest`,
+      `DocDocumentPdpOutputTest` zelené.
+- [ ] Nový test s čísly se zbytkem po rozpočtu zelený.

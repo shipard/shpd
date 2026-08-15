@@ -19,7 +19,10 @@ class HelpCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $this->requireDataSource($output);
+        if (!file_exists(getcwd() . '/config/main.json')) {
+            $output->writeln('<error>Not a Shipard data source directory (config/main.json not found)</error>');
+            return Command::FAILURE;
+        }
 
         $output->writeln('');
         $output->writeln('<info>Shipard Data Source Tool v' . Version::VERSION . '</info>');
@@ -35,6 +38,13 @@ class HelpCommand extends Command
         $output->writeln('');
         $output->writeln('<comment>Users:</comment>');
         $output->writeln('  <info>user-create</info>             Create a new user in the data source');
+        $output->writeln('  <info>user-set-admin</info>          Grant or revoke administrator rights for a user');
+        $output->writeln('  <info>auth-emergency-login</info>    Break-glass: create a session token for a user directly in the DB (bypasses auth policy)');
+        $output->writeln('');
+        $output->writeln('<comment>API keys:</comment>');
+        $output->writeln('  <info>api-key-create</info>          Create a new API key for an existing user');
+        $output->writeln('  <info>api-key-list</info>            List API keys in the data source');
+        $output->writeln('  <info>api-key-revoke</info>          Revoke (deactivate) an API key');
         $output->writeln('');
         $output->writeln('<comment>Secrets:</comment>');
         $output->writeln('  <info>ds-secrets-health</info>       Check health of the per-DS secrets infrastructure');
@@ -53,6 +63,20 @@ class HelpCommand extends Command
         $output->writeln('  <info>mail-router-bootstrap</info>   Ensure _mail_router system user and default mailbox exist');
         $output->writeln('  <info>mail-router-setup</info>       Generate (or rotate) the API key used by the external mail-router');
         $output->writeln('  <info>mail-idempotency-prune</info>  Remove expired idempotency keys for incoming mail');
+        $output->writeln('  <info>mail-outbox-run</info>         Process due messages in the outbound mail queue');
+        $output->writeln('  <info>mail-outbox-retry</info>       Re-queue a failed outbound message');
+        $output->writeln('  <info>mail-send-test</info>          Send a test message through the outbound mail transport');
+        $output->writeln('');
+        $output->writeln('<comment>Alerts:</comment>');
+        $output->writeln('  <info>alerts-run</info>              Run due alert checks (or a single check)');
+        $output->writeln('  <info>alerts-prune</info>            Delete resolved/dismissed alerts older than the retention window');
+        $output->writeln('');
+        $output->writeln('<comment>Economy:</comment>');
+        $output->writeln('  <info>bank-import-statement</info>   Import bankovního výpisu ze souboru (CAMT/GPC/FIO)');
+        $output->writeln('  <info>accbal-match</info>            Spáruje nespárované bankovní úhrady proti otevřeným předpisům (clearing → 311/321)');
+        $output->writeln('');
+        $output->writeln('<comment>Registry (Spisovna):</comment>');
+        $output->writeln('  <info>registry-extract-texts</info>  Fill registry documents extracted_text from attachments (default: missing only)');
         $output->writeln('');
         $output->writeln('<comment>AI Analyzer:</comment>');
         $output->writeln('  <info>ai-analyzer-bootstrap</info>   Ensure _ai_analyzer user, default AI backend and default profile exist');
@@ -90,14 +114,5 @@ class HelpCommand extends Command
         $output->writeln('');
 
         return Command::SUCCESS;
-    }
-
-    private function requireDataSource(OutputInterface $output): void
-    {
-        $configFile = getcwd() . '/config/main.json';
-        if (!file_exists($configFile)) {
-            $output->writeln('<error>Not a Shipard data source directory (config/main.json not found)</error>');
-            exit(Command::FAILURE);
-        }
     }
 }

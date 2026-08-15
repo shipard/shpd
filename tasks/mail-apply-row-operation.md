@@ -1,11 +1,11 @@
 # Apply z AI analýzy: doplnění pohybu (operation) na řádcích dokladu
 
-**Stav:** částečně — implementace + testy + docs hotové 15. 8. 2026;
-ověřeno na dev DS (doklad `2260007` prošel na 40 bez ruční korekce).
-Dodatek (odstranění rutinní info issue, revize D3) implementován
-15. 8. 2026 vč. odstranění preview větve. Zbývá: dev ověření dodatku
-(apply bez issue) a ruční doplnění konceptů
-`!0000000005`–`!0000000009`
+**Stav:** hotovo (dev) — implementace, testy, docs i dodatek
+(ac50f44, vč. odstranění preview větve) hotové a ověřené 15. 8. 2026
+na dev DS: `2260007` prošel na 40 bez ruční korekce, apply bez
+rutinní hlášky, `DocumentApplierTest` zelený (59 testů). Zbývá:
+ruční doplnění konceptů `!0000000005`–`!0000000009`; alfa přechází
+pod message-centric nasazení
 
 **Cíl:** Doklady vzniklé z AI analýzy (tlačítko Použít na Kontrole)
 mají na item řádcích vyplněný sloupec Pohyb (`operation`), odvozený
@@ -251,7 +251,7 @@ Commit: `fix(exchange): apply — bez info issue u rutinniho doplneni pohybu`
 
 ### Hotovo když (dodatek)
 
-- [ ] Apply z Kontroly nevytváří žádné `row_operation_defaulted`
+- [x] Apply z Kontroly nevytváří žádné `row_operation_defaulted`
       issue; pohyb je doplněný beze změny chování. (dev ověření)
 - [x] `row_operation_config_invalid` zůstává (test s rozbitou
       mapou zelený).

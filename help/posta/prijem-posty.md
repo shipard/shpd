@@ -8,8 +8,8 @@ related: [posta/kontrola-vytezeni.md, slovnicek.md, co-dnes-nejde.md]
 # Příjem pošty
 
 Shipard nemá schránku, do které bys chodil číst e-maily. Faktury mu
-přeposíláš na adresu, kterou jsi dostal, nebo je nahraješ přímo
-z Dashboardu — a on je sám přečte a připraví z nich doklady.
+přeposíláš na jeho adresu, nebo je nahraješ přímo z Dashboardu —
+a on je sám přečte a připraví z nich doklady.
 
 ## Kdy to potřebuješ
 
@@ -18,9 +18,9 @@ se ti ji přepisovat do systému ručně.
 
 ## Postup
 
-1. **Najdi svou adresu pro příjem pošty.** Dostal jsi ji e-mailem spolu
-   s přihlašovacími údaji. V aplikaci zatím vidět není; když se ti ztratila,
-   napiš na **podpora@shipard.cz**.
+1. **Zjisti svou adresu pro příjem pošty.** Odvozuje se z adresy, na
+   které běží tvoje aplikace: když Shipard otevíráš na
+   `mojefirma.shpd.dev`, poštu mu posíláš na **`mojefirma@shpd.dev`**.
 
 2. **Přepošli fakturu na tuhle adresu.** Buď přepošli celý e-mail od
    dodavatele, nebo napiš nový a přilož PDF. Předmět ani text psát nemusíš —

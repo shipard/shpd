@@ -32,19 +32,18 @@ existuje — daňové přiznání se z něj zatím podávat nedá
 
 ## 2. Jak si říct o přístup
 
-Přístupy zakládáme ručně. Napiš e-mail na **podpora@shipard.cz** a uveď:
+Napiš e-mail na **podpora@shipard.cz** a uveď **jméno a kontaktní
+e-mail**. Volitelně připiš, čeho by sis chtěl všimnout nejvíc (došlá
+pošta, fakturace, účetnictví…), ať víme, na co se tě pak ptát.
 
-- **jméno a kontaktní e-mail** — na ten e-mail ti přijdou přihlašovací údaje,
-- **název firmy nebo organizace**, pro kterou to chceš zkoušet,
-- **jsi plátce DPH?** (ano / ne),
-- **chceš prázdný prostor, nebo s ukázkovými daty** na hraní,
-- volitelně: čeho by sis chtěl všimnout nejvíc (došlá pošta, fakturace,
-  účetnictví…), ať víme, na co se tě pak ptát.
+Zpátky ti přijde pozvánka na portál **home.shpd.dev**. Tam se přihlásíš —
+heslem, nebo Googlem či GitHubem, pokud máš účet na stejném e-mailu —
+a **zdroj dat si založíš sám**: tlačítkem *Nový zdroj dat* zadáš název
+firmy a adresu, na které aplikace poběží (třeba `mojefirma.shpd.dev`).
+Za pár minut je hotovo a můžeš dovnitř.
 
-Zpátky dostaneš odkaz na aplikaci, uživatelské jméno, heslo a adresu, na
-kterou můžeš Shipardu přeposílat poštu ke zpracování. Obvykle to trvá
-několik pracovních dnů. Nic dalšího instalovat nemusíš — stačí prohlížeč
-(Chrome, Firefox, Edge, Safari; funguje i na mobilu).
+Nic instalovat nemusíš — stačí prohlížeč (Chrome, Firefox, Edge, Safari;
+funguje i na mobilu).
 
 ---
 
@@ -53,6 +52,15 @@ několik pracovních dnů. Nic dalšího instalovat nemusíš — stačí prohl�
 Po přihlášení jsi na **Dashboardu**. To je domovská obrazovka, která
 ukazuje, co je právě potřeba udělat — nová pošta ke zpracování,
 upozornění na nesrovnalosti, rozdělané doklady.
+
+Čerstvý zdroj dat tě nenechá tápat: na Dashboardu uvidíš kartu
+**„Dokončit nastavení"**, která otevře průvodce prvotním nastavením.
+Ten tě provede tím podstatným — **vlastní firmu načte z registru**
+(stačí IČO), zeptá se na plátcovství DPH a předvyplní registraci,
+překlopí bankovní účty a nechá tě rozhodnout účtovou osnovu, domácí
+měnu a fiskální rok. Nic z toho není blokující — položky můžeš doplnit
+kdykoli později v *Nastavení*, karta ti bude chybějící věci připomínat.
+Bez vlastní firmy ale nepotvrdíš žádný doklad, takže s tímhle začni.
 
 V levém panelu najdeš:
 
@@ -67,10 +75,12 @@ V levém panelu najdeš:
 Co doporučujeme zkusit, a v tomhle pořadí — zpracování přijaté pošty je
 to, co nás teď zajímá nejvíc:
 
-1. **Pošli do Shipardu přijatou fakturu.** Na adresu pro příjem pošty
-   (dostaneš ji e-mailem spolu s přístupy) přepošli libovolnou fakturu
-   v PDF a chvíli počkej. Objeví se v *Došlé poště* a Dashboard ti nabídne
-   kartu „vytvořit doklad".
+1. **Dostaň do Shipardu přijatou fakturu.** Buď ji nahraj rovnou —
+   na Dashboardu klikni na **Nahrát** (nebo PDF přetáhni myší kamkoli
+   na plochu Dashboardu) — nebo ji přepošli e-mailem: adresa pro příjem
+   pošty se odvozuje z adresy aplikace, takže pro `mojefirma.shpd.dev`
+   je to `mojefirma@shpd.dev`. Chvíli počkej — faktura se objeví
+   v *Došlé poště* a Dashboard ti nabídne kartu „vytvořit doklad".
 2. **Zkontroluj, co AI vytáhla.** Tohle je pro nás nejcennější část.
    Před uložením uvidíš náhled dokladu — porovnej ho s originálem
    a všimni si, co je špatně: sazby DPH, jednotky, počty, celková částka.

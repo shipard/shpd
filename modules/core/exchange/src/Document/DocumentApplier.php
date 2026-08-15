@@ -243,7 +243,6 @@ class DocumentApplier
         $issues = $this->documentValidator->validate($canonical);
         $this->appendVatModeIssue($canonical, $issues);
         $resolved = $this->resolveAll($canonical, $issues);
-        $this->appendRowOperationPreviewIssues($canonical, $resolved, $issues);
         $enriched = $this->withResolve($canonical, $resolved, $issues);
 
         // preview always succeeds even with errors — client renders the
@@ -1146,81 +1145,18 @@ class DocumentApplier
     }
 
     /**
-     * Preview protějšek defaultRowOperationsForApply() — jen emituje
-     * info issues, aby bylo doplnění vidět v review (Kontrole) před
-     * apply. Matched položky čtou item_type z DB přes matchedId;
-     * položky k založení (canCreate) ho predikují zrcadlem
-     * prepareItemCreatePayload (item_kind z createPayload, jinak první
-     * aktivní druh). Autoritativní zůstává apply — přepne-li uživatel
-     * v review položku, apply přepočítá podle finálního ID.
-     *
-     * @param array<string, mixed> $canonical
-     * @param array<string, mixed> $resolved
-     * @param array<int, array{severity: string, path: string, code: string, message: string}> $issues
-     */
-    private function appendRowOperationPreviewIssues(array $canonical, array $resolved, array &$issues): void
-    {
-        $docType = $this->mapDocType($canonical);
-        $cfgApply = $this->config->cfgItem('docs.core.applyRowOperations');
-        if (!is_array($cfgApply[$docType] ?? null)) {
-            return;
-        }
-
-        $rowResolve = [];
-        foreach ($resolved['rows'] ?? [] as $entry) {
-            if (is_array($entry) && isset($entry['index'])) {
-                $rowResolve[(int) $entry['index']] = $entry;
-            }
-        }
-
-        $rows = is_array($canonical['rows'] ?? null) ? $canonical['rows'] : [];
-        $matchedIds = [];   // index řádku → ID matched položky
-        $createKinds = [];  // index řádku → ?item_kind side-create payloadu
-        $rowItemTypes = []; // index řádku → ?item_type
-        foreach ($rows as $i => $row) {
-            if (!$this->rowNeedsOperation($row)) {
-                continue;
-            }
-            $item = $rowResolve[$i]['item'] ?? null;
-            $status = is_array($item) ? ($item['status'] ?? null) : null;
-            if ($status === 'matched' && isset($item['matchedId'])) {
-                $matchedIds[$i] = (int) $item['matchedId'];
-            } elseif ($status === 'canCreate') {
-                $kind = $item['createPayload']['item_kind'] ?? null;
-                $createKinds[$i] = is_numeric($kind) ? (int) $kind : null;
-            } else {
-                $rowItemTypes[$i] = null;
-            }
-        }
-        if ($matchedIds === [] && $createKinds === [] && $rowItemTypes === []) {
-            return;
-        }
-
-        $types = $this->fetchItemTypes(array_values($matchedIds));
-        foreach ($matchedIds as $i => $id) {
-            $rowItemTypes[$i] = $types[$id] ?? null;
-        }
-        if ($createKinds !== []) {
-            $kindTypes = $this->fetchItemKindTypes(array_filter($createKinds, static fn($k) => $k !== null));
-            $fallbackType = $this->defaultItemKindType();
-            foreach ($createKinds as $i => $kind) {
-                $rowItemTypes[$i] = $kind !== null ? ($kindTypes[$kind] ?? $fallbackType) : $fallbackType;
-            }
-        }
-
-        ksort($rowItemTypes);
-        $this->resolveRowOperationDefaults($docType, $rowItemTypes, $issues);
-    }
-
-    /**
      * Přeloží item_type řádků na kódy pohybů dle
-     * `docs.core.applyRowOperations` pro daný docType a ke každému
-     * doplnění přidá info issue `row_operation_defaulted` (vzor
-     * `vat_mode_derived`). Kód, který v `docs.core.rowOperations`
+     * `docs.core.applyRowOperations` pro daný docType. Doplnění je
+     * TICHÉ — žádné info issue: AI pohyb nikdy nevrací, doplňuje se
+     * tedy na každém item řádku každého apply a hláška, která svítí
+     * vždy, by učila uživatele sekci Upozornění přeskakovat.
+     * Transparentnost dává sám výsledek (sloupec Pohyb konceptu) —
+     * na rozdíl od `vat_mode_derived`, kde výsledek odchylku od
+     * výstupu AI nevysvětlí. Kód, který v `docs.core.rowOperations`
      * neexistuje nebo není pro docType povolený, se NEdoplní (chová se
      * jako docType bez záznamu) a přidá warning
-     * `row_operation_config_invalid` — rozbitá konfigurace musí být
-     * vidět v review, ne až na účtování.
+     * `row_operation_config_invalid` — ten hlásí skutečný problém
+     * a vystřelí jen při rozbité mapě.
      *
      * @param array<int, ?int> $rowItemTypes index řádku → item_type (null = bez položky / neznámý)
      * @param array<int, array{severity: string, path: string, code: string, message: string}> $issues
@@ -1239,9 +1175,8 @@ class DocumentApplier
 
         $out = [];
         foreach ($rowItemTypes as $i => $itemType) {
-            $code = $itemType !== null ? ($byItemType[(string) $itemType] ?? null) : null;
-            $fromItemType = $code !== null;
-            $code ??= $cfg['default'] ?? null;
+            $code = ($itemType !== null ? ($byItemType[(string) $itemType] ?? null) : null)
+                ?? ($cfg['default'] ?? null);
             if (!is_string($code) || $code === '') {
                 continue;
             }
@@ -1254,15 +1189,6 @@ class DocumentApplier
                 ];
                 continue;
             }
-            $name = (string) ($cfgOps[$code]['name:cs'] ?? $cfgOps[$code]['name'] ?? $code);
-            $issues[] = [
-                'severity' => 'info',
-                'path'     => "rows.{$i}.operation",
-                'code'     => 'row_operation_defaulted',
-                'message'  => $fromItemType
-                    ? "Pohyb „{$name}“ doplněn podle typu položky."
-                    : "Pohyb „{$name}“ doplněn podle výchozího pohybu dokladu.",
-            ];
             $out[$i] = $code;
         }
         return $out;
@@ -1286,41 +1212,6 @@ class DocumentApplier
             $out[(int) $row['id']] = (int) $row['item_type'];
         }
         return $out;
-    }
-
-    /**
-     * @param array<int, int> $kindIds
-     * @return array<int, int> ID druhu → item_type
-     */
-    private function fetchItemKindTypes(array $kindIds): array
-    {
-        $kindIds = array_values(array_unique(array_map('intval', $kindIds)));
-        if ($kindIds === []) {
-            return [];
-        }
-        $out = [];
-        foreach ($this->db->fetchAll(
-            'SELECT [id], [item_type] FROM [economy_items_kinds] WHERE [id] IN %in',
-            $kindIds,
-        ) as $row) {
-            $out[(int) $row['id']] = (int) $row['item_type'];
-        }
-        return $out;
-    }
-
-    /**
-     * item_type prvního aktivního druhu položky — zrcadlí default
-     * item_kind v prepareItemCreatePayload() pro preview predikci
-     * u side-created položek.
-     */
-    private function defaultItemKindType(): ?int
-    {
-        $row = $this->db->fetch(
-            'SELECT [item_type] FROM [economy_items_kinds]
-             WHERE [docState] IN (%i, %i, %i) ORDER BY [id] LIMIT 1',
-            self::ACTIVE_STATES[0], self::ACTIVE_STATES[1], self::ACTIVE_STATES[2],
-        );
-        return $row !== null ? (int) $row['item_type'] : null;
     }
 
     /**

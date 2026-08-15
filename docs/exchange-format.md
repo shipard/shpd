@@ -692,10 +692,11 @@ klíč = docType):
 
 Explicitní canonical `operation` má přednost (passthrough); kontační
 (`accSide`) a textové řádky se nedoplňují; docType bez záznamu v cfg →
-dnešní chování (null). Každé doplnění přidá do `_resolve.issues` info
-**`row_operation_defaulted`** s uvedením pohybu a zdroje — preview ho
-emituje taky (u side-created položek predikcí přes `item_kind`, jinak
-první aktivní druh; autoritativní zůstává apply). Kód, který
+dnešní chování (null). Doplnění je **tiché** — AI pohyb nikdy nevrací,
+doplňuje se tedy rutinně na každém item řádku a hláška, která svítí
+vždy, by učila uživatele Upozornění přeskakovat; transparentnost dává
+sám výsledek ve sloupci Pohyb konceptu (na rozdíl od `vat_mode_derived`,
+kde výsledek odchylku od výstupu AI sám nevysvětlí). Kód, který
 v `docs.core.rowOperations` neexistuje nebo není pro docType povolený,
 se nedoplní a přidá warning `row_operation_config_invalid`; paritu
 konfigurace hlídá `ApplyRowOperationsParityTest`.

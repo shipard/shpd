@@ -2,8 +2,10 @@
 
 **Stav:** částečně — implementace + testy + docs hotové 15. 8. 2026;
 ověřeno na dev DS (doklad `2260007` prošel na 40 bez ruční korekce).
-Zbývá: Dodatek níže (odstranění rutinní info issue, revize D3)
-a ruční doplnění konceptů `!0000000005`–`!0000000009`
+Dodatek (odstranění rutinní info issue, revize D3) implementován
+15. 8. 2026 vč. odstranění preview větve. Zbývá: dev ověření dodatku
+(apply bez issue) a ruční doplnění konceptů
+`!0000000005`–`!0000000009`
 
 **Cíl:** Doklady vzniklé z AI analýzy (tlačítko Použít na Kontrole)
 mají na item řádcích vyplněný sloupec Pohyb (`operation`), odvozený
@@ -250,9 +252,11 @@ Commit: `fix(exchange): apply — bez info issue u rutinniho doplneni pohybu`
 ### Hotovo když (dodatek)
 
 - [ ] Apply z Kontroly nevytváří žádné `row_operation_defaulted`
-      issue; pohyb je doplněný beze změny chování.
-- [ ] `row_operation_config_invalid` zůstává (test s rozbitou
+      issue; pohyb je doplněný beze změny chování. (dev ověření)
+- [x] `row_operation_config_invalid` zůstává (test s rozbitou
       mapou zelený).
-- [ ] Testy applieru upravené a zelené (úzký filtr
-      `DocumentApplierTest`).
-- [ ] Docs bez zmínky o odstraněné hlášce.
+- [x] Testy applieru upravené a zelené (úzký filtr
+      `DocumentApplierTest`); preview větev (predikce item_type
+      u side-creates) odstraněna celá — existovala jen kvůli D3,
+      preview tak neplatí DB dotazy za nic.
+- [x] Docs bez zmínky o odstraněné hlášce.

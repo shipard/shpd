@@ -278,10 +278,13 @@ AI pohyb řádku (`rows[].operation`) záměrně nevrací — je to interní
 koncept z Použít prošel na stav V pořádku bez ručního doplňování,
 `DocumentApplier` doplní item řádkům pohyb podle typu resolvované /
 založené položky, jinak výchozím pohybem docTypu (cfgItem
-`docs.core.applyRowOperations`). Doplnění je v review modalu vidět
-jako info **`row_operation_defaulted`** v `_resolve.issues` (preview
-i apply; u položek k založení preview typ predikuje, autoritativní je
-apply). Detaily: `docs/exchange-format.md` §10 „Doplnění pohybu řádků"
+`docs.core.applyRowOperations`). Doplnění je **tiché** — probíhá na
+každém item řádku každého apply, takže info hláška by svítila vždy
+a degradovala pozornost pro vzácné hlášky; transparentnost dává sám
+výsledek (sloupec Pohyb konceptu). Do `_resolve.issues` jde jen
+warning `row_operation_config_invalid` při rozbité konfiguraci
+(neexistující/nepovolený kód). Detaily: `docs/exchange-format.md` §10
+„Doplnění pohybu řádků"
 a [tasks/mail-apply-row-operation.md](../../../../tasks/mail-apply-row-operation.md).
 
 ## Message-centrické akce (apply / reject / unapply / preview)

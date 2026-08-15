@@ -1439,12 +1439,8 @@ class DocumentApplierTest extends TestCase
         $out = $this->invokeDefaultRowOps($applier, $canonical, $plan, $issues, rowItems: [2 => 99]);
 
         $this->assertSame([0 => 'purchase.services', 1 => 'acc.entry', 2 => 'purchase.goods'], $out);
-        $defaulted = array_values(array_filter($issues, static fn($i) => $i['code'] === 'row_operation_defaulted'));
-        $this->assertCount(3, $defaulted);
-        $this->assertSame('info', $defaulted[0]['severity']);
-        $this->assertSame('rows.0.operation', $defaulted[0]['path']);
-        $this->assertStringContainsString('Nákup služeb', $defaulted[0]['message']);
-        $this->assertStringContainsString('podle typu položky', $defaulted[0]['message']);
+        // Rutinní doplnění je tiché — žádné info issue (dodatek tasku).
+        $this->assertSame([], $issues);
     }
 
     public function testRowOperationFallsBackToDocTypeDefault(): void
@@ -1457,9 +1453,7 @@ class DocumentApplierTest extends TestCase
         $out = $this->invokeDefaultRowOps($applier, $canonical, ['rowSkips' => [], 'resolvedRowItems' => []], $issues);
 
         $this->assertSame([0 => 'acc.entry'], $out);
-        $this->assertCount(1, $issues);
-        $this->assertSame('row_operation_defaulted', $issues[0]['code']);
-        $this->assertStringContainsString('podle výchozího pohybu dokladu', $issues[0]['message']);
+        $this->assertSame([], $issues);
     }
 
     public function testRowOperationInvnoMapsTypeAndFallsBackOnUnmapped(): void
@@ -1481,8 +1475,7 @@ class DocumentApplierTest extends TestCase
         );
 
         $this->assertSame([0 => 'sale.services', 1 => 'sale.services'], $out);
-        $this->assertStringContainsString('podle typu položky', $issues[0]['message']);
-        $this->assertStringContainsString('podle výchozího pohybu dokladu', $issues[1]['message']);
+        $this->assertSame([], $issues);
     }
 
     public function testRowOperationSkipsPassthroughContationTextAndSkippedRows(): void
@@ -1559,7 +1552,13 @@ class DocumentApplierTest extends TestCase
         $this->assertSame('purchase.other', $data['rows'][1]['operation']);
     }
 
-    public function testPreviewEmitsRowOperationDefaultedForMatchedItem(): void
+    /**
+     * Rutinní doplnění pohybu je tiché i na preview — dřívější info
+     * issue `row_operation_defaulted` svítilo u každého apply a učilo
+     * uživatele Upozornění přeskakovat (dodatek tasku
+     * mail-apply-row-operation).
+     */
+    public function testPreviewEmitsNoRowOperationIssues(): void
     {
         [$party, $item, $unit, $vat, $bank] = $this->buildMatchedResolvers();
         $applier = $this->buildApplier(
@@ -1576,40 +1575,7 @@ class DocumentApplierTest extends TestCase
 
         $this->assertTrue($result->success);
         $issues = $result->canonical['_resolve']['issues'] ?? [];
-        $defaulted = $this->findIssueByCode($issues, 'row_operation_defaulted');
-        $this->assertNotNull($defaulted);
-        $this->assertSame('info', $defaulted['severity']);
-        $this->assertSame('rows.0.operation', $defaulted['path']);
-        $this->assertStringContainsString('Nákup služeb', $defaulted['message']);
-    }
-
-    public function testPreviewPredictsRowOperationForSideCreatedItem(): void
-    {
-        [$party, , $unit, $vat, $bank] = $this->buildMatchedResolvers();
-        $item = $this->createMock(ItemResolver::class);
-        $item->method('resolve')->willReturn(ResolveResult::canCreate(['name' => 'Konzultace']));
-
-        // createPayload bez item_kind → predikce zrcadlí
-        // prepareItemCreatePayload: první aktivní druh (zde item_type 0).
-        $db = $this->createMock(Connection::class);
-        $db->method('fetchAll')->willReturn([]);
-        $db->method('fetch')->willReturn(new Row(['item_type' => 0]));
-
-        $applier = $this->buildApplier(
-            db: $db,
-            party: $party, item: $item, unit: $unit, vat: $vat, bank: $bank,
-            config: $this->buildRowOperationConfig(),
-        );
-
-        $payload = json_decode(
-            (string) file_get_contents(__DIR__ . '/../../../../../Fixtures/Exchange/invoiceReceived_happy.json'),
-            true,
-        );
-        $result = $applier->preview($payload);
-
-        $issues = $result->canonical['_resolve']['issues'] ?? [];
-        $defaulted = $this->findIssueByCode($issues, 'row_operation_defaulted');
-        $this->assertNotNull($defaulted);
-        $this->assertStringContainsString('Nákup služeb', $defaulted['message']);
+        $this->assertNull($this->findIssueByCode($issues, 'row_operation_defaulted'));
+        $this->assertNull($this->findIssueByCode($issues, 'row_operation_config_invalid'));
     }
 }

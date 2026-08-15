@@ -17,7 +17,7 @@ jednotlivých subsystémů žijí v [`docs/`](../docs/README.md).
 
 ## Stav
 
-Celkem 207 tasků: **naplánováno** 3 · **částečně** 3 · **hotovo** 201.
+Celkem 208 tasků: **naplánováno** 3 · **částečně** 3 · **hotovo** 202.
 
 Zdroj pravdy je řádek `**Stav:**` v hlavičce každého tasku; tato
 tabulka je generovaná (`scripts/tasks-index.py`). Hotové tasky se
@@ -34,7 +34,6 @@ nevypisují — níže je jen to, co není dokončené.
 
 **Bez hlavičky `**Stav:**` nebo s neznámým stavem:**
 
-- `cli-doctor-branding-help-completion.md (neznámý stav: hotovo (zbývá ruční ověření na alfě po nasazení))`
 - `docs-vat-mode-derivation.md (neznámý stav: hotovo (dev))`
 - `mail-apply-row-operation.md (neznámý stav: hotovo (dev))`
 

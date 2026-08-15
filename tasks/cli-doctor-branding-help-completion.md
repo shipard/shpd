@@ -1,6 +1,10 @@
 # CLI údržba: branding v PermissionSpec, mkdir módy, sync nápovědy, bash completion
 
-**Stav:** hotovo (zbývá ruční ověření na alfě po nasazení)
+**Stav:** hotovo — nasazeno a ověřeno na alfě 15. 8. 2026: `fix-permissions`
+opravil `branding` na `t55w-…` (shipard:shipard 0750), `doctor` čistý,
+upload obrázku v Nastavení aplikace prošel, `shpd-ds help` obsahuje
+všechny registrované příkazy (ověřeno proti `list --raw`), completion
+skripty nainstalované v `/etc/bash_completion.d/`
 
 **Cíl:** `shpd-server doctor` a `fix-permissions` pokrývají adresář
 `branding/` v datových zdrojích; `ds-create`/`ds-upgrade` nastavují
@@ -160,5 +164,6 @@ bash/zsh completion instalovanou serverovým upgradem.
   FixPermissions, Upgrade, CronInstall); používá ji i chown v ds-create.
 - `requireDataSource` v DS HelpCommandu už nevolá `exit()`, vrací
   FAILURE (kvůli drift testu).
-- Zbývá ruční ověření na alfě dle sekce Testy (doctor → fix-permissions
-  na `t55w-…`, upload brandingu, `shpd-ds help`, tab-completion).
+- Ruční ověření na alfě dle sekce Testy proběhlo 15. 8. 2026 — vše
+  prošlo (doctor/fix-permissions na `t55w-…`, upload brandingu,
+  `shpd-ds help` kompletní, completion skripty na místě).

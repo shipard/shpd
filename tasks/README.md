@@ -17,7 +17,7 @@ jednotlivých subsystémů žijí v [`docs/`](../docs/README.md).
 
 ## Stav
 
-Celkem 208 tasků: **naplánováno** 3 · **částečně** 4 · **hotovo** 201.
+Celkem 207 tasků: **naplánováno** 3 · **částečně** 3 · **hotovo** 201.
 
 Zdroj pravdy je řádek `**Stav:**` v hlavičce každého tasku; tato
 tabulka je generovaná (`scripts/tasks-index.py`). Hotové tasky se
@@ -30,12 +30,13 @@ nevypisují — níže je jen to, co není dokončené.
 | `dashboard-alert-grouping.md` | naplánováno | design schválen 2026-07-16, neimplementováno |
 | `doc-number-release-on-data-save.md` | částečně | kód + testy hotové 2026-08-13; zbývá D2 (reset test DS), ruční proklik a read-only verifikace na alfě |
 | `hosting-09-federated-login.md` | částečně | kód + testy + docs hotové 2026-08-14 (commity 1–3); zbývá ds-upgrade na hostingu, zapnutí Google/GitHub na alfě dle runbooku (mutace — David) a ruční E2E řetěz |
-| `mail-apply-row-operation.md` | částečně | implementace + testy + docs hotové 15. 8. 2026; |
 | `mail-message-centric.md` | částečně | Fáze A–D v tomto repozitáři hotové (schéma, /result v4, |
 
 **Bez hlavičky `**Stav:**` nebo s neznámým stavem:**
 
+- `cli-doctor-branding-help-completion.md (neznámý stav: hotovo (zbývá ruční ověření na alfě po nasazení))`
 - `docs-vat-mode-derivation.md (neznámý stav: hotovo (dev))`
+- `mail-apply-row-operation.md (neznámý stav: hotovo (dev))`
 
 <!-- STAV:END -->
 

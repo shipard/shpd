@@ -24,7 +24,7 @@ Cokoli z kategorie 4 se nezačíná, dokud je otevřená položka z kategorie 1.
 
 ---
 
-## M0 — Věcná správnost výpočtů ▸ **aktivní**
+## M0 — Věcná správnost výpočtů ✓ **hotovo** (15. 8. 2026)
 
 Doklad vzniklý z došlé faktury musí mít správné částky. Dnes ne vždy má.
 Nejmenší milník na roadmapě a zároveň blokátor všeho ostatního: dokud běží,
@@ -32,7 +32,7 @@ každý tester generuje data, která se budou muset opravovat.
 
 | Co | Zadání |
 |---|---|
-| Faktury s jednotkovými cenami včetně DPH → daň se počítá dvakrát | [`tasks/TODO.md`](../tasks/TODO.md) |
+| Faktury s jednotkovými cenami včetně DPH → daň se počítá dvakrát | `docs-vat-mode-derivation.md` |
 | Dokončení zaokrouhlení celkové částky (ověření + nasazení promptu) | `mail-invoice-rounding.md` |
 | Reverse charge v rekapitulaci DPH | `docs-vat-totals-reverse-charge.md` |
 | Opravy schématu AI analýzy (`schema_error`, nedeklarované hodnoty) | `mail-analysis-schema-fixes.md` |
@@ -41,9 +41,17 @@ každý tester generuje data, která se budou muset opravovat.
 součet rekapitulace DPH a celková částka výsledného dokladu předloze, a to
 i u faktur s koncovými cenami a s reverse charge.
 
+**Uzavřeno 15. 8. 2026** — GitHub issues #13–#16 zavřené. Kontrolní sada
+(běžné doklady, koncové ceny, reverse charge, zaokrouhlení, bez DPH)
+ověřena na dev DS — všechny doklady sedí s předlohou na haléř
+a deníky jsou vyrovnané. Cestou odkryty a opraveny dvě další chyby
+(rekapitulace v režimu z ceny celkem, doplňování pohybu při apply).
+Potvrzení na reálných datech alfy přechází do M2 (závislé na
+message-centric nasazení).
+
 ---
 
-## M1 — Výstupy pro DPH
+## M1 — Výstupy pro DPH ▸ **aktivní**
 
 Bez přiznání k DPH a kontrolního hlášení nemůže být Shipard jedinou evidencí
 firmy — účetní ho nepřevezme a systém zůstane doplňkem. Evidence existuje
@@ -73,7 +81,7 @@ matcher, clearing účty i dávkový endpoint párování existují.
 | Co | Zadání |
 |---|---|
 | Ověření celého toku na reálných datech testovacího prostředí | — |
-| Zbytky po M0 (co se ukáže při ověřování) | — |
+| Zbytky po M0: dokončení message-centric nasazení na alfě (živá analýza, prompt v4.1.0, `schema_error` v provozu), vzory koncových cen nad reálnými analýzami | `mail-message-centric.md` |
 
 **Hotovo když:** přijatá faktura z e-mailu projde až do spárované úhrady
 a uživatel do toho zasáhne jen potvrzením návrhu.

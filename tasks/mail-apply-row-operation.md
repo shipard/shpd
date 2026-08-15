@@ -1,8 +1,9 @@
 # Apply z AI analýzy: doplnění pohybu (operation) na řádcích dokladu
 
 **Stav:** částečně — implementace + testy + docs hotové 15. 8. 2026;
-zbývá dev DS (rebuild kompilované cfg, nový apply z Kontroly, přechod
-na 40) a ruční doplnění konceptů `!0000000005`–`!0000000009`
+ověřeno na dev DS (doklad `2260007` prošel na 40 bez ruční korekce).
+Zbývá: Dodatek níže (odstranění rutinní info issue, revize D3)
+a ruční doplnění konceptů `!0000000005`–`!0000000009`
 
 **Cíl:** Doklady vzniklé z AI analýzy (tlačítko Použít na Kontrole)
 mají na item řádcích vyplněný sloupec Pohyb (`operation`), odvozený
@@ -208,3 +209,50 @@ Regrese: `DocRowOperationRules` testy, `RowOperationsSelfBalancingParityTest`,
    (mimo scope backfill).
 4. Alfa: přechází pod koordinované message-centric nasazení (jako
    prompt v4.1.0).
+
+---
+
+## Dodatek (15. 8. 2026): revize D3 — bez info issue u rutinního doplnění
+
+**Rozhodnutí potvrzeno 15. 8. 2026.**
+
+### Zjištění z živého provozu
+
+Info issue `row_operation_defaulted` se v okně Zkontrolovat objevuje
+u **každého item řádku každého apply** — AI pohyb nikdy nevrací
+(a vracet nemá), doplnění je stoprocentní rutina, ne výjimečná
+událost. Upozornění, které svítí vždy, nenese žádnou informaci
+a učí uživatele sekci Upozornění přeskakovat — degraduje pozornost
+pro vzácné a důležité hlášky (`vat_mode_derived`, nespárovaný
+partner, `row_operation_config_invalid`).
+
+Transparentnost zajišťuje samotný výsledek: doplněný pohyb je přímo
+vidět ve sloupci Pohyb vzniklého konceptu (na rozdíl od korekce
+`vat_mode`, kde výsledek sám nevysvětluje odchylku od výstupu AI —
+tam poznámka zůstává).
+
+### Změna
+
+1. **Odstranit** emit info issue `row_operation_defaulted`
+   z `DocumentApplier` (doplnění pohybu probíhá beze změny, jen
+   tiše). Upravit testy, které issue očekávají (případy 1–5:
+   kontrola doplněné operace zůstává, aserce na issue odpadá;
+   případ 6 passthrough beze změny).
+2. **Zachovat** warning `row_operation_config_invalid` — hlásí
+   skutečný problém (neexistující/nepovolený kód v konfiguraci)
+   a vystřelí jen při rozbité mapě.
+3. Dokumentace: v `ai-analysis.md` (review flow) odstranit zmínku
+   o `row_operation_defaulted`; v docs applieru poznamenat, že
+   doplnění je tiché a proč.
+
+Commit: `fix(exchange): apply — bez info issue u rutinniho doplneni pohybu`
+
+### Hotovo když (dodatek)
+
+- [ ] Apply z Kontroly nevytváří žádné `row_operation_defaulted`
+      issue; pohyb je doplněný beze změny chování.
+- [ ] `row_operation_config_invalid` zůstává (test s rozbitou
+      mapou zelený).
+- [ ] Testy applieru upravené a zelené (úzký filtr
+      `DocumentApplierTest`).
+- [ ] Docs bez zmínky o odstraněné hlášce.

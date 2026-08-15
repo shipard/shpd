@@ -1,11 +1,10 @@
 # Oprava dvojího počítání DPH — derivace `vat_mode` u cen s DPH
 
-**Stav:** hotovo (dev) — derivace + prompt v4.1.0 + oprava rekapitulace
-mode 2 (dodatek); ověřeno 15. 8. 2026 na dev DS: účtenka `2260005`
-(dříve koncept `!0000000008`) má 1442,98 / 303,02 / 1746,00, deník
-vyrovnaný (MD 503100 + 343110 / DAL 321100 na 1746,00). Zbývají alfa
-položky závislé na dokončení message-centric nasazení (prompt v4.1.0
-na alfě, hledání vzorů nad reálnými analýzami) — přechází pod
+**Stav:** hotovo — derivace + prompt v4.1.0 + oprava rekapitulace
+mode 2 (dodatek); ověřeno 15. 8. 2026 na dev DS (účtenka `2260005`,
+dříve koncept `!0000000008`: 1442,98 / 303,02 / 1746,00, deník
+vyrovnaný MD 503100 + 343110 / DAL 321100 na 1746,00) a téhož dne
+i na alfě. Hledání vzorů nad reálnými analýzami přechází pod
 `mail-message-centric.md`
 
 **Cíl:** Doklady z AI analýzy, jejichž položkové řádky jsou v cenách

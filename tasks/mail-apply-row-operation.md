@@ -1,11 +1,11 @@
 # Apply z AI analýzy: doplnění pohybu (operation) na řádcích dokladu
 
-**Stav:** hotovo (dev) — implementace, testy, docs i dodatek
-(ac50f44, vč. odstranění preview větve) hotové a ověřené 15. 8. 2026
-na dev DS: `2260007` prošel na 40 bez ruční korekce, apply bez
-rutinní hlášky, `DocumentApplierTest` zelený (59 testů). Zbývá:
-ruční doplnění konceptů `!0000000005`–`!0000000009`; alfa přechází
-pod message-centric nasazení
+**Stav:** hotovo — implementace, testy, docs i dodatek
+(ac50f44, vč. odstranění preview větve) ověřené 15. 8. 2026 na dev DS
+(`2260007` prošel na 40 bez ruční korekce, apply bez rutinní hlášky,
+`DocumentApplierTest` zelený, 59 testů) a téhož dne i na alfě.
+Mimo scope zůstává ruční doplnění starých konceptů
+`!0000000005`–`!0000000009` na dev DS
 
 **Cíl:** Doklady vzniklé z AI analýzy (tlačítko Použít na Kontrole)
 mají na item řádcích vyplněný sloupec Pohyb (`operation`), odvozený

@@ -183,6 +183,28 @@ class FixPermissionsCommandTest extends TestCase
         $this->assertSame(0600, $perms);
     }
 
+    public function testFixesBrandingDirMode(): void
+    {
+        // Alfa incident: branding/ vzniklý pod rootem s 0755 —
+        // fix-permissions ho musí srovnat na 0750 dle specu.
+        $this->writeServerJson();
+        $spec = $this->makeSpec();
+        $dsDir = $this->buildTreeWithBrokenMode($spec);
+        mkdir($dsDir . '/branding', 0755);
+        chmod($dsDir . '/branding', 0755);
+
+        $command = new TestableFixPermissionsCommand($this->tempConfigPath, $spec);
+        $command->rootResult = true;
+
+        $tester = new CommandTester($command);
+        $exitCode = $tester->execute(['--force' => true]);
+
+        $this->assertSame(0, $exitCode);
+        $this->assertStringContainsString('chmod 0750', $tester->getDisplay());
+        $perms = fileperms($dsDir . '/branding') & 0777;
+        $this->assertSame(0750, $perms);
+    }
+
     public function testReportsMissingConfigFile(): void
     {
         $spec = $this->makeSpec();

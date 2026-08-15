@@ -105,6 +105,7 @@ class HealthCheckerTest extends TestCase
             mkdir($dsDir . '/secrets', 0700, true);
             $this->writeFile($dsDir . '/secrets/secrets.key', "key\n", 0600);
             mkdir($dsDir . '/att', 0750, true);
+            mkdir($dsDir . '/branding', 0750, true);
             mkdir($dsDir . '/cache/thumbnails', 0750, true);
             chmod($dsDir . '/cache', 0750);
         }
@@ -190,6 +191,27 @@ class HealthCheckerTest extends TestCase
         $entryIssue = array_values(array_filter($modeIssues, static fn($i) => str_contains($i['message'], 'expected')))[0];
         $this->assertSame('mode 0644, expected 0600', $entryIssue['message']);
         $this->assertTrue($entryIssue['fixable']);
+    }
+
+    public function testDetectsWrongModeOnBrandingDir(): void
+    {
+        // Alfa incident: branding/ vytvořený pod rootem zůstal 0755 —
+        // doctor ho musí hlásit jako fixable mode mismatch.
+        $spec = $this->makeSpec();
+        $this->buildContractTree($spec);
+        $dsDir = $this->createDsTree($spec, 'aaaa-bbbb-cccc-dddd');
+        chmod($dsDir . '/branding', 0755);
+
+        $checker = new HealthChecker($spec);
+        $issues = $this->withoutRootOwnerIssues($checker->checkAll());
+
+        $brandingIssues = array_values(array_filter(
+            $issues,
+            static fn($i) => str_ends_with($i['path'], '/branding'),
+        ));
+        $this->assertCount(1, $brandingIssues, 'unexpected issues: ' . json_encode($issues));
+        $this->assertSame('mode 0755, expected 0750', $brandingIssues[0]['message']);
+        $this->assertTrue($brandingIssues[0]['fixable']);
     }
 
     public function testSecretsContentsModeAboveMaxIsReported(): void

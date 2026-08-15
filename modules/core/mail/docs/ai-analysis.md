@@ -271,6 +271,19 @@ navíc učí model mode u koncových cen vracet rovnou správně — derivace
 zůstává pojistka. Detaily: `docs/exchange-format.md` (sekce vat)
 a [tasks/docs-vat-mode-derivation.md](../../../../tasks/docs-vat-mode-derivation.md).
 
+## Pohyb řádků při apply (doplnění operation)
+
+AI pohyb řádku (`rows[].operation`) záměrně nevrací — je to interní
+účetní koncept, na předloze není a prompt pro něj pravidlo nemá. Aby
+koncept z Použít prošel na stav V pořádku bez ručního doplňování,
+`DocumentApplier` doplní item řádkům pohyb podle typu resolvované /
+založené položky, jinak výchozím pohybem docTypu (cfgItem
+`docs.core.applyRowOperations`). Doplnění je v review modalu vidět
+jako info **`row_operation_defaulted`** v `_resolve.issues` (preview
+i apply; u položek k založení preview typ predikuje, autoritativní je
+apply). Detaily: `docs/exchange-format.md` §10 „Doplnění pohybu řádků"
+a [tasks/mail-apply-row-operation.md](../../../../tasks/mail-apply-row-operation.md).
+
 ## Message-centrické akce (apply / reject / unapply / preview)
 
 Akce nad dokumentovým návrhem operují nad **poslední úspěšnou analýzou**

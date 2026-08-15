@@ -369,6 +369,12 @@ nebo import mezi dvěma cizími subjekty.
 {
   "rowKind":  "item",              // key z docs.core.rowKinds
                                     //   item | text | section | discount | …
+  "operation": null,               // key z docs.core.rowOperations (pohyb
+                                    //   řádku). AI extraktory nevyplňují —
+                                    //   interní účetní koncept, na předloze
+                                    //   není; null applier při apply doplní
+                                    //   podle typu položky / docTypu, viz
+                                    //   §10 „Doplnění pohybu řádků".
   "orderPos": 1,
 
   // Item identification — resolver zkouší více cest, viz sekce 8
@@ -633,6 +639,8 @@ POST /api/v1/_exchange/docs/document/apply
   │      - per-partner item mapping → INSERT economy_items_supplier_codes
   │
   ├─ 7. Transform canonical → interní $data
+  │      - item řádky bez operation → pohyb dle
+  │        docs.core.applyRowOperations (viz níže)
   │      - reference → resolved id (partner, item, unit, vat_code)
   │      - canonical field names → DB column names (camelCase → snake_case)
   │      - currency uppercase → lowercase (cfgItem expects "czk")
@@ -666,6 +674,31 @@ POST /api/v1/_exchange/docs/document/apply
         - docNumber doplněn z přidělené series (jen pokud confirm — viz níže)
         - savedDocId v top-level (FK na docs_core_heads.id)
 ```
+
+### Doplnění pohybu řádků (`operation`)
+
+Item řádek bez pohybu nesmí na docState 40 („Pohyb je povinný",
+`DocRowOperationRules::validateRow`) — a AI pohyb správně nevrací
+(interní účetní koncept, na předloze není). Applier proto item řádkům
+s `operation = null` pohyb doplní dvoustupňově podle cfgItem
+**`docs.core.applyRowOperations`** (`modules/docs/core/config/`,
+klíč = docType):
+
+1. **`byItemType`** — mapa `economy.items.itemTypes` → kód operace;
+   `item_type` se čte z DB přes finální ID položky řádku (matched
+   i side-created jednotně, proto běží až po side-creates),
+2. **`default`** — fallback docTypu, když řádek položku nemá nebo typ
+   není v mapě (invni → `acc.entry`, invno → `sale.services`).
+
+Explicitní canonical `operation` má přednost (passthrough); kontační
+(`accSide`) a textové řádky se nedoplňují; docType bez záznamu v cfg →
+dnešní chování (null). Každé doplnění přidá do `_resolve.issues` info
+**`row_operation_defaulted`** s uvedením pohybu a zdroje — preview ho
+emituje taky (u side-created položek predikcí přes `item_kind`, jinak
+první aktivní druh; autoritativní zůstává apply). Kód, který
+v `docs.core.rowOperations` neexistuje nebo není pro docType povolený,
+se nedoplní a přidá warning `row_operation_config_invalid`; paritu
+konfigurace hlídá `ApplyRowOperationsParityTest`.
 
 ### Apply a doc state
 

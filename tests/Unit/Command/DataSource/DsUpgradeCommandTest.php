@@ -275,6 +275,26 @@ class DsUpgradeCommandTest extends TestCase
         $this->assertStringContainsString('[OK]', $tester->getDisplay());
     }
 
+    public function testUpgradeCreatesWritableDirsWithSpecMode(): void
+    {
+        $this->dsConnection->method('getTableColumns')->willReturn([
+            'id'    => 'int(11)',
+            'label' => 'varchar(100)',
+        ]);
+        $this->dsConnection->method('getTableIndexes')->willReturn(['idx_label']);
+
+        $tester = $this->createCommandTester();
+        $exitCode = $tester->execute([]);
+
+        $this->assertSame(Command::SUCCESS, $exitCode);
+        clearstatcache();
+        foreach (['att', 'branding', 'cache', 'cache/thumbnails', 'cache/oidc'] as $subdir) {
+            $dir = $this->dsDir . '/' . $subdir;
+            $this->assertDirectoryExists($dir);
+            $this->assertSame(0750, fileperms($dir) & 0777, "mode of {$subdir}");
+        }
+    }
+
     public function testUpgradeValidationErrorAborts(): void
     {
         // Create a second module with duplicate tableId=1 to trigger validation error

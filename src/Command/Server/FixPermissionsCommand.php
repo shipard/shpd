@@ -133,20 +133,7 @@ class FixPermissionsCommand extends Command
 
     protected function detectShipardUser(string $mode): string
     {
-        if ($mode === 'production') {
-            return 'shipard';
-        }
-        if (is_dir('/opt/shipard')) {
-            $stat = @stat('/opt/shipard');
-            if ($stat !== false) {
-                $info = posix_getpwuid($stat['uid']);
-                if (is_array($info) && isset($info['name'])) {
-                    return $info['name'];
-                }
-            }
-        }
-        $login = posix_getlogin();
-        return $login !== false && $login !== '' ? $login : 'unknown';
+        return PermissionSpec::detectShipardUser($mode);
     }
 
     /**

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Shipard\Command\Server;
 
 use Shipard\Core\Config\ServerConfig;
+use Shipard\Core\Server\PermissionSpec;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
@@ -66,23 +67,9 @@ class UpgradeCommand extends Command
         return is_array($info) && isset($info['name']) ? $info['name'] : 'unknown';
     }
 
-    /** Stejná logika jako DoctorCommand::detectShipardUser(). */
     protected function detectShipardUser(string $mode): string
     {
-        if ($mode === 'production') {
-            return 'shipard';
-        }
-        if (is_dir('/opt/shipard')) {
-            $stat = @stat('/opt/shipard');
-            if ($stat !== false) {
-                $info = posix_getpwuid($stat['uid']);
-                if (is_array($info) && isset($info['name'])) {
-                    return $info['name'];
-                }
-            }
-        }
-        $login = posix_getlogin();
-        return $login !== false && $login !== '' ? $login : 'unknown';
+        return PermissionSpec::detectShipardUser($mode);
     }
 
     /**

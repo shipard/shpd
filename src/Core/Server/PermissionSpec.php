@@ -102,6 +102,29 @@ final class PermissionSpec
     }
 
     /**
+     * Shared shipard-user detection: production → 'shipard', otherwise the
+     * owner of /opt/shipard, falling back to the login user. Doctor,
+     * FixPermissions, Upgrade and DsCreate must all agree on this.
+     */
+    public static function detectShipardUser(string $mode): string
+    {
+        if ($mode === 'production') {
+            return 'shipard';
+        }
+        if (is_dir('/opt/shipard')) {
+            $stat = @stat('/opt/shipard');
+            if ($stat !== false) {
+                $info = posix_getpwuid($stat['uid']);
+                if (is_array($info) && isset($info['name'])) {
+                    return $info['name'];
+                }
+            }
+        }
+        $login = posix_getlogin();
+        return $login !== false && $login !== '' ? $login : 'unknown';
+    }
+
+    /**
      * @return list<string> existing data-source root directories (contain config/main.json)
      */
     public function discoverDataSources(): array

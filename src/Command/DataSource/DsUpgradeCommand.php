@@ -80,12 +80,15 @@ class DsUpgradeCommand extends Command
         $output->writeln('Data source: ' . $dsConfig->getName() . ' (' . $dsConfig->getId() . ')', OutputInterface::VERBOSITY_VERBOSE);
         $output->writeln('', OutputInterface::VERBOSITY_VERBOSE);
 
-        // Ensure writable directories exist (att, branding, cache)
-        foreach (['att', 'branding', 'cache/thumbnails', 'cache/oidc'] as $subdir) {
+        // Ensure writable directories exist (att, branding, cache) with the
+        // PermissionSpec mode — mkdir alone is subject to umask, so chmod
+        // explicitly (also converges dirs created by older versions).
+        foreach (['att', 'branding', 'cache', 'cache/thumbnails', 'cache/oidc'] as $subdir) {
             $dirPath = $dsDir . '/' . $subdir;
             if (!is_dir($dirPath)) {
                 @mkdir($dirPath, 0755, true);
             }
+            @chmod($dirPath, 0750);
         }
 
         // Step 1.5: Ensure per-DS secrets key exists (generated for legacy DS

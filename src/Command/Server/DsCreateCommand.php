@@ -10,6 +10,7 @@ use Shipard\Core\Database\DatabaseManager;
 use Shipard\Core\Module\InstallModuleRegistry;
 use Shipard\Core\Module\ModulePathResolver;
 use Shipard\Core\Security\DsSecretCipher;
+use Shipard\Core\Server\PermissionSpec;
 use Shipard\Core\Utils\IdGenerator;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -179,6 +180,12 @@ class DsCreateCommand extends Command
         @mkdir($dataSourceDir . '/cache/thumbnails', 0755, true);
         @mkdir($dataSourceDir . '/cache/oidc', 0755, true);
 
+        // mkdir mode is subject to umask — enforce the PermissionSpec contract
+        // (0750) explicitly, without relying on a later fix-permissions run.
+        foreach (['', 'config', 'att', 'branding', 'cache', 'cache/thumbnails', 'cache/oidc'] as $subdir) {
+            @chmod(rtrim($dataSourceDir . '/' . $subdir, '/'), 0750);
+        }
+
         $password = $dbManager->generatePassword();
 
         try {
@@ -218,6 +225,18 @@ class DsCreateCommand extends Command
             return Command::FAILURE;
         }
 
+        // Hosting provisioning runs ds-create as root — without this chown the
+        // whole DS tree stays root:root and PHP-FPM (shipard user) can't write
+        // uploads into att/branding/cache.
+        if ($this->getEuid() === 0) {
+            $shipardUser = PermissionSpec::detectShipardUser($config->getMode());
+            if (posix_getpwnam($shipardUser) === false) {
+                $output->writeln("<comment>  [WARN] User '{$shipardUser}' not found — skipping chown, run fix-permissions</comment>");
+            } else {
+                $this->chownRecursive($dataSourceDir, $shipardUser);
+            }
+        }
+
         // Output summary
         $output->writeln('');
         $output->writeln('<info>Data source created successfully</info>');
@@ -233,5 +252,24 @@ class DsCreateCommand extends Command
         $output->writeln('');
 
         return Command::SUCCESS;
+    }
+
+    protected function getEuid(): int
+    {
+        return posix_geteuid();
+    }
+
+    private function chownRecursive(string $path, string $user): void
+    {
+        @chown($path, $user);
+        @chgrp($path, $user);
+        if (is_dir($path) && !is_link($path)) {
+            foreach (scandir($path) ?: [] as $entry) {
+                if ($entry === '.' || $entry === '..') {
+                    continue;
+                }
+                $this->chownRecursive($path . '/' . $entry, $user);
+            }
+        }
     }
 }

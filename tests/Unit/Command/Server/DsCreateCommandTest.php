@@ -306,6 +306,23 @@ class DsCreateCommandTest extends TestCase
         $this->assertStringContainsString('already exists', $tester->getDisplay());
     }
 
+    public function testDsCreateSetsSpecModeOnCreatedDirs(): void
+    {
+        $tester = $this->createCommandTester();
+        $exitCode = $tester->execute(['--name' => 'Test', '--language' => 'cs', '--country' => 'cz']);
+        $this->assertSame(0, $exitCode);
+
+        $dirs = glob($this->tempDir . '/*', GLOB_ONLYDIR);
+        $this->assertCount(1, $dirs);
+        $dsDir = $dirs[0];
+
+        clearstatcache();
+        foreach (['', '/config', '/att', '/branding', '/cache', '/cache/thumbnails', '/cache/oidc'] as $subdir) {
+            $this->assertDirectoryExists($dsDir . $subdir);
+            $this->assertSame(0750, fileperms($dsDir . $subdir) & 0777, "mode of '{$subdir}'");
+        }
+    }
+
     public function testDsCreateGeneratesSecretsKey(): void
     {
         DsSecretCipher::resetCache();

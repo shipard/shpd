@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Shipard\Command\Server;
 
+use Shipard\Core\Server\CompletionInstaller;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
@@ -51,6 +52,7 @@ class ServerInitCommand extends Command
             $output->writeln('<info>Server is already initialized</info>');
             // Still re-apply ownership in case it was wrong
             $this->applyConfigOwnership($user, $output);
+            $this->installShellCompletion($output);
             return Command::SUCCESS;
         }
 
@@ -77,6 +79,7 @@ class ServerInitCommand extends Command
         file_put_contents($this->serverConfigPath, json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
 
         $this->applyConfigOwnership($user, $output);
+        $this->installShellCompletion($output);
 
         $output->writeln('<info>Server initialized successfully</info>');
         $output->writeln("  Mode:    <comment>{$mode}</comment>");
@@ -131,6 +134,23 @@ class ServerInitCommand extends Command
         }
         if (is_file($this->serverConfigPath)) {
             $this->setOwnership($this->serverConfigPath, 'root', $user, 0640, $output);
+        }
+    }
+
+    protected function createCompletionInstaller(): CompletionInstaller
+    {
+        return new CompletionInstaller();
+    }
+
+    /** Best-effort: binárky nemusí být v PATH (instalace symlinků je na adminovi). */
+    private function installShellCompletion(OutputInterface $output): void
+    {
+        $installer = $this->createCompletionInstaller();
+        foreach (CompletionInstaller::BINARIES as $binary) {
+            $result = $installer->install($binary);
+            if ($result['status'] === 'skipped' || $result['status'] === 'error') {
+                $output->writeln('<comment>Warning: bash completion for ' . $binary . ': ' . $result['message'] . '</comment>');
+            }
         }
     }
 

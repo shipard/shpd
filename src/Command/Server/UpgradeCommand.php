@@ -256,6 +256,9 @@ class UpgradeCommand extends Command
         $output->writeln($euid === 0
             ? '  [run]  cron install'
             : '  [skip] cron install (not running as root)');
+        $output->writeln($euid === 0
+            ? '  [run]  completion install'
+            : '  [skip] completion install (not running as root)');
         $output->writeln(match (true) {
             !$plan['nginxReload'] => '  [skip] nginx reload (no docs/nginx/ changes)',
             $euid !== 0 => '  [skip] nginx reload (not running as root)',
@@ -318,6 +321,7 @@ class UpgradeCommand extends Command
         // /etc/cron.d i systemctl potřebují root, ne shipard uživatele).
         if ($euid === 0) {
             $steps[] = ['cron install', $shpdServer . ' cron-install'];
+            $steps[] = ['completion install', $shpdServer . ' completion-install'];
         }
         $nginxReloadCmd = 'nginx -t && systemctl reload nginx';
         $fpmReloadCmd = 'systemctl reload php' . $this->getPhpVersion() . '-fpm';
@@ -388,6 +392,7 @@ class UpgradeCommand extends Command
             $output->writeln('');
             $output->writeln('<comment>Root-only steps skipped — run manually as root:</comment>');
             $output->writeln('  sudo shpd-server cron-install');
+            $output->writeln('  sudo shpd-server completion-install');
             if ($plan['nginxReload']) {
                 $output->writeln('  sudo nginx -t && sudo systemctl reload nginx');
             }

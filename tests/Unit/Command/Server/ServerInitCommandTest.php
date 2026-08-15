@@ -6,9 +6,22 @@ namespace Shipard\Tests\Unit\Command\Server;
 
 use PHPUnit\Framework\TestCase;
 use Shipard\Command\Server\ServerInitCommand;
+use Shipard\Core\Server\CompletionInstaller;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Tester\CommandTester;
+
+class InitStubCompletionInstaller extends CompletionInstaller
+{
+    /** @var list<string> */
+    public array $installedBinaries = [];
+
+    public function install(string $binaryName): array
+    {
+        $this->installedBinaries[] = $binaryName;
+        return ['status' => 'up-to-date', 'message' => '/etc/bash_completion.d/' . $binaryName];
+    }
+}
 
 class TestableServerInitCommand extends ServerInitCommand
 {
@@ -17,11 +30,18 @@ class TestableServerInitCommand extends ServerInitCommand
     public ?string $lastMysqladminPassword = null;
     /** @var list<array{path: string, owner: string, group: string, mode: int}> */
     public array $ownershipApplied = [];
+    public InitStubCompletionInstaller $completionInstaller;
 
     public function __construct(string $tempConfigPath)
     {
         parent::__construct();
         $this->serverConfigPath = $tempConfigPath;
+        $this->completionInstaller = new InitStubCompletionInstaller();
+    }
+
+    protected function createCompletionInstaller(): CompletionInstaller
+    {
+        return $this->completionInstaller;
     }
 
     protected function isRunningAsRoot(): bool
@@ -200,6 +220,31 @@ class ServerInitCommandTest extends TestCase
             'group' => $byPath[$this->tempConfigPath]['group'],
             'mode' => $byPath[$this->tempConfigPath]['mode'],
         ]);
+    }
+
+    public function testInitInstallsShellCompletion(): void
+    {
+        $command = new TestableServerInitCommand($this->tempConfigPath);
+        $command->rootResult = true;
+
+        $tester = $this->createTester($command);
+        $exitCode = $tester->execute(['--mode' => 'development', '--user' => $this->existingUser()]);
+
+        $this->assertSame(0, $exitCode);
+        $this->assertSame(['shpd-server', 'shpd-ds'], $command->completionInstaller->installedBinaries);
+    }
+
+    public function testAlreadyInitializedStillInstallsShellCompletion(): void
+    {
+        file_put_contents($this->tempConfigPath, '{}');
+        $command = new TestableServerInitCommand($this->tempConfigPath);
+        $command->rootResult = true;
+
+        $tester = $this->createTester($command);
+        $exitCode = $tester->execute(['--user' => $this->existingUser()]);
+
+        $this->assertSame(0, $exitCode);
+        $this->assertSame(['shpd-server', 'shpd-ds'], $command->completionInstaller->installedBinaries);
     }
 
     public function testDefaultModeIsDevelopment(): void

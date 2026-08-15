@@ -190,7 +190,8 @@ Orchestruje nasazení nové verze: `git pull --ff-only` → `composer install
 --no-dev --optimize-autoloader` (jen při změně `composer.json`/`composer.lock`)
 → frontend build (jen při změně pod `frontend/`) → `ds-upgrade-all` →
 `cron-install` (vždy, jen pod rootem — idempotentní regenerace
-`/etc/cron.d/shipard`) → reload služeb (jen při změně verzovaných
+`/etc/cron.d/shipard`) → `completion-install` (vždy, jen pod rootem —
+bash completion obou binárek) → reload služeb (jen při změně verzovaných
 systémových confů: `docs/nginx/**` → `nginx -t && systemctl reload nginx`,
 `docs/php/**` → `systemctl reload php<ver>-fpm`; jen pod rootem, jinak
 vypíše ruční příkazy) → `doctor`.
@@ -282,6 +283,28 @@ regeneraci nevyžadují.
 | Opce | Význam |
 |------|--------|
 | `--dry-run` | Vypíše cíl a rendrovaný obsah, nic nezapíše. Lze bez sudo. |
+
+### `completion-install`
+
+```bash
+sudo shpd-server completion-install      # zapíše /etc/bash_completion.d/{shpd-server,shpd-ds}
+```
+
+Idempotentní instalace bash completion pro `shpd-server` i `shpd-ds`.
+Completion skripty generuje vestavěný Symfony Console příkaz
+(`<binárka> completion bash`) — `completion-install` jen resolvne binárky
+z PATH a výstup atomicky zapíše do `/etc/bash_completion.d/<name>`,
+přepis jen když se obsah liší. Binárka mimo PATH, selhané generování nebo
+chybějící `/etc/bash_completion.d` (bez balíčku bash-completion) → WARN
+a přeskočení (exit 0); FAILURE jen při chybě zápisu. Volá ho
+`shpd-server upgrade` jako subproces a `server-init` (best-effort).
+
+Completion pro zsh/fish se neinstaluje — uživatel si skript vygeneruje
+sám vestavěným příkazem a nainstaluje podle konvence svého shellu:
+
+```bash
+shpd-server completion zsh               # analogicky shpd-ds, fish
+```
 
 ### `next-table-id`
 

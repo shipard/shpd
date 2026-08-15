@@ -217,8 +217,8 @@ sudo -u shipard shpd-ds user-create \
     --name 'Správce' \
     --email admin@example.cz
 
-# 4) Srovnat práva — čerstvý DS dostane defaultní umask módy (0755/0644),
-#    kontrakt chce 0750/0640
+# 4) Ověřit práva — ds-create nastavuje kontraktní módy (0750) sám;
+#    fix-permissions je záchranná brzda pro starší DS nebo ruční zásahy
 sudo shpd-server fix-permissions
 ```
 
@@ -228,11 +228,12 @@ samostatné kroky (stejný sled, jaký v dev provádí dashboard).
 `secrets.key` pro šifrování citlivých dat se vytvoří automaticky při
 `ds-create` (mode `0600 shipard:shipard`). Viz [`secrets.md`](secrets.md).
 
-> **Práva čerstvého DS:** nově vytvořený DS dostane defaultní umask módy
-> (0755/0644), takže hned po `ds-create` na něm `doctor` nahlásí „mode
-> drift". `sudo shpd-server fix-permissions` (krok 4 výše) je srovná na
-> kontraktní 0750/0640 — a je zároveň záchranná brzda, kdyby něco vzniklo
-> jako root. Na závěr ověř `sudo -u shipard shpd-server doctor`.
+> **Práva čerstvého DS:** `ds-create` nastavuje adresářům kontraktní módy
+> (0750) explicitně a při běhu pod rootem (hosting provisioning) strom
+> rovnou chownuje na uživatele shipard. `sudo shpd-server fix-permissions`
+> (krok 4 výše) tak slouží jako záchranná brzda pro DS založené staršími
+> verzemi nebo po ručních zásazích. Na závěr ověř
+> `sudo -u shipard shpd-server doctor`.
 
 Datový zdroj je pak dostupný na `https://<tvoje-doména>/<id>/app/`.
 
@@ -336,11 +337,14 @@ Příkaz provede (kroky přes `sudo -u shipard -H`, doctor přímo jako root):
 5. `shpd-server cron-install` — idempotentní regenerace
    `/etc/cron.d/shipard` + `/opt/shipard/run` (viz §10). Běží jen pod
    rootem; jinak příkaz vypíše ruční `sudo` příkaz.
-6. reload služeb — jen při změně verzovaných systémových confů (viz §6):
+6. `shpd-server completion-install` — idempotentní instalace bash
+   completion obou binárek do `/etc/bash_completion.d`. Běží jen pod
+   rootem; jinak příkaz vypíše ruční `sudo` příkaz.
+7. reload služeb — jen při změně verzovaných systémových confů (viz §6):
    `docs/nginx/**` → `nginx -t && systemctl reload nginx`, `docs/php/**` →
    `systemctl reload php<ver>-fpm`. Běží jen pod rootem; jinak příkaz
    vypíše ruční `sudo` příkazy.
-7. `shpd-server doctor`
+8. `shpd-server doctor`
 
 Bez příchozích commitů skončí `Already up to date.`. Selhání kroku běh
 zastaví (žádný automatický rollback) — dokonči ruční kroky níže. Selhání
@@ -355,6 +359,7 @@ sudo -u shipard composer install --no-dev --optimize-autoloader
 (cd frontend && sudo -u shipard npm ci && sudo -u shipard npm run build)
 sudo -u shipard shpd-server ds-upgrade-all
 sudo shpd-server cron-install
+sudo shpd-server completion-install
 sudo shpd-server doctor
 ```
 

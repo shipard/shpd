@@ -28,6 +28,7 @@ final class ServerApplicationFactory
         $app->add(new \Shipard\Command\Server\DomainRemoveCommand());
         $app->add(new \Shipard\Command\Server\CronCommand());
         $app->add(new \Shipard\Command\Server\CronInstallCommand());
+        $app->add(new \Shipard\Command\Server\CompletionInstallCommand());
         $app->add(new \Shipard\Command\Server\HostingSyncCommand());
         $app->add(new \Shipard\Command\Server\DoctorCommand());
         $app->add(new \Shipard\Command\Server\FixPermissionsCommand());

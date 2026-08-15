@@ -318,15 +318,17 @@ class UpgradeCommandTest extends TestCase
         $this->assertSame(0, $tester->execute([]));
         // git pre-flight subprocesses run via sudo too
         $this->assertStringContainsString("sudo -u 'shipard' -H git", $cmd->captureLog[0]);
-        // mutating steps: pull, frontend, ds-upgrade-all wrapped; cron install + doctor direct as root
-        $this->assertCount(5, $cmd->stepLog);
+        // mutating steps: pull, frontend, ds-upgrade-all wrapped; cron install + completion install + doctor direct as root
+        $this->assertCount(6, $cmd->stepLog);
         foreach (array_slice($cmd->stepLog, 0, 3) as $step) {
             $this->assertStringContainsString("sudo -u 'shipard' -H sh -c", $step);
         }
         $this->assertStringContainsString('cron-install', $cmd->stepLog[3]);
         $this->assertStringNotContainsString('sudo', $cmd->stepLog[3]);
-        $this->assertStringContainsString('doctor', $cmd->stepLog[4]);
+        $this->assertStringContainsString('completion-install', $cmd->stepLog[4]);
         $this->assertStringNotContainsString('sudo', $cmd->stepLog[4]);
+        $this->assertStringContainsString('doctor', $cmd->stepLog[5]);
+        $this->assertStringNotContainsString('sudo', $cmd->stepLog[5]);
     }
 
     public function testShipardUserRunsWithoutSudoAndSkipsDoctor(): void
@@ -374,13 +376,14 @@ class UpgradeCommandTest extends TestCase
         $tester = new CommandTester($cmd);
 
         $this->assertSame(0, $tester->execute([]));
-        // pull, ds-upgrade-all, cron install, nginx reload, fpm reload, doctor
-        $this->assertCount(6, $cmd->stepLog);
+        // pull, ds-upgrade-all, cron install, completion install, nginx reload, fpm reload, doctor
+        $this->assertCount(7, $cmd->stepLog);
         $this->assertStringContainsString('ds-upgrade-all', $cmd->stepLog[1]);
         $this->assertStringContainsString('cron-install', $cmd->stepLog[2]);
-        $this->assertSame('nginx -t && systemctl reload nginx', $cmd->stepLog[3]);
-        $this->assertSame('systemctl reload php8.5-fpm', $cmd->stepLog[4]);
-        $this->assertStringContainsString('doctor', $cmd->stepLog[5]);
+        $this->assertStringContainsString('completion-install', $cmd->stepLog[3]);
+        $this->assertSame('nginx -t && systemctl reload nginx', $cmd->stepLog[4]);
+        $this->assertSame('systemctl reload php8.5-fpm', $cmd->stepLog[5]);
+        $this->assertStringContainsString('doctor', $cmd->stepLog[6]);
     }
 
     public function testNonRootSkipsReloadAndPrintsHint(): void
@@ -412,6 +415,8 @@ class UpgradeCommandTest extends TestCase
         $display = $tester->getDisplay();
         $this->assertStringContainsString('[skip] cron install (not running as root)', $display);
         $this->assertStringContainsString('sudo shpd-server cron-install', $display);
+        $this->assertStringContainsString('[skip] completion install (not running as root)', $display);
+        $this->assertStringContainsString('sudo shpd-server completion-install', $display);
     }
 
     public function testDryRunShowsCronInstallPlan(): void
@@ -422,6 +427,7 @@ class UpgradeCommandTest extends TestCase
 
         $this->assertSame(0, $tester->execute(['--dry-run' => true]));
         $this->assertStringContainsString('[run]  cron install', $tester->getDisplay());
+        $this->assertStringContainsString('[run]  completion install', $tester->getDisplay());
         $this->assertSame([], $cmd->stepLog);
     }
 

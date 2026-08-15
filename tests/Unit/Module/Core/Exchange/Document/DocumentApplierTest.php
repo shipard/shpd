@@ -8,6 +8,7 @@ use Dibi\Connection;
 use Dibi\Row;
 use PHPUnit\Framework\TestCase;
 use Shipard\Core\Config\ConfigRuntime;
+use Shipard\Core\Utils\JsoncParser;
 use Shipard\Module\Core\Exchange\Common\ApplyResult;
 use Shipard\Module\Core\Exchange\Document\DocumentApplier;
 use Shipard\Module\Core\Exchange\Document\DocumentValidator;
@@ -53,6 +54,7 @@ class DocumentApplierTest extends TestCase
         ?TransactionlessTableGateway $persons = null,
         ?TransactionlessTableGateway $items = null,
         ?AccountResolver $account = null,
+        ?ConfigRuntime $config = null,
     ): DocumentApplier {
         $db ??= $this->createMock(Connection::class);
         $party ??= $this->createMock(PartyResolver::class);
@@ -67,7 +69,7 @@ class DocumentApplierTest extends TestCase
 
         return new TestableDocumentApplier(
             db: $db,
-            config: $this->createMock(ConfigRuntime::class),
+            config: $config ?? $this->createMock(ConfigRuntime::class),
             headsGateway: $heads,
             personsGateway: $persons,
             itemsGateway: $items,
@@ -1368,5 +1370,246 @@ class DocumentApplierTest extends TestCase
         );
         $payload['vat']['registrationCountry'] = 'DE';
         $applier->preview($payload);
+    }
+
+    // ── Doplnění pohybu (operation) na item řádcích při apply ───────────────
+
+    /**
+     * ConfigRuntime mock s reálnými jsonc konfiguracemi pohybů — testy
+     * doplňování běží nad skutečnými mapami, ne nad kopií v testu.
+     *
+     * @param array<string, mixed>|null $applyOverride náhrada docs.core.applyRowOperations
+     */
+    private function buildRowOperationConfig(?array $applyOverride = null): ConfigRuntime
+    {
+        $root = dirname(__DIR__, 6);
+        $config = $this->createMock(ConfigRuntime::class);
+        $config->method('cfgItem')->willReturnMap([
+            ['docs.core.rowOperations',
+             JsoncParser::parseFile($root . '/modules/docs/core/config/rowOperations.jsonc')],
+            ['docs.core.applyRowOperations',
+             $applyOverride ?? JsoncParser::parseFile($root . '/modules/docs/core/config/applyRowOperations.jsonc')],
+        ]);
+        return $config;
+    }
+
+    /**
+     * Connection mock, jehož fetchAll vrací item_type per ID (kryje batch
+     * fetch nad economy_items i economy_items_kinds — mapuje se přes ID).
+     *
+     * @param array<int, int> $types ID → item_type
+     */
+    private function buildItemTypesDb(array $types): Connection
+    {
+        $db = $this->createMock(Connection::class);
+        $db->method('fetchAll')->willReturn(array_map(
+            static fn(int $id, int $type) => ['id' => $id, 'item_type' => $type],
+            array_keys($types),
+            array_values($types),
+        ));
+        return $db;
+    }
+
+    /**
+     * @param array<int, array{severity: string, path: string, code: string, message: string}> $issues
+     * @return array<int, string>
+     */
+    private function invokeDefaultRowOps(DocumentApplier $applier, array $canonical, array $plan, array &$issues, array $rowItems = []): array
+    {
+        $sideIds = ['supplier' => null, 'customer' => null, 'supplierBank' => null, 'rowItems' => $rowItems];
+        $ref = new \ReflectionMethod($applier, 'defaultRowOperationsForApply');
+        $args = [$canonical, $plan, $sideIds, &$issues];
+        return $ref->invokeArgs($applier, $args);
+    }
+
+    public function testRowOperationDefaultedByItemType(): void
+    {
+        $applier = $this->buildApplier(
+            db: $this->buildItemTypesDb([11 => 0, 12 => 2, 99 => 1]),
+            config: $this->buildRowOperationConfig(),
+        );
+        $canonical = ['docType' => 'invoiceReceived', 'rows' => [
+            ['item' => ['name' => 'Konzultace']],
+            ['item' => ['name' => 'Správní poplatek']],
+            ['item' => ['name' => 'Kancelářský papír']],
+        ]];
+        // Řádky 0+1 matched, řádek 2 side-created — item_type se čte jednotně.
+        $plan = ['rowSkips' => [], 'resolvedRowItems' => [0 => 11, 1 => 12]];
+        $issues = [];
+        $out = $this->invokeDefaultRowOps($applier, $canonical, $plan, $issues, rowItems: [2 => 99]);
+
+        $this->assertSame([0 => 'purchase.services', 1 => 'acc.entry', 2 => 'purchase.goods'], $out);
+        $defaulted = array_values(array_filter($issues, static fn($i) => $i['code'] === 'row_operation_defaulted'));
+        $this->assertCount(3, $defaulted);
+        $this->assertSame('info', $defaulted[0]['severity']);
+        $this->assertSame('rows.0.operation', $defaulted[0]['path']);
+        $this->assertStringContainsString('Nákup služeb', $defaulted[0]['message']);
+        $this->assertStringContainsString('podle typu položky', $defaulted[0]['message']);
+    }
+
+    public function testRowOperationFallsBackToDocTypeDefault(): void
+    {
+        $applier = $this->buildApplier(config: $this->buildRowOperationConfig());
+        $canonical = ['docType' => 'invoiceReceived', 'rows' => [
+            ['description' => 'Řádek bez položky'],
+        ]];
+        $issues = [];
+        $out = $this->invokeDefaultRowOps($applier, $canonical, ['rowSkips' => [], 'resolvedRowItems' => []], $issues);
+
+        $this->assertSame([0 => 'acc.entry'], $out);
+        $this->assertCount(1, $issues);
+        $this->assertSame('row_operation_defaulted', $issues[0]['code']);
+        $this->assertStringContainsString('podle výchozího pohybu dokladu', $issues[0]['message']);
+    }
+
+    public function testRowOperationInvnoMapsTypeAndFallsBackOnUnmapped(): void
+    {
+        // Typ 0 → sale.services (mapou), typ 3 v invno mapě není → default.
+        $applier = $this->buildApplier(
+            db: $this->buildItemTypesDb([21 => 0, 22 => 3]),
+            config: $this->buildRowOperationConfig(),
+        );
+        $canonical = ['docType' => 'invoiceIssued', 'rows' => [
+            ['item' => ['name' => 'Vývoj']],
+            ['item' => ['name' => 'Ostatní služby']],
+        ]];
+        $issues = [];
+        $out = $this->invokeDefaultRowOps(
+            $applier, $canonical,
+            ['rowSkips' => [], 'resolvedRowItems' => [0 => 21, 1 => 22]],
+            $issues,
+        );
+
+        $this->assertSame([0 => 'sale.services', 1 => 'sale.services'], $out);
+        $this->assertStringContainsString('podle typu položky', $issues[0]['message']);
+        $this->assertStringContainsString('podle výchozího pohybu dokladu', $issues[1]['message']);
+    }
+
+    public function testRowOperationSkipsPassthroughContationTextAndSkippedRows(): void
+    {
+        $applier = $this->buildApplier(config: $this->buildRowOperationConfig());
+        $canonical = ['docType' => 'invoiceReceived', 'rows' => [
+            ['operation' => 'purchase.other', 'item' => ['name' => 'Explicitní pohyb']],
+            ['account' => '518100', 'accSide' => 'debit', 'totalPrice' => 100.0],
+            ['rowKind' => 'text', 'description' => 'Textový řádek'],
+            ['item' => ['name' => 'Přeskočený řádek']],
+        ]];
+        $issues = [];
+        $out = $this->invokeDefaultRowOps(
+            $applier, $canonical,
+            ['rowSkips' => [3], 'resolvedRowItems' => []],
+            $issues,
+        );
+
+        $this->assertSame([], $out);
+        $this->assertSame([], $issues);
+    }
+
+    public function testRowOperationDocTypeWithoutConfigEntryUnchanged(): void
+    {
+        $applier = $this->buildApplier(config: $this->buildRowOperationConfig());
+        $canonical = ['docType' => 'accountingDocument', 'rows' => [
+            ['item' => ['name' => 'Položka']],
+        ]];
+        $issues = [];
+        $out = $this->invokeDefaultRowOps($applier, $canonical, ['rowSkips' => [], 'resolvedRowItems' => []], $issues);
+
+        $this->assertSame([], $out);
+        $this->assertSame([], $issues);
+    }
+
+    public function testRowOperationUnknownCodeInConfigWarnsAndSkips(): void
+    {
+        $applier = $this->buildApplier(config: $this->buildRowOperationConfig([
+            'invni' => ['byItemType' => [], 'default' => 'nonexistent.op'],
+        ]));
+        $canonical = ['docType' => 'invoiceReceived', 'rows' => [
+            ['item' => ['name' => 'Položka']],
+        ]];
+        $issues = [];
+        $out = $this->invokeDefaultRowOps($applier, $canonical, ['rowSkips' => [], 'resolvedRowItems' => []], $issues);
+
+        $this->assertSame([], $out);
+        $this->assertCount(1, $issues);
+        $this->assertSame('row_operation_config_invalid', $issues[0]['code']);
+        $this->assertSame('warning', $issues[0]['severity']);
+    }
+
+    public function testTransformUsesRowOperationDefaultsAndPassthroughWins(): void
+    {
+        $applier = $this->buildApplier();
+        $canonical = [
+            'docType' => 'invoiceReceived',
+            'dates'   => ['issueDate' => '2026-06-10'],
+            'rows' => [
+                ['quantity' => 1, 'unitPrice' => 100.0, 'totalPrice' => 100.0],
+                ['operation' => 'purchase.other', 'quantity' => 1, 'unitPrice' => 50.0, 'totalPrice' => 50.0],
+            ],
+        ];
+        $plan = [
+            'rowSkips' => [], 'resolvedRowItems' => [], 'resolvedRowUnits' => [],
+            'resolvedRowVatCodes' => [], 'resolvedRowAccounts' => [], 'resolvedRowPartners' => [],
+            'rowOperationDefaults' => [0 => 'purchase.services', 1 => 'acc.entry'],
+        ];
+
+        $data = $this->invokeTransformWithPlan($applier, $canonical, $plan);
+
+        $this->assertSame('purchase.services', $data['rows'][0]['operation']);
+        // Explicitní canonical operation má přednost před defaultem.
+        $this->assertSame('purchase.other', $data['rows'][1]['operation']);
+    }
+
+    public function testPreviewEmitsRowOperationDefaultedForMatchedItem(): void
+    {
+        [$party, $item, $unit, $vat, $bank] = $this->buildMatchedResolvers();
+        $applier = $this->buildApplier(
+            db: $this->buildItemTypesDb([18 => 0]),
+            party: $party, item: $item, unit: $unit, vat: $vat, bank: $bank,
+            config: $this->buildRowOperationConfig(),
+        );
+
+        $payload = json_decode(
+            (string) file_get_contents(__DIR__ . '/../../../../../Fixtures/Exchange/invoiceReceived_happy.json'),
+            true,
+        );
+        $result = $applier->preview($payload);
+
+        $this->assertTrue($result->success);
+        $issues = $result->canonical['_resolve']['issues'] ?? [];
+        $defaulted = $this->findIssueByCode($issues, 'row_operation_defaulted');
+        $this->assertNotNull($defaulted);
+        $this->assertSame('info', $defaulted['severity']);
+        $this->assertSame('rows.0.operation', $defaulted['path']);
+        $this->assertStringContainsString('Nákup služeb', $defaulted['message']);
+    }
+
+    public function testPreviewPredictsRowOperationForSideCreatedItem(): void
+    {
+        [$party, , $unit, $vat, $bank] = $this->buildMatchedResolvers();
+        $item = $this->createMock(ItemResolver::class);
+        $item->method('resolve')->willReturn(ResolveResult::canCreate(['name' => 'Konzultace']));
+
+        // createPayload bez item_kind → predikce zrcadlí
+        // prepareItemCreatePayload: první aktivní druh (zde item_type 0).
+        $db = $this->createMock(Connection::class);
+        $db->method('fetchAll')->willReturn([]);
+        $db->method('fetch')->willReturn(new Row(['item_type' => 0]));
+
+        $applier = $this->buildApplier(
+            db: $db,
+            party: $party, item: $item, unit: $unit, vat: $vat, bank: $bank,
+            config: $this->buildRowOperationConfig(),
+        );
+
+        $payload = json_decode(
+            (string) file_get_contents(__DIR__ . '/../../../../../Fixtures/Exchange/invoiceReceived_happy.json'),
+            true,
+        );
+        $result = $applier->preview($payload);
+
+        $issues = $result->canonical['_resolve']['issues'] ?? [];
+        $defaulted = $this->findIssueByCode($issues, 'row_operation_defaulted');
+        $this->assertNotNull($defaulted);
+        $this->assertStringContainsString('Nákup služeb', $defaulted['message']);
     }
 }

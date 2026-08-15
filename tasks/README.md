@@ -29,9 +29,13 @@ nevypisují — níže je jen to, co není dokončené.
 | `auth-phase0a-hardening.md` | naplánováno | rate limiting a evidence neúspěšných přihlášení chybí |
 | `dashboard-alert-grouping.md` | naplánováno | design schválen 2026-07-16, neimplementováno |
 | `doc-number-release-on-data-save.md` | částečně | kód + testy hotové 2026-08-13; zbývá D2 (reset test DS), ruční proklik a read-only verifikace na alfě |
-| `docs-vat-mode-derivation.md` | částečně | derivace + prompt v4.1.0 hotové 14. 8. 2026 |
 | `hosting-09-federated-login.md` | částečně | kód + testy + docs hotové 2026-08-14 (commity 1–3); zbývá ds-upgrade na hostingu, zapnutí Google/GitHub na alfě dle runbooku (mutace — David) a ruční E2E řetěz |
+| `mail-apply-row-operation.md` | částečně | implementace + testy + docs hotové 15. 8. 2026; |
 | `mail-message-centric.md` | částečně | Fáze A–D v tomto repozitáři hotové (schéma, /result v4, |
+
+**Bez hlavičky `**Stav:**` nebo s neznámým stavem:**
+
+- `docs-vat-mode-derivation.md (neznámý stav: hotovo (dev))`
 
 <!-- STAV:END -->
 

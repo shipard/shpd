@@ -1,0 +1,31 @@
+{
+    // docs.core.applyRowOperations
+    //
+    // Doplnění pohybu (operation) na item řádcích při apply z AI analýzy
+    // (DocumentApplier). Klíč = docType (docs.core.docTypes).
+    //   byItemType: economy.items.itemTypes → kód operace
+    //               (docs.core.rowOperations)
+    //   default:    fallback, když řádek položku nemá nebo typ není v mapě
+    //
+    // Kódy musí existovat v docs.core.rowOperations a být povolené pro
+    // daný docType — parita hlídaná testem (ApplyRowOperationsParityTest).
+    // docType bez záznamu = žádné doplňování (operation zůstává null).
+    "invni": {
+        "byItemType": {
+            "0": "purchase.services",   // Služba
+            "1": "purchase.goods",      // Zásoba
+            "2": "acc.entry",           // Účetní položka
+            "3": "purchase.other"       // Ostatní
+        },
+        "default": "acc.entry"
+    },
+    "invno": {
+        "byItemType": {
+            "0": "sale.services",
+            "1": "sale.goods",
+            "2": "acc.entry"
+            // 3 (Ostatní): invno nemá sale.other → spadne na default
+        },
+        "default": "sale.services"
+    }
+}

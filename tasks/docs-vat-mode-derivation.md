@@ -1,11 +1,12 @@
 # Oprava dvojího počítání DPH — derivace `vat_mode` u cen s DPH
 
-**Stav:** částečně — derivace + prompt v4.1.0 hotové 14. 8. 2026
-(D1–D5 v kódu, commity 0a7feaa / 7bdc03f / 9617062); ověření na dev DS
-odkrylo starší chybu rekapitulace v mode 2 (viz Dodatek níže) — doklad
-`!0000000008` vyšel 1746,01 místo 1746,00. Oprava dle Dodatku
-implementována 14. 8. 2026 (daň rozdílem Σ vat_total − Σ vat_base).
-Zbývá: přepočet `!0000000008` na dev DS, hledání vzoru na alfě
+**Stav:** hotovo (dev) — derivace + prompt v4.1.0 + oprava rekapitulace
+mode 2 (dodatek); ověřeno 15. 8. 2026 na dev DS: účtenka `2260005`
+(dříve koncept `!0000000008`) má 1442,98 / 303,02 / 1746,00, deník
+vyrovnaný (MD 503100 + 343110 / DAL 321100 na 1746,00). Zbývají alfa
+položky závislé na dokončení message-centric nasazení (prompt v4.1.0
+na alfě, hledání vzorů nad reálnými analýzami) — přechází pod
+`mail-message-centric.md`
 
 **Cíl:** Doklady z AI analýzy, jejichž položkové řádky jsou v cenách
 **s DPH** (koncové/maloobchodní ceny — účtenky, PHM, občerstvení),
@@ -200,8 +201,9 @@ Regrese: `DocDocumentTotalsTest`, `DocDocumentVatRecapTest`,
       z preview i apply; review modal issues rendruje generic).
 - [x] Validátor warnuje jen tam, kde derivace neměla data
       (`vat_mode_suspect` přes sdílenou `VatModeDerivation`).
-- [ ] Prompt v4.1.0 nasazen (`ds-upgrade` + `ai-profile-reload
-      --force` na dev i alfě) — verze bumpnutá na všech 3 místech ✓.
+- [x] Prompt v4.1.0 nasazen na dev (`ds-upgrade` + `ai-profile-reload
+      --force`) — verze bumpnutá na všech 3 místech ✓; alfa přechází
+      pod message-centric nasazení.
 - [x] PHPUnit (exchange + docs + mail) zelené, úzké filtry i celá
       Unit sada (4012 testů).
 
@@ -279,9 +281,11 @@ ručně pořízený doklad v režimu „Z ceny celkem" se zbytkem po rozpočtu
 
 - [x] Rekapitulace v mode 2: `tax = Σ vat_total − Σ vat_base`,
       `total = Σ vat_total` (per skupina, ne-noPayTax).
-- [ ] `!0000000008` po přepočtu (uložení dokladu) má
+- [x] `!0000000008` po přepočtu (uložení dokladu) má
       1442,98 / 303,02 / 1746,00 a deník je vyrovnaný na 1746,00
-      (DAL 321100) — **zbývá ověřit na dev DS**.
+      (DAL 321100) — zaučtováno jako `2260005`: MD 503100 1442,98
+      + MD 343110 303,02 / DAL 321100 1746,00, rozdíl 0,00
+      (ověřeno 15. 8. 2026).
 - [x] Mode 0/1 a noPayTax/samovyměření beze změn — regrese
       `DocDocumentVatRecapTest`, `DocDocumentTotalsTest`,
       `DocDocumentPdpOutputTest` (+ `DocDocumentDomesticAmountsTest`)

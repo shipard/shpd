@@ -266,9 +266,13 @@ obsahuje — počítat DPH zdola by ji na doklad dalo podruhé.
 deklarovaný mode — a zrcadlově. Korekce se v review modalu zobrazí
 jako warning **`vat_mode_derived`** v `_resolve.issues` (preview
 i apply). Když derivace nemá dost dat (chybí recap i `totalBase`),
-validátor místo toho warnuje **`vat_mode_suspect`**. Prompt v4.1.0
-navíc učí model mode u koncových cen vracet rovnou správně — derivace
-zůstává pojistka. Detaily: `docs/exchange-format.md` (sekce vat)
+validátor místo toho warnuje **`vat_mode_suspect`**. Prompt (od v4.1.0,
+zpřesněno ve v4.2.0) navíc učí model mode u koncových cen vracet rovnou
+správně — derivace zůstává pojistka. Integritu řádků a rekapitulace
+hlídají validátorové warningy **`rows_recap_mismatch`** (neúplné řádky)
+a **`vat_recap_inconsistent`** (rekapitulace dopočtená místo opsaná) —
+viz `docs/exchange-format.md` a
+[tasks/ai-extraction-integrity.md](../../../../tasks/ai-extraction-integrity.md). Detaily: `docs/exchange-format.md` (sekce vat)
 a [tasks/docs-vat-mode-derivation.md](../../../../tasks/docs-vat-mode-derivation.md).
 
 ## Pohyb řádků při apply (doplnění operation)

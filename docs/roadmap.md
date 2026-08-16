@@ -81,7 +81,7 @@ matcher, clearing účty i dávkový endpoint párování existují.
 | Co | Zadání |
 |---|---|
 | Ověření celého toku na reálných datech testovacího prostředí | — |
-| Zbytky po M0: dokončení message-centric nasazení na alfě (živá analýza, prompt v4.1.0, `schema_error` v provozu), vzory koncových cen nad reálnými analýzami | `mail-message-centric.md` |
+| Zbytky po M0: dokončení message-centric nasazení na alfě (živá analýza, aktuální prompt — v4.2.0, `schema_error` v provozu), vzory koncových cen nad reálnými analýzami | `mail-message-centric.md` |
 
 **Hotovo když:** přijatá faktura z e-mailu projde až do spárované úhrady
 a uživatel do toho zasáhne jen potvrzením návrhu.

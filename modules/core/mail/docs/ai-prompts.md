@@ -24,7 +24,7 @@ Audit běhu: každý `core_mail_message_analyses` row si propíše `profile_ndx`
 `backend_ndx` a `prompt_version`, takže historie je auditovatelná i po pozdějších
 změnách profilu.
 
-## Default prompt (v4.1.0)
+## Default prompt (v4.2.0)
 
 Od `v4.0.0` je analýza **message-centrická**
 ([tasks/mail-message-centric.md](../../../../tasks/mail-message-centric.md)
@@ -56,12 +56,18 @@ Klíčové pokyny v promptu:
   ISO 3166-1 alpha-2 lowercase (`cz`).
 - `selfParty` vždy `"customer"` (jsme příjemce přijaté faktury).
 - `source.kind` vždy `"aiExtraction"`, `source.promptVersion` vždy
-  shodná s `prompt_version` profilu (`v4.1.0`).
+  shodná s `prompt_version` profilu (`v4.2.0`).
 - VAT kódy v řádcích jsou klíče z `world.vat.{country}.vatCodes`
   cfgItem (`cz-110`, `cz-111`, …) — ne sazby v procentech.
 - `totals.totalRounding` = zaokrouhlení celkové částky se znaménkem
   (dolů = záporné); zaokrouhlení nikdy nepatří jako položkový řádek
   do `rows`.
+- `rows` musí obsahovat **všechny** položkové řádky dokladu (u
+  vícestránkových ze všech stran) + self-check součtu řádků proti
+  rekapitulaci před vrácením výsledku.
+- `vatRecap` a `totals` výhradně **opisem** z rekapitulačního bloku
+  dokladu, nikdy dopočtem z cen položek; bez rekapitulace na dokladu
+  se pole vynechají.
 - `document.doc_type` nikdy `other` — když zpráva žádný doklad ani
   dokument nenese, vrať `document: null` a klasifikaci `other`.
 
@@ -157,7 +163,7 @@ Plné schéma viz [`profiles/czech_general.jsonc`](../profiles/czech_general.jso
    přes `shpd.docs.document.v1` (polymorfní dle `docType`, bez per-typ
    branche), registry typy přes `shpd.registry.document.v1` (nový druh =
    nová if/then větev `kindFields` v registry schématu + kopie embedu).
-5. Bumpni `prompt_version` (`v4.1.0` → `v4.2.0`).
+5. Bumpni `prompt_version` (`v4.2.0` → `v4.3.0`).
 
 ### Vlastní profil pro jiný jazyk / účel
 
@@ -217,6 +223,34 @@ backendů (`default` Anthropic Claude Sonnet pro běžné případy, druhý back
 s Claude Opus pro náročné dokumenty) a přiřadit je různým profilům.
 
 ## Changelog promptu
+
+### v4.2.0 (2026-08-16)
+
+Integrita řádků a rekapitulace DPH
+([tasks/ai-extraction-integrity.md](../../../../tasks/ai-extraction-integrity.md)
+D1/D4) — dva reálné případy z dev DS: u třístránkové faktury model
+extrahoval 8 z 57 položkových řádků a rekapitulaci opsal z dokladu
+(doklad „vypadal OK", chyběly položky za ~14 tis. Kč); u účtenky s cenami
+bez DPH model chybně určil `fromTotal` a rekapitulaci dopočítal pozpátku
+(podplaceno o DPH):
+
+- Nová pravidla úplnosti: `rows` musí obsahovat VŠECHNY položkové řádky
+  (vícestránkové doklady ze všech stran), zákaz zkracování/shrnování;
+  self-check součtu `totalPrice` proti rekapitulaci před vrácením
+  výsledku. Ukázkový JSON má nově dva položkové řádky (prolomení kotvy
+  jednořádkové ukázky).
+- Zpřesněné pravidlo `vat.mode`: `fromTotal` POUZE při shodě součtu
+  položek s částkou k úhradě; shoda na řádek „Základ" → `fromBase`
+  i na účtence (samotný fakt účtenky není důvod pro `fromTotal`).
+- Nové pravidlo opisu: `vatRecap` a `totals` výhradně opisem
+  z rekapitulačního bloku dokladu, nikdy dopočtem z cen položek.
+
+Prompt je pojistka první linie — nezávisle na něm `DocumentValidator`
+oba vzory chytá warningy **`rows_recap_mismatch`** (součet řádků vs.
+rekapitulace dle režimu DPH) a **`vat_recap_inconsistent`** (vnitřní
+aritmetika řádků rekapitulace). U dlouhých faktur vyžaduje úplná
+extrakce zvýšený `max_tokens` na straně ai_analyzeru (samostatný task
+v repu ai_analyzer) — nasazovat společně.
 
 ### v4.1.0 (2026-08-14)
 

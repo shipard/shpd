@@ -272,6 +272,21 @@ vypočtené hodnoty. Důvod, proč jsou v canonical:
   signál chybné extrakce řádků. Výjimka: deklarovaná **celá** částka
   v pásmu < 1,00 od vypočtené varianty projde bez warningu — jde
   o zaokrouhlení celkové částky faktury.
+- **Integrita řádků vs. rekapitulace** — `totals_mismatch` nechytí
+  neúplné řádky, když AI rekapitulaci opsala z dokladu (recap si na
+  deklarovanou částku vždy sedne). Proto validátor navíc porovná součet
+  položkových řádků proti rekapitulaci podle efektivního režimu DPH
+  (fromBase → Σ `base`, fromTotal → Σ `total`; fallback `totals`,
+  tolerance per-řádkového zaokrouhlení) → warning **`rows_recap_mismatch`**
+  na `rows`. Rekapitulace z dokladu je autoritativní — mismatch znamená
+  neúplné či chybně extrahované řádky.
+- **Vnitřní aritmetika rekapitulace** — pro každý řádek recapu musí
+  platit `base + tax = total` (±0,02) a `tax = base × pct/100`
+  (±max(0,05; |base| × 0,001) — kryje haléře i výpočet koeficientem);
+  reverse-charge páry a 0% řádky se přeskakují. Porušení → warning
+  **`vat_recap_inconsistent`** na `vatRecap[i]`. Chytá rekapitulaci,
+  kterou model dopočítal pozpátku (typicky po chybně určeném režimu DPH)
+  místo opsání z dokladu.
 
 `totals.totalRounding` nese zaokrouhlení celkové částky se znaménkem
 (zaokrouhleno dolů = záporné, např. `-0.05`). I ono je informativní —
@@ -612,6 +627,22 @@ klient drží jeden payload mezi step preview a apply.
 
 Klient vyplňuje `userAction` mezi `/preview` a `/apply`. `/apply` aktion
 zvalidnuje a buď uloží, nebo vrátí chybu se seznamem nerozhodnutých referencí.
+
+### Issue codes — dokumenty
+
+Kódy v `_resolve.issues[]` (`DocumentValidator` + `DocumentApplier`).
+Errors blokují `/apply`, warningy jen informují v UI.
+
+| `code` | Severity | Význam |
+|--------|----------|--------|
+| `required` | error | Chybí povinné pole per `docType` (issueDate, rows, supplier/customer). |
+| `totals_mismatch` | warning | Deklarovaná `totals.totalAmount` neodpovídá žádné vypočtené variantě (Σ řádků, Σ řádků s DPH, Σ recap). |
+| `rows_recap_mismatch` | warning | Součet položkových řádků neodpovídá rekapitulaci/totals dle efektivního režimu DPH — řádky nejspíš neúplné. |
+| `vat_recap_inconsistent` | warning | Řádek rekapitulace vnitřně nesedí (`base + tax ≠ total` nebo `tax ≠ base × pct`) — recap dopočtený místo opsaného. |
+| `vat_mode_derived` | warning | `DocumentApplier` koriguje `vat_mode` podle `VatModeDerivation` (Σ řádků sedí na total, ne na base — nebo zrcadlově). |
+| `vat_mode_suspect` | warning | Řádky vypadají jako ceny s DPH při deklarovaném `fromBase`, ale derivace nemá dost dat na korekci. |
+| `partner_doc_number_missing` | warning | Přijatá faktura cílí na stav ≥ 20 bez čísla dokladu dodavatele. |
+| `row_operation_config_invalid` | warning | Pohyb řádku nejde doplnit — chybná konfigurace rowOperations. |
 
 ## 10. Apply pipeline
 

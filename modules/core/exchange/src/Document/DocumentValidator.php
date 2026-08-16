@@ -33,6 +33,8 @@ final class DocumentValidator
         $this->checkPerDocType($canonical, $issues);
         $this->checkTotalsCoherence($canonical, $issues);
         $this->checkVatModeSuspect($canonical, $issues);
+        $this->checkRowsVsRecap($canonical, $issues);
+        $this->checkVatRecapArithmetic($canonical, $issues);
         $this->checkPartnerDocNumber($canonical, $issues);
 
         return $issues;
@@ -245,6 +247,159 @@ final class DocumentValidator
             'code'     => 'vat_mode_suspect',
             'message'  => 'Součet řádků odpovídá částce k úhradě, ale režim výpočtu je zdola (fromBase) — řádky vypadají jako ceny s DPH, zkontrolujte režim výpočtu.',
         ];
+    }
+
+    /**
+     * Součet položkových řádků vs. rekapitulace DPH (fallback totals) podle
+     * efektivního režimu výpočtu. Rekapitulace opsaná z dokladu je
+     * autoritativní — mismatch signalizuje neúplné či chybně extrahované
+     * řádky (AI u vícestránkových dokladů umí vrátit jen podmnožinu),
+     * ne špatný doklad, proto warning. `checkTotalsCoherence` tuhle
+     * konstelaci nechytí: deklarovanou částku porovnává i proti Σ
+     * vatRecap[].total — a recap opsaný z téhož dokladu si vždy sedne.
+     *
+     * Validator běží před korekcí `vat_mode` v DocumentApplier::transform,
+     * efektivní režim se proto derivuje lokálně: {@see VatModeDerivation}
+     * má přednost, deklarovaný `vat.mode` je fallback.
+     *
+     * @param array<int, array{severity: string, path: string, code: string, message: string}> $issues
+     */
+    private function checkRowsVsRecap(array $canonical, array &$issues): void
+    {
+        $rows = $canonical['rows'] ?? null;
+        $rowSum = VatModeDerivation::sumItemRows($rows);
+        if ($rowSum === null) {
+            return;
+        }
+
+        // `none` má base ≈ total, větev celkové částky sedí pro oba směry.
+        $derived = VatModeDerivation::derive($canonical);
+        $fromTotal = $derived !== null
+            ? $derived === 2
+            : (string) ($canonical['vat']['mode'] ?? 'fromBase') !== 'fromBase';
+
+        $expected = $this->rowsRecapReference($canonical, $fromTotal);
+        if ($expected === null) {
+            return;
+        }
+
+        $rowCount = 0;
+        foreach ((array) $rows as $row) {
+            if (is_array($row) && (string) ($row['rowKind'] ?? 'item') === 'item' && !isset($row['accSide'])) {
+                $rowCount++;
+            }
+        }
+        if (abs($rowSum - $expected) <= VatModeDerivation::tolerance($rowCount)) {
+            return;
+        }
+
+        $label = $fromTotal ? 'součtu celků s DPH' : 'součtu základů bez DPH';
+        $issues[] = [
+            'severity' => 'warning',
+            'path'     => 'rows',
+            'code'     => 'rows_recap_mismatch',
+            'message'  => "Součet položkových řádků {$rowSum} neodpovídá {$label} v rekapitulaci dokladu ({$expected}) — řádky mohou být neúplné nebo chybně extrahované.",
+        ];
+    }
+
+    /**
+     * Referenční hodnota pro checkRowsVsRecap: Σ `vatRecap[].base` resp.
+     * `[].total` (jen z kompletního recapu — zrcadlí sémantiku
+     * {@see VatModeDerivation}), fallback `totals.totalBase` resp.
+     * `totals.totalAmount − totalRounding` (zaokrouhlení celkové částky
+     * se řádků netýká).
+     */
+    private function rowsRecapReference(array $canonical, bool $fromTotal): ?float
+    {
+        $vatRecap = $canonical['vatRecap'] ?? null;
+        if (is_array($vatRecap) && count($vatRecap) > 0) {
+            $key = $fromTotal ? 'total' : 'base';
+            $sum = 0.0;
+            $complete = true;
+            foreach ($vatRecap as $r) {
+                if (!is_array($r) || !isset($r[$key]) || !is_numeric($r[$key])) {
+                    $complete = false;
+                    break;
+                }
+                $sum += (float) $r[$key];
+            }
+            if ($complete) {
+                return round($sum, 2);
+            }
+        }
+
+        $totals = $canonical['totals'] ?? null;
+        if (!is_array($totals)) {
+            return null;
+        }
+        if (!$fromTotal) {
+            return isset($totals['totalBase']) && is_numeric($totals['totalBase'])
+                ? round((float) $totals['totalBase'], 2)
+                : null;
+        }
+        if (!isset($totals['totalAmount']) || !is_numeric($totals['totalAmount'])) {
+            return null;
+        }
+        $rounding = isset($totals['totalRounding']) && is_numeric($totals['totalRounding'])
+            ? (float) $totals['totalRounding']
+            : 0.0;
+        return round((float) $totals['totalAmount'] - $rounding, 2);
+    }
+
+    /**
+     * Vnitřní aritmetika řádků rekapitulace DPH: base + tax = total a
+     * tax = base × pct/100. Rekapitulace opsaná z dokladu oběma vyhoví;
+     * rekapitulace dopočtená modelem pozpátku (chybně určený režim
+     * výpočtu) bývá nekonzistentní a je tak aritmeticky odhalitelná.
+     * Tolerance daně kryje haléřové zaokrouhlení i výpočet koeficientem
+     * u dokladů s cenami s DPH. Reverse-charge páry a 0% řádky se
+     * přeskakují.
+     *
+     * @param array<int, array{severity: string, path: string, code: string, message: string}> $issues
+     */
+    private function checkVatRecapArithmetic(array $canonical, array &$issues): void
+    {
+        $vatRecap = $canonical['vatRecap'] ?? null;
+        if (!is_array($vatRecap)) {
+            return;
+        }
+        foreach ($vatRecap as $i => $r) {
+            if (!is_array($r) || ($r['isReversePair'] ?? null) === true) {
+                continue;
+            }
+            $pct = $r['vatPct'] ?? null;
+            $base = $r['base'] ?? null;
+            $tax = $r['tax'] ?? null;
+            $total = $r['total'] ?? null;
+            if (!is_numeric($pct) || !is_numeric($base) || !is_numeric($tax) || !is_numeric($total)) {
+                continue;
+            }
+            $pctF = (float) $pct;
+            if ($pctF == 0.0) {
+                continue;
+            }
+            $baseF = (float) $base;
+            $taxF = (float) $tax;
+            $totalF = (float) $total;
+
+            $problems = [];
+            if (abs($baseF + $taxF - $totalF) > 0.02) {
+                $problems[] = "základ {$baseF} + DPH {$taxF} ≠ celkem {$totalF}";
+            }
+            $expectedTax = round($baseF * $pctF / 100.0, 2);
+            if (abs($taxF - $expectedTax) > max(0.05, abs($baseF) * 0.001)) {
+                $problems[] = "DPH {$taxF} neodpovídá sazbě {$pctF} % ze základu {$baseF} (očekáváno ~{$expectedTax})";
+            }
+            if ($problems === []) {
+                continue;
+            }
+            $issues[] = [
+                'severity' => 'warning',
+                'path'     => "vatRecap[{$i}]",
+                'code'     => 'vat_recap_inconsistent',
+                'message'  => 'Řádek rekapitulace DPH je vnitřně nekonzistentní: ' . implode('; ', $problems) . '.',
+            ];
+        }
     }
 
     /**

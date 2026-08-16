@@ -369,6 +369,292 @@ class DocumentValidatorTest extends TestCase
         $this->assertNull($this->findByCode($issues, 'partner_doc_number_missing'));
     }
 
+    public function testRowsRecapMismatchWarnsOnIncompleteRows(): void
+    {
+        // ARTEX konstelace: model extrahoval 8 z ~57 řádků, recap opsal
+        // z dokladu → totals_mismatch mlčí (recap sedí na totalAmount),
+        // ale Σ řádků nesedí na Σ základů recapu.
+        $issues = $this->v->validate([
+            'docType' => 'invoiceReceived',
+            'supplier' => ['name' => 'V'],
+            'dates' => ['issueDate' => '2026-04-15'],
+            'vat' => ['mode' => 'fromBase'],
+            'rows' => [
+                ['rowKind' => 'item', 'totalPrice' => 1000.00, 'vat' => ['pct' => 21]],
+                ['rowKind' => 'item', 'totalPrice' => 1000.00, 'vat' => ['pct' => 21]],
+                ['rowKind' => 'item', 'totalPrice' => 1000.00, 'vat' => ['pct' => 21]],
+                ['rowKind' => 'item', 'totalPrice' => 1000.00, 'vat' => ['pct' => 21]],
+                ['rowKind' => 'item', 'totalPrice' => 1000.00, 'vat' => ['pct' => 21]],
+                ['rowKind' => 'item', 'totalPrice' => 1000.00, 'vat' => ['pct' => 21]],
+                ['rowKind' => 'item', 'totalPrice' => 1000.00, 'vat' => ['pct' => 21]],
+                ['rowKind' => 'item', 'totalPrice' => 657.78, 'vat' => ['pct' => 21]],
+            ],
+            'vatRecap' => [
+                ['vatPct' => 21, 'base' => 22082.55, 'tax' => 4637.34, 'total' => 26719.89],
+            ],
+            'totals' => ['totalBase' => 22082.55, 'totalVat' => 4637.34, 'totalAmount' => 26719.89],
+        ]);
+        $this->assertNull($this->findByCode($issues, 'totals_mismatch'), 'recap sedí na totalAmount, totals check mlčí');
+        $w = $this->findByCode($issues, 'rows_recap_mismatch');
+        $this->assertNotNull($w);
+        $this->assertSame('warning', $w['severity']);
+        $this->assertSame('rows', $w['path']);
+        $this->assertStringContainsString('7657.78', $w['message']);
+        $this->assertStringContainsString('22082.55', $w['message']);
+        // Recap je vnitřně konzistentní — D5 nesmí přisadit.
+        $this->assertNull($this->findByCode($issues, 'vat_recap_inconsistent'));
+    }
+
+    public function testRowsRecapMatchProducesNoWarning(): void
+    {
+        $issues = $this->v->validate([
+            'docType' => 'invoiceReceived',
+            'supplier' => ['name' => 'V'],
+            'dates' => ['issueDate' => '2026-04-15'],
+            'vat' => ['mode' => 'fromBase'],
+            'rows' => [
+                ['rowKind' => 'item', 'totalPrice' => 800.00, 'vat' => ['pct' => 21]],
+                ['rowKind' => 'item', 'totalPrice' => 200.00, 'vat' => ['pct' => 15]],
+            ],
+            'vatRecap' => [
+                ['vatPct' => 21, 'base' => 800.00, 'tax' => 168.00, 'total' => 968.00],
+                ['vatPct' => 15, 'base' => 200.00, 'tax' => 30.00, 'total' => 230.00],
+            ],
+            'totals' => ['totalAmount' => 1198.00],
+        ]);
+        $this->assertNull($this->findByCode($issues, 'rows_recap_mismatch'));
+    }
+
+    public function testRowsRecapMismatchWarnsForFromTotalRows(): void
+    {
+        // Řádky v cenách s DPH (fromTotal), ale neúplné — Σ nesedí na
+        // Σ celků recapu.
+        $issues = $this->v->validate([
+            'docType' => 'invoiceReceived',
+            'supplier' => ['name' => 'V'],
+            'dates' => ['issueDate' => '2026-04-15'],
+            'vat' => ['mode' => 'fromTotal'],
+            'rows' => [
+                ['rowKind' => 'item', 'totalPrice' => 605.00, 'vat' => ['pct' => 21]],
+            ],
+            'vatRecap' => [
+                ['vatPct' => 21, 'base' => 1000.00, 'tax' => 210.00, 'total' => 1210.00],
+            ],
+            'totals' => ['totalAmount' => 1210.00],
+        ]);
+        $w = $this->findByCode($issues, 'rows_recap_mismatch');
+        $this->assertNotNull($w);
+        $this->assertStringContainsString('celků', $w['message']);
+    }
+
+    public function testRowsRecapFromTotalMatchProducesNoWarning(): void
+    {
+        $issues = $this->v->validate([
+            'docType' => 'invoiceReceived',
+            'supplier' => ['name' => 'V'],
+            'dates' => ['issueDate' => '2026-04-15'],
+            'vat' => ['mode' => 'fromTotal'],
+            'rows' => [
+                ['rowKind' => 'item', 'totalPrice' => 1210.00, 'vat' => ['pct' => 21]],
+            ],
+            'vatRecap' => [
+                ['vatPct' => 21, 'base' => 1000.00, 'tax' => 210.00, 'total' => 1210.00],
+            ],
+            'totals' => ['totalAmount' => 1210.00],
+        ]);
+        $this->assertNull($this->findByCode($issues, 'rows_recap_mismatch'));
+    }
+
+    public function testRowsRecapSkipsWithoutRecapAndTotals(): void
+    {
+        $issues = $this->v->validate([
+            'docType' => 'invoiceReceived',
+            'supplier' => ['name' => 'V'],
+            'dates' => ['issueDate' => '2026-04-15'],
+            'vat' => ['mode' => 'fromBase'],
+            'rows' => [
+                ['rowKind' => 'item', 'totalPrice' => 500.00, 'vat' => ['pct' => 21]],
+            ],
+        ]);
+        $this->assertNull($this->findByCode($issues, 'rows_recap_mismatch'));
+    }
+
+    public function testRowsRecapSkipsWhenRowSumUnreliable(): void
+    {
+        // Řádek bez číselného totalPrice → sumItemRows() vrací null,
+        // neúplný součet je pro porovnání nespolehlivý.
+        $issues = $this->v->validate([
+            'docType' => 'invoiceReceived',
+            'supplier' => ['name' => 'V'],
+            'dates' => ['issueDate' => '2026-04-15'],
+            'vat' => ['mode' => 'fromBase'],
+            'rows' => [
+                ['rowKind' => 'item', 'totalPrice' => 500.00, 'vat' => ['pct' => 21]],
+                ['rowKind' => 'item', 'vat' => ['pct' => 21]],
+            ],
+            'vatRecap' => [
+                ['vatPct' => 21, 'base' => 22082.55, 'tax' => 4637.34, 'total' => 26719.89],
+            ],
+        ]);
+        $this->assertNull($this->findByCode($issues, 'rows_recap_mismatch'));
+    }
+
+    public function testRowsRecapWithinToleranceProducesNoWarning(): void
+    {
+        // Haléřová odchylka per-řádkového zaokrouhlení: diff 0.01 při
+        // 3 řádcích (tolerance max(0.02, 0.03)).
+        $issues = $this->v->validate([
+            'docType' => 'invoiceReceived',
+            'supplier' => ['name' => 'V'],
+            'dates' => ['issueDate' => '2026-04-15'],
+            'vat' => ['mode' => 'fromTotal'],
+            'rows' => [
+                ['rowKind' => 'item', 'totalPrice' => 403.33, 'vat' => ['pct' => 21]],
+                ['rowKind' => 'item', 'totalPrice' => 403.33, 'vat' => ['pct' => 21]],
+                ['rowKind' => 'item', 'totalPrice' => 403.33, 'vat' => ['pct' => 21]],
+            ],
+            'vatRecap' => [
+                ['vatPct' => 21, 'base' => 1000.00, 'tax' => 210.00, 'total' => 1210.00],
+            ],
+        ]);
+        $this->assertNull($this->findByCode($issues, 'rows_recap_mismatch'));
+    }
+
+    public function testRowsRecapFallsBackToTotalsWithoutRecap(): void
+    {
+        $issues = $this->v->validate([
+            'docType' => 'invoiceReceived',
+            'supplier' => ['name' => 'V'],
+            'dates' => ['issueDate' => '2026-04-15'],
+            'vat' => ['mode' => 'fromBase'],
+            'rows' => [
+                ['rowKind' => 'item', 'totalPrice' => 500.00, 'vat' => ['pct' => 21]],
+            ],
+            'totals' => ['totalBase' => 1000.00, 'totalAmount' => 1210.00],
+        ]);
+        $w = $this->findByCode($issues, 'rows_recap_mismatch');
+        $this->assertNotNull($w);
+        $this->assertStringContainsString('základů', $w['message']);
+    }
+
+    public function testVatRecapInconsistentWarnsOnBackComputedRecap(): void
+    {
+        // PLECA konstelace: ceny položek bez DPH, model chybně určil
+        // fromTotal a recap dopočítal pozpátku (387 + 81.40 ≠ 468.60).
+        // D3 mlčí (Σ řádků sedí na dopočtený total) — chytá D5.
+        $issues = $this->v->validate([
+            'docType' => 'invoiceReceived',
+            'supplier' => ['name' => 'V'],
+            'dates' => ['issueDate' => '2026-04-15'],
+            'vat' => ['mode' => 'fromTotal'],
+            'rows' => [
+                ['rowKind' => 'item', 'totalPrice' => 156.20, 'vat' => ['pct' => 21]],
+                ['rowKind' => 'item', 'totalPrice' => 156.20, 'vat' => ['pct' => 21]],
+                ['rowKind' => 'item', 'totalPrice' => 156.20, 'vat' => ['pct' => 21]],
+            ],
+            'vatRecap' => [
+                ['vatPct' => 21, 'base' => 387.00, 'tax' => 81.40, 'total' => 468.60],
+            ],
+            'totals' => ['totalAmount' => 468.60],
+        ]);
+        $this->assertNull($this->findByCode($issues, 'rows_recap_mismatch'));
+        $w = $this->findByCode($issues, 'vat_recap_inconsistent');
+        $this->assertNotNull($w);
+        $this->assertSame('warning', $w['severity']);
+        $this->assertSame('vatRecap[0]', $w['path']);
+        $this->assertStringContainsString('387', $w['message']);
+        $this->assertStringContainsString('468.6', $w['message']);
+    }
+
+    public function testVatRecapConsistentProducesNoWarning(): void
+    {
+        $issues = $this->v->validate([
+            'docType' => 'invoiceReceived',
+            'supplier' => ['name' => 'V'],
+            'dates' => ['issueDate' => '2026-04-15'],
+            'rows' => [
+                ['rowKind' => 'item', 'totalPrice' => 10330.58, 'vat' => ['pct' => 21]],
+            ],
+            'vatRecap' => [
+                ['vatPct' => 21, 'base' => 10330.58, 'tax' => 2169.42, 'total' => 12500.00],
+            ],
+        ]);
+        $this->assertNull($this->findByCode($issues, 'vat_recap_inconsistent'));
+    }
+
+    public function testVatRecapInconsistentWarnsOnTaxVsPct(): void
+    {
+        // base + tax = total sedí, ale daň neodpovídá sazbě.
+        $issues = $this->v->validate([
+            'docType' => 'invoiceReceived',
+            'supplier' => ['name' => 'V'],
+            'dates' => ['issueDate' => '2026-04-15'],
+            'rows' => [
+                ['rowKind' => 'item', 'totalPrice' => 387.00, 'vat' => ['pct' => 21]],
+            ],
+            'vatRecap' => [
+                ['vatPct' => 21, 'base' => 387.00, 'tax' => 60.00, 'total' => 447.00],
+            ],
+        ]);
+        $w = $this->findByCode($issues, 'vat_recap_inconsistent');
+        $this->assertNotNull($w);
+        $this->assertStringContainsString('sazbě', $w['message']);
+    }
+
+    public function testVatRecapSkipsReversePairAndZeroPct(): void
+    {
+        // Reverse-charge pár a 0% řádek mají vlastní pravidla — aritmetika
+        // se u nich nekontroluje, i když by naivně nevyšla.
+        $issues = $this->v->validate([
+            'docType' => 'invoiceReceived',
+            'supplier' => ['name' => 'V'],
+            'dates' => ['issueDate' => '2026-04-15'],
+            'rows' => [
+                ['rowKind' => 'item', 'totalPrice' => 1000.00, 'vat' => ['pct' => 21]],
+            ],
+            'vatRecap' => [
+                ['vatPct' => 21, 'base' => 1000.00, 'tax' => 210.00, 'total' => 0.00, 'isReversePair' => true],
+                ['vatPct' => 0, 'base' => 500.00, 'tax' => 50.00, 'total' => 550.00],
+            ],
+        ]);
+        $this->assertNull($this->findByCode($issues, 'vat_recap_inconsistent'));
+    }
+
+    public function testVatRecapToleranceBoundaries(): void
+    {
+        // base+tax−total přesně 0.02 a tax odchylka přesně max(0.05, …)
+        // jsou ještě v toleranci.
+        $issues = $this->v->validate([
+            'docType' => 'invoiceReceived',
+            'supplier' => ['name' => 'V'],
+            'dates' => ['issueDate' => '2026-04-15'],
+            'rows' => [
+                ['rowKind' => 'item', 'totalPrice' => 110.00, 'vat' => ['pct' => 21]],
+            ],
+            'vatRecap' => [
+                ['vatPct' => 21, 'base' => 100.00, 'tax' => 21.00, 'total' => 121.02],
+                ['vatPct' => 21, 'base' => 10.00, 'tax' => 2.15, 'total' => 12.15],
+            ],
+        ]);
+        $this->assertNull($this->findByCode($issues, 'vat_recap_inconsistent'));
+
+        // Krok za hranici u obou podmínek už warnuje.
+        $issues = $this->v->validate([
+            'docType' => 'invoiceReceived',
+            'supplier' => ['name' => 'V'],
+            'dates' => ['issueDate' => '2026-04-15'],
+            'rows' => [
+                ['rowKind' => 'item', 'totalPrice' => 110.00, 'vat' => ['pct' => 21]],
+            ],
+            'vatRecap' => [
+                ['vatPct' => 21, 'base' => 100.00, 'tax' => 21.00, 'total' => 121.03],
+                ['vatPct' => 21, 'base' => 10.00, 'tax' => 2.16, 'total' => 12.16],
+            ],
+        ]);
+        $this->assertNotNull($this->findByPath($issues, 'vatRecap[0]'));
+        $this->assertNotNull($this->findByPath($issues, 'vatRecap[1]'));
+    }
+
     /**
      * @param array<int, array{severity: string, path: string, code: string, message: string}> $issues
      * @return array{severity: string, path: string, code: string, message: string}|null

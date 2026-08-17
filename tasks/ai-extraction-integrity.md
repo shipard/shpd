@@ -1,6 +1,6 @@
 # AI extrakce dokladů — integrita řádků a rekapitulace DPH (prompt v4.2.0 + validator)
 
-**Stav:** částečně — kód, testy a docs hotové 16. 8. 2026; zbývá nasazení (ds-upgrade + reload profilu, koordinace s ai_analyzer max_tokens) a re-analýza obou referenčních zpráv
+**Stav:** hotovo — kód 16.–17. 8. 2026 (vč. doplňku D6+D7); nasazeno a ověřeno re-analýzou obou referenčních zpráv 17. 8. 2026
 **Repo:** nov_shipard (souběžný task v ai_analyzer: `tasks/max-tokens-stop-reason.md`)
 
 ## Cíl
@@ -147,10 +147,11 @@ Pro každý řádek `vatRecap` (skip `isReversePair === true` a řádky s
       `base + tax ≠ total` (odchylka 0,20); odchylka daně 0,13 je uvnitř
       tolerance `max(0.05, |base|×0.001)` = 0,387 — warning vystřelí tak
       jako tak, druhou podmínku kryje samostatný test
-- [ ] Re-analýza MSG-20260816-0001: buď kompletních 57 řádků, nebo warning
-      `rows_recap_mismatch` na návrhu
-- [ ] Re-analýza MSG-20260816-0006: `fromBase`, recap 468,60 / 98,40 / 567,00
+- [x] Re-analýza MSG-20260816-0001: buď kompletních 57 řádků, nebo warning
+      `rows_recap_mismatch` na návrhu (ověřeno po nasazení 17. 8. 2026)
+- [x] Re-analýza MSG-20260816-0006: `fromBase`, recap 468,60 / 98,40 / 567,00
       opsaný z dokladu, totalAmount 567,00 — nebo warningy z D3/D5
+      (ověřeno po nasazení 17. 8. 2026)
 - [x] `ai-prompts.md` + docs validatoru aktualizované (`exchange-format.md`
       nově nese tabulku issue kódů dokumentů, `ai-analysis.md` odkazuje
       na oba nové warningy)
@@ -230,5 +231,7 @@ profilu), proto volitelný override i na profilu.
       je admin-only (seed ani reload ho nepropisují, drží DB default)
 - [x] `AnalysisController` posílá `profile.max_tokens` i `backend.max_tokens`
 - [x] `ChatController` při 0/NULL používá vlastní fallback, nikdy nepošle 0
-- [ ] Po UPDATE na 0 a deployi analyzéru projde re-analýza ARTEX
-      (57 řádků, žádný truncation error)
+- [x] Po UPDATE na 0 a deployi analyzéru projde re-analýza ARTEX
+      (57 řádků, žádný truncation error) — ověřeno 17. 8. 2026,
+      vyžadovalo ještě streaming volání v analyzéru (doplněk 2 D10+D11
+      v ai_analyzer tasku)

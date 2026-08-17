@@ -17,7 +17,7 @@ jednotlivých subsystémů žijí v [`docs/`](../docs/README.md).
 
 ## Stav
 
-Celkem 212 tasků: **naplánováno** 3 · **částečně** 4 · **hotovo** 205.
+Celkem 212 tasků: **naplánováno** 3 · **částečně** 3 · **hotovo** 206.
 
 Zdroj pravdy je řádek `**Stav:**` v hlavičce každého tasku; tato
 tabulka je generovaná (`scripts/tasks-index.py`). Hotové tasky se
@@ -28,7 +28,6 @@ nevypisují — níže je jen to, co není dokončené.
 | `ai-profile-sync-in-ds-upgrade.md` | naplánováno | sync není v `DsUpgradeCommand` |
 | `auth-phase0a-hardening.md` | naplánováno | rate limiting a evidence neúspěšných přihlášení chybí |
 | `dashboard-alert-grouping.md` | naplánováno | design schválen 2026-07-16, neimplementováno |
-| `ai-extraction-integrity.md` | částečně | kód, testy a docs hotové 16. 8. 2026; zbývá nasazení (ds-upgrade + reload profilu, koordinace s ai_analyzer max_tokens) a re-analýza obou referenčních zpráv |
 | `doc-number-release-on-data-save.md` | částečně | kód + testy hotové 2026-08-13; zbývá D2 (reset test DS), ruční proklik a read-only verifikace na alfě |
 | `hosting-09-federated-login.md` | částečně | kód + testy + docs hotové 2026-08-14 (commity 1–3); zbývá ds-upgrade na hostingu, zapnutí Google/GitHub na alfě dle runbooku (mutace — David) a ruční E2E řetěz |
 | `mail-message-centric.md` | částečně | Fáze A–D v tomto repozitáři hotové (schéma, /result v4, |

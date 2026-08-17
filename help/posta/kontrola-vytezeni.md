@@ -1,8 +1,8 @@
 ---
 title: Kontrola vytěženého dokladu
 summary: Jak porovnat návrh dokladu s originálem faktury, co kontrolovat první a kdy návrh zamítnout.
-keywords: [kontrola, vytěžení, analýza, náhled dokladu, jistota, použít, zamítnout, AI přečetla špatně, sedí částka, review]
-related: [slovnicek.md, co-dnes-nejde.md]
+keywords: [kontrola, vytěžení, analýza, náhled dokladu, jistota, použít, zamítnout, AI přečetla špatně, sedí částka, review, vytvořit z registru, hledat v registru, nový dodavatel z faktury]
+related: [slovnicek.md, co-dnes-nejde.md, osoby/zalozeni-osoby.md]
 ---
 
 # Kontrola vytěženého dokladu
@@ -49,6 +49,13 @@ karta s procentem **Jistoty**. U jistých návrhů má karta rovnou tlačítko
    - seznam **Kandidáti** s tlačítky **Použít #číslo**, když AI našla víc
      možných záznamů,
    - vyhledávací pole **Hledat…**, kde si záznam najdeš sám,
+   - u dodavatele a odběratele **Vytvořit z registru: název** — nabídne
+     se, když Shipard vytěžené IČO našel ve veřejném registru firem
+     a osobu ještě nemáš v evidenci. Jeden klik ji založí i vybere.
+     Stejné tlačítko je i přímo na kartě strany, panel nemusíš otevírat,
+   - u dodavatele a odběratele **Hledat v registru…** — otevře hledání
+     v registru s předvyplněným IČO z faktury (stejný dialog jako
+     **Z registru** v Osobách); po **Uložit** se osoba rovnou vybere,
    - **Vytvořit novou osobu**, **Vytvořit novou položku** nebo
      **Vytvořit nový účet** — podle toho, čeho se rozhodnutí týká,
    - **Vynechat řádek**, ale jen u řádku faktury.
@@ -111,6 +118,13 @@ kontroluj celkovou částku vždy.
 z EU) se rozpad daně v **DPH rekapitulaci** opravuje. Zkontroluj, že
 **Celkem** odpovídá tomu, co máš zaplatit.
 
+**Vytvořit z registru se nenabízí vždy.** Tlačítko se objeví, jen když se
+z faktury vytěžilo IČO, subjekt pod ním v registru existuje a v evidenci
+ho ještě nemáš. Když osobu se stejným IČO už máš, tlačítko se nenabízí —
+najdeš ji vyhledávacím polem **Hledat…**. A když je registr zrovna
+nedostupný, tlačítko prostě chybí a nic dalšího se neděje; **Hledat
+v registru…** v panelu je k dispozici vždy.
+
 **U bankovního účtu musí být nejdřív rozhodnutý dodavatel.** Dokud není,
 panel u účtu místo vyhledávání napíše *Nejdřív vyber nebo vytvoř
 dodavatele.* a nabídne jedině vytvoření nového účtu — účet se totiž
@@ -147,6 +161,8 @@ cokoli popsané na téhle stránce.
 
 - [Když AI přečte fakturu špatně](kdyz-ai-cte-spatne.md) — kde se která
   chyba opravuje
+- [Založení osoby](../osoby/zalozeni-osoby.md) — natažení firmy
+  z registru mimo poštu a ruční založení
 - [Slovníček](../slovnicek.md) — co znamenají stavy a názvy sekcí
 - [Co Shipard dnes neumí](../co-dnes-nejde.md) — kde ještě nemusí
   souhlasit čísla

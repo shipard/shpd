@@ -35,6 +35,33 @@ export async function searchRegistry(query) {
 }
 
 /**
+ * Předkontrola pro quick-add v review modalu: najdi v registru přesnou
+ * shodu na IČO. Vrací řádek vhodný pro jednoklikové vytvoření, jinak null.
+ * Chyby polyká (vrací null) — předkontrola nesmí rušit review flow.
+ *
+ * @param {string} companyId
+ * @returns {Promise<object|null>}  SearchResultRow, nebo null
+ */
+export async function findRegistryQuickHit(companyId) {
+  const id = (companyId ?? '').trim();
+  if (id === '') return null;
+  try {
+    const res = await searchRegistry(id);
+    if (!res?.success) return null;
+    const exact = (res.data?.results ?? [])
+      .filter(r => r.companyId === id && !r.existsInDb);
+    if (exact.length === 0) return null;
+    // Preferuj platný subjekt; při více platných shodách (teoreticky
+    // CZ+SK kolize) quick-add nenabízej — fallback je wizard.
+    const valid = exact.filter(r => r.isValid);
+    const pool = valid.length > 0 ? valid : exact;
+    return pool.length === 1 ? pool[0] : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Fetch the canonical `shpd.persons.person` payload for a given
  * country + companyId pair. Returns the canonical directly as `data`.
  *

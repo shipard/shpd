@@ -19,9 +19,16 @@
   //   onUserActionsChange  (next) => void; null = read-only mode (3a)
 
   import { t } from '../../i18n/index.js';
+  import { translateError } from '../../i18n/errors.js';
   import Popover from '../ui/Popover.svelte';
   import ResolveDecisionPanel from './ResolveDecisionPanel.svelte';
+  import RegistryImportWizard from '../registry/RegistryImportWizard.svelte';
   import { enrichedRowCount, matchKindKey, suggestedFieldKeys } from './enrichBadge.js';
+  import {
+    findRegistryQuickHit,
+    fetchRegistryPerson,
+    applyRegistryPerson,
+  } from '../../api/personsRegistry.js';
 
   let {
     canonical = null,
@@ -204,16 +211,107 @@
     decisionOpen = null;
   }
 
-  function handleDecide(action) {
-    if (!decisionOpen) return;
+  function decideForPath(path, action) {
     const next = { ...userActions };
     if (action === null || action === undefined) {
-      delete next[decisionOpen.path];
+      delete next[path];
     } else {
-      next[decisionOpen.path] = action;
+      next[path] = action;
     }
     onUserActionsChange?.(next);
+  }
+
+  function handleDecide(action) {
+    if (!decisionOpen) return;
+    decideForPath(decisionOpen.path, action);
     decisionOpen = null;
+  }
+
+  // ── Quick-add z registru (Issue #28) ────────────────────────────────────
+  // Předkontrola: nespárovaná strana s vytěženým IČO se na pozadí ověří
+  // proti ARES/RPO registru; při jednoznačném nálezu se na kartě strany
+  // i v resolve popoveru nabídne jednoklikové vytvoření osoby.
+
+  // path ('supplier' | 'customer') → SearchResultRow z registru, nebo null.
+  let registryHits = $state({});
+  // path → true během fetch+apply (loading na tlačítku, single-flight).
+  let quickAddBusy = $state({});
+  // path → lokalizovaná chybová hláška posledního pokusu, nebo null.
+  let quickAddError = $state({});
+  // Wizard fallback: null | { path, initialQuery }
+  let registrySearchOpen = $state(null);
+  // Token běžící předkontroly — přepnutí zprávy zahodí staré odpovědi.
+  let registryCheckToken = 0;
+
+  // IČO čteme z canonical party bloku, ne z createPayload — ambiguous
+  // createPayload nenese a hodnoty jsou identické (payload se z něj staví).
+  function partyCompanyId(path) {
+    const raw = canonical?.[path]?.companyId;
+    return typeof raw === 'string' ? raw.trim() : '';
+  }
+
+  $effect(() => {
+    const currentResolve = resolve;
+    // Reset při každé změně preview dat (přepnutí zprávy v modalu).
+    registryHits = {};
+    quickAddBusy = {};
+    quickAddError = {};
+    registrySearchOpen = null;
+    const token = ++registryCheckToken;
+    if (onUserActionsChange === null || aiFailed || !currentResolve) return;
+    for (const path of ['supplier', 'customer']) {
+      const block = currentResolve[path];
+      if (!block || block.status === 'matched') continue;
+      const companyId = partyCompanyId(path);
+      if (companyId === '') continue;
+      void findRegistryQuickHit(companyId).then((hit) => {
+        if (token !== registryCheckToken || hit === null) return;
+        registryHits = { ...registryHits, [path]: hit };
+      });
+    }
+  });
+
+  // Jediné místo quick-add logiky — sdílí ho karta strany i popover panel.
+  // Vrací true při úspěchu; zavření popoveru řeší volající (karta nezavírá).
+  async function handleRegistryQuickAdd(path) {
+    const hit = registryHits[path];
+    if (!hit || quickAddBusy[path]) return false;
+    quickAddBusy = { ...quickAddBusy, [path]: true };
+    quickAddError = { ...quickAddError, [path]: null };
+    try {
+      const fetched = await fetchRegistryPerson(hit.country, hit.companyId);
+      if (!fetched?.success) {
+        quickAddError = { ...quickAddError, [path]: translateError(fetched?.error) };
+        return false;
+      }
+      const applied = await applyRegistryPerson({
+        ...fetched.data,
+        applyOptions: { mergeStrategy: 'createOnly', targetDocState: 40 },
+      });
+      if (applied?.success) {
+        decideForPath(path, `useExisting:${applied.data?.savedPersonId}`);
+        return true;
+      }
+      // Souběh: osobu mezitím někdo vytvořil → applier vrací person_exists
+      // (409) s čerstvě resolvnutým matchedId v error.details.canonical.
+      const matchedId = applied?.error?.code === 'person_exists'
+        ? applied?.error?.details?.canonical?._resolve?.header?.matchedId ?? null
+        : null;
+      if (matchedId != null) {
+        decideForPath(path, `useExisting:${matchedId}`);
+        return true;
+      }
+      quickAddError = { ...quickAddError, [path]: translateError(applied?.error) };
+      return false;
+    } finally {
+      quickAddBusy = { ...quickAddBusy, [path]: false };
+    }
+  }
+
+  function openRegistrySearch(path) {
+    const initialQuery = partyCompanyId(path) || (canonical?.[path]?.name ?? '');
+    registrySearchOpen = { path, initialQuery };
+    closeDecision();
   }
 
   function effectiveStatusKey(path, resolveBlock) {
@@ -358,6 +456,26 @@
       </div>
     {:else}
       <div class="shpd-exchange__party-empty">—</div>
+    {/if}
+    {#if onUserActionsChange !== null
+         && registryHits[path]
+         && (userActions[path] ?? null) === null
+         && partyResolve?.status !== 'matched'}
+      <div class="shpd-exchange__party-registry">
+        <button
+          type="button"
+          class="shpd-exchange__party-registry-btn"
+          onclick={() => handleRegistryQuickAdd(path)}
+          disabled={quickAddBusy[path]}
+        >
+          + {quickAddBusy[path]
+            ? t('exchange.preview.registry.creating')
+            : t('exchange.preview.registry.quickAdd', { name: registryHits[path].fullName })}
+        </button>
+        {#if quickAddError[path]}
+          <span class="shpd-exchange__party-registry-error">{quickAddError[path]}</span>
+        {/if}
+      </div>
     {/if}
   </div>
 {/snippet}
@@ -593,9 +711,35 @@
       parentMatchedId={decisionOpen.parentMatchedId}
       currentUserAction={userActions[decisionOpen.path] ?? null}
       onDecide={handleDecide}
+      registryHit={decisionOpen.kind === 'party' ? registryHits[decisionOpen.path] ?? null : null}
+      registryBusy={quickAddBusy[decisionOpen.path] ?? false}
+      registryError={decisionOpen.kind === 'party' ? quickAddError[decisionOpen.path] ?? null : null}
+      onRegistryQuickAdd={decisionOpen.kind === 'party'
+        ? () => {
+            const path = decisionOpen.path;
+            void handleRegistryQuickAdd(path).then((ok) => {
+              if (ok) closeDecision();
+            });
+          }
+        : null}
+      onOpenRegistrySearch={decisionOpen.kind === 'party'
+        ? () => openRegistrySearch(decisionOpen.path)
+        : null}
     />
   </Popover>
 {/if}
+
+<RegistryImportWizard
+  open={registrySearchOpen !== null}
+  initialQuery={registrySearchOpen?.initialQuery ?? ''}
+  onClose={() => (registrySearchOpen = null)}
+  onSaved={(personId) => {
+    if (registrySearchOpen && personId != null) {
+      decideForPath(registrySearchOpen.path, `useExisting:${personId}`);
+    }
+    registrySearchOpen = null;
+  }}
+/>
 
 <style>
   .shpd-exchange {
@@ -717,6 +861,46 @@
   .shpd-exchange__party-empty {
     color: var(--shpd-color-text-muted);
     font-style: italic;
+  }
+
+  /* Quick-add z registru (Issue #28) — vizuálně zrcadlí .shpd-resolve__create
+     v ResolveDecisionPanel, aby obě místa nabízela stejně vypadající akci. */
+  .shpd-exchange__party-registry {
+    display: flex;
+    flex-direction: column;
+    gap: var(--shpd-space-xs);
+    margin-top: var(--shpd-space-xs);
+  }
+
+  .shpd-exchange__party-registry-btn {
+    display: flex;
+    align-items: center;
+    gap: var(--shpd-space-xs);
+    width: 100%;
+    padding: var(--shpd-space-xs) var(--shpd-space-sm);
+    border: 1px solid var(--shpd-color-border);
+    background-color: var(--shpd-color-bg);
+    color: var(--shpd-color-primary);
+    font-family: inherit;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    border-radius: var(--shpd-radius-sm);
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .shpd-exchange__party-registry-btn:hover:not(:disabled) {
+    background-color: var(--shpd-color-primary-soft);
+  }
+
+  .shpd-exchange__party-registry-btn:disabled {
+    cursor: default;
+    opacity: 0.7;
+  }
+
+  .shpd-exchange__party-registry-error {
+    font-size: 0.75rem;
+    color: var(--shpd-color-danger);
   }
 
   /* ── Meta grid ───────────────────────────────────────────────────────── */

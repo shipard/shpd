@@ -73,7 +73,10 @@ doplň si je, až je budeš potřebovat.
 při kontrole vytěženého dokladu vyplatí kontrolovat právě IČO — podle
 názvu se dá splést víc firem, podle IČO ne. Když Shipard najde víc
 kandidátů nebo žádného, zeptá se tě: **Vybrat existujícího…** nebo
-**Vytvořit novou osobu**.
+**Vytvořit novou osobu**. Když vytěžené IČO najde ve veřejném registru
+a osobu ještě nemáš, nabídne navíc **Vytvořit z registru: název** —
+jeden klik a dodavatel vznikne rovnou z registru, viz
+[Kontrola vytěženého dokladu](../posta/kontrola-vytezeni.md).
 
 **Splatnost (dny)** na tabu **Nastavení** je předplněná na 14. Z ní se na
 faktuře dopočítá **Datum splatnosti** jako datum vystavení plus tolik dní,

@@ -34,6 +34,14 @@
     currentUserAction = null,
     parentMatchedId = null,
     onDecide = () => {},
+    // Quick-add z registru (Issue #28) — jen referenceKind === 'party'.
+    // Stav i logika žijí v DocumentExchangePreview (sdílené s kartou strany),
+    // panel jen renderuje.
+    registryHit = null,          // SearchResultRow | null
+    registryBusy = false,
+    registryError = null,        // lokalizovaná chyba posledního pokusu
+    onRegistryQuickAdd = null,   // () => void
+    onOpenRegistrySearch = null, // () => void — otevře wizard, zavře popover
   } = $props();
 
   let searchTerm = $state('');
@@ -247,6 +255,24 @@
     </div>
   {/if}
 
+  {#if referenceKind === 'party' && registryHit && onRegistryQuickAdd}
+    <div class="shpd-resolve__registry">
+      <button
+        type="button"
+        class="shpd-resolve__create"
+        onclick={onRegistryQuickAdd}
+        disabled={registryBusy}
+      >
+        + {registryBusy
+          ? t('exchange.preview.registry.creating')
+          : t('exchange.preview.registry.quickAdd', { name: registryHit.fullName })}
+      </button>
+      {#if registryError}
+        <div class="shpd-resolve__status shpd-resolve__status--error">{registryError}</div>
+      {/if}
+    </div>
+  {/if}
+
   {#if bankBlocked}
     <p class="shpd-resolve__hint">
       {t('exchange.preview.decide.bankRequiresSupplier')}
@@ -305,6 +331,15 @@
       >
         + {createLabel}
       </button>
+      {#if referenceKind === 'party' && onOpenRegistrySearch}
+        <button
+          type="button"
+          class="shpd-resolve__registry-search"
+          onclick={onOpenRegistrySearch}
+        >
+          {t('exchange.preview.registry.search')}
+        </button>
+      {/if}
       {#if referenceKind === 'item'}
         <button
           type="button"
@@ -505,7 +540,8 @@
     background-color: var(--shpd-color-primary-soft);
   }
 
-  .shpd-resolve__skip {
+  .shpd-resolve__skip,
+  .shpd-resolve__registry-search {
     width: 100%;
     padding: var(--shpd-space-xs) var(--shpd-space-sm);
     border: 1px solid var(--shpd-color-border);
@@ -518,9 +554,21 @@
     text-align: left;
   }
 
-  .shpd-resolve__skip:hover {
+  .shpd-resolve__skip:hover,
+  .shpd-resolve__registry-search:hover {
     background-color: var(--shpd-color-bg-secondary);
     color: var(--shpd-color-text);
+  }
+
+  .shpd-resolve__registry {
+    display: flex;
+    flex-direction: column;
+    gap: var(--shpd-space-xs);
+  }
+
+  .shpd-resolve__create:disabled {
+    cursor: default;
+    opacity: 0.7;
   }
 
   .shpd-resolve__hint {

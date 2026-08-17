@@ -36,6 +36,7 @@
   let {
     open = false,
     asOwn = false,
+    initialQuery = '',
     onClose = () => {},
     onSaved = (_personId) => {},
   } = $props();
@@ -81,6 +82,16 @@
   $effect(() => {
     if (open) {
       resetAll();
+      // Prefill z review modalu (fallback quick-addu, Issue #28): hledání
+      // spustit rovnou, debounce se týká jen psaní. Až po resetAll() —
+      // ten query maže. runSearch si token inkrementuje sám, searchLoading
+      // shodí ve finally.
+      const prefill = initialQuery.trim();
+      if (prefill !== '') {
+        query = initialQuery;
+        searchLoading = true;
+        void runSearch(prefill);
+      }
       // Autofocus the input. The Modal is mounted synchronously, but the
       // input bind happens on the same tick — defer with microtask.
       queueMicrotask(() => inputEl?.focus());

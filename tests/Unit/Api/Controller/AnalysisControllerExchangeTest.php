@@ -501,6 +501,26 @@ class AnalysisControllerExchangeTest extends TestCase
         $this->assertSame(['anything' => 'goes'], $decoded);
     }
 
+    public function testValidateAndStoreCanonicalStampsServerExtractedAt(): void
+    {
+        // D12: source.extractedAt od modelu je nedůvěryhodný (typicky opsaný
+        // z ukázky v promptu) — server ho nepodmíněně přepíše vlastním časem.
+        $db = $this->createMock(DataSourceConnection::class);
+        $ctrl = $this->controller($db);
+        $canonical = $this->happyCanonical();
+        $canonical['source']['extractedAt'] = '2025-01-09T10:30:00Z';
+
+        [$json, $valid] = $this->callValidate($ctrl, $canonical);
+
+        $this->assertTrue($valid);
+        $decoded = json_decode((string) $json, true);
+        $stamped = $decoded['source']['extractedAt'];
+        $this->assertNotSame('2025-01-09T10:30:00Z', $stamped);
+        $parsed = \DateTimeImmutable::createFromFormat(DATE_ATOM, $stamped);
+        $this->assertInstanceOf(\DateTimeImmutable::class, $parsed);
+        $this->assertEqualsWithDelta(time(), $parsed->getTimestamp(), 120);
+    }
+
     // ── validateAndStoreCanonical + row history enrichment ─────────────────
 
     public function testValidateAndStoreCanonicalPersistsEnrichedCanonical(): void
@@ -607,6 +627,23 @@ class AnalysisControllerExchangeTest extends TestCase
         [, $valid] = $this->callValidate($ctrl, $canonical, docType: 'insurance');
 
         $this->assertFalse($valid);
+    }
+
+    public function testValidateRegistryCanonicalDoesNotStampExtractedAt(): void
+    {
+        // Registry schéma pole source nezná (additionalProperties: false) —
+        // razítko D12 se v registry větvi nepropisuje ani do forenzního
+        // _rawOutput.
+        $db = $this->createMock(DataSourceConnection::class);
+        $ctrl = $this->controller($db, configRuntime: $this->configRuntimeWithRegistryTargets());
+        $canonical = $this->registryCanonical();
+        $canonical['source'] = ['extractedAt' => '2025-01-09T10:30:00Z'];
+
+        [$json, $valid] = $this->callValidate($ctrl, $canonical, docType: 'insurance');
+
+        $this->assertFalse($valid);
+        $decoded = json_decode((string) $json, true);
+        $this->assertSame($canonical, $decoded['_rawOutput']);
     }
 
     public function testValidateDocsCanonicalUnaffectedByRegistryConfig(): void

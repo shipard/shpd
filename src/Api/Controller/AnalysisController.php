@@ -979,6 +979,16 @@ class AnalysisController
             return [null, false];
         }
 
+        // D12: čas extrakce je serverový fakt — hodnotu od modelu nepodmíněně
+        // přepisujeme. Registry schéma pole source nezná, razítkuje se jen
+        // docs větev; bez source pole se forenzní obsah nedotváří.
+        if (
+            PrimaryTypes::targetFor($this->configRuntime, $docType) !== PrimaryTypes::TARGET_REGISTRY
+            && is_array($extractedJson['source'] ?? null)
+        ) {
+            $extractedJson['source']['extractedAt'] = date(DATE_ATOM);
+        }
+
         // If no SchemaValidator was wired (e.g. unit tests), skip validation
         // and store as-is.
         if ($this->schemaValidator === null) {

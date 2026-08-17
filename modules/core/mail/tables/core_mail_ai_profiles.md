@@ -31,6 +31,7 @@ může pro různé typy pošty zvolit jiný model.
 |---|---|---|
 | `prompt_version` | varchar(50), NOT NULL, default `v1.0.0` | Verze promptu (SemVer). Loguje se do `message_analyses.prompt_version`. |
 | `prompt_template` | longtext, NOT NULL | Vlastní text promptu s Jinja-style placeholders |
+| `max_tokens` | int, NOT NULL, default 0 | Volitelný override limitu output tokenů — kaskáda profil → backend → default provideru analyzeru; `0` = nenastaveno. Admin pole: seed ani reload profilu ho nemění. |
 
 ### Výstupní schéma (schema)
 

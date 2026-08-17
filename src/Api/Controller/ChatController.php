@@ -286,7 +286,9 @@ class ChatController
             baseUrl: $backend['base_url'] !== null ? (string) $backend['base_url'] : '',
             system: $this->systemPrompt(),
             messages: $this->buildAnthropicMessages($id),
-            maxTokens: (int) ($backend['max_tokens'] ?? 4096),
+            // 0/NULL na backendu = nenastaveno — chat drží vlastní skromný
+            // default, nula nesmí odejít do API (HTTP 400).
+            maxTokens: ((int) ($backend['max_tokens'] ?? 0)) ?: 4096,
             temperature: null, // v1: omitted — Opus 4.7/4.8 reject `temperature` (HTTP 400)
             tools: $toolDefs !== [] ? $toolDefs : null,
         );

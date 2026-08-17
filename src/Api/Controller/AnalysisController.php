@@ -494,6 +494,9 @@ class AnalysisController
                 'supported_doc_types' => $this->decodeJsonField($profile['supported_doc_types']),
                 'language' => (string) $profile['language'],
                 'confidence_thresholds' => $this->decodeJsonField($profile['confidence_thresholds']),
+                // 0 = nenastaveno; analyzér řeší kaskádu profil → backend →
+                // vlastní default. ?? kryje DS před ds-upgrade (SELECT *).
+                'max_tokens' => (int) ($profile['max_tokens'] ?? 0),
             ],
             'backend' => [
                 'backend_ndx' => (int) $backend['id'],

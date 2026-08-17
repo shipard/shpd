@@ -175,3 +175,60 @@ Pro každý řádek `vatRecap` (skip `isReversePair === true` a řádky s
   recap/totals výhradně opisem, nikdy dopočtem. (potvrzeno 16. 8. 2026)
 - **D5** — validator: warning `vat_recap_inconsistent` — vnitřní aritmetika
   řádků rekapitulace (base+tax=total, tax=base×pct). (potvrzeno 16. 8. 2026)
+- **D6** — max_tokens: sémantika `0 = použij default v kódu`; jediný default
+  žije v provideru analyzéru (32768). (potvrzeno 16. 8. 2026)
+- **D7** — max_tokens volitelně na AI profilu; rezoluce profil → backend →
+  provider konstanta. (potvrzeno 16. 8. 2026)
+
+---
+
+## Doplněk: D6 + D7 — max_tokens jako kaskáda profil → backend → provider
+
+**Kontext:** První nasazení D2 odhalilo, že `core_ai_backends.max_tokens`
+je v každém DS seedovaný natvrdo na 4096 (`AIAnalyzerProvisioner`) a
+`AnalysisController` ho explicitně posílá → default v analyzéru se nikdy
+neuplatní; re-analýza ARTEX skončila `[ai_error] anthropic: output truncated
+at max_tokens=4096` (kontrola stop_reason z D2 správně zafungovala).
+Hodnota zkamenělá v datech každého DS = každé budoucí zvednutí limitu je
+datová oprava všude. Řešení: 0/NULL znamená „nenastaveno, spadni níž";
+jediný skutečný default je konstanta v provideru analyzéru. Limit navíc
+logicky souvisí s komplexností promptu/výstupu (output schema žije na
+profilu), proto volitelný override i na profilu.
+
+### Scope doplňku (shpd strana)
+
+1. **`modules/core/mail/src/AIAnalyzerProvisioner.php`** — seed backendu
+   `'max_tokens' => 0` (místo 4096).
+2. **`modules/core/ai/tables/core_ai_backends.jsonc`** — default sloupce 0;
+   popisek/tooltip „0 = automaticky (default provideru)".
+3. **`modules/core/mail/tables/core_mail_ai_profiles.jsonc`** (příp.
+   odpovídající umístění tabulky profilů) — nový sloupec `max_tokens`
+   (int, default 0) + doplnit do formu
+   `modules/core/mail/forms/core_mail_ai_profiles.jsonc` se stejným
+   popiskem; `czech_general.jsonc` hodnotu nenastavuje (= 0).
+4. **`src/Api/Controller/AnalysisController.php`** — do `profile` sekce
+   payloadu přidat `'max_tokens' => (int) $profile['max_tokens']`;
+   backend sekce beze změny (posílá se i nula).
+5. **`src/Api/Controller/ChatController.php:289`** — `??` → ošetření nuly:
+   `((int)($backend['max_tokens'] ?? 0)) ?: 4096` (chat si drží vlastní
+   skromný default, nulu nesmí poslat do API).
+6. **Data:** existující řádky `core_ai_backends` v dev DS UPDATE na
+   `max_tokens = 0` (mutace, jednotlivě po odsouhlasení; alfa až s
+   nasazením celé sady).
+7. **Nasazení:** nový sloupec profilu = `ds-upgrade`; reload profilů;
+   koordinace s analyzérem (D6/D7 strana v ai_analyzer tasku) — analyzér
+   s kaskádou nasadit PŘED tím, než se v DS objeví nuly, jinak by
+   `int(0)` prošlo do API.
+
+### Hotovo když (doplněk)
+
+- [x] Provisioner seeduje 0; tabulky/formy backendu i profilu nesou
+      `max_tokens` s defaultem 0 a popiskem „0 = automaticky". Pozn.:
+      form backendů byl mrtvý soubor (po renamu tabulky na
+      `core_ai_backends` ho FormController nenašel) — přesunut na
+      `modules/core/ai/forms/core_ai_backends.jsonc`; sloupec profilu
+      je admin-only (seed ani reload ho nepropisují, drží DB default)
+- [x] `AnalysisController` posílá `profile.max_tokens` i `backend.max_tokens`
+- [x] `ChatController` při 0/NULL používá vlastní fallback, nikdy nepošle 0
+- [ ] Po UPDATE na 0 a deployi analyzéru projde re-analýza ARTEX
+      (57 řádků, žádný truncation error)

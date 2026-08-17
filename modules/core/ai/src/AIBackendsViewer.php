@@ -119,7 +119,7 @@ class AIBackendsViewer extends TableViewer
         $this->addItem($access, 'API klíč', !empty($record['has_api_key']) ? 'nastaven' : 'nenastaven');
 
         $tuning = [];
-        $this->addItem($tuning, 'Max. tokenů', $record['max_tokens'] ?? null);
+        $this->addItem($tuning, 'Max. tokenů', ((int) ($record['max_tokens'] ?? 0)) ?: 'automaticky');
         $this->addItem($tuning, 'Teplota', $record['temperature'] ?? null);
 
         $flags = [];

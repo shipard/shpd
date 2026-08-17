@@ -171,7 +171,9 @@ class AIAnalyzerProvisioner
             'model' => 'claude-sonnet-4-5',
             'api_key' => null,
             'base_url' => null,
-            'max_tokens' => 4096,
+            // 0 = nenastaveno — limit se rozhoduje kaskádou profil → backend
+            // → default v provideru analyzéru (jediné místo se skutečným číslem).
+            'max_tokens' => 0,
             'temperature' => 0,
             'is_default' => 1,
             'is_active' => 0,

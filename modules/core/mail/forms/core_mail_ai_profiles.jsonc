@@ -38,6 +38,9 @@
                                 {"type": "input", "column": "output_schema", "inputType": "textarea"},
                                 {"type": "input", "column": "confidence_thresholds", "inputType": "textarea"},
 
+                                {"type": "separator", "label": "Ladění", "label:cs": "Ladění", "label:en": "Tuning"},
+                                {"type": "input", "column": "max_tokens"},
+
                                 {"type": "separator", "label": "Příznaky", "label:cs": "Příznaky", "label:en": "Flags"},
                                 {"type": "input", "column": "is_default"},
                                 {"type": "input", "column": "is_active"}

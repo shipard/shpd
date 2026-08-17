@@ -133,12 +133,12 @@
 
         {
             "id": "max_tokens",
-            "name": "Max tokens",
-            "name:cs": "Max. tokenů",
-            "name:en": "Max tokens",
+            "name": "Max tokens (0 = automatic)",
+            "name:cs": "Max. tokenů (0 = automaticky)",
+            "name:en": "Max tokens (0 = automatic)",
             "type": "int",
             "nullable": false,
-            "default": 4096,
+            "default": 0,
             "group": "tuning"
         },
         {

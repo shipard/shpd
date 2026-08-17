@@ -149,6 +149,8 @@ class AIAnalyzerProvisionerTest extends TestCase
         $this->assertSame(0, $backend['is_active']);
         $this->assertSame(1, $backend['is_default']);
         $this->assertSame('anthropic', $backend['provider']);
+        // 0 = nenastaveno; skutečný default žije v provideru analyzéru.
+        $this->assertSame(0, $backend['max_tokens']);
     }
 
     public function testProvisionedProfileLoadsTemplateAndJsonEncodes(): void
@@ -320,6 +322,7 @@ class AIAnalyzerProvisionerTest extends TestCase
         $this->assertArrayNotHasKey('is_default', $data);
         $this->assertArrayNotHasKey('is_active', $data);
         $this->assertArrayNotHasKey('backend', $data);
+        $this->assertArrayNotHasKey('max_tokens', $data);
         $this->assertArrayNotHasKey('id', $data);
         $this->assertArrayNotHasKey('created', $data);
     }

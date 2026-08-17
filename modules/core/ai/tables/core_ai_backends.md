@@ -43,7 +43,7 @@ zprávy.
 
 | Sloupec | Typ | Popis |
 |---|---|---|
-| `max_tokens` | int, NOT NULL, default 4096 | Max output tokenů na request |
+| `max_tokens` | int, NOT NULL, default 0 | Max output tokenů na request. `0` = automaticky — spadne na default provideru analyzeru; přebít může nenulová hodnota na AI profilu (kaskáda profil → backend → provider). Chat si při 0 drží vlastní fallback 4096. |
 | `temperature` | numeric(3,2), NOT NULL, default 0.00 | Extrakce má být deterministická |
 
 ### Příznaky (flags)

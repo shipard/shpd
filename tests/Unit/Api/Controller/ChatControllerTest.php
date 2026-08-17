@@ -354,6 +354,22 @@ class ChatControllerTest extends TestCase
         $this->assertSame(7, $inserts[1]['tokens_output']);
     }
 
+    public function testSendMessageZeroMaxTokensFallsBackToChatDefault(): void
+    {
+        // max_tokens = 0 na backendu znamená „nenastaveno" — chat nesmí
+        // poslat nulu do API, drží vlastní default 4096.
+        $inserts = [];
+        $backend = ['max_tokens' => 0] + self::BACKEND;
+        $db = $this->streamDb($inserts, $backend);
+        $llm = new ScriptedLlmClient([$this->finalResult('Ahoj.')]);
+        $ctrl = new ChatController($db, null, null, $llm);
+
+        $this->runProducer($ctrl->sendMessage($this->auth(), 5, $this->request('POST', '/x', ['text' => 'Ahoj'])));
+
+        $this->assertNotNull($llm->lastParams);
+        $this->assertSame(4096, $llm->lastParams->maxTokens);
+    }
+
     public function testSendMessageEmitsErrorEventAndKeepsUserMessage(): void
     {
         $inserts = [];

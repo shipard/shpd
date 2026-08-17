@@ -260,7 +260,8 @@ Response 200:
       "output_schema": { },
       "supported_doc_types": ["invoiceReceived", "creditNote"],
       "language": "cs",
-      "confidence_thresholds": { "ready": 0.9, "review": 0.6 }
+      "confidence_thresholds": { "ready": 0.9, "review": 0.6 },
+      "max_tokens": 0
     },
     "backend": {
       "backend_ndx": 5,
@@ -268,12 +269,17 @@ Response 200:
       "model": "claude-sonnet-4-5",
       "api_key": "sk-ant-…",
       "base_url": null,
-      "max_tokens": 4096,
+      "max_tokens": 0,
       "temperature": 0.0
     }
   }
 }
 ```
+
+`max_tokens` je kaskáda **profil → backend → default provideru analyzeru**:
+`0` znamená „nenastaveno, spadni níž". Jediný skutečný default (číslo) žije
+v provideru analyzeru; nenulová hodnota na profilu přebíjí backend (limit
+souvisí s komplexností promptu/výstupu, které žijí na profilu).
 
 Response headers: `Cache-Control: no-store, no-cache, must-revalidate`,
 `Pragma: no-cache`. Plaintext API klíč žije v paměti analyzeru jen po dobu

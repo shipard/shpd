@@ -99,7 +99,7 @@ class AIProfilesViewer extends TableViewer
         $record = $this->db->fetchRow(
             'SELECT p.`profile_id`, p.`name`, b.`name` AS `backend_name`,'
             . ' p.`supported_doc_types`, p.`language`, p.`prompt_version`,'
-            . ' p.`is_default`, p.`is_active`, p.`created`, p.`modified`'
+            . ' p.`max_tokens`, p.`is_default`, p.`is_active`, p.`created`, p.`modified`'
             . ' FROM `' . $this->table . '` p'
             . ' LEFT JOIN `core_ai_backends` b ON b.`id` = p.`backend`'
             . ' WHERE p.`id` = %i',
@@ -123,6 +123,10 @@ class AIProfilesViewer extends TableViewer
         // strojové hodnoty — do properties nepatří, zobrazíme jen verzi promptu.
         $prompt = [];
         $this->addItem($prompt, 'Verze promptu', $record['prompt_version'] ?? null);
+        // 0 = bez override — limit se řeší kaskádou backend → default analyzéru.
+        if (((int) ($record['max_tokens'] ?? 0)) !== 0) {
+            $this->addItem($prompt, 'Max. tokenů', (int) $record['max_tokens']);
+        }
 
         $flags = [];
         $this->addItem($flags, 'Výchozí profil', !empty($record['is_default']) ? 'Ano' : 'Ne');

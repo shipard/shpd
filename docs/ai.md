@@ -89,6 +89,13 @@ backend na PHP straně resolvuje `AiBackendResolver`. Pozn.: PHP strana neměla
 LLM klienta, dokud nevznikl chat — analýza pošty volá model výhradně z Python
 daemonu.
 
+`max_tokens` je kaskáda **AI profil → backend → default provideru analyzeru**;
+`0` = nenastaveno, spadni níž. Jediné skutečné číslo žije v provideru
+analyzeru — limit tak nezkamení v datech každého DS. Chat backendový
+`max_tokens` respektuje, při 0/NULL drží vlastní fallback 4096
+(`ChatController`); dashboard shrnutí má vlastní konstantu (~300) a backend
+limit nečte.
+
 Výsledek extrakce navíc prochází deterministickým obohacením řádků
 z historie dokladů partnera (`RowHistoryEnricher`, bez LLM volání) — viz
 `modules/core/mail/docs/ai-analysis.md`, sekce „Obohacení řádků z historie".

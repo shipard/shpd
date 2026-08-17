@@ -96,7 +96,9 @@ jen `anthropic`; rozhraní drží dveře pro další.
 
 - **Výběr backendu** (`resolveBackend`): `conversation.backend`, jinak default
   aktivní z `core_ai_backends`. Klíč dešifruje `DsSecretCipher` (stejně jako
-  analýza pošty). Viz [`ai.md`](ai.md) §5.
+  analýza pošty). Viz [`ai.md`](ai.md) §5. `max_tokens` backendu chat
+  respektuje; při 0/NULL (= nenastaveno) drží vlastní fallback 4096 — nula
+  nikdy neodejde do API.
 - **Systémový prompt** (`systemPrompt`): základ z cfgItem `core.chat.settings`
   (`module.jsonc`), s built-in fallbackem. K němu se **při každém požadavku
   přilepí aktuální datum** + instrukce „neodhaduj podle tréninkových dat, ověř

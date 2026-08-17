@@ -13,6 +13,11 @@ Plný design: [`tasks/ds-encrypted-secrets.md`](../../tasks/ds-encrypted-secrets
 - **Permissions:** soubor `0600 shipard:shipard`, adresář `0700 shipard:shipard`
 - **Formát ciphertextu v DB:** `v1:{nonce_b64}:{tag_b64}:{ciphertext_b64}`,
   sloupec typu `text NULL`
+- **Sensitive automaticky:** typ `encrypted_text` implikuje `sensitive: true`
+  (derivace v `ColumnDefinition::fromArray`) — API guard tak ciphertext nikdy
+  nepustí ven (`stripSensitive`) ani dovnitř (`rejectSensitiveInput`), i když
+  jsonc flag chybí. Explicitní `"sensitive": true` v jsonc je od teď volitelná
+  explicitnost; `"sensitive": false` u encrypted_text derivace záměrně přebije.
 
 Klíč žije v rámci adresáře DS, takže přežije migraci přes tarball + DB dump
 bez extra zásahu admina.

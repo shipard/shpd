@@ -103,7 +103,8 @@ class ColumnDefinition
                 ? $data['reference']
                 : null,
             system: (bool) ($data['system'] ?? false),
-            sensitive: (bool) ($data['sensitive'] ?? false),
+            sensitive: (bool) ($data['sensitive'] ?? false)
+                || $type === SchemaIntrospector::ENCRYPTED_COLUMN_TYPE,
         );
     }
 }

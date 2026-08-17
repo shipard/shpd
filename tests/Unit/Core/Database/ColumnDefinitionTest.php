@@ -45,4 +45,50 @@ class ColumnDefinitionTest extends TestCase
         $this->assertSame('encrypted_text', $col->type);
         $this->assertTrue($col->nullable);
     }
+
+    public function testEncryptedTextIsSensitiveWithoutFlag(): void
+    {
+        $col = ColumnDefinition::fromArray([
+            'id' => 'api_key',
+            'name' => 'API key',
+            'type' => 'encrypted_text',
+        ]);
+
+        $this->assertTrue($col->sensitive);
+    }
+
+    public function testEncryptedTextIsSensitiveWithExplicitFlag(): void
+    {
+        $col = ColumnDefinition::fromArray([
+            'id' => 'api_key',
+            'name' => 'API key',
+            'type' => 'encrypted_text',
+            'sensitive' => true,
+        ]);
+
+        $this->assertTrue($col->sensitive);
+    }
+
+    public function testEncryptedTextOverridesExplicitSensitiveFalse(): void
+    {
+        $col = ColumnDefinition::fromArray([
+            'id' => 'api_key',
+            'name' => 'API key',
+            'type' => 'encrypted_text',
+            'sensitive' => false,
+        ]);
+
+        $this->assertTrue($col->sensitive);
+    }
+
+    public function testNonEncryptedTypeIsNotSensitiveByDefault(): void
+    {
+        $col = ColumnDefinition::fromArray([
+            'id' => 'note',
+            'name' => 'Note',
+            'type' => 'text',
+        ]);
+
+        $this->assertFalse($col->sensitive);
+    }
 }

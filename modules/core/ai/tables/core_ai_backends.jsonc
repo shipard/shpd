@@ -126,6 +126,7 @@
             "name:en": "API key",
             "type": "encrypted_text",
             "nullable": true,
+            "sensitive": true,
             "group": "credentials"
         },
 

@@ -105,9 +105,9 @@ třeba (žádná schema změna).
 - [x] `ColumnDefinition` derivuje sensitive z typu encrypted_text
 - [x] `core_ai_backends.jsonc` má u `api_key` explicitní flag
 - [x] Testy dle scope zelené
-- [ ] Manuální ověření: oprava `max_tokens` na AI backendu přes UI
+- [x] Manuální ověření: oprava `max_tokens` na AI backendu přes UI
       projde a uložený `api_key` v DB zůstal beze změny (ciphertext
-      identický před/po save)
+      identický před/po save) — ověřeno 17. 8. 2026
 - [x] `secrets.md` aktualizované
 
 ## Commit strategie

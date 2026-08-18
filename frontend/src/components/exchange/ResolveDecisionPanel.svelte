@@ -33,6 +33,11 @@
     createPayload = null,
     currentUserAction = null,
     parentMatchedId = null,
+    // Bulk režim (Issue #29): bulkCount > 0 ⇒ rozhodnutí se aplikuje na
+    // bulkCount řádků naráz; bulkDecidedCount = kolik z nich už nějaké
+    // rozhodnutí má (řídí zobrazení hromadného „Zrušit výběr“).
+    bulkCount = 0,
+    bulkDecidedCount = 0,
     onDecide = () => {},
     // Quick-add z registru (Issue #28) — jen referenceKind === 'party'.
     // Stav i logika žijí v DocumentExchangePreview (sdílené s kartou strany),
@@ -226,9 +231,20 @@
 </script>
 
 <div class="shpd-resolve">
+  {#if bulkCount > 0}
+    <p class="shpd-resolve__hint">{t('exchange.preview.bulk.hint', { count: bulkCount })}</p>
+  {/if}
+
   {#if currentUserAction !== null && currentUserAction !== undefined}
     <div class="shpd-resolve__current">
       <span>{t('exchange.preview.decide.selected', { label: currentLabel })}</span>
+      <button type="button" class="shpd-resolve__unselect" onclick={chooseUnselect}>
+        {t('exchange.preview.decide.unselect')}
+      </button>
+    </div>
+  {:else if bulkCount > 0 && bulkDecidedCount > 0}
+    <div class="shpd-resolve__current">
+      <span>{t('exchange.preview.bulk.decided', { count: bulkDecidedCount })}</span>
       <button type="button" class="shpd-resolve__unselect" onclick={chooseUnselect}>
         {t('exchange.preview.decide.unselect')}
       </button>
@@ -346,7 +362,9 @@
           class="shpd-resolve__skip"
           onclick={chooseSkip}
         >
-          {t('exchange.preview.decide.skipRow')}
+          {bulkCount > 0
+            ? t('exchange.preview.bulk.skipRows')
+            : t('exchange.preview.decide.skipRow')}
         </button>
       {/if}
     </div>

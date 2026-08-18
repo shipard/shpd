@@ -158,6 +158,40 @@
   //     parentMatchedId }
   let decisionOpen = $state(null);
 
+  // ── Hromadné naplnění položky (Issue #29) ──────────────────────────────
+  // U dokladů s mnoha řádky se často používá jedna položka. Badge `+`
+  // v hlavičce sloupce „Položka“ otevře stejný ResolveDecisionPanel a
+  // rozhodnutí zapíše do všech ne-matched řádků naráz (včetně přepisu
+  // dřívějších per-row rozhodnutí). Matched řádky zůstávají nedotčené —
+  // konzistentně s tím, že jejich řádkový badge není interaktivní.
+  let bulkItemIndices = $derived.by(() => {
+    const rows = resolve?.rows ?? [];
+    const out = [];
+    for (let i = 0; i < rows.length; i++) {
+      const st = rows[i]?.item?.status;
+      if (st && st !== 'matched') out.push(i);
+    }
+    return out;
+  });
+  let bulkItemVisible = $derived(
+    onUserActionsChange !== null && bulkItemIndices.length >= 2,
+  );
+
+  function openBulkItemDecision(event) {
+    if (onUserActionsChange === null) return;
+    event.preventDefault();
+    event.stopPropagation();
+    decisionOpen = {
+      anchor: event.currentTarget,
+      path: null,
+      resolveBlock: null,
+      kind: 'item',
+      parentMatchedId: null,
+      bulkPaths: bulkItemIndices.map((i) => `rows[${i}].item`),
+      ...entityConfigForKind('item'),
+    };
+  }
+
   function entityConfigForKind(kind) {
     if (kind === 'party')       return { table: 'base_persons_persons' };
     if (kind === 'item')        return { table: 'economy_items' };
@@ -223,7 +257,21 @@
 
   function handleDecide(action) {
     if (!decisionOpen) return;
-    decideForPath(decisionOpen.path, action);
+    if (decisionOpen.bulkPaths) {
+      // Bulk: všechny cesty v jednom novém objektu — jediné volání
+      // onUserActionsChange, žádné N dílčích callbacků.
+      const next = { ...userActions };
+      for (const path of decisionOpen.bulkPaths) {
+        if (action === null || action === undefined) {
+          delete next[path];
+        } else {
+          next[path] = action;
+        }
+      }
+      onUserActionsChange?.(next);
+    } else {
+      decideForPath(decisionOpen.path, action);
+    }
     decisionOpen = null;
   }
 
@@ -586,7 +634,19 @@
           <thead>
             <tr>
               <th class="shpd-exchange__rows-pos">{t('exchange.preview.row.position')}</th>
-              <th>{t('exchange.preview.row.item')}</th>
+              <th>
+                {t('exchange.preview.row.item')}
+                {#if bulkItemVisible}
+                  <button
+                    type="button"
+                    class="shpd-exchange__status shpd-exchange__status--canCreate shpd-exchange__status--interactive"
+                    title={t('exchange.preview.bulk.itemTitle', { count: bulkItemIndices.length })}
+                    onclick={openBulkItemDecision}
+                  >
+                    <span class="shpd-exchange__status-glyph">+</span>
+                  </button>
+                {/if}
+              </th>
               <th class="num">{t('exchange.preview.row.quantity')}</th>
               <th>{t('exchange.preview.row.unit')}</th>
               <th class="num">{t('exchange.preview.row.unitPrice')}</th>
@@ -709,7 +769,11 @@
       entityTable={decisionOpen.table}
       createPayload={decisionOpen.resolveBlock?.createPayload ?? null}
       parentMatchedId={decisionOpen.parentMatchedId}
-      currentUserAction={userActions[decisionOpen.path] ?? null}
+      currentUserAction={decisionOpen.path !== null ? userActions[decisionOpen.path] ?? null : null}
+      bulkCount={decisionOpen.bulkPaths?.length ?? 0}
+      bulkDecidedCount={decisionOpen.bulkPaths
+        ? decisionOpen.bulkPaths.filter((p) => (userActions[p] ?? null) !== null).length
+        : 0}
       onDecide={handleDecide}
       registryHit={decisionOpen.kind === 'party' ? registryHits[decisionOpen.path] ?? null : null}
       registryBusy={quickAddBusy[decisionOpen.path] ?? false}

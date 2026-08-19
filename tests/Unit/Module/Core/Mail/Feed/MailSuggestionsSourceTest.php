@@ -17,11 +17,11 @@ use Shipard\Module\Core\Mail\Feed\MailSuggestionsSource;
  *   - confidence pásmo (AnalysisConfidenceResolver) → kind, stateStyle a sada
  *     akcí: ready → apply (primary) + review + reject; review/low → review
  *     (primary) + reject; strop D7 podle pokrytí řádků
- *   - zpráva analysis_state=70 → urgent karta + reanalyze/open_form
+ *   - zpráva analysis_state=70 → urgent karta + reanalyze/open_detail
  *     (degradace na review při primary_type=other)
  *   - otevřený návrh s ai_failed wrapperem (_validationError) → chybová
  *     karta mail_invalid s reanalyze
- *   - karta „Není faktura" (kind info, akce trash/archive/open_form)
+ *   - karta „Není faktura" (kind info, akce trash/archive/open_detail)
  *   - strukturovaná hlavička `headline` (partner/typ/částka) + `confidencePct`
  *     + `emailSubject` + `details` + `secondaryFindings`; fallback na
  *     title/subtitle bez partnera
@@ -252,7 +252,7 @@ final class MailSuggestionsSourceTest extends TestCase
         $this->assertSame('reanalyze', $actions[0]['kind']);
         $this->assertTrue($actions[0]['primary']);
         $this->assertSame(['messageNdx' => 101], $actions[0]['target']);
-        $this->assertSame('open_form', $actions[1]['kind']);
+        $this->assertSame('open_detail', $actions[1]['kind']);
     }
 
     public function testMessageAiErrorProducesUrgentCard(): void
@@ -282,9 +282,10 @@ final class MailSuggestionsSourceTest extends TestCase
         $this->assertSame('reanalyze', $actions[0]['id']);
         $this->assertSame('reanalyze', $actions[0]['kind']);
         $this->assertSame(['messageNdx' => 555], $actions[0]['target']);
-        $this->assertSame('open_form', $actions[1]['kind']);
-        $this->assertSame('core_mail_incoming_messages', $actions[1]['target']['table']);
+        $this->assertSame('open_detail', $actions[1]['kind']);
+        $this->assertSame('core.mail.incoming', $actions[1]['target']['viewerId']);
         $this->assertSame(555, $actions[1]['target']['recordId']);
+        $this->assertSame('content', $actions[1]['target']['tabId']);
     }
 
     public function testErrorCardDegradesToReviewForOtherPrimaryType(): void
@@ -344,8 +345,9 @@ final class MailSuggestionsSourceTest extends TestCase
         $this->assertTrue($actions[0]['primary']);
         $this->assertSame(['messageNdx' => 777], $actions[0]['target']);
         $this->assertSame('archive_message', $actions[1]['kind']);
-        $this->assertSame('open_form', $actions[2]['kind']);
-        $this->assertSame('core_mail_incoming_messages', $actions[2]['target']['table']);
+        $this->assertSame('open_detail', $actions[2]['kind']);
+        $this->assertSame('core.mail.incoming', $actions[2]['target']['viewerId']);
+        $this->assertSame('content', $actions[2]['target']['tabId']);
     }
 
     // ── SQL pojistky ─────────────────────────────────────────────────────

@@ -51,13 +51,13 @@
         : 'var(--shpd-color-text-secondary)',
   );
 
-  // „+N" = syntetická open_form akce — otevře editační formulář zprávy
-  // (stejný handler v Dashboard.svelte jako alert akce).
+  // „+N" = syntetická open_detail akce — otevře read-only náhled zprávy
+  // v modalu, stejně jako akce openMail na kartě (handler v Dashboard.svelte).
   function openMessage() {
     onAction({
       id: 'openMail',
-      kind: 'open_form',
-      target: { table: 'core_mail_incoming_messages', recordId: card.context?.messageNdx },
+      kind: 'open_detail',
+      target: { viewerId: 'core.mail.incoming', recordId: card.context?.messageNdx, tabId: 'content' },
     });
   }
 </script>

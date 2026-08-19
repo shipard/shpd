@@ -68,6 +68,8 @@ Fáze 1 (widget MVP) říkala *„přehled, ne přístupový bod"*. Fáze 2 ten 
                               │     └─ Použít → applyMessage(ndx) → FormDialog/toast
                               ├─ reject_message  → RejectReasonPrompt → reject
                               ├─ reanalyze       → reanalyzeMessage(msgNdx)
+                              ├─ open_detail     → ViewerDetailModal (read-only
+                              │     náhled záznamu; mail „Otevřít e-mail")
                               └─ open_viewer/open_form → navigace
 ```
 
@@ -200,6 +202,7 @@ Prioritní žebříček (sestupně), uvnitř pásma `timestamp` DESC.
 | `undo_auto_archive` | „Vrátit vše" z digest karty auto-archivu, toast + refetch | `{date?}` |
 | `open_viewer` | navigace | `{viewerId, recordId?}` |
 | `open_form` | otevři form | `{table, recordId?/id?}` |
+| `open_detail` | read-only detail záznamu v modalu (`ViewerDetailModal` → `GET /_ui/viewer/{viewerId}/detail/{id}`; `toolbar` z odpovědi se ignoruje, `tabId` ořeže detail na jediný tab) | `{viewerId, recordId, tabId?}` |
 
 ## 5. Zdroje karet
 
@@ -223,8 +226,8 @@ Karta má `id = "mail_suggestion:{messageNdx}"`, akční targety
 `{messageNdx}`.
 
 **Chybové karty** — dva zdroje, obě `kind=urgent`, `stateStyle=error`,
-akce `reanalyze` (primary, `{messageNdx}`) + `open_form`
-(`core_mail_incoming_messages`):
+akce `reanalyze` (primary, `{messageNdx}`) + `open_detail`
+(read-only náhled zprávy, viewer `core.mail.incoming`, tab `content`):
 
 - zprávy `analysis_state=70` (analýza selhala) mimo Archiv/Koš
   (`id = "mail_message:{ndx}"`); když už dřívější klasifikace určila
@@ -236,7 +239,7 @@ akce `reanalyze` (primary, `{messageNdx}`) + `open_form`
 **Karty „Není faktura"** — zprávy `analysis_state=30`, `docState=10` (Nová),
 `primary_type='other'` bez otevřeného návrhu → `kind=info`,
 `stateStyle=archive`, titulek „Není faktura — {label typu}"; akce
-`trash_message` (primary), `archive_message`, `open_form`. Žádné
+`trash_message` (primary), `archive_message`, `open_detail`. Žádné
 auto-zavření ani digest — jedna karta per zpráva s jednoklikovým úklidem.
 (Sémantika beze změny proti extracted éře.)
 
@@ -463,7 +466,7 @@ frontend/src/components/dashboard/
 │                           bez mini náhledu): klik otevře v nové záložce
 │                           (PDF/obrázky inline, jinak download), hover
 │                           náhled (jen hover zařízení); „+N" nad strop 3
-│                           je syntetická open_form akce (formulář zprávy)
+│                           je syntetická open_detail akce (náhled zprávy)
 ├── RejectReasonPrompt.svelte — sdílený prompt na důvod (feed i ViewerDetail)
 ├── AiSummaryCard.svelte  — AI shrnutí přes SSE (fallback county dle kind, §11)
 └── ChatLauncher.svelte   — plovoucí chat input (pill, sticky dole na středu,
@@ -502,11 +505,10 @@ message-centrických `/_mail/messages/{ndx}/*` endpointů).
 ## 9. Form modal nad dashboardem
 
 `Dashboard.svelte` drží `formModal = {open, table, recordId, wasSaved}` a
-mountuje `<FormDialog>` — obsluhuje `open_form` akce karet (alerty, chybové
-karty, „Není faktura“…) vystavenou fakturu po apply z review
-modalu (rovnou, bez toastu) a toast „Otevřít“ u Spisovny
-(`base_registry_documents`). Refetch po close je podmíněný (`wasSaved` se nastaví jen
-v `onSaved`):
+mountuje `<FormDialog>` — obsluhuje `open_form` akce karet (alerty…),
+vystavenou fakturu po apply z review modalu (rovnou, bez toastu) a toast
+„Otevřít“ u Spisovny (`base_registry_documents`). Refetch po close je
+podmíněný (`wasSaved` se nastaví jen v `onSaved`):
 
 | Scénář | Refetch? |
 |---|---|
@@ -514,6 +516,17 @@ v `onSaved`):
 | Edit → **Uložit** → close | Ano |
 | **Hotovo** ve FormStateBar (closeForm: 1) | Ano |
 | Edit + Esc/× → confirm OK | Ne |
+
+**Read-only detail modal** (`open_detail`, Issue #30): `Dashboard.svelte`
+drží `detailModal = {open, viewerId, recordId, tabId}` a mountuje
+`<ViewerDetailModal>` (`components/viewer/`) — třetí hostitel
+`ViewerDetail` (vedle inline panelu a draweru). Fetchuje
+`GET /_ui/viewer/{viewerId}/detail/{id}`, `toolbar` z odpovědi ignoruje
+celý, `onAction`/`onRefresh` nepředává a `tabId` ořeže detail na jediný
+tab (mail „Otevřít e-mail" → tab `content`; hlavička s předmětem,
+odesílatelem a badges zůstává). Tab lišta se skrývá přes opt-in prop
+`ViewerDetail.hideSingleTabBar`. Zavření **nevolá** `load()` — čtení
+feed nemění. Stejný modal otevírá i chip „+N" příloh (`FeedCard.svelte`).
 
 ## 10. Empty stavy a refresh
 

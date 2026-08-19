@@ -146,6 +146,8 @@ export default {
   'viewer.search.clear': 'Vymazat hledání',
   'viewer.endOfList': 'To je všechno',
   'viewer.drawer.close': 'Zavřít detail',
+  'viewer.detailModal.title': 'Detail záznamu',
+  'viewer.detailModal.loadFailed': 'Detail se nepodařilo načíst: {msg}',
   'viewer.layout.showGrid': 'Zobrazit jako tabulku',
   'viewer.layout.showList': 'Zobrazit jako seznam',
   'viewer.selectRecord': 'Vyberte záznam',

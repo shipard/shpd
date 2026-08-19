@@ -14,7 +14,10 @@
   import { t } from '../../i18n/index.js';
   import { translateError } from '../../i18n/errors.js';
 
-  let { detail = null, loading = false, onRefresh, onAction = null } = $props();
+  // hideSingleTabBar: opt-in pro hostitele s jediným tabem (ViewerDetailModal) —
+  // skryje tab lištu, když není mezi čím přepínat. Default false, aby se
+  // nezměnil vzhled stávajících hostitelů (inline panel, drawer).
+  let { detail = null, loading = false, onRefresh, onAction = null, hideSingleTabBar = false } = $props();
 
   // Otevřený dropdown — { actionId, anchor }. Per-action, takže různá tlačítka
   // se navzájem zavírají (otevření nového dropdownu shodí předchozí).
@@ -235,18 +238,20 @@
     {/if}
 
     <!-- Tab bar -->
-    <div class="shpd-detail__tabs">
-      {#each detail.tabs as tab (tab.id)}
-        <button
-          class="shpd-detail__tab"
-          class:shpd-detail__tab--active={activeTabId === tab.id}
-          onclick={() => activeTabId = tab.id}
-          type="button"
-        >
-          {tab.label}
-        </button>
-      {/each}
-    </div>
+    {#if !(hideSingleTabBar && detail.tabs.length <= 1)}
+      <div class="shpd-detail__tabs">
+        {#each detail.tabs as tab (tab.id)}
+          <button
+            class="shpd-detail__tab"
+            class:shpd-detail__tab--active={activeTabId === tab.id}
+            onclick={() => activeTabId = tab.id}
+            type="button"
+          >
+            {tab.label}
+          </button>
+        {/each}
+      </div>
+    {/if}
 
     {#snippet renderContent(content)}
       {#if content?.type === 'properties'}

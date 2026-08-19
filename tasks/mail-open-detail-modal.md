@@ -1,6 +1,6 @@
 # Task: Dashboard — „Otevřít e-mail" jako read-only náhled zprávy v modalu (Issue #30)
 
-**Stav:** naplánováno — design schválen 2026-08-19, neimplementováno
+**Stav:** hotovo
 
 ## Cíl
 

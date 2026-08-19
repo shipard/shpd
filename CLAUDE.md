@@ -252,7 +252,10 @@ Formát hlavičky stránky a šablona: `docs/help-authoring.md`.
 - Kartový kontrakt `{id, source, kind, icon, stateStyle, title, subtitle,
   timestamp, context, actions[]}`. Chování akcí odvozuje frontend z `action.kind`
   (`apply_extracted`/`review_extracted`/`reject_extracted`/`reanalyze`/
-  `trash_message`/`archive_message`/`open_viewer`/`open_form`). Mail akce bez
+  `trash_message`/`archive_message`/`open_viewer`/`open_form`/`open_detail`).
+  `open_detail` = read-only detail záznamu v modalu (`ViewerDetailModal` nad
+  `GET /_ui/viewer/{viewerId}/detail/{id}`, target `{viewerId, recordId,
+  tabId?}`) — mail „Otevřít e-mail" a chip „+N" příloh. Mail akce bez
   `label` (FE lokalizuje dle `action.id`); alert akce nesou vlastní label
   (passthrough).
 - **Jednoklik apply** posílá `safe` (`applyExtractedDocument(ndx)` bez

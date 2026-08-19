@@ -137,6 +137,8 @@ export default {
   'viewer.search.clear': 'Clear search',
   'viewer.endOfList': "That's all",
   'viewer.drawer.close': 'Close detail',
+  'viewer.detailModal.title': 'Record detail',
+  'viewer.detailModal.loadFailed': 'Failed to load detail: {msg}',
   'viewer.layout.showGrid': 'Show as table',
   'viewer.layout.showList': 'Show as list',
   'viewer.selectRecord': 'Select a record',

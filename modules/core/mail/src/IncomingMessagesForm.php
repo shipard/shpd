@@ -44,7 +44,14 @@ class IncomingMessagesForm extends TableForm
                         hint: 'Prostý text zprávy. HTML varianta se v Fázi 1 neupravuje ručně — vzniká jen přes import.',
                     )
                 ->col()
-                    ->component('attachmentsView', params: ['table_id' => $tableId])
+                    ->component('attachmentsView', params: [
+                        'table_id' => $tableId,
+                        // Raw .eml se v panelu příloh neukazuje — konzistence
+                        // s viewerem (fetchContentAttachments) a feedem.
+                        'exclude_attachment_id' => isset($data['raw_source_attachment'])
+                            ? (int) $data['raw_source_attachment']
+                            : null,
+                    ])
             ->build();
 
         $settings = $this->tab('settings', 'Nastavení')

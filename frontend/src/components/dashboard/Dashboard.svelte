@@ -20,6 +20,7 @@
   import FeedFilter from './FeedFilter.svelte';
   import MailUploadModal from './MailUploadModal.svelte';
   import RejectReasonPrompt from './RejectReasonPrompt.svelte';
+  import ViewerDetailModal from '../viewer/ViewerDetailModal.svelte';
 
   const HEADS_TABLE = 'docs_core_heads';
   const REGISTRY_TABLE = 'base_registry_documents';
@@ -69,6 +70,10 @@
   // Form modal — alert open_form, toast „Otevřít“ (registry) a vystavená
   // faktura po apply z review modalu. wasSaved viz handleFormClose.
   let formModal = $state({ open: false, table: '', recordId: null, wasSaved: false });
+
+  // Read-only detail modal — open_detail akce karet („Otevřít e-mail").
+  // Čtení nic nemění, zavření na rozdíl od handleFormClose nevolá load().
+  let detailModal = $state({ open: false, viewerId: '', recordId: null, tabId: null });
 
   // Minimální lokální toast (app nemá toast infra). kind: 'applied' → Otevřít.
   // docTable řídí, kterou tabulku „Otevřít“ otevře — dnes jen Spisovna;
@@ -164,6 +169,14 @@
         return undoAutoArchiveFlow(target.date ?? null, card.id);
       case 'open_viewer':
         return navigationStore.navigateToViewer(target.viewerId, target.recordId ?? null, target.viewGroup ?? null);
+      case 'open_detail':
+        detailModal = {
+          open: true,
+          viewerId: target.viewerId,
+          recordId: target.recordId,
+          tabId: target.tabId ?? null,
+        };
+        return;
       case 'open_panel':
         return navigationStore.navigateToPanel(target.panelId, action.label ?? null);
       case 'open_form':
@@ -482,6 +495,14 @@
     onClose={handleFormClose}
   />
 {/if}
+
+<ViewerDetailModal
+  open={detailModal.open}
+  viewerId={detailModal.viewerId}
+  recordId={detailModal.recordId}
+  tabId={detailModal.tabId}
+  onClose={() => (detailModal = { open: false, viewerId: '', recordId: null, tabId: null })}
+/>
 
 {#if toast.visible}
   <div class="shpd-toast" role="status">

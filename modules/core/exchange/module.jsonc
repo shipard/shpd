@@ -24,6 +24,16 @@
 
     "config": [
         { "id": "core.exchange.contentTags", "file": "config/contentTags.jsonc" }
+    ],
+
+    "documentEventHandlers": [
+        {
+            // Učení pravidel IČO → obsahový štítek z apply dokladu s LLM
+            // štítkem (D22, tasks/content-tag-enrichment.md).
+            "table": "docs_core_heads",
+            "class": "Shipard\\Module\\Core\\Exchange\\Enrich\\ContentTagRuleCaptureHandler",
+            "events": ["stateChanged"]
+        }
     ]
 
     // No documentClasses — uses existing Document/TableGateway.

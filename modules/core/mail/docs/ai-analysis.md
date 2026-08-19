@@ -242,6 +242,80 @@ apply-time zápis `DocumentApplier::writeSupplierCodeMappings` (ten pokryje
 řeší unique index `(person, supplier_code)`. Párování canonical → finální
 řádky je poziční přes `order_pos` s guardem na shodu popisu.
 
+## Obsahová eskalace (content tags)
+
+Vrstva 2 „AI párování položek" (`tasks/content-tag-enrichment.md`,
+D1–D22) — nastupuje, když po Vrstvě 0 zbývají item řádky bez
+`item.ourCode`. Orchestruje `RowEnrichmentPipeline`
+(`modules/core/exchange/src/Enrich/`), který nahrazuje přímé volání
+`RowHistoryEnricher` ve všech cestách kromě ISDOC importu (strukturované
+položky, eskalace tam nepatří).
+
+**Flow:**
+
+1. Vrstva 0 (`RowHistoryEnricher::enrich`) — beze změny.
+2. Zbývá nepokrytý item řádek? Ne → konec.
+3. **Pravidlo IČO → štítek** (`core_exchange_tag_rules`, tableId 438):
+   zásah přeskakuje LLM, persistuje se
+   `_resolve.contentTag {tag, tagSource: "rule", ruleId}`.
+4. Jinak **LLM klasifikace** (`ContentTagClassifier`, jen při `/result` —
+   právě jednou za běh analýzy): doklad se klasifikuje do fixní taxonomie
+   `core.exchange.contentTags` (prompt `tag-v1.0.0`, enum generovaný
+   z cfgItem, digest = supplier + popisy řádků + totals). Persist
+   `{tag, tagSource: "llm", tagConfidence, promptVersion, rowExceptions}`;
+   `null` štítek je legitimní výstup (nic se nezapisuje). Selhání LLM
+   nikdy neshodí `/result`.
+5. **Resolution štítek → položka** (`ContentTagResolver`, fresh při každém
+   čtení): tag řádku = `rowExceptions[rowIndex] ?? primaryTag`; právě
+   jedna živá položka s tagem v `economy_items.content_tags` → trojice
+   {ourCode, account}; více → `ambiguous`; žádná → fallback účet z nabídky
+   účetních položek aktivní varianty osnovy (`AccountingItemsOffer`,
+   prefix fallback `vehicle.*`) → `accountOnly`; ani ten → `unmapped`.
+   `amountGuard` z `economy.items.contentTagDefaults` návrh zadrží
+   (`guarded`, možný dlouhodobý majetek). Propisují se jen prázdná pole.
+
+Fresh běh (preview/apply) LLM nevolá — **fresh re-check pravidla přepíše
+persistnutý LLM štítek** (deterministika bije odhad, D16); otagování
+položky mezi analýzou a preview se projeví bez reanalýzy. Štítek se navíc
+denormalizuje do sloupce `core_mail_message_analyses.content_tag`.
+
+Audit per řádek (`_resolve.rows[i].enrichment`):
+
+```jsonc
+{
+    "matchedBy":  "contentTag",
+    "confidence": "medium" | null,        // medium jen když se něco propsalo
+    "tag":        "vehicle.fuel",
+    "tagSource":  "rule" | "llm",
+    "itemName":   "Spotřeba PHM",         // jen resolution item
+    "sourceItemId": 123,                  // jen resolution item
+    "suggested":  { "ourCode": "…", "account": "…" },  // co reálně doplnil
+    "resolution": "item" | "accountOnly" | "ambiguous" | "unmapped" | "guarded",
+    "candidates": ["FUEL-A", "FUEL-B"],   // jen ambiguous
+    "guard":      "amount",               // jen guarded
+    "vatHint":    "nonDeductible"         // informativní (D4), z contentTagDefaults
+}
+```
+
+**Precedence (D13):** setting `exchange.contentTag.beforeDominance`
+(SettingsStore, default `true`) — contentTag má přednost před dominancí
+(tier 3 Vrstvy 0 běží až jako úklid po eskalaci); `false` = stávající
+pořadí. Backend LLM klasifikace jde přes setting
+`exchange.contentTag.backend` (ndx `core_ai_backends`, null = default
+backend; doporučení: levný model). Obojí zatím jen přes `ds-setting set`,
+UI vznikne v tasku `content-tag-ui.md`.
+
+**Strop pásma (D14):** řádek doplněný s `matchedBy: "contentTag"` stropuje
+pásmo na `review` vždy — obsahový návrh potvrzuje člověk.
+
+**Learning (D22):** `ContentTagRuleCaptureHandler` (registrace
+`documentEventHandlers` v `core.exchange/module.jsonc`) při přechodu
+dokladu 10 → 20 s lineage `aiExtraction` a LLM štítkem zapíše pravidlo
+IČO → štítek (origin `learned`, platné okamžitě). Shoda s existujícím
+pravidlem → jen statistiky; konflikt s `learned` pravidlem → pravidlo se
+smaže (dodavatel s pestrým sortimentem); `user`/`seed` pravidla learning
+nikdy nemění.
+
 ## Zaokrouhlení celkové částky při apply
 
 Faktury se zaokrouhlenou částkou k úhradě (typicky na celé Kč):

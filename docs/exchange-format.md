@@ -616,6 +616,20 @@ klient drží jeden payload mezi step preview a apply.
 }
 ```
 
+### Audit bloky navíc (additionalProperties)
+
+`_resolve` má ve schématu `additionalProperties: true` — audit vrstvy si
+do něj přidávají vlastní bloky bez změny schématu:
+
+- `_resolve.rows[i].enrichment` — obohacení řádku z historie partnera
+  nebo obsahové eskalace (viz `modules/core/mail/docs/ai-analysis.md`,
+  sekce „Obohacení řádků z historie" a „Obsahová eskalace").
+- `_resolve.contentTag` — dokument-level obsahový štítek
+  (`{tag, tagSource: "rule"|"llm", ruleId? | tagConfidence?,
+  promptVersion?, rowExceptions?}`), persistuje se při `/result`,
+  fresh re-check pravidla IČO ho může přepsat
+  (`tasks/content-tag-enrichment.md`).
+
 ### `userAction` slovník
 
 | Hodnota | Význam |

@@ -96,9 +96,12 @@ analyzeru — limit tak nezkamení v datech každého DS. Chat backendový
 (`ChatController`); dashboard shrnutí má vlastní konstantu (~300) a backend
 limit nečte.
 
-Výsledek extrakce navíc prochází deterministickým obohacením řádků
-z historie dokladů partnera (`RowHistoryEnricher`, bez LLM volání) — viz
-`modules/core/mail/docs/ai-analysis.md`, sekce „Obohacení řádků z historie".
+Výsledek extrakce navíc prochází obohacením řádků (`RowEnrichmentPipeline`):
+deterministická vrstva z historie dokladů partnera (`RowHistoryEnricher`,
+bez LLM volání) + obsahová eskalace pro nepokryté řádky (klasifikace do
+taxonomie štítků — pravidlem IČO, jinak levným LLM voláním) — viz
+`modules/core/mail/docs/ai-analysis.md`, sekce „Obohacení řádků z historie"
+a „Obsahová eskalace (content tags)".
 
 **Soukromí digestu shrnutí**: prompt shrnutí obsahuje titulky karet
 (partneři/částky z hlaviček dokladů) — stejná data, jaká analyzer LLM už

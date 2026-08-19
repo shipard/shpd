@@ -367,6 +367,7 @@ class DocumentApplier
 
         // Mark canCreate references as matched (with newly-assigned ids).
         $resolved = $this->annotateSideCreated($resolved, $sideCreatedIds);
+        $resolved = $this->annotateNoItemRows($resolved, $plan['rowNoItems']);
         $finalCanonical = $this->withResolve($canonical, $resolved, $validatorIssues);
         $finalCanonical['savedDocId'] = $savedDocId;
 
@@ -535,6 +536,7 @@ class DocumentApplier
             'bankCreate'          => null,
             'rowItemCreates'      => [],
             'rowSkips'            => [],
+            'rowNoItems'          => [],
             'resolvedSupplier'    => null,
             'resolvedCustomer'    => null,
             'resolvedSupplierBank'=> null,
@@ -592,10 +594,19 @@ class DocumentApplier
             if ($itemFresh !== null) {
                 $itemClient = is_array($clientRow['item'] ?? null) ? $clientRow['item'] : null;
                 $itemAction = $itemClient['userAction'] ?? null;
-                $itemRes = $this->resolveOne("rows.{$i}.item", $itemFresh, $itemAction, 'economy_items', $plan, $issues);
-                $plan['resolvedRowItems'][$i] = $itemRes['id'];
-                if ($itemRes['autoCreate']) {
-                    $plan['rowItemCreates'][$i] = $itemFresh['createPayload'] ?? [];
+                if ($itemAction === 'noItem') {
+                    // „Jen účet — bez položky" (D24): řádek se pořídí bez item
+                    // FK. resolveOne se nevolá — pin přebíjí fresh status i
+                    // enrichment návrh (D3). Povinnost účtu se validuje níž,
+                    // až je resolvedRowAccounts pro řádek známé.
+                    $plan['rowNoItems'][] = $i;
+                    $plan['resolvedRowItems'][$i] = null;
+                } else {
+                    $itemRes = $this->resolveOne("rows.{$i}.item", $itemFresh, $itemAction, 'economy_items', $plan, $issues);
+                    $plan['resolvedRowItems'][$i] = $itemRes['id'];
+                    if ($itemRes['autoCreate']) {
+                        $plan['rowItemCreates'][$i] = $itemFresh['createPayload'] ?? [];
+                    }
                 }
             } else {
                 $plan['resolvedRowItems'][$i] = null;
@@ -614,6 +625,19 @@ class DocumentApplier
             $plan['resolvedRowAccounts'][$i] = ($accountFresh['status'] ?? null) === 'matched'
                 ? ($accountFresh['matchedId'] ?? null)
                 : null;
+
+            // Řádek s pinem noItem bez naresolvovaného účtu nemá co účtovat —
+            // apply musí selhat srozumitelně, ne až při účtování konceptu.
+            if (in_array($i, $plan['rowNoItems'], true) && $plan['resolvedRowAccounts'][$i] === null) {
+                $plan['errorCode'] = 'no_item_requires_account';
+                $plan['errorMessage'] = "Řádek {$i}: volba „jen účet — bez položky\" vyžaduje platný účet.";
+                $issues[] = [
+                    'severity' => 'error',
+                    'path'     => "rows.{$i}.item",
+                    'code'     => 'no_item_requires_account',
+                    'message'  => 'Volba „jen účet — bez položky" vyžaduje řádek s platným účtem.',
+                ];
+            }
 
             // Per-řádkový partner — pin přes _resolve.rows[i].partner.
             $plan['resolvedRowPartners'][$i] = $this->resolvePin(
@@ -1666,6 +1690,29 @@ class DocumentApplier
             }
         }
         return false;
+    }
+
+    /**
+     * Stamp rows decided as `noItem` with status `noItem` in the response
+     * `_resolve` — the fresh resolve status (canCreate/notFound) would
+     * otherwise suggest an unresolved reference on a successfully applied
+     * row. Response-only status (schema has additionalProperties).
+     *
+     * @param array<string, mixed> $resolved
+     * @param list<int> $noItemRows
+     * @return array<string, mixed>
+     */
+    private function annotateNoItemRows(array $resolved, array $noItemRows): array
+    {
+        if ($noItemRows === []) {
+            return $resolved;
+        }
+        foreach ($resolved['rows'] ?? [] as $i => $rowR) {
+            if (isset($rowR['item']) && in_array($i, $noItemRows, true)) {
+                $resolved['rows'][$i]['item']['status'] = 'noItem';
+            }
+        }
+        return $resolved;
     }
 
     /**

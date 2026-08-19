@@ -123,7 +123,16 @@ final class RowEnrichmentPipeline
 
             $block = $canonical['_resolve']['contentTag'] ?? null;
             if (is_array($block) && is_string($block['tag'] ?? null) && $block['tag'] !== '') {
-                $canonical = $this->applyTagToRows($canonical, $block);
+                // Lokalizovaný tagLabel jen na fresh čteních (D23) — /result
+                // běží bez uživatelského jazyka, persist label nenese a
+                // frontend fallbackuje na klíč štítku.
+                if (!$allowLlm) {
+                    $label = $this->resolver->tagLabelFor((string) $block['tag']);
+                    if ($label !== null) {
+                        $canonical['_resolve']['contentTag']['tagLabel'] = $label;
+                    }
+                }
+                $canonical = $this->applyTagToRows($canonical, $block, withLabels: !$allowLlm);
             }
         }
 
@@ -192,9 +201,10 @@ final class RowEnrichmentPipeline
      *
      * @param array<string, mixed> $canonical
      * @param array<string, mixed> $block  persistnutý/čerstvý `_resolve.contentTag`
+     * @param bool $withLabels  fresh čtení → lokalizovaný tagLabel do auditu (D23)
      * @return array<string, mixed>
      */
-    private function applyTagToRows(array $canonical, array $block): array
+    private function applyTagToRows(array $canonical, array $block, bool $withLabels = false): array
     {
         $primaryTag = (string) $block['tag'];
         $tagSource  = (string) ($block['tagSource'] ?? 'llm');
@@ -227,6 +237,12 @@ final class RowEnrichmentPipeline
                 'tagSource' => $tagSource,
                 'suggested' => [],
             ];
+            if ($withLabels) {
+                $label = $this->resolver->tagLabelFor($rowTag);
+                if ($label !== null) {
+                    $enrichment['tagLabel'] = $label;
+                }
+            }
             $vatHint = $this->resolver->vatHintFor($rowTag);
             if ($vatHint !== null) {
                 $enrichment['vatHint'] = $vatHint;

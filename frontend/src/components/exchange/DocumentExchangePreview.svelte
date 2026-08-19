@@ -47,6 +47,11 @@
   let summary = $derived(resolve?.summary ?? null);
   let issues = $derived(resolve?.issues ?? []);
   let enrichedCount = $derived(enrichedRowCount(resolve?.rows));
+  // Sloupec Účet se ukazuje, jen když ho aspoň jeden řádek nese —
+  // faktury bez kontace/enrichmentu zůstávají beze změny (D23).
+  let hasAccountColumn = $derived(
+    (canonical?.rows ?? []).some((r) => r?.account != null && String(r.account) !== ''),
+  );
 
   // ── DPH & platba: lokalizace canonical enum klíčů ──────────────────────
   // Canonical nese stringové klíče (fromBase, domestic, bankTransfer, …);
@@ -85,16 +90,26 @@
   // shoda)" + řádek „Položka: kód — jméno“ (enrichment.itemName) +
   // řádek s výčtem skutečně doplněných polí. U dominance
   // nese kind i podíl položky na řádcích historie (enrichment.dominance).
+  // Obsahov\u00e1 klasifikace (matchedBy 'contentTag') m\u00e1 vlastn\u00ed header \u2014
+  // blok nenese sourceDocId a matchKindKey by lhal \u201ep\u0159esn\u00e1 shoda".
   function enrichTitle(e) {
-    const docNumber = e.sourceDocNumber ?? `#${e.sourceDocId}`;
-    const kindKey = matchKindKey(e.matchedBy);
-    const kind =
-      kindKey === 'dominant' && e.dominance?.share != null
-        ? t('exchange.preview.enrich.kind.dominantShare', {
-            share: Math.round(e.dominance.share * 100),
-          })
-        : t(`exchange.preview.enrich.kind.${kindKey}`);
-    const header = t('exchange.preview.enrich.tooltip', { docNumber, kind });
+    let header;
+    if (e.matchedBy === 'contentTag') {
+      header = t('exchange.preview.enrich.contentTag', {
+        tag: e.tagLabel ?? e.tag ?? '\u2014',
+        source: t(`exchange.preview.enrich.tagSource.${e.tagSource === 'rule' ? 'rule' : 'llm'}`),
+      });
+    } else {
+      const docNumber = e.sourceDocNumber ?? `#${e.sourceDocId}`;
+      const kindKey = matchKindKey(e.matchedBy);
+      const kind =
+        kindKey === 'dominant' && e.dominance?.share != null
+          ? t('exchange.preview.enrich.kind.dominantShare', {
+              share: Math.round(e.dominance.share * 100),
+            })
+          : t(`exchange.preview.enrich.kind.${kindKey}`);
+      header = t('exchange.preview.enrich.tooltip', { docNumber, kind });
+    }
     const fields = suggestedFieldKeys(e.suggested)
       .map((key) => t(`exchange.preview.enrich.field.${key}`))
       .join(', ');
@@ -108,6 +123,9 @@
       );
     }
     if (fields) lines.push(t('exchange.preview.enrich.filled', { fields }));
+    if (e.vatHint === 'nonDeductible') {
+      lines.push(t('exchange.preview.enrich.vatHint.nonDeductible'));
+    }
     return lines.join('\n');
   }
 
@@ -148,7 +166,20 @@
     if (s === 'matchedDecided') return '✓';
     if (s === 'canCreateDecided') return '+';
     if (s === 'skipped') return '⊘';
+    if (s === 'noItemDecided') return '✓';
     return null;
+  }
+
+  // „Jen účet — bez položky" (D24) se nabízí jen na řádku, který účet
+  // reálně nese (z extrakce nebo propsaný enrichmentem do canonical).
+  function rowHasAccount(i) {
+    const account = canonical?.rows?.[i]?.account;
+    return account != null && String(account) !== '';
+  }
+
+  function rowHasAccountForPath(path) {
+    const m = /^rows\[(\d+)\]\.item$/.exec(path ?? '');
+    return m !== null && rowHasAccount(Number(m[1]));
   }
 
   // ── Phase 3b: interactive decisions ────────────────────────────────────
@@ -188,6 +219,9 @@
       kind: 'item',
       parentMatchedId: null,
       bulkPaths: bulkItemIndices.map((i) => `rows[${i}].item`),
+      // Bulk noItem jen když účet nesou všechny cílové řádky — částečný
+      // zápis by na zbytku vyrobil apply chybu no_item_requires_account.
+      allowNoItem: bulkItemIndices.every((i) => rowHasAccount(i)),
       ...entityConfigForKind('item'),
     };
   }
@@ -237,6 +271,7 @@
       resolveBlock,
       kind,
       parentMatchedId: parentMatchedIdForPath(path, kind),
+      allowNoItem: kind === 'item' && rowHasAccountForPath(path),
       ...cfg,
     };
   }
@@ -371,6 +406,7 @@
     if (typeof ua === 'string' && ua.startsWith('useExisting:')) return 'matchedDecided';
     if (ua === 'create') return 'canCreateDecided';
     if (ua === 'skip') return 'skipped';
+    if (ua === 'noItem') return 'noItemDecided';
     return original;
   }
 
@@ -383,6 +419,7 @@
     }
     if (ua === 'create') return t('exchange.preview.status.decided.create');
     if (ua === 'skip') return t('exchange.preview.status.decided.skip');
+    if (ua === 'noItem') return t('exchange.preview.status.decided.noItem');
     return statusLabel(resolveBlock);
   }
 
@@ -647,6 +684,9 @@
                   </button>
                 {/if}
               </th>
+              {#if hasAccountColumn}
+                <th>{t('exchange.preview.row.account')}</th>
+              {/if}
               <th class="num">{t('exchange.preview.row.quantity')}</th>
               <th>{t('exchange.preview.row.unit')}</th>
               <th class="num">{t('exchange.preview.row.unitPrice')}</th>
@@ -666,6 +706,16 @@
                   {@render statusBadge(resolve?.rows?.[i]?.item, `rows[${i}].item`, 'item')}
                   {@render enrichBadge(resolve?.rows?.[i]?.enrichment)}
                 </td>
+                {#if hasAccountColumn}
+                  <td>
+                    {#if row.account}
+                      <span class="shpd-exchange__row-code">{row.account}</span>
+                      {@render statusBadge(resolve?.rows?.[i]?.account)}
+                    {:else}
+                      —
+                    {/if}
+                  </td>
+                {/if}
                 <td class="num">{row.quantity ?? '—'}</td>
                 <td>
                   {row.unit ?? '—'}
@@ -770,6 +820,7 @@
       createPayload={decisionOpen.resolveBlock?.createPayload ?? null}
       parentMatchedId={decisionOpen.parentMatchedId}
       currentUserAction={decisionOpen.path !== null ? userActions[decisionOpen.path] ?? null : null}
+      allowNoItem={decisionOpen.allowNoItem ?? false}
       bulkCount={decisionOpen.bulkPaths?.length ?? 0}
       bulkDecidedCount={decisionOpen.bulkPaths
         ? decisionOpen.bulkPaths.filter((p) => (userActions[p] ?? null) !== null).length
@@ -1074,6 +1125,16 @@
   .shpd-exchange__status--skipped {
     background: var(--shpd-color-text-muted, #888);
     color: var(--shpd-color-surface, white);
+  }
+
+  /* noItem — řádek půjde jen s účtem, bez položky. Pozitivní rozhodnutí
+     (řádek se pořídí), proto ✓ + outline; neutrální paleta odlišuje od
+     matched (zelená) i canCreate (žlutá). */
+  .shpd-exchange__status--noItemDecided {
+    background: var(--shpd-color-state-confirmed-bg);
+    color: var(--shpd-color-state-confirmed-text);
+    outline: 2px solid var(--shpd-color-state-confirmed-text);
+    outline-offset: 1px;
   }
 
   /* ── Enrichment badge (Row History Enrichment) ───────────────────────────

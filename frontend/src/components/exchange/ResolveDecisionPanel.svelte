@@ -8,6 +8,7 @@
   //   - pick a result            → onDecide(`useExisting:${item.id}`)
   //   - "create new" → save      → onDecide(`useExisting:${newId}`)  (real id, no side-create)
   //   - "skip row"  (items only) → onDecide('skip')
+  //   - "account only" (items with account) → onDecide('noItem')
   //   - "create"   (bank only)   → onDecide('create')  // fallback when no parent
   //   - clear current selection  → onDecide(null)
   //
@@ -38,6 +39,9 @@
     // rozhodnutí má (řídí zobrazení hromadného „Zrušit výběr“).
     bulkCount = 0,
     bulkDecidedCount = 0,
+    // „Jen účet — bez položky" (D24) — jen referenceKind 'item' a jen když
+    // řádek (u bulku všechny řádky) nese účet; rozhoduje rodič.
+    allowNoItem = false,
     onDecide = () => {},
     // Quick-add z registru (Issue #28) — jen referenceKind === 'party'.
     // Stav i logika žijí v DocumentExchangePreview (sdílené s kartou strany),
@@ -99,6 +103,7 @@
     }
     if (action === 'create') return t('exchange.preview.decide.create');
     if (action === 'skip') return t('exchange.preview.decide.skip');
+    if (action === 'noItem') return t('exchange.preview.decide.noItem');
     return String(action);
   }
 
@@ -192,6 +197,10 @@
 
   function chooseSkip() {
     onDecide('skip');
+  }
+
+  function chooseNoItem() {
+    onDecide('noItem');
   }
 
   function chooseUnselect() {
@@ -354,6 +363,15 @@
           onclick={onOpenRegistrySearch}
         >
           {t('exchange.preview.registry.search')}
+        </button>
+      {/if}
+      {#if referenceKind === 'item' && allowNoItem}
+        <button
+          type="button"
+          class="shpd-resolve__skip"
+          onclick={chooseNoItem}
+        >
+          {t('exchange.preview.decide.noItem')}
         </button>
       {/if}
       {#if referenceKind === 'item'}

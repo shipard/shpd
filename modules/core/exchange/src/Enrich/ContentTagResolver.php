@@ -155,6 +155,18 @@ final class ContentTagResolver
         return $guard;
     }
 
+    /**
+     * Lokalizovaný label štítku z cfgItem taxonomie. Compiled config je
+     * načtený pro jazyk requestu — label proto patří jen do fresh odpovědí
+     * (preview/apply), nikdy do persistu z /result (D23).
+     */
+    public function tagLabelFor(string $tag): ?string
+    {
+        $taxonomy = $this->config?->cfgItem('core.exchange.contentTags');
+        $name = is_array($taxonomy) ? ($taxonomy[$tag]['name'] ?? null) : null;
+        return is_string($name) && $name !== '' ? $name : null;
+    }
+
     /** vatHint pro štítek — v1 informativní (jde jen do auditu), D4. */
     public function vatHintFor(string $tag): ?string
     {

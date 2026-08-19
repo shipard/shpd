@@ -34,6 +34,7 @@ class RowEnrichmentPipelineTest extends TestCase
         bool $beforeDominance = true,
         array $defaults = [],
         ?Connection $dibi = null,
+        array $taxonomy = [],
     ): RowEnrichmentPipeline {
         $dibi ??= $this->dibi($history, $items, $rule);
 
@@ -43,6 +44,7 @@ class RowEnrichmentPipelineTest extends TestCase
         $config = $this->createMock(ConfigRuntime::class);
         $config->method('cfgItem')->willReturnMap([
             ['economy.items.contentTagDefaults', $defaults],
+            ['core.exchange.contentTags', $taxonomy],
         ]);
 
         return new RowEnrichmentPipeline(
@@ -189,6 +191,45 @@ class RowEnrichmentPipelineTest extends TestCase
         $this->assertSame('medium', $enrichment['confidence']);
         $this->assertSame('rule', $enrichment['tagSource']);
         $this->assertSame('item', $enrichment['resolution']);
+    }
+
+    public function testFreshRunAddsLocalizedTagLabel(): void
+    {
+        // Fresh čtení nese lokalizovaný label štítku (D23) — dokument-level
+        // blok i řádkový audit.
+        $pipeline = $this->pipeline(
+            items: [$this->taggedItem('FUEL', ['vehicle.fuel'])],
+            rule: ['id' => 5, 'tag' => 'vehicle.fuel', 'origin' => 'learned'],
+            taxonomy: ['vehicle.fuel' => ['name' => 'Pohonné hmoty', 'order' => 10]],
+        );
+        $result = $pipeline->enrichFresh($this->canonical([$this->itemRow('Natural 95')]));
+
+        $this->assertSame('Pohonné hmoty', $result['_resolve']['contentTag']['tagLabel']);
+        $this->assertSame('Pohonné hmoty', $this->enrichmentAt($result, 0)['tagLabel']);
+    }
+
+    public function testResultRunOmitsTagLabel(): void
+    {
+        // /result běží bez uživatelského jazyka — persist label nenese (D23).
+        $dibi = $this->dibi(
+            history: [],
+            items: [$this->taggedItem('FUEL', ['vehicle.fuel'])],
+            rule: ['id' => 5, 'tag' => 'vehicle.fuel', 'origin' => 'learned'],
+        );
+        $fluent = $this->createMock(\Dibi\Fluent::class);
+        $fluent->method('__call')->willReturnSelf();
+        $fluent->method('execute');
+        $dibi->method('update')->willReturn($fluent);
+
+        $pipeline = $this->pipeline(
+            classifier: $this->neverCalledClassifier(),
+            dibi: $dibi,
+            taxonomy: ['vehicle.fuel' => ['name' => 'Pohonné hmoty', 'order' => 10]],
+        );
+        $result = $pipeline->enrichAtResult($this->canonical([$this->itemRow('Natural 95')]));
+
+        $this->assertArrayNotHasKey('tagLabel', $result['_resolve']['contentTag']);
+        $this->assertArrayNotHasKey('tagLabel', $this->enrichmentAt($result, 0));
     }
 
     public function testLlmClassifiesWithRowExceptions(): void

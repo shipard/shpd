@@ -19,7 +19,22 @@
     ],
 
     "settingsItems": [
-        { "viewer": "economy.items.kinds", "section": "items" }
+        { "viewer": "economy.items.kinds", "section": "items", "order": 10 },
+        { "panel": "contentTags", "section": "items", "order": 20 }
+    ],
+
+    "panels": [
+        {
+            // Nastavení → Položky → Obsahové štítky (tasks/content-tag-ui.md
+            // D27): přehled mapování taxonomie + reverzní otagování položek.
+            // Ručně psaný panel — server-driven settings page tabulku
+            // s akcemi neunese (vzor dsSetup).
+            "id": "contentTags",
+            "name": "Content tags",
+            "name:cs": "Obsahové štítky",
+            "name:en": "Content tags",
+            "icon": "tags"
+        }
     ],
 
     "viewers": [

@@ -74,12 +74,15 @@ Fáze 1 (widget MVP) říkala *„přehled, ne přístupový bod"*. Fáze 2 ten 
 ```
 
 - **Zdroj karet** = lehké rozhraní `FeedSource::collectCards(FeedContext): array`
-  (`src/Core/Feed/`). Dva konzumenti registrované napevno v controlleru (D10);
+  (`src/Core/Feed/`). Konzumenti registrovaní napevno v controlleru (D10);
   žádný plugin-registr. `MailSuggestionsSource` (`modules/core/mail/src/Feed/`),
-  `AlertsSource` (`modules/core/alerts/src/Feed/`).
+  `AlertsSource` (`modules/core/alerts/src/Feed/`),
+  `ContentTagSuggestionsSource` (`modules/core/exchange/src/Dashboard/`).
 - **Degradace dle modulů** (task `hosting-07b`): zdroj se vůbec nezaregistruje,
   když jeho klíčová tabulka na DS není — mail zdroje vyžadují
-  `core_mail_incoming_messages`, `AlertsSource` `core_alerts_alerts`
+  `core_mail_incoming_messages`, `AlertsSource` `core_alerts_alerts`,
+  `ContentTagSuggestionsSource` `core_mail_message_analyses` +
+  `economy_items` + `economy_accounting_accounts`
   (mapa tabulka → zdroj žije v `collectCards()`, `$tables` = runtime
   `TableDefinition` mapa z dispatche). Dashboard tak nepadá na DS bez
   `core.mail` (hosting DS).
@@ -186,7 +189,7 @@ Prioritní žebříček (sestupně), uvnitř pásma `timestamp` DESC.
 | `urgent` | 🔴 | alert `error`; zpráva `analysis_state=70` (analýza selhala); nevalidní výstup AI (`mail_invalid`) |
 | `review` | 🟡 | otevřený návrh v pásmu `review`/`low` (runtime resolver); alert `warning`; chybová karta s `primary_type=other` |
 | `ready`  | 🟢 | otevřený návrh v pásmu `ready` (jednoklik apply) |
-| `info`   | ℹ️ | alert `info`; karta „Není faktura"; „a další…" karta |
+| `info`   | ℹ️ | alert `info`; karta „Není faktura"; karta „Nová kategorie" (content tag); „a další…" karta |
 
 ### 4.2 Slovník `kind` akcí (chování odvozuje frontend)
 
@@ -203,6 +206,7 @@ Prioritní žebříček (sestupně), uvnitř pásma `timestamp` DESC.
 | `open_viewer` | navigace | `{viewerId, recordId?}` |
 | `open_form` | otevři form | `{table, recordId?/id?}` |
 | `open_detail` | read-only detail záznamu v modalu (`ViewerDetailModal` → `GET /_ui/viewer/{viewerId}/detail/{id}`; `toolbar` z odpovědi se ignoruje, `tabId` ořeže detail na jediný tab) | `{viewerId, recordId, tabId?}` |
+| `materialize_content_tag` | založení účetní položky pro obsahový štítek — `POST /_exchange/content-tags/materialize`, toast s „Otevřít" (form položky) + refetch; labely akcí posílá server (passthrough — u goods.stock nesou čísla účtů z osnovy) | `{tag, account?}` |
 
 ## 5. Zdroje karet
 
@@ -323,6 +327,37 @@ Bez registry (null) se tagová agregace přeskočí — fail-open, alerty
 projdou individuálně. Karta čerpá z tabulky alertů (D12), může být až
 5 minut za skutečností; panel sám spouští checky naživo.
 
+### 5.3 ContentTagSuggestionsSource
+
+Karta **„Nová kategorie"** (tasks/content-tag-ui.md D25): otevřené
+dokumentové návrhy (poslední úspěšná analýza, `resolution IS NULL`,
+zpráva v docState 10/20) nesou obsahový štítek
+(`core_mail_message_analyses.content_tag`), který **nemá živou otagovanou
+položku** (`economy_items.content_tags`, stavy 10/40/80; JSON filtr
+v PHP). Jedna karta per štítek — agregace `GROUP BY content_tag` dělá
+dedupe přes zprávy; query-driven bez dismiss stavu (karta zmizí, jakmile
+položka vznikne nebo žádný otevřený návrh štítek nepotřebuje).
+
+`id = "content_tag:{tag}"`, `kind=info`, `stateStyle=concept`,
+`icon=question`, `category=invoices`, titulek „Nová kategorie: {label}"
+(label z cfgItem `core.exchange.contentTags` — lokalizuje server),
+podtitulek „{n} dokladů čeká · návrh: {starter} ({účet})",
+`context={tag, waiting}`. Akce nesou **lokalizovaný `label` ze serveru**
+(passthrough vzor alertů — dynamická čísla účtů):
+
+- štítek s položkou v nabídce aktivní varianty osnovy → jediná primary
+  akce „Založit položku" (`materialize_content_tag`, `{tag}`);
+- `goods.stock` (bez mapování, D7) → dvě akce „Jako materiál (501…)" /
+  „Jako zboží (504…)" s čísly prvních aktivních analytik 501/504
+  (`{tag, account}`); bez 501/504 v osnově karta není;
+- štítek vědomě bez mapování (admin.other, people.benefits, NPO bez
+  protějšku) **nekartuje** — je „review by design", karta by neměla co
+  založit.
+
+Po založení se návrhy při dalším otevření povýší na plnou trojici bez
+reanalýzy (fresh resolution, D16). Sesterská settings stránka:
+Nastavení → Položky → Obsahové štítky (panel `contentTags`).
+
 ## 6. Akce a jejich sémantika
 
 ### 6.1 `apply_message` — jednoklik „Použít" z karty (pásmo ready)
@@ -438,6 +473,21 @@ a `docs/mail/api-contract.md` §9.11.
 **Odpovědi**: `200 { messageNdx, analysisNdx, trashedDocId }`,
 `409 INVALID_STATE` / `409 DOC_ADVANCED`, `404 NOT_FOUND`, `500 INTERNAL_ERROR`.
 
+### `POST /api/v1/_exchange/content-tags/materialize`
+
+**Auth**: běžný uživatelský token. Body `{tag, account?}` — založí účetní
+položku pro obsahový štítek (karta „Nová kategorie", settings stránka);
+sdílená služba `AccountingItemMaterializer` (extrakce generátoru ze
+`SetupController`), zápis přes `TableGateway` (ItemDocument validace).
+Sesterské endpointy pro settings panel: `GET …/content-tags/overview`
+(stav mapování + reverzní návrhy), `POST …/content-tags/tag-items`
+(bulk otagování). Dispatcher `contentTags` → `ContentTagsController`.
+
+**Odpovědi**: `200 { itemId, code, name }`, `409 ALREADY_MAPPED` /
+`OFFER_UNAVAILABLE` / `ITEM_KIND_MISSING` / `UNIT_MISSING` /
+`CODE_COLLISION`, `422 UNKNOWN_TAG` / `ACCOUNT_REQUIRED` /
+`ACCOUNT_NOT_FOUND`, `500 SAVE_FAILED`.
+
 ## 8. Frontend komponenty
 
 ```
@@ -479,7 +529,9 @@ API: `frontend/src/api/dashboard.js` (`fetchDashboard()`,
 `setMessageDocState()`, `streamDashboardSummary()` — SSE konzument dle
 vzoru `chat.js`), `api/exchange.js` (`previewMessage`, `applyMessage`,
 `rejectMessage`, `unapplyMessage`, `reanalyzeMessage` — wrappery
-message-centrických `/_mail/messages/{ndx}/*` endpointů).
+message-centrických `/_mail/messages/{ndx}/*` endpointů),
+`api/contentTags.js` (`materializeContentTag`, `fetchContentTagsOverview`,
+`tagContentItems` — `/_exchange/content-tags/*`).
 
 - **Doc-state proužek**: globální `.docState_*` třídy (`styles/base.css`), pruh
   přes `--shpd-row-bar`. Kind→stateStyle mapuje server. Na kartě feedu je pruh

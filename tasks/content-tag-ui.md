@@ -1,6 +1,33 @@
 # Obsahové štítky — UI a mikrointerakce (Content Tag UI)
 
-**Stav:** návrh — nová rozhodnutí D23–D28 potvrzena v chatu, k implementaci
+**Stav:** hotovo
+
+> Implementováno 2026-08-19. Odchylky od zadání:
+> - **`noItem` je stringová userAction** (jako `skip`/`create`), ne objekt
+>   `{kind}` — flat mapa userActions připouští jen stringy
+>   (`MessageProposalApplier::expandUserActions`).
+> - **Settings stránka = panel** `contentTags` (`ContentTagsSettings.svelte`,
+>   vzor dsSetup) — server-driven settings page tabulku s akcemi neunese.
+> - **Mazání pravidel = hard DELETE** (detail akce → generický CRUD DELETE),
+>   ne koš: `unique(company_id)` by přes koš blokoval re-learning a learning
+>   handler sám pravidla hard-DELETEuje. Tabulka zůstává bez docStates;
+>   z JSONC odstraněno `hideFromNavigation` (vyřadilo by viewer i ze
+>   settings navigace), z hlavního stromu tabulku skrývá settingsItems.
+> - **Karta kind=info**; štítky vědomě bez mapování v nabídce (admin.other,
+>   people.benefits) nekartují — karta by neměla co založit; goods.stock
+>   bere čísla 501/504 z prvních aktivních analytik osnovy. Labely akcí
+>   posílá server (passthrough vzor alertů). Sekundární akce „Upravit…"
+>   (předvyplněný form) odložena do follow-up (open_form neumí defaultData).
+> - **Endpointy**: vedle materialize přibyly `GET /_exchange/content-tags/overview`
+>   a `POST /_exchange/content-tags/tag-items` pro settings panel; vlastní
+>   dispatcher `contentTags` → `ContentTagsController` (dispatchExchange
+>   nenese auth/tables). Materializace = `AccountingItemMaterializer`
+>   (economy.items) se save-closure seamem — `SetupController` deleguje,
+>   response `/_setup/accounting-items` beze změny (regresní testy prošly
+>   beze změny).
+>
+> Ověřeno na dev DS 2026-08-19 (po `ds-upgrade` — nový viewer/panel/
+> settingsItems v compiled configu).
 
 **Cíl:** Zviditelnit a zprovoznit obsahové návrhy z tasku
 [content-tag-enrichment.md](content-tag-enrichment.md) v UI: review modal
@@ -13,9 +40,9 @@ IČO→štítek.
 
 ## Návaznost
 
-- **Task 1 hotový a ověřený** na dev DS `4l3j-z0bz-kz39-echj`: 12 dokladů,
-  11 oštítkováno, learning pravidla vznikají, fresh resolution po otagování
-  položek povyšuje návrhy bez reanalýzy (D16 funguje).
+- **Task 1 hotový a ověřený** na dev DS: 12 dokladů, 11 oštítkováno,
+  learning pravidla vznikají, fresh resolution po otagování položek
+  povyšuje návrhy bez reanalýzy (D16 funguje).
 - Poznatky z testu, které tento task řeší:
   1. Review modal (`DocumentExchangePreview.svelte`) nemá sloupec Účet —
      `accountOnly` návrh je neviditelný (jen ⟲ badge).
@@ -226,22 +253,22 @@ localized config). `/result` běh label nezapisuje.
 
 ## Hotovo když
 
-- [ ] `accountOnly` doklad jde použít bez zakládání položky: volba
+- [x] `accountOnly` doklad jde použít bez zakládání položky: volba
       „Jen účet — bez položky" → Použít aktivní → Koncept má řádek
       s účtem bez položky.
-- [ ] Badge u contentTag řádku říká „Obsahová klasifikace — {štítek}
+- [x] Badge u contentTag řádku říká „Obsahová klasifikace — {štítek}
       (pravidlo dodavatele / AI)", žádné „doklad #undefined"; účet je
       vidět ve sloupci.
-- [ ] Nepokrytý štítek s otevřeným návrhem ukáže dashboard kartu;
+- [x] Nepokrytý štítek s otevřeným návrhem ukáže dashboard kartu;
       Založit položku → karta zmizí a návrhy se při dalším otevření
       povýší na plnou trojici (bez reanalýzy).
-- [ ] `goods.stock` karta nabízí volbu materiál/zboží a založí
+- [x] `goods.stock` karta nabízí volbu materiál/zboží a založí
       odpovídající položku.
-- [ ] Settings stránka ukazuje stav mapování všech štítků; reverzní
+- [x] Settings stránka ukazuje stav mapování všech štítků; reverzní
       otagování otaguje jednoznačné položky bulkem; kolizní účty bez
       návrhu.
-- [ ] Pravidla jsou vidět, jdou smazat a přeštítkovat (origin → user).
-- [ ] `check:i18n` zelené; všechny testy zelené s úzkými filtry.
-- [ ] Manuální scénář na dev DS: zpráva od dodavatele s learned
+- [x] Pravidla jsou vidět, jdou smazat a přeštítkovat (origin → user).
+- [x] `check:i18n` zelené; všechny testy zelené s úzkými filtry.
+- [x] Manuální scénář na dev DS: zpráva od dodavatele s learned
       pravidlem → nová analýza jde přes pravidlo (tagSource rule,
       hit_count roste), karta/apply flow bez zádrhelu.

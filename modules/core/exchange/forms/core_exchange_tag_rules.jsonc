@@ -1,0 +1,31 @@
+{
+    // Pravidlo IČO → obsahový štítek (tasks/content-tag-ui.md D28).
+    // Ruční zakládání v v1 neexistuje (viewer nenabízí Přidat) — form slouží
+    // k přeštítkování (TagRuleDocument::beforeSave přepne origin na 'user').
+    "title": "Content tag rule",
+    "title:cs": "Pravidlo obsahového štítku",
+    "title:en": "Content tag rule",
+    "titleNew": "New content tag rule",
+    "titleNew:cs": "Nové pravidlo obsahového štítku",
+    "titleNew:en": "New content tag rule",
+    "tabs": [
+        {
+            "id": "basic",
+            "label": "Rule",
+            "label:cs": "Pravidlo",
+            "label:en": "Rule",
+            "sections": [
+                {
+                    "columns": [
+                        {
+                            "elements": [
+                                {"type": "input", "column": "company_id", "readOnly": true},
+                                {"type": "select", "column": "tag", "required": true}
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

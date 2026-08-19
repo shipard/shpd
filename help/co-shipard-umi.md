@@ -36,7 +36,7 @@ Položky, které jsou v menu samostatně, nad ostatními sekcemi.
 | Agenda | Co s ní uděláš | Návod |
 |---|---|---|
 | **Osoby** | Dodavatelé, odběratelé i fyzické osoby v jedné evidenci. Firmu si doplníš z veřejného registru podle IČO. Ke každé osobě vedeš kontakty, adresy a bankovní spojení | [Založení osoby](osoby/zalozeni-osoby.md) |
-| **Položky** | Co se na dokladech fakturuje — jeden řádek dokladu je položka. U položky se drží i to, čím se účtuje (druhy položek a měrné jednotky se nastavují v Nastavení) | [Založení položky](polozky/zalozeni-polozky.md) |
+| **Položky** | Co se na dokladech fakturuje — jeden řádek dokladu je položka. U položky se drží i to, čím se účtuje (druhy položek a měrné jednotky se nastavují v Nastavení) | [Založení položky](polozky/zalozeni-polozky.md) · [Obsahové štítky](polozky/obsahove-stitky.md) |
 
 ---
 

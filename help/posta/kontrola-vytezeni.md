@@ -58,6 +58,9 @@ karta s procentem **Jistoty**. U jistých návrhů má karta rovnou tlačítko
      **Z registru** v Osobách); po **Uložit** se osoba rovnou vybere,
    - **Vytvořit novou osobu**, **Vytvořit novou položku** nebo
      **Vytvořit nový účet** — podle toho, čeho se rozhodnutí týká,
+   - **Jen účet — bez položky** — jen u řádku faktury, který už nese
+     účet (typicky doplněný obsahovou klasifikací). Řádek se pořídí
+     s účtem a bez položky; to je v pořádku, položku zakládat nemusíš,
    - **Vynechat řádek**, ale jen u řádku faktury.
 
    Rozhodnutí se pak ukáže jako **Vybráno: …** a vezmeš ho zpět
@@ -107,6 +110,14 @@ nepřišla z faktury, ale z tvých starších dokladů od stejného dodavatele �
 *přesná shoda*, *podobný text* nebo *častá položka dodavatele*. První dvě
 bývají spolehlivé; **častou položku ověřuj vždy** — znamená jen „tohle
 u tohohle dodavatele býváš zvyklý", ne že to je na téhle faktuře.
+
+**Obsahová klasifikace.** Když historie mlčí, AI doklad zařadí podle
+obsahu — poznámka u řádku pak říká *Obsahová klasifikace — Pohonné hmoty
+(pravidlo dodavatele)* nebo *(AI)*. Návrh doplní položku, nebo aspoň
+účet — ten vidíš ve sloupci **Účet** tabulky řádků (sloupec se ukazuje,
+jen když ho aspoň jeden řádek má). U kategorií jako občerstvení poznámka
+navíc upozorní na DPH typicky bez nároku na odpočet. Detaily a správa
+kategorií: [Obsahové štítky](../polozky/obsahove-stitky.md).
 
 **Faktury s cenami včetně DPH.** U dokladů, kde jsou jednotkové ceny
 uvedené s daní (typicky drobný prodej, občerstvení), se daň může spočítat
@@ -161,6 +172,8 @@ cokoli popsané na téhle stránce.
 
 - [Když AI přečte fakturu špatně](kdyz-ai-cte-spatne.md) — kde se která
   chyba opravuje
+- [Obsahové štítky](../polozky/obsahove-stitky.md) — karta Nová kategorie
+  a správa kategorií nákladů
 - [Založení osoby](../osoby/zalozeni-osoby.md) — natažení firmy
   z registru mimo poštu a ruční založení
 - [Slovníček](../slovnicek.md) — co znamenají stavy a názvy sekcí

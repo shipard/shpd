@@ -86,6 +86,12 @@ async function apiRequest(method, path, body = null, isRetry = false) {
     return null;
   }
 
+  // 204 No Content (např. CRUD DELETE) — fetch tělo zahazuje, json() by
+  // spadl na prázdném vstupu.
+  if (response.status === 204) {
+    return { success: true, data: null };
+  }
+
   return response.json();
 }
 

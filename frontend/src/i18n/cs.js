@@ -190,6 +190,7 @@ export default {
   'viewer.detail.setPasswordFailed': 'Nepodařilo se nastavit heslo: {msg}',
   'viewer.detail.inviteSent': 'Pozvánka byla odeslána.',
   'viewer.detail.inviteFailed': 'Nepodařilo se poslat pozvánku: {msg}',
+  'viewer.detail.deleteTagRuleConfirm': 'Opravdu smazat toto pravidlo? Smazání je trvalé; pravidlo může znovu vzniknout učením.',
   'viewer.detail.mailBody': 'Tělo zprávy',
 
   // ── Viewer detail dokladu (content type `document`) ─────────────────────
@@ -638,6 +639,24 @@ export default {
   'setup.chart.none': 'Žádná (vlastní osnova)',
   'setup.vat.payer': 'Vede agendu DPH',
   'setup.vat.nonPayer': 'Nevede (neplátce)',
+
+  // ── Obsahové štítky (Nastavení → Položky) ───────────────────────────────
+  'settings.contentTags.title': 'Obsahové štítky',
+  'settings.contentTags.description': 'Mapování obsahové taxonomie na účetní položky — návrhy AI klasifikace dokladů se z něj předvyplňují.',
+  'settings.contentTags.unavailable': 'Účetní osnova není zvolena nebo účetnictví není aktivní — mapování štítků na účty teď nejde spravovat.',
+  'settings.contentTags.col.tag': 'Štítek',
+  'settings.contentTags.col.state': 'Stav mapování',
+  'settings.contentTags.state.mapped': 'otagované položky',
+  'settings.contentTags.state.defaultAccount': 'výchozí účet z nabídky ({account})',
+  'settings.contentTags.state.unmapped': 'bez mapování',
+  'settings.contentTags.action.create': 'Založit položku',
+  'settings.contentTags.untagged.title': 'Neotagované položky',
+  'settings.contentTags.untagged.description': 'Živé položky s účtem, kterému nabídka přiřazuje právě jeden štítek. Účty s více štítky návrh nedostávají.',
+  'settings.contentTags.untagged.empty': 'Žádné položky k otagování.',
+  'settings.contentTags.untagged.collision': 'více možných štítků — bez návrhu',
+  'settings.contentTags.untagged.tagSelected': '{count, plural, =0 {Otagovat vybrané} one {Otagovat # položku} few {Otagovat # položky} many {Otagovat # položek} other {Otagovat # položek}}',
+  'settings.contentTags.untagged.summary': 'Otagováno: {updated}, selhalo: {failed}.',
+  'settings.contentTags.offerLink': 'Hromadné založení výchozích položek (panel Nastavení zdroje dat)…',
 
   // ── Settings pages (Nastavení → stránky vlastností) ────────────────────
   'settingsPage.loadFailed': 'Stránku nastavení se nepodařilo načíst.',

@@ -35,8 +35,30 @@
             "class": "Shipard\\Module\\Core\\Exchange\\Enrich\\ContentTagRuleCaptureHandler",
             "events": ["stateChanged"]
         }
-    ]
+    ],
 
-    // No documentClasses — uses existing Document/TableGateway.
-    // No viewers — backend service module.
+    "documentClasses": [
+        {
+            "table": "core_exchange_tag_rules",
+            "class": "Shipard\\Module\\Core\\Exchange\\Enrich\\TagRuleDocument"
+        }
+    ],
+
+    "viewers": [
+        {
+            // Správa pravidel IČO → štítek v Nastavení (content-tag-ui D28);
+            // form JSONC konvencí (forms/core_exchange_tag_rules.jsonc).
+            "id": "core.exchange.tagRules",
+            "name": "Content tag rules",
+            "name:cs": "Pravidla obsahových štítků",
+            "name:en": "Content tag rules",
+            "icon": "tags",
+            "table": "core_exchange_tag_rules",
+            "class": "Shipard\\Module\\Core\\Exchange\\Enrich\\TagRulesViewer"
+        }
+    ],
+
+    "settingsItems": [
+        { "viewer": "core.exchange.tagRules", "section": "items", "order": 30 }
+    ]
 }

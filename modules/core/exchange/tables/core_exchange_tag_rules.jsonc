@@ -11,8 +11,10 @@
     // štítek. Potvrzené pravidlo přeskakuje LLM klasifikaci. Jedno pravidlo
     // per IČO je vědomé v1 zjednodušení — dodavatel s pestrým sortimentem
     // pravidlo nedostane (learning handler ho při konfliktu smaže).
-    // Správa přes UI vznikne v tasku content-tag-ui.md.
-    "hideFromNavigation": true,
+    // Správa: viewer core.exchange.tagRules v Nastavení → Položky
+    // (content-tag-ui D28). Bez hideFromNavigation — tabulku v settings
+    // navigaci nese settingsItems, z hlavního stromu ji tentýž mechanismus
+    // skrývá; hideFromNavigation by viewer vyřadil i z Nastavení.
 
     "columns": [
         {

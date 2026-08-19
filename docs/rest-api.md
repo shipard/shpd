@@ -185,6 +185,9 @@ http://{ip-adresa}/{ds-id}/api/v1/{tabulka}
 | `POST` | `/api/v1/_setup/bank-accounts` | Překlop vybraných spojení do číselníku bankovních účtů (auth) |
 | `GET` | `/api/v1/_setup/accounting-items-offer` | Nabídka účetních položek dle varianty osnovy (auth) |
 | `POST` | `/api/v1/_setup/accounting-items` | Jednorázové vygenerování vybraných účetních položek (auth) |
+| `POST` | `/api/v1/_exchange/content-tags/materialize` | Založení účetní položky pro obsahový štítek (auth) |
+| `GET` | `/api/v1/_exchange/content-tags/overview` | Stav mapování taxonomie štítků + reverzní návrhy (auth) |
+| `POST` | `/api/v1/_exchange/content-tags/tag-items` | Hromadné otagování položek obsahovými štítky (auth) |
 | `GET` | `/api/v1/_app/info` | Název/zkrácený název/ikona/logo aplikace — **veřejné** |
 | `GET` | `/api/v1/_app/branding/{slot}` | Binární obsah branding slotu — **veřejné**, immutable cache |
 | `POST` | `/api/v1/_app/branding/{slot}` | Upload obrázku slotu (multipart, pole `file`) — auth |
@@ -264,6 +267,24 @@ přeskočí úplně — parametry se uloží a odpověď nese informativní varo
 pokud by některý zapsaný klíč provisioner spustil; seed dorovná `ds-upgrade`
 po zapnutí provisioningu. Odpověď má stejný tvar jako GET (+ `warnings`). Auth: přihlášený
 uživatel, bez `adminOnly`.
+
+**`/_exchange/content-tags` endpointy** (tasks/content-tag-ui.md D26/D27,
+dispatcher `contentTags` → `ContentTagsController`; auth: přihlášený
+uživatel, bez `adminOnly`):
+**`POST …/materialize`** s body `{tag, account?}` založí účetní položku
+pro obsahový štítek — z první položky nabídky aktivní varianty osnovy
+nesoucí štítek (`account` = override), štítek bez položky v nabídce
+(goods.stock) vyžaduje `account` (kód = číslo účtu, sufix při kolizi,
+`content_tags=[tag]`). Odpověď `{itemId, code, name}`; živá otagovaná
+položka → `409 ALREADY_MAPPED`, neznámý štítek → `422 UNKNOWN_TAG`,
+chybějící účet → `422 ACCOUNT_REQUIRED` / `ACCOUNT_NOT_FOUND`.
+**`GET …/overview`** vrací `{available, chartVariant, tags: [{tag, label,
+state: mapped|defaultAccount|unmapped, items, defaultAccount}], untagged:
+[{id, code, name, account, suggestedTag?, candidateTags?}]}` — reverzní
+návrh jen pro účty s právě jedním štítkem v nabídce (kolizní účty nesou
+`candidateTags`). **`POST …/tag-items`** s body `{items: [{id, tags}]}`
+hromadně otaguje položky (merge s existujícími štítky, zápis přes
+`ItemDocument`); odpověď `{updated, failed}`.
 
 **Veřejné `/_auth/oidc` endpointy:** všechny tři OIDC routy jsou výjimky
 z autentizace (`AuthMiddleware::isExempt()`) — celý flow běží před vznikem

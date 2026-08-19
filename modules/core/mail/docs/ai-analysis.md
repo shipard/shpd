@@ -293,7 +293,9 @@ Audit per řádek (`_resolve.rows[i].enrichment`):
     "resolution": "item" | "accountOnly" | "ambiguous" | "unmapped" | "guarded",
     "candidates": ["FUEL-A", "FUEL-B"],   // jen ambiguous
     "guard":      "amount",               // jen guarded
-    "vatHint":    "nonDeductible"         // informativní (D4), z contentTagDefaults
+    "vatHint":    "nonDeductible",        // informativní (D4), z contentTagDefaults
+    "tagLabel":   "Pohonné hmoty"         // jen fresh čtení (jazyk requestu, D23);
+                                          // persist z /result label nenese
 }
 ```
 
@@ -302,8 +304,36 @@ Audit per řádek (`_resolve.rows[i].enrichment`):
 (tier 3 Vrstvy 0 běží až jako úklid po eskalaci); `false` = stávající
 pořadí. Backend LLM klasifikace jde přes setting
 `exchange.contentTag.backend` (ndx `core_ai_backends`, null = default
-backend; doporučení: levný model). Obojí zatím jen přes `ds-setting set`,
-UI vznikne v tasku `content-tag-ui.md`.
+backend; doporučení: levný model). Obojí zatím jen přes `ds-setting set`.
+
+**UI (tasks/content-tag-ui.md, D23–D28):**
+
+- **Review modal**: podmíněný sloupec Účet (render, když aspoň jeden řádek
+  `account` nese), badge tooltip „Obsahová klasifikace — {tagLabel}
+  (pravidlo dodavatele / AI)" + řádek vatHint. Row-level userAction
+  **`noItem`** („Jen účet — bez položky", stringová akce jako `skip`):
+  klient ji nabídne, jen když řádek nese `account`; `DocumentApplier`
+  reconcile pořídí řádek bez item FK s účtem, chybějící účet = 422
+  `no_item_requires_account`; pin přebíjí fresh resolve i enrichment
+  návrh (D3). Response označí řádek `_resolve.rows[i].item.status =
+  "noItem"`.
+- **Dashboard karta „Nová kategorie"** (`ContentTagSuggestionsSource`,
+  `modules/core/exchange/src/Dashboard/`): jedna karta per štítek
+  s otevřenými návrhy bez živé otagované položky; akce
+  `materialize_content_tag` volá `POST /_exchange/content-tags/materialize`
+  (sdílená služba `AccountingItemMaterializer`). `goods.stock` nabízí
+  volbu materiál (501…) / zboží (504…); štítky vědomě bez mapování
+  (admin.other…) nekartují. Query-driven, bez dismiss stavu.
+- **Nastavení → Položky → Obsahové štítky** (panel `contentTags`,
+  `ContentTagsSettings.svelte`): stav mapování taxonomie + Založit per
+  štítek (`GET /_exchange/content-tags/overview`), reverzní otagování
+  neotagovaných položek s jednoznačným účtem
+  (`POST /_exchange/content-tags/tag-items`), odkaz na setup nabídku.
+- **Nastavení → Položky → Pravidla obsahových štítků**
+  (`core.exchange.tagRules` viewer + `TagRuleDocument`): label štítku,
+  IČO + jméno partnera, origin, statistiky; přeštítkování formulářem
+  přepne `origin` na `user`, smazání = hard DELETE (detail akce) —
+  koš by přes unique(company_id) blokoval re-learning.
 
 **Strop pásma (D14):** řádek doplněný s `matchedBy: "contentTag"` stropuje
 pásmo na `review` vždy — obsahový návrh potvrzuje člověk.

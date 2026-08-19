@@ -6,6 +6,7 @@
   import SettingsPage from '../settings/SettingsPage.svelte';
   import AccountSecurity from '../account/AccountSecurity.svelte';
   import DsSetup from '../settings/DsSetup.svelte';
+  import ContentTagsSettings from '../settings/ContentTagsSettings.svelte';
   import PortalContent from '../portal/PortalContent.svelte';
   import { t } from '../../i18n/index.js';
 
@@ -16,6 +17,7 @@
   const panelComponents = {
     accountSecurity: AccountSecurity,
     dsSetup: DsSetup,
+    contentTags: ContentTagsSettings,
     hostingPortal: PortalContent,
   };
 

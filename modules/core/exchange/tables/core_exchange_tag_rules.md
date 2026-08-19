@@ -4,11 +4,15 @@ Deterministická osa obsahové eskalace párování položek
 (tasks/content-tag-enrichment.md): pravidlo **IČO dodavatele → obsahový
 štítek** z taxonomie `core.exchange.contentTags`. Zásah pravidla přeskakuje
 LLM klasifikaci (D12); pravidla vznikají učením z apply dokladu s LLM
-štítkem (D22, `ContentTagRuleCaptureHandler`), ručně (UI task
-`content-tag-ui.md`) nebo importem seedu ze starého Shipardu (rezervováno).
+štítkem (D22, `ContentTagRuleCaptureHandler`) nebo importem seedu ze
+starého Shipardu (rezervováno). Ruční zakládání v v1 neexistuje.
 
-`tableId = 438`. Bez stavového modelu, bez vieweru/formu (v1), skryto
-z navigace. Bez `keepOnReset` — learned pravidla se obnoví provozem.
+`tableId = 438`. Bez stavového modelu — správa přes viewer
+`core.exchange.tagRules` v Nastavení → Položky (content-tag-ui D28,
+`TagRulesViewer` + `TagRuleDocument` + JSONC form): přeštítkování formem
+přepíná `origin` na `user`, mazání je **hard DELETE** detail akcí (koš by
+přes unique(`company_id`) blokoval re-learning; learning sám pravidla při
+konfliktu maže). Bez `keepOnReset` — learned pravidla se obnoví provozem.
 
 ## Struktura
 

@@ -181,6 +181,7 @@ export default {
   'viewer.detail.setPasswordFailed': 'Failed to set password: {msg}',
   'viewer.detail.inviteSent': 'Invitation sent.',
   'viewer.detail.inviteFailed': 'Failed to send invitation: {msg}',
+  'viewer.detail.deleteTagRuleConfirm': 'Really delete this rule? Deletion is permanent; the rule can be re-learned.',
   'viewer.detail.mailBody': 'Message body',
 
   // ── Viewer document detail (content type `document`) ────────────────────
@@ -625,6 +626,24 @@ export default {
   'setup.chart.none': 'None (custom chart)',
   'setup.vat.payer': 'Keeps a VAT agenda',
   'setup.vat.nonPayer': 'Does not (non-payer)',
+
+  // ── Content tags (Settings → Items) ─────────────────────────────────────
+  'settings.contentTags.title': 'Content tags',
+  'settings.contentTags.description': 'Mapping of the content taxonomy to accounting items — AI document classification pre-fills its suggestions from it.',
+  'settings.contentTags.unavailable': 'The chart of accounts is not chosen or accounting is not active — tag-to-account mapping cannot be managed now.',
+  'settings.contentTags.col.tag': 'Tag',
+  'settings.contentTags.col.state': 'Mapping state',
+  'settings.contentTags.state.mapped': 'tagged items',
+  'settings.contentTags.state.defaultAccount': 'default account from the offer ({account})',
+  'settings.contentTags.state.unmapped': 'no mapping',
+  'settings.contentTags.action.create': 'Create item',
+  'settings.contentTags.untagged.title': 'Untagged items',
+  'settings.contentTags.untagged.description': 'Live items whose account maps to exactly one tag in the offer. Accounts with multiple tags get no suggestion.',
+  'settings.contentTags.untagged.empty': 'No items to tag.',
+  'settings.contentTags.untagged.collision': 'multiple possible tags — no suggestion',
+  'settings.contentTags.untagged.tagSelected': '{count, plural, =0 {Tag selected} one {Tag # item} other {Tag # items}}',
+  'settings.contentTags.untagged.summary': 'Tagged: {updated}, failed: {failed}.',
+  'settings.contentTags.offerLink': 'Bulk-create default items (Data source setup panel)…',
 
   // ── Settings pages (Settings → property pages) ─────────────────────────
   'settingsPage.loadFailed': 'Failed to load the settings page.',

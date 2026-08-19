@@ -1,5 +1,5 @@
 <script>
-  import { get, post } from '../../api/client.js';
+  import { get, post, del } from '../../api/client.js';
   import {
     runDueAlertChecks,
     snoozeAlert,
@@ -654,6 +654,21 @@
     // jen na dedikovaný endpoint; sloupec je sensitive, CRUD ho nevidí.
     if (actionId === 'setPassword') {
       passwordDialogOpen = true;
+      return;
+    }
+    // Smazat pravidlo štítku (TagRulesViewer) — bezstavová tabulka bez
+    // koše, hard DELETE přes generický CRUD; unique(IČO) nesmí blokovat
+    // budoucí re-learning (content-tag-ui D28).
+    if (actionId === 'deleteTagRule') {
+      if (!confirm(t('viewer.detail.deleteTagRuleConfirm'))) return;
+      const result = await del(`/core_exchange_tag_rules/${recordId}`);
+      if (result?.success) {
+        selectedRowId = null;
+        pageNumber = 0;
+        fetchRowsExplicit(tab.viewerId, activeSearch, activeViewGroup, activeSeriesId, activeFilters, 0, effectiveLayout, activeSort);
+      } else {
+        alert(translateError(result?.error));
+      }
       return;
     }
     // Poslat pozvánku uživateli (UsersViewer, admin) — mail s linkem na

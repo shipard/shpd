@@ -82,7 +82,7 @@ final class RowHistoryEnricher
      * @param array<string, mixed> $canonical
      * @return array<string, mixed>
      */
-    public function enrich(array $canonical): array
+    public function enrich(array $canonical, bool $withDominance = true): array
     {
         $rows = is_array($canonical['rows'] ?? null) ? $canonical['rows'] : [];
         if ($rows === []) {
@@ -103,7 +103,57 @@ final class RowHistoryEnricher
             if (!is_array($row)) {
                 continue;
             }
-            $canonical = $this->enrichRow($canonical, (int) $idx, $row, $history);
+            $canonical = $this->enrichRow($canonical, (int) $idx, $row, $history, $withDominance);
+        }
+
+        return $canonical;
+    }
+
+    /**
+     * Samostatný dominance krok (tier 3) pro řádky, které zůstaly bez
+     * `item.ourCode` — používá RowEnrichmentPipeline při precedenci
+     * „contentTag před dominancí" (D13): enrich(withDominance: false) →
+     * contentTag vrstva → applyDominance() na zbytek. Mimo pipeline se
+     * chování enrich() nemění (default $withDominance = true).
+     *
+     * @param array<string, mixed> $canonical
+     * @return array<string, mixed>
+     */
+    public function applyDominance(array $canonical): array
+    {
+        $rows = is_array($canonical['rows'] ?? null) ? $canonical['rows'] : [];
+        $hasUncovered = false;
+        foreach ($rows as $row) {
+            if (is_array($row) && self::rowExpectsItem($row)
+                && trim((string) ($row['item']['ourCode'] ?? '')) === ''
+            ) {
+                $hasUncovered = true;
+                break;
+            }
+        }
+        if (!$hasUncovered) {
+            return $canonical;
+        }
+
+        $partnerId = $this->resolveCounterparty($canonical);
+        if ($partnerId === null) {
+            return $canonical;
+        }
+
+        $docType = DocumentApplier::mapDocTypeValue((string) ($canonical['docType'] ?? ''));
+        $history = $this->loadHistory($partnerId, $docType);
+
+        foreach ($canonical['rows'] as $idx => $row) {
+            if (!is_array($row) || !self::rowExpectsItem($row)) {
+                continue;
+            }
+            if (trim((string) ($row['item']['ourCode'] ?? '')) !== '') {
+                continue;
+            }
+            $match = $this->findDominantItem($history, $row);
+            if ($match !== null) {
+                $canonical = $this->applyMatchToRow($canonical, (int) $idx, $row, $match);
+            }
         }
 
         return $canonical;
@@ -136,7 +186,7 @@ final class RowHistoryEnricher
      * @param list<array<string, mixed>> $history
      * @return array<string, mixed>
      */
-    private function enrichRow(array $canonical, int $idx, array $row, array $history): array
+    private function enrichRow(array $canonical, int $idx, array $row, array $history, bool $withDominance = true): array
     {
         $enrichment = [
             'matchedBy'       => null,
@@ -159,11 +209,27 @@ final class RowHistoryEnricher
 
         $candidates = $this->rowTextCandidates($row);
         $match = $candidates !== [] ? $this->findMatch($candidates, $history) : null;
-        $match ??= $this->findDominantItem($history, $row);
+        if ($withDominance) {
+            $match ??= $this->findDominantItem($history, $row);
+        }
         if ($match === null) {
             return $this->writeEnrichment($canonical, $idx, $enrichment);
         }
 
+        return $this->applyMatchToRow($canonical, $idx, $row, $match);
+    }
+
+    /**
+     * Propsání matchnuté historie do řádku + zápis audit bloku — společné
+     * pro enrichRow() a samostatný applyDominance() krok.
+     *
+     * @param array<string, mixed> $canonical
+     * @param array<string, mixed> $row
+     * @param array{0: array<string, mixed>, 1: string, 2: string, 3: ?string, 4?: array<string, mixed>} $match
+     * @return array<string, mixed>
+     */
+    private function applyMatchToRow(array $canonical, int $idx, array $row, array $match): array
+    {
         [$hist, $matchedBy, $confidence, $matchedText] = $match;
 
         $suggested = [];
@@ -187,13 +253,15 @@ final class RowHistoryEnricher
         }
 
         $canonical['rows'][$idx] = $row;
-        $enrichment['matchedBy'] = $matchedBy;
-        $enrichment['confidence'] = $confidence;
-        $enrichment['matchedText'] = $matchedText;
-        $enrichment['itemName'] = ((string) ($hist['item_name'] ?? '')) ?: null;
-        $enrichment['sourceDocId'] = (int) $hist['doc_head'];
-        $enrichment['sourceDocNumber'] = ((string) ($hist['doc_number'] ?? '')) ?: null;
-        $enrichment['suggested'] = $suggested;
+        $enrichment = [
+            'matchedBy'       => $matchedBy,
+            'confidence'      => $confidence,
+            'matchedText'     => $matchedText,
+            'itemName'        => ((string) ($hist['item_name'] ?? '')) ?: null,
+            'sourceDocId'     => (int) $hist['doc_head'],
+            'sourceDocNumber' => ((string) ($hist['doc_number'] ?? '')) ?: null,
+            'suggested'       => $suggested,
+        ];
         if (isset($match[4])) {
             $enrichment['dominance'] = $match[4];
         }

@@ -73,11 +73,10 @@ final class ContentTagResolver
     /** Inkrement statistik pravidla při skutečném použití v pipeline. */
     public function markRuleHit(int $ruleId): void
     {
-        $this->db->query(
-            'UPDATE core_exchange_tag_rules SET hit_count = hit_count + 1, last_hit_at = %s WHERE id = %i',
-            date('Y-m-d H:i:s'),
-            $ruleId,
-        );
+        $this->db->update('core_exchange_tag_rules', [
+            'hit_count%sql' => 'hit_count + 1',
+            'last_hit_at'   => date('Y-m-d H:i:s'),
+        ])->where('id = %i', $ruleId)->execute();
     }
 
     /**

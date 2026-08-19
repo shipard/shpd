@@ -107,6 +107,10 @@ class AnalysisConfidenceResolver
      * (`high`/`medium`) beze změny; řádky s ourCode od AI mají
      * `confidence: null` → stropu se netýkají.
      *
+     * Řádky doplněné obsahovou eskalací (`matchedBy: 'contentTag'`) stropují
+     * vždy (D14, `tasks/content-tag-enrichment.md`) — obsahový návrh vždy
+     * potvrzuje člověk, bez ohledu na zdroj štítku (rule/llm).
+     *
      * @param array<string, mixed> $canonical
      */
     public function capBandByRowCoverage(string $band, array $canonical): string
@@ -124,6 +128,9 @@ class AnalysisConfidenceResolver
                 return self::BAND_REVIEW;
             }
             if (($enrichments[$idx]['confidence'] ?? null) === 'low') {
+                return self::BAND_REVIEW;
+            }
+            if (($enrichments[$idx]['matchedBy'] ?? null) === 'contentTag') {
                 return self::BAND_REVIEW;
             }
         }

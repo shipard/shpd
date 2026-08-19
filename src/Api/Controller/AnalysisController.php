@@ -22,7 +22,7 @@ use Shipard\Core\Security\Exception\SecretsKeyMissingException;
 use Shipard\Module\Core\Attachments\AttachmentService;
 use Shipard\Module\Base\Registry\RegistryApplier;
 use Shipard\Module\Core\Exchange\Document\DocumentApplier;
-use Shipard\Module\Core\Exchange\Enrich\RowHistoryEnricher;
+use Shipard\Module\Core\Exchange\Enrich\RowEnrichmentPipeline;
 use Shipard\Module\Core\Exchange\Resolve\PartyResolver;
 use Shipard\Module\Core\Exchange\Schema\SchemaLoader;
 use Shipard\Module\Core\Exchange\Schema\SchemaValidator;
@@ -101,7 +101,7 @@ class AnalysisController
         private readonly ?DocumentApplier $applier = null,
         private readonly ?ConfigRuntime $configRuntime = null,
         private readonly ?DocumentEventDispatcher $eventDispatcher = null,
-        private readonly ?RowHistoryEnricher $enricher = null,
+        private readonly ?RowEnrichmentPipeline $enricher = null,
     ) {}
 
     // -------------------------------------------------------------------
@@ -796,29 +796,33 @@ class AnalysisController
             ? (int) $body['backend_ndx']
             : null;
 
+        // 1) Canonical návrhu: validace + enrichment (včetně případné LLM
+        //    klasifikace obsahového štítku). Běží PŘED transakcí — jen čte
+        //    (validace, SELECTy, LLM volání); držet kvůli LLM otevřenou tx
+        //    by blokovalo zámky. Nevalidní výstup dostává forenzní wrapper
+        //    (dashboard z něj staví chybovou kartu), běh se uloží a vrací
+        //    se 201.
+        $canonicalJson = null;
+        $proposedType = null;
+        $documentValid = false;
+        $docConfidence = null;
+        if ($document !== null) {
+            $proposedType = trim((string) ($document['doc_type'] ?? 'other'));
+            $docConfidence = isset($document['confidence']) ? (float) $document['confidence'] : null;
+            $extractedJson = is_array($document['extracted_json'] ?? null)
+                ? $document['extracted_json']
+                : null;
+            [$canonicalJson, $documentValid] = $this->validateAndStoreCanonical(
+                $extractedJson,
+                $proposedType,
+            );
+        }
+        $contentTag = $this->extractContentTag($canonicalJson, $documentValid);
+
         $dibi = $this->db->getDibiConnection();
         $dibi->begin();
         try {
             $now = date('Y-m-d H:i:s');
-
-            // 1) Canonical návrhu: validace + enrichment. Nevalidní výstup
-            //    dostává forenzní wrapper (dashboard z něj staví chybovou
-            //    kartu), běh se uloží a vrací se 201.
-            $canonicalJson = null;
-            $proposedType = null;
-            $documentValid = false;
-            $docConfidence = null;
-            if ($document !== null) {
-                $proposedType = trim((string) ($document['doc_type'] ?? 'other'));
-                $docConfidence = isset($document['confidence']) ? (float) $document['confidence'] : null;
-                $extractedJson = is_array($document['extracted_json'] ?? null)
-                    ? $document['extracted_json']
-                    : null;
-                [$canonicalJson, $documentValid] = $this->validateAndStoreCanonical(
-                    $extractedJson,
-                    $proposedType,
-                );
-            }
 
             // 2) message_analyses záznam. `confidence` nese jistotu návrhu
             //    (document.confidence) — z ní se za běhu počítá pásmo
@@ -837,6 +841,7 @@ class AnalysisController
                     : null,
                 'canonical_json' => $canonicalJson,
                 'proposed_type' => $proposedType,
+                'content_tag' => $contentTag,
                 'confidence' => $docConfidence
                     ?? (isset($body['overall_confidence']) ? (float) $body['overall_confidence'] : null),
                 'tokens_input' => isset($body['tokens_input']) ? (int) $body['tokens_input'] : null,
@@ -1010,13 +1015,14 @@ class AnalysisController
 
         if ($schemaIssues === []) {
             if ($this->enricher !== null) {
-                // Obohacení řádků z historie — do canonical_json se ukládá
-                // obohacený canonical. Selhání /result nesmí shodit
+                // Obohacení řádků — Vrstva 0 (historie) + obsahová eskalace
+                // (pravidlo IČO / LLM klasifikace, D16/D17) — do canonical_json
+                // se ukládá obohacený canonical. Selhání /result nesmí shodit
                 // (analyzer by zprávu retryoval) → pokračuje se neobohaceně.
                 try {
-                    $extractedJson = $this->enricher->enrich($extractedJson);
+                    $extractedJson = $this->enricher->enrichAtResult($extractedJson);
                 } catch (\Throwable $e) {
-                    ErrorLogger::logException($e, 'AnalysisController::result row history enrichment failed');
+                    ErrorLogger::logException($e, 'AnalysisController::result row enrichment failed');
                 }
             }
             return [
@@ -1034,6 +1040,21 @@ class AnalysisController
             (string) json_encode($wrapped, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             false,
         ];
+    }
+
+    /**
+     * Obsahový štítek z `_resolve.contentTag.tag` obohaceného canonicalu —
+     * denormalizace do sloupce `content_tag` (filtrování analýz, learning
+     * handler). null = bez štítku / nevalidní dokument.
+     */
+    private function extractContentTag(?string $canonicalJson, bool $documentValid): ?string
+    {
+        if ($canonicalJson === null || !$documentValid) {
+            return null;
+        }
+        $canonical = json_decode($canonicalJson, true);
+        $tag = is_array($canonical) ? ($canonical['_resolve']['contentTag']['tag'] ?? null) : null;
+        return is_string($tag) && $tag !== '' ? $tag : null;
     }
 
     /**
@@ -1565,11 +1586,13 @@ class AnalysisController
             'targetDocState' => 10,
         ];
 
-        // Fresh obohacení z historie — přepíše persistnutý enrichment
-        // blok aktuálním stavem DB. Selhání preview neblokuje.
+        // Fresh obohacení (historie + obsahové štítky, bez LLM) — přepíše
+        // persistnutý enrichment blok aktuálním stavem DB; fresh re-check
+        // pravidla IČO má přednost před persistnutým LLM štítkem (D16).
+        // Selhání preview neblokuje.
         if ($this->enricher !== null) {
             try {
-                $canonical = $this->enricher->enrich($canonical);
+                $canonical = $this->enricher->enrichFresh($canonical);
             } catch (\Throwable $e) {
                 ErrorLogger::logException($e, 'AnalysisController::previewMessage row history enrichment failed');
             }

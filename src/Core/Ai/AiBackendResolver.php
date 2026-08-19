@@ -40,6 +40,25 @@ class AiBackendResolver
     }
 
     /**
+     * A specific active backend by its row id, or null when it does not
+     * exist or is inactive. Used by per-feature backend overrides
+     * (e.g. the `exchange.contentTag.backend` setting).
+     *
+     * @return array<string, mixed>|null
+     */
+    public function backendByNdx(int $ndx): ?array
+    {
+        if ($ndx <= 0) {
+            return null;
+        }
+        return $this->db->fetchRow(
+            'SELECT * FROM `' . self::BACKENDS_TABLE . '` WHERE `id` = %i AND `is_active` = %i LIMIT 1',
+            $ndx,
+            1,
+        );
+    }
+
+    /**
      * Decrypts the backend's API key. Returns null when the backend has no
      * key stored (not activated yet).
      *

@@ -383,7 +383,7 @@ function buildMcpRegistry(
 				$documentRegistry,
 				$tables,
 			),
-			\Shipard\Module\Core\Exchange\Enrich\RowHistoryEnricher::create($db->getDibiConnection()),
+			\Shipard\Module\Core\Exchange\Enrich\RowEnrichmentPipeline::create($db, $configRuntime, $resolved->config),
 			$configRuntime,
 			$mcpTargetAppliers,
 		)
@@ -888,10 +888,11 @@ function dispatchAnalysis(
 			$documentEventDispatcher,
 		)
 		: null;
-	// Obohacení řádků z historie — stejná degradace jako applier (bez
-	// ConfigRuntime se enrichment přeskočí).
+	// Obohacení řádků — pipeline Vrstvy 0 (historie) + Vrstvy 2 (obsahová
+	// eskalace); stejná degradace jako applier (bez ConfigRuntime se
+	// enrichment přeskočí).
 	$enricher = $configRuntime !== null
-		? \Shipard\Module\Core\Exchange\Enrich\RowHistoryEnricher::create($db->getDibiConnection())
+		? \Shipard\Module\Core\Exchange\Enrich\RowEnrichmentPipeline::create($db, $configRuntime, $resolved->config)
 		: null;
 
 	$ctrl = new AnalysisController(

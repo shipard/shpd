@@ -189,6 +189,21 @@
             "group": "result"
         },
         {
+            // Obsahový štítek dokladu z obsahové eskalace párování
+            // (tasks/content-tag-enrichment.md) — denormalizace
+            // `_resolve.contentTag.tag` z canonical_json. Zdroj štítku
+            // (rule/llm) nese jen audit blok v canonicalu.
+            "id": "content_tag",
+            "name": "Content tag",
+            "name:cs": "Obsahový štítek",
+            "name:en": "Content tag",
+            "type": "enumString",
+            "length": 40,
+            "cfgItem": "core.exchange.contentTags",
+            "nullable": true,
+            "group": "result"
+        },
+        {
             "id": "error_message",
             "name": "Error message",
             "name:cs": "Chybová zpráva",
@@ -318,6 +333,13 @@
             "columns": [
                 {"column": "message"},
                 {"column": "analyzed_at", "order": "DESC"}
+            ]
+        },
+        {
+            "id": "idx_content_tag",
+            "type": "index",
+            "columns": [
+                {"column": "content_tag"}
             ]
         }
     ]

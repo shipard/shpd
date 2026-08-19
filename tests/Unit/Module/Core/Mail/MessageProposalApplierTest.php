@@ -11,6 +11,8 @@ use Shipard\Core\Document\DocumentResult;
 use Shipard\Core\Document\TableGateway;
 use Shipard\Module\Core\Exchange\Common\ApplyResult;
 use Shipard\Module\Core\Exchange\Document\DocumentApplier;
+use Shipard\Module\Core\Exchange\Enrich\ContentTagResolver;
+use Shipard\Module\Core\Exchange\Enrich\RowEnrichmentPipeline;
 use Shipard\Module\Core\Exchange\Enrich\RowHistoryEnricher;
 use Shipard\Module\Core\Exchange\Resolve\PartyResolver;
 use Shipard\Module\Core\Exchange\Resolve\ResolveResult;
@@ -440,7 +442,7 @@ class MessageProposalApplierTest extends TestCase
         ])]);
         $party = $this->createMock(PartyResolver::class);
         $party->method('resolve')->willReturn(ResolveResult::matched(42, 'companyId'));
-        $enricher = new RowHistoryEnricher($dibi, $party);
+        $enricher = new RowEnrichmentPipeline(new RowHistoryEnricher($dibi, $party), new ContentTagResolver($dibi));
 
         $captured = null;
         $applier = $this->createMock(DocumentApplier::class);
@@ -468,7 +470,7 @@ class MessageProposalApplierTest extends TestCase
         $dibi->method('fetchAll')->willThrowException(new \RuntimeException('db down'));
         $party = $this->createMock(PartyResolver::class);
         $party->method('resolve')->willReturn(ResolveResult::matched(42, 'companyId'));
-        $enricher = new RowHistoryEnricher($dibi, $party);
+        $enricher = new RowEnrichmentPipeline(new RowHistoryEnricher($dibi, $party), new ContentTagResolver($dibi));
 
         $captured = null;
         $applier = $this->createMock(DocumentApplier::class);

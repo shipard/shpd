@@ -1107,6 +1107,55 @@ class AnalysisControllerTest extends TestCase
         $this->assertArrayNotHasKey('extracted_document_count', $insertValues);
     }
 
+    public function testResultPersistsContentTagColumn(): void
+    {
+        // Denormalizace `_resolve.contentTag.tag` z obohaceného canonicalu
+        // do sloupce content_tag (tasks/content-tag-enrichment.md, D20).
+        // Passthrough bez SchemaValidatoru — blok nese extracted_json.
+        $db = $this->dbForResult();
+
+        $fluent = $this->createMock(\Dibi\Fluent::class);
+        $fluent->method('__call')->willReturnSelf();
+        $fluent->method('execute');
+
+        $insertValues = null;
+        $dibi = $this->createMock(\Dibi\Connection::class);
+        $dibi->method('insert')->willReturnCallback(
+            function (string $table, array $values) use (&$insertValues, $fluent) {
+                if ($table === 'core_mail_message_analyses') {
+                    $insertValues = $values;
+                }
+                return $fluent;
+            },
+        );
+        $dibi->method('update')->willReturn($fluent);
+        $dibi->method('getInsertId')->willReturn(125);
+        $db->method('getDibiConnection')->willReturn($dibi);
+
+        $ctrl = $this->controller($db);
+        $response = $ctrl->result(
+            $this->analyzerAuth(),
+            $this->request('POST', '/x', ['X-Claim-Token' => 'ct_abc'], [
+                'model_name' => 'claude',
+                'prompt_version' => 'v4',
+                'message_classification' => ['primary_type' => 'invoiceReceived', 'confidence' => 0.9],
+                'document' => [
+                    'doc_type' => 'invoiceReceived',
+                    'confidence' => 0.8,
+                    'extracted_json' => [
+                        'docNumber' => 'FV-2',
+                        '_resolve' => ['contentTag' => ['tag' => 'vehicle.fuel', 'tagSource' => 'rule']],
+                    ],
+                ],
+            ]),
+            42,
+        );
+
+        $this->assertSame(201, $this->statusOf($response));
+        $this->assertNotNull($insertValues);
+        $this->assertSame('vehicle.fuel', $insertValues['content_tag']);
+    }
+
     public function testResultWithoutDocumentStoresOverallConfidence(): void
     {
         $db = $this->dbForResult();
@@ -1145,6 +1194,7 @@ class AnalysisControllerTest extends TestCase
         $this->assertNotNull($insertValues);
         $this->assertNull($insertValues['canonical_json']);
         $this->assertNull($insertValues['proposed_type']);
+        $this->assertNull($insertValues['content_tag']);
         $this->assertSame(0.42, $insertValues['confidence']);
     }
 }

@@ -29,7 +29,7 @@ class AccountingItemsOffer
 
     public function __construct(
         private readonly DataSourceConnection $db,
-        private readonly ModulePathResolver $modulePathResolver,
+        private readonly ?ModulePathResolver $modulePathResolver = null,
     ) {
     }
 
@@ -121,7 +121,9 @@ class AccountingItemsOffer
             'npo'     => 'accountingItemsNpo.jsonc',
             default   => null,
         };
-        $modulePath = $this->modulePathResolver->getPath('economy.items');
+        // Bez resolveru se soubory hledají relativně k této třídě — žije
+        // uvnitř modulu economy.items, takže dirname(__DIR__) je jeho kořen.
+        $modulePath = $this->modulePathResolver?->getPath('economy.items') ?? dirname(__DIR__);
         if ($file === null || $modulePath === null) {
             return null;
         }

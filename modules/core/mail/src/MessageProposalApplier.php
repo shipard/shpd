@@ -9,7 +9,7 @@ use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Document\TableGateway;
 use Shipard\Core\Logging\ErrorLogger;
 use Shipard\Module\Core\Exchange\Document\DocumentApplier;
-use Shipard\Module\Core\Exchange\Enrich\RowHistoryEnricher;
+use Shipard\Module\Core\Exchange\Enrich\RowEnrichmentPipeline;
 
 /**
  * Sdílené jádro message-centrických akcí nad dokumentovým návrhem — HTTP
@@ -65,7 +65,7 @@ final class MessageProposalApplier
     public function __construct(
         private readonly DataSourceConnection $db,
         private readonly ?DocumentApplier $applier,
-        private readonly ?RowHistoryEnricher $enricher = null,
+        private readonly ?RowEnrichmentPipeline $enricher = null,
         private readonly ?ConfigRuntime $config = null,
         private readonly array $targetAppliers = [],
         private readonly ?TableGateway $headsGateway = null,
@@ -189,12 +189,12 @@ final class MessageProposalApplier
         }
         $canonical['source'] = $source;
 
-        // Fresh obohacení řádků z historie — před merge userActions, takže
-        // klientovy piny mají v reconcile fázi applieru přednost. Selhání
-        // enrichmentu apply nikdy neblokuje.
+        // Fresh obohacení řádků (historie + obsahové štítky, bez LLM) —
+        // před merge userActions, takže klientovy piny mají v reconcile
+        // fázi applieru přednost. Selhání enrichmentu apply nikdy neblokuje.
         if ($this->enricher !== null) {
             try {
-                $canonical = $this->enricher->enrich($canonical);
+                $canonical = $this->enricher->enrichFresh($canonical);
             } catch (\Throwable $e) {
                 ErrorLogger::logException($e, 'MessageProposalApplier::apply row history enrichment failed');
             }

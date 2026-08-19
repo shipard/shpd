@@ -37,6 +37,7 @@ je řádek analýzy zároveň **nositelem dokumentového návrhu** (`canonical_j
 | `confidence` | numeric(4,3) | Confidence dokumentového návrhu (`document.confidence`; běh bez dokumentu `overall_confidence`) v rozsahu `0.000`–`1.000` |
 | `canonical_json` | longtext, NULL | Validovaný + obohacený canonical návrhu (`shpd.docs.document.v1`, resp. `shpd.registry.document.v1`). NULL = běh žádný dokument nenavrhl. Při selhání validace forenzní wrapper `{_validationError, _validationIssues, _rawOutput}`. |
 | `proposed_type` | enumString(30), NULL, cfgItem `core.mail.primaryTypes` | Typ dokumentu navržený tímto během. Historický záznam — na rozdíl od mutable `message.primary_type` se po zápisu nemění. Ve wire kontraktu se pole jmenuje `doc_type`. |
+| `content_tag` | enumString(40), NULL, cfgItem `core.exchange.contentTags` | Obsahový štítek dokladu z obsahové eskalace párování (tasks/content-tag-enrichment.md) — denormalizace `_resolve.contentTag.tag` z `canonical_json`. Zdroj štítku (rule/llm) nese jen audit blok v canonicalu. |
 | `error_message` | text | Detail chyby u `status = failed` |
 
 ### Verdikt (resolution)

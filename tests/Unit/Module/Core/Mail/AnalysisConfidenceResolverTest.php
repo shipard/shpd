@@ -221,6 +221,35 @@ class AnalysisConfidenceResolverTest extends TestCase
         );
     }
 
+    public function testCapDowngradesReadyForContentTagRows(): void
+    {
+        // Obsahová eskalace (matchedBy contentTag) stropuje vždy (D14,
+        // tasks/content-tag-enrichment.md) — návrh potvrzuje člověk,
+        // i když má confidence medium.
+        $canonical = [
+            'rows' => [
+                ['rowKind' => 'item', 'item' => ['ourCode' => 'FUEL']],
+            ],
+            '_resolve' => ['rows' => [
+                ['index' => 0, 'enrichment' => [
+                    'matchedBy'  => 'contentTag',
+                    'confidence' => 'medium',
+                    'tag'        => 'vehicle.fuel',
+                    'tagSource'  => 'rule',
+                    'suggested'  => ['ourCode' => 'FUEL'],
+                ]],
+            ]],
+        ];
+
+        $this->assertSame(
+            AnalysisConfidenceResolver::BAND_REVIEW,
+            $this->resolver()->capBandByRowCoverage(
+                AnalysisConfidenceResolver::BAND_READY,
+                $canonical,
+            ),
+        );
+    }
+
     // ── bandForAnalysis (convenience) ───────────────────────────────────────
 
     public function testBandForAnalysisUsesProfileThresholdsAndCap(): void

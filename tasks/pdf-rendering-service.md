@@ -1,7 +1,8 @@
 # PDF rendering služba (Gotenberg) + RenderClient
 
+**Stav:** naplánováno — rozhodnutí D1–D8 potvrzena (designová diskuze 18. 8. 2026)
+
 **Issue:** shipard/shpd#34
-**Status:** rozhodnutí D1–D8 potvrzena (designová diskuze 18. 8. 2026), připraveno k implementaci
 
 ## Cíl
 

@@ -23,6 +23,7 @@ use Shipard\Core\Settings\SettingsStore;
 use Shipard\Core\Settings\SetupChecklist;
 use Shipard\Core\Utils\JsoncParser;
 use Shipard\Module\Economy\Accounting\AccountChartProvisioner;
+use Shipard\Module\Economy\Items\AccountingItemsOffer;
 use Shipard\Module\Economy\Codebooks\FiscalYearsProvisioner;
 
 /**
@@ -53,6 +54,8 @@ class SetupController
 
     /** Memo pro ownPerson() — null = zatím nenačteno, false = žádná není. */
     private array|false|null $ownPersonCache = null;
+
+    private ?AccountingItemsOffer $accountingItemsOfferCache = null;
 
     /**
      * @param array<string, \Shipard\Core\Database\TableDefinition> $tables
@@ -549,8 +552,14 @@ class SetupController
     /** Hodnota economy.accountChart, nebo null = nerozhodnuto. */
     private function accountChartVariant(): ?string
     {
-        $variant = (new SettingsStore($this->db))->get('economy.accountChart');
-        return is_string($variant) && $variant !== '' ? $variant : null;
+        return $this->itemsOffer()->variant();
+    }
+
+    /** Sdílená čtečka nabídky účetních položek (memoizovaně). */
+    private function itemsOffer(): AccountingItemsOffer
+    {
+        return $this->accountingItemsOfferCache
+            ??= new AccountingItemsOffer($this->db, $this->modulePathResolver);
     }
 
     /**
@@ -578,63 +587,16 @@ class SetupController
     }
 
     /**
-     * Seed sady podle varianty osnovy — tvar {groups, items} (Task 11),
-     * items klíčované kódem položky. Starý tvar (plochý seznam) se
-     * nepodporuje, jediný konzument je tento kontroler.
-     * Dva soubory, ne jeden s filtrem — viz komentář u accountingItemsOffer.
+     * Seed sady podle varianty osnovy — deleguje na sdílenou čtečku
+     * {@see AccountingItemsOffer::loadSeed()} (tvar {groups, items},
+     * items klíčované kódem položky).
      *
      * @return array{groups: list<array<string, mixed>>, items: array<string, array<string, mixed>>}|null
      *         null = soubor chybí / nečitelný / bez items
      */
     private function loadAccountingItemsSeed(string $variant): ?array
     {
-        $file = match ($variant) {
-            'default' => 'accountingItemsDefault.jsonc',
-            'npo'     => 'accountingItemsNpo.jsonc',
-            default   => null,
-        };
-        $modulePath = $this->modulePathResolver->getPath('economy.items');
-        if ($file === null || $modulePath === null) {
-            return null;
-        }
-        $path = $modulePath . '/config/' . $file;
-        if (!is_file($path)) {
-            ErrorLogger::error('SetupController: accounting items seed not found', ['file' => $file]);
-            return null;
-        }
-
-        $seed = JsoncParser::parseFile($path);
-        if (!is_array($seed) || !is_array($seed['items'] ?? null)) {
-            return null;
-        }
-
-        $groups   = [];
-        $groupIds = [];
-        foreach ((array) ($seed['groups'] ?? []) as $entry) {
-            if (is_array($entry) && !empty($entry['id'])) {
-                $groups[] = $entry;
-                $groupIds[(string) $entry['id']] = true;
-            }
-        }
-
-        $byCode = [];
-        foreach ($seed['items'] as $entry) {
-            if (!is_array($entry) || empty($entry['code'])) {
-                continue;
-            }
-            // Neznámá skupina je chyba seedu, ne důvod položku zahodit —
-            // offer ji vrátí tak, jak je, klient ji zobrazí v sekci Ostatní.
-            $group = (string) ($entry['group'] ?? '');
-            if (!isset($groupIds[$group])) {
-                ErrorLogger::error('SetupController: accounting items seed entry has unknown group', [
-                    'file'  => $file,
-                    'code'  => (string) $entry['code'],
-                    'group' => $group,
-                ]);
-            }
-            $byCode[(string) $entry['code']] = $entry;
-        }
-        return ['groups' => $groups, 'items' => $byCode];
+        return $this->itemsOffer()->loadSeed($variant);
     }
 
     /**

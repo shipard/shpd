@@ -9,6 +9,7 @@ final class FormElement
     public const ALLOWED_TYPES = [
         'input',
         'select',
+        'multiselect',
         'lookup',
         'separator',
         'inline',
@@ -92,6 +93,10 @@ final class FormElement
                     ));
                 }
             }
+        }
+
+        if ($type === 'multiselect' && ($column === null || $column === '')) {
+            throw new \InvalidArgumentException('multiselect element requires column');
         }
 
         if ($type === 'component' && ($componentName === null || $componentName === '')) {

@@ -220,6 +220,32 @@ class TabBuilderTest extends TestCase
         $this->assertSame($options, $el->options);
     }
 
+    public function testMultiselect(): void
+    {
+        $options = [
+            ['value' => 'vehicle.fuel', 'label' => 'Pohonné hmoty'],
+            ['value' => 'it.software', 'label' => 'Software a SaaS'],
+        ];
+        $tab = (new TabBuilder('t', 'T'))
+            ->section()->col()
+                ->multiselect('content_tags', label: 'Štítky', options: $options, hint: 'Multi')
+            ->build();
+        $el = $tab->sections[0]->columns[0]->elements[0];
+        $this->assertSame('multiselect', $el->type);
+        $this->assertSame('content_tags', $el->column);
+        $this->assertSame($options, $el->options);
+        $this->assertSame('Multi', $el->hint);
+    }
+
+    public function testMultiselectInsideInlineRejected(): void
+    {
+        $this->expectException(\LogicException::class);
+
+        (new TabBuilder('t', 'T'))
+            ->section()->col()->inline()
+                ->multiselect('content_tags');
+    }
+
     public function testTextarea(): void
     {
         $tab = (new TabBuilder('t', 'T'))

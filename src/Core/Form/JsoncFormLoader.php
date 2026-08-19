@@ -214,9 +214,9 @@ class JsoncFormLoader
         // Determine type: explicit in JSONC, or derived from column definition.
         $type = $type ?? $this->deriveType($col);
 
-        // Resolve select options from config if not provided.
+        // Resolve select/multiselect options from config if not provided.
         $options = $elData['options'] ?? null;
-        if ($type === 'select' && $options === null && $col !== null) {
+        if (($type === 'select' || $type === 'multiselect') && $options === null && $col !== null) {
             $options = $this->resolveEnumOptions($col, $config);
         }
 

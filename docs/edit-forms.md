@@ -157,7 +157,7 @@ Formulář má vždy alespoň jeden tab. Je-li tab jen jeden, tab bar se nezobra
 
 Element žije uvnitř sloupce (`section.columns[i].elements[]`). Sám si nediktuje šířku — tu určuje sloupec.
 
-Povolené typy: `input`, `select`, `separator`, `inline`, `html`, `component`.
+Povolené typy: `input`, `select`, `multiselect`, `separator`, `inline`, `html`, `component`.
 
 ### 4.1 `input`
 
@@ -207,6 +207,29 @@ Hodnota je validována v konstruktoru `FormElement` proti whitelistu — neplatn
 ```
 
 `options` se generují na serveru z `cfgItem` sloupce.
+
+### 4.2b `multiselect`
+
+```json
+{
+    "type": "multiselect",
+    "column": "content_tags",
+    "label": "Obsahové štítky",
+    "options": [
+        {"value": "vehicle.fuel", "label": "Pohonné hmoty"},
+        {"value": "it.software", "label": "Software a SaaS"}
+    ]
+}
+```
+
+Výběr více hodnot z pevné nabídky (cfgItem-based číselník). Hodnota je pole
+hodnot z `options` (typicky list stringů); sloupec v DB je `type: json` —
+Document třída odpovídá za `json_encode` v `beforeSave()` (prázdný výběr →
+`NULL`). `options` se auto-resolují z `cfgItem` sloupce stejně jako u `select`.
+Frontend vykresluje chips + dropdown se zaškrtávacími položkami
+(`MultiselectInput.svelte`). `column` je povinný; do `inline` skupiny
+multiselect nelze umístit (stejné pravidlo jako `lookup`). PHP builder:
+`TabBuilder::multiselect(column, label:, options:, ...)`.
 
 ### 4.3 `separator`
 
@@ -765,6 +788,7 @@ $tab = $this->tab('basic', 'Základní údaje')
 | `number` | `number` | `int`/`bigint`/`numeric`/`float` |
 | `checkbox` | `checkbox` | `boolean` |
 | `select` | — | `enumInt`, `enumString` |
+| `multiselect` | — | `json` (list hodnot) |
 
 ```php
 // Element factory metody (musí být uvnitř otevřeného col())
@@ -777,6 +801,9 @@ $col->date($column, ...);  $col->datetime($column, ...);  $col->time($column, ..
 $col->number($column, ...);  $col->checkbox($column, ...);
 
 $col->select(string $column, ?string $label = null, ?array $options = null,
+    ?string $triggers = null, bool $required = false, ...): static;
+
+$col->multiselect(string $column, ?string $label = null, ?array $options = null,
     ?string $triggers = null, bool $required = false, ...): static;
 
 $col->separator(?string $label = null, bool $hidden = false): static;

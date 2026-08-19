@@ -404,6 +404,7 @@ Shortcut když nepotřebuješ vlastní labely:
 | `number(col)` | int, bigint, numeric, float |
 | `checkbox(col)` | boolean |
 | `select(col, options: ...)` | enumInt, enumString |
+| `multiselect(col, options: ...)` | json — výběr více hodnot z cfgItem číselníku, hodnota = list; Document dělá `json_encode` v `beforeSave()` |
 | `separator(label: ...)` | — |
 | `lookup(col, table: ...)` | FK na velkou tabulku (viz reference kap. 22) |
 | `html(content: ...)`, `component(name: ...)` | custom HTML / pojmenovaná Svelte komponenta |

@@ -186,6 +186,42 @@ class FormElementTest extends TestCase
         $this->assertSame('Person', $arr['options'][1]['label']);
     }
 
+    public function testMultiselectWithOptions(): void
+    {
+        $el = new FormElement(
+            type: 'multiselect',
+            column: 'content_tags',
+            label: 'Tags',
+            options: [
+                ['value' => 'vehicle.fuel', 'label' => 'Pohonné hmoty'],
+                ['value' => 'it.software', 'label' => 'Software a SaaS'],
+            ],
+        );
+        $arr = $el->toArray();
+
+        $this->assertSame('multiselect', $arr['type']);
+        $this->assertSame('content_tags', $arr['column']);
+        $this->assertCount(2, $arr['options']);
+        $this->assertSame('it.software', $arr['options'][1]['value']);
+    }
+
+    public function testMultiselectRequiresColumn(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('multiselect element requires column');
+
+        new FormElement(type: 'multiselect');
+    }
+
+    public function testMultiselectInsideInlineRejected(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        new FormElement(type: 'inline', elements: [
+            new FormElement(type: 'multiselect', column: 'content_tags'),
+        ]);
+    }
+
     public function testHtmlSerialization(): void
     {
         $el = new FormElement(type: 'html', content: '<p>Hello</p>');

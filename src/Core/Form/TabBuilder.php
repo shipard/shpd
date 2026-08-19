@@ -247,6 +247,35 @@ final class TabBuilder
     }
 
     /**
+     * Multi-select over a fixed option list (cfgItem-based). Value is a list of option values.
+     */
+    public function multiselect(
+        string $column,
+        ?string $label = null,
+        ?array $options = null,
+        ?string $triggers = null,
+        bool $required = false,
+        bool $readOnly = false,
+        bool $hidden = false,
+        ?string $hint = null,
+        ?string $placeholder = null,
+    ): static {
+        $this->pushElement(new FormElement(
+            type: 'multiselect',
+            column: $column,
+            label: $this->resolveLabel($column, $label),
+            placeholder: $placeholder,
+            required: $required,
+            readOnly: $readOnly,
+            hidden: $hidden,
+            triggers: $triggers,
+            options: $options,
+            hint: $hint,
+        ));
+        return $this;
+    }
+
+    /**
      * @param array<string, scalar>|null $filter
      */
     public function lookup(

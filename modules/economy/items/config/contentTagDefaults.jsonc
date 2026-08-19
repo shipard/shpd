@@ -1,0 +1,36 @@
+{
+    // economy.items.contentTagDefaults — per-tag účetní pravidla nezávislá
+    // na variantě osnovy (tasks/content-tag-enrichment.md, D4/D10).
+    //
+    // Fallback štítek → účet se tady NEdefinuje — derivuje se z nabídky
+    // účetních položek aktivní varianty (accountingItemsDefault/Npo.jsonc).
+    //
+    // vatHint je v1 INFORMATIVNÍ — propíše se do audit bloku jako warning
+    // (content_tag_vat_hint), tvrdé vynucení DPH režimu je mimo scope.
+    // amountGuard: řádek s totalPrice nad `over` (v domácí měně) návrh
+    // nedostane (audit `guard: 'amount'`), pásmo zůstane review.
+    "people.catering": {
+        "vatHint": "nonDeductible"
+    },
+    "people.gifts": {
+        "vatHint": "nonDeductible"
+    },
+    "office.equipment": {
+        "amountGuard": {
+            "over": 80000,
+            "action": "review",
+            "note": "possible fixed asset",
+            "note:cs": "možný dlouhodobý majetek",
+            "note:en": "possible fixed asset"
+        }
+    },
+    "it.hardware": {
+        "amountGuard": {
+            "over": 80000,
+            "action": "review",
+            "note": "possible fixed asset",
+            "note:cs": "možný dlouhodobý majetek",
+            "note:en": "possible fixed asset"
+        }
+    }
+}

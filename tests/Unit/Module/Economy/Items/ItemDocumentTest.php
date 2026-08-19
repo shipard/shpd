@@ -186,4 +186,87 @@ class ItemDocumentTest extends TestCase
 
         $this->assertTrue($doc->validate($data)->isValid());
     }
+
+    // -------- content_tags --------
+
+    private function docWithTaxonomy(): ItemDocument
+    {
+        $config = $this->createMock(\Shipard\Core\Config\ConfigRuntime::class);
+        $config->method('cfgItem')->willReturnMap([
+            ['core.exchange.contentTags', [
+                'vehicle.fuel' => ['name' => 'Fuel'],
+                'it.software'  => ['name' => 'Software'],
+            ]],
+        ]);
+        $doc = $this->doc();
+        $doc->setConfig($config);
+        return $doc;
+    }
+
+    public function testValidateContentTagsKnownKeysPass(): void
+    {
+        $data = ['name' => 'PHM', 'item_kind' => 1, 'unit' => 1,
+                 'content_tags' => ['vehicle.fuel', 'it.software']];
+
+        $this->assertTrue($this->docWithTaxonomy()->validate($data)->isValid());
+    }
+
+    public function testValidateContentTagsUnknownKeyFails(): void
+    {
+        $data = ['name' => 'PHM', 'item_kind' => 1, 'unit' => 1,
+                 'content_tags' => ['vehicle.fuel', 'bogus.tag']];
+        $result = $this->docWithTaxonomy()->validate($data);
+
+        $this->assertFalse($result->isValid());
+        $columns = array_column($result->toArray(), 'column');
+        $this->assertContains('content_tags', $columns);
+    }
+
+    public function testValidateContentTagsMustBeListOfStrings(): void
+    {
+        $data = ['name' => 'PHM', 'item_kind' => 1, 'unit' => 1,
+                 'content_tags' => ['vehicle.fuel' => true]];
+        $result = $this->docWithTaxonomy()->validate($data);
+
+        $this->assertFalse($result->isValid());
+        $columns = array_column($result->toArray(), 'column');
+        $this->assertContains('content_tags', $columns);
+    }
+
+    public function testValidateContentTagsWithoutTaxonomySkipsKeyCheck(): void
+    {
+        // Chybějící compiled config (např. CLI kontext) → validace klíčů se
+        // přeskočí, tvar (list stringů) se pořád vynucuje.
+        $data = ['name' => 'PHM', 'item_kind' => 1, 'unit' => 1,
+                 'content_tags' => ['whatever.tag']];
+
+        $this->assertTrue($this->doc()->validate($data)->isValid());
+    }
+
+    public function testBeforeSaveEncodesContentTagsToJson(): void
+    {
+        $db = $this->createMock(\Dibi\Connection::class);
+        $db->method('fetch')->willReturn(null);
+        $doc = $this->doc();
+        $doc->setDb($db);
+
+        $data = ['name' => 'X', 'item_kind' => 1, 'unit' => 1,
+                 'content_tags' => ['vehicle.fuel', 'it.software']];
+        $doc->beforeSave($data);
+
+        $this->assertSame('["vehicle.fuel","it.software"]', $data['content_tags']);
+    }
+
+    public function testBeforeSaveEmptyContentTagsBecomesNull(): void
+    {
+        $db = $this->createMock(\Dibi\Connection::class);
+        $db->method('fetch')->willReturn(null);
+        $doc = $this->doc();
+        $doc->setDb($db);
+
+        $data = ['name' => 'X', 'item_kind' => 1, 'unit' => 1, 'content_tags' => []];
+        $doc->beforeSave($data);
+
+        $this->assertNull($data['content_tags']);
+    }
 }

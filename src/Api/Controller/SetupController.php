@@ -520,6 +520,13 @@ class SetupController
                 'docState'            => 40,
             ];
 
+            // Obsahové štítky z nabídky — položky založené ze setup panelu
+            // jsou rovnou otagované (serializaci řeší ItemDocument).
+            $contentTags = $entry['contentTags'] ?? null;
+            if (is_array($contentTags) && $contentTags !== []) {
+                $payload['content_tags'] = array_values($contentTags);
+            }
+
             $result = $this->saveItemRow($payload);
             if (!$result->isSuccess()) {
                 ErrorLogger::error('SetupController: accounting item generation failed', [

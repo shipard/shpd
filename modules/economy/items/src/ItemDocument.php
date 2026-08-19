@@ -75,6 +75,32 @@ class ItemDocument extends Document
             }
         }
 
+        // Obsahové štítky musí být klíče cfgItem core.exchange.contentTags.
+        // Lookup přes string ID — economy.items na core.exchange modulově
+        // nezávisí (cfgItemy jsou globální); chybějící cfgItem → skip.
+        if (array_key_exists('content_tags', $data) && $data['content_tags'] !== null && $data['content_tags'] !== '') {
+            $tags = $data['content_tags'];
+            if (is_string($tags)) {
+                $tags = json_decode($tags, true);
+            }
+            if (!is_array($tags) || $tags !== array_values(array_filter($tags, 'is_string'))) {
+                $result->addError('content_tags', 'Obsahové štítky musí být seznam řetězců', 'invalid');
+            } else {
+                $taxonomy = $this->config?->cfgItem('core.exchange.contentTags');
+                if (is_array($taxonomy)) {
+                    foreach ($tags as $tag) {
+                        if (!array_key_exists($tag, $taxonomy)) {
+                            $result->addError(
+                                'content_tags',
+                                sprintf('Neznámý obsahový štítek "%s"', $tag),
+                                'invalid',
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
         // Manuálně zadaný kód musí být unikátní
         if (!empty($data['code']) && $this->db !== null) {
             $existingId = !empty($data['id']) ? (int) $data['id'] : 0;
@@ -114,6 +140,13 @@ class ItemDocument extends Document
             if ($kind !== null && $kind !== false) {
                 $data['item_type'] = (int) $kind['item_type'];
             }
+        }
+
+        // JSON sloupce nemají auto-serializaci — encode tady, prázdný výběr → NULL.
+        if (array_key_exists('content_tags', $data) && is_array($data['content_tags'])) {
+            $data['content_tags'] = $data['content_tags'] === []
+                ? null
+                : json_encode(array_values($data['content_tags']), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         }
     }
 

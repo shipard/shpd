@@ -875,7 +875,7 @@ class SetupControllerTest extends TestCase
         $data = $resp->getPayload()['data'];
         $this->assertTrue($data['available']);
         $this->assertSame('default', $data['chartVariant']);
-        $this->assertCount(54, $data['candidates']);
+        $this->assertCount(57, $data['candidates']);
         $this->assertSame('548100', $this->findCandidate($resp, '548100Z')['accountNumber']);
         $this->assertSame('568201', $this->findCandidate($resp, '568201')['accountNumber']);
 
@@ -927,14 +927,15 @@ class SetupControllerTest extends TestCase
     {
         // Konzistence seed ↔ osnova: každý account existuje v příslušném
         // chart JSONC, každá položka odkazuje na deklarovanou skupinu,
-        // počty dle Tasku 11 (default 54/8, NPO 31/7).
+        // počty dle Tasku 11 (default 54/8, NPO 31/7) + content tag
+        // enrichment (default +3: 501100S, 538200, 543900 → 57).
         $modules = dirname(__DIR__, 4) . '/modules';
         $charts  = [
             'default' => "{$modules}/economy/accounting/config/accountChartDefault.jsonc",
             'npo'     => "{$modules}/economy/accounting/config/accountChartNpo.jsonc",
         ];
         $seeds = [
-            'default' => ["{$modules}/economy/items/config/accountingItemsDefault.jsonc", 54, 8],
+            'default' => ["{$modules}/economy/items/config/accountingItemsDefault.jsonc", 57, 8],
             'npo'     => ["{$modules}/economy/items/config/accountingItemsNpo.jsonc", 31, 7],
         ];
 
@@ -993,6 +994,9 @@ class SetupControllerTest extends TestCase
         $this->assertSame(40, $bank['docState']);
         // item_type se neposílá — denormalizuje ho ItemDocument::beforeSave z druhu.
         $this->assertArrayNotHasKey('item_type', $bank);
+        // Obsahové štítky z nabídky se propisují; položka bez tagů klíč nemá.
+        $this->assertSame(['services.banking'], $bank['content_tags']);
+        $this->assertArrayNotHasKey('content_tags', $fx);
     }
 
     public function testGenerateSkipsMissingAccountButCreatesOthers(): void

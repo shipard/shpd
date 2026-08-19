@@ -119,6 +119,18 @@
             "cfgItem": "economy.items.itemTypes",
             "group": "classification"
         },
+        {
+            "id": "content_tags",
+            "name": "Content tags",
+            "name:cs": "Obsahové štítky",
+            "name:en": "Content tags",
+            "type": "json",
+            "nullable": true,
+            "group": "classification"
+            // List klíčů z cfgItem core.exchange.contentTags (obsahová
+            // eskalace párování, tasks/content-tag-enrichment.md).
+            // Serializaci řeší ItemDocument (prázdný výběr → NULL).
+        },
 
         // --- details ---
 

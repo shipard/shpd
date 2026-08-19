@@ -23,6 +23,7 @@ položka patří do jednoho **druhu** (`item_kind`), přebírá z něj svůj
 |---|---|---|
 | `item_kind` | int, NOT NULL, ref → `economy_items_kinds` | Druh položky — určuje `item_type` |
 | `item_type` | enumInt, default 3 | Typ položky — denormalizace z `item_kind`. V UI readOnly, plněn serverem. |
+| `content_tags` | json, nullable | Obsahové štítky — list klíčů z cfgItem `core.exchange.contentTags`. Používá obsahová eskalace párování (štítek → položka). Serializuje `ItemDocument` (prázdný výběr → NULL). |
 
 ### Detaily (details)
 

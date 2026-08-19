@@ -62,6 +62,7 @@ class FormController
                 return Response::error('RECORD_NOT_FOUND', "Record {$id} not found", 404);
             }
             $data = TableAccessGuard::stripSensitive($data, $def);
+            $data = $this->decodeJsonColumns($data, $def);
         } else {
             // Pro nový záznam sestav výchozí data z defaultů sloupců
             foreach ($def->columns as $col) {
@@ -841,5 +842,28 @@ class FormController
                 : (bool) $value,
             default => $value,
         };
+    }
+
+    /**
+     * JSON sloupce jdou z DB jako string (žádná auto-deserializace v gateway) —
+     * pro form editaci (multiselect apod.) je klient potřebuje jako hodnotu.
+     * Nevalidní JSON se ponechá beze změny, ať o data nepřijdeme.
+     */
+    private function decodeJsonColumns(array $data, TableDefinition $def): array
+    {
+        foreach ($def->columns as $col) {
+            if ($col->type !== 'json') {
+                continue;
+            }
+            $value = $data[$col->id] ?? null;
+            if (!is_string($value) || trim($value) === '') {
+                continue;
+            }
+            $decoded = json_decode($value, true);
+            if ($decoded !== null) {
+                $data[$col->id] = $decoded;
+            }
+        }
+        return $data;
     }
 }

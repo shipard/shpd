@@ -16,9 +16,16 @@
         "world.vat",
         "core.mail",
         "core.attachments"
+    ],
+
+    "tables": [
+        "core_exchange_tag_rules"
+    ],
+
+    "config": [
+        { "id": "core.exchange.contentTags", "file": "config/contentTags.jsonc" }
     ]
 
-    // No tables of its own — purely a logic / API layer.
     // No documentClasses — uses existing Document/TableGateway.
     // No viewers — backend service module.
 }

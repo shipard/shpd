@@ -86,6 +86,10 @@
         {
             "id": "economy.items.sourceKinds",
             "file": "config/sourceKinds.jsonc"
+        },
+        {
+            "id": "economy.items.contentTagDefaults",
+            "file": "config/contentTagDefaults.jsonc"
         }
     ]
 }

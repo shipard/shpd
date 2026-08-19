@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Shipard\Module\Economy\Items;
 
+use Shipard\Core\Form\EnumOptionsHelper;
 use Shipard\Core\Form\FormDefinition;
 use Shipard\Core\Form\FormHeaderInfo;
 use Shipard\Core\Form\RecalculateResult;
@@ -61,6 +62,10 @@ class ItemsForm extends TableForm
                         table: 'economy_accounting_accounts',
                         filter: ['account_level' => 4],
                         placeholder: 'Hledat účet…',
+                        hidden: !$isAccEntryItem,
+                    )
+                    ->multiselect('content_tags',
+                        options: $this->resolveContentTagOptions(),
                         hidden: !$isAccEntryItem,
                     )
 
@@ -249,6 +254,24 @@ class ItemsForm extends TableForm
             $options[] = ['value' => (int) $row['id'], 'label' => $label];
         }
         return $options;
+    }
+
+    /**
+     * Options obsahových štítků z globální taxonomie core.exchange.contentTags.
+     * Pořadí = pořadí v cfgItem souboru (klíč `order` je tam pro čitelnost).
+     *
+     * @return list<array{value: int|string, label: string}>
+     */
+    private function resolveContentTagOptions(): array
+    {
+        if ($this->config === null) {
+            return [];
+        }
+        $cfgData = $this->config->cfgItem('core.exchange.contentTags');
+        if (!is_array($cfgData)) {
+            return [];
+        }
+        return EnumOptionsHelper::fromCfgData($cfgData, 'enumString', 'core.exchange.contentTags');
     }
 
     /**

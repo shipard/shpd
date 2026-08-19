@@ -1,0 +1,127 @@
+{
+    "tableId": 438,
+    "name": "Content tag rules",
+    "name:cs": "Pravidla obsahových štítků",
+    "name:en": "Content tag rules",
+
+    "displayPattern": "{company_id} → {tag}",
+
+    // Deterministická osa obsahové eskalace (D12/D21/D22,
+    // tasks/content-tag-enrichment.md): pravidlo IČO dodavatele → obsahový
+    // štítek. Potvrzené pravidlo přeskakuje LLM klasifikaci. Jedno pravidlo
+    // per IČO je vědomé v1 zjednodušení — dodavatel s pestrým sortimentem
+    // pravidlo nedostane (learning handler ho při konfliktu smaže).
+    // Správa přes UI vznikne v tasku content-tag-ui.md.
+    "hideFromNavigation": true,
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+        {
+            "id": "company_id",
+            "name": "Company ID",
+            "name:cs": "IČO dodavatele",
+            "name:en": "Company ID",
+            "type": "varchar",
+            "length": 20,
+            "nullable": false
+            // Normalizované — bez mezer, jen alfanumerické znaky.
+        },
+        {
+            "id": "tag",
+            "name": "Content tag",
+            "name:cs": "Obsahový štítek",
+            "name:en": "Content tag",
+            "type": "enumString",
+            "length": 40,
+            "cfgItem": "core.exchange.contentTags",
+            "nullable": false
+        },
+        {
+            "id": "origin",
+            "name": "Origin",
+            "name:cs": "Původ",
+            "name:en": "Origin",
+            "type": "enumString",
+            "length": 10,
+            "nullable": false
+            // 'user' | 'learned' | 'seed'. Learning (D22) mění jen 'learned';
+            // 'user'/'seed' pravidla nikdy nepřepisuje ani nemaže.
+            // 'seed' je rezervovaný pro import ze starého Shipardu.
+        },
+        {
+            "id": "confirmed",
+            "name": "Confirmed",
+            "name:cs": "Potvrzeno",
+            "name:en": "Confirmed",
+            "type": "tinyint",
+            "nullable": false,
+            "default": 1
+            // V1 vždy 1 (D22 platí okamžitě); pole pro budoucí auto-režim
+            // žebříkem (D14).
+        },
+        {
+            "id": "hit_count",
+            "name": "Hit count",
+            "name:cs": "Počet zásahů",
+            "name:en": "Hit count",
+            "type": "int",
+            "nullable": false,
+            "default": 0
+        },
+        {
+            "id": "last_hit_at",
+            "name": "Last hit at",
+            "name:cs": "Poslední zásah",
+            "name:en": "Last hit at",
+            "type": "datetime",
+            "nullable": true
+        },
+        {
+            "id": "created",
+            "name": "Created",
+            "name:cs": "Vytvořeno",
+            "name:en": "Created",
+            "type": "datetime",
+            "nullable": false
+        },
+        {
+            "id": "created_by",
+            "name": "Created by",
+            "name:cs": "Vytvořil",
+            "name:en": "Created by",
+            "type": "int",
+            "nullable": true
+        },
+        {
+            "id": "modified",
+            "name": "Modified",
+            "name:cs": "Změněno",
+            "name:en": "Modified",
+            "type": "datetime",
+            "nullable": true
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "unq_company_id",
+            "type": "unique",
+            "columns": [
+                {"column": "company_id"}
+            ]
+        },
+        {
+            "id": "idx_tag",
+            "type": "index",
+            "columns": [
+                {"column": "tag"}
+            ]
+        }
+    ]
+}

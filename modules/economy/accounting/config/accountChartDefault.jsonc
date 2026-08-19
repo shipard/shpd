@@ -506,6 +506,7 @@
     {"number":"532100","name":"Daň z nemovitostí","short_name":"Daň z nemovitostí","account_kind":2,"costs_type":1,"results_type":1},
     {"number":"538","name":"Ostatní daně a poplatky","short_name":"Ostatní daně a poplatky","account_kind":2,"results_type":1},
     {"number":"538100","name":"Daň z převodu nemovitosti","short_name":"Daň z převodu nemovitosti","account_kind":2,"costs_type":1,"results_type":1},
+    {"number":"538200","name":"Dálniční poplatky, mýto a správní poplatky","short_name":"Dálniční, mýto a správní poplatky","account_kind":2,"costs_type":1,"results_type":1},
     {"number":"54","name":"Jiné provozní náklady","short_name":"Jiné provozní náklady","account_kind":2,"results_type":1},
     {"number":"541","name":"Zůstatková cena prodaného dlouhodobého nehmotného a hmotného majetku","short_name":"Zůstatková cena prodaného DNM a HM","account_kind":2,"results_type":1},
     {"number":"541100","name":"Zůstatková cena prodaného dlouhodobého nehmotného a hmotného majetku","short_name":"Zůstatková cena prodaného DNM a HM","account_kind":2,"costs_type":1,"results_type":1},

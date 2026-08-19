@@ -49,6 +49,7 @@
             "name:en": "Origin",
             "type": "enumString",
             "length": 10,
+            "cfgItem": "core.exchange.tagRuleOrigins",
             "nullable": false
             // 'user' | 'learned' | 'seed'. Learning (D22) mění jen 'learned';
             // 'user'/'seed' pravidla nikdy nepřepisuje ani nemaže.

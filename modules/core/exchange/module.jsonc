@@ -23,7 +23,8 @@
     ],
 
     "config": [
-        { "id": "core.exchange.contentTags", "file": "config/contentTags.jsonc" }
+        { "id": "core.exchange.contentTags", "file": "config/contentTags.jsonc" },
+        { "id": "core.exchange.tagRuleOrigins", "file": "config/tagRuleOrigins.jsonc" }
     ],
 
     "documentEventHandlers": [

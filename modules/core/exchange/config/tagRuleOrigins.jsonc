@@ -1,0 +1,24 @@
+{
+    // core.exchange.tagRuleOrigins — původ pravidla IČO → obsahový štítek
+    // (core_exchange_tag_rules.origin). Learning (D22) mění jen 'learned';
+    // 'user'/'seed' pravidla nikdy nepřepisuje ani nemaže. 'seed' je
+    // rezervovaný pro import ze starého Shipardu.
+    "user": {
+        "name": "Manual",
+        "name:cs": "Ruční",
+        "name:en": "Manual",
+        "order": 10
+    },
+    "learned": {
+        "name": "Learned",
+        "name:cs": "Naučené",
+        "name:en": "Learned",
+        "order": 20
+    },
+    "seed": {
+        "name": "Imported seed",
+        "name:cs": "Importovaný seed",
+        "name:en": "Imported seed",
+        "order": 30
+    }
+}

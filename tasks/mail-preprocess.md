@@ -1,7 +1,7 @@
 # Došlá pošta: technické předzpracování zpráv před AI analýzou
 
 **Issue:** shipard/shpd#33 (rendering služba: #34)
-**Status:** připraveno k implementaci — Fáze 1; Fáze 2 blokována #34
+**Stav:** naplánováno — připraveno k implementaci: Fáze 1; Fáze 2 blokována #34
 
 ## Cíl
 
@@ -10,7 +10,7 @@ frontou. Řízeno pravidly (`core_mail_preprocess_rules`): stažení dokladu
 z odkazu v těle zprávy, render HTML těla do PDF (Fáze 2). Výsledkem jsou
 nové obsahové přílohy zprávy, které vidí uživatel, AI analyzer i Spisovna.
 
-Motivace a reálné vzorky (DS `pw6p-460g-dt66-d4i3` na alfě): viz issue #33
+Motivace a reálné vzorky (jeden z DS na alfě): viz issue #33
 — Bolt `MSG-20260817-0004` (faktura za odkazem, awstrack redirect), Apple
 `MSG-20260817-0003` a Google Play `MSG-20260817-0005` (faktura v HTML těle,
 klasifikace selhala / bez dokumentu).

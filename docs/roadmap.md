@@ -1,7 +1,8 @@
 # Roadmap
 
 Kam Nový Shipard směřuje a v jakém pořadí. Tento dokument odpovídá na otázku
-**„co teď"** — implementační zadání žijí v [`tasks/`](../tasks/README.md),
+**„co teď"** — celková mapa rozsahu (**„co všechno"**) je ve
+[`features.md`](features.md), implementační zadání žijí v [`tasks/`](../tasks/README.md),
 referenční specifikace subsystémů v [`docs/`](README.md).
 
 Stav jednotlivých tasků: generovaný souhrn v

@@ -5,6 +5,7 @@ Technické specifikace projektu Shipard.
 | Dokument | Obsah |
 |----------|-------|
 | [roadmap.md](roadmap.md) | **Roadmapa** — milníky podle schopností uživatele, pravidlo prioritizace, vědomě odložené věci |
+| [features.md](features.md) | **Přehled funkcí** — mapa rozsahu: co je hotové, částečné a plánované, vědomě mimo rozsah |
 | [architecture.md](architecture.md) | Mapa tříd, vrstvy, závislosti, tok dat — jak komponenty spolupracují |
 | [modules.md](modules.md) | Modulový systém — struktura, závislosti, JSONC formát, i18n, kompilace konfigurace, CLI příkaz `ds-upgrade` |
 | [table-definitions.md](table-definitions.md) | Formát definice databázových tabulek — datové typy, sloupce, indexy, extensions, validace, bezpečné změny |

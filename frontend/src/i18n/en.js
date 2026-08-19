@@ -273,6 +273,10 @@ export default {
   'error.STREAM_ERROR': 'The response stream failed ({message}) — the reply may not have been saved',
   'error.CREATE_FAILED': 'Could not create the conversation',
   // Self-service DS creation (hosting-08)
+  'error.ALREADY_MAPPED': 'The tag already has a live tagged item — nothing to create',
+  'error.ACCOUNT_REQUIRED': 'The tag has no offer item — choose an account number',
+  'error.ACCOUNT_NOT_FOUND': 'The account was not found in the active chart',
+  'error.UNKNOWN_TAG': 'Unknown content tag',
   'error.NO_SERVER': 'Creating data sources is not available right now — contact your administrator',
   'error.OPEN_REQUEST': 'Your previous request is still being processed',
   'error.MAX_OWNED': 'You have reached the maximum number of data sources',
@@ -455,6 +459,7 @@ export default {
   'dashboard.card.confidence': 'Confidence {pct} %',
   'dashboard.card.actionFailed': 'Action failed: {msg}',
   'dashboard.toast.appliedRegistry': 'Document #{id} filed to the Registry',
+  'dashboard.toast.itemCreated': 'Item {code} — {name} created',
   'dashboard.toast.open': 'Open',
   'dashboard.toast.autoArchiveReverted': '{count, plural, one {# message restored} other {# messages restored}}',
   'dashboard.toast.uploaded': '{count, plural, one {# message uploaded and queued for AI analysis} other {# messages uploaded and queued for AI analysis}}',

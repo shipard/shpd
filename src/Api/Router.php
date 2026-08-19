@@ -267,6 +267,10 @@ class Router
 			return $this->resolveBankExchangeRoute($subpath, $method);
 		}
 
+		if (str_starts_with($subpath, '/_exchange/content-tags/')) {
+			return $this->resolveContentTagsRoute($subpath, $method);
+		}
+
 		if (str_starts_with($subpath, '/_alerts')) {
 			return $this->resolveAlertsRoute($subpath, $method);
 		}
@@ -755,6 +759,24 @@ class Router
 			return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
 		}
 		return new Route('exchange', "bank:{$rest}");
+	}
+
+	/**
+	 * Obsahové štítky (tasks/content-tag-ui.md D26/D27) — vlastní dispatcher
+	 * `contentTags`: ExchangeController bere jen appliery a dispatchExchange
+	 * nedostává auth/tables, které tyhle endpointy potřebují.
+	 */
+	private function resolveContentTagsRoute(string $subpath, string $method): Route|Response
+	{
+		$rest = substr($subpath, strlen('/_exchange/content-tags/'));
+		return match (true) {
+			$rest === 'materialize' && $method === 'POST' => new Route('contentTags', 'materialize'),
+			$rest === 'overview' && $method === 'GET'     => new Route('contentTags', 'overview'),
+			$rest === 'tag-items' && $method === 'POST'   => new Route('contentTags', 'tagItems'),
+			in_array($rest, ['materialize', 'overview', 'tag-items'], true)
+				=> Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405),
+			default => Response::error('NOT_FOUND', 'Not found', 404),
+		};
 	}
 
 	private function resolveAlertsRoute(string $subpath, string $method): Route|Response

@@ -286,6 +286,10 @@ export default {
   'error.CREATE_FAILED': 'Konverzaci se nepodařilo založit',
   'error.SETUP_ALERT': 'Upozornění na chybějící nastavení nejde odložit ani zavřít — zmizí samo, jakmile nastavení doplníte',
   // Self-service zakládání DS (hosting-08)
+  'error.ALREADY_MAPPED': 'Štítek už má živou otagovanou položku — není co zakládat',
+  'error.ACCOUNT_REQUIRED': 'Štítek nemá položku v nabídce — zvolte číslo účtu',
+  'error.ACCOUNT_NOT_FOUND': 'Účet nebyl v aktivní osnově nalezen',
+  'error.UNKNOWN_TAG': 'Neznámý obsahový štítek',
   'error.NO_SERVER': 'Zakládání zdrojů dat teď není dostupné — kontaktujte správce',
   'error.OPEN_REQUEST': 'Předchozí požadavek se ještě zpracovává',
   'error.MAX_OWNED': 'Dosáhli jste maximálního počtu zdrojů dat',
@@ -468,6 +472,7 @@ export default {
   'dashboard.card.confidence': 'Jistota {pct} %',
   'dashboard.card.actionFailed': 'Akce se nezdařila: {msg}',
   'dashboard.toast.appliedRegistry': 'Dokument #{id} zařazen do Spisovny',
+  'dashboard.toast.itemCreated': 'Položka {code} — {name} založena',
   'dashboard.toast.open': 'Otevřít',
   'dashboard.toast.autoArchiveReverted': '{count, plural, one {# zpráva vrácena} few {# zprávy vráceny} many {# zpráv vráceno} other {# zpráv vráceno}}',
   'dashboard.toast.uploaded': '{count, plural, one {Nahrána # zpráva, zařazena do AI analýzy} few {Nahrány # zprávy, zařazeny do AI analýzy} many {Nahráno # zpráv, zařazeno do AI analýzy} other {Nahráno # zpráv, zařazeno do AI analýzy}}',

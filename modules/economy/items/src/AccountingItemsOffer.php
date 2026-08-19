@@ -95,6 +95,52 @@ class AccountingItemsOffer
     }
 
     /**
+     * První položka nabídky aktivní varianty nesoucí přesně tento štítek —
+     * včetně klíče `code`. Bez prefix fallbacku: materializace položky ze
+     * skupinového zásahu by založila položku, která hledaný štítek nenese
+     * (D26 — fallback smí jen navrhovat účet, ne položku).
+     *
+     * @return array<string, mixed>|null
+     */
+    public function entryForTag(string $tag): ?array
+    {
+        $variant = $this->variant();
+        if ($variant === null) {
+            return null;
+        }
+        $seed = $this->loadSeed($variant);
+        if ($seed === null) {
+            return null;
+        }
+        foreach ($seed['items'] as $code => $entry) {
+            foreach ((array) ($entry['contentTags'] ?? []) as $t) {
+                if ($t === $tag) {
+                    $entry['code'] = (string) $code;
+                    return $entry;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Lokalizované pole z JSONC záznamu nabídky — `{base}:{jazyk}` →
+     * `{base}:en` → `{base}` → $fallback (stejný chain jako ConfigLocalizer).
+     * Sdílené SetupControllerem a AccountingItemMaterializerem.
+     *
+     * @param array<string, mixed> $entry
+     */
+    public static function localizedField(array $entry, string $base, string $language, string $fallback): string
+    {
+        foreach ([$base . ':' . $language, $base . ':en', $base] as $key) {
+            if (!empty($entry[$key])) {
+                return (string) $entry[$key];
+            }
+        }
+        return $fallback;
+    }
+
+    /**
      * @param array<string, array<string, mixed>> $items
      * @param callable(string): bool $matches
      */

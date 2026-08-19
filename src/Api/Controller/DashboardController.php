@@ -15,6 +15,7 @@ use Shipard\Core\Feed\FeedContext;
 use Shipard\Core\Feed\FeedSource;
 use Shipard\Core\Logging\ErrorLogger;
 use Shipard\Module\Core\Alerts\Feed\AlertsSource;
+use Shipard\Module\Core\Exchange\Dashboard\ContentTagSuggestionsSource;
 use Shipard\Module\Core\Mail\Feed\MailDigestSource;
 use Shipard\Module\Core\Mail\Feed\MailSuggestionsSource;
 
@@ -140,6 +141,12 @@ class DashboardController
         }
         if (isset($tables['core_alerts_alerts'])) {
             $sources[] = new AlertsSource($alertRegistry);
+        }
+        // Karta „Nová kategorie" (content-tag-ui D25) — potřebuje analýzy
+        // (štítky návrhů), položky (pokrytí štítků) i osnovu (volba účtu
+        // goods.stock + materializace).
+        if (isset($tables['core_mail_message_analyses'], $tables['economy_items'], $tables['economy_accounting_accounts'])) {
+            $sources[] = new ContentTagSuggestionsSource();
         }
 
         $cards = [];

@@ -9,6 +9,7 @@
     reanalyzeMessage,
   } from '../../api/exchange.js';
   import { confirmSenderRule, rejectSenderRule, undoAutoArchive } from '../../api/mail.js';
+  import { materializeContentTag } from '../../api/contentTags.js';
   import { iconRefresh, iconUpload } from '../../icons.js';
   import { navigationStore } from '../../stores/navigation.svelte.js';
   import Button from '../ui/Button.svelte';
@@ -167,6 +168,8 @@
         return senderRuleFlow(rejectSenderRule, target.ruleId, card.id);
       case 'undo_auto_archive':
         return undoAutoArchiveFlow(target.date ?? null, card.id);
+      case 'materialize_content_tag':
+        return materializeTagFlow(target.tag, target.account ?? null, card.id);
       case 'open_viewer':
         return navigationStore.navigateToViewer(target.viewerId, target.recordId ?? null, target.viewGroup ?? null);
       case 'open_detail':
@@ -275,6 +278,34 @@
         showToast({
           kind: 'reverted',
           message: t('dashboard.toast.autoArchiveReverted', { count: result.data?.restored ?? 0 }),
+        });
+        load();
+      } else {
+        alert(t('dashboard.card.actionFailed', { msg: translateError(result?.error) }));
+      }
+    } finally {
+      busyCardId = null;
+    }
+  }
+
+  // „Založit položku" z karty Nová kategorie (content-tag-ui D25/D26) —
+  // po založení se feed přepočítá query-driven (karta zmizí sama), toast
+  // s „Otevřít" vede do formu nové položky.
+  async function materializeTagFlow(tag, account, cardId) {
+    if (busyCardId !== null || !tag) return;
+    busyCardId = cardId;
+    try {
+      const result = await materializeContentTag(tag, account);
+      if (result?.success) {
+        dropCardById(cardId);
+        showToast({
+          kind: 'applied',
+          message: t('dashboard.toast.itemCreated', {
+            code: result.data?.code ?? '',
+            name: result.data?.name ?? '',
+          }),
+          docId: result.data?.itemId ?? null,
+          docTable: 'economy_items',
         });
         load();
       } else {

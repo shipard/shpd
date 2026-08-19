@@ -290,6 +290,7 @@ function dispatch(
 		'registry' => dispatchRegistry($route, $request, $auth, $tables, $db, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $configRuntime),
 		'analysis' => dispatchAnalysis($route, $request, $auth, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher),
 		'exchange' => dispatchExchange($route, $request, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher),
+		'contentTags' => dispatchContentTags($route, $request, $auth, $db, $configRuntime, resolveLanguage($request, $resolved->config), $tables, $resolved->config, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher),
 		'alerts' => dispatchAlerts($route, $request, $db, $alertCheckRegistry, $configRuntime, resolveLanguage($request, $resolved->config)),
 		'setup' => dispatchSetup($route, $request, $auth, $db, $alertCheckRegistry, $configRuntime, $modulePathResolver, resolveLanguage($request, $resolved->config), $tables, $resolved->config, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher),
 		'accbal'  => dispatchAccbal($route, $request, $db, $configRuntime, $journalEventDispatcher, $resolved->config),
@@ -575,6 +576,39 @@ function dispatchAlerts(
 		'dismiss'   => $ctrl->dismiss((int) $route->id),
 		'unsnooze'  => $ctrl->unsnooze((int) $route->id),
 		default     => Response::error('INTERNAL_ERROR', "Unknown alerts action: {$route->action}", 500),
+	};
+}
+
+function dispatchContentTags(
+	Route $route,
+	Request $request,
+	AuthContext $auth,
+	\Shipard\Core\Database\DataSourceConnection $db,
+	?\Shipard\Core\Config\ConfigRuntime $configRuntime,
+	string $language,
+	array $tables = [],
+	?\Shipard\Core\Config\DataSourceConfig $dsConfig = null,
+	?\Shipard\Core\Document\DocumentRegistry $documentRegistry = null,
+	?\Shipard\Core\Document\DocumentEventDispatcher $eventDispatcher = null,
+): Response {
+	if ($configRuntime === null) {
+		return Response::error('INTERNAL_ERROR', 'ConfigRuntime is required for /_exchange/content-tags endpoints', 500);
+	}
+
+	$ctrl = new \Shipard\Api\Controller\ContentTagsController(
+		$db,
+		$configRuntime,
+		$language,
+		$dsConfig,
+		$tables,
+		$documentRegistry,
+		$eventDispatcher,
+	);
+	return match ($route->action) {
+		'materialize' => $ctrl->materialize($request, $auth),
+		'overview'    => $ctrl->overview($auth),
+		'tagItems'    => $ctrl->tagItems($request, $auth),
+		default       => Response::error('INTERNAL_ERROR', "Unknown content-tags action: {$route->action}", 500),
 	};
 }
 

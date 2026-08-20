@@ -1,7 +1,7 @@
 ---
 title: Kontrola vytěženého dokladu
 summary: Jak porovnat návrh dokladu s originálem faktury, co kontrolovat první a kdy návrh zamítnout.
-keywords: [kontrola, vytěžení, analýza, náhled dokladu, jistota, použít, zamítnout, AI přečetla špatně, sedí částka, review, vytvořit z registru, hledat v registru, nový dodavatel z faktury]
+keywords: [kontrola, vytěžení, analýza, náhled dokladu, jistota, použít, vystavit koncept, vystavit a uzavřít, zamítnout, AI přečetla špatně, sedí částka, review, vytvořit z registru, hledat v registru, nový dodavatel z faktury]
 related: [slovnicek.md, co-dnes-nejde.md, osoby/zalozeni-osoby.md]
 ---
 
@@ -64,21 +64,30 @@ karta s procentem **Jistoty**. U jistých návrhů má karta rovnou tlačítko
    - **Vynechat řádek**, ale jen u řádku faktury.
 
    Rozhodnutí se pak ukáže jako **Vybráno: …** a vezmeš ho zpět
-   tlačítkem **Zrušit výběr**. Dokud něco zůstává nerozhodnuté, tlačítko
-   **Použít** je zašedlé — bez vysvětlení, takže když nejde kliknout,
-   hledej nedořešenou referenci.
+   tlačítkem **Zrušit výběr**. Dokud něco zůstává nerozhodnuté, obě
+   tlačítka **Vystavit…** jsou zašedlá — bez vysvětlení, takže když
+   nejde kliknout, hledej nedořešenou referenci.
 
-6. **Použij, nebo zamítni.**
-   - **Použít** — vznikne **Faktura přijatá** ve stavu **Koncept**
-     a zpráva přejde na **Hotovo**.
+6. **Vystav doklad, nebo návrh zamítni.**
+   - **Vystavit a uzavřít** — **Faktura přijatá** vznikne rovnou ve
+     stavu **V pořádku**: dostane číslo, zaúčtuje se a nic dalšího po
+     tobě nechce. Zpráva přejde na **Hotovo**. Volba pro návrhy, které
+     po kontrole sedí. Když dokladu chybí náležitost (třeba registrace
+     DPH nebo kurz), Shipard vystavení odmítne s hláškou — pak jdi
+     cestou konceptu a chybějící doplň ve formuláři.
+   - **Vystavit koncept** — doklad vznikne ve stavu **Koncept**
+     a zpráva přejde na **Hotovo**. Volba pro chvíle, kdy chceš před
+     uzavřením ještě něco upravit.
    - **Zamítnout** — když to faktura vůbec není (reklama, upomínka)
      nebo je vytěžení nepoužitelné. Důvod je povinný a uloží se k návrhu:
      *špatně rozpoznaný typ*, *není to faktura*.
 
-7. **Dokonči doklad.** Koncept se ti po **Použít** hned otevře
+7. **Dokonči koncept.** Po **Vystavit koncept** se ti doklad hned otevře
    v editačním formuláři a je plně editovatelný — co jsi v náhledu jen
    zaregistroval, oprav teď. Zaúčtuje se teprve přechodem
-   na stav **V pořádku**.
+   na stav **V pořádku**. Po **Vystavit a uzavřít** tenhle krok odpadá —
+   doklad je hotový a na Dashboardu ho z potvrzující lišty otevřeš
+   odkazem **Otevřít**.
 
 ## Na co narazíš
 
@@ -93,11 +102,18 @@ sebou. Badge u návrhu se z něj odvozuje:
 | **Chyba extrakce** | — | Extrakce se nepovedla, typicky nečitelné PDF. Zkus **Znovu analyzovat** |
 
 **Jistý návrh můžeš použít rovnou z karty.** U návrhu s badge **K použití**
-má karta na Dashboardu tlačítko **Použít** — doklad vznikne na jeden klik,
-bez otevírání náhledu. Když v návrhu zbývá nerozhodnutá reference
+má karta na Dashboardu tlačítko **Použít** — **Koncept** vznikne na jeden
+klik, bez otevírání náhledu. Když v návrhu zbývá nerozhodnutá reference
 (dodavatel, položka…), Shipard místo uložení otevře náhled ke kontrole
 a rozhodneš ji tam. Náhled si i u jistého návrhu můžeš otevřít sám
-tlačítkem **Zkontrolovat**.
+tlačítkem **Zkontrolovat**. Vystavit a uzavřít na jeden klik z karty
+nejde — rovnou uzavřít se dá jen z náhledu, po kontrole.
+
+**Vystavit a uzavřít se nevrací jedním klikem.** Doklad je po něm
+uzamčený ve stavu **V pořádku** jako každý jiný hotový doklad — když v něm
+dodatečně najdeš chybu, řeší se převodem na **V opravě**, případně
+**Stornem** (viz [Oprava dokladu](../faktury-prijate/oprava-dokladu.md)).
+Když si nejsi jistý, vystav koncept.
 
 **Z jednoho e-mailu vznikne nejvýše jeden návrh.** AI vytěží hlavní
 dokument zprávy (typicky fakturu). Když ve zprávě najde ještě něco dalšího

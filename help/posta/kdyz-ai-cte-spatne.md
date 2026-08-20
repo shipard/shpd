@@ -21,8 +21,8 @@ datum, dodavatel nebo položky.
 
    | Co je špatně | Kde to opravíš |
    |---|---|
-   | Dodavatel, položka, jednotka, kód DPH | Přímo v náhledu, ještě před **Použít** |
-   | Částky, datumy, sazby, texty, počty řádků | Až v dokladu, po **Použít** |
+   | Dodavatel, položka, jednotka, kód DPH | Přímo v náhledu, ještě před vystavením |
+   | Částky, datumy, sazby, texty, počty řádků | Až v dokladu, po **Vystavit koncept** |
    | Typ dokladu, nebo to faktura vůbec není | **Zamítnout** |
    | Nečitelná příloha | **Znovu analyzovat** |
 
@@ -31,7 +31,8 @@ datum, dodavatel nebo položky.
    **Vytvořit nového**. Tohle je jediná část návrhu, kterou lze měnit před
    uložením — a vyplatí se, protože podle dodavatele se dohledává i zbytek.
 
-3. **Zbytek oprav v dokladu.** Dej **Použít**. Doklad vznikne jako
+3. **Zbytek oprav v dokladu.** Dej **Vystavit koncept** — ne **Vystavit
+   a uzavřít**, uzavřený doklad se needituje. Doklad vznikne jako
    **Koncept** a **hned se ti otevře** v editačním formuláři, takže ho
    nemusíš nikde hledat. V Konceptu je editovatelné všechno — částky,
    datumy, řádky, sazby. Oprav a ulož.

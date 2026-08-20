@@ -218,7 +218,9 @@
   // Společné dokončení apply (jednoklik i modal): docs → vystavený Koncept
   // se rovnou otevře ve FormDialogu (kontrola + případné uzavření);
   // registry → toast „Zařazeno… [Otevřít]“ (u Spisovny není co uzavírat).
-  function finishApply(messageNdx, docId, target) {
+  // `finalized` = modalové „Vystavit a uzavřít“ (targetDocState 40): doklad
+  // je hotový, místo FormDialogu jen toast s odkazem Otevřít.
+  function finishApply(messageNdx, docId, target, finalized = false) {
     previewNdx = null;
     dropCardByMessage(messageNdx);
     if (target === 'registry') {
@@ -227,6 +229,13 @@
         message: t('dashboard.toast.appliedRegistry', { id: docId }),
         docId,
         docTable: REGISTRY_TABLE,
+      });
+    } else if (finalized && docId) {
+      showToast({
+        kind: 'applied',
+        message: t('dashboard.toast.appliedFinal', { id: docId }),
+        docId,
+        docTable: HEADS_TABLE,
       });
     } else if (docId) {
       formModal = { open: true, table: HEADS_TABLE, recordId: docId, wasSaved: false };
@@ -336,11 +345,12 @@
   // ── Review modal ─────────────────────────────────────────────────────────────
 
   // Apply z review modalu (target přichází z modalu, který ho má z preview
-  // endpointu).
-  async function handleApplyFromModal(messageNdx, userActions = null, target = 'docs') {
-    const result = await applyMessage(messageNdx, userActions);
+  // endpointu). `applyOptions` {targetDocState: 40} = „Vystavit a uzavřít“.
+  async function handleApplyFromModal(messageNdx, userActions = null, target = 'docs', applyOptions = null) {
+    const result = await applyMessage(messageNdx, userActions, applyOptions);
     if (result?.success) {
-      finishApply(messageNdx, result.data?.savedDocId ?? 0, target);
+      const finalized = applyOptions?.targetDocState === 40;
+      finishApply(messageNdx, result.data?.savedDocId ?? 0, target, finalized);
     } else {
       alert(t('dashboard.card.actionFailed', { msg: translateError(result?.error) }));
     }

@@ -29,6 +29,7 @@ class TableGateway
     private function injectDocServices(Document $doc): void
     {
         $doc->setDb($this->db);
+        $doc->setExternalTransaction($this->transactionsExternal());
         if ($this->config !== null) {
             $doc->setConfig($this->config);
         }
@@ -39,6 +40,15 @@ class TableGateway
         $doc->setSettings(
             $this->settings ??= new SettingsStore(new DataSourceConnection($this->db)),
         );
+    }
+
+    /**
+     * True = transakci vlastní volající gatewaye (TransactionlessTableGateway),
+     * dokumenty si nesmí otevírat vlastní — viz Document::$externalTransaction.
+     */
+    protected function transactionsExternal(): bool
+    {
+        return false;
     }
 
     public function loadRecord(int $id): ?array

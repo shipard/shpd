@@ -109,38 +109,42 @@ class DocDocumentNumberingTest extends TestCase
         $this->assertSame('2025', $doc->resolvePatternPub('%Y', $data, $series));
     }
 
+    /**
+     * Fetch sekvence úspěšného assignDocumentNumber: series row →
+     * resolveFiscalYearId → counter FOR UPDATE → getFiscalYearLabel.
+     * Výsledek s buildConfig(): sequence 1, doc_number '126A0001'.
+     */
+    private function wireAssignFetches(Connection $db): void
+    {
+        $callCount = 0;
+        $db->method('fetch')->willReturnCallback(
+            function () use (&$callCount): ?Row {
+                $callCount++;
+                return match ($callCount) {
+                    // SELECT * FROM docs_core_number_series
+                    1 => new Row([
+                        'id' => 1, 'doc_type' => 'invno', 'doc_number_code' => 'A',
+                        'doc_number_pattern' => '%D%y%C%4', 'reset_scope' => 'fiscal_year',
+                    ]),
+                    // resolveFiscalYearId
+                    2 => new Row(['id' => 100]),
+                    // SELECT last_assigned … FOR UPDATE
+                    3 => new Row(['last_assigned' => 0]),
+                    // getFiscalYearLabel — fiscal_years lookup
+                    4 => new Row(['doc_number_prefix' => '26', 'name' => '2026']),
+                    default => null,
+                };
+            }
+        );
+    }
+
     // ── assignDocumentNumber ────────────────────────────────────────────────
 
     public function testAssignDocumentNumberAssignsSequentialNumber(): void
     {
         // Mock: number_series row, counter row at last_assigned=0, then update.
         $db = $this->createMock(Connection::class);
-        $callCount = 0;
-        $db->method('fetch')->willReturnCallback(
-            function () use (&$callCount): ?Row {
-                $callCount++;
-                if ($callCount === 1) {
-                    // SELECT * FROM docs_core_number_series
-                    return new Row([
-                        'id' => 1, 'doc_type' => 'invno', 'doc_number_code' => 'A',
-                        'doc_number_pattern' => '%D%y%C%4', 'reset_scope' => 'fiscal_year',
-                    ]);
-                }
-                if ($callCount === 2) {
-                    // resolveFiscalYearId
-                    return new Row(['id' => 100]);
-                }
-                if ($callCount === 3) {
-                    // SELECT last_assigned … FOR UPDATE
-                    return new Row(['last_assigned' => 0]);
-                }
-                if ($callCount === 4) {
-                    // getFiscalYearLabel — fiscal_years lookup
-                    return new Row(['doc_number_prefix' => '26', 'name' => '2026']);
-                }
-                return null;
-            }
-        );
+        $this->wireAssignFetches($db);
         $doc = new TestableDocsHeadsDocument();
         $doc->setDb($db);
         $doc->setConfig($this->buildConfig());
@@ -288,5 +292,160 @@ class DocDocumentNumberingTest extends TestCase
 
         $this->assertNull($data['sequence_number']);
         $this->assertSame('', $data['doc_number']);
+    }
+
+    // ── processStateTransition — přidělení čísla při opuštění Konceptu ─────
+
+    public function testDirectInsertTo40AssignsRealNumber(): void
+    {
+        // Exchange „Vystavit a uzavřít“: insert rovnou ve 40 (transition
+        // old = 0) musí dostat číslo ze série — bez toho by doklad skončil
+        // s placeholderem !000… z ensureDocNumberPlaceholder (past P2).
+        $db = $this->createMock(Connection::class);
+        $this->wireAssignFetches($db);
+
+        $doc = new TestableDocsHeadsDocument();
+        $doc->setDb($db);
+        $doc->setConfig($this->buildConfig());
+
+        $data = [
+            'docState'        => 40,
+            'number_series'   => 1,
+            'doc_type'        => 'invno',
+            'accounting_date' => '2026-05-06',
+        ];
+        $doc->trackStateChangePub($data, null);
+        $doc->processStateTransitionPub($data, null);
+
+        $this->assertSame(1, $data['sequence_number']);
+        $this->assertSame(100, $data['fiscal_year']);
+        $this->assertSame('126A0001', $data['doc_number']);
+
+        // Counter se posunul — UPDATE last_assigned proběhl.
+        $counterUpdates = array_filter(
+            $doc->executedSql,
+            fn(array $q): bool => str_contains($q['sql'], 'SET [last_assigned]'),
+        );
+        $this->assertCount(1, $counterUpdates);
+    }
+
+    public function testTransition10To20StillAssignsNumber(): void
+    {
+        // Dosavadní UI cesta (FormController potvrzení Konceptu) po rozšíření
+        // podmínky na {0,10}→{20,40} funguje beze změny.
+        $db = $this->createMock(Connection::class);
+        $this->wireAssignFetches($db);
+
+        $doc = new TestableDocsHeadsDocument();
+        $doc->setDb($db);
+        $doc->setConfig($this->buildConfig());
+
+        $data = [
+            'id'              => 42,
+            'docState'        => 20,
+            'number_series'   => 1,
+            'doc_type'        => 'invno',
+            'accounting_date' => '2026-05-06',
+        ];
+        $original = ['docState' => 10, 'number_series' => 1];
+
+        $doc->trackStateChangePub($data, $original);
+        $doc->processStateTransitionPub($data, $original);
+
+        $this->assertSame(1, $data['sequence_number']);
+        $this->assertSame('126A0001', $data['doc_number']);
+    }
+
+    public function testInsertAsKonceptDoesNotAssignNumber(): void
+    {
+        // Insert ve stavu 10 není přechod (trackStateChange nechává
+        // stateTransition = null) — na číslo se nesahá.
+        $db = $this->createMock(Connection::class);
+        $db->expects($this->never())->method('fetch');
+
+        $doc = new TestableDocsHeadsDocument();
+        $doc->setDb($db);
+
+        $data = ['docState' => 10, 'number_series' => 1];
+        $doc->trackStateChangePub($data, null);
+        $doc->processStateTransitionPub($data, null);
+
+        $this->assertArrayNotHasKey('sequence_number', $data);
+        $this->assertArrayNotHasKey('doc_number', $data);
+        $this->assertSame([], $doc->executedSql);
+    }
+
+    // ── assignDocumentNumber — vlastní vs. externí transakce ───────────────
+
+    public function testAssignOpensOwnTransactionByDefault(): void
+    {
+        $db = $this->createMock(Connection::class);
+        $this->wireAssignFetches($db);
+        $db->expects($this->once())->method('begin');
+        $db->expects($this->once())->method('commit');
+        $db->expects($this->never())->method('rollback');
+
+        $doc = new TestableDocsHeadsDocument();
+        $doc->setDb($db);
+        $doc->setConfig($this->buildConfig());
+
+        $data = [
+            'number_series'   => 1,
+            'doc_type'        => 'invno',
+            'accounting_date' => '2026-05-06',
+        ];
+        $doc->assignDocumentNumberPub($data);
+
+        $this->assertSame(1, $data['sequence_number']);
+    }
+
+    public function testAssignSkipsOwnTransactionInsideExternalOne(): void
+    {
+        // Exchange Applier vlastní vnější transakci (TransactionlessTableGateway
+        // → Document::setExternalTransaction). Druhý begin() by ji v MariaDB
+        // implicitně commitnul (past P1) — nesmí se otevřít, číslo se ale
+        // přidělí normálně.
+        $db = $this->createMock(Connection::class);
+        $this->wireAssignFetches($db);
+        $db->expects($this->never())->method('begin');
+        $db->expects($this->never())->method('commit');
+        $db->expects($this->never())->method('rollback');
+
+        $doc = new TestableDocsHeadsDocument();
+        $doc->setDb($db);
+        $doc->setConfig($this->buildConfig());
+        $doc->setExternalTransaction(true);
+
+        $data = [
+            'number_series'   => 1,
+            'doc_type'        => 'invno',
+            'accounting_date' => '2026-05-06',
+        ];
+        $doc->assignDocumentNumberPub($data);
+
+        $this->assertSame(1, $data['sequence_number']);
+        $this->assertSame('126A0001', $data['doc_number']);
+    }
+
+    public function testReleaseSkipsOwnTransactionInsideExternalOne(): void
+    {
+        // Stejný kontrakt pro release (20→10) — dnes se v exchange cestě
+        // nevolá, ale chování musí být konzistentní.
+        $db = $this->createMock(Connection::class);
+        $db->method('fetch')->willReturn(new Row(['max_seq' => 5]));
+        $db->expects($this->never())->method('begin');
+        $db->expects($this->never())->method('commit');
+
+        $doc = new TestableDocsHeadsDocument();
+        $doc->setDb($db);
+        $doc->setExternalTransaction(true);
+
+        $original = ['number_series' => 1, 'fiscal_year' => 100, 'sequence_number' => 5];
+        $data = ['id' => 42, 'sequence_number' => 5, 'doc_number' => '126A0005'];
+
+        $doc->releaseDocumentNumberPub($data, $original);
+
+        $this->assertNull($data['sequence_number']);
+        $this->assertSame('!0000000042', $data['doc_number']);
     }
 }

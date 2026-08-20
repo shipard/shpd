@@ -1,26 +1,29 @@
 ---
 title: Dokončení dokladu
-summary: Co se děje po Použít — od Konceptu přes Potvrzeno k V pořádku a co se tím spustí.
-keywords: [dokončení, koncept, potvrzeno, v pořádku, číslo faktury, číselná řada, zaúčtování, saldokonto, uzamčení dokladu]
+summary: Co se děje po Vystavit koncept — od Konceptu přes Potvrzeno k V pořádku a co se tím spustí.
+keywords: [dokončení, koncept, potvrzeno, v pořádku, vystavit koncept, číslo faktury, číselná řada, zaúčtování, saldokonto, uzamčení dokladu]
 related: [posta/kontrola-vytezeni.md, faktury-prijate/oprava-dokladu.md, slovnicek.md]
 ---
 
 # Dokončení dokladu
 
-Doklad z došlé pošty vzniká jako **Koncept** — rozpracovaný záznam, který
-zatím nikam nepočítá. Aby se zaúčtoval a objevil v saldokontu, musí projít
-dvěma přechody. Tahle stránka je o tom, co se při každém z nich stane.
+Doklad vystavený z došlé pošty přes **Vystavit koncept** vzniká jako
+**Koncept** — rozpracovaný záznam, který zatím nikam nepočítá. Aby se
+zaúčtoval a objevil v saldokontu, musí projít dvěma přechody. Tahle stránka
+je o tom, co se při každém z nich stane. (Doklad vystavený přes **Vystavit
+a uzavřít** je hotový rovnou — nic z toho ho nečeká.)
 
 ## Kdy to potřebuješ
 
-Potvrdil jsi vytěžený návrh, doklad se otevřel v editačním formuláři a ty
-řešíš, co s ním dál. Nebo hledáš doklad, který jsi rozdělal a nedokončil.
+Vystavil jsi z vytěženého návrhu koncept, doklad se otevřel v editačním
+formuláři a ty řešíš, co s ním dál. Nebo hledáš doklad, který jsi rozdělal
+a nedokončil.
 
 ## Postup
 
 Kroky 1–3 se dějí v **editačním formuláři** — tom, který se ti otevřel po
-**Použít**. Tlačítka dole ve formuláři jsou **Uložit**, **Potvrdit**
-a **V pořádku**.
+**Vystavit koncept**. Tlačítka dole ve formuláři jsou **Uložit**,
+**Potvrdit** a **V pořádku**.
 
 1. **Dokonči Koncept.** Tady je editovatelné všechno: řádky, částky, sazby,
    datumy, dodavatel. Zkontroluj především **Účetní datum**,
@@ -61,6 +64,9 @@ a **V pořádku**.
 **Z Konceptu se nedá skočit přímo na V pořádku.** Cesta je vždycky
 Koncept → Potvrzeno → V pořádku. Není to obtěžování: mezi přidělením čísla
 a zaúčtováním je krok, kdy má člověk poslední možnost si doklad přečíst.
+Jediná zkratka je **Vystavit a uzavřít** v náhledu vytěženého návrhu —
+tam kontrola proběhla nad náhledem a doklad vznikne rovnou ve V pořádku;
+jednou vystavený Koncept už touhle zkratkou projít nemůže.
 
 **Vracet do Konceptu se dá jen od konce číselné řady.** Dokladů můžeš
 vrátit i víc, ale vždy postupně od nejnovějšího: jak si číslo vezme zpátky

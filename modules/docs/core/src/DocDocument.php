@@ -26,7 +26,7 @@ use Shipard\Module\World\Vat\VatRateResolver;
  *   5. calculateRowPrice + calculateRowVat for each row
  *   6. buildVatRecapitulation (with reverse charge pairs)
  *   7. sumTotals + apply rounding + apply exchange rate to *_dom
- *   8. processStateTransition (assignNumber 10→20, releaseNumber 20→10)
+ *   8. processStateTransition (assignNumber {0,10}→{20,40}, releaseNumber 20→10)
  *   9. maintainSnapshots (buildSnapshots when partner changes / first time)
  *  10. applyPaymentReferenceDefault from sequence_number
  */
@@ -988,7 +988,11 @@ abstract class DocDocument extends Document
         if ($t === null) {
             return;
         }
-        if ($t['old'] === 10 && $t['new'] === 20) {
+        // Číslo se přiděluje při každém opuštění Konceptu do 20/40 — vedle
+        // UI přechodu 10→20 i přímý insert ve finálním stavu (old = 0,
+        // exchange apply „Vystavit a uzavřít“). Import mode se sem nedostane
+        // (beforeSave větví na applyImportNumber dřív).
+        if (in_array($t['old'], [0, 10], true) && in_array($t['new'], [20, 40], true)) {
             $this->assignDocumentNumber($data);
             return;
         }
@@ -1116,7 +1120,14 @@ abstract class DocDocument extends Document
             ? $this->resolveFiscalYearId((string) ($data['accounting_date'] ?? ''))
             : null;
 
-        $this->db->begin();
+        // Uvnitř transakce Applieru (externalTransaction) se vlastní begin
+        // nesmí otevřít — implicitně by ji commitnul (MariaDB, viz
+        // Document::$externalTransaction). FOR UPDATE zámek counteru funguje
+        // ve vnější transakci stejně, jen se drží do jejího commitu.
+        $ownTx = !$this->externalTransaction;
+        if ($ownTx) {
+            $this->db->begin();
+        }
         try {
             // Idempotent counter init
             $this->executeSql(
@@ -1151,9 +1162,13 @@ abstract class DocDocument extends Document
                 $series,
             );
 
-            $this->db->commit();
+            if ($ownTx) {
+                $this->db->commit();
+            }
         } catch (\Throwable $e) {
-            $this->db->rollback();
+            if ($ownTx) {
+                $this->db->rollback();
+            }
             throw $e;
         }
     }
@@ -1189,7 +1204,12 @@ abstract class DocDocument extends Document
             );
         }
 
-        $this->db->begin();
+        // Stejný kontrakt jako assignDocumentNumber: uvnitř externí transakce
+        // žádný vlastní begin/commit.
+        $ownTx = !$this->externalTransaction;
+        if ($ownTx) {
+            $this->db->begin();
+        }
         try {
             $this->executeSql(
                 'UPDATE [docs_core_number_counters]
@@ -1206,9 +1226,13 @@ abstract class DocDocument extends Document
             $data['supplier_snapshot'] = null;
             $data['customer_snapshot'] = null;
 
-            $this->db->commit();
+            if ($ownTx) {
+                $this->db->commit();
+            }
         } catch (\Throwable $e) {
-            $this->db->rollback();
+            if ($ownTx) {
+                $this->db->rollback();
+            }
             throw $e;
         }
     }

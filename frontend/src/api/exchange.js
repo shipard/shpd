@@ -59,12 +59,22 @@ export async function previewMessage(messageNdx) {
  * Backend (MessageProposalApplier::expandUserActions) handles the flat →
  * nested translation.
  *
+ * `applyOptions` passes through to the canonical apply verbatim. The only
+ * client-driven key is `targetDocState`: 40 = „Vystavit a uzavřít“ (document
+ * created directly in V pořádku — number assigned, accounted), default 10
+ * (Koncept). `autoCreateMode` keeps being derived server-side from the
+ * presence of `_resolve` — never send it here.
+ *
  * @param {number} messageNdx
  * @param {object|null} [userActions]  Flat {path: action} map, or null
  *                                      for safe one-click apply.
+ * @param {object|null} [applyOptions] e.g. {targetDocState: 40}, or null
+ *                                      for server defaults.
  */
-export async function applyMessage(messageNdx, userActions = null) {
-  const body = userActions !== null ? { _resolve: userActions } : {};
+export async function applyMessage(messageNdx, userActions = null, applyOptions = null) {
+  const body = {};
+  if (userActions !== null) body._resolve = userActions;
+  if (applyOptions !== null) body.applyOptions = applyOptions;
   return await post(`/_mail/messages/${messageNdx}/apply`, body);
 }
 

@@ -1,6 +1,6 @@
 # Task: Review modal — „Vystavit a uzavřít" (apply rovnou do V pořádku)
 
-**Stav:** naplánováno
+**Stav:** hotovo
 
 ## Cíl
 

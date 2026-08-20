@@ -21,10 +21,20 @@ use Shipard\Core\Document\TableGateway;
  * roll back together with the doc save.
  *
  * Centralising transaction control in the Applier sidesteps that.
+ *
+ * The same rule extends to Document-internal transactions:
+ * transactionsExternal() = true propagates to Document::$externalTransaction
+ * via injectDocServices, so hooks like DocDocument::assignDocumentNumber
+ * skip their own begin/commit and run inside the Applier's transaction.
  */
 class TransactionlessTableGateway extends TableGateway
 {
     protected function beginTransaction(): void {}
     protected function commitTransaction(): void {}
     protected function rollbackTransaction(): void {}
+
+    protected function transactionsExternal(): bool
+    {
+        return true;
+    }
 }

@@ -27,9 +27,24 @@ abstract class Document
      */
     protected ?array $stateTransition = null;
 
+    /**
+     * True = save běží uvnitř transakce vlastněné volajícím (exchange
+     * Applier přes TransactionlessTableGateway). Dokumentové hooky pak
+     * NESMÍ otevírat vlastní transakci — MariaDB nemá nested START
+     * TRANSACTION, druhý begin() by vnější transakci implicitně commitnul
+     * (viz doc-comment TransactionlessTableGateway). Nastavuje gateway
+     * v injectDocServices().
+     */
+    protected bool $externalTransaction = false;
+
     public function setDb(\Dibi\Connection $db): void
     {
         $this->db = $db;
+    }
+
+    public function setExternalTransaction(bool $external): void
+    {
+        $this->externalTransaction = $external;
     }
 
     public function setConfig(ConfigRuntime $config): void

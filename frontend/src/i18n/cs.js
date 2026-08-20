@@ -398,7 +398,8 @@ export default {
   'exchange.preview.pdf.download': 'Stáhnout',
   'exchange.preview.loading': 'Načítám náhled…',
   'exchange.preview.actions.close': 'Zavřít',
-  'exchange.preview.actions.apply': 'Použít',
+  'exchange.preview.actions.apply': 'Vystavit koncept',
+  'exchange.preview.actions.applyFinal': 'Vystavit a uzavřít',
   'exchange.preview.actions.reject': 'Zamítnout',
   'exchange.preview.actions.applyRegistry': 'Zařadit',
 
@@ -473,6 +474,7 @@ export default {
   'dashboard.card.confidence': 'Jistota {pct} %',
   'dashboard.card.actionFailed': 'Akce se nezdařila: {msg}',
   'dashboard.toast.appliedRegistry': 'Dokument #{id} zařazen do Spisovny',
+  'dashboard.toast.appliedFinal': 'Doklad #{id} vystaven a uzavřen',
   'dashboard.toast.itemCreated': 'Položka {code} — {name} založena',
   'dashboard.toast.open': 'Otevřít',
   'dashboard.toast.autoArchiveReverted': '{count, plural, one {# zpráva vrácena} few {# zprávy vráceny} many {# zpráv vráceno} other {# zpráv vráceno}}',

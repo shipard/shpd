@@ -7,7 +7,9 @@
   //   - Left: PDF / image attachments via PdfViewerPanel — all content
   //     attachments of the message (D10)
   //   - Right: canonical visualization via DocumentExchangePreview
-  //   - Footer: Zavřít / Zamítnout / Použít (Použít disabled for ai_failed)
+  //   - Footer: Zavřít / Zamítnout / Vystavit koncept / Vystavit a uzavřít
+  //     (registry target: single Zařadit); both applies disabled for
+  //     ai_failed / undecided references.
   //
   // Apply / reject delegate to parent callbacks — parent still owns the
   // actual API call (Dashboard / ViewerDetail).
@@ -18,8 +20,10 @@
   //   - `canApply` is true only when all non-matched references have a
   //     decision (or are explicitly skipped). Unit / vatCode badges don't
   //     gate apply — the applier has fallback defaults.
-  //   - "Použít" passes `userActions` and the doc target ('docs' /
+  //   - Both apply buttons pass `userActions` and the doc target ('docs' /
   //     'registry') to onApply — parents branch post-apply UX on it.
+  //     „Vystavit a uzavřít“ adds applyOptions {targetDocState: 40} as the
+  //     4th argument (document goes directly to V pořádku, no FormDialog).
   //
   // Mobile (<768px): single column with PDF/Preview tab switcher.
 
@@ -115,8 +119,8 @@
       && allDecided(data.canonical?._resolve ?? null, userActions),
   );
 
-  function handleApplyClick() {
-    onApply(messageNdx, userActions, data?.target ?? 'docs');
+  function handleApplyClick(applyOptions = null) {
+    onApply(messageNdx, userActions, data?.target ?? 'docs', applyOptions);
   }
 </script>
 
@@ -184,14 +188,29 @@
       disabled={data === null}
       onclick={() => onReject(messageNdx)}
     />
-    <Button
-      label={isRegistry
-        ? t('exchange.preview.actions.applyRegistry')
-        : t('exchange.preview.actions.apply')}
-      variant="success"
-      disabled={!canApply}
-      onclick={handleApplyClick}
-    />
+    {#if isRegistry}
+      <Button
+        label={t('exchange.preview.actions.applyRegistry')}
+        variant="success"
+        disabled={!canApply}
+        onclick={() => handleApplyClick()}
+      />
+    {:else}
+      <!-- Oba apply gatuje stejné canApply (D3) — náležitosti stavu 40
+           hlídá backendová validace, chyba se ukáže alertem v hostiteli. -->
+      <Button
+        label={t('exchange.preview.actions.apply')}
+        variant="secondary"
+        disabled={!canApply}
+        onclick={() => handleApplyClick()}
+      />
+      <Button
+        label={t('exchange.preview.actions.applyFinal')}
+        variant="success"
+        disabled={!canApply}
+        onclick={() => handleApplyClick({ targetDocState: 40 })}
+      />
+    {/if}
   {/snippet}
 </Modal>
 

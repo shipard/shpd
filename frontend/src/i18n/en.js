@@ -385,7 +385,8 @@ export default {
   'exchange.preview.pdf.download': 'Download',
   'exchange.preview.loading': 'Loading preview…',
   'exchange.preview.actions.close': 'Close',
-  'exchange.preview.actions.apply': 'Apply',
+  'exchange.preview.actions.apply': 'Issue as draft',
+  'exchange.preview.actions.applyFinal': 'Issue and close',
   'exchange.preview.actions.reject': 'Reject',
   'exchange.preview.actions.applyRegistry': 'File',
 
@@ -460,6 +461,7 @@ export default {
   'dashboard.card.confidence': 'Confidence {pct} %',
   'dashboard.card.actionFailed': 'Action failed: {msg}',
   'dashboard.toast.appliedRegistry': 'Document #{id} filed to the Registry',
+  'dashboard.toast.appliedFinal': 'Document #{id} issued and closed',
   'dashboard.toast.itemCreated': 'Item {code} — {name} created',
   'dashboard.toast.open': 'Open',
   'dashboard.toast.autoArchiveReverted': '{count, plural, one {# message restored} other {# messages restored}}',

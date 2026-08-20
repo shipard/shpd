@@ -135,16 +135,20 @@
   // strict-mode resolution. On success for the docs target the created
   // Koncept opens right away in the Viewer's FormDialog via the generic
   // `open_form` detail-action branch (same pattern as fileToRegistry).
-  async function handleApplyFromModal(messageNdx, userActions = null, target = 'docs') {
+  // „Vystavit a uzavřít“ (applyOptions {targetDocState: 40}) skips the
+  // FormDialog — the document is final, just close + refresh (D5; the
+  // viewer has no toast infra).
+  async function handleApplyFromModal(messageNdx, userActions = null, target = 'docs', applyOptions = null) {
     if (actionInFlightNdx !== null) return;
     actionInFlightNdx = messageNdx;
     try {
-      const result = await applyMessage(messageNdx, userActions);
+      const result = await applyMessage(messageNdx, userActions, applyOptions);
       if (result?.success) {
         const savedDocId = result.data?.savedDocId ?? 0;
+        const finalized = applyOptions?.targetDocState === 40;
         closePreviewModal();
         onRefresh?.();
-        if (target !== 'registry' && savedDocId) {
+        if (!finalized && target !== 'registry' && savedDocId) {
           onAction?.('openCreatedDoc', {
             id: 'openCreatedDoc',
             kind: 'open_form',

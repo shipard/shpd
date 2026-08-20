@@ -116,11 +116,7 @@ class ContentTagClassifier
      */
     private function userPrompt(array $canonical, array $taxonomy): string
     {
-        $lines = ['Taxonomy (tag: description):'];
-        foreach ($taxonomy as $key => $entry) {
-            $name = is_array($entry) ? (string) ($entry['name'] ?? '') : '';
-            $lines[] = "  {$key}: {$name}";
-        }
+        $lines = [ContentTagPrompt::taxonomyBlock($taxonomy)];
 
         $lines[] = '';
         $lines[] = 'Document:';

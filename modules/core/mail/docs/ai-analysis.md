@@ -346,6 +346,14 @@ pravidlem → jen statistiky; konflikt s `learned` pravidlem → pravidlo se
 smaže (dodavatel s pestrým sortimentem); `user`/`seed` pravidla learning
 nikdy nemění.
 
+**Seed z účetní historie:** třetí zdroj pravidel `IČO → štítek` (kromě
+ruční správy a learningu) je import agregované účetní historie ze
+zdrojového systému — `shpd-ds booking-history --apply-seed`, origin
+`seed`. Nad tímtéž souborem stojí i report o kvalitě zdroje a o taxonomii
+(pokrytí, konzistence LLM × reverz, mrtvé štítky) a reverzní otagování
+položek podle účtů. Formát souboru, prahy seedu a chování příkazu:
+[`docs/booking-history-format.md`](../../../../docs/booking-history-format.md).
+
 ## Zaokrouhlení celkové částky při apply
 
 Faktury se zaokrouhlenou částkou k úhradě (typicky na celé Kč):

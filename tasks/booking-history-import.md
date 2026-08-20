@@ -1,6 +1,6 @@
 # Import účetní historie (booking history) — formát a zpracování
 
-**Stav:** design potvrzen v chatu (D29–D35), k implementaci
+**Stav:** hotovo
 
 **Cíl:** Nový Shipard umí přijmout soubor s agregovanou účetní historií
 z libovolného zdrojového systému (starý Shipard, cizí ERP, tabulky) ve
@@ -159,14 +159,46 @@ při nekompatibilní změně.
 
 ## Hotovo když
 
-- [ ] `docs/booking-history-format.md` existuje a odpovídá specifikaci.
-- [ ] `shpd-ds booking-history --input=x.jsonl` zvaliduje soubor a vypíše
+- [x] `docs/booking-history-format.md` existuje a odpovídá specifikaci.
+- [x] `shpd-ds booking-history --input=x.jsonl` zvaliduje soubor a vypíše
       souhrn; rozbitý soubor → srozumitelná chyba s řádkem.
-- [ ] `--report` vyrobí markdown se všemi sekcemi D35; druhý běh nad
+- [x] `--report` vyrobí markdown se všemi sekcemi D35; druhý běh nad
       týmž vstupem nevolá LLM (cache).
-- [ ] `--apply-seed --dry-run` vypíše plán; ostrý běh založí seed
+- [x] `--apply-seed --dry-run` vypíše plán; ostrý běh založí seed
       pravidla dle prahů a nikdy nepřepíše user/learned.
-- [ ] `--tag-items` otaguje jen jednoznačné netagované položky.
-- [ ] Soubor s `companyId`/`account` null projde bez pádu a promítne se
+- [x] `--tag-items` otaguje jen jednoznačné netagované položky.
+- [x] Soubor s `companyId`/`account` null projde bez pádu a promítne se
       do metrik kvality.
-- [ ] Testy zelené s úzkými filtry.
+- [x] Testy zelené s úzkými filtry.
+
+---
+
+## Poznámky k implementaci
+
+- `--no-llm` **přidán** nad rámec zadání: nad tisíci distinct texty je běh
+  reportu jinak nutně placený, a prohlédnout soubor bez LLM je běžná
+  potřeba. Report v tom režimu degraduje na reverzní pohled.
+- Seed se zapisuje **přímým SQL**, ne přes `TagRuleDocument`: ten při změně
+  štítku existujícího záznamu překlápí `origin` na `user` (D28), což by
+  z aktualizovaného seedu udělalo ruční pravidlo nedotknutelné dalším
+  importem. Stejný důvod jako u `ContentTagRuleCaptureHandler`.
+- Práh `docCount >= 3` se počítá nad záznamy **dominantního štítku**, ne
+  celého IČO — práh tak stojí na důkazech pro ten konkrétní štítek. Součet
+  `docCount` je horní odhad (jeden doklad spadá pod víc agregačních klíčů),
+  což report přiznává.
+- `share` má jmenovatel **řádky s rozřešeným reverzním štítkem** (doslovné
+  čtení D32). Kandidát proto nese i `coverage` (rozřešené řádky / všechny
+  řádky IČO) a report ho vypisuje — vysoký podíl při nízkém pokrytí je
+  pravidlo z malého výseku historie. Druhý práh z coverage vědomě není.
+- `--tag-items` jede **bez syntetické tolerance** (jen přesná shoda čísla
+  účtu): účty položek pocházejí z osnovy DS, syntetika by nic nepřidala a
+  zápis do dat uživatele na slabší signál nepatří. Tolerance zůstává jen
+  pro reverz nad cizími analytikami ve zdrojovém souboru.
+- Reálná nabídka položek má hodně účtů s víc štítky (`501100` nese pět) —
+  reverz proto zasáhne jen část řádků a report to vykazuje jako „kolizní
+  účet". Není to chyba reverzu, ale kurátorská volba nabídky (mapování
+  štítek → účet je many-to-one).
+- Sdílení s D27 obrazovkou: `AccountingItemsOffer::tagsByAccount()` (reverzní
+  mapa) a `ContentTagBackfill::untaggedItemsWithAccount()` (dotaz na
+  neotagované položky). Rozhodovací politika zůstává per volající —
+  obrazovka nabízí i kolizní účty, dávka bere jen jednoznačné.

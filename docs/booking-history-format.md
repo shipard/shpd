@@ -170,7 +170,102 @@ tedy nemá texty filtrovat ani „vylepšovat" — pošle je, jak jsou.
 Soubor jen s hlavičkou (nula záznamů) je také validní — zpracování vypíše
 souhrn s nulovými počty.
 
-## 7. Související dokumenty
+## 7. Zpracování — `shpd-ds booking-history`
+
+Spouští se **z adresáře datového zdroje** (jako všechny `shpd-ds` příkazy).
+Bez režimu jen zvaliduje soubor a vypíše souhrn hlavičky; režimy jsou
+kombinovatelné.
+
+```bash
+cd /opt/shipard/data-sources/<id>
+
+# validace + souhrn hlavičky
+sudo shpd-ds booking-history --input=/tmp/history.jsonl
+
+# report (LLM klasifikace + reverz); druhý běh už LLM nevolá — cache
+sudo shpd-ds booking-history --input=/tmp/history.jsonl --report
+sudo shpd-ds booking-history --input=/tmp/history.jsonl --report --no-llm
+
+# seed pravidel IČO → štítek: nejdřív plán, pak ostrý běh
+sudo shpd-ds booking-history --input=/tmp/history.jsonl --apply-seed --dry-run
+sudo shpd-ds booking-history --input=/tmp/history.jsonl --apply-seed
+
+# reverzní otagování živých položek DS podle účtů
+sudo shpd-ds booking-history --input=/tmp/history.jsonl --tag-items --dry-run
+```
+
+| Opce | Význam |
+|------|--------|
+| `--input <soubor>` | **povinné** — cesta k JSONL souboru |
+| `--report` | markdown report (viz níže) + souhrn na stdout |
+| `--report-out <soubor>` | cesta reportu (default `<input>.report.md`) |
+| `--apply-seed` | zápis pravidel `IČO → štítek` do `core_exchange_tag_rules` |
+| `--tag-items` | otagování živých položek DS podle jejich účtů |
+| `--dry-run` | jen plán, žádný zápis (platí pro oba zápisové režimy) |
+| `--backend <id\|název>` | AI backend pro klasifikaci |
+| `--no-llm` | bez LLM — report jen z reverzu účet→štítek |
+
+### Report
+
+Sekce: kvalita zdroje (degenerace textů celkem i per účet, chybějící
+IČO/účet, objemné účty), pokrytí taxonomie (zásahy reverzu, objemné účty
+bez štítku, texty bez štítku od LLM), konzistence LLM × reverz (matice,
+štítky s neshodou nad 30 %, rozptyl účtů per štítek), mrtvé štítky a náhled
+seedu včetně plánu zápisu per IČO.
+
+Bez dostupné LLM klasifikace (`--no-llm`, chybějící backend nebo klíč)
+report **degraduje** na reverzní pohled — nespadne.
+
+### Klasifikace a její cena
+
+LLM se volá jen nad **distinct obsahonosnými** texty, v dávkách po ~50, a
+výsledky se cachují do `<input>.tags.jsonl`. Opakovaný report nad týmž
+souborem je proto zadarmo. Padlá dávka běh neshodí a do cache nic nezapíše
+— příště se zkusí znovu.
+
+Backend: `--backend`, jinak nastavení `exchange.contentTag.backend`, jinak
+default backend DS. Doporučení stejné jako u analýzy dokladů — levný model,
+klasifikace krátkého textu je triviální úloha.
+
+### Seed pravidel (prahy a přednost)
+
+Kandidátem je IČO, u kterého dominantní reverzní štítek drží **≥ 80 %
+řádků** (mezi řádky s rozřešeným štítkem) a má **≥ 3 doklady**. Remíza
+dominance kandidáta nedává — dodavatel s pestrým sortimentem pravidlo
+nedostane.
+
+Zapisuje se `origin = seed`, `confirmed = 1`. Přednost:
+
+| Existující pravidlo | Chování |
+|---|---|
+| žádné | INSERT `seed` |
+| stejný štítek | nic |
+| `seed`, jiný štítek | UPDATE |
+| `user` / `learned`, jiný štítek | **přeskočí** + vypíše |
+
+Import tedy nikdy nepřepíše ruční ani naučené pravidlo.
+
+Report u každého kandidáta ukazuje i **pokrytí** — podíl řádků dodavatele,
+kterým reverz vůbec dal štítek. Vysoký podíl při nízkém pokrytí = pravidlo
+postavené na malém výseku historie; podívej se na něj, než ho pustíš ostře.
+
+### Otagování položek (`--tag-items`)
+
+Otaguje jen **živé položky s prázdnými** `content_tags`, jejichž účet nese
+v nabídce účetních položek **právě jeden** štítek. Kolizní a neznámé účty
+zůstávají bez zásahu (vypíše se, kolik jich bylo) — hromadný zápis nemá koho
+se zeptat. Existující štítky se merguje, ne přepisuje.
+
+Na rozdíl od reverzu nad zdrojovým souborem tady **není** syntetická
+tolerance: účty položek pocházejí z osnovy tohoto DS, takže přesná shoda
+stačí a slabší signál do zápisu do dat uživatele nepatří.
+
+Varianta osnovy se pro tento režim bere z **nastavení DS**
+(`economy.accountChart`), ne z hlavičky souboru — tagují se položky tohoto
+datasetu. Bez nastavené varianty režim jen ohlásí, že není podle čeho
+tagovat.
+
+## 8. Související dokumenty
 
 - [cli.md](cli.md) — příkaz `shpd-ds booking-history`
 - `modules/core/mail/docs/ai-analysis.md`, sekce „Obsahová eskalace

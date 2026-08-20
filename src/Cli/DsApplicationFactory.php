@@ -47,6 +47,7 @@ final class DsApplicationFactory
         $app->add(new \Shipard\Command\DataSource\AlertsPruneCommand());
         $app->add(new \Shipard\Command\DataSource\BankImportStatementCommand());
         $app->add(new \Shipard\Command\DataSource\AccbalMatchCommand());
+        $app->add(new \Shipard\Command\DataSource\BookingHistoryCommand());
         $app->add(new \Shipard\Command\DataSource\DsSecretsHealthCommand());
         $app->add(new \Shipard\Command\DataSource\DsSecretsRotateCommand());
         $app->add(new \Shipard\Command\DataSource\HostingOidcInitCommand());

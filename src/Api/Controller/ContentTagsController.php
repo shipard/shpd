@@ -18,6 +18,7 @@ use Shipard\Core\Logging\ErrorLogger;
 use Shipard\Module\Core\Exchange\Enrich\ContentTagResolver;
 use Shipard\Module\Economy\Items\AccountingItemMaterializer;
 use Shipard\Module\Economy\Items\AccountingItemsOffer;
+use Shipard\Module\Economy\Items\ContentTagBackfill;
 
 /**
  * Endpoints (tasks/content-tag-ui.md D26/D27):
@@ -303,31 +304,23 @@ class ContentTagsController
             return [];
         }
 
-        $rows = $this->db->fetchAll(
-            'SELECT i.id, i.code, i.name, a.number AS account_number'
-            . ' FROM economy_items i'
-            . ' JOIN economy_accounting_accounts a ON a.id = i.accounting_account'
-            . ' WHERE i.docState IN %in'
-            . ' AND (i.content_tags IS NULL OR i.content_tags = %s OR i.content_tags = %s)'
-            . ' ORDER BY i.code ASC',
-            self::ITEM_ACTIVE_STATES,
-            '',
-            '[]',
-        );
+        // Dotaz na neotagované položky je sdílený s dávkovým otagováním
+        // z CLI (ContentTagBackfill, D34) — jeden dotaz, dvě politiky nad
+        // ním: obrazovka nabídne i kolizní účty, dávka bere jen jednoznačné.
+        $rows = $this->backfill()->untaggedItemsWithAccount();
 
         $taxonomy = $this->taxonomy();
         $out = [];
         foreach ($rows as $row) {
-            $account = (string) ($row['account_number'] ?? '');
-            $tags = $tagsByAccount[$account] ?? [];
+            $tags = $tagsByAccount[$row['account']] ?? [];
             if ($tags === []) {
                 continue; // účet mimo nabídku — bez návrhu i bez záznamu
             }
             $suggestion = [
-                'id'      => (int) $row['id'],
-                'code'    => (string) $row['code'],
-                'name'    => (string) $row['name'],
-                'account' => $account,
+                'id'      => $row['id'],
+                'code'    => $row['code'],
+                'name'    => $row['name'],
+                'account' => $row['account'],
             ];
             if (count($tags) === 1) {
                 $tag = $tags[0];
@@ -348,6 +341,20 @@ class ContentTagsController
     protected function resolver(): ContentTagResolver
     {
         return new ContentTagResolver($this->db->getDibiConnection(), $this->offer(), $this->config);
+    }
+
+    /** Sdílená služba reverzního otagování položek (D34). */
+    protected function backfill(): ContentTagBackfill
+    {
+        return new ContentTagBackfill(
+            db: $this->db,
+            offer: $this->offer(),
+            config: $this->config,
+            tables: $this->tables,
+            dsConfig: $this->dsConfig,
+            documentRegistry: $this->documentRegistry,
+            eventDispatcher: $this->eventDispatcher,
+        );
     }
 
     /** Seam pro testy (vzor saveItemRow). */

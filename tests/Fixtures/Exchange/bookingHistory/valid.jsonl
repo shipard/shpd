@@ -1,0 +1,6 @@
+{"format":"shpd.economy.booking-history","version":1,"sourceSystem":{"name":"shipard-e10","version":"1.2"},"sourceRef":"ds abcd-efgh","chartVariant":"default","currency":"CZK","period":{"from":"2019-01-01","to":"2026-06-30"},"docTypes":["invni"],"exportedAt":"2026-08-20T10:00:00+02:00","recordCount":4,"unknownFutureField":{"x":1}}
+
+{"companyId":"26 378 191","account":"518202","itemCode":"518202","itemName":"Internetové služby","rowText":"Měsíční  paušál za internet 100/10","docCount":74,"rowCount":96,"totalAmount":366300.00,"firstDate":"2019-02-11","lastDate":"2026-06-05","futureField":"ignored"}
+{"companyId":"11223344","account":"501100","itemCode":null,"itemName":"Kancelářské potřeby","rowText":"Kancelářské potřeby","docCount":5,"rowCount":9,"totalAmount":4210.5,"firstDate":"2021-03-01","lastDate":"2024-11-30"}
+{"companyId":null,"account":null,"itemCode":null,"itemName":null,"rowText":"","docCount":"2","rowCount":2,"totalAmount":null,"firstDate":null,"lastDate":null}
+{"companyId":"55667788","account":"518300","itemName":"Poštovní služby","rowText":"518300","docCount":3,"rowCount":3,"totalAmount":"890"}

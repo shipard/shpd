@@ -1,6 +1,6 @@
 # Task: Dashboard — sériový průchod frontou přijatých faktur („Projít frontu")
 
-**Stav:** naplánováno
+**Stav:** hotovo
 
 ## Cíl
 

@@ -38,9 +38,15 @@
   let {
     open = false,
     messageNdx = null,
+    // Batch mód „Projít frontu" (tasks/dashboard-queue-walkthrough.md):
+    // {index, total} | null. Zapíná počítadlo v hlavičce a Přeskočit
+    // v patičce; apply/reject delegace se nemění — posun na další zprávu
+    // řídí rodič změnou messageNdx (reload zajistí $effect níž).
+    queue = null,
     onClose = () => {},
     onApply = () => {},
     onReject = () => {},
+    onSkip = () => {},
   } = $props();
 
   let loading = $state(false);
@@ -124,7 +130,13 @@
   }
 </script>
 
-<Modal title={t('exchange.preview.title')} {open} {onClose} width="full">
+{#snippet queueBadge()}
+  <span class="shpd-exchange-modal__queue-pos">
+    {t('exchange.preview.queuePosition', { i: queue.index + 1, n: queue.total })}
+  </span>
+{/snippet}
+
+<Modal title={t('exchange.preview.title')} {open} {onClose} width="full" headerExtra={queue ? queueBadge : undefined}>
   {#if loading}
     <div class="shpd-exchange-modal__loading">
       {t('exchange.preview.loading')}
@@ -182,6 +194,16 @@
       variant="secondary"
       onclick={onClose}
     />
+    {#if queue}
+      <!-- Jen batch mód (D4) — posun na další zprávu bez verdiktu,
+           karta zůstává ve feedu. -->
+      <Button
+        label={t('exchange.preview.actions.skip')}
+        variant="secondary"
+        disabled={loading}
+        onclick={onSkip}
+      />
+    {/if}
     <Button
       label={t('exchange.preview.actions.reject')}
       variant="danger"
@@ -215,6 +237,18 @@
 </Modal>
 
 <style>
+  /* Počítadlo pozice ve frontě („3 / 8") — nenápadný badge v hlavičce. */
+  .shpd-exchange-modal__queue-pos {
+    padding: 2px var(--shpd-space-sm);
+    border: 1px solid var(--shpd-color-border);
+    border-radius: 999px;
+    background: var(--shpd-color-surface);
+    color: var(--shpd-color-text-secondary);
+    font-size: var(--shpd-font-size-sm);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
   .shpd-exchange-modal__loading,
   .shpd-exchange-modal__error {
     display: flex;

@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { t } from '../../i18n/index.js';
   import { translateError } from '../../i18n/errors.js';
   import { fetchDashboard, setMessageDocState } from '../../api/dashboard.js';
@@ -20,6 +20,7 @@
   import Feed from './Feed.svelte';
   import FeedFilter from './FeedFilter.svelte';
   import MailUploadModal from './MailUploadModal.svelte';
+  import QueueCategoriesPrompt from './QueueCategoriesPrompt.svelte';
   import RejectReasonPrompt from './RejectReasonPrompt.svelte';
   import ViewerDetailModal from '../viewer/ViewerDetailModal.svelte';
 
@@ -67,6 +68,29 @@
   let previewNdx = $state(null);
   let rejectNdx = $state(null);
   let rejectSubmitting = $state(false);
+
+  // Sériový průchod frontou (Issue #32/1, tasks/dashboard-queue-walkthrough.md).
+  // null = běžný single-message režim. list je snapshot messageNdx pořízený
+  // při startu — nezávislý na data.cards (ty se během průchodu optimisticky
+  // mažou přes dropCardByMessage) i na kartách přibylých mezitím.
+  let queue = $state(null);
+  // Předkrok „Nová kategorie" (D8) — {cards, list} pro QueueCategoriesPrompt;
+  // null = zavřeno. Snapshot zpráv (list) se bere už při kliknutí na tlačítko,
+  // předkrok ho jen podrží do „Pokračovat".
+  let queuePrecheck = $state(null);
+
+  // Karty způsobilé pro průchod (D1): jen návrhy přijatých faktur (target
+  // docs), pásma ready + review. Prefix id je nejpřesnější rozlišení zdroje —
+  // content_tag karty mají také category invoices, ale prefix je odfiltruje;
+  // urgent/info karty neprojdou prefixem resp. target filtrem.
+  let queueableCards = $derived(
+    (data?.cards ?? []).filter(
+      (c) =>
+        c.id?.startsWith('mail_suggestion:')
+        && c.category === 'invoices'
+        && c.context?.target === 'docs',
+    ),
+  );
 
   // Form modal — alert open_form, toast „Otevřít“ (registry) a vystavená
   // faktura po apply z review modalu. wasSaved viz handleFormClose.
@@ -221,6 +245,20 @@
   // `finalized` = modalové „Vystavit a uzavřít“ (targetDocState 40): doklad
   // je hotový, místo FormDialogu jen toast s odkazem Otevřít.
   function finishApply(messageNdx, docId, target, finalized = false) {
+    // Batch mód (D2, D9): žádný FormDialog ani toast, jen počítadla a posun
+    // na další zprávu — previewNdx se nesmí nulovat (modal by flicknul
+    // zavřít/otevřít a $effect by shodil data). load() až ve finishQueue().
+    // Registry větev se sem nemůže trefit — fronta je jen docs (D1).
+    if (queue) {
+      dropCardByMessage(messageNdx);
+      if (finalized) {
+        queue.counts.closed += 1;
+      } else {
+        queue.counts.draft += 1;
+      }
+      advanceQueue();
+      return;
+    }
     previewNdx = null;
     dropCardByMessage(messageNdx);
     if (target === 'registry') {
@@ -357,7 +395,9 @@
   }
 
   function handleRejectFromModal(messageNdx) {
-    previewNdx = null;
+    // Batch mód (D7): prompt se otevře nad preview modalem (modal stack),
+    // previewNdx zůstává — zrušení promptu vrací na tutéž zprávu.
+    if (!queue) previewNdx = null;
     rejectNdx = messageNdx;
   }
 
@@ -372,13 +412,104 @@
       if (result?.success) {
         rejectNdx = null;
         dropCardByMessage(ndx);
-        load();
+        if (queue) {
+          // Batch mód: bez load() (P4), jen počítadlo + posun dál.
+          queue.counts.rejected += 1;
+          advanceQueue();
+        } else {
+          load();
+        }
       } else {
         alert(t('dashboard.card.actionFailed', { msg: translateError(result?.error) }));
       }
     } finally {
       rejectSubmitting = false;
     }
+  }
+
+  // ── Sériový průchod frontou (Issue #32/1) ──────────────────────────────────
+
+  // Start průchodu: snapshot fronty (D1) — chronologicky od nejstarší dle
+  // timestamp (ATOM řetězce se řadí lexikograficky; null na konec, mezi
+  // sebou v pořadí feedu — sort je stabilní). Existují-li ve feedu karty
+  // „Nová kategorie", předřadí se předkrok (D8); snapshot zpráv se ale bere
+  // už teď — materializace štítků ho nemění.
+  function startQueue() {
+    const list = [...queueableCards]
+      .sort((a, b) => (a.timestamp ?? '\uffff').localeCompare(b.timestamp ?? '\uffff'))
+      .map((c) => c.context.messageNdx);
+    if (list.length === 0) return;
+    const tagCards = (data?.cards ?? []).filter((c) => c.id?.startsWith('content_tag:'));
+    if (tagCards.length > 0) {
+      queuePrecheck = { cards: tagCards, list };
+    } else {
+      openQueueAt(list, 0);
+    }
+  }
+
+  function openQueueAt(list, index) {
+    queue = { list, index, counts: { closed: 0, draft: 0, rejected: 0, skipped: 0 } };
+    previewNdx = list[index];
+  }
+
+  // Posun na další zprávu — previewNdx se mezi položkami nenuluje (P1),
+  // modal zůstává otevřený a jeho $effect zajistí reload + reset userActions.
+  function advanceQueue() {
+    if (queue.index + 1 === queue.list.length) {
+      finishQueue();
+      return;
+    }
+    queue.index += 1;
+    previewNdx = queue.list[queue.index];
+  }
+
+  // Konec průchodu (doběhnutí i předčasné zavření modalu): jeden souhrnný
+  // toast za zpracované položky (D2; bez akce Otevřít — kind !== 'applied')
+  // a jeden load(). Při nule zpracovaných (okamžité zavření) žádný toast.
+  function finishQueue() {
+    const message = queueSummaryText(queue.counts);
+    previewNdx = null;
+    queue = null;
+    if (message !== '') {
+      showToast({ kind: 'queueSummary', message });
+    }
+    load();
+  }
+
+  // Souhrn „Uzavřeno X · Konceptů Y · …" — nulové části se vynechávají.
+  function queueSummaryText(counts) {
+    const parts = [];
+    if (counts.closed > 0) parts.push(t('dashboard.toast.queueClosed', { n: counts.closed }));
+    if (counts.draft > 0) parts.push(t('dashboard.toast.queueDraft', { n: counts.draft }));
+    if (counts.rejected > 0) parts.push(t('dashboard.toast.queueRejected', { n: counts.rejected }));
+    if (counts.skipped > 0) parts.push(t('dashboard.toast.queueSkipped', { n: counts.skipped }));
+    return parts.join(' · ');
+  }
+
+  // Přeskočit (D4) — posun bez verdiktu, karta zůstává ve feedu.
+  function handleQueueSkip() {
+    queue.counts.skipped += 1;
+    advanceQueue();
+  }
+
+  // Zavření preview modalu: v batch módu = konec průchodu se souhrnem
+  // za dosud zpracované; jinak běžné zavření.
+  function handlePreviewClose() {
+    if (queue) {
+      finishQueue();
+    } else {
+      previewNdx = null;
+    }
+  }
+
+  async function handlePrecheckContinue() {
+    const list = queuePrecheck.list;
+    queuePrecheck = null;
+    // Nechat modal předkroku odregistrovat z modal stacku, než se otevře
+    // review modal — jinak by dostal depth 1 a s ním nested shrink
+    // (30 px/strana), tj. byl by menší než při otevření ze „Zkontrolovat".
+    await tick();
+    openQueueAt(list, 0);
   }
 
   // ── Ruční nahrání ────────────────────────────────────────────────────────────
@@ -476,12 +607,29 @@
     <AiSummaryCard summary={data.summary} />
 
     {#if (data.cards?.length ?? 0) > 0}
-      <FeedFilter
-        value={feedFilter}
-        counts={feedCounts}
-        urgent={feedUrgent}
-        onChange={(v) => (feedFilter = v)}
-      />
+      <div class="shpd-dashboard__feed-toolbar">
+        <div class="shpd-dashboard__feed-filter">
+          <FeedFilter
+            value={feedFilter}
+            counts={feedCounts}
+            urgent={feedUrgent}
+            onChange={(v) => (feedFilter = v)}
+          />
+        </div>
+        <!-- Projít frontu (D3) — jen na záložkách Vše a Faktury a jen když
+             je co procházet; na Spisovna/Ostatní by bylo zavádějící
+             (registry je mimo scope průchodu). -->
+        {#if (feedFilter === 'all' || feedFilter === 'invoices') && queueableCards.length > 0}
+          <div class="shpd-dashboard__feed-queue">
+            <Button
+              variant="primary"
+              size="sm"
+              label={t('dashboard.queue.button', { n: queueableCards.length })}
+              onclick={startQueue}
+            />
+          </div>
+        {/if}
+      </div>
     {/if}
 
     <Feed
@@ -502,9 +650,19 @@
 <DocumentExchangePreviewModal
   open={previewNdx !== null}
   messageNdx={previewNdx}
-  onClose={() => (previewNdx = null)}
+  queue={queue ? { index: queue.index, total: queue.list.length } : null}
+  onClose={handlePreviewClose}
   onApply={handleApplyFromModal}
   onReject={handleRejectFromModal}
+  onSkip={handleQueueSkip}
+/>
+
+<QueueCategoriesPrompt
+  open={queuePrecheck !== null}
+  cards={queuePrecheck?.cards ?? []}
+  onMaterialized={dropCardById}
+  onContinue={handlePrecheckContinue}
+  onClose={() => (queuePrecheck = null)}
 />
 
 {#if caps.mailUpload}
@@ -612,6 +770,23 @@
     margin: 0;
     font-size: var(--shpd-font-size-xl);
     color: var(--shpd-color-text);
+  }
+
+  /* Řádek filtr + Projít frontu. Filtr dostává flex:1 + min-width:0, aby
+     jeho vnitřní overflow-x fungoval a tlačítko se nezmenšovalo. */
+  .shpd-dashboard__feed-toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--shpd-space-md);
+  }
+
+  .shpd-dashboard__feed-filter {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .shpd-dashboard__feed-queue {
+    flex-shrink: 0;
   }
 
   .shpd-dashboard__loading,

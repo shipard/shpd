@@ -1,7 +1,7 @@
 ---
 title: Kontrola vytěženého dokladu
 summary: Jak porovnat návrh dokladu s originálem faktury, co kontrolovat první a kdy návrh zamítnout.
-keywords: [kontrola, vytěžení, analýza, náhled dokladu, jistota, použít, vystavit koncept, vystavit a uzavřít, zamítnout, AI přečetla špatně, sedí částka, review, vytvořit z registru, hledat v registru, nový dodavatel z faktury]
+keywords: [kontrola, vytěžení, analýza, náhled dokladu, jistota, použít, vystavit koncept, vystavit a uzavřít, zamítnout, AI přečetla špatně, sedí částka, review, vytvořit z registru, hledat v registru, nový dodavatel z faktury, projít frontu, přeskočit, fronta faktur]
 related: [slovnicek.md, co-dnes-nejde.md, osoby/zalozeni-osoby.md]
 ---
 
@@ -108,6 +108,20 @@ klik, bez otevírání náhledu. Když v návrhu zbývá nerozhodnutá reference
 a rozhodneš ji tam. Náhled si i u jistého návrhu můžeš otevřít sám
 tlačítkem **Zkontrolovat**. Vystavit a uzavřít na jeden klik z karty
 nejde — rovnou uzavřít se dá jen z náhledu, po kontrole.
+
+**Víc faktur najednou projdeš frontou.** Když na Dashboardu čeká víc
+návrhů přijatých faktur, na záložkách **Vše** a **Přijaté faktury** je
+vedle filtru tlačítko **Projít frontu** s počtem čekajících. Otevře
+náhled nejstarší zprávy a po každém rozhodnutí — **Vystavit a uzavřít**,
+**Vystavit koncept**, **Zamítnout**, nebo **Přeskočit** (nechá návrh na
+později, karta zůstane) — rovnou ukáže další. V hlavičce náhledu vidíš,
+kolikátou zprávu z kolika právě řešíš. Po vystavení konceptu se ve frontě
+formulář neotvírá — koncepty dokončíš po průchodu. Na konci (nebo když
+frontu zavřeš křížkem dřív) se ukáže souhrn, kolik jsi uzavřel, kolik
+vzniklo konceptů, kolik jsi zamítl a přeskočil. Pokud na Dashboardu čekají
+i karty **Nová kategorie**, průchod začne dialogem, kde můžeš chybějící
+kategorie nejdřív založit — návrhy, kterým chyběla jen položka, pak
+projdou rovnou.
 
 **Vystavit a uzavřít se nevrací jedním klikem.** Doklad je po něm
 uzamčený ve stavu **V pořádku** jako každý jiný hotový doklad — když v něm

@@ -415,6 +415,45 @@ Logika (`MessageProposalApplier::unapply`):
 4. Analysis `resolution`/`rejected_reason`/`resolved_at/by` → NULL,
    zpráva `target_table_id`/`target_row` → NULL, `docState 40→20`.
 
+### 6.6 Sériový průchod frontou — „Projít frontu" (Issue #32/1)
+
+Tlačítko **Projít frontu (N)** vedle FeedFilteru (jen záložky Vše/Faktury,
+jen když N > 0) otevře review modal na první zprávě fronty a po každém
+verdiktu (Vystavit a uzavřít / Vystavit koncept / Zamítnout / Přeskočit)
+načte další zprávu místo zavření. Vše frontend nad existujícími endpointy
+— backend beze změn. Zadání a rozhodnutí D1–D9:
+`tasks/dashboard-queue-walkthrough.md`.
+
+- **Složení fronty (D1)**: jen karty `mail_suggestion:*` s
+  `category='invoices'` a `context.target='docs'` (pásma ready + review;
+  registry, urgent a info karty vyloučeny). **Snapshot** messageNdx se
+  pořizuje při kliknutí — nezávislý na optimistickém mazání karet
+  i na kartách přibylých během průchodu. Řazení chronologicky od
+  nejstarší (`timestamp` ASC, null na konec) — s „Vystavit a uzavřít"
+  drží čísla faktur pořadí doručení.
+- **Batch mód potlačuje per-item UX (D2)**: žádný FormDialog po konceptu,
+  žádné per-item toasty, žádné `load()` po položce. Stav drží
+  `Dashboard.queue = {list, index, counts}`; batch větve ve `finishApply`
+  a `submitRejectFlow` jen inkrementují counts a posunou `previewNdx`
+  (modal zůstává otevřený, reload řeší jeho `$effect`). Na konci —
+  doběhnutí i předčasné zavření modalu — jeden souhrnný toast
+  „Uzavřeno X · Y konceptů · Zamítnuto Z · Přeskočeno W" (nulové části
+  vynechány, bez akce Otevřít) a jeden `load()`.
+- **Modal v batch módu**: props `queue {index, total}` + `onSkip` —
+  počítadlo „i / n" přes `headerExtra`, tlačítko Přeskočit v patičce
+  (posun bez verdiktu, karta zůstává ve feedu). Zamítnout otevírá
+  `RejectReasonPrompt` **nad** modalem (modal stack; zrušení promptu =
+  návrat na tutéž zprávu). Chyba apply = alert + zůstat na zprávě (D6).
+  Single-message použití (karta „Zkontrolovat", ViewerDetail) je beze
+  změny — `queue = null`.
+- **Předkrok „Nová kategorie" (D8, Issue #35)**: existují-li ve feedu
+  `content_tag:*` karty, průchodu se předřadí `QueueCategoriesPrompt` —
+  seznam štítků s materialize akcemi (labely ze serveru, vč. volby
+  materiál/zboží). Úspěch → řádek zmizí + optimistické `dropCardById`
+  u rodiče; bez toastů a bez `load()`. „Pokračovat" spustí průchod;
+  návrhy povýšené založenou položkou se projeví přirozeně (preview se
+  počítá čerstvě). Snapshot fronty se předkrokem nemění.
+
 ## 7. API kontrakt
 
 ### `GET /_ui/dashboard`
@@ -494,7 +533,8 @@ Sesterské endpointy pro settings panel: `GET …/content-tags/overview`
 frontend/src/components/dashboard/
 ├── Dashboard.svelte      — fetch, layout, review modal,
 │                           reject prompt, form po vystavení,
-│                           toast (registry / auto-archiv)
+│                           toast (registry / auto-archiv),
+│                           stav sériového průchodu frontou (§6.6)
 ├── Feed.svelte           — grid karet (auto-fill minmax(360px,1fr) → 2 sloupce
 │                           na desktopu, 1 na mobilu; row-major = serverové
 │                           řazení; stejná výška karet v řádku, žádný masonry),
@@ -518,6 +558,9 @@ frontend/src/components/dashboard/
 │                           náhled (jen hover zařízení); „+N" nad strop 3
 │                           je syntetická open_detail akce (náhled zprávy)
 ├── RejectReasonPrompt.svelte — sdílený prompt na důvod (feed i ViewerDetail)
+├── QueueCategoriesPrompt.svelte — předkrok průchodu frontou (§6.6):
+│                           založení otagovaných položek z content_tag
+│                           karet před otevřením první zprávy
 ├── AiSummaryCard.svelte  — AI shrnutí přes SSE (fallback county dle kind, §11)
 └── ChatLauncher.svelte   — plovoucí chat input (pill, sticky dole na středu,
                             width min(560px,100%)): odeslání →

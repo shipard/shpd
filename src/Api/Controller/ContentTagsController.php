@@ -296,25 +296,9 @@ class ContentTagsController
      */
     private function untaggedSuggestions(): array
     {
-        $variant = $this->offer()->variant();
-        $seed = $variant !== null ? $this->offer()->loadSeed($variant) : null;
-        if ($seed === null) {
-            return [];
-        }
-
-        // číslo účtu → množina štítků napříč položkami nabídky
-        $tagsByAccount = [];
-        foreach ($seed['items'] as $entry) {
-            $account = (string) ($entry['account'] ?? '');
-            if ($account === '') {
-                continue;
-            }
-            foreach ((array) ($entry['contentTags'] ?? []) as $tag) {
-                if (is_string($tag) && $tag !== '') {
-                    $tagsByAccount[$account][$tag] = true;
-                }
-            }
-        }
+        // Reverzní mapa účet → štítky je sdílená s reverzem nad souborem
+        // účetní historie (AccountingItemsOffer::tagsByAccount()).
+        $tagsByAccount = $this->offer()->tagsByAccount();
         if ($tagsByAccount === []) {
             return [];
         }
@@ -335,7 +319,7 @@ class ContentTagsController
         $out = [];
         foreach ($rows as $row) {
             $account = (string) ($row['account_number'] ?? '');
-            $tags = array_keys($tagsByAccount[$account] ?? []);
+            $tags = $tagsByAccount[$account] ?? [];
             if ($tags === []) {
                 continue; // účet mimo nabídku — bez návrhu i bez záznamu
             }

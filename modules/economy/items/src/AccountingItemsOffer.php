@@ -61,6 +61,42 @@ class AccountingItemsOffer
     }
 
     /**
+     * Reverzní mapa **číslo účtu → štítky** z nabídky dané varianty osnovy
+     * (bez varianty = aktivní). Jeden účet může nést víc štítků napříč
+     * položkami nabídky — kolize řeší volající (settings obrazovka je
+     * ukazuje jako `candidateTags`, booking-history reverz je vyhodí jako
+     * nejednoznačné).
+     *
+     * Sdílená mezi reverzními návrhy v Nastavení (D15/D27) a reverzem nad
+     * souborem účetní historie (`AccountTagMap`) — jediné místo, které ví,
+     * jak se z nabídky čte opačný směr než {@see defaultAccountForTag()}.
+     *
+     * @return array<string, list<string>> prázdné = neznámá varianta / soubor chybí
+     */
+    public function tagsByAccount(?string $variant = null): array
+    {
+        $variant ??= $this->variant();
+        $seed = $variant !== null ? $this->loadSeed($variant) : null;
+        if ($seed === null) {
+            return [];
+        }
+
+        $byAccount = [];
+        foreach ($seed['items'] as $entry) {
+            $account = (string) ($entry['account'] ?? '');
+            if ($account === '') {
+                continue;
+            }
+            foreach ((array) ($entry['contentTags'] ?? []) as $tag) {
+                if (is_string($tag) && $tag !== '' && !in_array($tag, $byAccount[$account] ?? [], true)) {
+                    $byAccount[$account][] = $tag;
+                }
+            }
+        }
+        return $byAccount;
+    }
+
+    /**
      * Fallback účet pro obsahový štítek z nabídky aktivní varianty osnovy —
      * číslo účtu první položky nabídky nesoucí přesně tento štítek; když
      * žádná není, prefix fallback (D3): první položka se štítkem stejné

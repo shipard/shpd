@@ -1,0 +1,108 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Shipard\Core\Reports;
+
+/**
+ * Deklarace reportu z JSONC (D7, D16) — jediné místo, ze kterého se odvozuje
+ * toolbar parametrů v UI, validace na REST API i budoucí MCP `inputSchema`.
+ *
+ * Vstupní pole je už lokalizované (`ConfigLocalizer` vyřešil `name:cs`
+ * varianty před voláním `fromArray()` — vzor `AlertCheckRegistry`).
+ */
+final class ReportDefinition
+{
+    public const GRANULARITIES = ['month', 'quarter', 'halfYear', 'year'];
+    private const PARAM_TYPES  = ['enum', 'bool'];
+
+    /**
+     * @param list<string> $periodGranularities Podmnožina GRANULARITIES.
+     * @param list<array{id: string, type: string, options: list<string>, default: mixed}> $params
+     *        Schéma ne-periodových parametrů.
+     */
+    public function __construct(
+        public readonly string $id,
+        public readonly string $name,
+        public readonly string $builderClass,
+        public readonly array $periodGranularities,
+        public readonly array $params,
+        public readonly string $moduleId,
+    ) {}
+
+    /** @param array<string, mixed> $data */
+    public static function fromArray(array $data, string $moduleId): self
+    {
+        $id = $data['id'] ?? null;
+        if (!is_string($id) || !preg_match('/^[a-z][a-zA-Z0-9.]*$/', $id)) {
+            throw new \InvalidArgumentException(
+                "Module '{$moduleId}': report declaration missing or invalid 'id'",
+            );
+        }
+
+        $name = $data['name'] ?? null;
+        if (!is_string($name) || $name === '') {
+            throw new \InvalidArgumentException("Report '{$id}': missing 'name'");
+        }
+
+        $builder = $data['builder'] ?? null;
+        if (!is_string($builder) || $builder === '') {
+            throw new \InvalidArgumentException("Report '{$id}': missing 'builder' class");
+        }
+
+        $granularities = $data['periodGranularities'] ?? null;
+        if (!is_array($granularities) || $granularities === []
+            || array_diff($granularities, self::GRANULARITIES) !== []
+        ) {
+            throw new \InvalidArgumentException(
+                "Report '{$id}': 'periodGranularities' must be a non-empty subset of "
+                . implode('|', self::GRANULARITIES),
+            );
+        }
+
+        $params = [];
+        foreach ($data['params'] ?? [] as $idx => $param) {
+            if (!is_array($param) || !isset($param['id']) || !is_string($param['id']) || $param['id'] === '') {
+                throw new \InvalidArgumentException("Report '{$id}': params[{$idx}] missing 'id'");
+            }
+            $type = $param['type'] ?? null;
+            if (!in_array($type, self::PARAM_TYPES, true)) {
+                throw new \InvalidArgumentException(
+                    "Report '{$id}': params[{$idx}] type must be one of " . implode('|', self::PARAM_TYPES),
+                );
+            }
+            if (!array_key_exists('default', $param)) {
+                throw new \InvalidArgumentException("Report '{$id}': params[{$idx}] missing 'default'");
+            }
+            $options = [];
+            if ($type === 'enum') {
+                $options = $param['options'] ?? null;
+                if (!is_array($options) || $options === []) {
+                    throw new \InvalidArgumentException(
+                        "Report '{$id}': params[{$idx}] enum requires non-empty 'options'",
+                    );
+                }
+                if (!in_array($param['default'], $options, true)) {
+                    throw new \InvalidArgumentException(
+                        "Report '{$id}': params[{$idx}] default is not among options",
+                    );
+                }
+            }
+            $params[] = [
+                'id'      => $param['id'],
+                'type'    => $type,
+                'options' => array_values($options),
+                'default' => $type === 'bool' ? (bool) $param['default'] : $param['default'],
+            ];
+        }
+
+        return new self(
+            id: $id,
+            name: $name,
+            builderClass: $builder,
+            periodGranularities: array_values($granularities),
+            params: $params,
+            moduleId: $moduleId,
+        );
+    }
+}

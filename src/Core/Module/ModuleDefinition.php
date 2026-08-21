@@ -27,6 +27,7 @@ class ModuleDefinition
         public readonly array $journalEventHandlers = [],
         public readonly array $panels = [],
         public readonly array $navigationProviders = [],
+        public readonly array $reports = [],
     ) {}
 
     public static function fromArray(array $data): self
@@ -218,6 +219,24 @@ class ModuleDefinition
             }
         }
 
+        // reports — deklarace reportů (datových výstupů) v samostatných JSONC
+        // souborech, mirror file-based `config` klíče. Jeden soubor může
+        // deklarovat víc reportů; parsování a duplicit detection napříč
+        // moduly dělá ReportDefinitionLoader/ReportRegistry.
+        $reports = [];
+        if (isset($data['reports']) && is_array($data['reports'])) {
+            foreach ($data['reports'] as $idx => $reg) {
+                if (!is_array($reg)
+                    || !isset($reg['file']) || !is_string($reg['file']) || $reg['file'] === ''
+                ) {
+                    throw new \InvalidArgumentException(
+                        "Module '{$data['id']}': reports[{$idx}] requires 'file'",
+                    );
+                }
+                $reports[] = ['file' => $reg['file']];
+            }
+        }
+
         // keepOnReset — names of this module's OWN tables that `ds-reset`
         // must not drop (system/config tables vs. data). Items must be
         // strings and must be tables owned by this module (catches typos
@@ -266,6 +285,7 @@ class ModuleDefinition
             journalEventHandlers: $journalEventHandlers,
             panels: $panels,
             navigationProviders: $navigationProviders,
+            reports: $reports,
         );
     }
 

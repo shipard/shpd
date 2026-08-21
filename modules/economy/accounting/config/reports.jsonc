@@ -1,0 +1,15 @@
+// Deklarace reportů modulu economy.accounting (docs/reports.md, D7 + D16).
+// Registrace: module.jsonc → klíč "reports"; načítá ReportDefinitionLoader.
+[
+    {
+        "id": "economy.accounting.generalLedger",
+        "name": "General ledger",
+        "name:cs": "Hlavní kniha",
+        "name:en": "General ledger",
+        "builder": "Shipard\\Module\\Economy\\Accounting\\Reports\\GeneralLedgerBuilder",
+        "periodGranularities": ["month", "quarter", "halfYear", "year"],
+        "params": [
+            {"id": "detail", "type": "enum", "options": ["analytic", "synthetic"], "default": "analytic"}
+        ]
+    }
+]

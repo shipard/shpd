@@ -135,5 +135,11 @@
             "id": "economy.accounting.rules.cz",
             "file": "config/accountingRules.cz.jsonc"
         }
+    ],
+
+    "reports": [
+        {
+            "file": "config/reports.jsonc"
+        }
     ]
 }

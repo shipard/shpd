@@ -14,6 +14,8 @@ use Shipard\Module\Core\Mail\Mcp\MailDraftDocumentTool;
 use Shipard\Module\Core\Mail\Mcp\MailListPendingTool;
 use Shipard\Module\Docs\Core\Mcp\DocumentsAggregateTool;
 use Shipard\Module\Docs\Core\Mcp\DocumentsSearchTool;
+use Shipard\Module\Economy\Accounting\Mcp\ReportListTool;
+use Shipard\Module\Economy\Accounting\Mcp\ReportRunTool;
 
 /**
  * The chat tool-use loop offers the model only read-only tools. These assert
@@ -31,6 +33,8 @@ class McpToolReadOnlyTest extends TestCase
         $this->assertTrue((new RegistrySearchTool())->isReadOnly());
         $this->assertTrue((new HelpSearchTool())->isReadOnly());
         $this->assertTrue((new HelpGetPageTool())->isReadOnly());
+        $this->assertTrue((new ReportListTool())->isReadOnly());
+        $this->assertTrue((new ReportRunTool())->isReadOnly());
     }
 
     public function testDraftToolIsNotReadOnly(): void

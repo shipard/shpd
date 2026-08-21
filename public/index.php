@@ -351,6 +351,13 @@ function buildMcpRegistry(
 	if (isset($tables['base_registry_documents'])) {
 		$registry->register(new \Shipard\Module\Base\Registry\Mcp\RegistrySearchTool());
 	}
+	// Reporty (D11) — jen s aktivní účetní doménou; DataSourceConfig + jazyk
+	// nese sdílený support (ctx je nemá), report registry se staví lazily.
+	if (isset($tables['economy_accounting_journal'])) {
+		$reportToolSupport = new \Shipard\Module\Economy\Accounting\Mcp\ReportToolSupport($resolved->config);
+		$registry->register(new \Shipard\Module\Economy\Accounting\Mcp\ReportListTool($reportToolSupport));
+		$registry->register(new \Shipard\Module\Economy\Accounting\Mcp\ReportRunTool($reportToolSupport));
+	}
 
 	// Zápisový nástroj mail_draft_document nad sdílenou apply službou.
 	// DocumentApplier vyžaduje ConfigRuntime (jako dispatchExchange/Analysis);

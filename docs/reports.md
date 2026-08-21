@@ -14,8 +14,12 @@ z milníku M1 a validace importu ze starého Shipardu (M3).
 > (`ProfitLossBuilder`) a rozvaha (`BalanceSheetBuilder`, invarianty D15)
 > nad sdíleným `JournalReportSupport`. Fáze 3 hotova (2026-08-21,
 > `tasks/reports-phase3.md`) — skupina Reporty v navigaci, `ReportsPage`
-> + `PeriodPicker` + `ReportView`, deep-link přes query string. Zbývá:
-> Fáze 4 (MCP + diff). Upřesnění tvaru dle implementace: §10, §11, §12.
+> + `PeriodPicker` + `ReportView`, deep-link přes query string. Fáze 4
+> hotova (2026-08-21, `tasks/reports-phase4.md`) — MCP tooly `report_list`
+> + `report_run`, `ReportDiff` + CLI `report-run`/`report-diff`; plán
+> domény z issue #42 tím je uzavřen (validace importu čeká na exportér
+> v `old_shipard`, kontrakt §7.4). Upřesnění tvaru dle implementace:
+> §10, §11, §12, §13.
 
 ---
 
@@ -242,6 +246,41 @@ ze starého Shipardu (stejný report za stejné období musí sedět). Využije 
 Pozn.: starý Shipard strukturovaná data reportů dnes negeneruje; půjde
 snadno dodělat, znaménkovou konvenci srovná diff vrstva.
 
+Implementace (Fáze 4): `Shipard\Core\Reports\ReportDiff` — čistá třída
+bez DB nad dvěma dekódovanými `ReportResult` array. Porovnávají se pouze
+řádky `kind: detail` (klíč = `account`) a jako kontrolní součet řádky
+`kind: total` (klíč = `label`, jen labely přítomné na obou stranách);
+subtotaly a computed se ignorují — derivují z detailů, stará strana je
+mít nemusí. Sloupce se porovnávají v průniku dle `id` (jednostranné →
+`columnsOnlyInA/B`, warning), takže strany nemusejí mít shodné `reportId`
+ani stejnou sadu sloupců. Tolerance 0,005. Výstup: `{identical,
+differences: [{account, column, field (md|d|balance), a, b, delta}],
+onlyInA, onlyInB, columnsOnlyInA/B, statusA, statusB}`.
+
+**Kontrakt exportu staré strany** (navazující task v `old_shipard`):
+exportér agregovaného deníku produkuje minimální `ReportResult`-kompatibilní
+JSON — diff nic víc nepotřebuje:
+
+```json
+{
+  "reportId": "external.oldShipard.generalLedger",
+  "params": {},
+  "status": "ok",
+  "messages": [],
+  "columns": [{"id": "opening"}, {"id": "turnover"}, {"id": "closing"}],
+  "rows": [
+    {"kind": "detail", "level": 4, "account": "311001",
+     "label": "Odběratelé", "values": {"closing": {"md": 0, "d": 0, "balance": 0}}}
+  ]
+}
+```
+
+`params` jsou volné, subtotaly žádné, `total` volitelný. Přesnou sadu
+sloupců určí task v `old_shipard` podle možností staré DB — minimálně
+`closing` k datu; id sloupců musí odpovídat nové straně
+(`opening`/`turnover`/`closing` hlavní knihy), jinak se hodnoty
+neporovnají (skončí v `columnsOnlyIn*`).
+
 ---
 
 ## 8. Budoucí rozšíření (mimo rozsah v1)
@@ -367,3 +406,33 @@ Body, kde implementace zpřesnila návrh (tvar §3.1 platí beze změn):
   na rozdíl od auth větví) a po loadu navigace se aktivuje leaf
   `report:<id>`; neznámé id = normální start. „V tisících" do URL
   nepatří (čistě vizuální volba). Odchod ze stránky reportu query uklidí.
+
+---
+
+## 13. Upřesnění z implementace Fáze 4
+
+- **MCP tooly** (`modules/economy/accounting/src/Mcp/`): `report_list`
+  (katalog + `fiscalYears: [{name, months}]` per položka, jednou spočtené)
+  a `report_run` (`{summary, report: ReportResult::toArray()}`; `summary`
+  nese název, období a status — model ho nepřehlédne bez čtení JSONu).
+  Registrace v `buildMcpRegistry` podmíněná tabulkou
+  `economy_accounting_journal`. `McpInvocationContext` nenese
+  `DataSourceConfig` ani jazyk — sdílený `ReportToolSupport` je dostává
+  při registraci a `ReportRegistry` staví lazily až při prvním volání.
+- **Default detailu se liší per prezentace**: MCP `synthetic` (menší
+  výstup pro LLM), UI a CLI `analytic` (plný detail — u CLI kvůli diffu).
+  `detail` je per-report parametr — default se podsouvá jen reportům,
+  které ho deklarují.
+- **`fiscalYear` v MCP schema je integer** (pro model přirozené), před
+  validací se kastuje na string `name` fiskálního roku — validátor
+  i číselník pracují se stringem (§12).
+- **CLI** (`shpd-ds`): `report-run <reportId> --fiscal-year --month-from
+  --month-to [--detail] [--pretty]` — čistý JSON na stdout, poznámka
+  o `status: errors|warnings` na stderr, exit 0 (D15: legitimní výsledek).
+  `report-diff <fileA> <fileB>` (`-` = stdin pro jednu stranu)
+  `[--strict] [--json]` — exit 0 shoda, 1 rozdíly, 2 chyba vstupu /
+  strict violation (`--strict` odmítne stranu se `status: errors`;
+  bez něj se statusy jen zřetelně tisknou).
+- Limit velikosti výstupu `report_run` (analytická hlavní kniha za rok
+  na velkém DS) se zatím řeší doporučením `synthetic` v popisu toolu;
+  tvrdý limit / stránkování až podle chování na alfě.

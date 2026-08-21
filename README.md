@@ -30,6 +30,8 @@ Jak se v Shipardu dělají věci (návody pro uživatele): [help/](help/README.m
 
 Technické specifikace, architektura a formáty konfigurace: [docs/](docs/)
 
+Co aplikace umí, co částečně a co plánujeme: [docs/features.md](docs/features.md)
+
 Kam projekt směřuje a v jakém pořadí: [docs/roadmap.md](docs/roadmap.md)
 
 ## Technologie

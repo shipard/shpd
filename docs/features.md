@@ -4,7 +4,7 @@ Mapa rozsahu Nového Shipardu: co aplikace umí, co umí částečně a kam smě
 Odpovídá na otázku **„co všechno"** — pořadí určuje [roadmap.md](roadmap.md),
 uživatelský popis existujícího drží [help/co-shipard-umi.md](../help/co-shipard-umi.md).
 
-Legenda: `[x]` hotovo · `[~]` částečně · `[ ]` plánováno
+Legenda: `[x]` hotovo · `[ ] 🟠` částečně · `[ ]` plánováno
 
 ---
 
@@ -14,7 +14,7 @@ Legenda: `[x]` hotovo · `[~]` částečně · `[ ]` plánováno
 - [x] Chat — AI asistent nad daty a nápovědou (jen čtení)
 - [x] Upozornění — automatické kontroly jako karty na Dashboardu
 - [x] Úkoly — samostatná evidence
-- [~] Anglické rozhraní — existuje, nepřeložené popisky
+- [ ] 🟠 Anglické rozhraní — existuje, nepřeložené popisky
 
 ## Pošta a AI vytěžení
 
@@ -23,7 +23,7 @@ Legenda: `[x]` hotovo · `[~]` částečně · `[ ]` plánováno
 - [x] Rozpoznání dokumentu pro Spisovnu z došlé pošty
 - [x] Přímý import ISDOC bez AI
 - [x] Zohlednění historie partnera při vytěžení
-- [~] Opakovaná analýza — jen u zprávy analyzované nebo selhané
+- [ ] 🟠 Opakovaná analýza — jen u zprávy analyzované nebo selhané
 - [x] Ruční nahrání dokumentu do pošty — tlačítko Nahrát a drag-n-drop na Dashboardu
 - [ ] Zobrazení adresy pro příjem pošty v aplikaci
 
@@ -58,6 +58,19 @@ Legenda: `[x]` hotovo · `[~]` částečně · `[ ]` plánováno
 
 - [ ] Prodejky
 - [ ] Prodejní smlouvy — podklad pro opakovanou fakturaci
+
+## Zásoby
+
+- [ ] Příjemky a výdejky
+- [ ] Počáteční stavy zásob
+- [ ] Skladové přehledy — stavy a pohyby po položkách
+- [ ] Účtování zásob metodou A i B
+
+## Zakázky
+
+- [ ] Evidence zakázek
+- [ ] Přiřazení dokladů a pohybů k zakázce
+- [ ] Účetní vyhodnocení zakázky — náklady a výnosy po zakázkách
 
 ## Pokladna
 
@@ -104,7 +117,7 @@ Legenda: `[x]` hotovo · `[~]` částečně · `[ ]` plánováno
 
 ## Provoz a data
 
-- [~] Import ze starého Shipardu — existuje, spouští vývojář; ověření beze ztráty na ostrých datech
+- [ ] 🟠 Import ze starého Shipardu — existuje, spouští vývojář; ověření beze ztráty na ostrých datech
 - [ ] Záloha a obnova datového zdroje uživatelem
 - [ ] Smazání datového zdroje z rozhraní
 - [ ] Rate limiting a evidence neúspěšných přihlášení
@@ -128,7 +141,7 @@ Rozhodnuto, že se **nedělá** — ať se k tomu nevracíme.
 
 - Revize **po dokončení každého milníku**, společně s roadmapou; průběžné
   změny patří do tasků.
-- Položka je `[x]` až když funguje celá; rozpracované a omezené věci jsou `[~]`.
+- Položka je `[x]` až když funguje celá; rozpracované a omezené věci jsou `[ ] 🟠`.
 - Žádné citlivé údaje z reálných dat — dokument je ve veřejném repozitáři.
 
 ---

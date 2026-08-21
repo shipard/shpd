@@ -9,9 +9,11 @@ z milníku M1 a validace importu ze starého Shipardu (M3).
 > **Stav:** Fáze 1 hotova (2026-08-21, `tasks/reports-phase1.md`) — jádro
 > `src/Core/Reports/`, klíč `reports` v module.jsonc, hlavní kniha
 > (`GeneralLedgerBuilder`), REST `GET /_reports[/{reportId}]`. Rozhodnutí
-> D1–D16 potvrzena (GitHub issue #42 + komentář). Zbývá: Fáze 2
-> (výsledovka + rozvaha), Fáze 3 (viewer), Fáze 4 (MCP + diff).
-> Upřesnění tvaru dle implementace: §10.
+> D1–D16 potvrzena (GitHub issue #42 + komentář). Fáze 2 hotova
+> (2026-08-21, `tasks/reports-phase2.md`) — výsledovka
+> (`ProfitLossBuilder`) a rozvaha (`BalanceSheetBuilder`, invarianty D15)
+> nad sdíleným `JournalReportSupport`. Zbývá: Fáze 3 (viewer),
+> Fáze 4 (MCP + diff). Upřesnění tvaru dle implementace: §10, §11.
 
 ---
 
@@ -296,3 +298,35 @@ Body, kde implementace zpřesnila návrh (tvar §3.1 platí beze změn):
   (namespace `Shipard\Module\Economy\Accounting\Reports`), deklarace
   `config/reports.jsonc` + klíč `reports` v module.jsonc
   (`[{"file": "config/reports.jsonc"}]`).
+
+## 11. Upřesnění z implementace Fáze 2
+
+- **Sdílené helpery**: `JournalReportSupport` (agregace deníku per fiskální
+  měsíce s volitelným filtrem tříd — seznam povolených prvních znaků čísla
+  účtu, platí i pro chybové masky —, názvy z rozvrhu, chybové zprávy).
+  Buildery ho skládají, žádná dědičnost mezi nimi (duch D1).
+- **Výsledovka** (`economy.accounting.profitLoss`): třídy 5/6, sloupce
+  `period` (obraty intervalu) a `ytd` (od začátku fiskálního roku do konce
+  intervalu) — uzavírá otevřený bod Fáze 1, odpovídá sloupcům „Měsíc / Rok"
+  starého Shipardu. Místo generického totalu `computed` řádek „Výsledek
+  hospodaření za období" (level 0, `balance` = výnosy − náklady, kladné =
+  zisk; `md`/`d` = 0 — výsledek není obrat stran).
+- **Rozvaha** (`economy.accounting.balanceSheet`): třídy 0–4, sloupce
+  `opening`/`closing`. Zařazení do sekcí Aktiva/Pasiva **per analytický
+  účet**: `account_kind` 0/1 přímo, kind 5 (aktivně pasivní), NULL či jiný
+  dle znaménka closing balance (≥ 0 Aktiva) — zjednodušení v1, opening
+  strana se může lišit. Syntetické slučování až uvnitř sekce (analytiky
+  téhož syntetického účtu mohou skončit v opačných sekcích). Na skupinových
+  řádcích rozvrhu je `account_kind` nespolehlivý — kind se čte jen
+  z analytik.
+- **Sémantika znaménka v pasivní sekci**: builder otáčí `balance` všech
+  řádků pasiv (detail, subtotal, total), `md`/`d` zůstávají syrové. Není to
+  porušení D6 — builder definuje sémantiku sloupce své sekce, renderer nic
+  nedopočítává. `computed` řádek „Výsledek hospodaření běžného období"
+  (vzorec ytd výsledovky; `opening` k začátku intervalu) je poslední
+  položkou pasiv a vstupuje do „PASIVA CELKEM".
+- **Invarianty D15 v rozvaze**: `AKTIVA CELKEM == PASIVA CELKEM`
+  a vyrovnanost deníku (Σ syrových balance tříd 0–4 + tříd 5–6 == 0),
+  obojí per sloupec s tolerancí 0,005. Porušení → `ReportMessage` error
+  `balanceSheet.notBalanced` / `balanceSheet.journalImbalance` (v textu
+  sloupec a rozdíl), report se vrátí i tak (`status: errors`, HTTP 200).

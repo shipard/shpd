@@ -12,8 +12,10 @@ z milníku M1 a validace importu ze starého Shipardu (M3).
 > D1–D16 potvrzena (GitHub issue #42 + komentář). Fáze 2 hotova
 > (2026-08-21, `tasks/reports-phase2.md`) — výsledovka
 > (`ProfitLossBuilder`) a rozvaha (`BalanceSheetBuilder`, invarianty D15)
-> nad sdíleným `JournalReportSupport`. Zbývá: Fáze 3 (viewer),
-> Fáze 4 (MCP + diff). Upřesnění tvaru dle implementace: §10, §11.
+> nad sdíleným `JournalReportSupport`. Fáze 3 hotova (2026-08-21,
+> `tasks/reports-phase3.md`) — skupina Reporty v navigaci, `ReportsPage`
+> + `PeriodPicker` + `ReportView`, deep-link přes query string. Zbývá:
+> Fáze 4 (MCP + diff). Upřesnění tvaru dle implementace: §10, §11, §12.
 
 ---
 
@@ -331,3 +333,37 @@ Body, kde implementace zpřesnila návrh (tvar §3.1 platí beze změn):
   obojí per sloupec s tolerancí 0,005. Porušení → `ReportMessage` error
   `balanceSheet.notBalanced` / `balanceSheet.journalImbalance` (v textu
   sloupec a rozdíl), report se vrátí i tak (`status: errors`, HTTP 200).
+
+## 12. Upřesnění z implementace Fáze 3
+
+- **Katalog `GET /_reports`** nese vedle `items` i `periods:
+  {fiscalYears: [{name, months}]}` — data pro picker období, jednou pro
+  celou odpověď. `name` je **string** (shoda s parametrem `fiscalYear`
+  a sloupcem `name` číselníku; PRD ukázka měla number), `months` = počet
+  běžných měsíců (`period_type` 1). Zdroj `FiscalPeriodProvider::
+  regularYears()`.
+- **`ReportColumn.display`**: zobrazovací hint `'balance'` (default; jedna
+  hodnota Zůstatek) | `'sides'` (trojice MD / D / Zůstatek), v `toArray()`
+  vždy přítomen. Hlavní kniha: `turnover` → `sides`; ostatní sloupce všech
+  reportů `balance`. Data nesou vždy všechny tři hodnoty (D6) — hint řídí
+  jen renderer.
+- **Navigace z deklarace (duch D7)**: report deklarace nese volitelné
+  `navSection` + `navOrder`; `NavigationController::collectReportItems()`
+  z nich staví skupinu `{id: 'reports', label: Reporty/Reports, children}`
+  v cílové sekci. Child = `{id: 'report:<reportId>', type: 'panel',
+  panelId: 'reports', panelParams: {reportId}, icon: 'chart'}` — jedna
+  generická komponenta `ReportsPage` parametrizovaná přes `panelParams`.
+  Panel `reports` v module.jsonc je bez `navSection` (do navigace vstupují
+  jen per-report children). Selhání loaderu deklarací navigaci neshodí.
+- **Frontend** (`frontend/src/components/reports/`): `ReportsPage`
+  (stav parametrů per report v session mapě, default = poslední celý
+  měsíc), `PeriodPicker` (mřížka roky × měsíc | čtvrtletí | pololetí |
+  rok dle granularit deklarace), `ReportView` (čistý renderer
+  `ReportResult`; červené řádky dle `rowRef`, messages pod čarou,
+  přepínač „V tisících" dělí 1000 jen při renderu — D6).
+- **Deep-link (D10)**: `?report=<id>&fy=<rok>&mf=<od>&mt=<do>&detail=<d>`
+  — `history.replaceState` při každé změně parametrů, žádný router.
+  Při startu aplikace se query parsuje v `main.js` (URL se nečistí,
+  na rozdíl od auth větví) a po loadu navigace se aktivuje leaf
+  `report:<id>`; neznámé id = normální start. „V tisících" do URL
+  nepatří (čistě vizuální volba). Odchod ze stránky reportu query uklidí.

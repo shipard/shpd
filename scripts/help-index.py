@@ -65,7 +65,15 @@ CATALOG_EXEMPT = {CATALOG, "co-dnes-nejde.md", "slovnicek.md"}
 
 # Položky levého menu, které nejsou viewer modulu — drží je
 # NavigationController, takže je v module.jsonc nenajdeme.
-CATALOG_EXTRA_AGENDAS = {"Dashboard", "Chat"}
+CATALOG_EXTRA_AGENDAS = {
+    "Dashboard",
+    "Chat",
+    # Reporty — položky menu z report deklarací (nejsou viewery),
+    # viz docs/reports.md §12.
+    "Hlavní kniha",
+    "Výsledovka",
+    "Rozvaha",
+}
 
 # Řádek tabulky katalogu: `| **Agenda** | …`
 CATALOG_ROW_RE = re.compile(r"^\|\s*\*\*(.+?)\*\*\s*\|")

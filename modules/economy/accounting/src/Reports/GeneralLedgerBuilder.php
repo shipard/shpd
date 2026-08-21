@@ -6,8 +6,6 @@ namespace Shipard\Module\Economy\Accounting\Reports;
 
 use Shipard\Core\Reports\ReportBuilder;
 use Shipard\Core\Reports\ReportColumn;
-use Shipard\Core\Reports\ReportMessage;
-use Shipard\Core\Reports\ReportMessageSeverity;
 use Shipard\Core\Reports\ReportRequest;
 use Shipard\Core\Reports\ReportResult;
 use Shipard\Core\Reports\ReportRow;
@@ -29,17 +27,14 @@ use Shipard\Core\Reports\SubtotalAggregator;
  */
 final class GeneralLedgerBuilder implements ReportBuilder
 {
-    private const JOURNAL_TABLE  = 'economy_accounting_journal';
-    private const ACCOUNTS_TABLE = 'economy_accounting_accounts';
-    private const DOC_STATE_DELETED = 90;
-
     public function build(ReportRequest $request): ReportResult
     {
         $cs        = $request->language === 'cs';
         $synthetic = ($request->params['detail'] ?? 'analytic') === 'synthetic';
+        $support   = new JournalReportSupport();
 
-        $opening  = $this->aggregate($request, $request->range->monthIdsBefore);
-        $turnover = $this->aggregate($request, $request->range->monthIdsInRange);
+        $opening  = $support->aggregate($request, $request->range->monthIdsBefore);
+        $turnover = $support->aggregate($request, $request->range->monthIdsInRange);
 
         // Sloučení na klíč řádku: analyticky plné číslo účtu, synteticky
         // 3místný prefix. Chybové masky se neagregují na prefix — zůstávají
@@ -62,7 +57,7 @@ final class GeneralLedgerBuilder implements ReportBuilder
             }
         }
 
-        $names       = $this->loadAccountNames($request);
+        $names       = $support->loadAccountNames($request);
         $detailLevel = $synthetic ? 3 : 4;
 
         $detailRows = [];
@@ -105,7 +100,7 @@ final class GeneralLedgerBuilder implements ReportBuilder
             reportId: $request->reportId,
             params: $request->params,
             dataSource: $request->dataSource,
-            messages: $this->buildErrorMessages($errorKeys, $rows, $cs),
+            messages: $support->errorMessages($errorKeys, $rows, $cs),
             columns: [
                 new ReportColumn('opening', ReportColumn::TYPE_MONEY, $cs ? 'Počáteční stav' : 'Opening balance'),
                 new ReportColumn('turnover', ReportColumn::TYPE_MONEY, $cs ? 'Obraty za období' : 'Period turnover'),
@@ -113,90 +108,5 @@ final class GeneralLedgerBuilder implements ReportBuilder
             ],
             rows: $rows,
         );
-    }
-
-    /**
-     * Agregace deníku přes FK id fiskálních měsíců (už scoped na fiskální rok
-     * — id jsou globálně unikátní).
-     *
-     * @param list<int> $monthIds
-     * @return list<array{number: string, isError: bool, md: float, d: float}>
-     */
-    private function aggregate(ReportRequest $request, array $monthIds): array
-    {
-        if ($monthIds === []) {
-            return [];
-        }
-        $rows = $request->db->fetchAll(
-            'SELECT [account_number], [is_error],'
-            . ' SUM([money_dr]) AS [md], SUM([money_cr]) AS [d]'
-            . ' FROM [' . self::JOURNAL_TABLE . ']'
-            . ' WHERE [fiscal_month] IN %in'
-            . ' GROUP BY [account_number], [is_error]',
-            $monthIds,
-        );
-
-        $out = [];
-        foreach ($rows as $row) {
-            $out[] = [
-                'number'  => (string) $row['account_number'],
-                'isError' => (bool) $row['is_error'],
-                'md'      => (float) $row['md'],
-                'd'       => (float) $row['d'],
-            ];
-        }
-        return $out;
-    }
-
-    /**
-     * Názvy z účtového rozvrhu pro detaily i mezisoučty (rozvrh obsahuje
-     * i třídy, skupiny a syntetiky). Nenalezený název → label = číslo účtu.
-     *
-     * @return array<string, string> number → name
-     */
-    private function loadAccountNames(ReportRequest $request): array
-    {
-        $rows = $request->db->fetchAll(
-            'SELECT [number], [name] FROM [' . self::ACCOUNTS_TABLE . ']'
-            . ' WHERE [docState] != %i',
-            self::DOC_STATE_DELETED,
-        );
-        $names = [];
-        foreach ($rows as $row) {
-            $names[(string) $row['number']] = (string) $row['name'];
-        }
-        return $names;
-    }
-
-    /**
-     * @param list<string> $errorKeys Chybové masky (`account_number` u is_error řádků).
-     * @param list<ReportRow> $rows Finální řádky (kvůli rowRef indexům).
-     * @return list<ReportMessage>
-     */
-    private function buildErrorMessages(array $errorKeys, array $rows, bool $cs): array
-    {
-        if ($errorKeys === []) {
-            return [];
-        }
-        $indexByAccount = [];
-        foreach ($rows as $index => $row) {
-            if ($row->kind === ReportRowKind::Detail && $row->account !== null) {
-                $indexByAccount[$row->account] = $index;
-            }
-        }
-
-        $messages = [];
-        sort($errorKeys, SORT_STRING);
-        foreach ($errorKeys as $mask) {
-            $messages[] = new ReportMessage(
-                ReportMessageSeverity::Error,
-                'journal.accountNotFound',
-                $cs
-                    ? "Nedohledaný účet — v deníku zbyla chybová maska '{$mask}'"
-                    : "Account not found — journal contains error mask '{$mask}'",
-                isset($indexByAccount[$mask]) ? 'rows.' . $indexByAccount[$mask] : null,
-            );
-        }
-        return $messages;
     }
 }

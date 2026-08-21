@@ -6,11 +6,25 @@ namespace Shipard\Command\Server;
 
 use Shipard\Core\Version;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Helper\DescriptorHelper;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
 class HelpCommand extends Command
 {
+    /** Příkaz, který si vyžádal `--help`; null = obecná nápověda. */
+    private ?Command $describeCommand = null;
+
+    /**
+     * Symfony volá při `<příkaz> --help` na commandu jménem `help`. Ručně
+     * psaná nápověda tady vestavěnou nahrazuje, takže bez téhle metody
+     * `--help` u **kteréhokoli** příkazu skončil fatální chybou.
+     */
+    public function setCommand(Command $command): void
+    {
+        $this->describeCommand = $command;
+    }
+
     protected function configure(): void
     {
         $this->setName('help')
@@ -19,6 +33,13 @@ class HelpCommand extends Command
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        // Popis konkrétního příkazu (jeho opce) nechává na Symfony —
+        // ručně psaný přehled je jen pro seznam příkazů.
+        if ($this->describeCommand !== null) {
+            (new DescriptorHelper())->describe($output, $this->describeCommand);
+            return Command::SUCCESS;
+        }
+
         $output->writeln('');
         $output->writeln('<info>Shipard Server Management v' . Version::VERSION . '</info>');
         $output->writeln('');

@@ -87,6 +87,7 @@ final class BalanceSheetBuilder implements ReportBuilder
         $sections  = ['assets' => [], 'liabilities' => []];
         $bsSum     = ['opening' => 0.0, 'closing' => 0.0];
         $errorKeys = [];
+        $wrongSide = [];
         foreach ($accounts as $number => $acc) {
             $number = (string) $number;
             $o = ['md' => round($acc['opening']['md'], 2), 'd' => round($acc['opening']['d'], 2)];
@@ -107,6 +108,19 @@ final class BalanceSheetBuilder implements ReportBuilder
                 // closing balance — zjednodušení v1, viz doc komentář třídy.
                 default => $closingBalance >= 0.0 ? 'assets' : 'liabilities',
             };
+            // Účet s explicitní povahou (kind 0/1) a konečným zůstatkem na
+            // opačné straně — typicky aktivně pasivní účet, který v rozvrhu
+            // není označen kind 5. Zařazení respektuje rozvrh (sekce se
+            // nemění); warning na rozpor upozorní (D15). Pozn.: u účtů
+            // třídy 4 (např. 429, 431) může být protistranný zůstatek
+            // legitimní (ztráta) — warning je informativní, ne chyba.
+            if (!$acc['isError'] && (
+                ($kind === self::KIND_ASSETS && $closingBalance < -0.005)
+                || ($kind === self::KIND_LIABILITIES && $closingBalance > 0.005)
+            )) {
+                $wrongSide[] = $number;
+            }
+
             $sections[$section][$number] = [
                 'isError' => $acc['isError'],
                 'opening' => $o,
@@ -173,6 +187,17 @@ final class BalanceSheetBuilder implements ReportBuilder
         $rows[] = $liabTotal;
 
         $messages = $support->errorMessages($errorKeys, $rows, $cs);
+        foreach ($wrongSide as $number) {
+            $accName    = $names[$number] ?? $number;
+            $messages[] = new ReportMessage(
+                ReportMessageSeverity::Warning,
+                'balanceSheet.balanceOnWrongSide',
+                $cs
+                    ? "Účet {$number} ({$accName}) má konečný zůstatek na opačné straně, než odpovídá jeho povaze v účtovém rozvrhu — zvažte označení účtu jako aktivně pasivní."
+                    : "Account {$number} ({$accName}) has a closing balance on the opposite side than its chart kind suggests — consider marking the account as mixed (assets & liabilities).",
+                $number,
+            );
+        }
         foreach (self::COLUMNS as $columnId) {
             $diff = round($assetsTotal->values[$columnId]['balance'] - $liabTotal->values[$columnId]['balance'], 2);
             if (abs($diff) > 0.005) {

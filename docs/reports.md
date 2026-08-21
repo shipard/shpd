@@ -121,7 +121,8 @@ To stačí pro oči, ne pro stroje. `ReportResult` proto nese **tvrdý aparát**
 - `status`: `ok | warnings | errors` — odvozený z nejvyšší severity zpráv,
 - `messages`: seznam `{severity: error|warning|info, code, text, rowRef?}` —
   `code` je strojově čitelný (např. `journal.accountNotFound`,
-  `period.notClosed`), `text` lidský, `rowRef` volitelná vazba na řádek.
+  `balanceSheet.notBalanced`, `balanceSheet.balanceOnWrongSide`),
+  `text` lidský, `rowRef` volitelná vazba na řádek.
 
 Závazná pravidla pro konzumenty:
 

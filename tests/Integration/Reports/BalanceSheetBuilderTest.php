@@ -322,4 +322,42 @@ class BalanceSheetBuilderTest extends IntegrationTestCase
             0.005,
         );
     }
+
+    public function testBalanceOnWrongSideWarning(): void
+    {
+        // Vyrovnaný deník: pasivní účet (kind 1) skončí s MD zůstatkem
+        // („pohledávková" strana — vzor: přeplatek DPH na účtu značeném
+        // jako pasivum), protistrana na kind 5 účtu (bez warningu).
+        $this->seedJournalRow(2, self::ACC_LIABILITY, 300.0, 0.0);
+        $this->seedJournalRow(2, self::ACC_MIXED_NEG, 0.0, 300.0);
+
+        $result = $this->runReport(self::REPORT_ID, 'analytic');
+        $array  = $result->toArray();
+
+        // Warning, ne error — status warnings.
+        $this->assertSame('warnings', $array['status']);
+        $warnings = array_values(array_filter(
+            $array['messages'],
+            static fn (array $m): bool => $m['code'] === 'balanceSheet.balanceOnWrongSide',
+        ));
+        $this->assertCount(1, $warnings);
+        $this->assertSame('warning', $warnings[0]['severity']);
+        $this->assertSame(self::ACC_LIABILITY, $warnings[0]['rowRef']);
+
+        // Zařazení respektuje rozvrh: účet zůstává v pasivech s otočeným
+        // (záporným) balance; kind 5 protistrana jde dle znaménka také
+        // do pasiv — sekce Aktiva je prázdná a totaly sedí (0 == 0).
+        [$assets, $liabilities] = $this->splitSections($result);
+        $liab = $this->findDetail($liabilities, self::ACC_LIABILITY);
+        $this->assertNotNull($liab);
+        $this->assertEqualsWithDelta(-300.0, $liab->values['closing']['balance'], 0.005);
+
+        $assetsTotal = $assets[count($assets) - 1];
+        $liabTotal   = $liabilities[count($liabilities) - 1];
+        $this->assertEqualsWithDelta(
+            $assetsTotal->values['closing']['balance'],
+            $liabTotal->values['closing']['balance'],
+            0.005,
+        );
+    }
 }

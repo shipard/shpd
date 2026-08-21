@@ -292,6 +292,7 @@ function dispatch(
 		'exchange' => dispatchExchange($route, $request, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher),
 		'contentTags' => dispatchContentTags($route, $request, $auth, $db, $configRuntime, resolveLanguage($request, $resolved->config), $tables, $resolved->config, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher),
 		'alerts' => dispatchAlerts($route, $request, $db, $alertCheckRegistry, $configRuntime, resolveLanguage($request, $resolved->config)),
+		'reports' => dispatchReports($route, $request, $db, $configRuntime, $modulePathResolver, $resolved, resolveLanguage($request, $resolved->config)),
 		'setup' => dispatchSetup($route, $request, $auth, $db, $alertCheckRegistry, $configRuntime, $modulePathResolver, resolveLanguage($request, $resolved->config), $tables, $resolved->config, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher),
 		'accbal'  => dispatchAccbal($route, $request, $db, $configRuntime, $journalEventDispatcher, $resolved->config),
 		'accounting' => dispatchAccounting($route, $request, $db, $configRuntime, $journalEventDispatcher),
@@ -576,6 +577,34 @@ function dispatchAlerts(
 		'dismiss'   => $ctrl->dismiss((int) $route->id),
 		'unsnooze'  => $ctrl->unsnooze((int) $route->id),
 		default     => Response::error('INTERNAL_ERROR', "Unknown alerts action: {$route->action}", 500),
+	};
+}
+
+function dispatchReports(
+	Route $route,
+	Request $request,
+	\Shipard\Core\Database\DataSourceConnection $db,
+	?\Shipard\Core\Config\ConfigRuntime $configRuntime,
+	ModulePathResolver $modulePathResolver,
+	\Shipard\Api\ResolvedDataSource $resolved,
+	string $language,
+): Response {
+	// Registry se staví lazily až tady — /_reports je jediný konzument,
+	// bootstrap ostatních requestů modul scan navíc neplatí.
+	$registry = \Shipard\Api\ReportDefinitionLoader::load($resolved->config, $modulePathResolver, $language);
+	$runner   = new \Shipard\Core\Reports\ReportRunner(
+		$registry,
+		$db,
+		$configRuntime,
+		$resolved->config->getId(),
+		$language,
+	);
+
+	$ctrl = new \Shipard\Api\Controller\ReportsController($registry, $runner);
+	return match ($route->action) {
+		'catalog' => $ctrl->catalog(),
+		'run'     => $ctrl->run($route->table ?? '', $request->getQueryParams()),
+		default   => Response::error('INTERNAL_ERROR', "Unknown reports action: {$route->action}", 500),
 	};
 }
 

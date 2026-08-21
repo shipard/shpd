@@ -275,6 +275,28 @@ class Router
 			return $this->resolveAlertsRoute($subpath, $method);
 		}
 
+		// GET /_reports — katalog reportů
+		if ($subpath === '/_reports') {
+			if ($method !== 'GET') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('reports', 'catalog');
+		}
+
+		// GET /_reports/{reportId} — spuštění reportu (parametry v query).
+		// Id reportu je tečkované (economy.accounting.generalLedger) a jede
+		// ve slotu `table` (Route nemá dedikovaný string slot).
+		if (str_starts_with($subpath, '/_reports/')) {
+			$reportId = substr($subpath, strlen('/_reports/'));
+			if (!preg_match('#^[a-z][a-zA-Z0-9.]*$#', $reportId)) {
+				return Response::error('NOT_FOUND', 'Not found', 404);
+			}
+			if ($method !== 'GET') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('reports', 'run', $reportId);
+		}
+
 		if (str_starts_with($subpath, '/_setup')) {
 			return $this->resolveSetupRoute($subpath, $method);
 		}

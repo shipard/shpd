@@ -6,9 +6,12 @@ Zakládá celou doménu reportů; první tři reporty jsou **hlavní kniha,
 výsledovka a rozvaha** (interní podoba) — kontrolní protějšek DPH výstupů
 z milníku M1 a validace importu ze starého Shipardu (M3).
 
-> **Stav:** Návrh. Rozhodnutí D1–D16 potvrzena (GitHub issue #42
-> + doplnění D15–D16 v komentáři). Implementace nezačala; PRD v `tasks/`
-> vznikne fázovaně.
+> **Stav:** Fáze 1 hotova (2026-08-21, `tasks/reports-phase1.md`) — jádro
+> `src/Core/Reports/`, klíč `reports` v module.jsonc, hlavní kniha
+> (`GeneralLedgerBuilder`), REST `GET /_reports[/{reportId}]`. Rozhodnutí
+> D1–D16 potvrzena (GitHub issue #42 + komentář). Zbývá: Fáze 2
+> (výsledovka + rozvaha), Fáze 3 (viewer), Fáze 4 (MCP + diff).
+> Upřesnění tvaru dle implementace: §10.
 
 ---
 
@@ -259,3 +262,37 @@ snadno dodělat, znaménkovou konvenci srovná diff vrstva.
 
 Reference: GitHub issue #42, `accounting.md` (deník), `accbal.md` §1.2
 (vzor „jen deník"), `tasks/pdf-rendering-service.md` (#34).
+
+---
+
+## 10. Upřesnění z implementace Fáze 1
+
+Body, kde implementace zpřesnila návrh (tvar §3.1 platí beze změn):
+
+- **Parametry období na API**: `fiscalYear` = **název** fiskálního roku
+  (unikátní `name`, např. `2026`); `monthFrom`/`monthTo` = **pořadí běžného
+  fiskálního měsíce v roce** (1-based dle `date_begin`; u kalendářního roku
+  shodné s kalendářním měsícem). Interval musí odpovídat některé deklarované
+  granularitě (zarovnané čtvrtletí/pololetí/měsíc/rok) — API drží stejnou
+  hranici jako budoucí picker (D8).
+- **`FiscalRange`** vzniká výhradně v `ReportParamValidator` a nese už
+  přeložené FK id fiskálních měsíců (`monthIdsBefore` vč. otevíracího
+  období `period_type = 0`, `monthIdsInRange`) — buildery na číselníky
+  znovu nesahají. Fiskální období čte `FiscalPeriodProvider`
+  (DB implementace + in-memory fake pro unit testy).
+- **Řádky výsledku**: `level` — total 0, třída 1, skupina 2, syntetika 3,
+  analytika 4 (v syntetickém režimu detail = 3). `rowRef` zpráv má tvar
+  `rows.{index}` do plochého seznamu řádků.
+- **Chybové masky** (`is_error = 1`, např. `504???`): samostatný detail
+  řádek s maskou jako label, v syntetickém režimu se **neagregují** na
+  prefix; do mezisoučtů a totalu ale vstupují (total = suma deníku, sedí
+  na SQL agregaci).
+- **REST**: odpověď jede ve standardní API obálce `{success, data}`,
+  `data` = `ReportResult::toArray()` beze změn. Chybové kódy:
+  `REPORT_NOT_FOUND` (404), `BAD_REQUEST` (400, text z validatoru).
+  Katalog `GET /_reports` vrací `{items: [{id, name, periodGranularities,
+  params}]}`.
+- **Umístění builderu**: `modules/economy/accounting/src/Reports/`
+  (namespace `Shipard\Module\Economy\Accounting\Reports`), deklarace
+  `config/reports.jsonc` + klíč `reports` v module.jsonc
+  (`[{"file": "config/reports.jsonc"}]`).

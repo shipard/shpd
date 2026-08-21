@@ -261,6 +261,64 @@ class BookingHistoryCommandTest extends TestCase
         $this->assertStringContainsString('nových 2', $display);
     }
 
+    /**
+     * Prahy seedu jdou přepnout z příkazové řádky (D37). Ve fixture má
+     * každé IČO pokrytí 1.0, takže práh pokrytí 1.1 musí vyřadit všechny.
+     */
+    public function testSeedThresholdsAreConfigurable(): void
+    {
+        $tester = $this->tester();
+        $tester->execute([
+            '--input' => $this->inputPath,
+            '--apply-seed' => true,
+            '--dry-run' => true,
+            '--seed-min-coverage' => '1.1',
+        ]);
+        $this->assertStringContainsString(
+            'Žádný kandidát nesplnil prahy',
+            $tester->getDisplay(),
+        );
+
+        $strictDocs = $this->tester();
+        $strictDocs->execute([
+            '--input' => $this->inputPath,
+            '--apply-seed' => true,
+            '--dry-run' => true,
+            '--seed-min-docs' => '999',
+        ]);
+        $this->assertStringContainsString('Žádný kandidát nesplnil prahy', $strictDocs->getDisplay());
+
+        $loose = $this->tester();
+        $loose->execute([
+            '--input' => $this->inputPath,
+            '--apply-seed' => true,
+            '--dry-run' => true,
+            '--seed-min-share' => '0.1',
+            '--seed-min-docs' => '1',
+            '--seed-min-coverage' => '0.1',
+        ]);
+        // IČO účtované na 999999 nemá reverzní štítek vůbec — to prahy
+        // nezachrání, zůstávají dvě.
+        $this->assertStringContainsString('nových 2', $loose->getDisplay());
+    }
+
+    public function testReportShowsCoverageRejectedCandidates(): void
+    {
+        $tester = $this->tester();
+        $tester->execute([
+            '--input' => $this->inputPath,
+            '--report' => true,
+            '--no-llm' => true,
+            '--report-out' => $this->dsDir . '/coverage.md',
+            '--seed-min-coverage' => '1.1',
+        ]);
+
+        $markdown = (string) file_get_contents($this->dsDir . '/coverage.md');
+        $this->assertStringContainsString('pokrytí ≥ 110,0 %', $markdown, 'report tiskne skutečné prahy');
+        $this->assertStringContainsString('**pod prahem pokrytí**', $markdown);
+        $this->assertStringContainsString('pod prahem pokrytí 2', $markdown);
+    }
+
     public function testApplySeedSkipsUserRule(): void
     {
         $tester = $this->tester(existingRule: ['tag' => 'goods.stock', 'origin' => 'user']);

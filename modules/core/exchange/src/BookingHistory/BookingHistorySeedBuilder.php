@@ -9,11 +9,18 @@ namespace Shipard\Module\Core\Exchange\BookingHistory;
  * akumulátor nad reverzními štítky záznamů.
  *
  * Prahy: dominantní štítek musí mít `share >= 0.8` (podíl **řádků** mezi
- * řádky s rozřešeným štítkem) a `docCount >= 3`. `docCount` se bere
- * z dominantního štítku, ne z celého IČO — práh tak stojí na důkazech pro
- * ten konkrétní štítek. Je to horní odhad počtu dokladů (jeden doklad
- * spadá pod víc agregačních klíčů), takže práh 3 je spodní mez, kterou
- * odhad může jen nadstřelit.
+ * řádky s rozřešeným štítkem), `docCount >= 3` a od D37 také
+ * `coverage >= 0.5` (podíl řádků IČO, kterým reverz vůbec dal štítek).
+ * `docCount` se bere z dominantního štítku, ne z celého IČO — práh tak
+ * stojí na důkazech pro ten konkrétní štítek. Je to horní odhad počtu
+ * dokladů (jeden doklad spadá pod víc agregačních klíčů), takže práh 3 je
+ * spodní mez, kterou odhad může jen nadstřelit.
+ *
+ * Práh pokrytí přišel z pilotu: kandidáti s pokrytím 20–43 % stavěli
+ * pravidlo na malém výseku historie dodavatele — u zbytku jeho řádků
+ * reverz nevěděl nic, takže „100% dominance" byla dominance mezi třemi
+ * řádky z dvaceti. Takový kandidát se **nezahazuje**, jen neprojde:
+ * {@see previewCandidates()} ho vrací dál se stavem, ať je v reportu vidět.
  *
  * Remíza dominance → bez kandidáta: dodavatel s pestrým sortimentem
  * pravidlo nedostane (stejná logika jako mazání kolizních `learned`
@@ -26,6 +33,7 @@ final class BookingHistorySeedBuilder
 {
     public const DEFAULT_MIN_SHARE = 0.8;
     public const DEFAULT_MIN_DOC_COUNT = 3;
+    public const DEFAULT_MIN_COVERAGE = 0.5;
 
     /** @var array<string, array{totalRows: int, tags: array<string, array{rows: int, docs: int}>}> */
     private array $companies = [];
@@ -35,7 +43,23 @@ final class BookingHistorySeedBuilder
     public function __construct(
         private readonly float $minShare = self::DEFAULT_MIN_SHARE,
         private readonly int $minDocCount = self::DEFAULT_MIN_DOC_COUNT,
+        private readonly float $minCoverage = self::DEFAULT_MIN_COVERAGE,
     ) {}
+
+    public function minShare(): float
+    {
+        return $this->minShare;
+    }
+
+    public function minDocCount(): int
+    {
+        return $this->minDocCount;
+    }
+
+    public function minCoverage(): float
+    {
+        return $this->minCoverage;
+    }
 
     public function add(BookingHistoryRecord $record, AccountTagMatch $match): void
     {
@@ -58,11 +82,27 @@ final class BookingHistorySeedBuilder
     }
 
     /**
-     * Kandidáti splňující prahy, nejsilnější podpora první.
+     * Kandidáti splňující **všechny** prahy, nejsilnější podpora první —
+     * jediný vstup pro `--apply-seed`.
      *
      * @return list<SeedCandidate>
      */
     public function candidates(): array
+    {
+        return array_values(array_filter(
+            $this->previewCandidates(),
+            static fn (SeedCandidate $candidate): bool => $candidate->isAccepted(),
+        ));
+    }
+
+    /**
+     * Kandidáti pro náhled v reportu — včetně zamítnutých prahem pokrytí
+     * ({@see SeedCandidate::$rejectedBy}). Transparence: člověk má vidět,
+     * co těsně nevyšlo, ne jen výsledné počty.
+     *
+     * @return list<SeedCandidate>
+     */
+    public function previewCandidates(): array
     {
         $out = [];
         foreach ($this->companies as $companyId => $company) {
@@ -81,7 +121,7 @@ final class BookingHistorySeedBuilder
      * Proč IČO kandidátem není — vstup do reportu, aby prahy nebyly
      * neprůhledné.
      *
-     * @return array{noCompanyIdRecords: int, companies: int, noResolvedTag: int, tie: int, belowShare: int, belowDocCount: int}
+     * @return array{noCompanyIdRecords: int, companies: int, noResolvedTag: int, tie: int, belowShare: int, belowDocCount: int, belowCoverage: int}
      */
     public function skipped(): array
     {
@@ -92,11 +132,14 @@ final class BookingHistorySeedBuilder
             'tie'                => 0,
             'belowShare'         => 0,
             'belowDocCount'      => 0,
+            'belowCoverage'      => 0,
         ];
         foreach ($this->companies as $companyId => $company) {
-            $reason = $this->evaluate((string) $companyId, $company);
-            if (is_string($reason)) {
-                $counters[$reason]++;
+            $result = $this->evaluate((string) $companyId, $company);
+            if (is_string($result)) {
+                $counters[$result]++;
+            } elseif ($result->rejectedBy === SeedCandidate::REJECTED_COVERAGE) {
+                $counters['belowCoverage']++;
             }
         }
         return $counters;
@@ -104,7 +147,8 @@ final class BookingHistorySeedBuilder
 
     /**
      * @param array{totalRows: int, tags: array<string, array{rows: int, docs: int}>} $company
-     * @return SeedCandidate|string kandidát, nebo důvod zamítnutí
+     * @return SeedCandidate|string kandidát (i zamítnutý pokrytím), nebo
+     *         důvod, proč kandidát nevznikl vůbec
      */
     private function evaluate(string $companyId, array $company): SeedCandidate|string
     {
@@ -142,6 +186,8 @@ final class BookingHistorySeedBuilder
             return 'belowDocCount';
         }
 
+        $coverage = $company['totalRows'] > 0 ? $resolvedRows / $company['totalRows'] : 0.0;
+
         return new SeedCandidate(
             companyId: $companyId,
             tag: $bestTag,
@@ -150,7 +196,9 @@ final class BookingHistorySeedBuilder
             resolvedRows: $resolvedRows,
             totalRows: $company['totalRows'],
             share: $share,
-            coverage: $company['totalRows'] > 0 ? $resolvedRows / $company['totalRows'] : 0.0,
+            coverage: $coverage,
+            // Pod prahem pokrytí kandidát neprojde, ale zůstane v náhledu.
+            rejectedBy: $coverage < $this->minCoverage ? SeedCandidate::REJECTED_COVERAGE : null,
         );
     }
 }

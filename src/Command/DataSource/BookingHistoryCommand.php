@@ -24,6 +24,7 @@ use Shipard\Module\Core\Exchange\BookingHistory\BookingHistoryClassifier;
 use Shipard\Module\Core\Exchange\BookingHistory\BookingHistoryFile;
 use Shipard\Module\Core\Exchange\BookingHistory\BookingHistoryFormatException;
 use Shipard\Module\Core\Exchange\BookingHistory\BookingHistoryReport;
+use Shipard\Module\Core\Exchange\BookingHistory\BookingHistorySeedBuilder;
 use Shipard\Module\Core\Exchange\BookingHistory\SeedApplier;
 use Shipard\Module\Core\Exchange\BookingHistory\TagCache;
 use Shipard\Module\Economy\Items\AccountingItemsOffer;
@@ -70,7 +71,10 @@ class BookingHistoryCommand extends Command
             ->addOption('tag-items', null, InputOption::VALUE_NONE, 'Otaguj živé položky DS podle účtů')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Jen vypiš plán, nic neměň')
             ->addOption('backend', null, InputOption::VALUE_REQUIRED, 'AI backend pro klasifikaci (id nebo název)')
-            ->addOption('no-llm', null, InputOption::VALUE_NONE, 'Bez LLM klasifikace — report jen z reverzu účet→štítek');
+            ->addOption('no-llm', null, InputOption::VALUE_NONE, 'Bez LLM klasifikace — report jen z reverzu účet→štítek')
+            ->addOption('seed-min-share', null, InputOption::VALUE_REQUIRED, 'Seed: min. podíl řádků dominantního štítku (default ' . BookingHistorySeedBuilder::DEFAULT_MIN_SHARE . ')')
+            ->addOption('seed-min-docs', null, InputOption::VALUE_REQUIRED, 'Seed: min. počet dokladů dominantního štítku (default ' . BookingHistorySeedBuilder::DEFAULT_MIN_DOC_COUNT . ')')
+            ->addOption('seed-min-coverage', null, InputOption::VALUE_REQUIRED, 'Seed: min. pokrytí řádků IČO reverzem (default ' . BookingHistorySeedBuilder::DEFAULT_MIN_COVERAGE . ')');
     }
 
     protected function getDataSourceDir(): string
@@ -165,8 +169,13 @@ class BookingHistoryCommand extends Command
         }
 
         // Jeden průchod souborem pro všechny režimy (kvalita, seed, clustery).
+        $analyzer = new BookingHistoryAnalyzer(
+            minShare: $this->floatOption($input, 'seed-min-share', BookingHistorySeedBuilder::DEFAULT_MIN_SHARE),
+            minDocCount: $this->intOption($input, 'seed-min-docs', BookingHistorySeedBuilder::DEFAULT_MIN_DOC_COUNT),
+            minCoverage: $this->floatOption($input, 'seed-min-coverage', BookingHistorySeedBuilder::DEFAULT_MIN_COVERAGE),
+        );
         try {
-            $analysis = (new BookingHistoryAnalyzer())->analyze($file, $accountTags);
+            $analysis = $analyzer->analyze($file, $accountTags);
         } catch (BookingHistoryFormatException $e) {
             $output->writeln("<error>Soubor {$inputPath}: {$e->getMessage()}</error>");
             return Command::FAILURE;
@@ -447,6 +456,18 @@ class BookingHistoryCommand extends Command
         foreach ($result['failed'] as $failure) {
             $output->writeln("  <error>položka {$failure['id']}: {$failure['reason']}</error>");
         }
+    }
+
+    private function floatOption(InputInterface $input, string $name, float $default): float
+    {
+        $value = $input->getOption($name);
+        return is_numeric($value) ? (float) $value : $default;
+    }
+
+    private function intOption(InputInterface $input, string $name, int $default): int
+    {
+        $value = $input->getOption($name);
+        return is_numeric($value) ? (int) $value : $default;
     }
 
     /**

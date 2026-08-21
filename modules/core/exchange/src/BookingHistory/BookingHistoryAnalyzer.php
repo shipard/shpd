@@ -21,12 +21,13 @@ final class BookingHistoryAnalyzer
     public function __construct(
         private readonly float $minShare = BookingHistorySeedBuilder::DEFAULT_MIN_SHARE,
         private readonly int $minDocCount = BookingHistorySeedBuilder::DEFAULT_MIN_DOC_COUNT,
+        private readonly float $minCoverage = BookingHistorySeedBuilder::DEFAULT_MIN_COVERAGE,
     ) {}
 
     public function analyze(BookingHistoryFile $file, AccountTagMap $accountTags): BookingHistoryAnalysis
     {
         $quality  = new BookingHistoryQuality();
-        $seed     = new BookingHistorySeedBuilder($this->minShare, $this->minDocCount);
+        $seed     = new BookingHistorySeedBuilder($this->minShare, $this->minDocCount, $this->minCoverage);
         $clusters = [];
         $matchKindRows = [];
         $recordCount = 0;

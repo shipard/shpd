@@ -80,9 +80,10 @@ final class BookingHistoryReport
             );
         }
         $out[] = sprintf(
-            'Seed kandidátů: %d (z %d IČO)',
+            'Seed kandidátů: %d (z %d IČO), pod prahem pokrytí %d',
             count($seed->candidates()),
             $seed->skipped()['companies'],
+            $seed->skipped()['belowCoverage'],
         );
         return $out;
     }
@@ -432,30 +433,33 @@ final class BookingHistoryReport
     private function seedPreview(): void
     {
         $seed = $this->analysis->seed;
-        $candidates = $seed->candidates();
+        $accepted = $seed->candidates();
+        $preview = $seed->previewCandidates();
         $skipped = $seed->skipped();
 
         $this->h(2, 'Náhled seed pravidel');
         $this->line();
         $this->line(sprintf(
-            'Kandidátů: **%d** z %d IČO (prahy: podíl řádků ≥ %s, dokladů ≥ %d).',
-            count($candidates),
+            'Kandidátů: **%d** z %d IČO (prahy: podíl řádků ≥ %s, dokladů ≥ %d, pokrytí ≥ %s).',
+            count($accepted),
             $skipped['companies'],
-            $this->pct(BookingHistorySeedBuilder::DEFAULT_MIN_SHARE),
-            BookingHistorySeedBuilder::DEFAULT_MIN_DOC_COUNT,
+            $this->pct($seed->minShare()),
+            $seed->minDocCount(),
+            $this->pct($seed->minCoverage()),
         ));
         $this->line();
         $this->line(sprintf(
             'Zamítnuto: bez reverzního štítku %s, remíza dominance %s, pod prahem podílu %s,'
-            . ' pod prahem dokladů %s. Záznamů bez IČO: %s.',
+            . ' pod prahem dokladů %s, pod prahem pokrytí %s. Záznamů bez IČO: %s.',
             $this->num($skipped['noResolvedTag']),
             $this->num($skipped['tie']),
             $this->num($skipped['belowShare']),
             $this->num($skipped['belowDocCount']),
+            $this->num($skipped['belowCoverage']),
             $this->num($skipped['noCompanyIdRecords']),
         ));
 
-        if ($candidates === []) {
+        if ($preview === []) {
             $this->line();
             $this->line('_Žádný kandidát — seed by nic nezapsal._');
             return;
@@ -464,7 +468,7 @@ final class BookingHistoryReport
         $this->line();
         $this->line('| IČO | Štítek | Podíl | Pokrytí | Řádky | Doklady | Plán zápisu |');
         $this->line('|---|---|--:|--:|--:|--:|---|');
-        foreach (array_slice($candidates, 0, self::TOP_SEED) as $candidate) {
+        foreach (array_slice($preview, 0, self::TOP_SEED) as $candidate) {
             $this->line(sprintf(
                 '| `%s` | `%s` | %s | %s | %s | %s | %s |',
                 $candidate->companyId,
@@ -473,12 +477,14 @@ final class BookingHistoryReport
                 $this->pct($candidate->coverage),
                 $this->num($candidate->rows),
                 $this->num($candidate->docs),
-                $this->planLabel($candidate->companyId),
+                $candidate->isAccepted()
+                    ? $this->planLabel($candidate->companyId)
+                    : '**pod prahem pokrytí**',
             ));
         }
-        if (count($candidates) > self::TOP_SEED) {
+        if (count($preview) > self::TOP_SEED) {
             $this->line();
-            $this->line(sprintf('_… a další %d kandidáti._', count($candidates) - self::TOP_SEED));
+            $this->line(sprintf('_… a další %d kandidáti._', count($preview) - self::TOP_SEED));
         }
         $this->line();
         $this->line('> **Pokrytí** je podíl řádků dodavatele, kterým reverz vůbec dal štítek.'

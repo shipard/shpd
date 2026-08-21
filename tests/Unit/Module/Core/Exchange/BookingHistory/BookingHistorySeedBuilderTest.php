@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use Shipard\Module\Core\Exchange\BookingHistory\AccountTagMatch;
 use Shipard\Module\Core\Exchange\BookingHistory\BookingHistoryRecord;
 use Shipard\Module\Core\Exchange\BookingHistory\BookingHistorySeedBuilder;
+use Shipard\Module\Core\Exchange\BookingHistory\SeedCandidate;
 
 /** Prahy seed kandidátů IČO → štítek (D32). */
 class BookingHistorySeedBuilderTest extends TestCase
@@ -104,23 +105,75 @@ class BookingHistorySeedBuilderTest extends TestCase
         $this->assertSame(0, $skipped['companies']);
     }
 
-    public function testCompanyWithoutResolvedTagIsSkippedAndCoverageIsReported(): void
+    /**
+     * Dominance 100 % na pětině historie dodavatele = pravidlo z malého
+     * výseku. Do D37 takový kandidát prošel; od D37 ho zastaví práh
+     * pokrytí, ale v náhledu zůstane vidět.
+     */
+    public function testLowCoverageCandidateIsRejectedButStaysInPreview(): void
     {
         $builder = new BookingHistorySeedBuilder();
         $this->add($builder, '11223344', null, 100, 50);
         $this->add($builder, '55667788', 'it.internet', 20, 5);
         $this->add($builder, '55667788', null, 80, 30);
 
+        $this->assertSame([], $builder->candidates(), 'pod prahem pokrytí se nezakládá');
+
+        $preview = $builder->previewCandidates();
+        $this->assertCount(1, $preview, 'IČO bez rozřešeného štítku nemá kandidáta ani v náhledu');
+        $this->assertSame('55667788', $preview[0]->companyId);
+        $this->assertSame(SeedCandidate::REJECTED_COVERAGE, $preview[0]->rejectedBy);
+        $this->assertFalse($preview[0]->isAccepted());
+        $this->assertEqualsWithDelta(1.0, $preview[0]->share, 0.0001);
+        $this->assertEqualsWithDelta(0.2, $preview[0]->coverage, 0.0001);
+        $this->assertSame(100, $preview[0]->totalRows);
+        $this->assertSame(20, $preview[0]->resolvedRows);
+
+        $skipped = $builder->skipped();
+        $this->assertSame(1, $skipped['noResolvedTag']);
+        $this->assertSame(1, $skipped['belowCoverage']);
+    }
+
+    /** Pilotní čísla: share 1.0, docs 21, coverage 0.27 → neprojde. */
+    public function testPilotShapedCandidateBelowCoverage(): void
+    {
+        $builder = new BookingHistorySeedBuilder();
+        $this->add($builder, '26378191', 'people.catering', 27, 21);
+        $this->add($builder, '26378191', null, 73, 40);
+
+        $this->assertSame([], $builder->candidates());
+        $preview = $builder->previewCandidates();
+        $this->assertEqualsWithDelta(0.27, $preview[0]->coverage, 0.0001);
+        $this->assertSame(SeedCandidate::REJECTED_COVERAGE, $preview[0]->rejectedBy);
+    }
+
+    public function testCoverageAboveThresholdPasses(): void
+    {
+        $builder = new BookingHistorySeedBuilder();
+        $this->add($builder, '26378191', 'people.catering', 60, 21);
+        $this->add($builder, '26378191', null, 40, 20);
+
         $candidates = $builder->candidates();
-        $this->assertCount(1, $candidates, 'IČO bez rozřešeného štítku nemá kandidáta');
-        $this->assertSame('55667788', $candidates[0]->companyId);
-        // share nad rozřešenými řádky je 1.0, coverage ale odhalí, že reverz
-        // pokryl jen pětinu historie dodavatele.
-        $this->assertEqualsWithDelta(1.0, $candidates[0]->share, 0.0001);
-        $this->assertEqualsWithDelta(0.2, $candidates[0]->coverage, 0.0001);
-        $this->assertSame(100, $candidates[0]->totalRows);
-        $this->assertSame(20, $candidates[0]->resolvedRows);
-        $this->assertSame(1, $builder->skipped()['noResolvedTag']);
+        $this->assertCount(1, $candidates);
+        $this->assertEqualsWithDelta(0.6, $candidates[0]->coverage, 0.0001);
+        $this->assertTrue($candidates[0]->isAccepted());
+    }
+
+    public function testCoverageThresholdIsConfigurable(): void
+    {
+        $lenient = new BookingHistorySeedBuilder(minCoverage: 0.2);
+        $this->add($lenient, '26378191', 'people.catering', 27, 21);
+        $this->add($lenient, '26378191', null, 73, 40);
+        $this->assertCount(1, $lenient->candidates(), 'nižší práh kandidáta pustí');
+
+        $strict = new BookingHistorySeedBuilder(minCoverage: 0.9);
+        $this->add($strict, '26378191', 'people.catering', 60, 21);
+        $this->add($strict, '26378191', null, 40, 20);
+        $this->assertSame([], $strict->candidates(), 'vyšší práh ho zastaví');
+
+        $this->assertSame(0.8, (new BookingHistorySeedBuilder())->minShare());
+        $this->assertSame(3, (new BookingHistorySeedBuilder())->minDocCount());
+        $this->assertSame(0.5, (new BookingHistorySeedBuilder())->minCoverage());
     }
 
     public function testCandidatesAreSortedByStrongestSupport(): void

@@ -35,6 +35,35 @@ export async function runReport(reportId, params) {
 }
 
 /**
+ * Deep-link reportu z query stringu (`?report=<id>&fy=<rok>&mf=<od>&mt=<do>
+ * &detail=<d>`) — čistý parser jako parseAuthAction. Bez `report` → null;
+ * jednotlivá nevalidní pole se zahodí (doplní je default v ReportsPage).
+ * „V tisících" do URL nepatří (čistě vizuální volba).
+ *
+ * @param {string} search window.location.search
+ * @returns {{reportId: string, params: {fiscalYear?: string, monthFrom?: number,
+ *   monthTo?: number, detail?: string}}|null}
+ */
+export function parseReportDeepLink(search) {
+  const query = new URLSearchParams(search);
+  const reportId = query.get('report');
+  if (!reportId) return null;
+
+  const params = {};
+  const fy = query.get('fy');
+  if (fy) params.fiscalYear = fy;
+  for (const [key, name] of [['mf', 'monthFrom'], ['mt', 'monthTo']]) {
+    const raw = query.get(key);
+    const value = Number.parseInt(raw ?? '', 10);
+    if (Number.isInteger(value) && value >= 1 && value <= 12) params[name] = value;
+  }
+  const detail = query.get('detail');
+  if (detail === 'analytic' || detail === 'synthetic') params.detail = detail;
+
+  return { reportId, params };
+}
+
+/**
  * Výchozí období = poslední celý měsíc existujícího fiskálního roku.
  * Fiskální roky v1 jsou zarovnané na kalendář (name = kalendářní rok) —
  * bez mapy fiskální↔kalendářní měsíc bereme pořadí měsíce v roce jako

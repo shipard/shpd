@@ -17,6 +17,13 @@ let pendingRecordId    = $state(null);
 // Jednorázový hint jako pendingRecordId, ale pro tab (viewGroup) vieweru —
 // digest karta otevírá došlou poštu rovnou na tabu Archiv.
 let pendingViewGroup   = $state(null);
+// Jednorázový hint pro ReportsPage — parametry z deep-link URL
+// (?report=…&fy=…). Konzumuje se po resolvu katalogu, manuální navigace
+// ho vyprazdňuje jako ostatní pendingy.
+let pendingReportParams = $state(null);
+// Deep-link stash z main.js (před mountem, přežije login obrazovku) —
+// nereaktivní: čte se jednou po loadu app navigace.
+let pendingReportDeepLink = null;
 
 // Aktivní položka pro aktuální mód — jedno místo pro tří-cestnou volbu,
 // sdílené gettery i navigate().
@@ -55,6 +62,7 @@ function navigate(item) {
   // Manuální navigace mimo dashboard widget — pending hinty vyprší.
   pendingRecordId = null;
   pendingViewGroup = null;
+  pendingReportParams = null;
   if (mode === 'settings') {
     settingsActiveItem = normalized;
   } else if (mode === 'account') {
@@ -139,6 +147,67 @@ function consumePendingViewGroup() {
   return group;
 }
 
+/** main.js: stash deep-linku reportu před mountem (URL se nečistí). */
+function setPendingReportDeepLink(link) {
+  pendingReportDeepLink = link;
+}
+
+/**
+ * ReportsPage po resolvu katalogu vyzvedne parametry z deep-linku —
+ * stejný jednorázový kontrakt jako pendingRecordId.
+ */
+function consumePendingReportParams() {
+  const params = pendingReportParams;
+  pendingReportParams = null;
+  return params;
+}
+
+/**
+ * Aktivace deep-linku reportu — volá Sidebar po loadu app navigace, PŘED
+ * ensureDefaultActiveItem. Najde leaf `report:<id>` ve stromu; nalezený
+ * nastaví jako activeItem PŘÍMO (ne přes navigate() — ten by právě
+ * nastavené pendingReportParams smazal). Neznámé id → normální start.
+ * Jednorázové: stash se čistí při prvním volání bez ohledu na výsledek.
+ *
+ * @returns {boolean} true když byl report leaf aktivován
+ */
+function activateReportDeepLink(navTree) {
+  const link = pendingReportDeepLink;
+  pendingReportDeepLink = null;
+  if (!link || mode !== 'app' || appActiveItem !== null) {
+    return false;
+  }
+  const leaf = findLeafById(navTree, 'report:' + link.reportId);
+  if (!leaf) {
+    return false;
+  }
+  pendingReportParams = link.params;
+  appActiveItem = {
+    id: leaf.id,
+    label: leaf.label,
+    type: leaf.type,
+    table: leaf.table ?? null,
+    viewerId: leaf.viewerId ?? null,
+    pageId: leaf.pageId ?? null,
+    panelId: leaf.panelId ?? null,
+    panelParams: leaf.panelParams ?? null,
+    filter: leaf.filter ?? null,
+    fixedViewGroup: leaf.fixedViewGroup ?? null,
+  };
+  return true;
+}
+
+/** Rekurzivní hledání leafu dle id ve stromu navigace (sekce/skupiny). */
+function findLeafById(nodes, id) {
+  if (!Array.isArray(nodes)) return null;
+  for (const node of nodes) {
+    if (node?.id === id && node?.type) return node;
+    const found = findLeafById(node?.children, id);
+    if (found) return found;
+  }
+  return null;
+}
+
 /**
  * Nastav výchozí activeItem v app módu — voláno po loadu navigace, pokud
  * zatím není nic vybraného. Výchozí = první root-level leaf stromu (uzel
@@ -202,6 +271,9 @@ export const navigationStore = {
   navigateToPanel,
   consumePendingRecordId,
   consumePendingViewGroup,
+  setPendingReportDeepLink,
+  consumePendingReportParams,
+  activateReportDeepLink,
   ensureDefaultActiveItem,
   enterSettings,
   exitSettings,

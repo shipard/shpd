@@ -16,6 +16,7 @@
   import Select from '../ui/Select.svelte';
   import { t } from '../../i18n/index.js';
   import { translateError } from '../../i18n/errors.js';
+  import { navigationStore } from '../../stores/navigation.svelte.js';
   import { fetchReportCatalog, runReport, defaultPeriod } from '../../api/reports.js';
 
   let { item } = $props();
@@ -56,20 +57,67 @@
 
   loadCatalog();
 
-  // Resolve parametrů při změně reportu / načtení katalogu: session mapa má
-  // přednost, jinak default (poslední celý měsíc, default detail deklarace).
+  // Overlay parametrů z deep-linku validovaný proti katalogu — nevalidní
+  // pole padají na base; 400 z ručně upravené URL tak prakticky nenastane
+  // (zbytek jistí banner z runReport).
+  function overlayDeepLink(base, pending) {
+    const merged = { ...base };
+    const year = pending.fiscalYear !== undefined
+      ? catalog.fiscalYears.find((y) => String(y.name) === String(pending.fiscalYear))
+      : null;
+    if (year) merged.fiscalYear = String(year.name);
+    const months = catalog.fiscalYears
+      .find((y) => String(y.name) === String(merged.fiscalYear))?.months ?? 12;
+    const from = pending.monthFrom ?? merged.monthFrom;
+    const to = pending.monthTo ?? merged.monthTo;
+    if (from >= 1 && from <= to && to <= months) {
+      merged.monthFrom = from;
+      merged.monthTo = to;
+    }
+    const detailParam = reportDef?.params.find((p) => p.id === 'detail');
+    if (pending.detail && detailParam?.options.includes(pending.detail)) {
+      merged.detail = pending.detail;
+    }
+    return merged;
+  }
+
+  // Resolve parametrů při změně reportu / načtení katalogu: deep-link
+  // (one-shot) overlay nad session/default; jinak session mapa, jinak
+  // default (poslední celý měsíc, default detail deklarace).
   $effect(() => {
     if (!catalog || !reportId) return;
+    // untrack: konzumace čte i nuluje tentýž $state — bez něj by se efekt
+    // po vynulování naplánoval znovu.
+    const pending = untrack(() => navigationStore.consumePendingReportParams());
     const saved = sessionState.get(reportId);
-    if (saved) {
+    if (saved && !pending) {
       params = saved.params;
       thousands = saved.thousands;
       return;
     }
     const period = defaultPeriod(catalog.fiscalYears);
     const detail = reportDef?.params.find((p) => p.id === 'detail')?.default ?? 'analytic';
-    params = period ? { ...period, detail } : null;
-    thousands = false;
+    const base = saved?.params ?? (period ? { ...period, detail } : null);
+    params = base && pending ? overlayDeepLink(base, pending) : base;
+    thousands = saved?.thousands ?? false;
+  });
+
+  // Deep-link URL (D10): ?report=&fy=&mf=&mt=&detail= přes replaceState —
+  // bez reloadu, bez zásahu do zbytku shellu. Odchod ze stránky query
+  // uklidí, aby reload neresuscitoval report přes jinou obrazovku.
+  function syncUrl(id, p) {
+    const query = new URLSearchParams({
+      report: id,
+      fy: p.fiscalYear,
+      mf: String(p.monthFrom),
+      mt: String(p.monthTo),
+      detail: p.detail,
+    });
+    history.replaceState(null, '', `${window.location.pathname}?${query}`);
+  }
+
+  $effect(() => () => {
+    history.replaceState(null, '', window.location.pathname);
   });
 
   // Spuštění reportu při změně parametrů. `thousands` je čistě vizuální —
@@ -82,6 +130,7 @@
       return;
     }
     sessionState.set(id, { params: p, thousands: untrack(() => thousands) });
+    syncUrl(id, p);
     const seq = ++requestSeq;
     loading = true;
     runError = null;

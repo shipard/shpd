@@ -11,8 +11,10 @@ import { avatarStore } from './stores/avatar.svelte.js'
 import { loginNotice } from './stores/loginNotice.svelte.js'
 import { authAction } from './stores/authAction.svelte.js'
 import { opAuth } from './stores/opAuth.svelte.js'
+import { navigationStore } from './stores/navigation.svelte.js'
 import { parseOidcRedirect, parseOpAuth } from './api/oidc.js'
 import { parseAuthAction } from './api/authActions.js'
+import { parseReportDeepLink } from './api/reports.js'
 import { exchangeOidc } from './api/auth.js'
 
 // Inicializace mobilní detekce (matchMedia listener). Jednou na začátku.
@@ -74,6 +76,15 @@ async function boot() {
   if (!startupAction && !oidcRedirect && opAuthTxn) {
     history.replaceState(null, '', window.location.pathname)
     opAuth.set(opAuthTxn)
+  }
+
+  // Deep-link reportu (?report=…&fy=…, docs/reports.md D10): jen stash do
+  // storu — URL se na rozdíl od auth větví NEČISTÍ, má zůstat sdílitelná
+  // a přežít reload. In-memory stash přežije i login obrazovku (navigace
+  // se načítá až po přihlášení).
+  const reportLink = parseReportDeepLink(search)
+  if (!startupAction && !oidcRedirect && !opAuthTxn && reportLink) {
+    navigationStore.setPendingReportDeepLink(reportLink)
   }
 
   // Per-user preference (vzhled, jazyk) — jen když už jsme přihlášení

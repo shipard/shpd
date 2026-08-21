@@ -41,6 +41,20 @@
     return leaves;
   }
 
+  // Ids všech skupin na cestě k leafu s daným id (rekurzivně) — na
+  // rozbalení předků aktivní položky po loadu stromu.
+  function collectAncestorGroupIds(nodes, leafId, path = []) {
+    if (!Array.isArray(nodes) || leafId == null) return [];
+    for (const node of nodes) {
+      if (node?.id === leafId && node?.type) return path;
+      if (node?.children) {
+        const found = collectAncestorGroupIds(node.children, leafId, [...path, node.id]);
+        if (found.length > 0) return found;
+      }
+    }
+    return [];
+  }
+
   // `collapsed` je bindable — AppShell ho zrcadlí kvůli pozici ThemePanel
   // (panel se renderuje v AppShellu, ne tady; drawer má transform, který
   // by position:fixed panel uvěznil). Panel custom vzhledu už neotevírá
@@ -80,11 +94,18 @@
         // (Dashboard) má `type` a žádné children — netřeba expandovat.
         expanded = new Set(navTree.filter(g => g.children).map(g => g.id));
         // Po loadu app navigace (ne settings) zajistíme, že je něco vybráno —
-        // první root-level leaf stromu (na hosting DS portál, jinde
-        // Dashboard, D6).
+        // deep-link reportu má přednost (no-op bez stashe), jinak první
+        // root-level leaf stromu (na hosting DS portál, jinde Dashboard, D6).
         if (navigationStore.mode === 'app') {
+          navigationStore.activateReportDeepLink(navTree);
           navigationStore.ensureDefaultActiveItem(navTree);
         }
+        // Vnořené skupiny startují sbalené — předky aktivní položky
+        // rozbalit, jinak by deep-linknutý leaf nebyl vidět.
+        for (const groupId of collectAncestorGroupIds(navTree, navigationStore.activeId)) {
+          expanded.add(groupId);
+        }
+        expanded = new Set(expanded);
       } catch {
         error = t('sidebar.navigationLoadFailed');
       } finally {

@@ -96,6 +96,8 @@ class HelpCommand extends Command
         $output->writeln('  <info>bank-import-statement</info>   Import bankovního výpisu ze souboru (CAMT/GPC/FIO)');
         $output->writeln('  <info>accbal-match</info>            Spáruje nespárované bankovní úhrady proti otevřeným předpisům (clearing → 311/321)');
         $output->writeln('  <info>booking-history</info>         Zpracuje soubor účetní historie (report kvality, seed pravidel IČO→štítek, otagování položek)');
+        $output->writeln('  <info>report-run</info>              Spustí report a vypíše ReportResult jako JSON na stdout');
+        $output->writeln('  <info>report-diff</info>             Porovná dva ReportResult JSON soubory (kontrolní diff)');
         $output->writeln('');
         $output->writeln('<comment>Registry (Spisovna):</comment>');
         $output->writeln('  <info>registry-extract-texts</info>  Fill registry documents extracted_text from attachments (default: missing only)');

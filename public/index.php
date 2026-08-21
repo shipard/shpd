@@ -600,7 +600,11 @@ function dispatchReports(
 		$language,
 	);
 
-	$ctrl = new \Shipard\Api\Controller\ReportsController($registry, $runner);
+	$ctrl = new \Shipard\Api\Controller\ReportsController(
+		$registry,
+		$runner,
+		new \Shipard\Core\Reports\DbFiscalPeriodProvider($db),
+	);
 	return match ($route->action) {
 		'catalog' => $ctrl->catalog(),
 		'run'     => $ctrl->run($route->table ?? '', $request->getQueryParams()),

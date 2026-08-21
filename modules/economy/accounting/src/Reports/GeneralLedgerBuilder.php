@@ -103,7 +103,7 @@ final class GeneralLedgerBuilder implements ReportBuilder
             messages: $support->errorMessages($errorKeys, $rows, $cs),
             columns: [
                 new ReportColumn('opening', ReportColumn::TYPE_MONEY, $cs ? 'Počáteční stav' : 'Opening balance'),
-                new ReportColumn('turnover', ReportColumn::TYPE_MONEY, $cs ? 'Obraty za období' : 'Period turnover'),
+                new ReportColumn('turnover', ReportColumn::TYPE_MONEY, $cs ? 'Obraty za období' : 'Period turnover', ReportColumn::DISPLAY_SIDES),
                 new ReportColumn('closing', ReportColumn::TYPE_MONEY, $cs ? 'Konečný zůstatek' : 'Closing balance'),
             ],
             rows: $rows,

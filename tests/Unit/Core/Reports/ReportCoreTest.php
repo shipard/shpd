@@ -48,7 +48,7 @@ class ReportCoreTest extends TestCase
         $this->assertSame('ok', $array['status']);
         $this->assertSame([], $array['messages']);
         $this->assertSame(
-            [['id' => 'turnover', 'type' => 'money', 'label' => 'Obraty za období']],
+            [['id' => 'turnover', 'type' => 'money', 'label' => 'Obraty za období', 'display' => 'balance']],
             $array['columns'],
         );
         $this->assertSame(
@@ -61,6 +61,21 @@ class ReportCoreTest extends TestCase
             ]],
             $array['rows'],
         );
+    }
+
+    public function testColumnDisplayDefaultAndExplicit(): void
+    {
+        $default = new ReportColumn('closing', 'money', 'Konečný zůstatek');
+        $this->assertSame('balance', $default->toArray()['display']);
+
+        $sides = new ReportColumn('turnover', 'money', 'Obraty', ReportColumn::DISPLAY_SIDES);
+        $this->assertSame(
+            ['id' => 'turnover', 'type' => 'money', 'label' => 'Obraty', 'display' => 'sides'],
+            $sides->toArray(),
+        );
+
+        $this->expectException(\InvalidArgumentException::class);
+        new ReportColumn('x', 'money', 'X', 'both');
     }
 
     public function testStatusDerivedFromMessages(): void
@@ -108,6 +123,11 @@ class ReportCoreTest extends TestCase
                 }
                 $months[] = ['id' => 213, 'periodType' => 2];
                 return $months;
+            }
+
+            public function regularYears(): array
+            {
+                return [['name' => '2026', 'months' => 12]];
             }
         };
     }

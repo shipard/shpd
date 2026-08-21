@@ -90,12 +90,18 @@ class ReportsApiTest extends TestCase
             ));
         }
 
-        $controller = new ReportsController($registry, $this->makeRunner($registry));
+        $controller = new ReportsController($registry, $this->makeRunner($registry), $this->makePeriods());
         $payload    = $controller->catalog()->getPayload();
 
         $this->assertTrue($payload['success']);
         $items = array_column($payload['data']['items'], null, 'id');
         $this->assertArrayHasKey('economy.accounting.generalLedger', $items);
+
+        // Fiskální období pro picker — jednou pro celou odpověď, ne per report.
+        $this->assertSame(
+            ['fiscalYears' => [['name' => '2026', 'months' => 12]]],
+            $payload['data']['periods'],
+        );
 
         $ledger = $items['economy.accounting.generalLedger'];
         $this->assertSame('Hlavní kniha', $ledger['name']);
@@ -176,9 +182,9 @@ class ReportsApiTest extends TestCase
         return new ReportsController($registry, $this->makeRunner($registry));
     }
 
-    private function makeRunner(ReportRegistry $registry): ReportRunner
+    private function makePeriods(): FiscalPeriodProvider
     {
-        $periods = new class implements FiscalPeriodProvider {
+        return new class implements FiscalPeriodProvider {
             public function findYearByName(string $name): ?array
             {
                 return $name === '2026' ? ['id' => 1, 'name' => '2026'] : null;
@@ -192,7 +198,17 @@ class ReportsApiTest extends TestCase
                 }
                 return $months;
             }
+
+            public function regularYears(): array
+            {
+                return [['name' => '2026', 'months' => 12]];
+            }
         };
+    }
+
+    private function makeRunner(ReportRegistry $registry): ReportRunner
+    {
+        $periods = $this->makePeriods();
 
         return new ReportRunner(
             $registry,

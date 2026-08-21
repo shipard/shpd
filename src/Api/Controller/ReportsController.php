@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Shipard\Api\Controller;
 
 use Shipard\Api\Response;
+use Shipard\Core\Reports\FiscalPeriodProvider;
 use Shipard\Core\Reports\ReportNotFoundException;
 use Shipard\Core\Reports\ReportRegistry;
 use Shipard\Core\Reports\ReportRunner;
@@ -24,6 +25,7 @@ class ReportsController
     public function __construct(
         private readonly ReportRegistry $registry,
         private readonly ReportRunner $runner,
+        private readonly ?FiscalPeriodProvider $periodProvider = null,
     ) {}
 
     /** GET /_reports */
@@ -38,7 +40,10 @@ class ReportsController
                 'params'              => $definition->params,
             ];
         }
-        return Response::success(['items' => $items]);
+        return Response::success([
+            'items'   => $items,
+            'periods' => ['fiscalYears' => $this->periodProvider?->regularYears() ?? []],
+        ]);
     }
 
     /**

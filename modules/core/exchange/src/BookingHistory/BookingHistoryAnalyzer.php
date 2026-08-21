@@ -32,6 +32,7 @@ final class BookingHistoryAnalyzer
         $matchKindRows = [];
         $recordCount = 0;
         $degraded = ['records' => 0, 'rows' => 0, 'byAccount' => []];
+        $fileItemCodes = [];
 
         foreach ($file->records() as $record) {
             $recordCount++;
@@ -42,6 +43,12 @@ final class BookingHistoryAnalyzer
             $quality->add($record);
             $seed->add($record, $match);
             $matchKindRows[$match->kind] = ($matchKindRows[$match->kind] ?? 0) + $record->rowCount;
+
+            // Všechny kódy souboru (i u degenerovaných textů) — jmenovatel
+            // míry shody s katalogem DS (D38).
+            if ($record->itemCode !== null) {
+                $fileItemCodes[$record->itemCode] = ($fileItemCodes[$record->itemCode] ?? 0) + $record->rowCount;
+            }
 
             if ($match->degradedExact) {
                 $degraded['records']++;
@@ -69,6 +76,7 @@ final class BookingHistoryAnalyzer
             recordCount: $recordCount,
             matchKindRows: $matchKindRows,
             degradedExact: $degraded,
+            fileItemCodes: $fileItemCodes,
         );
     }
 }

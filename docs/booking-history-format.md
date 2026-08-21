@@ -200,10 +200,15 @@ sudo shpd-ds booking-history --input=/tmp/history.jsonl --tag-items --dry-run
 | `--report` | markdown report (viz níže) + souhrn na stdout |
 | `--report-out <soubor>` | cesta reportu (default `<input>.report.md`) |
 | `--apply-seed` | zápis pravidel `IČO → štítek` do `core_exchange_tag_rules` |
-| `--tag-items` | otagování živých položek DS podle jejich účtů |
+| `--tag-items[=režim]` | otagování živých položek DS — `offer` / `usage` / `auto` (default `auto`) |
 | `--dry-run` | jen plán, žádný zápis (platí pro oba zápisové režimy) |
 | `--backend <id\|název>` | AI backend pro klasifikaci |
 | `--no-llm` | bez LLM — report jen z reverzu účet→štítek |
+| `--seed-min-share <0–1>` | seed: min. podíl řádků dominantního štítku (default 0.8) |
+| `--seed-min-docs <N>` | seed: min. počet dokladů dominantního štítku (default 3) |
+| `--seed-min-coverage <0–1>` | seed: min. pokrytí řádků IČO reverzem (default 0.5) |
+| `--usage-min-share <0–1>` | usage: min. podíl dominantního štítku položky (default 0.7) |
+| `--usage-min-rows <N>` | usage: min. řádků dominantního štítku (default 5) |
 
 ### Report
 
@@ -227,12 +232,29 @@ Backend: `--backend`, jinak nastavení `exchange.contentTag.backend`, jinak
 default backend DS. Doporučení stejné jako u analýzy dokladů — levný model,
 klasifikace krátkého textu je triviální úloha.
 
+### Reverz na neznámé osnově — kontrola názvů
+
+Při `chartVariant: unknown` je přesná shoda čísla účtu slabší signál, než
+vypadá: analytiky si každý systém vede po svém. Přesná shoda se proto
+přijme jen tehdy, když se **název položky** ze záznamu podobá názvu
+položky nabídky (bez diakritiky, tolerantně ke skloňování a pořadí slov).
+Neshoda nebo chybějící název → záznam se počítá dál, jako by přesná shoda
+nebyla (spadne na hrubší syntetickou úroveň). Report vykáže, kolik shod
+kontrola zamítla a na kterých účtech.
+
+Motivace z pilotu: zdroj vedl pod `518201`–`518203` finanční leasing, kde
+nabídka má telefon / internet / poštovné — bez kontroly z toho vznikly
+falešné štítky. U deklarované osnovy (`default`/`npo`) se kontrola
+nespouští.
+
 ### Seed pravidel (prahy a přednost)
 
 Kandidátem je IČO, u kterého dominantní reverzní štítek drží **≥ 80 %
-řádků** (mezi řádky s rozřešeným štítkem) a má **≥ 3 doklady**. Remíza
-dominance kandidáta nedává — dodavatel s pestrým sortimentem pravidlo
-nedostane.
+řádků** (mezi řádky s rozřešeným štítkem), má **≥ 3 doklady** a **pokrytí
+≥ 50 %** — tedy reverz dal štítek aspoň polovině řádků toho dodavatele.
+Bez prahu pokrytí vznikala pravidla z malého výseku historie („100%
+dominance" mezi třemi řádky z dvaceti). Remíza dominance kandidáta nedává
+— dodavatel s pestrým sortimentem pravidlo nedostane.
 
 Zapisuje se `origin = seed`, `confirmed = 1`. Přednost:
 
@@ -245,25 +267,42 @@ Zapisuje se `origin = seed`, `confirmed = 1`. Přednost:
 
 Import tedy nikdy nepřepíše ruční ani naučené pravidlo.
 
-Report u každého kandidáta ukazuje i **pokrytí** — podíl řádků dodavatele,
-kterým reverz vůbec dal štítek. Vysoký podíl při nízkém pokrytí = pravidlo
-postavené na malém výseku historie; podívej se na něj, než ho pustíš ostře.
+Kandidát pod prahem pokrytí se v reportu **ukazuje dál** se stavem „pod
+prahem pokrytí" — ať je vidět, co těsně nevyšlo. `--apply-seed` ho
+nezaloží; pokud ho chceš přesto, sniž `--seed-min-coverage`.
 
 ### Otagování položek (`--tag-items`)
 
-Otaguje jen **živé položky s prázdnými** `content_tags`, jejichž účet nese
-v nabídce účetních položek **právě jeden** štítek. Kolizní a neznámé účty
-zůstávají bez zásahu (vypíše se, kolik jich bylo) — hromadný zápis nemá koho
-se zeptat. Existující štítky se merguje, ne přepisuje.
+Dva režimy nad týmž cílem (živé položky DS s **prázdnými**
+`content_tags`; existující štítky se merguje, ne přepisuje):
 
-Na rozdíl od reverzu nad zdrojovým souborem tady **není** syntetická
-tolerance: účty položek pocházejí z osnovy tohoto DS, takže přesná shoda
-stačí a slabší signál do zápisu do dat uživatele nepatří.
+| Režim | Signál | Kdy má smysl |
+|-------|--------|--------------|
+| `offer` | účet položky → štítek z nabídky účetních položek | dataset s naší osnovou; cizí soubor slouží jen jako spouštěč |
+| `usage` | dominantní štítek klasifikovaných textů **té konkrétní položky** | dataset migrovaný z téhož systému, který dodal historii |
 
-Varianta osnovy se pro tento režim bere z **nastavení DS**
-(`economy.accountChart`), ne z hlavičky souboru — tagují se položky tohoto
-datasetu. Bez nastavené varianty režim jen ohlásí, že není podle čeho
-tagovat.
+`auto` (default) vybere `usage`, pokud **míra shody kódů** — kolik kódů
+položek ze souboru je v katalogu DS — dosáhne 0,8; jinak `offer`. Zvolený
+režim i míra shody se vypíšou.
+
+**Režim `offer`** bere jen účty, které nesou v nabídce **právě jeden**
+štítek; kolizní a neznámé zůstávají bez zásahu (vypíše se, kolik jich
+bylo) — hromadný zápis nemá koho se zeptat. Na rozdíl od reverzu nad
+zdrojovým souborem tu **není** syntetická tolerance: účty položek pocházejí
+z osnovy tohoto DS. Varianta osnovy se bere z **nastavení DS**
+(`economy.accountChart`), ne z hlavičky souboru; bez nastavené varianty
+režim jen ohlásí, že není podle čeho tagovat.
+
+**Režim `usage`** agreguje výsledky klasifikace per kód položky a navrhne
+štítek při dominanci ≥ 70 % na aspoň 5 řádcích. Do agregace jdou jen
+**obsahonosné** texty — text shodný s názvem položky by kruhově potvrzoval
+sám sebe. Výsledek `null` („model štítek nenašel") soutěží jako
+plnohodnotná možnost, takže catch-all položky („Ostatní služby",
+„Materiál") a leasingové splátky návrh správně nedostanou. Multi-tag se
+nenavrhuje — jeden dominantní štítek, nebo nic.
+
+Režim `usage` potřebuje LLM klasifikaci, takže si ji vyžádá i bez
+`--report`. S `--no-llm` spadne na `offer` (a řekne to).
 
 ## 8. Související dokumenty
 

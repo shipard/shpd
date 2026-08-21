@@ -27,12 +27,17 @@ final class BookingHistoryReport
      * @param array<string, array{action: string, existingTag?: string, existingOrigin?: string}> $seedPlan
      *        plán zápisu per IČO (z SeedApplier::plan()); prázdné = bez plánu
      */
+    /**
+     * @param ?array{mode: string, matchRate: ?float, matchedCodes: int, fileCodes: int, plan: list<array<string, mixed>>, applied: ?array{updated: int, failed: int}} $itemsResult
+     *        souhrn otagování položek — sekce se vykreslí jen když režim běžel
+     */
     public function __construct(
         private readonly BookingHistoryAnalysis $analysis,
         private readonly array $taxonomy = [],
         private readonly array $seedPlan = [],
         private readonly ?string $inputPath = null,
         private readonly ?string $generatedAt = null,
+        private readonly ?array $itemsResult = null,
     ) {}
 
     public function render(): string
@@ -44,6 +49,7 @@ final class BookingHistoryReport
         $this->consistency();
         $this->deadTags();
         $this->seedPreview();
+        $this->itemTagging();
         return implode("\n", $this->lines) . "\n";
     }
 
@@ -489,6 +495,77 @@ final class BookingHistoryReport
         $this->line();
         $this->line('> **Pokrytí** je podíl řádků dodavatele, kterým reverz vůbec dal štítek.'
             . ' Vysoký podíl při nízkém pokrytí = pravidlo postavené na malém výseku historie.');
+    }
+
+    /**
+     * Otagování položek — sekce jen když režim skutečně běžel. U usage
+     * režimu je to hlavní přínos běhu (dominantní štítek per položka),
+     * u offer režimu doplněk k reverzu.
+     */
+    private function itemTagging(): void
+    {
+        if ($this->itemsResult === null) {
+            return;
+        }
+        $result = $this->itemsResult;
+        $usage = ($result['mode'] ?? '') === 'usage';
+
+        $this->h(2, 'Otagování položek');
+        $this->line();
+        $this->line(sprintf(
+            'Režim **%s**%s. Shoda kódů souboru s katalogem DS: %s (%s z %s kódů).',
+            (string) $result['mode'],
+            $usage
+                ? ' — štítek per položka z dominance klasifikovaných textů'
+                : ' — štítek z reverzu účet→štítek',
+            $this->pct((float) ($result['matchRate'] ?? 0.0)),
+            $this->num((int) ($result['matchedCodes'] ?? 0)),
+            $this->num((int) ($result['fileCodes'] ?? 0)),
+        ));
+
+        $plan = $result['plan'] ?? [];
+        $applied = $result['applied'] ?? null;
+        $this->line();
+        if ($plan === []) {
+            $this->line('_Žádná položka nesplnila podmínky — nic k otagování._');
+            return;
+        }
+        $this->line($applied !== null
+            ? sprintf(
+                'Zapsáno: **%s** položek, selhalo %s.',
+                $this->num((int) $applied['updated']),
+                $this->num((int) $applied['failed']),
+            )
+            : sprintf('Plán (dry-run): **%s** položek.', $this->num(count($plan))));
+
+        $this->line();
+        $this->line($usage
+            ? '| Kód | Položka | Štítek | Podpora | Podíl |'
+            : '| Kód | Položka | Štítek | Účet |');
+        $this->line($usage ? '|---|---|---|--:|--:|' : '|---|---|---|---|');
+        foreach (array_slice($plan, 0, self::TOP_CLUSTERS) as $entry) {
+            $this->line($usage
+                ? sprintf(
+                    '| `%s` | %s | `%s` | %s / %s | %s |',
+                    (string) $entry['code'],
+                    $this->cell((string) $entry['name']),
+                    (string) $entry['tag'],
+                    $this->num((int) $entry['dominantRows']),
+                    $this->num((int) $entry['rows']),
+                    $this->pct((float) $entry['share']),
+                )
+                : sprintf(
+                    '| `%s` | %s | `%s` | `%s` |',
+                    (string) $entry['code'],
+                    $this->cell((string) $entry['name']),
+                    (string) $entry['tag'],
+                    (string) ($entry['account'] ?? ''),
+                ));
+        }
+        if (count($plan) > self::TOP_CLUSTERS) {
+            $this->line();
+            $this->line(sprintf('_… a další %d položek._', count($plan) - self::TOP_CLUSTERS));
+        }
     }
 
     // ── Pomocné ─────────────────────────────────────────────────────────────

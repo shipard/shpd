@@ -1,6 +1,6 @@
 # Booking history — follow-upy z pilotních běhů (hardening reverzu, práh pokrytí, otagování z užití)
 
-**Stav:** design potvrzen v chatu (D36–D38), k implementaci
+**Stav:** hotovo
 
 **Cíl:** Tři korekce nástroje `shpd-ds booking-history` vzešlé z pilotních
 běhů nad reálným exportem (3 559 záznamů; cílové DS
@@ -94,14 +94,56 @@ multi-tag se v v1 nenavrhuje — jen jeden dominantní štítek.
 
 ## Hotovo když
 
-- [ ] MSI fixture: přesné shody `518201/518202` (leasingové názvy) se
+- [x] Pilotní export: přesné shody `518201/518202` (leasingové názvy) se
       degradují a `it.phone`/`it.internet` z reverzu zmizí; počet
       degradací je v reportu.
-- [ ] Seed náhled ukazuje kandidáty s pokrytím < 50 % jako vyřazené;
+- [x] Seed náhled ukazuje kandidáty s pokrytím < 50 % jako vyřazené;
       `--apply-seed` je nezaloží; prahy jdou přepnout parametry.
-- [ ] Na `btpg` DS: `--tag-items --dry-run` zvolí režim usage (shoda
+- [x] Na `btpg` DS: `--tag-items --dry-run` zvolí režim usage (shoda
       kódů ≥ 0.8), vypíše plán s dominantními štítky; catch-all a
       leasingové položky v plánu nejsou; ostrý běh otaguje jen položky
       s prázdnými `content_tags`.
-- [ ] Testy zelené s úzkými filtry; nápověda commandu popisuje nové
+- [x] Testy zelené s úzkými filtry; nápověda commandu popisuje nové
       parametry.
+
+---
+
+## Výsledky ověření (pilotní export, 3 559 záznamů)
+
+- **D36:** kontrola názvů zamítla 3 přesné shody = 102 řádků (`518201`–`518203`
+  s leasingovými názvy). Přesné shody 310 → 208; `it.phone`, `it.internet`
+  a `services.postage` z reverzu zmizely. Report to vykazuje včetně rozpadu
+  per účet.
+- **D37:** 40 kandidátů → 31 přijatých, 9 zamítnutých pokrytím
+  (`people.catering` 20–37 %, `admin.insurance` 33–45 %, `services.banking`
+  37 % — přesně ti z pilotu). V náhledu zůstávají se stavem „pod prahem
+  pokrytí".
+- **D38:** auto režim vybral `usage` (shoda kódů 86,8 % = 46 z 53), plán
+  20 položek s podporou 9–628 řádků. Zamítnuto správně: leasingové splátky
+  a úvěry (dominantní `null`), catch-all položky („Ostatní služby" 1 584
+  řádků → 27 %, „Materiál" 2 655 → 27 %) prahem podílu, malé vzorky prahem
+  řádků.
+
+## Poznámky k implementaci
+
+- **Podobnost názvů** není jen `similar_text`: ta porovnává znaky v pořadí
+  a propadne na přeházených slovech („Připojení k internetu" ×
+  „Internetové připojení"). Přidána tokenová shoda s pětiznakovým prefixem
+  (pokrývá české skloňování) a podřetězec; bere se maximum.
+- **Nabídka bez názvů** (mapa postavená bez nich) kontrolu **projde** —
+  degradovat všechno, když není čím ověřovat, by reverz zabilo. Chybějící
+  název **v záznamu** je proti tomu selhání, jak zadání chce.
+- Degradace přesné shody může skončit **syntetickou shodou téhož štítku**
+  (např. `503xxx` = pohonné hmoty). To je záměr: hrubší úroveň je slabší,
+  ale legitimní signál — a `degradedExact` je v reportu vidět.
+- `usageByItemCode()` žije v `BookingHistoryAnalysis`, ne v taggeru:
+  agregace per kód je odvozená statistika (stejná konvence jako
+  konzistence a mrtvé štítky), takže ji dostane i kolektivní skript.
+  Tagger je pak čistá služba bez DB.
+- `--tag-items` je `VALUE_OPTIONAL`, takže rozlišuje tři stavy (chybí /
+  bez hodnoty = auto / s hodnotou). Testy nesmí posílat `true` — Symfony
+  z něj udělá `"1"`.
+- Zápis obou režimů jde přes jediné `ContentTagBackfill::apply()` (merge
+  štítků, izolace chyb per položka) — žádná druhá zápisová cesta.
+- Pořadí v `execute()` se změnilo: otagování běží **před** zápisem
+  reportu, aby v něm mohla být sekce s jeho výsledkem.

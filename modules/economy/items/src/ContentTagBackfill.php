@@ -115,6 +115,41 @@ class ContentTagBackfill
     }
 
     /**
+     * Živé položky s kódem a jejich existujícími štítky — katalog pro
+     * otagování z užití (D38, `BookingHistoryItemUsageTagger`). Na rozdíl
+     * od {@see untaggedItemsWithAccount()} sem patří **i otagované** a
+     * položky bez účtu: usage režim párované kódy jen porovnává (míra
+     * shody) a už otagované musí umět poctivě přeskočit.
+     *
+     * @return list<array{id: int, code: string, name: string, tags: list<string>}>
+     */
+    public function liveItemsByCode(): array
+    {
+        $rows = $this->db->fetchAll(
+            'SELECT id, code, name, content_tags FROM ' . self::ITEMS_TABLE
+            . ' WHERE docState IN %in AND code IS NOT NULL AND code != %s'
+            . ' ORDER BY code ASC',
+            self::ITEM_ACTIVE_STATES,
+            '',
+        );
+
+        $out = [];
+        foreach ($rows as $row) {
+            $row = (array) $row;
+            $tags = json_decode((string) ($row['content_tags'] ?? ''), true);
+            $out[] = [
+                'id'   => (int) $row['id'],
+                'code' => (string) $row['code'],
+                'name' => (string) $row['name'],
+                'tags' => is_array($tags)
+                    ? array_values(array_filter($tags, static fn ($t): bool => is_string($t) && $t !== ''))
+                    : [],
+            ];
+        }
+        return $out;
+    }
+
+    /**
      * Plán otagování — jen položky, jejichž účet nese v nabídce právě jeden
      * štítek. Kolizní a neznámé účty se do plánu nedostanou; jejich počty
      * vrací {@see planSkipped()}, aby CLI mohlo říct, co nechalo být.

@@ -50,9 +50,9 @@ class BookingHistoryCommandTest extends TestCase
         $this->inputPath = $this->dsDir . '/history.jsonl';
         file_put_contents($this->inputPath, implode("\n", [
             '{"format":"shpd.economy.booking-history","version":1,"sourceSystem":{"name":"shipard-e10"},"sourceRef":"ds test","chartVariant":"default","currency":"CZK","period":{"from":"2020-01-01","to":"2026-06-30"},"docTypes":["invni"],"recordCount":4}',
-            '{"companyId":"11111111","account":"518202","itemName":"Internet","rowText":"Paušál internet 100/10","docCount":40,"rowCount":80,"totalAmount":96000}',
-            '{"companyId":"22222222","account":"503100","rowText":"Nafta","docCount":30,"rowCount":60,"totalAmount":180000}',
-            '{"companyId":"33333333","account":"999999","rowText":"Nezařaditelná služba","docCount":2,"rowCount":4,"totalAmount":1000}',
+            '{"companyId":"11111111","account":"518202","itemCode":"518202","itemName":"Internet","rowText":"Paušál internet 100/10","docCount":40,"rowCount":80,"totalAmount":96000}',
+            '{"companyId":"22222222","account":"503100","itemCode":"503100","rowText":"Nafta","docCount":30,"rowCount":60,"totalAmount":180000}',
+            '{"companyId":"33333333","account":"999999","itemCode":"999999","rowText":"Nezařaditelná služba","docCount":2,"rowCount":4,"totalAmount":1000}',
             '{"companyId":null,"account":null,"rowText":"","docCount":1,"rowCount":1,"totalAmount":null}',
         ]) . "\n");
     }
@@ -75,6 +75,7 @@ class BookingHistoryCommandTest extends TestCase
         ?array $existingRule = null,
         array $modules = ['economy.items', 'economy.accounting'],
         ?string $chartVariant = null,
+        array $catalog = [],
     ): CommandTester {
         $dsConfig = $this->createMock(DataSourceConfig::class);
         $dsConfig->method('getDefaultLanguage')->willReturn('cs');
@@ -99,8 +100,34 @@ class BookingHistoryCommandTest extends TestCase
                     : null;
             },
         );
-        $db->method('fetchAll')->willReturn([]);        // žádné neotagované položky
-        $db->method('fetchRow')->willReturn(null);
+        // fetchAll obsluhuje dva dotazy: katalog položek (usage režim) a
+        // neotagované položky s účtem (offer režim).
+        $db->method('fetchAll')->willReturnCallback(
+            static function (mixed ...$args) use ($catalog): array {
+                $sql = (string) $args[0];
+                if (str_contains($sql, 'content_tags IS NULL')) {
+                    return [];   // offer režim: žádné netagované položky s účtem
+                }
+                if (str_contains($sql, 'code IS NOT NULL')) {
+                    return $catalog;
+                }
+                return [];
+            },
+        );
+        $db->method('fetchRow')->willReturnCallback(
+            static function (mixed ...$args) use ($catalog): ?array {
+                if (!str_contains((string) $args[0], 'FROM economy_items')) {
+                    return null;
+                }
+                $id = (int) ($args[1] ?? 0);
+                foreach ($catalog as $row) {
+                    if ((int) $row['id'] === $id) {
+                        return $row;
+                    }
+                }
+                return null;
+            },
+        );
 
         $llm = $this->createMock(LlmClient::class);
         $llm->method('streamChat')->willReturnCallback(
@@ -335,12 +362,13 @@ class BookingHistoryCommandTest extends TestCase
         $tester = $this->tester(chartVariant: 'default');
         $this->assertSame(0, $tester->execute([
             '--input' => $this->inputPath,
-            '--tag-items' => true,
+            '--tag-items' => 'offer',
             '--dry-run' => true,
         ]));
 
         $display = $tester->getDisplay();
-        $this->assertStringContainsString('Otagování položek podle účtů', $display);
+        $this->assertStringContainsString('Otagování položek', $display);
+        $this->assertStringContainsString('režim: offer', $display);
         $this->assertStringContainsString('netagovaných položek s účtem: 0', $display);
     }
 
@@ -349,10 +377,147 @@ class BookingHistoryCommandTest extends TestCase
      * musí říct, ne vykázat všechny položky jako „účet mimo nabídku" —
      * na živých DS to byl matoucí výstup u stovky položek.
      */
+    /**
+     * Fixture nese kódy 518202 / 503100 / 999999; katalog má první dva →
+     * shoda 2/3 = 0,67 < 0,8, takže auto vybere offer.
+     */
+    public function testAutoModePicksOfferWhenCodeMatchIsWeak(): void
+    {
+        $tester = $this->tester(
+            ['paušál internet 100/10' => 'it.internet'],
+            chartVariant: 'default',
+            catalog: [
+                ['id' => 1, 'code' => '518202', 'name' => 'Internet', 'content_tags' => null],
+                ['id' => 2, 'code' => '503100', 'name' => 'Nafta', 'content_tags' => null],
+            ],
+        );
+        $tester->execute(['--input' => $this->inputPath, '--tag-items' => null, '--dry-run' => true]);
+
+        $display = $tester->getDisplay();
+        $this->assertStringContainsString('režim: offer (auto — shoda kódů 66,7 %', $display);
+        $this->assertStringContainsString('práh 80,0 %', $display);
+    }
+
+    public function testAutoModePicksUsageWhenCodesMatchAndPlansFromDominance(): void
+    {
+        $catalog = [
+            ['id' => 11, 'code' => '518202', 'name' => 'Internet', 'content_tags' => null],
+            ['id' => 12, 'code' => '503100', 'name' => 'Nafta', 'content_tags' => null],
+            ['id' => 13, 'code' => '999999', 'name' => 'Ostatní náklady', 'content_tags' => null],
+        ];
+        $tester = $this->tester(
+            [
+                'paušál internet 100/10' => 'it.internet',
+                'nafta'                  => 'vehicle.fuel',
+                'nezařaditelná služba'   => null,   // catch-all → bez návrhu
+            ],
+            chartVariant: 'default',
+            catalog: $catalog,
+        );
+        $tester->execute([
+            '--input' => $this->inputPath,
+            '--tag-items' => null,
+            '--dry-run' => true,
+        ]);
+
+        $display = $tester->getDisplay();
+        $this->assertStringContainsString('režim: usage (auto — shoda kódů 100,0 %', $display);
+        $this->assertStringContainsString('plán 518202 (Internet) → `it.internet`  [80 z 80 řádků, 100,0 %]', $display);
+        $this->assertStringContainsString('plán 503100 (Nafta) → `vehicle.fuel`', $display);
+        $this->assertStringNotContainsString('999999 (Ostatní náklady)', $display, 'dominantní null → bez návrhu');
+        $this->assertStringContainsString('--dry-run: otagovalo by 2 položek', $display);
+        $this->assertStringContainsString('bez dominantního štítku 1', $display);
+    }
+
+    public function testUsageModeWritesThroughGateway(): void
+    {
+        $catalog = [
+            ['id' => 11, 'code' => '518202', 'name' => 'Internet', 'content_tags' => null],
+            ['id' => 12, 'code' => '503100', 'name' => 'Nafta', 'content_tags' => '["it.phone"]'],
+        ];
+        $tester = $this->tester(
+            ['paušál internet 100/10' => 'it.internet', 'nafta' => 'vehicle.fuel'],
+            chartVariant: 'default',
+            catalog: $catalog,
+        );
+        $tester->execute(['--input' => $this->inputPath, '--tag-items' => 'usage']);
+
+        $display = $tester->getDisplay();
+        // 503100 už štítek má → přeskočí se; zapíše se jen 518202, a to
+        // přes gateway (mock DocumentRegistry chybí → save selže, což je
+        // pro test dost: prošlo to zápisovou cestou, ne dry-runem).
+        $this->assertStringContainsString('už otagované 1', $display);
+        $this->assertStringNotContainsString('--dry-run', $display);
+        $this->assertMatchesRegularExpression('/otagováno \d+ položek, selhalo \d+/u', $display);
+    }
+
+    public function testExplicitUsageModeWithNoLlmFallsBackToOffer(): void
+    {
+        $tester = $this->tester(chartVariant: 'default');
+        $tester->execute([
+            '--input' => $this->inputPath,
+            '--tag-items' => 'usage',
+            '--no-llm' => true,
+            '--dry-run' => true,
+        ]);
+
+        $display = $tester->getDisplay();
+        $this->assertStringContainsString('--tag-items=usage potřebuje klasifikaci textů', $display);
+        $this->assertStringContainsString('režim: offer', $display);
+    }
+
+    public function testUnknownItemsModeFails(): void
+    {
+        $tester = $this->tester();
+        $this->assertSame(1, $tester->execute(['--input' => $this->inputPath, '--tag-items' => 'nonsense']));
+        $this->assertStringContainsString('neznámý režim "nonsense"', $tester->getDisplay());
+    }
+
+    public function testUsageModeRunsClassificationWithoutReport(): void
+    {
+        $tester = $this->tester(
+            ['nafta' => 'vehicle.fuel'],
+            chartVariant: 'default',
+            catalog: [['id' => 12, 'code' => '503100', 'name' => 'Nafta', 'content_tags' => null]],
+        );
+        $tester->execute(['--input' => $this->inputPath, '--tag-items' => 'usage', '--dry-run' => true]);
+
+        // Bez --report se dřív neklasifikovalo vůbec; usage režim to potřebuje.
+        $this->assertStringContainsString('Klasifikace: 3 distinct textů', $tester->getDisplay());
+    }
+
+    public function testReportContainsItemTaggingSectionOnlyWhenModeRan(): void
+    {
+        $catalog = [['id' => 12, 'code' => '503100', 'name' => 'Nafta', 'content_tags' => null]];
+        $withItems = $this->tester(['nafta' => 'vehicle.fuel'], chartVariant: 'default', catalog: $catalog);
+        $withItems->execute([
+            '--input' => $this->inputPath,
+            '--report' => true,
+            '--tag-items' => 'usage',
+            '--dry-run' => true,
+            '--report-out' => $this->dsDir . '/usage.md',
+        ]);
+        $markdown = (string) file_get_contents($this->dsDir . '/usage.md');
+        $this->assertStringContainsString('## Otagování položek', $markdown);
+        $this->assertStringContainsString('Režim **usage**', $markdown);
+        $this->assertStringContainsString('| `503100` | Nafta | `vehicle.fuel` |', $markdown);
+
+        $withoutItems = $this->tester(['nafta' => 'vehicle.fuel'], chartVariant: 'default');
+        $withoutItems->execute([
+            '--input' => $this->inputPath,
+            '--report' => true,
+            '--report-out' => $this->dsDir . '/plain.md',
+        ]);
+        $this->assertStringNotContainsString(
+            '## Otagování položek',
+            (string) file_get_contents($this->dsDir . '/plain.md'),
+        );
+    }
+
     public function testTagItemsWithoutChartVariantSaysSoInsteadOfBlamingAccounts(): void
     {
         $tester = $this->tester();
-        $tester->execute(['--input' => $this->inputPath, '--tag-items' => true, '--dry-run' => true]);
+        $tester->execute(['--input' => $this->inputPath, '--tag-items' => 'offer', '--dry-run' => true]);
 
         $display = $tester->getDisplay();
         $this->assertStringContainsString('Varianta účtové osnovy DS není nastavená', $display);
@@ -362,7 +527,7 @@ class BookingHistoryCommandTest extends TestCase
     public function testTagItemsWithoutAccountingModuleDegradesGracefully(): void
     {
         $tester = $this->tester(modules: ['economy.items']);
-        $this->assertSame(0, $tester->execute(['--input' => $this->inputPath, '--tag-items' => true]));
+        $this->assertSame(0, $tester->execute(['--input' => $this->inputPath, '--tag-items' => 'offer']));
         $this->assertStringContainsString('Modul účetnictví není aktivní', $tester->getDisplay());
     }
 
@@ -373,13 +538,13 @@ class BookingHistoryCommandTest extends TestCase
             '--input'      => $this->inputPath,
             '--report'     => true,
             '--apply-seed' => true,
-            '--tag-items'  => true,
+            '--tag-items'  => 'offer',
             '--dry-run'    => true,
         ]));
 
         $display = $tester->getDisplay();
         $this->assertStringContainsString('Report:', $display);
         $this->assertStringContainsString('Seed pravidel IČO → štítek', $display);
-        $this->assertStringContainsString('Otagování položek podle účtů', $display);
+        $this->assertStringContainsString('Otagování položek', $display);
     }
 }

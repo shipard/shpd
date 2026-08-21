@@ -26,6 +26,9 @@ final class TextCluster
     /** @var array<string, int> reverzní štítek → řádky */
     public array $reverseTags = [];
 
+    /** @var array<string, int> kód položky ve zdroji → řádky */
+    public array $itemCodes = [];
+
     /** LLM štítek; null = model štítek nenašel, nebo klasifikace neproběhla. */
     public ?string $llmTag = null;
 
@@ -55,6 +58,12 @@ final class TextCluster
         }
         if ($match->tag !== null) {
             $this->reverseTags[$match->tag] = ($this->reverseTags[$match->tag] ?? 0) + $record->rowCount;
+        }
+        // Kódy položek nesou otagování z užití (D38) — agregace per kód se
+        // dělá až po klasifikaci, takže cluster si musí pamatovat, ke kterým
+        // položkám jeho text patřil.
+        if ($record->itemCode !== null) {
+            $this->itemCodes[$record->itemCode] = ($this->itemCodes[$record->itemCode] ?? 0) + $record->rowCount;
         }
     }
 

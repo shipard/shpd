@@ -23,6 +23,7 @@ use Shipard\Module\Core\Exchange\BookingHistory\BookingHistoryAnalyzer;
 use Shipard\Module\Core\Exchange\BookingHistory\BookingHistoryClassifier;
 use Shipard\Module\Core\Exchange\BookingHistory\BookingHistoryFile;
 use Shipard\Module\Core\Exchange\BookingHistory\BookingHistoryFormatException;
+use Shipard\Module\Core\Exchange\BookingHistory\BookingHistoryItemUsageTagger;
 use Shipard\Module\Core\Exchange\BookingHistory\BookingHistoryReport;
 use Shipard\Module\Core\Exchange\BookingHistory\BookingHistorySeedBuilder;
 use Shipard\Module\Core\Exchange\BookingHistory\SeedApplier;
@@ -52,6 +53,11 @@ use Symfony\Component\Console\Output\OutputInterface;
  */
 class BookingHistoryCommand extends Command
 {
+    private const ITEMS_MODE_OFFER = 'offer';
+    private const ITEMS_MODE_USAGE = 'usage';
+    private const ITEMS_MODE_AUTO = 'auto';
+    private const ITEMS_MODE_INVALID = '?';
+
     public function __construct(
         private readonly ?DataSourceConfig $dsConfig = null,
         private readonly ?DataSourceConnection $dsConnection = null,
@@ -68,13 +74,15 @@ class BookingHistoryCommand extends Command
             ->addOption('report', null, InputOption::VALUE_NONE, 'Vyrob markdown report')
             ->addOption('report-out', null, InputOption::VALUE_REQUIRED, 'Cesta reportu (default <input>.report.md)')
             ->addOption('apply-seed', null, InputOption::VALUE_NONE, 'Zapiš seed pravidla IČO→štítek')
-            ->addOption('tag-items', null, InputOption::VALUE_NONE, 'Otaguj živé položky DS podle účtů')
+            ->addOption('tag-items', null, InputOption::VALUE_OPTIONAL, 'Otaguj živé položky DS: offer (podle účtů) | usage (podle klasifikace textů) | auto (default)')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'Jen vypiš plán, nic neměň')
             ->addOption('backend', null, InputOption::VALUE_REQUIRED, 'AI backend pro klasifikaci (id nebo název)')
             ->addOption('no-llm', null, InputOption::VALUE_NONE, 'Bez LLM klasifikace — report jen z reverzu účet→štítek')
             ->addOption('seed-min-share', null, InputOption::VALUE_REQUIRED, 'Seed: min. podíl řádků dominantního štítku (default ' . BookingHistorySeedBuilder::DEFAULT_MIN_SHARE . ')')
             ->addOption('seed-min-docs', null, InputOption::VALUE_REQUIRED, 'Seed: min. počet dokladů dominantního štítku (default ' . BookingHistorySeedBuilder::DEFAULT_MIN_DOC_COUNT . ')')
-            ->addOption('seed-min-coverage', null, InputOption::VALUE_REQUIRED, 'Seed: min. pokrytí řádků IČO reverzem (default ' . BookingHistorySeedBuilder::DEFAULT_MIN_COVERAGE . ')');
+            ->addOption('seed-min-coverage', null, InputOption::VALUE_REQUIRED, 'Seed: min. pokrytí řádků IČO reverzem (default ' . BookingHistorySeedBuilder::DEFAULT_MIN_COVERAGE . ')')
+            ->addOption('usage-min-share', null, InputOption::VALUE_REQUIRED, 'Usage: min. podíl dominantního štítku položky (default ' . BookingHistoryItemUsageTagger::DEFAULT_MIN_SHARE . ')')
+            ->addOption('usage-min-rows', null, InputOption::VALUE_REQUIRED, 'Usage: min. řádků dominantního štítku (default ' . BookingHistoryItemUsageTagger::DEFAULT_MIN_ROWS . ')');
     }
 
     protected function getDataSourceDir(): string
@@ -147,8 +155,13 @@ class BookingHistoryCommand extends Command
 
         $wantReport = (bool) $input->getOption('report');
         $wantSeed   = (bool) $input->getOption('apply-seed');
-        $wantItems  = (bool) $input->getOption('tag-items');
         $dryRun     = (bool) $input->getOption('dry-run');
+
+        $itemsMode = $this->itemsMode($input, $output);
+        $wantItems = $itemsMode !== null;
+        if ($itemsMode === self::ITEMS_MODE_INVALID) {
+            return Command::FAILURE;
+        }
 
         if (!$wantReport && !$wantSeed && !$wantItems) {
             // Validace už proběhla otevřením souboru; projdeme ho celý, aby
@@ -181,7 +194,17 @@ class BookingHistoryCommand extends Command
             return Command::FAILURE;
         }
 
-        if ($wantReport && !$input->getOption('no-llm')) {
+        // Klasifikace není jen pro report — usage režim otagování na ní
+        // stojí (agreguje LLM štítky per kód položky, D38).
+        $noLlm = (bool) $input->getOption('no-llm');
+        $needsLlm = $wantReport || ($wantItems && $itemsMode !== self::ITEMS_MODE_OFFER);
+        if ($needsLlm && $noLlm && $itemsMode === self::ITEMS_MODE_USAGE) {
+            $output->writeln('<comment>--tag-items=usage potřebuje klasifikaci textů, ale je zapnuté --no-llm'
+                . ' → otaguju podle účtů (offer).</comment>');
+            $itemsMode = self::ITEMS_MODE_OFFER;
+            $needsLlm = $wantReport;
+        }
+        if ($needsLlm && !$noLlm) {
             $this->classify($output, $analysis, $inputPath, $dsConnection, $dsConfig, $config, $input->getOption('backend'));
         }
 
@@ -192,14 +215,32 @@ class BookingHistoryCommand extends Command
         $candidates  = $analysis->seed->candidates();
         $seedPlan    = ($wantReport || $wantSeed) ? $seedApplier->plan($candidates) : [];
 
-        if ($wantReport) {
-            $this->writeReport($output, $input, $analysis, $taxonomy, $seedPlan, $inputPath);
-        }
         if ($wantSeed) {
             $this->applySeed($output, $seedApplier, $candidates, $seedPlan, $dryRun);
         }
+
+        // Otagování jde před zápisem reportu, aby v něm mohl být jeho
+        // výsledek (u usage režimu je to hlavní přínos běhu).
+        $itemsResult = null;
         if ($wantItems) {
-            $this->tagItems($output, $dsConnection, $dsConfig, $config, $resolver, $offer, $lang, $dryRun);
+            $itemsResult = $this->tagItems(
+                $output,
+                $analysis,
+                $itemsMode,
+                $dsConnection,
+                $dsConfig,
+                $config,
+                $resolver,
+                $offer,
+                $lang,
+                $dryRun,
+                $this->floatOption($input, 'usage-min-share', BookingHistoryItemUsageTagger::DEFAULT_MIN_SHARE),
+                $this->intOption($input, 'usage-min-rows', BookingHistoryItemUsageTagger::DEFAULT_MIN_ROWS),
+            );
+        }
+
+        if ($wantReport) {
+            $this->writeReport($output, $input, $analysis, $taxonomy, $seedPlan, $inputPath, $itemsResult);
         }
 
         return Command::SUCCESS;
@@ -293,6 +334,7 @@ class BookingHistoryCommand extends Command
     /**
      * @param array<string, array{action: string, tag: string, existingTag?: string, existingOrigin?: string}> $seedPlan
      * @param array<string, mixed> $taxonomy
+     * @param ?array<string, mixed> $itemsResult souhrn otagování položek pro report
      */
     private function writeReport(
         OutputInterface $output,
@@ -301,6 +343,7 @@ class BookingHistoryCommand extends Command
         array $taxonomy,
         array $seedPlan,
         string $inputPath,
+        ?array $itemsResult = null,
     ): void {
         $report = new BookingHistoryReport(
             $analysis,
@@ -308,6 +351,7 @@ class BookingHistoryCommand extends Command
             $seedPlan,
             $inputPath,
             date('Y-m-d H:i'),
+            $itemsResult,
         );
 
         $target = (string) ($input->getOption('report-out') ?? '') ?: $inputPath . '.report.md';
@@ -378,8 +422,16 @@ class BookingHistoryCommand extends Command
         ));
     }
 
+    /**
+     * Otagování živých položek DS. Vrací souhrn pro report (nebo null,
+     * když se nedalo nic udělat).
+     *
+     * @return array{mode: string, matchRate: ?float, matchedCodes: int, fileCodes: int, plan: list<array<string, mixed>>, applied: ?array{updated: int, failed: int}}|null
+     */
     private function tagItems(
         OutputInterface $output,
+        BookingHistoryAnalysis $analysis,
+        string $mode,
         DataSourceConnection $db,
         DataSourceConfig $dsConfig,
         ConfigRuntime $config,
@@ -387,9 +439,11 @@ class BookingHistoryCommand extends Command
         AccountingItemsOffer $offer,
         string $lang,
         bool $dryRun,
-    ): void {
+        float $usageMinShare,
+        int $usageMinRows,
+    ): ?array {
         $output->writeln('');
-        $output->writeln('<comment>Otagování položek podle účtů</comment>');
+        $output->writeln('<comment>Otagování položek</comment>');
 
         $tables = TableLoader::load($dsConfig, $resolver, $lang);
         $dibi = $db->getDibiConnection();
@@ -407,16 +461,132 @@ class BookingHistoryCommand extends Command
             eventDispatcher: $dispatcher,
         );
 
-        if (!$backfill->accountingActive()) {
+        if (!$backfill->accountingActive() && $mode !== self::ITEMS_MODE_USAGE) {
+            // Usage režim účet nepotřebuje — pracuje s kódy a klasifikací.
             $output->writeln('<comment>  Modul účetnictví není aktivní — položky nemají účet,'
-                . ' není podle čeho tagovat.</comment>');
-            return;
+                . ' není podle čeho tagovat (offer režim).</comment>');
+            if ($mode === self::ITEMS_MODE_OFFER) {
+                return null;
+            }
         }
 
+        $tagger = new BookingHistoryItemUsageTagger(
+            $backfill->liveItemsByCode(),
+            $analysis->usageByItemCode(),
+            $analysis->fileItemCodes,
+            $usageMinShare,
+            $usageMinRows,
+        );
+
+        $resolved = $mode;
+        if ($mode === self::ITEMS_MODE_AUTO) {
+            $resolved = $tagger->isAutoEligible() ? self::ITEMS_MODE_USAGE : self::ITEMS_MODE_OFFER;
+            $output->writeln(sprintf(
+                '  režim: <info>%s</info> (auto — shoda kódů %s: %d z %d kódů souboru je v katalogu, práh %s)',
+                $resolved,
+                $this->percent($tagger->matchRate()),
+                $tagger->matchedCodeCount(),
+                $tagger->fileCodeCount(),
+                $this->percent(BookingHistoryItemUsageTagger::AUTO_MATCH_RATE),
+            ));
+        } else {
+            $output->writeln(sprintf(
+                '  režim: <info>%s</info> (shoda kódů %s)',
+                $resolved,
+                $this->percent($tagger->matchRate()),
+            ));
+        }
+
+        return $resolved === self::ITEMS_MODE_USAGE
+            ? $this->tagItemsFromUsage($output, $backfill, $tagger, $dryRun)
+            : $this->tagItemsFromOffer($output, $backfill, $tagger, $dryRun);
+    }
+
+    /**
+     * @return array{mode: string, matchRate: ?float, matchedCodes: int, fileCodes: int, plan: list<array<string, mixed>>, applied: ?array{updated: int, failed: int}}|null
+     */
+    private function tagItemsFromUsage(
+        OutputInterface $output,
+        ContentTagBackfill $backfill,
+        BookingHistoryItemUsageTagger $tagger,
+        bool $dryRun,
+    ): ?array {
+        $plan = $tagger->plan();
+        $skipped = $tagger->skipped();
+        $output->writeln(sprintf(
+            '  kódů s klasifikovanými texty: %d — návrh %d, mimo katalog %d, už otagované %d,'
+            . ' bez dominantního štítku %d, remíza %d, pod prahem podílu %d, pod prahem řádků %d',
+            array_sum([$skipped['candidates'], $skipped['notInCatalog'], $skipped['alreadyTagged'],
+                $skipped['dominantNull'], $skipped['tie'], $skipped['belowShare'], $skipped['belowRows']]),
+            $skipped['candidates'],
+            $skipped['notInCatalog'],
+            $skipped['alreadyTagged'],
+            $skipped['dominantNull'],
+            $skipped['tie'],
+            $skipped['belowShare'],
+            $skipped['belowRows'],
+        ));
+
+        $summary = [
+            'mode'         => self::ITEMS_MODE_USAGE,
+            'matchRate'    => $tagger->matchRate(),
+            'matchedCodes' => $tagger->matchedCodeCount(),
+            'fileCodes'    => $tagger->fileCodeCount(),
+            'plan'         => $plan,
+            'applied'      => null,
+        ];
+        if ($plan === []) {
+            return $summary;
+        }
+
+        if ($dryRun) {
+            foreach ($plan as $entry) {
+                $output->writeln(sprintf(
+                    '  <comment>plán</comment> %s (%s) → `%s`  [%d z %d řádků, %s]',
+                    $entry['code'],
+                    $entry['name'],
+                    $entry['tag'],
+                    $entry['dominantRows'],
+                    $entry['rows'],
+                    $this->percent($entry['share']),
+                ));
+            }
+            $output->writeln(sprintf('  <comment>--dry-run:</comment> otagovalo by %d položek', count($plan)));
+            return $summary;
+        }
+
+        $result = $backfill->apply($plan);
+        $summary['applied'] = [
+            'updated' => count($result['updated']),
+            'failed'  => count($result['failed']),
+        ];
+        $output->writeln(sprintf(
+            '  otagováno %d položek, selhalo %d',
+            count($result['updated']),
+            count($result['failed']),
+        ));
+        foreach ($result['failed'] as $failure) {
+            $output->writeln("  <error>položka {$failure['id']}: {$failure['reason']}</error>");
+        }
+        return $summary;
+    }
+
+    /**
+     * @return array{mode: string, matchRate: ?float, matchedCodes: int, fileCodes: int, plan: list<array<string, mixed>>, applied: ?array{updated: int, failed: int}}|null
+     */
+    private function tagItemsFromOffer(
+        OutputInterface $output,
+        ContentTagBackfill $backfill,
+        BookingHistoryItemUsageTagger $tagger,
+        bool $dryRun,
+    ): ?array {
+        if (!$backfill->accountingActive()) {
+            return null;
+        }
         if (!$backfill->offerAvailable()) {
             $output->writeln('<comment>  Varianta účtové osnovy DS není nastavená'
                 . ' (economy.accountChart) — mapa účet→štítek je prázdná, není podle čeho tagovat.</comment>');
-            return;
+            return null;
         }
 
         $plan = $backfill->plan();
@@ -430,8 +600,16 @@ class BookingHistoryCommand extends Command
             $skipped['unmappedAccount'],
         ));
 
+        $summary = [
+            'mode'         => self::ITEMS_MODE_OFFER,
+            'matchRate'    => $tagger->matchRate(),
+            'matchedCodes' => $tagger->matchedCodeCount(),
+            'fileCodes'    => $tagger->fileCodeCount(),
+            'plan'         => $plan,
+            'applied'      => null,
+        ];
         if ($plan === []) {
-            return;
+            return $summary;
         }
         if ($dryRun) {
             foreach ($plan as $entry) {
@@ -444,10 +622,14 @@ class BookingHistoryCommand extends Command
                 ));
             }
             $output->writeln(sprintf('  <comment>--dry-run:</comment> otagovalo by %d položek', count($plan)));
-            return;
+            return $summary;
         }
 
         $result = $backfill->apply($plan);
+        $summary['applied'] = [
+            'updated' => count($result['updated']),
+            'failed'  => count($result['failed']),
+        ];
         $output->writeln(sprintf(
             '  otagováno %d položek, selhalo %d',
             count($result['updated']),
@@ -456,6 +638,36 @@ class BookingHistoryCommand extends Command
         foreach ($result['failed'] as $failure) {
             $output->writeln("  <error>položka {$failure['id']}: {$failure['reason']}</error>");
         }
+        return $summary;
+    }
+
+    private function percent(float $share): string
+    {
+        return number_format($share * 100, 1, ',', ' ') . ' %';
+    }
+
+    /**
+     * Režim `--tag-items`. Opce má volitelnou hodnotu, takže „chybí" a „je
+     * bez hodnoty" se nedají rozlišit z `getOption()` (obojí je null) —
+     * přítomnost se čte z raw vstupu.
+     *
+     * @return ?string null = otagovat se nemá; ITEMS_MODE_INVALID = chybná hodnota
+     */
+    private function itemsMode(InputInterface $input, OutputInterface $output): ?string
+    {
+        if (!$input->hasParameterOption('--tag-items', true)) {
+            return null;
+        }
+        $value = $input->getOption('tag-items');
+        if ($value === null || $value === '') {
+            return self::ITEMS_MODE_AUTO;
+        }
+        $mode = strtolower(trim((string) $value));
+        if (!in_array($mode, [self::ITEMS_MODE_OFFER, self::ITEMS_MODE_USAGE, self::ITEMS_MODE_AUTO], true)) {
+            $output->writeln("<error>--tag-items: neznámý režim \"{$mode}\" (offer | usage | auto)</error>");
+            return self::ITEMS_MODE_INVALID;
+        }
+        return $mode;
     }
 
     private function floatOption(InputInterface $input, string $name, float $default): float

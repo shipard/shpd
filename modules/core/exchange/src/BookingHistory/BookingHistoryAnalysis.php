@@ -41,7 +41,66 @@ final class BookingHistoryAnalysis
          * @var array{records: int, rows: int, byAccount: array<string, int>}
          */
         public readonly array $degradedExact = ['records' => 0, 'rows' => 0, 'byAccount' => []],
+        /**
+         * Kód položky ve zdroji → řádky, přes **všechny** záznamy souboru.
+         *
+         * @var array<string, int>
+         */
+        public readonly array $fileItemCodes = [],
     ) {}
+
+    /**
+     * Výsledky klasifikace agregované per kód položky — vstup otagování
+     * z užití (D38).
+     *
+     * Sčítají se jen **obsahonosné** texty (degenerované se do clusterů
+     * nedostanou už při průchodu, D33) — text shodný s názvem položky by
+     * jinak kruhově potvrzoval sám sebe. `null` (model štítek nenašel) je
+     * v tally **plnohodnotný soupeř**: u catch-all a leasingových položek
+     * má vyhrát a znamenat „bez návrhu".
+     *
+     * @return array<string, array{tags: array<string, int>, rows: int, dominant: ?string, dominantRows: int, share: float, dominantIsNull: bool, tie: bool}>
+     *         `tags` má prázdný string jako značku výsledku `null`;
+     *         `dominant` je štítek jen když vyhrál štítek — u `null`
+     *         výsledku a remízy je `null` a rozliší je příznaky
+     */
+    public function usageByItemCode(): array
+    {
+        $usage = [];
+        foreach ($this->clusters as $cluster) {
+            if (!$cluster->llmClassified) {
+                continue;
+            }
+            $key = $cluster->llmTag ?? '';
+            foreach ($cluster->itemCodes as $code => $rows) {
+                $entry = $usage[$code] ?? ['tags' => [], 'rows' => 0];
+                $entry['tags'][$key] = ($entry['tags'][$key] ?? 0) + $rows;
+                $entry['rows'] += $rows;
+                $usage[$code] = $entry;
+            }
+        }
+
+        foreach ($usage as $code => $entry) {
+            $winner = null;
+            $winnerRows = 0;
+            $tie = false;
+            foreach ($entry['tags'] as $tag => $rows) {
+                if ($rows > $winnerRows) {
+                    $winnerRows = $rows;
+                    $winner = (string) $tag;
+                    $tie = false;
+                } elseif ($rows === $winnerRows) {
+                    $tie = true;
+                }
+            }
+            $usage[$code]['dominantIsNull'] = $winner === '';
+            $usage[$code]['tie'] = $tie;
+            $usage[$code]['dominant'] = ($tie || $winner === '' || $winner === null) ? null : $winner;
+            $usage[$code]['dominantRows'] = $winnerRows;
+            $usage[$code]['share'] = $entry['rows'] > 0 ? $winnerRows / $entry['rows'] : 0.0;
+        }
+        return $usage;
+    }
 
     /** Zamítla kontrola názvů aspoň jednu přesnou shodu? */
     public function hasDegradedExact(): bool

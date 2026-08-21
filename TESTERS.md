@@ -142,13 +142,25 @@ v malování.
 Když si nejsi jistý, jestli to jde napsat veřejně, napiš nám na
 **podpora@shipard.cz** a hlášení založíme za tebe.
 
+A když si nejsi jistý, jestli je to vůbec chyba — nebo se ti prostě
+nechce vyplňovat formulář kvůli něčemu, co je možná drobnost — zeptej
+se nejdřív na našem **[Discordu](https://discord.gg/PWTt5EUFAV)**.
+Společně vyhodnotíme, jestli to za issue stojí, a případně ho
+založíme my.
+
 ---
 
 ## 6. Kde se ptát
 
 Issues jsou na chyby a nápady. Když se jen chceš na něco **zeptat** — jak
 se něco dělá, jestli je něco chyba nebo tvoje nepochopení, jak jsi na tom
-s přístupem — napiš na **podpora@shipard.cz**.
+s přístupem — máš dvě cesty:
+
+- **[Discord](https://discord.gg/PWTt5EUFAV)** — nejrychlejší. Je to
+  neformální místo, kde sedíme my i ostatní testeři; na rychlou otázku
+  většinou přijde rychlá odpověď. Nemusíš nic dlouze formulovat, klidně
+  napiš „nejde mi X, dělám něco blbě?“
+- **podpora@shipard.cz** — když ti e-mail vyhovuje víc, funguje pořád.
 
 Není hloupá otázka. Když něco nejde najít, je to většinou naše chyba,
 ne tvoje.

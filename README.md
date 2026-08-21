@@ -24,6 +24,13 @@ a jak nahlásit chybu: [TESTERS.md](TESTERS.md)
 
 Jak rozjet vývojové prostředí na Ubuntu LTS za pár minut: [DEVELOPERS.md](DEVELOPERS.md)
 
+## Komunita
+
+Rychlý dotaz, nejasnost, nebo si jen chceš popovídat o tom, kam Shipard
+míří? Máme **[Discord](https://discord.gg/PWTt5EUFAV)** — je nás tam
+zatím hrstka, ale odpovídáme rychle a žádná otázka není moc malá.
+Přijď klidně jen nakouknout.
+
 ## Dokumentace
 
 Jak se v Shipardu dělají věci (návody pro uživatele): [help/](help/README.md)

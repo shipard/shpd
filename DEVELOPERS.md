@@ -220,6 +220,11 @@ Pořád to nejde? Založ issue na
 `shpd-server doctor` a relevantními řádky z logu — díky tomu to
 rozklíčujeme nejrychleji.
 
+A když jde jen o rychlý dotaz, na který se nechce zakládat issue —
+„je tohle záměr, nebo bug?“, „jak se dělá X?“ — stav se na našem
+**[Discordu](https://discord.gg/PWTt5EUFAV)**. Je nás tam málo, ale
+odpovídáme ochotně a rychle.
+
 ---
 
 ## 10. Kam dál

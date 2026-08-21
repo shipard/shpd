@@ -1,0 +1,56 @@
+/**
+ * API helpers for the reports endpoints (tasks/reports-phase3.md, docs/reports.md):
+ *   GET /_reports              — catalog of declared reports + fiscal periods
+ *   GET /_reports/{reportId}   — run a report; query = params
+ *                                (fiscalYear, monthFrom, monthTo, detail)
+ *
+ * Result with `status: errors` is HTTP 200 — a data error is not a request
+ * error; the renderer shows it (badge + red rows), it is not a fetch failure.
+ */
+
+import { get } from './client.js';
+
+/**
+ * @returns {Promise<{success: boolean, data?: {items: Array<{id: string, name: string,
+ *   periodGranularities: string[], params: Array<object>}>,
+ *   periods: {fiscalYears: Array<{name: string, months: number}>}}, error?: object}>}
+ */
+export async function fetchReportCatalog() {
+  return await get('/_reports');
+}
+
+/**
+ * @param {string} reportId
+ * @param {{fiscalYear: string, monthFrom: number, monthTo: number, detail: string}} params
+ * @returns {Promise<{success: boolean, data?: object, error?: object}>} data = ReportResult
+ */
+export async function runReport(reportId, params) {
+  const query = new URLSearchParams({
+    fiscalYear: params.fiscalYear,
+    monthFrom: String(params.monthFrom),
+    monthTo: String(params.monthTo),
+    detail: params.detail,
+  });
+  return await get(`/_reports/${encodeURIComponent(reportId)}?${query}`);
+}
+
+/**
+ * Výchozí období = poslední celý měsíc existujícího fiskálního roku.
+ * Fiskální roky v1 jsou zarovnané na kalendář (name = kalendářní rok) —
+ * bez mapy fiskální↔kalendářní měsíc bereme pořadí měsíce v roce jako
+ * kalendářní měsíc; u ne-kalendářního roku degraduje na poslední měsíc.
+ *
+ * @param {Array<{name: string, months: number}>} fiscalYears (řazené dle name)
+ * @param {Date} [now]
+ * @returns {{fiscalYear: string, monthFrom: number, monthTo: number}|null} null bez fiskálních roků
+ */
+export function defaultPeriod(fiscalYears, now = new Date()) {
+  if (!Array.isArray(fiscalYears) || fiscalYears.length === 0) return null;
+  const currentYear = now.getFullYear();
+  const candidates = fiscalYears.filter((y) => Number(y.name) <= currentYear);
+  const year = (candidates.length > 0 ? candidates : fiscalYears).at(-1);
+  const month = Number(year.name) === currentYear
+    ? Math.min(Math.max(now.getMonth(), 1), year.months) // getMonth() 0-based → minulý měsíc
+    : year.months;
+  return { fiscalYear: String(year.name), monthFrom: month, monthTo: month };
+}

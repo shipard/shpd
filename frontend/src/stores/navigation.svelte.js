@@ -44,6 +44,9 @@ function navigate(item) {
     viewerId: item.viewerId,
     pageId: item.pageId ?? null,
     panelId: item.panelId ?? null,
+    // Parametry panel komponenty ze serveru (reporty: {reportId}) — jedna
+    // generická komponenta obslouží víc sidebar položek.
+    panelParams: item.panelParams ?? null,
     filter: item.filter ?? null,
     // Napevno daný viewGroup vieweru (sidebar položky saldokont) — viewer
     // pak skryje chip lištu a všechny fetche filtruje touto hodnotou.
@@ -160,6 +163,7 @@ function ensureDefaultActiveItem(navTree = null) {
     viewerId: leaf.viewerId ?? null,
     pageId: leaf.pageId ?? null,
     panelId: leaf.panelId ?? null,
+    panelParams: leaf.panelParams ?? null,
     filter: leaf.filter ?? null,
     fixedViewGroup: leaf.fixedViewGroup ?? null,
   };

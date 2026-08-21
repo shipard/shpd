@@ -8,6 +8,7 @@
   import DsSetup from '../settings/DsSetup.svelte';
   import ContentTagsSettings from '../settings/ContentTagsSettings.svelte';
   import PortalContent from '../portal/PortalContent.svelte';
+  import ReportsPage from '../reports/ReportsPage.svelte';
   import { t } from '../../i18n/index.js';
 
   let { activeItem = null, onOpenThemePanel } = $props();
@@ -19,6 +20,7 @@
     dsSetup: DsSetup,
     contentTags: ContentTagsSettings,
     hostingPortal: PortalContent,
+    reports: ReportsPage,
   };
 
   const PanelComponent = $derived(
@@ -38,7 +40,8 @@
   {:else if activeItem?.type === 'page'}
     <SettingsPage tab={activeItem} {onOpenThemePanel} />
   {:else if PanelComponent}
-    <PanelComponent />
+    <!-- item: panel s panelParams (reporty) — ostatní panely prop ignorují -->
+    <PanelComponent item={activeItem} />
   {:else if activeItem}
     <!-- Placeholder for future content types (form, …) -->
     <div class="shpd-content__empty">

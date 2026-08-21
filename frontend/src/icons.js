@@ -30,6 +30,7 @@ import {
   faGear,
   faGears,
   faCalculator,
+  faChartColumn,
   faUser,
   faUsers,
   faBuilding,
@@ -120,6 +121,7 @@ export const iconUsers = faUsers;
 export const iconLock = faLock;
 
 // ── Číselníky / moduly (sidebar, navigace) ──────────────────────
+export const iconChart = faChartColumn;
 export const iconCompany = faBuilding;
 export const iconInvoice = faFileInvoiceDollar;
 export const iconInvoiceIn = faFileInvoice;
@@ -217,6 +219,7 @@ export const iconMap = {
   'logout': iconLogout,
   'lock': iconLock,
   'calculator': iconCalculator,
+  'chart': iconChart,
   'app-settings': iconAppSettings,
   'alert': iconAlert,
   'dashboard': iconDashboard,

@@ -184,6 +184,10 @@ class NavigationController
         // saldokonta) — stejné bucketování _section/_order jako statické.
         $items = array_merge($items, $this->collectProviderItems($resolvedModules, $db, $language, $isAdmin, $tables));
 
+        // Skupina Reporty — z report deklarací (docs/reports.md D7/D10):
+        // jedna deklarace řídí navigaci i UI.
+        $items = array_merge($items, $this->collectReportItems($resolvedModules, $config, $resolver, $language));
+
         // Bucket by navSection. `_top` → root-level leaves; unknown → fallback.
         $topLeaves = [];
         $buckets   = [];
@@ -456,6 +460,76 @@ class NavigationController
                     ErrorLogger::logException($e, "Navigation provider '{$class}' failed");
                 }
             }
+        }
+        return $items;
+    }
+
+    /**
+     * Skupina Reporty per sekce z report deklarací (`reports` v module.jsonc,
+     * viz docs/reports.md D7/D10). Child = leaf `{type: 'panel', panelId:
+     * 'reports', panelParams: {reportId}}` — jednu generickou stránku
+     * parametrizuje id reportu. Reporty bez `navSection` do navigace
+     * nevstupují. Loader se volá jen když má některý modul deklarace;
+     * selhání loaderu navigaci neshodí (vzor collectProviderItems).
+     *
+     * @param  ModuleDefinition[]  $resolvedModules
+     * @return array<int, array<string, mixed>>
+     */
+    private function collectReportItems(
+        array $resolvedModules,
+        DataSourceConfig $config,
+        ModulePathResolver $resolver,
+        string $language,
+    ): array {
+        $hasReports = false;
+        foreach ($resolvedModules as $module) {
+            if ($module->reports !== []) {
+                $hasReports = true;
+                break;
+            }
+        }
+        if (!$hasReports) {
+            return [];
+        }
+
+        try {
+            $registry = \Shipard\Api\ReportDefinitionLoader::load($config, $resolver, $language);
+        } catch (\Throwable $e) {
+            ErrorLogger::logException($e, 'Report definitions failed to load for navigation');
+            return [];
+        }
+
+        $bySection = [];
+        foreach ($registry->getAll() as $definition) {
+            if ($definition->navSection === null) {
+                continue;
+            }
+            $bySection[$definition->navSection][] = $definition;
+        }
+
+        $items = [];
+        foreach ($bySection as $section => $definitions) {
+            usort($definitions, fn ($a, $b) => $a->navOrder <=> $b->navOrder);
+            $children = [];
+            foreach ($definitions as $definition) {
+                $children[] = [
+                    'id'          => 'report:' . $definition->id,
+                    'label'       => $definition->name,
+                    'type'        => 'panel',
+                    'panelId'     => 'reports',
+                    'panelParams' => ['reportId' => $definition->id],
+                    'icon'        => 'chart',
+                ];
+            }
+            // Id skupiny je stabilní 'reports' — v praxi žijí reporty v jedné
+            // sekci (accounting); víc sekcí by chtělo id per sekce.
+            $items[] = [
+                'id'       => 'reports',
+                'label'    => $language === 'cs' ? 'Reporty' : 'Reports',
+                'children' => $children,
+                '_section' => (string) $section,
+                '_order'   => $definitions[0]->navOrder,
+            ];
         }
         return $items;
     }

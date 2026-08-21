@@ -20,6 +20,7 @@ final class ReportDefinition
      * @param list<string> $periodGranularities Podmnožina GRANULARITIES.
      * @param list<array{id: string, type: string, options: list<string>, default: mixed}> $params
      *        Schéma ne-periodových parametrů.
+     * @param ?string $navSection Sekce hlavní navigace; null = report do navigace nevstupuje.
      */
     public function __construct(
         public readonly string $id,
@@ -28,6 +29,8 @@ final class ReportDefinition
         public readonly array $periodGranularities,
         public readonly array $params,
         public readonly string $moduleId,
+        public readonly ?string $navSection = null,
+        public readonly int $navOrder = 1000,
     ) {}
 
     /** @param array<string, mixed> $data */
@@ -96,6 +99,15 @@ final class ReportDefinition
             ];
         }
 
+        $navSection = $data['navSection'] ?? null;
+        if ($navSection !== null && (!is_string($navSection) || $navSection === '')) {
+            throw new \InvalidArgumentException("Report '{$id}': 'navSection' must be a non-empty string");
+        }
+        $navOrder = $data['navOrder'] ?? 1000;
+        if (!is_int($navOrder)) {
+            throw new \InvalidArgumentException("Report '{$id}': 'navOrder' must be an integer");
+        }
+
         return new self(
             id: $id,
             name: $name,
@@ -103,6 +115,8 @@ final class ReportDefinition
             periodGranularities: array_values($granularities),
             params: $params,
             moduleId: $moduleId,
+            navSection: $navSection,
+            navOrder: $navOrder,
         );
     }
 }

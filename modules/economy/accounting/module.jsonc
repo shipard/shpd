@@ -141,5 +141,15 @@
         {
             "file": "config/reports.jsonc"
         }
+    ],
+
+    // Panel ReportViewer — bez navSection: do navigace vstupují per-report
+    // children (NavigationController, skupina Reporty), panel sám ne.
+    "panels": [
+        {
+            "id": "reports",
+            "name": "Reports",
+            "name:cs": "Reporty"
+        }
     ]
 }

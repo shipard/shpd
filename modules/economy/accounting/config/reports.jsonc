@@ -3,6 +3,8 @@
 [
     {
         "id": "economy.accounting.generalLedger",
+        "navSection": "accounting",
+        "navOrder": 60,
         "name": "General ledger",
         "name:cs": "Hlavní kniha",
         "name:en": "General ledger",
@@ -14,6 +16,8 @@
     },
     {
         "id": "economy.accounting.profitLoss",
+        "navSection": "accounting",
+        "navOrder": 61,
         "name": "Profit and loss",
         "name:cs": "Výsledovka",
         "name:en": "Profit and loss",
@@ -25,6 +29,8 @@
     },
     {
         "id": "economy.accounting.balanceSheet",
+        "navSection": "accounting",
+        "navOrder": 62,
         "name": "Balance sheet",
         "name:cs": "Rozvaha",
         "name:en": "Balance sheet",

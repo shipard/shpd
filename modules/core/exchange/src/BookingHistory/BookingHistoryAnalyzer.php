@@ -30,14 +30,24 @@ final class BookingHistoryAnalyzer
         $clusters = [];
         $matchKindRows = [];
         $recordCount = 0;
+        $degraded = ['records' => 0, 'rows' => 0, 'byAccount' => []];
 
         foreach ($file->records() as $record) {
             $recordCount++;
-            $match = $accountTags->resolve($record->account);
+            // itemName je vstup sanity checku přesné shody (D36) — bez něj
+            // by mapa při neznámé osnově neměla čím ověřit analytiku.
+            $match = $accountTags->resolve($record->account, $record->itemName);
 
             $quality->add($record);
             $seed->add($record, $match);
             $matchKindRows[$match->kind] = ($matchKindRows[$match->kind] ?? 0) + $record->rowCount;
+
+            if ($match->degradedExact) {
+                $degraded['records']++;
+                $degraded['rows'] += $record->rowCount;
+                $account = (string) $record->account;
+                $degraded['byAccount'][$account] = ($degraded['byAccount'][$account] ?? 0) + $record->rowCount;
+            }
 
             // Clustery jen z obsahonosných textů — degenerovaný text nemá co
             // klasifikovat a v matici konzistence by dělal šum (D33).
@@ -57,6 +67,7 @@ final class BookingHistoryAnalyzer
             clusters: $clusters,
             recordCount: $recordCount,
             matchKindRows: $matchKindRows,
+            degradedExact: $degraded,
         );
     }
 }

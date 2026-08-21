@@ -216,6 +216,29 @@ final class BookingHistoryReport
             $this->num($this->matchKindRows([AccountTagMatch::KIND_NO_ACCOUNT])),
         ));
 
+        if ($this->analysis->hasDegradedExact()) {
+            $degraded = $this->analysis->degradedExact;
+            $this->line();
+            $this->line(sprintf(
+                'Kontrola názvů zamítla **%s** přesných shod (%s řádků): číslo účtu v nabídce'
+                . ' sedělo, ale název položky ve zdroji znamená něco jiného. Takové záznamy'
+                . ' spadly na hrubší syntetickou úroveň (D36).',
+                $this->num($degraded['records']),
+                $this->num($degraded['rows']),
+            ));
+            $this->line();
+            $this->line('| Účet | Zamítnuté řádky | Štítek z nabídky |');
+            $this->line('|---|--:|---|');
+            foreach ($this->analysis->degradedExactAccounts() as $entry) {
+                $this->line(sprintf(
+                    '| `%s` | %s | %s |',
+                    $entry['account'],
+                    $this->num($entry['rows']),
+                    $entry['offerTags'] !== [] ? '`' . implode('`, `', $entry['offerTags']) . '`' : '—',
+                ));
+            }
+        }
+
         $missing = $this->analysis->accountsWithoutReverseTag(self::TOP_ACCOUNTS);
         if ($missing !== []) {
             $this->line();

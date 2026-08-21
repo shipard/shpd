@@ -1,0 +1,6 @@
+{"format":"shpd.economy.booking-history","version":1,"sourceSystem":{"name":"other-erp"},"sourceRef":"anonymizovaný zdroj","chartVariant":"unknown","currency":"CZK","period":{"from":"2015-01-01","to":"2026-06-30"},"docTypes":["invni"],"recordCount":5}
+{"companyId":"11111111","account":"518201","itemCode":"518201","itemName":"Finanční leasing 1","rowText":"Leasingová splátka stroje 1/48","docCount":12,"rowCount":12,"totalAmount":144000}
+{"companyId":"11111111","account":"518202","itemCode":"518202","itemName":"Finanční leasing 2","rowText":"Leasingová splátka stroje 2/48","docCount":12,"rowCount":12,"totalAmount":132000}
+{"companyId":"22222222","account":"518202","itemCode":"518202","itemName":"Internetové připojení","rowText":"Paušál internet 250/50","docCount":24,"rowCount":24,"totalAmount":48000}
+{"companyId":"33333333","account":"518202","itemCode":"518202","rowText":"Připojení k internetu","docCount":6,"rowCount":6,"totalAmount":12000}
+{"companyId":"44444444","account":"503100","itemCode":"503100","itemName":"Kancelářský nábytek","rowText":"Skříň dubová","docCount":4,"rowCount":4,"totalAmount":40000}

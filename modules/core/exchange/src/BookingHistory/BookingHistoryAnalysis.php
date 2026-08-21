@@ -35,7 +35,42 @@ final class BookingHistoryAnalysis
         public readonly int $recordCount,
         /** @var array<string, int> druh reverzní shody → řádky */
         public readonly array $matchKindRows,
+        /**
+         * Přesné shody zamítnuté kontrolou názvu (D36).
+         *
+         * @var array{records: int, rows: int, byAccount: array<string, int>}
+         */
+        public readonly array $degradedExact = ['records' => 0, 'rows' => 0, 'byAccount' => []],
     ) {}
+
+    /** Zamítla kontrola názvů aspoň jednu přesnou shodu? */
+    public function hasDegradedExact(): bool
+    {
+        return ($this->degradedExact['records'] ?? 0) > 0;
+    }
+
+    /**
+     * Účty, na kterých kontrola názvů zamítla přesnou shodu — nejvíc
+     * zasažené první. Přímý seznam k prohlédnutí: buď cizí analytika
+     * znamená něco jiného (správná degradace), nebo je název položky
+     * v exportu k ničemu.
+     *
+     * @return list<array{account: string, rows: int, offerTags: list<string>}>
+     */
+    public function degradedExactAccounts(int $limit = 10): array
+    {
+        $accounts = $this->degradedExact['byAccount'] ?? [];
+        arsort($accounts);
+        $out = [];
+        foreach ($accounts as $account => $rows) {
+            $out[] = [
+                'account'   => (string) $account,
+                'rows'      => $rows,
+                'offerTags' => $this->accountTags->tagsForAccount((string) $account),
+            ];
+        }
+        return $limit > 0 ? array_slice($out, 0, $limit) : $out;
+    }
 
     /** @return array<string, TextCluster> */
     public function clusters(): array

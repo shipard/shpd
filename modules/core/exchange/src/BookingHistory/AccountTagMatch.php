@@ -9,6 +9,11 @@ namespace Shipard\Module\Core\Exchange\BookingHistory;
  * `tag` je neprázdný jen u druhů `exact` a `synthetic`; ostatní druhy nesou
  * důvod, proč štítek nevznikl — report je vykazuje odděleně, protože
  * „účet mimo nabídku" a „kolizní účet" jsou jiné vady zdroje.
+ *
+ * `degradedExact` říká, že účet **v nabídce byl** s jednoznačným štítkem,
+ * ale kontrola názvu položky ho zamítla (D36) a výsledek pochází teprve
+ * z hrubší syntetické úrovně. Není to druh výsledku, ale okolnost jeho
+ * vzniku — proto flag, ne `kind`: report chce vědět obojí zvlášť.
  */
 final readonly class AccountTagMatch
 {
@@ -28,6 +33,7 @@ final readonly class AccountTagMatch
         public ?string $tag,
         public string $kind,
         public array $candidates = [],
+        public bool $degradedExact = false,
     ) {}
 
     public function isHit(): bool

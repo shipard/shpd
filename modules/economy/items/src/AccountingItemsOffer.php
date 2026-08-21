@@ -97,6 +97,57 @@ class AccountingItemsOffer
     }
 
     /**
+     * Jako {@see tagsByAccount()}, ale s **názvy položek nabídky** per štítek:
+     * `účet → štítek → názvy`. Vrací všechny jazykové varianty názvu
+     * (`name`, `name:cs`, `name:en`) — konzument porovnává proti maximu, aby
+     * výsledek nezávisel na jazyku DS.
+     *
+     * Slouží sanity checku reverzu při neznámé osnově (D36,
+     * `AccountTagMap`): cizí systém vede pod `518202` finanční leasing,
+     * nabídka tam má internetové připojení — bez porovnání názvů by přesná
+     * shoda čísla vyrobila falešný štítek.
+     *
+     * @return array<string, array<string, list<string>>>
+     */
+    public function namesByAccountTag(?string $variant = null): array
+    {
+        $variant ??= $this->variant();
+        $seed = $variant !== null ? $this->loadSeed($variant) : null;
+        if ($seed === null) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($seed['items'] as $entry) {
+            $account = (string) ($entry['account'] ?? '');
+            if ($account === '') {
+                continue;
+            }
+            $names = [];
+            foreach (['name', 'name:cs', 'name:en'] as $key) {
+                $name = trim((string) ($entry[$key] ?? ''));
+                if ($name !== '' && !in_array($name, $names, true)) {
+                    $names[] = $name;
+                }
+            }
+            if ($names === []) {
+                continue;
+            }
+            foreach ((array) ($entry['contentTags'] ?? []) as $tag) {
+                if (!is_string($tag) || $tag === '') {
+                    continue;
+                }
+                foreach ($names as $name) {
+                    if (!in_array($name, $out[$account][$tag] ?? [], true)) {
+                        $out[$account][$tag][] = $name;
+                    }
+                }
+            }
+        }
+        return $out;
+    }
+
+    /**
      * Fallback účet pro obsahový štítek z nabídky aktivní varianty osnovy —
      * číslo účtu první položky nabídky nesoucí přesně tento štítek; když
      * žádná není, prefix fallback (D3): první položka se štítkem stejné

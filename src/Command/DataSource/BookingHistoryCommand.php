@@ -135,7 +135,9 @@ class BookingHistoryCommand extends Command
 
         $offer = new AccountingItemsOffer($dsConnection, $resolver);
         $variant = $file->header->effectiveChartVariant();
-        $accountTags = AccountTagMap::fromOffer($offer, $variant);
+        // Neznámá osnova → přesná shoda analytiky se ověřuje názvem položky
+        // (D36); u deklarované osnovy analytikám věříme.
+        $accountTags = AccountTagMap::fromOffer($offer, $variant, $file->header->chartVariantIsGuessed());
 
         $this->printHeader($output, $file, $variant, $accountTags);
 

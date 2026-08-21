@@ -34,6 +34,7 @@ Technické specifikace projektu Shipard.
 | [accounting.md](accounting.md) | Účtování dokladů — automatické generování záznamů účetního deníku z obsahu dokladu (pohyb → předpis → kategorie → maska účtu → rozvrh), bez ručního zadávání účtů |
 | [bank.md](bank.md) | **Referenční spec modulu** `economy.bank`: bankovní transakce a výpisy, ingestion (parsery + dedup), účtovací mikroengine, clearing účty nespárovaných plateb, polymorfní zdroj deníku, migrace. Fáze 1–4 hotové. |
 | [ds-setup.md](ds-setup.md) | **Designový dokument** — nastavení nového zdroje dat: tři vrstvy nastavení (instalační parametry / referenční data / firemní identita), odvozený checklist chybějícího nastavení nad setup checky, průvodce jako UI nad ním, plátcovství DPH. Plán, implementace nezačala. |
+| [reports.md](reports.md) | **Designový dokument** domény `report`: datové výstupy — princip „jeden výpočet, N prezentací" (`ReportResult` JSON → viewer/REST/MCP/diff), plochý model řádků, strany účtu místo znamének, fiskální období, generické MCP tooly. První reporty: hlavní kniha, výsledovka, rozvaha. Návrh (issue #42). |
 | [accbal.md](accbal.md) | **Designový dokument** modulu `economy.accbal`: saldokonto postavené nad účetním deníkem — nastavení skupin a účtů, generátor pohybů z deníku (předpisy/úhrady) + allocations, clearing nespárovaných plateb, událost `journalWritten`. Fáze 0–2 hotové, matcher (Fáze 3) v přípravě. |
 
 Nginx konfigurace jsou v [`nginx/`](nginx/) (app.conf, development.conf, production.conf).

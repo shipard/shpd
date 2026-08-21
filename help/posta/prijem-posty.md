@@ -33,9 +33,11 @@ se ti ji přepisovat do systému ručně.
    → **Analyzuje se** → **Analyzováno**.
 
 4. **Vyzvedni si výsledek na Dashboardu.** Když AI ve zprávě našla fakturu,
-   zpráva se sama přepne na **K řešení** a na Dashboardu se objeví karta —
-   u jistého návrhu s tlačítkem **Použít**, jinak **Zkontrolovat**. Odtud
-   pokračuj podle [Kontrola vytěženého dokladu](kontrola-vytezeni.md).
+   zpráva se sama přepne na **K řešení** a na Dashboardu se objeví návrh —
+   jistý v sekci **Připraveno** (sbalený souhrnný pruh, tlačítko
+   **Použít** na řádku), ostatní jako karty v sekci **Ke kontrole**
+   s tlačítkem **Zkontrolovat**. Odtud pokračuj podle
+   [Kontrola vytěženého dokladu](kontrola-vytezeni.md).
 
 ## Na co narazíš
 
@@ -64,13 +66,14 @@ pošli každou samostatným e-mailem.
 
 **Dokument do Spisovny.** Když AI pozná smlouvu, pojistku, nabídku,
 revizi nebo úřední písemnost, nabídne na Dashboardu zařazení do
-**Spisovny** místo dokladu. Vzniklý záznam dostane **všechny přílohy
-zprávy** — jedno doručení = jeden záznam, jako v podacím deníku.
+**Spisovny** místo dokladu; jisté návrhy mají v sekci **Připraveno**
+vlastní pruh, oddělený od faktur. Vzniklý záznam dostane **všechny
+přílohy zprávy** — jedno doručení = jeden záznam, jako v podacím deníku.
 
 **Když to není faktura.** Reklamu, newsletter nebo upomínku AI pozná
-a místo návrhu dokladu se na Dashboardu objeví karta s akcemi **Do koše**
-a **Archivovat**. Rozdíl je jen v tom, kam zpráva zmizí; obojí ji odklidí
-z cesty a přílohy zůstanou.
+a místo návrhu dokladu se na Dashboardu objeví nenápadný řádek v sekci
+**Ostatní** s akcemi **Do koše** a **Archivovat**. Rozdíl je jen v tom,
+kam zpráva zmizí; obojí ji odklidí z cesty a přílohy zůstanou.
 
 **Hromadnou poštu Shipard pozná, ale sám ji neodklidí.** Newslettery se
 dají rozpoznat z hlaviček e-mailu (odhlašovací odkaz a podobné). Je to pro

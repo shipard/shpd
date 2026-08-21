@@ -53,24 +53,31 @@ class DashboardController
     ): Response {
         $lang = $language ?? 'en';
 
-        [$cards, $truncated] = $this->collectCards($db, $config, $lang, $alertRegistry, $tables);
+        [$cards, $truncated, $readySummary] = $this->collectCards($db, $config, $lang, $alertRegistry, $tables);
         if ($truncated) {
             $cards[] = $this->andMoreCard($lang);
         }
 
-        return Response::success([
-            'generatedAt'  => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
-            'summary'      => ['aiText' => null, 'counts' => $this->countByKind($cards)],
-            'cards'        => $cards,
-            // Capabilities (D9) — frontend podle nich skrývá upload a
-            // ChatLauncher. `chat` musí zůstat identický s podmínkou Chat
-            // root leafu v NavigationController (D5 + D10).
-            'capabilities' => [
-                'mailUpload' => isset($tables['core_mail_incoming_messages']),
-                'chat'       => isset($tables['core_chat_conversations'])
-                    && (($auth?->isAdmin ?? false) || !isset($tables['hosting_core_data_sources'])),
-            ],
-        ]);
+        $data = [
+            'generatedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
+            'summary'     => ['aiText' => null, 'counts' => $this->countByKind($cards)],
+            'cards'       => $cards,
+        ];
+        // Souhrn ready pásma pro sbalený pruh (Issue #32/2, D8) — jen když
+        // je aspoň jedna ready karta; jinak se pole vynechá.
+        if ($readySummary !== null) {
+            $data['readySummary'] = $readySummary;
+        }
+        // Capabilities (D9) — frontend podle nich skrývá upload a
+        // ChatLauncher. `chat` musí zůstat identický s podmínkou Chat
+        // root leafu v NavigationController (D5 + D10).
+        $data['capabilities'] = [
+            'mailUpload' => isset($tables['core_mail_incoming_messages']),
+            'chat'       => isset($tables['core_chat_conversations'])
+                && (($auth?->isAdmin ?? false) || !isset($tables['hosting_core_data_sources'])),
+        ];
+
+        return Response::success($data);
     }
 
     /**
@@ -118,7 +125,12 @@ class DashboardController
      * mezi `dashboard()` a `summary()` — obě odpovědi stojí nad týmiž kartami.
      * Info karta „…a další" se přidává až v `dashboard()` (do shrnutí nepatří).
      *
-     * @return array{0: list<array<string,mixed>>, 1: bool}  [karty, zda došlo k ořezu]
+     * `readySummary` se počítá tady (nad kartami po stropu) a interní pole
+     * `amount`/`currency` se hned odstraní — čisté karty tak dostane i AI
+     * shrnutí (`summary()`), digest cache se interními poli nemění.
+     *
+     * @return array{0: list<array<string,mixed>>, 1: bool, 2: array<string,mixed>|null}
+     *         [karty, zda došlo k ořezu, souhrn ready pásma]
      */
     private function collectCards(
         DataSourceConnection $db,
@@ -162,7 +174,90 @@ class DashboardController
             }
         }
 
-        return $this->sortAndCap($cards, self::MAX_CARDS);
+        [$cards, $truncated] = $this->sortAndCap($cards, self::MAX_CARDS);
+        $readySummary = $this->buildReadySummary($cards);
+
+        return [$this->stripInternalFields($cards), $truncated, $readySummary];
+    }
+
+    /**
+     * Souhrn ready pásma pro sbalené pruhy feedu (Issue #32/2, D8 + D11).
+     * Počítá se z karet PO `sortAndCap` — souhrn odpovídá tomu, co uživatel
+     * vidí — a dělí se **per kategorie**: `invoices` (přijaté faktury,
+     * defenzivní default) a `registry` (Spisovna) mají každá vlastní pruh.
+     * Částky se agregují per měna, nikdy napříč měnami; karta bez
+     * `amount`/`currency` se do `amounts` nezapočítá, do `count` ano
+     * (registry karty částky nenesou → jejich `amounts` je vždy prázdné).
+     * `confidencePct` u ready karet vždy existuje (pásmo se bez jistoty
+     * nespočítá), kód je přesto defenzivní — bez hodnot zůstane min/max null.
+     *
+     * @param  list<array<string,mixed>> $cards
+     * @return array<string, array{count:int,
+     *               amounts:list<array{currency:string,total:float}>,
+     *               confidenceMin:int|null, confidenceMax:int|null}>|null
+     *         klíče `invoices`/`registry`, jen neprázdné skupiny;
+     *         null = žádná ready karta (pole se v odpovědi vynechá)
+     * @internal Public pro účely testů — čistá transformace bez business logiky.
+     */
+    public function buildReadySummary(array $cards): ?array
+    {
+        $groups = [];
+        foreach ($cards as $card) {
+            if (($card['kind'] ?? '') !== 'ready') {
+                continue;
+            }
+            $key = ($card['category'] ?? '') === 'registry' ? 'registry' : 'invoices';
+            $g = $groups[$key] ?? ['count' => 0, 'totals' => [], 'confMin' => null, 'confMax' => null];
+            $g['count']++;
+            $amount   = $card['amount'] ?? null;
+            $currency = $card['currency'] ?? null;
+            if ((is_int($amount) || is_float($amount)) && is_string($currency) && $currency !== '') {
+                $g['totals'][$currency] = ($g['totals'][$currency] ?? 0.0) + (float) $amount;
+            }
+            $conf = $card['confidencePct'] ?? null;
+            if (is_int($conf)) {
+                $g['confMin'] = $g['confMin'] === null ? $conf : min($g['confMin'], $conf);
+                $g['confMax'] = $g['confMax'] === null ? $conf : max($g['confMax'], $conf);
+            }
+            $groups[$key] = $g;
+        }
+        if ($groups === []) {
+            return null;
+        }
+
+        $summary = [];
+        foreach (['invoices', 'registry'] as $key) {
+            if (!isset($groups[$key])) {
+                continue;
+            }
+            $amounts = [];
+            foreach ($groups[$key]['totals'] as $currency => $total) {
+                $amounts[] = ['currency' => (string) $currency, 'total' => round($total, 2)];
+            }
+            $summary[$key] = [
+                'count'         => $groups[$key]['count'],
+                'amounts'       => $amounts,
+                'confidenceMin' => $groups[$key]['confMin'],
+                'confidenceMax' => $groups[$key]['confMax'],
+            ];
+        }
+        return $summary;
+    }
+
+    /**
+     * Odstraní interní pole `amount`/`currency` (podklad pro readySummary)
+     * ze všech karet — do kartového kontraktu (docs/dashboard.md §4) nepatří.
+     *
+     * @param  list<array<string,mixed>> $cards
+     * @return list<array<string,mixed>>
+     * @internal Public pro účely testů.
+     */
+    public function stripInternalFields(array $cards): array
+    {
+        foreach ($cards as &$card) {
+            unset($card['amount'], $card['currency']);
+        }
+        return $cards;
     }
 
     /** Writes one SSE event frame and flushes it to the client. */

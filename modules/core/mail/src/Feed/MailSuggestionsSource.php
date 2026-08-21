@@ -248,6 +248,19 @@ final class MailSuggestionsSource implements FeedSource
                 : $this->cardSubtitle($ctx, $canonical, $confidence, $subject);
         }
 
+        // Interní numerická pole pro readySummary (Issue #32/2, D8) — jen
+        // návrhy dokladů (docs) s částkou i měnou. Controller je po agregaci
+        // z karet odstraní; do kartového kontraktu (docs/dashboard.md §4)
+        // nepatří.
+        if (!$isRegistry) {
+            $amount   = $this->amountValue($canonical);
+            $currency = is_string($canonical['currency'] ?? null) ? trim((string) $canonical['currency']) : '';
+            if ($amount !== null && $currency !== '') {
+                $card['amount']   = $amount;
+                $card['currency'] = $currency;
+            }
+        }
+
         if ($confidence !== null) {
             $card['confidencePct'] = (int) round($confidence * 100);
         }
@@ -801,17 +814,33 @@ final class MailSuggestionsSource implements FeedSource
     }
 
     /**
+     * Číselná hodnota celkové částky z canonical totals; null když chybí nebo
+     * není číselná. Sdílené mezi formatAmount() a interními poli pro
+     * readySummary — text na kartě a serverový souhrn musí vycházet z téže
+     * hodnoty.
+     *
+     * @param array<string,mixed> $canonical
+     */
+    private function amountValue(array $canonical): ?float
+    {
+        $total = $canonical['totals']['totalAmount'] ?? null;
+        if (!is_int($total) && !is_float($total) && !(is_string($total) && is_numeric($total))) {
+            return null;
+        }
+        return (float) $total;
+    }
+
+    /**
      * Naformátuje celkovou částku „{amount} {currency}" z canonical totals.
      *
      * @param array<string,mixed> $canonical
      */
     private function formatAmount(array $canonical): ?string
     {
-        $total = $canonical['totals']['totalAmount'] ?? null;
-        if (!is_int($total) && !is_float($total) && !(is_string($total) && is_numeric($total))) {
+        $amount = $this->amountValue($canonical);
+        if ($amount === null) {
             return null;
         }
-        $amount   = (float) $total;
         $currency = is_string($canonical['currency'] ?? null) ? (string) $canonical['currency'] : '';
         $formatted = number_format($amount, 2, ',', ' ');
         return $currency !== '' ? ($formatted . ' ' . $currency) : $formatted;

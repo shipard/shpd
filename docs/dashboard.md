@@ -18,14 +18,37 @@ feedem (SSE, cache dle hashe feedu, tichá degradace na statické county — §1
 │  🤖 Dnešní shrnutí                                            │
 │  Aktuálně máte: 1 naléhavou věc, 4 ke kontrole, 3 připravené. │
 ├──────────────────────────────────────────────────────────────┤
-│  🔴 Chyba analýzy e-mailu                                     │
-│     e-mail „Nečitelná faktura"     [Znovu analyzovat][Otevřít]│
-│  🟢 Přijatá faktura — ČEZ a.s.                                │
-│     4 200 Kč · jistota 94 %   [Použít][Zkontrolovat][Zamítnout]│
-│  🟡 Přijatá faktura — Dodavatel                               │
-│     jistota 62 %                     [Zkontrolovat][Zamítnout] │
+│  🔴 Vyžaduje pozornost (1)                                    │
+│  ┌──────────────────────────────────────────────────────────┐│
+│  │ Chyba analýzy e-mailu              ← plná karta, full-width│
+│  │ e-mail „Nečitelná faktura"    [Znovu analyzovat][Otevřít] ││
+│  └──────────────────────────────────────────────────────────┘│
+│  🟡 Ke kontrole (4)                                           │
+│  [plná karta]  [plná karta]        ← grid, 2 sloupce          │
+│  [plná karta]  [plná karta]                                   │
+│  🟢 Připraveno (3)                                            │
+│  ┌──────────────────────────────────────────────────────────┐│
+│  │ 3 doklady připravené k použití     ← sbalený souhrnný pruh││
+│  │ Celkem 96 420,00 CZK · jistota 91–98 %                    ││
+│  │                                    [Projít] [Zobrazit ▾]  ││
+│  └──────────────────────────────────────────────────────────┘│
+│  ℹ️ Ostatní (1)                                                │
+│    Není faktura — … · „…"        Koš · Archiv ← kompaktní řádek│
 └──────────────────────────────────────────────────────────────┘
 ```
+
+Feed je rozdělený do **sekcí podle pásem** (`kind`, Issue #32/2) s
+asymetrickou vizuální váhou: urgentní karty velké a plné (full-width),
+review karty střední (dnešní grid), ready pásmo defaultně **sbalené do
+souhrnného pruhu** (rozbalené = kompaktní jednořádkové položky) a info
+pásmo degradované na tlumené řádky. Vizuální váha odpovídá potřebné
+pozornosti — zelené karty, které vyžadují nejméně čtení, nezabírají
+většinu plochy. Prázdná sekce se nerenderuje (ani hlavička).
+
+Ready pásmo se dělí **per kategorie do dvou pruhů** (D11): pruh
+**Přijaté faktury** (součty per měna, jistota, Projít) a samostatný pruh
+**Spisovna** (vlastní titulek, bez součtů a bez Projít — průchod
+Spisovnou se přidá později). Zobrazí se jen neprázdné pruhy.
 
 ## 2. Princip
 
@@ -39,6 +62,12 @@ Fáze 1 (widget MVP) říkala *„přehled, ne přístupový bod"*. Fáze 2 ten 
 - Deterministika zůstává deterministická: **pravidla (alerts) pro stav, AI
   (analyzer) pro jazyk a nejednoznačnost.** Oba zdroje padají do téhož feedu.
 - **Řadí a stropuje server** (`sortAndCap`), frontend jen renderuje.
+- **Sekce podle pásem jsou čistě prezentační vrstva** (`Feed.svelte`,
+  Issue #32/2): `$derived` seskupení už seřazených karet, serverové řazení
+  se nemění. Kategorie chipů (invoices/registry/other) a pásma (`kind`)
+  jsou ortogonální — sekce se počítají nad filtrovanou množinou; warning
+  alert je kategorie Ostatní, ale sekce Ke kontrole (záměr). Jediné
+  serverové rozšíření je souhrn `readySummary` pro sbalený pruh (§7).
 
 ## 3. Architektura
 
@@ -187,9 +216,9 @@ Prioritní žebříček (sestupně), uvnitř pásma `timestamp` DESC.
 | `kind` | Pásmo | Zdroj → mapování |
 |---|---|---|
 | `urgent` | 🔴 | alert `error`; zpráva `analysis_state=70` (analýza selhala); nevalidní výstup AI (`mail_invalid`) |
-| `review` | 🟡 | otevřený návrh v pásmu `review`/`low` (runtime resolver); alert `warning`; chybová karta s `primary_type=other` |
+| `review` | 🟡 | otevřený návrh v pásmu `review`/`low` (runtime resolver); alert `warning`; chybová karta s `primary_type=other`; karta „Nová kategorie" (content tag, D12 — blokuje povýšení návrhů) |
 | `ready`  | 🟢 | otevřený návrh v pásmu `ready` (jednoklik apply) |
-| `info`   | ℹ️ | alert `info`; karta „Není faktura"; karta „Nová kategorie" (content tag); „a další…" karta |
+| `info`   | ℹ️ | alert `info`; karta „Není faktura"; „a další…" karta |
 
 ### 4.2 Slovník `kind` akcí (chování odvozuje frontend)
 
@@ -271,6 +300,15 @@ registry `party.name`). Feed je stropovaný, takže N `json_decode` je
 - **Návrhová karta s neprázdnými `secondary_findings`** běhu navíc nese
   `secondaryFindings` (viz §4) — hint dalších nálezů, D7.
 
+**Interní pole `amount`/`currency`** (Issue #32/2, D8): návrhové karty
+(docs target) s částkou i měnou v canonical nesou navíc numerické
+`amount` (float z `totals.totalAmount`, tatáž hodnota jako
+v `headline.amountText` — sdílený `amountValue()`) a `currency`.
+Registry ani chybové karty je nemají. Slouží **jen** jako podklad pro
+`readySummary` — `DashboardController` je po agregaci ze všech karet
+odstraní (`stripInternalFields()`), do kartového kontraktu (§4) nepatří
+a klient je nikdy nevidí.
+
 **Přílohy karet** — všechny druhy mail karet nesou volitelná pole
 `attachments`/`attachmentsTotal` (viz §4); zdroj je pro všechny stejný:
 **všechny obsahové přílohy zprávy** (D10 — `source_attachments` filtr
@@ -338,7 +376,11 @@ v PHP). Jedna karta per štítek — agregace `GROUP BY content_tag` dělá
 dedupe přes zprávy; query-driven bez dismiss stavu (karta zmizí, jakmile
 položka vznikne nebo žádný otevřený návrh štítek nepotřebuje).
 
-`id = "content_tag:{tag}"`, `kind=info`, `stateStyle=concept`,
+`id = "content_tag:{tag}"`, `kind=review` (od Issue #32/2 D12 — plná
+karta v sekci Ke kontrole; původně `info`, ale karta blokuje povýšení
+návrhů a po založení položky se přestane objevovat, takže si zaslouží
+plnou váhu; počítá se tím i do `summary.counts.review`),
+`stateStyle=concept`,
 `icon=question`, `category=invoices`, titulek „Nová kategorie: {label}"
 (label z cfgItem `core.exchange.contentTags` — lokalizuje server),
 podtitulek „{n} dokladů čeká · návrh: {starter} ({účet})",
@@ -453,6 +495,14 @@ načte další zprávu místo zavření. Vše frontend nad existujícími endpoi
   u rodiče; bez toastů a bez `load()`. „Pokračovat" spustí průchod;
   návrhy povýšené založenou položkou se projeví přirozeně (preview se
   počítá čerstvě). Snapshot fronty se předkrokem nemění.
+- **Ready-only průchod (Issue #32/2, D9)**: „Projít" v pruhu přijatých
+  faktur (variant `invoices`; pruh Spisovny Projít nemá, D11) volá
+  `startQueue('ready')` — snapshot je `queueableCards` navíc filtrované
+  `kind === 'ready'`; řazení a chování jinak identické (chronologicky,
+  counts, souhrnný toast). Stejný filtr projde i `tagCards` předkroku —
+  content_tag karty jsou review, takže předkrok u ready průchodu dostane
+  prázdný seznam a přirozeně se neukáže (logika se neobchází). Tlačítko
+  „Projít frontu (N)" u filtru zůstává beze změny (ready + review).
 
 ## 7. API kontrakt
 
@@ -467,6 +517,15 @@ načte další zprávu místo zavření. Vše frontend nad existujícími endpoi
     "generatedAt": "2026-06-28T08:42:11+00:00",
     "summary": { "aiText": null, "counts": { "urgent": 1, "review": 4, "ready": 3 } },
     "cards": [ /* seřazené dle žebříčku, strop MAX_CARDS ~30 */ ],
+    "readySummary": {
+      "invoices": {
+        "count": 3,
+        "amounts": [ { "currency": "CZK", "total": 96420.0 }, { "currency": "EUR", "total": 120.0 } ],
+        "confidenceMin": 91,
+        "confidenceMax": 98
+      },
+      "registry": { "count": 2, "amounts": [], "confidenceMin": 90, "confidenceMax": 97 }
+    },
     "capabilities": { "mailUpload": true, "chat": true }
   }
 }
@@ -477,6 +536,20 @@ načte další zprávu místo zavření. Vše frontend nad existujícími endpoi
   actionable pásma (urgent/review/ready).
 - Přetečení stropu → karty se ořežou a přidá se závěrečná info karta
   „…a další nezpracovaná pošta" s `open_viewer` na `core.mail.incoming`.
+- `readySummary` (Issue #32/2, D8 + D11) — souhrny ready pásma pro sbalené
+  pruhy, **per kategorie**: klíče `invoices` (přijaté faktury; karty bez
+  kategorie padají sem — defenzivní default shodný s frontendem)
+  a `registry` (Spisovna), jen neprázdné skupiny. Počítá se **po**
+  `sortAndCap` (souhrn = to, co uživatel vidí, `count` = počet ready karet
+  skupiny po stropu). `amounts` agregované **per měna** — nikdy se nesčítá
+  napříč měnami; karta bez částky se do `amounts` nezapočítá, do `count`
+  ano (registry karty částky nenesou → jejich `amounts` je vždy `[]`).
+  `confidenceMin/Max` z `confidencePct` ready karet skupiny (defenzivně
+  `null`, když žádná nemá jistotu). Bez ready karet se pole **vynechá**.
+  Podklad jsou interní pole `amount`/`currency` návrhových karet (§5.1),
+  která controller před odesláním z karet odstraní — kartový kontrakt (§4)
+  se nemění. Frontend částky formátuje lokálně (stejný vzor jako serverový
+  `formatAmount()`).
 - `capabilities` (task `hosting-07b`, D9): frontend podle nich skrývá
   ovládání funkcí, které na DS neexistují nebo uživateli nepatří.
   `mailUpload` = přítomnost `core_mail_incoming_messages` (tlačítko Nahrát,
@@ -535,10 +608,33 @@ frontend/src/components/dashboard/
 │                           reject prompt, form po vystavení,
 │                           toast (registry / auto-archiv),
 │                           stav sériového průchodu frontou (§6.6)
-├── Feed.svelte           — grid karet (auto-fill minmax(360px,1fr) → 2 sloupce
-│                           na desktopu, 1 na mobilu; row-major = serverové
+├── Feed.svelte           — sekce podle pásem (Issue #32/2): $derived seskupení
+│                           karet dle kind (neznámý kind → info), hlavičky
+│                           (barevná tečka + název + počet), prázdná sekce se
+│                           nerenderuje; urgent full-width stack, review grid
+│                           (auto-fill minmax(360px,1fr) → 2 sloupce na
+│                           desktopu, 1 na mobilu; row-major = serverové
 │                           řazení; stejná výška karet v řádku, žádný masonry),
+│                           ready → FeedReadySection, info → FeedRowCompact;
 │                           prázdný stav (prop emptyText → per-záložkový empty)
+├── FeedReadySection.svelte — jeden pruh ready pásma (D3/D4/D6 + D11);
+│                           Feed renderuje až dva (per kategorie): variant
+│                           invoices = sbalený souhrnný pruh (počet z
+│                           cards.length, součty per měna + rozsah jistoty
+│                           ze serverového readySummary.invoices, akce
+│                           Projít → onWalkthrough a Zobrazit ▾ → toggle,
+│                           rozbalené = orámovaný blok FeedRowCompact řádků
+│                           s patičkou „Projít frontu"); variant registry =
+│                           vlastní titulek, bez součtů a bez Projít
+│                           (průchod Spisovnou zatím není); stav rozbalení
+│                           lokální $state, default sbaleno, nepersistuje
+├── FeedRowCompact.svelte — kompaktní jednořádková položka (mode ready/info):
+│                           ready = donut jistoty, partner tučně, typ · datum,
+│                           částka, Použít (apply_message) + oko
+│                           (review_message); info = tlumený řádek
+│                           title/subtitle, akce z card.actions (heterogenní
+│                           — jen deleguje onAction, žádná vlastní logika);
+│                           busy disabluje všechna tlačítka
 ├── FeedFilter.svelte     — chip bar filtru kategorií (Vše/Faktury/Spisovna/
 │                           Ostatní), počet uvnitř chipu bez závorek; čistě
 │                           prezentační, counts/urgent/filtered počítá

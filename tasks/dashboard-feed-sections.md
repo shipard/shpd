@@ -1,6 +1,6 @@
 # Dashboard — sekce podle pásem + asymetrická vizuální váha (Issue #32/2)
 
-**Stav:** naplánováno
+**Stav:** hotovo
 
 ## Status
 
@@ -86,6 +86,21 @@ typ · datum, částka, [Použít], ikona oka → review modal), ne plné karty.
 10. **D10 — Hlavičky sekcí lokalizované** (cs/en), i18n klíče
     `dashboard.feed.section.{urgent,review,ready,info}` + texty pruhu
     `dashboard.feed.readyStrip.*`.
+11. **D11 — Dva pruhy v Připraveno** (doplněno při review 2026-08-21):
+    ready pásmo se dělí per kategorie — pruh **Přijaté faktury** (jako D3:
+    součty, jistota, Projít) a samostatný pruh **Spisovna** (vlastní
+    titulek, bez součtů částek a bez Projít — průchod Spisovnou se přidá
+    později). Smíchaný počet byl matoucí. `readySummary` je per skupina:
+    `{invoices?, registry?}` (jen neprázdné; karty bez kategorie →
+    invoices, defenzivní default shodný na serveru i frontendu).
+12. **D12 — Karta „Nová kategorie" je review** (doplněno při review
+    2026-08-21): `ContentTagSuggestionsSource` posílal `kind=info`
+    (zadání D9 mylně tvrdilo review) — v novém layoutu karta zapadla
+    jako tlumený řádek na konci sekce Ostatní, přestože blokuje povýšení
+    návrhů a po založení položek se přestane objevovat. Změna na
+    `kind=review` → plná karta v sekci Ke kontrole; nově se počítá i do
+    `summary.counts.review`. Předkrok průchodu se nemění (filtruje se
+    per `content_tag:*` prefix, ne per kind).
 
 ## Před implementací přečti
 

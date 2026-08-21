@@ -26,9 +26,9 @@ položku i účet.
 
 ### Karta Nová kategorie
 
-1. Karta se ukáže, když nějaké doklady čekají na kategorii, pro kterou
-   ještě nemáš otagovanou položku. V podtitulku vidíš, kolik dokladů čeká
-   a jaká položka se navrhne.
+1. Karta se ukáže v sekci **Ke kontrole**, když nějaké doklady čekají na
+   kategorii, pro kterou ještě nemáš otagovanou položku. V podtitulku
+   vidíš, kolik dokladů čeká a jaká položka se navrhne.
 2. Klikni na **Založit položku** — položka vznikne rovnou otagovaná
    a s účtem. U kategorie **Zboží / materiál na sklad** si místo toho
    vybereš mezi **Jako materiál (501…)** a **Jako zboží (504…)** podle

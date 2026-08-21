@@ -434,12 +434,21 @@
   // sebou v pořadí feedu — sort je stabilní). Existují-li ve feedu karty
   // „Nová kategorie", předřadí se předkrok (D8); snapshot zpráv se ale bere
   // už teď — materializace štítků ho nemění.
-  function startQueue() {
-    const list = [...queueableCards]
+  // kindFilter (Issue #32/2, D9): \u201eProj\u00edt" z ready pruhu omez\u00ed snapshot na
+  // p\u00e1smo ready. Stejn\u00fd filtr projde i tagCards p\u0159edkroku \u2014 content_tag
+  // karty jsou review, tak\u017ee p\u0159edkrok u ready pr\u016fchodu dostane pr\u00e1zdn\u00fd
+  // seznam a p\u0159irozen\u011b se neuk\u00e1\u017ee (logika se neobch\u00e1z\u00ed).
+  function startQueue(kindFilter = null) {
+    const source = kindFilter
+      ? queueableCards.filter((c) => c.kind === kindFilter)
+      : queueableCards;
+    const list = [...source]
       .sort((a, b) => (a.timestamp ?? '\uffff').localeCompare(b.timestamp ?? '\uffff'))
       .map((c) => c.context.messageNdx);
     if (list.length === 0) return;
-    const tagCards = (data?.cards ?? []).filter((c) => c.id?.startsWith('content_tag:'));
+    const tagCards = (data?.cards ?? []).filter(
+      (c) => c.id?.startsWith('content_tag:') && (!kindFilter || c.kind === kindFilter),
+    );
     if (tagCards.length > 0) {
       queuePrecheck = { cards: tagCards, list };
     } else {
@@ -625,7 +634,7 @@
               variant="primary"
               size="sm"
               label={t('dashboard.queue.button', { n: queueableCards.length })}
-              onclick={startQueue}
+              onclick={() => startQueue()}
             />
           </div>
         {/if}
@@ -634,8 +643,10 @@
 
     <Feed
       cards={filteredCards}
+      readySummary={data.readySummary ?? null}
       {busyCardId}
       onCardAction={handleCardAction}
+      onWalkthrough={() => startQueue('ready')}
       emptyText={feedFilter !== 'all' && (data.cards?.length ?? 0) > 0
         ? t('dashboard.feed.emptyCategory')
         : null}

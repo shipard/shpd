@@ -175,7 +175,10 @@ final class ContentTagSuggestionsSource implements FeedSource
         return [
             'id'         => 'content_tag:' . $tag,
             'source'     => 'contentTags',
-            'kind'       => 'info',
+            // review, ne info (Issue #32/2 D12): karta blokuje povýšení
+            // návrhů a po založení položky se přestane objevovat — patří
+            // mezi plné karty Ke kontrole, ne zapadlá v Ostatní.
+            'kind'       => 'review',
             'icon'       => 'question',
             'stateStyle' => 'concept',
             'category'   => FeedSource::CATEGORY_INVOICES,

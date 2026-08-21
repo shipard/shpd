@@ -14,9 +14,12 @@ projdi ho podle postupu níž.
 ## Kdy to potřebuješ
 
 Zpráva s fakturou dorazila a analýza skončila — v **Došlé poště** má
-badge **Analyzováno** a stav **K řešení**, na **Dashboardu** se objevila
-karta s procentem **Jistoty**. U jistých návrhů má karta rovnou tlačítko
-**Použít**, u ostatních je hlavní **Zkontrolovat**.
+badge **Analyzováno** a stav **K řešení**, na **Dashboardu** se objevil
+návrh s procentem **Jistoty**. Dashboard řadí návrhy do sekcí podle
+naléhavosti: návrhy ke kontrole jsou karty v sekci **Ke kontrole**
+s hlavním tlačítkem **Zkontrolovat**; jisté návrhy najdeš v sekci
+**Připraveno**, sbalené do souhrnného pruhu s tlačítkem **Použít**
+na každém řádku.
 
 ## Postup
 
@@ -101,13 +104,18 @@ sebou. Badge u návrhu se z něj odvozuje:
 | **Nízká jistota** | pod 60 % | Čti řádek po řádku, nebo zamítni a zadej ručně |
 | **Chyba extrakce** | — | Extrakce se nepovedla, typicky nečitelné PDF. Zkus **Znovu analyzovat** |
 
-**Jistý návrh můžeš použít rovnou z karty.** U návrhu s badge **K použití**
-má karta na Dashboardu tlačítko **Použít** — **Koncept** vznikne na jeden
-klik, bez otevírání náhledu. Když v návrhu zbývá nerozhodnutá reference
-(dodavatel, položka…), Shipard místo uložení otevře náhled ke kontrole
-a rozhodneš ji tam. Náhled si i u jistého návrhu můžeš otevřít sám
-tlačítkem **Zkontrolovat**. Vystavit a uzavřít na jeden klik z karty
-nejde — rovnou uzavřít se dá jen z náhledu, po kontrole.
+**Jistý návrh můžeš použít rovnou z Dashboardu.** Faktury s badge
+**K použití** jsou v sekci **Připraveno** sbalené do jednoho pruhu —
+vidíš na něm počet čekajících, součet částek po měnách a rozsah jistoty.
+Tlačítko **Zobrazit** pruh rozbalí na seznam řádků; každý řádek nese
+jistotu, dodavatele, datum, částku a tlačítko **Použít** — **Koncept**
+vznikne na jeden klik, bez otevírání náhledu. Když v návrhu zbývá
+nerozhodnutá reference (dodavatel, položka…), Shipard místo uložení
+otevře náhled ke kontrole a rozhodneš ji tam. Náhled si i u jistého
+návrhu můžeš otevřít sám ikonou oka u řádku. Vystavit a uzavřít na jeden
+klik odtud nejde — rovnou uzavřít se dá jen z náhledu, po kontrole.
+Jisté návrhy k zařazení do **Spisovny** mají v sekci vedle vlastní pruh
+— stejné rozbalení a **Použít**, jen bez součtu částek.
 
 **Víc faktur najednou projdeš frontou.** Když na Dashboardu čeká víc
 návrhů přijatých faktur, na záložkách **Vše** a **Přijaté faktury** je
@@ -122,6 +130,11 @@ vzniklo konceptů, kolik jsi zamítl a přeskočil. Pokud na Dashboardu čekají
 i karty **Nová kategorie**, průchod začne dialogem, kde můžeš chybějící
 kategorie nejdřív založit — návrhy, kterým chyběla jen položka, pak
 projdou rovnou.
+
+Pruh přijatých faktur v sekci **Připraveno** má navíc vlastní tlačítko
+**Projít** — stejný průchod, ale jen přes jisté faktury z tohoto pruhu.
+**Projít frontu** u filtru bere jisté návrhy i ty ke kontrole. Pruh
+Spisovny průchod zatím nemá — návrhy z něj použiješ po jednom.
 
 **Vystavit a uzavřít se nevrací jedním klikem.** Doklad je po něm
 uzamčený ve stavu **V pořádku** jako každý jiný hotový doklad — když v něm

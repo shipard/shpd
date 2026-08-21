@@ -80,7 +80,7 @@ class ContentTagSuggestionsSourceTest extends TestCase
         $this->assertCount(1, $cards);
         $card = $cards[0];
         $this->assertSame('content_tag:vehicle.fuel', $card['id']);
-        $this->assertSame('info', $card['kind']);
+        $this->assertSame('review', $card['kind']);
         $this->assertSame('Nová kategorie: Pohonné hmoty', $card['title']);
         $this->assertStringContainsString('3 doklady čekají', $card['subtitle']);
         $this->assertStringContainsString('Spotřeba PHM (503100)', $card['subtitle']);

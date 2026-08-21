@@ -22,8 +22,10 @@ use Shipard\Core\Logging\ErrorLogger;
  * Unit testy pro DashboardController.
  *
  * Pokrývají:
- *   - sortAndCap / countByKind (čisté transformace)
- *   - dashboard() — tvar feedu, zapojení zdrojů, ořez + „a další“ karta
+ *   - sortAndCap / countByKind / buildReadySummary / stripInternalFields
+ *     (čisté transformace)
+ *   - dashboard() — tvar feedu, zapojení zdrojů, ořez + „a další“ karta,
+ *     readySummary (Issue #32/2)
  *   - summary() — SSE události (text/done/error), degradace
  */
 final class DashboardControllerTest extends TestCase
@@ -137,6 +139,120 @@ final class DashboardControllerTest extends TestCase
         $this->assertSame(['urgent' => 2, 'review' => 1, 'ready' => 1], $ctrl->countByKind($cards));
     }
 
+    // ── buildReadySummary / stripInternalFields (čisté funkce, Issue #32/2) ──
+
+    /** @return array<string,mixed> */
+    private function readyCard(string $id, ?float $amount, ?string $currency, ?int $confidencePct): array
+    {
+        $card = ['id' => $id, 'kind' => 'ready', 'timestamp' => null];
+        if ($amount !== null) {
+            $card['amount'] = $amount;
+        }
+        if ($currency !== null) {
+            $card['currency'] = $currency;
+        }
+        if ($confidencePct !== null) {
+            $card['confidencePct'] = $confidencePct;
+        }
+        return $card;
+    }
+
+    public function testBuildReadySummaryAggregatesPerCurrency(): void
+    {
+        // Karty bez category padají defenzivně do skupiny invoices.
+        $ctrl = new DashboardController();
+        $summary = $ctrl->buildReadySummary([
+            $this->readyCard('a', 1000.50, 'CZK', 95),
+            $this->readyCard('b', 2000.00, 'CZK', 91),
+            $this->readyCard('c', 120.00, 'EUR', 98),
+            $this->card('review', null, 'r'),   // jiné pásmo — ignoruje se
+            $this->card('info', null, 'i'),
+        ]);
+
+        $this->assertNotNull($summary);
+        $this->assertArrayNotHasKey('registry', $summary);
+        $this->assertSame(3, $summary['invoices']['count']);
+        // Per měna, nikdy napříč měnami.
+        $this->assertSame(
+            [['currency' => 'CZK', 'total' => 3000.50], ['currency' => 'EUR', 'total' => 120.00]],
+            $summary['invoices']['amounts'],
+        );
+        $this->assertSame(91, $summary['invoices']['confidenceMin']);
+        $this->assertSame(98, $summary['invoices']['confidenceMax']);
+    }
+
+    public function testBuildReadySummaryCountsCardsWithoutAmount(): void
+    {
+        // Karta bez částky (totals.totalAmount chybělo): do count ano,
+        // do amounts ne. Bez měny totéž — nelze zařadit do skupiny.
+        $ctrl = new DashboardController();
+        $summary = $ctrl->buildReadySummary([
+            $this->readyCard('a', 500.00, 'CZK', 92),
+            $this->readyCard('b', null, null, 96),
+            $this->readyCard('c', 300.00, null, null),
+        ]);
+
+        $this->assertNotNull($summary);
+        $this->assertSame(3, $summary['invoices']['count']);
+        $this->assertSame([['currency' => 'CZK', 'total' => 500.00]], $summary['invoices']['amounts']);
+        $this->assertSame(92, $summary['invoices']['confidenceMin']);
+        $this->assertSame(96, $summary['invoices']['confidenceMax']);
+    }
+
+    public function testBuildReadySummaryGroupsRegistrySeparately(): void
+    {
+        // Ready karty do Spisovny (D11) tvoří vlastní skupinu — nemíchají
+        // se do počtu ani jistot faktur; částky nenesou (amounts prázdné).
+        $ctrl = new DashboardController();
+        $summary = $ctrl->buildReadySummary([
+            $this->readyCard('a', 500.00, 'CZK', 95),
+            [...$this->readyCard('r1', null, null, 90), 'category' => 'registry'],
+            [...$this->readyCard('r2', null, null, 97), 'category' => 'registry'],
+        ]);
+
+        $this->assertNotNull($summary);
+        $this->assertSame(1, $summary['invoices']['count']);
+        $this->assertSame(95, $summary['invoices']['confidenceMin']);
+        $this->assertSame(2, $summary['registry']['count']);
+        $this->assertSame([], $summary['registry']['amounts']);
+        $this->assertSame(90, $summary['registry']['confidenceMin']);
+        $this->assertSame(97, $summary['registry']['confidenceMax']);
+
+        // Jen registry karty → skupina invoices chybí.
+        $onlyRegistry = $ctrl->buildReadySummary([
+            [...$this->readyCard('r1', null, null, 90), 'category' => 'registry'],
+        ]);
+        $this->assertArrayNotHasKey('invoices', $onlyRegistry);
+        $this->assertSame(1, $onlyRegistry['registry']['count']);
+    }
+
+    public function testBuildReadySummaryNullWithoutReadyCards(): void
+    {
+        $ctrl = new DashboardController();
+        $this->assertNull($ctrl->buildReadySummary([]));
+        $this->assertNull($ctrl->buildReadySummary([
+            $this->card('urgent', null, 'u'),
+            $this->card('review', null, 'v'),
+            $this->card('info', null, 'i'),
+        ]));
+    }
+
+    public function testStripInternalFieldsRemovesAmountAndCurrency(): void
+    {
+        $ctrl = new DashboardController();
+        $stripped = $ctrl->stripInternalFields([
+            $this->readyCard('a', 500.00, 'CZK', 92),
+            $this->card('info', null, 'i'),
+        ]);
+
+        foreach ($stripped as $card) {
+            $this->assertArrayNotHasKey('amount', $card);
+            $this->assertArrayNotHasKey('currency', $card);
+        }
+        // Ostatní pole zůstávají.
+        $this->assertSame(92, $stripped[0]['confidencePct']);
+    }
+
     // ── dashboard() feed tvar ────────────────────────────────────────────────
 
     public function testDashboardEmptyFeedShape(): void
@@ -156,6 +272,7 @@ final class DashboardControllerTest extends TestCase
         $this->assertNull($data['summary']['aiText']);
         $this->assertSame(['urgent' => 0, 'review' => 0, 'ready' => 0], $data['summary']['counts']);
         $this->assertSame([], $data['cards']);
+        $this->assertArrayNotHasKey('readySummary', $data);
         $this->assertArrayNotHasKey('tasks', $data);
         $this->assertArrayNotHasKey('widgets', $data);
     }
@@ -243,6 +360,48 @@ final class DashboardControllerTest extends TestCase
         $this->assertSame('mail_more', $last['id']);
         $this->assertSame('info', $last['kind']);
         $this->assertSame('open_viewer', $last['actions'][0]['kind']);
+    }
+
+    public function testDashboardReadySummaryFromCanonicalAndStripsInternalFields(): void
+    {
+        // Dvě ready karty s částkou (CZK + EUR), jedna bez totals — do count
+        // ano, do amounts ne. Interní amount/currency nesmí do payloadu.
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturn(null);
+        $db->method('fetchAll')->willReturnCallback(
+            static function (string $sql): array {
+                if (!str_contains($sql, 'proposed_type')) {
+                    return [];
+                }
+                $mk = static function (int $ndx, string $canonical, float $confidence): array {
+                    $row = self::suggestionRow($ndx, $ndx, "F$ndx");
+                    $row['canonical_json'] = $canonical;
+                    $row['confidence'] = $confidence;
+                    return $row;
+                };
+                return [
+                    $mk(1, '{"totals":{"totalAmount":1000.5},"currency":"CZK"}', 0.95),
+                    $mk(2, '{"totals":{"totalAmount":120},"currency":"EUR"}', 0.98),
+                    $mk(3, '{}', 0.91),
+                ];
+            },
+        );
+
+        $ctrl = new DashboardController();
+        $data = $ctrl->dashboard($db, null, 'cs', null, $this->fullTables())->getPayload()['data'];
+
+        $invoices = $data['readySummary']['invoices'];
+        $this->assertSame(3, $invoices['count']);
+        $this->assertSame(
+            [['currency' => 'CZK', 'total' => 1000.50], ['currency' => 'EUR', 'total' => 120.00]],
+            $invoices['amounts'],
+        );
+        $this->assertSame(91, $invoices['confidenceMin']);
+        $this->assertSame(98, $invoices['confidenceMax']);
+        foreach ($data['cards'] as $card) {
+            $this->assertArrayNotHasKey('amount', $card, $card['id']);
+            $this->assertArrayNotHasKey('currency', $card, $card['id']);
+        }
     }
 
     // ── degradace dle modulů + per-source izolace + capabilities (07b) ──────

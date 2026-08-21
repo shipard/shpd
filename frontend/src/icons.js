@@ -82,6 +82,7 @@ import {
   faArrowUpRightFromSquare,
   faServer,
   faDatabase,
+  faEye,
 } from '@fortawesome/free-solid-svg-icons';
 
 // ── Akce (toolbary, tlačítka) ──────────────────────────────────
@@ -95,6 +96,7 @@ export const iconSearch = faMagnifyingGlass;
 export const iconFilter = faFilter;
 export const iconRefresh = faArrowsRotate;
 export const iconCopy = faCopy;
+export const iconPreview = faEye; // 👁 — otevření read-only náhledu / review modalu
 
 // ── Navigace ────────────────────────────────────────────────────
 export const iconChevronLeft = faChevronLeft;

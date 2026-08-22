@@ -22,7 +22,9 @@ use Shipard\Core\Version;
  *      merge auth.providers do main.json → user-create ownera
  *      s předpropojenou identitou → mail-router-setup --json (D4, jen
  *      s aktivním core.mail; token jde do confirm body jako mail_token)
- *      → confirm ok/failed.
+ *      → ai-analyzer-setup --json (hosting-10 D3, jen s aktivním
+ *      core.mail i core.ai; token jde do confirm body jako
+ *      analyzer_token) → confirm ok/failed.
  *   3. Stats push (D7) — jen když reconcile response nese
  *      stats_wanted=true (nebo ruční --stats): `hosting-stats --json`
  *      per lokální DS, nasbírané počty jedním POST …/stats. Selhání
@@ -120,9 +122,13 @@ class HostingSyncRunner
                 $allOk = false;
             } else {
                 // D4: mail token jde hostingu jen při úspěchu kroku f.;
-                // bez core.mail confirm token nenese.
+                // bez core.mail confirm token nenese. Analog hosting-10 D3
+                // pro analyzer token z kroku h.
                 if ($result['mailToken'] !== null) {
                     $confirmBody['mail_token'] = $result['mailToken'];
+                }
+                if ($result['analyzerToken'] !== null) {
+                    $confirmBody['analyzer_token'] = $result['analyzerToken'];
                 }
                 $this->logLine('  done.');
             }
@@ -197,7 +203,7 @@ class HostingSyncRunner
 
     /**
      * Poslední flat JSON objekt s klíči alerts + mail z výstupu subprocesu
-     * (stdout/stderr se prokládají — stejný přístup jako parseMailSetupOutput).
+     * (stdout/stderr se prokládají — stejný přístup jako parseSetupOutput).
      *
      * @return array{alerts: int|null, mail: int|null}|null
      */
@@ -228,22 +234,25 @@ class HostingSyncRunner
 
     /**
      * @param array<string, mixed> $item
-     * @return array{error: ?string, mailToken: ?string} error = zpráva pro
-     *     confirm failed (null = úspěch); mailToken = shpd_ak_ token z kroku
-     *     f. pro confirm body (null = DS bez core.mail nebo chyba)
+     * @return array{error: ?string, mailToken: ?string, analyzerToken: ?string}
+     *     error = zpráva pro confirm failed (null = úspěch); mailToken =
+     *     shpd_ak_ token z kroku f. pro confirm body (null = DS bez core.mail
+     *     nebo chyba); analyzerToken = shpd_ak_ token z kroku h. (null = DS
+     *     bez core.mail+core.ai nebo chyba)
      */
     private function provisionRequest(array $item): array
     {
         $mailToken = null;
-        $error = $this->provisionSteps($item, $mailToken);
-        return ['error' => $error, 'mailToken' => $mailToken];
+        $analyzerToken = null;
+        $error = $this->provisionSteps($item, $mailToken, $analyzerToken);
+        return ['error' => $error, 'mailToken' => $mailToken, 'analyzerToken' => $analyzerToken];
     }
 
     /**
      * @param array<string, mixed> $item
      * @return string|null chybová zpráva pro confirm failed, null = úspěch
      */
-    private function provisionSteps(array $item, ?string &$mailToken): ?string
+    private function provisionSteps(array $item, ?string &$mailToken, ?string &$analyzerToken): ?string
     {
         $dsId = (string) ($item['ds_id'] ?? '');
         $name = (string) ($item['name'] ?? '');
@@ -359,7 +368,14 @@ class HostingSyncRunner
 
         // g. AI gateway backend (D5) — jen s `ai` sekcí payloadu a aktivním
         //    core.ai.
-        return $this->setupAiBackend($dsDir, $item);
+        $error = $this->setupAiBackend($dsDir, $item);
+        if ($error !== null) {
+            return $error;
+        }
+
+        // h. Analyzer token pro AI analyzer (hosting-10 D3) — jen s aktivním
+        //    core.mail i core.ai.
+        return $this->mintAnalyzerToken($dsDir, $analyzerToken);
     }
 
     /**
@@ -390,11 +406,50 @@ class HostingSyncRunner
             );
         }
 
-        $token = $this->parseMailSetupOutput($result['output']);
+        $token = $this->parseSetupOutput($result['output']);
         if ($token === null) {
             return 'mail-router-setup returned no parsable api_key JSON';
         }
         $mailToken = $token;
+        return null;
+    }
+
+    /**
+     * Krok h. — `ai-analyzer-setup --json` v adresáři DS; token jde do
+     * confirm body jako analyzer_token. Stejný retry vzor jako krok f.:
+     * existující klíč shodí běh bez --force, druhý pokus rotuje s --force
+     * (neškodné — token na hostingu stejně přepíše tento confirm, analyzer
+     * DS ještě nepulluje).
+     */
+    private function mintAnalyzerToken(string $dsDir, ?string &$analyzerToken): ?string
+    {
+        if (!$this->isModuleActiveForDs($dsDir, 'core.mail')
+            || !$this->isModuleActiveForDs($dsDir, 'core.ai')
+        ) {
+            $this->logLine('  ai-analyzer-setup skipped — core.mail or core.ai not active.');
+            return null;
+        }
+
+        $this->logLine('  ai-analyzer-setup…');
+        $result = $this->runProcess([$this->shpdDsPath, 'ai-analyzer-setup', '--json'], $dsDir);
+        if ($result['exitCode'] !== 0) {
+            $this->logLine('  ai-analyzer-setup retry with --force…');
+            $result = $this->runProcess([$this->shpdDsPath, 'ai-analyzer-setup', '--json', '--force'], $dsDir);
+        }
+        if ($result['exitCode'] !== 0) {
+            $tail = trim($result['output']);
+            return sprintf(
+                'ai-analyzer-setup failed (exit %d)%s',
+                $result['exitCode'],
+                $tail !== '' ? ': ' . $tail : '',
+            );
+        }
+
+        $token = $this->parseSetupOutput($result['output']);
+        if ($token === null) {
+            return 'ai-analyzer-setup returned no parsable api_key JSON';
+        }
+        $analyzerToken = $token;
         return null;
     }
 
@@ -443,10 +498,11 @@ class HostingSyncRunner
     }
 
     /**
-     * Výstup subprocesu prokládá stdout a stderr — vzít poslední JSON
-     * objekt s validním api_key, dekorace okolo ignorovat.
+     * Výstup setup subprocesu (mail-router-setup / ai-analyzer-setup)
+     * prokládá stdout a stderr — vzít poslední JSON objekt s validním
+     * api_key, dekorace okolo ignorovat.
      */
-    private function parseMailSetupOutput(string $output): ?string
+    private function parseSetupOutput(string $output): ?string
     {
         if (!preg_match_all('/\{[^{}]*\}/', $output, $matches)) {
             return null;

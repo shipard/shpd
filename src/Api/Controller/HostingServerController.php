@@ -210,10 +210,12 @@ class HostingServerController
      * POST /_hosting/server/confirm
      *
      * Body: {request_id: int, ds_id: string, status: "ok"|"failed",
-     *        error?: string, mail_token?: string}
+     *        error?: string, mail_token?: string, analyzer_token?: string}
      *
      * mail_token (D4) = shpd_ak_ klíč z kroku mail-router-setup agenta;
-     * ukládá se šifrovaně a přepisuje předchozí hodnotu.
+     * analyzer_token (hosting-10 D3) = shpd_ak_ klíč z kroku
+     * ai-analyzer-setup agenta; oba se ukládají šifrovaně a přepisují
+     * předchozí hodnotu.
      *
      * @param array<string, \Shipard\Core\Database\TableDefinition> $tables
      */
@@ -254,18 +256,21 @@ class HostingServerController
         $lifecycle = (string) $row['lifecycle'];
 
         if ($status === 'ok') {
-            // D4: mail token z kroku mail-router-setup — ukládá se šifrovaně
-            // a NEPODMÍNĚNĚ (i při idempotentním re-confirmu už aktivního DS;
-            // retry agenta token rotuje, hosting musí držet ten poslední).
-            $mailToken = trim((string) ($body['mail_token'] ?? ''));
-            if ($mailToken !== '') {
-                $cipher = $this->cipher ?? DsSecretCipher::forConfig($this->config);
-                $db->updateWhere(
-                    'hosting_core_data_sources',
-                    ['mail_token' => $cipher->encrypt($mailToken), 'modified' => $now],
-                    'id = %i',
-                    (int) $row['id'],
-                );
+            // D4 mail_token, hosting-10 D3 analyzer_token — ukládají se
+            // šifrovaně a NEPODMÍNĚNĚ (i při idempotentním re-confirmu už
+            // aktivního DS; retry agenta token rotuje, hosting musí držet
+            // ten poslední).
+            foreach (['mail_token', 'analyzer_token'] as $tokenColumn) {
+                $token = trim((string) ($body[$tokenColumn] ?? ''));
+                if ($token !== '') {
+                    $cipher = $this->cipher ?? DsSecretCipher::forConfig($this->config);
+                    $db->updateWhere(
+                        'hosting_core_data_sources',
+                        [$tokenColumn => $cipher->encrypt($token), 'modified' => $now],
+                        'id = %i',
+                        (int) $row['id'],
+                    );
+                }
             }
             if ($lifecycle !== 'active') {
                 $db->updateWhere(

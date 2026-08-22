@@ -542,6 +542,77 @@ class HostingServerControllerTest extends TestCase
         );
     }
 
+    public function testConfirmOkStoresAnalyzerTokenEncrypted(): void
+    {
+        $reqId = $this->addRequest(['server' => $this->serverId, 'lifecycle' => 'creating']);
+        $token = 'shpd_ak_' . str_repeat('f', 32);
+
+        $resp = $this->confirm($reqId, 'bbbb-bbbb-bbbb-bbbb', 'ok', analyzerToken: $token);
+        $this->assertSame(200, $this->getStatus($resp));
+
+        $stored = (string) $this->db->dataSources[$reqId]['analyzer_token'];
+        $this->assertNotSame($token, $stored);
+        $this->assertSame($token, $this->cipher->decrypt($stored));
+    }
+
+    public function testConfirmWithoutAnalyzerTokenLeavesColumnUntouched(): void
+    {
+        $reqId = $this->addRequest([
+            'server' => $this->serverId,
+            'lifecycle' => 'creating',
+            'analyzer_token' => $this->cipher->encrypt('shpd_ak_' . str_repeat('1', 32)),
+        ]);
+
+        $this->confirm($reqId, 'bbbb-bbbb-bbbb-bbbb', 'ok');
+
+        $this->assertSame(
+            'shpd_ak_' . str_repeat('1', 32),
+            $this->cipher->decrypt((string) $this->db->dataSources[$reqId]['analyzer_token']),
+        );
+    }
+
+    public function testConfirmAnalyzerTokenOverwritesOnActiveReconfirm(): void
+    {
+        // Retry agenta rotuje token — hosting drží poslední, i když už je
+        // DS active (lifecycle update se přeskočí, token ne).
+        $reqId = $this->addRequest([
+            'server' => $this->serverId,
+            'lifecycle' => 'active',
+            'analyzer_token' => $this->cipher->encrypt('shpd_ak_' . str_repeat('1', 32)),
+        ]);
+        $newToken = 'shpd_ak_' . str_repeat('2', 32);
+
+        $resp = $this->confirm($reqId, 'bbbb-bbbb-bbbb-bbbb', 'ok', analyzerToken: $newToken);
+        $this->assertSame(200, $this->getStatus($resp));
+
+        $this->assertSame(
+            $newToken,
+            $this->cipher->decrypt((string) $this->db->dataSources[$reqId]['analyzer_token']),
+        );
+    }
+
+    public function testConfirmStoresBothTokens(): void
+    {
+        $reqId = $this->addRequest(['server' => $this->serverId, 'lifecycle' => 'creating']);
+        $mailToken = 'shpd_ak_' . str_repeat('c', 32);
+        $analyzerToken = 'shpd_ak_' . str_repeat('f', 32);
+
+        $resp = $this->confirm(
+            $reqId,
+            'bbbb-bbbb-bbbb-bbbb',
+            'ok',
+            mailToken: $mailToken,
+            analyzerToken: $analyzerToken,
+        );
+        $this->assertSame(200, $this->getStatus($resp));
+
+        $this->assertSame($mailToken, $this->cipher->decrypt((string) $this->db->dataSources[$reqId]['mail_token']));
+        $this->assertSame(
+            $analyzerToken,
+            $this->cipher->decrypt((string) $this->db->dataSources[$reqId]['analyzer_token']),
+        );
+    }
+
     public function testConfirmForeignRequestIs403(): void
     {
         $reqId = $this->addRequest(['server' => $this->otherServerId]);
@@ -703,6 +774,7 @@ class HostingServerControllerTest extends TestCase
         string $status,
         ?string $error = null,
         ?string $mailToken = null,
+        ?string $analyzerToken = null,
     ): Response {
         $body = ['request_id' => $requestId, 'ds_id' => $dsId, 'status' => $status];
         if ($error !== null) {
@@ -710,6 +782,9 @@ class HostingServerControllerTest extends TestCase
         }
         if ($mailToken !== null) {
             $body['mail_token'] = $mailToken;
+        }
+        if ($analyzerToken !== null) {
+            $body['analyzer_token'] = $analyzerToken;
         }
         return $this->controller->confirm(
             $this->req('POST', 'confirm', body: $body),

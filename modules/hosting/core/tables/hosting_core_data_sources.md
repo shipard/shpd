@@ -7,6 +7,8 @@ Fáze 2 přidala provisioning sloupce (`owner`, `provision_error`,
 `claimed_at`) — řádek s `lifecycle = request` je požadavek ve frontě
 pro agenta `hosting-sync`. Fáze 3 (D4) přidala `mail_token` — token
 DS pro `/_mail/incoming`, který hosting brokeruje mail-routerům.
+Task hosting-10 (D2) přidal `analyzer_token` — API klíč DS, který
+hosting stejným vzorem brokeruje AI analyzerům.
 
 `tableId = 431`. Stavový model: `core.system.docStatesArchive`.
 **`adminOnly = true`** (D9) — portáloví uživatelé se k datům dostanou
@@ -47,6 +49,7 @@ Klient OIDC OP (D2) je aktivní, jen když jsou vyplněné **oba** sloupce —
 | Sloupec | Typ | Popis |
 |---|---|---|
 | `mail_token` | encrypted_text, **sensitive** | `shpd_ak_` token DS pro `/_mail/incoming`. Mintuje agent (`mail-router-setup --json`) a hlásí ho confirmem; šifruje `HostingDataSourceDocument::beforeSave`. Dešifrovaný odchází jen endpointem `GET /_hosting/mail/lookup` (klíč mail-routeru, https). Ruční backfill: admin form (opt-in sensitive pole). |
+| `analyzer_token` | encrypted_text, **sensitive** | `shpd_ak_` API klíč DS pro AI analyzer daemon. Mintuje agent (`ai-analyzer-setup --json`) a hlásí ho confirmem; šifruje `HostingDataSourceDocument::beforeSave`. Dešifrovaný odchází jen endpointem `GET /_hosting/ai-analyzer/lookup` (klíč analyzeru, https). Ruční backfill: admin form (opt-in sensitive pole). |
 
 ### Stav (status)
 

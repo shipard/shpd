@@ -1,6 +1,6 @@
 # hosting-10 — Automatické napojení nových DS na AI analyzer
 
-**Stav:** částečně — část A (nov_shipard: tabulka + analyzer_token + hosting-analyzer-key + lookup endpoint + --json + krok h + confirm, commity 1–3) hotová 2026-08-22; zbývá část B (ai_analyzer: sources-sync + systemd) a E2E na alfě (D7 backfill).
+**Stav:** hotovo — část A (nov_shipard, commity 1–3) i část B (ai_analyzer: sources-sync + systemd) hotové 2026-08-22; nasazeno na alfě a kompletně otestováno vč. E2E a backfillu (D7) 2026-08-23.
 
 > PRD schváleno (D1–D8 potvrzeno v chatu, včetně D6a).
 > Návaznost: `docs/hosting.md` (D3 pull agent, D4 mail-router vzor), task
@@ -247,15 +247,15 @@ ai_analyzer:
 
 ## Hotovo když
 
-- [ ] Nový DS založený z portálu je analyzován bez ruční editace
+- [x] Nový DS založený z portálu je analyzován bez ruční editace
       `sources.d/` (E2E krok 4)
-- [ ] Lookup endpoint servíruje jen aktivní DS s tokenem, formát =
+- [x] Lookup endpoint servíruje jen aktivní DS s tokenem, formát =
       přesně sources.d soubor, ETag/304 funguje
-- [ ] `sources-sync` nikdy nepřepíše funkční soubor nevalidním
+- [x] `sources-sync` nikdy nepřepíše funkční soubor nevalidním
       obsahem; výpadek hostingu = stale sources, analýza běží dál
-- [ ] Restart daemonu po změně `sources.d/` je automatický (path
+- [x] Restart daemonu po změně `sources.d/` je automatický (path
       unit) a graceful (drain, žádná ztráta claims)
-- [ ] `analyzer_token` na hostingu jen šifrovaně, ve formech
+- [x] `analyzer_token` na hostingu jen šifrovaně, ve formech
       sensitive, dešifrovaný odchází jen lookup endpointem přes https
-- [ ] Ruční backfill (D7) zdokumentovaný a ověřený na alfě
-- [ ] Testy obou repozitářů zelené, dokumentace aktualizovaná
+- [x] Ruční backfill (D7) zdokumentovaný a ověřený na alfě
+- [x] Testy obou repozitářů zelené, dokumentace aktualizovaná

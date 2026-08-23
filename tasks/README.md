@@ -17,7 +17,7 @@ jednotlivých subsystémů žijí v [`docs/`](../docs/README.md).
 
 ## Stav
 
-Celkem 229 tasků: **naplánováno** 5 · **částečně** 4 · **hotovo** 220.
+Celkem 229 tasků: **naplánováno** 5 · **částečně** 3 · **hotovo** 221.
 
 Zdroj pravdy je řádek `**Stav:**` v hlavičce každého tasku; tato
 tabulka je generovaná (`scripts/tasks-index.py`). Hotové tasky se
@@ -32,7 +32,6 @@ nevypisují — níže je jen to, co není dokončené.
 | `pdf-rendering-service.md` | naplánováno | rozhodnutí D1–D8 potvrzena (designová diskuze 18. 8. 2026) |
 | `doc-number-release-on-data-save.md` | částečně | kód + testy hotové 2026-08-13; zbývá D2 (reset test DS), ruční proklik a read-only verifikace na alfě |
 | `hosting-09-federated-login.md` | částečně | kód + testy + docs hotové 2026-08-14 (commity 1–3); zbývá ds-upgrade na hostingu, zapnutí Google/GitHub na alfě dle runbooku (mutace — David) a ruční E2E řetěz |
-| `hosting-10-ai-analyzer.md` | částečně | část A (nov_shipard: tabulka + analyzer_token + hosting-analyzer-key + lookup endpoint + --json + krok h + confirm, commity 1–3) hotová 2026-08-22; zbývá část B (ai_analyzer: sources-sync + systemd) a E2E na alfě (D7 backfill). |
 | `mail-message-centric.md` | částečně | Fáze A–D v tomto repozitáři hotové (schéma, /result v4, |
 
 <!-- STAV:END -->

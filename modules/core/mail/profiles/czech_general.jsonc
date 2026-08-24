@@ -429,12 +429,16 @@
                                             "type": "object",
                                             "additionalProperties": false,
                                             "properties": {
+                                                // Kopie kanonického schematu (ProfileSchemaDriftTest) — 80 je
+                                                // parkovací cíl migrace; v mail/AI flow ho odmítá exchange
+                                                // validator (target_state_80_requires_import).
                                                 "targetDocState": {
                                                     "type": "integer",
                                                     "enum": [
                                                         10,
                                                         40,
-                                                        30
+                                                        30,
+                                                        80
                                                     ]
                                                 },
                                                 "autoCreateMode": {

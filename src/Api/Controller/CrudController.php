@@ -30,6 +30,7 @@ class CrudController
 		private array $tables,
 		private ?ConfigRuntime $config = null,
 		private AuthContext $auth = new AuthContext(false),
+		private ?\Shipard\Core\Document\DocumentRegistry $documentRegistry = null,
 	) {
 		$this->validator = new InputValidator();
 	}
@@ -286,7 +287,9 @@ class CrudController
 		}
 
 		$stateCol = $dsDef->stateColumn;
-		$row      = $this->fetchById($table, $id, [$stateCol]);
+		// Celý řádek — filterStateTransitions hook potřebuje víc než stavový
+		// sloupec (doc_type pro polymorfní dispatch, číslo/řadu dokladu).
+		$row = $this->fetchById($table, $id, $this->allReadableColumns($def));
 		if ($row === null) {
 			return Response::error('NOT_FOUND', 'Record not found', 404);
 		}
@@ -295,12 +298,23 @@ class CrudController
 		$currentState = (int) ($row[$stateCol] ?? 10);
 		$stateData    = $cfg->getState($currentState);
 
+		$transitions = $cfg->getAvailableTransitions($currentState);
+		if ($this->documentRegistry !== null) {
+			$transitions = \Shipard\Core\Document\DocStateTransitionFilter::apply(
+				$table,
+				$row,
+				$transitions,
+				$this->documentRegistry,
+				$this->db->getDibiConnection(),
+			);
+		}
+
 		return Response::success([
 			'currentState' => $currentState,
 			'stateName'    => $stateData['stateName']  ?? '',
 			'stateStyle'   => $stateData['stateStyle']  ?? '',
 			'readOnly'     => $cfg->isReadOnly($currentState),
-			'transitions'  => $cfg->getAvailableTransitions($currentState),
+			'transitions'  => $transitions,
 		]);
 	}
 

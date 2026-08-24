@@ -1183,6 +1183,46 @@ abstract class DocDocument extends Document
         }
     }
 
+    /**
+     * Přechod →10 (Koncept) uvolňuje číslo dokladu a smí ho provést jen
+     * poslední doklad v řadě (releaseDocumentNumber jinak padá
+     * DomainException). Neposlednímu dokladu se proto přechod →10 v UI
+     * vůbec nenabízí. Doklad bez čísla (defenzivně) nabídku nemění —
+     * release je pro něj no-op.
+     */
+    public function filterStateTransitions(array $transitions, array $row): array
+    {
+        $offersDraft = array_filter(
+            $transitions,
+            fn(array $t): bool => (int) ($t['state'] ?? 0) === 10,
+        ) !== [];
+        if (!$offersDraft || $this->db === null) {
+            return $transitions;
+        }
+
+        $seriesId = (int) ($row['number_series'] ?? 0);
+        $sequence = (int) ($row['sequence_number'] ?? 0);
+        if ($seriesId === 0 || $sequence === 0) {
+            return $transitions;
+        }
+
+        // Stejný dotaz jako guard v releaseDocumentNumber.
+        $maxRow = $this->db->fetch(
+            'SELECT MAX([sequence_number]) AS [max_seq]
+             FROM [docs_core_heads]
+             WHERE [number_series] = %i AND [fiscal_year] <=> %iN',
+            $seriesId, $row['fiscal_year'] ?? null,
+        );
+        if ((int) ($maxRow['max_seq'] ?? 0) === $sequence) {
+            return $transitions;
+        }
+
+        return array_values(array_filter(
+            $transitions,
+            fn(array $t): bool => (int) ($t['state'] ?? 0) !== 10,
+        ));
+    }
+
     protected function releaseDocumentNumber(array &$data, ?array $originalData): void
     {
         if ($this->db === null || $originalData === null) {

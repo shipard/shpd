@@ -42,6 +42,7 @@ class FormController
         string $language = 'en',
         array $newRecordDefaults = [],
         ?AuthContext $auth = null,
+        ?DocumentRegistry $documentRegistry = null,
     ): Response {
         $def = $tables[$table] ?? null;
         if ($def === null) {
@@ -113,7 +114,9 @@ class FormController
         if ($def->docStates !== null && $config !== null) {
             // Pro nový záznam použij výchozí stav (10 = Koncept)
             $docData = $isNew ? [$def->docStates->stateColumn => 10] : $data;
-            $docStatesInfo = $this->buildDocStatesInfo($def, $docData, $config);
+            $docStatesInfo = $this->buildDocStatesInfo(
+                $def, $docData, $config, $table, $documentRegistry, $db,
+            );
             $formDefinition = $formDefinition->withDocStates($docStatesInfo);
         }
 
@@ -328,6 +331,7 @@ class FormController
         ModulePathResolver $modulePathResolver,
         string $language = 'en',
         ?AuthContext $auth = null,
+        ?DocumentRegistry $documentRegistry = null,
     ): Response {
         $def = $tables[$table] ?? null;
         if ($def === null) {
@@ -368,7 +372,7 @@ class FormController
                 ? [$def->docStates->stateColumn => ($data[$def->docStates->stateColumn] ?? 10)]
                 : $data;
             $formDefinition = $formDefinition->withDocStates(
-                $this->buildDocStatesInfo($def, $docData, $config)
+                $this->buildDocStatesInfo($def, $docData, $config, $table, $documentRegistry, $db)
             );
         }
 
@@ -452,19 +456,32 @@ class FormController
         return $formDefinition->withHeaderInfo($headerInfo);
     }
 
-    private function buildDocStatesInfo(TableDefinition $def, array $data, ConfigRuntime $config): array
-    {
+    private function buildDocStatesInfo(
+        TableDefinition $def,
+        array $data,
+        ConfigRuntime $config,
+        string $table = '',
+        ?DocumentRegistry $documentRegistry = null,
+        ?DataSourceConnection $db = null,
+    ): array {
         $dsDef = $def->docStates;
         $cfg = DocStateConfig::fromCfgItem($config->cfgItem($dsDef->cfgItem));
         $currentState = (int) ($data[$dsDef->stateColumn] ?? 10);
         $stateData = $cfg->getState($currentState);
+
+        $transitions = $cfg->getAvailableTransitions($currentState);
+        if ($table !== '' && $documentRegistry !== null && $db !== null) {
+            $transitions = \Shipard\Core\Document\DocStateTransitionFilter::apply(
+                $table, $data, $transitions, $documentRegistry, $db->getDibiConnection(),
+            );
+        }
 
         return [
             'currentState' => $currentState,
             'stateName'    => $stateData['stateName'] ?? '',
             'stateStyle'   => $stateData['stateStyle'] ?? '',
             'read_only'    => $cfg->isReadOnly($currentState),
-            'transitions'  => $cfg->getAvailableTransitions($currentState),
+            'transitions'  => $transitions,
         ];
     }
 

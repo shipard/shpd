@@ -274,7 +274,7 @@ function dispatch(
 	return match ($route->controller) {
 		'auth'    => dispatchAuth($route->action, $request, $auth, $db, $resolved),
 		'password' => dispatchPassword($route, $request, $auth, $db, $resolved),
-		'crud'       => dispatchCrud($route, $request, $auth, $tables, $db, $configRuntime),
+		'crud'       => dispatchCrud($route, $request, $auth, $tables, $db, $configRuntime, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'attachment'  => dispatchAttachment($route, $request, $auth, $tables, $db, $resolved),
 		'chat'    => dispatchChat($route, $request, $auth, $db, $tables, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'meta'    => dispatchMeta($route->action, $route->table, $tables, resolveLanguage($request, $resolved->config)),
@@ -1107,8 +1107,9 @@ function dispatchCrud(
 	array $tables,
 	\Shipard\Core\Database\DataSourceConnection $db,
 	?\Shipard\Core\Config\ConfigRuntime $configRuntime = null,
+	?\Shipard\Core\Document\DocumentRegistry $documentRegistry = null,
 ): Response {
-	$ctrl  = new CrudController($db, $tables, $configRuntime, $auth);
+	$ctrl  = new CrudController($db, $tables, $configRuntime, $auth, $documentRegistry);
 	$table = $route->table ?? '';
 	$id    = $route->id;
 	return match ($route->action) {
@@ -1282,9 +1283,9 @@ function dispatchForm(
 
 	$lookupReg = $lookupRegistry ?? new LookupRegistry();
 	return match ($route->action) {
-		'meta'        => $ctrl->meta($table, $route->id, $tables, $db, $formRegistry, $configRuntime, $lookupReg, $modulePathResolver, $language, $queryDefaults, $auth),
+		'meta'        => $ctrl->meta($table, $route->id, $tables, $db, $formRegistry, $configRuntime, $lookupReg, $modulePathResolver, $language, $queryDefaults, $auth, $documentRegistry),
 		'save'        => $ctrl->save($table, $route->id, $request, $tables, $db, $configRuntime, $formRegistry, $modulePathResolver, $lookupReg, $language, $documentRegistry, $dsConfig, $auth, $eventDispatcher),
-		'recalculate' => $ctrl->recalculate($table, $request, $tables, $db, $formRegistry, $configRuntime, $lookupReg, $modulePathResolver, $language, $auth),
+		'recalculate' => $ctrl->recalculate($table, $request, $tables, $db, $formRegistry, $configRuntime, $lookupReg, $modulePathResolver, $language, $auth, $documentRegistry),
 		default       => Response::error('INTERNAL_ERROR', "Unknown form action: {$route->action}", 500),
 	};
 }

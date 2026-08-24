@@ -73,6 +73,23 @@ abstract class Document
     }
 
     /**
+     * Per-dokumentové filtrování nabídky stavových přechodů pro UI
+     * (doc-state-options, form load/recalculate). Vrací podmnožinu
+     * $transitions; slouží jen ke skrytí slepých cest v nabídce —
+     * server-side bariéry (validace, výjimky v beforeSave) zůstávají
+     * jediným vynucením. Default: pass-through.
+     *
+     * @param array<int, array<string, mixed>> $transitions položky z
+     *        DocStateConfig::getAvailableTransitions (klíč 'state')
+     * @param array<string, mixed> $row aktuální řádek záznamu
+     * @return array<int, array<string, mixed>>
+     */
+    public function filterStateTransitions(array $transitions, array $row): array
+    {
+        return $transitions;
+    }
+
+    /**
      * Pre-save hook. Receives the original DB row as $originalData on update;
      * null on insert. Subclasses use originalData to detect what changed
      * (e.g. partner change → rebuild snapshot, docState transition → assign

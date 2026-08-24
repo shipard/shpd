@@ -293,7 +293,7 @@ class RowHistoryEnricherTest extends TestCase
     {
         // Kandidáti s itemem mimo aktivní stavy (smazáno/archiv) se filtrují už
         // v SQL (JOIN economy_items ... docState IN 10/40/80); historie jen
-        // z dokladů 20/40, docType přeložený na short code.
+        // z dokladů 40/80 (doklad s číslem), docType přeložený na short code.
         $db = $this->createMock(Connection::class);
         $db->expects($this->once())
             ->method('fetchAll')
@@ -305,7 +305,7 @@ class RowHistoryEnricherTest extends TestCase
                 ),
                 10, 40, 80,
                 42, 'invni',
-                20, 40,
+                40, 80,
                 200,
             )
             ->willReturn([]);

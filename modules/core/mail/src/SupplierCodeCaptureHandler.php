@@ -8,7 +8,7 @@ use Shipard\Core\Document\AbstractDocumentEventHandler;
 
 /**
  * Uzavření smyčky AI extrakce (D8): při potvrzení dokladu vzniklého z AI
- * extrakce (přechod 10 Koncept → 20 Potvrzeno, lineage `aiExtraction`)
+ * extrakce (přechod 10 Koncept → 40 V pořádku, lineage `aiExtraction`)
  * zapíše naučená mapování dodavatelských kódů do
  * `economy_items_supplier_codes` — pro canonical řádky s extrahovaným
  * `item.supplierCode`, kterým finální řádek dokladu přiřadil položku.
@@ -32,7 +32,7 @@ use Shipard\Core\Document\AbstractDocumentEventHandler;
 class SupplierCodeCaptureHandler extends AbstractDocumentEventHandler
 {
     private const STATE_DRAFT = 10;
-    private const STATE_CONFIRMED = 20;
+    private const STATE_CONFIRMED = 40;
 
     public function onStateChanged(string $tableId, array $data, int $oldState, int $newState): void
     {

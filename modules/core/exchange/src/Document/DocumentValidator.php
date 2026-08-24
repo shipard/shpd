@@ -36,8 +36,33 @@ final class DocumentValidator
         $this->checkRowsVsRecap($canonical, $issues);
         $this->checkVatRecapArithmetic($canonical, $issues);
         $this->checkPartnerDocNumber($canonical, $issues);
+        $this->checkParkingStateRequiresImport($canonical, $issues);
 
         return $issues;
+    }
+
+    /**
+     * Stav 80 (V opravě) je výhradně parkovací cíl migrace (nezaúčtovatelné
+     * doklady s číslem) — bez applyOptions.importNumber přes exchange
+     * dosažitelný není.
+     *
+     * @param array<int, array{severity: string, path: string, code: string, message: string}> $issues
+     */
+    private function checkParkingStateRequiresImport(array $canonical, array &$issues): void
+    {
+        $options = $canonical['applyOptions'] ?? [];
+        $targetState = $options['targetDocState'] ?? null;
+        if ($targetState === null || (int) $targetState !== 80) {
+            return;
+        }
+        if (!is_array($options['importNumber'] ?? null)) {
+            $issues[] = [
+                'severity' => 'error',
+                'path'     => 'applyOptions.targetDocState',
+                'code'     => 'target_state_80_requires_import',
+                'message'  => 'targetDocState 80 (V opravě) je povolen jen s applyOptions.importNumber (migrace).',
+            ];
+        }
     }
 
     /**
@@ -411,8 +436,9 @@ final class DocumentValidator
         if ($docType !== 'invoiceReceived') {
             return;
         }
+        // Warning platí pro všechny cíle mimo Koncept (40, 30 i 80).
         $targetState = $canonical['applyOptions']['targetDocState'] ?? null;
-        if ($targetState === null || (int) $targetState < 20) {
+        if ($targetState === null || (int) $targetState === 10) {
             return;
         }
         $partnerDocNumber = $canonical['docNumber'] ?? null;

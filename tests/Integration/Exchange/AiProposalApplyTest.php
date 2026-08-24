@@ -415,9 +415,9 @@ class AiProposalApplyTest extends IntegrationTestCase
         $savedDocId = (int) $apply->getPayload()['data']['savedDocId'];
         $this->trackCreatedFromDoc($savedDocId);
 
-        // Doklad posunut z Konceptu dál (10→20) → unapply musí odmítnout.
+        // Doklad posunut z Konceptu dál (10→40) → unapply musí odmítnout.
         $this->db->getDibiConnection()->query(
-            'UPDATE docs_core_heads SET docState = 20 WHERE id = %i', $savedDocId,
+            'UPDATE docs_core_heads SET docState = 40 WHERE id = %i', $savedDocId,
         );
 
         $resp = $this->controller->unapplyMessage($this->authed(), $this->request(), $messageNdx);

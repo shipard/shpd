@@ -80,7 +80,7 @@ class SupplierCodeCaptureHandlerTest extends TestCase
             ],
         );
 
-        $handler->onStateChanged('docs_core_heads', ['id' => 555], 10, 20);
+        $handler->onStateChanged('docs_core_heads', ['id' => 555], 10, 40);
 
         $this->assertCount(1, $handler->sqlCalls);
         [$sql, $person, $item, $code, $name] = $handler->sqlCalls[0];
@@ -100,7 +100,7 @@ class SupplierCodeCaptureHandlerTest extends TestCase
             [['order_pos' => 1, 'item' => 18, 'description' => 'X']],
         );
 
-        $handler->onStateChanged('docs_core_heads', ['id' => 555], 10, 20);
+        $handler->onStateChanged('docs_core_heads', ['id' => 555], 10, 40);
         $this->assertSame([], $handler->sqlCalls);
     }
 
@@ -111,9 +111,9 @@ class SupplierCodeCaptureHandlerTest extends TestCase
         $handler = new TestableSupplierCodeCaptureHandler();
         $handler->setDb($db);
 
-        $handler->onStateChanged('docs_core_heads', ['id' => 555], 20, 40);
+        $handler->onStateChanged('docs_core_heads', ['id' => 555], 80, 40);
         $handler->onStateChanged('docs_core_heads', ['id' => 555], 10, 90);
-        $handler->onStateChanged('docs_core_heads', ['id' => 555], 0, 20);
+        $handler->onStateChanged('docs_core_heads', ['id' => 555], 0, 40);
         $this->assertSame([], $handler->sqlCalls);
     }
 
@@ -127,7 +127,7 @@ class SupplierCodeCaptureHandlerTest extends TestCase
             [],
         );
 
-        $handler->onStateChanged('docs_core_heads', ['id' => 555], 10, 20);
+        $handler->onStateChanged('docs_core_heads', ['id' => 555], 10, 40);
         $this->assertSame([], $handler->sqlCalls);
     }
 
@@ -141,7 +141,7 @@ class SupplierCodeCaptureHandlerTest extends TestCase
             [['order_pos' => 1, 'item' => 18, 'description' => 'Úplně jiný řádek']],
         );
 
-        $handler->onStateChanged('docs_core_heads', ['id' => 555], 10, 20);
+        $handler->onStateChanged('docs_core_heads', ['id' => 555], 10, 40);
         $this->assertSame([], $handler->sqlCalls);
     }
 
@@ -149,12 +149,12 @@ class SupplierCodeCaptureHandlerTest extends TestCase
     {
         // Chybějící hlavička dokladu.
         $handler = $this->handler(null, null, []);
-        $handler->onStateChanged('docs_core_heads', ['id' => 555], 10, 20);
+        $handler->onStateChanged('docs_core_heads', ['id' => 555], 10, 40);
         $this->assertSame([], $handler->sqlCalls);
 
         // Hlavička s lineage, ale zpráva bez úspěšné analýzy (canonical chybí).
         $handler = $this->handler($this->aiHead(), null, []);
-        $handler->onStateChanged('docs_core_heads', ['id' => 555], 10, 20);
+        $handler->onStateChanged('docs_core_heads', ['id' => 555], 10, 40);
         $this->assertSame([], $handler->sqlCalls);
     }
 }

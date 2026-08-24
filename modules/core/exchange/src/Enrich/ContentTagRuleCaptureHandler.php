@@ -10,7 +10,7 @@ use Shipard\Core\Logging\ErrorLogger;
 /**
  * Učení pravidel obsahových štítků (tasks/content-tag-enrichment.md, D22):
  * při potvrzení dokladu vzniklého z AI extrakce (přechod 10 Koncept →
- * 20 Potvrzeno, lineage `aiExtraction`) s LLM štítkem zapíše pravidlo
+ * 40 V pořádku, lineage `aiExtraction`) s LLM štítkem zapíše pravidlo
  * IČO dodavatele → štítek do `core_exchange_tag_rules` (origin `learned`,
  * platné okamžitě — další doklad téhož IČO jde bez LLM).
  *
@@ -33,7 +33,7 @@ use Shipard\Core\Logging\ErrorLogger;
 class ContentTagRuleCaptureHandler extends AbstractDocumentEventHandler
 {
     private const STATE_DRAFT = 10;
-    private const STATE_CONFIRMED = 20;
+    private const STATE_CONFIRMED = 40;
 
     public function onStateChanged(string $tableId, array $data, int $oldState, int $newState): void
     {

@@ -349,12 +349,42 @@ class DocumentValidatorTest extends TestCase
             'supplier' => ['name' => 'V'],
             'dates' => ['issueDate' => '2026-04-15'],
             'rows' => [['rowKind' => 'item']],
-            'applyOptions' => ['targetDocState' => 20],
+            'applyOptions' => ['targetDocState' => 40],
             // docNumber omitted
         ]);
         $w = $this->findByCode($issues, 'partner_doc_number_missing');
         $this->assertNotNull($w);
         $this->assertSame('warning', $w['severity']);
+    }
+
+    public function testTargetState80WithoutImportNumberIsError(): void
+    {
+        // Parkovací stav 80 je výhradně migrační — mimo import mode chyba.
+        $issues = $this->v->validate([
+            'docType' => 'invoiceReceived',
+            'supplier' => ['name' => 'V'],
+            'dates' => ['issueDate' => '2026-04-15'],
+            'rows' => [['rowKind' => 'item']],
+            'applyOptions' => ['targetDocState' => 80],
+        ]);
+        $e = $this->findByCode($issues, 'target_state_80_requires_import');
+        $this->assertNotNull($e);
+        $this->assertSame('error', $e['severity']);
+    }
+
+    public function testTargetState80WithImportNumberPasses(): void
+    {
+        $issues = $this->v->validate([
+            'docType' => 'invoiceReceived',
+            'supplier' => ['name' => 'V'],
+            'dates' => ['issueDate' => '2026-04-15'],
+            'rows' => [['rowKind' => 'item']],
+            'applyOptions' => [
+                'targetDocState' => 80,
+                'importNumber' => ['docNumber' => '2024-0042', 'sequenceNumber' => 42],
+            ],
+        ]);
+        $this->assertNull($this->findByCode($issues, 'target_state_80_requires_import'));
     }
 
     public function testPartnerDocNumberNotChalliengedForDraft(): void

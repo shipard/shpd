@@ -1033,7 +1033,7 @@ class DocumentApplier
                     : (int) ($importNumber['sequenceNumber'] ?? 0),
             ] : null,
             // Import mode: our own bank account (issued invoices need it at
-            // state 20+; standard self-party flow can't carry it).
+            // state 40+; standard self-party flow can't carry it).
             'bank_account'         => $importOwnBank !== null ? (int) $importOwnBank : null,
             'partner_bank'         => $sideIds['supplierBank'] ?? $plan['resolvedSupplierBank'] ?? null,
             'partner_bank_account' => $canonical['supplier']['bankAccount']['accountNumber'] ?? null,

@@ -52,8 +52,8 @@ use Shipard\Module\Docs\Core\OwnCompanyResolver;
  */
 final class RowHistoryEnricher
 {
-    /** Stavy dokladů považované za naučenou historii: 20 Potvrzeno, 40 V pořádku. */
-    private const HISTORY_DOC_STATES = [20, 40];
+    /** Stavy dokladů považované za naučenou historii: 40 V pořádku, 80 V opravě (doklad s číslem). */
+    private const HISTORY_DOC_STATES = [40, 80];
 
     /** Stejná trojice jako v resolverech — navrhovaná položka musí být živá. */
     private const ITEM_ACTIVE_STATES = [10, 40, 80];

@@ -250,11 +250,11 @@ class AnalysisControllerResolveBodyTest extends TestCase
         [$applier, $captured] = $this->captureApplier($canonical);
         $this->controller($db, $applier)->applyMessage(
             $this->authed(),
-            $this->requestWithBody(['applyOptions' => ['targetDocState' => 20]]),
+            $this->requestWithBody(['applyOptions' => ['targetDocState' => 40]]),
             100,
         );
         $c = $captured();
-        $this->assertSame(20, $c['applyOptions']['targetDocState']);
+        $this->assertSame(40, $c['applyOptions']['targetDocState']);
     }
 
     public function testInvalidResolveValueGracefullySkipped(): void

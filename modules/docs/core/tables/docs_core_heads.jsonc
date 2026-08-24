@@ -117,7 +117,7 @@
             // Number assigned by the other party (e.g. supplier's invoice
             // number on a received invoice). Our own sequence number lives
             // in `doc_number`. Recommended non-empty for invoiceReceived at
-            // docState >= 20 — Exchange validator emits a warning; hard
+            // any non-draft docState — Exchange validator emits a warning; hard
             // per-docType validation is a follow-up in docs.invoicesIn.
         },
 

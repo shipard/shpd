@@ -80,7 +80,7 @@ class ContentTagRuleCaptureHandlerTest extends TestCase
     {
         $handler = $this->handler($this->aiHead(), $this->llmCanonical());
 
-        $handler->onStateChanged('docs_core_heads', ['id' => 555], 10, 20);
+        $handler->onStateChanged('docs_core_heads', ['id' => 555], 10, 40);
 
         $this->assertCount(1, $handler->sqlCalls);
         [$sql, $companyId, $tag, $origin] = $handler->sqlCalls[0];
@@ -98,7 +98,7 @@ class ContentTagRuleCaptureHandlerTest extends TestCase
             rule: ['id' => 7, 'tag' => 'vehicle.fuel', 'origin' => 'learned'],
         );
 
-        $handler->onStateChanged('docs_core_heads', ['id' => 555], 10, 20);
+        $handler->onStateChanged('docs_core_heads', ['id' => 555], 10, 40);
 
         $this->assertCount(1, $handler->sqlCalls);
         [$sql, $ruleId] = $handler->sqlCalls[0];
@@ -115,7 +115,7 @@ class ContentTagRuleCaptureHandlerTest extends TestCase
             rule: ['id' => 7, 'tag' => 'vehicle.fuel', 'origin' => 'learned'],
         );
 
-        $handler->onStateChanged('docs_core_heads', ['id' => 555], 10, 20);
+        $handler->onStateChanged('docs_core_heads', ['id' => 555], 10, 40);
 
         $this->assertCount(1, $handler->sqlCalls);
         [$sql, $ruleId] = $handler->sqlCalls[0];
@@ -131,7 +131,7 @@ class ContentTagRuleCaptureHandlerTest extends TestCase
             rule: ['id' => 7, 'tag' => 'vehicle.fuel', 'origin' => 'user'],
         );
 
-        $handler->onStateChanged('docs_core_heads', ['id' => 555], 10, 20);
+        $handler->onStateChanged('docs_core_heads', ['id' => 555], 10, 40);
 
         $this->assertSame([], $handler->sqlCalls);
     }
@@ -141,7 +141,7 @@ class ContentTagRuleCaptureHandlerTest extends TestCase
         // Učí se jen z LLM štítků — rule-sourced štítek už pravidlo má.
         $handler = $this->handler($this->aiHead(), $this->llmCanonical(tagSource: 'rule'));
 
-        $handler->onStateChanged('docs_core_heads', ['id' => 555], 10, 20);
+        $handler->onStateChanged('docs_core_heads', ['id' => 555], 10, 40);
 
         $this->assertSame([], $handler->sqlCalls);
     }
@@ -150,7 +150,7 @@ class ContentTagRuleCaptureHandlerTest extends TestCase
     {
         $handler = $this->handler($this->aiHead(), $this->llmCanonical(companyId: null));
 
-        $handler->onStateChanged('docs_core_heads', ['id' => 555], 10, 20);
+        $handler->onStateChanged('docs_core_heads', ['id' => 555], 10, 40);
 
         $this->assertSame([], $handler->sqlCalls);
     }
@@ -162,7 +162,7 @@ class ContentTagRuleCaptureHandlerTest extends TestCase
             $this->llmCanonical(),
         );
 
-        $handler->onStateChanged('docs_core_heads', ['id' => 555], 10, 20);
+        $handler->onStateChanged('docs_core_heads', ['id' => 555], 10, 40);
 
         $this->assertSame([], $handler->sqlCalls);
     }
@@ -171,7 +171,7 @@ class ContentTagRuleCaptureHandlerTest extends TestCase
     {
         $handler = $this->handler($this->aiHead(), $this->llmCanonical());
 
-        $handler->onStateChanged('docs_core_heads', ['id' => 555], 20, 40);
+        $handler->onStateChanged('docs_core_heads', ['id' => 555], 80, 40);
         $handler->onStateChanged('docs_core_heads', ['id' => 555], 10, 90);
 
         $this->assertSame([], $handler->sqlCalls);

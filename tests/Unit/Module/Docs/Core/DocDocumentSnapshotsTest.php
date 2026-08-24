@@ -242,7 +242,7 @@ class DocDocumentSnapshotsTest extends TestCase
         $doc->setConfig($this->buildConfig());
 
         $data = [
-            'docState' => 20, 'doc_type' => 'invno', 'partner' => 50,
+            'docState' => 40, 'doc_type' => 'invno', 'partner' => 50,
             'partner_address' => null, 'bank_account' => null, 'vat_registration' => null,
         ];
         $doc->maintainSnapshotsPub($data, ['docState' => 10, 'partner' => 50]);
@@ -279,7 +279,7 @@ class DocDocumentSnapshotsTest extends TestCase
     public function testMaintainSnapshotsDataSaveWithoutDocStateFallsBackToOriginal(): void
     {
         // Data-save bez docState v payloadu (volání mimo gateway, např.
-        // recomputeHeader): efektivní stav je stav z originálu (20) —
+        // recomputeHeader): efektivní stav je stav z originálu (80) —
         // snapshoty se při změně partnera musí přestavět, ne přeskočit.
         $db = $this->dbReturning([
             new Row(['id' => 60, 'full_name' => 'Nový Partner']),
@@ -298,11 +298,108 @@ class DocDocumentSnapshotsTest extends TestCase
             'supplier_snapshot' => ['name' => 'Naše firma'],
             'customer_snapshot' => ['name' => 'Starý Partner'],
         ];
-        $original = ['docState' => 20, 'partner' => 50];
+        $original = ['docState' => 80, 'partner' => 50];
         $doc->maintainSnapshotsPub($data, $original);
 
         $customer = json_decode($data['customer_snapshot'], true);
         $this->assertSame('Nový Partner', $customer['name']);
+    }
+
+    public function testTransition10To40AssignsNumberAndBuildsSnapshots(): void
+    {
+        // Zrušením stavu 20 se potvrzení stalo jednokrokovým: 10→40 musí
+        // v jednom save přidělit číslo ZE série a zároveň postavit snapshoty.
+        $db = $this->createMock(Connection::class);
+        $db->method('fetch')->willReturnCallback(
+            function (string $sql): ?Row {
+                if (str_contains($sql, 'docs_core_number_series')) {
+                    return new Row([
+                        'id' => 1, 'doc_type' => 'invno', 'doc_number_code' => 'A',
+                        'doc_number_pattern' => '%D%y%C%4', 'reset_scope' => 'fiscal_year',
+                    ]);
+                }
+                if (str_contains($sql, 'last_assigned')) {
+                    return new Row(['last_assigned' => 0]);
+                }
+                if (str_contains($sql, 'doc_number_prefix')) {
+                    return new Row(['doc_number_prefix' => '26', 'name' => '2026']);
+                }
+                if (str_contains($sql, 'fiscal_years')) {
+                    return new Row(['id' => 100, 'name' => '2026']);
+                }
+                if (str_contains($sql, 'base_persons_persons')) {
+                    return new Row(['id' => 50, 'full_name' => 'Partner s.r.o.']);
+                }
+                return null;
+            }
+        );
+
+        $doc = new TestableDocsHeadsDocument();
+        $doc->setDb($db);
+        $doc->setConfig($this->buildConfig());
+
+        $data = [
+            'id'               => 42,
+            'docState'         => 40,
+            'doc_type'         => 'invno',
+            'partner'          => 50,
+            'partner_address'  => null,
+            'bank_account'     => null,
+            'vat_registration' => null,
+            'number_series'    => 1,
+            'issue_date'       => '2026-05-06',
+            'accounting_date'  => '2026-05-06',
+            'doc_currency'     => 'czk',
+            'home_currency'    => 'czk',
+            'rows'             => [],
+        ];
+        $doc->beforeSavePub($data, ['docState' => 10, 'partner' => 50]);
+
+        $this->assertSame(1, $data['sequence_number']);
+        $this->assertSame('126A0001', $data['doc_number']);
+        $this->assertNotEmpty($data['supplier_snapshot']);
+        $this->assertNotEmpty($data['customer_snapshot']);
+    }
+
+    public function testImportModeSkipsSnapshotBuild(): void
+    {
+        // Migrace (`_importNumber` v payloadu): snapshoty se nestaví — stavět
+        // je z dnešních dat osob pro historické doklady by bylo věcně špatně.
+        // Bez import mode by save ve stavu 80 s partnerem snapshot postavil
+        // (viz testMaintainSnapshotsRebuildsWhenPartnerChanged).
+        $db = $this->createMock(Connection::class);
+        $db->method('fetch')->willReturnCallback(
+            function (string $sql): ?Row {
+                if (str_contains($sql, 'reset_scope')) {
+                    return new Row(['reset_scope' => 'fiscal_year']);
+                }
+                if (str_contains($sql, 'base_persons_persons')) {
+                    // Kdyby se snapshot přece jen stavěl, dostane platnou osobu
+                    // a test spadne na assertArrayNotHasKey níž.
+                    return new Row(['id' => 50, 'full_name' => 'Partner s.r.o.']);
+                }
+                return null;
+            }
+        );
+
+        $doc = new TestableDocsHeadsDocument();
+        $doc->setDb($db);
+        $doc->setConfig($this->buildConfig());
+
+        $data = [
+            'docState'        => 80,
+            'doc_type'        => 'invno',
+            'partner'         => 50,
+            'number_series'   => 1,
+            'issue_date'      => '2024-06-01',
+            'accounting_date' => '2024-06-01',
+            'rows'            => [],
+            '_importNumber'   => ['docNumber' => '2024-0042', 'sequenceNumber' => 42],
+        ];
+        $doc->beforeSavePub($data, null);
+
+        $this->assertArrayNotHasKey('supplier_snapshot', $data);
+        $this->assertArrayNotHasKey('customer_snapshot', $data);
     }
 
     public function testMaintainSnapshotsKeepsExistingWhenUnchanged(): void

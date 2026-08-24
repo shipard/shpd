@@ -201,10 +201,10 @@ class DocDocumentNumberingTest extends TestCase
         $doc->setDb($db);
 
         // Data-save z formuláře: docState je system sloupec, v payloadu chybí.
-        // Doklad je v Potvrzeno (20) s přiděleným číslem.
+        // Doklad je V opravě (80) s přiděleným číslem.
         $data = ['id' => 42, 'sequence_number' => 5, 'doc_number' => '126A0005'];
         $original = [
-            'docState' => 20, 'number_series' => 1, 'fiscal_year' => 100,
+            'docState' => 80, 'number_series' => 1, 'fiscal_year' => 100,
             'sequence_number' => 5, 'doc_number' => '126A0005',
         ];
 
@@ -219,7 +219,7 @@ class DocDocumentNumberingTest extends TestCase
 
     public function testDataSaveWithInjectedUnchangedDocStateNeverTouchesNumber(): void
     {
-        // Gateway injektuje efektivní stav do payloadu — stav 20 → 20 beze
+        // Gateway injektuje efektivní stav do payloadu — stav 80 → 80 beze
         // změny pořád nesmí být přechod.
         $db = $this->createMock(Connection::class);
         $db->expects($this->never())->method('fetch');
@@ -227,9 +227,9 @@ class DocDocumentNumberingTest extends TestCase
         $doc = new TestableDocsHeadsDocument();
         $doc->setDb($db);
 
-        $data = ['id' => 42, 'docState' => 20, 'sequence_number' => 5, 'doc_number' => '126A0005'];
+        $data = ['id' => 42, 'docState' => 80, 'sequence_number' => 5, 'doc_number' => '126A0005'];
         $original = [
-            'docState' => 20, 'number_series' => 1, 'fiscal_year' => 100,
+            'docState' => 80, 'number_series' => 1, 'fiscal_year' => 100,
             'sequence_number' => 5, 'doc_number' => '126A0005',
         ];
 
@@ -329,10 +329,9 @@ class DocDocumentNumberingTest extends TestCase
         $this->assertCount(1, $counterUpdates);
     }
 
-    public function testTransition10To20StillAssignsNumber(): void
+    public function testTransition10To40AssignsNumber(): void
     {
-        // Dosavadní UI cesta (FormController potvrzení Konceptu) po rozšíření
-        // podmínky na {0,10}→{20,40} funguje beze změny.
+        // UI cesta (FormController potvrzení Konceptu): 10→40 přiděluje číslo.
         $db = $this->createMock(Connection::class);
         $this->wireAssignFetches($db);
 
@@ -342,7 +341,7 @@ class DocDocumentNumberingTest extends TestCase
 
         $data = [
             'id'              => 42,
-            'docState'        => 20,
+            'docState'        => 40,
             'number_series'   => 1,
             'doc_type'        => 'invno',
             'accounting_date' => '2026-05-06',
@@ -429,7 +428,7 @@ class DocDocumentNumberingTest extends TestCase
 
     public function testReleaseSkipsOwnTransactionInsideExternalOne(): void
     {
-        // Stejný kontrakt pro release (20→10) — dnes se v exchange cestě
+        // Stejný kontrakt pro release (80→10) — dnes se v exchange cestě
         // nevolá, ale chování musí být konzistentní.
         $db = $this->createMock(Connection::class);
         $db->method('fetch')->willReturn(new Row(['max_seq' => 5]));

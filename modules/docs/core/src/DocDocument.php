@@ -26,7 +26,7 @@ use Shipard\Module\World\Vat\VatRateResolver;
  *   5. calculateRowPrice + calculateRowVat for each row
  *   6. buildVatRecapitulation (with reverse charge pairs)
  *   7. sumTotals + apply rounding + apply exchange rate to *_dom
- *   8. processStateTransition (assignNumber {0,10}→{20,40}, releaseNumber 20→10)
+ *   8. processStateTransition (assignNumber {0,10}→{40}, releaseNumber 80→10)
  *   9. maintainSnapshots (buildSnapshots when partner changes / first time)
  *  10. applyPaymentReferenceDefault from sequence_number
  */
@@ -35,11 +35,18 @@ abstract class DocDocument extends Document
     /** Default split for due_date when partner has no payment_term_days. */
     private const DEFAULT_PAYMENT_TERM_DAYS = 14;
 
-    /** Snapshots are built/refreshed only in editable confirmed states. */
-    private const SNAPSHOT_STATES = [20, 80];
+    /** Snapshots are built/refreshed when entering Done or while being edited. */
+    private const SNAPSHOT_STATES = [40, 80];
 
     /** Deleted doc state — period lookups skip only this; archived periods stay resolvable by date. */
     private const DOC_STATE_DELETED = 90;
+
+    /**
+     * True while saving a migrated document (`_importNumber` present).
+     * Import skips snapshot building — building snapshots from today's
+     * person data for historical documents would be factually wrong.
+     */
+    private bool $importMode = false;
 
     private ?VatRateResolver $vatRateResolver = null;
     private ?OwnCompanyResolver $ownCompanyResolver = null;
@@ -71,7 +78,7 @@ abstract class DocDocument extends Document
 
         $newState = (int) ($data['docState'] ?? 10);
 
-        if (in_array($newState, [20, 40, 80], true)) {
+        if (in_array($newState, [40, 80], true)) {
             if ($this->headPartnerRequired() && empty($data['partner'])) {
                 $result->addError('partner', 'Partner je povinný', 'required');
             }
@@ -112,7 +119,7 @@ abstract class DocDocument extends Document
     }
 
     /**
-     * Je hlavičkový partner povinný při potvrzení (stavy 20/40/80)?
+     * Je hlavičkový partner povinný při potvrzení (stavy 40/80)?
      * Faktury ano; účetní doklad (cmnbkp) ne — partner žije per řádek
      * (zápočet má dva partnery, mzda závazek bez hlavičkového partnera).
      */
@@ -157,6 +164,8 @@ abstract class DocDocument extends Document
         // "unknown column". Pull it out first, branch on it at the end.
         $importNumber = $data['_importNumber'] ?? null;
         unset($data['_importNumber']);
+        // Reset per save — the instance may be reused across documents.
+        $this->importMode = is_array($importNumber);
 
         $this->trackStateChange($data, $originalData);
 
@@ -988,15 +997,16 @@ abstract class DocDocument extends Document
         if ($t === null) {
             return;
         }
-        // Číslo se přiděluje při každém opuštění Konceptu do 20/40 — vedle
-        // UI přechodu 10→20 i přímý insert ve finálním stavu (old = 0,
+        // Číslo se přiděluje při každém opuštění Konceptu do 40 — vedle
+        // UI přechodu 10→40 i přímý insert ve finálním stavu (old = 0,
         // exchange apply „Vystavit a uzavřít“). Import mode se sem nedostane
         // (beforeSave větví na applyImportNumber dřív).
-        if (in_array($t['old'], [0, 10], true) && in_array($t['new'], [20, 40], true)) {
+        if (in_array($t['old'], [0, 10], true) && $t['new'] === 40) {
             $this->assignDocumentNumber($data);
             return;
         }
-        if ($t['old'] === 20 && $t['new'] === 10) {
+        // Návrat V opravě → Koncept uvolní číslo (jen poslední doklad v řadě).
+        if ($t['old'] === 80 && $t['new'] === 10) {
             $this->releaseDocumentNumber($data, $originalData);
         }
     }
@@ -1302,6 +1312,12 @@ abstract class DocDocument extends Document
 
     protected function maintainSnapshots(array &$data, ?array $originalData): void
     {
+        // Migrovaná data mají snapshoty NULL záměrně — stavět je z dnešních
+        // dat osob pro historické doklady by bylo věcně špatně.
+        if ($this->importMode) {
+            return;
+        }
+
         // Chybějící docState v payloadu = stav se nemění (gateway ho injektuje,
         // fallback na originál kryje volání mimo gateway — recomputeHeader).
         $newState = (int) ($data['docState'] ?? $originalData['docState'] ?? 10);

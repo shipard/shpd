@@ -20,14 +20,14 @@ class IssuedInvoiceDocumentTest extends TestCase
 
     /**
      * Minimal data set that already passes parent (DocsHeadsDocument) validation
-     * for state 20 (Confirmed). Per-type rules layer on top of these.
+     * for state 40 (Done). Per-type rules layer on top of these.
      *
      * @return array<string, mixed>
      */
     private function confirmedData(): array
     {
         return [
-            'docState'         => 20,
+            'docState'         => 40,
             'number_series'    => 1,
             'issue_date'       => '2026-05-06',
             'accounting_date'  => '2026-05-06',

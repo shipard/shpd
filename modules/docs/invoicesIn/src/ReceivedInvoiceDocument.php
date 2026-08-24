@@ -31,7 +31,7 @@ class ReceivedInvoiceDocument extends DocsHeadsDocument
         // Only relevant for bank transfer (payment_method === 1). Cash / card /
         // cash-on-delivery / set-off don't need supplier bank info. Historical
         // (paid) invoices legitimately lack it, so this must not block saves.
-        if (in_array($newState, [20, 40, 80], true) && $paymentMethod === 1) {
+        if (in_array($newState, [40, 80], true) && $paymentMethod === 1) {
             $hasBank = !empty($data['partner_bank'])
                 || !empty($data['partner_bank_account'])
                 || !empty($data['partner_bank_iban']);

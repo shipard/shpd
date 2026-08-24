@@ -24,7 +24,7 @@ class IssuedInvoiceDocument extends DocsHeadsDocument
         $newState = (int) ($data['docState'] ?? 10);
 
         // Confirm and beyond: our bank account must be set on issued invoices
-        if (in_array($newState, [20, 40, 80], true)) {
+        if (in_array($newState, [40, 80], true)) {
             if (empty($data['bank_account'])) {
                 $result->addError(
                     'bank_account',

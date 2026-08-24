@@ -33,7 +33,7 @@ class DocDocumentValidateTest extends TestCase
     private function confirmedData(): array
     {
         return [
-            'docState'         => 20,
+            'docState'         => 40,
             'number_series'    => 1,
             'issue_date'       => '2026-05-06',
             'accounting_date'  => '2026-05-06',

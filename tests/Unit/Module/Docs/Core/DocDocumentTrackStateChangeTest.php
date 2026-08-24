@@ -107,9 +107,9 @@ class DocDocumentTrackStateChangeTest extends TestCase
     {
         $doc = new TestableDocsHeadsDocument();
         $data = ['docState' => 40];
-        $doc->trackStateChangePub($data, ['docState' => 20]);
+        $doc->trackStateChangePub($data, ['docState' => 10]);
 
-        $this->assertSame(['old' => 20, 'new' => 40], $doc->getStateTransition());
+        $this->assertSame(['old' => 10, 'new' => 40], $doc->getStateTransition());
     }
 
     public function testNoTransitionOnUnchangedState(): void

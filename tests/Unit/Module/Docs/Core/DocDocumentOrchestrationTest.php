@@ -67,7 +67,7 @@ class DocDocumentOrchestrationTest extends TestCase
         $this->assertSame(10, $data['docState']);
     }
 
-    public function testProcessStateTransition10To20InvokesAssignNumber(): void
+    public function testProcessStateTransition10To40InvokesAssignNumber(): void
     {
         $db = $this->createMock(Connection::class);
         $callCount = 0;
@@ -92,7 +92,7 @@ class DocDocumentOrchestrationTest extends TestCase
         $doc->setConfig($this->buildConfig());
 
         $data = [
-            'docState' => 20,
+            'docState' => 40,
             'number_series'   => 1,
             'doc_type'        => 'invno',
             'accounting_date' => '2026-05-06',
@@ -104,7 +104,7 @@ class DocDocumentOrchestrationTest extends TestCase
         $this->assertSame('126A0006', $data['doc_number']);
     }
 
-    public function testProcessStateTransition20To10ReleasesNumberWhenLast(): void
+    public function testProcessStateTransition80To10ReleasesNumberWhenLast(): void
     {
         $db = $this->createMock(Connection::class);
         $db->method('fetch')->willReturn(new Row(['max_seq' => 5]));
@@ -113,7 +113,7 @@ class DocDocumentOrchestrationTest extends TestCase
         $doc->setDb($db);
 
         $data = ['id' => 42, 'docState' => 10, 'sequence_number' => 5, 'doc_number' => '126A0005'];
-        $original = ['docState' => 20, 'number_series' => 1, 'fiscal_year' => 100, 'sequence_number' => 5];
+        $original = ['docState' => 80, 'number_series' => 1, 'fiscal_year' => 100, 'sequence_number' => 5];
         $doc->trackStateChangePub($data, $original);
         $doc->processStateTransitionPub($data, $original);
 
@@ -121,14 +121,14 @@ class DocDocumentOrchestrationTest extends TestCase
         $this->assertSame('!0000000042', $data['doc_number']);
     }
 
-    public function testProcessStateTransition20To40NoOp(): void
+    public function testProcessStateTransition80To40NoOp(): void
     {
         $doc = new TestableDocsHeadsDocument();
         $data = ['docState' => 40, 'sequence_number' => 5, 'doc_number' => '126A0005'];
-        $doc->trackStateChangePub($data, ['docState' => 20]);
-        $doc->processStateTransitionPub($data, ['docState' => 20]);
+        $doc->trackStateChangePub($data, ['docState' => 80]);
+        $doc->processStateTransitionPub($data, ['docState' => 80]);
 
-        // No changes — Confirmed → Done is just a state flag
+        // No changes — Being edited → Done is just a state flag
         $this->assertSame(5, $data['sequence_number']);
         $this->assertSame('126A0005', $data['doc_number']);
     }

@@ -174,10 +174,11 @@ class DocRowOperationsValidateTest extends TestCase
         $this->assertSame('rows.1.operation', $result->getErrors()[0]->column);
     }
 
-    public function testState20DoesNotEnforceOperations(): void
+    public function testState80DoesNotEnforceOperations(): void
     {
+        // Pohyby řádků se vynucují až při přechodu do 40 — V opravě (80) ne.
         $data = $this->state40Data([['row_kind' => 1, 'total_price' => 100]]);
-        $data['docState'] = 20;
+        $data['docState'] = 80;
 
         $this->assertTrue($this->headDoc()->validate($data)->isValid());
     }

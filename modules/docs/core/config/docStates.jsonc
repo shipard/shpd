@@ -2,9 +2,11 @@
     // docs.core.docStates
     //
     // Stavy dokladů. Oproti core.system.docStatesArchive:
-    // + 20 Potvrzeno (přidělené číslo, ale stále editovatelné)
     // + 30 Storno (zachovává číslo, sdílí mainState s 40 V pořádku)
     // - 70 V archívu (u dokladů nadbytečné)
+    //
+    // Stav 20 Potvrzeno byl zrušen (tasks/docs-remove-confirmed-state.md);
+    // v mainState po něm zůstává díra (2) — záměrně, bez backfillu.
 
     "10": {
         "stateName": "Koncept",
@@ -17,21 +19,7 @@
         "mainState": 1,
         "viewGroup": "active",
         "closeForm": 0,
-        "goto": [20, 90]
-    },
-
-    "20": {
-        "stateName": "Potvrzeno",
-        "stateName:cs": "Potvrzeno",
-        "stateName:en": "Confirmed",
-        "actionName": "Potvrdit",
-        "actionName:cs": "Potvrdit",
-        "actionName:en": "Confirm",
-        "stateStyle": "confirmed",
-        "mainState": 2,
-        "viewGroup": "active",
-        "closeForm": 0,
-        "goto": [10, 40, 90]
+        "goto": [40, 90]
     },
 
     "80": {
@@ -45,7 +33,7 @@
         "mainState": 3,
         "viewGroup": "active",
         "closeForm": 0,
-        "goto": [40, 30, 90]
+        "goto": [40, 30, 10, 90]
     },
 
     "40": {

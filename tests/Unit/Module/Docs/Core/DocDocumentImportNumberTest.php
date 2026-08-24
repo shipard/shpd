@@ -165,7 +165,7 @@ class DocDocumentImportNumberTest extends TestCase
         $doc->setDb($db);
 
         $data = [
-            'docState'        => 20,
+            'docState'        => 80,
             'number_series'   => 1,
             'issue_date'      => '2024-06-01',
             'accounting_date' => '2024-06-01',

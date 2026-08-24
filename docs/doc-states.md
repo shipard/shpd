@@ -180,7 +180,7 @@ Každý stav má `stateStyle` identifikátor. Systém přidává CSS třídu ve 
 | `stateStyle` | Barva | Použití |
 |---|---|---|
 | `concept` | žlutá | Koncept — nový, nepotvrzený dokument |
-| `confirmed` | modrá | Potvrzeno — přiděleno číslo, stále editovatelné (doklady) |
+| `confirmed` | modrá | K řešení — rozpracovaný stav (došlá pošta, `docStatesIncoming`) |
 | `done` | světle zelená | V pořádku — platný, readOnly |
 | `edit` | oranžová | V opravě — dočasně odemčen k editaci |
 | `archive` | šedá | V archívu — platný, neaktivní |
@@ -189,7 +189,7 @@ Každý stav má `stateStyle` identifikátor. Systém přidává CSS třídu ve 
 
 CSS třídy jsou definovány v `ViewerRow.svelte` jako `:global` pravidla (aby se aplikovaly přes Svelte scoping). Výběr přebíjí barvu docState (always wins).
 
-`stateStyle` určuje i **mobilní umístění přechodu ve footeru formuláře** (`FormStateBar`): na mobilu (≤ 768px) jdou do kebab menu (⋮) destruktivní přechody (`archive`/`trash`/`cancelled` — Archivovat, Stornovat, Smazat; v kebabu červeně) a `concept` (Uložit jako koncept — návrat zpět na koncept, pomocná akce; v kebabu neutrálně). Postupové přechody (Potvrdit `confirmed`, V pořádku `done`, Opravit `edit`…) zůstávají viditelné vedle Uložit. Na desktopu beze změny — viz `docs/edit-forms.md`, sekce „Toolbar formuláře (FormStateBar)".
+`stateStyle` určuje i **mobilní umístění přechodu ve footeru formuláře** (`FormStateBar`): na mobilu (≤ 768px) jdou do kebab menu (⋮) destruktivní přechody (`archive`/`trash`/`cancelled` — Archivovat, Stornovat, Smazat; v kebabu červeně) a `concept` (Uložit jako koncept — návrat zpět na koncept, pomocná akce; v kebabu neutrálně). Postupové přechody (V pořádku `done`, Opravit `edit`…) zůstávají viditelné vedle Uložit. Na desktopu beze změny — viz `docs/edit-forms.md`, sekce „Toolbar formuláře (FormStateBar)".
 
 ### `mobileKebab` — volitelný příznak stavu
 
@@ -213,23 +213,21 @@ Konfigurační soubor: `modules/core/system/config/docStatesArchive.jsonc`
 
 ---
 
-## 8. Příklad rozšířené sady — `economy.docs.docStates`
+## 8. Příklad rozšířené sady — `docs.core.docStates`
 
-Doklady (faktury, objednávky, …) přidávají stavy Potvrzeno a Storno:
+Doklady (faktury, objednávky, …) přidávají stav Storno a vynechávají archiv:
 
 | docState | Název | mainState | viewGroup | readOnly | Přechody do |
 |----------|-------|-----------|-----------|----------|-------------|
-| 10 | Koncept | 1 | active | — | 20, 40, 70, 90 |
-| 20 | Potvrzeno | 2 | active | — | 10, 40, 70, 90 |
-| 80 | V opravě | 3 | active | — | 40, 70, 90 |
-| 40 | V pořádku | **4** | active | 1 | 30, 80, 70, 90 |
+| 10 | Koncept | 1 | active | — | 40, 90 |
+| 80 | V opravě | 3 | active | — | 40, 30, 10, 90 |
+| 40 | V pořádku | **4** | active | 1 | 80, 30, 90 |
 | 30 | Storno | **4** | active | 1 | 80 |
-| 70 | V archívu | 5 | archive | 1 | 80 |
-| 90 | Smazáno | 6 | trash | 1 | 80 |
+| 90 | Smazáno | 5 | trash | 1 | 80 |
 
-**Klíčový detail:** Storno a V pořádku mají stejný `mainState` (4). V prohlížeči s `ORDER BY docStateMain ASC, doc_number DESC` se tak stornované doklady přirozeně prolínají s platnými a řadí se dle čísla dokladu.
+**Klíčový detail:** Storno a V pořádku mají stejný `mainState` (4). V prohlížeči s `ORDER BY docStateMain ASC, doc_number DESC` se tak stornované doklady přirozeně prolínají s platnými a řadí se dle čísla dokladu. Po hodnotě 1 (Koncept) následuje 3 — mainState 2 patřil zrušenému stavu Potvrzeno (20) a díra se záměrně nezaplňuje (žádný backfill `docStateMain`).
 
-**Stav Potvrzeno (20):** Dokument má přidělené číslo z číselné řady, ale je stále editovatelný (`readOnly` není nastaveno). Číslo dokladu se při přechodu zpět na Koncept nesmí uvolnit — to řeší business logika v `Document.beforeSave()`.
+**Číslo dokladu a návrat do Konceptu:** číslo z číselné řady se přiděluje při přechodu 10 → 40 (`DocDocument::processStateTransition`). Přechod 80 → 10 (V opravě → Koncept) číslo uvolňuje — smí ho provést jen poslední doklad v řadě, jinak by v sekvenci vznikla díra (`releaseDocumentNumber` padá `DomainException`). Aby UI nenabízelo slepou cestu, hook `Document::filterStateTransitions` (implementace v `DocDocument`) přechod →10 z nabídky vyřadí, není-li doklad poslední v řadě.
 
 ---
 
@@ -269,6 +267,18 @@ Wrapper nad načteným cfgItem. Klíčové metody:
 - `isTransitionAllowed(int $from, int $to): bool` — ověří přechod přes `goto`
 - `getViewGroupStates(string $viewGroup): int[]` — vrátí docState hodnoty pro daný viewGroup
 - `getAvailableTransitions(int $currentState): array` — vrátí přechody pro API odpověď
+
+### `Document::filterStateTransitions` — per-dokumentové filtrování nabídky
+
+Nabídku z `getAvailableTransitions()` může Document třída zúžit hookem
+`filterStateTransitions(array $transitions, array $row): array` (default
+pass-through). Aplikuje ho `DocStateTransitionFilter::apply()` v obou
+producentech přechodů do UI: `CrudController::docStateOptions()` a
+`FormController` (form load i recalculate). Bez registrované Document třídy
+nebo bez DB je hook pass-through. Hook jen skrývá slepé cesty v nabídce —
+vynucením zůstávají server-side bariéry (validace, výjimky v `beforeSave`).
+První uživatel: `DocDocument` vyřazuje přechod →10, není-li doklad poslední
+v číselné řadě (viz sekce 8).
 
 ### `CrudController` — vynucení stavů
 
@@ -317,6 +327,9 @@ Odpověď:
     }
 }
 ```
+
+Vrácené `transitions` jsou už prohnané hookem `filterStateTransitions`
+(viz sekce 9) — nabídka se může u konkrétního záznamu lišit od holého `goto`.
 
 ### Provedení přechodu
 

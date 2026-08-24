@@ -20,10 +20,11 @@ modelem.
 - **DPH model pro Českou republiku** — všechny kódy DPH ze starého Shipardu
   (tuzemsko vstup/výstup ve všech sazbách, EU plnění, dovoz/vývoz, tuzemský
   PDP), časově proměnná procenta, párové kódy pro reverse charge
-- **Číselné řady** — atomicky generované číslo dokladu při Potvrzení
-- **Snapshoty** dodavatele a odběratele do hlavičky při Potvrzení
-- **Stavový model** s 6 stavy (Koncept, Potvrzeno, V opravě, V pořádku, Storno,
-  Smazáno), specifický pro doklady (cfgItem `docs.core.docStates`)
+- **Číselné řady** — atomicky generované číslo dokladu při vystavení (10 → 40)
+- **Snapshoty** dodavatele a odběratele do hlavičky při vystavení
+- **Stavový model** s 5 stavy (Koncept, V opravě, V pořádku, Storno,
+  Smazáno), specifický pro doklady (cfgItem `docs.core.docStates`);
+  původní 6. stav Potvrzeno (20) byl zrušen
 - **Polymorfní zpracování** — společné tabulky `docs_core_*` pro všechny
   budoucí typy, samostatné Document třídy per typ v modulech
   `docs.invoicesOut` / `docs.invoicesIn`
@@ -146,21 +147,24 @@ v sekci 10. Tato změna je nezávislá na docs MVP a může se nasadit dřív.
 ### cfgItem `docs.core.docStates`
 
 Doklady mají vlastní rozšířenou sadu stavů — oproti standardnímu
-`core.system.docStatesArchive` přibývají **Potvrzeno** (20) a **Storno** (30),
-chybí **V archívu** (70).
+`core.system.docStatesArchive` přibývá **Storno** (30), chybí **V archívu**
+(70). Stav **Potvrzeno (20)** byl zrušen (tasks/docs-remove-confirmed-state.md)
+— přiděloval číslo, ale nic dalšího; číslo se přiděluje při 10 → 40 a roli
+„editovatelný doklad s číslem" plně převzal stav 80 (V opravě). Po mainState 2
+zůstává díra, záměrně bez backfillu.
 
 | docState | stateName | mainState | viewGroup | readOnly | enablePrint | closeForm | goto |
 |---|---|---|---|---|---|---|---|
-| 10 | Koncept | 1 | active | — | — | 0 | 20, 90 |
-| 20 | Potvrzeno | 2 | active | — | — | 0 | 10*, 40, 90 |
-| 80 | V opravě | 3 | active | — | — | 0 | 40, 30, 90 |
+| 10 | Koncept | 1 | active | — | — | 0 | 40, 90 |
+| 80 | V opravě | 3 | active | — | — | 0 | 40, 30, 10*, 90 |
 | 40 | V pořádku | **4** | active | 1 | 1 | 1 | 80, 30, 90 |
 | 30 | Storno | **4** | active | 1 | — | 1 | 80 |
 | 90 | Smazáno | 5 | trash | 1 | — | 1 | 80 |
 
-\* Přechod 20 → 10 je povolen **jen pokud je doklad poslední v řadě** (kontrola
-v `processDocState` + filtr v `getAvailableTransitions`). Důvod: uvolnění
-sequence_number jen pokud nevznikne díra v sekvenci.
+\* Přechod 80 → 10 je povolen **jen pokud je doklad poslední v řadě**
+(`releaseDocumentNumber` jinak padá `DomainException`; UI ho nenabízí díky
+hooku `Document::filterStateTransitions`). Důvod: uvolnění sequence_number
+jen pokud nevznikne díra v sekvenci.
 
 **Stav 40 a 30 sdílejí `mainState=4`** záměrně — v prohlížeči se Storno
 prolíná s aktivními doklady a řadí se podle čísla dokladu (oranžovo-červená
@@ -171,19 +175,18 @@ pozici v sekvenci).
 
 | Z → Do | Co se děje | Důvod |
 |---|---|---|
-| 10 → 20 | Přidělí se sequence_number, sestaví doc_number, vyplní snapshoty | Doklad získává identitu, je viditelný „venku" |
-| 20 → 40 | Žádná změna dat, jen stav | Účetně uzavřeno, doklad „v pořádku" |
-| 20 → 10 | Uvolní sequence_number (jen pokud poslední), doc_number → `!...` | Kompletní vrácení do rozpracování |
+| 10 → 40 | Přidělí se sequence_number, sestaví doc_number, vyplní snapshoty, zaúčtuje se | Doklad získává identitu a je uzavřený |
 | 40 → 80 | Žádná změna dat | Otevření pro opravu |
 | 80 → 40 | Aktualizace snapshotů (pokud změněn partner) | Uzavření po opravě |
+| 80 → 10 | Uvolní sequence_number (jen pokud poslední), doc_number → `!...`, snapshoty → NULL | Kompletní vrácení do rozpracování |
 | 80 → 30 | Žádná změna dat, jen stav | Doklad je nesmyslný / chybný, ale evidovaný |
 | 30 → 80 | Otevření pro úpravu (přechod na cestu zpět) | Storno se má vrátit do života |
 | 40 → 30 | Žádná změna dat, jen stav | Stornování validního dokladu |
-| → 90 | Žádná změna dat, jen stav | Smazání (Koncept/Potvrzeno/V opravě → Smazáno) |
+| → 90 | Žádná změna dat, jen stav | Smazání (Koncept/V opravě → Smazáno) |
 | 90 → 80 | Žádná změna dat | Obnovení smazaného (přes V opravě) |
 
 **Klíčový invariant:** `sequence_number` jednou přidělené nelze ztratit (kromě
-přechodu 20 → 10 u posledního dokladu). Jakmile je `sequence_number != NULL`,
+přechodu 80 → 10 u posledního dokladu). Jakmile je `sequence_number != NULL`,
 zůstává na dokladu i v Storno, V archívu (kdyby existoval) i ve Smazáno.
 
 ### CSS stateStyles
@@ -193,7 +196,6 @@ Použije se stávající paleta z `docs/design-system.md`:
 | docState | stateStyle | Barva |
 |---|---|---|
 | 10 Koncept | `concept` | žlutá |
-| 20 Potvrzeno | `confirmed` | (bez pruhu) |
 | 80 V opravě | `edit` | fialová |
 | 40 V pořádku | `done` | (bez pruhu, badge zelený) |
 | 30 Storno | `cancelled` | červená |
@@ -208,9 +210,11 @@ Použije se stávající paleta z `docs/design-system.md`:
     // docs.core.docStates
     //
     // Stavy dokladů. Oproti core.system.docStatesArchive:
-    // + 20 Potvrzeno (přidělené číslo, ale stále editovatelné)
     // + 30 Storno (zachovává číslo, sdílí mainState s 40 V pořádku)
     // - 70 V archívu (u dokladů nadbytečné)
+    //
+    // Stav 20 Potvrzeno byl zrušen (tasks/docs-remove-confirmed-state.md);
+    // v mainState po něm zůstává díra (2) — záměrně, bez backfillu.
 
     "10": {
         "stateName": "Koncept",
@@ -223,21 +227,7 @@ Použije se stávající paleta z `docs/design-system.md`:
         "mainState": 1,
         "viewGroup": "active",
         "closeForm": 0,
-        "goto": [20, 90]
-    },
-
-    "20": {
-        "stateName": "Potvrzeno",
-        "stateName:cs": "Potvrzeno",
-        "stateName:en": "Confirmed",
-        "actionName": "Potvrdit",
-        "actionName:cs": "Potvrdit",
-        "actionName:en": "Confirm",
-        "stateStyle": "confirmed",
-        "mainState": 2,
-        "viewGroup": "active",
-        "closeForm": 0,
-        "goto": [10, 40, 90]
+        "goto": [40, 90]
     },
 
     "80": {
@@ -251,7 +241,7 @@ Použije se stávající paleta z `docs/design-system.md`:
         "mainState": 3,
         "viewGroup": "active",
         "closeForm": 0,
-        "goto": [40, 30, 90]
+        "goto": [40, 30, 10, 90]
     },
 
     "40": {
@@ -304,33 +294,14 @@ Použije se stávající paleta z `docs/design-system.md`:
 
 ### Backend — kontextové filtrování přechodů
 
-Stávající `DocStateConfig::getAvailableTransitions(int $currentState)` musí
-být rozšířený o **kontext dokladu** — minimálně předaný `array $data`.
-Důvod: filtrování přechodu 20 → 10 podle pravidla „poslední v řadě".
-
-Návrh signatury:
-
-```php
-public function getAvailableTransitions(int $currentState, array $context = []): array
-{
-    $transitions = $this->doStandardLookup($currentState);
-
-    // Hook pro business-specific filtrování
-    foreach ($transitions as $i => $transition) {
-        if (!$this->isTransitionContextuallyAllowed($currentState, $transition['state'], $context)) {
-            unset($transitions[$i]);
-        }
-    }
-
-    return array_values($transitions);
-}
-```
-
-Implementace `isTransitionContextuallyAllowed` může být v subclass `DocStateConfig`
-specifické pro `docs.core` — kontrola přes DB, zda je `sequence_number`
-maximální v dané řadě+roce.
-
-Volání z `FormController.meta()` předá `$data` z aktuálně načteného dokladu.
+Implementováno jako hook na Document třídě (ne na `DocStateConfig`):
+`Document::filterStateTransitions(array $transitions, array $row): array`
+(default pass-through). Sdílený `DocStateTransitionFilter::apply()` ho volá
+v obou producentech přechodů do UI — `CrudController::docStateOptions()` a
+`FormController` (form load i recalculate). `DocDocument` jím vyřazuje
+přechod →10, není-li doklad poslední v řadě (`MAX(sequence_number)` per
+řada + fiskální rok — tentýž dotaz jako guard v `releaseDocumentNumber`).
+Detaily: `docs/doc-states.md` sekce 9.
 
 ---
 
@@ -766,7 +737,7 @@ je tedy primárně na úrovni transakce, ne UNIQUE.
 
 ### 5.3 Algoritmus přidělení čísla
 
-Volá se v `Document::beforeSave` při přechodu Koncept (10) → Potvrzeno (20).
+Volá se v `Document::beforeSave` při přechodu Koncept (10) → V pořádku (40).
 
 ```php
 public function assignDocumentNumber(array &$data): void
@@ -881,15 +852,12 @@ public function resolvePattern(string $pattern, array $data, array $series): str
 Vytvoření Konceptu (id = 123):
   doc_number      = '!0000000123'
   sequence_number = NULL
-  fiscal_year     = NULL  (resolvuje se až při Potvrzení)
+  fiscal_year     = NULL  (resolvuje se až při přechodu do V pořádku)
 
-Přechod Koncept → Potvrzeno:
+Přechod Koncept → V pořádku (10 → 40):
   doc_number      = '126A0001'  (resolved)
   sequence_number = 1
   fiscal_year     = <id roku 2026>
-
-Potvrzeno → V pořádku:
-  beze změny
 
 V pořádku → V opravě → V pořádku:
   beze změny
@@ -897,7 +865,7 @@ V pořádku → V opravě → V pořádku:
 40 → 30 (Storno):
   beze změny — Storno si drží své původní číslo
 
-20 → 10 (Potvrzeno → Koncept), JEN POKUD JE POSLEDNÍ V ŘADĚ:
+80 → 10 (V opravě → Koncept), JEN POKUD JE POSLEDNÍ V ŘADĚ:
   doc_number      = '!0000000123'  (zpět)
   sequence_number = NULL
   fiscal_year     = NULL
@@ -1174,7 +1142,7 @@ Idempotence: lookup před insertem. Uživatel si může výchozí řadu zarchivo
 `unq_series_seq` má NULL hodnoty pro `sequence_number` (Koncepty) i pro
 `fiscal_year` (řady s reset_scope=none v Konceptech). MariaDB počítá NULL
 jako neporušující UNIQUE — tj. víc Konceptů koexistuje bez kolize. Při
-přechodu na Potvrzeno se obě hodnoty naplní, a UNIQUE se aktivuje (je-li
+přechodu do V pořádku se obě hodnoty naplní, a UNIQUE se aktivuje (je-li
 v sekvenci čisto, INSERT/UPDATE projde).
 
 ### 6.3 Default values logic
@@ -1203,12 +1171,14 @@ serveru v `Document::beforeSave`** podle povahy:
 | `vat_rounding_mode` | 2 (matematicky na 0,01) |
 | `fiscal_year`, `fiscal_month` | resolvované z `accounting_date` v `beforeSave` |
 | `vat_period` | resolvované z `vat_duzp` + `vat_registration` v `beforeSave` |
-| `payment_reference` | = `sequence_number` po Potvrzeno (jen pokud uživatel nezadal jinak) |
+| `payment_reference` | = `sequence_number` po přidělení čísla (jen pokud uživatel nezadal jinak) |
 
 ### 6.4 Snapshot logika
 
 Snapshoty jsou **JSON sloupce** plněné v `Document::beforeSave` při přechodu
-Koncept → Potvrzeno a aktualizované při změně partnera v Potvrzeno / V opravě.
+Koncept → V pořádku a aktualizované při změně partnera ve V opravě.
+Import mode (`_importNumber`) je přeskakuje — migrovaná data mají snapshoty
+NULL záměrně.
 
 Pseudokód:
 
@@ -1218,12 +1188,12 @@ public function maintainSnapshots(array &$data, ?array $originalData): void
     $stateNow      = (int) ($data['docState'] ?? 10);
     $stateOriginal = (int) ($originalData['docState'] ?? 10);
 
-    // Snapshoty se plní/aktualizují jen v editovatelných stavech 20 / 80
-    if (!in_array($stateNow, [20, 80])) {
+    // Snapshoty se plní/aktualizují jen ve stavech 40 / 80
+    if (!in_array($stateNow, [40, 80])) {
         return;
     }
 
-    // Buď je snapshot prázdný (první přechod do 20), nebo se změnil partner
+    // Buď je snapshot prázdný (první přechod do 40), nebo se změnil partner
     $partnerChanged = ($data['partner'] ?? null) !== ($originalData['partner'] ?? null);
     $snapshotEmpty  = empty($data['supplier_snapshot']) || empty($data['customer_snapshot']);
 
@@ -1313,9 +1283,8 @@ V `Document::validate` se per stav kontrolují různé požadavky:
 | Stav | Požadavky |
 |---|---|
 | 10 (Koncept) | Stačí `doc_type`, `number_series`, `issue_date`, `accounting_date` |
-| 20 (Potvrzeno) | Plus: `partner`, `vat_registration` (pokud `vat_mode != 0`), aspoň 1 řádek, `exchange_rate` (pokud cizí měna), validní snapshoty po sestavení |
-| 40 (V pořádku) | Stejně jako Potvrzeno |
-| 80 (V opravě) | Stejně jako Potvrzeno |
+| 40 (V pořádku) | Plus: `partner`, `vat_registration` (pokud `vat_mode != 0`), aspoň 1 řádek, `exchange_rate` (pokud cizí měna), pohyby řádků (rowOperations), validní snapshoty po sestavení |
+| 80 (V opravě) | Stejně jako 40, bez vynucení pohybů řádků |
 | 30 (Storno) | Beze změny — co bylo OK ve 40, je OK ve 30 |
 
 ---
@@ -1712,34 +1681,24 @@ třída `DocDocument` v `docs.core`.
 8. COMMIT
 ```
 
-### 9.2 Koncept (10) → Potvrzeno (20)
+### 9.2 Koncept (10) → V pořádku (40)
 
 ```
-1. Klient pošle PUT s { docState: 20, ...ostatní data... }
+1. Klient pošle PUT s { docState: 40, ...ostatní data... }
    (Pozn: na rozdíl od standardního state-only přechodu jsou součástí 
    i editovaná data, protože uživatel mohl něco upravit těsně před potvrzením)
-2. CrudController.processDocState() ověří přechod 10 → 20 (povolen)
+2. CrudController.processDocState() ověří přechod 10 → 40 (povolen)
 3. Document.beforeSave():
    a. assignDocumentNumber() — atomicky, viz sekce 5.3
    b. maintainSnapshots() — sestaví supplier_snapshot + customer_snapshot
    c. payment_reference default = sequence_number, pokud user nenastavil
    d. ostatní jako v 9.1 (defaults, calculations)
-4. UPDATE heads, sync rows, sync recap
-5. COMMIT
+4. UPDATE heads, sync rows, sync recap; po commitu zaúčtování
+   (DocsHeadsEventHandler)
+5. COMMIT; closeForm: 1 — UI zavře formulář a vrátí do vieweru
 ```
 
-### 9.3 Potvrzeno (20) → V pořádku (40)
-
-```
-1. Klient pošle PUT s { docState: 40 }
-2. processDocState ověří přechod
-3. Document.beforeSave() — žádná specifická akce; pokud uživatel
-   neupravoval data, jen přepíše state
-4. UPDATE heads SET docState=40, docStateMain=4
-5. closeForm: 1 — UI zavře formulář a vrátí do vieweru
-```
-
-### 9.4 V pořádku (40) → V opravě (80)
+### 9.3 V pořádku (40) → V opravě (80)
 
 ```
 1. Klient pošle PUT s { docState: 80 }
@@ -1749,7 +1708,7 @@ třída `DocDocument` v `docs.core`.
 5. closeForm: 0 — formulář zůstává otevřený, již editovatelný
 ```
 
-### 9.5 V opravě (80) → V pořádku (40)
+### 9.4 V opravě (80) → V pořádku (40)
 
 ```
 1. Klient pošle PUT s { docState: 40, ...edited fields... }
@@ -1760,7 +1719,7 @@ třída `DocDocument` v `docs.core`.
 4. UPDATE heads, sync rows, sync recap
 ```
 
-### 9.6 V opravě (80) → Storno (30) / V pořádku (40) → Storno (30)
+### 9.5 V opravě (80) → Storno (30) / V pořádku (40) → Storno (30)
 
 ```
 1. Klient pošle PUT s { docState: 30 }
@@ -1775,11 +1734,11 @@ třída `DocDocument` v `docs.core`.
 Storno **zachovává všechna data dokladu** včetně rekapitulace, počtů,
 snapshotů. Je to jen flag „neúčinné účetně".
 
-### 9.7 → Smazáno (90)
+### 9.6 → Smazáno (90)
 
 ```
 1. Klient pošle PUT s { docState: 90 }
-2. processDocState ověří přechod (90 dosažitelné z 10, 20, 80, 40, 30)
+2. processDocState ověří přechod (90 dosažitelné z 10, 80, 40)
 3. Document.beforeSave() — žádná akce
 4. UPDATE heads SET docState=90, docStateMain=5
 5. closeForm: 1
@@ -1788,7 +1747,7 @@ snapshotů. Je to jen flag „neúčinné účetně".
 Smazáno je „v koši". Doklad zůstává v DB se všemi daty. Z koše lze obnovit
 jen do V opravě (90 → 80).
 
-### 9.8 Potvrzeno (20) → Koncept (10) — uvolnění čísla
+### 9.7 V opravě (80) → Koncept (10) — uvolnění čísla
 
 Speciální případ, jediný přechod kde se sahá na sequence_number.
 
@@ -1813,9 +1772,9 @@ Speciální případ, jediný přechod kde se sahá na sequence_number.
 4. UPDATE heads
 ```
 
-V `getAvailableTransitions` pro stav 20 se přechod 20 → 10 nabídne, **jen
-když je doklad poslední v řadě** — UI tak nemate uživatele nedostupným
-tlačítkem.
+Hook `Document::filterStateTransitions` (implementace v `DocDocument`)
+přechod 80 → 10 z nabídky vyřadí, **není-li doklad poslední v řadě** —
+UI tak nemate uživatele nedostupným tlačítkem.
 
 ---
 

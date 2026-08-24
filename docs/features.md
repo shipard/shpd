@@ -45,7 +45,7 @@ Legenda: `[x]` hotovo · `[ ] 🟠` částečně · `[ ]` plánováno
 
 ### Faktury přijaté
 
-- [x] Vznik z došlé pošty i ručně, stavy Koncept → Potvrzeno → V pořádku
+- [x] Vznik z došlé pošty i ručně, stavy Koncept → V pořádku
 - [x] Zaúčtování a promítnutí do saldokonta
 
 ### Faktury vydané

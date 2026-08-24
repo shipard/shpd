@@ -754,7 +754,7 @@ specifikovat:
 ```jsonc
 {
   "applyOptions": {
-    "targetDocState": 20,      // 10 (Koncept) | 20 (Potvrzeno)
+    "targetDocState": 40,      // 10 (Koncept) | 40 (V pořádku) | 30 (Storno) | 80 (jen migrace, viz níže)
     "autoCreateMode": "safe",  // strict (default) | safe | liberal — viz níže
     "createMissingEntities": true,   // explicit consent k side-creates
     "rejectOnIssues": ["error"]      // ["error"] | ["error","warning"] | []
@@ -762,9 +762,14 @@ specifikovat:
 }
 ```
 
-Když `targetDocState >= 20`, projde state transition v `DocDocument::processStateTransition`
+Když `targetDocState` je 40, projde state transition v `DocDocument::processStateTransition`
 (přidělí číslo z series, vyrobí snapshoty). Pokud kterákoliv povinná reference
 chybí, applier selže (validace v `DocDocument::validate`).
+
+`targetDocState: 80` (V opravě) je **parkovací cíl migrace** — validátor ho
+povoluje jen v kombinaci s `applyOptions.importNumber` (jinak error
+`target_state_80_requires_import`). Mimo migraci přes exchange dosažitelný
+není; číslo v tom případě nese `importNumber`, snapshoty se nestaví.
 
 ### `autoCreateMode`
 
@@ -815,7 +820,7 @@ preview indikoval `canCreate` / `ambiguous`).
 - `savedDocId` (top-level) — id nového záznamu v `docs_core_heads`
 - `_resolve.summary.status = "applied"`
 - Nově vytvořené entity mají `_resolve.*.personId` / `itemId` / atd. vyplněné
-- Pokud `targetDocState >= 20`: `docNumber` doplněn z přidělené series
+- Pokud `targetDocState: 40`: `docNumber` doplněn z přidělené series
 
 **Chybové stavy:**
 

@@ -22,11 +22,13 @@ use Shipard\Core\Logging\ErrorLogger;
  * Unit testy pro DashboardController.
  *
  * Pokrývají:
- *   - sortAndCap / countByKind / buildReadySummary / stripInternalFields
- *     (čisté transformace)
+ *   - buildReadySummary (čistá transformace)
  *   - dashboard() — tvar feedu, zapojení zdrojů, ořez + „a další“ karta,
  *     readySummary (Issue #32/2)
  *   - summary() — SSE události (text/done/error), degradace
+ *
+ * Čisté transformace collectoru (sortAndCap / countByKind /
+ * stripInternalFields) žijí ve FeedCollectorTest.
  */
 final class DashboardControllerTest extends TestCase
 {
@@ -76,70 +78,13 @@ final class DashboardControllerTest extends TestCase
         return $this->tables('core_mail_incoming_messages', 'core_alerts_alerts');
     }
 
-    // ── sortAndCap / countByKind (čisté funkce) ──────────────────────────────
-
     /** @return array<string,mixed> */
     private function card(string $kind, ?string $timestamp, string $id = 'x'): array
     {
         return ['id' => $id, 'kind' => $kind, 'timestamp' => $timestamp];
     }
 
-    public function testSortAndCapOrdersByKindBand(): void
-    {
-        $ctrl = new DashboardController();
-        $input = [
-            $this->card('info', '2026-06-28T10:00:00+00:00', 'i'),
-            $this->card('ready', '2026-06-28T10:00:00+00:00', 'r'),
-            $this->card('urgent', '2026-06-28T10:00:00+00:00', 'u'),
-            $this->card('review', '2026-06-28T10:00:00+00:00', 'v'),
-        ];
-        [$sorted, $truncated] = $ctrl->sortAndCap($input, 30);
-
-        $this->assertFalse($truncated);
-        $this->assertSame(['u', 'v', 'r', 'i'], array_column($sorted, 'id'));
-    }
-
-    public function testSortAndCapTimestampDescWithinBand(): void
-    {
-        $ctrl = new DashboardController();
-        $input = [
-            $this->card('ready', '2026-06-01T10:00:00+00:00', 'old'),
-            $this->card('ready', '2026-06-28T10:00:00+00:00', 'new'),
-            $this->card('ready', null, 'notime'),
-        ];
-        [$sorted] = $ctrl->sortAndCap($input, 30);
-
-        // Nejnovější první, karta bez timestampu naspod pásma.
-        $this->assertSame(['new', 'old', 'notime'], array_column($sorted, 'id'));
-    }
-
-    public function testSortAndCapCapsAndFlagsTruncation(): void
-    {
-        $ctrl = new DashboardController();
-        $input = [];
-        for ($i = 0; $i < 35; $i++) {
-            $input[] = $this->card('ready', '2026-06-28T10:00:00+00:00', "c$i");
-        }
-        [$sorted, $truncated] = $ctrl->sortAndCap($input, 30);
-
-        $this->assertTrue($truncated);
-        $this->assertCount(30, $sorted);
-    }
-
-    public function testCountByKindCountsOnlyActionable(): void
-    {
-        $ctrl = new DashboardController();
-        $cards = [
-            $this->card('urgent', null),
-            $this->card('urgent', null),
-            $this->card('review', null),
-            $this->card('ready', null),
-            $this->card('info', null),   // nezapočítává se
-        ];
-        $this->assertSame(['urgent' => 2, 'review' => 1, 'ready' => 1], $ctrl->countByKind($cards));
-    }
-
-    // ── buildReadySummary / stripInternalFields (čisté funkce, Issue #32/2) ──
+    // ── buildReadySummary (čistá funkce, Issue #32/2) ────────────────────────
 
     /** @return array<string,mixed> */
     private function readyCard(string $id, ?float $amount, ?string $currency, ?int $confidencePct): array
@@ -235,22 +180,6 @@ final class DashboardControllerTest extends TestCase
             $this->card('review', null, 'v'),
             $this->card('info', null, 'i'),
         ]));
-    }
-
-    public function testStripInternalFieldsRemovesAmountAndCurrency(): void
-    {
-        $ctrl = new DashboardController();
-        $stripped = $ctrl->stripInternalFields([
-            $this->readyCard('a', 500.00, 'CZK', 92),
-            $this->card('info', null, 'i'),
-        ]);
-
-        foreach ($stripped as $card) {
-            $this->assertArrayNotHasKey('amount', $card);
-            $this->assertArrayNotHasKey('currency', $card);
-        }
-        // Ostatní pole zůstávají.
-        $this->assertSame(92, $stripped[0]['confidencePct']);
     }
 
     // ── dashboard() feed tvar ────────────────────────────────────────────────

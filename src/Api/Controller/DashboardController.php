@@ -11,33 +11,20 @@ use Shipard\Core\Alerts\AlertCheckRegistry;
 use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Dashboard\DashboardSummaryService;
 use Shipard\Core\Database\DataSourceConnection;
-use Shipard\Core\Feed\FeedContext;
-use Shipard\Core\Feed\FeedSource;
+use Shipard\Core\Feed\FeedCollector;
 use Shipard\Core\Logging\ErrorLogger;
-use Shipard\Module\Core\Alerts\Feed\AlertsSource;
-use Shipard\Module\Core\Exchange\Dashboard\ContentTagSuggestionsSource;
-use Shipard\Module\Core\Mail\Feed\MailDigestSource;
-use Shipard\Module\Core\Mail\Feed\MailSuggestionsSource;
 
 /**
- * Dashboard — prioritizovaný feed akčních karet pro home obrazovku (fáze 2).
+ * Dashboard — prezentační vrstva feedu akčních karet (fáze 2).
  *
- * Alerty a návrhy z došlé pošty se agregují do jednotného `cards[]` přes lehké
- * `FeedSource` zdroje (napevno registrované, D10).
- *
- * Řazení a strop řeší server (`sortAndCap` dle `KIND_ORDER` + `timestamp`),
- * frontend jen renderuje. `summary.aiText` je v této fázi `null` (naplní 2b).
+ * Sběr, řazení a strop karet řeší `FeedCollector` (sdílený s badge stavů
+ * sekcí, UI shells Fáze 3); controller nad kartami staví odpovědi —
+ * dashboard feed, AI shrnutí (SSE) a `readySummary`.
  *
  * Detaily: `docs/dashboard.md`.
  */
 class DashboardController
 {
-    /** Strop počtu karet feedu; při ořezu se přidá info karta „a další…". */
-    private const int MAX_CARDS = 30;
-
-    /** Prioritní žebříček pásem karet (nižší = výše). Sekundárně timestamp DESC. */
-    private const array KIND_ORDER = ['urgent' => 0, 'review' => 1, 'ready' => 2, 'info' => 3];
-
     /**
      * @param array<string, \Shipard\Core\Database\TableDefinition> $tables
      *        Runtime definice tabulek — řídí registraci zdrojů (D8)
@@ -53,14 +40,19 @@ class DashboardController
     ): Response {
         $lang = $language ?? 'en';
 
-        [$cards, $truncated, $readySummary] = $this->collectCards($db, $config, $lang, $alertRegistry, $tables);
+        $collector = new FeedCollector();
+        [$cards, $truncated] = $collector->collect($db, $config, $lang, $alertRegistry, $tables);
+        // readySummary se počítá nad kartami po stropu (Issue #32/2) a interní
+        // pole `amount`/`currency` se hned poté odstraní — do kontraktu nepatří.
+        $readySummary = $this->buildReadySummary($cards);
+        $cards        = $collector->stripInternalFields($cards);
         if ($truncated) {
             $cards[] = $this->andMoreCard($lang);
         }
 
         $data = [
             'generatedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
-            'summary'     => ['aiText' => null, 'counts' => $this->countByKind($cards)],
+            'summary'     => ['aiText' => null, 'counts' => $collector->countByKind($cards)],
             'cards'       => $cards,
         ];
         // Souhrn ready pásma pro sbalený pruh (Issue #32/2, D8) — jen když
@@ -83,8 +75,8 @@ class DashboardController
     /**
      * GET /_ui/dashboard/summary — generované AI shrnutí feedu (SSE, fáze 2b).
      *
-     * Sdílí `collectCards()` s `dashboard()`, takže shrnutí vzniká nad přesně
-     * týmiž kartami, jaké vidí uživatel. Události: `text {delta}` (jen při
+     * Sdílí `FeedCollector::collect()` s `dashboard()`, takže shrnutí vzniká nad
+     * přesně týmiž kartami, jaké vidí uživatel. Události: `text {delta}` (jen při
      * cache miss), `done {text, cached}` (`text=null` = prázdný feed nebo
      * degradace — frontend ponechá statické county), `error {message}`.
      * Vzor streamu: ChatController. Detaily docs/dashboard.md §AI shrnutí.
@@ -99,7 +91,10 @@ class DashboardController
     ): Response {
         $lang = $language ?? 'en';
 
-        [$cards] = $this->collectCards($db, $config, $lang, $alertRegistry, $tables);
+        $collector = new FeedCollector();
+        [$cards] = $collector->collect($db, $config, $lang, $alertRegistry, $tables);
+        // Čisté karty i pro AI shrnutí — digest cache se interními poli nemění.
+        $cards = $collector->stripInternalFields($cards);
 
         return Response::stream(
             function () use ($service, $cards, $lang): void {
@@ -118,66 +113,6 @@ class DashboardController
             200,
             'text/event-stream; charset=utf-8',
         );
-    }
-
-    /**
-     * Posbírá karty ze zdrojů feedu, seřadí a stropuje (`sortAndCap`). Sdílené
-     * mezi `dashboard()` a `summary()` — obě odpovědi stojí nad týmiž kartami.
-     * Info karta „…a další" se přidává až v `dashboard()` (do shrnutí nepatří).
-     *
-     * `readySummary` se počítá tady (nad kartami po stropu) a interní pole
-     * `amount`/`currency` se hned odstraní — čisté karty tak dostane i AI
-     * shrnutí (`summary()`), digest cache se interními poli nemění.
-     *
-     * @return array{0: list<array<string,mixed>>, 1: bool, 2: array<string,mixed>|null}
-     *         [karty, zda došlo k ořezu, souhrn ready pásma]
-     */
-    private function collectCards(
-        DataSourceConnection $db,
-        ?ConfigRuntime $config,
-        string $lang,
-        ?AlertCheckRegistry $alertRegistry = null,
-        array $tables = [],
-    ): array {
-        $ctx = new FeedContext($db, $config, $lang, self::MAX_CARDS);
-
-        // Zdroje se registrují podle přítomnosti klíčové tabulky na DS (D8) —
-        // dashboard nesmí padat na DS bez core.mail / core.alerts (hosting DS).
-        // Mapování tabulka → zdroj drží controller; zdroje zůstávají napevno
-        // registrované (dashboard.md D10), žádné nové rozhraní na FeedSource.
-        /** @var list<FeedSource> $sources */
-        $sources = [];
-        if (isset($tables['core_mail_incoming_messages'])) {
-            $sources[] = new MailSuggestionsSource();
-            $sources[] = new MailDigestSource();
-        }
-        if (isset($tables['core_alerts_alerts'])) {
-            $sources[] = new AlertsSource($alertRegistry);
-        }
-        // Karta „Nová kategorie" (content-tag-ui D25) — potřebuje analýzy
-        // (štítky návrhů), položky (pokrytí štítků) i osnovu (volba účtu
-        // goods.stock + materializace).
-        if (isset($tables['core_mail_message_analyses'], $tables['economy_items'], $tables['economy_accounting_accounts'])) {
-            $sources[] = new ContentTagSuggestionsSource();
-        }
-
-        $cards = [];
-        foreach ($sources as $src) {
-            // Per-source izolace (D8): výjimka jednoho zdroje se zaloguje
-            // a feed pokračuje ostatními zdroji.
-            try {
-                foreach ($src->collectCards($ctx) as $card) {
-                    $cards[] = $card;
-                }
-            } catch (\Throwable $e) {
-                ErrorLogger::logException($e, 'Dashboard feed source failed: ' . $src::class);
-            }
-        }
-
-        [$cards, $truncated] = $this->sortAndCap($cards, self::MAX_CARDS);
-        $readySummary = $this->buildReadySummary($cards);
-
-        return [$this->stripInternalFields($cards), $truncated, $readySummary];
     }
 
     /**
@@ -244,86 +179,12 @@ class DashboardController
         return $summary;
     }
 
-    /**
-     * Odstraní interní pole `amount`/`currency` (podklad pro readySummary)
-     * ze všech karet — do kartového kontraktu (docs/dashboard.md §4) nepatří.
-     *
-     * @param  list<array<string,mixed>> $cards
-     * @return list<array<string,mixed>>
-     * @internal Public pro účely testů.
-     */
-    public function stripInternalFields(array $cards): array
-    {
-        foreach ($cards as &$card) {
-            unset($card['amount'], $card['currency']);
-        }
-        return $cards;
-    }
-
     /** Writes one SSE event frame and flushes it to the client. */
     private function sse(string $event, array $data): void
     {
         echo "event: {$event}\n";
         echo 'data: ' . json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n\n";
         @flush();
-    }
-
-    /**
-     * Seřadí karty dle prioritního žebříčku (`KIND_ORDER`), uvnitř pásma dle
-     * `timestamp` sestupně (nejnovější první; karty bez timestampu naspod), a
-     * ořízne na `$max`.
-     *
-     * @param  list<array<string,mixed>> $cards
-     * @return array{0: list<array<string,mixed>>, 1: bool}  [seřazené+oříznuté, zda došlo k ořezu]
-     * @internal Public pro účely testů — čistá transformace bez business logiky.
-     */
-    public function sortAndCap(array $cards, int $max): array
-    {
-        usort($cards, static function (array $a, array $b): int {
-            $oa = self::KIND_ORDER[$a['kind'] ?? ''] ?? 99;
-            $ob = self::KIND_ORDER[$b['kind'] ?? ''] ?? 99;
-            if ($oa !== $ob) {
-                return $oa <=> $ob;
-            }
-            $ta = (string) ($a['timestamp'] ?? '');
-            $tb = (string) ($b['timestamp'] ?? '');
-            if ($ta === $tb) {
-                return 0;
-            }
-            if ($ta === '') {
-                return 1;
-            }
-            if ($tb === '') {
-                return -1;
-            }
-            return strcmp($tb, $ta); // ATOM formát řadí lexikálně = chronologicky
-        });
-
-        $truncated = count($cards) > $max;
-        if ($truncated) {
-            $cards = array_slice($cards, 0, $max);
-        }
-        return [$cards, $truncated];
-    }
-
-    /**
-     * Počty karet dle kind (jen actionable pásma — urgent/review/ready).
-     * Info karty (vč. „a další…") se nezapočítávají.
-     *
-     * @param  list<array<string,mixed>> $cards
-     * @return array{urgent:int, review:int, ready:int}
-     * @internal Public pro účely testů.
-     */
-    public function countByKind(array $cards): array
-    {
-        $counts = ['urgent' => 0, 'review' => 0, 'ready' => 0];
-        foreach ($cards as $card) {
-            $kind = (string) ($card['kind'] ?? '');
-            if (isset($counts[$kind])) {
-                $counts[$kind]++;
-            }
-        }
-        return $counts;
     }
 
     /**

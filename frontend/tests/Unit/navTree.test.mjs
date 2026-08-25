@@ -45,6 +45,27 @@ test('flattenLeaves: skupina bez children se přeskočí', () => {
   assert.deepEqual(flattenLeaves([{ id: 'empty', label: 'Prázdná' }]), []);
 });
 
+test('flattenLeaves: withGroupLabel — label nejbližší nadřazené skupiny', () => {
+  const leaves = flattenLeaves(tree, { withGroupLabel: true });
+  const byId = Object.fromEntries(leaves.map((l) => [l.id, l.groupLabel]));
+  assert.equal(byId['dashboard'], null);      // root-level leaf
+  assert.equal(byId['mail'], null);           // root-level leaf
+  assert.equal(byId['invoices-out'], 'Prodej');
+  assert.equal(byId['price-lists'], 'Číselníky'); // pod-skupina, ne root sekce
+  assert.equal(byId['journal'], 'Účtárna');
+});
+
+test('flattenLeaves: withGroupLabel vrací kopie, originální uzly se nemutují', () => {
+  flattenLeaves(tree, { withGroupLabel: true });
+  assert.equal(tree[2].children[0].groupLabel, undefined);
+});
+
+test('flattenLeaves: bez options vrací původní objekty (zpětná kompatibilita)', () => {
+  const leaves = flattenLeaves(tree);
+  assert.equal(leaves[0], tree[0]); // identita, ne kopie
+  assert.equal(leaves[0].groupLabel, undefined);
+});
+
 test('findLeafById: leaf na rootu i vnořený', () => {
   assert.equal(findLeafById(tree, 'dashboard')?.label, 'Dashboard');
   assert.equal(findLeafById(tree, 'price-lists')?.label, 'Ceníky');

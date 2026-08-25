@@ -8,16 +8,25 @@
  * Rekurzivně sebere všechny klikatelné leaves ze stromu navigace
  * v depth-first pořadí. Skupiny (bez `type`, jen s `children`) se
  * vynechají; jejich children se ploše zařadí do výsledku.
+ *
+ * S `options.withGroupLabel` vrací mělké kopie leafů obohacené
+ * o `groupLabel` = label nejbližší nadřazené skupiny (root-level leaf →
+ * null) — sekundární řádek výsledku v command paletě. Bez options se
+ * vrací původní objekty beze změny (NavIconStrip).
  */
-export function flattenLeaves(tree) {
+export function flattenLeaves(tree, options = {}) {
+  const { withGroupLabel = false } = options;
   const leaves = [];
-  for (const node of tree) {
-    if (node.type) {
-      leaves.push(node);
-    } else if (node.children) {
-      leaves.push(...flattenLeaves(node.children));
+  const walk = (nodes, groupLabel) => {
+    for (const node of nodes) {
+      if (node.type) {
+        leaves.push(withGroupLabel ? { ...node, groupLabel } : node);
+      } else if (node.children) {
+        walk(node.children, node.label ?? groupLabel);
+      }
     }
-  }
+  };
+  walk(tree, null);
   return leaves;
 }
 

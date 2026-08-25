@@ -9,6 +9,7 @@
   import { navigationStore } from '../../stores/navigation.svelte.js';
   import { layoutStore } from '../../stores/layout.svelte.js';
   import { paletteStore } from '../../stores/palette.svelte.js';
+  import { sectionBadgesStore } from '../../stores/sectionBadges.svelte.js';
   import { t } from '../../i18n/index.js';
   import Icon from '../ui/Icon.svelte';
   import BrandingHeader from '../chrome/BrandingHeader.svelte';
@@ -174,7 +175,13 @@
       </div>
       <NavIconStrip tree={navTree} activeId={navigationStore.activeId} onNavigate={handleItemClick} />
     {:else}
-      <NavTree tree={navTree} activeId={navigationStore.activeId} onNavigate={handleItemClick} />
+      <!-- Badge stavů sekcí jen v app módu — settings/account strom je nemá. -->
+      <NavTree
+        tree={navTree}
+        activeId={navigationStore.activeId}
+        onNavigate={handleItemClick}
+        sectionBadges={navigationStore.mode === 'app' ? sectionBadgesStore.badges : {}}
+      />
     {/if}
   </div>
 

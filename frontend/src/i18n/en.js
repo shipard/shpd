@@ -82,6 +82,7 @@ export default {
   'sidebar.logout': 'Log out',
   'sidebar.notAuthenticated': 'Not authenticated',
   'sidebar.navigationLoadFailed': 'Failed to load navigation',
+  'sidebar.sectionBadge': '{count, plural, one {# item needs attention} other {# items need attention}}',
 
   // ── App shell ───────────────────────────────────────────────────────────
   'app.selectMenuItem': 'Select an item from the menu',

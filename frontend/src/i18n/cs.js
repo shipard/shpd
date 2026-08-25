@@ -91,6 +91,7 @@ export default {
   'sidebar.logout': 'Odhlásit',
   'sidebar.notAuthenticated': 'Nepřihlášen',
   'sidebar.navigationLoadFailed': 'Nepodařilo se načíst navigaci',
+  'sidebar.sectionBadge': '{count, plural, one {# položka čeká na vyřízení} few {# položky čekají na vyřízení} many {# položky čeká na vyřízení} other {# položek čeká na vyřízení}}',
 
   // ── App shell ───────────────────────────────────────────────────────────
   'app.selectMenuItem': 'Vyberte položku v menu',

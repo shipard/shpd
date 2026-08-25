@@ -9,6 +9,7 @@
   import { layoutStore } from '../../stores/layout.svelte.js';
   import { chatPanelStore } from '../../stores/chatPanel.svelte.js';
   import { paletteStore } from '../../stores/palette.svelte.js';
+  import { sectionBadgesStore } from '../../stores/sectionBadges.svelte.js';
 
   let { onLogout } = $props();
 
@@ -58,6 +59,12 @@
     }
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
+  });
+
+  // Polling badge stavů sekcí (60 s + focus) — žije se shellem.
+  $effect(() => {
+    sectionBadgesStore.startPolling();
+    return () => sectionBadgesStore.stopPolling();
   });
 </script>
 

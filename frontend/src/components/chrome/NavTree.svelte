@@ -5,8 +5,17 @@
   import { untrack } from 'svelte';
   import Icon from '../ui/Icon.svelte';
   import { iconChevronDown, iconChevronRight, resolveIcon } from '../../icons.js';
+  import { tn } from '../../i18n/index.js';
 
-  let { tree = [], activeId = null, onNavigate } = $props();
+  // `sectionBadges` — mapa `{ "<sectionId>": { count, severity } }` z GET
+  // /_ui/section-badges (UI shells Fáze 3). Renderuje se jen na root
+  // skupinách-sekcích; sentinel `_top` není uzlem stromu, ignoruje se
+  // přirozeně. Komponenta je hloupá — data dodává Sidebar ze store.
+  let { tree = [], activeId = null, onNavigate, sectionBadges = {} } = $props();
+
+  function badgeCount(count) {
+    return count > 99 ? '99+' : String(count);
+  }
 
   // Ids všech skupin na cestě k leafu s daným id (rekurzivně) — na
   // rozbalení předků aktivní položky po loadu stromu.
@@ -72,6 +81,16 @@
         onclick={() => toggleGroup(group.id)}
       >
         <span class="shpd-navtree__group-label">{group.label}</span>
+        {#if sectionBadges[group.id]?.count > 0}
+          <span
+            class="shpd-navtree__badge"
+            class:shpd-navtree__badge--danger={sectionBadges[group.id].severity === 'danger'}
+            aria-label={tn('sidebar.sectionBadge', sectionBadges[group.id].count)}
+          >
+            <span class="shpd-navtree__badge-dot" aria-hidden="true"></span>
+            {badgeCount(sectionBadges[group.id].count)}
+          </span>
+        {/if}
         <span class="shpd-navtree__chevron">
           <Icon icon={expanded.has(group.id) ? iconChevronDown : iconChevronRight} size="xs" />
         </span>
@@ -162,6 +181,31 @@
     align-items: center;
     justify-content: center;
     line-height: 1;
+  }
+
+  /* Badge stavu sekce — tečka v barvě severity + počet. Header má
+     uppercase a 0.75rem, badge si drží vlastní neutrální podobu. */
+  .shpd-navtree__badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-right: var(--shpd-space-xs);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+    color: var(--shpd-color-text-sidebar);
+  }
+
+  .shpd-navtree__badge-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background-color: var(--shpd-color-warning, #d97706);
+  }
+
+  .shpd-navtree__badge--danger .shpd-navtree__badge-dot {
+    background-color: var(--shpd-color-danger, #ef4444);
   }
 
   .shpd-navtree__list {

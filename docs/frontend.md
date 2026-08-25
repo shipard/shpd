@@ -65,9 +65,15 @@ frontend/
 │   │   │   ├── DateInput.svelte
 │   │   │   ├── Icon.svelte             # Univerzální ikona (inline SVG z FA definition)
 │   │   │   └── Modal.svelte
+│   │   ├── chrome/                     # Primitivy aplikačního chrome — shelly je komponují
+│   │   │   ├── NavTree.svelte          # Rekurzivní renderer navigačního stromu
+│   │   │   ├── NavIconStrip.svelte     # Plochý pás ikon leafů (sbalený sidebar)
+│   │   │   ├── UserMenu.svelte         # Avatar + dropdown (nastavení, jazyk, odhlásit)
+│   │   │   ├── BrandingHeader.svelte   # Ikona aplikace + logo
+│   │   │   └── ModeBackBar.svelte      # „← Zpět do aplikace" v settings/account
 │   │   ├── layout/
 │   │   │   ├── AppShell.svelte         # Hlavní layout (sidebar + content)
-│   │   │   ├── Sidebar.svelte          # Navigace, logo, user info — kolapsibilní (sbalený = ploché ikony)
+│   │   │   ├── Sidebar.svelte          # Sidebar shell — kompozice chrome primitiv
 │   │   │   └── ContentArea.svelte      # Hlavní oblast — renderuje aktivní položku
 │   │   ├── auth/
 │   │   │   └── LoginScreen.svelte      # Přihlašovací obrazovka
@@ -82,6 +88,8 @@ frontend/
 │   │       ├── FormField.svelte        # Dynamický field renderer (typ → komponenta)
 │   │       ├── FormRenderer.svelte     # Generický formulář z metadat
 │   │       └── FormDialog.svelte       # Modal wrapper pro FormRenderer
+│   ├── utils/
+│   │   └── navTree.js                  # Čisté helpery nad navigačním stromem (flattenLeaves, findLeafById, findRootSectionId)
 │   └── styles/
 │       ├── variables.css               # CSS custom properties (barvy, spacing, typography)
 │       ├── reset.css                   # CSS reset
@@ -166,10 +174,13 @@ Na viewportu ≤ 768px se shell přepne do mobilního režimu (řídí
 - Nahoře se objeví `MobileTopBar` — hamburger (otevře drawer), titul
   aktuální obrazovky (`navigationStore.activeItem.label`), vpravo akce.
   Akce + kontext (list/detail) publikuje aktuální obrazovka přes
-  `layout.svelte.js` kanál `topBar*` (`setTopBar` / `clearTopBar`);
-  když nikdo nic nepublikuje (`topBarContext === null`, např. dashboard),
-  fallback na hamburger + titul z navigace + prázdný slot. Detaily
-  publikování viz **Mobilní viewer (list/detail)** v sekci 7.
+  **screen surface** kanál v `layout.svelte.js` (`setScreenSurface` /
+  `clearScreenSurface`, gettery `surface*`) — obecný kontrakt „obrazovka
+  publikuje, shell rozhoduje kde vykreslí" (`docs/ui-shells.md` §6);
+  MobileTopBar je jeho mobilní konzument. Když nikdo nic nepublikuje
+  (`surfaceContext === null`, např. dashboard), fallback na hamburger
+  + titul z navigace + prázdný slot. Detaily publikování viz
+  **Mobilní viewer (list/detail)** v sekci 7.
 - Sidebar vystoupí z toku layoutu a stane se z něj **drawer** — vysune
   se zleva přes obsah (`position: fixed`, `transform: translateX`),
   zbytek ztmaví overlay. Recykluje stejný `Sidebar.svelte` jako desktop.
@@ -223,12 +234,32 @@ do `'app'` módu). Persistence módu je out of scope této fáze.
 
 ### Sidebar — struktura
 
-Sidebar je flex column se třemi sekcemi:
+`Sidebar.svelte` je **kompozice sdílených primitiv chrome**
+(`components/chrome/`) — budoucí shelly (viz `docs/ui-shells.md`) tytéž
+primitivy komponují jinak, místo reimplementace:
 
-- **Header** (fixní) — volitelná ikona aplikace (branding slot `icon`, jen pokud je nastavená) + logo „Shipard" + tlačítko pro sbalení/rozbalení
-- **Nav** (scrollovatelný, `flex: 1`) — navigační strom ze serveru
-- **Footer** (fixní) — uživatelský panel s avatarem a jménem; klik otevře
-  dropdown s položkami **Nastavení účtu** a **Odhlásit**
+| Primitiv | Obsah |
+|---|---|
+| `NavTree` | rekurzivní renderer stromu (skupiny s toggle, leafy, aktivní stav); interní stav rozbalení + auto-expand cesty k aktivní položce |
+| `NavIconStrip` | plochý pás ikon leafů (`flattenLeaves`) — sbalený režim |
+| `UserMenu` | avatar + dropdown (Nastavení účtu/aplikace, jazyk, odhlásit); `compact` varianta se side-overlay dropdownem |
+| `BrandingHeader` | ikona aplikace (branding slot) + logo/shortName, čte `appInfoStore` sám |
+| `ModeBackBar` | „← Zpět do aplikace" v settings/account módu, `compact` varianta |
+
+Sidebaru samotnému zůstává: fetch navigace per mode, `collapsed` stav
++ toggle (specifikum sidebar shellu), loading/error stav a normalizace
+kliknuté položky (`handleItemClick` → `navigationStore.navigate`).
+Layout je flex column: header (BrandingHeader + toggle), volitelný
+ModeBackBar, scrollovatelný nav (`flex: 1`, NavTree/NavIconStrip),
+UserMenu v patce.
+
+Po loadu **app** navigace Sidebar předá strom do
+`navigationStore.setAppNavTree()` — z něj store derivuje getter
+`activeSection` (id sekce úrovně 1, do níž patří aktivní leaf; `_top`
+leafy a sekundární módy → `null`). Čistá derivace bez zápisu při
+navigaci, funguje i pro `navigateToViewer()` z dashboardu a deep linky.
+Tree helpery (`flattenLeaves`, `findLeafById`, `findRootSectionId`) žijí
+v `utils/navTree.js` jako čisté, unit-testované funkce.
 
 ### Sidebar — kolapsibilní
 
@@ -236,21 +267,22 @@ Sidebar je kolapsibilní na úzký proužek (48px). Ve sbaleném stavu:
 
 - Ikona aplikace, logo a sekce navigace (groups, sub-groups) jsou skryté
 - Klikatelné položky menu (leaves) zůstávají vidět jako plochý seznam
-  ikon — `flattenLeaves(navTree)` rekurzivně vybere všechny nody s `type`
-  v depth-first pořadí. Každá ikona má `title` atribut s názvem položky.
+  ikon (`NavIconStrip`) — `flattenLeaves(navTree)` rekurzivně vybere
+  všechny nody s `type` v depth-first pořadí. Každá ikona má `title`
+  atribut s názvem položky.
 - Aktivní položka se zvýrazní stejně jako v rozbaleném stavu
   (oranžový accent proužek vlevo + modré primary pozadí)
 - V settings módu zůstává v hlavičce sidebaru kompaktní tlačítko zpět
-  (jen ikona `iconChevronLeft`)
-- V patce zůstává jen kruhový avatar uživatele; klik otevře dropdown menu
-  jako overlay vpravo od sidebaru (`.shpd-sidebar__user-menu--side`)
+  (`ModeBackBar` s `compact`, jen ikona `iconChevronLeft`)
+- V patce zůstává jen kruhový avatar uživatele (`UserMenu` s `compact`);
+  klik otevře dropdown menu jako overlay vpravo od sidebaru
 - Rozbalení/sbalení jen přes toggle tlačítko v hlavičce. Hover myší
   sidebar nerozbaluje (klávesová zkratka pro toggle je plánovaná do
   budoucna).
 
-Stav řídí Svelte runes: `collapsed` (toggle tlačítkem). Pomocný
-`$derived flatLeaves` je plochý seznam klikatelných položek pro sbalený
-stav.
+Stav řídí Svelte runes: `collapsed` (toggle tlačítkem); dle něj Sidebar
+přepíná `NavTree` ↔ `NavIconStrip` a předává `compact` do UserMenu
+a ModeBackBar.
 
 ### Sidebar — dynamická navigace ze serveru
 
@@ -301,7 +333,7 @@ Prodej → Účtárna → Systém.
 ```
 
 API tvar (`id`/`label`/`children`/`type`/`icon`/`viewerId`/`table`) je shodný
-jako u dřívějšího prefix-groupingu — `Sidebar.svelte` rozlišuje root-leaf
+jako u dřívějšího prefix-groupingu — `NavTree` rozlišuje root-leaf
 (má `type`) vs skupinu (má `children`) a nemění se. Klik v sidebaru přímo
 nahradí obsah hlavní oblasti. `navigation.svelte.js` spravuje jedinou aktivní
 položku (`activeItem`). `ContentArea` renderuje obsah podle typu (`table` →
@@ -432,14 +464,14 @@ Bez vybraného záznamu se zobrazí seznam přes celou šířku; po kliknutí
 na řádek se seznam skryje (CSS přes třídy `shpd-viewer__body--mobile`
 a `shpd-viewer__body--detail`) a detail zabere celou šířku.
 
-Akce se přesouvají do `MobileTopBar` (přes `layout.svelte.js` store,
-kanál `topBar*`):
+Akce se přesouvají do `MobileTopBar` (přes screen surface kanál
+v `layout.svelte.js`):
 
 - Seznam: hamburger + titul + akce seznamu jako ikony (Přidat, …).
 - Detail: ← zpět (vlevo, místo hamburgeru) + titul záznamu + hlavní
   akce jako ikona + kebab (⋮) se zbytkem akcí (`Popover`).
 
-Viewer publikuje akce reaktivně přes `layoutStore.setTopBar(...)` podle
+Viewer publikuje akce reaktivně přes `layoutStore.setScreenSurface(...)` podle
 `selectedRowId`; akce nesou navázaný `onClick`, takže MobileTopBar
 o vieweru nic neví — jen volá `action.onClick()`. Seznam mapuje
 `meta.toolbar`, detail `detailToolbar` (= `result.data.toolbar`); obojí
@@ -448,7 +480,7 @@ Hlavní akce v detailu = heuristika „první v `detailToolbar`". Snooze/
 dismiss/recheck a `kind` akce nejsou v `detailToolbar` — žijí v
 `detail.actions` uvnitř `ViewerDetail` (na mobilu plná šířka detailu),
 takže do top baru nepatří. Při unmountu / přepnutí na desktop viewer
-volá `clearTopBar()`. Na desktopu zůstává `ViewerToolbar` ve vieweru
+volá `clearScreenSurface()`. Na desktopu zůstává `ViewerToolbar` ve vieweru
 beze změny.
 
 ### Architektura

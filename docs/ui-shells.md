@@ -78,28 +78,37 @@ shelly zkonvergují ke kompromisu, kterému se chceme vyhnout.
 
 ## 5. Sdílené primitivy chrome
 
-Rozbití `Sidebar.svelte` (~900 řádků) na skládatelné kusy; shelly je
-**komponují**, neimplementují znovu:
+> Realizováno Fází 1 (`frontend/src/components/chrome/`) — viz
+> `frontend.md` §4 *Sidebar — struktura*.
+
+`Sidebar.svelte` je rozbitý na skládatelné kusy; shelly je **komponují**,
+neimplementují znovu:
 
 | Primitiv | Obsah (dnes v Sidebaru) |
 |---|---|
 | `NavTree` | rekurzivní renderer stromu (skupiny, leafy, aktivní stav) |
-| `NavIconStrip` | plochý pás ikon leafů (dnes collapsed režim, `flattenLeaves`) |
+| `NavIconStrip` | plochý pás ikon leafů (collapsed režim, `flattenLeaves`) |
 | `UserMenu` | avatar + dropdown (Nastavení účtu/aplikace, jazyk, odhlásit) |
 | `BrandingHeader` | ikona aplikace + logo |
 | `ModeBackBar` | „← Zpět do aplikace" v settings/account módu |
 
 ## 6. Screen surface
 
-Dnešní `topBar*` kanál (`setTopBar`/`clearTopBar`) se přejmenuje a zobecní:
-obrazovka publikuje `{context, actions, title, back}`, **libovolný** shell ho
-konzumuje po svém (mobilní top bar, toolbar klasického shellu, tab lišta
-divokého shellu). Publikující strana (Viewer, FormStateBar…) se nemění —
-kontrakt už existuje, jen přestává být „mobilní".
+> Realizováno Fází 1 (`layout.svelte.js`: `setScreenSurface` /
+> `clearScreenSurface`, gettery `surface*`) — viz `frontend.md` §4.
+
+Bývalý `topBar*` kanál, přejmenovaný a zobecněný: obrazovka publikuje
+`{context, actions, title, back}`, **libovolný** shell ho konzumuje po svém
+(mobilní top bar, toolbar klasického shellu, tab lišta divokého shellu).
+Publikující strana (Viewer, FormStateBar…) se nezměnila — kontrakt už
+existoval, jen přestal být „mobilní"; MobileTopBar je jeho konzument.
 
 ## 7. Aktivní sekce (`navigationStore`)
 
-Jediná skutečná změna sdíleného stavu: vedle `activeItem` přibude
+> Realizováno Fází 1 (getter `activeSection`, derivace z `appNavTree`
+> přes `utils/navTree.js`) — viz `frontend.md` §4.
+
+Jediná skutečná změna sdíleného stavu: vedle `activeItem` existuje
 `activeSection` (id sekce úrovně 1, do níž aktivní leaf patří; `_top` leafy
 mají sekci `null`). Potřebují ji shelly s odděleným regionem sekcí (classic:
 horní menu, wild: levý rail) — po kliknutí na sekci se zobrazí její leafy

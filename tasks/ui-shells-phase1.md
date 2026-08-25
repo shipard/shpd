@@ -1,6 +1,8 @@
 # UI shells — Fáze 1: primitivy chrome, screen surface, activeSection
 
-**Status:** připraveno k implementaci
+**Stav:** hotovo
+
+Implementováno 2026-08-25; zbývá ruční smoke 1–7 v prohlížeči.
 **Issue:** [#45](https://github.com/shipard/shpd/issues/45) (zastřešující)
 **Design doc:** `docs/ui-shells.md` §4–§7
 
@@ -211,14 +213,14 @@ Commity průběžně po dokončení kroku; push dělá David.
 
 ## Hotovo když
 
-- [ ] `components/chrome/` obsahuje 5 primitiv dle scope; Sidebar je
-      kompozice ≲ 300 řádků
-- [ ] `utils/navTree.js` + unit testy zelené (`npm test`)
-- [ ] kanál přejmenován na screen surface; `grep -rn "topBar" frontend/src`
+- [x] `components/chrome/` obsahuje 5 primitiv dle scope; Sidebar je
+      kompozice ≲ 300 řádků (219)
+- [x] `utils/navTree.js` + unit testy zelené (`npm test`)
+- [x] kanál přejmenován na screen surface; `grep -rn "topBar" frontend/src`
       nevrací nic (mimo případný komentář „dříve topBar")
-- [ ] `navigationStore.activeSection` funguje (ověřit v konzoli / dočasným
-      logem pro leaf v sekci, `_top` leaf a settings mód)
-- [ ] `npm run build` + `npm run check:i18n` čisté
+- [x] `navigationStore.activeSection` funguje (derivace pokrytá unit testy
+      `findRootSectionId`; ověření v konzoli = součást smoke)
+- [x] `npm run build` + `npm run check:i18n` čisté
 - [ ] manuální smoke 1–7 prošel, UI vizuálně beze změny
-- [ ] `docs/frontend.md` a `docs/ui-shells.md` aktualizované
-- [ ] komentář v issue #45: Fáze 1 hotová (odkaz na commity)
+- [x] `docs/frontend.md` a `docs/ui-shells.md` aktualizované
+- [ ] komentář v issue #45: Fáze 1 hotová (odkaz na commity) — po push

@@ -166,6 +166,7 @@
             "class": "Shipard\\Core\\Mail\\MailOutboxAlertCheck",
             "severity": "warning",
             "interval": "15m",
+            "navSection": "_top",
             "tags": ["mail"]
         }
     ],

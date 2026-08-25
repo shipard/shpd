@@ -143,6 +143,9 @@ final class AlertsSource implements FeedSource
             'icon'       => $icon,
             'stateStyle' => $stateStyle,
             'category'   => FeedSource::CATEGORY_OTHER,
+            // Atribuce pro badge sekcí (Fáze 3) — per check z module.jsonc;
+            // bez registry / bez pole null = karta se do badge nepočítá.
+            'navSection' => $this->registry?->get($checkId)?->navSection,
             'title'      => (string) ($row['title'] ?? ''),
             'subtitle'   => $subtitle,
             'timestamp'  => $this->toAtom($row['last_seen_at'] ?? null) ?? $this->toAtom($row['first_seen_at'] ?? null),
@@ -180,6 +183,7 @@ final class AlertsSource implements FeedSource
             'icon'       => $icon,
             'stateStyle' => $stateStyle,
             'category'   => FeedSource::CATEGORY_OTHER,
+            'navSection' => $this->registry?->get($checkId)?->navSection,
             'title'      => $title,
             'subtitle'   => $cs ? "{$count} upozornění" : "{$count} alerts",
             'timestamp'  => $this->toAtom($g['last_at'] ?? null) ?? $this->toAtom($g['first_at'] ?? null),

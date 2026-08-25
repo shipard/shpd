@@ -286,6 +286,49 @@ final class AlertsSourceTest extends TestCase
         $this->assertSame('docs.core.stale_in_repair', $card['title']);
     }
 
+    public function testNavSectionComesFromRegistryOnIndividualAndGroupCards(): void
+    {
+        $registry = new AlertCheckRegistry([ModuleDefinition::fromArray([
+            'id'          => 'base.persons',
+            'name'        => 'Persons',
+            'alertChecks' => [[
+                'id'         => 'base.persons.missing_own_person',
+                'name'       => 'X',
+                'class'      => 'X',
+                'interval'   => '1h',
+                'navSection' => 'accounting',
+            ]],
+        ])], 'cs');
+        $src = new AlertsSource($registry);
+
+        // Individuální karta (check pod prahem).
+        $card = $src->collectCards($this->singleAlertContext($this->alertRow(20)))[0];
+        $this->assertSame('accounting', $card['navSection']);
+
+        // Skupinová karta (check nad prahem).
+        $group = $src->collectCards($this->context([$this->groupRow('base.persons.missing_own_person', 4, 20)]))[0];
+        $this->assertSame('accounting', $group['navSection']);
+    }
+
+    public function testNavSectionNullWithoutRegistryOrField(): void
+    {
+        // Bez registru (null) — chování beze změny, pole je null.
+        $src = new AlertsSource();
+        $card = $src->collectCards($this->singleAlertContext($this->alertRow(20)))[0];
+        $this->assertNull($card['navSection']);
+
+        // Registr s checkem bez navSection.
+        $registry = new AlertCheckRegistry([ModuleDefinition::fromArray([
+            'id'          => 'base.persons',
+            'name'        => 'Persons',
+            'alertChecks' => [[
+                'id' => 'base.persons.missing_own_person', 'name' => 'X', 'class' => 'X', 'interval' => '1h',
+            ]],
+        ])], 'cs');
+        $card = (new AlertsSource($registry))->collectCards($this->singleAlertContext($this->alertRow(20)))[0];
+        $this->assertNull($card['navSection']);
+    }
+
     public function testGroupCardActionOpensAlertsViewer(): void
     {
         $src = new AlertsSource();

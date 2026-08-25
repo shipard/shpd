@@ -33,6 +33,7 @@ class AlertCheckDefinitionTest extends TestCase
         $this->assertTrue($def->enabled);
         $this->assertSame([], $def->tags);
         $this->assertSame('base.persons', $def->moduleId);
+        $this->assertNull($def->navSection);
     }
 
     public function testFullConstruction(): void
@@ -122,5 +123,24 @@ class AlertCheckDefinitionTest extends TestCase
     {
         $def = AlertCheckDefinition::fromArray(self::baseData(), 'base.persons');
         $this->assertTrue($def->enabled);
+    }
+
+    public function testNavSectionAcceptsSectionIdAndTopSentinel(): void
+    {
+        $data = self::baseData();
+        $data['navSection'] = 'accounting';
+        $this->assertSame('accounting', AlertCheckDefinition::fromArray($data, 'base.persons')->navSection);
+
+        $data['navSection'] = '_top';
+        $this->assertSame('_top', AlertCheckDefinition::fromArray($data, 'base.persons')->navSection);
+    }
+
+    public function testInvalidNavSectionThrows(): void
+    {
+        $data = self::baseData();
+        $data['navSection'] = 'Bad-Section';
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('invalid navSection');
+        AlertCheckDefinition::fromArray($data, 'base.persons');
     }
 }

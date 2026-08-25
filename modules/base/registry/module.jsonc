@@ -68,6 +68,7 @@
             "class": "Shipard\\Module\\Base\\Registry\\RegistryExpirationAlertCheck",
             "severity": "warning",
             "interval": "6h",
+            "navSection": "_top",
             "tags": ["registry"]
         }
     ],

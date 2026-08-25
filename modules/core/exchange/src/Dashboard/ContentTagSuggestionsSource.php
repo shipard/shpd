@@ -182,6 +182,9 @@ final class ContentTagSuggestionsSource implements FeedSource
             'icon'       => 'question',
             'stateStyle' => 'concept',
             'category'   => FeedSource::CATEGORY_INVOICES,
+            // Po plánovaném sloučení sekce Základní do `_top` (ui-shells.md
+            // §13) změnit na NAV_SECTION_TOP.
+            'navSection' => 'basic',
             'title'      => ($cs ? 'Nová kategorie: ' : 'New category: ') . $label,
             'subtitle'   => $subtitle,
             'timestamp'  => $this->toAtom($latest),

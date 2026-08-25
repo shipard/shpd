@@ -85,6 +85,7 @@
             "class": "Shipard\\Module\\Economy\\Accounting\\Checks\\AccountingErrorsCheck",
             "severity": "warning",
             "interval": "1h",
+            "navSection": "accounting",
             "tags": ["accounting"]
         },
         {

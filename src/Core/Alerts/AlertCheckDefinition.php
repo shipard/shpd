@@ -31,6 +31,10 @@ final readonly class AlertCheckDefinition
      * @param string[] $tags       Volné značky pro filtrování.
      * @param string $moduleId     Modul, ze kterého check pochází (pro chyby
      *                              a debug výpisy).
+     * @param ?string $navSection  Atribuce karet checku pro badge stavů sekcí
+     *                              (UI shells Fáze 3) — id sekce navigace nebo
+     *                              sentinel `_top`. Null = karty se do badge
+     *                              nepočítají (opt-in, D1).
      */
     public function __construct(
         public string $id,
@@ -43,6 +47,7 @@ final readonly class AlertCheckDefinition
         public bool $enabled,
         public array $tags,
         public string $moduleId,
+        public ?string $navSection = null,
     ) {}
 
     /**
@@ -92,6 +97,18 @@ final readonly class AlertCheckDefinition
             }
         }
 
+        $navSection = null;
+        if (isset($data['navSection'])) {
+            if (!is_string($data['navSection']) || !preg_match('/^[a-z_][a-z0-9_]*$/', $data['navSection'])) {
+                $got = is_string($data['navSection']) ? $data['navSection'] : gettype($data['navSection']);
+                throw new \InvalidArgumentException(
+                    "alertChecks['{$id}']: invalid navSection '{$got}' (in module '{$moduleId}')."
+                    . ' Expected [a-z_][a-z0-9_]*',
+                );
+            }
+            $navSection = $data['navSection'];
+        }
+
         return new self(
             id: $id,
             name: $name,
@@ -103,6 +120,7 @@ final readonly class AlertCheckDefinition
             enabled: $enabled,
             tags: $tags,
             moduleId: $moduleId,
+            navSection: $navSection,
         );
     }
 

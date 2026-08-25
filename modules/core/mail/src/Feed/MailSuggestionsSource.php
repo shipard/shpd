@@ -211,6 +211,7 @@ final class MailSuggestionsSource implements FeedSource
             'icon'       => $icon,
             'stateStyle' => $stateStyle,
             'category'   => $isRegistry ? FeedSource::CATEGORY_REGISTRY : FeedSource::CATEGORY_INVOICES,
+            'navSection' => FeedSource::NAV_SECTION_TOP,
             'title'      => $isRegistry
                 ? $this->registryCardTitle($ctx, $docType, $canonical)
                 : $this->cardTitle($ctx, $docType, $canonical),
@@ -303,6 +304,7 @@ final class MailSuggestionsSource implements FeedSource
             'icon'       => 'warning',
             'stateStyle' => 'error',
             'category'   => FeedSource::CATEGORY_OTHER,
+            'navSection' => FeedSource::NAV_SECTION_TOP,
             'title'      => $ctx->language === 'cs' ? 'Chyba analýzy e-mailu' : 'E-mail analysis failed',
             'subtitle'   => trim((string) ($row['sender_name'] ?? '')),
             'timestamp'  => $this->toAtom($row['received_at'] ?? null),
@@ -362,6 +364,7 @@ final class MailSuggestionsSource implements FeedSource
             'icon'       => 'warning',
             'stateStyle' => 'error',
             'category'   => FeedSource::CATEGORY_OTHER,
+            'navSection' => FeedSource::NAV_SECTION_TOP,
             'title'      => $ctx->language === 'cs' ? 'Chyba analýzy e-mailu' : 'E-mail analysis failed',
             'subtitle'   => trim((string) ($row['sender_name'] ?? '')),
             'timestamp'  => $this->toAtom($row['received_at'] ?? null),
@@ -434,6 +437,7 @@ final class MailSuggestionsSource implements FeedSource
             'icon'       => 'info',
             'stateStyle' => 'archive',
             'category'   => FeedSource::CATEGORY_OTHER,
+            'navSection' => FeedSource::NAV_SECTION_TOP,
             'title'      => ($ctx->language === 'cs' ? 'Není faktura — ' : 'Not an invoice — ')
                 . $this->primaryTypeLabel($ctx, (string) ($row['primary_type'] ?? 'other')),
             'subtitle'   => $sender,

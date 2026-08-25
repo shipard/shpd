@@ -74,6 +74,7 @@
             "class": "Shipard\\Module\\Economy\\Bank\\Checks\\StatementReconciliationCheck",
             "severity": "warning",
             "interval": "1h",
+            "navSection": "accounting",
             "tags": ["bank"]
         },
         {
@@ -87,6 +88,7 @@
             "class": "Shipard\\Module\\Economy\\Bank\\Checks\\BankAccountingErrorsCheck",
             "severity": "warning",
             "interval": "15m",
+            "navSection": "accounting",
             "tags": ["bank"]
         }
     ],

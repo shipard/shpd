@@ -10,6 +10,8 @@
 // znovu při následujících tab switchích na stejný viewer.
 
 import { findLeafById, findRootSectionId } from '../utils/navTree.js';
+import { recordRecent } from '../utils/recents.js';
+import { authStore } from './auth.svelte.js';
 
 let mode = $state('app');
 let appActiveItem      = $state(null);
@@ -76,6 +78,18 @@ function navigate(item) {
     accountActiveItem = normalized;
   } else {
     appActiveItem = normalized;
+    // Recents pro command paletu — jen app mód a jen položky s id
+    // (ad-hoc cíle navigateToViewer/navigateToPanel sem nevedou; paleta
+    // nabízí jen to, co umí znovu otevřít). Učí se tak i z běžné
+    // navigace sidebarem, ne jen z výběrů v paletě.
+    if (normalized.id != null) {
+      recordRecent(authStore.user?.id, {
+        id: normalized.id,
+        label: normalized.label,
+        icon: item.icon ?? null,
+        type: normalized.type,
+      });
+    }
   }
 }
 

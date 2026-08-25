@@ -8,6 +8,7 @@
   import { authStore } from '../../stores/auth.svelte.js';
   import { navigationStore } from '../../stores/navigation.svelte.js';
   import { layoutStore } from '../../stores/layout.svelte.js';
+  import { paletteStore } from '../../stores/palette.svelte.js';
   import { t } from '../../i18n/index.js';
   import Icon from '../ui/Icon.svelte';
   import BrandingHeader from '../chrome/BrandingHeader.svelte';
@@ -19,6 +20,7 @@
     iconCollapse,
     iconExpand,
     iconClose,
+    iconSearch,
     iconSpinner,
     iconWarning,
   } from '../../icons.js';
@@ -89,6 +91,16 @@
   function toggleCollapse() {
     collapsed = !collapsed;
   }
+
+  // Trigger command palety — tooltip nese zkratku dle platformy (R5/D5).
+  const isMac = /Mac|iPhone|iPad/.test(navigator.platform ?? '');
+  const searchTitle = t('palette.trigger') + ' · ' + (isMac ? '⌘K' : 'Ctrl+K');
+
+  function openPalette() {
+    paletteStore.openPalette();
+    // Na mobilu by drawer zůstal přes overlay palety.
+    if (layoutStore.isMobile) layoutStore.closeDrawer();
+  }
 </script>
 
 <nav
@@ -99,21 +111,35 @@
     {#if !collapsed || layoutStore.isMobile}
       <BrandingHeader />
     {/if}
-    {#if layoutStore.isMobile}
-      <!-- Na mobilu nahrazuje collapse toggle ✕, které zavře drawer.
-           Collapse nedává v draweru smysl (je buď otevřený, nebo zavřený). -->
-      <button
-        class="shpd-sidebar__toggle"
-        onclick={() => layoutStore.closeDrawer()}
-        aria-label={t('app.menu.close')}
-      >
-        <Icon icon={iconClose} size="sm" />
-      </button>
-    {:else}
-      <button class="shpd-sidebar__toggle" onclick={toggleCollapse} title={collapsed ? t('sidebar.expand') : t('sidebar.collapse')}>
-        <Icon icon={collapsed ? iconExpand : iconCollapse} size="sm" />
-      </button>
-    {/if}
+    <div class="shpd-sidebar__header-actions">
+      {#if !collapsed || layoutStore.isMobile}
+        <!-- Lupa = trigger command palety; ve sbaleném desktopu se
+             přesouvá nad NavIconStrip (v hlavičce není místo). -->
+        <button
+          class="shpd-sidebar__toggle"
+          onclick={openPalette}
+          title={searchTitle}
+          aria-label={searchTitle}
+        >
+          <Icon icon={iconSearch} size="sm" />
+        </button>
+      {/if}
+      {#if layoutStore.isMobile}
+        <!-- Na mobilu nahrazuje collapse toggle ✕, které zavře drawer.
+             Collapse nedává v draweru smysl (je buď otevřený, nebo zavřený). -->
+        <button
+          class="shpd-sidebar__toggle"
+          onclick={() => layoutStore.closeDrawer()}
+          aria-label={t('app.menu.close')}
+        >
+          <Icon icon={iconClose} size="sm" />
+        </button>
+      {:else}
+        <button class="shpd-sidebar__toggle" onclick={toggleCollapse} title={collapsed ? t('sidebar.expand') : t('sidebar.collapse')}>
+          <Icon icon={collapsed ? iconExpand : iconCollapse} size="sm" />
+        </button>
+      {/if}
+    </div>
   </div>
 
   {#if navigationStore.mode !== 'app'}
@@ -135,6 +161,17 @@
         {/if}
       </div>
     {:else if collapsed}
+      <!-- Trigger palety ve sbaleném pásu ikon — nad navigací. -->
+      <div class="shpd-sidebar__search-strip">
+        <button
+          class="shpd-sidebar__toggle"
+          onclick={openPalette}
+          title={searchTitle}
+          aria-label={searchTitle}
+        >
+          <Icon icon={iconSearch} size="sm" />
+        </button>
+      </div>
       <NavIconStrip tree={navTree} activeId={navigationStore.activeId} onNavigate={handleItemClick} />
     {:else}
       <NavTree tree={navTree} activeId={navigationStore.activeId} onNavigate={handleItemClick} />
@@ -188,6 +225,19 @@
     flex: 1;
     overflow-y: auto;
     min-height: 0;
+  }
+
+  .shpd-sidebar__header-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+  }
+
+  .shpd-sidebar__search-strip {
+    display: flex;
+    justify-content: center;
+    padding-top: var(--shpd-space-sm);
   }
 
   .shpd-sidebar__toggle {

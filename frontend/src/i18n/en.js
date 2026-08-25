@@ -90,6 +90,18 @@ export default {
   'app.menu.close': 'Close menu',
   'tabbar.close': 'Close {tab}',
 
+  // ── Command palette ─────────────────────────────────────────────────────
+  'palette.title': 'Quick navigation',
+  'palette.placeholder': 'Where do you want to go?',
+  'palette.group.recent': 'Recent',
+  'palette.group.app': 'Application',
+  'palette.group.settings': 'Settings',
+  'palette.group.account': 'Account',
+  'palette.empty': 'Nothing found',
+  'palette.hint': 'Start typing to search',
+  'palette.loadFailed': 'Failed to load this source',
+  'palette.trigger': 'Search',
+
   // ── Login ───────────────────────────────────────────────────────────────
   'login.heading': 'Shipard',
   'login.username': 'Login name',

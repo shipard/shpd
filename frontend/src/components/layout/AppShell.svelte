@@ -4,9 +4,11 @@
   import MobileTopBar from './MobileTopBar.svelte';
   import ThemePanel from './ThemePanel.svelte';
   import ChatPanel from '../chat/ChatPanel.svelte';
+  import CommandPalette from '../chrome/CommandPalette.svelte';
   import { navigationStore } from '../../stores/navigation.svelte.js';
   import { layoutStore } from '../../stores/layout.svelte.js';
   import { chatPanelStore } from '../../stores/chatPanel.svelte.js';
+  import { paletteStore } from '../../stores/palette.svelte.js';
 
   let { onLogout } = $props();
 
@@ -28,6 +30,25 @@
     // Na mobilu klik na položku zavře drawer (jinak by zůstal přes obsah).
     if (layoutStore.isMobile) layoutStore.closeDrawer();
   }
+
+  // Globální zkratka Ctrl/Cmd+K otevírá command paletu (R7). Nereaguje,
+  // když uživatel píše v inputu/textarea/contenteditable mimo paletu
+  // (kolize s editací ve FormDialogu — čistá detekce „dialog otevřen"
+  // neexistuje, focus test je v1 dostatečný).
+  $effect(() => {
+    function onKeyDown(e) {
+      if (e.key !== 'k' || (!e.ctrlKey && !e.metaKey)) return;
+      const el = document.activeElement;
+      if (el && !paletteStore.open
+          && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) {
+        return;
+      }
+      e.preventDefault();
+      paletteStore.openPalette();
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  });
 
   // Esc zavírá drawer (jen mobil + otevřený drawer).
   $effect(() => {
@@ -80,6 +101,9 @@
     onClose={() => { themePanelOpen = false; }}
     collapsed={sidebarCollapsed}
   />
+
+  <!-- Command palette — shell-nezávislá, shelly dodávají jen trigger. -->
+  <CommandPalette />
 
   <!-- Boční AI chat panel — mimo mobilní/desktop větve, geometrii si řeší
        sám přes layoutStore.isMobile. Otevírá ho dashboardový ChatLauncher. -->

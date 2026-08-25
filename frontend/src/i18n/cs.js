@@ -99,6 +99,18 @@ export default {
   'app.menu.close': 'Zavřít menu',
   'tabbar.close': 'Zavřít {tab}',
 
+  // ── Command palette ─────────────────────────────────────────────────────
+  'palette.title': 'Rychlá navigace',
+  'palette.placeholder': 'Kam chcete jít?',
+  'palette.group.recent': 'Naposledy',
+  'palette.group.app': 'Aplikace',
+  'palette.group.settings': 'Nastavení',
+  'palette.group.account': 'Účet',
+  'palette.empty': 'Nic nenalezeno',
+  'palette.hint': 'Začněte psát pro vyhledávání',
+  'palette.loadFailed': 'Zdroj se nepodařilo načíst',
+  'palette.trigger': 'Hledat',
+
   // ── Login ───────────────────────────────────────────────────────────────
   'login.heading': 'Shipard',
   'login.username': 'Přihlašovací jméno',

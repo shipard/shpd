@@ -272,6 +272,8 @@ export const navigationStore = {
     if (mode !== 'app' || !appActiveItem || !appNavTree) return null;
     return findRootSectionId(appNavTree, appActiveItem.id);
   },
+  // App strom pro command paletu (zdroj app položek bez dalšího fetche).
+  get appNavTree() { return appNavTree; },
   get pendingRecordId() { return pendingRecordId; },
   get pendingViewGroup() { return pendingViewGroup; },
   navigate,

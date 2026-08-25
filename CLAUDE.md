@@ -241,14 +241,23 @@ Formát hlavičky stránky a šablona: `docs/help-authoring.md`.
   **Prioritizovaný feed akčních karet** + tasks widget pod ním (fáze 1 widget
   mřížka nahrazena).
 - `GET /_ui/dashboard` → `{summary{aiText,counts}, cards[], capabilities}`.
-  Karty agregují napevno registrované `FeedSource` zdroje
-  (`MailSuggestionsSource`, `AlertsSource` — `src/Core/Feed/` + moduly);
-  zdroj se registruje jen při přítomnosti jeho klíčové tabulky na DS
-  a výjimka jednoho zdroje feed neshodí (per-source izolace).
+  Sběr karet dělá `Core\Feed\FeedCollector` (sdílený dashboardem, AI
+  shrnutím a `GET /_ui/section-badges`): napevno registrované `FeedSource`
+  zdroje (`MailSuggestionsSource`, `AlertsSource` — `src/Core/Feed/`
+  + moduly); zdroj se registruje jen při přítomnosti jeho klíčové tabulky
+  na DS a výjimka jednoho zdroje feed neshodí (per-source izolace).
   `capabilities {mailUpload, chat}` řídí skrytí tlačítka Nahrát /
   drag&drop / ChatLauncheru na frontendu. **Řadí a stropuje server**
   (`sortAndCap` dle `KIND_ORDER` urgent/review/ready/info + `timestamp` DESC,
-  `MAX_CARDS ~30` + „a další…" karta). `buildTasksWidget` re-use fáze 1.
+  `MAX_CARDS ~30` + „a další…" karta).
+- **Badge stavů sekcí** (UI shells Fáze 3, #45): karty nesou volitelný
+  `navSection` (mail → `_top`, content-tag → `basic`, alerty per check
+  z `alertChecks[].navSection`; setup checky bez pole). `GET
+  /_ui/section-badges` → `{sections: {"<id>": {count, severity}}}` — jen
+  urgent (danger) / review (warning), jen neprázdné sekce. FE: store
+  `sectionBadges.svelte.js` (polling 60 s + focus, startuje AppShell),
+  badge na root sekcích rozbaleného `NavTree` (jen app mód; collapsed
+  a `_top` bez badge). Viz `docs/dashboard.md`, `docs/ui-shells.md` §8.
 - Kartový kontrakt `{id, source, kind, icon, stateStyle, title, subtitle,
   timestamp, context, actions[]}`. Chování akcí odvozuje frontend z `action.kind`
   (`apply_extracted`/`review_extracted`/`reject_extracted`/`reanalyze`/

@@ -75,7 +75,7 @@ reconciler.
 |---|---|---|
 | `AlertCheck` (abstract) | `src/Core/Alerts/AlertCheck.php` | Base class pro konkrétní checky. Ctor: `$db`, `$config`, `$language`. Vrací `AlertFinding[]`. |
 | `AlertFinding` (readonly VO) | `src/Core/Alerts/AlertFinding.php` | Jeden nález z checku. Validace: severity whitelist, neprázdný title, max 1 primary action. |
-| `AlertCheckDefinition` (readonly VO) | `src/Core/Alerts/AlertCheckDefinition.php` | Parsovaný `alertChecks[]` záznam (id, name, class, severity, interval, intervalSeconds, enabled, tags, moduleId). |
+| `AlertCheckDefinition` (readonly VO) | `src/Core/Alerts/AlertCheckDefinition.php` | Parsovaný `alertChecks[]` záznam (id, name, class, severity, interval, intervalSeconds, enabled, tags, moduleId, navSection). |
 | `AlertCheckRegistry` | `src/Core/Alerts/AlertCheckRegistry.php` | Agreguje `ModuleDefinition->alertChecks` přes všechny moduly, lokalizuje, detekuje duplicity. |
 | `AlertReconciler` | `src/Core/Alerts/AlertReconciler.php` | Srdce systému. `runCheck()`, `getDueCheckIds()`. |
 | `AlertRunResult` (readonly VO) | `src/Core/Alerts/AlertRunResult.php` | Návrat z `runCheck()` — status, new/updated/resolved counts, durationMs, errorMessage. |
@@ -98,6 +98,7 @@ V `module.jsonc`:
         "severity":    "warning",     // info|warning|error, default warning
         "interval":    "1h",          // 5m / 1h / 30m / 1d / 7d
         "enabled":     true,          // default true
+        "navSection":  "accounting",  // volitelně — badge stavů sekcí (viz níže)
         "tags":        ["setup"]      // volné značky
     }
 ]
@@ -106,6 +107,14 @@ V `module.jsonc`:
 Validace v `ModuleDefinition::fromArray()` (uvnitř modulu — duplicit ID detekce)
 a `AlertCheckRegistry` (napříč moduly — duplicit ID detekce, severity whitelist,
 interval parsing).
+
+**`navSection`** (volitelné, formát `[a-z_][a-z0-9_]*`) — atribuce karet
+checku pro **badge stavů sekcí** v sidebaru (UI shells Fáze 3,
+`GET /_ui/section-badges`): id sekce z `global.navSections` nebo sentinel
+`_top`. `AlertsSource` ho propisuje do individuální i skupinové karty
+feedu; check bez pole se do badge nepočítá (opt-in). Setup checkům
+(`tags: ["setup"]`) pole nedávej — agregují se do jediné setup karty,
+kam se hodnota z definice nepropisuje.
 
 ---
 

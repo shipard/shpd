@@ -1,6 +1,11 @@
 # UI shells — Fáze 3: Badge stavů sekcí
 
-**Status:** připraveno k implementaci
+**Stav:** hotovo
+
+Implementováno 2026-08-25; zbývá ruční smoke 1–8 v prohlížeči a komentář
+do issue #45 po pushi. Odchylka od R3: setup checky (8 ze 14) navSection
+nedostaly — agregují se do jediné setup karty, pole z definice by se do
+ní nepropsalo (potvrzeno v návrhové diskusi implementace).
 **Issue:** [#45](https://github.com/shipard/shpd/issues/45) (zastřešující)
 **Design doc:** `docs/ui-shells.md` §8
 **Návaznost:** Fáze 1 (NavTree primitiv), nezávislé na Fázi 2. První fáze

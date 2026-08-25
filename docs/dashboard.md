@@ -102,8 +102,14 @@ Fáze 1 (widget MVP) říkala *„přehled, ne přístupový bod"*. Fáze 2 ten 
                               └─ open_viewer/open_form → navigace
 ```
 
+- **Sběr karet** = služba `Core\Feed\FeedCollector` (UI shells Fáze 3) —
+  „one calculation, N presentations": nad `FeedCollector::collect()` stojí
+  dashboard, AI shrnutí i `GET /_ui/section-badges` (badge stavů sekcí).
+  `DashboardController` je prezentační vrstva (readySummary, „a další"
+  karta, SSE); collector je bezstavový, controller si ho instancuje sám
+  (`new FeedCollector()` — repo nemá DI kontejner).
 - **Zdroj karet** = lehké rozhraní `FeedSource::collectCards(FeedContext): array`
-  (`src/Core/Feed/`). Konzumenti registrovaní napevno v controlleru (D10);
+  (`src/Core/Feed/`). Konzumenti registrovaní napevno v collectoru (D10);
   žádný plugin-registr. `MailSuggestionsSource` (`modules/core/mail/src/Feed/`),
   `AlertsSource` (`modules/core/alerts/src/Feed/`),
   `ContentTagSuggestionsSource` (`modules/core/exchange/src/Dashboard/`).
@@ -112,16 +118,16 @@ Fáze 1 (widget MVP) říkala *„přehled, ne přístupový bod"*. Fáze 2 ten 
   `core_mail_incoming_messages`, `AlertsSource` `core_alerts_alerts`,
   `ContentTagSuggestionsSource` `core_mail_message_analyses` +
   `economy_items` + `economy_accounting_accounts`
-  (mapa tabulka → zdroj žije v `collectCards()`, `$tables` = runtime
-  `TableDefinition` mapa z dispatche). Dashboard tak nepadá na DS bez
-  `core.mail` (hosting DS).
-- **Per-source izolace**: `collectCards()` obaluje každý zdroj try-catch —
+  (mapa tabulka → zdroj žije ve `FeedCollector::collect()`, `$tables` =
+  runtime `TableDefinition` mapa z dispatche). Dashboard tak nepadá na DS
+  bez `core.mail` (hosting DS).
+- **Per-source izolace**: `collect()` obaluje každý zdroj try-catch —
   `\Throwable` se zaloguje (`Dashboard feed source failed: <class>`) a feed
   pokračuje ostatními zdroji. Dashboard nevrátí 500, dokud funguje aspoň
   jeho obálka.
-- **Řazení + strop** dělá `DashboardController::sortAndCap()`: seřaď dle
+- **Řazení + strop** dělá `FeedCollector::sortAndCap()`: seřaď dle
   `KIND_ORDER` (urgent/review/ready/info), uvnitř pásma `timestamp` DESC, ořízni
-  na `MAX_CARDS` (~30); při ořezu přidej info kartu „a další…".
+  na `MAX_CARDS` (~30); při ořezu přidá controller info kartu „a další…".
 
 ## 4. Kartový kontrakt
 
@@ -198,6 +204,15 @@ Fáze 1 (widget MVP) říkala *„přehled, ne přístupový bod"*. Fáze 2 ten 
   (bezpečný default; dnes jen „…a další" karta). Mapování: návrhová karta
   dle `context.target` (docs→invoices, registry→registry); chybové karty,
   „Není faktura", digest, návrhy pravidel i alert karty → `other`.
+- `navSection` — **volitelné**, id sekce navigace (`global.navSections`)
+  nebo sentinel `_top` (`FeedSource::NAV_SECTION_TOP`) — atribuce karty pro
+  **badge stavů sekcí** (UI shells Fáze 3, `GET /_ui/section-badges`).
+  Opt-in: karta bez pole (či s `null`) se do badge nepočítá; počítají se
+  jen pásma `urgent`/`review`. Jiný účel než `category` (ta řídí chips
+  filtru feedu). Mapování: mail karty → `_top`, content-tag karta →
+  `basic`, alert karty per check z `alertChecks[].navSection`
+  v `module.jsonc` (setup checky pole nemají — agregují se do setup
+  karty).
 - `timestamp` — sekundární řazení uvnitř pásma (ATOM).
 - `context` — volitelná zdrojově-specifická data.
 - `attachments` + `attachmentsTotal` — **volitelná** pole, jen mail karty
@@ -576,6 +591,28 @@ Generované AI shrnutí feedu (fáze 2b, §11). Události:
 - **Cache miss** → stream `text` delt → `done{text, cached:false}` + upsert cache.
 - **Backend chybí / bez API klíče / klíč nejde dešifrovat** → `done{text:null}`
   (tichá degradace, log server-side).
+
+### `GET /_ui/section-badges`
+
+**Auth**: Bearer token (stejný režim jako `/_ui/dashboard`).
+
+Badge stavů sekcí navigace (UI shells Fáze 3) — stejný sběr karet jako
+dashboard, jiná prezentace: agregace per `navSection`
+(`FeedCollector::sectionBadges()`). Detailně `docs/rest-api.md`.
+
+```json
+{ "success": true, "data": { "sections": {
+  "accounting": { "count": 3, "severity": "danger" },
+  "_top":       { "count": 1, "severity": "warning" }
+} } }
+```
+
+- Počítají se jen karty `urgent` (severity `danger`) a `review`
+  (`warning`) s neprázdným `navSection`; sekce = součet + max severity
+  (danger > warning). `ready`/`info` se nepočítají (D2 — trvale svítící
+  badge není signál).
+- Jen neprázdné sekce; `_top` je platný klíč (sidebar pilot ho
+  nerenderuje, D6). Prázdný feed → `{}`.
 
 ### `POST /_mail/messages/{ndx}/unapply`
 

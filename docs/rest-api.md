@@ -178,6 +178,7 @@ http://{ip-adresa}/{ds-id}/api/v1/{tabulka}
 | `POST` | `/api/v1/_auth/sessions/revoke-others` | Odhlášení ostatních zařízení (session) |
 | `GET` | `/api/v1/_ui/settings/page/{pageId}` | Definice + hodnoty settings page (auth) |
 | `POST` | `/api/v1/_ui/settings/page/{pageId}` | Uložení hodnot settings page (auth) |
+| `GET` | `/api/v1/_ui/section-badges` | Badge stavů sekcí navigace — agregace dashboard feedu (auth) |
 | `GET` | `/api/v1/_setup/checklist` | Živý setup checklist + hodnoty parametrů vrstvy C (auth) |
 | `POST` | `/api/v1/_setup/parameters` | Zápis parametrů vrstvy C + okamžitý běh provisionerů (auth) |
 | `GET` | `/api/v1/_setup/vat-registration-prefill` | Návrh hodnot Registrace DPH z vlastní Osoby + vrstvy A (auth) |
@@ -193,6 +194,15 @@ http://{ip-adresa}/{ds-id}/api/v1/{tabulka}
 | `POST` | `/api/v1/_app/branding/{slot}` | Upload obrázku slotu (multipart, pole `file`) — auth |
 | `DELETE` | `/api/v1/_app/branding/{slot}` | Smazání obrázku slotu — auth |
 | `POST` | `/api/v1/_accounting/reaccount` | Přeúčtování dokladu ve stavu 40 (auth) |
+
+**`GET /_ui/section-badges`** — badge stavů sekcí navigace (UI shells
+Fáze 3). Bearer auth (stejný režim jako `/_ui/dashboard`). Agreguje
+dashboard feed per `navSection` karet (`FeedCollector::sectionBadges()`):
+počítají se jen karty `urgent` (severity `danger`) a `review` (`warning`)
+s neprázdným `navSection`, sekce = součet + max severity. Odpověď
+`{"sections": {"<sectionId>": {"count": N, "severity": "danger"|"warning"}}}`
+— jen neprázdné sekce, sentinel `_top` je platný klíč, prázdný feed →
+`{}`. Detaily [docs/dashboard.md](dashboard.md) §7.
 
 **`POST /_accounting/reaccount`** — body `{"docId": N}`. Znovu spustí
 `AccountingEngine` pro doklad ve stavu 40 (po opravě účtového rozvrhu /

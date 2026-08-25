@@ -117,17 +117,31 @@ shell `activeSection` jen odvozuje pro zvýraznění.
 
 ## 8. Stav sekcí (badge)
 
+> Realizováno Fází 3 (`tasks/ui-shells-phase3.md`): extrakce
+> `Core\Feed\FeedCollector` z DashboardControlleru, opt-in pole
+> `navSection` v kartovém kontraktu (mail → `_top`, content-tag →
+> `basic`, alerty per check přes `alertChecks[].navSection`), endpoint
+> `GET /_ui/section-badges` + pilot v sidebaru (badge na root sekcích
+> rozbaleného NavTree, store `sectionBadges.svelte.js`, polling 60 s +
+> focus) — viz `dashboard.md` §3/§4/§7, `frontend.md`.
+
 „Oranžové kolečko u Účtárny" = serverová **agregace dashboard feedu per
 sekce**, žádný nový subsystém (rozhodnuto: začít jednoduše).
 
-- Datový tvar navržený s rezervou pro budoucí obohacení:
-  `{sections: {<sectionId>: {count: int, severity: "info"|"warning"|"danger", source?: string}}}`.
-- Transport: rozšíření odpovědi `/_ui/navigation`, nebo malý samostatný
-  endpoint (kvůli odlišné kadenci obnovování) — rozhodne PRD fáze 3.
-- Mapování: existující `FeedSource` karty → sekce podle domény karty
-  (mail → `_top`/pošta, alerty → dle zdroje). Detail v PRD.
-- **Pilot v současném sidebaru** (badge u skupin) — ověření užitečnosti bez
-  čekání na nové shelly.
+- Finální datový tvar (rezervu `source?` lze doplnit později):
+  `{sections: {<sectionId>: {count: int, severity: "warning"|"danger"}}}`
+  — jen neprázdné sekce, `_top` platný klíč. Počítají se jen karty pásem
+  `urgent` (→ danger) a `review` (→ warning); `ready`/`info` ne — trvale
+  svítící badge není signál.
+- Transport: samostatný endpoint `GET /_ui/section-badges` (odlišná
+  kadence obnovování než strom navigace).
+- Mapování: existující `FeedSource` karty → sekce přes opt-in pole
+  `navSection` (mail → `_top`, alerty → per check). Karta bez pole se
+  nepočítá.
+- **Pilot v současném sidebaru** (badge u skupin, tečka v barvě severity
+  + počet, cap 99+) — ověření užitečnosti bez čekání na nové shelly.
+  `_top` se v pilotu nerenderuje (položky jsou trvale viditelné, D6);
+  collapsed pás v1 bez badge (vyřeší Fáze 4).
 
 ## 9. Command palette
 

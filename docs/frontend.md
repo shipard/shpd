@@ -339,6 +339,29 @@ nahradí obsah hlavní oblasti. `navigation.svelte.js` spravuje jedinou aktivní
 položku (`activeItem`). `ContentArea` renderuje obsah podle typu (`table` →
 `TableBrowser`, `viewer` → `Viewer`).
 
+### Sidebar — badge stavů sekcí
+
+Signalizace „v této sekci na tebe něco čeká" (UI shells Fáze 3, issue #45)
+— pilot v rozbaleném NavTree.
+
+- **Data:** `GET /_ui/section-badges` — serverová agregace dashboard feedu
+  per `navSection` karet (`{sections: {"<id>": {count, severity}}}`, jen
+  neprázdné sekce; `docs/dashboard.md` §7).
+- **Store `stores/sectionBadges.svelte.js`:** `badges` ($state mapa),
+  `refresh()`, `startPolling()`/`stopPolling()`. Polling à 60 s + refresh
+  při focusu okna; tick se přeskočí při `document.hidden`. Chyba fetche
+  i 401 ponechají poslední známý stav — tichá degradace (vzor AI shrnutí).
+  Životní cyklus řídí `AppShell` (`$effect` s cleanup).
+- **Render:** `Sidebar` předává mapu do `NavTree` propem `sectionBadges`
+  (jen app mód — settings/account strom badge nemá). `NavTree` kreslí na
+  root hlavičkách sekcí tečku v barvě severity (`--shpd-color-warning` /
+  `--shpd-color-danger`) + počet (cap `99+`), `aria-label` s ICU plurálem
+  (`sidebar.sectionBadge`). Klíč `_top` se ignoruje přirozeně (není uzlem
+  stromu) — položky `_top` jsou trvale viditelné.
+- **Rozsah pilotu:** jen rozbalený strom — tedy i mobilní drawer (renderuje
+  tutéž `Sidebar`); collapsed pás ikon (`NavIconStrip`) v1 bez badge
+  (vyřeší Fáze 4).
+
 ### Command palette
 
 Spotlight/Cmd-K overlay pro rychlou navigaci — **shell-nezávislá**: renderuje

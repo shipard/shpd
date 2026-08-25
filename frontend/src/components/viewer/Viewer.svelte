@@ -861,7 +861,7 @@
   // takže se do top baru vůbec nedostanou a zůstávají beze změny.
   $effect(() => {
     if (!layoutStore.isMobile) {
-      layoutStore.clearTopBar();
+      layoutStore.clearScreenSurface();
       return;
     }
 
@@ -874,7 +874,7 @@
         variant: a.variant,
         onClick: () => handleToolbarAction(a.id),
       }));
-      layoutStore.setTopBar({
+      layoutStore.setScreenSurface({
         context: 'list',
         actions,
         title: tab.label ?? null,
@@ -894,7 +894,7 @@
           variant: a.variant,
           onClick: () => handleToolbarAction(a.id),
         }));
-      layoutStore.setTopBar({
+      layoutStore.setScreenSurface({
         context: 'detail',
         actions,
         title: detail?.title ?? tab.label ?? null,
@@ -908,7 +908,7 @@
 
   // Úklid při unmountu — ať akce nezůstanou na další obrazovce.
   $effect(() => {
-    return () => layoutStore.clearTopBar();
+    return () => layoutStore.clearScreenSurface();
   });
 </script>
 

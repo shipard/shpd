@@ -13,33 +13,34 @@ const MOBILE_BREAKPOINT = 768; // px — musí ladit s @media v komponentách
 let isMobile   = $state(false);
 let drawerOpen = $state(false);
 
-// --- Top bar obsah (publikovaný aktuální obrazovkou, čte MobileTopBar) ---
+// --- Screen surface (publikovaný aktuální obrazovkou, čte shell) ---
 //
-// Obrazovka (typicky Viewer) zapíše, co má top bar zobrazit: kontext
-// (list/detail → ovlivní levou ikonu), akce (pole {id, label, icon,
-// variant, onClick}), titul override a back handler. MobileTopBar to
-// čte a renderuje, sám nic neví o vieweru.
+// Obecný kanál: aktivní obrazovka (typicky Viewer) publikuje svůj povrch —
+// kontext (list/detail), akce (pole {id, label, icon, variant, onClick}),
+// titul override a back handler. Shell rozhoduje, kde a jak ho vykreslí;
+// dnešním konzumentem je MobileTopBar (mobilní top bar), budoucí shelly
+// ho konzumují po svém. Viz docs/ui-shells.md §6. (Dříve `topBar*` kanál.)
 //
-// `null` kontext = obrazovka nic nepublikuje → MobileTopBar fallback
+// `null` kontext = obrazovka nic nepublikuje → konzument fallback
 // na hamburger + titul z navigace + prázdný slot (dashboard apod.).
 
-let topBarContext = $state(null);  // 'list' | 'detail' | null
-let topBarActions = $state([]);    // [{ id, label, icon, variant, onClick }]
-let topBarTitle   = $state(null);  // string | null (override; null = z navigace)
-let topBarBack    = $state(null);  // (() => void) | null
+let surfaceContext = $state(null);  // 'list' | 'detail' | null
+let surfaceActions = $state([]);    // [{ id, label, icon, variant, onClick }]
+let surfaceTitle   = $state(null);  // string | null (override; null = z navigace)
+let surfaceBack    = $state(null);  // (() => void) | null
 
-function setTopBar({ context = null, actions = [], title = null, back = null }) {
-  topBarContext = context;
-  topBarActions = actions;
-  topBarTitle   = title;
-  topBarBack    = back;
+function setScreenSurface({ context = null, actions = [], title = null, back = null }) {
+  surfaceContext = context;
+  surfaceActions = actions;
+  surfaceTitle   = title;
+  surfaceBack    = back;
 }
 
-function clearTopBar() {
-  topBarContext = null;
-  topBarActions = [];
-  topBarTitle   = null;
-  topBarBack    = null;
+function clearScreenSurface() {
+  surfaceContext = null;
+  surfaceActions = [];
+  surfaceTitle   = null;
+  surfaceBack    = null;
 }
 
 // Inicializace matchMedia listeneru. Voláno jednou z main.js po mountu.
@@ -76,14 +77,14 @@ function toggleDrawer() { drawerOpen = !drawerOpen; }
 export const layoutStore = {
   get isMobile()   { return isMobile; },
   get drawerOpen() { return drawerOpen; },
-  get topBarContext() { return topBarContext; },
-  get topBarActions() { return topBarActions; },
-  get topBarTitle()   { return topBarTitle; },
-  get topBarBack()    { return topBarBack; },
+  get surfaceContext() { return surfaceContext; },
+  get surfaceActions() { return surfaceActions; },
+  get surfaceTitle()   { return surfaceTitle; },
+  get surfaceBack()    { return surfaceBack; },
   initLayout,
   openDrawer,
   closeDrawer,
   toggleDrawer,
-  setTopBar,
-  clearTopBar,
+  setScreenSurface,
+  clearScreenSurface,
 };

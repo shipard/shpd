@@ -9,13 +9,13 @@
   import { navigationStore } from '../../stores/navigation.svelte.js';
   import { t } from '../../i18n/index.js';
 
-  // Titul: override z top-bar kanálu, jinak z navigace.
+  // Titul: override ze screen surface, jinak z navigace.
   let title = $derived(
-    layoutStore.topBarTitle ?? navigationStore.activeItem?.label ?? ''
+    layoutStore.surfaceTitle ?? navigationStore.activeItem?.label ?? ''
   );
 
-  let context = $derived(layoutStore.topBarContext);
-  let actions = $derived(layoutStore.topBarActions ?? []);
+  let context = $derived(layoutStore.surfaceContext);
+  let actions = $derived(layoutStore.surfaceActions ?? []);
 
   // V detailu: první akce = hlavní (ikona). Kebab zatím obsahuje VŠECHNY
   // detail akce (včetně té hlavní) — dnes je tam reálně jen Otevřít, a než
@@ -42,8 +42,8 @@
   }
 
   function handleLeft() {
-    if (context === 'detail' && layoutStore.topBarBack) {
-      layoutStore.topBarBack();
+    if (context === 'detail' && layoutStore.surfaceBack) {
+      layoutStore.surfaceBack();
     } else {
       layoutStore.toggleDrawer();
     }

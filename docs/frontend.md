@@ -339,6 +339,45 @@ nahradí obsah hlavní oblasti. `navigation.svelte.js` spravuje jedinou aktivní
 položku (`activeItem`). `ContentArea` renderuje obsah podle typu (`table` →
 `TableBrowser`, `viewer` → `Viewer`).
 
+### Command palette
+
+Spotlight/Cmd-K overlay pro rychlou navigaci — **shell-nezávislá**: renderuje
+ji `AppShell`, shelly dodávají jen trigger (kontrakt `docs/ui-shells.md` §4,
+koncept §9). Realizováno Fází 2 UI shells (issue #45).
+
+- **Trigger:** globální zkratka `Ctrl/Cmd+K` (keydown v `AppShell`; nereaguje
+  při focusu v `input`/`textarea`/`contenteditable` mimo paletu) + lupa
+  v hlavičce sidebaru (rozbalený režim a mobilní drawer — otevření palety
+  drawer zavře; ve sbaleném režimu ikona nad `NavIconStrip`). Tooltip nese
+  zkratku dle platformy (`⌘K` / `Ctrl+K`).
+- **Architektura providerů** (`stores/palette.svelte.js`): zdroj nabídky =
+  záznam `SOURCE_DEFS` (mód + i18n klíč skupiny + URL stromu) — v1 tři
+  navigační stromy (app / settings / account) + skupina recents na prázdný
+  vstup. Přidání zdroje (nápověda, fulltext záznamů — v2) = nový provider,
+  ne přepis. Stromy se stahují lazy při prvním otevření a cachují po dobu
+  session; app strom přednostně z `navigationStore.appNavTree`. Selhání
+  jednoho zdroje = chybový řádek ve výsledcích, paleta zůstává použitelná.
+- **Matching** (`utils/paletteMatch.js`, čisté funkce): folding diakritiky
+  („uctarna" → „Účtárna") per znak s mapou indexů — zvýraznění shod
+  (`ranges`) se mapuje na původní label. Ranking prefix > začátek slova >
+  subsequence; remíza → boost položek z recents; max 10 výsledků na skupinu,
+  žádná virtualizace.
+- **Recents** (`utils/recents.js`): localStorage `shpd_recents_<userId>`
+  (DS izolaci řeší origin/subdomain), pole `{id, label, icon, type, ts}`,
+  cap 7, dedup dle id. Zaznamenává `navigationStore.navigate()` — **jen app
+  mód** a jen položky s `id`, takže se učí i z běžné navigace sidebarem;
+  ad-hoc cíle (`navigateToViewer`/`navigateToPanel`) se neukládají. Paleta
+  při zobrazení resolvuje živý leaf ze stromu podle id (zmizelé položky se
+  přeskočí).
+- **Výběr cíle z jiného módu** = přepnutí módu
+  (`enterSettings`/`enterAccount`/`exitToApp`) + `navigate()` s originálním
+  objektem leafu ze stromu.
+- **UI** (`chrome/CommandPalette.svelte`): vlastní overlay v horní třetině
+  (ne `ui/Modal`), lifecycle dle vzoru `ThemePanel` (Esc, klik na backdrop,
+  keydown listener registrovaný až po otevření), šipky/Enter, autofocus,
+  `aria-activedescendant`; aktivní řádek mění `mousemove` (ne hover),
+  aby se výběr nehýbal pod rukama při psaní.
+
 ---
 
 ## 5. Prohlížeč tabulek (TableBrowser)

@@ -131,15 +131,25 @@ sekce**, žádný nový subsystém (rozhodnuto: začít jednoduše).
 
 ## 9. Command palette
 
-Spotlight/Cmd-P overlay, **shell-nezávislý** (renderuje AppShell/root, shelly
-mají jen trigger + klávesovou zkratku). Tenké UI nad existujícími zdroji:
+> Realizováno Fází 2 (`tasks/ui-shells-phase2.md`): overlay
+> `chrome/CommandPalette.svelte` + `stores/palette.svelte.js`, zkratka
+> Ctrl/Cmd+K + lupa v sidebaru — viz `frontend.md` §4 *Command palette*.
 
-- **zdroje nabídky:** navigační strom (viewery, panely, reporty, stránky
-  nastavení), nápověda/dokumentace; později záznamy přes fulltext vieweru,
-- **akce po výběru:** existující akční slovník (`navigate`,
-  `navigateToViewer`, `open_form`…),
-- fuzzy match na klientu nad už načteným stromem; serverové zdroje
-  (dokumentace, záznamy) přes debounced dotaz — rozsah první verze určí PRD.
+Spotlight/Cmd-K overlay, **shell-nezávislý** (renderuje AppShell, shelly mají
+jen trigger + klávesovou zkratku — položka checklistu v §4). Tenké UI nad
+existujícími zdroji:
+
+- **Provider kontrakt (hotový koncept):** zdroj nabídky = záznam v
+  `SOURCE_DEFS` store palety — dodává položky se svou skupinou výsledků,
+  `results` je skládá. V1 providery: tři navigační stromy (app / settings /
+  account, lazy + session cache) a recents (localStorage, jen app mód,
+  cap 7, plní se i běžnou navigací). Nápověda/dokumentace a záznamy přes
+  fulltext vieweru se později přidají jako **další provider, ne přepis**
+  (serverové zdroje přes debounced dotaz).
+- **Akce po výběru:** existující akční slovník — v1 `navigate()`
+  s originálním leafem stromu (+ přepnutí módu); `open_form` a spol. ve v2.
+- Fuzzy match na klientu s foldingem diakritiky, ranking prefix > začátek
+  slova > subsequence, remíza → boost z recents (`utils/paletteMatch.js`).
 
 ## 10. Sekční AI kontexty
 
@@ -221,4 +231,3 @@ dopředu.
 - Transport badge dat (v navigaci vs. samostatný endpoint) a kadence refreshe.
 - Mechanika přepnutí shellu (reload vs. soft swap).
 - Úzká místa kompaktních shellů (reporty, široké gridy) — dořešit u fáze 4/6.
-- Klávesová zkratka a rozsah zdrojů první verze palety.

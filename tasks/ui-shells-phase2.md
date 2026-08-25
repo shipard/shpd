@@ -1,6 +1,9 @@
 # UI shells — Fáze 2: Command palette
 
-**Status:** připraveno k implementaci
+**Stav:** hotovo
+
+Implementováno 2026-08-25; zbývá ruční smoke 1–8 v prohlížeči a komentář
+do issue #45 po pushi.
 **Issue:** [#45](https://github.com/shipard/shpd/issues/45) (zastřešující)
 **Design doc:** `docs/ui-shells.md` §9
 **Návaznost:** staví na Fázi 1 (`tasks/ui-shells-phase1.md`) — primitivy chrome,
@@ -198,13 +201,13 @@ Commity průběžně; push dělá David.
 
 ## Hotovo když
 
-- [ ] Ctrl/Cmd+K + lupa otevírají paletu ve všech režimech sidebaru
+- [x] Ctrl/Cmd+K + lupa otevírají paletu ve všech režimech sidebaru
       i na mobilu
-- [ ] fuzzy s foldingem diakritiky, zvýraznění shod, skupiny dle módů
-- [ ] výběr naviguje vč. přepnutí módu; recents (7, jen app) fungují
+- [x] fuzzy s foldingem diakritiky, zvýraznění shod, skupiny dle módů
+- [x] výběr naviguje vč. přepnutí módu; recents (7, jen app) fungují
       a plní se i běžnou navigací
-- [ ] provider architektura zřejmá z kódu (přidání zdroje = nový provider)
-- [ ] `npm test` zelené vč. nových testů, build + check:i18n čisté
+- [x] provider architektura zřejmá z kódu (přidání zdroje = nový provider)
+- [x] `npm test` zelené vč. nových testů, build + check:i18n čisté
 - [ ] smoke 1–8 prošel
-- [ ] `docs/frontend.md` + `docs/ui-shells.md` §9 aktualizované
+- [x] `docs/frontend.md` + `docs/ui-shells.md` §9 aktualizované
 - [ ] komentář v issue #45: Fáze 2 hotová (odkaz na commity)

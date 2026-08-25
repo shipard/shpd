@@ -80,6 +80,64 @@ final class FeedCollectorTest extends TestCase
         $this->assertSame(['urgent' => 2, 'review' => 1, 'ready' => 1], $collector->countByKind($cards));
     }
 
+    // ── sectionBadges (UI shells Fáze 3, D2) ─────────────────────────────────
+
+    /** @return array<string,mixed> */
+    private function sectionCard(string $kind, ?string $navSection, string $id = 'x'): array
+    {
+        $card = ['id' => $id, 'kind' => $kind, 'timestamp' => null];
+        if ($navSection !== null) {
+            $card['navSection'] = $navSection;
+        }
+        return $card;
+    }
+
+    public function testSectionBadgesCountsOnlyUrgentAndReview(): void
+    {
+        $collector = new FeedCollector();
+        $badges = $collector->sectionBadges([
+            $this->sectionCard('urgent', 'accounting'),
+            $this->sectionCard('review', 'accounting'),
+            $this->sectionCard('ready', 'accounting'),   // nepočítá se (D2)
+            $this->sectionCard('info', 'accounting'),    // nepočítá se (D2)
+        ]);
+
+        $this->assertSame(['accounting' => ['count' => 2, 'severity' => 'danger']], $badges);
+    }
+
+    public function testSectionBadgesIgnoresCardsWithoutNavSection(): void
+    {
+        $collector = new FeedCollector();
+        $badges = $collector->sectionBadges([
+            $this->sectionCard('urgent', null),
+            [...$this->sectionCard('review', null), 'navSection' => null],
+            $this->sectionCard('review', 'basic'),
+        ]);
+
+        $this->assertSame(['basic' => ['count' => 1, 'severity' => 'warning']], $badges);
+    }
+
+    public function testSectionBadgesMaxSeverityAndPerSectionSums(): void
+    {
+        $collector = new FeedCollector();
+        $badges = $collector->sectionBadges([
+            $this->sectionCard('review', 'accounting'),
+            $this->sectionCard('urgent', 'accounting'),  // max severity vyhrává
+            $this->sectionCard('review', 'accounting'),
+            $this->sectionCard('review', '_top'),        // sentinel je platný klíč
+            $this->sectionCard('review', '_top'),
+        ]);
+
+        $this->assertSame(3, $badges['accounting']['count']);
+        $this->assertSame('danger', $badges['accounting']['severity']);
+        $this->assertSame(['count' => 2, 'severity' => 'warning'], $badges['_top']);
+    }
+
+    public function testSectionBadgesEmptyFeedYieldsEmptyMap(): void
+    {
+        $this->assertSame([], (new FeedCollector())->sectionBadges([]));
+    }
+
     // ── stripInternalFields ──────────────────────────────────────────────────
 
     public function testStripInternalFieldsRemovesAmountAndCurrency(): void

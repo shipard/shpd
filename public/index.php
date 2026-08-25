@@ -1166,7 +1166,8 @@ function dispatchDashboard(
 ): Response {
 	$ctrl = new DashboardController();
 	return match ($route->action) {
-		'index'   => $ctrl->dashboard($db, $configRuntime, $language, $alertCheckRegistry, $tables, $auth),
+		'index'         => $ctrl->dashboard($db, $configRuntime, $language, $alertCheckRegistry, $tables, $auth),
+		'sectionBadges' => $ctrl->sectionBadges($db, $configRuntime, $language, $alertCheckRegistry, $tables),
 		'summary' => $ctrl->summary(
 			$db,
 			new \Shipard\Core\Dashboard\DashboardSummaryService(

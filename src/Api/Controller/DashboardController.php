@@ -116,6 +116,32 @@ class DashboardController
     }
 
     /**
+     * GET /_ui/section-badges — badge stavů sekcí navigace (UI shells Fáze 3).
+     *
+     * Stejný sběr karet jako dashboard (plný FeedContext), jiná prezentace:
+     * agregace per `navSection` (`FeedCollector::sectionBadges`, D2–D4).
+     * Odpověď: `{sections: {"<sectionId>": {count, severity}}}` — jen
+     * neprázdné sekce, `_top` je platný klíč.
+     *
+     * @param array<string, \Shipard\Core\Database\TableDefinition> $tables
+     */
+    public function sectionBadges(
+        DataSourceConnection $db,
+        ?ConfigRuntime $config = null,
+        ?string $language = null,
+        ?AlertCheckRegistry $alertRegistry = null,
+        array $tables = [],
+    ): Response {
+        $lang = $language ?? 'en';
+
+        $collector = new FeedCollector();
+        [$cards] = $collector->collect($db, $config, $lang, $alertRegistry, $tables);
+
+        // (object) — prázdná mapa musí být v JSON `{}`, ne `[]`.
+        return Response::success(['sections' => (object) $collector->sectionBadges($cards)]);
+    }
+
+    /**
      * Souhrn ready pásma pro sbalené pruhy feedu (Issue #32/2, D8 + D11).
      * Počítá se z karet PO `sortAndCap` — souhrn odpovídá tomu, co uživatel
      * vidí — a dělí se **per kategorie**: `invoices` (přijaté faktury,

@@ -64,6 +64,14 @@ class Router
 			return new Route('dashboard', 'summary');
 		}
 
+		// GET /_ui/section-badges — badge stavů sekcí navigace (UI shells Fáze 3)
+		if ($subpath === '/_ui/section-badges') {
+			if ($method !== 'GET') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('dashboard', 'sectionBadges');
+		}
+
 		if ($subpath === '/_ui/settings/navigation') {
 			if ($method !== 'GET') {
 				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);

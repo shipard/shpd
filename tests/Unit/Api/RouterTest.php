@@ -40,6 +40,20 @@ class RouterTest extends TestCase
 		$this->assertRoute($result, 'meta', 'table', 'core_system_users');
 	}
 
+	// Section badges (UI shells Fáze 3)
+	public function testSectionBadgesGet(): void
+	{
+		$result = $this->router->resolve('/api/v1/_ui/section-badges', 'GET');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'dashboard', 'sectionBadges');
+	}
+
+	public function testSectionBadgesPostNotAllowed(): void
+	{
+		$result = $this->router->resolve('/api/v1/_ui/section-badges', 'POST');
+		$this->assertInstanceOf(Response::class, $result);
+	}
+
 	// Settings pages
 	public function testSettingsPageGet(): void
 	{

@@ -471,6 +471,56 @@ final class DashboardControllerTest extends TestCase
         $this->assertFalse($caps($hostingTables, null)['chat']);
     }
 
+    // ── sectionBadges() — badge stavů sekcí (UI shells Fáze 3) ──────────────
+
+    public function testSectionBadgesAggregatesAlertCardsBySection(): void
+    {
+        // Alert s navSection z registry → review/warning v sekci accounting.
+        $registry = new \Shipard\Core\Alerts\AlertCheckRegistry(
+            [\Shipard\Core\Module\ModuleDefinition::fromArray([
+                'id'          => 'economy.accounting',
+                'name'        => 'Accounting',
+                'alertChecks' => [[
+                    'id'         => 'chk',
+                    'name'       => 'Chyby účtování',
+                    'class'      => 'X',
+                    'interval'   => '1h',
+                    'navSection' => 'accounting',
+                ]],
+            ])],
+            'cs',
+        );
+
+        $ctrl = new DashboardController();
+        $response = $ctrl->sectionBadges(
+            $this->bothSourcesDb(),
+            null,
+            'cs',
+            $registry,
+            $this->fullTables(),
+        );
+
+        $payload = $response->getPayload();
+        $this->assertTrue($payload['success']);
+        // Mail suggestion karta je ready — do badge nepatří; jen alert (urgent).
+        $this->assertEquals(
+            (object) ['accounting' => ['count' => 1, 'severity' => 'danger']],
+            $payload['data']['sections'],
+        );
+    }
+
+    public function testSectionBadgesEmptyFeedYieldsEmptyObject(): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchAll')->willReturn([]);
+
+        $ctrl = new DashboardController();
+        $payload = $ctrl->sectionBadges($db, null, 'cs', null, $this->fullTables())->getPayload();
+
+        // Prázdná mapa musí být objekt (JSON `{}`), ne pole.
+        $this->assertEquals(new \stdClass(), $payload['data']['sections']);
+    }
+
     // ── summary() — SSE AI shrnutí (fáze 2b) ─────────────────────────────────
 
     private function runProducer(Response $response): string

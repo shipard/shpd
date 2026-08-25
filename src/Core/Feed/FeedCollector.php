@@ -143,6 +143,39 @@ final class FeedCollector
     }
 
     /**
+     * Agregace feedu per navigační sekce pro badge stavů sekcí (UI shells
+     * Fáze 3, D2–D4). Čistá funkce nad kartami: počítají se jen pásma
+     * `urgent` (→ severity `danger`) a `review` (→ `warning`) s neprázdným
+     * `navSection` (opt-in, D1); `ready`/`info` ne — trvale svítící badge
+     * není signál. Sekce = součet karet + max severity (danger > warning).
+     *
+     * @param  list<array<string,mixed>> $cards
+     * @return array<string, array{count:int, severity:string}>
+     *         klíč = id sekce (vč. sentinelu `_top`), jen neprázdné sekce
+     */
+    public function sectionBadges(array $cards): array
+    {
+        $sections = [];
+        foreach ($cards as $card) {
+            $kind = $card['kind'] ?? '';
+            if ($kind !== 'urgent' && $kind !== 'review') {
+                continue;
+            }
+            $section = $card['navSection'] ?? null;
+            if (!is_string($section) || $section === '') {
+                continue;
+            }
+            $entry = $sections[$section] ?? ['count' => 0, 'severity' => 'warning'];
+            $entry['count']++;
+            if ($kind === 'urgent') {
+                $entry['severity'] = 'danger';
+            }
+            $sections[$section] = $entry;
+        }
+        return $sections;
+    }
+
+    /**
      * Počty karet dle kind (jen actionable pásma — urgent/review/ready).
      * Info karty (vč. „a další…") se nezapočítávají.
      *

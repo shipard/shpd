@@ -56,6 +56,9 @@
         // deep-link reportu má přednost (no-op bez stashe), jinak první
         // root-level leaf stromu (na hosting DS portál, jinde Dashboard, D6).
         if (navigationStore.mode === 'app') {
+          // Strom do storu kvůli derivaci activeSection — před aktivací
+          // položky, ať je sekce odvoditelná hned od prvního výběru.
+          navigationStore.setAppNavTree(navTree);
           navigationStore.activateReportDeepLink(navTree);
           navigationStore.ensureDefaultActiveItem(navTree);
         }

@@ -9,6 +9,8 @@
 // ne ve storu — viewer ji vyčistí po prvním použití, aby se neaplikovala
 // znovu při následujících tab switchích na stejný viewer.
 
+import { findLeafById, findRootSectionId } from '../utils/navTree.js';
+
 let mode = $state('app');
 let appActiveItem      = $state(null);
 let settingsActiveItem = $state(null);
@@ -24,6 +26,11 @@ let pendingReportParams = $state(null);
 // Deep-link stash z main.js (před mountem, přežije login obrazovku) —
 // nereaktivní: čte se jednou po loadu app navigace.
 let pendingReportDeepLink = null;
+// App navigační strom — plní Sidebar po loadu /_ui/navigation přes
+// setAppNavTree(). Jediný účel: derivace `activeSection` (žádný zápis
+// při navigaci → nemůže zestárnout, funguje i pro navigateToViewer
+// z dashboardu a deep linky).
+let appNavTree = $state(null);
 
 // Aktivní položka pro aktuální mód — jedno místo pro tří-cestnou volbu,
 // sdílené gettery i navigate().
@@ -197,15 +204,9 @@ function activateReportDeepLink(navTree) {
   return true;
 }
 
-/** Rekurzivní hledání leafu dle id ve stromu navigace (sekce/skupiny). */
-function findLeafById(nodes, id) {
-  if (!Array.isArray(nodes)) return null;
-  for (const node of nodes) {
-    if (node?.id === id && node?.type) return node;
-    const found = findLeafById(node?.children, id);
-    if (found) return found;
-  }
-  return null;
+/** Sidebar po loadu app navigace — viz komentář u `appNavTree`. */
+function setAppNavTree(tree) {
+  appNavTree = tree;
 }
 
 /**
@@ -264,11 +265,19 @@ export const navigationStore = {
   get mode()       { return mode; },
   get activeItem() { return currentActiveItem(); },
   get activeId()   { return currentActiveItem()?.id ?? null; },
+  // Sekce úrovně 1, do níž patří aktivní leaf — čistá derivace ze stromu.
+  // Mimo app mód, pro `_top`/root leafy (dashboard, chat) a před loadem
+  // stromu vrací null.
+  get activeSection() {
+    if (mode !== 'app' || !appActiveItem || !appNavTree) return null;
+    return findRootSectionId(appNavTree, appActiveItem.id);
+  },
   get pendingRecordId() { return pendingRecordId; },
   get pendingViewGroup() { return pendingViewGroup; },
   navigate,
   navigateToViewer,
   navigateToPanel,
+  setAppNavTree,
   consumePendingRecordId,
   consumePendingViewGroup,
   setPendingReportDeepLink,

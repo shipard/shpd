@@ -107,6 +107,10 @@ export default {
   'shell.followsApp': 'Řídí se nastavením aplikace ({shell}).',
   'shell.classic.home': 'Domů',
   'shell.classic.sections': 'Sekce aplikace',
+  'shell.option.wild': 'Kompaktní',
+  'shell.wild.home': 'Domů',
+  'shell.wild.sections': 'Sekce aplikace',
+  'shell.wild.aiTab': 'AI asistent sekce',
 
   // ── Command palette ─────────────────────────────────────────────────────
   'palette.title': 'Rychlá navigace',

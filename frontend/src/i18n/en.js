@@ -98,6 +98,10 @@ export default {
   'shell.followsApp': 'Follows the application settings ({shell}).',
   'shell.classic.home': 'Home',
   'shell.classic.sections': 'Application sections',
+  'shell.option.wild': 'Compact',
+  'shell.wild.home': 'Home',
+  'shell.wild.sections': 'Application sections',
+  'shell.wild.aiTab': 'Section AI assistant',
 
   // ── Command palette ─────────────────────────────────────────────────────
   'palette.title': 'Quick navigation',

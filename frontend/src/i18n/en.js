@@ -91,6 +91,10 @@ export default {
   'app.menu.close': 'Close menu',
   'tabbar.close': 'Close {tab}',
 
+  // ── Shells (classic) ──────────────────────────────────────────────────────
+  'shell.classic.home': 'Home',
+  'shell.classic.sections': 'Application sections',
+
   // ── Command palette ─────────────────────────────────────────────────────
   'palette.title': 'Quick navigation',
   'palette.placeholder': 'Where do you want to go?',

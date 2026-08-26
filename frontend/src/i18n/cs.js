@@ -100,6 +100,10 @@ export default {
   'app.menu.close': 'Zavřít menu',
   'tabbar.close': 'Zavřít {tab}',
 
+  // ── Shelly (classic) ──────────────────────────────────────────────────────
+  'shell.classic.home': 'Domů',
+  'shell.classic.sections': 'Sekce aplikace',
+
   // ── Command palette ─────────────────────────────────────────────────────
   'palette.title': 'Rychlá navigace',
   'palette.placeholder': 'Kam chcete jít?',

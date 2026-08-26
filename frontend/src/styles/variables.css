@@ -196,6 +196,8 @@
   --shpd-sidebar-width: 260px;
   --shpd-sidebar-width-collapsed: 48px;
   --shpd-header-height: 56px;
+  /* Levý pás classic shellu (ikona + popisek pod sebou). */
+  --shpd-classic-strip-width: 76px;
 }
 
 /* ============================================================

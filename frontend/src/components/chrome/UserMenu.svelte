@@ -1,7 +1,10 @@
 <script>
   // Chrome primitiv: avatar + jméno v patce s dropdown menu — Nastavení
   // účtu / Nastavení aplikace, jazyk, odhlásit. `compact` = jen kruhový
-  // avatar, dropdown vyjíždí do strany (side-overlay).
+  // avatar, dropdown vyjíždí do strany (side-overlay). `direction`:
+  // 'up' (default, patka sidebaru) | 'down' (horizontální top bar
+  // classic shellu — dropdown dolů, zarovnaný doprava, bez patkového
+  // rámečku).
   //
   // Mode akce volá přímo navigationStore (enterAccount/enterSettings);
   // logout dodává rodič přes `onLogout` — menu se při něm záměrně
@@ -22,7 +25,7 @@
     iconConfirm,
   } from '../../icons.js';
 
-  let { compact = false, onLogout } = $props();
+  let { compact = false, direction = 'up', onLogout } = $props();
 
   let userMenuOpen = $state(false);
   let userMenuRoot = $state(null);
@@ -101,7 +104,11 @@
   });
 </script>
 
-<div class="shpd-usermenu" bind:this={userMenuRoot}>
+<div
+  class="shpd-usermenu"
+  class:shpd-usermenu--bar={direction === 'down'}
+  bind:this={userMenuRoot}
+>
   <button
     class="shpd-usermenu__button"
     class:shpd-usermenu__button--compact={compact}
@@ -129,7 +136,8 @@
   {#if userMenuOpen}
     <div
       class="shpd-usermenu__menu"
-      class:shpd-usermenu__menu--side={compact}
+      class:shpd-usermenu__menu--side={compact && direction === 'up'}
+      class:shpd-usermenu__menu--down={direction === 'down'}
       role="menu"
     >
       {#if navigationStore.mode !== 'account'}
@@ -275,6 +283,21 @@
     left: calc(100% - 4px);
     right: auto;
     min-width: 200px;
+  }
+
+  /* Top bar varianta: root bez patkového rámečku/odsazení, dropdown
+     vyjíždí dolů a zarovnává se k pravému okraji tlačítka. */
+  .shpd-usermenu--bar {
+    border-top: none;
+    padding: 0;
+  }
+
+  .shpd-usermenu__menu--down {
+    top: calc(100% + 4px);
+    bottom: auto;
+    left: auto;
+    right: 0;
+    min-width: 220px;
   }
 
   .shpd-usermenu__menu-item {

@@ -4,7 +4,9 @@
 // importovat nesmí). Resolver v AppShellu padá na sidebar, když jméno
 // v mapě chybí.
 import SidebarShell from './SidebarShell.svelte';
+import ClassicShell from './ClassicShell.svelte';
 
 export const shellComponents = {
   sidebar: SidebarShell,
+  classic: ClassicShell,
 };

@@ -84,6 +84,7 @@ import {
   faServer,
   faDatabase,
   faEye,
+  faHouse,
 } from '@fortawesome/free-solid-svg-icons';
 
 // ── Akce (toolbary, tlačítka) ──────────────────────────────────
@@ -108,6 +109,7 @@ export const iconMenu = faBars;
 export const iconClose = faXmark; // ✕ — zavření drawera / panelu (význam „zavřít", odlišný od iconCancel)
 export const iconCollapse = faAnglesLeft;
 export const iconExpand = faAnglesRight;
+export const iconHome = faHouse; // 🏠 — domeček `_top` v horním menu classic shellu
 export const iconMore = faEllipsisVertical;
 export const iconOpenExternal = faArrowUpRightFromSquare; // ⧉ — otevřít v plném zobrazení (chat panel → sekce Chat)
 
@@ -184,6 +186,7 @@ export const iconFileZip = faFileZipper;
  */
 export const iconMap = {
   'add': iconAdd,
+  'home': iconHome,
   'edit': iconEdit,
   'delete': iconDelete,
   'save': iconSave,

@@ -181,13 +181,21 @@ existujícími zdroji:
 
 ## 10. Sekční AI kontexty
 
-Konfigurace, ne UI: rozšíření sekcí (v `global.navSections` nebo paralelním
-cfgItem) o AI kontext — prompt „oddělení", výsek feedu, který asistent vidí,
-dostupné nástroje. Chat komponenta existuje; nové je **scope chatu = sekce**.
-„Upozornění z dashboardu v chatu" = sekční feed vložený do kontextu
-konverzace (není to AI generující upozornění; na kartu lze konverzačně
-navázat). Využitelné ze všech shellů (chat panel otevřený z Účtárny zná
-sekci); wild shell to jen povyšuje na první záložku sekce.
+**Realizováno** (Fáze 5, `tasks/ui-shells-phase5.md`): cfgItem
+`core.chat.sectionContexts` (prompt per sekce), sloupec `section` na
+konverzaci + sekční blok system promptu, čtecí nástroj `feed_cards`
+(feed pullem, D3), karty sekce jako UI v prázdné scoped konverzaci
+(`GET /_ui/dashboard?section=`), chip u inputu + tlačítko chatu
+v chrome obou shellů. Detaily: `docs/chat.md` §5/§7,
+`docs/dashboard.md` §7, `docs/mcp-server.md` §5.
+
+Původní návrh: konfigurace, ne UI — rozšíření sekcí o AI kontext:
+prompt „oddělení", výsek feedu, který asistent vidí, dostupné nástroje.
+Chat komponenta existuje; nové je **scope chatu = sekce**. „Upozornění
+z dashboardu v chatu" = sekční feed vložený do kontextu konverzace
+(není to AI generující upozornění; na kartu lze konverzačně navázat).
+Využitelné ze všech shellů (chat panel otevřený z Účtárny zná sekci);
+wild shell to jen povyšuje na první záložku sekce.
 
 ## 11. Volba shellu
 

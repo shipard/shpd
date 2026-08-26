@@ -129,8 +129,16 @@ vystavuje v `tools/list` všechny; filtr je na konzumentovi.
 
 | Tier | `isReadOnly()` | Nástroje |
 |------|----------------|----------|
-| Čtení | `true` | `persons_search`, `persons_get`, `documents_search`, `documents_aggregate`, `mail_list_pending`, `registry_search`, `help_search`, `help_get_page` |
+| Čtení | `true` | `persons_search`, `persons_get`, `documents_search`, `documents_aggregate`, `mail_list_pending`, `registry_search`, `help_search`, `help_get_page`, `feed_cards` |
 | Zápis (koncepty/akce) | `false` | `mail_draft_document` |
+
+`feed_cards` (UI shells Fáze 5) je první core nástroj v `src/Api/Mcp/`:
+čte feed upozornění a návrhů přes `FeedCollector` (tentýž sběr jako
+dashboard), volitelný parametr `section` filtruje na jednu sekci navigace,
+projekce jen `{kind, title, subtitle, navSection, timestamp}`. Jazyk
+a `AlertCheckRegistry` nejsou v `McpInvocationContext` — injektují se
+konstruktorem při registraci v `buildMcpRegistry()` (vzor
+`ReportToolSupport`).
 
 ---
 

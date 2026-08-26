@@ -1,6 +1,6 @@
 # UI shells — Fáze 5: Sekční AI kontexty
 
-**Status:** připraveno k implementaci
+**Stav:** hotovo
 **Issue:** [#45](https://github.com/shipard/shpd/issues/45) (zastřešující)
 **Design doc:** `docs/ui-shells.md` §10
 **Návaznost:** Fáze 3 (`FeedCollector`, `navSection` na kartách),
@@ -224,13 +224,31 @@ Commity průběžně; push dělá David.
 
 ## Hotovo když
 
-- [ ] cfgItem s prompty (po Davidově revizi textů), sloupec `section`
-      + ds-upgrade sync
-- [ ] scoped konverzace: validace, sekční blok promptu, `feed_cards`
+- [x] cfgItem s prompty (po Davidově revizi textů), sloupec `section`
+      (ds-upgrade sync = provozní krok R8, na dev DS zatím neproběhl)
+- [x] scoped konverzace: validace, sekční blok promptu, `feed_cards`
       registrovaný a čtecí
-- [ ] panel: chip dle `activeSection`, karty sekce v prázdné konverzaci,
+- [x] panel: chip dle `activeSection`, karty sekce v prázdné konverzaci,
       fixace po první zprávě
-- [ ] PHPUnit filtr zelený, build + check:i18n čisté
+- [x] PHPUnit filtr zelený, build + check:i18n čisté
 - [ ] smoke 1–8 prošel (vč. classic shellu)
-- [ ] dokumentace (4 soubory) aktualizovaná
+- [x] dokumentace (4 soubory) aktualizovaná
 - [ ] komentář v issue #45: Fáze 5 hotová (odkaz na commity)
+
+## Odchylky implementace (2026-08-26)
+
+- **Vstupní bod panelu**: `chatPanelStore.open()` měl jediného volajícího
+  (dashboardový `ChatLauncher`, kde `activeSection` je vždy null) — scénář
+  „otevřu panel v sekci" neměl jak nastat. Po dohodě přidáno **tlačítko
+  chatu v chrome** obou shellů (hlavička Sidebaru + sbalený pás, classic
+  `TopMenuBar`), gate = Chat leaf v nav tree. Smoke 1 se provádí přes něj.
+  Scope zachytává `chatStore.newConversation(section)` — tedy i „+"
+  v hlavičce panelu.
+- **Akce karet v chatu**: obsluhují se jen navigační druhy (`open_viewer`,
+  `open_panel`, `open_form`, `open_detail`), ostatní se z karty odfiltrují —
+  pokrývá 100 % dnešních sekčních karet (alerty nesou jen
+  `open_form`/`open_viewer`); těžké dashboard flow (apply/undo…) se
+  neextrahovaly.
+- R1 zmiňuje `TableGateway::saveDocument` — create ve skutečnosti píše raw
+  `insertRow` (beze změny mechaniky, jen doplněn sloupec).
+- `toolLabels.js` žije v `frontend/src/components/chat/`, ne v `utils/`.

@@ -15,15 +15,21 @@ nástroje. Přehled subsystému: [`ai.md`](ai.md).
 
 | Metoda | Cesta | Účel |
 |--------|-------|------|
-| GET | `/_chat/conversations` | Seznam konverzací uživatele |
-| POST | `/_chat/conversations` | Založí prázdnou konverzaci |
-| GET | `/_chat/conversations/{id}` | Detail + zprávy (`seq` ASC) |
+| GET | `/_chat/conversations` | Seznam konverzací uživatele (vč. `section`) |
+| POST | `/_chat/conversations` | Založí prázdnou konverzaci (volitelně `section`) |
+| GET | `/_chat/conversations/{id}` | Detail (vč. `section`) + zprávy (`seq` ASC) |
 | PATCH | `/_chat/conversations/{id}` | Přejmenování (`title`) |
 | DELETE | `/_chat/conversations/{id}` | Soft-delete (`docState=90`) |
 | POST | `/_chat/conversations/{id}/messages` | **Streamovaný tah** (SSE) |
 
 Vše vyžaduje auth a je **user-scoped** (cizí konverzace → 404). Zprávy nejsou
 zapisovatelné přes CRUD — vznikají jen ve smyčce (integrita bloků).
+
+`section` (UI shells Fáze 5) scopuje konverzaci na sekci hlavní navigace:
+volí se při založení a dál se nemění. Hodnota se validuje proti id
+z `global.navSections` (sentinel `_top` neprojde) → jinak
+`INVALID_VALUE` (422); bez kompilované konfigurace validace degraduje na
+statický seznam id.
 
 ---
 
@@ -106,6 +112,17 @@ jen `anthropic`; rozhraní drží dveře pro další.
   za budoucnost. Základ (cfgItem i fallback) dále instruuje model vracet
   tabulková data jako **GFM pipe tabulku** a členit delší text markdown
   nadpisy — frontend obojí renderuje nativně (§7).
+- **Sekční blok** (UI shells Fáze 5): konverzace se `section` dostane mezi
+  základ a datumový dovětek blok
+  `„Kontext: uživatel konverzuje v oddělení «{label}». {prompt}"` — label
+  z `global.navSections` (kompilovaná cfg je pre-lokalizovaná), prompt
+  z cfgItem **`core.chat.sectionContexts`**
+  (`modules/core/chat/config/sectionContexts.jsonc`; klíč = id sekce,
+  hodnota `{prompt}` s `:cs`/`:en` variantami). Sekce bez záznamu
+  v cfgItem → jen věta s labelem (degradace bez konfigurace). Prompty
+  drží fokus oddělení (čím začít, co ověřovat), obecná pravidla zůstávají
+  v základu. Nástroje se per sekce **nefiltrují** (D6) — fokus dělá
+  prompt, bezpečnost read-only tier.
 
 ---
 
@@ -114,7 +131,8 @@ jen `anthropic`; rozhraní drží dveře pro další.
 Konverzace a zprávy — per uživatel + DS, soft-delete přes `docState`.
 
 - [`core_chat_conversations`](../modules/core/chat/tables/core_chat_conversations.md)
-  — vlastník, název, backend, agregát telemetrie.
+  — vlastník, název, backend, agregát telemetrie, `section` (scope na
+  sekci navigace, nullable).
 - [`core_chat_messages`](../modules/core/chat/tables/core_chat_messages.md)
   — `content` jako **JSON pole bloků Anthropic** (`text`/`tool_use`/`tool_result`),
   `role` (`user`/`assistant`) + `kind` (`user_text`/`assistant`/`tool_results`).
@@ -166,6 +184,23 @@ nástrojů.
   streaming i error handling jsou reuse; „Otevřít v Chatu" (⧉) naviguje
   do sekce Chat se stejným vláknem. Otevřenost drží mini store
   `chatPanel.svelte.js`. Viz `docs/dashboard.md` §8.
+- **Scope na sekci** (UI shells Fáze 5): nová konverzace zdědí scope
+  z `navigationStore.activeSection` v okamžiku `newConversation()` —
+  volají to launcher, „+" v panelu a **tlačítko chatu v chrome** (hlavička
+  Sidebaru + sbalený pás, classic `TopMenuBar`; gate = Chat leaf v nav
+  tree, týž výraz jako capability `chat`). Draft drží `pendingSection`
+  v chat store; `section` se odešle s lazy create při první zprávě.
+  U inputu chip s labelem sekce — v draftu s ✕ (`clearPendingSection`),
+  po založení statický. Plná sekce Chat scope jen **zobrazuje** (chip +
+  štítek v seznamu konverzací), výběr nenabízí (D5).
+- **Karty sekce** (`SectionCards.svelte`): prázdná scoped konverzace
+  zobrazí nad inputem skutečné dashboard karty sekce
+  (`GET /_ui/dashboard?section=`, reuse `FeedCard`) — UI, žádná AI
+  generace (D4). Obsluhují se jen navigační akce (`open_viewer`,
+  `open_panel`, `open_form`, `open_detail`); ostatní druhy se z karet
+  odfiltrují. Chyba fetche → blok se tiše vynechá; po první zprávě
+  zmizí. Model si feed čte nástrojem `feed_cards`
+  ([`mcp-server.md`](mcp-server.md) §5).
 
 ---
 

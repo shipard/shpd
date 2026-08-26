@@ -574,6 +574,14 @@ načte další zprávu místo zavření. Vše frontend nad existujícími endpoi
   (D5 z hosting-07), aby `ChatLauncher` neobcházel skrytý nav leaf.
   Chybějící pole (starší server) frontend čte jako obě `true`.
 
+**`?section=<id>`** (UI shells Fáze 5) — filtr karet na jednu sekci
+navigace dle `navSection` karty; používá ho blok karet sekce v prázdné
+scoped chat konverzaci (`SectionCards`, viz `docs/chat.md`). Filtruje se
+**po** `collect()` (tedy po řazení a stropu); `summary`, `readySummary`,
+`capabilities` i karta „…a další" jsou celofeedové a při filtru se
+vynechají — odpověď je jen `{generatedAt, cards}`. Nevalidní hodnota →
+prázdný seznam, ne chyba.
+
 ### `GET /_ui/dashboard/summary` (SSE)
 
 **Auth**: Bearer token. **Content-Type**: `text/event-stream`.

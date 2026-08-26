@@ -31,6 +31,12 @@ SHIPARD_INTEGRATION_DS_PATH=/opt/shipard/data-sources/abcd-efgh-ijkl-mnop \
 
 ## Testy
 
+- `Dataset/DatasetRoundTripTest.php` — datová sada (`docs/datasets.md`):
+  syntetická sada s prefixem `IT-DS` → seed v merge režimu (bez resetu) →
+  export vložených záznamů → porovnání + invarianty (zaúčtování, lineage,
+  `att:` remapa, přílohy). Uklízí podle přirozených klíčů; přeskočí se bez
+  aktivní řady `invni` nebo bez vlastní firmy.
+
 - `Mail/MailEndpointTest.php` — procedurální pokrytí `MailController::receiveIncoming`
   s reálnou DB + file storage:
   - happy path (raw_source + 2 přílohy)

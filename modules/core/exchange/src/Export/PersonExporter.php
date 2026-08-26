@@ -114,7 +114,12 @@ final class PersonExporter implements RecordExporter
             'vatId'         => V::str($p['vat_id'] ?? null),
             'courtRegistration' => V::str($p['court_registration'] ?? null),
             'govEBoxId'     => V::str($p['gov_e_box_id'] ?? null),
-            'name'          => [
+            // Firma: části jména (last_name = kopie full_name) odvozuje
+            // PersonDocument — exportuje se jen fullName, jinak by round-trip
+            // vyráběl přírůstek.
+            'name'          => $personType === 'company' ? [
+                'fullName'    => V::str($p['full_name'] ?? null),
+            ] : [
                 'fullName'    => V::str($p['full_name'] ?? null),
                 'titleBefore' => V::str($p['title_before'] ?? null),
                 'firstName'   => V::str($p['first_name'] ?? null),

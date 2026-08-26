@@ -1,6 +1,6 @@
 # Datové sady — fáze 1: `dataset-dump` + `dataset-seed`
 
-**Stav:** naplánováno — rozhodnutí R1–R7 potvrzena 2026-08-26, implementace od kroku 1
+**Stav:** hotovo — kroky 1–6 implementované 2026-08-26 (6 commitů); round-trip ověřen na jednorázovém DS, zbývá dump ručně naplněného demo DS na alfě (D5)
 
 ## Kontext / Cíl
 
@@ -209,16 +209,33 @@ manifest, mail formát, oba příkazy, odkaz na #40), doplnit `docs/cli.md`
 
 ## Hotovo když
 
-- [ ] `dataset-dump` na ručně naplněném demo DS (alfa) vyprodukuje sadu —
-      složku čitelnou v gitu (JSONC + PDF)
-- [ ] `dataset-seed` na čistém DS sadu naimportuje; obsah DS je shodný
-      s původním (osoby, položky, doklady vč. čísel a zaúčtování,
-      spisovna, pošta s analýzami a funkčními náhledy příloh)
-- [ ] opakovaný seed téže sady = identický výsledek (determinismus)
-- [ ] `dataset-seed --no-reset` doplní obsah do existujícího DS
-- [ ] dump → seed → dump dává byte-shodnou sadu (modulo `created`
-      v manifestu)
-- [ ] round-trip testy zelené, `composer test` prochází
-      (PHPUnit s úzkým `--filter`)
-- [ ] dokumentace: `docs/datasets.md`, `docs/cli.md`, zmínka
-      v `docs/exchange-format.md`
+- [x] `dataset-dump` vyprodukuje sadu — složku čitelnou v gitu (JSONC + PDF);
+      ověřeno na dev DS (13 osob, 9 položek, 13 dokladů, 15 zpráv, 0 varování).
+      Demo DS na alfě zatím ručně nenaplněn (D5) — dump tam proběhne, až bude
+- [x] `dataset-seed` na čistém DS (jednorázový `ds-create`) sadu naimportuje;
+      obsah shodný s původním vč. deníku (40 řádků, součty MD = D), lineage
+      zpráva ↔ doklad a příloh na disku
+- [x] opakovaný seed téže sady = identický výsledek (dump po druhém seedu
+      shodný modulo `manifest.created`)
+- [x] `dataset-seed --no-reset` doplní obsah do existujícího DS (integrační
+      test `DatasetRoundTripTest` běží právě v tomto režimu)
+- [x] dump → seed → dump byte-shodný modulo `created` (a `title`, který
+      bez `--title` defaultuje na název DS); vůči zdrojovému DS jediná
+      normalizace `rows[].orderPos 0 → 1`
+- [x] round-trip test zelený, celá unit sada prochází
+      (`vendor/bin/phpunit -d memory_limit=1G`)
+- [x] dokumentace: `docs/datasets.md`, `docs/cli.md`, zmínka
+      v `docs/exchange-format.md` §1 (bod 8)
+
+## Odchylky od zadání (implementace)
+
+- Přílohy pošty nejsou v ploché `mail/attachments/`, ale v sidecar složce
+  záznamu `mail/NNNN-<slug>.files/` — stejný mechanismus jako spisovna (R2),
+  jména jsou unikátní jen v rámci záznamu a nezávisí na číslování dumpu.
+- `setup/settings.jsonc` (rozhodovací parametry DS `economy.*` + branding
+  texty) — bez nich provisionery po resetu neseedují účtový rozvrh a doklady
+  se nezaúčtují; aplikuje se před `ds-reset`.
+- Rozšíření formátů: `applyOptions.importOwnBankAccount` přijímá kód
+  číselníku; items `accountingAccount` + `contentTags`.
+- Round-trip unit testy „canonical → apply → export" nahrazeny unit testy
+  exporterů nad fixture řádky + integračním testem proti živému DS.

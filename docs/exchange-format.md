@@ -46,6 +46,10 @@ najednou:
    vyrobí canonical z DB záznamu, ten lze serializovat do ISDOC, e-mailem
    přeposlat partnerovi, který má taky Shipard, atd. Spolehlivější než AI
    extrakce z PDF na obou stranách.
+8. **Datové sady** — přenosný obraz celého DS (`shpd-ds dataset-dump` /
+   `dataset-seed`): exportery vyrobí canonical z DB, seed ho vrátí přes
+   appliery. Demo sady, testovací fixtury, školicí DS. Viz
+   `docs/datasets.md` (#40).
 
 ### Generalizace
 

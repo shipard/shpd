@@ -619,7 +619,10 @@ export default {
   'chat.tool.documentsAggregate': '📊 Computing totals…',
   'chat.tool.mailListPending': '🔍 Checking incoming mail…',
   'chat.tool.registrySearch': '🔍 Searching the registry…',
+  'chat.tool.feedCards': '🔔 Alerts and suggestions…',
   'chat.tool.generic': '🔧 Using tool {name}…',
+  'chat.scope.remove': 'Remove section',
+  'chat.sectionCards.title': 'Now in this department',
   // ── Data source setup panel (dsSetup) ───────────────────────────────────
   'setup.title': 'Data source setup',
   'setup.intro': 'Settings that are still missing before you can keep books in this data source. Items disappear on their own once the setting is filled in.',

@@ -10,6 +10,8 @@
   import Icon from '../ui/Icon.svelte';
   import { iconAdd, iconEdit, iconDelete } from '../../icons.js';
   import { chatStore } from '../../stores/chat.svelte.js';
+  import { navigationStore } from '../../stores/navigation.svelte.js';
+  import { findSectionLabel } from '../../utils/navTree.js';
   import { t } from '../../i18n/index.js';
 
   let { onselect } = $props();
@@ -70,6 +72,13 @@
       >
         <button class="shpd-convlist__main" onclick={() => select(c)}>
           <span class="shpd-convlist__title">{titleOf(c)}</span>
+          {#if c.section}
+            <!-- Scope na sekci (UI shells Fáze 5) — jen zobrazení, výběr
+                 tu není (D5). Label ze stromu navigace, fallback id. -->
+            <span class="shpd-convlist__section">
+              {findSectionLabel(navigationStore.appNavTree ?? [], c.section)}
+            </span>
+          {/if}
         </button>
         <div class="shpd-convlist__actions">
           <button class="shpd-convlist__icon" title={t('common.edit')} onclick={() => openRename(c)}>
@@ -144,6 +153,15 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .shpd-convlist__section {
+    display: inline-block;
+    margin-top: 2px;
+    padding: 0 var(--shpd-space-xs);
+    border: 1px solid var(--shpd-color-border);
+    border-radius: var(--shpd-radius-sm);
+    color: var(--shpd-color-text-secondary);
+    font-size: var(--shpd-font-size-xs, 11px);
   }
   .shpd-convlist__actions {
     display: flex;

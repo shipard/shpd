@@ -10,6 +10,8 @@
   import { layoutStore } from '../../stores/layout.svelte.js';
   import { paletteStore } from '../../stores/palette.svelte.js';
   import { sectionBadgesStore } from '../../stores/sectionBadges.svelte.js';
+  import { chatStore } from '../../stores/chat.svelte.js';
+  import { chatPanelStore } from '../../stores/chatPanel.svelte.js';
   import { t } from '../../i18n/index.js';
   import Icon from '../ui/Icon.svelte';
   import BrandingHeader from '../chrome/BrandingHeader.svelte';
@@ -24,6 +26,7 @@
     iconSearch,
     iconSpinner,
     iconWarning,
+    iconChat,
   } from '../../icons.js';
 
   // `collapsed` je bindable — AppShell ho zrcadlí kvůli pozici ThemePanel
@@ -112,6 +115,24 @@
     // Na mobilu by drawer zůstal přes overlay palety.
     if (layoutStore.isMobile) layoutStore.closeDrawer();
   }
+
+  // Vstup do ChatPanelu z chrome (UI shells Fáze 5) — nová konverzace
+  // zdědí scope z aktivní sekce. Gate = Chat leaf ve stromu (týž výraz
+  // jako capability `chat` v /_ui/dashboard).
+  const hasChat = $derived(
+    navigationStore.mode === 'app'
+      && (navigationStore.appNavTree ?? []).some((n) => n?.type === 'chat'),
+  );
+
+  function toggleChatPanel() {
+    if (chatPanelStore.isOpen) {
+      chatPanelStore.close();
+      return;
+    }
+    chatStore.newConversation(navigationStore.activeSection);
+    chatPanelStore.open();
+    if (layoutStore.isMobile) layoutStore.closeDrawer();
+  }
 </script>
 
 <nav
@@ -134,6 +155,16 @@
         >
           <Icon icon={iconSearch} size="sm" />
         </button>
+        {#if hasChat}
+          <button
+            class="shpd-sidebar__toggle"
+            onclick={toggleChatPanel}
+            title={t('chat.panel.title')}
+            aria-label={t('chat.panel.title')}
+          >
+            <Icon icon={iconChat} size="sm" />
+          </button>
+        {/if}
       {/if}
       {#if layoutStore.isMobile}
         <!-- Na mobilu nahrazuje collapse toggle ✕, které zavře drawer.
@@ -182,6 +213,16 @@
         >
           <Icon icon={iconSearch} size="sm" />
         </button>
+        {#if hasChat}
+          <button
+            class="shpd-sidebar__toggle"
+            onclick={toggleChatPanel}
+            title={t('chat.panel.title')}
+            aria-label={t('chat.panel.title')}
+          >
+            <Icon icon={iconChat} size="sm" />
+          </button>
+        {/if}
       </div>
       <NavIconStrip tree={navTree} activeId={navigationStore.activeId} onNavigate={handleItemClick} />
     {:else}

@@ -56,7 +56,7 @@
         icon={iconAdd}
         iconOnly
         label={t('chat.panel.new')}
-        onclick={() => chatStore.newConversation()}
+        onclick={() => chatStore.newConversation(navigationStore.activeSection)}
       />
       <Button
         variant="ghost"

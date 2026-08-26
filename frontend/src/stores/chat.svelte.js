@@ -20,6 +20,7 @@ import {
 
 let conversations = $state([]);
 let activeId = $state(null);
+let activeConversation = $state(null); // hlavička z GET detailu (nese section)
 let messages = $state([]);
 let loadingList = $state(false);
 let loadingThread = $state(false);
@@ -27,6 +28,10 @@ let streaming = $state(false);
 let streamingText = $state('');
 let streamingTools = $state([]);
 let error = $state(null); // { code, message } | null
+// Scope draftu na sekci navigace (UI shells Fáze 5) — nastavuje se při
+// newConversation(), odešle se s lazy create v send(); ✕ na chipu ho
+// před první zprávou odebere. Po založení drží scope řádek konverzace.
+let pendingSection = $state(null);
 
 async function loadConversations() {
   loadingList = true;
@@ -45,17 +50,24 @@ async function openConversation(id) {
   try {
     const res = await getConversation(id);
     messages = res && res.success ? res.data.messages : [];
+    activeConversation = res && res.success ? res.data.conversation : null;
   } finally {
     loadingThread = false;
   }
 }
 
-function newConversation() {
+function newConversation(section = null) {
   activeId = null;
+  activeConversation = null;
   messages = [];
   error = null;
   streamingText = '';
   streamingTools = [];
+  pendingSection = section ?? null;
+}
+
+function clearPendingSection() {
+  pendingSection = null;
 }
 
 async function send(text) {
@@ -76,7 +88,7 @@ async function send(text) {
   // Create the conversation lazily on first message.
   let id = activeId;
   if (id == null) {
-    const created = await createConversation();
+    const created = await createConversation(null, pendingSection);
     if (!created || !created.success) {
       streaming = false;
       error = { code: 'CREATE_FAILED', message: 'Could not create conversation' };
@@ -131,9 +143,20 @@ export const chatStore = {
   get streamingText() { return streamingText; },
   get streamingTools() { return streamingTools; },
   get error() { return error; },
+  get pendingSection() { return pendingSection; },
+  // Efektivní scope vlákna: draft → pendingSection; založená konverzace →
+  // section z detailu (activeConversation), fallback řádek ze seznamu
+  // (detail hned po lazy create ještě nemusí být načtený).
+  get scopeSection() {
+    if (activeId == null) return pendingSection;
+    return activeConversation?.section
+      ?? conversations.find((c) => c.id === activeId)?.section
+      ?? null;
+  },
   loadConversations,
   openConversation,
   newConversation,
+  clearPendingSection,
   send,
   rename,
   remove,

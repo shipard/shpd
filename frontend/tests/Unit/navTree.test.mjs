@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { flattenLeaves, findLeafById, findRootSectionId } from '../../src/utils/navTree.js';
+import { flattenLeaves, findLeafById, findRootSectionId, findSectionLabel } from '../../src/utils/navTree.js';
 
 // Vzorek stromu ve tvaru /_ui/navigation: root mixuje leafy (`type`)
 // a sekce (bez `type`, s `children`), sekce mohou mít pod-skupiny.
@@ -99,4 +99,19 @@ test('findRootSectionId: neznámý leaf / prázdný strom / null id → null', (
   assert.equal(findRootSectionId(tree, 'nonexistent'), null);
   assert.equal(findRootSectionId([], 'journal'), null);
   assert.equal(findRootSectionId(tree, null), null);
+});
+
+test('findSectionLabel: label root sekce dle id', () => {
+  assert.equal(findSectionLabel(tree, 'sales'), 'Prodej');
+  assert.equal(findSectionLabel(tree, 'accounting'), 'Účtárna');
+});
+
+test('findSectionLabel: root-level leaf se nepočítá za sekci → fallback id', () => {
+  assert.equal(findSectionLabel(tree, 'dashboard'), 'dashboard');
+});
+
+test('findSectionLabel: neznámá sekce → syrové id; null id / ne-pole → degradace', () => {
+  assert.equal(findSectionLabel(tree, 'purchase'), 'purchase');
+  assert.equal(findSectionLabel(tree, null), null);
+  assert.equal(findSectionLabel(null, 'sales'), 'sales');
 });

@@ -56,3 +56,14 @@ export function findRootSectionId(tree, leafId) {
   }
   return null;
 }
+
+/**
+ * Label root sekce dle id (uzel bez `type`). Sekce může ze stromu vypadnout
+ * (prázdné sekce server vynechává) — pak fallback na syrové id, ať štítek
+ * scope konverzace nikdy není prázdný.
+ */
+export function findSectionLabel(tree, sectionId) {
+  if (!Array.isArray(tree) || sectionId == null) return sectionId ?? null;
+  const node = tree.find((n) => !n?.type && n?.id === sectionId);
+  return node?.label ?? sectionId;
+}

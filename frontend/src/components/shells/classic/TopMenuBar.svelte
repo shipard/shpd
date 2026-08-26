@@ -15,9 +15,11 @@
   import { navigationStore } from '../../../stores/navigation.svelte.js';
   import { paletteStore } from '../../../stores/palette.svelte.js';
   import { sectionBadgesStore } from '../../../stores/sectionBadges.svelte.js';
+  import { chatStore } from '../../../stores/chat.svelte.js';
+  import { chatPanelStore } from '../../../stores/chatPanel.svelte.js';
   import { flattenLeaves } from '../../../utils/navTree.js';
   import { t, tn } from '../../../i18n/index.js';
-  import { iconHome, iconSearch } from '../../../icons.js';
+  import { iconHome, iconSearch, iconChat } from '../../../icons.js';
 
   let { onNavigate, onLogout } = $props();
 
@@ -44,6 +46,19 @@
   // Trigger palety — tooltip se zkratkou dle platformy (vzor Sidebar).
   const isMac = /Mac|iPhone|iPad/.test(navigator.platform ?? '');
   const searchTitle = t('palette.trigger') + ' · ' + (isMac ? '⌘K' : 'Ctrl+K');
+
+  // Vstup do ChatPanelu z chrome (UI shells Fáze 5) — nová konverzace
+  // zdědí scope z aktivní sekce; gate = Chat leaf ve stromu (vzor Sidebar).
+  const hasChat = $derived(tree.some((n) => n?.type === 'chat'));
+
+  function toggleChatPanel() {
+    if (chatPanelStore.isOpen) {
+      chatPanelStore.close();
+      return;
+    }
+    chatStore.newConversation(navigationStore.activeSection);
+    chatPanelStore.open();
+  }
 </script>
 
 <header class="shpd-topmenu">
@@ -103,6 +118,16 @@
     >
       <Icon icon={iconSearch} size="sm" />
     </button>
+    {#if hasChat}
+      <button
+        class="shpd-topmenu__tool"
+        onclick={toggleChatPanel}
+        title={t('chat.panel.title')}
+        aria-label={t('chat.panel.title')}
+      >
+        <Icon icon={iconChat} size="sm" />
+      </button>
+    {/if}
     <UserMenu compact direction="down" {onLogout} />
   </div>
 </header>

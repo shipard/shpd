@@ -13,6 +13,7 @@ const TOOL_LABEL_KEYS = {
   documents_aggregate: 'chat.tool.documentsAggregate',
   mail_list_pending: 'chat.tool.mailListPending',
   registry_search: 'chat.tool.registrySearch',
+  feed_cards: 'chat.tool.feedCards',
 };
 
 /**

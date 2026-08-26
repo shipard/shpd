@@ -27,8 +27,8 @@ export function listConversations() {
   return get('/_chat/conversations');
 }
 
-export function createConversation(title = null) {
-  return post('/_chat/conversations', { title });
+export function createConversation(title = null, section = null) {
+  return post('/_chat/conversations', { title, section });
 }
 
 export function getConversation(id) {

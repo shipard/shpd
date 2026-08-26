@@ -8,7 +8,12 @@
   import ChatInput from './ChatInput.svelte';
   import Markdown from './Markdown.svelte';
   import ToolCallChip from './ToolCallChip.svelte';
+  import SectionCards from './SectionCards.svelte';
+  import Icon from '../ui/Icon.svelte';
+  import { iconClose } from '../../icons.js';
   import { chatStore } from '../../stores/chat.svelte.js';
+  import { navigationStore } from '../../stores/navigation.svelte.js';
+  import { findSectionLabel } from '../../utils/navTree.js';
   import { translateError } from '../../i18n/errors.js';
   import { t } from '../../i18n/index.js';
 
@@ -26,6 +31,14 @@
   const isEmpty = $derived(
     chatStore.messages.length === 0 && !chatStore.streaming && !chatStore.loadingThread,
   );
+
+  // Scope na sekci (UI shells Fáze 5): draft → chip s ✕ (scope lze odebrat),
+  // založená konverzace → statický chip. Label ze stromu navigace, fallback id.
+  const scopeSection = $derived(chatStore.scopeSection);
+  const scopeRemovable = $derived(chatStore.activeId == null);
+  const scopeLabel = $derived(
+    findSectionLabel(navigationStore.appNavTree ?? [], scopeSection),
+  );
 </script>
 
 <div class="shpd-thread">
@@ -34,6 +47,11 @@
       <p class="shpd-thread__hint">{t('chat.loading')}</p>
     {:else if isEmpty}
       <p class="shpd-thread__hint">{t('chat.empty')}</p>
+      {#if scopeSection}
+        <!-- Karty sekce jako UI (D4) — jen v prázdné scoped konverzaci;
+             po první zprávě isEmpty spadne a blok zmizí. -->
+        <SectionCards section={scopeSection} />
+      {/if}
     {/if}
 
     {#each chatStore.messages as message (message.id)}
@@ -64,6 +82,24 @@
     {/if}
   </div>
 
+  {#if scopeSection}
+    <div class="shpd-thread__scope">
+      <span class="shpd-thread__scope-chip">
+        {scopeLabel}
+        {#if scopeRemovable}
+          <button
+            type="button"
+            class="shpd-thread__scope-remove"
+            title={t('chat.scope.remove')}
+            aria-label={t('chat.scope.remove')}
+            onclick={() => chatStore.clearPendingSection()}
+          >
+            <Icon icon={iconClose} size="sm" />
+          </button>
+        {/if}
+      </span>
+    </div>
+  {/if}
   <ChatInput disabled={chatStore.streaming} onsend={(text) => chatStore.send(text)} />
 </div>
 
@@ -94,6 +130,32 @@
     flex-wrap: wrap;
     gap: var(--shpd-space-xs);
     margin-top: var(--shpd-space-sm);
+  }
+  .shpd-thread__scope {
+    padding: var(--shpd-space-xs) var(--shpd-space-md) 0;
+  }
+  .shpd-thread__scope-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--shpd-space-xs);
+    padding: 2px var(--shpd-space-sm);
+    border: 1px solid var(--shpd-color-border);
+    border-radius: 999px;
+    background-color: var(--shpd-color-bg);
+    color: var(--shpd-color-text-secondary);
+    font-size: var(--shpd-font-size-sm);
+  }
+  .shpd-thread__scope-remove {
+    display: inline-flex;
+    align-items: center;
+    padding: 0;
+    background: none;
+    border: none;
+    color: var(--shpd-color-text-secondary);
+    cursor: pointer;
+  }
+  .shpd-thread__scope-remove:hover {
+    color: var(--shpd-color-text);
   }
   .shpd-thread__error {
     margin: var(--shpd-space-sm) 0;

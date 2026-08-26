@@ -632,7 +632,10 @@ export default {
   'chat.tool.documentsAggregate': '📊 Počítám součty…',
   'chat.tool.mailListPending': '🔍 Procházím došlou poštu…',
   'chat.tool.registrySearch': '🔍 Prohledávám Spisovnu…',
+  'chat.tool.feedCards': '🔔 Upozornění a návrhy…',
   'chat.tool.generic': '🔧 Používám nástroj {name}…',
+  'chat.scope.remove': 'Odebrat sekci',
+  'chat.sectionCards.title': 'Aktuálně v oddělení',
   // ── Panel Nastavení zdroje dat (dsSetup) ────────────────────────────────
   'setup.title': 'Nastavení zdroje dat',
   'setup.intro': 'Seznam nastavení, která ještě chybí, aby se ve zdroji dat dalo účtovat. Položky mizí samy, jakmile nastavení doplníte.',

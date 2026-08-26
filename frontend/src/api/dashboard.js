@@ -8,9 +8,12 @@ const TOKEN_KEY = 'shpd_token';
 /**
  * Fetch dashboard data — feed akčních karet + AI summary counts.
  * Vrací `{ generatedAt, summary, cards }` nebo null při selhání.
+ * Se `section` vrací server jen karty té sekce (`{ generatedAt, cards }`,
+ * bez summary/readySummary/capabilities) — blok karet v scoped chatu.
  */
-export async function fetchDashboard() {
-  const res = await get('/_ui/dashboard');
+export async function fetchDashboard(section = null) {
+  const query = section ? `?section=${encodeURIComponent(section)}` : '';
+  const res = await get(`/_ui/dashboard${query}`);
   return res?.success ? res.data : null;
 }
 

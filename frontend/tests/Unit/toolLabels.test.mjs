@@ -7,6 +7,7 @@ test('known tools map to i18n keys', () => {
   assert.equal(toolLabelKey('persons_get'), 'chat.tool.personsGet');
   assert.equal(toolLabelKey('documents_search'), 'chat.tool.documentsSearch');
   assert.equal(toolLabelKey('mail_list_pending'), 'chat.tool.mailListPending');
+  assert.equal(toolLabelKey('feed_cards'), 'chat.tool.feedCards');
 });
 
 test('unknown tool returns null (caller falls back to generic)', () => {

@@ -10,6 +10,7 @@
   import { iconChat } from '../../icons.js';
   import { chatStore } from '../../stores/chat.svelte.js';
   import { chatPanelStore } from '../../stores/chatPanel.svelte.js';
+  import { navigationStore } from '../../stores/navigation.svelte.js';
   import { t } from '../../i18n/index.js';
 
   let text = $state('');
@@ -18,7 +19,9 @@
     const value = text.trim();
     if (value === '') return;
     text = '';
-    chatStore.newConversation();
+    // Scope na aktivní sekci (na dashboardu null) — jednotné chování
+    // se vstupy z chrome (UI shells Fáze 5).
+    chatStore.newConversation(navigationStore.activeSection);
     chatPanelStore.open();
     // Bez await — panel se otevře okamžitě, optimistická zpráva + streaming
     // dotečou přes store.

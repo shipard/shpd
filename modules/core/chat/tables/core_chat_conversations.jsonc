@@ -70,6 +70,16 @@
             "nullable": true,
             "group": "identity"
         },
+        {
+            "id": "section",
+            "name": "Section",
+            "name:cs": "Sekce",
+            "name:en": "Section",
+            "type": "varchar",
+            "length": 32,
+            "nullable": true,
+            "group": "identity"
+        },
 
         // --- backend ---
 

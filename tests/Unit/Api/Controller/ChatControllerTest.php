@@ -16,7 +16,10 @@ use Shipard\Api\Mcp\McpToolRegistry;
 use Shipard\Core\Ai\LlmChatParams;
 use Shipard\Core\Ai\LlmChatResult;
 use Shipard\Core\Ai\LlmClient;
+use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Database\DataSourceConnection;
+use Shipard\Core\I18n\ConfigLocalizer;
+use Shipard\Core\Utils\JsoncParser;
 
 /**
  * Unit testy pro ChatController (Fáze 1 — CRUD konverzací).
@@ -47,6 +50,31 @@ class ChatControllerTest extends TestCase
         $ref = new \ReflectionClass($response);
         $prop = $ref->getProperty('status');
         return (int) $prop->getValue($response);
+    }
+
+    /**
+     * ConfigRuntime s reálnými navSections + sectionContexts JSONC,
+     * lokalizovanými jako v compiled configu (vzor NavigationControllerTest).
+     */
+    private function configRuntime(string $language = 'cs'): ConfigRuntime
+    {
+        $root         = dirname(__DIR__, 4);
+        $navSections  = ConfigLocalizer::localize(
+            JsoncParser::parseFile($root . '/modules/install/base/config/navSections.jsonc'),
+            $language,
+        );
+        $sectionCtx   = ConfigLocalizer::localize(
+            JsoncParser::parseFile($root . '/modules/core/chat/config/sectionContexts.jsonc'),
+            $language,
+        );
+
+        $cfg = $this->createMock(ConfigRuntime::class);
+        $cfg->method('cfgItem')->willReturnCallback(fn (string $id) => match ($id) {
+            'global.navSections'        => $navSections,
+            'core.chat.sectionContexts' => $sectionCtx,
+            default                     => null,
+        });
+        return $cfg;
     }
 
     // -------------------------------------------------------------------
@@ -132,6 +160,80 @@ class ChatControllerTest extends TestCase
     }
 
     // -------------------------------------------------------------------
+    // create — section scope (UI shells Fáze 5)
+    // -------------------------------------------------------------------
+
+    public function testCreateWithValidSectionStoresIt(): void
+    {
+        $captured = null;
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('insertRow')->willReturnCallback(function (string $table, array $data) use (&$captured): int {
+            $captured = $data;
+            return 1;
+        });
+
+        $ctrl = new ChatController($db, $this->configRuntime());
+        $response = $ctrl->create($this->auth(), $this->request('POST', '/_chat/conversations', ['section' => 'accounting']));
+
+        $this->assertSame(201, $this->statusOf($response));
+        $this->assertSame('accounting', $captured['section']);
+    }
+
+    public function testCreateValidatesSectionAgainstFallbackIdsWithoutConfig(): void
+    {
+        // Bez ConfigRuntime (chybějící compiled config) validace degraduje
+        // na statický seznam id — známá sekce projde.
+        $captured = null;
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('insertRow')->willReturnCallback(function (string $table, array $data) use (&$captured): int {
+            $captured = $data;
+            return 1;
+        });
+
+        $ctrl = new ChatController($db);
+        $response = $ctrl->create($this->auth(), $this->request('POST', '/_chat/conversations', ['section' => 'sales']));
+
+        $this->assertSame(201, $this->statusOf($response));
+        $this->assertSame('sales', $captured['section']);
+    }
+
+    public function testCreateWithInvalidSectionReturns422(): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->expects($this->never())->method('insertRow');
+
+        $ctrl = new ChatController($db, $this->configRuntime());
+        $response = $ctrl->create($this->auth(), $this->request('POST', '/_chat/conversations', ['section' => 'bogus']));
+
+        $this->assertSame(422, $this->statusOf($response));
+        $this->assertSame('INVALID_VALUE', $response->getPayload()['error']['code']);
+    }
+
+    public function testCreateRejectsTopSentinelAsSection(): void
+    {
+        // `_top` je sentinel root-level leafů, ne sekce — scope na něj neexistuje.
+        $ctrl = new ChatController($this->createMock(DataSourceConnection::class), $this->configRuntime());
+        $response = $ctrl->create($this->auth(), $this->request('POST', '/_chat/conversations', ['section' => '_top']));
+
+        $this->assertSame(422, $this->statusOf($response));
+    }
+
+    public function testCreateMissingOrBlankSectionStoredAsNull(): void
+    {
+        $captured = null;
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('insertRow')->willReturnCallback(function (string $table, array $data) use (&$captured): int {
+            $captured = $data;
+            return 1;
+        });
+
+        $ctrl = new ChatController($db, $this->configRuntime());
+        $ctrl->create($this->auth(), $this->request('POST', '/_chat/conversations', ['section' => '  ']));
+
+        $this->assertNull($captured['section']);
+    }
+
+    // -------------------------------------------------------------------
     // list — jen vlastní a nesmazané
     // -------------------------------------------------------------------
 
@@ -160,6 +262,24 @@ class ChatControllerTest extends TestCase
         $this->assertStringContainsString('`docState` <> %i', $sql);
         $this->assertContains(self::USER_ID, $args);
         $this->assertContains(90, $args);
+    }
+
+    public function testListReturnsSectionField(): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchAll')->willReturnCallback(function (...$a): array {
+            $this->assertStringContainsString('`section`', (string) $a[0]);
+            return [
+                ['id' => 1, 'title' => 'A', 'section' => 'accounting', 'backend' => null, 'model_snapshot' => null, 'tokens_input' => 0, 'tokens_output' => 0, 'cost' => 0, 'created' => '2026-06-01 10:00:00', 'modified' => '2026-06-02 10:00:00'],
+                ['id' => 2, 'title' => 'B', 'section' => null, 'backend' => null, 'model_snapshot' => null, 'tokens_input' => 0, 'tokens_output' => 0, 'cost' => 0, 'created' => '2026-06-01 10:00:00', 'modified' => '2026-06-01 10:00:00'],
+            ];
+        });
+
+        $ctrl = new ChatController($db);
+        $payload = $ctrl->list($this->auth(), $this->request('GET', '/_chat/conversations'))->getPayload();
+
+        $this->assertSame('accounting', $payload['data'][0]['section']);
+        $this->assertNull($payload['data'][1]['section']);
     }
 
     // -------------------------------------------------------------------
@@ -293,9 +413,9 @@ class ChatControllerTest extends TestCase
      * @param array<int, array<string, mixed>> $inserts
      * @param array<string, mixed>|null        $backend
      */
-    private function streamDb(array &$inserts, ?array $backend): DataSourceConnection
+    private function streamDb(array &$inserts, ?array $backend, ?string $section = null): DataSourceConnection
     {
-        $conv = ['id' => 5, 'user' => self::USER_ID, 'backend' => null, 'docState' => 10];
+        $conv = ['id' => 5, 'user' => self::USER_ID, 'backend' => null, 'docState' => 10, 'section' => $section];
         $db = $this->createMock(DataSourceConnection::class);
         $db->method('fetchRow')->willReturnCallback(
             fn ($sql, ...$a) => str_contains((string) $sql, 'core_ai_backends') ? $backend : $conv,
@@ -368,6 +488,56 @@ class ChatControllerTest extends TestCase
 
         $this->assertNotNull($llm->lastParams);
         $this->assertSame(4096, $llm->lastParams->maxTokens);
+    }
+
+    // -------------------------------------------------------------------
+    // sendMessage — sekční blok system promptu (UI shells Fáze 5)
+    // -------------------------------------------------------------------
+
+    public function testSystemPromptContainsSectionBlockWithPrompt(): void
+    {
+        $inserts = [];
+        $db = $this->streamDb($inserts, self::BACKEND, 'accounting');
+        $llm = new ScriptedLlmClient([$this->finalResult('Ahoj.')]);
+        $ctrl = new ChatController($db, $this->configRuntime(), null, $llm);
+
+        $this->runProducer($ctrl->sendMessage($this->auth(), 5, $this->request('POST', '/x', ['text' => 'Ahoj'])));
+
+        $system = $llm->lastParams->system;
+        $this->assertStringContainsString('Kontext: uživatel konverzuje v oddělení «Účtárna».', $system);
+        $this->assertStringContainsString('Jsi asistent Účtárny.', $system);
+        // Sekční blok patří před datumový dovětek.
+        $this->assertLessThan(
+            strpos($system, 'Aktuální datum'),
+            strpos($system, 'Kontext: uživatel konverzuje'),
+        );
+    }
+
+    public function testSystemPromptSectionWithoutCfgRecordDegradesToLabelOnly(): void
+    {
+        // Sekce `system` nemá záznam v core.chat.sectionContexts — připojí se
+        // jen věta s labelem, žádný sekční prompt.
+        $inserts = [];
+        $db = $this->streamDb($inserts, self::BACKEND, 'system');
+        $llm = new ScriptedLlmClient([$this->finalResult('Ahoj.')]);
+        $ctrl = new ChatController($db, $this->configRuntime(), null, $llm);
+
+        $this->runProducer($ctrl->sendMessage($this->auth(), 5, $this->request('POST', '/x', ['text' => 'Ahoj'])));
+
+        $this->assertStringContainsString('Kontext: uživatel konverzuje v oddělení «Systém».', $llm->lastParams->system);
+        $this->assertStringNotContainsString('Jsi asistent', $llm->lastParams->system);
+    }
+
+    public function testSystemPromptWithoutSectionHasNoSectionBlock(): void
+    {
+        $inserts = [];
+        $db = $this->streamDb($inserts, self::BACKEND);
+        $llm = new ScriptedLlmClient([$this->finalResult('Ahoj.')]);
+        $ctrl = new ChatController($db, $this->configRuntime(), null, $llm);
+
+        $this->runProducer($ctrl->sendMessage($this->auth(), 5, $this->request('POST', '/x', ['text' => 'Ahoj'])));
+
+        $this->assertStringNotContainsString('Kontext: uživatel konverzuje', $llm->lastParams->system);
     }
 
     public function testSendMessageEmitsErrorEventAndKeepsUserMessage(): void

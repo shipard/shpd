@@ -16,6 +16,7 @@ zapisovatelné přes API — vznikají v orchestrační smyčce (viz
 |---|---|---|
 | `user` | int → `core_system_users`, NOT NULL | Vlastník konverzace |
 | `title` | varchar(200), nullable | Název (typicky z první zprávy) |
+| `section` | varchar(32), nullable | Scope na sekci navigace (id z `global.navSections`); volí se při založení, dál se nemění. `NULL` = bez scope |
 
 ### Backend
 
@@ -54,7 +55,7 @@ Agregát přes zprávy konverzace; plněno orchestrační smyčkou.
 ## Životní cyklus
 
 1. **Založení** — `POST /_chat/conversations` vytvoří prázdnou konverzaci
-   (`docState=10`), volitelně s `title`/`backend`.
+   (`docState=10`), volitelně s `title`/`backend`/`section`.
 2. **Provoz** — `POST /_chat/conversations/{id}/messages` přidává zprávy
    (smyčka), `modified` a telemetrie se průběžně aktualizují.
 3. **Soft-delete** — `DELETE` nastaví `docState=90`; konverzace zmizí ze seznamu,

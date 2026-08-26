@@ -46,6 +46,10 @@
         {
             "id": "core.chat.settings",
             "file": "config/settings.jsonc"
+        },
+        {
+            "id": "core.chat.sectionContexts",
+            "file": "config/sectionContexts.jsonc"
         }
     ]
 }

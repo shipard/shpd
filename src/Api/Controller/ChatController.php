@@ -48,6 +48,13 @@ class ChatController
     private const BACKENDS_TABLE       = 'core_ai_backends';
     private const MAX_TOOL_ITERATIONS  = 8;
 
+    /**
+     * Fallback id sekcí pro validaci `section`, když chybí kompilovaná
+     * konfigurace (`global.navSections`) — stejná id jako navSections.jsonc
+     * a NavigationController::SECTIONS_FALLBACK.
+     */
+    private const NAV_SECTIONS_FALLBACK_IDS = ['basic', 'purchase', 'sales', 'accounting', 'system'];
+
     private const SYSTEM_PROMPT_FALLBACK =
         'Jsi vestavěný AI asistent účetního systému Shipard. Pomáháš uživateli '
         . 's dotazy o jeho datech a agendě. Odpovídej věcně, stručně a česky. '
@@ -83,7 +90,7 @@ class ChatController
         $offset = max(0, (int) ($params['offset'] ?? 0));
 
         $rows = $this->db->fetchAll(
-            'SELECT `id`, `title`, `backend`, `model_snapshot`,'
+            'SELECT `id`, `title`, `section`, `backend`, `model_snapshot`,'
             . ' `tokens_input`, `tokens_output`, `cost`, `created`, `modified`'
             . ' FROM `' . self::TABLE_CONVERSATIONS . '`'
             . ' WHERE `user` = %i AND `docState` <> %i'
@@ -100,8 +107,10 @@ class ChatController
 
     /**
      * POST /_chat/conversations
-     * Body: { "title"?: string|null, "backend"?: int|null }
-     * Creates an empty conversation owned by the current user.
+     * Body: { "title"?: string|null, "backend"?: int|null, "section"?: string|null }
+     * Creates an empty conversation owned by the current user. `section` scopes
+     * the conversation to a main-navigation section (id from `global.navSections`,
+     * validated); it is chosen at creation and never changes.
      */
     public function create(AuthContext $auth, Request $request): Response
     {
@@ -116,10 +125,17 @@ class ChatController
             ? (int) $body['backend']
             : null;
 
+        $section = isset($body['section']) ? trim((string) $body['section']) : '';
+        $section = $section !== '' ? $section : null;
+        if ($section !== null && !isset($this->navSections()[$section])) {
+            return Response::error('INVALID_VALUE', 'Unknown navigation section', 422);
+        }
+
         $now = date('Y-m-d H:i:s');
         $id  = $this->db->insertRow(self::TABLE_CONVERSATIONS, [
             'user'          => $userId,
             'title'         => $title,
+            'section'       => $section,
             'backend'       => $backend,
             'tokens_input'  => 0,
             'tokens_output' => 0,
@@ -284,7 +300,7 @@ class ChatController
             model: (string) ($backend['model'] ?? ''),
             apiKey: $apiKey,
             baseUrl: $backend['base_url'] !== null ? (string) $backend['base_url'] : '',
-            system: $this->systemPrompt(),
+            system: $this->systemPrompt($conversation['section'] ?? null),
             messages: $this->buildAnthropicMessages($id),
             // 0/NULL na backendu = nenastaveno — chat drží vlastní skromný
             // default, nula nesmí odejít do API (HTTP 400).
@@ -628,7 +644,7 @@ class ChatController
      * "today" — without this it falls back to its training cutoff and may treat a
      * present-day year as the future.
      */
-    private function systemPrompt(): string
+    private function systemPrompt(?string $section = null): string
     {
         $base = self::SYSTEM_PROMPT_FALLBACK;
         if ($this->config !== null) {
@@ -636,6 +652,22 @@ class ChatController
             if (is_array($cfg) && !empty($cfg['systemPrompt'])) {
                 $base = (string) $cfg['systemPrompt'];
             }
+        }
+
+        // Sekční blok (UI shells Fáze 5): scoped konverzace dostane kontext
+        // oddělení — label z navSections + prompt z core.chat.sectionContexts;
+        // sekce bez záznamu v cfgItem dostane jen větu s labelem (degradace).
+        if ($section !== null) {
+            $label  = $this->navSections()[$section] ?? $section;
+            $prompt = '';
+            if ($this->config !== null) {
+                $contexts = $this->config->cfgItem('core.chat.sectionContexts');
+                if (is_array($contexts) && !empty($contexts[$section]['prompt'])) {
+                    $prompt = (string) $contexts[$section]['prompt'];
+                }
+            }
+            $base .= "\n\nKontext: uživatel konverzuje v oddělení «{$label}»."
+                . ($prompt !== '' ? ' ' . $prompt : '');
         }
 
         $today = date('Y-m-d');
@@ -684,6 +716,35 @@ class ChatController
         return $cfg->getMainState($docState);
     }
 
+    /**
+     * Mapa id sekce => lokalizovaný label z `global.navSections` (kompilovaná
+     * konfigurace je pre-lokalizovaná, žádný jazykový parametr). Bez compiled
+     * configu degraduje na statický seznam id (label = id) — zrcadlí
+     * degradaci NavigationControlleru.
+     *
+     * @return array<string, string>
+     */
+    private function navSections(): array
+    {
+        $out = [];
+        $raw = $this->config?->cfgItem('global.navSections');
+        if (is_array($raw) && !empty($raw['sections']) && is_array($raw['sections'])) {
+            foreach ($raw['sections'] as $section) {
+                if (!isset($section['id'])) {
+                    continue;
+                }
+                $id       = (string) $section['id'];
+                $out[$id] = (string) ($section['name'] ?? $id);
+            }
+        }
+        if ($out === []) {
+            foreach (self::NAV_SECTIONS_FALLBACK_IDS as $id) {
+                $out[$id] = $id;
+            }
+        }
+        return $out;
+    }
+
     private function normalizeTitle(mixed $title): ?string
     {
         if ($title === null) {
@@ -705,6 +766,7 @@ class ChatController
         return [
             'id'             => (int) $row['id'],
             'title'          => $row['title'] !== null ? (string) $row['title'] : null,
+            'section'        => isset($row['section']) && $row['section'] !== null ? (string) $row['section'] : null,
             'backend'        => isset($row['backend']) && $row['backend'] !== null ? (int) $row['backend'] : null,
             'model_snapshot' => $row['model_snapshot'] !== null ? (string) $row['model_snapshot'] : null,
             'tokens_input'   => (int) ($row['tokens_input'] ?? 0),

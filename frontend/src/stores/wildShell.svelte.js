@@ -20,6 +20,19 @@ let lastTabBySection = $state({});
 const KEY_HOME = '_top';
 const keyFor = (section) => section ?? KEY_HOME;
 
+// Poslední navigace, kterou shell adoptoval — záměrně plain proměnné
+// (ne $state): čtou se v R3 efektu WildShellu a nesmí trackovat.
+// Module-level přežijí unmount (settings mód), takže mount pozná
+// i navigaci, která proběhla bez namontovaného shellu (paleta ze
+// settings módu rovnou na app leaf); shodná navigace = no-op → settings
+// roundtrip bez navigace paměť záložek nepřepíše.
+let seenSection = null;
+let seenActiveId = null;
+
+function navigationChanged(section, activeId) {
+  return section !== seenSection || activeId !== seenActiveId;
+}
+
 function setBrowsing(section) {
   browsingSection = section ?? null;
   initialized = true;
@@ -36,6 +49,8 @@ function getLastTab(section) {
 // Srovnání dle skutečné navigace (první mount i R3 sync po externí
 // navigaci — paleta, deep link). Idempotentní.
 function adoptNavigation(section, activeId) {
+  seenSection = section ?? null;
+  seenActiveId = activeId ?? null;
   setBrowsing(section);
   if (activeId != null) recordTab(section, activeId);
 }
@@ -47,4 +62,5 @@ export const wildShellStore = {
   recordTab,
   getLastTab,
   adoptNavigation,
+  navigationChanged,
 };

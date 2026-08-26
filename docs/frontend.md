@@ -188,7 +188,9 @@ Shell je Svelte komponenta registrovaná v mapě
   `utils/wildLanding.js` (první vstup → AI záložka, jinak poslední
   stav; domeček AI nemá a padá na dashboard). Externí navigace
   (paleta, deep link) srovnává prohlížení efektem reagujícím jen na
-  změnu `activeSection`/`activeId`. `ContentArea` zůstává při AI
+  změnu `activeSection`/`activeId` proti poslední adoptované navigaci
+  — tu drží store, takže mount dožene i navigaci provedenou bez
+  namontovaného shellu (paleta ze settings módu). `ContentArea` zůstává při AI
   záložce mounted (skrytá přes CSS) — viewery nepřicházejí o stav.
   Paměť přežije settings/account mód (module-level store), reload ji
   čistí. Desktop-only.

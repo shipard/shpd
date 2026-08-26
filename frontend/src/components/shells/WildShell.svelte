@@ -67,27 +67,26 @@
         : null
   );
 
-  // První mount shellu v session (soft swap volby) — adoptuj aktivní
-  // položku: její sekce je prohlížená, záložka = aktivní leaf. Návrat ze
-  // settings módu (initialized) paměť drží.
-  if (!wildShellStore.initialized) {
+  // Mount: první v session (soft swap volby) adoptuje aktivní položku;
+  // remount po settings módu adoptuje jen když mezitím proběhla navigace
+  // (paleta ze settings) — synchronně před renderem, efekt níže by stihl
+  // až frame po něm. Beze změny navigace paměť drží.
+  if (!wildShellStore.initialized
+    || wildShellStore.navigationChanged(navigationStore.activeSection, navigationStore.activeId)) {
     wildShellStore.adoptNavigation(navigationStore.activeSection, navigationStore.activeId);
   }
 
   // R3 — externí navigace (paleta, deep link, karty dashboardu) srovná
-  // prohlížení. Reaguje jen na ZMĚNU (prev proměnné inicializované
-  // aktuálními hodnotami → první běh po mountu je no-op, settings
-  // roundtrip nepřepíše záznam 'ai'). Klik na rail mění jen
-  // browsingSection (netrackováno) → efekt mlčí, prohlížení se nevrací.
-  let prevActiveSection = navigationStore.activeSection;
-  let prevActiveId = navigationStore.activeId;
-
+  // prohlížení. Reaguje jen na ZMĚNU proti poslední adoptované navigaci
+  // (drží ji store, aby přežila unmount — paleta ze settings módu
+  // naviguje bez namontovaného shellu a mount ji musí dohnat; shodná
+  // navigace = no-op, settings roundtrip nepřepíše záznam 'ai'). Klik
+  // na rail mění jen browsingSection (netrackováno) → efekt mlčí,
+  // prohlížení se nevrací.
   $effect(() => {
     const section = navigationStore.activeSection;
     const activeId = navigationStore.activeId;
-    if (section === prevActiveSection && activeId === prevActiveId) return;
-    prevActiveSection = section;
-    prevActiveId = activeId;
+    if (!wildShellStore.navigationChanged(section, activeId)) return;
     untrack(() => wildShellStore.adoptNavigation(section, activeId));
   });
 

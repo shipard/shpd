@@ -71,6 +71,34 @@ class SetupExporterTest extends TestCase
         $this->assertSame(1, $binder['order_pos']);
     }
 
+    public function testReferenceColumnsAreMappedToAccountNumberOrSkipped(): void
+    {
+        $def = TableDefinition::fromArray([
+            'tableId' => 9999,
+            'name'    => 'Synthetic',
+            'columns' => [
+                ['id' => 'id', 'name' => 'ID', 'type' => 'int', 'primaryKey' => true, 'autoIncrement' => true],
+                ['id' => 'code', 'name' => 'Code', 'type' => 'varchar', 'length' => 20],
+                ['id' => 'accounting_account', 'name' => 'Account', 'type' => 'int', 'nullable' => true, 'reference' => 'economy_accounting_accounts'],
+                ['id' => 'owner', 'name' => 'Owner', 'type' => 'int', 'nullable' => true, 'reference' => 'base_persons_persons'],
+            ],
+        ]);
+
+        $db = $this->createMock(Connection::class);
+        $db->method('fetchAll')->willReturn([new Row(['id' => 1, 'code' => 'A', 'accounting_account' => 9, 'owner' => 5])]);
+        $db->method('fetch')->willReturnCallback(function (string $sql, int $id): ?Row {
+            $this->assertStringContainsString('[economy_accounting_accounts]', $sql);
+            return $id === 9 ? new Row(['number' => '221100']) : null;
+        });
+
+        $exporter = new SetupExporter($db, ['economy_codebooks_bank_accounts' => $def]);
+        $records = $exporter->exportAll();
+
+        $this->assertSame(['code' => 'A', 'accounting_account' => '221100'], $records[0]->data['rows'][0]);
+        $this->assertCount(1, $exporter->getWarnings());
+        $this->assertStringContainsString("'owner' (FK na base_persons_persons)", $exporter->getWarnings()[0]);
+    }
+
     public function testNoActiveTablesYieldsNothing(): void
     {
         $db = $this->createMock(Connection::class);

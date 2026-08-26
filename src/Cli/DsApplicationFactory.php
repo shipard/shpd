@@ -27,6 +27,7 @@ final class DsApplicationFactory
         $app->add(new \Shipard\Command\DataSource\ApiKeyCreateCommand());
         $app->add(new \Shipard\Command\DataSource\ApiKeyListCommand());
         $app->add(new \Shipard\Command\DataSource\ApiKeyRevokeCommand());
+        $app->add(new \Shipard\Command\DataSource\DatasetDumpCommand());
         $app->add(new \Shipard\Command\DataSource\SeedPersonsCommand());
         $app->add(new \Shipard\Command\DataSource\SeedClearCommand());
         $app->add(new \Shipard\Command\DataSource\SeedMailCommand());

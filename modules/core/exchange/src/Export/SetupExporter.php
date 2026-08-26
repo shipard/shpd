@@ -34,6 +34,12 @@ final class SetupExporter
 
     private const SKIP_COLUMNS = ['id', 'docStateMain', 'created', 'modified', 'created_by'];
 
+    /** @var list<string> */
+    private array $warnings = [];
+
+    /** @var array<int, ?string> */
+    private array $accountNumberCache = [];
+
     /**
      * @param array<string, TableDefinition> $tables aktivní tabulky DS (TableLoader::load)
      */
@@ -62,6 +68,12 @@ final class SetupExporter
         return $out;
     }
 
+    /** @return list<string> */
+    public function getWarnings(): array
+    {
+        return $this->warnings;
+    }
+
     /**
      * @param list<string> $keyColumns
      * @return list<array<string, mixed>>
@@ -75,6 +87,16 @@ final class SetupExporter
         }
         $hasDocState = isset($columns['docState']);
 
+        // FK sloupce: interní id na jiném DS neplatí. Účet z rozvrhu se přenese
+        // číslem (seed ho resolvuje zpět), ostatní reference se vynechají.
+        foreach ($columns as $colId => $col) {
+            if ($col->reference !== null && !in_array($colId, self::SKIP_COLUMNS, true)
+                && $col->reference !== 'economy_accounting_accounts') {
+                $this->warnings[] = "setup {$tableName}: sloupec '{$colId}' (FK na {$col->reference}) se nepřenáší";
+                unset($columns[$colId]);
+            }
+        }
+
         $order = implode(', ', array_map(static fn(string $c): string => "[{$c}]", [...$keyColumns, 'id']));
         $where = $hasDocState ? ' WHERE [docState] <> 90' : '';
         $rows = $this->db->fetchAll("SELECT * FROM [{$tableName}]{$where} ORDER BY {$order}");
@@ -87,11 +109,26 @@ final class SetupExporter
                 if (in_array($colId, self::SKIP_COLUMNS, true) || !array_key_exists($colId, $row)) {
                     continue;
                 }
-                $record[$colId] = self::typedValue($col, $row[$colId]);
+                $record[$colId] = $col->reference === 'economy_accounting_accounts'
+                    ? $this->accountNumber($row[$colId])
+                    : self::typedValue($col, $row[$colId]);
             }
             $out[] = $record;
         }
         return $out;
+    }
+
+    private function accountNumber(mixed $id): ?string
+    {
+        $id = V::int($id);
+        if ($id === null || $id <= 0) {
+            return null;
+        }
+        if (!array_key_exists($id, $this->accountNumberCache)) {
+            $row = $this->db->fetch('SELECT [number] FROM [economy_accounting_accounts] WHERE [id] = %i', $id);
+            $this->accountNumberCache[$id] = $row !== null ? V::str($row['number']) : null;
+        }
+        return $this->accountNumberCache[$id];
     }
 
     public static function typedValue(ColumnDefinition $col, mixed $value): mixed

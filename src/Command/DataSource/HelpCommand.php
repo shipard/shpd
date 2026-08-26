@@ -110,6 +110,9 @@ class HelpCommand extends Command
         $output->writeln('  <info>ai-profile-reload</info>       Reload AI profile from JSONC template into the DB');
         $output->writeln('  <info>mail-analysis-reap</info>      Release expired AI analysis claims and re-queue affected messages');
         $output->writeln('');
+        $output->writeln('<comment>Dataset:</comment>');
+        $output->writeln('  <info>dataset-dump</info>            Export the whole DS into a portable dataset folder (--zip, --force)');
+        $output->writeln('');
         $output->writeln('<comment>Seed (test data):</comment>');
         $output->writeln('  <info>seed-persons</info>            Generate fake persons with optional contacts and bank accounts');
         $output->writeln('  <info>seed-clear</info>              Remove all seeded test persons (TEST- prefix)');
@@ -128,6 +131,7 @@ class HelpCommand extends Command
         $output->writeln('  shpd-ds user-create --login=admin --password=...');
         $output->writeln('  shpd-ds ai-analyzer-set-key --backend default --api-key <api-key>');
         $output->writeln('  shpd-ds ds-secrets-rotate --dry-run');
+        $output->writeln('  shpd-ds dataset-dump /tmp/web-demo --zip');
         $output->writeln('  shpd-ds seed-persons --count=100 --with-contacts --with-bank-accounts');
         $output->writeln('  shpd-ds seed-persons -c 20 --company-ratio=60');
         $output->writeln('  shpd-ds seed-clear');

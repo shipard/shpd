@@ -966,6 +966,38 @@ stats krok agenta `hosting-sync`; hosting snapshoty upsertuje do
 |------|--------|
 | `--json` | Stdout = jediný JSON objekt (chyby jdou na stderr). |
 
+### Dataset
+
+Přenosné datové sady (`shpd.dataset.v1`) — složka nebo zip s obsahem DS
+ve výměnných formátech. Formát sady, manifest a mail formát popisuje
+`docs/datasets.md`; zadání a rozhodnutí `tasks/dataset-phase1.md` (#40).
+
+#### `dataset-dump`
+
+```bash
+sudo shpd-ds dataset-dump /tmp/web-demo
+sudo shpd-ds dataset-dump /tmp/web-demo --zip --force
+sudo shpd-ds dataset-dump /tmp/web-demo --name=web-demo --title="Demo webu" --description="…"
+```
+
+Vyexportuje **celý DS** (všechny záznamy mimo koš, `docState != 90`) do
+složky sady: `setup/` (číselníky, které reset neobnoví), `persons/`,
+`items/`, `docs/`, `registry/`, `mail/` + `manifest.jsonc`. Soubory se
+jmenují `NNNN-<slug>.jsonc` v deterministickém pořadí (přirozené klíče,
+ne interní id), přílohy záznamu leží v sidecar složce `NNNN-<slug>.files/`.
+Sekce modulů, které na DS nejsou aktivní, se vynechají. Věci, které formát
+nenese (řádkový partner účetního dokladu, vlastní účet bez kódu…), příkaz
+vypíše jako `warning:` — exit code zůstává 0.
+
+| Opce | Význam |
+|------|--------|
+| `<dir>` | Cílová složka; musí být prázdná nebo neexistovat |
+| `--zip[=cesta]` | Zabalit i do zipu (bez hodnoty `<dir>.zip`) |
+| `-f, --force` | Přepsat obsah existující sady ve složce (maže jen manifest a známé sekce) |
+| `--name` | Identifikátor sady `[a-z0-9][a-z0-9._-]*` (default: slug názvu složky) |
+| `--title` | Titulek (default: název DS) |
+| `--description` | Popis sady |
+
 ### Seed (testovací data)
 
 > Seed příkazy jsou určené pro vývoj a demo. **Nepouštět na produkční DS.**

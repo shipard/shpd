@@ -1,6 +1,14 @@
 # UI shells — Fáze 4: shell `classic` + volba shellu
 
-**Status:** připraveno k implementaci
+**Stav:** hotovo
+
+Implementováno 2026-08-26; zbývá ruční smoke 1–12 v prohlížeči a komentář
+v issue #45 po push. Odchylky od PRD: fetch app nav stromu hoistnut do
+`navigationStore.loadAppNavTree()` (ClassicShell nemá Sidebar, který ho
+dřív vlastnil); `themePanelLeftOffset` je CSS délka (calc nad tokeny),
+ne px číslo; navíc `'shell'` ve whitelistech `ModuleDefinition` field
+typů a `DsSettingCommand::STRUCTURED_FIELD_TYPES`.
+
 **Issue:** [#45](https://github.com/shipard/shpd/issues/45) (zastřešující)
 **Design doc:** `docs/ui-shells.md` §11, §12
 **Návaznost:** Fáze 1 (primitivy, `activeSection`), Fáze 2 (paleta —

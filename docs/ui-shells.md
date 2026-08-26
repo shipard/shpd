@@ -54,24 +54,36 @@ tedy aplikaci, ale zavádíme tenkou vyměnitelnou vrstvu navigačního chrome.
 
 ## 4. Shell kontrakt
 
-Shell je Svelte komponenta registrovaná v klientské mapě (vzor
-`panelComponents` v `ContentArea`).
+> Realizováno Fází 4 (`frontend/src/components/shells/` — registry
+> `index.js`, `SidebarShell`, `ClassicShell`) — viz `frontend.md` §4
+> *Shelly*.
 
-**Dostává:** navigační strom, `navigationStore` (mode, activeItem, activeSection,
-navigate…), screen surface (čte), stavy sekcí (badge data), `onLogout`.
+Shell je Svelte komponenta registrovaná v klientské mapě
+`shells/index.js` (vzor `panelComponents` v `ContentArea`); jména drží
+`KNOWN_SHELLS` v `utils/shell.js`.
 
-**Renderuje:** vlastní chrome + sdílenou `ContentArea`.
+**Dostává:** navigační strom (`navigationStore.appNavTree`),
+`navigationStore` (mode, activeItem, activeSection, navigate…), screen
+surface (čte), stavy sekcí (badge data), `onLogout`, `onOpenThemePanel`
++ bindable `themePanelLeftOffset` (CSS délka pro pozici panelu).
+
+**Renderuje:** vlastní chrome + sdílenou `ContentArea`. Globální overlaye
+(ThemePanel, CommandPalette, ChatPanel) renderuje **AppShell** — shell
+dodává jen trigger/offset (mobilní drawer má transform, fixed panel
+uvnitř by se uvěznil).
 
 **Povinně umí (checklist):**
 
-- [ ] navigace stromem (všechny typy leafů vč. `panel`, `report:*`)
-- [ ] mode přepínání app / settings / account + návrat
-- [ ] user menu (sdílený primitiv)
-- [ ] branding slot
-- [ ] otevření ThemePanel a ChatPanel (globální panely vlastní shell)
-- [ ] konzumace screen surface (kde vykreslí titul/akce, je věc shellu)
-- [ ] badge stavů sekcí (kde je vykreslí, je věc shellu)
-- [ ] command palette trigger
+- [x] navigace stromem (všechny typy leafů vč. `panel`, `report:*`)
+- [x] mode přepínání app / settings / account + návrat (settings/account
+      chrome řeší resolver — vždy sidebar-style, D6)
+- [x] user menu (sdílený primitiv)
+- [x] branding slot
+- [x] otevření ThemePanel a ChatPanel (trigger/offset; render vlastní AppShell)
+- [x] konzumace screen surface (kde vykreslí titul/akce, je věc shellu;
+      classic na desktopu region nemá — D7)
+- [x] badge stavů sekcí (kde je vykreslí, je věc shellu)
+- [x] command palette trigger
 
 Kontrakt předepisuje **co** (schopnosti), ne **jak** (rozložení) — jinak
 shelly zkonvergují ke kompromisu, kterému se chceme vyhnout.
@@ -88,7 +100,8 @@ neimplementují znovu:
 |---|---|
 | `NavTree` | rekurzivní renderer stromu (skupiny, leafy, aktivní stav) |
 | `NavIconStrip` | plochý pás ikon leafů (collapsed režim, `flattenLeaves`) |
-| `UserMenu` | avatar + dropdown (Nastavení účtu/aplikace, jazyk, odhlásit) |
+| `NavFlyoutStrip` | pás uzlů úrovně 2 s Popover flyouty úrovně 3 (classic, Fáze 4) |
+| `UserMenu` | avatar + dropdown (Nastavení účtu/aplikace, jazyk, odhlásit); `direction="down"` pro top bar |
 | `BrandingHeader` | ikona aplikace + logo |
 | `ModeBackBar` | „← Zpět do aplikace" v settings/account módu |
 
@@ -140,8 +153,9 @@ sekce**, žádný nový subsystém (rozhodnuto: začít jednoduše).
   nepočítá.
 - **Pilot v současném sidebaru** (badge u skupin, tečka v barvě severity
   + počet, cap 99+) — ověření užitečnosti bez čekání na nové shelly.
-  `_top` se v pilotu nerenderuje (položky jsou trvale viditelné, D6);
-  collapsed pás v1 bez badge (vyřeší Fáze 4).
+  `_top` se v sidebaru nerenderuje (položky jsou trvale viditelné);
+  collapsed pás zůstává bez badge. Classic shell (Fáze 4) badge kreslí
+  na položkách horního menu a `_top` badge na domečku.
 
 ## 9. Command palette
 
@@ -177,26 +191,37 @@ sekci); wild shell to jen povyšuje na první záložku sekce.
 
 ## 11. Volba shellu
 
+> Realizováno Fází 4 (`tasks/ui-shells-phase4.md`): field typ `shell`
+> (allowlist `SettingsController::SHELLS`), pole `app.shell` /
+> `account.shell` v `core.system`, DS default v `/_app/info`, klient
+> `stores/shell.svelte.js` + `utils/shell.js` — viz `app-settings.md`
+> a `frontend.md` §4 *Shelly*.
+
 Přesně vzor vzhledu (theme, Fáze 4): **DS default + user follow/override**.
 
-- `app.shell` (scope ds) — default pro DS, edituje Nastavení aplikace,
+- `app.shell` (scope ds) — default pro DS, edituje Nastavení aplikace
+  (přes Uložit),
 - `account.shell` (scope user) — `{follow:true}` nebo
-  `{follow:false, shell, params}`,
-- absence hodnoty = follow; DS bez defaultu = `sidebar`.
+  `{follow:false, shell, params}`, mění se okamžitě,
+- absence hodnoty = follow; DS bez defaultu = `sidebar`; neznámé jméno
+  padá na `sidebar` (server allowlist + klientský `resolveShell`).
 
 **Parametry shellu** (hustota/kompakt, umístění prvků, výchozí obrazovka)
-jsou options konkrétního shellu — ortogonální osa k volbě shellu. Hustota
-může pokrýt část „konzervativní" poptávky levněji než celý shell.
+jsou options konkrétního shellu — ortogonální osa k volbě shellu; v1 se
+jen přenášejí (`params`), žádné UI. Hustota může pokrýt část
+„konzervativní" poptávky levněji než celý shell.
 
-Změna shellu = plný re-render chrome; nejjednodušší mechanika po vzoru
-přepnutí jazyka (reload), dořeší PRD fáze 4.
+Změna shellu = **soft swap** komponenty v AppShellu (žádný reload) —
+`navigationStore` přežije, uživatel zůstane na aktivní položce. Mobil
+(<768 px) a settings/account módy volbu ignorují — vždy sidebar-style
+chrome (řeší resolver v AppShellu jedním výrazem).
 
 ## 12. Plánované shelly
 
 | Shell | Sekce (úroveň 1) | Leafy sekce | Pozn. |
 |---|---|---|---|
 | `sidebar` | strom v levém panelu | tamtéž | dnešní stav, default |
-| `classic` | horní menu | levý pás ikon | „starý Shipard"; nejlépe definovaný → první nový |
+| `classic` | horní menu (+ domeček `_top`) | levý pás **uzlů úrovně 2** — leaf naviguje, skupina otevírá flyout s úrovní 3 | „starý Shipard"; **realizován Fází 4**. Klik na sekci → první leaf. Starý Shipard měl overflow „malé ikony dole" — v1 neřeší, pás scrolluje |
 | `wild` | levý rail velkých ikon s badge | horní záložky-ikony obsahu; 1. záložka = AI asistent sekce | AI-first, maximální kompaktnost |
 | `mobile` | — | — | dnes režim uvnitř shellu; cílově vlastní shell, rezoluce = f(volba, form factor) |
 
@@ -241,7 +266,10 @@ dopředu.
 
 ## 16. Otevřené body
 
-- Přesné chování kliku na sekci v classic/wild (první leaf vs. přehled sekce).
-- Transport badge dat (v navigaci vs. samostatný endpoint) a kadence refreshe.
-- Mechanika přepnutí shellu (reload vs. soft swap).
-- Úzká místa kompaktních shellů (reporty, široké gridy) — dořešit u fáze 4/6.
+- ~~Přesné chování kliku na sekci v classic/wild~~ — rozhodnuto Fází 4:
+  první leaf sekce (chování starého Shipardu); budoucí `defaultItem`
+  v `navSections.jsonc` možný.
+- ~~Transport badge dat a kadence refreshe~~ — rozhodnuto Fází 3:
+  samostatný endpoint, polling 60 s + focus.
+- ~~Mechanika přepnutí shellu~~ — rozhodnuto Fází 4: soft swap (§11).
+- Úzká místa kompaktních shellů (reporty, široké gridy) — dořešit u fáze 6.

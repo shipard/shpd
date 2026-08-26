@@ -68,12 +68,18 @@ frontend/
 │   │   ├── chrome/                     # Primitivy aplikačního chrome — shelly je komponují
 │   │   │   ├── NavTree.svelte          # Rekurzivní renderer navigačního stromu
 │   │   │   ├── NavIconStrip.svelte     # Plochý pás ikon leafů (sbalený sidebar)
+│   │   │   ├── NavFlyoutStrip.svelte   # Pás uzlů úrovně 2 s Popover flyouty (classic)
 │   │   │   ├── UserMenu.svelte         # Avatar + dropdown (nastavení, jazyk, odhlásit)
 │   │   │   ├── BrandingHeader.svelte   # Ikona aplikace + logo
 │   │   │   └── ModeBackBar.svelte      # „← Zpět do aplikace" v settings/account
+│   │   ├── shells/
+│   │   │   ├── index.js                # Registry shellů (jméno → komponenta)
+│   │   │   ├── SidebarShell.svelte     # Výchozí shell (sidebar/drawer + content)
+│   │   │   ├── ClassicShell.svelte     # Classic shell (horní menu + levý pás)
+│   │   │   └── classic/TopMenuBar.svelte # Horní menu classic shellu
 │   │   ├── layout/
-│   │   │   ├── AppShell.svelte         # Hlavní layout (sidebar + content)
-│   │   │   ├── Sidebar.svelte          # Sidebar shell — kompozice chrome primitiv
+│   │   │   ├── AppShell.svelte         # Globální starosti + resolver shellu
+│   │   │   ├── Sidebar.svelte          # Sidebar — kompozice chrome primitiv
 │   │   │   └── ContentArea.svelte      # Hlavní oblast — renderuje aktivní položku
 │   │   ├── auth/
 │   │   │   └── LoginScreen.svelte      # Přihlašovací obrazovka
@@ -89,7 +95,8 @@ frontend/
 │   │       ├── FormRenderer.svelte     # Generický formulář z metadat
 │   │       └── FormDialog.svelte       # Modal wrapper pro FormRenderer
 │   ├── utils/
-│   │   └── navTree.js                  # Čisté helpery nad navigačním stromem (flattenLeaves, findLeafById, findRootSectionId)
+│   │   ├── navTree.js                  # Čisté helpery nad navigačním stromem (flattenLeaves, findLeafById, findRootSectionId)
+│   │   └── shell.js                    # resolveShell + normalizace hodnot shellu (KNOWN_SHELLS)
 │   └── styles/
 │       ├── variables.css               # CSS custom properties (barvy, spacing, typography)
 │       ├── reset.css                   # CSS reset
@@ -144,7 +151,44 @@ Token má prefix `shpd_st_`, expirace 24h, uložen v `core_system_sessions`.
 
 ## 4. Aplikační shell
 
-Layout je bez horní lišty — logo a uživatelské info jsou integrovány v sidebaru:
+### Shelly (volba chrome, UI shells Fáze 4)
+
+Aplikace má vyměnitelné navigační chrome — **shelly** (`docs/ui-shells.md`).
+Shell je Svelte komponenta registrovaná v mapě
+`components/shells/index.js` (`{sidebar, classic}`); jména drží
+`KNOWN_SHELLS` v `utils/shell.js` (store nesmí importovat komponenty).
+
+- **`AppShell.svelte`** už nekreslí layout — zůstaly mu globální starosti
+  (Ctrl/Cmd+K, badge polling, ThemePanel, CommandPalette, ChatPanel,
+  load app navigace) a **resolver shellu**: alternativní shell platí jen
+  na desktopu v app módu (`!layoutStore.isMobile && mode === 'app'`);
+  mobil a settings/account módy dostávají vždy `SidebarShell`. Přepnutí
+  = soft swap komponenty — `navigationStore` přežije, uživatel zůstane
+  na aktivní položce.
+- **`SidebarShell.svelte`** — 1:1 extrakce původního layoutu AppShellu:
+  desktopový sidebar i mobilní větev (MobileTopBar + drawer + overlay).
+- **`ClassicShell.svelte`** — horní menu agend (`classic/TopMenuBar`)
+  + levý pás `chrome/NavFlyoutStrip` (uzly úrovně 2 aktivní sekce; leaf
+  naviguje, skupina otevírá `ui/Popover` flyout s úrovní 3, oddělovače
+  podskupin; max jeden otevřený flyout, pás scrolluje). Domeček = `_top`
+  (root-level leafy v pásu), badge sekcí vč. `_top` čte shell přímo ze
+  `sectionBadgesStore`. Desktop-only.
+- **`stores/shell.svelte.js`** — follow/override/dsDefault po vzoru
+  theme, ale bez anti-flash mechaniky (localStorage `shpd_shell` /
+  `shpd_ds_shell` jen boot cache); efektivní shell přes čistý
+  `resolveShell()` s fallbackem `sidebar`. Volba v Nastavení účtu
+  (`ShellField`, okamžitě) a Nastavení aplikace (`DsShellField`, přes
+  Uložit) — `docs/app-settings.md`.
+- **ThemePanel** dostává levý offset jako CSS délku (`leftOffset`) —
+  hlásí ji aktivní shell přes bind (sidebar dle collapsed, classic
+  konstantou `--shpd-classic-strip-width`).
+- **App nav strom** načítá `navigationStore.loadAppNavTree()` (trigger:
+  AppShell `$effect` při vstupu do app módu) — strom potřebují všechny
+  shelly i paleta, fetch nesmí záviset na namontovaném shellu. Ordering
+  side-effectů (strom → deep-link reportu → default položka) drží store.
+
+Výchozí (sidebar) layout je bez horní lišty — logo a uživatelské info
+jsou integrovány v sidebaru:
 
 ```
 ┌──────────┬──────────────────────────────────────────┐
@@ -215,10 +259,12 @@ Mode drží `navigation.svelte.js` ve `$state`.
   app→settings→app (i app→account→app) vrátí uživatele na poslední položku
   v app módu
 
-Sidebar reaguje na `navigationStore.mode` přes `$effect`:
-- `'app'` → načítá z `GET /_ui/navigation`
-- `'settings'` → načítá z `GET /_ui/settings/navigation`
-- `'account'` → načítá z `GET /_ui/account/navigation`
+Navigační strom per mode:
+- `'app'` → `GET /_ui/navigation` — načítá `navigationStore.loadAppNavTree()`
+  (volá AppShell; strom sdílí všechny shelly i paleta), Sidebar ho čte
+  z `navigationStore.appNavTree`
+- `'settings'` → `GET /_ui/settings/navigation` — lokální fetch v Sidebaru
+- `'account'` → `GET /_ui/account/navigation` — lokální fetch v Sidebaru
 
 V režimu `!== 'app'` je v hlavičce sidebaru navíc tlačítko „Zpět do
 aplikace" (pod logem); v dropdownu patky se zobrazují jen ta nastavení, ve
@@ -242,22 +288,23 @@ primitivy komponují jinak, místo reimplementace:
 |---|---|
 | `NavTree` | rekurzivní renderer stromu (skupiny s toggle, leafy, aktivní stav); interní stav rozbalení + auto-expand cesty k aktivní položce |
 | `NavIconStrip` | plochý pás ikon leafů (`flattenLeaves`) — sbalený režim |
-| `UserMenu` | avatar + dropdown (Nastavení účtu/aplikace, jazyk, odhlásit); `compact` varianta se side-overlay dropdownem |
+| `NavFlyoutStrip` | pás uzlů úrovně 2 (classic shell): leaf naviguje, skupina otevírá Popover flyout s úrovní 3 |
+| `UserMenu` | avatar + dropdown (Nastavení účtu/aplikace, jazyk, odhlásit); `compact` varianta se side-overlay dropdownem, `direction="down"` pro horizontální top bar |
 | `BrandingHeader` | ikona aplikace (branding slot) + logo/shortName, čte `appInfoStore` sám |
 | `ModeBackBar` | „← Zpět do aplikace" v settings/account módu, `compact` varianta |
 
-Sidebaru samotnému zůstává: fetch navigace per mode, `collapsed` stav
-+ toggle (specifikum sidebar shellu), loading/error stav a normalizace
-kliknuté položky (`handleItemClick` → `navigationStore.navigate`).
+Sidebaru samotnému zůstává: fetch settings/account navigace (app strom
+drží `navigationStore`), `collapsed` stav + toggle (specifikum sidebar
+shellu), loading/error stav a normalizace kliknuté položky
+(`handleItemClick` → `navigationStore.navigate`).
 Layout je flex column: header (BrandingHeader + toggle), volitelný
 ModeBackBar, scrollovatelný nav (`flex: 1`, NavTree/NavIconStrip),
 UserMenu v patce.
 
-Po loadu **app** navigace Sidebar předá strom do
-`navigationStore.setAppNavTree()` — z něj store derivuje getter
-`activeSection` (id sekce úrovně 1, do níž patří aktivní leaf; `_top`
-leafy a sekundární módy → `null`). Čistá derivace bez zápisu při
-navigaci, funguje i pro `navigateToViewer()` z dashboardu a deep linky.
+App strom drží `navigationStore` (`loadAppNavTree()`) — z něj store
+derivuje getter `activeSection` (id sekce úrovně 1, do níž patří aktivní
+leaf; `_top` leafy a sekundární módy → `null`). Čistá derivace bez zápisu
+při navigaci, funguje i pro `navigateToViewer()` z dashboardu a deep linky.
 Tree helpery (`flattenLeaves`, `findLeafById`, `findRootSectionId`) žijí
 v `utils/navTree.js` jako čisté, unit-testované funkce.
 
@@ -358,9 +405,10 @@ Signalizace „v této sekci na tebe něco čeká" (UI shells Fáze 3, issue #45
   `--shpd-color-danger`) + počet (cap `99+`), `aria-label` s ICU plurálem
   (`sidebar.sectionBadge`). Klíč `_top` se ignoruje přirozeně (není uzlem
   stromu) — položky `_top` jsou trvale viditelné.
-- **Rozsah pilotu:** jen rozbalený strom — tedy i mobilní drawer (renderuje
-  tutéž `Sidebar`); collapsed pás ikon (`NavIconStrip`) v1 bez badge
-  (vyřeší Fáze 4).
+- **Rozsah:** rozbalený strom — tedy i mobilní drawer (renderuje tutéž
+  `Sidebar`); collapsed pás ikon (`NavIconStrip`) zůstává bez badge.
+  Classic shell (Fáze 4) kreslí badge na položkách horního menu
+  a `_top` badge na domečku (`TopMenuBar` čte store přímo).
 
 ### Command palette
 

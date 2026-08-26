@@ -61,6 +61,7 @@ a u parametrů vrstvy C validuje hodnoty při zápisu.
 | `app.icon` | Metadata branding slotu `icon` (favicon, sidebar) | žádná ikona (browser default) |
 | `app.companyLogo` | Metadata branding slotu `companyLogo` (login, později sestavy/faktury) | žádné logo |
 | `app.theme` | DS-wide výchozí vzhled `{ mode, custom }` (Fáze 4) — platí pro uživatele bez vlastního | žádný → vestavěný Shipard light |
+| `app.shell` | DS-wide výchozí shell `{ shell, params }` (UI shells Fáze 4) — platí pro uživatele bez vlastního | žádný → `sidebar` |
 
 Metadata obrázkových klíčů zapisuje upload endpoint:
 `{ filename, storedAs, mime, size, hash (sha256, 16 zn.), modified }`.
@@ -85,15 +86,15 @@ nedotýká → branding přežívá reset.
 
 | Metoda | URL | Auth | Popis |
 |--------|-----|------|-------|
-| `GET` | `/_app/info` | **veřejné** | `{ name, shortName, icon, companyLogo, theme }` — icon/logo jako `{url, hash}` nebo `null`; `theme` = DS default `{mode, custom}` nebo `null` |
+| `GET` | `/_app/info` | **veřejné** | `{ name, shortName, icon, companyLogo, theme, shell }` — icon/logo jako `{url, hash}` nebo `null`; `theme` = DS default `{mode, custom}` nebo `null`; `shell` = DS default `{shell, params}` nebo `null` |
 | `GET` | `/_app/branding/{slot}` | **veřejné** | Binární obsah; `Cache-Control: immutable` (cache-busting přes `?h={hash}`); SVG s CSP + nosniff |
 | `POST` | `/_app/branding/{slot}` | auth | Multipart upload (pole `file`), vrací metadata |
 | `DELETE` | `/_app/branding/{slot}` | auth | Smaže soubor i settings klíč |
 
 Veřejné GET jsou vědomé rozhodnutí — login obrazovka zobrazuje název/logo
 a favicon se načítá bez tokenu. Do `/_app/info` nesmí přibýt nic citlivého
-(DB jméno, moduly, uživatelé) — `theme` je jen barva sidebaru, veřejná
-spolu s brandingem. Výjimky z auth: `AuthMiddleware::isExempt()`
+(DB jméno, moduly, uživatelé) — `theme` je jen barva sidebaru a `shell`
+jen jméno rozložení, veřejné spolu s brandingem. Výjimky z auth: `AuthMiddleware::isExempt()`
 matchuje akce `('app', 'info')` a `('app', 'brandingGet')` — zápisové akce
 mají vlastní action názvy (`brandingUpload`, `brandingDelete`), takže
 exempt nejsou.
@@ -103,9 +104,9 @@ exempt nejsou.
 - **`stores/appInfo.svelte.js`** — načítá `/_app/info` při bootu
   (`main.js`, před loginem) a po každé změně nastavení/obrázku. `apply()`
   nastavuje `document.title` a `<link rel="icon">`; sidebar/header/login
-  čtou store reaktivně. Po loadu navíc tlačí DS default vzhledu do
-  `themeStore.setDsDefault(theme)` (push směr appInfo → theme, žádný
-  kruhový import).
+  čtou store reaktivně. Po loadu navíc tlačí DS defaulty do
+  `themeStore.setDsDefault(theme)` a `shellStore.setDsDefault(shell)`
+  (push směr appInfo → theme/shell, žádný kruhový import).
 - **`components/settings/SettingsPage.svelte`** — render definice
   (label vlevo, input + hint vpravo), Uložit → POST, po uspěchu
   `appInfoStore.load()`.
@@ -176,11 +177,11 @@ Kopie `SettingsStore` scoped na `user_id`; unikát je dvojice
 modulu `core.system`. Referenční integrita na `user_id` je na aplikační
 úrovni (projekt nepoužívá FOREIGN KEY).
 
-### Field typy `theme` / `language`
+### Field typy `theme` / `shell` / `language`
 
-`language` (a user-scope `theme`) jsou řízené widgety vázané na klientské
-stores (`themeStore`, `language`), hodnota se ukládá na server (zdroj
-pravdy). Validace v `savePage()`:
+`language` (a user-scope `theme`/`shell`) jsou řízené widgety vázané na
+klientské stores (`themeStore`, `shellStore`, `language`), hodnota se
+ukládá na server (zdroj pravdy). Validace v `savePage()`:
 
 - `theme` — objekt `{ mode: light|dark|custom, custom: {…}|null }`.
   **User-scope** (`account.theme`) nese navíc `follow` flag:
@@ -188,16 +189,24 @@ pravdy). Validace v `savePage()`:
   (override); legacy `{mode, custom}` bez follow → override (`follow:false`).
   **DS-scope** (`app.theme`) follow nezná — případný flag se zahodí,
   uloží se jen `{mode, custom}`. Větvení podle `$pageDef['scope']`.
+- `shell` — objekt `{ shell, params }`; `shell` proti serverovému
+  allowlistu `SettingsController::SHELLS` (`sidebar`, `classic` — nový
+  shell = přidat jméno), `params` volitelný objekt (v1 passthrough bez
+  interpretace). Follow kontrakt identický s theme: user-scope
+  `{follow:true}` | `{follow:false, shell, params}` (legacy bez follow →
+  override), DS-scope follow zahazuje.
 - `language` — string `cs` | `en` | `auto`.
 
-Klíče: user store `account.theme`/`account.language`, DS store `app.theme`.
-**User-scope** theme/language jdou na klientu **mimo tlačítko Uložit** —
-mění se okamžitě (live preview / reload) a synchronizují přes `POST`.
-**DS-scope** `app.theme` se naopak ukládá **přes tlačítko Uložit** jako
-běžná hodnota (controlled `DsThemeField`) — DS-wide default nevysílá
-mezistavy všem uživatelům. Render větev v `SettingsPage` rozhoduje podle
-`definition.scope`: `user` → živý `ThemeField`, `ds` → `DsThemeField` do
-`values`.
+Klíče: user store `account.theme`/`account.shell`/`account.language`,
+DS store `app.theme`/`app.shell`.
+**User-scope** theme/shell/language jdou na klientu **mimo tlačítko
+Uložit** — mění se okamžitě (live preview / soft swap / reload)
+a synchronizují přes `POST`. **DS-scope** `app.theme`/`app.shell` se
+naopak ukládají **přes tlačítko Uložit** jako běžná hodnota (controlled
+`DsThemeField`/`DsShellField`) — DS-wide default nevysílá mezistavy všem
+uživatelům. Render větev v `SettingsPage` rozhoduje podle
+`definition.scope`: `user` → živý `ThemeField`/`ShellField`, `ds` →
+`DsThemeField`/`DsShellField` do `values`.
 
 ### DS-wide výchozí vzhled (Fáze 4)
 
@@ -211,6 +220,22 @@ nedotkne. Omezení nastavení DS defaultu jen na správce je zatím mimo
 rozsah — smí kdokoli s přístupem do Nastavení aplikace. Detaily efektivního
 výpočtu a follow přepínače: [`design-system.md`](design-system.md)
 (sekce 9), [`frontend.md`](frontend.md) (sekce *Theme management*).
+
+### DS-wide výchozí shell (UI shells Fáze 4)
+
+Pole **`app.shell`** [type `shell`] v `appSettings` (scope `ds`) drží
+DS-wide default rozložení; **`account.shell`** v `accountBasic` (scope
+`user`) follow/override volbu uživatele. Efektivní shell na klientu:
+`follow ? (DS default ?? 'sidebar') : override`, neznámé jméno padá na
+`sidebar` (`utils/shell.js`). DS default jde na klienta přes `appInfo`
+(`/_app/info` → `shell`) → `shellStore.setDsDefault()`. Na rozdíl od
+theme **bez anti-flash bootstrapu** — shell rozhoduje, který komponentový
+strom se mountne, localStorage (`shpd_shell`, `shpd_ds_shell`) je jen
+boot cache. Přepnutí je soft swap komponenty v `AppShell` (uživatel
+zůstane na aktivní položce); mobil (<768 px) a settings/account módy
+volbu ignorují — vždy sidebar-style chrome. Detaily:
+[`frontend.md`](frontend.md) (sekce *Shelly*),
+[`ui-shells.md`](ui-shells.md) §11/§12.
 
 ### Account mód — vlastní navigační strom
 
@@ -332,11 +357,13 @@ náhled v `AvatarSlotField`. Object URL se při každé výměně revokuje.
   i ThemePanel.
 - `stores/accountPrefs.svelte.js` — po loginu/bootu (`App.svelte`
   onSuccess + `main.js` při autentizovaném startu) `load()` ze serveru,
-  aplikuje `themeStore.applyFromServer()` a (liší-li se) `language.setMode()`.
-  localStorage zůstává anti-flash cache; server vyhrává.
-- Server push: `themeStore.setMode/setCustom` a `language.setMode` zapisují
-  přes `api/account.js` (`pushAccountPrefs`) — odděleno od `accountPrefs`
-  storu kvůli kruhovému importu.
+  aplikuje `themeStore.applyFromServer()`, `shellStore.applyFromServer()`
+  a (liší-li se) `language.setMode()`. localStorage zůstává anti-flash /
+  boot cache; server vyhrává.
+- Server push: `themeStore.setMode/setCustom`, `shellStore.setFollow/
+  setOverride` a `language.setMode` zapisují přes `api/account.js`
+  (`pushAccountPrefs`) — odděleno od `accountPrefs` storu kvůli kruhovému
+  importu.
 
 ### Testy (Fáze 3)
 
@@ -350,3 +377,9 @@ Fáze 4: `SettingsControllerTest` — `account.theme` follow tvary
 (`{follow:true}`, override, legacy → override), `app.theme` scope ds
 (follow zahozen, invalid → 422), `scope` v definici; `AppControllerTest`
 — `/_app/info` vrací `theme` (null když nenastaveno).
+
+UI shells Fáze 4 (typ `shell`): `SettingsControllerTest` — `account.shell`
+follow/override (params passthrough), neznámé jméno → 422, `app.shell`
+bez follow, ne-objekt → 422; `AppControllerTest` — `/_app/info` vrací
+`shell` (null když nenastaveno); frontend `tests/Unit/shell.test.mjs` —
+`resolveShell`/normalizace.

@@ -1,8 +1,8 @@
 // Shell resolution — čisté funkce bez runes (unit-testovatelné přes
 // node --test, viz tests/Unit/shell.test.mjs).
 //
-// „Shell" = komponenta chrome aplikace (sidebar | classic). Efektivní
-// shell = follow ? (DS default ?? 'sidebar') : user override. Neznámé
+// „Shell" = komponenta chrome aplikace (sidebar | classic | wild).
+// Efektivní shell = follow ? (DS default ?? 'sidebar') : override. Neznámé
 // jméno padá na 'sidebar' — serverový allowlist (SettingsController) je
 // první pojistka, tohle druhá (stale localStorage / config po odebrání
 // shellu).
@@ -10,7 +10,7 @@
 // Jediný zdroj pravdy jmen shellů na klientu — registry komponent
 // (components/shells/index.js) musí mapovat přesně tato jména; store
 // komponenty importovat nesmí (kruhový import), proto seznam žije tady.
-export const KNOWN_SHELLS = ['sidebar', 'classic'];
+export const KNOWN_SHELLS = ['sidebar', 'classic', 'wild'];
 
 export const DEFAULT_SHELL = 'sidebar';
 

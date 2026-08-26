@@ -17,6 +17,11 @@
   import { translateError } from '../../i18n/errors.js';
   import { t } from '../../i18n/index.js';
 
+  // showScopeChip: SectionAssistant (AI záložka wild shellu) chip skrývá —
+  // scope tam dává záložka, chip by byl redundantní a ✕ by vlákno
+  // desynchronizoval od záložky. Default zachovává ChatPanel/ChatView.
+  let { showScopeChip = true } = $props();
+
   let scroller = $state(null);
 
   // Auto-scroll to bottom whenever the thread grows or text streams in.
@@ -82,7 +87,7 @@
     {/if}
   </div>
 
-  {#if scopeSection}
+  {#if scopeSection && showScopeChip}
     <div class="shpd-thread__scope">
       <span class="shpd-thread__scope-chip">
         {scopeLabel}

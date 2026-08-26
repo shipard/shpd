@@ -23,8 +23,13 @@ test('resolveShell: override vyhrává nad DS defaultem', () => {
 });
 
 test('resolveShell: neznámé jméno (override i DS default) → sidebar', () => {
-  assert.equal(resolveShell(false, 'wild', 'classic'), DEFAULT_SHELL);
-  assert.equal(resolveShell(true, 'classic', 'wild'), DEFAULT_SHELL);
+  assert.equal(resolveShell(false, 'nope', 'classic'), DEFAULT_SHELL);
+  assert.equal(resolveShell(true, 'classic', 'nope'), DEFAULT_SHELL);
+});
+
+test('resolveShell: wild je známý shell (Fáze 6)', () => {
+  assert.equal(resolveShell(false, 'wild', null), 'wild');
+  assert.equal(resolveShell(true, null, 'wild'), 'wild');
 });
 
 test('resolveShell: garbage vstupy → sidebar', () => {
@@ -70,7 +75,7 @@ test('normalizeDsShell: {shell, params} → jméno', () => {
 });
 
 test('normalizeDsShell: neznámé jméno propouští (validuje resolveShell)', () => {
-  assert.equal(normalizeDsShell({ shell: 'wild' }), 'wild');
+  assert.equal(normalizeDsShell({ shell: 'nope' }), 'nope');
 });
 
 test('normalizeDsShell: garbage → null', () => {

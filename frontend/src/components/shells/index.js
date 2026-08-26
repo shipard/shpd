@@ -5,8 +5,10 @@
 // v mapě chybí.
 import SidebarShell from './SidebarShell.svelte';
 import ClassicShell from './ClassicShell.svelte';
+import WildShell from './WildShell.svelte';
 
 export const shellComponents = {
   sidebar: SidebarShell,
   classic: ClassicShell,
+  wild: WildShell,
 };

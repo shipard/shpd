@@ -11,6 +11,7 @@
   const options = [
     { value: 'sidebar', labelKey: 'shell.option.sidebar' },
     { value: 'classic', labelKey: 'shell.option.classic' },
+    { value: 'wild',    labelKey: 'shell.option.wild' },
   ];
 
   // Chybějící/neznámá hodnota se zobrazí jako default sidebar.

@@ -17,6 +17,7 @@
     { value: FOLLOW,    labelKey: 'shell.followApp' },
     { value: 'sidebar', labelKey: 'shell.option.sidebar' },
     { value: 'classic', labelKey: 'shell.option.classic' },
+    { value: 'wild',    labelKey: 'shell.option.wild' },
   ];
 
   const current = $derived(shellStore.follow ? FOLLOW : shellStore.override);

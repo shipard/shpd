@@ -513,6 +513,24 @@ class SettingsControllerTest extends TestCase
         $this->assertSame(['density' => 'compact'], $stored['params']);
     }
 
+    public function testSavePageAccountShellWildIsAllowed(): void
+    {
+        $captured = null;
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchAll')->willReturn([]);
+        $db->expects($this->once())->method('execute')
+            ->willReturnCallback(function (...$args) use (&$captured) { $captured = $args; });
+
+        $resp = $this->ctrl->savePage(
+            'accountBasic',
+            $this->saveRequest(['values' => ['account.shell' => ['follow' => false, 'shell' => 'wild']]]),
+            $this->config(), $this->resolver, $this->auth(), $db,
+        );
+
+        $this->assertSame(200, $this->getStatus($resp));
+        $this->assertSame('wild', json_decode($captured[3], true)['shell']);
+    }
+
     public function testSavePageAccountShellUnknownNameReturns422(): void
     {
         $db = $this->mockDb();
@@ -520,7 +538,7 @@ class SettingsControllerTest extends TestCase
 
         $resp = $this->ctrl->savePage(
             'accountBasic',
-            $this->saveRequest(['values' => ['account.shell' => ['follow' => false, 'shell' => 'wild']]]),
+            $this->saveRequest(['values' => ['account.shell' => ['follow' => false, 'shell' => 'nope']]]),
             $this->config(), $this->resolver, $this->auth(), $db,
         );
 

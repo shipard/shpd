@@ -30,7 +30,7 @@ class SettingsController
      * jméno. Chrání DS config před překlepy; klientský fallback na
      * `sidebar` je druhá pojistka.
      */
-    private const SHELLS = ['sidebar', 'classic'];
+    private const SHELLS = ['sidebar', 'classic', 'wild'];
 
     public function navigation(
         DataSourceConfig $config,

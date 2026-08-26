@@ -521,6 +521,62 @@ final class DashboardControllerTest extends TestCase
         $this->assertEquals(new \stdClass(), $payload['data']['sections']);
     }
 
+    // ── dashboard(?section=) — sekční filtr karet (UI shells Fáze 5) ────────
+
+    public function testDashboardSectionFilterReturnsOnlyMatchingCards(): void
+    {
+        // Alert s navSection=accounting (z registry) + mail karta (_top):
+        // filtr na accounting vrátí jen alert; summary/readySummary/
+        // capabilities jsou celofeedové a při filtru se vynechají.
+        $registry = new \Shipard\Core\Alerts\AlertCheckRegistry(
+            [\Shipard\Core\Module\ModuleDefinition::fromArray([
+                'id'          => 'economy.accounting',
+                'name'        => 'Accounting',
+                'alertChecks' => [[
+                    'id'         => 'chk',
+                    'name'       => 'Chyby účtování',
+                    'class'      => 'X',
+                    'interval'   => '1h',
+                    'navSection' => 'accounting',
+                ]],
+            ])],
+            'cs',
+        );
+
+        $ctrl = new DashboardController();
+        $data = $ctrl->dashboard(
+            $this->bothSourcesDb(),
+            null,
+            'cs',
+            $registry,
+            $this->fullTables(),
+            null,
+            'accounting',
+        )->getPayload()['data'];
+
+        $this->assertSame(['alert:7'], array_column($data['cards'], 'id'));
+        $this->assertArrayNotHasKey('summary', $data);
+        $this->assertArrayNotHasKey('readySummary', $data);
+        $this->assertArrayNotHasKey('capabilities', $data);
+    }
+
+    public function testDashboardUnknownSectionYieldsEmptyCards(): void
+    {
+        // Nevalidní hodnota → prázdný seznam, ne chyba (R4).
+        $ctrl = new DashboardController();
+        $data = $ctrl->dashboard(
+            $this->bothSourcesDb(),
+            null,
+            'cs',
+            null,
+            $this->fullTables(),
+            null,
+            'bogus',
+        )->getPayload()['data'];
+
+        $this->assertSame([], $data['cards']);
+    }
+
     // ── summary() — SSE AI shrnutí (fáze 2b) ─────────────────────────────────
 
     private function runProducer(Response $response): string

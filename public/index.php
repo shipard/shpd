@@ -276,10 +276,10 @@ function dispatch(
 		'password' => dispatchPassword($route, $request, $auth, $db, $resolved),
 		'crud'       => dispatchCrud($route, $request, $auth, $tables, $db, $configRuntime, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
 		'attachment'  => dispatchAttachment($route, $request, $auth, $tables, $db, $resolved),
-		'chat'    => dispatchChat($route, $request, $auth, $db, $tables, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
+		'chat'    => dispatchChat($route, $request, $auth, $db, $tables, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), resolveLanguage($request, $resolved->config), $alertCheckRegistry),
 		'meta'    => dispatchMeta($route->action, $route->table, $tables, resolveLanguage($request, $resolved->config)),
 		'ui'      => dispatchUi($route->action, $resolved->config, $modulePathResolver, resolveLanguage($request, $resolved->config), $configRuntime, $db, $auth, $tables),
-		'dashboard' => dispatchDashboard($route, $db, $configRuntime, resolveLanguage($request, $resolved->config), $resolved->config, $alertCheckRegistry, $tables, $auth),
+		'dashboard' => dispatchDashboard($route, $db, $configRuntime, resolveLanguage($request, $resolved->config), $resolved->config, $alertCheckRegistry, $tables, $auth, $request),
 		'settings' => dispatchSettings($route, $request, $auth, $resolved->config, $modulePathResolver, resolveLanguage($request, $resolved->config), $configRuntime, $db, $tables),
 		'app'     => dispatchApp($route, $auth, $db, $resolved->config, $tables),
 		'form'    => dispatchForm($route, $request, $auth, $tables, $db, $formRegistry ?? new FormRegistry(), $configRuntime, $modulePathResolver, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), resolveLanguage($request, $resolved->config), $resolved->config, $lookupRegistry ?? new LookupRegistry(), $documentEventDispatcher),
@@ -304,7 +304,7 @@ function dispatch(
 		'hostingMail' => dispatchHostingMail($route, $request, $db, $tables, $resolved),
 		'hostingAiAnalyzer' => dispatchHostingAiAnalyzer($route, $request, $db, $tables, $resolved),
 		'hostingAiGateway' => dispatchHostingAiGateway($route, $request, $db, $tables, $resolved),
-		'mcp'     => dispatchMcp($request, $auth, $resolved->connection, $tables, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
+		'mcp'     => dispatchMcp($request, $auth, $resolved->connection, $tables, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), resolveLanguage($request, $resolved->config), $alertCheckRegistry),
 		'openapi' => (new OpenApiController())->spec($auth, $openApiPublic, $tables, $baseUrl),
 		default   => Response::error('INTERNAL_ERROR', "Unknown controller: {$route->controller}", 500),
 	};
@@ -318,8 +318,10 @@ function dispatchMcp(
 	?\Shipard\Core\Config\ConfigRuntime $configRuntime,
 	\Shipard\Api\ResolvedDataSource $resolved,
 	\Shipard\Core\Document\DocumentRegistry $documentRegistry,
+	?string $language = null,
+	?\Shipard\Core\Alerts\AlertCheckRegistry $alertCheckRegistry = null,
 ): Response {
-	$registry = buildMcpRegistry($db, $tables, $configRuntime, $resolved, $documentRegistry);
+	$registry = buildMcpRegistry($db, $tables, $configRuntime, $resolved, $documentRegistry, $language, $alertCheckRegistry);
 	$ctrl = new \Shipard\Api\Controller\McpController($registry);
 	return $ctrl->rpc($request, $auth, $db, $tables, $configRuntime);
 }
@@ -337,9 +339,15 @@ function buildMcpRegistry(
 	?\Shipard\Core\Config\ConfigRuntime $configRuntime,
 	\Shipard\Api\ResolvedDataSource $resolved,
 	\Shipard\Core\Document\DocumentRegistry $documentRegistry,
+	?string $language = null,
+	?\Shipard\Core\Alerts\AlertCheckRegistry $alertCheckRegistry = null,
 ): \Shipard\Api\Mcp\McpToolRegistry {
 	$registry = new \Shipard\Api\Mcp\McpToolRegistry();
 	$registry->register(new \Shipard\Module\Base\Persons\Mcp\PersonsSearchTool());
+	// Feed karet (UI shells Fáze 5) — jazyk a alert registry nejsou
+	// v McpInvocationContext, injektují se konstruktorem (vzor
+	// ReportToolSupport). Zdroje feedu se gatují samy dle $tables.
+	$registry->register(new \Shipard\Api\Mcp\FeedCardsTool($language, $alertCheckRegistry));
 	$registry->register(new \Shipard\Module\Base\Persons\Mcp\PersonsGetTool());
 	$registry->register(new \Shipard\Module\Docs\Core\Mcp\DocumentsSearchTool());
 	$registry->register(new \Shipard\Module\Docs\Core\Mcp\DocumentsAggregateTool());
@@ -1084,9 +1092,11 @@ function dispatchChat(
 	?\Shipard\Core\Config\ConfigRuntime $configRuntime = null,
 	?\Shipard\Api\ResolvedDataSource $resolved = null,
 	?\Shipard\Core\Document\DocumentRegistry $documentRegistry = null,
+	?string $language = null,
+	?\Shipard\Core\Alerts\AlertCheckRegistry $alertCheckRegistry = null,
 ): Response {
 	$registry = $resolved !== null
-		? buildMcpRegistry($db, $tables, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry())
+		? buildMcpRegistry($db, $tables, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $language, $alertCheckRegistry)
 		: null;
 	$ctrl = new ChatController($db, $configRuntime, $resolved?->config, new AnthropicLlmClient(), $tables, $registry);
 	return match ($route->action) {
@@ -1163,10 +1173,13 @@ function dispatchDashboard(
 	?\Shipard\Core\Alerts\AlertCheckRegistry $alertCheckRegistry = null,
 	array $tables = [],
 	?AuthContext $auth = null,
+	?Request $request = null,
 ): Response {
 	$ctrl = new DashboardController();
+	// Sekční filtr karet (?section=, UI shells Fáze 5) — jen akce index.
+	$section = $request !== null ? ($request->getQueryParams()['section'] ?? null) : null;
 	return match ($route->action) {
-		'index'         => $ctrl->dashboard($db, $configRuntime, $language, $alertCheckRegistry, $tables, $auth),
+		'index'         => $ctrl->dashboard($db, $configRuntime, $language, $alertCheckRegistry, $tables, $auth, $section !== null ? (string) $section : null),
 		'sectionBadges' => $ctrl->sectionBadges($db, $configRuntime, $language, $alertCheckRegistry, $tables),
 		'summary' => $ctrl->summary(
 			$db,

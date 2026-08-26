@@ -37,11 +37,28 @@ class DashboardController
         ?AlertCheckRegistry $alertRegistry = null,
         array $tables = [],
         ?AuthContext $auth = null,
+        ?string $section = null,
     ): Response {
         $lang = $language ?? 'en';
 
         $collector = new FeedCollector();
         [$cards, $truncated] = $collector->collect($db, $config, $lang, $alertRegistry, $tables);
+
+        // Sekční filtr `?section=` (UI shells Fáze 5, R4) — karty jedné sekce
+        // pro blok v scoped chat konverzaci. Filtruje se po collect; summary,
+        // readySummary i capabilities jsou celofeedové → při filtru se
+        // vynechají, odpověď nese jen karty. Nevalidní hodnota → přirozeně
+        // prázdný seznam, ne chyba.
+        if ($section !== null && $section !== '') {
+            $filtered = array_values(array_filter(
+                $cards,
+                static fn (array $c): bool => ($c['navSection'] ?? null) === $section,
+            ));
+            return Response::success([
+                'generatedAt' => (new \DateTimeImmutable())->format(\DateTimeInterface::ATOM),
+                'cards'       => $collector->stripInternalFields($filtered),
+            ]);
+        }
         // readySummary se počítá nad kartami po stropu (Issue #32/2) a interní
         // pole `amount`/`currency` se hned poté odstraní — do kontraktu nepatří.
         $readySummary = $this->buildReadySummary($cards);

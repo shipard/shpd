@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Shipard\Tests\Unit\Api\Mcp;
 
 use PHPUnit\Framework\TestCase;
+use Shipard\Api\Mcp\FeedCardsTool;
 use Shipard\Module\Base\Persons\Mcp\PersonsGetTool;
 use Shipard\Module\Base\Persons\Mcp\PersonsSearchTool;
 use Shipard\Module\Base\Registry\Mcp\RegistrySearchTool;
@@ -35,6 +36,7 @@ class McpToolReadOnlyTest extends TestCase
         $this->assertTrue((new HelpGetPageTool())->isReadOnly());
         $this->assertTrue((new ReportListTool())->isReadOnly());
         $this->assertTrue((new ReportRunTool())->isReadOnly());
+        $this->assertTrue((new FeedCardsTool())->isReadOnly());
     }
 
     public function testDraftToolIsNotReadOnly(): void

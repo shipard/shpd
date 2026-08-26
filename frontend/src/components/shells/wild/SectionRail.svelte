@@ -111,7 +111,8 @@
     flex-shrink: 0;
     padding: var(--shpd-space-sm) 0;
     background: var(--shpd-sidebar-bg-image, var(--shpd-color-bg-sidebar));
-    overflow: hidden;
+    /* Bez overflow: hidden — side-overlay dropdown UserMenu (compact)
+       vyjíždí doprava MIMO rail a ořez by ho skryl; scroll řeší __nav. */
   }
 
   .shpd-rail__brand {

@@ -55,8 +55,8 @@ tedy aplikaci, ale zavádíme tenkou vyměnitelnou vrstvu navigačního chrome.
 ## 4. Shell kontrakt
 
 > Realizováno Fází 4 (`frontend/src/components/shells/` — registry
-> `index.js`, `SidebarShell`, `ClassicShell`) — viz `frontend.md` §4
-> *Shelly*.
+> `index.js`, `SidebarShell`, `ClassicShell`; Fází 6 přibyl `WildShell`)
+> — viz `frontend.md` §4 *Shelly*.
 
 Shell je Svelte komponenta registrovaná v klientské mapě
 `shells/index.js` (vzor `panelComponents` v `ContentArea`); jména drží
@@ -155,7 +155,9 @@ sekce**, žádný nový subsystém (rozhodnuto: začít jednoduše).
   + počet, cap 99+) — ověření užitečnosti bez čekání na nové shelly.
   `_top` se v sidebaru nerenderuje (položky jsou trvale viditelné);
   collapsed pás zůstává bez badge. Classic shell (Fáze 4) badge kreslí
-  na položkách horního menu a `_top` badge na domečku.
+  na položkách horního menu a `_top` badge na domečku. Wild shell
+  (Fáze 6) je kreslí jako pilulku s počtem na ikonách railu — vč. `_top`
+  na domečku.
 
 ## 9. Command palette
 
@@ -230,7 +232,7 @@ chrome (řeší resolver v AppShellu jedním výrazem).
 |---|---|---|---|
 | `sidebar` | strom v levém panelu | tamtéž | dnešní stav, default |
 | `classic` | horní menu (+ domeček `_top`) | levý pás **uzlů úrovně 2** — leaf naviguje, skupina otevírá flyout s úrovní 3 | „starý Shipard"; **realizován Fází 4**. Klik na sekci → první leaf. Starý Shipard měl overflow „malé ikony dole" — v1 neřeší, pás scrolluje |
-| `wild` | levý rail velkých ikon s badge | horní záložky-ikony obsahu; 1. záložka = AI asistent sekce | AI-first, maximální kompaktnost |
+| `wild` | levý rail velkých ikon s badge | horní záložky-ikony obsahu; 1. záložka = AI asistent sekce | AI-first, maximální kompaktnost; **realizován Fází 6** (`tasks/ui-shells-phase6.md`). V1 = kompozice hotových kusů (Fáze 1–5), rozvoj iterativně dle chování. Stav prohlížení shell-lokální (`stores/wildShell.svelte.js`), paměť poslední záložky per sekce přežije settings mód, reload ne |
 | `mobile` | — | — | dnes režim uvnitř shellu; cílově vlastní shell, rezoluce = f(volba, form factor) |
 
 `classic` a `wild` jsou zrcadlové projekce (sekce nahoře/vlevo, leafy
@@ -280,4 +282,6 @@ dopředu.
 - ~~Transport badge dat a kadence refreshe~~ — rozhodnuto Fází 3:
   samostatný endpoint, polling 60 s + focus.
 - ~~Mechanika přepnutí shellu~~ — rozhodnuto Fází 4: soft swap (§11).
-- Úzká místa kompaktních shellů (reporty, široké gridy) — dořešit u fáze 6.
+- Úzká místa kompaktních shellů (reporty, široké gridy) — wild v1
+  neřeší (obsah je tatáž `ContentArea`, jen bez sidebaru = víc šířky);
+  vyhodnotit iterativně dle chování.

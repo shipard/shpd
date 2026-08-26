@@ -69,6 +69,7 @@ frontend/
 │   │   │   ├── NavTree.svelte          # Rekurzivní renderer navigačního stromu
 │   │   │   ├── NavIconStrip.svelte     # Plochý pás ikon leafů (sbalený sidebar)
 │   │   │   ├── NavFlyoutStrip.svelte   # Pás uzlů úrovně 2 s Popover flyouty (classic)
+│   │   │   ├── NavTabStrip.svelte      # Ikonové záložky uzlů úrovně 2 s dropdowny (wild)
 │   │   │   ├── UserMenu.svelte         # Avatar + dropdown (nastavení, jazyk, odhlásit)
 │   │   │   ├── BrandingHeader.svelte   # Ikona aplikace + logo
 │   │   │   └── ModeBackBar.svelte      # „← Zpět do aplikace" v settings/account
@@ -76,7 +77,9 @@ frontend/
 │   │   │   ├── index.js                # Registry shellů (jméno → komponenta)
 │   │   │   ├── SidebarShell.svelte     # Výchozí shell (sidebar/drawer + content)
 │   │   │   ├── ClassicShell.svelte     # Classic shell (horní menu + levý pás)
-│   │   │   └── classic/TopMenuBar.svelte # Horní menu classic shellu
+│   │   │   ├── classic/TopMenuBar.svelte # Horní menu classic shellu
+│   │   │   ├── WildShell.svelte        # Wild shell (rail + záložky + AI asistent sekce)
+│   │   │   └── wild/SectionRail.svelte # Svislý rail sekcí wild shellu
 │   │   ├── layout/
 │   │   │   ├── AppShell.svelte         # Globální starosti + resolver shellu
 │   │   │   ├── Sidebar.svelte          # Sidebar — kompozice chrome primitiv
@@ -155,7 +158,7 @@ Token má prefix `shpd_st_`, expirace 24h, uložen v `core_system_sessions`.
 
 Aplikace má vyměnitelné navigační chrome — **shelly** (`docs/ui-shells.md`).
 Shell je Svelte komponenta registrovaná v mapě
-`components/shells/index.js` (`{sidebar, classic}`); jména drží
+`components/shells/index.js` (`{sidebar, classic, wild}`); jména drží
 `KNOWN_SHELLS` v `utils/shell.js` (store nesmí importovat komponenty).
 
 - **`AppShell.svelte`** už nekreslí layout — zůstaly mu globální starosti
@@ -173,6 +176,22 @@ Shell je Svelte komponenta registrovaná v mapě
   podskupin; max jeden otevřený flyout, pás scrolluje). Domeček = `_top`
   (root-level leafy v pásu), badge sekcí vč. `_top` čte shell přímo ze
   `sectionBadgesStore`. Desktop-only.
+- **`WildShell.svelte`** (UI shells Fáze 6) — AI-first kompaktní shell:
+  svislý rail sekcí (`wild/SectionRail`, ikony s badge vč. `_top` na
+  domečku, dole paleta + UserMenu compact) + horní ikonové záložky
+  úrovně 2 (`chrome/NavTabStrip`) s AI záložkou jako prvním vstupem do
+  sekce (`chat/SectionAssistant`, ikona chatu, gate = Chat leaf ve
+  stromu). Stav prohlížení je shell-lokální
+  (`stores/wildShell.svelte.js`): `browsingSection` + paměť poslední
+  záložky per sekce (`lastTabBySection`) — klik na rail nenaviguje, jen
+  mění prohlíženou sekci; přistání řeší čistá funkce
+  `utils/wildLanding.js` (první vstup → AI záložka, jinak poslední
+  stav; domeček AI nemá a padá na dashboard). Externí navigace
+  (paleta, deep link) srovnává prohlížení efektem reagujícím jen na
+  změnu `activeSection`/`activeId`. `ContentArea` zůstává při AI
+  záložce mounted (skrytá přes CSS) — viewery nepřicházejí o stav.
+  Paměť přežije settings/account mód (module-level store), reload ji
+  čistí. Desktop-only.
 - **`stores/shell.svelte.js`** — follow/override/dsDefault po vzoru
   theme, ale bez anti-flash mechaniky (localStorage `shpd_shell` /
   `shpd_ds_shell` jen boot cache); efektivní shell přes čistý
@@ -181,7 +200,8 @@ Shell je Svelte komponenta registrovaná v mapě
   Uložit) — `docs/app-settings.md`.
 - **ThemePanel** dostává levý offset jako CSS délku (`leftOffset`) —
   hlásí ji aktivní shell přes bind (sidebar dle collapsed, classic
-  konstantou `--shpd-classic-strip-width`).
+  konstantou `--shpd-classic-strip-width`, wild konstantou
+  `--shpd-sidebar-width-collapsed` = šířka railu).
 - **App nav strom** načítá `navigationStore.loadAppNavTree()` (trigger:
   AppShell `$effect` při vstupu do app módu) — strom potřebují všechny
   shelly i paleta, fetch nesmí záviset na namontovaném shellu. Ordering
@@ -289,6 +309,7 @@ primitivy komponují jinak, místo reimplementace:
 | `NavTree` | rekurzivní renderer stromu (skupiny s toggle, leafy, aktivní stav); interní stav rozbalení + auto-expand cesty k aktivní položce |
 | `NavIconStrip` | plochý pás ikon leafů (`flattenLeaves`) — sbalený režim |
 | `NavFlyoutStrip` | pás uzlů úrovně 2 (classic shell): leaf naviguje, skupina otevírá Popover flyout s úrovní 3 |
+| `NavTabStrip` | horizontální ikonové záložky uzlů úrovně 2 (wild shell): leaf naviguje, skupina otevírá Popover dropdown s úrovní 3 — chování 1:1 s NavFlyoutStrip, jen orientace; o AI záložce nic neví (kreslí ji WildShell vedle) |
 | `UserMenu` | avatar + dropdown (Nastavení účtu/aplikace, jazyk, odhlásit); `compact` varianta se side-overlay dropdownem, `direction="down"` pro horizontální top bar |
 | `BrandingHeader` | ikona aplikace (branding slot) + logo/shortName, čte `appInfoStore` sám |
 | `ModeBackBar` | „← Zpět do aplikace" v settings/account módu, `compact` varianta |

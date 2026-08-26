@@ -190,8 +190,8 @@ ukládá na server (zdroj pravdy). Validace v `savePage()`:
   **DS-scope** (`app.theme`) follow nezná — případný flag se zahodí,
   uloží se jen `{mode, custom}`. Větvení podle `$pageDef['scope']`.
 - `shell` — objekt `{ shell, params }`; `shell` proti serverovému
-  allowlistu `SettingsController::SHELLS` (`sidebar`, `classic` — nový
-  shell = přidat jméno), `params` volitelný objekt (v1 passthrough bez
+  allowlistu `SettingsController::SHELLS` (`sidebar`, `classic`, `wild`
+  — nový shell = přidat jméno), `params` volitelný objekt (v1 passthrough bez
   interpretace). Follow kontrakt identický s theme: user-scope
   `{follow:true}` | `{follow:false, shell, params}` (legacy bez follow →
   override), DS-scope follow zahazuje.
@@ -379,7 +379,8 @@ Fáze 4: `SettingsControllerTest` — `account.theme` follow tvary
 — `/_app/info` vrací `theme` (null když nenastaveno).
 
 UI shells Fáze 4 (typ `shell`): `SettingsControllerTest` — `account.shell`
-follow/override (params passthrough), neznámé jméno → 422, `app.shell`
-bez follow, ne-objekt → 422; `AppControllerTest` — `/_app/info` vrací
-`shell` (null když nenastaveno); frontend `tests/Unit/shell.test.mjs` —
-`resolveShell`/normalizace.
+follow/override (params passthrough), neznámé jméno → 422, `wild` projde
+(Fáze 6), `app.shell` bez follow, ne-objekt → 422; `AppControllerTest` —
+`/_app/info` vrací `shell` (null když nenastaveno); frontend
+`tests/Unit/shell.test.mjs` — `resolveShell`/normalizace (vč. `wild`);
+`tests/Unit/wildLanding.test.mjs` — přistání záložek wild shellu.

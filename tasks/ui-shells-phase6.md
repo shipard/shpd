@@ -1,6 +1,14 @@
 # UI shells — Fáze 6: shell `wild`
 
-**Status:** připraveno k implementaci
+**Stav:** hotovo
+
+Implementováno 2026-08-26 (4 commity dle strategie); zbývá ruční smoke
+1–11 v prohlížeči a komentář v issue #45 po push. Odchylky od PRD:
+`resolveLanding` v `utils/wildLanding.js` (testováno); ChatThread dostal
+prop `showScopeChip` (AI záložka chip skrývá — scope dává záložka);
+label shellu ve volbě = „Kompaktní / Compact" (potvrzeno). R3 efekt
+reaguje jen na změnu `activeSection`/`activeId` (prev proměnné) — literal
+podmínka „liší se od browsingSection" by prohlížení vracela zpět.
 **Issue:** [#45](https://github.com/shipard/shpd/issues/45) (zastřešující)
 **Design doc:** `docs/ui-shells.md` §12
 **Návaznost:** skládá hotové kusy — Fáze 4 (resolver, registry, volba,

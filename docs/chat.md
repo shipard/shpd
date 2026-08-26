@@ -186,9 +186,10 @@ nástrojů.
   `chatPanel.svelte.js`. Viz `docs/dashboard.md` §8.
 - **Scope na sekci** (UI shells Fáze 5): nová konverzace zdědí scope
   z `navigationStore.activeSection` v okamžiku `newConversation()` —
-  volají to launcher, „+" v panelu a **tlačítko chatu v chrome** (hlavička
+  volají to launcher, „+" v panelu, **tlačítko chatu v chrome** (hlavička
   Sidebaru + sbalený pás, classic `TopMenuBar`; gate = Chat leaf v nav
-  tree, týž výraz jako capability `chat`). Draft drží `pendingSection`
+  tree, týž výraz jako capability `chat`) a „Nová konverzace" v AI
+  záložce wild shellu. Draft drží `pendingSection`
   v chat store; `section` se odešle s lazy create při první zprávě.
   U inputu chip s labelem sekce — v draftu s ✕ (`clearPendingSection`),
   po založení statický. Plná sekce Chat scope jen **zobrazuje** (chip +
@@ -201,6 +202,18 @@ nástrojů.
   odfiltrují. Chyba fetche → blok se tiše vynechá; po první zprávě
   zmizí. Model si feed čte nástrojem `feed_cards`
   ([`mcp-server.md`](mcp-server.md) §5).
+- **AI asistent sekce** (`SectionAssistant.svelte`, wild shell Fáze 6):
+  plná plocha AI záložky sekce — hlavička (název sekce, Nová konverzace,
+  Otevřít v Chatu) + `ChatThread` s `showScopeChip={false}` (scope dává
+  záložka, chip by byl redundantní a ✕ by vlákno od záložky
+  desynchronizoval). Vstup na záložku naváže na **nejnovější** scoped
+  konverzaci sekce (seznam nese `section`, řazený modified DESC), bez
+  existující založí prázdný draft (SectionCards + input). Sdílí tentýž
+  `chatStore` singleton — souběh s otevřeným ChatPanelem zobrazuje
+  totéž vlákno (přijatelné v1, stejná sémantika jako „Otevřít v Chatu").
+  Pozn.: `chatStore.remove()` po smazání aktivního vlákna zakládá draft
+  bez scope — mazání v asistentu není, po smazání v sekci Chat se
+  záložka při návratu čistě re-aktivuje.
 
 ---
 

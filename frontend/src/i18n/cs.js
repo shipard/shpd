@@ -100,7 +100,11 @@ export default {
   'app.menu.close': 'Zavřít menu',
   'tabbar.close': 'Zavřít {tab}',
 
-  // ── Shelly (classic) ──────────────────────────────────────────────────────
+  // ── Shelly (volba + classic) ──────────────────────────────────────────────
+  'shell.followApp': 'Podle aplikace',
+  'shell.option.sidebar': 'Sidebar',
+  'shell.option.classic': 'Klasické',
+  'shell.followsApp': 'Řídí se nastavením aplikace ({shell}).',
   'shell.classic.home': 'Domů',
   'shell.classic.sections': 'Sekce aplikace',
 

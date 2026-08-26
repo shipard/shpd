@@ -14,6 +14,8 @@
   import AvatarSlotField from './AvatarSlotField.svelte';
   import ThemeField from './ThemeField.svelte';
   import DsThemeField from './DsThemeField.svelte';
+  import ShellField from './ShellField.svelte';
+  import DsShellField from './DsShellField.svelte';
   import LanguageField from './LanguageField.svelte';
   import { iconSave, iconSpinner, resolveIcon } from '../../icons.js';
 
@@ -57,12 +59,20 @@
     })();
   });
 
+  // Pole ukládaná přes Uložit stránky: texty + DS-scope theme/shell
+  // (structured hodnoty v `values`). User-scope theme/shell/language jedou
+  // live stores, image/avatar vlastní upload endpoint — mimo Uložit.
+  function isSavedViaPage(field, scope) {
+    return field.type === 'text'
+      || ((field.type === 'theme' || field.type === 'shell') && scope === 'ds');
+  }
+
   // Server vrací jednu mapu values — rozdělíme na editovatelné texty
   // (string | null → '') a stavy image slotů.
-  //   user-scope theme/language → řízená přímo stores (live), do `values`
-  //     nepatří (mění se okamžitě, ne přes Uložit)
-  //   ds-scope theme (app.theme) → ukládá se přes Uložit jako hodnota, takže
-  //     do `values` patří (controlled DsThemeField)
+  //   user-scope theme/shell/language → řízená přímo stores (live), do
+  //     `values` nepatří (mění se okamžitě, ne přes Uložit)
+  //   ds-scope theme/shell (app.theme/app.shell) → ukládá se přes Uložit
+  //     jako hodnota, takže do `values` patří (controlled Ds*Field)
   function splitValues(serverValues) {
     const texts = {};
     const images = {};
@@ -72,11 +82,11 @@
         images[field.id] = serverValues[field.id] ?? null;
       } else if (field.type === 'text') {
         texts[field.id] = serverValues[field.id] ?? '';
-      } else if (field.type === 'theme' && scope === 'ds') {
-        // DS default — uloží se přes Uložit (objekt {mode, custom} nebo null).
+      } else if (isSavedViaPage(field, scope)) {
+        // DS default — structured objekt ({mode, custom} / {shell, params})
+        // nebo null.
         texts[field.id] = serverValues[field.id] ?? null;
       }
-      // user-scope theme/language — live stores, mimo `values`.
     }
     values = texts;
     imageStates = images;
@@ -118,11 +128,10 @@
     appInfoStore.load();
   }
 
-  // Uložit tlačítko pro pole ukládaná přes savePage: text + ds-scope theme
-  // (app.theme). image/user-theme/language se ukládají mimo (vlastní endpoint
-  // / live store binding), takže account Basic tlačítko nemá.
+  // Uložit tlačítko jen pro stránky s poli ukládanými přes savePage —
+  // account Basic (live stores) tlačítko nemá.
   let hasSavableFields = $derived((definition?.fields ?? []).some(f =>
-    f.type === 'text' || (f.type === 'theme' && (definition?.scope ?? 'ds') === 'ds')
+    isSavedViaPage(f, definition?.scope ?? 'ds')
   ));
 </script>
 
@@ -171,6 +180,15 @@
                   <ThemeField {onOpenThemePanel} />
                 {:else}
                   <DsThemeField
+                    value={values[field.id]}
+                    onchange={(v) => { values[field.id] = v; }}
+                  />
+                {/if}
+              {:else if field.type === 'shell'}
+                {#if (definition.scope ?? 'ds') === 'user'}
+                  <ShellField />
+                {:else}
+                  <DsShellField
                     value={values[field.id]}
                     onchange={(v) => { values[field.id] = v; }}
                   />

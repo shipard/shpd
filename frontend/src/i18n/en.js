@@ -91,7 +91,11 @@ export default {
   'app.menu.close': 'Close menu',
   'tabbar.close': 'Close {tab}',
 
-  // ── Shells (classic) ──────────────────────────────────────────────────────
+  // ── Shells (choice + classic) ─────────────────────────────────────────────
+  'shell.followApp': 'Follow application',
+  'shell.option.sidebar': 'Sidebar',
+  'shell.option.classic': 'Classic',
+  'shell.followsApp': 'Follows the application settings ({shell}).',
   'shell.classic.home': 'Home',
   'shell.classic.sections': 'Application sections',
 

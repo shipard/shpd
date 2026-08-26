@@ -28,7 +28,7 @@ nevypisují — níže je jen to, co není dokončené.
 | `ai-profile-sync-in-ds-upgrade.md` | naplánováno | sync není v `DsUpgradeCommand` |
 | `auth-phase0a-hardening.md` | naplánováno | rate limiting a evidence neúspěšných přihlášení chybí |
 | `dashboard-alert-grouping.md` | naplánováno | design schválen 2026-07-16, neimplementováno |
-| `dataset-phase1.md` | naplánováno | připraveno k implementaci |
+| `dataset-phase1.md` | naplánováno | rozhodnutí R1–R7 potvrzena 2026-08-26, implementace od kroku 1 |
 | `mail-preprocess.md` | naplánováno | připraveno k implementaci: Fáze 1; Fáze 2 blokována #34 |
 | `pdf-rendering-service.md` | naplánováno | rozhodnutí D1–D8 potvrzena (designová diskuze 18. 8. 2026) |
 | `doc-number-release-on-data-save.md` | částečně | kód + testy hotové 2026-08-13; zbývá D2 (reset test DS), ruční proklik a read-only verifikace na alfě |

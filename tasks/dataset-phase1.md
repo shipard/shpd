@@ -1,6 +1,6 @@
 # Datové sady — fáze 1: `dataset-dump` + `dataset-seed`
 
-**Stav:** naplánováno — připraveno k implementaci
+**Stav:** naplánováno — rozhodnutí R1–R7 potvrzena 2026-08-26, implementace od kroku 1
 
 ## Kontext / Cíl
 
@@ -39,6 +39,45 @@ seed defaultně resetuje (s potvrzením), `--no-reset` doplní do existujícího
 DS (use case „metodika"); dump bere **celý DS** bez filtrů; rozsah entit =
 osoby, položky, doklady, dokumenty spisovny, došlá pošta + analýzy + přílohy.
 
+## Doplňující rozhodnutí z plánování (2026-08-26)
+
+Zjištění z průzkumu kódu před implementací; potvrzeno v chatu.
+
+- **R1 — sekce `setup/`.** `ds-reset` + provisionery obnoví jednotky, druhy
+  položek, účtový rozvrh, fiskální roky, DPH období, číselné řady a default
+  mailbox, ale **ne** vlastní bankovní účty (`economy_codebooks_bank_accounts`,
+  nutné pro vydané faktury ve stavu 40), registrace DPH
+  (`economy_codebooks_vat_registrations`, `DocDocument` ji vyžaduje při
+  `vat_mode != 0`), šanony spisovny (`RegistryApplier::suggestBinder` nikdy
+  nevytváří) ani další mailboxy. Sada proto nese `setup/<tabulka>.jsonc`
+  (`bank_accounts`, `vat_registrations`, `binders`, `mailboxes`) — prosté
+  řádky s přirozeným klíčem (`code` / `country` / `name` / `mailbox_id`),
+  seedované přímo přes `TableGateway` před osobami. Vlastní firma jde
+  standardně přes persons (`status.isOwn`).
+- **R2 — přílohy spisovny.** Dokumenty spisovny přílohy vlastní (kopie ze
+  zprávy přes `copyTo`), doklady ne — `DocsHeadsViewer` je zobrazuje ze
+  zdrojové zprávy přes `source_message`. Registry záznam má proto sidecar
+  složku `registry/NNNN-<slug>.files/<název>`; seed ji po vložení nahraje
+  přes `AttachmentService::upload()`. U dokladů stačí obnovit lineage.
+- **R3 — registry obálka.** `RegistryApplier::apply()` vyžaduje řádek
+  zprávy a schéma `shpd.registry.document.v1` nenese docState, lineage ani
+  přílohy. Applier se nemění; sadový soubor je obálka
+  `{document: <canonical>, docState, sourceKind, binder (název), refNumber,
+  validFrom, validTo, notice, created, attachments[]}` a seed vkládá přes
+  `RegistryApplier::buildDocumentData()` + vlastní insert (vzor
+  `FileFromMessageService`).
+- **R4 — `att:<id>` v `canonical_json`.** Dump přepíše `att:<interní id>`
+  na `att:<pořadí přílohy ve zprávě>` (1-based, vyhoví vzoru
+  `^att:[0-9]+$`), seed mapuje zpět na nová id. Jinak by po seedu neprošel
+  apply návrhu ze zprávy a dump → seed → dump by nebyl byte-shodný.
+- **R5 — archiv vs koš.** Exportuje se vše s `docState != 90` u všech
+  entit včetně pošty (80 = Archiv je součást stavu DS, 90 = Koš ne).
+- **R6 — `ext-zip`** se doplní do `composer.json` `require`
+  (`IsdocReader` ho už tiše předpokládá).
+- **R7 — exportery** mají vedle `exportAll()` i `exportByIds()` — CLI filtr
+  nevystavuje, ale round-trip integrační test na sdíleném DS ho potřebuje
+  (seed `--no-reset` → export jen vložených záznamů → diff → úklid).
+
 ## Před implementací přečti
 
 - `docs/exchange-format.md` §3–4 (architektura, apply lifecycle),
@@ -64,10 +103,12 @@ osoby, položky, doklady, dokumenty spisovny, došlá pošta + analýzy + příl
 ```
 sada/
   manifest.jsonc
+  setup/*.jsonc          # shpd.dataset.setup.v1 — číselníky (R1)
   persons/*.jsonc        # shpd.persons.person.v1
   items/*.jsonc          # shpd.items.item.v1
   docs/*.jsonc           # shpd.docs.document.v1
-  registry/*.jsonc       # shpd.registry.document.v1
+  registry/*.jsonc       # obálka nad shpd.registry.document.v1 (R3)
+  registry/NNNN-<slug>.files/<soubor>  # přílohy dokumentu spisovny (R2)
   mail/
     messages/*.jsonc     # shpd.mail.incomingMessage.v1 (nový, viz níže)
     attachments/<soubor>  # binárka přílohy, jméno = obsah pole v message souboru
@@ -86,7 +127,7 @@ aby dump → seed → dump dával identický výsledek (diffovatelnost sady v gi
   "description": "…",
   "dateMode": "fixed",          // fáze 1: jen "fixed"
   "created": "2026-08-26T10:00:00Z",
-  "counts": { "persons": 12, "items": 8, "docs": 15, "registry": 4, "mail": 6 }
+  "counts": { "setup": 4, "persons": 12, "items": 8, "docs": 15, "registry": 4, "mail": 6 }
 }
 ```
 

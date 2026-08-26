@@ -8,6 +8,7 @@ use Dibi\Connection;
 use Dibi\Row;
 use PHPUnit\Framework\TestCase;
 use Shipard\Module\Base\Registry\RegistryExporter;
+use Shipard\Module\Core\Exchange\Dataset\AttachmentNames;
 
 class RegistryExporterTest extends TestCase
 {
@@ -97,9 +98,10 @@ class RegistryExporterTest extends TestCase
 
     public function testUniqueNameHandlesNoExtensionAndSlashes(): void
     {
-        $this->assertSame('a_b', RegistryExporter::uniqueName('a/b', []));
-        $this->assertSame('readme-2', RegistryExporter::uniqueName('readme', ['readme' => true]));
-        $this->assertSame('x-3.pdf', RegistryExporter::uniqueName('x.pdf', ['x.pdf' => true, 'x-2.pdf' => true]));
+        $this->assertSame('a_b', AttachmentNames::unique('a/b', []));
+        $this->assertSame('readme-2', AttachmentNames::unique('readme', ['readme' => true]));
+        $this->assertSame('x-3.pdf', AttachmentNames::unique('x.pdf', ['x.pdf' => true, 'x-2.pdf' => true]));
+        $this->assertSame('file', AttachmentNames::unique('..', []));
     }
 
     public function testExportAllSkipsTrashAndOrdersByCreated(): void

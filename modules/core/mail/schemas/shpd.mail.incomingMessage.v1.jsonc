@@ -1,0 +1,164 @@
+{
+    // shpd.mail.incomingMessage.v1 — sadová reprezentace došlé zprávy
+    // (core_mail_incoming_messages + core_mail_message_analyses + přílohy).
+    //
+    // Primárně dump/restore obal pro datové sady (tasks/dataset-phase1.md,
+    // #40) — nemá resolve aparát jako ostatní výměnné formáty. Interní id
+    // se nikam nepropisují: mailbox a AI profil jsou kódy, odesílatel jako
+    // identifikátory osoby, vazba analýza → zpráva vnořením, vazba na
+    // vytvořený doklad / dokument spisovny přes `target` (číslo dokladu,
+    // resp. titulek + created), přílohy jménem souboru v sidecar složce
+    // záznamu (`mail/NNNN-<slug>.files/<file>`).
+    //
+    // `att:<n>` odkazy uvnitř `canonicalJson` jsou při dumpu přepsané
+    // na 1-based pořadí přílohy v `attachments[]`; seed je mapuje zpět
+    // na nová id (R4).
+
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://shipard.cz/schemas/shpd.mail.incomingMessage.v1.json",
+    "title": "Shipard incoming mail message (dataset) v1",
+    "type": "object",
+    "additionalProperties": false,
+
+    "required": ["format", "formatVersion", "messageId", "mailbox", "subject", "senderEmail", "receivedAt"],
+
+    "properties": {
+        "format":        { "const": "shpd.mail.incomingMessage" },
+        "formatVersion": { "type": "string", "pattern": "^1\\.[0-9]+$" },
+
+        // ── Identita ────────────────────────────────────────────────────
+        // Lidský kód zprávy (MSG-YYYYMMDD-NNNN, unique). Seed ho zachová —
+        // IncomingMessageDocument generuje jen prázdný.
+        "messageId": { "type": "string", "minLength": 1, "maxLength": 30 },
+        // core_mail_mailboxes.mailbox_id
+        "mailbox":   { "type": "string", "minLength": 1 },
+
+        // ── Klasifikace ─────────────────────────────────────────────────
+        "primaryType":       { "type": ["string", "null"] },
+        "primaryTypeSource": { "type": ["string", "null"] },
+
+        // ── Hlavičky ────────────────────────────────────────────────────
+        "subject":     { "type": "string" },
+        "senderEmail": { "type": "string" },
+        "senderName":  { "type": ["string", "null"] },
+        "senderPerson": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "properties": {
+                "name":      { "type": ["string", "null"] },
+                "companyId": { "type": ["string", "null"] },
+                "taxId":     { "type": ["string", "null"] },
+                "vatId":     { "type": ["string", "null"] }
+            }
+        },
+        "receivedAt":        { "$ref": "#/$defs/LocalDateTime" },
+        "externalMessageId": { "type": ["string", "null"] },
+        "inReplyTo":         { "type": ["string", "null"] },
+        "replyReferences":   { "type": ["string", "null"] },
+        "isBulk":            { "type": ["boolean", "null"] },
+
+        // ── Tělo ────────────────────────────────────────────────────────
+        "bodyPlain": { "type": ["string", "null"] },
+        "bodyHtml":  { "type": ["string", "null"] },
+
+        // ── Stav ────────────────────────────────────────────────────────
+        // source_type: 1 manual, 2 e-mail, 3 API, 4 scan
+        "sourceType":        { "type": ["integer", "null"] },
+        // core.mail.docStatesIncoming: 10 Nová, 20 K řešení, 40 Hotovo, 80 Archiv (90 Koš se neexportuje)
+        "docState":          { "type": "integer", "enum": [10, 20, 40, 80] },
+        // core.mail.analysisStates: 0 žádná, 10 ve frontě, 20 analyzuje se, 30 hotová, 70 selhala
+        "analysisState":     { "type": "integer", "enum": [0, 10, 20, 30, 70] },
+        "aiAnalysisEnabled": { "type": ["boolean", "null"] },
+        "needsReanalysis":   { "type": ["boolean", "null"] },
+        // core_mail_ai_profiles.profile_id
+        "profileOverride":   { "type": ["string", "null"] },
+        "created":           { "$ref": "#/$defs/LocalDateTimeOrNull" },
+
+        // ── Lineage na vytvořený záznam (target_table_id / target_row) ──
+        "target": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "required": ["table"],
+            "properties": {
+                "table":     { "enum": ["docs_core_heads", "base_registry_documents"] },
+                // docs_core_heads: vlastní číslo dokladu
+                "docNumber": { "type": ["string", "null"] },
+                // base_registry_documents: titulek + created
+                "title":     { "type": ["string", "null"] },
+                "created":   { "$ref": "#/$defs/LocalDateTimeOrNull" }
+            }
+        },
+
+        // ── Přílohy (core_attachments_files, table_id 303) ──────────────
+        "attachments": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["file"],
+                "properties": {
+                    // jméno souboru v sidecar složce záznamu
+                    "file":        { "type": "string", "minLength": 1 },
+                    // původní zobrazované jméno
+                    "name":        { "type": ["string", "null"] },
+                    "mimeType":    { "type": ["string", "null"] },
+                    "size":        { "type": ["integer", "null"], "minimum": 0 },
+                    "sha256":      { "type": ["string", "null"], "pattern": "^[a-fA-F0-9]{64}$" },
+                    // raw .eml originál (raw_source_attachment) — není obsahová příloha
+                    "isRawSource": { "type": ["boolean", "null"] },
+                    "order":       { "type": ["integer", "null"] }
+                }
+            }
+        },
+
+        // ── Snapshot běhů analýzy (core_mail_message_analyses) ──────────
+        "analyses": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["analyzedAt", "status", "modelName", "promptVersion"],
+                "properties": {
+                    "analyzedAt":    { "$ref": "#/$defs/LocalDateTime" },
+                    // 1 pending, 2 success, 3 failed
+                    "status":        { "type": "integer", "enum": [1, 2, 3] },
+                    "modelName":     { "type": "string", "minLength": 1 },
+                    "modelVersion":  { "type": ["string", "null"] },
+                    "promptVersion": { "type": "string", "minLength": 1 },
+                    // core_mail_ai_profiles.profile_id
+                    "profile":       { "type": ["string", "null"] },
+                    // Surový výstup běhu — verbatim, bez prune.
+                    "analysisJson":  { "type": ["object", "null"], "additionalProperties": true },
+                    // shpd.docs.document.v1 / shpd.registry.document.v1 (nebo forenzní obal
+                    // {_validationError, …}) — verbatim, jen att: refs přepsané na pořadí.
+                    "canonicalJson": { "type": ["object", "null"], "additionalProperties": true },
+                    "confidence":    { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+                    "proposedType":  { "type": ["string", "null"] },
+                    "contentTag":    { "type": ["string", "null"] },
+                    "errorMessage":  { "type": ["string", "null"] },
+                    // core.mail.analysisResolutions: null otevřená, 40 použita, 50 odmítnuta
+                    "resolution":    { "enum": [null, 40, 50] },
+                    "rejectedReason": { "type": ["string", "null"] },
+                    "resolvedAt":    { "$ref": "#/$defs/LocalDateTimeOrNull" },
+                    "tokensInput":   { "type": ["integer", "null"] },
+                    "tokensOutput":  { "type": ["integer", "null"] },
+                    "durationMs":    { "type": ["integer", "null"] },
+                    "costUsd":       { "type": ["number", "null"] },
+                    "created":       { "$ref": "#/$defs/LocalDateTimeOrNull" }
+                }
+            }
+        }
+    },
+
+    "$defs": {
+        // Lokální čas DS bez posunu, jak ho drží DB (Y-m-d\TH:i:s).
+        "LocalDateTime": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}$"
+        },
+        "LocalDateTimeOrNull": {
+            "type": ["string", "null"],
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}$"
+        }
+    }
+}

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Shipard\Module\Base\Registry;
 
 use Dibi\Connection;
+use Shipard\Module\Core\Exchange\Dataset\AttachmentNames;
 use Shipard\Module\Core\Exchange\Dataset\ExportedFile;
 use Shipard\Module\Core\Exchange\Dataset\ExportedRecord;
 use Shipard\Module\Core\Exchange\Dataset\RecordExporter;
@@ -152,7 +153,7 @@ final class RegistryExporter implements RecordExporter
         $used = [];
         foreach ($rows as $r) {
             $r = is_array($r) ? $r : $r->toArray();
-            $name = self::uniqueName(V::str($r['name'] ?? null) ?? V::str($r['file_name'] ?? null) ?? 'file', $used);
+            $name = AttachmentNames::unique(V::str($r['name'] ?? null) ?? V::str($r['file_name'] ?? null) ?? 'file', $used);
             $used[$name] = true;
             $meta[] = V::prune([
                 'file'     => $name,
@@ -168,25 +169,5 @@ final class RegistryExporter implements RecordExporter
             );
         }
         return [$meta, $files];
-    }
-
-    /**
-     * @param array<string, true> $used
-     */
-    public static function uniqueName(string $name, array $used): string
-    {
-        $name = str_replace(['/', '\\', "\0"], '_', $name);
-        if (!isset($used[$name])) {
-            return $name;
-        }
-        $dot = strrpos($name, '.');
-        $base = $dot === false || $dot === 0 ? $name : substr($name, 0, $dot);
-        $ext = $dot === false || $dot === 0 ? '' : substr($name, $dot);
-        for ($i = 2; ; $i++) {
-            $candidate = "{$base}-{$i}{$ext}";
-            if (!isset($used[$candidate])) {
-                return $candidate;
-            }
-        }
     }
 }

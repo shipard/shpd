@@ -1,0 +1,405 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://shipard.cz/schemas/shpd.mail.incomingMessage.v1.json",
+    "title": "Shipard incoming mail message (dataset) v1",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+        "format",
+        "formatVersion",
+        "messageId",
+        "mailbox",
+        "subject",
+        "senderEmail",
+        "receivedAt"
+    ],
+    "properties": {
+        "format": {
+            "const": "shpd.mail.incomingMessage"
+        },
+        "formatVersion": {
+            "type": "string",
+            "pattern": "^1\\.[0-9]+$"
+        },
+        "messageId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 30
+        },
+        "mailbox": {
+            "type": "string",
+            "minLength": 1
+        },
+        "primaryType": {
+            "type": [
+                "string",
+                "null"
+            ]
+        },
+        "primaryTypeSource": {
+            "type": [
+                "string",
+                "null"
+            ]
+        },
+        "subject": {
+            "type": "string"
+        },
+        "senderEmail": {
+            "type": "string"
+        },
+        "senderName": {
+            "type": [
+                "string",
+                "null"
+            ]
+        },
+        "senderPerson": {
+            "type": [
+                "object",
+                "null"
+            ],
+            "additionalProperties": false,
+            "properties": {
+                "name": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "companyId": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "taxId": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "vatId": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                }
+            }
+        },
+        "receivedAt": {
+            "$ref": "#/$defs/LocalDateTime"
+        },
+        "externalMessageId": {
+            "type": [
+                "string",
+                "null"
+            ]
+        },
+        "inReplyTo": {
+            "type": [
+                "string",
+                "null"
+            ]
+        },
+        "replyReferences": {
+            "type": [
+                "string",
+                "null"
+            ]
+        },
+        "isBulk": {
+            "type": [
+                "boolean",
+                "null"
+            ]
+        },
+        "bodyPlain": {
+            "type": [
+                "string",
+                "null"
+            ]
+        },
+        "bodyHtml": {
+            "type": [
+                "string",
+                "null"
+            ]
+        },
+        "sourceType": {
+            "type": [
+                "integer",
+                "null"
+            ]
+        },
+        "docState": {
+            "type": "integer",
+            "enum": [
+                10,
+                20,
+                40,
+                80
+            ]
+        },
+        "analysisState": {
+            "type": "integer",
+            "enum": [
+                0,
+                10,
+                20,
+                30,
+                70
+            ]
+        },
+        "aiAnalysisEnabled": {
+            "type": [
+                "boolean",
+                "null"
+            ]
+        },
+        "needsReanalysis": {
+            "type": [
+                "boolean",
+                "null"
+            ]
+        },
+        "profileOverride": {
+            "type": [
+                "string",
+                "null"
+            ]
+        },
+        "created": {
+            "$ref": "#/$defs/LocalDateTimeOrNull"
+        },
+        "target": {
+            "type": [
+                "object",
+                "null"
+            ],
+            "additionalProperties": false,
+            "required": [
+                "table"
+            ],
+            "properties": {
+                "table": {
+                    "enum": [
+                        "docs_core_heads",
+                        "base_registry_documents"
+                    ]
+                },
+                "docNumber": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "title": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "created": {
+                    "$ref": "#/$defs/LocalDateTimeOrNull"
+                }
+            }
+        },
+        "attachments": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "file"
+                ],
+                "properties": {
+                    "file": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "name": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "mimeType": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "size": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ],
+                        "minimum": 0
+                    },
+                    "sha256": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "pattern": "^[a-fA-F0-9]{64}$"
+                    },
+                    "isRawSource": {
+                        "type": [
+                            "boolean",
+                            "null"
+                        ]
+                    },
+                    "order": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ]
+                    }
+                }
+            }
+        },
+        "analyses": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "analyzedAt",
+                    "status",
+                    "modelName",
+                    "promptVersion"
+                ],
+                "properties": {
+                    "analyzedAt": {
+                        "$ref": "#/$defs/LocalDateTime"
+                    },
+                    "status": {
+                        "type": "integer",
+                        "enum": [
+                            1,
+                            2,
+                            3
+                        ]
+                    },
+                    "modelName": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "modelVersion": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "promptVersion": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "profile": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "analysisJson": {
+                        "type": [
+                            "object",
+                            "null"
+                        ],
+                        "additionalProperties": true
+                    },
+                    "canonicalJson": {
+                        "type": [
+                            "object",
+                            "null"
+                        ],
+                        "additionalProperties": true
+                    },
+                    "confidence": {
+                        "type": [
+                            "number",
+                            "null"
+                        ],
+                        "minimum": 0,
+                        "maximum": 1
+                    },
+                    "proposedType": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "contentTag": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "errorMessage": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "resolution": {
+                        "enum": [
+                            null,
+                            40,
+                            50
+                        ]
+                    },
+                    "rejectedReason": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "resolvedAt": {
+                        "$ref": "#/$defs/LocalDateTimeOrNull"
+                    },
+                    "tokensInput": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ]
+                    },
+                    "tokensOutput": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ]
+                    },
+                    "durationMs": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ]
+                    },
+                    "costUsd": {
+                        "type": [
+                            "number",
+                            "null"
+                        ]
+                    },
+                    "created": {
+                        "$ref": "#/$defs/LocalDateTimeOrNull"
+                    }
+                }
+            }
+        }
+    },
+    "$defs": {
+        "LocalDateTime": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}$"
+        },
+        "LocalDateTimeOrNull": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}$"
+        }
+    }
+}

@@ -13,26 +13,30 @@ use Shipard\Core\Utils\JsoncParser;
  * `.json` is the compiled (comment-free) version actually loaded by
  * SchemaLoader. Without a CLI compile step they're maintained by hand and
  * drift is the obvious risk — this test parses both and compares.
+ *
+ * Covers every module that keeps schemas in the `{formatId}.v{n}` pair
+ * convention (exchange, mail datasets).
  */
 class SchemaDriftTest extends TestCase
 {
     /**
-     * @return array<string, array{0: string}>
+     * @return array<string, array{0: string, 1: string}>
      */
     public static function schemaProvider(): array
     {
         return [
-            'shpd.docs.document.v1'   => ['shpd.docs.document.v1'],
-            'shpd.persons.person.v1' => ['shpd.persons.person.v1'],
-            'shpd.items.item.v1'     => ['shpd.items.item.v1'],
-            'shpd.bank.statement.v1' => ['shpd.bank.statement.v1'],
+            'shpd.docs.document.v1'         => ['modules/core/exchange/schemas', 'shpd.docs.document.v1'],
+            'shpd.persons.person.v1'        => ['modules/core/exchange/schemas', 'shpd.persons.person.v1'],
+            'shpd.items.item.v1'            => ['modules/core/exchange/schemas', 'shpd.items.item.v1'],
+            'shpd.bank.statement.v1'        => ['modules/core/exchange/schemas', 'shpd.bank.statement.v1'],
+            'shpd.mail.incomingMessage.v1'  => ['modules/core/mail/schemas', 'shpd.mail.incomingMessage.v1'],
         ];
     }
 
     #[DataProvider('schemaProvider')]
-    public function testJsoncAndJsonAreEquivalent(string $name): void
+    public function testJsoncAndJsonAreEquivalent(string $dir, string $name): void
     {
-        $base = dirname(__DIR__, 6) . '/modules/core/exchange/schemas';
+        $base = dirname(__DIR__, 6) . '/' . $dir;
         $jsoncPath = "{$base}/{$name}.jsonc";
         $jsonPath = "{$base}/{$name}.json";
 

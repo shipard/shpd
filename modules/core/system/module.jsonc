@@ -92,6 +92,16 @@
                     "hint": "Default sidebar appearance for all users who haven't set their own.",
                     "hint:cs": "Výchozí vzhled sidebaru pro všechny uživatele, kteří nemají vlastní.",
                     "hint:en": "Default sidebar appearance for all users who haven't set their own."
+                },
+                {
+                    "id": "app.shell",
+                    "type": "shell",
+                    "name": "Default layout",
+                    "name:cs": "Výchozí rozložení",
+                    "name:en": "Default layout",
+                    "hint": "Default app layout (shell) for all users who haven't set their own.",
+                    "hint:cs": "Výchozí rozložení aplikace (shell) pro všechny uživatele, kteří nemají vlastní.",
+                    "hint:en": "Default app layout (shell) for all users who haven't set their own."
                 }
             ]
         },
@@ -122,6 +132,16 @@
                     "hint": "Sidebar color and light/dark base. Synced across your devices.",
                     "hint:cs": "Barva sidebaru a světlý/tmavý základ. Synchronizováno mezi vašimi zařízeními.",
                     "hint:en": "Sidebar color and light/dark base. Synced across your devices."
+                },
+                {
+                    "id": "account.shell",
+                    "type": "shell",
+                    "name": "Layout",
+                    "name:cs": "Rozložení",
+                    "name:en": "Layout",
+                    "hint": "App layout (shell) on desktop. Synced across your devices.",
+                    "hint:cs": "Rozložení aplikace (shell) na desktopu. Synchronizováno mezi vašimi zařízeními.",
+                    "hint:en": "App layout (shell) on desktop. Synced across your devices."
                 },
                 {
                     "id": "account.language",

@@ -104,7 +104,7 @@ class SettingsControllerTest extends TestCase
         $this->assertSame('appSettings', $data['definition']['id']);
         $this->assertSame('Aplikace', $data['definition']['label']);
         $this->assertSame('ds', $data['definition']['scope']);
-        $this->assertCount(5, $data['definition']['fields']);
+        $this->assertCount(6, $data['definition']['fields']);
 
         $byId = array_column($data['definition']['fields'], null, 'id');
         $this->assertSame('Název zdroje dat', $byId['app.name']['label']);
@@ -114,6 +114,9 @@ class SettingsControllerTest extends TestCase
         // DS default vzhledu — pole typu theme, scope ds (přes Uložit).
         $this->assertSame('theme', $byId['app.theme']['type']);
         $this->assertSame('Výchozí vzhled', $byId['app.theme']['label']);
+        // DS default shellu — pole typu shell, scope ds (přes Uložit).
+        $this->assertSame('shell', $byId['app.shell']['type']);
+        $this->assertSame('Výchozí rozložení', $byId['app.shell']['label']);
 
         $this->assertSame('Moje firma s.r.o.', $data['values']['app.name']);
         $this->assertNull($data['values']['app.shortName']);
@@ -292,8 +295,11 @@ class SettingsControllerTest extends TestCase
         $this->assertSame('theme', $byId['account.theme']['type']);
         $this->assertSame('language', $byId['account.language']['type']);
         $this->assertSame('Vzhled', $byId['account.theme']['label']);
+        $this->assertSame('shell', $byId['account.shell']['type']);
+        $this->assertSame('Rozložení', $byId['account.shell']['label']);
         $this->assertSame('cs', $data['values']['account.language']);
         $this->assertNull($data['values']['account.theme']);
+        $this->assertNull($data['values']['account.shell']);
     }
 
     public function testSavePageThemeStoresStructuredValue(): void
@@ -460,6 +466,119 @@ class SettingsControllerTest extends TestCase
 
         $this->assertSame(422, $this->getStatus($resp));
         $this->assertSame('app.theme', $resp->getPayload()['error']['details'][0]['field']);
+    }
+
+    // --- account.shell / app.shell (typ shell, UI shells Fáze 4) ---
+
+    public function testSavePageAccountShellFollowTrue(): void
+    {
+        $captured = null;
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchAll')->willReturn([]);
+        $db->expects($this->once())->method('execute')
+            ->willReturnCallback(function (...$args) use (&$captured) { $captured = $args; });
+
+        $resp = $this->ctrl->savePage(
+            'accountBasic',
+            $this->saveRequest(['values' => ['account.shell' => ['follow' => true]]]),
+            $this->config(), $this->resolver, $this->auth(), $db,
+        );
+
+        $this->assertSame(200, $this->getStatus($resp));
+        // UserSettingsStore::set váže (userId, key, json, json) — JSON je index 3.
+        $this->assertSame(['follow' => true], json_decode($captured[3], true));
+    }
+
+    public function testSavePageAccountShellOverrideKeepsFollowFalseAndParams(): void
+    {
+        $captured = null;
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchAll')->willReturn([]);
+        $db->expects($this->once())->method('execute')
+            ->willReturnCallback(function (...$args) use (&$captured) { $captured = $args; });
+
+        $resp = $this->ctrl->savePage(
+            'accountBasic',
+            $this->saveRequest(['values' => [
+                'account.shell' => ['follow' => false, 'shell' => 'classic', 'params' => ['density' => 'compact']],
+            ]]),
+            $this->config(), $this->resolver, $this->auth(), $db,
+        );
+
+        $this->assertSame(200, $this->getStatus($resp));
+        $stored = json_decode($captured[3], true);
+        $this->assertFalse($stored['follow']);
+        $this->assertSame('classic', $stored['shell']);
+        // params jsou v1 passthrough — bez interpretace, ale zachované.
+        $this->assertSame(['density' => 'compact'], $stored['params']);
+    }
+
+    public function testSavePageAccountShellUnknownNameReturns422(): void
+    {
+        $db = $this->mockDb();
+        $db->expects($this->never())->method('execute');
+
+        $resp = $this->ctrl->savePage(
+            'accountBasic',
+            $this->saveRequest(['values' => ['account.shell' => ['follow' => false, 'shell' => 'wild']]]),
+            $this->config(), $this->resolver, $this->auth(), $db,
+        );
+
+        $this->assertSame(422, $this->getStatus($resp));
+        $this->assertSame('account.shell', $resp->getPayload()['error']['details'][0]['field']);
+        $this->assertSame('INVALID_VALUE', $resp->getPayload()['error']['details'][0]['code']);
+    }
+
+    public function testSavePageAppShellStoresWithoutFollow(): void
+    {
+        $captured = null;
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchAll')->willReturn([]);
+        $db->expects($this->once())->method('execute')
+            ->willReturnCallback(function (...$args) use (&$captured) { $captured = $args; });
+
+        $resp = $this->ctrl->savePage(
+            'appSettings',
+            $this->saveRequest(['values' => [
+                'app.shell' => ['follow' => true, 'shell' => 'classic'],
+            ]]),
+            $this->config(), $this->resolver, $this->auth(), $db,
+        );
+
+        $this->assertSame(200, $this->getStatus($resp));
+        // DS scope follow ignoruje — uloží jen {shell, params}.
+        $stored = json_decode($captured[2], true);
+        $this->assertArrayNotHasKey('follow', $stored);
+        $this->assertSame('classic', $stored['shell']);
+    }
+
+    public function testSavePageAppShellInvalidParamsReturns422(): void
+    {
+        $db = $this->mockDb();
+        $db->expects($this->never())->method('execute');
+
+        $resp = $this->ctrl->savePage(
+            'appSettings',
+            $this->saveRequest(['values' => ['app.shell' => ['shell' => 'classic', 'params' => 'compact']]]),
+            $this->config(), $this->resolver, $this->auth(), $db,
+        );
+
+        $this->assertSame(422, $this->getStatus($resp));
+        $this->assertSame('app.shell', $resp->getPayload()['error']['details'][0]['field']);
+    }
+
+    public function testSavePageShellNonArrayReturns422(): void
+    {
+        $db = $this->mockDb();
+        $db->expects($this->never())->method('execute');
+
+        $resp = $this->ctrl->savePage(
+            'accountBasic',
+            $this->saveRequest(['values' => ['account.shell' => 'classic']]),
+            $this->config(), $this->resolver, $this->auth(), $db,
+        );
+
+        $this->assertSame(422, $this->getStatus($resp));
     }
 
     // --- account navigation ---

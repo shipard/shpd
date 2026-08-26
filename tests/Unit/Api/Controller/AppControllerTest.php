@@ -126,6 +126,23 @@ class AppControllerTest extends TestCase
         $this->assertSame('#0E4F5C', $theme['custom']['sidebar']['color']);
     }
 
+    public function testInfoShellNullWhenUnset(): void
+    {
+        $data = $this->makeController()->info()->getPayload()['data'];
+        $this->assertArrayHasKey('shell', $data);
+        $this->assertNull($data['shell']);
+    }
+
+    public function testInfoIncludesDsShell(): void
+    {
+        $resp = $this->makeController([
+            ['key' => 'app.shell', 'value' => json_encode(['shell' => 'classic', 'params' => []])],
+        ])->info();
+
+        $shell = $resp->getPayload()['data']['shell'];
+        $this->assertSame('classic', $shell['shell']);
+    }
+
     public function testInfoIncludesIconUrlWithHash(): void
     {
         $resp = $this->makeController([

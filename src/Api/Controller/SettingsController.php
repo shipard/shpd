@@ -25,6 +25,13 @@ use Shipard\Core\Utils\JsoncParser;
 
 class SettingsController
 {
+    /**
+     * Allowlist jmen shellů pro field typ `shell` — nový shell = přidat
+     * jméno. Chrání DS config před překlepy; klientský fallback na
+     * `sidebar` je druhá pojistka.
+     */
+    private const SHELLS = ['sidebar', 'classic'];
+
     public function navigation(
         DataSourceConfig $config,
         ModulePathResolver $resolver,
@@ -259,6 +266,32 @@ class SettingsController
                 ];
                 // Override z user-scope si nese explicitní follow:false, aby se
                 // odlišil od „sleduj DS"; ds-scope follow nezná.
+                $toSave[$id] = $isUserScope ? ['follow' => false] + $clean : $clean;
+            } elseif ($type === 'shell') {
+                if (!is_array($raw)) {
+                    $errors[] = ['field' => $id, 'code' => 'INVALID_VALUE', 'message' => 'Invalid shell value'];
+                    continue;
+                }
+                // Stejný follow kontrakt jako theme: user-scope {follow:true}
+                // = sleduj DS default, jinak {follow:false, shell, params};
+                // DS-scope follow nezná — případný flag zahodíme.
+                $isUserScope = ($pageDef['scope'] ?? 'ds') === 'user';
+                if ($isUserScope && ($raw['follow'] ?? false) === true) {
+                    $toSave[$id] = ['follow' => true];
+                    continue;
+                }
+                // `shell` proti allowlistu, `params` volitelný objekt
+                // (v1 prázdný — passthrough pro budoucí volby shellu).
+                if (!in_array($raw['shell'] ?? null, self::SHELLS, true)
+                    || (isset($raw['params']) && !is_array($raw['params']))
+                ) {
+                    $errors[] = ['field' => $id, 'code' => 'INVALID_VALUE', 'message' => 'Invalid shell value'];
+                    continue;
+                }
+                $clean = [
+                    'shell'  => $raw['shell'],
+                    'params' => is_array($raw['params'] ?? null) ? $raw['params'] : [],
+                ];
                 $toSave[$id] = $isUserScope ? ['follow' => false] + $clean : $clean;
             } elseif ($type === 'language') {
                 if (!in_array($raw, ['cs', 'en', 'auto'], true)) {

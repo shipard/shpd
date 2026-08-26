@@ -310,6 +310,7 @@ class ModuleDefinitionTest extends TestCase
                         ['type' => 'text'],                                  // chybí id pole
                         ['id' => 'a.b', 'type' => 'select'],                  // nepodporovaný typ
                         ['id' => 'a.c'],                                      // type default = text
+                        ['id' => 'a.d', 'type' => 'shell'],                   // podporovaný typ (UI shells Fáze 4)
                     ],
                 ],
             ],
@@ -317,8 +318,9 @@ class ModuleDefinitionTest extends TestCase
 
         $this->assertCount(1, $def->settingsPages);
         $this->assertSame('valid', $def->settingsPages[0]['id']);
-        $this->assertCount(1, $def->settingsPages[0]['fields']);
+        $this->assertCount(2, $def->settingsPages[0]['fields']);
         $this->assertSame('a.c', $def->settingsPages[0]['fields'][0]['id']);
+        $this->assertSame('shell', $def->settingsPages[0]['fields'][1]['type']);
     }
 
     public function testSettingsPagesAbsentDefaultsToEmpty(): void

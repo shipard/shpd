@@ -69,7 +69,7 @@ class ModuleDefinition
                     if (!is_array($field)) continue;
                     if (!isset($field['id']) || !is_string($field['id']) || $field['id'] === '') continue;
                     $type = $field['type'] ?? 'text';
-                    if (!in_array($type, ['text', 'image', 'theme', 'language', 'avatar'], true)) continue;
+                    if (!in_array($type, ['text', 'image', 'theme', 'language', 'avatar', 'shell'], true)) continue;
                     $field['type'] = $type;
                     $fields[]      = $field;
                 }

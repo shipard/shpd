@@ -59,6 +59,7 @@ class AppController
             'app.icon',
             'app.companyLogo',
             'app.theme',
+            'app.shell',
         ]);
 
         $name = is_string($values['app.name']) && trim($values['app.name']) !== ''
@@ -80,6 +81,9 @@ class AppController
             // s brandingem — je to jen barva sidebaru, nic citlivého. Klient
             // z něj počítá efektivní vzhled pro follow-uživatele.
             'theme'       => is_array($values['app.theme']) ? $values['app.theme'] : null,
+            // DS-wide výchozí shell ({shell, params} nebo null) — stejný
+            // kontrakt jako theme, klient z něj počítá efektivní shell.
+            'shell'       => is_array($values['app.shell']) ? $values['app.shell'] : null,
             // Auth politika pro login obrazovku — jen id + label providerů,
             // nikdy clientId/secret/issuer.
             'auth'        => [

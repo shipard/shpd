@@ -34,7 +34,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 class DsSettingCommand extends Command
 {
     /** Field typy settings stránek, které nesou JSON metadata spravovaná aplikací. */
-    private const STRUCTURED_FIELD_TYPES = ['image', 'avatar', 'theme'];
+    private const STRUCTURED_FIELD_TYPES = ['image', 'avatar', 'theme', 'shell'];
 
     public function __construct(
         private readonly ?DataSourceConfig $dsConfig = null,

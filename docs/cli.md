@@ -998,6 +998,37 @@ vypíše jako `warning:` — exit code zůstává 0.
 | `--title` | Titulek (default: název DS) |
 | `--description` | Popis sady |
 
+#### `dataset-seed`
+
+```bash
+sudo shpd-ds dataset-seed /tmp/web-demo
+sudo shpd-ds dataset-seed /tmp/web-demo.zip -y
+sudo shpd-ds dataset-seed /tmp/web-demo --no-reset
+```
+
+Naplní DS obsahem sady. Výchozí režim **resetuje DS** (delegace na
+`ds-reset` — na produkci vyžaduje `enableReset: true` v `config/main.json`,
+stejně jako `ds-reset` sám) a poté importuje sekce v pořadí setup → persons
+→ items → docs → registry → mail. Osoby, položky a doklady jdou přes
+standardní appliery (čísla dokladů se zachovávají, doklady ve stavu
+V pořádku se zaúčtují), dokumenty spisovny a zprávy se zapisují přímo přes
+Document hooky; přílohy do `att/`, analýzy zpráv jako snapshot (žádné
+volání AI). Vazby zpráva ↔ doklad se obnoví podle čísla dokladu.
+
+Před jakoukoli změnou proběhne **preflight** — manifest, každý soubor proti
+schématu a validátorům, přítomnost příloh. Chyba preflightu = nic se
+nesmaže. Na konci souhrn per sekce (ok / failed / skipped) a porovnání
+s `counts` z manifestu; jakákoli chyba záznamu = nenulový exit code.
+
+| Opce | Význam |
+|------|--------|
+| `<path>` | Složka sady nebo `.zip` |
+| `--no-reset` | Nemazat DS — doplnit sadu do existujícího obsahu (osoby/položky `mergeAdd`, duplicitní číslo dokladu nebo kód zprávy = chyba záznamu) |
+| `-y, --yes` | Bez potvrzení |
+
+> Manifest s `dateMode` jiným než `fixed` seed odmítne („not implemented“ —
+> relativní datování je mimo rozsah fáze 1).
+
 ### Seed (testovací data)
 
 > Seed příkazy jsou určené pro vývoj a demo. **Nepouštět na produkční DS.**

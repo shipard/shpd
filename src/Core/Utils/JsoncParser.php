@@ -6,7 +6,7 @@ namespace Shipard\Core\Utils;
 
 class JsoncParser
 {
-    public static function parse(string $content): mixed
+    public static function parse(string $content, bool $assoc = true): mixed
     {
         $result = '';
         $len = strlen($content);
@@ -98,20 +98,20 @@ class JsoncParser
         }
 
         try {
-            return json_decode($result, true, 512, JSON_THROW_ON_ERROR);
+            return json_decode($result, $assoc, 512, JSON_THROW_ON_ERROR);
         } catch (\JsonException $e) {
             throw new \RuntimeException('JSONC parse error: ' . $e->getMessage());
         }
     }
 
-    public static function parseFile(string $path): mixed
+    public static function parseFile(string $path, bool $assoc = true): mixed
     {
         $content = @file_get_contents($path);
         if ($content === false) {
             throw new \RuntimeException("Cannot read file: $path");
         }
         try {
-            return self::parse($content);
+            return self::parse($content, $assoc);
         } catch (\RuntimeException $e) {
             throw new \RuntimeException($e->getMessage() . " (file: $path)");
         }

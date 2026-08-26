@@ -1,0 +1,255 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Shipard\Tests\Unit\Command\DataSource;
+
+use Dibi\Connection;
+use PHPUnit\Framework\TestCase;
+use Shipard\Command\DataSource\DatasetSeedCommand;
+use Shipard\Core\Config\ConfigRuntime;
+use Shipard\Core\Config\DataSourceConfig;
+use Shipard\Core\Database\DataSourceConnection;
+use Shipard\Core\Document\DocumentRegistry;
+use Shipard\Core\Module\ModulePathResolver;
+use Shipard\Module\Core\Attachments\AttachmentService;
+use Shipard\Module\Core\Exchange\Dataset\DatasetManifest;
+use Shipard\Module\Core\Exchange\Dataset\DatasetReader;
+use Shipard\Module\Core\Exchange\Dataset\DatasetWriter;
+use Shipard\Module\Core\Exchange\Dataset\SectionSeeder;
+use Shipard\Module\Core\Exchange\Dataset\SeedContext;
+use Shipard\Module\Core\Exchange\Dataset\SeedReport;
+use Shipard\Tests\Unit\Module\Core\Exchange\Dataset\DatasetPreflightTest;
+use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Helper\HelperSet;
+use Symfony\Component\Console\Helper\QuestionHelper;
+use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\Console\Tester\CommandTester;
+
+class TestableDatasetSeedCommand extends DatasetSeedCommand
+{
+    public int $resetRuns = 0;
+    public int $settingsApplied = -1;
+    public int $settingsToReport = 3;
+    public int $resetResult = Command::SUCCESS;
+    public ?bool $lastMerge = null;
+    /** @var list<SectionSeeder> */
+    public array $seeders = [];
+
+    public function __construct(
+        DataSourceConfig $dsConfig,
+        DataSourceConnection $dsConnection,
+        private readonly string $dsDir,
+    ) {
+        parent::__construct($dsConfig, $dsConnection);
+    }
+
+    protected function getDataSourceDir(): string
+    {
+        return $this->dsDir;
+    }
+
+    protected function buildResolver(): ModulePathResolver
+    {
+        return new ModulePathResolver([]);
+    }
+
+    protected function applySettingsBeforeReset(DatasetReader $reader, DataSourceConfig $dsConfig): int
+    {
+        $this->settingsApplied = $this->resetRuns; // musí být 0 = před resetem
+        return $this->settingsToReport;
+    }
+
+    protected function runReset(OutputInterface $output): int
+    {
+        $this->resetRuns++;
+        return $this->resetResult;
+    }
+
+    /** @var (\Closure(DatasetReader, DataSourceConfig, DataSourceConnection, string, bool): SeedContext)|null */
+    public ?\Closure $contextFactory = null;
+
+    protected function createContext(
+        DatasetReader $reader,
+        DataSourceConfig $dsConfig,
+        DataSourceConnection $dsConnection,
+        string $dsDir,
+        bool $merge,
+    ): SeedContext {
+        $this->lastMerge = $merge;
+        return ($this->contextFactory)($reader, $dsConfig, $dsConnection, $dsDir, $merge);
+    }
+
+    protected function createSeeders(SeedContext $ctx): array
+    {
+        return $this->seeders;
+    }
+}
+
+class DatasetSeedCommandTest extends TestCase
+{
+    private string $tmp;
+    private string $dsDir;
+    private string $setDir;
+
+    protected function setUp(): void
+    {
+        $this->tmp = sys_get_temp_dir() . '/shpd_seedcmd_' . bin2hex(random_bytes(4));
+        $this->dsDir = $this->tmp . '/ds';
+        mkdir($this->dsDir . '/config', 0755, true);
+        file_put_contents($this->dsDir . '/config/main.json', '{}');
+        $this->setDir = $this->writeSet();
+    }
+
+    protected function tearDown(): void
+    {
+        DatasetReader::removeTree($this->tmp);
+    }
+
+    private function writeSet(bool $valid = true): string
+    {
+        $dir = $this->tmp . '/set' . ($valid ? '' : '-bad');
+        $w = DatasetWriter::create($dir);
+        $w->writeJsonc('persons/0001-acme.jsonc', $valid ? DatasetPreflightTest::person() : ['format' => 'shpd.persons.person']);
+        $w->writeManifest(new DatasetManifest('demo', 'Demo', null, 'fixed', '2026-08-26T10:00:00Z', ['persons' => 1]));
+        return $dir;
+    }
+
+    private function command(): TestableDatasetSeedCommand
+    {
+        $dsConfig = $this->createMock(DataSourceConfig::class);
+        $dsConfig->method('getName')->willReturn('Test DS');
+        $dsConfig->method('getDefaultLanguage')->willReturn('cs');
+        $dsConnection = $this->createMock(DataSourceConnection::class);
+
+        $cmd = new TestableDatasetSeedCommand($dsConfig, $dsConnection, $this->dsDir);
+        $cmd->setHelperSet(new HelperSet([new QuestionHelper()]));
+        $cmd->contextFactory = fn(DatasetReader $reader, DataSourceConfig $cfg, DataSourceConnection $conn, string $dir, bool $merge): SeedContext
+            => new SeedContext(
+                reader: $reader,
+                db: $this->createMock(Connection::class),
+                dsConnection: $conn,
+                config: $this->createMock(ConfigRuntime::class),
+                dsConfig: $cfg,
+                registry: new DocumentRegistry(),
+                tables: [],
+                dsDir: $dir,
+                attachments: $this->createMock(AttachmentService::class),
+                dispatcher: null,
+                merge: $merge,
+            );
+        $cmd->seeders = [new class implements SectionSeeder {
+            public function section(): string { return 'persons'; }
+            public function seed(SeedContext $ctx, SeedReport $report): void
+            {
+                foreach ($ctx->reader->listFiles('persons') as $rel) {
+                    $report->ok('persons');
+                }
+            }
+        }];
+        return $cmd;
+    }
+
+    private function contextAwareCommand(): TestableDatasetSeedCommand
+    {
+        return $this->command();
+    }
+
+    public function testResetAndSeedWithYes(): void
+    {
+        $cmd = $this->contextAwareCommand();
+        $tester = new CommandTester($cmd);
+        $exit = $tester->execute(['path' => $this->setDir, '--yes' => true]);
+
+        $display = $tester->getDisplay();
+        $this->assertSame(Command::SUCCESS, $exit, $display);
+        $this->assertSame(1, $cmd->resetRuns);
+        $this->assertSame(0, $cmd->settingsApplied, 'settings are applied before the reset runs');
+        $this->assertStringContainsString('Applied 3 data source setting(s)', $display);
+        $this->assertFalse($cmd->lastMerge);
+        $this->assertStringContainsString('Dataset demo — Demo (persons 1)', $display);
+        $this->assertStringContainsString('persons:   ok 1', $display);
+        $this->assertStringContainsString('Seed complete.', $display);
+    }
+
+    public function testNoResetSkipsResetAndSetsMerge(): void
+    {
+        $cmd = $this->contextAwareCommand();
+        $tester = new CommandTester($cmd);
+        $exit = $tester->execute(['path' => $this->setDir, '--yes' => true, '--no-reset' => true]);
+
+        $this->assertSame(Command::SUCCESS, $exit, $tester->getDisplay());
+        $this->assertSame(0, $cmd->resetRuns);
+        $this->assertSame(-1, $cmd->settingsApplied, 'merge mode leaves DS settings alone');
+        $this->assertTrue($cmd->lastMerge);
+    }
+
+    public function testDeclinedConfirmationAbortsBeforeReset(): void
+    {
+        $cmd = $this->contextAwareCommand();
+        $tester = new CommandTester($cmd);
+        $tester->setInputs(['n']);
+        $exit = $tester->execute(['path' => $this->setDir]);
+
+        $this->assertSame(Command::SUCCESS, $exit);
+        $this->assertSame(0, $cmd->resetRuns);
+        $this->assertStringContainsString('RESET data source', $tester->getDisplay());
+        $this->assertStringContainsString('Aborted.', $tester->getDisplay());
+    }
+
+    public function testPreflightFailureStopsBeforeReset(): void
+    {
+        $cmd = $this->contextAwareCommand();
+        $tester = new CommandTester($cmd);
+        $exit = $tester->execute(['path' => $this->writeSet(valid: false), '--yes' => true]);
+
+        $this->assertSame(Command::FAILURE, $exit);
+        $this->assertSame(0, $cmd->resetRuns);
+        $this->assertStringContainsString('preflight failed', $tester->getDisplay());
+        $this->assertStringContainsString('persons/0001-acme.jsonc:', $tester->getDisplay());
+    }
+
+    public function testResetFailureStopsSeed(): void
+    {
+        $cmd = $this->contextAwareCommand();
+        $cmd->resetResult = Command::FAILURE;
+        $tester = new CommandTester($cmd);
+        $exit = $tester->execute(['path' => $this->setDir, '--yes' => true]);
+
+        $this->assertSame(Command::FAILURE, $exit);
+        $this->assertStringContainsString('ds-reset failed', $tester->getDisplay());
+        $this->assertStringNotContainsString('Seed complete', $tester->getDisplay());
+    }
+
+    public function testRecordErrorsGiveFailureExit(): void
+    {
+        $cmd = $this->contextAwareCommand();
+        $cmd->seeders = [new class implements SectionSeeder {
+            public function section(): string { return 'persons'; }
+            public function seed(SeedContext $ctx, SeedReport $report): void
+            {
+                $report->failed('persons', '0001-acme.jsonc: validation_failed — x');
+            }
+        }];
+        $tester = new CommandTester($cmd);
+        $exit = $tester->execute(['path' => $this->setDir, '--yes' => true]);
+
+        $this->assertSame(Command::FAILURE, $exit);
+        $this->assertStringContainsString('failed 1', $tester->getDisplay());
+        $this->assertStringContainsString('Seed finished with 1 error(s)', $tester->getDisplay());
+    }
+
+    public function testInvalidPathFails(): void
+    {
+        $tester = new CommandTester($this->contextAwareCommand());
+        $this->assertSame(Command::FAILURE, $tester->execute(['path' => $this->tmp . '/nope', '--yes' => true]));
+        $this->assertStringContainsString('not found', $tester->getDisplay());
+    }
+
+    public function testOutsideDataSourceDirectoryFails(): void
+    {
+        unlink($this->dsDir . '/config/main.json');
+        $tester = new CommandTester($this->contextAwareCommand());
+        $this->assertSame(Command::FAILURE, $tester->execute(['path' => $this->setDir, '--yes' => true]));
+    }
+}

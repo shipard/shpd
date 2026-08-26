@@ -1,0 +1,183 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://shipard.cz/schemas/shpd.dataset.registryDocument.v1.json",
+    "title": "Shipard dataset registry document v1",
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+        "format",
+        "document"
+    ],
+    "properties": {
+        "format": {
+            "const": "shpd.dataset.registryDocument.v1"
+        },
+        "document": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+                "schema",
+                "docType",
+                "title"
+            ],
+            "properties": {
+                "schema": {
+                    "const": "shpd.registry.document.v1"
+                },
+                "docType": {
+                    "enum": [
+                        "contract",
+                        "insurance",
+                        "quotation",
+                        "certificate",
+                        "official",
+                        "other"
+                    ]
+                },
+                "title": {
+                    "type": "string",
+                    "minLength": 1
+                },
+                "summary": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                },
+                "party": {
+                    "type": [
+                        "object",
+                        "null"
+                    ],
+                    "additionalProperties": false,
+                    "properties": {
+                        "name": {
+                            "type": [
+                                "string",
+                                "null"
+                            ]
+                        },
+                        "companyId": {
+                            "type": [
+                                "string",
+                                "null"
+                            ]
+                        },
+                        "email": {
+                            "type": [
+                                "string",
+                                "null"
+                            ]
+                        }
+                    }
+                },
+                "kindFields": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "binderSuggestion": {
+                    "type": [
+                        "string",
+                        "null"
+                    ]
+                }
+            }
+        },
+        "docState": {
+            "type": "integer",
+            "enum": [
+                10,
+                40,
+                70,
+                80
+            ]
+        },
+        "sourceKind": {
+            "type": [
+                "string",
+                "null"
+            ]
+        },
+        "binder": {
+            "type": [
+                "string",
+                "null"
+            ]
+        },
+        "refNumber": {
+            "type": [
+                "string",
+                "null"
+            ]
+        },
+        "validFrom": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "format": "date"
+        },
+        "validTo": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "format": "date"
+        },
+        "notice": {
+            "type": [
+                "string",
+                "null"
+            ]
+        },
+        "created": {
+            "type": [
+                "string",
+                "null"
+            ],
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}$"
+        },
+        "attachments": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                    "file"
+                ],
+                "properties": {
+                    "file": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "name": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "mimeType": {
+                        "type": [
+                            "string",
+                            "null"
+                        ]
+                    },
+                    "size": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ],
+                        "minimum": 0
+                    },
+                    "sha256": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "pattern": "^[a-fA-F0-9]{64}$"
+                    }
+                }
+            }
+        }
+    }
+}

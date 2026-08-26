@@ -30,6 +30,8 @@ class SchemaDriftTest extends TestCase
             'shpd.items.item.v1'            => ['modules/core/exchange/schemas', 'shpd.items.item.v1'],
             'shpd.bank.statement.v1'        => ['modules/core/exchange/schemas', 'shpd.bank.statement.v1'],
             'shpd.mail.incomingMessage.v1'  => ['modules/core/mail/schemas', 'shpd.mail.incomingMessage.v1'],
+            'shpd.dataset.setup.v1'         => ['modules/core/exchange/schemas', 'shpd.dataset.setup.v1'],
+            'shpd.dataset.registryDocument.v1' => ['modules/base/registry/schemas', 'shpd.dataset.registryDocument.v1'],
         ];
     }
 

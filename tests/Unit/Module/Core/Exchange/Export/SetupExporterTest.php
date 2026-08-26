@@ -99,6 +99,35 @@ class SetupExporterTest extends TestCase
         $this->assertStringContainsString("'owner' (FK na base_persons_persons)", $exporter->getWarnings()[0]);
     }
 
+    public function testSettingsExportKeepsOnlyPortableKeys(): void
+    {
+        $def = $this->tableDef('core/system/tables/core_system_settings.jsonc');
+        $db = $this->createMock(Connection::class);
+        $db->expects($this->once())->method('fetchAll')->willReturnCallback(function (string $sql): array {
+            $this->assertStringContainsString('[core_system_settings]', $sql);
+            return [
+                new Row(['key' => 'app.companyLogo', 'value' => '"logo.png"']),
+                new Row(['key' => 'app.icon', 'value' => '{"storedAs":"icon.svg"}']),
+                new Row(['key' => 'app.name', 'value' => '"Demo firma"']),
+                new Row(['key' => 'economy.accountChart', 'value' => '"default"']),
+                new Row(['key' => 'economy.fiscalYearStartMonth', 'value' => '1']),
+                new Row(['key' => 'economy.vatAgenda', 'value' => 'true']),
+                new Row(['key' => 'test.jedna.b', 'value' => '"x"']),
+            ];
+        });
+
+        $records = (new SetupExporter($db, ['core_system_settings' => $def]))->exportAll();
+
+        $this->assertCount(1, $records);
+        $this->assertSame('settings', $records[0]->data['table']);
+        $this->assertSame([
+            ['key' => 'app.name', 'value' => 'Demo firma'],
+            ['key' => 'economy.accountChart', 'value' => 'default'],
+            ['key' => 'economy.fiscalYearStartMonth', 'value' => 1],
+            ['key' => 'economy.vatAgenda', 'value' => true],
+        ], $records[0]->data['rows']);
+    }
+
     public function testNoActiveTablesYieldsNothing(): void
     {
         $db = $this->createMock(Connection::class);

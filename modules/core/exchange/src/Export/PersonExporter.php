@@ -168,9 +168,11 @@ final class PersonExporter implements RecordExporter
         if ($kind === null) {
             return null;
         }
+        // fetchedAt se neexportuje: applier ho při seedu razítkuje NOW()
+        // (source_imported_at = okamžik importu), takže by dump → seed → dump
+        // nebyl stabilní.
         return [
             'kind'        => $kind,
-            'fetchedAt'   => V::dateTime($p['source_imported_at'] ?? null),
             'registryRef' => V::str($p['source_ref'] ?? null),
         ];
     }

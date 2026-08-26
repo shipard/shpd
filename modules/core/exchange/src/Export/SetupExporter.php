@@ -24,8 +24,22 @@ final class SetupExporter
 {
     public const FORMAT = 'shpd.dataset.setup.v1';
 
+    /**
+     * Pseudo-tabulka `settings`: rozhodovací parametry DS z `core_system_settings`
+     * (`economy.accountChart`, `economy.fiscalYearStartMonth`, …). Bez nich
+     * provisionery po resetu neseedují účtový rozvrh ani fiskální roky a
+     * doklady ze sady by se nezaúčtovaly. Aplikují se **před** `ds-reset`.
+     */
+    public const SETTINGS_TABLE = 'settings';
+
+    /** Prefixy / klíče nastavení, které sada nese (branding soubory ne). */
+    public const SETTINGS_PREFIXES = ['economy.'];
+    // app.icon / app.companyLogo odkazují na soubory v branding/ — nepřenosné.
+    public const SETTINGS_KEYS = ['app.name', 'app.shortName', 'app.theme', 'app.shell'];
+
     /** @var array<string, array{table: string, key: list<string>}> */
     public const TABLES = [
+        'settings'          => ['table' => 'core_system_settings',                'key' => ['key']],
         'bank_accounts'     => ['table' => 'economy_codebooks_bank_accounts',     'key' => ['code']],
         'vat_registrations' => ['table' => 'economy_codebooks_vat_registrations', 'key' => ['country', 'name']],
         'binders'           => ['table' => 'base_registry_binders',               'key' => ['name']],
@@ -62,7 +76,9 @@ final class SetupExporter
             $out[] = new ExportedRecord(0, $key, [
                 'format' => self::FORMAT,
                 'table'  => $key,
-                'rows'   => $this->exportTable($spec['table'], $def, $spec['key']),
+                'rows'   => $key === self::SETTINGS_TABLE
+                    ? $this->exportSettings()
+                    : $this->exportTable($spec['table'], $def, $spec['key']),
             ]);
         }
         return $out;
@@ -116,6 +132,41 @@ final class SetupExporter
             $out[] = $record;
         }
         return $out;
+    }
+
+    /**
+     * @return list<array{key: string, value: mixed}>
+     */
+    private function exportSettings(): array
+    {
+        $rows = $this->db->fetchAll('SELECT [key], [value] FROM [core_system_settings] ORDER BY [key]');
+        $out = [];
+        foreach ($rows as $r) {
+            $r = is_array($r) ? $r : $r->toArray();
+            $key = (string) ($r['key'] ?? '');
+            if (!self::isPortableSetting($key)) {
+                continue;
+            }
+            $value = is_string($r['value'] ?? null) ? json_decode($r['value'], true) : null;
+            if ($value === null) {
+                continue;
+            }
+            $out[] = ['key' => $key, 'value' => $value];
+        }
+        return $out;
+    }
+
+    public static function isPortableSetting(string $key): bool
+    {
+        if (in_array($key, self::SETTINGS_KEYS, true)) {
+            return true;
+        }
+        foreach (self::SETTINGS_PREFIXES as $prefix) {
+            if (str_starts_with($key, $prefix)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private function accountNumber(mixed $id): ?string

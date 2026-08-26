@@ -93,8 +93,9 @@ class PersonExporterTest extends TestCase
         $this->assertSame(['email' => 'info@zluty.example', 'phone' => '+420123456789'], $c['contact']);
         $this->assertSame(['isOwn' => true, 'docState' => 40], $c['status']);
         $this->assertSame(
-            ['kind' => 'registry', 'fetchedAt' => '2026-05-01T10:20:30', 'registryRef' => 'ares:12345678'],
+            ['kind' => 'registry', 'registryRef' => 'ares:12345678'],
             $c['source'],
+            'fetchedAt is not exported — the applier stamps import time itself',
         );
 
         $addr = $c['addresses'][0];

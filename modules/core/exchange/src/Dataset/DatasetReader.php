@@ -135,6 +135,24 @@ final class DatasetReader
     }
 
     /**
+     * Stejný soubor jako objektový strom (`stdClass`) — pro bloby, které se
+     * mají přenést verbatim (`{}` nesmí zdegenerovat na `[]`).
+     */
+    public function readJsoncObjects(string $relPath): \stdClass
+    {
+        $full = $this->resolvePath($relPath);
+        try {
+            $data = JsoncParser::parseFile($full, assoc: false);
+        } catch (\Throwable $e) {
+            throw DatasetException::invalidFile($relPath, $e->getMessage());
+        }
+        if (!$data instanceof \stdClass) {
+            throw DatasetException::invalidFile($relPath, 'top level must be a JSON object');
+        }
+        return $data;
+    }
+
+    /**
      * Absolutní cesta k souboru v sadě. Odmítá cesty mimo kořen.
      */
     public function resolvePath(string $relPath, bool $mustExist = true): string

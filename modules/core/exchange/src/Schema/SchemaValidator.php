@@ -24,13 +24,17 @@ final class SchemaValidator
      * @param array<string, mixed> $payload Canonical document as PHP array.
      * @return array<int, array{severity: string, path: string, code: string, message: string}>
      */
-    public function validate(array $payload, string $formatId, string $version): array
+    public function validate(array|\stdClass $payload, string $formatId, string $version): array
     {
         $schema = $this->loader->load($formatId, $version);
 
         // Opis expects stdClass-decoded data, not PHP associative arrays
-        // (otherwise empty objects are mis-detected as empty arrays).
-        $data = json_decode(json_encode($payload, JSON_UNESCAPED_UNICODE), false);
+        // (otherwise empty objects are mis-detected as empty arrays). Callers
+        // holding the object form (dataset files, verbatim blobs) pass it
+        // straight through — `{}` must stay an object.
+        $data = $payload instanceof \stdClass
+            ? $payload
+            : json_decode(json_encode($payload, JSON_UNESCAPED_UNICODE), false);
 
         $validator = new Validator();
         $result = $validator->schemaValidation($data, $validator->loader()->loadObjectSchema($schema));

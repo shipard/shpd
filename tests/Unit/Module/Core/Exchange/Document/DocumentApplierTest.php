@@ -8,6 +8,7 @@ use Dibi\Connection;
 use Dibi\Row;
 use PHPUnit\Framework\TestCase;
 use Shipard\Core\Config\ConfigRuntime;
+use Shipard\Core\Document\DocumentResult;
 use Shipard\Core\Utils\JsoncParser;
 use Shipard\Module\Core\Exchange\Common\ApplyResult;
 use Shipard\Module\Core\Exchange\Document\DocumentApplier;
@@ -1577,5 +1578,86 @@ class DocumentApplierTest extends TestCase
         $issues = $result->canonical['_resolve']['issues'] ?? [];
         $this->assertNull($this->findIssueByCode($issues, 'row_operation_defaulted'));
         $this->assertNull($this->findIssueByCode($issues, 'row_operation_config_invalid'));
+    }
+
+    // ── applyOptions.importOwnBankAccount jako kód číselníku (datasety) ──
+
+    /** Matched resolvery, aby apply došel až k 5c (bez side-creates). */
+    private function buildApplierForOwnBankTests(Connection $db, ?TransactionlessTableGateway $heads = null): DocumentApplier
+    {
+        $party = $this->createMock(PartyResolver::class);
+        $party->method('resolve')->willReturn(ResolveResult::matched(5, 'companyId'));
+        $unit = $this->createMock(UnitResolver::class);
+        $unit->method('resolve')->willReturn(ResolveResult::matched(3, 'systemCode'));
+        $item = $this->createMock(ItemResolver::class);
+        $item->method('resolve')->willReturn(ResolveResult::matched(18, 'ourCode'));
+        $vat = $this->createMock(VatCodeResolver::class);
+        $vat->method('resolve')->willReturn(new ResolveResult(
+            ResolveStatus::Matched, matchedId: 0, matchedBy: 'cfgItem',
+            createPayload: ['code' => 'highEU', 'pct' => 21.0, 'reverseVatCode' => null, 'noPayTax' => false],
+        ));
+        $bank = $this->createMock(BankAccountResolver::class);
+        $bank->method('resolvePartnerBank')->willReturn(ResolveResult::matched(7, 'iban'));
+
+        return $this->buildApplier(db: $db, party: $party, item: $item, unit: $unit, vat: $vat, bank: $bank, heads: $heads);
+    }
+
+    public function testApplyRejectsUnknownOwnBankAccountCode(): void
+    {
+        $db = $this->createMock(Connection::class);
+        $db->method('fetch')->willReturn(null); // series default → null, bank code → not found
+        $db->expects($this->never())->method('begin');
+
+        $payload = json_decode(
+            (string) file_get_contents(__DIR__ . '/../../../../../Fixtures/Exchange/invoiceReceived_happy.json'),
+            true,
+        );
+        $payload['applyOptions'] = ['importOwnBankAccount' => 'MAIN'];
+
+        $result = $this->buildApplierForOwnBankTests($db)->apply($payload);
+
+        $this->assertFalse($result->success);
+        $this->assertSame('own_bank_account_not_found', $result->errorCode);
+        $this->assertSame(422, $result->statusCode);
+        $this->assertStringContainsString("'MAIN'", (string) $result->errorMessage);
+    }
+
+    public function testApplyResolvesOwnBankAccountCodeToId(): void
+    {
+        $db = $this->createMock(Connection::class);
+        $db->method('fetch')->willReturnCallback(static function (string $sql): ?Row {
+            if (str_contains($sql, '[economy_codebooks_bank_accounts]')) {
+                return new Row(['id' => 17]);
+            }
+            return null;
+        });
+
+        $heads = $this->createMock(TransactionlessTableGateway::class);
+        $heads->expects($this->once())
+            ->method('saveDocument')
+            ->with($this->callback(static fn(array $data): bool => ($data['bank_account'] ?? null) === 17))
+            ->willReturn(DocumentResult::ok(['id' => 100]));
+
+        $payload = json_decode(
+            (string) file_get_contents(__DIR__ . '/../../../../../Fixtures/Exchange/invoiceReceived_happy.json'),
+            true,
+        );
+        $payload['applyOptions'] = ['importOwnBankAccount' => 'MAIN'];
+
+        $result = $this->buildApplierForOwnBankTests($db, $heads)->apply($payload);
+
+        $this->assertTrue($result->success, "Expected success; got {$result->errorCode}: {$result->errorMessage}");
+        $this->assertSame(100, $result->savedId);
+        $this->assertSame(17, $result->canonical['applyOptions']['importOwnBankAccount']);
+    }
+
+    public function testValidateAcceptsStringOwnBankAccountInSchema(): void
+    {
+        $result = $this->buildApplier()->validate([
+            'format' => 'shpd.docs.document', 'formatVersion' => '1.0', 'docType' => 'invoiceReceived',
+            'selfParty' => 'customer', 'supplier' => ['name' => 'X'], 'dates' => ['issueDate' => '2026-06-01'],
+            'applyOptions' => ['importOwnBankAccount' => 'MAIN'],
+        ]);
+        $this->assertNotSame('schema_invalid', $result->errorCode);
     }
 }

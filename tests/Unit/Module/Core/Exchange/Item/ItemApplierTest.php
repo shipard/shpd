@@ -16,6 +16,7 @@ use Shipard\Module\Core\Exchange\Item\ItemFlowResolver;
 use Shipard\Module\Core\Exchange\Item\ItemResolveResult;
 use Shipard\Module\Core\Exchange\Item\ItemValidator;
 use Shipard\Module\Core\Exchange\Person\PersonApplier;
+use Shipard\Module\Core\Exchange\Resolve\AccountResolver;
 use Shipard\Module\Core\Exchange\Resolve\ResolveResult;
 use Shipard\Module\Core\Exchange\Resolve\UnitResolver;
 use Shipard\Module\Core\Exchange\Schema\SchemaLoader;
@@ -616,6 +617,7 @@ class ItemApplierTest extends TestCase
         ?TransactionlessTableGateway $itemsGateway = null,
         ?TransactionlessTableGateway $kindsGateway = null,
         ?PersonApplier $personApplier = null,
+        ?AccountResolver $accountResolver = null,
     ): TestableItemApplier {
         $db ??= $this->createMock(Connection::class);
         $resolver ??= $this->stubResolver(
@@ -638,6 +640,61 @@ class ItemApplierTest extends TestCase
             flowResolver: $resolver,
             unitResolver: $unitResolver,
             personApplier: $personApplier,
+            accountResolver: $accountResolver,
         );
+    }
+
+    // ── accountingAccount + contentTags (datasety, #40) ────────────────────
+
+    public function testApplyStoresAccountingAccountAndContentTags(): void
+    {
+        $account = $this->createMock(AccountResolver::class);
+        $account->expects($this->once())->method('resolve')->with('518100')->willReturn(9);
+
+        $gateway = $this->createMock(TransactionlessTableGateway::class);
+        $gateway->expects($this->once())
+            ->method('saveDocument')
+            ->with($this->callback(static fn(array $p): bool => ($p['accounting_account'] ?? null) === 9
+                && ($p['content_tags'] ?? null) === ['it.software', 'services.accounting']))
+            ->willReturn(DocumentResult::ok(['id' => 42]));
+
+        $applier = $this->buildApplier(itemsGateway: $gateway, accountResolver: $account);
+        $result = $applier->apply($this->validPayload([
+            'accountingAccount' => '518100',
+            'contentTags'       => ['it.software', 'services.accounting'],
+        ]));
+
+        $this->assertTrue($result->success, "Expected success; got {$result->errorCode}: {$result->errorMessage}");
+    }
+
+    public function testUnknownAccountingAccountIsWarningNotError(): void
+    {
+        $account = $this->createMock(AccountResolver::class);
+        $account->method('resolve')->willReturn(null);
+
+        $gateway = $this->createMock(TransactionlessTableGateway::class);
+        $gateway->expects($this->once())
+            ->method('saveDocument')
+            ->with($this->callback(static fn(array $p): bool => !array_key_exists('accounting_account', $p)))
+            ->willReturn(DocumentResult::ok(['id' => 42]));
+
+        $applier = $this->buildApplier(itemsGateway: $gateway, accountResolver: $account);
+        $result = $applier->apply($this->validPayload(['accountingAccount' => '999999']));
+
+        $this->assertTrue($result->success);
+        $codes = array_column($result->canonical['_resolve']['issues'] ?? [], 'code');
+        $this->assertContains('account_not_found', $codes);
+    }
+
+    public function testEmptyContentTagsAreNotWritten(): void
+    {
+        $gateway = $this->createMock(TransactionlessTableGateway::class);
+        $gateway->expects($this->once())
+            ->method('saveDocument')
+            ->with($this->callback(static fn(array $p): bool => !array_key_exists('content_tags', $p)))
+            ->willReturn(DocumentResult::ok(['id' => 42]));
+
+        $result = $this->buildApplier(itemsGateway: $gateway)->apply($this->validPayload(['contentTags' => []]));
+        $this->assertTrue($result->success);
     }
 }

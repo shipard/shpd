@@ -117,6 +117,13 @@ Zbytek pojmosloví (Canonical, Schema, Resolve, Apply, Lineage) viz
   "unit":            "h",                 // ISO code, lokální zkratka nebo název;
                                           //   UnitResolver mapuje na core_units.id
 
+  // ── Účtování / klasifikace (volitelné, datové sady #40) ─────────────────
+  "accountingAccount": "518100",          // číslo účtu z rozvrhu → economy_items.accounting_account
+                                          //   (extension economy.accounting); AccountResolver,
+                                          //   neznámé číslo = warning account_not_found, bez účtu
+  "contentTags": ["it.software"],         // klíče cfgItem core.exchange.contentTags
+                                          //   → economy_items.content_tags (JSON list)
+
   // ── Per-partner dodavatelské kódy ───────────────────────────────────────
   "supplierCodes": [ { /* viz §6 */ } ],
 
@@ -180,6 +187,19 @@ neaktivní) zůstává pořadí `ourCode → ean → sku → name`.
 v `kind.itemType` (hint pro KindResolver / pro canCreate nového kindu).
 Pokud klient v payloadu pošle top-level `itemType`, schema ho odmítne
 (`additionalProperties: false`).
+
+### `accountingAccount` / `contentTags` — rozšíření pro datové sady
+
+Původní Fáze 1 položek tato pole neměla; přidala je fáze 1 datových sad
+(#40), protože bez účtu položky by se doklady seedované ze sady zaúčtovaly
+jinak než v původním DS. `accountingAccount` je **číslo** účtu (ne id) —
+`ItemApplier` ho přes `AccountResolver` mapuje na
+`economy_items.accounting_account`; neznámé číslo nebo DS bez extension
+`economy.accounting` = warning `account_not_found`, položka se uloží bez
+účtu. `contentTags` jde do `economy_items.content_tags` (validaci klíčů
+proti taxonomii dělá `ItemDocument`). U `mergeAdd` se obě doplní jen do
+prázdných sloupců, `fullSync`/`updateHeader` přepisují. Opačný směr:
+`ItemExporter` (`modules/core/exchange/src/Export/`).
 
 ## 4. Životní cyklus
 

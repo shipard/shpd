@@ -13,6 +13,7 @@ use Shipard\Module\Core\Exchange\Common\ApplyResult;
 use Shipard\Module\Core\Exchange\Common\PartyToPersonCanonical;
 use Shipard\Module\Core\Exchange\Common\TransactionlessTableGateway;
 use Shipard\Module\Core\Exchange\Person\PersonApplier;
+use Shipard\Module\Core\Exchange\Resolve\AccountResolver;
 use Shipard\Module\Core\Exchange\Resolve\ItemResolver;
 use Shipard\Module\Core\Exchange\Resolve\KindResolver;
 use Shipard\Module\Core\Exchange\Resolve\ResolveResult;
@@ -80,6 +81,7 @@ class ItemApplier
         private readonly ItemFlowResolver $flowResolver,
         private readonly UnitResolver $unitResolver,
         private readonly ?PersonApplier $personApplier = null,
+        private readonly ?AccountResolver $accountResolver = null,
     ) {}
 
     /**
@@ -119,6 +121,7 @@ class ItemApplier
             flowResolver: $flowResolver,
             unitResolver: $unitResolver,
             personApplier: $personApplier,
+            accountResolver: new AccountResolver($db),
         );
     }
 
@@ -216,6 +219,13 @@ class ItemApplier
         $strategy = MergeStrategy::fromCanonical($canonical['applyOptions']['mergeStrategy'] ?? null);
         $resolve = $this->flowResolver->resolve($canonical);
 
+        // 3b. Účet položky (číslo z účtového rozvrhu, datové sady #40) → id.
+        //     Neznámý účet = warning, položka se uloží bez účtu.
+        [$accountingAccountId, $accountIssue] = $this->resolveAccountingAccount($canonical);
+        if ($accountIssue !== null) {
+            $validatorIssues[] = $accountIssue;
+        }
+
         // 4. Reconcile header userAction
         $clientResolve = is_array($canonical['_resolve'] ?? null) ? $canonical['_resolve'] : [];
         $headerUserAction = $clientResolve['header']['userAction'] ?? null;
@@ -263,7 +273,7 @@ class ItemApplier
         try {
             $kindId = $this->resolveOrSideCreateKind($resolve, $clientResolve);
             $unitId = $this->resolveOrFallbackUnit($resolve);
-            $savedItemId = $this->saveHeader($canonical, $resolve, $headerDecision, $kindId, $unitId);
+            $savedItemId = $this->saveHeader($canonical, $resolve, $headerDecision, $kindId, $unitId, $accountingAccountId);
             $this->saveSupplierCodes($canonical, $resolve, $savedItemId, $clientResolve);
             $this->writeLineage($canonical, $savedItemId);
             $this->db->commit();
@@ -421,13 +431,14 @@ class ItemApplier
         array $decision,
         int $kindId,
         int $unitId,
+        ?int $accountingAccountId = null,
     ): int {
         $useExistingId = $decision['useExistingId'];
         $strategy = MergeStrategy::fromCanonical($canonical['applyOptions']['mergeStrategy'] ?? null);
         $targetDocState = (int) ($canonical['applyOptions']['targetDocState'] ?? self::DEFAULT_TARGET_DOC_STATE);
 
         if ($useExistingId === null) {
-            $payload = $this->transformHeaderForCreate($canonical, $kindId, $unitId, $targetDocState);
+            $payload = $this->transformHeaderForCreate($canonical, $kindId, $unitId, $targetDocState, $accountingAccountId);
             $result = $this->itemsGateway->saveDocument($payload);
             if (!$result->isSuccess()) {
                 throw new \RuntimeException('Header create failed: ' . $this->describeSaveFailure($result));
@@ -441,9 +452,9 @@ class ItemApplier
         }
 
         if ($strategy === MergeStrategy::UpdateHeader || $strategy === MergeStrategy::FullSync) {
-            $patch = $this->transformHeaderForUpdate($canonical, $existing, $kindId, $unitId, overwrite: true);
+            $patch = $this->transformHeaderForUpdate($canonical, $existing, $kindId, $unitId, overwrite: true, accountingAccountId: $accountingAccountId);
         } elseif ($strategy === MergeStrategy::MergeAdd) {
-            $patch = $this->transformHeaderForUpdate($canonical, $existing, $kindId, $unitId, overwrite: false);
+            $patch = $this->transformHeaderForUpdate($canonical, $existing, $kindId, $unitId, overwrite: false, accountingAccountId: $accountingAccountId);
         } else {
             // CreateOnly should never reach here (rejected in reconcileHeader).
             return $useExistingId;
@@ -466,7 +477,7 @@ class ItemApplier
      * @param array<string, mixed> $canonical
      * @return array<string, mixed>
      */
-    private function transformHeaderForCreate(array $canonical, int $kindId, int $unitId, int $targetDocState): array
+    private function transformHeaderForCreate(array $canonical, int $kindId, int $unitId, int $targetDocState, ?int $accountingAccountId = null): array
     {
         $status = is_array($canonical['status'] ?? null) ? $canonical['status'] : [];
 
@@ -482,6 +493,13 @@ class ItemApplier
             'valid_to'          => $this->normalize($canonical['validTo'] ?? null),
             'docState'          => $targetDocState,
         ];
+        if ($accountingAccountId !== null) {
+            $payload['accounting_account'] = $accountingAccountId;
+        }
+        $tags = $this->contentTags($canonical);
+        if ($tags !== null) {
+            $payload['content_tags'] = $tags;
+        }
 
         // `code`: when explicit, pass through; when null/empty, drop the key
         // and let ItemDocument::beforeSave generate a hex.
@@ -510,6 +528,7 @@ class ItemApplier
         int $kindId,
         int $unitId,
         bool $overwrite,
+        ?int $accountingAccountId = null,
     ): array {
         $candidates = [
             'name'               => $this->normalize($canonical['name'] ?? null),
@@ -521,6 +540,8 @@ class ItemApplier
             'sales_price_no_vat' => $this->floatOrNull($canonical['salesPriceNoVat'] ?? null),
             'valid_from'         => $this->normalize($canonical['validFrom'] ?? null),
             'valid_to'           => $this->normalize($canonical['validTo'] ?? null),
+            'accounting_account' => $accountingAccountId,
+            'content_tags'       => $this->contentTags($canonical),
         ];
 
         $patch = [];
@@ -828,6 +849,53 @@ class ItemApplier
             return 'validation: ' . implode('; ', $errors);
         }
         return 'unknown';
+    }
+
+    /**
+     * `accountingAccount` (číslo účtu) → `economy_accounting_accounts.id`.
+     *
+     * @param array<string, mixed> $canonical
+     * @return array{0: ?int, 1: ?array{severity: string, path: string, code: string, message: string}}
+     */
+    private function resolveAccountingAccount(array $canonical): array
+    {
+        $number = $canonical['accountingAccount'] ?? null;
+        if (!is_string($number) || trim($number) === '') {
+            return [null, null];
+        }
+        $issue = static fn(string $msg): array => [
+            'severity' => 'warning',
+            'path'     => 'accountingAccount',
+            'code'     => 'account_not_found',
+            'message'  => $msg,
+        ];
+        if ($this->accountResolver === null) {
+            return [null, $issue("Účet '{$number}' nelze přiřadit: resolver účtů není k dispozici.")];
+        }
+        try {
+            $id = $this->accountResolver->resolve($number);
+        } catch (\Throwable) {
+            // Extension economy.accounting na DS není → tabulka účtů chybí.
+            $id = null;
+        }
+        if ($id === null) {
+            return [null, $issue("Účet '{$number}' nebyl v účtovém rozvrhu nalezen; položka se uloží bez účtu.")];
+        }
+        return [$id, null];
+    }
+
+    /**
+     * @param array<string, mixed> $canonical
+     * @return list<string>|null
+     */
+    private function contentTags(array $canonical): ?array
+    {
+        $tags = $canonical['contentTags'] ?? null;
+        if (!is_array($tags)) {
+            return null;
+        }
+        $tags = array_values(array_filter($tags, static fn($t): bool => is_string($t) && $t !== ''));
+        return $tags === [] ? null : $tags;
     }
 
     private function normalize(mixed $value): ?string

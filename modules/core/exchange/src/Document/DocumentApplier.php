@@ -314,6 +314,23 @@ class DocumentApplier
             return ApplyResult::error('number_series_not_found', $e->getMessage(), $enriched, statusCode: 422);
         }
 
+        // 5c. Import mode: vlastní bankovní účet zadaný kódem číselníku
+        //     (datové sady, #40) → id. Neznámý kód = čistá 422 tady, ne pád
+        //     v transakci.
+        $ownBank = $canonical['applyOptions']['importOwnBankAccount'] ?? null;
+        if (is_string($ownBank)) {
+            $ownBankId = $this->resolveOwnBankAccountByCode($ownBank);
+            if ($ownBankId === null) {
+                return ApplyResult::error(
+                    'own_bank_account_not_found',
+                    "Vlastní bankovní účet s kódem '{$ownBank}' nebyl nalezen (economy_codebooks_bank_accounts).",
+                    $enriched,
+                    statusCode: 422,
+                );
+            }
+            $canonical['applyOptions']['importOwnBankAccount'] = $ownBankId;
+        }
+
         // 6–11. Transactional save.
         $this->db->begin();
         try {
@@ -1444,6 +1461,26 @@ class DocumentApplier
              WHERE [doc_type] = %s AND [docState] IN (%i, %i, %i)
              ORDER BY [id] LIMIT 1',
             $docType,
+            self::ACTIVE_STATES[0], self::ACTIVE_STATES[1], self::ACTIVE_STATES[2],
+        );
+        return $row !== null ? (int) $row['id'] : null;
+    }
+
+    /**
+     * `applyOptions.importOwnBankAccount` jako string = kód číselníku
+     * `economy_codebooks_bank_accounts.code` (přenosné sady místo interního id).
+     */
+    private function resolveOwnBankAccountByCode(string $code): ?int
+    {
+        $code = trim($code);
+        if ($code === '') {
+            return null;
+        }
+        $row = $this->db->fetch(
+            'SELECT [id] FROM [economy_codebooks_bank_accounts]
+             WHERE [code] = %s AND [docState] IN (%i, %i, %i)
+             ORDER BY [id] LIMIT 1',
+            $code,
             self::ACTIVE_STATES[0], self::ACTIVE_STATES[1], self::ACTIVE_STATES[2],
         );
         return $row !== null ? (int) $row['id'] : null;

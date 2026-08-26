@@ -771,6 +771,19 @@ povoluje jen v kombinaci s `applyOptions.importNumber` (jinak error
 `target_state_80_requires_import`). Mimo migraci přes exchange dosažitelný
 není; číslo v tom případě nese `importNumber`, snapshoty se nestaví.
 
+`applyOptions.importOwnBankAccount` (vlastní bankovní účet u vydaných
+faktur ve stavu 40+) přijímá buď interní id, nebo **string = `code`
+z číselníku `economy_codebooks_bank_accounts`** — přenosná varianta pro
+datové sady (#40). Kód resolvuje `DocumentApplier` před transakcí; neznámý
+kód = `own_bank_account_not_found` (422).
+
+Opačný směr (DB → canonical) dělají exportery v
+`modules/core/exchange/src/Export/` (`DocumentExporter`, `PersonExporter`,
+`ItemExporter`) a `RegistryExporter` v `modules/base/registry/src/` —
+zrcadlo `transform()` s referencemi externě (partner identifikátory,
+položky `ourCode`, účty číslem, řada `numberSeriesCode`, vlastní účet
+kódem). Konzument: datové sady, `shpd-ds dataset-dump`.
+
 ### `autoCreateMode`
 
 Řídí, co se stane s `canCreate` referencí, na které klient nedoplnil

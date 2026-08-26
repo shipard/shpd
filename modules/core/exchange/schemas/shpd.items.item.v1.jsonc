@@ -86,6 +86,13 @@
         "salesPriceNoVat": { "type": ["number", "null"] },
         "unit":            { "type": "string", "minLength": 1 },
 
+        // Účet z účtového rozvrhu (economy_items.accounting_account, extension
+        // economy.accounting) jako číslo účtu; applier ho resolvuje přes
+        // AccountResolver, neznámý → warning account_not_found. Datové sady (#40).
+        "accountingAccount": { "type": ["string", "null"], "pattern": "^[0-9]+$" },
+        // Obsahové štítky (klíče cfgItem core.exchange.contentTags) → economy_items.content_tags.
+        "contentTags": { "type": ["array", "null"], "items": { "type": "string", "minLength": 1 } },
+
         // ── Per-partner supplier codes ──────────────────────────────────
         "supplierCodes": {
             "type": "array",

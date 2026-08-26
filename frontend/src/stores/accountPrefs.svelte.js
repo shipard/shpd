@@ -9,6 +9,7 @@
 
 import { getAccountPrefs } from '../api/account.js';
 import { themeStore } from './theme.svelte.js';
+import { shellStore } from './shell.svelte.js';
 import { language } from '../i18n/index.js';
 
 // Guard proti reload-smyčce: jazyk aplikujeme nejvýš jednou za život
@@ -31,6 +32,11 @@ async function load() {
   const theme = values['account.theme'];
   if (theme) {
     themeStore.applyFromServer(theme);
+  }
+
+  const shell = values['account.shell'];
+  if (shell) {
+    shellStore.applyFromServer(shell);
   }
 
   const lang = values['account.language'];

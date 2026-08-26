@@ -8,13 +8,15 @@
 // apply() propisuje shortName do document.title a ikonu do <link rel="icon">.
 // Text v sidebaru/headeru čte store reaktivně přes getter.
 //
-// Vedle brandingu nese i DS-wide výchozí vzhled (`theme`, klíč app.theme).
-// Po loadu se tlačí do themeStore.setDsDefault() — push směr appInfo → theme,
-// aby theme store neimportoval appInfo (žádný kruhový import). DS-wide hodnota
-// logicky patří k brandingu.
+// Vedle brandingu nese i DS-wide výchozí vzhled (`theme`, klíč app.theme)
+// a výchozí shell (`shell`, klíč app.shell). Po loadu se tlačí do
+// themeStore.setDsDefault() / shellStore.setDsDefault() — push směr
+// appInfo → theme/shell, aby tyto stores neimportovaly appInfo (žádný
+// kruhový import). DS-wide hodnoty logicky patří k brandingu.
 
 import { getAppInfo, brandingUrl } from '../api/app.js';
 import { themeStore } from './theme.svelte.js';
+import { shellStore } from './shell.svelte.js';
 
 const DEFAULT_NAME = 'Shipard';
 
@@ -24,6 +26,7 @@ let info = $state({
   icon: null,        // { url, hash } | null
   companyLogo: null, // { url, hash } | null
   theme: null,       // { mode, custom } | null — DS default vzhledu
+  shell: null,       // { shell, params } | null — DS default shellu
   auth: null,        // { local, providers: [{id, label}] } | null — pro login obrazovku
 });
 
@@ -37,10 +40,13 @@ async function load() {
         icon: response.data.icon ?? null,
         companyLogo: response.data.companyLogo ?? null,
         theme: response.data.theme ?? null,
+        shell: response.data.shell ?? null,
         auth: response.data.auth ?? null,
       };
-      // DS default → theme store (efektivní vzhled pro follow-uživatele).
+      // DS defaulty → theme/shell store (efektivní hodnoty pro
+      // follow-uživatele).
       themeStore.setDsDefault(info.theme);
+      shellStore.setDsDefault(info.shell);
     }
   } catch {
     // Endpoint nedostupný (např. server down) — zůstanou defaulty.
@@ -71,6 +77,7 @@ export const appInfoStore = {
   get icon()        { return info.icon; },
   get companyLogo() { return info.companyLogo; },
   get theme()       { return info.theme; },
+  get shell()       { return info.shell; },
   get auth()        { return info.auth; },
   load,
   apply,

@@ -9,6 +9,7 @@
 // ne ve storu — viewer ji vyčistí po prvním použití, aby se neaplikovala
 // znovu při následujících tab switchích na stejný viewer.
 
+import { get } from '../api/client.js';
 import { findLeafById, findRootSectionId } from '../utils/navTree.js';
 import { recordRecent } from '../utils/recents.js';
 import { authStore } from './auth.svelte.js';
@@ -28,11 +29,14 @@ let pendingReportParams = $state(null);
 // Deep-link stash z main.js (před mountem, přežije login obrazovku) —
 // nereaktivní: čte se jednou po loadu app navigace.
 let pendingReportDeepLink = null;
-// App navigační strom — plní Sidebar po loadu /_ui/navigation přes
-// setAppNavTree(). Jediný účel: derivace `activeSection` (žádný zápis
-// při navigaci → nemůže zestárnout, funguje i pro navigateToViewer
-// z dashboardu a deep linky).
+// App navigační strom — načítá ho loadAppNavTree() (volá AppShell při
+// vstupu do app módu; strom potřebují oba shelly i paleta). Účel: derivace
+// `activeSection` (žádný zápis při navigaci → nemůže zestárnout, funguje
+// i pro navigateToViewer z dashboardu a deep linky) a render navigace.
 let appNavTree = $state(null);
+// Chyba posledního loadu app stromu — {code: 'unauthenticated'|'failed',
+// message: string|null} nebo null. Lokalizaci dělá komponenta.
+let appNavError = $state(null);
 
 // Aktivní položka pro aktuální mód — jedno místo pro tří-cestnou volbu,
 // sdílené gettery i navigate().
@@ -218,9 +222,38 @@ function activateReportDeepLink(navTree) {
   return true;
 }
 
-/** Sidebar po loadu app navigace — viz komentář u `appNavTree`. */
+/** Po loadu app navigace — viz komentář u `appNavTree`. */
 function setAppNavTree(tree) {
   appNavTree = tree;
+}
+
+/**
+ * Fetch app navigačního stromu (GET /_ui/navigation) + navazující side
+ * effecty v závazném pořadí: strom do stavu (kvůli derivaci activeSection
+ * PŘED aktivací položky), deep-link reportu, default položka. Dřív žilo
+ * v Sidebar.svelte — hoist sem, protože strom potřebují všechny shelly
+ * (SidebarShell i ClassicShell) a fetch nesmí záviset na tom, který je
+ * zrovna namontovaný. Při refetchi (návrat do app módu) se starý strom
+ * drží až do příchodu nového — žádný flash prázdné navigace.
+ */
+async function loadAppNavTree() {
+  appNavError = null;
+  try {
+    const response = await get('/_ui/navigation');
+    if (response === null) {
+      appNavError = { code: 'unauthenticated', message: null };
+      return;
+    }
+    if (!response.success) {
+      appNavError = { code: 'failed', message: response.error?.message ?? null };
+      return;
+    }
+    appNavTree = response.data;
+    activateReportDeepLink(appNavTree);
+    ensureDefaultActiveItem(appNavTree);
+  } catch {
+    appNavError = { code: 'failed', message: null };
+  }
 }
 
 /**
@@ -286,14 +319,17 @@ export const navigationStore = {
     if (mode !== 'app' || !appActiveItem || !appNavTree) return null;
     return findRootSectionId(appNavTree, appActiveItem.id);
   },
-  // App strom pro command paletu (zdroj app položek bez dalšího fetche).
+  // App strom pro shelly a command paletu (zdroj app položek bez
+  // dalšího fetche). null = ještě nenačten (loading stav).
   get appNavTree() { return appNavTree; },
+  get appNavError() { return appNavError; },
   get pendingRecordId() { return pendingRecordId; },
   get pendingViewGroup() { return pendingViewGroup; },
   navigate,
   navigateToViewer,
   navigateToPanel,
   setAppNavTree,
+  loadAppNavTree,
   consumePendingRecordId,
   consumePendingViewGroup,
   setPendingReportDeepLink,

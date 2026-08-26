@@ -33,44 +33,54 @@
   // Nastavení účtu → Základní.
   let { onNavigate, onLogout, collapsed = $bindable(false) } = $props();
 
-  // Navigation tree loaded from server API — reloads when mode changes
-  let navTree = $state([]);
-  let loading = $state(true);
-  let error   = $state(null);
+  // App strom vlastní navigationStore (loadAppNavTree volá AppShell —
+  // strom potřebují všechny shelly). Lokální fetch zůstává jen pro
+  // settings/account strom, který jiný shell nekreslí.
+  let modeTree    = $state([]);
+  let modeLoading = $state(true);
+  let modeError   = $state(null);
 
   $effect(() => {
+    if (navigationStore.mode === 'app') return;
+
     const url = navigationStore.mode === 'settings'
       ? '/_ui/settings/navigation'
-      : navigationStore.mode === 'account'
-        ? '/_ui/account/navigation'
-        : '/_ui/navigation';
+      : '/_ui/account/navigation';
 
-    loading = true;
-    error   = null;
-    navTree = [];
+    modeLoading = true;
+    modeError   = null;
+    modeTree    = [];
 
     (async () => {
       try {
         const response = await get(url);
-        if (response === null) { error = t('sidebar.notAuthenticated'); return; }
-        if (!response.success) { error = response.error?.message ?? t('sidebar.navigationLoadFailed'); return; }
-        navTree = response.data;
-        // Po loadu app navigace (ne settings) zajistíme, že je něco vybráno —
-        // deep-link reportu má přednost (no-op bez stashe), jinak první
-        // root-level leaf stromu (na hosting DS portál, jinde Dashboard, D6).
-        if (navigationStore.mode === 'app') {
-          // Strom do storu kvůli derivaci activeSection — před aktivací
-          // položky, ať je sekce odvoditelná hned od prvního výběru.
-          navigationStore.setAppNavTree(navTree);
-          navigationStore.activateReportDeepLink(navTree);
-          navigationStore.ensureDefaultActiveItem(navTree);
-        }
+        if (response === null) { modeError = t('sidebar.notAuthenticated'); return; }
+        if (!response.success) { modeError = response.error?.message ?? t('sidebar.navigationLoadFailed'); return; }
+        modeTree = response.data;
       } catch {
-        error = t('sidebar.navigationLoadFailed');
+        modeError = t('sidebar.navigationLoadFailed');
       } finally {
-        loading = false;
+        modeLoading = false;
       }
     })();
+  });
+
+  // App mód: strom + loading/error ze storu (null strom bez chyby =
+  // ještě se načítá); ostatní módy z lokálního fetche.
+  const navTree = $derived(
+    navigationStore.mode === 'app' ? (navigationStore.appNavTree ?? []) : modeTree
+  );
+  const loading = $derived(
+    navigationStore.mode === 'app'
+      ? (navigationStore.appNavTree === null && navigationStore.appNavError === null)
+      : modeLoading
+  );
+  const error = $derived.by(() => {
+    if (navigationStore.mode !== 'app') return modeError;
+    const e = navigationStore.appNavError;
+    if (!e) return null;
+    if (e.code === 'unauthenticated') return t('sidebar.notAuthenticated');
+    return e.message ?? t('sidebar.navigationLoadFailed');
   });
 
   function handleItemClick(item) {

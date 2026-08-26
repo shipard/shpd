@@ -1,35 +1,51 @@
 <script>
-  import Sidebar from './Sidebar.svelte';
-  import ContentArea from './ContentArea.svelte';
-  import MobileTopBar from './MobileTopBar.svelte';
+  // AppShell — globální starosti nad shelly (UI shells Fáze 4): resolver
+  // shellu, load app navigace, Ctrl/Cmd+K, badge polling, ThemePanel,
+  // CommandPalette, ChatPanel. Samotný layout chrome (sidebar/drawer,
+  // resp. horní menu) kreslí komponenty v components/shells/.
   import ThemePanel from './ThemePanel.svelte';
   import ChatPanel from '../chat/ChatPanel.svelte';
   import CommandPalette from '../chrome/CommandPalette.svelte';
+  import { shellComponents } from '../shells/index.js';
   import { navigationStore } from '../../stores/navigation.svelte.js';
   import { layoutStore } from '../../stores/layout.svelte.js';
   import { chatPanelStore } from '../../stores/chatPanel.svelte.js';
   import { paletteStore } from '../../stores/palette.svelte.js';
   import { sectionBadgesStore } from '../../stores/sectionBadges.svelte.js';
+  import { shellStore } from '../../stores/shell.svelte.js';
 
   let { onLogout } = $props();
 
-  // Panel custom vzhledu žije tady, ne v Sidebaru — mobilní drawer má
+  // Resolver shellu (R2): alternativní shell jen na desktopu v app módu —
+  // mobil (D5) i settings/account módy (D6) jedou vždy v sidebar-style
+  // chrome. Přepnutí je soft swap komponenty: navigationStore přežije,
+  // uživatel zůstane na aktivní položce (D4). Neznámé jméno padá na
+  // sidebar (druhá pojistka vedle server allowlistu).
+  const shellName = $derived(
+    (!layoutStore.isMobile && navigationStore.mode === 'app')
+      ? shellStore.effective
+      : 'sidebar'
+  );
+  const ShellComponent = $derived(shellComponents[shellName] ?? shellComponents.sidebar);
+
+  // App nav strom vlastní navigationStore (potřebují ho oba shelly
+  // i paleta) — load při každém vstupu do app módu (refetch jako dřív,
+  // starý strom drží do příchodu nového).
+  $effect(() => {
+    if (navigationStore.mode === 'app') navigationStore.loadAppNavTree();
+  });
+
+  // Panel custom vzhledu žije tady, ne v shellu — mobilní drawer má
   // transform (containing block pro position:fixed) a Sidebar overflow:
   // hidden, takže panel/Modal renderovaný uvnitř by se ořízl. Otevírá ho
   // ThemeField (Nastavení účtu → Základní) přes onOpenThemePanel probublaný
-  // skrz ContentArea; collapsed se zrcadlí přes bind kvůli left pozici
-  // panelu na desktopu.
+  // skrz shell → ContentArea; levý offset (CSS délka) hlásí aktivní shell
+  // přes bind — sidebar dle collapsed, classic konstantou šířky pásu.
   let themePanelOpen = $state(false);
-  let sidebarCollapsed = $state(false);
+  let themePanelLeftOffset = $state('calc(var(--shpd-sidebar-width) + var(--shpd-space-sm))');
 
   function openThemePanel() {
     themePanelOpen = true;
-  }
-
-  function handleNavigate(item) {
-    navigationStore.navigate(item);
-    // Na mobilu klik na položku zavře drawer (jinak by zůstal přes obsah).
-    if (layoutStore.isMobile) layoutStore.closeDrawer();
   }
 
   // Globální zkratka Ctrl/Cmd+K otevírá command paletu (R7). Nereaguje,
@@ -51,133 +67,31 @@
     return () => document.removeEventListener('keydown', onKeyDown);
   });
 
-  // Esc zavírá drawer (jen mobil + otevřený drawer).
-  $effect(() => {
-    if (!layoutStore.isMobile || !layoutStore.drawerOpen) return;
-    function onKeyDown(e) {
-      if (e.key === 'Escape') layoutStore.closeDrawer();
-    }
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  });
-
-  // Polling badge stavů sekcí (60 s + focus) — žije se shellem.
+  // Polling badge stavů sekcí (60 s + focus) — žije v AppShellu, ne
+  // v shellech: přežije soft swap shellu bez restartu intervalu.
   $effect(() => {
     sectionBadgesStore.startPolling();
     return () => sectionBadgesStore.stopPolling();
   });
 </script>
 
-<div class="shpd-shell" class:shpd-shell--mobile={layoutStore.isMobile}>
-  {#if layoutStore.isMobile}
-    <!-- Mobilní režim: top bar nahoře, sidebar jako overlay drawer. -->
-    <MobileTopBar />
+<ShellComponent
+  {onLogout}
+  onOpenThemePanel={openThemePanel}
+  bind:themePanelLeftOffset
+/>
 
-    {#if layoutStore.drawerOpen}
-      <div
-        class="shpd-shell__overlay"
-        onclick={() => layoutStore.closeDrawer()}
-        aria-hidden="true"
-      ></div>
-    {/if}
+<ThemePanel
+  open={themePanelOpen}
+  onClose={() => { themePanelOpen = false; }}
+  leftOffset={themePanelLeftOffset}
+/>
 
-    <div
-      class="shpd-shell__drawer"
-      class:shpd-shell__drawer--open={layoutStore.drawerOpen}
-    >
-      <Sidebar onNavigate={handleNavigate} {onLogout} />
-    </div>
+<!-- Command palette — shell-nezávislá, shelly dodávají jen trigger. -->
+<CommandPalette />
 
-    <div class="shpd-shell__main">
-      <ContentArea activeItem={navigationStore.activeItem} onOpenThemePanel={openThemePanel} />
-    </div>
-  {:else}
-    <!-- Desktop režim: beze změny — pevný sidebar + obsah vedle. -->
-    <Sidebar
-      onNavigate={handleNavigate}
-      {onLogout}
-      bind:collapsed={sidebarCollapsed}
-    />
-    <div class="shpd-shell__main">
-      <ContentArea activeItem={navigationStore.activeItem} onOpenThemePanel={openThemePanel} />
-    </div>
-  {/if}
-
-  <ThemePanel
-    open={themePanelOpen}
-    onClose={() => { themePanelOpen = false; }}
-    collapsed={sidebarCollapsed}
-  />
-
-  <!-- Command palette — shell-nezávislá, shelly dodávají jen trigger. -->
-  <CommandPalette />
-
-  <!-- Boční AI chat panel — mimo mobilní/desktop větve, geometrii si řeší
-       sám přes layoutStore.isMobile. Otevírá ho dashboardový ChatLauncher. -->
-  {#if chatPanelStore.isOpen}
-    <ChatPanel />
-  {/if}
-</div>
-
-<style>
-  .shpd-shell {
-    display: flex;
-    /* 100dvh (dynamic viewport height) řeší ořez spodku shellu pod
-       adresní lištou mobilních prohlížečů (sticky launcher, composer) —
-       stejný pattern jako fullscreen Modal. Staré prohlížeče dvh
-       ignorují a zůstanou na 100vh. */
-    height: 100vh;
-    height: 100dvh;
-    overflow: hidden;
-    position: relative;
-  }
-
-  /* Mobilní režim: shell je vertikální (top bar nad obsahem).
-     Sidebar drawer a overlay jsou position:fixed mimo tok. */
-  .shpd-shell--mobile {
-    flex-direction: column;
-  }
-
-  .shpd-shell__main {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    overflow: hidden;
-    min-height: 0;
-  }
-
-  /* --- Mobilní drawer + overlay --- */
-
-  .shpd-shell__overlay {
-    position: fixed;
-    inset: 0;
-    top: var(--shpd-header-height); /* pod top barem */
-    background-color: var(--shpd-color-overlay);
-    z-index: 90;
-  }
-
-  .shpd-shell__drawer {
-    position: fixed;
-    top: var(--shpd-header-height);
-    bottom: 0;
-    left: 0;
-    width: 72%;
-    max-width: 320px;
-    z-index: 100;
-    transform: translateX(-100%);
-    transition: transform 0.22s ease;
-    /* Drawer obsahuje Sidebar, který má vlastní pozadí (modré).
-       Sidebar uvnitř roztáhneme na plnou šířku i výšku drawera. */
-    display: flex;
-  }
-
-  /* Sidebar uvnitř draweru vyplní celou jeho šířku (desktop má pevných
-     260px; v draweru chceme bez průhledného pruhu vpravo). */
-  .shpd-shell__drawer :global(.shpd-sidebar) {
-    width: 100%;
-  }
-
-  .shpd-shell__drawer--open {
-    transform: translateX(0);
-  }
-</style>
+<!-- Boční AI chat panel — mimo shell, geometrii si řeší sám přes
+     layoutStore.isMobile. Otevírá ho dashboardový ChatLauncher. -->
+{#if chatPanelStore.isOpen}
+  <ChatPanel />
+{/if}

@@ -19,7 +19,15 @@
   import ThemeSwatches from '../settings/ThemeSwatches.svelte';
   import { iconClose } from '../../icons.js';
 
-  let { open, onClose, collapsed = false } = $props();
+  // `leftOffset` — CSS délka levého okraje panelu na desktopu; hlásí ji
+  // aktivní shell přes AppShell (sidebar dle collapsed stavu, classic
+  // konstantou šířky pásu). CSS string místo čísla, ať zůstane calc()
+  // nad tokeny.
+  let {
+    open,
+    onClose,
+    leftOffset = 'calc(var(--shpd-sidebar-width) + var(--shpd-space-sm))',
+  } = $props();
 
   let panelRoot = $state(null);
 
@@ -84,7 +92,7 @@
 {:else if open}
   <div
     class="shpd-theme-panel"
-    class:shpd-theme-panel--collapsed={collapsed}
+    style:left={leftOffset}
     bind:this={panelRoot}
     role="dialog"
     aria-label={t('theme.panel.title')}
@@ -103,7 +111,7 @@
   .shpd-theme-panel {
     position: fixed;
     top: 64px;
-    left: calc(var(--shpd-sidebar-width) + var(--shpd-space-sm));
+    /* left dodává inline style:left (prop leftOffset). */
     width: 340px;
     background: var(--shpd-color-bg);
     border: 1px solid var(--shpd-color-border);
@@ -113,10 +121,6 @@
        pod modály (1000). */
     z-index: 200;
     padding: var(--shpd-space-md);
-  }
-
-  .shpd-theme-panel--collapsed {
-    left: calc(var(--shpd-sidebar-width-collapsed) + var(--shpd-space-sm));
   }
 
   .shpd-theme-panel__header {

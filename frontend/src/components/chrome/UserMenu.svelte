@@ -1,6 +1,6 @@
 <script>
   // Chrome primitiv: avatar + jméno v patce s dropdown menu — Nastavení
-  // účtu / Nastavení aplikace, vzhled a jazyk (podmenu), odhlásit. `compact` = jen kruhový
+  // účtu / Nastavení aplikace, vzhled, rozložení a jazyk (podmenu), odhlásit. `compact` = jen kruhový
   // avatar, dropdown vyjíždí do strany (side-overlay). `direction`:
   // 'up' (default, patka sidebaru) | 'down' (horizontální top bar
   // classic shellu — dropdown dolů, zarovnaný doprava, bez patkového
@@ -14,6 +14,7 @@
   import { navigationStore } from '../../stores/navigation.svelte.js';
   import { layoutStore } from '../../stores/layout.svelte.js';
   import { themeStore } from '../../stores/theme.svelte.js';
+  import { shellStore } from '../../stores/shell.svelte.js';
   import { avatarStore } from '../../stores/avatar.svelte.js';
   import { language, t } from '../../i18n/index.js';
   import Icon from '../ui/Icon.svelte';
@@ -28,17 +29,19 @@
     iconConfirm,
     iconPalette,
     iconLanguage,
+    iconLayout,
   } from '../../icons.js';
 
   let { compact = false, direction = 'up', onLogout, onOpenThemePanel } = $props();
 
   let userMenuOpen = $state(false);
   let userMenuRoot = $state(null);
-  let openSubmenu = $state(null);     // 'appearance' | 'language' | null
+  let openSubmenu = $state(null);     // 'appearance' | 'shell' | 'language' | null
   let submenuFixedBottom = $state(0); // px od spodku viewportu
   let submenuFixedLeft = $state(0);   // px zleva — pravá hrana položky + 6
   // Kotvy flyoutu (fixed varianta) — wrapper každé položky s podmenu.
   let appearanceWrapEl = $state(null);
+  let shellWrapEl = $state(null);
   let languageWrapEl = $state(null);
 
   // Plný sidebar: flyout musí být fixed (únik z overflow:hidden),
@@ -127,6 +130,23 @@
       closeUserMenu();
       setTimeout(() => { onOpenThemePanel?.(); }, 0);
     }
+  }
+
+  // Podmenu Rozložení — user-scope volba shellu (Issue #46, fáze 3).
+  // Volba spouští okamžitý soft swap (vzor ShellField); na mobilu se
+  // položka skrývá — resolver tam volbu ignoruje (D5).
+  const shellOptions = [
+    { value: 'sidebar', labelKey: 'shell.option.sidebar' },
+    { value: 'classic', labelKey: 'shell.option.classic' },
+    { value: 'wild',    labelKey: 'shell.option.wild' },
+  ];
+
+  function selectShellFollow() {
+    shellStore.setFollow(true);
+  }
+
+  function selectShellOverride(value) {
+    shellStore.setOverride(value);
   }
 
   function handleLogoutFromMenu() {
@@ -283,6 +303,71 @@
           </div>
         {/if}
       </div>
+
+      <!-- Rozložení — podmenu nad shellStore. Na mobilu skryto:
+           volba shellu se tam ignoruje (resolver v AppShellu, D5). -->
+      {#if !layoutStore.isMobile}
+        <div class="shpd-usermenu__subwrap" bind:this={shellWrapEl}>
+          <button
+            class="shpd-usermenu__menu-item"
+            class:shpd-usermenu__menu-item--active={openSubmenu === 'shell'}
+            onclick={() => toggleSubmenu('shell', shellWrapEl)}
+            role="menuitem"
+            aria-haspopup="menu"
+            aria-expanded={openSubmenu === 'shell'}
+          >
+            <Icon icon={iconLayout} size="sm" />
+            <span class="shpd-usermenu__menu-item-label">{t('sidebar.layout')}</span>
+            <span class="shpd-usermenu__menu-item-chevron">
+              <Icon icon={submenuSide === 'left' ? iconChevronLeft : iconChevronRight} size="xs" />
+            </span>
+          </button>
+
+          {#if openSubmenu === 'shell'}
+            <div
+              class="shpd-usermenu__submenu"
+              class:shpd-usermenu__submenu--left={submenuSide === 'left'}
+              class:shpd-usermenu__submenu--top={direction === 'down'}
+              class:shpd-usermenu__submenu--fixed={fixedFlyout}
+              style:bottom={fixedFlyout ? submenuFixedBottom + 'px' : null}
+              style:left={fixedFlyout ? submenuFixedLeft + 'px' : null}
+              role="menu"
+            >
+              <button
+                class="shpd-usermenu__menu-item"
+                class:shpd-usermenu__menu-item--active={shellStore.follow}
+                onclick={selectShellFollow}
+                role="menuitemradio"
+                aria-checked={shellStore.follow}
+              >
+                <span class="shpd-usermenu__menu-item-label">{t('shell.followApp')}</span>
+                {#if shellStore.follow}
+                  <span class="shpd-usermenu__menu-item-check">
+                    <Icon icon={iconConfirm} size="xs" />
+                  </span>
+                {/if}
+              </button>
+              <div class="shpd-usermenu__menu-divider"></div>
+              {#each shellOptions as opt}
+                <button
+                  class="shpd-usermenu__menu-item"
+                  class:shpd-usermenu__menu-item--active={!shellStore.follow && shellStore.override === opt.value}
+                  onclick={() => selectShellOverride(opt.value)}
+                  role="menuitemradio"
+                  aria-checked={!shellStore.follow && shellStore.override === opt.value}
+                >
+                  <span class="shpd-usermenu__menu-item-label">{t(opt.labelKey)}</span>
+                  {#if !shellStore.follow && shellStore.override === opt.value}
+                    <span class="shpd-usermenu__menu-item-check">
+                      <Icon icon={iconConfirm} size="xs" />
+                    </span>
+                  {/if}
+                </button>
+              {/each}
+            </div>
+          {/if}
+        </div>
+      {/if}
 
       <!-- Jazyk — podmenu, stejný mechanismus jako Vzhled. Přepnutí
            volá location.reload(), zavírání netřeba řešit. -->

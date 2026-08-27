@@ -43,6 +43,7 @@ import {
   faTags,
   faFolderOpen,
   faTable,
+  faTableColumns,
   faList,
   faBars,
   faAnglesLeft,
@@ -119,6 +120,7 @@ export const iconLogout = faArrowRightFromBracket;
 export const iconSettings = faGear;
 export const iconAppSettings = faGears;
 export const iconLanguage = faLanguage; // jazyk — podmenu v UserMenu
+export const iconLayout = faTableColumns; // rozložení — podmenu v UserMenu
 export const iconCalculator = faCalculator;
 export const iconUser = faUser;
 export const iconUsers = faUsers;

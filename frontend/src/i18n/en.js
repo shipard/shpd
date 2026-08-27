@@ -35,6 +35,7 @@ export default {
   'sidebar.language.cs': 'Čeština',
   'sidebar.language.en': 'English',
   'sidebar.language.auto': 'Automatic',
+  'sidebar.layout': 'Layout',
   'sidebar.appearance': 'Appearance',
   'sidebar.appearance.follow': 'Follow application',
   'sidebar.appearance.light': 'Shipard',

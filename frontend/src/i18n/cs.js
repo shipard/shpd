@@ -44,6 +44,7 @@ export default {
   'sidebar.language.cs': 'Čeština',
   'sidebar.language.en': 'English',
   'sidebar.language.auto': 'Automaticky',
+  'sidebar.layout': 'Rozložení',
   'sidebar.appearance': 'Vzhled',
   'sidebar.appearance.follow': 'Podle aplikace',
   'sidebar.appearance.light': 'Shipard',

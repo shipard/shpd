@@ -50,7 +50,7 @@ minutami při každém ladění formulace.
 | `login` | Přihlásí se přes formulář a uloží session do `SHPD_STORAGE_STATE`. |
 | `check` | Projede scénář bez záznamu. Nenulový exit = scénář nesedí na aplikaci; hláška řekne krok a selektor. Zároveň smoke E2E. |
 | `record` | ① + ② → `raw.mp4` + `timeline.json` do `VIDEO_WORK_DIR/<id>/`. |
-| `compose` | ③ nad existujícími artefakty → `VIDEO_OUT_DIR/<id>.mp4`. |
+| `compose` | ③ nad existujícími artefakty → `VIDEO_OUT_DIR/<id>.mp4`. Cestou zkontroluje čitelnost titulků. |
 | `build` | `record` + `compose`. |
 
 ```bash
@@ -132,6 +132,13 @@ event. Runner dělá jen easing smyčku, kurzor jede za ní.
 
 Rozejití vizuálního kurzoru a syntetické myši bylo hlavní technické
 riziko v #48; tímhle mizí konstrukcí, ne laděním časování.
+
+### Validátor čitelnosti
+
+`compose` varuje u titulku, který je vidět kratší dobu než
+`max(1,2 s; znaky/15)`, a u titulku delšího než 90 znaků. Kontroluje se
+**skutečná doba zobrazení** — titulek zmizí, až ho vystřídá další, což ze
+samotného scénáře vidět není. Varování běh nezastaví.
 
 ---
 

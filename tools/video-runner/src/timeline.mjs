@@ -29,8 +29,11 @@ export class Timeline {
     this.end = null;
     /**
      * Sekundy rawu, které předcházejí nule časové osy. U `cdp` je to nula
-     * (osa začíná prvním framem), u `x11` doba, než se ffmpeg rozjel —
-     * `compose` ji ořízne, takže se obě varianty chovají stejně.
+     * (osa začíná prvním framem), u `x11` doba, než se ffmpeg rozjel.
+     *
+     * `compose` o tuhle hodnotu posune titulky. Ořezávat raw by bylo horší:
+     * ubývaly by framy a `rect` v událostech by přestal odpovídat času,
+     * ve kterém ho postprodukce hledá.
      */
     this.rawOffset = 0;
   }

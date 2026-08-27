@@ -25,6 +25,7 @@ Technické specifikace projektu Shipard.
 | [design-system.md](design-system.md) | Design system — paleta barev, doc-state konvence, badge systém, avatary, CSS proměnné |
 | [documentation.md](documentation.md) | Pravidla pro dokumentaci modulů a tabulek — kde leží README.md, co obsahuje .md k tabulce, vzory |
 | [help-authoring.md](help-authoring.md) | Pravidla pro **uživatelskou** dokumentaci v [`help/`](../help/README.md) — žánrová hranice, front matter, šablona stránky, generovaný rozcestník |
+| [services.md](services.md) | **Standard samostatných komponent** — pravidla pro repozitáře mimo `shpd` (`ai-analyzer`, `mail-router`, generátor videa, vendorovaná infrastruktura): tři kategorie, struktura repa, povinná sada CLI verbů, cesty na cílovém stroji, kontrakty vůči `shpd`, checklist souladu |
 | [cli.md](cli.md) | CLI nástroje — kompletní reference `shpd-server` a `shpd-ds` příkazů, pomocných skriptů a workflow scénářů |
 | [logging.md](logging.md) | Logging — centralizovaný `ErrorLogger`, JSON řádky (jeden per záznam), cesta a konfigurace logu; žádné přímé `error_log()` |
 | [exchange-format.md](exchange-format.md) | Výměnný formát pro doklady — kanonický JSON `shpd.docs.document.v1`, validate/preview/apply pipeline, resolvery, merge strategie |

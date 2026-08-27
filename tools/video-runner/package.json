@@ -1,0 +1,19 @@
+{
+  "name": "shipard-video-runner",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Výroba videí z UI podle scénáře — Playwright + ffmpeg",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "bin": {
+    "video-runner": "./bin/video-runner.mjs"
+  },
+  "scripts": {
+    "start": "node bin/video-runner.mjs"
+  },
+  "dependencies": {
+    "playwright": "^1.62.1"
+  }
+}

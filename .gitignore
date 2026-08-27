@@ -3,3 +3,8 @@
 /.phpunit.result.cache
 /frontend/node_modules/
 /public/app/
+/tools/video-runner/node_modules/
+/tools/video-runner/.env
+/tools/video-runner/.storage-state.json
+/tools/video-runner/.work/
+/tools/video-runner/out/

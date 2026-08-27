@@ -27,6 +27,17 @@ export class Timeline {
     this.events = [];
     this.t0 = null;
     this.end = null;
+    /**
+     * Sekundy rawu, které předcházejí nule časové osy. U `cdp` je to nula
+     * (osa začíná prvním framem), u `x11` doba, než se ffmpeg rozjel —
+     * `compose` ji ořízne, takže se obě varianty chovají stejně.
+     */
+    this.rawOffset = 0;
+  }
+
+  /** @param {number} seconds */
+  setRawOffset(seconds) {
+    this.rawOffset = Math.max(0, seconds);
   }
 
   /**
@@ -74,6 +85,7 @@ export class Timeline {
       // postprodukce nemohla přepočítat na výstupní rozlišení.
       captureSize: { w: this.scenario.capture.w, h: this.scenario.capture.h },
       duration: this.duration(),
+      rawOffset: Math.round(this.rawOffset * 1000) / 1000,
       fps: this.scenario.output.fps,
       events: this.events,
     };

@@ -9,18 +9,13 @@ import { mkdir, rm } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 
 import captureCdp from '../capture-cdp.mjs';
+import captureX11 from '../capture-x11.mjs';
 import { PROJECT_ROOT } from '../config.mjs';
-import { UserError } from '../errors.mjs';
 import * as ffmpeg from '../ffmpeg.mjs';
 import { loadScenario } from '../scenario.mjs';
 import { Timeline } from '../timeline.mjs';
 
-const DRIVERS = {
-  cdp: captureCdp,
-  x11: async () => {
-    throw new UserError('Varianta záznamu x11 zatím není implementovaná (krok 6).');
-  },
-};
+const DRIVERS = { cdp: captureCdp, x11: captureX11 };
 
 /**
  * Sdílené s verbem `build`, aby se scénář nenačítal dvakrát.

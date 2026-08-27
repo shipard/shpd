@@ -20,6 +20,19 @@ sudo apt install ffmpeg xvfb fonts-liberation fonts-noto-core
 | `xvfb` | virtuální X server pro variantu záznamu `--capture=x11`. Pro `--capture=cdp` není potřeba. |
 | `fonts-liberation`, `fonts-noto-core` | viz níže. |
 
+### Xvfb potřebuje `/tmp/.X11-unix`
+
+Varianta záznamu `x11` tam zakládá socket displeje. Na desktopu adresář
+existuje, v čerstvém kontejneru často ne — a Xvfb si ho pod běžným
+uživatelem nevytvoří:
+
+```bash
+sudo mkdir -p /tmp/.X11-unix && sudo chmod 1777 /tmp/.X11-unix
+```
+
+Varování `xkbcomp: Could not resolve keysym XF86…` při startu Xvfb jsou
+neškodná, X server běží dál.
+
 ### Fonty jsou součást zadání, ne detail
 
 Videa se musí mezi sebou vzhledově shodovat. Když se aplikace na jednom

@@ -34,12 +34,17 @@ Mechanismus zobrazení: **panel** — deklarace v `module.jsonc`
 (`panels[]` + `settingsItems[]`), Svelte komponenta zaregistrovaná v mapě
 `panelComponents` v `ContentArea.svelte`. Stejný vzor jako `dsSetup`.
 
+Panel je jen pro **běžný účetní DS** (`install.base`). Dedikovaný hosting
+DS (`install.hosting`, D11) nemá nainstalované moduly `base.persons`,
+`core.mail`, `economy.*`, `docs.core` ani `core.attachments` — About by
+tam neměl co ukázat, sekci tam proto nezavádíme (D6).
+
 ## Cíl
 
 Po dokončení platí:
 
 - V Nastavení existuje nová sekce „O zdroji dat" jako **poslední** položka
-  sidebaru (na běžném i hosting DS).
+  sidebaru (jen na běžném DS, ne na hosting profilu — D6).
 - Kliknutí otevře panel se třemi bloky (seřazeno podle důležitosti):
   1. **Identita** — název DS, vlastní osoba (název, IČO, DIČ),
      e-mailová adresa DS
@@ -55,8 +60,7 @@ Po dokončení platí:
 ## Potvrzená designová rozhodnutí (Anna, 2026-08-27)
 
 - **D1 — Umístění:** nová sekce `about` s `order: 200` (za sekcí `other`)
-  v obou instalačních profilech (`install/base` i `install/hosting`).
-  Jediná položka sekce = panel `dsAbout`.
+  v profilu `install/base`. Jediná položka sekce = panel `dsAbout`.
 - **D2 — Viditelnost:** panel vidí všichni uživatelé DS (žádný
   `adminOnly` gate). Pozdější zúžení na adminy je otevřená otázka,
   neřešíme teď.
@@ -68,6 +72,12 @@ Po dokončení platí:
   Po expiraci se přepočítá synchronně v rámci requestu.
 - **D5 — Řazení bloků v panelu:** od nejdůležitějšího po nejméně důležité:
   identita → charakteristika → velikosti a počty.
+- **D6 — Hosting profil bez About:** sekce `about` se do
+  `install/hosting/config/settingsSections.jsonc` NEPŘIDÁVÁ. Hosting DS
+  nemá moduly s daty, které panel zobrazuje. Mechanismus: `core.system`
+  sice deklaruje settingsItem všude, ale položka v sekci, která v profilu
+  neexistuje, se v navigaci tiše zahodí — žádný gate není potřeba.
+  Endpoint ale musí chybějící tabulky tolerovat (viz Rozsah bod 1).
 
 ## Před implementací přečti
 
@@ -129,6 +139,13 @@ Poznámky k implementaci:
 - Neexistující `att/` adresář = `{bytes: 0, files: 0}` (žádná výjimka).
 - Vlastní osoba: dotaz podle vzoru `SetupController::ownPerson()`,
   navíc sloupce `company_id`, `tax_id`.
+- **Tolerance chybějících tabulek (D6):** na hosting profilu neexistují
+  `base_persons_persons`, `core_mail_mailboxes`,
+  `economy_codebooks_vat_registrations`, `docs_core_heads`,
+  `core_mail_incoming_messages` ani `core_attachments_files`. Před
+  dotazem ověř existenci tabulky (registry `$tables`, nebo
+  `SHOW TABLES LIKE …`) a chybějící blok vrať jako null/nuly — přímé
+  zavolání endpointu na hostingu nesmí skončit 500.
 - Žádné mutace kromě zápisu cache klíče.
 
 ### 2. Routa — `src/Api/Router.php`
@@ -161,7 +178,7 @@ Poznámky k implementaci:
 - Do `settingsItems[]` (ř. 189) přidej:
   `{ "panel": "dsAbout", "section": "about", "order": 10 }`
 
-### 5. Sekce — settingsSections v OBOU profilech
+### 5. Sekce — jen `install/base`
 
 - `modules/install/base/config/settingsSections.jsonc` — na konec
   `sections[]`:
@@ -175,7 +192,8 @@ Poznámky k implementaci:
       "order": 200
   }
   ```
-- `modules/install/hosting/config/settingsSections.jsonc` — totéž.
+- `modules/install/hosting/config/settingsSections.jsonc` se
+  **záměrně NEMĚNÍ** (D6).
 
 ### 6. Frontend — `frontend/src/api/dsAbout.js` (nový)
 
@@ -215,29 +233,39 @@ Poznámky k implementaci:
 
 1. `cd frontend && timeout 90 npm run build 2>&1 | tail -4` — bez chyb.
 2. PHPUnit: `vendor/bin/phpunit --filter Router` — zeleně.
-3. V prohlížeči: Nastavení → sekce „O zdroji dat" je **poslední**
-   v sidebaru; panel zobrazí všechny tři bloky s reálnými daty.
+3. V prohlížeči (běžný DS): Nastavení → sekce „O zdroji dat" je
+   **poslední** v sidebaru; panel zobrazí všechny tři bloky s reálnými
+   daty.
 4. Na DS bez vlastní osoby / bez schránky (čerstvý DS): panel se zobrazí
    bez chyb, chybějící údaje jako „—".
 5. Druhé načtení panelu do hodiny: sken `att/` se nespouští
    (ověř logem nebo časem odpovědi).
+6. Hosting DS (pokud je k dispozici): sekce „O zdroji dat" se
+   v Nastavení NEZOBRAZUJE; ruční `GET /_ui/ds-about` vrátí odpověď
+   s null/nulami, ne 500.
 
 ## Hotovo když
 
-- Sekce „O zdroji dat" je poslední položkou Nastavení na base
-  i hosting profilu.
+- Sekce „O zdroji dat" je poslední položkou Nastavení na base profilu;
+  na hosting profilu není (D6).
 - Panel zobrazuje identitu, charakteristiku a velikosti/počty
   z živých dat; chybějící údaje neshodí render.
+- Endpoint toleruje chybějící tabulky (hosting) — žádná 500.
 - Cache velikosti příloh funguje (TTL 1 h).
 - Žádná nebezpečná tlačítka (D3).
 - Build + testy zelené.
 
 ## Pasti / na co pozor
 
-- **Sekce jsou definované ve DVOU souborech** — `install/base`
-  i `install/hosting` mají vlastní `settingsSections.jsonc` pod stejným
-  cfgItem ID `global.settingsSections`. Zapomeneš-li hosting, About na
-  hosting DS nebude.
+- **Hosting profil se záměrně nemění** (D6) — settingsItem z `core.system`
+  se na hostingu sbírá taky, ale bez sekce `about` v hosting
+  `settingsSections.jsonc` se položka v navigaci tiše zahodí. To je
+  zamýšlený mechanismus, ne bug. NEPŘIDÁVEJ sekci do hosting profilu
+  „pro jistotu".
+- **Endpoint na hostingu** — tabulky `base_persons_persons`,
+  `core_mail_mailboxes`, `economy_*`, `docs_core_heads`,
+  `core_attachments_files` tam NEEXISTUJÍ. Bez guardu na existenci
+  tabulek spadne přímé volání na SQL chybu.
 - **Prázdná sekce se v navigaci vynechá**
   (`SettingsController::navigation()`, ř. ~97) — sekce `about` se ukáže
   až s naregistrovaným panelem v `settingsItems[]`. Pokud sekci nevidíš,

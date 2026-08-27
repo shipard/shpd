@@ -1,6 +1,6 @@
 <script>
   // Chrome primitiv: avatar + jméno v patce s dropdown menu — Nastavení
-  // účtu / Nastavení aplikace, vzhled (podmenu), jazyk, odhlásit. `compact` = jen kruhový
+  // účtu / Nastavení aplikace, vzhled a jazyk (podmenu), odhlásit. `compact` = jen kruhový
   // avatar, dropdown vyjíždí do strany (side-overlay). `direction`:
   // 'up' (default, patka sidebaru) | 'down' (horizontální top bar
   // classic shellu — dropdown dolů, zarovnaný doprava, bez patkového
@@ -27,15 +27,19 @@
     iconAppSettings,
     iconConfirm,
     iconPalette,
+    iconLanguage,
   } from '../../icons.js';
 
   let { compact = false, direction = 'up', onLogout, onOpenThemePanel } = $props();
 
   let userMenuOpen = $state(false);
   let userMenuRoot = $state(null);
-  let appearanceOpen = $state(false); // podmenu Vzhled
-  let subwrapEl = $state(null);       // kotva flyoutu (fixed varianta)
+  let openSubmenu = $state(null);     // 'appearance' | 'language' | null
   let submenuFixedBottom = $state(0); // px od spodku viewportu
+  let submenuFixedLeft = $state(0);   // px zleva — pravá hrana položky + 6
+  // Kotvy flyoutu (fixed varianta) — wrapper každé položky s podmenu.
+  let appearanceWrapEl = $state(null);
+  let languageWrapEl = $state(null);
 
   // Plný sidebar: flyout musí být fixed (únik z overflow:hidden),
   // vertikálně se zarovnává na položku — pozice se měří při otevření.
@@ -43,12 +47,12 @@
 
   function toggleUserMenu() {
     userMenuOpen = !userMenuOpen;
-    appearanceOpen = false;
+    openSubmenu = null;
   }
 
   function closeUserMenu() {
     userMenuOpen = false;
-    appearanceOpen = false;
+    openSubmenu = null;
   }
 
   function handleSettings() {
@@ -98,12 +102,16 @@
     { value: 'custom', labelKey: 'sidebar.appearance.custom' },
   ];
 
-  function toggleAppearance() {
-    appearanceOpen = !appearanceOpen;
-    if (appearanceOpen && fixedFlyout && subwrapEl) {
-      // Spodek flyoutu = spodek položky (stejná kotva jako absolute
-      // varianta bottom:0), roste nahoru.
-      submenuFixedBottom = window.innerHeight - subwrapEl.getBoundingClientRect().bottom;
+  // Otevřené je vždy nejvýš jedno podmenu; u fixed varianty se při
+  // otevření změří kotva (spodek flyoutu = spodek položky, roste nahoru).
+  function toggleSubmenu(name, wrapEl) {
+    openSubmenu = openSubmenu === name ? null : name;
+    if (openSubmenu && fixedFlyout && wrapEl) {
+      // Stejné kotvy jako absolute varianta (bottom:0, left:100%+6px),
+      // jen přepočtené do viewport souřadnic.
+      const rect = wrapEl.getBoundingClientRect();
+      submenuFixedBottom = window.innerHeight - rect.bottom;
+      submenuFixedLeft = rect.right + 6;
     }
   }
 
@@ -210,27 +218,27 @@
 
       <!-- Vzhled — podmenu: desktop flyout do strany, mobil inline
            akordeon (flyout by přetekl drawer). -->
-      <div class="shpd-usermenu__subwrap" bind:this={subwrapEl}>
+      <div class="shpd-usermenu__subwrap" bind:this={appearanceWrapEl}>
         <button
           class="shpd-usermenu__menu-item"
-          class:shpd-usermenu__menu-item--active={appearanceOpen}
-          onclick={toggleAppearance}
+          class:shpd-usermenu__menu-item--active={openSubmenu === 'appearance'}
+          onclick={() => toggleSubmenu('appearance', appearanceWrapEl)}
           role="menuitem"
           aria-haspopup="menu"
-          aria-expanded={appearanceOpen}
+          aria-expanded={openSubmenu === 'appearance'}
         >
           <Icon icon={iconPalette} size="sm" />
           <span class="shpd-usermenu__menu-item-label">{t('sidebar.appearance')}</span>
           <span class="shpd-usermenu__menu-item-chevron">
             {#if layoutStore.isMobile}
-              <Icon icon={appearanceOpen ? iconChevronDown : iconChevronRight} size="xs" />
+              <Icon icon={openSubmenu === 'appearance' ? iconChevronDown : iconChevronRight} size="xs" />
             {:else}
               <Icon icon={submenuSide === 'left' ? iconChevronLeft : iconChevronRight} size="xs" />
             {/if}
           </span>
         </button>
 
-        {#if appearanceOpen}
+        {#if openSubmenu === 'appearance'}
           <div
             class="shpd-usermenu__submenu"
             class:shpd-usermenu__submenu--inline={layoutStore.isMobile}
@@ -238,6 +246,7 @@
             class:shpd-usermenu__submenu--top={direction === 'down'}
             class:shpd-usermenu__submenu--fixed={fixedFlyout}
             style:bottom={fixedFlyout ? submenuFixedBottom + 'px' : null}
+            style:left={fixedFlyout ? submenuFixedLeft + 'px' : null}
             role="menu"
           >
             <button
@@ -275,24 +284,58 @@
         {/if}
       </div>
 
-      <div class="shpd-usermenu__menu-divider"></div>
-      <div class="shpd-usermenu__menu-label">{t('sidebar.language')}</div>
-      {#each languageOptions as opt}
+      <!-- Jazyk — podmenu, stejný mechanismus jako Vzhled. Přepnutí
+           volá location.reload(), zavírání netřeba řešit. -->
+      <div class="shpd-usermenu__subwrap" bind:this={languageWrapEl}>
         <button
           class="shpd-usermenu__menu-item"
-          class:shpd-usermenu__menu-item--active={language.mode === opt.value}
-          onclick={() => handleLanguageChange(opt.value)}
-          role="menuitemradio"
-          aria-checked={language.mode === opt.value}
+          class:shpd-usermenu__menu-item--active={openSubmenu === 'language'}
+          onclick={() => toggleSubmenu('language', languageWrapEl)}
+          role="menuitem"
+          aria-haspopup="menu"
+          aria-expanded={openSubmenu === 'language'}
         >
-          <span class="shpd-usermenu__menu-item-label">{t(opt.labelKey)}</span>
-          {#if language.mode === opt.value}
-            <span class="shpd-usermenu__menu-item-check">
-              <Icon icon={iconConfirm} size="xs" />
-            </span>
-          {/if}
+          <Icon icon={iconLanguage} size="sm" />
+          <span class="shpd-usermenu__menu-item-label">{t('sidebar.language')}</span>
+          <span class="shpd-usermenu__menu-item-chevron">
+            {#if layoutStore.isMobile}
+              <Icon icon={openSubmenu === 'language' ? iconChevronDown : iconChevronRight} size="xs" />
+            {:else}
+              <Icon icon={submenuSide === 'left' ? iconChevronLeft : iconChevronRight} size="xs" />
+            {/if}
+          </span>
         </button>
-      {/each}
+
+        {#if openSubmenu === 'language'}
+          <div
+            class="shpd-usermenu__submenu"
+            class:shpd-usermenu__submenu--inline={layoutStore.isMobile}
+            class:shpd-usermenu__submenu--left={submenuSide === 'left'}
+            class:shpd-usermenu__submenu--top={direction === 'down'}
+            class:shpd-usermenu__submenu--fixed={fixedFlyout}
+            style:bottom={fixedFlyout ? submenuFixedBottom + 'px' : null}
+            style:left={fixedFlyout ? submenuFixedLeft + 'px' : null}
+            role="menu"
+          >
+            {#each languageOptions as opt}
+              <button
+                class="shpd-usermenu__menu-item"
+                class:shpd-usermenu__menu-item--active={language.mode === opt.value}
+                onclick={() => handleLanguageChange(opt.value)}
+                role="menuitemradio"
+                aria-checked={language.mode === opt.value}
+              >
+                <span class="shpd-usermenu__menu-item-label">{t(opt.labelKey)}</span>
+                {#if language.mode === opt.value}
+                  <span class="shpd-usermenu__menu-item-check">
+                    <Icon icon={iconConfirm} size="xs" />
+                  </span>
+                {/if}
+              </button>
+            {/each}
+          </div>
+        {/if}
+      </div>
 
       <div class="shpd-usermenu__menu-divider"></div>
       <button class="shpd-usermenu__menu-item" onclick={handleLogoutFromMenu} role="menuitem">
@@ -525,7 +568,9 @@
      ThemePanel; kotva = pravý okraj sidebaru přes token, bez JS. */
   .shpd-usermenu__submenu--fixed {
     position: fixed;
-    left: calc(var(--shpd-sidebar-width) + var(--shpd-space-xs));
+    /* left/bottom dodává inline měření při otevření (viz
+       toggleSubmenu) — tady jen fallback, kdyby měření selhalo. */
+    left: calc(var(--shpd-sidebar-width) - var(--shpd-space-sm));
     right: auto;
     bottom: var(--shpd-space-sm);
     top: auto;

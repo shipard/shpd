@@ -11,7 +11,8 @@
     "video-runner": "./bin/video-runner.mjs"
   },
   "scripts": {
-    "start": "node bin/video-runner.mjs"
+    "start": "node bin/video-runner.mjs",
+    "test": "node --test 'tests/*.test.mjs'"
   },
   "dependencies": {
     "playwright": "^1.62.1"

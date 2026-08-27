@@ -116,8 +116,22 @@ downscalem 2:1, jinak by byl text rozmazaný.
 **`caption` neblokuje, `pause` je jediný spotřebič času** a smí být
 modifikátorem kteréhokoli kroku (`{ "click": "…", "pause": 1.5 }`).
 Titulek tak přirozeně přežije několik akcí. Doba přejezdu kurzoru se do
-`pause` nepočítá — je to vlastnost akce, ne vyprávění; výchozí 600 ms,
-přebitelné `travel`.
+`pause` nepočítá — je to vlastnost akce, ne vyprávění; výchozí 0,6 s,
+přebitelná modifikátorem `travel`.
+
+**Všechny časy jsou v sekundách** — `pause`, `travel` i `for`. Dvě
+jednotky v jednom souboru by spolehlivě vyráběly překlepy typu
+`"travel": 1` v domnění, že jde o vteřinu.
+
+### Kurzor se synchronizuje sám
+
+Overlay nemá vlastní animaci. `page.mouse.move()` dispatchuje **skutečné
+DOM eventy** a vložený kurzor se polohuje výhradně z nich — takže nemůže
+dorazit dřív ani později než hover stav, protože oboje spouští tentýž
+event. Runner dělá jen easing smyčku, kurzor jede za ní.
+
+Rozejití vizuálního kurzoru a syntetické myši bylo hlavní technické
+riziko v #48; tímhle mizí konstrukcí, ne laděním časování.
 
 ---
 
@@ -133,6 +147,24 @@ přebitelné `travel`.
   zrovna je. Sady podle #40 přijdou do `demo/datasets/`.
 - **Čas není fixovaný.** `page.clock.setFixedTime()` zatím nikde, takže
   „dnes" je ve videu skutečné dnes.
+- **Jazyk aplikace se neřídí ze scénáře.** Aplikace se vykreslí v jazyce,
+  který si Chromium řekne přes `Accept-Language` — tedy anglicky. Pro
+  česká videa bude potřeba `locale` v kontextu, případně jako pole
+  scénáře.
+
+---
+
+## Testy
+
+```bash
+npm test
+```
+
+Pokrývají to, co jde ověřit bez prohlížeče: parser JSONC (komentáře
+uvnitř řetězců, zbytkové čárky, zachování čísel řádků) a validaci
+scénáře (překlep v názvu verbu, dva verby v kroku, modifikátor u verbu,
+kam nepatří). Průchod scénáře se testuje verbem `check` proti živé
+instanci.
 
 ---
 

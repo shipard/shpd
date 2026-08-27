@@ -1,6 +1,49 @@
-/** Verb `check` — implementace přijde v kroku 4 zadání spike. */
-import { UserError } from '../errors.mjs';
+/**
+ * Verb `check` — průchod scénáře bez záznamu.
+ *
+ * Zároveň smoke E2E: nenulový exit znamená, že se scénář rozešel
+ * s aplikací. Hláška vždycky říká číslo kroku a selektor.
+ */
 
-export default async function check() {
-  throw new UserError('Verb `check` zatím není implementovaný (krok 4).');
+import { loadScenario } from '../scenario.mjs';
+import { interpret } from '../interpret.mjs';
+import { assertSession, createSession } from '../runner.mjs';
+import { Timeline } from '../timeline.mjs';
+
+/** Chvilka na konci, aby při VIDEO_HEADFUL=1 šel výsledek vůbec zahlédnout. */
+const HEADFUL_LINGER_MS = 2000;
+
+export default async function check({ config, scenarioPath }) {
+  const scenario = await loadScenario(scenarioPath);
+  const { width, height } = scenario.viewport;
+
+  console.log(
+    `check ${scenario.id} — ${scenario.steps.length} kroků, `
+    + `viewport ${width}×${height} @${scenario.capture.scale}x`,
+  );
+
+  const session = await createSession(config, scenario, { headless: !config.headful });
+  const timeline = new Timeline(scenario, 'none');
+
+  try {
+    await assertSession(session.page, config);
+
+    timeline.start();
+    await interpret({
+      page: session.page,
+      config,
+      scenario,
+      timeline,
+      log: (line) => console.log(line),
+    });
+    timeline.finish();
+
+    console.log(`OK — průchod trval ${timeline.duration().toFixed(1)} s`);
+
+    if (config.headful) {
+      await new Promise((resolve) => setTimeout(resolve, HEADFUL_LINGER_MS));
+    }
+  } finally {
+    await session.close();
+  }
 }

@@ -19,11 +19,17 @@ export default async function check({ config, scenarioPath }) {
 
   console.log(
     `check ${scenario.id} — ${scenario.steps.length} kroků, `
-    + `viewport ${width}×${height} @${scenario.capture.scale}x`,
+    + `viewport ${width}×${height} @${scenario.capture.scale}x, ${scenario.locale}`,
   );
 
-  const session = await createSession(config, scenario, { headless: !config.headful });
-  const timeline = new Timeline(scenario, 'none');
+  const session = await createSession(config, scenario, {
+    headless: !config.headful,
+    // Viditelný prohlížeč při ladění: dvojnásobná hustota by okno zvětšila
+    // na dvojnásobek toho, co zadává scénář, a na běžném displeji by se
+    // nevešlo. `check` žádné pixely neukládá, takže na výsledku nezáleží.
+    scale: config.headful ? 1 : scenario.capture.scale,
+  });
+  const timeline = new Timeline(scenario);
 
   try {
     await assertSession(session.page, config);

@@ -10,6 +10,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 
+import { outName, RAW_NAME, TIMELINE_NAME } from '../artifacts.mjs';
 import { buildCaptions, checkReadability, renderAss } from '../captions.mjs';
 import { PROJECT_ROOT } from '../config.mjs';
 import { UserError } from '../errors.mjs';
@@ -32,8 +33,8 @@ export async function composeScenario(config, scenario) {
   await ffmpeg.assertAvailable();
 
   const dir = join(config.workDir, scenario.id);
-  const rawPath = join(dir, 'raw.mp4');
-  const timelinePath = join(dir, 'timeline.json');
+  const rawPath = join(dir, RAW_NAME);
+  const timelinePath = join(dir, TIMELINE_NAME);
 
   for (const [path, what] of [[rawPath, 'záznam'], [timelinePath, 'časová osa']]) {
     if (!existsSync(path)) {
@@ -55,10 +56,15 @@ export async function composeScenario(config, scenario) {
   await writeFile(assPath, renderAss(captions, scenario.output), 'utf8');
 
   await mkdir(config.outDir, { recursive: true });
-  const outPath = join(config.outDir, `${scenario.id}.mp4`);
+  const outPath = join(config.outDir, outName(scenario.id));
+
+  // Škáluje se jen když se výstup od záznamu opravdu liší — `scale` na
+  // stejný rozměr není no-op, projde tím další interpolace.
+  const scaling = scenario.output.w !== scenario.capture.w
+    || scenario.output.h !== scenario.capture.h;
 
   const filters = [
-    `scale=${scenario.output.w}:${scenario.output.h}:flags=lanczos`,
+    ...(scaling ? [`scale=${scenario.output.w}:${scenario.output.h}:flags=lanczos`] : []),
     // Titulky až za škálováním — vypálené před ním by se downscalem
     // rozmazaly stejně jako zbytek obrazu.
     `subtitles=${filterPath(assPath)}`,
@@ -68,7 +74,9 @@ export async function composeScenario(config, scenario) {
     '-y',
     '-i', rawPath,
     '-vf', filters,
-    '-c:v', 'libx264', '-crf', '20', '-preset', 'medium',
+    // Screen content s textem: crf 20 je na hranici, kde jdou vidět
+    // artefakty na hranách písma.
+    '-c:v', 'libx264', '-crf', '18', '-preset', 'medium',
     '-pix_fmt', 'yuv420p',
     '-movflags', '+faststart',
     '-an',
@@ -77,7 +85,9 @@ export async function composeScenario(config, scenario) {
 
   console.log(
     `Hotovo: ${relative(PROJECT_ROOT, outPath)} `
-    + `(${scenario.output.w}×${scenario.output.h}, ${captions.length} titulků)`,
+    + `(${scenario.output.w}×${scenario.output.h}`
+    + `${scaling ? ` ze záznamu ${scenario.capture.w}×${scenario.capture.h}` : ', bez škálování'}`
+    + `, ${captions.length} titulků)`,
   );
 
   return outPath;

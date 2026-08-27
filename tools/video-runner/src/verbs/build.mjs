@@ -4,8 +4,8 @@ import { loadScenario } from '../scenario.mjs';
 import { composeScenario } from './compose.mjs';
 import { recordScenario } from './record.mjs';
 
-export default async function build({ config, scenarioPath, capture }) {
+export default async function build({ config, scenarioPath }) {
   const scenario = await loadScenario(scenarioPath);
-  await recordScenario(config, scenario, capture);
+  await recordScenario(config, scenario);
   await composeScenario(config, scenario);
 }

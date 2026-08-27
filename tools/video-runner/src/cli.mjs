@@ -12,16 +12,12 @@ import { parseArgs } from 'node:util';
 import { loadConfig } from './config.mjs';
 import { UserError } from './errors.mjs';
 
-const CAPTURES = ['cdp', 'x11'];
-const DEFAULT_CAPTURE = 'cdp';
-
 /**
  * @typedef {object} VerbSpec
  * @property {string} module Cesta k modulu s implementací.
  * @property {boolean} scenario Vyžaduje cestu ke scénáři.
  * @property {boolean} baseUrl Potřebuje adresu instance.
  * @property {boolean} credentials Potřebuje login a heslo.
- * @property {boolean} capture Bere v úvahu `--capture`.
  * @property {string} help Jednořádkový popis do nápovědy.
  */
 
@@ -29,33 +25,32 @@ const DEFAULT_CAPTURE = 'cdp';
 const VERBS = {
   login: {
     module: './verbs/login.mjs',
-    scenario: false, baseUrl: true, credentials: true, capture: false,
+    scenario: false, baseUrl: true, credentials: true,
     help: 'Přihlásí se formulářem a uloží session do SHPD_STORAGE_STATE.',
   },
   check: {
     module: './verbs/check.mjs',
-    scenario: true, baseUrl: true, credentials: false, capture: false,
+    scenario: true, baseUrl: true, credentials: false,
     help: 'Projede scénář bez záznamu. Nenulový exit = scénář nesedí na aplikaci.',
   },
   record: {
     module: './verbs/record.mjs',
-    scenario: true, baseUrl: true, credentials: false, capture: true,
+    scenario: true, baseUrl: true, credentials: false,
     help: 'Natočí raw.mp4 a timeline.json do VIDEO_WORK_DIR.',
   },
   compose: {
     module: './verbs/compose.mjs',
-    scenario: true, baseUrl: false, credentials: false, capture: false,
-    help: 'Složí výsledné video z existujícího raw.mp4 a timeline.json.',
+    scenario: true, baseUrl: false, credentials: false,
+    help: 'Složí výsledné video z existujícího záznamu a časové osy.',
   },
   build: {
     module: './verbs/build.mjs',
-    scenario: true, baseUrl: true, credentials: false, capture: true,
+    scenario: true, baseUrl: true, credentials: false,
     help: 'record + compose v jednom běhu.',
   },
 };
 
 const OPTIONS = {
-  capture: { type: 'string' },
   help: { type: 'boolean', short: 'h' },
 };
 
@@ -73,9 +68,6 @@ Verby:
 ${rows}
 
 Volby:
-  --capture=cdp|x11   Varianta záznamu (výchozí ${DEFAULT_CAPTURE}).
-                      cdp = CDP screencast, headless, bez systémových závislostí
-                      x11 = headed Chromium v Xvfb + ffmpeg x11grab
   -h, --help          Tato nápověda.
 
 Konfigurace se čte z tools/video-runner/.env (vzor v .env.example).
@@ -111,18 +103,6 @@ export async function run(argv) {
     );
   }
 
-  if (parsed.values.capture !== undefined && !spec.capture) {
-    throw new UserError(`Verb ${verbName} volbu --capture nepoužívá.`);
-  }
-
-  const capture = parsed.values.capture ?? DEFAULT_CAPTURE;
-  if (!CAPTURES.includes(capture)) {
-    throw new UserError(
-      `Neznámá varianta záznamu: ${capture}`,
-      `Možnosti: ${CAPTURES.join(', ')}`,
-    );
-  }
-
   let scenarioPath = null;
   if (spec.scenario) {
     if (rest.length === 0) {
@@ -140,7 +120,7 @@ export async function run(argv) {
   const config = loadConfig({ baseUrl: spec.baseUrl, credentials: spec.credentials });
 
   const { default: verb } = await import(spec.module);
-  await verb({ config, scenarioPath, capture });
+  await verb({ config, scenarioPath });
 
   return 0;
 }

@@ -1,6 +1,6 @@
 # Video runner — pilotní spike (protažení pipeline)
 
-**Stav:** naplánováno — připraveno k implementaci
+**Stav:** hotovo — implementace i ověření na dev serveru 2026-08-27; závěry níže
 
 ## Kontext / Cíl
 
@@ -27,6 +27,12 @@ Vzniká runner v `tools/video-runner/` s podmnožinou funkcionality: verby
 `waitFor`, `hover`, `click`, `caption`, `pause`, `highlight`; vložený kurzor;
 **obě** varianty záznamu (A+ i B, viz níže) pro porovnání; `timeline.json`;
 kompozitor s burned-in titulky; výstup `.mp4`.
+
+*Doplněno během spike:* verb `scroll` (jediná skutečná animace, kterou
+produkt má, a zároveň jediné místo, kde by varianta `cdp` mohla nestíhat —
+bez toho by rozhodnutí o variantě stálo na nedotčeném předpokladu)
+a připnutí jazyka a časové zóny (Z5). Varianta `x11` byla po vyhodnocení
+odstraněna (Z7).
 
 **Mimo rozsah:** zoomy a rámečky v postprodukci (`timeline.json` pro ně jen
 připravuje data), dabing, verby `fill` / `press` / `scrollTo` / `raw`,
@@ -231,28 +237,148 @@ Commit po každém kroku.
 
 ## Hotovo když
 
-- [ ] `tools/video-runner/` existuje, `npm install` projde, `--help` vypíše verby
-- [ ] `INSTALL.md` popisuje instalaci od čistého Debianu/Ubuntu včetně fontů
+- [x] `tools/video-runner/` existuje, `npm install` projde, `--help` vypíše verby
+- [x] `INSTALL.md` popisuje instalaci od čistého Debianu/Ubuntu včetně fontů
       a poznámky o nvm a PATH; `.env.example` je kompletní
-- [ ] `.env` ani `.storage-state.json` nejsou v gitu a `check-sensitive.py`
+- [x] `.env` ani `.storage-state.json` nejsou v gitu a `check-sensitive.py`
       je nehlásí
-- [ ] `login` vyrobí `storageState`; `record` s neplatnou session selže
+- [x] `login` vyrobí `storageState`; `record` s neplatnou session selže
       jasnou hláškou, ne videem přihlašovací stránky
-- [ ] `check` projde pilotní scénář bez záznamu a vrátí 0; při neexistujícím
+- [x] `check` projde pilotní scénář bez záznamu a vrátí 0; při neexistujícím
       selektoru vrátí nenulový kód a řekne který krok
-- [ ] vložený kurzor se v `VIDEO_HEADFUL=1` pohybuje plynule a hover stavy
+- [x] vložený kurzor se v `VIDEO_HEADFUL=1` pohybuje plynule a hover stavy
       naskakují ve chvíli, kdy k prvku opticky dorazí (R2)
-- [ ] `build --capture=cdp` i `build --capture=x11` vyrobí přehratelný
-      `.mp4` s vypáleným titulkem ve správném čase
-- [ ] `compose` se dá pustit samostatně nad existujícím `raw` +
+- [x] `build` vyrobí přehratelný `.mp4` s vypáleným titulkem ve správném
+      čase (obě varianty ověřeny, `x11` pak odstraněna — Z7)
+- [x] `compose` se dá pustit samostatně nad existujícím `raw` +
       `timeline.json` a změna textu titulku nevyžaduje přetočení
-- [ ] `timeline.json` obsahuje `rect` u akcí nad prvky
-- [ ] validátor čitelnosti titulků hlásí příliš krátké i příliš dlouhé
-- [ ] **sekce „Zjištění" v tomto souboru vyplněná** — doporučená varianta
+- [x] `timeline.json` obsahuje `rect` u akcí nad prvky
+- [x] validátor čitelnosti titulků hlásí příliš krátké i příliš dlouhé
+- [x] **sekce „Zjištění" v tomto souboru vyplněná** — doporučená varianta
       záznamu s odůvodněním, chování synchronizace kurzoru, doporučené FPS
-      a délky pauz, seznam křehkých míst
-- [ ] testovací klip smazán, v repu není žádný videosoubor
+      a délky pauz, seznam křehkých míst (Z1–Z7)
+- [x] testovací klip smazán, v repu není žádný videosoubor
 
 ## Zjištění
 
-*(doplní se po provedení spike; závěry se pak zrcadlí do komentáře v #48)*
+Provedeno na dev serveru (Ubuntu 24.04, Node 24.14, Playwright 1.62)
+2026-08-27. Sedm nálezů; první čtyři jsou past, do které by spadl každý,
+kdo by pipeline psal podle intuice.
+
+### Z1 — Playwrightí `deviceScaleFactor` a CDP screencast se vylučují
+
+Kontext s `deviceScaleFactor: 2` hlásí ve stránce `devicePixelRatio: 2`,
+ale screencast posílá framy **1280×800**, ne 2560×1600. Playwright hustotu
+emuluje přes `Emulation.setDeviceMetricsOverride` a screencast se řídí
+velikostí emulovaného zařízení v DIP. Dvojnásobná hustota se tedy tiše
+nekonala a text byl měkký.
+
+Funkční kombinace je `viewport: null` + `--window-size=<CSS>` +
+`--force-device-scale-factor=<scale>`, tedy rozměr určuje okno a hustotu
+skutečný raster. Ověřeno: frame 2560×1600. Metadata framu přitom pořád
+tvrdí `deviceWidth: 1280`, takže se na ně nedá spolehnout.
+
+### Z2 — `--kiosk` ve Xvfb bez window manageru nic nedělá
+
+Chromium fullscreen nekreslí samo, žádá o něj WM přes EWMH. V čerstvém Xvfb
+žádný neběží, takže v záznamu zůstala lišta prohlížeče s taby a adresním
+řádkem a vedle okna černý pruh (`--window-size` se navíc nepředávalo vůbec).
+Matchbox okno roztáhne, ale `_NET_WM_STATE_FULLSCREEN` neobslouží; openbox
+ano — a přesto lišta zůstala vidět. Nedořešeno, viz Z7.
+
+### Z3 — stylopis aplikace platí i na overlay
+
+Vložený kurzor nebyl ve videu vidět, přesto byl v DOMu a měl správný
+transform. Příčina: `svg { display: block; max-width: 100% }` v
+`frontend/src/styles/reset.css`. Rodičovský div kurzoru má `width: 0`
+(je to jen ukotvení pro transform), takže `max-width: 100%` znamená nulu
+a šipku to smáčklo na `width: 0` při zachované výšce 30 px.
+
+Overlay je součástí stránky, takže na něj platí její CSS — a bude to platit
+na každý další prvek, který do overlaye přidáme. Řešeno **shadow rootem**,
+ne opravou jedné property; hranice je jediná obrana, která vydrží příští
+`!important` v resetu.
+
+### Z4 — zmenšovat výstup na 1280×800 byla chyba v zadání
+
+Pipeline byla celou dobu v pořádku (raw 2560×1600 → výstup 1280×800), ale
+video zobrazené na stránce v šířce 1280 CSS px vidí **každý návštěvník
+s retina displejem jako dvojnásobný upscale**. Detail, kvůli kterému se
+nahrává na 2×, se zahodil až při doručení. Poznávací znak: klip je ostrý
+přesně při 50 % velikosti, tedy tam, kde nastane mapování 1:1.
+
+`output` proto nemusí obsahovat rozměr a pak se nezmenšuje. `compose`
+navíc `scale` filtr vynechá úplně, když se výstup od záznamu neliší —
+`scale` na stejný rozměr není no-op, projde tím další interpolace.
+
+### Z5 — runner točil aplikaci v angličtině
+
+Aplikace si jazyk odvozuje z `navigator.language`
+(`frontend/src/stores/language.svelte.js`, režim `auto`) a Playwright
+startuje v `en-US`. Popisky navigace tedy byly „Incoming messages", ne
+„Došlá pošta". Projevilo se to jako nefunkční selektor; bez toho by první
+hero video vyšlo anglické a nikdo by netušil proč.
+
+Scénář má proto `locale` (výchozí `cs-CZ`) a `timezone`
+(`Europe/Prague`) — zóna se navíc bude hodit k `fixedTime` z #40.
+
+### Z6 — scrollovat jde jen tam, kde je kurzor
+
+Prohlížeč je dvoupanelový: střed `main.shpd-content` padne na
+`.shpd-viewer__detail-panel`, který se nescrolluje. Scrollovatelný je
+`.shpd-viewer__rows` (na dev DS 1313 px obsahu v 669 px okna, tedy 644 px
+k dispozici). Chromium wheel event nad nescrollovatelnou oblastí **zahodí
+beze slova**, což by dalo tiše nehybné video.
+
+Runner proto před a po scrollu čte `scrollTop` nejbližšího scrollovatelného
+předka pod kurzorem a při nulovém posunu končí chybou, která vypíše, co pod
+kurzorem leží a kde by scroll fungoval. Stejný vzor jako u přihlašování:
+hláška má nést data, ne otázku, na kterou runner umí odpovědět sám.
+
+### Z7 — varianta záznamu: `cdp`, `x11` odstraněno
+
+Po opravě geometrie byly obě varianty **opticky nerozlišitelné** — což je
+očekávané, protože nahrávají z téhož rendereru se stejnými přepínači.
+`x11` si přitom drží tři nevýhody: Xvfb a window manager jako systémové
+závislosti, nedořešená lišta prohlížeče (Z2) a časová osa, která se musí
+srovnávat s během ffmpegu přes `-progress`.
+
+Jediný technický argument pro `x11` byl strop snímkové frekvence: screencast
+posílá další frame až po `screencastFrameAck`, takže by v rychlém pohybu
+mohl nestíhat. Měření to nepotvrzuje:
+
+| scénář | framů | délka | průměr | špička |
+|---|---|---|---|---|
+| bez scrollu | 57 | 8,0 s | 7,1/s | — |
+| scroll `over: 1.5` | 329 | 19,4 s | 16,9/s | 47/s |
+| scroll `over: 0.4` (1250 px/s) | 269 | 17,9 s | 15,0/s | 40/s |
+
+Průměr je nepoužitelný — framy vznikají jen při změně obrazu, takže měří
+hlavně délku pauz ve scénáři. **Špička 40/s i při 1250 px/s** je s rezervou
+nad výstupními 30 fps, a to je rychleji, než se v ukázce kdy bude
+scrollovat. `x11` proto smazáno včetně `ffmpeg.start()` a `rawOffset`
+v časové ose; kód je v historii, kdyby ho někdy vrátila potřeba plynulejších
+animací.
+
+Disk: ~7 MB PNG framů na sekundu klipu (106 MB / 17,9 s). U třicetisekundového
+videa něco přes 200 MB dočasných dat. Únosné, PNG zůstává — JPEG ze
+screencastu má chroma subsampling 4:2:0, které je na textu vidět.
+
+### Doporučení pro další práci
+
+- **FPS:** 30 na výstupu stačí, záznam má rezervu.
+- **Pauzy:** 1,5–2,5 s po titulku je čitelné; validátor hlídá
+  `max(1,2 s; znaky/15)`.
+- **Rychlost scrollu:** `over` kolem 1,5 s na 500 px je klidné tempo;
+  strop záznamu je nejméně 1250 px/s.
+- **`data-testid` je teď hlavní blokátor skutečných scénářů.** V `frontend/src`
+  není ani jeden. Navigace je serverem řízená a každá položka nese stabilní
+  jazykově neutrální `id` (`viewer:core.mail.incoming`,
+  `report:economy.accounting.balanceSheet`), takže
+  `data-testid={`nav-${node.id}`}` na tlačítku v `NavTree.svelte` pokryje
+  celou navigaci třemi řádky a automaticky i vše budoucí. Pro zbytek zlaté
+  cesty platí totéž pravidlo: kde existuje serverem definované id, testid
+  z něj odvodit; ručně jen tam, kde žádné není.
+- Pilotní scénář zatím používá `:has-text('Došlá pošta')`, tedy Playwrightí
+  selektor vázaný na český popisek. Dvojnásobný dluh, vědomý, s komentářem
+  ve scénáři.

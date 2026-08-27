@@ -19,7 +19,7 @@ a v tasku [`tasks/video-runner-spike.md`](../../tasks/video-runner-spike.md).
 
 ## Instalace
 
-Viz [`INSTALL.md`](INSTALL.md). Zkráceně: `apt install ffmpeg xvfb fonts-liberation
+Viz [`INSTALL.md`](INSTALL.md). Zkráceně: `apt install ffmpeg fonts-liberation
 fonts-noto-core`, Node 24+, `npm install`, `npx playwright install chromium`,
 `cp .env.example .env` a vyplnit.
 
@@ -54,7 +54,7 @@ minutami při každém ladění formulace.
 | `build` | `record` + `compose`. |
 
 ```bash
-node bin/video-runner.mjs <verb> [scénář] [--capture=cdp|x11]
+node bin/video-runner.mjs <verb> [scénář]
 node bin/video-runner.mjs --help
 ```
 
@@ -62,18 +62,23 @@ Ostatní verby než `login` session jen čtou. Když vyprší, `record`
 skončí hláškou „session neplatná, spusť `login`" — nikdy nesmí vzniknout
 video přihlašovací stránky.
 
-### Varianty záznamu
+### Jak vzniká obraz
 
-`--capture=cdp` (výchozí)
-: CDP `Page.startScreencast`, framy s timestampy, ffmpeg je složí na
-  konstantní FPS. Běží headless, žádná systémová závislost navíc.
-  Statická pasáž = jeden frame s dlouhou dobou trvání, což je správně.
+CDP `Page.startScreencast`: framy s timestampy, ffmpeg je složí přes concat
+na konstantní FPS. Běží headless, žádná systémová závislost navíc.
 
-`--capture=x11`
-: Headed Chromium v Xvfb + `ffmpeg -f x11grab`. Konstantní FPS nativně,
-  zachytí CSS transitions. Cena: Xvfb.
+Klíčová vlastnost je, že **Chrome posílá framy jen při změně obrazu**.
+Statická pasáž tedy dá jeden frame s dlouhou dobou trvání místo stovky
+identických — proto tahle cesta neseká tam, kde Playwrightí `recordVideo`
+ano. Průměrná snímková frekvence za celý klip je z téhož důvodu nesmyslné
+číslo; ve statistice po záznamu je proto i **špička**, tedy nejvyšší počet
+framů v jednosekundovém okně. To je jediné číslo, které odpovídá na otázku
+„stíhá záznam v pohybu".
 
-Která z nich je lepší, je otevřená otázka — právě to má spike rozhodnout.
+Zvažovala se ještě varianta s headed Chromiem ve Xvfb a `ffmpeg -f x11grab`
+(konstantní FPS nativně). Ve spike prohrála — měla stejný obraz za cenu dvou
+systémových závislostí a nedala se v ní schovat lišta prohlížeče. Důvody
+jsou v `tasks/video-runner-spike.md` a v shipard/shpd#48.
 
 ---
 
@@ -98,8 +103,18 @@ JSONC v [`demo/scenarios/`](../../demo/scenarios/).
 
 `capture.w`/`capture.h` jsou rozměry **rawu v pixelech**, `scale` je
 `deviceScaleFactor`. CSS viewport z toho vychází jako `w/scale × h/scale`
-— tady tedy 1280×800 při dvojnásobné hustotě. Výstup 1280×800 vzniká
-downscalem 2:1, jinak by byl text rozmazaný.
+— tady tedy 1280×800 při dvojnásobné hustotě.
+
+`output` **nemusí obsahovat rozměr** a pak se nezmenšuje: video vyjde
+v rozlišení záznamu. Zmenšit na 1280×800 znamenalo zahodit přesně ten
+detail, kvůli kterému se nahrává na dvojnásobnou hustotu — takové video
+vidí každý návštěvník s retina displejem jako dvojnásobný upscale.
+Zmenšit se dá vždycky, zpátky se to nedodělá.
+
+Geometrie **nesmí** používat Playwrightí `deviceScaleFactor`: ten hustotu
+jen emuluje a CDP screencast pak posílá framy ve velikosti emulovaného
+zařízení v DIP, tedy 1×. Skutečný raster dělá teprve
+`--force-device-scale-factor` s `viewport: null`.
 
 ### Verby scénáře
 
@@ -109,6 +124,7 @@ downscalem 2:1, jinak by byl text rozmazaný.
 | `waitFor` | Počká na prvek. Timeout = selhání celého běhu. |
 | `hover` | Přejezd kurzoru nad prvek. |
 | `click` | Přejezd + kliknutí. |
+| `scroll` | Posun v CSS px (kladný dolů) za dobu `over`. Scrolluje tam, kde je kurzor. |
 | `caption` | Nastaví titulek. `null` ho sundá. |
 | `highlight` | Rámeček kolem prvku po dobu `for` (sekundy). |
 | `pause` | Čas. |
@@ -119,7 +135,13 @@ Titulek tak přirozeně přežije několik akcí. Doba přejezdu kurzoru se do
 `pause` nepočítá — je to vlastnost akce, ne vyprávění; výchozí 0,6 s,
 přebitelná modifikátorem `travel`.
 
-**Všechny časy jsou v sekundách** — `pause`, `travel` i `for`. Dvě
+**Totéž platí pro `scroll`:** doba `over` se do `pause` nepočítá. Easing
+řídí runner, ne prohlížeč — jeden velký `wheel` delta by animaci nechal na
+kompozitoru Chromia, který se může chovat jinak v jiné verzi. Scrolluje se
+tam, kde je kurzor, takže `scroll` musí následovat po `hover` nebo `click`
+nad obsahem; když se nic neposune, je to chyba, ne tiše nehybné video.
+
+**Všechny časy jsou v sekundách** — `pause`, `travel`, `for` i `over`. Dvě
 jednotky v jednom souboru by spolehlivě vyráběly překlepy typu
 `"travel": 1` v domnění, že jde o vteřinu.
 

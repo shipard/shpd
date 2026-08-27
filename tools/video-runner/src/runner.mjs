@@ -18,9 +18,8 @@ import { APP_PATH, isLoginScreen, SELECTORS } from './shipard.mjs';
  * @param {object} [options]
  * @param {boolean} [options.headless]
  * @param {string[]} [options.args]
- * @param {Record<string,string>} [options.env]
- * @param {boolean} [options.windowSized] Rozměr určuje okno, ne viewport
- *   (kiosk režim ve Xvfb — tam by Playwright viewport okno zmenšil).
+ * @param {number} [options.scale] Přebíje `capture.scale` ze scénáře — používá
+ *   `check` při ladění s viditelným prohlížečem.
  */
 export async function createSession(config, scenario, options = {}) {
   if (!existsSync(config.storageState)) {
@@ -30,20 +29,37 @@ export async function createSession(config, scenario, options = {}) {
     );
   }
 
+  // Geometrie je pro oba záznamy stejná a **nesmí** se dělat Playwrightním
+  // `deviceScaleFactor`. Ten hustotu jen emuluje přes
+  // `Emulation.setDeviceMetricsOverride` a CDP screencast pak posílá framy
+  // ve velikosti emulovaného zařízení v DIP — tedy 1×, i když stránka hlásí
+  // `devicePixelRatio: 2`. Skutečný raster ve dvojnásobné hustotě dělá
+  // teprve `--force-device-scale-factor`, a rozměr okna musí přijít zvnějšku
+  // (`viewport: null`), jinak ho Playwright přebíje zpátky na emulaci.
+  const { width, height } = scenario.viewport;
+  const scale = options.scale ?? scenario.capture.scale;
+
   const browser = await launchChromium({
     headless: options.headless ?? true,
-    args: options.args,
-    env: options.env,
+    args: [
+      `--window-size=${width},${height}`,
+      '--window-position=0,0',
+      `--force-device-scale-factor=${scale}`,
+      // Headless scrollbary skrývá sám, headed ne. Bez tohohle by se
+      // varianty záznamu lišily o šířku scrollbaru a vypadalo by to jako
+      // rozdíl varianty, přitom je to rozdíl nastavení.
+      '--hide-scrollbars',
+      ...(options.args ?? []),
+    ],
   });
 
   const context = await browser.newContext({
     storageState: config.storageState,
-    ...(options.windowSized
-      ? { viewport: null }
-      : {
-        viewport: { width: scenario.viewport.width, height: scenario.viewport.height },
-        deviceScaleFactor: scenario.capture.scale,
-      }),
+    viewport: null,
+    // Jazyk aplikace se odvozuje z `navigator.language`, takže bez tohohle
+    // by video vyšlo v angličtině (Playwright startuje v en-US).
+    locale: scenario.locale,
+    timezoneId: scenario.timezone,
   });
 
   await installOverlay(context);

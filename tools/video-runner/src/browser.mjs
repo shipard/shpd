@@ -11,10 +11,9 @@ import { UserError } from './errors.mjs';
 export const DEFAULT_TIMEOUT = 15_000;
 
 /**
- * Argumenty pro deterministické vykreslování. Bez nich se headless (varianta
- * záznamu `cdp`) a headed (`x11`) rozejdou v hintingu písma a v barevném
- * profilu — a pak nejde poznat, jestli je rozdíl ve videu způsobený
- * variantou záznamu, nebo jen jiným rendererem.
+ * Argumenty pro deterministické vykreslování. Bez nich se stroje rozejdou
+ * v hintingu písma a v barevném profilu, takže by se videa natočená jinde
+ * vizuálně neshodovala.
  */
 const RENDER_ARGS = [
   '--force-color-profile=srgb',
@@ -24,12 +23,11 @@ const RENDER_ARGS = [
 /**
  * @param {object} [options]
  * @param {boolean} [options.headless]
- * @param {string[]} [options.args] Argumenty navíc (kiosk režim pro Xvfb).
- * @param {Record<string,string>} [options.env] Prostředí procesu (DISPLAY pro Xvfb).
+ * @param {string[]} [options.args] Argumenty navíc (geometrie okna).
  */
-export async function launchChromium({ headless = true, args = [], env } = {}) {
+export async function launchChromium({ headless = true, args = [] } = {}) {
   try {
-    return await chromium.launch({ headless, args: [...RENDER_ARGS, ...args], env });
+    return await chromium.launch({ headless, args: [...RENDER_ARGS, ...args] });
   } catch (error) {
     if (/Executable doesn't exist|please run the following command/i.test(error.message)) {
       throw new UserError(

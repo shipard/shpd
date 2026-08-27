@@ -8,50 +8,52 @@
 import { mkdir, rm } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 
-import captureCdp from '../capture-cdp.mjs';
-import captureX11 from '../capture-x11.mjs';
+import { RAW_NAME, TIMELINE_NAME } from '../artifacts.mjs';
+import capture from '../capture-cdp.mjs';
 import { PROJECT_ROOT } from '../config.mjs';
 import * as ffmpeg from '../ffmpeg.mjs';
 import { loadScenario } from '../scenario.mjs';
 import { Timeline } from '../timeline.mjs';
-
-const DRIVERS = { cdp: captureCdp, x11: captureX11 };
 
 /**
  * Sdílené s verbem `build`, aby se scénář nenačítal dvakrát.
  *
  * @param {import('./../config.mjs').Config} config
  * @param {import('./../scenario.mjs').Scenario} scenario
- * @param {'cdp'|'x11'} capture
  * @returns {Promise<{dir: string, rawPath: string, timelinePath: string}>}
  */
-export async function recordScenario(config, scenario, capture) {
+export async function recordScenario(config, scenario) {
   await ffmpeg.assertAvailable();
 
   const dir = join(config.workDir, scenario.id);
-  // Zbytky z minulého běhu by při pádu uprostřed vypadaly jako platný
-  // výsledek — a `compose` by beze slova složil staré video.
-  await rm(dir, { recursive: true, force: true });
   await mkdir(dir, { recursive: true });
 
-  const timeline = new Timeline(scenario, capture);
+  // Zbytky z minulého běhu by při pádu uprostřed vypadaly jako platný
+  // výsledek — a `compose` by beze slova složil staré video. Maže se ale
+  // jen to, co teď vznikne: artefakty druhé varianty záznamu musí přežít,
+  // jinak se nedají porovnat.
+  for (const name of [RAW_NAME, TIMELINE_NAME]) {
+    await rm(join(dir, name), { force: true });
+  }
+
+  const timeline = new Timeline(scenario);
   const log = (line) => console.log(line);
 
-  console.log(`record ${scenario.id} --capture=${capture}`);
-  const rawPath = await DRIVERS[capture]({ config, scenario, timeline, dir, log });
+  console.log(`record ${scenario.id}`);
+  const rawPath = await capture({ config, scenario, timeline, dir, log });
 
-  const timelinePath = join(dir, 'timeline.json');
+  const timelinePath = join(dir, TIMELINE_NAME);
   await timeline.write(timelinePath);
 
   console.log(
     `Záznam ${timeline.duration().toFixed(1)} s → ${relative(PROJECT_ROOT, dir)}/`
-    + ` (raw.mp4, timeline.json)`,
+    + ` (${RAW_NAME}, ${TIMELINE_NAME})`,
   );
 
   return { dir, rawPath, timelinePath };
 }
 
-export default async function record({ config, scenarioPath, capture }) {
+export default async function record({ config, scenarioPath }) {
   const scenario = await loadScenario(scenarioPath);
-  await recordScenario(config, scenario, capture);
+  await recordScenario(config, scenario);
 }

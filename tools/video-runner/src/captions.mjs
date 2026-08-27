@@ -25,11 +25,10 @@ const FONT = 'Liberation Sans';
  * Události `caption` na intervaly. `text: null` titulek sundá, další
  * neprázdný titulek ten předchozí vystřídá.
  *
- * @param {{events: Array<{t:number,type:string,text?:string|null}>, duration:number, rawOffset?:number}} timeline
+ * @param {{events: Array<{t:number,type:string,text?:string|null}>, duration:number}} timeline
  * @returns {Array<{start:number,end:number,text:string}>}
  */
 export function buildCaptions(timeline) {
-  const offset = timeline.rawOffset ?? 0;
   const captions = [];
   let open = null;
 
@@ -51,9 +50,7 @@ export function buildCaptions(timeline) {
     captions.push(open);
   }
 
-  return captions
-    .filter((caption) => caption.end > caption.start)
-    .map((caption) => ({ ...caption, start: caption.start + offset, end: caption.end + offset }));
+  return captions.filter((caption) => caption.end > caption.start);
 }
 
 /**

@@ -10,10 +10,16 @@ import { DEFAULT_TIMEOUT } from './browser.mjs';
 import { pageUrl } from './config.mjs';
 import { UserError } from './errors.mjs';
 import { highlight } from './overlay.mjs';
-import { DEFAULT_HIGHLIGHT_S, DEFAULT_TRAVEL_S } from './scenario.mjs';
+import { DEFAULT_HIGHLIGHT_S, DEFAULT_SCROLL_S, DEFAULT_TRAVEL_S } from './scenario.mjs';
 
 /** Kolikrát za sekundu se posune syntetická myš při přejezdu. */
 const CURSOR_HZ = 60;
+
+/** Kolik kroků za sekundu má scrollování. */
+const SCROLL_HZ = 60;
+
+/** Pod tímhle posunem v px se scroll považuje za neúčinný. */
+const SCROLL_EPSILON = 1;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
 
@@ -69,6 +75,46 @@ async function travelTo(ctx, x, y, seconds) {
   ctx.mouse = { x, y };
 }
 
+/**
+ * Stav scrollování pod daným bodem — hodnota pro porovnání a zároveň
+ * podklad pro chybovou hlášku.
+ *
+ * Wheel event jde tam, kde je kurzor. Když nad ním nic scrollovatelného
+ * není, Chromium ho zahodí **beze slova**, takže bez tohohle by z toho
+ * vzniklo tiše nehybné video. A protože „je kurzor nad správným místem?"
+ * je otázka, na kterou runner umí odpovědět sám, vrací se i to, co pod
+ * kurzorem leží a kde by scroll fungoval.
+ */
+function scrollState(page, x, y) {
+  return page.evaluate(([px, py]) => {
+    const name = (el) => el.tagName.toLowerCase()
+      + [...el.classList].filter((c) => !c.startsWith('svelte-')).map((c) => `.${c}`).join('');
+    const scrollable = (el) => /(auto|scroll)/.test(getComputedStyle(el).overflowY)
+      && el.scrollHeight > el.clientHeight;
+
+    const hit = document.elementFromPoint(px, py);
+
+    let el = hit;
+    while (el) {
+      if (scrollable(el)) return { top: el.scrollTop, container: name(el), hit: hit && name(hit) };
+      el = el.parentElement;
+    }
+
+    // Nic pod kurzorem — ať hláška umí poradit, kde by to šlo.
+    const candidates = [...document.querySelectorAll('*')]
+      .filter(scrollable)
+      .map((node) => `${name(node)} (${node.scrollHeight - node.clientHeight} px)`)
+      .slice(0, 6);
+
+    return {
+      top: document.scrollingElement?.scrollTop ?? 0,
+      container: null,
+      hit: hit && name(hit),
+      candidates,
+    };
+  }, [x, y]);
+}
+
 async function moveToElement(ctx, step) {
   const box = await elementRect(ctx, step);
   const center = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
@@ -100,6 +146,54 @@ const HANDLERS = {
     await ctx.page.mouse.down();
     await ctx.page.mouse.up();
     ctx.timeline.mark('click', { selector: step.click, rect: [box.x, box.y, box.width, box.height] });
+  },
+
+  /**
+   * Scroll s easingem řízený runnerem, ne kompozitorem prohlížeče: jeden
+   * velký `wheel` delta by nechal animaci na Chromiu, které se může
+   * chovat jinak ve jiné verzi. Takhle je pohyb vždycky stejný a tempo
+   * si řídí scénář.
+   */
+  async scroll(ctx, step) {
+    const seconds = step.over ?? DEFAULT_SCROLL_S;
+    const total = step.scroll;
+    const steps = Math.max(2, Math.round(seconds * SCROLL_HZ));
+    const ms = seconds * 1000;
+
+    const before = await scrollState(ctx.page, ctx.mouse.x, ctx.mouse.y);
+    if (before.container === null) {
+      throw new UserError(
+        `${label(step)}: pod kurzorem není nic, co by se dalo scrollovat.`
+        + ` Kurzor je na ${ctx.mouse.x},${ctx.mouse.y} nad ${before.hit ?? 'ničím'}.`,
+        before.candidates?.length
+          ? `Scrollovat jde tady: ${before.candidates.join(', ')}.`
+          : 'Na stránce není žádná scrollovatelná oblast — má obsah dost řádků?',
+      );
+    }
+
+    const started = performance.now();
+    let done = 0;
+
+    for (let i = 1; i <= steps; i++) {
+      const target = total * easeInOutCubic(i / steps);
+      const delta = target - done;
+      done = target;
+      if (delta !== 0) await ctx.page.mouse.wheel(0, delta);
+      await sleep(started + (ms * i) / steps - performance.now());
+    }
+
+    const after = await scrollState(ctx.page, ctx.mouse.x, ctx.mouse.y);
+    if (Math.abs(after.top - before.top) < SCROLL_EPSILON) {
+      throw new UserError(
+        `${label(step)}: ${before.container} se neposunul (scrollTop ${before.top}).`,
+        'Je oblast na konci ve směru scrollu? Kladný posun jde dolů, záporný nahoru.',
+      );
+    }
+
+    ctx.timeline.mark('scroll', {
+      by: total, over: seconds, container: before.container,
+      from: before.top, to: after.top,
+    });
   },
 
   async caption(ctx, step) {

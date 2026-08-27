@@ -1,12 +1,22 @@
 /**
  * ② Overlay — kurzor, efekt kliknutí, rámeček `highlight`.
  *
- * Klíčové rozhodnutí je, že **overlay nemá vlastní animaci**. Kurzor se
- * polohuje výhradně z DOM eventů `mousemove`, které skutečně dispatchuje
- * `page.mouse.move()`. Synchronizace vizuálního kurzoru se syntetickou myší
- * — hlavní technické riziko z #48 — tím vzniká konstrukcí, ne časováním:
- * kurzor nemůže dorazit dřív ani později než hover stav, protože oboje
- * spouští tentýž event.
+ * Dvě rozhodnutí drží celý tenhle soubor:
+ *
+ * 1. **Overlay nemá vlastní animaci.** Kurzor se polohuje výhradně z DOM
+ *    eventů `mousemove`, které skutečně dispatchuje `page.mouse.move()`.
+ *    Synchronizace vizuálního kurzoru se syntetickou myší — hlavní
+ *    technické riziko z #48 — tím vzniká konstrukcí, ne časováním: kurzor
+ *    nemůže dorazit dřív ani později než hover stav, protože oboje spouští
+ *    tentýž event.
+ *
+ * 2. **Obsah overlaye bydlí v shadow rootu.** Overlay je součástí stránky,
+ *    takže na něj jinak platí stylopis aplikace. Konkrétně
+ *    `svg { max-width: 100% }` v `frontend/src/styles/reset.css` smáčklo
+ *    šipku kurzoru na nulovou šířku (rodič má `width: 0`, takže
+ *    `max-width: 100%` znamená nulu) a kurzor nebyl ve videu vidět. Opravit
+ *    to explicitní šířkou by fungovalo do prvního `!important` v resetu;
+ *    shadow root je hranice, kterou stylopis stránky nepřekročí.
  *
  * Skript se injektuje přes `addInitScript`, takže přežije navigaci.
  */
@@ -27,46 +37,82 @@ function overlayMain(opts) {
   if (window[KEY]) return;
 
   const state = {
-    root: null, cursor: null, ring: null, box: null,
+    host: null, cursor: null, ring: null, box: null,
     target: null, raf: 0, timer: 0, placed: '',
   };
 
+  // Rozměry šipky jsou tady napsané dvakrát (v atributech i v CSS)
+  // záměrně: atributy kvůli poměru stran viewBoxu, CSS kvůli tomu, aby
+  // šířku nemohlo přebít nic zvenčí, kdyby se overlay jednou renderoval
+  // i mimo shadow root.
+  const SVG =
+    '<svg width="24" height="30" viewBox="-2 -2 24 30">'
+    + '<path d="M0 0 L0 19 L5 14.4 L8.2 21.5 L11.4 20 L8.2 13 L15 13 Z" '
+    + `fill="${opts.cursorFill}" stroke="${opts.cursorStroke}" `
+    + 'stroke-width="1.6" stroke-linejoin="round"/></svg>';
+
+  const CSS = `
+    .box {
+      position: fixed;
+      display: none;
+      box-sizing: border-box;
+      pointer-events: none;
+      border: ${opts.highlightWidth}px solid ${opts.highlightColor};
+      border-radius: ${opts.highlightRadius}px;
+    }
+    /* Kurzor je jen ukotvení pro transform — šipka a prstenec z něj čouhají. */
+    .cursor {
+      position: fixed;
+      left: 0; top: 0; width: 0; height: 0;
+      opacity: 0;
+      will-change: transform;
+    }
+    /* Špička šipky je v uživatelské souřadnici (0,0); posun o −2 px proti
+       viewBoxu ji srovná přesně na bod kurzoru. */
+    .cursor svg {
+      position: absolute;
+      left: -2px; top: -2px;
+      width: 24px; height: 30px;
+      max-width: none;
+      display: block;
+      overflow: visible;
+    }
+    .ring {
+      position: absolute;
+      left: -16px; top: -16px;
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      border: 2px solid ${opts.accent};
+      opacity: 0;
+      transform: scale(.4);
+    }
+  `;
+
   function build() {
-    const root = document.createElement('div');
-    root.setAttribute('data-shpd-video-overlay', '');
-    root.style.cssText =
+    const host = document.createElement('div');
+    host.setAttribute('data-shpd-video-overlay', '');
+    host.style.cssText =
       'position:fixed;left:0;top:0;width:0;height:0;pointer-events:none;z-index:2147483647;';
 
+    const shadow = host.attachShadow({ mode: 'open' });
+
+    const style = document.createElement('style');
+    style.textContent = CSS;
+
     const box = document.createElement('div');
-    box.style.cssText =
-      'position:fixed;box-sizing:border-box;display:none;pointer-events:none;'
-      + `border:${opts.highlightWidth}px solid ${opts.highlightColor};`
-      + `border-radius:${opts.highlightRadius}px;`;
+    box.className = 'box';
 
     const cursor = document.createElement('div');
-    cursor.style.cssText =
-      'position:fixed;left:0;top:0;width:0;height:0;opacity:0;will-change:transform;';
+    cursor.className = 'cursor';
+    cursor.innerHTML = SVG;
 
     const ring = document.createElement('div');
-    ring.style.cssText =
-      'position:absolute;left:-16px;top:-16px;width:32px;height:32px;border-radius:50%;'
-      + `border:2px solid ${opts.accent};opacity:0;transform:scale(.4);`;
-
-    // Špička šipky je v uživatelské souřadnici (0,0); posun elementu o −2 px
-    // proti viewBoxu ji srovná přesně na bod kurzoru.
-    const svg =
-      '<svg width="24" height="30" viewBox="-2 -2 24 30" '
-      + 'style="position:absolute;left:-2px;top:-2px;overflow:visible">'
-      + '<path d="M0 0 L0 19 L5 14.4 L8.2 21.5 L11.4 20 L8.2 13 L15 13 Z" '
-      + `fill="${opts.cursorFill}" stroke="${opts.cursorStroke}" `
-      + 'stroke-width="1.6" stroke-linejoin="round"/></svg>';
-
-    cursor.innerHTML = svg;
+    ring.className = 'ring';
     cursor.appendChild(ring);
-    root.appendChild(box);
-    root.appendChild(cursor);
 
-    state.root = root;
+    shadow.append(style, box, cursor);
+
+    state.host = host;
     state.box = box;
     state.cursor = cursor;
     state.ring = ring;
@@ -74,10 +120,10 @@ function overlayMain(opts) {
 
   /** Overlay musí přežít i to, když aplikace přepíše obsah body. */
   function ensure() {
-    if (!state.root) build();
-    const host = document.body || document.documentElement;
-    if (!host) return false;
-    if (!state.root.isConnected) host.appendChild(state.root);
+    if (!state.host) build();
+    const parent = document.body || document.documentElement;
+    if (!parent) return false;
+    if (!state.host.isConnected) parent.appendChild(state.host);
     return true;
   }
 

@@ -3,7 +3,7 @@ import { test } from 'node:test';
 
 import { buildCaptions, checkReadability, renderAss } from '../src/captions.mjs';
 
-const timeline = (events, duration = 10, rawOffset = 0) => ({ events, duration, rawOffset });
+const timeline = (events, duration = 10) => ({ events, duration });
 
 test('titulek trvá do svého null', () => {
   const captions = buildCaptions(timeline([
@@ -37,14 +37,6 @@ test('ostatní události se ignorují', () => {
     { t: 4, type: 'caption', text: null },
   ]));
   assert.equal(captions.length, 1);
-});
-
-test('rawOffset posune titulky, ne raw', () => {
-  const captions = buildCaptions(timeline([
-    { t: 1, type: 'caption', text: 'a' },
-    { t: 3, type: 'caption', text: null },
-  ], 10, 0.5));
-  assert.deepEqual(captions, [{ start: 1.5, end: 3.5, text: 'a' }]);
 });
 
 test('varování u příliš krátkého titulku', () => {

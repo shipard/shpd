@@ -80,3 +80,26 @@ test('id musí být slug', async () => {
   await writeFile(path, JSON.stringify({ id: 'Test Scénář', steps: [{ pause: 1 }] }), 'utf8');
   assert.match(await message(loadScenario(path)), /id z malých písmen/);
 });
+
+test('scroll chce nenulové číslo, over jen u něj', async () => {
+  assert.match(await message(load({ steps: [{ scroll: 0 }] })), /scroll musí být nenulové/);
+  assert.match(await message(load({ steps: [{ scroll: 'dolu' }] })), /scroll musí být nenulové/);
+  assert.match(await message(load({ steps: [{ hover: '.x', over: 1 }] })), /over dává smysl jen u scroll/);
+
+  const scenario = await load({ steps: [{ scroll: -400, over: 0.8 }] });
+  assert.equal(scenario.steps[0].verb, 'scroll');
+  assert.equal(scenario.steps[0].scroll, -400);
+  assert.equal(scenario.steps[0].over, 0.8);
+});
+
+test('jazyk a zóna mají výchozí hodnotu a validují se', async () => {
+  const implicit = await load({ steps: [{ pause: 1 }] });
+  assert.equal(implicit.locale, 'cs-CZ');
+  assert.equal(implicit.timezone, 'Europe/Prague');
+
+  const explicit = await load({ locale: 'en-US', steps: [{ pause: 1 }] });
+  assert.equal(explicit.locale, 'en-US');
+
+  assert.match(await message(load({ locale: '', steps: [{ pause: 1 }] })), /locale musí být/);
+});
+

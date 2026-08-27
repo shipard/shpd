@@ -13,16 +13,36 @@ import { UserError } from './errors.mjs';
 import { parseJsonc } from './jsonc.mjs';
 
 /** Verby scénáře podporované ve spike. Klíč kroku, který je jedním z nich, určuje akci. */
-export const VERBS = ['goto', 'waitFor', 'hover', 'click', 'caption', 'highlight', 'pause'];
+export const VERBS = ['goto', 'waitFor', 'hover', 'click', 'scroll', 'caption', 'highlight', 'pause'];
 
 /** Klíče, které akci neurčují, jen ji upravují. */
-const MODIFIERS = ['pause', 'travel', 'for'];
+const MODIFIERS = ['pause', 'travel', 'for', 'over'];
 
 /** Verby pracující se selektorem. */
 export const SELECTOR_VERBS = ['waitFor', 'hover', 'click', 'highlight'];
 
 const DEFAULT_CAPTURE = { w: 2560, h: 1600, scale: 2 };
-const DEFAULT_OUTPUT = { w: 1280, h: 800, fps: 30 };
+
+/**
+ * Výstupní rozlišení se **nezmenšuje**, dokud si to scénář nevyžádá.
+ *
+ * Zmenšit na 1280×800 znamenalo zahodit přesně ten detail, kvůli kterému se
+ * nahrává na dvojnásobnou hustotu: video zobrazené na stránce v šířce
+ * 1280 CSS px vidí každý návštěvník s retina displejem jako dvojnásobný
+ * upscale. Zmenšit se dá vždycky, zpátky se to nedodělá.
+ */
+const DEFAULT_OUTPUT_FPS = 30;
+
+/**
+ * Jazyk a časová zóna prohlížeče.
+ *
+ * Není to detail: aplikace si jazyk odvozuje z `navigator.language`
+ * (`frontend/src/stores/language.svelte.js`) a Playwright startuje
+ * v `en-US`. Bez připnutí vyjde celé video v angličtině — a pozná se to
+ * až na hotovém klipu, protože scénář ani runner o jazyku nic nevědí.
+ */
+const DEFAULT_LOCALE = 'cs-CZ';
+const DEFAULT_TIMEZONE = 'Europe/Prague';
 
 /**
  * Výchozí doba přejezdu kurzoru v sekundách. Do `pause` se nepočítá (D4).
@@ -36,8 +56,22 @@ export const DEFAULT_TRAVEL_S = 0.6;
 /** Výchozí doba zobrazení rámečku `highlight` v sekundách. */
 export const DEFAULT_HIGHLIGHT_S = 1.5;
 
+/**
+ * Výchozí doba scrollování v sekundách. Stejně jako `travel` se do `pause`
+ * nepočítá — je to vlastnost akce, ne vyprávění.
+ */
+export const DEFAULT_SCROLL_S = 1.2;
+
 function fail(message, hint) {
   throw new UserError(message, hint);
+}
+
+/** Posun scrollu smí být i negativní (nahoru), nesmí být nulový. */
+function nonZeroNumber(value, label) {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value === 0) {
+    fail(`${label} musí být nenulové číslo, je ${JSON.stringify(value)}.`);
+  }
+  return value;
 }
 
 function positiveNumber(value, label) {
@@ -45,6 +79,14 @@ function positiveNumber(value, label) {
     fail(`${label} musí být kladné číslo, je ${JSON.stringify(value)}.`);
   }
   return value;
+}
+
+function readString(raw, label, fallback) {
+  if (raw === undefined) return fallback;
+  if (typeof raw !== 'string' || raw.trim() === '') {
+    fail(`${label} musí být neprázdný řetězec, je ${JSON.stringify(raw)}.`);
+  }
+  return raw;
 }
 
 function readBlock(raw, label, defaults) {
@@ -109,6 +151,15 @@ function validateStep(step, index) {
     if (verb !== 'highlight') fail(`${at}: for dává smysl jen u highlight, ne u ${verb}.`);
   }
 
+  if (Object.hasOwn(step, 'over')) {
+    positiveNumber(step.over, `${at} → over`);
+    if (verb !== 'scroll') fail(`${at}: over dává smysl jen u scroll, ne u ${verb}.`);
+  }
+
+  if (verb === 'scroll') {
+    nonZeroNumber(step.scroll, `${at} → scroll`);
+  }
+
   if (SELECTOR_VERBS.includes(verb)) {
     if (typeof step[verb] !== 'string' || step[verb].trim() === '') {
       fail(`${at}: ${verb} chce neprázdný selektor.`);
@@ -140,6 +191,8 @@ function validateStep(step, index) {
  * @property {{w:number,h:number,scale:number}} capture Rozměry rawu v pixelech.
  * @property {{w:number,h:number,fps:number}} output
  * @property {{width:number,height:number}} viewport CSS viewport odvozený z capture.
+ * @property {string} locale Jazyk prohlížeče — určuje jazyk aplikace ve videu.
+ * @property {string} timezone Časová zóna prohlížeče.
  * @property {Array<Record<string, any> & {verb:string,index:number}>} steps
  */
 
@@ -180,7 +233,9 @@ export async function loadScenario(path) {
   }
 
   const capture = readBlock(raw.capture, 'capture', DEFAULT_CAPTURE);
-  const output = readBlock(raw.output, 'output', DEFAULT_OUTPUT);
+  const output = readBlock(raw.output, 'output', {
+    w: capture.w, h: capture.h, fps: DEFAULT_OUTPUT_FPS,
+  });
 
   // CSS viewport se odvozuje, nezadává. `capture` jsou pixely rawu; při
   // scale 2 tedy 2560×1600 znamená okno 1280×800 s dvojnásobnou hustotou.
@@ -199,6 +254,8 @@ export async function loadScenario(path) {
     capture,
     output,
     viewport: { width, height },
+    locale: readString(raw.locale, 'locale', DEFAULT_LOCALE),
+    timezone: readString(raw.timezone, 'timezone', DEFAULT_TIMEZONE),
     steps: raw.steps.map(validateStep),
   };
 }

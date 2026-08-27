@@ -1,7 +1,8 @@
 # Instalace prostředí pro video runner
 
 Runner potřebuje tři věci: **Node 24+**, **Chromium od Playwrightu**
-a **ffmpeg**. Varianta záznamu `x11` navíc **Xvfb**.
+a **ffmpeg**. Nic dalšího — záznam běží headless přes CDP screencast, takže
+žádný X server ani window manager ve hře není.
 
 Dokument je psaný prostředí-agnosticky — konkrétní příkazy jsou pro
 Debian/Ubuntu, na jiné distribuci se liší jen názvy balíčků.
@@ -11,27 +12,13 @@ Debian/Ubuntu, na jiné distribuci se liší jen názvy balíčků.
 ## 1. Systémové balíčky
 
 ```bash
-sudo apt install ffmpeg xvfb fonts-liberation fonts-noto-core
+sudo apt install ffmpeg fonts-liberation fonts-noto-core
 ```
 
 | Balíček | K čemu |
 |---------|--------|
 | `ffmpeg` | kompozice raw záznamu, vypálení titulků, škálování. **Povinné.** |
-| `xvfb` | virtuální X server pro variantu záznamu `--capture=x11`. Pro `--capture=cdp` není potřeba. |
 | `fonts-liberation`, `fonts-noto-core` | viz níže. |
-
-### Xvfb potřebuje `/tmp/.X11-unix`
-
-Varianta záznamu `x11` tam zakládá socket displeje. Na desktopu adresář
-existuje, v čerstvém kontejneru často ne — a Xvfb si ho pod běžným
-uživatelem nevytvoří:
-
-```bash
-sudo mkdir -p /tmp/.X11-unix && sudo chmod 1777 /tmp/.X11-unix
-```
-
-Varování `xkbcomp: Could not resolve keysym XF86…` při startu Xvfb jsou
-neškodná, X server běží dál.
 
 ### Fonty jsou součást zadání, ne detail
 
@@ -80,18 +67,44 @@ cd tools/video-runner
 npm install
 ```
 
-Chromium se instaluje **ve dvou krocích** — systémové knihovny jako root,
-samotný prohlížeč pod svým účtem:
+Chromium se instaluje **ve dvou krocích** — systémové závislosti jako root,
+samotný prohlížeč pod svým účtem. `npx` se pod `sudo` ale nepouští:
 
 ```bash
-sudo npx playwright install-deps chromium   # systémové .so knihovny
-npx playwright install chromium             # prohlížeč do ~/.cache/ms-playwright
+npx playwright install-deps --dry-run chromium   # jako běžný uživatel: vypíše, co chybí
+sudo apt install <balíčky z výpisu>              # instaluje se ručně
+npx playwright install chromium                  # prohlížeč do ~/.cache/ms-playwright
 ```
+
+> **Proč ne `sudo npx playwright install-deps chromium`.** `sudo` zahodí
+> tvůj PATH a nahradí ho hodnotou `secure_path` z `/etc/sudoers`, kde nvm
+> být nemůže → `sudo: npx: command not found`. Obejití plnou cestou narazí
+> o krok dál: `npx` má shebang `#!/usr/bin/env node` a `env` hledá `node`
+> v tom už resetovaném PATH → `/usr/bin/env: 'node': No such file or
+> directory`. Nouzově to jde přebít přes `sudo env "PATH=$PATH" npx …`, ale
+> není proč: `install-deps` nedělá nic jiného než `apt install` pevného
+> seznamu, takže je průhlednější vytáhnout seznam přes `--dry-run`
+> a nainstalovat ho sám.
+
+**Autoritativní je vždy výstup `--dry-run`** — Playwright ho generuje podle
+distribuce a své verze. Referenční stav pro Ubuntu 24.04 s desktopovými
+balíčky (Playwright 1.62): systémové `.so` knihovny už v systému jsou
+a chybí jen fonty pro pokrytí CJK, emoji a cyrilice:
+
+```bash
+sudo apt install fonts-freefont-ttf fonts-ipafont-gothic fonts-noto-color-emoji \
+                 fonts-tlwg-loma-otf fonts-unifont fonts-wqy-zenhei \
+                 xfonts-cyrillic xfonts-scalable
+```
+
+Pro česká videa je nepotřebuješ, ale bez nich Chromium hlásí varování —
+a hlavně se má dev stroj vzhledově chovat stejně jako budoucí `ns-media`.
 
 Proč ne jedním `sudo npx playwright install --with-deps chromium`: pod
 `sudo` by se prohlížeč stáhl do `/root/.cache/ms-playwright`, kde ho běh
-pod tvým účtem nenajde. Druhý příkaz se pouští **z `tools/video-runner/`**,
-aby se stáhla verze Chromia odpovídající zdejšímu připnutému Playwrightu.
+pod tvým účtem nenajde. Instalace prohlížeče se pouští **z
+`tools/video-runner/`**, aby se stáhla verze Chromia odpovídající zdejšímu
+připnutému Playwrightu.
 
 ---
 
@@ -122,6 +135,5 @@ scénář na něco nesedí — hláška řekne který krok a jaký selektor.
 Nakonec obě varianty záznamu:
 
 ```bash
-node bin/video-runner.mjs build demo/scenarios/spike-dashboard.jsonc --capture=cdp
-node bin/video-runner.mjs build demo/scenarios/spike-dashboard.jsonc --capture=x11
+node bin/video-runner.mjs build ../../demo/scenarios/spike-dashboard.jsonc
 ```

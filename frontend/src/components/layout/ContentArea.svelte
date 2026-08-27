@@ -6,6 +6,7 @@
   import SettingsPage from '../settings/SettingsPage.svelte';
   import AccountSecurity from '../account/AccountSecurity.svelte';
   import DsSetup from '../settings/DsSetup.svelte';
+  import DsAbout from '../settings/DsAbout.svelte';
   import ContentTagsSettings from '../settings/ContentTagsSettings.svelte';
   import PortalContent from '../portal/PortalContent.svelte';
   import ReportsPage from '../reports/ReportsPage.svelte';
@@ -18,6 +19,7 @@
   const panelComponents = {
     accountSecurity: AccountSecurity,
     dsSetup: DsSetup,
+    dsAbout: DsAbout,
     contentTags: ContentTagsSettings,
     hostingPortal: PortalContent,
     reports: ReportsPage,

@@ -294,6 +294,7 @@ function dispatch(
 		'alerts' => dispatchAlerts($route, $request, $db, $alertCheckRegistry, $configRuntime, resolveLanguage($request, $resolved->config)),
 		'reports' => dispatchReports($route, $request, $db, $configRuntime, $modulePathResolver, $resolved, resolveLanguage($request, $resolved->config)),
 		'setup' => dispatchSetup($route, $request, $auth, $db, $alertCheckRegistry, $configRuntime, $modulePathResolver, resolveLanguage($request, $resolved->config), $tables, $resolved->config, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher),
+		'dsAbout' => dispatchDsAbout($route, $auth, $db, $configRuntime, $resolved->config, resolveLanguage($request, $resolved->config), $tables),
 		'accbal'  => dispatchAccbal($route, $request, $db, $configRuntime, $journalEventDispatcher, $resolved->config),
 		'accounting' => dispatchAccounting($route, $request, $db, $configRuntime, $journalEventDispatcher),
 		'bank'    => dispatchBank($route, $request, $auth, $tables, $db, $resolved, $configRuntime, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher, $journalEventDispatcher),
@@ -718,6 +719,27 @@ function dispatchSetup(
 		'accountingItemsOffer'    => $ctrl->accountingItemsOffer($auth),
 		'generateAccountingItems' => $ctrl->generateAccountingItems($request, $auth),
 		default                   => Response::error('INTERNAL_ERROR', "Unknown setup action: {$route->action}", 500),
+	};
+}
+
+/** Panel „O zdroji dat" — GET /_ui/ds-about (tasks/ds-about-panel.md, Issue #41). */
+function dispatchDsAbout(
+	Route $route,
+	AuthContext $auth,
+	\Shipard\Core\Database\DataSourceConnection $db,
+	?\Shipard\Core\Config\ConfigRuntime $configRuntime,
+	\Shipard\Core\Config\DataSourceConfig $dsConfig,
+	string $language,
+	array $tables = [],
+): Response {
+	if ($configRuntime === null) {
+		return Response::error('INTERNAL_ERROR', 'ConfigRuntime is required for /_ui/ds-about', 500);
+	}
+
+	$ctrl = new \Shipard\Api\Controller\DsAboutController($db, $configRuntime, $dsConfig, $language, $tables);
+	return match ($route->action) {
+		'about' => $ctrl->about($auth),
+		default => Response::error('INTERNAL_ERROR', "Unknown dsAbout action: {$route->action}", 500),
 	};
 }
 

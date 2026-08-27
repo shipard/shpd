@@ -1,6 +1,6 @@
 # Task: Panel „O zdroji dat" (About) v Nastavení
 
-**Stav:** naplánováno
+**Stav:** hotovo
 
 **GitHub Issue:** [#41 Informace o zdroji dat](https://github.com/shipard/shpd/issues/41)
 
@@ -79,6 +79,34 @@ Po dokončení platí:
   neexistuje, se v navigaci tiše zahodí — žádný gate není potřeba.
   Endpoint ale musí chybějící tabulky tolerovat (viz Rozsah bod 1).
 
+## Ověření zadání proti kódu (2026-08-27)
+
+Před implementací ověřeno; kde se zadání rozcházelo s kódem, je to
+opraveno přímo v textu Rozsahu, tady je souhrn:
+
+- `DataSourceConnection::tableExists()` je **private** — existence tabulek
+  se ověřuje výhradně přes registry `$tables` (`TableLoader::load`, klíč =
+  název tabulky, vzor `SetupController` ř. 548). Žádné `SHOW TABLES`.
+- Osoby mají tři identifikátory: `company_id` = IČO, `tax_id` = DIČ,
+  `vat_id` = „DIČ pro DPH" (`SetupController::ownPerson()` čte `vat_id`).
+  Panel zobrazuje IČO + DIČ (`tax_id`).
+- `taxpayer_kind` je enumInt s cfgItem `economy.codebooks.vatTaxpayerKinds`
+  (0 Klasický plátce, 1 OSS) — server posílá i lokalizovaný
+  `taxpayerKindLabel`, frontend enum neduplikuje.
+- Formátovač bajtů existuje: `formatFileSize()` v
+  `frontend/src/api/attachments.js` (B / KB / MB,1 / GB,1) — použít,
+  nepřesouvat.
+- Routy `/_ui/*` jsou v `Router.php` pohromadě u `/_ui/section-badges`
+  (ř. ~68), ne u `/_setup` (ř. 317) — nová routa patří tam.
+- `global.settingsSections` je kompilovaná cfgItem — po přidání sekce je
+  na dev DS nutný `vendor/bin/shpd-ds ds-upgrade`, jinak se sekce neukáže.
+- Vzor panelu dsSetup (commit `a101e80`) aktualizoval i `docs/rest-api.md`
+  a `docs/app-settings.md`; CLAUDE.md navíc vyžaduje `help/` ve stejném
+  commitu → přidány body 10 a 11 Rozsahu.
+- Unit test controlleru je levný — `SetupControllerTest::makeDb()` má
+  hotový vzor (`fetchSingle` callback podle substringu SQL, temp dir pro
+  `DataSourceConfig` jako `AppControllerTest`).
+
 ## Před implementací přečti
 
 - `docs/ds-setup.md` — panel dsSetup jako vzor (D12/D14), vrstvy A/C
@@ -116,6 +144,7 @@ Vrací (tvar odpovědi):
   "profile": {
     "vatPayer": true,                 // aktivní registrace DPH existuje
     "taxpayerKind": 0,                // enumInt z registrace, null pokud neplátce
+    "taxpayerKindLabel": "…",         // lokalizovaný název z cfgItem vatTaxpayerKinds, null pokud neplátce
     "accountChart": "default",        // default | npo | none | null (nerozhodnuto)
     "dsId": "…",                      // DataSourceConfig::getId()
     "created": "2026-…"               // DataSourceConfig::getCreated()
@@ -138,30 +167,33 @@ Poznámky k implementaci:
   než 3600 s, vrať cache bez skenu.
 - Neexistující `att/` adresář = `{bytes: 0, files: 0}` (žádná výjimka).
 - Vlastní osoba: dotaz podle vzoru `SetupController::ownPerson()`,
-  navíc sloupce `company_id`, `tax_id`.
+  navíc sloupce `company_id` (IČO) a `tax_id` (DIČ). Pozor: `ownPerson()`
+  čte `vat_id` = „DIČ pro DPH" — to je třetí, jiný sloupec.
 - **Tolerance chybějících tabulek (D6):** na hosting profilu neexistují
   `base_persons_persons`, `core_mail_mailboxes`,
   `economy_codebooks_vat_registrations`, `docs_core_heads`,
   `core_mail_incoming_messages` ani `core_attachments_files`. Před
-  dotazem ověř existenci tabulky (registry `$tables`, nebo
-  `SHOW TABLES LIKE …`) a chybějící blok vrať jako null/nuly — přímé
-  zavolání endpointu na hostingu nesmí skončit 500.
+  dotazem ověř existenci tabulky **jen** přes registry `$tables`
+  (`DataSourceConnection::tableExists()` je private) a chybějící blok
+  vrať jako null/nuly — přímé zavolání endpointu na hostingu nesmí
+  skončit 500.
 - Žádné mutace kromě zápisu cache klíče.
 
 ### 2. Routa — `src/Api/Router.php`
 
-- V hlavním rozcestníku (okolí ř. 317, kde se větví `/_setup`) přidej
-  větev pro `/_ui/ds-about` → `new Route('dsAbout', 'about')`.
-  Pozor: prefix `/_ui/settings` se řeší dřív (ř. 75–93) — nová routa
-  je záměrně `/_ui/ds-about`, ne `/_ui/settings/about`, aby se
-  nezaplétala do settings page mechanismu.
+- Do bloku `/_ui/*` rout (za `GET /_ui/section-badges`, okolí ř. 68 —
+  ne k `/_setup` na ř. 317) přidej větev pro `/_ui/ds-about` →
+  `new Route('dsAbout', 'about')`, jiná metoda → 405.
+  Routa je záměrně `/_ui/ds-about`, ne `/_ui/settings/about`, aby se
+  nezaplétala do settings page mechanismu (`/_ui/settings/…`).
 
 ### 3. Dispatch — `public/index.php`
 
 - Nová funkce `dispatchDsAbout(...)` podle vzoru `dispatchSetup`
-  (ř. 690): sestaví `DsAboutController($db, $configRuntime, $dsConfig,
-  $language)` a zavolá akci. Zapoj do hlavního `match` na
-  `$route->controller === 'dsAbout'`.
+  (ř. 680): sestaví `DsAboutController($db, $configRuntime, $dsConfig,
+  $language, $tables)` a zavolá akci; `$tables` je registry
+  z `TableLoader::load` (guard chybějících tabulek). Zapoj do hlavního
+  `match` na `$route->controller === 'dsAbout'`.
 
 ### 4. Deklarace panelu — `modules/core/system/module.jsonc`
 
@@ -205,9 +237,11 @@ Poznámky k implementaci:
 - Vzor `DsSetup.svelte`: `onMount` → fetch, `loading` / `error` stavy,
   `t()` z i18n.
 - Tři bloky dle D5. Definiční seznam (label + hodnota), žádné formuláře.
-- Formátování velikostí: MB/GB s jedním desetinným místem (helper
-  v komponentě; pokud v utils existuje formátovač bajtů, použij ho —
-  ověř `frontend/src/utils/`).
+- Formátování velikostí: `formatFileSize()` z
+  `frontend/src/api/attachments.js` (B / KB / MB a GB s jedním desetinným
+  místem) — existující helper, nepřesouvat ani neduplikovat.
+- Typ osnovy a „nerozhodnuto" přes existující klíče `setup.chart.*`
+  a `setup.undecided`; druh plátce z `taxpayerKindLabel` ze serveru.
 - Chybějící hodnoty: „—" (u vlastní osoby lokalizovaný text
   „zatím nenastaveno").
 
@@ -222,25 +256,43 @@ Poznámky k implementaci:
   plátce/neplátce, podnikatel/NPO/bez osnovy, „zatím nenastaveno").
   Jmenný prostor `dsAbout.*`.
 
+### 10. Dokumentace — `docs/`
+
+- `docs/rest-api.md`: odstavec `GET /_ui/ds-about` za blokem `/_setup`
+  endpointů (tvar odpovědi, tolerance chybějících tabulek, cache).
+- `docs/app-settings.md`, sekce *Panel*: doplnit `dsAbout` mezi konzumenty.
+
+### 11. Uživatelská dokumentace — `help/o-zdroji-dat.md` (nová)
+
+- Krátká úlohová stránka (root `help/` → sekce Základy): kde panel najdu
+  a co v něm je, popisky přesně dle `cs.js`. Poté
+  `python3 scripts/help-index.py`. Formát: `docs/help-authoring.md`.
+
 ## Testy
 
 - `tests/Unit/Api/RouterTest.php` — routa `GET /_ui/ds-about` →
   controller `dsAbout` / akce `about`; jiná metoda → 405.
-- Unit test controlleru jen pokud jde bez velkého mockování DB — jinak
-  stačí Router test + E2E ověření (panel je read-only agregace).
+- `tests/Unit/Api/Controller/DsAboutControllerTest.php` — mock DB podle
+  vzoru `SetupControllerTest::makeDb()`: (a) registry bez tabulek
+  (hosting) → null/nuly a **žádný** SQL na chybějící tabulky;
+  (b) cache mladší než hodina → sken se nespustí; (c) sken temp `att/`
+  → správné bytes/files + jeden zápis cache; (d) chybějící `att/` →
+  nuly bez zápisu; (e) anonym → 401.
 
 ## Ověření na dev serveru (součást tasku)
 
 1. `cd frontend && timeout 90 npm run build 2>&1 | tail -4` — bez chyb.
 2. PHPUnit: `vendor/bin/phpunit --filter Router` — zeleně.
-3. V prohlížeči (běžný DS): Nastavení → sekce „O zdroji dat" je
+3. Na dev DS `vendor/bin/shpd-ds ds-upgrade` — rekompilace
+   `global.settingsSections` (bez toho se nová sekce neukáže).
+4. V prohlížeči (běžný DS): Nastavení → sekce „O zdroji dat" je
    **poslední** v sidebaru; panel zobrazí všechny tři bloky s reálnými
    daty.
-4. Na DS bez vlastní osoby / bez schránky (čerstvý DS): panel se zobrazí
+5. Na DS bez vlastní osoby / bez schránky (čerstvý DS): panel se zobrazí
    bez chyb, chybějící údaje jako „—".
-5. Druhé načtení panelu do hodiny: sken `att/` se nespouští
+6. Druhé načtení panelu do hodiny: sken `att/` se nespouští
    (ověř logem nebo časem odpovědi).
-6. Hosting DS (pokud je k dispozici): sekce „O zdroji dat" se
+7. Hosting DS (pokud je k dispozici): sekce „O zdroji dat" se
    v Nastavení NEZOBRAZUJE; ruční `GET /_ui/ds-about` vrátí odpověď
    s null/nulami, ne 500.
 
@@ -266,6 +318,9 @@ Poznámky k implementaci:
   `core_mail_mailboxes`, `economy_*`, `docs_core_heads`,
   `core_attachments_files` tam NEEXISTUJÍ. Bez guardu na existenci
   tabulek spadne přímé volání na SQL chybu.
+- **`DataSourceConnection::tableExists()` je private** — nezveřejňovat ho
+  kvůli tomuhle panelu; registry `$tables` stačí a je to tentýž zdroj
+  pravdy jako u `TableAccessGuard`.
 - **Prázdná sekce se v navigaci vynechá**
   (`SettingsController::navigation()`, ř. ~97) — sekce `about` se ukáže
   až s naregistrovaným panelem v `settingsItems[]`. Pokud sekci nevidíš,

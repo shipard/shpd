@@ -72,6 +72,16 @@ class Router
 			return new Route('dashboard', 'sectionBadges');
 		}
 
+		// GET /_ui/ds-about — panel „O zdroji dat" (read-only agregace, Issue #41).
+		// Záměrně mimo prefix /_ui/settings, aby se nezaplétal do settings page
+		// mechanismu (/_ui/settings/page/{id}).
+		if ($subpath === '/_ui/ds-about') {
+			if ($method !== 'GET') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('dsAbout', 'about');
+		}
+
 		if ($subpath === '/_ui/settings/navigation') {
 			if ($method !== 'GET') {
 				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);

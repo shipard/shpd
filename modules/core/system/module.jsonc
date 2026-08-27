@@ -173,6 +173,13 @@
             "name:cs": "Nastavení zdroje dat",
             "name:en": "Data source setup",
             "icon": "list-check"
+        },
+        {
+            "id": "dsAbout",
+            "name": "About data source",
+            "name:cs": "O zdroji dat",
+            "name:en": "About data source",
+            "icon": "info"
         }
     ],
     "viewers": [
@@ -192,7 +199,10 @@
         { "viewer": "core.system.users",   "section": "other", "subsection": "other.system", "order": 20 },
         { "table": "core_system_user_identities",   "section": "other", "subsection": "other.system", "order": 22 },
         { "table": "core_system_auth_transactions", "section": "other", "subsection": "other.system", "order": 24 },
-        { "table": "core_system_settings", "section": "other", "subsection": "other.system", "order": 30 }
+        { "table": "core_system_settings", "section": "other", "subsection": "other.system", "order": 30 },
+        // Sekce `about` existuje jen v profilu install.base — na hosting
+        // profilu se položka v navigaci tiše zahodí (ds-about-panel D6).
+        { "panel": "dsAbout", "section": "about", "order": 10 }
     ],
     "accountItems": [
         { "page": "accountBasic", "section": "basic", "order": 10 },

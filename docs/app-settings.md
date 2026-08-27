@@ -281,6 +281,13 @@ První konzument: `accountSecurity` (sekce Základní, ikona `lock`) —
 komponenta `components/account/AccountSecurity.svelte` se změnou hesla a
 správou relací (auth Fáze 0b, viz [`auth.md`](auth.md)).
 
+Read-only panel `dsAbout` (O zdroji dat, `components/settings/DsAbout.svelte`,
+`GET /_ui/ds-about`) má vlastní sekci `about` s `order: 200` — poslední
+položka Nastavení. Sekce existuje jen v profilu `install.base`; hosting
+profil ji záměrně nemá a `settingsItem` z `core.system` se tam v navigaci
+tiše zahodí (položka bez existující sekce), žádný gate není potřeba.
+Viz `tasks/ds-about-panel.md` (D1, D6).
+
 
 ### Uživatelský avatar (per-user fotka)
 

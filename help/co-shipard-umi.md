@@ -78,6 +78,8 @@ Položky, které jsou v menu samostatně, nad ostatními sekcemi.
 - [Co Shipard dnes neumí](co-dnes-nejde.md) — chybějící funkce a místa, kde
   ještě nemusí souhlasit čísla
 - [Slovníček](slovnicek.md) — jak se která věc v aplikaci jmenuje
+- [Informace o zdroji dat](o-zdroji-dat.md) — název firmy, ID zdroje dat,
+  plátcovství DPH a velikost dat na jednom místě v **Nastavení aplikace**
 - [Pro testery](../TESTERS.md) — jak si říct o přístup a jak nahlásit chybu
 
 ---

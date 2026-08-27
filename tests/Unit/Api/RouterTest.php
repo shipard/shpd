@@ -54,6 +54,20 @@ class RouterTest extends TestCase
 		$this->assertInstanceOf(Response::class, $result);
 	}
 
+	// Panel „O zdroji dat" (Issue #41)
+	public function testDsAboutGet(): void
+	{
+		$result = $this->router->resolve('/api/v1/_ui/ds-about', 'GET');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'dsAbout', 'about');
+	}
+
+	public function testDsAboutPostNotAllowed(): void
+	{
+		$result = $this->router->resolve('/api/v1/_ui/ds-about', 'POST');
+		$this->assertInstanceOf(Response::class, $result);
+	}
+
 	// Settings pages
 	public function testSettingsPageGet(): void
 	{

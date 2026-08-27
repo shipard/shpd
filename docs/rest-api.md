@@ -211,6 +211,23 @@ stav 40 → `422 INVALID_DOC_STATE`, neexistující → `404`. Účtování při
 přechodech stavů běží automaticky přes `documentEventHandlers` — endpoint
 je pro ruční přeúčtování (alert / tlačítko v UI od Fáze 3).
 
+**`GET /_ui/ds-about`** — backend panelu „O zdroji dat"
+(`tasks/ds-about-panel.md`, Issue #41; komponenta `DsAbout.svelte`,
+poslední sekce Nastavení na profilu `install.base`). Read-only agregace
+`{identity: {dsName, ownPerson: {fullName, companyId, taxId} | null,
+mailAddress}, profile: {vatPayer, taxpayerKind, taxpayerKindLabel,
+accountChart, dsId, created}, storage: {databaseBytes, attachments:
+{bytes, files, computedAt}, counts: {documents, incomingMail,
+attachmentFiles}}}`. Vidí každý přihlášený uživatel (401 pro anonyma,
+žádný admin gate). Existence tabulek cizích modulů se ověřuje přes
+registry `$tables` — na hosting profilu (bez `base.persons`, `core.mail`,
+`economy.*`, `docs.core`, `core.attachments`) vrací null/nuly, ne 500.
+Velikost DB je `SUM(data_length + index_length)` z `information_schema`
+za `DATABASE()`; sken `att/` se cachuje v `core_system_settings` pod
+klíčem `about.attachmentsSize` (TTL 1 h, přepočet synchronně v requestu;
+chybějící adresář = nuly bez zápisu). Jediná mutace endpointu je tento
+cache klíč.
+
 **`/_setup` endpointy** — backend panelu `dsSetup`
 ([docs/ds-setup.md](ds-setup.md) D12/D14). `GET /_setup/checklist` spouští
 setup checky **naživo** přes `SetupChecklist` (ne z tabulky alertů) a vrací

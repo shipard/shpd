@@ -90,6 +90,16 @@
                     "order": 70
                 }
             ]
+        },
+        {
+            // Poslední položka Nastavení — panel dsAbout (ds-about-panel D1).
+            // Hosting profil tuto sekci záměrně nemá (D6).
+            "id": "about",
+            "name": "About data source",
+            "name:cs": "O zdroji dat",
+            "name:en": "About data source",
+            "icon": "info",
+            "order": 200
         }
     ]
 }

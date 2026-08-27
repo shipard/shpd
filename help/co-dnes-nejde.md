@@ -99,9 +99,6 @@ požádat.
 - **Datový zdroj se nedá smazat z rozhraní.** Napiš na podporu.
 - **Převod dat ze starého Shipardu neděláš sám.** Import existuje, ale
   spouštíme ho my a s tebou pak porovnáme kontrolní součty.
-- **Adresu pro příjem pošty v aplikaci neuvidíš.** Přijde ti e-mailem
-  s přístupy; když se ztratí, pošleme ji znovu. Zobrazení v aplikaci se
-  chystá.
 - **Uživatele a přístupy zakládáme ručně.** Viz [TESTERS.md](../TESTERS.md).
 
 ---

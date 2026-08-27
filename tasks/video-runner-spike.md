@@ -1,6 +1,6 @@
 # Video runner — pilotní spike (protažení pipeline)
 
-**Stav:** připraveno k implementaci
+**Stav:** naplánováno — připraveno k implementaci
 
 ## Kontext / Cíl
 

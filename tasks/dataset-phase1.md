@@ -1,6 +1,6 @@
 # Datové sady — fáze 1: `dataset-dump` + `dataset-seed`
 
-**Stav:** připraveno k implementaci
+**Stav:** naplánováno — připraveno k implementaci
 
 ## Kontext / Cíl
 

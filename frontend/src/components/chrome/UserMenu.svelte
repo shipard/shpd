@@ -1,6 +1,6 @@
 <script>
   // Chrome primitiv: avatar + jméno v patce s dropdown menu — Nastavení
-  // účtu / Nastavení aplikace, jazyk, odhlásit. `compact` = jen kruhový
+  // účtu / Nastavení aplikace, vzhled (podmenu), jazyk, odhlásit. `compact` = jen kruhový
   // avatar, dropdown vyjíždí do strany (side-overlay). `direction`:
   // 'up' (default, patka sidebaru) | 'down' (horizontální top bar
   // classic shellu — dropdown dolů, zarovnaný doprava, bez patkového
@@ -13,6 +13,7 @@
   import { authStore } from '../../stores/auth.svelte.js';
   import { navigationStore } from '../../stores/navigation.svelte.js';
   import { layoutStore } from '../../stores/layout.svelte.js';
+  import { themeStore } from '../../stores/theme.svelte.js';
   import { avatarStore } from '../../stores/avatar.svelte.js';
   import { language, t } from '../../i18n/index.js';
   import Icon from '../ui/Icon.svelte';
@@ -20,22 +21,34 @@
     iconLogout,
     iconChevronDown,
     iconChevronUp,
+    iconChevronLeft,
+    iconChevronRight,
     iconSettings,
     iconAppSettings,
     iconConfirm,
+    iconPalette,
   } from '../../icons.js';
 
-  let { compact = false, direction = 'up', onLogout } = $props();
+  let { compact = false, direction = 'up', onLogout, onOpenThemePanel } = $props();
 
   let userMenuOpen = $state(false);
   let userMenuRoot = $state(null);
+  let appearanceOpen = $state(false); // podmenu Vzhled
+  let subwrapEl = $state(null);       // kotva flyoutu (fixed varianta)
+  let submenuFixedBottom = $state(0); // px od spodku viewportu
+
+  // Plný sidebar: flyout musí být fixed (únik z overflow:hidden),
+  // vertikálně se zarovnává na položku — pozice se měří při otevření.
+  const fixedFlyout = $derived(!compact && direction === 'up' && !layoutStore.isMobile);
 
   function toggleUserMenu() {
     userMenuOpen = !userMenuOpen;
+    appearanceOpen = false;
   }
 
   function closeUserMenu() {
     userMenuOpen = false;
+    appearanceOpen = false;
   }
 
   function handleSettings() {
@@ -69,6 +82,43 @@
 
   function handleLanguageChange(value) {
     language.setMode(value);
+  }
+
+  // Podmenu Vzhled — user-scope volba vzhledu (Issue #46). Volba módu
+  // implikuje override (setMode uvnitř nastavuje follow=false), „Podle
+  // aplikace“ vrací follow. Menu po volbě zůstává otevřené (živý
+  // náhled), zavírá ho až „Vlastní“ (otvírá ThemePanel) nebo klik mimo.
+  // Strana flyoutu: menu zarovnané vpravo (classic top bar) → doleva,
+  // jinak doprava. Mobil místo flyoutu rozbaluje inline (akordeon).
+  const submenuSide = direction === 'down' ? 'left' : 'right';
+
+  const appearanceModes = [
+    { value: 'light',  labelKey: 'sidebar.appearance.light' },
+    { value: 'dark',   labelKey: 'sidebar.appearance.dark' },
+    { value: 'custom', labelKey: 'sidebar.appearance.custom' },
+  ];
+
+  function toggleAppearance() {
+    appearanceOpen = !appearanceOpen;
+    if (appearanceOpen && fixedFlyout && subwrapEl) {
+      // Spodek flyoutu = spodek položky (stejná kotva jako absolute
+      // varianta bottom:0), roste nahoru.
+      submenuFixedBottom = window.innerHeight - subwrapEl.getBoundingClientRect().bottom;
+    }
+  }
+
+  function selectAppearanceFollow() {
+    themeStore.setFollow(true);
+  }
+
+  function selectAppearanceMode(value) {
+    themeStore.setMode(value);
+    if (value === 'custom') {
+      // ThemePanel si po otevření registruje document click listener —
+      // otevření deferujeme za aktuální klik (vzor ThemeField).
+      closeUserMenu();
+      setTimeout(() => { onOpenThemePanel?.(); }, 0);
+    }
   }
 
   function handleLogoutFromMenu() {
@@ -155,6 +205,75 @@
           <span>{t('sidebar.appSettings')}</span>
         </button>
       {/if}
+
+      <div class="shpd-usermenu__menu-divider"></div>
+
+      <!-- Vzhled — podmenu: desktop flyout do strany, mobil inline
+           akordeon (flyout by přetekl drawer). -->
+      <div class="shpd-usermenu__subwrap" bind:this={subwrapEl}>
+        <button
+          class="shpd-usermenu__menu-item"
+          class:shpd-usermenu__menu-item--active={appearanceOpen}
+          onclick={toggleAppearance}
+          role="menuitem"
+          aria-haspopup="menu"
+          aria-expanded={appearanceOpen}
+        >
+          <Icon icon={iconPalette} size="sm" />
+          <span class="shpd-usermenu__menu-item-label">{t('sidebar.appearance')}</span>
+          <span class="shpd-usermenu__menu-item-chevron">
+            {#if layoutStore.isMobile}
+              <Icon icon={appearanceOpen ? iconChevronDown : iconChevronRight} size="xs" />
+            {:else}
+              <Icon icon={submenuSide === 'left' ? iconChevronLeft : iconChevronRight} size="xs" />
+            {/if}
+          </span>
+        </button>
+
+        {#if appearanceOpen}
+          <div
+            class="shpd-usermenu__submenu"
+            class:shpd-usermenu__submenu--inline={layoutStore.isMobile}
+            class:shpd-usermenu__submenu--left={submenuSide === 'left'}
+            class:shpd-usermenu__submenu--top={direction === 'down'}
+            class:shpd-usermenu__submenu--fixed={fixedFlyout}
+            style:bottom={fixedFlyout ? submenuFixedBottom + 'px' : null}
+            role="menu"
+          >
+            <button
+              class="shpd-usermenu__menu-item"
+              class:shpd-usermenu__menu-item--active={themeStore.follow}
+              onclick={selectAppearanceFollow}
+              role="menuitemradio"
+              aria-checked={themeStore.follow}
+            >
+              <span class="shpd-usermenu__menu-item-label">{t('sidebar.appearance.follow')}</span>
+              {#if themeStore.follow}
+                <span class="shpd-usermenu__menu-item-check">
+                  <Icon icon={iconConfirm} size="xs" />
+                </span>
+              {/if}
+            </button>
+            <div class="shpd-usermenu__menu-divider"></div>
+            {#each appearanceModes as opt}
+              <button
+                class="shpd-usermenu__menu-item"
+                class:shpd-usermenu__menu-item--active={!themeStore.follow && themeStore.mode === opt.value}
+                onclick={() => selectAppearanceMode(opt.value)}
+                role="menuitemradio"
+                aria-checked={!themeStore.follow && themeStore.mode === opt.value}
+              >
+                <span class="shpd-usermenu__menu-item-label">{t(opt.labelKey)}{opt.value === 'custom' ? '…' : ''}</span>
+                {#if !themeStore.follow && themeStore.mode === opt.value}
+                  <span class="shpd-usermenu__menu-item-check">
+                    <Icon icon={iconConfirm} size="xs" />
+                  </span>
+                {/if}
+              </button>
+            {/each}
+          </div>
+        {/if}
+      </div>
 
       <div class="shpd-usermenu__menu-divider"></div>
       <div class="shpd-usermenu__menu-label">{t('sidebar.language')}</div>
@@ -351,5 +470,64 @@
     height: 1px;
     margin: var(--shpd-space-xs) 0;
     background-color: var(--shpd-color-bg-sidebar-border);
+  }
+
+  /* Podmenu (flyout) — kotva je wrapper položky. Vertikálně roste
+     po směru menu: up = od spodku položky nahoru, down = od vrchu
+     dolů, aby neuteklo z obrazovky. */
+  .shpd-usermenu__subwrap {
+    position: relative;
+  }
+
+  .shpd-usermenu__submenu {
+    position: absolute;
+    bottom: 0;
+    left: calc(100% + 6px);
+    min-width: 180px;
+    background-color: var(--shpd-color-bg-sidebar-elevated);
+    border: 1px solid var(--shpd-color-bg-sidebar-border);
+    border-radius: var(--shpd-radius-md);
+    box-shadow: var(--shpd-shadow-md);
+    padding: var(--shpd-space-xs);
+    z-index: 210;
+  }
+
+  .shpd-usermenu__submenu--left {
+    left: auto;
+    right: calc(100% + 6px);
+  }
+
+  .shpd-usermenu__submenu--top {
+    bottom: auto;
+    top: 0;
+  }
+
+  /* Mobil: akordeon uvnitř menu místo flyoutu. */
+  .shpd-usermenu__submenu--inline {
+    position: static;
+    min-width: 0;
+    padding: 0 0 0 var(--shpd-space-lg);
+    background: transparent;
+    border: none;
+    box-shadow: none;
+  }
+
+  .shpd-usermenu__menu-item-chevron {
+    display: inline-flex;
+    align-items: center;
+    color: var(--shpd-color-text-sidebar-muted);
+    flex-shrink: 0;
+  }
+
+  /* Plný (nesbalený) sidebar má overflow:hidden (skrývání
+     labelů při toggle transition), absolute flyout by ořízl na
+     hraně sidebaru. Fixed uniká z clipu — stejný trik jako
+     ThemePanel; kotva = pravý okraj sidebaru přes token, bez JS. */
+  .shpd-usermenu__submenu--fixed {
+    position: fixed;
+    left: calc(var(--shpd-sidebar-width) + var(--shpd-space-xs));
+    right: auto;
+    bottom: var(--shpd-space-sm);
+    top: auto;
   }
 </style>

@@ -60,7 +60,7 @@
       class="shpd-shell__drawer"
       class:shpd-shell__drawer--open={layoutStore.drawerOpen}
     >
-      <Sidebar onNavigate={handleNavigate} {onLogout} />
+      <Sidebar onNavigate={handleNavigate} {onLogout} {onOpenThemePanel} />
     </div>
 
     <div class="shpd-shell__main">
@@ -71,6 +71,7 @@
     <Sidebar
       onNavigate={handleNavigate}
       {onLogout}
+      {onOpenThemePanel}
       bind:collapsed={sidebarCollapsed}
     />
     <div class="shpd-shell__main">

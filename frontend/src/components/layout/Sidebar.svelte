@@ -34,7 +34,7 @@
   // by position:fixed panel uvěznil). Panel custom vzhledu už neotevírá
   // sidebar (dropdown vzhledu zanikl) — otevírá ho ThemeField na stránce
   // Nastavení účtu → Základní.
-  let { onNavigate, onLogout, collapsed = $bindable(false) } = $props();
+  let { onNavigate, onLogout, onOpenThemePanel, collapsed = $bindable(false) } = $props();
 
   // App strom vlastní navigationStore (loadAppNavTree volá AppShell —
   // strom potřebují všechny shelly). Lokální fetch zůstává jen pro
@@ -236,7 +236,7 @@
     {/if}
   </div>
 
-  <UserMenu compact={collapsed} onLogout={handleLogout} />
+  <UserMenu compact={collapsed} onLogout={handleLogout} {onOpenThemePanel} />
 </nav>
 
 <style>

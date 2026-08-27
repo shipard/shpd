@@ -169,6 +169,7 @@
     browsingSection={wildShellStore.browsingSection}
     onSelectSection={handleSelectSection}
     {onLogout}
+    {onOpenThemePanel}
   />
 
   <div class="shpd-wild__main">

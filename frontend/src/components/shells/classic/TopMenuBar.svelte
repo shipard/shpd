@@ -21,7 +21,7 @@
   import { t, tn } from '../../../i18n/index.js';
   import { iconHome, iconSearch, iconChat } from '../../../icons.js';
 
-  let { onNavigate, onLogout } = $props();
+  let { onNavigate, onLogout, onOpenThemePanel } = $props();
 
   const tree = $derived(navigationStore.appNavTree ?? []);
   // Sekce = root uzly se children (leafy `_top`/dashboard/chat mají type).
@@ -128,7 +128,7 @@
         <Icon icon={iconChat} size="sm" />
       </button>
     {/if}
-    <UserMenu compact direction="down" {onLogout} />
+    <UserMenu compact direction="down" {onLogout} {onOpenThemePanel} />
   </div>
 </header>
 

@@ -53,7 +53,7 @@
 </script>
 
 <div class="shpd-classic">
-  <TopMenuBar onNavigate={handleNavigate} {onLogout} />
+  <TopMenuBar onNavigate={handleNavigate} {onLogout} {onOpenThemePanel} />
 
   <div class="shpd-classic__body">
     <aside class="shpd-classic__strip">

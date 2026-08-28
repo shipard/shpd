@@ -278,6 +278,10 @@ Funkční kombinace je `viewport: null` + `--window-size=<CSS>` +
 skutečný raster. Ověřeno: frame 2560×1600. Metadata framu přitom pořád
 tvrdí `deviceWidth: 1280`, takže se na ně nedá spolehnout.
 
+*Dovětek po Z8/Z9:* tohle zjištění vzniklo na headless shellu. Po přechodu
+na plné Chromium platí kombinace dál, jen `--window-size` už neurčuje
+viewport přesně — viz Z9 a samokalibrace v `runner.mjs`.
+
 ### Z2 — `--kiosk` ve Xvfb bez window manageru nic nedělá
 
 Chromium fullscreen nekreslí samo, žádá o něj WM přes EWMH. V čerstvém Xvfb
@@ -363,6 +367,48 @@ animací.
 Disk: ~7 MB PNG framů na sekundu klipu (106 MB / 17,9 s). U třicetisekundového
 videa něco přes 200 MB dočasných dat. Únosné, PNG zůstává — JPEG ze
 screencastu má chroma subsampling 4:2:0, které je na textu vidět.
+
+### Z8 — headless shell nemá PDF viewer
+
+Náhledy PDF v aplikaci (`AttachmentGrid` v režimu `full`,
+`PdfViewerPanel`) jsou nativní `<iframe src="…pdf">` a spoléhají na
+vestavěný viewer Chromia. Playwright ale pro headless běh standardně
+používá ořezaný build `chromium-headless-shell` (nástupce starého
+headless režimu) — a ten PDF viewer nemá, soubor by se místo zobrazení
+stahoval. V iframe proto zůstávalo prázdné místo.
+
+Řešení: `channel: 'chromium'` v `chromium.launch()` — plné Chromium
+v novém headless režimu, stejný renderer a stejný PDF viewer, jaký má
+skutečný uživatel. Ověřeno na klipu: náhled PDF se vykreslí.
+
+### Z9 — nový headless si z okna ukrajuje výšku na chrome
+
+S plným Chromiem dá `--window-size=1280,800` viewport **1280×713** —
+nový headless modeluje okenní chrome (~87 px), který headless shell
+neměl. Raw pak vyšel 2560×1426 místo 2560×1600. Delta navíc není nic,
+na co by šlo spoléhat mezi verzemi.
+
+Řešení: samokalibrace v `runner.mjs` — po startu se změří
+`innerWidth/innerHeight`, okno se přes CDP `Browser.setWindowBounds`
+posune o rozdíl a přeměří; při neshodě čitelná chyba. Jednotky sedí,
+`--window-size` i bounds jsou CSS px. Bonus: kalibrace srovná geometrii
+i při `VIDEO_HEADFUL=1`, kde si výšku ukrajuje skutečné okno.
+
+### Z10 — mrtvá session vykreslí shell, ne přihlašovací formulář
+
+Backend při `/refresh` vydává nový token s novým `expires_at` — ale
+nový token dostane jen běžící prohlížeč. Runner ukládal session jednou
+ve verbu `login` a už nikdy, takže v souboru zůstával původní token
+a po TTL umřel. SPA se s mrtvou session přesto vykreslí: shell naběhne,
+sidebar skončí ve stavu „Nepřihlášen" a API vrací 401. Kontrola
+`isLoginScreen` nic nepozná a scénář umře timeoutem na nevinném
+selektoru (`@nav-…` se bez načteného stromu nikdy neobjeví).
+
+Řešení dvojí: (a) `close()` v `runner.mjs` ukládá `storageState` po
+každém běhu, takže refreshnutý token se persistuje a `login` je potřeba
+jen po dlouhé odmlce; (b) `assertSession` ověřuje přihlášení přímo
+autentizovaným `GET /_ui/navigation` — 401 po jednom opakovaném pokusu
+(závod s refreshem aplikace) znamená čitelnou chybu „spusť login".
 
 ### Doporučení pro další práci
 

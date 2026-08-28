@@ -1,5 +1,12 @@
 # Video: `data-testid` a selektorová zkratka `@` (#48)
 
+**Stav:** hotovo — testidy zlaté cesty + `@` zkratka + validace,
+pilotní klip přetočen proti 4l3j (2026-08-28). Navíc oproti zadání:
+`app-shell` na kořenech všech tří shellů (starý `.shpd-shell` seděl
+jen na SidebarShell) a `sidebar` — bez nich by scénář nesplnil
+„žádné CSS třídy". Pozn.: scénář předpokládá shell `sidebar`;
+uživatel s override `classic`/`wild` `@sidebar` nenajde.
+
 Navazuje na `tasks/video-runner-spike.md` (Zjištění + Doporučení). Rozhodnuto
 v chatu, zapsáno v #48:
 
@@ -102,9 +109,9 @@ z `docs/README.md`.
 
 ## Hotovo když
 
-- [ ] `grep -r "data-testid" frontend/src` nachází navigaci, viewer,
+- [x] `grep -r "data-testid" frontend/src` nachází navigaci, viewer,
       dashboard, login i paletu; konvence je v dokumentaci
-- [ ] `@` selektor projde překladem, validátor odmítne `@ne platný!`
-- [ ] `shipard.mjs` ani scénář neobsahují `:has-text` a CSS třídy
-- [ ] testy runneru zelené, `check` na pilotním scénáři projde
-- [ ] pilotní klip přetočen a vizuálně shodný s předchozím
+- [x] `@` selektor projde překladem, validátor odmítne `@ne platný!`
+- [x] `shipard.mjs` ani scénář neobsahují `:has-text` a CSS třídy
+- [x] testy runneru zelené, `check` na pilotním scénáři projde
+- [x] pilotní klip přetočen a vizuálně shodný s předchozím

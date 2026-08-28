@@ -157,6 +157,23 @@ class ServerConfig
     }
 
     /**
+     * PDF rendering služba (Gotenberg) — volitelný klíč `render`. Null =
+     * služba není nakonfigurována; RenderClient pak degraduje na
+     * errorKind=unconfigured, nic nepadá. Viz docs/render.md (#34).
+     */
+    public function getRender(): ?RenderConfig
+    {
+        $render = $this->data['render'] ?? null;
+        if ($render === null) {
+            return null;
+        }
+        if (!is_array($render)) {
+            throw new \RuntimeException("Server config 'render' must be an object");
+        }
+        return RenderConfig::fromArray($render);
+    }
+
+    /**
      * Napojení na hosting (D3) — volitelná sekce `hosting`. Null = server
      * není spravovaný hostingem; validace až při použití, chybějící sekce
      * nesmí rozbít ostatní commandy.

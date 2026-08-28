@@ -425,6 +425,62 @@ class ServerConfigTest extends TestCase
         $config->getMailRelay();
     }
 
+    public function testGetRenderMissingReturnsNull(): void
+    {
+        $path = $this->createConfig([
+            'host'           => '127.0.0.1',
+            'port'           => 3306,
+            'admin_user'     => 'root',
+            'admin_password' => 'secret',
+            'mode'           => 'production',
+        ]);
+
+        $config = new ServerConfig($path);
+        $config->load();
+
+        $this->assertNull($config->getRender());
+    }
+
+    public function testGetRenderConfigured(): void
+    {
+        $path = $this->createConfig([
+            'host'           => '127.0.0.1',
+            'port'           => 3306,
+            'admin_user'     => 'root',
+            'admin_password' => 'secret',
+            'mode'           => 'production',
+            'render'         => ['url' => 'http://127.0.0.1:3000', 'timeoutSec' => 45],
+        ]);
+
+        $config = new ServerConfig($path);
+        $config->load();
+        $render = $config->getRender();
+
+        $this->assertNotNull($render);
+        $this->assertSame('http://127.0.0.1:3000', $render->url);
+        $this->assertSame(45, $render->timeoutSec);
+    }
+
+    public function testGetRenderInvalidThrows(): void
+    {
+        $path = $this->createConfig([
+            'host'           => '127.0.0.1',
+            'port'           => 3306,
+            'admin_user'     => 'root',
+            'admin_password' => 'secret',
+            'mode'           => 'production',
+            'render'         => 'not-an-object',
+        ]);
+
+        $config = new ServerConfig($path);
+        $config->load();
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessageMatches('/render.*object/i');
+
+        $config->getRender();
+    }
+
     public function testGetHostingMissingReturnsNull(): void
     {
         $path = $this->createConfig([

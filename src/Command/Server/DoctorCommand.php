@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Shipard\Command\Server;
 
 use Shipard\Core\Config\DataSourceConfig;
+use Shipard\Core\Config\RenderConfig;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Mail\MailRelayConfig;
+use Shipard\Core\Render\RenderClient;
 use Shipard\Core\Server\CronProvisioner;
 use Shipard\Core\Server\DomainsFile;
 use Shipard\Core\Server\HealthChecker;
@@ -24,6 +26,9 @@ class DoctorCommand extends Command
         // Embedded ISDOC v PDF (IsdocImportService) — bez binárky detekce
         // tiše degraduje, doctor na chybějící nástroj upozorní.
         'pdfdetach'     => 'poppler-utils',
+        // Post-processing PDF renderů (EmbedIsdocStep fallback, AppendPdfsStep).
+        'pdfattach'     => 'poppler-utils',
+        'pdfunite'      => 'poppler-utils',
         'rsvg-convert'  => 'librsvg2-bin',
         'vipsthumbnail' => 'libvips-tools',
         'vips'          => 'libvips-tools',
@@ -121,6 +126,10 @@ class DoctorCommand extends Command
         $toolErrors = $this->checkAttachmentTools($output);
 
         $output->writeln('');
+        $output->writeln('<info>Render service</info>');
+        $renderErrors = $this->checkRenderService($config, $output);
+
+        $output->writeln('');
         $output->writeln('<info>Data source DB connections</info>');
         $dsErrors = $this->checkDataSourceConnections($spec, $output, $mode);
 
@@ -132,7 +141,7 @@ class DoctorCommand extends Command
         $output->writeln(str_repeat('─', 55));
 
         $totalIssues = count($issues) + $dsErrors + $fpmErrors + $nginxErrors + $toolErrors
-                     + $mailErrors + $cronErrors
+                     + $mailErrors + $cronErrors + $renderErrors
                      + ($poolUser !== $shipardUser ? 1 : 0);
         if ($totalIssues === 0) {
             $output->writeln('<info>✓ All checks passed.</info>');
@@ -595,6 +604,48 @@ class DoctorCommand extends Command
             }
         }
         return $missing;
+    }
+
+    /**
+     * PDF rendering služba (Gotenberg): chybějící klíč `render` = info
+     * (validní stav, konzumenti degradují na errorKind=unconfigured),
+     * nakonfigurovaná služba bez odpovědi na health = error.
+     *
+     * @param array $serverConfig dekódovaný server.json
+     * @return int number of render issues
+     */
+    protected function checkRenderService(array $serverConfig, OutputInterface $output): int
+    {
+        $renderData = $serverConfig['render'] ?? null;
+        if ($renderData === null) {
+            $output->writeln('  (render service not configured — skipped)');
+            return 0;
+        }
+
+        try {
+            if (!is_array($renderData)) {
+                throw new \RuntimeException("Server config 'render' must be an object");
+            }
+            $renderConfig = RenderConfig::fromArray($renderData);
+        } catch (\Throwable $e) {
+            $output->writeln('  ✗ server.json render is invalid: ' . $e->getMessage());
+            return 1;
+        }
+
+        if ($this->renderHealth($renderConfig)) {
+            $output->writeln("  ✓ render service responding at {$renderConfig->url}");
+            return 0;
+        }
+
+        $output->writeln("  ✗ render service at {$renderConfig->url} is not responding");
+        $output->writeln('    <comment>→ Check the container: systemctl status shpd-render (docs/operations/render-service.md)</comment>');
+        return 1;
+    }
+
+    /** Health check přes RenderClient — protected seam pro testy. */
+    protected function renderHealth(RenderConfig $renderConfig): bool
+    {
+        return (new RenderClient($renderConfig))->health();
     }
 
     /**

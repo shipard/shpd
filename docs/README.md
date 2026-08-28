@@ -28,6 +28,7 @@ Technické specifikace projektu Shipard.
 | [services.md](services.md) | **Standard samostatných komponent** — pravidla pro repozitáře mimo `shpd` (`ai-analyzer`, `mail-router`, generátor videa, vendorovaná infrastruktura): tři kategorie, struktura repa, povinná sada CLI verbů, cesty na cílovém stroji, kontrakty vůči `shpd`, checklist souladu |
 | [cli.md](cli.md) | CLI nástroje — kompletní reference `shpd-server` a `shpd-ds` příkazů, pomocných skriptů a workflow scénářů |
 | [logging.md](logging.md) | Logging — centralizovaný `ErrorLogger`, JSON řádky (jeden per záznam), cesta a konfigurace logu; žádné přímé `error_log()` |
+| [render.md](render.md) | PDF rendering — Gotenberg služba per stroj + engine-agnostický `RenderClient` (`src/Core/Render/`), profily untrusted/report, post-processing (embedIsdoc, appendPdfs), degradace |
 | [exchange-format.md](exchange-format.md) | Výměnný formát pro doklady — kanonický JSON `shpd.docs.document.v1`, validate/preview/apply pipeline, resolvery, merge strategie |
 | [exchange-format-persons.md](exchange-format-persons.md) | Výměnný formát pro osoby — `shpd.persons.person.v1`, sub-kolekce (adresy, banky, kontakty), authoritative refresh, lineage |
 | [exchange-format-items.md](exchange-format-items.md) | Výměnný formát pro položky — `shpd.items.item.v1`, KindResolver / SupplierCodesResolver, per-partner dodavatelské kódy |
@@ -63,6 +64,7 @@ Provozní a operační dokumentace (nasazení, oprávnění, bezpečnost).
 | [migration-guide.md](migration-guide.md) | Migrace DS mezi servery — checklist pro přenos celého data-source (co tvoří DS, kritické secrets); detailní postupy v `operations/` |
 | [operations/mail-router.md](operations/mail-router.md) | Připojení mail-routeru k hostingu (D4) — řádek routeru + klíč, config `lookup_sync`, timer, ruční backfill `mail_token`, diagnostika lookup endpointu |
 | [operations/permissions.md](operations/permissions.md) | Permission kontrakt pro `/opt/shipard` a `/etc/shipard` — `PermissionSpec`, `shpd-server doctor` / `fix-permissions`, single-user model |
+| [operations/render-service.md](operations/render-service.md) | Provoz PDF rendering služby (Gotenberg) — single-server (podman + unit), Incus, Proxmox, upgrade pinu, bezpečnostní model |
 | [operations/secrets.md](operations/secrets.md) | Šifrované secrets v DS — AES-256-GCM, per-DS klíč, `encrypted_text` sloupce v jakémkoli modulu |
 
 ## Archiv

@@ -27,6 +27,7 @@ class TestableDoctorCommand extends DoctorCommand
     public ?string $fakeCronFilePath = null;
     public ?string $fakeRunDir = null;
     public ?\DateTimeImmutable $fakeNow = null;
+    public bool $stubRenderHealth = true;
 
     public function __construct(string $tempConfigPath, PermissionSpec $spec)
     {
@@ -85,6 +86,11 @@ class TestableDoctorCommand extends DoctorCommand
     protected function now(): \DateTimeImmutable
     {
         return $this->fakeNow ?? parent::now();
+    }
+
+    protected function renderHealth(\Shipard\Core\Config\RenderConfig $renderConfig): bool
+    {
+        return $this->stubRenderHealth;
     }
 
     public function checkCronPublic(OutputInterface $output, string $mode): int
@@ -804,6 +810,77 @@ class DoctorCommandTest extends TestCase
 
         $this->assertSame(1, $exitCode);
         $this->assertSame($baseline + 2, (int) ($mWith[1] ?? 0));
+    }
+
+    // ─── Render service ──────────────────────────────────────────────────────
+
+    public function testRenderNotConfiguredIsSkippedInfo(): void
+    {
+        $spec = $this->makeSpec();
+        $command = $this->commandWithStubs($spec);
+
+        $tester = new CommandTester($command);
+        $tester->execute([]);
+
+        $display = $tester->getDisplay();
+        $this->assertStringContainsString('Render service', $display);
+        $this->assertStringContainsString('(render service not configured — skipped)', $display);
+    }
+
+    public function testRenderHealthyReportsOk(): void
+    {
+        $spec = $this->makeSpec();
+        $command = $this->commandWithStubs($spec);
+        file_put_contents($this->tempConfigPath, json_encode([
+            'mode'   => 'development',
+            'render' => ['url' => 'http://127.0.0.1:3000'],
+        ]));
+
+        $tester = new CommandTester($command);
+        $tester->execute([]);
+
+        $this->assertStringContainsString('✓ render service responding at http://127.0.0.1:3000', $tester->getDisplay());
+    }
+
+    public function testRenderUnhealthyReportsErrorWithHint(): void
+    {
+        $spec = $this->makeSpec();
+        $command = $this->commandWithStubs($spec);
+        $command->stubRenderHealth = false;
+        file_put_contents($this->tempConfigPath, json_encode([
+            'mode'   => 'development',
+            'render' => ['url' => 'http://127.0.0.1:3000'],
+        ]));
+
+        $tester = new CommandTester($command);
+        $command->stubRenderHealth = true;
+        $tester->execute([]);
+        preg_match('/Issues found: (\d+)/', $tester->getDisplay(), $mWithout);
+
+        $command->stubRenderHealth = false;
+        $tester->execute([]);
+        $display = $tester->getDisplay();
+        preg_match('/Issues found: (\d+)/', $display, $mWith);
+
+        $this->assertStringContainsString('✗ render service at http://127.0.0.1:3000 is not responding', $display);
+        $this->assertStringContainsString('docs/operations/render-service.md', $display);
+        $this->assertSame((int) ($mWithout[1] ?? 0) + 1, (int) ($mWith[1] ?? 0));
+    }
+
+    public function testRenderInvalidConfigReportsError(): void
+    {
+        $spec = $this->makeSpec();
+        $command = $this->commandWithStubs($spec);
+        file_put_contents($this->tempConfigPath, json_encode([
+            'mode'   => 'development',
+            'render' => ['url' => 'ftp://bad'],
+        ]));
+
+        $tester = new CommandTester($command);
+        $exitCode = $tester->execute([]);
+
+        $this->assertSame(1, $exitCode);
+        $this->assertStringContainsString('✗ server.json render is invalid', $tester->getDisplay());
     }
 
     // ─── Cron checks ────────────────────────────────────────────────────────

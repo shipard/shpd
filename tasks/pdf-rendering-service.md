@@ -1,6 +1,6 @@
 # PDF rendering služba (Gotenberg) + RenderClient
 
-**Stav:** naplánováno — rozhodnutí D1–D8 potvrzena (designová diskuze 18. 8. 2026)
+**Stav:** částečně — kód, testy a docs hotové 2026-08-28 (#34); zbývá spustit Gotenberg (podman + unit template) a živé E2E dle „Hotovo když" — na dev stroji podman není, integrační test je gated na `SHIPARD_INTEGRATION_GOTENBERG_URL`
 
 **Issue:** shipard/shpd#34
 
@@ -190,8 +190,8 @@ Commity referencují #34.
 
 ## Hotovo když
 
-- [ ] `server.json` bez klíče `render`: vše funguje, `renderHtml` vrací
-      `unconfigured`, doctor hlásí info, nic nepadá
+- [x] `server.json` bez klíče `render`: vše funguje, `renderHtml` vrací
+      `unconfigured`, doctor hlásí info, nic nepadá (unit testy)
 - [ ] Na dev stroji s běžícím Gotenbergem (podman, unit template):
       `renderHtml` s profile Report + header/footer šablonou vrátí
       validní vícestránkové PDF s číslováním stran
@@ -201,6 +201,6 @@ Commity referencují #34.
 - [ ] `convertOffice` s .docx vzorkem vrátí PDF
 - [ ] `postProcess` embedIsdoc: výsledné PDF obsahuje attachment
       (ověřitelné `pdfdetach -list`); appendPdfs spojí dokumenty
-- [ ] Zastavená služba: volání vrací `unreachable`, v logu právě jeden
-      warning, doctor warning
-- [ ] Testy zelené (integrační gated), dokumentace kompletní
+- [x] Zastavená služba: volání vrací `unreachable`, v logu právě jeden
+      warning, doctor warning (unit testy; živý proklik zbývá)
+- [x] Testy zelené (integrační gated), dokumentace kompletní

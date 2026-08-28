@@ -1,0 +1,34 @@
+# Shipard PDF rendering služba (Gotenberg) — systemd unit template pro
+# single-server instalaci (podman na stroji). Nasazení:
+#   sudo cp docs/render/shpd-render.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now shpd-render
+# Upgrade image = změna pinu níže + daemon-reload + restart shpd-render.
+# Multi-kontejnerové topologie (Incus/Proxmox) tento unit nepoužívají —
+# viz docs/operations/render-service.md.
+#
+# Bezpečnostní model (D1/D4/D5): bind jen na 127.0.0.1, žádný WAN forward.
+# Obsah se vždy pushuje v requestu — deny-list '.*' zakazuje Chromiu
+# veškeré odchozí requesty, JS je vypnutý globálně. Šablony jsou
+# server-side a JS nepotřebují; kdyby ho budoucí sestavy vyžadovaly,
+# poběží druhá instance s jinými flagy.
+
+[Unit]
+Description=Shipard PDF rendering service (Gotenberg)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+ExecStartPre=-/usr/bin/podman rm -f shpd-render
+ExecStart=/usr/bin/podman run --rm --name shpd-render \
+    -p 127.0.0.1:3000:3000 \
+    docker.io/gotenberg/gotenberg:8.30.0 \
+    gotenberg \
+    --chromium-disable-javascript=true \
+    --chromium-deny-list=.* \
+    --api-timeout=60s
+ExecStop=/usr/bin/podman stop shpd-render
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

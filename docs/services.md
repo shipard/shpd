@@ -306,7 +306,7 @@ Komponenta je v souladu se standardem, když:
 | `ai-analyzer` | runtime služba | nesouladná — chybí `CLAUDE.md`, CLI, dokumentace anglicky |
 | `mail-router` | runtime služba | nesouladná — chybí `CLAUDE.md`, CLI, prázdné `tasks/` |
 | generátor videa (#48) | nástroj | nevzniklo — píše se přímo podle standardu |
-| Gotenberg (#34) | vendorovaná infra | nevzniklo |
+| Gotenberg (#34) | vendorovaná infra | dle standardu — pin + unit template `docs/render/shpd-render.service`, provoz `docs/operations/render-service.md`, klient `src/Core/Render/` (`docs/render.md`); rollout na alfě zbývá |
 
 ---
 

@@ -52,7 +52,7 @@
 {#if cards.length === 0}
   <div class="shpd-feed__empty">{emptyText ?? t('dashboard.feed.empty')}</div>
 {:else}
-  <div class="shpd-feed">
+  <div class="shpd-feed" data-testid="feed">
     {#each KINDS as kind (kind)}
       {#if sections[kind].length > 0}
         <section class="shpd-feed__section">

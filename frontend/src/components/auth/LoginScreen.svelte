@@ -168,6 +168,7 @@
         <input
           bind:this={loginInput}
           id="login-name"
+          data-testid="login-name"
           class="shpd-login__input"
           type="text"
           autocomplete="username"
@@ -181,6 +182,7 @@
         <label class="shpd-login__label" for="login-password">{t('login.password')}</label>
         <input
           id="login-password"
+          data-testid="login-password"
           class="shpd-login__input"
           type="password"
           autocomplete="current-password"
@@ -196,7 +198,7 @@
     {/if}
 
     {#if errorMessage}
-      <div class="shpd-login__error">{errorMessage}</div>
+      <div class="shpd-login__error" data-testid="login-error">{errorMessage}</div>
     {/if}
 
     {#if localEnabled}

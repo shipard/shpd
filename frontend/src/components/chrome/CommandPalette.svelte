@@ -81,12 +81,13 @@
     aria-hidden="true"
   ></div>
 
-  <div class="shpd-palette" role="dialog" aria-label={t('palette.title')}>
+  <div class="shpd-palette" data-testid="palette" role="dialog" aria-label={t('palette.title')}>
     <div class="shpd-palette__input-row">
       <Icon icon={iconSearch} size="sm" />
       <input
         bind:this={inputEl}
         class="shpd-palette__input"
+        data-testid="palette-input"
         type="text"
         value={paletteStore.query}
         oninput={(e) => paletteStore.setQuery(e.target.value)}

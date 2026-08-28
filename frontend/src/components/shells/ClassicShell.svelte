@@ -52,7 +52,7 @@
   }
 </script>
 
-<div class="shpd-classic">
+<div class="shpd-classic" data-testid="app-shell">
   <TopMenuBar onNavigate={handleNavigate} {onLogout} {onOpenThemePanel} />
 
   <div class="shpd-classic__body">

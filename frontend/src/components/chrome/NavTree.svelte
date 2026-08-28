@@ -68,6 +68,7 @@
       <button
         class="shpd-navtree__item"
         class:shpd-navtree__item--active={activeId === group.id}
+        data-testid={'nav-' + group.id}
         onclick={() => onNavigate?.(group)}
       >
         <Icon icon={resolveIcon(group.icon)} size="sm" />
@@ -78,6 +79,7 @@
     <div class="shpd-navtree__group">
       <button
         class="shpd-navtree__group-header"
+        data-testid={'navgroup-' + group.id}
         onclick={() => toggleGroup(group.id)}
       >
         <span class="shpd-navtree__group-label">{group.label}</span>
@@ -104,6 +106,7 @@
               <li class="shpd-navtree__subgroup">
                 <button
                   class="shpd-navtree__subgroup-header"
+                  data-testid={'navgroup-' + child.id}
                   onclick={() => toggleGroup(child.id)}
                 >
                   <span>{child.label}</span>
@@ -119,6 +122,7 @@
                         <button
                           class="shpd-navtree__item"
                           class:shpd-navtree__item--active={activeId === leaf.id}
+                          data-testid={'nav-' + leaf.id}
                           onclick={() => onNavigate?.(leaf)}
                         >
                           <Icon icon={resolveIcon(leaf.icon)} size="sm" />
@@ -134,6 +138,7 @@
                 <button
                   class="shpd-navtree__item"
                   class:shpd-navtree__item--active={activeId === child.id}
+                  data-testid={'nav-' + child.id}
                   onclick={() => onNavigate?.(child)}
                 >
                   <Icon icon={resolveIcon(child.icon)} size="sm" />

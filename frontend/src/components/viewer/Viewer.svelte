@@ -977,6 +977,7 @@
         <div class="shpd-viewer__search-box">
           <input
             class="shpd-viewer__search-input"
+            data-testid="viewer-search"
             type="text"
             placeholder={t('viewer.search.placeholder')}
             oninput={handleSearchInput}
@@ -1028,6 +1029,7 @@
       {:else}
       <div
         class="shpd-viewer__rows"
+        data-testid="viewer-rows"
         bind:this={listEl}
         onscroll={handleScroll}
       >
@@ -1084,7 +1086,7 @@
     <!-- Right panel: detail. V grid layoutu se nerenderuje — detail
          žije v non-modálním draweru (ViewerDetailDrawer). -->
     {#if !isGrid}
-      <div class="shpd-viewer__detail-panel">
+      <div class="shpd-viewer__detail-panel" data-testid="viewer-detail">
         {#if selectedRowId != null}
           <ViewerDetail
             {detail}

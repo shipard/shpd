@@ -137,6 +137,7 @@
 
 <nav
   class="shpd-sidebar"
+  data-testid="sidebar"
   class:shpd-sidebar--collapsed={collapsed}
 >
   <div class="shpd-sidebar__header">

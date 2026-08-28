@@ -164,7 +164,7 @@
   }
 </script>
 
-<div class="shpd-wild">
+<div class="shpd-wild" data-testid="app-shell">
   <SectionRail
     browsingSection={wildShellStore.browsingSection}
     onSelectSection={handleSelectSection}

@@ -1030,6 +1030,27 @@ async function handleLogout() {
 }
 ```
 
+### `data-testid` (video-runner, smoke E2E)
+
+Stabilní selektory pro automatizaci — video-runner (`tools/video-runner/`,
+zkratka `@name` → `[data-testid="name"]`) a později smoke E2E testy.
+Rozhodnutí D11–D14 z #48:
+
+- **Odvozování před vymýšlením.** Kde existuje serverem definované,
+  jazykově neutrální id, testid se z něj odvozuje mechanicky — navigace
+  má `nav-{node.id}` (např. `nav-viewer:core.mail.incoming`, `nav-dashboard`)
+  a `navgroup-{group.id}` na headerech skupin (`NavTree.svelte`). Ručně
+  pojmenované testidy jen tam, kde žádné serverové id není — a jen na
+  zlaté cestě prvního videa (login, shell, dashboard + feed, viewer,
+  paleta), ne plošně.
+- **Jmenná konvence `oblast-konkretum`** (`login-name`, `viewer-rows`,
+  `palette-input`). Testid identifikuje prvek, ne cestu k němu — žádné
+  hierarchie v názvu. Singletony mají unikátní testid; opakované prvky
+  nesou typový marker (`viewer-row`, `feed-card`) a konzument si bere
+  první / n-tý.
+- **Testidy zůstávají v produkčním buildu.** Nestripovat: videa se točí
+  proti skutečným buildům a tytéž testidy poslouží smoke E2E.
+
 ---
 
 ## 10. Ikony

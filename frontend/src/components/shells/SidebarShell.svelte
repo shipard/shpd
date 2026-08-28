@@ -43,7 +43,7 @@
   });
 </script>
 
-<div class="shpd-shell" class:shpd-shell--mobile={layoutStore.isMobile}>
+<div class="shpd-shell" data-testid="app-shell" class:shpd-shell--mobile={layoutStore.isMobile}>
   {#if layoutStore.isMobile}
     <!-- Mobilní režim: top bar nahoře, sidebar jako overlay drawer. -->
     <MobileTopBar />

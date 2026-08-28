@@ -62,7 +62,7 @@
   }
 </script>
 
-<div class="shpd-feed-card {stateClass}">
+<div class="shpd-feed-card {stateClass}" data-testid="feed-card">
   <span class="shpd-feed-card__bar"></span>
   {#if card.icon}
     <span class="shpd-feed-card__icon">

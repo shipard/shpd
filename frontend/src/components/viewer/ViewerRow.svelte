@@ -30,6 +30,7 @@
 
 <button
   class={rowClass}
+  data-testid="viewer-row"
   {onclick}
   type="button"
 >

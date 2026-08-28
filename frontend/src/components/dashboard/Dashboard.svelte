@@ -575,6 +575,7 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   class="shpd-dashboard"
+  data-testid="dashboard"
   ondragover={handleDashboardDragOver}
   ondragleave={handleDashboardDragLeave}
   ondrop={handleDashboardDrop}

@@ -93,9 +93,9 @@ JSONC v [`demo/scenarios/`](../../demo/scenarios/).
   "output":  { "w": 1280, "h": 800, "fps": 30 },
   "steps": [
     { "goto": "/app/" },
-    { "waitFor": ".shpd-shell", "pause": 1 },
+    { "waitFor": "@app-shell", "pause": 1 },
     { "caption": "Testovací klip — protažení pipeline", "pause": 2.5 },
-    { "hover": ".shpd-sidebar", "pause": 1 },
+    { "hover": "@sidebar", "pause": 1 },
     { "caption": null }
   ]
 }
@@ -145,6 +145,20 @@ nad obsahem; když se nic neposune, je to chyba, ne tiše nehybné video.
 jednotky v jednom souboru by spolehlivě vyráběly překlepy typu
 `"travel": 1` v domnění, že jde o vteřinu.
 
+### Selektory
+
+Selektor začínající `@` je zkratka za `data-testid`: `@viewer-rows`
+znamená `[data-testid="viewer-rows"]`. Jen přesná shoda, žádný Playwrightí
+dialekt — co smí být za zavináčem, hlídá validátor už při `check`
+(`A-Z a-z 0-9 _ . : -`). Testidy aplikace a jejich konvence popisuje
+`docs/frontend.md` § 9; navigace je má odvozené ze serverových id
+(`@nav-viewer:core.mail.incoming`).
+
+**`@` je primární volba.** Plné CSS zůstává povolené pro okrajové případy,
+na které testid není — s vědomím, že třídy se mění s refaktoringem.
+`timeline.json` nese selektor tak, jak byl ve scénáři, takže krok jde
+zpětně dohledat i po přejmenování tříd.
+
 ### Kurzor se synchronizuje sám
 
 Overlay nemá vlastní animaci. `page.mouse.move()` dispatchuje **skutečné
@@ -166,12 +180,10 @@ samotného scénáře vidět není. Varování běh nezastaví.
 
 ## Známé dluhy
 
-- **Selektory jsou CSS, ne `data-testid`.** V aplikaci dnes není ani
-  jeden `data-testid` — spike se proto vyhnul zlaté cestě a chytá se
-  toho, co existuje (`.shpd-shell`, `#login-name`). Je to křehké:
-  CSS třídy se mění s refaktoringem a texty s i18n. Až budou
-  `data-testid` na zlaté cestě doplněné, přejdou na ně i scénáře
-  a validátor CSS variantu **zakáže**.
+- **Testidy pokrývají jen zlatou cestu prvního videa.** Login, shell,
+  navigace, dashboard + feed, viewer, paleta — viz `docs/frontend.md` § 9.
+  Scénář mimo ni si musí vypomoct CSS (povolené, viz Selektory), nebo
+  testid nejdřív doplnit.
 - **Datové sady chybí.** Scénáře běží nad tím, co na cílové instanci
   zrovna je. Sady podle #40 přijdou do `demo/datasets/`.
 - **Čas není fixovaný.** `page.clock.setFixedTime()` zatím nikde, takže

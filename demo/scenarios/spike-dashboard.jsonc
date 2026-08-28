@@ -1,8 +1,5 @@
 // Pilotní scénář spike (tasks/video-runner-spike.md) — smysl je protáhnout
 // pipeline prvními daty, ne natočit použitelnou ukázku. Obsah je jedno.
-//
-// Selektory jsou CSS, protože v aplikaci zatím není ani jeden `data-testid`.
-// Je to známý dluh, ne vzor k následování — viz tools/video-runner/README.md.
 {
   "id": "spike-dashboard",
 
@@ -17,24 +14,20 @@
 
   "steps": [
     { "goto": "/app/" },
-    { "waitFor": ".shpd-shell", "pause": 1 },
+    { "waitFor": "@app-shell", "pause": 1 },
     { "caption": "Testovací klip — protažení pipeline", "pause": 2.5 },
-    { "hover": ".shpd-sidebar", "pause": 1 },
-    { "highlight": ".shpd-sidebar", "for": 1.5, "pause": 1.5 },
+    { "hover": "@sidebar", "pause": 1 },
+    { "highlight": "@sidebar", "for": 1.5, "pause": 1.5 },
 
     // Scroll je jediná skutečná animace, kterou produkt má, a zároveň
     // jediné místo, kde by varianta záznamu `cdp` mohla nestíhat. Proto
     // je v pilotním scénáři: klik do navigace, přejezd na obsah, scroll.
-    //
-    // `:has-text()` je Playwrightí selektor, ne CSS, a váže se na český
-    // popisek — dvojnásobný dluh do doby, než v aplikaci budou
-    // `data-testid`.
     { "caption": "Klik do navigace a scroll v obsahu" },
-    { "click": ".shpd-navtree__item:has-text('Došlá pošta')" },
+    { "click": "@nav-viewer:core.mail.incoming" },
     // Scrollovat se musí nad seznamem řádků, ne nad `.shpd-content`:
     // střed obsahu padne na detailní panel vpravo, který se nescrolluje.
-    { "waitFor": ".shpd-viewer__rows", "pause": 1.5 },
-    { "hover": ".shpd-viewer__rows", "pause": 0.5 },
+    { "waitFor": "@viewer-rows", "pause": 1.5 },
+    { "hover": "@viewer-rows", "pause": 0.5 },
     { "scroll": 500, "over": 0.4, "pause": 1 },
     { "scroll": -500, "over": 1.2, "pause": 1 },
 

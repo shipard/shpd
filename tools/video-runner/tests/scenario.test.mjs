@@ -71,6 +71,17 @@ test('prázdný selektor', async () => {
   assert.match(await message(load({ steps: [{ click: '  ' }] })), /neprázdný selektor/);
 });
 
+test('@ selektor: platný projde, překlep spadne s číslem kroku', async () => {
+  const scenario = await load({
+    steps: [{ click: '@nav-viewer:core.mail.incoming' }, { waitFor: '@viewer-rows' }],
+  });
+  // Krok si nese selektor tak, jak byl ve scénáři — překládá se až u locatoru.
+  assert.equal(scenario.steps[0].click, '@nav-viewer:core.mail.incoming');
+
+  const text = await message(load({ steps: [{ pause: 1 }, { highlight: '@ne platný!' }] }));
+  assert.match(text, /krok #2: highlight má neplatný @ selektor/);
+});
+
 test('scénář bez kroků', async () => {
   assert.match(await message(load({ steps: [] })), /nemá žádné kroky/);
 });

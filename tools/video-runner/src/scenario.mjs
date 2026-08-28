@@ -11,6 +11,7 @@ import { resolve } from 'node:path';
 
 import { UserError } from './errors.mjs';
 import { parseJsonc } from './jsonc.mjs';
+import { TESTID_SELECTOR_RE } from './selectors.mjs';
 
 /** Verby scénáře podporované ve spike. Klíč kroku, který je jedním z nich, určuje akci. */
 export const VERBS = ['goto', 'waitFor', 'hover', 'click', 'scroll', 'caption', 'highlight', 'pause'];
@@ -163,6 +164,14 @@ function validateStep(step, index) {
   if (SELECTOR_VERBS.includes(verb)) {
     if (typeof step[verb] !== 'string' || step[verb].trim() === '') {
       fail(`${at}: ${verb} chce neprázdný selektor.`);
+    }
+    // Zkratka `@` je jen testid, žádné CSS za ním — překlep se má poznat
+    // při `check`, ne až uprostřed natáčení.
+    if (step[verb].startsWith('@') && !TESTID_SELECTOR_RE.test(step[verb])) {
+      fail(
+        `${at}: ${verb} má neplatný @ selektor ${JSON.stringify(step[verb])}.`,
+        '@name znamená [data-testid="name"]; povolené znaky jsou A-Z a-z 0-9 _ . : -',
+      );
     }
   }
 

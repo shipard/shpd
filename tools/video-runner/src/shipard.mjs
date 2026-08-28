@@ -3,24 +3,24 @@
  *
  * Všechno ostatní je generické — scénáře si selektory nosí s sebou. Tady
  * bydlí jen to, co runner musí umět sám: přihlásit se a poznat, že je
- * přihlášený.
- *
- * Selektory jsou zatím CSS (`data-testid` v aplikaci nejsou, viz README →
- * Známé dluhy). Přihlašovací pole mají naštěstí stabilní `id` a formulář
- * odesílá Enter, takže se nemusí klikat na tlačítko, jehož popisek se mění
- * s jazykem.
+ * přihlášený. Formulář odesílá Enter, takže se nemusí klikat na tlačítko,
+ * jehož popisek se mění s jazykem.
  */
+
+import { resolveSelector } from './selectors.mjs';
 
 /** Cesta k SPA relativně k `SHPD_BASE_URL`. */
 export const APP_PATH = '/app/';
 
+// Hodnoty jsou přeložené už tady — call sites (login.mjs, runner.mjs) je
+// dávají rovnou do Playwrightu.
 export const SELECTORS = {
   /** frontend/src/components/auth/LoginScreen.svelte */
-  loginName: '#login-name',
-  loginPassword: '#login-password',
-  loginError: '.shpd-login__error',
-  /** frontend/src/components/shells/SidebarShell.svelte — kořen přihlášené aplikace. */
-  appShell: '.shpd-shell',
+  loginName: resolveSelector('@login-name'),
+  loginPassword: resolveSelector('@login-password'),
+  loginError: resolveSelector('@login-error'),
+  /** frontend/src/components/shells/*.svelte — kořen přihlášené aplikace, mají ho všechny shelly. */
+  appShell: resolveSelector('@app-shell'),
 };
 
 /**

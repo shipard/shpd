@@ -11,6 +11,7 @@ import { pageUrl } from './config.mjs';
 import { UserError } from './errors.mjs';
 import { highlight } from './overlay.mjs';
 import { DEFAULT_HIGHLIGHT_S, DEFAULT_SCROLL_S, DEFAULT_TRAVEL_S } from './scenario.mjs';
+import { resolveSelector } from './selectors.mjs';
 
 /** Kolikrát za sekundu se posune syntetická myš při přejezdu. */
 const CURSOR_HZ = 60;
@@ -36,14 +37,14 @@ function label(step) {
  */
 async function elementRect(ctx, step) {
   const selector = step[step.verb];
-  const locator = ctx.page.locator(selector).first();
+  const locator = ctx.page.locator(resolveSelector(selector)).first();
 
   try {
     await locator.waitFor({ state: 'visible', timeout: DEFAULT_TIMEOUT });
   } catch {
     throw new UserError(
       `${label(step)}: prvek se do ${DEFAULT_TIMEOUT / 1000} s neobjevil.`,
-      'Sedí selektor na aktuální aplikaci? Selektory jsou zatím CSS, mění se s refaktoringem.',
+      'Sedí selektor na aktuální aplikaci? `@name` hledá [data-testid="name"], přesnou shodu.',
     );
   }
 
@@ -204,7 +205,8 @@ const HANDLERS = {
   async highlight(ctx, step) {
     const seconds = step.for ?? DEFAULT_HIGHLIGHT_S;
     await elementRect(ctx, step);
-    const rect = await highlight(ctx.page, step.highlight, seconds);
+    // Overlay dělá in-page querySelector — zkratku `@` musí dostat přeloženou.
+    const rect = await highlight(ctx.page, resolveSelector(step.highlight), seconds);
     if (!rect) throw new UserError(`${label(step)}: rámeček se nepodařilo vykreslit.`);
     ctx.timeline.mark('highlight', { selector: step.highlight, for: seconds, rect });
   },

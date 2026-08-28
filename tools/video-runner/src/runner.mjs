@@ -64,8 +64,67 @@ export async function createSession(config, scenario, options = {}) {
 
   await installOverlay(context);
   const page = await context.newPage();
+  await calibrateViewport(context, page, width, height);
 
   return { browser, context, page, close: () => browser.close() };
+}
+
+/**
+ * Dorovnání okna tak, aby viewport vyšel přesně na rozměr ze scénáře.
+ *
+ * Plné Chromium (`channel: 'chromium'`, viz browser.mjs) si z
+ * `--window-size` ukrajuje výšku na okenní chrome: okno 1280×800 dá
+ * viewport 1280×713. Headless shell nic neukrajoval, takže Z1 platilo
+ * beze zbytku; spoléhat na konkrétní deltu ale nejde — mezi verzemi
+ * Chromia se může hnout. Proto se viewport po startu změří a okno se
+ * přes CDP `Browser.setWindowBounds` posune o rozdíl. Jednotky sedí:
+ * `--window-size` i bounds jsou CSS px, hustotu řeší až
+ * `--force-device-scale-factor`.
+ *
+ * @param {import('playwright').BrowserContext} context
+ * @param {import('playwright').Page} page
+ * @param {number} width  Cílový viewport v CSS px.
+ * @param {number} height
+ */
+async function calibrateViewport(context, page, width, height) {
+  const measure = () => page.evaluate(() => [window.innerWidth, window.innerHeight]);
+
+  const cdp = await context.newCDPSession(page);
+  try {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const [w, h] = await measure();
+      if (w === width && h === height) return;
+
+      const { windowId } = await cdp.send('Browser.getWindowForTarget');
+      const { bounds } = await cdp.send('Browser.getWindowBounds', { windowId });
+      await cdp.send('Browser.setWindowBounds', {
+        windowId,
+        bounds: {
+          width: bounds.width + (width - w),
+          height: bounds.height + (height - h),
+        },
+      });
+      // Resize se do stránky propíše asynchronně; další měření počká,
+      // až se skutečně stane, jinak by smyčka korigovala dvakrát totéž.
+      await page
+        .waitForFunction(
+          ([tw, th]) => window.innerWidth === tw && window.innerHeight === th,
+          [width, height],
+          { timeout: 1000 },
+        )
+        .catch(() => {});
+    }
+
+    const [w, h] = await measure();
+    if (w !== width || h !== height) {
+      throw new UserError(
+        `Viewport se nepodařilo dorovnat na ${width}×${height}, zůstal ${w}×${h}.`,
+        'Změnilo se chování oken v nové verzi Chromia? Viz Z9 v tasks/video-runner-spike.md.',
+      );
+    }
+  } finally {
+    await cdp.detach().catch(() => {});
+  }
 }
 
 /**

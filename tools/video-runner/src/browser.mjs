@@ -27,7 +27,12 @@ const RENDER_ARGS = [
  */
 export async function launchChromium({ headless = true, args = [] } = {}) {
   try {
-    return await chromium.launch({ headless, args: [...RENDER_ARGS, ...args] });
+    // `channel: 'chromium'` = plné Chromium v novém headless režimu, ne
+    // ořezaný `chromium-headless-shell`. Rozdíl je vestavěný PDF viewer:
+    // headless shell ho nemá, takže náhledy PDF (`AttachmentGrid`,
+    // `PdfViewerPanel`) zůstávaly ve videu prázdné. Plné Chromium vykreslí
+    // PDF v iframe stejně jako prohlížeč skutečného uživatele.
+    return await chromium.launch({ channel: 'chromium', headless, args: [...RENDER_ARGS, ...args] });
   } catch (error) {
     if (/Executable doesn't exist|please run the following command/i.test(error.message)) {
       throw new UserError(

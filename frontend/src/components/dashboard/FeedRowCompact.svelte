@@ -114,11 +114,9 @@
     color: var(--shpd-color-text);
   }
 
-  /* Sousední řádky odděluje vlasová linka (uvnitř bloku ready sekce
-     i pod sebou v info sekci). */
-  .shpd-feed-row + .shpd-feed-row {
-    border-top: 1px solid var(--shpd-color-border);
-  }
+  /* Vlasovou linku mezi sousedními řádky kreslí rodič (Feed,
+     FeedReadySection) — sibling kombinátor mezi instancemi komponenty
+     by scoped styl vyhodil jako nepoužitý. */
 
   /* Info řádky jsou degradované — tlumené, bez rámu a pozadí. */
   .shpd-feed-row--info {

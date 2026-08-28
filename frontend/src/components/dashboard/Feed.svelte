@@ -179,6 +179,13 @@
     align-items: stretch;
   }
 
+  /* Info: sousední kompaktní řádky odděluje vlasová linka. Kreslí ji
+     rodič — uvnitř FeedRowCompact by sibling selektor mezi instancemi
+     komponenty scoped styl vyhodil jako nepoužitý. */
+  .shpd-feed__rows > :global(.shpd-feed-row + .shpd-feed-row) {
+    border-top: 1px solid var(--shpd-color-border);
+  }
+
   .shpd-feed__empty {
     padding: var(--shpd-space-xl);
     text-align: center;

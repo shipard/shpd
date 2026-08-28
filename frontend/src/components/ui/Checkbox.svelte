@@ -4,6 +4,7 @@
     label?: string;
     disabled?: boolean;
     indeterminate?: boolean;
+    onchange?: (e: Event) => void;
   }
 
   let {
@@ -11,6 +12,7 @@
     label,
     disabled = false,
     indeterminate = false,
+    onchange,
   }: Props = $props();
 </script>
 
@@ -21,6 +23,7 @@
     bind:checked
     {indeterminate}
     {disabled}
+    {onchange}
   />
   <span class="shpd-checkbox__box" aria-hidden="true"></span>
   {#if label}

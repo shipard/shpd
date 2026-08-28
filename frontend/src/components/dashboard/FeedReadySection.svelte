@@ -195,6 +195,13 @@
     padding-left: 4px;
   }
 
+  /* Vlasová linka mezi sousedními řádky — kreslí ji rodič, uvnitř
+     FeedRowCompact by sibling selektor mezi instancemi komponenty
+     scoped styl vyhodil jako nepoužitý. */
+  .shpd-ready__rows > :global(.shpd-feed-row + .shpd-feed-row) {
+    border-top: 1px solid var(--shpd-color-border);
+  }
+
   .shpd-ready__footer {
     border-top: 1px solid var(--shpd-color-border);
     padding: var(--shpd-space-sm) var(--shpd-space-md);

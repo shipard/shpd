@@ -97,7 +97,7 @@
   // náhled), zavírá ho až „Vlastní“ (otvírá ThemePanel) nebo klik mimo.
   // Strana flyoutu: menu zarovnané vpravo (classic top bar) → doleva,
   // jinak doprava. Mobil místo flyoutu rozbaluje inline (akordeon).
-  const submenuSide = direction === 'down' ? 'left' : 'right';
+  const submenuSide = $derived(direction === 'down' ? 'left' : 'right');
 
   const appearanceModes = [
     { value: 'light',  labelKey: 'sidebar.appearance.light' },
@@ -582,16 +582,6 @@
     align-items: center;
     color: var(--shpd-color-accent);
     flex-shrink: 0;
-  }
-
-  /* Sekce label — nadpis skupiny položek v dropdownu ("Jazyk"). */
-  .shpd-usermenu__menu-label {
-    padding: var(--shpd-space-xs) var(--shpd-space-sm);
-    font-size: 0.75rem;
-    font-weight: 600;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    color: var(--shpd-color-text-sidebar-muted);
   }
 
   .shpd-usermenu__menu-divider {

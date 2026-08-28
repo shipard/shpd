@@ -165,39 +165,28 @@
       {#each sections as section (section.id)}
         {@const stats = sectionStats(section)}
         <section class="shpd-items-offer__group">
-          <!-- Klik na checkbox přepíná výběr skupiny (preventDefault drží
-               nativní checkbox jako čistě zobrazovací), zbytek hlavičky
-               sbaluje/rozbaluje. -->
-          <div
-            class="shpd-items-offer__group-head"
-            role="button"
-            tabindex="0"
-            aria-expanded={!!expanded[section.id]}
-            onclick={() => toggleExpand(section.id)}
-            onkeydown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                toggleExpand(section.id);
-              }
-            }}
-          >
-            <span
-              class="shpd-items-offer__group-check"
-              onclick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (!generating) toggleSection(section);
-              }}
-            >
+          <!-- Checkbox přepíná výběr skupiny, zbytek hlavičky je tlačítko
+               sbalit/rozbalit — dva samostatné ovládací prvky, oba
+               dosažitelné z klávesnice. -->
+          <div class="shpd-items-offer__group-head">
+            <span class="shpd-items-offer__group-check">
               <Checkbox
                 checked={stats.available > 0 && stats.selected === stats.available}
                 indeterminate={stats.selected > 0 && stats.selected < stats.available}
                 disabled={stats.available === 0 || generating}
+                onchange={() => toggleSection(section)}
               />
             </span>
-            <span class="shpd-items-offer__group-name">{section.name}</span>
-            <span class="shpd-items-offer__group-count">{stats.selected}/{stats.available}</span>
-            <Icon icon={expanded[section.id] ? iconChevronDown : iconChevronRight} size="sm" />
+            <button
+              type="button"
+              class="shpd-items-offer__group-toggle"
+              aria-expanded={!!expanded[section.id]}
+              onclick={() => toggleExpand(section.id)}
+            >
+              <span class="shpd-items-offer__group-name">{section.name}</span>
+              <span class="shpd-items-offer__group-count">{stats.selected}/{stats.available}</span>
+              <Icon icon={expanded[section.id] ? iconChevronDown : iconChevronRight} size="sm" />
+            </button>
           </div>
 
           {#if expanded[section.id]}
@@ -310,9 +299,23 @@
     align-items: center;
     gap: var(--shpd-space-sm);
     padding: var(--shpd-space-xs) var(--shpd-space-sm);
+    color: var(--shpd-color-text-secondary);
+  }
+
+  .shpd-items-offer__group-toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--shpd-space-sm);
+    flex: 1;
+    min-width: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    font: inherit;
+    color: inherit;
+    text-align: left;
     cursor: pointer;
     user-select: none;
-    color: var(--shpd-color-text-secondary);
   }
 
   .shpd-items-offer__group-check :global(.shpd-checkbox) {

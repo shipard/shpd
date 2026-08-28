@@ -54,6 +54,9 @@
   }
 </script>
 
+<!-- svelte-ignore a11y_no_static_element_interactions -- keydown jen chytá
+     Escape probublaný z vnitřních fokusovatelných prvků, div sám není
+     interaktivní cíl. -->
 <div
   bind:this={rootEl}
   class="shpd-multiselect"

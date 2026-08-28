@@ -10,6 +10,19 @@ export default defineConfig({
   build: {
     outDir: '../public/app',
     emptyOutDir: true,
+    // Aplikační chunk má ~530 kB (154 kB gzip) — SPA za loginem, jeden
+    // vstup, code-splitting per obrazovka zatím záměrně neděláme. Limit
+    // zvednutý těsně nad současný stav, ať warning hlásí až další růst.
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        // Vendor kód do vlastního chunku — mezi deployi se nemění,
+        // takže ho prohlížeč drží v cache i po vydání nové verze appky.
+        manualChunks(id) {
+          if (id.includes('node_modules')) return 'vendor'
+        },
+      },
+    },
   },
   server: {
     proxy: {

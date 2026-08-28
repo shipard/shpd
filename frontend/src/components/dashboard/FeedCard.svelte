@@ -160,6 +160,7 @@
         {#each card.actions as action (action.id)}
           <Button
             label={actionLabel(action)}
+            testid={`card-action-${action.id}`}
             variant={action.primary ? 'primary' : 'secondary'}
             size="sm"
             disabled={busy}

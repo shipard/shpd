@@ -768,7 +768,7 @@
               {t('exchange.preview.totals.vat')}:
               <strong>{formatMoney(canonical.totals.totalVat, canonical.currency)}</strong>
             </div>
-            <div class="shpd-exchange__total">
+            <div class="shpd-exchange__total" data-testid="review-total">
               {t('exchange.preview.totals.total')}:
               <strong>{formatMoney(canonical.totals.totalAmount, canonical.currency)}</strong>
             </div>

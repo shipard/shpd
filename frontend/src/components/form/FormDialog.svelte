@@ -159,6 +159,7 @@
     iconSlot={hasIcon ? iconSnippet : undefined}
     summary={hasSummary ? summarySnippet : undefined}
     headerExtra={headerExtraSnippet}
+    testid="form-dialog"
   >
     {#if notice}
       <div class="shpd-form-dialog__notice" role="status">{notice}</div>

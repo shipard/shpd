@@ -1,5 +1,7 @@
 # Video: publikace přes HTTP — galerie v `out/` (#48)
 
+**Stav:** naplánováno
+
 Rozhodnuto v chatu, zapsáno v #48:
 
 - **D15 — publikace přes HTTP:** `out/` servírovaný nginx na dev serveru

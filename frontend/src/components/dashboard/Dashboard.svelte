@@ -716,10 +716,10 @@
 />
 
 {#if toast.visible}
-  <div class="shpd-toast" role="status">
+  <div class="shpd-toast" role="status" data-testid="toast">
     <span class="shpd-toast__msg">{toast.message}</span>
     {#if toast.kind === 'applied'}
-      <button type="button" class="shpd-toast__action" onclick={openCreatedDoc}>{t('dashboard.toast.open')}</button>
+      <button type="button" class="shpd-toast__action" data-testid="toast-open" onclick={openCreatedDoc}>{t('dashboard.toast.open')}</button>
     {/if}
     <button type="button" class="shpd-toast__close" onclick={dismissToast} aria-label={t('common.cancel')}>×</button>
   </div>

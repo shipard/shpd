@@ -65,6 +65,8 @@
      *  If not set, the card sizes to its content (max 90vh). Ignored when
      *  `width === 'full'` (which forces 95vh). */
     height?: string;
+    /** Volitelný `data-testid` na kartě modalu (video-runner, smoke E2E). */
+    testid?: string;
   }
 
   let {
@@ -79,6 +81,7 @@
     footer,
     width = '640px',
     height,
+    testid,
   }: Props = $props();
 
   // Unikátní ID této instance modalu — slouží k identifikaci ve stacku.
@@ -138,7 +141,7 @@
 {#if open}
   <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
   <div class="shpd-modal" onclick={handleOverlayClick} role="dialog" aria-modal="true" aria-label={title} tabindex="-1">
-    <div class="shpd-modal__card" style={cardStyle}>
+    <div class="shpd-modal__card" style={cardStyle} data-testid={testid}>
       <div class="shpd-modal__header">
         {#if iconSlot}
           <div class="shpd-modal__header-icon">

@@ -136,7 +136,7 @@
   </span>
 {/snippet}
 
-<Modal title={t('exchange.preview.title')} {open} {onClose} width="full" headerExtra={queue ? queueBadge : undefined}>
+<Modal title={t('exchange.preview.title')} {open} {onClose} width="full" testid="review-modal" headerExtra={queue ? queueBadge : undefined}>
   {#if loading}
     <div class="shpd-exchange-modal__loading">
       {t('exchange.preview.loading')}
@@ -192,6 +192,7 @@
     <Button
       label={t('exchange.preview.actions.close')}
       variant="secondary"
+      testid="review-close"
       onclick={onClose}
     />
     {#if queue}
@@ -200,6 +201,7 @@
       <Button
         label={t('exchange.preview.actions.skip')}
         variant="secondary"
+        testid="review-skip"
         disabled={loading}
         onclick={onSkip}
       />
@@ -207,6 +209,7 @@
     <Button
       label={t('exchange.preview.actions.reject')}
       variant="danger"
+      testid="review-reject"
       disabled={data === null}
       onclick={() => onReject(messageNdx)}
     />
@@ -223,12 +226,14 @@
       <Button
         label={t('exchange.preview.actions.apply')}
         variant="secondary"
+        testid="review-apply-draft"
         disabled={!canApply}
         onclick={() => handleApplyClick()}
       />
       <Button
         label={t('exchange.preview.actions.applyFinal')}
         variant="success"
+        testid="review-apply-final"
         disabled={!canApply}
         onclick={() => handleApplyClick({ targetDocState: 40 })}
       />

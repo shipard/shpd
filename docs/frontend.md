@@ -1050,6 +1050,14 @@ Rozhodnutí D11–D14 z #48:
   první / n-tý.
 - **Testidy zůstávají v produkčním buildu.** Nestripovat: videa se točí
   proti skutečným buildům a tytéž testidy poslouží smoke E2E.
+- **Generické komponenty propouštějí testid propem.** `Button` a `Modal`
+  mají volitelný prop `testid` → `data-testid` na kořenovém elementu
+  (tlačítko / karta modalu). Zlatá cesta S1 (#48): akční tlačítka feed
+  karty `card-action-{action.id}` (odvozeno z id akce, D11), review modal
+  `review-modal` + `review-apply-draft` / `review-apply-final` /
+  `review-reject` / `review-skip` / `review-close` / `review-total`
+  (celková částka), toast `toast` / `toast-open`, FormDialog
+  `form-dialog`.
 
 ---
 

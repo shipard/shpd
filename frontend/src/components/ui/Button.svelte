@@ -11,6 +11,8 @@
     loading?: boolean;
     type?: 'button' | 'submit' | 'reset';
     onclick?: () => void;
+    /** Volitelný `data-testid` pro automatizaci (video-runner, smoke E2E). */
+    testid?: string;
   }
 
   let {
@@ -23,6 +25,7 @@
     loading = false,
     type = 'button',
     onclick,
+    testid,
   }: Props = $props();
 
   const isDisabled = $derived(disabled || loading);
@@ -33,6 +36,7 @@
   class:shpd-btn--loading={loading}
   class:shpd-btn--icon-only={iconOnly}
   {type}
+  data-testid={testid}
   disabled={isDisabled}
   title={iconOnly ? label : undefined}
   {onclick}

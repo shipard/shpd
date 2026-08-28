@@ -244,6 +244,79 @@ class RenderClientTest extends TestCase
         $this->assertSame(['warn', 'debug'], $levels);
     }
 
+    public function testPostProcessRejectsNonPdfInput(): void
+    {
+        $client = new RenderClient($this->config());
+
+        $result = $client->postProcess('not a pdf', [['step' => 'appendPdfs']]);
+
+        $this->assertSame(RenderErrorKind::InvalidInput, $result->errorKind);
+    }
+
+    public function testPostProcessRejectsUnknownStep(): void
+    {
+        $client = new RenderClient($this->config());
+
+        $result = $client->postProcess('%PDF-x', [['step' => 'signDocument']]);
+
+        $this->assertSame(RenderErrorKind::InvalidInput, $result->errorKind);
+        $this->assertStringContainsString('signDocument', (string) $result->note);
+    }
+
+    public function testPostProcessChainsStepsInOrder(): void
+    {
+        $client = new class ($this->config()) extends RenderClient {
+            protected function createStep(string $name): ?\Shipard\Core\Render\PostProcess\PostProcessStepInterface
+            {
+                return new class ($name) implements \Shipard\Core\Render\PostProcess\PostProcessStepInterface {
+                    public function __construct(private readonly string $name)
+                    {
+                    }
+
+                    public function apply(string $pdf, array $params): string
+                    {
+                        return $pdf . '+' . $this->name;
+                    }
+                };
+            }
+        };
+
+        $result = $client->postProcess('%PDF-x', [['step' => 'a'], ['step' => 'b']]);
+
+        $this->assertTrue($result->ok);
+        $this->assertSame('%PDF-x+a+b', $result->pdfContent);
+    }
+
+    public function testPostProcessStepFailureMapsToEngineError(): void
+    {
+        $client = new class ($this->config()) extends RenderClient {
+            protected function createStep(string $name): ?\Shipard\Core\Render\PostProcess\PostProcessStepInterface
+            {
+                return new class implements \Shipard\Core\Render\PostProcess\PostProcessStepInterface {
+                    public function apply(string $pdf, array $params): string
+                    {
+                        throw new \RuntimeException('pdfunite failed (exit 1)');
+                    }
+                };
+            }
+        };
+
+        $result = $client->postProcess('%PDF-x', [['step' => 'appendPdfs']]);
+
+        $this->assertSame(RenderErrorKind::EngineError, $result->errorKind);
+        $this->assertStringContainsString('step appendPdfs', (string) $result->note);
+    }
+
+    public function testPostProcessStepBadParamsMapToInvalidInput(): void
+    {
+        $client = new RenderClient($this->config());
+
+        $result = $client->postProcess('%PDF-x', [['step' => 'appendPdfs', 'params' => []]]);
+
+        $this->assertSame(RenderErrorKind::InvalidInput, $result->errorKind);
+        $this->assertStringContainsString('step appendPdfs', (string) $result->note);
+    }
+
     public function testInvalidInputDoesNotLogWarning(): void
     {
         $engine = new RecordingRenderEngine(RenderResult::success('%PDF-x'));

@@ -9,6 +9,9 @@ use Shipard\Core\Config\ServerConfig;
 use Shipard\Core\Logging\ErrorLogger;
 use Shipard\Core\Render\Engine\GotenbergEngine;
 use Shipard\Core\Render\Engine\RenderEngineInterface;
+use Shipard\Core\Render\PostProcess\AppendPdfsStep;
+use Shipard\Core\Render\PostProcess\EmbedIsdocStep;
+use Shipard\Core\Render\PostProcess\PostProcessStepInterface;
 
 /**
  * Fasáda PDF renderingu pro volající — engine-agnostický kontrakt (D3),
@@ -104,6 +107,57 @@ class RenderClient
         $result = $this->engine->convertOffice($fileName, $content, $this->config->timeoutSec);
 
         return $this->logFailureOnce($result);
+    }
+
+    /**
+     * Post-processing řetěz nad PDF (D8) — kroky se aplikují v pořadí,
+     * výstup kroku je vstupem dalšího. Funguje i bez nakonfigurované
+     * služby (embedIsdoc pak jde rovnou přes pdfattach, appendPdfs je
+     * čistě lokální).
+     *
+     * @param list<array{step: string, params?: array<string, mixed>}> $steps
+     */
+    public function postProcess(string $pdf, array $steps): RenderResult
+    {
+        if (!str_starts_with($pdf, '%PDF')) {
+            return RenderResult::failure(RenderErrorKind::InvalidInput, 'postProcess input is not a PDF');
+        }
+        if ($steps === []) {
+            return RenderResult::failure(RenderErrorKind::InvalidInput, 'postProcess requires at least one step');
+        }
+
+        foreach ($steps as $spec) {
+            $name = (string) ($spec['step'] ?? '');
+            $step = $this->createStep($name);
+            if ($step === null) {
+                return RenderResult::failure(
+                    RenderErrorKind::InvalidInput,
+                    "unknown post-process step '{$name}'",
+                );
+            }
+
+            try {
+                $pdf = $step->apply($pdf, $spec['params'] ?? []);
+            } catch (\InvalidArgumentException $e) {
+                return RenderResult::failure(RenderErrorKind::InvalidInput, "step {$name}: " . $e->getMessage());
+            } catch (\Throwable $e) {
+                return $this->logFailureOnce(
+                    RenderResult::failure(RenderErrorKind::EngineError, "step {$name}: " . $e->getMessage()),
+                );
+            }
+        }
+
+        return RenderResult::success($pdf);
+    }
+
+    /** Factory kroků — protected seam, testy podstrkují vlastní kroky. */
+    protected function createStep(string $name): ?PostProcessStepInterface
+    {
+        return match ($name) {
+            'embedIsdoc' => new EmbedIsdocStep($this->engine, $this->config?->timeoutSec ?? 30),
+            'appendPdfs' => new AppendPdfsStep(),
+            default => null,
+        };
     }
 
     /** Health check služby — krátký timeout, používá doctor. */

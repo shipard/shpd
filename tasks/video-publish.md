@@ -1,6 +1,6 @@
 # Video: publikace přes HTTP — galerie v `out/` (#48)
 
-**Stav:** naplánováno
+**Stav:** hotovo — galerie i předpis v INSTALL.md; nasazení nginx je ruční krok mimo repo
 
 Rozhodnuto v chatu, zapsáno v #48:
 
@@ -61,8 +61,8 @@ Rozhodnuto v chatu, zapsáno v #48:
 
 ## Hotovo když
 
-- [ ] `compose` po každém běhu přegeneruje `out/index.html` ze skenu adresáře
-- [ ] test generátoru zelený
-- [ ] `INSTALL.md` obsahuje vzorový nginx config s basic auth a poznámku D17
+- [x] `compose` po každém běhu přegeneruje `out/index.html` ze skenu adresáře
+- [x] test generátoru zelený
+- [x] `INSTALL.md` obsahuje vzorový nginx config s basic auth a poznámku D17
 - [ ] (po ručním nasazení) galerie běží za auth a Anna otevře video bez
       terminálu

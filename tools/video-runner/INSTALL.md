@@ -137,3 +137,46 @@ Nakonec obě varianty záznamu:
 ```bash
 node bin/video-runner.mjs build ../../demo/scenarios/spike-dashboard.jsonc
 ```
+
+---
+
+## 6. Publikace (nginx s basic auth)
+
+Runner po každém `compose` přegeneruje `out/index.html` — statickou galerii
+všech videí v `out/`. Aby byla k vidění bez terminálu, servíruje adresář
+nginx (rozhodnutí D15 v #48). Nasazení vhostu, hesla a certifikátu je
+**ruční krok mimo repo** — tady je jen předpis.
+
+> **Basic auth není dočasná berlička, ale podmínka existence té URL (D17).**
+> Videa točená nad dev DS můžou obsahovat reálná jména a částky. Na veřejný
+> web smí až klipy natočené nad seedovaným deterministickým datasetem (#40).
+
+Heslo (balíček `apache2-utils`):
+
+```bash
+sudo htpasswd -c /etc/nginx/htpasswd-media <uživatel>
+```
+
+Vzorový server-block — `server_name` je návrh, `root` musí ukazovat na
+absolutní hodnotu `VIDEO_OUT_DIR`:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name media.shpd.dev;
+
+    # certifikát např. přes certbot --nginx
+    ssl_certificate     /etc/letsencrypt/live/media.shpd.dev/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/media.shpd.dev/privkey.pem;
+
+    root /home/<uživatel>/sw/shpd/tools/video-runner/out;
+    index index.html;
+    autoindex off;
+
+    auth_basic           "Shipard media";
+    auth_basic_user_file /etc/nginx/htpasswd-media;
+}
+```
+
+Ověření po nasazení: adresa bez hesla vrátí **401**, s heslem se zobrazí
+galerie a video se přehraje přímo v prohlížeči (download = „Uložit jako“).

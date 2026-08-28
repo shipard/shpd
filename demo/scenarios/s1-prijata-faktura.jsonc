@@ -1,0 +1,55 @@
+// S1 — Přeposlaná faktura → doklad (hero video webu).
+// Tvrzení: klient přepošle fakturu e-mailem, Shipard z ní připraví doklad,
+// účetní jen zkontroluje a potvrdí. Viz shpd-web/docs/demo-scenare.md (S1)
+// a shipard/shpd#48.
+//
+// Rozsah rozhodnut v chatu (O1/O2): video začíná kartou na dashboardu
+// (došlá pošta se neukazuje — „klient přeposlal fakturu" říká titulek,
+// viz #48 Determinismus); končí otevřeným hotovým dokladem přes toast.
+//
+// PŘEDPOKLADY DAT (do doby seedu z #40 ruční příprava):
+//   - na dashboardu je jako PRVNÍ karta návrh přijaté faktury se
+//     zanalyzovaným PDF (runner bere @feed-card / @card-action-review
+//     jako .first() — pořadí karet určuje, co se natočí),
+//   - všechny reference jsou matched (jinak je „Vystavit a uzavřít"
+//     disabled a klik selže),
+//   - POZOR: průchod (i verb `check`!) zprávu SPOTŘEBUJE — apply vytvoří
+//     skutečný doklad. Každý záběr potřebuje čerstvou zprávu.
+//   - Per D17: dokud běží nad reálnými daty, video je jen interní za auth.
+{
+  "id": "s1-prijata-faktura",
+
+  // Dokumentační vazba na sadu z #40 — runner pole zatím nečte.
+  "dataset": "web-demo",
+
+  "capture": { "w": 2560, "h": 1600, "scale": 2 },
+  "output":  { "fps": 30 },
+
+  "steps": [
+    { "goto": "/app/" },
+    { "waitFor": "@app-shell", "pause": 0.8 },
+
+    // ── Dashboard: karta návrhu ────────────────────────────────────────
+    { "caption": "Klient přeposlal fakturu e-mailem", "pause": 0.3 },
+    { "hover": "@feed-card", "pause": 1.2 },
+    { "highlight": "@feed-card", "for": 1.2, "pause": 1.4 },
+
+    // ── Kontrola vytěžených údajů ──────────────────────────────────────
+    { "caption": "Shipard z PDF vytáhl dodavatele, částky i DPH" },
+    { "click": "@card-action-review" },
+    { "waitFor": "@review-modal", "pause": 1.2 },
+    { "highlight": "@review-total", "for": 1.5, "pause": 2.2 },
+
+    // ── Potvrzení ──────────────────────────────────────────────────────
+    { "caption": "Jedno kliknutí — doklad je zaúčtovaný" },
+    { "click": "@review-apply-final" },
+    { "waitFor": "@toast", "pause": 1.4 },
+
+    // ── Výsledek: hotová přijatá faktura ───────────────────────────────
+    { "caption": "Originál faktury zůstává u dokladu" },
+    { "click": "@toast-open" },
+    { "waitFor": "@form-dialog", "pause": 2.6 },
+
+    { "caption": null, "pause": 0.8 }
+  ]
+}

@@ -15,6 +15,7 @@ import { buildCaptions, checkReadability, renderAss } from '../captions.mjs';
 import { PROJECT_ROOT } from '../config.mjs';
 import { UserError } from '../errors.mjs';
 import * as ffmpeg from '../ffmpeg.mjs';
+import { GALLERY_NAME, generateGallery } from '../gallery.mjs';
 import { loadScenario } from '../scenario.mjs';
 
 /** libavfilter dělí volby dvojtečkou, takže cesta se musí escapovat. */
@@ -88,6 +89,12 @@ export async function composeScenario(config, scenario) {
     + `(${scenario.output.w}×${scenario.output.h}`
     + `${scaling ? ` ze záznamu ${scenario.capture.w}×${scenario.capture.h}` : ', bez škálování'}`
     + `, ${captions.length} titulků)`,
+  );
+
+  const videoCount = await generateGallery(config.outDir);
+  console.log(
+    `Galerie: ${relative(PROJECT_ROOT, join(config.outDir, GALLERY_NAME))} `
+    + `(${videoCount} videí)`,
   );
 
   return outPath;

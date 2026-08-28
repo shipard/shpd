@@ -5,6 +5,7 @@
  */
 
 import { existsSync } from 'node:fs';
+import { chmod } from 'node:fs/promises';
 
 import { DEFAULT_TIMEOUT, launchChromium } from './browser.mjs';
 import { pageUrl } from './config.mjs';
@@ -66,7 +67,21 @@ export async function createSession(config, scenario, options = {}) {
   const page = await context.newPage();
   await calibrateViewport(context, page, width, height);
 
-  return { browser, context, page, close: () => browser.close() };
+  const close = async () => {
+    // Backend při refreshi vydává nový token s novým expires_at. Nový
+    // token dostane jen běžící prohlížeč — kdyby se neuložil, zůstal by
+    // v souboru ten původní z verbu `login` a po TTL by umřel (Z10).
+    // Ukládá se i po chybě běhu: horší než stav na disku být nemůže.
+    try {
+      await context.storageState({ path: config.storageState });
+      await chmod(config.storageState, 0o600);
+    } catch {
+      // Kontext po pádu už nemusí žít — stará session na disku zůstane.
+    }
+    await browser.close();
+  };
+
+  return { browser, context, page, close };
 }
 
 /**
@@ -157,6 +172,42 @@ export async function assertSession(page, config) {
     throw new UserError(
       'Session neplatná — aplikace ukazuje přihlašovací formulář.',
       'Spusť: video-runner login',
+    );
+  }
+
+  // Kontrola formuláře nestačí: s mrtvou session se shell vykreslí taky,
+  // jen sidebar skončí ve stavu „Nepřihlášen" a API vrací 401 (Z10).
+  // Scénář by pak umřel timeoutem na nevinném selektoru. Přihlášení se
+  // proto ověřuje přímo autentizovaným endpointem; první 401 může být
+  // závod s refreshem, který aplikace právě dělá, proto jeden opakovaný
+  // pokus s odstupem.
+  for (let attempt = 0; ; attempt++) {
+    const status = await page.evaluate(async () => {
+      // /{ds}/app/ na dev, /app/ v produkci — stejný odvozovací princip
+      // jako frontend/src/api/config.js.
+      const base = location.pathname.replace(/\/app\/.*$/, '');
+      const response = await fetch(`${base}/api/v1/_ui/navigation`, {
+        headers: { Accept: 'application/json' },
+      });
+      return response.status;
+    });
+
+    if (status === 200) return;
+
+    if (status === 401 || status === 403) {
+      if (attempt === 0) {
+        await page.waitForTimeout(1000);
+        continue;
+      }
+      throw new UserError(
+        'Session vypršela — aplikace se vykreslí, ale API vrací 401.',
+        'Spusť: video-runner login',
+      );
+    }
+
+    throw new UserError(
+      `Ověření session selhalo — GET /_ui/navigation vrátil ${status}.`,
+      'Běží backend instance v pořádku?',
     );
   }
 }

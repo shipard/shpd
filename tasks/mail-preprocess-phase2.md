@@ -1,7 +1,7 @@
 # Došlá pošta: předzpracování Fáze 2 — render těla do PDF
 
 **Issue:** shipard/shpd#33 (Fáze 2; render služba #34 je hotová)
-**Stav:** částečně — kód, testy a dev E2E hotové (2026-08-29, 6 commitů); zbývá alfa (render sekce + síť k `shpd-render`, E2E nad reálnými Apple fakturami)
+**Stav:** hotovo — kód, testy, dev i alfa E2E (2026-08-29, 6 commitů + checklist); otevřený jen ruční proklik badge v UI a nezávislý Bolt E2E z Fáze 1
 
 ## Cíl
 
@@ -233,12 +233,14 @@ Commity referencují #33.
       `isdoc: none`, stav 30, druhý `--force` smazal a přegeneroval.
       Zbývá **ruční proklik v prohlížeči** (badge „Vygenerováno"
       v detailu zprávy)
-- [ ] Alfa — prerekvizity nasazení (mimo tento PRD, mutace per-akce):
-      render sekce v server config alfy + síťová dostupnost
-      `shpd-render` (10.199.6.211) z alfy — dnes nedostupné; pokud na
-      alfě běžel `ds-upgrade` s Fází 1, před ním SQL backfill
-      `system_phase` (viz Odchylky)
-- [ ] Alfa E2E: `mail-preprocess --force` nad reálnými Apple fakturami
-      `MSG-20260331-0003` (qrce) a `MSG-20260327-0003` (dtje) → PDF
-      příloha, zpráva projde frontou; výsledek čitelný v `preprocess_log`
+- [x] Alfa — prerekvizity nasazení: render sekce v server configu +
+      síťová dostupnost render služby (`doctor`: responding at
+      `http://10.199.6.210:3000`); nasazeno 2026-08-29, `ds-upgrade`
+      založil pravidla rovnou aktivní na všech 4 DS (Fáze 1 na alfě
+      nikdy neběžela → backfill nebyl potřeba)
+- [x] Alfa E2E (2026-08-29): `mail-preprocess --force` nad reálnými Apple
+      fakturami `MSG-20260331-0003` (qrce, id 18236 → příloha 14847)
+      a `MSG-20260327-0003` (dtje, id 75732 → příloha 62431) — stav 30,
+      PDF 1 strana s českou diakritikou, provenance včetně `bodySha256`,
+      `preprocess_log` kompletní, gate fronty průchozí
 - [ ] Bolt E2E z Fáze 1 zůstává otevřený bod (nezávislý na Fázi 2)

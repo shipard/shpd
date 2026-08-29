@@ -1,7 +1,7 @@
 # Došlá pošta: předzpracování Fáze 2 — render těla do PDF
 
 **Issue:** shipard/shpd#33 (Fáze 2; render služba #34 je hotová)
-**Stav:** hotovo — kód, testy, dev i alfa E2E (2026-08-29, 6 commitů + checklist); otevřený jen ruční proklik badge v UI a nezávislý Bolt E2E z Fáze 1
+**Stav:** hotovo — kód, testy, dev i alfa E2E, ruční proklik UI (2026-08-29, 6 commitů + checklist); nezávislý Bolt E2E z Fáze 1 sleduje `tasks/mail-preprocess.md`
 
 ## Cíl
 
@@ -230,9 +230,9 @@ Commity referencují #33.
 - [x] Zpráva s HTML tělem a matchem Apple pravidla na dev DS (4l3j,
       zpráva id 54 založená přímým INSERTem, `mail-preprocess --force`):
       PDF příloha s provenance, diakritika OK, tracking pixel nenačten,
-      `isdoc: none`, stav 30, druhý `--force` smazal a přegeneroval.
-      Zbývá **ruční proklik v prohlížeči** (badge „Vygenerováno"
-      v detailu zprávy)
+      `isdoc: none`, stav 30, druhý `--force` smazal a přegeneroval;
+      ruční proklik v prohlížeči (badge „Vygenerováno" v detailu
+      zprávy) OK
 - [x] Alfa — prerekvizity nasazení: render sekce v server configu +
       síťová dostupnost render služby (`doctor`: responding at
       `http://10.199.6.210:3000`); nasazeno 2026-08-29, `ds-upgrade`

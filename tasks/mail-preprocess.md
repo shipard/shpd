@@ -1,7 +1,7 @@
 # Došlá pošta: technické předzpracování zpráv před AI analýzou
 
 **Issue:** shipard/shpd#33 (rendering služba: #34)
-**Stav:** částečně — Fáze 1 hotová (2026-08-29, 6 commitů), Bolt E2E čeká na alfu; Fáze 2 (`renderBodyToPdf`, `renderIfHtml`, aktivace Apple/Google) implementována 2026-08-29, stav v `tasks/mail-preprocess-phase2.md`
+**Stav:** částečně — Fáze 1 hotová (2026-08-29, 6 commitů), otevřený jen Bolt E2E na alfě (živý odkaz ze vzorku); Fáze 2 (`renderBodyToPdf`, `renderIfHtml`, aktivace Apple/Google) hotová 2026-08-29 — `tasks/mail-preprocess-phase2.md`
 
 ## Cíl
 

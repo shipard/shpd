@@ -119,6 +119,14 @@ class Router
 			return new Route('app', 'info');
 		}
 
+		// Web app manifest (PWA) — veřejný, fetchuje ho prohlížeč bez tokenu.
+		if ($subpath === '/_app/manifest') {
+			if ($method !== 'GET') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('app', 'manifest');
+		}
+
 		if ($subpath === '/_app/avatar') {
 			// Avatar nenese slot v URL — uživatel se bere z tokenu (AuthContext).
 			// Všechny metody vyžadují auth (na rozdíl od brandingGet, který je

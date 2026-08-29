@@ -116,7 +116,12 @@ class Response
 			return;
 		}
 
-		header('Content-Type: application/json; charset=utf-8');
+		// Explicitní Content-Type z withHeader() má přednost (např.
+		// application/manifest+json u /_app/manifest) — hlavičky výše už
+		// odešly, druhé header() by je přepsalo.
+		if (!isset($this->headers['Content-Type'])) {
+			header('Content-Type: application/json; charset=utf-8');
+		}
 		echo json_encode($this->payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 	}
 }

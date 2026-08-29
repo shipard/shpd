@@ -109,6 +109,20 @@ class RouterTest extends TestCase
 		$this->assertInstanceOf(Response::class, $result);
 	}
 
+	public function testAppManifest(): void
+	{
+		$result = $this->router->resolve('/api/v1/_app/manifest', 'GET');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'app', 'manifest');
+	}
+
+	public function testAppManifestPostNotAllowed(): void
+	{
+		$result = $this->router->resolve('/api/v1/_app/manifest', 'POST');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
+	}
+
 	public function testAppBrandingActionsPerMethod(): void
 	{
 		$get = $this->router->resolve('/api/v1/_app/branding/icon', 'GET');

@@ -137,6 +137,17 @@ class AuthMiddlewareTest extends TestCase
 		$this->assertFalse($result->isAuthenticated);
 	}
 
+	public function testAppManifestIsExempt(): void
+	{
+		// Prohlížeč fetchuje <link rel="manifest"> bez Authorization hlavičky.
+		$route = new Route('app', 'manifest');
+		$req = $this->req(server: ['HTTP_AUTHORIZATION' => 'Token malformed']);
+		$result = $this->middleware->handle($req, $route, $this->db);
+
+		$this->assertInstanceOf(AuthContext::class, $result);
+		$this->assertFalse($result->isAuthenticated);
+	}
+
 	public function testAppBrandingGetIsExempt(): void
 	{
 		$route = new Route('app', 'brandingGet', 'icon');

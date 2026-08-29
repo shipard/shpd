@@ -105,6 +105,86 @@ class AppControllerTest extends TestCase
         $this->assertSame('Moje firma s.r.o.', $data['shortName']);
     }
 
+    // --- manifest() ---
+
+    public function testManifestFallsBackToMainJsonName(): void
+    {
+        $m = $this->makeController()->manifest(false)->getPayload();
+
+        $this->assertSame('Testovací firma', $m['name']);
+        $this->assertSame('Testovací firma', $m['short_name']);
+    }
+
+    public function testManifestPrefersAppNameAndShortName(): void
+    {
+        $m = $this->makeController([
+            ['key' => 'app.name', 'value' => json_encode('Moje firma s.r.o.')],
+            ['key' => 'app.shortName', 'value' => json_encode('Moje firma')],
+        ])->manifest(false)->getPayload();
+
+        $this->assertSame('Moje firma s.r.o.', $m['name']);
+        $this->assertSame('Moje firma', $m['short_name']);
+    }
+
+    public function testManifestShortNameFallsBackToName(): void
+    {
+        $m = $this->makeController([
+            ['key' => 'app.name', 'value' => json_encode('Moje firma s.r.o.')],
+        ])->manifest(false)->getPayload();
+
+        $this->assertSame('Moje firma s.r.o.', $m['short_name']);
+    }
+
+    public function testManifestProdModePathsHaveNoDsPrefix(): void
+    {
+        $m = $this->makeController()->manifest(false)->getPayload();
+
+        $this->assertSame('/app/', $m['id']);
+        $this->assertSame('/app/', $m['start_url']);
+        $this->assertSame('/app/', $m['scope']);
+        $this->assertSame('/app/icons/icon-192.png', $m['icons'][0]['src']);
+    }
+
+    public function testManifestDevModePathsCarryDsPrefix(): void
+    {
+        $m = $this->makeController()->manifest(true)->getPayload();
+
+        $this->assertSame('/test-test-test-test/app/', $m['id']);
+        $this->assertSame('/test-test-test-test/app/', $m['start_url']);
+        $this->assertSame('/test-test-test-test/app/', $m['scope']);
+        foreach ($m['icons'] as $icon) {
+            $this->assertStringStartsWith('/test-test-test-test/app/icons/', $icon['src']);
+        }
+    }
+
+    public function testManifestIconsAndStaticFields(): void
+    {
+        $m = $this->makeController()->manifest(false)->getPayload();
+
+        $this->assertSame('standalone', $m['display']);
+        $this->assertSame('en', $m['lang']); // main.json bez defaultLanguage → 'en'
+        $this->assertMatchesRegularExpression('/^#[0-9a-f]{6}$/', $m['theme_color']);
+        $this->assertMatchesRegularExpression('/^#[0-9a-f]{6}$/', $m['background_color']);
+
+        $this->assertCount(4, $m['icons']);
+        $any      = array_filter($m['icons'], static fn ($i) => !isset($i['purpose']));
+        $maskable = array_filter($m['icons'], static fn ($i) => ($i['purpose'] ?? null) === 'maskable');
+        $this->assertCount(2, $any);
+        $this->assertCount(2, $maskable);
+        foreach ($m['icons'] as $icon) {
+            $this->assertSame('image/png', $icon['type']);
+            $this->assertContains($icon['sizes'], ['192x192', '512x512']);
+        }
+    }
+
+    public function testManifestHeaders(): void
+    {
+        $headers = $this->makeController()->manifest(false)->getHeaders();
+
+        $this->assertSame('application/manifest+json; charset=utf-8', $headers['Content-Type']);
+        $this->assertSame('public, max-age=3600', $headers['Cache-Control']);
+    }
+
     public function testInfoThemeNullWhenUnset(): void
     {
         $data = $this->makeController()->info()->getPayload()['data'];

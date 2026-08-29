@@ -18,6 +18,7 @@ use Shipard\Core\Settings\UserSettingsStore;
  *
  * Endpoints:
  *   GET    /_app/info             Název, zkrácený název, ikona, logo (VEŘEJNÉ)
+ *   GET    /_app/manifest         Web app manifest pro PWA instalaci (VEŘEJNÉ)
  *   GET    /_app/branding/{slot}  Binární obsah slotu (VEŘEJNÉ, immutable cache)
  *   POST   /_app/branding/{slot}  Upload (multipart, pole `file`) — vyžaduje auth
  *   DELETE /_app/branding/{slot}  Smazání souboru i metadat — vyžaduje auth
@@ -31,6 +32,10 @@ use Shipard\Core\Settings\UserSettingsStore;
  */
 class AppController
 {
+    /** Shipard paleta pro manifest — literály z frontend/src/styles/variables.css. */
+    private const string MANIFEST_THEME_COLOR      = '#005089'; // --shpd-color-primary
+    private const string MANIFEST_BACKGROUND_COLOR = '#ffffff'; // --shpd-color-bg
+
     private SettingsStore $settings;
     private BrandingStorage $storage;
     private AvatarStorage $avatars;
@@ -62,13 +67,7 @@ class AppController
             'app.shell',
         ]);
 
-        $name = is_string($values['app.name']) && trim($values['app.name']) !== ''
-            ? $values['app.name']
-            : $this->config->getName();
-
-        $shortName = is_string($values['app.shortName']) && trim($values['app.shortName']) !== ''
-            ? $values['app.shortName']
-            : $name;
+        [$name, $shortName] = $this->resolveNames($values);
 
         $policy = $this->config->getAuthPolicy();
 
@@ -94,6 +93,78 @@ class AppController
                 ),
             ],
         ]);
+    }
+
+    /**
+     * Název a zkrácený název aplikace z settings s fallbacky: `app.name` →
+     * `main.json` name; `app.shortName` → name. Sdílí `info()` a `manifest()`.
+     *
+     * @param array<string, mixed> $values hodnoty z SettingsStore::getMany()
+     * @return array{0: string, 1: string} [name, shortName]
+     */
+    private function resolveNames(array $values): array
+    {
+        $name = is_string($values['app.name'] ?? null) && trim($values['app.name']) !== ''
+            ? $values['app.name']
+            : $this->config->getName();
+
+        $shortName = is_string($values['app.shortName'] ?? null) && trim($values['app.shortName']) !== ''
+            ? $values['app.shortName']
+            : $name;
+
+        return [$name, $shortName];
+    }
+
+    /**
+     * GET /_app/manifest — web app manifest (PWA, tasks/pwa-v1.md, #52).
+     *
+     * Manifest-only (bez service workeru). Per-DS jméno, ikony zatím statická
+     * defaultní sada z buildu. `$devMode` = DS ID v cestě (`/{ds-id}/app/`),
+     * prod bez prefixu (`/app/`) — rozhoduje DataSourceResolver, ne parsování
+     * URL tady.
+     *
+     * Cesty k ikonám jsou záměrně absolutní: relativní by prohlížeč
+     * resolvoval proti URL manifestu (`…/api/v1/_app/manifest`), ne proti
+     * `scope`. `start_url`/`scope`/`id` musí být absolutní ze stejného důvodu.
+     */
+    public function manifest(bool $devMode): Response
+    {
+        $values = $this->settings->getMany(['app.name', 'app.shortName']);
+        [$name, $shortName] = $this->resolveNames($values);
+
+        $base = $devMode ? '/' . $this->config->getId() : '';
+        $app  = $base . '/app/';
+
+        $icon = static fn (string $file, string $size, ?string $purpose = null): array => array_filter([
+            'src'     => $app . 'icons/' . $file,
+            'sizes'   => $size,
+            'type'    => 'image/png',
+            'purpose' => $purpose,
+        ]);
+
+        $manifest = [
+            'name'             => $name,
+            'short_name'       => $shortName,
+            'id'               => $app,
+            'start_url'        => $app,
+            'scope'            => $app,
+            'display'          => 'standalone',
+            'lang'             => $this->config->getDefaultLanguage(),
+            'theme_color'      => self::MANIFEST_THEME_COLOR,
+            'background_color' => self::MANIFEST_BACKGROUND_COLOR,
+            'icons'            => [
+                $icon('icon-192.png', '192x192'),
+                $icon('icon-512.png', '512x512'),
+                $icon('icon-maskable-192.png', '192x192', 'maskable'),
+                $icon('icon-maskable-512.png', '512x512', 'maskable'),
+            ],
+        ];
+
+        // Jméno se mění zřídka; prohlížeč manifest při návštěvách stejně
+        // re-fetchuje, hodina cache tedy nic nerozbije.
+        return Response::raw($manifest)
+            ->withHeader('Content-Type', 'application/manifest+json; charset=utf-8')
+            ->withHeader('Cache-Control', 'public, max-age=3600');
     }
 
     /**

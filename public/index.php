@@ -281,7 +281,7 @@ function dispatch(
 		'ui'      => dispatchUi($route->action, $resolved->config, $modulePathResolver, resolveLanguage($request, $resolved->config), $configRuntime, $db, $auth, $tables),
 		'dashboard' => dispatchDashboard($route, $db, $configRuntime, resolveLanguage($request, $resolved->config), $resolved->config, $alertCheckRegistry, $tables, $auth, $request),
 		'settings' => dispatchSettings($route, $request, $auth, $resolved->config, $modulePathResolver, resolveLanguage($request, $resolved->config), $configRuntime, $db, $tables),
-		'app'     => dispatchApp($route, $auth, $db, $resolved->config, $tables),
+		'app'     => dispatchApp($route, $auth, $db, $resolved->config, $tables, $resolved->isDevMode()),
 		'form'    => dispatchForm($route, $request, $auth, $tables, $db, $formRegistry ?? new FormRegistry(), $configRuntime, $modulePathResolver, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), resolveLanguage($request, $resolved->config), $resolved->config, $lookupRegistry ?? new LookupRegistry(), $documentEventDispatcher),
 		'lookup'  => dispatchLookup($route, $request, $auth, $tables, $db, $lookupRegistry ?? new LookupRegistry(), $configRuntime),
 		'viewer'  => dispatchViewer($route, $request, $auth, $viewerRegistry, $tables, $db, $configRuntime, resolveLanguage($request, $resolved->config)),
@@ -1249,11 +1249,13 @@ function dispatchApp(
 	\Shipard\Core\Database\DataSourceConnection $db,
 	\Shipard\Core\Config\DataSourceConfig $config,
 	array $tables = [],
+	bool $devMode = false,
 ): Response {
 	$ctrl = new \Shipard\Api\Controller\AppController($db, $config, $tables);
 	$slot = (string) $route->table;
 	return match ($route->action) {
 		'info'           => $ctrl->info(),
+		'manifest'       => $ctrl->manifest($devMode),
 		'brandingGet'    => $ctrl->brandingGet($slot),
 		'brandingUpload' => $ctrl->brandingUpload($slot, $auth),
 		'brandingDelete' => $ctrl->brandingDelete($slot, $auth),

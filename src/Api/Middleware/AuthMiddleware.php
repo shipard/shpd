@@ -94,9 +94,11 @@ class AuthMiddleware
 			return true;
 		}
 		// Veřejné app info + čtení brandingu — login obrazovka a favicon
-		// potřebují název/ikonu bez tokenu. Zápisové akce (brandingUpload,
-		// brandingDelete) exempt nejsou.
-		if ($route->controller === 'app' && ($route->action === 'info' || $route->action === 'brandingGet')) {
+		// potřebují název/ikonu bez tokenu. Web app manifest (PWA) fetchuje
+		// prohlížeč sám z <link rel="manifest">, bez Authorization hlavičky.
+		// Zápisové akce (brandingUpload, brandingDelete) exempt nejsou.
+		if ($route->controller === 'app'
+			&& in_array($route->action, ['info', 'manifest', 'brandingGet'], true)) {
 			return true;
 		}
 		return false;

@@ -1,0 +1,65 @@
+{
+    // core.mail.preprocessStates
+    //
+    // Stav technického předzpracování došlé zprávy
+    // (core_mail_incoming_messages.preprocess_state). Ortogonální
+    // k docState (workflow) i analysis_state (AI pipeline) — zpráva
+    // ve stavu 10/20 se nevydává do AI fronty (gate v /queue).
+    //
+    // Přechody:
+    //   0  (none)     — žádné pravidlo nematchlo při intake, koncový stav
+    //   10 (pending)  → 20 claim runnerem (mail-preprocess --message)
+    //   20 (running)  → 30 hotovo | 40 hotovo s chybami | 10 sweep (mrtvý proces)
+    //   30/40         → 10 jen ručně (mail-preprocess --force)
+
+    "0": {
+        "name": "Not applicable",
+        "name:cs": "Netýká se",
+        "name:en": "Not applicable",
+        "stateStyle": "archive",
+        "icon": "info",
+        "description:cs": "Žádné pravidlo předzpracování nematchlo",
+        "description:en": "No preprocess rule matched",
+        "order": 0
+    },
+    "10": {
+        "name": "Pending",
+        "name:cs": "Čeká",
+        "name:en": "Pending",
+        "stateStyle": "concept",
+        "icon": "question",
+        "description:cs": "Plán sestaven, čeká na runner",
+        "description:en": "Plan stored, waiting for the runner",
+        "order": 10
+    },
+    "20": {
+        "name": "Running",
+        "name:cs": "Běží",
+        "name:en": "Running",
+        "stateStyle": "edit",
+        "icon": "refresh",
+        "description:cs": "Runner vykonává plán",
+        "description:en": "The runner is executing the plan",
+        "order": 20
+    },
+    "30": {
+        "name": "Done",
+        "name:cs": "Hotovo",
+        "name:en": "Done",
+        "stateStyle": "done",
+        "icon": "check",
+        "description:cs": "Všechny akce proběhly",
+        "description:en": "All actions completed",
+        "order": 30
+    },
+    "40": {
+        "name": "Done with errors",
+        "name:cs": "Hotovo s chybami",
+        "name:en": "Done with errors",
+        "stateStyle": "error",
+        "icon": "warning",
+        "description:cs": "Některá akce selhala — detaily v logu předzpracování",
+        "description:en": "Some action failed — see the preprocess log",
+        "order": 40
+    }
+}

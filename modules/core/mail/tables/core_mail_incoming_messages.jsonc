@@ -319,6 +319,34 @@
             "group": "ai"
         },
 
+        // --- technické předzpracování (tasks/mail-preprocess.md) ---
+
+        {
+            // Stav předzpracování — ortogonální k docState i analysis_state.
+            // 10/20 drží zprávu mimo AI frontu (gate v /queue).
+            // Viz config/preprocessStates.jsonc.
+            "id": "preprocess_state",
+            "name": "Preprocess state",
+            "name:cs": "Stav předzpracování",
+            "name:en": "Preprocess state",
+            "type": "enumInt",
+            "nullable": false,
+            "cfgItem": "core.mail.preprocessStates",
+            "default": 0,
+            "group": "ai"
+        },
+        {
+            // JSON {plan: [{ruleId, actions}], results: [{action, ok, note,
+            // attachmentId?}], attempts, createdAt, startedAt, finishedAt}.
+            "id": "preprocess_log",
+            "name": "Preprocess log",
+            "name:cs": "Log předzpracování",
+            "name:en": "Preprocess log",
+            "type": "longtext",
+            "nullable": true,
+            "group": "ai"
+        },
+
         // --- audit ---
 
         {
@@ -468,6 +496,15 @@
             "type": "index",
             "columns": [
                 {"column": "auto_disposed_at"}
+            ]
+        },
+        {
+            // Rescue sweep runneru: state IN (10, 20) AND modified < threshold
+            "id": "idx_preprocess_state",
+            "type": "index",
+            "columns": [
+                {"column": "preprocess_state"},
+                {"column": "modified"}
             ]
         }
     ]

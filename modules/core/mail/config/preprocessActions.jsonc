@@ -1,0 +1,35 @@
+{
+    // core.mail.preprocessActions
+    //
+    // Katalog akcí předzpracování došlé zprávy (klíč `action` v JSON
+    // sloupci core_mail_preprocess_rules.actions). `phase` > 1 = akce
+    // je rezervovaná, runner ji zatím neumí a validace pravidla ji odmítne.
+
+    "fetchLinkedDocument": {
+        "name": "Fetch linked document",
+        "name:cs": "Stáhnout dokument z odkazu",
+        "name:en": "Fetch linked document",
+        "description:cs": "Najde v těle zprávy odkaz dle linkHrefRegex, projde redirecty (kontrola allowedDomains po každém hopu) a uloží PDF jako přílohu zprávy",
+        "description:en": "Finds a link in the message body by linkHrefRegex, follows redirects (allowedDomains checked per hop) and stores the PDF as a message attachment",
+        "phase": 1,
+        "order": 10
+    },
+    "renderBodyToPdf": {
+        "name": "Render body to PDF",
+        "name:cs": "Vyrenderovat tělo do PDF",
+        "name:en": "Render body to PDF",
+        "description:cs": "Vyrenderuje HTML tělo zprávy do PDF přílohy (rendering služba, #34)",
+        "description:en": "Renders the HTML body into a PDF attachment (rendering service, #34)",
+        "phase": 2,
+        "order": 20
+    },
+    "convertOfficeToPdf": {
+        "name": "Convert office document to PDF",
+        "name:cs": "Převést kancelářský dokument do PDF",
+        "name:en": "Convert office document to PDF",
+        "description:cs": "Rezervováno",
+        "description:en": "Reserved",
+        "phase": 2,
+        "order": 30
+    }
+}

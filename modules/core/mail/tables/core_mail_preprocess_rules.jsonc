@@ -1,0 +1,233 @@
+{
+    "tableId": 440,
+    "name": "Preprocess rules",
+    "name:cs": "Pravidla předzpracování",
+    "name:en": "Preprocess rules",
+
+    "displayPattern": "{rule_id}",
+
+    "docStates": {
+        "stateColumn": "docState",
+        "mainColumn": "docStateMain",
+        "cfgItem": "core.system.docStatesArchive"
+    },
+
+    "columnGroups": [
+        {
+            "id": "rule",
+            "name": "Rule",
+            "name:cs": "Pravidlo",
+            "name:en": "Rule"
+        },
+        {
+            "id": "match",
+            "name": "Match conditions",
+            "name:cs": "Podmínky shody",
+            "name:en": "Match conditions"
+        },
+        {
+            "id": "stats",
+            "name": "Statistics",
+            "name:cs": "Statistiky",
+            "name:en": "Statistics"
+        },
+        {
+            "id": "status",
+            "name": "Status",
+            "name:cs": "Stav",
+            "name:en": "Status"
+        }
+    ],
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+
+        // --- rule ---
+
+        {
+            // Stabilní klíč pro upsert systémových pravidel z katalogu
+            // (config/systemPreprocessRules.jsonc); u uživatelských generovaný.
+            "id": "rule_id",
+            "name": "Rule ID",
+            "name:cs": "Klíč pravidla",
+            "name:en": "Rule ID",
+            "type": "varchar",
+            "length": 60,
+            "nullable": false,
+            "group": "rule"
+        },
+        {
+            "id": "origin",
+            "name": "Origin",
+            "name:cs": "Původ",
+            "name:en": "Origin",
+            "type": "enumString",
+            "length": 10,
+            "nullable": false,
+            "cfgItem": "core.mail.preprocessRuleOrigins",
+            "default": "user",
+            "group": "rule"
+        },
+        {
+            // Uspořádaný seznam akcí: JSON `[{"action": "...", ...params}]`.
+            // Klíče akcí viz config/preprocessActions.jsonc.
+            "id": "actions",
+            "name": "Actions",
+            "name:cs": "Akce",
+            "name:en": "Actions",
+            "type": "longtext",
+            "nullable": false,
+            "group": "rule"
+        },
+        {
+            "id": "notice",
+            "name": "Notice",
+            "name:cs": "Poznámka",
+            "name:en": "Notice",
+            "type": "varchar",
+            "length": 250,
+            "nullable": true,
+            "group": "rule"
+        },
+
+        // --- match (AND přes vyplněné; aspoň jedna vyplněná) ---
+
+        {
+            "id": "sender_email",
+            "name": "Sender e-mail",
+            "name:cs": "E-mail odesílatele",
+            "name:en": "Sender e-mail",
+            "type": "varchar",
+            "length": 200,
+            "nullable": true,
+            "group": "match"
+        },
+        {
+            "id": "sender_domain",
+            "name": "Sender domain",
+            "name:cs": "Doména odesílatele",
+            "name:en": "Sender domain",
+            "type": "varchar",
+            "length": 190,
+            "nullable": true,
+            "group": "match"
+        },
+        {
+            "id": "subject_regex",
+            "name": "Subject regex",
+            "name:cs": "Regex předmětu",
+            "name:en": "Subject regex",
+            "type": "varchar",
+            "length": 500,
+            "nullable": true,
+            "group": "match"
+        },
+        {
+            "id": "body_regex",
+            "name": "Body regex",
+            "name:cs": "Regex těla",
+            "name:en": "Body regex",
+            "type": "varchar",
+            "length": 500,
+            "nullable": true,
+            "group": "match"
+        },
+
+        // --- stats ---
+
+        {
+            "id": "hit_count",
+            "name": "Hit count",
+            "name:cs": "Počet zásahů",
+            "name:en": "Hit count",
+            "type": "int",
+            "nullable": false,
+            "default": 0,
+            "group": "stats"
+        },
+        {
+            "id": "last_hit_at",
+            "name": "Last hit",
+            "name:cs": "Poslední zásah",
+            "name:en": "Last hit",
+            "type": "datetime",
+            "nullable": true,
+            "group": "stats"
+        },
+
+        // --- audit ---
+
+        {
+            "id": "created",
+            "name": "Created",
+            "name:cs": "Vytvořeno",
+            "name:en": "Created",
+            "type": "datetime",
+            "nullable": false,
+            "group": "status"
+        },
+        {
+            "id": "created_by",
+            "name": "Created by",
+            "name:cs": "Vytvořil",
+            "name:en": "Created by",
+            "type": "int",
+            "nullable": true,
+            "reference": "core_system_users",
+            "group": "status"
+        },
+        {
+            "id": "modified",
+            "name": "Modified",
+            "name:cs": "Změněno",
+            "name:en": "Modified",
+            "type": "datetime",
+            "nullable": false,
+            "group": "status"
+        },
+
+        // --- doc state (systémové, bez skupiny) ---
+
+        {
+            "id": "docState",
+            "name": "Document state",
+            "name:cs": "Stav dokumentu",
+            "name:en": "Document state",
+            "type": "tinyint",
+            "default": 10,
+            "system": true
+        },
+        {
+            "id": "docStateMain",
+            "name": "Document state (sort)",
+            "name:cs": "Stav dokumentu (řazení)",
+            "name:en": "Document state (sort)",
+            "type": "tinyint",
+            "default": 1,
+            "system": true
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "unq_rule_id",
+            "type": "unique",
+            "columns": [
+                {"column": "rule_id"}
+            ]
+        },
+        {
+            "id": "idx_state",
+            "type": "index",
+            "columns": [
+                {"column": "docState"}
+            ]
+        }
+    ]
+}

@@ -1,0 +1,20 @@
+{
+    // core.mail.preprocessRuleOrigins
+    //
+    // Původ pravidla předzpracování (core_mail_preprocess_rules.origin):
+    // systémové z katalogu config/systemPreprocessRules.jsonc (upsert
+    // při ds-upgrade) vs. založené ručně v nastavení.
+
+    "system": {
+        "name": "System",
+        "name:cs": "Systémové",
+        "name:en": "System",
+        "order": 10
+    },
+    "user": {
+        "name": "User",
+        "name:cs": "Uživatel",
+        "name:en": "User",
+        "order": 20
+    }
+}

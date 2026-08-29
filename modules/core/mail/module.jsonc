@@ -24,7 +24,8 @@
         "core_mail_senders",
         "core_mail_outbox",
         "core_mail_outbox_log",
-        "core_mail_sender_rules"
+        "core_mail_sender_rules",
+        "core_mail_preprocess_rules"
     ],
 
     // ds-reset chrání AI profily — je to konfigurace (vč. admin úprav
@@ -32,11 +33,12 @@
     // data. Backendy chrání analogicky core.ai.
     // Senders jsou konfigurace (transporty per from adresa); outbox a log
     // jsou data — při resetu se mažou. Sender rules (pravidla došlé pošty)
-    // jsou rovněž konfigurace.
+    // jsou rovněž konfigurace, stejně jako pravidla předzpracování.
     "keepOnReset": [
         "core_mail_ai_profiles",
         "core_mail_senders",
-        "core_mail_sender_rules"
+        "core_mail_sender_rules",
+        "core_mail_preprocess_rules"
     ],
 
     // core_mail_incoming_messages má viewer core.mail.incoming (Došlá pošta)
@@ -224,6 +226,18 @@
         {
             "id": "core.mail.senderRuleOrigins",
             "file": "config/senderRuleOrigins.jsonc"
+        },
+        {
+            "id": "core.mail.preprocessStates",
+            "file": "config/preprocessStates.jsonc"
+        },
+        {
+            "id": "core.mail.preprocessActions",
+            "file": "config/preprocessActions.jsonc"
+        },
+        {
+            "id": "core.mail.preprocessRuleOrigins",
+            "file": "config/preprocessRuleOrigins.jsonc"
         }
     ]
 }

@@ -74,6 +74,13 @@ reanalýzy; unapply obě strany nuluje.
 | `needs_reanalysis` | boolean, default false | Příznak nastavený akcí "Znova analyzovat" — zapne se po reanalyze hooku, vypne se při dalším úspěšném `result`. |
 | `profile_override` | int → `core_mail_ai_profiles` | Pro ad-hoc znovu-analýzu s jiným profilem. NULL = použít default profil DS. |
 
+### Technické předzpracování (ai)
+
+| Sloupec | Typ | Popis |
+|---|---|---|
+| `preprocess_state` | enumInt, NOT NULL, default 0 | Stav předzpracování dle pravidel [core_mail_preprocess_rules](core_mail_preprocess_rules.md) — ortogonální k `docState` i `analysis_state`. Hodnoty: `0` netýká se, `10` čeká, `20` běží, `30` hotovo, `40` hotovo s chybami. Ve stavech 10/20 zprávu `/queue` nevydá. Viz [preprocessStates.jsonc](../config/preprocessStates.jsonc). |
+| `preprocess_log` | longtext (JSON) | `{plan: [{ruleId, actions}], results: [{action, ok, note, attachmentId?}], attempts, createdAt, startedAt, finishedAt}`. Plán je snapshot z intake — runner vykonává jej, ne aktuální pravidla. |
+
 ### Stav (status)
 
 | Sloupec | Typ | Popis |
@@ -100,6 +107,7 @@ reanalýzy; unapply obě strany nuluje.
 | `idx_sender_email` | index | `sender_email` | Filtr dle odesílatele |
 | `idx_sender_person` | index | `sender_person` | Filtr dle osoby v systému |
 | `idx_auto_disposed` | index | `auto_disposed_at` | Digest karta a „Vrátit vše" (zprávy auto-archivované v daném dni) |
+| `idx_preprocess_state` | index | `preprocess_state`, `modified` | Rescue sweep `mail-preprocess --sweep` (zaseknuté stavy 10/20) |
 
 ## Návaznosti
 
@@ -113,6 +121,7 @@ reanalýzy; unapply obě strany nuluje.
 | `docs_core_heads` | `heads.source_message` → `messages.id`; dopředně `target_table_id='docs_core_heads'` + `target_row` | Doklad vzniklý apply návrhu (obousměrná lineage) |
 | `base_registry_documents` | `documents.source_message` → `messages.id`; dopředně `target_*` | Záznam Spisovny vzniklý ze zprávy |
 | [core_mail_sender_rules](core_mail_sender_rules.md) | `messages.auto_disposed_by` → `sender_rules.id` | Pravidlo, které zprávu auto-archivovalo |
+| [core_mail_preprocess_rules](core_mail_preprocess_rules.md) | `preprocess_log.plan[].ruleId` → `rule_id` | Snapshot plánu předzpracování |
 
 ## Workflow
 

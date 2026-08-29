@@ -321,6 +321,39 @@ class AttachmentService
     }
 
     /**
+     * Merge extra keys into the attachment's `metadata` JSON (existing keys
+     * are overwritten, others kept). Used for provenance of generated
+     * attachments (e.g. `{generatedBy: "preprocess", ruleId, sourceUrl}`).
+     *
+     * @param array<string, mixed> $extra
+     */
+    public function mergeMetadata(int $id, array $extra): bool
+    {
+        $attachment = $this->getAttachment($id);
+        if ($attachment === null) {
+            return false;
+        }
+
+        $current = $attachment['metadata'] ?? null;
+        if (is_string($current)) {
+            $current = json_decode($current, true);
+        }
+        $merged = array_merge(is_array($current) ? $current : [], $extra);
+
+        $this->db->updateWhere(
+            self::TABLE,
+            [
+                'metadata' => json_encode($merged, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+                'modified' => date('Y-m-d H:i:s'),
+            ],
+            'id = %i',
+            $id,
+        );
+
+        return true;
+    }
+
+    /**
      * Soft-delete an attachment.
      */
     public function softDelete(int $id): bool

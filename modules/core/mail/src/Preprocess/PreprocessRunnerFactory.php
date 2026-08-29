@@ -14,6 +14,8 @@ use Shipard\Module\Core\Exchange\Enrich\RowHistoryEnricher;
 use Shipard\Module\Core\Exchange\Schema\SchemaLoader;
 use Shipard\Module\Core\Exchange\Schema\SchemaValidator;
 use Shipard\Module\Core\Mail\IsdocImportService;
+use Shipard\Module\Core\Mail\Preprocess\Action\FetchLinkedDocumentAction;
+use Shipard\Module\Core\Mail\Preprocess\Http\CurlHttpFetcher;
 
 /**
  * Produkční wiring runneru pro CLI `mail-preprocess`: přílohy, registr
@@ -61,9 +63,10 @@ final class PreprocessRunnerFactory
         );
     }
 
-    /** Registr akcí Fáze 1 — implementace přibývají po jednotlivých akcích. */
+    /** Registr akcí Fáze 1 (renderBodyToPdf přijde s #34). */
     public static function defaultActions(DataSourceConnection $db, AttachmentService $attachments): ActionRegistry
     {
-        return new ActionRegistry();
+        return new ActionRegistry()
+            ->register(FetchLinkedDocumentAction::KEY, new FetchLinkedDocumentAction($attachments, new CurlHttpFetcher()));
     }
 }

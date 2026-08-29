@@ -213,7 +213,6 @@ class GotenbergEngine implements RenderEngineInterface
         $errno = curl_errno($ch);
         $error = $errno !== 0 ? curl_error($ch) : null;
         $statusCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
 
         return [
             'statusCode' => $statusCode,
@@ -238,7 +237,6 @@ class GotenbergEngine implements RenderEngineInterface
         $errno = curl_errno($ch);
         $error = $errno !== 0 ? curl_error($ch) : null;
         $statusCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
 
         return [
             'statusCode' => $statusCode,

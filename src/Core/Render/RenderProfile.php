@@ -10,8 +10,8 @@ namespace Shipard\Core\Render;
  * - Untrusted: e-mailová HTML těla a jiný cizí obsah. Header/footer a
  *   printBackground zakázány, timeout tvrdě stropovaný. JS je vypnutý
  *   globálně flagem kontejneru (--chromium-disable-javascript), odchozí
- *   síť Chromia zakázaná deny-listem — to profil nevynucuje, jen na to
- *   spoléhá (viz docs/operations/render-service.md).
+ *   síť Chromia zakázaná env CHROMIUM_DENY_PRIVATE_IPS/PUBLIC_IPS — to
+ *   profil nevynucuje, jen na to spoléhá (viz docs/operations/render-service.md).
  * - Report: vlastní server-side šablony — header/footer, printBackground,
  *   plný timeout z konfigurace.
  */

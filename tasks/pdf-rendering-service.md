@@ -1,6 +1,6 @@
 # PDF rendering služba (Gotenberg) + RenderClient
 
-**Stav:** částečně — kód, testy a docs hotové 2026-08-28 (#34); zbývá spustit Gotenberg (podman + unit template) a živé E2E dle „Hotovo když" — na dev stroji podman není, integrační test je gated na `SHIPARD_INTEGRATION_GOTENBERG_URL`
+**Stav:** hotovo — kód, testy a docs 2026-08-28 (#34); Gotenberg běží (Incus `shpd-render`, 8.34.0), živé E2E prošlo 2026-08-29 — oprava nasazení a ověření viz `tasks/render-service-deploy-fix.md`
 
 **Issue:** shipard/shpd#34
 

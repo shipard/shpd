@@ -86,10 +86,15 @@ $client->health();         // bool — GET /health, krátký timeout (doctor)
 
 JS je vypnutý **globálně** flagem kontejneru
 (`--chromium-disable-javascript`) — per-request to Gotenberg neumí.
-Odchozí síť Chromia zakazuje `--chromium-deny-list='.*'` (push-only
-obsah, assety jdou v requestu). Šablony jsou server-side a JS
-nepotřebují; kdyby ho budoucí sestavy vyžadovaly, poběží druhá instance
-s jinými flagy — kontrakt klienta se nemění.
+Odchozí síť Chromia zakazují env proměnné kontejneru
+`CHROMIUM_DENY_PRIVATE_IPS` + `CHROMIUM_DENY_PUBLIC_IPS` (push-only
+obsah, assety jdou v requestu; ne `--chromium-deny-list=.*`, ten blokuje
+i interní `file://` — viz `docs/operations/render-service.md`). Hlavní
+HTML soubor jde v multipartu vždy pod jménem `index.html` — Gotenberg
+jiný název odmítne (400); assety se z něj referencují relativně.
+Šablony jsou server-side a JS nepotřebují; kdyby ho budoucí sestavy
+vyžadovaly, poběží druhá instance s jinými flagy — kontrakt klienta se
+nemění.
 
 ## Post-processing (D8)
 

@@ -7,6 +7,10 @@ zprávy** — vidí je uživatel, AI analyzer i Spisovna stejně jako přílohy
 z e-mailu. Motivace: část pošty nenese doklad jako PDF přílohu (faktura za
 odkazem v těle — Bolt; faktura přímo HTML tělem — Apple, Google Play).
 
+Fáze 1 (#33) přinesla pravidla, runner a `fetchLinkedDocument`; Fáze 2
+(`tasks/mail-preprocess-phase2.md`, po render službě #34) akci
+`renderBodyToPdf`, parametr `renderIfHtml` a aktivaci pravidel Apple/Google.
+
 Odlišení od sousedů:
 
 - **Sender rules** (`core_mail_sender_rules`) jsou terminální triage —
@@ -64,31 +68,51 @@ nikdy nespadne.
 
 **Akce** (`actions`, uspořádaný JSON seznam, klíče `core.mail.preprocessActions`):
 
-| Akce | Fáze | Parametry |
-|---|---|---|
-| `fetchLinkedDocument` | 1 | `linkHrefRegex` (povinný), `allowedDomains` (povinný seznam), `renderIfHtml` (rezervováno) |
-| `renderBodyToPdf` | 2 (#34) | — |
-| `convertOfficeToPdf` | rezervováno | — |
+| Akce | Parametry |
+|---|---|
+| `fetchLinkedDocument` | `linkHrefRegex` (povinný), `allowedDomains` (povinný seznam), `renderIfHtml` (bool, default false) |
+| `renderBodyToPdf` | — |
+| `convertOfficeToPdf` | rezervováno (konverze příloh = renditions, #34/D7) — validace odmítne |
 
 `PreprocessRuleDocument` odmítne akce, které runner neumí
-(`PreprocessRuleDocument::IMPLEMENTED_ACTIONS`), a hlídá povinné parametry.
+(`PreprocessRuleDocument::IMPLEMENTED_ACTIONS`, zrcadlo
+`PreprocessRunnerFactory::defaultActions`), a hlídá povinné parametry
+a typ `renderIfHtml`.
 
 ### Systémový katalog
 
 `config/systemPreprocessRules.jsonc` → `PreprocessRulesProvisioner` při
 `ds-upgrade` (bezpodmínečně, i pod `skipProvisioning` — import-mode DS
 přijímá poštu stejně). Per `rule_id`: chybí → INSERT (`origin = system`,
-stav 40; pravidla s `phase: 2` vznikají rovnou archivovaná — 70);
-existuje ve 40 → UPDATE obsahových polí; archivované/smazané/koncept →
-beze změny (**nekřísí se**). `hit_count`, `last_hit_at`, `created` se
-nikdy nepřepisují.
+stav 40, `system_phase` = `phase` z katalogu; pravidla s `phase > 1`
+vznikají rovnou archivovaná — 70); existuje ve 40 → UPDATE obsahových
+polí (+ dorovnání `system_phase`); archivované/smazané/koncept → beze
+změny (**nekřísí se**). `hit_count`, `last_hit_at`, `created` se nikdy
+nepřepisují.
+
+**Aktivace pravidel z pozdější fáze** (`system_phase`, D14): archivované
+systémové pravidlo se `system_phase > 1` archivoval systém, ne uživatel.
+Když katalog `phase` odebere, `ds-upgrade` ho **aktivuje** — `[ACTIVATE]`,
+70 → 40, obsah z katalogu, `system_phase = 1`. Uživatelem archivované
+živé pravidlo má `system_phase = 1` a zůstává archivované. Výpis
+`ds-upgrade -v`: `[CREATE]`, `[ACTIVATE]`, `[UPDATE]`, `[SKIP]`, `[OK]`.
 
 Důsledek: úpravu systémového pravidla ve stavu 40 další `ds-upgrade`
 přepíše. Přizpůsobení = systémové pravidlo archivovat a založit
 uživatelskou kopii.
 
-Katalog v1: `bolt-invoice-link` (živé), `apple-invoice-body`,
-`google-play-order` (Fáze 2, archivované do nasazení `renderBodyToPdf`).
+Katalog: `bolt-invoice-link` (fetch z odkazu), `apple-invoice-body`
+(kotva `Apple Distribution International` — fakturační právnická osoba;
+adresa odesílatele v těle přímé pošty není), `google-play-order`
+(kotva na adresy odesílatele v těle — forwardy). Všechna živá.
+
+> **Migrace DS z Fáze 1:** DS, kde `ds-upgrade` založil Apple/Google
+> pravidla ještě před sloupcem `system_phase`, je má archivovaná se
+> `system_phase = 1` (default sloupce) — od uživatelem archivovaných
+> nerozlišitelná, provisioner je správně nechá být. Jednorázově před
+> `ds-upgrade`:
+> `UPDATE core_mail_preprocess_rules SET system_phase = 2 WHERE origin = 'system' AND docState = 70 AND system_phase = 1 AND hit_count = 0 AND rule_id IN ('apple-invoice-body', 'google-play-order');`
+> Týká se jen DS upgradovaných mezi 29. 8. 2026 (Fáze 1) a nasazením Fáze 2.
 
 ## Tok
 
@@ -130,11 +154,15 @@ nemění. Ruční přepočet = `--force`.
    přijme jen z finální URL, jejíž host je v `allowedDomains` (i
    subdomény) a která matchne `linkHrefRegex`.
 4. Anonymní GET, timeout 20 s, strop 20 MB (přenos se přeruší), content
-   type `application/pdf` nebo magic `%PDF`. HTML = selhání s poznámkou
-   (`renderIfHtml` je Fáze 2).
+   type `application/pdf` nebo magic `%PDF`. Finální `text/html`:
+   s `renderIfHtml: true` se vyrenderuje do PDF (render služba, profil
+   Untrusted, strop 2 MB HTML — kontroly allowlist/regex/size cap jdou
+   před renderem; selhání renderu = poznámka kandidáta, zkouší se další);
+   bez flagu je HTML selhání s poznámkou.
 5. Uložení přes `AttachmentService::upload` jako obsahová příloha zprávy,
    provenance do `core_attachments_files.metadata`:
-   `{generatedBy: "preprocess", ruleId, action, sourceUrl, finalUrl, fetchedAt}` (D5).
+   `{generatedBy: "preprocess", ruleId, action, sourceUrl, finalUrl, fetchedAt}`
+   (D5), u renderovaného výsledku navíc `rendered: true`.
 
 **Idempotence:** nesmazaná příloha se shodným `(ruleId, action, sourceUrl)`
 → akce se přeskočí jako úspěšná. Opakované `mail-preprocess --message`
@@ -144,6 +172,31 @@ tedy nevyrábí duplikáty; `--force` generované přílohy nejdřív smaže
 Selhání (expirovaný odkaz, 404, timeout, cizí doména, size cap) je
 **provozní stav**: zapíše se do `results`, zpráva skončí ve 40, žádná
 výjimka ven (D6).
+
+## Akce `renderBodyToPdf`
+
+`Preprocess/Action/RenderBodyToPdfAction` — pro zprávy, kde je doklad
+přímo HTML tělem e-mailu (Apple, Google Play):
+
+1. Vstup je jen `body_html` (prázdné = selhání akce; strop 2 MB).
+2. Render přes `RenderClient::renderHtml(..., RenderProfile::Untrusted)`
+   (`docs/render.md`), **bez assetů**. Odchozí síť Chromia je vypnutá,
+   takže **vzdálené obrázky a tracking pixely se záměrně nenačtou** —
+   deterministický výstup, žádný egress; `cid:` obrázky v1 neřešíme
+   (v PDF chybí). Tělo bez `<meta charset>` dostane UTF-8 hlavičku
+   (Chromium by jinak hádal kódování a rozbil diakritiku).
+3. Uložení jako obsahová příloha; název z předmětu zprávy (sanitizovaný,
+   `.pdf`, prázdný předmět → `message-body.pdf`). Provenance
+   `{generatedBy: "preprocess", ruleId, action, bodySha256, renderedAt}`.
+
+**Idempotence** dle `(ruleId, action)` — tělo je po intake neměnné.
+Nenakonfigurovaná služba (`render` chybí v server config) nebo její
+výpadek = selhání akce s `render failed: <errorKind>: <note>`, zpráva
+skončí ve 40 a doteče do AI fronty; nic nepadá. ISDOC krok po renderu
+proběhne nad PDF a skončí `none` (renderované PDF ISDOC nenese).
+
+Společné kusy obou akcí (provenance lookup, uložení s úklidem temp
+souboru, sanitizace názvu) žijí v `Action/GeneratedAttachments`.
 
 ## Provoz
 
@@ -163,6 +216,10 @@ výjimka ven (D6).
   příloh, přegenerování. Funguje i na stavech 0/30/40 (ladění nového
   pravidla nad starou zprávou). Odmítne zprávu s aktivním AI claimem
   (`analysis_state = 20`) a zprávu ve stavu 20 (použij `--sweep`).
+- **Render služba**: runner ji bere ze `render` sekce
+  `/etc/shipard/server.json` (`RenderClient::fromServerConfig`,
+  `PreprocessRunnerFactory`); server config nenačitatelný = klient
+  nenakonfigurovaný, render akce selhávají provozně.
 - **Detail zprávy** (viewer Došlá pošta): badge stavu předzpracování
   v hlavičce, blok „Předzpracování" v tabu Obsah (pravidla, pokusy,
   výsledek per akce, ISDOC, čas), generované přílohy nesou badge
@@ -171,10 +228,8 @@ výjimka ven (D6).
 CLI reference: [docs/cli.md](../../../../docs/cli.md) § `mail-preprocess`.
 API gate: [docs/mail/api-contract.md](../../../../docs/mail/api-contract.md) § 9.1.
 
-## Fáze 2 (po #34)
+## Mimo scope
 
-Akce `renderBodyToPdf` (HTML tělo → PDF příloha přes rendering službu),
-parametr `renderIfHtml` u fetch (stažené HTML → render místo selhání),
-aktivace systémových pravidel Apple/Google (odarchivovat, nebo smazat
-a nechat provisioner založit znovu — smazané se nekřísí, proto raději
-přechod 70 → 40 v UI).
+Render HTML *příloh* do PDF a konverze Office příloh = renditions (#34/D7),
+ne preprocess; `convertOfficeToPdf` zůstává v katalogu akcí rezervované
+(D18). `cid:` obrázky v renderovaném těle (v1 se nenačtou).

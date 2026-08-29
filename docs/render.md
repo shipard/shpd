@@ -3,9 +3,11 @@
 Sdílená schopnost renderovat HTML → PDF a konvertovat Office dokumenty
 → PDF. Rozhodnutí D1–D8 viz `tasks/pdf-rendering-service.md` (issue #34).
 
-Konzumenti: preprocess pošty Fáze 2 (#33, `renderBodyToPdf`), HTML
-renditions příloh (follow-up #34), tiskové výstupy a reporty (samostatný
-budoucí design — tady je jen kontrakt, který budou potřebovat).
+Konzumenti: preprocess došlé pošty (#33 — akce `renderBodyToPdf` a
+`fetchLinkedDocument` s `renderIfHtml`, profil Untrusted bez assetů;
+`modules/core/mail/docs/preprocess.md`), HTML renditions příloh
+(follow-up #34), tiskové výstupy a reporty (samostatný budoucí design —
+tady je jen kontrakt, který budou potřebovat).
 
 ## Architektura
 

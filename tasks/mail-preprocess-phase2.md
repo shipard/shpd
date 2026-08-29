@@ -1,7 +1,7 @@
 # Došlá pošta: předzpracování Fáze 2 — render těla do PDF
 
 **Issue:** shipard/shpd#33 (Fáze 2; render služba #34 je hotová)
-**Stav:** k implementaci
+**Stav:** částečně — kód, testy a dev E2E hotové (2026-08-29, 6 commitů); zbývá alfa (render sekce + síť k `shpd-render`, E2E nad reálnými Apple fakturami)
 
 ## Cíl
 
@@ -186,6 +186,31 @@ PHPUnit s úzkými `--filter`, `timeout_sec: 120`.
 
 Commity referencují #33.
 
+## Odchylky provedení od zadání
+
+- **Validace akcí** nejde přes `phase` v cfgItem `preprocessActions`, ale
+  přes `PreprocessRuleDocument::IMPLEMENTED_ACTIONS` — `renderBodyToPdf`
+  tam přidán; `convertOfficeToPdf` dál odmítán (D18). Flip `phase: 1`
+  v JSONC je jen popisný.
+- **D16a UTF-8 hlavička:** tělo bez `<meta charset>` se před renderem
+  obalí `<meta charset="utf-8">` (do `<head>`, resp. celým dokumentem).
+  Chromium by u souboru bez deklarace hádal kódování a rozbil diakritiku;
+  ověřeno na dev DS (PDF s českými znaky v pořádku).
+- **Sdílená utilita** je třída `Action/GeneratedAttachments` (provenance
+  lookup, uložení s úklidem temp, sanitizace názvu), ne jen statická
+  sanitizace — fetch akce přepojena, chování beze změny. Strop délky
+  názvu teď přípona `.pdf` nikdy neodřízne.
+- **`renderIfHtml` bez render klienta** (starší wiring) = selhání
+  s poznámkou; `RenderClient` je 4. nullable parametr fetch akce.
+- **DS z Fáze 1** (Apple/Google založené před sloupcem `system_phase`):
+  mají archivované řádky se `system_phase = 1` — od uživatelem
+  archivovaných nerozlišitelné, D14 je správně nechá být. Jednorázový
+  SQL backfill (`system_phase = 2` pro archivované systémové bez zásahů)
+  před `ds-upgrade`; postup v `modules/core/mail/docs/preprocess.md`
+  → Systémový katalog. Na dev DS 4l3j proveden.
+- `MailPreprocessCommand` načítá `ServerConfig` jednou
+  (`loadServerConfig()`), sdílí ho resolver, log i render klient.
+
 ## Dokumentace k aktualizaci
 
 - `modules/core/mail/docs/preprocess.md` — akce `renderBodyToPdf`,
@@ -197,17 +222,22 @@ Commity referencují #33.
 
 ## Hotovo když
 
-- [ ] Testy zelené, `npm run check:i18n`
-- [ ] Dev DS: config rebuild + `ds-upgrade` aktivuje dříve archivovaná
-      fáze-2 pravidla (dev DS 4l3j je má z Fáze 1 archivovaná);
-      opakovaný běh `unchanged`; ručně archivované pravidlo zůstává
-      archivované
-- [ ] Zpráva s HTML tělem a matchem Apple pravidla na dev DS: PDF
-      příloha s provenance, viditelná v detailu zprávy, ISDOC krok
-      proběhl, zpráva prošla gate fronty
+- [x] Testy zelené, `npm run check:i18n`
+- [x] Dev DS: `ds-upgrade` aktivuje dříve archivovaná fáze-2 pravidla
+      (`[ACTIVATE]` ×2 po SQL backfillu `system_phase`, viz Odchylky);
+      opakovaný běh `[OK]`; archivované se `system_phase = 1` provisioner
+      nechává (unit + první běh na 4l3j před backfillem = `[SKIP]`)
+- [x] Zpráva s HTML tělem a matchem Apple pravidla na dev DS (4l3j,
+      zpráva id 54 založená přímým INSERTem, `mail-preprocess --force`):
+      PDF příloha s provenance, diakritika OK, tracking pixel nenačten,
+      `isdoc: none`, stav 30, druhý `--force` smazal a přegeneroval.
+      Zbývá **ruční proklik v prohlížeči** (badge „Vygenerováno"
+      v detailu zprávy)
 - [ ] Alfa — prerekvizity nasazení (mimo tento PRD, mutace per-akce):
       render sekce v server config alfy + síťová dostupnost
-      `shpd-render` (10.199.6.211) z alfy — dnes nedostupné
+      `shpd-render` (10.199.6.211) z alfy — dnes nedostupné; pokud na
+      alfě běžel `ds-upgrade` s Fází 1, před ním SQL backfill
+      `system_phase` (viz Odchylky)
 - [ ] Alfa E2E: `mail-preprocess --force` nad reálnými Apple fakturami
       `MSG-20260331-0003` (qrce) a `MSG-20260327-0003` (dtje) → PDF
       příloha, zpráva projde frontou; výsledek čitelný v `preprocess_log`

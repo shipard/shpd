@@ -25,6 +25,7 @@ use Shipard\Core\Utils\JsoncParser;
 use Shipard\Core\Version;
 use Shipard\Module\Core\Mail\AIAnalyzerProvisioner;
 use Shipard\Module\Core\Mail\MailRouterProvisioner;
+use Shipard\Module\Core\Mail\Preprocess\PreprocessRulesProvisioner;
 use Shipard\Module\Core\Units\UnitsProvisioner;
 use Shipard\Module\Docs\Core\NumberSeriesProvisioner;
 use Shipard\Module\Economy\Accbal\BalancesProvisioner;
@@ -282,6 +283,12 @@ class DsUpgradeCommand extends Command
         // keepOnReset, takže po resetu není potřeba žádná ruční akce.
         $this->provisionAiAnalyzer($resolvedModules, $dsConnection, $output);
 
+        // Systémová pravidla předzpracování pošty (tasks/mail-preprocess.md
+        // §2) — BEZPODMÍNEČNĚ, i pod skipProvisioning: import-mode DS
+        // přijímá poštu stejně. Idempotentní upsert dle rule_id,
+        // archivované se nekřísí.
+        $this->provisionPreprocessRules($resolvedModules, $dsConnection, $output);
+
         // Parametry vrstvy C (docs/ds-setup.md §5.2) — jedna instance kvůli
         // request-level cache; provisionery jen čtou, žádný set se tu neděje.
         $settings = new SettingsStore($dsConnection);
@@ -417,6 +424,34 @@ class DsUpgradeCommand extends Command
     /**
      * @param list<\Shipard\Core\Module\ModuleDefinition> $resolvedModules
      */
+    private function provisionPreprocessRules(
+        array $resolvedModules,
+        DataSourceConnection $dsConnection,
+        OutputInterface $output,
+    ): void {
+        if (!$this->isModuleActive($resolvedModules, 'core.mail')) {
+            return;
+        }
+
+        $output->writeln('', OutputInterface::VERBOSITY_VERBOSE);
+        $output->writeln('Provisioning mail preprocess rules...', OutputInterface::VERBOSITY_VERBOSE);
+
+        $result = new PreprocessRulesProvisioner($dsConnection)->provision();
+
+        foreach ($result['created'] as $ruleId) {
+            $output->writeln("  [CREATE] preprocess rule '{$ruleId}'");
+        }
+        foreach ($result['updated'] as $ruleId) {
+            $output->writeln("  [UPDATE] preprocess rule '{$ruleId}'");
+        }
+        foreach ($result['skipped'] as $ruleId) {
+            $output->writeln("  [SKIP]   preprocess rule '{$ruleId}' (not in confirmed state — left as is)", OutputInterface::VERBOSITY_VERBOSE);
+        }
+        foreach ($result['unchanged'] as $ruleId) {
+            $output->writeln("  [OK]     preprocess rule '{$ruleId}'", OutputInterface::VERBOSITY_VERBOSE);
+        }
+    }
+
     private function provisionAiAnalyzer(
         array $resolvedModules,
         DataSourceConnection $dsConnection,

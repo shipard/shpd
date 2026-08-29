@@ -515,6 +515,26 @@ class DsUpgradeCommandTest extends TestCase
         $this->assertStringNotContainsString('[RENAME]', $display);
     }
 
+    public function testPreprocessRulesProvisionedUnderSkipProvisioning(): void
+    {
+        $this->createAiFixtureModules();
+        $this->dsConfig = $this->createSkipProvisioningConfig(['test.unit', 'core.mail']);
+
+        // fetchRow → null = katalog se zakládá celý; běží i pod skipProvisioning.
+        $this->dsConnection->method('getTableColumns')->willReturn([]);
+        $this->dsConnection->method('getTableIndexes')->willReturn([]);
+        $this->dsConnection->method('executeSQL');
+
+        $tester = $this->createCommandTester();
+        $exitCode = $tester->execute([]);
+
+        $this->assertSame(Command::SUCCESS, $exitCode);
+        $display = $tester->getDisplay();
+        $this->assertStringContainsString("[CREATE] preprocess rule 'bolt-invoice-link'", $display);
+        $this->assertStringContainsString("[CREATE] preprocess rule 'apple-invoice-body'", $display);
+        $this->assertStringContainsString('Provisioning disabled via config', $display);
+    }
+
     public function testAiAnalyzerRenamesLegacyProfile(): void
     {
         $this->createAiFixtureModules();
@@ -553,6 +573,7 @@ class DsUpgradeCommandTest extends TestCase
 
         $this->assertSame(Command::SUCCESS, $exitCode);
         $this->assertStringNotContainsString('_ai_analyzer', $tester->getDisplay());
+        $this->assertStringNotContainsString('preprocess rule', $tester->getDisplay());
     }
 
     public function testUndecidedAccountChartSkipsSeedAndReportsTodo(): void

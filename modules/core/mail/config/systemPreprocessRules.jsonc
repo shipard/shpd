@@ -1,0 +1,52 @@
+{
+    // Systémový katalog pravidel předzpracování došlé pošty
+    // (tasks/mail-preprocess.md §2, issue #33 D2). Není to cfgItem —
+    // čte ho PreprocessRulesProvisioner při ds-upgrade a idempotentně
+    // upsertuje do core_mail_preprocess_rules dle `rule_id`:
+    //
+    //   - chybí            → INSERT (origin system; docState 40, u `phase: 2`
+    //                        rovnou 70 = archivované, aktivace až s #34)
+    //   - existuje ve 40   → UPDATE obsahových polí (match + actions + notice);
+    //                        hit_count/last_hit_at/created zůstávají
+    //   - archivované/smazané/koncept → beze změny (nekřísí se)
+    //
+    // Přizpůsobení systémového pravidla = archivovat ho a založit
+    // uživatelskou kopii; úpravy pravidla ve stavu 40 další ds-upgrade
+    // přepíše. Vzorky jsou `Fwd:` forwardy — kotvíme přes body_regex, ne
+    // přes odesílatele (D11). Regexy jsou PCRE bez oddělovačů, case-insensitive.
+
+    "rules": [
+        {
+            "rule_id": "bolt-invoice-link",
+            "notice": "Bolt — faktura za odkazem invoice.bolt.eu (awstrack redirect)",
+            "body_regex": "invoice\\.bolt\\.eu",
+            "actions": [
+                {
+                    "action": "fetchLinkedDocument",
+                    "linkHrefRegex": "invoice\\.bolt\\.eu",
+                    "allowedDomains": ["bolt.eu"]
+                }
+            ]
+        },
+        {
+            // Fáze 2 (#34): faktura je HTML tělem zprávy.
+            "rule_id": "apple-invoice-body",
+            "phase": 2,
+            "notice": "Apple — faktura/účtenka v HTML těle zprávy (render do PDF, Fáze 2)",
+            "body_regex": "no_reply@email\\.apple\\.com",
+            "actions": [
+                { "action": "renderBodyToPdf" }
+            ]
+        },
+        {
+            // Fáze 2 (#34): objednávka Google Play je HTML tělem zprávy.
+            "rule_id": "google-play-order",
+            "phase": 2,
+            "notice": "Google Play — objednávka/účtenka v HTML těle zprávy (render do PDF, Fáze 2)",
+            "body_regex": "googleplay-noreply@google\\.com|payments-noreply@google\\.com",
+            "actions": [
+                { "action": "renderBodyToPdf" }
+            ]
+        }
+    ]
+}

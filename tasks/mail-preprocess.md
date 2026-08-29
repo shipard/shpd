@@ -1,7 +1,7 @@
 # Došlá pošta: technické předzpracování zpráv před AI analýzou
 
 **Issue:** shipard/shpd#33 (rendering služba: #34)
-**Stav:** částečně — Fáze 1 hotová (2026-08-29, 6 commitů); Fáze 2 (`renderBodyToPdf`, `renderIfHtml`, aktivace Apple/Google) blokována #34
+**Stav:** Fáze 1 hotová (2026-08-29, 6 commitů); Fáze 2 (`renderBodyToPdf`, `renderIfHtml`, aktivace Apple/Google) má vlastní PRD: `tasks/mail-preprocess-phase2.md` (D14–D18)
 
 ## Cíl
 
@@ -35,7 +35,8 @@ klasifikace selhala / bez dokumentu).
   (bez `renderIfHtml`), odklad ISDOC, gate AI fronty, viewer + form.
 - **Fáze 2 (po #34):** akce `renderBodyToPdf`, parametr `renderIfHtml`
   u fetch, aktivace systémových pravidel Apple/Google (do té doby jsou
-  v katalogu, ale archivovaná — viz níže).
+  v katalogu, ale archivovaná — viz níže). PRD:
+  `tasks/mail-preprocess-phase2.md`.
 
 ## Scope — Fáze 1
 

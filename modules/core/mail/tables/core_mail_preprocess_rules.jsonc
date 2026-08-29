@@ -75,6 +75,21 @@
             "group": "rule"
         },
         {
+            // Fáze katalogu, ve které pravidlo naposledy provisionoval systém
+            // (tasks/mail-preprocess-phase2.md D14). Provisioner odarchivuje
+            // systémové pravidlo jen když je archivované se system_phase > 1
+            // a katalog ho posunul na fázi 1; uživatelem archivované živé
+            // pravidlo má 1 → nekřísí se. U uživatelských pravidel vždy 1.
+            "id": "system_phase",
+            "name": "System phase",
+            "name:cs": "Fáze systému",
+            "name:en": "System phase",
+            "type": "tinyint",
+            "nullable": false,
+            "default": 1,
+            "group": "rule"
+        },
+        {
             // Uspořádaný seznam akcí: JSON `[{"action": "...", ...params}]`.
             // Klíče akcí viz config/preprocessActions.jsonc.
             "id": "actions",

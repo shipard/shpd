@@ -12,7 +12,9 @@ přílohu — a teprve pak zpráva doteče do AI fronty. Koncept a provoz:
 pravidla ve stavu 40.** Systémová pravidla (`origin = system`) zakládá
 a aktualizuje `PreprocessRulesProvisioner` při `ds-upgrade`; archivované
 (70) ani smazané (90) systémové pravidlo se nekřísí — přizpůsobení =
-archivovat systémové a založit uživatelskou kopii.
+archivovat systémové a založit uživatelskou kopii. Jediná výjimka je
+aktivace pravidla z pozdější fáze katalogu (`system_phase`, viz níže):
+archivované bylo systémem, ne uživatelem.
 
 ## Struktura
 
@@ -22,6 +24,7 @@ archivovat systémové a založit uživatelskou kopii.
 |---|---|---|
 | `rule_id` | varchar(60), NOT NULL, unique | Stabilní klíč: u systémových z katalogu (`bolt-invoice-link`), u uživatelských generuje `PreprocessRuleDocument` (`user-…`) |
 | `origin` | enumString(10), NOT NULL, default `user` | `system` \| `user` — `core.mail.preprocessRuleOrigins` |
+| `system_phase` | tinyint, NOT NULL, default 1 | Fáze katalogu, ve které pravidlo naposledy provisionoval systém. Pravidlo založené z katalogu s `phase: 2` vzniká archivované se `system_phase = 2`; když katalog přejde na fázi 1, provisioner ho **aktivuje** (70 → 40, `system_phase = 1`). Uživatelem archivované živé pravidlo má `system_phase = 1` → nekřísí se. U uživatelských pravidel vždy 1, bez významu |
 | `actions` | longtext, NOT NULL | JSON: uspořádaný seznam `[{"action": "fetchLinkedDocument", "linkHrefRegex": "…", "allowedDomains": ["…"]}]`. Klíče akcí: `core.mail.preprocessActions`; akce s `phase > 1` validace odmítne |
 | `notice` | varchar(250) | Lidský popis pravidla (zobrazuje se v seznamu) |
 

@@ -76,6 +76,13 @@ class AnalysisController
     public const ANALYSIS_ANALYZED = 30;
     public const ANALYSIS_FAILED = 70;
 
+    /**
+     * preprocess_state (core.mail.preprocessStates), ve kterých zpráva do
+     * fronty nepatří — technické předzpracování ještě nedoběhlo (gate,
+     * tasks/mail-preprocess.md D9). Ortogonální k analysis_state.
+     */
+    public const PREPROCESS_BLOCKING_STATES = [10, 20];
+
     private const DEFAULT_LEASE_SECONDS = 300;
     private const MIN_LEASE_SECONDS = 60;
     private const MAX_LEASE_SECONDS = 900;
@@ -234,6 +241,7 @@ class AnalysisController
                JOIN %n mb ON mb.id = m.mailbox
               WHERE m.analysis_state = %i
                 AND m.docState NOT IN %in
+                AND m.preprocess_state NOT IN %in
                 AND (m.ai_analysis_enabled IS NULL OR m.ai_analysis_enabled = %i)
                 AND (mb.ai_analysis_disabled = %i OR m.ai_analysis_enabled = %i)
                 AND NOT EXISTS (
@@ -248,6 +256,7 @@ class AnalysisController
             self::MAILBOXES_TABLE,
             self::ANALYSIS_QUEUED,
             [self::DOC_STATE_ARCHIVED, self::DOC_STATE_TRASH],
+            self::PREPROCESS_BLOCKING_STATES,
             1,
             0,
             1,
@@ -289,6 +298,7 @@ class AnalysisController
                JOIN %n mb ON mb.id = m.mailbox
               WHERE m.analysis_state = %i
                 AND m.docState NOT IN %in
+                AND m.preprocess_state NOT IN %in
                 AND (m.ai_analysis_enabled IS NULL OR m.ai_analysis_enabled = %i)
                 AND (mb.ai_analysis_disabled = %i OR m.ai_analysis_enabled = %i)
                 AND NOT EXISTS (
@@ -301,6 +311,7 @@ class AnalysisController
             self::MAILBOXES_TABLE,
             self::ANALYSIS_QUEUED,
             [self::DOC_STATE_ARCHIVED, self::DOC_STATE_TRASH],
+            self::PREPROCESS_BLOCKING_STATES,
             1,
             0,
             1,
@@ -369,7 +380,7 @@ class AnalysisController
             // INSERT do claims (tabulka nemá partial unique). Spec §3.2
             // "Atomicky" + §2.4 popis invariantu max-jedna-aktivní-claim.
             $msgRow = $dibi->fetch(
-                'SELECT id, analysis_state, profile_override FROM %n WHERE id = %i FOR UPDATE',
+                'SELECT id, analysis_state, preprocess_state, profile_override FROM %n WHERE id = %i FOR UPDATE',
                 self::MESSAGES_TABLE,
                 $messageNdx,
             );
@@ -382,6 +393,16 @@ class AnalysisController
                 return Response::error(
                     'INVALID_STATE',
                     'Message is not queued for analysis (analysis_state != 10)',
+                    409,
+                );
+            }
+            // Gate předzpracování i na claimu — /queue zprávu nevydá, ale
+            // analyzer může claimovat ze staršího snapshotu fronty.
+            if (in_array((int) ($msgRow['preprocess_state'] ?? 0), self::PREPROCESS_BLOCKING_STATES, true)) {
+                $dibi->rollback();
+                return Response::error(
+                    'INVALID_STATE',
+                    'Message is being preprocessed (preprocess_state in 10/20)',
                     409,
                 );
             }

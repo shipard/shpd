@@ -247,9 +247,64 @@ class AnalysisControllerTest extends TestCase
         }
     }
 
+    public function testQueueExcludesMessagesUnderPreprocessing(): void
+    {
+        // Gate předzpracování (tasks/mail-preprocess.md D9): oba dotazy
+        // (výdej i COUNT) musí vyřadit preprocess_state 10/20.
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturnOnConsecutiveCalls(
+            ['login' => '_ai_analyzer'],
+            ['id' => 1],
+        );
+        $queueArgs = null;
+        $db->method('fetchAll')->willReturnCallback(
+            static function (...$args) use (&$queueArgs): array {
+                $queueArgs = $args;
+                return [];
+            },
+        );
+        $countArgs = null;
+        $db->method('fetchSingle')->willReturnCallback(
+            static function (...$args) use (&$countArgs): int {
+                $countArgs = $args;
+                return 0;
+            },
+        );
+
+        $ctrl = $this->controller($db);
+        $ctrl->queue($this->analyzerAuth(), $this->request('GET', '/_mail/analysis/queue'));
+
+        foreach (['výdej' => $queueArgs, 'COUNT' => $countArgs] as $label => $args) {
+            $this->assertNotNull($args, $label);
+            $this->assertStringContainsString('AND m.preprocess_state NOT IN %in', (string) $args[0], $label);
+            $this->assertContains([10, 20], $args, $label);
+        }
+    }
+
     // -------------------------------------------------------------------
     // /claim — pre-decrypt branches (no real DB needed)
     // -------------------------------------------------------------------
+
+    public function testClaimReturns409WhenMessageIsBeingPreprocessed(): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturn(['login' => '_ai_analyzer']);
+        $dibi = $this->createMock(\Dibi\Connection::class);
+        $dibi->method('fetch')->willReturn(new \Dibi\Row([
+            'id' => 42,
+            'analysis_state' => 10,
+            'preprocess_state' => 20, // runner právě běží
+            'profile_override' => null,
+        ]));
+        $db->method('getDibiConnection')->willReturn($dibi);
+
+        $ctrl = $this->controller($db);
+        $response = $ctrl->claim($this->analyzerAuth(), $this->request('POST', '/x', [], ['analyzer_id' => 'uuid-1']), 42);
+
+        $this->assertSame(409, $this->statusOf($response));
+        $this->assertSame('INVALID_STATE', $response->getPayload()['error']['code']);
+        $this->assertStringContainsString('preprocess', $response->getPayload()['error']['message']);
+    }
 
     public function testClaimRequiresAnalyzerId(): void
     {

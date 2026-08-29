@@ -20,6 +20,8 @@ use Shipard\Module\Core\Mail\BulkHeadersDetector;
 use Shipard\Module\Core\Mail\IdempotencyStore;
 use Shipard\Module\Core\Mail\IncomingMessageDocument;
 use Shipard\Module\Core\Mail\IsdocImportService;
+use Shipard\Module\Core\Mail\Preprocess\PreprocessRuleMatcher;
+use Shipard\Module\Core\Mail\Preprocess\PreprocessSpawner;
 use Shipard\Module\Core\Mail\MailRouterProvisioner;
 use Shipard\Module\Core\Mail\SenderRuleMatcher;
 
@@ -39,6 +41,10 @@ class MailController
     /** docState Archiv (core.mail.docStatesIncoming) — cíl pre-triage. */
     private const DOC_STATE_ARCHIVED = 80;
 
+    /** preprocess_state „čeká" (core.mail.preprocessStates) — plán uložen, runner ještě neběžel. */
+    private const PREPROCESS_PENDING = 10;
+    private const PREPROCESS_RULES_TABLE = 'core_mail_preprocess_rules';
+
     /** Strop souborů v jedné dávce ručního uploadu (D6). */
     private const UPLOAD_MAX_FILES = 20;
 
@@ -53,6 +59,8 @@ class MailController
      * @param \Closure(): IsdocImportService|null $isdocImportFactory Lazy
      *        wiring deterministického ISDOC importu — service se staví až
      *        při prvním kandidátovi (intake bez ISDOC neplatí režii wiringu).
+     * @param \Closure(int): void|null $preprocessSpawner Test seam — náhrada
+     *        detached spawnu runneru předzpracování (default PreprocessSpawner).
      */
     public function __construct(
         private readonly DataSourceConnection $db,
@@ -62,6 +70,7 @@ class MailController
         private readonly ?ConfigRuntime $config = null,
         private readonly ?DataSourceConfig $dsConfig = null,
         private readonly ?\Closure $isdocImportFactory = null,
+        private readonly ?\Closure $preprocessSpawner = null,
     ) {
         $this->attachments = new AttachmentService($db, $dsPath, $tables);
         $this->idempotency = new IdempotencyStore($db);
@@ -149,16 +158,30 @@ class MailController
         // vzniká rovnou v Archivu, bez analýzy, s auditem na zprávě.
         $matchedRule = new SenderRuleMatcher($dibi)->match($fields['sender_email']);
 
+        // Technické předzpracování (tasks/mail-preprocess.md): jen zprávy,
+        // které nejdou do Archivu. Plán je snapshot pravidel v čase intake
+        // (D12) — runner vykonává jej, ne aktuální pravidla.
+        $preprocessPlan = $matchedRule === null ? $this->matchPreprocessPlan($fields) : null;
+
         $dibi->begin();
 
         try {
-            $messageId = $this->insertIncomingMessage($fields, $mailboxId, $auth->userId, $matchedRule);
+            $messageId = $this->insertIncomingMessage($fields, $mailboxId, $auth->userId, $matchedRule, $preprocessPlan);
 
             if ($matchedRule !== null) {
                 $dibi->query(
                     'UPDATE core_mail_sender_rules SET hit_count = hit_count + 1, last_hit_at = %s WHERE id = %i',
                     date('Y-m-d H:i:s'),
                     (int) $matchedRule['id'],
+                );
+            }
+
+            if ($preprocessPlan !== null) {
+                $dibi->query(
+                    'UPDATE %n SET hit_count = hit_count + 1, last_hit_at = %s WHERE id IN %in',
+                    self::PREPROCESS_RULES_TABLE,
+                    date('Y-m-d H:i:s'),
+                    array_column($preprocessPlan, 'ruleNdx'),
                 );
             }
 
@@ -216,9 +239,15 @@ class MailController
 
             // Deterministický ISDOC import (tasks/mail-isdoc-import.md) —
             // až po commitu intake tx, nikdy nesmí shodit příjem pošty.
-            // Auto-archivovaná zpráva žádné zpracování nedostává.
+            // Auto-archivovaná zpráva žádné zpracování nedostává. Zpráva
+            // s plánem předzpracování ISDOC větev přeskočí (D10) — převezme
+            // ji runner nad původními i vygenerovanými přílohami.
             if ($matchedRule === null) {
-                $this->runIsdocImport($messageId, $contentAttachments);
+                if ($preprocessPlan === null) {
+                    $this->runIsdocImport($messageId, $contentAttachments);
+                } else {
+                    $this->spawnPreprocess($messageId);
+                }
             }
 
             return Response::success($responseData, 201);
@@ -260,6 +289,46 @@ class MailController
             ($this->isdocImportFactory)()->tryImport($messageId, $contentAttachments);
         } catch (\Throwable $e) {
             ErrorLogger::logException($e, 'MailController::receiveIncoming ISDOC import failed');
+        }
+    }
+
+    /**
+     * Plán předzpracování dle potvrzených pravidel; null = žádné pravidlo
+     * nematchlo (zpráva jde dnešní cestou). Selhání matcheru nikdy nesmí
+     * shodit příjem pošty — zpráva pak projde bez předzpracování.
+     *
+     * @param array<string, mixed> $fields
+     * @return list<array{ruleId: string, ruleNdx: int, actions: list<array<string, mixed>>}>|null
+     */
+    private function matchPreprocessPlan(array $fields): ?array
+    {
+        try {
+            return new PreprocessRuleMatcher($this->db->getDibiConnection())->match(
+                (string) $fields['sender_email'],
+                (string) ($fields['subject'] ?? ''),
+                $fields['body_html'] ?? null,
+                $fields['body_plain'] ?? null,
+            );
+        } catch (\Throwable $e) {
+            ErrorLogger::logException($e, 'MailController::receiveIncoming preprocess matcher failed — message goes through without preprocessing');
+            return null;
+        }
+    }
+
+    /**
+     * Detached spawn runneru předzpracování po commitu intake (D8).
+     * Selhání jen zaloguje — zprávu ve stavu 10 zvedne rescue sweep.
+     */
+    private function spawnPreprocess(int $messageId): void
+    {
+        try {
+            if ($this->preprocessSpawner !== null) {
+                ($this->preprocessSpawner)($messageId);
+                return;
+            }
+            new PreprocessSpawner($this->dsPath)->spawn($messageId);
+        } catch (\Throwable $e) {
+            ErrorLogger::logException($e, 'MailController::receiveIncoming preprocess spawn failed — sweep will pick the message up');
         }
     }
 
@@ -770,12 +839,17 @@ class MailController
      * @param array<string, mixed>|null $matchedRule Potvrzené pravidlo
      *        odesílatele (pre-triage) — zpráva pak vzniká rovnou v Archivu
      *        (80), bez analýzy, s auditem `auto_disposed_*`.
+     * @param list<array<string, mixed>>|null $preprocessPlan Plán
+     *        předzpracování — zpráva vzniká s `preprocess_state=10` a plánem
+     *        v `preprocess_log` (snapshot, D12). `analysis_state` se počítá
+     *        beze změny — osy jsou ortogonální (D9), frontu hlídá gate.
      */
     private function insertIncomingMessage(
         array $fields,
         int $mailboxId,
         int $authorId,
         ?array $matchedRule = null,
+        ?array $preprocessPlan = null,
     ): int {
         $doc = $this->documentRegistry->getDocument(self::MAIL_TABLE);
         $dibi = $this->db->getDibiConnection();
@@ -804,6 +878,16 @@ class MailController
             $data['analysis_state'] = 0;
             $data['auto_disposed_by'] = (int) $matchedRule['id'];
             $data['auto_disposed_at'] = date('Y-m-d H:i:s');
+        }
+
+        if ($preprocessPlan !== null) {
+            $data['preprocess_state'] = self::PREPROCESS_PENDING;
+            $data['preprocess_log'] = (string) json_encode([
+                'plan' => $preprocessPlan,
+                'results' => [],
+                'attempts' => 0,
+                'createdAt' => date('c'),
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         }
 
         $validation = $doc->validate($data);

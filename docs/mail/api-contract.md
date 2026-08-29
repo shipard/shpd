@@ -229,6 +229,14 @@ a Archiv zprávu z fronty přirozeně vyřadí — `ai_analysis_enabled NOT FALS
 bez aktivní claim. Workflow `docState` se jinak nekontroluje (osy jsou
 ortogonální, viz `modules/core/mail/docs/ai-analysis.md` „Stavy zprávy").
 
+**Gate předzpracování:** navíc `preprocess_state NOT IN (10, 20)` — zpráva,
+které běží technické předzpracování (stažení dokladu z odkazu, viz
+`modules/core/mail/docs/preprocess.md`), se do fronty ani do
+`total_available` nedostane, dokud runner neskončí (30 hotovo / 40 hotovo
+s chybami). Selhání předzpracování frontu **nikdy neblokuje** — zpráva
+doteče se stavem 40. Stejnou podmínku kontroluje i `/claim` (409
+`INVALID_STATE`), kdyby analyzer claimoval ze staršího snapshotu fronty.
+
 ### 9.2 `POST /_mail/analysis/{ndx}/claim`
 
 Request body:

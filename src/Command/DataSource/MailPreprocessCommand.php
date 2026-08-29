@@ -25,6 +25,9 @@ use Symfony\Component\Console\Output\OutputInterface;
  */
 class MailPreprocessCommand extends Command
 {
+    private ?ServerConfig $serverConfig = null;
+    private bool $serverConfigLoaded = false;
+
     public function __construct(
         private readonly ?DataSourceConfig $dsConfig = null,
         private readonly ?DataSourceConnection $dsConnection = null,
@@ -47,22 +50,46 @@ class MailPreprocessCommand extends Command
         return getcwd();
     }
 
+    /**
+     * Server config sdílí resolver modulů, log a rendering klient
+     * (`render` sekce); nenačitatelný = null, příkaz degraduje (default
+     * moduly, bez logu, render akce selhávají s `unconfigured`).
+     */
+    protected function loadServerConfig(): ?ServerConfig
+    {
+        if (!$this->serverConfigLoaded) {
+            $this->serverConfigLoaded = true;
+            try {
+                $sc = new ServerConfig();
+                $sc->load();
+                $this->serverConfig = $sc;
+            } catch (\Throwable) {
+                $this->serverConfig = null;
+            }
+        }
+        return $this->serverConfig;
+    }
+
     protected function buildResolver(): ModulePathResolver
     {
+        $sc = $this->loadServerConfig();
         try {
-            $sc = new ServerConfig();
-            $sc->load();
-            return ModulePathResolver::fromServerConfig($sc, dirname(__DIR__, 3) . '/modules');
+            if ($sc !== null) {
+                return ModulePathResolver::fromServerConfig($sc, dirname(__DIR__, 3) . '/modules');
+            }
         } catch (\Throwable) {
-            return new ModulePathResolver([dirname(__DIR__, 3) . '/modules']);
+            // fallback níže
         }
+        return new ModulePathResolver([dirname(__DIR__, 3) . '/modules']);
     }
 
     protected function getLogPath(): ?string
     {
+        $cfg = $this->loadServerConfig();
+        if ($cfg === null) {
+            return null;
+        }
         try {
-            $cfg = new ServerConfig();
-            $cfg->load();
             ErrorLogger::setLogLevel($cfg->getLogLevel());
             return $cfg->getLogFile();
         } catch (\Throwable) {
@@ -108,7 +135,13 @@ class MailPreprocessCommand extends Command
             $dsConfig = $this->dsConfig ?? new DataSourceConfig($dsDir);
             $dsConnection = $this->dsConnection ?? new DataSourceConnection($dsConfig);
             ErrorLogger::setDsId($dsConfig->getId());
-            $runner = $this->runner ?? PreprocessRunnerFactory::create($dsConfig, $dsConnection, $dsDir, $this->buildResolver());
+            $runner = $this->runner ?? PreprocessRunnerFactory::create(
+                $dsConfig,
+                $dsConnection,
+                $dsDir,
+                $this->buildResolver(),
+                $this->loadServerConfig(),
+            );
 
             if ($sweep) {
                 return $this->runSweep($runner, $output);

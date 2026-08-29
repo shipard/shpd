@@ -92,11 +92,18 @@ class PreprocessRuleDocumentTest extends TestCase
         }
     }
 
-    public function testPhaseTwoActionIsRejectedAsUnknown(): void
+    public function testReservedActionIsRejectedAsUnknown(): void
+    {
+        $data = $this->valid(['actions' => '[{"action":"convertOfficeToPdf"}]']);
+
+        $this->assertContains(['column' => 'actions', 'code' => 'unknown_action'], $this->errors($this->doc()->validate($data)));
+    }
+
+    public function testRenderBodyToPdfActionIsAccepted(): void
     {
         $data = $this->valid(['actions' => '[{"action":"renderBodyToPdf"}]']);
 
-        $this->assertContains(['column' => 'actions', 'code' => 'unknown_action'], $this->errors($this->doc()->validate($data)));
+        $this->assertTrue($this->doc()->validate($data)->isValid());
     }
 
     public function testFetchActionRequiresRegexAndDomains(): void

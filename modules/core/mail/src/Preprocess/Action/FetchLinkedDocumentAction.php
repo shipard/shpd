@@ -43,17 +43,18 @@ final class FetchLinkedDocumentAction implements PreprocessAction
     public const MAX_CANDIDATES = 5;
     public const ALLOWED_CONTENT_TYPES = ['application/pdf'];
 
-    private const MAIL_TABLE_ID = 303;
+    private readonly GeneratedAttachments $generated;
 
     /**
      * @param \Closure(string): list<string>|null $resolver host → IP adresy
      *        (test seam; default gethostbynamel).
      */
     public function __construct(
-        private readonly AttachmentService $attachments,
+        AttachmentService $attachments,
         private readonly HttpFetcher $http,
         private readonly ?\Closure $resolver = null,
     ) {
+        $this->generated = new GeneratedAttachments($attachments);
     }
 
     public function execute(array $message, string $ruleId, array $params): ActionResult
@@ -84,7 +85,7 @@ final class FetchLinkedDocumentAction implements PreprocessAction
         $notes = [];
 
         foreach (array_slice($candidates, 0, self::MAX_CANDIDATES) as $sourceUrl) {
-            $existing = $this->findExisting($messageId, $ruleId, $sourceUrl);
+            $existing = $this->generated->findExisting($messageId, $ruleId, self::KEY, $sourceUrl);
             if ($existing !== null) {
                 return ActionResult::success("already present (attachment {$existing})", [$existing]);
             }
@@ -259,54 +260,18 @@ final class FetchLinkedDocumentAction implements PreprocessAction
      */
     private function store(int $messageId, string $ruleId, string $sourceUrl, array $fetched): array
     {
-        $tmp = tempnam(sys_get_temp_dir(), 'shpd_pp_');
-        if ($tmp === false || file_put_contents($tmp, (string) ($fetched['body'] ?? '')) === false) {
-            return ['ok' => false, 'note' => 'cannot write temporary file'];
-        }
-
-        // FileStorage soubor přesouvá (rename); při selhání uklidit sami.
-        $result = $this->attachments->upload(self::MAIL_TABLE_ID, $messageId, (string) $fetched['fileName'], $tmp, null);
-        if (is_file($tmp)) {
-            @unlink($tmp);
-        }
-        if (!($result['success'] ?? false)) {
-            return ['ok' => false, 'note' => 'attachment upload failed: ' . (string) ($result['error'] ?? 'unknown')];
-        }
-
-        $id = (int) ($result['data']['id'] ?? 0);
-        $this->attachments->mergeMetadata($id, [
-            'generatedBy' => 'preprocess',
-            'ruleId' => $ruleId,
-            'action' => self::KEY,
-            'sourceUrl' => $sourceUrl,
-            'finalUrl' => (string) $fetched['finalUrl'],
-            'fetchedAt' => date('c'),
-        ]);
-
-        return ['ok' => true, 'note' => '', 'id' => $id];
-    }
-
-    /** Idempotence dle provenance (ruleId, action, sourceUrl) mezi nesmazanými přílohami. */
-    private function findExisting(int $messageId, string $ruleId, string $sourceUrl): ?int
-    {
-        foreach ($this->attachments->listAttachments(self::MAIL_TABLE_ID, $messageId) as $file) {
-            $file = (array) $file;
-            $metadata = $file['metadata'] ?? null;
-            if (is_string($metadata)) {
-                $metadata = json_decode($metadata, true);
-            }
-            if (!is_array($metadata)) {
-                continue;
-            }
-            if (($metadata['generatedBy'] ?? null) === 'preprocess'
-                && ($metadata['action'] ?? null) === self::KEY
-                && ($metadata['ruleId'] ?? null) === $ruleId
-                && ($metadata['sourceUrl'] ?? null) === $sourceUrl
-            ) {
-                return (int) $file['id'];
-            }
-        }
-        return null;
+        return $this->generated->store(
+            $messageId,
+            (string) $fetched['fileName'],
+            (string) ($fetched['body'] ?? ''),
+            $ruleId,
+            self::KEY,
+            [
+                'sourceUrl' => $sourceUrl,
+                'finalUrl' => (string) $fetched['finalUrl'],
+                'fetchedAt' => date('c'),
+            ],
+        );
     }
 
     /**
@@ -376,14 +341,6 @@ final class FetchLinkedDocumentAction implements PreprocessAction
                 $name = $base;
             }
         }
-        $name = preg_replace('~[\\\\/:*?"<>|\x00-\x1F]+~', '_', $name) ?? '';
-        $name = trim($name, ' ._');
-        if ($name === '') {
-            $name = 'document.pdf';
-        }
-        if (!str_ends_with(strtolower($name), '.pdf')) {
-            $name .= '.pdf';
-        }
-        return mb_substr($name, 0, 150);
+        return GeneratedAttachments::sanitizePdfFileName($name, 'document.pdf');
     }
 }

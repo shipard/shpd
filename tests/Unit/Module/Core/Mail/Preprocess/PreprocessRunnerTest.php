@@ -12,8 +12,10 @@ use Shipard\Module\Core\Mail\IsdocImportService;
 use Shipard\Module\Core\Mail\Preprocess\ActionRegistry;
 use Shipard\Module\Core\Mail\Preprocess\ActionResult;
 use Shipard\Module\Core\Mail\Preprocess\PreprocessAction;
+use Shipard\Core\Render\RenderClient;
 use Shipard\Module\Core\Mail\Preprocess\PreprocessRuleMatcher;
 use Shipard\Module\Core\Mail\Preprocess\PreprocessRunner;
+use Shipard\Module\Core\Mail\Preprocess\PreprocessRunnerFactory;
 
 /** Akce, která si zapíše volání a vrátí předem daný výsledek. */
 final class RecordingAction implements PreprocessAction
@@ -192,6 +194,31 @@ class PreprocessRunnerTest extends TestCase
         $this->assertSame(40, $final['state']);
         $this->assertFalse($final['log']['results'][0]['ok']);
         $this->assertSame('link expired (HTTP 404)', $final['log']['results'][0]['note']);
+    }
+
+    public function testRenderBodyToPdfPlanRunsThroughDefaultRegistryAndUnconfiguredRenderEndsInForty(): void
+    {
+        // Produkční registr (defaultActions) s nenakonfigurovanou render
+        // službou: akce selže provozně, zpráva doteče do 40 a projde gate fronty.
+        $message = $this->message(['preprocess_log' => json_encode([
+            'plan' => [['ruleId' => 'apple-invoice-body', 'ruleNdx' => 2, 'actions' => [['action' => 'renderBodyToPdf']]]],
+            'results' => [],
+            'attempts' => 0,
+        ])]);
+        $db = $this->db($message);
+        $attachments = $this->attachments();
+        $registry = PreprocessRunnerFactory::defaultActions($db, $attachments, new RenderClient(null));
+        $this->assertContains('renderBodyToPdf', $registry->keys());
+
+        $result = new PreprocessRunner($db, $attachments, $registry)->run(42);
+
+        $this->assertSame('done_with_errors', $result['status']);
+        $final = $this->finalWrite();
+        $this->assertSame(40, $final['state']);
+        $this->assertSame('renderBodyToPdf', $final['log']['results'][0]['action']);
+        $this->assertSame('apple-invoice-body', $final['log']['results'][0]['ruleId']);
+        $this->assertFalse($final['log']['results'][0]['ok']);
+        $this->assertStringContainsString('unconfigured', $final['log']['results'][0]['note']);
     }
 
     public function testUnknownActionAndThrowingActionAreRecordedAsFailures(): void

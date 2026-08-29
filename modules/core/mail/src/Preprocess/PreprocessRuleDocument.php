@@ -8,6 +8,7 @@ use Shipard\Core\Document\Document;
 use Shipard\Core\Document\ValidationError;
 use Shipard\Core\Document\ValidationResult;
 use Shipard\Module\Core\Mail\Preprocess\Action\FetchLinkedDocumentAction;
+use Shipard\Module\Core\Mail\Preprocess\Action\RenderBodyToPdfAction;
 
 /**
  * Document třída pro `core_mail_preprocess_rules` (tasks/mail-preprocess.md §7).
@@ -17,7 +18,7 @@ use Shipard\Module\Core\Mail\Preprocess\Action\FetchLinkedDocumentAction;
  *   - formát podmínek: e-mail s `@`, doména bez `@` a s tečkou, regexy
  *     kompilovatelné (PCRE bez oddělovačů)
  *   - `actions` = neprázdný JSON seznam akcí; klíč akce musí být
- *     implementovaný runnerem (Fáze 2 akce validace odmítne), povinné
+ *     implementovaný runnerem (rezervované akce validace odmítne), povinné
  *     parametry per akci
  *   - `rule_id`: formát, unikátnost mezi živými pravidly (10/40/80);
  *     u uživatelských se generuje `user-…`
@@ -31,10 +32,10 @@ class PreprocessRuleDocument extends Document
 
     /**
      * Akce, které runner umí vykonat (zrcadlo PreprocessRunnerFactory::
-     * defaultActions). renderBodyToPdf/convertOfficeToPdf jsou v katalogu
-     * cfgItem preprocessActions s phase 2 — validace je odmítne.
+     * defaultActions). convertOfficeToPdf je v katalogu cfgItem
+     * preprocessActions s phase 2 (rezervováno, D18) — validace ho odmítne.
      */
-    public const IMPLEMENTED_ACTIONS = [FetchLinkedDocumentAction::KEY];
+    public const IMPLEMENTED_ACTIONS = [FetchLinkedDocumentAction::KEY, RenderBodyToPdfAction::KEY];
 
     private const MATCH_COLUMNS = ['sender_email', 'sender_domain', 'subject_regex', 'body_regex'];
     private const RULE_ID_PATTERN = '~^[a-z0-9][a-z0-9-]{1,58}$~';

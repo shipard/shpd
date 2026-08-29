@@ -211,16 +211,21 @@ class CronCommandTest extends TestCase
         [$cmd, $tester] = $this->makeTester();
         $exit = $tester->execute(['--slot' => 'minute']);
 
+        // Per DS všechny joby slotu v deklarovaném pořadí, DS seřazené.
         $this->assertSame(0, $exit);
         $this->assertSame([
             ['ds' => 'aaaa-aaaa-aaaa-aaaa', 'job' => 'mail-outbox-run'],
+            ['ds' => 'aaaa-aaaa-aaaa-aaaa', 'job' => 'mail-analysis-reap'],
+            ['ds' => 'aaaa-aaaa-aaaa-aaaa', 'job' => 'mail-preprocess --sweep'],
             ['ds' => 'bbbb-bbbb-bbbb-bbbb', 'job' => 'mail-outbox-run'],
+            ['ds' => 'bbbb-bbbb-bbbb-bbbb', 'job' => 'mail-analysis-reap'],
+            ['ds' => 'bbbb-bbbb-bbbb-bbbb', 'job' => 'mail-preprocess --sweep'],
         ], $cmd->callLog);
     }
 
     public function testSlotJobsMapping(): void
     {
-        $this->assertSame(['mail-outbox-run'], CronCommand::SLOT_JOBS['minute']);
+        $this->assertSame(['mail-outbox-run', 'mail-analysis-reap', 'mail-preprocess --sweep'], CronCommand::SLOT_JOBS['minute']);
         $this->assertSame(['alerts-run'], CronCommand::SLOT_JOBS['five-minutes']);
         $this->assertSame(['mail-idempotency-prune'], CronCommand::SLOT_JOBS['daily']);
         $this->assertSame(['alerts-prune'], CronCommand::SLOT_JOBS['weekly']);
@@ -233,19 +238,19 @@ class CronCommandTest extends TestCase
 
         [$cmd, $tester] = $this->makeTester();
         $cmd->setJobResults([
-            'aaaa-aaaa-aaaa-aaaa mail-outbox-run' => ['exitCode' => 1, 'timedOut' => false, 'output' => 'boom'],
+            'aaaa-aaaa-aaaa-aaaa mail-idempotency-prune' => ['exitCode' => 1, 'timedOut' => false, 'output' => 'boom'],
         ]);
 
-        $exit = $tester->execute(['--slot' => 'minute']);
+        $exit = $tester->execute(['--slot' => 'daily']);
 
         $this->assertSame(0, $exit);
         $this->assertCount(2, $cmd->callLog);
 
-        $hb = $this->readHeartbeat('minute');
+        $hb = $this->readHeartbeat('daily');
         $this->assertSame(1, $hb['failedCount']);
         $this->assertSame(2, $hb['jobsRun']);
         $this->assertSame('aaaa-aaaa-aaaa-aaaa', $hb['failures'][0]['ds']);
-        $this->assertSame('mail-outbox-run', $hb['failures'][0]['job']);
+        $this->assertSame('mail-idempotency-prune', $hb['failures'][0]['job']);
         $this->assertSame(1, $hb['failures'][0]['exitCode']);
 
         $log = (string) file_get_contents($this->logPath);
@@ -282,11 +287,11 @@ class CronCommandTest extends TestCase
         mkdir($this->dsDir . '/lost+found', 0755, true);
 
         [$cmd, $tester] = $this->makeTester();
-        $exit = $tester->execute(['--slot' => 'minute']);
+        $exit = $tester->execute(['--slot' => 'daily']);
 
         $this->assertSame(0, $exit);
-        $this->assertSame([['ds' => 'aaaa-aaaa-aaaa-aaaa', 'job' => 'mail-outbox-run']], $cmd->callLog);
-        $this->assertSame(1, $this->readHeartbeat('minute')['dsCount']);
+        $this->assertSame([['ds' => 'aaaa-aaaa-aaaa-aaaa', 'job' => 'mail-idempotency-prune']], $cmd->callLog);
+        $this->assertSame(1, $this->readHeartbeat('daily')['dsCount']);
     }
 
     public function testMissingDataSourcesDirIsInfraFailure(): void

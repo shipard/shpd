@@ -21,7 +21,7 @@ use Shipard\Core\Logging\ErrorLogger;
  * dle `id`. Plán se ukládá na zprávu jako snapshot — runner vykonává jej,
  * ne aktuální stav pravidel (D12).
  */
-final class PreprocessRuleMatcher
+class PreprocessRuleMatcher
 {
     /** docState potvrzeného pravidla (core.system.docStatesArchive). */
     public const DOC_STATE_CONFIRMED = 40;

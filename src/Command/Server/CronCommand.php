@@ -25,9 +25,14 @@ use Symfony\Component\Console\Output\OutputInterface;
  */
 class CronCommand extends Command
 {
-    /** slot → per-DS shpd-ds příkazy; deklarativní registr v module.jsonc až bude jobů víc */
+    /**
+     * slot → per-DS shpd-ds příkazy (řetězec = příkaz + volby oddělené
+     * mezerou); deklarativní registr v module.jsonc až bude jobů víc.
+     * mail-preprocess --sweep je jen záchrana — primární spouštěč runneru
+     * je detached spawn z intake (tasks/mail-preprocess.md D8).
+     */
     public const SLOT_JOBS = [
-        'minute'       => ['mail-outbox-run'],
+        'minute'       => ['mail-outbox-run', 'mail-analysis-reap', 'mail-preprocess --sweep'],
         'two-minutes'  => [],
         'five-minutes' => ['alerts-run'],
         'daily'        => ['mail-idempotency-prune'],
@@ -255,7 +260,8 @@ class CronCommand extends Command
      */
     protected function runJob(string $dsDir, string $job): array
     {
-        return $this->runProcessJob([$this->getShpdDsPath(), $job], $dsDir);
+        $argv = preg_split('/\s+/', trim($job)) ?: [$job];
+        return $this->runProcessJob([$this->getShpdDsPath(), ...$argv], $dsDir);
     }
 
     /**

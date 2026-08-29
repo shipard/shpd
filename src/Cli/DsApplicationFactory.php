@@ -44,6 +44,7 @@ final class DsApplicationFactory
         $app->add(new \Shipard\Command\DataSource\AiAnalyzerSetKeyCommand());
         $app->add(new \Shipard\Command\DataSource\AiProfileReloadCommand());
         $app->add(new \Shipard\Command\DataSource\MailAnalysisReapCommand());
+        $app->add(new \Shipard\Command\DataSource\MailPreprocessCommand());
         $app->add(new \Shipard\Command\DataSource\RegistryExtractTextsCommand());
         $app->add(new \Shipard\Command\DataSource\AlertsRunCommand());
         $app->add(new \Shipard\Command\DataSource\AlertsPruneCommand());

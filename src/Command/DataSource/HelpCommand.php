@@ -88,6 +88,7 @@ class HelpCommand extends Command
         $output->writeln('  <info>mail-outbox-run</info>         Process due messages in the outbound mail queue');
         $output->writeln('  <info>mail-outbox-retry</info>       Re-queue a failed outbound message');
         $output->writeln('  <info>mail-send-test</info>          Send a test message through the outbound mail transport');
+        $output->writeln('  <info>mail-preprocess</info>         Run the stored preprocess plan of a message (--message <id> [--force]) or rescue stuck ones (--sweep)');
         $output->writeln('');
         $output->writeln('<comment>Alerts:</comment>');
         $output->writeln('  <info>alerts-run</info>              Run due alert checks (or a single check)');

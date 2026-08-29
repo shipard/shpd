@@ -102,6 +102,7 @@ Kontrakty: [docs/mail/api-contract.md](../../../docs/mail/api-contract.md).
 | `bin/shpd-ds ai-analyzer-setup [--force] [--ip=X]` | API klíč pro AI analyzer. |
 | `bin/shpd-ds ai-analyzer-set-key --backend default --api-key sk-ant-...` | Nastaví/zrotuje API klíč backendu (šifruje přes `DsSecretCipher`). |
 | `bin/shpd-ds mail-analysis-reap` | Reaper expirovaných claimů (cron 1×/min). |
+| `bin/shpd-ds mail-preprocess --message <id> [--force]` / `--sweep` | Runner technického předzpracování zprávy (plán z intake) / záchrana zaseknutých (cron 1×/min). Viz [docs/preprocess.md](docs/preprocess.md). |
 
 `ai-analyzer-bootstrap` a `mail-router-bootstrap` se volají automaticky z `ds-upgrade`.
 

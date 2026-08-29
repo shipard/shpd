@@ -232,7 +232,7 @@ slotu subprocesem `shpd-ds <cmd>` s cwd v adresáři DS:
 
 | Slot | Kadence | Příkazy |
 |------|---------|---------|
-| `minute` | každou minutu | `mail-outbox-run` |
+| `minute` | každou minutu | `mail-outbox-run`, `mail-analysis-reap`, `mail-preprocess --sweep` |
 | `two-minutes` | à 2 min | server-level: `hosting-sync` |
 | `five-minutes` | à 5 min | `alerts-run` (self-throttling přes `next_run_at`) |
 | `daily` | denně 03:17 | `mail-idempotency-prune` |
@@ -834,6 +834,27 @@ sudo shpd-ds mail-analysis-reap
 
 Uvolní vypršené AI analysis claims (zaseknutí workeři) a re-queueuje
 postižené zprávy. Bezpečné spouštět opakovaně (např. z cronu).
+
+#### `mail-preprocess`
+
+```bash
+sudo shpd-ds mail-preprocess --message 1234          # vykoná uložený plán zprávy
+sudo shpd-ds mail-preprocess --message 1234 --force  # re-match pravidel + přegenerování
+sudo shpd-ds mail-preprocess --sweep                 # záchrana zaseknutých (cron, minute slot)
+```
+
+Runner technického předzpracování došlé zprávy (`modules/core/mail/docs/preprocess.md`).
+`--message` claimne zprávu ve stavu Čeká (10 → 20) a vykoná **plán uložený
+při intake** — změna pravidel po přijetí plán nemění; zpráva, která není
+ve stavu 10, skončí tiše (`Skipped`). Primárně ho spouští intake detached
+spawnem, ručně se hodí při ladění. Selhání akce není chyba příkazu — zpráva
+skončí ve stavu Hotovo s chybami (40) a projde do AI fronty.
+
+| Opce | Význam |
+|------|--------|
+| `--message <id>` | Id zprávy (`core_mail_incoming_messages.id`) |
+| `--force` | Re-match dle **aktuálních** potvrzených pravidel, smazání dříve vygenerovaných příloh (dle provenance) a přegenerování. Funguje i na stavech 0/30/40 — ladění nového pravidla nad starou zprávou. Odmítne zprávu s aktivním AI claimem (`analysis_state=20`) |
+| `--sweep` | Rescue: stav 10 starší než 5 min (spawn selhal) a stav 20 starší než 15 min (proces umřel) → zpět na 10 + spawn; po 3 pokusech stav 40. Exit 0 i bez nálezu |
 
 ### Hosting
 

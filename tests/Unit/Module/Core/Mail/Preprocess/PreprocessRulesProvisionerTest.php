@@ -75,6 +75,8 @@ class PreprocessRulesProvisionerTest extends TestCase
         return array_merge([
             'id' => 7,
             'docState' => 40,
+            'origin' => 'system',
+            'system_phase' => 1,
             'sender_email' => null,
             'sender_domain' => null,
             'subject_regex' => null,
@@ -106,9 +108,124 @@ class PreprocessRulesProvisionerTest extends TestCase
         $this->assertSame('invoice\.bolt\.eu', $bolt['body_regex']);
         $this->assertSame('fetchLinkedDocument', json_decode($bolt['actions'], true)[0]['action']);
 
+        $this->assertSame(1, $bolt['system_phase']);
+
         $apple = $this->inserts[1]['data'];
         $this->assertSame(70, $apple['docState'], 'Fáze 2 pravidlo vzniká archivované');
         $this->assertSame(4, $apple['docStateMain']);
+        $this->assertSame(2, $apple['system_phase']);
+    }
+
+    // --- aktivace fáze-2 pravidel (D14) ------------------------------------
+
+    /** @return array<string, mixed> */
+    private function appleRule(array $overrides = []): array
+    {
+        return array_merge([
+            'rule_id' => 'apple-invoice-body',
+            'notice' => 'Apple',
+            'body_regex' => 'Apple Distribution International',
+            'actions' => [['action' => 'renderBodyToPdf']],
+        ], $overrides);
+    }
+
+    /** Řádek založený dřívějším ds-upgrade z katalogu s phase 2 (archivovaný, stará kotva). */
+    private function archivedAppleRow(array $overrides = []): array
+    {
+        return array_merge($this->boltRow([
+            'id' => 9,
+            'docState' => 70,
+            'system_phase' => 2,
+            'body_regex' => 'no_reply@email\.apple\.com',
+            'actions' => '[{"action":"renderBodyToPdf"}]',
+            'notice' => 'Apple (Fáze 2)',
+        ]), $overrides);
+    }
+
+    public function testCatalogPhaseFlipActivatesSystemArchivedRule(): void
+    {
+        $path = $this->catalog([$this->appleRule()]);
+
+        $result = new PreprocessRulesProvisioner($this->db(['apple-invoice-body' => $this->archivedAppleRow()]), $path)->provision();
+
+        $this->assertSame(['apple-invoice-body'], $result['activated']);
+        $this->assertSame([], $result['skipped']);
+        $this->assertCount(1, $this->updates);
+        $this->assertSame(9, $this->updates[0]['id']);
+        $data = $this->updates[0]['data'];
+        $this->assertSame(40, $data['docState']);
+        $this->assertSame(3, $data['docStateMain']);
+        $this->assertSame(1, $data['system_phase']);
+        $this->assertSame('Apple Distribution International', $data['body_regex'], 'obsah se přebírá z katalogu (re-kotvení)');
+        $this->assertSame('Apple', $data['notice']);
+        foreach (['hit_count', 'last_hit_at', 'created', 'origin', 'rule_id'] as $untouched) {
+            $this->assertArrayNotHasKey($untouched, $data, $untouched);
+        }
+    }
+
+    public function testUserArchivedRuleWithPhaseOneIsNotResurrected(): void
+    {
+        $path = $this->catalog([$this->appleRule()]);
+        $row = $this->archivedAppleRow(['system_phase' => 1]);
+
+        $result = new PreprocessRulesProvisioner($this->db(['apple-invoice-body' => $row]), $path)->provision();
+
+        $this->assertSame(['apple-invoice-body'], $result['skipped']);
+        $this->assertSame([], $this->updates);
+    }
+
+    public function testArchivedRuleStaysArchivedWhileCatalogIsStillPhaseTwo(): void
+    {
+        $path = $this->catalog([$this->appleRule(['phase' => 2])]);
+
+        $result = new PreprocessRulesProvisioner($this->db(['apple-invoice-body' => $this->archivedAppleRow()]), $path)->provision();
+
+        $this->assertSame(['apple-invoice-body'], $result['skipped']);
+        $this->assertSame([], $this->updates);
+    }
+
+    public function testUserOriginArchivedRuleIsNeverActivated(): void
+    {
+        $path = $this->catalog([$this->appleRule()]);
+        $row = $this->archivedAppleRow(['origin' => 'user']);
+
+        $result = new PreprocessRulesProvisioner($this->db(['apple-invoice-body' => $row]), $path)->provision();
+
+        $this->assertSame(['apple-invoice-body'], $result['skipped']);
+        $this->assertSame([], $this->updates);
+    }
+
+    public function testRunAfterActivationIsUnchanged(): void
+    {
+        $path = $this->catalog([$this->appleRule()]);
+        $row = $this->boltRow([
+            'id' => 9,
+            'system_phase' => 1,
+            'body_regex' => 'Apple Distribution International',
+            'actions' => '[{"action":"renderBodyToPdf"}]',
+            'notice' => 'Apple',
+        ]);
+
+        $result = new PreprocessRulesProvisioner($this->db(['apple-invoice-body' => $row]), $path)->provision();
+
+        $this->assertSame(['apple-invoice-body'], $result['unchanged']);
+        $this->assertSame([], $this->updates);
+    }
+
+    public function testConfirmedRuleWithStalePhaseIsAlignedWithoutStateChange(): void
+    {
+        $path = $this->catalog([$this->boltRule()]);
+        $row = $this->boltRow(['system_phase' => 2]);
+
+        $result = new PreprocessRulesProvisioner($this->db(['bolt-invoice-link' => $row]), $path)->provision();
+
+        $this->assertSame(['bolt-invoice-link'], $result['updated']);
+        $this->assertCount(1, $this->updates);
+        $data = $this->updates[0]['data'];
+        $this->assertSame(1, $data['system_phase']);
+        $this->assertArrayHasKey('modified', $data);
+        $this->assertArrayNotHasKey('docState', $data);
+        $this->assertArrayNotHasKey('body_regex', $data, 'obsah shodný — dorovnává se jen fáze');
     }
 
     public function testSecondRunIsNoOp(): void
@@ -199,6 +316,8 @@ class PreprocessRulesProvisionerTest extends TestCase
             'no condition' => [['rule_id' => 'no-cond', 'actions' => [['action' => 'a']]]],
             'invalid regex' => [['rule_id' => 'bad-regex', 'body_regex' => '(', 'actions' => [['action' => 'a']]]],
             'no actions' => [['rule_id' => 'no-actions', 'body_regex' => 'x', 'actions' => []]],
+            'phase zero' => [['rule_id' => 'phase-zero', 'body_regex' => 'x', 'phase' => 0, 'actions' => [['action' => 'a']]]],
+            'phase string' => [['rule_id' => 'phase-str', 'body_regex' => 'x', 'phase' => '2', 'actions' => [['action' => 'a']]]],
         ];
 
         foreach ($cases as $label => $rules) {

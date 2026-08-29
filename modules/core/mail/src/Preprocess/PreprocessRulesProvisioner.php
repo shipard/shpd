@@ -14,10 +14,14 @@ use Shipard\Core\Utils\JsoncParser;
  * jsou systémový kontrakt modulu, ne migrovaná data; import-mode DS
  * přijímá poštu stejně).
  *
- * Per `rule_id`: chybí → INSERT (docState 40, resp. 70 u `phase > 1`);
- * existuje ve 40 → UPDATE obsahových polí, když se liší; jiný stav
- * (koncept, archiv, smazáno) → beze změny — archivované systémové
- * pravidlo se nekřísí, hit statistiky a `created` se nikdy nepřepisují.
+ * Per `rule_id`: chybí → INSERT (docState 40, resp. 70 u `phase > 1`,
+ * `system_phase` = fáze z katalogu); existuje ve 40 → UPDATE obsahových
+ * polí (+ dorovnání `system_phase`), když se liší; archivované systémové
+ * pravidlo se `system_phase > 1`, které katalog posunul na fázi 1 →
+ * **aktivace** (70 → 40, D14 — archivoval ho systém, ne uživatel); jiný
+ * stav (koncept, smazáno, archiv se `system_phase = 1`) → beze změny —
+ * uživatelem archivované pravidlo se nekřísí, hit statistiky a `created`
+ * se nikdy nepřepisují.
  */
 final class PreprocessRulesProvisioner
 {
@@ -38,29 +42,31 @@ final class PreprocessRulesProvisioner
     }
 
     /**
-     * @return array{created: list<string>, updated: list<string>, unchanged: list<string>, skipped: list<string>}
+     * @return array{created: list<string>, activated: list<string>, updated: list<string>, unchanged: list<string>, skipped: list<string>}
      */
     public function provision(): array
     {
-        $result = ['created' => [], 'updated' => [], 'unchanged' => [], 'skipped' => []];
+        $result = ['created' => [], 'activated' => [], 'updated' => [], 'unchanged' => [], 'skipped' => []];
         $now = date('Y-m-d H:i:s');
 
         foreach (self::loadCatalog($this->catalogPath) as $rule) {
             $ruleId = (string) $rule['rule_id'];
+            $phase = (int) ($rule['phase'] ?? 1);
             $content = self::contentOf($rule);
 
             $row = $this->db->fetchRow(
-                'SELECT id, docState, sender_email, sender_domain, subject_regex, body_regex, actions, notice'
+                'SELECT id, docState, origin, system_phase, sender_email, sender_domain, subject_regex, body_regex, actions, notice'
                 . ' FROM %n WHERE rule_id = %s',
                 self::TABLE,
                 $ruleId,
             );
 
             if ($row === null) {
-                $archived = ((int) ($rule['phase'] ?? 1)) > 1;
+                $archived = $phase > 1;
                 $this->db->insertRow(self::TABLE, $content + [
                     'rule_id' => $ruleId,
                     'origin' => 'system',
+                    'system_phase' => $phase,
                     'hit_count' => 0,
                     'last_hit_at' => null,
                     'created' => $now,
@@ -73,7 +79,26 @@ final class PreprocessRulesProvisioner
                 continue;
             }
 
-            if ((int) $row['docState'] !== self::DOC_STATE_CONFIRMED) {
+            $docState = (int) $row['docState'];
+            $rowPhase = (int) ($row['system_phase'] ?? 1);
+
+            // Aktivace (D14): archivoval systém (fáze > 1), katalog už je ve fázi 1.
+            if ($docState === self::DOC_STATE_ARCHIVED
+                && (string) ($row['origin'] ?? '') === 'system'
+                && $rowPhase > 1
+                && $phase <= 1
+            ) {
+                $this->db->updateWhere(self::TABLE, $content + [
+                    'system_phase' => 1,
+                    'docState' => self::DOC_STATE_CONFIRMED,
+                    'docStateMain' => self::DOC_STATE_MAIN_CONFIRMED,
+                    'modified' => $now,
+                ], 'id = %i', (int) $row['id']);
+                $result['activated'][] = $ruleId;
+                continue;
+            }
+
+            if ($docState !== self::DOC_STATE_CONFIRMED) {
                 $result['skipped'][] = $ruleId;
                 continue;
             }
@@ -82,12 +107,16 @@ final class PreprocessRulesProvisioner
             foreach (self::CONTENT_COLUMNS as $column) {
                 $current[$column] = $row[$column] ?? null;
             }
-            if (self::sameContent($current, $content)) {
+            $update = self::sameContent($current, $content) ? [] : $content;
+            if ($rowPhase !== $phase) {
+                $update['system_phase'] = $phase;
+            }
+            if ($update === []) {
                 $result['unchanged'][] = $ruleId;
                 continue;
             }
 
-            $this->db->updateWhere(self::TABLE, $content + ['modified' => $now], 'id = %i', (int) $row['id']);
+            $this->db->updateWhere(self::TABLE, $update + ['modified' => $now], 'id = %i', (int) $row['id']);
             $result['updated'][] = $ruleId;
         }
 
@@ -136,6 +165,9 @@ final class PreprocessRulesProvisioner
             }
             if (PreprocessRuleMatcher::decodeActions($rule['actions'] ?? null) === null) {
                 throw new \RuntimeException("systemPreprocessRules.jsonc: rule '{$ruleId}' has no valid actions");
+            }
+            if (array_key_exists('phase', $rule) && (!is_int($rule['phase']) || $rule['phase'] < 1)) {
+                throw new \RuntimeException("systemPreprocessRules.jsonc: rule '{$ruleId}' phase must be an integer >= 1");
             }
         }
 

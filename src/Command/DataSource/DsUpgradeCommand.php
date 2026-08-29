@@ -441,6 +441,9 @@ class DsUpgradeCommand extends Command
         foreach ($result['created'] as $ruleId) {
             $output->writeln("  [CREATE] preprocess rule '{$ruleId}'");
         }
+        foreach ($result['activated'] as $ruleId) {
+            $output->writeln("  [ACTIVATE] preprocess rule '{$ruleId}' (catalog phase reached — unarchived)");
+        }
         foreach ($result['updated'] as $ruleId) {
             $output->writeln("  [UPDATE] preprocess rule '{$ruleId}'");
         }

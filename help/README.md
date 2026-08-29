@@ -26,7 +26,9 @@ Tyhle stránky slouží dvěma čtenářům: tobě a vestavěnému AI asistentov
 | [Co Shipard dnes neumí](co-dnes-nejde.md) | Poctivý seznam chybějících funkcí a míst, kde ještě nemusí souhlasit čísla. |
 | [Co Shipard umí](co-shipard-umi.md) | Úplný přehled agend, které v aplikaci jsou — a u kterých z nich už je napsaný návod. |
 | [Informace o zdroji dat](o-zdroji-dat.md) | Kde zjistíš název a IČO vlastní firmy, adresu pro příjem pošty, plátcovství DPH, ID zdroje dat a kolik místa zabírají data a přílohy. |
+| [První nastavení zdroje dat](prvni-nastaveni.md) | Jak čerstvý zdroj dat nastavit přes kartu Dokončit nastavení — vlastní firma, DPH, bankovní účet, účtová osnova, fiskální rok a domácí měna. |
 | [Slovníček](slovnicek.md) | Co která věc v Shipardu znamená a jak se jmenuje v rozhraní. |
+| [Začínáme](zaciname.md) | Co dělat po prvním přihlášení — dokončit nastavení, dostat do Shipardu první fakturu a zorientovat se v levém panelu. |
 
 ### Osoby
 

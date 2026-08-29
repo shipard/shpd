@@ -54,13 +54,14 @@ ukazuje, co je právě potřeba udělat — nová pošta ke zpracování,
 upozornění na nesrovnalosti, rozdělané doklady.
 
 Čerstvý zdroj dat tě nenechá tápat: na Dashboardu uvidíš kartu
-**„Dokončit nastavení"**, která otevře průvodce prvotním nastavením.
-Ten tě provede tím podstatným — **vlastní firmu načte z registru**
-(stačí IČO), zeptá se na plátcovství DPH a předvyplní registraci,
-překlopí bankovní účty a nechá tě rozhodnout účtovou osnovu, domácí
-měnu a fiskální rok. Nic z toho není blokující — položky můžeš doplnit
-kdykoli později v *Nastavení*, karta ti bude chybějící věci připomínat.
-Bez vlastní firmy ale nepotvrdíš žádný doklad, takže s tímhle začni.
+**„Dokončit nastavení"**, která otevře panel **Nastavení zdroje dat**
+se seznamem toho, co ještě chybí — vlastní firma (načte se z registru,
+stačí IČO), plátcovství DPH, bankovní účet, účtová osnova, domácí měna
+a fiskální rok. Nic z toho není blokující a položky mizí samy, jak je
+doplňuješ. Bez vlastní firmy ale nepotvrdíš žádný doklad, takže s tímhle
+začni. Podrobný návod:
+[První nastavení zdroje dat](help/prvni-nastaveni.md); celkový rozjezd
+shrnuje stránka [Začínáme](help/zaciname.md).
 
 V levém panelu najdeš:
 

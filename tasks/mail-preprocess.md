@@ -1,7 +1,7 @@
 # Došlá pošta: technické předzpracování zpráv před AI analýzou
 
 **Issue:** shipard/shpd#33 (rendering služba: #34)
-**Stav:** naplánováno — připraveno k implementaci: Fáze 1; Fáze 2 blokována #34
+**Stav:** částečně — Fáze 1 hotová (2026-08-29, 6 commitů); Fáze 2 (`renderBodyToPdf`, `renderIfHtml`, aktivace Apple/Google) blokována #34
 
 ## Cíl
 
@@ -201,19 +201,42 @@ Commity referencují #33.
 - `docs/mail/api-contract.md` — gate fronty
 - `modules/core/mail/docs/ai-analysis.md` — pořadí ISDOC u předzpracování
 
+## Odchylky provedení od zadání (Fáze 1)
+
+- `origin` je `enumString` (`system`/`user`, cfgItem
+  `preprocessRuleOrigins`) a `preprocess_state` je `enumInt` s cfgItem —
+  vzor modulu (sender rules, `analysis_state`), labely do UI zdarma.
+- Runner volá ISDOC import nad **všemi** obsahovými přílohami, ne jen
+  nad vygenerovanými — intake větev byla pro zprávu s plánem přeskočena
+  (D10), původní přílohy by jinak ISDOC nikdy neprošly.
+- `mail-analysis-reap` v cron slotu `minute` chyběl (README ho slibovalo)
+  — doplněn spolu s `mail-preprocess --sweep`; `CronCommand::SLOT_JOBS`
+  umí položky s volbami.
+- Allowlist domén se kontroluje na **finální** URL; per hop se kontroluje
+  schéma a veřejná IP (SSRF). Tracking wrapper z cizí domény je průchozí
+  jen jako 3xx — obsah z něj se nikdy nepřijme.
+- `--force` odmítá zprávu s aktivním AI claimem (`analysis_state = 20`);
+  `hit_count` počítá jen intake match.
+
 ## Hotovo když
 
-- [ ] Nová zpráva bez matchujícího pravidla se chová bit-přesně jako dnes
-      (state 0, ISDOC při intake, fronta beze změny)
+- [x] Nová zpráva bez matchujícího pravidla se chová bit-přesně jako dnes
+      (state 0, ISDOC při intake, fronta beze změny) — `IngestPreprocessTest`
 - [ ] Bolt vzorek (`MSG-20260817-0004`-typ zprávy) na testovacím DS:
       pravidlo matchne, PDF faktura stažena jako příloha s provenance,
-      zpráva doteče do AI fronty až po dokončení
-- [ ] Expirovaný/nefunkční odkaz: stav 40, zpráva ve frontě, výsledek
-      čitelný v `preprocess_log`
-- [ ] `mail-preprocess --message` opakovaně = žádné duplikáty;
-      `--force` přegeneruje
-- [ ] Sweep zvedne uměle zaseknutou zprávu (state 20, mrtvý proces)
-- [ ] `ds-upgrade` na čistém i import-mode DS založí systémová pravidla;
-      opakovaný běh nic neduplikuje; archivované se nekřísí
-- [ ] Testy zelené, `npm run check:i18n` (nové UI texty)
-- [ ] Dokumentace aktualizována
+      zpráva doteče do AI fronty až po dokončení — **čeká na alfu**
+      (na dev DS ověřen jen intake plán + spawn; fetch proti reálné Bolt
+      URL vyžaduje živý odkaz ze vzorku)
+- [x] Expirovaný/nefunkční odkaz: stav 40, zpráva ve frontě, výsledek
+      čitelný v `preprocess_log` — unit (`PreprocessRunnerTest`,
+      `FetchLinkedDocumentActionTest`)
+- [x] `mail-preprocess --message` opakovaně = žádné duplikáty
+      (idempotence dle provenance); `--force` přegeneruje
+- [x] Sweep zvedne uměle zaseknutou zprávu (state 20) — unit; na dev DS
+      `--sweep` bez nálezu OK
+- [x] `ds-upgrade` na čistém i import-mode DS založí systémová pravidla;
+      opakovaný běh nic neduplikuje; archivované se nekřísí — dev DS 4l3j
+      + `DsUpgradeCommandTest` pod `skipProvisioning`
+- [x] Testy zelené, `npm run check:i18n` (nové UI texty)
+- [x] Dokumentace aktualizována (`modules/core/mail/docs/preprocess.md`,
+      `docs/mail/api-contract.md`, `docs/cli.md`, `ai-analysis.md`, README)

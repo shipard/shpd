@@ -54,7 +54,8 @@
         { "table": "core_mail_outbox",              "section": "other", "subsection": "other.mail", "order": 75 },
         { "table": "core_mail_outbox_log",          "section": "other", "subsection": "other.mail", "order": 80 },
         { "page": "mailOutbound",                   "section": "other", "subsection": "other.mail", "order": 85 },
-        { "viewer": "core.mail.senderRules",        "section": "other", "subsection": "other.mail", "order": 90 }
+        { "viewer": "core.mail.senderRules",        "section": "other", "subsection": "other.mail", "order": 90 },
+        { "viewer": "core.mail.preprocessRules",    "section": "other", "subsection": "other.mail", "order": 95 }
     ],
 
     "settingsPages": [
@@ -127,6 +128,15 @@
             "icon": "mail",
             "table": "core_mail_sender_rules",
             "class": "Shipard\\Module\\Core\\Mail\\SenderRulesViewer"
+        },
+        {
+            "id": "core.mail.preprocessRules",
+            "name": "Preprocess rules",
+            "name:cs": "Pravidla předzpracování",
+            "name:en": "Preprocess rules",
+            "icon": "mail",
+            "table": "core_mail_preprocess_rules",
+            "class": "Shipard\\Module\\Core\\Mail\\Preprocess\\PreprocessRulesViewer"
         }
     ],
 
@@ -136,6 +146,7 @@
             "class": "Shipard\\Module\\Core\\Mail\\IncomingMessagesForm"
         }
     ],
+    // core_mail_preprocess_rules: JSONC form forms/core_mail_preprocess_rules.jsonc
 
     "documentClasses": [
         {
@@ -153,6 +164,10 @@
         {
             "table": "core_mail_sender_rules",
             "class": "Shipard\\Module\\Core\\Mail\\SenderRuleDocument"
+        },
+        {
+            "table": "core_mail_preprocess_rules",
+            "class": "Shipard\\Module\\Core\\Mail\\Preprocess\\PreprocessRuleDocument"
         }
     ],
 

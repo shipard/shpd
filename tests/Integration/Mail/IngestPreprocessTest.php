@@ -16,6 +16,9 @@ use Shipard\Tests\Integration\IntegrationTestCase;
  * pravidlo uloží plán + preprocess_state=10 a spustí spawn; bez pravidla
  * se zpráva chová bit-přesně jako dnes (state 0, log NULL); archivované
  * pravidlo nematchuje; sender-rule archiv má přednost (žádné předzpracování).
+ *
+ * Testovací doména it-pp.example — na DS žijí systémová pravidla
+ * (bolt-invoice-link), vzorky se jich nesmí dotknout.
  */
 class IngestPreprocessTest extends IntegrationTestCase
 {
@@ -68,9 +71,9 @@ class IngestPreprocessTest extends IntegrationTestCase
 
     public function testConfirmedRuleStoresPlanAndSpawnsRunner(): void
     {
-        $ruleNdx = $this->insertRule('bolt', ['body_regex' => 'invoice\.bolt\.eu'], 40);
+        $ruleNdx = $this->insertRule('bolt', ['body_regex' => 'invoice\.it-pp\.example'], 40);
 
-        $ndx = $this->ingest('plan stored', 'Fwd: <a href="https://invoice.bolt.eu/abc">Invoice</a>');
+        $ndx = $this->ingest('plan stored', 'Fwd: <a href="https://invoice.it-pp.example/abc">Invoice</a>');
 
         $row = $this->db->fetchRow('SELECT * FROM core_mail_incoming_messages WHERE id = %i', $ndx);
         $this->assertSame(10, (int) $row['preprocess_state']);
@@ -106,9 +109,9 @@ class IngestPreprocessTest extends IntegrationTestCase
 
     public function testArchivedRuleDoesNotMatch(): void
     {
-        $this->insertRule('archived', ['body_regex' => 'invoice\.bolt\.eu'], 70);
+        $this->insertRule('archived', ['body_regex' => 'invoice\.it-pp\.example'], 70);
 
-        $ndx = $this->ingest('archived rule', 'https://invoice.bolt.eu/abc');
+        $ndx = $this->ingest('archived rule', 'https://invoice.it-pp.example/abc');
 
         $row = $this->db->fetchRow('SELECT preprocess_state FROM core_mail_incoming_messages WHERE id = %i', $ndx);
         $this->assertSame(0, (int) $row['preprocess_state']);
@@ -117,7 +120,7 @@ class IngestPreprocessTest extends IntegrationTestCase
 
     public function testSenderRuleArchiveTakesPrecedence(): void
     {
-        $this->insertRule('bolt', ['body_regex' => 'invoice\.bolt\.eu'], 40);
+        $this->insertRule('bolt', ['body_regex' => 'invoice\.it-pp\.example'], 40);
         $now = date('Y-m-d H:i:s');
         $this->db->getDibiConnection()->insert('core_mail_sender_rules', [
             'pattern_kind' => 'email',
@@ -131,7 +134,7 @@ class IngestPreprocessTest extends IntegrationTestCase
             'docStateMain' => 3,
         ])->execute();
 
-        $ndx = $this->ingest('archived by sender rule', 'https://invoice.bolt.eu/abc');
+        $ndx = $this->ingest('archived by sender rule', 'https://invoice.it-pp.example/abc');
 
         $row = $this->db->fetchRow('SELECT docState, preprocess_state FROM core_mail_incoming_messages WHERE id = %i', $ndx);
         $this->assertSame(80, (int) $row['docState']);
@@ -150,8 +153,8 @@ class IngestPreprocessTest extends IntegrationTestCase
             'origin' => 'user',
             'actions' => json_encode([[
                 'action' => 'fetchLinkedDocument',
-                'linkHrefRegex' => 'invoice\.bolt\.eu',
-                'allowedDomains' => ['bolt.eu'],
+                'linkHrefRegex' => 'invoice\.it-pp\.example',
+                'allowedDomains' => ['it-pp.example'],
             ]]),
             'hit_count' => 0,
             'created' => $now,

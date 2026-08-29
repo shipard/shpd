@@ -17,6 +17,7 @@
   import { thumbnailUrl, downloadUrl, inlineUrl, formatFileSize } from '../../api/attachments.js';
   import Icon from '../ui/Icon.svelte';
   import { iconFile, iconFilePdf, iconFileImage } from '../../icons.js';
+  import { t } from '../../i18n/index.js';
 
   let { attachments = [], mode = 'grid' } = $props();
 
@@ -69,7 +70,13 @@
     </div>
     <div class="shpd-attgrid__info">
       <span class="shpd-attgrid__name">{att.name}</span>
-      <span class="shpd-attgrid__size">{formatFileSize(att.file_size)}</span>
+      <span class="shpd-attgrid__size">
+        {formatFileSize(att.file_size)}
+        {#if att.generated}
+          <!-- Příloha vygenerovaná předzpracováním zprávy (provenance metadata). -->
+          <span class="shpd-attgrid__badge">{t('attachments.generated')}</span>
+        {/if}
+      </span>
     </div>
   </a>
 {/snippet}
@@ -87,6 +94,9 @@
               rel="noopener"
             >{att.name}</a>
             <span class="shpd-attgrid__size">{formatFileSize(att.file_size)}</span>
+            {#if att.generated}
+              <span class="shpd-attgrid__badge">{t('attachments.generated')}</span>
+            {/if}
           </figcaption>
           {#if isPdf(att.mime_type)}
             <iframe
@@ -121,6 +131,18 @@
 {/if}
 
 <style>
+  .shpd-attgrid__badge {
+    display: inline-block;
+    margin-left: var(--shpd-space-xs);
+    padding: 0 6px;
+    border-radius: var(--shpd-radius-sm);
+    font-size: 0.75em;
+    line-height: 1.5;
+    background: var(--shpd-color-primary-soft);
+    color: var(--shpd-color-primary);
+    vertical-align: middle;
+  }
+
   .shpd-attgrid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));

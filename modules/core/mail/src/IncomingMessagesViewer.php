@@ -6,6 +6,7 @@ namespace Shipard\Module\Core\Mail;
 
 use Shipard\Core\Document\DocStateConfig;
 use Shipard\Core\Viewer\TableViewer;
+use Shipard\Module\Core\Mail\Preprocess\PreprocessRunner;
 
 /**
  * Viewer došlých zpráv (core_mail_incoming_messages).
@@ -343,6 +344,15 @@ class IncomingMessagesViewer extends TableViewer
             ];
         }
 
+        // Stav technického předzpracování (tasks/mail-preprocess.md) — 0 = netýká se, skryto.
+        $preprocessBadge = $this->buildCfgStateBadge('core.mail.preprocessStates', (int) ($record['preprocess_state'] ?? 0));
+        if ($preprocessBadge !== null) {
+            $badges[] = [
+                'label' => $preprocessBadge['label'],
+                'style' => $preprocessBadge['style'] === 'archive' ? 'neutral' : $preprocessBadge['style'],
+            ];
+        }
+
         return [
             'title'    => $subject !== '' ? $subject : '(bez předmětu)',
             'subtitle' => $subtitleParts !== [] ? implode(' · ', $subtitleParts) : null,
@@ -358,18 +368,29 @@ class IncomingMessagesViewer extends TableViewer
      */
     private function buildAnalysisBadge(int $analysisState): ?array
     {
-        if ($analysisState === 0 || $this->config === null) {
+        return $this->buildCfgStateBadge('core.mail.analysisStates', $analysisState);
+    }
+
+    /**
+     * Badge stavu z enumInt cfgItem (analysisStates, preprocessStates).
+     * Hodnota 0 („netýká se") se nezobrazuje → null.
+     *
+     * @return array{label: string, style: string}|null
+     */
+    private function buildCfgStateBadge(string $cfgItemId, int $state): ?array
+    {
+        if ($state === 0 || $this->config === null) {
             return null;
         }
 
-        $cfg = $this->config->cfgItem('core.mail.analysisStates');
-        if (!is_array($cfg) || !isset($cfg[(string) $analysisState])) {
+        $cfg = $this->config->cfgItem($cfgItemId);
+        if (!is_array($cfg) || !isset($cfg[(string) $state])) {
             return null;
         }
-        $entry = $cfg[(string) $analysisState];
+        $entry = $cfg[(string) $state];
 
         return [
-            'label' => (string) ($entry['name'] ?? $analysisState),
+            'label' => (string) ($entry['name'] ?? $state),
             'style' => (string) ($entry['stateStyle'] ?? 'concept'),
         ];
     }
@@ -438,6 +459,13 @@ class IncomingMessagesViewer extends TableViewer
             ];
             $blocks[] = ['type' => 'attachment-grid', 'attachments' => $attachments];
         }
+        $preprocessItems = $this->buildPreprocessItems($record);
+        if ($preprocessItems !== []) {
+            $blocks[] = [
+                'type'   => 'properties',
+                'groups' => [['title' => 'Předzpracování', 'items' => $preprocessItems]],
+            ];
+        }
         if ($techItems !== []) {
             $blocks[] = [
                 'type'   => 'properties',
@@ -456,11 +484,71 @@ class IncomingMessagesViewer extends TableViewer
     }
 
     /**
+     * Výsledky technického předzpracování z `preprocess_state` +
+     * `preprocess_log` (stav, pokusy, výsledek per akce, čas). Prázdné pro
+     * zprávy, kterých se předzpracování netýká (stav 0 bez logu).
+     *
+     * @return array<int, array{label: string, value: string}>
+     */
+    private function buildPreprocessItems(array $record): array
+    {
+        $state = (int) ($record['preprocess_state'] ?? 0);
+        $log = PreprocessRunner::decodeLog($record['preprocess_log'] ?? null);
+        if ($state === 0 && $log === []) {
+            return [];
+        }
+
+        $items = [];
+        $badge = $this->buildCfgStateBadge('core.mail.preprocessStates', $state);
+        $this->addItem($items, 'Stav', $badge['label'] ?? (string) $state);
+
+        $plan = is_array($log['plan'] ?? null) ? $log['plan'] : [];
+        $ruleIds = [];
+        foreach ($plan as $entry) {
+            if (is_array($entry) && ($entry['ruleId'] ?? '') !== '') {
+                $ruleIds[] = (string) $entry['ruleId'];
+            }
+        }
+        $this->addItem($items, 'Pravidla', implode(', ', $ruleIds));
+
+        $attempts = (int) ($log['attempts'] ?? 0);
+        if ($attempts > 0) {
+            $this->addItem($items, 'Pokusy', (string) $attempts);
+        }
+
+        foreach (is_array($log['results'] ?? null) ? $log['results'] : [] as $result) {
+            if (!is_array($result)) {
+                continue;
+            }
+            $label = trim(((string) ($result['ruleId'] ?? '')) . ' / ' . ((string) ($result['action'] ?? '')), ' /');
+            $value = !empty($result['ok']) ? 'OK' : 'Chyba';
+            $note = trim((string) ($result['note'] ?? ''));
+            if ($note !== '') {
+                $value .= ' — ' . $note;
+            }
+            if (!empty($result['attachmentId'])) {
+                $value .= ' (příloha #' . (int) $result['attachmentId'] . ')';
+            }
+            $this->addItem($items, $label !== '' ? $label : 'Akce', $value);
+        }
+
+        if (!empty($log['isdoc']) && $log['isdoc'] !== 'skipped') {
+            $this->addItem($items, 'ISDOC', (string) $log['isdoc']);
+        }
+        $this->addItem($items, 'Dokončeno', $this->formatDateTime($log['finishedAt'] ?? null));
+
+        return $items;
+    }
+
+    /**
      * Obsahové přílohy zprávy pro blok `attachment-grid` (AttachmentGrid).
      * Vylučuje raw .eml (raw_source_attachment); velikost posíláme v bajtech,
      * formátuje frontend (formatFileSize v api/attachments.js).
      *
-     * @return array<int, array{id: int, name: string, mime_type: string, file_size: int}>
+     * `generated` = příloha vygenerovaná předzpracováním (provenance
+     * `metadata.generatedBy`), frontend ji označí badgem.
+     *
+     * @return array<int, array{id: int, name: string, mime_type: string, file_size: int, generated: bool}>
      */
     private function fetchContentAttachments(array $record): array
     {
@@ -470,7 +558,7 @@ class IncomingMessagesViewer extends TableViewer
 
         // Seznam obsahových příloh = core_attachments_files.table_id = 303 AND record_id = msg.id
         // s vyloučením raw .eml (raw_source_attachment_ndx)
-        $sql = 'SELECT `id`, `name`, `file_name`, `file_size`, `mime_type`'
+        $sql = 'SELECT `id`, `name`, `file_name`, `file_size`, `mime_type`, `metadata`'
             . ' FROM `core_attachments_files`'
             . ' WHERE `table_id` = %i AND `record_id` = %i AND `is_deleted` = 0';
         $params = [303, (int) $record['id']];
@@ -490,6 +578,7 @@ class IncomingMessagesViewer extends TableViewer
                 'name'      => (string) ($f['name'] ?? $f['file_name']),
                 'mime_type' => (string) ($f['mime_type'] ?? ''),
                 'file_size' => (int) ($f['file_size'] ?? 0),
+                'generated' => PreprocessRunner::isGeneratedAttachment((array) $f),
             ];
         }
 

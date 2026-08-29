@@ -1,0 +1,47 @@
+{
+    "title": "Pravidlo předzpracování",
+    "title:cs": "Pravidlo předzpracování",
+    "title:en": "Preprocess rule",
+    "titleNew": "Nové pravidlo předzpracování",
+    "titleNew:cs": "Nové pravidlo předzpracování",
+    "titleNew:en": "New preprocess rule",
+    "tabs": [
+        {
+            "id": "basic",
+            "label": "Pravidlo",
+            "label:cs": "Pravidlo",
+            "label:en": "Rule",
+            "sections": [
+                {
+                    "title": "Podmínky shody",
+                    "title:cs": "Podmínky shody",
+                    "title:en": "Match conditions",
+                    "columns": [
+                        {
+                            "elements": [
+                                {"type": "input", "column": "sender_email"},
+                                {"type": "input", "column": "sender_domain"},
+                                {"type": "input", "column": "subject_regex"},
+                                {"type": "input", "column": "body_regex"}
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "title": "Akce",
+                    "title:cs": "Akce",
+                    "title:en": "Actions",
+                    "columns": [
+                        {
+                            "elements": [
+                                {"type": "input", "column": "actions", "required": true},
+                                {"type": "input", "column": "notice"},
+                                {"type": "input", "column": "rule_id"}
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

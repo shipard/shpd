@@ -276,6 +276,7 @@ export default {
 
   // ── Attachments ─────────────────────────────────────────────────────────
   'attachments.title': 'Přílohy',
+  'attachments.generated': 'Vygenerováno',
   'attachments.saveFirst': 'Nejprve uložte záznam, poté budete moci přidávat přílohy.',
   'attachments.upload': 'Nahrát přílohu',
   'attachments.count': '{count, plural, one {# příloha} few {# přílohy} many {# příloh} other {# příloh}}',

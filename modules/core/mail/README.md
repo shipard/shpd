@@ -32,6 +32,7 @@ další providers (Ollama, ...), odeslaná pošta.
 | [core_mail_ai_profiles](tables/core_mail_ai_profiles.md) | Prompty + JSON schémata + thresholdy per use-case (Fáze 3a); FK `backend` → `core_ai_backends` (modul core/ai) |
 | [core_mail_analysis_claims](tables/core_mail_analysis_claims.md) | Lease mechanismus pro pull protocol (Fáze 3a) |
 | [core_mail_sender_rules](tables/core_mail_sender_rules.md) | Pravidla odesílatelů — auto-archiv šumu při ingestu (Fáze 3 Spisovny) |
+| [core_mail_preprocess_rules](tables/core_mail_preprocess_rules.md) | Pravidla technického předzpracování (stažení dokladu z odkazu) — [docs/preprocess.md](docs/preprocess.md) |
 
 ## Zdrojové soubory
 
@@ -53,6 +54,12 @@ další providers (Ollama, ...), odeslaná pošta.
 | [BulkHeadersDetector.php](src/BulkHeadersDetector.php) | Signál `is_bulk` z hlaviček raw `.eml` (List-Unsubscribe, Precedence, Auto-Submitted, List-Id) |
 | [SenderRuleSuggestionHandler.php](src/SenderRuleSuggestionHandler.php) | Učení: 3+ ručních odklizení téhož odesílatele → návrh pravidla (Koncept) |
 | [Feed/MailDigestSource.php](src/Feed/MailDigestSource.php) | Digest karta auto-archivu + karty návrhů pravidel na dashboardu |
+| [Preprocess/PreprocessRuleMatcher.php](src/Preprocess/PreprocessRuleMatcher.php) | Match zprávy proti pravidlům předzpracování (AND, CI regexy) → plán |
+| [Preprocess/PreprocessRunner.php](src/Preprocess/PreprocessRunner.php) | Runner: claim, vykonání plánu, ISDOC, stavy 30/40, `--force`, sweep |
+| [Preprocess/PreprocessSpawner.php](src/Preprocess/PreprocessSpawner.php) | Detached spawn `mail-preprocess --message` po commitu intake |
+| [Preprocess/Action/FetchLinkedDocumentAction.php](src/Preprocess/Action/FetchLinkedDocumentAction.php) | Akce `fetchLinkedDocument` — redirect chain s kontrolou per hop, allowlist, provenance |
+| [Preprocess/PreprocessRulesProvisioner.php](src/Preprocess/PreprocessRulesProvisioner.php) | Upsert systémového katalogu `config/systemPreprocessRules.jsonc` při `ds-upgrade` |
+| [Preprocess/PreprocessRuleDocument.php](src/Preprocess/PreprocessRuleDocument.php) / [PreprocessRulesViewer.php](src/Preprocess/PreprocessRulesViewer.php) | Validace pravidel (podmínky, regexy, akce) a settings viewer |
 
 ## Konfigurace
 
@@ -111,3 +118,4 @@ Kontrakty: [docs/mail/api-contract.md](../../../docs/mail/api-contract.md).
 - [docs/documentation.md](docs/documentation.md) — Fáze 1+2a architektura
 - [docs/ai-analysis.md](docs/ai-analysis.md) — Fáze 3a: AI analýza, pull protokol, životní cyklus
 - [docs/ai-prompts.md](docs/ai-prompts.md) — Default prompt + guidelines pro customizaci
+- [docs/preprocess.md](docs/preprocess.md) — Technické předzpracování zpráv před AI analýzou (pravidla, runner, `fetchLinkedDocument`, sweep)

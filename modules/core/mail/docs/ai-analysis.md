@@ -476,7 +476,11 @@ zprávě je); do canonicalu jde `attachments[]` odkaz na nosné PDF
 
 Datový tok: `MailController::receiveIncoming` po commitu intake transakce
 zavolá `IsdocImportService::tryImport` (lazy wiring — bez kandidáta se
-service vůbec nestaví). Service:
+service vůbec nestaví). **Výjimka:** zpráva s plánem technického
+předzpracování (`preprocess_state = 10`, viz [preprocess.md](preprocess.md))
+intake větev přeskočí — ISDOC import nad **všemi** obsahovými přílohami
+(původními i vygenerovanými, stažené PDF může nést embedded ISDOC) spustí
+až runner `mail-preprocess` po dokončení akcí. Service:
 
 1. rozparsuje všechny kandidáty (`IsdocReader`, modul `core.exchange`) na
    canonical `shpd.docs.document.v1` se `source.kind='isdoc'`,

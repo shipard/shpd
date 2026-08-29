@@ -267,6 +267,7 @@ export default {
 
   // ── Attachments ─────────────────────────────────────────────────────────
   'attachments.title': 'Attachments',
+  'attachments.generated': 'Generated',
   'attachments.saveFirst': 'Save the record first, then you can add attachments.',
   'attachments.upload': 'Upload attachment',
   'attachments.count': '{count, plural, one {# attachment} other {# attachments}}',

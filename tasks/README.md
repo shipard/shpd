@@ -17,7 +17,7 @@ jednotlivých subsystémů žijí v [`docs/`](../docs/README.md).
 
 ## Stav
 
-Celkem 243 tasků: **naplánováno** 3 · **částečně** 5 · **hotovo** 235.
+Celkem 243 tasků: **naplánováno** 3 · **částečně** 4 · **hotovo** 236.
 
 Zdroj pravdy je řádek `**Stav:**` v hlavičce každého tasku; tato
 tabulka je generovaná (`scripts/tasks-index.py`). Hotové tasky se
@@ -31,7 +31,6 @@ nevypisují — níže je jen to, co není dokončené.
 | `doc-number-release-on-data-save.md` | částečně | kód + testy hotové 2026-08-13; zbývá D2 (reset test DS), ruční proklik a read-only verifikace na alfě |
 | `hosting-09-federated-login.md` | částečně | kód + testy + docs hotové 2026-08-14 (commity 1–3); zbývá ds-upgrade na hostingu, zapnutí Google/GitHub na alfě dle runbooku (mutace — David) a ruční E2E řetěz |
 | `mail-message-centric.md` | částečně | Fáze A–D v tomto repozitáři hotové (schéma, /result v4, |
-| `mail-preprocess-phase2.md` | částečně | kód, testy a dev E2E hotové (2026-08-29, 6 commitů); zbývá alfa (render sekce + síť k `shpd-render`, E2E nad reálnými Apple fakturami) |
 | `mail-preprocess.md` | částečně | Fáze 1 hotová (2026-08-29, 6 commitů), Bolt E2E čeká na alfu; Fáze 2 (`renderBodyToPdf`, `renderIfHtml`, aktivace Apple/Google) implementována 2026-08-29, stav v `tasks/mail-preprocess-phase2.md` |
 
 <!-- STAV:END -->

@@ -296,9 +296,19 @@ class PreprocessRulesProvisionerTest extends TestCase
         $byId = array_column($rules, null, 'rule_id');
 
         $this->assertArrayHasKey('bolt-invoice-link', $byId);
-        $this->assertArrayNotHasKey('phase', $byId['bolt-invoice-link'], 'Bolt je živé pravidlo Fáze 1');
-        $this->assertSame(2, $byId['apple-invoice-body']['phase']);
-        $this->assertSame(2, $byId['google-play-order']['phase']);
+        foreach (['bolt-invoice-link', 'apple-invoice-body', 'google-play-order'] as $live) {
+            $this->assertArrayNotHasKey('phase', $byId[$live], "{$live} je živé pravidlo");
+        }
+
+        // Apple: přímá pošta, adresa odesílatele v těle není — kotví právnická osoba (D15).
+        $appleBody = '<table><tr><td>Apple Distribution International Ltd.</td></tr><tr><td>Faktura</td></tr></table>';
+        $plan = PreprocessRuleMatcher::plan([$byId['apple-invoice-body'] + ['id' => 2]], 'no_reply@email.apple.com', 'Vaše faktura od Apple', $appleBody, null);
+        $this->assertNotNull($plan);
+        $this->assertSame('renderBodyToPdf', $plan[0]['actions'][0]['action']);
+        $this->assertNull(
+            PreprocessRuleMatcher::plan([$byId['apple-invoice-body'] + ['id' => 2]], 'x@y.example', 'Fwd: Apple newsletter', '<p>New in the App Store</p>', null),
+            'marketing bez fakturační právnické osoby nematchne',
+        );
 
         // Forward Bolt vzorku: odkaz zabalený v awstrack redirectu, odesílatel interní.
         $body = '<a href="https://awstrack.me/L0/https:%2F%2Finvoice.bolt.eu%2Fdl%2Fabc/1/x">Download invoice</a>';

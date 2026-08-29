@@ -4,11 +4,18 @@
     // čte ho PreprocessRulesProvisioner při ds-upgrade a idempotentně
     // upsertuje do core_mail_preprocess_rules dle `rule_id`:
     //
-    //   - chybí            → INSERT (origin system; docState 40, u `phase: 2`
-    //                        rovnou 70 = archivované, aktivace až s #34)
+    //   - chybí            → INSERT (origin system; docState 40, u `phase > 1`
+    //                        rovnou 70 = archivované; system_phase = fáze)
     //   - existuje ve 40   → UPDATE obsahových polí (match + actions + notice);
     //                        hit_count/last_hit_at/created zůstávají
-    //   - archivované/smazané/koncept → beze změny (nekřísí se)
+    //   - archivované systémem (docState 70, system_phase > 1) a katalog
+    //                        už bez `phase` → AKTIVACE (70 → 40, obsah z katalogu)
+    //   - archivované uživatelem (system_phase = 1)/smazané/koncept → beze
+    //                        změny (nekřísí se)
+    //
+    // `phase` (int >= 1, volitelné): pravidlo pro akci, kterou runner ještě
+    // neumí — založí se archivované a aktivuje se, až se `phase` z katalogu
+    // odebere (tasks/mail-preprocess-phase2.md D14).
     //
     // Přizpůsobení systémového pravidla = archivovat ho a založit
     // uživatelskou kopii; úpravy pravidla ve stavu 40 další ds-upgrade
@@ -29,20 +36,21 @@
             ]
         },
         {
-            // Fáze 2 (#34): faktura je HTML tělem zprávy.
+            // Faktura je HTML tělem zprávy. Kotva = právnická osoba na každé
+            // EU faktuře Apple (D15); adresa odesílatele v těle přímé pošty
+            // není, `no_reply@email.apple.com` by nematchla.
             "rule_id": "apple-invoice-body",
-            "phase": 2,
-            "notice": "Apple — faktura/účtenka v HTML těle zprávy (render do PDF, Fáze 2)",
-            "body_regex": "no_reply@email\\.apple\\.com",
+            "notice": "Apple — faktura/účtenka v HTML těle zprávy (render do PDF)",
+            "body_regex": "Apple Distribution International",
             "actions": [
                 { "action": "renderBodyToPdf" }
             ]
         },
         {
-            // Fáze 2 (#34): objednávka Google Play je HTML tělem zprávy.
+            // Objednávka Google Play je HTML tělem zprávy. Kotva na
+            // odesílatele v těle (forwardy) — bez živých vzorků 2026 beze změny.
             "rule_id": "google-play-order",
-            "phase": 2,
-            "notice": "Google Play — objednávka/účtenka v HTML těle zprávy (render do PDF, Fáze 2)",
+            "notice": "Google Play — objednávka/účtenka v HTML těle zprávy (render do PDF)",
             "body_regex": "googleplay-noreply@google\\.com|payments-noreply@google\\.com",
             "actions": [
                 { "action": "renderBodyToPdf" }

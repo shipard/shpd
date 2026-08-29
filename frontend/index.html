@@ -70,6 +70,21 @@
         }
       })();
     </script>
+    <!--
+      PWA (tasks/pwa-v1.md, #52): manifest-only, bez service workeru.
+      Relativní href záměrně: dokument žije vždy přesně na /app/ (prod)
+      resp. /{ds-id}/app/ (dev) — SPA bez URL routingu — takže
+      ../api/v1/… míří na správné API a icons/… na public/app/icons/
+      v obou režimech. Kdyby někdy přibyl URL routing s hlubšími cestami,
+      je potřeba <base> nebo absolutizace. Vite tyto href nechává být
+      (neresolvují se na soubor v frontend/).
+      theme-color je statická Shipard primary (--shpd-color-primary);
+      přebarvování podle DS vzhledu je mimo scope a nesahá do theme
+      bootstrapu výše.
+    -->
+    <link rel="manifest" href="../api/v1/_app/manifest" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+    <meta name="theme-color" content="#005089" />
   </head>
   <body>
     <div id="app"></div>

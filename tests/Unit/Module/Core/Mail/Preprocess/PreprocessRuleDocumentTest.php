@@ -99,6 +99,15 @@ class PreprocessRuleDocumentTest extends TestCase
         $this->assertContains(['column' => 'actions', 'code' => 'unknown_action'], $this->errors($this->doc()->validate($data)));
     }
 
+    public function testRenderIfHtmlMustBeBoolean(): void
+    {
+        $bad = $this->valid(['actions' => '[{"action":"fetchLinkedDocument","linkHrefRegex":"x","allowedDomains":["a.example"],"renderIfHtml":"yes"}]']);
+        $this->assertContains(['column' => 'actions', 'code' => 'invalid_param'], $this->errors($this->doc()->validate($bad)));
+
+        $good = $this->valid(['actions' => '[{"action":"fetchLinkedDocument","linkHrefRegex":"x","allowedDomains":["a.example"],"renderIfHtml":true}]']);
+        $this->assertTrue($this->doc()->validate($good)->isValid());
+    }
+
     public function testRenderBodyToPdfActionIsAccepted(): void
     {
         $data = $this->valid(['actions' => '[{"action":"renderBodyToPdf"}]']);

@@ -198,6 +198,9 @@ class PreprocessRuleDocument extends Document
                 if (FetchLinkedDocumentAction::normalizeDomains($action['allowedDomains'] ?? null) === []) {
                     $result->addError('actions', "Akce #" . ($i + 1) . ": allowedDomains je povinný neprázdný seznam", 'param_required');
                 }
+                if (array_key_exists('renderIfHtml', $action) && !is_bool($action['renderIfHtml'])) {
+                    $result->addError('actions', "Akce #" . ($i + 1) . ": renderIfHtml musí být true/false", 'invalid_param');
+                }
             }
         }
     }

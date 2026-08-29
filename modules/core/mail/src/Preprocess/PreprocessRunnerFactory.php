@@ -81,7 +81,7 @@ final class PreprocessRunnerFactory
     public static function defaultActions(DataSourceConnection $db, AttachmentService $attachments, RenderClient $render): ActionRegistry
     {
         return new ActionRegistry()
-            ->register(FetchLinkedDocumentAction::KEY, new FetchLinkedDocumentAction($attachments, new CurlHttpFetcher()))
+            ->register(FetchLinkedDocumentAction::KEY, new FetchLinkedDocumentAction($attachments, new CurlHttpFetcher(), null, $render))
             ->register(RenderBodyToPdfAction::KEY, new RenderBodyToPdfAction($attachments, $render));
     }
 }

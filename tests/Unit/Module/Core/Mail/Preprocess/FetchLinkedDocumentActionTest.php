@@ -5,6 +5,11 @@ declare(strict_types=1);
 namespace Shipard\Tests\Unit\Module\Core\Mail\Preprocess;
 
 use PHPUnit\Framework\TestCase;
+use Shipard\Core\Config\RenderConfig;
+use Shipard\Core\Logging\ErrorLogger;
+use Shipard\Core\Render\RenderClient;
+use Shipard\Core\Render\RenderErrorKind;
+use Shipard\Core\Render\RenderResult;
 use Shipard\Module\Core\Attachments\AttachmentService;
 use Shipard\Module\Core\Mail\Preprocess\Action\FetchLinkedDocumentAction;
 use Shipard\Module\Core\Mail\Preprocess\Http\HttpFetcher;
@@ -44,6 +49,20 @@ class FetchLinkedDocumentActionTest extends TestCase
     /** @var list<array{name: string, tmp: string, tmpExisted: bool}> */
     private array $uploads = [];
 
+    protected function setUp(): void
+    {
+        RenderClient::resetWarningForTesting();
+        ErrorLogger::resetForTesting();
+        ErrorLogger::setLogPath(sys_get_temp_dir() . '/shpd_fetch_action_test.log');
+    }
+
+    protected function tearDown(): void
+    {
+        ErrorLogger::resetForTesting();
+        RenderClient::resetWarningForTesting();
+        @unlink(sys_get_temp_dir() . '/shpd_fetch_action_test.log');
+    }
+
     /** @param list<array<string, mixed>> $existing */
     private function attachments(array $existing = [], bool $uploadOk = true): AttachmentService
     {
@@ -67,15 +86,23 @@ class FetchLinkedDocumentActionTest extends TestCase
     }
 
     /** @param array<string, HttpResponse> $responses */
-    private function action(array $responses, ?AttachmentService $att = null, ?\Closure $resolver = null): array
+    private function action(array $responses, ?AttachmentService $att = null, ?\Closure $resolver = null, ?RenderClient $render = null): array
     {
         $http = new FakeHttpFetcher($responses);
         $action = new FetchLinkedDocumentAction(
             $att ?? $this->attachments(),
             $http,
             $resolver ?? static fn(string $host): array => ['93.184.216.34'],
+            $render,
         );
         return [$action, $http];
+    }
+
+    /** @return array{0: RenderClient, 1: FakeRenderEngine} */
+    private function renderClient(?RenderResult $result = null): array
+    {
+        $engine = new FakeRenderEngine($result ?? RenderResult::success(self::PDF));
+        return [new RenderClient(new RenderConfig('http://127.0.0.1:3000', 30), $engine), $engine];
     }
 
     /** @return array<string, mixed> */
@@ -311,16 +338,131 @@ class FetchLinkedDocumentActionTest extends TestCase
         $this->assertSame([], $this->uploads);
     }
 
-    public function testHtmlDocumentFailsWithPhaseTwoNote(): void
+    // --- renderIfHtml (D17) --------------------------------------------------------
+
+    private const HTML_RESPONSE_HEADERS = ['content-type' => 'text/html; charset=utf-8'];
+
+    public function testHtmlDocumentWithoutFlagFailsWithHint(): void
+    {
+        [$render, $engine] = $this->renderClient();
+        [$action] = $this->action([
+            self::FINAL => new HttpResponse(200, self::HTML_RESPONSE_HEADERS, '<html>invoice</html>'),
+        ], null, null, $render);
+
+        $result = $action->execute($this->message('<a href="' . self::FINAL . '">x</a>'), 'r', $this->params());
+
+        $this->assertFalse($result->ok);
+        $this->assertStringContainsString('renderIfHtml', $result->note);
+        $this->assertSame([], $engine->renders, 'bez flagu se render nevolá');
+        $this->assertSame([], $this->uploads);
+    }
+
+    public function testHtmlDocumentWithFlagIsRenderedAndStoredAsPdf(): void
+    {
+        [$render, $engine] = $this->renderClient();
+        [$action] = $this->action([
+            self::WRAPPER => new HttpResponse(302, ['location' => self::FINAL]),
+            self::FINAL => new HttpResponse(200, self::HTML_RESPONSE_HEADERS, '<div>Faktura č. 1</div>'),
+        ], null, null, $render);
+
+        $result = $action->execute($this->message(), 'bolt-invoice-link', $this->params(['renderIfHtml' => true]));
+
+        $this->assertTrue($result->ok, $result->note);
+        $this->assertSame([77], $result->attachmentIds);
+        $this->assertCount(1, $engine->renders);
+        $this->assertStringContainsString('<meta charset="utf-8">', $engine->renders[0]['html']);
+        $this->assertStringContainsString('Faktura č. 1', $engine->renders[0]['html']);
+        $this->assertSame([], $engine->renders[0]['assets']);
+
+        $this->assertSame('abc.pdf', $this->uploads[0]['name'], 'název z URL, vynucená přípona .pdf');
+        $extra = $this->merged[0]['extra'];
+        $this->assertTrue($extra['rendered']);
+        $this->assertSame(self::WRAPPER, $extra['sourceUrl']);
+        $this->assertSame(self::FINAL, $extra['finalUrl']);
+        $this->assertSame('fetchLinkedDocument', $extra['action']);
+    }
+
+    public function testRenderFailureIsCandidateNoteAndNextCandidateIsTried(): void
+    {
+        [$render, $engine] = $this->renderClient(RenderResult::failure(RenderErrorKind::Unreachable, 'connection refused'));
+        $html = '<a href="https://invoice.bolt.eu/page">page</a> <a href="' . self::FINAL . '">pdf</a>';
+        [$action] = $this->action([
+            'https://invoice.bolt.eu/page' => new HttpResponse(200, self::HTML_RESPONSE_HEADERS, '<p>x</p>'),
+            self::FINAL => new HttpResponse(200, ['content-type' => 'application/pdf'], self::PDF),
+        ], null, null, $render);
+
+        $result = $action->execute($this->message($html), 'r', $this->params(['renderIfHtml' => true]));
+
+        $this->assertTrue($result->ok, $result->note);
+        $this->assertCount(1, $engine->renders, 'render se zkusil jen u HTML kandidáta');
+        $this->assertArrayNotHasKey('rendered', $this->merged[0]['extra'], 'PDF kandidát není renderovaný');
+    }
+
+    public function testRenderFailureOnOnlyCandidateIsReportedWithKind(): void
+    {
+        [$render] = $this->renderClient(RenderResult::failure(RenderErrorKind::Timeout, 'exceeded'));
+        [$action] = $this->action([
+            self::FINAL => new HttpResponse(200, self::HTML_RESPONSE_HEADERS, '<p>x</p>'),
+        ], null, null, $render);
+
+        $result = $action->execute($this->message('<a href="' . self::FINAL . '">x</a>'), 'r', $this->params(['renderIfHtml' => true]));
+
+        $this->assertFalse($result->ok);
+        $this->assertStringContainsString('render failed: timeout: exceeded', $result->note);
+        $this->assertSame([], $this->uploads);
+    }
+
+    public function testFinalPdfDoesNotInvokeRenderEvenWithFlag(): void
+    {
+        [$render, $engine] = $this->renderClient();
+        [$action] = $this->action([
+            self::FINAL => new HttpResponse(200, ['content-type' => 'application/pdf'], self::PDF),
+        ], null, null, $render);
+
+        $result = $action->execute($this->message('<a href="' . self::FINAL . '">x</a>'), 'r', $this->params(['renderIfHtml' => true]));
+
+        $this->assertTrue($result->ok, $result->note);
+        $this->assertSame([], $engine->renders);
+        $this->assertArrayNotHasKey('rendered', $this->merged[0]['extra']);
+    }
+
+    public function testEmptyHtmlBodyWithFlagFails(): void
+    {
+        [$render, $engine] = $this->renderClient();
+        [$action] = $this->action([
+            self::FINAL => new HttpResponse(200, self::HTML_RESPONSE_HEADERS, "  
+"),
+        ], null, null, $render);
+
+        $result = $action->execute($this->message('<a href="' . self::FINAL . '">x</a>'), 'r', $this->params(['renderIfHtml' => true]));
+
+        $this->assertFalse($result->ok);
+        $this->assertStringContainsString('empty HTML body', $result->note);
+        $this->assertSame([], $engine->renders);
+    }
+
+    public function testFlagWithoutRenderClientFailsWithNote(): void
     {
         [$action] = $this->action([
-            self::FINAL => new HttpResponse(200, ['content-type' => 'text/html; charset=utf-8'], '<html>invoice</html>'),
+            self::FINAL => new HttpResponse(200, self::HTML_RESPONSE_HEADERS, '<p>x</p>'),
         ]);
 
         $result = $action->execute($this->message('<a href="' . self::FINAL . '">x</a>'), 'r', $this->params(['renderIfHtml' => true]));
 
         $this->assertFalse($result->ok);
-        $this->assertStringContainsString('renderIfHtml', $result->note);
+        $this->assertStringContainsString('no render client', $result->note);
+    }
+
+    public function testUnconfiguredRenderClientWithFlagFailsWithoutException(): void
+    {
+        [$action] = $this->action([
+            self::FINAL => new HttpResponse(200, self::HTML_RESPONSE_HEADERS, '<p>x</p>'),
+        ], null, null, new RenderClient(null));
+
+        $result = $action->execute($this->message('<a href="' . self::FINAL . '">x</a>'), 'r', $this->params(['renderIfHtml' => true]));
+
+        $this->assertFalse($result->ok);
+        $this->assertStringContainsString('unconfigured', $result->note);
     }
 
     public function testUnsupportedContentTypeFails(): void

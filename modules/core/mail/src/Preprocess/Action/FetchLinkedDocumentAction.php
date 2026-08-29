@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Shipard\Module\Core\Mail\Preprocess\Action;
 
+use Shipard\Core\Render\RenderClient;
+use Shipard\Core\Render\RenderProfile;
 use Shipard\Module\Core\Attachments\AttachmentService;
 use Shipard\Module\Core\Mail\Preprocess\ActionResult;
 use Shipard\Module\Core\Mail\Preprocess\Http\HttpFetcher;
@@ -17,8 +19,11 @@ use Shipard\Module\Core\Mail\Preprocess\PreprocessRuleMatcher;
  *
  * Parametry: `linkHrefRegex` (povinný — kandidátní odkaz musí matchnout
  * přímo nebo po URL-decode, tracking wrappery nesou cíl zakódovaný),
- * `allowedDomains` (povinný seznam), `renderIfHtml` (rezervováno, Fáze 2 —
- * stažené HTML = selhání akce s poznámkou).
+ * `allowedDomains` (povinný seznam), `renderIfHtml` (bool, default false,
+ * D17 — finální `text/html` se místo selhání vyrenderuje do PDF profilem
+ * Untrusted přes RenderClient; bez flagu je HTML selhání s poznámkou).
+ * Render je až za kontrolami allowlist/regex/size cap; jeho selhání je
+ * poznámka kandidáta a pokračuje se dalším (konzistentní se selháním fetch).
  *
  * Bezpečnost (D6): redirecty se procházejí ručně, **každý hop** projde
  * kontrolou schématu (http/https) a překladu hostu na veřejnou adresu
@@ -48,11 +53,14 @@ final class FetchLinkedDocumentAction implements PreprocessAction
     /**
      * @param \Closure(string): list<string>|null $resolver host → IP adresy
      *        (test seam; default gethostbynamel).
+     * @param RenderClient|null $render Pro `renderIfHtml`; null = HTML
+     *        vždy selhání (starší wiring / testy bez renderu).
      */
     public function __construct(
         AttachmentService $attachments,
         private readonly HttpFetcher $http,
         private readonly ?\Closure $resolver = null,
+        private readonly ?RenderClient $render = null,
     ) {
         $this->generated = new GeneratedAttachments($attachments);
     }
@@ -71,6 +79,7 @@ final class FetchLinkedDocumentAction implements PreprocessAction
         if ($domains === []) {
             return ActionResult::failure('allowedDomains is required');
         }
+        $renderIfHtml = ($params['renderIfHtml'] ?? false) === true;
 
         $candidates = self::extractCandidateUrls(
             (string) ($message['body_html'] ?? ''),
@@ -90,7 +99,7 @@ final class FetchLinkedDocumentAction implements PreprocessAction
                 return ActionResult::success("already present (attachment {$existing})", [$existing]);
             }
 
-            $fetched = $this->fetch($sourceUrl, $regex, $domains);
+            $fetched = $this->fetch($sourceUrl, $regex, $domains, $renderIfHtml);
             if (!$fetched['ok']) {
                 $notes[] = $sourceUrl . ': ' . $fetched['note'];
                 continue;
@@ -182,9 +191,9 @@ final class FetchLinkedDocumentAction implements PreprocessAction
      * Průchod redirect řetězcem s kontrolou per hop.
      *
      * @param list<string> $domains
-     * @return array{ok: bool, note: string, body?: string, finalUrl?: string, fileName?: string}
+     * @return array{ok: bool, note: string, body?: string, finalUrl?: string, fileName?: string, rendered?: bool}
      */
-    private function fetch(string $startUrl, string $regex, array $domains): array
+    private function fetch(string $startUrl, string $regex, array $domains, bool $renderIfHtml = false): array
     {
         $url = $startUrl;
 
@@ -234,7 +243,7 @@ final class FetchLinkedDocumentAction implements PreprocessAction
                 || str_starts_with($response->body, '%PDF');
             if (!$isPdf) {
                 if (str_starts_with($contentType, 'text/html')) {
-                    return ['ok' => false, 'note' => 'final document is HTML — renderIfHtml is Phase 2 (#34)'];
+                    return $this->renderHtmlDocument($response->body, $url, (string) $response->header('content-disposition'), $renderIfHtml);
                 }
                 return ['ok' => false, 'note' => "unsupported content-type '{$contentType}' at {$url}"];
             }
@@ -255,22 +264,64 @@ final class FetchLinkedDocumentAction implements PreprocessAction
     }
 
     /**
-     * @param array{body?: string, finalUrl?: string, fileName?: string} $fetched
+     * Finální dokument je HTML (D17): s `renderIfHtml` render do PDF
+     * profilem Untrusted, jinak selhání s poznámkou. Allowlist, regex
+     * a size cap už prošly — render je až za nimi.
+     *
+     * @return array{ok: bool, note: string, body?: string, finalUrl?: string, fileName?: string, rendered?: bool}
+     */
+    private function renderHtmlDocument(string $html, string $url, string $contentDisposition, bool $renderIfHtml): array
+    {
+        if (!$renderIfHtml) {
+            return ['ok' => false, 'note' => "final document is HTML at {$url} — set renderIfHtml: true to render it to PDF"];
+        }
+        if ($this->render === null) {
+            return ['ok' => false, 'note' => "final document is HTML at {$url} but no render client is available"];
+        }
+        if (trim($html) === '') {
+            return ['ok' => false, 'note' => "empty HTML body at {$url}"];
+        }
+        if (strlen($html) > RenderBodyToPdfAction::HTML_MAX_BYTES) {
+            return ['ok' => false, 'note' => 'HTML document exceeds the render size cap (' . RenderBodyToPdfAction::HTML_MAX_BYTES . " B) at {$url}"];
+        }
+
+        $rendered = $this->render->renderHtml(RenderBodyToPdfAction::ensureUtf8Document($html), [], RenderProfile::Untrusted);
+        if (!$rendered->ok || $rendered->pdfContent === null) {
+            $kind = $rendered->errorKind?->value ?? 'unknown';
+            return ['ok' => false, 'note' => "render failed: {$kind}" . ($rendered->note !== null ? ": {$rendered->note}" : '') . " at {$url}"];
+        }
+
+        return [
+            'ok' => true,
+            'note' => '',
+            'body' => $rendered->pdfContent,
+            'finalUrl' => $url,
+            'fileName' => self::fileNameFor($contentDisposition, $url),
+            'rendered' => true,
+        ];
+    }
+
+    /**
+     * @param array{body?: string, finalUrl?: string, fileName?: string, rendered?: bool} $fetched
      * @return array{ok: bool, note: string, id?: int}
      */
     private function store(int $messageId, string $ruleId, string $sourceUrl, array $fetched): array
     {
+        $extra = [
+            'sourceUrl' => $sourceUrl,
+            'finalUrl' => (string) $fetched['finalUrl'],
+            'fetchedAt' => date('c'),
+        ];
+        if ($fetched['rendered'] ?? false) {
+            $extra['rendered'] = true;
+        }
         return $this->generated->store(
             $messageId,
             (string) $fetched['fileName'],
             (string) ($fetched['body'] ?? ''),
             $ruleId,
             self::KEY,
-            [
-                'sourceUrl' => $sourceUrl,
-                'finalUrl' => (string) $fetched['finalUrl'],
-                'fetchedAt' => date('c'),
-            ],
+            $extra,
         );
     }
 

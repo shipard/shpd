@@ -7,10 +7,13 @@
 # viz docs/operations/render-service.md.
 #
 # Bezpečnostní model (D1/D4/D5): bind jen na 127.0.0.1, žádný WAN forward.
-# Obsah se vždy pushuje v requestu — deny-list '.*' zakazuje Chromiu
-# veškeré odchozí requesty, JS je vypnutý globálně. Šablony jsou
-# server-side a JS nepotřebují; kdyby ho budoucí sestavy vyžadovaly,
-# poběží druhá instance s jinými flagy.
+# Obsah se vždy pushuje v requestu — env CHROMIUM_DENY_PRIVATE_IPS +
+# CHROMIUM_DENY_PUBLIC_IPS (obě true) zakazují Chromiu veškeré síťové
+# URL, JS je vypnutý globálně. Dřívější `--chromium-deny-list=.*` nepoužívat:
+# matchuje i interní `file://` load nahraného index.html → každá konverze
+# vrací 403. `file://` hlídají vestavěné always-on ochrany Gotenbergu.
+# Šablony jsou server-side a JS nepotřebují; kdyby ho budoucí sestavy
+# vyžadovaly, poběží druhá instance s jinými flagy.
 
 [Unit]
 Description=Shipard PDF rendering service (Gotenberg)
@@ -21,10 +24,11 @@ After=network-online.target
 ExecStartPre=-/usr/bin/podman rm -f shpd-render
 ExecStart=/usr/bin/podman run --rm --name shpd-render \
     -p 127.0.0.1:3000:3000 \
-    docker.io/gotenberg/gotenberg:8.30.0 \
+    -e CHROMIUM_DENY_PRIVATE_IPS=true \
+    -e CHROMIUM_DENY_PUBLIC_IPS=true \
+    docker.io/gotenberg/gotenberg:8.34.0 \
     gotenberg \
     --chromium-disable-javascript=true \
-    --chromium-deny-list=.* \
     --api-timeout=60s
 ExecStop=/usr/bin/podman stop shpd-render
 Restart=on-failure

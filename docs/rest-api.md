@@ -190,6 +190,7 @@ http://{ip-adresa}/{ds-id}/api/v1/{tabulka}
 | `GET` | `/api/v1/_exchange/content-tags/overview` | Stav mapování taxonomie štítků + reverzní návrhy (auth) |
 | `POST` | `/api/v1/_exchange/content-tags/tag-items` | Hromadné otagování položek obsahovými štítky (auth) |
 | `GET` | `/api/v1/_app/info` | Název/zkrácený název/ikona/logo aplikace — **veřejné** |
+| `GET` | `/api/v1/_app/manifest` | Web app manifest pro PWA instalaci (`application/manifest+json`) — **veřejné** |
 | `GET` | `/api/v1/_app/branding/{slot}` | Binární obsah branding slotu — **veřejné**, immutable cache |
 | `POST` | `/api/v1/_app/branding/{slot}` | Upload obrázku slotu (multipart, pole `file`) — auth |
 | `DELETE` | `/api/v1/_app/branding/{slot}` | Smazání obrázku slotu — auth |
@@ -328,10 +329,16 @@ Forgot je anti-enumerační — odpověď se neliší pro existující a neexist
 `INVALID_TOKEN`, `NO_LOCAL_PASSWORD`, `NO_EMAIL`, `MAIL_NOT_CONFIGURED`.
 Detaily: [docs/auth.md](auth.md).
 
-**Veřejné `/_app` endpointy:** `GET /_app/info` a `GET /_app/branding/{slot}`
-jsou výjimky z autentizace (`AuthMiddleware::isExempt()`) — login obrazovka
-zobrazuje název/logo a favicon se načítá bez tokenu. Nesmí sem přibýt nic
-citlivého. Branding GET posílá `Cache-Control: public, max-age=31536000,
+**Veřejné `/_app` endpointy:** `GET /_app/info`, `GET /_app/manifest`
+a `GET /_app/branding/{slot}` jsou výjimky z autentizace
+(`AuthMiddleware::isExempt()`) — login obrazovka zobrazuje název/logo,
+favicon se načítá bez tokenu a web app manifest si prohlížeč fetchuje sám
+z `<link rel="manifest">` bez Authorization hlavičky. Nesmí sem přibýt nic
+citlivého. Manifest nese per-DS `name`/`short_name` (`app.name`/`app.shortName`
+s fallbacky jako `/_app/info`), `start_url`/`scope`/`id` s DS prefixem v dev
+režimu (`/{ds-id}/app/`) a bez něj v prod (`/app/`), statickou sadu ikon
+z `/app/icons/` a `Cache-Control: public, max-age=3600`; detaily
+[docs/frontend.md](frontend.md) sekce 13. Branding GET posílá `Cache-Control: public, max-age=31536000,
 immutable` (URL nese `?h={hash}` pro cache-busting); SVG navíc
 `Content-Security-Policy: default-src 'none'` a `X-Content-Type-Options:
 nosniff`. Detaily: [docs/app-settings.md](app-settings.md).

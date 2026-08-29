@@ -23,7 +23,7 @@ Položky, které jsou v menu samostatně, nad ostatními sekcemi.
 
 | Agenda | Co s ní uděláš | Návod |
 |---|---|---|
-| **Dashboard** | Domovská obrazovka. Ukazuje, co je právě potřeba udělat — nová pošta k vyřízení, upozornění z kontrol, rozdělané doklady. Většina práce začíná tady | [Začínáme](zaciname.md) · [První nastavení zdroje dat](prvni-nastaveni.md) |
+| **Dashboard** | Domovská obrazovka. Ukazuje, co je právě potřeba udělat — nová pošta k vyřízení, upozornění z kontrol, rozdělané doklady. Většina práce začíná tady | [Začínáme](zaciname.md) · [První nastavení zdroje dat](prvni-nastaveni.md) · [Instalace aplikace](instalace-aplikace.md) |
 | **Chat** | Vestavěný AI asistent. Odpovídá na otázky o tvých datech i na to, jak se v Shipardu co dělá. Jen čte — nic nezaloží ani nezmění | — |
 | **Došlá pošta** | Faktury a dokumenty, které přišly na tvou adresu pro příjem pošty. AI zprávu přečte celou a připraví z ní nejvýše jeden návrh — doklad, nebo dokument do Spisovny; co našla navíc, ukáže jako poznámku | [Příjem pošty](posta/prijem-posty.md) · [Kontrola vytěženého dokladu](posta/kontrola-vytezeni.md) · [Když AI přečte fakturu špatně](posta/kdyz-ai-cte-spatne.md) |
 | **Spisovna** | Evidence dokumentů, které nejsou doklady — smlouvy, pojistky, revize. Řadí se do **Šanonů**. AI je pozná v došlé poště a nabídne je na Dashboardu k zařazení stejně jako faktury; záznam zařazený z pošty dostane všechny přílohy zprávy. Zprávu zařadíš i ručně tlačítkem **Zařadit do Spisovny**. U dokumentů s platností Shipard hlídá datum **Platí do** a včas upozorní | — |

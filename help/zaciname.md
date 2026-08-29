@@ -74,3 +74,5 @@ Orientace v levém panelu:
   návrhu s originálem
 - [Vystavení faktury](faktury-vydane/vystaveni-faktury.md) — první
   vydaná faktura
+- [Instalace aplikace](instalace-aplikace.md) — Shipard jednou ikonou na
+  ploše telefonu nebo počítače

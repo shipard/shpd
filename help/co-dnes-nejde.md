@@ -105,8 +105,11 @@ požádat.
 
 ## Rozhraní
 
-- **Mobilní aplikace neexistuje a nechystá se.** Rozhraní je responzivní,
-  na telefonu i tabletu funguje v prohlížeči.
+- **Mobilní aplikace v App Storu ani Google Play není a nechystá se.**
+  Rozhraní je responzivní a Shipard si přidáš na plochu telefonu nebo
+  nainstaluješ do počítače přímo z prohlížeče — viz
+  [Instalace aplikace](instalace-aplikace.md). Nainstalovaná aplikace ale
+  **nefunguje bez připojení** a **neposílá notifikace do telefonu**.
 - **Anglické rozhraní není úplné.** Čeština je hlavní jazyk; v angličtině
   můžeš narazit na nepřeložené popisky.
 - **Narazíš na nedodělané obrazovky.** Nic tím nerozbiješ tak, abychom to

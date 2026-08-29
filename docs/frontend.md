@@ -892,6 +892,7 @@ rovnou nad dashboardem a po close refetchují **jen pokud došlo k save**
 | `GET /_ui/settings/navigation` | Navigační strom režimu Nastavení (sekce + položky podle `settingsItems[]` napříč moduly) |
 | `GET/POST /_ui/settings/page/{pageId}` | Settings page — definice + hodnoty / uložení (viz [`app-settings.md`](app-settings.md)) |
 | `GET /_app/info` | Veřejné info aplikace — název, zkrácený název, ikona, logo (titulek, favicon, sidebar, login) |
+| `GET /_app/manifest` | Veřejný web app manifest pro PWA instalaci — per-DS jméno, `start_url`/`scope` dle režimu (viz sekce 13) |
 | `GET/POST/DELETE /_app/branding/{slot}` | Branding obrázky — GET veřejný s immutable cache, zápis s auth |
 | `GET /_ui/dashboard` | Feed akčních karet pro home obrazovku (viz [`dashboard.md`](dashboard.md)) |
 | `GET /_ui/viewer/{id}/meta` | Metadata vieweru (name, table, filters, toolbar, viewGroups, numberSeries) |
@@ -1577,7 +1578,72 @@ přímo — mapování `field` na lokalizovaný název sloupce z
 
 ---
 
-## 13. Budoucí rozšíření
+## 13. PWA — instalovatelná aplikace
+
+Aplikace jde nainstalovat do telefonu i na desktop jako PWA
+(`tasks/pwa-v1.md`, issue #52). V1 je **manifest-only**: žádný service
+worker, žádná offline cache, žádná invalidace po deployi. Od ~2023 stačí
+Chromu/Edgi pro instalační prompt manifest + HTTPS; Safari umí „Přidat na
+plochu" vždy. Service worker přijde až s push notifikacemi (vlastní issue).
+
+### Manifest
+
+Jméno a ikona jsou per-DS, proto manifest **generuje PHP**, ne statický
+soubor: `GET /api/v1/_app/manifest` (`AppController::manifest()`, veřejný —
+`AuthMiddleware::isExempt()`, prohlížeč ho fetchuje bez tokenu).
+
+- `name`/`short_name` — `app.name`/`app.shortName` s fallbacky jako
+  `/_app/info` (sdílený helper `resolveNames()`).
+- `id`/`start_url`/`scope` — `/app/` v prod, `/{ds-id}/app/` v dev. Režim
+  rozhoduje `ResolvedDataSource::isDevMode()` (předává `dispatchApp()`),
+  žádné vlastní parsování URL.
+- `icons` — **absolutní cesty** s týmž prefixem; relativní by se resolvovaly
+  proti URL manifestu (`/api/v1/…`), ne proti `scope`.
+- `display: standalone`, `lang` z `defaultLanguage` DS, `theme_color`/
+  `background_color` = literály `--shpd-color-primary`/`--shpd-color-bg`
+  z `variables.css` (ne runtime derivace).
+- `Content-Type: application/manifest+json`, `Cache-Control: public,
+  max-age=3600`. `Response::send()` respektuje explicitní Content-Type
+  z `withHeader()` — do té doby ho JSON default přepisoval.
+
+### Linky v `index.html`
+
+`frontend/index.html` (ne `public/app/index.html` — to je build artefakt
+mimo git) má za bootstrap scripty:
+
+```html
+<link rel="manifest" href="../api/v1/_app/manifest" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<meta name="theme-color" content="#005089" />
+```
+
+Href jsou **relativní záměrně**: dokument žije vždy přesně na `/app/`
+resp. `/{ds-id}/app/` (SPA bez URL routingu), takže míří správně v obou
+režimech bez změny nginx. Kdyby někdy přibyl URL routing s hlubšími
+cestami, je potřeba `<base>` nebo absolutizace. Vite tyto href nechává
+být (neresolvují se na soubor v `frontend/`, ENOENT se polyká).
+`theme-color` je statická — přebarvování podle DS vzhledu je mimo scope.
+
+### Ikony
+
+Statická defaultní sada v `frontend/public/icons/` (Vite `publicDir` →
+`public/app/icons/`): `icon-192.png`, `icon-512.png` (`purpose: any`,
+zaoblené rohy), `icon-maskable-192.png`, `icon-maskable-512.png` (motiv
+v 80 % safe zone, pozadí do krajů), `apple-touch-icon.png` 180×180 bez
+průhlednosti. Písmeno „S" na Shipard primary, vygenerováno jednorázově
+(SVG → `rsvg-convert`). Výměna za skutečné logo = přepsání PNG, žádná
+změna kódu.
+
+### Follow-upy (mimo V1)
+
+- per-DS instalační ikony z branding slotu `icon`,
+- push notifikace + service worker,
+- hosting PWA — PWA je vázaná na origin, DS appky na jiných doménách do
+  hosting PWA zabalit nejde (otevřený bod v #52).
+
+---
+
+## 14. Budoucí rozšíření
 
 - **Filtrování v prohlížeči** — toolbar s filtry podle typu sloupce
 - **Mazání záznamů** — tlačítko v řádku nebo hromadně

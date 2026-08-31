@@ -232,7 +232,7 @@ chrome (řeší resolver v AppShellu jedním výrazem).
 |---|---|---|---|
 | `sidebar` | strom v levém panelu | tamtéž | dnešní stav, default |
 | `classic` | horní menu (+ domeček `_top`) | levý pás **uzlů úrovně 2** — leaf naviguje, skupina otevírá flyout s úrovní 3 | „starý Shipard"; **realizován Fází 4**. Klik na sekci → první leaf. Starý Shipard měl overflow „malé ikony dole" — v1 neřeší, pás scrolluje |
-| `wild` | levý rail velkých ikon s badge | horní záložky-ikony obsahu; 1. záložka = AI asistent sekce | AI-first, maximální kompaktnost; **realizován Fází 6** (`tasks/ui-shells-phase6.md`). V1 = kompozice hotových kusů (Fáze 1–5), rozvoj iterativně dle chování. Stav prohlížení shell-lokální (`stores/wildShell.svelte.js`), paměť poslední záložky per sekce přežije settings mód, reload ne |
+| `wild` | levý rail ikon s popisky a badge | horní záložky-ikony obsahu; 1. záložka = AI asistent sekce | AI-first, maximální kompaktnost; **realizován Fází 6** (`tasks/ui-shells-phase6.md`). V1 = kompozice hotových kusů (Fáze 1–5), rozvoj iterativně dle chování; Issue #51 přidal popisky ikon railu (šířka = `--shpd-rail-width`) a text v aktivní záložce. Stav prohlížení shell-lokální (`stores/wildShell.svelte.js`), paměť poslední záložky per sekce přežije settings mód, reload ne |
 | `mobile` | — | — | dnes režim uvnitř shellu; cílově vlastní shell, rezoluce = f(volba, form factor) |
 
 `classic` a `wild` jsou zrcadlové projekce (sekce nahoře/vlevo, leafy

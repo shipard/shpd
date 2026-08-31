@@ -1,7 +1,7 @@
 <script>
   // Svislý rail sekcí wild shellu (D1): nahoře ikona aplikace (tooltip =
-  // název), domeček (`_top`) + sekce z navSections jako velké ikony bez
-  // textu s tooltipem, badge z Fáze 3 (sekce pod svým id, domeček pod
+  // název), domeček (`_top`) + sekce z navSections jako ikony s popiskem
+  // pod sebou (Issue #51; dříve jen tooltip), badge z Fáze 3 (sekce pod svým id, domeček pod
   // `_top` — první místo, kde se `_top` badge kreslí). Dole trigger
   // palety + UserMenu (compact); bez chrome tlačítka chatu — AI je
   // v záložkách (D1).
@@ -58,6 +58,7 @@
       aria-label={t('shell.wild.home')}
     >
       <Icon icon={iconHome} size="lg" />
+      <span class="shpd-rail__label">{t('shell.wild.home')}</span>
       {#if sectionBadgesStore.badges._top?.count > 0}
         <span
           class="shpd-rail__badge"
@@ -76,6 +77,7 @@
         aria-label={section.label}
       >
         <Icon icon={resolveIcon(section.icon)} size="lg" />
+        <span class="shpd-rail__label">{section.label}</span>
         {#if sectionBadgesStore.badges[section.id]?.count > 0}
           <span
             class="shpd-rail__badge"
@@ -107,7 +109,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    width: var(--shpd-sidebar-width-collapsed);
+    width: var(--shpd-rail-width);
     flex-shrink: 0;
     padding: var(--shpd-space-sm) 0;
     background: var(--shpd-sidebar-bg-image, var(--shpd-color-bg-sidebar));
@@ -141,29 +143,43 @@
   .shpd-rail__nav {
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: stretch;
+    width: 100%;
     gap: 2px;
     flex: 1;
     min-height: 0;
     overflow-y: auto;
     /* Badge přesahuje tlačítko — bez rezervy by ho overflow ořízl. */
-    padding: 2px;
+    padding: 2px var(--shpd-space-xs);
   }
 
-  /* Velká ikona bez textu (D1) — aktivní signál = levý accent proužek
-     (jazyk NavIconStrip/NavFlyoutStrip). */
+  /* Ikona s popiskem pod sebou (Issue #51, jazyk NavFlyoutStrip) —
+     aktivní signál = levý accent proužek. */
   .shpd-rail__item {
     position: relative;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    width: 40px;
-    height: 40px;
+    gap: 4px;
+    width: 100%;
+    padding: var(--shpd-space-sm) 2px;
     color: var(--shpd-color-text-sidebar);
     border-radius: var(--shpd-radius-sm);
     transition: background-color 0.15s, opacity 0.15s;
     opacity: 0.85;
     flex-shrink: 0;
+  }
+
+  .shpd-rail__label {
+    max-width: 100%;
+    font-size: 0.7rem;
+    line-height: 1.15;
+    text-align: center;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
   }
 
   .shpd-rail__item:hover {
@@ -183,9 +199,9 @@
   .shpd-rail__item--active::before {
     content: '';
     position: absolute;
-    left: -2px;
-    top: 6px;
-    bottom: 6px;
+    left: 0;
+    top: 4px;
+    bottom: 4px;
     width: 3px;
     border-radius: 0 2px 2px 0;
     background-color: var(--shpd-color-accent);
@@ -196,7 +212,7 @@
   .shpd-rail__badge {
     position: absolute;
     top: 0;
-    right: 0;
+    right: 12px;
     min-width: 14px;
     height: 14px;
     padding: 0 3px;
@@ -217,6 +233,8 @@
     display: flex;
     flex-direction: column;
     align-items: center;
+    width: 100%;
+    padding: 0 var(--shpd-space-xs);
     gap: var(--shpd-space-xs);
     flex-shrink: 0;
     margin-top: var(--shpd-space-sm);

@@ -28,11 +28,11 @@
     onOpenThemePanel,
     // ThemePanel kreslí AppShell — wild hlásí konstantní offset šířky
     // railu (CSS délka nad tokeny, vzor ClassicShell).
-    themePanelLeftOffset = $bindable('calc(var(--shpd-sidebar-width-collapsed) + var(--shpd-space-sm))'),
+    themePanelLeftOffset = $bindable('calc(var(--shpd-rail-width) + var(--shpd-space-sm))'),
   } = $props();
 
   $effect(() => {
-    themePanelLeftOffset = 'calc(var(--shpd-sidebar-width-collapsed) + var(--shpd-space-sm))';
+    themePanelLeftOffset = 'calc(var(--shpd-rail-width) + var(--shpd-space-sm))';
   });
 
   const tree = $derived(navigationStore.appNavTree ?? []);
@@ -185,6 +185,9 @@
           aria-label={t('shell.wild.aiTab')}
         >
           <Icon icon={iconChat} size="md" />
+          {#if onAiTab}
+            <span class="shpd-wild__ai-tab-label">{t('shell.wild.aiTab')}</span>
+          {/if}
         </button>
         <span class="shpd-wild__tabs-sep" aria-hidden="true"></span>
       {/if}
@@ -245,13 +248,23 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
+    gap: 6px;
+    min-width: 36px;
     height: 36px;
+    padding: 0 8px;
     color: var(--shpd-color-text-sidebar);
     border-radius: var(--shpd-radius-sm);
     transition: background-color 0.15s, opacity 0.15s;
     opacity: 0.85;
     flex-shrink: 0;
+  }
+
+  .shpd-wild__ai-tab-label {
+    max-width: 200px;
+    font-size: var(--shpd-font-size-sm);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .shpd-wild__ai-tab:hover {

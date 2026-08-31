@@ -7,6 +7,9 @@
   // otevřený dropdown; zavření výběrem / Esc / klikem mimo řeší Popover.
   // Pruh při přetečení scrolluje horizontálně.
   //
+  // Aktivní záložka (leaf i skupina s aktivním leafem) zobrazuje svůj
+  // popisek (Issue #51) — ostatní zůstávají ikonové s tooltipem.
+  //
   // O AI záložce wild shellu primitiv nic neví (R1) — WildShell ji
   // renderuje vedle jako sourozence ve stejném vizuálním pruhu.
   //
@@ -61,6 +64,9 @@
           aria-label={node.label}
         >
           <Icon icon={resolveIcon(node.icon)} size="md" />
+          {#if activeId === node.id}
+            <span class="shpd-tabstrip__label">{node.label}</span>
+          {/if}
         </button>
       {:else}
         <button
@@ -75,6 +81,9 @@
           bind:this={groupButtons[node.id]}
         >
           <Icon icon={resolveIcon(node.icon)} size="md" />
+          {#if isGroupActive(node)}
+            <span class="shpd-tabstrip__label">{node.label}</span>
+          {/if}
         </button>
       {/if}
     </li>
@@ -141,13 +150,23 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
+    gap: 6px;
+    min-width: 36px;
     height: 36px;
+    padding: 0 8px;
     color: var(--shpd-color-text-sidebar);
     border-radius: var(--shpd-radius-sm);
     transition: background-color 0.15s, opacity 0.15s;
     opacity: 0.85;
     flex-shrink: 0;
+  }
+
+  .shpd-tabstrip__label {
+    max-width: 180px;
+    font-size: var(--shpd-font-size-sm);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .shpd-tabstrip__item:hover,

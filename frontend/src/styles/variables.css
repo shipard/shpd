@@ -198,6 +198,8 @@
   --shpd-header-height: 56px;
   /* Levý pás classic shellu (ikona + popisek pod sebou). */
   --shpd-classic-strip-width: 76px;
+  /* Levý rail wild shellu (ikona + popisek pod sebou, Issue #51). */
+  --shpd-rail-width: 76px;
 }
 
 /* ============================================================

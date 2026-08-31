@@ -19,7 +19,7 @@
   import { t, tn } from '../../../i18n/index.js';
   import { resolveIcon, iconHome, iconSearch } from '../../../icons.js';
 
-  let { browsingSection = null, onSelectSection, onLogout, onOpenThemePanel } = $props();
+  let { browsingSection = null, onSelectSection, onOpenThemePanel } = $props();
 
   const tree = $derived(navigationStore.appNavTree ?? []);
   // Sekce = root uzly se children (leafy `_top`/dashboard/chat mají type).
@@ -98,7 +98,7 @@
     >
       <Icon icon={iconSearch} size="lg" />
     </button>
-    <UserMenu compact {onLogout} {onOpenThemePanel} />
+    <UserMenu compact {onOpenThemePanel} />
   </div>
 </aside>
 

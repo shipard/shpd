@@ -7,9 +7,12 @@
   // rámečku).
   //
   // Mode akce volá přímo navigationStore (enterAccount/enterSettings);
-  // logout dodává rodič přes `onLogout` — menu se při něm záměrně
-  // NEZAVÍRÁ, celý chrome zmizí sám, jakmile clearAuth přepne aplikaci
+  // logout si UserMenu řeší samo (logout() API + clearAuth) — je to
+  // jediné místo s tlačítkem Odhlásit ve všech shellech. Menu se
+  // při logoutu záměrně NEZAVÍRÁ, celý chrome zmizí sám, jakmile
+  // clearAuth přepne aplikaci
   // na LoginScreen (viz docs/frontend.md §9 Dropdown / popover komponenty).
+  import { logout } from '../../api/auth.js';
   import { authStore } from '../../stores/auth.svelte.js';
   import { navigationStore } from '../../stores/navigation.svelte.js';
   import { layoutStore } from '../../stores/layout.svelte.js';
@@ -32,7 +35,7 @@
     iconLayout,
   } from '../../icons.js';
 
-  let { compact = false, direction = 'up', onLogout, onOpenThemePanel } = $props();
+  let { compact = false, direction = 'up', onOpenThemePanel } = $props();
 
   let userMenuOpen = $state(false);
   let userMenuRoot = $state(null);
@@ -149,10 +152,15 @@
     shellStore.setOverride(value);
   }
 
-  function handleLogoutFromMenu() {
+  async function handleLogoutFromMenu() {
     // Záměrně nezavíráme menu předem — celý chrome zmizí sám,
     // jakmile clearAuth přepne aplikaci na LoginScreen.
-    onLogout?.();
+    try {
+      await logout();
+    } catch (err) {
+      console.warn('Logout API call failed (continuing):', err);
+    }
+    authStore.clearAuth();
   }
 
   // Zavři menu při kliknutí mimo něj nebo při Escape.

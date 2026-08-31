@@ -10,7 +10,6 @@
   import { layoutStore } from '../../stores/layout.svelte.js';
 
   let {
-    onLogout,
     onOpenThemePanel,
     // ThemePanel se renderuje v AppShellu (mobilní drawer má transform =
     // containing block pro position:fixed, panel uvnitř by se uvěznil) —
@@ -60,7 +59,7 @@
       class="shpd-shell__drawer"
       class:shpd-shell__drawer--open={layoutStore.drawerOpen}
     >
-      <Sidebar onNavigate={handleNavigate} {onLogout} {onOpenThemePanel} />
+      <Sidebar onNavigate={handleNavigate} {onOpenThemePanel} />
     </div>
 
     <div class="shpd-shell__main">
@@ -70,7 +69,6 @@
     <!-- Desktop režim: pevný sidebar + obsah vedle. -->
     <Sidebar
       onNavigate={handleNavigate}
-      {onLogout}
       {onOpenThemePanel}
       bind:collapsed={sidebarCollapsed}
     />

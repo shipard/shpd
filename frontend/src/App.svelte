@@ -28,7 +28,7 @@
 {:else if authStore.isAuthenticated}
   <!-- Jednotný shell pro všechny přihlášené (revize D10, task hosting-07):
        ne-admin dostává serverem ořezanou navigaci, portál je panel. -->
-  <AppShell onLogout={() => {}} />
+  <AppShell />
 {:else if authAction.kind === 'set-password'}
   <SetPasswordScreen />
 {:else}

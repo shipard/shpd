@@ -24,7 +24,6 @@
   import { t } from '../../i18n/index.js';
 
   let {
-    onLogout,
     onOpenThemePanel,
     // ThemePanel kreslí AppShell — wild hlásí konstantní offset šířky
     // railu (CSS délka nad tokeny, vzor ClassicShell).
@@ -168,7 +167,6 @@
   <SectionRail
     browsingSection={wildShellStore.browsingSection}
     onSelectSection={handleSelectSection}
-    {onLogout}
     {onOpenThemePanel}
   />
 

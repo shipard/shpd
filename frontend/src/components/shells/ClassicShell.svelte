@@ -10,7 +10,6 @@
   import { navigationStore } from '../../stores/navigation.svelte.js';
 
   let {
-    onLogout,
     onOpenThemePanel,
     // ThemePanel kreslí AppShell — classic hlásí konstantní offset
     // šířky pásu (CSS délka nad tokeny, vzor SidebarShell).
@@ -53,7 +52,7 @@
 </script>
 
 <div class="shpd-classic" data-testid="app-shell">
-  <TopMenuBar onNavigate={handleNavigate} {onLogout} {onOpenThemePanel} />
+  <TopMenuBar onNavigate={handleNavigate} {onOpenThemePanel} />
 
   <div class="shpd-classic__body">
     <aside class="shpd-classic__strip">

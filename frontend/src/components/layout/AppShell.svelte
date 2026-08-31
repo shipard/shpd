@@ -14,8 +14,6 @@
   import { sectionBadgesStore } from '../../stores/sectionBadges.svelte.js';
   import { shellStore } from '../../stores/shell.svelte.js';
 
-  let { onLogout } = $props();
-
   // Resolver shellu (R2): alternativní shell jen na desktopu v app módu —
   // mobil (D5) i settings/account módy (D6) jedou vždy v sidebar-style
   // chrome. Přepnutí je soft swap komponenty: navigationStore přežije,
@@ -76,7 +74,6 @@
 </script>
 
 <ShellComponent
-  {onLogout}
   onOpenThemePanel={openThemePanel}
   bind:themePanelLeftOffset
 />

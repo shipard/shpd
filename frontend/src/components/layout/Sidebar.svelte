@@ -4,8 +4,6 @@
   // NavTree / NavIconStrip dle `collapsed`, UserMenu v patce.
   // Vlastní zůstává: fetch navigace per mode, collapsed stav, loading/error.
   import { get } from '../../api/client.js';
-  import { logout } from '../../api/auth.js';
-  import { authStore } from '../../stores/auth.svelte.js';
   import { navigationStore } from '../../stores/navigation.svelte.js';
   import { layoutStore } from '../../stores/layout.svelte.js';
   import { paletteStore } from '../../stores/palette.svelte.js';
@@ -34,7 +32,7 @@
   // by position:fixed panel uvěznil). Panel custom vzhledu už neotevírá
   // sidebar (dropdown vzhledu zanikl) — otevírá ho ThemeField na stránce
   // Nastavení účtu → Základní.
-  let { onNavigate, onLogout, onOpenThemePanel, collapsed = $bindable(false) } = $props();
+  let { onNavigate, onOpenThemePanel, collapsed = $bindable(false) } = $props();
 
   // App strom vlastní navigationStore (loadAppNavTree volá AppShell —
   // strom potřebují všechny shelly). Lokální fetch zůstává jen pro
@@ -90,16 +88,6 @@
     const navItem = { id: item.id, label: item.label, type: item.type, table: item.table, viewerId: item.viewerId, pageId: item.pageId, panelId: item.panelId, panelParams: item.panelParams, filter: item.filter, fixedViewGroup: item.fixedViewGroup };
     navigationStore.navigate(navItem);
     onNavigate?.(navItem);
-  }
-
-  async function handleLogout() {
-    try {
-      await logout();
-    } catch (err) {
-      console.warn('Logout API call failed (continuing):', err);
-    }
-    authStore.clearAuth();
-    onLogout?.();
   }
 
   function toggleCollapse() {
@@ -237,7 +225,7 @@
     {/if}
   </div>
 
-  <UserMenu compact={collapsed} onLogout={handleLogout} {onOpenThemePanel} />
+  <UserMenu compact={collapsed} {onOpenThemePanel} />
 </nav>
 
 <style>

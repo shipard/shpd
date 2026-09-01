@@ -73,6 +73,9 @@ CATALOG_EXTRA_AGENDAS = {
     "Hlavní kniha",
     "Výsledovka",
     "Rozvaha",
+    "Přiznání k DPH — živě",
+    "Kontrolní hlášení — živě",
+    "Souhrnné hlášení — živě",
 }
 
 # Řádek tabulky katalogu: `| **Agenda** | …`

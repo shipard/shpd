@@ -14,5 +14,9 @@
 
     "config": [
         { "id": "economy.taxes.reports.cz", "file": "config/vat-reports-cz.jsonc" }
+    ],
+
+    "reports": [
+        { "file": "config/reports.jsonc" }
     ]
 }

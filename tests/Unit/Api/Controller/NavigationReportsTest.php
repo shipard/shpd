@@ -114,17 +114,23 @@ class NavigationReportsTest extends TestCase
         $this->assertArrayNotHasKey('_section', $group);
         $this->assertArrayNotHasKey('_order', $group);
 
-        // Tři reporty v pořadí dle navOrder (60/61/62).
+        // Reporty v pořadí dle navOrder (účetní 60–62, DPH 70–72).
         $this->assertSame(
             [
                 'report:economy.accounting.generalLedger',
                 'report:economy.accounting.profitLoss',
                 'report:economy.accounting.balanceSheet',
+                'report:economy.taxes.vatReturnLive',
+                'report:economy.taxes.vatControlStatementLive',
+                'report:economy.taxes.vatEcSalesLive',
             ],
             array_column($group['children'], 'id'),
         );
         $this->assertSame(
-            ['Hlavní kniha', 'Výsledovka', 'Rozvaha'],
+            [
+                'Hlavní kniha', 'Výsledovka', 'Rozvaha',
+                'Přiznání k DPH — živě', 'Kontrolní hlášení — živě', 'Souhrnné hlášení — živě',
+            ],
             array_column($group['children'], 'label'),
         );
 
@@ -146,7 +152,10 @@ class NavigationReportsTest extends TestCase
         $this->assertNotNull($group);
         $this->assertSame('Reports', $group['label']);
         $this->assertSame(
-            ['General ledger', 'Profit and loss', 'Balance sheet'],
+            [
+                'General ledger', 'Profit and loss', 'Balance sheet',
+                'VAT return (live)', 'VAT control statement (live)', 'EC sales list (live)',
+            ],
             array_column($group['children'], 'label'),
         );
     }
@@ -157,7 +166,7 @@ class NavigationReportsTest extends TestCase
         $group = $this->reportsGroup($this->tree('cs', new AuthContext(isAuthenticated: true, userId: 2, isAdmin: false)));
 
         $this->assertNotNull($group);
-        $this->assertCount(3, $group['children']);
+        $this->assertCount(6, $group['children']);
     }
 
     public function testReportsGroupOrderedAfterAccountingViewers(): void

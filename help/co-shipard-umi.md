@@ -62,6 +62,9 @@ Položky, které jsou v menu samostatně, nad ostatními sekcemi.
 | **Hlavní kniha** | Report ve skupině **Reporty**: účty s počátečním stavem, obraty MD/D a konečným zůstatkem za zvolené období. Období vybíráš v mřížce měsíc / čtvrtletí / pololetí / rok, detail analyticky nebo synteticky | — |
 | **Výsledovka** | Report ve skupině **Reporty**: výnosy a náklady za období a od počátku roku, dole výsledek hospodaření. Umí zobrazení v tisících | — |
 | **Rozvaha** | Report ve skupině **Reporty**: aktiva a pasiva k počátku a konci období. Když aktiva nesedí na pasiva, report to červeně ohlásí pod tabulkou | — |
+| **Přiznání k DPH — živě** | Report ve skupině **Reporty**: řádky přiznání spočítané z dokladů za zvolené období DPH, dole vlastní daň nebo nadměrný odpočet. Kontroluje se proti účetnímu deníku | [Živé výstupy DPH](uctarna/dph-zive-vystupy.md) |
+| **Kontrolní hlášení — živě** | Report ve skupině **Reporty**: sekce A1–B3 s doklady nad 10 000 Kč jednotlivě a menšími v souhrnu. Chybějící DIČ nebo číslo dokladu dodavatele ohlásí pod tabulkou | [Živé výstupy DPH](uctarna/dph-zive-vystupy.md) |
+| **Souhrnné hlášení — živě** | Report ve skupině **Reporty**: dodání zboží a služeb do EU sečtená po odběratelích s počtem plnění a hodnotou | [Živé výstupy DPH](uctarna/dph-zive-vystupy.md) |
 
 ---
 

@@ -22,6 +22,7 @@
         "economy.codebooks",
         "economy.items",
         "economy.accounting",
+        "economy.taxes",
         "economy.bank",
         "economy.accbal",
         "world.vat",

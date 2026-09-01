@@ -1,0 +1,38 @@
+// Deklarace živých DPH reportů modulu economy.taxes (docs/reports.md,
+// tasks/taxes-phase01.md). Zdroj období = registrace + interval období DPH
+// (periodSource vatPeriod), žádné per-report parametry.
+[
+    {
+        "id": "economy.taxes.vatReturnLive",
+        "navSection": "accounting",
+        "navOrder": 70,
+        "name": "VAT return (live)",
+        "name:cs": "Přiznání k DPH — živě",
+        "name:en": "VAT return (live)",
+        "builder": "Shipard\\Module\\Economy\\Taxes\\Reports\\VatReturnLiveBuilder",
+        "periodSource": "vatPeriod",
+        "params": []
+    },
+    {
+        "id": "economy.taxes.vatControlStatementLive",
+        "navSection": "accounting",
+        "navOrder": 71,
+        "name": "VAT control statement (live)",
+        "name:cs": "Kontrolní hlášení — živě",
+        "name:en": "VAT control statement (live)",
+        "builder": "Shipard\\Module\\Economy\\Taxes\\Reports\\VatControlStatementLiveBuilder",
+        "periodSource": "vatPeriod",
+        "params": []
+    },
+    {
+        "id": "economy.taxes.vatEcSalesLive",
+        "navSection": "accounting",
+        "navOrder": 72,
+        "name": "EC sales list (live)",
+        "name:cs": "Souhrnné hlášení — živě",
+        "name:en": "EC sales list (live)",
+        "builder": "Shipard\\Module\\Economy\\Taxes\\Reports\\VatEcSalesLiveBuilder",
+        "periodSource": "vatPeriod",
+        "params": []
+    }
+]

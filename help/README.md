@@ -69,6 +69,7 @@ Tyhle stránky slouží dvěma čtenářům: tobě a vestavěnému AI asistentov
 
 | Stránka | Co v ní najdeš |
 |---------|----------------|
+| [Živé výstupy DPH](uctarna/dph-zive-vystupy.md) | Jak si přečíst živé přiznání k DPH, kontrolní hlášení a souhrnné hlášení za zvolené období a co znamenají upozornění pod tabulkou. |
 | [Když se doklad nezaúčtuje](uctarna/kdyz-se-doklad-nezauctuje.md) | Co znamenají hlášky u chyby účtování, kde se která spravuje a proč doklad nemusíš rozebírat. |
 
 <!-- OBSAH:END -->

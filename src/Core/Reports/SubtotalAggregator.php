@@ -106,6 +106,9 @@ final class SubtotalAggregator
     private function accumulate(array &$sums, array $values): void
     {
         foreach ($values as $columnId => $cell) {
+            if (!is_array($cell)) {
+                continue; // text/date buňky (string) nelze agregovat
+            }
             if (!isset($sums[$columnId])) {
                 $sums[$columnId] = ['md' => 0.0, 'd' => 0.0];
             }

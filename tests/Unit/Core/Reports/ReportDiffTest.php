@@ -162,4 +162,71 @@ class ReportDiffTest extends TestCase
 
         $this->assertTrue((new ReportDiff())->diff($a, $b)['identical']);
     }
+
+    // ── Text/date sloupce ───────────────────────────────────────────────────
+
+    /** @return array<string, mixed> */
+    private function textDetail(string $account, string $evidNumber, float $balance): array
+    {
+        return [
+            'kind'    => 'detail',
+            'level'   => 0,
+            'account' => $account,
+            'label'   => $account,
+            'values'  => [
+                'evidNumber' => $evidNumber,
+                'closing'    => ['md' => $balance, 'd' => 0.0, 'balance' => $balance],
+            ],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private function makeTextResult(array $rows): array
+    {
+        $result = $this->makeResult($rows);
+        array_unshift($result['columns'], ['id' => 'evidNumber', 'type' => 'text', 'label' => 'Ev. číslo', 'display' => 'balance']);
+        return $result;
+    }
+
+    public function testTextColumnIdenticalAndDiffers(): void
+    {
+        $a = $this->makeTextResult([$this->textDetail('doc1', 'FV-2026-001', 100.0)]);
+        $this->assertTrue((new ReportDiff())->diff($a, $a)['identical']);
+
+        $b = $this->makeTextResult([$this->textDetail('doc1', 'FV-2026-002', 100.0)]);
+        $diff = (new ReportDiff())->diff($a, $b);
+
+        $this->assertFalse($diff['identical']);
+        $this->assertCount(1, $diff['differences']);
+        $this->assertSame(
+            ['account' => 'doc1', 'column' => 'evidNumber', 'field' => 'value',
+                'a' => 'FV-2026-001', 'b' => 'FV-2026-002', 'delta' => null],
+            $diff['differences'][0],
+        );
+    }
+
+    public function testMissingColumnTypeIsTreatedAsMoney(): void
+    {
+        // Staré exporty `type` nemají — money porovnání musí fungovat dál.
+        $a = $this->makeResult([$this->detail('311001', 100.0, 0.0)]);
+        $b = $this->makeResult([$this->detail('311001', 200.0, 0.0)]);
+        unset($a['columns'][0]['type'], $b['columns'][0]['type']);
+
+        $diff = (new ReportDiff())->diff($a, $b);
+        $this->assertFalse($diff['identical']);
+        $this->assertSame('md', $diff['differences'][0]['field']);
+        $this->assertSame(100.0, $diff['differences'][0]['delta']);
+    }
+
+    public function testTextColumnOnlyInOneSide(): void
+    {
+        $a = $this->makeTextResult([$this->textDetail('doc1', 'FV-2026-001', 100.0)]);
+        $b = $this->makeResult([$this->detail('doc1', 100.0, 0.0)]);
+        $b['rows'][0]['values'] = ['closing' => ['md' => 100.0, 'd' => 0.0, 'balance' => 100.0]];
+        $b['rows'][0]['account'] = 'doc1';
+
+        $diff = (new ReportDiff())->diff($a, $b);
+        $this->assertTrue($diff['identical']);
+        $this->assertSame(['evidNumber'], $diff['columnsOnlyInA']);
+    }
 }

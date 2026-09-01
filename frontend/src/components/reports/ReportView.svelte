@@ -8,6 +8,7 @@
   import { iconWarning, iconInfo, iconAlert } from '../../icons.js';
   import { t } from '../../i18n/index.js';
   import { formatAmount } from '../../utils/formatNumber.js';
+  import { language } from '../../stores/language.svelte.js';
 
   let { result, thousands = false } = $props();
 
@@ -41,8 +42,27 @@
     return formatAmount(value, { thousands });
   }
 
+  // Text/date sloupce nesou buňku jako prostý string (datum ISO YYYY-MM-DD).
+  function isTextual(column) {
+    const type = column.type ?? 'money';
+    return type === 'text' || type === 'date';
+  }
+
+  function fmtText(column, cell) {
+    const value = typeof cell === 'string' ? cell : '';
+    if (column.type === 'date' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      const d = new Date(value);
+      if (!Number.isNaN(d.getTime())) {
+        return d.toLocaleDateString(language.current === 'en' ? 'en-US' : 'cs-CZ');
+      }
+    }
+    return value;
+  }
+
   function headerLabel(column) {
-    return thousands ? `${column.label} ${t('reports.thousandsSuffix')}` : column.label;
+    // Suffix „(v tisících)" dává smysl jen u peněžních sloupců.
+    if (!thousands || isTextual(column)) return column.label;
+    return `${column.label} ${t('reports.thousandsSuffix')}`;
   }
 </script>
 
@@ -66,7 +86,9 @@
           <tr>
             <th class="shpd-report__th shpd-report__th--label" rowspan={hasSides ? 2 : 1}></th>
             {#each columns as column (column.id)}
-              {#if (column.display ?? 'balance') === 'sides'}
+              {#if isTextual(column)}
+                <th class="shpd-report__th shpd-report__th--text" rowspan={hasSides ? 2 : 1}>{headerLabel(column)}</th>
+              {:else if (column.display ?? 'balance') === 'sides'}
                 <th class="shpd-report__th shpd-report__th--group" colspan="3">{headerLabel(column)}</th>
               {:else}
                 <th class="shpd-report__th shpd-report__th--num" rowspan={hasSides ? 2 : 1}>{headerLabel(column)}</th>
@@ -104,7 +126,9 @@
               </td>
               {#each columns as column (column.id)}
                 {@const cell = row.values?.[column.id]}
-                {#if (column.display ?? 'balance') === 'sides'}
+                {#if isTextual(column)}
+                  <td class="shpd-report__td shpd-report__td--text">{fmtText(column, cell)}</td>
+                {:else if (column.display ?? 'balance') === 'sides'}
                   <td class="shpd-report__td shpd-report__td--num">{fmt(cell?.md)}</td>
                   <td class="shpd-report__td shpd-report__td--num">{fmt(cell?.d)}</td>
                   <td class="shpd-report__td shpd-report__td--num">{fmt(cell?.balance)}</td>
@@ -203,6 +227,12 @@
   .shpd-report__td--num {
     text-align: right;
     font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .shpd-report__th--text,
+  .shpd-report__td--text {
+    text-align: left;
     white-space: nowrap;
   }
 

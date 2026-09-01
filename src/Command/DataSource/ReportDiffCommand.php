@@ -138,7 +138,8 @@ class ReportDiffCommand extends Command
             foreach ($diff['differences'] as $d) {
                 $table->addRow([
                     $d['account'], $d['column'], $d['field'],
-                    $this->money($d['a']), $this->money($d['b']), $this->money($d['delta']),
+                    $this->cell($d['a']), $this->cell($d['b']),
+                    $d['delta'] === null ? '' : $this->money((float) $d['delta']),
                 ]);
             }
             $table->render();
@@ -155,5 +156,11 @@ class ReportDiffCommand extends Command
     private function money(float $value): string
     {
         return number_format($value, 2, ',', ' ');
+    }
+
+    /** Text/date rozdíly nesou string hodnoty, money rozdíly float. */
+    private function cell(mixed $value): string
+    {
+        return is_string($value) ? $value : $this->money((float) $value);
     }
 }

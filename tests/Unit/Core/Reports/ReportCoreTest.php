@@ -78,6 +78,38 @@ class ReportCoreTest extends TestCase
         new ReportColumn('x', 'money', 'X', 'both');
     }
 
+    public function testTextAndDateColumns(): void
+    {
+        $text = new ReportColumn('evidNumber', 'text', 'Ev. číslo');
+        $this->assertSame(
+            ['id' => 'evidNumber', 'type' => 'text', 'label' => 'Ev. číslo', 'display' => 'balance'],
+            $text->toArray(),
+        );
+
+        $date = new ReportColumn('dppd', 'date', 'DPPD');
+        $this->assertSame('date', $date->toArray()['type']);
+
+        // String buňky procházejí toArray beze změny.
+        $result = new ReportResult('r', [], 'ds', [], [$text], [
+            new ReportRow(ReportRowKind::Detail, 0, null, 'FV-2026-001', ['evidNumber' => 'FV-2026-001']),
+        ]);
+        $this->assertSame(['evidNumber' => 'FV-2026-001'], $result->toArray()['rows'][0]['values']);
+    }
+
+    public function testTextColumnRejectsSidesDisplay(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("display 'sides' requires type 'money'");
+        new ReportColumn('vatId', 'text', 'DIČ', ReportColumn::DISPLAY_SIDES);
+    }
+
+    public function testColumnRejectsUnknownType(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("unsupported type 'number'");
+        new ReportColumn('x', 'number', 'X');
+    }
+
     public function testStatusDerivedFromMessages(): void
     {
         $info    = new ReportMessage(ReportMessageSeverity::Info, 'x.info', 'info');
@@ -317,6 +349,22 @@ class ReportCoreTest extends TestCase
         $this->assertSame(['md' => 0.0, 'd' => 200.0, 'balance' => -200.0], $rows[8]->values['turnover']);
         // Total = suma tříd.
         $this->assertSame(['md' => 150.5, 'd' => 210.0, 'balance' => -59.5], $rows[9]->values['turnover']);
+    }
+
+    public function testAggregatorIgnoresStringCells(): void
+    {
+        $aggregator = new SubtotalAggregator();
+        $detail     = new ReportRow(ReportRowKind::Detail, 2, '501', 'Spotřeba', [
+            'evidNumber' => 'FV-2026-001',
+            'turnover'   => ['md' => 5.0, 'd' => 2.0, 'balance' => 3.0],
+        ]);
+
+        $rows  = $aggregator->rollup([$detail], [1], fn (string $p): string => "Třída {$p}", 'Celkem');
+        $total = end($rows);
+
+        $this->assertSame(ReportRowKind::Total, $total->kind);
+        $this->assertArrayNotHasKey('evidNumber', $total->values);
+        $this->assertSame(['md' => 5.0, 'd' => 2.0, 'balance' => 3.0], $total->values['turnover']);
     }
 
     public function testAggregatorMultipleColumns(): void

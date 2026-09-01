@@ -8,7 +8,10 @@ namespace Shipard\Core\Reports;
  * Strojové porovnání dvou dekódovaných `ReportResult` array (D14) — čistá
  * třída bez DB, primární využití: kontrola importu ze starého Shipardu
  * (`report-diff` CLI). Strany nemusejí mít shodné `reportId` ani stejnou
- * sadu sloupců — porovnává se průnik sloupců dle `id`.
+ * sadu sloupců — porovnává se průnik sloupců dle `id`. Money sloupce se
+ * porovnávají numericky s tolerancí, text/date sloupce striktně jako string
+ * (`field: 'value'`, `delta: null`); chybějící `type` sloupce = money
+ * (kompatibilita se starými exporty).
  *
  * Porovnávají se pouze řádky `kind: detail` (klíč = `account`) a jako
  * kontrolní součet řádky `kind: total` (klíč = `label`, jen labely přítomné
@@ -30,7 +33,7 @@ final class ReportDiff
      * @param array<string, mixed> $b Dekódovaný `ReportResult::toArray()` strany B.
      * @return array{
      *     identical: bool,
-     *     differences: list<array{account: string, column: string, field: string, a: float, b: float, delta: float}>,
+     *     differences: list<array{account: string, column: string, field: string, a: float|string, b: float|string, delta: ?float}>,
      *     onlyInA: list<string>,
      *     onlyInB: list<string>,
      *     columnsOnlyInA: list<string>,
@@ -41,9 +44,17 @@ final class ReportDiff
      */
     public function diff(array $a, array $b): array
     {
-        $columnsA = $this->columnIds($a);
-        $columnsB = $this->columnIds($b);
-        $sharedColumns = array_values(array_intersect($columnsA, $columnsB));
+        $columnsA = $this->columnTypes($a);
+        $columnsB = $this->columnTypes($b);
+        // Průnik sloupců; kind porovnání: money jen když obě strany money,
+        // jinak string (text/date na kterékoli straně vítězí).
+        $sharedColumns = [];
+        foreach ($columnsA as $id => $typeA) {
+            if (!isset($columnsB[$id])) {
+                continue;
+            }
+            $sharedColumns[$id] = ($typeA === 'money' && $columnsB[$id] === 'money') ? 'money' : 'text';
+        }
 
         $detailsA = $this->rowsByKey($a, 'detail', 'account');
         $detailsB = $this->rowsByKey($b, 'detail', 'account');
@@ -75,23 +86,24 @@ final class ReportDiff
             'differences'    => $differences,
             'onlyInA'        => $onlyInA,
             'onlyInB'        => $onlyInB,
-            'columnsOnlyInA' => array_values(array_diff($columnsA, $columnsB)),
-            'columnsOnlyInB' => array_values(array_diff($columnsB, $columnsA)),
+            'columnsOnlyInA' => array_values(array_diff(array_keys($columnsA), array_keys($columnsB))),
+            'columnsOnlyInB' => array_values(array_diff(array_keys($columnsB), array_keys($columnsA))),
             'statusA'        => (string) ($a['status'] ?? 'ok'),
             'statusB'        => (string) ($b['status'] ?? 'ok'),
         ];
     }
 
-    /** @return list<string> */
-    private function columnIds(array $result): array
+    /** @return array<string, string> id sloupce => typ; chybějící/nevalidní `type` = money. */
+    private function columnTypes(array $result): array
     {
-        $ids = [];
+        $types = [];
         foreach ($result['columns'] ?? [] as $column) {
             if (is_array($column) && isset($column['id']) && is_string($column['id'])) {
-                $ids[] = $column['id'];
+                $type = $column['type'] ?? 'money';
+                $types[$column['id']] = is_string($type) ? $type : 'money';
             }
         }
-        return $ids;
+        return $types;
     }
 
     /**
@@ -119,12 +131,27 @@ final class ReportDiff
     /**
      * @param array<string, mixed> $valuesA
      * @param array<string, mixed> $valuesB
-     * @param list<string> $columns
+     * @param array<string, string> $columns id sloupce => kind porovnání ('money' | 'text')
      * @param list<array<string, mixed>> $differences
      */
     private function compareValues(string $key, array $valuesA, array $valuesB, array $columns, array &$differences): void
     {
-        foreach ($columns as $column) {
+        foreach ($columns as $column => $kind) {
+            if ($kind !== 'money') {
+                $valA = is_string($valuesA[$column] ?? null) ? $valuesA[$column] : '';
+                $valB = is_string($valuesB[$column] ?? null) ? $valuesB[$column] : '';
+                if ($valA !== $valB) {
+                    $differences[] = [
+                        'account' => $key,
+                        'column'  => $column,
+                        'field'   => 'value',
+                        'a'       => $valA,
+                        'b'       => $valB,
+                        'delta'   => null,
+                    ];
+                }
+                continue;
+            }
             foreach (self::FIELDS as $field) {
                 $valA = (float) ($valuesA[$column][$field] ?? 0.0);
                 $valB = (float) ($valuesB[$column][$field] ?? 0.0);

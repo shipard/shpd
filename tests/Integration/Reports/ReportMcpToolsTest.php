@@ -57,7 +57,7 @@ class ReportMcpToolsTest extends IntegrationTestCase
         $result = $this->listReports();
 
         $this->assertIsString($result['summary']);
-        $this->assertCount(3, $result['items']);
+        $this->assertGreaterThanOrEqual(3, count($result['items']));
 
         $ids = array_column($result['items'], 'reportId');
         $this->assertContains('economy.accounting.generalLedger', $ids);
@@ -66,8 +66,15 @@ class ReportMcpToolsTest extends IntegrationTestCase
 
         foreach ($result['items'] as $item) {
             $this->assertNotSame('', $item['name']);
-            $this->assertNotSame([], $item['periodGranularities']);
             $this->assertArrayHasKey('params', $item);
+            if (($item['periodSource'] ?? 'fiscal') === 'vatPeriod') {
+                // vatPeriod reporty granularity nemají a roky neneseou —
+                // období jsou v top-level vatRegistrations.
+                $this->assertSame([], $item['periodGranularities']);
+                $this->assertArrayNotHasKey('fiscalYears', $item);
+                continue;
+            }
+            $this->assertNotSame([], $item['periodGranularities']);
             $this->assertNotSame([], $item['fiscalYears'], 'dev DS musí mít fiskální roky');
             $this->assertArrayHasKey('name', $item['fiscalYears'][0]);
             $this->assertArrayHasKey('months', $item['fiscalYears'][0]);

@@ -16,6 +16,7 @@ use Shipard\Core\Database\DataSourceConnection;
 final class ReportRunner
 {
     private readonly FiscalPeriodProvider $periods;
+    private readonly VatPeriodProvider $vatPeriods;
 
     public function __construct(
         private readonly ReportRegistry $registry,
@@ -24,8 +25,12 @@ final class ReportRunner
         private readonly string $dataSourceId,
         private readonly string $language = 'en',
         ?FiscalPeriodProvider $periods = null,
+        ?VatPeriodProvider $vatPeriods = null,
     ) {
         $this->periods = $periods ?? new DbFiscalPeriodProvider($db);
+        // Konstrukce je bez dotazu — DS bez economy_codebooks za to nic neplatí,
+        // dotaz přijde až s během vatPeriod reportu (ten bez tabulek neexistuje).
+        $this->vatPeriods = $vatPeriods ?? new DbVatPeriodProvider($db);
     }
 
     /**
@@ -40,7 +45,7 @@ final class ReportRunner
             throw new ReportNotFoundException("Unknown report '{$reportId}'");
         }
 
-        $validator = new ReportParamValidator($this->periods);
+        $validator = new ReportParamValidator($this->periods, $this->vatPeriods);
         $validated = $validator->validate($definition, $rawParams);
 
         $builderClass = $definition->builderClass;
@@ -64,6 +69,7 @@ final class ReportRunner
             config: $this->config,
             dataSource: $this->dataSourceId,
             language: $this->language,
+            vatRange: $validated['vatRange'],
         ));
     }
 }

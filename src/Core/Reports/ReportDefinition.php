@@ -14,13 +14,18 @@ namespace Shipard\Core\Reports;
 final class ReportDefinition
 {
     public const GRANULARITIES = ['month', 'quarter', 'halfYear', 'year'];
+    public const PERIOD_SOURCES = ['fiscal', 'vatPeriod'];
     private const PARAM_TYPES  = ['enum', 'bool'];
 
     /**
-     * @param list<string> $periodGranularities Podmnožina GRANULARITIES.
+     * @param list<string> $periodGranularities Podmnožina GRANULARITIES;
+     *        u `periodSource: 'vatPeriod'` prázdné (období určuje registrace).
      * @param list<array{id: string, type: string, options: list<string>, default: mixed}> $params
      *        Schéma ne-periodových parametrů.
      * @param ?string $navSection Sekce hlavní navigace; null = report do navigace nevstupuje.
+     * @param string $periodSource Zdroj období: 'fiscal' (fiskální měsíce, default)
+     *        nebo 'vatPeriod' (období DPH registrace — parametry
+     *        vatRegistration + dateFrom/dateTo).
      */
     public function __construct(
         public readonly string $id,
@@ -31,6 +36,7 @@ final class ReportDefinition
         public readonly string $moduleId,
         public readonly ?string $navSection = null,
         public readonly int $navOrder = 1000,
+        public readonly string $periodSource = 'fiscal',
     ) {}
 
     /** @param array<string, mixed> $data */
@@ -53,8 +59,23 @@ final class ReportDefinition
             throw new \InvalidArgumentException("Report '{$id}': missing 'builder' class");
         }
 
+        $periodSource = $data['periodSource'] ?? 'fiscal';
+        if (!is_string($periodSource) || !in_array($periodSource, self::PERIOD_SOURCES, true)) {
+            throw new \InvalidArgumentException(
+                "Report '{$id}': 'periodSource' must be one of " . implode('|', self::PERIOD_SOURCES),
+            );
+        }
+
         $granularities = $data['periodGranularities'] ?? null;
-        if (!is_array($granularities) || $granularities === []
+        if ($periodSource === 'vatPeriod') {
+            // Období určuje registrace DPH — granularity by byly mrtvá konfigurace.
+            if ($granularities !== null) {
+                throw new \InvalidArgumentException(
+                    "Report '{$id}': 'periodGranularities' must not be declared for periodSource 'vatPeriod'",
+                );
+            }
+            $granularities = [];
+        } elseif (!is_array($granularities) || $granularities === []
             || array_diff($granularities, self::GRANULARITIES) !== []
         ) {
             throw new \InvalidArgumentException(
@@ -117,6 +138,7 @@ final class ReportDefinition
             moduleId: $moduleId,
             navSection: $navSection,
             navOrder: $navOrder,
+            periodSource: $periodSource,
         );
     }
 }

@@ -6,7 +6,7 @@ namespace Shipard\Module\Economy\Accounting\Mcp;
 use Shipard\Api\Mcp\McpInvocationContext;
 use Shipard\Api\Mcp\McpTool;
 use Shipard\Core\Reports\DbFiscalPeriodProvider;
-use Shipard\Core\Reports\ReportDefinition;
+use Shipard\Core\Reports\DbVatPeriodProvider;
 
 /**
  * Čtecí MCP nástroj: katalog deklarovaných reportů (D11) — id, název,
@@ -29,12 +29,14 @@ final class ReportListTool implements McpTool
 
 	public function description(): string
 	{
-		return 'Vrátí katalog účetních reportů nad účetním deníkem (hlavní kniha, '
-			. 'výsledovka, rozvaha): id reportu, název, podporované granularity '
-			. 'období, schéma parametrů a dostupné fiskální roky s počtem měsíců. '
-			. 'Použij jako první krok, když uživatel chce čísla z účetnictví po '
-			. 'obdobích — data pak vrací nástroj report_run. NEpoužívej pro seznam '
-			. 'dokladů či faktur (od toho je documents_search).';
+		return 'Vrátí katalog reportů (hlavní kniha, výsledovka, rozvaha, živé '
+			. 'výstupy DPH): id reportu, název, zdroj období (periodSource '
+			. 'fiscal | vatPeriod), granularity, schéma parametrů a dostupné '
+			. 'fiskální roky; pro vatPeriod reporty navíc registrace DPH s jejich '
+			. 'obdobími (vatRegistrations). Použij jako první krok, když uživatel '
+			. 'chce čísla z účetnictví nebo DPH po obdobích — data pak vrací '
+			. 'nástroj report_run. NEpoužívej pro seznam dokladů či faktur '
+			. '(od toho je documents_search).';
 	}
 
 	public function inputSchema(): array
@@ -51,9 +53,38 @@ final class ReportListTool implements McpTool
 		$definitions = $this->support->registry()->getAll();
 		$fiscalYears = (new DbFiscalPeriodProvider($ctx->db))->regularYears();
 
-		return [
+		// Registrace DPH jen když je nějaký vatPeriod report registrovaný
+		// a tabulky existují — jinak by dotaz padal na DS bez economy.codebooks.
+		$hasVatPeriod = false;
+		foreach ($definitions as $definition) {
+			if ($definition->periodSource === 'vatPeriod') {
+				$hasVatPeriod = true;
+				break;
+			}
+		}
+		$vatRegistrations = [];
+		if ($hasVatPeriod && isset($ctx->tables['economy_codebooks_vat_periods'])) {
+			$vatRegistrations = (new DbVatPeriodProvider($ctx->db))->registrationsWithPeriods();
+		}
+
+		$items = [];
+		foreach ($definitions as $d) {
+			$item = [
+				'reportId'            => $d->id,
+				'name'                => $d->name,
+				'periodSource'        => $d->periodSource,
+				'periodGranularities' => $d->periodGranularities,
+				'params'              => $d->params,
+			];
+			if ($d->periodSource !== 'vatPeriod') {
+				$item['fiscalYears'] = $fiscalYears;
+			}
+			$items[] = $item;
+		}
+
+		$out = [
 			'summary' => sprintf(
-				'K dispozici %d reportů; fiskální roky: %s.',
+				'K dispozici %d reportů; fiskální roky: %s.%s',
 				count($definitions),
 				$fiscalYears === []
 					? 'žádné'
@@ -61,14 +92,15 @@ final class ReportListTool implements McpTool
 						static fn (array $y): string => "{$y['name']} ({$y['months']} měsíců)",
 						$fiscalYears,
 					)),
+				$vatRegistrations === []
+					? ''
+					: sprintf(' Registrace DPH: %d (viz vatRegistrations).', count($vatRegistrations)),
 			),
-			'items' => array_map(static fn (ReportDefinition $d): array => [
-				'reportId'            => $d->id,
-				'name'                => $d->name,
-				'periodGranularities' => $d->periodGranularities,
-				'params'              => $d->params,
-				'fiscalYears'         => $fiscalYears,
-			], $definitions),
+			'items' => $items,
 		];
+		if ($vatRegistrations !== []) {
+			$out['vatRegistrations'] = $vatRegistrations;
+		}
+		return $out;
 	}
 }

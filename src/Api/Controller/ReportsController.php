@@ -9,6 +9,7 @@ use Shipard\Core\Reports\FiscalPeriodProvider;
 use Shipard\Core\Reports\ReportNotFoundException;
 use Shipard\Core\Reports\ReportRegistry;
 use Shipard\Core\Reports\ReportRunner;
+use Shipard\Core\Reports\VatPeriodProvider;
 
 /**
  * Endpoints:
@@ -26,24 +27,33 @@ class ReportsController
         private readonly ReportRegistry $registry,
         private readonly ReportRunner $runner,
         private readonly ?FiscalPeriodProvider $periodProvider = null,
+        private readonly ?VatPeriodProvider $vatPeriodProvider = null,
     ) {}
 
     /** GET /_reports */
     public function catalog(): Response
     {
         $items = [];
+        $hasVatPeriod = false;
         foreach ($this->registry->getAll() as $definition) {
             $items[] = [
                 'id'                  => $definition->id,
                 'name'                => $definition->name,
+                'periodSource'        => $definition->periodSource,
                 'periodGranularities' => $definition->periodGranularities,
                 'params'              => $definition->params,
             ];
+            $hasVatPeriod = $hasVatPeriod || $definition->periodSource === 'vatPeriod';
         }
-        return Response::success([
-            'items'   => $items,
-            'periods' => ['fiscalYears' => $this->periodProvider?->regularYears() ?? []],
-        ]);
+
+        $periods = ['fiscalYears' => $this->periodProvider?->regularYears() ?? []];
+        // Registrace DPH jen když je nějaký vatPeriod report registrovaný —
+        // jinak by dotaz padal na DS bez economy_codebooks tabulek.
+        if ($hasVatPeriod && $this->vatPeriodProvider !== null) {
+            $periods['vatRegistrations'] = $this->vatPeriodProvider->registrationsWithPeriods();
+        }
+
+        return Response::success(['items' => $items, 'periods' => $periods]);
     }
 
     /**

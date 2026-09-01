@@ -43,9 +43,12 @@ class ReportRunCommand extends Command
         $this->setName('report-run')
              ->setDescription('Spustí report a vypíše ReportResult jako JSON na stdout')
              ->addArgument('reportId', InputArgument::REQUIRED, 'Id reportu (např. economy.accounting.generalLedger)')
-             ->addOption('fiscal-year', null, InputOption::VALUE_REQUIRED, 'Název fiskálního roku (např. 2026)')
+             ->addOption('fiscal-year', null, InputOption::VALUE_REQUIRED, 'Název fiskálního roku (např. 2026) — reporty s fiskálním obdobím')
              ->addOption('month-from', null, InputOption::VALUE_REQUIRED, 'První fiskální měsíc intervalu (1–N)')
              ->addOption('month-to', null, InputOption::VALUE_REQUIRED, 'Poslední fiskální měsíc intervalu (1–N)')
+             ->addOption('vat-registration', null, InputOption::VALUE_REQUIRED, 'Id registrace DPH — reporty s obdobím DPH')
+             ->addOption('date-from', null, InputOption::VALUE_REQUIRED, 'Začátek intervalu období DPH (YYYY-MM-DD)')
+             ->addOption('date-to', null, InputOption::VALUE_REQUIRED, 'Konec intervalu období DPH (YYYY-MM-DD)')
              ->addOption('detail', null, InputOption::VALUE_REQUIRED, 'Úroveň detailu: analytic | synthetic', 'analytic')
              ->addOption('pretty', null, InputOption::VALUE_NONE, 'Formátovaný JSON (odsazení)');
     }
@@ -75,13 +78,6 @@ class ReportRunCommand extends Command
             return Command::FAILURE;
         }
 
-        foreach (['fiscal-year', 'month-from', 'month-to'] as $option) {
-            if ($input->getOption($option) === null) {
-                $err->writeln("<error>Missing required option --{$option}</error>");
-                return Command::INVALID;
-            }
-        }
-
         $dsConfig     = $this->dsConfig ?? new DataSourceConfig($dsDir);
         $dsConnection = $this->dsConnection ?? new DataSourceConnection($dsConfig);
         $language     = $dsConfig->getDefaultLanguage();
@@ -96,15 +92,39 @@ class ReportRunCommand extends Command
         $registry = ReportDefinitionLoader::load($dsConfig, $this->getModulePathResolver(), $language);
         $runner   = new ReportRunner($registry, $dsConnection, $configRuntime, $dsConfig->getId(), $language);
 
-        $reportId  = (string) $input->getArgument('reportId');
-        $rawParams = [
-            'fiscalYear' => (string) $input->getOption('fiscal-year'),
-            'monthFrom'  => (string) $input->getOption('month-from'),
-            'monthTo'    => (string) $input->getOption('month-to'),
-        ];
+        $reportId   = (string) $input->getArgument('reportId');
+        $definition = $registry->get($reportId);
+
+        // Povinné volby dle periodSource deklarace. Neznámý report propadá
+        // s prázdnými parametry na runner — ten vypíše dostupné reporty.
+        $rawParams = [];
+        if ($definition !== null && $definition->periodSource === 'vatPeriod') {
+            foreach (['vat-registration', 'date-from', 'date-to'] as $option) {
+                if ($input->getOption($option) === null) {
+                    $err->writeln("<error>Missing required option --{$option}</error>");
+                    return Command::INVALID;
+                }
+            }
+            $rawParams = [
+                'vatRegistration' => (string) $input->getOption('vat-registration'),
+                'dateFrom'        => (string) $input->getOption('date-from'),
+                'dateTo'          => (string) $input->getOption('date-to'),
+            ];
+        } elseif ($definition !== null) {
+            foreach (['fiscal-year', 'month-from', 'month-to'] as $option) {
+                if ($input->getOption($option) === null) {
+                    $err->writeln("<error>Missing required option --{$option}</error>");
+                    return Command::INVALID;
+                }
+            }
+            $rawParams = [
+                'fiscalYear' => (string) $input->getOption('fiscal-year'),
+                'monthFrom'  => (string) $input->getOption('month-from'),
+                'monthTo'    => (string) $input->getOption('month-to'),
+            ];
+        }
         // `detail` je per-report parametr — reportu, který ho nedeklaruje,
         // se default nepodsouvá (validátor by ho odmítl jako neznámý).
-        $definition = $registry->get($reportId);
         if ($definition !== null) {
             foreach ($definition->params as $param) {
                 if ($param['id'] === 'detail') {

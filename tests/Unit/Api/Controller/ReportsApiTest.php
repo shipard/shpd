@@ -18,6 +18,7 @@ use Shipard\Core\Reports\ReportRegistry;
 use Shipard\Core\Reports\ReportRequest;
 use Shipard\Core\Reports\ReportResult;
 use Shipard\Core\Reports\ReportRunner;
+use Shipard\Core\Reports\VatPeriodProvider;
 use Shipard\Core\Utils\JsoncParser;
 
 /** Testovací builder pro ReportRunner — echo reportId + parametrů. */
@@ -166,7 +167,117 @@ class ReportsApiTest extends TestCase
         $this->assertSame('REPORT_NOT_FOUND', $response->getPayload()['error']['code']);
     }
 
+    // ── VatPeriod reporty ───────────────────────────────────────────────────
+
+    public function testCatalogWithVatPeriodReportExposesRegistrations(): void
+    {
+        $controller = $this->makeVatPeriodControllerWithFakeReport();
+        $payload    = $controller->catalog()->getPayload();
+
+        $this->assertTrue($payload['success']);
+        $items = array_column($payload['data']['items'], null, 'id');
+        $this->assertSame('vatPeriod', $items['test.vatFake']['periodSource']);
+        $this->assertSame([], $items['test.vatFake']['periodGranularities']);
+
+        $periods = $payload['data']['periods'];
+        $this->assertSame([['name' => '2026', 'months' => 12]], $periods['fiscalYears']);
+        $this->assertCount(1, $periods['vatRegistrations']);
+        $registration = $periods['vatRegistrations'][0];
+        $this->assertSame(5, $registration['id']);
+        $this->assertSame('CZ plátce', $registration['name']);
+        $this->assertSame('CZ12345678', $registration['vatId']);
+        $this->assertCount(3, $registration['periods']);
+        $this->assertSame(
+            ['id' => 51, 'name' => '01/2026', 'dateBegin' => '2026-01-01', 'dateEnd' => '2026-01-31', 'locked' => false],
+            $registration['periods'][0],
+        );
+    }
+
+    public function testRunVatPeriodReport(): void
+    {
+        $controller = $this->makeVatPeriodControllerWithFakeReport();
+
+        $response = $controller->run('test.vatFake', [
+            'vatRegistration' => '5', 'dateFrom' => '2026-01-01', 'dateTo' => '2026-03-31',
+        ]);
+        $payload = $response->getPayload();
+
+        $this->assertSame(200, $this->statusOf($response));
+        $this->assertTrue($payload['success']);
+        $this->assertSame(
+            ['vatRegistration' => 5, 'dateFrom' => '2026-01-01', 'dateTo' => '2026-03-31'],
+            $payload['data']['params']['period'],
+        );
+    }
+
+    public function testRunVatPeriodReportRejectsPartialCoverage(): void
+    {
+        $controller = $this->makeVatPeriodControllerWithFakeReport();
+
+        $response = $controller->run('test.vatFake', [
+            'vatRegistration' => '5', 'dateFrom' => '2026-01-01', 'dateTo' => '2026-03-15',
+        ]);
+
+        $this->assertSame(400, $this->statusOf($response));
+        $this->assertSame('BAD_REQUEST', $response->getPayload()['error']['code']);
+    }
+
     // ── Helpers ─────────────────────────────────────────────────────────────
+
+    private function makeVatPeriodControllerWithFakeReport(): ReportsController
+    {
+        $registry = new ReportRegistry();
+        $registry->add(new ReportDefinition(
+            id: 'test.vatFake',
+            name: 'Fake VAT report',
+            builderClass: ReportsApiTestBuilder::class,
+            periodGranularities: [],
+            params: [],
+            moduleId: 'test.module',
+            periodSource: 'vatPeriod',
+        ));
+        $vatPeriods = $this->makeVatPeriods();
+        return new ReportsController(
+            $registry,
+            $this->makeRunner($registry, $vatPeriods),
+            $this->makePeriods(),
+            $vatPeriods,
+        );
+    }
+
+    private function makeVatPeriods(): VatPeriodProvider
+    {
+        return new class implements VatPeriodProvider {
+            public function findRegistration(int $id): ?array
+            {
+                return $id === 5 ? ['id' => 5, 'name' => 'CZ plátce'] : null;
+            }
+
+            public function periodsOfRegistration(int $registrationId): array
+            {
+                if ($registrationId !== 5) {
+                    return [];
+                }
+                return [
+                    ['id' => 51, 'name' => '01/2026', 'dateBegin' => '2026-01-01', 'dateEnd' => '2026-01-31', 'locked' => false],
+                    ['id' => 52, 'name' => '02/2026', 'dateBegin' => '2026-02-01', 'dateEnd' => '2026-02-28', 'locked' => false],
+                    ['id' => 53, 'name' => '03/2026', 'dateBegin' => '2026-03-01', 'dateEnd' => '2026-03-31', 'locked' => true],
+                ];
+            }
+
+            public function registrationsWithPeriods(): array
+            {
+                return [[
+                    'id'               => 5,
+                    'name'             => 'CZ plátce',
+                    'vatId'            => 'CZ12345678',
+                    'taxPeriodKind'    => 1,
+                    'reportPeriodKind' => 1,
+                    'periods'          => $this->periodsOfRegistration(5),
+                ]];
+            }
+        };
+    }
 
     private function makeControllerWithFakeReport(): ReportsController
     {
@@ -206,7 +317,7 @@ class ReportsApiTest extends TestCase
         };
     }
 
-    private function makeRunner(ReportRegistry $registry): ReportRunner
+    private function makeRunner(ReportRegistry $registry, ?VatPeriodProvider $vatPeriods = null): ReportRunner
     {
         $periods = $this->makePeriods();
 
@@ -217,6 +328,7 @@ class ReportsApiTest extends TestCase
             'test-ds-id',
             'cs',
             $periods,
+            $vatPeriods,
         );
     }
 

@@ -28,10 +28,14 @@ final class ReportRunTool implements McpTool
 
 	public function description(): string
 	{
-		return 'Spustí účetní report (hlavní kniha, výsledovka, rozvaha) za zadané '
-			. 'období a vrátí strukturovaný výsledek: sloupce, řádky s hodnotami '
-			. 'md/d/balance per účet, zprávy a status. Id reportů a dostupné '
-			. 'fiskální roky zjistíš nástrojem report_list. DŮLEŽITÉ: výsledek se '
+		return 'Spustí report (hlavní kniha, výsledovka, rozvaha, živé výstupy DPH) '
+			. 'za zadané období a vrátí strukturovaný výsledek: sloupce, řádky '
+			. 's hodnotami, zprávy a status. Id reportů, zdroj období '
+			. '(periodSource) a dostupné fiskální roky či registrace DPH zjistíš '
+			. 'nástrojem report_list; reporty s periodSource "fiscal" chtějí '
+			. 'fiscalYear+monthFrom+monthTo, reporty "vatPeriod" chtějí '
+			. 'vatRegistration+dateFrom+dateTo (interval musí přesně pokrýt celá '
+			. 'období DPH registrace). DŮLEŽITÉ: výsledek se '
 			. 'status "errors" NEJSOU spolehlivá čísla — chybu vždy nahlas '
 			. 'uživateli a nepoužívej je mlčky pro výpočty; status "warnings" '
 			. 'u odpovědi zmiň. Pro přehledy a srovnání používej detail '
@@ -45,9 +49,12 @@ final class ReportRunTool implements McpTool
 			'type' => 'object',
 			'properties' => [
 				'reportId'   => ['type' => 'string', 'description' => 'Id reportu z report_list (např. economy.accounting.balanceSheet)'],
-				'fiscalYear' => ['type' => 'integer', 'description' => 'Fiskální rok dle názvu, např. 2026 (dostupné roky viz report_list)'],
-				'monthFrom'  => ['type' => 'integer', 'minimum' => 1, 'maximum' => 12, 'description' => 'První fiskální měsíc intervalu'],
-				'monthTo'    => ['type' => 'integer', 'minimum' => 1, 'maximum' => 12, 'description' => 'Poslední fiskální měsíc intervalu'],
+				'fiscalYear' => ['type' => 'integer', 'description' => 'Fiskální rok dle názvu, např. 2026 — povinné pro reporty s periodSource "fiscal" (dostupné roky viz report_list)'],
+				'monthFrom'  => ['type' => 'integer', 'minimum' => 1, 'maximum' => 12, 'description' => 'První fiskální měsíc intervalu (periodSource "fiscal")'],
+				'monthTo'    => ['type' => 'integer', 'minimum' => 1, 'maximum' => 12, 'description' => 'Poslední fiskální měsíc intervalu (periodSource "fiscal")'],
+				'vatRegistration' => ['type' => 'integer', 'description' => 'Id registrace DPH — povinné pro reporty s periodSource "vatPeriod" (registrace a jejich období viz report_list)'],
+				'dateFrom'   => ['type' => 'string', 'format' => 'date', 'description' => 'Začátek intervalu období DPH, YYYY-MM-DD (periodSource "vatPeriod")'],
+				'dateTo'     => ['type' => 'string', 'format' => 'date', 'description' => 'Konec intervalu období DPH, YYYY-MM-DD (periodSource "vatPeriod")'],
 				'detail'     => [
 					'type'        => 'string',
 					'enum'        => ['analytic', 'synthetic'],
@@ -55,7 +62,7 @@ final class ReportRunTool implements McpTool
 					'description' => 'Úroveň detailu; default synthetic = agregace na syntetické účty (menší výstup, pro LLM přehledy), analytic = plné analytiky.',
 				],
 			],
-			'required' => ['reportId', 'fiscalYear', 'monthFrom', 'monthTo'],
+			'required' => ['reportId'],
 		];
 	}
 
@@ -65,10 +72,8 @@ final class ReportRunTool implements McpTool
 			throw new \RuntimeException('report_run: missing ReportToolSupport wiring');
 		}
 
-		foreach (['reportId', 'fiscalYear', 'monthFrom', 'monthTo'] as $required) {
-			if (!array_key_exists($required, $arguments)) {
-				throw new \InvalidArgumentException("Missing required parameter: {$required}");
-			}
+		if (!array_key_exists('reportId', $arguments)) {
+			throw new \InvalidArgumentException('Missing required parameter: reportId');
 		}
 
 		$reportId   = (string) $arguments['reportId'];
@@ -79,11 +84,29 @@ final class ReportRunTool implements McpTool
 			);
 		}
 
-		$rawParams = [
-			'fiscalYear' => (string) $arguments['fiscalYear'],
-			'monthFrom'  => $arguments['monthFrom'],
-			'monthTo'    => $arguments['monthTo'],
-		];
+		if ($definition->periodSource === 'vatPeriod') {
+			foreach (['vatRegistration', 'dateFrom', 'dateTo'] as $required) {
+				if (!array_key_exists($required, $arguments)) {
+					throw new \InvalidArgumentException("Missing required parameter: {$required}");
+				}
+			}
+			$rawParams = [
+				'vatRegistration' => (string) $arguments['vatRegistration'],
+				'dateFrom'        => (string) $arguments['dateFrom'],
+				'dateTo'          => (string) $arguments['dateTo'],
+			];
+		} else {
+			foreach (['fiscalYear', 'monthFrom', 'monthTo'] as $required) {
+				if (!array_key_exists($required, $arguments)) {
+					throw new \InvalidArgumentException("Missing required parameter: {$required}");
+				}
+			}
+			$rawParams = [
+				'fiscalYear' => (string) $arguments['fiscalYear'],
+				'monthFrom'  => $arguments['monthFrom'],
+				'monthTo'    => $arguments['monthTo'],
+			];
+		}
 		// Default pro MCP je synthetic (menší výstup pro LLM; UI/CLI default je
 		// analytic) — podsouvá se jen reportům, které parametr deklarují.
 		foreach ($definition->params as $param) {
@@ -95,13 +118,16 @@ final class ReportRunTool implements McpTool
 
 		$result = $this->support->runner($ctx)->run($reportId, $rawParams);
 
+		$period = $result->params['period'];
+		$periodLabel = $definition->periodSource === 'vatPeriod'
+			? sprintf('%s–%s', $period['dateFrom'], $period['dateTo'])
+			: sprintf('%s/%d–%d', $period['fiscalYear'], $period['monthFrom'], $period['monthTo']);
+
 		return [
 			'summary' => sprintf(
-				'%s %s/%d–%d, status: %s (%d messages)',
+				'%s %s, status: %s (%d messages)',
 				$definition->name,
-				$result->params['period']['fiscalYear'],
-				$result->params['period']['monthFrom'],
-				$result->params['period']['monthTo'],
+				$periodLabel,
 				$result->status->value,
 				count($result->messages),
 			),

@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace Shipard\Core\Reports;
 
 /**
- * Validace request parametrů proti deklaraci reportu. Období (fiscalYear +
- * monthFrom/monthTo) se překládá na `FiscalRange`; ostatní parametry se
- * normalizují dle schématu (neznámý = chyba, chybějící = default).
+ * Validace request parametrů proti deklaraci reportu. Období se dle
+ * `periodSource` deklarace překládá buď na `FiscalRange` (fiscalYear +
+ * monthFrom/monthTo), nebo na `VatPeriodRange` (vatRegistration +
+ * dateFrom/dateTo — interval musí přesně souvisle pokrýt ≥1 období DPH
+ * registrace); ostatní parametry se normalizují dle schématu
+ * (neznámý = chyba, chybějící = default).
  *
  * Chyba → `InvalidArgumentException` s lidskou zprávou; controller ji mapuje
  * na HTTP 400.
@@ -17,17 +20,29 @@ final class ReportParamValidator
     private const PERIOD_TYPE_REGULAR = 1;
     private const PERIOD_TYPE_CLOSING = 2;
 
-    public function __construct(private readonly FiscalPeriodProvider $periods) {}
+    public function __construct(
+        private readonly FiscalPeriodProvider $periods,
+        private readonly ?VatPeriodProvider $vatPeriods = null,
+    ) {}
 
     /**
      * @param array<string, mixed> $rawParams
-     * @return array{params: array<string, mixed>, range: FiscalRange}
+     * @return array{params: array<string, mixed>, range: ?FiscalRange, vatRange: ?VatPeriodRange}
      * @throws \InvalidArgumentException
      */
     public function validate(ReportDefinition $definition, array $rawParams): array
     {
-        $range  = $this->resolveRange($definition, $rawParams);
-        $params = ['period' => $range->toParamsArray()];
+        if ($definition->periodSource === 'vatPeriod') {
+            $range    = null;
+            $vatRange = $this->resolveVatRange($definition, $rawParams);
+            $params   = ['period' => $vatRange->toParamsArray()];
+            $reserved = ['vatRegistration', 'dateFrom', 'dateTo'];
+        } else {
+            $range    = $this->resolveRange($definition, $rawParams);
+            $vatRange = null;
+            $params   = ['period' => $range->toParamsArray()];
+            $reserved = ['fiscalYear', 'monthFrom', 'monthTo'];
+        }
 
         $schema = [];
         foreach ($definition->params as $param) {
@@ -35,7 +50,7 @@ final class ReportParamValidator
         }
 
         foreach ($rawParams as $key => $value) {
-            if (in_array($key, ['fiscalYear', 'monthFrom', 'monthTo'], true)) {
+            if (in_array($key, $reserved, true)) {
                 continue;
             }
             if (!isset($schema[$key])) {
@@ -50,7 +65,82 @@ final class ReportParamValidator
             }
         }
 
-        return ['params' => $params, 'range' => $range];
+        return ['params' => $params, 'range' => $range, 'vatRange' => $vatRange];
+    }
+
+    /** @param array<string, mixed> $rawParams */
+    private function resolveVatRange(ReportDefinition $definition, array $rawParams): VatPeriodRange
+    {
+        if ($this->vatPeriods === null) {
+            // Chyba zapojení (runner provider vždy dodává), ne uživatelského vstupu.
+            throw new \RuntimeException(
+                "Report '{$definition->id}': periodSource 'vatPeriod' requires a VatPeriodProvider",
+            );
+        }
+
+        $regId = $rawParams['vatRegistration'] ?? null;
+        if ($regId === null || $regId === '' || !is_numeric($regId) || (int) $regId != $regId) {
+            throw new \InvalidArgumentException("Missing or invalid required parameter 'vatRegistration'");
+        }
+        $registration = $this->vatPeriods->findRegistration((int) $regId);
+        if ($registration === null) {
+            throw new \InvalidArgumentException("VAT registration '" . (int) $regId . "' does not exist");
+        }
+
+        $dateFrom = $this->parseDate($rawParams, 'dateFrom');
+        $dateTo   = $this->parseDate($rawParams, 'dateTo');
+        if ($dateFrom > $dateTo) {
+            throw new \InvalidArgumentException("'dateFrom' must not be greater than 'dateTo'");
+        }
+
+        // Přesné souvislé pokrytí: interval = ≥1 období bez mezer a přesahů.
+        $selected = [];
+        foreach ($this->vatPeriods->periodsOfRegistration($registration['id']) as $period) {
+            if ($period['dateBegin'] >= $dateFrom && $period['dateEnd'] <= $dateTo) {
+                $selected[] = $period;
+            }
+        }
+        $covered = $selected !== []
+            && $selected[0]['dateBegin'] === $dateFrom
+            && $selected[count($selected) - 1]['dateEnd'] === $dateTo;
+        if ($covered) {
+            for ($i = 1; $i < count($selected); $i++) {
+                $prevEnd = new \DateTimeImmutable($selected[$i - 1]['dateEnd']);
+                if ($prevEnd->modify('+1 day')->format('Y-m-d') !== $selected[$i]['dateBegin']) {
+                    $covered = false;
+                    break;
+                }
+            }
+        }
+        if (!$covered) {
+            throw new \InvalidArgumentException(
+                "Interval {$dateFrom}–{$dateTo} does not exactly cover VAT periods"
+                . " of registration '{$registration['name']}'",
+            );
+        }
+
+        return new VatPeriodRange(
+            registrationId: $registration['id'],
+            registrationName: $registration['name'],
+            dateBegin: $dateFrom,
+            dateEnd: $dateTo,
+            periodIds: array_column($selected, 'id'),
+            periodNames: array_column($selected, 'name'),
+        );
+    }
+
+    /** @param array<string, mixed> $rawParams */
+    private function parseDate(array $rawParams, string $key): string
+    {
+        $value = $rawParams[$key] ?? null;
+        if (!is_string($value) || $value === '') {
+            throw new \InvalidArgumentException("Missing required parameter '{$key}'");
+        }
+        $parsed = \DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+        if ($parsed === false || $parsed->format('Y-m-d') !== $value) {
+            throw new \InvalidArgumentException("Parameter '{$key}' must be a date in YYYY-MM-DD format");
+        }
+        return $value;
     }
 
     /** @param array<string, mixed> $rawParams */

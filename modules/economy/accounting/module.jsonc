@@ -25,7 +25,7 @@
             "name": "Chart of accounts",
             "name:cs": "Účtový rozvrh",
             "name:en": "Chart of accounts",
-            "icon": "calculator",
+            "icon": "table-list",
             "table": "economy_accounting_accounts",
             "class": "Shipard\\Module\\Economy\\Accounting\\AccountsViewer",
             "navSection": "accounting",

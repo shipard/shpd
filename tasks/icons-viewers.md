@@ -1,6 +1,6 @@
 # Task: Ikony prohlížečů — odstranění duplicit, nové ikony (Issue #54)
 
-**Stav:** naplánováno
+**Stav:** hotovo
 
 ## Status / cíl
 
@@ -185,3 +185,22 @@ ORDER BY b.`sort_order` ASC, b.`name` ASC
   FA import — jinak zbytečný zásah do invoicesIn module.jsonc.
 - Ikony ve `iconMap` používá i server-driven navigace — po změně zkontrolovat
   i horní menu classic shellu, nejen sidebar.
+
+## Implementační poznámky (odchylky od zadání)
+
+- **Spisovna po E2E vrácena na `folder`** (rozhodnutí Anna — `box-archive`
+  nesedl); klíč `archive`/`faBoxArchive` z registru zase odstraněn.
+  Duplicita s viewerem `binders` (`folder`) je tím opět vědomá.
+- „Odeslaná pošta" není viewer, ale **settings page** `mailOutbound`
+  (`settingsPages[]` v `modules/core/mail/module.jsonc`) — změna `mail` →
+  `mail-out` provedena tam.
+- Viewer pravidel štítků má id `core.exchange.tagRules` (camelCase),
+  ne `tag_rules`.
+- Křížová kontrola klíčů odhalila předchozí tichý fallback: sekce „Ostatní"
+  v `settingsSections.jsonc` (base i hosting) používá `"icon": "dots"`,
+  který v `iconMap` chyběl → doplněn (`iconDots` = `faEllipsis`).
+- `resolveIcon()` má nově dev-only `console.warn` při neznámém klíči.
+- Test odvození stran: nový
+  `tests/Unit/Module/Economy/Accbal/BalancesNavigationProviderTest.php`;
+  `NavigationControllerTest::testProviderItemsMergedIntoSection` rozšířen
+  o agregační sloupce (assert `receivable`/`payable` místo `calculator`).

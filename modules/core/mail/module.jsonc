@@ -64,7 +64,7 @@
             "name": "Outbound mail",
             "name:cs": "Odchozí pošta",
             "name:en": "Outbound mail",
-            "icon": "mail",
+            "icon": "mail-out",
             "fields": [
                 {
                     "id": "mail.defaultFrom",
@@ -98,7 +98,7 @@
             "name": "Mailboxes",
             "name:cs": "Schránky",
             "name:en": "Mailboxes",
-            "icon": "mail",
+            "icon": "inbox",
             "table": "core_mail_mailboxes",
             "class": "Shipard\\Module\\Core\\Mail\\MailboxesViewer"
         },
@@ -107,7 +107,7 @@
             "name": "Mail senders",
             "name:cs": "Odesílatelé pošty",
             "name:en": "Mail senders",
-            "icon": "mail",
+            "icon": "address-book",
             "table": "core_mail_senders",
             "class": "Shipard\\Module\\Core\\Mail\\SendersViewer"
         },
@@ -125,7 +125,7 @@
             "name": "Sender rules",
             "name:cs": "Pravidla odesílatelů",
             "name:en": "Sender rules",
-            "icon": "mail",
+            "icon": "filter",
             "table": "core_mail_sender_rules",
             "class": "Shipard\\Module\\Core\\Mail\\SenderRulesViewer"
         },
@@ -134,7 +134,7 @@
             "name": "Preprocess rules",
             "name:cs": "Pravidla předzpracování",
             "name:en": "Preprocess rules",
-            "icon": "mail",
+            "icon": "magic",
             "table": "core_mail_preprocess_rules",
             "class": "Shipard\\Module\\Core\\Mail\\Preprocess\\PreprocessRulesViewer"
         }

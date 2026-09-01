@@ -348,11 +348,14 @@ class NavigationControllerTest extends TestCase
     public function testProviderItemsMergedIntoSection(): void
     {
         // Reálný BalancesNavigationProvider (registrace v economy.accbal) nad
-        // mockovaným DB spojením — dvě saldokonta se show_in_navigation.
+        // mockovaným DB spojením — dvě saldokonta se show_in_navigation,
+        // agregace předpisových účtů určuje ikonu (Issue #54).
         $db = $this->createMock(DataSourceConnection::class);
         $db->method('fetchAll')->willReturn([
-            ['code' => 'receivables', 'name' => 'Pohledávky', 'short_name' => 'Pohledávky'],
-            ['code' => 'payables',    'name' => 'Závazky z obchodních vztahů', 'short_name' => null],
+            ['code' => 'receivables', 'name' => 'Pohledávky', 'short_name' => 'Pohledávky',
+                'side_min' => 0, 'side_max' => 0, 'side_cnt' => 2],
+            ['code' => 'payables',    'name' => 'Závazky z obchodních vztahů', 'short_name' => null,
+                'side_min' => 1, 'side_max' => 1, 'side_cnt' => 2],
         ]);
 
         $resp = $this->ctrl->navigation(
@@ -376,14 +379,15 @@ class NavigationControllerTest extends TestCase
         $this->assertSame('Pohledávky', $receivables['label']);
         $this->assertSame('viewer', $receivables['type']);
         $this->assertSame('economy.accbal.ledger', $receivables['viewerId']);
-        $this->assertSame('calculator', $receivables['icon']);
+        $this->assertSame('receivable', $receivables['icon']);
         $this->assertSame('receivables', $receivables['fixedViewGroup']);
         // Interní klíče nesmí proleakovat do API výstupu.
         $this->assertArrayNotHasKey('_section', $receivables);
         $this->assertArrayNotHasKey('_order', $receivables);
 
-        // Label fallback: prázdný short_name → plný name.
+        // Label fallback: prázdný short_name → plný name; DAL strana → payable.
         $this->assertSame('Závazky z obchodních vztahů', $children[$ledgerPos + 2]['label']);
+        $this->assertSame('payable', $children[$ledgerPos + 2]['icon']);
     }
 
     public function testProviderSkippedWithoutDb(): void

@@ -43,7 +43,7 @@
             "name": "Items",
             "name:cs": "Položky",
             "name:en": "Items",
-            "icon": "box",
+            "icon": "items",
             "table": "economy_items",
             "class": "Shipard\\Module\\Economy\\Items\\ItemsViewer",
             "navSection": "basic",
@@ -54,7 +54,7 @@
             "name": "Item kinds",
             "name:cs": "Druhy položek",
             "name:en": "Item kinds",
-            "icon": "tags",
+            "icon": "kinds",
             "table": "economy_items_kinds",
             "class": "Shipard\\Module\\Economy\\Items\\ItemKindsViewer"
         }

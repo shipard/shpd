@@ -27,6 +27,7 @@ import {
   faChevronDown,
   faChevronUp,
   faEllipsisVertical,
+  faEllipsis,
   faArrowRightFromBracket,
   faGear,
   faGears,
@@ -36,7 +37,8 @@ import {
   faUsers,
   faBuilding,
   faFileInvoiceDollar,
-  faFileInvoice,
+  faFileArrowDown,
+  faFileArrowUp,
   faFileLines,
   faBoxesStacked,
   faTag,
@@ -87,6 +89,22 @@ import {
   faDatabase,
   faEye,
   faHouse,
+  faBagShopping,
+  faShapes,
+  faShuffle,
+  faTableList,
+  faScaleBalanced,
+  faRightLeft,
+  faCircleArrowUp,
+  faCircleArrowDown,
+  faMoneyBillTransfer,
+  faCashRegister,
+  faChartPie,
+  faPaperPlane,
+  faInbox,
+  faAddressBook,
+  faWandMagicSparkles,
+  faMicrochip,
 } from '@fortawesome/free-solid-svg-icons';
 
 // ── Akce (toolbary, tlačítka) ──────────────────────────────────
@@ -113,6 +131,7 @@ export const iconCollapse = faAnglesLeft;
 export const iconExpand = faAnglesRight;
 export const iconHome = faHouse; // 🏠 — domeček `_top` v horním menu classic shellu
 export const iconMore = faEllipsisVertical;
+export const iconDots = faEllipsis; // ⋯ — sekce „Ostatní" v Nastavení
 export const iconOpenExternal = faArrowUpRightFromSquare; // ⧉ — otevřít v plném zobrazení (chat panel → sekce Chat)
 
 // ── Auth / uživatelé ────────────────────────────────────────────
@@ -130,16 +149,25 @@ export const iconLock = faLock;
 export const iconChart = faChartColumn;
 export const iconCompany = faBuilding;
 export const iconInvoice = faFileInvoiceDollar;
-export const iconInvoiceIn = faFileInvoice;
+export const iconInvoiceIn = faFileArrowDown; // ⬇ — přijaté faktury (směrová metafora)
+export const iconInvoiceOut = faFileArrowUp; // ⬆ — vydané faktury
 export const iconDocAccounting = faFileInvoiceDollar;
 export const iconDocument = faFileLines;
 export const iconWarehouse = faBoxesStacked;
+export const iconItems = faBagShopping; // Položky
+export const iconKinds = faShapes; // Druhy položek
 export const iconTag = faTag;
 export const iconTags = faTags;
+export const iconShuffle = faShuffle; // Pravidla štítků
 export const iconFolder = faFolderOpen;
 export const iconTable = faTable;
+export const iconTableList = faTableList; // Účtový rozvrh
 export const iconList = faList;
 export const iconMail = faEnvelope;
+export const iconMailOut = faPaperPlane; // Odeslaná pošta
+export const iconInbox = faInbox; // Schránky
+export const iconAddressBook = faAddressBook; // Odesílatelé
+export const iconMagic = faWandMagicSparkles; // Preprocess pravidla
 export const iconRuler = faRulerCombined;
 export const iconBox = faCube;
 export const iconCalendar = faCalendarDays;
@@ -147,7 +175,14 @@ export const iconBook = faBook;
 export const iconListCheck = faListCheck;
 export const iconVat = faPercent;
 export const iconWallet = faWallet;
+export const iconCashRegister = faCashRegister; // Pokladny
 export const iconBank = faBuildingColumns;
+export const iconMoneyTransfer = faMoneyBillTransfer; // Bankovní pohyby
+export const iconBalance = faScaleBalanced; // Saldokonta + fallback saldokontních nav položek
+export const iconMovements = faRightLeft; // Saldo pohyby
+export const iconReceivable = faCircleArrowUp; // nav položka saldokonta pohledávkového typu (MD)
+export const iconPayable = faCircleArrowDown; // nav položka saldokonta závazkového typu (DAL)
+export const iconChartPie = faChartPie; // Střediska
 export const iconHash = faHashtag;
 export const iconServer = faServer;
 export const iconDatabase = faDatabase;
@@ -168,6 +203,7 @@ export const iconAlert = faBell;
 // ── Dashboard ──────────────────────────────────────────────────
 export const iconDashboard = faGauge;
 export const iconRobot = faRobot;
+export const iconChip = faMicrochip; // AI backendy
 export const iconChat = faComments;
 
 // ── Přílohy / soubory ─────────────────────────────────────────────
@@ -203,15 +239,24 @@ export const iconMap = {
   'company': iconCompany,
   'invoice': iconInvoice,
   'invoice-in': iconInvoiceIn,
+  'invoice-out': iconInvoiceOut,
   'doc-accounting': iconDocAccounting,
   'document': iconDocument,
   'warehouse': iconWarehouse,
+  'items': iconItems,
+  'kinds': iconKinds,
   'tag': iconTag,
   'tags': iconTags,
+  'shuffle': iconShuffle,
   'folder': iconFolder,
   'table': iconTable,
+  'table-list': iconTableList,
   'list': iconList,
   'mail': iconMail,
+  'mail-out': iconMailOut,
+  'inbox': iconInbox,
+  'address-book': iconAddressBook,
+  'magic': iconMagic,
   'ruler': iconRuler,
   'box': iconBox,
   'calendar': iconCalendar,
@@ -219,7 +264,14 @@ export const iconMap = {
   'list-check': iconListCheck,
   'vat': iconVat,
   'wallet': iconWallet,
+  'cash-register': iconCashRegister,
   'bank': iconBank,
+  'money-transfer': iconMoneyTransfer,
+  'balance': iconBalance,
+  'movements': iconMovements,
+  'receivable': iconReceivable,
+  'payable': iconPayable,
+  'chart-pie': iconChartPie,
   'hash': iconHash,
   'server': iconServer,
   'database': iconDatabase,
@@ -231,8 +283,10 @@ export const iconMap = {
   'alert': iconAlert,
   'dashboard': iconDashboard,
   'robot': iconRobot,
+  'chip': iconChip,
   'chat': iconChat,
   'cloud-download': iconCloudDownload,
+  'dots': iconDots,
   // Feed karty (kind → stavová ikona)
   'check': iconSuccess,
   'question': iconQuestion,
@@ -248,5 +302,8 @@ export const iconMap = {
  */
 export function resolveIcon(name, fallback = iconTable) {
   if (!name) return fallback;
+  if (import.meta.env.DEV && !(name in iconMap)) {
+    console.warn(`[icons] neznámý klíč ikony "${name}" — fallback na iconTable`);
+  }
   return iconMap[name] ?? fallback;
 }

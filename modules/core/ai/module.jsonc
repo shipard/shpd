@@ -33,7 +33,7 @@
             "name": "AI backends",
             "name:cs": "AI backendy",
             "name:en": "AI backends",
-            "icon": "robot",
+            "icon": "chip",
             "table": "core_ai_backends",
             "class": "Shipard\\Module\\Core\\Ai\\AIBackendsViewer"
         }

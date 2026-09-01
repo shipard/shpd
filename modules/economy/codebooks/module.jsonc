@@ -58,7 +58,7 @@
             "name": "Cash desks",
             "name:cs": "Pokladny",
             "name:en": "Cash desks",
-            "icon": "wallet",
+            "icon": "cash-register",
             "table": "economy_codebooks_cash_desks",
             "class": "Shipard\\Module\\Economy\\Codebooks\\CashDesksViewer"
         },
@@ -85,7 +85,7 @@
             "name": "Cost centers",
             "name:cs": "Střediska",
             "name:en": "Cost centers",
-            "icon": "folder",
+            "icon": "chart-pie",
             "table": "economy_codebooks_cost_centers",
             "class": "Shipard\\Module\\Economy\\Codebooks\\CostCentersViewer"
         }

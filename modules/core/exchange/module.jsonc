@@ -52,7 +52,7 @@
             "name": "Content tag rules",
             "name:cs": "Pravidla obsahových štítků",
             "name:en": "Content tag rules",
-            "icon": "tags",
+            "icon": "shuffle",
             "table": "core_exchange_tag_rules",
             "class": "Shipard\\Module\\Core\\Exchange\\Enrich\\TagRulesViewer"
         }

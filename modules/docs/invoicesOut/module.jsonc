@@ -15,7 +15,7 @@
             "name": "Issued invoices",
             "name:cs": "Faktury vydané",
             "name:en": "Issued invoices",
-            "icon": "invoice",
+            "icon": "invoice-out",
             "table": "docs_core_heads",
             "class": "Shipard\\Module\\Docs\\InvoicesOut\\IssuedInvoicesViewer",
             "navSection": "sales",

@@ -25,7 +25,7 @@
             "name": "Bank transactions",
             "name:cs": "Bankovní transakce",
             "name:en": "Bank transactions",
-            "icon": "wallet",
+            "icon": "money-transfer",
             "table": "economy_bank_transactions",
             "class": "Shipard\\Module\\Economy\\Bank\\BankTransactionsViewer",
             "navSection": "accounting",

@@ -28,7 +28,7 @@
             "name": "Conversations",
             "name:cs": "Konverzace",
             "name:en": "Conversations",
-            "icon": "robot",
+            "icon": "chat",
             "table": "core_chat_conversations",
             "class": "Shipard\\Module\\Core\\Chat\\ConversationsViewer"
         }

@@ -28,7 +28,7 @@
             "name": "Balances",
             "name:cs": "Saldokonta",
             "name:en": "Balances",
-            "icon": "book",
+            "icon": "balance",
             "table": "economy_accbal_balances",
             "class": "Shipard\\Module\\Economy\\Accbal\\BalancesViewer"
         },
@@ -46,7 +46,7 @@
             "name": "Balance ledger",
             "name:cs": "Saldo pohyby",
             "name:en": "Balance ledger",
-            "icon": "calculator",
+            "icon": "movements",
             "table": "economy_accbal_ledger",
             "class": "Shipard\\Module\\Economy\\Accbal\\LedgerViewer",
             "navSection": "accounting",

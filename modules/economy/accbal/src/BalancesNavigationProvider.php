@@ -23,11 +23,23 @@ class BalancesNavigationProvider implements NavigationItemsProvider
     {
         // DS před ds-upgrade sloupec show_in_navigation nemá — dotaz by
         // shodil celou navigaci. Očekávatelný stav → prázdný seznam.
+        //
+        // Agregace předpisových účtů (bal_side = 0) určuje ikonu položky:
+        // čistě MD = pohledávkový typ, čistě DAL = závazkový typ. Dobropisové
+        // řádky (modify_sign = 1) mají stranu obrácenou — bez vyloučení by
+        // Závazky vyšly „smíšené" a spadly na fallback.
         try {
             $balances = $db->fetchAll(
-                'SELECT `code`, `name`, `short_name` FROM `economy_accbal_balances`'
-                . ' WHERE `show_in_navigation` = 1 AND `docState` != 90'
-                . ' ORDER BY `sort_order` ASC, `name` ASC',
+                'SELECT b.`code`, b.`name`, b.`short_name`,'
+                . ' MIN(a.`acc_side`) AS side_min, MAX(a.`acc_side`) AS side_max,'
+                . ' COUNT(a.`id`) AS side_cnt'
+                . ' FROM `economy_accbal_balances` b'
+                . ' LEFT JOIN `economy_accbal_balance_accounts` a'
+                . ' ON a.`balance` = b.`id` AND a.`bal_side` = 0'
+                . ' AND a.`modify_sign` = 0 AND a.`docState` != 90'
+                . ' WHERE b.`show_in_navigation` = 1 AND b.`docState` != 90'
+                . ' GROUP BY b.`id`'
+                . ' ORDER BY b.`sort_order` ASC, b.`name` ASC',
             );
         } catch (\Throwable) {
             return [];
@@ -41,12 +53,22 @@ class BalancesNavigationProvider implements NavigationItemsProvider
                 'label'          => $shortName !== '' ? $shortName : (string) $b['name'],
                 'type'           => 'viewer',
                 'viewerId'       => 'economy.accbal.ledger',
-                'icon'           => 'calculator',
+                'icon'           => self::balanceIcon($b),
                 'fixedViewGroup' => (string) $b['code'],
                 '_section'       => 'accounting',
                 '_order'         => 31 + $i,
             ];
         }
         return $items;
+    }
+
+    /** @param array<string, mixed> $b řádek s agregacemi side_min/side_max/side_cnt */
+    private static function balanceIcon(array $b): string
+    {
+        $cnt = (int) ($b['side_cnt'] ?? 0);
+        if ($cnt > 0 && (int) $b['side_min'] === (int) $b['side_max']) {
+            return (int) $b['side_min'] === 0 ? 'receivable' : 'payable';
+        }
+        return 'balance';
     }
 }

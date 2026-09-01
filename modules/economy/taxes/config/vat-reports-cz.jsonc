@@ -1,0 +1,129 @@
+// Mapování kódů DPH (world.vat.cz) na výstupy: řádky přiznání DPHDP3,
+// sekce kontrolního hlášení DPHKH1 a kódy plnění souhrnného hlášení DPHSHV.
+// Závazná tabulka: tasks/taxes-phase01.md (issue #55, D3).
+//
+// Jeden záznam pro KAŽDÝ kód číselníku — i vyloučení je explicitní (null),
+// aby test úplnosti (VatReportsMappingCompletenessTest) odlišil „záměrně
+// mimo" od „zapomenuto".
+//
+// Tvary:
+//   dp3: { row: <int>, col?: "full" | "reduced" } | null
+//        `col` jen u odpočtových řádků 40/41/43/44 — sloupce „V plné výši" /
+//        „Krácený odpočet". Krácené kódy se zatím jen vykazují do sloupce,
+//        koeficient/vypořádání je mimo scope M1.
+//   kh:  { group: "A1" | "A2" | "A4A5" | "B1" | "B2B3", kodPredPl?: 4 | 5 } | null
+//        Rozpad A4/A5 a B2/B3 (limit 10 000 Kč vč. daně, CZ DIČ) řeší engine
+//        per doklad; config nese jen skupinu. kodPredPl jen u A1/B1 (PDP).
+//   sh:  { kod: 0 | 3 } | null   (0 zboží, 3 služby)
+//
+// Proč tuzemské PDP páry (cz-203/204/370, ř. 10/11) v KH nejsou: jejich daň
+// nese sekce B1 z odpočtové strany. EU/dovoz odpočty (cz-215…, cz-415…,
+// ř. 43/44 bez PDP kódu) v KH nejsou — daňovou stranu nese A2 z párových
+// kódů. Dovoz zboží ř. 7/8 v KH není (daň vyměřená v celním režimu).
+{
+    "vatOutputs": {
+        // ── Tuzemsko / vstup ────────────────────────────────────────────────
+        "cz-110": { "dp3": { "row": 40, "col": "full" }, "kh": { "group": "B2B3" }, "sh": null },
+        "cz-111": { "dp3": { "row": 41, "col": "full" }, "kh": { "group": "B2B3" }, "sh": null },
+        "cz-301": { "dp3": { "row": 41, "col": "full" }, "kh": { "group": "B2B3" }, "sh": null },
+        "cz-302": { "dp3": { "row": 41, "col": "full" }, "kh": { "group": "B2B3" }, "sh": null },
+        "cz-112": { "dp3": null, "kh": null, "sh": null },
+        "cz-115": { "dp3": { "row": 43, "col": "full" }, "kh": { "group": "B1", "kodPredPl": 4 }, "sh": null },
+        "cz-116": { "dp3": { "row": 44, "col": "full" }, "kh": { "group": "B1", "kodPredPl": 4 }, "sh": null },
+        "cz-340": { "dp3": { "row": 44, "col": "full" }, "kh": { "group": "B1", "kodPredPl": 4 }, "sh": null },
+        "cz-117": { "dp3": { "row": 43, "col": "full" }, "kh": { "group": "B1", "kodPredPl": 5 }, "sh": null },
+        "cz-118": { "dp3": { "row": 40, "col": "reduced" }, "kh": { "group": "B2B3" }, "sh": null },
+        "cz-119": { "dp3": { "row": 41, "col": "reduced" }, "kh": { "group": "B2B3" }, "sh": null },
+        "cz-341": { "dp3": { "row": 41, "col": "reduced" }, "kh": { "group": "B2B3" }, "sh": null },
+        "cz-342": { "dp3": { "row": 41, "col": "reduced" }, "kh": { "group": "B2B3" }, "sh": null },
+
+        // ── Tuzemsko / výstup ───────────────────────────────────────────────
+        "cz-120": { "dp3": { "row": 1 }, "kh": { "group": "A4A5" }, "sh": null },
+        "cz-121": { "dp3": { "row": 2 }, "kh": { "group": "A4A5" }, "sh": null },
+        "cz-310": { "dp3": { "row": 2 }, "kh": { "group": "A4A5" }, "sh": null },
+        "cz-311": { "dp3": { "row": 2 }, "kh": { "group": "A4A5" }, "sh": null },
+        "cz-122": { "dp3": null, "kh": null, "sh": null },
+        "cz-123": { "dp3": { "row": 50 }, "kh": null, "sh": null },
+        "cz-150": { "dp3": { "row": 25 }, "kh": { "group": "A1", "kodPredPl": 4 }, "sh": null },
+        "cz-151": { "dp3": { "row": 25 }, "kh": { "group": "A1", "kodPredPl": 4 }, "sh": null },
+        "cz-350": { "dp3": { "row": 25 }, "kh": { "group": "A1", "kodPredPl": 4 }, "sh": null },
+        "cz-152": { "dp3": { "row": 25 }, "kh": { "group": "A1", "kodPredPl": 5 }, "sh": null },
+        "cz-203": { "dp3": { "row": 10 }, "kh": null, "sh": null },
+        "cz-204": { "dp3": { "row": 11 }, "kh": null, "sh": null },
+        "cz-370": { "dp3": { "row": 11 }, "kh": null, "sh": null },
+
+        // ── EU / výstup ─────────────────────────────────────────────────────
+        "cz-201": { "dp3": { "row": 20 }, "kh": null, "sh": { "kod": 0 } },
+        "cz-202": { "dp3": { "row": 21 }, "kh": null, "sh": { "kod": 3 } },
+        "cz-205": { "dp3": { "row": 3 }, "kh": { "group": "A2" }, "sh": null },
+        "cz-206": { "dp3": { "row": 4 }, "kh": { "group": "A2" }, "sh": null },
+        "cz-360": { "dp3": { "row": 4 }, "kh": { "group": "A2" }, "sh": null },
+        "cz-361": { "dp3": { "row": 4 }, "kh": { "group": "A2" }, "sh": null },
+        "cz-207": { "dp3": { "row": 5 }, "kh": { "group": "A2" }, "sh": null },
+        "cz-208": { "dp3": { "row": 6 }, "kh": { "group": "A2" }, "sh": null },
+        "cz-362": { "dp3": { "row": 6 }, "kh": { "group": "A2" }, "sh": null },
+        "cz-363": { "dp3": { "row": 6 }, "kh": { "group": "A2" }, "sh": null },
+
+        // ── EU / vstup (odpočty samovyměření — daňovou stranu nese A2) ─────
+        "cz-215": { "dp3": { "row": 43, "col": "full" }, "kh": null, "sh": null },
+        "cz-216": { "dp3": { "row": 44, "col": "full" }, "kh": null, "sh": null },
+        "cz-390": { "dp3": { "row": 44, "col": "full" }, "kh": null, "sh": null },
+        "cz-391": { "dp3": { "row": 44, "col": "full" }, "kh": null, "sh": null },
+        "cz-217": { "dp3": { "row": 43, "col": "full" }, "kh": null, "sh": null },
+        "cz-218": { "dp3": { "row": 44, "col": "full" }, "kh": null, "sh": null },
+        "cz-392": { "dp3": { "row": 44, "col": "full" }, "kh": null, "sh": null },
+        "cz-393": { "dp3": { "row": 44, "col": "full" }, "kh": null, "sh": null },
+
+        // ── Zahraničí / výstup ──────────────────────────────────────────────
+        "cz-401": { "dp3": { "row": 22 }, "kh": null, "sh": null },
+        "cz-405": { "dp3": { "row": 7 }, "kh": null, "sh": null },
+        "cz-406": { "dp3": { "row": 8 }, "kh": null, "sh": null },
+        "cz-460": { "dp3": { "row": 8 }, "kh": null, "sh": null },
+        "cz-461": { "dp3": { "row": 8 }, "kh": null, "sh": null },
+        "cz-407": { "dp3": { "row": 12 }, "kh": { "group": "A2" }, "sh": null },
+        "cz-408": { "dp3": { "row": 13 }, "kh": { "group": "A2" }, "sh": null },
+        "cz-462": { "dp3": { "row": 13 }, "kh": { "group": "A2" }, "sh": null },
+        "cz-463": { "dp3": { "row": 13 }, "kh": { "group": "A2" }, "sh": null },
+
+        // ── Zahraničí / vstup (odpočty — dovoz v celním režimu, ostatní) ───
+        "cz-415": { "dp3": { "row": 43, "col": "full" }, "kh": null, "sh": null },
+        "cz-416": { "dp3": { "row": 44, "col": "full" }, "kh": null, "sh": null },
+        "cz-490": { "dp3": { "row": 44, "col": "full" }, "kh": null, "sh": null },
+        "cz-491": { "dp3": { "row": 44, "col": "full" }, "kh": null, "sh": null },
+        "cz-417": { "dp3": { "row": 43, "col": "full" }, "kh": null, "sh": null },
+        "cz-418": { "dp3": { "row": 44, "col": "full" }, "kh": null, "sh": null },
+        "cz-492": { "dp3": { "row": 44, "col": "full" }, "kh": null, "sh": null },
+        "cz-493": { "dp3": { "row": 44, "col": "full" }, "kh": null, "sh": null }
+    },
+
+    // Popisky řádků DPHDP3 pro živý report (zkrácené názvy dle formuláře).
+    // Řádky 52/53/60/61 vstupují jen do dopočtu 63 a v M1 jsou nulové.
+    "dp3Rows": {
+        "1":  { "label": "Domestic supplies — standard rate", "label:cs": "Dodání zboží a poskytnutí služeb v tuzemsku — základní sazba" },
+        "2":  { "label": "Domestic supplies — reduced rate", "label:cs": "Dodání zboží a poskytnutí služeb v tuzemsku — snížená sazba" },
+        "3":  { "label": "Intra-EU acquisition of goods — standard rate", "label:cs": "Pořízení zboží z jiného členského státu — základní sazba" },
+        "4":  { "label": "Intra-EU acquisition of goods — reduced rate", "label:cs": "Pořízení zboží z jiného členského státu — snížená sazba" },
+        "5":  { "label": "Services received from the EU — standard rate", "label:cs": "Přijetí služby z jiného členského státu — základní sazba" },
+        "6":  { "label": "Services received from the EU — reduced rate", "label:cs": "Přijetí služby z jiného členského státu — snížená sazba" },
+        "7":  { "label": "Import of goods — standard rate", "label:cs": "Dovoz zboží — základní sazba" },
+        "8":  { "label": "Import of goods — reduced rate", "label:cs": "Dovoz zboží — snížená sazba" },
+        "10": { "label": "Domestic reverse charge — customer — standard rate", "label:cs": "Režim přenesení daňové povinnosti — odběratel — základní sazba" },
+        "11": { "label": "Domestic reverse charge — customer — reduced rate", "label:cs": "Režim přenesení daňové povinnosti — odběratel — snížená sazba" },
+        "12": { "label": "Other taxable supplies — standard rate", "label:cs": "Ostatní zdanitelná plnění s povinností přiznat daň — základní sazba" },
+        "13": { "label": "Other taxable supplies — reduced rate", "label:cs": "Ostatní zdanitelná plnění s povinností přiznat daň — snížená sazba" },
+        "20": { "label": "Supply of goods to another EU member state", "label:cs": "Dodání zboží do jiného členského státu" },
+        "21": { "label": "Supply of services to another EU member state", "label:cs": "Poskytnutí služeb s místem plnění v jiném členském státě" },
+        "22": { "label": "Export of goods", "label:cs": "Vývoz zboží" },
+        "25": { "label": "Domestic reverse charge — supplier", "label:cs": "Režim přenesení daňové povinnosti — dodavatel" },
+        "40": { "label": "Input tax deduction from domestic supplies — standard rate", "label:cs": "Nárok na odpočet z přijatých zdanitelných plnění — základní sazba" },
+        "41": { "label": "Input tax deduction from domestic supplies — reduced rate", "label:cs": "Nárok na odpočet z přijatých zdanitelných plnění — snížená sazba" },
+        "43": { "label": "Deduction from supplies reported on rows 3–13 — standard rate", "label:cs": "Odpočet ze zdanitelných plnění vykázaných na ř. 3–13 — základní sazba" },
+        "44": { "label": "Deduction from supplies reported on rows 3–13 — reduced rate", "label:cs": "Odpočet ze zdanitelných plnění vykázaných na ř. 3–13 — snížená sazba" },
+        "46": { "label": "Total deduction", "label:cs": "Odpočet daně celkem" },
+        "50": { "label": "Exempt supplies without deduction entitlement", "label:cs": "Plnění osvobozená od daně bez nároku na odpočet" },
+        "62": { "label": "Total output tax", "label:cs": "Daň na výstupu celkem" },
+        "63": { "label": "Total deduction (46 + 52 + 53 + 60)", "label:cs": "Odpočet daně (46 + 52 + 53 + 60)" },
+        "64": { "label": "Tax liability", "label:cs": "Vlastní daň" },
+        "65": { "label": "Excess deduction", "label:cs": "Nadměrný odpočet" }
+    }
+}

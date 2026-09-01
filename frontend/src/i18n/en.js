@@ -809,6 +809,9 @@ export default {
   // ── Reports ─────────────────────────────────────────────────────
   'reports.period.label': 'Period',
   'reports.period.yearColumn': 'year',
+  'reports.period.locked': 'Period is locked',
+  'reports.vatRegistration.label': 'VAT registration',
+  'reports.noVatRegistrations': 'No VAT registrations are defined',
   'reports.detail.analytic': 'Analytic',
   'reports.detail.synthetic': 'Synthetic',
   'reports.format.exact': 'Exact',

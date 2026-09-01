@@ -12,12 +12,13 @@
   // volá GET /_reports/{id} a výsledek předává čistému rendereru ReportView.
   import { untrack } from 'svelte';
   import PeriodPicker from './PeriodPicker.svelte';
+  import VatPeriodPicker from './VatPeriodPicker.svelte';
   import ReportView from './ReportView.svelte';
   import Select from '../ui/Select.svelte';
   import { t } from '../../i18n/index.js';
   import { translateError } from '../../i18n/errors.js';
   import { navigationStore } from '../../stores/navigation.svelte.js';
-  import { fetchReportCatalog, runReport, defaultPeriod } from '../../api/reports.js';
+  import { fetchReportCatalog, runReport, defaultPeriod, defaultVatPeriod } from '../../api/reports.js';
 
   let { item } = $props();
 
@@ -33,11 +34,14 @@
   let requestSeq = 0;
 
   const reportDef = $derived(catalog?.items.find((i) => i.id === reportId) ?? null);
+  const periodSource = $derived(reportDef?.periodSource ?? 'fiscal');
   const detailOptions = $derived(
     (reportDef?.params.find((p) => p.id === 'detail')?.options ?? [])
       .map((o) => ({ value: o, label: t(`reports.detail.${o}`) })),
   );
-  const noPeriods = $derived(catalog !== null && catalog.fiscalYears.length === 0);
+  const noPeriods = $derived(catalog !== null && (periodSource === 'vatPeriod'
+    ? catalog.vatRegistrations.length === 0
+    : catalog.fiscalYears.length === 0));
 
   async function loadCatalog() {
     catalogError = null;
@@ -52,6 +56,7 @@
     catalog = {
       items: res.data.items ?? [],
       fiscalYears: res.data.periods?.fiscalYears ?? [],
+      vatRegistrations: res.data.periods?.vatRegistrations ?? [],
     };
   }
 
@@ -62,17 +67,36 @@
   // (zbytek jistí banner z runReport).
   function overlayDeepLink(base, pending) {
     const merged = { ...base };
-    const year = pending.fiscalYear !== undefined
-      ? catalog.fiscalYears.find((y) => String(y.name) === String(pending.fiscalYear))
-      : null;
-    if (year) merged.fiscalYear = String(year.name);
-    const months = catalog.fiscalYears
-      .find((y) => String(y.name) === String(merged.fiscalYear))?.months ?? 12;
-    const from = pending.monthFrom ?? merged.monthFrom;
-    const to = pending.monthTo ?? merged.monthTo;
-    if (from >= 1 && from <= to && to <= months) {
-      merged.monthFrom = from;
-      merged.monthTo = to;
+    if (periodSource === 'vatPeriod') {
+      const registration = pending.vatRegistration !== undefined
+        ? catalog.vatRegistrations.find((r) => r.id === pending.vatRegistration)
+        : null;
+      if (registration) merged.vatRegistration = registration.id;
+      const periods = catalog.vatRegistrations
+        .find((r) => r.id === merged.vatRegistration)?.periods ?? [];
+      const from = pending.dateFrom ?? merged.dateFrom;
+      const to = pending.dateTo ?? merged.dateTo;
+      // Hranice intervalu musejí sedět na existující období registrace —
+      // přesné pokrytí pak vynucuje server (400 jistí banner z runReport).
+      if (from <= to
+        && periods.some((p) => p.dateBegin === from)
+        && periods.some((p) => p.dateEnd === to)) {
+        merged.dateFrom = from;
+        merged.dateTo = to;
+      }
+    } else {
+      const year = pending.fiscalYear !== undefined
+        ? catalog.fiscalYears.find((y) => String(y.name) === String(pending.fiscalYear))
+        : null;
+      if (year) merged.fiscalYear = String(year.name);
+      const months = catalog.fiscalYears
+        .find((y) => String(y.name) === String(merged.fiscalYear))?.months ?? 12;
+      const from = pending.monthFrom ?? merged.monthFrom;
+      const to = pending.monthTo ?? merged.monthTo;
+      if (from >= 1 && from <= to && to <= months) {
+        merged.monthFrom = from;
+        merged.monthTo = to;
+      }
     }
     const detailParam = reportDef?.params.find((p) => p.id === 'detail');
     if (pending.detail && detailParam?.options.includes(pending.detail)) {
@@ -95,9 +119,13 @@
       thousands = saved.thousands;
       return;
     }
-    const period = defaultPeriod(catalog.fiscalYears);
-    const detail = reportDef?.params.find((p) => p.id === 'detail')?.default ?? 'analytic';
-    const base = saved?.params ?? (period ? { ...period, detail } : null);
+    const period = periodSource === 'vatPeriod'
+      ? defaultVatPeriod(catalog.vatRegistrations)
+      : defaultPeriod(catalog.fiscalYears);
+    // `detail` jen když ho report deklaruje — server by neznámý parametr odmítl.
+    const detailParam = reportDef?.params.find((p) => p.id === 'detail');
+    const base = saved?.params
+      ?? (period ? (detailParam ? { ...period, detail: detailParam.default } : { ...period }) : null);
     params = base && pending ? overlayDeepLink(base, pending) : base;
     thousands = saved?.thousands ?? false;
   });
@@ -106,13 +134,11 @@
   // bez reloadu, bez zásahu do zbytku shellu. Odchod ze stránky query
   // uklidí, aby reload neresuscitoval report přes jinou obrazovku.
   function syncUrl(id, p) {
-    const query = new URLSearchParams({
-      report: id,
-      fy: p.fiscalYear,
-      mf: String(p.monthFrom),
-      mt: String(p.monthTo),
-      detail: p.detail,
-    });
+    const entries = p.vatRegistration != null
+      ? { report: id, reg: String(p.vatRegistration), df: p.dateFrom, dt: p.dateTo }
+      : { report: id, fy: p.fiscalYear, mf: String(p.monthFrom), mt: String(p.monthTo) };
+    if (p.detail !== undefined) entries.detail = p.detail;
+    const query = new URLSearchParams(entries);
     history.replaceState(null, '', `${window.location.pathname}?${query}`);
   }
 
@@ -176,12 +202,20 @@
   <div class="shpd-reports__toolbar">
     <h1 class="shpd-reports__title">{item?.label ?? ''}</h1>
     {#if catalog && reportDef && !noPeriods}
-      <PeriodPicker
-        fiscalYears={catalog.fiscalYears}
-        granularities={reportDef.periodGranularities}
-        value={params}
-        onChange={changePeriod}
-      />
+      {#if periodSource === 'vatPeriod'}
+        <VatPeriodPicker
+          registrations={catalog.vatRegistrations}
+          value={params}
+          onChange={changePeriod}
+        />
+      {:else}
+        <PeriodPicker
+          fiscalYears={catalog.fiscalYears}
+          granularities={reportDef.periodGranularities}
+          value={params}
+          onChange={changePeriod}
+        />
+      {/if}
       {#if detailOptions.length > 0}
         <span class="shpd-reports__detail">
           <Select bind:value={detailValue} options={detailOptions} required onchange={commitDetail} />
@@ -217,7 +251,9 @@
     {:else if catalog && !reportDef}
       <p class="shpd-reports__note">{t('reports.unknownReport')}</p>
     {:else if noPeriods}
-      <p class="shpd-reports__note">{t('reports.noPeriods')}</p>
+      <p class="shpd-reports__note">
+        {t(periodSource === 'vatPeriod' ? 'reports.noVatRegistrations' : 'reports.noPeriods')}
+      </p>
     {:else if runError}
       <div class="shpd-reports__error">
         <p>{t('reports.loadFailed')}: {runError}</p>

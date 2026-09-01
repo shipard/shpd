@@ -822,6 +822,9 @@ export default {
   // ── Reporty ─────────────────────────────────────────────────────
   'reports.period.label': 'Období',
   'reports.period.yearColumn': 'rok',
+  'reports.period.locked': 'Období je uzamčeno',
+  'reports.vatRegistration.label': 'Registrace DPH',
+  'reports.noVatRegistrations': 'Nejsou definovány žádné registrace DPH',
   'reports.detail.analytic': 'Analyticky',
   'reports.detail.synthetic': 'Synteticky',
   'reports.format.exact': 'Přesně',

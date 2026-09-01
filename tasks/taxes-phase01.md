@@ -1,6 +1,6 @@
 # Task: `economy.taxes` — Fáze 0+1: mapování DPH výstupů + živé přiznání / KH / SH
 
-**Stav:** PRD
+**Stav:** částečně — implementace kompletní (mapping, jádro reportů s periodSource vatPeriod + text/date sloupci, kalkulátory, buildery, UI, testy); zbývá ds-upgrade + proklik na dev DS a read-only ověření na alfě dle „Hotovo když"
 **Issue:** #55 (M1 — DPH), rozhodnutí D1–D6
 
 ## Kontext

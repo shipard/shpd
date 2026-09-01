@@ -17,7 +17,7 @@ jednotlivých subsystémů žijí v [`docs/`](../docs/README.md).
 
 ## Stav
 
-Celkem 245 tasků: **naplánováno** 3 · **částečně** 4 · **hotovo** 238.
+Celkem 246 tasků: **naplánováno** 3 · **částečně** 5 · **hotovo** 238.
 
 Zdroj pravdy je řádek `**Stav:**` v hlavičce každého tasku; tato
 tabulka je generovaná (`scripts/tasks-index.py`). Hotové tasky se
@@ -32,6 +32,7 @@ nevypisují — níže je jen to, co není dokončené.
 | `hosting-09-federated-login.md` | částečně | kód + testy + docs hotové 2026-08-14 (commity 1–3); zbývá ds-upgrade na hostingu, zapnutí Google/GitHub na alfě dle runbooku (mutace — David) a ruční E2E řetěz |
 | `mail-message-centric.md` | částečně | Fáze A–D v tomto repozitáři hotové (schéma, /result v4, |
 | `mail-preprocess.md` | částečně | Fáze 1 hotová (2026-08-29, 6 commitů), otevřený jen Bolt E2E na alfě (živý odkaz ze vzorku); Fáze 2 (`renderBodyToPdf`, `renderIfHtml`, aktivace Apple/Google) hotová 2026-08-29 — `tasks/mail-preprocess-phase2.md` |
+| `taxes-phase01.md` | částečně | implementace kompletní (mapping, jádro reportů s periodSource vatPeriod + text/date sloupci, kalkulátory, buildery, UI, testy); zbývá ds-upgrade + proklik na dev DS a read-only ověření na alfě dle „Hotovo když" |
 
 <!-- STAV:END -->
 

@@ -361,12 +361,13 @@ class DocDocumentSnapshotsTest extends TestCase
         $this->assertNotEmpty($data['customer_snapshot']);
     }
 
-    public function testImportModeSkipsSnapshotBuild(): void
+    /**
+     * DB mock pro import testy: reset_scope pro applyImportNumber, vlastní
+     * firma pro buildOwnSnapshot (OwnCompanyResolver i PersonSnapshotBuilder
+     * čtou base_persons_persons), adresa vlastní firmy → null.
+     */
+    private function dbForImport(): Connection
     {
-        // Migrace (`_importNumber` v payloadu): snapshoty se nestaví — stavět
-        // je z dnešních dat osob pro historické doklady by bylo věcně špatně.
-        // Bez import mode by save ve stavu 80 s partnerem snapshot postavil
-        // (viz testMaintainSnapshotsRebuildsWhenPartnerChanged).
         $db = $this->createMock(Connection::class);
         $db->method('fetch')->willReturnCallback(
             function (string $sql): ?Row {
@@ -374,16 +375,56 @@ class DocDocumentSnapshotsTest extends TestCase
                     return new Row(['reset_scope' => 'fiscal_year']);
                 }
                 if (str_contains($sql, 'base_persons_persons')) {
-                    // Kdyby se snapshot přece jen stavěl, dostane platnou osobu
-                    // a test spadne na assertArrayNotHasKey níž.
-                    return new Row(['id' => 50, 'full_name' => 'Partner s.r.o.']);
+                    return new Row(['id' => 1, 'full_name' => 'Naše firma s.r.o.']);
                 }
                 return null;
             }
         );
+        return $db;
+    }
 
+    public function testImportModePersistsPartnerSnapshotFromPayload(): void
+    {
+        // Migrace s dobovým snapshotem partnera v payloadu: persistuje se
+        // beze změny (nestaví se z dnešního adresáře), vlastní strana se
+        // staví standardně. invni (trade_dir 2): partner = supplier sloupec.
         $doc = new TestableDocsHeadsDocument();
-        $doc->setDb($db);
+        $doc->setDb($this->dbForImport());
+        $doc->setConfig($this->buildConfig());
+
+        $data = [
+            'docState'        => 80,
+            'doc_type'        => 'invni',
+            'partner'         => 50,
+            'number_series'   => 1,
+            'issue_date'      => '2024-06-01',
+            'accounting_date' => '2024-06-01',
+            'rows'            => [],
+            '_importNumber'   => ['docNumber' => '2024-0042', 'sequenceNumber' => 42],
+            '_importPartnerSnapshot' => [
+                'name' => 'Dobový Dodavatel s.r.o.', 'company_id' => '999',
+                'tax_id' => 'CZ99999999', 'vat_id' => 'CZ99999999',
+                'court_registration' => null,
+                'contact' => ['email' => null, 'phone' => null],
+            ],
+        ];
+        $doc->beforeSavePub($data, null);
+
+        // Virtuální pole nesmí prosáknout do SQL.
+        $this->assertArrayNotHasKey('_importPartnerSnapshot', $data);
+
+        $supplier = json_decode($data['supplier_snapshot'], true);
+        $customer = json_decode($data['customer_snapshot'], true);
+        $this->assertSame('Dobový Dodavatel s.r.o.', $supplier['name']);
+        $this->assertSame('CZ99999999', $supplier['vat_id']);
+        $this->assertSame('Naše firma s.r.o.', $customer['name']);
+    }
+
+    public function testImportModePartnerSnapshotFlipsForIssuedInvoice(): void
+    {
+        // invno (trade_dir 1): partner = customer sloupec, my supplier.
+        $doc = new TestableDocsHeadsDocument();
+        $doc->setDb($this->dbForImport());
         $doc->setConfig($this->buildConfig());
 
         $data = [
@@ -395,9 +436,65 @@ class DocDocumentSnapshotsTest extends TestCase
             'accounting_date' => '2024-06-01',
             'rows'            => [],
             '_importNumber'   => ['docNumber' => '2024-0042', 'sequenceNumber' => 42],
+            '_importPartnerSnapshot' => ['name' => 'Dobový Odběratel a.s.', 'vat_id' => 'CZ11122233'],
         ];
         $doc->beforeSavePub($data, null);
 
+        $supplier = json_decode($data['supplier_snapshot'], true);
+        $customer = json_decode($data['customer_snapshot'], true);
+        $this->assertSame('Naše firma s.r.o.', $supplier['name']);
+        $this->assertSame('Dobový Odběratel a.s.', $customer['name']);
+        $this->assertSame('CZ11122233', $customer['vat_id']);
+    }
+
+    public function testImportModeWithoutPayloadLeavesPartnerSnapshotNull(): void
+    {
+        // Import bez `_importPartnerSnapshot` (kanonické zdroje bez stran):
+        // partnerský sloupec zůstává NULL — nikdy se nestaví z dnešního
+        // adresáře. Vlastní strana se staví i tak.
+        $doc = new TestableDocsHeadsDocument();
+        $doc->setDb($this->dbForImport());
+        $doc->setConfig($this->buildConfig());
+
+        $data = [
+            'docState'        => 80,
+            'doc_type'        => 'invni',
+            'partner'         => 50,
+            'number_series'   => 1,
+            'issue_date'      => '2024-06-01',
+            'accounting_date' => '2024-06-01',
+            'rows'            => [],
+            '_importNumber'   => ['docNumber' => '2024-0042', 'sequenceNumber' => 42],
+        ];
+        $doc->beforeSavePub($data, null);
+
+        $this->assertNull($data['supplier_snapshot']);
+        $customer = json_decode($data['customer_snapshot'], true);
+        $this->assertSame('Naše firma s.r.o.', $customer['name']);
+    }
+
+    public function testImportModeKonceptBuildsNoSnapshots(): void
+    {
+        // Import na docState 10: state gate platí i pro import — snapshoty
+        // se nestaví (stejně jako běžná cesta), payload se jen zkonzumuje.
+        $doc = new TestableDocsHeadsDocument();
+        $doc->setDb($this->dbForImport());
+        $doc->setConfig($this->buildConfig());
+
+        $data = [
+            'docState'        => 10,
+            'doc_type'        => 'invni',
+            'partner'         => 50,
+            'number_series'   => 1,
+            'issue_date'      => '2024-06-01',
+            'accounting_date' => '2024-06-01',
+            'rows'            => [],
+            '_importNumber'   => ['docNumber' => '2024-0042', 'sequenceNumber' => 42],
+            '_importPartnerSnapshot' => ['name' => 'Dobový Dodavatel s.r.o.'],
+        ];
+        $doc->beforeSavePub($data, null);
+
+        $this->assertArrayNotHasKey('_importPartnerSnapshot', $data);
         $this->assertArrayNotHasKey('supplier_snapshot', $data);
         $this->assertArrayNotHasKey('customer_snapshot', $data);
     }

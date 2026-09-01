@@ -43,10 +43,24 @@ abstract class DocDocument extends Document
 
     /**
      * True while saving a migrated document (`_importNumber` present).
-     * Import skips snapshot building — building snapshots from today's
-     * person data for historical documents would be factually wrong.
+     * Import never builds snapshots from today's person data — that would
+     * be factually wrong for historical documents. Not building from the
+     * directory does NOT mean leaving them empty, though: the partner side
+     * is persisted verbatim from the canonical payload when present
+     * (`_importPartnerSnapshot`, era-correct data assembled by the
+     * exporter), and the own side builds normally (own company + head's
+     * bank_account/vat_registration). See buildImportSnapshots().
      */
     private bool $importMode = false;
+
+    /**
+     * Dobový snapshot partnera z canonical payloadu (`_importPartnerSnapshot`),
+     * konzumovaný v beforeSave. Null = payload snapshot nenese (kanonické
+     * zdroje bez stran) — partnerský sloupec zůstává NULL.
+     *
+     * @var array<string, mixed>|null
+     */
+    private ?array $importPartnerSnapshot = null;
 
     private ?VatRateResolver $vatRateResolver = null;
     private ?OwnCompanyResolver $ownCompanyResolver = null;
@@ -166,6 +180,15 @@ abstract class DocDocument extends Document
         unset($data['_importNumber']);
         // Reset per save — the instance may be reused across documents.
         $this->importMode = is_array($importNumber);
+
+        // Dobový snapshot partnera — druhé virtuální pole importu; stejně
+        // jako `_importNumber` nesmí dojít do SQL. Mimo import mód se
+        // ignoruje (transform ho mimo import ani neposílá).
+        $snapshotPayload = $data['_importPartnerSnapshot'] ?? null;
+        unset($data['_importPartnerSnapshot']);
+        $this->importPartnerSnapshot = $this->importMode && is_array($snapshotPayload)
+            ? $snapshotPayload
+            : null;
 
         $this->trackStateChange($data, $originalData);
 
@@ -1352,16 +1375,18 @@ abstract class DocDocument extends Document
 
     protected function maintainSnapshots(array &$data, ?array $originalData): void
     {
-        // Migrovaná data mají snapshoty NULL záměrně — stavět je z dnešních
-        // dat osob pro historické doklady by bylo věcně špatně.
-        if ($this->importMode) {
-            return;
-        }
-
         // Chybějící docState v payloadu = stav se nemění (gateway ho injektuje,
         // fallback na originál kryje volání mimo gateway — recomputeHeader).
         $newState = (int) ($data['docState'] ?? $originalData['docState'] ?? 10);
         if (!in_array($newState, self::SNAPSHOT_STATES, true)) {
+            return;
+        }
+
+        // Import mód: nestavět z dnešního adresáře — dobová data by přepsal
+        // dnešními. Partnerská strana přijde dobová v payloadu (je-li),
+        // vlastní strana se staví standardně.
+        if ($this->importMode) {
+            $this->buildImportSnapshots($data);
             return;
         }
 
@@ -1379,12 +1404,10 @@ abstract class DocDocument extends Document
 
     protected function buildSnapshots(array &$data): void
     {
-        $docTypeKey = (string) ($data['doc_type'] ?? '');
-        $docTypes = $this->config?->cfgItem('docs.core.docTypes') ?? [];
-        if (!is_array($docTypes) || !isset($docTypes[$docTypeKey]['trade_dir'])) {
+        $tradeDir = $this->resolveTradeDir($data);
+        if ($tradeDir === null) {
             return;
         }
-        $tradeDir = (int) $docTypes[$docTypeKey]['trade_dir'];
 
         $partnerSnap = $this->buildPersonSnapshot(
             personId:  (int) ($data['partner'] ?? 0),
@@ -1392,7 +1415,51 @@ abstract class DocDocument extends Document
             bankAccountId: null,
             vatRegistrationId: null,
         );
+        $ownSnap = $this->buildOwnSnapshot($data);
 
+        $this->assignSnapshots($data, $tradeDir, $partnerSnap, $ownSnap);
+    }
+
+    /**
+     * Import mód: partnerská strana = dobový snapshot z payloadu (je-li;
+     * jinak sloupec zůstává NULL — kanonické zdroje bez stran), vlastní
+     * strana standardně z dnešního adresáře (vlastní firma se nemění, DIČ
+     * nese vat_registration z hlavičky dokladu).
+     */
+    protected function buildImportSnapshots(array &$data): void
+    {
+        $tradeDir = $this->resolveTradeDir($data);
+        if ($tradeDir === null) {
+            return;
+        }
+        $this->assignSnapshots(
+            $data,
+            $tradeDir,
+            $this->importPartnerSnapshot ?? [],
+            $this->buildOwnSnapshot($data),
+        );
+    }
+
+    /** `trade_dir` docTypu; null = typ bez stran (cmnbkp) — snapshoty se nestaví. */
+    private function resolveTradeDir(array $data): ?int
+    {
+        $docTypeKey = (string) ($data['doc_type'] ?? '');
+        $docTypes = $this->config?->cfgItem('docs.core.docTypes') ?? [];
+        if (!is_array($docTypes) || !isset($docTypes[$docTypeKey]['trade_dir'])) {
+            return null;
+        }
+        return (int) $docTypes[$docTypeKey]['trade_dir'];
+    }
+
+    /**
+     * Snapshot vlastní firmy: HQ adresa + bank_account/vat_registration
+     * z hlavičky dokladu.
+     *
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    private function buildOwnSnapshot(array $data): array
+    {
         $own = $this->ownCompanyResolver();
         $ownPersonId = $own->getOwnPersonId();
         if ($ownPersonId === null) {
@@ -1402,19 +1469,29 @@ abstract class DocDocument extends Document
         }
         $ownHqAddress = $own->getOwnHeadquartersAddress();
 
-        $ownSnap = $this->buildPersonSnapshot(
+        return $this->buildPersonSnapshot(
             personId:  $ownPersonId,
             addressId: $ownHqAddress !== null ? (int) $ownHqAddress['id'] : null,
             bankAccountId: $data['bank_account'] ?? null,
             vatRegistrationId: $data['vat_registration'] ?? null,
         );
+    }
 
-        // Snapshots must hit the database as JSON strings, not PHP arrays.
-        // The columns are typed `json` in JSONC (= LONGTEXT in MariaDB), and
-        // dibi has no automatic array→JSON serialization for that type — if
-        // we pass a 2-D array, dibi treats it as a multi-row insert payload
-        // and produces broken SQL. DocsHeadsForm::decodeSnapshot reverses
-        // this on read.
+    /**
+     * Zapíše snapshoty do sloupců dle `trade_dir`.
+     *
+     * Snapshots must hit the database as JSON strings, not PHP arrays.
+     * The columns are typed `json` in JSONC (= LONGTEXT in MariaDB), and
+     * dibi has no automatic array→JSON serialization for that type — if
+     * we pass a 2-D array, dibi treats it as a multi-row insert payload
+     * and produces broken SQL. DocsHeadsForm::decodeSnapshot reverses
+     * this on read.
+     *
+     * @param array<string, mixed> $partnerSnap
+     * @param array<string, mixed> $ownSnap
+     */
+    private function assignSnapshots(array &$data, int $tradeDir, array $partnerSnap, array $ownSnap): void
+    {
         if ($tradeDir === 1) {
             // Output (issued invoice) — we are supplier
             $data['supplier_snapshot'] = $this->encodeSnapshot($ownSnap);

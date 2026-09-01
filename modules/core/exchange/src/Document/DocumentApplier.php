@@ -1049,6 +1049,13 @@ class DocumentApplier
                     ? null
                     : (int) ($importNumber['sequenceNumber'] ?? 0),
             ] : null,
+            // Import mode: dobový snapshot partnera z kanonické strany.
+            // Virtual field consumed + removed by DocDocument::beforeSave —
+            // Applier nerozhoduje o cílovém sloupci (trade_dir větvení je věc
+            // Document vrstvy). Null mimo import mód → dropped by array_filter.
+            '_importPartnerSnapshot' => is_array($importNumber)
+                ? $this->buildImportPartnerSnapshot($canonical, $docType)
+                : null,
             // Import mode: our own bank account (issued invoices need it at
             // state 40+; standard self-party flow can't carry it).
             'bank_account'         => $importOwnBank !== null ? (int) $importOwnBank : null,
@@ -1092,6 +1099,89 @@ class DocumentApplier
             static fn($v, $k) => $v !== null || in_array($k, ['rows'], true),
             ARRAY_FILTER_USE_BOTH,
         ) + ['rows' => $data['rows']];
+    }
+
+    /**
+     * Import mód: přeloží kanonickou stranu partnera (supplier/customer dle
+     * selfParty) do tvaru {@see \Shipard\Module\Docs\Core\PersonSnapshotBuilder}.
+     * DocDocument ji persistuje jako dobový snapshot partnera — snapshoty se
+     * u importu nestaví z dnešního adresáře, dobová data (především `vat_id`
+     * pro kontrolní hlášení) nese payload; za jejich dobovost odpovídá
+     * exportér. Null = bez snapshotu (účetní doklad nemá strany; prázdná
+     * strana v payloadu).
+     *
+     * @param array<string, mixed> $canonical
+     * @return array<string, mixed>|null
+     */
+    private function buildImportPartnerSnapshot(array $canonical, string $docType): ?array
+    {
+        if ($docType === 'cmnbkp') {
+            return null;
+        }
+
+        $supplier = is_array($canonical['supplier'] ?? null) ? $canonical['supplier'] : [];
+        $customer = is_array($canonical['customer'] ?? null) ? $canonical['customer'] : [];
+        // Partnerská strana = ta druhá než selfParty; bez selfParty zrcadlí
+        // kaskádu výběru hlavičkového partnera v transform().
+        $party = match ($canonical['selfParty'] ?? null) {
+            'customer' => $supplier,
+            'supplier' => $customer,
+            default    => $supplier !== [] ? $supplier : $customer,
+        };
+        if ($party === []) {
+            return null;
+        }
+
+        // Prázdný string = hodnota chybí — snapshot drží null jako
+        // PersonSnapshotBuilder u prázdných DB sloupců.
+        $s = static function (mixed $v): ?string {
+            if ($v === null) {
+                return null;
+            }
+            $t = trim((string) $v);
+            return $t === '' ? null : $t;
+        };
+
+        $snap = [
+            'name'               => (string) ($party['name'] ?? ''),
+            'company_id'         => $s($party['companyId'] ?? null),
+            'tax_id'             => $s($party['taxId'] ?? null),
+            'vat_id'             => $s($party['vatId'] ?? null),
+            'court_registration' => $s($party['courtRegistration'] ?? null),
+            'contact'            => [
+                'email' => $s($party['contact']['email'] ?? null),
+                'phone' => $s($party['contact']['phone'] ?? null),
+            ],
+        ];
+
+        $addr = is_array($party['address'] ?? null) ? $party['address'] : [];
+        if ($addr !== []) {
+            $country = $s($addr['country'] ?? null);
+            $snap['address'] = [
+                'street'        => $s($addr['street'] ?? null),
+                'house_number'  => $s($addr['houseNumber'] ?? null),
+                'city'          => $s($addr['city'] ?? null),
+                'city_part'     => $s($addr['cityPart'] ?? null),
+                'zip'           => $s($addr['zip'] ?? null),
+                'country'       => $country !== null ? strtolower($country) : null,
+                'display_block' => $s($addr['displayBlock'] ?? null),
+                'display_line'  => $s($addr['displayLine'] ?? null),
+            ];
+        }
+
+        $bank = is_array($party['bankAccount'] ?? null) ? $party['bankAccount'] : [];
+        if ($bank !== []) {
+            $currency = $s($bank['currency'] ?? null);
+            $snap['bank_account'] = [
+                'name'           => null, // canonical jméno účtu nenese
+                'account_number' => $s($bank['accountNumber'] ?? null),
+                'iban'           => $s($bank['iban'] ?? null),
+                'bic'            => $s($bank['bic'] ?? null),
+                'currency'       => $currency !== null ? strtolower($currency) : null,
+            ];
+        }
+
+        return $snap;
     }
 
     /**

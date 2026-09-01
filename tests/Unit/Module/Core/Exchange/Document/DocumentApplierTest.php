@@ -766,6 +766,130 @@ class DocumentApplierTest extends TestCase
         $this->assertArrayNotHasKey('bank_account', $data);
     }
 
+    public function testTransformBuildsImportPartnerSnapshotFromSupplier(): void
+    {
+        // Import mód + selfParty=customer: partnerská strana = supplier.
+        // Kanonická strana se překládá do tvaru PersonSnapshotBuilder.
+        $applier = $this->buildApplier();
+        $canonical = [
+            'docType'   => 'invoiceReceived',
+            'selfParty' => 'customer',
+            'dates'     => ['issueDate' => '2024-06-01'],
+            'supplier'  => [
+                'name'              => 'Dodavatel s.r.o.',
+                'country'           => 'cz',
+                'companyId'         => '12345678',
+                'taxId'             => 'CZ12345678',
+                'vatId'             => 'CZ99999999', // dobové DIČ ze staré hlavičky
+                'courtRegistration' => 'MS v Praze, C 123',
+                'contact'           => ['email' => 'a@b.cz', 'phone' => '+420 111', 'web' => 'https://b.cz'],
+                'address'           => [
+                    'street' => 'Hlavní', 'houseNumber' => '1', 'city' => 'Praha',
+                    'cityPart' => 'Nové Město', 'zip' => '11000', 'country' => 'CZ',
+                    'registryCode' => '123', 'displayLine' => 'Hlavní 1, 110 00 Praha',
+                ],
+                'bankAccount'       => [
+                    'accountNumber' => '123/0300', 'iban' => 'CZ6503000000000123',
+                    'bic' => 'CEKOCZPP', 'currency' => 'CZK',
+                ],
+            ],
+            'applyOptions' => ['importNumber' => ['docNumber' => 'X-1', 'sequenceNumber' => 1]],
+        ];
+
+        $data = $this->invokeTransform($applier, $canonical);
+        $snap = $data['_importPartnerSnapshot'];
+
+        $this->assertSame('Dodavatel s.r.o.', $snap['name']);
+        $this->assertSame('12345678', $snap['company_id']);
+        $this->assertSame('CZ12345678', $snap['tax_id']);
+        $this->assertSame('CZ99999999', $snap['vat_id']);
+        $this->assertSame('MS v Praze, C 123', $snap['court_registration']);
+        $this->assertSame('a@b.cz', $snap['contact']['email']);
+        $this->assertSame('+420 111', $snap['contact']['phone']);
+        $this->assertSame('Hlavní', $snap['address']['street']);
+        $this->assertSame('1', $snap['address']['house_number']);
+        $this->assertSame('Nové Město', $snap['address']['city_part']);
+        $this->assertSame('cz', $snap['address']['country']);
+        $this->assertSame('Hlavní 1, 110 00 Praha', $snap['address']['display_line']);
+        $this->assertArrayNotHasKey('registryCode', $snap['address']);
+        $this->assertSame('123/0300', $snap['bank_account']['account_number']);
+        $this->assertSame('czk', $snap['bank_account']['currency']);
+        $this->assertNull($snap['bank_account']['name']);
+    }
+
+    public function testTransformImportSnapshotOmitsMissingSections(): void
+    {
+        // Bez adresy a banky sekce chybí úplně; prázdné vatId → null (jako
+        // PersonSnapshotBuilder u prázdných DB sloupců).
+        $applier = $this->buildApplier();
+        $canonical = [
+            'docType'   => 'invoiceReceived',
+            'selfParty' => 'customer',
+            'dates'     => ['issueDate' => '2024-06-01'],
+            'supplier'  => ['name' => 'Beta s.r.o.', 'companyId' => '111', 'vatId' => ''],
+            'applyOptions' => ['importNumber' => ['docNumber' => 'X-1', 'sequenceNumber' => 1]],
+        ];
+
+        $snap = $this->invokeTransform($applier, $canonical)['_importPartnerSnapshot'];
+
+        $this->assertSame('Beta s.r.o.', $snap['name']);
+        $this->assertNull($snap['vat_id']);
+        $this->assertNull($snap['tax_id']);
+        $this->assertArrayNotHasKey('address', $snap);
+        $this->assertArrayNotHasKey('bank_account', $snap);
+        $this->assertNull($snap['contact']['email']);
+    }
+
+    public function testTransformImportSnapshotUsesCustomerWhenSelfSupplier(): void
+    {
+        $applier = $this->buildApplier();
+        $canonical = [
+            'docType'   => 'invoiceIssued',
+            'selfParty' => 'supplier',
+            'dates'     => ['issueDate' => '2024-06-01'],
+            'supplier'  => ['name' => 'Naše firma s.r.o.'],
+            'customer'  => ['name' => 'Odběratel a.s.', 'vatId' => 'CZ11122233'],
+            'applyOptions' => ['importNumber' => ['docNumber' => 'X-1', 'sequenceNumber' => 1]],
+        ];
+
+        $snap = $this->invokeTransform($applier, $canonical)['_importPartnerSnapshot'];
+
+        $this->assertSame('Odběratel a.s.', $snap['name']);
+        $this->assertSame('CZ11122233', $snap['vat_id']);
+    }
+
+    public function testTransformImportSnapshotAbsentWithoutImportNumber(): void
+    {
+        // Mimo import mód se snapshot payload nestaví vůbec.
+        $applier = $this->buildApplier();
+        $canonical = [
+            'docType'   => 'invoiceReceived',
+            'selfParty' => 'customer',
+            'dates'     => ['issueDate' => '2024-06-01'],
+            'supplier'  => ['name' => 'Dodavatel s.r.o.', 'vatId' => 'CZ99999999'],
+        ];
+
+        $data = $this->invokeTransform($applier, $canonical);
+
+        $this->assertArrayNotHasKey('_importPartnerSnapshot', $data);
+    }
+
+    public function testTransformImportSnapshotAbsentForAccountingDocument(): void
+    {
+        // cmnbkp nemá strany — snapshot payload se nestaví ani v import módu.
+        $applier = $this->buildApplier();
+        $canonical = [
+            'docType'   => 'accountingDocument',
+            'dates'     => ['issueDate' => '2024-06-01'],
+            'supplier'  => ['name' => 'Nemá tu co dělat'],
+            'applyOptions' => ['importNumber' => ['docNumber' => 'X-1', 'sequenceNumber' => 1]],
+        ];
+
+        $data = $this->invokeTransform($applier, $canonical);
+
+        $this->assertArrayNotHasKey('_importPartnerSnapshot', $data);
+    }
+
     public function testTransformToleratesNullVat(): void
     {
         // Top-level `vat` je od schema fixes nullable — null se musí chovat

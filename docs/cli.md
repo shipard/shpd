@@ -82,6 +82,10 @@ Read-only health check. Vypíše:
   joby z posledního běhu = warning). Na dev serveru bez cron souboru se
   sekce přeskočí.
 - **Data source DB connections** — pokus o `SELECT 1` na každý DS
+- **Data source states** — stavy z `config/state.json`
+  ([ds-state.md](ds-state.md)): počty per stav, `⚠` DS v maintenance déle
+  než 7 dní (zapomenutá? D8), `✗` poškozený `state.json` (DS fail-closed
+  zavřený — počítá se jako chyba), `·` ostatní ne-active DS
 
 Žádné side-effecty. Exit code `0` (vše OK) nebo `1` (alespoň jeden issue).
 Bez sudo (jen čte).
@@ -236,7 +240,7 @@ podle stavu DS** (`config/state.json`, [ds-state.md](ds-state.md)):
 | `minute` | každou minutu | `mail-outbox-run`, `mail-analysis-reap`, `mail-preprocess --sweep` | `active` |
 | `two-minutes` | à 2 min | server-level: `hosting-sync` | vždy (server-level) |
 | `five-minutes` | à 5 min | `alerts-run` (self-throttling přes `next_run_at`) | `active` |
-| `daily` | denně 03:17 | `mail-idempotency-prune` | `active`, `read_only` |
+| `daily` | denně 03:17 | `mail-idempotency-prune`; server-level: `ds-state-check` | `active`, `read_only` (server-level vždy) |
 | `weekly` | neděle 04:43 | `alerts-prune` | `active`, `read_only` |
 
 Registr povolených stavů je `CronCommand::JOB_ALLOWED_STATES`; job bez
@@ -246,9 +250,9 @@ slot by spamoval) — počet jde do heartbeatu.
 
 Kromě per-DS jobů má slot volitelně **server-level příkazy**
 (`CronCommand::SERVER_SLOT_JOBS`) — spouští se subprocesem
-`shpd-server <cmd>` **jednou za běh slotu**, ne per DS. První uživatel:
-`hosting-sync` (na serveru bez sekce `hosting` v server.json rychlý
-exit 0).
+`shpd-server <cmd>` **jednou za běh slotu**, ne per DS, a **neřídí se
+stavem DS**. Uživatelé: `hosting-sync` (two-minutes; na serveru bez sekce
+`hosting` v server.json rychlý exit 0) a `ds-state-check` (daily, D8).
 
 Chování:
 
@@ -382,6 +386,21 @@ nepřeklápí, payload neobsahuje client_secret a stats krok neběží.
 |------|--------|
 | `--dry-run` | Vypíše frontu požadavků bez jakýchkoli akcí. |
 | `--stats` | Vynutí stats krok i bez `stats_wanted` z reconcile. |
+
+### `ds-state-check`
+
+```bash
+shpd-server ds-state-check        # z cron daily slotu, ručně jen při ladění
+```
+
+D8 z [ds-state.md](ds-state.md): projde `config/state.json` všech DS a pro
+každý v maintenance déle než **7 dní** (`DataSourceStateScanner::
+MAINTENANCE_WARN_DAYS`) zapíše `warn` do `shipard.log` (`data source in
+maintenance longer than threshold — forgotten?`) a řádek `⚠` na stdout;
+poškozený `state.json` (DS fail-closed zavřený) vypíše jako `✗`. Server-level
+job `daily` slotu — alert checky běží uvnitř DS a v maintenance jsou
+vypnuté, zapomenutou maintenance musí hlásit server. Exit vždy `0`
+(nález není chyba jobu; interaktivně totéž ukáže `doctor`).
 
 ---
 
@@ -562,17 +581,19 @@ zápisu příkaz vypíše **efektivní stav**.
 | Akce | Chování |
 |------|---------|
 | `show` (default) | lidsky čitelný výpis; poškozený `state.json` → exit 1 + nápověda k opravě (DS je fail-closed `suspended`) |
-| `set <state>` | zapíše lifecycle stav (`changedBy: cli`). `read_only` vypíše upozornění, že HTTP vynucení přijde ve fázi 2 (cron ho respektuje už teď). `pending_deletion` vyžaduje `--delete-after=<ISO 8601>` v budoucnosti a potvrzení (`--yes` / `-y` pro skripty); přechod jinam `deleteAfter` zahodí. Přepíše i poškozený soubor |
+| `set <state>` | zapíše lifecycle stav (`changedBy: cli`). `pending_deletion` vyžaduje `--delete-after=<ISO 8601>` v budoucnosti a potvrzení (`--yes` / `-y` pro skripty); přechod jinam `deleteAfter` zahodí. Přepíše i poškozený soubor |
 | `maintenance --on [--reason=<r>]` | zapne overlay; `since` se drží od prvního zapnutí i při změně reasonu |
 | `maintenance --off` | vypne overlay; bez aktivního maintenance no-op (exit 0) |
 
 Exit code: SUCCESS; FAILURE při nevalidním stavu/reasonu/datu, odmítnutém
 potvrzení, selhání zápisu, nebo `show` nad poškozeným souborem.
 
-Fáze 1 vynucuje HTTP jen pro `suspended` / maintenance / `pending_deletion`
-(503 `DS_UNAVAILABLE` + `Retry-After: 300`, i pro `/_mail/incoming` —
-mail-router frontuje). Na hostovaných DS bude stav řídit hosting
-(`hosting-sync`, fáze 3); lokální CLI je pro nehostované DS a nouzové zásahy.
+HTTP: `suspended` / maintenance / `pending_deletion` → 503 `DS_UNAVAILABLE`
++ `Retry-After: 300` (i pro `/_mail/incoming` — mail-router frontuje);
+`read_only` → čtení běží, mutace 403 `DS_READ_ONLY`, pošta a analyzer
+503, chat vypnutý ([ds-state.md](ds-state.md) §6). Na hostovaných DS bude
+stav řídit hosting (`hosting-sync`, fáze 3); lokální CLI je pro nehostované
+DS a nouzové zásahy.
 
 ### Users
 

@@ -124,8 +124,16 @@ pod hlavičku a používá ho nástroj, jehož výstupem je sám text
 
 `isReadOnly()` zařazuje nástroj do tieru. Vnitřní chat nabízí modelu **jen
 čtecí nástroje** (`isReadOnly()===true`) a před spuštěním tier re-checkuje
-(bezpečnostní invariant — viz [`chat.md`](chat.md)). MCP server jako takový
-vystavuje v `tools/list` všechny; filtr je na konzumentovi.
+(bezpečnostní invariant — viz [`chat.md`](chat.md)). MCP server na DS ve
+stavu `active` vystavuje v `tools/list` všechny; filtr je na konzumentovi.
+
+Na DS ve stavu **`read_only`** ([ds-state.md](ds-state.md) §6, #56 D5) je
+filtr na serveru: `McpController` s `readOnly` vrací v `tools/list` jen
+čtecí tier (`McpToolRegistry::readOnlyView()` — tentýž filtr, který
+používá chat) a `tools/call` na zápisový nástroj odpoví JSON-RPC `-32602`
+„Tool … is not available: data source is read-only" — ne HTTP 403, MCP
+klienti čtou JSON-RPC. Chat samotný je v `read_only` vypnutý (403 na
+routách).
 
 | Tier | `isReadOnly()` | Nástroje |
 |------|----------------|----------|

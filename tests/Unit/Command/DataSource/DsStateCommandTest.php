@@ -83,13 +83,14 @@ class DsStateCommandTest extends TestCase
         $this->assertStringContainsString('Not a Shipard data source directory', $tester->getDisplay());
     }
 
-    public function testSetReadOnlyWritesFileAndWarnsAboutPhaseTwo(): void
+    public function testSetReadOnlyWritesFile(): void
     {
         $tester = $this->makeTester();
         $this->assertSame(0, $tester->execute(['action' => 'set', 'value' => 'read_only']));
         $display = $tester->getDisplay();
         $this->assertStringContainsString('State set to read_only', $display);
-        $this->assertStringContainsString('phase 2', $display);
+        // Fáze 2: HTTP read-only vynucuje ReadOnlyPolicy — žádné upozornění.
+        $this->assertStringNotContainsString('phase 2', $display);
         $this->assertStringContainsString('Effective state: read_only', $display);
 
         $this->assertSame([

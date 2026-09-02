@@ -1,8 +1,10 @@
 # Stavy zdroje dat
 
 Stavový model DS podle issue [shipard/shpd#56](https://github.com/shipard/shpd/issues/56)
-(rozhodnutí D1–D10). Tento dokument popisuje **fázi 1**: stavový soubor,
-HTTP vynucení, cron gating a CLI. Co je fáze 2 a 3, je v závěru.
+(rozhodnutí D1–D10). Tento dokument popisuje **fázi 1** (stavový soubor,
+503 pro zavřené DS, cron gating, CLI) a **fázi 2** (read-only vynucení na
+routách, MCP read-tier, stavová obrazovka SPA, hlídání zapomenuté
+maintenance — sekce 6). Fáze 3 (hosting orchestrace) je v závěru.
 
 ## 1. Model — dvě osy
 
@@ -11,7 +13,7 @@ HTTP vynucení, cron gating a CLI. Co je fáze 2 a 3, je v závěru.
 | Stav | Význam |
 |------|--------|
 | `active` | běžný provoz |
-| `read_only` | klient „jen kouká" — čtení a reporty fungují, zápisy ne. **Fáze 1 HTTP nevynucuje** (chová se jako `active`), cron už ho respektuje |
+| `read_only` | klient „jen kouká" — čtení a reporty fungují, zápisy ne: HTTP mutace **403 `DS_READ_ONLY`** (sekce 6), chat vypnutý, MCP jen čtecí nástroje, pošta se nepřijímá (503), cron jen úklidové joby |
 | `suspended` | zavřeno (neplatící klient, ruční zásah) — HTTP 503, cron nic |
 | `pending_deletion` | čeká na fyzické smazání po `deleteAfter` — HTTP 503, cron nic; mazací job je fáze 3 |
 
@@ -25,14 +27,14 @@ vrátí do `read_only`, ne do `active` (D1).
 **Efektivní stav** = `maintenance aktivní ? suspended : state`. Všechny
 subsystémy rozhodují podle efektivního stavu.
 
-## 2. Chování per subsystém (fáze 1)
+## 2. Chování per subsystém
 
-| Efektivní stav | HTTP (vč. `/_mail/incoming`) | cron per-DS joby | cron server-level joby |
-|---|---|---|---|
-| `active` | běží | všechny | běží |
-| `read_only` | běží beze změny (fáze 2: 403 `DS_READ_ONLY` na mutacích) | jen `mail-idempotency-prune`, `alerts-prune` | běží |
-| `suspended` | **503** `DS_UNAVAILABLE` + `Retry-After: 300` | žádné | běží |
-| `pending_deletion` | **503** `DS_UNAVAILABLE` + `Retry-After: 300` | žádné | běží |
+| Efektivní stav | HTTP | `/_mail/incoming`, analyzer callbacky | cron per-DS joby | cron server-level joby |
+|---|---|---|---|---|
+| `active` | běží | běží | všechny | běží |
+| `read_only` | čtení běží, mutace **403** `DS_READ_ONLY`, chat celý 403 (sekce 6) | **503** `DS_UNAVAILABLE` + `Retry-After: 300` (D4 — router frontuje) | jen `mail-idempotency-prune`, `alerts-prune` | běží |
+| `suspended` | **503** `DS_UNAVAILABLE` + `Retry-After: 300` | 503 | žádné | běží |
+| `pending_deletion` | **503** `DS_UNAVAILABLE` + `Retry-After: 300` | 503 | žádné | běží |
 
 Proč 503 a ne 404 (D3): mail-router a monitoring by 404 vyhodnotily jako
 permanentní chybu a poštu zahodily; 503 znamená „zkus později" — router
@@ -115,7 +117,8 @@ orchestrace přes `hosting-sync` je fáze 3.
   DS je na cíli automaticky zavřený, dokud po sanity checku operátor
   neřekne `--off`. Viz [migration-guide.md](migration-guide.md).
 - **Ukončení činnosti klienta „chce jen vidět účetnictví":** `set read_only`
-  (plné vynucení fáze 2).
+  — přihlášení, prohlížení, reporty a přílohy fungují, zápisy server odmítá
+  (sekce 6).
 
 ## 5. Třídy
 
@@ -123,18 +126,107 @@ orchestrace přes `hosting-sync` je fáze 3.
 |---|---|
 | `Core\Config\DataSourceState` | readonly stav; `load()` / `save()`, gettery `getEffectiveState()`, `blocksHttp()`, mutátory `withState()` / `withMaintenance()` / `withoutMaintenance()` / `withDeleteAfter()` |
 | `Api\Exception\DataSourceUnavailableException` | hází resolver pro zavřený DS; nese `dsId`, `effectiveState`, `maintenanceReason`; `index.php` → 503 |
+| `Api\ResolvedDataSource::$state` / `isReadOnly()` | stav načtený resolverem cestuje pipeline (politika, `/_app/info`, MCP, navigace) — disk se čte jednou |
+| `Api\ReadOnlyPolicy` + `Api\ReadOnlyVerdict` | klasifikace rout pro `read_only` (sekce 6) |
+| `Api\Mcp\McpToolRegistry::readOnlyView()` | registr jen s `isReadOnly()` nástroji — sdílí chat i `/_mcp` v `read_only` |
+| `Core\Server\DataSourceStateScanner` + `DataSourceStateEntry` | sken `data-sources/*/config/state.json` pro doctor a `ds-state-check` (D8) |
 | `Command\Server\CronCommand::JOB_ALLOWED_STATES` | registr job → povolené lifecycle stavy |
+| `Command\Server\DsStateCheckCommand` | `shpd-server ds-state-check` — daily warning D8 |
 | `Command\DataSource\DsStateCommand` | `shpd-ds ds-state` |
 
-## 6. Fázování
+## 6. Fáze 2 — read-only vynucení, SPA, D8
 
-- **Fáze 1 (tento dokument):** `state.json`, 503 za resolverem, cron
-  gating, CLI. Task `tasks/ds-state-phase1.md`.
-- **Fáze 2:** per-route klasifikace (allowlist flag na `Route`) a 403
-  `DS_READ_ONLY` na mutacích, MCP read-tier, vypnutí chatu, statická
-  stavová HTML stránka pro browser (fáze 1 vrací JSON 503 i pro `/_app`),
-  stav v `/_meta` + frontend banner, alert check „DS v maintenance déle
-  než N dní" (D8, data z heartbeatu už jsou).
+### 6.1 `ReadOnlyPolicy` — verdikt per routa
+
+Vynucení sedí v `public/index.php` jako krok **6.5** — za `AuthMiddleware`
+(anonym dostane 401 dřív než informaci o stavu DS), před rate limitem.
+Volá se **jen** při efektivním stavu `read_only`; `active` politiku
+vůbec nevidí. Klasifikuje se **per routa `(controller, action)`, ne per
+HTTP metoda** (D7): SSE chat je GET a spouští LLM, login je POST a fungovat
+musí. Centrální tabulka, ne flag na `Route` — `Router` je ručně psaný
+if-chain s desítkami konstrukcí a tabulka se testuje jako celek
+(`tests/Unit/Api/ReadOnlyPolicyTest.php`).
+
+Tři verdikty:
+
+| Verdikt | Odpověď | Komu |
+|---|---|---|
+| `Allow` | routa běží | čtení, auth, reporty, přílohy download, MCP (filtr uvnitř) |
+| `Deny403` | **403** `DS_READ_ONLY` „Data source is read-only" | uživatelské mutace — klient zobrazí, neretryuje |
+| `Deny503` | **503** `DS_UNAVAILABLE` + `Retry-After: 300` (shodné s zavřeným DS) | strojový ingest: `/_mail/incoming` (D4), callbacky AI analyzeru (`queue`/`claim`/`payload`/`attachmentContent`/`result`/`failed`) — volající frontuje, práci nezahazuje |
+
+**Fail-closed:** controller nebo akce mimo tabulku = `Deny403`. Nová routa
+přidaná bez rozmyslu je v read-only zavřená, dokud ji někdo v
+`ReadOnlyPolicy::TABLE` vědomě nepovolí. Zdroj pravdy o verdiktech je kód;
+princip a odchylky:
+
+- `auth`, `password` celé ALLOW — přihlášení, refresh, samoobsluha účtu
+  (heslo, sessions, pozvánky) na read-only DS fungují.
+- `chat` celý 403 (D5) včetně `list`/`show`; entry pointy (chat leaf
+  v navigaci, capability `chat` i `mailUpload` v `/_ui/dashboard`) skrývá
+  **server** — `NavigationController` i `DashboardController` dostávají
+  `readOnly` a podmínka chat leafu zůstává identická s capability.
+  `dashboard.summary` (LLM) 403.
+- `hosting*` celé ALLOW — endpointy řídí lifecycle *jiných* DS a mají
+  vlastní klíčovou auth; read-only hosting DS, který by zablokoval
+  rekonciliaci flotily, je horší selhání než teoretická mutace hosting dat.
+- `exchange` matchuje suffix akce (`person:apply` → `apply`):
+  `validate`/`preview` ALLOW, `apply` 403. `analysis.previewMessage`
+  (GET bez zápisu) ALLOW.
+- `setup` čtecí akce zůstávají fail-closed 403 (kromě `checklist`) —
+  jejich read-only povaha nebyla ověřena; povolit lze kdykoli.
+
+### 6.2 MCP read-tier
+
+`McpController` dostává `readOnly`: `tools/list` vrací jen nástroje
+s `isReadOnly() === true` (`McpToolRegistry::readOnlyView()`, tentýž filtr
+jako chat tool-use loop), `tools/call` na zápisový nástroj vrací JSON-RPC
+`-32602` s důvodem „data source is read-only" — **ne** HTTP 403, MCP
+klienti čtou JSON-RPC. Viz [mcp-server.md](mcp-server.md) §5.
+
+### 6.3 SPA — stavová obrazovka a banner
+
+SPA se servíruje staticky nginxem z `public/app/` (`docs/nginx/app.conf`),
+`index.php` pro `/app/` neběží — stavová stránka tedy **není PHP HTML**, ale
+SPA. Boot volá veřejný `GET /_app/info`:
+
+- zavřený DS → 503 `DS_UNAVAILABLE` (details `_state` = efektivní stav)
+  → `appInfo.unavailable` → `App.svelte` ukáže `StatusScreen` (generický
+  Shipard vizuál — DS config se nečte; jeden text pro suspended /
+  maintenance / pending_deletion, tlačítko Zkusit znovu = reload);
+- `read_only` → odpověď nese `dsState: "read_only"` → `appInfo.readOnly`
+  → trvalý `ReadOnlyBanner` v `ContentArea` (sdílí všechny shelly);
+  `client.js` na 403 `DS_READ_ONLY` zobrazí jednotný toast
+  (`noticeStore` + `GlobalToast` v `AppShell`), i18n `error.DS_READ_ONLY`.
+
+`/_app/info` vystavuje jen `active` | `read_only` — blokované stavy
+skončí 503 už v resolveru, nic citlivého neprozrazuje. Plošné skrývání
+editačních prvků (Nový záznam, uložit ve formulářích, drag&drop příloh)
+se dolaďuje průběžně — server vynucuje, banner + toast dávají
+srozumitelnost.
+
+### 6.4 D8 — zapomenutá maintenance
+
+Alert checky běží *uvnitř* DS a v maintenance jsou cronem vypnuté — D8
+je proto server-level. `DataSourceStateScanner` projde
+`data-sources/*/config/state.json` (fail-closed soubory hlásí jako
+`corrupted`), práh `MAINTENANCE_WARN_DAYS = 7` (konstanta; do
+`server.json` až bude důvod). Dvě ústí:
+
+- `shpd-server doctor` → sekce **Data source states**: počty per stav,
+  `⚠` per DS v maintenance déle než 7 dní, `✗` per DS s poškozeným
+  souborem (počítá se jako chyba), `·` ostatní ne-active DS.
+- `shpd-server ds-state-check` v `daily` slotu
+  (`CronCommand::SERVER_SLOT_JOBS`) → `warn` do `shipard.log` per DS
+  (jednou denně, ne spam). Exit vždy 0 — nález není chyba jobu.
+
+## 7. Fázování
+
+- **Fáze 1:** `state.json`, 503 za resolverem, cron gating, CLI. Task
+  `tasks/ds-state-phase1.md`.
+- **Fáze 2 (sekce 6):** `ReadOnlyPolicy`, MCP read-tier, SPA stavová
+  obrazovka + banner, D8. Task `tasks/ds-state-phase2.md`.
 - **Fáze 3:** hosting — desired state v `hosting_core_data_sources`,
   aplikace přes `hosting-sync`, rekonciliace actual state zpět,
-  `pending_deletion` mazací job se zálohou (D10).
+  `pending_deletion` mazací job se zálohou (D10). Rozlišení maintenance
+  reason ve stavové obrazovce (503 details nesou jen efektivní stav).

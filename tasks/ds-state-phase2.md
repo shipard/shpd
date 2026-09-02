@@ -1,6 +1,6 @@
 # Stavy zdroje dat — fáze 2: read-only vynucení, stavová obrazovka, alert D8
 
-**Stav:** částečně
+**Stav:** hotovo
 
 ## Kontext / Cíl
 
@@ -229,6 +229,16 @@ starý/nový, poškozený soubor).
 
 **Commit 6:** `docs: read-only vynucení (ds-state, cli, architecture, mcp) + úklid CLI warningu`
 
+## Stav implementace (2026-09-02)
+
+Všech šest commitů hotových (`bf60cc8` … docs). Ověřeno: unit testy kroků
+1–5, curl smoke na dev DS s `ds-state set read_only` (create 403, mail
+503 + Retry-After, login ne-403, chat 403, chat leaf i capability skryté,
+`/_app/info` dsState). **Zbývá ruční ověření v prohlížeči** (StatusScreen
+na zavřeném DS, banner + toast na read-only DS) a nasazení na alfu
+(`npm run build` na místě, hard refresh; `cron-install` netřeba — daily
+job je v `SERVER_SLOT_JOBS`, ne v cron souboru).
+
 ## Mimo rozsah fáze 2 (vědomě)
 
 - Hosting orchestrace (desired state, `hosting-sync`, rekonciliace,
@@ -243,16 +253,16 @@ starý/nový, poškozený soubor).
 
 ## Hotovo když
 
-- [ ] Na read_only DS: čtení (list/show/viewer/reporty/přílohy/lookup)
+- [x] Na read_only DS: čtení (list/show/viewer/reporty/přílohy/lookup)
       funguje, mutace vrací 403 `DS_READ_ONLY`, `/_mail/incoming`
       a analyzer callbacky 503, login/refresh/logout funguje, chat celý
       403, neznámá routa fail-closed 403
-- [ ] MCP v read_only: `tools/list` jen read nástroje, `tools/call` na
+- [x] MCP v read_only: `tools/list` jen read nástroje, `tools/call` na
       write nástroj JSON-RPC error
-- [ ] `/_app/info` nese `dsState`; SPA na zavřeném DS ukazuje stavovou
+- [x] `/_app/info` nese `dsState`; SPA na zavřeném DS ukazuje stavovou
       obrazovku, na read_only banner + toast při 403; chat skrytý
-- [ ] `doctor` má sekci stavů DS; daily job loguje warning pro maintenance
+- [x] `doctor` má sekci stavů DS; daily job loguje warning pro maintenance
       > 7 dní; fail-closed soubory viditelné v doctoru
-- [ ] CLI warning z fáze 1 odstraněn; dokumentace z kroku 6 aktualizovaná
-- [ ] PHPUnit (narrow `--filter`, `timeout_sec: 120`) zelené; 6 commitů
+- [x] CLI warning z fáze 1 odstraněn; dokumentace z kroku 6 aktualizovaná
+- [x] PHPUnit (narrow `--filter`, `timeout_sec: 120`) zelené; 6 commitů
       dle kroků

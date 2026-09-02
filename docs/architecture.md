@@ -43,6 +43,8 @@ HTTP request
   → TableLoader (načtení definic tabulek pro DS)
   → Router (path + method → Route)
   → AuthMiddleware (Bearer token → AuthContext)
+  → ReadOnlyPolicy — jen při efektivním stavu read_only
+      (mutace → 403 DS_READ_ONLY, strojový ingest → 503, neznámá routa fail-closed 403)
   → RateLimitMiddleware (kontrola limitu, X-RateLimit-* hlavičky)
   → Controller dispatch
   → CorsMiddleware.applyTo() + rate-limit hlavičky
@@ -63,7 +65,8 @@ HTTP request
 | Třída | Účel |
 |-------|------|
 | `DataSourceResolver` | Načte `domains.json`, přeloží hostname na `DataSourceConfig` + `DataSourceConnection`. Hází `UnknownHostException` pro neznámou subdoménu. Před vytvořením connection čte `config/state.json` (`Core\Config\DataSourceState`) a pro zavřený DS hází `DataSourceUnavailableException` (`dsId`, `effectiveState`, `maintenanceReason`) → `index.php` 503. Viz [ds-state.md](ds-state.md). |
-| `ResolvedDataSource` | Readonly dvojice `DataSourceConfig` + `DataSourceConnection`. |
+| `ResolvedDataSource` | Readonly `DataSourceConfig` + `DataSourceConnection` + `DataSourceState` (`state`, `isReadOnly()`) — stav načtený resolverem cestuje pipeline (politika, `/_app/info`, MCP, navigace). |
+| `ReadOnlyPolicy` | Tabulka `(controller, action)` → `ReadOnlyVerdict` (`Allow` / `Deny403` / `Deny503`) pro DS ve stavu `read_only`; neznámá kombinace = `Deny403` (fail-closed). Volá `index.php` krok 6.5 za auth. Viz [ds-state.md](ds-state.md) §6. |
 | `TableLoader` | Z `DataSourceConfig` a `modulesBasePath` sestaví `array<string, TableDefinition>` pro všechny aktivní moduly DS (s extensions, lokalizovaný). |
 
 ### Middleware

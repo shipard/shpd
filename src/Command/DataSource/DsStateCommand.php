@@ -19,10 +19,10 @@ use Symfony\Component\Console\Question\ConfirmationQuestion;
  *   ds-state set <state> [--delete-after=<ISO>] [--yes]
  *   ds-state maintenance --on [--reason=<r>] | --off
  *
- * Fáze 1: HTTP vynucuje jen suspended / maintenance / pending_deletion
- * (503); read_only respektuje cron, na routách přijde ve fázi 2. Lokální
- * CLI je pro nehostované DS a nouzové zásahy — u hostovaných DS drží
- * desired state hosting (D6, fáze 3).
+ * HTTP: suspended / maintenance / pending_deletion → 503; read_only →
+ * ReadOnlyPolicy (403 na mutacích, docs/ds-state.md). Lokální CLI je pro
+ * nehostované DS a nouzové zásahy — u hostovaných DS drží desired state
+ * hosting (D6, fáze 3).
  */
 class DsStateCommand extends Command
 {
@@ -157,9 +157,6 @@ class DsStateCommand extends Command
         }
 
         $output->writeln(sprintf('State set to <info>%s</info>.', $saved->getState()));
-        if ($target === DataSourceState::READ_ONLY) {
-            $output->writeln('<comment>Note: HTTP read-only enforcement arrives in phase 2 — for now requests behave as active; cron already skips write jobs.</comment>');
-        }
         $this->writeEffective($saved, $output);
         return Command::SUCCESS;
     }

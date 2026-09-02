@@ -33,7 +33,7 @@ Podrobné specifikace jsou v adresáři `docs/`. Přečti příslušný dokument
 | `docs/accounting.md` | Účtování dokladů — rowOperations, účtovací předpis, `AccountingEngine`, deník, lifecycle (stav 40), endpoint reaccount, tab Zaúčtování + `JournalViewer` (Fáze 1–3 hotové), DPH analytiky per vatCode + reverse charge + konvence OSS |
 | `docs/auth.md` | Autentizace — auth politika per DS (`auth` v main.json), OIDC relying party (start/callback/exchange, PKCE, handoff), `SessionService`, mapování identit + JIT, break-glass CLI, test s dockerovým Keycloakem, samoobsluha účtů Fáze 0b (pozvánky, forgot/reset/change hesla, sessions) |
 | `docs/render.md` | PDF rendering — Gotenberg služba per stroj + `RenderClient` (`src/Core/Render/`), profily untrusted/report, post-processing (embedIsdoc/appendPdfs), degradace `errorKind`; provoz v `docs/operations/render-service.md` |
-| `docs/ds-state.md` | Stavy zdroje dat — lifecycle + maintenance overlay, `config/state.json` (fail-closed), 503 `DS_UNAVAILABLE`, cron gating `JOB_ALLOWED_STATES`, `shpd-ds ds-state`; fáze 2/3 dle #56 |
+| `docs/ds-state.md` | Stavy zdroje dat — lifecycle + maintenance overlay, `config/state.json` (fail-closed), 503 `DS_UNAVAILABLE`, cron gating `JOB_ALLOWED_STATES`, `shpd-ds ds-state`; fáze 2: `ReadOnlyPolicy` (403 `DS_READ_ONLY`, fail-closed per routa), MCP read-tier, SPA `StatusScreen` + banner, D8 `ds-state-check`; fáze 3 (hosting) dle #56 |
 | `docs/mail/outbound.md` | Odchozí pošta — fronta (`core_mail_outbox` + log), per-sender SMTP transporty, relay konfigurace `mail.relay`, `MailOutboxService`/`TransportResolver`, cron worker, password endpoint, runbook |
 
 ## Architektura — rychlý přehled
@@ -194,7 +194,7 @@ Formát hlavičky stránky a šablona: `docs/help-authoring.md`.
 - **Commitované texty** (tasky, docs, commit messages): nikdy citlivé údaje z reálných dat (jména firem/osob, čísla faktur, reálné částky, názvy DS, id záznamů) — diagnostické příklady anonymizovat se zachováním poměrů; viz `tasks/README.md` → Konvence
 
 ### CLI příkazy
-- `shpd-server`: `version`, `help`, `ds-create --name [--module] [--ds-id]`, `server-init`, `next-table-id`, `hosting-sync [--dry-run] [--stats]`
+- `shpd-server`: `version`, `help`, `ds-create --name [--module] [--ds-id]`, `server-init`, `next-table-id`, `hosting-sync [--dry-run] [--stats]`, `ds-state-check` (daily D8), `doctor`, `cron --slot`
 - `shpd-ds` (z adresáře DS): `version`, `help`, `ds-upgrade`, `ds-setting list|get <key>|set <key> <value> [--unset]`, `ds-state [show|set <state> [--delete-after] [-y]|maintenance --on [--reason]|--off]` (`docs/ds-state.md`), `ds-secrets-health`, `ds-secrets-rotate [--dry-run]`, `alerts-run [--check=id|--all]`, `alerts-prune [--days=N] [--dry-run]`, `report-run <reportId> --fiscal-year --month-from --month-to [--detail] [--pretty]` (JSON na stdout), `report-diff <fileA> <fileB> [--strict] [--json]` (exit 0/1/2), `mail-outbox-run [--limit=N]`, `mail-outbox-retry --id N`, `mail-send-test --to x@y [--from ...]`, `registry-extract-texts [--all] [--limit=N]`, `dataset-dump <dir> [--zip] [--force]`, `dataset-seed <dir|zip> [--no-reset] [-y]` (reset + import sady, `docs/datasets.md`), `user-create [--password] [--if-not-exists] [--identity-issuer/-subject/-provider]` (bez hesla → poslat pozvánku), `user-set-admin`, `auth-emergency-login`, `hosting-oidc-init`, `hosting-oidc-client`, `hosting-server-key`, `hosting-router-key`, `hosting-analyzer-key`, `hosting-ai-gw-init`, `hosting-ai-token`, `hosting-stats [--json]`
 
 ### Frontend — ikony

@@ -1,0 +1,28 @@
+// Hero faktura — poběží ve videu detailně (scénář S1). Čistý a čitelný layout.
+// Očekávané součty (build.py je počítá, tady jen kontrolní opis ze zadání):
+// základ 8 500,00 / DPH 1 785,00 / celkem 10 285,00 Kč.
+{
+	"supplier": "softaro",
+	"docNumber": "2026-0912",
+	"variableSymbol": "20260912",
+	"dates": {
+		"issue": "2026-09-01",
+		"tax": "2026-08-31",
+		"due": "2026-09-15",
+	},
+	"currency": "CZK",
+	"rows": [
+		{
+			"text": "Správa IT infrastruktury — paušál 08/2026",
+			"qty": 1,
+			"unit": "měs",
+			"unitPrice": 8500.00,
+			"vatPct": 21,
+		},
+	],
+	"rounding": "none",
+	"template": "a",
+	"notes": {
+		"onDocument": "Fakturujeme Vám paušální správu IT infrastruktury za období 08/2026 dle smlouvy o poskytování služeb. Děkujeme za včasnou úhradu.",
+	},
+}

@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<title>Faktura {{docNumber}}</title>
+<style>
+	* { margin: 0; padding: 0; box-sizing: border-box; }
+	html, body { width: 100%; }
+	body {
+		font-family: 'Noto Sans', sans-serif;
+		font-size: 10px;
+		color: #1f2933;
+		line-height: 1.45;
+	}
+	.accent-bar { height: 7mm; background: {{accent}}; }
+	.page { padding: 10mm 15mm 12mm 15mm; }
+
+	.head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 9mm; }
+	.head .supplier h1 { font-size: 17px; color: {{accent}}; margin-bottom: 2mm; }
+	.head .supplier p { color: #52606d; }
+	.head .doc { text-align: right; }
+	.head .doc .doc-title { font-size: 21px; font-weight: 700; letter-spacing: 0.08em; }
+	.head .doc .doc-sub { color: #52606d; }
+	.head .doc .doc-no { font-size: 14px; font-weight: 700; margin-top: 1mm; }
+
+	.boxes { display: flex; gap: 6mm; margin-bottom: 6mm; }
+	.box { flex: 1; border: 1px solid #d3dce6; border-radius: 2mm; padding: 3.5mm 4mm; }
+	.box h2 {
+		font-size: 8.5px; text-transform: uppercase; letter-spacing: 0.12em;
+		color: {{accent}}; margin-bottom: 2mm;
+	}
+	.box .b-name { font-weight: 700; font-size: 11.5px; }
+	.box table td { padding: 0.4mm 0; vertical-align: top; }
+	.box table td.l { color: #52606d; padding-right: 4mm; white-space: nowrap; }
+
+	.dates { display: flex; gap: 6mm; margin-bottom: 7mm; }
+	.dates .d { flex: 1; background: #f5f7fa; border-radius: 2mm; padding: 2.5mm 4mm; }
+	.dates .d .dl { font-size: 8.5px; color: #52606d; text-transform: uppercase; letter-spacing: 0.08em; }
+	.dates .d .dv { font-size: 11.5px; font-weight: 700; }
+
+	table.items { width: 100%; border-collapse: collapse; margin-bottom: 6mm; }
+	table.items thead th {
+		font-size: 8.5px; text-transform: uppercase; letter-spacing: 0.08em;
+		color: #52606d; text-align: right; padding: 0 2mm 1.5mm 2mm;
+		border-bottom: 2px solid {{accent}};
+	}
+	table.items thead th.h-text { text-align: left; padding-left: 0; }
+	table.items td { padding: 2mm; border-bottom: 1px solid #e4e9f0; text-align: right; }
+	table.items td.c-text { text-align: left; padding-left: 0; }
+	table.items td.c-unit { text-align: left; color: #52606d; }
+	table.items td.c-total { font-weight: 700; }
+
+	.sum { display: flex; justify-content: space-between; align-items: flex-start; gap: 10mm; margin-bottom: 7mm; }
+	table.vat-recap { border-collapse: collapse; }
+	table.vat-recap th {
+		font-size: 8.5px; text-transform: uppercase; letter-spacing: 0.08em;
+		color: #52606d; text-align: right; padding: 0 3mm 1mm 3mm;
+		border-bottom: 1px solid #d3dce6;
+	}
+	table.vat-recap td { text-align: right; padding: 1.2mm 3mm; border-bottom: 1px solid #e4e9f0; }
+	table.totals { border-collapse: collapse; min-width: 62mm; }
+	table.totals th { text-align: left; font-weight: 400; color: #52606d; padding: 1.2mm 6mm 1.2mm 0; }
+	table.totals td { text-align: right; padding: 1.2mm 0; }
+	table.totals tr.grand th, table.totals tr.grand td {
+		font-size: 14px; font-weight: 700; color: {{accent}};
+		border-top: 2px solid {{accent}}; padding-top: 2mm;
+	}
+
+	.note { background: #f5f7fa; border-radius: 2mm; padding: 3mm 4mm; color: #3e4c59; margin-bottom: 8mm; }
+	.foot { border-top: 1px solid #e4e9f0; padding-top: 2.5mm; color: #7b8794; font-size: 8.5px; }
+</style>
+</head>
+<body>
+<div class="accent-bar"></div>
+<div class="page">
+
+	<div class="head">
+		<div class="supplier">
+			<h1>{{supplierName}}</h1>
+			<p>{{supplierStreet}}, {{supplierZipCity}}</p>
+			<p>IČO: {{supplierIco}} &nbsp;·&nbsp; DIČ: {{supplierDic}}</p>
+			<p>{{supplierEmail}}</p>
+		</div>
+		<div class="doc">
+			<div class="doc-title">FAKTURA</div>
+			<div class="doc-sub">daňový doklad</div>
+			<div class="doc-no">č. {{docNumber}}</div>
+		</div>
+	</div>
+
+	<div class="boxes">
+		<div class="box">
+			<h2>Odběratel</h2>
+			<div class="b-name">{{customerName}}</div>
+			<p>{{customerStreet}}</p>
+			<p>{{customerZipCity}}</p>
+			<p>IČO: {{customerIco}} &nbsp;·&nbsp; DIČ: {{customerDic}}</p>
+		</div>
+		<div class="box">
+			<h2>Platební údaje</h2>
+			<table>
+				<tr><td class="l">Bankovní účet</td><td>{{supplierAccount}}</td></tr>
+				<tr><td class="l">IBAN</td><td>{{supplierIban}}</td></tr>
+				<tr><td class="l">Variabilní symbol</td><td>{{vs}}</td></tr>
+				<tr><td class="l">Forma úhrady</td><td>Převodem</td></tr>
+				<tr><td class="l">Měna</td><td>CZK</td></tr>
+			</table>
+		</div>
+	</div>
+
+	<div class="dates">
+		<div class="d"><div class="dl">Datum vystavení</div><div class="dv">{{issueDate}}</div></div>
+		<div class="d"><div class="dl">Datum usk. zdan. plnění</div><div class="dv">{{taxDate}}</div></div>
+		<div class="d"><div class="dl">Datum splatnosti</div><div class="dv">{{dueDate}}</div></div>
+	</div>
+
+	<table class="items">
+		<thead>
+			<tr>
+				<th class="h-text">Popis položky</th>
+				<th>Množství</th>
+				<th class="h-text">MJ</th>
+				<th>Cena za MJ</th>
+				<th>DPH</th>
+				<th>Celkem bez DPH</th>
+			</tr>
+		</thead>
+		<tbody>
+{{rows}}
+		</tbody>
+	</table>
+
+	<div class="sum">
+		<table class="vat-recap">
+			<thead>
+				<tr><th>Sazba DPH</th><th>Základ</th><th>DPH</th><th>Celkem</th></tr>
+			</thead>
+			<tbody>
+{{vatRecap}}
+			</tbody>
+		</table>
+		<table class="totals">
+			<tr><th>Základ daně celkem</th><td>{{totalBase}} Kč</td></tr>
+			<tr><th>DPH celkem</th><td>{{totalVat}} Kč</td></tr>
+			{{roundingRow}}
+			<tr class="grand"><th>Celkem k úhradě</th><td>{{totalAmount}} Kč</td></tr>
+		</table>
+	</div>
+
+	<div class="note">{{note}}</div>
+
+	<div class="foot">{{supplierCourtReg}}</div>
+
+</div>
+</body>
+</html>

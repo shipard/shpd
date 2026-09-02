@@ -1,6 +1,6 @@
 # Demo: generátor fiktivních přijatých faktur (PDF)
 
-**Stav:** naplánováno
+**Stav:** hotovo
 
 ## Kontext / Cíl
 

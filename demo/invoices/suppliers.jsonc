@@ -1,0 +1,84 @@
+// Identity pro generátor fiktivních přijatých faktur (tasks/demo-invoices.md).
+//
+// VŠECHNY subjekty jsou fiktivní — rozhodnutí D8 (shpd-web/docs/demo-vyroba.md):
+// žádné reálné právnické osoby na fabrikovaných dokladech.
+//
+// Ověření k 2026-09-01:
+//   - IČO mají validní kontrolní součet a v ARES neexistují,
+//   - názvy firem mají v ARES 0 zásahů,
+//   - domény dodavatelů byly bez A záznamu.
+// „Volnost" identit je snapshot — při budoucí kolizi identitu vyměnit
+// a PDF přegenerovat (proto je to generátor).
+//
+// Rezervní volná IČO pro rozšiřování sady: 98818678, 42167108.
+//
+// POZOR: doména hoblinka.cz je registrovaná cizím subjektem — e-mail ani web
+// odběratele se na PDF neuvádí NIKDE (šablony pro odběratele kontaktní
+// placeholder záměrně nemají).
+//
+// Čísla účtů mají validní mod-11 kontrolní součet, IBANy sedí — build.py
+// obojí znovu ověřuje assertem. Kódy bank jsou reálné (jinak by účet nebyl
+// validní); názvy bank se na PDF neuvádí.
+{
+	"ownCompany": {
+		"name": "Truhlářství Hoblinka s.r.o.",
+		"street": "Pilinová 214",
+		"city": "Zlín",
+		"zip": "760 01",
+		"ico": "52654150",
+		"dic": "CZ52654150",
+	},
+
+	"suppliers": {
+		"softaro": {
+			"name": "Softaro s.r.o.",
+			"street": "Vývojová 1128/6",
+			"city": "Brno",
+			"zip": "616 00",
+			"ico": "54965691",
+			"dic": "CZ54965691",
+			"account": "2308417557/2010",
+			"iban": "CZ8520100000002308417557",
+			"email": "fakturace@softaro.cz",
+			"courtReg": "Spisová značka C 128443 vedená u Krajského soudu v Brně",
+			"accent": "#0e7490", // jen šablona a
+		},
+		"dubretta": {
+			"name": "Dubretta s.r.o.",
+			"street": "Katrová 87",
+			"city": "Hranice",
+			"zip": "753 01",
+			"ico": "31970184",
+			"dic": "CZ31970184",
+			"account": "1156072849/0100",
+			"iban": "CZ5901000000001156072849",
+			"email": "odbyt@dubretta.cz",
+			"courtReg": "Spisová značka C 44902 vedená u Krajského soudu v Ostravě",
+		},
+		"papyria": {
+			"name": "Papyria s.r.o.",
+			"street": "Knihařská 452/3",
+			"city": "Praha 1",
+			"zip": "110 00",
+			"ico": "66901707",
+			"dic": "CZ66901707",
+			"account": "1982653311/5500",
+			"iban": "CZ1855000000001982653311",
+			"email": "objednavky@papyria.cz",
+			"courtReg": "Spisová značka C 217650 vedená u Městského soudu v Praze",
+			"accent": "#7c2d5a", // jen šablona a
+		},
+		"energima": {
+			"name": "Energima a.s.",
+			"street": "Rozvodná 2201/14",
+			"city": "Ostrava",
+			"zip": "702 00",
+			"ico": "54463416",
+			"dic": "CZ54463416",
+			"account": "2744190969/0300",
+			"iban": "CZ7203000000002744190969",
+			"email": "zakaznici@energima.cz",
+			"courtReg": "Spisová značka B 11482 vedená u Krajského soudu v Ostravě",
+		},
+	},
+}

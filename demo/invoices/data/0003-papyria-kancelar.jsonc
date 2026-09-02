@@ -1,0 +1,49 @@
+// Dvě sazby DPH: odborná periodika 12 % + kancelářské potřeby 21 % —
+// prověří rekapitulaci po sazbách. Knížkám se vyhýbáme (od 2024 mají
+// 0 % DPH), proto časopisy.
+{
+	"supplier": "papyria",
+	"docNumber": "20261873",
+	"variableSymbol": "20261873",
+	"dates": {
+		"issue": "2026-08-28",
+		"tax": "2026-08-28",
+		"due": "2026-09-11",
+	},
+	"currency": "CZK",
+	"rows": [
+		{
+			"text": "Předplatné — čtvrtletník Dřevo a interiér, Q4/2026",
+			"qty": 1,
+			"unit": "ks",
+			"unitPrice": 435.00,
+			"vatPct": 12,
+		},
+		{
+			"text": "Odborný měsíčník Truhlář dnes, čísla 9–11/2026",
+			"qty": 3,
+			"unit": "ks",
+			"unitPrice": 129.00,
+			"vatPct": 12,
+		},
+		{
+			"text": "Kancelářský papír A4 80 g/m², balení 500 listů",
+			"qty": 10,
+			"unit": "ks",
+			"unitPrice": 89.50,
+			"vatPct": 21,
+		},
+		{
+			"text": "Toner černý, kompatibilní",
+			"qty": 2,
+			"unit": "ks",
+			"unitPrice": 1245.00,
+			"vatPct": 21,
+		},
+	],
+	"rounding": "none",
+	"template": "a",
+	"notes": {
+		"onDocument": "Děkujeme za Vaši objednávku č. OBJ-2026-0311.",
+	},
+}

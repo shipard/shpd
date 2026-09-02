@@ -1,0 +1,49 @@
+// Zboží 21 %, 4 řádky s množstvím, jednotkami (m2, ks, bm) a desetinnými
+// cenami — prověří extrakci řádků. docNumber je alfanumerický a ZÁMĚRNĚ
+// se liší od VS (testovací případ pro extrakci).
+{
+	"supplier": "dubretta",
+	"docNumber": "FV-2026-0457",
+	"variableSymbol": "20260457",
+	"dates": {
+		"issue": "2026-08-25",
+		"tax": "2026-08-25",
+		"due": "2026-09-08",
+	},
+	"currency": "CZK",
+	"rows": [
+		{
+			"text": "Spárovka smrková 18 mm, formát 2500×1250 mm",
+			"qty": 12.5,
+			"unit": "m2",
+			"unitPrice": 486.50,
+			"vatPct": 21,
+		},
+		{
+			"text": "Deska dubová A/B 25 mm, průběžná lamela",
+			"qty": 4,
+			"unit": "ks",
+			"unitPrice": 2340.00,
+			"vatPct": 21,
+		},
+		{
+			"text": "Hrana ABS dub 22×0,8 mm",
+			"qty": 48,
+			"unit": "bm",
+			"unitPrice": 18.90,
+			"vatPct": 21,
+		},
+		{
+			"text": "Doprava a manipulace",
+			"qty": 1,
+			"unit": "ks",
+			"unitPrice": 650.00,
+			"vatPct": 21,
+		},
+	],
+	"rounding": "none",
+	"template": "b",
+	"notes": {
+		"onDocument": "Zboží zůstává do úplného zaplacení majetkem dodavatele. Případné reklamace uplatněte do 14 dnů od převzetí.",
+	},
+}

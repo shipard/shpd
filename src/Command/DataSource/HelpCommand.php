@@ -56,6 +56,7 @@ class HelpCommand extends Command
         $output->writeln('');
         $output->writeln('<comment>Settings:</comment>');
         $output->writeln('  <info>ds-setting</info>              Read and write data source settings: list | get <key> | set <key> <value> [--unset]');
+        $output->writeln('  <info>ds-state</info>                Show or change the data source state (config/state.json): show | set <state> [--delete-after] | maintenance --on [--reason] | --off');
         $output->writeln('');
         $output->writeln('<comment>Users:</comment>');
         $output->writeln('  <info>user-create</info>             Create a new user in the data source');
@@ -130,6 +131,7 @@ class HelpCommand extends Command
         $output->writeln('  shpd-ds ds-reset -y');
         $output->writeln('  shpd-ds ds-setting set economy.accountChart default');
         $output->writeln('  shpd-ds ds-setting list');
+        $output->writeln('  shpd-ds ds-state maintenance --on --reason=import');
         $output->writeln('  shpd-ds user-create --login=admin --password=...');
         $output->writeln('  shpd-ds ai-analyzer-set-key --backend default --api-key <api-key>');
         $output->writeln('  shpd-ds ds-secrets-rotate --dry-run');

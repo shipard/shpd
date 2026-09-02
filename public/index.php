@@ -32,6 +32,8 @@ use Shipard\Api\Exception\UnknownHostException;
 use Shipard\Api\Middleware\AuthMiddleware;
 use Shipard\Api\Middleware\CorsMiddleware;
 use Shipard\Api\Middleware\RateLimitMiddleware;
+use Shipard\Api\ReadOnlyPolicy;
+use Shipard\Api\ReadOnlyVerdict;
 use Shipard\Api\Request;
 use Shipard\Api\Response;
 use Shipard\Api\Route;
@@ -138,6 +140,30 @@ try {
 	/** @var AuthContext $auth */
 	$auth = $authResult;
 
+	// ── 6.5. Read-only vynucení (#56 fáze 2) ─────────────────────────────────
+	// Za auth (anonym dostane 401 dřív než informaci o stavu DS), před rate
+	// limitem. `active` politiku vůbec nevolá. Verdikt per routa (D7),
+	// neznámá routa fail-closed 403 — viz ReadOnlyPolicy.
+	if ($resolved->isReadOnly()) {
+		$verdict = (new ReadOnlyPolicy())->verdict($route);
+		if ($verdict === ReadOnlyVerdict::Deny503) {
+			// Strojový ingest (D4): stejná odpověď jako zavřený DS, volající
+			// frontuje. Info do logu — ops vidí, že router/analyzer čeká.
+			ErrorLogger::info('request refused — data source read-only', [
+				'controller' => $route->controller,
+				'action' => $route->action,
+			]);
+			$corsMiddleware->applyTo(unavailableResponse($resolved->state->getEffectiveState()))->send();
+			exit;
+		}
+		if ($verdict === ReadOnlyVerdict::Deny403) {
+			$corsMiddleware->applyTo(
+				Response::error('DS_READ_ONLY', 'Data source is read-only', 403),
+			)->send();
+			exit;
+		}
+	}
+
 	// ── 7. Rate limiting ──────────────────────────────────────────────────────
 	$rateLimiter = new RateLimitMiddleware();
 	$rateResult  = $rateLimiter->handle($request, $auth, $route, $resolved->connection);
@@ -197,11 +223,7 @@ try {
 		'state' => $e->effectiveState,
 		'maintenanceReason' => $e->maintenanceReason,
 	]);
-	$corsMiddleware->applyTo(
-		Response::error('DS_UNAVAILABLE', 'Data source is temporarily unavailable', 503, [
-			['field' => '_state', 'code' => $e->effectiveState, 'message' => 'Data source state: ' . $e->effectiveState],
-		])->withHeader('Retry-After', '300'),
-	)->send();
+	$corsMiddleware->applyTo(unavailableResponse($e->effectiveState))->send();
 } catch (UnknownDataSourceException $e) {
 	$corsMiddleware->applyTo(
 		Response::error('UNKNOWN_DATASOURCE', "Unknown data source: {$e->dsId}", 404),
@@ -251,6 +273,17 @@ function resolveLanguage(Request $request, ?\Shipard\Core\Config\DataSourceConfi
 	$first = explode(';', $first)[0];
 	$first = explode('-', trim($first))[0];
 	return $first !== '' ? strtolower($first) : $fallback;
+}
+
+/**
+ * 503 pro DS, který teď nepřijímá požadavek (zavřený stav, nebo read-only
+ * pro strojový ingest). Retry-After — mail-router a analyzer frontují.
+ */
+function unavailableResponse(string $effectiveState): Response
+{
+	return Response::error('DS_UNAVAILABLE', 'Data source is temporarily unavailable', 503, [
+		['field' => '_state', 'code' => $effectiveState, 'message' => 'Data source state: ' . $effectiveState],
+	])->withHeader('Retry-After', '300');
 }
 
 function applyAllHeaders(CorsMiddleware $cors, RateLimitMiddleware $rateLimit, Response $response): Response

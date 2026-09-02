@@ -6,6 +6,7 @@
   import ThemePanel from './ThemePanel.svelte';
   import ChatPanel from '../chat/ChatPanel.svelte';
   import CommandPalette from '../chrome/CommandPalette.svelte';
+  import GlobalToast from '../ui/GlobalToast.svelte';
   import { shellComponents } from '../shells/index.js';
   import { navigationStore } from '../../stores/navigation.svelte.js';
   import { layoutStore } from '../../stores/layout.svelte.js';
@@ -86,6 +87,9 @@
 
 <!-- Command palette — shell-nezávislá, shelly dodávají jen trigger. -->
 <CommandPalette />
+
+<!-- Globální toast (noticeStore) — např. 403 DS_READ_ONLY z client.js. -->
+<GlobalToast />
 
 <!-- Boční AI chat panel — mimo shell, geometrii si řeší sám přes
      layoutStore.isMobile. Otevírá ho dashboardový ChatLauncher. -->

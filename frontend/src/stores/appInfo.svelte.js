@@ -20,6 +20,13 @@ import { shellStore } from './shell.svelte.js';
 
 const DEFAULT_NAME = 'Shipard';
 
+// Stav DS (#56 fáze 2). `unavailable` = boot dostal 503 DS_UNAVAILABLE
+// (zavřený DS) → App ukáže StatusScreen místo loginu/aplikace; nese
+// efektivní stav z error details (`_state`). `readOnly` = dsState
+// `read_only` → banner v ContentArea, toast při 403 řeší client.js.
+let unavailable = $state(null); // { state } | null
+let readOnly = $state(false);
+
 let info = $state({
   name: null,
   shortName: null,
@@ -47,6 +54,11 @@ async function load() {
       // follow-uživatele).
       themeStore.setDsDefault(info.theme);
       shellStore.setDsDefault(info.shell);
+      readOnly = response.data.dsState === 'read_only';
+      unavailable = null;
+    } else if (response?.error?.code === 'DS_UNAVAILABLE') {
+      const detail = response.error.details?.find((d) => d.field === '_state');
+      unavailable = { state: detail?.code ?? 'suspended' };
     }
   } catch {
     // Endpoint nedostupný (např. server down) — zůstanou defaulty.
@@ -79,6 +91,8 @@ export const appInfoStore = {
   get theme()       { return info.theme; },
   get shell()       { return info.shell; },
   get auth()        { return info.auth; },
+  get unavailable() { return unavailable; },
+  get readOnly()    { return readOnly; },
   load,
   apply,
 };

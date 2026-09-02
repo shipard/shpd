@@ -97,6 +97,11 @@ export default {
   'sidebar.sectionBadge': '{count, plural, one {# položka čeká na vyřízení} few {# položky čekají na vyřízení} many {# položky čeká na vyřízení} other {# položek čeká na vyřízení}}',
 
   // ── App shell ───────────────────────────────────────────────────────────
+  'dsState.unavailable.title': 'Zdroj dat je pozastaven',
+  'dsState.unavailable.text': 'Tento zdroj dat je dočasně nedostupný. Zkuste to prosím později.',
+  'dsState.unavailable.retry': 'Zkusit znovu',
+  'dsState.readOnly.banner': 'Zdroj dat je jen pro čtení — změny nelze ukládat.',
+  'dsState.readOnly.toast': 'Zdroj dat je jen pro čtení, změny nelze ukládat.',
   'app.selectMenuItem': 'Vyberte položku v menu',
   'app.unsupportedPanel': 'Nepodporovaný typ panelu: {type}',
   'app.menu.open': 'Otevřít menu',
@@ -292,6 +297,8 @@ export default {
   // Top-level error.code values from Response::error() in PHP. Unknown
   // codes fall back to error.message (English). Add a key here when a
   // user-visible code starts showing up in the UI.
+  'error.DS_READ_ONLY': 'Zdroj dat je jen pro čtení, změny nelze ukládat',
+  'error.DS_UNAVAILABLE': 'Zdroj dat je dočasně nedostupný',
   'error.VALIDATION_ERROR': 'Validace selhala',
   'error.NOT_FOUND': 'Záznam nenalezen',
   'error.RECORD_NOT_FOUND': 'Záznam nenalezen',

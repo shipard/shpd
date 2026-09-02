@@ -8,6 +8,8 @@
   import SetPasswordScreen from './components/auth/SetPasswordScreen.svelte';
   import OpAuthScreen from './components/auth/OpAuthScreen.svelte';
   import AppShell from './components/layout/AppShell.svelte';
+  import StatusScreen from './components/ui/StatusScreen.svelte';
+  import { appInfoStore } from './stores/appInfo.svelte.js';
 
   // Po úspěšném loginu načti per-user preference (vzhled, jazyk) ze serveru.
   function handleLoginSuccess() {
@@ -16,7 +18,11 @@
   }
 </script>
 
-{#if opAuth.txn}
+{#if appInfoStore.unavailable}
+  <!-- Zavřený DS (suspended / maintenance / pending_deletion, #56): boot
+       GET /_app/info vrátil 503 — stavová obrazovka místo čehokoli. -->
+  <StatusScreen />
+{:else if opAuth.txn}
   <!-- Pending OIDC OP schválení (D10) — větev PŘED rozhodováním
        portál/shell, funguje pro adminy i ne-adminy. Bez session nejdřív
        LoginScreen; po loginu se authStore přepne a approve proběhne. -->

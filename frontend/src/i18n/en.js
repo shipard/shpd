@@ -88,6 +88,11 @@ export default {
   'sidebar.sectionBadge': '{count, plural, one {# item needs attention} other {# items need attention}}',
 
   // ── App shell ───────────────────────────────────────────────────────────
+  'dsState.unavailable.title': 'Data source is suspended',
+  'dsState.unavailable.text': 'This data source is temporarily unavailable. Please try again later.',
+  'dsState.unavailable.retry': 'Try again',
+  'dsState.readOnly.banner': 'Data source is read-only — changes cannot be saved.',
+  'dsState.readOnly.toast': 'Data source is read-only, changes cannot be saved.',
   'app.selectMenuItem': 'Select an item from the menu',
   'app.unsupportedPanel': 'Unsupported panel type: {type}',
   'app.menu.open': 'Open menu',
@@ -280,6 +285,8 @@ export default {
   'attachments.confirmDelete': 'Really delete attachment "{name}"?',
 
   // ── Server error codes (mapped via i18n/errors.js translateError()) ─────
+  'error.DS_READ_ONLY': 'Data source is read-only, changes cannot be saved',
+  'error.DS_UNAVAILABLE': 'Data source is temporarily unavailable',
   'error.VALIDATION_ERROR': 'Validation failed',
   'error.NOT_FOUND': 'Record not found',
   'error.RECORD_NOT_FOUND': 'Record not found',

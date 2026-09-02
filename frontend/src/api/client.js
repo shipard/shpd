@@ -1,5 +1,6 @@
 import { API_BASE_URL } from './config.js';
-import { language } from '../i18n/index.js';
+import { language, t } from '../i18n/index.js';
+import { noticeStore } from '../stores/notice.svelte.js';
 
 const TOKEN_KEY = 'shpd_token';
 
@@ -92,7 +93,15 @@ async function apiRequest(method, path, body = null, isRetry = false) {
     return { success: true, data: null };
   }
 
-  return response.json();
+  const payload = await response.json();
+
+  // 403 DS_READ_ONLY (#56 fáze 2): jednotný toast místo generické chyby
+  // v každém formuláři — server zápis odmítl, protože DS je jen pro čtení.
+  if (response.status === 403 && payload?.error?.code === 'DS_READ_ONLY') {
+    noticeStore.show(t('dsState.readOnly.toast'));
+  }
+
+  return payload;
 }
 
 export function get(path) {

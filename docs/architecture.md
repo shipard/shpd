@@ -38,6 +38,8 @@ HTTP request
   → Request::fromGlobals()
   → CorsMiddleware (OPTIONS → 204, ostatní pokračují)
   → ServerConfig + DataSourceResolver (subdoména → DS)
+      → kontrola config/state.json před připojením k DB
+        (suspended / maintenance / pending_deletion → 503 DS_UNAVAILABLE + Retry-After)
   → TableLoader (načtení definic tabulek pro DS)
   → Router (path + method → Route)
   → AuthMiddleware (Bearer token → AuthContext)
@@ -60,7 +62,7 @@ HTTP request
 
 | Třída | Účel |
 |-------|------|
-| `DataSourceResolver` | Načte `domains.json`, přeloží hostname na `DataSourceConfig` + `DataSourceConnection`. Hází `UnknownHostException` pro neznámou subdoménu. |
+| `DataSourceResolver` | Načte `domains.json`, přeloží hostname na `DataSourceConfig` + `DataSourceConnection`. Hází `UnknownHostException` pro neznámou subdoménu. Před vytvořením connection čte `config/state.json` (`Core\Config\DataSourceState`) a pro zavřený DS hází `DataSourceUnavailableException` (`dsId`, `effectiveState`, `maintenanceReason`) → `index.php` 503. Viz [ds-state.md](ds-state.md). |
 | `ResolvedDataSource` | Readonly dvojice `DataSourceConfig` + `DataSourceConnection`. |
 | `TableLoader` | Z `DataSourceConfig` a `modulesBasePath` sestaví `array<string, TableDefinition>` pro všechny aktivní moduly DS (s extensions, lokalizovaný). |
 

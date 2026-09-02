@@ -1,6 +1,6 @@
 # Stavy zdroje dat — fáze 1: `state.json` + HTTP enforcement + cron gating + CLI
 
-**Stav:** naplánováno
+**Stav:** hotovo
 
 ## Kontext / Cíl
 
@@ -176,6 +176,21 @@ shpd-ds ds-state maintenance --off
 
 **Commit 5:** `docs: stavy zdroje dat (ds-state.md, cli, architecture, migration-guide)`
 
+## Ověření (2. 9. 2026)
+
+Implementováno v 5 commitech dle kroků výše. Ručně ověřeno na dev DS
+(dočasný `state.json`, po testu smazán): `_meta` i `POST /_mail/incoming`
+vrací 503 + `Retry-After: 300`, po `maintenance --off` DS resolvuje
+normálně. Odchylky od zadání:
+
+- HTTP scénáře jsou unit testy v `DataSourceResolverTest` (existující
+  `TestableDataSourceResolver` bez DB), ne integrační suite.
+- `SLOT_JOBS` zůstává seznam; povolené stavy nese samostatná konstanta
+  `JOB_ALLOWED_STATES` (job bez záznamu = jen `active`). Heartbeat nese
+  navíc `corruptedStateFiles`.
+- Alfa: `ds-upgrade` není potřeba (žádná změna schématu), stačí deploy
+  kódu. Nikde zatím žádný `state.json` neexistuje = všechny DS `active`.
+
 ## Mimo rozsah fáze 1 (vědomě)
 
 - Read-only vynucení na routách (allowlist flag na `Route`, 403
@@ -194,18 +209,18 @@ shpd-ds ds-state maintenance --off
 
 ## Hotovo když
 
-- [ ] `DataSourceState` čte a zapisuje `state.json` v1; chybějící soubor =
+- [x] `DataSourceState` čte a zapisuje `state.json` v1; chybějící soubor =
       active, poškozený = fail-closed suspended + error log; unit testy zelené
-- [ ] Request na DS v suspended / maintenance / pending_deletion vrací 503
+- [x] Request na DS v suspended / maintenance / pending_deletion vrací 503
       `DS_UNAVAILABLE` + `Retry-After`, bez pokusu o DB připojení;
       `read_only` a chybějící `state.json` procházejí beze změny
-- [ ] `/_mail/incoming` na zavřeném DS vrací 503 (ověřit ručně nebo
+- [x] `/_mail/incoming` na zavřeném DS vrací 503 (ověřit ručně nebo
       integračním testem — mail-router zprávu frontuje, nezahodí)
-- [ ] Cron přeskakuje joby dle tabulky stavů; heartbeat nese
+- [x] Cron přeskakuje joby dle tabulky stavů; heartbeat nese
       `skippedDataSources`; existující chování pro DS bez `state.json`
       beze změny
-- [ ] `shpd-ds ds-state` show/set/maintenance funguje včetně validací
+- [x] `shpd-ds ds-state` show/set/maintenance funguje včetně validací
       a potvrzení u `pending_deletion`
-- [ ] Dokumentace z kroku 5 aktualizovaná
-- [ ] PHPUnit (narrow `--filter`, `timeout_sec: 120`) zelené; commit per
+- [x] Dokumentace z kroku 5 aktualizovaná
+- [x] PHPUnit (narrow `--filter`, `timeout_sec: 120`) zelené; commit per
       logický krok (5 commitů dle výše)

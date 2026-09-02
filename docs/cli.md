@@ -226,17 +226,23 @@ shpd-server cron --slot=minute        # z /etc/cron.d/shipard, ručně jen při 
 ```
 
 Dispatcher periodických úloh — volá ho generovaný `/etc/cron.d/shipard`
-(viz `cron-install`). Pro každý aktivní DS (adresář v
+(viz `cron-install`). Pro každý DS (adresář v
 `/opt/shipard/data-sources` s `config/main.json`) spustí per-DS příkazy
-slotu subprocesem `shpd-ds <cmd>` s cwd v adresáři DS:
+slotu subprocesem `shpd-ds <cmd>` s cwd v adresáři DS — **filtrované
+podle stavu DS** (`config/state.json`, [ds-state.md](ds-state.md)):
 
-| Slot | Kadence | Příkazy |
-|------|---------|---------|
-| `minute` | každou minutu | `mail-outbox-run`, `mail-analysis-reap`, `mail-preprocess --sweep` |
-| `two-minutes` | à 2 min | server-level: `hosting-sync` |
-| `five-minutes` | à 5 min | `alerts-run` (self-throttling přes `next_run_at`) |
-| `daily` | denně 03:17 | `mail-idempotency-prune` |
-| `weekly` | neděle 04:43 | `alerts-prune` |
+| Slot | Kadence | Příkazy | Běží ve stavech |
+|------|---------|---------|-----------------|
+| `minute` | každou minutu | `mail-outbox-run`, `mail-analysis-reap`, `mail-preprocess --sweep` | `active` |
+| `two-minutes` | à 2 min | server-level: `hosting-sync` | vždy (server-level) |
+| `five-minutes` | à 5 min | `alerts-run` (self-throttling přes `next_run_at`) | `active` |
+| `daily` | denně 03:17 | `mail-idempotency-prune` | `active`, `read_only` |
+| `weekly` | neděle 04:43 | `alerts-prune` | `active`, `read_only` |
+
+Registr povolených stavů je `CronCommand::JOB_ALLOWED_STATES`; job bez
+záznamu běží jen v `active`. V `suspended` / maintenance /
+`pending_deletion` neběží per-DS nic. Přeskočený DS se neloguje (minute
+slot by spamoval) — počet jde do heartbeatu.
 
 Kromě per-DS jobů má slot volitelně **server-level příkazy**
 (`CronCommand::SERVER_SLOT_JOBS`) — spouští se subprocesem
@@ -253,7 +259,9 @@ Chování:
   timeout jobu 10 min (SIGTERM, po 5 s SIGKILL).
 - **Heartbeat** — po doběhnutí zapíše
   `/opt/shipard/run/cron-<slot>.heartbeat` (JSON: timestamp, verze, počty
-  DS/jobů/selhání) — čte ho `doctor`.
+  DS/jobů/selhání, `skippedDataSources` = DS přeskočené kvůli stavu,
+  `corruptedStateFiles` = DS s nečitelným `state.json`, které jsou
+  fail-closed zavřené) — čte ho `doctor`.
 - Loguje do centrálního `shipard.log`; stdout je minimální (cron redirect
   do `/opt/shipard/log/cron.log` je jen poslední záchrana).
 
@@ -532,6 +540,39 @@ v `settingsPages` aktivních modulů (scope `ds`). Neznámý klíč → chyba
 s výpisem povolených; hodnoty parametrů vrstvy C se validují při zápisu.
 Klíče se strukturovanými hodnotami spravovanými aplikací (typy `image`,
 `avatar`, `theme` — branding, vzhled) přes CLI nastavit nejdou.
+
+#### `ds-state`
+
+```bash
+cd /opt/shipard/data-sources/<id>
+shpd-ds ds-state                                              # show: stav, maintenance, efektivní stav
+sudo shpd-ds ds-state set read_only                           # lifecycle stav
+sudo shpd-ds ds-state set pending_deletion --delete-after=2026-10-01   # + interaktivní potvrzení
+sudo shpd-ds ds-state maintenance --on --reason=import        # dočasně zavřít (reason default manual)
+sudo shpd-ds ds-state maintenance --off                       # znovu otevřít
+```
+
+Ovládání `config/state.json` — stavový model viz [ds-state.md](ds-state.md).
+Dvě osy: lifecycle stav (`active` | `read_only` | `suspended` |
+`pending_deletion`) a maintenance overlay (`import` | `restore` |
+`migration` | `manual`). Aktivní maintenance má přednost — DS se chová
+jako `suspended`; `--off` vrátí přesně uložený lifecycle stav. Po každém
+zápisu příkaz vypíše **efektivní stav**.
+
+| Akce | Chování |
+|------|---------|
+| `show` (default) | lidsky čitelný výpis; poškozený `state.json` → exit 1 + nápověda k opravě (DS je fail-closed `suspended`) |
+| `set <state>` | zapíše lifecycle stav (`changedBy: cli`). `read_only` vypíše upozornění, že HTTP vynucení přijde ve fázi 2 (cron ho respektuje už teď). `pending_deletion` vyžaduje `--delete-after=<ISO 8601>` v budoucnosti a potvrzení (`--yes` / `-y` pro skripty); přechod jinam `deleteAfter` zahodí. Přepíše i poškozený soubor |
+| `maintenance --on [--reason=<r>]` | zapne overlay; `since` se drží od prvního zapnutí i při změně reasonu |
+| `maintenance --off` | vypne overlay; bez aktivního maintenance no-op (exit 0) |
+
+Exit code: SUCCESS; FAILURE při nevalidním stavu/reasonu/datu, odmítnutém
+potvrzení, selhání zápisu, nebo `show` nad poškozeným souborem.
+
+Fáze 1 vynucuje HTTP jen pro `suspended` / maintenance / `pending_deletion`
+(503 `DS_UNAVAILABLE` + `Retry-After: 300`, i pro `/_mail/incoming` —
+mail-router frontuje). Na hostovaných DS bude stav řídit hosting
+(`hosting-sync`, fáze 3); lokální CLI je pro nehostované DS a nouzové zásahy.
 
 ### Users
 

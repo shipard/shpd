@@ -18,6 +18,15 @@ Plus DB schema `{id_with_underscores}` v MariaDB.
 
 ## Backup
 
+Před dumpem přepni DS do maintenance — API, cron i příjem pošty se
+zastaví (503, mail-router frontuje), dump je konzistentní a `state.json`
+odjede v tarballu, takže DS je na cílovém serveru zavřený automaticky
+(viz [ds-state.md](ds-state.md)):
+
+```bash
+cd /opt/shipard/data-sources/${DS_ID} && sudo shpd-ds ds-state maintenance --on --reason=migration
+```
+
 ```bash
 DS_ID=abcd-efgh-ijkl-mnop
 DS_DB="$(echo "${DS_ID}" | tr - _)"
@@ -65,9 +74,17 @@ mysql "${DS_DB}" < "ds-${DS_DB}-...sql"
 
 # 5. Sanity check
 cd "/opt/shipard/data-sources/${DS_ID}"
+bin/shpd-ds ds-state             # očekávej maintenance on (migration) — DS je zatím zavřený
 bin/shpd-ds ds-upgrade           # idempotentní, dorovná schema pokud zaostává
 bin/shpd-ds ds-secrets-health    # ověří, že secrets.key sedí na ciphertext v DB
+
+# 6. Otevřít — až po úspěšném sanity checku a přepnutí DNS / domains.json
+bin/shpd-ds ds-state maintenance --off
 ```
+
+`maintenance --off` vrátí DS do lifecycle stavu, ve kterém byl na zdroji
+(`read_only` zůstane `read_only`). Na zdrojovém serveru DS **neotvírej** —
+dvě živé kopie by přijímaly poštu obě.
 
 Pokud `ds-secrets-health` vrátí non-zero exit:
 - **Exit 1 (warnings)** — typicky špatné permissions po extract. Příkaz

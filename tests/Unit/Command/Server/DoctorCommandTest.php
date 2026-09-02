@@ -235,6 +235,41 @@ class DoctorCommandTest extends TestCase
         $this->assertStringContainsString("PHP-FPM pool user:   {$this->testUser}   ✓", $display);
     }
 
+    public function testDataSourceStatesSectionReportsOverdueMaintenanceAndCorruptedFile(): void
+    {
+        // #56 D8: ⚠ pro maintenance déle než 7 dní, ✗ pro fail-closed state.json,
+        // read_only jen informativně.
+        $this->writeServerJson('development');
+        $spec = $this->makeSpec();
+        $this->buildHealthyTree($spec);
+        $dsRoot = $spec->getDataSourcesDir();
+        foreach (['aaaa-aaaa-aaaa-aaaa', 'bbbb-bbbb-bbbb-bbbb', 'cccc-cccc-cccc-cccc', 'dddd-dddd-dddd-dddd'] as $id) {
+            @mkdir($dsRoot . '/' . $id . '/config', 0750, true);
+            file_put_contents($dsRoot . '/' . $id . '/config/main.json', '{}');
+        }
+        file_put_contents($dsRoot . '/aaaa-aaaa-aaaa-aaaa/config/state.json',
+            '{"version":1,"state":"active","maintenance":{"reason":"import","since":"2026-08-20T10:00:00Z"}}');
+        file_put_contents($dsRoot . '/bbbb-bbbb-bbbb-bbbb/config/state.json', '{broken');
+        file_put_contents($dsRoot . '/cccc-cccc-cccc-cccc/config/state.json', '{"version":1,"state":"read_only"}');
+
+        $command = $this->makeTester($spec);
+        $command->stubPoolUser = $this->testUser;
+        $command->fakeNow = new \DateTimeImmutable('2026-09-02T12:00:00Z');
+        $tester = new CommandTester($command);
+        $tester->execute([]);
+
+        $display = $tester->getDisplay();
+        $this->assertStringContainsString('Data source states', $display);
+        // Jen sekce stavů — další sekce (Outbound mail) DS vypisují taky.
+        $section = substr($display, strpos($display, 'Data source states'));
+        $section = substr($section, 0, strpos($section, 'Outbound mail'));
+        $this->assertStringContainsString('active 1 · read_only 1 · suspended 2 (maintenance 1) · pending_deletion 0', $section);
+        $this->assertStringContainsString('⚠ aaaa-aaaa-aaaa-aaaa: maintenance (import) for 13 days', $section);
+        $this->assertStringContainsString('✗ bbbb-bbbb-bbbb-bbbb: state.json unusable', $section);
+        $this->assertStringContainsString('· cccc-cccc-cccc-cccc: read_only', $section);
+        $this->assertStringNotContainsString('dddd-dddd-dddd-dddd', $section);
+    }
+
     public function testReportsFailureWhenPoolUserMismatch(): void
     {
         $this->writeServerJson('development');

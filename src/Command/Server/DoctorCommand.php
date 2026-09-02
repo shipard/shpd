@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Shipard\Command\Server;
 
 use Shipard\Core\Config\DataSourceConfig;
+use Shipard\Core\Config\DataSourceState;
 use Shipard\Core\Config\RenderConfig;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Mail\MailRelayConfig;
@@ -12,6 +13,7 @@ use Shipard\Core\Render\RenderClient;
 use Shipard\Core\Server\CronProvisioner;
 use Shipard\Core\Server\DomainsFile;
 use Shipard\Core\Server\HealthChecker;
+use Shipard\Core\Server\DataSourceStateScanner;
 use Shipard\Core\Server\PermissionSpec;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -134,6 +136,10 @@ class DoctorCommand extends Command
         $dsErrors = $this->checkDataSourceConnections($spec, $output, $mode);
 
         $output->writeln('');
+        $output->writeln('<info>Data source states</info>');
+        $stateErrors = $this->checkDataSourceStates($spec, $output);
+
+        $output->writeln('');
         $output->writeln('<info>Outbound mail</info>');
         $mailErrors = $this->checkMailOutbound($spec, $config, $output);
 
@@ -141,7 +147,7 @@ class DoctorCommand extends Command
         $output->writeln(str_repeat('─', 55));
 
         $totalIssues = count($issues) + $dsErrors + $fpmErrors + $nginxErrors + $toolErrors
-                     + $mailErrors + $cronErrors + $renderErrors
+                     + $mailErrors + $cronErrors + $renderErrors + $stateErrors
                      + ($poolUser !== $shipardUser ? 1 : 0);
         if ($totalIssues === 0) {
             $output->writeln('<info>✓ All checks passed.</info>');
@@ -197,6 +203,56 @@ class DoctorCommand extends Command
                 $output->writeln("  ✗ {$id}: " . $e->getMessage());
                 $errors++;
             }
+        }
+        return $errors;
+    }
+
+    /**
+     * Stavy DS (#56 D8): počty per efektivní stav, ⚠ pro maintenance déle
+     * než práh (zapomenutá?), ✗ pro fail-closed state.json (DS zavřený
+     * omylem — jediné místo, kde to admin uvidí bez čtení logu). Ne-active
+     * DS se vypisují všechny, aby read_only/suspended nebyly překvapení.
+     *
+     * @return int number of errors (corrupted state files)
+     */
+    protected function checkDataSourceStates(PermissionSpec $spec, OutputInterface $output): int
+    {
+        $entries = (new DataSourceStateScanner($spec->getDataSourcesDir()))->scan($this->now());
+        if (count($entries) === 0) {
+            $output->writeln('  (no data sources)');
+            return 0;
+        }
+
+        $counts = DataSourceStateScanner::countByState($entries);
+        $output->writeln(sprintf(
+            '  active %d · read_only %d · suspended %d (maintenance %d) · pending_deletion %d',
+            $counts['active'], $counts['read_only'], $counts['suspended'], $counts['maintenance'], $counts['pending_deletion'],
+        ));
+
+        $errors = 0;
+        $threshold = DataSourceStateScanner::MAINTENANCE_WARN_DAYS;
+        foreach ($entries as $e) {
+            if ($e->isCorrupted()) {
+                $output->writeln("  ✗ {$e->dsId}: state.json unusable — fail-closed as suspended (see shipard.log, fix or remove the file)");
+                $errors++;
+                continue;
+            }
+            if ($e->state->isMaintenanceActive()) {
+                $reason = $e->state->getMaintenanceReason() ?? '?';
+                $days = $e->maintenanceDays;
+                if ($e->isMaintenanceOverdue($threshold)) {
+                    $output->writeln("  ⚠ {$e->dsId}: maintenance ({$reason}) for {$days} days — forgotten? shpd-ds ds-state maintenance --off");
+                } else {
+                    $output->writeln("  · {$e->dsId}: maintenance ({$reason}), " . ($days === null ? 'since unknown' : "{$days} day(s)"));
+                }
+                continue;
+            }
+            if ($e->effectiveState() !== DataSourceState::ACTIVE) {
+                $output->writeln("  · {$e->dsId}: {$e->effectiveState()}");
+            }
+        }
+        if ($errors === 0 && $counts['maintenance'] === 0 && $counts['active'] === count($entries)) {
+            $output->writeln('  All data sources active ✓');
         }
         return $errors;
     }

@@ -30,6 +30,7 @@ final class ServerApplicationFactory
         $app->add(new \Shipard\Command\Server\CronInstallCommand());
         $app->add(new \Shipard\Command\Server\CompletionInstallCommand());
         $app->add(new \Shipard\Command\Server\HostingSyncCommand());
+        $app->add(new \Shipard\Command\Server\DsStateCheckCommand());
         $app->add(new \Shipard\Command\Server\DoctorCommand());
         $app->add(new \Shipard\Command\Server\FixPermissionsCommand());
         $app->setDefaultCommand('help');

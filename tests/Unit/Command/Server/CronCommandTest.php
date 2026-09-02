@@ -247,11 +247,12 @@ class CronCommandTest extends TestCase
         $exit = $tester->execute(['--slot' => 'daily']);
 
         $this->assertSame(0, $exit);
-        $this->assertCount(2, $cmd->callLog);
+        // server job ds-state-check + 2 DS × mail-idempotency-prune
+        $this->assertCount(3, $cmd->callLog);
 
         $hb = $this->readHeartbeat('daily');
         $this->assertSame(1, $hb['failedCount']);
-        $this->assertSame(2, $hb['jobsRun']);
+        $this->assertSame(3, $hb['jobsRun']);
         $this->assertSame('aaaa-aaaa-aaaa-aaaa', $hb['failures'][0]['ds']);
         $this->assertSame('mail-idempotency-prune', $hb['failures'][0]['job']);
         $this->assertSame(1, $hb['failures'][0]['exitCode']);
@@ -293,7 +294,10 @@ class CronCommandTest extends TestCase
         $exit = $tester->execute(['--slot' => 'daily']);
 
         $this->assertSame(0, $exit);
-        $this->assertSame([['ds' => 'aaaa-aaaa-aaaa-aaaa', 'job' => 'mail-idempotency-prune']], $cmd->callLog);
+        $this->assertSame([
+            ['ds' => '(server)', 'job' => 'ds-state-check'],
+            ['ds' => 'aaaa-aaaa-aaaa-aaaa', 'job' => 'mail-idempotency-prune'],
+        ], $cmd->callLog);
         $this->assertSame(1, $this->readHeartbeat('daily')['dsCount']);
     }
 
@@ -359,7 +363,10 @@ class CronCommandTest extends TestCase
         foreach (['minute', 'five-minutes', 'daily', 'weekly'] as $slot) {
             [$cmd, $tester] = $this->makeTester();
             $tester->execute(['--slot' => $slot]);
-            $this->assertSame([], $cmd->callLog, $slot);
+            // Server-level joby (daily ds-state-check) stavem DS neřídí — právě
+            // zavřené DS hlídají; per-DS joby musí být prázdné.
+            $perDs = array_values(array_filter($cmd->callLog, static fn($c) => $c['ds'] !== '(server)'));
+            $this->assertSame([], $perDs, $slot);
             $this->assertSame(1, $this->readHeartbeat($slot)['skippedDataSources'], $slot);
         }
     }
@@ -388,7 +395,10 @@ class CronCommandTest extends TestCase
 
         [$cmd, $tester] = $this->makeTester();
         $tester->execute(['--slot' => 'daily']);
-        $this->assertSame([['ds' => 'aaaa-aaaa-aaaa-aaaa', 'job' => 'mail-idempotency-prune']], $cmd->callLog);
+        $this->assertSame([
+            ['ds' => '(server)', 'job' => 'ds-state-check'],
+            ['ds' => 'aaaa-aaaa-aaaa-aaaa', 'job' => 'mail-idempotency-prune'],
+        ], $cmd->callLog);
         $this->assertSame(0, $this->readHeartbeat('daily')['skippedDataSources']);
 
         [$cmd, $tester] = $this->makeTester();

@@ -55,9 +55,14 @@ class CronCommand extends Command
         'alerts-prune'            => [DataSourceState::ACTIVE, DataSourceState::READ_ONLY],
     ];
 
-    /** slot → server-level shpd-server příkazy — jednou za běh slotu, ne per DS */
+    /**
+     * slot → server-level shpd-server příkazy — jednou za běh slotu, ne per
+     * DS. Neřídí se stavem DS (běží i pro zavřené DS — ds-state-check právě
+     * ty hlídá, #56 D8).
+     */
     public const SERVER_SLOT_JOBS = [
         'two-minutes' => ['hosting-sync'],
+        'daily'       => ['ds-state-check'],
     ];
 
     private const JOB_TIMEOUT_SECONDS = 600;

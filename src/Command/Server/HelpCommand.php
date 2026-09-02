@@ -58,6 +58,7 @@ class HelpCommand extends Command
         $output->writeln('  <info>cron-install</info>    Generate /etc/cron.d/shipard and the runtime directory (idempotent)');
         $output->writeln('  <info>completion-install</info> Install bash completion for shpd-server and shpd-ds (idempotent)');
         $output->writeln('  <info>hosting-sync</info>    Sync with the hosting: reconcile local data sources and provision queued requests');
+        $output->writeln('  <info>ds-state-check</info>  Warn about data sources stuck in maintenance > 7 days or with unusable state.json (daily cron job)');
         $output->writeln('  <info>doctor</info>          Diagnose server configuration and permissions');
         $output->writeln('  <info>fix-permissions</info> Fix ownership and modes (requires sudo)');
         $output->writeln('');

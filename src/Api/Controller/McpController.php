@@ -28,8 +28,14 @@ class McpController
 	/** Verze appky pro serverInfo. */
 	private const string SERVER_VERSION = Version::VERSION;
 
+	/**
+	 * `$readOnly` = DS ve stavu `read_only` (#56 D5): `tools/list` vrací jen
+	 * read-tier nástroje a `tools/call` na zápisový nástroj vrací JSON-RPC
+	 * chybu — ne HTTP 403, MCP klienti čtou JSON-RPC.
+	 */
 	public function __construct(
 		private readonly McpToolRegistry $registry,
+		private readonly bool $readOnly = false,
 	) {}
 
 	public function rpc(
@@ -87,11 +93,12 @@ class McpController
 
 	private function toolsList(JsonRpcRequest $r): Response
 	{
+		$visible = $this->readOnly ? $this->registry->readOnlyView() : $this->registry;
 		$tools = array_map(static fn(McpTool $t) => [
 			'name'        => $t->name(),
 			'description' => $t->description(),
 			'inputSchema' => $t->inputSchema(),
-		], $this->registry->all());
+		], $visible->all());
 
 		return $this->result($r->id, ['tools' => $tools]);
 	}
@@ -106,6 +113,14 @@ class McpController
 		if ($tool === null) {
 			return Response::raw(
 				JsonRpcError::envelope($r->id, JsonRpcError::INVALID_PARAMS, "Unknown tool: " . (is_string($name) ? $name : '(missing)')),
+				200,
+			);
+		}
+		if ($this->readOnly && !$tool->isReadOnly()) {
+			// Explicitní důvod, ne „Unknown tool" — klient má vědět, že nástroj
+			// existuje a vrátí se, až DS přejde do active.
+			return Response::raw(
+				JsonRpcError::envelope($r->id, JsonRpcError::INVALID_PARAMS, "Tool {$tool->name()} is not available: data source is read-only"),
 				200,
 			);
 		}

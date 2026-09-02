@@ -87,6 +87,7 @@ class NavigationController
         ?DataSourceConnection $db = null,
         ?AuthContext $auth = null,
         array $tables = [],
+        bool $readOnly = false,
     ): Response {
         $isAdmin = $auth?->isAdmin ?? false;
         $allModules      = ModuleLoader::loadAllModules($resolver);
@@ -214,11 +215,13 @@ class NavigationController
             'icon'   => 'dashboard',
             '_order' => 20,
         ];
-        // Chat leaf jen při aktivním core.chat (07b D10) a zároveň ne pro
-        // ne-admina na DS s aktivním hosting.core (D5). Výraz musí zůstat
-        // identický s capability `chat` v DashboardController::dashboard().
+        // Chat leaf jen při aktivním core.chat (07b D10), ne pro ne-admina
+        // na DS s aktivním hosting.core (D5) a ne na read-only DS (#56 D5 —
+        // chat je vypnutý, routy vrací 403). Výraz musí zůstat identický
+        // s capability `chat` v DashboardController::dashboard().
         if (isset($tables['core_chat_conversations'])
             && ($isAdmin || !isset($tables['hosting_core_data_sources']))
+            && !$readOnly
         ) {
             $topLeaves[] = [
                 'id'     => 'chat',

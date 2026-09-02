@@ -471,6 +471,21 @@ final class DashboardControllerTest extends TestCase
         $this->assertFalse($caps($hostingTables, null)['chat']);
     }
 
+    public function testCapabilitiesOffOnReadOnlyDs(): void
+    {
+        // #56 D5: read-only DS — chat vypnutý, upload server odmítá 403.
+        $ctrl = new DashboardController();
+        $db   = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturn(null);
+        $db->method('fetchAll')->willReturn([]);
+        $admin = new AuthContext(isAuthenticated: true, userId: 1, isAdmin: true);
+        $tables = $this->tables('core_mail_incoming_messages', 'core_chat_conversations');
+
+        $caps = $ctrl->dashboard($db, null, 'cs', null, $tables, $admin, null, readOnly: true)
+            ->getPayload()['data']['capabilities'];
+        $this->assertSame(['mailUpload' => false, 'chat' => false], $caps);
+    }
+
     // ── sectionBadges() — badge stavů sekcí (UI shells Fáze 3) ──────────────
 
     public function testSectionBadgesAggregatesAlertCardsBySection(): void

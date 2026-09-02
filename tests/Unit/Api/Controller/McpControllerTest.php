@@ -102,6 +102,58 @@ class McpControllerTest extends TestCase
 		$this->assertSame(202, $this->getStatus($resp));
 	}
 
+	// ── read_only DS (#56 D5): read-tier filtr ───────────────────────────────
+
+	/** @return array{McpController, AuthContext, DataSourceConnection} */
+	private function readOnlyController(): array
+	{
+		$registry = new McpToolRegistry();
+		$registry->register(new PersonsSearchTool());
+		$registry->register(new MailDraftDocumentTool(null));
+		$ctrl = new McpController($registry, readOnly: true);
+		$auth = new AuthContext(true, 1, 'session', 'tok');
+		$db = $this->createMock(DataSourceConnection::class);
+		return [$ctrl, $auth, $db];
+	}
+
+	public function testReadOnlyToolsListHidesWriteTools(): void
+	{
+		[$ctrl, $auth, $db] = $this->readOnlyController();
+		$resp = $ctrl->rpc($this->buildRequest([
+			'jsonrpc' => '2.0', 'id' => 30, 'method' => 'tools/list',
+		]), $auth, $db, [], null);
+		$names = array_column($resp->getPayload()['result']['tools'], 'name');
+		$this->assertContains('persons_search', $names);
+		$this->assertNotContains('mail_draft_document', $names);
+	}
+
+	public function testReadOnlyToolsCallOnWriteToolIsJsonRpcError(): void
+	{
+		[$ctrl, $auth, $db] = $this->readOnlyController();
+		$resp = $ctrl->rpc($this->buildRequest([
+			'jsonrpc' => '2.0', 'id' => 31, 'method' => 'tools/call',
+			'params' => ['name' => 'mail_draft_document', 'arguments' => []],
+		]), $auth, $db, [], null);
+		$payload = $resp->getPayload();
+		$this->assertSame(200, $this->getStatus($resp));
+		$this->assertSame(31, $payload['id']);
+		$this->assertSame(JsonRpcError::INVALID_PARAMS, $payload['error']['code']);
+		$this->assertStringContainsString('read-only', $payload['error']['message']);
+	}
+
+	public function testActiveDsListsWriteTools(): void
+	{
+		$registry = new McpToolRegistry();
+		$registry->register(new PersonsSearchTool());
+		$registry->register(new MailDraftDocumentTool(null));
+		$ctrl = new McpController($registry);
+		$auth = new AuthContext(true, 1, 'session', 'tok');
+		$resp = $ctrl->rpc($this->buildRequest([
+			'jsonrpc' => '2.0', 'id' => 32, 'method' => 'tools/list',
+		]), $auth, $this->createMock(DataSourceConnection::class), [], null);
+		$this->assertContains('mail_draft_document', array_column($resp->getPayload()['result']['tools'], 'name'));
+	}
+
 	// 3. tools/list → obsahuje persons_search s inputSchema
 	public function testToolsListContainsPersonsSearch(): void
 	{

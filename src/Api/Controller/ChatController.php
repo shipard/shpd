@@ -452,10 +452,7 @@ class ChatController
         $tools = [];
         $defs = [];
         if ($this->toolRegistry !== null) {
-            foreach ($this->toolRegistry->all() as $tool) {
-                if (!$tool->isReadOnly()) {
-                    continue;
-                }
+            foreach ($this->toolRegistry->readOnlyView()->all() as $tool) {
                 $tools[$tool->name()] = $tool;
                 $defs[] = [
                     'name'         => $tool->name(),

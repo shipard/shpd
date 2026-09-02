@@ -6,6 +6,7 @@ namespace Shipard\Tests\Unit\Api\Mcp;
 
 use PHPUnit\Framework\TestCase;
 use Shipard\Api\Mcp\FeedCardsTool;
+use Shipard\Api\Mcp\McpToolRegistry;
 use Shipard\Module\Base\Persons\Mcp\PersonsGetTool;
 use Shipard\Module\Base\Persons\Mcp\PersonsSearchTool;
 use Shipard\Module\Base\Registry\Mcp\RegistrySearchTool;
@@ -42,5 +43,17 @@ class McpToolReadOnlyTest extends TestCase
     public function testDraftToolIsNotReadOnly(): void
     {
         $this->assertFalse((new MailDraftDocumentTool(null))->isReadOnly());
+    }
+
+    public function testReadOnlyViewDropsWriteToolsAndLeavesOriginalIntact(): void
+    {
+        $registry = new McpToolRegistry();
+        $registry->register(new PersonsSearchTool());
+        $registry->register(new MailDraftDocumentTool(null));
+
+        $view = $registry->readOnlyView();
+        $this->assertSame(['persons_search'], array_map(fn($t) => $t->name(), $view->all()));
+        $this->assertNull($view->get('mail_draft_document'));
+        $this->assertNotNull($registry->get('mail_draft_document'));
     }
 }

@@ -28,4 +28,20 @@ final class McpToolRegistry
 	{
 		return $this->tools[$name] ?? null;
 	}
+
+	/**
+	 * Registr jen s read-tier nástroji (`isReadOnly()`). Sdílí chat
+	 * tool-use loop (model nikdy nevidí zápisové nástroje) a `/_mcp` na DS
+	 * ve stavu `read_only` (#56 D5) — jeden filtr, ne dva.
+	 */
+	public function readOnlyView(): self
+	{
+		$view = new self();
+		foreach ($this->tools as $tool) {
+			if ($tool->isReadOnly()) {
+				$view->register($tool);
+			}
+		}
+		return $view;
+	}
 }

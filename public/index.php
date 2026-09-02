@@ -326,8 +326,8 @@ function dispatch(
 		'attachment'  => dispatchAttachment($route, $request, $auth, $tables, $db, $resolved),
 		'chat'    => dispatchChat($route, $request, $auth, $db, $tables, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), resolveLanguage($request, $resolved->config), $alertCheckRegistry),
 		'meta'    => dispatchMeta($route->action, $route->table, $tables, resolveLanguage($request, $resolved->config)),
-		'ui'      => dispatchUi($route->action, $resolved->config, $modulePathResolver, resolveLanguage($request, $resolved->config), $configRuntime, $db, $auth, $tables),
-		'dashboard' => dispatchDashboard($route, $db, $configRuntime, resolveLanguage($request, $resolved->config), $resolved->config, $alertCheckRegistry, $tables, $auth, $request),
+		'ui'      => dispatchUi($route->action, $resolved->config, $modulePathResolver, resolveLanguage($request, $resolved->config), $configRuntime, $db, $auth, $tables, $resolved->isReadOnly()),
+		'dashboard' => dispatchDashboard($route, $db, $configRuntime, resolveLanguage($request, $resolved->config), $resolved->config, $alertCheckRegistry, $tables, $auth, $request, $resolved->isReadOnly()),
 		'settings' => dispatchSettings($route, $request, $auth, $resolved->config, $modulePathResolver, resolveLanguage($request, $resolved->config), $configRuntime, $db, $tables),
 		'app'     => dispatchApp($route, $auth, $db, $resolved->config, $tables, $resolved->isDevMode(), $resolved->state->getEffectiveState()),
 		'form'    => dispatchForm($route, $request, $auth, $tables, $db, $formRegistry ?? new FormRegistry(), $configRuntime, $modulePathResolver, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), resolveLanguage($request, $resolved->config), $resolved->config, $lookupRegistry ?? new LookupRegistry(), $documentEventDispatcher),
@@ -371,7 +371,7 @@ function dispatchMcp(
 	?\Shipard\Core\Alerts\AlertCheckRegistry $alertCheckRegistry = null,
 ): Response {
 	$registry = buildMcpRegistry($db, $tables, $configRuntime, $resolved, $documentRegistry, $language, $alertCheckRegistry);
-	$ctrl = new \Shipard\Api\Controller\McpController($registry);
+	$ctrl = new \Shipard\Api\Controller\McpController($registry, $resolved->isReadOnly());
 	return $ctrl->rpc($request, $auth, $db, $tables, $configRuntime);
 }
 
@@ -1226,13 +1226,14 @@ function dispatchUi(
 	?\Shipard\Core\Database\DataSourceConnection $db = null,
 	?AuthContext $auth = null,
 	array $tables = [],
+	bool $readOnly = false,
 ): Response {
 	$ctrl = new NavigationController();
 	return match ($action) {
 		// $db jen pro app navigaci — navigation providery (data-driven položky);
 		// settings/account navigace jde přes SettingsController bez providerů.
 		// $auth + $tables: ne-adminovi se strom ořezává (adminOnly, D4).
-		'navigation' => $ctrl->navigation($config, $modulePathResolver, $language, $configRuntime, $db, $auth, $tables),
+		'navigation' => $ctrl->navigation($config, $modulePathResolver, $language, $configRuntime, $db, $auth, $tables, $readOnly),
 		default      => Response::error('INTERNAL_ERROR', "Unknown UI action: {$action}", 500),
 	};
 }
@@ -1247,12 +1248,13 @@ function dispatchDashboard(
 	array $tables = [],
 	?AuthContext $auth = null,
 	?Request $request = null,
+	bool $readOnly = false,
 ): Response {
 	$ctrl = new DashboardController();
 	// Sekční filtr karet (?section=, UI shells Fáze 5) — jen akce index.
 	$section = $request !== null ? ($request->getQueryParams()['section'] ?? null) : null;
 	return match ($route->action) {
-		'index'         => $ctrl->dashboard($db, $configRuntime, $language, $alertCheckRegistry, $tables, $auth, $section !== null ? (string) $section : null),
+		'index'         => $ctrl->dashboard($db, $configRuntime, $language, $alertCheckRegistry, $tables, $auth, $section !== null ? (string) $section : null, $readOnly),
 		'sectionBadges' => $ctrl->sectionBadges($db, $configRuntime, $language, $alertCheckRegistry, $tables),
 		'summary' => $ctrl->summary(
 			$db,

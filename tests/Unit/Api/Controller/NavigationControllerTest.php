@@ -537,6 +537,25 @@ class NavigationControllerTest extends TestCase
         $this->cleanupModuleRoot($modRoot, 'test/navpanel');
     }
 
+    public function testChatHiddenOnReadOnlyDs(): void
+    {
+        // #56 D5: read-only DS má chat vypnutý (routy 403) — leaf se neemituje
+        // ani adminovi. Dashboard zůstává.
+        $resp = $this->ctrl->navigation(
+            $this->config(['install.base']),
+            $this->resolver,
+            'cs',
+            $this->configRuntime('cs'),
+            null,
+            $this->admin(),
+            $this->defaultTables(),
+            readOnly: true,
+        );
+        $ids = array_map(fn($n) => $n['id'], $resp->getPayload()['data']);
+        $this->assertNotContains('chat', $ids);
+        $this->assertContains('dashboard', $ids);
+    }
+
     public function testChatGatedForNonAdminOnHostingDs(): void
     {
         // Chat leaf = core.chat aktivní && (admin || hosting neaktivní) —

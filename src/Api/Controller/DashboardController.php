@@ -38,6 +38,7 @@ class DashboardController
         array $tables = [],
         ?AuthContext $auth = null,
         ?string $section = null,
+        bool $readOnly = false,
     ): Response {
         $lang = $language ?? 'en';
 
@@ -79,11 +80,13 @@ class DashboardController
         }
         // Capabilities (D9) — frontend podle nich skrývá upload a
         // ChatLauncher. `chat` musí zůstat identický s podmínkou Chat
-        // root leafu v NavigationController (D5 + D10).
+        // root leafu v NavigationController (D5 + D10 + read-only #56 D5).
+        // Upload na read-only DS server odmítá 403, tlačítko se skrývá taky.
         $data['capabilities'] = [
-            'mailUpload' => isset($tables['core_mail_incoming_messages']),
+            'mailUpload' => isset($tables['core_mail_incoming_messages']) && !$readOnly,
             'chat'       => isset($tables['core_chat_conversations'])
-                && (($auth?->isAdmin ?? false) || !isset($tables['hosting_core_data_sources'])),
+                && (($auth?->isAdmin ?? false) || !isset($tables['hosting_core_data_sources']))
+                && !$readOnly,
         ];
 
         return Response::success($data);

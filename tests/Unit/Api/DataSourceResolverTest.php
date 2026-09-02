@@ -6,6 +6,7 @@ namespace Shipard\Tests\Unit\Api;
 use PHPUnit\Framework\TestCase;
 use Shipard\Api\DataSourceResolver;
 use Shipard\Api\Exception\UnknownDataSourceException;
+use Shipard\Api\Exception\DataSourceUnavailableException;
 use Shipard\Api\Exception\UnknownHostException;
 use Shipard\Api\ResolvedDataSource;
 use Shipard\Core\Config\DataSourceConfig;
@@ -16,8 +17,11 @@ use Shipard\Core\Database\DataSourceConnection;
  */
 class TestableDataSourceResolver extends DataSourceResolver
 {
+	public int $connectionCalls = 0;
+
 	protected function createConnection(DataSourceConfig $config): DataSourceConnection
 	{
+		$this->connectionCalls++;
 		// Use reflection to bypass the real Dibi connection
 		$mock = $this->createMockConnection($config);
 		return $mock;
@@ -277,5 +281,101 @@ class DataSourceResolverTest extends TestCase
 
 		$this->assertInstanceOf(ResolvedDataSource::class, $result);
 		$this->assertSame($dsId, $result->config->getId());
+	}
+
+	// ── Stav DS (config/state.json) ──────────────────────────────────────────
+
+	private function writeDsState(string $dsId, array $state): void
+	{
+		file_put_contents(
+			$this->tempDir . '/data-sources/' . $dsId . '/config/state.json',
+			json_encode(array_merge(['version' => 1], $state)),
+		);
+	}
+
+	public function testSuspendedDataSourceThrowsBeforeConnecting(): void
+	{
+		$dsId = 'a3f2-b8c1-d4e7-f9a0';
+		$domainsFile = $this->writeDomains(['demo.shipard.cz' => $dsId]);
+		$this->writeDsConfig($dsId);
+		$this->writeDsState($dsId, ['state' => 'suspended']);
+
+		$resolver = $this->makeResolver($domainsFile);
+		try {
+			$resolver->resolve('demo.shipard.cz', '/api/v1/users');
+			$this->fail('expected DataSourceUnavailableException');
+		} catch (DataSourceUnavailableException $e) {
+			$this->assertSame($dsId, $e->dsId);
+			$this->assertSame('suspended', $e->effectiveState);
+			$this->assertNull($e->maintenanceReason);
+		}
+		$this->assertSame(0, $resolver->connectionCalls, 'DB connection must not be attempted for a closed DS');
+	}
+
+	public function testMaintenanceOverActiveThrowsWithReason(): void
+	{
+		$dsId = 'a3f2-b8c1-d4e7-f9a0';
+		$this->writeDsConfig($dsId);
+		$this->writeDsState($dsId, [
+			'state' => 'active',
+			'maintenance' => ['reason' => 'import', 'since' => '2026-09-01T10:00:00Z'],
+		]);
+
+		$resolver = $this->makeResolverNoDomains();
+		try {
+			$resolver->resolve('127.0.0.1', '/' . $dsId . '/api/v1/users');
+			$this->fail('expected DataSourceUnavailableException');
+		} catch (DataSourceUnavailableException $e) {
+			$this->assertSame('suspended', $e->effectiveState);
+			$this->assertSame('import', $e->maintenanceReason);
+		}
+		$this->assertSame(0, $resolver->connectionCalls);
+	}
+
+	public function testPendingDeletionThrows(): void
+	{
+		$dsId = 'a3f2-b8c1-d4e7-f9a0';
+		$domainsFile = $this->writeDomains(['demo.shipard.cz' => $dsId]);
+		$this->writeDsConfig($dsId);
+		$this->writeDsState($dsId, ['state' => 'pending_deletion', 'deleteAfter' => '2026-10-01T00:00:00Z']);
+
+		$this->expectException(DataSourceUnavailableException::class);
+		$this->makeResolver($domainsFile)->resolve('demo.shipard.cz', '/_meta');
+	}
+
+	public function testReadOnlyPassesInPhaseOne(): void
+	{
+		$dsId = 'a3f2-b8c1-d4e7-f9a0';
+		$domainsFile = $this->writeDomains(['demo.shipard.cz' => $dsId]);
+		$this->writeDsConfig($dsId);
+		$this->writeDsState($dsId, ['state' => 'read_only']);
+
+		$resolver = $this->makeResolver($domainsFile);
+		$result = $resolver->resolve('demo.shipard.cz', '/api/v1/users');
+		$this->assertSame($dsId, $result->config->getId());
+		$this->assertSame(1, $resolver->connectionCalls);
+	}
+
+	public function testCorruptedStateFileFailsClosed(): void
+	{
+		$dsId = 'a3f2-b8c1-d4e7-f9a0';
+		$domainsFile = $this->writeDomains(['demo.shipard.cz' => $dsId]);
+		$this->writeDsConfig($dsId);
+		file_put_contents($this->tempDir . '/data-sources/' . $dsId . '/config/state.json', '{broken');
+
+		$resolver = $this->makeResolver($domainsFile);
+		$this->expectException(DataSourceUnavailableException::class);
+		$resolver->resolve('demo.shipard.cz', '/api/v1/users');
+	}
+
+	public function testMissingStateFilePassesUnchanged(): void
+	{
+		$dsId = 'a3f2-b8c1-d4e7-f9a0';
+		$this->writeDsConfig($dsId);
+
+		$resolver = $this->makeResolverNoDomains();
+		$result = $resolver->resolve('127.0.0.1', '/' . $dsId . '/api/v1/users');
+		$this->assertSame('/api/v1/users', $result->normalizedPath);
+		$this->assertSame(1, $resolver->connectionCalls);
 	}
 }

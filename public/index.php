@@ -27,6 +27,7 @@ use Shipard\Api\DocumentLoader;
 use Shipard\Api\FormLoader;
 use Shipard\Api\LookupLoader;
 use Shipard\Api\Exception\UnknownDataSourceException;
+use Shipard\Api\Exception\DataSourceUnavailableException;
 use Shipard\Api\Exception\UnknownHostException;
 use Shipard\Api\Middleware\AuthMiddleware;
 use Shipard\Api\Middleware\CorsMiddleware;
@@ -187,6 +188,20 @@ try {
 	// ── 10. Apply headers and send ────────────────────────────────────────────
 	applyAllHeaders($corsMiddleware, $rateLimiter, $response)->send();
 
+} catch (DataSourceUnavailableException $e) {
+	// DS zavřený stavem (suspended / maintenance / pending_deletion) — 503,
+	// aby mail-router a monitoring frontovaly místo zahazování (#56 D3).
+	// Zavřený DS není chyba → info. Reason maintenance je interní, jen do logu.
+	ErrorLogger::setDsId($e->dsId);
+	ErrorLogger::info('request refused — data source unavailable', [
+		'state' => $e->effectiveState,
+		'maintenanceReason' => $e->maintenanceReason,
+	]);
+	$corsMiddleware->applyTo(
+		Response::error('DS_UNAVAILABLE', 'Data source is temporarily unavailable', 503, [
+			['field' => '_state', 'code' => $e->effectiveState, 'message' => 'Data source state: ' . $e->effectiveState],
+		])->withHeader('Retry-After', '300'),
+	)->send();
 } catch (UnknownDataSourceException $e) {
 	$corsMiddleware->applyTo(
 		Response::error('UNKNOWN_DATASOURCE', "Unknown data source: {$e->dsId}", 404),

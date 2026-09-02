@@ -3,9 +3,11 @@ declare(strict_types=1);
 
 namespace Shipard\Api;
 
+use Shipard\Api\Exception\DataSourceUnavailableException;
 use Shipard\Api\Exception\UnknownDataSourceException;
 use Shipard\Api\Exception\UnknownHostException;
 use Shipard\Core\Config\DataSourceConfig;
+use Shipard\Core\Config\DataSourceState;
 use Shipard\Core\Database\DataSourceConnection;
 
 class DataSourceResolver
@@ -37,6 +39,7 @@ class DataSourceResolver
 		}
 
 		$dsId = $map[$host];
+		$this->assertDataSourceAvailable($dsId);
 		$config = $this->createDataSourceConfig($dsId);
 		$connection = $this->createConnection($config);
 
@@ -59,6 +62,7 @@ class DataSourceResolver
 			throw new UnknownDataSourceException($dsId);
 		}
 
+		$this->assertDataSourceAvailable($dsId);
 		$config = $this->createDataSourceConfig($dsId);
 		$connection = $this->createConnection($config);
 
@@ -67,6 +71,23 @@ class DataSourceResolver
 		$normalizedPath = $rest !== '' ? $rest : '/';
 
 		return new ResolvedDataSource($config, $connection, $normalizedPath, true);
+	}
+
+	/**
+	 * Kontrola config/state.json před připojením k DB — v maintenance může
+	 * být databáze rozbitá nebo neexistovat (restore). Stav si nese výjimka,
+	 * index.php ho vrací v error details.
+	 */
+	private function assertDataSourceAvailable(string $dsId): void
+	{
+		$state = DataSourceState::load($this->dataSourcesDir . '/' . $dsId);
+		if ($state->blocksHttp()) {
+			throw new DataSourceUnavailableException(
+				$dsId,
+				$state->getEffectiveState(),
+				$state->getMaintenanceReason(),
+			);
+		}
 	}
 
 	protected function loadDomainsFile(): array

@@ -7,6 +7,7 @@ namespace Shipard\Api\Controller;
 use Shipard\Api\AuthContext;
 use Shipard\Api\Response;
 use Shipard\Core\Config\DataSourceConfig;
+use Shipard\Core\Config\DataSourceState;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Settings\AvatarStorage;
 use Shipard\Core\Settings\BrandingStorage;
@@ -55,8 +56,12 @@ class AppController
      * GET /_app/info
      *
      * `app.name` má přednost před `main.json` name; shortName padá na name.
+     *
+     * `$dsState` je efektivní stav DS (#56 R5) — endpoint je veřejný, sem
+     * dojde jen `active` nebo `read_only` (blokované stavy skončí 503 už
+     * v resolveru), nic citlivého neprozrazuje.
      */
-    public function info(): Response
+    public function info(string $dsState = DataSourceState::ACTIVE): Response
     {
         $values = $this->settings->getMany([
             'app.name',
@@ -83,6 +88,8 @@ class AppController
             // DS-wide výchozí shell ({shell, params} nebo null) — stejný
             // kontrakt jako theme, klient z něj počítá efektivní shell.
             'shell'       => is_array($values['app.shell']) ? $values['app.shell'] : null,
+            // Stav DS pro SPA: `read_only` → banner + skrytý chat (fáze 2).
+            'dsState'     => $dsState,
             // Auth politika pro login obrazovku — jen id + label providerů,
             // nikdy clientId/secret/issuer.
             'auth'        => [

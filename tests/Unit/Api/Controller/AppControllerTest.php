@@ -83,6 +83,18 @@ class AppControllerTest extends TestCase
         $this->assertNull($data['companyLogo']);
     }
 
+    public function testInfoDsStateDefaultsToActive(): void
+    {
+        $data = $this->makeController()->info()->getPayload()['data'];
+        $this->assertSame('active', $data['dsState']);
+    }
+
+    public function testInfoPassesReadOnlyDsState(): void
+    {
+        $data = $this->makeController()->info('read_only')->getPayload()['data'];
+        $this->assertSame('read_only', $data['dsState']);
+    }
+
     public function testInfoPrefersAppNameAndShortName(): void
     {
         $resp = $this->makeController([

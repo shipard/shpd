@@ -343,7 +343,7 @@ class DataSourceResolverTest extends TestCase
 		$this->makeResolver($domainsFile)->resolve('demo.shipard.cz', '/_meta');
 	}
 
-	public function testReadOnlyPassesInPhaseOne(): void
+	public function testReadOnlyResolvesAndCarriesState(): void
 	{
 		$dsId = 'a3f2-b8c1-d4e7-f9a0';
 		$domainsFile = $this->writeDomains(['demo.shipard.cz' => $dsId]);
@@ -354,6 +354,30 @@ class DataSourceResolverTest extends TestCase
 		$result = $resolver->resolve('demo.shipard.cz', '/api/v1/users');
 		$this->assertSame($dsId, $result->config->getId());
 		$this->assertSame(1, $resolver->connectionCalls);
+		// Stav se předává dál — pipeline ho nečte z disku podruhé.
+		$this->assertSame('read_only', $result->state->getEffectiveState());
+		$this->assertTrue($result->isReadOnly());
+	}
+
+	public function testMissingStateFileResolvesAsActive(): void
+	{
+		$dsId = 'a3f2-b8c1-d4e7-f9a0';
+		$domainsFile = $this->writeDomains(['demo.shipard.cz' => $dsId]);
+		$this->writeDsConfig($dsId);
+
+		$result = $this->makeResolver($domainsFile)->resolve('demo.shipard.cz', '/api/v1/users');
+		$this->assertSame('active', $result->state->getEffectiveState());
+		$this->assertFalse($result->isReadOnly());
+	}
+
+	public function testDevModeCarriesState(): void
+	{
+		$dsId = 'a3f2-b8c1-d4e7-f9a0';
+		$this->writeDsConfig($dsId);
+		$this->writeDsState($dsId, ['state' => 'read_only']);
+
+		$result = $this->makeResolver($this->writeDomains([]))->resolve('127.0.0.1', '/' . $dsId . '/api/v1/users');
+		$this->assertTrue($result->isReadOnly());
 	}
 
 	public function testCorruptedStateFileFailsClosed(): void

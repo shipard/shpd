@@ -39,11 +39,11 @@ class DataSourceResolver
 		}
 
 		$dsId = $map[$host];
-		$this->assertDataSourceAvailable($dsId);
+		$state = $this->assertDataSourceAvailable($dsId);
 		$config = $this->createDataSourceConfig($dsId);
 		$connection = $this->createConnection($config);
 
-		return new ResolvedDataSource($config, $connection, $path, false);
+		return new ResolvedDataSource($config, $connection, $path, false, $state);
 	}
 
 	private function resolveDevMode(string $path): ResolvedDataSource
@@ -62,7 +62,7 @@ class DataSourceResolver
 			throw new UnknownDataSourceException($dsId);
 		}
 
-		$this->assertDataSourceAvailable($dsId);
+		$state = $this->assertDataSourceAvailable($dsId);
 		$config = $this->createDataSourceConfig($dsId);
 		$connection = $this->createConnection($config);
 
@@ -70,15 +70,17 @@ class DataSourceResolver
 		$rest = $slashPos !== false ? substr($trimmed, $slashPos) : '/';
 		$normalizedPath = $rest !== '' ? $rest : '/';
 
-		return new ResolvedDataSource($config, $connection, $normalizedPath, true);
+		return new ResolvedDataSource($config, $connection, $normalizedPath, true, $state);
 	}
 
 	/**
 	 * Kontrola config/state.json před připojením k DB — v maintenance může
 	 * být databáze rozbitá nebo neexistovat (restore). Stav si nese výjimka,
-	 * index.php ho vrací v error details.
+	 * index.php ho vrací v error details. Propuštěný stav se vrací, aby ho
+	 * ResolvedDataSource nesl dál (read-only vynucení, /_app/info) a pipeline
+	 * nečetla soubor podruhé.
 	 */
-	private function assertDataSourceAvailable(string $dsId): void
+	private function assertDataSourceAvailable(string $dsId): DataSourceState
 	{
 		$state = DataSourceState::load($this->dataSourcesDir . '/' . $dsId);
 		if ($state->blocksHttp()) {
@@ -88,6 +90,7 @@ class DataSourceResolver
 				$state->getMaintenanceReason(),
 			);
 		}
+		return $state;
 	}
 
 	protected function loadDomainsFile(): array

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Shipard\Command\Server;
 
+use Shipard\Core\Config\DataSourceState;
 use Shipard\Core\Config\ServerConfig;
 use Shipard\Core\Logging\ErrorLogger;
 use Shipard\Core\Server\CronProvisioner;
@@ -37,6 +38,21 @@ class CronCommand extends Command
         'five-minutes' => ['alerts-run'],
         'daily'        => ['mail-idempotency-prune'],
         'weekly'       => ['alerts-prune'],
+    ];
+
+    /**
+     * job → lifecycle stavy DS, ve kterých job běží (docs/ds-state.md, #56).
+     * Job bez záznamu běží jen v `active` (fail-closed). V `suspended` /
+     * maintenance / `pending_deletion` neběží nic — efektivní stav se
+     * v mapě nehledá. Registr se přesune do module.jsonc spolu se SLOT_JOBS.
+     */
+    public const JOB_ALLOWED_STATES = [
+        'mail-outbox-run'         => [DataSourceState::ACTIVE],
+        'mail-analysis-reap'      => [DataSourceState::ACTIVE],
+        'mail-preprocess --sweep' => [DataSourceState::ACTIVE],
+        'alerts-run'              => [DataSourceState::ACTIVE],
+        'mail-idempotency-prune'  => [DataSourceState::ACTIVE, DataSourceState::READ_ONLY],
+        'alerts-prune'            => [DataSourceState::ACTIVE, DataSourceState::READ_ONLY],
     ];
 
     /** slot → server-level shpd-server příkazy — jednou za běh slotu, ne per DS */
@@ -153,6 +169,8 @@ class CronCommand extends Command
 
         $jobsRun = 0;
         $failures = [];
+        $skippedDataSources = 0;
+        $corruptedStateFiles = 0;
 
         // Server-level joby (shpd-server) — jednou za běh slotu, ne per DS.
         foreach ($serverJobs as $job) {
@@ -182,7 +200,19 @@ class CronCommand extends Command
                 ErrorLogger::info('cron: data source disappeared mid-run — skipped', ['slot' => $slot, 'ds' => $id]);
                 continue;
             }
-            foreach ($jobs as $job) {
+            // Gating podle config/state.json — čte jen stavový soubor,
+            // main.json ani DB se nedotýká. Přeskočený DS = tichý skip
+            // (minute slot by logem spamoval), počet jde do heartbeatu.
+            $state = DataSourceState::load($d);
+            if ($state->isCorrupted()) {
+                $corruptedStateFiles++;
+            }
+            $dsJobs = self::jobsForState($jobs, $state->getEffectiveState());
+            if ($dsJobs === []) {
+                $skippedDataSources++;
+                continue;
+            }
+            foreach ($dsJobs as $job) {
                 $result = $this->runJob($d, $job);
                 $jobsRun++;
                 if ($result['exitCode'] !== 0 || $result['timedOut']) {
@@ -211,6 +241,8 @@ class CronCommand extends Command
             'templateVersion' => CronProvisioner::TEMPLATE_VERSION,
             'appVersion' => Version::VERSION,
             'dsCount' => count($candidates),
+            'skippedDataSources' => $skippedDataSources,
+            'corruptedStateFiles' => $corruptedStateFiles,
             'jobsRun' => $jobsRun,
             'failedCount' => count($failures),
             'failures' => $failures,
@@ -225,14 +257,16 @@ class CronCommand extends Command
         ErrorLogger::info('cron slot finished', [
             'slot' => $slot,
             'dsCount' => count($candidates),
+            'skippedDataSources' => $skippedDataSources,
             'jobsRun' => $jobsRun,
             'failedCount' => count($failures),
             'durationMs' => $durationMs,
         ]);
         $output->writeln(sprintf(
-            'Slot %s: %d data source(s), %d job(s) run, %d failed, %d ms',
+            'Slot %s: %d data source(s), %d skipped by state, %d job(s) run, %d failed, %d ms',
             $slot,
             count($candidates),
+            $skippedDataSources,
             $jobsRun,
             count($failures),
             $durationMs,
@@ -250,6 +284,25 @@ class CronCommand extends Command
         // Selhané joby nejsou infra chyba — cron nesmí spamovat MAILTO,
         // problémy per DS reportuje doctor a centrální log.
         return Command::SUCCESS;
+    }
+
+    /**
+     * Joby slotu povolené pro efektivní stav DS (JOB_ALLOWED_STATES;
+     * job bez záznamu = jen active).
+     *
+     * @param list<string> $jobs
+     * @return list<string>
+     */
+    public static function jobsForState(array $jobs, string $effectiveState): array
+    {
+        return array_values(array_filter(
+            $jobs,
+            static fn(string $job): bool => in_array(
+                $effectiveState,
+                self::JOB_ALLOWED_STATES[$job] ?? [DataSourceState::ACTIVE],
+                true,
+            ),
+        ));
     }
 
     /**

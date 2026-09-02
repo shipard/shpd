@@ -112,11 +112,14 @@ class CronCommandTest extends TestCase
         ErrorLogger::resetForTesting();
     }
 
-    private function createDs(string $id): string
+    private function createDs(string $id, ?string $stateJson = null): string
     {
         $dir = $this->dsDir . '/' . $id;
         mkdir($dir . '/config', 0755, true);
         file_put_contents($dir . '/config/main.json', '{}');
+        if ($stateJson !== null) {
+            file_put_contents($dir . '/config/state.json', $stateJson);
+        }
         return $dir;
     }
 
@@ -319,6 +322,114 @@ class CronCommandTest extends TestCase
         $this->assertIsString($hb['appVersion']);
         $this->assertIsInt($hb['durationMs']);
         $this->assertSame([], $hb['failures']);
+        $this->assertSame(0, $hb['skippedDataSources']);
+        $this->assertSame(0, $hb['corruptedStateFiles']);
+    }
+
+    // ── Gating podle config/state.json ──────────────────────────────────────
+
+    public function testSuspendedDsGetsNoJobsAndIsCountedAsSkipped(): void
+    {
+        $this->createDs('aaaa-aaaa-aaaa-aaaa', '{"version":1,"state":"suspended"}');
+        $this->createDs('bbbb-bbbb-bbbb-bbbb');
+
+        [$cmd, $tester] = $this->makeTester();
+        $exit = $tester->execute(['--slot' => 'minute']);
+
+        $this->assertSame(0, $exit);
+        $this->assertSame([
+            ['ds' => 'bbbb-bbbb-bbbb-bbbb', 'job' => 'mail-outbox-run'],
+            ['ds' => 'bbbb-bbbb-bbbb-bbbb', 'job' => 'mail-analysis-reap'],
+            ['ds' => 'bbbb-bbbb-bbbb-bbbb', 'job' => 'mail-preprocess --sweep'],
+        ], $cmd->callLog);
+        $hb = $this->readHeartbeat('minute');
+        $this->assertSame(2, $hb['dsCount']);
+        $this->assertSame(1, $hb['skippedDataSources']);
+        $this->assertSame(3, $hb['jobsRun']);
+        $this->assertStringContainsString('1 skipped by state', $tester->getDisplay());
+    }
+
+    public function testMaintenanceOverActiveSkipsEverything(): void
+    {
+        $this->createDs(
+            'aaaa-aaaa-aaaa-aaaa',
+            '{"version":1,"state":"active","maintenance":{"reason":"import","since":"2026-09-01T10:00:00Z"}}',
+        );
+
+        foreach (['minute', 'five-minutes', 'daily', 'weekly'] as $slot) {
+            [$cmd, $tester] = $this->makeTester();
+            $tester->execute(['--slot' => $slot]);
+            $this->assertSame([], $cmd->callLog, $slot);
+            $this->assertSame(1, $this->readHeartbeat($slot)['skippedDataSources'], $slot);
+        }
+    }
+
+    public function testPendingDeletionSkipsEverything(): void
+    {
+        $this->createDs('aaaa-aaaa-aaaa-aaaa', '{"version":1,"state":"pending_deletion","deleteAfter":"2026-10-01T00:00:00Z"}');
+
+        [$cmd, $tester] = $this->makeTester();
+        $tester->execute(['--slot' => 'weekly']);
+        $this->assertSame([], $cmd->callLog);
+    }
+
+    public function testReadOnlyRunsOnlyPruneJobs(): void
+    {
+        $this->createDs('aaaa-aaaa-aaaa-aaaa', '{"version":1,"state":"read_only"}');
+
+        [$cmd, $tester] = $this->makeTester();
+        $tester->execute(['--slot' => 'minute']);
+        $this->assertSame([], $cmd->callLog, 'minute slot has no read_only jobs');
+        $this->assertSame(1, $this->readHeartbeat('minute')['skippedDataSources']);
+
+        [$cmd, $tester] = $this->makeTester();
+        $tester->execute(['--slot' => 'five-minutes']);
+        $this->assertSame([], $cmd->callLog, 'alerts-run is active-only');
+
+        [$cmd, $tester] = $this->makeTester();
+        $tester->execute(['--slot' => 'daily']);
+        $this->assertSame([['ds' => 'aaaa-aaaa-aaaa-aaaa', 'job' => 'mail-idempotency-prune']], $cmd->callLog);
+        $this->assertSame(0, $this->readHeartbeat('daily')['skippedDataSources']);
+
+        [$cmd, $tester] = $this->makeTester();
+        $tester->execute(['--slot' => 'weekly']);
+        $this->assertSame([['ds' => 'aaaa-aaaa-aaaa-aaaa', 'job' => 'alerts-prune']], $cmd->callLog);
+    }
+
+    public function testCorruptedStateFileFailsClosedAndIsCounted(): void
+    {
+        $this->createDs('aaaa-aaaa-aaaa-aaaa', '{broken');
+
+        [$cmd, $tester] = $this->makeTester();
+        $exit = $tester->execute(['--slot' => 'minute']);
+
+        $this->assertSame(0, $exit);
+        $this->assertSame([], $cmd->callLog);
+        $hb = $this->readHeartbeat('minute');
+        $this->assertSame(1, $hb['skippedDataSources']);
+        $this->assertSame(1, $hb['corruptedStateFiles']);
+        $this->assertStringContainsString('fail-closed', (string) file_get_contents($this->logPath));
+    }
+
+    public function testServerJobsIgnoreDsState(): void
+    {
+        $this->createDs('aaaa-aaaa-aaaa-aaaa', '{"version":1,"state":"suspended"}');
+
+        [$cmd, $tester] = $this->makeTester();
+        $tester->execute(['--slot' => 'two-minutes']);
+        $this->assertSame([['ds' => '(server)', 'job' => 'hosting-sync']], $cmd->callLog);
+    }
+
+    public function testJobAllowedStatesCoverAllSlotJobs(): void
+    {
+        foreach (CronCommand::SLOT_JOBS as $slot => $jobs) {
+            foreach ($jobs as $job) {
+                $this->assertArrayHasKey($job, CronCommand::JOB_ALLOWED_STATES, "{$slot}: {$job}");
+            }
+        }
+        // Neznámý job = jen active (fail-closed).
+        $this->assertSame(['x'], CronCommand::jobsForState(['x'], 'active'));
+        $this->assertSame([], CronCommand::jobsForState(['x'], 'read_only'));
     }
 
     public function testRealRunJobTimesOut(): void

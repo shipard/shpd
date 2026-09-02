@@ -1,0 +1,227 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Shipard\Tests\Unit\Core\Config;
+
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\TestCase;
+use Shipard\Core\Config\DataSourceState;
+use Shipard\Core\Logging\ErrorLogger;
+
+class DataSourceStateTest extends TestCase
+{
+    private string $dsDir;
+    private string $logPath;
+
+    protected function setUp(): void
+    {
+        ErrorLogger::resetForTesting();
+        $this->dsDir = sys_get_temp_dir() . '/shpd-ds-state-' . uniqid();
+        mkdir($this->dsDir . '/config', 0755, true);
+        $this->logPath = $this->dsDir . '/shipard.log';
+        ErrorLogger::setLogPath($this->logPath);
+    }
+
+    protected function tearDown(): void
+    {
+        ErrorLogger::resetForTesting();
+        foreach (glob($this->dsDir . '/config/*') ?: [] as $f) {
+            @chmod($f, 0644);
+            unlink($f);
+        }
+        @rmdir($this->dsDir . '/config');
+        @unlink($this->logPath);
+        @rmdir($this->dsDir);
+    }
+
+    private function writeState(string $json): void
+    {
+        file_put_contents(DataSourceState::filePath($this->dsDir), $json);
+    }
+
+    private function logContents(): string
+    {
+        return is_file($this->logPath) ? (string) file_get_contents($this->logPath) : '';
+    }
+
+    public function testMissingFileIsActiveWithoutOverlay(): void
+    {
+        $s = DataSourceState::load($this->dsDir);
+        $this->assertSame('active', $s->getState());
+        $this->assertSame('active', $s->getEffectiveState());
+        $this->assertFalse($s->isMaintenanceActive());
+        $this->assertFalse($s->blocksHttp());
+        $this->assertFalse($s->isFromFile());
+        $this->assertFalse($s->isCorrupted());
+        $this->assertSame('', $this->logContents());
+    }
+
+    public function testAllLifecycleStatesLoad(): void
+    {
+        $expectations = [
+            'active' => false,
+            'read_only' => false,
+            'suspended' => true,
+            'pending_deletion' => true,
+        ];
+        foreach ($expectations as $state => $blocks) {
+            $this->writeState(json_encode(['version' => 1, 'state' => $state]));
+            $s = DataSourceState::load($this->dsDir);
+            $this->assertSame($state, $s->getState(), $state);
+            $this->assertSame($state, $s->getEffectiveState(), $state);
+            $this->assertSame($blocks, $s->blocksHttp(), $state);
+            $this->assertTrue($s->isFromFile());
+            $this->assertFalse($s->isCorrupted());
+        }
+    }
+
+    public function testMaintenanceOverlayMakesEffectiveStateSuspended(): void
+    {
+        $this->writeState(json_encode([
+            'version' => 1,
+            'state' => 'read_only',
+            'maintenance' => ['reason' => 'import', 'since' => '2026-09-01T10:00:00Z'],
+            'changedBy' => 'cli',
+            'changed' => '2026-09-01T10:00:00Z',
+        ]));
+        $s = DataSourceState::load($this->dsDir);
+        $this->assertSame('read_only', $s->getState());
+        $this->assertTrue($s->isMaintenanceActive());
+        $this->assertSame('suspended', $s->getEffectiveState());
+        $this->assertTrue($s->blocksHttp());
+        $this->assertSame('import', $s->getMaintenanceReason());
+        $this->assertSame('2026-09-01T10:00:00Z', $s->getMaintenanceSince());
+        $this->assertSame('cli', $s->getChangedBy());
+    }
+
+    public function testDeleteAfterIsPreserved(): void
+    {
+        $this->writeState(json_encode([
+            'version' => 1,
+            'state' => 'pending_deletion',
+            'deleteAfter' => '2026-10-01T00:00:00Z',
+        ]));
+        $s = DataSourceState::load($this->dsDir);
+        $this->assertSame('2026-10-01T00:00:00Z', $s->getDeleteAfter());
+        $this->assertTrue($s->blocksHttp());
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function corruptedFiles(): iterable
+    {
+        yield 'invalid json' => ['{not json'];
+        yield 'not an object' => ['"active"'];
+        yield 'unknown state' => [json_encode(['version' => 1, 'state' => 'frozen'])];
+        yield 'missing state' => [json_encode(['version' => 1])];
+        yield 'unknown version' => [json_encode(['version' => 2, 'state' => 'active'])];
+        yield 'missing version' => [json_encode(['state' => 'active'])];
+        yield 'unknown reason' => [json_encode(['version' => 1, 'state' => 'active', 'maintenance' => ['reason' => 'vacation']])];
+        yield 'maintenance not object' => [json_encode(['version' => 1, 'state' => 'active', 'maintenance' => 'import'])];
+        yield 'empty file' => [''];
+    }
+
+    #[DataProvider('corruptedFiles')]
+    public function testCorruptedFileFailsClosedAsSuspended(string $content): void
+    {
+        $this->writeState($content);
+        $s = DataSourceState::load($this->dsDir);
+        $this->assertSame('suspended', $s->getState());
+        $this->assertSame('suspended', $s->getEffectiveState());
+        $this->assertTrue($s->blocksHttp());
+        $this->assertTrue($s->isCorrupted());
+        $this->assertTrue($s->isFromFile());
+        $log = $this->logContents();
+        $this->assertStringContainsString('fail-closed', $log);
+        $this->assertStringContainsString('"level":"error"', $log);
+    }
+
+    public function testUnreadableFileFailsClosed(): void
+    {
+        if (function_exists('posix_geteuid') && posix_geteuid() === 0) {
+            $this->markTestSkipped('root ignores file permissions');
+        }
+        $this->writeState(json_encode(['version' => 1, 'state' => 'active']));
+        chmod(DataSourceState::filePath($this->dsDir), 0000);
+        $s = DataSourceState::load($this->dsDir);
+        $this->assertSame('suspended', $s->getEffectiveState());
+        $this->assertTrue($s->isCorrupted());
+        $this->assertStringContainsString('not readable', $this->logContents());
+    }
+
+    public function testSaveRoundTripAndAtomicity(): void
+    {
+        $now = new \DateTimeImmutable('2026-09-02 12:34:56', new \DateTimeZone('Europe/Prague'));
+        $saved = DataSourceState::active()
+            ->withState('read_only')
+            ->withMaintenance('migration', $now)
+            ->save($this->dsDir, 'cli', $now);
+
+        $this->assertSame('2026-09-02T10:34:56Z', $saved->getChanged());
+        $this->assertSame('cli', $saved->getChangedBy());
+        $this->assertFileDoesNotExist(DataSourceState::filePath($this->dsDir) . '.tmp');
+
+        $raw = json_decode((string) file_get_contents(DataSourceState::filePath($this->dsDir)), true);
+        $this->assertSame([
+            'version' => 1,
+            'state' => 'read_only',
+            'maintenance' => ['reason' => 'migration', 'since' => '2026-09-02T10:34:56Z'],
+            'changedBy' => 'cli',
+            'changed' => '2026-09-02T10:34:56Z',
+        ], $raw);
+
+        $loaded = DataSourceState::load($this->dsDir);
+        $this->assertSame('read_only', $loaded->getState());
+        $this->assertSame('migration', $loaded->getMaintenanceReason());
+        $this->assertSame('2026-09-02T10:34:56Z', $loaded->getMaintenanceSince());
+        $this->assertSame('suspended', $loaded->getEffectiveState());
+
+        $reopened = $loaded->withoutMaintenance()->save($this->dsDir, 'cli');
+        $this->assertFalse($reopened->isMaintenanceActive());
+        $this->assertSame('read_only', DataSourceState::load($this->dsDir)->getEffectiveState());
+    }
+
+    public function testWithMaintenanceKeepsOriginalSinceWhenReasonChanges(): void
+    {
+        $first = new \DateTimeImmutable('2026-09-01T10:00:00Z');
+        $s = DataSourceState::active()->withMaintenance('import', $first);
+        $s = $s->withMaintenance('manual', new \DateTimeImmutable('2026-09-02T10:00:00Z'));
+        $this->assertSame('manual', $s->getMaintenanceReason());
+        $this->assertSame('2026-09-01T10:00:00Z', $s->getMaintenanceSince());
+    }
+
+    public function testDeleteAfterDroppedWhenLeavingPendingDeletion(): void
+    {
+        $s = DataSourceState::active()
+            ->withState('pending_deletion')
+            ->withDeleteAfter(new \DateTimeImmutable('2026-10-01T00:00:00Z'));
+        $this->assertSame('2026-10-01T00:00:00Z', $s->getDeleteAfter());
+        $this->assertNull($s->withState('active')->getDeleteAfter());
+    }
+
+    public function testInvalidStateAndReasonAreRejected(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        DataSourceState::active()->withState('frozen');
+    }
+
+    public function testInvalidReasonIsRejected(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        DataSourceState::active()->withMaintenance('vacation');
+    }
+
+    public function testSaveFailsLoudlyWhenConfigDirMissing(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        DataSourceState::active()->save($this->dsDir . '/nonexistent', 'cli');
+    }
+
+    public function testSaveRefusesCorruptedState(): void
+    {
+        $this->writeState('{broken');
+        $s = DataSourceState::load($this->dsDir);
+        $this->expectException(\LogicException::class);
+        $s->save($this->dsDir, 'cli');
+    }
+}

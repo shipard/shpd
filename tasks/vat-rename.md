@@ -1,6 +1,6 @@
 # Task: Přejmenování `economy.taxes` → `economy.vat` + terminologie CS/RS
 
-**Stav:** PRD
+**Stav:** hotovo
 **Issue:** #55 — komentář „Revize návrhu po fázi 1" (rozhodnutí o přejmenování, D10)
 **Návaznost:** dělej PŘED `tasks/vat-report-periods.md` (ten už staví na nových
 názvech). Stará strana (rename pole v registrations runneru) je součástí

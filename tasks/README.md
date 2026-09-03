@@ -17,7 +17,7 @@ jednotlivých subsystémů žijí v [`docs/`](../docs/README.md).
 
 ## Stav
 
-Celkem 252 tasků: **naplánováno** 3 · **částečně** 7 · **hotovo** 242.
+Celkem 255 tasků: **naplánováno** 6 · **částečně** 7 · **hotovo** 242.
 
 Zdroj pravdy je řádek `**Stav:**` v hlavičce každého tasku; tato
 tabulka je generovaná (`scripts/tasks-index.py`). Hotové tasky se
@@ -28,6 +28,9 @@ nevypisují — níže je jen to, co není dokončené.
 | `ai-profile-sync-in-ds-upgrade.md` | naplánováno | sync není v `DsUpgradeCommand` |
 | `auth-phase0a-hardening.md` | naplánováno | rate limiting a evidence neúspěšných přihlášení chybí |
 | `dashboard-alert-grouping.md` | naplánováno | design schválen 2026-07-16, neimplementováno |
+| `subtable-phase1.md` | naplánováno | design schválen 2026-09-03 (issue #53), neimplementováno |
+| `subtable-phase2.md` | naplánováno | design schválen 2026-09-03 (issue #53), závisí na `subtable-phase1.md` |
+| `subtable-phase3.md` | naplánováno | design schválen 2026-09-03 (issue #53), závisí na `subtable-phase1.md` |
 | `doc-number-release-on-data-save.md` | částečně | kód + testy hotové 2026-08-13; zbývá D2 (reset test DS), ruční proklik a read-only verifikace na alfě |
 | `docs-import-party-snapshots.md` | částečně | kód, testy a docs hotové 2026-09-01; zbývá ověření po re-importu qrce (task 29 old_shipard, ops) — poslední dva body checklistu |
 | `hosting-09-federated-login.md` | částečně | kód + testy + docs hotové 2026-08-14 (commity 1–3); zbývá ds-upgrade na hostingu, zapnutí Google/GitHub na alfě dle runbooku (mutace — David) a ruční E2E řetěz |
@@ -113,6 +116,9 @@ Server-driven formuláře, generický klient. Reference
 | `form-validation-errors.md` | Zobrazení a kontrakt validačních hlášek |
 | `persons-form-restructure.md` | Restrukturalizace formuláře osob |
 | `items-form-restructure.md` | Restrukturalizace formuláře položek |
+| `subtable-phase1.md` | Sub-tabulky: sloupce ze serveru, read-only prohlížení, `ConfirmDialog`, filtr (issue #53) |
+| `subtable-phase2.md` | Dialog sub-záznamu: Přidat / Přidat a pokračovat, šipky Předchozí/Další |
+| `subtable-phase3.md` | Přesun řádků sub-tabulky (`/move`) a automatické `order_pos` |
 
 ## Nastavení aplikace a vlastní vzhledy
 

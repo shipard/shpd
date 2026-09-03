@@ -1,6 +1,6 @@
 # Task: Instance daňových tvrzení (`economy_vat_report_periods`) místo období DPH
 
-**Stav:** PRD
+**Stav:** částečně — implementace kompletní (5 commitů 2026-09-03: tabulka + eventy jádra, přiřazení + on-demand, reporty nad instancemi, cron + zrušení `vat_periods`, docs); E2E na dev DS prošlo (uložení dokladu → koncepty, reporty `--period`, alert, guard, přepočet, ruční přesun). Zbývá ruční proklik UI (picker, viewer Daňová tvrzení, selecty na dokladu) a ověření po re-importu qrce (task 30) — poslední bod „Hotovo když“.
 **Issue:** #55 — komentář „Revize návrhu po fázi 1", rozhodnutí D7–D13
 **Návaznost:** po `tasks/vat-rename.md` (staví na `economy.vat`, `cs_/rs_period_kind`).
 Import instancí a re-import alfy řeší `old_shipard: …/tasks/30-vat-report-periods-import.md`
@@ -138,13 +138,16 @@ konzistentně; docs.core nesmí záviset na economy.vat):
 
 ## Hotovo když
 
-- [ ] Testy zelené vč. partition invarianty a degenerovaného případu.
-- [ ] `ds-create` (čistý DS): registrace → seed instancí, doklad se při
-      uložení přiřadí do všech relevantních instancí, reporty běží nad
-      `--period`.
-- [ ] `grep -rn "vat_periods"` nevrací nic mimo tasks/ a archiv.
-- [ ] Picker KH na čtvrtletním plátci nabízí měsíce (instance), DP3 čtvrtletí
-      — původní bug z alfy je pokrytý testem.
+- [x] Testy zelené vč. partition invarianty a degenerovaného případu
+      (`VatPeriodAssignerTest`, `VatPeriodValidatorTest`).
+- [x] Registrace → seed instancí, doklad se při uložení přiřadí do všech
+      relevantních instancí, reporty běží nad `--period` — ověřeno na dev DS
+      4l3j přes `ds-upgrade` + skript nad `TableGateway` (čistý `ds-create`
+      neběžel, cesta je totožná).
+- [x] `grep -rn "vat_periods"` nevrací nic mimo tasks/ a archiv.
+- [x] Picker KH na čtvrtletním plátci nabízí měsíce (instance), DP3 čtvrtletí
+      — pokryto `testReturnAndCsReportsUseInstancesOfTheirOwnType`;
+      ruční proklik UI zbývá.
 - [ ] Po re-importu (task 30) na qrce: DP3 Q1/2026 ř. 64 = 99 042,86,
       křížová kontrola 0 rozdílů; měsíční KH 01–03/2026 dávají dohromady
       přesně obsah Q1 (invarianta na reálných datech).

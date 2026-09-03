@@ -444,37 +444,41 @@ Rozšíření jádra pro živé DPH výstupy modulu `economy.vat`
 
 - **`periodSource` v deklaraci reportu**: `'fiscal'` (default, beze změny)
   nebo `'vatPeriod'`. VatPeriod report nesmí deklarovat
-  `periodGranularities` (období určuje registrace DPH) a jeho parametry
-  období jsou `vatRegistration` (id do `economy_codebooks_vat_registrations`)
-  + `dateFrom`/`dateTo` (ISO). Interval musí **přesně souvisle pokrýt ≥1
-  období** registrace (`economy_codebooks_vat_periods`, návaznost +1 den),
-  jinak 400 — sloučený kvartál měsíčního plátce je legitimní.
-- **`VatPeriodRange`** (`registrationId`, `registrationName`, `dateBegin`,
-  `dateEnd`, `periodIds`, `periodNames`) je druhý tvar období vedle
-  `FiscalRange`; `ReportRequest.range` je nullable a přibylo
-  `ReportRequest.vatRange` — dle `periodSource` je vyplněné právě jedno.
-  Zdroj dat: `VatPeriodProvider` / `DbVatPeriodProvider` (zrcadlo
-  fiskálního provideru, runner si ho self-wiruje; konstrukce bez dotazu).
-- **REST katalog**: položka nese `periodSource`;
-  `periods.vatRegistrations: [{id, name, vatId, taxPeriodKind,
-  csPeriodKind, rsPeriodKind, periods: [{id, name, dateBegin, dateEnd, locked}]}]`
-  se emituje **jen když** je registrovaný nějaký vatPeriod report (DS bez
-  `economy.codebooks` tabulek na dotaz nenarazí; závislosti modulu tabulky
-  garantují). Query klíče runu: `vatRegistration`, `dateFrom`, `dateTo`.
-- **CLI** `report-run`: `--vat-registration --date-from --date-to`;
-  povinnost voleb se větví dle deklarace (kontrola až po načtení registry),
-  neznámý report propadá na výpis dostupných reportů. **MCP**: `report_run`
-  má required jen `reportId` (zbytek se vynucuje větví dle `periodSource`),
-  `report_list` vrací `periodSource` per položku, `fiscalYears` jen
-  fiskálním reportům a top-level `vatRegistrations` (gate: vatPeriod
-  deklarace + existence tabulky).
+  `periodGranularities` a **musí** deklarovat `vatReportType`
+  (`return` | `cs` | `rs`) — typ instance daňového tvrzení
+  (`economy_vat_report_periods`, `modules/economy/vat/docs/README.md`).
+  Jediný parametr období je `period` = id instance; instance musí být
+  živá a typu `vatReportType`, jinak 400 (revize #55 D11 — původní
+  interval `vatRegistration` + `dateFrom`/`dateTo` s přesným pokrytím
+  období zanikl spolu s původní tabulkou období DPH v economy.codebooks).
+- **`VatPeriodRange`** (`periodId`, `reportType`, `periodName`,
+  `registrationId`, `registrationName`, `dateBegin`, `dateEnd`, `locked`)
+  je druhý tvar období vedle `FiscalRange`; `ReportRequest.range` je
+  nullable a `ReportRequest.vatRange` je vyplněné právě u vatPeriod.
+  `params.period` výsledku: `{period, reportType, name, vatRegistration,
+  dateFrom, dateTo}`. Zdroj dat: `ReportPeriodProvider` /
+  `DbReportPeriodProvider` (runner si ho self-wiruje; konstrukce bez dotazu).
+  Výběr dokladů: `WHERE h.<vat|cs|rs>_period = instance` — pravidlo clamped
+  DPPD žije v přiřazení při uložení dokladu, ne v SQL reportu (D8).
+- **REST katalog**: položka nese `periodSource` a `vatReportType`;
+  `periods.vatRegistrations: [{id, name, vatId, periods: [{id, type, name,
+  dateBegin, dateEnd, locked, docState}]}]` (instance všech typů) se emituje
+  **jen když** je registrovaný nějaký vatPeriod report. Query klíč runu:
+  `period`.
+- **CLI** `report-run`: `--period <id>`; povinnost voleb se větví dle
+  deklarace, neznámý report propadá na výpis dostupných reportů. **MCP**:
+  `report_run` má required jen `reportId` (`period` se vynucuje větví dle
+  `periodSource`), `report_list` vrací `periodSource` + `vatReportType`
+  per položku, `fiscalYears` jen fiskálním reportům a top-level
+  `vatRegistrations` s instancemi (gate: vatPeriod deklarace + existence
+  `economy_vat_report_periods`).
 - **Frontend**: `ReportsPage` větví picker dle `periodSource` —
-  `VatPeriodPicker.svelte` (select registrace při více než jedné, mřížka
-  období per rok, sloučené kvartály měsíční registrace jen když všechna
-  3 období existují a navazují; `locked` jen vizuální hint). Deep-link
-  klíče `reg`/`df`/`dt`; `runReport()` staví query jen z definovaných
-  klíčů a `detail` posílá jen reportům, které ho deklarují. Gate „žádná
-  období" je per zdroj (`reports.noVatRegistrations`).
+  `VatPeriodPicker.svelte` nabízí instance typu reportu zvolené registrace
+  filtrované rokem (roletka, default rok zvolené instance); koncepty
+  kurzívou, `locked` jen vizuální hint; žádné slučování kvartálů (KH
+  čtvrtletního plátce má měsíční instance `cs`). Deep-link klíč `p`;
+  default = poslední uzavřená instance typu. Gate „žádná instance tohoto
+  tvrzení" je per typ (`reports.noVatRegistrations`).
 - **Sloupce `text` a `date`** (`ReportColumn`): buňka je prostý string
   (datum ISO `YYYY-MM-DD`), `display: 'sides'` je pro ně zakázaný.
   `ReportView` je vykresluje vlevo (datum lokalizovaně), suffix

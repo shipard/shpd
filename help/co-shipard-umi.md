@@ -65,6 +65,7 @@ Položky, které jsou v menu samostatně, nad ostatními sekcemi.
 | **Přiznání k DPH — živě** | Report ve skupině **Reporty**: řádky přiznání spočítané z dokladů za zvolené období DPH, dole vlastní daň nebo nadměrný odpočet. Kontroluje se proti účetnímu deníku | [Živé výstupy DPH](uctarna/dph-zive-vystupy.md) |
 | **Kontrolní hlášení — živě** | Report ve skupině **Reporty**: sekce A1–B3 s doklady nad 10 000 Kč jednotlivě a menšími v souhrnu. Chybějící DIČ nebo číslo dokladu dodavatele ohlásí pod tabulkou | [Živé výstupy DPH](uctarna/dph-zive-vystupy.md) |
 | **Souhrnné hlášení — živě** | Report ve skupině **Reporty**: dodání zboží a služeb do EU sečtená po odběratelích s počtem plnění a hodnotou | [Živé výstupy DPH](uctarna/dph-zive-vystupy.md) |
+| **Daňová tvrzení** | Seznam v sekci **Účtárna**: období přiznání, kontrolního a souhrnného hlášení per registrace DPH, s rozsahem dat. Doklady se do nich zařazují při uložení, chybějící tvrzení vznikne jako Koncept | [Živé výstupy DPH](uctarna/dph-zive-vystupy.md) |
 
 ---
 

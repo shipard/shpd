@@ -6,6 +6,7 @@ namespace Shipard\Module\Base\Persons;
 
 use Shipard\Core\Form\FormDefinition;
 use Shipard\Core\Form\FormHeaderInfo;
+use Shipard\Core\Form\FormTab;
 use Shipard\Core\Form\RecalculateResult;
 use Shipard\Core\Form\TableForm;
 
@@ -98,6 +99,144 @@ class PersonsForm extends TableForm
             titleNew: 'Nová osoba',
             tabs: [$basic, $contacts, $addresses, $bankAccounts, $this->attachmentsTab(), $settings],
         );
+    }
+
+    // ── Sub-tabulky: Kontakty / Adresy / Bankovní účty ──────────────────────
+
+    /**
+     * Sloupce sub-tabulek osoby (issue #53, fáze 1). Výběr podle JSONC
+     * definic `base_persons_{contacts,addresses,bank_accounts}`:
+     *
+     *  - Kontakty: Název · Funkce · E-mail · Telefon · Poznámka
+     *    (tabulka nemá „typ kontaktu / hodnotu" — kontakt je osoba s rolí).
+     *  - Adresy: Typ adresy · Název · Ulice a číslo · Obec · PSČ · Země
+     *    (země = `name` z cfgItem `world.base.countries`; příznak
+     *    hlavní/fakturační v tabulce neexistuje — typ adresy ho nahrazuje).
+     *  - Bankovní účty: Název účtu · Číslo účtu · IBAN · BIC/SWIFT · Měna · Zdroj.
+     *
+     * Všechny tři tabulky mají docStates (archivační model) — `stateStyle`
+     * řádku doplní `TableForm::subtableRowStateStyle()`: archivované řádky
+     * jsou tlumené, ale zobrazené (uživatel je potřebuje najít
+     * a odarchivovat). Labely z definic tabulek (lokalizované), fallback
+     * česky.
+     *
+     * @param list<array<string, mixed>> $rows
+     * @param array<string, mixed> $parentData
+     * @return array{columns: list<array<string, mixed>>, rows: list<array<string, mixed>>, order_column: ?string}
+     */
+    public function renderSubtable(FormTab $tab, array $rows, array $parentData): array
+    {
+        return match ($tab->id) {
+            'contacts'      => $this->renderPersonChildRows($tab, $rows, [
+                'name'  => ['Název', true],
+                'role'  => ['Funkce', false],
+                'email' => ['E-mail', false],
+                'phone' => ['Telefon', false],
+                'note'  => ['Poznámka', false],
+            ]),
+            'addresses'     => $this->renderPersonChildRows($tab, $rows, [
+                'address_type' => ['Typ adresy', false],
+                'name'         => ['Název', false],
+                'street'       => ['Ulice', true],
+                'city'         => ['Obec', false],
+                'zip'          => ['PSČ', false],
+                'country'      => ['Země', false],
+            ]),
+            'bank_accounts' => $this->renderPersonChildRows($tab, $rows, [
+                'name'           => ['Název účtu', false],
+                'account_number' => ['Číslo účtu', true],
+                'iban'           => ['IBAN', false],
+                'bic'            => ['BIC/SWIFT', false],
+                'currency'       => ['Měna', false],
+                'source'         => ['Zdroj', false],
+            ]),
+            default         => parent::renderSubtable($tab, $rows, $parentData),
+        };
+    }
+
+    /**
+     * Společný renderer tří sub-tabulek osoby: sloupce ve zvoleném pořadí,
+     * buňky přes typ sloupce z definice dětské tabulky (cfgItem → label,
+     * datum → d.m.Y…), plus per-sloupec výjimky: `street` skládá ulici
+     * s číslem popisným/orientačním, `currency` velkými písmeny.
+     *
+     * @param list<array<string, mixed>> $rows
+     * @param array<string, array{string, bool}> $spec column id → [fallback label, grow]
+     * @return array{columns: list<array<string, mixed>>, rows: list<array<string, mixed>>, order_column: ?string}
+     */
+    private function renderPersonChildRows(FormTab $tab, array $rows, array $spec): array
+    {
+        $table = (string) ($tab->subtable['table'] ?? '');
+        $childDef = $this->tables[$table] ?? null;
+        $colDefs = [];
+        if ($childDef !== null) {
+            foreach ($childDef->columns as $col) {
+                $colDefs[$col->id] = $col;
+            }
+        }
+
+        $columns = [];
+        foreach ($spec as $id => [$fallback, $grow]) {
+            $column = ['id' => $id, 'label' => $this->subtableLabel($table, $id, $fallback)];
+            if ($grow) {
+                $column['grow'] = true;
+            }
+            $columns[] = $column;
+        }
+
+        $out = [];
+        foreach ($rows as $row) {
+            $cells = [];
+            foreach ($spec as $id => $_) {
+                $text = match ($id) {
+                    'street'   => $this->formatStreet($row),
+                    'currency' => isset($row['currency']) && $row['currency'] !== ''
+                        ? strtoupper((string) $row['currency'])
+                        : null,
+                    default    => isset($colDefs[$id])
+                        ? $this->defaultSubtableCell($colDefs[$id], $row[$id] ?? null)
+                        : $this->plainCell($row[$id] ?? null),
+                };
+                if ($text !== null) {
+                    $cells[$id] = $text;
+                }
+            }
+            $entry = ['id' => (int) ($row['id'] ?? 0), 'cells' => $cells];
+            $style = $childDef !== null ? $this->subtableRowStateStyle($childDef, $row) : null;
+            if ($style !== null) {
+                $entry['stateStyle'] = $style;
+            }
+            $out[] = $entry;
+        }
+
+        return ['columns' => $columns, 'rows' => $out, 'order_column' => null];
+    }
+
+    /**
+     * „Ulice 12/3": ulice + číslo popisné, orientační za lomítkem; bez
+     * ulice jen čísla, bez čehokoli prázdno.
+     *
+     * @param array<string, mixed> $row
+     */
+    private function formatStreet(array $row): ?string
+    {
+        $street = trim((string) ($row['street'] ?? ''));
+        $house  = trim((string) ($row['house_number'] ?? ''));
+        $orient = trim((string) ($row['orientation_number'] ?? ''));
+        $number = $house;
+        if ($orient !== '') {
+            $number = $number !== '' ? "{$number}/{$orient}" : $orient;
+        }
+        $text = trim("{$street} {$number}");
+        return $text !== '' ? $text : null;
+    }
+
+    private function plainCell(mixed $value): ?string
+    {
+        if ($value === null || $value === '' || !is_scalar($value)) {
+            return null;
+        }
+        return (string) $value;
     }
 
     public function buildHeaderInfo(array $data): ?FormHeaderInfo

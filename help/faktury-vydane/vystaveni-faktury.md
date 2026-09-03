@@ -69,7 +69,9 @@ toho, kdo ti kolik dluží. Nebo zkoušíš, co Shipard u vydané faktury umí a
    jednotkou, cenou a DPH. Řádek otevřeš k úpravě tlačítkem **Upravit**
    (tužka) nebo dvojklikem, **Smazat** (koš) se před smazáním zeptá.
    V otevřeném řádku listuješ na sousední šipkami v záhlaví okna.
-   Součty dokladu se po každé změně řádku přepočítají.
+   Pořadí řádků změníš šipkami **Posunout výš** a **Posunout níž** přímo
+   v tabulce; nový řádek se zařadí na konec sám. Součty dokladu se po
+   každé změně řádku přepočítají.
 
 5. **Zkontroluj tab Rekapitulace DPH.** Je to rozpis základu a daně po sazbách
    a celkový součet. Nesouhlasí-li s tím, co čekáš, oprav řádky teď — ne až po

@@ -1,6 +1,6 @@
 # Sub-tabulky ve formulářích — fáze 3: přesun řádků nahoru/dolů a automatické `order_pos`
 
-**Stav:** naplánováno — design schválen 2026-09-03 (issue #53), závisí na `subtable-phase1.md`
+**Stav:** hotovo — implementováno 2026-09-03 (issue #53); E2E ověření na dev DS dle sekce „Hotovo když“, bod 7 (alfa) zbývá Anně
 
 ## Kontext / Cíl
 
@@ -191,3 +191,33 @@ layoutů `DocRowsForm`.
   ale nezapisuj to jako „nemůže nastat".
 - **Citlivá data:** kontrola duplicit na alfě jen jako `COUNT(*)`, žádné
   čísla dokladů ani partneři v odpovědi.
+
+## Výsledek implementace (2026-09-03)
+
+Odchylky a upřesnění oproti zadání (rozhodnutí schválena Annou 2026-09-03):
+
+- **Oprava z fáze 1 jako první commit:** `ReadOnlyPolicy` je fail-closed a
+  akci `form.subtable` neznala — sub-tabulky se na read-only DS nenačetly
+  (403). `subtable` Allow, `subtableMove` Deny403, oba v testu politiky.
+- **Read-only rodič vrací 422 `DOCUMENT_READONLY`**, ne 409 — stejný kód,
+  status i hláška jako `FormController::save`, aby frontend nemapoval dvě
+  varianty.
+- **Šipky se skryjí jen při zadaném textu filtru**, ne při každém seznamu
+  nad 10 řádků — prázdný filtr znamená úplný seznam a přesun dává smysl.
+- **Ikony** nové `iconMoveUp` / `iconMoveDown` (faArrowUp / faArrowDown);
+  chevrony v registru znamenají rozbalení, ne pohyb.
+- **Řádky 702 a 726 v `DocDocument` číslují rekapitulaci DPH, ne řádky**;
+  hromadné číslování řádků při zápisu z payloadu neexistuje. Do
+  `DocDocument` se nesahalo — `beforeSave` řeší řádky ze sub-formuláře,
+  import si pořadí posílá sám nebo zůstane na nule (přesun ho srovná).
+- **Existenci `orderColumn` v dětské tabulce ověřuje controller** (500),
+  `FormTab` registr tabulek nemá; validuje neprázdný řetězec a zákaz
+  kombinace se `sort`.
+- **Po přesunu jen refetch** (server přečísloval skupinu, mění se sloupec #),
+  bez lokálního přeuspořádání a bez reloadu rodiče.
+- **Bod 7 (duplicity `order_pos` na alfě)** nešel odsud — přístup
+  `claude_ro` není v repozitáři. Dotaz pro Annu (jen počty, žádná data):
+  `SELECT COUNT(DISTINCT doc_head) FROM docs_core_rows r JOIN (SELECT
+  doc_head, order_pos FROM docs_core_rows GROUP BY doc_head, order_pos
+  HAVING COUNT(*) > 1) d USING (doc_head, order_pos);` — informativní,
+  žádná oprava dat, doklady se přečíslují při prvním přesunu.

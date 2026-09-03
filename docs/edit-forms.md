@@ -681,6 +681,7 @@ Modal komponenta (Esc, klik na overlay, `×`) volá `onClose()` bez parametru �
 | `/_ui/form/{table}/save/{id}` | PUT | Uložení existujícího záznamu |
 | `/_ui/form/{table}/recalculate` | POST | Přepočítání bez uložení |
 | `/_ui/form/{table}/subtable/{tabId}/{parentId}` | GET | Sloupce + vyrenderované řádky sub-tabulky (tab typu `subtable`) — kap. 15 |
+| `/_ui/form/{table}/subtable/{tabId}/{parentId}/move` | POST | Přesun řádku sub-tabulky o jednu pozici (`{id, direction: up\|down}`), přečíslování skupiny 1..N — kap. 15.5 |
 
 ### Detekce přechodu stavu
 
@@ -711,6 +712,7 @@ abstract class TableForm
         string $id, string $label,
         string $table, string $foreignKey,
         ?string $formId = null, ?string $sort = null, ?string $icon = null,
+        ?string $orderColumn = null,   // pořadový sloupec → šipky přesunu, řazení orderColumn ASC, id ASC; nekombinovat se $sort
     ): FormTab;
     protected function attachmentsTab(string $id = 'attachments', string $label = 'Přílohy'): FormTab;
 }
@@ -1031,22 +1033,28 @@ sub-tabulka později povýšit na plný grid bez přepisu kontraktu.
   = prázdná buňka — nikdy „0,00" za NULL. `stateStyle` nesou řádky dětských
   tabulek s docStates; frontend dá na `<tr>` globální třídu
   `docState_{style}` (archiv tlumený, koš škrtnutý, `styles/base.css`).
-- `order_column` — v této fázi vždy `null`; klíč zavádí kontrakt pro fázi 3
-  (šipky přesunu).
-- **Řazení** — `sort` ze `subtableTab()` (`col:dir[,col:dir]`, syntaxe jako
-  `?sort=` CRUD endpointu). Default `order_pos:asc`, má-li dětská tabulka
-  ten sloupec, jinak `id:asc`; `id ASC` je vždy tiebreaker. `sort` je
-  serverová konfigurace formu, ne vstup uživatele — neznámý / sensitive
-  sloupec nebo špatný směr je 500.
-- **Controller** `FormController::subtable()` — guard rodiče i dětské tabulky
+- `order_column` — pořadový sloupec z deklarace tabu (`subtableTab(...,
+  orderColumn: 'order_pos')`), jinak `null`. Plní ho controller, ne
+  renderer. Non-null → frontend ukáže šipky přesunu (kap. 15.5).
+- **Řazení** — tab s `orderColumn` řadí **vždy** `orderColumn ASC, id ASC`
+  (stejné pořadí vidí endpoint přesunu; `FormTab` zakazuje kombinaci se
+  `sort`). Jinak `sort` ze `subtableTab()` (`col:dir[,col:dir]`, syntaxe
+  jako `?sort=` CRUD endpointu), default `order_pos:asc`, má-li dětská
+  tabulka ten sloupec, jinak `id:asc`; `id ASC` je vždy tiebreaker. `sort`
+  i `orderColumn` jsou serverová konfigurace formu, ne vstup uživatele —
+  neznámý / sensitive sloupec nebo špatný směr je 500.
+- **Controller** `FormController::subtable()` — sdílené
+  `resolveSubtableContext()` (i pro `/move`): guard rodiče i dětské tabulky
   (`TableAccessGuard::guardTable`), rodič se načte jako v `meta({id})`
   (`stripSensitive`, dekódování JSON sloupců), `FormRegistry::createForm()`
   + `setTableDef()` + `setTables()`, `buildFormDefinition($data, false)` →
-  tab typu `subtable` s daným id, řádky `WHERE fk = parentId`,
-  `stripSensitive` per řádek, `renderSubtable()`. Rodič bez PHP form třídy
-  (JSONC / auto form) nebo neznámý tab → 404 `SUBTABLE_NOT_FOUND`.
+  tab typu `subtable` s daným id; FK i `orderColumn` musí být sloupce dětské
+  tabulky (jinak 500). Pak řádky `WHERE fk = parentId`, `stripSensitive`
+  per řádek, `renderSubtable()`. Rodič bez PHP form třídy (JSONC / auto
+  form) nebo neznámý tab → 404 `SUBTABLE_NOT_FOUND`.
   Routa: `Router::resolveFormRoute` → `Route('form', 'subtable', $table,
   $parentId, key: $tabId)` (`Route::$key` = textový identifikátor v cestě).
+  `ReadOnlyPolicy`: `form.subtable` Allow (čtení), `form.subtableMove` Deny403.
 
 ### 15.2 `TableForm::renderSubtable(FormTab $tab, array $rows, array $parentData)`
 
@@ -1124,10 +1132,17 @@ $fallback)` (lokalizovaný label sloupce dětské tabulky), `subtableColumnSpec(
   hlavička (`border-collapse: separate`), zarovnání přes `--num` třídy,
   barva textu na `<table>` (ne na `td`), aby ji globální `.docState_*` na
   `<tr>` přebila.
+- **Šipky přesunu ▲ ▼** (`iconMoveUp` / `iconMoveDown`) před Upravit /
+  Smazat, jen když přišlo `order_column`, rodič není read-only a filtr
+  nemá zadaný text (zúžený seznam: soused ve filtru není soused v pořadí;
+  prázdný filtr nad 10 řádky nevadí). První řádek ▲ a poslední ▼ disabled,
+  během přesunu obě. Klik → `POST …/move` → jeden refetch (server
+  přečísloval skupinu, mění se i sloupec `#`; lokální přeuspořádání by
+  ukázalo stará čísla). Rodič se nepřenačítá — součty na pořadí nezávisí.
 - `data-testid`: `subtable`, `subtable-add`, `subtable-filter`, `subtable-row`
-  (+ `data-row-id`), `subtable-row-edit`, `subtable-row-delete`,
-  `subtable-row-view`; ConfirmDialog `confirm-dialog`, `confirm-ok`,
-  `confirm-cancel`.
+  (+ `data-row-id`), `subtable-row-up`, `subtable-row-down`,
+  `subtable-row-edit`, `subtable-row-delete`, `subtable-row-view`;
+  ConfirmDialog `confirm-dialog`, `confirm-ok`, `confirm-cancel`.
 ### 15.4 Dialog sub-záznamu — tlačítka a navigace (fáze 2)
 
 Dialog řádku je běžný `FormDialog`, který od `FormSubTable` dostává navíc
@@ -1177,6 +1192,46 @@ zavírá křížek, Esc a klik mimo modal.
 `data-testid`: `form-save`, `form-save-continue`, `form-nav-prev`,
 `form-nav-pos`, `form-nav-next`, `unsaved-dialog`.
 
+### 15.5 Pořadí řádků — `orderColumn`, endpoint `/move`, automatické `order_pos` (fáze 3)
+
+Sub-tabulka nad tabulkou s pořadovým sloupcem (dnes jen řádky dokladu,
+`docs_core_rows.order_pos`) ho deklaruje v `subtableTab(..., orderColumn:
+'order_pos')`. `FormTab` validuje neprázdný řetězec a zakazuje kombinaci se
+`sort`; existenci sloupce ověří controller (registr tabulek `FormTab` nemá).
+Osoby (Kontakty, Adresy, Účty) pořadí nemají → beze změny.
+
+**`POST /_ui/form/{parentTable}/subtable/{tabId}/{parentId}/move`**, tělo
+`{ "id": 4711, "direction": "up" | "down" }` → `FormController::subtableMove()`:
+
+1. `resolveSubtableContext()` jako u výpisu; tab bez `orderColumn` → 400
+   `SUBTABLE_NOT_ORDERED`; špatné tělo → 400 `BAD_REQUEST`.
+2. Rodič v read-only doc state → 422 `DOCUMENT_READONLY` se stejnou hláškou
+   jako `save` („Document is read-only in state N."), aby frontend nemapoval
+   dvě varianty. Read-only DS odmítá `ReadOnlyPolicy` (fail-closed).
+3. Transakce: `SELECT id, order_col FROM child WHERE fk = ? ORDER BY
+   order_col ASC, id ASC FOR UPDATE`, řádek mimo rodiče → 404 + rollback;
+   přečíslování **celé skupiny 1..N** (řádky přidané sub-formulářem měly
+   historicky všechny 0 — prohození dvou nul by nic nezměnilo), prohození
+   se sousedem (na kraji no-op, přečíslování se přesto provede), `UPDATE`
+   jen u řádků, kde se hodnota liší, commit.
+4. Odpověď `{ success: true, data: { order: [ids v novém pořadí] } }`.
+
+Zapisuje přímo přes DB, ne přes Document hooky — přesun úmyslně **nespouští**
+přepočet hlavičky (`DocRowsDocument::afterSave`), součty ani rekapitulace na
+pořadí nezávisí. Souběh: zámek řádků skupiny; souběžný insert bez zámku může
+dostat duplicitní pořadí, další přesun ho srovná.
+
+**Automatické `order_pos`:** `DocRowsDocument::beforeSave()` doplní novému
+řádku (`$originalData === null`) bez pořadí (`<= 0`) `MAX(order_pos) + 1`
+v rámci `doc_head`. Explicitní kladné `order_pos` (importy, výměnný formát)
+zůstává; update se nedotýká. Ruční pole „Pořadí" z `DocRowsForm` zaniklo
+(oba layouty). Generický mechanismus pro jiné tabulky se zatím nedělá — až
+bude druhá tabulka s pořadím, přesune se do `Document` podle `orderColumn`.
+
+Konzumenti pořadí (`DocsHeadsViewer::buildDetailRows`, `AccountingEngine`)
+čtou `ORDER BY order_pos` (viewer s `id` tiebreakerem) — přečíslování jen
+zpevňuje pořadí, obsah nemění.
+
 ---
 
 ## 16. Svelte komponenty
@@ -1217,7 +1272,7 @@ zavírá křížek, Esc a klik mimo modal.
 | `FormTab` | Datová třída |
 | `FormElement` | Datová třída; `input_type`, `hidden`, `triggers` |
 | `FormRegistry` | Registr PHP tříd formulářů; podporuje per-table polymorfismus přes `typeColumn` + `classes` + `defaultClass` (`createForm($table, $data, ...)`) — viz kap. 23 |
-| `FormController` | HTTP controller; volá `createForm($table, $data, ...)` ve všech metodách (`resolveFormDefinition`, `recalculate`, `enrichHeaderInfo`, `subtable`) |
+| `FormController` | HTTP controller; volá `createForm($table, $data, ...)` ve všech metodách (`resolveFormDefinition`, `recalculate`, `enrichHeaderInfo`, `resolveSubtableContext` pro `subtable` / `subtableMove`) |
 | `AutoFormBuilder` | Generuje FormDefinition z TableDefinition |
 | `JsoncFormLoader` | Načítá JSONC formy |
 | `RecalculateResult` | Výsledek recalculate |

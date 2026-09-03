@@ -140,11 +140,12 @@ class ModuleDefinition
         }
 
         // documentEventHandlers — hooky na události dokumentů cizích tabulek
-        // (stateChanged po commitu, beforeDelete v transakci). Dispatch dělá
-        // TableGateway přes DocumentEventDispatcher.
+        // (beforeSave v transakci před zápisem, afterSave + stateChanged po
+        // commitu, beforeDelete v transakci). Dispatch dělá TableGateway přes
+        // DocumentEventDispatcher.
         $documentEventHandlers = [];
         if (isset($data['documentEventHandlers']) && is_array($data['documentEventHandlers'])) {
-            $knownEvents = ['stateChanged', 'beforeDelete'];
+            $knownEvents = ['beforeSave', 'afterSave', 'stateChanged', 'beforeDelete'];
             foreach ($data['documentEventHandlers'] as $idx => $reg) {
                 if (!is_array($reg)
                     || !isset($reg['table']) || !is_string($reg['table']) || $reg['table'] === ''

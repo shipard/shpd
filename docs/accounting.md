@@ -599,11 +599,19 @@ interface DocumentEventHandler
 
     /** Před smazáním dokumentu (uvnitř transakce, před child delete). */
     public function onBeforeDelete(string $tableId, array $data): void;
+
+    /** V save transakci před zápisem hlavičky, smí mutovat $data (economy.vat). */
+    public function onBeforeSave(string $tableId, array &$data, ?array $originalData): void;
+
+    /** Po commitu každého uložení. */
+    public function onAfterSave(string $tableId, array $data, ?array $originalData): void;
 }
 ```
 
-Dispatch zajišťuje `TableGateway`: `stateChanged` po `Document::afterSave`,
-`beforeDelete` po `Document::beforeDelete`. Registrace se kompiluje z
+Dispatch zajišťuje `TableGateway`: `beforeSave` po `Document::beforeSave`
+uvnitř transakce, `afterSave` a `stateChanged` po `Document::afterSave`,
+`beforeDelete` po `Document::beforeDelete`. Úplná sémantika: `docs/modules.md`
+→ Pole `documentEventHandlers`. Registrace se kompiluje z
 `module.jsonc` do cfg (analogie `documentClasses`).
 
 ### 7.2 Lifecycle účtování

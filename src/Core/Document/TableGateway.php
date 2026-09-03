@@ -118,6 +118,12 @@ class TableGateway
         try {
             $this->beginTransaction();
 
+            // beforeSave handlery cizích modulů — uvnitř transakce, před
+            // zápisem hlavičky, s child sety ještě v $data (dopočet extension
+            // sloupců, např. economy.vat → vat_period/cs_period/rs_period).
+            // Výjimka = rollback, uložení selže.
+            $this->eventDispatcher?->dispatchBeforeSave($this->tableId, $data, $originalData);
+
             // Separate child data from head data. Only track child sets that
             // were actually provided in $data — either by the client or set
             // by Document::beforeSave. Children NOT present in $data stay
@@ -174,6 +180,10 @@ class TableGateway
         }
 
         $doc->afterSave($data);
+
+        // afterSave handlery — každé uložení, po commitu; výjimky loguje
+        // a polyká dispatcher.
+        $this->eventDispatcher?->dispatchAfterSave($this->tableId, $data, $originalData);
 
         // Dispatch documentEventHandlers až po commitu a po afterSave —
         // přechod poskytuje Document (trackStateChange), gateway nic

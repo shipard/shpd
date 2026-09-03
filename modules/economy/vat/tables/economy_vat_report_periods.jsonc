@@ -1,0 +1,129 @@
+{
+    // Instance daňových tvrzení (issue #55, D7): per registrace DPH a typ
+    // výstupu (přiznání / kontrolní hlášení / souhrnné hlášení) jeden záznam
+    // s rozsahem s denní přesností. Nahrazuje kalendářní mřížku
+    // economy_codebooks_vat_periods — pravda je v datech, ne v odhadu
+    // z periodicity. Doklady na instance míří sloupci vat_period /
+    // cs_period / rs_period (extension docs_core_heads), přiřazení dělá
+    // DocsHeadsVatPeriodHandler při uložení dokladu.
+    "tableId": 441,
+    "name": "VAT report periods",
+    "name:cs": "Daňová tvrzení",
+    "name:en": "VAT report periods",
+
+    "displayPattern": "{name}",
+
+    "docStates": {
+        "stateColumn": "docState",
+        "mainColumn": "docStateMain",
+        "cfgItem": "core.system.docStatesArchive"
+    },
+
+    // Přechody stavů (Smazat, Ukončit platnost) musí projít Document
+    // vrstvou — guardy zrušení (zámek, přiřazené doklady) žijí ve validate().
+    "stateTransitionsRunDocumentHooks": true,
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+        {
+            "id": "vat_registration",
+            "name": "VAT registration",
+            "name:cs": "Registrace DPH",
+            "name:en": "VAT registration",
+            "type": "int",
+            "nullable": false,
+            "reference": "economy_codebooks_vat_registrations"
+        },
+        {
+            "id": "report_type",
+            "name": "Report type",
+            "name:cs": "Typ tvrzení",
+            "name:en": "Report type",
+            "type": "enumString",
+            "length": 10,
+            "nullable": false,
+            "cfgItem": "economy.vat.reportTypes"
+        },
+        {
+            "id": "name",
+            "name": "Name",
+            "name:cs": "Název",
+            "name:en": "Name",
+            "type": "varchar",
+            "length": 20,
+            "nullable": false
+        },
+        {
+            "id": "date_begin",
+            "name": "Begin date",
+            "name:cs": "Začátek období",
+            "name:en": "Begin date",
+            "type": "date",
+            "nullable": false
+        },
+        {
+            "id": "date_end",
+            "name": "End date",
+            "name:cs": "Konec období",
+            "name:en": "End date",
+            "type": "date",
+            "nullable": false
+        },
+        {
+            "id": "locked",
+            "name": "Locked",
+            "name:cs": "Uzamčeno",
+            "name:en": "Locked",
+            "type": "boolean",
+            "default": 0,
+            "nullable": false
+        },
+
+        // --- doc state (systémové, bez skupiny) ---
+
+        {
+            "id": "docState",
+            "name": "Document state",
+            "name:cs": "Stav dokumentu",
+            "name:en": "Document state",
+            "type": "tinyint",
+            "default": 10,
+            "system": true
+        },
+        {
+            "id": "docStateMain",
+            "name": "Document state (sort)",
+            "name:cs": "Stav dokumentu (řazení)",
+            "name:en": "Document state (sort)",
+            "type": "tinyint",
+            "default": 1,
+            "system": true
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "idx_registration_type_begin",
+            "type": "index",
+            "columns": [
+                {"column": "vat_registration"},
+                {"column": "report_type"},
+                {"column": "date_begin"}
+            ]
+        },
+        {
+            "id": "idx_doc_state",
+            "type": "index",
+            "columns": [
+                {"column": "docStateMain", "order": "ASC"},
+                {"column": "date_begin", "order": "DESC"}
+            ]
+        }
+    ]
+}

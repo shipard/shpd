@@ -1,0 +1,20 @@
+{
+    // economy.vat.reportTypes — typ instance daňového tvrzení
+    // (economy_vat_report_periods.report_type). Klíče jsou oficiální
+    // zkratky: Control Statement (cs), Recapitulative Statement (rs).
+    "return": {
+        "name": "VAT return",
+        "name:cs": "Přiznání k DPH",
+        "name:en": "VAT return"
+    },
+    "cs": {
+        "name": "Control statement",
+        "name:cs": "Kontrolní hlášení",
+        "name:en": "Control statement"
+    },
+    "rs": {
+        "name": "Recapitulative statement",
+        "name:cs": "Souhrnné hlášení",
+        "name:en": "Recapitulative statement"
+    }
+}

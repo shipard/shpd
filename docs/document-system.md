@@ -720,6 +720,9 @@ API volání: saveDocument({customer_id: 42, rows: [...]})
 │
 ├─ 4. BEGIN TRANSACTION
 │
+├─ 4b. documentEventHandlers: beforeSave (cizí moduly, smí mutovat data;
+│      výjimka = rollback) — viz docs/modules.md
+│
 ├─ 5. INSERT/UPDATE economy_docs_heads
 │     → $headId = lastInsertId nebo existující ID
 │
@@ -732,6 +735,9 @@ API volání: saveDocument({customer_id: 42, rows: [...]})
 ├─ 7. COMMIT
 │
 ├─ 8. document.afterSave(data)
+│
+├─ 8b. documentEventHandlers: afterSave (každé uložení), pak stateChanged
+│      (jen při změně docState) — výjimky se logují a polykají
 │
 └─ 9. return DocumentResult::ok(data)
 ```

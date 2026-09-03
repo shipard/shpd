@@ -194,7 +194,7 @@ class NavigationControllerTest extends TestCase
             array_column($this->node($tree, 'sales')['children'], 'viewerId'),
         );
         $this->assertSame(
-            ['docs.accountingDocs.heads', 'economy.accounting.journal', 'economy.accounting.accounts', 'economy.bank.transactions', 'economy.accbal.ledger', 'economy.bank.statements'],
+            ['docs.accountingDocs.heads', 'economy.accounting.journal', 'economy.accounting.accounts', 'economy.bank.transactions', 'economy.accbal.ledger', 'economy.bank.statements', 'economy.vat.reportPeriods'],
             array_column($this->node($tree, 'accounting')['children'], 'viewerId'),
         );
         // System holds ONLY Alerts — users/settings moved to Settings app.

@@ -12,8 +12,43 @@
     // a vat_recap, economy.accounting = deník pro křížovou kontrolu 343.
     "dependencies": ["world.vat", "economy.codebooks", "docs.core", "economy.accounting"],
 
+    "tables": [
+        "economy_vat_report_periods"
+    ],
+
     "config": [
-        { "id": "economy.vat.reports.cz", "file": "config/vat-reports-cz.jsonc" }
+        { "id": "economy.vat.reports.cz", "file": "config/vat-reports-cz.jsonc" },
+        { "id": "economy.vat.reportTypes", "file": "config/reportTypes.jsonc" }
+    ],
+
+    "viewers": [
+        {
+            // Instance daňových tvrzení (D7) — vedle živých reportů v sekci
+            // účetnictví; registrace zůstávají v Nastavení.
+            "id": "economy.vat.reportPeriods",
+            "name": "VAT report periods",
+            "name:cs": "Daňová tvrzení",
+            "name:en": "VAT report periods",
+            "icon": "calendar",
+            "table": "economy_vat_report_periods",
+            "class": "Shipard\\Module\\Economy\\Vat\\ReportPeriodsViewer",
+            "navSection": "accounting",
+            "navOrder": 50
+        }
+    ],
+
+    "forms": [
+        {
+            "table": "economy_vat_report_periods",
+            "class": "Shipard\\Module\\Economy\\Vat\\ReportPeriodsForm"
+        }
+    ],
+
+    "documentClasses": [
+        {
+            "table": "economy_vat_report_periods",
+            "class": "Shipard\\Module\\Economy\\Vat\\ReportPeriodDocument"
+        }
     ],
 
     "reports": [

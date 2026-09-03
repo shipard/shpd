@@ -17,6 +17,28 @@ namespace Shipard\Core\Document;
 interface DocumentEventHandler
 {
     /**
+     * Uvnitř save transakce, po `Document::beforeSave()` a PŘED zápisem
+     * hlavičky — handler smí `$data` mutovat (dopočítat sloupce hlavičky
+     * vlastněné cizím modulem, např. extension sloupce). Child sety jsou
+     * v `$data` ještě přítomné. Výjimka se propaguje — transakce se
+     * rollbackne a uložení selže (handler je součást konzistence zápisu).
+     *
+     * @param array<string, mixed> $data Data dokumentu po beforeSave (mutable)
+     * @param ?array<string, mixed> $originalData Původní řádek při update, null při insertu
+     */
+    public function onBeforeSave(string $tableId, array &$data, ?array $originalData): void;
+
+    /**
+     * Po commitu uložení, po `Document::afterSave()` — pro každé uložení,
+     * bez ohledu na změnu docState. Výjimku dispatcher zaloguje a spolkne
+     * (uložení už proběhlo). Vedlejší efekty musí být idempotentní.
+     *
+     * @param array<string, mixed> $data Uložená data dokumentu (head + child sety)
+     * @param ?array<string, mixed> $originalData Původní řádek při update, null při insertu
+     */
+    public function onAfterSave(string $tableId, array $data, ?array $originalData): void;
+
+    /**
      * Po commitu uložení, pokud se změnil docState (volá se po afterSave).
      * Handler si případné transakce řídí sám. Výjimku dispatcher zaloguje
      * a spolkne — uložení dokladu už proběhlo a nesmí selhat kvůli handleru.

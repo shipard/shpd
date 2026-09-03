@@ -44,6 +44,14 @@ abstract class AbstractDocumentEventHandler implements DocumentEventHandler
         $this->dsConfig = $dsConfig;
     }
 
+    public function onBeforeSave(string $tableId, array &$data, ?array $originalData): void
+    {
+    }
+
+    public function onAfterSave(string $tableId, array $data, ?array $originalData): void
+    {
+    }
+
     public function onStateChanged(string $tableId, array $data, int $oldState, int $newState): void
     {
     }

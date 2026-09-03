@@ -47,6 +47,45 @@ final class DocumentEventDispatcher
         }
     }
 
+    /**
+     * Uvnitř save transakce před zápisem hlavičky — handlery smí `$data`
+     * mutovat, výjimka se propaguje (rollback v gateway).
+     *
+     * @param array<string, mixed> $data
+     * @param ?array<string, mixed> $originalData
+     */
+    public function dispatchBeforeSave(string $tableId, array &$data, ?array $originalData): void
+    {
+        foreach ($this->handlersFor($tableId, 'beforeSave') as $handler) {
+            $handler->onBeforeSave($tableId, $data, $originalData);
+        }
+    }
+
+    /**
+     * Po commitu uložení (každé uložení) — výjimky se logují a polykají.
+     *
+     * @param array<string, mixed> $data
+     * @param ?array<string, mixed> $originalData
+     */
+    public function dispatchAfterSave(string $tableId, array $data, ?array $originalData): void
+    {
+        foreach ($this->handlersFor($tableId, 'afterSave') as $handler) {
+            try {
+                $handler->onAfterSave($tableId, $data, $originalData);
+            } catch (\Throwable $e) {
+                ErrorLogger::logException(
+                    $e,
+                    sprintf(
+                        'DocumentEventHandler %s::onAfterSave failed for %s #%s',
+                        $handler::class,
+                        $tableId,
+                        (string) ($data['id'] ?? '?'),
+                    ),
+                );
+            }
+        }
+    }
+
     public function dispatchStateChanged(string $tableId, array $data, int $oldState, int $newState): void
     {
         foreach ($this->handlersFor($tableId, 'stateChanged') as $handler) {

@@ -366,7 +366,7 @@ ID modulu přímo odpovídá cestě v souborovém systému:
 | `documentEventHandlers` | object[] | Ne | Ne | Hooky na události dokumentů cizích tabulek (viz níže) |
 | `documentEventHandlers[].table` | string | Ano | Ne | ID cílové tabulky |
 | `documentEventHandlers[].class` | string | Ano | Ne | FQCN handleru (implements `DocumentEventHandler`) |
-| `documentEventHandlers[].events` | string[] | Ne | Ne | `stateChanged`, `beforeDelete`; default obě |
+| `documentEventHandlers[].events` | string[] | Ne | Ne | `beforeSave`, `afterSave`, `stateChanged`, `beforeDelete`; default všechny |
 
 ### Pole `documentEventHandlers`
 
@@ -388,6 +388,16 @@ dokumentů, aniž by vlastník tabulky na něm závisel (např. `economy.account
 
 Sémantika událostí:
 
+- **`beforeSave`** — uvnitř save transakce, po `Document::beforeSave()`
+  a **před** zápisem hlavičky; child sety jsou v `$data` ještě přítomné
+  a handler smí `$data` mutovat (dopočet sloupců hlavičky vlastněných
+  cizím modulem — extension sloupce, např. `economy.vat` plní
+  `vat_period`/`cs_period`/`rs_period` na `docs_core_heads`). Výjimka se
+  **propaguje**, transakce se rollbackne a uložení selže.
+- **`afterSave`** — po commitu a po `Document::afterSave()`, při **každém**
+  uložení bez ohledu na změnu stavu (např. seed instancí tvrzení po
+  uložení registrace DPH). Výjimka se zaloguje a **spolkne**; vedlejší
+  efekty musí být idempotentní.
 - **`stateChanged`** — po commitu uložení a po `afterSave`, jen pokud se
   `docState` reálně změnil. Přechod poskytuje `Document::getStateTransition()`
   (plní `trackStateChange`); pro nový záznam vzniklý rovnou mimo Koncept

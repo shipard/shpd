@@ -29,15 +29,45 @@ class FakeEventHandler extends AbstractDocumentEventHandler
     /** @var list<array{table: string, id: mixed}> */
     public static array $deleteCalls = [];
 
+    /** @var list<array{table: string, id: mixed, original: ?array}> */
+    public static array $beforeSaveCalls = [];
+
+    /** @var list<array{table: string, id: mixed, original: ?array}> */
+    public static array $afterSaveCalls = [];
+
     public static bool $throwOnStateChanged = false;
     public static bool $throwOnBeforeDelete = false;
+    public static bool $throwOnBeforeSave = false;
+    public static bool $throwOnAfterSave = false;
 
     public static function reset(): void
     {
         self::$stateCalls = [];
         self::$deleteCalls = [];
+        self::$beforeSaveCalls = [];
+        self::$afterSaveCalls = [];
         self::$throwOnStateChanged = false;
         self::$throwOnBeforeDelete = false;
+        self::$throwOnBeforeSave = false;
+        self::$throwOnAfterSave = false;
+    }
+
+    public function onBeforeSave(string $tableId, array &$data, ?array $originalData): void
+    {
+        self::$beforeSaveCalls[] = ['table' => $tableId, 'id' => $data['id'] ?? null, 'original' => $originalData];
+        // Mutace dat handlerem se musí propsat do zápisu hlavičky.
+        $data['handler_column'] = 'set-by-handler';
+        if (self::$throwOnBeforeSave) {
+            throw new \RuntimeException('before save boom');
+        }
+    }
+
+    public function onAfterSave(string $tableId, array $data, ?array $originalData): void
+    {
+        self::$afterSaveCalls[] = ['table' => $tableId, 'id' => $data['id'] ?? null, 'original' => $originalData];
+        if (self::$throwOnAfterSave) {
+            throw new \RuntimeException('after save boom');
+        }
     }
 
     public function onStateChanged(string $tableId, array $data, int $oldState, int $newState): void
@@ -108,6 +138,9 @@ class EventTestGateway extends TableGateway
         return [];
     }
 
+    /** @var list<array<string, mixed>> */
+    public array $updateRowCalls = [];
+
     protected function insertRow(string $table, array $data): int
     {
         return 1;
@@ -115,6 +148,7 @@ class EventTestGateway extends TableGateway
 
     protected function updateRow(string $table, int $id, array $data): void
     {
+        $this->updateRowCalls[] = $data;
     }
 
     protected function deleteRow(string $table, int $id): void
@@ -254,6 +288,58 @@ class DocumentEventsTest extends TestCase
         $this->assertTrue($gw->saveDocument(['id' => 5])->isSuccess());
     }
 
+    // ── Gateway: beforeSave / afterSave ─────────────────────────────────────
+
+    public function testBeforeSaveRunsInsideTransactionAndMutatesHeadData(): void
+    {
+        $gw = $this->gateway($this->dispatcher(['beforeSave']));
+        $gw->storedRows[5] = ['id' => 5, 'docState' => 40];
+
+        $result = $gw->saveDocument(['id' => 5, 'description' => 'x']);
+
+        $this->assertTrue($result->isSuccess());
+        $this->assertCount(1, FakeEventHandler::$beforeSaveCalls);
+        $this->assertSame(5, FakeEventHandler::$beforeSaveCalls[0]['id']);
+        $this->assertSame(40, FakeEventHandler::$beforeSaveCalls[0]['original']['docState']);
+        // mutace handleru došla do UPDATE hlavičky
+        $this->assertSame('set-by-handler', $gw->updateRowCalls[0]['handler_column'] ?? null);
+        $this->assertSame(1, $gw->beginCount);
+        $this->assertSame(1, $gw->commitCount);
+    }
+
+    public function testBeforeSaveExceptionRollsBackAndFailsSave(): void
+    {
+        FakeEventHandler::$throwOnBeforeSave = true;
+        $gw = $this->gateway($this->dispatcher(['beforeSave', 'afterSave']));
+        $gw->storedRows[5] = ['id' => 5];
+
+        $result = $gw->saveDocument(['id' => 5]);
+
+        $this->assertFalse($result->isSuccess());
+        $this->assertSame(1, $gw->rollbackCount);
+        $this->assertSame(0, $gw->commitCount);
+        $this->assertCount(0, $gw->updateRowCalls);
+        $this->assertCount(0, FakeEventHandler::$afterSaveCalls);
+    }
+
+    public function testAfterSaveDispatchesAfterCommitForEverySaveAndSwallowsException(): void
+    {
+        FakeEventHandler::$throwOnAfterSave = true;
+        TransitionDocument::$transition = null;
+        $gw = $this->gateway($this->dispatcher(['afterSave']));
+
+        // insert: originalData null
+        $result = $gw->saveDocument(['description' => 'new']);
+
+        $this->assertTrue($result->isSuccess());
+        $this->assertCount(1, FakeEventHandler::$afterSaveCalls);
+        $this->assertNull(FakeEventHandler::$afterSaveCalls[0]['original']);
+        $this->assertSame(1, FakeEventHandler::$afterSaveCalls[0]['id']);
+        $this->assertSame(1, $gw->commitCount);
+        // bez přechodu stavu se stateChanged nevolá, afterSave ano
+        $this->assertCount(0, FakeEventHandler::$stateCalls);
+    }
+
     // ── Gateway: beforeDelete ───────────────────────────────────────────────
 
     public function testDeleteDispatchesBeforeDeleteInsideTransactionBeforeChildren(): void
@@ -317,14 +403,14 @@ class DocumentEventsTest extends TestCase
             ['table' => 'docs_core_heads', 'class' => 'Foo\\Bar'],
         ]));
 
-        $this->assertSame(['stateChanged', 'beforeDelete'], $def->documentEventHandlers[0]['events']);
+        $this->assertSame(['beforeSave', 'afterSave', 'stateChanged', 'beforeDelete'], $def->documentEventHandlers[0]['events']);
     }
 
     public function testModuleDefinitionRejectsUnknownEvent(): void
     {
         $this->expectException(\InvalidArgumentException::class);
         ModuleDefinition::fromArray($this->moduleData([
-            ['table' => 'docs_core_heads', 'class' => 'Foo\\Bar', 'events' => ['afterSave']],
+            ['table' => 'docs_core_heads', 'class' => 'Foo\\Bar', 'events' => ['afterCommit']],
         ]));
     }
 

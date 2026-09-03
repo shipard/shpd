@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Shipard\Tests\Unit\Module\Economy\Taxes;
+namespace Shipard\Tests\Unit\Module\Economy\Vat;
 
 use PHPUnit\Framework\TestCase;
-use Shipard\Module\Economy\Taxes\ControlStatementCalculator;
-use Shipard\Module\Economy\Taxes\VatOutputsMapping;
+use Shipard\Module\Economy\Vat\ControlStatementCalculator;
+use Shipard\Module\Economy\Vat\VatOutputsMapping;
 
 /**
  * Rozpad sekcí KH na syntetických datech: hranice 10 000,00 vč. daně

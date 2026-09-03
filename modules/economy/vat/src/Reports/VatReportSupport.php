@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Shipard\Module\Economy\Taxes\Reports;
+namespace Shipard\Module\Economy\Vat\Reports;
 
 use Shipard\Core\Reports\ReportMessage;
 use Shipard\Core\Reports\ReportMessageSeverity;
 use Shipard\Core\Reports\ReportRequest;
 use Shipard\Core\Reports\ReportResult;
-use Shipard\Module\Economy\Taxes\VatDocumentSelection;
-use Shipard\Module\Economy\Taxes\VatOutputsMapping;
+use Shipard\Module\Economy\Vat\VatDocumentSelection;
+use Shipard\Module\Economy\Vat\VatOutputsMapping;
 use Shipard\Module\World\Vat\VatRateResolver;
 
 /**
@@ -22,7 +22,7 @@ final class VatReportSupport
 {
     public function mapping(ReportRequest $request): ?VatOutputsMapping
     {
-        $cfg = $request->config?->cfgItem('economy.taxes.reports.cz');
+        $cfg = $request->config?->cfgItem('economy.vat.reports.cz');
         return is_array($cfg) ? new VatOutputsMapping($cfg) : null;
     }
 
@@ -64,8 +64,8 @@ final class VatReportSupport
                 ReportMessageSeverity::Error,
                 'vatReports.missingConfig',
                 $cs
-                    ? 'Chybí kompilovaná konfigurace mapování DPH výstupů (economy.taxes.reports.cz) — spusťte ds-upgrade.'
-                    : 'Missing compiled VAT outputs mapping config (economy.taxes.reports.cz) — run ds-upgrade.',
+                    ? 'Chybí kompilovaná konfigurace mapování DPH výstupů (economy.vat.reports.cz) — spusťte ds-upgrade.'
+                    : 'Missing compiled VAT outputs mapping config (economy.vat.reports.cz) — run ds-upgrade.',
             )],
             columns: $columns,
             rows: [],

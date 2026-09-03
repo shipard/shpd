@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Shipard\Tests\Unit\Module\Economy\Taxes;
+namespace Shipard\Tests\Unit\Module\Economy\Vat;
 
 use PHPUnit\Framework\TestCase;
-use Shipard\Module\Economy\Taxes\VatOutputsMapping;
-use Shipard\Module\Economy\Taxes\VatReturnCalculator;
+use Shipard\Module\Economy\Vat\VatOutputsMapping;
+use Shipard\Module\Economy\Vat\VatReturnCalculator;
 
 /**
  * Dopočty DPHDP3 (46, 62–65) na syntetických datech.

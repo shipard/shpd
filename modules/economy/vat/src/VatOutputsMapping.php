@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Shipard\Module\Economy\Taxes;
+namespace Shipard\Module\Economy\Vat;
 
 /**
- * Resolver mapovací konfigurace `economy.taxes.reports.{country}`
+ * Resolver mapovací konfigurace `economy.vat.reports.{country}`
  * (config/vat-reports-cz.jsonc): pro kód DPH vrátí jeho zařazení do
  * výstupů — řádek DPHDP3, sekci DPHKH1, kód plnění DPHSHV. Neznámý kód
  * je tvrdá chyba (mapování musí pokrývat celý číselník — hlídá
@@ -27,7 +27,7 @@ final class VatOutputsMapping
         $record = $this->config['vatOutputs'][$vatCode] ?? null;
         if (!is_array($record)) {
             throw new \DomainException(
-                "Kód DPH '{$vatCode}' nemá záznam v mapování výstupů (economy.taxes.reports)",
+                "Kód DPH '{$vatCode}' nemá záznam v mapování výstupů (economy.vat.reports)",
             );
         }
         return $record;

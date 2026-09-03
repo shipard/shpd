@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Shipard\Tests\Unit\Module\Economy\Taxes;
+namespace Shipard\Tests\Unit\Module\Economy\Vat;
 
 use PHPUnit\Framework\TestCase;
-use Shipard\Module\Economy\Taxes\EcSalesListCalculator;
-use Shipard\Module\Economy\Taxes\VatOutputsMapping;
+use Shipard\Module\Economy\Vat\EcSalesListCalculator;
+use Shipard\Module\Economy\Vat\VatOutputsMapping;
 
 class EcSalesListCalculatorTest extends TestCase
 {

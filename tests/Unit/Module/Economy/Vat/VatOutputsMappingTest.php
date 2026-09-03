@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Shipard\Tests\Unit\Module\Economy\Taxes;
+namespace Shipard\Tests\Unit\Module\Economy\Vat;
 
 use PHPUnit\Framework\TestCase;
 use Shipard\Core\Utils\JsoncParser;
-use Shipard\Module\Economy\Taxes\VatOutputsMapping;
+use Shipard\Module\Economy\Vat\VatOutputsMapping;
 
 class VatOutputsMappingTest extends TestCase
 {
     private const CONFIG = __DIR__
-        . '/../../../../../modules/economy/taxes/config/vat-reports-cz.jsonc';
+        . '/../../../../../modules/economy/vat/config/vat-reports-cz.jsonc';
 
     private function mapping(): VatOutputsMapping
     {

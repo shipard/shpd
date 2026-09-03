@@ -439,7 +439,7 @@ Body, kde implementace zpřesnila návrh (tvar §3.1 platí beze změn):
 
 ## 14. Zdroj období `vatPeriod` + text/date sloupce (M1 — DPH, #55)
 
-Rozšíření jádra pro živé DPH výstupy modulu `economy.taxes`
+Rozšíření jádra pro živé DPH výstupy modulu `economy.vat`
 (`tasks/taxes-phase01.md`):
 
 - **`periodSource` v deklaraci reportu**: `'fiscal'` (default, beze změny)

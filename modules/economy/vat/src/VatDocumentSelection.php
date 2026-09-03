@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Shipard\Module\Economy\Taxes;
+namespace Shipard\Module\Economy\Vat;
 
 use Shipard\Core\Database\DataSourceConnection;
 

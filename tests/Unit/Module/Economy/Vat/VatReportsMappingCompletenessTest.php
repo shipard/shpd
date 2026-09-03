@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Shipard\Tests\Unit\Module\Economy\Taxes;
+namespace Shipard\Tests\Unit\Module\Economy\Vat;
 
 use PHPUnit\Framework\TestCase;
 use Shipard\Core\Utils\JsoncParser;
@@ -35,7 +35,7 @@ class VatReportsMappingCompletenessTest extends TestCase
     private function reportsConfig(): array
     {
         return JsoncParser::parseFile(
-            self::MODULES . '/economy/taxes/config/vat-reports-cz.jsonc',
+            self::MODULES . '/economy/vat/config/vat-reports-cz.jsonc',
         );
     }
 

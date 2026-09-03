@@ -120,9 +120,9 @@ class NavigationReportsTest extends TestCase
                 'report:economy.accounting.generalLedger',
                 'report:economy.accounting.profitLoss',
                 'report:economy.accounting.balanceSheet',
-                'report:economy.taxes.vatReturnLive',
-                'report:economy.taxes.vatControlStatementLive',
-                'report:economy.taxes.vatEcSalesLive',
+                'report:economy.vat.returnLive',
+                'report:economy.vat.controlStatementLive',
+                'report:economy.vat.recapitulativeStatementLive',
             ],
             array_column($group['children'], 'id'),
         );

@@ -1,4 +1,4 @@
-# Modul `economy.taxes` — daňové výstupy
+# Modul `economy.vat` — daňové výstupy
 
 Živé výstupy DPH počítané **on-demand** z potvrzených dokladů — Fáze 0+1
 milníku M1 (issue #55, zadání `tasks/taxes-phase01.md`, rozhodnutí D1–D6).
@@ -10,16 +10,16 @@ v `config/reports.jsonc` s `periodSource: "vatPeriod"`:
 
 | Report | Výstup |
 |---|---|
-| `economy.taxes.vatReturnLive` | Přiznání k DPH (DPHDP3) — řádky formuláře + dopočty 46/62–65, operativní stav (ř. 64/65) a křížová kontrola proti deníku v messages |
-| `economy.taxes.vatControlStatementLive` | Kontrolní hlášení (DPHKH1) — sekce A1/A2/A4/A5/B1/B2/B3, detailní řádky s ev. číslem / DIČ / DPPD, agregáty A5/B3 |
-| `economy.taxes.vatEcSalesLive` | Souhrnné hlášení (DPHSHV) — agregace per (kód plnění, DIČ odběratele) |
+| `economy.vat.returnLive` | Přiznání k DPH (DPHDP3) — řádky formuláře + dopočty 46/62–65, operativní stav (ř. 64/65) a křížová kontrola proti deníku v messages |
+| `economy.vat.controlStatementLive` | Kontrolní hlášení (DPHKH1) — sekce A1/A2/A4/A5/B1/B2/B3, detailní řádky s ev. číslem / DIČ / DPPD, agregáty A5/B3 |
+| `economy.vat.recapitulativeStatementLive` | Souhrnné hlášení (DPHSHV) — agregace per (kód plnění, DIČ odběratele) |
 
 Nic se nepersistuje (D1) — persistence přijde až s Podáním (Fáze 2,
 doména `filing`).
 
 ## Mapovací konfigurace
 
-`config/vat-reports-cz.jsonc` (cfgItem `economy.taxes.reports.cz`) mapuje
+`config/vat-reports-cz.jsonc` (cfgItem `economy.vat.reports.cz`) mapuje
 **každý** kód `world.vat.cz` na výstupy: `dp3 {row, col?}`, `kh {group,
 kodPredPl?}`, `sh {kod}` — i vyloučení je explicitní `null`. Princip
 shodný s rozhodnutím #8 účtování: `world.vat` zůstává legislativní vrstva

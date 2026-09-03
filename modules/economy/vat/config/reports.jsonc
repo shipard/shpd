@@ -1,37 +1,37 @@
-// Deklarace živých DPH reportů modulu economy.taxes (docs/reports.md,
+// Deklarace živých DPH reportů modulu economy.vat (docs/reports.md,
 // tasks/taxes-phase01.md). Zdroj období = registrace + interval období DPH
 // (periodSource vatPeriod), žádné per-report parametry.
 [
     {
-        "id": "economy.taxes.vatReturnLive",
+        "id": "economy.vat.returnLive",
         "navSection": "accounting",
         "navOrder": 70,
         "name": "VAT return (live)",
         "name:cs": "Přiznání k DPH — živě",
         "name:en": "VAT return (live)",
-        "builder": "Shipard\\Module\\Economy\\Taxes\\Reports\\VatReturnLiveBuilder",
+        "builder": "Shipard\\Module\\Economy\\Vat\\Reports\\VatReturnLiveBuilder",
         "periodSource": "vatPeriod",
         "params": []
     },
     {
-        "id": "economy.taxes.vatControlStatementLive",
+        "id": "economy.vat.controlStatementLive",
         "navSection": "accounting",
         "navOrder": 71,
         "name": "VAT control statement (live)",
         "name:cs": "Kontrolní hlášení — živě",
         "name:en": "VAT control statement (live)",
-        "builder": "Shipard\\Module\\Economy\\Taxes\\Reports\\VatControlStatementLiveBuilder",
+        "builder": "Shipard\\Module\\Economy\\Vat\\Reports\\VatControlStatementLiveBuilder",
         "periodSource": "vatPeriod",
         "params": []
     },
     {
-        "id": "economy.taxes.vatEcSalesLive",
+        "id": "economy.vat.recapitulativeStatementLive",
         "navSection": "accounting",
         "navOrder": 72,
         "name": "EC sales list (live)",
         "name:cs": "Souhrnné hlášení — živě",
         "name:en": "EC sales list (live)",
-        "builder": "Shipard\\Module\\Economy\\Taxes\\Reports\\VatEcSalesLiveBuilder",
+        "builder": "Shipard\\Module\\Economy\\Vat\\Reports\\VatEcSalesLiveBuilder",
         "periodSource": "vatPeriod",
         "params": []
     }

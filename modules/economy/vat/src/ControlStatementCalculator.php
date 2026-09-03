@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Shipard\Module\Economy\Taxes;
+namespace Shipard\Module\Economy\Vat;
 
 /**
  * Rozpad dokladů do sekcí kontrolního hlášení DPHKH1 (tasks/taxes-phase01.md,

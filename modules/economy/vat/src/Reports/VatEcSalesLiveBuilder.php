@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Shipard\Module\Economy\Taxes\Reports;
+namespace Shipard\Module\Economy\Vat\Reports;
 
 use Shipard\Core\Reports\ReportBuilder;
 use Shipard\Core\Reports\ReportColumn;
@@ -12,7 +12,7 @@ use Shipard\Core\Reports\ReportRequest;
 use Shipard\Core\Reports\ReportResult;
 use Shipard\Core\Reports\ReportRow;
 use Shipard\Core\Reports\ReportRowKind;
-use Shipard\Module\Economy\Taxes\EcSalesListCalculator;
+use Shipard\Module\Economy\Vat\EcSalesListCalculator;
 
 /**
  * Živé souhrnné hlášení (DPHSHV) — agregace per (kód plnění, DIČ

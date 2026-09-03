@@ -21,11 +21,11 @@ class VatPeriodValidatorTest extends TestCase
     public function testDefinitionVatPeriodWithoutGranularities(): void
     {
         $definition = ReportDefinition::fromArray([
-            'id'           => 'economy.taxes.vatReturnLive',
+            'id'           => 'economy.vat.returnLive',
             'name'         => 'Přiznání k DPH — živě',
             'builder'      => 'X',
             'periodSource' => 'vatPeriod',
-        ], 'economy.taxes');
+        ], 'economy.vat');
 
         $this->assertSame('vatPeriod', $definition->periodSource);
         $this->assertSame([], $definition->periodGranularities);

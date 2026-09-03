@@ -1,8 +1,8 @@
 {
-    "id": "economy.taxes",
-    "name": "Taxes",
-    "name:cs": "Daně",
-    "name:en": "Taxes",
+    "id": "economy.vat",
+    "name": "VAT",
+    "name:cs": "DPH",
+    "name:en": "VAT",
     "description": "VAT outputs: live VAT return, control statement and EC sales list computed on demand from confirmed documents (issue #55, M1)",
     "description:cs": "Výstupy DPH: živé přiznání, kontrolní hlášení a souhrnné hlášení počítané on-demand z potvrzených dokladů (issue #55, M1)",
     "description:en": "VAT outputs: live VAT return, control statement and EC sales list computed on demand from confirmed documents (issue #55, M1)",
@@ -13,7 +13,7 @@
     "dependencies": ["world.vat", "economy.codebooks", "docs.core", "economy.accounting"],
 
     "config": [
-        { "id": "economy.taxes.reports.cz", "file": "config/vat-reports-cz.jsonc" }
+        { "id": "economy.vat.reports.cz", "file": "config/vat-reports-cz.jsonc" }
     ],
 
     "reports": [

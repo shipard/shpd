@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Shipard\Module\Economy\Taxes;
+namespace Shipard\Module\Economy\Vat;
 
 /**
  * Živé přiznání k DPH (DPHDP3): sumace base/tax per (řádek, sloupec)

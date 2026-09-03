@@ -2,12 +2,24 @@
     // core.system.formDefaults
     //
     // Defaults consumed by AutoFormBuilder when a table has no explicit
-    // forms/{table}.jsonc. Currently just the label for the synthetic
-    // "general" tab that holds columns without an explicit group.
+    // forms/{table}.jsonc (label for the synthetic "general" tab that holds
+    // columns without an explicit group) and by the default subtable
+    // renderer in TableForm::renderSubtable() (boolean cell labels).
 
     "generalTabLabel": {
         "name": "General",
         "name:cs": "Obecné",
         "name:en": "General"
+    },
+
+    "booleanYes": {
+        "name": "Yes",
+        "name:cs": "Ano",
+        "name:en": "Yes"
+    },
+    "booleanNo": {
+        "name": "No",
+        "name:cs": "Ne",
+        "name:en": "No"
     }
 }

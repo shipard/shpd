@@ -9,12 +9,14 @@ use Shipard\Api\Request;
 use Shipard\Api\Response;
 use Shipard\Api\TableAccessGuard;
 use Shipard\Core\Config\ConfigRuntime;
+use Shipard\Core\Database\ColumnDefinition;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Database\TableDefinition;
 use Shipard\Core\Form\AutoFormBuilder;
 use Shipard\Core\Form\FormDefinition;
 use Shipard\Core\Form\FormElement;
 use Shipard\Core\Form\FormRegistry;
+use Shipard\Core\Form\FormTab;
 use Shipard\Core\Form\JsoncFormLoader;
 use Shipard\Core\Form\Lookup\LookupRegistry;
 use Shipard\Core\Form\RecalculateResult;
@@ -305,6 +307,159 @@ class FormController
      *
      * @return list<array{field: string, code: string, message: string}>|null
      */
+    /**
+     * GET /_ui/form/{table}/subtable/{tabId}/{parentId}
+     *
+     * Sloupce + vyrenderované řádky sub-tabulky (tab typu `subtable`) pro
+     * existující rodičovský záznam — kontrakt v docs/edit-forms.md kap. 15.
+     * Rodič se načítá stejně jako v meta({id}): renderer na rodičovském
+     * formu potřebuje jeho data (doklad bez DPH nemá DPH sloupce). Rodič
+     * bez PHP form třídy (JSONC / auto) nebo neznámý tab → 404
+     * SUBTABLE_NOT_FOUND. Přístup = čtení: guard rodiče i dětské tabulky,
+     * sensitive sloupce se z řádků odstraní před renderem.
+     *
+     * @param array<string, TableDefinition> $tables
+     */
+    public function subtable(
+        string $table,
+        ?string $tabId,
+        ?int $parentId,
+        array $tables,
+        DataSourceConnection $db,
+        FormRegistry $formRegistry,
+        ?ConfigRuntime $config,
+        ?AuthContext $auth = null,
+    ): Response {
+        $def = $tables[$table] ?? null;
+        if ($def === null) {
+            return Response::error('TABLE_NOT_FOUND', "Table '{$table}' not found", 404);
+        }
+        $authCtx = $auth ?? new AuthContext(false);
+        $guardErr = TableAccessGuard::guardTable($table, $authCtx, $def);
+        if ($guardErr !== null) {
+            return $guardErr;
+        }
+        if ($tabId === null || $tabId === '' || $parentId === null || $parentId <= 0) {
+            return Response::error('NOT_FOUND', 'Not found', 404);
+        }
+
+        $data = $db->fetchRow("SELECT * FROM `{$table}` WHERE `id` = %i", $parentId);
+        if ($data === null) {
+            return Response::error('RECORD_NOT_FOUND', "Record {$parentId} not found", 404);
+        }
+        $data = TableAccessGuard::stripSensitive($data, $def);
+        $data = $this->decodeJsonColumns($data, $def);
+
+        $form = $formRegistry->createForm($table, $data, $db, $config);
+        if ($form === null) {
+            return Response::error('SUBTABLE_NOT_FOUND', "Table '{$table}' has no form class", 404);
+        }
+        $form->setTableDef($def);
+        $form->setTables($tables);
+
+        $tab = $this->findSubtableTab($form->buildFormDefinition($data, false), $tabId);
+        if ($tab === null) {
+            return Response::error('SUBTABLE_NOT_FOUND', "Subtable '{$tabId}' not found on '{$table}'", 404);
+        }
+
+        $childTable = (string) $tab->subtable['table'];
+        $childDef = $tables[$childTable] ?? null;
+        if ($childDef === null) {
+            return Response::error('TABLE_NOT_FOUND', "Table '{$childTable}' not found", 404);
+        }
+        $guardErr = TableAccessGuard::guardTable($childTable, $authCtx, $childDef);
+        if ($guardErr !== null) {
+            return $guardErr;
+        }
+
+        $childCols = [];
+        foreach ($childDef->columns as $col) {
+            $childCols[$col->id] = $col;
+        }
+        $fk = (string) $tab->subtable['foreignKey'];
+        if (!isset($childCols[$fk])) {
+            return Response::error(
+                'INTERNAL_ERROR',
+                "Subtable '{$tabId}': foreign key '{$fk}' is not a column of '{$childTable}'",
+                500,
+            );
+        }
+
+        $orderBy = $this->subtableOrderBy($tab->subtable['sort'] ?? null, $childCols, $tabId);
+        if ($orderBy instanceof Response) {
+            return $orderBy;
+        }
+
+        $rows = $db->fetchAll(
+            "SELECT * FROM `{$childTable}` WHERE `{$fk}` = %i ORDER BY {$orderBy}",
+            $parentId,
+        );
+        $rows = array_map(
+            static fn(array $row): array => TableAccessGuard::stripSensitive($row, $childDef),
+            $rows,
+        );
+
+        $rendered = $form->renderSubtable($tab, $rows, $data);
+
+        return Response::success([
+            'columns'      => array_values($rendered['columns'] ?? []),
+            'rows'         => array_values($rendered['rows'] ?? []),
+            'order_column' => $rendered['order_column'] ?? null,
+        ]);
+    }
+
+    private function findSubtableTab(FormDefinition $formDef, string $tabId): ?FormTab
+    {
+        foreach ($formDef->tabs as $tab) {
+            if ($tab->type === 'subtable' && $tab->id === $tabId && $tab->subtable !== null) {
+                return $tab;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * ORDER BY klauzule pro řádky sub-tabulky ze `sort` tabu
+     * (`col:dir[,col:dir]`, stejná syntaxe jako `?sort=` CRUD endpointu).
+     * Default `order_pos:asc`, má-li dětská tabulka ten sloupec, jinak
+     * `id:asc`; `id ASC` je vždy tiebreaker. `sort` je serverová
+     * konfigurace formu, ne vstup uživatele — neznámý / sensitive sloupec
+     * nebo špatný směr je proto 500, ne 400.
+     *
+     * @param array<string, ColumnDefinition> $cols
+     */
+    private function subtableOrderBy(?string $sort, array $cols, string $tabId): string|Response
+    {
+        if ($sort === null || trim($sort) === '') {
+            $sort = isset($cols['order_pos']) ? 'order_pos:asc' : 'id:asc';
+        }
+
+        $parts = [];
+        $seen = [];
+        foreach (array_map('trim', explode(',', $sort)) as $part) {
+            if ($part === '') {
+                continue;
+            }
+            $pieces    = explode(':', $part, 2);
+            $column    = $pieces[0];
+            $direction = strtoupper($pieces[1] ?? 'asc');
+            $colDef    = $cols[$column] ?? null;
+            if ($colDef === null || $colDef->sensitive || !in_array($direction, ['ASC', 'DESC'], true)) {
+                return Response::error(
+                    'INTERNAL_ERROR',
+                    "Subtable '{$tabId}': invalid sort '{$part}'",
+                    500,
+                );
+            }
+            $parts[] = "`{$column}` {$direction}";
+            $seen[$column] = true;
+        }
+        if (!isset($seen['id'])) {
+            $parts[] = '`id` ASC';
+        }
+        return implode(', ', $parts);
+    }
+
     private function validationWarnings(DocumentResult $result): ?array
     {
         $warnings = $result->getValidation()?->getWarnings() ?? [];

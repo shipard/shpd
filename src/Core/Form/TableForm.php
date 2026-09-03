@@ -5,14 +5,28 @@ declare(strict_types=1);
 namespace Shipard\Core\Form;
 
 use Shipard\Core\Config\ConfigRuntime;
+use Shipard\Core\Database\ColumnDefinition;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Database\TableDefinition;
+use Shipard\Core\Document\DocStateConfig;
 
 abstract class TableForm
 {
+    /** Max. počet sloupců default rendereru sub-tabulky (renderSubtable). */
+    public const SUBTABLE_DEFAULT_MAX_COLUMNS = 6;
+
+    /** Technické sloupce, které default renderer sub-tabulky nikdy nezobrazí. */
+    private const SUBTABLE_SKIPPED_COLUMNS = ['created', 'modified', 'order_pos'];
+
+    private const SUBTABLE_NUMERIC_TYPES = ['tinyint', 'smallint', 'int', 'bigint', 'numeric', 'float'];
+    private const SUBTABLE_TEXT_TYPES = ['varchar', 'text', 'mediumtext', 'longtext'];
+
     protected ?ConfigRuntime $config = null;
     protected ?DataSourceConnection $db = null;
     protected ?TableDefinition $tableDef = null;
+
+    /** @var array<string, TableDefinition> Všechny tabulky DS — default renderer sub-tabulky z nich bere definici dětské tabulky. */
+    protected array $tables = [];
 
     public function __construct(
         protected string $table,
@@ -31,6 +45,12 @@ abstract class TableForm
     public function setTableDef(TableDefinition $tableDef): void
     {
         $this->tableDef = $tableDef;
+    }
+
+    /** @param array<string, TableDefinition> $tables Indexované názvem tabulky (výstup TableLoader::load). */
+    public function setTables(array $tables): void
+    {
+        $this->tables = $tables;
     }
 
     abstract public function buildFormDefinition(array $data, bool $isNew): FormDefinition;
@@ -127,6 +147,212 @@ abstract class TableForm
             ],
             icon: $icon,
         );
+    }
+
+    // ── Sub-tabulky: sloupce a vyrenderované řádky ─────────────────────────
+
+    /**
+     * Sloupce a vyrenderované řádky sub-tabulky pro tab typu `subtable`
+     * (endpoint `GET /_ui/form/{table}/subtable/{tabId}/{parentId}`,
+     * docs/edit-forms.md kap. 15). Tvar sloupců je shodný
+     * s `TableViewer::getGridColumns()` (`id`, `label`, `align`, `grow`,
+     * `width`), buňky jsou hotové texty — klient nezná FK, enumy ani formát
+     * částek. Řádek: `{id, cells: {colId: string|{text, class?}}, stateStyle?}`;
+     * chybějící klíč v `cells` = prázdná buňka.
+     *
+     * Default: prvních SUBTABLE_DEFAULT_MAX_COLUMNS sloupců dětské tabulky
+     * (bez PK, FK na rodiče, `system`, `sensitive`, `json` a technických
+     * `created`/`modified`/`order_pos`), label `formLabel ?? name`
+     * (TableLoader je už lokalizoval), číselné typy vpravo, první textový
+     * sloupec `grow`. Buňky: cfgItem → `name` položky, boolean → Ano/Ne
+     * z cfgItem `core.system.formDefaults`, numeric dle `scale`, datum
+     * `d.m.Y`; `reference` zůstává surové id (default má být levný —
+     * pojmenované FK řeší override). U dětské tabulky s docStates nese
+     * řádek `stateStyle` stavu (archiv tlumený, koš škrtnutý — globální
+     * `.docState_*` třídy).
+     *
+     * Overridy (`DocsHeadsFormBase`, `PersonsForm`) rozhodují podle
+     * `$tab->id` a pro ostatní taby volají `parent::renderSubtable()`.
+     * Sloupce smějí záviset na `$parentData` (doklad bez DPH nemá DPH
+     * sloupce). `order_column` je zatím vždy `null` (fáze 3, issue #53).
+     *
+     * @param list<array<string, mixed>> $rows Řádky dětské tabulky bez sensitive
+     *     sloupců, seřazené serverem podle `sort` tabu.
+     * @param array<string, mixed> $parentData Data rodičovského záznamu.
+     * @return array{columns: list<array<string, mixed>>, rows: list<array<string, mixed>>, order_column: ?string}
+     */
+    public function renderSubtable(FormTab $tab, array $rows, array $parentData): array
+    {
+        $childDef = $this->tables[(string) ($tab->subtable['table'] ?? '')] ?? null;
+        if ($childDef === null) {
+            return ['columns' => [], 'rows' => [], 'order_column' => null];
+        }
+
+        $colDefs = $this->defaultSubtableColumnDefs($childDef, (string) ($tab->subtable['foreignKey'] ?? ''));
+        $columns = array_map(fn(ColumnDefinition $c) => $this->subtableColumnSpec($c), $colDefs);
+        $growAssigned = false;
+        foreach ($columns as $i => $spec) {
+            if (!$growAssigned && in_array($colDefs[$i]->type, self::SUBTABLE_TEXT_TYPES, true) && $colDefs[$i]->cfgItem === null) {
+                $columns[$i]['grow'] = true;
+                $growAssigned = true;
+            }
+        }
+
+        $out = [];
+        foreach ($rows as $row) {
+            $cells = [];
+            foreach ($colDefs as $col) {
+                $text = $this->defaultSubtableCell($col, $row[$col->id] ?? null);
+                if ($text !== null) {
+                    $cells[$col->id] = $text;
+                }
+            }
+            $entry = ['id' => (int) ($row['id'] ?? 0), 'cells' => $cells];
+            $style = $this->subtableRowStateStyle($childDef, $row);
+            if ($style !== null) {
+                $entry['stateStyle'] = $style;
+            }
+            $out[] = $entry;
+        }
+
+        return ['columns' => array_values($columns), 'rows' => $out, 'order_column' => null];
+    }
+
+    /**
+     * Sloupce dětské tabulky pro default renderer — viz renderSubtable().
+     *
+     * @return list<ColumnDefinition>
+     */
+    protected function defaultSubtableColumnDefs(TableDefinition $childDef, string $foreignKey): array
+    {
+        $ds = $childDef->docStates;
+        $skip = self::SUBTABLE_SKIPPED_COLUMNS;
+        if ($ds !== null) {
+            $skip[] = $ds->stateColumn;
+            $skip[] = $ds->mainColumn;
+        }
+
+        $out = [];
+        foreach ($childDef->columns as $col) {
+            if ($col->primaryKey || $col->autoIncrement || $col->system || $col->sensitive) {
+                continue;
+            }
+            if ($col->id === $foreignKey || in_array($col->id, $skip, true) || $col->type === 'json') {
+                continue;
+            }
+            $out[] = $col;
+            if (count($out) >= self::SUBTABLE_DEFAULT_MAX_COLUMNS) {
+                break;
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Specifikace sloupce sub-tabulky z definice sloupce: `id`, `label`,
+     * `align: 'right'` pro čísla (ne enumy / FK). Sdílené overridy pro
+     * sloupce, které berou 1:1 z tabulky.
+     *
+     * @return array<string, mixed>
+     */
+    protected function subtableColumnSpec(ColumnDefinition $col): array
+    {
+        $spec = ['id' => $col->id, 'label' => $col->formLabel ?? $col->name];
+        if (in_array($col->type, self::SUBTABLE_NUMERIC_TYPES, true) && $col->cfgItem === null && $col->reference === null) {
+            $spec['align'] = 'right';
+        }
+        return $spec;
+    }
+
+    /**
+     * Text buňky podle typu sloupce — viz renderSubtable(). `null` = prázdná buňka.
+     */
+    protected function defaultSubtableCell(ColumnDefinition $col, mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+        if ($col->cfgItem !== null) {
+            return $this->cfgItemLabel($col->cfgItem, $value);
+        }
+        return match ($col->type) {
+            'boolean'  => SubtableCellFormatter::boolean($value, ...$this->booleanLabels()),
+            'numeric'  => SubtableCellFormatter::number($value, (int) ($col->scale ?? 2)),
+            'float'    => SubtableCellFormatter::trimmedNumber($value, 4),
+            'date'     => SubtableCellFormatter::date($value),
+            'datetime' => SubtableCellFormatter::dateTime($value),
+            'json'     => null,
+            default    => is_scalar($value) ? (string) $value : null,
+        };
+    }
+
+    /**
+     * Lokalizovaný label sloupce dětské tabulky (`formLabel ?? name`
+     * z TableLoader) pro hlavičku sub-tabulky v overridech; bez definice
+     * tabulky (testy, chybějící registr) `$fallback`.
+     */
+    protected function subtableLabel(string $table, string $column, string $fallback): string
+    {
+        $def = $this->tables[$table] ?? null;
+        if ($def !== null) {
+            foreach ($def->columns as $col) {
+                if ($col->id === $column) {
+                    return $col->formLabel ?? $col->name;
+                }
+            }
+        }
+        return $fallback;
+    }
+
+    /**
+     * Lokalizovaný `name` položky cfgItem pro hodnotu enumu; neznámá
+     * položka / chybějící config → surová hodnota.
+     */
+    protected function cfgItemLabel(string $cfgItemId, mixed $value): string
+    {
+        $cfg = $this->config?->cfgItem($cfgItemId);
+        $entry = is_array($cfg) && is_scalar($value) ? ($cfg[(string) $value] ?? null) : null;
+        if (is_array($entry) && isset($entry['name'])) {
+            return (string) $entry['name'];
+        }
+        return is_scalar($value) ? (string) $value : '';
+    }
+
+    /**
+     * Labely boolean buněk („Ano" / „Ne") z cfgItem `core.system.formDefaults`
+     * — stejný zdroj lokalizace jako label tabu General.
+     *
+     * @return array{string, string} [yes, no]
+     */
+    protected function booleanLabels(): array
+    {
+        $defaults = $this->config?->cfgItem('core.system.formDefaults');
+        return [
+            (string) ($defaults['booleanYes']['name'] ?? 'Yes'),
+            (string) ($defaults['booleanNo']['name'] ?? 'No'),
+        ];
+    }
+
+    /**
+     * `stateStyle` stavu řádku (`archive`, `trash`, `done`…) pro tabulky
+     * s docStates; `null` bez docStates / configu / neznámý stav.
+     *
+     * @param array<string, mixed> $row
+     */
+    protected function subtableRowStateStyle(TableDefinition $childDef, array $row): ?string
+    {
+        $ds = $childDef->docStates;
+        if ($ds === null || $this->config === null) {
+            return null;
+        }
+        $state = $row[$ds->stateColumn] ?? null;
+        if ($state === null || $state === '' || !is_numeric($state)) {
+            return null;
+        }
+        $cfgData = $this->config->cfgItem($ds->cfgItem);
+        $style = DocStateConfig::fromCfgItem(is_array($cfgData) ? $cfgData : null)
+            ->getState((int) $state)['stateStyle'] ?? null;
+        return is_string($style) && $style !== '' ? $style : null;
     }
 
     /**

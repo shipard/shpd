@@ -347,6 +347,42 @@ class RouterTest extends TestCase
 		$this->assertRoute($result, 'form', 'meta', 'base_persons_persons', 42);
 	}
 
+	public function testFormSubtable(): void
+	{
+		$result = $this->router->resolve('/api/v1/_ui/form/docs_core_heads/subtable/rows/42', 'GET');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'form', 'subtable', 'docs_core_heads', 42);
+		$this->assertSame('rows', $result->key);
+	}
+
+	public function testFormSubtableWrongMethod(): void
+	{
+		$result = $this->router->resolve('/api/v1/_ui/form/docs_core_heads/subtable/rows/42', 'POST');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
+	}
+
+	public function testFormSubtableRejectsInvalidParentId(): void
+	{
+		$result = $this->router->resolve('/api/v1/_ui/form/docs_core_heads/subtable/rows/0', 'GET');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('NOT_FOUND', $result->getPayload()['error']['code']);
+	}
+
+	public function testFormSubtableRejectsInvalidTabId(): void
+	{
+		$result = $this->router->resolve('/api/v1/_ui/form/docs_core_heads/subtable/ro-ws/1', 'GET');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('NOT_FOUND', $result->getPayload()['error']['code']);
+	}
+
+	public function testFormSubtableWithoutParentIdIsNotFound(): void
+	{
+		$result = $this->router->resolve('/api/v1/_ui/form/docs_core_heads/subtable/rows', 'GET');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('NOT_FOUND', $result->getPayload()['error']['code']);
+	}
+
 	public function testFormSaveCreate(): void
 	{
 		$result = $this->router->resolve('/api/v1/_ui/form/core_system_users/save', 'POST');

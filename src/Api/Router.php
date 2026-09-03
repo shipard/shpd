@@ -1167,6 +1167,24 @@ class Router
 			return new Route('form', 'recalculate', $table);
 		}
 
+		// GET /_ui/form/{table}/subtable/{tabId}/{parentId}
+		// Sloupce + vyrenderované řádky sub-tabulky rodičovského formu
+		// (docs/edit-forms.md kap. 15). tabId = id tabu typu `subtable`.
+		if ($count === 4 && $action === 'subtable') {
+			if ($method !== 'GET') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			$tabId = $parts[2];
+			$rawId = $parts[3];
+			if (preg_match('/^[A-Za-z0-9_]+$/', $tabId) !== 1) {
+				return Response::error('NOT_FOUND', 'Not found', 404);
+			}
+			if (!ctype_digit($rawId) || (int) $rawId <= 0) {
+				return Response::error('NOT_FOUND', 'Not found', 404);
+			}
+			return new Route('form', 'subtable', $table, (int) $rawId, key: $tabId);
+		}
+
 		return Response::error('NOT_FOUND', 'Not found', 404);
 	}
 

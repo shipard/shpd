@@ -19,6 +19,10 @@
    *
    * Klientský filtr nad tabulkou od 11 řádků (bez diakritiky, přes texty
    * všech buněk); serverové hledání zatím ne (tasks/TODO.md).
+   *
+   * Dialog řádku (fáze 2): nový záznam má Přidat (uloží a zavře) a Přidat
+   * a pokračovat (uloží, reset na další nový); existující záznam listuje
+   * šipkami ‹ › přes `navigation` (i v read-only režimu).
    */
   import { get, del } from '../../api/client.js';
   import Button from '../ui/Button.svelte';
@@ -163,18 +167,48 @@
   // onSaved se volá po každém uložení včetně přechodu stavu s close_form: 0
   // (např. "Opravit" 40 → 80). Modal proto NEzavíráme bezpodmínečně — to by
   // shazovalo formulář i při Opravit, což je špatně (viz hlavní modaly, kde
-  // onSaved jen refetchuje). Zavíráme jen u formulářů BEZ doc states — ty mají
+  // onSaved jen refetchuje). Zavíráme u formulářů BEZ doc states — ty mají
   // jedinou akci Uložit (žádné přechody), takže po Uložit nemá smysl zůstávat
-  // otevřený (jinak by šel zavřít jen křížkem). Formuláře s doc states
-  // (Kontakty, Adresy …) zůstanou otevřené — zavření řeší close_form / onClose.
+  // otevřený (jinak by šel zavřít jen křížkem) — a u NOVÉHO záznamu vždy
+  // (tlačítko Přidat = uložit a zavřít; Přidat a pokračovat jde jinou cestou,
+  // viz handleSaveAndContinue). Existující záznam s doc states (Kontakty,
+  // Adresy …) zůstane otevřený — zavření řeší close_form / onClose.
   async function handleDialogSaved(_record, info) {
-    if (!info?.hasDocStates) {
+    if (!info?.hasDocStates || info?.wasNew) {
       dialogOpen = false;
       editRecordId = null;
     }
     await fetchRows();
     onChanged?.();
   }
+
+  // Přidat a pokračovat: řádek je uložený, dialog zůstává otevřený na dalším
+  // novém záznamu (reset řeší FormEditor). Jen refetch + rodič si přepočte
+  // odvozené hodnoty.
+  async function handleSaveAndContinue() {
+    await fetchRows();
+    onChanged?.();
+  }
+
+  // Navigace Předchozí / Další v dialogu řádku (fáze 2): index
+  // v NEFILTROVANÉM seřazeném seznamu `rows` — filtr je jen pro tabulku,
+  // listování jde přes všechny řádky rodiče. -1 = nový záznam → dialog šipky
+  // nerenderuje. Změna editRecordId → FormDialog dostane nový recordId →
+  // FormEditor formulář přenačte ($effect na recordId).
+  const navigation = $derived.by(() => {
+    const index = editRecordId == null ? -1 : rows.findIndex(r => r.id === editRecordId);
+    const count = rows.length;
+    return {
+      index,
+      count,
+      onPrev: () => {
+        if (index > 0) editRecordId = rows[index - 1].id;
+      },
+      onNext: () => {
+        if (index >= 0 && index < count - 1) editRecordId = rows[index + 1].id;
+      },
+    };
+  });
 
   // Načtení při změně rodiče / tabu. Závislosti jen na primitivech — po
   // tichém reloadu rodiče přijde nový objekt `element`, ale řádky jsme si
@@ -313,6 +347,8 @@
   open={dialogOpen}
   onClose={handleDialogClose}
   onSaved={handleDialogSaved}
+  onSaveAndContinue={handleSaveAndContinue}
+  {navigation}
   defaultData={{ [element.foreign_key]: parentId }}
   {readOnly}
   notice={readOnly ? t('subtable.readOnlyNotice') : null}

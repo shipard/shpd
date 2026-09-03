@@ -16,10 +16,18 @@
      *  přechody sub-záznamu. Nezaměňovat s docStates.read_only, které
      *  přechody (Opravit…) naopak nechává. */
     readOnly = false,
+    /** Záznam ještě nemá id (nový). */
+    isNew = false,
+    /** Nový sub-záznam: Uložit se jmenuje Přidat a vedle něj je Přidat
+     *  a pokračovat (tento callback). Bez něj (top-level dialogy) zůstává
+     *  Uložit jako dnes. */
+    onSaveAndContinue = undefined,
   } = $props();
 
   const showSave = $derived(!readOnly && (!docStates || !docStates.read_only));
   const transitions = $derived(readOnly ? [] : (docStates?.transitions ?? []));
+  const showContinue = $derived(showSave && isNew && typeof onSaveAndContinue === 'function');
+  const saveLabel = $derived(showContinue ? t('form.add') : t('common.save'));
 
   const DESTRUCTIVE_STYLES = ['archive', 'trash', 'cancelled'];
   function isDestructive(stateStyle) {
@@ -53,11 +61,34 @@
       ? transitions.filter(tr => !inKebab(tr))
       : transitions
   );
-  const kebabTransitions = $derived(
-    layoutStore.isMobile
-      ? transitions.filter(tr => inKebab(tr))
-      : []
-  );
+  // Přidat a pokračovat vedle Přidat na desktopu; na mobilu do kebabu
+  // (vedlejší akce — hlavní je Přidat).
+  const showContinueInline = $derived(showContinue && !layoutStore.isMobile);
+
+  // Položky kebabu (jen mobil): Přidat a pokračovat + přechody dle inKebab.
+  // Generické {key, label, danger, run}, aby kebab nebyl vázaný na přechody.
+  const kebabItems = $derived.by(() => {
+    if (!layoutStore.isMobile) return [];
+    const items = [];
+    if (showContinue) {
+      items.push({
+        key: 'continue',
+        label: t('form.saveAndContinue'),
+        danger: false,
+        run: () => onSaveAndContinue?.(),
+      });
+    }
+    for (const tr of transitions) {
+      if (!inKebab(tr)) continue;
+      items.push({
+        key: `tr:${tr.state}`,
+        label: tr.actionName,
+        danger: variantForStyle(tr.stateStyle) === 'danger',
+        run: () => onTransition?.(tr.state, tr.close_form ?? false),
+      });
+    }
+    return items;
+  });
 
   let kebabOpen = $state(false);
   let kebabAnchor = $state(null);
@@ -68,23 +99,34 @@
   }
   function closeKebab() { kebabOpen = false; }
 
-  function runTransition(tr) {
+  function runKebabItem(item) {
     closeKebab();
-    onTransition?.(tr.state, tr.close_form ?? false);
+    item.run();
   }
 </script>
 
 <!-- Bez jediné akce se lišta nerenderuje (read-only prohlížení) — prázdný
      pruh s horní linkou by jen ubíral místo. -->
-{#if showSave || visibleTransitions.length > 0 || kebabTransitions.length > 0}
+{#if showSave || visibleTransitions.length > 0 || kebabItems.length > 0}
 <div class="shpd-form-state-bar">
   {#if showSave}
     <Button
-      label={t('common.save')}
+      label={saveLabel}
       variant="primary"
       loading={saving}
       disabled={saving}
       onclick={onSave}
+      testid="form-save"
+    />
+  {/if}
+
+  {#if showContinueInline}
+    <Button
+      label={t('form.saveAndContinue')}
+      variant="secondary"
+      disabled={saving}
+      onclick={() => onSaveAndContinue?.()}
+      testid="form-save-continue"
     />
   {/if}
 
@@ -97,7 +139,7 @@
     />
   {/each}
 
-  {#if kebabTransitions.length > 0}
+  {#if kebabItems.length > 0}
     <button
       type="button"
       class="shpd-form-state-bar__kebab-btn"
@@ -114,14 +156,14 @@
 {#if kebabOpen}
   <Popover open={true} anchor={kebabAnchor} placement="top" onClose={closeKebab}>
     <div class="shpd-form-state-bar__kebab-menu">
-      {#each kebabTransitions as tr (tr.state)}
+      {#each kebabItems as item (item.key)}
         <button
           type="button"
           class="shpd-form-state-bar__kebab-item"
-          class:shpd-form-state-bar__kebab-item--danger={variantForStyle(tr.stateStyle) === 'danger'}
-          onclick={() => runTransition(tr)}
+          class:shpd-form-state-bar__kebab-item--danger={item.danger}
+          onclick={() => runKebabItem(item)}
         >
-          {tr.actionName}
+          {item.label}
         </button>
       {/each}
     </div>

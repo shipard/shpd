@@ -71,6 +71,14 @@
      *  (ConfirmDialog, 480 px), které by po zmenšení o 60 px na každou
      *  hloubku přestaly být použitelné; rodič pod nimi vyčnívá i tak. */
     fixedSize?: boolean;
+    /** Navigační ovládání v hlavičce (šipky Předchozí/Další sub-záznamu,
+     *  FormDialog `navigation`), renderované mezi `summary` a `×`. Na mobilu
+     *  zůstává viditelné — na rozdíl od summary. */
+    headerNav?: Snippet;
+    /** Volitelný handler kláves. Modal ho volá jen když je tato karta na
+     *  vrcholu stacku (stejné pravidlo jako Esc), takže vnořený dialog
+     *  neposílá klávesy rodiči. Esc zůstává v režii Modalu. */
+    onKeydown?: (e: KeyboardEvent) => void;
   }
 
   let {
@@ -87,16 +95,22 @@
     height,
     testid,
     fixedSize = false,
+    headerNav,
+    onKeydown,
   }: Props = $props();
 
   // Unikátní ID této instance modalu — slouží k identifikaci ve stacku.
   const modalId = Symbol('modal');
 
-  // Close on Escape key — jen pokud je tento modal na vrcholu stacku.
+  // Klávesy jen pro modal na vrcholu stacku: Esc zavírá, ostatní dostane
+  // volající přes `onKeydown` (FormDialog: Alt+←/→ Předchozí/Další).
   function handleKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape' && isTopOfStack(modalId)) {
+    if (!isTopOfStack(modalId)) return;
+    if (e.key === 'Escape') {
       onClose();
+      return;
     }
+    onKeydown?.(e);
   }
 
   // Close when clicking the overlay but not the card
@@ -174,6 +188,11 @@
         {#if summary}
           <div class="shpd-modal__header-summary">
             {@render summary()}
+          </div>
+        {/if}
+        {#if headerNav}
+          <div class="shpd-modal__header-nav">
+            {@render headerNav()}
           </div>
         {/if}
         <button class="shpd-modal__close" onclick={onClose} aria-label={t('common.close')}>×</button>
@@ -317,6 +336,18 @@
     color: var(--shpd-color-text);
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
+  }
+
+  /* Navigace v hlavičce (‹ 2 / 12 ›) — kompaktní cluster před křížkem. */
+  .shpd-modal__header-nav {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--shpd-space-xs);
+    flex-shrink: 0;
+    font-size: var(--shpd-font-size-sm);
+    color: var(--shpd-color-text-secondary);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
   }
 
   .shpd-modal__close {

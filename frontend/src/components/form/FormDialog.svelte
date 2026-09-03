@@ -1,9 +1,11 @@
 <script lang="ts">
   import Modal from '../ui/Modal.svelte';
   import Icon from '../ui/Icon.svelte';
+  import Button from '../ui/Button.svelte';
+  import ConfirmDialog from '../ui/ConfirmDialog.svelte';
   import FormEditor from './FormEditor.svelte';
   import FormStateBadge from './FormStateBadge.svelte';
-  import { resolveIcon } from '../../icons.js';
+  import { resolveIcon, iconChevronLeft, iconChevronRight } from '../../icons.js';
   import { t } from '../../i18n/index.js';
 
   type HeaderInfoItem = { label: string; value: string };
@@ -14,12 +16,21 @@
     summary: HeaderInfoItem[];
   };
 
+  type Navigation = {
+    /** 0-based index aktuálního záznamu v seznamu; -1 = nový záznam → šipky se nerenderují. */
+    index: number;
+    count: number;
+    onPrev: () => void;
+    onNext: () => void;
+  };
+
   interface Props {
     table: string;
     recordId?: number | null;
     open: boolean;
     onClose: () => void;
-    onSaved?: (record: Record<string, unknown>, info?: { hasDocStates: boolean }) => void;
+    /** `wasNew` = záznam byl při uložení nový (dialog otevřený bez recordId). */
+    onSaved?: (record: Record<string, unknown>, info?: { hasDocStates: boolean; wasNew: boolean }) => void;
     defaultData?: Record<string, unknown>;
     /** Nenápadná informační notice nad formulářem (neutrální, ne error). */
     notice?: string | null;
@@ -27,6 +38,14 @@
      *  dotazu na neuložené změny. Používá FormSubTable pro řádky read-only
      *  rodiče (issue #53). */
     readOnly?: boolean;
+    /** Listování sousedními záznamy seznamu (sub-tabulka): šipky ‹ › a
+     *  pozice v hlavičce, Alt+←/→. Bez `navigation` vypadá dialog jako
+     *  dnes (top-level). Navigaci vlastní volající — má seřazený seznam. */
+    navigation?: Navigation | null;
+    /** Nový sub-záznam: vedle Přidat i „Přidat a pokračovat" — po uložení se
+     *  formulář resetuje na další nový záznam a zavolá se tento callback
+     *  (nikoli onSaved, které by dialog zavřelo). */
+    onSaveAndContinue?: (record: Record<string, unknown>) => void;
   }
 
   let {
@@ -38,6 +57,8 @@
     defaultData = {},
     notice = null,
     readOnly = false,
+    navigation = null,
+    onSaveAndContinue,
   }: Props = $props();
 
   // Aktuální titulek a doc_states z formuláře — aktualizuje se přes onFormLoaded
@@ -61,27 +82,97 @@
     }
   });
 
+  // Akce čekající na potvrzení „Neuložené změny" (zavření nebo Předchozí/
+  // Další). Non-null = ConfirmDialog otevřený; Zahodit ji spustí, Zůstat zruší.
+  let pendingAction = $state<(() => void) | null>(null);
+
+  // Sdílená ochrana neuložených změn pro zavření i navigaci: bez dirty
+  // rovnou `then()`, s dirty ConfirmDialog (Zahodit → then, Zůstat → nic).
+  // Nahrazuje dřívější window.confirm.
+  function guardDirty(then: () => void) {
+    if (!isDirty) {
+      then();
+      return;
+    }
+    pendingAction = then;
+  }
+
+  function discardPending() {
+    const run = pendingAction;
+    pendingAction = null;
+    isDirty = false;
+    run?.();
+  }
+
+  function stayPending() {
+    pendingAction = null;
+  }
+
   function handleClose(opts?: { force?: boolean }) {
     // force=true — přeskočí dirty kontrolu. Používá se po úspěšném save+closeForm,
     // kde FormEditor ví, že data jsou uložená, a nesmí se zobrazit confirm.
-    if (isDirty && !opts?.force) {
-      const confirmed = window.confirm(t('form.unsavedChanges'));
-      if (!confirmed) return;
+    if (opts?.force) {
+      isDirty = false;
+      onClose();
+      return;
     }
-    isDirty = false;
-    onClose();
+    guardDirty(() => {
+      isDirty = false;
+      onClose();
+    });
   }
 
   function handleSaved(record: Record<string, unknown>) {
     // Druhý argument informuje konzumenta (např. FormSubTable), zda má
-    // formulář doc states. Formuláře bez doc states mají jedinou akci Uložit
-    // (žádné přechody s close_form), takže subtable je po Uložit zavře. Formuláře
-    // s doc states zůstanou otevřené — zavření řeší close_form / onClose, stejně
-    // jako u hlavních modalů. currentDocStates je v okamžiku save spolehlivě
-    // naplněný (onFormLoaded proběhl při loadu).
-    onSaved?.(record, { hasDocStates: currentDocStates != null });
+    // formulář doc states a zda byl záznam nový. Formuláře bez doc states
+    // mají jedinou akci Uložit (žádné přechody s close_form), takže subtable
+    // je po Uložit zavře; nový záznam se zavírá i s doc states (Přidat).
+    // Existující záznam s doc states zůstane otevřený — zavření řeší
+    // close_form / onClose, stejně jako u hlavních modalů. currentDocStates
+    // je v okamžiku save spolehlivě naplněný (onFormLoaded proběhl při loadu).
+    // `recordId` (prop) zůstává null po celou dobu dialogu nového záznamu.
+    onSaved?.(record, { hasDocStates: currentDocStates != null, wasNew: recordId == null });
     // Nezavíráme formulář zde — o zavření rozhoduje FormEditor sám
     // na základě closeForm flagu nebo akce uživatele
+  }
+
+  // ── Navigace Předchozí / Další ──────────────────────────────────────────────
+
+  const showNav = $derived(!!navigation && navigation.index >= 0 && navigation.count > 0);
+  const canPrev = $derived(showNav && (navigation?.index ?? 0) > 0);
+  const canNext = $derived(showNav && (navigation?.index ?? 0) < (navigation?.count ?? 0) - 1);
+
+  function goPrev() {
+    if (!canPrev) return;
+    guardDirty(() => navigation?.onPrev());
+  }
+
+  function goNext() {
+    if (!canNext) return;
+    guardDirty(() => navigation?.onNext());
+  }
+
+  // Fokus v textovém poli: na macOS Alt+šipka skáče po slovech a dotaz na
+  // neuložené změny uprostřed psaní by rušil — tam klávesy nechytáme.
+  function isTextEditing(el: Element | null): boolean {
+    if (!el) return false;
+    if (el instanceof HTMLTextAreaElement) return true;
+    if ((el as HTMLElement).isContentEditable) return true;
+    if (el instanceof HTMLInputElement) {
+      return !['checkbox', 'radio', 'button', 'submit', 'reset', 'range', 'color', 'file'].includes(el.type);
+    }
+    return false;
+  }
+
+  // Alt+← / Alt+→ = Předchozí / Další. Volá Modal jen na vrcholu stacku.
+  // preventDefault brání tomu, aby Alt+← udělalo „zpět" v historii prohlížeče.
+  function handleKeydown(e: KeyboardEvent) {
+    if (!showNav || !e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    if (isTextEditing(document.activeElement)) return;
+    e.preventDefault();
+    if (e.key === 'ArrowLeft') goPrev();
+    else goNext();
   }
 
   // Volá FormEditor po načtení / přepočtu formuláře. Aktualizuje header modalu.
@@ -153,6 +244,34 @@
   {/if}
 {/snippet}
 
+{#snippet headerNavSnippet()}
+  {#if navigation}
+    <Button
+      icon={iconChevronLeft}
+      iconOnly
+      size="sm"
+      variant="ghost"
+      label={t('form.navPrev')}
+      disabled={!canPrev}
+      onclick={goPrev}
+      testid="form-nav-prev"
+    />
+    <span class="shpd-form-dialog__nav-pos" data-testid="form-nav-pos">
+      {t('form.navPosition', { index: navigation.index + 1, count: navigation.count })}
+    </span>
+    <Button
+      icon={iconChevronRight}
+      iconOnly
+      size="sm"
+      variant="ghost"
+      label={t('form.navNext')}
+      disabled={!canNext}
+      onclick={goNext}
+      testid="form-nav-next"
+    />
+  {/if}
+{/snippet}
+
 {#if open}
   <Modal
     title={headerTitle}
@@ -164,6 +283,8 @@
     iconSlot={hasIcon ? iconSnippet : undefined}
     summary={hasSummary ? summarySnippet : undefined}
     headerExtra={headerExtraSnippet}
+    headerNav={showNav ? headerNavSnippet : undefined}
+    onKeydown={handleKeydown}
     testid="form-dialog"
   >
     {#if notice}
@@ -178,11 +299,29 @@
       onDirtyChange={handleDirtyChange}
       {defaultData}
       {readOnly}
+      {onSaveAndContinue}
     />
   </Modal>
+
+  <ConfirmDialog
+    open={pendingAction !== null}
+    title={t('form.unsavedTitle')}
+    message={t('form.unsavedChanges')}
+    confirmLabel={t('form.unsavedDiscard')}
+    cancelLabel={t('form.unsavedStay')}
+    variant="danger"
+    onConfirm={discardPending}
+    onCancel={stayPending}
+    testid="unsaved-dialog"
+  />
 {/if}
 
 <style>
+  .shpd-form-dialog__nav-pos {
+    min-width: 3.5em;
+    text-align: center;
+  }
+
   /* Neutrální informační pruh nad formulářem — na rozdíl od červených
      validačních bannerů ve FormEditor nesignalizuje chybu. */
   .shpd-form-dialog__notice {

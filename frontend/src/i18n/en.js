@@ -254,7 +254,15 @@ export default {
 
   // ── Form (FormDialog, FormEditor, FormRenderer, FormStateBar) ───────────
   'form.titleNew': 'New record',
-  'form.unsavedChanges': 'You have unsaved changes. Really close the form?',
+  'form.unsavedChanges': 'You have unsaved changes. They will be lost if you continue.',
+  'form.unsavedTitle': 'Unsaved changes',
+  'form.unsavedDiscard': 'Discard',
+  'form.unsavedStay': 'Stay',
+  'form.add': 'Add',
+  'form.saveAndContinue': 'Add and continue',
+  'form.navPosition': '{index} / {count}',
+  'form.navPrev': 'Previous',
+  'form.navNext': 'Next',
   'form.loadFailed': 'Failed to load form.',
   'form.saveFailed': 'Failed to save record.',
   'form.transitionFailed': 'Failed to change state.',

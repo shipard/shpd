@@ -263,7 +263,15 @@ export default {
 
   // ── Form (FormDialog, FormEditor, FormRenderer, FormStateBar) ───────────
   'form.titleNew': 'Nový záznam',
-  'form.unsavedChanges': 'Máte neuložené změny. Opravdu chcete zavřít formulář?',
+  'form.unsavedChanges': 'Máte neuložené změny. Když budete pokračovat, ztratí se.',
+  'form.unsavedTitle': 'Neuložené změny',
+  'form.unsavedDiscard': 'Zahodit',
+  'form.unsavedStay': 'Zůstat',
+  'form.add': 'Přidat',
+  'form.saveAndContinue': 'Přidat a pokračovat',
+  'form.navPosition': '{index} / {count}',
+  'form.navPrev': 'Předchozí',
+  'form.navNext': 'Další',
   'form.loadFailed': 'Nepodařilo se načíst formulář.',
   'form.saveFailed': 'Nepodařilo se uložit záznam.',
   'form.transitionFailed': 'Nepodařilo se změnit stav.',

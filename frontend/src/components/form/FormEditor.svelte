@@ -1,5 +1,5 @@
 <script>
-  import { untrack } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { get, post, put } from '../../api/client.js';
   import FormTab from './FormTab.svelte';
   import AttachmentPanel from './AttachmentPanel.svelte';
@@ -18,7 +18,13 @@
     /** Jen k prohlížení (řádek read-only rodiče ze sub-tabulky): všechna pole
      *  vypnutá, nikdy dirty, FormStateBar bez Uložit a přechodů. */
     readOnly = false,
+    /** Nový sub-záznam: FormStateBar ukáže Přidat + Přidat a pokračovat.
+     *  Volá se po uložení a resetu formuláře na další nový záznam. */
+    onSaveAndContinue,
   } = $props();
+
+  // Kořenový element — fokus prvního pole po Přidat a pokračovat.
+  let rootEl = $state(null);
 
   let formDef = $state(null);
   let formData = $state({});
@@ -230,8 +236,10 @@
 
   // ── Save ────────────────────────────────────────────────────────────────────
 
-  async function handleSave() {
-    saving = true;
+  // Uloží formulář (POST nový / PUT existující). Vrátí záznam ze serveru,
+  // nebo null — validační i ostatní chyby zobrazí sám. Sdílené pro Uložit
+  // a Přidat a pokračovat; liší se jen tím, co po uložení následuje.
+  async function saveRecord() {
     clearValidationErrors();
     loadError = null;
     const isNew = currentId == null;
@@ -240,15 +248,66 @@
       : await put(`/_ui/form/${table}/save/${currentId}`, sanitizeFormData(formData));
 
     if (res?.success) {
-      onSaved?.(res.data);
-      currentId = res.data?.id ?? currentId;
-      await loadForm(table, currentId);  // Reload bez zavření
-    } else if (res?.error?.code === 'VALIDATION_ERROR' && res?.error?.details) {
+      return res.data ?? {};
+    }
+    if (res?.error?.code === 'VALIDATION_ERROR' && res?.error?.details) {
       applyValidationErrors(res.error.details);
     } else {
       loadError = res?.error ? translateError(res.error) : t('form.saveFailed');
     }
+    return null;
+  }
+
+  async function handleSave() {
+    saving = true;
+    const record = await saveRecord();
+    if (record !== null) {
+      onSaved?.(record);
+      currentId = record.id ?? currentId;
+      await loadForm(table, currentId);  // Reload bez zavření
+    }
     saving = false;
+  }
+
+  // Přidat a pokračovat (nový sub-záznam): uložit → reset na další nový záznam
+  // se stejnými defaultData (FK rodiče) → fokus do prvního pole. Záměrně
+  // NEjde přes onSaved — FormSubTable by dialog zavřel; místo toho
+  // onSaveAndContinue (subtable si jen přenačte řádky). Při chybě uložení
+  // zůstává formulář s chybami, nic se neresetuje.
+  async function handleSaveAndContinue() {
+    saving = true;
+    const record = await saveRecord();
+    if (record !== null) {
+      await resetToNew();
+      onSaveAndContinue?.(record);
+    }
+    saving = false;
+  }
+
+  // Nový prázdný záznam: meta pro nový záznam (defaultData → server-side
+  // defaulty), nový snapshot (formulář není dirty), titulek title_new.
+  async function resetToNew() {
+    currentId = null;
+    await loadForm(table, null);
+    await tick();
+    focusFirstField();
+  }
+
+  // První editovatelné pole aktivního tabu. Lookup pole se přeskočí — jeho
+  // input otevírá dropdown už při fokusu (LookupInput.handleFocus) a po
+  // každém uložení by vyskočilo vyhledávání.
+  function focusFirstField() {
+    if (!rootEl) return;
+    const candidates = rootEl.querySelectorAll(
+      '.shpd-form-editor__tab-content:not([hidden]) input:not([disabled]):not([type="hidden"]),'
+      + ' .shpd-form-editor__tab-content:not([hidden]) select:not([disabled]),'
+      + ' .shpd-form-editor__tab-content:not([hidden]) textarea:not([disabled])',
+    );
+    for (const el of candidates) {
+      if (el.closest('.shpd-lookup')) continue;
+      el.focus();
+      return;
+    }
   }
 
   // ── Doc state transition ────────────────────────────────────────────────────
@@ -474,7 +533,7 @@
   }
 </script>
 
-<div class="shpd-form-editor">
+<div class="shpd-form-editor" bind:this={rootEl}>
 
   <!-- Tab bar -->
   {#if formDef && formDef.tabs.length > 1}
@@ -558,7 +617,9 @@
       docStates={formDef.doc_states ?? null}
       {saving}
       {readOnly}
+      isNew={currentId == null}
       onSave={handleSave}
+      onSaveAndContinue={onSaveAndContinue ? handleSaveAndContinue : undefined}
       onTransition={handleTransition}
     />
   {/if}

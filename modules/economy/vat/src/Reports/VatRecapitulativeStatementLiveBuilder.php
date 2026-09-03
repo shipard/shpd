@@ -12,14 +12,14 @@ use Shipard\Core\Reports\ReportRequest;
 use Shipard\Core\Reports\ReportResult;
 use Shipard\Core\Reports\ReportRow;
 use Shipard\Core\Reports\ReportRowKind;
-use Shipard\Module\Economy\Vat\EcSalesListCalculator;
+use Shipard\Module\Economy\Vat\RecapitulativeStatementCalculator;
 
 /**
  * Živé souhrnné hlášení (DPHSHV) — agregace per (kód plnění, DIČ
  * odběratele): počet plnění + hodnota v domácí měně (plná přesnost,
  * zaokrouhlení nahoru až věc XML). Chybějící DIČ = warning message.
  */
-final class VatEcSalesLiveBuilder implements ReportBuilder
+final class VatRecapitulativeStatementLiveBuilder implements ReportBuilder
 {
     public function build(ReportRequest $request): ReportResult
     {
@@ -33,7 +33,7 @@ final class VatEcSalesLiveBuilder implements ReportBuilder
         }
 
         $docs = $support->docs($request);
-        $calc = (new EcSalesListCalculator($mapping))->calculate($docs);
+        $calc = (new RecapitulativeStatementCalculator($mapping))->calculate($docs);
 
         $rows       = [];
         $totalCount = 0;
@@ -59,11 +59,11 @@ final class VatEcSalesLiveBuilder implements ReportBuilder
         foreach ($calc['errors'] as $error) {
             $messages[] = new ReportMessage(
                 ReportMessageSeverity::Warning,
-                'vatSh.missingVatId',
+                'vatRs.missingVatId',
                 sprintf(
                     $cs
                         ? 'Doklad %s: chybí DIČ odběratele — plnění nelze vykázat v souhrnném hlášení.'
-                        : 'Document %s: missing customer VAT ID — the supply cannot be reported in the EC sales list.',
+                        : 'Document %s: missing customer VAT ID — the supply cannot be reported in the recapitulative statement.',
                     $error['docNumber'],
                 ),
             );

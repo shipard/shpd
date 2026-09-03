@@ -3,9 +3,9 @@
     "name": "VAT",
     "name:cs": "DPH",
     "name:en": "VAT",
-    "description": "VAT outputs: live VAT return, control statement and EC sales list computed on demand from confirmed documents (issue #55, M1)",
+    "description": "VAT outputs: live VAT return, control statement and recapitulative statement computed on demand from confirmed documents (issue #55, M1)",
     "description:cs": "Výstupy DPH: živé přiznání, kontrolní hlášení a souhrnné hlášení počítané on-demand z potvrzených dokladů (issue #55, M1)",
-    "description:en": "VAT outputs: live VAT return, control statement and EC sales list computed on demand from confirmed documents (issue #55, M1)",
+    "description:en": "VAT outputs: live VAT return, control statement and recapitulative statement computed on demand from confirmed documents (issue #55, M1)",
 
     // world.vat = kódy DPH (legislativní vrstva bez výkaznických konvencí, D3),
     // economy.codebooks = registrace + období DPH, docs.core = doklady

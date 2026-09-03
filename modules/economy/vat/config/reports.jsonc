@@ -28,10 +28,10 @@
         "id": "economy.vat.recapitulativeStatementLive",
         "navSection": "accounting",
         "navOrder": 72,
-        "name": "EC sales list (live)",
+        "name": "Recapitulative statement (live)",
         "name:cs": "Souhrnné hlášení — živě",
-        "name:en": "EC sales list (live)",
-        "builder": "Shipard\\Module\\Economy\\Vat\\Reports\\VatEcSalesLiveBuilder",
+        "name:en": "Recapitulative statement (live)",
+        "builder": "Shipard\\Module\\Economy\\Vat\\Reports\\VatRecapitulativeStatementLiveBuilder",
         "periodSource": "vatPeriod",
         "params": []
     }

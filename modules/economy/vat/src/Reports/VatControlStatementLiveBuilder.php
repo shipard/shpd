@@ -119,7 +119,7 @@ final class VatControlStatementLiveBuilder implements ReportBuilder
             $index      = $rowIndexByDocRef["{$error['section']}|{$error['docId']}"] ?? null;
             $messages[] = new ReportMessage(
                 ReportMessageSeverity::Warning,
-                'vatKh.' . $error['code'],
+                'vatCs.' . $error['code'],
                 sprintf(
                     $error['code'] === 'missingVatId'
                         ? ($cs ? 'Doklad %s (sekce %s): chybí DIČ partnera.' : 'Document %s (section %s): missing partner VAT ID.')

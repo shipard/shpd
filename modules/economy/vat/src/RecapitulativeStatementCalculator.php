@@ -11,7 +11,7 @@ namespace Shipard\Module\Economy\Vat;
  * (Fáze 3). Chybějící DIČ odběratele je měkká chyba (builder z ní dělá
  * lokalizované ReportMessage), řádek se agreguje pod prázdné DIČ.
  */
-final class EcSalesListCalculator
+final class RecapitulativeStatementCalculator
 {
     public function __construct(private readonly VatOutputsMapping $mapping) {}
 

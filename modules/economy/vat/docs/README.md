@@ -35,16 +35,16 @@ cfgItem); samotné deklarace reportů se čtou z modulu za requestu.
 
 ```
 src/
-├── VatOutputsMapping.php          # resolver cfgItem; neznámý kód = výjimka
-├── VatDocumentSelection.php       # heads (docState 40) přes date containment
-│                                  #   vat_periods (D5) + recap + DIČ ze snapshotů
-├── VatReturnCalculator.php        # DP3: sumace per (řádek, sloupec) + dopočty
-├── ControlStatementCalculator.php # KH: rozpad sekcí, limit 10 000, pásma, měkké chyby
-├── EcSalesListCalculator.php      # SH: agregace (kod, DIČ) → počet + hodnota
-├── VatJournalCrossCheck.php       # recap tax_dom vs 343 analytiky deníku
+├── VatOutputsMapping.php                  # resolver cfgItem; neznámý kód = výjimka
+├── VatDocumentSelection.php               # heads (docState 40) přes date containment
+│                                          #   vat_periods (D5) + recap + DIČ ze snapshotů
+├── VatReturnCalculator.php                # DP3: sumace per (řádek, sloupec) + dopočty
+├── ControlStatementCalculator.php         # KH (CS): rozpad sekcí, limit 10 000, pásma, měkké chyby
+├── RecapitulativeStatementCalculator.php  # SH (RS): agregace (kod, DIČ) → počet + hodnota
+├── VatJournalCrossCheck.php               # recap tax_dom vs 343 analytiky deníku
 └── Reports/
-    ├── VatReportSupport.php       # sdílené kusy builderů (kompozice)
-    └── Vat*LiveBuilder.php        # tenké ReportBuilder adaptéry
+    ├── VatReportSupport.php               # sdílené kusy builderů (kompozice)
+    └── Vat*LiveBuilder.php                # tenké ReportBuilder adaptéry
 ```
 
 Kalkulátory jsou **čisté** (vstup = pole z `VatDocumentSelection`) a testují

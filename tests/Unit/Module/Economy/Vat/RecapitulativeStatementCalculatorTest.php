@@ -5,14 +5,14 @@ declare(strict_types=1);
 namespace Shipard\Tests\Unit\Module\Economy\Vat;
 
 use PHPUnit\Framework\TestCase;
-use Shipard\Module\Economy\Vat\EcSalesListCalculator;
+use Shipard\Module\Economy\Vat\RecapitulativeStatementCalculator;
 use Shipard\Module\Economy\Vat\VatOutputsMapping;
 
-class EcSalesListCalculatorTest extends TestCase
+class RecapitulativeStatementCalculatorTest extends TestCase
 {
-    private function calculator(): EcSalesListCalculator
+    private function calculator(): RecapitulativeStatementCalculator
     {
-        return new EcSalesListCalculator(new VatOutputsMapping(['vatOutputs' => [
+        return new RecapitulativeStatementCalculator(new VatOutputsMapping(['vatOutputs' => [
             'cz-201' => ['dp3' => ['row' => 20], 'kh' => null, 'sh' => ['kod' => 0]],
             'cz-202' => ['dp3' => ['row' => 21], 'kh' => null, 'sh' => ['kod' => 3]],
             'cz-120' => ['dp3' => ['row' => 1], 'kh' => null, 'sh' => null],

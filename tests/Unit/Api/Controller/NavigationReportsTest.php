@@ -154,7 +154,7 @@ class NavigationReportsTest extends TestCase
         $this->assertSame(
             [
                 'General ledger', 'Profit and loss', 'Balance sheet',
-                'VAT return (live)', 'VAT control statement (live)', 'EC sales list (live)',
+                'VAT return (live)', 'VAT control statement (live)', 'Recapitulative statement (live)',
             ],
             array_column($group['children'], 'label'),
         );

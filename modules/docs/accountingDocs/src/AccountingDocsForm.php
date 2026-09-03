@@ -41,6 +41,19 @@ class AccountingDocsForm extends DocsHeadsFormBase
         );
     }
 
+    /**
+     * Řádky účetního dokladu jsou kontace: sub-tabulka `rows` zobrazuje
+     * sadu Pohyb · Účet · Popis · Strana · Částka místo položkové sady
+     * (množství / cena / DPH). Viz `DocsHeadsFormBase::renderSubtable()`.
+     */
+    public function renderSubtable(FormTab $tab, array $rows, array $parentData): array
+    {
+        if ($tab->id !== 'rows') {
+            return parent::renderSubtable($tab, $rows, $parentData);
+        }
+        return $this->renderContationRows($rows);
+    }
+
     /** Účetní doklad je bez DPH — vynuť `vat_mode = 0` pro nový záznam. */
     protected function applyClientDefaults(array &$data, bool $isNew): void
     {

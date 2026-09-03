@@ -9,6 +9,7 @@ use Shipard\Core\Form\FormDefinition;
 use Shipard\Core\Form\FormHeaderInfo;
 use Shipard\Core\Form\FormTab;
 use Shipard\Core\Form\RecalculateResult;
+use Shipard\Core\Form\SubtableCellFormatter;
 use Shipard\Core\Form\TableForm;
 use Shipard\Core\Settings\SettingsStore;
 
@@ -496,6 +497,251 @@ abstract class DocsHeadsFormBase extends TableForm
             'doc_head',
             formId: 'docs.core.rows',
         );
+    }
+
+    // ── Sub-tabulka řádků (tab `rows`) ─────────────────────────────────────
+
+    /**
+     * Sloupce a buňky sub-tabulky řádků dokladu (issue #53, fáze 1).
+     * Položková sada; doklad bez DPH (`vat_mode = 0` rodiče) DPH sloupce
+     * nemá a Celkem bere z `total_price`. Kontační sadu (účetní doklad)
+     * řeší `AccountingDocsForm::renderSubtable()` — všech osm operací
+     * s vlajkou `rowSide` je v `docs.core.rowOperations` povoleno výhradně
+     * pro `cmnbkp`, a ten má vlastní form třídu, takže sada je jednoznačná
+     * z hlavičky; per-řádkové rozhodování není potřeba.
+     *
+     * @param list<array<string, mixed>> $rows
+     * @param array<string, mixed> $parentData
+     * @return array{columns: list<array<string, mixed>>, rows: list<array<string, mixed>>, order_column: ?string}
+     */
+    public function renderSubtable(FormTab $tab, array $rows, array $parentData): array
+    {
+        if ($tab->id !== 'rows') {
+            return parent::renderSubtable($tab, $rows, $parentData);
+        }
+        return $this->renderItemRows($rows, $parentData);
+    }
+
+    /**
+     * Položková sada: # · Popis · Množství · MJ · Cena/MJ · [Bez DPH · DPH % ·
+     * DPH · Celkem s DPH] | [Cena celkem]. Textový řádek (`row_kind = 0`)
+     * má jen popis tlumeně, žádné číselné buňky (množství/cena tam bývá
+     * NULL nebo 0 — neukazujeme „0,00"). Částky bez měny (měna je
+     * v hlavičce). Labely z definice `docs_core_rows` (lokalizované
+     * TableLoaderem), fallback česky.
+     *
+     * @param list<array<string, mixed>> $rows
+     * @param array<string, mixed> $parentData
+     * @return array{columns: list<array<string, mixed>>, rows: list<array<string, mixed>>, order_column: ?string}
+     */
+    protected function renderItemRows(array $rows, array $parentData): array
+    {
+        $hasVat = (int) ($parentData['vat_mode'] ?? 1) !== 0;
+        $t = 'docs_core_rows';
+
+        $columns = [
+            ['id' => 'order_pos',   'label' => '#', 'align' => 'right', 'width' => 44],
+            ['id' => 'description', 'label' => $this->subtableLabel($t, 'description', 'Popis'), 'grow' => true],
+            ['id' => 'quantity',    'label' => $this->subtableLabel($t, 'quantity', 'Množství'), 'align' => 'right'],
+            ['id' => 'unit',        'label' => $this->subtableLabel($t, 'unit', 'Jednotka')],
+            ['id' => 'unit_price',  'label' => $this->subtableLabel($t, 'unit_price', 'Cena/jednotka'), 'align' => 'right'],
+        ];
+        if ($hasVat) {
+            $columns[] = ['id' => 'vat_base',   'label' => $this->subtableLabel($t, 'vat_base', 'Základ DPH'), 'align' => 'right'];
+            $columns[] = ['id' => 'vat_pct',    'label' => $this->subtableLabel($t, 'vat_pct', 'DPH %'), 'align' => 'right'];
+            $columns[] = ['id' => 'vat_amount', 'label' => $this->subtableLabel($t, 'vat_amount', 'DPH'), 'align' => 'right'];
+            $columns[] = ['id' => 'vat_total',  'label' => $this->subtableLabel($t, 'vat_total', 'Celkem s DPH'), 'align' => 'right'];
+        } else {
+            $columns[] = ['id' => 'total_price', 'label' => $this->subtableLabel($t, 'total_price', 'Cena celkem'), 'align' => 'right'];
+        }
+
+        $units = $this->loadUnitShortcuts($rows);
+
+        $out = [];
+        foreach (array_values($rows) as $i => $row) {
+            $cells = ['order_pos' => $this->rowNumber($row, $i)];
+            $description = trim((string) ($row['description'] ?? ''));
+            $isText = (int) ($row['row_kind'] ?? 1) === 0;
+
+            if ($isText) {
+                if ($description !== '') {
+                    $cells['description'] = ['text' => $description, 'class' => 'muted'];
+                }
+                $out[] = ['id' => (int) ($row['id'] ?? 0), 'cells' => $cells];
+                continue;
+            }
+
+            if ($description !== '') {
+                $cells['description'] = $description;
+            }
+            $this->putCell($cells, 'quantity', SubtableCellFormatter::trimmedNumber($row['quantity'] ?? null, 4));
+            $unitId = (int) ($row['unit'] ?? 0);
+            if ($unitId > 0 && isset($units[$unitId])) {
+                $cells['unit'] = $units[$unitId];
+            }
+            $this->putCell($cells, 'unit_price', SubtableCellFormatter::price($row['unit_price'] ?? null));
+            if ($hasVat) {
+                $this->putCell($cells, 'vat_base', SubtableCellFormatter::money($row['vat_base'] ?? null));
+                $this->putCell($cells, 'vat_pct', SubtableCellFormatter::trimmedNumber($row['vat_pct'] ?? null, 2));
+                $this->putCell($cells, 'vat_amount', SubtableCellFormatter::money($row['vat_amount'] ?? null));
+                $this->putCell($cells, 'vat_total', SubtableCellFormatter::money($row['vat_total'] ?? null));
+            } else {
+                $this->putCell($cells, 'total_price', SubtableCellFormatter::money($row['total_price'] ?? null));
+            }
+
+            $out[] = ['id' => (int) ($row['id'] ?? 0), 'cells' => $cells];
+        }
+
+        return ['columns' => $columns, 'rows' => $out, 'order_column' => null];
+    }
+
+    /**
+     * Kontační sada (účetní doklad): # · Pohyb · Účet · Popis · Strana ·
+     * Částka. Pohyb = `name` z `docs.core.rowOperations`; Účet = číslo
+     * a název z `economy_accounting_accounts` (jen řádky s přímým účtem —
+     * saldokontní operace mají účet implicitní z předpisu, buňka je
+     * prázdná); Strana jen u operací s `rowSide: 1` (u `rowSide: 0`,
+     * kurzové rozdíly, stranu nesou kroky předpisu — buňka prázdná).
+     * Textový řádek jako v položkové sadě.
+     *
+     * @param list<array<string, mixed>> $rows
+     * @return array{columns: list<array<string, mixed>>, rows: list<array<string, mixed>>, order_column: ?string}
+     */
+    protected function renderContationRows(array $rows): array
+    {
+        $t = 'docs_core_rows';
+        $columns = [
+            ['id' => 'order_pos',   'label' => '#', 'align' => 'right', 'width' => 44],
+            ['id' => 'operation',   'label' => $this->subtableLabel($t, 'operation', 'Pohyb')],
+            ['id' => 'account',     'label' => $this->subtableLabel($t, 'account', 'Účet')],
+            ['id' => 'description', 'label' => $this->subtableLabel($t, 'description', 'Popis'), 'grow' => true],
+            ['id' => 'acc_side',    'label' => $this->subtableLabel($t, 'acc_side', 'Strana')],
+            ['id' => 'total_price', 'label' => 'Částka', 'align' => 'right'],
+        ];
+
+        $operations = $this->config?->cfgItem('docs.core.rowOperations');
+        $operations = is_array($operations) ? $operations : [];
+        $accounts = $this->loadAccountLabels($rows);
+
+        $out = [];
+        foreach (array_values($rows) as $i => $row) {
+            $cells = ['order_pos' => $this->rowNumber($row, $i)];
+            $description = trim((string) ($row['description'] ?? ''));
+            $isText = (int) ($row['row_kind'] ?? 1) === 0;
+
+            if ($isText) {
+                if ($description !== '') {
+                    $cells['description'] = ['text' => $description, 'class' => 'muted'];
+                }
+                $out[] = ['id' => (int) ($row['id'] ?? 0), 'cells' => $cells];
+                continue;
+            }
+
+            $operation = (string) ($row['operation'] ?? '');
+            $opAttrs = is_array($operations[$operation] ?? null) ? $operations[$operation] : [];
+            if ($operation !== '') {
+                $cells['operation'] = (string) ($opAttrs['name'] ?? $operation);
+            }
+            $accountId = (int) ($row['account'] ?? 0);
+            if ($accountId > 0 && isset($accounts[$accountId])) {
+                $cells['account'] = $accounts[$accountId];
+            }
+            if ($description !== '') {
+                $cells['description'] = $description;
+            }
+            if (!empty($opAttrs['rowSide']) && isset($row['acc_side']) && $row['acc_side'] !== '') {
+                $cells['acc_side'] = $this->cfgItemLabel('docs.core.accSides', $row['acc_side']);
+            }
+            $this->putCell($cells, 'total_price', SubtableCellFormatter::money($row['total_price'] ?? null));
+
+            $out[] = ['id' => (int) ($row['id'] ?? 0), 'cells' => $cells];
+        }
+
+        return ['columns' => $columns, 'rows' => $out, 'order_column' => null];
+    }
+
+    /**
+     * Číslo řádku pro sloupec #: `order_pos`, je-li > 0, jinak pořadí
+     * v seřazeném seznamu (řádky přidané sub-formulářem mají dnes
+     * `order_pos = 0` — automatické číslování řeší fáze 3).
+     *
+     * @param array<string, mixed> $row
+     */
+    private function rowNumber(array $row, int $index): string
+    {
+        $pos = (int) ($row['order_pos'] ?? 0);
+        return (string) ($pos > 0 ? $pos : $index + 1);
+    }
+
+    /** @param array<string, mixed> $cells */
+    private function putCell(array &$cells, string $id, ?string $text): void
+    {
+        if ($text !== null) {
+            $cells[$id] = $text;
+        }
+    }
+
+    /**
+     * Zkratky jednotek jedním dotazem `IN` nad id z řádků (žádný N+1).
+     *
+     * @param list<array<string, mixed>> $rows
+     * @return array<int, string> unit id → shortcut
+     */
+    private function loadUnitShortcuts(array $rows): array
+    {
+        $ids = $this->collectIds($rows, 'unit');
+        if ($ids === [] || $this->db === null) {
+            return [];
+        }
+        $out = [];
+        foreach ($this->db->fetchAll('SELECT `id`, `shortcut`, `name` FROM `core_units` WHERE `id` IN %in', $ids) as $u) {
+            $label = trim((string) ($u['shortcut'] ?? ''));
+            if ($label === '') {
+                $label = trim((string) ($u['name'] ?? ''));
+            }
+            if ($label !== '') {
+                $out[(int) $u['id']] = $label;
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * „číslo název" účtů jedním dotazem `IN` nad id z řádků.
+     *
+     * @param list<array<string, mixed>> $rows
+     * @return array<int, string> account id → label
+     */
+    private function loadAccountLabels(array $rows): array
+    {
+        $ids = $this->collectIds($rows, 'account');
+        if ($ids === [] || $this->db === null) {
+            return [];
+        }
+        $out = [];
+        foreach ($this->db->fetchAll('SELECT `id`, `number`, `name` FROM `economy_accounting_accounts` WHERE `id` IN %in', $ids) as $a) {
+            $label = trim(trim((string) ($a['number'] ?? '')) . ' ' . trim((string) ($a['name'] ?? '')));
+            if ($label !== '') {
+                $out[(int) $a['id']] = $label;
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $rows
+     * @return list<int>
+     */
+    private function collectIds(array $rows, string $column): array
+    {
+        $ids = [];
+        foreach ($rows as $row) {
+            $id = (int) ($row[$column] ?? 0);
+            if ($id > 0) {
+                $ids[$id] = true;
+            }
+        }
+        return array_keys($ids);
     }
 
     /** @param array<string, mixed> $data */

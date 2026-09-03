@@ -169,20 +169,7 @@ class DocDocumentDefaultsTest extends TestCase
         $this->assertSame(105, $doc->resolveFiscalMonthIdPub('2026-05-15'));
     }
 
-    public function testResolveVatPeriodIdRequiresBothInputs(): void
-    {
-        $db = $this->createMock(Connection::class);
-        $db->method('fetch')->willReturn(new Row(['id' => 9]));
-
-        $doc = new TestableDocsHeadsDocument();
-        $doc->setDb($db);
-
-        $this->assertNull($doc->resolveVatPeriodIdPub(null, 1));
-        $this->assertNull($doc->resolveVatPeriodIdPub('2026-05-06', null));
-        $this->assertSame(9, $doc->resolveVatPeriodIdPub('2026-05-06', 1));
-    }
-
-    public function testResolveAccountingPeriodsPopulatesAllThree(): void
+    public function testResolveAccountingPeriodsPopulatesFiscalYearAndMonth(): void
     {
         $db = $this->createMock(Connection::class);
         $callCount = 0;
@@ -192,7 +179,6 @@ class DocDocumentDefaultsTest extends TestCase
                 return match ($callCount) {
                     1 => new Row(['id' => 100]),  // fiscal year
                     2 => new Row(['id' => 200]),  // fiscal month
-                    3 => new Row(['id' => 300]),  // vat period
                     default => null,
                 };
             }
@@ -210,6 +196,7 @@ class DocDocumentDefaultsTest extends TestCase
 
         $this->assertSame(100, $data['fiscal_year']);
         $this->assertSame(200, $data['fiscal_month']);
-        $this->assertSame(300, $data['vat_period']);
+        // vat_period už docs.core neřeší — plní economy.vat handler (beforeSave event)
+        $this->assertArrayNotHasKey('vat_period', $data);
     }
 }

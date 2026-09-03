@@ -49,10 +49,6 @@ class TestableDocsHeadsDocument extends DocsHeadsDocument
         return $this->resolveFiscalMonthId($accountingDate);
     }
 
-    public function resolveVatPeriodIdPub(?string $vatDuzp, ?int $vatRegistrationId): ?int
-    {
-        return $this->resolveVatPeriodId($vatDuzp, $vatRegistrationId);
-    }
 
     public function calculateRowPricePub(array &$row): void
     {

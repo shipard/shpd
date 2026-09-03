@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Shipard\Module\Economy\Vat;
 
+use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Document\Document;
 use Shipard\Core\Document\ValidationError;
 use Shipard\Core\Document\ValidationResult;
@@ -35,6 +36,41 @@ class ReportPeriodDocument extends Document
         'cs'     => 'cs_period',
         'rs'     => 'rs_period',
     ];
+
+    /** Rozsah se při tomto uložení změnil → afterPersist spustí přepočet. */
+    private bool $rangeChanged = false;
+
+    public function beforeSave(array &$data, ?array $originalData = null): void
+    {
+        $this->rangeChanged = $originalData !== null
+            && !empty($data['id'])
+            && (
+                $this->isoDate($data['date_begin'] ?? '') !== $this->isoDate($originalData['date_begin'] ?? '')
+                || $this->isoDate($data['date_end'] ?? '') !== $this->isoDate($originalData['date_end'] ?? '')
+                || (int) ($data['docState'] ?? 10) !== (int) ($originalData['docState'] ?? 10)
+            );
+    }
+
+    /**
+     * Uvnitř save transakce po zápisu: změna rozsahu (nebo stavu — smazaná
+     * instance přestává pokrývat) přepočítá zařazení dotčených dokladů
+     * (VatPeriodRecalculator). Atomické s uložením instance.
+     */
+    public function afterPersist(array $data): void
+    {
+        if (!$this->rangeChanged || $this->db === null || empty($data['id'])) {
+            return;
+        }
+        $this->recalculate((int) $data['id']);
+    }
+
+    protected function recalculate(int $instanceId): void
+    {
+        $cfg = $this->config?->cfgItem('economy.vat.reports.cz');
+        $mapping = is_array($cfg) ? new VatOutputsMapping($cfg) : null;
+        (new VatPeriodRecalculator(new DataSourceConnection($this->db), $mapping))
+            ->recomputeForInstance($instanceId);
+    }
 
     public function validate(array &$data): ValidationResult
     {

@@ -1,0 +1,47 @@
+{
+    // Extension from economy.vat: momentální zařazení dokladu do instancí
+    // daňových tvrzení (issue #55, D13). Trojice vat_period / cs_period /
+    // rs_period míří na economy_vat_report_periods typu return / cs / rs;
+    // NULL = doklad do daného tvrzení nespadá (žádný kód DPH s příslušným
+    // mapováním, chybějící DUZP/registrace).
+    //
+    // Plní DocsHeadsVatPeriodHandler (beforeSave) pravidlem clamped DPPD;
+    // ručně změněné pole handler respektuje (přesun dokladu mezi měsíci KH).
+    // Skutečná historie zařazení bude v podáních (Fáze 2 dle #55).
+    //
+    // docs.core na economy.vat nezávisí — proto extension, ne sloupce tabulky.
+
+    "table": "docs_core_heads",
+    "columns": [
+        {
+            "id": "vat_period",
+            "name": "VAT return period",
+            "name:cs": "Přiznání k DPH",
+            "name:en": "VAT return period",
+            "type": "int",
+            "nullable": true,
+            "reference": "economy_vat_report_periods",
+            "group": "accounting"
+        },
+        {
+            "id": "cs_period",
+            "name": "Control statement period",
+            "name:cs": "Kontrolní hlášení",
+            "name:en": "Control statement period",
+            "type": "int",
+            "nullable": true,
+            "reference": "economy_vat_report_periods",
+            "group": "accounting"
+        },
+        {
+            "id": "rs_period",
+            "name": "Recapitulative statement period",
+            "name:cs": "Souhrnné hlášení",
+            "name:en": "Recapitulative statement period",
+            "type": "int",
+            "nullable": true,
+            "reference": "economy_vat_report_periods",
+            "group": "accounting"
+        }
+    ]
+}

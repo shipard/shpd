@@ -34,9 +34,11 @@ beforeSave (Fáze 2).
 
 ### `accounting`
 
-System sloupce mapování do účetních období: `fiscal_year`, `fiscal_month`,
-`vat_period`. Plus uživatelem volitelná `vat_registration`. Resolvery
-přijdou ve Fázi 2.
+System sloupce mapování do účetních období: `fiscal_year`, `fiscal_month`.
+Plus uživatelem volitelná `vat_registration`. Zařazení do instancí daňových
+tvrzení (`vat_period`, `cs_period`, `rs_period`) dodává extension modulu
+`economy.vat` a plní jeho handler při uložení — viz
+`modules/economy/vat/docs/README.md`.
 
 ### `vat`
 

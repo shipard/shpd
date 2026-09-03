@@ -22,7 +22,8 @@ use Shipard\Module\World\Vat\VatRateResolver;
  *   1. denormalize doc_type from number_series
  *   2. apply date defaults (accounting_date, vat_duzp, vat_dppd, due_date)
  *   3. apply home_currency from DS config
- *   4. resolve fiscal_year/fiscal_month/vat_period
+ *   4. resolve fiscal_year/fiscal_month (vat_period/cs_period/rs_period plní
+ *      economy.vat přes beforeSave documentEventHandler — docs.core o nich neví)
  *   5. calculateRowPrice + calculateRowVat for each row
  *   6. buildVatRecapitulation (with reverse charge pairs)
  *   7. sumTotals + apply rounding + apply exchange rate to *_dom
@@ -452,12 +453,8 @@ abstract class DocDocument extends Document
             $data['fiscal_year']  = $this->resolveFiscalYearId((string) $data['accounting_date']);
             $data['fiscal_month'] = $this->resolveFiscalMonthId((string) $data['accounting_date']);
         }
-        if (!empty($data['vat_duzp']) && !empty($data['vat_registration'])) {
-            $data['vat_period'] = $this->resolveVatPeriodId(
-                (string) $data['vat_duzp'],
-                (int) $data['vat_registration'],
-            );
-        }
+        // Zařazení do instancí tvrzení DPH (vat_period/cs_period/rs_period) je
+        // věc economy.vat — DocsHeadsVatPeriodHandler (beforeSave event).
     }
 
     protected function resolveFiscalYearId(string $accountingDate): ?int
@@ -488,23 +485,6 @@ abstract class DocDocument extends Document
              WHERE [date_begin] <= %d AND [date_end] >= %d AND [period_type] = 1
              LIMIT 1',
             $accountingDate, $accountingDate,
-        );
-        return $row !== null ? (int) $row['id'] : null;
-    }
-
-    protected function resolveVatPeriodId(?string $vatDuzp, ?int $vatRegistrationId): ?int
-    {
-        if ($vatDuzp === null || $vatRegistrationId === null || $this->db === null) {
-            return null;
-        }
-        $row = $this->db->fetch(
-            'SELECT [id] FROM [economy_codebooks_vat_periods]
-             WHERE [vat_registration] = %i
-               AND [date_begin] <= %d AND [date_end] >= %d
-               AND [docState] != %i
-             LIMIT 1',
-            $vatRegistrationId, $vatDuzp, $vatDuzp,
-            self::DOC_STATE_DELETED,
         );
         return $row !== null ? (int) $row['id'] : null;
     }

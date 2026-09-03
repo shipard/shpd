@@ -16,6 +16,45 @@
         "economy_vat_report_periods"
     ],
 
+    // Zařazení dokladu do instancí tvrzení (vat_period / cs_period /
+    // rs_period, D13) — docs.core na economy.vat nezávisí.
+    "extensions": [
+        "docs_core_heads"
+    ],
+
+    "documentEventHandlers": [
+        {
+            // Save-time přiřazení instancí (D8) + on-demand koncept (D9).
+            "table": "docs_core_heads",
+            "class": "Shipard\\Module\\Economy\\Vat\\DocsHeadsVatPeriodHandler",
+            "events": ["beforeSave"]
+        },
+        {
+            // Seed instancí běžného období po uložení registrace DPH
+            // (náhrada VatPeriodsProvisioner v afterSave registrace).
+            "table": "economy_codebooks_vat_registrations",
+            "class": "Shipard\\Module\\Economy\\Vat\\VatRegistrationSeedHandler",
+            "events": ["afterSave"]
+        }
+    ],
+
+    "alertChecks": [
+        {
+            "id": "economy.vat.draft_report_periods",
+            "name": "Draft VAT report periods",
+            "name:cs": "Koncepty daňových tvrzení",
+            "name:en": "Draft VAT report periods",
+            "description": "Report period instances created on demand while saving a document — review the range and confirm them.",
+            "description:cs": "Instance tvrzení založené automaticky při uložení dokladu — zkontrolujte rozsah a potvrďte je.",
+            "description:en": "Report period instances created on demand while saving a document — review the range and confirm them.",
+            "class": "Shipard\\Module\\Economy\\Vat\\Checks\\DraftReportPeriodsCheck",
+            "severity": "warning",
+            "interval": "15m",
+            "navSection": "accounting",
+            "tags": ["vat", "periods"]
+        }
+    ],
+
     "config": [
         { "id": "economy.vat.reports.cz", "file": "config/vat-reports-cz.jsonc" },
         { "id": "economy.vat.reportTypes", "file": "config/reportTypes.jsonc" }

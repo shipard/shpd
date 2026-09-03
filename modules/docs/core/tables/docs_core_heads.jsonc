@@ -293,18 +293,6 @@
             "reference": "economy_codebooks_vat_registrations",
             "group": "accounting"
         },
-        {
-            "id": "vat_period",
-            "name": "VAT period",
-            "name:cs": "Období DPH",
-            "name:en": "VAT period",
-            "type": "int",
-            "nullable": true,
-            "reference": "economy_codebooks_vat_periods",
-            "system": true,
-            "group": "accounting"
-        },
-
         // --- vat ---
 
         {

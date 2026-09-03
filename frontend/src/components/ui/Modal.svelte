@@ -67,6 +67,10 @@
     height?: string;
     /** Volitelný `data-testid` na kartě modalu (video-runner, smoke E2E). */
     testid?: string;
+    /** Vyjme kartu z depth-shrinku vnořených modalů. Pro malé dialogy
+     *  (ConfirmDialog, 480 px), které by po zmenšení o 60 px na každou
+     *  hloubku přestaly být použitelné; rodič pod nimi vyčnívá i tak. */
+    fixedSize?: boolean;
   }
 
   let {
@@ -82,6 +86,7 @@
     width = '640px',
     height,
     testid,
+    fixedSize = false,
   }: Props = $props();
 
   // Unikátní ID této instance modalu — slouží k identifikaci ve stacku.
@@ -125,7 +130,7 @@
   // max-height: 90vh), jinak by se na úzkém/nízkém viewportu obě hloubky capnuly na
   // stejnou hodnotu a depth-shrink by nebyl vidět.
   const cardStyle = $derived.by(() => {
-    const off = depth * 30;
+    const off = fixedSize ? 0 : depth * 30;
     if (width === 'full') {
       return `width: calc(95vw - ${off * 2}px); max-width: calc(95vw - ${off * 2}px); height: calc(95vh - ${off * 2}px); max-height: calc(95vh - ${off * 2}px);`;
     }

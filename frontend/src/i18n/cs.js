@@ -21,6 +21,7 @@ export default {
   'common.close': 'Zavřít',
   'common.add': 'Přidat',
   'common.edit': 'Upravit',
+  'common.view': 'Zobrazit',
   'common.delete': 'Smazat',
   'common.confirm': 'Potvrdit',
   'common.ok': 'OK',
@@ -278,6 +279,11 @@ export default {
   // ── Form sub-table ──────────────────────────────────────────────────────
   'subtable.saveFirst': 'Nejprve uložte záznam, poté budete moci přidávat záznamy.',
   'subtable.confirmDelete': 'Opravdu chcete smazat tento záznam?',
+  'subtable.deleteTitle': 'Smazat záznam',
+  'subtable.filterPlaceholder': 'Filtrovat…',
+  'subtable.noMatch': 'Filtru neodpovídá žádný záznam.',
+  'subtable.loadFailed': 'Nepodařilo se načíst záznamy.',
+  'subtable.readOnlyNotice': 'Záznam je jen pro čtení, položku lze pouze prohlížet.',
 
   // ── Attachments ─────────────────────────────────────────────────────────
   'attachments.title': 'Přílohy',

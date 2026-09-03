@@ -23,6 +23,10 @@
     defaultData?: Record<string, unknown>;
     /** Nenápadná informační notice nad formulářem (neutrální, ne error). */
     notice?: string | null;
+    /** Jen k prohlížení: pole vypnutá, bez Uložit a přechodů, zavření bez
+     *  dotazu na neuložené změny. Používá FormSubTable pro řádky read-only
+     *  rodiče (issue #53). */
+    readOnly?: boolean;
   }
 
   let {
@@ -33,6 +37,7 @@
     onSaved,
     defaultData = {},
     notice = null,
+    readOnly = false,
   }: Props = $props();
 
   // Aktuální titulek a doc_states z formuláře — aktualizuje se přes onFormLoaded
@@ -172,6 +177,7 @@
       onFormLoaded={handleFormLoaded}
       onDirtyChange={handleDirtyChange}
       {defaultData}
+      {readOnly}
     />
   </Modal>
 {/if}

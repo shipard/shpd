@@ -12,6 +12,7 @@ export default {
   'common.close': 'Close',
   'common.add': 'Add',
   'common.edit': 'Edit',
+  'common.view': 'View',
   'common.delete': 'Delete',
   'common.confirm': 'Confirm',
   'common.ok': 'OK',
@@ -269,6 +270,11 @@ export default {
   // ── Form sub-table ──────────────────────────────────────────────────────
   'subtable.saveFirst': 'Save the record first, then you can add rows.',
   'subtable.confirmDelete': 'Really delete this record?',
+  'subtable.deleteTitle': 'Delete record',
+  'subtable.filterPlaceholder': 'Filter…',
+  'subtable.noMatch': 'No records match the filter.',
+  'subtable.loadFailed': 'Failed to load records.',
+  'subtable.readOnlyNotice': 'The record is read-only; the item can only be viewed.',
 
   // ── Attachments ─────────────────────────────────────────────────────────
   'attachments.title': 'Attachments',

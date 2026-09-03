@@ -11,10 +11,15 @@
     saving = false,
     onSave,
     onTransition,
+    /** Formulář otevřený jen k prohlížení (řádek read-only dokladu ze
+     *  sub-tabulky): bez Uložit i bez přechodů — z řádku se nesmí spouštět
+     *  přechody sub-záznamu. Nezaměňovat s docStates.read_only, které
+     *  přechody (Opravit…) naopak nechává. */
+    readOnly = false,
   } = $props();
 
-  const showSave = $derived(!docStates || !docStates.read_only);
-  const transitions = $derived(docStates?.transitions ?? []);
+  const showSave = $derived(!readOnly && (!docStates || !docStates.read_only));
+  const transitions = $derived(readOnly ? [] : (docStates?.transitions ?? []));
 
   const DESTRUCTIVE_STYLES = ['archive', 'trash', 'cancelled'];
   function isDestructive(stateStyle) {
@@ -69,6 +74,9 @@
   }
 </script>
 
+<!-- Bez jediné akce se lišta nerenderuje (read-only prohlížení) — prázdný
+     pruh s horní linkou by jen ubíral místo. -->
+{#if showSave || visibleTransitions.length > 0 || kebabTransitions.length > 0}
 <div class="shpd-form-state-bar">
   {#if showSave}
     <Button
@@ -101,6 +109,7 @@
     </button>
   {/if}
 </div>
+{/if}
 
 {#if kebabOpen}
   <Popover open={true} anchor={kebabAnchor} placement="top" onClose={closeKebab}>

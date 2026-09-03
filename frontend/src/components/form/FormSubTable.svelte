@@ -1,62 +1,158 @@
 <script>
+  /**
+   * Sub-tabulka ve formuláři (tab typu `subtable`) — issue #53, fáze 1.
+   *
+   * Sloupce i obsah buněk definuje server (`GET /_ui/form/{parentTable}/
+   * subtable/{tabId}/{parentId}`, renderer na rodičovském formu — viz
+   * docs/edit-forms.md kap. 15). Tvar `columns` je shodný s gridem
+   * vieweru (`id`, `label`, `align`, `grow`, `width`), buňka je string nebo
+   * `{text, class}` span; klient nezná FK, enumy ani formát částek.
+   *
+   * Režimy:
+   *   - editovatelný rodič: Přidat vlevo v toolbaru, u řádku Upravit / Smazat
+   *     (Smazat potvrzuje ConfirmDialog), dvojklik = Upravit;
+   *   - `disabled` (rodič se právě ukládá / přepočítává): tytéž akce, jen
+   *     dočasně vypnuté — ikony nepřeskakují na Zobrazit;
+   *   - `readOnly` (rodič jen pro čtení): bez Přidat / Smazat, u řádku
+   *     Zobrazit — dialog řádku se otevře s vypnutými poli, bez Uložit
+   *     a přechodů (FormDialog `readOnly`).
+   *
+   * Klientský filtr nad tabulkou od 11 řádků (bez diakritiky, přes texty
+   * všech buněk); serverové hledání zatím ne (tasks/TODO.md).
+   */
   import { get, del } from '../../api/client.js';
   import Button from '../ui/Button.svelte';
+  import Input from '../ui/Input.svelte';
+  import ConfirmDialog from '../ui/ConfirmDialog.svelte';
   import FormDialog from './FormDialog.svelte';
+  import { iconAdd, iconEdit, iconDelete, iconPreview } from '../../icons.js';
+  import { normalizeSpans } from '../viewer/viewerSpans.js';
+  import { foldDiacritics } from '../../utils/paletteMatch.js';
   import { t } from '../../i18n/index.js';
+  import { translateError } from '../../i18n/errors.js';
 
   let {
+    /** `tab.subtable` z FormDefinition: { table, foreign_key, form_id?, sort? }. */
     element,
+    /** Id tabu — segment cesty endpointu. */
+    tabId,
+    /** Tabulka rodiče — segment cesty endpointu. */
+    parentTable = null,
     parentId = null,
     disabled = false,
+    readOnly = false,
+    /** Po uložení / smazání řádku — rodič si přenačte odvozené hodnoty (součty). */
+    onChanged,
   } = $props();
 
-  let rows = $state([]);
-  let loading = $state(false);
-  let columns = $state([]);
+  /** Filtr se zobrazí až nad tímto počtem řádků. */
+  const FILTER_THRESHOLD = 10;
 
-  // Sub-form dialog state
+  let columns = $state([]);
+  let rows = $state([]);
+  // Fáze 3: sloupec pořadí → šipky přesunu. Zatím vždy null, klíč kontraktu
+  // se zavádí teď, aby fáze 3 neměnila tvar odpovědi.
+  let orderColumn = $state(null);
+  let loading = $state(false);
+  let loadError = $state(null);
+  let filter = $state('');
+
+  // Dialog řádku (nový / úprava / prohlížení)
   let dialogOpen = $state(false);
   let editRecordId = $state(null);
 
-  const EXCLUDE_COLS = new Set(['id', 'order_pos', 'created', 'modified']);
-  const MAX_COLS = 5;
+  // Potvrzení smazání
+  let deleteId = $state(null);
+  let deleting = $state(false);
 
   async function fetchRows() {
-    if (parentId == null) return;
+    if (parentId == null || !parentTable || !tabId) return;
     loading = true;
-    const fk = element.foreign_key;
-    const sort = element.sort ?? 'order_pos:asc';
-    const res = await get(`/${element.table}?filter[${fk}]=eq:${parentId}&sort=${encodeURIComponent(sort)}`);
+    loadError = null;
+    const res = await get(`/_ui/form/${parentTable}/subtable/${tabId}/${parentId}`);
     if (res?.success) {
-      rows = res.data ?? [];
-      deriveColumns();
+      columns = res.data?.columns ?? [];
+      rows = res.data?.rows ?? [];
+      orderColumn = res.data?.order_column ?? null;
+    } else {
+      loadError = res?.error ? translateError(res.error) : t('subtable.loadFailed');
     }
     loading = false;
   }
 
-  function deriveColumns() {
-    if (rows.length === 0) { columns = []; return; }
-    const fk = element.foreign_key;
-    const allKeys = Object.keys(rows[0]).filter(k =>
-      !EXCLUDE_COLS.has(k) && k !== fk
-    );
-    columns = allKeys.slice(0, MAX_COLS);
+  // ── Filtr ──────────────────────────────────────────────────────────────────
+
+  const filterVisible = $derived(rows.length > FILTER_THRESHOLD);
+
+  function rowText(row) {
+    const parts = [];
+    for (const col of columns) {
+      for (const span of normalizeSpans(row.cells?.[col.id]) ?? []) {
+        if (span?.text) parts.push(span.text);
+      }
+    }
+    return foldDiacritics(parts.join(' '));
   }
 
+  const visibleRows = $derived.by(() => {
+    const q = foldDiacritics(filter.trim());
+    if (!filterVisible || q === '') return rows;
+    return rows.filter(row => rowText(row).includes(q));
+  });
+
+  // Reset filtru při změně rodiče — jiný záznam, jiný seznam.
+  $effect(() => {
+    parentId;
+    filter = '';
+  });
+
+  // ── Sloupce ────────────────────────────────────────────────────────────────
+
+  const growCount = $derived(columns.filter(c => c.grow).length);
+
+  /** Inline styl <col> — px pro fixní šířku, rovný podíl % pro grow (vzor ViewerGrid). */
+  function colStyle(col) {
+    if (col.width) return `width: ${col.width}px;`;
+    if (col.grow) return `width: ${Math.floor(100 / growCount)}%;`;
+    return '';
+  }
+
+  // ── Akce ───────────────────────────────────────────────────────────────────
+
   function handleAdd() {
+    if (disabled || readOnly) return;
     editRecordId = null;
     dialogOpen = true;
   }
 
-  function handleEdit(id) {
+  /** Upravit / Zobrazit — dialog rozliší režim přes `readOnly`. */
+  function openRow(id) {
+    if (disabled && !readOnly) return;
     editRecordId = id;
     dialogOpen = true;
   }
 
-  async function handleDelete(id) {
-    if (!confirm(t('subtable.confirmDelete'))) return;
-    await del(`/${element.table}/${id}`);
-    fetchRows();
+  function requestDelete(id) {
+    if (disabled || readOnly) return;
+    deleteId = id;
+  }
+
+  async function confirmDelete() {
+    if (deleteId == null || deleting) return;
+    deleting = true;
+    const res = await del(`/${element.table}/${deleteId}`);
+    deleting = false;
+    deleteId = null;
+    if (!res?.success) {
+      loadError = res?.error ? translateError(res.error) : t('form.saveFailed');
+    }
+    await fetchRows();
+    onChanged?.();
+  }
+
+  function cancelDelete() {
+    if (deleting) return;
+    deleteId = null;
   }
 
   function handleDialogClose() {
@@ -71,68 +167,142 @@
   // jedinou akci Uložit (žádné přechody), takže po Uložit nemá smysl zůstávat
   // otevřený (jinak by šel zavřít jen křížkem). Formuláře s doc states
   // (Kontakty, Adresy …) zůstanou otevřené — zavření řeší close_form / onClose.
-  function handleDialogSaved(_record, info) {
+  async function handleDialogSaved(_record, info) {
     if (!info?.hasDocStates) {
       dialogOpen = false;
       editRecordId = null;
     }
-    fetchRows();
+    await fetchRows();
+    onChanged?.();
   }
 
+  // Načtení při změně rodiče / tabu. Závislosti jen na primitivech — po
+  // tichém reloadu rodiče přijde nový objekt `element`, ale řádky jsme si
+  // už načetli sami a druhý fetch je zbytečný.
   $effect(() => {
     const pid = parentId;
-    if (pid != null) fetchRows();
+    const pt = parentTable;
+    const tid = tabId;
+    if (pid != null && pt && tid) fetchRows();
   });
 </script>
 
-<div class="shpd-form-subtable">
+<div class="shpd-form-subtable" data-testid="subtable">
   {#if parentId == null}
     <div class="shpd-form-subtable__info">
       {t('subtable.saveFirst')}
     </div>
   {:else}
     <div class="shpd-form-subtable__toolbar">
-      <Button
-        label={t('common.add')}
-        variant="secondary"
-        size="sm"
-        onclick={handleAdd}
-        {disabled}
-      />
+      <div class="shpd-form-subtable__toolbar-left">
+        {#if !readOnly}
+          <Button
+            label={t('common.add')}
+            icon={iconAdd}
+            variant="secondary"
+            size="sm"
+            onclick={handleAdd}
+            {disabled}
+            testid="subtable-add"
+          />
+        {/if}
+      </div>
+      {#if filterVisible}
+        <div class="shpd-form-subtable__filter">
+          <Input
+            bind:value={filter}
+            placeholder={t('subtable.filterPlaceholder')}
+            testid="subtable-filter"
+          />
+        </div>
+      {/if}
     </div>
 
-    {#if loading}
-      <div class="shpd-form-subtable__loading">{t('common.loading')}</div>
+    {#if loadError}
+      <div class="shpd-form-subtable__error" role="alert">{loadError}</div>
+    {/if}
+
+    {#if loading && rows.length === 0}
+      <div class="shpd-form-subtable__status">{t('common.loading')}</div>
     {:else if rows.length === 0}
-      <div class="shpd-form-subtable__empty">{t('common.empty')}</div>
+      <div class="shpd-form-subtable__status">{t('common.empty')}</div>
+    {:else if visibleRows.length === 0}
+      <div class="shpd-form-subtable__status">{t('subtable.noMatch')}</div>
     {:else}
-      <div class="shpd-form-subtable__table-wrap">
-        <table class="shpd-form-subtable__table">
-          <thead>
-            <tr>
-              {#each columns as col}
-                <th>{col}</th>
-              {/each}
-              <th class="shpd-form-subtable__actions-th"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {#each rows as row (row.id)}
-              <tr>
-                {#each columns as col}
-                  <td>{row[col] ?? ''}</td>
-                {/each}
-                <td class="shpd-form-subtable__actions">
-                  {#if !disabled}
-                    <button class="shpd-form-subtable__btn" onclick={() => handleEdit(row.id)} title={t('common.edit')}>✎</button>
-                    <button class="shpd-form-subtable__btn shpd-form-subtable__btn--danger" onclick={() => handleDelete(row.id)} title={t('common.delete')}>✕</button>
-                  {/if}
-                </td>
-              </tr>
+      <table class="shpd-form-subtable__table">
+        <colgroup>
+          {#each columns as col (col.id)}
+            <col style={colStyle(col)} />
+          {/each}
+          <col class="shpd-form-subtable__actions-col" />
+        </colgroup>
+        <thead>
+          <tr>
+            {#each columns as col (col.id)}
+              <th
+                class="shpd-form-subtable__th"
+                class:shpd-form-subtable__th--num={col.align === 'right'}
+              >{col.label}</th>
             {/each}
-          </tbody>
-        </table>
-      </div>
+            <th class="shpd-form-subtable__th shpd-form-subtable__th--actions"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {#each visibleRows as row (row.id)}
+            <tr
+              class="shpd-form-subtable__tr {row.stateStyle ? `docState_${row.stateStyle}` : ''}"
+              data-testid="subtable-row"
+              data-row-id={row.id}
+              ondblclick={() => openRow(row.id)}
+            >
+              {#each columns as col (col.id)}
+                <td
+                  class="shpd-form-subtable__td"
+                  class:shpd-form-subtable__td--num={col.align === 'right'}
+                >
+                  {#each normalizeSpans(row.cells?.[col.id]) ?? [] as span}
+                    <span class={span.class ? `shpd-form-subtable__span--${span.class}` : ''}>{span.text}</span>
+                  {/each}
+                </td>
+              {/each}
+              <td class="shpd-form-subtable__td shpd-form-subtable__actions">
+                {#if readOnly}
+                  <Button
+                    icon={iconPreview}
+                    iconOnly
+                    size="sm"
+                    variant="ghost"
+                    label={t('common.view')}
+                    onclick={() => openRow(row.id)}
+                    testid="subtable-row-view"
+                  />
+                {:else}
+                  <Button
+                    icon={iconEdit}
+                    iconOnly
+                    size="sm"
+                    variant="ghost"
+                    label={t('common.edit')}
+                    {disabled}
+                    onclick={() => openRow(row.id)}
+                    testid="subtable-row-edit"
+                  />
+                  <Button
+                    icon={iconDelete}
+                    iconOnly
+                    size="sm"
+                    variant="ghost"
+                    label={t('common.delete')}
+                    {disabled}
+                    onclick={() => requestDelete(row.id)}
+                    testid="subtable-row-delete"
+                  />
+                {/if}
+              </td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
     {/if}
   {/if}
 </div>
@@ -144,6 +314,19 @@
   onClose={handleDialogClose}
   onSaved={handleDialogSaved}
   defaultData={{ [element.foreign_key]: parentId }}
+  {readOnly}
+  notice={readOnly ? t('subtable.readOnlyNotice') : null}
+/>
+
+<ConfirmDialog
+  open={deleteId != null}
+  title={t('subtable.deleteTitle')}
+  message={t('subtable.confirmDelete')}
+  confirmLabel={t('common.delete')}
+  variant="danger"
+  busy={deleting}
+  onConfirm={confirmDelete}
+  onCancel={cancelDelete}
 />
 
 <style>
@@ -151,81 +334,104 @@
     width: 100%;
   }
 
-  .shpd-form-subtable__info {
+  .shpd-form-subtable__info,
+  .shpd-form-subtable__status {
     padding: var(--shpd-space-lg);
     text-align: center;
     color: var(--shpd-color-text-secondary);
     font-size: var(--shpd-font-size-sm);
   }
 
+  .shpd-form-subtable__error {
+    padding: var(--shpd-space-sm) var(--shpd-space-md);
+    margin-bottom: var(--shpd-space-sm);
+    border-radius: var(--shpd-radius-sm);
+    background: var(--shpd-color-alert-danger-bg, var(--shpd-color-bg-hover));
+    color: var(--shpd-color-danger);
+    font-size: var(--shpd-font-size-sm);
+  }
+
   .shpd-form-subtable__toolbar {
     display: flex;
-    justify-content: flex-end;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--shpd-space-sm);
     padding: var(--shpd-space-sm) 0;
   }
 
-  .shpd-form-subtable__loading,
-  .shpd-form-subtable__empty {
-    padding: var(--shpd-space-md);
-    text-align: center;
-    color: var(--shpd-color-text-secondary);
-    font-size: var(--shpd-font-size-sm);
+  .shpd-form-subtable__toolbar-left {
+    display: flex;
+    gap: var(--shpd-space-sm);
   }
 
-  .shpd-form-subtable__table-wrap {
-    overflow-x: auto;
+  .shpd-form-subtable__filter {
+    width: min(280px, 50%);
   }
 
+  /* border-collapse: separate — s collapse by bordery sticky hlavičky
+     odscrollovaly s obsahem (stejný důvod jako ViewerGrid). Barva textu
+     na tabulce, ne na td — globální .docState_archive / .docState_trash
+     na <tr> ji přebíjí (tlumený archiv, škrtnutý koš). */
   .shpd-form-subtable__table {
     width: 100%;
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: 0;
     font-size: var(--shpd-font-size-sm);
-  }
-
-  .shpd-form-subtable__table th {
-    text-align: left;
-    padding: var(--shpd-space-xs) var(--shpd-space-sm);
-    border-bottom: 2px solid var(--shpd-color-border);
-    font-weight: 600;
-    color: var(--shpd-color-text-secondary);
-    white-space: nowrap;
-  }
-
-  .shpd-form-subtable__table td {
-    padding: var(--shpd-space-xs) var(--shpd-space-sm);
-    border-bottom: 1px solid var(--shpd-color-border);
     color: var(--shpd-color-text);
   }
 
-  .shpd-form-subtable__table tbody tr:hover {
+  .shpd-form-subtable__th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: var(--shpd-space-xs) var(--shpd-space-sm);
+    text-align: left;
+    font-weight: 600;
+    color: var(--shpd-color-text-secondary);
+    background: var(--shpd-color-bg);
+    border-bottom: 2px solid var(--shpd-color-border);
+    white-space: nowrap;
+  }
+
+  .shpd-form-subtable__td {
+    padding: 4px var(--shpd-space-sm);
+    border-bottom: 1px solid var(--shpd-color-border);
+    vertical-align: middle;
+  }
+
+  /* Číselné sloupce — zarovnání + tabular-nums, hlavička i buňky. */
+  .shpd-form-subtable__th--num,
+  .shpd-form-subtable__td--num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .shpd-form-subtable__tr:hover > .shpd-form-subtable__td {
     background: var(--shpd-color-bg-hover);
   }
 
-  .shpd-form-subtable__actions-th {
-    width: 60px;
+  .shpd-form-subtable__actions-col {
+    width: 72px;
   }
 
   .shpd-form-subtable__actions {
     white-space: nowrap;
     text-align: right;
+    padding-top: 0;
+    padding-bottom: 0;
   }
 
-  .shpd-form-subtable__btn {
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 2px var(--shpd-space-xs);
-    color: var(--shpd-color-text-secondary);
-    font-size: var(--shpd-font-size-base);
-    border-radius: var(--shpd-radius-sm);
-  }
+  /* Styled span variants — stejný slovník jako ViewerGrid; `muted` navíc
+     kurzívou (textový řádek dokladu). */
+  .shpd-form-subtable__span--amount  { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .shpd-form-subtable__span--muted   { opacity: 0.7; font-style: italic; }
+  .shpd-form-subtable__span--bold    { font-weight: 600; }
+  .shpd-form-subtable__span--primary { color: var(--shpd-color-primary); }
+  .shpd-form-subtable__span--success { color: var(--shpd-color-success); }
+  .shpd-form-subtable__span--warning { color: var(--shpd-color-warning); }
+  .shpd-form-subtable__span--danger  { color: var(--shpd-color-danger); }
 
-  .shpd-form-subtable__btn:hover {
-    background: var(--shpd-color-bg-hover);
-    color: var(--shpd-color-text);
-  }
-
-  .shpd-form-subtable__btn--danger:hover {
-    color: var(--shpd-color-danger);
+  .shpd-form-subtable__td > span + span {
+    margin-left: var(--shpd-space-xs);
   }
 </style>

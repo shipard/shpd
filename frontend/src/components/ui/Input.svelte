@@ -9,6 +9,8 @@
     disabled?: boolean;
     error?: string | null;
     oninput?: (event: Event) => void;
+    /** Volitelný `data-testid` na inputu (video-runner, smoke E2E). */
+    testid?: string;
   }
 
   let {
@@ -21,6 +23,7 @@
     disabled = false,
     error = null,
     oninput,
+    testid,
   }: Props = $props();
 </script>
 
@@ -35,6 +38,7 @@
   {maxlength}
   {disabled}
   {oninput}
+  data-testid={testid}
 />
 {#if error}
   <span class="shpd-input__error">{error}</span>

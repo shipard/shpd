@@ -15,6 +15,9 @@
     onFormLoaded,
     onDirtyChange,
     defaultData = {},
+    /** Jen k prohlížení (řádek read-only rodiče ze sub-tabulky): všechna pole
+     *  vypnutá, nikdy dirty, FormStateBar bez Uložit a přechodů. */
+    readOnly = false,
   } = $props();
 
   let formDef = $state(null);
@@ -49,9 +52,12 @@
       : (formDef?.title_new ?? t('form.titleNew'))
   );
 
-  const isDisabled = $derived(
-    saving || recalculating || (formDef?.doc_states?.read_only ?? false)
-  );
+  // Read-only = externí prop (prohlížení) NEBO read-only stav dokumentu.
+  // isDisabled navíc zahrnuje probíhající save/recalculate — sub-tabulka
+  // dostává obojí zvlášť, aby během ukládání rodiče nepřepínala Upravit/Smazat
+  // na Zobrazit (jen je dočasně vypne).
+  const isReadOnly = $derived(readOnly || (formDef?.doc_states?.read_only ?? false));
+  const isDisabled = $derived(saving || recalculating || isReadOnly);
 
   // Notifikuje rodiče (FormDialog) o aktuálním titulku a stavu — header modalu
   // tak může zobrazit titulek, FormStateBadge a subtitle z header_info.
@@ -71,7 +77,7 @@
   // takže změna spuštěná triggerem zachová dirty stav (uživatel musí Uložit).
   const isDirty = $derived.by(() => {
     if (!loadedDataSnapshot) return false;
-    if (formDef?.doc_states?.read_only) return false;
+    if (isReadOnly) return false;
     return !shallowEqual(formData, loadedDataSnapshot);
   });
 
@@ -99,7 +105,9 @@
 
   // ── Load ────────────────────────────────────────────────────────────────────
 
-  async function loadForm(tbl, id) {
+  // `keepTab`: po tichém reloadu (změna řádku sub-tabulky) zůstat na aktivním
+  // tabu — jinak by každé přidání řádku vrátilo uživatele na první tab.
+  async function loadForm(tbl, id, { keepTab = false } = {}) {
     loadError = null;
     let path = id != null
       ? `/_ui/form/${tbl}/meta/${id}`
@@ -135,7 +143,20 @@
     dataResolved = res.data.dataResolved ?? {};
     // Snapshot dat — po načtení formulář není dirty
     loadedDataSnapshot = { ...formData };
-    activeTabId = formDef.tabs[0]?.id ?? null;
+    const tabIds = formDef.tabs.map(t => t.id);
+    if (!keepTab || !tabIds.includes(activeTabId)) {
+      activeTabId = formDef.tabs[0]?.id ?? null;
+    }
+  }
+
+  // Sub-tabulka nahlásila změnu řádku (přidání / úprava / smazání). Server
+  // mohl přepočítat odvozené hodnoty rodiče (součty dokladu v
+  // DocRowsDocument::recomputeHeader), které formulář drží v formData
+  // a header_info — přenačteme je. Jen když rodič nemá neuložené změny:
+  // reload by je zahodil; při dirty stavu se hodnoty obnoví po Uložit.
+  async function handleSubtableChanged() {
+    if (currentId == null || isDirty || saving || recalculating) return;
+    await loadForm(table, currentId, { keepTab: true });
   }
 
   function buildDefaultData(def) {
@@ -518,9 +539,12 @@
               {fieldErrors}
               {dataResolved}
               disabled={isDisabled}
+              readOnly={isReadOnly}
               onTrigger={handleTrigger}
               onResolveChange={handleResolveChange}
               parentId={currentId}
+              parentTable={table}
+              onSubtableChanged={handleSubtableChanged}
             />
           {/if}
         </div>
@@ -533,6 +557,7 @@
     <FormStateBar
       docStates={formDef.doc_states ?? null}
       {saving}
+      {readOnly}
       onSave={handleSave}
       onTransition={handleTransition}
     />

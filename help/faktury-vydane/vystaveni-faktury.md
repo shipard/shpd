@@ -61,9 +61,14 @@ toho, kdo ti kolik dluží. Nebo zkoušíš, co Shipard u vydané faktury umí a
    Potřebuješ-li na faktuře mezititulek nebo komentář, přepni **Typ řádku**
    na *Textový řádek*. Do součtů nevstupuje.
 
+   Nový řádek uložíš tlačítkem **Přidat**. Když zadáváš víc řádků za
+   sebou, použij **Přidat a pokračovat**: řádek se uloží a hned máš před
+   sebou prázdný formulář pro další.
+
    Zadané řádky vidíš na tabu **Řádky** v tabulce s popisem, množstvím,
    jednotkou, cenou a DPH. Řádek otevřeš k úpravě tlačítkem **Upravit**
    (tužka) nebo dvojklikem, **Smazat** (koš) se před smazáním zeptá.
+   V otevřeném řádku listuješ na sousední šipkami v záhlaví okna.
    Součty dokladu se po každé změně řádku přepočítají.
 
 5. **Zkontroluj tab Rekapitulace DPH.** Je to rozpis základu a daně po sazbách

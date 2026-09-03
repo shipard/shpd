@@ -1,6 +1,6 @@
 # Sub-tabulky ve formulářích — fáze 2: dialog řádku (Přidat / Přidat a pokračovat, Předchozí/Další)
 
-**Stav:** naplánováno — design schválen 2026-09-03 (issue #53), závisí na `subtable-phase1.md`
+**Stav:** hotovo — implementováno 2026-09-03 (issue #53); E2E ověření na dev DS dle sekce „Hotovo když“
 
 ## Kontext / Cíl
 
@@ -172,3 +172,32 @@ onSaveAndContinue?: () => void;            // po úspěšném uložení + resetu
 - **Kebab na mobilu** — ověř všechny tři layouty + mobil (viz issue #46).
 - **Nepřidávej Zavřít** ani „pro jistotu" — rozhodnuto: křížek, Esc, klik
   mimo stačí.
+
+## Výsledek implementace (2026-09-03)
+
+Odchylky a upřesnění oproti zadání (rozhodnutí schválena Annou 2026-09-03):
+
+- **Reakce `FormEditor` na změnu `recordId` už existovala** (`$effect`
+  s `untrack`), Předchozí/Další tedy stačí přes změnu `editRecordId`
+  v `FormSubTable`; hlavičku modalu po každém načtení přepisuje
+  `handleFormLoaded`, reset při `open` se neměnil.
+- **Tlačítko Zavřít nikde nebylo** — jen křížek modalu; nic se neodstraňovalo.
+- **Přidat a pokračovat nejde přes `onSaved`** (sub-tabulka by dialog
+  zavřela): `FormEditor` má sdílené `saveRecord()` a obálky `handleSave()` /
+  `handleSaveAndContinue()`, druhá po `resetToNew()` volá samostatný
+  `onSaveAndContinue`. `wasNew` pro pravidlo zavření počítá `FormDialog`
+  z vlastního `recordId == null`.
+- **Šipky** v novém slotu `Modal.headerNav` (mezi `summary` a `×`), ne
+  v `headerExtra`, kde sedí badge stavu. Klávesy přes nový prop
+  `Modal.onKeydown` volaný jen pro kartu na vrcholu stacku.
+- **Alt+←/→ se ignoruje, když je fokus v textovém poli** (macOS: Alt+šipka
+  skáče po slovech; dotaz na neuložené změny uprostřed psaní by rušil);
+  jinak `preventDefault` proti „zpět" v historii prohlížeče.
+- **Auto-fokus po Přidat a pokračovat přeskočí lookup pole** — `LookupInput`
+  otevírá dropdown už při fokusu, po každém uložení by vyskočilo vyhledávání.
+- **Kebab na mobilu** zobecněn na položky `{label, danger, run}`, aby vešlo
+  Přidat a pokračovat vedle přechodů stavů.
+- Text `form.unsavedChanges` upraven („…Když budete pokračovat, ztratí se.“),
+  aby seděl na zavření i na navigaci; nové klíče `form.unsavedTitle`,
+  `form.unsavedDiscard`, `form.unsavedStay`, `form.add`,
+  `form.saveAndContinue`, `form.navPosition`, `form.navPrev`, `form.navNext`.

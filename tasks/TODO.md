@@ -103,10 +103,10 @@ serverové řazení a hledání). Kontrakt endpointu `/subtable` má záměrně 
 **Zjištěno:** 09/2026 při fázi 1 sub-tabulek (issue #53).
 
 Fáze 1 zavedla `ui/ConfirmDialog.svelte` (Enter / Esc, `fixedSize`, testidy)
-a nasadila ho jen v `FormSubTable`. Nativní `window.confirm` zůstává
-v `AttachmentPanel` (smazání přílohy), `ViewerDetail` (akce s `confirm`)
-a `Viewer` (smazání pravidla štítku). `FormDialog.handleClose`
-(neuložené změny) řeší fáze 2 (`tasks/subtable-phase2.md`).
+a nasadila ho v `FormSubTable`; fáze 2 jím nahradila `window.confirm`
+i ve `FormDialog` (neuložené změny — Zahodit / Zůstat). Nativní
+`window.confirm` zůstává v `AttachmentPanel` (smazání přílohy),
+`ViewerDetail` (akce s `confirm`) a `Viewer` (smazání pravidla štítku).
 
 **Směr řešení:** mechanická náhrada — lokální state `confirmOpen` + dialog
 s `variant="danger"`; u `ViewerDetail` text pochází ze serverové akce

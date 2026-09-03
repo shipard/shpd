@@ -1128,8 +1128,54 @@ $fallback)` (lokalizovaný label sloupce dětské tabulky), `subtableColumnSpec(
   (+ `data-row-id`), `subtable-row-edit`, `subtable-row-delete`,
   `subtable-row-view`; ConfirmDialog `confirm-dialog`, `confirm-ok`,
   `confirm-cancel`.
-- Chování po Uložit v dialogu (`hasDocStates` větev v `handleDialogSaved`)
-  zůstává beze změny — revizi dialogu řeší fáze 2.
+### 15.4 Dialog sub-záznamu — tlačítka a navigace (fáze 2)
+
+Dialog řádku je běžný `FormDialog`, který od `FormSubTable` dostává navíc
+`navigation` a `onSaveAndContinue`. Top-level dialogy (Osoba, Faktura
+z prohlížeče) tyto props neposílají a vypadají jako dřív.
+
+**Tlačítka ve `FormStateBar`** (props `isNew`, `onSaveAndContinue`):
+
+| Záznam | Tlačítka | Po uložení |
+|--------|----------|------------|
+| nový sub-záznam | **Přidat** (primary, = `onSave`) + **Přidat a pokračovat** (secondary; na mobilu v kebabu) | Přidat: `onSaved` s `wasNew: true` → sub-tabulka dialog zavře (i u forem s doc states). Přidat a pokračovat: `FormEditor.handleSaveAndContinue()` → `saveRecord()` → `resetToNew()` (meta nového záznamu s `defaultData`, nový snapshot, titulek `title_new`, fokus prvního pole mimo lookup) → `onSaveAndContinue(record)` → sub-tabulka jen refetchne řádky a zavolá `onChanged`. Záměrně nejde přes `onSaved`, které by dialog zavřelo. |
+| nový top-level záznam | **Uložit** jako dřív | beze změny |
+| existující bez doc states (řádky dokladu, měsíce) | **Uložit** | `onSaved` → sub-tabulka zavře (`!hasDocStates`) |
+| existující s doc states (Adresy, Kontakty, Účty) | **Uložit** + přechody stavů | dialog zůstává otevřený, zavření řeší `close_form` / křížek — beze změny |
+
+Pravidlo zavření v `FormSubTable.handleDialogSaved`: `!info.hasDocStates ||
+info.wasNew`. `wasNew` počítá `FormDialog` z vlastního `recordId == null`
+(zůstává null po celou dobu dialogu nového záznamu).
+
+Ukládání v `FormEditor` je rozdělené na sdílené `saveRecord()` (POST / PUT,
+zobrazí validační i ostatní chyby, vrátí záznam nebo `null`) a obálky
+`handleSave()` / `handleSaveAndContinue()`. Při chybě uložení se nic
+neresetuje — formulář zůstane s chybami.
+
+**Navigace Předchozí / Další** (`FormDialog.navigation = {index, count,
+onPrev, onNext}`): vlastní ji `FormSubTable`, protože má seřazený seznam
+řádků — index se hledá v **nefiltrovaném** `rows` (filtr je jen pro
+tabulku), `onPrev` / `onNext` mění `editRecordId`, `FormEditor` formulář
+přenačte přes svůj `$effect` na `recordId`. Šipky `‹ 2 / 12 ›` jsou
+v hlavičce modalu v novém slotu `Modal.headerNav` (mezi `summary` a `×`,
+na mobilu viditelné), na krajích disabled, u nového záznamu (`index = -1`)
+se nerenderují. Fungují i v read-only režimu (prohlížení). Klávesy
+**Alt+← / Alt+→** přes `Modal.onKeydown` — Modal ho volá jen pro kartu na
+vrcholu stacku (stejné pravidlo jako Esc); `FormDialog` klávesu ignoruje,
+když je fokus v textovém poli (na macOS Alt+šipka skáče po slovech), jinak
+`preventDefault` proti „zpět" v historii prohlížeče.
+
+**Neuložené změny:** zavření (křížek, Esc, klik mimo) i Předchozí / Další
+sdílejí `FormDialog.guardDirty(then)` — bez dirty rovnou `then()`, s dirty
+`ConfirmDialog` „Neuložené změny" s tlačítky **Zahodit** (→ `then()`) a
+**Zůstat**. `window.confirm` ve `FormDialog` zmizel. Přechod se nikdy
+neukládá automaticky.
+
+**Zavírání:** žádné tlačítko Zavřít — ani v top-level, ani v sub-dialozích;
+zavírá křížek, Esc a klik mimo modal.
+
+`data-testid`: `form-save`, `form-save-continue`, `form-nav-prev`,
+`form-nav-pos`, `form-nav-next`, `unsaved-dialog`.
 
 ---
 
@@ -1137,10 +1183,10 @@ $fallback)` (lokalizovaný label sloupce dětské tabulky), `subtableColumnSpec(
 
 | Komponenta | Popis |
 |------------|-------|
-| `Modal.svelte` (ui/) | Generický modal: header s titulkem a `×`, tělo, overlay, body scroll lock, modal stack pro Esc handling. Volitelný `headerExtra` snippet pro badge, `width` a `height` props, `fixedSize` (vyjme kartu z depth-shrinku — malé dialogy). |
+| `Modal.svelte` (ui/) | Generický modal: header s titulkem a `×`, tělo, overlay, body scroll lock, modal stack pro Esc handling. Volitelný `headerExtra` snippet pro badge, `headerNav` (šipky navigace před `×`), `width` a `height` props, `fixedSize` (vyjme kartu z depth-shrinku — malé dialogy), `onKeydown` (klávesy jen pro kartu na vrcholu stacku). |
 | `ConfirmDialog.svelte` (ui/) | Potvrzovací dialog nad Modal (480 px, `fixedSize`): `title`, `message`, `confirmLabel`, `variant` primary/danger, `busy`, `onConfirm` / `onCancel`; Enter = potvrdit (fokus na tlačítku), Esc = zrušit. Náhrada `window.confirm` — kap. 15.3 |
-| `FormDialog.svelte` | Orchestrátor — Modal s škálující se velikostí (clamp 1200–1700 px), poskytuje header (titulek + badge + subtitle + summary), drží dirty stav, zobrazí confirm při zavření. Meta načítá FormEditor uvnitř. Prop `readOnly` (prohlížení řádku read-only rodiče) a `notice`. |
-| `FormEditor.svelte` | Hlavní shell: tab bar, obsah, toolbar (header je v Modal). Sleduje dirty stav (snapshot vs aktuální data), propaguje titulek/doc_states/dirty zpět do FormDialog přes callbacky `onFormLoaded` a `onDirtyChange`. Prop `readOnly`; `isReadOnly` / `isDisabled` zvlášť pro sub-tabulky; `handleSubtableChanged()` tichý reload rodiče |
+| `FormDialog.svelte` | Orchestrátor — Modal s škálující se velikostí (clamp 1200–1700 px), poskytuje header (titulek + badge + subtitle + summary + šipky navigace), drží dirty stav, `guardDirty()` s `ConfirmDialog` Zahodit / Zůstat při zavření i Předchozí / Další. Meta načítá FormEditor uvnitř. Props `readOnly`, `notice`, `navigation`, `onSaveAndContinue`; `onSaved` info nese `hasDocStates` + `wasNew` — kap. 15.4 |
+| `FormEditor.svelte` | Hlavní shell: tab bar, obsah, toolbar (header je v Modal). Sleduje dirty stav (snapshot vs aktuální data), propaguje titulek/doc_states/dirty zpět do FormDialog přes callbacky `onFormLoaded` a `onDirtyChange`. Prop `readOnly`; `isReadOnly` / `isDisabled` zvlášť pro sub-tabulky; `handleSubtableChanged()` tichý reload rodiče; `saveRecord()` + `handleSave()` / `handleSaveAndContinue()` (`resetToNew()`, fokus prvního pole) |
 | `FormTab.svelte` | Jeden tab — vykreslí sekce / subtable / attachments podle `tab.type`; sub-tabulce předává `tabId`, `parentTable`, `readOnly`, `onSubtableChanged` |
 | `FormSection.svelte` | Karta s pozadím a volitelným titulkem; horizontální grid pro N sloupců |
 | `FormColumn.svelte` | Sloupec se sdílenou auto-šířkou labelů (`max-content 1fr`) |
@@ -1148,7 +1194,7 @@ $fallback)` (lokalizovaný label sloupce dětské tabulky), `subtableColumnSpec(
 | `FormInline.svelte` | Inline skupina (víc polí v jedné řádce); první pole použije label řádky, ostatní mají mini-labely |
 | `FormElement.svelte` | Renderer elementu — switch podle `type` + delegace na UI komponenty |
 | `FormSubTable.svelte` | Sub-tabulka: sloupce a řádky ze serveru (`/subtable`), Přidat / Upravit / Smazat (ConfirmDialog) nebo Zobrazit v read-only, klientský filtr od 11 řádků — kap. 15 |
-| `FormStateBar.svelte` | Spodní toolbar: Uložit + přechodová tlačítka; `readOnly` skryje obojí, bez jediné akce se nerenderuje |
+| `FormStateBar.svelte` | Spodní toolbar: Uložit + přechodová tlačítka; `readOnly` skryje obojí, bez jediné akce se nerenderuje. `isNew` + `onSaveAndContinue` → Přidat + Přidat a pokračovat (na mobilu v kebabu; kebab má generické položky `{label, danger, run}`) |
 | `FormStateBadge.svelte` | Badge stavu v záhlaví Modalu |
 
 ### UI komponenty (`components/ui/`)

@@ -141,12 +141,17 @@
 
   // ── Sloupce ────────────────────────────────────────────────────────────────
 
-  const growCount = $derived(columns.filter(c => c.grow).length);
-
-  /** Inline styl <col> — px pro fixní šířku, rovný podíl % pro grow (vzor ViewerGrid). */
+  /**
+   * Inline styl <col>: px jen pro pevnou šířku. Rostoucí sloupec záměrně
+   * BEZ `width: 100%` (vzor ViewerGrid): v auto layoutu se k procentuálnímu
+   * sloupci přičtou pevné šířky ostatních a tabulka přeteče doprava přes
+   * padding tabu — grid to maskuje vlastním scroll kontejnerem, formulář ne.
+   * Zbytek šířky dostanou automatické sloupce úměrně obsahu; číselné sloupce
+   * se smrsknou na obsah přes `--num` (width: 1% + nowrap), takže text
+   * (popis) dostane prakticky všechno.
+   */
   function colStyle(col) {
     if (col.width) return `width: ${col.width}px;`;
-    if (col.grow) return `width: ${Math.floor(100 / growCount)}%;`;
     return '';
   }
 
@@ -292,6 +297,7 @@
     {:else if visibleRows.length === 0}
       <div class="shpd-form-subtable__status">{t('subtable.noMatch')}</div>
     {:else}
+      <div class="shpd-form-subtable__table-wrap">
       <table class="shpd-form-subtable__table">
         <colgroup>
           {#each columns as col (col.id)}
@@ -388,6 +394,7 @@
           {/each}
         </tbody>
       </table>
+      </div>
     {/if}
   {/if}
 </div>
@@ -455,6 +462,21 @@
     width: min(280px, 50%);
   }
 
+  /* Na desktopu bez vlastního scroll kontejneru (overflow visible), aby
+     sticky hlavička držela vůči scroll oblasti tabu; tabulka se do šířky
+     vejde (viz colStyle). Na mobilu se 9 sloupců řádků dokladu nevejde
+     nikdy — tam obal posouvá vodorovně sám a padding tabu zůstane. */
+  .shpd-form-subtable__table-wrap {
+    width: 100%;
+    overflow: visible;
+  }
+
+  @media (max-width: 768px) {
+    .shpd-form-subtable__table-wrap {
+      overflow-x: auto;
+    }
+  }
+
   /* border-collapse: separate — s collapse by bordery sticky hlavičky
      odscrollovaly s obsahem (stejný důvod jako ViewerGrid). Barva textu
      na tabulce, ne na td — globální .docState_archive / .docState_trash
@@ -486,11 +508,15 @@
     vertical-align: middle;
   }
 
-  /* Číselné sloupce — zarovnání + tabular-nums, hlavička i buňky. */
+  /* Číselné sloupce — zarovnání + tabular-nums, hlavička i buňky.
+     width: 1% + nowrap = shrink-to-fit: sloupec je jen tak široký, jak
+     nejdelší částka, zbytek šířky zůstane textovým sloupcům. */
   .shpd-form-subtable__th--num,
   .shpd-form-subtable__td--num {
     text-align: right;
     font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    width: 1%;
   }
 
   .shpd-form-subtable__tr:hover > .shpd-form-subtable__td {

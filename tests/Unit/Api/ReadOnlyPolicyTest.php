@@ -41,7 +41,8 @@ class ReadOnlyPolicyTest extends TestCase
 			['crud', 'create', $d403], ['crud', 'update', $d403], ['crud', 'patch', $d403], ['crud', 'delete', $d403],
 			// viewer / form / lookup / attachment
 			['viewer', 'meta', $allow], ['viewer', 'rows', $allow], ['viewer', 'detail', $allow],
-			['form', 'meta', $allow], ['form', 'save', $d403], ['form', 'recalculate', $d403],
+			['form', 'meta', $allow], ['form', 'subtable', $allow],
+			['form', 'save', $d403], ['form', 'recalculate', $d403], ['form', 'subtableMove', $d403],
 			['lookup', 'search', $allow], ['lookup', 'resolve', $allow],
 			['attachment', 'download', $allow], ['attachment', 'thumbnail', $allow], ['attachment', 'list', $allow],
 			['attachment', 'upload', $d403], ['attachment', 'patch', $d403],

@@ -67,8 +67,11 @@ final class ReadOnlyPolicy
 		],
 		'viewer' => [self::ANY => ReadOnlyVerdict::Allow],
 		'form' => [
-			'meta' => ReadOnlyVerdict::Allow,
-			// save, recalculate → 403
+			'meta'     => ReadOnlyVerdict::Allow,
+			// Sloupce + řádky sub-tabulky (issue #53) — čtení, bez ní by tab
+			// Řádky / Adresy na read-only DS zůstal prázdný.
+			'subtable' => ReadOnlyVerdict::Allow,
+			// save, recalculate, subtableMove → 403
 		],
 		'lookup' => [self::ANY => ReadOnlyVerdict::Allow],
 		'attachment' => [

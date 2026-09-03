@@ -24,7 +24,7 @@ Podrobné specifikace jsou v adresáři `docs/`. Přečti příslušný dokument
 | `docs/document-system.md` | Dokumentový systém — Document třídy, hooky, validace, TableGateway, child tabulky, DocumentRegistry |
 | `docs/alerts.md` | Systém upozornění — JSONC `alertChecks`, PHP `AlertCheck`, `AlertReconciler`, snooze/dismiss, CLI `alerts-run` |
 | `docs/frontend.md` | Frontend architektura — Svelte 5, komponenty, ikony (Font Awesome), API komunikace |
-| `docs/edit-forms.md` | Editační formuláře — FormDefinition, taby, sekce, sloupce, `TableForm`, JSONC formy, recalculate, doc states, **HeaderInfo** (sekce 21), **Lookup pole** (sekce 22) |
+| `docs/edit-forms.md` | Editační formuláře — FormDefinition, taby, sekce, sloupce, `TableForm`, JSONC formy, recalculate, doc states, **Sub-tabulky** (sekce 15: endpoint `/subtable`, `renderSubtable()`, read-only, ConfirmDialog), **HeaderInfo** (sekce 21), **Lookup pole** (sekce 22) |
 | `docs/edit-forms-cookbook.md` | Editační formuláře — cookbook s izolovanými vzory pro psaní forem (JSONC i PHP `TableBuilder`); rychlý úvod, sekce/sloupce/inline/separator recepty, časté chyby. Pro hluboký referenční materiál viz `edit-forms.md`. |
 | `docs/operations/secrets.md` | Per-DS šifrování `encrypted_text` sloupců — `DsSecretCipher`, klíčový soubor, rotace, health check, threat model |
 | `docs/migration-guide.md` | Backup a přenos DS na jiný server — tarball, DB dump, perms, ověření |
@@ -156,6 +156,18 @@ Formát hlavičky stránky a šablona: `docs/help-authoring.md`.
 - Lookup pole podporují inline **edit** (tužka u vybrané hodnoty) a **create** („+ Vytvořit nový“ v dropdownu) přes vnořený `FormDialog`. Opt-in přes `editForm`/`createForm` flagy v lookup definici. Přidaný `editTriggers` flag (default false) ovládá, zda edit detailů triggerne recalculate v rodiči — zapíná se tam, kde edit propisuje data zpět do rodiče (položka → řádek). U Partnera vypnutý, jinak by edit detailů vynuloval adresu/banku přes destruktivní cascade.
 - `lookup` element **nelze** umístit do `inline` skupiny.
 - Detailně viz `docs/edit-forms.md` kapitola 22.
+
+### Editační formuláře — sub-tabulky
+- Tab typu `subtable` (`TableForm::subtableTab()`) zobrazuje child tabulku; **sloupce
+  i buňky definuje server** přes `GET /_ui/form/{parentTable}/subtable/{tabId}/{parentId}`
+  → `TableForm::renderSubtable(FormTab $tab, array $rows, array $parentData)` na
+  **rodičovském** formu. Default z `TableDefinition` dětské tabulky (`setTables()`),
+  overridy: `DocsHeadsFormBase` (řádky dokladu), `AccountingDocsForm` (kontace),
+  `PersonsForm` (kontakty / adresy / účty).
+- Formát čísel, částek a dat v buňkách **jen** přes `SubtableCellFormatter` — nepřidávat
+  další privátní `formatMoney()`. Boolean labely z cfgItem `core.system.formDefaults`.
+- Read-only rodič → `FormDialog readOnly` (jen Zobrazit); mazání přes `ui/ConfirmDialog`.
+  Detaily `docs/edit-forms.md` kapitola 15.
 
 ### Editační formuláře — polymorfismus per typ
 - Formuláře nad polymorfní tabulkou (např. `docs_core_heads` s `doc_type`)

@@ -76,3 +76,61 @@ checkbox neunese — pro ty je správná odpověď `select` s prázdnou volbou
 (typ `text` už dnes mapuje prázdný string na `null`, tedy smazání klíče).
 
 **Priorita:** nízká, dokud žádná settings stránka takové pole nepotřebuje.
+
+---
+
+## Gridový prohlížeč se serverovým hledáním pro sub-tabulky
+
+**Zjištěno:** 09/2026 při fázi 1 sub-tabulek (issue #53, `tasks/subtable-phase1.md`).
+
+Sub-tabulky ve formulářích (řádky dokladu, adresy osoby…) mají od fáze 1
+**klientský filtr** — zobrazí se od 11 řádků a filtruje přes texty všech
+vyrenderovaných buněk bez diakritiky (`FormSubTable.svelte`). Načítají se
+vždy všechny řádky rodiče jedním dotazem.
+
+**Kdy to přestane stačit:** rodič s řádově stovkami dětských řádků (adresy
+importované z registru u velkého subjektu, dlouhé účetní doklady). Pak dává
+smysl povýšit sub-tabulku na plný grid (`ViewerGrid` — infinite scroll,
+serverové řazení a hledání). Kontrakt endpointu `/subtable` má záměrně tvar
+`TableViewer::getGridColumns()`, aby se to obešlo bez přepisu.
+
+**Priorita:** nízká, dokud někdo nenarazí na pomalý nebo nepřehledný filtr.
+
+---
+
+## Zbývající `window.confirm` nahradit `ConfirmDialog`
+
+**Zjištěno:** 09/2026 při fázi 1 sub-tabulek (issue #53).
+
+Fáze 1 zavedla `ui/ConfirmDialog.svelte` (Enter / Esc, `fixedSize`, testidy)
+a nasadila ho jen v `FormSubTable`. Nativní `window.confirm` zůstává
+v `AttachmentPanel` (smazání přílohy), `ViewerDetail` (akce s `confirm`)
+a `Viewer` (smazání pravidla štítku). `FormDialog.handleClose`
+(neuložené změny) řeší fáze 2 (`tasks/subtable-phase2.md`).
+
+**Směr řešení:** mechanická náhrada — lokální state `confirmOpen` + dialog
+s `variant="danger"`; u `ViewerDetail` text pochází ze serverové akce
+(`action.confirm`), titulek generický.
+
+**Priorita:** nízká; vizuální nekonzistence, ne funkční chyba.
+
+---
+
+## Sjednotit privátní `formatMoney()` napříč viewery
+
+**Zjištěno:** 09/2026 při fázi 1 sub-tabulek (issue #53).
+
+Formátování částek `number_format(x, 2, ',', ' ')` žije jako privátní
+metoda v `JournalViewer`, `BankStatementsViewer`, `BankTransactionsViewer`,
+`LedgerViewer`, `DocsHeadsViewer` (+ `formatTrimmedNumber`), `DocsHeadsFormBase`
+a `Mcp/DocumentsAggregateTool`; `MailSuggestionsSource::formatAmount` je
+další varianta. Fáze 1 zavedla sdílený `src/Core/Form/SubtableCellFormatter`
+(`money`, `number`, `trimmedNumber`, `price`, `date`, `dateTime`, `boolean`)
+a použila ho v sub-tabulkách — další kopie nepřidávat.
+
+**Směr řešení:** přejmenovat / přesunout formatter na neutrální místo
+(např. `Core\Utils\NumberFormatter`) a viewery na něj přepnout; pozor na
+rozdíly v chování `null` (viewer vrací `null`, `DocsHeadsFormBase::formatMoney`
+vrací „0,00").
+
+**Priorita:** nízká — úklid; roste s každým dalším viewerem.

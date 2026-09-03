@@ -61,6 +61,11 @@ toho, kdo ti kolik dluží. Nebo zkoušíš, co Shipard u vydané faktury umí a
    Potřebuješ-li na faktuře mezititulek nebo komentář, přepni **Typ řádku**
    na *Textový řádek*. Do součtů nevstupuje.
 
+   Zadané řádky vidíš na tabu **Řádky** v tabulce s popisem, množstvím,
+   jednotkou, cenou a DPH. Řádek otevřeš k úpravě tlačítkem **Upravit**
+   (tužka) nebo dvojklikem, **Smazat** (koš) se před smazáním zeptá.
+   Součty dokladu se po každé změně řádku přepočítají.
+
 5. **Zkontroluj tab Rekapitulace DPH.** Je to rozpis základu a daně po sazbách
    a celkový součet. Nesouhlasí-li s tím, co čekáš, oprav řádky teď — ne až po
    potvrzení.
@@ -72,7 +77,9 @@ toho, kdo ti kolik dluží. Nebo zkoušíš, co Shipard u vydané faktury umí a
 
 7. **Dej V pořádku.** Doklad se uzamkne, **zaúčtuje** a **objeví se
    v saldokontu** jako nezaplacená pohledávka, kterou pak spáruješ s platbou
-   z banky. Formulář se zavře.
+   z banky. Formulář se zavře. Řádky uzamčeného dokladu si dál můžeš
+   prohlédnout: na tabu **Řádky** je u každého tlačítko **Zobrazit** (oko),
+   měnit je ale nejde.
 
 ## Na co narazíš
 

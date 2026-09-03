@@ -1,6 +1,6 @@
 # Sub-tabulky ve formulářích — fáze 1: sloupce ze serveru, read-only prohlížení, potvrzovací modal, filtr
 
-**Stav:** naplánováno — design schválen 2026-09-03 (issue #53), neimplementováno
+**Stav:** hotovo — implementováno 2026-09-03 (issue #53); E2E ověření na dev DS dle sekce „Hotovo když“
 
 ## Kontext / Cíl
 
@@ -356,3 +356,42 @@ Nová komponenta nad `Modal`:
   hloubka 2–3. Depth-shrink zmenší i ConfirmDialog — ověř, že 480 px
   minus 2×60 px je pořád použitelné, jinak `ConfirmDialog` z depth-shrinku
   vyjmi (nový prop `Modal.fixedSize`).
+
+## Výsledek implementace (2026-09-03)
+
+Kód odpovídá krokům 1–8 s těmito odchylkami, ověřenými proti zdrojům
+(rozhodnutí schválena Annou 2026-09-03):
+
+- **Signatura rendereru** je `renderSubtable(FormTab $tab, array $rows,
+  array $parentData)` — tab objekt místo `string $tabId`, aby override
+  nemusel znovu volat `buildFormDefinition()` kvůli `table` / `foreignKey`.
+  Dětskou `TableDefinition` bere default z `TableForm::setTables()` (volá
+  controller), ne z „tables registry" uvnitř formu.
+- **Kontakty nemají „typ kontaktu / hodnotu"** — JSONC má `name`, `role`,
+  `email`, `phone`, `note`. Sloupce: Název · Funkce · E-mail · Telefon ·
+  Poznámka. **Adresy** nemají příznak hlavní/fakturační (nahrazuje ho Typ
+  adresy); země je `enumString` s cfgItem `world.base.countries`, ne
+  reference. **Bankovní účty** nemají příznak hlavní; měna je varchar(3).
+  Sloupce viz `docs/edit-forms.md` §15.2.
+- **Kontační sada je jednoznačná z hlavičky:** všech osm `rowSide` operací
+  je povoleno výhradně pro `cmnbkp`, který má vlastní `AccountingDocsForm`.
+  Sada K je override v této třídě (`renderContationRows()` v base), ne
+  per-řádkové rozhodování; `hasRowSideLayout()` z `DocRowsForm` se nesdílí.
+- **Součty hlavičky po změně řádku:** server je přepočítává
+  (`DocRowsDocument::afterSave/afterDelete`), ale rodičovský formulář se
+  dřív nepřenačítal. Přidán callback `onChanged` → `FormEditor.handleSubtableChanged()`
+  s tichým reloadem (`keepTab`) jen když rodič není dirty.
+- **Ikony:** `iconEdit`, `iconDelete`, `iconPreview` (faEye) už existovaly;
+  normalizace přes existující `foldDiacritics()` z `utils/paletteMatch.js`.
+- **Read-only indikace:** `ReadOnlyBanner` je pruh stavu DS, nepoužit;
+  místo něj existující prop `notice` na `FormDialog`.
+- **`disabled` vs `readOnly`** rozlišeno hned (FormEditor `isReadOnly` /
+  `isDisabled`), ikony během ukládání rodiče nepřeskakují.
+- **Ano/Ne** pro boolean buňky z cfgItem `core.system.formDefaults`
+  (`booleanYes` / `booleanNo`) — **vyžaduje `ds-upgrade` na DS.**
+- `Route` dostal `?string $key` (tabId v cestě); `Modal` prop `fixedSize`;
+  `Input` prop `testid`; `stateStyle` na řádku (archiv tlumený přes
+  globální `.docState_*`, viz §15.1).
+- Výkon `buildFormDefinition()` u dokladů pro `/subtable` zatím neměřen na
+  dev DS — pokud bude znát, zavést `findSubtableTab()` s lehkým overridem
+  v `DocsHeadsFormBase` (viz Pasti).

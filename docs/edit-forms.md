@@ -680,6 +680,7 @@ Modal komponenta (Esc, klik na overlay, `×`) volá `onClose()` bez parametru �
 | `/_ui/form/{table}/save` | POST | Uložení nového záznamu |
 | `/_ui/form/{table}/save/{id}` | PUT | Uložení existujícího záznamu |
 | `/_ui/form/{table}/recalculate` | POST | Přepočítání bez uložení |
+| `/_ui/form/{table}/subtable/{tabId}/{parentId}` | GET | Sloupce + vyrenderované řádky sub-tabulky (tab typu `subtable`) — kap. 15 |
 
 ### Detekce přechodu stavu
 
@@ -696,10 +697,14 @@ abstract class TableForm
     protected ?ConfigRuntime $config = null;
     protected ?DataSourceConnection $db = null;
     protected ?TableDefinition $tableDef = null;  // pro auto-label
+    protected array $tables = [];                 // všechny tabulky DS (setTables) — default renderer sub-tabulek
 
     abstract public function buildFormDefinition(array $data, bool $isNew): FormDefinition;
 
     public function recalculate(string $changedColumn, array $data): RecalculateResult { ... }
+
+    /** Sloupce + buňky sub-tabulky pro tab typu `subtable` — kap. 15. Default z TableDefinition dětské tabulky. */
+    public function renderSubtable(FormTab $tab, array $rows, array $parentData): array { ... }
 
     protected function tab(string $id, string $label, ?string $icon = null): TabBuilder;
     protected function subtableTab(
@@ -980,9 +985,151 @@ Pro polymorfní tabulky (jeden physický řádek může reprezentovat víc logic
 
 ## 15. Sub-tabulky (FormSubTable)
 
-- Sub-záznamy se ukládají **okamžitě** při potvrzení mini-dialogu (ne s hlavním formulářem)
+Tab typu `subtable` zobrazuje child tabulku rodičovského záznamu — řádky
+dokladu, Kontakty / Adresy / Bankovní účty osoby, měsíce účetního roku,
+období registrace DPH. Jeden univerzální mechanismus (issue #53, fáze 1 —
+`tasks/subtable-phase1.md`; fáze 2 dialog řádku, fáze 3 přesun řádků).
+
+- Sub-záznamy se ukládají **okamžitě** při potvrzení dialogu řádku (ne s hlavním formulářem)
 - Pro **nový záznam** (rodič nemá ID) jsou taby se sub-tabulkami disabled s informací „Nejprve uložte záznam"
 - Po uložení rodiče se `currentId` aktualizuje a sub-tabulky se odemknou
+
+### 15.1 Endpoint `GET /_ui/form/{parentTable}/subtable/{tabId}/{parentId}`
+
+Sloupce i obsah buněk definuje **server**; klient nezná FK, enumy ani formát
+částek (stejný princip jako grid vieweru, `docs/viewer-grid.md` §3). Tvar
+specifikace sloupců je shodný s `TableViewer::getGridColumns()`, aby šla
+sub-tabulka později povýšit na plný grid bez přepisu kontraktu.
+
+```jsonc
+{
+  "success": true,
+  "data": {
+    "columns": [
+      { "id": "order_pos",   "label": "#",            "align": "right", "width": 44 },
+      { "id": "description", "label": "Popis",        "grow": true },
+      { "id": "quantity",    "label": "Množství",     "align": "right" },
+      { "id": "unit",        "label": "Jednotka" },
+      { "id": "vat_total",   "label": "Celkem s DPH", "align": "right" }
+    ],
+    "rows": [
+      { "id": 4711, "cells": { "order_pos": "1", "description": "Ukázková položka",
+        "quantity": "2", "unit": "ks", "vat_total": "2 420,00" } },
+      { "id": 4712, "cells": { "order_pos": "2",
+        "description": { "text": "Textový řádek", "class": "muted" } } },
+      { "id": 4713, "cells": { "description": "Archivovaná adresa" }, "stateStyle": "archive" }
+    ],
+    "order_column": null
+  }
+}
+```
+
+- `columns[]` — `{id, label, align?: 'right', grow?: true, width?: px}`.
+- `rows[]` — `{id, cells, stateStyle?}`. `cells` = mapa `columnId → string |
+  {text, class?}` (span formát gridu bez badge; `class` ze slovníku `muted`,
+  `bold`, `amount`, `primary`, `success`, `warning`, `danger`). Chybějící klíč
+  = prázdná buňka — nikdy „0,00" za NULL. `stateStyle` nesou řádky dětských
+  tabulek s docStates; frontend dá na `<tr>` globální třídu
+  `docState_{style}` (archiv tlumený, koš škrtnutý, `styles/base.css`).
+- `order_column` — v této fázi vždy `null`; klíč zavádí kontrakt pro fázi 3
+  (šipky přesunu).
+- **Řazení** — `sort` ze `subtableTab()` (`col:dir[,col:dir]`, syntaxe jako
+  `?sort=` CRUD endpointu). Default `order_pos:asc`, má-li dětská tabulka
+  ten sloupec, jinak `id:asc`; `id ASC` je vždy tiebreaker. `sort` je
+  serverová konfigurace formu, ne vstup uživatele — neznámý / sensitive
+  sloupec nebo špatný směr je 500.
+- **Controller** `FormController::subtable()` — guard rodiče i dětské tabulky
+  (`TableAccessGuard::guardTable`), rodič se načte jako v `meta({id})`
+  (`stripSensitive`, dekódování JSON sloupců), `FormRegistry::createForm()`
+  + `setTableDef()` + `setTables()`, `buildFormDefinition($data, false)` →
+  tab typu `subtable` s daným id, řádky `WHERE fk = parentId`,
+  `stripSensitive` per řádek, `renderSubtable()`. Rodič bez PHP form třídy
+  (JSONC / auto form) nebo neznámý tab → 404 `SUBTABLE_NOT_FOUND`.
+  Routa: `Router::resolveFormRoute` → `Route('form', 'subtable', $table,
+  $parentId, key: $tabId)` (`Route::$key` = textový identifikátor v cestě).
+
+### 15.2 `TableForm::renderSubtable(FormTab $tab, array $rows, array $parentData)`
+
+Renderer žije na **rodičovském** formu, protože sloupce závisí na kontextu
+rodiče (doklad bez DPH nemá DPH sloupce; `$parentData` = data rodiče).
+Override rozhoduje podle `$tab->id` a pro ostatní taby volá
+`parent::renderSubtable()`.
+
+**Default** (formuláře bez overridu — Účetní roky → měsíce, Registrace DPH
+→ období — ho dostanou zdarma):
+
+- sloupce: prvních 6 (`TableForm::SUBTABLE_DEFAULT_MAX_COLUMNS`) sloupců
+  dětské `TableDefinition` (z `setTables()`) bez PK / autoIncrement, FK na
+  rodiče, `system`, `sensitive`, `json`, stavových sloupců docStates
+  a technických `created` / `modified` / `order_pos`; label `formLabel ??
+  name` (TableLoader ho už lokalizoval); číselné typy bez cfgItem /
+  reference `align: right`; první textový sloupec `grow`;
+- buňky (`defaultSubtableCell()`): cfgItem → `name` položky; boolean →
+  Ano / Ne z cfgItem `core.system.formDefaults` (`booleanYes`,
+  `booleanNo` — po přidání nutný `ds-upgrade`); numeric → dle `scale`;
+  date → `d.m.Y`; datetime → `d.m.Y H:i`; `reference` → surové id (default
+  má být levný, bez dotazů — pojmenované FK řeší override); null / `''` →
+  buňka chybí;
+- `stateStyle` přes `subtableRowStateStyle()` u tabulek s docStates
+  (`DocStateConfig::getState()['stateStyle']`).
+
+**Sdílené helpery pro overridy:** `subtableLabel($table, $column,
+$fallback)` (lokalizovaný label sloupce dětské tabulky), `subtableColumnSpec()`,
+`defaultSubtableCell()`, `cfgItemLabel()`, `booleanLabels()`,
+`subtableRowStateStyle()`. Formátování čísel / částek / dat výhradně přes
+`SubtableCellFormatter` (`money`, `number`, `trimmedNumber`, `price`, `date`,
+`dateTime`, `boolean`) — je to jediné sdílené místo, další privátní
+`formatMoney()` nepřidávat (sjednocení stávajících viz `tasks/TODO.md`).
+
+**Existující overridy:**
+
+| Form | Tab | Sloupce |
+|------|-----|---------|
+| `DocsHeadsFormBase` (`renderItemRows`) | `rows` | Položková sada: # · Popis · Množství · Jednotka · Cena/jednotka · [Základ DPH · DPH % · DPH · Celkem s DPH] podle `vat_mode` rodiče, bez DPH místo toho [Cena celkem]. Textový řádek (`row_kind = 0`) jen popis se `class: muted`, žádné číselné buňky. `#` = `order_pos`, při 0 pořadí v seznamu. Zkratky jednotek jedním `IN` dotazem. Částky bez měny (je v hlavičce). |
+| `AccountingDocsForm` (`renderContationRows` z base) | `rows` | Kontační sada: # · Pohyb · Účet · Popis · Strana · Částka. Všech osm operací s vlajkou `rowSide` je v `docs.core.rowOperations` povoleno výhradně pro `cmnbkp`, a ten má vlastní form třídu — sada je jednoznačná z hlavičky, per-řádkové rozhodování není potřeba. Strana jen u `rowSide: 1`; Účet jen u řádků s přímým účtem (saldokontní operace mají účet z předpisu). |
+| `PersonsForm` (`renderPersonChildRows`) | `contacts` / `addresses` / `bank_accounts` | Název · Funkce · E-mail · Telefon · Poznámka / Typ adresy · Název · Ulice (+ č. p./č. o.) · Obec · PSČ · Země (cfgItem `world.base.countries`) / Název účtu · Číslo účtu · IBAN · BIC/SWIFT · Měna · Zdroj. Všechny tři tabulky mají docStates → archivované řádky tlumené, **ne skryté** (uživatel je potřebuje najít a odarchivovat). |
+
+### 15.3 Frontend — `FormSubTable.svelte`
+
+- Props: `element` (= `tab.subtable`), `tabId`, `parentTable`, `parentId`,
+  `disabled`, `readOnly`, `onChanged`. `FormEditor` → `FormTab` → sub-tabulka;
+  `parentTable` a `tabId` skládají cestu endpointu.
+- **`disabled` vs `readOnly`** — `FormEditor` posílá obojí zvlášť:
+  `isReadOnly = readOnly || doc_states.read_only`, `isDisabled = saving ||
+  recalculating || isReadOnly`. `disabled` = akce dočasně vypnuté (rodič se
+  ukládá), ikony nepřeskakují; `readOnly` = bez Přidat / Smazat, u řádku jen
+  Zobrazit (`iconPreview`), dvojklik = Upravit / Zobrazit.
+- **Read-only dialog řádku:** `FormDialog readOnly` → `FormEditor readOnly`
+  (pole vypnutá, `isDirty` vždy false → Esc / křížek bez dotazu) →
+  `FormStateBar readOnly` (bez Uložit i přechodů; bez jediné akce se lišta
+  nerenderuje). Nad formulářem `notice` „Záznam je jen pro čtení…".
+  `LookupInput` při `disabled` neotevírá vyhledávání ani edit / create.
+  `readOnly` na `FormStateBar` je jiná věc než `docStates.read_only` — to
+  přechody (Opravit…) naopak nechává.
+- **Reload rodiče po změně řádku:** `onChanged` → `FormEditor.handleSubtableChanged()`
+  → `loadForm(table, currentId, {keepTab: true})`, ale jen když rodič nemá
+  neuložené změny — server mohl přepočítat odvozené hodnoty (součty dokladu,
+  `DocRowsDocument::recomputeHeader`) a reload by rozeditovanou hlavičku
+  zahodil; při dirty stavu se hodnoty obnoví po Uložit.
+- **Mazání:** `ui/ConfirmDialog.svelte` místo `window.confirm`. Enter =
+  potvrdit (po otevření má fokus potvrzovací tlačítko, žádný globální
+  listener), Esc = zrušit (Modal přes stack zavře jen vršek). Karta 480 px
+  s `Modal fixedSize` (mimo depth-shrink vnořených modalů). Ostatní výskyty
+  `window.confirm` viz `tasks/TODO.md`; `FormDialog.handleClose` řeší fáze 2.
+- **Filtr:** od 11 řádků (`FILTER_THRESHOLD = 10`) `Input` vpravo
+  v toolbaru; klientsky přes texty všech buněk bez diakritiky
+  (`foldDiacritics` z `utils/paletteMatch.js`), reset při změně `parentId`,
+  stav „Filtru neodpovídá žádný záznam". Serverové hledání není v plánu.
+- Tabulka: `<colgroup>` (`width` px / `grow` rovný podíl %), sticky
+  hlavička (`border-collapse: separate`), zarovnání přes `--num` třídy,
+  barva textu na `<table>` (ne na `td`), aby ji globální `.docState_*` na
+  `<tr>` přebila.
+- `data-testid`: `subtable`, `subtable-add`, `subtable-filter`, `subtable-row`
+  (+ `data-row-id`), `subtable-row-edit`, `subtable-row-delete`,
+  `subtable-row-view`; ConfirmDialog `confirm-dialog`, `confirm-ok`,
+  `confirm-cancel`.
+- Chování po Uložit v dialogu (`hasDocStates` větev v `handleDialogSaved`)
+  zůstává beze změny — revizi dialogu řeší fáze 2.
 
 ---
 
@@ -990,17 +1137,18 @@ Pro polymorfní tabulky (jeden physický řádek může reprezentovat víc logic
 
 | Komponenta | Popis |
 |------------|-------|
-| `Modal.svelte` (ui/) | Generický modal: header s titulkem a `×`, tělo, overlay, body scroll lock, modal stack pro Esc handling. Volitelný `headerExtra` snippet pro badge, `width` a `height` props. |
-| `FormDialog.svelte` | Orchestrátor — Modal s škálující se velikostí (clamp 1200–1700 px), poskytuje header (titulek + badge + subtitle + summary), drží dirty stav, zobrazí confirm při zavření. Meta načítá FormEditor uvnitř. |
-| `FormEditor.svelte` | Hlavní shell: tab bar, obsah, toolbar (header je v Modal). Sleduje dirty stav (snapshot vs aktuální data), propaguje titulek/doc_states/dirty zpět do FormDialog přes callbacky `onFormLoaded` a `onDirtyChange` |
-| `FormTab.svelte` | Jeden tab — vykreslí sekce / subtable / attachments podle `tab.type` |
+| `Modal.svelte` (ui/) | Generický modal: header s titulkem a `×`, tělo, overlay, body scroll lock, modal stack pro Esc handling. Volitelný `headerExtra` snippet pro badge, `width` a `height` props, `fixedSize` (vyjme kartu z depth-shrinku — malé dialogy). |
+| `ConfirmDialog.svelte` (ui/) | Potvrzovací dialog nad Modal (480 px, `fixedSize`): `title`, `message`, `confirmLabel`, `variant` primary/danger, `busy`, `onConfirm` / `onCancel`; Enter = potvrdit (fokus na tlačítku), Esc = zrušit. Náhrada `window.confirm` — kap. 15.3 |
+| `FormDialog.svelte` | Orchestrátor — Modal s škálující se velikostí (clamp 1200–1700 px), poskytuje header (titulek + badge + subtitle + summary), drží dirty stav, zobrazí confirm při zavření. Meta načítá FormEditor uvnitř. Prop `readOnly` (prohlížení řádku read-only rodiče) a `notice`. |
+| `FormEditor.svelte` | Hlavní shell: tab bar, obsah, toolbar (header je v Modal). Sleduje dirty stav (snapshot vs aktuální data), propaguje titulek/doc_states/dirty zpět do FormDialog přes callbacky `onFormLoaded` a `onDirtyChange`. Prop `readOnly`; `isReadOnly` / `isDisabled` zvlášť pro sub-tabulky; `handleSubtableChanged()` tichý reload rodiče |
+| `FormTab.svelte` | Jeden tab — vykreslí sekce / subtable / attachments podle `tab.type`; sub-tabulce předává `tabId`, `parentTable`, `readOnly`, `onSubtableChanged` |
 | `FormSection.svelte` | Karta s pozadím a volitelným titulkem; horizontální grid pro N sloupců |
 | `FormColumn.svelte` | Sloupec se sdílenou auto-šířkou labelů (`max-content 1fr`) |
 | `FormFieldRow.svelte` | Wrapper jedné label+input dvojice — emituje DVA sourozence do FormColumn gridu |
 | `FormInline.svelte` | Inline skupina (víc polí v jedné řádce); první pole použije label řádky, ostatní mají mini-labely |
 | `FormElement.svelte` | Renderer elementu — switch podle `type` + delegace na UI komponenty |
-| `FormSubTable.svelte` | Editor child tabulky s CRUD (uvnitř subtable tabu) |
-| `FormStateBar.svelte` | Spodní toolbar: Uložit + přechodová tlačítka |
+| `FormSubTable.svelte` | Sub-tabulka: sloupce a řádky ze serveru (`/subtable`), Přidat / Upravit / Smazat (ConfirmDialog) nebo Zobrazit v read-only, klientský filtr od 11 řádků — kap. 15 |
+| `FormStateBar.svelte` | Spodní toolbar: Uložit + přechodová tlačítka; `readOnly` skryje obojí, bez jediné akce se nerenderuje |
 | `FormStateBadge.svelte` | Badge stavu v záhlaví Modalu |
 
 ### UI komponenty (`components/ui/`)
@@ -1016,13 +1164,14 @@ Pro polymorfní tabulky (jeden physický řádek může reprezentovat víc logic
 ### `src/Core/Form/`
 | Třída | Popis |
 |-------|-------|
-| `TableForm` | Abstraktní bázová třída; auto-label z TableDefinition |
+| `TableForm` | Abstraktní bázová třída; auto-label z TableDefinition; `setTables()` + default `renderSubtable()` sub-tabulek (kap. 15) |
+| `SubtableCellFormatter` | Sdílené formátování buněk sub-tabulek: `money`, `number`, `trimmedNumber`, `price`, `date`, `dateTime`, `boolean` |
 | `TabBuilder` | Fluent builder; autoHideSeparators |
 | `FormDefinition` | Datová třída; `toArray()` → snake_case JSON |
 | `FormTab` | Datová třída |
 | `FormElement` | Datová třída; `input_type`, `hidden`, `triggers` |
 | `FormRegistry` | Registr PHP tříd formulářů; podporuje per-table polymorfismus přes `typeColumn` + `classes` + `defaultClass` (`createForm($table, $data, ...)`) — viz kap. 23 |
-| `FormController` | HTTP controller; volá `createForm($table, $data, ...)` ve všech třech metodách (`resolveFormDefinition`, `recalculate`, `enrichHeaderInfo`) |
+| `FormController` | HTTP controller; volá `createForm($table, $data, ...)` ve všech metodách (`resolveFormDefinition`, `recalculate`, `enrichHeaderInfo`, `subtable`) |
 | `AutoFormBuilder` | Generuje FormDefinition z TableDefinition |
 | `JsoncFormLoader` | Načítá JSONC formy |
 | `RecalculateResult` | Výsledek recalculate |

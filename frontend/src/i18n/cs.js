@@ -292,6 +292,8 @@ export default {
   'subtable.noMatch': 'Filtru neodpovídá žádný záznam.',
   'subtable.loadFailed': 'Nepodařilo se načíst záznamy.',
   'subtable.readOnlyNotice': 'Záznam je jen pro čtení, položku lze pouze prohlížet.',
+  'subtable.moveUp': 'Posunout výš',
+  'subtable.moveDown': 'Posunout níž',
 
   // ── Attachments ─────────────────────────────────────────────────────────
   'attachments.title': 'Přílohy',

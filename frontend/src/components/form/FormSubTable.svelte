@@ -23,13 +23,18 @@
    * Dialog řádku (fáze 2): nový záznam má Přidat (uloží a zavře) a Přidat
    * a pokračovat (uloží, reset na další nový); existující záznam listuje
    * šipkami ‹ › přes `navigation` (i v read-only režimu).
+   *
+   * Pořadí (fáze 3): když server pošle `order_column`, řádky mají šipky
+   * ▲ ▼ → `POST …/move`, server skupinu přečísluje 1..N a prohodí sousedy;
+   * poté jen refetch (mění se i sloupec #). Šipky chybí u read-only rodiče
+   * a při zadaném textu filtru (soused ve filtru není soused v pořadí).
    */
-  import { get, del } from '../../api/client.js';
+  import { get, post, del } from '../../api/client.js';
   import Button from '../ui/Button.svelte';
   import Input from '../ui/Input.svelte';
   import ConfirmDialog from '../ui/ConfirmDialog.svelte';
   import FormDialog from './FormDialog.svelte';
-  import { iconAdd, iconEdit, iconDelete, iconPreview } from '../../icons.js';
+  import { iconAdd, iconEdit, iconDelete, iconPreview, iconMoveUp, iconMoveDown } from '../../icons.js';
   import { normalizeSpans } from '../viewer/viewerSpans.js';
   import { foldDiacritics } from '../../utils/paletteMatch.js';
   import { t } from '../../i18n/index.js';
@@ -54,9 +59,11 @@
 
   let columns = $state([]);
   let rows = $state([]);
-  // Fáze 3: sloupec pořadí → šipky přesunu. Zatím vždy null, klíč kontraktu
-  // se zavádí teď, aby fáze 3 neměnila tvar odpovědi.
+  // Pořadový sloupec z deklarace tabu (`subtableTab(..., orderColumn:)`);
+  // null = tabulka pořadí neřeší, šipky se nerenderují.
   let orderColumn = $state(null);
+  // Probíhá přesun — obě šipky vypnuté proti dvojkliku.
+  let moving = $state(false);
   let loading = $state(false);
   let loadError = $state(null);
   let filter = $state('');
@@ -109,6 +116,28 @@
     parentId;
     filter = '';
   });
+
+  // ── Pořadí ─────────────────────────────────────────────────────────────────
+
+  // Zadaný text filtru = zúžený seznam; přesun by prohazoval sousedy, které
+  // uživatel nevidí vedle sebe. Prázdný filtr (jen zobrazené pole) nevadí.
+  const filterActive = $derived(filterVisible && filter.trim() !== '');
+  const canReorder = $derived(orderColumn != null && !readOnly && !filterActive);
+
+  async function moveRow(id, direction) {
+    if (!canReorder || disabled || moving) return;
+    moving = true;
+    const res = await post(`/_ui/form/${parentTable}/subtable/${tabId}/${parentId}/move`, { id, direction });
+    moving = false;
+    if (!res?.success) {
+      loadError = res?.error ? translateError(res.error) : t('form.saveFailed');
+      return;
+    }
+    // Refetch, ne lokální přeuspořádání: server přečísloval celou skupinu
+    // a sloupec # by jinak ukazoval stará čísla. Řádky zůstávají zobrazené,
+    // tabulka nebliká. Rodič se nepřenačítá — součty na pořadí nezávisí.
+    await fetchRows();
+  }
 
   // ── Sloupce ────────────────────────────────────────────────────────────────
 
@@ -268,7 +297,7 @@
           {#each columns as col (col.id)}
             <col style={colStyle(col)} />
           {/each}
-          <col class="shpd-form-subtable__actions-col" />
+          <col style="width: {canReorder ? 148 : 72}px;" />
         </colgroup>
         <thead>
           <tr>
@@ -282,7 +311,7 @@
           </tr>
         </thead>
         <tbody>
-          {#each visibleRows as row (row.id)}
+          {#each visibleRows as row, i (row.id)}
             <tr
               class="shpd-form-subtable__tr {row.stateStyle ? `docState_${row.stateStyle}` : ''}"
               data-testid="subtable-row"
@@ -300,6 +329,28 @@
                 </td>
               {/each}
               <td class="shpd-form-subtable__td shpd-form-subtable__actions">
+                {#if canReorder}
+                  <Button
+                    icon={iconMoveUp}
+                    iconOnly
+                    size="sm"
+                    variant="ghost"
+                    label={t('subtable.moveUp')}
+                    disabled={disabled || moving || i === 0}
+                    onclick={() => moveRow(row.id, 'up')}
+                    testid="subtable-row-up"
+                  />
+                  <Button
+                    icon={iconMoveDown}
+                    iconOnly
+                    size="sm"
+                    variant="ghost"
+                    label={t('subtable.moveDown')}
+                    disabled={disabled || moving || i === visibleRows.length - 1}
+                    onclick={() => moveRow(row.id, 'down')}
+                    testid="subtable-row-down"
+                  />
+                {/if}
                 {#if readOnly}
                   <Button
                     icon={iconPreview}
@@ -444,10 +495,6 @@
 
   .shpd-form-subtable__tr:hover > .shpd-form-subtable__td {
     background: var(--shpd-color-bg-hover);
-  }
-
-  .shpd-form-subtable__actions-col {
-    width: 72px;
   }
 
   .shpd-form-subtable__actions {

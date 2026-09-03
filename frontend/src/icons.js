@@ -14,6 +14,8 @@ import {
   faPlus,
   faPen,
   faTrash,
+  faArrowUp,
+  faArrowDown,
   faCopy,
   faFloppyDisk,
   faXmark,
@@ -119,6 +121,8 @@ export const iconFilter = faFilter;
 export const iconRefresh = faArrowsRotate;
 export const iconCopy = faCopy;
 export const iconPreview = faEye; // 👁 — otevření read-only náhledu / review modalu
+export const iconMoveUp = faArrowUp;     // ▲ — přesun řádku výš (sub-tabulka); pohyb, ne rozbalení (to je chevron)
+export const iconMoveDown = faArrowDown; // ▼ — přesun řádku níž
 
 // ── Navigace ────────────────────────────────────────────────────
 export const iconChevronLeft = faChevronLeft;

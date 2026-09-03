@@ -283,6 +283,8 @@ export default {
   'subtable.noMatch': 'No records match the filter.',
   'subtable.loadFailed': 'Failed to load records.',
   'subtable.readOnlyNotice': 'The record is read-only; the item can only be viewed.',
+  'subtable.moveUp': 'Move up',
+  'subtable.moveDown': 'Move down',
 
   // ── Attachments ─────────────────────────────────────────────────────────
   'attachments.title': 'Attachments',

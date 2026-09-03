@@ -63,7 +63,7 @@ final class DocumentsAggregateTool implements McpTool
 					'enum' => ['partner', 'doc_type', 'fiscal_month', 'vat_period'],
 					'description' => 'Podle čeho seskupit: partner (žebříček dodavatelů/odběratelů),'
 						. ' doc_type (podle typu dokladu), fiscal_month (časová řada po měsících),'
-						. ' vat_period (po obdobích DPH)',
+						. ' vat_period (po instancích přiznání k DPH)',
 				],
 				'measure' => [
 					'type' => 'string',
@@ -153,7 +153,7 @@ final class DocumentsAggregateTool implements McpTool
 			],
 			'vat_period' => [
 				', MIN(`vp`.`name`) AS `label_raw`, MIN(`vp`.`date_begin`) AS `dim_sort`',
-				' LEFT JOIN `economy_codebooks_vat_periods` `vp` ON `vp`.`id` = `h`.`vat_period`',
+				' LEFT JOIN `economy_vat_report_periods` `vp` ON `vp`.`id` = `h`.`vat_period`',
 				'`dim_sort` ASC',
 			],
 		};
@@ -366,7 +366,7 @@ final class DocumentsAggregateTool implements McpTool
 			'partner'      => 'partnerů',
 			'doc_type'     => 'typů dokladů',
 			'fiscal_month' => 'fiskálních měsíců',
-			'vat_period'   => 'období DPH',
+			'vat_period'   => 'přiznání k DPH',
 		};
 		$measureLabel = match ($measure) {
 			'total_base'   => 'podle základu bez DPH',

@@ -32,8 +32,8 @@ use Shipard\Module\Economy\Accbal\BalancesProvisioner;
 use Shipard\Module\Economy\Accbal\ClearingInfrastructureProvisioner;
 use Shipard\Module\Economy\Accounting\AccountChartProvisioner;
 use Shipard\Module\Economy\Codebooks\FiscalYearsProvisioner;
-use Shipard\Module\Economy\Codebooks\VatPeriodsProvisioner;
 use Shipard\Module\Economy\Items\ItemKindsProvisioner;
+use Shipard\Module\Economy\Vat\ReportPeriodsProvisioner;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -296,7 +296,7 @@ class DsUpgradeCommand extends Command
         if ($dsConfig->shouldSkipProvisioning()) {
             $output->writeln('');
             $output->writeln("<comment>[SKIP] Provisioning disabled via config (skipProvisioning=true).</comment>");
-            $output->writeln("<comment>       No reference data (units, item kinds, fiscal years, VAT periods,</comment>");
+            $output->writeln("<comment>       No reference data (units, item kinds, fiscal years, VAT report periods,</comment>");
             $output->writeln("<comment>       number series, mail router) was generated.</comment>");
             $output->writeln("<comment>       Set skipProvisioning=false in config/main.json and re-run</comment>");
             $output->writeln("<comment>       ds-upgrade once the import is complete.</comment>");
@@ -763,17 +763,18 @@ class DsUpgradeCommand extends Command
         OutputInterface $output,
     ): void {
         $output->writeln('', OutputInterface::VERBOSITY_VERBOSE);
-        $output->writeln('Provisioning economy.codebooks vat periods...', OutputInterface::VERBOSITY_VERBOSE);
+        $output->writeln('Provisioning economy.vat report periods...', OutputInterface::VERBOSITY_VERBOSE);
 
-        if (!$this->isModuleActive($resolvedModules, 'economy.codebooks')) {
-            $output->writeln('  <comment>[SKIP] economy.codebooks module not active</comment>', OutputInterface::VERBOSITY_VERBOSE);
+        if (!$this->isModuleActive($resolvedModules, 'economy.vat')) {
+            $output->writeln('  <comment>[SKIP] economy.vat module not active</comment>', OutputInterface::VERBOSITY_VERBOSE);
             return;
         }
 
-        $provisioner = new VatPeriodsProvisioner($dsConnection);
-        $result = $provisioner->provision();
+        // Instance tvrzení pokrývající dnešek a zítřek pro aktivní registrace
+        // (D9) — stejná logika jako denní cron vat-periods-ensure.
+        $result = (new ReportPeriodsProvisioner($dsConnection))->ensureAll();
 
-        $this->logProvisioningResult($output, 'vat periods', $result['vatPeriods']);
+        $this->logProvisioningResult($output, 'vat report periods', $result);
     }
 
     /**

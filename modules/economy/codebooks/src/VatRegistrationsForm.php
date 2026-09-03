@@ -55,20 +55,13 @@ class VatRegistrationsForm extends TableForm
                     ->date('valid_to')
             ->build();
 
-        $periods = $this->subtableTab(
-            'periods',
-            'Období DPH',
-            'economy_codebooks_vat_periods',
-            'vat_registration',
-            formId: 'economy.codebooks.vat_periods',
-            sort: 'date_begin:asc',
-        );
-
+        // Instance daňových tvrzení (přiznání / KH / SH) žijí ve vieweru
+        // „Daňová tvrzení" modulu economy.vat — codebooks na něm nezávisí.
         return new FormDefinition(
             table: $this->table,
             title: 'Registrace DPH',
             titleNew: 'Nová registrace DPH',
-            tabs: [$basic, $periods],
+            tabs: [$basic],
         );
     }
 

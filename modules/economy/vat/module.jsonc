@@ -31,7 +31,7 @@
         },
         {
             // Seed instancí běžného období po uložení registrace DPH
-            // (náhrada VatPeriodsProvisioner v afterSave registrace).
+            // (dřív afterSave hook registrace v economy.codebooks).
             "table": "economy_codebooks_vat_registrations",
             "class": "Shipard\\Module\\Economy\\Vat\\VatRegistrationSeedHandler",
             "events": ["afterSave"]

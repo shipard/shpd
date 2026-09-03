@@ -239,7 +239,6 @@ class NavigationControllerTest extends TestCase
 
         foreach ([
             'core_chat_messages',
-            'economy_codebooks_vat_periods',
             'core_system_users',
             'core_system_settings',
         ] as $moved) {

@@ -240,7 +240,7 @@ podle stavu DS** (`config/state.json`, [ds-state.md](ds-state.md)):
 | `minute` | každou minutu | `mail-outbox-run`, `mail-analysis-reap`, `mail-preprocess --sweep` | `active` |
 | `two-minutes` | à 2 min | server-level: `hosting-sync` | vždy (server-level) |
 | `five-minutes` | à 5 min | `alerts-run` (self-throttling přes `next_run_at`) | `active` |
-| `daily` | denně 03:17 | `mail-idempotency-prune`; server-level: `ds-state-check` | `active`, `read_only` (server-level vždy) |
+| `daily` | denně 03:17 | `mail-idempotency-prune` (`active`, `read_only`), `vat-periods-ensure` (`active`); server-level: `ds-state-check` | viz příkazy (server-level vždy) |
 | `weekly` | neděle 04:43 | `alerts-prune` | `active`, `read_only` |
 
 Registr povolených stavů je `CronCommand::JOB_ALLOWED_STATES`; job bez

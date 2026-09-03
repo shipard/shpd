@@ -137,38 +137,8 @@ class VatRegistrationsViewer extends TableViewer
             'content' => $this->buildOverviewContent($record),
         ];
 
-        $periods = $this->db->fetchAll(
-            'SELECT `name`, `date_begin`, `date_end`, `locked`'
-            . ' FROM `economy_codebooks_vat_periods`'
-            . ' WHERE `vat_registration` = %i'
-            . ' ORDER BY `date_begin` ASC, `id` ASC',
-            $recordId,
-        );
-
-        $periodRows = [];
-        foreach ($periods as $p) {
-            $periodRows[] = [
-                'name'       => $p['name'] ?? '',
-                'date_begin' => $this->formatDate($p['date_begin'] ?? null),
-                'date_end'   => $this->formatDate($p['date_end'] ?? null),
-                'locked'     => !empty($p['locked']) ? 'Ano' : 'Ne',
-            ];
-        }
-
-        $tabs[] = [
-            'id'      => 'periods',
-            'label'   => $this->detailTabLabel('economy.codebooks.viewerDetailLabels', 'vatPeriods', 'VAT periods'),
-            'content' => [
-                'type'    => 'table',
-                'columns' => [
-                    ['id' => 'name',       'label' => 'Název'],
-                    ['id' => 'date_begin', 'label' => 'Začátek'],
-                    ['id' => 'date_end',   'label' => 'Konec'],
-                    ['id' => 'locked',     'label' => 'Uzamčeno'],
-                ],
-                'rows' => $periodRows,
-            ],
-        ];
+        // Instance daňových tvrzení registrace zobrazuje viewer „Daňová
+        // tvrzení" modulu economy.vat (filtr registrace) — codebooks na něm nezávisí.
 
         return ['tabs' => $tabs];
     }

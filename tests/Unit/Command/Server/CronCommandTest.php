@@ -230,7 +230,7 @@ class CronCommandTest extends TestCase
     {
         $this->assertSame(['mail-outbox-run', 'mail-analysis-reap', 'mail-preprocess --sweep'], CronCommand::SLOT_JOBS['minute']);
         $this->assertSame(['alerts-run'], CronCommand::SLOT_JOBS['five-minutes']);
-        $this->assertSame(['mail-idempotency-prune'], CronCommand::SLOT_JOBS['daily']);
+        $this->assertSame(['mail-idempotency-prune', 'vat-periods-ensure'], CronCommand::SLOT_JOBS['daily']);
         $this->assertSame(['alerts-prune'], CronCommand::SLOT_JOBS['weekly']);
     }
 
@@ -247,12 +247,12 @@ class CronCommandTest extends TestCase
         $exit = $tester->execute(['--slot' => 'daily']);
 
         $this->assertSame(0, $exit);
-        // server job ds-state-check + 2 DS × mail-idempotency-prune
-        $this->assertCount(3, $cmd->callLog);
+        // server job ds-state-check + 2 DS × (mail-idempotency-prune, vat-periods-ensure)
+        $this->assertCount(5, $cmd->callLog);
 
         $hb = $this->readHeartbeat('daily');
         $this->assertSame(1, $hb['failedCount']);
-        $this->assertSame(3, $hb['jobsRun']);
+        $this->assertSame(5, $hb['jobsRun']);
         $this->assertSame('aaaa-aaaa-aaaa-aaaa', $hb['failures'][0]['ds']);
         $this->assertSame('mail-idempotency-prune', $hb['failures'][0]['job']);
         $this->assertSame(1, $hb['failures'][0]['exitCode']);
@@ -297,6 +297,7 @@ class CronCommandTest extends TestCase
         $this->assertSame([
             ['ds' => '(server)', 'job' => 'ds-state-check'],
             ['ds' => 'aaaa-aaaa-aaaa-aaaa', 'job' => 'mail-idempotency-prune'],
+            ['ds' => 'aaaa-aaaa-aaaa-aaaa', 'job' => 'vat-periods-ensure'],
         ], $cmd->callLog);
         $this->assertSame(1, $this->readHeartbeat('daily')['dsCount']);
     }

@@ -3,7 +3,7 @@
 Instance daňových tvrzení (issue #55, rozhodnutí D7–D13). Pro každou
 registraci DPH a každý typ výstupu (přiznání, kontrolní hlášení, souhrnné
 hlášení) jeden záznam s rozsahem s denní přesností. Nahrazuje kalendářní
-mřížku `economy_codebooks_vat_periods`: rozdílné frekvence KH a SH, změny
+mřížku období DPH z `economy.codebooks`: rozdílné frekvence KH a SH, změny
 periodicity v čase i vznik/zánik plátcovství uprostřed období jsou prostě
 jiné rozsahy v datech.
 

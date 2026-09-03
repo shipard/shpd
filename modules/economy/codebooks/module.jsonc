@@ -15,7 +15,6 @@
         "economy_codebooks_fiscal_years",
         "economy_codebooks_fiscal_months",
         "economy_codebooks_vat_registrations",
-        "economy_codebooks_vat_periods",
         "economy_codebooks_cash_desks",
         "economy_codebooks_bank_accounts"
     ],
@@ -29,9 +28,7 @@
         { "viewer": "economy.codebooks.cashDesks",        "section": "accounting" },
         { "viewer": "economy.codebooks.bankAccounts",     "section": "accounting" },
         { "viewer": "economy.codebooks.warehouses",       "section": "warehouses" },
-        { "viewer": "economy.codebooks.costCenters",      "section": "warehouses" },
-        { "table":  "economy_codebooks_vat_periods",      "section": "accounting",
-          "visibilityClass": "Shipard\\Module\\Economy\\Codebooks\\VatAgendaNavGate" }
+        { "viewer": "economy.codebooks.costCenters",      "section": "warehouses" }
     ],
 
     "viewers": [
@@ -105,10 +102,6 @@
             "class": "Shipard\\Module\\Economy\\Codebooks\\VatRegistrationsForm"
         },
         {
-            "table": "economy_codebooks_vat_periods",
-            "id": "economy.codebooks.vat_periods"
-        },
-        {
             "table": "economy_codebooks_cash_desks",
             "id": "economy.codebooks.cash_desks"
         },
@@ -132,10 +125,6 @@
         {
             "table": "economy_codebooks_vat_registrations",
             "class": "Shipard\\Module\\Economy\\Codebooks\\VatRegistrationDocument"
-        },
-        {
-            "table": "economy_codebooks_vat_periods",
-            "class": "Shipard\\Module\\Economy\\Codebooks\\VatPeriodDocument"
         },
         {
             "table": "economy_codebooks_cash_desks",

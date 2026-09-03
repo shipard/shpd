@@ -19,7 +19,7 @@ export function saveSetupParameters(values) {
 /**
  * Předvyplnění Registrace DPH z vlastní Osoby + vrstvy A. Uložení pak jde
  * přes generický POST /_ui/form/economy_codebooks_vat_registrations/save,
- * aby se chytil hook na VatPeriodsProvisioner.
+ * aby se chytil afterSave handler economy.vat (seed instancí tvrzení).
  *
  * @returns {Promise<{success: boolean, data?: {values: object,
  *   periodKindOptions: Array<{value: number, label: string}>}, error?: object}>}

@@ -36,7 +36,7 @@ class CronCommand extends Command
         'minute'       => ['mail-outbox-run', 'mail-analysis-reap', 'mail-preprocess --sweep'],
         'two-minutes'  => [],
         'five-minutes' => ['alerts-run'],
-        'daily'        => ['mail-idempotency-prune'],
+        'daily'        => ['mail-idempotency-prune', 'vat-periods-ensure'],
         'weekly'       => ['alerts-prune'],
     ];
 
@@ -52,6 +52,7 @@ class CronCommand extends Command
         'mail-preprocess --sweep' => [DataSourceState::ACTIVE],
         'alerts-run'              => [DataSourceState::ACTIVE],
         'mail-idempotency-prune'  => [DataSourceState::ACTIVE, DataSourceState::READ_ONLY],
+        'vat-periods-ensure'      => [DataSourceState::ACTIVE],
         'alerts-prune'            => [DataSourceState::ACTIVE, DataSourceState::READ_ONLY],
     ];
 

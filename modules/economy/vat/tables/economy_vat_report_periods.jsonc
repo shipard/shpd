@@ -2,7 +2,7 @@
     // Instance daňových tvrzení (issue #55, D7): per registrace DPH a typ
     // výstupu (přiznání / kontrolní hlášení / souhrnné hlášení) jeden záznam
     // s rozsahem s denní přesností. Nahrazuje kalendářní mřížku
-    // economy_codebooks_vat_periods — pravda je v datech, ne v odhadu
+    // období DPH z economy.codebooks — pravda je v datech, ne v odhadu
     // z periodicity. Doklady na instance míří sloupci vat_period /
     // cs_period / rs_period (extension docs_core_heads), přiřazení dělá
     // DocsHeadsVatPeriodHandler při uložení dokladu.

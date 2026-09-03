@@ -101,6 +101,7 @@ class HelpCommand extends Command
         $output->writeln('  <info>booking-history</info>         Zpracuje soubor účetní historie (report kvality, seed pravidel IČO→štítek, otagování položek)');
         $output->writeln('  <info>report-run</info>              Spustí report a vypíše ReportResult jako JSON na stdout');
         $output->writeln('  <info>report-diff</info>             Porovná dva ReportResult JSON soubory (kontrolní diff)');
+        $output->writeln('  <info>vat-periods-ensure</info>      Zajistí instance daňových tvrzení (přiznání/KH/SH) pro dnešek a zítřek — denní cron');
         $output->writeln('');
         $output->writeln('<comment>Registry (Spisovna):</comment>');
         $output->writeln('  <info>registry-extract-texts</info>  Fill registry documents extracted_text from attachments (default: missing only)');

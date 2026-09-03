@@ -813,7 +813,6 @@ class SettingsControllerTest extends TestCase
         $ids = $this->collectNavItemIds($resp->getPayload()['data']);
 
         $this->assertNotContains('viewer:economy.codebooks.vatRegistrations', $ids);
-        $this->assertNotContains('economy_codebooks_vat_periods', $ids);
         // Ostatní položky modulu gate nefiltruje.
         $this->assertContains('viewer:economy.codebooks.fiscalYears', $ids);
     }
@@ -827,7 +826,6 @@ class SettingsControllerTest extends TestCase
         $ids = $this->collectNavItemIds($resp->getPayload()['data']);
 
         $this->assertContains('viewer:economy.codebooks.vatRegistrations', $ids);
-        $this->assertContains('economy_codebooks_vat_periods', $ids);
     }
 
     public function testNavigationShowsVatAgendaWhenUndecided(): void

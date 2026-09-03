@@ -721,7 +721,7 @@ class DsUpgradeCommandTest extends TestCase
 
     /**
      * Zachytí insertRow do economy_codebooks_fiscal_years (ostatní tabulky
-     * ignoruje — VatPeriodsProvisioner apod. běží ve stejném průchodu).
+     * ignoruje — ReportPeriodsProvisioner apod. běží ve stejném průchodu).
      *
      * @return object{rows: list<array<string, mixed>>}
      */

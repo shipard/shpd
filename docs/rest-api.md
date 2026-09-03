@@ -256,8 +256,8 @@ Zdroj: aktivní vlastní Osoba (`vat_id`, `name`) a vrstva A (`country`);
 datum a frekvence registr nevrací, zůstávají na uživateli. Bez vlastní
 Osoby → `409 NO_OWN_PERSON`. **Uložení jde přes existující
 `POST /_ui/form/economy_codebooks_vat_registrations/save`**, aby se chytil
-hook `VatRegistrationDocument` → `VatPeriodsProvisioner` (období DPH
-vzniknou hned).
+`afterSave` handler modulu `economy.vat` (`VatRegistrationSeedHandler` →
+instance daňových tvrzení vzniknou hned).
 
 **`GET /_setup/bank-account-candidates`** — `{candidates: [{id, name,
 accountNumber, iban, bic, currency, source, validFrom, validTo,

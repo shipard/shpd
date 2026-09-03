@@ -121,7 +121,7 @@ docs.core
 ├── base.persons (vyžaduje is_own + court_registration)
 ├── world.base
 ├── world.vat (vyžaduje vat-cz.jsonc)
-├── economy.codebooks (fiscal_years, vat_periods, …)
+├── economy.codebooks (fiscal_years, vat_registrations, …)
 └── economy.items (katalog položek)
 ```
 

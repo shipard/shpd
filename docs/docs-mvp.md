@@ -1023,9 +1023,8 @@ Idempotence: lookup před insertem. Uživatel si může výchozí řadu zarchivo
         {"id": "vat_registration", "type": "int", "nullable": true,
          "reference": "economy_codebooks_vat_registrations",
          "group": "accounting", "name:cs": "Registrace DPH"},
-        {"id": "vat_period", "type": "int", "nullable": true,
-         "reference": "economy_codebooks_vat_periods",
-         "system": true, "group": "accounting", "name:cs": "Období DPH"},
+        // vat_period / cs_period / rs_period (instance daňových tvrzení)
+        // dodává extension modulu economy.vat — viz modules/economy/vat.
 
         // -- vat --
         {"id": "vat_mode", "type": "enumInt", "default": 1,

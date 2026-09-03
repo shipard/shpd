@@ -224,7 +224,7 @@ class DocumentsAggregateToolTest extends TestCase
             ['total_value' => '100.00', 'total_docs' => 1, 'currency_count' => 1, 'currency' => 'czk'],
         );
 
-        $this->assertStringContainsString('LEFT JOIN `economy_codebooks_vat_periods` `vp`', $this->capturedSql);
+        $this->assertStringContainsString('LEFT JOIN `economy_vat_report_periods` `vp`', $this->capturedSql);
         $this->assertSame('2025/Q1', $result['items'][0]['full_name']);
     }
 

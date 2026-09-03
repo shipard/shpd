@@ -29,7 +29,6 @@ přijde s dokladovým systémem).
 | [economy_codebooks_fiscal_years](tables/economy_codebooks_fiscal_years.md) | Fiskální (účetní) roky |
 | [economy_codebooks_fiscal_months](tables/economy_codebooks_fiscal_months.md) | Fiskální měsíce navázané na rok |
 | [economy_codebooks_vat_registrations](tables/economy_codebooks_vat_registrations.md) | Registrace k DPH (různé země, OSS, diskontinuity) |
-| [economy_codebooks_vat_periods](tables/economy_codebooks_vat_periods.md) | Období DPH navázaná na registraci (měsíční / čtvrtletní) |
 | [economy_codebooks_cash_desks](tables/economy_codebooks_cash_desks.md) | Pokladny pro hotovostní operace |
 | [economy_codebooks_bank_accounts](tables/economy_codebooks_bank_accounts.md) | Vlastní bankovní účty (firma) |
 
@@ -55,10 +54,8 @@ při ručním pořízení.
 | [FiscalYearsViewer.php](src/FiscalYearsViewer.php) | Viewer roků s tabem seznamu měsíců |
 | [FiscalYearsProvisioner.php](src/FiscalYearsProvisioner.php) | Idempotentní seed aktuálního a následujícího roku |
 | [VatRegistrationDocument.php](src/VatRegistrationDocument.php) | Validace registrace DPH (povinná pole, range platnosti, enum kontroly) |
-| [VatPeriodDocument.php](src/VatPeriodDocument.php) | Validace období DPH (povinná pole, range dat) |
-| [VatRegistrationsForm.php](src/VatRegistrationsForm.php) | Formulář registrace se sub-tabulkou Období DPH |
-| [VatRegistrationsViewer.php](src/VatRegistrationsViewer.php) | Viewer registrací s tabem seznamu období |
-| [VatPeriodsProvisioner.php](src/VatPeriodsProvisioner.php) | Idempotentní generátor období pro aktivní registrace |
+| [VatRegistrationsForm.php](src/VatRegistrationsForm.php) | Formulář registrace (identifikace, periodicity = defaulty generátoru instancí, platnost) |
+| [VatRegistrationsViewer.php](src/VatRegistrationsViewer.php) | Viewer registrací |
 | [CashDeskDocument.php](src/CashDeskDocument.php) | Validace pokladny (povinná pole, formát měny) + default-per-currency uniqueness v `afterPersist` |
 | [BankAccountDocument.php](src/BankAccountDocument.php) | Validace bankovního účtu (account_number nebo iban povinný, regex IBAN/BIC) + default-per-currency uniqueness v `afterPersist` |
 
@@ -141,34 +138,15 @@ později) bude obsahovat referenci na konkrétní registraci, a podle data
 uskutečnění zdanitelného plnění „spadne" do jejího příslušného období.
 Přiznání DPH se sestavují per registrace.
 
-### Auto-generování období DPH
+### Instance daňových tvrzení
 
-Při každém běhu `bin/shpd-ds ds-upgrade` se po fiskálních rocích spustí
-`VatPeriodsProvisioner::provision()`:
-
-1. Načte aktivní registrace (`docState IN (10, 40, 80)`).
-2. Pro každou registraci v jedné transakci vygeneruje období v aktuálním
-   a následujícím **kalendářním** roce, omezené na rozsah
-   `valid_from`/`valid_to` registrace.
-3. Frekvence se řídí podle `tax_period_kind`:
-   měsíční → 12 období per rok s názvem `"MM/YYYY"`,
-   čtvrtletní → 4 období per rok s názvem `"QN/YYYY"`.
-4. Vygenerované období dostává `docState=40, docStateMain=3, locked=0`.
-
-**Idempotence**: lookup před insertem je **překryvový** — podle
-`vat_registration` + `date_begin <= kandidát.date_end AND date_end >=
-kandidát.date_begin` — a **ignoruje docState**. Překryv místo rovnosti
-`date_begin` proto, že v tabulce mohou být období importovaná ze starého
-Shipardu s jinou frekvencí, než má registrace v `tax_period_kind`
-(např. čtvrtletní historie + měsíční registrace); rovnostní lookup by je
-nenašel a založil období překrývající se s existujícím. Pokud uživatel
-přes UI smaže období (`docState=90`), další `ds-upgrade` ho nikdy
-nevygeneruje znovu — smazané období zůstává smazané a blokuje i
-generování všech kandidátů, kteří se s ním překrývají.
-
-Generátor počítá podle **kalendářního** (ne fiskálního) roku — období
-DPH jsou kalendářní entita; pokud má firma fiskální rok jiný než
-kalendář, je to nezávislé.
+Období DPH už codebooks negeneruje. Instance tvrzení (přiznání, kontrolní
+hlášení, souhrnné hlášení) s rozsahem s denní přesností žijí v tabulce
+`economy_vat_report_periods` modulu `economy.vat`; periodicity na
+registraci (`tax_period_kind`, `cs_period_kind`, `rs_period_kind`) jsou jen
+defaulty jejího generátoru. Seed po uložení registrace dělá
+`economy.vat` přes `afterSave` documentEventHandler. Viz
+`modules/economy/vat/docs/README.md`.
 
 ### Manuální správa
 

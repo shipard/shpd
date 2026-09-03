@@ -256,7 +256,7 @@ stavu“ je součást existujícího API.
 | `economy.accountChart` | `default` \| `npo` \| `none` | varianta účtové osnovy | `AccountChartProvisioner` |
 | `economy.homeCurrency` | string, ISO 4217 lower | domácí měna dokladů | `DocsHeadsFormBase`, `DocDocument`, `JournalLedgerHandler` → `LedgerGenerator`, `FiscalYearsForm`, `DsUpgradeCommand` (gate fiskálních roků) |
 | `economy.fiscalYearStartMonth` | int 1–12 | první měsíc fiskálního roku | `FiscalYearsProvisioner` |
-| `economy.vatAgenda` | bool | plátcovství DPH | `VatPeriodsProvisioner`, formuláře dokladů (výchozí `vat_mode`), viditelnost DPH v UI |
+| `economy.vatAgenda` | bool | plátcovství DPH | formuláře dokladů (výchozí `vat_mode`), viditelnost DPH v UI |
 
 `SettingsStore` bere v konstruktoru jen `DataSourceConnection` a je podle
 `app-settings.md` výslovně volatelný z HTTP i CLI — tentýž klíč tedy čte
@@ -469,15 +469,14 @@ DPH nevyžaduje. Chybí tedy jen:
    staví řádky z `docs_core_vat_recap` a `buildRowLines()` bere
    `vat_base_dom`, takže doklad s `vat_mode = 0` zaúčtuje plnou částku
    a na 343xxx nesáhne.
-4. Provisioning období DPH **v okamžiku vzniku registrace**. `VatPeriodsProvisioner` iteruje registrace, takže na DS bez registrace už dnes nic nevyrobí — „u neplátce negenerovat” tedy není co implementovat. Chybí opačný směr: dokud se období generují jen při `ds-upgrade`, má uživatel po založení registrace registraci a nulová období. Patří do `vat-payer-01`, průvodce pak volá hotovou věc.
-
-   **Vědomý limit — změna frekvence.** Lookup provisioneru je překryvový
-   (záměrně, chrání `resolveVatPeriodId()` před nedeterminismem), takže
-   po změně `tax_period_kind` existující období **blokují** kandidáty nové
-   frekvence ve svém rozsahu — měsíční období se po přepnutí ze čtvrtletní
-   objeví až za horizontem už vygenerovaných let. Stará období se nemažou
-   (mohou nést doklady); případný úklid/přegenerování je věcné rozhodnutí
-   mimo `vat-payer-01`.
+4. Provisioning instancí tvrzení **v okamžiku vzniku registrace** (hotové,
+   revize #55 D9). Uložení registrace přes `VatRegistrationDocument` vyvolá
+   `afterSave` documentEventHandler modulu `economy.vat`
+   (`VatRegistrationSeedHandler` → `ReportPeriodsProvisioner`), který založí
+   instance přiznání / KH / SH pokrývající dnešek a zítřek; denní cron
+   `vat-periods-ensure` je dorovnává dál. Kalendářní mřížka období DPH
+   zanikla — změna periodicity se projeví u příští generované instance,
+   historii dodá import reálných rozsahů.
 
 **Proč varianta 1 a ne `neplátce` jako `taxpayer_kind`:** registrace je
 časově omezený fakt (`valid_from`/`valid_to`), takže **absence v intervalu je
@@ -554,7 +553,7 @@ plátcovství DPH → domácí měna → setup checky → tagová agregace → f
 | `core.system` | `SettingsStore` beze změny (jen nový konzument); panel `dsSetup` v `panels` + `settingsItems` |
 | `core.alerts` | Bez změny jádra — nové checky jsou data. Nový druh akce `open_panel` je kontrakt mezi `AlertFinding` a frontendem |
 | `base.persons` | Zobecnění `MissingOwnPersonCheck`, nový check na sídlo |
-| `economy.codebooks` | Pět checků, čtení `economy.*` klíčů ve `FiscalYearsProvisioner` a `VatPeriodsProvisioner` |
+| `economy.codebooks` | Pět checků, čtení `economy.*` klíčů ve `FiscalYearsProvisioner` |
 | `economy.accounting` | Check nad osnovou, čtení `economy.accountChart` v `AccountChartProvisioner` |
 | `economy.accbal` | `LedgerGenerator` — `home_currency` ze settings místo `main.json` |
 | `docs.core` / `docs.invoicesOut` / `docs.invoicesIn` | Odvozený default `vat_mode`, skrytí DPH u neplátce, `home_currency` ze settings |

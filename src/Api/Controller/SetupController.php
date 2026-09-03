@@ -152,7 +152,7 @@ class SetupController
     /**
      * GET /_setup/vat-registration-prefill — návrh hodnot Registrace DPH.
      * Uložení dělá frontend přes existující POST /_ui/form/.../save, aby
-     * prošlo VatRegistrationDocument (afterSave → VatPeriodsProvisioner);
+     * prošlo VatRegistrationDocument (afterSave event → seed instancí tvrzení);
      * tenhle endpoint jen skládá předvyplnění.
      *
      * valid_from a frekvence jsou záměrně null — registr datum registrace

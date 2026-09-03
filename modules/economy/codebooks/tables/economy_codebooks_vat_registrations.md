@@ -44,13 +44,14 @@ nesahá.
 
 - Manuálně přes UI vznikne registrace jako `Koncept` (10); uživatel ji
   přepne do `V pořádku` (40), případně `Smazaný` (90).
-- `VatPeriodsProvisioner` zpracovává registrace s `docState IN (10, 40, 80)`
-  — i Koncept generuje období, aby uživatel viděl náhled.
-- Dokladový systém (přijde později) podle data uskutečnění zdanitelného
-  plnění najde registraci a její odpovídající období.
+- Generátor instancí tvrzení (`economy.vat` → `ReportPeriodsProvisioner`)
+  zpracovává registrace s `docState IN (10, 40, 80)`; periodicity
+  `tax_period_kind` / `cs_period_kind` / `rs_period_kind` jsou jeho defaulty,
+  runtime logika reportů je nečte (D10).
+- Doklad podle DUZP (a DPPD oříznutého do přiznání) spadne do instancí
+  tvrzení své registrace — přiřazení dělá `economy.vat` při uložení.
 
 ## Související
 
-- [economy_codebooks_vat_periods](economy_codebooks_vat_periods.md) — období navázaná na registraci
+- [economy_vat_report_periods](../../vat/tables/economy_vat_report_periods.md) — instance daňových tvrzení navázané na registraci
 - [VatRegistrationDocument](../src/VatRegistrationDocument.php) — validace
-- [VatPeriodsProvisioner](../src/VatPeriodsProvisioner.php) — auto-generování období

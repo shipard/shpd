@@ -988,8 +988,8 @@ Pro polymorfní tabulky (jeden physický řádek může reprezentovat víc logic
 ## 15. Sub-tabulky (FormSubTable)
 
 Tab typu `subtable` zobrazuje child tabulku rodičovského záznamu — řádky
-dokladu, Kontakty / Adresy / Bankovní účty osoby, měsíce účetního roku,
-období registrace DPH. Jeden univerzální mechanismus (issue #53, fáze 1 —
+dokladu, Kontakty / Adresy / Bankovní účty osoby, měsíce účetního roku.
+Jeden univerzální mechanismus (issue #53, fáze 1 —
 `tasks/subtable-phase1.md`; fáze 2 dialog řádku, fáze 3 přesun řádků).
 
 - Sub-záznamy se ukládají **okamžitě** při potvrzení dialogu řádku (ne s hlavním formulářem)
@@ -1063,8 +1063,9 @@ rodiče (doklad bez DPH nemá DPH sloupce; `$parentData` = data rodiče).
 Override rozhoduje podle `$tab->id` a pro ostatní taby volá
 `parent::renderSubtable()`.
 
-**Default** (formuláře bez overridu — Účetní roky → měsíce, Registrace DPH
-→ období — ho dostanou zdarma):
+**Default** (formuláře bez overridu — dnes Účetní roky → měsíce — ho
+dostanou zdarma; období DPH už sub-tabulka není, instance tvrzení řeší
+issue #55):
 
 - sloupce: prvních 6 (`TableForm::SUBTABLE_DEFAULT_MAX_COLUMNS`) sloupců
   dětské `TableDefinition` (z `setTables()`) bez PK / autoIncrement, FK na

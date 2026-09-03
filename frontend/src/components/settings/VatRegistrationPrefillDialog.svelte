@@ -1,8 +1,9 @@
 <script>
   // Dialog „Založit Registraci DPH" pro panel dsSetup (ds-setup Task 09,
   // §5.4 bod 2). Prefill přijde z GET /_setup/vat-registration-prefill;
-  // tři pole, která registr nezná (valid_from + obě frekvence), doplní
-  // uživatel vědomě — záměrně bez defaultů.
+  // tři pole, která registr nezná (valid_from + frekvence přiznání a KH),
+  // doplní uživatel vědomě — záměrně bez defaultů. Frekvence SH má zákonný
+  // default (měsíčně), server ji navrhne rovnou.
   //
   // Uložení jde přes generický POST /_ui/form/.../save, tedy přes
   // VatRegistrationDocument — afterSave hook hned dogeneruje období DPH.
@@ -28,10 +29,11 @@
   let values = $state(null);
   let periodKindOptions = $state([]);
 
-  // Tři pole na doplnění — bind cíle.
+  // Pole na doplnění — bind cíle.
   let validFrom = $state('');
   let taxPeriodKind = $state(null);
-  let reportPeriodKind = $state(null);
+  let csPeriodKind = $state(null);
+  let rsPeriodKind = $state(null);
 
   let saving = $state(false);
   let saveError = $state(null);
@@ -50,7 +52,8 @@
     periodKindOptions = [];
     validFrom = '';
     taxPeriodKind = null;
-    reportPeriodKind = null;
+    csPeriodKind = null;
+    rsPeriodKind = null;
     saving = false;
     saveError = null;
     fieldErrors = {};
@@ -59,6 +62,7 @@
       if (result?.success) {
         values = result.data?.values ?? null;
         periodKindOptions = result.data?.periodKindOptions ?? [];
+        rsPeriodKind = values?.rs_period_kind ?? null;
       } else {
         loadError = translateError(result?.error);
       }
@@ -71,7 +75,7 @@
 
   const canSave = $derived(
     !loading && !saving && values !== null
-      && validFrom !== '' && taxPeriodKind !== null && reportPeriodKind !== null,
+      && validFrom !== '' && taxPeriodKind !== null && csPeriodKind !== null && rsPeriodKind !== null,
   );
 
   async function handleSave() {
@@ -84,7 +88,8 @@
         ...values,
         valid_from: validFrom,
         tax_period_kind: taxPeriodKind,
-        report_period_kind: reportPeriodKind,
+        cs_period_kind: csPeriodKind,
+        rs_period_kind: rsPeriodKind,
       });
       if (result?.success) {
         onSaved();
@@ -142,13 +147,24 @@
       </div>
 
       <div class="shpd-vat-prefill__field">
-        <label for="vat-prefill-report-period">{t('setup.vatDialog.reportPeriod')}</label>
+        <label for="vat-prefill-cs-period">{t('setup.vatDialog.csPeriod')}</label>
         <Select
-          id="vat-prefill-report-period"
-          bind:value={reportPeriodKind}
+          id="vat-prefill-cs-period"
+          bind:value={csPeriodKind}
           options={periodKindOptions}
           placeholder={t('setup.vatDialog.periodPlaceholder')}
-          error={fieldErrors.report_period_kind ?? null}
+          error={fieldErrors.cs_period_kind ?? null}
+        />
+      </div>
+
+      <div class="shpd-vat-prefill__field">
+        <label for="vat-prefill-rs-period">{t('setup.vatDialog.rsPeriod')}</label>
+        <Select
+          id="vat-prefill-rs-period"
+          bind:value={rsPeriodKind}
+          options={periodKindOptions}
+          placeholder={t('setup.vatDialog.periodPlaceholder')}
+          error={fieldErrors.rs_period_kind ?? null}
         />
       </div>
 

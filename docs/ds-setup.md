@@ -350,10 +350,11 @@ a `name` z vlastní Osoby, `country` z vrstvy A
 (`DataSourceConfig::getCountry()`), `region` default `eu`,
 `taxpayer_kind = 0`. **Registr nevrací datum registrace ani příznak
 plátce** — kanonický formát má jen `vatId`, žádné `vatRegistration` ani
-`vatPayer`. `valid_from`, `tax_period_kind` a `report_period_kind` proto
+`vatPayer`. `valid_from`, `tax_period_kind` a `cs_period_kind` proto
 přijdou **null** a dialog se na ně zeptá (nápověda u data varuje před
 „dnes"; frekvence jsou select z cfgItem `vatPeriodKinds`, rezervovaná
-hodnota `0` v něm není). Uložení jde přes generický
+hodnota `0` v něm není). `rs_period_kind` přijde s návrhem `1` (souhrnné
+hlášení je ze zákona měsíční), dialog ho nabídne ke změně. Uložení jde přes generický
 `POST /_ui/form/economy_codebooks_vat_registrations/save`, tedy přes
 `VatRegistrationDocument` — hook `afterSave` hned dogeneruje období DPH.
 Přítomnost `vatId` se používá jako **návrh** hodnoty `economy.vatAgenda`

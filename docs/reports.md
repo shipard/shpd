@@ -457,7 +457,7 @@ Rozšíření jádra pro živé DPH výstupy modulu `economy.vat`
   fiskálního provideru, runner si ho self-wiruje; konstrukce bez dotazu).
 - **REST katalog**: položka nese `periodSource`;
   `periods.vatRegistrations: [{id, name, vatId, taxPeriodKind,
-  reportPeriodKind, periods: [{id, name, dateBegin, dateEnd, locked}]}]`
+  csPeriodKind, rsPeriodKind, periods: [{id, name, dateBegin, dateEnd, locked}]}]`
   se emituje **jen když** je registrovaný nějaký vatPeriod report (DS bez
   `economy.codebooks` tabulek na dotaz nenarazí; závislosti modulu tabulky
   garantují). Query klíče runu: `vatRegistration`, `dateFrom`, `dateTo`.

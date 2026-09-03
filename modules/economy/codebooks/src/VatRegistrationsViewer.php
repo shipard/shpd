@@ -24,7 +24,7 @@ class VatRegistrationsViewer extends TableViewer
     public function selectRows(?string $search, array $filters, int $pageNumber): array
     {
         $sql = 'SELECT `id`, `name`, `region`, `country`, `taxpayer_kind`, `vat_id`,'
-            . ' `tax_period_kind`, `report_period_kind`, `valid_from`, `valid_to`,'
+            . ' `tax_period_kind`, `cs_period_kind`, `rs_period_kind`, `valid_from`, `valid_to`,'
             . ' `docState`, `docStateMain`'
             . ' FROM `' . $this->table . '`';
 
@@ -214,11 +214,18 @@ class VatRegistrationsViewer extends TableViewer
             $periodKindLabels[$taxPeriodKind] ?? (string) $taxPeriodKind,
         );
 
-        $reportPeriodKind = (int) ($record['report_period_kind'] ?? 0);
+        $csPeriodKind = (int) ($record['cs_period_kind'] ?? 0);
         $this->addItem(
             $periodItems,
             'Frekvence kontrolního hlášení',
-            $periodKindLabels[$reportPeriodKind] ?? (string) $reportPeriodKind,
+            $periodKindLabels[$csPeriodKind] ?? (string) $csPeriodKind,
+        );
+
+        $rsPeriodKind = (int) ($record['rs_period_kind'] ?? 0);
+        $this->addItem(
+            $periodItems,
+            'Frekvence souhrnného hlášení',
+            $periodKindLabels[$rsPeriodKind] ?? (string) $rsPeriodKind,
         );
 
         $this->addItem($periodItems, 'Platí od', $this->formatDate($record['valid_from'] ?? null));

@@ -45,11 +45,18 @@ class VatRegistrationDocument extends Document
             $result->addError('tax_period_kind', 'Neplatná frekvence přiznání DPH', 'invalid_value');
         }
 
-        $reportPeriodKind = $data['report_period_kind'] ?? null;
-        if ($reportPeriodKind === null || $reportPeriodKind === '') {
-            $result->addError('report_period_kind', 'Frekvence kontrolního hlášení je povinná', 'required');
-        } elseif (!in_array((int) $reportPeriodKind, self::VALID_PERIOD_KINDS, true)) {
-            $result->addError('report_period_kind', 'Neplatná frekvence kontrolního hlášení', 'invalid_value');
+        $csPeriodKind = $data['cs_period_kind'] ?? null;
+        if ($csPeriodKind === null || $csPeriodKind === '') {
+            $result->addError('cs_period_kind', 'Frekvence kontrolního hlášení je povinná', 'required');
+        } elseif (!in_array((int) $csPeriodKind, self::VALID_PERIOD_KINDS, true)) {
+            $result->addError('cs_period_kind', 'Neplatná frekvence kontrolního hlášení', 'invalid_value');
+        }
+
+        $rsPeriodKind = $data['rs_period_kind'] ?? null;
+        if ($rsPeriodKind === null || $rsPeriodKind === '') {
+            $result->addError('rs_period_kind', 'Frekvence souhrnného hlášení je povinná', 'required');
+        } elseif (!in_array((int) $rsPeriodKind, self::VALID_PERIOD_KINDS, true)) {
+            $result->addError('rs_period_kind', 'Neplatná frekvence souhrnného hlášení', 'invalid_value');
         }
 
         if (empty($data['valid_from'])) {

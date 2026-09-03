@@ -41,7 +41,7 @@ final class DbVatPeriodProvider implements VatPeriodProvider
     public function registrationsWithPeriods(): array
     {
         $registrations = $this->db->fetchAll(
-            'SELECT [id], [name], [vat_id], [tax_period_kind], [report_period_kind]'
+            'SELECT [id], [name], [vat_id], [tax_period_kind], [cs_period_kind], [rs_period_kind]'
             . ' FROM [economy_codebooks_vat_registrations]'
             . ' WHERE [docState] != %i ORDER BY [name], [id]',
             self::DOC_STATE_DELETED,
@@ -66,12 +66,13 @@ final class DbVatPeriodProvider implements VatPeriodProvider
         foreach ($registrations as $row) {
             $id = (int) $row['id'];
             $out[] = [
-                'id'               => $id,
-                'name'             => (string) $row['name'],
-                'vatId'            => $row['vat_id'] !== null ? (string) $row['vat_id'] : null,
-                'taxPeriodKind'    => (int) $row['tax_period_kind'],
-                'reportPeriodKind' => (int) $row['report_period_kind'],
-                'periods'          => $periodsByRegistration[$id] ?? [],
+                'id'            => $id,
+                'name'          => (string) $row['name'],
+                'vatId'         => $row['vat_id'] !== null ? (string) $row['vat_id'] : null,
+                'taxPeriodKind' => (int) $row['tax_period_kind'],
+                'csPeriodKind'  => (int) $row['cs_period_kind'],
+                'rsPeriodKind'  => (int) $row['rs_period_kind'],
+                'periods'       => $periodsByRegistration[$id] ?? [],
             ];
         }
         return $out;

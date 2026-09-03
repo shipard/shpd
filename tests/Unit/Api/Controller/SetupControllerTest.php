@@ -589,7 +589,9 @@ class SetupControllerTest extends TestCase
         // prázdné, uživatel je doplní vědomě (D2/D5).
         $this->assertNull($data['values']['valid_from']);
         $this->assertNull($data['values']['tax_period_kind']);
-        $this->assertNull($data['values']['report_period_kind']);
+        $this->assertNull($data['values']['cs_period_kind']);
+        // Frekvence SH má zákonný default (měsíčně) — navrhuje se rovnou.
+        $this->assertSame(1, $data['values']['rs_period_kind']);
 
         // Frekvence z cfgItem — jen 1/2, rezervovaná 0 se nenabízí.
         $this->assertSame([1, 2], array_column($data['periodKindOptions'], 'value'));

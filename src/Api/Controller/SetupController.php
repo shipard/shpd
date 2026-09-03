@@ -184,7 +184,10 @@ class SetupController
                 'taxpayer_kind'      => 0,
                 'valid_from'         => null,
                 'tax_period_kind'    => null,
-                'report_period_kind' => null,
+                'cs_period_kind'     => null,
+                // Souhrnné hlášení je ze zákona měsíční, čtvrtletní jen za
+                // podmínek § 102 odst. 6 — default 1 je bezpečný návrh.
+                'rs_period_kind'     => 1,
             ],
             'periodKindOptions' => $this->periodKindOptions(),
         ]);

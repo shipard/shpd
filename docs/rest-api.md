@@ -250,7 +250,8 @@ Osoba aspoň jedno bankovní spojení). Akce z checku zůstává jako sekundárn
 
 **`GET /_setup/vat-registration-prefill`** — návrh hodnot Registrace DPH:
 `{values: {vat_id, country, region, name, taxpayer_kind, valid_from: null,
-tax_period_kind: null, report_period_kind: null}, periodKindOptions}`.
+tax_period_kind: null, cs_period_kind: null, rs_period_kind: 1},
+periodKindOptions}`.
 Zdroj: aktivní vlastní Osoba (`vat_id`, `name`) a vrstva A (`country`);
 datum a frekvence registr nevrací, zůstávají na uživateli. Bez vlastní
 Osoby → `409 NO_OWN_PERSON`. **Uložení jde přes existující

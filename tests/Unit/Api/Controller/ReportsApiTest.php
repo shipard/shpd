@@ -268,12 +268,13 @@ class ReportsApiTest extends TestCase
             public function registrationsWithPeriods(): array
             {
                 return [[
-                    'id'               => 5,
-                    'name'             => 'CZ plátce',
-                    'vatId'            => 'CZ12345678',
-                    'taxPeriodKind'    => 1,
-                    'reportPeriodKind' => 1,
-                    'periods'          => $this->periodsOfRegistration(5),
+                    'id'            => 5,
+                    'name'          => 'CZ plátce',
+                    'vatId'         => 'CZ12345678',
+                    'taxPeriodKind' => 1,
+                    'csPeriodKind'  => 1,
+                    'rsPeriodKind'  => 1,
+                    'periods'       => $this->periodsOfRegistration(5),
                 ]];
             }
         };

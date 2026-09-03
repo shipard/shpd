@@ -1,5 +1,5 @@
 {
-    // Hodnoty odpovídají enumInt tax_period_kind / report_period_kind
+    // Hodnoty odpovídají enumInt tax_period_kind / cs_period_kind / rs_period_kind
     // v economy_codebooks_vat_registrations.
     // Pozor: hodnota 0 se nepoužívá (rezervováno do budoucna).
     "1": {

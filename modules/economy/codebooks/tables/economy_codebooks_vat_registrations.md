@@ -22,7 +22,8 @@ nesahá.
 | Sloupec | Typ | Popis |
 |---|---|---|
 | `tax_period_kind` | enumInt default 1, cfgItem `economy.codebooks.vatPeriodKinds` | Frekvence přiznání DPH: 1 = měsíční, 2 = čtvrtletní |
-| `report_period_kind` | enumInt default 1, cfgItem `economy.codebooks.vatPeriodKinds` | Frekvence kontrolního hlášení; v ČR může být KH měsíční i u čtvrtletního plátce |
+| `cs_period_kind` | enumInt default 1, cfgItem `economy.codebooks.vatPeriodKinds` | Frekvence kontrolního hlášení (CS); v ČR může být KH měsíční i u čtvrtletního plátce |
+| `rs_period_kind` | enumInt default 1, cfgItem `economy.codebooks.vatPeriodKinds` | Frekvence souhrnného hlášení (RS); zákonnou podmínku čtvrtletního SH (§ 102 odst. 6) systém nehlídá |
 | `valid_from` | date | Začátek platnosti registrace |
 | `valid_to` | date NULL | Konec platnosti; `NULL` = bez konce |
 

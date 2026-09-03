@@ -25,8 +25,11 @@ class VatRegistrationsForm extends TableForm
             if (!isset($data['tax_period_kind']) || $data['tax_period_kind'] === '' || $data['tax_period_kind'] === null) {
                 $data['tax_period_kind'] = 1;
             }
-            if (!isset($data['report_period_kind']) || $data['report_period_kind'] === '' || $data['report_period_kind'] === null) {
-                $data['report_period_kind'] = 1;
+            if (!isset($data['cs_period_kind']) || $data['cs_period_kind'] === '' || $data['cs_period_kind'] === null) {
+                $data['cs_period_kind'] = 1;
+            }
+            if (!isset($data['rs_period_kind']) || $data['rs_period_kind'] === '' || $data['rs_period_kind'] === null) {
+                $data['rs_period_kind'] = 1;
             }
         }
 
@@ -45,7 +48,8 @@ class VatRegistrationsForm extends TableForm
                     ->select('taxpayer_kind', options: $taxpayerKindOptions, required: true)
                     ->separator('Periodicita')
                     ->select('tax_period_kind', options: $periodKindOptions, required: true)
-                    ->select('report_period_kind', options: $periodKindOptions, required: true)
+                    ->select('cs_period_kind', options: $periodKindOptions, required: true)
+                    ->select('rs_period_kind', options: $periodKindOptions, required: true)
                     ->separator('Platnost')
                     ->date('valid_from', required: true)
                     ->date('valid_to')

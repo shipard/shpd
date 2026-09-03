@@ -23,7 +23,8 @@ class VatRegistrationDocumentTest extends TestCase
             'country'            => 'cz',
             'taxpayer_kind'      => 0,
             'tax_period_kind'    => 1,
-            'report_period_kind' => 1,
+            'cs_period_kind'     => 1,
+            'rs_period_kind'     => 1,
             'valid_from'         => '2026-01-01',
             'valid_to'           => null,
             'vat_id'             => 'CZ12345678',
@@ -93,14 +94,24 @@ class VatRegistrationDocumentTest extends TestCase
         $this->assertContains('tax_period_kind', array_column($result->toArray(), 'column'));
     }
 
-    public function testMissingReportPeriodKindFails(): void
+    public function testMissingCsPeriodKindFails(): void
     {
         $data = $this->validData();
-        unset($data['report_period_kind']);
+        unset($data['cs_period_kind']);
         $result = $this->doc()->validate($data);
 
         $this->assertFalse($result->isValid());
-        $this->assertContains('report_period_kind', array_column($result->toArray(), 'column'));
+        $this->assertContains('cs_period_kind', array_column($result->toArray(), 'column'));
+    }
+
+    public function testMissingRsPeriodKindFails(): void
+    {
+        $data = $this->validData();
+        unset($data['rs_period_kind']);
+        $result = $this->doc()->validate($data);
+
+        $this->assertFalse($result->isValid());
+        $this->assertContains('rs_period_kind', array_column($result->toArray(), 'column'));
     }
 
     public function testMissingValidFromFails(): void
@@ -141,16 +152,30 @@ class VatRegistrationDocumentTest extends TestCase
         $this->assertNotEmpty($errors);
     }
 
-    public function testInvalidReportPeriodKindFails(): void
+    public function testInvalidCsPeriodKindFails(): void
     {
         $data = $this->validData();
-        $data['report_period_kind'] = 5;
+        $data['cs_period_kind'] = 5;
         $result = $this->doc()->validate($data);
 
         $this->assertFalse($result->isValid());
         $errors = array_filter(
             $result->toArray(),
-            fn(array $e) => $e['column'] === 'report_period_kind' && $e['code'] === 'invalid_value',
+            fn(array $e) => $e['column'] === 'cs_period_kind' && $e['code'] === 'invalid_value',
+        );
+        $this->assertNotEmpty($errors);
+    }
+
+    public function testInvalidRsPeriodKindFails(): void
+    {
+        $data = $this->validData();
+        $data['rs_period_kind'] = 5;
+        $result = $this->doc()->validate($data);
+
+        $this->assertFalse($result->isValid());
+        $errors = array_filter(
+            $result->toArray(),
+            fn(array $e) => $e['column'] === 'rs_period_kind' && $e['code'] === 'invalid_value',
         );
         $this->assertNotEmpty($errors);
     }

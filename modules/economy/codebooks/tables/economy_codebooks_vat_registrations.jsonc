@@ -106,10 +106,21 @@
             "group": "period"
         },
         {
-            "id": "report_period_kind",
+            "id": "cs_period_kind",
             "name": "Control statement period kind",
             "name:cs": "Frekvence kontrolního hlášení",
             "name:en": "Control statement period kind",
+            "type": "enumInt",
+            "default": 1,
+            "cfgItem": "economy.codebooks.vatPeriodKinds",
+            "group": "period"
+        },
+        {
+            // Zákonnou podmínku čtvrtletního SH (§ 102 odst. 6 ZDPH) systém nehlídá.
+            "id": "rs_period_kind",
+            "name": "Recapitulative statement period kind",
+            "name:cs": "Frekvence souhrnného hlášení",
+            "name:en": "Recapitulative statement period kind",
             "type": "enumInt",
             "default": 1,
             "cfgItem": "economy.codebooks.vatPeriodKinds",

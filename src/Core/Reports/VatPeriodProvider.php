@@ -26,7 +26,7 @@ interface VatPeriodProvider
      * Řazené dle `name`.
      *
      * @return list<array{id: int, name: string, vatId: ?string,
-     *     taxPeriodKind: int, reportPeriodKind: int,
+     *     taxPeriodKind: int, csPeriodKind: int, rsPeriodKind: int,
      *     periods: list<array{id: int, name: string, dateBegin: string, dateEnd: string, locked: bool}>}>
      */
     public function registrationsWithPeriods(): array;

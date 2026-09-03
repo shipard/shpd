@@ -10,8 +10,10 @@ final class FormTab
 
     /**
      * @param FormSection[] $sections   Required for type='fields'.
-     * @param array{table: string, foreignKey: string, formId: ?string, sort?: ?string}|null $subtable
-     *                                  Required for type='subtable'.
+     * @param array{table: string, foreignKey: string, formId: ?string, sort?: ?string, orderColumn?: ?string}|null $subtable
+     *                                  Required for type='subtable'. `orderColumn` = pořadový
+     *                                  sloupec dětské tabulky (šipky přesunu, řazení
+     *                                  `orderColumn ASC, id ASC`); nekombinuje se se `sort`.
      * @param int|null      $tableId    Required for type='attachments'.
      * @param string|null   $changeEndpoint Only for type='attachments': API path
      *                                  POSTed (fire-and-forget) after upload/delete;
@@ -85,6 +87,22 @@ final class FormTab
                     sprintf('FormTab "%s" of type "subtable" must not have sections', $id),
                 );
             }
+            $orderColumn = $subtable['orderColumn'] ?? null;
+            if ($orderColumn !== null) {
+                if (!is_string($orderColumn) || $orderColumn === '') {
+                    throw new \InvalidArgumentException(
+                        sprintf('FormTab "%s" subtable "orderColumn" must be a non-empty string or null', $id),
+                    );
+                }
+                // Řádky seřazené sub-tabulky se řadí VŽDY podle pořadového
+                // sloupce (+ id) — endpoint výpisu i přesunu musí vidět totéž
+                // pořadí, jinak by šipky přesouvaly něco jiného, než uživatel vidí.
+                if (isset($subtable['sort']) && $subtable['sort'] !== null && $subtable['sort'] !== '') {
+                    throw new \InvalidArgumentException(
+                        sprintf('FormTab "%s": subtable "sort" cannot be combined with "orderColumn"', $id),
+                    );
+                }
+            }
         }
 
         if ($type === 'attachments') {
@@ -130,6 +148,9 @@ final class FormTab
             }
             if (array_key_exists('sort', $this->subtable) && $this->subtable['sort'] !== null) {
                 $sub['sort'] = $this->subtable['sort'];
+            }
+            if (!empty($this->subtable['orderColumn'])) {
+                $sub['order_column'] = $this->subtable['orderColumn'];
             }
             $result['subtable'] = $sub;
         }

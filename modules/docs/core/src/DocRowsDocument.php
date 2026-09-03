@@ -47,6 +47,39 @@ class DocRowsDocument extends Document
         return $result;
     }
 
+    /**
+     * Nový řádek bez pořadí (sub-formulář `order_pos` nepředává — ruční
+     * pole „Pořadí" zaniklo) dostane MAX(order_pos) + 1 v rámci dokladu,
+     * takže ručně přidávané řádky mají souvislé pořadí (issue #53, fáze 3).
+     * Explicitní kladné `order_pos` (importy, výměnný formát, které si
+     * číslují samy) zůstává. Update se nedotýká — pořadí existujících
+     * řádků mění jen endpoint přesunu (FormController::subtableMove).
+     */
+    public function beforeSave(array &$data, ?array $originalData = null): void
+    {
+        parent::beforeSave($data, $originalData);
+        if ($originalData !== null) {
+            return;
+        }
+        if ((int) ($data['order_pos'] ?? 0) > 0) {
+            return;
+        }
+        $headId = (int) ($data['doc_head'] ?? 0);
+        if ($headId <= 0 || $this->db === null) {
+            return;
+        }
+        $data['order_pos'] = $this->nextOrderPos($headId);
+    }
+
+    private function nextOrderPos(int $headId): int
+    {
+        $max = $this->db->fetchSingle(
+            'SELECT MAX([order_pos]) FROM [docs_core_rows] WHERE [doc_head] = %i',
+            $headId,
+        );
+        return (int) ($max ?: 0) + 1;
+    }
+
     private function loadHeadDocType(mixed $headId): ?string
     {
         if ($headId === null || $headId === '' || $this->db === null) {

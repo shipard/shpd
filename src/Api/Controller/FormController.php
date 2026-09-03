@@ -318,6 +318,9 @@ class FormController
      * SUBTABLE_NOT_FOUND. Přístup = čtení: guard rodiče i dětské tabulky,
      * sensitive sloupce se z řádků odstraní před renderem.
      *
+     * Řazení: tab s `orderColumn` VŽDY `orderColumn ASC, id ASC` (stejné
+     * pořadí, jaké vidí endpoint přesunu); jinak `sort` tabu.
+     *
      * @param array<string, TableDefinition> $tables
      */
     public function subtable(
@@ -330,11 +333,170 @@ class FormController
         ?ConfigRuntime $config,
         ?AuthContext $auth = null,
     ): Response {
+        $ctx = $this->resolveSubtableContext(
+            $table, $tabId, $parentId, $tables, $db, $formRegistry, $config, $auth ?? new AuthContext(false),
+        );
+        if ($ctx instanceof Response) {
+            return $ctx;
+        }
+
+        if ($ctx['orderColumn'] !== null) {
+            $orderBy = "`{$ctx['orderColumn']}` ASC, `id` ASC";
+        } else {
+            $orderBy = $this->subtableOrderBy($ctx['tab']->subtable['sort'] ?? null, $ctx['childCols'], (string) $tabId);
+            if ($orderBy instanceof Response) {
+                return $orderBy;
+            }
+        }
+
+        $childDef = $ctx['childDef'];
+        $rows = $db->fetchAll(
+            "SELECT * FROM `{$ctx['childTable']}` WHERE `{$ctx['fk']}` = %i ORDER BY {$orderBy}",
+            $parentId,
+        );
+        $rows = array_map(
+            static fn(array $row): array => TableAccessGuard::stripSensitive($row, $childDef),
+            $rows,
+        );
+
+        $rendered = $ctx['form']->renderSubtable($ctx['tab'], $rows, $ctx['data']);
+
+        return Response::success([
+            'columns'      => array_values($rendered['columns'] ?? []),
+            'rows'         => array_values($rendered['rows'] ?? []),
+            'order_column' => $ctx['orderColumn'],
+        ]);
+    }
+
+    /**
+     * POST /_ui/form/{table}/subtable/{tabId}/{parentId}/move
+     * body `{id, direction: 'up'|'down'}` — přesun řádku sub-tabulky
+     * o jednu pozici (issue #53, fáze 3).
+     *
+     * Server v jedné transakci načte skupinu (`SELECT … FOR UPDATE`,
+     * `orderColumn ASC, id ASC`), přečísluje ji 1..N (řádky přidané
+     * sub-formulářem měly historicky všechny 0 — prohození dvou nul by nic
+     * nezměnilo), prohodí řádek se sousedem (na kraji no-op, přečíslování
+     * se přesto provede) a zapíše jen řádky, kde se hodnota liší. Zapisuje
+     * přímo přes DB, ne přes Document hooky: přesun úmyslně NEspouští
+     * přepočet hlavičky (součty ani rekapitulace na pořadí nezávisí).
+     *
+     * Tab bez `orderColumn` → 400 SUBTABLE_NOT_ORDERED; rodič v read-only
+     * doc state → 422 DOCUMENT_READONLY (stejně jako save); řádek mimo
+     * rodiče → 404. Read-only DS odmítá ReadOnlyPolicy (fail-closed).
+     * Souběh: zámek řádků skupiny; souběžný insert bez zámku může dostat
+     * duplicitní pořadí — další přesun ho srovná.
+     *
+     * @param array<string, TableDefinition> $tables
+     */
+    public function subtableMove(
+        string $table,
+        ?string $tabId,
+        ?int $parentId,
+        Request $request,
+        array $tables,
+        DataSourceConnection $db,
+        FormRegistry $formRegistry,
+        ?ConfigRuntime $config,
+        ?AuthContext $auth = null,
+    ): Response {
+        $ctx = $this->resolveSubtableContext(
+            $table, $tabId, $parentId, $tables, $db, $formRegistry, $config, $auth ?? new AuthContext(false),
+        );
+        if ($ctx instanceof Response) {
+            return $ctx;
+        }
+        $orderColumn = $ctx['orderColumn'];
+        if ($orderColumn === null) {
+            return Response::error('SUBTABLE_NOT_ORDERED', "Subtable '{$tabId}' has no order column", 400);
+        }
+
+        $body = $request->getBody() ?? [];
+        $rawId = $body['id'] ?? null;
+        $direction = $body['direction'] ?? null;
+        if (!is_numeric($rawId) || (int) $rawId <= 0 || !in_array($direction, ['up', 'down'], true)) {
+            return Response::error('BAD_REQUEST', 'Body must contain positive "id" and "direction" up|down', 400);
+        }
+        $rowId = (int) $rawId;
+
+        $readOnlyErr = $this->guardParentWritable($ctx['def'], $ctx['data'], $config);
+        if ($readOnlyErr !== null) {
+            return $readOnlyErr;
+        }
+
+        $childTable = $ctx['childTable'];
+        $db->begin();
+        try {
+            $group = $db->fetchAll(
+                "SELECT `id`, `{$orderColumn}` AS `pos` FROM `{$childTable}` WHERE `{$ctx['fk']}` = %i"
+                . " ORDER BY `{$orderColumn}` ASC, `id` ASC FOR UPDATE",
+                $parentId,
+            );
+            $ids = [];
+            $current = [];
+            foreach ($group as $row) {
+                $id = (int) $row['id'];
+                $ids[] = $id;
+                $current[$id] = (int) ($row['pos'] ?? 0);
+            }
+
+            $index = array_search($rowId, $ids, true);
+            if ($index === false) {
+                $db->rollback();
+                return Response::error('RECORD_NOT_FOUND', "Row {$rowId} does not belong to record {$parentId}", 404);
+            }
+
+            $swap = $direction === 'up' ? $index - 1 : $index + 1;
+            if ($swap >= 0 && $swap < count($ids)) {
+                [$ids[$index], $ids[$swap]] = [$ids[$swap], $ids[$index]];
+            }
+
+            foreach ($ids as $i => $id) {
+                $pos = $i + 1;
+                if ($current[$id] !== $pos) {
+                    $db->execute(
+                        "UPDATE `{$childTable}` SET `{$orderColumn}` = %i WHERE `id` = %i",
+                        $pos,
+                        $id,
+                    );
+                }
+            }
+            $db->commit();
+        } catch (\Throwable $e) {
+            $db->rollback();
+            throw $e;
+        }
+
+        return Response::success(['order' => $ids]);
+    }
+
+    /**
+     * Společné resolvování pro endpointy sub-tabulky: rodič (tabulka, guard,
+     * záznam), jeho PHP form, tab typu `subtable`, dětská tabulka (guard),
+     * FK a pořadový sloupec (oba musí být sloupce dětské tabulky — jinak
+     * chyba konfigurace formu, 500).
+     *
+     * @param array<string, TableDefinition> $tables
+     * @return array{
+     *     def: TableDefinition, data: array<string, mixed>, form: TableForm, tab: FormTab,
+     *     childTable: string, childDef: TableDefinition, childCols: array<string, ColumnDefinition>,
+     *     fk: string, orderColumn: ?string
+     * }|Response
+     */
+    private function resolveSubtableContext(
+        string $table,
+        ?string $tabId,
+        ?int $parentId,
+        array $tables,
+        DataSourceConnection $db,
+        FormRegistry $formRegistry,
+        ?ConfigRuntime $config,
+        AuthContext $authCtx,
+    ): array|Response {
         $def = $tables[$table] ?? null;
         if ($def === null) {
             return Response::error('TABLE_NOT_FOUND', "Table '{$table}' not found", 404);
         }
-        $authCtx = $auth ?? new AuthContext(false);
         $guardErr = TableAccessGuard::guardTable($table, $authCtx, $def);
         if ($guardErr !== null) {
             return $guardErr;
@@ -384,28 +546,53 @@ class FormController
                 500,
             );
         }
-
-        $orderBy = $this->subtableOrderBy($tab->subtable['sort'] ?? null, $childCols, $tabId);
-        if ($orderBy instanceof Response) {
-            return $orderBy;
+        $orderColumn = $tab->subtable['orderColumn'] ?? null;
+        $orderColumn = is_string($orderColumn) && $orderColumn !== '' ? $orderColumn : null;
+        if ($orderColumn !== null && !isset($childCols[$orderColumn])) {
+            return Response::error(
+                'INTERNAL_ERROR',
+                "Subtable '{$tabId}': order column '{$orderColumn}' is not a column of '{$childTable}'",
+                500,
+            );
         }
 
-        $rows = $db->fetchAll(
-            "SELECT * FROM `{$childTable}` WHERE `{$fk}` = %i ORDER BY {$orderBy}",
-            $parentId,
-        );
-        $rows = array_map(
-            static fn(array $row): array => TableAccessGuard::stripSensitive($row, $childDef),
-            $rows,
-        );
+        return [
+            'def'         => $def,
+            'data'        => $data,
+            'form'        => $form,
+            'tab'         => $tab,
+            'childTable'  => $childTable,
+            'childDef'    => $childDef,
+            'childCols'   => $childCols,
+            'fk'          => $fk,
+            'orderColumn' => $orderColumn,
+        ];
+    }
 
-        $rendered = $form->renderSubtable($tab, $rows, $data);
-
-        return Response::success([
-            'columns'      => array_values($rendered['columns'] ?? []),
-            'rows'         => array_values($rendered['rows'] ?? []),
-            'order_column' => $rendered['order_column'] ?? null,
-        ]);
+    /**
+     * Rodič v read-only doc state (zaúčtovaná faktura…) nesmí měnit ani
+     * pořadí řádků — stejný kód, status i hláška jako u save
+     * (processDocState), aby frontend nemusel mapovat dvě varianty.
+     *
+     * @param array<string, mixed> $parentData
+     */
+    private function guardParentWritable(TableDefinition $def, array $parentData, ?ConfigRuntime $config): ?Response
+    {
+        $dsDef = $def->docStates;
+        if ($dsDef === null || $config === null) {
+            return null;
+        }
+        $cfgData = $config->cfgItem($dsDef->cfgItem);
+        $cfg = DocStateConfig::fromCfgItem(is_array($cfgData) ? $cfgData : null);
+        $currentState = (int) ($parentData[$dsDef->stateColumn] ?? 10);
+        if (!$cfg->isReadOnly($currentState)) {
+            return null;
+        }
+        return Response::error(
+            'DOCUMENT_READONLY',
+            "Document is read-only in state {$currentState}.",
+            422,
+        );
     }
 
     private function findSubtableTab(FormDefinition $formDef, string $tabId): ?FormTab

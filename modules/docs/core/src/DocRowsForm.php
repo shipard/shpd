@@ -132,8 +132,9 @@ class DocRowsForm extends TableForm
 
         $this->appendRowIdentityFields($col, $opAttrs);
 
-        $col->separator('Pořadí')
-            ->number('order_pos');
+        // Pořadí řádku se needituje ručně: nový řádek dostane order_pos
+        // automaticky (DocRowsDocument::beforeSave), přesun řeší šipky
+        // v sub-tabulce (issue #53, fáze 3).
 
         return new FormDefinition(
             table: $this->table,
@@ -210,8 +211,6 @@ class DocRowsForm extends TableForm
             ->number('price_calc_mode', hidden: true);
 
         $this->appendRowIdentityFields($section, $opAttrs);
-
-        $section->separator('Pořadí')->number('order_pos');
 
         return new FormDefinition(
             table: $this->table,

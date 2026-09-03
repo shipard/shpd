@@ -376,6 +376,28 @@ class RouterTest extends TestCase
 		$this->assertSame('NOT_FOUND', $result->getPayload()['error']['code']);
 	}
 
+	public function testFormSubtableMove(): void
+	{
+		$result = $this->router->resolve('/api/v1/_ui/form/docs_core_heads/subtable/rows/42/move', 'POST');
+		$this->assertInstanceOf(Route::class, $result);
+		$this->assertRoute($result, 'form', 'subtableMove', 'docs_core_heads', 42);
+		$this->assertSame('rows', $result->key);
+	}
+
+	public function testFormSubtableMoveRequiresPost(): void
+	{
+		$result = $this->router->resolve('/api/v1/_ui/form/docs_core_heads/subtable/rows/42/move', 'GET');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('METHOD_NOT_ALLOWED', $result->getPayload()['error']['code']);
+	}
+
+	public function testFormSubtableUnknownTailIsNotFound(): void
+	{
+		$result = $this->router->resolve('/api/v1/_ui/form/docs_core_heads/subtable/rows/42/swap', 'POST');
+		$this->assertInstanceOf(Response::class, $result);
+		$this->assertSame('NOT_FOUND', $result->getPayload()['error']['code']);
+	}
+
 	public function testFormSubtableWithoutParentIdIsNotFound(): void
 	{
 		$result = $this->router->resolve('/api/v1/_ui/form/docs_core_heads/subtable/rows', 'GET');

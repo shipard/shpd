@@ -496,6 +496,7 @@ abstract class DocsHeadsFormBase extends TableForm
             'docs_core_rows',
             'doc_head',
             formId: 'docs.core.rows',
+            orderColumn: 'order_pos',
         );
     }
 

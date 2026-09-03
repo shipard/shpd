@@ -1185,6 +1185,23 @@ class Router
 			return new Route('form', 'subtable', $table, (int) $rawId, key: $tabId);
 		}
 
+		// POST /_ui/form/{table}/subtable/{tabId}/{parentId}/move
+		// Přesun řádku sub-tabulky o jednu pozici (issue #53, fáze 3).
+		if ($count === 5 && $action === 'subtable' && $parts[4] === 'move') {
+			if ($method !== 'POST') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			$tabId = $parts[2];
+			$rawId = $parts[3];
+			if (preg_match('/^[A-Za-z0-9_]+$/', $tabId) !== 1) {
+				return Response::error('NOT_FOUND', 'Not found', 404);
+			}
+			if (!ctype_digit($rawId) || (int) $rawId <= 0) {
+				return Response::error('NOT_FOUND', 'Not found', 404);
+			}
+			return new Route('form', 'subtableMove', $table, (int) $rawId, key: $tabId);
+		}
+
 		return Response::error('NOT_FOUND', 'Not found', 404);
 	}
 

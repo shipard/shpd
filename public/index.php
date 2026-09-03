@@ -1378,7 +1378,8 @@ function dispatchForm(
 		'meta'        => $ctrl->meta($table, $route->id, $tables, $db, $formRegistry, $configRuntime, $lookupReg, $modulePathResolver, $language, $queryDefaults, $auth, $documentRegistry),
 		'save'        => $ctrl->save($table, $route->id, $request, $tables, $db, $configRuntime, $formRegistry, $modulePathResolver, $lookupReg, $language, $documentRegistry, $dsConfig, $auth, $eventDispatcher),
 		'recalculate' => $ctrl->recalculate($table, $request, $tables, $db, $formRegistry, $configRuntime, $lookupReg, $modulePathResolver, $language, $auth, $documentRegistry),
-		'subtable'    => $ctrl->subtable($table, $route->key, $route->id, $tables, $db, $formRegistry, $configRuntime, $auth),
+		'subtable'     => $ctrl->subtable($table, $route->key, $route->id, $tables, $db, $formRegistry, $configRuntime, $auth),
+		'subtableMove' => $ctrl->subtableMove($table, $route->key, $route->id, $request, $tables, $db, $formRegistry, $configRuntime, $auth),
 		default       => Response::error('INTERNAL_ERROR', "Unknown form action: {$route->action}", 500),
 	};
 }

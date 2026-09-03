@@ -125,6 +125,11 @@ abstract class TableForm
      * Build a tab that hosts a child table. The child table is rendered as a
      * grid with its own toolbar; the parent record is identified by parentId
      * at runtime.
+     *
+     * `$orderColumn` = pořadový sloupec dětské tabulky (např. `order_pos`):
+     * sub-tabulka ukáže šipky přesunu (`POST …/subtable/{tab}/{id}/move`),
+     * řádky se řadí `orderColumn ASC, id ASC` a `$sort` se nesmí zadat.
+     * Bez něj (Kontakty, Adresy…) se pořadí neřeší.
      */
     protected function subtableTab(
         string $id,
@@ -134,16 +139,18 @@ abstract class TableForm
         ?string $formId = null,
         ?string $sort = null,
         ?string $icon = null,
+        ?string $orderColumn = null,
     ): FormTab {
         return new FormTab(
             id: $id,
             label: $label,
             type: 'subtable',
             subtable: [
-                'table'      => $table,
-                'foreignKey' => $foreignKey,
-                'formId'     => $formId,
-                'sort'       => $sort,
+                'table'       => $table,
+                'foreignKey'  => $foreignKey,
+                'formId'      => $formId,
+                'sort'        => $sort,
+                'orderColumn' => $orderColumn,
             ],
             icon: $icon,
         );
@@ -174,7 +181,9 @@ abstract class TableForm
      * Overridy (`DocsHeadsFormBase`, `PersonsForm`) rozhodují podle
      * `$tab->id` a pro ostatní taby volají `parent::renderSubtable()`.
      * Sloupce smějí záviset na `$parentData` (doklad bez DPH nemá DPH
-     * sloupce). `order_column` je zatím vždy `null` (fáze 3, issue #53).
+     * sloupce). `order_column` v odpovědi endpointu
+     * plní controller z deklarace tabu (`subtableTab(..., orderColumn:)`),
+     * hodnota z rendereru se nepoužívá.
      *
      * @param list<array<string, mixed>> $rows Řádky dětské tabulky bez sensitive
      *     sloupců, seřazené serverem podle `sort` tabu.

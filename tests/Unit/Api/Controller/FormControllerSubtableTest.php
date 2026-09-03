@@ -46,6 +46,7 @@ class FormControllerSubtableTest extends TestCase
 					['id' => 'name',   'name' => 'Name',   'type' => 'varchar', 'length' => 100],
 					['id' => 'amount', 'name' => 'Amount', 'type' => 'numeric', 'precision' => 12, 'scale' => 2],
 					['id' => 'token',  'name' => 'Token',  'type' => 'varchar', 'length' => 64, 'sensitive' => true],
+					['id' => 'order_pos', 'name' => 'Order', 'type' => 'smallint', 'default' => 0],
 				],
 			]),
 		];
@@ -150,6 +151,25 @@ class FormControllerSubtableTest extends TestCase
 		$res = $this->ctrl->subtable('parent_tbl', 'basic', 5, $this->tables(), $db, $this->registry(), null, $this->admin());
 		$this->assertSame(404, $this->httpStatus($res));
 		$this->assertSame('SUBTABLE_NOT_FOUND', $res->getPayload()['error']['code']);
+	}
+
+	public function testOrderedTabSortsByOrderColumnAndReportsIt(): void
+	{
+		$sql = null;
+		$db = $this->db(['id' => 5, 'name' => 'Rodič'], [['id' => 10, 'parent' => 5, 'name' => 'A', 'order_pos' => 1]], $sql);
+		$res = $this->ctrl->subtable('parent_tbl', 'ordered', 5, $this->tables(), $db, $this->registry(), null, $this->admin());
+
+		$this->assertSame(200, $this->httpStatus($res));
+		$this->assertSame('order_pos', $res->getPayload()['data']['order_column']);
+		$this->assertStringContainsString('ORDER BY `order_pos` ASC, `id` ASC', $sql);
+	}
+
+	public function testOrderColumnMissingInChildTableIs500(): void
+	{
+		$db = $this->db(['id' => 5, 'name' => 'Rodič']);
+		$res = $this->ctrl->subtable('parent_tbl', 'badorder', 5, $this->tables(), $db, $this->registry(), null, $this->admin());
+		$this->assertSame(500, $this->httpStatus($res));
+		$this->assertSame('INTERNAL_ERROR', $res->getPayload()['error']['code']);
 	}
 
 	public function testInvalidSortInFormDefinitionIs500(): void

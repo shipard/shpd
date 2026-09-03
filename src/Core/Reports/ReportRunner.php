@@ -16,7 +16,7 @@ use Shipard\Core\Database\DataSourceConnection;
 final class ReportRunner
 {
     private readonly FiscalPeriodProvider $periods;
-    private readonly VatPeriodProvider $vatPeriods;
+    private readonly ReportPeriodProvider $vatPeriods;
 
     public function __construct(
         private readonly ReportRegistry $registry,
@@ -25,12 +25,12 @@ final class ReportRunner
         private readonly string $dataSourceId,
         private readonly string $language = 'en',
         ?FiscalPeriodProvider $periods = null,
-        ?VatPeriodProvider $vatPeriods = null,
+        ?ReportPeriodProvider $vatPeriods = null,
     ) {
         $this->periods = $periods ?? new DbFiscalPeriodProvider($db);
-        // Konstrukce je bez dotazu — DS bez economy_codebooks za to nic neplatí,
+        // Konstrukce je bez dotazu — DS bez economy.vat za to nic neplatí,
         // dotaz přijde až s během vatPeriod reportu (ten bez tabulek neexistuje).
-        $this->vatPeriods = $vatPeriods ?? new DbVatPeriodProvider($db);
+        $this->vatPeriods = $vatPeriods ?? new DbReportPeriodProvider($db);
     }
 
     /**

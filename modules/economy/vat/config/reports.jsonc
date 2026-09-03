@@ -1,6 +1,8 @@
 // Deklarace živých DPH reportů modulu economy.vat (docs/reports.md,
-// tasks/taxes-phase01.md). Zdroj období = registrace + interval období DPH
-// (periodSource vatPeriod), žádné per-report parametry.
+// tasks/taxes-phase01.md, tasks/vat-report-periods.md). Zdroj období =
+// instance daňového tvrzení (periodSource vatPeriod, parametr `period`),
+// vatReportType určuje typ instance a sloupec hlavičky pro výběr dokladů.
+// Žádné per-report parametry.
 [
     {
         "id": "economy.vat.returnLive",
@@ -11,6 +13,7 @@
         "name:en": "VAT return (live)",
         "builder": "Shipard\\Module\\Economy\\Vat\\Reports\\VatReturnLiveBuilder",
         "periodSource": "vatPeriod",
+        "vatReportType": "return",
         "params": []
     },
     {
@@ -22,6 +25,7 @@
         "name:en": "VAT control statement (live)",
         "builder": "Shipard\\Module\\Economy\\Vat\\Reports\\VatControlStatementLiveBuilder",
         "periodSource": "vatPeriod",
+        "vatReportType": "cs",
         "params": []
     },
     {
@@ -33,6 +37,7 @@
         "name:en": "Recapitulative statement (live)",
         "builder": "Shipard\\Module\\Economy\\Vat\\Reports\\VatRecapitulativeStatementLiveBuilder",
         "periodSource": "vatPeriod",
+        "vatReportType": "rs",
         "params": []
     }
 ]

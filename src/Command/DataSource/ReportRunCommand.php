@@ -46,9 +46,7 @@ class ReportRunCommand extends Command
              ->addOption('fiscal-year', null, InputOption::VALUE_REQUIRED, 'Název fiskálního roku (např. 2026) — reporty s fiskálním obdobím')
              ->addOption('month-from', null, InputOption::VALUE_REQUIRED, 'První fiskální měsíc intervalu (1–N)')
              ->addOption('month-to', null, InputOption::VALUE_REQUIRED, 'Poslední fiskální měsíc intervalu (1–N)')
-             ->addOption('vat-registration', null, InputOption::VALUE_REQUIRED, 'Id registrace DPH — reporty s obdobím DPH')
-             ->addOption('date-from', null, InputOption::VALUE_REQUIRED, 'Začátek intervalu období DPH (YYYY-MM-DD)')
-             ->addOption('date-to', null, InputOption::VALUE_REQUIRED, 'Konec intervalu období DPH (YYYY-MM-DD)')
+             ->addOption('period', null, InputOption::VALUE_REQUIRED, 'Id instance daňového tvrzení (economy_vat_report_periods) — reporty s obdobím DPH')
              ->addOption('detail', null, InputOption::VALUE_REQUIRED, 'Úroveň detailu: analytic | synthetic', 'analytic')
              ->addOption('pretty', null, InputOption::VALUE_NONE, 'Formátovaný JSON (odsazení)');
     }
@@ -99,17 +97,11 @@ class ReportRunCommand extends Command
         // s prázdnými parametry na runner — ten vypíše dostupné reporty.
         $rawParams = [];
         if ($definition !== null && $definition->periodSource === 'vatPeriod') {
-            foreach (['vat-registration', 'date-from', 'date-to'] as $option) {
-                if ($input->getOption($option) === null) {
-                    $err->writeln("<error>Missing required option --{$option}</error>");
-                    return Command::INVALID;
-                }
+            if ($input->getOption('period') === null) {
+                $err->writeln('<error>Missing required option --period</error>');
+                return Command::INVALID;
             }
-            $rawParams = [
-                'vatRegistration' => (string) $input->getOption('vat-registration'),
-                'dateFrom'        => (string) $input->getOption('date-from'),
-                'dateTo'          => (string) $input->getOption('date-to'),
-            ];
+            $rawParams = ['period' => (string) $input->getOption('period')];
         } elseif ($definition !== null) {
             foreach (['fiscal-year', 'month-from', 'month-to'] as $option) {
                 if ($input->getOption($option) === null) {

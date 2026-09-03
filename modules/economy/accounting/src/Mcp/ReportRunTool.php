@@ -34,8 +34,9 @@ final class ReportRunTool implements McpTool
 			. '(periodSource) a dostupné fiskální roky či registrace DPH zjistíš '
 			. 'nástrojem report_list; reporty s periodSource "fiscal" chtějí '
 			. 'fiscalYear+monthFrom+monthTo, reporty "vatPeriod" chtějí '
-			. 'vatRegistration+dateFrom+dateTo (interval musí přesně pokrýt celá '
-			. 'období DPH registrace). DŮLEŽITÉ: výsledek se '
+			. 'period (id instance daňového tvrzení z report_list → '
+			. 'vatRegistrations[].periods, typ instance musí odpovídat vatReportType '
+			. 'reportu). DŮLEŽITÉ: výsledek se '
 			. 'status "errors" NEJSOU spolehlivá čísla — chybu vždy nahlas '
 			. 'uživateli a nepoužívej je mlčky pro výpočty; status "warnings" '
 			. 'u odpovědi zmiň. Pro přehledy a srovnání používej detail '
@@ -52,9 +53,7 @@ final class ReportRunTool implements McpTool
 				'fiscalYear' => ['type' => 'integer', 'description' => 'Fiskální rok dle názvu, např. 2026 — povinné pro reporty s periodSource "fiscal" (dostupné roky viz report_list)'],
 				'monthFrom'  => ['type' => 'integer', 'minimum' => 1, 'maximum' => 12, 'description' => 'První fiskální měsíc intervalu (periodSource "fiscal")'],
 				'monthTo'    => ['type' => 'integer', 'minimum' => 1, 'maximum' => 12, 'description' => 'Poslední fiskální měsíc intervalu (periodSource "fiscal")'],
-				'vatRegistration' => ['type' => 'integer', 'description' => 'Id registrace DPH — povinné pro reporty s periodSource "vatPeriod" (registrace a jejich období viz report_list)'],
-				'dateFrom'   => ['type' => 'string', 'format' => 'date', 'description' => 'Začátek intervalu období DPH, YYYY-MM-DD (periodSource "vatPeriod")'],
-				'dateTo'     => ['type' => 'string', 'format' => 'date', 'description' => 'Konec intervalu období DPH, YYYY-MM-DD (periodSource "vatPeriod")'],
+				'period'     => ['type' => 'integer', 'description' => 'Id instance daňového tvrzení — povinné pro reporty s periodSource "vatPeriod" (instance viz report_list → vatRegistrations[].periods; typ instance = vatReportType reportu)'],
 				'detail'     => [
 					'type'        => 'string',
 					'enum'        => ['analytic', 'synthetic'],
@@ -85,16 +84,10 @@ final class ReportRunTool implements McpTool
 		}
 
 		if ($definition->periodSource === 'vatPeriod') {
-			foreach (['vatRegistration', 'dateFrom', 'dateTo'] as $required) {
-				if (!array_key_exists($required, $arguments)) {
-					throw new \InvalidArgumentException("Missing required parameter: {$required}");
-				}
+			if (!array_key_exists('period', $arguments)) {
+				throw new \InvalidArgumentException('Missing required parameter: period');
 			}
-			$rawParams = [
-				'vatRegistration' => (string) $arguments['vatRegistration'],
-				'dateFrom'        => (string) $arguments['dateFrom'],
-				'dateTo'          => (string) $arguments['dateTo'],
-			];
+			$rawParams = ['period' => (string) $arguments['period']];
 		} else {
 			foreach (['fiscalYear', 'monthFrom', 'monthTo'] as $required) {
 				if (!array_key_exists($required, $arguments)) {
@@ -120,7 +113,7 @@ final class ReportRunTool implements McpTool
 
 		$period = $result->params['period'];
 		$periodLabel = $definition->periodSource === 'vatPeriod'
-			? sprintf('%s–%s', $period['dateFrom'], $period['dateTo'])
+			? sprintf('%s (%s–%s)', $period['name'], $period['dateFrom'], $period['dateTo'])
 			: sprintf('%s/%d–%d', $period['fiscalYear'], $period['monthFrom'], $period['monthTo']);
 
 		return [

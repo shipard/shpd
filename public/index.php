@@ -687,7 +687,7 @@ function dispatchReports(
 		new \Shipard\Core\Reports\DbFiscalPeriodProvider($db),
 		// Konstrukce bez dotazu — catalog() se na registrace ptá jen když je
 		// registrovaný nějaký vatPeriod report (ten garantuje tabulky).
-		new \Shipard\Core\Reports\DbVatPeriodProvider($db),
+		new \Shipard\Core\Reports\DbReportPeriodProvider($db),
 	);
 	return match ($route->action) {
 		'catalog' => $ctrl->catalog(),

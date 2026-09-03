@@ -6,7 +6,7 @@ namespace Shipard\Module\Economy\Accounting\Mcp;
 use Shipard\Api\Mcp\McpInvocationContext;
 use Shipard\Api\Mcp\McpTool;
 use Shipard\Core\Reports\DbFiscalPeriodProvider;
-use Shipard\Core\Reports\DbVatPeriodProvider;
+use Shipard\Core\Reports\DbReportPeriodProvider;
 
 /**
  * Čtecí MCP nástroj: katalog deklarovaných reportů (D11) — id, název,
@@ -32,8 +32,9 @@ final class ReportListTool implements McpTool
 		return 'Vrátí katalog reportů (hlavní kniha, výsledovka, rozvaha, živé '
 			. 'výstupy DPH): id reportu, název, zdroj období (periodSource '
 			. 'fiscal | vatPeriod), granularity, schéma parametrů a dostupné '
-			. 'fiskální roky; pro vatPeriod reporty navíc registrace DPH s jejich '
-			. 'obdobími (vatRegistrations). Použij jako první krok, když uživatel '
+			. 'fiskální roky; pro vatPeriod reporty navíc vatReportType a registrace '
+			. 'DPH s instancemi tvrzení (vatRegistrations[].periods, každá s type '
+			. 'return|cs|rs — report bere jen instance svého typu). Použij jako první krok, když uživatel '
 			. 'chce čísla z účetnictví nebo DPH po obdobích — data pak vrací '
 			. 'nástroj report_run. NEpoužívej pro seznam dokladů či faktur '
 			. '(od toho je documents_search).';
@@ -63,8 +64,8 @@ final class ReportListTool implements McpTool
 			}
 		}
 		$vatRegistrations = [];
-		if ($hasVatPeriod && isset($ctx->tables['economy_codebooks_vat_periods'])) {
-			$vatRegistrations = (new DbVatPeriodProvider($ctx->db))->registrationsWithPeriods();
+		if ($hasVatPeriod && isset($ctx->tables['economy_vat_report_periods'])) {
+			$vatRegistrations = (new DbReportPeriodProvider($ctx->db))->registrationsWithPeriods();
 		}
 
 		$items = [];
@@ -76,7 +77,9 @@ final class ReportListTool implements McpTool
 				'periodGranularities' => $d->periodGranularities,
 				'params'              => $d->params,
 			];
-			if ($d->periodSource !== 'vatPeriod') {
+			if ($d->periodSource === 'vatPeriod') {
+				$item['vatReportType'] = $d->vatReportType;
+			} else {
 				$item['fiscalYears'] = $fiscalYears;
 			}
 			$items[] = $item;

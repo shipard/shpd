@@ -8,6 +8,7 @@ use Shipard\Core\Reports\ReportMessage;
 use Shipard\Core\Reports\ReportMessageSeverity;
 use Shipard\Core\Reports\ReportRequest;
 use Shipard\Core\Reports\ReportResult;
+use Shipard\Module\Economy\Vat\ReportPeriodDocument;
 use Shipard\Module\Economy\Vat\VatDocumentSelection;
 use Shipard\Module\Economy\Vat\VatOutputsMapping;
 use Shipard\Module\World\Vat\VatRateResolver;
@@ -35,7 +36,7 @@ final class VatReportSupport
         return (new VatRateResolver($request->config))->getVatCodes('cz', null, null, true);
     }
 
-    /** @return list<array<string, mixed>> Doklady výběru dle VatPeriodRange. */
+    /** @return list<array<string, mixed>> Doklady přiřazené instanci z VatPeriodRange (D11). */
     public function docs(ReportRequest $request): array
     {
         $range = $request->vatRange;
@@ -44,8 +45,11 @@ final class VatReportSupport
                 "Report '{$request->reportId}': missing VatPeriodRange (declare periodSource 'vatPeriod')",
             );
         }
-        return (new VatDocumentSelection($request->db))
-            ->load($range->registrationId, $range->dateBegin, $range->dateEnd);
+        $column = ReportPeriodDocument::HEAD_COLUMN_BY_TYPE[$range->reportType] ?? null;
+        if ($column === null) {
+            throw new \RuntimeException("Report '{$request->reportId}': unknown vatReportType '{$range->reportType}'");
+        }
+        return (new VatDocumentSelection($request->db))->load($range->periodId, $column);
     }
 
     /**

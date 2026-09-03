@@ -9,7 +9,7 @@ use Shipard\Core\Reports\FiscalPeriodProvider;
 use Shipard\Core\Reports\ReportNotFoundException;
 use Shipard\Core\Reports\ReportRegistry;
 use Shipard\Core\Reports\ReportRunner;
-use Shipard\Core\Reports\VatPeriodProvider;
+use Shipard\Core\Reports\ReportPeriodProvider;
 
 /**
  * Endpoints:
@@ -27,7 +27,7 @@ class ReportsController
         private readonly ReportRegistry $registry,
         private readonly ReportRunner $runner,
         private readonly ?FiscalPeriodProvider $periodProvider = null,
-        private readonly ?VatPeriodProvider $vatPeriodProvider = null,
+        private readonly ?ReportPeriodProvider $vatPeriodProvider = null,
     ) {}
 
     /** GET /_reports */
@@ -40,6 +40,7 @@ class ReportsController
                 'id'                  => $definition->id,
                 'name'                => $definition->name,
                 'periodSource'        => $definition->periodSource,
+                'vatReportType'       => $definition->vatReportType,
                 'periodGranularities' => $definition->periodGranularities,
                 'params'              => $definition->params,
             ];
@@ -47,8 +48,8 @@ class ReportsController
         }
 
         $periods = ['fiscalYears' => $this->periodProvider?->regularYears() ?? []];
-        // Registrace DPH jen když je nějaký vatPeriod report registrovaný —
-        // jinak by dotaz padal na DS bez economy_codebooks tabulek.
+        // Registrace DPH s instancemi tvrzení jen když je nějaký vatPeriod
+        // report registrovaný — jinak by dotaz padal na DS bez economy.vat tabulek.
         if ($hasVatPeriod && $this->vatPeriodProvider !== null) {
             $periods['vatRegistrations'] = $this->vatPeriodProvider->registrationsWithPeriods();
         }

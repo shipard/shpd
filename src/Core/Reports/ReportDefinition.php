@@ -15,6 +15,7 @@ final class ReportDefinition
 {
     public const GRANULARITIES = ['month', 'quarter', 'halfYear', 'year'];
     public const PERIOD_SOURCES = ['fiscal', 'vatPeriod'];
+    public const VAT_REPORT_TYPES = ['return', 'cs', 'rs'];
     private const PARAM_TYPES  = ['enum', 'bool'];
 
     /**
@@ -24,8 +25,9 @@ final class ReportDefinition
      *        Schéma ne-periodových parametrů.
      * @param ?string $navSection Sekce hlavní navigace; null = report do navigace nevstupuje.
      * @param string $periodSource Zdroj období: 'fiscal' (fiskální měsíce, default)
-     *        nebo 'vatPeriod' (období DPH registrace — parametry
-     *        vatRegistration + dateFrom/dateTo).
+     *        nebo 'vatPeriod' (instance daňového tvrzení — parametr `period`).
+     * @param ?string $vatReportType Typ instance tvrzení (`return`|`cs`|`rs`),
+     *        povinný právě u `periodSource: 'vatPeriod'` (D11).
      */
     public function __construct(
         public readonly string $id,
@@ -37,6 +39,7 @@ final class ReportDefinition
         public readonly ?string $navSection = null,
         public readonly int $navOrder = 1000,
         public readonly string $periodSource = 'fiscal',
+        public readonly ?string $vatReportType = null,
     ) {}
 
     /** @param array<string, mixed> $data */
@@ -63,6 +66,20 @@ final class ReportDefinition
         if (!is_string($periodSource) || !in_array($periodSource, self::PERIOD_SOURCES, true)) {
             throw new \InvalidArgumentException(
                 "Report '{$id}': 'periodSource' must be one of " . implode('|', self::PERIOD_SOURCES),
+            );
+        }
+
+        $vatReportType = $data['vatReportType'] ?? null;
+        if ($periodSource === 'vatPeriod') {
+            if (!is_string($vatReportType) || !in_array($vatReportType, self::VAT_REPORT_TYPES, true)) {
+                throw new \InvalidArgumentException(
+                    "Report '{$id}': periodSource 'vatPeriod' requires 'vatReportType' one of "
+                    . implode('|', self::VAT_REPORT_TYPES),
+                );
+            }
+        } elseif ($vatReportType !== null) {
+            throw new \InvalidArgumentException(
+                "Report '{$id}': 'vatReportType' is only allowed for periodSource 'vatPeriod'",
             );
         }
 
@@ -139,6 +156,7 @@ final class ReportDefinition
             navSection: $navSection,
             navOrder: $navOrder,
             periodSource: $periodSource,
+            vatReportType: $vatReportType,
         );
     }
 }

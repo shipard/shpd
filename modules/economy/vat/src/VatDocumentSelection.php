@@ -7,13 +7,13 @@ namespace Shipard\Module\Economy\Vat;
 use Shipard\Core\Database\DataSourceConnection;
 
 /**
- * Společný výběr dokladů pro všechny tři DPH kalkulátory (D5): doklady
- * ve stavu „V pořádku" (docState 40), jejichž **období DPH spadá do
- * intervalu** — join přes date containment na `economy_codebooks_vat_periods`,
- * nikdy přes DUZP přímo (doklad s ručně přiřazeným obdobím musí skončit
- * ve stejném KH jako ve svém přiznání). K hlavičkám načte řádky
- * `docs_core_vat_recap` (domácí měna) a rozliší DIČ partnera ze snapshotů
- * (`vat_id`, fallback `tax_id`).
+ * Společný výběr dokladů pro všechny tři DPH kalkulátory (D8/D11): doklady
+ * ve stavu „V pořádku" (docState 40), jejichž **materializovaný ukazatel**
+ * (`vat_period` / `cs_period` / `rs_period` dle typu reportu) míří na
+ * instanci tvrzení — nikdy přes datum přímo; pravidlo clamped DPPD žije
+ * v přiřazení při uložení (DocsHeadsVatPeriodHandler). K hlavičkám načte
+ * řádky `docs_core_vat_recap` (domácí měna) a rozliší DIČ partnera ze
+ * snapshotů (`vat_id`, fallback `tax_id`).
  */
 final class VatDocumentSelection
 {
@@ -28,18 +28,24 @@ final class VatDocumentSelection
      *         recap (list řádků: vat_code, vat_pct, base_dom, tax_dom,
      *         is_reverse_pair).
      */
-    public function load(int $vatRegistrationId, string $dateFrom, string $dateTo): array
+    /**
+     * @param int $periodId id instance `economy_vat_report_periods`
+     * @param string $periodColumn sloupec hlavičky dle typu instance
+     *        (`vat_period` | `cs_period` | `rs_period`)
+     */
+    public function load(int $periodId, string $periodColumn): array
     {
+        if (!in_array($periodColumn, ['vat_period', 'cs_period', 'rs_period'], true)) {
+            throw new \InvalidArgumentException("Unknown period column '{$periodColumn}'");
+        }
         $heads = $this->db->fetchAll(
             'SELECT [h].[id], [h].[doc_type], [h].[doc_number], [h].[partner_doc_number],'
             . ' [h].[total_amount_dom], [h].[vat_duzp], [h].[vat_dppd],'
             . ' [h].[customer_snapshot], [h].[supplier_snapshot]'
             . ' FROM [docs_core_heads] [h]'
-            . ' JOIN [economy_codebooks_vat_periods] [vp] ON [vp].[id] = [h].[vat_period]'
-            . ' WHERE [h].[vat_registration] = %i AND [h].[docState] = %i'
-            . ' AND [vp].[date_begin] >= %d AND [vp].[date_end] <= %d'
+            . ' WHERE %n = %i AND [h].[docState] = %i'
             . ' ORDER BY [h].[doc_number], [h].[id]',
-            $vatRegistrationId, self::DOC_STATE_OK, $dateFrom, $dateTo,
+            'h.' . $periodColumn, $periodId, self::DOC_STATE_OK,
         );
         if ($heads === []) {
             return [];

@@ -18,7 +18,7 @@
   import { t } from '../../i18n/index.js';
   import { translateError } from '../../i18n/errors.js';
   import { navigationStore } from '../../stores/navigation.svelte.js';
-  import { fetchReportCatalog, runReport, defaultPeriod, defaultVatPeriod } from '../../api/reports.js';
+  import { fetchReportCatalog, runReport, defaultPeriod, defaultVatPeriod, hasVatPeriod } from '../../api/reports.js';
 
   let { item } = $props();
 
@@ -39,8 +39,9 @@
     (reportDef?.params.find((p) => p.id === 'detail')?.options ?? [])
       .map((o) => ({ value: o, label: t(`reports.detail.${o}`) })),
   );
+  const vatReportType = $derived(reportDef?.vatReportType ?? 'return');
   const noPeriods = $derived(catalog !== null && (periodSource === 'vatPeriod'
-    ? catalog.vatRegistrations.length === 0
+    ? !catalog.vatRegistrations.some((r) => (r.periods ?? []).some((p) => p.type === vatReportType))
     : catalog.fiscalYears.length === 0));
 
   async function loadCatalog() {
@@ -68,21 +69,10 @@
   function overlayDeepLink(base, pending) {
     const merged = { ...base };
     if (periodSource === 'vatPeriod') {
-      const registration = pending.vatRegistration !== undefined
-        ? catalog.vatRegistrations.find((r) => r.id === pending.vatRegistration)
-        : null;
-      if (registration) merged.vatRegistration = registration.id;
-      const periods = catalog.vatRegistrations
-        .find((r) => r.id === merged.vatRegistration)?.periods ?? [];
-      const from = pending.dateFrom ?? merged.dateFrom;
-      const to = pending.dateTo ?? merged.dateTo;
-      // Hranice intervalu musejí sedět na existující období registrace —
-      // přesné pokrytí pak vynucuje server (400 jistí banner z runReport).
-      if (from <= to
-        && periods.some((p) => p.dateBegin === from)
-        && periods.some((p) => p.dateEnd === to)) {
-        merged.dateFrom = from;
-        merged.dateTo = to;
+      // Instance musí existovat a být typu reportu — jinak zůstává default
+      // (typ vynucuje i server, 400 jistí banner z runReport).
+      if (pending.period !== undefined && hasVatPeriod(catalog.vatRegistrations, pending.period, vatReportType)) {
+        merged.period = pending.period;
       }
     } else {
       const year = pending.fiscalYear !== undefined
@@ -120,7 +110,7 @@
       return;
     }
     const period = periodSource === 'vatPeriod'
-      ? defaultVatPeriod(catalog.vatRegistrations)
+      ? defaultVatPeriod(catalog.vatRegistrations, vatReportType)
       : defaultPeriod(catalog.fiscalYears);
     // `detail` jen když ho report deklaruje — server by neznámý parametr odmítl.
     const detailParam = reportDef?.params.find((p) => p.id === 'detail');
@@ -134,8 +124,8 @@
   // bez reloadu, bez zásahu do zbytku shellu. Odchod ze stránky query
   // uklidí, aby reload neresuscitoval report přes jinou obrazovku.
   function syncUrl(id, p) {
-    const entries = p.vatRegistration != null
-      ? { report: id, reg: String(p.vatRegistration), df: p.dateFrom, dt: p.dateTo }
+    const entries = p.period != null
+      ? { report: id, p: String(p.period) }
       : { report: id, fy: p.fiscalYear, mf: String(p.monthFrom), mt: String(p.monthTo) };
     if (p.detail !== undefined) entries.detail = p.detail;
     const query = new URLSearchParams(entries);
@@ -205,6 +195,7 @@
       {#if periodSource === 'vatPeriod'}
         <VatPeriodPicker
           registrations={catalog.vatRegistrations}
+          reportType={vatReportType}
           value={params}
           onChange={changePeriod}
         />

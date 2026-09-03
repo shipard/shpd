@@ -363,6 +363,9 @@ abstract class DocsHeadsFormBase extends TableForm
         $hasForeignCurrency = $docCurrency !== '' && $homeCurrency !== ''
             && $docCurrency !== $homeCurrency;
         $partnerId = (int) ($data['partner'] ?? 0);
+        $reportPeriodOptions = $hasVat && !$isNew
+            ? $this->resolveReportPeriodOptions((int) ($data['vat_registration'] ?? 0))
+            : ['return' => [], 'cs' => [], 'rs' => []];
 
         return $this->tab('basic', 'Hlavička')
             ->section()
@@ -431,6 +434,21 @@ abstract class DocsHeadsFormBase extends TableForm
                         options: $vatSectionHidden ? [] : $this->resolveVatRegistrationOptions(),
                         triggers: 'reload',
                         hidden: !$hasVat,
+                    )
+                    // Zařazení do instancí tvrzení (economy.vat extension) —
+                    // server je při uložení přepočítá, ručně změněné pole
+                    // respektuje (přesun dokladu mezi měsíci KH).
+                    ->select('vat_period',
+                        options: $reportPeriodOptions['return'],
+                        hidden: !$hasVat || $isNew,
+                    )
+                    ->select('cs_period',
+                        options: $reportPeriodOptions['cs'],
+                        hidden: !$hasVat || $isNew,
+                    )
+                    ->select('rs_period',
+                        options: $reportPeriodOptions['rs'],
+                        hidden: !$hasVat || $isNew,
                     )
 
                     ->separator('Měna')
@@ -633,6 +651,45 @@ abstract class DocsHeadsFormBase extends TableForm
     }
 
     /** @return list<array{value: int, label: string}> */
+    /**
+     * Instance daňových tvrzení registrace dokladu per typ (return/cs/rs) —
+     * options selectů vat_period/cs_period/rs_period. Tabulka patří modulu
+     * economy.vat (extension sloupců), docs.core na něm nezávisí: bez
+     * tabulky (DS bez economy.vat) vrací prázdné options místo pádu.
+     *
+     * @return array{return: list<array{value: int, label: string}>, cs: list<array{value: int, label: string}>, rs: list<array{value: int, label: string}>}
+     */
+    protected function resolveReportPeriodOptions(int $vatRegistrationId): array
+    {
+        $options = ['return' => [], 'cs' => [], 'rs' => []];
+        if ($this->db === null || $vatRegistrationId <= 0) {
+            return $options;
+        }
+        try {
+            $rows = $this->db->fetchAll(
+                'SELECT `id`, `report_type`, `name`, `date_begin`, `date_end` FROM `economy_vat_report_periods`'
+                . ' WHERE `vat_registration` = %i AND `docState` != 90'
+                . ' ORDER BY `date_begin` DESC, `id` DESC',
+                $vatRegistrationId,
+            );
+        } catch (\Dibi\Exception) {
+            return $options;
+        }
+        foreach ($rows as $row) {
+            $type = (string) $row['report_type'];
+            if (!isset($options[$type])) {
+                continue;
+            }
+            $begin = $row['date_begin'] instanceof \DateTimeInterface ? $row['date_begin']->format('d.m.Y') : (string) $row['date_begin'];
+            $end = $row['date_end'] instanceof \DateTimeInterface ? $row['date_end']->format('d.m.Y') : (string) $row['date_end'];
+            $options[$type][] = [
+                'value' => (int) $row['id'],
+                'label' => $row['name'] . ' (' . $begin . ' – ' . $end . ')',
+            ];
+        }
+        return $options;
+    }
+
     protected function resolveVatRegistrationOptions(): array
     {
         if ($this->db === null) {

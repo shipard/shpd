@@ -1,41 +1,63 @@
 <script module>
   /**
-   * Label zvoleného intervalu období DPH: název období („01/2026"),
-   * rozsah („01/2026–03/2026"), u více registrací s prefixem názvu
-   * registrace. Nezarovnaný interval (deep-link) degraduje na data.
+   * Label zvolené instance tvrzení: název instance („01/2026"), u více
+   * registrací s prefixem názvu registrace. Neznámé id (deep-link na
+   * smazanou instanci) degraduje na „#id".
    *
-   * @param {{vatRegistration: number, dateFrom: string, dateTo: string}|null} value
-   * @param {Array<{id: number, name: string, periods: Array<object>}>} registrations
+   * @param {{period: number}|null} value
+   * @param {Array<{id: number, name: string, periods: Array<{id: number, name: string}>}>} registrations
    * @returns {string}
    */
   export function formatVatPeriodLabel(value, registrations = []) {
-    if (!value) return '';
-    const registration = registrations.find((r) => r.id === value.vatRegistration);
-    const periods = (registration?.periods ?? []).filter(
-      (p) => p.dateBegin >= value.dateFrom && p.dateEnd <= value.dateTo,
-    );
-    let label;
-    if (periods.length === 1) label = periods[0].name;
-    else if (periods.length > 1) label = `${periods[0].name}–${periods.at(-1).name}`;
-    else label = `${value.dateFrom}–${value.dateTo}`;
-    return registration && registrations.length > 1
-      ? `${registration.name} — ${label}`
-      : label;
+    if (!value || value.period == null) return '';
+    for (const registration of registrations) {
+      const period = (registration.periods ?? []).find((p) => p.id === value.period);
+      if (period) {
+        return registrations.length > 1 ? `${registration.name} — ${period.name}` : period.name;
+      }
+    }
+    return `#${value.period}`;
+  }
+
+  /**
+   * Instance daného typu zvolené registrace seskupené po letech
+   * (rok = rok dateBegin), nejnovější rok první, instance v roce dle dateBegin.
+   *
+   * @param {{periods: Array<object>}|null} registration
+   * @param {string} reportType
+   * @returns {Array<{year: string, periods: Array<object>}>}
+   */
+  export function periodsByYear(registration, reportType) {
+    const byYear = new Map();
+    for (const period of registration?.periods ?? []) {
+      if (period.type !== reportType) continue;
+      const year = period.dateBegin.slice(0, 4);
+      if (!byYear.has(year)) byYear.set(year, []);
+      byYear.get(year).push(period);
+    }
+    return [...byYear.entries()]
+      .map(([year, periods]) => ({
+        year,
+        periods: [...periods].sort((a, b) => a.dateBegin.localeCompare(b.dateBegin)),
+      }))
+      .sort((a, b) => b.year.localeCompare(a.year));
   }
 </script>
 
 <script>
-  // Picker období DPH — protějšek PeriodPicker pro reporty s periodSource
-  // 'vatPeriod'. Controlled: dostane hodnotu a onChange, stav drží rodič.
-  // Nabízí období zvolené registrace seskupená po letech; u měsíční
-  // registrace navíc sloučené kvartály (jen když všechna 3 období existují
-  // a navazují — server přesné pokrytí vynucuje).
+  // Picker instancí daňových tvrzení — protějšek PeriodPicker pro reporty
+  // s periodSource 'vatPeriod' (D11). Controlled: dostane hodnotu {period}
+  // a onChange, stav drží rodič. Nabízí instance typu reportu
+  // (vatReportType) zvolené registrace, filtrované rokem (roletka; default
+  // rok zvolené instance). Žádné slučování kvartálů — instance jsou to,
+  // co v datech je; KH čtvrtletního plátce má měsíční instance typu cs.
   import Popover from '../ui/Popover.svelte';
   import Select from '../ui/Select.svelte';
   import { t } from '../../i18n/index.js';
 
   let {
     registrations = [],
+    reportType = 'return',
     value = null,
     disabled = false,
     onChange,
@@ -44,11 +66,23 @@
   let open = $state(false);
   let anchorEl = $state(null);
 
-  // Registrace zvolená v panelu — sleduje value, dokud uživatel nepřepne.
-  let panelRegistrationId = $state(null);
-  $effect(() => {
-    panelRegistrationId = value?.vatRegistration ?? registrations[0]?.id ?? null;
+  const selected = $derived.by(() => {
+    if (!value || value.period == null) return null;
+    for (const registration of registrations) {
+      const period = (registration.periods ?? []).find((p) => p.id === value.period);
+      if (period) return { registration, period };
+    }
+    return null;
   });
+
+  // Registrace a rok zvolené v panelu — sledují value, dokud uživatel nepřepne.
+  let panelRegistrationId = $state(null);
+  let panelYear = $state(null);
+  $effect(() => {
+    panelRegistrationId = selected?.registration.id ?? registrations[0]?.id ?? null;
+    panelYear = selected?.period.dateBegin.slice(0, 4) ?? null;
+  });
+
   const registration = $derived(
     registrations.find((r) => r.id === panelRegistrationId) ?? null,
   );
@@ -58,61 +92,24 @@
     label: r.vatId ? `${r.name} (${r.vatId})` : r.name,
   })));
 
-  // Období per rok (dle roku date_begin), nejnovější rok nahoře.
-  const yearRows = $derived.by(() => {
-    const byYear = new Map();
-    for (const period of registration?.periods ?? []) {
-      const year = period.dateBegin.slice(0, 4);
-      if (!byYear.has(year)) byYear.set(year, []);
-      byYear.get(year).push(period);
-    }
-    return [...byYear.entries()]
-      .map(([year, periods]) => ({ year, periods, quarters: quartersOf(periods) }))
-      .sort((a, b) => b.year.localeCompare(a.year));
-  });
+  const yearRows = $derived(periodsByYear(registration, reportType));
+  const yearOptions = $derived(yearRows.map((row) => ({ value: row.year, label: row.year })));
 
-  function nextDay(isoDate) {
-    const date = new Date(isoDate);
-    date.setUTCDate(date.getUTCDate() + 1);
-    return date.toISOString().slice(0, 10);
-  }
+  // Rok mimo nabídku (jiná registrace / typ) → nejnovější dostupný.
+  const effectiveYear = $derived(
+    yearRows.some((row) => row.year === panelYear) ? panelYear : (yearRows[0]?.year ?? null),
+  );
+  const visiblePeriods = $derived(
+    yearRows.find((row) => row.year === effectiveYear)?.periods ?? [],
+  );
 
-  // Sloučené kvartály měsíční registrace (KH/SH kvartálního plátce DP3 se
-  // řeší obráceně — kvartální období jsou přímo v seznamu).
-  function quartersOf(periods) {
-    if (registration?.taxPeriodKind !== 1) return [];
-    const out = [];
-    for (let q = 1; q <= 4; q++) {
-      const months = periods.filter((p) => {
-        const month = Number(p.dateBegin.slice(5, 7));
-        return month >= 3 * q - 2 && month <= 3 * q;
-      });
-      if (months.length !== 3) continue;
-      if (months.some((p, i) => i > 0 && nextDay(months[i - 1].dateEnd) !== p.dateBegin)) continue;
-      out.push({ q, dateFrom: months[0].dateBegin, dateTo: months.at(-1).dateEnd });
-    }
-    return out;
-  }
-
-  // Krátký label buňky: „01/2026" → „1", „Q1/2026" → „1Q", jinak celý název.
-  function cellLabel(period) {
-    const month = /^(\d{2})\/\d{4}$/.exec(period.name);
-    if (month) return String(Number(month[1]));
-    const quarter = /^Q(\d)\/\d{4}$/.exec(period.name);
-    if (quarter) return `${quarter[1]}Q`;
-    return period.name;
-  }
-
-  function select(dateFrom, dateTo) {
+  function select(period) {
     open = false;
-    onChange?.({ vatRegistration: panelRegistrationId, dateFrom, dateTo });
+    onChange?.({ period: period.id });
   }
 
-  function isActive(dateFrom, dateTo) {
-    return value !== null
-      && value.vatRegistration === panelRegistrationId
-      && value.dateFrom === dateFrom
-      && value.dateTo === dateTo;
+  function isActive(period) {
+    return value !== null && value.period === period.id;
   }
 </script>
 
@@ -138,37 +135,30 @@
         <Select bind:value={panelRegistrationId} options={registrationOptions} required />
       </div>
     {/if}
-    <div class="shpd-period__grid">
-      {#each yearRows as row (row.year)}
-        <div class="shpd-period__row">
-          <span class="shpd-period__year">{row.year}</span>
-          <span class="shpd-period__cells">
-            {#each row.periods as period (period.id)}
-              <button
-                type="button"
-                class="shpd-period__cell"
-                class:shpd-period__cell--active={isActive(period.dateBegin, period.dateEnd)}
-                class:shpd-period__cell--locked={period.locked}
-                title={period.locked ? t('reports.period.locked') : undefined}
-                onclick={() => select(period.dateBegin, period.dateEnd)}
-              >{cellLabel(period)}</button>
-            {/each}
-          </span>
-          {#if row.quarters.length > 0}
-            <span class="shpd-period__cells shpd-period__cells--divided">
-              {#each row.quarters as quarter (quarter.q)}
-                <button
-                  type="button"
-                  class="shpd-period__cell"
-                  class:shpd-period__cell--active={isActive(quarter.dateFrom, quarter.dateTo)}
-                  onclick={() => select(quarter.dateFrom, quarter.dateTo)}
-                >{quarter.q}Q</button>
-              {/each}
-            </span>
-          {/if}
-        </div>
-      {/each}
-    </div>
+    {#if yearOptions.length > 0}
+      <div class="shpd-period__registration">
+        <span class="shpd-period__registration-label">{t('reports.period.yearColumn')}</span>
+        <Select value={effectiveYear} options={yearOptions} required onchange={(e) => { panelYear = e?.target?.value ?? effectiveYear; }} />
+      </div>
+      <div class="shpd-period__list">
+        {#each visiblePeriods as period (period.id)}
+          <button
+            type="button"
+            class="shpd-period__item"
+            class:shpd-period__item--active={isActive(period)}
+            class:shpd-period__item--draft={period.docState === 10}
+            title={period.locked ? t('reports.period.locked') : (period.docState === 10 ? t('reports.period.draft') : undefined)}
+            onclick={() => select(period)}
+          >
+            <span class="shpd-period__item-name">{period.name}</span>
+            <span class="shpd-period__item-range">{period.dateBegin} – {period.dateEnd}</span>
+            {#if period.locked}<span class="shpd-period__item-flag">🔒</span>{/if}
+          </button>
+        {/each}
+      </div>
+    {:else}
+      <p class="shpd-period__empty">{t('reports.period.noInstances')}</p>
+    {/if}
   </div>
 </Popover>
 
@@ -213,6 +203,7 @@
     display: flex;
     flex-direction: column;
     gap: var(--shpd-space-sm);
+    min-width: 18rem;
   }
 
   .shpd-period__registration {
@@ -227,7 +218,7 @@
     white-space: nowrap;
   }
 
-  .shpd-period__grid {
+  .shpd-period__list {
     display: flex;
     flex-direction: column;
     gap: 2px;
@@ -235,56 +226,52 @@
     overflow-y: auto;
   }
 
-  .shpd-period__row {
+  .shpd-period__item {
     display: flex;
-    align-items: center;
-    gap: var(--shpd-space-xs);
-  }
-
-  .shpd-period__year {
-    width: 3.2em;
-    flex: none;
-    font-weight: 600;
-    font-size: var(--shpd-font-size-sm);
-    color: var(--shpd-color-text);
-  }
-
-  .shpd-period__cells {
-    display: inline-flex;
-    gap: 2px;
-  }
-
-  .shpd-period__cells--divided {
-    padding-left: var(--shpd-space-xs);
-    border-left: 1px solid var(--shpd-color-border);
-    margin-left: var(--shpd-space-xs);
-  }
-
-  .shpd-period__cell {
-    min-width: 2em;
-    padding: 2px 4px;
+    align-items: baseline;
+    gap: var(--shpd-space-sm);
+    padding: var(--shpd-space-xs) var(--shpd-space-sm);
     background: none;
     border: 1px solid transparent;
-    border-radius: var(--shpd-radius-sm, 4px);
+    border-radius: var(--shpd-radius-sm);
     color: var(--shpd-color-text);
+    font-family: var(--shpd-font-family);
     font-size: var(--shpd-font-size-sm);
-    font-variant-numeric: tabular-nums;
+    text-align: left;
     cursor: pointer;
-    text-align: center;
   }
 
-  .shpd-period__cell:hover {
-    background-color: var(--shpd-color-bg-hover);
+  .shpd-period__item:hover {
+    background-color: var(--shpd-color-bg-secondary);
   }
 
-  .shpd-period__cell--active {
-    background-color: var(--shpd-color-accent);
-    color: var(--shpd-color-text-on-accent, #fff);
+  .shpd-period__item--active {
+    border-color: var(--shpd-color-primary);
+    background-color: var(--shpd-color-bg-secondary);
+  }
+
+  .shpd-period__item--draft .shpd-period__item-name {
+    font-style: italic;
+  }
+
+  .shpd-period__item-name {
     font-weight: 600;
+    min-width: 5em;
   }
 
-  .shpd-period__cell--locked {
-    text-decoration: underline dotted;
-    text-underline-offset: 3px;
+  .shpd-period__item-range {
+    color: var(--shpd-color-text-secondary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .shpd-period__item-flag {
+    margin-left: auto;
+    font-size: var(--shpd-font-size-xs, 0.75rem);
+  }
+
+  .shpd-period__empty {
+    margin: 0;
+    color: var(--shpd-color-text-secondary);
+    font-size: var(--shpd-font-size-sm);
   }
 </style>

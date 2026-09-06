@@ -1,0 +1,45 @@
+{
+    "id": "docs.cashRegister",
+    "name": "Retail sales",
+    "name:cs": "Prodejky",
+    "name:en": "Retail sales",
+    "description": "Document type subclass for retail sales (cashreg) — cash desk sales, fixed output direction",
+    "description:cs": "Prodejky (cashreg) — prodej za hotové / kartou na pokladně, Document třída, formulář a viewer",
+    "description:en": "Document type subclass for retail sales (cashreg) — cash desk sales, fixed output direction",
+
+    "dependencies": ["docs.core", "economy.accounting"],
+
+    "viewers": [
+        {
+            "id": "docs.cashRegister.heads",
+            "name": "Retail sales",
+            "name:cs": "Prodejky",
+            "name:en": "Retail sales",
+            "icon": "cash-register",
+            "table": "docs_core_heads",
+            "class": "Shipard\\Module\\Docs\\CashRegister\\CashRegisterViewer",
+            "navSection": "sales",
+            "navOrder": 20
+        }
+    ],
+
+    "documentClasses": [
+        {
+            "table": "docs_core_heads",
+            "typeColumn": "doc_type",
+            "classes": {
+                "cashreg": "Shipard\\Module\\Docs\\CashRegister\\CashRegisterDocument"
+            }
+        }
+    ],
+
+    "forms": [
+        {
+            "table": "docs_core_heads",
+            "typeColumn": "doc_type",
+            "classes": {
+                "cashreg": "Shipard\\Module\\Docs\\CashRegister\\CashRegisterForm"
+            }
+        }
+    ]
+}

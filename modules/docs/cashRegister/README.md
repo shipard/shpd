@@ -1,0 +1,45 @@
+# Modul: docs.cashRegister
+
+Modul pro **Prodejky** (`doc_type = 'cashreg'`). Polymorfní subclass nad
+`docs.core`, issue #59.
+
+## Účel
+
+Prodej za hotové nebo kartou na pokladně — doklad s pevným směrem výstup
+(`trade_dir: 1`, my jsme dodavatel, DPH na výstupu), typicky bez partnera.
+Vratka je prodejka se **zápornými řádky** (#59 D9), žádný zvláštní typ ani
+směr.
+
+Číselná řada je **vázaná na pokladnu** (`series_binding: cash_desk`) stejně
+jako u pokladních dokladů: řada per aktivní pokladna vzniká automaticky,
+záložky vieweru = pokladny, pokladna se na dokladu nezadává. Číslo má tvar
+`14{kód pokladny}{rok}{pořadí}`, např. `14HP12600001`.
+
+## Co modul přidává
+
+- **Document třída** `CashRegisterDocument extends CashDeskDocumentBase`
+  (docs.core) — partner nepovinný, způsob úhrady jen Hotovost / Kartou, měna
+  dokladu = měna pokladny, splatnost = datum vystavení. Pohyby řádku:
+  `sale.services`, `sale.goods`, `acc.entry`.
+- **Editační formulář** `CashRegisterForm extends CashDeskFormBase` —
+  minimalistická hlavička: způsob úhrady, nepovinný partner, datum vystavení,
+  DPH, měna jen pro čtení, readOnly sekce „Pokladna".
+- **Viewer** `CashRegisterViewer extends DocsHeadsViewer` — Prodej → Prodejky,
+  `scopedDocType = 'cashreg'`, v řádku datum a způsob úhrady.
+- **Polymorfní registrace** v `documentClasses` / `forms` (typeColumn
+  `doc_type`).
+
+## Co modul NEpřidává
+
+- Žádné nové tabulky ani cfgItems — typ a pohyby žijí v `docs.core`,
+  účtovací předpis `cashreg` v `economy.accounting` (protiúčet = účet pokladny
+  přes `accountSrc: cashDesk`, karta → `card.transit` 261).
+- Kontrolní hlášení: prodejka s partnerem s CZ DIČ nad limit jde do A4,
+  anonymní do A5 — dělá existující `economy.vat`, tady nic.
+- Tisk prodejky, platební terminály per analytika, pokladní knihu (fáze 2).
+
+## Vztah k `docs.cashDocs`
+
+Sesterský modul pro **Pokladní doklady** (`doc_type = 'cash'`, směr per
+doklad) sdílí tutéž bázi `CashDeskDocumentBase` / `CashDeskFormBase`
+v `docs.core`; moduly na sobě nezávisejí.

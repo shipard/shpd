@@ -170,7 +170,10 @@ class JsoncFormLoader
             }
             $elements = [];
             foreach ($elementsData as $elData) {
-                $elements[] = $this->buildElement($elData, $colMap, $config, $jsonPath);
+                $element = $this->buildElement($elData, $colMap, $config, $jsonPath);
+                if ($element !== null) {
+                    $elements[] = $element;
+                }
             }
             $columns[] = new FormColumn($elements);
         }
@@ -183,9 +186,15 @@ class JsoncFormLoader
     }
 
     /**
+     * Element s `"optional": true` vázaný na sloupec, který tabulka na tomto
+     * DS nemá, se vynechá (vrací null) — typicky extension sloupec volitelného
+     * modulu (accounting_account z economy.accounting na pokladně). Form ho
+     * pak prostě nevykreslí místo pole bez labelu a typu. Bez `optional`
+     * zůstává dosavadní chování (element se postaví i bez definice sloupce).
+     *
      * @param array<string, ColumnDefinition> $colMap
      */
-    private function buildElement(array $elData, array $colMap, ?ConfigRuntime $config, string $jsonPath): FormElement
+    private function buildElement(array $elData, array $colMap, ?ConfigRuntime $config, string $jsonPath): ?FormElement
     {
         // Reject the legacy `cols` field — it signals an unported element.
         if (array_key_exists('cols', $elData)) {
@@ -207,6 +216,9 @@ class JsoncFormLoader
 
         $column = $elData['column'] ?? null;
         $col = $column !== null ? ($colMap[$column] ?? null) : null;
+        if ($column !== null && $col === null && !empty($elData['optional'])) {
+            return null;
+        }
 
         // Fill missing label from TableDefinition.
         $label = $elData['label'] ?? ($col !== null ? $col->name : null);
@@ -223,10 +235,10 @@ class JsoncFormLoader
         // Nested elements (inline groups).
         $elements = null;
         if (isset($elData['elements']) && is_array($elData['elements'])) {
-            $elements = array_map(
+            $elements = array_values(array_filter(array_map(
                 fn(array $nested) => $this->buildElement($nested, $colMap, $config, $jsonPath),
                 $elData['elements'],
-            );
+            )));
         }
 
         // Derive inputType from JSONC or column definition.

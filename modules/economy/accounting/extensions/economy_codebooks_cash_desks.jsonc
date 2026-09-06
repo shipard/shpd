@@ -1,0 +1,26 @@
+{
+    // Extension z economy.accounting na číselník pokladen.
+    //
+    // accounting_account — analytický účet pokladny (211xxx). Účtovací engine
+    //   z něj bere protiúčet hotovostních operací: pokladní doklady a prodejky
+    //   (Task B, accountSrc: cashDesk) i faktury placené hotově
+    //   (payment_method = 0 → 211 místo 311/321, #59 D8). Pole je účetní
+    //   informace, ale žije na pokladně — proto extension z economy.accounting,
+    //   ne z budoucího docs.cashDocs: engine ho potřebuje i bez pokladních
+    //   dokladů a nesmí záviset na volitelném modulu. Zrcadlo
+    //   economy.bank/extensions/economy_codebooks_bank_accounts.jsonc (221xxx).
+
+    "table": "economy_codebooks_cash_desks",
+    "columns": [
+        {
+            "id": "accounting_account",
+            "name": "Accounting account",
+            "name:cs": "Účet",
+            "name:en": "Accounting account",
+            "type": "int",
+            "nullable": true,
+            "reference": "economy_accounting_accounts",
+            "group": "settings"
+        }
+    ]
+}

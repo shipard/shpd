@@ -16,7 +16,8 @@
 
     "extensions": [
         "economy_items",
-        "docs_core_heads"
+        "docs_core_heads",
+        "economy_codebooks_cash_desks"
     ],
 
     "viewers": [

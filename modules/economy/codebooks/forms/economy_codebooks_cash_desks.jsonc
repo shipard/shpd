@@ -22,6 +22,15 @@
                                 {"type": "input", "column": "notice"},
 
                                 {"type": "separator", "label": "Nastavení", "label:cs": "Nastavení", "label:en": "Settings"},
+                                // accounting_account je extension z economy.accounting — bez
+                                // toho modulu sloupec neexistuje a loader `optional` element vynechá.
+                                {
+                                    "type": "lookup",
+                                    "column": "accounting_account",
+                                    "optional": true,
+                                    "placeholder": "Hledat účet 211…",
+                                    "lookup": {"table": "economy_accounting_accounts", "filter": {"account_level": 4, "number_prefix": "211"}}
+                                },
                                 {"type": "input", "column": "is_default"},
                                 {"type": "input", "column": "sort_order"},
                                 {"type": "input", "column": "valid_from"},

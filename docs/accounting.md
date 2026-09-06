@@ -796,7 +796,8 @@ Vědomě se teď neřeší (a předpis/schéma na to nic nepředpřipravuje):
 - **Doklady bank / cash / cashreg / purchase / cmnbkp** — přijdou s dalšími
   typy dokladů; mechanismus `query` v krocích předpisu pokryje budoucí
   potřeby typu filtr podle `payment_method`. Hotovostní úhrada faktury
-  (protistrana 211) se vyřeší až s pokladnou.
+  (protistrana 211) se vyřeší až s pokladnou (#59 D8, Task B); analytika
+  pokladny už na číselníku je (viz níže).
 - **OSS** (prodej neplátcům v EU se zahraničními sazbami) — `vat-de.jsonc`
   a další státy, zahraniční kódy v UI dokladu, OSS přiznání, per-datasource
   vrstva mapování, enablement per stát. Základ je položený: konvence
@@ -807,8 +808,15 @@ Vědomě se teď neřeší (a předpis/schéma na to nic nepředpřipravuje):
   analytiku.
 - **Automatické zakládání DPH účtů za běhu** (`checkAccountVAT`) — účty
   zakládá provisioner / uživatel, engine jen dohledává.
-- **Analytiky bankovních účtů a pokladen** — později jako atribut
-  v codebooku (jako `debsAccountId` ve starém systému).
+
+Hotovo (dřív tady jako „později"): **analytiky bankovních účtů a pokladen**
+žijí jako atribut číselníku `accounting_account` — na bankovním spojení
+extension `economy.bank/extensions/economy_codebooks_bank_accounts.jsonc`
+(221xxx, používá bankovní engine), na pokladně extension
+`economy.accounting/extensions/economy_codebooks_cash_desks.jsonc` (211xxx;
+`accountSrc: cashDesk` a účtování hotově placených faktur na 211 přidává
+Task B, #59 D8). Formuláře obou číselníků nabízejí lookup omezený na
+analytiky dané řady, Document tvrdě validuje.
 
 ---
 

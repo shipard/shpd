@@ -126,6 +126,44 @@ class JsoncFormLoaderTest extends TestCase
         $this->assertSame('Jméno', $def->tabs[0]->sections[0]->columns[0]->elements[0]->label);
     }
 
+    public function testSkipsOptionalElementsForColumnsMissingFromTableDef(): void
+    {
+        // Extension sloupec volitelného modulu (accounting_account) na DS bez
+        // toho modulu: `optional` element se vynechá, separator a ostatní pole
+        // zůstávají. Bez `optional` se element postaví jako dřív (legacy).
+        $path = $this->writeJsonc(<<<JSON
+        {
+            "title": "T",
+            "tabs": [{
+                "id": "basic", "label": "B",
+                "sections": [{"columns": [{"elements": [
+                    {"type": "input", "column": "name"},
+                    {"type": "separator", "label": "Nastavení"},
+                    {"type": "lookup", "column": "accounting_account", "optional": true,
+                     "lookup": {"table": "economy_accounting_accounts"}},
+                    {"type": "input", "column": "legacy_missing"},
+                    {"type": "input", "column": "sort_order"}
+                ]}]}]
+            }]
+        }
+        JSON);
+
+        $def = (new JsoncFormLoader())->load(
+            jsonPath: $path,
+            tableDef: $this->makeTableDef([
+                ['id' => 'name',       'name' => 'Jméno',  'type' => 'varchar', 'length' => 100],
+                ['id' => 'sort_order', 'name' => 'Pořadí', 'type' => 'smallint'],
+            ]),
+        );
+
+        $elements = $def->tabs[0]->sections[0]->columns[0]->elements;
+        $this->assertSame(
+            ['name', null, 'legacy_missing', 'sort_order'],
+            array_map(fn($el) => $el->column, $elements),
+        );
+        $this->assertSame('separator', $elements[1]->type);
+    }
+
     public function testDerivesInputTypeFromColumnType(): void
     {
         $path = $this->writeJsonc(<<<JSON

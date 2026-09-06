@@ -26,12 +26,15 @@
                                 {"type": "input", "column": "account_number"},
                                 {"type": "input", "column": "iban"},
                                 {"type": "input", "column": "bic"},
-                                {"type": "input", "column": "ebanking_id"},
+                                // ebanking_id a accounting_account jsou extension z economy.bank —
+                                // bez toho modulu sloupce neexistují a loader `optional` elementy vynechá.
+                                {"type": "input", "column": "ebanking_id", "optional": true},
 
                                 {"type": "separator", "label": "Nastavení", "label:cs": "Nastavení", "label:en": "Settings"},
                                 {
                                     "type": "lookup",
                                     "column": "accounting_account",
+                                    "optional": true,
                                     "placeholder": "Hledat účet 221…",
                                     "lookup": {"table": "economy_accounting_accounts", "filter": {"account_level": 4, "number_prefix": "221"}}
                                 },

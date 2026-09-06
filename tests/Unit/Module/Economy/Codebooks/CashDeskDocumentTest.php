@@ -140,6 +140,40 @@ class CashDeskDocumentTest extends TestCase
         $this->assertTrue($this->doc()->validate($data)->isValid());
     }
 
+    // --- accounting_account (extension z economy.accounting) ----------------
+
+    public function testAccountingAccountMustBeActive211Analytic(): void
+    {
+        $data = $this->validData();
+        $data['accounting_account'] = 15;
+
+        // bez DB (unit kontext) se existence nekontroluje
+        $this->assertTrue($this->doc()->validate($data)->isValid());
+
+        $missing = $this->createMock(\Dibi\Connection::class);
+        $missing->method('fetch')->willReturn(null);
+        $doc = $this->doc();
+        $doc->setDb($missing);
+        $errors = array_filter(
+            $doc->validate($data)->toArray(),
+            static fn(array $e): bool => $e['column'] === 'accounting_account' && $e['code'] === 'invalid',
+        );
+        $this->assertNotEmpty($errors);
+
+        $found = $this->createMock(\Dibi\Connection::class);
+        $found->method('fetch')->willReturnCallback(
+            function (string $sql, mixed ...$params): ?\Dibi\Row {
+                $this->assertSame(15, $params[0]);
+                $this->assertSame('211%', $params[1]);
+                $this->assertStringContainsString('account_level = 4', $sql);
+                return new \Dibi\Row(['id' => 15]);
+            },
+        );
+        $doc = $this->doc();
+        $doc->setDb($found);
+        $this->assertTrue($doc->validate($data)->isValid());
+    }
+
     // --- beforeSave ---------------------------------------------------------
 
     public function testBeforeSaveNormalizesCurrency(): void

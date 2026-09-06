@@ -39,6 +39,26 @@ class CashDeskDocument extends Document
             );
         }
 
+        // accounting_account (extension z economy.accounting) musí odkazovat
+        // na existující aktivní analytický účet pokladny — account_level = 4
+        // a číslo v řadě 211. Klientský filtr lookupu není bezpečnostní
+        // hranice; tady je tvrdé vynucení (vzor BankAccountDocument / 221).
+        if (!empty($data['accounting_account']) && $this->db !== null) {
+            $row = $this->db->fetch(
+                'SELECT id FROM economy_accounting_accounts'
+                . ' WHERE id = %i AND account_level = 4 AND number LIKE %s AND docState IN (10, 40, 80)',
+                (int) $data['accounting_account'],
+                '211%',
+            );
+            if ($row === null || $row === false) {
+                $result->addError(
+                    'accounting_account',
+                    'Účet musí být existující aktivní analytický účet v řadě 211.',
+                    'invalid',
+                );
+            }
+        }
+
         return $result;
     }
 

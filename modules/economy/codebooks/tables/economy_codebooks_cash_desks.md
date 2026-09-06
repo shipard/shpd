@@ -33,6 +33,7 @@ dokladu — viz `modules/docs/core/tables/docs_core_number_series.md`.
 | `valid_from` | date NULL | Platnost od |
 | `valid_to` | date NULL | Platnost do |
 | `sort_order` | smallint default 0 | Pořadí pro řazení ve výpisu |
+| `accounting_account` | int NULL → `economy_accounting_accounts` | **Extension z `economy.accounting`** — analytický účet pokladny (211xxx), protiúčet hotovostních operací pro účtovací engine. Bez modulu sloupec ani pole ve formuláři neexistují. Lookup omezený na analytiky `211`, `CashDeskDocument` tvrdě validuje. |
 
 ### Systémové (bez skupiny)
 

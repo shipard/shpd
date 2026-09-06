@@ -883,6 +883,12 @@ JSONC source používá **camelCase** klíče (`titleNew`, `readOnly`, `inputTyp
 
 Labely a typy inputů se doplní z TableDefinition pokud chybí. `options` u `select` se auto-resolují z `cfgItem` sloupce.
 
+**`"optional": true`** na elementu: pokud tabulka na daném DS sloupec nemá,
+loader element vynechá (místo pole bez labelu a typu). Používá se pro
+**extension sloupce volitelných modulů** — `accounting_account` na pokladně
+(extension `economy.accounting`) a na bankovním spojení + `ebanking_id`
+(extension `economy.bank`). Bez `optional` se element postaví vždy.
+
 ### Taby s `type: subtable` / `attachments` v JSONC
 
 ```jsonc

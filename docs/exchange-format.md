@@ -62,7 +62,7 @@ plánované formáty (samostatné dokumenty / iterace) popisuje sekce 13.
 | Termín | Význam |
 |--------|--------|
 | **Canonical / exchange format** | Kanonická JSON reprezentace doménové entity. Samonosná, bez interních ID. |
-| **Schema** | Definice struktury konkrétního formátu (`shpd.docs.document.v1`). JSON Schema draft-2020-12 + PHP třída `ExchangeFormat` pro logiku, kterou schema neumí (např. polymorfismus podle `docType`). |
+| **Schema** | Definice struktury konkrétního formátu (`shpd.docs.document.v1`). JSON Schema draft-2020-12 + PHP `DocumentValidator` pro logiku, kterou schema neumí (např. polymorfismus podle `docType`). |
 | **Resolve** | Proces propojení referencí v canonical (Party, Item, Unit, VAT code, BankAccount) s entitami v lokální DB. |
 | **Apply** | Proces uložení canonical dokumentu do DB — orchestruje resolve, transformuje na interní `$data`, deleguje na `TableGateway::saveDocument()`. |
 | **Lineage** | Stopy, odkud doklad vznikl — `source.kind` + `source_message` v `docs_core_heads`, zpětně `target_*` na zdrojové zprávě. |
@@ -312,13 +312,35 @@ reprodukuje). Výslednou částku a `total_rounding` pak dopočte
 - **`invoiceIssued`** — strana, kterou my pozici je `supplier`,
   `supplier.bankAccount` (= náš účet) se vyplní z dokladu, customer
   z partnera.
+- **`accountingDocument`** (`cmnbkp`) — bez stran, kontační řádky
+  (`accSide`, `account`), partner per řádek přes pin.
+- **`cashDocument`** (`cash`, pokladní doklad, #59 D12) — povinný **`cashDesk`**
+  (kód pokladny `economy_codebooks_cash_desks.code`) a **`cashDirection`**
+  (1 příjem / 2 výdej). Řadu applier dohledá podle (typ, pokladna) — řady
+  jsou vázané na pokladnu, `applyOptions.numberSeriesCode` se ignoruje;
+  neznámá pokladna nebo pokladna bez řady = apply-level chyba
+  `cash_desk_not_found` (422). `cash_desk` hlavičky se denormalizuje z řady.
+  Strany `supplier`/`customer` nepovinné (anonymní doklad); je-li strana
+  uvedená, je partnerem hlavičky podle směru (příjem → odběratel, výdej →
+  dodavatel; `selfParty` má přednost) a v import módu z ní vzniká dobový
+  snapshot. `payment.method` default `cash` (jinak jen `card`). Úhrady
+  faktur hotově/kartou = řádky `operation: payment.receivable` /
+  `payment.payable` s `totalPrice`, `paymentReference` (VS) a partnerem
+  přes pin `_resolve.rows[i].partner` (viz §7).
+- **`cashRegisterDocument`** (`cashreg`, prodejka) — povinný `cashDesk`,
+  bez `cashDirection` (pevně výstup); vratka = záporné řádky.
+- **`invoiceIssued` / `invoiceReceived` + `cashDesk`** — volitelný kód
+  pokladny platí jen s `payment.method: "cash"` (faktura placená hotově →
+  `cash_desk` hlavičky, účtuje se na pokladnu místo 311/321); s jinou
+  platbou se ignoruje s warningem `cash_desk_ignored`.
 - **`creditNote*`** — bude rozšířeno o `relatedDocNumber` (originál).
-- **`order*`, `deliveryNote*`, `cashDoc*`, `bankStatement*`** — budoucí
-  rozšíření, držíme stejnou top-level kostru.
+- **`order*`, `deliveryNote*`, `bankStatement*`** — budoucí rozšíření,
+  držíme stejnou top-level kostru.
 
 Pole, která nedávají smysl pro daný `docType`, mají být `null` nebo
-vynechána. Validace polymorfismu je v PHP (`ExchangeFormat::validate()`),
-JSON Schema definuje jen společnou strukturu.
+vynechána. Validace polymorfismu je v PHP
+(`DocumentValidator::checkPerDocType()`), JSON Schema definuje jen společnou
+strukturu.
 
 ## 6. Party object
 
@@ -432,7 +454,19 @@ nebo import mezi dvěma cizími subjekty.
     "vatBase":   10330.58,
     "vatAmount": 2169.42,
     "vatTotal":  12500.00
-  }
+  },
+
+  // Kontace / saldo identita (účetní doklad, úhrady payment.* na pokladním
+  // dokladu): částka přímo v totalPrice, strana a účet u kontace, VS / SS /
+  // KS / splatnost úhrady. Partner řádku se NEPOSÍLÁ jako Party — pinuje
+  // se přes `_resolve.rows[i].partner = "useExisting:<id>"` (exportér zná
+  // id z LocalIdMap; PartyResolver je pro hlavičkové strany).
+  "accSide":          null,          // "debit" | "credit" (jen kontace)
+  "account":          null,          // číslo účtu (acc.record)
+  "paymentReference": "2026000042",  // VS hrazeného dokladu
+  "specificSymbol":   null,
+  "constantSymbol":   null,
+  "dueDate":          null
 }
 ```
 
@@ -661,6 +695,13 @@ Errors blokují `/apply`, warningy jen informují v UI.
 | `vat_mode_suspect` | warning | Řádky vypadají jako ceny s DPH při deklarovaném `fromBase`, ale derivace nemá dost dat na korekci. |
 | `partner_doc_number_missing` | warning | Přijatá faktura cílí na stav ≥ 20 bez čísla dokladu dodavatele. |
 | `row_operation_config_invalid` | warning | Pohyb řádku nejde doplnit — chybná konfigurace rowOperations. |
+| `invalid_value` | error | `cashDirection` pokladního dokladu není 1 ani 2. |
+| `cash_desk_ignored` | warning | `cashDesk` na faktuře bez `payment.method: "cash"` — pokladna se nepropíše. |
+
+Apply-level kódy (`ApplyResult.errorCode`, 422): `number_series_not_found`,
+`own_bank_account_not_found`, **`cash_desk_not_found`** (neznámý kód pokladny,
+nebo pokladna bez řady typu `cash`/`cashreg` — ulož pokladnu ve stavu V pořádku,
+řadu založí provisioner).
 
 ## 10. Apply pipeline
 
@@ -741,7 +782,12 @@ klíč = docType):
 
 Explicitní canonical `operation` má přednost (passthrough); kontační
 (`accSide`) a textové řádky se nedoplňují; docType bez záznamu v cfg →
-dnešní chování (null). Doplnění je **tiché** — AI pohyb nikdy nevrací,
+dnešní chování (null). `cashreg` záznam má (`sale.goods` default);
+`cash` záměrně ne — pohyby závisejí na směru a mapa osu směru nemá, import
+(old_shipard runner) posílá `operation` explicitně a AI apply pokladní
+doklady netvoří. Řádek s operací, která má v `rowOperations` vlajku
+`rowSide` (kontační — FX, `payment.*`), applier přepne na `price_calc_mode`
+fromTotal, aby `totalPrice` přežil přepočet. Doplnění je **tiché** — AI pohyb nikdy nevrací,
 doplňuje se tedy rutinně na každém item řádku a hláška, která svítí
 vždy, by učila uživatele Upozornění přeskakovat; transparentnost dává
 sám výsledek ve sloupci Pohyb konceptu (na rozdíl od `vat_mode_derived`,

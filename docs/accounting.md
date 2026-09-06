@@ -180,12 +180,37 @@ a razítkování identity v enginu (`resolveRowIdentity`):
 | `rowAccount: "direct"` | účet se zadává přímo na řádku (majetek — analytika per druh) |
 | `rowAccount: "item"` | účet přijde z položky typu 2 |
 | `rowSide: 1` | strana MD/DAL se zadává na řádku (`acc_side`; protějšek `sideSrc: "row"` předpisu). Přepíná formulář do kontačního layoutu bez položkového bloku |
-| `rowSide: 0` | kontační layout, ale **bez volby strany**: stranu nesou fixní kroky předpisu, částky řádků kladné — směr = volba operace (kurzové rozdíly) |
+| `rowSide: 0` | kontační layout, ale **bez volby strany**: stranu nesou fixní kroky předpisu, částky řádků kladné — směr = volba operace (kurzové rozdíly, saldokontní úhrady `payment.*`). Řádek je bez DPH bloku: `vat_code` prázdný → mimo rekapitulaci, do součtu dokladu se přičte |
+| `identityRequired: 1` | partner řádku a `payment_reference` jsou **tvrdě** povinné (`DocRowOperationRules`, kódy `partner_required` / `payment_reference_required`) — saldokontní úhrady, bez nich accbal nemá co párovat. Vyžaduje `rowPartner` + `rowPaymentId` |
+| `docTypes.{typ}.cashDir: 1 \| 2` | jen u typu se směrem per doklad (`cash`): pohyb je povolený jen při daném `cash_dir` hlavičky (1 příjem, 2 výdej). Chybí = oba směry. Filtruje nabídku formuláře i tvrdou validaci; default nového řádku = nejnižší `order` pro daný směr |
 
 Vlajka `rowSide` chybí = položkový layout (faktury) — i s
 `rowAccount`/`rowPartner`/`rowPaymentId` (zálohy, majetek); stranu určuje
 krok předpisu. Saldokontní operace bez `rowAccount` mají účet implicitní
 z kategorie předpisu — formulář vstup účtu/položky nestaví.
+
+### Pokladní doklady a prodejky (#59 D7)
+
+Pohyby per typ a směr (`docs.core.docTypes`: `cash` má `trade_dir: 0` +
+`trade_dir_column: cash_dir`, `cashreg` pevně výstup):
+
+| pohyb | `cash` příjem (`cashDir: 1`) | `cash` výdej (`cashDir: 2`) | `cashreg` |
+|---|---|---|---|
+| `sale.services`, `sale.goods` | ✓ | — | ✓ |
+| `payment.receivable` (Úhrada pohledávky) | ✓ | — | — |
+| `purchase.goods`, `purchase.services`, `purchase.other` | — | ✓ | — |
+| `payment.payable` (Úhrada závazku) | — | ✓ | — |
+| `acc.entry` | ✓ | ✓ | ✓ |
+
+`payment.receivable` / `payment.payable` jsou protějšek bankovních
+spárovaných úhrad (kategorie `bank.matched.*`): `rowSide: 0`, `rowPartner`,
+`rowPaymentId`, `identityRequired` — partner řádku = dlužník/věřitel,
+`payment_reference` = VS / číslo hrazené faktury. Deník pak nese identitu
+řádku a `LedgerGenerator` z něj udělá úhradu v saldokontu
+(`receivables`/`payables`, bal_side 1), kterou `BalanceMatcher::rematchBucket`
+alokuje na předpis (viz `docs/accbal.md`; `matchTransaction`/`matchAll` jsou
+bankovní vstupy přes clearing 261200/261300, pokladní úhrada clearingem
+neprochází). Zálohy (`*.advance*`) na pokladní doklady zatím nepatří.
 
 ### Kurzové rozdíly saldokonta (vlna D, D12)
 
@@ -304,7 +329,8 @@ categories  jen názvy kategorií pro dokumentaci/UI
 | pole | význam |
 |---|---|
 | `cat` | kategorie → dohledání masky v `accounts`. Nepovinné, pokud je `accountSrc` |
-| `accountSrc` | alternativní zdroj účtu mimo kategorie: `"item"` = účet z položky řádku (`acc.entry`, `acc.item`), `"row"` = přímý účet řádku (`acc.record`, `purchase.asset`) |
+| `accountSrc` | alternativní zdroj účtu mimo kategorie: `"item"` = účet z položky řádku (`acc.entry`, `acc.item`), `"row"` = přímý účet řádku (`acc.record`, `purchase.asset`), `"cashDesk"` (jen `src: head`) = účet pokladny hlavičky (`head.cash_desk` → `economy_codebooks_cash_desks.accounting_account`, 211xxx) |
+| `headQuery` | filtr `{sloupec: hodnota}` nad **hlavičkou** pro libovolný `src` — `query` se u `rows`/`vat` kroků hodnotí nad řádkem / rekapitulací, takže bez `headQuery` nejde v jednom bloku rozlišit strany podle `cash_dir`. U `src: head` je ekvivalentní `query` |
 | `src` | `"rows"` (řádky dokladu) \| `"vat"` (DPH rekapitulace) \| `"head"` (hlavička) |
 | `col` | pro `head`: `"total"` (default) \| `"rounding"`. Pro `rows`/`vat` se nepoužívá (MVP) |
 | `operation` / `operations` | filtr pohybu řádku (jen `src: rows`) |
@@ -312,7 +338,7 @@ categories  jen názvy kategorií pro dokumentaci/UI
 | `sideSrc` | `"row"` = strana z `acc_side` řádku (kontační operace s `rowSide: 1`); jinak platí fixní `side` kroku |
 | `sign` | `"+"` / `"-"` — krok platí jen pro kladnou / zápornou částku |
 | `reverseSign` | 1 = otočit znaménko částky (typicky se `sign: "-"`) |
-| `query` | obecný filtr `{sloupec: hodnota}` nad zdrojovým záznamem (head/row) |
+| `query` | obecný filtr `{sloupec: hodnota}` nad zdrojovým záznamem (head/row/recap), volné porovnání. Hodnota-pole je operátorový objekt: `{"$ne": v}` (nerovnost), `{"$in": [v, …]}`; neznámý operátor je chyba předpisu (`LogicException`). Totéž platí pro `query` záznamů `accounts` |
 | `text` | text řádku deníku; pokud chybí, použije se default podle `src` |
 
 Zdroje částek (vždy pár domácí měna + měna dokladu):
@@ -435,6 +461,45 @@ Kontrolní příklad — faktura přijatá, EU pořízení služeb 1 000 Kč
                          MD 1 210 = DAL 1 210 ✓
 ```
 
+### Předpis pokladny — `cash`, `cashreg`, hotově placené faktury (#59 D8)
+
+Protistrana hotovostních dokladů se řídí `payment_method` hlavičky:
+**0 Hotovost** → účet pokladny (`accountSrc: "cashDesk"`, 211xxx per
+pokladna), **2 Kartou** → kategorie `card.transit` (peníze na cestě,
+maska `261100` — jediný terminál, per-terminál analytiky mimo scope;
+migrovaný rozvrh bez `261100` dá `account_not_found` / řádek `261???`,
+řeší se rozvrhem DS, ne předpisem). Kategorie `cash` neexistuje —
+`accountSrc: cashDesk` `accounts[]` obchází.
+
+Blok `cash` je jeden (engine bere první blok per docType): příjmová část
+(`headQuery: {cash_dir: 1}`, jako vydaná faktura, strany DAL/MD) a výdajová
+(`headQuery: {cash_dir: 2}`, jako přijatá faktura). Head kroky protistrany
+mají `query: {cash_dir, payment_method}`. Blok `cashreg` = příjmová část bez
+`headQuery` a bez `payment.*`. U `invno`/`invni` dostal saldo krok
+`query: {payment_method: {"$ne": 0}}` a přibyl krok
+`{accountSrc: "cashDesk", src: "head", col: "total", query: {payment_method: 0}}`
+— hotově placená faktura účtuje celkem na pokladnu místo 311/321
+(nevzniká otevřená položka salda, staré `totalCash`). Faktura s Hotovostí
+bez `cash_desk` → chybový řádek `211???` + alert, uživatel doplní pokladnu
+a přeúčtuje. Konzistenci předpisu s `rowOperations` a seed rozvrhy hlídá
+`CashAccountingRulesTest`.
+
+Kontrolní příklady (`tests/Integration/Accounting/CashDocsAccountingTest`):
+
+```
+Příjmový PD, hotově, prodej služby 1 000 + 21 % (cz-120):
+    602xxx DAL 1 000   343120 DAL 210   211xxx MD 1 210
+Příjmový PD, kartou, úhrada FVB 1 210 (payment.receivable, VS = číslo FVB):
+    311xxx DAL 1 210 (partner + payment_reference z řádku)   261100 MD 1 210
+Výdajový PD, hotově, nákup materiálu 500 + 21 %:
+    504xxx MD 500   343120 MD 105   211xxx DAL 605
+Prodejka hotově, zboží 1 000 + 21 %:
+    604xxx DAL 1 000   343120 DAL 210   211xxx MD 1 210
+Prodejka — vratka (záporné řádky, D9): tytéž účty, záporné částky na obou
+    stranách, deník vyrovnaný
+FVB s Hotovostí 1 210:  602/343 DAL   211xxx MD 1 210   (žádný 311)
+```
+
 ---
 
 ## 5. Dohledávání účtů
@@ -443,6 +508,11 @@ Pořadí:
 
 1. **`accountSrc: "item"`** — účet přímo z `economy_items.accounting_account`
    položky řádku (FK). Maska se nepoužívá.
+1b. **`accountSrc: "cashDesk"`** (head kroky) — `head.cash_desk` →
+   `economy_codebooks_cash_desks.accounting_account` → účet rozvrhu
+   (`docState IN LINKABLE_STATES`, archivní 70 se dohledá). Chybějící
+   pokladna nebo účet → chybový řádek `211???`, kód `cash_desk_account_missing`
+   (dvě hlášky: „doklad nemá pokladnu" vs. „pokladna nemá účet").
 2. **`cat`** — v sekci `accounts` se najde **první** záznam se shodnou `cat`
    a vyhovující `query` (porovnání rovností nad zdrojovým záznamem — u
    `src: rows` nad řádkem, u `src: head` nad hlavičkou). Výsledkem je
@@ -655,6 +725,8 @@ Storno (30) = doklad účetně neexistuje. Generování je idempotentní
 
 Chybové kódy (`accounting_messages[].code`): `rules_not_found`,
 `fiscal_period_missing`, `account_not_found`, `item_account_missing`,
+`row_account_missing`, `cash_desk_account_missing` (hotovostní doklad bez
+pokladny nebo pokladna bez účtu 211xxx — `accountSrc: cashDesk`),
 `unbalanced`, `empty_journal`.
 
 ### 7.4 Chyby a alerty
@@ -676,8 +748,11 @@ budoucí bankovní výpisy). Místo toho:
 | kontrola | kdy | typ |
 |---|---|---|
 | `operation` povinný a povolený pro docType | uložení dokladu | tvrdá (`validate`) |
+| `operation` povolený pro `cash_dir` hlavičky (`cashDir`) | uložení dokladu | tvrdá |
+| `payment.*` řádek má partnera a `payment_reference` (`identityRequired`) | uložení dokladu | tvrdá |
 | `acc.entry` řádek má `item` | uložení dokladu | tvrdá |
 | položka `acc.entry` je typ 2 + má účet | účtování | měkká (chybový řádek) |
+| pokladna dokladu má účet 211xxx (hotovostní doklad, hotově placená faktura) | účtování | měkká (`cash_desk_account_missing`) |
 | účet dle masky existuje v rozvrhu | účtování | měkká |
 | MD = DAL, neprázdný deník | účtování | měkká |
 
@@ -793,11 +868,14 @@ Vědomě se teď neřeší (a předpis/schéma na to nic nepředpřipravuje):
   `purchase.goods` zatím účtují jen výnos/náklad bez vazby na sklad.
 - **Majetek** (property, odpisy), **accRing** (účetní okruhy), `accExts`,
   `cashBookId`.
-- **Doklady bank / cash / cashreg / purchase / cmnbkp** — přijdou s dalšími
-  typy dokladů; mechanismus `query` v krocích předpisu pokryje budoucí
-  potřeby typu filtr podle `payment_method`. Hotovostní úhrada faktury
-  (protistrana 211) se vyřeší až s pokladnou (#59 D8, Task B); analytika
-  pokladny už na číselníku je (viz níže).
+- **Doklady bank / purchase / sklad** — přijdou s dalšími typy dokladů;
+  mechanismy `query` (vč. operátorů) a `headQuery` v krocích předpisu
+  pokryjí budoucí potřeby. Pokladní doklady, prodejky a hotově placené
+  faktury jsou hotové (#59, sekce 4 a 5).
+- **Pokladní kniha** — report nad deníkem (211 analytika pokladny, běžící
+  zůstatek), otevírací doklady (`cmnbkp` 211/701), inventura 211 proti
+  668/568 a importní kontrola `initBalance` — fáze 2 (#59 D10). Platební
+  terminály per 261 analytika a tisk pokladních dokladů také později.
 - **OSS** (prodej neplátcům v EU se zahraničními sazbami) — `vat-de.jsonc`
   a další státy, zahraniční kódy v UI dokladu, OSS přiznání, per-datasource
   vrstva mapování, enablement per stát. Základ je položený: konvence
@@ -814,9 +892,9 @@ Hotovo (dřív tady jako „později"): **analytiky bankovních účtů a poklad
 extension `economy.bank/extensions/economy_codebooks_bank_accounts.jsonc`
 (221xxx, používá bankovní engine), na pokladně extension
 `economy.accounting/extensions/economy_codebooks_cash_desks.jsonc` (211xxx;
-`accountSrc: cashDesk` a účtování hotově placených faktur na 211 přidává
-Task B, #59 D8). Formuláře obou číselníků nabízejí lookup omezený na
-analytiky dané řady, Document tvrdě validuje.
+používá `accountSrc: cashDesk` — pokladní doklady, prodejky i hotově
+placené faktury, #59 D8). Formuláře obou číselníků nabízejí lookup omezený
+na analytiky dané řady, Document tvrdě validuje.
 
 ---
 

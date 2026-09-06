@@ -65,6 +65,13 @@ Tyhle stránky slouží dvěma čtenářům: tobě a vestavěnému AI asistentov
 |---------|----------------|
 | [Vystavení faktury](faktury-vydane/vystaveni-faktury.md) | Jak vystavit fakturu odběrateli — od Přidat po V pořádku — a proč ji z Shipardu zatím nedostaneš na papír. |
 
+### Pokladna
+
+| Stránka | Co v ní najdeš |
+|---------|----------------|
+| [Pokladní doklad](pokladna/pokladni-doklad.md) | Jak zapsat příjem nebo výdej hotovosti či platbu kartou na pokladně — včetně úhrady faktury — a co k tomu musí být nastavené. |
+| [Prodejka](pokladna/prodejka.md) | Jak zapsat prodej za hotové nebo kartou na pokladně bez faktury a jak udělat vratku. |
+
 ### Účtárna
 
 | Stránka | Co v ní najdeš |

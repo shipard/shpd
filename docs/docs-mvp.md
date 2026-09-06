@@ -15,7 +15,9 @@ modelem.
 
 ### Co MVP dělá
 
-- **Dva typy dokladů:** Faktura vydaná (`invno`), Faktura přijatá (`invni`)
+- **Typy dokladů:** Faktura vydaná (`invno`), Faktura přijatá (`invni`);
+  po MVP přibyly Účetní doklad (`cmnbkp`), Pokladní doklad (`cash`, směr per
+  doklad z `cash_dir`, řada vázaná na pokladnu) a Prodejka (`cashreg`) — #59
 - **Hlavička, řádky, rekapitulace DPH** — kompletní třístupňová struktura
 - **DPH model pro Českou republiku** — všechny kódy DPH ze starého Shipardu
   (tuzemsko vstup/výstup ve všech sazbách, EU plnění, dovoz/vývoz, tuzemský
@@ -87,9 +89,13 @@ modules/docs/
 ├── invoicesOut/           ← Faktura vydaná (Document třída + viewer)
 │   ├── module.jsonc
 │   └── src/
-└── invoicesIn/            ← Faktura přijatá (Document třída + viewer)
-    ├── module.jsonc
-    └── src/
+├── invoicesIn/            ← Faktura přijatá (Document třída + viewer)
+│   ├── module.jsonc
+│   └── src/
+├── accountingDocs/        ← Účetní doklad (cmnbkp) — po MVP
+├── cashDocs/              ← Pokladní doklad (cash) — #59, sdílená báze
+│                              CashDeskDocumentBase/FormBase žije v core/
+└── cashRegister/          ← Prodejka (cashreg) — #59
 ```
 
 ### Nový modul `world.vat`
@@ -2000,7 +2006,7 @@ základ, číselné řady. Bez výpočtů a UI.
   - `docs_core_number_counters.jsonc`
 - Per tabulka `.md` dokumentace (per docs/documentation.md konvence)
 - Vytvořit cfgItem soubory:
-  - `docs.core.docTypes` (jen `invno`, `invni`)
+  - `docs.core.docTypes` (v MVP jen `invno`, `invni`; dnes i `cmnbkp`, `cash`, `cashreg`)
   - `docs.core.docStates`
   - `docs.core.vatModes`
   - `docs.core.vatCalcSources`

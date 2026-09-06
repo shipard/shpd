@@ -181,6 +181,11 @@ Formát hlavičky stránky a šablona: `docs/help-authoring.md`.
 - Per-typ subclassy jsou tenké — overridují jen, co se má lišit (titulky
   přes `getFormTitle()` / `getNewFormTitle()`, do budoucna jednotlivé
   `buildXxxTab()` metody). Společná logika žije v base.
+- Doklady vázané na pokladnu (`docs.cashDocs` → `cash`, `docs.cashRegister`
+  → `cashreg`, #59) sdílejí v `docs.core` abstraktní `CashDeskDocumentBase`
+  / `CashDeskFormBase` (úhrada jen hotově/kartou, měna pokladny, splatnost =
+  vystavení, pokladna z řady — nikdy tichý výběr první řady). Směr `cash`
+  per doklad (`cash_dir`), pohyby filtruje `rowOperations[].docTypes.cash.cashDir`.
 - `FormRegistry::createForm($table, $data, $db, $config)` dispatchuje podle
   `$data[$typeColumn]`. Existující `{table, class}` registrace fungují beze
   změny (PersonsForm, ItemsForm, …).

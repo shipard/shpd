@@ -1,6 +1,16 @@
 # Task B: Pokladní doklady (`cash`) a prodejky (`cashreg`) — moduly, pohyby, účtování, import
 
-**Stav:** naplánováno — Task A (`docs-core-bound-series.md`) hotový 2026-09-06, lze začít
+**Stav:** hotovo — 2026-09-06, 7 commitů na `stable` (kód, testy unit +
+integrační, dokumentace, help); zbývá ruční proklik UI na dev DS (nutno
+založit pokladnu) a ověření na alfě po re-importu (Task C). Odchylky od
+zadání: `payment.*` mají `rowSide: 0` (jinak by položkový layout vyžadoval
+DPH kód a applier by přepočítal `total_price`); sdílená logika obou typů je
+v `docs.core` (`CashDeskDocumentBase` / `CashDeskFormBase`), moduly na sobě
+nezávisejí; partner řádku úhrady se importuje přes existující pin
+`_resolve.rows[i].partner`, žádné `rows[].party`; `ExchangeFormat.php`
+neexistuje — validace je v `DocumentValidator`. Navíc opravená regrese
+Task A (`DocsHeadsViewer::attachPartnerPersonId` volal smazanou metodu)
+a tichý výběr první řady u vázaného typu ve formuláři.
 **Issue:** #59 — rozhodnutí D1, D5–D9, D11, D12
 **Návaznost:** vyžaduje hotový `tasks/docs-core-bound-series.md` (Task A: vázané řady,
 `cash_desk` / `cash_dir` na hlavičce, `resolveTradeDir`, extension `accounting_account`

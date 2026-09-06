@@ -56,7 +56,7 @@ Legenda: `[x]` hotovo · `[ ] 🟠` částečně · `[ ]` plánováno
 
 ### Prodej
 
-- [ ] Prodejky
+- [x] Prodejky
 - [ ] Prodejní smlouvy — podklad pro opakovanou fakturaci
 
 ## Zásoby
@@ -74,7 +74,7 @@ Legenda: `[x]` hotovo · `[ ] 🟠` částečně · `[ ]` plánováno
 
 ## Pokladna
 
-- [ ] Pokladní lístky — příjmové a výdajové
+- [x] Pokladní doklady — příjmové a výdajové
 - [ ] Pokladní kniha
 
 ## Účtárna

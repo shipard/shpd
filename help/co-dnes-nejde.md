@@ -41,6 +41,19 @@ Shipard dneska evidence, ne fakturační nástroj.
 
 ---
 
+## Pokladna: bez knihy a bez účtenky
+
+**Pokladní knihu Shipard zatím nevede.** Pokladní doklady a prodejky se
+zaúčtují na účet pokladny, ale přehled zůstatku a pohybů pokladny za období,
+počáteční stav ani inventura pokladny nejsou. Zůstatek dnes zjistíš jen
+z účetního deníku nebo hlavní knihy na účtu pokladny.
+
+**Pokladní doklad ani prodejku nevytiskneš.** Stejně jako u vydaných faktur
+— zákazníkovi účtenku musíš dát z jiného zařízení. Platební terminály se
+neevidují zvlášť; platba kartou jde na jeden účet peněz na cestě.
+
+---
+
 ## Kde ještě nemusí souhlasit čísla
 
 Tohle je pro nás priorita číslo jedna a pracuje se na tom. Do té doby

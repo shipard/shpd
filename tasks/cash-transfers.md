@@ -1,6 +1,14 @@
 # Task D: Převody peněz — pokladna ↔ banka ↔ pokladna (peníze na cestě)
 
-**Stav:** návrh — čeká na implementaci
+**Stav:** hotovo — 2026-09-06, 4 commity na `stable` (rozvrh 261400 + seed test;
+pohyby `transfer.*` + předpis + karty na 261400 + integrační testy; banka
+`txOperations` + validace směru + matcher test; dokumentace). Odchylky od zadání:
+provisioner ani `DocRowsForm`/`DocDocument` nepotřebovaly změnu kódu (idempotence per
+`number`, partner řízený jen `rowPartner`, VS vynucuje jen `identityRequired`);
+formulář bankovní transakce roletku podle směru nefiltruje — směr hlídá validace
+`operation_direction_mismatch`; matcher výluku nepotřebuje (261100 není v saldo
+skupině). 261400 dostávají jen DS s provisioningem (na 4l3j ověřeno), migrované
+DS rozvrhem. Zbývá ruční proklik UI a alfa.
 **Issue:** #59 (doplněk k fázi 1 — pohyby chybějící v Task B; rozhodnutí v komentáři
 „Převody peněz")
 **Návaznost:** vyžaduje hotové `tasks/docs-core-bound-series.md` a
@@ -200,13 +208,14 @@ Push dělá David.
 
 ## Hotovo když
 
-- [ ] Na dev DS jde v roletce Pohyb příjmového PD vybrat „Příjem z převodu peněz",
+- [x] Na dev DS jde v roletce Pohyb příjmového PD vybrat „Příjem z převodu peněz",
       u výdajového „Výdej pro převod peněz"; řádek bez partnera a DPH se uloží
-      a doklad potvrdí.
-- [ ] Bankovní transakce má v operacích `transfer.in/out`; zaúčtuje 221 / 261100.
-- [ ] Po zaúčtování PD + protistrany v bance je zůstatek 261100 nulový (test).
-- [ ] Prodejka kartou účtuje na 261400; 261400 existuje v obou seedech a na
+      a doklad potvrdí. *(nabídka + validace pokryté unit testy; ruční proklik
+      v prohlížeči zbývá)*
+- [x] Bankovní transakce má v operacích `transfer.in/out`; zaúčtuje 221 / 261100.
+- [x] Po zaúčtování PD + protistrany v bance je zůstatek 261100 nulový (test).
+- [x] Prodejka kartou účtuje na 261400; 261400 existuje v obou seedech a na
       existujícím dev DS po `ds-upgrade`.
-- [ ] Matcher accbal transakce `transfer.*` nepáruje.
-- [ ] Stávající testy procházejí; `docs/accounting.md` a `docs/bank.md`
+- [x] Matcher accbal transakce `transfer.*` nepáruje.
+- [x] Stávající testy procházejí; `docs/accounting.md` a `docs/bank.md`
       aktualizovány.

@@ -329,14 +329,29 @@ cfgItem `economy.bank.txOperations` (vzor `docs.core.rowOperations`):
     "payment.out":  {"name:cs": "Výdaj (nespárováno)",  "direction": 2, "cat": "bank.unmatched.out"},
     "fee.out":      {"name:cs": "Bankovní poplatek",     "direction": 2, "cat": "bank.fee"},
     "interest.in":  {"name:cs": "Připsaný úrok",          "direction": 1, "cat": "bank.interest.in"},
-    "interest.out": {"name:cs": "Zaplacený úrok",         "direction": 2, "cat": "bank.interest.out"}
-    // tax.*, transfer.* … dle potřeby
+    "interest.out": {"name:cs": "Zaplacený úrok",         "direction": 2, "cat": "bank.interest.out"},
+    "transfer.in":  {"name:cs": "Příjem z převodu peněz", "direction": 1, "cat": "cash.transit"},
+    "transfer.out": {"name:cs": "Výdej pro převod peněz", "direction": 2, "cat": "cash.transit"}
+    // tax.* … dle potřeby
 }
 ```
 
 Default operace = `payment.in` / `payment.out` dle `direction`. Auto-klasifikace
 poplatků/úroků dle protistrany/textu je **pozdější refinement** — fáze 1 jede
 na defaultu + ruční změně `operation` ve formuláři.
+
+`transfer.in` / `transfer.out` (#59 Task D) = převod peněz s vlastní
+pokladnou (nebo vlastním jiným účtem) jako protistranou. Obě strany převodu
+jdou přes **261100 Peníze na cestě** (kategorie `cash.transit`, sdílená
+s pohyby `transfer.*` pokladního dokladu — `docs/accounting.md` §2, §4):
+příjem `221 MD / 261100 DAL`, výdaj `261100 MD / 221 DAL`; po zaúčtování
+obou stran je 261100 z převodů nulový. Matcher (`accbal`) takovou transakci
+**nevidí** — kandidáty bere z ledgeru clearingu 261200/261300 a 261100
+v žádné saldo skupině není; `operation` proto nikdy nepřepíše na
+`payment.*.matched`. Formulář transakce nabízí všechny pohyby bez filtru;
+`BankTransactionDocument::validate` odmítne pohyb s jiným `direction`, než
+má transakce (`operation_direction_mismatch`). Automatická detekce převodu
+z výpisu (protiúčet = náš účet) zůstává refinement (§11).
 
 ### 6.3 Dva clearing účty + nulová kontrola
 
@@ -452,8 +467,9 @@ byla zamítnuta jako drahá a závislá na neexistujícím saldu.)
   účtů přibudou až tehdy (`ADD COLUMN` je bezpečný) — ve Fázi 1 zavedeny nebyly.
 - **Auto-klasifikace** `operation` dle protistrany/textu (poplatky, úroky).
 - **Příkazy k úhradě / inkasu** (starý `bankorder`) — samostatné téma.
-- **Vícecestné převody mezi vlastními účty** (261100) a hotovost (pokladna)
-  jako protistrana — až s pokladnou.
+- **Automatická detekce převodů** mezi vlastními účty / s pokladnou z výpisu
+  (protiúčet = náš účet) a párování obou stran převodu na 261100 — ruční
+  volba `transfer.in/out` už existuje (#59 Task D, §6.2).
 - **Kurzové rozdíly** u cizoměnových účtů — saldo/exch-diff.
 
 ---
@@ -514,6 +530,11 @@ přegenerace clearing → 311/321.
 11. Stavy transakce: vlastní sada `economy.bank.txStates`; přechod do
     „Zaúčtováno" (40) spouští mikroengine; účtování neblokuje přechod
     (`accounting_state = 2` + alert).
+12. Převody peněz (#59 Task D): operace `transfer.in/out` na kategorii
+    `cash.transit` → 261100, sdílené s pokladním dokladem; bez saldokontní
+    skupiny (nula po obou stranách je kontrola), matcher převody nevidí
+    (nejsou na clearingu). Karty pokladny odděleny na 261400. Směr pohybu
+    vůči směru transakce hlídá validace dokumentu, roletka se nefiltruje.
 
 ---
 
@@ -536,9 +557,10 @@ Vyřešené (ponechané pro kontext):
 
 Otevřené:
 
-- **Detekce „převod mezi vlastními účty"** (protiúčet je náš jiný účet) —
-  zatím na clearing jako ostatní; detekce + 261100 (a párování obou stran
-  převodu) je rozšíření.
+- **Detekce „převod mezi vlastními účty"** (protiúčet je náš jiný účet nebo
+  odvod z pokladny) — bez ruční volby `transfer.*` jde transakce na clearing
+  jako ostatní; automatická detekce a párování obou stran převodu na 261100
+  je rozšíření. Ruční operace `transfer.in/out` existují (#59 Task D).
 - **Auto-create partnera při migraci** (`createMissingPartner`) — flag je
   proplumbovaný do apply jádra, ale auto-create osoby z protistrany zatím
   neimplementován (saldo-nezávislé, viz §7).

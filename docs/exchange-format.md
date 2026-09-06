@@ -326,7 +326,12 @@ reprodukuje). Výslednou částku a `total_rounding` pak dopočte
   snapshot. `payment.method` default `cash` (jinak jen `card`). Úhrady
   faktur hotově/kartou = řádky `operation: payment.receivable` /
   `payment.payable` s `totalPrice`, `paymentReference` (VS) a partnerem
-  přes pin `_resolve.rows[i].partner` (viz §7).
+  přes pin `_resolve.rows[i].partner` (viz §7). Převody peněz (#59 Task D)
+  = řádky `operation: transfer.in` (jen `cashDirection: 1`) /
+  `transfer.out` (jen 2) s `totalPrice` a volitelným `paymentReference`
+  (staré `symbol1`/`symbol2`), bez partnera; `operation` je passthrough,
+  směr vůči `cashDirection` hlídá validace dokladu. Stejné klíče platí i pro
+  `operation` bankovní transakce (`shpd.bank.statement.v1`).
 - **`cashRegisterDocument`** (`cashreg`, prodejka) — povinný `cashDesk`,
   bez `cashDirection` (pevně výstup); vratka = záporné řádky.
 - **`invoiceIssued` / `invoiceReceived` + `cashDesk`** — volitelný kód

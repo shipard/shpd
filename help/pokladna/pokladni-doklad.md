@@ -1,7 +1,7 @@
 ---
 title: Pokladní doklad
 summary: Jak zapsat příjem nebo výdej hotovosti či platbu kartou na pokladně — včetně úhrady faktury — a co k tomu musí být nastavené.
-keywords: [pokladní doklad, příjmový pokladní doklad, výdajový pokladní doklad, příjmový doklad, výdajový doklad, pokladna, hotovost, platba hotově, platba kartou, úhrada faktury hotově, zaplaceno hotově, pokladní lístek, paragon, směr pokladního dokladu, příjem, výdej]
+keywords: [pokladní doklad, příjmový pokladní doklad, výdajový pokladní doklad, příjmový doklad, výdajový doklad, pokladna, hotovost, platba hotově, platba kartou, úhrada faktury hotově, zaplaceno hotově, pokladní lístek, paragon, směr pokladního dokladu, příjem, výdej, převod peněz, odvod hotovosti do banky, dotace pokladny, převod mezi pokladnami, peníze na cestě]
 related: [pokladna/prodejka.md, faktury-vydane/vystaveni-faktury.md, faktury-prijate/oprava-dokladu.md, uctarna/kdyz-se-doklad-nezauctuje.md, co-dnes-nejde.md]
 ---
 
@@ -54,6 +54,16 @@ Pro rychlý prodej zboží bez partnera se víc hodí [Prodejka](prodejka.md).
      **Partnera** a **Variabilní symbol** hrazené faktury; DPH se tu neřeší,
      tu už nese faktura. Partner a variabilní symbol jsou povinné — bez nich
      by se úhrada nespárovala.
+   - *Příjem z převodu peněz* (u příjmu) / *Výdej pro převod peněz* (u
+     výdeje) — peníze se jen přesouvají mezi pokladnou a bankou nebo mezi
+     dvěma pokladnami: odvod hotovosti do banky, dotace pokladny z účtu,
+     přesun do druhé pokladny. Zadáváš jen **Částku**; partner se nevybírá
+     a DPH se neřeší. Do **Variabilního symbolu** si můžeš poznamenat, s čím
+     převod souvisí (číslo bankovní transakce, doklad druhé pokladny) — není
+     to povinné. Druhou stranu převodu zapíšeš na bankovní transakci
+     (Pohyb *Příjem z převodu peněz* / *Výdej pro převod peněz*) nebo
+     pokladním dokladem opačného směru na druhé pokladně; dokud tam není,
+     zůstávají peníze na účtu *Peníze na cestě*.
    - *Účetní položka* — cokoli jiného, účet dá vybraná položka.
 
 6. **Dej Potvrdit a pak V pořádku.** Doklad dostane číslo z řady pokladny
@@ -71,8 +81,15 @@ dokladu** jen pro čtení — změna směru by zneplatnila pohyby řádků. Špa
 směr vyřeš smazáním řádků, nebo založ nový doklad.
 
 **Pohyb, který hledáš, v nabídce není.** Nabídka se řídí směrem: u příjmu
-jsou jen prodejní pohyby a úhrada pohledávky, u výdeje jen nákupní pohyby
-a úhrada závazku. *Účetní položka* je v obou.
+jsou jen prodejní pohyby, úhrada pohledávky a příjem z převodu peněz,
+u výdeje jen nákupní pohyby, úhrada závazku a výdej pro převod peněz.
+*Účetní položka* je v obou.
+
+**Odvod do banky nebo dotace pokladny.** Nezakládej k tomu nákup ani
+prodej — použij pohyb *Výdej pro převod peněz* (peníze odcházejí
+z pokladny) nebo *Příjem z převodu peněz* (přicházejí do ní) a na bankovní
+transakci zvol tentýž pohyb v opačném směru. Převod mezi dvěma pokladnami
+= výdajový doklad na jedné a příjmový na druhé.
 
 **Částka je vždy kladná.** Zda jde o příjem nebo výdej, říká směr, ne
 znaménko. Vratka zaplacené částky je u pokladního dokladu opačný směr,

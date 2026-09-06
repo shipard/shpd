@@ -200,7 +200,22 @@ Pohyby per typ a směr (`docs.core.docTypes`: `cash` má `trade_dir: 0` +
 | `payment.receivable` (Úhrada pohledávky) | ✓ | — | — |
 | `purchase.goods`, `purchase.services`, `purchase.other` | — | ✓ | — |
 | `payment.payable` (Úhrada závazku) | — | ✓ | — |
+| `transfer.in` (Příjem z převodu peněz) | ✓ | — | — |
+| `transfer.out` (Výdej pro převod peněz) | — | ✓ | — |
 | `acc.entry` | ✓ | ✓ | ✓ |
+
+`transfer.in` / `transfer.out` (#59 Task D) jsou převody peněz — odvod
+hotovosti do banky, dotace pokladny z banky, převod mezi pokladnami. Obě
+strany převodu jdou přes **261100 Peníze na cestě** (kategorie
+`cash.transit`); druhou stranu nese bankovní transakce s operací
+`transfer.in/out` (`economy.bank.txOperations`) nebo pokladní doklad druhé
+pokladny. Vlajky `rowSide: 0` + `rowPaymentId` **bez** `rowPartner` a bez
+`identityRequired`: řádek je bez DPH, bez partnera, `payment_reference`
+nepovinný (identifikace protistrany převodu — číslo bankovní transakce,
+doklad druhé pokladny — pro budoucí párování 261). Na `cmnbkp` úmyslně
+nejsou (ruční opravy pokryje `acc.record` na 261). Saldokontní skupinu
+převody nemají — po zaúčtování obou stran má 261100 z převodů nulový
+zůstatek, což je zároveň kontrola.
 
 `payment.receivable` / `payment.payable` jsou protějšek bankovních
 spárovaných úhrad (kategorie `bank.matched.*`): `rowSide: 0`, `rowPartner`,
@@ -465,11 +480,26 @@ Kontrolní příklad — faktura přijatá, EU pořízení služeb 1 000 Kč
 
 Protistrana hotovostních dokladů se řídí `payment_method` hlavičky:
 **0 Hotovost** → účet pokladny (`accountSrc: "cashDesk"`, 211xxx per
-pokladna), **2 Kartou** → kategorie `card.transit` (peníze na cestě,
-maska `261100` — jediný terminál, per-terminál analytiky mimo scope;
-migrovaný rozvrh bez `261100` dá `account_not_found` / řádek `261???`,
-řeší se rozvrhem DS, ne předpisem). Kategorie `cash` neexistuje —
+pokladna), **2 Kartou** → kategorie `card.transit` (platební karty na
+cestě, maska `261400` — jediný terminál, per-terminál analytiky mimo
+scope; migrovaný rozvrh bez `261400` dá `account_not_found` / řádek
+`261???`, řeší se rozvrhem DS, ne předpisem). Kategorie `cash` neexistuje —
 `accountSrc: cashDesk` `accounts[]` obchází.
+
+Převody peněz (Task D) mají v bloku `cash` per směr jeden řádkový krok
+kategorie `cash.transit` (maska `261100`): příjem `transfer.in` DAL 261100
+(MD pokladna z head kroku), výdej `transfer.out` MD 261100 (DAL pokladna).
+Řádek má nulovou DPH, kroky `src: vat` ho nezasáhnou. Druhou stranu
+převodu účtuje bankovní mikroengine z operace `transfer.in/out`
+(kategorie `cash.transit`, tedy tatáž maska) nebo pokladní doklad druhé
+pokladny — viz `docs/bank.md` §6.2.
+
+**Proč dvě analytiky 261.** Převody (`261100`) mají po zaúčtování obou
+stran nulový zůstatek — stejná kontrolní logika jako clearing
+`261200/261300`. Karty (`261400`) nenulový zůstatek mají běžně (tržby
+dosud nepřipsané bankou, stržené poplatky); na jednom účtu by kontrola
+nuly nefungovala. Úplnost seedů vůči maskám `261xxx` hlídá
+`CashAccountingRulesTest::testEvery261MaskOfRulesHasAccountInBothSeedCharts`.
 
 Blok `cash` je jeden (engine bere první blok per docType): příjmová část
 (`headQuery: {cash_dir: 1}`, jako vydaná faktura, strany DAL/MD) a výdajová
@@ -490,7 +520,7 @@ Kontrolní příklady (`tests/Integration/Accounting/CashDocsAccountingTest`):
 Příjmový PD, hotově, prodej služby 1 000 + 21 % (cz-120):
     602xxx DAL 1 000   343120 DAL 210   211xxx MD 1 210
 Příjmový PD, kartou, úhrada FVB 1 210 (payment.receivable, VS = číslo FVB):
-    311xxx DAL 1 210 (partner + payment_reference z řádku)   261100 MD 1 210
+    311xxx DAL 1 210 (partner + payment_reference z řádku)   261400 MD 1 210
 Výdajový PD, hotově, nákup materiálu 500 + 21 %:
     504xxx MD 500   343120 MD 105   211xxx DAL 605
 Prodejka hotově, zboží 1 000 + 21 %:
@@ -498,6 +528,22 @@ Prodejka hotově, zboží 1 000 + 21 %:
 Prodejka — vratka (záporné řádky, D9): tytéž účty, záporné částky na obou
     stranách, deník vyrovnaný
 FVB s Hotovostí 1 210:  602/343 DAL   211xxx MD 1 210   (žádný 311)
+```
+
+Převody peněz (`tests/Integration/Accounting/CashTransferAccountingTest`):
+
+```
+Odvod hotovosti do banky 20 000:
+  výdajový PD, transfer.out:      261100 MD 20 000 / 211xxx DAL 20 000
+  bankovní transakce transfer.in: 221xxx MD 20 000 / 261100 DAL 20 000
+  → 261100: 0
+Dotace pokladny z banky 5 000:
+  bankovní transakce transfer.out: 261100 MD 5 000 / 221xxx DAL 5 000
+  příjmový PD, transfer.in:        211xxx MD 5 000 / 261100 DAL 5 000
+  → 261100: 0
+Převod mezi pokladnami A → B 3 000:
+  výdajový PD na A (transfer.out) + příjmový PD na B (transfer.in) → 261100: 0
+Prodejka kartou 1 000 + 21 %:  604/343 DAL   261400 MD 1 210   (261400 ≠ 0, 261100 bez řádku)
 ```
 
 ---
@@ -997,3 +1043,12 @@ Drobnosti zjištěné implementací:
     123, 201, 202, 401) mapování nemají, nulová daň řádek negeneruje.
 17. PDP výstup (cz-150/151/152/350): `noPayTax + sumTax: 0` — faktura je
     jen základ, daň odvádí zákazník, bez oddaňovacího páru (oprava W4).
+18. Převody peněz (#59 Task D, `tasks/cash-transfers.md`): **T1** pohyby
+    `transfer.in/out` jen na `cash` a bankovních transakcích, na `cmnbkp` ne
+    (ruční opravy = `acc.record` na 261). **T2** převody na `261100`
+    (`cash.transit`), karty přesunuty na `261400` (`card.transit`) — u
+    převodů čekáme nulu, u karet ne. **T3** řádek převodu bez DPH, bez
+    partnera, `payment_reference` nepovinný (cesta k budoucímu párování
+    261); saldokontní skupina 4100 ze starého systému se nezavádí.
+    Migrované DS (`skipProvisioning`) dostanou 261400 rozvrhem, ne
+    provisionerem — stejně jako 261100.

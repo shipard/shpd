@@ -480,7 +480,13 @@ Elementy s `"triggers": "reload"` spustí recalculate při změně hodnoty.
    }
    ```
 3. Server zavolá `TableForm::recalculate()`, vrátí novou FormDefinition + přepočítaná data
-4. Klient překreslí formulář
+4. Klient překreslí formulář. Data ze serveru přitom pokládá přes prázdné
+   hodnoty (`''`) pro všechna pole nové FormDefinition — stejně jako při
+   prvním načtení (`buildDefaultData`). Recalculate totiž může layout
+   rozšířit o pole, která v datech nejsou (změna pohybu řádku přidá saldo
+   identitu); `bind:value` na `undefined` by shodil Svelte
+   (`props_invalid_value`, komponenty mají fallback hodnotu) a zbytek
+   formuláře by zůstal neaktivní.
 
 Recalculate **neukládá** do DB.
 

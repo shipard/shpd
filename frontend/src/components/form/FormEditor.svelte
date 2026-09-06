@@ -205,7 +205,13 @@
     });
     if (res?.success) {
       formDef = res.data.formDefinition;
-      formData = res.data.data;
+      // Stejně jako v loadForm: nejdřív prázdné hodnoty pro všechna pole nové
+      // FormDefinition, pak data ze serveru. Recalculate může layout rozšířit
+      // o pole, která v datech nejsou (změna pohybu řádku přidá saldo identitu
+      // VS/SS/KS/splatnost) — `bind:value={formData[col]}` na undefined
+      // shodí Svelte (props_invalid_value: komponenta má fallback hodnotu)
+      // a zbytek formuláře zůstane neaktivní.
+      formData = { ...buildDefaultData(formDef), ...res.data.data };
       // dataResolved nahradíme celý — server vrací autoritativní mapu pro všechna
       // lookup pole v aktuálním form-state. Klíče chybějící v response znamenají,
       // že dané pole je null (nebo lookup neresolvoval) — display popis musí

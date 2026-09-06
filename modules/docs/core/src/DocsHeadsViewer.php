@@ -566,9 +566,13 @@ class DocsHeadsViewer extends TableViewer
             return $this->attachPartnerPersonId($record, $supplier, $customer);
         }
 
-        // Stejné mapování jako DocDocument::buildSnapshots():
-        // trade_dir 1 = my jsme dodavatel, jinak my odběratel.
-        $tradeDir = $this->resolveTradeDir($record);
+        // Stejné mapování jako DocDocument::buildSnapshots(): 1 = my jsme
+        // dodavatel, 2 = my odběratel, null = typ bez stran (cmnbkp) — živé
+        // strany se nestaví, stejně jako se pro něj nestaví snapshoty.
+        $tradeDir = DocDocument::resolveTradeDir($record, $this->config);
+        if ($tradeDir === null) {
+            return $this->attachPartnerPersonId($record, $supplier, $customer);
+        }
 
         $partner = null;
         $partnerId = (int) ($record['partner'] ?? 0);
@@ -603,20 +607,6 @@ class DocsHeadsViewer extends TableViewer
             $supplier ?? $liveSupplier,
             $customer ?? $liveCustomer,
         );
-    }
-
-    /**
-     * Směr obchodu z docs.core.docTypes — stejné mapování jako
-     * DocDocument::buildSnapshots(): trade_dir 1 = my jsme dodavatel,
-     * jinak my odběratel.
-     */
-    private function resolveTradeDir(array $record): int
-    {
-        $docTypes = $this->config?->cfgItem('docs.core.docTypes');
-        $docTypeKey = (string) ($record['doc_type'] ?? '');
-        return is_array($docTypes)
-            ? (int) ($docTypes[$docTypeKey]['trade_dir'] ?? 2)
-            : 2;
     }
 
     /**

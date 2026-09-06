@@ -400,7 +400,7 @@ class DocRowsForm extends TableForm
             return null;
         }
         $head = $this->db->fetchRow(
-            'SELECT `vat_registration`, `doc_type`, `vat_place`, `vat_duzp`, `vat_mode`'
+            'SELECT `vat_registration`, `doc_type`, `cash_dir`, `vat_place`, `vat_duzp`, `vat_mode`'
             . ' FROM `docs_core_heads` WHERE `id` = %i',
             (int) $docHeadId,
         );
@@ -428,15 +428,13 @@ class DocRowsForm extends TableForm
             }
         }
 
-        $docTypes = $this->config?->cfgItem('docs.core.docTypes');
-        if (is_array($docTypes) && isset($docTypes[$context['doc_type']]['trade_dir'])) {
-            $tradeDir = (int) $docTypes[$context['doc_type']]['trade_dir'];
-            $context['direction'] = match ($tradeDir) {
-                1 => 'output',
-                2 => 'input',
-                default => null,
-            };
-        }
+        // Směr DPH kódů = směr obchodu dokladu (per typ, u pokladního
+        // dokladu per doklad z cash_dir) — jediná autorita DocDocument.
+        $context['direction'] = match (DocDocument::resolveTradeDir($head, $this->config)) {
+            1 => 'output',
+            2 => 'input',
+            default => null,
+        };
 
         $context['place'] = match ($context['vat_place']) {
             0 => 'domestic',

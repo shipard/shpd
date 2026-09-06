@@ -25,8 +25,9 @@ class DocsHeadsViewerDetailTest extends TestCase
     ];
 
     private const DOC_TYPES = [
-        'invno' => ['name' => 'Faktura vydaná', 'trade_dir' => 1],
-        'invni' => ['name' => 'Faktura přijatá', 'trade_dir' => 2],
+        'invno'  => ['name' => 'Faktura vydaná', 'trade_dir' => 1],
+        'invni'  => ['name' => 'Faktura přijatá', 'trade_dir' => 2],
+        'cmnbkp' => ['name' => 'Účetní doklad', 'trade_dir' => 0],
     ];
 
     private const PAYMENT_METHODS = [
@@ -215,6 +216,23 @@ class DocsHeadsViewerDetailTest extends TestCase
         $this->assertSame('Česká Tech, s.r.o.', $content['supplier']['name']);
         $this->assertSame('12345678', $content['supplier']['company_id']);
         $this->assertSame('Česká Tech, s.r.o.', $content['customer']['name']);
+    }
+
+    public function testTypeWithoutSidesHasNoLiveParties(): void
+    {
+        // cmnbkp (trade_dir 0 → resolveTradeDir null): strany se živě nestaví
+        // (stejně jako snapshoty), i když má hlavička partnera.
+        $viewer = $this->makeViewer(
+            $this->baseRecord(['doc_type' => 'cmnbkp', 'partner' => 5]),
+            dibiFetchMap: [
+                'is_own'               => ['id' => 9],
+                'base_persons_persons' => ['id' => 5, 'full_name' => 'Partner s.r.o.'],
+            ],
+        );
+        $content = $this->detailContent($viewer);
+
+        $this->assertNull($content['supplier']);
+        $this->assertNull($content['customer']);
     }
 
     public function testMissingOwnCompanyYieldsNullSideWithoutCrash(): void

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Shipard\Module\Docs\Core;
 
+use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Document\Document;
 use Shipard\Core\Document\ValidationError;
 use Shipard\Core\Document\ValidationResult;
@@ -19,7 +20,7 @@ use Shipard\Module\World\Vat\VatRateResolver;
  * / docs.invoicesIn.
  *
  * The orchestration pipeline runs in `beforeSave`:
- *   1. denormalize doc_type from number_series
+ *   1. denormalize doc_type (+ cash_desk for bound types) from number_series
  *   2. apply date defaults (accounting_date, vat_duzp, vat_dppd, due_date)
  *   3. apply home_currency from DS config
  *   4. resolve fiscal_year/fiscal_month (vat_period/cs_period/rs_period plní
@@ -41,6 +42,13 @@ abstract class DocDocument extends Document
 
     /** Deleted doc state — period lookups skip only this; archived periods stay resolvable by date. */
     private const DOC_STATE_DELETED = 90;
+
+    /**
+     * Vazba řady (docTypes[].series_binding) → sloupec hlavičky, do kterého
+     * se hodnota z řady denormalizuje. Sklad zatím na hlavičce sloupec nemá
+     * (přijde se skladovými doklady), proto tu není.
+     */
+    private const BINDING_HEAD_COLUMNS = ['cash_desk' => 'cash_desk'];
 
     /**
      * True while saving a migrated document (`_importNumber` present).
@@ -91,6 +99,11 @@ abstract class DocDocument extends Document
             $result->addError('accounting_date', 'Účetní datum je povinné', 'required');
         }
 
+        // validate() běží před beforeSave — typ, pokladna z řady a směr se
+        // kontrolují nad denormalizovanými hodnotami (idempotentní, 1 SELECT).
+        $this->denormalizeFromSeries($data);
+        $this->validateBindingAndDirection($data, $result);
+
         $newState = (int) ($data['docState'] ?? 10);
 
         if (in_array($newState, [40, 80], true)) {
@@ -134,6 +147,61 @@ abstract class DocDocument extends Document
     }
 
     /**
+     * Pokladna a směr podle typu dokladu (docs.core.docTypes):
+     *
+     * - typ se `series_binding: cash_desk` → `cash_desk` musí přijít z řady
+     *   (řada bez pokladny = chyba formuláře `series_binding_missing`);
+     * - nevázaný typ → `cash_desk` smí být vyplněná jen při platbě
+     *   v hotovosti (`payment_method = 0`), jinak `cash_desk_requires_cash_payment`;
+     * - typ s `trade_dir_column: cash_dir` → `cash_dir` je 1 nebo 2;
+     *   ostatní typy musí mít 0.
+     *
+     * Neznámý typ (bez cfg) se nekontroluje — číselná řada už chybí výše.
+     */
+    protected function validateBindingAndDirection(array $data, ValidationResult $result): void
+    {
+        $docTypes = $this->config?->cfgItem('docs.core.docTypes');
+        $docTypeKey = (string) ($data['doc_type'] ?? '');
+        if (!is_array($docTypes) || !is_array($docTypes[$docTypeKey] ?? null)) {
+            return;
+        }
+        $docType = $docTypes[$docTypeKey];
+
+        if (($docType['series_binding'] ?? null) === 'cash_desk') {
+            if (empty($data['cash_desk'])) {
+                $result->addError(
+                    ValidationError::FIELD_FORM,
+                    'Číselná řada nemá přiřazenou pokladnu',
+                    'series_binding_missing',
+                );
+            }
+        } elseif (!empty($data['cash_desk']) && (int) ($data['payment_method'] ?? 1) !== 0) {
+            $result->addError(
+                'cash_desk',
+                'Pokladnu lze zadat jen při platbě v hotovosti',
+                'cash_desk_requires_cash_payment',
+            );
+        }
+
+        $cashDir = (int) ($data['cash_dir'] ?? 0);
+        if (($docType['trade_dir_column'] ?? null) === 'cash_dir') {
+            if (CashDirection::tryFrom($cashDir)?->tradeDir() === null) {
+                $result->addError(
+                    'cash_dir',
+                    'Směr pokladního dokladu musí být příjem nebo výdej',
+                    'invalid_value',
+                );
+            }
+        } elseif ($cashDir !== 0) {
+            $result->addError(
+                'cash_dir',
+                'Směr pokladního dokladu se u tohoto typu dokladu nepoužívá',
+                'invalid_value',
+            );
+        }
+    }
+
+    /**
      * Je hlavičkový partner povinný při potvrzení (stavy 40/80)?
      * Faktury ano; účetní doklad (cmnbkp) ne — partner žije per řádek
      * (zápočet má dva partnery, mzda závazek bez hlavičkového partnera).
@@ -156,9 +224,9 @@ abstract class DocDocument extends Document
             return;
         }
 
-        // validate() runs before beforeSave, so doc_type may not be
-        // denormalized yet — idempotent, beforeSave repeats it.
-        $this->denormalizeDocType($data);
+        // Idempotentní — validate() i beforeSave() denormalizují také; tady
+        // kvůli přímým voláním z podtříd / testů.
+        $this->denormalizeFromSeries($data);
         $docType = (string) ($data['doc_type'] ?? '');
         if ($docType === '') {
             return;
@@ -193,7 +261,7 @@ abstract class DocDocument extends Document
 
         $this->trackStateChange($data, $originalData);
 
-        $this->denormalizeDocType($data);
+        $this->denormalizeFromSeries($data);
         $this->applyDateDefaults($data);
         $this->applyHomeCurrency($data);
         $this->resolveAccountingPeriods($data);
@@ -380,17 +448,35 @@ abstract class DocDocument extends Document
 
     // ── Defaults ────────────────────────────────────────────────────────────
 
-    protected function denormalizeDocType(array &$data): void
+    /**
+     * Denormalizace z číselné řady: `doc_type` vždy; pro typ se
+     * `series_binding` i vázaná entita (BINDING_HEAD_COLUMNS) — hodnota
+     * z řady přepíše payload bez ohledu na to, co poslal klient (pokladna
+     * je u vázaných typů systémová jako doc_type). Pro nevázané typy se
+     * `cash_desk` z payloadu nechává (uživatelský u hotově placené faktury).
+     */
+    protected function denormalizeFromSeries(array &$data): void
     {
         if (empty($data['number_series']) || $this->db === null) {
             return;
         }
         $row = $this->db->fetch(
-            'SELECT [doc_type] FROM [docs_core_number_series] WHERE [id] = %i',
+            'SELECT [doc_type], [cash_desk], [warehouse] FROM [docs_core_number_series] WHERE [id] = %i',
             (int) $data['number_series'],
         );
-        if ($row !== null) {
-            $data['doc_type'] = (string) $row['doc_type'];
+        if ($row === null) {
+            return;
+        }
+        $series = $row->toArray();
+        if (isset($series['doc_type'])) {
+            $data['doc_type'] = (string) $series['doc_type'];
+        }
+
+        $docTypes = $this->config?->cfgItem('docs.core.docTypes');
+        $binding = is_array($docTypes) ? ($docTypes[$data['doc_type']]['series_binding'] ?? null) : null;
+        if (is_string($binding) && isset(self::BINDING_HEAD_COLUMNS[$binding])) {
+            $value = $series[$binding] ?? null;
+            $data[self::BINDING_HEAD_COLUMNS[$binding]] = $value !== null ? (int) $value : null;
         }
     }
 
@@ -1384,7 +1470,7 @@ abstract class DocDocument extends Document
 
     protected function buildSnapshots(array &$data): void
     {
-        $tradeDir = $this->resolveTradeDir($data);
+        $tradeDir = self::resolveTradeDir($data, $this->config);
         if ($tradeDir === null) {
             return;
         }
@@ -1408,7 +1494,7 @@ abstract class DocDocument extends Document
      */
     protected function buildImportSnapshots(array &$data): void
     {
-        $tradeDir = $this->resolveTradeDir($data);
+        $tradeDir = self::resolveTradeDir($data, $this->config);
         if ($tradeDir === null) {
             return;
         }
@@ -1420,15 +1506,39 @@ abstract class DocDocument extends Document
         );
     }
 
-    /** `trade_dir` docTypu; null = typ bez stran (cmnbkp) — snapshoty se nestaví. */
-    private function resolveTradeDir(array $data): ?int
+    /**
+     * Směr obchodu dokladu — jediná autorita pro snapshoty, DocRowsForm
+     * (směr DPH kódů), DocsHeadsViewer (strany detailu) i DocumentApplier.
+     *
+     *   1 = výstup (my dodavatel, partner odběratel), 2 = vstup (my odběratel).
+     *   null = typ bez stran (cmnbkp) nebo neznámý typ — snapshoty se nestaví.
+     *
+     * Typ s pevným `trade_dir` 1/2 ho vrací; typ s `trade_dir: 0` a
+     * `trade_dir_column` čte směr per doklad ze sloupce hlavičky (zatím jen
+     * `cash_dir`: příjem → 1, výdej → 2, nepoužito → null).
+     *
+     * @param array<string, mixed> $data hlavička (potřebuje `doc_type` + případný `trade_dir_column`)
+     */
+    public static function resolveTradeDir(array $data, ?ConfigRuntime $config): ?int
     {
+        $docTypes = $config?->cfgItem('docs.core.docTypes');
         $docTypeKey = (string) ($data['doc_type'] ?? '');
-        $docTypes = $this->config?->cfgItem('docs.core.docTypes') ?? [];
-        if (!is_array($docTypes) || !isset($docTypes[$docTypeKey]['trade_dir'])) {
+        if (!is_array($docTypes) || !is_array($docTypes[$docTypeKey] ?? null)) {
             return null;
         }
-        return (int) $docTypes[$docTypeKey]['trade_dir'];
+        $docType = $docTypes[$docTypeKey];
+
+        $tradeDir = (int) ($docType['trade_dir'] ?? 0);
+        if ($tradeDir === 1 || $tradeDir === 2) {
+            return $tradeDir;
+        }
+
+        $column = $docType['trade_dir_column'] ?? null;
+        if ($tradeDir === 0 && $column === 'cash_dir') {
+            return CashDirection::tryFrom((int) ($data['cash_dir'] ?? 0))?->tradeDir();
+        }
+
+        return null;
     }
 
     /**

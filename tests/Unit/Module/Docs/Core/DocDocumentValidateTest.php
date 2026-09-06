@@ -7,6 +7,7 @@ namespace Shipard\Tests\Unit\Module\Docs\Core;
 use Dibi\Connection;
 use Dibi\Row;
 use PHPUnit\Framework\TestCase;
+use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Tests\Fixtures\Module\Docs\Core\TestableDocsHeadsDocument;
 
 class DocDocumentValidateTest extends TestCase
@@ -16,6 +17,53 @@ class DocDocumentValidateTest extends TestCase
         $db = $this->createMock(Connection::class);
         $db->method('fetch')->willReturn(new Row(['id' => 1])); // own person exists
         return $db;
+    }
+
+    /**
+     * DB, kde řada 1 je faktura vydaná a řada 2 syntetický typ vázaný na
+     * pokladnu (`$boundCashDesk` = pokladna řady, null = řada bez vazby).
+     */
+    private function dbWithSeries(?int $boundCashDesk = 7): Connection
+    {
+        $db = $this->createMock(Connection::class);
+        $db->method('fetch')->willReturnCallback(
+            static function (string $sql, mixed ...$params) use ($boundCashDesk): ?Row {
+                if (str_contains($sql, 'docs_core_number_series')) {
+                    return (int) $params[0] === 2
+                        ? new Row(['doc_type' => 'cashb', 'cash_desk' => $boundCashDesk, 'warehouse' => null])
+                        : new Row(['doc_type' => 'invno', 'cash_desk' => null, 'warehouse' => null]);
+                }
+                return new Row(['id' => 1]);
+            },
+        );
+        return $db;
+    }
+
+    private function configWithCashType(): ConfigRuntime
+    {
+        $docTypes = [
+            'invno' => ['trade_dir' => 1],
+            'cashb' => ['trade_dir' => 0, 'trade_dir_column' => 'cash_dir', 'series_binding' => 'cash_desk'],
+        ];
+        $config = $this->createMock(ConfigRuntime::class);
+        $config->method('cfgItem')->willReturnCallback(
+            static fn (string $id): mixed => $id === 'docs.core.docTypes' ? $docTypes : null,
+        );
+        return $config;
+    }
+
+    private function docWithCashType(?int $boundCashDesk = 7): TestableDocsHeadsDocument
+    {
+        $doc = new TestableDocsHeadsDocument();
+        $doc->setDb($this->dbWithSeries($boundCashDesk));
+        $doc->setConfig($this->configWithCashType());
+        return $doc;
+    }
+
+    /** @return list<array{column: string, code: string}> */
+    private function errorsFor(array $errors, string $column): array
+    {
+        return array_values(array_filter($errors, fn(array $e) => $e['column'] === $column));
     }
 
     /** @return array<string, mixed> */
@@ -55,6 +103,63 @@ class DocDocumentValidateTest extends TestCase
         $result = $doc->validate($data);
 
         $this->assertTrue($result->isValid());
+    }
+
+    // ── cash_desk / cash_dir (tasks/docs-core-bound-series.md §5) ──────────
+
+    public function testInvoiceCashDeskRequiresCashPayment(): void
+    {
+        $doc = $this->docWithCashType();
+
+        $data = $this->konceptData() + ['cash_desk' => 7, 'payment_method' => 1];
+        $errors = $this->errorsFor($doc->validate($data)->toArray(), 'cash_desk');
+        $this->assertSame('cash_desk_requires_cash_payment', $errors[0]['code']);
+
+        $data = $this->konceptData() + ['cash_desk' => 7, 'payment_method' => 0];
+        $this->assertTrue($doc->validate($data)->isValid());
+
+        // bez payment_method platí schéma default 1 (převodem)
+        $data = $this->konceptData() + ['cash_desk' => 7];
+        $this->assertCount(1, $this->errorsFor($doc->validate($data)->toArray(), 'cash_desk'));
+    }
+
+    public function testInvoiceCashDirMustStayZero(): void
+    {
+        $doc = $this->docWithCashType();
+
+        $data = $this->konceptData() + ['cash_dir' => 1];
+        $errors = $this->errorsFor($doc->validate($data)->toArray(), 'cash_dir');
+        $this->assertSame('invalid_value', $errors[0]['code']);
+
+        $data = $this->konceptData() + ['cash_dir' => 0];
+        $this->assertTrue($doc->validate($data)->isValid());
+    }
+
+    public function testBoundTypeDenormalizesCashDeskFromSeriesAndNeedsDirection(): void
+    {
+        $doc = $this->docWithCashType(boundCashDesk: 7);
+
+        // payload posílá cizí pokladnu — vyhrává řada; bez cash_dir chyba
+        $data = array_merge($this->konceptData(), ['number_series' => 2, 'cash_desk' => 99]);
+        $errors = $doc->validate($data)->toArray();
+        $this->assertSame('cashb', $data['doc_type']);
+        $this->assertSame(7, $data['cash_desk']);
+        $this->assertSame('invalid_value', $this->errorsFor($errors, 'cash_dir')[0]['code']);
+
+        $data = array_merge($this->konceptData(), ['number_series' => 2, 'cash_dir' => 2]);
+        $this->assertTrue($doc->validate($data)->isValid());
+        $this->assertSame(7, $data['cash_desk']);
+    }
+
+    public function testBoundTypeSeriesWithoutCashDeskIsFormError(): void
+    {
+        $doc = $this->docWithCashType(boundCashDesk: null);
+
+        $data = array_merge($this->konceptData(), ['number_series' => 2, 'cash_dir' => 1, 'cash_desk' => 5]);
+        $errors = $doc->validate($data)->toArray();
+
+        $this->assertNull($data['cash_desk'], 'řada bez pokladny přepíše payload na NULL');
+        $this->assertSame('series_binding_missing', $this->errorsFor($errors, '_form')[0]['code']);
     }
 
     public function testKonceptMissingNumberSeriesFails(): void

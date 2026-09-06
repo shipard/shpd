@@ -3,8 +3,16 @@
 Pokladny pro hotovostní operace se stavy dokumentů
 (`core.system.docStatesArchive`). Záznamy vznikají ručně přes UI jako
 `Koncept` (10), uživatel je manuálně přepne do `V pořádku` (40).
-Dokladový modul (přijde později) bude na hlavičce pokladního dokladu
-držet referenci na konkrétní pokladnu.
+Hlavička dokladu (`docs_core_heads.cash_desk`) na pokladnu odkazuje —
+u typů s řadou vázanou na pokladnu systémově (z řady), u faktur při
+platbě Hotovostí.
+
+Přechody stavu jdou přes Document lifecycle
+(`stateTransitionsRunDocumentHooks: true`), aby na uložení do stavu 40
+reagoval handler modulu `docs.core` (`CashDeskSeriesEventHandler`,
+event `afterSave`) a založil pokladně číselné řady vázaných typů
+dokladu — viz `modules/docs/core/tables/docs_core_number_series.md`.
+`economy.codebooks` na `docs.core` nezávisí; vazba je jednosměrná.
 
 ## Sloupce
 

@@ -10,6 +10,10 @@ use Shipard\Core\Database\DataSourceConnection;
 /**
  * Idempotentní seed číselných řad — zajistí, že existuje alespoň jedna řada
  * pro každý typ dokladu z cfgItem docs.core.docTypes (kromě smazaných).
+ *
+ * Typy se `series_binding` přeskakuje — jejich řady vznikají per entitu
+ * v BoundNumberSeriesProvisioner a nevázaná řada vázaného typu nesmí
+ * existovat (NumberSeriesDocument by ji odmítl).
  */
 class NumberSeriesProvisioner
 {
@@ -33,6 +37,9 @@ class NumberSeriesProvisioner
 
         foreach ($docTypes as $docTypeKey => $docType) {
             if (!is_string($docTypeKey) || !is_array($docType)) {
+                continue;
+            }
+            if (!empty($docType['series_binding'])) {
                 continue;
             }
 

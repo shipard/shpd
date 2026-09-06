@@ -12,6 +12,12 @@
         "cfgItem": "core.system.docStatesArchive"
     },
 
+    // Přechody stavu jdou přes Document lifecycle (ne přímý UPDATE), aby na
+    // ně reagovaly documentEventHandlers cizích modulů — docs.core po
+    // přechodu pokladny do stavu 40 zakládá vázané číselné řady
+    // (CashDeskSeriesEventHandler, event afterSave).
+    "stateTransitionsRunDocumentHooks": true,
+
     "columnGroups": [
         {
             "id": "identity",

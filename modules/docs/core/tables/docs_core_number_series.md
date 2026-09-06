@@ -86,7 +86,30 @@ jedna řada (kromě `Smazáno`, docState=90). Default je vytvořena rovnou
 jako `V pořádku` (40/3) s patternem z `doc_number_pattern_default`.
 
 Uživatel si může výchozí řadu zarchivovat a založit vlastní; provisioner
-pak nezasáhne.
+pak nezasáhne. Typy se `series_binding` tento provisioner **přeskakuje**.
+
+### Vázané řady — `BoundNumberSeriesProvisioner`
+
+Pro každý typ se `series_binding` a každou entitu ve stavu `V pořádku`
+(pokladna / sklad, `docState = 40`) zajistí řadu (`doc_type`, FK) mimo
+stav Smazáno. Nová řada: `name` = „{název typu} — {kód entity}",
+`doc_number_code` = kód entity (do `%C`; žádný nový placeholder),
+`doc_number_pattern` z `doc_number_pattern_default` typu, `reset_scope`
+`fiscal_year`, stav 40/3. Idempotentní, vrací `{created, existing}`.
+
+Spouští se:
+
+- z `ds-upgrade` **i pod `skipProvisioning`** (řady jsou infrastruktura,
+  kterou import dokladů potřebuje — dohledává řadu podle typu a kódu
+  pokladny);
+- z `CashDeskSeriesEventHandler` (`documentEventHandlers` docs.core na
+  tabulce `economy_codebooks_cash_desks`, event `afterSave`) — pokladna
+  uložená do stavu 40 dostane řady hned, bez `ds-upgrade`.
+
+Přejmenování pokladny (změna `code`) se do `doc_number_code` existující
+řady **nepropaguje** — čísla vydaných dokladů se nesmí měnit. Vazby jsou
+obecné přes `NumberSeriesDocument::BINDINGS` (binding → tabulka); sklad
+nevyžaduje žádný další kód, jen typ dokladu se `series_binding: warehouse`.
 
 ## Související
 

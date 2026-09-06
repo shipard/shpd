@@ -27,6 +27,7 @@ use Shipard\Module\Core\Mail\AIAnalyzerProvisioner;
 use Shipard\Module\Core\Mail\MailRouterProvisioner;
 use Shipard\Module\Core\Mail\Preprocess\PreprocessRulesProvisioner;
 use Shipard\Module\Core\Units\UnitsProvisioner;
+use Shipard\Module\Docs\Core\BoundNumberSeriesProvisioner;
 use Shipard\Module\Docs\Core\NumberSeriesProvisioner;
 use Shipard\Module\Economy\Accbal\BalancesProvisioner;
 use Shipard\Module\Economy\Accbal\ClearingInfrastructureProvisioner;
@@ -288,6 +289,12 @@ class DsUpgradeCommand extends Command
         // přijímá poštu stejně. Idempotentní upsert dle rule_id,
         // archivované se nekřísí.
         $this->provisionPreprocessRules($resolvedModules, $dsConnection, $output);
+
+        // Řady vázané na pokladnu/sklad (docTypes[].series_binding) —
+        // BEZPODMÍNEČNĚ, i pod skipProvisioning: import dokladů ze starého
+        // systému dohledává řadu podle (typ, kód pokladny), takže řady musí
+        // existovat před importem (#59 D12). Idempotentní, per aktivní entita.
+        $this->provisionDocCoreBoundNumberSeries($resolvedModules, $dsDir, $dsConnection, $output);
 
         // Parametry vrstvy C (docs/ds-setup.md §5.2) — jedna instance kvůli
         // request-level cache; provisionery jen čtou, žádný set se tu neděje.
@@ -805,6 +812,37 @@ class DsUpgradeCommand extends Command
         $result = $provisioner->provision();
 
         $this->logProvisioningResult($output, 'number series', $result['numberSeries']);
+    }
+
+    /**
+     * Řady vázané na entitu (pokladna/sklad) — běží mimo skipProvisioning gate,
+     * viz komentář u volání v execute().
+     *
+     * @param list<\Shipard\Core\Module\ModuleDefinition> $resolvedModules
+     */
+    private function provisionDocCoreBoundNumberSeries(
+        array $resolvedModules,
+        string $dsDir,
+        DataSourceConnection $dsConnection,
+        OutputInterface $output,
+    ): void {
+        $output->writeln('', OutputInterface::VERBOSITY_VERBOSE);
+        $output->writeln('Provisioning docs.core bound number series...', OutputInterface::VERBOSITY_VERBOSE);
+
+        if (!$this->isModuleActive($resolvedModules, 'docs.core')) {
+            $output->writeln('  <comment>[SKIP] docs.core module not active</comment>', OutputInterface::VERBOSITY_VERBOSE);
+            return;
+        }
+
+        if (!is_file($dsDir . '/config/configuration/compiled.cs.json')) {
+            $output->writeln('  <comment>[SKIP] config not compiled yet</comment>');
+            return;
+        }
+
+        $config = ConfigRuntime::load($dsDir, 'cs');
+        $result = (new BoundNumberSeriesProvisioner($dsConnection, $config))->provision();
+
+        $this->logProvisioningResult($output, 'bound number series', $result);
     }
 
     /**

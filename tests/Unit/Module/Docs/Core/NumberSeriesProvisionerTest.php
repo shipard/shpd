@@ -189,6 +189,28 @@ class NumberSeriesProvisionerTest extends TestCase
         $this->assertCount(0, $store->tables['docs_core_number_series']);
     }
 
+    public function testBoundTypeDoesNotGetUnboundSeries(): void
+    {
+        $store = $this->recordingDb();
+        $config = $this->buildConfig([
+            'invno' => ['name:cs' => 'Faktura vydaná', 'doc_number_pattern_default' => '%D%y%C%4'],
+            'cashb' => [
+                'name:cs' => 'Pokladní doklad',
+                'series_binding' => 'cash_desk',
+                'doc_number_pattern_default' => '%D%C%y%5',
+            ],
+        ]);
+
+        $result = (new NumberSeriesProvisioner($store->db, $config))->provision();
+
+        $this->assertSame(1, $result['numberSeries']['created']);
+        $this->assertSame(0, $result['numberSeries']['existing']);
+        $this->assertSame(
+            ['invno'],
+            array_column($store->tables['docs_core_number_series'], 'doc_type'),
+        );
+    }
+
     public function testFallbackPatternUsedWhenDocTypeMissing(): void
     {
         $store = $this->recordingDb();

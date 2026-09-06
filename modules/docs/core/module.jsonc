@@ -106,6 +106,17 @@
         }
     ],
 
+    "documentEventHandlers": [
+        {
+            // Pokladna uložená do stavu 40 → řady typů se series_binding
+            // cash_desk (BoundNumberSeriesProvisioner). Handler na číselníku
+            // cizího modulu: economy.codebooks na docs.core nezávisí.
+            "table": "economy_codebooks_cash_desks",
+            "class": "Shipard\\Module\\Docs\\Core\\CashDeskSeriesEventHandler",
+            "events": ["afterSave"]
+        }
+    ],
+
     "config": [
         { "id": "docs.core.docTypes",        "file": "config/docTypes.jsonc" },
         { "id": "docs.core.docStates",       "file": "config/docStates.jsonc" },

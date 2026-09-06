@@ -57,6 +57,7 @@ class DocsHeadsViewer extends TableViewer
             . ' h.`docState`, h.`docStateMain`,'
             . ' h.`issue_date`, h.`due_date`,'
             . ' h.`total_amount`, h.`doc_currency`,'
+            . ' h.`cash_dir`, h.`payment_method`,'
             . ' p.`full_name` AS partner_name'
             . ' FROM `' . $this->table . '` h'
             . ' LEFT JOIN `base_persons_persons` p ON p.`id` = h.`partner`';
@@ -194,16 +195,9 @@ class DocsHeadsViewer extends TableViewer
         if ($dueDate !== null) {
             $t2[] = ['text' => 'splat. ' . $dueDate, 'class' => 'muted'];
         }
-        if ($docState !== 10 && $docState !== 40) {
-            $cfg = DocStateConfig::fromCfgItem($this->config?->cfgItem($this->docStatesCfgItem ?? ''));
-            $stateData = $cfg->getState($docState);
-            $stateName = (string) ($stateData['stateName'] ?? '');
-            if ($stateName !== '') {
-                $t2[] = [
-                    'text'  => $stateName,
-                    'class' => self::STATE_SPAN_CLASS[$stateStyle] ?? 'muted',
-                ];
-            }
+        $stateTag = $this->stateTag($docState);
+        if ($stateTag !== null) {
+            $t2[] = $stateTag;
         }
         $row['t2'] = $t2 !== [] ? $t2 : null;
 
@@ -222,6 +216,29 @@ class DocsHeadsViewer extends TableViewer
         }
 
         return $row;
+    }
+
+    /**
+     * Span se jménem stavu pro řádek vieweru — jen mimo běžné stavy Koncept
+     * (10) a V pořádku (40), které nese barva řádku. Sdílené per-typ
+     * viewery, které si t2 skládají samy.
+     *
+     * @return array{text: string, class: string}|null
+     */
+    protected function stateTag(int $docState): ?array
+    {
+        if ($docState === 10 || $docState === 40) {
+            return null;
+        }
+        $cfg = DocStateConfig::fromCfgItem($this->config?->cfgItem($this->docStatesCfgItem ?? ''));
+        $stateName = (string) ($cfg->getState($docState)['stateName'] ?? '');
+        if ($stateName === '') {
+            return null;
+        }
+        return [
+            'text'  => $stateName,
+            'class' => self::STATE_SPAN_CLASS[$this->resolveStateStyle($docState)] ?? 'muted',
+        ];
     }
 
     /**
@@ -546,9 +563,11 @@ class DocsHeadsViewer extends TableViewer
     private function detailIconForDocType(string $docType): string
     {
         return match ($docType) {
-            'invni' => 'invoice-in',
-            'invno' => 'invoice',
-            default => 'document',
+            'invni'   => 'invoice-in',
+            'invno'   => 'invoice',
+            'cash'    => 'wallet',
+            'cashreg' => 'cash-register',
+            default   => 'document',
         };
     }
 
@@ -944,7 +963,7 @@ class DocsHeadsViewer extends TableViewer
         return (string) $cfg[$key]['name'];
     }
 
-    private function resolvePaymentMethodLabel(mixed $value): ?string
+    protected function resolvePaymentMethodLabel(mixed $value): ?string
     {
         if ($value === null || $value === '' || $this->config === null) {
             return null;
@@ -1012,7 +1031,7 @@ class DocsHeadsViewer extends TableViewer
         return $this->ownCompanyResolver;
     }
 
-    private function formatDate(mixed $value): ?string
+    protected function formatDate(mixed $value): ?string
     {
         if ($value === null || $value === '') {
             return null;

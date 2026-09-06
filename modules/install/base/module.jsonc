@@ -30,6 +30,7 @@
         "docs.invoicesOut",
         "docs.invoicesIn",
         "docs.accountingDocs",
+        "docs.cashDocs",
         "tasks.core",
         "core.chat",
     ],

@@ -1,0 +1,45 @@
+{
+    "id": "docs.cashDocs",
+    "name": "Cash documents",
+    "name:cs": "Pokladní doklady",
+    "name:en": "Cash documents",
+    "description": "Document type subclass for cash documents (cash) — receipts and disbursements per cash desk",
+    "description:cs": "Pokladní doklady (cash) — příjmové a výdajové doklady per pokladna, Document třída, formulář a viewer",
+    "description:en": "Document type subclass for cash documents (cash) — receipts and disbursements per cash desk",
+
+    "dependencies": ["docs.core", "economy.accounting"],
+
+    "viewers": [
+        {
+            "id": "docs.cashDocs.heads",
+            "name": "Cash documents",
+            "name:cs": "Pokladní doklady",
+            "name:en": "Cash documents",
+            "icon": "wallet",
+            "table": "docs_core_heads",
+            "class": "Shipard\\Module\\Docs\\CashDocs\\CashDocsViewer",
+            "navSection": "accounting",
+            "navOrder": 7
+        }
+    ],
+
+    "documentClasses": [
+        {
+            "table": "docs_core_heads",
+            "typeColumn": "doc_type",
+            "classes": {
+                "cash": "Shipard\\Module\\Docs\\CashDocs\\CashDocument"
+            }
+        }
+    ],
+
+    "forms": [
+        {
+            "table": "docs_core_heads",
+            "typeColumn": "doc_type",
+            "classes": {
+                "cash": "Shipard\\Module\\Docs\\CashDocs\\CashDocForm"
+            }
+        }
+    ]
+}

@@ -305,7 +305,11 @@ abstract class DocsHeadsFormBase extends TableForm
         // Per-type viewer hint: if doc_type is provided (e.g. 'invno' from
         // IssuedInvoicesViewer.getNewRecordDefaults) and number_series is not
         // yet set, pre-select the first active series of that type.
-        if (empty($data['number_series']) && !empty($data['doc_type']) && $this->db !== null) {
+        // Typ s řadou vázanou na entitu (pokladna) se nepředvyplňuje —
+        // „první řada" by doklad potichu zařadila do libovolné pokladny.
+        if (empty($data['number_series']) && !empty($data['doc_type']) && $this->db !== null
+            && !$this->isBoundDocType((string) $data['doc_type'])
+        ) {
             $row = $this->db->fetchRow(
                 'SELECT `id` FROM `docs_core_number_series`'
                 . ' WHERE `doc_type` = %s AND `docState` IN (10, 40, 80)'
@@ -876,6 +880,13 @@ abstract class DocsHeadsFormBase extends TableForm
             $this->buildFormDefinition($data, $isNew),
             $data,
         );
+    }
+
+    /** Má typ dokladu řadu vázanou na entitu (`docTypes[].series_binding`)? */
+    protected function isBoundDocType(string $docType): bool
+    {
+        $cfg = $this->config?->cfgItem('docs.core.docTypes');
+        return is_array($cfg) && !empty($cfg[$docType]['series_binding']);
     }
 
     /**

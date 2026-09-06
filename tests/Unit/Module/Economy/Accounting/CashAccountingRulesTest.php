@@ -74,6 +74,39 @@ class CashAccountingRulesTest extends TestCase
         }
     }
 
+    /**
+     * Každá analytika 261xxx, na kterou předpis míří maskou (clearing
+     * 261200/261300, převody 261100, karty 261400), musí být v obou seed
+     * rozvrzích — programově, bez ručního seznamu (vzor
+     * VatAnalyticsCompletenessTest). Nová maska 261 bez účtu test shodí.
+     */
+    public function testEvery261MaskOfRulesHasAccountInBothSeedCharts(): void
+    {
+        $masks = [];
+        foreach ($this->rules()['accounts'] as $entry) {
+            foreach ((array) ($entry['accountMask'] ?? []) as $mask) {
+                if (str_starts_with((string) $mask, '261')) {
+                    $masks[(string) $mask] = (string) ($entry['cat'] ?? '');
+                }
+            }
+        }
+        $this->assertNotEmpty($masks, 'předpis má mít aspoň jednu masku 261');
+        // Numerické klíče PHP přetypuje na int → zpět na string.
+        foreach (array_keys($masks) as $mask) {
+            $this->assertSame(6, strlen((string) $mask), "maska {$mask} má být plná analytika (prefix 261 by chytil vše)");
+        }
+
+        foreach (['accountChartDefault', 'accountChartNpo'] as $chart) {
+            $numbers = array_flip(array_map(
+                fn($e) => (string) $e['number'],
+                JsoncParser::parseFile(self::MODULES . "/economy/accounting/config/{$chart}.jsonc"),
+            ));
+            foreach ($masks as $mask => $cat) {
+                $this->assertArrayHasKey((string) $mask, $numbers, "{$chart} nemá účet {$mask} (kategorie {$cat})");
+            }
+        }
+    }
+
     public function testInvoicesBookCashPaymentOnCashDesk(): void
     {
         foreach (['invno' => 'receivables', 'invni' => 'payables'] as $docType => $balanceCat) {

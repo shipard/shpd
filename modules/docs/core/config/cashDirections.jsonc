@@ -1,0 +1,29 @@
+{
+    // docs.core.cashDirections
+    //
+    // Směr pokladního dokladu (docs_core_heads.cash_dir). Pro typy bez
+    // vazby na pokladnu (faktury, cmnbkp) zůstává 0. Typ dokladu s
+    // `trade_dir: 0` + `trade_dir_column: "cash_dir"` z něj odvozuje směr
+    // obchodu: 1 příjem → my dodavatel (DPH výstup), 2 výdej → my odběratel
+    // (DPH vstup). PHP protějšek: Shipard\Module\Docs\Core\CashDirection.
+    //
+    //   0 = nepoužito
+    //   1 = příjem
+    //   2 = výdej
+
+    "0": {
+        "name": "Not applicable",
+        "name:cs": "—",
+        "name:en": "Not applicable"
+    },
+    "1": {
+        "name": "Receipt",
+        "name:cs": "Příjem",
+        "name:en": "Receipt"
+    },
+    "2": {
+        "name": "Disbursement",
+        "name:cs": "Výdej",
+        "name:en": "Disbursement"
+    }
+}

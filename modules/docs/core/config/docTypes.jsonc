@@ -6,7 +6,22 @@
     //
     // Atributy:
     //   doc_id_code: string vkládaný do %D placeholderu vzorce čísla dokladu
-    //   trade_dir:   1 = výstup (my=dodavatel), 2 = vstup (my=odběratel)
+    //   trade_dir:   1 = výstup (my=dodavatel), 2 = vstup (my=odběratel),
+    //                0 = typ bez pevného směru (cmnbkp; nebo směr per doklad
+    //                přes trade_dir_column)
+    //   trade_dir_column: název sloupce hlavičky, ze kterého se čte směr
+    //                obchodu, když je trade_dir 0. Hodnota sloupce se mapuje
+    //                1→1, 2→2, jinak „bez stran". Jediná povolená hodnota je
+    //                zatím "cash_dir" (cfgItem docs.core.cashDirections).
+    //                Jediná autorita: DocDocument::resolveTradeDir().
+    //   series_binding: "cash_desk" | "warehouse" — řada tohoto typu je vázaná
+    //                na entitu a musí mít vyplněný odpovídající FK
+    //                (docs_core_number_series.cash_desk / .warehouse).
+    //                Řady zakládá BoundNumberSeriesProvisioner per aktivní
+    //                entitu (doc_number_code = kód entity); běžný
+    //                NumberSeriesProvisioner vázané typy přeskakuje. Hodnota
+    //                FK se při uložení dokladu denormalizuje z řady do
+    //                hlavičky (docs_core_heads.cash_desk). Chybí = nevázaný typ.
     //   doc_number_pattern_default: vzorec, který provisioner použije při
     //                               vytvoření default číselné řady
     //   subclass:    plný název Document třídy v navazujícím modulu

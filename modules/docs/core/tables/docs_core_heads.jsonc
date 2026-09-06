@@ -71,6 +71,21 @@
             "group": "identity"
         },
         {
+            // Směr pokladního dokladu: 0 nepoužito (faktury, cmnbkp), 1 příjem,
+            // 2 výdej. Typ s docTypes[].trade_dir_column = "cash_dir" z něj
+            // odvozuje trade_dir (DocDocument::resolveTradeDir); ostatní typy
+            // musí mít 0 — hlídá DocDocument::validate.
+            "id": "cash_dir",
+            "name": "Cash direction",
+            "name:cs": "Směr pokladního dokladu",
+            "name:en": "Cash direction",
+            "type": "enumInt",
+            "default": 0,
+            "nullable": false,
+            "cfgItem": "docs.core.cashDirections",
+            "group": "identity"
+        },
+        {
             "id": "sequence_number",
             "name": "Sequence number",
             "name:cs": "Pořadové číslo",
@@ -478,6 +493,21 @@
             "group": "payment"
         },
         {
+            // Pokladna. Pro typ s docTypes[].series_binding = "cash_desk" je
+            // systémová — denormalizuje se z řady bez ohledu na payload
+            // (DocDocument::denormalizeFromSeries), stejně jako doc_type.
+            // Pro ostatní typy uživatelská, smí být vyplněná jen při
+            // payment_method = 0 (Hotovost). Proto bez `system: true`.
+            "id": "cash_desk",
+            "name": "Cash desk",
+            "name:cs": "Pokladna",
+            "name:en": "Cash desk",
+            "type": "int",
+            "nullable": true,
+            "reference": "economy_codebooks_cash_desks",
+            "group": "payment"
+        },
+        {
             "id": "payment_reference",
             "name": "Payment reference",
             "name:cs": "Variabilní symbol",
@@ -661,6 +691,13 @@
             "id": "idx_partner",
             "type": "index",
             "columns": [{"column": "partner"}]
+        },
+
+        // doklady pokladny (pokladní kniha, hotově placené faktury)
+        {
+            "id": "idx_cash_desk",
+            "type": "index",
+            "columns": [{"column": "cash_desk"}]
         },
 
         // dates for reports

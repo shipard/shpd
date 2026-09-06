@@ -55,6 +55,29 @@
             "nullable": false,
             "group": "identity"
         },
+        // Vazba řady na entitu (docTypes[].series_binding). Vázaný typ
+        // "cash_desk" vyžaduje cash_desk a zakazuje warehouse (a zrcadlově);
+        // nevázaný typ musí mít obojí NULL — hlídá NumberSeriesDocument.
+        {
+            "id": "cash_desk",
+            "name": "Cash desk",
+            "name:cs": "Pokladna",
+            "name:en": "Cash desk",
+            "type": "int",
+            "nullable": true,
+            "reference": "economy_codebooks_cash_desks",
+            "group": "identity"
+        },
+        {
+            "id": "warehouse",
+            "name": "Warehouse",
+            "name:cs": "Sklad",
+            "name:en": "Warehouse",
+            "type": "int",
+            "nullable": true,
+            "reference": "economy_codebooks_warehouses",
+            "group": "identity"
+        },
         {
             "id": "name",
             "name": "Series name",
@@ -159,6 +182,23 @@
             "id": "idx_doc_type",
             "type": "index",
             "columns": [{"column": "doc_type"}]
+        },
+        // lookup „řady pokladny X / skladu Y typu Z" (provisioner, denormalizace)
+        {
+            "id": "idx_binding_cash_desk",
+            "type": "index",
+            "columns": [
+                {"column": "doc_type"},
+                {"column": "cash_desk"}
+            ]
+        },
+        {
+            "id": "idx_binding_warehouse",
+            "type": "index",
+            "columns": [
+                {"column": "doc_type"},
+                {"column": "warehouse"}
+            ]
         },
         {
             "id": "idx_doc_state",

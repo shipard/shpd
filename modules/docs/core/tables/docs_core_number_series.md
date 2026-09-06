@@ -14,8 +14,20 @@ Stavy: standardní `core.system.docStatesArchive` (Koncept → V pořádku
 | Sloupec | Typ | Popis |
 |---|---|---|
 | `doc_type` | enumString(20) → `docs.core.docTypes` | Typ dokladu (`invno`, `invni`, …) |
+| `cash_desk` | int, nullable → `economy_codebooks_cash_desks` | Pokladna — povinná pro typ s `series_binding: cash_desk`, jinak NULL |
+| `warehouse` | int, nullable → `economy_codebooks_warehouses` | Sklad — povinný pro typ s `series_binding: warehouse`, jinak NULL |
 | `name` | varchar(100) | Lidský název řady |
 | `notice` | varchar(250), nullable | Volná poznámka |
+
+### Řady vázané na entitu
+
+Typ dokladu může v `docs.core.docTypes` deklarovat `series_binding`
+(`cash_desk` | `warehouse`). Řada takového typu **musí** mít vyplněný
+odpovídající FK a druhý NULL; řada nevázaného typu musí mít oba NULL.
+Vazba se při uložení dokladu denormalizuje z řady do hlavičky
+(`docs_core_heads.cash_desk`) a přepíše, co poslal klient — stejně jako
+`doc_type`. Změna pokladny pod existujícími doklady nedává smysl, formulář
+ji po založení řady nabízí jen ke čtení.
 
 ### `numbering`
 
@@ -61,6 +73,9 @@ Implementováno v `NumberSeriesDocument::validate`:
 ## Indexy
 
 - `idx_doc_type` — `(doc_type)`, lookup per typ
+- `idx_binding_cash_desk` — `(doc_type, cash_desk)`, „řady pokladny X typu Y"
+  (provisioner, denormalizace, import)
+- `idx_binding_warehouse` — `(doc_type, warehouse)`, totéž pro sklad
 - `idx_doc_state` — `(docStateMain ASC, name ASC)`, viewer řazení
 
 ## Provisioner

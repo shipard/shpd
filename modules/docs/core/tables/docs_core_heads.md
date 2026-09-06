@@ -15,6 +15,7 @@ nastavuje se v `DocDocument::beforeSave` a má příznak `system: true`.
 |---|---|---|
 | `doc_type` | enumString(20), system | Typ dokladu, denormalizovaný z řady |
 | `number_series` | int → `docs_core_number_series` | Řada, ze které pochází číslo |
+| `cash_dir` | enumInt → `docs.core.cashDirections`, default 0 | Směr pokladního dokladu: 0 nepoužito (faktury, cmnbkp), 1 příjem, 2 výdej. Typ s `trade_dir_column: cash_dir` z něj odvozuje směr obchodu (`DocDocument::resolveTradeDir`: 1 → my dodavatel, 2 → my odběratel); ostatní typy musí mít 0. |
 | `sequence_number` | int, nullable, system | Pořadové číslo v řadě, NULL pro Koncept |
 | `doc_number` | varchar(40), system | Resolvované číslo dokladu (`126A0001`) nebo placeholder `!{id_padded}` u Konceptu |
 | `doc_text` | varchar(200), nullable | Volný popisný text |
@@ -63,8 +64,22 @@ Sumace plněné v `beforeSave` ve Fázi 2. Doc currency: `total_base`,
 ### `payment`
 
 `payment_method`, `bank_account` (náš účet, vazba na
-`economy_codebooks_bank_accounts`), `payment_reference`, `specific_symbol`,
-`constant_symbol`.
+`economy_codebooks_bank_accounts`), `cash_desk`, `payment_reference`,
+`specific_symbol`, `constant_symbol`.
+
+`cash_desk` (int, nullable → `economy_codebooks_cash_desks`, index
+`idx_cash_desk`) má dvojí režim podle typu dokladu:
+
+- typ s `series_binding: cash_desk` — **systémový**: denormalizuje se z řady
+  (`DocDocument::denormalizeFromSeries`) bez ohledu na payload, řada bez
+  pokladny je chyba `series_binding_missing`;
+- ostatní typy (faktury) — uživatelský: smí být vyplněný jen při
+  `payment_method = 0` (Hotovost), jinak chyba
+  `cash_desk_requires_cash_payment`. Formulář pole ukazuje jen při
+  Hotovosti a nabízí výchozí pokladnu (`is_default`) měny dokladu.
+
+Sloupec proto nemá `system: true` — systémovost pro vázané typy vynucuje
+`DocDocument`, stejně jako u `doc_type`.
 
 ### `lineage` — system
 

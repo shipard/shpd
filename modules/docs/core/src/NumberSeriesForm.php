@@ -19,6 +19,11 @@ class NumberSeriesForm extends TableForm
         $docTypeOptions    = $this->resolveOptions('docs.core.docTypes');
         $resetScopeOptions = $this->resolveOptions('docs.core.resetScopes');
 
+        // Vazba na entitu: pole jen pro typ s odpovídajícím series_binding,
+        // po založení řady jen ke čtení (změna pokladny pod doklady nedává
+        // smysl — řady z provisioneru i ruční).
+        $binding = $this->resolveSeriesBinding((string) ($data['doc_type'] ?? ''));
+
         $basic = $this->tab('basic', $this->defaultGeneralTabLabel())
             ->section()
                 ->col()
@@ -29,6 +34,20 @@ class NumberSeriesForm extends TableForm
                         triggers: 'reload',
                         required: true,
                         readOnly: !$isNew,
+                    )
+                    ->lookup('cash_desk',
+                        table: 'economy_codebooks_cash_desks',
+                        required: $binding === 'cash_desk',
+                        readOnly: !$isNew,
+                        hidden: $binding !== 'cash_desk',
+                        triggers: 'reload',
+                    )
+                    ->lookup('warehouse',
+                        table: 'economy_codebooks_warehouses',
+                        required: $binding === 'warehouse',
+                        readOnly: !$isNew,
+                        hidden: $binding !== 'warehouse',
+                        triggers: 'reload',
                     )
                     ->input('doc_number_code')
                     ->input('doc_number_pattern', required: true, readOnly: !$isNew)
@@ -66,10 +85,44 @@ class NumberSeriesForm extends TableForm
                     $data['name'] = (string) $entry['name'];
                 }
             }
+
+            // Cascading reset: vazba patřila k předchozímu typu (jiný
+            // series_binding) — skrytá vyplněná hodnota by padla ve validaci.
+            foreach (array_keys(NumberSeriesDocument::BINDINGS) as $column) {
+                $data[$column] = null;
+            }
+        }
+
+        // Výběr entity: kód řady = kód entity (konvence provisioneru,
+        // %C ve vzorci), jen když je kód ještě prázdný.
+        if (isset(NumberSeriesDocument::BINDINGS[$changedColumn])
+            && !empty($data[$changedColumn])
+            && empty($data['doc_number_code'])
+            && $this->db !== null
+        ) {
+            $table = NumberSeriesDocument::BINDINGS[$changedColumn]['table'];
+            $row = $this->db->fetchRow(
+                'SELECT `code` FROM `' . $table . '` WHERE `id` = %i',
+                (int) $data[$changedColumn],
+            );
+            if ($row !== null && !empty($row['code'])) {
+                $data['doc_number_code'] = (string) $row['code'];
+            }
         }
 
         $isNew = empty($data['id']);
         return new RecalculateResult($this->buildFormDefinition($data, $isNew), $data);
+    }
+
+    /** `series_binding` typu dokladu z cfg; null = nevázaný / neznámý typ. */
+    private function resolveSeriesBinding(string $docType): ?string
+    {
+        if ($docType === '' || $this->config === null) {
+            return null;
+        }
+        $docTypes = $this->config->cfgItem('docs.core.docTypes');
+        $binding = is_array($docTypes) ? ($docTypes[$docType]['series_binding'] ?? null) : null;
+        return is_string($binding) && $binding !== '' ? $binding : null;
     }
 
     /**

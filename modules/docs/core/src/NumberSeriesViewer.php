@@ -23,8 +23,9 @@ class NumberSeriesViewer extends TableViewer
 
     public function selectRows(?string $search, array $filters, int $pageNumber): array
     {
-        $sql = 'SELECT `id`, `doc_type`, `name`, `doc_number_code`, `doc_number_pattern`,'
-            . ' `reset_scope`, `valid_from`, `valid_to`, `notice`, `docState`, `docStateMain`'
+        $sql = 'SELECT `id`, `doc_type`, `cash_desk`, `warehouse`, `name`, `doc_number_code`,'
+            . ' `doc_number_pattern`, `reset_scope`, `valid_from`, `valid_to`, `notice`,'
+            . ' `docState`, `docStateMain`'
             . ' FROM `' . $this->table . '`';
 
         $conditions = [];
@@ -62,7 +63,44 @@ class NumberSeriesViewer extends TableViewer
         [$offset, $limit] = $this->buildPaginationLimit($pageNumber);
         $sql .= ' LIMIT ' . $offset . ', ' . $limit;
 
-        return $this->db->fetchAll($sql, ...$params);
+        return $this->attachBindingCodes($this->db->fetchAll($sql, ...$params));
+    }
+
+    /**
+     * Doplní do řádků `cash_desk_code` / `warehouse_code` (dva hromadné
+     * dotazy místo JOINu — viewGroup/search podmínky používají neprefixované
+     * sloupce a `name` mají všechny tři tabulky).
+     *
+     * @param list<array<string, mixed>> $rows
+     * @return list<array<string, mixed>>
+     */
+    private function attachBindingCodes(array $rows): array
+    {
+        foreach (NumberSeriesDocument::BINDINGS as $column => $meta) {
+            $ids = [];
+            foreach ($rows as $row) {
+                if (!empty($row[$column])) {
+                    $ids[] = (int) $row[$column];
+                }
+            }
+            $codes = [];
+            if ($ids !== []) {
+                $entities = $this->db->fetchAll(
+                    'SELECT `id`, `code` FROM `' . $meta['table'] . '` WHERE `id` IN %in',
+                    array_values(array_unique($ids)),
+                );
+                foreach ($entities as $entity) {
+                    $codes[(int) $entity['id']] = (string) $entity['code'];
+                }
+            }
+            foreach ($rows as &$row) {
+                $row[$column . '_code'] = !empty($row[$column])
+                    ? ($codes[(int) $row[$column]] ?? null)
+                    : null;
+            }
+            unset($row);
+        }
+        return $rows;
     }
 
     public function renderRow(array $rowData): array
@@ -78,6 +116,12 @@ class NumberSeriesViewer extends TableViewer
         $t2 = [];
         if ($docTypeLabel !== '') {
             $t2[] = ['text' => $docTypeLabel];
+        }
+        if (!empty($rowData['cash_desk_code'])) {
+            $t2[] = ['text' => 'Pokladna ' . $rowData['cash_desk_code'], 'class' => 'muted'];
+        }
+        if (!empty($rowData['warehouse_code'])) {
+            $t2[] = ['text' => 'Sklad ' . $rowData['warehouse_code'], 'class' => 'muted'];
         }
         if (!empty($rowData['doc_number_pattern'])) {
             $t2[] = ['text' => (string) $rowData['doc_number_pattern'], 'class' => 'muted'];
@@ -147,6 +191,8 @@ class NumberSeriesViewer extends TableViewer
             'Typ dokladu',
             $this->resolveDocTypeLabel((string) ($record['doc_type'] ?? '')),
         );
+        $this->addItem($identityItems, 'Pokladna', $this->resolveBindingLabel('cash_desk', $record));
+        $this->addItem($identityItems, 'Sklad', $this->resolveBindingLabel('warehouse', $record));
         $this->addItem($identityItems, 'Poznámka', $record['notice'] ?? null);
 
         $numberingItems = [];
@@ -190,6 +236,23 @@ class NumberSeriesViewer extends TableViewer
             return $key;
         }
         return (string) $cfg[$key]['name'];
+    }
+
+    /** `kód — název` vázané entity řady, null bez vazby / při visícím FK. */
+    private function resolveBindingLabel(string $column, array $record): ?string
+    {
+        $id = (int) ($record[$column] ?? 0);
+        if ($id <= 0 || !isset(NumberSeriesDocument::BINDINGS[$column])) {
+            return null;
+        }
+        $row = $this->db->fetchRow(
+            'SELECT `code`, `name` FROM `' . NumberSeriesDocument::BINDINGS[$column]['table'] . '` WHERE `id` = %i',
+            $id,
+        );
+        if ($row === null) {
+            return null;
+        }
+        return trim((string) ($row['code'] ?? '')) . ' — ' . trim((string) ($row['name'] ?? ''));
     }
 
     private function resolveResetScopeLabel(string $key): string

@@ -142,6 +142,14 @@
         {
             "table": "economy_codebooks_bank_accounts",
             "class": "Shipard\\Module\\Economy\\Codebooks\\BankAccountsLookup"
+        },
+        {
+            "table": "economy_codebooks_cash_desks",
+            "class": "Shipard\\Module\\Economy\\Codebooks\\CashDesksLookup"
+        },
+        {
+            "table": "economy_codebooks_warehouses",
+            "class": "Shipard\\Module\\Economy\\Codebooks\\WarehousesLookup"
         }
     ],
 

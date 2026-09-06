@@ -4,14 +4,73 @@ declare(strict_types=1);
 
 namespace Shipard\Tests\Unit\Module\Docs\Core;
 
+use Dibi\Connection;
+use Dibi\Row;
 use PHPUnit\Framework\TestCase;
+use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Module\Docs\Core\NumberSeriesDocument;
 
 class NumberSeriesDocumentTest extends TestCase
 {
+    private ?string $tmpDir = null;
+
+    protected function tearDown(): void
+    {
+        if ($this->tmpDir !== null && is_dir($this->tmpDir)) {
+            $this->removeDir($this->tmpDir);
+        }
+    }
+
+    private function removeDir(string $path): void
+    {
+        foreach (scandir($path) ?: [] as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+            $full = "$path/$entry";
+            is_dir($full) ? $this->removeDir($full) : unlink($full);
+        }
+        rmdir($path);
+    }
+
     private function doc(): NumberSeriesDocument
     {
         return new NumberSeriesDocument();
+    }
+
+    /**
+     * Document s cfg docTypes: `invno` nevázaný, syntetické `cashb` vázané
+     * na pokladnu a `whs` vázané na sklad.
+     */
+    private function docWithBindings(?Connection $db = null): NumberSeriesDocument
+    {
+        $this->tmpDir = sys_get_temp_dir() . '/shpd_test_' . uniqid();
+        mkdir($this->tmpDir . '/config/configuration', 0755, true);
+        $docTypes = [
+            'invno' => ['name' => 'Faktura vydaná', 'trade_dir' => 1],
+            'cashb' => ['name' => 'Pokladní doklad', 'trade_dir' => 0, 'series_binding' => 'cash_desk'],
+            'whs'   => ['name' => 'Skladový doklad', 'trade_dir' => 0, 'series_binding' => 'warehouse'],
+        ];
+        file_put_contents(
+            $this->tmpDir . '/config/configuration/compiled.cs.json',
+            json_encode(['_meta' => ['language' => 'cs'], 'items' => ['docs.core.docTypes' => $docTypes]]),
+        );
+
+        $doc = new NumberSeriesDocument();
+        $doc->setConfig(ConfigRuntime::load($this->tmpDir, 'cs'));
+        if ($db !== null) {
+            $doc->setDb($db);
+        }
+        return $doc;
+    }
+
+    /** @return list<array{column: string, code: string}> */
+    private function errorsFor(NumberSeriesDocument $doc, array $data, string $column): array
+    {
+        return array_values(array_filter(
+            $doc->validate($data)->toArray(),
+            fn(array $e) => $e['column'] === $column,
+        ));
     }
 
     /** @return array<string, mixed> */
@@ -162,5 +221,105 @@ class NumberSeriesDocumentTest extends TestCase
 
         $result = $this->doc()->validate($data);
         $this->assertTrue($result->isValid());
+    }
+
+    // ── series_binding ──────────────────────────────────────────────────────
+
+    public function testBoundTypeRequiresCashDesk(): void
+    {
+        $data = $this->validData();
+        $data['doc_type'] = 'cashb';
+
+        $errors = $this->errorsFor($this->docWithBindings(), $data, 'cash_desk');
+
+        $this->assertCount(1, $errors);
+        $this->assertSame('required', $errors[0]['code']);
+    }
+
+    public function testBoundTypeWithCashDeskIsValidWithoutDb(): void
+    {
+        $data = $this->validData();
+        $data['doc_type']  = 'cashb';
+        $data['cash_desk'] = 7;
+
+        $this->assertTrue($this->docWithBindings()->validate($data)->isValid());
+    }
+
+    public function testBoundCashDeskTypeRejectsWarehouse(): void
+    {
+        $data = $this->validData();
+        $data['doc_type']  = 'cashb';
+        $data['cash_desk'] = 7;
+        $data['warehouse'] = 3;
+
+        $errors = $this->errorsFor($this->docWithBindings(), $data, 'warehouse');
+
+        $this->assertCount(1, $errors);
+        $this->assertSame('binding_not_allowed', $errors[0]['code']);
+    }
+
+    public function testWarehouseBindingIsMirrored(): void
+    {
+        $data = $this->validData();
+        $data['doc_type'] = 'whs';
+
+        $doc = $this->docWithBindings();
+        $this->assertSame('required', $this->errorsFor($doc, $data, 'warehouse')[0]['code']);
+
+        $data['warehouse'] = 3;
+        $data['cash_desk'] = 7;
+        $this->assertSame('binding_not_allowed', $this->errorsFor($doc, $data, 'cash_desk')[0]['code']);
+
+        unset($data['cash_desk']);
+        $this->assertTrue($doc->validate($data)->isValid());
+    }
+
+    public function testUnboundTypeRejectsAnyBinding(): void
+    {
+        $data = $this->validData();
+        $data['cash_desk'] = 7;
+
+        $errors = $this->errorsFor($this->docWithBindings(), $data, 'cash_desk');
+
+        $this->assertCount(1, $errors);
+        $this->assertSame('binding_not_allowed', $errors[0]['code']);
+    }
+
+    public function testUnboundTypeWithNullBindingsIsValid(): void
+    {
+        $data = $this->validData();
+        $data['cash_desk'] = null;
+        $data['warehouse'] = null;
+
+        $this->assertTrue($this->docWithBindings()->validate($data)->isValid());
+    }
+
+    public function testBoundTypeRejectsMissingOrDeletedCashDesk(): void
+    {
+        $data = $this->validData();
+        $data['doc_type']  = 'cashb';
+        $data['cash_desk'] = 7;
+
+        $missing = $this->createMock(Connection::class);
+        $missing->method('fetch')->willReturn(null);
+        $errors = $this->errorsFor($this->docWithBindings($missing), $data, 'cash_desk');
+        $this->assertSame('not_found', $errors[0]['code']);
+
+        $deleted = $this->createMock(Connection::class);
+        $deleted->method('fetch')->willReturn(new Row(['docState' => 90]));
+        $errors = $this->errorsFor($this->docWithBindings($deleted), $data, 'cash_desk');
+        $this->assertSame('invalid_state', $errors[0]['code']);
+
+        $active = $this->createMock(Connection::class);
+        $active->method('fetch')->willReturn(new Row(['docState' => 40]));
+        $this->assertTrue($this->docWithBindings($active)->validate($data)->isValid());
+    }
+
+    public function testWithoutConfigBindingIsNotChecked(): void
+    {
+        $data = $this->validData();
+        $data['cash_desk'] = 7;
+
+        $this->assertTrue($this->doc()->validate($data)->isValid());
     }
 }

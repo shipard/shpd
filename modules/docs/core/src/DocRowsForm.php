@@ -391,6 +391,7 @@ class DocRowsForm extends TableForm
      *     vat_duzp: ?string,
      *     vat_mode: int,
      *     doc_type: string,
+     *     cash_dir: int,
      *     vat_place: int,
      * }|null
      */
@@ -410,6 +411,7 @@ class DocRowsForm extends TableForm
 
         $context = [
             'doc_type'  => (string) ($head['doc_type'] ?? ''),
+            'cash_dir'  => (int) ($head['cash_dir'] ?? 0),
             'vat_place' => (int) ($head['vat_place'] ?? 0),
             'vat_duzp'  => $head['vat_duzp'] ?? null,
             'vat_mode'  => (int) ($head['vat_mode'] ?? 1),
@@ -500,9 +502,10 @@ class DocRowsForm extends TableForm
     }
 
     /**
-     * Options pohybů filtrované podle `doc_type` hlavičky, řazené dle
-     * `docTypes[docType].order` vzestupně (první = default pro nový řádek).
-     * `name` z cfgItem je už lokalizované compiled configem.
+     * Options pohybů filtrované podle `doc_type` hlavičky (a u pokladního
+     * dokladu podle `cash_dir` — pohyb s `cashDir` se nabízí jen pro shodný
+     * směr), řazené dle `docTypes[docType].order` vzestupně (první = default
+     * pro nový řádek). `name` z cfgItem je už lokalizované compiled configem.
      *
      * @param array<string, mixed>|null $headContext
      * @return list<array{value: string, label: string}>
@@ -517,6 +520,7 @@ class DocRowsForm extends TableForm
         if (!is_array($cfg)) {
             return [];
         }
+        $cashDir = (int) ($headContext['cash_dir'] ?? 0);
 
         $entries = [];
         foreach ($cfg as $key => $entry) {
@@ -525,6 +529,9 @@ class DocRowsForm extends TableForm
             }
             $docTypeAttrs = $entry['docTypes'][$docType] ?? null;
             if (!is_array($docTypeAttrs)) {
+                continue;
+            }
+            if (isset($docTypeAttrs['cashDir']) && (int) $docTypeAttrs['cashDir'] !== $cashDir) {
                 continue;
             }
             $entries[] = [

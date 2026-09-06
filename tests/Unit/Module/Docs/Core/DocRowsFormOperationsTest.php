@@ -42,11 +42,32 @@ class DocRowsFormOperationsTest extends TestCase
             'docs.core.rowOperations' => [
                 // schválně přeházené pořadí — řadí se podle order, ne klíče
                 'acc.entry' => ['name' => 'Účetní položka', 'docTypes' => [
-                    'invno' => ['order' => 900], 'invni' => ['order' => 900],
+                    'invno' => ['order' => 900], 'invni' => ['order' => 900], 'cash' => ['order' => 900],
                 ]],
-                'sale.goods'    => ['name' => 'Prodej zboží',  'docTypes' => ['invno' => ['order' => 200]]],
-                'sale.services' => ['name' => 'Prodej služeb', 'docTypes' => ['invno' => ['order' => 100]]],
-                'purchase.goods' => ['name' => 'Nákup zboží', 'docTypes' => ['invni' => ['order' => 100]]],
+                'sale.goods'    => ['name' => 'Prodej zboží',  'docTypes' => [
+                    'invno' => ['order' => 200], 'cash' => ['order' => 200, 'cashDir' => 1],
+                ]],
+                'sale.services' => ['name' => 'Prodej služeb', 'docTypes' => [
+                    'invno' => ['order' => 100], 'cash' => ['order' => 100, 'cashDir' => 1],
+                ]],
+                'purchase.goods' => ['name' => 'Nákup zboží', 'docTypes' => [
+                    'invni' => ['order' => 100], 'cash' => ['order' => 100, 'cashDir' => 2],
+                ]],
+                'payment.receivable' => [
+                    'name' => 'Úhrada pohledávky',
+                    'rowSide' => 0, 'rowPartner' => 1, 'rowPaymentId' => 1, 'identityRequired' => 1,
+                    'docTypes' => ['cash' => ['order' => 300, 'cashDir' => 1]],
+                ],
+                'payment.payable' => [
+                    'name' => 'Úhrada závazku',
+                    'rowSide' => 0, 'rowPartner' => 1, 'rowPaymentId' => 1, 'identityRequired' => 1,
+                    'docTypes' => ['cash' => ['order' => 400, 'cashDir' => 2]],
+                ],
+            ],
+            'docs.core.docTypes' => [
+                'invno' => ['trade_dir' => 1],
+                'invni' => ['trade_dir' => 2],
+                'cash'  => ['trade_dir' => 0, 'trade_dir_column' => 'cash_dir', 'series_binding' => 'cash_desk'],
             ],
             'docs.core.rowKinds' => [
                 '0' => ['name' => 'Textový řádek'],
@@ -60,11 +81,12 @@ class DocRowsFormOperationsTest extends TestCase
         return ConfigRuntime::load($this->tmpDir, 'cs');
     }
 
-    private function dbWithHead(string $docType): DataSourceConnection
+    private function dbWithHead(string $docType, int $cashDir = 0): DataSourceConnection
     {
         $db = $this->createMock(DataSourceConnection::class);
         $db->method('fetchRow')->willReturn([
             'doc_type'  => $docType,
+            'cash_dir'  => $cashDir,
             'vat_place' => 0,
             'vat_duzp'  => null,
             'vat_mode'  => 1,
@@ -74,11 +96,11 @@ class DocRowsFormOperationsTest extends TestCase
         return $db;
     }
 
-    private function form(string $docType): DocRowsForm
+    private function form(string $docType, int $cashDir = 0): DocRowsForm
     {
         $form = new DocRowsForm('docs_core_rows');
         $form->setConfig($this->buildConfig());
-        $form->setDb($this->dbWithHead($docType));
+        $form->setDb($this->dbWithHead($docType, $cashDir));
         return $form;
     }
 
@@ -162,5 +184,49 @@ class DocRowsFormOperationsTest extends TestCase
         $result = $this->form('invno')->recalculate('row_kind', $data);
 
         $this->assertSame('sale.services', $result->data['operation']);
+    }
+
+    // ── Pokladní doklad: pohyby dle cash_dir ────────────────────────────────
+
+    public function testCashReceiptOffersOnlyReceiptOperations(): void
+    {
+        $data = ['row_kind' => 1, 'doc_head' => 5];
+        $def = $this->form('cash', cashDir: 1)->buildFormDefinition($data, true);
+
+        $el = $this->findElement($def, 'operation');
+        $this->assertSame(
+            ['sale.services', 'sale.goods', 'payment.receivable', 'acc.entry'],
+            array_column($el->options, 'value'),
+        );
+    }
+
+    public function testCashDisbursementOffersPurchaseOpsAndDefaultsToLowestOrder(): void
+    {
+        $data = ['row_kind' => 1, 'doc_head' => 5];
+        $form = $this->form('cash', cashDir: 2);
+        $def = $form->buildFormDefinition($data, true);
+
+        $el = $this->findElement($def, 'operation');
+        $this->assertSame(
+            ['purchase.goods', 'payment.payable', 'acc.entry'],
+            array_column($el->options, 'value'),
+        );
+
+        $form->applyNewRecordDefaults($data);
+        $this->assertSame('purchase.goods', $data['operation']);
+    }
+
+    public function testPaymentRowUsesContationLayoutWithoutVatOrSide(): void
+    {
+        $data = ['row_kind' => 1, 'doc_head' => 5, 'operation' => 'payment.receivable'];
+        $def = $this->form('cash', cashDir: 1)->buildFormDefinition($data, true);
+
+        $this->assertNull($this->findElement($def, 'vat_code'), 'úhrada je bez DPH bloku');
+        $this->assertNull($this->findElement($def, 'quantity'));
+        $this->assertNull($this->findElement($def, 'acc_side'), 'stranu nese krok předpisu');
+        $this->assertNotNull($this->findElement($def, 'total_price'));
+        $this->assertNotNull($this->findElement($def, 'partner'));
+        $this->assertNotNull($this->findElement($def, 'payment_reference'));
+        $this->assertTrue($this->findElement($def, 'price_calc_mode')->hidden);
     }
 }

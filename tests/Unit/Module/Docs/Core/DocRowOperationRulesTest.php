@@ -16,9 +16,82 @@ class DocRowOperationRulesTest extends TestCase
             'sale.services' => ['name' => 'Sale of services', 'docTypes' => ['invno' => ['order' => 100]]],
             'purchase.services' => ['name' => 'Purchase of services', 'docTypes' => ['invni' => ['order' => 200]]],
             'acc.entry' => ['name' => 'Accounting entry', 'docTypes' => [
-                'invno' => ['order' => 900], 'invni' => ['order' => 900],
+                'invno' => ['order' => 900], 'invni' => ['order' => 900], 'cash' => ['order' => 900],
             ]],
+            // pokladní doklad: pohyby per směr + saldokontní úhrada
+            'sale.goods' => ['name' => 'Sale of goods', 'docTypes' => ['cash' => ['order' => 200, 'cashDir' => 1]]],
+            'purchase.goods' => ['name' => 'Purchase of goods', 'docTypes' => ['cash' => ['order' => 100, 'cashDir' => 2]]],
+            'payment.receivable' => [
+                'name' => 'Receivable payment',
+                'rowSide' => 0, 'rowPartner' => 1, 'rowPaymentId' => 1, 'identityRequired' => 1,
+                'docTypes' => ['cash' => ['order' => 300, 'cashDir' => 1]],
+            ],
         ];
+    }
+
+    // ── cashDir (pokladní doklad, směr per doklad) ──────────────────────────
+
+    public function testCashDirMatchPasses(): void
+    {
+        $row = ['row_kind' => 1, 'operation' => 'sale.goods'];
+        $this->assertSame([], DocRowOperationRules::validateRow($row, 'cash', $this->cfg(), 1));
+    }
+
+    public function testCashDirMismatchFails(): void
+    {
+        $row = ['row_kind' => 1, 'operation' => 'purchase.goods'];
+        $errors = DocRowOperationRules::validateRow($row, 'cash', $this->cfg(), 1);
+
+        $this->assertCount(1, $errors);
+        $this->assertSame('operation', $errors[0]['column']);
+        $this->assertSame('operation_not_allowed_for_direction', $errors[0]['code']);
+    }
+
+    public function testOperationWithoutCashDirAllowsBothDirections(): void
+    {
+        $row = ['row_kind' => 1, 'operation' => 'acc.entry', 'item' => 3];
+        $this->assertSame([], DocRowOperationRules::validateRow($row, 'cash', $this->cfg(), 1));
+        $this->assertSame([], DocRowOperationRules::validateRow($row, 'cash', $this->cfg(), 2));
+    }
+
+    public function testUnknownOrZeroCashDirSkipsDirectionCheck(): void
+    {
+        // null = volající směr nezná (degradace), 0 = neplatný směr hlášený
+        // na hlavičce — per-řádkový duplikát by byl šum.
+        $row = ['row_kind' => 1, 'operation' => 'purchase.goods'];
+        $this->assertSame([], DocRowOperationRules::validateRow($row, 'cash', $this->cfg()));
+        $this->assertSame([], DocRowOperationRules::validateRow($row, 'cash', $this->cfg(), 0));
+    }
+
+    // ── identityRequired (saldokontní úhrady) ───────────────────────────────
+
+    public function testIdentityRequiredNeedsPartnerAndPaymentReference(): void
+    {
+        $row = ['row_kind' => 1, 'operation' => 'payment.receivable', 'total_price' => 1210];
+        $errors = DocRowOperationRules::validateRow($row, 'cash', $this->cfg(), 1);
+
+        $this->assertSame(
+            [['partner', 'partner_required'], ['payment_reference', 'payment_reference_required']],
+            array_map(fn(array $e) => [$e['column'], $e['code']], $errors),
+        );
+    }
+
+    public function testIdentityRequiredSatisfiedPasses(): void
+    {
+        $row = [
+            'row_kind' => 1, 'operation' => 'payment.receivable',
+            'partner' => 50, 'payment_reference' => '2026001',
+        ];
+        $this->assertSame([], DocRowOperationRules::validateRow($row, 'cash', $this->cfg(), 1));
+    }
+
+    public function testIdentityRequiredRejectsBlankReference(): void
+    {
+        $row = ['row_kind' => 1, 'operation' => 'payment.receivable', 'partner' => 50, 'payment_reference' => '  '];
+        $errors = DocRowOperationRules::validateRow($row, 'cash', $this->cfg(), 1);
+
+        $this->assertCount(1, $errors);
+        $this->assertSame('payment_reference_required', $errors[0]['code']);
     }
 
     public function testStandardRowWithValidOperationPasses(): void

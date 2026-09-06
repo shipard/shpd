@@ -35,13 +35,13 @@ class DocRowsDocument extends Document
     {
         $result = new ValidationResult();
 
-        $docType = $this->loadHeadDocType($data['doc_head'] ?? null);
+        $head = $this->loadHeadContext($data['doc_head'] ?? null);
         $cfg = $this->config?->cfgItem('docs.core.rowOperations');
-        if ($docType === null || !is_array($cfg)) {
+        if ($head === null || !is_array($cfg)) {
             return $result;
         }
 
-        foreach (DocRowOperationRules::validateRow($data, $docType, $cfg) as $err) {
+        foreach (DocRowOperationRules::validateRow($data, $head['doc_type'], $cfg, $head['cash_dir']) as $err) {
             $result->addError($err['column'], $err['message'], $err['code']);
         }
         return $result;
@@ -80,17 +80,26 @@ class DocRowsDocument extends Document
         return (int) ($max ?: 0) + 1;
     }
 
-    private function loadHeadDocType(mixed $headId): ?string
+    /**
+     * Typ a směr hlavičky pro validaci pohybu (cash_dir filtruje pohyby
+     * pokladního dokladu, u ostatních typů je 0).
+     *
+     * @return array{doc_type: string, cash_dir: int}|null
+     */
+    private function loadHeadContext(mixed $headId): ?array
     {
         if ($headId === null || $headId === '' || $this->db === null) {
             return null;
         }
         $row = $this->db->fetch(
-            'SELECT [doc_type] FROM [docs_core_heads] WHERE [id] = %i',
+            'SELECT [doc_type], [cash_dir] FROM [docs_core_heads] WHERE [id] = %i',
             (int) $headId,
         );
         $docType = $row !== null ? (string) ($row['doc_type'] ?? '') : '';
-        return $docType !== '' ? $docType : null;
+        if ($docType === '') {
+            return null;
+        }
+        return ['doc_type' => $docType, 'cash_dir' => (int) ($row['cash_dir'] ?? 0)];
     }
 
     public function afterSave(array $data): void

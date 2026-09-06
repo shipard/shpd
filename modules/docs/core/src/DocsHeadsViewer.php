@@ -631,7 +631,7 @@ class DocsHeadsViewer extends TableViewer
             return [$supplier, $customer];
         }
 
-        if ($this->resolveTradeDir($record) === 1) {
+        if (DocDocument::resolveTradeDir($record, $this->config) === 1) {
             if ($customer !== null) {
                 $customer['person_id'] = $partnerId;
             }

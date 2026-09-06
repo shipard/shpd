@@ -35,9 +35,12 @@ final class DocRowOperationRules
     /**
      * @param array<string, mixed> $row
      * @param array<string, mixed> $cfgOperations cfgItem docs.core.rowOperations
+     * @param ?int $cashDir  cash_dir hlavičky (1 příjem / 2 výdej); 0 = typ bez
+     *                       směru per doklad, null = volající ho nezná
+     *                       (degradovaně se kontrola směru přeskočí)
      * @return list<array{column: string, message: string, code: string}>
      */
-    public static function validateRow(array $row, string $docType, array $cfgOperations): array
+    public static function validateRow(array $row, string $docType, array $cfgOperations, ?int $cashDir = null): array
     {
         $rowKind = (int) ($row['row_kind'] ?? 1);
         $operation = trim((string) ($row['operation'] ?? ''));
@@ -77,6 +80,21 @@ final class DocRowOperationRules
             ]];
         }
 
+        // Směr per doklad (cash): pohyb s cashDir je povolený jen při shodném
+        // cash_dir hlavičky. Neplatný cash_dir (0 u typu se směrem) hlásí
+        // DocDocument::validateBindingAndDirection na hlavičce — tady by
+        // per-řádkové duplikáty byly šum, proto se 0 i null přeskakují.
+        $requiredDir = $entry['docTypes'][$docType]['cashDir'] ?? null;
+        if ($requiredDir !== null && $cashDir !== null && $cashDir !== 0
+            && (int) $requiredDir !== $cashDir
+        ) {
+            return [[
+                'column'  => 'operation',
+                'message' => 'Pohyb není povolen pro tento směr pokladního dokladu',
+                'code'    => 'operation_not_allowed_for_direction',
+            ]];
+        }
+
         if ($operation === self::OPERATION_ACC_ENTRY && empty($row['item'])) {
             return [[
                 'column'  => 'item',
@@ -85,6 +103,25 @@ final class DocRowOperationRules
             ]];
         }
 
-        return [];
+        // Saldokontní úhrady: bez partnera a VS nemá accbal co párovat.
+        $errors = [];
+        if (!empty($entry['identityRequired'])) {
+            if (empty($row['partner'])) {
+                $errors[] = [
+                    'column'  => 'partner',
+                    'message' => 'Úhrada musí mít partnera (dlužníka / věřitele)',
+                    'code'    => 'partner_required',
+                ];
+            }
+            if (trim((string) ($row['payment_reference'] ?? '')) === '') {
+                $errors[] = [
+                    'column'  => 'payment_reference',
+                    'message' => 'Úhrada musí mít variabilní symbol / číslo hrazeného dokladu',
+                    'code'    => 'payment_reference_required',
+                ];
+            }
+        }
+
+        return $errors;
     }
 }

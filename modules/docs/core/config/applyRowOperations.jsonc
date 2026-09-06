@@ -10,6 +10,9 @@
     // Kódy musí existovat v docs.core.rowOperations a být povolené pro
     // daný docType — parita hlídaná testem (ApplyRowOperationsParityTest).
     // docType bez záznamu = žádné doplňování (operation zůstává null).
+    // Pokladní doklad (cash) záznam nemá záměrně: pohyby závisejí na směru
+    // (cash_dir) a mapa osu směru nemá; import (old_shipard runner) posílá
+    // operation explicitně, AI apply pokladní doklady netvoří.
     "invni": {
         "byItemType": {
             "0": "purchase.services",   // Služba
@@ -27,5 +30,13 @@
             // 3 (Ostatní): invno nemá sale.other → spadne na default
         },
         "default": "sale.services"
+    },
+    "cashreg": {
+        "byItemType": {
+            "0": "sale.services",
+            "1": "sale.goods",
+            "2": "acc.entry"
+        },
+        "default": "sale.goods"
     }
 }

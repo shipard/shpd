@@ -232,8 +232,9 @@ abstract class DocDocument extends Document
             return;
         }
 
+        $cashDir = (int) ($data['cash_dir'] ?? 0);
         foreach ($this->resolveRowsForCompute($data) as $i => $row) {
-            foreach (DocRowOperationRules::validateRow($row, $docType, $cfg) as $err) {
+            foreach (DocRowOperationRules::validateRow($row, $docType, $cfg, $cashDir) as $err) {
                 $result->addError("rows.{$i}.{$err['column']}", $err['message'], $err['code']);
             }
         }

@@ -4,6 +4,12 @@
     // Pohyby řádků dokladů. Klíč = stabilní stringový identifikátor.
     // docTypes: pro které typy dokladů je pohyb povolený; order určuje
     // pořadí v nabídce UI (vzestupně, první = default pro nový řádek).
+    //   cashDir: 1 | 2  — jen u typu se směrem per doklad (cash): pohyb je
+    //                     povolený jen při daném cash_dir hlavičky (1 příjem,
+    //                     2 výdej). Chybí = povolený pro oba směry. Nabídka
+    //                     ve formuláři i tvrdá validace (DocRowOperationRules)
+    //                     filtrují podle něj; default nového řádku = nejnižší
+    //                     order pro daný směr.
     //
     // Vlajky per-řádkové identity (čte je AccountingEngine ve Fázi 2):
     //   rowPartner: 1   — řádek nese vlastního partnera (engine ho razítkuje
@@ -11,6 +17,9 @@
     //   rowPaymentId: 1 — řádek nese vlastní platební identitu
     //                     (payment_reference / specific_symbol /
     //                     constant_symbol / due_date), jinak z hlavičky.
+    //   identityRequired: 1 — partner řádku a payment_reference jsou tvrdě
+    //                     povinné (saldokontní úhrady: bez nich accbal nemá
+    //                     co párovat). Vyžaduje rowPartner + rowPaymentId.
     //
     // Forma-facing atributy (řídí vstupy formuláře — protějšky accountSrc /
     // sideSrc z účtovacího předpisu, musí souhlasit):
@@ -23,7 +32,10 @@
     //   rowSide: 0           — kontační layout, ale BEZ volby strany: stranu
     //                          nesou fixní kroky předpisu (side na kroku),
     //                          částky řádků kladné — směr = volba operace
-    //                          (kurzové rozdíly). Vlajka chybí = položkový
+    //                          (kurzové rozdíly, saldokontní úhrady
+    //                          payment.*). Řádek je bez DPH bloku (vat_code
+    //                          prázdný → mimo rekapitulaci, do součtu
+    //                          dokladu se přičte). Vlajka chybí = položkový
     //                          layout.
     //   selfBalancing: 1     — kroky předpisu pokrývají OBĚ strany (jeden
     //                          řádek → MD i DAL stejnou částkou, FX čtveřice).
@@ -45,7 +57,9 @@
         "name:cs": "Prodej služeb",
         "name:en": "Sale of services",
         "docTypes": {
-            "invno": {"order": 100}
+            "invno": {"order": 100},
+            "cash": {"order": 100, "cashDir": 1},
+            "cashreg": {"order": 100}
         }
     },
     "sale.goods": {
@@ -53,7 +67,9 @@
         "name:cs": "Prodej zboží",
         "name:en": "Sale of goods",
         "docTypes": {
-            "invno": {"order": 200}
+            "invno": {"order": 200},
+            "cash": {"order": 200, "cashDir": 1},
+            "cashreg": {"order": 200}
         }
     },
     "purchase.goods": {
@@ -61,7 +77,8 @@
         "name:cs": "Nákup zboží a materiálu",
         "name:en": "Purchase of goods",
         "docTypes": {
-            "invni": {"order": 100}
+            "invni": {"order": 100},
+            "cash": {"order": 100, "cashDir": 2}
         }
     },
     "purchase.services": {
@@ -69,7 +86,8 @@
         "name:cs": "Nákup služeb",
         "name:en": "Purchase of services",
         "docTypes": {
-            "invni": {"order": 200}
+            "invni": {"order": 200},
+            "cash": {"order": 200, "cashDir": 2}
         }
     },
     "purchase.other": {
@@ -77,7 +95,41 @@
         "name:cs": "Ostatní nákup",
         "name:en": "Other purchase",
         "docTypes": {
-            "invni": {"order": 300}
+            "invni": {"order": 300},
+            "cash": {"order": 300, "cashDir": 2}
+        }
+    },
+
+    // Úhrady saldokonta hotově/kartou na pokladním dokladu (#59 D7) —
+    // protějšek bankovních spárovaných úhrad (kategorie bank.matched.*):
+    // partner řádku = dlužník/věřitel, payment_reference = VS / číslo hrazené
+    // faktury; deník pak vypadá jako bankovní úhrada a accbal matcher ho
+    // spáruje. rowSide: 0 = strana z kroku předpisu, částka kladná, bez DPH
+    // bloku. identityRequired: bez partnera a VS nemá saldo co párovat.
+    // Zálohy (*.advance*) na pokladní doklady zatím nedáváme (saldo záloh je
+    // accbal fáze 4+).
+    "payment.receivable": {
+        "name": "Receivable payment",
+        "name:cs": "Úhrada pohledávky",
+        "name:en": "Receivable payment",
+        "rowSide": 0,
+        "rowPartner": 1,
+        "rowPaymentId": 1,
+        "identityRequired": 1,
+        "docTypes": {
+            "cash": {"order": 300, "cashDir": 1}
+        }
+    },
+    "payment.payable": {
+        "name": "Payable payment",
+        "name:cs": "Úhrada závazku",
+        "name:en": "Payable payment",
+        "rowSide": 0,
+        "rowPartner": 1,
+        "rowPaymentId": 1,
+        "identityRequired": 1,
+        "docTypes": {
+            "cash": {"order": 400, "cashDir": 2}
         }
     },
 
@@ -140,7 +192,9 @@
         "name:en": "Accounting entry",
         "docTypes": {
             "invno": {"order": 900},
-            "invni": {"order": 900}
+            "invni": {"order": 900},
+            "cash": {"order": 900},
+            "cashreg": {"order": 900}
         }
     },
     "acc.record": {

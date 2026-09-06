@@ -40,10 +40,24 @@ class DocRowOperationsValidateTest extends TestCase
     {
         $items = [
             'docs.core.rowOperations' => [
-                'sale.services' => ['name' => 'Prodej služeb', 'docTypes' => ['invno' => ['order' => 100]]],
+                'sale.services' => ['name' => 'Prodej služeb', 'docTypes' => [
+                    'invno' => ['order' => 100], 'cash' => ['order' => 100, 'cashDir' => 1],
+                ]],
+                'purchase.goods' => ['name' => 'Nákup zboží', 'docTypes' => [
+                    'invni' => ['order' => 100], 'cash' => ['order' => 100, 'cashDir' => 2],
+                ]],
+                'payment.receivable' => [
+                    'name' => 'Úhrada pohledávky',
+                    'rowSide' => 0, 'rowPartner' => 1, 'rowPaymentId' => 1, 'identityRequired' => 1,
+                    'docTypes' => ['cash' => ['order' => 300, 'cashDir' => 1]],
+                ],
                 'acc.entry'     => ['name' => 'Účetní položka', 'docTypes' => [
                     'invno' => ['order' => 900], 'invni' => ['order' => 900],
                 ]],
+            ],
+            'docs.core.docTypes' => [
+                'invno' => ['trade_dir' => 1],
+                'cash'  => ['trade_dir' => 0, 'trade_dir_column' => 'cash_dir', 'series_binding' => 'cash_desk'],
             ],
         ];
         file_put_contents(
@@ -55,15 +69,40 @@ class DocRowOperationsValidateTest extends TestCase
 
     // ── DocRowsDocument (sub-form save) ─────────────────────────────────────
 
-    private function rowsDoc(): DocRowsDocument
+    private function rowsDoc(string $docType = 'invno', int $cashDir = 0): DocRowsDocument
     {
         $db = $this->createMock(Connection::class);
-        $db->method('fetch')->willReturn(new Row(['doc_type' => 'invno']));
+        $db->method('fetch')->willReturn(new Row(['doc_type' => $docType, 'cash_dir' => $cashDir]));
 
         $doc = new DocRowsDocument();
         $doc->setDb($db);
         $doc->setConfig($this->buildConfig());
         return $doc;
+    }
+
+    public function testRowSaveOnCashDocumentChecksDirection(): void
+    {
+        // výdajový pohyb na příjmovém pokladním dokladu
+        $data = ['doc_head' => 5, 'row_kind' => 1, 'operation' => 'purchase.goods'];
+        $result = $this->rowsDoc('cash', cashDir: 1)->validate($data);
+
+        $this->assertFalse($result->isValid());
+        $this->assertSame('operation_not_allowed_for_direction', $result->getErrors()[0]->code);
+
+        $data = ['doc_head' => 5, 'row_kind' => 1, 'operation' => 'sale.services'];
+        $this->assertTrue($this->rowsDoc('cash', cashDir: 1)->validate($data)->isValid());
+    }
+
+    public function testRowSavePaymentWithoutIdentityFails(): void
+    {
+        $data = ['doc_head' => 5, 'row_kind' => 1, 'operation' => 'payment.receivable', 'total_price' => 100];
+        $result = $this->rowsDoc('cash', cashDir: 1)->validate($data);
+
+        $this->assertFalse($result->isValid());
+        $this->assertSame(
+            ['partner', 'payment_reference'],
+            array_map(fn($e) => $e->column, $result->getErrors()),
+        );
     }
 
     public function testRowSaveValidOperationPasses(): void
@@ -118,13 +157,17 @@ class DocRowOperationsValidateTest extends TestCase
 
     // ── DocDocument (přechod do 40) ─────────────────────────────────────────
 
-    private function headDoc(): TestableDocsHeadsDocument
+    private function headDoc(string $docType = 'invno'): TestableDocsHeadsDocument
     {
         $db = $this->createMock(Connection::class);
-        $db->method('fetch')->willReturnCallback(function (...$args): ?Row {
+        $db->method('fetch')->willReturnCallback(function (...$args) use ($docType): ?Row {
             $sql = (string) ($args[0] ?? '');
             if (str_contains($sql, 'docs_core_number_series')) {
-                return new Row(['doc_type' => 'invno']);
+                return new Row([
+                    'doc_type'  => $docType,
+                    'cash_desk' => $docType === 'cash' ? 7 : null,
+                    'warehouse' => null,
+                ]);
             }
             return new Row(['id' => 1]); // own company
         });
@@ -133,6 +176,36 @@ class DocRowOperationsValidateTest extends TestCase
         $doc->setDb($db);
         $doc->setConfig($this->buildConfig());
         return $doc;
+    }
+
+    public function testState40CashDocumentRejectsRowAgainstDirection(): void
+    {
+        $data = $this->state40Data([
+            ['row_kind' => 1, 'operation' => 'sale.services', 'total_price' => 100],
+            ['row_kind' => 1, 'operation' => 'purchase.goods', 'total_price' => 50],
+        ]);
+        $data['doc_type'] = 'cash';
+        $data['cash_dir'] = 1;
+        $result = $this->headDoc('cash')->validate($data);
+
+        $this->assertFalse($result->isValid());
+        $errors = $result->getErrors();
+        $this->assertCount(1, $errors);
+        $this->assertSame('rows.1.operation', $errors[0]->column);
+        $this->assertSame('operation_not_allowed_for_direction', $errors[0]->code);
+    }
+
+    public function testState40CashPaymentRowNeedsIdentity(): void
+    {
+        $data = $this->state40Data([
+            ['row_kind' => 1, 'operation' => 'payment.receivable', 'total_price' => 1210, 'partner' => 50],
+        ]);
+        $data['doc_type'] = 'cash';
+        $data['cash_dir'] = 1;
+        $result = $this->headDoc('cash')->validate($data);
+
+        $this->assertFalse($result->isValid());
+        $this->assertSame('rows.0.payment_reference', $result->getErrors()[0]->column);
     }
 
     /** @return array<string, mixed> */

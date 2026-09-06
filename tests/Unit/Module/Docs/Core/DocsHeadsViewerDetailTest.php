@@ -196,6 +196,36 @@ class DocsHeadsViewerDetailTest extends TestCase
         $this->assertSame($customer, $content['customer']);
     }
 
+    public function testStoredSnapshotPartnerGetsPersonIdOnTradeDirSide(): void
+    {
+        // Regrese Task A: attachPartnerPersonId volal smazanou privátní
+        // resolveTradeDir → fatal u dokladu s partnerem. invni (trade_dir 2):
+        // partner = dodavatel → person_id na supplier; invno → customer.
+        $supplier = ['name' => 'Dodavatel s.r.o.'];
+        $customer = ['name' => 'My a.s.'];
+
+        $viewer = $this->makeViewer($this->baseRecord([
+            'partner'           => 5,
+            'partner_name'      => 'Dodavatel s.r.o.',
+            'supplier_snapshot' => json_encode($supplier),
+            'customer_snapshot' => json_encode($customer),
+        ]));
+        $content = $this->detailContent($viewer);
+        $this->assertSame(5, $content['supplier']['person_id']);
+        $this->assertArrayNotHasKey('person_id', $content['customer']);
+
+        $viewer = $this->makeViewer($this->baseRecord([
+            'doc_type'          => 'invno',
+            'partner'           => 5,
+            'partner_name'      => 'My a.s.',
+            'supplier_snapshot' => json_encode($supplier),
+            'customer_snapshot' => json_encode($customer),
+        ]));
+        $content = $this->detailContent($viewer);
+        $this->assertSame(5, $content['customer']['person_id']);
+        $this->assertArrayNotHasKey('person_id', $content['supplier']);
+    }
+
     public function testConceptAssemblesPartiesLive(): void
     {
         // invni (trade_dir 2): partner = dodavatel, vlastní firma = odběratel.

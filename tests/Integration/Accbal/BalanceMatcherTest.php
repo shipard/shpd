@@ -166,6 +166,41 @@ class BalanceMatcherTest extends IntegrationTestCase
         $this->assertNull($this->receivablesPayment($txId));
     }
 
+    /**
+     * Převod peněz (#59 Task D): transakce transfer.* účtuje na 261100, které
+     * v žádné saldo skupině není → ledger nic nevyrobí, matcher ji nevidí
+     * a operation zůstává transfer.in (nikdy payment.in.matched).
+     */
+    public function testTransferTransactionIsNotAMatchingCandidate(): void
+    {
+        $this->balanceId('receivables');
+        $this->prepareAccounts();
+        $this->ensureAccountByNumber('261100');
+        $this->seedReceivableRequest(20000.00); // otevřený předpis by jinak sedl na částku
+
+        $txId = $this->insertTx([
+            'bank_account' => $this->bankAccountId,
+            'direction'    => 1,
+            'operation'    => 'transfer.in',
+            'amount'       => 20000.00,
+            'amount_dom'   => 20000.00,
+            'partner'      => self::PARTNER,
+        ]);
+        $engine = new BankTransactionAccountingEngine($this->db->getDibiConnection(), $this->config, $this->journalEvents);
+        $this->assertSame(1, $engine->accountTransaction($txId)['state']);
+
+        $this->assertNull($this->clearingMove($txId), 'převod není na clearingu');
+        $ledger = $this->db->fetchAll('SELECT id FROM economy_accbal_ledger WHERE bank_transaction = %i', $txId);
+        $this->assertCount(0, $ledger, '261100 není v žádné saldo skupině → žádný pohyb ledgeru');
+
+        $result = $this->matcher()->matchTransaction($txId);
+        $this->assertSame(MatchResult::STATUS_SKIPPED, $result->status);
+        $this->assertSame('not_on_clearing', $result->reason);
+
+        $tx = $this->db->fetchRow('SELECT operation FROM economy_bank_transactions WHERE id = %i', $txId);
+        $this->assertSame('transfer.in', (string) $tx['operation'], 'matcher operaci převodu nepřepisuje');
+    }
+
     // ── Setup helpers ─────────────────────────────────────────────────────────
 
     private function matcher(): BalanceMatcher

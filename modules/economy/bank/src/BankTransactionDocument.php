@@ -51,7 +51,36 @@ class BankTransactionDocument extends Document
             $r->addError('amount_dom', 'Částka v domácí měně nesmí být záporná.', 'invalid');
         }
 
+        $this->validateOperationDirection($data, $direction, $r);
+
         return $r;
+    }
+
+    /**
+     * Pohyb (economy.bank.txOperations) musí směrem odpovídat transakci —
+     * formulář nabízí všechny pohyby bez filtru, takže výdaj s `transfer.in`
+     * by účtoval 221 DAL / 261100 DAL-protistrana obráceně (#59 Task D).
+     * Bez configu nebo u neznámého pohybu se kontrola degradovaně přeskočí
+     * (enum hodnotu hlídá schéma sloupce, vzor DocRowOperationRules).
+     */
+    private function validateOperationDirection(array $data, int $direction, ValidationResult $r): void
+    {
+        $operation = trim((string) ($data['operation'] ?? ''));
+        if ($operation === '' || $this->config === null || ($direction !== 1 && $direction !== 2)) {
+            return;
+        }
+        $ops = $this->config->cfgItem('economy.bank.txOperations');
+        $entry = is_array($ops) ? ($ops[$operation] ?? null) : null;
+        if (!is_array($entry) || !isset($entry['direction'])) {
+            return;
+        }
+        if ((int) $entry['direction'] !== $direction) {
+            $r->addError(
+                'operation',
+                'Pohyb neodpovídá směru transakce (příjmový pohyb na výdaji nebo naopak).',
+                'operation_direction_mismatch',
+            );
+        }
     }
 
     public function beforeSave(array &$data, ?array $originalData = null): void

@@ -27,6 +27,7 @@
     ['currency', 'viewer.document.meta.currency'],
     ['exchange_rate', 'viewer.document.meta.exchangeRate'],
     ['payment_method', 'viewer.document.meta.paymentMethod'],
+    ['cash_desk', 'viewer.document.meta.cashDesk'],
     ['payment_reference', 'viewer.document.meta.paymentReference'],
     ['specific_symbol', 'viewer.document.meta.specificSymbol'],
     ['constant_symbol', 'viewer.document.meta.constantSymbol'],

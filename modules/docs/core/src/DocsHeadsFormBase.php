@@ -367,6 +367,8 @@ abstract class DocsHeadsFormBase extends TableForm
         $reportPeriodOptions = $hasVat && !$isNew
             ? $this->resolveReportPeriodOptions((int) ($data['vat_registration'] ?? 0))
             : ['return' => [], 'cs' => [], 'rs' => []];
+        $isCashPayment = $this->isCashPayment($data);
+        $cashDeskHint = $this->cashDeskHint($data, $docCurrency);
 
         return $this->tab('basic', 'Hlavička')
             ->section()
@@ -472,6 +474,13 @@ abstract class DocsHeadsFormBase extends TableForm
                     ->separator('Platba')
                     ->select('payment_method',
                         options: $this->resolveCfgItemOptions('docs.core.paymentMethods'),
+                        triggers: 'reload',
+                    )
+                    ->lookup('cash_desk',
+                        table: 'economy_codebooks_cash_desks',
+                        placeholder: 'Hledat pokladnu…',
+                        hidden: !$isCashPayment,
+                        hint: $cashDeskHint,
                     )
                     ->select('bank_account',
                         options: $this->resolveBankAccountOptions($docCurrency),
@@ -846,11 +855,61 @@ abstract class DocsHeadsFormBase extends TableForm
             }
         }
 
+        if ($changedColumn === 'payment_method') {
+            if ((int) ($data['payment_method'] ?? 1) === 0) {
+                // Hotovost: předvyplnit výchozí pokladnu měny dokladu (is_default,
+                // stav V pořádku); není-li, pole zůstane prázdné s hintem.
+                if (empty($data['cash_desk'])) {
+                    $data['cash_desk'] = $this->resolveDefaultCashDesk(
+                        (string) ($data['doc_currency'] ?? $data['home_currency'] ?? 'czk'),
+                    );
+                }
+            } else {
+                // Jiná platba: pokladnu smazat, DocDocument::validate by ji
+                // odmítl (cash_desk_requires_cash_payment).
+                $data['cash_desk'] = null;
+            }
+        }
+
         $isNew = !isset($data['id']) || $data['id'] === null || $data['id'] === '';
         return new RecalculateResult(
             $this->buildFormDefinition($data, $isNew),
             $data,
         );
+    }
+
+    /**
+     * Pokladna (`cash_desk`) patří do hlavičky jen při platbě v hotovosti
+     * (payment_method 0) — jinak ji DocDocument::validate odmítne. Default
+     * doplňuje recalculate('payment_method'); bez výchozí pokladny měny
+     * zůstane prázdná s nápovědou. Sdílené base + per-typ formuláři
+     * (IssuedInvoiceForm / ReceivedInvoiceForm mají vlastní buildHeaderTab).
+     */
+    protected function isCashPayment(array $data): bool
+    {
+        return (int) ($data['payment_method'] ?? 1) === 0;
+    }
+
+    protected function cashDeskHint(array $data, string $docCurrency): ?string
+    {
+        return $this->isCashPayment($data) && empty($data['cash_desk'])
+            ? 'Pro měnu ' . strtoupper($docCurrency) . ' není výchozí pokladna — vyber ji ručně'
+            : null;
+    }
+
+    /** Výchozí pokladna (`is_default`) měny ve stavu V pořádku; null bez ní. */
+    protected function resolveDefaultCashDesk(string $currency): ?int
+    {
+        if ($this->db === null) {
+            return null;
+        }
+        $row = $this->db->fetchRow(
+            'SELECT `id` FROM `economy_codebooks_cash_desks`'
+            . ' WHERE `currency` = %s AND `is_default` = 1 AND `docState` = 40'
+            . ' ORDER BY `sort_order` ASC, `id` ASC LIMIT 1',
+            strtolower(trim($currency)),
+        );
+        return $row !== null ? (int) $row['id'] : null;
     }
 
     // ── Options resolvers ───────────────────────────────────────────────────

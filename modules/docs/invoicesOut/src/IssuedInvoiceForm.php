@@ -155,6 +155,14 @@ class IssuedInvoiceForm extends DocsHeadsFormBase
                     ->select(
                         'payment_method',
                         options: $this->resolveCfgItemOptions('docs.core.paymentMethods'),
+                        triggers: 'reload',
+                    )
+                    ->lookup(
+                        'cash_desk',
+                        table: 'economy_codebooks_cash_desks',
+                        placeholder: 'Hledat pokladnu…',
+                        hidden: !$this->isCashPayment($data),
+                        hint: $this->cashDeskHint($data, $docCurrency),
                     )
                     ->select(
                         'bank_account',

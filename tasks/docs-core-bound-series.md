@@ -1,6 +1,6 @@
 # Task A: Číselné řady vázané na pokladnu/sklad, `cash_desk` + `cash_dir` na hlavičce, `resolveTradeDir`
 
-**Stav:** návrh — čeká na implementaci
+**Stav:** hotovo — 2026-09-06, kód + testy + E2E provisioningu na dev DS; zbývá ruční proklik UI a nasazení na alfě
 **Issue:** #59 — rozhodnutí D2–D5, D8 (část: extension na pokladně)
 **Návaznost:** předchází `tasks/cash-docs-phase1.md` (Task B — moduly `docs.cashDocs`,
 `docs.cashRegister`, účtování). Task B na tomto úkolu staví; bez něj neběží. Exportní
@@ -249,17 +249,17 @@ filtrem, po změnách `.jsonc` rebuild cfg + `ds-upgrade` na dev DS. Push dělá
 
 ## Hotovo když
 
-- [ ] `ds-upgrade` na dev DS projde; `docs_core_number_series` má `cash_desk`,
+- [x] `ds-upgrade` na dev DS projde; `docs_core_number_series` má `cash_desk`,
       `warehouse`; `docs_core_heads` má `cash_desk`, `cash_dir`;
       `economy_codebooks_cash_desks` má `accounting_account`.
-- [ ] Řadu nevázaného typu nelze uložit s pokladnou; řadu vázaného typu bez ní ne
+- [x] Řadu nevázaného typu nelze uložit s pokladnou; řadu vázaného typu bez ní ne
       (ověřeno testem se syntetickým typem).
-- [ ] `BoundNumberSeriesProvisioner` je idempotentní, běží v `ds-upgrade` mimo
+- [x] `BoundNumberSeriesProvisioner` je idempotentní, běží v `ds-upgrade` mimo
       `skipProvisioning` gate a spustí se při uložení pokladny do stavu 40.
-- [ ] `resolveTradeDir` je jediná implementace; `grep -rn "\['trade_dir'\]"
+- [x] `resolveTradeDir` je jediná implementace; `grep -rn "\['trade_dir'\]"
       modules src` mimo ni nevrací konzumenty.
-- [ ] Faktura vydaná/přijatá: `cash_desk` viditelný jen při Hotovosti, default
+- [x] Faktura vydaná/přijatá: `cash_desk` viditelný jen při Hotovosti, default
       z `is_default` pokladny; jinak validace odmítne.
-- [ ] Stávající testy docs/accounting/exchange procházejí (snapshoty invno/invni
+- [x] Stávající testy docs/accounting/exchange procházejí (snapshoty invno/invni
       beze změny chování).
-- [ ] `npm run check:i18n` projde; dokumentace aktualizována.
+- [x] `npm run check:i18n` projde; dokumentace aktualizována.

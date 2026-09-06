@@ -237,9 +237,11 @@ class DocsHeadsViewer extends TableViewer
     public function renderDetail(int $recordId): array
     {
         $record = $this->db->fetchRow(
-            'SELECT h.*, p.`full_name` AS partner_name'
+            'SELECT h.*, p.`full_name` AS partner_name,'
+            . ' cd.`code` AS cash_desk_code, cd.`name` AS cash_desk_name'
             . ' FROM `' . $this->table . '` h'
             . ' LEFT JOIN `base_persons_persons` p ON p.`id` = h.`partner`'
+            . ' LEFT JOIN `economy_codebooks_cash_desks` cd ON cd.`id` = h.`cash_desk`'
             . ' WHERE h.`id` = %i',
             $recordId,
         );
@@ -665,10 +667,25 @@ class DocsHeadsViewer extends TableViewer
             'currency'        => $currency !== '' ? $currency : null,
             'exchange_rate'   => $hasRate ? number_format((float) $rate, 3, ',', ' ') : null,
             'payment_method'  => $this->resolvePaymentMethodLabel($record['payment_method'] ?? null),
+            'cash_desk'       => $this->formatCashDesk($record),
             'payment_reference' => $this->nullableString($record['payment_reference'] ?? null),
             'specific_symbol' => $this->nullableString($record['specific_symbol'] ?? null),
             'constant_symbol' => $this->nullableString($record['constant_symbol'] ?? null),
         ];
+    }
+
+    /** „kód — název" pokladny dokladu (LEFT JOIN v renderDetail); null bez pokladny. */
+    private function formatCashDesk(array $record): ?string
+    {
+        if (empty($record['cash_desk'])) {
+            return null;
+        }
+        $code = trim((string) ($record['cash_desk_code'] ?? ''));
+        $name = trim((string) ($record['cash_desk_name'] ?? ''));
+        if ($code === '' && $name === '') {
+            return null;
+        }
+        return $code !== '' && $name !== '' ? "{$code} — {$name}" : ($code !== '' ? $code : $name);
     }
 
     /** @return list<array<string, mixed>> */

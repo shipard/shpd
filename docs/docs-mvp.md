@@ -901,7 +901,42 @@ foreach ($docTypes as $key => $docType) {
 ```
 
 Idempotence: lookup před insertem. Uživatel si může výchozí řadu zarchivovat
-(40 → 70) a založit vlastní; provisioner pak nezasáhne.
+(40 → 70) a založit vlastní; provisioner pak nezasáhne. Typy se
+`series_binding` (§5.7) tento provisioner **přeskakuje**.
+
+### 5.7 Řady vázané na entitu (pokladna, sklad)
+
+Starý Shipard čísloval pokladní a skladové doklady „virtuálními" řadami
+per pokladna / sklad (`%B`, `%W` řešené v kódu `makeDocNumber`). Nový
+systém je zhmotňuje jako běžné záznamy `docs_core_number_series` s vazbou
+na entitu (#59 D2, D3):
+
+- **`docTypes[].series_binding`** — `"cash_desk"` | `"warehouse"`. Řada
+  takového typu **musí** mít vyplněný odpovídající FK
+  (`docs_core_number_series.cash_desk` → `economy_codebooks_cash_desks`,
+  `.warehouse` → `economy_codebooks_warehouses`) a druhý NULL; řada
+  nevázaného typu má oba NULL. Hlídá `NumberSeriesDocument::validate`
+  (`required` / `binding_not_allowed`, entita musí existovat a nebýt smazaná).
+  Oba FK žijí v `economy.codebooks`, na kterém `docs.core` už závisí —
+  polymorfní pár (`binding_table`, `binding_id`) by ztratil referenci.
+- **Provisioning** — `BoundNumberSeriesProvisioner`: pro každý vázaný typ
+  × každou entitu ve stavu 40 zajistí řadu (`doc_type`, FK) mimo Smazáno.
+  Název „{typ} — {kód entity}", **`doc_number_code` = kód entity** — do
+  vzorce vstupuje přes existující `%C`, žádný nový placeholder (vzorec
+  `%D%C%y%5` je ekvivalent starého `%D%B%y%5`). Běží z `ds-upgrade` i pod
+  `skipProvisioning` (import dokladů dohledává řadu podle typu a kódu
+  pokladny) a z `CashDeskSeriesEventHandler` po uložení pokladny do stavu 40
+  (`documentEventHandlers` docs.core na tabulce `economy_codebooks_cash_desks`,
+  event `afterSave`; pokladny mají `stateTransitionsRunDocumentHooks`, aby
+  přechod z UI handler spustil). Přejmenování pokladny se do
+  `doc_number_code` nepropaguje — čísla vydaných dokladů se nesmí měnit.
+- **Denormalizace** — `DocDocument::denormalizeFromSeries` zapíše při
+  uložení dokladu z řady kromě `doc_type` i vázanou entitu do hlavičky
+  (`cash_desk`; sklad na hlavičce sloupec zatím nemá) a přepíše, co poslal
+  klient. Řada vázaného typu bez entity = chyba `series_binding_missing`.
+- Mechanismus je obecný přes `NumberSeriesDocument::BINDINGS` — sklad
+  nevyžaduje další kód, jen typ dokladu se `series_binding: warehouse`.
+  Konkrétní typy (`cash`, `cashreg`) přidává Task B.
 
 ---
 
@@ -911,7 +946,7 @@ Idempotence: lookup před insertem. Uživatel si může výchozí řadu zarchivo
 
 | Skupina | Účel | Sloupce |
 |---|---|---|
-| `identity` | Identifikace dokladu | `doc_type`, `number_series`, `sequence_number`, `doc_number`, `doc_text` |
+| `identity` | Identifikace dokladu | `doc_type`, `number_series`, `cash_dir`, `sequence_number`, `doc_number`, `doc_text` |
 | `partner` | Partner a jeho údaje | `partner`, `partner_address`, `partner_bank` + 3 string sloupce |
 | `dates` | Datumy | `issue_date`, `due_date`, `accounting_date`, `vat_duzp`, `vat_dppd`, `period_from`, `period_to` |
 | `accounting` | Účetní mapování (system) | `fiscal_year`, `fiscal_month`, `vat_registration`, `vat_period` |
@@ -919,10 +954,29 @@ Idempotence: lookup před insertem. Uživatel si může výchozí řadu zarchivo
 | `currency` | Měna a kurz | `doc_currency`, `home_currency`, `exchange_rate` |
 | `rounding` | Zaokrouhlení | `total_rounding_mode`, `vat_rounding_mode` |
 | `totals` | Součtové částky (system) | `total_base`, `total_vat`, `total_amount`, `total_rounding`, `*_dom` |
-| `payment` | Platba a symboly | `payment_method`, `bank_account`, `payment_reference`, `specific_symbol`, `constant_symbol` |
+| `payment` | Platba a symboly | `payment_method`, `bank_account`, `cash_desk`, `payment_reference`, `specific_symbol`, `constant_symbol` |
 | `snapshots` | JSON snapshoty (system) | `supplier_snapshot`, `customer_snapshot` |
 | `notes` | Poznámky | `notice`, `doc_notice` |
 | (system) | Stavy | `docState`, `docStateMain` |
+
+**Pokladna a směr per doklad (#59 D4, D5):**
+
+- `cash_desk` (int → `economy_codebooks_cash_desks`) — pro typ se
+  `series_binding: cash_desk` **systémový**, denormalizovaný z řady (§5.7);
+  pro ostatní typy uživatelský, smí být vyplněný jen při
+  `payment_method = 0` (Hotovost), formulář ho ukazuje jen tehdy a
+  předvyplní výchozí pokladnu (`is_default`) měny dokladu. Proto bez
+  `system: true` v JSONC — systémovost vynucuje `DocDocument`.
+- `cash_dir` (enumInt, cfgItem `docs.core.cashDirections`, enum
+  `CashDirection`) — 0 nepoužito, 1 příjem, 2 výdej. Typ s
+  `docTypes[].trade_dir: 0` + `trade_dir_column: "cash_dir"` z něj
+  odvozuje **směr obchodu per doklad**; ostatní typy musí mít 0.
+- **`DocDocument::resolveTradeDir(array $data, ?ConfigRuntime $config): ?int`**
+  je jediná autorita směru: pevný `trade_dir` 1/2 typu → hodnota;
+  `trade_dir: 0` + `trade_dir_column` → sloupec hlavičky (1→1, 2→2, jinak
+  null); jinak null = typ bez stran (cmnbkp). Konzumenti: snapshoty
+  (§6.4), `DocRowsForm` (směr DPH kódů), `DocsHeadsViewer` (živé strany
+  detailu — null = bez stran), import.
 
 ### 6.2 Kompletní JSONC
 
@@ -1203,8 +1257,9 @@ public function maintainSnapshots(array &$data, ?array $originalData): void
 
 protected function buildSnapshots(array &$data): void
 {
-    $docType = $this->cfgItem("docs.core.docTypes")[$data['doc_type']];
-    $tradeDir = $docType['trade_dir'];  // 1=výstup (my=dodavatel), 2=vstup (my=odběratel)
+    // 1=výstup (my=dodavatel), 2=vstup (my=odběratel), null=typ bez stran →
+    // snapshoty se nestaví. Per doklad (cash_dir) řeší resolveTradeDir, §6.1.
+    $tradeDir = self::resolveTradeDir($data, $this->config);
 
     $partnerSnap = $this->buildPersonSnapshot(
         personId:  $data['partner'],

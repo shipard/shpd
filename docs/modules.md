@@ -376,6 +376,15 @@ dokumentů, aniž by vlastník tabulky na něm závisel (např. `economy.account
 (`DocumentEventHandlerLoader`, vzor `documentClasses`), dispatch dělá
 `TableGateway` přes `DocumentEventDispatcher`.
 
+Cílem nemusí být jen dokladová tabulka — handler lze registrovat i na
+**číselník jiného modulu**: `docs.core` se hákuje na
+`economy_codebooks_cash_desks` (`CashDeskSeriesEventHandler`, `afterSave`)
+a po uložení pokladny do stavu 40 jí zakládá vázané číselné řady;
+`economy.vat` stejně seeduje instance tvrzení po uložení registrace DPH.
+Pozor na přechody stavu: bez `stateTransitionsRunDocumentHooks: true` na
+tabulce jde změna stavu z UI přímým UPDATE a **žádný handler se nespustí** —
+číselník, na který se hákuje kvůli stavu, musí mít flag zapnutý.
+
 ```jsonc
 "documentEventHandlers": [
     {

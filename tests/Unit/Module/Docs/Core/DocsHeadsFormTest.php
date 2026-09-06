@@ -86,6 +86,72 @@ class DocsHeadsFormTest extends TestCase
         );
     }
 
+    // ── cash_desk (pokladna při platbě v hotovosti, #59 D4) ─────────────────
+
+    public function testCashDeskHiddenUnlessCashPaymentAndPaymentMethodReloads(): void
+    {
+        $form = $this->createForm();
+
+        // nový doklad: payment_method default 1 (převodem) → pokladna skrytá
+        $def = $form->buildFormDefinition([], true);
+        $cashDesk = $this->findElement($def, 'basic', 'cash_desk');
+        $this->assertNotNull($cashDesk);
+        $this->assertSame('lookup', $cashDesk->type);
+        $this->assertTrue($cashDesk->hidden);
+        $this->assertSame('reload', $this->findElement($def, 'basic', 'payment_method')->triggers);
+
+        // hotovost bez pokladny → viditelná s hintem na chybějící výchozí pokladnu
+        $def = $form->buildFormDefinition(['payment_method' => 0, 'doc_currency' => 'eur'], true);
+        $cashDesk = $this->findElement($def, 'basic', 'cash_desk');
+        $this->assertFalse($cashDesk->hidden);
+        $this->assertStringContainsString('EUR', (string) $cashDesk->hint);
+
+        // hotovost s pokladnou → bez hintu
+        $def = $form->buildFormDefinition(['payment_method' => 0, 'cash_desk' => 7], true);
+        $this->assertNull($this->findElement($def, 'basic', 'cash_desk')->hint);
+    }
+
+    public function testRecalculatePaymentMethodDefaultsAndClearsCashDesk(): void
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchAll')->willReturn([]);
+        $db->method('fetchRow')->willReturnCallback(
+            static function (string $sql, mixed ...$params): ?array {
+                if (str_contains($sql, 'economy_codebooks_cash_desks')) {
+                    return $params[0] === 'czk' ? ['id' => 7] : null;
+                }
+                return null;
+            },
+        );
+        $form = $this->createForm();
+        $form->setDb($db);
+
+        // převodem → hotovost: výchozí pokladna měny dokladu
+        $result = $form->recalculate('payment_method', [
+            'payment_method' => 0, 'doc_currency' => 'czk', 'home_currency' => 'czk',
+        ]);
+        $this->assertSame(7, $result->data['cash_desk']);
+
+        // měna bez výchozí pokladny → zůstane prázdná
+        $result = $form->recalculate('payment_method', [
+            'payment_method' => 0, 'doc_currency' => 'eur', 'home_currency' => 'czk',
+        ]);
+        $this->assertNull($result->data['cash_desk']);
+
+        // ručně vybraná pokladna se nepřepisuje
+        $result = $form->recalculate('payment_method', [
+            'payment_method' => 0, 'doc_currency' => 'czk', 'cash_desk' => 3,
+        ]);
+        $this->assertSame(3, $result->data['cash_desk']);
+
+        // hotovost → převodem: pokladna se smaže (validace by ji odmítla)
+        $result = $form->recalculate('payment_method', [
+            'payment_method' => 1, 'doc_currency' => 'czk', 'cash_desk' => 7,
+        ]);
+        $this->assertNull($result->data['cash_desk']);
+        $this->assertTrue($this->findElement($result->formDefinition, 'basic', 'cash_desk')->hidden);
+    }
+
     public function testSupplierSnapshotAddsSnapshotsTab(): void
     {
         $form = $this->createForm();

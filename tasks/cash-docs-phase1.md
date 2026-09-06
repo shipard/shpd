@@ -1,6 +1,6 @@
 # Task B: Pokladní doklady (`cash`) a prodejky (`cashreg`) — moduly, pohyby, účtování, import
 
-**Stav:** návrh — čeká na implementaci
+**Stav:** naplánováno — Task A (`docs-core-bound-series.md`) hotový 2026-09-06, lze začít
 **Issue:** #59 — rozhodnutí D1, D5–D9, D11, D12
 **Návaznost:** vyžaduje hotový `tasks/docs-core-bound-series.md` (Task A: vázané řady,
 `cash_desk` / `cash_dir` na hlavičce, `resolveTradeDir`, extension `accounting_account`

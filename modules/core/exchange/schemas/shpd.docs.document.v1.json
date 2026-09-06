@@ -27,6 +27,8 @@
         "docNumber": { "type": ["string", "null"] },
         "docText":   { "type": ["string", "null"] },
         "selfParty": { "enum": ["supplier", "customer", null] },
+        "cashDesk": { "type": ["string", "null"], "maxLength": 10 },
+        "cashDirection": { "enum": [1, 2, null] },
         "supplier": { "$ref": "#/$defs/Party" },
         "customer": { "$ref": "#/$defs/Party" },
         "dates": {

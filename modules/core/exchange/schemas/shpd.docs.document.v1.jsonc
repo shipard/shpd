@@ -55,6 +55,14 @@
         "docNumber": { "type": ["string", "null"] },
         "docText":   { "type": ["string", "null"] },
         "selfParty": { "enum": ["supplier", "customer", null] },
+        // Pokladna (#59 D12): kód economy_codebooks_cash_desks.code. Povinný
+        // u cashDocument / cashRegisterDocument (řada vázaná na pokladnu —
+        // applier ji dohledá podle typu + pokladny, numberSeriesCode se
+        // ignoruje); u faktur volitelný a platí jen s payment.method "cash"
+        // (faktura placená hotově → docs_core_heads.cash_desk).
+        "cashDesk": { "type": ["string", "null"], "maxLength": 10 },
+        // Směr pokladního dokladu: 1 příjem, 2 výdej. Jen cashDocument.
+        "cashDirection": { "enum": [1, 2, null] },
 
         // ── Parties ─────────────────────────────────────────────────────
         "supplier": { "$ref": "#/$defs/Party" },

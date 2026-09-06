@@ -14,6 +14,7 @@ use Shipard\Module\Base\Persons\PersonType;
 use Shipard\Module\Core\Exchange\Common\ApplyResult;
 use Shipard\Module\Core\Exchange\Common\TransactionlessTableGateway;
 use Shipard\Module\Core\Exchange\Schema\SchemaLoader;
+use Shipard\Module\Docs\Core\DocDocument;
 use Shipard\Module\Docs\Core\OwnCompanyResolver;
 use Shipard\Module\Core\Exchange\Resolve\AccountResolver;
 use Shipard\Module\Core\Exchange\Resolve\BankAccountResolver;
@@ -98,9 +99,11 @@ class DocumentApplier
      * accepted — passthrough when no alias matches.
      */
     private const DOC_TYPE_MAP = [
-        'invoiceReceived'    => 'invni',
-        'invoiceIssued'      => 'invno',
-        'accountingDocument' => 'cmnbkp',
+        'invoiceReceived'      => 'invni',
+        'invoiceIssued'        => 'invno',
+        'accountingDocument'   => 'cmnbkp',
+        'cashDocument'         => 'cash',
+        'cashRegisterDocument' => 'cashreg',
     ];
 
     /**
@@ -303,16 +306,63 @@ class DocumentApplier
             return ApplyResult::error('validation_failed', 'Validace dokumentu selhala.', $enriched);
         }
 
+        // 5a. Pokladna kódem (#59 D12): u typů s řadou vázanou na pokladnu
+        //     (cash, cashreg) určuje řadu; u faktur jde do cash_desk hlavičky,
+        //     ale jen při platbě hotově. Neznámý kód = čistá 422 tady.
+        $docTypeCode = $this->mapDocType($canonical);
+        $cashDeskCode = $canonical['cashDesk'] ?? null;
+        $cashDeskCode = is_string($cashDeskCode) && trim($cashDeskCode) !== '' ? trim($cashDeskCode) : null;
+        $cashDeskId = null;
+        if ($cashDeskCode !== null) {
+            $cashDeskId = $this->resolveCashDeskIdByCode($cashDeskCode);
+            if ($cashDeskId === null) {
+                return ApplyResult::error(
+                    'cash_desk_not_found',
+                    "Pokladna s kódem '{$cashDeskCode}' nebyla nalezena (economy_codebooks_cash_desks).",
+                    $enriched,
+                    statusCode: 422,
+                );
+            }
+        }
+
         // 5b. Resolve the target number series up-front. An explicit but
         //     unknown numberSeriesCode must fail as a clean apply-level error
         //     (422) here, not blow up mid-transaction as internal_error (500).
-        $seriesCode = $canonical['applyOptions']['numberSeriesCode'] ?? null;
-        $seriesCode = is_string($seriesCode) && $seriesCode !== '' ? $seriesCode : null;
-        try {
-            $numberSeriesId = $this->resolveNumberSeriesFor($this->mapDocType($canonical), $seriesCode);
-        } catch (NumberSeriesNotFoundException $e) {
-            return ApplyResult::error('number_series_not_found', $e->getMessage(), $enriched, statusCode: 422);
+        //     Vázaný typ: řada = (doc_type, pokladna), numberSeriesCode se
+        //     ignoruje; bez řady pokladny žádný tichý fallback.
+        if ($this->isCashDeskBoundDocType($docTypeCode)) {
+            $numberSeriesId = $cashDeskId !== null
+                ? $this->resolveBoundNumberSeries($docTypeCode, $cashDeskId)
+                : null;
+            if ($numberSeriesId === null) {
+                return ApplyResult::error(
+                    'cash_desk_not_found',
+                    "Pokladna '" . ($cashDeskCode ?? '') . "' nemá číselnou řadu typu {$docTypeCode}"
+                    . ' — ulož pokladnu ve stavu V pořádku, řadu založí provisioner.',
+                    $enriched,
+                    statusCode: 422,
+                );
+            }
+        } else {
+            $seriesCode = $canonical['applyOptions']['numberSeriesCode'] ?? null;
+            $seriesCode = is_string($seriesCode) && $seriesCode !== '' ? $seriesCode : null;
+            try {
+                $numberSeriesId = $this->resolveNumberSeriesFor($docTypeCode, $seriesCode);
+            } catch (NumberSeriesNotFoundException $e) {
+                return ApplyResult::error('number_series_not_found', $e->getMessage(), $enriched, statusCode: 422);
+            }
+            if ($cashDeskId !== null && ($canonical['payment']['method'] ?? null) !== 'cash') {
+                // DocDocument::validate by odmítl (cash_desk_requires_cash_payment).
+                $validatorIssues[] = [
+                    'severity' => 'warning',
+                    'path'     => 'cashDesk',
+                    'code'     => 'cash_desk_ignored',
+                    'message'  => 'Pokladna má na faktuře smysl jen při platbě hotově — ignorováno.',
+                ];
+                $cashDeskId = null;
+            }
         }
+        $plan['cashDeskId'] = $cashDeskId;
 
         // 5c. Import mode: vlastní bankovní účet zadaný kódem číselníku
         //     (datové sady, #40) → id. Neznámý kód = čistá 422 tady, ne pád
@@ -403,7 +453,11 @@ class DocumentApplier
     {
         // Účetní doklad (cmnbkp): nemá supplier/customer/selfParty — saldo
         // identita žije per řádek. Resolvujeme jen řádky (item + účet z čísla).
-        $isAccountingDoc = $this->mapDocType($canonical) === 'cmnbkp';
+        $docTypeCode = $this->mapDocType($canonical);
+        $isAccountingDoc = $docTypeCode === 'cmnbkp';
+        // Pokladní doklad / prodejka: strany nepovinné (anonymní doklad) —
+        // chybějící strana se neresolvuje, jinak by skončila unresolved_required.
+        $partiesOptional = $this->isCashDeskBoundDocType($docTypeCode);
 
         $supplierResult = null;
         $customerResult = null;
@@ -417,23 +471,27 @@ class DocumentApplier
             $customer = is_array($canonical['customer'] ?? null) ? $canonical['customer'] : [];
             $supplierCountry = strtolower((string) ($supplier['country'] ?? ''));
 
-            $supplierResult = $selfParty === 'supplier'
-                ? $this->partyResolver->resolveSelfParty()
-                : $this->partyResolver->resolve($supplier);
-            $customerResult = $selfParty === 'customer'
-                ? $this->partyResolver->resolveSelfParty()
-                : $this->partyResolver->resolve($customer);
+            if ($selfParty === 'supplier') {
+                $supplierResult = $this->partyResolver->resolveSelfParty();
+            } elseif (!$partiesOptional || $supplier !== []) {
+                $supplierResult = $this->partyResolver->resolve($supplier);
+            }
+            if ($selfParty === 'customer') {
+                $customerResult = $this->partyResolver->resolveSelfParty();
+            } elseif (!$partiesOptional || $customer !== []) {
+                $customerResult = $this->partyResolver->resolve($customer);
+            }
+
+            $supplierPersonId = $supplierResult !== null && $supplierResult->status === ResolveStatus::Matched
+                ? $supplierResult->matchedId
+                : null;
 
             if (is_array($supplier['bankAccount'] ?? null) && $supplier['bankAccount'] !== []) {
                 $supplierBankResult = $this->bankAccountResolver->resolvePartnerBank(
                     $supplier['bankAccount'],
-                    $supplierResult->status === ResolveStatus::Matched ? $supplierResult->matchedId : null,
+                    $supplierPersonId,
                 );
             }
-
-            $supplierPersonId = $supplierResult->status === ResolveStatus::Matched
-                ? $supplierResult->matchedId
-                : null;
         }
 
         $rowsResolve = [];
@@ -991,15 +1049,22 @@ class DocumentApplier
 
         // Účetní doklad (cmnbkp): hlavičkový partner je nepovinný a žije per
         // řádek; bere se z volitelného pinu (resolvedHeadPartner), bez
-        // selfParty resolution. Faktura: partner = ta druhá strana.
-        $partnerId = $docType === 'cmnbkp'
-            ? ($plan['resolvedHeadPartner'] ?? null)
-            : match ($selfParty) {
-                'customer' => $sideIds['supplier'] ?? $plan['resolvedSupplier'] ?? null,
-                'supplier' => $sideIds['customer'] ?? $plan['resolvedCustomer'] ?? null,
-                default    => $sideIds['supplier'] ?? $plan['resolvedSupplier']
-                               ?? ($sideIds['customer'] ?? $plan['resolvedCustomer'] ?? null),
-            };
+        // selfParty resolution. Faktura: partner = ta druhá strana. Pokladní
+        // doklad / prodejka: nepovinný — pin, jinak strana z payloadu.
+        $partyPartner = match ($selfParty) {
+            'customer' => $sideIds['supplier'] ?? $plan['resolvedSupplier'] ?? null,
+            'supplier' => $sideIds['customer'] ?? $plan['resolvedCustomer'] ?? null,
+            default    => $sideIds['supplier'] ?? $plan['resolvedSupplier']
+                           ?? ($sideIds['customer'] ?? $plan['resolvedCustomer'] ?? null),
+        };
+        $isCashDeskBound = $this->isCashDeskBoundDocType($docType);
+        $partnerId = match (true) {
+            $docType === 'cmnbkp' => $plan['resolvedHeadPartner'] ?? null,
+            $isCashDeskBound      => $plan['resolvedHeadPartner'] ?? $partyPartner,
+            default               => $partyPartner,
+        };
+        // Směr pokladního dokladu (jen cashDocument; validátor hlídá 1/2).
+        $cashDir = isset($canonical['cashDirection']) ? (int) $canonical['cashDirection'] : 0;
 
         $vatRegistrationId = $this->resolveVatRegistrationFor($canonical);
         // Derivace přebíjí deklarovaný mode (kromě none) — koriguje se jen
@@ -1011,7 +1076,10 @@ class DocumentApplier
             $vatMode = $derivedVatMode;
         }
         $vatPlace = self::VAT_PLACE_MAP[(string) ($canonical['vat']['place'] ?? 'domestic')] ?? 0;
-        $paymentMethod = self::PAYMENT_METHOD_MAP[(string) ($canonical['payment']['method'] ?? 'bankTransfer')] ?? 1;
+        // Pokladní doklad bez způsobu úhrady = Hotovost (ostatní Převodem).
+        $defaultPaymentMethod = $isCashDeskBound ? 'cash' : 'bankTransfer';
+        $paymentMethod = self::PAYMENT_METHOD_MAP[(string) ($canonical['payment']['method'] ?? $defaultPaymentMethod)]
+            ?? self::PAYMENT_METHOD_MAP[$defaultPaymentMethod];
 
         // AI extractors sometimes omit accountingDate even when issueDate
         // is present. DocDocument::beforeSave (applyDateDefaults) would
@@ -1054,8 +1122,14 @@ class DocumentApplier
             // Applier nerozhoduje o cílovém sloupci (trade_dir větvení je věc
             // Document vrstvy). Null mimo import mód → dropped by array_filter.
             '_importPartnerSnapshot' => is_array($importNumber)
-                ? $this->buildImportPartnerSnapshot($canonical, $docType)
+                ? $this->buildImportPartnerSnapshot($canonical, $docType, $cashDir)
                 : null,
+            // Pokladna (#59 D12): u vázaných typů ji DocDocument stejně
+            // přepíše z řady; u faktur = platba hotově na této pokladně.
+            // Null (nepokladní typ bez kódu) → vypadne přes array_filter.
+            'cash_desk'            => $plan['cashDeskId'] ?? null,
+            // 0 = typ bez směru; validátor u cashDocument vynucuje 1/2.
+            'cash_dir'             => $cashDir !== 0 ? $cashDir : null,
             // Import mode: our own bank account (issued invoices need it at
             // state 40+; standard self-party flow can't carry it).
             'bank_account'         => $importOwnBank !== null ? (int) $importOwnBank : null,
@@ -1107,26 +1181,35 @@ class DocumentApplier
      * DocDocument ji persistuje jako dobový snapshot partnera — snapshoty se
      * u importu nestaví z dnešního adresáře, dobová data (především `vat_id`
      * pro kontrolní hlášení) nese payload; za jejich dobovost odpovídá
-     * exportér. Null = bez snapshotu (účetní doklad nemá strany; prázdná
-     * strana v payloadu).
+     * exportér. Null = bez snapshotu (typ bez stran — účetní doklad;
+     * prázdná strana v payloadu — anonymní pokladní doklad).
+     *
+     * Která strana je partner, říká směr obchodu dokladu
+     * (DocDocument::resolveTradeDir — per typ, u pokladního dokladu per
+     * doklad z cash_dir): 1 → partner je odběratel, 2 → dodavatel.
+     * Explicitní selfParty má přednost.
      *
      * @param array<string, mixed> $canonical
      * @return array<string, mixed>|null
      */
-    private function buildImportPartnerSnapshot(array $canonical, string $docType): ?array
+    private function buildImportPartnerSnapshot(array $canonical, string $docType, int $cashDir = 0): ?array
     {
-        if ($docType === 'cmnbkp') {
+        $tradeDir = DocDocument::resolveTradeDir(['doc_type' => $docType, 'cash_dir' => $cashDir], $this->config);
+        if ($tradeDir === null) {
             return null;
         }
 
         $supplier = is_array($canonical['supplier'] ?? null) ? $canonical['supplier'] : [];
         $customer = is_array($canonical['customer'] ?? null) ? $canonical['customer'] : [];
-        // Partnerská strana = ta druhá než selfParty; bez selfParty zrcadlí
-        // kaskádu výběru hlavičkového partnera v transform().
+        // Partnerská strana = ta druhá než selfParty; bez selfParty dle
+        // směru obchodu, s fallbackem na druhou stranu (zrcadlí kaskádu
+        // výběru hlavičkového partnera v transform()).
         $party = match ($canonical['selfParty'] ?? null) {
             'customer' => $supplier,
             'supplier' => $customer,
-            default    => $supplier !== [] ? $supplier : $customer,
+            default    => $tradeDir === 1
+                ? ($customer !== [] ? $customer : $supplier)
+                : ($supplier !== [] ? $supplier : $customer),
         };
         if ($party === []) {
             return null;
@@ -1551,6 +1634,39 @@ class DocumentApplier
              WHERE [doc_type] = %s AND [docState] IN (%i, %i, %i)
              ORDER BY [id] LIMIT 1',
             $docType,
+            self::ACTIVE_STATES[0], self::ACTIVE_STATES[1], self::ACTIVE_STATES[2],
+        );
+        return $row !== null ? (int) $row['id'] : null;
+    }
+
+    /** Má typ dokladu řadu vázanou na pokladnu (`docTypes[].series_binding = cash_desk`)? */
+    private function isCashDeskBoundDocType(string $docType): bool
+    {
+        $cfg = $this->config->cfgItem('docs.core.docTypes');
+        return is_array($cfg) && (($cfg[$docType]['series_binding'] ?? null) === 'cash_desk');
+    }
+
+    /** `cashDesk` kanonického dokumentu = `economy_codebooks_cash_desks.code`. */
+    private function resolveCashDeskIdByCode(string $code): ?int
+    {
+        $row = $this->db->fetch(
+            'SELECT [id] FROM [economy_codebooks_cash_desks]
+             WHERE [code] = %s AND [docState] IN (%i, %i, %i)
+             ORDER BY [id] LIMIT 1',
+            $code,
+            self::ACTIVE_STATES[0], self::ACTIVE_STATES[1], self::ACTIVE_STATES[2],
+        );
+        return $row !== null ? (int) $row['id'] : null;
+    }
+
+    /** Řada vázaného typu pro pokladnu (BoundNumberSeriesProvisioner ji zakládá per aktivní pokladna). */
+    private function resolveBoundNumberSeries(string $docType, int $cashDeskId): ?int
+    {
+        $row = $this->db->fetch(
+            'SELECT [id] FROM [docs_core_number_series]
+             WHERE [doc_type] = %s AND [cash_desk] = %i AND [docState] IN (%i, %i, %i)
+             ORDER BY [id] LIMIT 1',
+            $docType, $cashDeskId,
             self::ACTIVE_STATES[0], self::ACTIVE_STATES[1], self::ACTIVE_STATES[2],
         );
         return $row !== null ? (int) $row['id'] : null;

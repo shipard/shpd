@@ -44,6 +44,27 @@ class TestableDocumentApplier extends DocumentApplier
 
 class DocumentApplierTest extends TestCase
 {
+    /**
+     * Výchozí config: jen typy dokladů (směr obchodu pro snapshot partnera
+     * v import módu jde přes DocDocument::resolveTradeDir), ostatní cfgItems
+     * null jako u holého mocku.
+     */
+    private function defaultConfig(): ConfigRuntime
+    {
+        $docTypes = [
+            'invno'   => ['trade_dir' => 1],
+            'invni'   => ['trade_dir' => 2],
+            'cmnbkp'  => ['trade_dir' => 0],
+            'cash'    => ['trade_dir' => 0, 'trade_dir_column' => 'cash_dir', 'series_binding' => 'cash_desk'],
+            'cashreg' => ['trade_dir' => 1, 'series_binding' => 'cash_desk'],
+        ];
+        $config = $this->createMock(ConfigRuntime::class);
+        $config->method('cfgItem')->willReturnCallback(
+            static fn (string $id): mixed => $id === 'docs.core.docTypes' ? $docTypes : null,
+        );
+        return $config;
+    }
+
     private function buildApplier(
         ?Connection $db = null,
         ?PartyResolver $party = null,
@@ -70,7 +91,7 @@ class DocumentApplierTest extends TestCase
 
         return new TestableDocumentApplier(
             db: $db,
-            config: $config ?? $this->createMock(ConfigRuntime::class),
+            config: $config ?? $this->defaultConfig(),
             headsGateway: $heads,
             personsGateway: $persons,
             itemsGateway: $items,

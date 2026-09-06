@@ -97,9 +97,38 @@ final class DocumentValidator
                     $issues[] = $this->required('customer', 'U vydané faktury je odběratel povinný.');
                 }
                 break;
-            // Other docTypes (creditNote, order, deliveryNote, cashDoc, …)
-            // pick up the common checks above; type-specific validation
-            // arrives with each module that introduces them.
+            // Pokladní doklad / prodejka (#59 D12): řada je vázaná na pokladnu,
+            // proto je kód pokladny povinný; směr PD 1 příjem / 2 výdej.
+            // Strany (supplier/customer) jsou nepovinné — anonymní doklady.
+            case 'cashDocument':
+                $this->checkCashDesk($canonical, $issues);
+                $direction = $canonical['cashDirection'] ?? null;
+                if (!in_array($direction, [1, 2], true)) {
+                    $issues[] = [
+                        'severity' => 'error',
+                        'path'     => 'cashDirection',
+                        'code'     => 'invalid_value',
+                        'message'  => 'Směr pokladního dokladu musí být 1 (příjem) nebo 2 (výdej).',
+                    ];
+                }
+                break;
+            case 'cashRegisterDocument':
+                $this->checkCashDesk($canonical, $issues);
+                break;
+            // Other docTypes (creditNote, order, deliveryNote, …) pick up the
+            // common checks above; type-specific validation arrives with each
+            // module that introduces them.
+        }
+    }
+
+    /**
+     * @param array<int, array{severity: string, path: string, code: string, message: string}> $issues
+     */
+    private function checkCashDesk(array $canonical, array &$issues): void
+    {
+        $code = $canonical['cashDesk'] ?? null;
+        if (!is_string($code) || trim($code) === '') {
+            $issues[] = $this->required('cashDesk', 'Kód pokladny je povinný — řada dokladu je vázaná na pokladnu.');
         }
     }
 

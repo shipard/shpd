@@ -61,7 +61,7 @@ class CashAccountingRulesTest extends TestCase
                 $masks[] = (string) $entry['accountMask'];
             }
         }
-        $this->assertSame(['261100'], $masks, 'card.transit má jedinou pevnou analytiku');
+        $this->assertSame(['261400'], $masks, 'card.transit má jedinou pevnou analytiku, oddělenou od převodů 261100');
         $this->assertArrayHasKey('card.transit', $this->rules()['categories']);
 
         foreach (['accountChartDefault', 'accountChartNpo'] as $chart) {
@@ -69,8 +69,49 @@ class CashAccountingRulesTest extends TestCase
                 fn($e) => (string) $e['number'],
                 JsoncParser::parseFile(self::MODULES . "/economy/accounting/config/{$chart}.jsonc"),
             ));
-            $this->assertArrayHasKey('261100', $numbers, "{$chart} nemá 261100");
+            $this->assertArrayHasKey('261400', $numbers, "{$chart} nemá 261400");
             $this->assertArrayHasKey('211100', $numbers, "{$chart} nemá 211100 (výchozí účet pokladny)");
+        }
+    }
+
+    /**
+     * Převody peněz (Task D): kategorie cash.transit míří na 261100 (odděleně
+     * od karet 261400), pohyby transfer.* mají v rowOperations vlajky
+     * rowSide 0 + rowPaymentId bez partnera a bez identityRequired, směr per
+     * cash_dir; v bloku cash má každý směr právě jeden krok cash.transit
+     * na správné straně (příjem DAL, výdej MD — pokladna z head kroku naopak).
+     */
+    public function testCashTransfersGoThroughTransitAccountSeparatedFromCards(): void
+    {
+        $rules = $this->rules();
+        $this->assertArrayHasKey('cash.transit', $rules['categories']);
+
+        $masks = [];
+        foreach ($rules['accounts'] as $entry) {
+            if (($entry['cat'] ?? null) === 'cash.transit') {
+                $masks[] = (string) $entry['accountMask'];
+            }
+        }
+        $this->assertSame(['261100'], $masks, 'cash.transit má jedinou pevnou analytiku 261100');
+
+        $ops = JsoncParser::parseFile(self::MODULES . '/docs/core/config/rowOperations.jsonc');
+        foreach (['transfer.in' => 1, 'transfer.out' => 2] as $op => $dir) {
+            $this->assertArrayHasKey($op, $ops);
+            $this->assertSame(0, $ops[$op]['rowSide'], "{$op}: strana z předpisu");
+            $this->assertSame(1, $ops[$op]['rowPaymentId'], "{$op}: payment_reference řádku (nepovinný)");
+            $this->assertArrayNotHasKey('rowPartner', $ops[$op], "{$op}: převod je bez partnera");
+            $this->assertArrayNotHasKey('identityRequired', $ops[$op], "{$op}: VS není povinný");
+            $this->assertSame(['cash'], array_keys($ops[$op]['docTypes']), "{$op}: jen pokladní doklad (T1)");
+            $this->assertSame($dir, $ops[$op]['docTypes']['cash']['cashDir']);
+
+            $steps = array_values(array_filter(
+                $this->stepsOf('cash'),
+                fn($s) => ($s['cat'] ?? null) === 'cash.transit' && ($s['operation'] ?? null) === $op,
+            ));
+            $this->assertCount(1, $steps, "cash: jeden krok cash.transit pro {$op}");
+            $this->assertSame(['cash_dir' => $dir], $steps[0]['headQuery']);
+            $this->assertSame('rows', $steps[0]['src']);
+            $this->assertSame($dir === 1 ? 1 : 0, $steps[0]['side'], 'příjem DAL 261100, výdej MD 261100');
         }
     }
 

@@ -26,7 +26,47 @@ class DocRowOperationRulesTest extends TestCase
                 'rowSide' => 0, 'rowPartner' => 1, 'rowPaymentId' => 1, 'identityRequired' => 1,
                 'docTypes' => ['cash' => ['order' => 300, 'cashDir' => 1]],
             ],
+            // převody peněz (Task D): bez partnera, VS nepovinný, směr per cash_dir
+            'transfer.in' => [
+                'name' => 'Cash transfer in', 'rowSide' => 0, 'rowPaymentId' => 1,
+                'docTypes' => ['cash' => ['order' => 350, 'cashDir' => 1]],
+            ],
+            'transfer.out' => [
+                'name' => 'Cash transfer out', 'rowSide' => 0, 'rowPaymentId' => 1,
+                'docTypes' => ['cash' => ['order' => 450, 'cashDir' => 2]],
+            ],
         ];
+    }
+
+    // ── transfer.* (převody peněz, Task D) ──────────────────────────────────
+
+    public function testTransferRowsNeedNeitherPartnerNorPaymentReference(): void
+    {
+        $in  = ['row_kind' => 1, 'operation' => 'transfer.in',  'total_price' => 5000];
+        $out = ['row_kind' => 1, 'operation' => 'transfer.out', 'total_price' => 20000];
+
+        $this->assertSame([], DocRowOperationRules::validateRow($in, 'cash', $this->cfg(), 1));
+        $this->assertSame([], DocRowOperationRules::validateRow($out, 'cash', $this->cfg(), 2));
+
+        // nepovinná identifikace protistrany převodu projde taky
+        $in['payment_reference'] = 'TX 2026-06-10 #4711';
+        $this->assertSame([], DocRowOperationRules::validateRow($in, 'cash', $this->cfg(), 1));
+    }
+
+    public function testTransferDirectionIsBoundToCashDir(): void
+    {
+        $in  = ['row_kind' => 1, 'operation' => 'transfer.in'];
+        $out = ['row_kind' => 1, 'operation' => 'transfer.out'];
+
+        $errors = DocRowOperationRules::validateRow($in, 'cash', $this->cfg(), 2);
+        $this->assertSame('operation_not_allowed_for_direction', $errors[0]['code'], 'transfer.in jen na příjmu');
+
+        $errors = DocRowOperationRules::validateRow($out, 'cash', $this->cfg(), 1);
+        $this->assertSame('operation_not_allowed_for_direction', $errors[0]['code'], 'transfer.out jen na výdeji');
+
+        // T1: na účetním dokladu převod není
+        $errors = DocRowOperationRules::validateRow($in, 'cmnbkp', $this->cfg());
+        $this->assertSame('operation_not_allowed', $errors[0]['code']);
     }
 
     // ── cashDir (pokladní doklad, směr per doklad) ──────────────────────────

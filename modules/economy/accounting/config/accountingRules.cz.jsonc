@@ -29,7 +29,8 @@
         "rounding.revenue": {"name:cs": "Zaokrouhlení — výnos"},
         "fx.loss":          {"name:cs": "Kurzové ztráty"},
         "fx.gain":          {"name:cs": "Kurzové zisky"},
-        "card.transit":     {"name:cs": "Karta — peníze na cestě"},
+        "card.transit":     {"name:cs": "Karta — platební karty na cestě"},
+        "cash.transit":     {"name:cs": "Převod peněz — peníze na cestě"},
 
         "bank.unmatched.in":  {"name:cs": "Banka — nespárovaný příjem"},
         "bank.unmatched.out": {"name:cs": "Banka — nespárovaný výdaj"},
@@ -73,11 +74,19 @@
         {"cat": "bank.interest.in",   "accountMask": "662"},
         {"cat": "bank.interest.out",  "accountMask": "562"},
 
-        // Platba kartou na pokladně (#59 D8): peníze na cestě, než banka
-        // připíše tržbu terminálu. Jediná analytika 261100 (seed rozvrhy) —
-        // per-terminál analytiky jsou mimo scope; migrovaný rozvrh bez
-        // 261100 dá account_not_found (řádek 261???), řeší se rozvrhem DS.
-        {"cat": "card.transit",       "accountMask": "261100"},
+        // Peníze na cestě — dvě oddělené analytiky (#59 D8 / Task D):
+        //   261100 cash.transit = převody peněz pokladna ↔ banka ↔ pokladna
+        //     (transfer.* na pokladním dokladu i bankovní transakci). Obě
+        //     strany převodu účtují sem → po zaúčtování obou nulový zůstatek
+        //     (kontrola jako clearing 261200/261300).
+        //   261400 card.transit = platby kartou na pokladně, než banka připíše
+        //     tržbu terminálu. Zůstatek je běžně nenulový (nepřipsané tržby,
+        //     stržené poplatky) — na jednom účtu s převody by kontrola nuly
+        //     nefungovala. Jediná analytika, per-terminál mimo scope.
+        // Migrovaný rozvrh bez 261100/261400 dá account_not_found (řádek
+        // 261???), řeší se rozvrhem DS.
+        {"cat": "cash.transit",       "accountMask": "261100"},
+        {"cat": "card.transit",       "accountMask": "261400"},
 
         // DPH analytiky per kód — konvence 343{NNN}, NNN = číselná část kódu.
         // Řádek má každý kód, který může vyprodukovat nenulovou daň: nenulová
@@ -219,9 +228,12 @@
         // 2 výdej). Kroky nad řádky/rekapitulací filtruje headQuery (query
         // se u nich hodnotí nad řádkem), head kroky query. Protistrana dle
         // payment_method: 0 Hotovost → účet pokladny (accountSrc cashDesk),
-        // 2 Kartou → peníze na cestě (card.transit). Úhrady payment.* jdou
-        // na 311/321 s identitou řádku (partner, VS) — accbal je páruje jako
-        // bankovní úhrady.
+        // 2 Kartou → karty na cestě (card.transit 261400). Úhrady payment.*
+        // jdou na 311/321 s identitou řádku (partner, VS) — accbal je páruje
+        // jako bankovní úhrady. Převody transfer.* (Task D) jdou na 261100
+        // (cash.transit): příjem DAL 261100 / MD pokladna z head kroku,
+        // výdej MD 261100 / DAL pokladna; protistranu nese bankovní transakce
+        // transfer.* nebo pokladní doklad druhé pokladny.
         {"docType": "cash",
             "accounting": [
                 // ── příjem: jako vydaná faktura
@@ -229,6 +241,8 @@
                     "operations": ["sale.services", "sale.goods"]},
                 {"headQuery": {"cash_dir": 1}, "cat": "receivables", "src": "rows", "side": 1,
                     "operation": "payment.receivable", "text": "Úhrada pohledávky"},
+                {"headQuery": {"cash_dir": 1}, "cat": "cash.transit", "src": "rows", "side": 1,
+                    "operation": "transfer.in", "text": "Převod peněz"},
                 {"headQuery": {"cash_dir": 1}, "accountSrc": "item", "src": "rows", "side": 1,
                     "operation": "acc.entry"},
                 {"headQuery": {"cash_dir": 1}, "cat": "vat", "src": "vat", "side": 1},
@@ -246,6 +260,8 @@
                     "operations": ["purchase.goods", "purchase.services", "purchase.other"]},
                 {"headQuery": {"cash_dir": 2}, "cat": "payables", "src": "rows", "side": 0,
                     "operation": "payment.payable", "text": "Úhrada závazku"},
+                {"headQuery": {"cash_dir": 2}, "cat": "cash.transit", "src": "rows", "side": 0,
+                    "operation": "transfer.out", "text": "Převod peněz"},
                 {"headQuery": {"cash_dir": 2}, "accountSrc": "item", "src": "rows", "side": 0,
                     "operation": "acc.entry"},
                 {"headQuery": {"cash_dir": 2}, "cat": "vat", "src": "vat", "side": 0},

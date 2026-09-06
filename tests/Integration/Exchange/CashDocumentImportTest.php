@@ -209,7 +209,7 @@ class CashDocumentImportTest extends IntegrationTestCase
         $this->assertSame($ourNumber, (string) $head['doc_number']);
 
         $journal = $this->db->fetchAll('SELECT * FROM economy_accounting_journal WHERE doc_head = %i', $docId);
-        $this->assertEqualsWithDelta(242.0, (float) $this->lineByPrefix($journal, '261100')['money_dr'], 0.001, 'karta → peníze na cestě');
+        $this->assertEqualsWithDelta(242.0, (float) $this->lineByPrefix($journal, '261400')['money_dr'], 0.001, 'karta → platební karty na cestě');
     }
 
     public function testUnknownCashDeskFailsCleanly(): void

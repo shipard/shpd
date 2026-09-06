@@ -263,7 +263,8 @@ class CashDocsAccountingTest extends IntegrationTestCase
     public function testReceiptCardPaymentOfReceivableCarriesRowIdentity(): void
     {
         // Příjmový PD, kartou, úhrada FVB 1 210 (payment.receivable, VS):
-        // 311 DAL 1 210 (partner + VS z řádku) · 261100 MD 1 210
+        // 311 DAL 1 210 (partner + VS z řádku) · 261400 MD 1 210 (karty na
+        // cestě — odděleně od převodů 261100, Task D)
         $partner = $this->anyPartnerId();
         $deskId = $this->createCashDesk($this->accountIdByPrefix('211'));
         $headId = $this->insertHead('cash', $deskId, 1210.0, 0.0, ['cash_dir' => 1, 'payment_method' => 2]);
@@ -289,7 +290,8 @@ class CashDocsAccountingTest extends IntegrationTestCase
         $this->assertSame('2026000042', (string) $receivable['payment_reference']);
         $this->assertSame('payment.receivable', $receivable['operation']);
 
-        $this->assertEqualsWithDelta(1210.0, (float) $this->lineByPrefix($journal, '261100')['money_dr'], 0.001);
+        $this->assertEqualsWithDelta(1210.0, (float) $this->lineByPrefix($journal, '261400')['money_dr'], 0.001);
+        $this->assertNoLine($journal, '261100');
         $this->assertNoLine($journal, '211');
     }
 

@@ -61,5 +61,24 @@
         "name:en": "Interest paid",
         "direction": 2,
         "cat": "bank.interest.out"
+    },
+    // Převody peněz (#59 Task D): protistrana je vlastní pokladna (nebo
+    // vlastní jiný bankovní účet). Obě strany přes 261100 (cash.transit) —
+    // po zaúčtování obou nulový zůstatek. Matcher accbal transakce nevidí:
+    // kandidáty bere z clearingu 261200/261300, 261100 v žádné saldo skupině
+    // není. Automatická detekce převodu z výpisu je refinement (bank.md §11).
+    "transfer.in": {
+        "name": "Transfer in (own cash / account)",
+        "name:cs": "Příjem z převodu peněz",
+        "name:en": "Transfer in (own cash / account)",
+        "direction": 1,
+        "cat": "cash.transit"
+    },
+    "transfer.out": {
+        "name": "Transfer out (own cash / account)",
+        "name:cs": "Výdej pro převod peněz",
+        "name:en": "Transfer out (own cash / account)",
+        "direction": 2,
+        "cat": "cash.transit"
     }
 }

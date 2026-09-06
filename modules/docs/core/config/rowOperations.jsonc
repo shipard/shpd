@@ -133,6 +133,37 @@
         }
     },
 
+    // Převody peněz (#59 Task D): odvod hotovosti do banky, dotace pokladny
+    // z banky, převod mezi pokladnami. Obě strany převodu jdou přes 261100
+    // Peníze na cestě (kategorie cash.transit) — druhou stranu nese bankovní
+    // transakce (economy.bank.txOperations transfer.*) nebo pokladní doklad
+    // druhé pokladny; po zaúčtování obou má 261100 z převodů nulový zůstatek.
+    // rowSide: 0 — strana z kroku předpisu, částka kladná, směr = operace +
+    // cash_dir. Bez partnera (žádný rowPartner), bez DPH; payment_reference
+    // nepovinný (identifikace protistrany převodu — číslo bankovní transakce,
+    // doklad druhé pokladny — pro budoucí párování 261). Bez saldokontní
+    // skupiny. Na cmnbkp úmyslně ne — ruční opravy pokryje acc.record na 261.
+    "transfer.in": {
+        "name": "Cash transfer in",
+        "name:cs": "Příjem z převodu peněz",
+        "name:en": "Cash transfer in",
+        "rowSide": 0,
+        "rowPaymentId": 1,
+        "docTypes": {
+            "cash": {"order": 350, "cashDir": 1}
+        }
+    },
+    "transfer.out": {
+        "name": "Cash transfer out",
+        "name:cs": "Výdej pro převod peněz",
+        "name:en": "Cash transfer out",
+        "rowSide": 0,
+        "rowPaymentId": 1,
+        "docTypes": {
+            "cash": {"order": 450, "cashDir": 2}
+        }
+    },
+
     // Zálohy a majetek (vlna C): zálohové operace NEMAJÍ rowAccount —
     // účet dohledávají kategorie advances.* účtovacího předpisu maskou
     // nad rozvrhem DS (D10, vzor saldokontních zápočtů), formulář vstup

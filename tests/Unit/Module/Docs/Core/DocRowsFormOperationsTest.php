@@ -63,6 +63,14 @@ class DocRowsFormOperationsTest extends TestCase
                     'rowSide' => 0, 'rowPartner' => 1, 'rowPaymentId' => 1, 'identityRequired' => 1,
                     'docTypes' => ['cash' => ['order' => 400, 'cashDir' => 2]],
                 ],
+                'transfer.in' => [
+                    'name' => 'Příjem z převodu peněz', 'rowSide' => 0, 'rowPaymentId' => 1,
+                    'docTypes' => ['cash' => ['order' => 350, 'cashDir' => 1]],
+                ],
+                'transfer.out' => [
+                    'name' => 'Výdej pro převod peněz', 'rowSide' => 0, 'rowPaymentId' => 1,
+                    'docTypes' => ['cash' => ['order' => 450, 'cashDir' => 2]],
+                ],
             ],
             'docs.core.docTypes' => [
                 'invno' => ['trade_dir' => 1],
@@ -195,7 +203,7 @@ class DocRowsFormOperationsTest extends TestCase
 
         $el = $this->findElement($def, 'operation');
         $this->assertSame(
-            ['sale.services', 'sale.goods', 'payment.receivable', 'acc.entry'],
+            ['sale.services', 'sale.goods', 'payment.receivable', 'transfer.in', 'acc.entry'],
             array_column($el->options, 'value'),
         );
     }
@@ -208,7 +216,7 @@ class DocRowsFormOperationsTest extends TestCase
 
         $el = $this->findElement($def, 'operation');
         $this->assertSame(
-            ['purchase.goods', 'payment.payable', 'acc.entry'],
+            ['purchase.goods', 'payment.payable', 'transfer.out', 'acc.entry'],
             array_column($el->options, 'value'),
         );
 
@@ -228,5 +236,26 @@ class DocRowsFormOperationsTest extends TestCase
         $this->assertNotNull($this->findElement($def, 'partner'));
         $this->assertNotNull($this->findElement($def, 'payment_reference'));
         $this->assertTrue($this->findElement($def, 'price_calc_mode')->hidden);
+    }
+
+    /**
+     * Převod peněz (Task D): kontační layout jako úhrada, ale bez partnera
+     * (žádný rowPartner) — partnera řídí výhradně vlajka, ne rowSide: 0.
+     * payment_reference je nabídnutý, ne povinný.
+     */
+    public function testTransferRowUsesContationLayoutWithoutPartnerOrVat(): void
+    {
+        $data = ['row_kind' => 1, 'doc_head' => 5, 'operation' => 'transfer.out'];
+        $def = $this->form('cash', cashDir: 2)->buildFormDefinition($data, true);
+
+        $this->assertNull($this->findElement($def, 'vat_code'), 'převod je bez DPH bloku');
+        $this->assertNull($this->findElement($def, 'quantity'));
+        $this->assertNull($this->findElement($def, 'item'), 'převod je bez položky');
+        $this->assertNull($this->findElement($def, 'acc_side'), 'stranu nese krok předpisu');
+        $this->assertNull($this->findElement($def, 'partner'), 'převod nemá partnera (T3)');
+        $this->assertTrue($this->findElement($def, 'total_price')->required);
+        $ref = $this->findElement($def, 'payment_reference');
+        $this->assertNotNull($ref, 'identifikace protistrany převodu');
+        $this->assertFalse($ref->required, 'payment_reference u převodu nepovinný');
     }
 }

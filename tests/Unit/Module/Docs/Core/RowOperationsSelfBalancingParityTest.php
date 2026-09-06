@@ -42,19 +42,23 @@ class RowOperationsSelfBalancingParityTest extends TestCase
 
             // Per operace: fixní strany kroků (side bez sideSrc). Kroky bez
             // `operation` (head/vat/rounding) se řádkových pohybů netýkají.
+            // Kroky s různým headQuery (cash: cash_dir 1 / 2) se navzájem
+            // vylučují — počítají se zvlášť, ne jako dvě strany jednoho pohybu.
             $fixedSides = [];
             foreach ($docRules['accounting'] as $step) {
                 $op = $step['operation'] ?? null;
                 if ($op === null) {
                     continue;
                 }
-                $fixedSides[$op] ??= [];
+                $key = $op . '|' . json_encode($step['headQuery'] ?? null);
+                $fixedSides[$key] ??= [];
                 if (!isset($step['sideSrc']) && isset($step['side'])) {
-                    $fixedSides[$op][(int) $step['side']] = true;
+                    $fixedSides[$key][(int) $step['side']] = true;
                 }
             }
 
-            foreach ($fixedSides as $op => $sides) {
+            foreach ($fixedSides as $key => $sides) {
+                $op = explode('|', $key, 2)[0];
                 $coversBoth = isset($sides[0], $sides[1]);
                 $flagged = !empty($this->rowOperations[$op]['selfBalancing']);
                 $this->assertSame(
@@ -82,16 +86,18 @@ class RowOperationsSelfBalancingParityTest extends TestCase
         foreach ($flagged as $op) {
             $found = false;
             foreach ($this->documents as $docRules) {
-                $sides = [];
+                $sidesByHeadQuery = [];
                 foreach ($docRules['accounting'] as $step) {
                     if (($step['operation'] ?? null) === $op
                         && !isset($step['sideSrc']) && isset($step['side'])) {
-                        $sides[(int) $step['side']] = true;
+                        $sidesByHeadQuery[json_encode($step['headQuery'] ?? null)][(int) $step['side']] = true;
                     }
                 }
-                if (isset($sides[0], $sides[1])) {
-                    $found = true;
-                    break;
+                foreach ($sidesByHeadQuery as $sides) {
+                    if (isset($sides[0], $sides[1])) {
+                        $found = true;
+                        break 2;
+                    }
                 }
             }
             $this->assertTrue(

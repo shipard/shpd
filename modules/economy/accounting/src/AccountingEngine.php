@@ -184,6 +184,13 @@ final class AccountingEngine
      */
     private function buildStepLines(array $step, array $head, array $rows, array $recap): array
     {
+        // headQuery: filtr nad hlavičkou pro libovolný src — `query` se u
+        // rows/vat kroků vyhodnocuje nad řádkem / rekapitulací, takže bez
+        // něj nejde v jednom bloku rozlišit strany podle cash_dir (#59 D8).
+        if (isset($step['headQuery']) && !$this->matchesQuery(['query' => $step['headQuery']], $head)) {
+            return [];
+        }
+
         $src = (string) ($step['src'] ?? '');
         return match ($src) {
             'rows' => $this->buildRowLines($step, $head, $rows),
@@ -326,16 +333,70 @@ final class AccountingEngine
             return [];
         }
 
+        $account = match ($step['accountSrc'] ?? null) {
+            'cashDesk' => $this->resolveCashDeskAccount($head),
+            default    => $this->resolveCategoryAccount($step, $head, $head, null),
+        };
+
         return [$this->makeLine(
             $step,
             $head,
-            $this->resolveCategoryAccount($step, $head, $head, null),
+            $account,
             $dom,
             $cur,
             text: (string) ($step['text'] ?? $head['doc_text'] ?? ''),
             operation: null,
             rowId: null,
         )];
+    }
+
+    /**
+     * Účet pokladny z hlavičky (accountSrc: "cashDesk", #59 D8):
+     * head.cash_desk → economy_codebooks_cash_desks.accounting_account
+     * (extension economy.accounting, 211xxx) → účet rozvrhu. Chybějící
+     * pokladna (faktura s Hotovostí bez pokladny) nebo účet → chybový řádek
+     * 211??? + message cash_desk_account_missing; alert vzniká z
+     * accounting_state 2 (AccountingErrorsCheck). Vzor
+     * BankTransactionAccountingEngine::resolveBankAccount.
+     *
+     * @return array{id?: int, number: string, is_error?: bool}
+     */
+    private function resolveCashDeskAccount(array $head): array
+    {
+        $errorAccount = ['number' => str_pad('211', self::ACCOUNT_NUMBER_LENGTH, '?'), 'is_error' => true];
+
+        $cashDeskId = (int) ($head['cash_desk'] ?? 0);
+        if ($cashDeskId === 0) {
+            $this->addMessage(
+                'cash_desk_account_missing',
+                'Doklad je hrazen hotově, ale nemá pokladnu — doplň pokladnu a přeúčtuj',
+            );
+            return $errorAccount;
+        }
+
+        $desk = $this->db->fetch(
+            'SELECT [accounting_account] FROM [economy_codebooks_cash_desks] WHERE [id] = %i',
+            $cashDeskId,
+        );
+        $accountId = $desk !== null ? (int) ($desk['accounting_account'] ?? 0) : 0;
+        $account = $accountId > 0
+            ? $this->db->fetch(
+                'SELECT [id], [number] FROM [economy_accounting_accounts]
+                 WHERE [id] = %i AND [docState] IN %in',
+                $accountId,
+                self::LINKABLE_STATES,
+            )
+            : null;
+
+        if ($account === null) {
+            $this->addMessage(
+                'cash_desk_account_missing',
+                'Pokladna nemá vyplněný nebo platný účet pro pohyby (211xxx)',
+            );
+            return $errorAccount;
+        }
+
+        return ['id' => (int) $account['id'], 'number' => (string) $account['number']];
     }
 
     /** Část vat kódu před první pomlčkou, lowercase (`cz-110` → `cz`). */
@@ -369,7 +430,10 @@ final class AccountingEngine
 
     /**
      * Obecný filtr `query` {sloupec: hodnota} nad zdrojovým záznamem —
-     * volné porovnání (DB vrací stringy, předpis píše čísla).
+     * volné porovnání (DB vrací stringy, předpis píše čísla). Hodnota-pole
+     * je operátorový objekt: `{"$ne": v}` (nerovnost), `{"$in": [v, …]}`.
+     * Neznámý operátor je chyba předpisu a padá hlasitě — tiché „nikdy
+     * nematchne" by krok jen zmizel. Sdílené kroky i `accounts[]` kategorie.
      */
     private function matchesQuery(array $step, array $record): bool
     {
@@ -378,7 +442,23 @@ final class AccountingEngine
             return true;
         }
         foreach ($query as $col => $expected) {
-            if (($record[$col] ?? null) != $expected) {
+            $actual = $record[$col] ?? null;
+            if (is_array($expected)) {
+                foreach ($expected as $op => $value) {
+                    $ok = match ((string) $op) {
+                        '$ne'   => $actual != $value,
+                        '$in'   => in_array($actual, is_array($value) ? $value : [$value]),
+                        default => throw new \LogicException(
+                            "Účtovací předpis: neznámý operátor '{$op}' ve query sloupce '{$col}'",
+                        ),
+                    };
+                    if (!$ok) {
+                        return false;
+                    }
+                }
+                continue;
+            }
+            if ($actual != $expected) {
                 return false;
             }
         }

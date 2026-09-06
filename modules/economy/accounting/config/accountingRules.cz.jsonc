@@ -10,6 +10,11 @@
     //             (number LIKE mask%, jen analytické účty, dle čísla).
     // categories: názvy kategorií pro dokumentaci/UI.
     //
+    // Účet pokladny (211xxx) není kategorie: kroky s accountSrc: "cashDesk"
+    // ho berou přímo z pokladny hlavičky (economy_codebooks_cash_desks
+    // .accounting_account, #59 D8) — hotovostní protistrana pokladních
+    // dokladů, prodejek i faktur placených hotově.
+    //
     // Detaily sémantiky kroků: docs/accounting.md sekce 4 a 5.
 
     "categories": {
@@ -24,6 +29,7 @@
         "rounding.revenue": {"name:cs": "Zaokrouhlení — výnos"},
         "fx.loss":          {"name:cs": "Kurzové ztráty"},
         "fx.gain":          {"name:cs": "Kurzové zisky"},
+        "card.transit":     {"name:cs": "Karta — peníze na cestě"},
 
         "bank.unmatched.in":  {"name:cs": "Banka — nespárovaný příjem"},
         "bank.unmatched.out": {"name:cs": "Banka — nespárovaný výdaj"},
@@ -66,6 +72,12 @@
         {"cat": "bank.fee",           "accountMask": "568"},
         {"cat": "bank.interest.in",   "accountMask": "662"},
         {"cat": "bank.interest.out",  "accountMask": "562"},
+
+        // Platba kartou na pokladně (#59 D8): peníze na cestě, než banka
+        // připíše tržbu terminálu. Jediná analytika 261100 (seed rozvrhy) —
+        // per-terminál analytiky jsou mimo scope; migrovaný rozvrh bez
+        // 261100 dá account_not_found (řádek 261???), řeší se rozvrhem DS.
+        {"cat": "card.transit",       "accountMask": "261100"},
 
         // DPH analytiky per kód — konvence 343{NNN}, NNN = číselná část kódu.
         // Řádek má každý kód, který může vyprodukovat nenulovou daň: nenulová
@@ -165,7 +177,13 @@
                     "side": 1, "sign": "+", "text": "Zaokrouhlení dokladu"},
                 {"cat": "rounding.cost", "src": "head", "col": "rounding",
                     "side": 0, "reverseSign": 1, "sign": "-", "text": "Zaokrouhlení dokladu"},
-                {"cat": "receivables", "src": "head", "col": "total", "side": 0}
+                // Faktura placená hotově (#59 D8): celkem jde na účet
+                // pokladny místo 311 — nevzniká otevřená položka salda
+                // (staré totalCash). Bez pokladny → řádek 211??? + alert.
+                {"cat": "receivables", "src": "head", "col": "total", "side": 0,
+                    "query": {"payment_method": {"$ne": 0}}},
+                {"accountSrc": "cashDesk", "src": "head", "col": "total", "side": 0,
+                    "query": {"payment_method": 0}}
             ]
         },
         {"docType": "invni",
@@ -190,7 +208,74 @@
                     "side": 0, "sign": "+", "text": "Zaokrouhlení dokladu"},
                 {"cat": "rounding.revenue", "src": "head", "col": "rounding",
                     "side": 1, "reverseSign": 1, "sign": "-", "text": "Zaokrouhlení dokladu"},
-                {"cat": "payables", "src": "head", "col": "total", "side": 1}
+                // Hotově placená přijatá faktura → účet pokladny místo 321 (D8).
+                {"cat": "payables", "src": "head", "col": "total", "side": 1,
+                    "query": {"payment_method": {"$ne": 0}}},
+                {"accountSrc": "cashDesk", "src": "head", "col": "total", "side": 1,
+                    "query": {"payment_method": 0}}
+            ]
+        },
+        // Pokladní doklad (#59 D7/D8): směr per doklad (cash_dir 1 příjem,
+        // 2 výdej). Kroky nad řádky/rekapitulací filtruje headQuery (query
+        // se u nich hodnotí nad řádkem), head kroky query. Protistrana dle
+        // payment_method: 0 Hotovost → účet pokladny (accountSrc cashDesk),
+        // 2 Kartou → peníze na cestě (card.transit). Úhrady payment.* jdou
+        // na 311/321 s identitou řádku (partner, VS) — accbal je páruje jako
+        // bankovní úhrady.
+        {"docType": "cash",
+            "accounting": [
+                // ── příjem: jako vydaná faktura
+                {"headQuery": {"cash_dir": 1}, "cat": "revenue", "src": "rows", "side": 1,
+                    "operations": ["sale.services", "sale.goods"]},
+                {"headQuery": {"cash_dir": 1}, "cat": "receivables", "src": "rows", "side": 1,
+                    "operation": "payment.receivable", "text": "Úhrada pohledávky"},
+                {"headQuery": {"cash_dir": 1}, "accountSrc": "item", "src": "rows", "side": 1,
+                    "operation": "acc.entry"},
+                {"headQuery": {"cash_dir": 1}, "cat": "vat", "src": "vat", "side": 1},
+                {"headQuery": {"cash_dir": 1}, "cat": "rounding.revenue", "src": "head", "col": "rounding",
+                    "side": 1, "sign": "+", "text": "Zaokrouhlení dokladu"},
+                {"headQuery": {"cash_dir": 1}, "cat": "rounding.cost", "src": "head", "col": "rounding",
+                    "side": 0, "reverseSign": 1, "sign": "-", "text": "Zaokrouhlení dokladu"},
+                {"accountSrc": "cashDesk", "src": "head", "col": "total", "side": 0,
+                    "query": {"cash_dir": 1, "payment_method": 0}},
+                {"cat": "card.transit", "src": "head", "col": "total", "side": 0,
+                    "query": {"cash_dir": 1, "payment_method": 2}},
+
+                // ── výdej: jako přijatá faktura
+                {"headQuery": {"cash_dir": 2}, "cat": "costs", "src": "rows", "side": 0,
+                    "operations": ["purchase.goods", "purchase.services", "purchase.other"]},
+                {"headQuery": {"cash_dir": 2}, "cat": "payables", "src": "rows", "side": 0,
+                    "operation": "payment.payable", "text": "Úhrada závazku"},
+                {"headQuery": {"cash_dir": 2}, "accountSrc": "item", "src": "rows", "side": 0,
+                    "operation": "acc.entry"},
+                {"headQuery": {"cash_dir": 2}, "cat": "vat", "src": "vat", "side": 0},
+                {"headQuery": {"cash_dir": 2}, "cat": "rounding.cost", "src": "head", "col": "rounding",
+                    "side": 0, "sign": "+", "text": "Zaokrouhlení dokladu"},
+                {"headQuery": {"cash_dir": 2}, "cat": "rounding.revenue", "src": "head", "col": "rounding",
+                    "side": 1, "reverseSign": 1, "sign": "-", "text": "Zaokrouhlení dokladu"},
+                {"accountSrc": "cashDesk", "src": "head", "col": "total", "side": 1,
+                    "query": {"cash_dir": 2, "payment_method": 0}},
+                {"cat": "card.transit", "src": "head", "col": "total", "side": 1,
+                    "query": {"cash_dir": 2, "payment_method": 2}}
+            ]
+        },
+        // Prodejka (#59 D1/D9): pevně výstup, příjmová část bez payment.*;
+        // vratka = záporné řádky (záporné částky na obou stranách, vyrovnané).
+        {"docType": "cashreg",
+            "accounting": [
+                {"cat": "revenue", "src": "rows", "side": 1,
+                    "operations": ["sale.services", "sale.goods"]},
+                {"accountSrc": "item", "src": "rows", "side": 1,
+                    "operation": "acc.entry"},
+                {"cat": "vat", "src": "vat", "side": 1},
+                {"cat": "rounding.revenue", "src": "head", "col": "rounding",
+                    "side": 1, "sign": "+", "text": "Zaokrouhlení dokladu"},
+                {"cat": "rounding.cost", "src": "head", "col": "rounding",
+                    "side": 0, "reverseSign": 1, "sign": "-", "text": "Zaokrouhlení dokladu"},
+                {"accountSrc": "cashDesk", "src": "head", "col": "total", "side": 0,
+                    "query": {"payment_method": 0}},
+                {"cat": "card.transit", "src": "head", "col": "total", "side": 0,
+                    "query": {"payment_method": 2}}
             ]
         },
         {"docType": "cmnbkp",

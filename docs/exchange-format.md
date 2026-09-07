@@ -317,9 +317,12 @@ reprodukuje). Výslednou částku a `total_rounding` pak dopočte
 - **`cashDocument`** (`cash`, pokladní doklad, #59 D12) — povinný **`cashDesk`**
   (kód pokladny `economy_codebooks_cash_desks.code`) a **`cashDirection`**
   (1 příjem / 2 výdej). Řadu applier dohledá podle (typ, pokladna) — řady
-  jsou vázané na pokladnu, `applyOptions.numberSeriesCode` se ignoruje;
-  neznámá pokladna nebo pokladna bez řady = apply-level chyba
-  `cash_desk_not_found` (422). `cash_desk` hlavičky se denormalizuje z řady.
+  jsou vázané na pokladnu, `applyOptions.numberSeriesCode` se ignoruje.
+  Chybí-li řada, applier ji založí sám (`BoundNumberSeriesProvisioner`,
+  idempotentní — pokladna založená generickým CRUD importu nespustí
+  `afterSave` handler); neznámá pokladna nebo pokladna mimo stav 40 =
+  apply-level chyba `cash_desk_not_found` (422). `cash_desk` hlavičky se
+  denormalizuje z řady.
   Strany `supplier`/`customer` nepovinné (anonymní doklad); je-li strana
   uvedená, je partnerem hlavičky podle směru (příjem → odběratel, výdej →
   dodavatel; `selfParty` má přednost) a v import módu z ní vzniká dobový
@@ -705,8 +708,8 @@ Errors blokují `/apply`, warningy jen informují v UI.
 
 Apply-level kódy (`ApplyResult.errorCode`, 422): `number_series_not_found`,
 `own_bank_account_not_found`, **`cash_desk_not_found`** (neznámý kód pokladny,
-nebo pokladna bez řady typu `cash`/`cashreg` — ulož pokladnu ve stavu V pořádku,
-řadu založí provisioner).
+nebo pokladna mimo stav V pořádku (40), takže jí nelze založit řadu typu
+`cash`/`cashreg`; pokladně ve stavu 40 applier chybějící řadu založí sám).
 
 ## 10. Apply pipeline
 

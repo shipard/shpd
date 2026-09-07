@@ -14,6 +14,8 @@ use Shipard\Module\Base\Persons\PersonType;
 use Shipard\Module\Core\Exchange\Common\ApplyResult;
 use Shipard\Module\Core\Exchange\Common\TransactionlessTableGateway;
 use Shipard\Module\Core\Exchange\Schema\SchemaLoader;
+use Shipard\Core\Database\DataSourceConnection;
+use Shipard\Module\Docs\Core\BoundNumberSeriesProvisioner;
 use Shipard\Module\Docs\Core\DocDocument;
 use Shipard\Module\Docs\Core\OwnCompanyResolver;
 use Shipard\Module\Core\Exchange\Resolve\AccountResolver;
@@ -329,16 +331,24 @@ class DocumentApplier
         //     unknown numberSeriesCode must fail as a clean apply-level error
         //     (422) here, not blow up mid-transaction as internal_error (500).
         //     Vázaný typ: řada = (doc_type, pokladna), numberSeriesCode se
-        //     ignoruje; bez řady pokladny žádný tichý fallback.
+        //     ignoruje. Chybí-li řada, nejdřív ji zkusí založit provisioner
+        //     (idempotentní; pokladna importovaná přes generický CRUD nespustí
+        //     afterSave handler, takže řady může dostat až tady) — teprve
+        //     pokladna mimo stav 40 nebo neexistující je chyba.
         if ($this->isCashDeskBoundDocType($docTypeCode)) {
             $numberSeriesId = $cashDeskId !== null
                 ? $this->resolveBoundNumberSeries($docTypeCode, $cashDeskId)
                 : null;
+            if ($numberSeriesId === null && $cashDeskId !== null) {
+                (new BoundNumberSeriesProvisioner(new DataSourceConnection($this->db), $this->config))
+                    ->provisionForCashDesk($cashDeskId);
+                $numberSeriesId = $this->resolveBoundNumberSeries($docTypeCode, $cashDeskId);
+            }
             if ($numberSeriesId === null) {
                 return ApplyResult::error(
                     'cash_desk_not_found',
                     "Pokladna '" . ($cashDeskCode ?? '') . "' nemá číselnou řadu typu {$docTypeCode}"
-                    . ' — ulož pokladnu ve stavu V pořádku, řadu založí provisioner.',
+                    . ' a nelze ji založit — pokladna není ve stavu V pořádku (40).',
                     $enriched,
                     statusCode: 422,
                 );

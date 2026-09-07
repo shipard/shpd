@@ -212,6 +212,50 @@ class CashDocumentImportTest extends IntegrationTestCase
         $this->assertEqualsWithDelta(242.0, (float) $this->lineByPrefix($journal, '261400')['money_dr'], 0.001, 'karta → platební karty na cestě');
     }
 
+    /**
+     * Pokladna založená mimo TableGateway (generický CRUD importu) nemá řady
+     * — afterSave handler se nespustil. Applier je musí založit sám, jinak
+     * padá celý import pokladny (#59, import msi 2026-09-06).
+     */
+    public function testCashDeskWithoutSeriesGetsProvisionedOnApply(): void
+    {
+        $dibi = $this->db->getDibiConnection();
+        $code = 'NS' . strtoupper(substr(uniqid(), -4));
+        $dibi->insert('economy_codebooks_cash_desks', [
+            'code' => $code, 'name' => 'IT pokladna bez řad', 'currency' => 'czk',
+            'docState' => 40, 'docStateMain' => 3,
+        ])->execute();
+        $deskId = (int) $dibi->getInsertId();
+        $this->createdCashDesks[] = $deskId;
+        $this->assertNull(
+            $this->db->fetchRow('SELECT id FROM docs_core_number_series WHERE cash_desk = %i', $deskId),
+            'pre-condition: pokladna bez řad',
+        );
+
+        $seq = random_int(900_000_000, 999_999_999);
+        $ourNumber = self::FIXTURE_PREFIX . '-' . $seq;
+        $canonical = $this->canonical('cashDocument', [
+            'cashDesk'      => $code,
+            'cashDirection' => 1,
+            'payment'       => ['method' => 'cash'],
+            'rows'          => [$this->serviceRow('sale.services', 100.0)],
+        ], $ourNumber, $seq);
+
+        $result = $this->applier->apply($canonical);
+        foreach ($this->db->fetchAll('SELECT id FROM docs_core_number_series WHERE cash_desk = %i', $deskId) as $s) {
+            $this->createdSeries[] = (int) $s['id'];
+        }
+        if ($result->savedId !== null) {
+            $this->createdDocIds[] = $result->savedId;
+        }
+
+        $this->assertTrue($result->success, 'apply: ' . ($result->errorCode ?? '') . ' ' . ($result->errorMessage ?? ''));
+        $this->assertNotEmpty($this->createdSeries, 'řady pokladny založeny při apply');
+        $head = $this->db->fetchRow('SELECT doc_type, cash_desk FROM docs_core_heads WHERE id = %i', $result->savedId);
+        $this->assertSame('cash', $head['doc_type']);
+        $this->assertSame($deskId, (int) $head['cash_desk']);
+    }
+
     public function testUnknownCashDeskFailsCleanly(): void
     {
         $seq = random_int(900_000_000, 999_999_999);

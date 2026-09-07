@@ -25,24 +25,31 @@ toho, kdo ti kolik dluží. Nebo zkoušíš, co Shipard u vydané faktury umí a
 
 1. **Otevři Prodej → Faktury vydané a dej Přidat.**
 
-2. **Vyplň hlavičku.** Vlevo je partner a datumy, vpravo DPH, měna,
-   zaokrouhlení a platba:
+2. **Vyplň hlavičku.** Vlevo je partner, způsob platby a datumy, vpravo
+   DPH, měna, platební symboly a období:
 
    - **Partner** je odběratel. Hledá se psaním; když ho v evidenci ještě nemáš,
      založíš ho přímo odsud — viz [Založení osoby](../osoby/zalozeni-osoby.md).
-   - **Adresa partnera** a **Bankovní účet partnera** se dají vybrat teprve
-     po zvolení partnera.
+   - **Adresa partnera** se dá vybrat teprve po zvolení partnera. Bankovní
+     účet odběratele se na vydané faktuře nezadává — platí on tobě.
+   - **Způsob platby** — když zvolíš *Hotovost*, objeví se pod ním ještě
+     **Pokladna**.
    - **Datum vystavení** a **Účetní datum** vyplň sám — obojí je povinné
      a Shipard je nepředplňuje.
-   - **DUZP**, **DPPD** a **Datum splatnosti** nechat prázdné můžeš. Doplní
-     se samy až po **Uložit** — DUZP a DPPD podle data vystavení, splatnost
-     podle splatnosti sjednané u partnera (bez ní 14 dní od vystavení).
-     Přepsat je jde kdykoli.
-   - **Registrace DPH** vyplň vždy, když fakturuješ s daní. Bez ní nepůjde
-     na řádku zvolit **Kód DPH**.
-   - **Náš bankovní účet** je u vydané faktury povinný — je to účet, na který
-     má odběratel zaplatit.
+   - **DUZP** a **Datum splatnosti** nechat prázdné můžeš. Doplní se samy
+     až po **Uložit** — DUZP podle data vystavení, splatnost podle
+     splatnosti sjednané u partnera (bez ní 14 dní od vystavení). Přepsat
+     je jde kdykoli. Datum povinnosti přiznat daň (DPPD) na vydané faktuře
+     nevyplňuješ, Shipard ho bere z DUZP.
    - **Text dokladu** je krátký popis, pod kterým fakturu poznáš v seznamu.
+
+   Dvě povinné věci jsou na záložce **Nastavení** — úplně vpravo, za
+   **Přílohami** — protože se u tebe většinou nemění:
+
+   - **Registrace DPH** vyplň vždy, když fakturuješ s daní. Bez ní nepůjde
+     na řádku zvolit **Kód DPH** a doklad nepotvrdíš.
+   - **Náš bankovní účet** je u vydané faktury povinný — je to účet, na který
+     má odběratel zaplatit. Bez něj doklad nepotvrdíš.
 
 3. **Dej Uložit.** Řádky se dají zadávat až u uloženého dokladu; do té doby
    na tabu **Řádky** stojí, že je potřeba záznam nejprve uložit.
@@ -101,8 +108,9 @@ bankovních spojení. Ručně obojí najdeš v **Nastavení → Účetnictví**.
 nemusíš.
 
 **Nabídka Kód DPH je prázdná.** Řádek si bere údaje o DPH z *uloženého*
-dokladu, takže musí být vybraná **Registrace DPH** a hlavička uložená. Když
-jsi registraci právě doplnil, dej **Uložit** a řádek otevři znovu.
+dokladu, takže musí být vybraná **Registrace DPH** (záložka **Nastavení**)
+a hlavička uložená. Když jsi registraci právě doplnil, dej **Uložit**
+a řádek otevři znovu.
 
 **Číselnou řadu ve formuláři nenajdeš.** U vydaných faktur se na ni Shipard
 neptá — doklad se založí do řady, která je právě vybraná v seznamu. Máš-li řad

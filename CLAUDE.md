@@ -195,9 +195,10 @@ Formát hlavičky stránky a šablona: `docs/help-authoring.md`.
   - `ReceivedInvoiceForm` (FPB) — sekce DPH (vat_registration,
     vat_rounding_mode), Bankovní spojení (bank_account), Měna
     (home_currency readOnly), Ostatní (constant_symbol).
-  - `IssuedInvoiceForm` (FVB) — jen sekce Měna (home_currency readOnly);
-    vat_registration a bank_account zůstávají v hlavičce, mění se podle
-    odběratele / měny dokladu.
+  - `IssuedInvoiceForm` (FVB) — sekce Měna (home_currency readOnly),
+    Ostatní (bank_account, vat_registration, vat_calc_source,
+    total_rounding_mode, vat_rounding_mode, constant_symbol). Hlavička FVB
+    nemá partner_bank ani vat_dppd (DPPD odvozuje DocDocument z DUZP).
 - Detailně viz `docs/edit-forms.md` kapitola 23.
 
 ### Citlivá data (encrypted_text)

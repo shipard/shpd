@@ -192,8 +192,9 @@ Formát hlavičky stránky a šablona: `docs/help-authoring.md`.
 - `DocsHeadsFormBase` má hook `buildExtraTabs(array $data, bool $isNew): array`
   (default `[]`) pro přidání per-typ tabů na konec formuláře za Přílohy.
   První uživatelé:
-  - `ReceivedInvoiceForm` (FPB) — sekce DPH (vat_registration),
-    Bankovní spojení (bank_account), Měna (home_currency readOnly).
+  - `ReceivedInvoiceForm` (FPB) — sekce DPH (vat_registration,
+    vat_rounding_mode), Bankovní spojení (bank_account), Měna
+    (home_currency readOnly), Ostatní (constant_symbol).
   - `IssuedInvoiceForm` (FVB) — jen sekce Měna (home_currency readOnly);
     vat_registration a bank_account zůstávají v hlavičce, mění se podle
     odběratele / měny dokladu.

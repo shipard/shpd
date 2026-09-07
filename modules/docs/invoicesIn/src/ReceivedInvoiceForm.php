@@ -16,10 +16,11 @@ use Shipard\Core\Form\FormTab;
  *   - 3 header-info hooky (`getDocTypeLabel`, `getHeaderIcon`) — společný
  *     `buildHeaderInfo()` v base; FPB drží `supplier_snapshot` defaultní.
  *   - `buildHeaderTab()` — 2-sloupcový layout bez separátorů, jen pole
- *     potřebná pro každodenní práci s FPB
+ *     potřebná pro každodenní práci s FPB, řazená podle toku práce
+ *     s došlou fakturou (partner → platba → symboly → datumy)
  *   - `buildExtraTabs()` — přidává tab „Nastavení" za Přílohy s poli,
- *     která se nastavují zřídka (vat_registration, bank_account,
- *     home_currency).
+ *     která se nastavují zřídka (vat_registration, vat_rounding_mode,
+ *     bank_account, home_currency, constant_symbol).
  *
  * Slouží jako rozšiřovací bod pro další FPB-specifické změny formuláře
  * (schvalovací workflow, vazba na příchozí poštu, AI extrakce,
@@ -74,7 +75,6 @@ class ReceivedInvoiceForm extends DocsHeadsFormBase
                 hidden: true,
             )
             ->input('doc_number', readOnly: true, hidden: true)
-            ->input('partner_doc_number')
 
             ->lookup(
                 'partner',
@@ -91,6 +91,18 @@ class ReceivedInvoiceForm extends DocsHeadsFormBase
                 placeholder: $partnerId !== 0 ? 'Vyberte adresu…' : 'Nejdřív vyberte partnera',
                 readOnly: $partnerId === 0,
             )
+            ->select(
+                'payment_method',
+                options: $this->resolveCfgItemOptions('docs.core.paymentMethods'),
+                triggers: 'reload',
+            )
+            ->lookup(
+                'cash_desk',
+                table: 'economy_codebooks_cash_desks',
+                placeholder: 'Hledat pokladnu…',
+                hidden: !$this->isCashPayment($data),
+                hint: $this->cashDeskHint($data, $docCurrency),
+            )
             ->lookup(
                 'partner_bank',
                 table: 'base_persons_bank_accounts',
@@ -99,14 +111,15 @@ class ReceivedInvoiceForm extends DocsHeadsFormBase
                 readOnly: $partnerId === 0,
             )
             ->input('partner_bank_iban', label: 'IBAN')
+            ->input('payment_reference')
+            ->input('specific_symbol')
 
             ->date('issue_date', required: true, triggers: 'reload')
             ->date('due_date')
             ->date('accounting_date', required: true)
             ->date('vat_duzp', hidden: !$hasVat)
             ->date('vat_dppd', hidden: !$hasVat)
-            ->date('period_from', hint: 'Volitelné, např. pronájem za období')
-            ->date('period_to')
+            ->input('partner_doc_number')
 
             ->col()
             ->select(
@@ -137,27 +150,9 @@ class ReceivedInvoiceForm extends DocsHeadsFormBase
                 'total_rounding_mode',
                 options: $this->resolveCfgItemOptions('docs.core.roundingModes'),
             )
-            ->select(
-                'vat_rounding_mode',
-                options: $this->resolveCfgItemOptions('docs.core.roundingModes'),
-                hidden: !$hasVat,
-            )
 
-            ->select(
-                'payment_method',
-                options: $this->resolveCfgItemOptions('docs.core.paymentMethods'),
-                triggers: 'reload',
-            )
-            ->lookup(
-                'cash_desk',
-                table: 'economy_codebooks_cash_desks',
-                placeholder: 'Hledat pokladnu…',
-                hidden: !$this->isCashPayment($data),
-                hint: $this->cashDeskHint($data, $docCurrency),
-            )
-            ->input('payment_reference')
-            ->input('specific_symbol')
-            ->input('constant_symbol')
+            ->date('period_from', hint: 'Volitelné, např. pronájem za období')
+            ->date('period_to')
 
             ->section()
             ->col()
@@ -193,6 +188,11 @@ class ReceivedInvoiceForm extends DocsHeadsFormBase
                 options: $this->resolveVatRegistrationOptions(),
                 triggers: 'reload',
             )
+            ->select(
+                'vat_rounding_mode',
+                options: $this->resolveCfgItemOptions('docs.core.roundingModes'),
+                hidden: !$hasVat,
+            )
 
             ->section(title: 'Bankovní spojení')
             ->col()
@@ -204,6 +204,11 @@ class ReceivedInvoiceForm extends DocsHeadsFormBase
             ->section(title: 'Měna')
             ->col()
             ->input('home_currency', readOnly: true)
+
+            ->section(title: 'Ostatní')
+            ->col()
+            ->input('constant_symbol')
+
             ->build();
     }
 }

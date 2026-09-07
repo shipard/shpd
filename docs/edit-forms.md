@@ -2065,7 +2065,7 @@ Všechny existující registrace `{table, class}` (`PersonsForm`, `NumberSeriesF
 
 `DocsHeadsFormBase::buildFormDefinition()` nabízí rozšiřující hook `buildExtraTabs(array $data, bool $isNew): array`, který subclassy mohou přepisovat a vracet extra taby — ty se přidají **na konec** formuláře, za Přílohy. Default v base třídě vrací prázdné pole.
 
-Vzor použití — `ReceivedInvoiceForm` (FPB) přidává tab „Nastavení“ s poli, která se u přijatých faktur nastavují zřídka (registrace DPH, náš bankovní účet, domácí měna readOnly):
+Vzor použití — `ReceivedInvoiceForm` (FPB) přidává tab „Nastavení“ s poli, která se u přijatých faktur nastavují zřídka (registrace DPH, zaokrouhlení DPH, náš bankovní účet, domácí měna readOnly, konstantní symbol):
 
 ```php
 class ReceivedInvoiceForm extends DocsHeadsFormBase
@@ -2088,6 +2088,10 @@ class ReceivedInvoiceForm extends DocsHeadsFormBase
                         options: $this->resolveVatRegistrationOptions(),
                         triggers: 'reload',
                     )
+                    ->select('vat_rounding_mode',
+                        options: $this->resolveCfgItemOptions('docs.core.roundingModes'),
+                        hidden: !$hasVat,
+                    )
             ->section(title: 'Bankovní spojení')
                 ->col()
                     ->select('bank_account',
@@ -2096,6 +2100,9 @@ class ReceivedInvoiceForm extends DocsHeadsFormBase
             ->section(title: 'Měna')
                 ->col()
                     ->input('home_currency', readOnly: true)
+            ->section(title: 'Ostatní')
+                ->col()
+                    ->input('constant_symbol')
             ->build();
     }
 }
@@ -2104,6 +2111,7 @@ class ReceivedInvoiceForm extends DocsHeadsFormBase
 Dopořučení:
 
 - Tab Nastavení je umístěn za Přílohami stejně jako u `PersonsForm` — udržuje konzistentní UX napříč aplikací.
+- Hlavička FPB (`buildHeaderTab()`) je řazená podle toku práce s došlou fakturou: levý sloupec partner → adresa → způsob platby (+ pokladna při hotovosti) → bankovní účet partnera / IBAN → variabilní a specifický symbol → datumy → číslo dokladu od partnera; pravý sloupec režim DPH, měna a kurz, zaokrouhlení částky, období plnění. Co se mění zřídka (zaokrouhlení DPH, konstantní symbol), patří do tabu Nastavení, ne do hlavičky.
 - Hook má stejnou signaturu jako `buildHeaderTab()` (`array $data, bool $isNew`), použitelnou pro větvení podle stavu formuláře (např. skrýt sekce „DPH“ když `vat_mode === 0`).
 - Pro extra **subtable** nebo **attachments** taby použij stejný hook — vrací se z něj `list<FormTab>`, který může obsahovat i `$this->subtableTab(...)` nebo `$this->attachmentsTab(...)`.
 - `IssuedInvoiceForm` (FVB) hook používá taky, ale s užším obsahem: jen sekce „Měna“ s `home_currency` (readOnly). `vat_registration` a `bank_account` zůstávají v hlavičce — u vydaných faktur se mění podle odběratele a měny dokladu, nepatří mezi „zřídka měněná“ nastavení. Strukturu má smysl držet stejnou jako u FPB — další pole (např. připomínkový režim, AI checks) se přidávají jako sekce navrch.

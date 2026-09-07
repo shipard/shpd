@@ -242,6 +242,28 @@ class AutoFormBuilderTest extends TestCase
         $this->assertFalse($elByCol['status']->required);
     }
 
+    /** Issue #61: select je povinný podle `!nullable`, default nehraje roli. */
+    public function testEnumSelectRequiredWhenNotNullEvenWithDefault(): void
+    {
+        $def = $this->makeTableDef([
+            ['id' => 'mode',     'name' => 'Mode',     'type' => 'enumInt', 'cfgItem' => 'x.modes', 'nullable' => false, 'default' => 1],
+            ['id' => 'optional', 'name' => 'Optional', 'type' => 'enumInt', 'cfgItem' => 'x.modes', 'nullable' => true],
+            ['id' => 'status',   'name' => 'Status',   'type' => 'int', 'default' => 0],
+        ]);
+
+        $result = (new AutoFormBuilder())->build($def);
+        $elByCol = [];
+        foreach ($this->elementsOf($result->tabs[0]) as $el) {
+            $elByCol[$el->column] = $el;
+        }
+
+        $this->assertSame('select', $elByCol['mode']->type);
+        $this->assertTrue($elByCol['mode']->required);
+        $this->assertFalse($elByCol['optional']->required);
+        $this->assertSame('input', $elByCol['status']->type);
+        $this->assertFalse($elByCol['status']->required, 'input: NOT NULL s defaultem zůstává nepovinný');
+    }
+
     public function testDocStatesIsNullByDefault(): void
     {
         $def = $this->makeTableDef([

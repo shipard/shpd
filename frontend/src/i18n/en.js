@@ -271,6 +271,7 @@ export default {
   'form.recordLoadFailed': 'Failed to load record.',
   'form.saveUnknownError': 'An unknown error occurred while saving.',
   'form.groupOther': 'Other',
+  'form.selectEmpty': 'not selected',
   // Mobile footer kebab (⋮) aria-label — secondary state transitions.
   'form.moreActions': 'More actions',
   // Neutral title — banner shows for Save as well as Confirm / Repair.

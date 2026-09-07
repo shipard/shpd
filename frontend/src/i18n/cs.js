@@ -280,6 +280,7 @@ export default {
   'form.recordLoadFailed': 'Nepodařilo se načíst záznam.',
   'form.saveUnknownError': 'Při ukládání došlo k neznámé chybě.',
   'form.groupOther': 'Ostatní',
+  'form.selectEmpty': 'nevybráno',
   // Aria-label kebabu (⋮) v mobilním footeru — vedlejší přechody dokladu.
   'form.moreActions': 'Další akce',
   // Neutrální nadpis — banner se ukazuje při Uložit i Potvrdit i Opravit.

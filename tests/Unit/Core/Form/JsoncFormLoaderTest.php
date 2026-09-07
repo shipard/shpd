@@ -422,6 +422,47 @@ class JsoncFormLoaderTest extends TestCase
         $this->assertFalse($els[1]->required);
     }
 
+    /**
+     * Issue #61: u selectu se `required` odvozuje jako `!nullable` bez ohledu
+     * na default — prázdná možnost vždy znamená NULL. U inputu zůstává
+     * pravidlo `!nullable && default === null`. Explicitní hodnota vyhrává.
+     */
+    public function testSelectRequiredFromNotNullEvenWithDefault(): void
+    {
+        $path = $this->writeJsonc(<<<JSON
+        {
+            "tabs": [{
+                "id": "basic", "label": "B",
+                "sections": [{"columns": [{"elements": [
+                    {"type": "select", "column": "mode"},
+                    {"type": "input",  "column": "mode_as_input"},
+                    {"type": "select", "column": "optional_mode"},
+                    {"type": "select", "column": "mode_explicit", "required": false},
+                    {"column": "derived_select"}
+                ]}]}]
+            }]
+        }
+        JSON);
+
+        $def = (new JsoncFormLoader())->load($path, $this->makeTableDef([
+            ['id' => 'mode',           'name' => 'M',  'type' => 'enumInt', 'cfgItem' => 'x.modes', 'nullable' => false, 'default' => 1],
+            ['id' => 'mode_as_input',  'name' => 'MI', 'type' => 'enumInt', 'cfgItem' => 'x.modes', 'nullable' => false, 'default' => 1],
+            ['id' => 'optional_mode',  'name' => 'OM', 'type' => 'enumInt', 'cfgItem' => 'x.modes', 'nullable' => true],
+            ['id' => 'mode_explicit',  'name' => 'ME', 'type' => 'enumInt', 'cfgItem' => 'x.modes', 'nullable' => false, 'default' => 1],
+            ['id' => 'derived_select', 'name' => 'DS', 'type' => 'enumString', 'length' => 8, 'cfgItem' => 'x.kinds', 'nullable' => false, 'default' => 'a'],
+        ]));
+
+        $els = $def->tabs[0]->sections[0]->columns[0]->elements;
+        $this->assertSame('select', $els[0]->type);
+        $this->assertTrue($els[0]->required, 'select na NOT NULL s defaultem → povinný');
+        $this->assertSame('input', $els[1]->type);
+        $this->assertFalse($els[1]->required, 'input na tomtéž sloupci → stávající pravidlo');
+        $this->assertFalse($els[2]->required, 'select na nullable → nepovinný');
+        $this->assertFalse($els[3]->required, 'explicitní false vyhrává');
+        $this->assertSame('select', $els[4]->type, 'typ odvozený z enumString');
+        $this->assertTrue($els[4]->required, 'odvozený select se řídí stejným pravidlem');
+    }
+
     public function testInlineGroupParsed(): void
     {
         $path = $this->writeJsonc(<<<JSON

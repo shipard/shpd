@@ -93,11 +93,14 @@ class AutoFormBuilder
         $isEnum = in_array($col->type, ['enumInt', 'enumString'], true);
 
         if ($isEnum) {
+            // Select: the empty option always means NULL → required whenever
+            // the column is NOT NULL, regardless of default (issue #61).
+            // Same rule as TabBuilder::select() and JsoncFormLoader.
             return new FormElement(
                 type: 'select',
                 column: $col->id,
                 label: $col->name,
-                required: $this->isRequired($col),
+                required: !$col->nullable,
                 options: $this->resolveEnumOptions($col, $config),
             );
         }

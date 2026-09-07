@@ -65,7 +65,7 @@
 {:else}
   <FormFieldRow {element} id={inputId}>
     {#if element.type === 'select'}
-      <Select id={inputId} bind:value={formData[element.column]} options={element.options ?? []} required={element.required ?? false} disabled={elDisabled} {error} onchange={handleChange} />
+      <Select id={inputId} bind:value={formData[element.column]} options={element.options ?? []} required={element.required ?? false} disabled={elDisabled} placeholder={element.placeholder} {error} onchange={handleChange} />
 
     {:else if element.type === 'multiselect'}
       <MultiselectInput

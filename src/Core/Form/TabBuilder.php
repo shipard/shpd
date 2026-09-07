@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Shipard\Core\Form;
 
+use Shipard\Core\Database\ColumnDefinition;
+
 /**
  * Fluent builder for {@see FormTab} of type 'fields'.
  *
@@ -36,13 +38,26 @@ final class TabBuilder
     /** @var array<string, string> column => label map for auto-resolve. */
     private array $colLabels;
 
+    /**
+     * @var array<string, ColumnDefinition> column => definition map. Used to
+     *      derive `required` for select() when the caller does not decide
+     *      explicitly (issue #61). Empty = no inference, select() defaults to false.
+     */
+    private array $colDefs;
+
+    /**
+     * @param array<string, string>           $colLabels
+     * @param array<string, ColumnDefinition> $colDefs
+     */
     public function __construct(
         private readonly string $id,
         private readonly string $label,
         array $colLabels = [],
         private readonly ?string $icon = null,
+        array $colDefs = [],
     ) {
         $this->colLabels = $colLabels;
+        $this->colDefs   = $colDefs;
     }
 
     // -------- Section / column management --------
@@ -222,21 +237,37 @@ final class TabBuilder
         return $this->pushWidget($column, $label, $required, $readOnly, $hidden, $hint, $triggers, 'checkbox');
     }
 
+    /**
+     * Single-value select over a fixed option list.
+     *
+     * `$required === null` (default) derives the flag from the column
+     * definition: NOT NULL column → required (the empty option would send
+     * NULL, which the column cannot hold), nullable → optional. Without a
+     * column definition the default is false. Explicit true/false always wins.
+     * The rule is intentionally `!nullable` without regard to the column
+     * default — the empty option of a select always means NULL, a default
+     * does not help there (unlike input(), see JsoncFormLoader/AutoFormBuilder).
+     *
+     * `$placeholder` = text of the empty option; the frontend falls back to
+     * the global "not selected" label when null.
+     */
     public function select(
         string $column,
         ?string $label = null,
         ?array $options = null,
         ?string $triggers = null,
-        bool $required = false,
+        ?bool $required = null,
         bool $readOnly = false,
         bool $hidden = false,
         ?string $hint = null,
+        ?string $placeholder = null,
     ): static {
         $this->pushElement(new FormElement(
             type: 'select',
             column: $column,
             label: $this->resolveLabel($column, $label),
-            required: $required,
+            placeholder: $placeholder,
+            required: $required ?? $this->inferSelectRequired($column),
             readOnly: $readOnly,
             hidden: $hidden,
             triggers: $triggers,
@@ -514,5 +545,15 @@ final class TabBuilder
     private function resolveLabel(string $column, ?string $label): ?string
     {
         return $label ?? $this->colLabels[$column] ?? null;
+    }
+
+    /**
+     * Default `required` for select(): NOT NULL column → true, nullable or
+     * unknown column → false. See select() docblock.
+     */
+    private function inferSelectRequired(string $column): bool
+    {
+        $col = $this->colDefs[$column] ?? null;
+        return $col !== null && !$col->nullable;
     }
 }

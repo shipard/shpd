@@ -37,6 +37,7 @@
       options={inner.options ?? []}
       required={inner.required ?? false}
       disabled={disabled || inner.read_only === true}
+      placeholder={inner.placeholder}
       error={fieldErrors[inner.column] ?? null}
       onchange={() => handleChange(inner)}
     />

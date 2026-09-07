@@ -182,7 +182,7 @@ Hodnota je validována v konstruktoru `FormElement` proti whitelistu — neplatn
 |------|---------|-------|
 | `column` | — | ID sloupce v DB |
 | `label` | z TableDefinition | Automaticky doplněn z názvu sloupce pokud chybí |
-| `required` | false | Hvězdička u labelu |
+| `required` | odvozeno ze schématu | Hvězdička u labelu. Bez explicitní hodnoty: u `select` `!nullable` sloupce (bez ohledu na default), u ostatních typů `!nullable && default === null`. Explicitní hodnota vždy vyhrává. Platí shodně pro JSONC, `TabBuilder` i `AutoFormBuilder` |
 | `hidden` | false | Skryto (`display: none`), pole zůstává v DOM |
 | `read_only` | false | Disabled input |
 | `triggers` | null | `"reload"` = při změně spustit recalculate |
@@ -207,6 +207,23 @@ Hodnota je validována v konstruktoru `FormElement` proti whitelistu — neplatn
 ```
 
 `options` se generují na serveru z `cfgItem` sloupce.
+
+**Prázdná možnost** (hodnota `NULL`) se vykreslí jen u nepovinného selectu a
+nese globální text „nevybráno" (i18n klíč `form.selectEmpty`). Explicitní
+`placeholder` elementu má přednost a prázdnou možnost vykreslí i u povinného
+selectu (vzor: průvodce nastavením DS s možností „Nerozhodnuto"). `required`
+bez explicitní hodnoty se odvozuje jako `!nullable` sloupce **bez podmínky na
+default** — prázdná možnost selectu vždy znamená `NULL`, který do NOT NULL
+sloupce nejde, a default novému záznamu hodnotu už dodal (`FormController`).
+Nullable sloupce (`vat_registration`, `bank_account`, `unit`…) prázdnou možnost
+mají; kde se má přesto vyžadovat výběr, stojí explicitní `required: true`
+(`vat_code` na řádku dokladu). `Select.svelte` při vazbě normalizuje `''` na
+`null` — formulář drží „nic" v obou podobách (`''` z `buildDefaultData` u
+nového záznamu, `null` ze serveru u existujícího) a bez normalizace by u
+nového záznamu zavřená roletka zůstala prázdná, protože `''` žádné možnosti
+neodpovídá. Pravidlo je na jednom místě per zdroj formuláře:
+`TabBuilder::select()`, `JsoncFormLoader::deriveRequired()`,
+`AutoFormBuilder::buildElement()` (issue #61).
 
 ### 4.2b `multiselect`
 
@@ -728,7 +745,7 @@ abstract class TableForm
 
 ### Auto-label z TableDefinition
 
-`TableForm` dostane `TableDefinition` přes `setTableDef()` před voláním `buildFormDefinition`. Helper `tab()` sestaví mapu `column_id => name` a předá ji `TabBuilder`. Element factory metody pak doplní `label` automaticky z této mapy pokud není zadán explicitně.
+`TableForm` dostane `TableDefinition` přes `setTableDef()` před voláním `buildFormDefinition`. Helper `tab()` sestaví mapu `column_id => name` a mapu `column_id => ColumnDefinition` a předá obě `TabBuilder`u (`colLabels`, `colDefs`). Element factory metody pak doplní `label` automaticky z labelů pokud není zadán explicitně; `select()` z definic odvodí `required` (`!nullable`), pokud volající nerozhodl explicitně. Bez `TableDefinition` (unit testy) se `required` selectu neodvozuje a je `false`.
 
 #### Krátký label ve formuláři — `formLabel`
 
@@ -814,7 +831,9 @@ $col->date($column, ...);  $col->datetime($column, ...);  $col->time($column, ..
 $col->number($column, ...);  $col->checkbox($column, ...);
 
 $col->select(string $column, ?string $label = null, ?array $options = null,
-    ?string $triggers = null, bool $required = false, ...): static;
+    ?string $triggers = null, ?bool $required = null, bool $readOnly = false,
+    bool $hidden = false, ?string $hint = null, ?string $placeholder = null): static;
+    // required null = odvodit ze sloupce (!nullable); placeholder = text prázdné možnosti
 
 $col->multiselect(string $column, ?string $label = null, ?array $options = null,
     ?string $triggers = null, bool $required = false, ...): static;

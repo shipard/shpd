@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { t } from '../../i18n/index.js';
+
   interface Option {
     value: string | number;
     label: string;
@@ -28,17 +30,24 @@
 </script>
 
 <div class="shpd-select__wrapper">
+  <!-- Formulář reprezentuje „nic" jako '' (FormEditor buildDefaultData u nového
+       záznamu) i jako null (server u nullable sloupců). Prázdná možnost má
+       hodnotu null; bez normalizace by '' žádné možnosti neodpovídalo,
+       prohlížeč by nevybral nic a zavřená roletka by zůstala prázdná. -->
   <select
     {id}
     class="shpd-select__field"
     class:shpd-select__field--error={!!error}
-    bind:value
+    bind:value={() => (value === '' ? null : value), (v) => (value = v)}
     {required}
     {disabled}
     {onchange}
   >
+    <!-- Prázdná možnost = NULL. Bez explicitního placeholderu nese globální
+         text „nevybráno" (issue #61); explicitní placeholder má přednost
+         a vykreslí prázdnou možnost i u required selectu (DsSetup). -->
     {#if !required || placeholder}
-      <option value={null}>{placeholder ?? ''}</option>
+      <option value={null}>{placeholder ?? t('form.selectEmpty')}</option>
     {/if}
     {#each options as option}
       <option value={option.value}>{option.label}</option>

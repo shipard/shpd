@@ -1,6 +1,6 @@
 # Task: Roletky ve formulářích — prázdná možnost jen u nullable polí (Issue #61)
 
-**Stav:** naplánováno
+**Stav:** hotovo
 
 ## Status / cíl
 
@@ -217,3 +217,154 @@ Kde dnes stojí ruční `required: true` na NOT NULL sloupci, lze ho nechat
 9. `docs/edit-forms.md` aktualizován; `python3 scripts/tasks-index.py &&
    python3 scripts/tasks-index.py --check && python3 scripts/check-sensitive.py`
    projde.
+
+## Poznámky k implementaci (2026-09-07)
+
+### Co se změnilo proti zadání
+
+Dvě odchylky, obě odsouhlasené před implementací:
+
+1. **`placeholder` se k selectu ve formulářích do té doby vůbec nedostal.**
+   `FormElement.svelte` a `FormInline.svelte` ho předávaly inputu a lookupu,
+   ale ne `<Select>`, a `TabBuilder::select()` parametr neměl. Rozhodnutí 3
+   („explicitní placeholder má přednost") tedy platilo jen pro přímá použití
+   `Select.svelte` (DsSetup). Doplněno: `placeholder` prochází z elementu do
+   selectu v obou komponentách a `TabBuilder::select()` dostal
+   `?string $placeholder = null` na konci signatury (parita s `multiselect()`).
+   Žádný dosavadní select placeholder nenesl, chování existujících forem se
+   tím nemění.
+2. **Pravidlo žilo na třech místech, ne dvou.** Vedle `TabBuilder` a
+   `JsoncFormLoader` odvozuje `required` i `AutoFormBuilder` (auto-formuláře
+   tabulek bez vlastní formy). Select tam nově `!nullable`, input beze změny.
+
+### Jak je odvození implementované
+
+- `TabBuilder`: pátý volitelný parametr konstruktoru `array $colDefs = []`
+  (za `$icon`; `$colLabels` zůstává, testy `new TabBuilder('t', 'T', …)`
+  beze změny). `select()` má `?bool $required = null`; při `null` vrací
+  `inferSelectRequired()` = `!nullable`, bez definice sloupce `false`.
+  `multiselect()` a ostatní typy nedotčené.
+- `TableForm::tab()` předává definice sloupců z `$this->tableDef`, který
+  `FormController` plní z `TableLoader::load()` — ten aplikuje extensions
+  přes `TableMerger::merge`, takže `vat_period`/`cs_period`/`rs_period`
+  (extension `economy.vat`) odvození vidí jako nullable. Ověřeno v kódu,
+  ne předpokládáno.
+- `JsoncFormLoader::deriveRequired($type, $col)`: select `!nullable`,
+  ostatní `!nullable && default === null`. Explicitní `"required"` vyhrává.
+- `Select.svelte`: `placeholder ?? t('form.selectEmpty')`, podmínka
+  `{#if !required || placeholder}` beze změny. Klíč `form.selectEmpty`
+  = „nevybráno" / „not selected".
+- **Nález z E2E (Anna, bod 3):** u nového záznamu byl text „nevybráno" vidět
+  až po rozbalení roletky, zavřená zůstávala prázdná. `FormEditor
+  buildDefaultData()` předvyplní pole nového záznamu `''`, prázdná možnost má
+  hodnotu `null`; `''` se s ní neshoduje, `<select>` nevybere nic. U
+  existujícího záznamu server vrací `null`, tam to sedělo. Opraveno v
+  `Select.svelte` funkční vazbou `bind:value={() => (value === '' ? null :
+  value), (v) => (value = v)}` — formulář už `''` a `null` považuje za totéž
+  (dirty porovnání, serializace při save), normalizace jen sjednocuje
+  zobrazení. Nesahá na `buildDefaultData` ani na data posílaná serveru.
+- Žádné volání `select()` nepoužívalo poziční argumenty za `label`, změna
+  `bool` → `?bool` je bez dopadu na volající. Testy modulových forem
+  `setTableDef()` nevolají, odvození se v nich neprojeví (colDefs prázdné →
+  `false`); odvození kryjí `TabBuilderTest`, `JsoncFormLoaderTest`,
+  `AutoFormBuilderTest`.
+
+### Audit dopadů
+
+Skript porovnal každé volání `->select()` (83 v 21 PHP souborech) a každý
+JSONC select (22 ve 12 souborech) se sloučeným schématem včetně extensions.
+Celkem 105 míst, 12 sloupců se stává povinnými (33 volání), **všech 12 má
+column default** → nový záznam dostane hodnotu z `FormController` (u
+`vat_mode` navíc `applyClientDefaults`). **Pro #60 z auditu nevzniká žádný
+nový vstup**; otevřené zůstávají jen položky, které #60 už zná
+(`vat_registration`, `vat_code`). Viditelný vedlejší efekt: hvězdička u dvou
+read-only selectů (`item_type` u položky, `reconciliation_state` u výpisu),
+stejně jako dnes u `number_series` existujícího dokladu.
+
+Řádky `docs_core_heads` jsou sloučené přes všechny formy hlavičky (základ,
+FVB, FPB, pokladní doklad, pokladna); `DocRowsForm.operation` je uveden
+dvakrát, protože řádek dokladu (podmíněně `!$isText`) a kontace
+(`required: true`) jsou dvě různá volání.
+
+| formulář(e) | tabulka | sloupec | typ | nullable | default | dnes required | nově | poznámka |
+|---|---|---|---|---|---|---|---|---|
+| PersonsForm | `base_persons_persons` | `person_type` | enumInt | ne | `1` | true | true | explicitní, beze změny |
+| RegistryDocumentsForm | `base_registry_documents` | `doc_kind` | enumString | ne | `'other'` | true | true | explicitní, beze změny |
+| RegistryDocumentsForm | `base_registry_documents` | `binder` | int | ano | `null` | false | false | prázdná možnost „nevybráno" |
+| IncomingMessagesForm | `core_mail_incoming_messages` | `primary_type` | enumString | ne | `'other'` | true | true | explicitní, beze změny |
+| IncomingMessagesForm | `core_mail_incoming_messages` | `mailbox` | int | ne | `null` | true | true | explicitní, beze změny |
+| UnitsForm | `core_units` | `quantity` | enumString | ne | `null` | true | true | explicitní, beze změny |
+| FiscalYearsForm | `economy_codebooks_fiscal_years` | `currency` | enumString | ne | `'czk'` | true | true | explicitní, beze změny |
+| VatRegistrationsForm | `economy_codebooks_vat_registrations` | `region` | enumString | ne | `'eu'` | true | true | explicitní, beze změny |
+| VatRegistrationsForm | `economy_codebooks_vat_registrations` | `country` | enumString | ne | `'cz'` | true | true | explicitní, beze změny |
+| VatRegistrationsForm | `economy_codebooks_vat_registrations` | `taxpayer_kind` | enumInt | ne | `0` | true | true | explicitní, beze změny |
+| VatRegistrationsForm | `economy_codebooks_vat_registrations` | `tax_period_kind` | enumInt | ne | `1` | true | true | explicitní, beze změny |
+| VatRegistrationsForm | `economy_codebooks_vat_registrations` | `cs_period_kind` | enumInt | ne | `1` | true | true | explicitní, beze změny |
+| VatRegistrationsForm | `economy_codebooks_vat_registrations` | `rs_period_kind` | enumInt | ne | `1` | true | true | explicitní, beze změny |
+| ItemKindsForm | `economy_items_kinds` | `item_type` | enumInt | ne | `3` | true | true | explicitní, beze změny |
+| ItemsForm | `economy_items` | `item_kind` | int | ne | `null` | true | true | explicitní, beze změny |
+| ItemsForm | `economy_items` | `item_type` | enumInt | ne | `3` | false | true | **nově povinné**; default `3` dodá novému záznamu hodnotu (pole readOnly, přibude hvězdička) |
+| ItemsForm | `economy_items` | `unit` | int | ne | `null` | true | true | explicitní, beze změny |
+| ReportPeriodsForm | `economy_vat_report_periods` | `vat_registration` | int | ne | `null` | true | true | explicitní, beze změny |
+| ReportPeriodsForm | `economy_vat_report_periods` | `report_type` | enumString | ne | `null` | true | true | explicitní, beze změny |
+| CashDeskFormBase, DocsHeadsFormBase, ReceivedInvoiceForm, IssuedInvoiceForm, AccountingDocsForm | `docs_core_heads` | `number_series` | int | ne | `null` | true | true | explicitní, beze změny |
+| DocRowsForm | `docs_core_rows` | `row_kind` | enumInt | ne | `1` | true | true | explicitní, beze změny |
+| DocRowsForm | `docs_core_rows` | `operation` | enumString | ano | `null` | !$isText | !$isText | explicitní, beze změny |
+| DocRowsForm | `docs_core_rows` | `unit` | int | ano | `null` | false | false | prázdná možnost „nevybráno" |
+| DocRowsForm | `docs_core_rows` | `price_calc_mode` | enumInt | ne | `0` | false | true | **nově povinné**; default `0` dodá novému záznamu hodnotu |
+| DocRowsForm | `docs_core_rows` | `vat_code` | varchar | ano | `null` | $showVat | $showVat | explicitní, beze změny |
+| DocRowsForm | `docs_core_rows` | `operation` | enumString | ano | `null` | true | true | explicitní, beze změny |
+| DocRowsForm | `docs_core_rows` | `acc_side` | enumInt | ano | `null` | true | true | explicitní, beze změny |
+| DocsHeadsFormBase, ReceivedInvoiceForm, IssuedInvoiceForm, CashDocForm, CashRegisterForm | `docs_core_heads` | `vat_mode` | enumInt | ne | `1` | false | true | **nově povinné**; default `1` dodá novému záznamu hodnotu |
+| DocsHeadsFormBase, ReceivedInvoiceForm, IssuedInvoiceForm, CashDocForm | `docs_core_heads` | `vat_calc_source` | enumInt | ne | `0` | false | true | **nově povinné**; default `0` dodá novému záznamu hodnotu |
+| DocsHeadsFormBase, ReceivedInvoiceForm, IssuedInvoiceForm | `docs_core_heads` | `vat_place` | enumInt | ne | `0` | false | true | **nově povinné**; default `0` dodá novému záznamu hodnotu |
+| DocsHeadsFormBase, ReceivedInvoiceForm, IssuedInvoiceForm, CashDocForm, CashRegisterForm | `docs_core_heads` | `vat_registration` | int | ano | `null` | false | false | prázdná možnost „nevybráno" |
+| DocsHeadsFormBase | `docs_core_heads` | `vat_period` | int | ano | `null` | false | false | prázdná možnost „nevybráno" |
+| DocsHeadsFormBase | `docs_core_heads` | `cs_period` | int | ano | `null` | false | false | prázdná možnost „nevybráno" |
+| DocsHeadsFormBase | `docs_core_heads` | `rs_period` | int | ano | `null` | false | false | prázdná možnost „nevybráno" |
+| DocsHeadsFormBase, ReceivedInvoiceForm, IssuedInvoiceForm | `docs_core_heads` | `doc_currency` | enumString | ne | `'czk'` | false | true | **nově povinné**; default `'czk'` dodá novému záznamu hodnotu |
+| DocsHeadsFormBase, ReceivedInvoiceForm, IssuedInvoiceForm, CashDocForm | `docs_core_heads` | `total_rounding_mode` | enumInt | ne | `0` | false | true | **nově povinné**; default `0` dodá novému záznamu hodnotu |
+| DocsHeadsFormBase, ReceivedInvoiceForm, IssuedInvoiceForm, CashDocForm | `docs_core_heads` | `vat_rounding_mode` | enumInt | ne | `0` | false | true | **nově povinné**; default `0` dodá novému záznamu hodnotu |
+| DocsHeadsFormBase, ReceivedInvoiceForm, IssuedInvoiceForm, CashDocForm, CashRegisterForm | `docs_core_heads` | `payment_method` | enumInt | ne | `1` | false | true | **nově povinné**; default `1` dodá novému záznamu hodnotu |
+| DocsHeadsFormBase, ReceivedInvoiceForm, IssuedInvoiceForm | `docs_core_heads` | `bank_account` | int | ano | `null` | false | false | prázdná možnost „nevybráno" |
+| NumberSeriesForm | `docs_core_number_series` | `doc_type` | enumString | ne | `null` | true | true | explicitní, beze změny |
+| NumberSeriesForm | `docs_core_number_series` | `reset_scope` | enumString | ne | `'fiscal_year'` | true | true | explicitní, beze změny |
+| CashDocForm | `docs_core_heads` | `cash_dir` | enumInt | ne | `0` | true | true | explicitní, beze změny |
+| TasksForm | `tasks_core_tasks` | `priority` | enumString | ano | `null` | false | false | prázdná možnost „nevybráno" |
+| DsUsersForm | `hosting_core_ds_users` | `user` | int | ne | `null` | true | true | explicitní, beze změny |
+| DsUsersForm | `hosting_core_ds_users` | `data_source` | int | ne | `null` | true | true | explicitní, beze změny |
+| DsUsersForm | `hosting_core_ds_users` | `role` | enumString | ne | `'member'` | true | true | explicitní, beze změny |
+| DataSourcesForm | `hosting_core_data_sources` | `language` | enumString | ne | `'cs'` | true | true | explicitní, beze změny |
+| DataSourcesForm | `hosting_core_data_sources` | `country` | enumString | ne | `'cz'` | true | true | explicitní, beze změny |
+| DataSourcesForm | `hosting_core_data_sources` | `server` | int | ano | `null` | false | false | prázdná možnost „nevybráno" |
+| DataSourcesForm | `hosting_core_data_sources` | `lifecycle` | enumString | ne | `'active'` | true | true | explicitní, beze změny |
+| DataSourcesForm | `hosting_core_data_sources` | `owner` | int | ano | `null` | false | false | prázdná možnost „nevybráno" |
+| base_persons_bank_accounts.jsonc (JSONC) | `base_persons_bank_accounts` | `source` | enumInt | ne | `0` | false | true | **nově povinné**; default `0` dodá novému záznamu hodnotu |
+| base_persons_addresses.jsonc (JSONC) | `base_persons_addresses` | `address_type` | enumInt | ne | `0` | false | true | **nově povinné**; default `0` dodá novému záznamu hodnotu |
+| base_persons_addresses.jsonc (JSONC) | `base_persons_addresses` | `country` | enumString | ano | `null` | false | false | prázdná možnost „nevybráno" |
+| base_persons_addresses.jsonc (JSONC) | `base_persons_addresses` | `place_reg_type` | enumString | ano | `null` | false | false | prázdná možnost „nevybráno" |
+| core_mail_sender_rules.jsonc (JSONC) | `core_mail_sender_rules` | `pattern_kind` | enumString | ne | `'email'` | true | true | explicitní, beze změny |
+| core_mail_sender_rules.jsonc (JSONC) | `core_mail_sender_rules` | `disposition` | enumString | ne | `'archive'` | true | true | explicitní, beze změny |
+| core_mail_mailboxes.jsonc (JSONC) | `core_mail_mailboxes` | `default_primary_type` | enumString | ano | `null` | false | false | prázdná možnost „nevybráno" |
+| core_exchange_tag_rules.jsonc (JSONC) | `core_exchange_tag_rules` | `tag` | enumString | ne | `null` | true | true | explicitní, beze změny |
+| economy_codebooks_fiscal_months.jsonc (JSONC) | `economy_codebooks_fiscal_months` | `period_type` | enumInt | ne | `1` | true | true | explicitní, beze změny |
+| economy_codebooks_bank_accounts.jsonc (JSONC) | `economy_codebooks_bank_accounts` | `currency` | enumString | ne | `'czk'` | true | true | explicitní, beze změny |
+| economy_codebooks_cash_desks.jsonc (JSONC) | `economy_codebooks_cash_desks` | `currency` | enumString | ne | `'czk'` | true | true | explicitní, beze změny |
+| economy_accounting_accounts.jsonc (JSONC) | `economy_accounting_accounts` | `account_kind` | enumInt | ano | `null` | false | false | prázdná možnost „nevybráno" |
+| economy_accounting_accounts.jsonc (JSONC) | `economy_accounting_accounts` | `costs_type` | enumInt | ano | `null` | false | false | prázdná možnost „nevybráno" |
+| economy_accounting_accounts.jsonc (JSONC) | `economy_accounting_accounts` | `results_type` | enumInt | ano | `null` | false | false | prázdná možnost „nevybráno" |
+| economy_bank_statements.jsonc (JSONC) | `economy_bank_statements` | `currency` | enumString | ne | `null` | true | true | explicitní, beze změny |
+| economy_bank_statements.jsonc (JSONC) | `economy_bank_statements` | `reconciliation_state` | enumInt | ne | `0` | false | true | **nově povinné**; default `0` dodá novému záznamu hodnotu (pole readOnly, přibude hvězdička) |
+| economy_bank_transactions.jsonc (JSONC) | `economy_bank_transactions` | `direction` | enumInt | ne | `null` | true odvozeno | true | beze změny (už dnes odvozené `true`) |
+| economy_bank_transactions.jsonc (JSONC) | `economy_bank_transactions` | `currency` | enumString | ne | `null` | true odvozeno | true | beze změny (už dnes odvozené `true`) |
+| economy_bank_transactions.jsonc (JSONC) | `economy_bank_transactions` | `operation` | enumString | ano | `null` | false | false | prázdná možnost „nevybráno" |
+| economy_accbal_balance_accounts.jsonc (JSONC) | `economy_accbal_balance_accounts` | `acc_side` | enumInt | ne | `0` | true | true | explicitní, beze změny |
+| economy_accbal_balance_accounts.jsonc (JSONC) | `economy_accbal_balance_accounts` | `amounts_sign` | enumInt | ne | `0` | true | true | explicitní, beze změny |
+| economy_accbal_balance_accounts.jsonc (JSONC) | `economy_accbal_balance_accounts` | `bal_side` | enumInt | ne | `0` | true | true | explicitní, beze změny |
+
+### Ověření
+
+`vendor/bin/phpunit --filter 'TabBuilder|JsoncFormLoader|AutoFormBuilder'`
+69 testů, celá sada 5161 testů zelená (1 skipped, předchozí stav);
+`npm run check:i18n` 781 klíčů v paritě; `npm run build` bez chyb.
+E2E body 3–7 z „Hotovo když" ověřuje Anna na dev DS před commitem.

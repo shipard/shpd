@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Shipard\Tests\Unit\Core\Form;
 
 use PHPUnit\Framework\TestCase;
+use Shipard\Core\Database\ColumnDefinition;
 use Shipard\Core\Form\TabBuilder;
 
 class TabBuilderTest extends TestCase
@@ -389,5 +390,90 @@ class TabBuilderTest extends TestCase
             ->section()->col()
                 ->inline()->lookup('partner', table: 'base_persons_persons')->endInline()
             ->build();
+    }
+
+    // -------- select(): required odvozené ze schématu (issue #61) --------
+
+    /** @return array<string, ColumnDefinition> */
+    private function colDefs(): array
+    {
+        $cols = [
+            // NOT NULL s defaultem — u selectu default nic neřeší, prázdná možnost = NULL
+            ['id' => 'mode', 'name' => 'Mode', 'type' => 'enumInt', 'cfgItem' => 'x.modes', 'nullable' => false, 'default' => 1],
+            ['id' => 'kind', 'name' => 'Kind', 'type' => 'enumString', 'length' => 8, 'cfgItem' => 'x.kinds', 'nullable' => false],
+            ['id' => 'binder', 'name' => 'Binder', 'type' => 'int', 'nullable' => true],
+            ['id' => 'tags', 'name' => 'Tags', 'type' => 'json', 'nullable' => false],
+        ];
+        $map = [];
+        foreach ($cols as $c) {
+            $map[$c['id']] = ColumnDefinition::fromArray($c);
+        }
+        return $map;
+    }
+
+    private function firstElement(TabBuilder $b): \Shipard\Core\Form\FormElement
+    {
+        return $b->build()->sections[0]->columns[0]->elements[0];
+    }
+
+    public function testSelectRequiredInferredFromNotNullColumnEvenWithDefault(): void
+    {
+        $b = (new TabBuilder('t', 'T', colDefs: $this->colDefs()))
+            ->section()->col()->select('mode');
+        $this->assertTrue($this->firstElement($b)->required);
+
+        $b = (new TabBuilder('t', 'T', colDefs: $this->colDefs()))
+            ->section()->col()->select('kind');
+        $this->assertTrue($this->firstElement($b)->required);
+    }
+
+    public function testSelectRequiredInferredFalseForNullableColumn(): void
+    {
+        $b = (new TabBuilder('t', 'T', colDefs: $this->colDefs()))
+            ->section()->col()->select('binder');
+        $this->assertFalse($this->firstElement($b)->required);
+    }
+
+    public function testSelectRequiredFalseWithoutColumnDefs(): void
+    {
+        $b = (new TabBuilder('t', 'T'))
+            ->section()->col()->select('mode');
+        $this->assertFalse($this->firstElement($b)->required);
+
+        // sloupec mimo mapu definic (např. virtuální pole) → false
+        $b = (new TabBuilder('t', 'T', colDefs: $this->colDefs()))
+            ->section()->col()->select('unknown_column');
+        $this->assertFalse($this->firstElement($b)->required);
+    }
+
+    public function testSelectExplicitRequiredWinsOverInference(): void
+    {
+        $b = (new TabBuilder('t', 'T', colDefs: $this->colDefs()))
+            ->section()->col()->select('mode', required: false);
+        $this->assertFalse($this->firstElement($b)->required, 'explicitní false na NOT NULL sloupci');
+
+        $b = (new TabBuilder('t', 'T', colDefs: $this->colDefs()))
+            ->section()->col()->select('binder', required: true);
+        $this->assertTrue($this->firstElement($b)->required, 'explicitní true na nullable sloupci');
+    }
+
+    public function testMultiselectRequiredNotInferred(): void
+    {
+        $b = (new TabBuilder('t', 'T', colDefs: $this->colDefs()))
+            ->section()->col()->multiselect('tags');
+        $this->assertFalse($this->firstElement($b)->required);
+    }
+
+    public function testSelectPlaceholderPassthrough(): void
+    {
+        $b = (new TabBuilder('t', 'T', colDefs: $this->colDefs()))
+            ->section()->col()->select('mode', placeholder: 'Nerozhodnuto');
+        $el = $this->firstElement($b);
+        $this->assertSame('Nerozhodnuto', $el->placeholder);
+        $this->assertTrue($el->required);
+
+        $b = (new TabBuilder('t', 'T'))
+            ->section()->col()->select('mode');
+        $this->assertNull($this->firstElement($b)->placeholder);
     }
 }

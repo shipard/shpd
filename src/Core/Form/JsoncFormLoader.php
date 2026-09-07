@@ -303,7 +303,7 @@ class JsoncFormLoader
             column: $column,
             label: $label,
             placeholder: $elData['placeholder'] ?? null,
-            required: $elData['required'] ?? ($col !== null && !$col->nullable && $col->default === null),
+            required: $elData['required'] ?? $this->deriveRequired($type, $col),
             readOnly: $elData['readOnly'] ?? false,
             hidden: $elData['hidden'] ?? false,
             triggers: $elData['triggers'] ?? null,
@@ -316,6 +316,24 @@ class JsoncFormLoader
             inputType: $inputType,
             lookup: $lookup,
         );
+    }
+
+    /**
+     * Default `required` when JSONC does not say. Select: `!nullable` — its
+     * empty option always means NULL, which a NOT NULL column cannot hold,
+     * a column default does not help (issue #61). Other types: NOT NULL
+     * without default (the schema default fills the value otherwise).
+     * Mirrors TabBuilder::select() and AutoFormBuilder.
+     */
+    private function deriveRequired(string $type, ?ColumnDefinition $col): bool
+    {
+        if ($col === null) {
+            return false;
+        }
+        if ($type === 'select') {
+            return !$col->nullable;
+        }
+        return !$col->nullable && $col->default === null;
     }
 
     private function deriveType(?ColumnDefinition $col): string

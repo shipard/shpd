@@ -201,7 +201,10 @@ Pro enumy a malé číselníky:
 }
 ```
 
-`required` přidá hvězdičku k labelu (validace běží i na serveru). `hidden` schová pole CSS-displej-none (zůstává v DOM, posílá se do save).
+`required` přidá hvězdičku k labelu (validace běží i na serveru). Bez explicitní
+hodnoty se odvozuje ze schématu: u `select` `!nullable` sloupce (prázdná možnost
+„nevybráno" tak existuje jen u nullable polí), u ostatních typů `!nullable &&
+default === null`. `hidden` schová pole CSS-displej-none (zůstává v DOM, posílá se do save).
 
 ---
 

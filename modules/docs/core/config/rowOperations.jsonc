@@ -20,6 +20,8 @@
     //   identityRequired: 1 — partner řádku a payment_reference jsou tvrdě
     //                     povinné (saldokontní úhrady: bez nich accbal nemá
     //                     co párovat). Vyžaduje rowPartner + rowPaymentId.
+    //   partnerRequired: 1 — jen partner řádku je tvrdě povinný, VS ne
+    //                     (zálohy v hotovosti). identityRequired ho implikuje.
     //
     // Forma-facing atributy (řídí vstupy formuláře — protějšky accountSrc /
     // sideSrc z účtovacího předpisu, musí souhlasit):
@@ -172,13 +174,16 @@
     // payment_reference řádku nese číslo zálohového dokladu (staré symbol1),
     // na které naváže saldokontní párování záloh (Fáze 4+). Odpočty jsou na
     // dokladu záporné (věrný obraz), stranu otáčí reverseSign v předpisu.
+    // Odpočet na pokladním dokladu (#59 Task E) se chová stejně jako na
+    // faktuře — položkový řádek s DPH (odpočet zdaněné zálohy nese daň).
     "purchase.advanceDeduction": {
         "name": "Advance payment deduction",
         "name:cs": "Odpočet poskytnuté zálohy",
         "name:en": "Advance payment deduction",
         "rowPaymentId": 1,
         "docTypes": {
-            "invni": {"order": 400}
+            "invni": {"order": 400},
+            "cash": {"order": 460, "cashDir": 2}
         }
     },
     "purchase.advanceVat": {
@@ -205,7 +210,42 @@
         "name:en": "Advance payment deduction",
         "rowPaymentId": 1,
         "docTypes": {
-            "invno": {"order": 300}
+            "invno": {"order": 300},
+            "cash": {"order": 360, "cashDir": 1}
+        }
+    },
+
+    // Zálohy přijaté / poskytnuté v hotovosti (#59 Task E): záloha zaplacená
+    // na pokladně bez faktury (úhrada zálohové faktury hotově = totéž).
+    // Bez DPH — zdanění zálohy je samostatný daňový doklad (mimo scope);
+    // kontační layout (rowSide 0), strana z předpisu (příjem DAL 324 /
+    // výdej MD 314), částka kladná; záporná částka = vrácení zálohy
+    // (konvence záporných řádků D9). Partner povinný (partnerRequired —
+    // saldo záloh bez dlužníka/věřitele nedává smysl), payment_reference
+    // nepovinný (identita pro budoucí párování záloh, staré doklady ho
+    // často nemají).
+    "advance.received": {
+        "name": "Advance received",
+        "name:cs": "Přijatá záloha",
+        "name:en": "Advance received",
+        "rowSide": 0,
+        "rowPartner": 1,
+        "rowPaymentId": 1,
+        "partnerRequired": 1,
+        "docTypes": {
+            "cash": {"order": 370, "cashDir": 1}
+        }
+    },
+    "advance.given": {
+        "name": "Advance given",
+        "name:cs": "Poskytnutá záloha",
+        "name:en": "Advance given",
+        "rowSide": 0,
+        "rowPartner": 1,
+        "rowPaymentId": 1,
+        "partnerRequired": 1,
+        "docTypes": {
+            "cash": {"order": 470, "cashDir": 2}
         }
     },
     "sale.advanceVat": {

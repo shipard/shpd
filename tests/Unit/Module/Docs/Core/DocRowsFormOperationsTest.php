@@ -71,6 +71,15 @@ class DocRowsFormOperationsTest extends TestCase
                     'name' => 'Výdej pro převod peněz', 'rowSide' => 0, 'rowPaymentId' => 1,
                     'docTypes' => ['cash' => ['order' => 450, 'cashDir' => 2]],
                 ],
+                // zálohy (Task E): odpočet položkový s DPH jako na faktuře, hotovostní záloha kontační
+                'sale.advanceDeduction' => [
+                    'name' => 'Odpočet přijaté zálohy', 'rowPaymentId' => 1,
+                    'docTypes' => ['invno' => ['order' => 300], 'cash' => ['order' => 360, 'cashDir' => 1]],
+                ],
+                'advance.received' => [
+                    'name' => 'Přijatá záloha', 'rowSide' => 0, 'rowPartner' => 1, 'rowPaymentId' => 1, 'partnerRequired' => 1,
+                    'docTypes' => ['cash' => ['order' => 370, 'cashDir' => 1]],
+                ],
             ],
             'docs.core.docTypes' => [
                 'invno' => ['trade_dir' => 1],
@@ -134,7 +143,7 @@ class DocRowsFormOperationsTest extends TestCase
         $el = $this->findElement($def, 'operation');
         $this->assertNotNull($el);
         $this->assertSame(
-            ['sale.services', 'sale.goods', 'acc.entry'],
+            ['sale.services', 'sale.goods', 'sale.advanceDeduction', 'acc.entry'],
             array_column($el->options, 'value'),
         );
     }
@@ -203,9 +212,41 @@ class DocRowsFormOperationsTest extends TestCase
 
         $el = $this->findElement($def, 'operation');
         $this->assertSame(
-            ['sale.services', 'sale.goods', 'payment.receivable', 'transfer.in', 'acc.entry'],
+            ['sale.services', 'sale.goods', 'payment.receivable', 'transfer.in', 'sale.advanceDeduction', 'advance.received', 'acc.entry'],
             array_column($el->options, 'value'),
         );
+    }
+
+    /**
+     * Zálohy na pokladním dokladu (Task E): odpočet zálohy se chová jako na
+     * faktuře — položkový řádek s DPH; hotovostní záloha je kontační bez DPH
+     * s partnerem (povinným) a nepovinným VS.
+     */
+    public function testAdvanceDeductionOnCashKeepsItemLayoutWithVat(): void
+    {
+        $data = ['row_kind' => 1, 'doc_head' => 5, 'operation' => 'sale.advanceDeduction'];
+        $def = $this->form('cash', cashDir: 1)->buildFormDefinition($data, true);
+
+        $this->assertNotNull($this->findElement($def, 'item'), 'položkový layout');
+        $this->assertNotNull($this->findElement($def, 'quantity'));
+        $this->assertNotNull($this->findElement($def, 'vat_code'), 'odpočet zdaněné zálohy nese DPH');
+        $this->assertNotNull($this->findElement($def, 'payment_reference'), 'číslo zálohového dokladu');
+        $this->assertNull($this->findElement($def, 'partner'), 'odpočet partnera řádku nemá');
+        $this->assertNull($this->findElement($def, 'acc_side'));
+    }
+
+    public function testCashAdvanceUsesContationLayoutWithPartner(): void
+    {
+        $data = ['row_kind' => 1, 'doc_head' => 5, 'operation' => 'advance.received'];
+        $def = $this->form('cash', cashDir: 1)->buildFormDefinition($data, true);
+
+        $this->assertNull($this->findElement($def, 'vat_code'), 'záloha v hotovosti je bez DPH');
+        $this->assertNull($this->findElement($def, 'quantity'));
+        $this->assertNull($this->findElement($def, 'item'));
+        $this->assertNull($this->findElement($def, 'acc_side'), 'stranu nese krok předpisu');
+        $this->assertNotNull($this->findElement($def, 'total_price'));
+        $this->assertNotNull($this->findElement($def, 'partner'));
+        $this->assertFalse($this->findElement($def, 'payment_reference')->required, 'VS nepovinný');
     }
 
     public function testCashDisbursementOffersPurchaseOpsAndDefaultsToLowestOrder(): void

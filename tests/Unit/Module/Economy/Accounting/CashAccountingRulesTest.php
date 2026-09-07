@@ -181,6 +181,58 @@ class CashAccountingRulesTest extends TestCase
         }
     }
 
+    /**
+     * Zálohy na pokladním dokladu (Task E, E3): advance.received/given jsou
+     * kontační bez DPH s povinným partnerem (partnerRequired, ne
+     * identityRequired), odpočty *.advanceDeduction zůstávají položkové s DPH
+     * jako na faktuře (bez rowSide) a předpis cash má pro každý z nich krok
+     * na správné straně (odpočet s reverseSign jako v invno/invni).
+     */
+    public function testCashAdvancesMirrorInvoiceDeductionsAndCarryPartner(): void
+    {
+        $ops = JsoncParser::parseFile(self::MODULES . '/docs/core/config/rowOperations.jsonc');
+
+        foreach (['advance.received' => 1, 'advance.given' => 2] as $op => $dir) {
+            $this->assertSame(0, $ops[$op]['rowSide'], "{$op}: kontační bez DPH");
+            $this->assertSame(1, $ops[$op]['rowPartner']);
+            $this->assertSame(1, $ops[$op]['rowPaymentId']);
+            $this->assertSame(1, $ops[$op]['partnerRequired'], "{$op}: partner povinný");
+            $this->assertArrayNotHasKey('identityRequired', $ops[$op], "{$op}: VS nepovinný");
+            $this->assertSame(['cash'], array_keys($ops[$op]['docTypes']));
+            $this->assertSame($dir, $ops[$op]['docTypes']['cash']['cashDir']);
+        }
+        foreach (['sale.advanceDeduction' => [1, 'invno'], 'purchase.advanceDeduction' => [2, 'invni']] as $op => [$dir, $invoice]) {
+            $this->assertArrayNotHasKey('rowSide', $ops[$op], "{$op}: položkový layout s DPH i na pokladně");
+            $this->assertSame($dir, $ops[$op]['docTypes']['cash']['cashDir']);
+            $this->assertArrayHasKey($invoice, $ops[$op]['docTypes']);
+        }
+
+        $steps = $this->stepsOf('cash');
+        $stepFor = function (string $op) use ($steps): array {
+            $found = array_values(array_filter($steps, fn($s) => ($s['operation'] ?? null) === $op));
+            $this->assertCount(1, $found, "cash: jeden krok pro {$op}");
+            return $found[0];
+        };
+
+        $received = $stepFor('advance.received');
+        $this->assertSame(['advances.received', 1, 1], [$received['cat'], $received['side'], $received['headQuery']['cash_dir']]);
+        $this->assertArrayNotHasKey('reverseSign', $received);
+
+        $given = $stepFor('advance.given');
+        $this->assertSame(['advances.given', 0, 2], [$given['cat'], $given['side'], $given['headQuery']['cash_dir']]);
+
+        // odpočty: tatáž kategorie, opačná strana a reverseSign jako na faktuře
+        foreach (['sale.advanceDeduction' => ['invno', 1], 'purchase.advanceDeduction' => ['invni', 2]] as $op => [$invoice, $dir]) {
+            $cash = $stepFor($op);
+            $inv = array_values(array_filter($this->stepsOf($invoice), fn($s) => ($s['operation'] ?? null) === $op));
+            $this->assertCount(1, $inv);
+            $this->assertSame($inv[0]['cat'], $cash['cat'], "{$op}: kategorie jako faktura");
+            $this->assertSame($inv[0]['side'], $cash['side'], "{$op}: strana jako faktura");
+            $this->assertSame(1, $cash['reverseSign']);
+            $this->assertSame($dir, $cash['headQuery']['cash_dir']);
+        }
+    }
+
     public function testInvoicesBookCashPaymentOnCashDesk(): void
     {
         foreach (['invno' => 'receivables', 'invni' => 'payables'] as $docType => $balanceCat) {

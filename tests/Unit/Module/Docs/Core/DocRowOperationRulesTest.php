@@ -35,7 +35,34 @@ class DocRowOperationRulesTest extends TestCase
                 'name' => 'Cash transfer out', 'rowSide' => 0, 'rowPaymentId' => 1,
                 'docTypes' => ['cash' => ['order' => 450, 'cashDir' => 2]],
             ],
+            // zálohy v hotovosti (Task E): partner povinný, VS ne
+            'advance.received' => [
+                'name' => 'Advance received', 'rowSide' => 0, 'rowPartner' => 1, 'rowPaymentId' => 1, 'partnerRequired' => 1,
+                'docTypes' => ['cash' => ['order' => 370, 'cashDir' => 1]],
+            ],
         ];
+    }
+
+    // ── partnerRequired (zálohy v hotovosti, Task E) ────────────────────────
+
+    public function testPartnerRequiredNeedsPartnerButNotPaymentReference(): void
+    {
+        $row = ['row_kind' => 1, 'operation' => 'advance.received', 'total_price' => 5000];
+        $errors = DocRowOperationRules::validateRow($row, 'cash', $this->cfg(), 1);
+        $this->assertSame([['partner', 'partner_required']], array_map(fn(array $e) => [$e['column'], $e['code']], $errors));
+
+        $row['partner'] = 50;
+        $this->assertSame([], DocRowOperationRules::validateRow($row, 'cash', $this->cfg(), 1), 'bez VS projde');
+
+        $row['payment_reference'] = 'ZAL 2026/07';
+        $this->assertSame([], DocRowOperationRules::validateRow($row, 'cash', $this->cfg(), 1));
+    }
+
+    public function testAdvanceReceivedOnlyOnReceipt(): void
+    {
+        $row = ['row_kind' => 1, 'operation' => 'advance.received', 'partner' => 50];
+        $errors = DocRowOperationRules::validateRow($row, 'cash', $this->cfg(), 2);
+        $this->assertSame('operation_not_allowed_for_direction', $errors[0]['code']);
     }
 
     // ── transfer.* (převody peněz, Task D) ──────────────────────────────────

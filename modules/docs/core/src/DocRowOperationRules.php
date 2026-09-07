@@ -103,16 +103,20 @@ final class DocRowOperationRules
             ]];
         }
 
-        // Saldokontní úhrady: bez partnera a VS nemá accbal co párovat.
+        // Saldokontní úhrady: bez partnera a VS nemá accbal co párovat
+        // (identityRequired). Zálohy v hotovosti chtějí jen partnera
+        // (partnerRequired) — VS staré doklady často nemají.
         $errors = [];
-        if (!empty($entry['identityRequired'])) {
+        if (!empty($entry['identityRequired']) || !empty($entry['partnerRequired'])) {
             if (empty($row['partner'])) {
                 $errors[] = [
                     'column'  => 'partner',
-                    'message' => 'Úhrada musí mít partnera (dlužníka / věřitele)',
+                    'message' => 'Řádek musí mít partnera (dlužníka / věřitele)',
                     'code'    => 'partner_required',
                 ];
             }
+        }
+        if (!empty($entry['identityRequired'])) {
             if (trim((string) ($row['payment_reference'] ?? '')) === '') {
                 $errors[] = [
                     'column'  => 'payment_reference',

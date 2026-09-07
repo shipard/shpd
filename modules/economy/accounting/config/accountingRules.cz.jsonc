@@ -243,6 +243,13 @@
                     "operation": "payment.receivable", "text": "Úhrada pohledávky"},
                 {"headQuery": {"cash_dir": 1}, "cat": "cash.transit", "src": "rows", "side": 1,
                     "operation": "transfer.in", "text": "Převod peněz"},
+                // Zálohy v hotovosti (Task E): přijatá záloha bez DPH DAL 324
+                // (vat_amount 0 → maska 324, ne 3249); odpočet jako na faktuře
+                // (záporný řádek s DPH, reverseSign → MD 3249), DPH z rekapitulace.
+                {"headQuery": {"cash_dir": 1}, "cat": "advances.received", "src": "rows", "side": 1,
+                    "operation": "advance.received", "text": "Přijatá záloha"},
+                {"headQuery": {"cash_dir": 1}, "cat": "advances.received", "src": "rows", "side": 0,
+                    "reverseSign": 1, "operation": "sale.advanceDeduction"},
                 {"headQuery": {"cash_dir": 1}, "accountSrc": "item", "src": "rows", "side": 1,
                     "operation": "acc.entry"},
                 {"headQuery": {"cash_dir": 1}, "cat": "vat", "src": "vat", "side": 1},
@@ -262,6 +269,10 @@
                     "operation": "payment.payable", "text": "Úhrada závazku"},
                 {"headQuery": {"cash_dir": 2}, "cat": "cash.transit", "src": "rows", "side": 0,
                     "operation": "transfer.out", "text": "Převod peněz"},
+                {"headQuery": {"cash_dir": 2}, "cat": "advances.given", "src": "rows", "side": 0,
+                    "operation": "advance.given", "text": "Poskytnutá záloha"},
+                {"headQuery": {"cash_dir": 2}, "cat": "advances.given", "src": "rows", "side": 1,
+                    "reverseSign": 1, "operation": "purchase.advanceDeduction"},
                 {"headQuery": {"cash_dir": 2}, "accountSrc": "item", "src": "rows", "side": 0,
                     "operation": "acc.entry"},
                 {"headQuery": {"cash_dir": 2}, "cat": "vat", "src": "vat", "side": 0},

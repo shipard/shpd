@@ -131,7 +131,6 @@ zatím nemá, a bez nich se firma za pár týdnů vrátí. Všechno níže je
 | Tisk / PDF vydaného dokladu | — |
 | Odeslání dokladu odběrateli e-mailem — nad existující odchozí poštou (`docs/mail/outbound.md`), chybí napojení z dokladu s přílohou | — |
 | Majetek — evidence a odpisy | — |
-| Účetní závěrka — uzávěrka roku, rozvaha, výsledovka | — |
 | Saldokonto — přehlednost: chip bar saldokont, položky v sidebaru, grid po partnerech | `accbal-ledger-viewgroup-chips.md`, `accbal-nav-items.md`, `accbal-ledger-grid.md` |
 
 **Hotovo když:** interní firmy vedou účetnictví výhradně v novém Shipardu
@@ -181,6 +180,7 @@ v každé diskuzi.
 | Zásoby (příjemky, výdejky, přehledy, účtování A/B) | pro ostrý provoz nejsou potřeba; budou se dělat, návrh zatím neexistuje |
 | Zakázky | totéž — až po M4, po platebních příkazech |
 | Zálohové faktury a zúčtování záloh | totéž; saldokonto na ně počítá (`docs/accbal.md` §5, mimo Fázi 3) |
+| Účetní závěrka (uzávěrka roku, rozvaha, výsledovka) | není potřeba pro přechod na ostro; přijde s prvním uzavíraným rokem |
 | PostgreSQL driver | MariaDB stačí; abstrakce v `DatabaseManager` je připravená |
 | Další LLM poskytovatelé kromě Anthropic | až bude důvod, backendy jsou abstrahované |
 | Mobilní nativní aplikace | responzivní web pokrývá potřebu |
@@ -203,7 +203,8 @@ v každé diskuzi.
   chybí podání). Do M2 doplněn zdroj platby a ověření saldokonta. Vložen
   nový M4 „Ostrý provoz" — funkce, které starý Shipard má a bez kterých se
   firma po migraci vrátí; původní M4/M5 přečíslovány na M5/M6, M5 přejmenován
-  na Veřejnou betu. Zásoby, Zakázky a Zálohy zapsány jako vědomě odložené.
+  na Veřejnou betu. Zásoby, Zakázky, Zálohy a Účetní závěrka zapsány jako
+  vědomě odložené.
 
 ---
 

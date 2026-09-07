@@ -32,6 +32,7 @@ use Shipard\Module\Docs\Core\NumberSeriesProvisioner;
 use Shipard\Module\Economy\Accbal\BalancesProvisioner;
 use Shipard\Module\Economy\Accbal\ClearingInfrastructureProvisioner;
 use Shipard\Module\Economy\Accounting\AccountChartProvisioner;
+use Shipard\Module\Economy\Accounting\TransitAccountsProvisioner;
 use Shipard\Module\Economy\Codebooks\FiscalYearsProvisioner;
 use Shipard\Module\Economy\Items\ItemKindsProvisioner;
 use Shipard\Module\Economy\Vat\ReportPeriodsProvisioner;
@@ -276,6 +277,12 @@ class DsUpgradeCommand extends Command
         // Idempotentní; na normálním DS no-op (full provisionery v else větvi pak
         // skupinu/účty přeskočí dle number/code).
         $this->provisionClearingInfrastructure($resolvedModules, $dsConnection, $output);
+
+        // Tranzitní účty 261100 (převody) / 261400 (karty) + syntetika 261 —
+        // BEZPODMÍNEČNĚ, i pod skipProvisioning (#59 Task E): předpis na ně
+        // míří pevnou maskou, migrovaný rozvrh je nemá (staré 261001/261002)
+        // a AccountChartProvisioner pod skipProvisioning neběží. Idempotentní.
+        $this->provisionTransitAccounts($resolvedModules, $dsConnection, $output);
 
         // AI analyzer (user, backend, profil + version sync ze šablony) se
         // zajišťuje BEZPODMÍNEČNĚ — i pod skipProvisioning. Není to migrovaná
@@ -681,6 +688,30 @@ class DsUpgradeCommand extends Command
 
         $this->logProvisioningResult($output, 'clearing accounts', $result['accounts']);
         $this->logProvisioningResult($output, 'clearing balance group', $result['group']);
+    }
+
+    /**
+     * @param list<\Shipard\Core\Module\ModuleDefinition> $resolvedModules
+     */
+    private function provisionTransitAccounts(
+        array $resolvedModules,
+        DataSourceConnection $dsConnection,
+        OutputInterface $output,
+    ): void {
+        $output->writeln('', OutputInterface::VERBOSITY_VERBOSE);
+        $output->writeln('Provisioning transit accounts (261100 / 261400)...', OutputInterface::VERBOSITY_VERBOSE);
+
+        if (!$this->isModuleActive($resolvedModules, 'economy.accounting')) {
+            $output->writeln(
+                '  <comment>[SKIP] economy.accounting module not active</comment>',
+                OutputInterface::VERBOSITY_VERBOSE,
+            );
+            return;
+        }
+
+        $result = (new TransitAccountsProvisioner($dsConnection))->provision();
+
+        $this->logProvisioningResult($output, 'transit accounts', $result);
     }
 
     /**

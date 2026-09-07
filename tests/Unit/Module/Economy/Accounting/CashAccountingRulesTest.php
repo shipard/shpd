@@ -6,6 +6,7 @@ namespace Shipard\Tests\Unit\Module\Economy\Accounting;
 
 use PHPUnit\Framework\TestCase;
 use Shipard\Core\Utils\JsoncParser;
+use Shipard\Module\Economy\Accounting\TransitAccountsProvisioner;
 
 /**
  * Konzistence předpisu pro pokladnu (#59 D8) — programová kontrola nad
@@ -144,6 +145,38 @@ class CashAccountingRulesTest extends TestCase
             ));
             foreach ($masks as $mask => $cat) {
                 $this->assertArrayHasKey((string) $mask, $numbers, "{$chart} nemá účet {$mask} (kategorie {$cat})");
+            }
+        }
+    }
+
+    /**
+     * TransitAccountsProvisioner (Task E) nese definice inline — drift proti
+     * seedům hlídá tenhle test (vzor ClearingInfrastructureProvisionerTest).
+     */
+    public function testTransitAccountsProvisionerMatchesBothSeedCharts(): void
+    {
+        foreach (['accountChartDefault', 'accountChartNpo'] as $chart) {
+            $byNumber = [];
+            foreach (JsoncParser::parseFile(self::MODULES . "/economy/accounting/config/{$chart}.jsonc") as $entry) {
+                $byNumber[(string) $entry['number']] = $entry;
+            }
+            foreach (TransitAccountsProvisioner::ACCOUNTS as $acc) {
+                $number = $acc['number'];
+                $this->assertArrayHasKey($number, $byNumber, "{$chart}: účet {$number} chybí");
+                $this->assertSame($byNumber[$number]['name'], $acc['name'], "{$chart}: name {$number} se rozešel se seedem");
+                $this->assertSame($byNumber[$number]['short_name'], $acc['short_name'], "{$chart}: short_name {$number}");
+                $this->assertSame((int) $byNumber[$number]['account_kind'], $acc['account_kind'], "{$chart}: account_kind {$number}");
+            }
+        }
+
+        // provisioner pokrývá každou pevnou masku 261xxx předpisu mimo clearing (accbal)
+        $covered = array_column(TransitAccountsProvisioner::ACCOUNTS, 'number');
+        foreach ($this->rules()['accounts'] as $entry) {
+            foreach ((array) ($entry['accountMask'] ?? []) as $mask) {
+                $mask = (string) $mask;
+                if (str_starts_with($mask, '261') && !str_starts_with((string) ($entry['cat'] ?? ''), 'bank.')) {
+                    $this->assertContains($mask, $covered, "maska {$mask} ({$entry['cat']}) nemá bezpodmínečný provisioner");
+                }
             }
         }
     }

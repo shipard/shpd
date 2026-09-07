@@ -926,8 +926,13 @@ na entitu (#59 D2, D3):
   Oba FK žijí v `economy.codebooks`, na kterém `docs.core` už závisí —
   polymorfní pár (`binding_table`, `binding_id`) by ztratil referenci.
 - **Provisioning** — `BoundNumberSeriesProvisioner`: pro každý vázaný typ
-  × každou entitu ve stavu 40 zajistí řadu (`doc_type`, FK) mimo Smazáno.
-  Název „{typ} — {kód entity}", **`doc_number_code` = kód entity** — do
+  × každou entitu ve stavu 40 nebo 70 zajistí řadu (`doc_type`, FK) mimo
+  Smazáno; řada dědí stav entity (40/3, archivovaná pokladna 70/4 — #59
+  Task E). Archivní řadu přijme jen import (`DocumentApplier`,
+  `applyOptions.importNumber`) pro historické doklady; viewer ani formulář
+  ji nenabízí, živý doklad na archivovanou pokladnu založit nejde. Pokladna,
+  která přešla 40 → 70 s už existující řadou 40, se neřeší (řada zůstává
+  aktivní). Název „{typ} — {kód entity}", **`doc_number_code` = kód entity** — do
   vzorce vstupuje přes existující `%C`, žádný nový placeholder (vzorec
   `%D%C%y%5` je ekvivalent starého `%D%B%y%5`). Běží z `ds-upgrade` i pod
   `skipProvisioning` (import dokladů dohledává řadu podle typu a kódu

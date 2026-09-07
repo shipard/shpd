@@ -321,8 +321,9 @@ reprodukuje). Výslednou částku a `total_rounding` pak dopočte
   Chybí-li řada, applier ji založí sám (`BoundNumberSeriesProvisioner`,
   idempotentní — pokladna založená generickým CRUD importu nespustí
   `afterSave` handler); neznámá pokladna nebo pokladna mimo stav 40 =
-  apply-level chyba `cash_desk_not_found` (422). `cash_desk` hlavičky se
-  denormalizuje z řady.
+  apply-level chyba `cash_desk_not_found` (422). Archivovanou pokladnu (70)
+  přijme jen import mód (`applyOptions.importNumber`) — řady vzniknou ve
+  stavu 70 (#59 Task E). `cash_desk` hlavičky se denormalizuje z řady.
   Strany `supplier`/`customer` nepovinné (anonymní doklad); je-li strana
   uvedená, je partnerem hlavičky podle směru (příjem → odběratel, výdej →
   dodavatel; `selfParty` má přednost) a v import módu z ní vzniká dobový
@@ -333,7 +334,12 @@ reprodukuje). Výslednou částku a `total_rounding` pak dopočte
   = řádky `operation: transfer.in` (jen `cashDirection: 1`) /
   `transfer.out` (jen 2) s `totalPrice` a volitelným `paymentReference`
   (staré `symbol1`/`symbol2`), bez partnera; `operation` je passthrough,
-  směr vůči `cashDirection` hlídá validace dokladu. Stejné klíče platí i pro
+  směr vůči `cashDirection` hlídá validace dokladu. Zálohy (#59 Task E):
+  `advance.received` (jen příjem) / `advance.given` (jen výdej) s
+  `totalPrice`, povinným partnerem přes pin `_resolve.rows[i].partner` a
+  volitelným `paymentReference`, bez DPH; záporná částka = vrácení. Odpočet
+  `sale.advanceDeduction` / `purchase.advanceDeduction` je na `cashDocument`
+  položkový řádek s DPH jako na faktuře (záporný základ). Stejné klíče platí i pro
   `operation` bankovní transakce (`shpd.bank.statement.v1`).
 - **`cashRegisterDocument`** (`cashreg`, prodejka) — povinný `cashDesk`,
   bez `cashDirection` (pevně výstup); vratka = záporné řádky.

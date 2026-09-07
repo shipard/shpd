@@ -22,11 +22,13 @@ a pokladna se na dokladu nezadává (denormalizuje se z řady do `cash_desk`).
   partner nepovinný, způsob úhrady jen Hotovost / Kartou, měna dokladu = měna
   pokladny, splatnost = datum vystavení. Pohyby řádku závisejí na směru
   (`rowOperations[].docTypes.cash.cashDir`): příjem `sale.services`,
-  `sale.goods`, `payment.receivable`, `transfer.in`, `acc.entry`; výdej
-  `purchase.goods`, `purchase.services`, `purchase.other`,
-  `payment.payable`, `transfer.out`, `acc.entry`.
+  `sale.goods`, `payment.receivable`, `transfer.in`, `sale.advanceDeduction`,
+  `advance.received`, `acc.entry`; výdej `purchase.goods`,
+  `purchase.services`, `purchase.other`, `payment.payable`, `transfer.out`,
+  `purchase.advanceDeduction`, `advance.given`, `acc.entry`.
   `payment.*` = úhrada faktury hotově/kartou (partner + VS na řádku, accbal
-  ji páruje jako bankovní úhradu). `transfer.*` = převod peněz (níže).
+  ji páruje jako bankovní úhradu). `transfer.*` = převod peněz, `advance.*`
+  a `*.advanceDeduction` = zálohy (níže).
 - **Editační formulář** `CashDocForm extends CashDeskFormBase` — směr
   (`cash_dir`, po vzniku řádků už jen pro čtení), způsob úhrady, nepovinný
   partner, datumy, DPH, readOnly sekce „Pokladna"; titulek hlavičky
@@ -63,6 +65,21 @@ doklad jednu, bankovní transakce s operací `transfer.in/out`
 Po zaúčtování obou stran je zůstatek 261100 nulový; párování obou stran
 a saldokontní skupina se nezavádí. Karty jdou odděleně na 261400. Detaily
 a kontrolní příklady: `docs/accounting.md` §2, §4.
+
+## Zálohy
+
+Hotovostní záloha bez faktury (#59 Task E): příjmový doklad s pohybem
+`advance.received` (DAL 324), výdajový s `advance.given` (MD 314). Řádek je
+kontační bez DPH — zdanění zálohy je samostatný daňový doklad — s **povinným
+partnerem** (`partnerRequired`) a nepovinným VS (`payment_reference`);
+záporná částka = vrácení zálohy (konvence záporných řádků). Odpočet zálohy
+(`sale.advanceDeduction` / `purchase.advanceDeduction`) se na pokladním
+dokladu chová **stejně jako na faktuře**: záporný položkový řádek s DPH,
+účet 3249/3149 přes `reverseSign`, daň z rekapitulace. Párování záloh je
+accbal fáze 4+. Detaily a kontrolní příklady: `docs/accounting.md` §2, §4.
+
+Archivovaná pokladna (stav V archívu) má řady také v archivu — přijme je
+jen import historických dokladů, v seznamu ani formuláři se nenabízí.
 
 ## Vztah k `docs.cashRegister`
 

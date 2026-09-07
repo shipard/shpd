@@ -1,7 +1,7 @@
 ---
 title: Pokladní doklad
 summary: Jak zapsat příjem nebo výdej hotovosti či platbu kartou na pokladně — včetně úhrady faktury — a co k tomu musí být nastavené.
-keywords: [pokladní doklad, příjmový pokladní doklad, výdajový pokladní doklad, příjmový doklad, výdajový doklad, pokladna, hotovost, platba hotově, platba kartou, úhrada faktury hotově, zaplaceno hotově, pokladní lístek, paragon, směr pokladního dokladu, příjem, výdej, převod peněz, odvod hotovosti do banky, dotace pokladny, převod mezi pokladnami, peníze na cestě]
+keywords: [pokladní doklad, příjmový pokladní doklad, výdajový pokladní doklad, příjmový doklad, výdajový doklad, pokladna, hotovost, platba hotově, platba kartou, úhrada faktury hotově, zaplaceno hotově, pokladní lístek, paragon, směr pokladního dokladu, příjem, výdej, převod peněz, odvod hotovosti do banky, dotace pokladny, převod mezi pokladnami, peníze na cestě, záloha v hotovosti, přijatá záloha, poskytnutá záloha, odpočet zálohy, vrácení zálohy, archivovaná pokladna]
 related: [pokladna/prodejka.md, faktury-vydane/vystaveni-faktury.md, faktury-prijate/oprava-dokladu.md, uctarna/kdyz-se-doklad-nezauctuje.md, co-dnes-nejde.md]
 ---
 
@@ -64,6 +64,17 @@ Pro rychlý prodej zboží bez partnera se víc hodí [Prodejka](prodejka.md).
      (Pohyb *Příjem z převodu peněz* / *Výdej pro převod peněz*) nebo
      pokladním dokladem opačného směru na druhé pokladně; dokud tam není,
      zůstávají peníze na účtu *Peníze na cestě*.
+   - *Přijatá záloha* (u příjmu) / *Poskytnutá záloha* (u výdeje) — zákazník
+     ti složil zálohu v hotovosti, nebo ty jsi zálohu zaplatil. Zadáváš
+     **Částku** a **Partnera** (ten je povinný), do **Variabilního symbolu**
+     můžeš dát číslo zálohové faktury nebo smlouvy. DPH se tu neřeší —
+     zdanění zálohy je samostatný daňový doklad. Vrácení zálohy zapíšeš
+     stejným pohybem se zápornou částkou.
+   - *Odpočet přijaté zálohy* (u příjmu) / *Odpočet poskytnuté zálohy* (u
+     výdeje) — při konečném vyúčtování se dřív zaplacená záloha odečte.
+     Funguje stejně jako na faktuře: řádek se **zápornou** částkou, s
+     množstvím, cenou a **Kódem DPH** jako u zdaněné zálohy, do
+     **Variabilního symbolu** číslo zálohového dokladu.
    - *Účetní položka* — cokoli jiného, účet dá vybraná položka.
 
 6. **Dej Potvrdit a pak V pořádku.** Doklad dostane číslo z řady pokladny
@@ -81,9 +92,14 @@ dokladu** jen pro čtení — změna směru by zneplatnila pohyby řádků. Špa
 směr vyřeš smazáním řádků, nebo založ nový doklad.
 
 **Pohyb, který hledáš, v nabídce není.** Nabídka se řídí směrem: u příjmu
-jsou jen prodejní pohyby, úhrada pohledávky a příjem z převodu peněz,
-u výdeje jen nákupní pohyby, úhrada závazku a výdej pro převod peněz.
-*Účetní položka* je v obou.
+jsou jen prodejní pohyby, úhrada pohledávky, příjem z převodu peněz,
+přijatá záloha a její odpočet; u výdeje jen nákupní pohyby, úhrada závazku,
+výdej pro převod peněz, poskytnutá záloha a její odpočet. *Účetní položka*
+je v obou.
+
+**Pokladna je v archivu.** Na pokladnu ve stavu **V archívu** nový doklad
+nezaložíš — v seznamu ani při přidávání se nenabízí. Historické doklady na
+ní zůstávají čitelné (a přenesou se i převodem dat ze starého systému).
 
 **Odvod do banky nebo dotace pokladny.** Nezakládej k tomu nákup ani
 prodej — použij pohyb *Výdej pro převod peněz* (peníze odcházejí

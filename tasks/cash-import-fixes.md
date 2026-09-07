@@ -1,6 +1,14 @@
 # Task E: Opravy po prvním importu pokladny — tranzitní účty, archivované pokladny, zálohy na pokladních dokladech
 
-**Stav:** návrh — čeká na implementaci
+**Stav:** hotovo — 2026-09-07, 4 commity na `stable` (TransitAccountsProvisioner;
+archivovaná pokladna v provisioneru řad + applieru; zálohy na `cash`; dokumentace).
+Upřesnění proti zadání (David 2026-09-07): odpočet zálohy
+(`sale/purchase.advanceDeduction`) se na pokladním dokladu chová **stejně jako na
+faktuře** — položkový řádek **s DPH**; „bez DPH“ platí jen pro nové
+`advance.received/given`. Partner záloh vynucuje nová vlajka `partnerRequired`
+(identityRequired by chtěl i VS). Viewer/form řady 70 nenabízely už dříve (bez změny
+kódu). Zbývá: `ds-upgrade` na `btpg`/`e8w1`, stará strana task 32, reimport a kontrola
+`is_error` (poslední bod „Hotovo když“).
 **Issue:** #59 — komentář „Reimport msi / Shipard s.r.o. 2026-09-07"
 **Návaznost:** vyžaduje hotové Task A–D. Stará strana: `old_shipard`
 `modules/imports/newShipard/tasks/32-cash-import-fixes.md` (mapování
@@ -189,12 +197,14 @@ Po nasazení na dev: `ds-upgrade` na `btpg-peg5-b0tr-chln` a `e8w1-iu9x-82vy-9ye
 
 ## Hotovo když
 
-- [ ] `ds-upgrade` na migrovaném DS založí 261100 a 261400 (druhý běh 0 created).
-- [ ] Pokladna ve stavu 70 má po `ds-upgrade` řady ve stavu 70; import dokladu na ni
-      projde; UI ji nenabízí.
-- [ ] Příjmový PD s `advance.received` a `sale.advanceDeduction` se zaúčtuje podle
-      kontrolních příkladů; záporná záloha se otočí správně.
-- [ ] Všechny stávající testy procházejí; dokumentace aktualizována.
+- [x] `ds-upgrade` na migrovaném DS založí 261100 a 261400 (druhý běh 0 created).
+      *(unit test provisioneru + 4l3j: existing 3 / created 0; btpg/e8w1 po nasazení)*
+- [x] Pokladna ve stavu 70 má po `ds-upgrade` řady ve stavu 70; import dokladu na ni
+      projde; UI ji nenabízí. *(integrační test na 4l3j)*
+- [x] Příjmový PD s `advance.received` a `sale.advanceDeduction` se zaúčtuje podle
+      kontrolních příkladů; záporná záloha se účtuje konvencí D9 (záporné částky na
+      stranách kroku, saldo účtu odpovídá otočenému zápisu).
+- [x] Všechny stávající testy procházejí; dokumentace aktualizována.
 - [ ] Po reimportu msi: `SELECT COUNT(*) FROM economy_accounting_journal WHERE
       is_error=1 AND doc_type IN ('cash','cashreg')` = 0 (po task 32); počet
       `cash` ve stavu 40 = 16 680 − (3 `cashBox=0` + 1 partner + 2 pohyby)

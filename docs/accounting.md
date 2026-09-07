@@ -182,6 +182,7 @@ a razítkování identity v enginu (`resolveRowIdentity`):
 | `rowSide: 1` | strana MD/DAL se zadává na řádku (`acc_side`; protějšek `sideSrc: "row"` předpisu). Přepíná formulář do kontačního layoutu bez položkového bloku |
 | `rowSide: 0` | kontační layout, ale **bez volby strany**: stranu nesou fixní kroky předpisu, částky řádků kladné — směr = volba operace (kurzové rozdíly, saldokontní úhrady `payment.*`). Řádek je bez DPH bloku: `vat_code` prázdný → mimo rekapitulaci, do součtu dokladu se přičte |
 | `identityRequired: 1` | partner řádku a `payment_reference` jsou **tvrdě** povinné (`DocRowOperationRules`, kódy `partner_required` / `payment_reference_required`) — saldokontní úhrady, bez nich accbal nemá co párovat. Vyžaduje `rowPartner` + `rowPaymentId` |
+| `partnerRequired: 1` | jen partner řádku je tvrdě povinný (`partner_required`), VS ne — zálohy v hotovosti (`advance.*`). `identityRequired` ho implikuje |
 | `docTypes.{typ}.cashDir: 1 \| 2` | jen u typu se směrem per doklad (`cash`): pohyb je povolený jen při daném `cash_dir` hlavičky (1 příjem, 2 výdej). Chybí = oba směry. Filtruje nabídku formuláře i tvrdou validaci; default nového řádku = nejnižší `order` pro daný směr |
 
 Vlajka `rowSide` chybí = položkový layout (faktury) — i s
@@ -202,7 +203,24 @@ Pohyby per typ a směr (`docs.core.docTypes`: `cash` má `trade_dir: 0` +
 | `payment.payable` (Úhrada závazku) | — | ✓ | — |
 | `transfer.in` (Příjem z převodu peněz) | ✓ | — | — |
 | `transfer.out` (Výdej pro převod peněz) | — | ✓ | — |
+| `sale.advanceDeduction` (Odpočet přijaté zálohy) | ✓ | — | — |
+| `advance.received` (Přijatá záloha) | ✓ | — | — |
+| `purchase.advanceDeduction` (Odpočet poskytnuté zálohy) | — | ✓ | — |
+| `advance.given` (Poskytnutá záloha) | — | ✓ | — |
 | `acc.entry` | ✓ | ✓ | ✓ |
+
+Zálohy na pokladním dokladu (#59 Task E): **odpočet zálohy**
+(`sale.advanceDeduction` / `purchase.advanceDeduction`) se chová **stejně
+jako na faktuře** — položkový záporný řádek s DPH (odpočet zdaněné zálohy
+nese daň), `payment_reference` = číslo zálohového dokladu; tytéž vlajky, jen
+přibyl `docTypes.cash` se směrem. **Hotovostní záloha** (`advance.received`
+příjem / `advance.given` výdej) je kontační bez DPH (`rowSide: 0`,
+zdanění zálohy = samostatný daňový doklad, mimo scope), `rowPartner` +
+`partnerRequired` (partner povinný — saldo záloh bez dlužníka/věřitele
+nedává smysl), `rowPaymentId` bez `identityRequired` (VS nepovinný, staré
+doklady ho často nemají). Záporná částka = vrácení zálohy (konvence D9).
+Zálohové faktury v novém systému nejsou; úhrada zálohové faktury hotově =
+`advance.received`. Párování záloh je accbal fáze 4+.
 
 `transfer.in` / `transfer.out` (#59 Task D) jsou převody peněz — odvod
 hotovosti do banky, dotace pokladny z banky, převod mezi pokladnami. Obě
@@ -482,9 +500,26 @@ Protistrana hotovostních dokladů se řídí `payment_method` hlavičky:
 **0 Hotovost** → účet pokladny (`accountSrc: "cashDesk"`, 211xxx per
 pokladna), **2 Kartou** → kategorie `card.transit` (platební karty na
 cestě, maska `261400` — jediný terminál, per-terminál analytiky mimo
-scope; migrovaný rozvrh bez `261400` dá `account_not_found` / řádek
-`261???`, řeší se rozvrhem DS, ne předpisem). Kategorie `cash` neexistuje —
-`accountSrc: cashDesk` `accounts[]` obchází.
+scope). Kategorie `cash` neexistuje — `accountSrc: cashDesk` `accounts[]`
+obchází.
+
+**Tranzitní účty jsou infrastruktura** (#59 Task E): `261` (syntetika),
+`261100` a `261400` zajišťuje `TransitAccountsProvisioner`
+(`modules/economy/accounting/src/`) z `ds-upgrade` **bezpodmínečně**, i pod
+`skipProvisioning` — zrcadlo `ClearingInfrastructureProvisioner` pro
+261200/261300. Migrovaný rozvrh (staré `261001/261002`) by jinak dal každé
+platbě kartou a převodu chybový řádek `261???`. Idempotence per `number`,
+existující (i přejmenovaný) účet se nepřepisuje; seedy 261100/261400
+zůstávají pro nové DS, drift proti provisioneru hlídá
+`CashAccountingRulesTest`.
+
+Zálohy (Task E): hotovostní záloha `advance.received` → DAL `advances.received`
+(řádek bez DPH → `vat_amount 0` → maska `324`, ne `3249`), `advance.given` →
+MD `advances.given` (`314`); odpočet `sale/purchase.advanceDeduction` má v
+bloku `cash` tytéž kroky jako na faktuře (`reverseSign`, záporný řádek s DPH
+→ `3249`/`3149`, daň z rekapitulace). Záporná hotovostní záloha (vrácení)
+zůstává na stranách kroku se zápornou částkou (D9) — saldo účtu odpovídá
+otočenému zápisu.
 
 Převody peněz (Task D) mají v bloku `cash` per směr jeden řádkový krok
 kategorie `cash.transit` (maska `261100`): příjem `transfer.in` DAL 261100
@@ -528,6 +563,21 @@ Prodejka hotově, zboží 1 000 + 21 %:
 Prodejka — vratka (záporné řádky, D9): tytéž účty, záporné částky na obou
     stranách, deník vyrovnaný
 FVB s Hotovostí 1 210:  602/343 DAL   211xxx MD 1 210   (žádný 311)
+```
+
+Zálohy na pokladně (`tests/Integration/Accounting/CashAdvancesAccountingTest`):
+
+```
+Příjmový PD: prodej 10 000 + 21 % a odpočet přijaté zálohy −4 000 + 21 % (sale.advanceDeduction):
+    602xxx DAL 10 000   343120 DAL 1 260   3249xx MD 4 000   211xxx MD 7 260
+Příjmový PD: přijatá záloha 5 000 (advance.received, partner, VS):
+    324xxx DAL 5 000 (partner + payment_reference z řádku)   211xxx MD 5 000
+Příjmový PD: přijatá záloha −5 000 (vrácení, D9):
+    324xxx DAL −5 000   211xxx MD −5 000   (saldo = 324 MD 5 000 / 211 DAL 5 000)
+Výdajový PD: poskytnutá záloha 3 000 (advance.given):
+    314xxx MD 3 000   211xxx DAL 3 000
+Výdajový PD: nákup 2 000 + 21 % a odpočet poskytnuté zálohy −1 000 + 21 %:
+    504xxx MD 2 000   343120 MD 210   3149xx DAL 1 000   211xxx DAL 1 210
 ```
 
 Převody peněz (`tests/Integration/Accounting/CashTransferAccountingTest`):
@@ -903,8 +953,9 @@ Obratová předvaha, hlavní kniha a další reporty = samostatný pozdější
 
 Vědomě se teď neřeší (a předpis/schéma na to nic nepředpřipravuje):
 
-- **Saldokonto** — párování úhrad, zálohy (přijaté/poskytnuté, odpočty,
-  zdanění), symboly a balance v deníku, kurzové rozdíly, zápočty. Bude
+- **Saldokonto** — párování úhrad, párování a zdanění záloh (samotné
+  pohyby záloh na fakturách i pokladních dokladech už existují — vlna C,
+  Task E), symboly a balance v deníku, kurzové rozdíly, zápočty. Bude
   samostatný velký úkol, navržený od nuly a jinak než ve starém Shipardu.
   Ze starého enginu tím odpadá: `balanceRows`, `balancePayment`/
   `balanceRequest`, `paymentSymbols`, dohledávání účtu z deníku.
@@ -1051,4 +1102,12 @@ Drobnosti zjištěné implementací:
     partnera, `payment_reference` nepovinný (cesta k budoucímu párování
     261); saldokontní skupina 4100 ze starého systému se nezavádí.
     Migrované DS (`skipProvisioning`) dostanou 261400 rozvrhem, ne
-    provisionerem — stejně jako 261100.
+    provisionerem — stejně jako 261100. **Obráceno v Task E (č. 19).**
+19. Opravy po reimportu msi (#59 Task E, `tasks/cash-import-fixes.md`):
+    **E1** 261/261100/261400 jsou infrastruktura — `TransitAccountsProvisioner`
+    bezpodmínečně i pod `skipProvisioning` (migrovaný rozvrh je nemá).
+    **E2** archivovaná pokladna (70) dostane řady ve stavu 70; import je
+    přijme, UI ne. **E3** zálohy na `cash`: odpočet `*.advanceDeduction`
+    jako na faktuře (položkový s DPH — upřesnění proti původnímu zadání
+    „bez DPH“), nové `advance.received/given` kontační bez DPH s povinným
+    partnerem (`partnerRequired`), VS nepovinný, záporná = vrácení (D9).

@@ -10,11 +10,12 @@ use Shipard\Core\Database\DataSourceConnection;
 /**
  * Idempotentní seed řad vázaných na entitu (docTypes[].series_binding).
  *
- * Pro každý typ dokladu se `series_binding` a každou aktivní entitu
- * (pokladna / sklad ve stavu 40) zajistí existenci řady (doc_type, FK)
- * mimo stav Smazáno. Nová řada: název „{typ} — {kód entity}", kód řady
- * (%C) = kód entity, vzorec z `doc_number_pattern_default`, restart per
- * fiskální rok, rovnou V pořádku (40/3). Přejmenování entity se do
+ * Pro každý typ dokladu se `series_binding` a každou entitu ve stavu
+ * V pořádku nebo V archívu (pokladna / sklad, 40 / 70) zajistí existenci
+ * řady (doc_type, FK) mimo stav Smazáno. Nová řada: název „{typ} — {kód
+ * entity}", kód řady (%C) = kód entity, vzorec z `doc_number_pattern_default`,
+ * restart per fiskální rok, stav dle entity (40/3, archivovaná pokladna
+ * 70/4 — jen pro import historických dokladů). Přejmenování entity se do
  * `doc_number_code` NEpropaguje (záměr, #59 D3) — čísla už vydaných
  * dokladů se nesmí měnit.
  *
@@ -31,7 +32,17 @@ final class BoundNumberSeriesProvisioner
     ) {}
 
     /**
-     * Všechny vázané typy × všechny aktivní entity.
+     * Stavy entity, pro které řada vzniká, → stav založené řady
+     * (docState => docStateMain dle core.system.docStatesArchive: 40 V pořádku
+     * = mainState 3, 70 V archívu = mainState 4). Archivovaná pokladna (#59
+     * Task E, E2) dostane řady v archivu: import historických dokladů ji
+     * přijme (DocumentApplier v import módu), UI ji nenabízí (viewer i form
+     * berou jen aktivní řady).
+     */
+    public const ENTITY_STATE_TO_SERIES_MAIN_STATE = [40 => 3, 70 => 4];
+
+    /**
+     * Všechny vázané typy × všechny entity ve stavu V pořádku / V archívu.
      *
      * @return array{created: int, existing: int}
      */
@@ -42,12 +53,12 @@ final class BoundNumberSeriesProvisioner
 
         foreach ($this->boundDocTypes() as $docTypeKey => [$docType, $binding]) {
             $entities = $this->db->fetchAll(
-                'SELECT id, code FROM ' . NumberSeriesDocument::BINDINGS[$binding]['table']
-                . ' WHERE docState = %i ORDER BY id',
-                40,
+                'SELECT id, code, docState FROM ' . NumberSeriesDocument::BINDINGS[$binding]['table']
+                . ' WHERE docState IN %in ORDER BY id',
+                array_keys(self::ENTITY_STATE_TO_SERIES_MAIN_STATE),
             );
             foreach ($entities as $entity) {
-                $this->ensureSeries($docTypeKey, $docType, $binding, (int) $entity['id'], (string) $entity['code'])
+                $this->ensureSeries($docTypeKey, $docType, $binding, (int) $entity['id'], (string) $entity['code'], (int) $entity['docState'])
                     ? $created++
                     : $existing++;
             }
@@ -58,7 +69,7 @@ final class BoundNumberSeriesProvisioner
 
     /**
      * Jedna entita (po jejím uložení): řady všech typů s daným bindingem.
-     * Entita mimo stav 40 nebo neexistující → no-op.
+     * Entita mimo stav 40/70 nebo neexistující → no-op.
      *
      * @return array{created: int, existing: int}
      */
@@ -73,7 +84,7 @@ final class BoundNumberSeriesProvisioner
             . ' WHERE id = %i',
             $entityId,
         );
-        if ($entity === null || (int) $entity['docState'] !== 40) {
+        if ($entity === null || !isset(self::ENTITY_STATE_TO_SERIES_MAIN_STATE[(int) $entity['docState']])) {
             return ['created' => 0, 'existing' => 0];
         }
 
@@ -83,7 +94,7 @@ final class BoundNumberSeriesProvisioner
             if ($typeBinding !== $binding) {
                 continue;
             }
-            $this->ensureSeries($docTypeKey, $docType, $binding, $entityId, (string) $entity['code'])
+            $this->ensureSeries($docTypeKey, $docType, $binding, $entityId, (string) $entity['code'], (int) $entity['docState'])
                 ? $created++
                 : $existing++;
         }
@@ -127,7 +138,7 @@ final class BoundNumberSeriesProvisioner
      * @param array<string, mixed> $docType
      * @return bool true = řada vytvořena, false = už existovala
      */
-    private function ensureSeries(string $docTypeKey, array $docType, string $binding, int $entityId, string $code): bool
+    private function ensureSeries(string $docTypeKey, array $docType, string $binding, int $entityId, string $code, int $entityState = 40): bool
     {
         $row = $this->db->fetchRow(
             'SELECT id FROM docs_core_number_series
@@ -153,8 +164,10 @@ final class BoundNumberSeriesProvisioner
             'doc_number_code'    => $code !== '' ? $code : null,
             'doc_number_pattern' => $pattern,
             'reset_scope'        => 'fiscal_year',
-            'docState'           => 40,
-            'docStateMain'       => 3,
+            // Řada dědí stav entity (40/3, 70/4). Přechod pokladny 40 → 70
+            // s už existující řadou 40 se tu neřeší (lookup výše ji najde).
+            'docState'           => $entityState,
+            'docStateMain'       => self::ENTITY_STATE_TO_SERIES_MAIN_STATE[$entityState] ?? 3,
         ]);
         return true;
     }

@@ -256,6 +256,67 @@ class CashDocumentImportTest extends IntegrationTestCase
         $this->assertSame($deskId, (int) $head['cash_desk']);
     }
 
+    /**
+     * Archivovaná pokladna (#59 Task E, E2): historické doklady na ni import
+     * přijme — řady vzniknou ve stavu 70 (provisioner z apply), hlavička nese
+     * pokladnu. Živý apply (bez importNumber) na archivovanou pokladnu končí
+     * čistou 422 cash_desk_not_found.
+     */
+    public function testArchivedCashDeskAcceptsImportOnlyAndGetsArchivedSeries(): void
+    {
+        $dibi = $this->db->getDibiConnection();
+        $code = 'AR' . strtoupper(substr(uniqid(), -4));
+        $dibi->insert('economy_codebooks_cash_desks', [
+            'code' => $code, 'name' => 'IT archivovaná pokladna', 'currency' => 'czk',
+            'docState' => 70, 'docStateMain' => 4,
+        ])->execute();
+        $deskId = (int) $dibi->getInsertId();
+        $this->createdCashDesks[] = $deskId;
+
+        $seq = random_int(900_000_000, 999_999_999);
+        $ourNumber = self::FIXTURE_PREFIX . '-' . $seq;
+        $canonical = $this->canonical('cashDocument', [
+            'cashDesk'      => $code,
+            'cashDirection' => 1,
+            'payment'       => ['method' => 'cash'],
+            'rows'          => [$this->serviceRow('sale.services', 100.0)],
+        ], $ourNumber, $seq);
+
+        // živý apply: bez importNumber archivovaná pokladna neprojde
+        $live = $canonical;
+        unset($live['applyOptions']['importNumber']);
+        $liveResult = $this->applier->apply($live);
+        foreach ($this->db->fetchAll('SELECT id FROM docs_core_number_series WHERE cash_desk = %i', $deskId) as $s) {
+            if (!in_array((int) $s['id'], $this->createdSeries, true)) {
+                $this->createdSeries[] = (int) $s['id'];
+            }
+        }
+        if ($liveResult->savedId !== null) {
+            $this->createdDocIds[] = $liveResult->savedId;
+        }
+        $this->assertFalse($liveResult->success, 'živý doklad na archivovanou pokladnu nejde');
+        $this->assertSame('cash_desk_not_found', $liveResult->errorCode);
+
+        // import: projde, řady jsou v archivu
+        $result = $this->applier->apply($canonical);
+        if ($result->savedId !== null) {
+            $this->createdDocIds[] = $result->savedId;
+        }
+        $this->assertApplied($result);
+
+        $series = $this->db->fetchAll('SELECT id, docState, docStateMain FROM docs_core_number_series WHERE cash_desk = %i', $deskId);
+        $this->assertNotEmpty($series, 'řady archivované pokladny založeny');
+        foreach ($series as $s) {
+            $this->assertSame(70, (int) $s['docState'], 'řada dědí archiv pokladny');
+            $this->assertSame(4, (int) $s['docStateMain']);
+        }
+        $head = $this->db->fetchRow('SELECT doc_type, cash_desk, doc_number, docState FROM docs_core_heads WHERE id = %i', $result->savedId);
+        $this->assertSame('cash', $head['doc_type']);
+        $this->assertSame($deskId, (int) $head['cash_desk']);
+        $this->assertSame($ourNumber, (string) $head['doc_number']);
+        $this->assertSame(40, (int) $head['docState']);
+    }
+
     public function testUnknownCashDeskFailsCleanly(): void
     {
         $seq = random_int(900_000_000, 999_999_999);

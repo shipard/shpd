@@ -84,10 +84,11 @@ class BoundNumberSeriesProvisionerTest extends TestCase
                     if ($table === 'docs_core_number_series' || !str_contains($sql, $table)) {
                         continue;
                     }
-                    $state = (int) ($params[0] ?? 40);
+                    // `docState IN %in` → pole stavů; skalár = starší tvar `docState = %i`
+                    $states = is_array($params[0] ?? null) ? array_map(intval(...), $params[0]) : [(int) ($params[0] ?? 40)];
                     return array_values(array_filter(
                         $rows,
-                        fn(array $r) => (int) $r['docState'] === $state,
+                        fn(array $r) => in_array((int) $r['docState'], $states, true),
                     ));
                 }
                 return [];
@@ -236,6 +237,52 @@ class BoundNumberSeriesProvisionerTest extends TestCase
         $series = $store->tables['docs_core_number_series'];
         $this->assertCount(1, $series);
         $this->assertSame(2, $series[0]['cash_desk']);
+    }
+
+    /**
+     * Archivovaná pokladna (#59 Task E, E2): řady vznikají i pro stav 70
+     * a dědí ho (70/4) — import historických dokladů ji potřebuje, UI ji
+     * nenabízí. Koncept (10) řady nedostane.
+     */
+    public function testArchivedCashDeskGetsArchivedSeries(): void
+    {
+        $store = $this->recordingDb([
+            'economy_codebooks_cash_desks' => [
+                ['id' => 1, 'code' => 'HP1', 'docState' => 40],
+                ['id' => 2, 'code' => 'OLD', 'docState' => 70],
+                ['id' => 3, 'code' => 'NEW', 'docState' => 10],
+            ],
+        ]);
+        $provisioner = new BoundNumberSeriesProvisioner($store->db, $this->buildConfig($this->cfgCashAndInvoice()));
+
+        $this->assertSame(['created' => 2, 'existing' => 0], $provisioner->provision());
+        $this->assertSame(['created' => 0, 'existing' => 2], $provisioner->provision());
+
+        $series = $store->tables['docs_core_number_series'];
+        $this->assertCount(2, $series);
+        $this->assertSame([40, 70], array_column($series, 'docState'));
+        $this->assertSame([3, 4], array_column($series, 'docStateMain'));
+        $this->assertSame(2, $series[1]['cash_desk']);
+        $this->assertSame('Pokladní doklad — OLD', $series[1]['name']);
+    }
+
+    public function testProvisionForArchivedCashDeskCreatesArchivedSeries(): void
+    {
+        $store = $this->recordingDb([
+            'economy_codebooks_cash_desks' => [
+                ['id' => 2, 'code' => 'OLD', 'docState' => 70],
+                ['id' => 3, 'code' => 'NEW', 'docState' => 10],
+            ],
+        ]);
+        $provisioner = new BoundNumberSeriesProvisioner($store->db, $this->buildConfig($this->cfgCashAndInvoice()));
+
+        $this->assertSame(['created' => 1, 'existing' => 0], $provisioner->provisionForCashDesk(2));
+        $this->assertSame(['created' => 0, 'existing' => 0], $provisioner->provisionForCashDesk(3), 'koncept nic');
+
+        $series = $store->tables['docs_core_number_series'];
+        $this->assertCount(1, $series);
+        $this->assertSame(70, $series[0]['docState']);
+        $this->assertSame(4, $series[0]['docStateMain']);
     }
 
     public function testUnknownBindingIsSkippedAndRejectedExplicitly(): void

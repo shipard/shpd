@@ -334,21 +334,25 @@ class DocumentApplier
         //     ignoruje. Chybí-li řada, nejdřív ji zkusí založit provisioner
         //     (idempotentní; pokladna importovaná přes generický CRUD nespustí
         //     afterSave handler, takže řady může dostat až tady) — teprve
-        //     pokladna mimo stav 40 nebo neexistující je chyba.
+        //     pokladna mimo stav 40 nebo neexistující je chyba. Archivovaná
+        //     pokladna (70) má řady v archivu a přijme ji jen import
+        //     (applyOptions.importNumber) — historické doklady jsou legitimní,
+        //     živý doklad na ni založit nejde (#59 Task E, E2).
         if ($this->isCashDeskBoundDocType($docTypeCode)) {
+            $importMode = is_array($canonical['applyOptions']['importNumber'] ?? null);
             $numberSeriesId = $cashDeskId !== null
-                ? $this->resolveBoundNumberSeries($docTypeCode, $cashDeskId)
+                ? $this->resolveBoundNumberSeries($docTypeCode, $cashDeskId, $importMode)
                 : null;
             if ($numberSeriesId === null && $cashDeskId !== null) {
                 (new BoundNumberSeriesProvisioner(new DataSourceConnection($this->db), $this->config))
                     ->provisionForCashDesk($cashDeskId);
-                $numberSeriesId = $this->resolveBoundNumberSeries($docTypeCode, $cashDeskId);
+                $numberSeriesId = $this->resolveBoundNumberSeries($docTypeCode, $cashDeskId, $importMode);
             }
             if ($numberSeriesId === null) {
                 return ApplyResult::error(
                     'cash_desk_not_found',
                     "Pokladna '" . ($cashDeskCode ?? '') . "' nemá číselnou řadu typu {$docTypeCode}"
-                    . ' a nelze ji založit — pokladna není ve stavu V pořádku (40).',
+                    . ' a nelze ji založit — pokladna není ve stavu V pořádku (40); archivovanou pokladnu přijme jen import.',
                     $enriched,
                     statusCode: 422,
                 );
@@ -1656,28 +1660,40 @@ class DocumentApplier
         return is_array($cfg) && (($cfg[$docType]['series_binding'] ?? null) === 'cash_desk');
     }
 
-    /** `cashDesk` kanonického dokumentu = `economy_codebooks_cash_desks.code`. */
+    /** Archivovaná entita (V archívu) — pokladna s historickými doklady (#59 Task E). */
+    private const ARCHIVED_STATE = 70;
+
+    /**
+     * `cashDesk` kanonického dokumentu = `economy_codebooks_cash_desks.code`.
+     * Archivovanou pokladnu (70) najde taky — zda se na ni dá doklad zařadit,
+     * rozhoduje až řada (resolveBoundNumberSeries, jen import mód).
+     */
     private function resolveCashDeskIdByCode(string $code): ?int
     {
         $row = $this->db->fetch(
             'SELECT [id] FROM [economy_codebooks_cash_desks]
-             WHERE [code] = %s AND [docState] IN (%i, %i, %i)
+             WHERE [code] = %s AND [docState] IN %in
              ORDER BY [id] LIMIT 1',
             $code,
-            self::ACTIVE_STATES[0], self::ACTIVE_STATES[1], self::ACTIVE_STATES[2],
+            [...self::ACTIVE_STATES, self::ARCHIVED_STATE],
         );
         return $row !== null ? (int) $row['id'] : null;
     }
 
-    /** Řada vázaného typu pro pokladnu (BoundNumberSeriesProvisioner ji zakládá per aktivní pokladna). */
-    private function resolveBoundNumberSeries(string $docType, int $cashDeskId): ?int
+    /**
+     * Řada vázaného typu pro pokladnu (BoundNumberSeriesProvisioner ji zakládá
+     * per pokladna ve stavu 40/70). Archivní řadu (70) přijme jen import mód —
+     * živý doklad na archivovanou pokladnu založit nejde.
+     */
+    private function resolveBoundNumberSeries(string $docType, int $cashDeskId, bool $importMode = false): ?int
     {
+        $states = $importMode ? [...self::ACTIVE_STATES, self::ARCHIVED_STATE] : self::ACTIVE_STATES;
         $row = $this->db->fetch(
             'SELECT [id] FROM [docs_core_number_series]
-             WHERE [doc_type] = %s AND [cash_desk] = %i AND [docState] IN (%i, %i, %i)
+             WHERE [doc_type] = %s AND [cash_desk] = %i AND [docState] IN %in
              ORDER BY [id] LIMIT 1',
             $docType, $cashDeskId,
-            self::ACTIVE_STATES[0], self::ACTIVE_STATES[1], self::ACTIVE_STATES[2],
+            $states,
         );
         return $row !== null ? (int) $row['id'] : null;
     }

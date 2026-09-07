@@ -51,7 +51,7 @@ Legenda: `[x]` hotovo · `[ ] 🟠` částečně · `[ ]` plánováno
 ### Faktury vydané
 
 - [x] Ruční vystavení, číselné řady, rekapitulace DPH, zaúčtování
-- [ ] Odeslání odběrateli e-mailem
+- [ ] 🟠 Odeslání odběrateli e-mailem — odchozí pošta existuje, chybí napojení z dokladu s PDF
 - [ ] Zálohové faktury a zúčtování záloh
 
 ### Prodej
@@ -95,9 +95,11 @@ Legenda: `[x]` hotovo · `[ ] 🟠` částečně · `[ ]` plánováno
 ## DPH
 
 - [x] Evidence — období DPH, analytiky per kód DPH, sazby
-- [ ] Přiznání k DPH — sestavení z deníku, XML pro daňový portál
-- [ ] Kontrolní hlášení — sekce A/B, limity, XML
-- [ ] Uzamčení období DPH
+- [ ] 🟠 Přiznání k DPH — živý výpočet z dokladů existuje; chybí podání a XML pro daňový portál
+- [ ] 🟠 Kontrolní hlášení — sekce A/B, limity spočítané; chybí podání a XML
+- [ ] 🟠 Souhrnné hlášení — živý výpočet; chybí podání a XML
+- [x] Instance daňových tvrzení — období per typ výstupu s denní přesností
+- [ ] Uzamčení období DPH po podání
 
 ## Majetek
 

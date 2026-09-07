@@ -23,6 +23,9 @@ když posouvá nejbližší otevřený milník. Ve sporu platí toto pořadí:
 
 Cokoli z kategorie 4 se nezačíná, dokud je otevřená položka z kategorie 1.
 
+Milníky nemají termíny. Pořadí říká, co se dělá dřív; kdy je to hotové,
+říká stav tasků.
+
 ---
 
 ## M0 — Věcná správnost výpočtů ✓ **hotovo** (15. 8. 2026)
@@ -55,18 +58,20 @@ message-centric nasazení).
 ## M1 — Výstupy pro DPH ▸ **aktivní**
 
 Bez přiznání k DPH a kontrolního hlášení nemůže být Shipard jedinou evidencí
-firmy — účetní ho nepřevezme a systém zůstane doplňkem. Evidence existuje
-(období DPH, analytiky per kód DPH, `world.vat` s CZ sazbami), **výstup
-neexistuje žádný**.
+firmy — účetní ho nepřevezme a systém zůstane doplňkem.
 
-Nejrozsáhlejší položka roadmapy. Zadání zatím není napsané — začíná se
-designovou diskuzí, ne implementací.
+Stav po revizi 7. 9. 2026: **výpočet existuje, podání ne.** Modul
+`economy.taxes` skládá přiznání, kontrolní hlášení i souhrnné hlášení
+on-demand jako reporty nad instancemi daňových tvrzení
+(`economy_vat_report_periods`) — issue #55, rozhodnutí D1–D13. Chybí
+persistence podaného tvrzení, XML pro daňový portál a zámek období.
 
 | Co | Zadání |
 |---|---|
-| Přiznání k DPH — sestavení z deníku a analytik, XML pro portál | — |
-| Kontrolní hlášení — sekce A/B, limity, XML | — |
-| Uzavření období DPH (zámek proti dodatečným změnám) | — |
+| Mapování kódů DPH → řádky přiznání / sekce KH / SH, živé reporty | `taxes-phase01.md` (částečně — zbývá ds-upgrade, proklik, ověření na alfě) |
+| Instance daňových tvrzení místo mřížky období DPH | `vat-report-periods.md` (částečně — zbývá proklik UI, ověření po re-importu) |
+| Podání — persistence podaného tvrzení, XML pro portál | — (issue #55, Fáze 2) |
+| Uzamčení období po podání (zámek proti dodatečným změnám) | — |
 
 **Hotovo když:** za uzavřené období lze vygenerovat přiznání i kontrolní
 hlášení ve formátu přijatelném pro daňový portál a čísla souhlasí s deníkem.
@@ -79,13 +84,19 @@ Pošta → AI analýza → doklad → účetní deník → saldokonto → párov
 platbou, bez ručního zásahu mimo kontrolu. Tady je hotovo víc, než se zdá:
 matcher, clearing účty i dávkový endpoint párování existují.
 
+Zdrojem platby je v tomto milníku **importovaný výpis ze souboru**
+(CAMT / GPC / FIO). Nahrání souboru je krok získání dat, ne kontrola
+dokladu — kruh uzavírá. Automatické stahování přes bankovní API je v M4.
+
 | Co | Zadání |
 |---|---|
 | Ověření celého toku na reálných datech testovacího prostředí | — |
+| Ověření správnosti saldokonta na reálných datech — konkrétní chyba není známá, jde o kontrolu součtů proti deníku a proti starému systému | — |
 | Zbytky po M0: dokončení message-centric nasazení na alfě (živá analýza, aktuální prompt — v4.2.0, `schema_error` v provozu), vzory koncových cen nad reálnými analýzami | `mail-message-centric.md` |
 
 **Hotovo když:** přijatá faktura z e-mailu projde až do spárované úhrady
-a uživatel do toho zasáhne jen potvrzením návrhu.
+a uživatel do toho zasáhne jen potvrzením návrhu; saldo po partnerech
+souhlasí s deníkem.
 
 ---
 
@@ -105,21 +116,50 @@ součty souhlasí se starým systémem.
 
 ---
 
-## M4 — Provoz firmou, která není vývojář
+## M4 — Ostrý provoz
 
-Dnes systém provozuje ten, kdo ho vyvíjí. Aby ho mohl provozovat někdo jiný,
-chybí bezpečnostní tvrdost a obnova.
+Firmy, které dnes běží na starém Shipardu, přejdou na nový a nevrátí se.
+Migrace dat (M3) k tomu nestačí — starý systém umí věci, které nový
+zatím nemá, a bez nich se firma za pár týdnů vrátí. Všechno níže je
+**blokátor migrace** (kategorie 3), ne pohodlí.
+
+| Co | Zadání |
+|---|---|
+| Bankovní API — automatické stahování transakcí (FIO token, plánovač, šifrované credentials); šev připravený v `docs/bank.md` §8 | — |
+| Platební příkazy — nad stejným konektorem | — |
+| Prodejní smlouvy — podklad pro opakovanou fakturaci | — |
+| Tisk / PDF vydaného dokladu | — |
+| Odeslání dokladu odběrateli e-mailem — nad existující odchozí poštou (`docs/mail/outbound.md`), chybí napojení z dokladu s přílohou | — |
+| Majetek — evidence a odpisy | — |
+| Účetní závěrka — uzávěrka roku, rozvaha, výsledovka | — |
+| Saldokonto — přehlednost: chip bar saldokont, položky v sidebaru, grid po partnerech | `accbal-ledger-viewgroup-chips.md`, `accbal-nav-items.md`, `accbal-ledger-grid.md` |
+
+**Hotovo když:** interní firmy vedou účetnictví výhradně v novém Shipardu
+a do starého se pro žádnou běžnou operaci nevrací.
+
+---
+
+## M5 — Veřejná beta: provoz firmou, která není vývojář
+
+Uživatel na pozvánku začíná s prázdným datovým zdrojem — nemigruje.
+Neblokuje ho tedy chybějící funkce ze starého Shipardu, ale všechno, co
+dnes za něj dělá vývojář z příkazové řádky, a bezpečnost cizích dat.
 
 | Co | Zadání |
 |---|---|
 | Rate limiting a evidence neúspěšných přihlášení | `auth-phase0a-hardening.md` |
 | Záloha a obnova datového zdroje | — |
+| Samoobslužná správa uživatelů a přístupových práv | — |
+| Zobrazení adresy pro příjem pošty v aplikaci | — |
 | Příkazy `ds-delete` a `ds-list` | — |
 | Servisní výmaz nepotřebných tabulek a sloupců | — |
 
+**Hotovo když:** pozvaný uživatel založí firmu, pozve kolegu, pošle první
+fakturu na adresu datového zdroje a nic z toho nevyžaduje zásah vývojáře.
+
 ---
 
-## M5 — Pohodlí a vzhled
+## M6 — Pohodlí a vzhled
 
 Vše, co systém zpříjemňuje, ale neblokuje jeho použití. Otevřená položka
 z M0 má vždy přednost.
@@ -138,6 +178,9 @@ v každé diskuzi.
 
 | Co | Proč |
 |---|---|
+| Zásoby (příjemky, výdejky, přehledy, účtování A/B) | pro ostrý provoz nejsou potřeba; budou se dělat, návrh zatím neexistuje |
+| Zakázky | totéž — až po M4, po platebních příkazech |
+| Zálohové faktury a zúčtování záloh | totéž; saldokonto na ně počítá (`docs/accbal.md` §5, mimo Fázi 3) |
 | PostgreSQL driver | MariaDB stačí; abstrakce v `DatabaseManager` je připravená |
 | Další LLM poskytovatelé kromě Anthropic | až bude důvod, backendy jsou abstrahované |
 | Mobilní nativní aplikace | responzivní web pokrývá potřebu |
@@ -153,6 +196,14 @@ v každé diskuzi.
   [`tasks/TODO.md`](../tasks/TODO.md) a přiřadí k milníku až při revizi.
 - Platí konvence z [`tasks/README.md`](../tasks/README.md): žádné citlivé
   údaje z reálných dat. Tento dokument je ve veřejném repozitáři.
+
+### Historie revizí
+
+- **7. 9. 2026 (po M0):** aktualizován stav M1 (výpočet DPH výstupů existuje,
+  chybí podání). Do M2 doplněn zdroj platby a ověření saldokonta. Vložen
+  nový M4 „Ostrý provoz" — funkce, které starý Shipard má a bez kterých se
+  firma po migraci vrátí; původní M4/M5 přečíslovány na M5/M6, M5 přejmenován
+  na Veřejnou betu. Zásoby, Zakázky a Zálohy zapsány jako vědomě odložené.
 
 ---
 

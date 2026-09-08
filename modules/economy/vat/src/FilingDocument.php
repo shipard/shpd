@@ -61,6 +61,12 @@ class FilingDocument extends Document
      * přechodu. Mimo ně zbývá jen `note` — jediné, co smí přibýt k už
      * podanému tvrzení.
      */
+    /**
+     * Snapshot je potřeba (pře)sestavit — nastaví `beforeSave`, provede
+     * `afterPersist` uvnitř save transakce.
+     */
+    private bool $composeNeeded = false;
+
     private const FROZEN_COLUMNS = [
         'report_period', 'report_type', 'filing_kind', 'sequence', 'name',
         'date_issue', 'date_filed', 'date_found', 'previous_filing',
@@ -108,6 +114,39 @@ class FilingDocument extends Document
         if ($period !== null && ($state === self::DOC_STATE_COMPOSED || empty($data['name']))) {
             $data['name'] = $this->composeName((string) ($period['name'] ?? ''), $kind, $sequence);
         }
+
+        // Snapshot se sestavuje u nového konceptu a při každé změně, která
+        // mění jeho obsah. Přechod do Podáno ani editace poznámky ho
+        // nepřepočítávají — podává se to, co bylo sestavené.
+        $this->composeNeeded = $state === self::DOC_STATE_COMPOSED && (
+            $isNew
+            || $originalData === null
+            || ($originalData['result'] ?? null) === null
+            || (int) ($originalData['report_period'] ?? 0) !== $periodId
+            || (string) ($originalData['filing_kind'] ?? '') !== $kind
+            || (int) ($originalData['previous_filing'] ?? 0) !== (int) ($data['previous_filing'] ?? 0)
+        );
+    }
+
+    /**
+     * Uvnitř save transakce po zápisu hlavičky: snapshot musí být atomický
+     * s podáním, ke kterému patří (kód DPH bez mapování = výjimka
+     * a rollback celého uložení).
+     */
+    public function afterPersist(array $data): void
+    {
+        if (!$this->composeNeeded || $this->db === null || empty($data['id'])) {
+            return;
+        }
+        $this->compose((int) $data['id']);
+    }
+
+    protected function compose(int $filingId): void
+    {
+        if ($this->db === null) {
+            return;
+        }
+        (new FilingComposer($this->db, $this->config))->compose($filingId);
     }
 
     public function validate(array &$data): ValidationResult

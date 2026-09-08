@@ -31,6 +31,19 @@ final class ControlStatementCalculator
     public const SECTIONS = ['A1', 'A2', 'A4', 'A5', 'B1', 'B2', 'B3'];
 
     /**
+     * Sekce přijatých plnění — ev. číslo i DIČ patří dodavateli, ne
+     * odběrateli. A2 je výjimka z písmenkové logiky: pořízení z EU je
+     * přijaté plnění, ale vykazuje se v sekci A, protože z něj přiznáváme
+     * daň. B3 do detailních řádků nikdy nedojde (je agregát), ale
+     * konstanta je vystavená i pro snapshot podání (FilingComposer), který
+     * DIČ protistrany určuje i u dokladů v agregátních sekcích.
+     */
+    public const RECEIVED_SECTIONS = ['A2', 'B1', 'B2', 'B3'];
+
+    /** Sekce se součtovým řádkem místo detailů (limit 10 000 Kč). */
+    public const AGGREGATE_SECTIONS = ['A5', 'B3'];
+
+    /**
      * @param array<string, array<string, mixed>> $vatCodes Definice kódů
      *        z world.vat (klíč = kód; používá se pole `category`).
      */
@@ -58,7 +71,7 @@ final class ControlStatementCalculator
         foreach ($docs as $doc) {
             foreach ($this->groupRecap($doc) as $group) {
                 $section = $this->resolveSection($group['group'], $doc);
-                if ($section === 'A5' || $section === 'B3') {
+                if (in_array($section, self::AGGREGATE_SECTIONS, true)) {
                     $aggregates[$section] = $this->addBands(
                         $aggregates[$section] ?? $this->emptyBands(),
                         $group['bands'],
@@ -69,7 +82,7 @@ final class ControlStatementCalculator
             }
         }
 
-        foreach (['A5', 'B3'] as $aggregate) {
+        foreach (self::AGGREGATE_SECTIONS as $aggregate) {
             if ($aggregates[$aggregate] !== null) {
                 $sections[$aggregate][] = [
                     'docId'      => null,
@@ -91,6 +104,23 @@ final class ControlStatementCalculator
         }
 
         return ['sections' => $sections, 'errors' => $errors];
+    }
+
+    /**
+     * Sekce kontrolního hlášení, do které řádek dokladu s tímto kódem
+     * spadne — tatáž pravidla jako `calculate()` (rozpad A4/A5 a B2/B3 dle
+     * limitu a CZ DIČ). Null = kód do hlášení nespadá.
+     *
+     * Vystaveno pro snapshot podání: materializovaná sekce v
+     * `economy_vat_filing_items` musí vzniknout tímto enginem, ne kopií
+     * pravidel na druhém místě.
+     *
+     * @param array<string, mixed> $doc Doklad z VatDocumentSelection.
+     */
+    public function sectionForCode(array $doc, string $vatCode): ?string
+    {
+        $kh = $this->mapping->kh($vatCode);
+        return $kh === null ? null : $this->resolveSection((string) $kh['group'], $doc);
     }
 
     /**
@@ -166,7 +196,7 @@ final class ControlStatementCalculator
     {
         // A-sekce = naše prodeje (DIČ odběratele), A2/B-sekce = přijatá
         // plnění (DIČ dodavatele + jeho číslo dokladu).
-        $received   = in_array($section, ['A2', 'B1', 'B2'], true);
+        $received   = in_array($section, self::RECEIVED_SECTIONS, true);
         $vatId      = $received
             ? (string) ($doc['supplier_vat_id'] ?? '')
             : (string) ($doc['customer_vat_id'] ?? '');

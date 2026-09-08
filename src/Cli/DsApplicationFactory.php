@@ -55,6 +55,7 @@ final class DsApplicationFactory
         $app->add(new \Shipard\Command\DataSource\ReportRunCommand());
         $app->add(new \Shipard\Command\DataSource\ReportDiffCommand());
         $app->add(new \Shipard\Command\DataSource\VatPeriodsEnsureCommand());
+        $app->add(new \Shipard\Command\DataSource\VatFilingComposeCommand());
         $app->add(new \Shipard\Command\DataSource\DsSecretsHealthCommand());
         $app->add(new \Shipard\Command\DataSource\DsSecretsRotateCommand());
         $app->add(new \Shipard\Command\DataSource\HostingOidcInitCommand());

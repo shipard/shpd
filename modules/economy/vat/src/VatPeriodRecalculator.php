@@ -17,6 +17,11 @@ use Shipard\Core\Database\DataSourceConnection;
  * tak přežije ruční přesun dokladu mezi instancemi, pokud datum dokladu
  * do cílové instance spadá. Chybějící instance se tu nezakládají (find-only);
  * doklad s NULL se dorovná při svém příštím uložení.
+ *
+ * Ukazatel na instanci typu se zákonným počátkem (#58, `validFrom`), jehož
+ * doklad má efektivní datum před tímto počátkem, je **nekonzistentní** i když
+ * instance datum obsahuje → NULL. Bez toho by po nasazení anachronické
+ * instance (KH 2013) dál držely doklady a guard by bránil jejich zrušení.
  */
 final class VatPeriodRecalculator
 {
@@ -116,7 +121,8 @@ final class VatPeriodRecalculator
                     && isset($instances[$current])
                     && $instances[$current]['type'] === $colType
                     && $instances[$current]['date_begin'] <= $date
-                    && $instances[$current]['date_end'] >= $date;
+                    && $instances[$current]['date_end'] >= $date
+                    && !$assigner->isBeforeValidFrom($colType, $date);
                 if (!$consistent && $computed[$col] !== $current) {
                     $updates[$col] = $computed[$col];
                 }

@@ -78,7 +78,7 @@ class CashRegisterFormAndViewerTest extends TestCase
         $this->assertSame('Nová prodejka', $def->titleNew);
         $this->assertNull($this->findElement($def, 'cash_dir'), 'prodejka směr nemá');
         $this->assertNull($this->findElement($def, 'cash_desk'));
-        $this->assertSame([0, 2], array_column($this->findElement($def, 'payment_method')->options, 'value'));
+        $this->assertSame([0, 1, 2], array_column($this->findElement($def, 'payment_method')->options, 'value'), 'hotově, převodem (úhrada = pohledávka), kartou');
         $this->assertTrue($this->findElement($def, 'doc_currency')->readOnly);
         $this->assertNotNull($this->findElement($def, 'partner'));
         $this->assertFalse($this->findElement($def, 'partner')->required);

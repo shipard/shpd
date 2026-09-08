@@ -1,6 +1,6 @@
 # Task: Automatizovaný reimport a porovnání zdrojů (`migration-check`)
 
-**Stav:** návrh — čeká na schválení rozhodnutí M1–M7, pak implementace
+**Stav:** naplánováno — návrh, čeká na schválení rozhodnutí M1–M7, pak implementace
 **Issue:** založit nové umbrella issue „Migrační smyčka: reimport + porovnání" (odkaz
 z #59); rozhodnutí sem
 **Návaznost:** stará strana `old_shipard` `modules/imports/newShipard/tasks/33-migration-check-exports.md`

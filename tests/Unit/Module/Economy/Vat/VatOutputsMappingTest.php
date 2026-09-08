@@ -95,4 +95,98 @@ class VatOutputsMappingTest extends TestCase
     {
         $this->assertNull(VatOutputsMapping::fromConfig(null));
     }
+
+    // ── reportTypes: druhy podání a zaokrouhlení (#55 D16, D17) ──────────
+
+    public function testFilingRulesFromRealConfig(): void
+    {
+        $mapping = $this->mapping();
+
+        $this->assertSame(['regular', 'corrective', 'supplementary'], $mapping->filingKinds('return'));
+        $this->assertSame(['regular', 'corrective', 'subsequent'], $mapping->filingKinds('cs'));
+        $this->assertSame(['regular', 'subsequent'], $mapping->filingKinds('rs'));
+
+        $this->assertSame('diff', $mapping->supplementaryMode('return'), 'DP3 dodatečné = rozdíly + ř. 66');
+        $this->assertSame('full', $mapping->supplementaryMode('cs'), 'KH dodatečné nezná — default full');
+
+        $this->assertSame(['subsequent'], $mapping->dateFoundRequiredFor('cs'));
+        $this->assertSame([], $mapping->dateFoundRequiredFor('return'));
+
+        $this->assertSame(1.0, $mapping->roundingUnit('return'));
+        $this->assertSame(0.01, $mapping->roundingUnit('cs'), 'KH se podává na haléře');
+        $this->assertSame(1.0, $mapping->roundingUnit('rs'));
+    }
+
+    public function testFilingRuleDefaultsWithoutReportTypesSection(): void
+    {
+        $mapping = new VatOutputsMapping(['vatOutputs' => []]);
+
+        $this->assertSame([], $mapping->filingKinds('return'), 'bez configu se nedá podat nic');
+        $this->assertSame('full', $mapping->supplementaryMode('return'));
+        $this->assertSame([], $mapping->dateFoundRequiredFor('cs'));
+        $this->assertSame(0.01, $mapping->roundingUnit('return'), 'bez configu se hodnoty neposouvají');
+    }
+
+    public function testUnknownFilingKindThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("unknown filing kind 'additional' in reportTypes.return.filingKinds");
+        new VatOutputsMapping([
+            'vatOutputs'  => [],
+            'reportTypes' => ['return' => ['filingKinds' => ['regular', 'additional']]],
+        ]);
+    }
+
+    public function testFilingKindsMustBeAList(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('reportTypes.cs.filingKinds must be an array');
+        new VatOutputsMapping([
+            'vatOutputs'  => [],
+            'reportTypes' => ['cs' => ['filingKinds' => ['first' => 'regular']]],
+        ]);
+    }
+
+    public function testDateFoundRequiredForMustBeAmongFilingKinds(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("dateFoundRequiredFor contains 'supplementary'");
+        new VatOutputsMapping([
+            'vatOutputs'  => [],
+            'reportTypes' => ['cs' => [
+                'filingKinds'          => ['regular', 'subsequent'],
+                'dateFoundRequiredFor' => ['supplementary'],
+            ]],
+        ]);
+    }
+
+    public function testUnknownSupplementaryModeThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("reportTypes.return.supplementaryMode must be 'diff' or 'full'");
+        new VatOutputsMapping([
+            'vatOutputs'  => [],
+            'reportTypes' => ['return' => ['supplementaryMode' => 'delta']],
+        ]);
+    }
+
+    public function testNonPositiveRoundingUnitThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('reportTypes.rs.roundingUnit must be greater than zero');
+        new VatOutputsMapping([
+            'vatOutputs'  => [],
+            'reportTypes' => ['rs' => ['roundingUnit' => 0]],
+        ]);
+    }
+
+    public function testNonNumericRoundingUnitThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('reportTypes.rs.roundingUnit must be a number');
+        new VatOutputsMapping([
+            'vatOutputs'  => [],
+            'reportTypes' => ['rs' => ['roundingUnit' => '1']],
+        ]);
+    }
 }

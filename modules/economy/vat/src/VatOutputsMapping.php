@@ -13,10 +13,14 @@ use Shipard\Core\Config\ConfigRuntime;
  * je tvrdá chyba (mapování musí pokrývat celý číselník — hlídá
  * VatReportsMappingCompletenessTest), explicitní vyloučení je `null`.
  *
- * Sekce `reportTypes` (#58) nese zákonný počátek typu výstupu
- * (`validFrom`, ISO datum) — před ním doklad do výstupu nespadá a instance
- * se negenerují. Neznámý typ nebo špatný formát data je chyba konstruktoru
- * (překlep v configu nesmí projít tiše).
+ * Sekce `reportTypes` nese národní pravidla per typ výstupu: zákonný
+ * počátek (`validFrom`, #58 — před ním doklad do výstupu nespadá
+ * a instance se negenerují), povolené druhy podání (`filingKinds`), režim
+ * dodatečného podání (`supplementaryMode`), druhy vyžadující datum
+ * zjištění (`dateFoundRequiredFor`) a jednotku zaokrouhlení podaných
+ * hodnot (`roundingUnit`) — #55 D16/D17. Neznámý typ, neznámý druh podání
+ * i špatný formát hodnoty jsou chyba konstruktoru (překlep v configu nesmí
+ * projít tiše).
  */
 final class VatOutputsMapping
 {
@@ -24,8 +28,20 @@ final class VatOutputsMapping
 
     private const REPORT_TYPES = ['return', 'cs', 'rs'];
 
-    /** @var array<string, string> typ → ISO datum */
-    private readonly array $validFromByType;
+    /** Druhy podání dle legislativy (#55 D16); názvosloví v config/filingKinds.jsonc. */
+    public const FILING_KINDS = ['regular', 'corrective', 'supplementary', 'subsequent'];
+
+    private const SUPPLEMENTARY_MODES = ['diff', 'full'];
+
+    /** Bez `roundingUnit` v configu se podané hodnoty neposouvají. */
+    private const DEFAULT_ROUNDING_UNIT = 0.01;
+
+    /**
+     * @var array<string, array{validFrom: ?string, filingKinds: list<string>,
+     *      supplementaryMode: string, dateFoundRequiredFor: list<string>,
+     *      roundingUnit: float}>
+     */
+    private readonly array $reportTypes;
 
     /** @param array<string, mixed> $config Dekódovaný cfgItem (`vatOutputs` + `dp3Rows` + `reportTypes`). */
     public function __construct(private readonly array $config)
@@ -33,7 +49,7 @@ final class VatOutputsMapping
         if (!isset($config['vatOutputs']) || !is_array($config['vatOutputs'])) {
             throw new \InvalidArgumentException("VAT outputs mapping: missing 'vatOutputs' section");
         }
-        $this->validFromByType = self::parseReportTypes($config['reportTypes'] ?? []);
+        $this->reportTypes = self::parseReportTypes($config['reportTypes'] ?? []);
     }
 
     /**
@@ -49,18 +65,64 @@ final class VatOutputsMapping
     /** Zákonný počátek typu výstupu (ISO datum) nebo null bez omezení. */
     public function validFrom(string $type): ?string
     {
-        return $this->validFromByType[$type] ?? null;
+        return $this->reportTypes[$type]['validFrom'] ?? null;
     }
 
     /** @return array<string, string> jen typy s omezením, typ → ISO datum */
     public function validFromByType(): array
     {
-        return $this->validFromByType;
+        $out = [];
+        foreach ($this->reportTypes as $type => $entry) {
+            if ($entry['validFrom'] !== null) {
+                $out[$type] = $entry['validFrom'];
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Druhy podání povolené u typu výstupu (#55 D16). Prázdné pole = typ
+     * v configu druhy nedeklaruje, podání se pro něj nesestavuje.
+     *
+     * @return list<string>
+     */
+    public function filingKinds(string $type): array
+    {
+        return $this->reportTypes[$type]['filingKinds'] ?? [];
+    }
+
+    /**
+     * Režim dodatečného podání: `diff` = rozdíly proti předchozímu podání
+     * (DP3, ř. 66), `full` = plný obsah znovu (default).
+     */
+    public function supplementaryMode(string $type): string
+    {
+        return $this->reportTypes[$type]['supplementaryMode'] ?? 'full';
+    }
+
+    /**
+     * Druhy podání, u kterých je povinné datum zjištění důvodů.
+     *
+     * @return list<string>
+     */
+    public function dateFoundRequiredFor(string $type): array
+    {
+        return $this->reportTypes[$type]['dateFoundRequiredFor'] ?? [];
+    }
+
+    /**
+     * Jednotka podaných hodnot: 1 = celé Kč, 0.01 = beze změny (#55 D17).
+     */
+    public function roundingUnit(string $type): float
+    {
+        return $this->reportTypes[$type]['roundingUnit'] ?? self::DEFAULT_ROUNDING_UNIT;
     }
 
     /**
      * @param mixed $section
-     * @return array<string, string>
+     * @return array<string, array{validFrom: ?string, filingKinds: list<string>,
+     *         supplementaryMode: string, dateFoundRequiredFor: list<string>,
+     *         roundingUnit: float}>
      */
     private static function parseReportTypes(mixed $section): array
     {
@@ -75,18 +137,99 @@ final class VatOutputsMapping
             if (!is_array($entry)) {
                 throw new \InvalidArgumentException("VAT outputs mapping: reportTypes.{$type} must be an object");
             }
-            if (!array_key_exists('validFrom', $entry)) {
-                continue;
+
+            $filingKinds = self::parseFilingKinds($type, 'filingKinds', $entry['filingKinds'] ?? []);
+            // Podmnožina povolených druhů — překlep („subsequnt", druh, který
+            // typ vůbec nezná) by jinak tiše znamenal „datum nikdy nepovinné".
+            $dateFound = self::parseFilingKinds($type, 'dateFoundRequiredFor', $entry['dateFoundRequiredFor'] ?? []);
+            foreach ($dateFound as $kind) {
+                if (!in_array($kind, $filingKinds, true)) {
+                    throw new \InvalidArgumentException(
+                        "VAT outputs mapping: reportTypes.{$type}.dateFoundRequiredFor contains"
+                        . " '{$kind}', which is not among filingKinds",
+                    );
+                }
             }
-            $validFrom = $entry['validFrom'];
-            if (!is_string($validFrom) || !self::isIsoDate($validFrom)) {
-                throw new \InvalidArgumentException(
-                    "VAT outputs mapping: reportTypes.{$type}.validFrom must be an ISO date (YYYY-MM-DD)",
-                );
-            }
-            $out[$type] = $validFrom;
+
+            $out[$type] = [
+                'validFrom'            => self::parseValidFrom($type, $entry),
+                'filingKinds'          => $filingKinds,
+                'supplementaryMode'    => self::parseSupplementaryMode($type, $entry),
+                'dateFoundRequiredFor' => $dateFound,
+                'roundingUnit'         => self::parseRoundingUnit($type, $entry),
+            ];
         }
         return $out;
+    }
+
+    /** @param array<string, mixed> $entry */
+    private static function parseValidFrom(string $type, array $entry): ?string
+    {
+        if (!array_key_exists('validFrom', $entry)) {
+            return null;
+        }
+        $validFrom = $entry['validFrom'];
+        if (!is_string($validFrom) || !self::isIsoDate($validFrom)) {
+            throw new \InvalidArgumentException(
+                "VAT outputs mapping: reportTypes.{$type}.validFrom must be an ISO date (YYYY-MM-DD)",
+            );
+        }
+        return $validFrom;
+    }
+
+    /**
+     * @param mixed $value
+     * @return list<string>
+     */
+    private static function parseFilingKinds(string $type, string $key, mixed $value): array
+    {
+        if (!is_array($value) || !array_is_list($value)) {
+            throw new \InvalidArgumentException(
+                "VAT outputs mapping: reportTypes.{$type}.{$key} must be an array of filing kinds",
+            );
+        }
+        foreach ($value as $kind) {
+            if (!is_string($kind) || !in_array($kind, self::FILING_KINDS, true)) {
+                $shown = is_string($kind) ? $kind : get_debug_type($kind);
+                throw new \InvalidArgumentException(
+                    "VAT outputs mapping: unknown filing kind '{$shown}' in reportTypes.{$type}.{$key}",
+                );
+            }
+        }
+        return array_values($value);
+    }
+
+    /** @param array<string, mixed> $entry */
+    private static function parseSupplementaryMode(string $type, array $entry): string
+    {
+        $mode = $entry['supplementaryMode'] ?? 'full';
+        if (!is_string($mode) || !in_array($mode, self::SUPPLEMENTARY_MODES, true)) {
+            throw new \InvalidArgumentException(
+                "VAT outputs mapping: reportTypes.{$type}.supplementaryMode must be 'diff' or 'full'",
+            );
+        }
+        return $mode;
+    }
+
+    /** @param array<string, mixed> $entry */
+    private static function parseRoundingUnit(string $type, array $entry): float
+    {
+        if (!array_key_exists('roundingUnit', $entry)) {
+            return self::DEFAULT_ROUNDING_UNIT;
+        }
+        $unit = $entry['roundingUnit'];
+        if (!is_int($unit) && !is_float($unit)) {
+            throw new \InvalidArgumentException(
+                "VAT outputs mapping: reportTypes.{$type}.roundingUnit must be a number",
+            );
+        }
+        $unit = (float) $unit;
+        if ($unit <= 0.0) {
+            throw new \InvalidArgumentException(
+                "VAT outputs mapping: reportTypes.{$type}.roundingUnit must be greater than zero",
+            );
+        }
+        return $unit;
     }
 
     private static function isIsoDate(string $value): bool

@@ -1,0 +1,62 @@
+{
+    // economy.vat.docStatesFilings
+    //
+    // Stavy podání DPH (economy_vat_filings, #55 D18). Lifecycle bez EPO —
+    // odeslání na Finanční správu dělá člověk, systém drží záznam o tom,
+    // co a kdy se podalo.
+    //
+    // Stavový automat:
+    //   Sestaveno → Podáno | Zrušeno
+    //   Podáno    → (nic; podané tvrzení se neopravuje editací, ale novým
+    //                podáním jiného druhu — opravným, dodatečným, následným)
+    //   Zrušeno   → (nic; zrušený koncept se nevrací, sestaví se nový)
+    //
+    // Mapování na stateStyle (docs/doc-states.md §6):
+    //   concept — žlutá  — Sestaveno (koncept, přepočet regeneruje snapshot)
+    //   done    — zelená — Podáno (snapshot immutable, guardy ve FilingDocument)
+    //   trash   — černá  — Zrušeno
+
+    "10": {
+        "stateName": "Composed",
+        "stateName:cs": "Sestaveno",
+        "stateName:en": "Composed",
+        "actionName": "Save as composed",
+        "actionName:cs": "Uložit jako sestavené",
+        "actionName:en": "Save as composed",
+        "stateStyle": "concept",
+        "mainState": 1,
+        "viewGroup": "active",
+        "closeForm": 0,
+        "goto": [40, 90]
+    },
+
+    "40": {
+        "stateName": "Filed",
+        "stateName:cs": "Podáno",
+        "stateName:en": "Filed",
+        "actionName": "File",
+        "actionName:cs": "Podat",
+        "actionName:en": "File",
+        "stateStyle": "done",
+        "mainState": 2,
+        "viewGroup": "active",
+        "readOnly": 1,
+        "closeForm": 1,
+        "goto": []
+    },
+
+    "90": {
+        "stateName": "Cancelled",
+        "stateName:cs": "Zrušeno",
+        "stateName:en": "Cancelled",
+        "actionName": "Cancel",
+        "actionName:cs": "Zrušit",
+        "actionName:en": "Cancel",
+        "stateStyle": "trash",
+        "mainState": 3,
+        "viewGroup": "trash",
+        "readOnly": 1,
+        "closeForm": 1,
+        "goto": []
+    }
+}

@@ -130,14 +130,46 @@
         "65": { "label": "Excess deduction", "label:cs": "Nadměrný odpočet" }
     },
 
-    // Zákonný počátek typu výstupu (#58): doklad s efektivním datem před
-    // `validFrom` do výstupu nespadá — ukazatel zůstane NULL, koncept
-    // instance se nezaloží a generátor instanci před tímto datem nikdy
-    // nezačne. Je to národní pravidlo výkaznictví, ne vlastnost typu
-    // instance (config/reportTypes.jsonc je jen názvosloví). Přiznání
-    // (`return`) a souhrnné hlášení (`rs`) omezení nemají — stará data jsou
-    // legitimní. Konec platnosti (`validTo`) záměrně neexistuje.
+    // Národní pravidla výkaznictví per typ výstupu — ne vlastnost typu
+    // instance (config/reportTypes.jsonc je jen názvosloví).
+    //
+    // `validFrom` (#58) — zákonný počátek typu: doklad s efektivním datem
+    //   před ním do výstupu nespadá (ukazatel NULL, koncept instance se
+    //   nezaloží, generátor instanci před tímto datem nikdy nezačne).
+    //   Přiznání a souhrnné hlášení omezení nemají — stará data jsou
+    //   legitimní. Konec platnosti (`validTo`) záměrně neexistuje.
+    //
+    // Druhy podání a zaokrouhlení (#55 D16, D17) — čte VatOutputsMapping,
+    // uplatňuje FilingDocument (které druhy lze podat) a FilingRounding
+    // (jak se z přesných hodnot stanou podané):
+    //
+    // `filingKinds`          povolené druhy podání; názvosloví je
+    //                        v config/filingKinds.jsonc. DP3 zná dodatečné
+    //                        (§ 141 DŘ), hlášení místo něj následné
+    //                        (§ 101f ZDPH); SH opravné nezná.
+    // `supplementaryMode`    `diff` = dodatečné vykazuje rozdíly proti
+    //                        předchozímu podání a změnu povinnosti na
+    //                        ř. 66; `full` (default) = plný obsah znovu.
+    // `dateFoundRequiredFor` druhy, u kterých je povinné datum zjištění
+    //                        důvodů pro podání (KH následné: `d_zjist`).
+    // `roundingUnit`         jednotka podaných hodnot: 1 = celé Kč
+    //                        (DP3 řádek po řádku, SH nahoru), 0.01 = beze
+    //                        změny (KH se podává na haléře).
     "reportTypes": {
-        "cs": { "validFrom": "2016-01-01" }   // zavedení kontrolního hlášení (§ 101c ZDPH)
+        "return": {
+            "filingKinds": ["regular", "corrective", "supplementary"],
+            "supplementaryMode": "diff",
+            "roundingUnit": 1
+        },
+        "cs": {
+            "validFrom": "2016-01-01",   // zavedení kontrolního hlášení (§ 101c ZDPH)
+            "filingKinds": ["regular", "corrective", "subsequent"],
+            "dateFoundRequiredFor": ["subsequent"],
+            "roundingUnit": 0.01
+        },
+        "rs": {
+            "filingKinds": ["regular", "subsequent"],
+            "roundingUnit": 1
+        }
     }
 }

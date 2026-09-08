@@ -58,7 +58,9 @@
 
     "config": [
         { "id": "economy.vat.reports.cz", "file": "config/vat-reports-cz.jsonc" },
-        { "id": "economy.vat.reportTypes", "file": "config/reportTypes.jsonc" }
+        { "id": "economy.vat.reportTypes", "file": "config/reportTypes.jsonc" },
+        { "id": "economy.vat.filingKinds", "file": "config/filingKinds.jsonc" },
+        { "id": "economy.vat.docStatesFilings", "file": "config/docStatesFilings.jsonc" }
     ],
 
     // Koeficienty odpočtu patří do Nastavení vedle Registrací DPH; stejný

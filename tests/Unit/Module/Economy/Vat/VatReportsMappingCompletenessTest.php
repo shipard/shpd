@@ -6,6 +6,7 @@ namespace Shipard\Tests\Unit\Module\Economy\Vat;
 
 use PHPUnit\Framework\TestCase;
 use Shipard\Core\Utils\JsoncParser;
+use Shipard\Module\Economy\Vat\VatOutputsMapping;
 
 /**
  * Úplnost mapování DPH výstupů (tasks/taxes-phase01.md, issue #55, D3 —
@@ -20,6 +21,11 @@ class VatReportsMappingCompletenessTest extends TestCase
     private const MODULES = __DIR__ . '/../../../../../modules';
 
     private const KH_GROUPS = ['A1', 'A2', 'A4A5', 'B1', 'B2B3'];
+    /** Druhy podání (#55 D16) — zdroj pravdy je VatOutputsMapping::FILING_KINDS. */
+    private const FILING_KINDS = VatOutputsMapping::FILING_KINDS;
+    private const REPORT_TYPE_KEYS = [
+        'validFrom', 'filingKinds', 'supplementaryMode', 'dateFoundRequiredFor', 'roundingUnit',
+    ];
     /** Odpočtové řádky se sloupcem „V plné výši" / „Krácený odpočet". */
     private const DP3_DEDUCTION_ROWS = [40, 41, 43, 44];
 
@@ -142,11 +148,109 @@ class VatReportsMappingCompletenessTest extends TestCase
         $config = $this->reportsConfig();
         $this->assertArrayHasKey('reportTypes', $config, 'sekce reportTypes (#58)');
 
+        // Všechny tři typy musí druhy podání deklarovat — typ bez
+        // `filingKinds` by znamenal „za toto tvrzení nelze nic podat".
+        $this->assertSame(
+            ['return', 'cs', 'rs'],
+            array_keys($config['reportTypes']),
+            'reportTypes: právě tři typy výstupu v kanonickém pořadí',
+        );
+
         foreach ($config['reportTypes'] as $type => $entry) {
-            $this->assertContains($type, ['return', 'cs', 'rs'], "reportTypes: neznámý typ '{$type}'");
-            $this->assertSame(['validFrom'], array_keys($entry), "reportTypes.{$type}: jen klíč validFrom (validTo záměrně neexistuje)");
-            $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2}$/', $entry['validFrom'], "reportTypes.{$type}.validFrom: ISO datum");
+            $this->assertSame(
+                [],
+                array_diff(array_keys($entry), self::REPORT_TYPE_KEYS),
+                "reportTypes.{$type}: neznámý klíč (validTo záměrně neexistuje)",
+            );
+
+            if (array_key_exists('validFrom', $entry)) {
+                $this->assertMatchesRegularExpression(
+                    '/^\d{4}-\d{2}-\d{2}$/',
+                    $entry['validFrom'],
+                    "reportTypes.{$type}.validFrom: ISO datum",
+                );
+            }
+
+            $kinds = $entry['filingKinds'] ?? [];
+            $this->assertNotEmpty($kinds, "reportTypes.{$type}.filingKinds: aspoň jeden druh podání");
+            $this->assertSame(
+                [],
+                array_diff($kinds, self::FILING_KINDS),
+                "reportTypes.{$type}.filingKinds: neznámý druh podání",
+            );
+            $this->assertContains('regular', $kinds, "reportTypes.{$type}: řádné podání musí být povolené");
+            // Legislativa zná po lhůtě u přiznání dodatečné, u hlášení
+            // následné — nikdy oba (#55 D16).
+            $this->assertFalse(
+                in_array('supplementary', $kinds, true) && in_array('subsequent', $kinds, true),
+                "reportTypes.{$type}: dodatečné a následné se u jednoho typu vylučují",
+            );
+
+            if (in_array('supplementary', $kinds, true)) {
+                $this->assertContains(
+                    $entry['supplementaryMode'] ?? 'full',
+                    ['diff', 'full'],
+                    "reportTypes.{$type}.supplementaryMode",
+                );
+            } else {
+                $this->assertArrayNotHasKey(
+                    'supplementaryMode',
+                    $entry,
+                    "reportTypes.{$type}: supplementaryMode bez druhu supplementary nic neřídí",
+                );
+            }
+
+            $this->assertSame(
+                [],
+                array_diff($entry['dateFoundRequiredFor'] ?? [], $kinds),
+                "reportTypes.{$type}.dateFoundRequiredFor: druh, který typ vůbec nezná",
+            );
+
+            $this->assertContains(
+                $entry['roundingUnit'] ?? null,
+                [1, 0.01],
+                "reportTypes.{$type}.roundingUnit: celé Kč (1) nebo haléře (0.01)",
+            );
         }
+    }
+
+    public function testFilingKindsCfgItemCoversEveryUsedKind(): void
+    {
+        $names = JsoncParser::parseFile(self::MODULES . '/economy/vat/config/filingKinds.jsonc');
+
+        $this->assertSame(
+            [],
+            array_diff(array_keys($names), self::FILING_KINDS),
+            'filingKinds.jsonc: druh, který VatOutputsMapping::FILING_KINDS nezná',
+        );
+
+        $used = [];
+        foreach ($this->reportsConfig()['reportTypes'] as $entry) {
+            foreach ($entry['filingKinds'] ?? [] as $kind) {
+                $used[$kind] = true;
+            }
+        }
+        foreach (array_keys($used) as $kind) {
+            $this->assertArrayHasKey($kind, $names, "filingKinds.jsonc: chybí název druhu {$kind}");
+            $this->assertNotSame('', (string) ($names[$kind]['name'] ?? ''), "filingKinds[{$kind}]: prázdný name");
+            $this->assertNotSame('', (string) ($names[$kind]['name:cs'] ?? ''), "filingKinds[{$kind}]: prázdný name:cs");
+        }
+    }
+
+    public function testDocStatesFilingsAutomaton(): void
+    {
+        $states = JsoncParser::parseFile(self::MODULES . '/economy/vat/config/docStatesFilings.jsonc');
+
+        // JsoncParser vrací numerické klíče jako int (PHP koerce klíčů polí).
+        $this->assertSame([10, 40, 90], array_keys($states), 'docStatesFilings: sestaveno / podáno / zrušeno');
+        // Koncept je jediná cesta dál; podané ani zrušené podání se needituje
+        // (oprava = nové podání jiného druhu, #55 D18).
+        $this->assertSame([40, 90], $states['10']['goto']);
+        $this->assertSame([], $states['40']['goto']);
+        $this->assertSame([], $states['90']['goto']);
+        $this->assertSame(1, $states['40']['readOnly'] ?? 0, 'stav Podáno je readOnly');
+        $this->assertSame('active', $states['40']['viewGroup']);
+        $this->assertSame('trash', $states['90']['viewGroup']);
     }
 
     public function testEveryUsedDp3RowHasLabel(): void

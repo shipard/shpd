@@ -1,0 +1,37 @@
+{
+    // economy.vat.filingKinds — druh podání
+    // (economy_vat_filings.filing_kind). Které druhy jsou u kterého typu
+    // tvrzení přípustné, říká mapovací config země
+    // (`vat-reports-cz.jsonc` → `reportTypes.{type}.filingKinds`) — tady
+    // je jen názvosloví. Druhy pocházejí z legislativy (#55 D16):
+    //
+    //   regular       řádné — první podání za období
+    //   corrective    opravné — plná náhrada podaného tvrzení ve lhůtě
+    //                 (DP3 § 138 DŘ, KH forma „O")
+    //   supplementary dodatečné — po lhůtě, DP3 vykazuje jen ROZDÍLY
+    //                 proti poslednímu podání a změnu povinnosti na ř. 66
+    //                 (§ 141 DŘ)
+    //   subsequent    následné — KH/SH po lhůtě, plný obsah znovu
+    //                 (KH forma „N", § 101f ZDPH; u KH povinné datum
+    //                 zjištění důvodů)
+    "regular": {
+        "name": "Regular",
+        "name:cs": "Řádné",
+        "name:en": "Regular"
+    },
+    "corrective": {
+        "name": "Corrective",
+        "name:cs": "Opravné",
+        "name:en": "Corrective"
+    },
+    "supplementary": {
+        "name": "Supplementary",
+        "name:cs": "Dodatečné",
+        "name:en": "Supplementary"
+    },
+    "subsequent": {
+        "name": "Subsequent",
+        "name:cs": "Následné",
+        "name:en": "Subsequent"
+    }
+}

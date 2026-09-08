@@ -333,6 +333,28 @@ class CashDocsAccountingTest extends IntegrationTestCase
         $this->assertEqualsWithDelta(1210.0, (float) $this->lineByPrefix($journal, '211')['money_dr'], 0.001);
     }
 
+    public function testRetailSaleByBankTransferBooksReceivable(): void
+    {
+        // Prodejka „na převod“ (partner povinný): 604 DAL · 343 DAL · 311 MD s partnerem;
+        // pokladna ani karty na cestě se nedotčou (#59, reimport 2026-09-08).
+        $deskId  = $this->createCashDesk($this->accountIdByPrefix('211'));
+        $partner = $this->anyPartnerId();
+        $headId  = $this->insertHead('cashreg', $deskId, 1000.0, 210.0, ['payment_method' => 1, 'partner' => $partner]);
+        $this->insertRow($headId, 'sale.goods', 1000.0, 21.0);
+        $this->insertRecap($headId, 1000.0, 210.0);
+
+        $result = $this->engine->accountDocument($headId);
+
+        $this->assertSame(1, $result['state'], json_encode($result['messages']));
+        $journal = $this->journalOf($headId);
+        $this->assertBalanced($journal);
+        $receivable = $this->lineByPrefix($journal, '311');
+        $this->assertEqualsWithDelta(1210.0, (float) $receivable['money_dr'], 0.001);
+        $this->assertSame($partner, (int) $receivable['partner'], 'pohledávka nese partnera hlavičky');
+        $this->assertNoLine($journal, '211');
+        $this->assertNoLine($journal, '261');
+    }
+
     public function testRetailSaleRefundBooksNegativeAmounts(): void
     {
         // Vratka (D9): záporné řádky → záporné částky na obou stranách, vyrovnané.

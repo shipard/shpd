@@ -140,12 +140,19 @@ abstract class CashDeskFormBase extends DocsHeadsFormBase
         return $desk;
     }
 
-    /** Způsoby úhrady povolené na pokladním dokladu (CashDeskDocumentBase::PAYMENT_METHODS_ALLOWED). */
+    /** Způsoby úhrady povolené na dokladu (default CashDeskDocumentBase::PAYMENT_METHODS_ALLOWED; formulář prodejky přepíše). */
+    protected function allowedPaymentMethods(): array
+    {
+        return CashDeskDocumentBase::PAYMENT_METHODS_ALLOWED;
+    }
+
+    /** Způsoby úhrady povolené na pokladním dokladu (allowedPaymentMethods). */
     protected function paymentMethodOptions(): array
     {
+        $allowed = $this->allowedPaymentMethods();
         return array_values(array_filter(
             $this->resolveCfgItemOptions('docs.core.paymentMethods'),
-            static fn(array $o) => in_array((int) $o['value'], CashDeskDocumentBase::PAYMENT_METHODS_ALLOWED, true),
+            static fn(array $o) => in_array((int) $o['value'], $allowed, true),
         ));
     }
 

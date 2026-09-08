@@ -37,6 +37,12 @@ class CashRegisterForm extends CashDeskFormBase
         return 'cash-register';
     }
 
+    /** Prodejka: hotově, převodem (pohledávka, partner povinný) nebo kartou. */
+    protected function allowedPaymentMethods(): array
+    {
+        return CashRegisterDocument::PAYMENT_METHODS_ALLOWED;
+    }
+
     protected function getPartnerSnapshotKey(): string
     {
         // Prodejka = výstup, partner je odběratel.

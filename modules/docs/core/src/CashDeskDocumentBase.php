@@ -16,7 +16,9 @@ use Shipard\Core\Document\ValidationResult;
  * Co báze přidává nad DocsHeadsDocument (#59 D5–D9):
  *   - hlavičkový partner nepovinný (anonymní příjem / výdej / prodej;
  *     u úhrad `payment.*` partnera nese řádek),
- *   - způsob úhrady jen Hotovost (0) nebo Kartou (2), default 0,
+ *   - způsob úhrady jen Hotovost (0) nebo Kartou (2), default 0 — potomek může
+ *     seznam rozšířit přepsáním `PAYMENT_METHODS_ALLOWED` (prodejka přidává
+ *     Převodem, viz CashRegisterDocument),
  *   - měna dokladu = měna pokladny (jiná je chyba `currency_mismatch`),
  *   - splatnost = datum vystavení (hotovostní doklad nemá splatnost).
  *
@@ -25,8 +27,17 @@ use Shipard\Core\Document\ValidationResult;
  */
 abstract class CashDeskDocumentBase extends DocsHeadsDocument
 {
-    /** Povolené způsoby úhrady: 0 Hotovost, 2 Kartou (cfgItem docs.core.paymentMethods). */
+    /**
+     * Povolené způsoby úhrady: 0 Hotovost, 2 Kartou (cfgItem docs.core.paymentMethods).
+     * Potomek přepíše (late static binding v `validate` i ve formuláři).
+     */
     public const PAYMENT_METHODS_ALLOWED = [0, 2];
+
+    /** Lidský popis povolených metod pro chybovou hlášku. */
+    protected function paymentMethodsAllowedLabel(): string
+    {
+        return 'hotově nebo kartou';
+    }
 
     protected function headPartnerRequired(): bool
     {
@@ -40,11 +51,11 @@ abstract class CashDeskDocumentBase extends DocsHeadsDocument
 
         $paymentMethod = $data['payment_method'] ?? null;
         if ($paymentMethod !== null && $paymentMethod !== ''
-            && !in_array((int) $paymentMethod, self::PAYMENT_METHODS_ALLOWED, true)
+            && !in_array((int) $paymentMethod, static::PAYMENT_METHODS_ALLOWED, true)
         ) {
             $result->addError(
                 'payment_method',
-                'Pokladní doklad lze uhradit jen hotově nebo kartou',
+                'Doklad lze uhradit jen ' . $this->paymentMethodsAllowedLabel(),
                 'invalid_value',
             );
         }

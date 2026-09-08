@@ -297,9 +297,14 @@ vypočtené hodnoty. Důvod, proč jsou v canonical:
 applier z něj **nečte**; `total_rounding_mode` dokladu (matematicky /
 nahoru / dolů na celé jednotky) si odvozuje nezávisle porovnáním
 vypočtené a deklarované částky (`DocumentApplier::deriveTotalRoundingMode`,
-konzervativně jen pro rozdíl > 0,01 a < 1,00, který některý mod přesně
-reprodukuje). Výslednou částku a `total_rounding` pak dopočte
-`DocDocument` sám. Platí pro AI extrakci i ISDOC
+konzervativně jen pro rozdíl >= 0,01 a < 1,00, který některý mod přesně
+reprodukuje — rozdíl o jediný haléř je platné zaokrouhlení, 69,99 → 70,00).
+Výslednou částku a `total_rounding` pak dopočte `DocDocument` sám.
+**Důsledek pro zdroje dat:** `totalAmount` musí být částka **po** zaokrouhlení
+(placená) — starý Shipard drží `sumTotal` bez zaokrouhlení a runner musí
+poslat `sumTotal + rounding`, jinak vyjde mód 0 a doklad zaokrouhlení ztratí
+(reimport 2026-09-07: 211/311/321 o haléře jinak, saldo nespáruje 70,00
+proti 69,99). Platí pro AI extrakci i ISDOC
 (`PayableRoundingAmount`) — obě cesty jdou přes týž applier.
 
 ### Polymorfismus podle `docType`

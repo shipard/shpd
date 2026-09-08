@@ -301,6 +301,10 @@
                     "side": 0, "reverseSign": 1, "sign": "-", "text": "Zaokrouhlení dokladu"},
                 {"accountSrc": "cashDesk", "src": "head", "col": "total", "side": 0,
                     "query": {"payment_method": 0}},
+                // Prodejka „na převod“ = pohledávka (partner povinný,
+                // CashRegisterDocument); identita hlavičky jako u FV.
+                {"cat": "receivables", "src": "head", "col": "total", "side": 0,
+                    "query": {"payment_method": 1}},
                 {"cat": "card.transit", "src": "head", "col": "total", "side": 0,
                     "query": {"payment_method": 2}}
             ]

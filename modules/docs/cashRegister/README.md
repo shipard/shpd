@@ -7,6 +7,9 @@ Modul pro **Prodejky** (`doc_type = 'cashreg'`). Polymorfní subclass nad
 
 Prodej za hotové nebo kartou na pokladně — doklad s pevným směrem výstup
 (`trade_dir: 1`, my jsme dodavatel, DPH na výstupu), typicky bez partnera.
+Výjimečně i **převodem**: prodejka „na převod“ je pohledávka (311 místo
+pokladny), partner je pak povinný. Zavedené kvůli migraci (starý Shipard je
+měl), v běžném provozu je to spíš faktura.
 Vratka je prodejka se **zápornými řádky** (#59 D9), žádný zvláštní typ ani
 směr.
 
@@ -18,8 +21,10 @@ záložky vieweru = pokladny, pokladna se na dokladu nezadává. Číslo má tva
 ## Co modul přidává
 
 - **Document třída** `CashRegisterDocument extends CashDeskDocumentBase`
-  (docs.core) — partner nepovinný, způsob úhrady jen Hotovost / Kartou, měna
-  dokladu = měna pokladny, splatnost = datum vystavení. Pohyby řádku:
+  (docs.core) — partner nepovinný (povinný při úhradě Převodem), způsob
+  úhrady Hotovost / Převodem / Kartou (`PAYMENT_METHODS_ALLOWED` přepsáno
+  nad bází, která má jen Hotovost / Kartou), měna dokladu = měna pokladny,
+  splatnost = datum vystavení. Pohyby řádku:
   `sale.services`, `sale.goods`, `acc.entry`.
 - **Editační formulář** `CashRegisterForm extends CashDeskFormBase` —
   minimalistická hlavička: způsob úhrady, nepovinný partner, datum vystavení,

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Shipard\Module\Docs\CashRegister;
 
+use Shipard\Core\Document\ValidationResult;
 use Shipard\Module\Docs\Core\CashDeskDocumentBase;
 
 /**
@@ -13,7 +14,35 @@ use Shipard\Module\Docs\Core\CashDeskDocumentBase;
  * (`docTypes.cashreg.trade_dir = 1`), takže `cash_dir` musí zůstat 0 — hlídá
  * DocDocument::validateBindingAndDirection. Vratka = záporné řádky, žádná
  * validace je neodmítá (stejně jako u dobropisů).
+ *
+ * Nad bázi přidává způsob úhrady **Převodem** (1): prodejka „na převod" je
+ * pohledávka — účtuje se na 311 místo pokladny (předpis `cashreg`,
+ * `query: {payment_method: 1}`), a proto vyžaduje partnera hlavičky
+ * (anonymní pohledávka nedává smysl). Rozhodnutí #59, reimport 2026-09-08:
+ * starý Shipard takové prodejky účtoval na 311, msi jich má tři.
  */
 class CashRegisterDocument extends CashDeskDocumentBase
 {
+    /** 0 Hotovost, 1 Převodem, 2 Kartou. */
+    public const PAYMENT_METHODS_ALLOWED = [0, 1, 2];
+
+    protected function paymentMethodsAllowedLabel(): string
+    {
+        return 'hotově, převodem nebo kartou';
+    }
+
+    public function validate(array &$data): ValidationResult
+    {
+        $result = parent::validate($data);
+
+        if ((int) ($data['payment_method'] ?? 0) === 1 && empty($data['partner'])) {
+            $result->addError(
+                'partner',
+                'Prodejka hrazená převodem je pohledávka — zadejte odběratele',
+                'partner_required_for_transfer',
+            );
+        }
+
+        return $result;
+    }
 }

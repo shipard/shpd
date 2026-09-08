@@ -500,8 +500,10 @@ Protistrana hotovostních dokladů se řídí `payment_method` hlavičky:
 **0 Hotovost** → účet pokladny (`accountSrc: "cashDesk"`, 211xxx per
 pokladna), **2 Kartou** → kategorie `card.transit` (platební karty na
 cestě, maska `261400` — jediný terminál, per-terminál analytiky mimo
-scope). Kategorie `cash` neexistuje — `accountSrc: cashDesk` `accounts[]`
-obchází.
+scope). Prodejka navíc umí **1 Převodem** → kategorie `receivables`
+(311, partner hlavičky povinný — `CashRegisterDocument`); pokladní doklad
+převodem nemá. Kategorie `cash` neexistuje — `accountSrc: cashDesk`
+`accounts[]` obchází.
 
 **Tranzitní účty jsou infrastruktura** (#59 Task E): `261` (syntetika),
 `261100` a `261400` zajišťuje `TransitAccountsProvisioner`

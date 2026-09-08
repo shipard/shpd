@@ -1022,6 +1022,17 @@ class DocumentApplierTest extends TestCase
         $this->assertArrayNotHasKey('total_rounding_mode', $data);
     }
 
+    /** Zaokrouhlení o haléř (starý Shipard: 69,99 + 0,01 = 70,00) je platný mod 1. */
+    public function testDeriveRoundingModeOneHellerIsStillRounding(): void
+    {
+        $data = $this->transformWithTotals([
+            'vatRecap' => [['vatPct' => 21, 'total' => 69.99]],
+            'totals'   => ['totalAmount' => 70.00],
+        ]);
+
+        $this->assertSame(1, $data['total_rounding_mode'] ?? null);
+    }
+
     public function testDeriveRoundingModeSkippedWithoutTotals(): void
     {
         $data = $this->transformWithTotals([]);

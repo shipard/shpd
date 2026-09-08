@@ -110,6 +110,19 @@ Formát hlavičky stránky a šablona: `docs/help-authoring.md`.
 - DB name: pomlčky → podtržítka (`abcd_efgh_ijkl_mnop`)
 - DB user: `shpd_` + první 2 skupiny bez pomlček (`shpd_abcdefgh`)
 
+### Zdroje dat ve veřejných textech (issues, komentáře, commity, docs, tasks)
+Tento repozitář je veřejný. Reálné zdroje dat (zákazníci, migrované firmy) se
+v GitHub issues, komentářích, commit messages, `docs/` a `tasks/` **nikdy
+nepojmenovávají** — žádné názvy firem, jména osob, domény ani pokladny
+„S. XY“. Identifikace výhradně **prefixem ID zdroje**:
+- nový Shipard: prvních 6 znaků DS ID (`btpg-p`), nebo celé ID;
+- starý Shipard: prvních 6 číslic (`689089`).
+Čísla a částky se uvádějí jen agregovaně (počty, součty per účet/období), ne
+per doklad s partnerem. Ukázkové/testovací DS (`4l3j-z0bz-kz39-echj`) omezení
+nemá. Platí i pro Claude při zakládání issues a komentářů (`gh`). Projektové
+soubory mimo repozitář (`alpha.md`, `fix-source/` v soukromém `old_shipard`)
+smí názvy nést — tam jsou potřeba k práci.
+
 ### Databáze
 - MariaDB přes Dibi (`driver: mysqli`)
 - `CHARACTER SET utf8mb4 COLLATE utf8mb4_czech_ci`

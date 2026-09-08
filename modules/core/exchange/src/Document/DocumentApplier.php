@@ -1445,9 +1445,11 @@ class DocumentApplier
     /**
      * Odvodí `total_rounding_mode` z rozdílu mezi spočtenou a deklarovanou
      * celkovou částkou. Konzervativně: mod se nastaví jen když se computed
-     * a declared liší o > 0,01 a < 1,00 a některý mod declared přesně
+     * a declared liší o >= 0,01 a < 1,00 a některý mod declared přesně
      * reprodukuje; jinak null (default 0, případný totals_mismatch warning
-     * z validátoru zůstává v platnosti).
+     * z validátoru zůstává v platnosti). Rozdíl přesně 0,01 je platné
+     * zaokrouhlení (69,99 → 70,00; starý Shipard je má běžně) — podmínka
+     * „declared = celé číslo reprodukované modem“ ho odliší od šumu v DPH.
      *
      * Computed se bere z nejautoritativnějšího dostupného zdroje:
      * Σ vatRecap[].total → totalBase + totalVat → Σ řádků s DPH per řádek.
@@ -1517,7 +1519,7 @@ class DocumentApplier
         }
 
         $diff = abs($declared - $computed);
-        if ($diff <= 0.01 || $diff >= 1.00) {
+        if ($diff < 0.005 || $diff >= 1.00) {
             return null;
         }
 

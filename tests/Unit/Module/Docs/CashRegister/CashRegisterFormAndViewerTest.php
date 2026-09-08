@@ -13,9 +13,10 @@ use Shipard\Module\Docs\CashRegister\CashRegisterForm;
 use Shipard\Module\Docs\CashRegister\CashRegisterViewer;
 
 /**
- * Formulář a viewer prodejky: úhrada jen Hotovost / Kartou, měna pokladny
- * jen pro čtení, žádný směr; hlavička s odběratelem ze snapshotu; řádek
- * vieweru s datem a způsobem úhrady.
+ * Formulář a viewer prodejky: úhrada Hotovost / Převodem / Kartou, měna
+ * pokladny jen pro čtení, žádný směr; tab Nastavení s DPH a zaokrouhlením
+ * (#68); hlavička s odběratelem ze snapshotu; řádek vieweru s datem a
+ * způsobem úhrady.
  */
 class CashRegisterFormAndViewerTest extends TestCase
 {
@@ -53,13 +54,19 @@ class CashRegisterFormAndViewerTest extends TestCase
         return $db;
     }
 
-    private function findElement(FormDefinition $def, string $column): ?FormElement
+    /** @param string|null $tabId null = hledat ve všech tabech */
+    private function findElement(FormDefinition $def, string $column, ?string $tabId = 'basic'): ?FormElement
     {
-        foreach ($def->tabs[0]->sections as $section) {
-            foreach ($section->columns as $col) {
-                foreach ($col->elements as $el) {
-                    if ($el->column === $column) {
-                        return $el;
+        foreach ($def->tabs as $tab) {
+            if ($tabId !== null && $tab->id !== $tabId) {
+                continue;
+            }
+            foreach ($tab->sections as $section) {
+                foreach ($section->columns as $col) {
+                    foreach ($col->elements as $el) {
+                        if ($el->column === $column) {
+                            return $el;
+                        }
                     }
                 }
             }
@@ -82,6 +89,40 @@ class CashRegisterFormAndViewerTest extends TestCase
         $this->assertTrue($this->findElement($def, 'doc_currency')->readOnly);
         $this->assertNotNull($this->findElement($def, 'partner'));
         $this->assertFalse($this->findElement($def, 'partner')->required);
+    }
+
+    /** Issue #68: tab Nastavení za Přílohami s režimem DPH, místem plnění, registrací a zaokrouhlením. */
+    public function testSettingsTabIsLastAndHoldsVatAndRounding(): void
+    {
+        $form = new CashRegisterForm('docs_core_heads');
+        $form->setConfig($this->config());
+        $form->setDb($this->db());
+
+        $def = $form->buildFormDefinition(['doc_type' => 'cashreg', 'number_series' => 12, 'vat_mode' => 1], true);
+
+        $tabIds = array_map(static fn ($t) => $t->id, $def->tabs);
+        $this->assertSame('settings', end($tabIds), 'Nastavení je poslední tab');
+        $this->assertContains('attachments', $tabIds);
+        $this->assertLessThan(array_search('settings', $tabIds, true), array_search('attachments', $tabIds, true));
+
+        foreach (['vat_mode', 'vat_place', 'vat_registration', 'total_rounding_mode', 'vat_rounding_mode'] as $col) {
+            $this->assertNull($this->findElement($def, $col, 'basic'), "$col není v hlavičce");
+            $this->assertNotNull($this->findElement($def, $col, 'settings'), "$col je v Nastavení");
+        }
+        $this->assertNotNull($this->findElement($def, 'payment_method'), 'způsob úhrady zůstává v hlavičce');
+        $this->assertSame('reload', $this->findElement($def, 'vat_mode', 'settings')->triggers);
+        $this->assertSame('reload', $this->findElement($def, 'vat_place', 'settings')->triggers);
+        $this->assertTrue($this->findElement($def, 'vat_registration', 'settings')->required, 's DPH je registrace povinná');
+        $this->assertFalse($this->findElement($def, 'vat_place', 'settings')->hidden);
+
+        // Bez DPH: režim DPH zůstává viditelný (jinak by se nedal zapnout), podřízená pole skrytá.
+        $def = $form->buildFormDefinition(['doc_type' => 'cashreg', 'number_series' => 12, 'vat_mode' => 0], true);
+        $this->assertFalse($this->findElement($def, 'vat_mode', 'settings')->hidden);
+        foreach (['vat_place', 'vat_registration', 'vat_rounding_mode'] as $col) {
+            $this->assertTrue($this->findElement($def, $col, 'settings')->hidden, "$col bez DPH skryté");
+        }
+        $this->assertFalse($this->findElement($def, 'total_rounding_mode', 'settings')->hidden);
+        $this->assertTrue($this->findElement($def, 'vat_duzp')->hidden, 'DUZP v hlavičce bez DPH skryté');
     }
 
     public function testHeaderInfoUsesCustomerSnapshot(): void

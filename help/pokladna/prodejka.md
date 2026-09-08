@@ -29,7 +29,9 @@ s pohybem *Úhrada pohledávky*, nebo na faktuře zvol platbu *Hotovost* rovnou.
    **Partner** je nepovinný — vyplň ho, když zákazník chce mít prodej
    na své firmě (s DIČ pak prodej nad 10 000 Kč jde do kontrolního hlášení
    jednotlivě). **Datum vystavení** a **Účetní datum** jsou povinné.
-   **Měna dokladu** je měna pokladny.
+   **Měna dokladu** je měna pokladny. **Režim DPH**, **Místo plnění**,
+   **Registrace DPH** a zaokrouhlení najdeš na záložce **Nastavení** úplně
+   vpravo — běžně je nemusíš měnit, doplní se samy.
 
 4. **Dej Uložit** a přidej řádky: **Pohyb** *Prodej zboží* nebo *Prodej
    služeb*, **Položka**, **Množství**, cena a **Kód DPH** — stejně jako na

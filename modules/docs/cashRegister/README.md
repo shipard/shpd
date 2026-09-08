@@ -28,7 +28,9 @@ záložky vieweru = pokladny, pokladna se na dokladu nezadává. Číslo má tva
   `sale.services`, `sale.goods`, `acc.entry`.
 - **Editační formulář** `CashRegisterForm extends CashDeskFormBase` —
   minimalistická hlavička: způsob úhrady, nepovinný partner, datum vystavení,
-  DPH, měna jen pro čtení, readOnly sekce „Pokladna".
+  měna jen pro čtení, readOnly sekce „Pokladna". Tab **Nastavení** za
+  Přílohami (#68): režim DPH, místo plnění, registrace DPH, zaokrouhlení
+  částky a DPH — pole, která se při běžném prodeji nemění.
 - **Viewer** `CashRegisterViewer extends DocsHeadsViewer` — Prodej → Prodejky,
   `scopedDocType = 'cashreg'`, v řádku datum a způsob úhrady.
 - **Polymorfní registrace** v `documentClasses` / `forms` (typeColumn

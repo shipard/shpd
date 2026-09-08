@@ -10,10 +10,16 @@ use Shipard\Module\Docs\Core\CashDeskFormBase;
 /**
  * Editační formulář prodejky — `doc_type = 'cashreg'`.
  *
- * Minimalistická hlavička: způsob úhrady (Hotovost / Kartou), nepovinný
- * partner, datum vystavení (+ účetní datum a DUZP, které se z něj doplní),
- * DPH, měna jen pro čtení (= měna pokladny), readOnly sekce „Pokladna",
+ * Minimalistická hlavička: způsob úhrady (Hotovost / Převodem / Kartou),
+ * nepovinný partner, datum vystavení (+ účetní datum a DUZP, které se z něj
+ * doplní), měna jen pro čtení (= měna pokladny), readOnly sekce „Pokladna",
  * text dokladu. Řádky, rekapitulace, poznámky a přílohy z base.
+ *
+ * Tab „Nastavení" za Přílohami (`buildExtraTabs`, vzor pokladního dokladu
+ * z #67) — Issue #68: režim DPH, místo plnění, registrace DPH a obě
+ * zaokrouhlení. Na rozdíl od pokladního dokladu tu bydlí i samotný režim
+ * DPH, proto se sekce „DPH" při `vat_mode = 0` neskrývá — skryjí se jen
+ * podřízená pole.
  */
 class CashRegisterForm extends CashDeskFormBase
 {
@@ -80,18 +86,6 @@ class CashRegisterForm extends CashDeskFormBase
                     ->date('vat_duzp', hidden: !$hasVat)
 
                 ->col()
-                    ->select(
-                        'vat_mode',
-                        options: $this->resolveCfgItemOptions('docs.core.vatModes'),
-                        triggers: 'reload',
-                    )
-                    ->select(
-                        'vat_registration',
-                        options: $this->resolveVatRegistrationOptions(),
-                        triggers: 'reload',
-                        required: $hasVat,
-                        hidden: !$hasVat,
-                    )
                     ->input('doc_currency', readOnly: true, hint: 'Měna pokladny');
 
         $this->addCashDeskSection($tab, $data);
@@ -100,6 +94,67 @@ class CashRegisterForm extends CashDeskFormBase
             ->section()
                 ->col()
                     ->input('doc_text')
+            ->build();
+    }
+
+    /**
+     * Tab „Nastavení" na konci formuláře (za Přílohami) — Issue #68.
+     *
+     * @param array<string, mixed> $data
+     * @return list<FormTab>
+     */
+    protected function buildExtraTabs(array $data, bool $isNew): array
+    {
+        return [$this->buildSettingsTab($data)];
+    }
+
+    /**
+     * Režim DPH, místo plnění, registrace DPH a zaokrouhlení.
+     * `vat_registration` je při vat_mode != 0 povinná (DocDocument) —
+     * validační chyba se zobrazí na poli v tomto tabu, FormEditor na něj
+     * přepne. `vat_mode` a `vat_place` mají `reload` (řídí viditelnost DUZP
+     * v hlavičce a polí tady); frontend při reloadu drží aktivní tab.
+     *
+     * @param array<string, mixed> $data
+     */
+    protected function buildSettingsTab(array $data): FormTab
+    {
+        $vatMode = (int) ($data['vat_mode'] ?? 1);
+        $hasVat = $vatMode !== 0;
+
+        return $this->tab('settings', 'Nastavení')
+            ->section(title: 'DPH')
+                ->col()
+                    ->select(
+                        'vat_mode',
+                        options: $this->resolveCfgItemOptions('docs.core.vatModes'),
+                        triggers: 'reload',
+                    )
+                    ->select(
+                        'vat_place',
+                        options: $this->resolveCfgItemOptions('docs.core.vatPlaces'),
+                        triggers: 'reload',
+                        hidden: !$hasVat,
+                    )
+                    ->select(
+                        'vat_registration',
+                        options: $this->resolveVatRegistrationOptions(),
+                        triggers: 'reload',
+                        required: $hasVat,
+                        hidden: !$hasVat,
+                    )
+
+            ->section(title: 'Zaokrouhlení')
+                ->col()
+                    ->select(
+                        'total_rounding_mode',
+                        options: $this->resolveCfgItemOptions('docs.core.roundingModes'),
+                    )
+                    ->select(
+                        'vat_rounding_mode',
+                        options: $this->resolveCfgItemOptions('docs.core.roundingModes'),
+                        hidden: !$hasVat,
+                    )
             ->build();
     }
 }

@@ -1,0 +1,118 @@
+{
+    // Koeficient odpočtu DPH (issue #59, D13): per registrace DPH a kalendářní
+    // rok dvě hodnoty — zálohový (během roku, § 76 odst. 6 ZDPH) a vypořádací
+    // (spočtený na konci roku). Konstrukce směrnice 2006/112/ES čl. 173–175
+    // (odpočitatelný podíl), národní je jen mapování na řádky formuláře.
+    // Vypořádací roku N je implicitní zálohový roku N+1; bez záznamu platí
+    // 1,0000 (plný nárok). Čte DeductionCoefficientResolver.
+    "tableId": 442,
+    "name": "VAT deduction coefficients",
+    "name:cs": "Koeficienty odpočtu DPH",
+    "name:en": "VAT deduction coefficients",
+
+    "displayPattern": "{year}",
+
+    "docStates": {
+        "stateColumn": "docState",
+        "mainColumn": "docStateMain",
+        "cfgItem": "core.system.docStatesArchive"
+    },
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+        {
+            "id": "vat_registration",
+            "name": "VAT registration",
+            "name:cs": "Registrace DPH",
+            "name:en": "VAT registration",
+            "type": "int",
+            "nullable": false,
+            "reference": "economy_codebooks_vat_registrations"
+        },
+        {
+            "id": "year",
+            "name": "Calendar year",
+            "name:cs": "Kalendářní rok",
+            "name:en": "Calendar year",
+            "type": "smallint",
+            "nullable": false
+        },
+        {
+            // NULL = odvodit (vypořádací koeficient předchozího roku, jinak 1,0000).
+            "id": "coefficient_provisional",
+            "name": "Provisional coefficient",
+            "name:cs": "Zálohový koeficient",
+            "name:en": "Provisional coefficient",
+            "type": "numeric",
+            "precision": 5,
+            "scale": 4,
+            "nullable": true
+        },
+        {
+            // NULL = rok zatím nevypořádán.
+            "id": "coefficient_settled",
+            "name": "Settled coefficient",
+            "name:cs": "Vypořádací koeficient",
+            "name:en": "Settled coefficient",
+            "type": "numeric",
+            "precision": 5,
+            "scale": 4,
+            "nullable": true
+        },
+        {
+            "id": "note",
+            "name": "Note",
+            "name:cs": "Poznámka",
+            "name:en": "Note",
+            "type": "varchar",
+            "length": 200,
+            "nullable": true
+        },
+
+        // --- doc state (systémové, bez skupiny) ---
+
+        {
+            "id": "docState",
+            "name": "Document state",
+            "name:cs": "Stav dokumentu",
+            "name:en": "Document state",
+            "type": "tinyint",
+            "default": 10,
+            "system": true
+        },
+        {
+            "id": "docStateMain",
+            "name": "Document state (sort)",
+            "name:cs": "Stav dokumentu (řazení)",
+            "name:en": "Document state (sort)",
+            "type": "tinyint",
+            "default": 1,
+            "system": true
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "idx_registration_year",
+            "type": "unique",
+            "columns": [
+                {"column": "vat_registration"},
+                {"column": "year"}
+            ]
+        },
+        {
+            "id": "idx_doc_state",
+            "type": "index",
+            "columns": [
+                {"column": "docStateMain", "order": "ASC"},
+                {"column": "year", "order": "DESC"}
+            ]
+        }
+    ]
+}

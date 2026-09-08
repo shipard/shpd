@@ -13,7 +13,8 @@
     "dependencies": ["world.vat", "economy.codebooks", "docs.core", "economy.accounting"],
 
     "tables": [
-        "economy_vat_report_periods"
+        "economy_vat_report_periods",
+        "economy_vat_deduction_coefficients"
     ],
 
     // Zařazení dokladu do instancí tvrzení (vat_period / cs_period /
@@ -87,6 +88,11 @@
         {
             "table": "economy_vat_report_periods",
             "class": "Shipard\\Module\\Economy\\Vat\\ReportPeriodDocument"
+        },
+        {
+            // Koeficient odpočtu per registrace × rok (#59 D13).
+            "table": "economy_vat_deduction_coefficients",
+            "class": "Shipard\\Module\\Economy\\Vat\\DeductionCoefficientDocument"
         }
     ],
 

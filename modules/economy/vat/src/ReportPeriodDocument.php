@@ -66,8 +66,7 @@ class ReportPeriodDocument extends Document
 
     protected function recalculate(int $instanceId): void
     {
-        $cfg = $this->config?->cfgItem('economy.vat.reports.cz');
-        $mapping = is_array($cfg) ? new VatOutputsMapping($cfg) : null;
+        $mapping = VatOutputsMapping::fromConfig($this->config);
         (new VatPeriodRecalculator(new DataSourceConnection($this->db), $mapping))
             ->recomputeForInstance($instanceId);
     }

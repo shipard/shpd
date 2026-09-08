@@ -137,6 +137,18 @@ class VatReportsMappingCompletenessTest extends TestCase
         }
     }
 
+    public function testReportTypesShape(): void
+    {
+        $config = $this->reportsConfig();
+        $this->assertArrayHasKey('reportTypes', $config, 'sekce reportTypes (#58)');
+
+        foreach ($config['reportTypes'] as $type => $entry) {
+            $this->assertContains($type, ['return', 'cs', 'rs'], "reportTypes: neznámý typ '{$type}'");
+            $this->assertSame(['validFrom'], array_keys($entry), "reportTypes.{$type}: jen klíč validFrom (validTo záměrně neexistuje)");
+            $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2}$/', $entry['validFrom'], "reportTypes.{$type}.validFrom: ISO datum");
+        }
+    }
+
     public function testEveryUsedDp3RowHasLabel(): void
     {
         $config = $this->reportsConfig();

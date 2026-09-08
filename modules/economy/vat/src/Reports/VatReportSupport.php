@@ -24,8 +24,7 @@ final class VatReportSupport
 {
     public function mapping(ReportRequest $request): ?VatOutputsMapping
     {
-        $cfg = $request->config?->cfgItem('economy.vat.reports.cz');
-        return is_array($cfg) ? new VatOutputsMapping($cfg) : null;
+        return VatOutputsMapping::fromConfig($request->config);
     }
 
     /** @return array<string, array<string, mixed>> Kódy vč. skrytých (párové). */

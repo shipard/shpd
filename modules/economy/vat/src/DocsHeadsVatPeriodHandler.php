@@ -130,7 +130,6 @@ final class DocsHeadsVatPeriodHandler extends AbstractDocumentEventHandler
 
     private function mapping(): ?VatOutputsMapping
     {
-        $cfg = $this->config?->cfgItem('economy.vat.reports.cz');
-        return is_array($cfg) ? new VatOutputsMapping($cfg) : null;
+        return VatOutputsMapping::fromConfig($this->config);
     }
 }

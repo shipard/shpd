@@ -56,4 +56,43 @@ class VatOutputsMappingTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         new VatOutputsMapping(['dp3Rows' => []]);
     }
+
+    // ── reportTypes.validFrom (#58) ──────────────────────────────────────
+
+    public function testValidFromFromRealConfig(): void
+    {
+        $mapping = $this->mapping();
+        $this->assertSame('2016-01-01', $mapping->validFrom('cs'), 'KH existuje od 1. 1. 2016');
+        $this->assertNull($mapping->validFrom('return'));
+        $this->assertNull($mapping->validFrom('rs'));
+        $this->assertSame(['cs' => '2016-01-01'], $mapping->validFromByType());
+    }
+
+    public function testMissingReportTypesSectionMeansNoLimits(): void
+    {
+        $mapping = new VatOutputsMapping(['vatOutputs' => []]);
+        $this->assertNull($mapping->validFrom('cs'));
+        $this->assertNull($mapping->validFrom('return'));
+        $this->assertNull($mapping->validFrom('rs'));
+        $this->assertSame([], $mapping->validFromByType());
+    }
+
+    public function testUnknownReportTypeThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage("unknown report type 'ks'");
+        new VatOutputsMapping(['vatOutputs' => [], 'reportTypes' => ['ks' => ['validFrom' => '2016-01-01']]]);
+    }
+
+    public function testInvalidValidFromThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('reportTypes.cs.validFrom');
+        new VatOutputsMapping(['vatOutputs' => [], 'reportTypes' => ['cs' => ['validFrom' => '2016-13-01']]]);
+    }
+
+    public function testFromConfigWithoutCfgItemIsNull(): void
+    {
+        $this->assertNull(VatOutputsMapping::fromConfig(null));
+    }
 }

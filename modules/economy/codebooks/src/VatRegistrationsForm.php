@@ -38,7 +38,7 @@ class VatRegistrationsForm extends TableForm
         $taxpayerKindOptions = $this->resolveIntOptions('economy.codebooks.vatTaxpayerKinds');
         $periodKindOptions = $this->resolveIntOptions('economy.codebooks.vatPeriodKinds');
 
-        $basic = $this->tab('basic', $this->defaultGeneralTabLabel())
+        $tab = $this->tab('basic', $this->defaultGeneralTabLabel())
             ->section()
                 ->col()
                     ->input('name', required: true)
@@ -52,8 +52,18 @@ class VatRegistrationsForm extends TableForm
                     ->select('rs_period_kind', options: $periodKindOptions, required: true)
                     ->separator('Platnost')
                     ->date('valid_from', required: true)
-                    ->date('valid_to')
-            ->build();
+                    ->date('valid_to');
+
+        // Koeficient odpočtu (#59 D13) žije v economy.vat; codebooks na něm
+        // nezávisí — jen odkaz, a jen když je modul aktivní (jeho cfgItem
+        // existuje v kompilované konfiguraci).
+        if (!$isNew && is_array($this->config?->cfgItem('economy.vat.reportTypes'))) {
+            $tab->separator('Krácený nárok na odpočet')
+                ->html('<p class="muted">Koeficienty odpočtu (zálohový a vypořádací per kalendářní rok) '
+                    . 'spravujete v Nastavení → Účetnictví → <strong>Koeficienty odpočtu DPH</strong>. '
+                    . 'Bez záznamu platí plný nárok (1,00).</p>');
+        }
+        $basic = $tab->build();
 
         // Instance daňových tvrzení (přiznání / KH / SH) žijí ve vieweru
         // „Daňová tvrzení" modulu economy.vat — codebooks na něm nezávisí.

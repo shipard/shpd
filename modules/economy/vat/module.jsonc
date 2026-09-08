@@ -61,6 +61,13 @@
         { "id": "economy.vat.reportTypes", "file": "config/reportTypes.jsonc" }
     ],
 
+    // Koeficienty odpočtu patří do Nastavení vedle Registrací DPH; stejný
+    // gate agendy DPH (economy.codebooks je závislost modulu).
+    "settingsItems": [
+        { "viewer": "economy.vat.deductionCoefficients", "section": "accounting",
+          "visibilityClass": "Shipard\\Module\\Economy\\Codebooks\\VatAgendaNavGate" }
+    ],
+
     "viewers": [
         {
             // Instance daňových tvrzení (D7) — vedle živých reportů v sekci
@@ -74,6 +81,16 @@
             "class": "Shipard\\Module\\Economy\\Vat\\ReportPeriodsViewer",
             "navSection": "accounting",
             "navOrder": 50
+        },
+        {
+            // Koeficient odpočtu per registrace × rok (#59 D13) — Nastavení.
+            "id": "economy.vat.deductionCoefficients",
+            "name": "VAT deduction coefficients",
+            "name:cs": "Koeficienty odpočtu DPH",
+            "name:en": "VAT deduction coefficients",
+            "icon": "calculator",
+            "table": "economy_vat_deduction_coefficients",
+            "class": "Shipard\\Module\\Economy\\Vat\\DeductionCoefficientsViewer"
         }
     ],
 
@@ -81,6 +98,10 @@
         {
             "table": "economy_vat_report_periods",
             "class": "Shipard\\Module\\Economy\\Vat\\ReportPeriodsForm"
+        },
+        {
+            "table": "economy_vat_deduction_coefficients",
+            "class": "Shipard\\Module\\Economy\\Vat\\DeductionCoefficientsForm"
         }
     ],
 

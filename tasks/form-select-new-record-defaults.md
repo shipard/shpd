@@ -1,6 +1,6 @@
 # Task: Roletky v modalech — předvyplnit výchozí hodnotu u nového záznamu (Issue #60)
 
-**Stav:** naplánováno
+**Stav:** hotovo
 
 ## Status / cíl
 
@@ -320,3 +320,68 @@ public function applyNewRecordDefaults(array &$data): void
 9. Komentáře v #24 a #60 napsané; help i cookbook aktualizované;
    `python3 scripts/tasks-index.py && python3 scripts/tasks-index.py --check
    && python3 scripts/check-sensitive.py` projde.
+
+## Poznámky k implementaci (2026-09-08)
+
+### Odchylky od zadání (odsouhlasené před implementací)
+
+1. **Jednotka položky** (`unit` = systémová `pcs`) přesunuta z
+   `ItemsForm::buildFormDefinition` do `applyNewRecordDefaults`. Byla to mrtvá
+   mutace stejného druhu jako u hlavičky (nad kopií dat), help přitom tvrdil
+   předplnění na Kus, které nefungovalo. PRD ji neznal.
+2. **Způsob úhrady pokladního dokladu**: „`payment_method = 0`, když
+   neprefillnuto" na HTTP cestě poznat nejde — `FormController` vloží schéma
+   default 1 (Převodem) dřív, než hook běží (proto nikdy nic nedělala ani
+   dnešní větev v `CashDeskFormBase::applyClientDefaults`). Pravidlo: hodnota
+   mimo `CashDeskDocumentBase::PAYMENT_METHODS_ALLOWED` (Hotovost, Kartou)
+   → Hotovost; explicitní prefill Kartou přežije.
+3. Drobné rozšíření: `ItemsForm` odvozuje `item_type` i pro **prefillnutý**
+   `item_kind` (typ se zadat přímo nedá, schéma default 3 by u jiného druhu
+   neseděl). Jeden helper `deriveItemType()` pro hook i recalculate.
+
+### Co se kde předvyplňuje
+
+- **Hlavička** (`DocsHeadsFormBase::applyNewRecordDefaults`), v tomto pořadí:
+  vat_mode neplátce → `issue_date` = dnes → `vat_registration` = první
+  z `resolveVatRegistrationOptions()` (country, id; jen `vat_mode !== 0`) →
+  `bank_account` = `resolveDefaultBankAccount()` (`is_default`, stav 40,
+  bez měnového filtru; jen `newRecordUsesBankAccount()`). Explicitní hodnota
+  vždy vyhrává. Z `applyClientDefaults` odstraněny mrtvé větve
+  `number_series` (řadu prefilluje viewer z aktivního tabu; na tabu všech řad
+  zůstává výběr ruční — dnešní chování) a `issue_date` (přesunuto);
+  ostatní větve zůstávají pro renderování.
+- **Účetní doklad** (`AccountingDocsForm`): `vat_mode = 0` před `parent::`,
+  `newRecordUsesBankAccount(): false`. Větev v `applyClientDefaults`
+  ponechána podle PRD — hlavička účetního dokladu ovšem žádné DPH pole
+  nerenderuje, takže je to jen pojistka pro recalculate.
+- **Pokladní doklad / pokladna** (`CashDeskFormBase`): způsob úhrady dle
+  bodu 2, `doc_currency` z pokladny řady, pak `parent::` (datum, registrace
+  DPH — pokladní doklad DPH má), bez bankovního účtu.
+- **Řádek dokladu** (`DocRowsForm`): předčasný `return` při prefillnutém
+  pohybu zrušen; kontext hlavičky jednou; pohyb beze změny; `vat_code`
+  = první z `buildVatCodeOptions()` (CZ tuzemsko výstup `cz-120` Základní,
+  vstup `cz-110`) + `vat_pct` přes nový `deriveVatPct()` sdílený
+  s `recalculate('vat_code')`; textový řádek a kontační řádek (`rowSide`)
+  nic. Podmínka DPH hlavičky v helperu `headHasVat()` pro build i hook.
+- **Položka** (`ItemsForm`): `item_kind` = systémový `other`, `item_type`
+  přes `deriveItemType()`, `unit` = `pcs`. Bez systémových záznamů nic.
+- `required: $hasVat` u `vat_registration` na všech pěti místech (base,
+  FVB, FPB, pokladní doklad, pokladna) — po #61 tedy bez prázdné možnosti.
+
+### Testy
+
+Nové: `DocsHeadsFormNewRecordDefaultsTest` (datum, registrace, účet,
+neplátce, per-typ formy, `required` podle `vat_mode`),
+`AccountingDocsFormNewRecordDefaultsTest`, `ItemsFormNewRecordDefaultsTest`.
+Rozšířené: `CashDocFormTest` (hook: Hotovost, měna pokladny, registrace,
+bez účtu; Kartou přežije), `DocRowsFormOperationsTest` (reálný
+`vat-cz.jsonc` přes `ConfigRuntimeFactory`: kód + sazba, bez DUZP jen kód,
+textový/kontační/bezDPH řádek nic, prefill pohybu neblokuje, recalculate
+beze změny). `php -l` na všech dotčených souborech.
+
+### Otevřené
+
+- #24 A.3 (výchozí zaokrouhlení) a B (`onchange` na datumech) nedotčeno;
+  A.1 tímto vyřešeno.
+- Živý výpočet DPH na řádku (rozhodnutí 6) — samostatná věc.
+- Komentáře do #24 a #60 po commitu (`gh issue comment --body-file`).

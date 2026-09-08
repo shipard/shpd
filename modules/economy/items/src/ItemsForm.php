@@ -12,10 +12,35 @@ use Shipard\Core\Form\TableForm;
 
 class ItemsForm extends TableForm
 {
-    public function buildFormDefinition(array $data, bool $isNew): FormDefinition
+    /**
+     * Defaulty nové položky (GET /meta bez id — mutace doletí ke klientovi;
+     * dřív stály v buildFormDefinition nad kopií a byly mrtvé, issue #60):
+     *  - druh = systémový `other` (sedí se schéma defaultem item_type = 3),
+     *    typ položky odvozený stejnou cestou jako recalculate('item_kind'),
+     *  - jednotka = systémová `pcs` (Kus).
+     * Bez systémových záznamů (DS před provisionerem) zůstává pole prázdné.
+     * Explicitní prefill vyhrává.
+     */
+    public function applyNewRecordDefaults(array &$data): void
     {
-        // Default unit = pcs ("ks") for new records when nothing was prefilled
-        if ($isNew && empty($data['unit']) && $this->db !== null) {
+        if ($this->db === null) {
+            return;
+        }
+        if (empty($data['item_kind'])) {
+            $row = $this->db->fetchRow(
+                'SELECT id FROM economy_items_kinds'
+                . ' WHERE system_code = %s AND docState IN (10, 40, 80)'
+                . ' ORDER BY id ASC LIMIT 1',
+                'other',
+            );
+            if ($row !== null) {
+                $data['item_kind'] = (int) $row['id'];
+            }
+        }
+        // I pro prefillnutý druh — typ se zadat přímo nedá, schéma default 3
+        // by u jiného druhu nesedělo.
+        $this->deriveItemType($data);
+        if (empty($data['unit'])) {
             $row = $this->db->fetchRow(
                 "SELECT id FROM core_units WHERE system_code = 'pcs'",
             );
@@ -23,7 +48,25 @@ class ItemsForm extends TableForm
                 $data['unit'] = (int) $row['id'];
             }
         }
+    }
 
+    /** item_type z druhu položky — jediné místo odvození (hook i recalculate). */
+    private function deriveItemType(array &$data): void
+    {
+        if (empty($data['item_kind']) || $this->db === null) {
+            return;
+        }
+        $row = $this->db->fetchRow(
+            'SELECT item_type FROM economy_items_kinds WHERE id = %i',
+            (int) $data['item_kind'],
+        );
+        if ($row !== null) {
+            $data['item_type'] = (int) $row['item_type'];
+        }
+    }
+
+    public function buildFormDefinition(array $data, bool $isNew): FormDefinition
+    {
         $itemKindOptions = $this->resolveItemKindOptions();
         $unitOptions = $this->resolveUnitOptions();
         $itemTypeOptions = $this->resolveItemTypeOptions();
@@ -196,14 +239,8 @@ class ItemsForm extends TableForm
 
     public function recalculate(string $changedColumn, array $data): RecalculateResult
     {
-        if ($changedColumn === 'item_kind' && !empty($data['item_kind']) && $this->db !== null) {
-            $row = $this->db->fetchRow(
-                'SELECT item_type FROM economy_items_kinds WHERE id = %i',
-                (int) $data['item_kind'],
-            );
-            if ($row !== null) {
-                $data['item_type'] = (int) $row['item_type'];
-            }
+        if ($changedColumn === 'item_kind') {
+            $this->deriveItemType($data);
         }
 
         $isNew = !isset($data['id']) || $data['id'] === null;

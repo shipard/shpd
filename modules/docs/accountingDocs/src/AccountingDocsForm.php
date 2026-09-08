@@ -54,7 +54,27 @@ class AccountingDocsForm extends DocsHeadsFormBase
         return $this->renderContationRows($rows);
     }
 
-    /** Účetní doklad je bez DPH — vynuť `vat_mode = 0` pro nový záznam. */
+    /**
+     * Účetní doklad je bez DPH: `vat_mode = 0` PŘED parent::, aby base
+     * nedosadil registraci DPH. Bankovní účet formulář nemá
+     * (newRecordUsesBankAccount). Záchytná síť při uložení zůstává v
+     * AccountingDocument::validate/beforeSave.
+     */
+    public function applyNewRecordDefaults(array &$data): void
+    {
+        $data['vat_mode'] = 0;
+        parent::applyNewRecordDefaults($data);
+    }
+
+    protected function newRecordUsesBankAccount(): bool
+    {
+        return false;
+    }
+
+    /**
+     * Jen renderování (skrytí sekce DPH) — běží i při recalculate, kde hook
+     * neběží; proto se `vat_mode = 0` s applyNewRecordDefaults duplikuje.
+     */
     protected function applyClientDefaults(array &$data, bool $isNew): void
     {
         parent::applyClientDefaults($data, $isNew);

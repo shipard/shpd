@@ -107,6 +107,7 @@ class CashDocForm extends CashDeskFormBase
                         'vat_registration',
                         options: $this->resolveVatRegistrationOptions(),
                         triggers: 'reload',
+                        required: $hasVat,
                         hidden: !$hasVat,
                     )
                     ->select(

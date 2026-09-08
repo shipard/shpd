@@ -187,6 +187,7 @@ class ReceivedInvoiceForm extends DocsHeadsFormBase
                 'vat_registration',
                 options: $this->resolveVatRegistrationOptions(),
                 triggers: 'reload',
+                required: $hasVat,
             )
             ->select(
                 'vat_rounding_mode',

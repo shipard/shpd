@@ -77,17 +77,75 @@ abstract class DocsHeadsFormBase extends TableForm
     }
 
     /**
-     * HTTP cesta nového dokladu: FormController před tímhle hookem předvyplní
-     * column defaults ze schématu (vat_mode = 1), takže odvození defaultu
-     * z `economy.vatAgenda` musí přepsat právě a jen tu schéma-hodnotu —
-     * mutace odsud se propíší do response `data`. Ostatní cesty (data už
-     * vat_mode nesou) řeší applyClientDefaults.
+     * HTTP cesta nového dokladu (GET /meta bez id): FormController před tímhle
+     * hookem předvyplní column defaults ze schématu a klientský prefill
+     * (`defaults[...]`); mutace odsud se propíší do response `data`. Naproti
+     * tomu applyClientDefaults běží nad kopií a řídí jen renderování
+     * (issue #24 A, #60). Cokoli, co má uživatel vidět předvyplněné hned po
+     * otevření modalu, patří sem.
+     *
+     * Pořadí je podstatné: registrace DPH se rozhoduje podle vat_mode,
+     * subclass (účetní doklad) ho proto nastaví PŘED parent::. Explicitní
+     * hodnota v datech (import, kopie dokladu, prefill) vždy vyhrává.
      */
     public function applyNewRecordDefaults(array &$data): void
     {
+        // 1. Neplátce (economy.vatAgenda === false): přepisuje právě a jen
+        //    schéma default vat_mode = 1.
         if ($this->vatAgendaDisabled() && (int) ($data['vat_mode'] ?? 1) === 1) {
             $data['vat_mode'] = 0;
         }
+        // 2. Datum vystavení = dnes (#24 A.1). Účetní datum / DUZP se dál
+        //    odvozují až v beforeSave, dokud recalculate na datumu nefunguje (#24 B).
+        if (empty($data['issue_date'])) {
+            $data['issue_date'] = date('Y-m-d');
+        }
+        // 3. Registrace DPH: první podle country, id — totéž pořadí, jaké
+        //    uživatel vidí v roletce. Jen u dokladu s DPH; vat_mode = 0 je
+        //    platná hodnota, proto (int) a ne empty().
+        if ((int) ($data['vat_mode'] ?? 1) !== 0 && empty($data['vat_registration'])) {
+            $options = $this->resolveVatRegistrationOptions();
+            if ($options !== []) {
+                $data['vat_registration'] = (int) $options[0]['value'];
+            }
+        }
+        // 4. Náš bankovní účet: is_default ve stavu V pořádku, bez ohledu na
+        //    měnu dokladu (FPB v EUR z českého účtu je běžná). Jen formuláře,
+        //    které pole renderují (základní, FVB, FPB).
+        if ($this->newRecordUsesBankAccount() && empty($data['bank_account'])) {
+            $account = $this->resolveDefaultBankAccount();
+            if ($account !== null) {
+                $data['bank_account'] = $account;
+            }
+        }
+    }
+
+    /**
+     * Renderuje formulář pole `bank_account`? Základní doklad, FVB a FPB ano;
+     * pokladní a účetní doklad ne (přepisují na false). Přes payment_method
+     * to odvodit nejde — účetní doklad má ze schématu 1 (Převodem) a pole
+     * přesto nemá.
+     */
+    protected function newRecordUsesBankAccount(): bool
+    {
+        return true;
+    }
+
+    /**
+     * Výchozí bankovní účet (`is_default`) ve stavu V pořádku; null bez něj.
+     * Víc výchozích účtů nic nebrání — ORDER BY je jen determinismus.
+     */
+    protected function resolveDefaultBankAccount(): ?int
+    {
+        if ($this->db === null) {
+            return null;
+        }
+        $row = $this->db->fetchRow(
+            'SELECT `id` FROM `economy_codebooks_bank_accounts`'
+            . ' WHERE `is_default` = 1 AND `docState` = 40'
+            . ' ORDER BY `sort_order` ASC, `id` ASC LIMIT 1',
+        );
+        return $row !== null ? (int) $row['id'] : null;
     }
 
     public function buildFormDefinition(array $data, bool $isNew): FormDefinition
@@ -291,9 +349,14 @@ abstract class DocsHeadsFormBase extends TableForm
     }
 
     /**
-     * Client-side defaults that don't require server lookups.
-     * Server-side defaults (fiscal_year, vat_period, snapshots, totals) are
-     * computed in DocDocument::beforeSave.
+     * Defaulty JEN pro renderování. Běží v buildFormDefinition nad kopií dat
+     * (GET meta i recalculate, kde applyNewRecordDefaults neběží), takže se
+     * do response `data` nepropíší — řídí `hidden`/options ($hasVat,
+     * $hasForeignCurrency, měnový filtr účtů). Co má uživatel vidět v inputu,
+     * patří do applyNewRecordDefaults; hodnoty, které řídí obojí (vat_mode
+     * účetního dokladu, payment_method pokladního), stojí na obou místech.
+     * Server-side defaulty (fiscal_year, vat_period, snapshots, součty)
+     * počítá DocDocument::beforeSave.
      *
      * @param array<string, mixed> $data
      */
@@ -301,27 +364,6 @@ abstract class DocsHeadsFormBase extends TableForm
     {
         if (!$isNew) {
             return;
-        }
-        // Per-type viewer hint: if doc_type is provided (e.g. 'invno' from
-        // IssuedInvoicesViewer.getNewRecordDefaults) and number_series is not
-        // yet set, pre-select the first active series of that type.
-        // Typ s řadou vázanou na entitu (pokladna) se nepředvyplňuje —
-        // „první řada" by doklad potichu zařadila do libovolné pokladny.
-        if (empty($data['number_series']) && !empty($data['doc_type']) && $this->db !== null
-            && !$this->isBoundDocType((string) $data['doc_type'])
-        ) {
-            $row = $this->db->fetchRow(
-                'SELECT `id` FROM `docs_core_number_series`'
-                . ' WHERE `doc_type` = %s AND `docState` IN (10, 40, 80)'
-                . ' ORDER BY `id` ASC LIMIT 1',
-                (string) $data['doc_type'],
-            );
-            if ($row !== null) {
-                $data['number_series'] = (int) $row['id'];
-            }
-        }
-        if (empty($data['issue_date'])) {
-            $data['issue_date'] = date('Y-m-d');
         }
         if (!isset($data['vat_mode'])) {
             // Neplátce (economy.vatAgenda === false) → „Bez DPH"; nerozhodnutý
@@ -440,6 +482,9 @@ abstract class DocsHeadsFormBase extends TableForm
                         // U skryté sekce nemá smysl dotaz na registrace do DB.
                         options: $vatSectionHidden ? [] : $this->resolveVatRegistrationOptions(),
                         triggers: 'reload',
+                        // Povinná u dokladu s DPH (DocDocument::validate) —
+                        // bez prázdné možnosti, hodnotu dodá applyNewRecordDefaults.
+                        required: $hasVat,
                         hidden: !$hasVat,
                     )
                     // Zařazení do instancí tvrzení (economy.vat extension) —

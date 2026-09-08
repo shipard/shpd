@@ -34,8 +34,9 @@ toho, kdo ti kolik dluží. Nebo zkoušíš, co Shipard u vydané faktury umí a
      účet odběratele se na vydané faktuře nezadává — platí on tobě.
    - **Způsob platby** — když zvolíš *Hotovost*, objeví se pod ním ještě
      **Pokladna**.
-   - **Datum vystavení** a **Účetní datum** vyplň sám — obojí je povinné
-     a Shipard je nepředplňuje.
+   - **Datum vystavení** je předvyplněné dnešním dnem, přepsat ho můžeš.
+     **Účetní datum** vyplň sám — je povinné a z data vystavení se zatím
+     nedoplňuje.
    - **DUZP** a **Datum splatnosti** nechat prázdné můžeš. Doplní se samy
      až po **Uložit** — DUZP podle data vystavení, splatnost podle
      splatnosti sjednané u partnera (bez ní 14 dní od vystavení). Přepsat
@@ -44,12 +45,15 @@ toho, kdo ti kolik dluží. Nebo zkoušíš, co Shipard u vydané faktury umí a
    - **Text dokladu** je krátký popis, pod kterým fakturu poznáš v seznamu.
 
    Dvě povinné věci jsou na záložce **Nastavení** — úplně vpravo, za
-   **Přílohami** — protože se u tebe většinou nemění:
+   **Přílohami** — protože se u tebe většinou nemění. Obě jsou u nové
+   faktury předvybrané; zkontroluj je, jen když máš registrací nebo účtů víc:
 
-   - **Registrace DPH** vyplň vždy, když fakturuješ s daní. Bez ní nepůjde
-     na řádku zvolit **Kód DPH** a doklad nepotvrdíš.
+   - **Registrace DPH** je u faktury s daní povinná; předvybraná je první
+     z tvých registrací. Bez ní nepůjde na řádku zvolit **Kód DPH** a doklad
+     nepotvrdíš.
    - **Náš bankovní účet** je u vydané faktury povinný — je to účet, na který
-     má odběratel zaplatit. Bez něj doklad nepotvrdíš.
+     má odběratel zaplatit. Předvybraný je účet označený v Nastavení jako
+     **Výchozí**; bez výchozího účtu ho vyber ručně, jinak doklad nepotvrdíš.
 
 3. **Dej Uložit.** Řádky se dají zadávat až u uloženého dokladu; do té doby
    na tabu **Řádky** stojí, že je potřeba záznam nejprve uložit.
@@ -63,7 +67,9 @@ toho, kdo ti kolik dluží. Nebo zkoušíš, co Shipard u vydané faktury umí a
      [Založení položky](../polozky/zalozeni-polozky.md).
    - **Množství** a **Cena/jednotka**; **Cena celkem** se dopočítá. Slevu
      zadej v sekci *Sleva* procentem, nebo částkou — ne obojím.
-   - **Kód DPH** — po jeho výběru se doplní **DPH %** podle DUZP.
+   - **Kód DPH** je předvybraný na základní sazbu (*Tuzemsko/Výstup/Základní*)
+     a **DPH %** je doplněné podle DUZP. Potřebuje-li řádek jinou sazbu, změň
+     kód — procento se přepočítá.
 
    Potřebuješ-li na faktuře mezititulek nebo komentář, přepni **Typ řádku**
    na *Textový řádek*. Do součtů nevstupuje.

@@ -9,7 +9,9 @@ use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Form\FormDefinition;
 use Shipard\Core\Form\FormElement;
+use Shipard\Core\Utils\JsoncParser;
 use Shipard\Module\Docs\Core\DocRowsForm;
+use Shipard\Tests\Fixtures\Core\Config\ConfigRuntimeFactory;
 
 /**
  * Select pohybu v řádkovém sub-formu: options filtrované podle doc_type
@@ -36,9 +38,10 @@ class DocRowsFormOperationsTest extends TestCase
         rmdir($this->tmpDir);
     }
 
-    private function buildConfig(): ConfigRuntime
+    /** @return array<string, mixed> cfgItems sdílené oběma konfiguracemi */
+    private function configItems(): array
     {
-        $items = [
+        return [
             'docs.core.rowOperations' => [
                 // schválně přeházené pořadí — řadí se podle order, ne klíče
                 'acc.entry' => ['name' => 'Účetní položka', 'docTypes' => [
@@ -91,11 +94,54 @@ class DocRowsFormOperationsTest extends TestCase
                 '1' => ['name' => 'Běžný řádek'],
             ],
         ];
+    }
+
+    private function buildConfig(): ConfigRuntime
+    {
         file_put_contents(
             $this->tmpDir . '/config/configuration/compiled.cs.json',
-            json_encode(['_meta' => ['language' => 'cs'], 'items' => $items]),
+            json_encode(['_meta' => ['language' => 'cs'], 'items' => $this->configItems()]),
         );
         return ConfigRuntime::load($this->tmpDir, 'cs');
+    }
+
+    /** Config s reálným world.vat.cz — pořadí kódů v JSONC = pořadí options. */
+    private function configWithVat(): ConfigRuntime
+    {
+        $items = $this->configItems();
+        $items['world.vat.cz'] = JsoncParser::parseFile(
+            dirname(__DIR__, 5) . '/modules/world/vat/config/vat-cz.jsonc',
+        );
+        return ConfigRuntimeFactory::fromItems($items);
+    }
+
+    /**
+     * Form nad hlavičkou s registrací DPH (země cz) — mock rozlišuje dotaz
+     * na hlavičku a na registraci.
+     */
+    private function formWithVat(string $docType, ?string $duzp, int $vatMode = 1, int $cashDir = 0): DocRowsForm
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturnCallback(
+            static function (string $sql, mixed ...$params) use ($docType, $duzp, $vatMode, $cashDir): ?array {
+                if (str_contains($sql, 'economy_codebooks_vat_registrations')) {
+                    return ['country' => 'cz'];
+                }
+                return [
+                    'doc_type'         => $docType,
+                    'cash_dir'         => $cashDir,
+                    'vat_place'        => 0,
+                    'vat_duzp'         => $duzp,
+                    'vat_mode'         => $vatMode,
+                    'vat_registration' => 5,
+                ];
+            },
+        );
+        $db->method('fetchAll')->willReturn([]);
+        $form = new DocRowsForm('docs_core_rows');
+        $form->setConfig($this->configWithVat());
+        $form->setDb($db);
+        return $form;
     }
 
     private function dbWithHead(string $docType, int $cashDir = 0): DataSourceConnection
@@ -298,5 +344,98 @@ class DocRowsFormOperationsTest extends TestCase
         $ref = $this->findElement($def, 'payment_reference');
         $this->assertNotNull($ref, 'identifikace protistrany převodu');
         $this->assertFalse($ref->required, 'payment_reference u převodu nepovinný');
+    }
+
+    // ── Kód DPH nového řádku (#60) ──────────────────────────────────────────
+
+    public function testNewItemRowGetsFirstVatCodeAndPct(): void
+    {
+        $data = ['row_kind' => 1, 'doc_head' => 5];
+        $this->formWithVat('invno', '2026-05-07')->applyNewRecordDefaults($data);
+
+        $this->assertSame('sale.services', $data['operation']);
+        $this->assertSame('cz-120', $data['vat_code'], 'první tuzemský výstupní kód = Základní');
+        $this->assertSame(21.0, $data['vat_pct']);
+    }
+
+    public function testReceivedInvoiceRowGetsFirstInputVatCode(): void
+    {
+        $data = ['row_kind' => 1, 'doc_head' => 5];
+        $this->formWithVat('invni', '2026-05-07')->applyNewRecordDefaults($data);
+
+        $this->assertSame('cz-110', $data['vat_code']);
+        $this->assertSame(21.0, $data['vat_pct']);
+    }
+
+    public function testNewRowWithoutDuzpGetsVatCodeButNoPct(): void
+    {
+        $data = ['row_kind' => 1, 'doc_head' => 5];
+        $this->formWithVat('invno', null)->applyNewRecordDefaults($data);
+
+        $this->assertSame('cz-120', $data['vat_code']);
+        $this->assertArrayNotHasKey('vat_pct', $data, 'bez DUZP zůstává sazba ruční — jako recalculate');
+    }
+
+    public function testTextRowGetsNoVatCode(): void
+    {
+        $data = ['row_kind' => 0, 'doc_head' => 5];
+        $this->formWithVat('invno', '2026-05-07')->applyNewRecordDefaults($data);
+
+        $this->assertArrayNotHasKey('vat_code', $data);
+        $this->assertArrayNotHasKey('operation', $data);
+    }
+
+    public function testNoVatHeadGetsOperationButNoVatCode(): void
+    {
+        $data = ['row_kind' => 1, 'doc_head' => 5];
+        $this->formWithVat('invno', '2026-05-07', vatMode: 0)->applyNewRecordDefaults($data);
+
+        $this->assertSame('sale.services', $data['operation']);
+        $this->assertArrayNotHasKey('vat_code', $data);
+    }
+
+    public function testExplicitOperationPrefillNoLongerBlocksVatCode(): void
+    {
+        $data = ['row_kind' => 1, 'doc_head' => 5, 'operation' => 'sale.goods'];
+        $this->formWithVat('invno', '2026-05-07')->applyNewRecordDefaults($data);
+
+        $this->assertSame('sale.goods', $data['operation']);
+        $this->assertSame('cz-120', $data['vat_code']);
+    }
+
+    public function testExplicitVatCodeWins(): void
+    {
+        $data = ['row_kind' => 1, 'doc_head' => 5, 'vat_code' => 'cz-121'];
+        $this->formWithVat('invno', '2026-05-07')->applyNewRecordDefaults($data);
+
+        $this->assertSame('cz-121', $data['vat_code']);
+    }
+
+    public function testContationRowGetsNoVatCode(): void
+    {
+        // payment.receivable má rowSide → kontační layout bez DPH bloku
+        $data = ['row_kind' => 1, 'doc_head' => 5, 'operation' => 'payment.receivable'];
+        $this->formWithVat('cash', '2026-05-07', cashDir: 1)->applyNewRecordDefaults($data);
+
+        $this->assertSame('payment.receivable', $data['operation']);
+        $this->assertArrayNotHasKey('vat_code', $data);
+    }
+
+    public function testHeadWithoutRegistrationCountryGetsNoVatCode(): void
+    {
+        // mock z form(): registrace se nedohledá → žádná nabídka kódů → nic
+        $data = ['row_kind' => 1, 'doc_head' => 5];
+        $this->form('invno')->applyNewRecordDefaults($data);
+
+        $this->assertSame('sale.services', $data['operation']);
+        $this->assertArrayNotHasKey('vat_code', $data);
+    }
+
+    public function testRecalculateVatCodeStillDerivesPct(): void
+    {
+        $result = $this->formWithVat('invno', '2026-05-07')
+            ->recalculate('vat_code', ['row_kind' => 1, 'doc_head' => 5, 'operation' => 'sale.services', 'vat_code' => 'cz-120', 'id' => 9]);
+
+        $this->assertSame(21.0, $result->data['vat_pct']);
     }
 }

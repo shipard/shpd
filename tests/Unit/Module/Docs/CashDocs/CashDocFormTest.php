@@ -23,7 +23,7 @@ class CashDocFormTest extends TestCase
     /** @var list<string> */
     private array $sqlLog = [];
 
-    private function db(int $rowsCount = 0, array $seriesRows = []): DataSourceConnection
+    private function db(int $rowsCount = 0, array $seriesRows = [], array $registrations = []): DataSourceConnection
     {
         $this->sqlLog = [];
         $db = $this->createMock(DataSourceConnection::class);
@@ -43,8 +43,15 @@ class CashDocFormTest extends TestCase
             },
         );
         $db->method('fetchAll')->willReturnCallback(
-            static fn (string $sql, mixed ...$params): array =>
-                str_contains($sql, 'docs_core_number_series') ? $seriesRows : [],
+            static function (string $sql, mixed ...$params) use ($seriesRows, $registrations): array {
+                if (str_contains($sql, 'docs_core_number_series')) {
+                    return $seriesRows;
+                }
+                if (str_contains($sql, 'economy_codebooks_vat_registrations')) {
+                    return $registrations;
+                }
+                return [];
+            },
         );
         return $db;
     }
@@ -70,11 +77,11 @@ class CashDocFormTest extends TestCase
         return $config;
     }
 
-    private function form(int $rowsCount = 0, array $seriesRows = []): TestableCashDocForm
+    private function form(int $rowsCount = 0, array $seriesRows = [], array $registrations = []): TestableCashDocForm
     {
         $form = new TestableCashDocForm('docs_core_heads');
         $form->setConfig($this->config());
-        $form->setDb($this->db($rowsCount, $seriesRows));
+        $form->setDb($this->db($rowsCount, $seriesRows, $registrations));
         return $form;
     }
 
@@ -143,6 +150,43 @@ class CashDocFormTest extends TestCase
         $form->applyClientDefaultsPub($data, true);
         $this->assertSame(0, $data['payment_method'], 'default Hotovost');
         $this->assertSame('czk', $data['doc_currency']);
+    }
+
+    // ── applyNewRecordDefaults (#60) — HTTP cesta nového dokladu ─────────────
+
+    public function testNewRecordHookSetsCashPaymentDeskCurrencyAndRegistrationWithoutBankAccount(): void
+    {
+        $form = $this->form(registrations: [['id' => 4, 'country' => 'cz', 'vat_id' => 'CZ123']]);
+        // schéma defaulty (payment_method 1 Převodem, doc_currency czk) + prefill řady z vieweru;
+        // měna schválně jiná než pokladny, aby bylo vidět, že vyhrává pokladna
+        $data = ['doc_type' => 'cash', 'number_series' => 12, 'payment_method' => 1, 'doc_currency' => 'eur', 'vat_mode' => 1];
+        $form->applyNewRecordDefaults($data);
+
+        $this->assertSame(0, $data['payment_method'], 'Převodem ze schématu → Hotovost');
+        $this->assertSame('czk', $data['doc_currency'], 'měna pokladny z řady');
+        $this->assertSame(4, $data['vat_registration'], 'pokladní doklad DPH má');
+        $this->assertArrayNotHasKey('bank_account', $data, 'formulář pole nemá');
+        $this->assertSame(date('Y-m-d'), $data['issue_date']);
+        foreach ($this->sqlLog as $sql) {
+            $this->assertStringNotContainsString('bank_accounts', $sql);
+        }
+    }
+
+    public function testNewRecordHookKeepsCardPrefill(): void
+    {
+        $data = ['doc_type' => 'cash', 'number_series' => 12, 'payment_method' => 2];
+        $this->form()->applyNewRecordDefaults($data);
+
+        $this->assertSame(2, $data['payment_method'], 'Kartou je povolené — explicitní prefill vyhrává');
+    }
+
+    public function testNewRecordHookWithoutSeriesKeepsSchemaCurrency(): void
+    {
+        $data = ['doc_type' => 'cash', 'payment_method' => 1, 'doc_currency' => 'czk'];
+        $this->form()->applyNewRecordDefaults($data);
+
+        $this->assertSame(0, $data['payment_method']);
+        $this->assertSame('czk', $data['doc_currency'], 'bez řady není pokladna — měna beze změny');
     }
 
     public function testPaymentMethodOptionsAreCashAndCardOnly(): void

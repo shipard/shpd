@@ -28,6 +28,36 @@ abstract class CashDeskFormBase extends DocsHeadsFormBase
     /** @var array<string, array{id: int, code: string, name: string, currency: string}|null> */
     private array $cashDeskCache = [];
 
+    /**
+     * HTTP cesta nového dokladu: schéma default payment_method = 1 (Převodem)
+     * na pokladní doklad nepatří — hodnota mimo povolené (Hotovost, Kartou)
+     * → Hotovost; explicitní prefill Kartou přežije. („Když neprefillnuto"
+     * na této cestě poznat nejde, FormController vloží schéma default dřív.)
+     * Měna = měna pokladny z řady (prefill vieweru). Pak base (datum,
+     * registrace DPH); bankovní účet formulář nemá. Větve v
+     * applyClientDefaults zůstávají pro renderování a recalculate.
+     */
+    public function applyNewRecordDefaults(array &$data): void
+    {
+        $paymentMethod = $data['payment_method'] ?? null;
+        if ($paymentMethod === null || $paymentMethod === ''
+            || !in_array((int) $paymentMethod, CashDeskDocumentBase::PAYMENT_METHODS_ALLOWED, true)
+        ) {
+            $data['payment_method'] = 0;
+        }
+        $desk = $this->resolveCashDesk($data);
+        if ($desk !== null && $desk['currency'] !== '') {
+            $data['doc_currency'] = $desk['currency'];
+        }
+        parent::applyNewRecordDefaults($data);
+    }
+
+    protected function newRecordUsesBankAccount(): bool
+    {
+        return false;
+    }
+
+    /** Jen renderování (viz DocsHeadsFormBase::applyClientDefaults). */
     protected function applyClientDefaults(array &$data, bool $isNew): void
     {
         $hadPaymentMethod = isset($data['payment_method']);

@@ -83,6 +83,7 @@ class CashRegisterForm extends CashDeskFormBase
                         'vat_registration',
                         options: $this->resolveVatRegistrationOptions(),
                         triggers: 'reload',
+                        required: $hasVat,
                         hidden: !$hasVat,
                     )
                     ->input('doc_currency', readOnly: true, hint: 'Měna pokladny');

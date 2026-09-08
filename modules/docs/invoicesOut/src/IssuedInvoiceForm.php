@@ -188,6 +188,7 @@ class IssuedInvoiceForm extends DocsHeadsFormBase
                 'vat_registration',
                 options: $this->resolveVatRegistrationOptions(),
                 triggers: 'reload',
+                required: $hasVat,
                 hidden: !$hasVat,
             )
             ->select(

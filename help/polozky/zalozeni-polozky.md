@@ -23,12 +23,13 @@ a ty chceš vědět, co se tím vlastně založí.
 2. **Vyplň Název.** Jediné pole, které za tebe Shipard nedoplní — a to,
    které se pak objeví na dokladu.
 
-3. **Vyber Druh položky.** Povinné — ale zakládat nic nemusíš: Shipard
-   má připravené čtyři druhy, **Služba**, **Zásoba**, **Účetní položka**
-   a **Ostatní**, a ty na začátek stačí. Vlastní druhy — pojmenované
-   kbelíky jako *Konzultace IT*, *Materiál* nebo *Energie* — si můžeš
-   přidat v Nastavení, když chceš položky členit podrobněji. Podle druhu
-   se sám vyplní **Typ položky**; ten se zadat přímo nedá.
+3. **Zkontroluj Druh položky.** Povinný, u nové položky předvybraný na
+   **Ostatní**. Zakládat nic nemusíš: Shipard má připravené čtyři druhy,
+   **Služba**, **Zásoba**, **Účetní položka** a **Ostatní**, a ty na
+   začátek stačí. Vlastní druhy — pojmenované kbelíky jako *Konzultace IT*,
+   *Materiál* nebo *Energie* — si můžeš přidat v Nastavení, když chceš
+   položky členit podrobněji. Podle druhu se sám vyplní **Typ položky**;
+   ten se zadat přímo nedá.
 
 4. **Zkontroluj Jednotku.** Povinná, u nové položky předplněná na **Kus**.
 

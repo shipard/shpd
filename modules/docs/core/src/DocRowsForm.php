@@ -25,8 +25,7 @@ class DocRowsForm extends TableForm
 
         $rowKind = (int) ($data['row_kind'] ?? 1);
         $isText = $rowKind === 0;
-        $headHasVat = $headContext !== null
-            && (int) ($headContext['vat_mode'] ?? 0) !== 0;
+        $headHasVat = $this->headHasVat($headContext);
 
         $operationOptions = $this->buildOperationOptions($headContext);
 
@@ -221,20 +220,80 @@ class DocRowsForm extends TableForm
     }
 
     /**
-     * Default pohyb pro nový řádek = první povolený pro doc_type hlavičky
-     * (nejnižší order). Hlavička je známá z prefillu `defaults[doc_head]`.
+     * Defaulty nového řádku z kontextu hlavičky (prefill `defaults[doc_head]`):
+     *  - pohyb = první povolený pro doc_type hlavičky (nejnižší order),
+     *  - Kód DPH = první z nabídky pro zemi registrace / směr / místo plnění
+     *    hlavičky (CZ tuzemsko → „Základní") včetně dopočtu vat_pct stejnou
+     *    cestou jako recalculate('vat_code') (issue #60).
+     * Textový řádek nemá nic z toho; kontační řádek (rowSide) nemá DPH blok,
+     * default by zapsal hodnotu do skrytého pole. Explicitní prefill vyhrává
+     * a prefillnutý pohyb neblokuje ostatní defaulty.
      */
     public function applyNewRecordDefaults(array &$data): void
     {
-        if ((int) ($data['row_kind'] ?? 1) !== 1 || !empty($data['operation'])) {
+        if ((int) ($data['row_kind'] ?? 1) !== 1) {
             return;
         }
-        $options = $this->buildOperationOptions(
-            $this->loadHeadContext($data['doc_head'] ?? null),
-        );
-        if ($options !== []) {
-            $data['operation'] = $options[0]['value'];
-            $this->applyContationRowDefaults($data);
+        $headContext = $this->loadHeadContext($data['doc_head'] ?? null);
+
+        if (empty($data['operation'])) {
+            $options = $this->buildOperationOptions($headContext);
+            if ($options !== []) {
+                $data['operation'] = $options[0]['value'];
+                $this->applyContationRowDefaults($data);
+            }
+        }
+
+        $opAttrs = $this->resolveOperationAttrs((string) ($data['operation'] ?? ''));
+        if ($this->hasRowSideLayout($opAttrs)) {
+            return;
+        }
+        if ($this->headHasVat($headContext) && empty($data['vat_code'])) {
+            $vatOptions = $this->buildVatCodeOptions($headContext);
+            if ($vatOptions !== []) {
+                $data['vat_code'] = $vatOptions[0]['value'];
+                $this->deriveVatPct($data, $headContext);
+            }
+        }
+    }
+
+    /**
+     * Má hlavička DPH (vat_mode !== 0)? Bez kontextu hlavičky ne. Jediné
+     * místo pravidla pro build i hook.
+     *
+     * @param array<string, mixed>|null $headContext
+     */
+    private function headHasVat(?array $headContext): bool
+    {
+        return $headContext !== null && (int) ($headContext['vat_mode'] ?? 0) !== 0;
+    }
+
+    /**
+     * Sazba DPH z kódu podle země registrace hlavičky a DUZP. Bez DUZP
+     * (doklad před uložením) nebo bez známé sazby zůstává ruční zadání —
+     * UI ukáže varování. Sdílené hookem a recalculate('vat_code').
+     *
+     * @param array<string, mixed>|null $headContext
+     */
+    private function deriveVatPct(array &$data, ?array $headContext): void
+    {
+        if (empty($data['vat_code'])
+            || $headContext === null
+            || empty($headContext['country'])
+            || empty($headContext['vat_duzp'])
+            || $this->config === null
+        ) {
+            return;
+        }
+        $resolver = new VatRateResolver($this->config);
+        try {
+            $data['vat_pct'] = $resolver->resolveVatPct(
+                (string) $headContext['country'],
+                (string) $data['vat_code'],
+                (string) $headContext['vat_duzp'],
+            );
+        } catch (\LogicException) {
+            // Unknown rate / no period — leave manual entry; UI shows warning.
         }
     }
 
@@ -351,23 +410,8 @@ class DocRowsForm extends TableForm
             }
         }
 
-        if ($changedColumn === 'vat_code'
-            && !empty($data['vat_code'])
-            && $headContext !== null
-            && !empty($headContext['country'])
-            && !empty($headContext['vat_duzp'])
-            && $this->config !== null
-        ) {
-            $resolver = new VatRateResolver($this->config);
-            try {
-                $data['vat_pct'] = $resolver->resolveVatPct(
-                    (string) $headContext['country'],
-                    (string) $data['vat_code'],
-                    (string) $headContext['vat_duzp'],
-                );
-            } catch (\LogicException) {
-                // Unknown rate / no period — leave manual entry; UI shows warning.
-            }
+        if ($changedColumn === 'vat_code') {
+            $this->deriveVatPct($data, $headContext);
         }
 
         // Kontační řádek (cmnbkp): při změně operace / typu řádku zajisti

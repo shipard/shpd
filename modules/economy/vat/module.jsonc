@@ -90,6 +90,19 @@
             "navOrder": 50
         },
         {
+            // Podání DPH (#55 D20) — za Daňovými tvrzeními: trvalý záznam
+            // „co jsme za období podali".
+            "id": "economy.vat.filings",
+            "name": "VAT filings",
+            "name:cs": "Podání DPH",
+            "name:en": "VAT filings",
+            "icon": "filing",
+            "table": "economy_vat_filings",
+            "class": "Shipard\\Module\\Economy\\Vat\\FilingsViewer",
+            "navSection": "accounting",
+            "navOrder": 55
+        },
+        {
             // Koeficient odpočtu per registrace × rok (#59 D13) — Nastavení.
             "id": "economy.vat.deductionCoefficients",
             "name": "VAT deduction coefficients",
@@ -109,6 +122,10 @@
         {
             "table": "economy_vat_deduction_coefficients",
             "class": "Shipard\\Module\\Economy\\Vat\\DeductionCoefficientsForm"
+        },
+        {
+            "table": "economy_vat_filings",
+            "class": "Shipard\\Module\\Economy\\Vat\\FilingsForm"
         }
     ],
 

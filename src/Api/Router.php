@@ -348,6 +348,14 @@ class Router
 			return new Route('accounting', 'reaccount');
 		}
 
+		// POST /_vat/filing-compose — přepočet snapshotu podání DPH (stav 10)
+		if ($subpath === '/_vat/filing-compose') {
+			if ($method !== 'POST') {
+				return Response::error('METHOD_NOT_ALLOWED', 'Method not allowed', 405);
+			}
+			return new Route('vat', 'filingCompose');
+		}
+
 		// POST /_bank/import-statement — import bankovního výpisu (multipart)
 		if ($subpath === '/_bank/import-statement') {
 			if ($method !== 'POST') {

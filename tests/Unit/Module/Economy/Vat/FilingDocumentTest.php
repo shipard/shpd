@@ -381,6 +381,56 @@ final class FilingDocumentTest extends TestCase
         $this->assertSame('immutable', $result->toArray()[0]['code']);
     }
 
+    // ── Částečná aktualizace (API pošle jen to, co mění) ────────────────
+
+    public function testPartialUpdateOfFiledFilingDoesNotRecomposeName(): void
+    {
+        // Payload bez docState nesmí vypadat jako koncept — jinak by
+        // beforeSave podanému podání přepsal název i previous_filing.
+        $doc      = $this->doc('return', [1 => $this->filedRow()]);
+        $data     = ['id' => 1, 'note' => 'Podáno datovou schránkou.'];
+        $original = $this->filedRow();
+        $doc->beforeSave($data, $original);
+
+        $this->assertArrayNotHasKey('name', $data, 'název podaného podání se neskládá znovu');
+        $this->assertArrayNotHasKey('previous_filing', $data);
+        $this->assertArrayNotHasKey('date_filed', $data);
+    }
+
+    public function testPartialUpdateKeepsFilingKindFromStoredRow(): void
+    {
+        // Bez fallbacku na uložený řádek by validace hlásila „druh podání
+        // je povinný" a název by vznikl s prázdným druhem.
+        $doc  = $this->doc('return', [
+            5 => $this->filedRow(['id' => 5]),
+            1 => $this->filedRow([
+                'docState' => FilingDocument::DOC_STATE_COMPOSED, 'filing_kind' => 'corrective', 'sequence' => 2,
+            ]),
+        ]);
+        $data = ['id' => 1, 'note' => 'Ještě zkontrolovat.'];
+        $this->assertTrue($doc->validate($data)->isValid());
+
+        $original = $this->filedRow([
+            'docState' => FilingDocument::DOC_STATE_COMPOSED, 'filing_kind' => 'corrective', 'sequence' => 2,
+        ]);
+        $doc->beforeSave($data, $original);
+        $this->assertSame('04/2026 — Opravné 2', $data['name']);
+    }
+
+    public function testPartialUpdateOfDraftStillValidatesOrder(): void
+    {
+        // Koncept řádného podání v instanci, kde už je podané — pravidla
+        // pořadí musí platit i pro částečnou aktualizaci.
+        $doc = $this->doc('return', [
+            1 => $this->filedRow(),
+            2 => $this->filedRow(['id' => 2, 'sequence' => 2, 'docState' => FilingDocument::DOC_STATE_COMPOSED]),
+        ]);
+        $data = ['id' => 2, 'note' => 'x'];
+        $result = $doc->validate($data);
+        $this->assertFalse($result->isValid());
+        $this->assertStringContainsString('jen jedno', $result->toArray()[0]['message']);
+    }
+
     // ── Mazání ──────────────────────────────────────────────────────────
 
     public function testFiledFilingCannotBeDeleted(): void

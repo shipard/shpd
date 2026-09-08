@@ -56,6 +56,10 @@ final class VatRecapitulativeStatementLiveBuilder implements ReportBuilder
         }
 
         $messages = [];
+        $lastFiling = $support->lastFilingMessage($request, $cs);
+        if ($lastFiling !== null) {
+            $messages[] = $lastFiling;
+        }
         foreach ($calc['errors'] as $error) {
             $messages[] = new ReportMessage(
                 ReportMessageSeverity::Warning,

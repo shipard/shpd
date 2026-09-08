@@ -345,6 +345,7 @@ function dispatch(
 		'dsAbout' => dispatchDsAbout($route, $auth, $db, $configRuntime, $resolved->config, resolveLanguage($request, $resolved->config), $tables),
 		'accbal'  => dispatchAccbal($route, $request, $db, $configRuntime, $journalEventDispatcher, $resolved->config),
 		'accounting' => dispatchAccounting($route, $request, $db, $configRuntime, $journalEventDispatcher),
+		'vat' => dispatchVat($route, $request, $db, $configRuntime),
 		'bank'    => dispatchBank($route, $request, $auth, $tables, $db, $resolved, $configRuntime, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $documentEventDispatcher, $journalEventDispatcher),
 		'personsRegistry' => dispatchPersonsRegistry($route, $request, $tables, $db, $configRuntime, $resolved, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry(), $serverConfig),
 		'hostingPortal' => dispatchHostingPortal($route, $request, $auth, $db, $tables, $resolved, $modulePathResolver, $configRuntime, $documentRegistry ?? new \Shipard\Core\Document\DocumentRegistry()),
@@ -471,6 +472,19 @@ function dispatchAccounting(
 	return match ($route->action) {
 		'reaccount' => $ctrl->reaccount($request),
 		default     => Response::error('INTERNAL_ERROR', "Unknown accounting action: {$route->action}", 500),
+	};
+}
+
+function dispatchVat(
+	Route $route,
+	Request $request,
+	\Shipard\Core\Database\DataSourceConnection $db,
+	?\Shipard\Core\Config\ConfigRuntime $configRuntime,
+): Response {
+	$ctrl = new \Shipard\Module\Economy\Vat\VatFilingController($db, $configRuntime);
+	return match ($route->action) {
+		'filingCompose' => $ctrl->compose($request),
+		default         => Response::error('INTERNAL_ERROR', "Unknown vat action: {$route->action}", 500),
 	};
 }
 

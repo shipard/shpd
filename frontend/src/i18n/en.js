@@ -316,6 +316,7 @@ export default {
   'error.METHOD_NOT_ALLOWED': 'Method not allowed',
   'error.TOO_MANY_FILES': 'You can upload at most 20 files at once',
   'error.INVALID_DOC_STATE': 'The document state does not allow this action',
+  'error.FILING_COMPOSE_FAILED': 'The filing could not be composed: {message}',
   'error.INTERNAL_ERROR': 'Internal server error',
   'error.UPLOAD_ERROR': 'File upload failed',
   'error.NETWORK_ERROR': 'Network error — check your connection',

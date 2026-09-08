@@ -115,6 +115,10 @@ final class VatControlStatementLiveBuilder implements ReportBuilder
         }
 
         $messages = [];
+        $lastFiling = $support->lastFilingMessage($request, $cs);
+        if ($lastFiling !== null) {
+            $messages[] = $lastFiling;
+        }
         foreach ($calc['errors'] as $error) {
             $index      = $rowIndexByDocRef["{$error['section']}|{$error['docId']}"] ?? null;
             $messages[] = new ReportMessage(

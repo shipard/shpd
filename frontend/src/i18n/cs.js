@@ -328,6 +328,7 @@ export default {
   'error.METHOD_NOT_ALLOWED': 'Metoda není povolená',
   'error.TOO_MANY_FILES': 'Najednou lze nahrát nejvýše 20 souborů',
   'error.INVALID_DOC_STATE': 'Doklad není ve stavu, který tuto akci umožňuje',
+  'error.FILING_COMPOSE_FAILED': 'Podání se nepodařilo sestavit: {message}',
   'error.INTERNAL_ERROR': 'Vnitřní chyba serveru',
   'error.UPLOAD_ERROR': 'Chyba při nahrávání souboru',
   'error.NETWORK_ERROR': 'Chyba sítě — zkontrolujte připojení',

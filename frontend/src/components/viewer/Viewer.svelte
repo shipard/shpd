@@ -8,6 +8,7 @@
     runAlertCheck,
   } from '../../api/alerts.js';
   import { reaccountDocument } from '../../api/accounting.js';
+  import { recomposeFiling } from '../../api/vat.js';
   import { importStatement, reaccountTransaction } from '../../api/bank.js';
   import { inviteUser } from '../../api/security.js';
   import { fileFromMessage } from '../../api/registry.js';
@@ -646,6 +647,15 @@
     // jiný endpoint/payload než doklad. Success vč. „zaúčtováno s chybami".
     if (actionId === 'reaccountTransaction') {
       const result = await reaccountTransaction(recordId);
+      if (result?.success) refreshAfterAction();
+      else alert(translateError(result?.error));
+      return;
+    }
+    // Přepočítat snapshot podání DPH (FilingsViewer, koncept ve stavu 10).
+    // Doménová chyba sestavení (kód DPH bez mapování) přijde jako 422 —
+    // uživatel ji musí vidět, snapshot zůstane nezměněný.
+    if (actionId === 'recomposeFiling') {
+      const result = await recomposeFiling(recordId);
       if (result?.success) refreshAfterAction();
       else alert(translateError(result?.error));
       return;

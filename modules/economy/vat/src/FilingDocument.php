@@ -75,11 +75,17 @@ class FilingDocument extends Document
 
     public function beforeSave(array &$data, ?array $originalData = null): void
     {
-        $isNew    = empty($data['id']);
-        $state    = (int) ($data['docState'] ?? self::DOC_STATE_COMPOSED);
+        $isNew = empty($data['id']);
+        // Uložení může být částečné (API pošle jen to, co mění) — hodnoty,
+        // které v payloadu nejsou, drží uložený řádek. Bez tohoto by
+        // částečná aktualizace podaného podání vypadala jako koncept
+        // a přepsala mu název i základ pro rozdíly.
+        $effective = array_merge($originalData ?? [], $data);
+
+        $state    = (int) ($effective['docState'] ?? self::DOC_STATE_COMPOSED);
         $oldState = $originalData !== null ? (int) ($originalData['docState'] ?? 0) : 0;
 
-        $periodId = (int) ($data['report_period'] ?? 0);
+        $periodId = (int) ($effective['report_period'] ?? 0);
         $period   = $periodId > 0 ? $this->loadReportPeriod($periodId) : null;
         if ($period !== null) {
             $data['report_type'] = (string) $period['report_type'];
@@ -92,11 +98,10 @@ class FilingDocument extends Document
             $data['sequence'] = $this->nextSequence($periodId);
         }
 
-        $kind     = (string) ($data['filing_kind'] ?? '');
-        $sequence = (int) ($data['sequence'] ?? $originalData['sequence'] ?? 1);
+        $kind     = (string) ($effective['filing_kind'] ?? '');
+        $sequence = (int) ($data['sequence'] ?? $effective['sequence'] ?? 1);
 
-        // Základ pro rozdíly drží koncept aktuální; po podání se zmrazí
-        // (na podání ve stavu 40 sem beforeSave nesahá).
+        // Základ pro rozdíly drží koncept aktuální; po podání se zmrazí.
         if ($state === self::DOC_STATE_COMPOSED) {
             $data['previous_filing'] = $kind === self::KIND_REGULAR
                 ? null
@@ -106,12 +111,16 @@ class FilingDocument extends Document
         // Datum podání: default dnes, editovatelné před přechodem.
         if ($state === self::DOC_STATE_FILED
             && $oldState !== self::DOC_STATE_FILED
-            && empty($data['date_filed'])
+            && empty($effective['date_filed'])
         ) {
             $data['date_filed'] = date('Y-m-d');
         }
 
-        if ($period !== null && ($state === self::DOC_STATE_COMPOSED || empty($data['name']))) {
+        // Název se skládá jen u konceptu (nebo když ještě žádný není —
+        // import zakládá podání rovnou v jiném stavu). Podanému podání by
+        // ho jinak přepsal každý save a při jiném jazyce požadavku
+        // i přeložil, ačkoli je to zmrazený údaj.
+        if ($period !== null && ($state === self::DOC_STATE_COMPOSED || empty($effective['name']))) {
             $data['name'] = $this->composeName((string) ($period['name'] ?? ''), $kind, $sequence);
         }
 
@@ -126,6 +135,7 @@ class FilingDocument extends Document
             || (string) ($originalData['filing_kind'] ?? '') !== $kind
             || (int) ($originalData['previous_filing'] ?? 0) !== (int) ($data['previous_filing'] ?? 0)
         );
+
     }
 
     /**
@@ -153,11 +163,18 @@ class FilingDocument extends Document
     {
         $result = new ValidationResult();
 
-        $periodId = (int) ($data['report_period'] ?? 0);
+        $selfId       = !empty($data['id']) ? (int) $data['id'] : null;
+        $current      = $selfId !== null ? $this->loadCurrent($selfId) : null;
+        $currentState = $current !== null ? (int) ($current['docState'] ?? 0) : 0;
+        // Efektivní hodnoty: co payload neposlal, drží uložený řádek
+        // (explicitní null v payloadu je záměrné vymazání, proto merge).
+        $effective = array_merge($current ?? [], $data);
+
+        $periodId = (int) ($effective['report_period'] ?? 0);
         if ($periodId <= 0) {
             $result->addError('report_period', 'Daňové tvrzení je povinné', 'required');
         }
-        $kind = (string) ($data['filing_kind'] ?? '');
+        $kind = (string) ($effective['filing_kind'] ?? '');
         if ($kind === '') {
             $result->addError('filing_kind', 'Druh podání je povinný', 'required');
         }
@@ -186,10 +203,7 @@ class FilingDocument extends Document
             return $result;
         }
 
-        $selfId       = !empty($data['id']) ? (int) $data['id'] : null;
-        $state        = (int) ($data['docState'] ?? self::DOC_STATE_COMPOSED);
-        $current      = $selfId !== null ? $this->loadCurrent($selfId) : null;
-        $currentState = $current !== null ? (int) ($current['docState'] ?? 0) : 0;
+        $state = (int) ($effective['docState'] ?? self::DOC_STATE_COMPOSED);
 
         // Podané (i zrušené) podání je zmrazené — jediná povolená změna je
         // poznámka. Kontrola běží před vším ostatním: u zmrazeného záznamu
@@ -204,7 +218,7 @@ class FilingDocument extends Document
             return $result;
         }
 
-        $this->validateFilingKind($result, $data, $type, $kind);
+        $this->validateFilingKind($result, $effective, $type, $kind);
         if (!$result->isValid()) {
             return $result;
         }

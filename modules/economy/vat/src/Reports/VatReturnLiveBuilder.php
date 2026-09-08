@@ -40,8 +40,12 @@ final class VatReturnLiveBuilder implements ReportBuilder
         $coefficient = $support->deductionCoefficient($request);
         $calc        = (new VatReturnCalculator($mapping))->calculate($docs, $coefficient['value']);
 
-        $rows     = [];
-        $messages = [];
+        $rows       = [];
+        $messages   = [];
+        $lastFiling = $support->lastFilingMessage($request, $cs);
+        if ($lastFiling !== null) {
+            $messages[] = $lastFiling;
+        }
         if ($docs !== []) {
             $all = $calc['rows'];
             foreach ($calc['computed'] as $number => $values) {

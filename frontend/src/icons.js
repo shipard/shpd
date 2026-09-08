@@ -103,6 +103,7 @@ import {
   faCashRegister,
   faChartPie,
   faPaperPlane,
+  faStamp,
   faInbox,
   faAddressBook,
   faWandMagicSparkles,
@@ -178,6 +179,7 @@ export const iconCalendar = faCalendarDays;
 export const iconBook = faBook;
 export const iconListCheck = faListCheck;
 export const iconVat = faPercent;
+export const iconFiling = faStamp; // Podání na úřad (DPH a dál) — má lifecycle, na rozdíl od reportu
 export const iconWallet = faWallet;
 export const iconCashRegister = faCashRegister; // Pokladny
 export const iconBank = faBuildingColumns;
@@ -267,6 +269,7 @@ export const iconMap = {
   'book': iconBook,
   'list-check': iconListCheck,
   'vat': iconVat,
+  'filing': iconFiling,
   'wallet': iconWallet,
   'cash-register': iconCashRegister,
   'bank': iconBank,

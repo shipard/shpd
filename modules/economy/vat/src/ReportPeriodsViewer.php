@@ -11,6 +11,9 @@ use Shipard\Core\Viewer\TableViewer;
 /**
  * Viewer instancí daňových tvrzení (`economy_vat_report_periods`). Filtry:
  * typ tvrzení, registrace (jen při více než jedné), rok začátku období.
+ *
+ * Detail instance nese seznam podání za tvrzení a akci **Sestavit podání**
+ * (#55 D20) — odsud vede cesta od živého výpočtu k trvalému záznamu.
  */
 class ReportPeriodsViewer extends TableViewer
 {
@@ -164,11 +167,105 @@ class ReportPeriodsViewer extends TableViewer
             $items[] = ['label' => 'Přiřazené doklady', 'value' => (string) $count];
         }
 
-        return ['tabs' => [[
+        $content = [['type' => 'properties', 'groups' => [['title' => 'Tvrzení', 'items' => $items]]]];
+
+        $filings = $this->filings($recordId);
+        if ($filings !== []) {
+            $content[] = $this->filingsTable($filings);
+        }
+
+        $detail = ['tabs' => [[
             'id'      => 'overview',
             'label'   => $this->defaultOverviewLabel(),
-            'content' => ['type' => 'properties', 'groups' => [['title' => 'Tvrzení', 'items' => $items]]],
+            'content' => $content,
         ]]];
+
+        // „Sestavit podání" otevře formulář podání s předvyplněnou
+        // instancí; povolené druhy dopočítá formulář z typu tvrzení.
+        if ((int) ($record['docState'] ?? 0) !== 90) {
+            $detail['actions'] = [[
+                'id'      => 'composeFiling',
+                'label'   => 'Sestavit podání',
+                'variant' => 'primary',
+                'kind'    => 'open_form',
+                'target'  => [
+                    'table'  => 'economy_vat_filings',
+                    'preset' => ['report_period' => $recordId],
+                ],
+            ]];
+        }
+        if ($filings !== []) {
+            $detail['actions'][] = [
+                'id'       => 'openFilings',
+                'label'    => 'Podání DPH',
+                'variant'  => 'secondary',
+                'kind'     => 'open_viewer',
+                'viewerId' => 'economy.vat.filings',
+                'recordId' => (int) $filings[0]['id'],
+            ];
+        }
+
+        return $detail;
+    }
+
+    /**
+     * Podání za instanci, nejnovější první (zrušená taky — patří k historii
+     * tvrzení a vysvětlují mezery v pořadí).
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function filings(int $periodId): array
+    {
+        return $this->db->fetchAll(
+            'SELECT `id`, `filing_kind`, `sequence`, `date_issue`, `date_filed`, `docState`'
+            . ' FROM `economy_vat_filings` WHERE `report_period` = %i'
+            . ' ORDER BY `sequence` DESC, `id` DESC',
+            $periodId,
+        );
+    }
+
+    /**
+     * @param list<array<string, mixed>> $filings
+     * @return array<string, mixed>
+     */
+    private function filingsTable(array $filings): array
+    {
+        $kindLabels  = $this->filingKindLabels();
+        $stateConfig = DocStateConfig::fromCfgItem($this->config?->cfgItem('economy.vat.docStatesFilings'));
+
+        $rows = [];
+        foreach ($filings as $filing) {
+            $kind = (string) $filing['filing_kind'];
+            $rows[] = [
+                'sequence' => (string) $filing['sequence'],
+                'kind'     => $kindLabels[$kind] ?? $kind,
+                'issued'   => $this->formatDate($filing['date_issue'] ?? null),
+                'filed'    => $this->formatDate($filing['date_filed'] ?? null),
+                'state'    => (string) ($stateConfig->getState((int) $filing['docState'])['stateName'] ?? ''),
+            ];
+        }
+
+        return ['type' => 'table', 'columns' => [
+            ['id' => 'sequence', 'label' => 'Pořadí'],
+            ['id' => 'kind',     'label' => 'Druh podání'],
+            ['id' => 'issued',   'label' => 'Sestaveno'],
+            ['id' => 'filed',    'label' => 'Podáno'],
+            ['id' => 'state',    'label' => 'Stav'],
+        ], 'rows' => $rows];
+    }
+
+    /** @return array<string, string> */
+    private function filingKindLabels(): array
+    {
+        $cfgData = $this->config?->cfgItem('economy.vat.filingKinds');
+        if (!is_array($cfgData)) {
+            return [];
+        }
+        $labels = [];
+        foreach (EnumOptionsHelper::fromCfgData($cfgData, 'enumString', 'economy.vat.filingKinds') as $option) {
+            $labels[(string) $option['value']] = (string) $option['label'];
+        }
+        return $labels;
     }
 
     public function getFilters(): array

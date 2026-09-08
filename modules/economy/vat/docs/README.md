@@ -30,7 +30,9 @@ shodný s rozhodnutím #8 účtování: `world.vat` zůstává legislativní vrs
 bez výkaznických konvencí (D3), výkaznictví per country žije tady.
 Úplnost vůči číselníku a shodu s `vatReturnRow` hlídá
 `VatReportsMappingCompletenessTest`. Sekce `dp3Rows` nese lokalizované
-popisky řádků přiznání pro živý report.
+popisky řádků přiznání pro živý report. Sekce `reportTypes` nese zákonný
+počátek typu výstupu (`cs.validFrom = 2016-01-01`, #58 — viz §Instance);
+neznámý typ nebo špatné datum je chyba konstruktoru `VatOutputsMapping`.
 
 Po změně configu je potřeba `vendor/bin/shpd-ds ds-upgrade` (rekompilace
 cfgItem); samotné deklarace reportů se čtou z modulu za requestu.
@@ -93,6 +95,30 @@ pro svůj typ neobsahuje); konzistentní ukazatel jinam zůstane — tím
 přežije ruční přesun do instance, kam datum dokladu spadá. Instance se
 při přepočtu nezakládají (find-only), doklad s NULL se dorovná při svém
 příštím uložení.
+
+**Zákonný počátek typu výstupu** (`reportTypes.{type}.validFrom` v mapovacím
+configu, #58): kontrolní hlášení existuje od 1. 1. 2016 (§ 101c ZDPH),
+přiznání a souhrnné hlášení omezení nemají. Je to národní pravidlo
+výkaznictví, proto žije ve `vat-reports-cz.jsonc`, ne v názvosloví typů
+instancí. Čtyři místa, kde se uplatní:
+
+- **přiřazení** (`VatPeriodAssigner`): clamped efektivní datum před
+  `validFrom` ⇒ `cs_period` NULL a lookup se pro ten typ **nevolá** —
+  žádný on-demand koncept, žádný alert. Bez mapování žádné omezení;
+- **generátor** (`ReportPeriodsProvisioner`, `$validFromByType`): `create()`
+  před počátkem vrací null, dolní mez kandidáta = pozdější z platnosti
+  registrace a počátku typu. Cesty bez kompilovaného configu (cron na DS
+  bez `compiled.*.json`) předají prázdné pole — generují jen dnešek/zítřek;
+- **přepočet** (`VatPeriodRecalculator`): ukazatel na instanci typu
+  s počátkem, jehož doklad má efektivní datum před ním, je nekonzistentní
+  → NULL i když instance datum obsahuje. Přepočet běží jen při změně
+  rozsahu nebo stavu instance, guard přiřazených dokladů před ním — na DS
+  bez reimportu se anachronická instance zruší až po úpravě jejího
+  rozsahu (ta doklady odpojí). Reimport (`ds-reset`) problém řeší úplně;
+- **import** (task 30 runner) se nemění — přenáší jen reálné reporty,
+  před 2016 žádné KH neexistují.
+
+Konec platnosti (`validTo`) záměrně neexistuje — bez použití.
 
 ## Koeficient odpočtu (D13, #59)
 

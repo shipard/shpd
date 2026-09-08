@@ -1,6 +1,6 @@
 # Task: `validFrom` per typ výstupu — žádné anachronické koncepty KH před 2016 — #58
 
-**Stav:** PRD
+**Stav:** hotovo
 **Issue:** #58 (návaznost #55 D9 — on-demand koncepty instancí tvrzení)
 **Návaznost:** `economy.vat` (`VatPeriodAssigner`, `ReportPeriodsProvisioner`,
 `VatPeriodRecalculator`, `vat-reports-cz.jsonc`). Bez změny DB schématu, bez
@@ -127,10 +127,13 @@ Před implementací **přečti**:
 
 ## Hotovo když
 
-- [ ] Testy zelené (mapping, assigner, provisioner, recalculator, completeness).
-- [ ] `ds-upgrade` na dev DS `4l3j` projde (rekompilace cfgItem).
-- [ ] Uložení dokladu s DUZP 2015 a kódem `cz-120` na dev DS: `cs_period`
-      NULL, žádný nový koncept, žádný alert `draft_report_periods`.
+- [x] Testy zelené (mapping, assigner, provisioner, recalculator, completeness)
+      — 2026-09-08; recalculator kryje integrační
+      `tests/Integration/Reports/VatReportPeriodsValidFromTest.php`.
+- [x] `ds-upgrade` na dev DS `4l3j` projde (rekompilace cfgItem) — 2026-09-08.
+- [x] Uložení dokladu s DUZP 2015 a kódem `cz-120` na dev DS: `cs_period`
+      NULL, žádný nový koncept, žádný alert `draft_report_periods` — ověřeno
+      integračním testem (on-demand cesta assigner + provisioner) na `4l3j`.
 - [ ] Po reimportu 689089 (`btpg-p`): `SELECT COUNT(*) FROM
       economy_vat_report_periods WHERE report_type='cs' AND date_begin <
       '2016-01-01'` = 0; počty `cs` = importované reporty + koncepty jen pro

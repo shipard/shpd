@@ -97,7 +97,7 @@
       <TextArea id={inputId} bind:value={formData[element.column]} required={element.required ?? false} disabled={elDisabled} {error} />
 
     {:else if element.input_type === 'date'}
-      <DateInput id={inputId} bind:value={formData[element.column]} required={element.required ?? false} disabled={elDisabled} {error} />
+      <DateInput id={inputId} bind:value={formData[element.column]} required={element.required ?? false} disabled={elDisabled} {error} onchange={handleChange} />
 
     {:else if element.input_type === 'datetime'}
       <Input id={inputId} type="datetime-local" bind:value={formData[element.column]} required={element.required ?? false} disabled={elDisabled} {error} />
@@ -106,7 +106,7 @@
       <Input id={inputId} type="time" bind:value={formData[element.column]} required={element.required ?? false} disabled={elDisabled} {error} />
 
     {:else if element.input_type === 'number'}
-      <NumberInput id={inputId} bind:value={formData[element.column]} required={element.required ?? false} disabled={elDisabled} {error} />
+      <NumberInput id={inputId} bind:value={formData[element.column]} required={element.required ?? false} disabled={elDisabled} {error} onchange={handleChange} />
 
     {:else}
       <Input id={inputId} type={element.input_type ?? 'text'} bind:value={formData[element.column]} placeholder={element.placeholder} required={element.required ?? false} disabled={elDisabled} {error} />

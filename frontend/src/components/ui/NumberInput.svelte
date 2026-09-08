@@ -8,6 +8,8 @@
     min?: number;
     max?: number;
     step?: number;
+    /** Nativní `change` — u číselného inputu až po potvrzení (blur, Enter), ne při psaní. */
+    onchange?: () => void;
   }
 
   let {
@@ -19,6 +21,7 @@
     min,
     max,
     step,
+    onchange,
   }: Props = $props();
 </script>
 
@@ -33,6 +36,7 @@
   {min}
   {max}
   {step}
+  {onchange}
 />
 {#if error}
   <span class="shpd-input__error">{error}</span>

@@ -5,6 +5,8 @@
     required?: boolean;
     disabled?: boolean;
     error?: string | null;
+    /** Zavolá se po opuštění pole, když se hodnota liší od té, s jakou uživatel do pole vstoupil. */
+    onchange?: () => void;
   }
 
   let {
@@ -13,7 +15,26 @@
     required = false,
     disabled = false,
     error = null,
+    onchange,
   }: Props = $props();
+
+  // Chrome střílí nativní `change` po každém úhozu, který dá validní datum:
+  // při psaní roku „2026“ je po první číslici hodnota 0002-MM-DD. Trigger
+  // (recalculate, #24 B) proto běží až na blur a jen při skutečné změně —
+  // jinak by server doplnil Účetní datum z rozepsaného roku a další úhozy
+  // by ho už nepřepsaly (recalculate doplňuje jen prázdná pole). Výchozí
+  // hodnota se bere při focusu, aby změna zvenku (recalculate, reload)
+  // neproběhla jako uživatelova.
+  let valueOnFocus = '';
+
+  function handleFocus() {
+    valueOnFocus = value;
+  }
+
+  function handleBlur() {
+    if (value === valueOnFocus) return;
+    onchange?.();
+  }
 </script>
 
 <input
@@ -24,6 +45,8 @@
   bind:value
   {required}
   {disabled}
+  onfocus={handleFocus}
+  onblur={handleBlur}
 />
 {#if error}
   <span class="shpd-input__error">{error}</span>

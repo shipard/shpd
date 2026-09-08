@@ -17,7 +17,7 @@ jednotlivých subsystémů žijí v [`docs/`](../docs/README.md).
 
 ## Stav
 
-Celkem 263 tasků: **naplánováno** 4 · **částečně** 7 · **hotovo** 252.
+Celkem 264 tasků: **naplánováno** 4 · **částečně** 7 · **hotovo** 253.
 
 Zdroj pravdy je řádek `**Stav:**` v hlavičce každého tasku; tato
 tabulka je generovaná (`scripts/tasks-index.py`). Hotové tasky se

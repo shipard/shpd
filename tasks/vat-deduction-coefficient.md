@@ -110,14 +110,14 @@ report i budoucí ř. 53 přes ni.
   `date_begin`; `DeductionCoefficientResolver::provisional()`; předat kalkulátoru.
 - `ReportMessage` (info) vždy, když v dokladech periody existuje nenulový krácený
   nárok: „Krácený nárok 39,57 × koeficient 1,00 (default) → ř. 52 = 39,57"; při
-  `source: default` navíc doporučení „nastavte koeficient roku N v Nastavení DPH".
+  `source: default` navíc doporučení „nastavte koeficient roku N v Nastavení → Účetnictví".
   Bez kráceného nároku žádná zpráva (nešumět).
 - Řádek 52 v `reports.jsonc` / labely: „Krácený odpočet (ř. 40–45 × koeficient)" /
   „Reduced deduction (rows 40–45 × coefficient)".
 
-### 5. UI — Nastavení DPH → Koeficienty odpočtu
+### 5. UI — Nastavení → Účetnictví → Koeficienty odpočtu DPH
 
-- Viewer `DeductionCoefficientsViewer` (`navSection` DPH/nastavení vedle registrací;
+- Viewer `DeductionCoefficientsViewer` (`navSection` účetnictví, vedle registrací k DPH — samostatná sekce DPH neexistuje, zváží se až s růstem;
   `VatAgendaNavGate` respektovat), řádek: registrace · rok · zálohový · vypořádací
   · poznámka; skupiny per registrace.
 - Formulář `DeductionCoefficientsForm`: registrace (lookup, jen 40), rok, zálohový %

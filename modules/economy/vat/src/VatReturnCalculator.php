@@ -7,13 +7,16 @@ namespace Shipard\Module\Economy\Vat;
 /**
  * Živé přiznání k DPH (DPHDP3): sumace base/tax per (řádek, sloupec)
  * z mapování + dopočítané řádky (referenční logika old_shipard
- * VatReturnReport::calcTaxReturn):
+ * VatReturnReport::calcTaxReturn, ř. 52 navíc — starý Shipard krácený
+ * sloupec nikdy nevyplňoval):
  *
  *   46 = Σ 40..45 (odpočty, oba sloupce),
+ *   52 = Σ krácený sloupec 40..45 × zálohový koeficient odpočtu (#59 D13;
+ *        koeficient dodá volající z DeductionCoefficientResolver, default
+ *        1,00 = plný nárok),
  *   62 = Σ 1..13 − 61 (daň na výstupu),
- *   63 = 46 + 52 + 53 + 60 — v M1 jen plná výše ř. 46 (koeficient
- *        kráceného odpočtu, tj. ř. 52/53, je mimo scope; krácený sloupec
- *        se jen vykazuje),
+ *   63 = 46 + 52 + 53 + 60 — ř. 53 (roční vypořádání) a 60 (úprava
+ *        odpočtu) jsou mimo scope a vstupují nulové,
  *   64 / 65 = vlastní daň / nadměrný odpočet z rozdílu 62 − 63.
  *
  * Plná přesnost — zaokrouhlování na celé Kč je věc XML (Fáze 3), řádek 66
@@ -30,14 +33,19 @@ final class VatReturnCalculator
 
     /**
      * @param list<array<string, mixed>> $docs Doklady z VatDocumentSelection.
+     * @param float $coefficient Zálohový koeficient odpočtu roku ⟨0; 1⟩ (ř. 52).
      * @return array{
      *     rows: array<int, array{base: float, taxFull: float, taxReduced: float}>,
      *     computed: array<int, array{base: float, taxFull: float, taxReduced: float}>,
      * } `rows` jen řádky s daty (klíč = číslo řádku, vzestupně);
-     *   `computed` = 46, 62, 63, 64, 65.
+     *   `computed` = 46, 52, 62, 63, 64, 65.
      */
-    public function calculate(array $docs): array
+    public function calculate(array $docs, float $coefficient = 1.0): array
     {
+        if ($coefficient < 0.0 || $coefficient > 1.0) {
+            throw new \InvalidArgumentException("VAT return: deduction coefficient {$coefficient} outside <0; 1>");
+        }
+
         $rows = [];
         foreach ($docs as $doc) {
             foreach ($doc['recap'] ?? [] as $recapRow) {
@@ -61,16 +69,21 @@ final class VatReturnCalculator
         $computed = [];
         $computed[46] = $this->sumRows($rows, self::DEDUCTION_ROWS);
 
+        // 52 = krácený nárok (ř. 40–45, sloupec krácený) × koeficient; výsledek
+        // je nárok v Kč, proto ve sloupci daně (taxFull), základ 0.
+        $computed[52] = self::EMPTY_ROW;
+        $computed[52]['taxFull'] = round($computed[46]['taxReduced'] * $coefficient, 2);
+
         $computed[62] = $this->subtractRows(
             $this->sumRows($rows, self::OUTPUT_TAX_ROWS),
             $rows[61] ?? self::EMPTY_ROW,
         );
 
-        // 63 = 46 + 52 + 53 + 60; ř. 52/53/60 v M1 neexistují (koeficient,
-        // vypořádání, úprava odpočtu) — do nároku vstupuje jen plná výše.
+        // 63 = 46 + 52 + 53 + 60; ř. 53 (vypořádání) a 60 (úprava odpočtu)
+        // zatím neexistují — vstupují nulové (mimo scope D13c).
         $computed[63] = self::EMPTY_ROW;
         $computed[63]['taxFull'] = $computed[46]['taxFull']
-            + ($rows[52]['taxFull'] ?? 0.0)
+            + $computed[52]['taxFull']
             + ($rows[53]['taxFull'] ?? 0.0)
             + ($rows[60]['taxFull'] ?? 0.0);
 

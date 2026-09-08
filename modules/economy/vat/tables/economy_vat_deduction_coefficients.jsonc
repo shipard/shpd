@@ -99,8 +99,10 @@
 
     "indexes": [
         {
+            // Ne unique: stavy dokumentu (smazaný 90) by kolidovaly s novým
+            // záznamem téhož roku — duplicitu živých hlídá validace dokumentu.
             "id": "idx_registration_year",
-            "type": "unique",
+            "type": "index",
             "columns": [
                 {"column": "vat_registration"},
                 {"column": "year"}

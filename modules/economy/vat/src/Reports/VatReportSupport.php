@@ -8,6 +8,7 @@ use Shipard\Core\Reports\ReportMessage;
 use Shipard\Core\Reports\ReportMessageSeverity;
 use Shipard\Core\Reports\ReportRequest;
 use Shipard\Core\Reports\ReportResult;
+use Shipard\Module\Economy\Vat\DeductionCoefficientResolver;
 use Shipard\Module\Economy\Vat\ReportPeriodDocument;
 use Shipard\Module\Economy\Vat\VatDocumentSelection;
 use Shipard\Module\Economy\Vat\VatOutputsMapping;
@@ -50,6 +51,25 @@ final class VatReportSupport
             throw new \RuntimeException("Report '{$request->reportId}': unknown vatReportType '{$range->reportType}'");
         }
         return (new VatDocumentSelection($request->db))->load($range->periodId, $column);
+    }
+
+    /**
+     * Zálohový koeficient odpočtu pro registraci a kalendářní rok začátku
+     * instance (#59 D13) — vypořádací období je vždy kalendářní rok.
+     *
+     * @return array{value: float, source: string, year: int}
+     */
+    public function deductionCoefficient(ReportRequest $request): array
+    {
+        $range = $request->vatRange;
+        if ($range === null) {
+            throw new \RuntimeException(
+                "Report '{$request->reportId}': missing VatPeriodRange (declare periodSource 'vatPeriod')",
+            );
+        }
+        $year = (int) substr($range->dateBegin, 0, 4);
+        $resolved = (new DeductionCoefficientResolver($request->db))->provisional($range->registrationId, $year);
+        return $resolved + ['year' => $year];
     }
 
     /**

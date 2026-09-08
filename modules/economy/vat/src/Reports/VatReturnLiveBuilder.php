@@ -12,14 +12,16 @@ use Shipard\Core\Reports\ReportRequest;
 use Shipard\Core\Reports\ReportResult;
 use Shipard\Core\Reports\ReportRow;
 use Shipard\Core\Reports\ReportRowKind;
+use Shipard\Module\Economy\Vat\DeductionCoefficientResolver;
 use Shipard\Module\Economy\Vat\VatJournalCrossCheck;
 use Shipard\Module\Economy\Vat\VatReturnCalculator;
 
 /**
  * Živé přiznání k DPH (DPHDP3) — počítá se on-demand z potvrzených dokladů
  * (D1, žádná persistence). Řádky formuláře s daty + dopočty 46/62–65
- * (kind computed); hlavička výsledku nese operativní stav DPH (ř. 64/65)
- * a výsledek křížové kontroly proti 343 analytikám deníku jako messages.
+ * (kind computed); hlavička výsledku nese operativní stav DPH (ř. 64/65),
+ * použitý koeficient odpočtu (ř. 52, jen je-li co krátit) a výsledek
+ * křížové kontroly proti 343 analytikám deníku jako messages.
  */
 final class VatReturnLiveBuilder implements ReportBuilder
 {
@@ -34,8 +36,9 @@ final class VatReturnLiveBuilder implements ReportBuilder
             return $support->missingConfigResult($request, $columns, $cs);
         }
 
-        $docs = $support->docs($request);
-        $calc = (new VatReturnCalculator($mapping))->calculate($docs);
+        $docs        = $support->docs($request);
+        $coefficient = $support->deductionCoefficient($request);
+        $calc        = (new VatReturnCalculator($mapping))->calculate($docs, $coefficient['value']);
 
         $rows     = [];
         $messages = [];
@@ -64,6 +67,7 @@ final class VatReturnLiveBuilder implements ReportBuilder
             }
 
             $messages[] = $this->currentPositionMessage($calc['computed'], $cs);
+            array_push($messages, ...$this->coefficientMessages($calc['computed'], $coefficient, $cs));
             array_push($messages, ...$this->crossCheckMessages($request, $support, $docs, $cs));
         }
 
@@ -92,6 +96,49 @@ final class VatReturnLiveBuilder implements ReportBuilder
             $text = $cs ? 'Daňová povinnost je nulová.' : 'The tax position is zero.';
         }
         return new ReportMessage(ReportMessageSeverity::Info, 'vatReturn.currentPosition', $text);
+    }
+
+    /**
+     * Koeficient odpočtu (ř. 52, #59 D13d): zpráva jen když je v dokladech
+     * nenulový krácený nárok — jinak by šuměla u firem bez osvobozených
+     * plnění. Default (bez záznamu pro rok) navíc doporučí koeficient nastavit.
+     *
+     * @param array<int, array{base: float, taxFull: float, taxReduced: float}> $computed
+     * @param array{value: float, source: string, year: int} $coefficient
+     * @return list<ReportMessage>
+     */
+    private function coefficientMessages(array $computed, array $coefficient, bool $cs): array
+    {
+        $reduced = $computed[46]['taxReduced'];
+        if (abs($reduced) < 0.005) {
+            return [];
+        }
+        $isDefault = $coefficient['source'] === DeductionCoefficientResolver::SOURCE_DEFAULT;
+        $sourceLabel = match ($coefficient['source']) {
+            DeductionCoefficientResolver::SOURCE_PROVISIONAL      => $cs ? 'zálohový' : 'provisional',
+            DeductionCoefficientResolver::SOURCE_PREVIOUS_SETTLED => $cs ? 'vypořádací minulého roku' : 'previous year settled',
+            default                                               => $cs ? 'default' : 'default',
+        };
+        $text = sprintf(
+            $cs
+                ? 'Krácený nárok %s × koeficient %s (%s) → ř. 52 = %s.'
+                : 'Reduced deduction %s × coefficient %s (%s) → row 52 = %s.',
+            number_format($reduced, 2, ',', ' '),
+            number_format($coefficient['value'], 2, ',', ' '),
+            $sourceLabel,
+            number_format($computed[52]['taxFull'], 2, ',', ' '),
+        );
+        $messages = [new ReportMessage(ReportMessageSeverity::Info, 'vatReturn.deductionCoefficient', $text)];
+        if ($isDefault) {
+            $messages[] = new ReportMessage(
+                ReportMessageSeverity::Info,
+                'vatReturn.deductionCoefficientDefault',
+                $cs
+                    ? "Pro rok {$coefficient['year']} není zadaný koeficient odpočtu — platí plný nárok (1,00). Nastavte ho v Nastavení → Účetnictví → Koeficienty odpočtu DPH."
+                    : "No deduction coefficient is set for {$coefficient['year']} — full deduction (1.00) applies. Set it under Settings → Accounting → VAT deduction coefficients.",
+            );
+        }
+        return $messages;
     }
 
     /**

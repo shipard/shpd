@@ -9,7 +9,7 @@ use Shipard\Module\Economy\Vat\VatOutputsMapping;
 use Shipard\Module\Economy\Vat\VatReturnCalculator;
 
 /**
- * Dopočty DPHDP3 (46, 62–65) na syntetických datech.
+ * Dopočty DPHDP3 (46, 52, 62–65) na syntetických datech.
  */
 class VatReturnCalculatorTest extends TestCase
 {
@@ -20,6 +20,7 @@ class VatReturnCalculatorTest extends TestCase
             'cz-121' => ['dp3' => ['row' => 2], 'kh' => null, 'sh' => null],
             'cz-110' => ['dp3' => ['row' => 40, 'col' => 'full'], 'kh' => null, 'sh' => null],
             'cz-118' => ['dp3' => ['row' => 40, 'col' => 'reduced'], 'kh' => null, 'sh' => null],
+            'cz-111' => ['dp3' => ['row' => 41, 'col' => 'full'], 'kh' => null, 'sh' => null],
             'cz-115' => ['dp3' => ['row' => 43, 'col' => 'full'], 'kh' => null, 'sh' => null],
             'cz-203' => ['dp3' => ['row' => 10], 'kh' => null, 'sh' => null],
             'cz-201' => ['dp3' => ['row' => 20], 'kh' => null, 'sh' => null],
@@ -116,10 +117,10 @@ class VatReturnCalculatorTest extends TestCase
         $this->assertSame(189.0, $result['computed'][65]['taxFull'], 'nadměrný odpočet');
     }
 
-    public function testReducedDeductionDoesNotEnterRow63(): void
+    public function testReducedDeductionEntersRow63ViaRow52(): void
     {
-        // Krácený odpočet (ř. 40 sloupec krácený) se jen vykazuje — bez
-        // koeficientu (ř. 52, mimo scope M1) nevstupuje do nároku ř. 63.
+        // Krácený odpočet (ř. 40 sloupec krácený) × default koeficient 1,00
+        // → ř. 52 = celý krácený nárok, 63 = 46 (plný) + 52.
         $result = $this->calculator()->calculate([
             $this->doc([
                 ['vat_code' => 'cz-120', 'base_dom' => 1000.0, 'tax_dom' => 210.0],
@@ -128,8 +129,68 @@ class VatReturnCalculatorTest extends TestCase
         ]);
 
         $this->assertSame(105.0, $result['computed'][46]['taxReduced']);
-        $this->assertSame(0.0, $result['computed'][63]['taxFull']);
-        $this->assertSame(210.0, $result['computed'][64]['taxFull']);
+        $this->assertSame(['base' => 0.0, 'taxFull' => 105.0, 'taxReduced' => 0.0], $result['computed'][52]);
+        $this->assertSame(105.0, $result['computed'][63]['taxFull']);
+        $this->assertSame(105.0, $result['computed'][64]['taxFull']);
+        $this->assertSame([46, 52, 62, 63, 64, 65], array_keys($result['computed']));
+    }
+
+    /** @return list<array<string, mixed>> Fixture 04/2026 (#59 D13): ř. 40 plný + krácený, 41, 43, výstup ř. 1. */
+    private function fixtureApril2026(): array
+    {
+        return [
+            $this->doc([
+                ['vat_code' => 'cz-120', 'base_dom' => 1307627.81, 'tax_dom' => 274601.84],
+                ['vat_code' => 'cz-110', 'base_dom' => 434209.81, 'tax_dom' => 91184.06],
+                ['vat_code' => 'cz-118', 'base_dom' => 188.43, 'tax_dom' => 39.57],
+                ['vat_code' => 'cz-111', 'base_dom' => 229782.25, 'tax_dom' => 27573.87],
+                ['vat_code' => 'cz-115', 'base_dom' => 58191.14, 'tax_dom' => 12220.14],
+            ]),
+        ];
+    }
+
+    public function testApril2026WithDefaultCoefficient(): void
+    {
+        $result = $this->calculator()->calculate($this->fixtureApril2026());
+
+        $this->assertSame(39.57, $result['rows'][40]['taxReduced']);
+        $this->assertSame(39.57, $result['computed'][52]['taxFull']);
+        $this->assertSame(130978.07, $result['computed'][46]['taxFull']);
+        $this->assertSame(131017.64, $result['computed'][63]['taxFull']);
+        $this->assertSame(274601.84, $result['computed'][62]['taxFull']);
+        $this->assertSame(143584.20, $result['computed'][64]['taxFull'], 'vlastní daň = podané tvrzení (před zaokrouhlením na Kč)');
+        $this->assertSame(0.0, $result['computed'][65]['taxFull']);
+    }
+
+    public function testApril2026WithCoefficient080(): void
+    {
+        $result = $this->calculator()->calculate($this->fixtureApril2026(), 0.80);
+
+        $this->assertSame(31.66, $result['computed'][52]['taxFull'], '39,57 × 0,80 = 31,656 → 31,66');
+        $this->assertSame(131009.73, $result['computed'][63]['taxFull']);
+        $this->assertSame(143592.11, $result['computed'][64]['taxFull']);
+        // Krácený sloupec ř. 40 zůstává vykázaný v plné výši (formulář ho má).
+        $this->assertSame(39.57, $result['rows'][40]['taxReduced']);
+        $this->assertSame(39.57, $result['computed'][46]['taxReduced']);
+    }
+
+    public function testCoefficientWithoutReducedDeductionIsNoop(): void
+    {
+        $result = $this->calculator()->calculate([
+            $this->doc([
+                ['vat_code' => 'cz-120', 'base_dom' => 1000.0, 'tax_dom' => 210.0],
+                ['vat_code' => 'cz-110', 'base_dom' => 400.0, 'tax_dom' => 84.0],
+            ]),
+        ], 0.5);
+
+        $this->assertSame(0.0, $result['computed'][52]['taxFull']);
+        $this->assertSame($result['computed'][46]['taxFull'], $result['computed'][63]['taxFull']);
+    }
+
+    public function testCoefficientOutsideUnitIntervalThrows(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->calculator()->calculate([], 1.5);
     }
 
     public function testBaseOnlyRowsDoNotAffectTax(): void

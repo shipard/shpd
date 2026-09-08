@@ -32,7 +32,7 @@ tam nikdy nebyl vyplněný, default 1,00 reprodukuje podaná tvrzení.
 
 ## Indexy
 
-- `idx_registration_year` **unique** na `vat_registration, year`
+- `idx_registration_year` na `vat_registration, year` (ne unique — smazaný záznam ve stavu 90 nesmí blokovat nový; duplicitu živých hlídá validace)
 - `idx_doc_state` na `docStateMain ASC, year DESC`
 
 ## Pravidla
@@ -43,7 +43,7 @@ tam nikdy nebyl vyplněný, default 1,00 reprodukuje podaná tvrzení.
   (`coefficient_precision`). Ukládá se jako desetinné číslo, formulář
   zadává rovněž desetinné číslo (0,80 = 80 %).
 - Jedna registrace má za rok nejvýš jeden živý záznam (`docState != 90`) —
-  duplicitu hlásí validace (`duplicate`) ještě před unique indexem.
+  duplicitu hlásí validace dokumentu (`duplicate`).
 - Report čte **jen záznamy ve stavu V pořádku (40)**; koncept se do výpočtu
   nedostane. Řeší `DeductionCoefficientResolver`.
 - Rok bez záznamu je legitimní stav (default 1,00), ne chyba — živé

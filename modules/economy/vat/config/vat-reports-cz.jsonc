@@ -9,8 +9,9 @@
 // Tvary:
 //   dp3: { row: <int>, col?: "full" | "reduced" } | null
 //        `col` jen u odpočtových řádků 40/41/43/44 — sloupce „V plné výši" /
-//        „Krácený odpočet". Krácené kódy se zatím jen vykazují do sloupce,
-//        koeficient/vypořádání je mimo scope M1.
+//        „Krácený odpočet". Krácený sloupec vstupuje do nároku přes ř. 52
+//        (× zálohový koeficient odpočtu, #59 D13); roční vypořádání ř. 53
+//        je mimo scope.
 //   kh:  { group: "A1" | "A2" | "A4A5" | "B1" | "B2B3", kodPredPl?: 4 | 5 } | null
 //        Rozpad A4/A5 a B2/B3 (limit 10 000 Kč vč. daně, CZ DIČ) řeší engine
 //        per doklad; config nese jen skupinu. kodPredPl jen u A1/B1 (PDP).
@@ -97,7 +98,8 @@
     },
 
     // Popisky řádků DPHDP3 pro živý report (zkrácené názvy dle formuláře).
-    // Řádky 52/53/60/61 vstupují jen do dopočtu 63 a v M1 jsou nulové.
+    // Řádek 52 se dopočítává (krácený × koeficient); 53/60/61 vstupují jen
+    // do dopočtu 63/62 a zatím jsou nulové.
     "dp3Rows": {
         "1":  { "label": "Domestic supplies — standard rate", "label:cs": "Dodání zboží a poskytnutí služeb v tuzemsku — základní sazba" },
         "2":  { "label": "Domestic supplies — reduced rate", "label:cs": "Dodání zboží a poskytnutí služeb v tuzemsku — snížená sazba" },
@@ -121,6 +123,7 @@
         "44": { "label": "Deduction from supplies reported on rows 3–13 — reduced rate", "label:cs": "Odpočet ze zdanitelných plnění vykázaných na ř. 3–13 — snížená sazba" },
         "46": { "label": "Total deduction", "label:cs": "Odpočet daně celkem" },
         "50": { "label": "Exempt supplies without deduction entitlement", "label:cs": "Plnění osvobozená od daně bez nároku na odpočet" },
+        "52": { "label": "Reduced deduction (rows 40–45 × coefficient)", "label:cs": "Krácený odpočet (ř. 40–45 × koeficient)" },
         "62": { "label": "Total output tax", "label:cs": "Daň na výstupu celkem" },
         "63": { "label": "Total deduction (46 + 52 + 53 + 60)", "label:cs": "Odpočet daně (46 + 52 + 53 + 60)" },
         "64": { "label": "Tax liability", "label:cs": "Vlastní daň" },

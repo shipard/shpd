@@ -117,6 +117,29 @@ class DocsHeadsFormNewRecordDefaultsTest extends TestCase
         $this->assertSame('2026-01-15', $data['issue_date']);
     }
 
+    /** Účetní datum a DUZP se odvozují z Data vystavení (#24 D6). */
+    public function testAccountingDateAndDuzpFollowIssueDate(): void
+    {
+        $data = $this->schemaData(['issue_date' => '2026-01-15']);
+        $this->form()->applyNewRecordDefaults($data);
+
+        $this->assertSame('2026-01-15', $data['accounting_date']);
+        $this->assertSame('2026-01-15', $data['vat_duzp']);
+    }
+
+    public function testExplicitAccountingDateAndDuzpWin(): void
+    {
+        $data = $this->schemaData([
+            'issue_date'      => '2026-01-15',
+            'accounting_date' => '2026-01-31',
+            'vat_duzp'        => '2026-01-10',
+        ]);
+        $this->form()->applyNewRecordDefaults($data);
+
+        $this->assertSame('2026-01-31', $data['accounting_date']);
+        $this->assertSame('2026-01-10', $data['vat_duzp']);
+    }
+
     // ── Registrace DPH ───────────────────────────────────────────────────────
 
     public function testVatRegistrationDefaultsToFirstOption(): void

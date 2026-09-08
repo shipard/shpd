@@ -298,15 +298,32 @@ class DocsHeadsFormTest extends TestCase
         $this->assertSame('2026-05-07', $result->data['vat_duzp']);
     }
 
-    public function testIssueDateDoesNotOverwriteFilledAccountingDate(): void
+    /** Nový doklad (bez id): Účetní datum a DUZP jdou za Datem vystavení (#24 D7). */
+    public function testIssueDateOnNewDocumentOverwritesDerivedDates(): void
     {
         $form = $this->createForm();
         $result = $form->recalculate('issue_date', [
             'issue_date'      => '2026-05-07',
             'accounting_date' => '2026-04-30',
+            'vat_duzp'        => '2026-04-30',
+        ]);
+
+        $this->assertSame('2026-05-07', $result->data['accounting_date']);
+        $this->assertSame('2026-05-07', $result->data['vat_duzp']);
+    }
+
+    /** Uložený doklad (s id): doplňují se jen prázdná pole. */
+    public function testIssueDateOnSavedDocumentKeepsFilledDates(): void
+    {
+        $form = $this->createForm();
+        $result = $form->recalculate('issue_date', [
+            'id'              => 42,
+            'issue_date'      => '2026-05-07',
+            'accounting_date' => '2026-04-30',
         ]);
 
         $this->assertSame('2026-04-30', $result->data['accounting_date']);
+        $this->assertSame('2026-05-07', $result->data['vat_duzp']);
     }
 
     // ── Triggers on user-driven reload selects ───────────────────────────────

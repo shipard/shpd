@@ -34,14 +34,14 @@ toho, kdo ti kolik dluží. Nebo zkoušíš, co Shipard u vydané faktury umí a
      účet odběratele se na vydané faktuře nezadává — platí on tobě.
    - **Způsob platby** — když zvolíš *Hotovost*, objeví se pod ním ještě
      **Pokladna**.
-   - **Datum vystavení** je předvyplněné dnešním dnem, přepsat ho můžeš.
-     **Účetní datum** vyplň sám — je povinné a z data vystavení se zatím
-     nedoplňuje.
-   - **DUZP** a **Datum splatnosti** nechat prázdné můžeš. Doplní se samy
-     až po **Uložit** — DUZP podle data vystavení, splatnost podle
-     splatnosti sjednané u partnera (bez ní 14 dní od vystavení). Přepsat
-     je jde kdykoli. Datum povinnosti přiznat daň (DPPD) na vydané faktuře
-     nevyplňuješ, Shipard ho bere z DUZP.
+   - **Datum vystavení**, **Účetní datum** a **DUZP** jsou předvyplněné
+     dnešním dnem. Dokud faktura není uložená, jdou Účetní datum a DUZP
+     za Datem vystavení: přepiš ho, opusť pole a obě se přepíšou podle
+     něj. Potřebuješ-li je jiné, nastav je až po Datu vystavení.
+   - **Datum splatnosti** nechat prázdné můžeš. Doplní se po výběru
+     partnera podle splatnosti u něj sjednané (bez ní 14 dní od vystavení),
+     nejpozději po **Uložit**. Přepsat ho jde kdykoli. Datum povinnosti
+     přiznat daň (DPPD) na vydané faktuře nevyplňuješ, Shipard ho bere z DUZP.
    - **Text dokladu** je krátký popis, pod kterým fakturu poznáš v seznamu.
 
    Dvě povinné věci jsou na záložce **Nastavení** — úplně vpravo, za

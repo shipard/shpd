@@ -95,10 +95,18 @@ abstract class DocsHeadsFormBase extends TableForm
         if ($this->vatAgendaDisabled() && (int) ($data['vat_mode'] ?? 1) === 1) {
             $data['vat_mode'] = 0;
         }
-        // 2. Datum vystavení = dnes (#24 A.1). Účetní datum / DUZP se dál
-        //    odvozují až v beforeSave, dokud recalculate na datumu nefunguje (#24 B).
+        // 2. Datum vystavení = dnes (#24 A.1) a z něj Účetní datum + DUZP,
+        //    stejně jako recalculate('issue_date'). Recalculate běží jen při
+        //    změně pole; kdo předvyplněné datum nechá být, by bez tohohle
+        //    narazil na povinné Účetní datum ve validate() (#24 B, D6).
         if (empty($data['issue_date'])) {
             $data['issue_date'] = date('Y-m-d');
+        }
+        if (empty($data['accounting_date'])) {
+            $data['accounting_date'] = $data['issue_date'];
+        }
+        if (empty($data['vat_duzp'])) {
+            $data['vat_duzp'] = $data['issue_date'];
         }
         // 3. Registrace DPH: první podle country, id — totéž pořadí, jaké
         //    uživatel vidí v roletce. Jen u dokladu s DPH; vat_mode = 0 je
@@ -896,10 +904,16 @@ abstract class DocsHeadsFormBase extends TableForm
         }
 
         if ($changedColumn === 'issue_date' && !empty($data['issue_date'])) {
-            if (empty($data['accounting_date'])) {
+            // Nový doklad (bez id, stejně jako $isNew v FormController): Účetní
+            // datum a DUZP jdou za Datem vystavení vždy — applyNewRecordDefaults
+            // je předvyplnil dneškem, takže „jen prázdné“ by už nikdy nic
+            // nezměnilo a zpětně datovaná faktura by chtěla tři ruční přepisy
+            // (#24 B, D7). U uloženého dokladu se doplňují jen prázdná pole.
+            $followIssueDate = empty($data['id']);
+            if ($followIssueDate || empty($data['accounting_date'])) {
                 $data['accounting_date'] = $data['issue_date'];
             }
-            if (empty($data['vat_duzp'])) {
+            if ($followIssueDate || empty($data['vat_duzp'])) {
                 $data['vat_duzp'] = $data['issue_date'];
             }
         }

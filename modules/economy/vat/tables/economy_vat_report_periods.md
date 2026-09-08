@@ -42,11 +42,13 @@ starého Shipardu (reálné rozsahy podaných tvrzení), (d) ručně přes viewe
   (`docState != 90`) — tvrdá validační chyba. Díra mezi sousedními
   instancemi je jen varování (`ValidationResult::addWarning`).
 - **Guardy zrušení** (přechod do 90 i tvrdé smazání): nelze u zamčené
-  instance ani u instance s přiřazenými doklady (`docs_core_heads.vat_period`
-  / `cs_period` / `rs_period`). Uživatel nejdřív doklady přepřiřadí (založí
-  správné instance, doklady se při přepočtu chytí jich). Guard na podání
-  (tabulky podání zatím neexistují) je připravený bod rozšíření
-  v `ReportPeriodDocument::cancellationBlockers()`.
+  instance, u instance s přiřazenými doklady (`docs_core_heads.vat_period`
+  / `cs_period` / `rs_period`) ani u instance, za kterou existuje nezrušené
+  **podání** (#55 D14 — instance je jeho kotva). Doklady uživatel nejdřív
+  přepřiřadí (založí správné instance, doklady se při přepočtu chytí jich).
+- **Zámek rozsahu**: instanci s podaným podáním nelze změnit `date_begin`
+  ani `date_end` — podaný obsah odpovídá rozsahu, ve kterém se sestavil.
+  Opravný postup je nové podání jiného druhu, ne editace rozsahu.
 - Změna `date_begin`/`date_end` spouští přepočet přiřazení dotčených
   dokladů (`ReportPeriodDocument::afterPersist`) — viz README modulu.
 - Přechody stavů běží přes Document (`stateTransitionsRunDocumentHooks`).
@@ -56,4 +58,5 @@ starého Shipardu (reálné rozsahy podaných tvrzení), (d) ručně přes viewe
 - [economy_codebooks_vat_registrations](../../codebooks/tables/economy_codebooks_vat_registrations.md) — rodičovská registrace
 - [ReportPeriodDocument](../src/ReportPeriodDocument.php) — validace, guardy, přepočet
 - [ReportPeriodsProvisioner](../src/ReportPeriodsProvisioner.php) — seed, cron, on-demand
+- [economy_vat_filings](economy_vat_filings.md) — podání za instanci
 - [docs/README.md](../docs/README.md) — model instancí a pravidla přiřazení

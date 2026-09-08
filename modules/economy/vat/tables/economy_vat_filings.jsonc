@@ -1,0 +1,218 @@
+{
+    // Podání DPH — hlavička (issue #55, D14–D18). Persistovaný snapshot
+    // obsahu instance tvrzení v okamžiku sestavení: co jsme za období
+    // podali. Kotví se na instanci (`report_period`), z ní plyne typ,
+    // registrace i rozsah — Fáze 3 nad tímto záznamem jen generuje XML.
+    //
+    // Obsah snapshotu žijí ve čtyřech systémových tabulkách
+    // (economy_vat_filing_items + _return_rows / _cs_rows / _rs_rows),
+    // zapisuje je výhradně FilingComposer.
+    "tableId": 443,
+    "name": "VAT filings",
+    "name:cs": "Podání DPH",
+    "name:en": "VAT filings",
+
+    "displayPattern": "{name}",
+
+    "docStates": {
+        "stateColumn": "docState",
+        "mainColumn": "docStateMain",
+        "cfgItem": "economy.vat.docStatesFilings"
+    },
+
+    // Přechod Sestaveno → Podáno musí projít Document vrstvou: doplní
+    // datum podání a ověří, že snapshot existuje (FilingDocument).
+    "stateTransitionsRunDocumentHooks": true,
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+        {
+            "id": "report_period",
+            "name": "Report period",
+            "name:cs": "Daňové tvrzení",
+            "name:en": "Report period",
+            "type": "int",
+            "nullable": false,
+            "reference": "economy_vat_report_periods"
+        },
+        {
+            // Denormalizace typu z instance — viewer a indexy ho potřebují
+            // bez joinu; shodu s instancí ověřuje FilingDocument.
+            "id": "report_type",
+            "name": "Report type",
+            "name:cs": "Typ tvrzení",
+            "name:en": "Report type",
+            "type": "enumString",
+            "length": 10,
+            "nullable": false,
+            "cfgItem": "economy.vat.reportTypes"
+        },
+        {
+            "id": "filing_kind",
+            "name": "Filing kind",
+            "name:cs": "Druh podání",
+            "name:en": "Filing kind",
+            "type": "enumString",
+            "length": 15,
+            "nullable": false,
+            "cfgItem": "economy.vat.filingKinds"
+        },
+        {
+            // Pořadí v instanci; 1 = první řádné. Přiděluje FilingDocument
+            // jako max + 1 přes všechna podání instance včetně zrušených —
+            // číslo se nikdy neopakuje.
+            "id": "sequence",
+            "name": "Sequence",
+            "name:cs": "Pořadí",
+            "name:en": "Sequence",
+            "type": "smallint",
+            "nullable": false,
+            "default": 1,
+            "system": true
+        },
+        {
+            // "{název instance} — {druh} {pořadí}", skládá FilingDocument.
+            "id": "name",
+            "name": "Name",
+            "name:cs": "Název",
+            "name:en": "Name",
+            "type": "varchar",
+            "length": 80,
+            "nullable": false,
+            "system": true
+        },
+        {
+            "id": "date_issue",
+            "name": "Composed on",
+            "name:cs": "Sestaveno",
+            "name:en": "Composed on",
+            "type": "date",
+            "nullable": false
+        },
+        {
+            // NULL dokud je podání koncept; přechod do stavu Podáno ho
+            // doplní (default dnes, editovatelné před přechodem).
+            "id": "date_filed",
+            "name": "Filed on",
+            "name:cs": "Podáno",
+            "name:en": "Filed on",
+            "type": "date",
+            "nullable": true
+        },
+        {
+            // Datum zjištění důvodů pro podání — KH následné (`d_zjist`),
+            // DP3 dodatečné (§ 141 DŘ). Povinnost říká config země
+            // (`reportTypes.{type}.dateFoundRequiredFor`).
+            "id": "date_found",
+            "name": "Reasons found on",
+            "name:cs": "Datum zjištění důvodů",
+            "name:en": "Reasons found on",
+            "type": "date",
+            "nullable": true
+        },
+        {
+            // Základ pro rozdíly; povinné u dodatečného podání. Reference
+            // sama na sebe (poslední podané podání téže instance).
+            "id": "previous_filing",
+            "name": "Previous filing",
+            "name:cs": "Předchozí podání",
+            "name:en": "Previous filing",
+            "type": "int",
+            "nullable": true,
+            "reference": "economy_vat_filings"
+        },
+        {
+            // Snapshot hlavičky XML (D19) — Fáze 2 sloupec jen deklaruje,
+            // schéma a editaci doplní Fáze 3 po #74.
+            "id": "header",
+            "name": "XML header snapshot",
+            "name:cs": "Hlavička podání",
+            "name:en": "XML header snapshot",
+            "type": "json",
+            "nullable": true,
+            "system": true
+        },
+        {
+            // Souhrn podaných hodnot (DP3 ř. 62–66, počty řádků sekcí KH,
+            // hodnota SH, stav křížové kontroly, `isEmpty`). NULL = snapshot
+            // ještě nebyl sestaven — podat takové podání nelze.
+            "id": "result",
+            "name": "Result summary",
+            "name:cs": "Výsledek",
+            "name:en": "Result summary",
+            "type": "json",
+            "nullable": true,
+            "system": true
+        },
+        {
+            // Měkké chyby kalkulátorů v okamžiku sestavení (chybějící DIČ,
+            // ev. číslo, rozdíly proti deníku) — historický záznam, ne
+            // živý stav.
+            "id": "messages",
+            "name": "Messages",
+            "name:cs": "Zprávy",
+            "name:en": "Messages",
+            "type": "json",
+            "nullable": true,
+            "system": true
+        },
+        {
+            // Jediný sloupec editovatelný i po podání.
+            "id": "note",
+            "name": "Note",
+            "name:cs": "Poznámka",
+            "name:en": "Note",
+            "type": "text",
+            "nullable": true
+        },
+
+        // --- doc state (systémové, bez skupiny) ---
+
+        {
+            "id": "docState",
+            "name": "Document state",
+            "name:cs": "Stav dokumentu",
+            "name:en": "Document state",
+            "type": "tinyint",
+            "default": 10,
+            "system": true
+        },
+        {
+            "id": "docStateMain",
+            "name": "Document state (sort)",
+            "name:cs": "Stav dokumentu (řazení)",
+            "name:en": "Document state (sort)",
+            "type": "tinyint",
+            "default": 1,
+            "system": true
+        }
+    ],
+
+    "indexes": [
+        {
+            // Unique smí být přes (instance, pořadí) i u tabulky s docStates:
+            // pořadí je monotónní počítadlo, ne business klíč — zrušené
+            // podání svoje číslo drží a nové dostane další.
+            "id": "idx_period_sequence",
+            "type": "unique",
+            "columns": [
+                {"column": "report_period"},
+                {"column": "sequence"}
+            ]
+        },
+        {
+            "id": "idx_doc_state",
+            "type": "index",
+            "columns": [
+                {"column": "docStateMain", "order": "ASC"},
+                {"column": "date_issue", "order": "DESC"}
+            ]
+        }
+    ]
+}

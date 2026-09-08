@@ -1,0 +1,133 @@
+{
+    // Podání DPH — výstupní řádky přiznání DPHDP3 (issue #55, D15/2).
+    // To, co šlo (nebo půjde) do XML: přesná hodnota z kalkulátoru
+    // i **podaná** hodnota po zaokrouhlení na celé Kč (D17). Řádek po
+    // řádku zvlášť — dopočty 46/62/63 se počítají ze zaokrouhlených
+    // řádků, ne zaokrouhlením přesného součtu (FilingRounding).
+    //
+    // U dodatečného přiznání (`supplementaryMode: diff`) jsou podané
+    // hodnoty **rozdílem** proti předchozímu podání; ř. 64/65 jsou nulové
+    // a změnu povinnosti nese ř. 66.
+    //
+    // Systémová tabulka — zapisuje výhradně FilingComposer.
+    "tableId": 445,
+    "name": "VAT filing return rows",
+    "name:cs": "Řádky podání DPH — přiznání",
+    "name:en": "VAT filing return rows",
+
+    "hideFromNavigation": true,
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+        {
+            "id": "filing",
+            "name": "Filing",
+            "name:cs": "Podání",
+            "name:en": "Filing",
+            "type": "int",
+            "nullable": false,
+            "reference": "economy_vat_filings"
+        },
+        {
+            "id": "row",
+            "name": "Form row",
+            "name:cs": "Řádek formuláře",
+            "name:en": "Form row",
+            "type": "smallint",
+            "nullable": false
+        },
+        {
+            // 1 = dopočtený řádek (46, 52, 62–66), 0 = sumace z dokladů.
+            "id": "is_computed",
+            "name": "Computed row",
+            "name:cs": "Dopočtený řádek",
+            "name:en": "Computed row",
+            "type": "boolean",
+            "nullable": false,
+            "default": 0
+        },
+
+        // --- přesné hodnoty (výstup kalkulátoru, na haléře) ---
+
+        {
+            "id": "base",
+            "name": "Base (exact)",
+            "name:cs": "Základ (přesně)",
+            "name:en": "Base (exact)",
+            "type": "numeric",
+            "precision": 15,
+            "scale": 2,
+            "default": 0
+        },
+        {
+            "id": "tax_full",
+            "name": "Tax / full deduction (exact)",
+            "name:cs": "Daň / plný odpočet (přesně)",
+            "name:en": "Tax / full deduction (exact)",
+            "type": "numeric",
+            "precision": 15,
+            "scale": 2,
+            "default": 0
+        },
+        {
+            "id": "tax_reduced",
+            "name": "Reduced deduction (exact)",
+            "name:cs": "Krácený odpočet (přesně)",
+            "name:en": "Reduced deduction (exact)",
+            "type": "numeric",
+            "precision": 15,
+            "scale": 2,
+            "default": 0
+        },
+
+        // --- podané hodnoty (celé Kč; u dodatečného rozdíl) ---
+
+        {
+            "id": "base_filed",
+            "name": "Base (filed)",
+            "name:cs": "Základ (podáno)",
+            "name:en": "Base (filed)",
+            "type": "numeric",
+            "precision": 15,
+            "scale": 2,
+            "default": 0
+        },
+        {
+            "id": "tax_full_filed",
+            "name": "Tax / full deduction (filed)",
+            "name:cs": "Daň / plný odpočet (podáno)",
+            "name:en": "Tax / full deduction (filed)",
+            "type": "numeric",
+            "precision": 15,
+            "scale": 2,
+            "default": 0
+        },
+        {
+            "id": "tax_reduced_filed",
+            "name": "Reduced deduction (filed)",
+            "name:cs": "Krácený odpočet (podáno)",
+            "name:en": "Reduced deduction (filed)",
+            "type": "numeric",
+            "precision": 15,
+            "scale": 2,
+            "default": 0
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "idx_filing_row",
+            "type": "unique",
+            "columns": [
+                {"column": "filing"},
+                {"column": "row"}
+            ]
+        }
+    ]
+}

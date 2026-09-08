@@ -14,7 +14,12 @@
 
     "tables": [
         "economy_vat_report_periods",
-        "economy_vat_deduction_coefficients"
+        "economy_vat_deduction_coefficients",
+        "economy_vat_filings",
+        "economy_vat_filing_items",
+        "economy_vat_filing_return_rows",
+        "economy_vat_filing_cs_rows",
+        "economy_vat_filing_rs_rows"
     ],
 
     // Zařazení dokladu do instancí tvrzení (vat_period / cs_period /
@@ -116,6 +121,11 @@
             // Koeficient odpočtu per registrace × rok (#59 D13).
             "table": "economy_vat_deduction_coefficients",
             "class": "Shipard\\Module\\Economy\\Vat\\DeductionCoefficientDocument"
+        },
+        {
+            // Podání DPH (#55 D14–D18): druhy, pořadí, lifecycle, guardy.
+            "table": "economy_vat_filings",
+            "class": "Shipard\\Module\\Economy\\Vat\\FilingDocument"
         }
     ],
 

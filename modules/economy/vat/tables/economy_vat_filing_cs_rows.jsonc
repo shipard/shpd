@@ -1,0 +1,178 @@
+{
+    // Podání DPH — výstupní řádky kontrolního hlášení DPHKH1 (issue #55,
+    // D15/2). Kontrolní hlášení se podává vždy celé (řádné / opravné /
+    // následné), zaokrouhlení je na haléře (`roundingUnit: 0.01`) —
+    // podaná hodnota je totožná s přesnou, proto se sloupce `_filed`
+    // u KH vůbec nezakládají (D17).
+    //
+    // Detailní řádky (A1/A2/A4/B1/B2) nesou ev. číslo, DIČ a DPPD;
+    // agregáty A5/B3 jeden součtový řádek s pásmy ve sloupcích.
+    //
+    // Systémová tabulka — zapisuje výhradně FilingComposer.
+    "tableId": 446,
+    "name": "VAT filing control statement rows",
+    "name:cs": "Řádky podání DPH — kontrolní hlášení",
+    "name:en": "VAT filing control statement rows",
+
+    "hideFromNavigation": true,
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+        {
+            "id": "filing",
+            "name": "Filing",
+            "name:cs": "Podání",
+            "name:en": "Filing",
+            "type": "int",
+            "nullable": false,
+            "reference": "economy_vat_filings"
+        },
+        {
+            // A1 / A2 / A4 / A5 / B1 / B2 / B3
+            "id": "section",
+            "name": "Section",
+            "name:cs": "Sekce",
+            "name:en": "Section",
+            "type": "varchar",
+            "length": 5,
+            "nullable": false
+        },
+        {
+            // "detail" = řádek per doklad, "aggregate" = součtový řádek A5/B3.
+            "id": "row_kind",
+            "name": "Row kind",
+            "name:cs": "Druh řádku",
+            "name:en": "Row kind",
+            "type": "varchar",
+            "length": 10,
+            "nullable": false
+        },
+        {
+            // NULL u agregátů; bez reference (snapshot přežije doklad).
+            "id": "doc_head",
+            "name": "Document head id",
+            "name:cs": "Doklad (id)",
+            "name:en": "Document head id",
+            "type": "int",
+            "nullable": true
+        },
+        {
+            // Evidenční číslo daňového dokladu, jak šlo do hlášení:
+            // A1/A4 naše číslo, A2/B1/B2 číslo dodavatele.
+            "id": "doc_number",
+            "name": "Evidence number",
+            "name:cs": "Ev. číslo",
+            "name:en": "Evidence number",
+            "type": "varchar",
+            "length": 40,
+            "nullable": false,
+            "default": ""
+        },
+        {
+            "id": "partner_vat_id",
+            "name": "Partner VAT id",
+            "name:cs": "DIČ protistrany",
+            "name:en": "Partner VAT id",
+            "type": "varchar",
+            "length": 20,
+            "nullable": false,
+            "default": ""
+        },
+        {
+            "id": "vat_dppd",
+            "name": "Date of tax obligation",
+            "name:cs": "DPPD",
+            "name:en": "Date of tax obligation",
+            "type": "date",
+            "nullable": true
+        },
+        {
+            "id": "kod_pred_pl",
+            "name": "Reverse charge code",
+            "name:cs": "Kód PDP",
+            "name:en": "Reverse charge code",
+            "type": "tinyint",
+            "nullable": true
+        },
+
+        // --- sazbová pásma (1 základní, 2 první snížená, 3 druhá snížená) ---
+
+        {
+            "id": "base1",
+            "name": "Base — standard rate",
+            "name:cs": "Základ — základní sazba",
+            "name:en": "Base — standard rate",
+            "type": "numeric",
+            "precision": 15,
+            "scale": 2,
+            "default": 0
+        },
+        {
+            "id": "tax1",
+            "name": "Tax — standard rate",
+            "name:cs": "Daň — základní sazba",
+            "name:en": "Tax — standard rate",
+            "type": "numeric",
+            "precision": 15,
+            "scale": 2,
+            "default": 0
+        },
+        {
+            "id": "base2",
+            "name": "Base — first reduced rate",
+            "name:cs": "Základ — první snížená sazba",
+            "name:en": "Base — first reduced rate",
+            "type": "numeric",
+            "precision": 15,
+            "scale": 2,
+            "default": 0
+        },
+        {
+            "id": "tax2",
+            "name": "Tax — first reduced rate",
+            "name:cs": "Daň — první snížená sazba",
+            "name:en": "Tax — first reduced rate",
+            "type": "numeric",
+            "precision": 15,
+            "scale": 2,
+            "default": 0
+        },
+        {
+            "id": "base3",
+            "name": "Base — second reduced rate",
+            "name:cs": "Základ — druhá snížená sazba",
+            "name:en": "Base — second reduced rate",
+            "type": "numeric",
+            "precision": 15,
+            "scale": 2,
+            "default": 0
+        },
+        {
+            "id": "tax3",
+            "name": "Tax — second reduced rate",
+            "name:cs": "Daň — druhá snížená sazba",
+            "name:en": "Tax — second reduced rate",
+            "type": "numeric",
+            "precision": 15,
+            "scale": 2,
+            "default": 0
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "idx_filing_section",
+            "type": "index",
+            "columns": [
+                {"column": "filing"},
+                {"column": "section"}
+            ]
+        }
+    ]
+}

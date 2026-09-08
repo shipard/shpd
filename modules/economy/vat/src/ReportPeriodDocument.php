@@ -18,8 +18,12 @@ use Shipard\Core\Document\ValidationResult;
  * plátcovství).
  *
  * Guardy zrušení (přechod do 90 přes stateTransitionsRunDocumentHooks
- * i tvrdé smazání): zamčená instance, přiřazené doklady, podání (bod
- * rozšíření — tabulky podání zatím neexistují).
+ * i tvrdé smazání): zamčená instance, přiřazené doklady, existující
+ * podání (#55 D14).
+ *
+ * Instanci s **podaným** tvrzením navíc nelze změnit rozsah — podaný
+ * obsah odpovídá rozsahu, ve kterém se sestavil. Opravný postup je nové
+ * podání jiného druhu, ne editace rozsahu.
  *
  * DB dotazy jsou v protected metodách, aby šly v testech přepsat bez
  * mockování dibi.
@@ -139,10 +143,28 @@ class ReportPeriodDocument extends Document
             }
         }
 
+        $current = $selfId !== null ? $this->loadCurrent($selfId) : null;
+
+        // Zámek rozsahu podaného tvrzení (D14). Neplatí pro přechod do
+        // Smazáno — ten řeší guardy zrušení níž vlastní zprávou.
+        if ($current !== null && $state !== self::DOC_STATE_DELETED) {
+            $rangeChanged = $this->isoDate($current['date_begin'] ?? '') !== $begin
+                || $this->isoDate($current['date_end'] ?? '') !== $end;
+            if ($rangeChanged && $this->countFiledFilings($selfId ?? 0) > 0) {
+                $result->addError(
+                    'date_begin',
+                    'Za toto tvrzení už je podané podání — rozsah období proto změnit nelze'
+                    . ' (podaný obsah odpovídá rozsahu, ve kterém se sestavil). Opravu podejte'
+                    . ' jako nové podání jiného druhu.',
+                    'range_locked',
+                );
+                return $result;
+            }
+        }
+
         // Guardy zrušení — přechod do Smazáno.
-        if ($selfId !== null && $state === self::DOC_STATE_DELETED) {
-            $current = $this->loadCurrent($selfId);
-            if ($current !== null && (int) ($current['docState'] ?? 0) !== self::DOC_STATE_DELETED) {
+        if ($current !== null && $state === self::DOC_STATE_DELETED) {
+            if ((int) ($current['docState'] ?? 0) !== self::DOC_STATE_DELETED) {
                 foreach ($this->cancellationBlockers($current) as $message) {
                     $result->addError(ValidationError::FIELD_FORM, $message, 'cancellation_blocked');
                 }
@@ -187,8 +209,16 @@ class ReportPeriodDocument extends Document
             }
         }
 
-        // Bod rozšíření: podání (Fáze 2 dle #55). Až tabulky podání vzniknou,
-        // instance, na kterou odkazuje podání, se nesmí zrušit.
+        // Podání (D14): instance je jeho kotva — typ, registrace i rozsah
+        // plynou z ní, takže zrušená instance by z podání udělala sirotka.
+        // Zrušené podání (90) nic neblokuje.
+        if (isset($row['id'])) {
+            $filings = $this->countLiveFilings((int) $row['id']);
+            if ($filings > 0) {
+                $blockers[] = "Za tvrzení existuje {$filings} podání — nejdřív je zrušte"
+                    . ' (podané podání zrušit nelze, to je trvalý záznam).';
+            }
+        }
 
         return $blockers;
     }
@@ -256,6 +286,30 @@ class ReportPeriodDocument extends Document
         }
         $row = $this->db->fetch('SELECT * FROM [economy_vat_report_periods] WHERE [id] = %i', $id);
         return $row !== null ? $row->toArray() : null;
+    }
+
+    /** Podání instance, která nejsou zrušená (koncept i podané). */
+    protected function countLiveFilings(int $periodId): int
+    {
+        if ($this->db === null) {
+            return 0;
+        }
+        return (int) $this->db->fetchSingle(
+            'SELECT COUNT(*) FROM [economy_vat_filings] WHERE [report_period] = %i AND [docState] != %i',
+            $periodId, FilingDocument::DOC_STATE_CANCELLED,
+        );
+    }
+
+    /** Podaná podání instance — zamykají rozsah období. */
+    protected function countFiledFilings(int $periodId): int
+    {
+        if ($this->db === null) {
+            return 0;
+        }
+        return (int) $this->db->fetchSingle(
+            'SELECT COUNT(*) FROM [economy_vat_filings] WHERE [report_period] = %i AND [docState] = %i',
+            $periodId, FilingDocument::DOC_STATE_FILED,
+        );
     }
 
     protected function countAssignedDocuments(string $headColumn, int $periodId): int

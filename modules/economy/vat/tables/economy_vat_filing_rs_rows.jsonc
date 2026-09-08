@@ -1,0 +1,93 @@
+{
+    // Podání DPH — výstupní řádky souhrnného hlášení DPHSHV (issue #55,
+    // D15/2). Agregace per (kód plnění, DIČ odběratele): počet plnění
+    // a hodnota. Podaná hodnota je zaokrouhlená **nahoru** na celé Kč —
+    // věrně dle starého Shipardu (VatRSReport: `ceil`), ne `round`.
+    //
+    // Systémová tabulka — zapisuje výhradně FilingComposer.
+    "tableId": 447,
+    "name": "VAT filing recapitulative statement rows",
+    "name:cs": "Řádky podání DPH — souhrnné hlášení",
+    "name:en": "VAT filing recapitulative statement rows",
+
+    "hideFromNavigation": true,
+
+    "columns": [
+        {
+            "id": "id",
+            "name": "ID",
+            "type": "int",
+            "autoIncrement": true,
+            "primaryKey": true
+        },
+        {
+            "id": "filing",
+            "name": "Filing",
+            "name:cs": "Podání",
+            "name:en": "Filing",
+            "type": "int",
+            "nullable": false,
+            "reference": "economy_vat_filings"
+        },
+        {
+            // Kód plnění: 0 zboží, 3 služby (case „kod" v XML).
+            "id": "kod",
+            "name": "Supply code",
+            "name:cs": "Kód plnění",
+            "name:en": "Supply code",
+            "type": "tinyint",
+            "nullable": false
+        },
+        {
+            "id": "partner_vat_id",
+            "name": "Customer VAT id",
+            "name:cs": "DIČ odběratele",
+            "name:en": "Customer VAT id",
+            "type": "varchar",
+            "length": 20,
+            "nullable": false,
+            "default": ""
+        },
+        {
+            "id": "count",
+            "name": "Number of supplies",
+            "name:cs": "Počet plnění",
+            "name:en": "Number of supplies",
+            "type": "int",
+            "nullable": false,
+            "default": 0
+        },
+        {
+            "id": "value",
+            "name": "Value (exact)",
+            "name:cs": "Hodnota (přesně)",
+            "name:en": "Value (exact)",
+            "type": "numeric",
+            "precision": 15,
+            "scale": 2,
+            "default": 0
+        },
+        {
+            "id": "value_filed",
+            "name": "Value (filed)",
+            "name:cs": "Hodnota (podáno)",
+            "name:en": "Value (filed)",
+            "type": "numeric",
+            "precision": 15,
+            "scale": 2,
+            "default": 0
+        }
+    ],
+
+    "indexes": [
+        {
+            "id": "idx_filing_kod_vatid",
+            "type": "unique",
+            "columns": [
+                {"column": "filing"},
+                {"column": "kod"},
+                {"column": "partner_vat_id"}
+            ]
+        }
+    ]
+}

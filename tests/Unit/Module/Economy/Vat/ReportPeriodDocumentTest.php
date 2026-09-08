@@ -21,6 +21,12 @@ final class TestableReportPeriodDocument extends ReportPeriodDocument
     /** @var array<string, int> "column:id" → počet */
     public array $assigned = [];
 
+    /** @var array<int, int> id instance → počet nezrušených podání */
+    public array $liveFilings = [];
+
+    /** @var array<int, int> id instance → počet podaných podání */
+    public array $filedFilings = [];
+
     protected function findOverlapping(int $regId, string $type, string $begin, string $end, ?int $selfId): array
     {
         $out = [];
@@ -60,6 +66,16 @@ final class TestableReportPeriodDocument extends ReportPeriodDocument
     protected function countAssignedDocuments(string $headColumn, int $periodId): int
     {
         return $this->assigned["{$headColumn}:{$periodId}"] ?? 0;
+    }
+
+    protected function countLiveFilings(int $periodId): int
+    {
+        return $this->liveFilings[$periodId] ?? 0;
+    }
+
+    protected function countFiledFilings(int $periodId): int
+    {
+        return $this->filedFilings[$periodId] ?? 0;
     }
 
     /** @return list<array<string, mixed>> */
@@ -212,6 +228,68 @@ final class ReportPeriodDocumentTest extends TestCase
         $doc = $this->doc([$this->q1()], ['vat_period:1' => 1]);
         $this->expectException(\DomainException::class);
         $doc->beforeDelete($this->q1());
+    }
+
+    // ── Podání (#55 D14) ────────────────────────────────────────────────
+
+    public function testCancellationBlockedWhenFilingExists(): void
+    {
+        $doc = $this->doc([$this->q1()]);
+        $doc->liveFilings = [1 => 2];
+        $data = $this->q1(['docState' => 90]);
+        $result = $doc->validate($data);
+        $this->assertFalse($result->isValid());
+        $error = $result->toArray()[0];
+        $this->assertSame(ValidationError::FIELD_FORM, $error['column']);
+        $this->assertSame('cancellation_blocked', $error['code']);
+        $this->assertStringContainsString('2 podání', $error['message']);
+    }
+
+    public function testCancelledFilingsDoNotBlockCancellation(): void
+    {
+        $doc = $this->doc([$this->q1()]);
+        $doc->liveFilings = [1 => 0];
+        $doc->filedFilings = [1 => 0];
+        $data = $this->q1(['docState' => 90]);
+        $this->assertTrue($doc->validate($data)->isValid());
+    }
+
+    public function testHardDeleteThrowsWhenFilingExists(): void
+    {
+        $doc = $this->doc([$this->q1()]);
+        $doc->liveFilings = [1 => 1];
+        $this->expectException(\DomainException::class);
+        $this->expectExceptionMessage('1 podání');
+        $doc->beforeDelete($this->q1());
+    }
+
+    public function testRangeChangeBlockedWhenFiled(): void
+    {
+        $doc = $this->doc([$this->q1()]);
+        $doc->filedFilings = [1 => 1];
+        $data = $this->q1(['date_end' => '2026-04-30']);
+        $result = $doc->validate($data);
+        $this->assertFalse($result->isValid());
+        $error = $result->toArray()[0];
+        $this->assertSame('date_begin', $error['column']);
+        $this->assertSame('range_locked', $error['code']);
+    }
+
+    public function testSaveWithoutRangeChangeIsAllowedWhenFiled(): void
+    {
+        $doc = $this->doc([$this->q1()]);
+        $doc->filedFilings = [1 => 1];
+        // Jen přejmenování — rozsah se nemění, podání zůstává pravdivé.
+        $data = $this->q1(['name' => '1Q/2026']);
+        $this->assertTrue($doc->validate($data)->isValid());
+    }
+
+    public function testRangeChangeAllowedWithoutFiledFiling(): void
+    {
+        $doc = $this->doc([$this->q1()]);
+        $doc->liveFilings = [1 => 1];   // jen koncept
+        $data = $this->q1(['date_end' => '2026-04-30']);
+        $this->assertTrue($doc->validate($data)->isValid());
     }
 
     public function testCsColumnMapping(): void

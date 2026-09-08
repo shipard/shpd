@@ -25,7 +25,7 @@ běhů nad reálným exportem (3 559 záznamů; cílové DS
   `BookingHistoryClassifier` (sidecar cache), command
   `src/Command/DataSource/BookingHistoryCommand.php`.
 - Empirie z pilotů (pro kontext implementace):
-  - MSI používá vlastní analytiky; jeho `518201/518202` = finanční
+  - Zdroj 689089 používá vlastní analytiky; jeho `518201/518202` = finanční
     leasing, zatímco nabídka je taguje `it.phone`/`it.internet` → 34
     falešných reverzních řádků přesnou shodou.
   - Seed kandidáti `people.catering`/`admin.insurance` s pokrytím

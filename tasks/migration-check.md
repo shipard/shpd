@@ -18,7 +18,7 @@ Smyslem není „import doběhl", ale **„rozdíl proti starému Shipardu je nu
 vysvětlený položkou ve `fix-source`"**.
 
 Dnešní stav, který to nahrazuje: ruční spuštění importu, ruční grep `.err` logu,
-ad hoc SQL na obou stranách (reimport msi 2026-09-07 stál půl dne analýzy).
+ad hoc SQL na obou stranách (reimport 689089 2026-09-07 stál půl dne analýzy).
 
 Před implementací **přečti**:
 
@@ -42,11 +42,11 @@ Před implementací **přečti**:
   starou stranu volá přes `ssh <old-host> "cd /var/lib/shipard/data-sources/<id> && shpd-ds-import …"`.
   Žádný nový síťový kanál, žádné API pro reset.
 - **M2 Páry.** Konfigurace = seznam párů `{oldDsId, oldHost, newDsId, tier: fast|full,
-  vatPeriods: [...], fiscalYears: [...]}`. Výchozí sada: **fast** = Shipard s.r.o.
-  (`73208441284308` → `e8w1-iu9x-82vy-9ye7`); **full** = msi (`68908901448295` →
-  `btpg-peg5-b0tr-chln`) + zdroje alfy (qrce, lefreal `33271805401633`, finmago) —
+  vatPeriods: [...], fiscalYears: [...]}`. Výchozí sada: **fast** = `73208441284308` →
+  `e8w1-iu9x-82vy-9ye7`; **full** = `68908901448295` → `btpg-peg5-b0tr-chln`
+  + zdroje alfy (`qrce-5`, `2xvt-y` ← `33271805401633`, `l6ot-0`) —
   jejich staré ID a cílové DS doplní David. Kritéria výběru dalších zdrojů: pokrytí
-  funkcí (msi: pokladna, prodejky, terminály, zálohy) a ochota uživatele zdroje
+  funkcí (689089: pokladna, prodejky, terminály, zálohy) a ochota uživatele zdroje
   opravovat data (`fix-source` bez majitele zplesniví).
 - **M3 Gate před resetem.** Běh na zdroji se **neprovede**, pokud (a) `source-check`
   na staré straně hlásí nálezy třídy blokátor, nebo (b) `fix-source/<dsid>/README.md`
@@ -179,9 +179,9 @@ staré straně v `export-vat-return`. Konfigurace párů pak nese klíče, ne id
 ## Fázování
 
 1. **Fáze A (tento task):** `ds-stats`, orchestrátor s L1 + L2, gate, summary; fast
-   běh na Shipard s.r.o. zelený nebo s vysvětlenými rozdíly. Stará strana:
+   běh na e8w1-i zelený nebo s vysvětlenými rozdíly. Stará strana:
    `export-doc-stats`, `source-check`, lock, `import-summary`.
-2. **Fáze B:** L3 DPH (`export-vat-return`, `--period-key`), full běh msi.
+2. **Fáze B:** L3 DPH (`export-vat-return`, `--period-key`), full běh 689089.
 3. **Fáze C:** L4 saldo; KH/SH v L3; notifikace.
 
 ## Mimo scope
@@ -197,7 +197,7 @@ staré straně v `export-vat-return`. Konfigurace párů pak nese klíče, ne id
 
 - [ ] `php tools/migration-check/check.php fast` proběhne bez asistence: gate → reset
       → import → exporty → diffy → `reports/latest-fast/summary.md`.
-- [ ] Shipard s.r.o.: L1 zelená nebo jen položky z `known-failures`; L2 pro všechny
+- [ ] e8w1-i: L1 zelená nebo jen položky z `known-failures`; L2 pro všechny
       roky z konfigurace zelená, nebo každý rozdíl přiřazený k položce `fix-source`.
 - [ ] Souběh s ručním importem je vyloučený (lock) a viditelný v summary.
 - [ ] `--dry-run` vypíše plán, žádný příkaz nespustí (snapshot test).

@@ -9,24 +9,24 @@ faktuře** — položkový řádek **s DPH**; „bez DPH“ platí jen pro nové
 (identityRequired by chtěl i VS). Viewer/form řady 70 nenabízely už dříve (bez změny
 kódu). Zbývá: `ds-upgrade` na `btpg`/`e8w1`, stará strana task 32, reimport a kontrola
 `is_error` (poslední bod „Hotovo když“).
-**Issue:** #59 — komentář „Reimport msi / Shipard s.r.o. 2026-09-07"
+**Issue:** #59 — komentář „Reimport 689089 → btpg-p a 732084 → e8w1-i (2026-09-07)"
 **Návaznost:** vyžaduje hotové Task A–D. Stará strana: `old_shipard`
 `modules/imports/newShipard/tasks/32-cash-import-fixes.md` (mapování
 `accounting_account` pokladen a záloh) — nasazuje se **po** této straně.
 
-## Kontext (nálezy z reimportu msi `btpg-peg5-b0tr-chln`)
+## Kontext (nálezy z reimportu 689089 → `btpg-peg5-b0tr-chln`)
 
 Prodejky sedí přesně. Pokladna má tři systémové problémy na nové straně:
 
 1. **Účty 261100 / 261400 v migrovaném rozvrhu neexistují** → 8 152 + 10 954
    chybových řádků deníku (`is_error`, maska místo účtu) + 4 966 na bankovních
-   `transfer.*`. `AccountChartProvisioner` pro `skipProvisioning` DS neběží; msi má
+   `transfer.*`. `AccountChartProvisioner` pro `skipProvisioning` DS neběží; 689089 má
    staré `261001/261002`. Clearing 261200/261300 problém nemá — provisionuje ho
    `ClearingInfrastructureProvisioner` bezpodmínečně.
 2. **Archivovaná pokladna** (stará 9000 → nová 70) — applier ji nenajde
    (`ACTIVE_STATES`), provisioner řady zakládá jen pro stav 40 → 7 dokladů
    `cash_desk_not_found`. Historické doklady na archivované pokladně jsou legitimní.
-3. **Zálohy na `cash`** — 287 dokladů msi (používané dodnes) bez pohybu; nová strana
+3. **Zálohy na `cash`** — 287 dokladů (689089) (používané dodnes) bez pohybu; nová strana
    pohyby `*.advance*` na `cash` nemá. Žádný z dokladů nemá řádek s DPH, jde o
    pokladní zůstatek a saldo záloh.
 
@@ -205,7 +205,7 @@ Po nasazení na dev: `ds-upgrade` na `btpg-peg5-b0tr-chln` a `e8w1-iu9x-82vy-9ye
       kontrolních příkladů; záporná záloha se účtuje konvencí D9 (záporné částky na
       stranách kroku, saldo účtu odpovídá otočenému zápisu).
 - [x] Všechny stávající testy procházejí; dokumentace aktualizována.
-- [ ] Po reimportu msi: `SELECT COUNT(*) FROM economy_accounting_journal WHERE
+- [ ] Po reimportu 689089: `SELECT COUNT(*) FROM economy_accounting_journal WHERE
       is_error=1 AND doc_type IN ('cash','cashreg')` = 0 (po task 32); počet
       `cash` ve stavu 40 = 16 680 − (3 `cashBox=0` + 1 partner + 2 pohyby)
       = 16 674 ± fix-source.

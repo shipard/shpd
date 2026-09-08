@@ -1105,7 +1105,7 @@ Drobnosti zjištěné implementací:
     261); saldokontní skupina 4100 ze starého systému se nezavádí.
     Migrované DS (`skipProvisioning`) dostanou 261400 rozvrhem, ne
     provisionerem — stejně jako 261100. **Obráceno v Task E (č. 19).**
-19. Opravy po reimportu msi (#59 Task E, `tasks/cash-import-fixes.md`):
+19. Opravy po reimportu 689089 (#59 Task E, `tasks/cash-import-fixes.md`):
     **E1** 261/261100/261400 jsou infrastruktura — `TransitAccountsProvisioner`
     bezpodmínečně i pod `skipProvisioning` (migrovaný rozvrh je nemá).
     **E2** archivovaná pokladna (70) dostane řady ve stavu 70; import je

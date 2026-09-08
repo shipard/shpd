@@ -61,6 +61,9 @@ class ReceivedInvoiceForm extends DocsHeadsFormBase
         $hasForeignCurrency = $docCurrency !== '' && $homeCurrency !== ''
             && $docCurrency !== $homeCurrency;
         $partnerId = (int) ($data['partner'] ?? 0);
+        // #62: bankovní účet a IBAN partnera jen při platbě převodem
+        // (hodnoty zůstávají, viz DocsHeadsFormBase::isBankTransferPayment).
+        $isBankTransfer = $this->isBankTransferPayment($data);
 
         return $this->tab('basic', 'Hlavička')
             ->section()
@@ -109,8 +112,9 @@ class ReceivedInvoiceForm extends DocsHeadsFormBase
                 filter: $partnerId !== 0 ? ['person' => $partnerId] : null,
                 placeholder: $partnerId !== 0 ? 'Vyberte bankovní účet…' : 'Nejdřív vyberte partnera',
                 readOnly: $partnerId === 0,
+                hidden: !$isBankTransfer,
             )
-            ->input('partner_bank_iban', label: 'IBAN')
+            ->input('partner_bank_iban', label: 'IBAN', hidden: !$isBankTransfer)
             ->input('payment_reference')
             ->input('specific_symbol')
 

@@ -960,6 +960,18 @@ abstract class DocsHeadsFormBase extends TableForm
         return (int) ($data['payment_method'] ?? 1) === 0;
     }
 
+    /**
+     * Bankovní účet partnera a IBAN mají smysl jen při platbě převodem
+     * (payment_method 1) — u hotovosti, karty, dobírky i zápočtu je formulář
+     * skrývá (#62). Hodnoty se při skrytí NEMAžÍ (na rozdíl od `cash_desk`):
+     * IBAN je informace o dodavateli (často z AI extrakce), ne o úhradě, a
+     * žádné validační pravidlo ho na způsob platby neváže.
+     */
+    protected function isBankTransferPayment(array $data): bool
+    {
+        return (int) ($data['payment_method'] ?? 1) === 1;
+    }
+
     protected function cashDeskHint(array $data, string $docCurrency): ?string
     {
         return $this->isCashPayment($data) && empty($data['cash_desk'])

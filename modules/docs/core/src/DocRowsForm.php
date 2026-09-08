@@ -95,13 +95,16 @@ class DocRowsForm extends TableForm
         $col->input('description')
 
                     ->separator('Množství a cena', hidden: $isText)
-                    ->number('quantity', triggers: 'reload', hidden: $isText)
+                    // Bez triggers: recalculate() pro quantity/unit_price/total_price
+                    // větev nemá a NumberInput trigger už spouští (#24 B) — každé
+                    // opuštění pole by poslalo prázdný roundtrip. Doplní se spolu s větví.
+                    ->number('quantity', hidden: $isText)
                     ->select('unit',
                         options: $this->resolveUnitOptions(),
                         hidden: $isText,
                     )
-                    ->number('unit_price', triggers: 'reload', hidden: $isText)
-                    ->number('total_price', triggers: 'reload', hidden: $isText)
+                    ->number('unit_price', hidden: $isText)
+                    ->number('total_price', hidden: $isText)
                     ->select('price_calc_mode',
                         options: $this->resolveCfgItemOptions('docs.core.priceCalcModes'),
                         hidden: $isText,

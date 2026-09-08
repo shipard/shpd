@@ -1,6 +1,6 @@
 # Task: Podání DPH — snapshot tvrzení, druhy podání, lifecycle (M1 Fáze 2) — #55 D14–D22
 
-**Stav:** PRD
+**Stav:** částečně — implementace kompletní (5 commitů 2026-09-08: config druhů a zaokrouhlení, tabulky + FilingDocument + guardy instance, FilingRounding + FilingComposer + CLI, viewer Podání DPH s rozdíly + formulář + akce + hlavička reportů, dokumentace). E2E na 4l3j prošlo (CLI sestavení, podání, dodatečné s ř. 66, rozdíly po dokladech, guardy instance, immutabilita). Zbývá ruční proklik UI a ověření podaných ř. 64 na btpg-p po reimportu zdroje.
 **Issue:** #55 — komentář „Fáze 2 — Podání: rozhodnutí D14–D22 (2026-09-08)"
 **Návaznost:** staví na `economy.vat` Fáze 1 (živé reporty, kalkulátory,
 `VatDocumentSelection`) a instancích tvrzení (`economy_vat_report_periods`,
@@ -239,13 +239,47 @@ ne editace rozsahu).
 
 ## Hotovo když
 
-- [ ] Testy zelené (rounding, composer, document, guardy).
-- [ ] `ds-upgrade` na dev DS 4l3j projde; viewer Podání DPH a formulář fungují.
+- [x] Testy zelené (rounding, composer, document, guardy) — unit sada
+      5 344 testů, integrační `FilingComposerTest` 7 testů nad 4l3j.
+- [x] `ds-upgrade` na dev DS 4l3j projde (5 tabulek); viewer Podání DPH,
+      formulář, akce Sestavit podání / Přepočítat a přechod Podat ověřeny
+      přes HTTP.
 - [ ] Dev DS `btpg-p` (zdroj 689089): řádné podání DP3 za instance 01–04/2026 dává
       **podané** ř. 64 = 260 864 / 135 796 / 120 203 / 143 583 Kč — přesně hodnoty
       z podaných XML (živý report dává 260 865,94 / 135 796,54 / 120 202,50 / 143 584,20).
-- [ ] Na téže instanci po změně dokladu: dodatečné podání má ř. 64/65 = 0 a ř. 66 =
-      rozdíl daňové povinnosti; detail Rozdíly ukáže dotčený doklad.
-- [ ] Podané podání nelze změnit ani smazat; instanci s podáním nelze zrušit ani
+      **Čeká na reimport zdroje** (ops).
+- [x] Na téže instanci po změně dokladu: dodatečné podání má ř. 64/65 = 0 a ř. 66 =
+      rozdíl daňové povinnosti; detail Rozdíly ukáže dotčený doklad — ověřeno
+      na 4l3j (změna rekapitulace o 100/21 Kč → ř. 66 = −21, Rozdíly ukázaly
+      dotčený doklad).
+- [x] Podané podání nelze změnit ani smazat; instanci s podáním nelze zrušit ani
       změnit rozsah; koncept je v instanci nejvýš jeden.
-- [ ] KH řádné podání za měsíční instanci: počty řádků sekcí a součty = živý report.
+- [x] KH řádné podání za měsíční instanci: počty řádků sekcí a součty = živý report
+      (integrační test rozpadu A4/A5).
+
+## Odchylky od zadání
+
+- **SH zaokrouhluje `ceil`, ne `round`** (§3/4 zadání uvádělo `round()`).
+  Referenční `VatRSReport` i README modulu mluví o zaokrouhlení nahoru
+  a to je i to, co je v podaných XML.
+- **Dodatečné přiznání diffuje proti kumulativnímu podanému stavu**, ne
+  proti hodnotám jednoho `previous_filing` — druhé dodatečné v řadě by
+  jinak vykázalo nesmysl (předchozí podání samo nese jen deltu).
+  `FilingComposer::cumulativeFiledRows` skládá řetěz: řádné a opravné je
+  plná náhrada, dodatečné se přičítá.
+- **Rozdíl dodatečného jde přes sjednocení řádků** obou podání. Starý kód
+  iteroval jen řádky nového výpočtu, takže vypadlý řádek se do rozdílu
+  nedostal — reprodukovat tuhle chybu nemá smysl.
+- **Prázdné podání se nepotvrzuje zvlášť** (§4 „prázdné podání explicitně
+  potvrzené"): přechod do Podáno vyžaduje jen existující snapshot
+  (`result` není NULL), `result.isEmpty` se propíše do vieweru. Bez
+  dalšího dialogu.
+- **Immutabilita příloh podaného podání není vynucená.** `core.attachments`
+  nemá hook „rodičovský záznam je read-only" a zavádět ho kvůli sloupci,
+  který Fáze 2 jen deklaruje (XML a PDF opis plní Fáze 3), by byl zásah do
+  cizího modulu bez užitku. Guard patří k Fázi 3 spolu s obsahem příloh.
+- **`sequence`, `name`, `header`, `result` a `messages` jsou `system`**
+  sloupce — klient je neposílá, plní je Document a composer.
+- `RECEIVED_SECTIONS` v `ControlStatementCalculator` doplněno o **B3**:
+  agregát přijatých plnění do detailních řádků nikdy nedojde, ale
+  snapshot podle něj určuje DIČ protistrany.

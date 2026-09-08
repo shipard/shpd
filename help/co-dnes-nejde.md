@@ -17,17 +17,20 @@ Seznam se mění. Když něco nenajdeš ani tady, ani v dokumentaci, napiš na
 
 ## Výstupy pro daně
 
-**Přiznání k DPH ani kontrolní hlášení se z Shipardu vygenerovat nedají.**
-Evidence pro ně existuje — období DPH, rozpad po sazbách i po kódech DPH —
-ale výstup pro daňový portál se zatím nevytvoří. Je to nejbližší velká věc
-na plánu.
+**XML pro daňový portál Shipard nevytvoří.** Přiznání k DPH, kontrolní
+i souhrnné hlášení umí spočítat i **podat** — tedy uložit trvalý záznam
+toho, co jsi za období odevzdal, včetně opravného, dodatečného
+a následného podání (viz [Podání DPH](uctarna/dph-podani.md)). Soubor pro
+daňový portál z něj ale zatím nevznikne, stejně jako tiskový opis. Je to
+nejbližší velká věc na plánu.
 
 Praktický důsledek: **Shipard zatím nemůže být jediné místo, kde tvoje
-účetnictví existuje.** Přiznání za tebe musí sestavit tvůj dnešní program
-nebo účetní.
+účetnictví existuje.** Soubor pro portál za tebe musí sestavit tvůj dnešní
+program nebo účetní.
 
 **Období DPH se nedá uzamknout.** Nic tě dnes nezastaví, když do už
-odevzdaného období dopíšeš doklad.
+odevzdaného období dopíšeš doklad — uvidíš to pak jako rozdíl v dalším
+podání, ale zabráněno tomu není.
 
 **Roční vypořádání koeficientu odpočtu (řádek 53) a úpravu odpočtu
 (řádek 60) živé přiznání nespočítá.** Krácený odpočet přes zálohový

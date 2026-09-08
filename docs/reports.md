@@ -42,7 +42,12 @@ vytvářely zmatek). Sdílet mohou nanejvýš infrastrukturu úplně dole
 
 `filing` je v tomto dokumentu jen vymezen; „státní" výkaz zisku a ztráty
 či rozvaha dle vyhlášky 500/2002 **nejsou pohledy reportu**, ale budoucí
-samostatná doména s vlastními položkami v navigaci.
+samostatná doména s vlastními položkami v navigaci. První reálný `filing`
+žije v modulu `economy.vat` (podání DPH — snapshot s lifecyclem, druhy
+podání, zaokrouhlení podaných hodnot; issue #55 Fáze 2, viz
+[modules/economy/vat/docs/README.md](../modules/economy/vat/docs/README.md)).
+Ukazuje i hranici obou domén: živý report je pořád přesný a přepočtený,
+podání drží zaokrouhlené hodnoty z okamžiku sestavení.
 
 ---
 

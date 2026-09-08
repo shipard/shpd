@@ -94,6 +94,44 @@ přežije ruční přesun do instance, kam datum dokladu spadá. Instance se
 při přepočtu nezakládají (find-only), doklad s NULL se dorovná při svém
 příštím uložení.
 
+## Koeficient odpočtu (D13, #59)
+
+Krácený nárok na odpočet (kódy s `dp3.col = "reduced"`, v ČR cz-118/119/
+341/342) se v DP3 vykazuje ve sloupci „Krácený odpočet" ř. 40–45 a do nároku
+ř. 63 vstupuje přes **ř. 52 = Σ krácený × zálohový koeficient**.
+
+**Model** — tabulka `economy_vat_deduction_coefficients` (`tables/*.md`):
+koeficient patří na **registraci DPH × kalendářní rok**, ne na fiskální
+období (vypořádací období je podle § 76 ZDPH vždy kalendářní rok) ani na
+DS (registrací může být víc). Konstrukce směrnice 2006/112/ES čl. 173–175
+(odpočitatelný podíl, předběžný podíl z minulého roku, roční vyrovnání) —
+obecná pro EU, národní je jen mapování na řádky (`vat-reports-cz.jsonc`).
+Per rok dvě hodnoty: `coefficient_provisional` (zálohový, § 76 odst. 6)
+a `coefficient_settled` (vypořádací). Spravuje se v Nastavení → Účetnictví
+→ **Koeficienty odpočtu DPH** (`DeductionCoefficientsViewer` / `Form`,
+gate `VatAgendaNavGate`); `DeductionCoefficientDocument` hlídá interval
+⟨0; 1⟩, přesnost na setiny (`coefficient_precision`) a duplicitu živých
+záznamů (DB index není unique — smazaný záznam 90 nesmí blokovat nový).
+
+**Resolver** — `DeductionCoefficientResolver::provisional($regId, $year)`
+je jediná autorita: explicitní zálohový roku → vypořádací roku N−1 →
+`1.0000` (`source: default` = plný nárok, stav firmy bez osvobozených
+plnění). Jen záznamy ve stavu 40. Rok bez záznamu je legitimní stav, ne
+chyba (D13d) — `VatReturnLiveBuilder` to řekne ve zprávách
+(`vatReturn.deductionCoefficient` + `…Default`), ale jen když v dokladech
+instance je nenulový krácený nárok (nešumět). Rok = rok `date_begin`
+instance z `VatPeriodRange`.
+
+**Kalkulátor** — `VatReturnCalculator::calculate($docs, $coefficient)`:
+computed 52 ve sloupci `taxFull` (základ 0), 63 = 46 + 52 + 53 + 60.
+Krácený sloupec ř. 40–45 zůstává vykázaný. Starý Shipard krácený sloupec
+nikdy nevyplňoval, import nic nepřenáší; default 1,00 reprodukuje podaná
+tvrzení (ověřeno na zdroji 689089, 01–04/2026: shoda ř. 64 až na
+zaokrouhlení řádků na Kč).
+
+**Mimo scope:** ř. 53 (roční vypořádání — vstup `coefficient_settled`
+je připravený) a ř. 60 (úprava odpočtu).
+
 ## Architektura
 
 ```
@@ -101,7 +139,10 @@ src/
 ├── VatOutputsMapping.php                  # resolver cfgItem; neznámý kód = výjimka
 ├── VatDocumentSelection.php               # heads (docState 40) WHERE <xx>_period = instance
 │                                          #   + recap + DIČ ze snapshotů
-├── VatReturnCalculator.php                # DP3: sumace per (řádek, sloupec) + dopočty
+├── VatReturnCalculator.php                # DP3: sumace per (řádek, sloupec) + dopočty (vč. ř. 52)
+├── DeductionCoefficientDocument.php       # koeficient odpočtu per registrace × rok: validace
+├── DeductionCoefficientResolver.php       # zálohový koeficient roku (explicitní → loňský vypořádací → 1,00)
+├── DeductionCoefficientsViewer.php / DeductionCoefficientsForm.php
 ├── ControlStatementCalculator.php         # KH (CS): rozpad sekcí, limit 10 000, pásma, měkké chyby
 ├── RecapitulativeStatementCalculator.php  # SH (RS): agregace (kod, DIČ) → počet + hodnota
 ├── VatJournalCrossCheck.php               # recap tax_dom vs 343 analytiky deníku
@@ -135,6 +176,6 @@ konfigurace.
 ## Mimo scope
 
 Podání a snapshoty (Fáze 2), vynucení zámku (Fáze 4), oprava dle § 44
-v A4, investiční zlato (A3), ř. 45/47, koeficient kráceného odpočtu
-(ř. 52/53), OSS a registrace jako samostatný parametr reportů (přijde
-s OSS / více DIČ).
+v A4, investiční zlato (A3), ř. 45/47, roční vypořádání koeficientu
+(ř. 53) a úprava odpočtu (ř. 60), OSS a registrace jako samostatný
+parametr reportů (přijde s OSS / více DIČ).

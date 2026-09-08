@@ -1,7 +1,7 @@
 ---
 title: Živé výstupy DPH
 summary: Jak si přečíst živé přiznání k DPH, kontrolní hlášení a souhrnné hlášení za zvolené období a co znamenají upozornění pod tabulkou.
-keywords: [DPH, přiznání k DPH, kontrolní hlášení, souhrnné hlášení, DPHDP3, DPHKH1, DPHSHV, daňová povinnost, vlastní daň, nadměrný odpočet, období DPH, daňové tvrzení, daňová tvrzení, registrace DPH, kolik zaplatím DPH, sekce A4, sekce B2, kód plnění, souhlasí s deníkem, přesunout doklad do jiného měsíce, koncept tvrzení]
+keywords: [DPH, přiznání k DPH, kontrolní hlášení, souhrnné hlášení, DPHDP3, DPHKH1, DPHSHV, daňová povinnost, vlastní daň, nadměrný odpočet, období DPH, daňové tvrzení, daňová tvrzení, registrace DPH, kolik zaplatím DPH, sekce A4, sekce B2, kód plnění, souhlasí s deníkem, přesunout doklad do jiného měsíce, koncept tvrzení, koeficient, koeficient odpočtu, krácený odpočet, krácený nárok, zálohový koeficient, vypořádací koeficient, řádek 52, osvobozená plnění, koeficient 1,00]
 related: [uctarna/kdyz-se-doklad-nezauctuje.md, faktury-prijate/dokonceni-dokladu.md, co-dnes-nejde.md]
 ---
 
@@ -58,6 +58,32 @@ vidíš na jeho hlavičce v sekci **DPH** (pole **Přiznání k DPH**,
 — třeba do jiného měsíce kontrolního hlášení. Při dalším uložení dokladu
 se ale zařazení znovu spočítá podle dat.
 
+## Krácený odpočet a koeficient
+
+Když firma vedle zdanitelných plnění uskutečňuje i **plnění osvobozená bez
+nároku na odpočet** (třeba pronájem bytů nebo finanční služby), má u části
+přijatých dokladů nárok na odpočet jen **krácený** — na dokladu je to kód
+DPH s kráceným odpočtem. V přiznání se tyhle částky ukazují ve sloupci
+**Krácený odpočet** řádků 40–45 a do celkového nároku vstupují přes řádek
+**Krácený odpočet (ř. 40–45 × koeficient)** vynásobené **koeficientem
+odpočtu**.
+
+Koeficient platí pro **kalendářní rok** a registraci DPH; zadáš ho v
+**Nastavení → Účetnictví → Koeficienty odpočtu DPH** jako desetinné číslo
+0,00–1,00 na celá procenta (0,80 = 80 %):
+
+- **Zálohový koeficient** používáš během roku — obvykle je to vypořádací
+  koeficient minulého roku, v prvním roce odhad dohodnutý se správcem
+  daně.
+- **Vypořádací koeficient** doplníš po skončení roku; Shipard ho pak sám
+  bere jako zálohový pro rok následující, dokud mu nezadáš jiný.
+
+Záznam platí, až když je ve stavu **V pořádku**. Bez záznamu Shipard
+počítá s koeficientem **1,00** — plný nárok, což je správně pro firmu bez
+osvobozených plnění. Pokud v období nějaký krácený odpočet je, přiznání
+pod tabulkou vždy řekne, jaký koeficient použilo a odkud ho vzalo; bez
+záznamu ti navíc doporučí koeficient nastavit.
+
 ## Na co narazíš
 
 - **Tvrzení nejde smazat**, dokud na něj míří nějaký doklad nebo je
@@ -76,6 +102,10 @@ se ale zařazení znovu spočítá podle dat.
 - Do výstupů vstupují **jen doklady ve stavu V pořádku** — koncept ani
   doklad v opravě v číslech nejsou. Tvrzení ve stavu Koncept je ale
   čitelné normálně.
+- **Roční vypořádání koeficientu** (řádek 53 přiznání) Shipard zatím
+  nespočítá — vypořádací koeficient zadáváš ručně a vypořádací řádek do
+  posledního přiznání roku doplní účetní. Viz
+  [Co Shipard dnes neumí](../co-dnes-nejde.md).
 - Výstupy jsou zatím jen ke čtení: **podání, XML pro daňový portál ani
   uzamčení období z nich zatím neuděláš** — viz
   [Co Shipard dnes neumí](../co-dnes-nejde.md).

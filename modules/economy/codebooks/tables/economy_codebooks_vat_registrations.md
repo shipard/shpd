@@ -54,4 +54,5 @@ nesahá.
 ## Související
 
 - [economy_vat_report_periods](../../vat/tables/economy_vat_report_periods.md) — instance daňových tvrzení navázané na registraci
+- [economy_vat_deduction_coefficients](../../vat/tables/economy_vat_deduction_coefficients.md) — koeficient odpočtu per registrace × kalendářní rok (ř. 52 DP3); formulář registrace na něj jen odkazuje, `economy.codebooks` na `economy.vat` nezávisí
 - [VatRegistrationDocument](../src/VatRegistrationDocument.php) — validace

@@ -1,6 +1,16 @@
 # Task: Krácený nárok na odpočet — koeficient (ř. 52 DP3) — #59 D13
 
-**Stav:** návrh — čeká na implementaci
+**Stav:** hotovo — 2026-09-08; odchylky od zadání níže
+
+**Odchylky od zadání (potvrzené 2026-09-08):** registrace ve formuláři jako
+`select` (ne lookup — registrací je pár, vzor `ReportPeriodsForm`); koeficient
+se zadává jako desetinné číslo 0,00–1,00 (ne v procentech s převodem /100);
+odkaz z registrace je textová poznámka (frontend nemá „tlačítko → viewer").
+Index `(vat_registration, year)` **není unique** — soft-delete (stav 90) by
+blokoval nový záznam téhož roku; duplicitu živých hlídá validace dokumentu.
+Kontrola na zdroji 689089 (01–04/2026): ř. 64 = 260 865,94 / 135 796,54 /
+120 202,50 / 143 584,20 vs. podáno 260 864 / 135 796 / 120 203 / 143 583 —
+rozdíl jen zaokrouhlení řádků na Kč.
 **Issue:** #59 — D13 (komentář „Kontrola DP3 proti podaným tvrzením", upravený 2026-09-08)
 **Návaznost:** `economy.vat` M1 (`VatReturnCalculator`, `VatReturnLiveBuilder`,
 `vat-reports-cz.jsonc`), `economy.codebooks` (`economy_codebooks_vat_registrations`).
@@ -153,10 +163,11 @@ report i budoucí ř. 53 přes ni.
 
 ## Hotovo když
 
-- [ ] `report-run economy.vat.returnLive --period=<04/2026 zdroje 689089>` dává ř. 52 =
+- [x] `report-run economy.vat.returnLive --period=<04/2026 zdroje 689089>` dává ř. 52 =
       39,57 a ř. 64 ≈ 143 583 (rozdíl jen zaokrouhlení na Kč) — shoda s podaným
       tvrzením; totéž 01–03/2026 (podáno 260 864 / 135 796 / 120 203).
-- [ ] Bez záznamu koeficientu report hlásí default; se záznamem 0,80 se ř. 52 změní.
-- [ ] Koeficient jde zadat v UI per registrace × rok, mimo ⟨0; 1⟩ nebo s nesprávnou
-      přesností se neuloží.
-- [ ] Stávající testy `economy.vat` procházejí; dokumentace aktualizována.
+- [x] Bez záznamu koeficientu report hlásí default; se záznamem 0,80 se ř. 52 změní
+      (`tests/Integration/Reports/VatDeductionCoefficientTest.php`).
+- [x] Koeficient jde zadat v UI per registrace × rok, mimo ⟨0; 1⟩ nebo s nesprávnou
+      přesností se neuloží (smoke přes `/_ui/form/.../save` na 4l3j).
+- [x] Stávající testy `economy.vat` procházejí; dokumentace aktualizována.

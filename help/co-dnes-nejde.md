@@ -29,6 +29,13 @@ nebo účetní.
 **Období DPH se nedá uzamknout.** Nic tě dnes nezastaví, když do už
 odevzdaného období dopíšeš doklad.
 
+**Roční vypořádání koeficientu odpočtu (řádek 53) a úpravu odpočtu
+(řádek 60) živé přiznání nespočítá.** Krácený odpočet přes zálohový
+koeficient (řádek 52) funguje — koeficient per rok zadáš v Nastavení, viz
+[Živé výstupy DPH](uctarna/dph-zive-vystupy.md). Vypořádací koeficient
+sice můžeš uložit, ale vypořádací řádek posledního přiznání roku zatím
+doplní účetní.
+
 ---
 
 ## Vydané faktury: nic pro odběratele

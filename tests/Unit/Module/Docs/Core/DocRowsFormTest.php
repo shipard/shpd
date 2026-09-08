@@ -98,16 +98,47 @@ class DocRowsFormTest extends TestCase
         $this->assertTrue($vatCode->hidden);
     }
 
-    public function testCalculatedVatColumnsAreReadOnly(): void
+    public function testCalculatedVatColumnsLiveInSummaryNotInForm(): void
     {
-        $form = $this->createForm();
-        $def = $form->buildFormDefinition(['row_kind' => 1, 'doc_head' => null], true);
+        $data = ['row_kind' => 1, 'doc_head' => 5, 'vat_base' => '300', 'vat_amount' => '63', 'vat_total' => '363'];
 
+        $def = $this->formWithHead(1)->buildFormDefinition($data, false);
         foreach (['vat_base', 'vat_amount', 'vat_total'] as $col) {
-            $el = $this->findElement($def, $col);
-            $this->assertNotNull($el);
-            $this->assertTrue($el->readOnly, "{$col} should be read-only");
+            $this->assertNull($this->findElement($def, $col), "{$col} should not be a form field");
         }
+        $this->assertSame([
+            ['label' => 'Základ', 'value' => '300,00'],
+            ['label' => 'DPH', 'value' => '63,00'],
+            ['label' => 'Celkem CZK', 'value' => '363,00'],
+        ], $def->liveSummary);
+
+        // Hlavička bez DPH → jen Celkem.
+        $def = $this->formWithHead(0)->buildFormDefinition($data, false);
+        $this->assertSame([['label' => 'Celkem CZK', 'value' => '363,00']], $def->liveSummary);
+    }
+
+    public function testLiveSummaryEmptyWithoutComputedTotalOrForTextRow(): void
+    {
+        $form = $this->formWithHead(1);
+
+        $this->assertSame([], $form->buildFormDefinition(['row_kind' => 1, 'doc_head' => 5], false)->liveSummary);
+        $this->assertSame([], $form->buildFormDefinition(
+            ['row_kind' => 0, 'doc_head' => 5, 'vat_total' => '100'], false,
+        )->liveSummary);
+    }
+
+    public function testLiveSummaryReflectsRecalculatedValues(): void
+    {
+        $result = $this->formWithHead(1)->recalculate('quantity', [
+            'row_kind' => 1, 'doc_head' => 5, 'price_calc_mode' => 0,
+            'quantity' => '10', 'unit_price' => '150', 'vat_code' => 'cz-110', 'vat_pct' => '21',
+        ]);
+
+        $this->assertSame([
+            ['label' => 'Základ', 'value' => '1 500,00'],
+            ['label' => 'DPH', 'value' => '315,00'],
+            ['label' => 'Celkem CZK', 'value' => '1 815,00'],
+        ], $result->formDefinition->liveSummary);
     }
 
     public function testDefaultPriceCalcModeForNewRow(): void

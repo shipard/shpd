@@ -74,7 +74,7 @@ Server vrací `FormDefinition` z endpointu `/_ui/form/{table}/meta`. Klient ji r
 }
 ```
 
-**Poznámka:** Všechny klíče jsou snake_case — `title_new`, `doc_states`, `read_only`, `close_form`, `foreign_key`, `form_id`, `input_type`, `table_id`, `component_name`.
+**Poznámka:** Všechny klíče jsou snake_case — `title_new`, `doc_states`, `live_summary`, `read_only`, `close_form`, `foreign_key`, `form_id`, `input_type`, `table_id`, `component_name`.
 
 | Pole | Typ | Popis |
 |------|-----|-------|
@@ -83,6 +83,7 @@ Server vrací `FormDefinition` z endpointu `/_ui/form/{table}/meta`. Klient ji r
 | `title_new` | string | Nadpis pro nový záznam |
 | `tabs` | Tab[] | Seznam tabů (min. 1) |
 | `doc_states` | DocStatesInfo \| null | Info o stavech; přítomno i pro nový záznam (výchozí stav 10) |
+| `live_summary` | `{label, value}[]` | Volitelný živý pruh součtů nad obsahem formuláře; **přítomno jen když neprázdné**. Sestavuje se z aktuálních dat při loadu i každém recalculate (kapitola 21) |
 
 ### Tab — tři typy
 
@@ -496,7 +497,11 @@ Elementy s `"triggers": "reload"` spustí recalculate při změně hodnoty.
        "data": { "...aktuální data všech polí..." }
    }
    ```
-3. Server zavolá `TableForm::recalculate()`, vrátí novou FormDefinition + přepočítaná data
+3. Server zavolá `TableForm::recalculate()`, vrátí novou FormDefinition + přepočítaná data.
+   Součástí vrácené FormDefinition je i volitelné `live_summary` (živý pruh
+   součtů, viz *Živý pruh součtů* v kapitole 21) — na rozdíl od `header_info`,
+   které recalculate vrací jako `null`, se sestavuje z aktuálních dat při
+   každém volání
 4. Klient překreslí formulář. Data ze serveru přitom pokládá přes prázdné
    hodnoty (`''`) pro všechna pole nové FormDefinition — stejně jako při
    prvním načtení (`buildDefaultData`). Recalculate totiž může layout
@@ -626,6 +631,7 @@ height: clamp(720px, 88vh, 1100px)
 ### Chování modalu
 
 - **Header** — Modal vlastní header s titulkem (`formDef.title` / `formDef.title_new` / `header_info.title`), `FormStateBadge` (přes `headerExtra` snippet) a tlačítkem `×` vpravo nahoře. FormEditor vlastní header nemá.
+- **Živý pruh součtů** (`formDef.live_summary`, volitelný) — `FormEditor` ho renderuje mezi tab-barem a validačním bannerem (mimo scrollovaný obsah): páry label/hodnota zarovnané vpravo, hodnoty tabulární číslice, během `recalculating` ztlumený. Na rozdíl od hlavičky se překresluje po každém recalculate (`formDef` se nahrazuje celý). Viz *Živý pruh součtů* v kapitole 21.
 - **Body skroluje** — header a `FormStateBar` zůstávají fixní, skroluje pouze tělo formuláře. Pro krátké formuláře (Úkol) zůstává prázdný prostor pod posledním polem — záměrný kompromis pro konzistenci napříč aplikací.
 - **Zavření** — `Esc` nebo klik na overlay (mimo kartu modalu) nebo tlačítko `×`. Všechny tři způsoby volají stejný `onClose` callback.
 - **Body scroll lock** — modal blokuje scrollování stránky pod sebou.
@@ -1479,6 +1485,42 @@ A formy bez `buildHeaderInfo()` override (typicky JSONC sub-formuláře jako Kon
 - **Nový záznam** (`GET /meta`) — `header_info: null`, modal zobrazí jen `title_new`
 - **Recalculate** (`POST /recalculate`) — `header_info: null`, klient ignoruje (hlavička neodráží neuložené změny)
 - **Save** — server nevrací `header_info` přímo v save response. Klient po úspěšném save volá `loadForm()` (přes meta endpoint), čímž se header aktualizuje na novou uloženou hodnotu
+
+### Živý pruh součtů (`live_summary`) — protějšek pro neuložený stav
+
+`header_info` je záměrně **uložený stav** — recalculate ho vrací `null`
+a klient drží hodnotu z loadu. Pro hodnoty, které mají odrážet **právě
+editovaná, neuložená data**, má `FormDefinition` volitelné `live_summary`:
+`list<array{label, value}>` (stejný tvar jako `header_info.summary`),
+konstruktorový parametr `liveSummary` za `headerInfo`. `toArray()` klíč
+emituje **jen když je neprázdný** — výstup ostatních formulářů se nemění.
+
+- **Kdo ho plní:** `buildFormDefinition()` z aktuálních `$data` — běží při
+  loadu (meta) i při každém recalculate, takže pruh je živý bez dalšího
+  kódu. Nic se necachuje.
+- **Kde se renderuje:** `FormEditor.svelte` mezi tab-barem a validačním
+  bannerem (mimo scrollovaný obsah), zarovnaný vpravo jako `summary`
+  hlavičky, hodnoty `tabular-nums`, během `recalculating` ztlumený.
+  `savedHeaderInfo` se nedotýká.
+- **První uživatel:** `DocRowsForm` — Základ · DPH · Celkem <měna> řádku
+  dokladu (#71) z `vat_base` / `vat_amount` / `vat_total`, které
+  `applyLiveCalculation` přepočítává při každém recalculate přes sdílený
+  `DocRowCalculator` (tentýž kód jako save cesta `DocDocument`). Bez DPH
+  na hlavičce jen Celkem; textový řádek, kontační řádek a řádek bez
+  vypočteného celkem → prázdné pole, klient nic nerenderuje. Formát
+  částek přes `SubtableCellFormatter::money()`.
+- **Mimo rozsah zatím:** živé součty hlavičky dokladu — `summary`
+  v `header_info` zůstává uložený stav.
+
+```json
+{
+  "live_summary": [
+    { "label": "Základ",     "value": "1 500,00" },
+    { "label": "DPH",        "value": "315,00" },
+    { "label": "Celkem CZK", "value": "1 815,00" }
+  ]
+}
+```
 
 ### Struktura
 

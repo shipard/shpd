@@ -7,6 +7,7 @@ namespace Shipard\Module\Docs\Core;
 use Shipard\Core\Form\FormDefinition;
 use Shipard\Core\Form\TabBuilder;
 use Shipard\Core\Form\RecalculateResult;
+use Shipard\Core\Form\SubtableCellFormatter;
 use Shipard\Core\Form\TableForm;
 use Shipard\Module\World\Vat\VatRateResolver;
 
@@ -133,13 +134,10 @@ class DocRowsForm extends TableForm
                         hidden: !$showVat,
                         hint: 'Lze přepsat pro doklady z jiného státu',
                         triggers: 'reload',
-                    )
-                    ->number('vat_base', readOnly: true, hidden: !$showVat,
-                        label: 'Základ DPH (vypočteno)')
-                    ->number('vat_amount', readOnly: true, hidden: !$showVat,
-                        label: 'Částka DPH (vypočteno)')
-                    ->number('vat_total', readOnly: true, hidden: !$showVat,
-                        label: 'Celkem (vypočteno)');
+                    );
+        // Vypočtené vat_base / vat_amount / vat_total nejsou pole formuláře —
+        // ukazuje je živý pruh (buildLiveSummary). V $data dál žijí a save
+        // je pošle; autoritativně je zapisuje persistRowComputedColumns.
 
         $this->appendRowIdentityFields($col, $opAttrs);
 
@@ -152,7 +150,41 @@ class DocRowsForm extends TableForm
             title: 'Řádek dokladu',
             titleNew: 'Nový řádek',
             tabs: [$col->build()],
+            liveSummary: $this->buildLiveSummary($data, $headContext),
         );
+    }
+
+    /**
+     * Živý pruh součtů nad obsahem formuláře (`FormDefinition::$liveSummary`,
+     * #71): Základ · DPH · Celkem <měna> z vat_* aktuálních $data. Sestavuje
+     * se při každém buildFormDefinition (load i recalculate), takže na rozdíl
+     * od header_info odráží neuložený stav; hlavička modalu zůstává uložený
+     * stav. Bez DPH na hlavičce jen Celkem. Jen položkový řádek s vypočteným
+     * celkem — jinak prázdné pole a klient nic nerenderuje.
+     *
+     * @param array<string, mixed> $data
+     * @param array<string, mixed>|null $headContext
+     * @return list<array{label: string, value: string}>
+     */
+    private function buildLiveSummary(array $data, ?array $headContext): array
+    {
+        if ((int) ($data['row_kind'] ?? 1) !== 1) {
+            return [];
+        }
+        $total = SubtableCellFormatter::money($data['vat_total'] ?? null);
+        if ($total === null) {
+            return [];
+        }
+        $currency = strtoupper((string) ($headContext['doc_currency'] ?? ''));
+        $totalLabel = $currency !== '' ? 'Celkem ' . $currency : 'Celkem';
+        if (!$this->headHasVat($headContext)) {
+            return [['label' => $totalLabel, 'value' => $total]];
+        }
+        return [
+            ['label' => 'Základ', 'value' => SubtableCellFormatter::money($data['vat_base'] ?? null) ?? '0,00'],
+            ['label' => 'DPH',    'value' => SubtableCellFormatter::money($data['vat_amount'] ?? null) ?? '0,00'],
+            ['label' => $totalLabel, 'value' => $total],
+        ];
     }
 
     /**

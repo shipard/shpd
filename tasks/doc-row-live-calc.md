@@ -1,6 +1,6 @@
 # Task: Řádek dokladu — živý výpočet ceny, základu, DPH a celkem (Issue #71)
 
-**Stav:** částečně — fáze 1 (výpočet, read-only pole, triggery) implementována 2026-09-08 a čeká na E2E ověření; fáze 2 (živý pruh) naplánována
+**Stav:** hotovo — fáze 1 (výpočet) commit `adbda654`, fáze 2 (živý pruh, odebrání polí) implementována 2026-09-08
 
 ## Status / cíl
 

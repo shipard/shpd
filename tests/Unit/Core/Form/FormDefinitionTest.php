@@ -274,4 +274,35 @@ class FormDefinitionTest extends TestCase
         );
         $this->assertSame('user', $tab->toArray()['icon']);
     }
+
+    public function testLiveSummaryOmittedWhenEmpty(): void
+    {
+        $def = new FormDefinition(
+            table: 'test',
+            title: 'Test',
+            titleNew: 'New',
+            tabs: [$this->singleFieldTab()],
+        );
+
+        $this->assertSame([], $def->liveSummary);
+        $this->assertArrayNotHasKey('live_summary', $def->toArray());
+    }
+
+    public function testLiveSummaryIncludedWhenSet(): void
+    {
+        $items = [
+            ['label' => 'Základ', 'value' => '1 000,00'],
+            ['label' => 'DPH', 'value' => '210,00'],
+            ['label' => 'Celkem CZK', 'value' => '1 210,00'],
+        ];
+        $def = new FormDefinition(
+            table: 'test',
+            title: 'Test',
+            titleNew: 'New',
+            tabs: [$this->singleFieldTab()],
+            liveSummary: $items,
+        );
+
+        $this->assertSame($items, $def->toArray()['live_summary']);
+    }
 }

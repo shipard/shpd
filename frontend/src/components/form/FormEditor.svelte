@@ -560,6 +560,23 @@
     </div>
   {/if}
 
+  <!-- Živý pruh součtů (formDef.live_summary) — na rozdíl od header_info se
+       na serveru sestavuje z aktuálních dat při každém load i recalculate,
+       takže odráží neuložený stav. formDef se po recalculate nahrazuje celý,
+       pruh se překreslí sám; savedHeaderInfo se nedotýká. -->
+  {#if formDef?.live_summary?.length}
+    <div
+      class="shpd-form-editor__live-summary"
+      class:shpd-form-editor__live-summary--busy={recalculating}
+      data-testid="form-live-summary"
+    >
+      {#each formDef.live_summary as item (item.label)}
+        <span class="shpd-form-editor__live-summary-label">{item.label}</span>
+        <span class="shpd-form-editor__live-summary-value">{item.value}</span>
+      {/each}
+    </div>
+  {/if}
+
   <!-- Validační banner — form-level i field-level chyby z VALIDATION_ERROR.
        Žije nad tab-content (mimo scrollovaný obsah) — je globální o formuláři,
        ne o aktuálním tabu. Form-level chyby holé, field-level s labelem pole. -->
@@ -684,6 +701,35 @@
     background: var(--shpd-color-danger);
     margin-left: 4px;
     vertical-align: middle;
+  }
+
+  /* Živý pruh součtů (Základ · DPH · Celkem): jednořádkový, zarovnaný
+     vpravo jako summary v hlavičce modalu, labely tlumené, hodnoty
+     tabulární číslice; během recalculate ztlumený. */
+  .shpd-form-editor__live-summary {
+    display: flex;
+    justify-content: flex-end;
+    align-items: baseline;
+    gap: var(--shpd-space-sm);
+    padding: var(--shpd-space-sm) var(--shpd-space-md);
+    border-bottom: 1px solid var(--shpd-color-border);
+    flex-shrink: 0;
+    font-size: var(--shpd-font-size-sm);
+    white-space: nowrap;
+    overflow-x: auto;
+    transition: opacity 0.12s;
+  }
+  .shpd-form-editor__live-summary--busy { opacity: 0.5; }
+  .shpd-form-editor__live-summary-label {
+    color: var(--shpd-color-text-secondary);
+  }
+  .shpd-form-editor__live-summary-value {
+    font-weight: 600;
+    color: var(--shpd-color-text);
+    font-variant-numeric: tabular-nums;
+  }
+  .shpd-form-editor__live-summary-value:not(:last-child) {
+    margin-right: var(--shpd-space-md);
   }
 
   /* Content */

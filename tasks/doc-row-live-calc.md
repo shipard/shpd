@@ -1,6 +1,6 @@
 # Task: Řádek dokladu — živý výpočet ceny, základu, DPH a celkem (Issue #71)
 
-**Stav:** naplánováno
+**Stav:** částečně — fáze 1 (výpočet, read-only pole, triggery) implementována 2026-09-08 a čeká na E2E ověření; fáze 2 (živý pruh) naplánována
 
 ## Status / cíl
 
@@ -52,6 +52,14 @@ a #24 B (hotovo, `cd04f84e` — `NumberInput` propaguje `onchange`, takže
 6. **Jeden task file, dvě fáze** — fáze 1 (výpočet, read-only pole,
    triggery) je použitelná sama; fáze 2 (pruh, odebrání polí) navazuje.
    Po fázi 1 commit.
+7. **Textový řádek v položkovém layoutu** dostane při živém přepočtu
+   `total_price` i `vat_*` = null — shodně se save cestou pro `row_kind 0`
+   — aby se ve skrytých polích neuložily zbytky z doby, kdy byl položkový.
+   (Anna, 2026-09-08.)
+8. **Nový položkový řádek má Množství = 1**, když prefill žádné nedal
+   (`applyNewRecordDefaults`). Doplněno při implementaci fáze 1: bod 3
+   v „Hotovo když" (Cena celkem = 1 × cena hned po výběru položky) bez
+   toho nejde splnit, `quantity` nemá v DB default. **Potvrdit při E2E.**
 
 ## Před implementací přečti
 
@@ -225,19 +233,18 @@ a #24 B (hotovo, `cd04f84e` — `NumberInput` propaguje `onchange`, takže
 - Nová privátní `buildLiveSummary(array $data, ?array $headContext): array`
   (jen položkový layout, `row_kind === 1`): položky
   `Základ` / `DPH` / `Celkem <měna>` z `vat_base`/`vat_amount`/`vat_total`,
-  formát `number_format(…, 2, ',', ' ')` — buď vytáhnout `formatMoney`
-  z `DocsHeadsFormBase` do sdíleného helperu, nebo malou lokální kopii
-  (jedna řádka); nezavádět novou závislost formuláře řádku na formuláři
-  hlavičky. Bez DPH na hlavičce (`vat_mode 0`) jen `Celkem`. Prázdné pole
+  formát přes existující `SubtableCellFormatter::money()`
+  (`src/Core/Form/`, stejný formát jako `formatMoney` hlavičky, nula →
+  „0,00") — žádný nový helper, žádná kopie, žádná závislost formuláře
+  řádku na formuláři hlavičky. Bez DPH na hlavičce (`vat_mode 0`) jen `Celkem`. Prázdné pole
   → prázdný pruh (`[]`, klient nic nerenderuje).
 - Předat do `new FormDefinition(…, liveSummary: …)`.
 - **Odebrat** `->number('vat_base'/'vat_amount'/'vat_total', readOnly…)`
   z položkového layoutu. Hodnoty dál žijí v `$data` (recalculate je
-  vrací, `formData` je nese, save je pošle) — ověřit, že
-  `sanitizeFormData` ve `FormEditor` neořezává klíče mimo definici; pokud
-  ano, `vat_*` se prostě neuloží z formuláře, což je v pořádku —
-  autoritativně je zapisuje `persistRowComputedColumns` po
-  `recomputeHeader`.
+  vrací, `formData` je nese, save je pošle). Ověřeno: `sanitizeFormData`
+  ve `FormEditor` klíče mimo definici **neořezává** (neznámý klíč
+  propouští beze změny), `vat_*` tedy doputují na server; autoritativně
+  je stejně zapisuje `persistRowComputedColumns` po `recomputeHeader`.
 - `DocRowsFormTest::testCalculatedVatColumnsAreReadOnly` → přepsat na
   „`vat_*` nejsou ve formuláři, `live_summary` má 3 položky při
   `vat_mode 1` / 1 položku při `vat_mode 0`".
@@ -311,10 +318,11 @@ a #24 B (hotovo, `cd04f84e` — `NumberInput` propaguje `onchange`, takže
 - **Data z klienta jsou stringy** (`"21"`, `"1500.5"`, `""`). Casty
   `(float)`/`(int)` jako v dnešním kódu; `empty("0")` je `true` — chování
   `empty($row['vat_pct'])` (0 % → bez daně) záměrně zachovat.
-- **`readOnly` pole a save.** Read-only `NumberInput` je `disabled`; ověřit,
-  že `sanitizeFormData` posílá i disabled pole (pravděpodobně ano — čte
-  `formData`, ne DOM). Kdyby ne, mode 0 by neuložil `total_price` —
-  test E2E bod 4.
+- **`readOnly` pole a save.** Read-only `NumberInput` je `disabled`.
+  Ověřeno v kódu: `sanitizeFormData` čte `formData`, ne DOM, takže
+  disabled pole se posílá; server žádnou bariéru na `read_only` nemá
+  (jen doc-state guard rodiče). Mode 0 tedy `total_price` uloží —
+  potvrdit E2E bod 4.
 - **Přepnutí `price_calc_mode` z 0 na 1** — do té chvíle read-only
   `total_price` má hodnotu `qty × unit`; po přepnutí je editovatelná
   a `unit_price` se dopočte z ní. Přepnutí 1 → 0: `unit_price`
@@ -328,8 +336,9 @@ a #24 B (hotovo, `cd04f84e` — `NumberInput` propaguje `onchange`, takže
 - **`patch_file` a diakritika** — PHP komentáře, testy, `docs/edit-forms.md`,
   `help/` a tento soubor obsahují češtinu; editovat přes Python
   `io.open(..., encoding='utf-8')` s `assert s.count(old) == 1`.
-- **Frontend má vlastní git root** (`frontend/`) — změny ve
-  `FormEditor.svelte` commitovat z `frontend/`, PHP z rootu.
+- **Frontend sdílí git root s PHP** (`git -C frontend rev-parse
+  --show-toplevel` → root repa) — každá fáze jde jedním commitem
+  s PHP i Svelte dohromady.
 - **`triggers: 'reload'` na `quantity`/`unit_price`/`total_price` byly
   vědomě odstraněny** v `48b57574` (prázdný roundtrip). Vrací se **jen**
   spolu s `applyLiveCalculation` — ne dřív.

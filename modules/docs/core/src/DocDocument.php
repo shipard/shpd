@@ -578,87 +578,45 @@ abstract class DocDocument extends Document
 
     // ── Row calculations ────────────────────────────────────────────────────
 
+    /**
+     * Cena řádku — tenká obálka nad DocRowCalculator::computePrice (sdílený
+     * s živým přepočtem v DocRowsForm, #71). Záměrně zachovává dočasnou
+     * mutaci `total_price` = cena PO slevě: na ní stojí calculateRowVat
+     * (dostává $row), buildVatRecapitulation (fallback na total_price)
+     * i sumTotals. Do DB z řádku jdou jen vat_* (persistRowComputedColumns),
+     * takže zlevněná hodnota se neuloží. Kdo mutaci „opraví", rozbije součty
+     * i rekapitulaci — hlídají to DocDocument*Test.
+     */
     protected function calculateRowPrice(array &$row): void
     {
-        $rowKind = (int) ($row['row_kind'] ?? 1);
-        if ($rowKind !== 1) {
+        if ((int) ($row['row_kind'] ?? 1) !== 1) {
             $row['total_price'] = null;
             return;
         }
-
-        $qty = (float) ($row['quantity'] ?? 0);
-        $mode = (int) ($row['price_calc_mode'] ?? 0);
-
-        if ($mode === 0) {
-            $unitPrice = (float) ($row['unit_price'] ?? 0);
-            $row['total_price'] = round($qty * $unitPrice, 2);
-        } else {
-            $totalPrice = (float) ($row['total_price'] ?? 0);
-            $row['unit_price'] = $qty > 0 ? round($totalPrice / $qty, 4) : 0.0;
-        }
-
-        // Apply discount (pct OR amount, not both)
-        $totalPrice = (float) ($row['total_price'] ?? 0);
-        if (!empty($row['discount_pct'])) {
-            $discount = round($totalPrice * ((float) $row['discount_pct']) / 100.0, 2);
-            $row['total_price'] = round($totalPrice - $discount, 2);
-        } elseif (!empty($row['discount_amount'])) {
-            $row['total_price'] = round($totalPrice - (float) $row['discount_amount'], 2);
-        }
+        $price = DocRowCalculator::computePrice($row);
+        $row['unit_price']  = $price['unit_price'];
+        $row['total_price'] = $price['net_total'];
     }
 
     /**
+     * DPH řádku — obálka nad DocRowCalculator::computeVat nad `total_price`
+     * po slevě (viz calculateRowPrice).
+     *
      * @param array<string, array<string, mixed>>|null $vatCodes VAT code
      *        definitions for the document's country (from resolveVatCodesForDoc).
      *        Null = country/config unresolved → compute without code semantics.
      */
     protected function calculateRowVat(array &$row, int $vatMode, ?array $vatCodes = null): void
     {
-        $rowKind = (int) ($row['row_kind'] ?? 1);
-        if ($rowKind !== 1) {
-            $row['vat_base'] = null;
-            $row['vat_amount'] = null;
-            $row['vat_total'] = null;
-            return;
-        }
-
-        $totalPrice = (float) ($row['total_price'] ?? 0);
-
-        if ($vatMode === 0 || empty($row['vat_code']) || empty($row['vat_pct'])) {
-            $row['vat_base']   = $totalPrice;
-            $row['vat_amount'] = 0.0;
-            $row['vat_total']  = $totalPrice;
-            return;
-        }
-
-        $pct = (float) $row['vat_pct'];
-
-        // noPayTax kódy (tuzemská PDP, EU pořízení, osvobozená plnění): daň
-        // není součástí částky placené dodavateli, takže celá total_price je
-        // základ — i pro vat_mode 2, kde by zpětný rozpočet byl chybný.
-        $codeDef = $vatCodes[(string) $row['vat_code']] ?? null;
-        if ($codeDef !== null && !empty($codeDef['noPayTax'])) {
-            $row['vat_base']  = $totalPrice;
-            $row['vat_total'] = $totalPrice;
-            // Vstupní samovyměření (reverseVatCode) nese spočtenou daň jako
-            // informativní nárok na odpočet; výstupní PDP / osvobozené = 0.
-            $row['vat_amount'] = !empty($codeDef['reverseVatCode'])
-                ? round($totalPrice * $pct / 100.0, 2)
-                : 0.0;
-            return;
-        }
-
-        if ($vatMode === 1) {
-            // From base — total_price is the base
-            $row['vat_base']   = $totalPrice;
-            $row['vat_amount'] = round($totalPrice * $pct / 100.0, 2);
-            $row['vat_total']  = round($row['vat_base'] + $row['vat_amount'], 2);
-        } else {
-            // From total (vat_mode === 2) — total_price includes VAT
-            $row['vat_total']  = $totalPrice;
-            $row['vat_base']   = round($totalPrice / (1.0 + $pct / 100.0), 2);
-            $row['vat_amount'] = round($row['vat_total'] - $row['vat_base'], 2);
-        }
+        $vat = DocRowCalculator::computeVat(
+            (float) ($row['total_price'] ?? 0),
+            $row,
+            $vatMode,
+            $vatCodes,
+        );
+        $row['vat_base']   = $vat['vat_base'];
+        $row['vat_amount'] = $vat['vat_amount'];
+        $row['vat_total']  = $vat['vat_total'];
     }
 
     // ── VAT recapitulation ──────────────────────────────────────────────────

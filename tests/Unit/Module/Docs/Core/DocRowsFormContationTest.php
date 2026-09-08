@@ -317,4 +317,22 @@ class DocRowsFormContationTest extends TestCase
 
         $this->assertArrayNotHasKey('price_calc_mode', $result->data);
     }
+
+    public function testContationRowSkipsLiveCalculation(): void
+    {
+        // Částka je zadaná ručně (price_calc_mode fixní 1) a řádek nemá DPH
+        // blok — živý přepočet (#71) ji nesmí přepsat ani zapsat vat_*.
+        $result = $this->form('cmnbkp', vatMode: 1)->recalculate('total_price', [
+            'row_kind' => 1, 'doc_head' => 5, 'operation' => 'acc.record',
+            'quantity' => '2', 'total_price' => '500', 'price_calc_mode' => 1, 'vat_pct' => '21',
+        ]);
+
+        $this->assertSame('500', $result->data['total_price']);
+        $this->assertArrayNotHasKey('unit_price', $result->data);
+        $this->assertArrayNotHasKey('vat_base', $result->data);
+
+        $el = $this->findElement($result->formDefinition, 'total_price');
+        $this->assertNotNull($el);
+        $this->assertFalse($el->readOnly);
+    }
 }

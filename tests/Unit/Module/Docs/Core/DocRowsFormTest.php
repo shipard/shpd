@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Shipard\Tests\Unit\Module\Docs\Core;
 
 use PHPUnit\Framework\TestCase;
+use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Core\Form\FormDefinition;
 use Shipard\Core\Form\FormElement;
 use Shipard\Module\Docs\Core\DocRowsForm;
@@ -129,5 +130,147 @@ class DocRowsFormTest extends TestCase
 
         $this->assertNotNull($result->formDefinition);
         $this->assertSame(1, $result->data['row_kind']);
+    }
+
+    // ── Živý přepočet (#71) ───────────────────────────────────────────────
+
+    /**
+     * Form nad hlavičkou bez registrace DPH — země se nedohledá, výpočet běží
+     * bez sémantiky kódů (stejně jako save bez země).
+     */
+    private function formWithHead(int $vatMode): DocRowsForm
+    {
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchRow')->willReturn([
+            'doc_type' => 'invno', 'cash_dir' => 0, 'vat_place' => 0, 'vat_duzp' => null,
+            'vat_mode' => $vatMode, 'vat_registration' => null, 'doc_currency' => 'czk',
+        ]);
+        $db->method('fetchAll')->willReturn([]);
+        $form = $this->createForm();
+        $form->setDb($db);
+        return $form;
+    }
+
+    public function testRecalculateQuantityComputesTotalAndVat(): void
+    {
+        $result = $this->formWithHead(1)->recalculate('quantity', [
+            'row_kind' => 1, 'doc_head' => 5, 'price_calc_mode' => 0,
+            'quantity' => '3', 'unit_price' => '100', 'vat_code' => 'cz-110', 'vat_pct' => '21',
+        ]);
+
+        $this->assertSame(300.0, $result->data['total_price']);
+        $this->assertSame(300.0, $result->data['vat_base']);
+        $this->assertSame(63.0, $result->data['vat_amount']);
+        $this->assertSame(363.0, $result->data['vat_total']);
+    }
+
+    public function testRecalculateWithDiscountKeepsTotalPriceBeforeDiscount(): void
+    {
+        // Past P1: do pole total_price jde cena PŘED slevou, sleva jen do vat_*.
+        $result = $this->formWithHead(1)->recalculate('discount_pct', [
+            'row_kind' => 1, 'doc_head' => 5, 'price_calc_mode' => 0,
+            'quantity' => '3', 'unit_price' => '100', 'discount_pct' => '10',
+            'vat_code' => 'cz-110', 'vat_pct' => '21',
+        ]);
+
+        $this->assertSame(300.0, $result->data['total_price']);
+        $this->assertSame(270.0, $result->data['vat_base']);
+        $this->assertSame(56.7, $result->data['vat_amount']);
+        $this->assertSame(326.7, $result->data['vat_total']);
+    }
+
+    public function testRecalculateFromTotalPriceComputesUnitPrice(): void
+    {
+        $result = $this->formWithHead(1)->recalculate('total_price', [
+            'row_kind' => 1, 'doc_head' => 5, 'price_calc_mode' => 1,
+            'quantity' => '4', 'total_price' => '1000',
+        ]);
+
+        $this->assertSame(250.0, $result->data['unit_price']);
+        $this->assertSame(1000.0, $result->data['total_price']);
+    }
+
+    public function testPriceCalcModeDrivesReadOnlyPriceField(): void
+    {
+        $form = $this->createForm();
+
+        $def = $form->buildFormDefinition(['row_kind' => 1, 'doc_head' => null, 'price_calc_mode' => 0], true);
+        $this->assertTrue($this->findElement($def, 'total_price')->readOnly);
+        $this->assertFalse($this->findElement($def, 'unit_price')->readOnly);
+
+        $def = $form->buildFormDefinition(['row_kind' => 1, 'doc_head' => null, 'price_calc_mode' => 1], true);
+        $this->assertFalse($this->findElement($def, 'total_price')->readOnly);
+        $this->assertTrue($this->findElement($def, 'unit_price')->readOnly);
+    }
+
+    public function testPriceInputsTriggerReload(): void
+    {
+        $def = $this->createForm()->buildFormDefinition(['row_kind' => 1, 'doc_head' => null], true);
+
+        foreach (['quantity', 'unit_price', 'total_price', 'price_calc_mode',
+                  'discount_pct', 'discount_amount', 'vat_pct'] as $col) {
+            $this->assertSame('reload', $this->findElement($def, $col)?->triggers, "{$col} should trigger reload");
+        }
+    }
+
+    public function testRecalculateWithoutHeadComputesWithoutVat(): void
+    {
+        $result = $this->createForm()->recalculate('quantity', [
+            'row_kind' => 1, 'doc_head' => null, 'price_calc_mode' => 0,
+            'quantity' => '2', 'unit_price' => '50', 'vat_code' => 'cz-110', 'vat_pct' => '21',
+        ]);
+
+        $this->assertSame(100.0, $result->data['total_price']);
+        $this->assertSame(100.0, $result->data['vat_base']);
+        $this->assertSame(0.0, $result->data['vat_amount']);
+        $this->assertSame(100.0, $result->data['vat_total']);
+    }
+
+    public function testRecalculateOnHeadWithoutVatHasZeroVat(): void
+    {
+        $result = $this->formWithHead(0)->recalculate('quantity', [
+            'row_kind' => 1, 'doc_head' => 5, 'price_calc_mode' => 0,
+            'quantity' => '2', 'unit_price' => '50', 'vat_code' => 'cz-110', 'vat_pct' => '21',
+        ]);
+
+        $this->assertSame(100.0, $result->data['vat_base']);
+        $this->assertSame(0.0, $result->data['vat_amount']);
+        $this->assertSame(100.0, $result->data['vat_total']);
+    }
+
+    public function testRecalculateTextRowClearsComputedValues(): void
+    {
+        $result = $this->formWithHead(1)->recalculate('row_kind', [
+            'row_kind' => 0, 'doc_head' => 5, 'quantity' => '2', 'unit_price' => '50',
+            'total_price' => '100', 'vat_base' => '100', 'vat_amount' => '21', 'vat_total' => '121',
+        ]);
+
+        $this->assertNull($result->data['total_price']);
+        $this->assertNull($result->data['vat_base']);
+        $this->assertNull($result->data['vat_amount']);
+        $this->assertNull($result->data['vat_total']);
+    }
+
+    public function testNewRecordDefaultsSetQuantityAndComputedZeros(): void
+    {
+        $form = $this->formWithHead(1);
+        $data = ['doc_head' => 5];
+        $form->applyNewRecordDefaults($data);
+
+        $this->assertSame(1, $data['quantity']);
+        $this->assertSame(0.0, $data['total_price']);
+        $this->assertSame(0.0, $data['vat_base']);
+        $this->assertSame(0.0, $data['vat_amount']);
+        $this->assertSame(0.0, $data['vat_total']);
+    }
+
+    public function testNewRecordDefaultsKeepPrefilledQuantity(): void
+    {
+        $form = $this->formWithHead(1);
+        $data = ['doc_head' => 5, 'quantity' => 3, 'unit_price' => 10];
+        $form->applyNewRecordDefaults($data);
+
+        $this->assertSame(3, $data['quantity']);
+        $this->assertSame(30.0, $data['total_price']);
     }
 }

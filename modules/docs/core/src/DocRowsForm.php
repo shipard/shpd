@@ -14,8 +14,12 @@ use Shipard\Module\World\Vat\VatRateResolver;
  * Sub-form for docs_core_rows (Phase 3).
  *
  * Loads parent header context (vat_registration → country, doc_type →
- * direction, vat_place, vat_duzp, vat_mode) on every render in order to
- * filter VAT codes and resolve vat_pct.
+ * direction, vat_place, vat_duzp, vat_mode, doc_currency) on every render in
+ * order to filter VAT codes and resolve vat_pct.
+ *
+ * Cena, základ, DPH a celkem řádku se přepočítávají živě při každém
+ * recalculate stejným kódem jako při uložení (`DocRowCalculator`, #71) —
+ * viz applyLiveCalculation.
  */
 class DocRowsForm extends TableForm
 {
@@ -53,6 +57,9 @@ class DocRowsForm extends TableForm
         }
 
         $showVat = $headHasVat && !$isText;
+        // Způsob výpočtu řídí, které cenové pole je read-only (#71): z ceny za
+        // jednotku (0) se dopočítává Cena celkem, z celkové (1) Cena/jednotka.
+        $calcMode = (int) ($data['price_calc_mode'] ?? 0);
         $directAccount = is_array($opAttrs)
             && ($opAttrs['rowAccount'] ?? null) === 'direct';
 
@@ -95,24 +102,25 @@ class DocRowsForm extends TableForm
         $col->input('description')
 
                     ->separator('Množství a cena', hidden: $isText)
-                    // Bez triggers: recalculate() pro quantity/unit_price/total_price
-                    // větev nemá a NumberInput trigger už spouští (#24 B) — každé
-                    // opuštění pole by poslalo prázdný roundtrip. Doplní se spolu s větví.
-                    ->number('quantity', hidden: $isText)
+                    // triggers: 'reload' na cenových polích = živý přepočet
+                    // (applyLiveCalculation v recalculate, #71); NumberInput
+                    // trigger spouští při opuštění pole (#24 B).
+                    ->number('quantity', hidden: $isText, triggers: 'reload')
                     ->select('unit',
                         options: $this->resolveUnitOptions(),
                         hidden: $isText,
                     )
-                    ->number('unit_price', hidden: $isText)
-                    ->number('total_price', hidden: $isText)
+                    ->number('unit_price', hidden: $isText, readOnly: $calcMode === 1, triggers: 'reload')
+                    ->number('total_price', hidden: $isText, readOnly: $calcMode === 0, triggers: 'reload')
                     ->select('price_calc_mode',
                         options: $this->resolveCfgItemOptions('docs.core.priceCalcModes'),
                         hidden: $isText,
+                        triggers: 'reload',
                     )
 
                     ->separator('Sleva', hidden: $isText)
-                    ->number('discount_pct', hidden: $isText, hint: 'Sleva v %')
-                    ->number('discount_amount', hidden: $isText, hint: 'Sleva absolutně')
+                    ->number('discount_pct', hidden: $isText, hint: 'Sleva v %', triggers: 'reload')
+                    ->number('discount_amount', hidden: $isText, hint: 'Sleva absolutně', triggers: 'reload')
 
                     ->separator('DPH', hidden: !$showVat)
                     ->select('vat_code',
@@ -124,6 +132,7 @@ class DocRowsForm extends TableForm
                     ->number('vat_pct',
                         hidden: !$showVat,
                         hint: 'Lze přepsat pro doklady z jiného státu',
+                        triggers: 'reload',
                     )
                     ->number('vat_base', readOnly: true, hidden: !$showVat,
                         label: 'Základ DPH (vypočteno)')
@@ -228,6 +237,10 @@ class DocRowsForm extends TableForm
      *  - Kód DPH = první z nabídky pro zemi registrace / směr / místo plnění
      *    hlavičky (CZ tuzemsko → „Základní") včetně dopočtu vat_pct stejnou
      *    cestou jako recalculate('vat_code') (issue #60).
+     *  - Množství = 1 (položkový řádek bez množství nemá v módu „z ceny za
+     *    jednotku" cenu celkem — po výběru položky tak Cena celkem hned ukáže
+     *    1 × cena) a živý přepočet, aby vat_* byly konzistentní od prvního
+     *    zobrazení (#71).
      * Textový řádek nemá nic z toho; kontační řádek (rowSide) nemá DPH blok,
      * default by zapsal hodnotu do skrytého pole. Explicitní prefill vyhrává
      * a prefillnutý pohyb neblokuje ostatní defaulty.
@@ -258,6 +271,10 @@ class DocRowsForm extends TableForm
                 $this->deriveVatPct($data, $headContext);
             }
         }
+        if (!isset($data['quantity']) || $data['quantity'] === '') {
+            $data['quantity'] = 1;
+        }
+        $this->applyLiveCalculation($data, $headContext);
     }
 
     /**
@@ -423,11 +440,91 @@ class DocRowsForm extends TableForm
             $this->applyContationRowDefaults($data);
         }
 
+        // Živý přepočet vždy, ne per sloupec — je idempotentní a levný,
+        // větvení podle sloupce by přineslo jen chyby z opomenutí.
+        $this->applyLiveCalculation($data, $headContext);
+
         $isNew = !isset($data['id']) || $data['id'] === null || $data['id'] === '';
         return new RecalculateResult(
             $this->buildFormDefinition($data, $isNew),
             $data,
         );
+    }
+
+    /**
+     * Živý přepočet řádku stejným kódem jako save (`DocRowCalculator`, #71):
+     * cena podle způsobu výpočtu, základ / DPH / celkem podle DPH režimu
+     * hlavičky. Volá se z recalculate (každý trigger) a z defaultů nového
+     * řádku.
+     *
+     *  - Textový řádek dostane null jako při uložení (calculateRowPrice /
+     *    calculateRowVat pro row_kind 0), aby ve skrytých polích nezůstaly
+     *    a neuložily se zbytky z doby, kdy byl položkový.
+     *  - Kontační řádek (rowSide) se přeskakuje: částka je zadaná ručně,
+     *    price_calc_mode fixní 1 a žádné DPH — mód 1 by mu přepsal unit_price
+     *    a computeVat zapsal vat_* do řádku bez DPH bloku.
+     *  - `total_price` se zapisuje PŘED slevou (past P1) — sleva se promítne
+     *    jen do vat_* přes net_total.
+     *  - Bez kontextu hlavičky se počítá jako bez DPH (základ = celkem),
+     *    stejně degradovaně jako save bez země.
+     *
+     * @param array<string, mixed>|null $headContext
+     */
+    private function applyLiveCalculation(array &$data, ?array $headContext): void
+    {
+        if ((int) ($data['row_kind'] ?? 1) !== 1) {
+            $data['total_price'] = null;
+            $data['vat_base']    = null;
+            $data['vat_amount']  = null;
+            $data['vat_total']   = null;
+            return;
+        }
+        $opAttrs = $this->resolveOperationAttrs((string) ($data['operation'] ?? ''));
+        if ($this->hasRowSideLayout($opAttrs)) {
+            return;
+        }
+
+        $price = DocRowCalculator::computePrice($data);
+        $data['unit_price']  = $price['unit_price'];
+        $data['total_price'] = $price['total_price'];
+
+        $vat = DocRowCalculator::computeVat(
+            $price['net_total'],
+            $data,
+            (int) ($headContext['vat_mode'] ?? 0),
+            $this->resolveVatCodesForRow($headContext),
+        );
+        $data['vat_base']   = $vat['vat_base'];
+        $data['vat_amount'] = $vat['vat_amount'];
+        $data['vat_total']  = $vat['vat_total'];
+    }
+
+    /**
+     * Definice DPH kódů země registrace hlavičky pro živý výpočet. Volání je
+     * shodné s `DocDocument::resolveVatCodesForDoc` — bez směru a místa,
+     * `includeHidden: true` — jinak by noPayTax kódy vyšly ve formuláři jinak
+     * než při uložení. `buildVatCodeOptions` filtruje pro nabídku a pro výpočet
+     * se nepoužívá. Null bez země / configu / konfigurace země = výpočet bez
+     * sémantiky kódů.
+     *
+     * @param array<string, mixed>|null $headContext
+     * @return array<string, array<string, mixed>>|null
+     */
+    private function resolveVatCodesForRow(?array $headContext): ?array
+    {
+        if ($headContext === null || empty($headContext['country']) || $this->config === null) {
+            return null;
+        }
+        try {
+            return (new VatRateResolver($this->config))->getVatCodes(
+                (string) $headContext['country'],
+                direction: null,
+                place: null,
+                includeHidden: true,
+            );
+        } catch (\LogicException) {
+            return null;
+        }
     }
 
     /**
@@ -440,6 +537,7 @@ class DocRowsForm extends TableForm
      *     doc_type: string,
      *     cash_dir: int,
      *     vat_place: int,
+     *     doc_currency: string,
      * }|null
      */
     private function loadHeadContext(mixed $docHeadId): ?array
@@ -448,8 +546,8 @@ class DocRowsForm extends TableForm
             return null;
         }
         $head = $this->db->fetchRow(
-            'SELECT `vat_registration`, `doc_type`, `cash_dir`, `vat_place`, `vat_duzp`, `vat_mode`'
-            . ' FROM `docs_core_heads` WHERE `id` = %i',
+            'SELECT `vat_registration`, `doc_type`, `cash_dir`, `vat_place`, `vat_duzp`, `vat_mode`,'
+            . ' `doc_currency` FROM `docs_core_heads` WHERE `id` = %i',
             (int) $docHeadId,
         );
         if ($head === null) {
@@ -462,6 +560,7 @@ class DocRowsForm extends TableForm
             'vat_place' => (int) ($head['vat_place'] ?? 0),
             'vat_duzp'  => $head['vat_duzp'] ?? null,
             'vat_mode'  => (int) ($head['vat_mode'] ?? 1),
+            'doc_currency' => (string) ($head['doc_currency'] ?? ''),
             'country'   => null,
             'direction' => null,
             'place'     => 'domestic',

@@ -30,9 +30,12 @@ a pokladna se na dokladu nezadává (denormalizuje se z řady do `cash_desk`).
   ji páruje jako bankovní úhradu). `transfer.*` = převod peněz, `advance.*`
   a `*.advanceDeduction` = zálohy (níže).
 - **Editační formulář** `CashDocForm extends CashDeskFormBase` — směr
-  (`cash_dir`, po vzniku řádků už jen pro čtení), způsob úhrady, nepovinný
-  partner, datumy, DPH, readOnly sekce „Pokladna"; titulek hlavičky
-  „Příjmový / Výdajový pokladní doklad".
+  (`cash_dir`, po vzniku řádků už jen pro čtení), nepovinný partner, datumy
+  (DPPD jen na příjmu — den přijetí hotovosti může předcházet DUZP; na výdeji
+  ho odvodí DocDocument z DUZP), ev. číslo dokladu, režim DPH a místo plnění,
+  readOnly sekce „Pokladna"; tab „Nastavení" za Přílohami se způsobem
+  úhrady, registrací DPH, způsobem výpočtu DPH a zaokrouhlením (#67).
+  Titulek hlavičky „Příjmový / Výdajový pokladní doklad".
 - **Viewer** `CashDocsViewer extends DocsHeadsViewer` — Účtárna → Pokladní
   doklady, `scopedDocType = 'cash'`, v řádku směr (Příjem / Výdej), datum
   a způsob úhrady; částka vždy kladná (směr nese štítek, vratky jsou záporné

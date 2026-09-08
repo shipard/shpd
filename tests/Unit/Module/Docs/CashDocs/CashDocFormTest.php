@@ -85,10 +85,11 @@ class CashDocFormTest extends TestCase
         return $form;
     }
 
-    private function findElement(FormDefinition $def, string $column): ?FormElement
+    /** @param string|null $tabId null = hledat ve všech tabech */
+    private function findElement(FormDefinition $def, string $column, ?string $tabId = 'basic'): ?FormElement
     {
         foreach ($def->tabs as $tab) {
-            if ($tab->id !== 'basic') {
+            if ($tabId !== null && $tab->id !== $tabId) {
                 continue;
             }
             foreach ($tab->sections as $section) {
@@ -193,9 +194,52 @@ class CashDocFormTest extends TestCase
     {
         $def = $this->form()->buildFormDefinition(['doc_type' => 'cash', 'number_series' => 12], true);
 
-        $el = $this->findElement($def, 'payment_method');
+        $el = $this->findElement($def, 'payment_method', 'settings');
         $this->assertSame([0, 2], array_column($el->options, 'value'));
         $this->assertSame('reload', $el->triggers);
+    }
+
+    /** Issue #67: tab Nastavení za Přílohami, přesunutá pole, ev. číslo a místo plnění v hlavičce. */
+    public function testSettingsTabIsLastAndHoldsRarelyChangedFields(): void
+    {
+        $def = $this->form()->buildFormDefinition(['doc_type' => 'cash', 'number_series' => 12, 'vat_mode' => 1], true);
+
+        $tabIds = array_map(static fn ($t) => $t->id, $def->tabs);
+        $this->assertSame('settings', end($tabIds), 'Nastavení je poslední tab');
+        $this->assertContains('attachments', $tabIds);
+        $this->assertLessThan(array_search('settings', $tabIds, true), array_search('attachments', $tabIds, true));
+
+        foreach (['payment_method', 'vat_registration', 'vat_calc_source', 'total_rounding_mode', 'vat_rounding_mode'] as $col) {
+            $this->assertNull($this->findElement($def, $col, 'basic'), "$col už není v hlavičce");
+            $this->assertNotNull($this->findElement($def, $col, 'settings'), "$col je v Nastavení");
+        }
+
+        $this->assertNotNull($this->findElement($def, 'partner_doc_number'), 'ev. číslo dokladu v hlavičce');
+        $place = $this->findElement($def, 'vat_place');
+        $this->assertNotNull($place, 'místo plnění v hlavičce');
+        $this->assertSame('reload', $place->triggers);
+        $this->assertFalse($place->hidden);
+    }
+
+    /** Issue #67: DPPD jen na příjmu; na výdeji a bez DPH skryté. */
+    public function testDppdOnlyOnReceipt(): void
+    {
+        $base = ['doc_type' => 'cash', 'number_series' => 12, 'vat_mode' => 1];
+
+        $def = $this->form()->buildFormDefinition($base + ['cash_dir' => 1], true);
+        $this->assertFalse($this->findElement($def, 'vat_dppd')->hidden, 'příjem → DPPD viditelné');
+        $this->assertFalse($this->findElement($def, 'vat_duzp')->hidden);
+
+        $def = $this->form()->buildFormDefinition($base + ['cash_dir' => 2], true);
+        $this->assertTrue($this->findElement($def, 'vat_dppd')->hidden, 'výdej → DPPD skryté');
+        $this->assertFalse($this->findElement($def, 'vat_duzp')->hidden, 'DUZP zůstává');
+
+        $def = $this->form()->buildFormDefinition($base, true);
+        $this->assertTrue($this->findElement($def, 'vat_dppd')->hidden, 'bez směru → DPPD skryté');
+
+        $def = $this->form()->buildFormDefinition(['doc_type' => 'cash', 'number_series' => 12, 'vat_mode' => 0, 'cash_dir' => 1], true);
+        $this->assertTrue($this->findElement($def, 'vat_dppd')->hidden, 'bez DPH → DPPD skryté');
+        $this->assertTrue($this->findElement($def, 'vat_place')->hidden, 'bez DPH → místo plnění skryté');
     }
 
     public function testCashDirIsRequiredReloadAndLockedOnceRowsExist(): void

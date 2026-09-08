@@ -35,12 +35,18 @@ Pro rychlý prodej zboží bez partnera se víc hodí [Prodejka](prodejka.md).
    doklad neuložíš a podle směru se řídí, jaké pohyby řádků a jaké kódy DPH
    se ti nabídnou. Po zadání prvního řádku už směr měnit nejde.
 
-4. **Vyplň zbytek hlavičky.** **Způsob platby** je *Hotovost* nebo *Kartou*
-   (jiné se tu nenabízejí). **Partner** je nepovinný — anonymní příjem
+4. **Vyplň zbytek hlavičky.** **Partner** je nepovinný — anonymní příjem
    či výdej se obejde bez něj. **Datum vystavení** a **Účetní datum** jsou
-   povinné; **DUZP** se doplní podle vystavení. **Měna dokladu** je vždy
-   měna pokladny a nedá se změnit; kterou pokladnu doklad patří, vidíš
-   v sekci **Pokladna**.
+   povinné; **DUZP** se doplní podle vystavení. U příjmu můžeš zadat i
+   **DPPD** (den přijetí hotovosti, když předchází DUZP — např. záloha);
+   u výdeje se doplní podle DUZP. **Ev. číslo dokladu** je číslo dokladu
+   od partnera (účtenka, paragon). **Místo plnění** funguje jako na
+   fakturách. **Měna dokladu** je vždy měna pokladny a nedá se změnit;
+   kterou pokladnu doklad patří, vidíš v sekci **Pokladna**.
+
+   **Způsob platby** (*Hotovost* nebo *Kartou*, jiné se tu nenabízejí),
+   registraci DPH a zaokrouhlení najdeš na tabu **Nastavení** úplně
+   vpravo — předvyplní se a běžně na ně nesaháš.
 
 5. **Dej Uložit** a zadej řádky na tabu **Řádky**. **Pohyb** vybírej podle
    toho, co se stalo:

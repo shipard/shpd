@@ -15,10 +15,16 @@ use Shipard\Module\Docs\Core\DocDocument;
  *
  * Hlavička: směr (`cash_dir`, povinný, bez defaultu — špatný default by
  * potichu vyráběl příjmové doklady; po vzniku řádků jen pro čtení, protože
- * změna směru zneplatní pohyby řádků), způsob úhrady Hotovost / Kartou,
- * nepovinný partner, datumy, DPH, měna dokladu jen pro čtení (= měna
- * pokladny), readOnly sekce „Pokladna". Řádky, rekapitulace, poznámky a
- * přílohy z base.
+ * změna směru zneplatní pohyby řádků), nepovinný partner, datumy, ev. číslo
+ * dokladu (`partner_doc_number`), režim DPH a místo plnění, měna dokladu jen
+ * pro čtení (= měna pokladny) a kurz, readOnly sekce „Pokladna". DPPD se
+ * zadává jen na příjmu (Issue #67 — povinnost přiznat daň vzniká dnem přijetí
+ * hotovosti, který může předcházet DUZP); na výdeji ho DocDocument odvodí
+ * z DUZP. Řádky, rekapitulace, poznámky a přílohy z base.
+ *
+ * Tab „Nastavení" za Přílohami (`buildExtraTabs`, vzor FVB/FPB): způsob
+ * úhrady Hotovost / Kartou, registrace DPH, způsob výpočtu DPH a obě
+ * zaokrouhlení — pole, která se při běžném pořizování nemění.
  *
  * Header info: titulek = partner, u anonymního dokladu „Příjmový / Výdajový
  * pokladní doklad" (base by bez partnera hlavičku vůbec nevrátila).
@@ -56,6 +62,7 @@ class CashDocForm extends CashDeskFormBase
             && $docCurrency !== $homeCurrency;
         $partnerId = (int) ($data['partner'] ?? 0);
         $hasRows = $this->hasRows($data);
+        $isReceipt = CashDirection::tryFrom((int) ($data['cash_dir'] ?? 0)) === CashDirection::Receipt;
 
         $tab = $this->tab('basic', 'Hlavička')
             ->section()
@@ -70,11 +77,6 @@ class CashDocForm extends CashDeskFormBase
                         required: true,
                         readOnly: $hasRows,
                         hint: $hasRows ? 'Směr nelze měnit — doklad už má řádky' : null,
-                    )
-                    ->select(
-                        'payment_method',
-                        options: $this->paymentMethodOptions(),
-                        triggers: 'reload',
                     )
 
                     ->lookup(
@@ -96,6 +98,8 @@ class CashDocForm extends CashDeskFormBase
                     ->date('issue_date', required: true, triggers: 'reload')
                     ->date('accounting_date', required: true)
                     ->date('vat_duzp', hidden: !$hasVat)
+                    ->date('vat_dppd', hidden: !$hasVat || !$isReceipt)
+                    ->input('partner_doc_number')
 
                 ->col()
                     ->select(
@@ -103,6 +107,61 @@ class CashDocForm extends CashDeskFormBase
                         options: $this->resolveCfgItemOptions('docs.core.vatModes'),
                         triggers: 'reload',
                     )
+                    ->select(
+                        'vat_place',
+                        options: $this->resolveCfgItemOptions('docs.core.vatPlaces'),
+                        triggers: 'reload',
+                        hidden: !$hasVat,
+                    )
+
+                    ->input('doc_currency', readOnly: true, hint: 'Měna pokladny')
+                    ->number('exchange_rate', hidden: !$hasForeignCurrency);
+
+        $this->addCashDeskSection($tab, $data);
+
+        return $tab
+            ->section()
+                ->col()
+                    ->input('doc_text')
+            ->build();
+    }
+
+    /**
+     * Tab „Nastavení" na konci formuláře (za Přílohami) — Issue #67.
+     *
+     * @param array<string, mixed> $data
+     * @return list<FormTab>
+     */
+    protected function buildExtraTabs(array $data, bool $isNew): array
+    {
+        return [$this->buildSettingsTab($data)];
+    }
+
+    /**
+     * Způsob úhrady, registrace DPH, způsob výpočtu DPH a zaokrouhlení.
+     * `vat_registration` je při vat_mode != 0 povinná (DocDocument) —
+     * validační chyba se zobrazí na poli v tomto tabu, FormEditor na něj
+     * přepne. `payment_method` a `vat_registration` mají `reload`; frontend
+     * při reloadu drží aktivní tab.
+     *
+     * @param array<string, mixed> $data
+     */
+    protected function buildSettingsTab(array $data): FormTab
+    {
+        $vatMode = (int) ($data['vat_mode'] ?? 1);
+        $hasVat = $vatMode !== 0;
+
+        return $this->tab('settings', 'Nastavení')
+            ->section(title: 'Platba')
+                ->col()
+                    ->select(
+                        'payment_method',
+                        options: $this->paymentMethodOptions(),
+                        triggers: 'reload',
+                    )
+
+            ->section(title: 'DPH', hidden: !$hasVat)
+                ->col()
                     ->select(
                         'vat_registration',
                         options: $this->resolveVatRegistrationOptions(),
@@ -116,9 +175,8 @@ class CashDocForm extends CashDeskFormBase
                         hidden: !$hasVat,
                     )
 
-                    ->input('doc_currency', readOnly: true, hint: 'Měna pokladny')
-                    ->number('exchange_rate', hidden: !$hasForeignCurrency)
-
+            ->section(title: 'Zaokrouhlení')
+                ->col()
                     ->select(
                         'total_rounding_mode',
                         options: $this->resolveCfgItemOptions('docs.core.roundingModes'),
@@ -127,14 +185,7 @@ class CashDocForm extends CashDeskFormBase
                         'vat_rounding_mode',
                         options: $this->resolveCfgItemOptions('docs.core.roundingModes'),
                         hidden: !$hasVat,
-                    );
-
-        $this->addCashDeskSection($tab, $data);
-
-        return $tab
-            ->section()
-                ->col()
-                    ->input('doc_text')
+                    )
             ->build();
     }
 

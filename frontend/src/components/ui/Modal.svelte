@@ -24,6 +24,14 @@
   export function isModalOpen(): boolean {
     return modalStack.length > 0;
   }
+
+  /** Esc události, které už v tomto stisku zavřely nějaký modal. Prohlížeč mezi
+   *  jednotlivými listenery uživatelské události provádí microtask checkpoint,
+   *  takže Svelte stihne vyrenderovat modal otevřený prvním listenerem
+   *  (ConfirmDialog „Neuložené změny“ z FormDialog) a zapsat ho na vrchol stacku
+   *  dřív, než přijde na řadu jeho vlastní window listener — ten by ho týmž Esc
+   *  hned zase zavřel. Jeden stisk Esc = jeden zavřený modal. */
+  const consumedEscapes = new WeakSet<KeyboardEvent>();
 </script>
 
 <script lang="ts">
@@ -107,6 +115,8 @@
   function handleKeydown(e: KeyboardEvent) {
     if (!isTopOfStack(modalId)) return;
     if (e.key === 'Escape') {
+      if (consumedEscapes.has(e)) return;
+      consumedEscapes.add(e);
       onClose();
       return;
     }

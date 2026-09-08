@@ -18,9 +18,17 @@ use Shipard\Core\Database\DataSourceConnection;
  *
  * Kandidát = kalendářní jednotka dle periodicity registrace pro daný typ
  * (`tax_period_kind` / `cs_period_kind` / `rs_period_kind`; D10 — periodicity
- * jsou už jen defaulty generátoru), oříznutá do platnosti registrace
- * a o sousední existující instance, aby nikdy nevznikl překryv. Datum mimo
- * platnost registrace → žádná instance (null).
+ * jsou už jen defaulty generátoru), oříznutá do platnosti registrace,
+ * do zákonného počátku typu výstupu (#58, `$validFromByType`) a o sousední
+ * existující instance, aby nikdy nevznikl překryv. Datum mimo platnost
+ * registrace nebo před počátkem typu → žádná instance (null).
+ *
+ * `$validFromByType` (`['cs' => '2016-01-01']`) dodává volající
+ * z `VatOutputsMapping::validFromByType()`. Cesty bez kompilovaného configu
+ * (cron / seed / ds-upgrade na DS bez compiled.*.json) smějí předat prázdné
+ * pole: generují jen dnešek a zítřek, omezení je pro ně bezpředmětné; členství
+ * dokladu stejně rozhoduje VatPeriodAssigner, tady je to jen pojistka
+ * generátoru.
  */
 final class ReportPeriodsProvisioner implements ReportPeriodLookup
 {
@@ -48,7 +56,13 @@ final class ReportPeriodsProvisioner implements ReportPeriodLookup
     /** @var array<int, ?array<string, mixed>> cache registrací */
     private array $registrations = [];
 
-    public function __construct(private readonly DataSourceConnection $db) {}
+    /**
+     * @param array<string, string> $validFromByType typ → ISO datum zákonného počátku výstupu
+     */
+    public function __construct(
+        private readonly DataSourceConnection $db,
+        private readonly array $validFromByType = [],
+    ) {}
 
     /** On-demand režim: chybějící instanci založit v daném stavu. */
     public function setCreateMissing(bool $create, int $docState = 10): void
@@ -87,7 +101,8 @@ final class ReportPeriodsProvisioner implements ReportPeriodLookup
 
     /**
      * Založí instanci pokrývající datum dle periodicity registrace. Null =
-     * datum mimo platnost registrace nebo neznámá registrace.
+     * datum mimo platnost registrace, před zákonným počátkem typu výstupu,
+     * nebo neznámá registrace.
      *
      * @return ?array{id: int, date_begin: string, date_end: string}
      */
@@ -100,7 +115,10 @@ final class ReportPeriodsProvisioner implements ReportPeriodLookup
         $kind = (int) ($registration[self::KIND_COLUMN_BY_TYPE[$type]] ?? self::KIND_MONTHLY);
         $candidate = self::candidateRange($kind, $date);
 
-        $validFrom = VatPeriodAssigner::isoDate($registration['valid_from'] ?? null);
+        $validFrom = self::lowerBound(
+            VatPeriodAssigner::isoDate($registration['valid_from'] ?? null),
+            $this->validFromByType[$type] ?? null,
+        );
         $validTo   = VatPeriodAssigner::isoDate($registration['valid_to'] ?? null);
         if (($validFrom !== null && $date < $validFrom) || ($validTo !== null && $date > $validTo)) {
             return null;
@@ -196,6 +214,21 @@ final class ReportPeriodsProvisioner implements ReportPeriodLookup
             'end'   => $begin->modify('+1 month -1 day')->format('Y-m-d'),
             'name'  => sprintf('%02d/%04d', $month, $year),
         ];
+    }
+
+    /**
+     * Dolní mez instance = pozdější z platnosti registrace a zákonného
+     * počátku typu výstupu (#58); null, neomezuje-li nic.
+     */
+    public static function lowerBound(?string $registrationValidFrom, ?string $typeValidFrom): ?string
+    {
+        if ($registrationValidFrom === null) {
+            return $typeValidFrom;
+        }
+        if ($typeValidFrom === null) {
+            return $registrationValidFrom;
+        }
+        return $typeValidFrom > $registrationValidFrom ? $typeValidFrom : $registrationValidFrom;
     }
 
     /**

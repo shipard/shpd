@@ -25,6 +25,7 @@ final class VatRegistrationSeedHandler extends AbstractDocumentEventHandler
         if ($id <= 0 || (int) ($data['docState'] ?? 10) === 90) {
             return;
         }
-        (new ReportPeriodsProvisioner(new DataSourceConnection($this->db)))->ensureForRegistration($id);
+        $validFrom = VatOutputsMapping::fromConfig($this->config)?->validFromByType() ?? [];
+        (new ReportPeriodsProvisioner(new DataSourceConnection($this->db), $validFrom))->ensureForRegistration($id);
     }
 }

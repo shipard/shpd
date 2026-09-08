@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Shipard\Command\DataSource;
 
+use Shipard\Core\Config\ConfigRuntime;
 use Shipard\Core\Config\DataSourceConfig;
 use Shipard\Core\Database\DataSourceConnection;
 use Shipard\Module\Economy\Vat\ReportPeriodsProvisioner;
+use Shipard\Module\Economy\Vat\VatOutputsMapping;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
@@ -68,7 +70,13 @@ class VatPeriodsEnsureCommand extends Command
             return Command::SUCCESS;
         }
 
-        $result = (new ReportPeriodsProvisioner($dsConnection))->ensureAll($today);
+        // Zákonné počátky výstupů (#58) — jen je-li config zkompilovaný;
+        // bez něj prázdné (cron generuje jen dnešek/zítřek, omezení nehraje roli).
+        $validFrom = [];
+        if (is_file($dsDir . '/config/configuration/compiled.cs.json')) {
+            $validFrom = VatOutputsMapping::fromConfig(ConfigRuntime::load($dsDir, 'cs'))?->validFromByType() ?? [];
+        }
+        $result = (new ReportPeriodsProvisioner($dsConnection, $validFrom))->ensureAll($today);
         $output->writeln(sprintf(
             'VAT report periods: %d created, %d already present',
             $result['created'],

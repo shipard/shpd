@@ -20,6 +20,10 @@ namespace Shipard\Module\Economy\Vat;
  * - Bez DUZP nebo registrace → všechno NULL. Bez mapování (chybí
  *   kompilovaný config) → `cs_period`/`rs_period` NULL, přiznání se
  *   přiřadí.
+ * - Zákonný počátek výstupu (#58, `reportTypes.{type}.validFrom` v mapování):
+ *   clamped efektivní datum před `validFrom` ⇒ ukazatel NULL a lookup se
+ *   pro ten typ **nevolá** — žádný on-demand koncept, žádný alert. Bez
+ *   mapování žádné omezení.
  */
 final class VatPeriodAssigner
 {
@@ -57,13 +61,24 @@ final class VatPeriodAssigner
         }
 
         $effective = self::effectiveDate(self::isoDate($head['vat_dppd'] ?? null), $duzp, $return);
-        if ($membership['cs']) {
+        if ($membership['cs'] && !$this->isBeforeValidFrom(self::TYPE_CS, $effective)) {
             $out['cs_period'] = $this->periods->covering($regId, self::TYPE_CS, $effective)['id'] ?? null;
         }
-        if ($membership['rs']) {
+        if ($membership['rs'] && !$this->isBeforeValidFrom(self::TYPE_RS, $effective)) {
             $out['rs_period'] = $this->periods->covering($regId, self::TYPE_RS, $effective)['id'] ?? null;
         }
         return $out;
+    }
+
+    /**
+     * Datum před zákonným počátkem typu výstupu (`reportTypes.{type}.validFrom`
+     * v mapování) — doklad do výstupu nespadá. Bez mapování nebo bez
+     * omezení typu vždy false. Sdílí ji VatPeriodRecalculator (V4).
+     */
+    public function isBeforeValidFrom(string $type, string $date): bool
+    {
+        $validFrom = $this->mapping?->validFrom($type);
+        return $validFrom !== null && $date < $validFrom;
     }
 
     /**

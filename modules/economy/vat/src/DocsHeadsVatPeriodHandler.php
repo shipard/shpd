@@ -44,7 +44,8 @@ final class DocsHeadsVatPeriodHandler extends AbstractDocumentEventHandler
         $duzp = VatPeriodAssigner::isoDate($data['vat_duzp'] ?? null);
 
         $connection = new DataSourceConnection($this->db);
-        $provisioner = new ReportPeriodsProvisioner($connection);
+        $mapping = VatOutputsMapping::fromConfig($this->config);
+        $provisioner = new ReportPeriodsProvisioner($connection, $mapping?->validFromByType() ?? []);
         $provisioner->setCreateMissing(true, 10);
 
         $computed = ['vat_period' => null, 'cs_period' => null, 'rs_period' => null];
@@ -52,7 +53,7 @@ final class DocsHeadsVatPeriodHandler extends AbstractDocumentEventHandler
             $recap = is_array($data['vatRecap'] ?? null)
                 ? $data['vatRecap']
                 : $this->loadRecap($connection, (int) ($data['id'] ?? 0));
-            $computed = (new VatPeriodAssigner($provisioner, $this->mapping()))->compute($data, $recap);
+            $computed = (new VatPeriodAssigner($provisioner, $mapping))->compute($data, $recap);
         }
 
         foreach (self::COLUMN_TYPES as $column => $type) {
@@ -126,10 +127,5 @@ final class DocsHeadsVatPeriodHandler extends AbstractDocumentEventHandler
             'SELECT [vat_code] FROM [docs_core_vat_recap] WHERE [doc_head] = %i',
             $headId,
         );
-    }
-
-    private function mapping(): ?VatOutputsMapping
-    {
-        return VatOutputsMapping::fromConfig($this->config);
     }
 }

@@ -91,7 +91,7 @@ final class VatPeriodRecalculator
             }
         }
 
-        $lookup = new ReportPeriodsProvisioner($this->db); // find-only
+        $lookup = new ReportPeriodsProvisioner($this->db, $this->mapping?->validFromByType() ?? []); // find-only
         $assigner = new VatPeriodAssigner($lookup, $this->mapping);
 
         $updated = 0;

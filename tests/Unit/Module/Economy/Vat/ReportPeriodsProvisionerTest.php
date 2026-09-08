@@ -46,6 +46,27 @@ final class ReportPeriodsProvisionerTest extends TestCase
         $this->assertSame('2026-03-19', $clamped['end']);
     }
 
+    // ── Zákonný počátek typu výstupu (#58) ──────────────────────────────────
+
+    public function testLowerBoundIsLaterOfRegistrationAndTypeValidFrom(): void
+    {
+        $this->assertNull(ReportPeriodsProvisioner::lowerBound(null, null));
+        $this->assertSame('2016-01-01', ReportPeriodsProvisioner::lowerBound(null, '2016-01-01'));
+        $this->assertSame('2010-05-01', ReportPeriodsProvisioner::lowerBound('2010-05-01', null));
+        $this->assertSame('2016-01-01', ReportPeriodsProvisioner::lowerBound('2010-05-01', '2016-01-01'), 'registrace starší než KH → KH');
+        $this->assertSame('2020-03-01', ReportPeriodsProvisioner::lowerBound('2020-03-01', '2016-01-01'), 'registrace mladší než KH → registrace');
+    }
+
+    public function testClampToTypeValidFromCutsCandidateBegin(): void
+    {
+        // Kandidát Q1/2016 čtvrtletního KH, kdyby počátek výstupu padl dovnitř
+        // čtvrtletí — začátek se ořízne stejně jako platností registrace.
+        $c = ReportPeriodsProvisioner::candidateRange(2, '2016-02-10');
+        $lower = ReportPeriodsProvisioner::lowerBound('2010-01-01', '2016-01-15');
+        $clamped = ReportPeriodsProvisioner::clampRange($c, $lower, null, ['prevEnd' => null, 'nextBegin' => null]);
+        $this->assertSame(['begin' => '2016-01-15', 'end' => '2016-03-31', 'name' => 'Q1/2016'], $clamped);
+    }
+
     public function testClampKeepsCandidateWhenNoConstraintBinds(): void
     {
         $c = ReportPeriodsProvisioner::candidateRange(1, '2026-02-10');

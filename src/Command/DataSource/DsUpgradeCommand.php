@@ -36,6 +36,7 @@ use Shipard\Module\Economy\Accounting\TransitAccountsProvisioner;
 use Shipard\Module\Economy\Codebooks\FiscalYearsProvisioner;
 use Shipard\Module\Economy\Items\ItemKindsProvisioner;
 use Shipard\Module\Economy\Vat\ReportPeriodsProvisioner;
+use Shipard\Module\Economy\Vat\VatOutputsMapping;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -320,7 +321,7 @@ class DsUpgradeCommand extends Command
             $this->provisionAccountChart($resolvedModules, $settings, $dsConnection, $output);
             $this->provisionAccbalBalances($resolvedModules, $dsConnection, $output);
             $this->provisionFiscalYears($resolvedModules, $dsDir, $settings, $dsConnection, $output);
-            $this->provisionVatPeriods($resolvedModules, $dsConnection, $output);
+            $this->provisionVatPeriods($resolvedModules, $dsDir, $dsConnection, $output);
             $this->provisionDocCoreNumberSeries($resolvedModules, $dsDir, $dsConnection, $output);
             $this->provisionMailRouter($resolvedModules, $dsConfig, $dsConnection, $output);
         }
@@ -797,6 +798,7 @@ class DsUpgradeCommand extends Command
      */
     private function provisionVatPeriods(
         array $resolvedModules,
+        string $dsDir,
         DataSourceConnection $dsConnection,
         OutputInterface $output,
     ): void {
@@ -809,8 +811,10 @@ class DsUpgradeCommand extends Command
         }
 
         // Instance tvrzení pokrývající dnešek a zítřek pro aktivní registrace
-        // (D9) — stejná logika jako denní cron vat-periods-ensure.
-        $result = (new ReportPeriodsProvisioner($dsConnection))->ensureAll();
+        // (D9) — stejná logika jako denní cron vat-periods-ensure. Zákonné
+        // počátky výstupů (#58) z právě zkompilovaného configu.
+        $validFrom = VatOutputsMapping::fromConfig(ConfigRuntime::load($dsDir, 'cs'))?->validFromByType() ?? [];
+        $result = (new ReportPeriodsProvisioner($dsConnection, $validFrom))->ensureAll();
 
         $this->logProvisioningResult($output, 'vat report periods', $result);
     }

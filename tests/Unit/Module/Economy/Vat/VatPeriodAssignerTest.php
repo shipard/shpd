@@ -13,11 +13,15 @@ use Shipard\Module\Economy\Vat\VatPeriodAssigner;
 /** In-memory instance: [id, reg, type, begin, end]. */
 final class FakePeriodLookup implements ReportPeriodLookup
 {
+    /** @var array<string, int> počet volání covering() per typ */
+    public array $calls = ['return' => 0, 'cs' => 0, 'rs' => 0];
+
     /** @param list<array{0: int, 1: int, 2: string, 3: string, 4: string}> $instances */
     public function __construct(private readonly array $instances) {}
 
     public function covering(int $registrationId, string $type, string $date): ?array
     {
+        $this->calls[$type] = ($this->calls[$type] ?? 0) + 1;
         foreach ($this->instances as [$id, $reg, $t, $begin, $end]) {
             if ($reg === $registrationId && $t === $type && $begin <= $date && $end >= $date) {
                 return ['id' => $id, 'date_begin' => $begin, 'date_end' => $end];
@@ -31,11 +35,28 @@ final class VatPeriodAssignerTest extends TestCase
 {
     private function mapping(): VatOutputsMapping
     {
-        return new VatOutputsMapping(['vatOutputs' => [
-            'cz-210' => ['dp3' => ['row' => 1], 'kh' => ['group' => 'A4A5'], 'sh' => null],
-            'cz-410' => ['dp3' => ['row' => 20], 'kh' => null, 'sh' => ['kod' => 0]],
-            'cz-112' => ['dp3' => null, 'kh' => null, 'sh' => null],
-        ]]);
+        return new VatOutputsMapping([
+            'vatOutputs' => [
+                'cz-210' => ['dp3' => ['row' => 1], 'kh' => ['group' => 'A4A5'], 'sh' => null],
+                'cz-410' => ['dp3' => ['row' => 20], 'kh' => null, 'sh' => ['kod' => 0]],
+                'cz-112' => ['dp3' => null, 'kh' => null, 'sh' => null],
+            ],
+            // jako reálný config: KH od 1. 1. 2016 (#58), SH bez omezení
+            'reportTypes' => ['cs' => ['validFrom' => '2016-01-01']],
+        ]);
+    }
+
+    /** Přelom 2015/2016: instance KH i SH pro prosinec 2015 existují — KH se přesto nesmí použít. */
+    private function turn2016Lookup(): FakePeriodLookup
+    {
+        return new FakePeriodLookup([
+            [101, 5, 'return', '2015-10-01', '2015-12-31'],
+            [111, 5, 'cs', '2015-12-01', '2015-12-31'],
+            [121, 5, 'rs', '2015-12-01', '2015-12-31'],
+            [102, 5, 'return', '2016-01-01', '2016-03-31'],
+            [112, 5, 'cs', '2016-01-01', '2016-01-31'],
+            [122, 5, 'rs', '2016-01-01', '2016-01-31'],
+        ]);
     }
 
     /** Q1/2026 přiznání + měsíční KH a SH. */
@@ -173,6 +194,65 @@ final class VatPeriodAssignerTest extends TestCase
         $this->assertSame($inQ1, $q1Union);
         $this->assertSame(count($q1Union), count(array_unique($q1Union)), 'doklad ve dvou KH instancích');
         $this->assertSame([6], $byCs[14]);
+    }
+
+    // ── Zákonný počátek výstupu (#58) ───────────────────────────────────────
+
+    public function testCsBeforeValidFromIsNullAndLookupNotCalled(): void
+    {
+        $lookup = $this->turn2016Lookup();
+        $out = $this->assigner(lookup: $lookup)->compute(
+            ['vat_registration' => 5, 'vat_duzp' => '2015-12-31', 'vat_dppd' => null],
+            [['vat_code' => 'cz-210'], ['vat_code' => 'cz-410']],
+        );
+        $this->assertSame(['vat_period' => 101, 'cs_period' => null, 'rs_period' => 121], $out, 'přiznání a SH ano, KH ne');
+        $this->assertSame(0, $lookup->calls['cs'], 'lookup pro cs se nesmí volat — žádný on-demand koncept');
+        $this->assertSame(1, $lookup->calls['rs']);
+    }
+
+    public function testCsFromValidFromIsAssigned(): void
+    {
+        $out = $this->assigner(lookup: $this->turn2016Lookup())->compute(
+            ['vat_registration' => 5, 'vat_duzp' => '2016-01-01', 'vat_dppd' => null],
+            [['vat_code' => 'cz-210']],
+        );
+        $this->assertSame(['vat_period' => 102, 'cs_period' => 112, 'rs_period' => null], $out);
+    }
+
+    public function testValidFromAppliesToClampedEffectiveDate(): void
+    {
+        // DUZP v prosinci 2015, DPPD v lednu 2016 → efektivní datum se ořízne
+        // do Q4/2015 přiznání (2015-12-31) → před validFrom → KH NULL.
+        $lookup = $this->turn2016Lookup();
+        $out = $this->assigner(lookup: $lookup)->compute(
+            ['vat_registration' => 5, 'vat_duzp' => '2015-12-20', 'vat_dppd' => '2016-01-05'],
+            [['vat_code' => 'cz-210']],
+        );
+        $this->assertSame(101, $out['vat_period']);
+        $this->assertNull($out['cs_period']);
+        $this->assertSame(0, $lookup->calls['cs']);
+    }
+
+    public function testWithoutReportTypesSectionNoLimitApplies(): void
+    {
+        $mapping = new VatOutputsMapping(['vatOutputs' => [
+            'cz-210' => ['dp3' => ['row' => 1], 'kh' => ['group' => 'A4A5'], 'sh' => null],
+        ]]);
+        $out = $this->assigner($mapping, $this->turn2016Lookup())->compute(
+            ['vat_registration' => 5, 'vat_duzp' => '2015-12-31'],
+            [['vat_code' => 'cz-210']],
+        );
+        $this->assertSame(111, $out['cs_period']);
+    }
+
+    public function testIsBeforeValidFrom(): void
+    {
+        $assigner = $this->assigner();
+        $this->assertTrue($assigner->isBeforeValidFrom('cs', '2015-12-31'));
+        $this->assertFalse($assigner->isBeforeValidFrom('cs', '2016-01-01'));
+        $this->assertFalse($assigner->isBeforeValidFrom('rs', '2013-01-01'));
+        $this->assertFalse($assigner->isBeforeValidFrom('return', '2013-01-01'));
+        $this->assertFalse((new VatPeriodAssigner($this->q1Lookup(), null))->isBeforeValidFrom('cs', '2013-01-01'), 'bez mapování bez omezení');
     }
 
     // ── Ruční přepis (handler) ──────────────────────────────────────────────

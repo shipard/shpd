@@ -209,10 +209,14 @@ class CashDocFormTest extends TestCase
         $this->assertContains('attachments', $tabIds);
         $this->assertLessThan(array_search('settings', $tabIds, true), array_search('attachments', $tabIds, true));
 
-        foreach (['payment_method', 'vat_registration', 'vat_calc_source', 'total_rounding_mode', 'vat_rounding_mode'] as $col) {
+        foreach (['payment_method', 'vat_registration', 'total_rounding_mode', 'vat_rounding_mode'] as $col) {
             $this->assertNull($this->findElement($def, $col, 'basic'), "$col už není v hlavičce");
             $this->assertNotNull($this->findElement($def, $col, 'settings'), "$col je v Nastavení");
         }
+
+        // #75 C2: metoda výpočtu DPH nemá u pokladního dokladu smysl —
+        // platí norma (daň ze součtu řádků v sazbě), pole je skryté.
+        $this->assertNull($this->findElement($def, 'vat_calc_source'), 'vat_calc_source není ve formuláři');
 
         $this->assertNotNull($this->findElement($def, 'partner_doc_number'), 'ev. číslo dokladu v hlavičce');
         $place = $this->findElement($def, 'vat_place');

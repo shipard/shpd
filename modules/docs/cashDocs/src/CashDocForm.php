@@ -169,11 +169,6 @@ class CashDocForm extends CashDeskFormBase
                         required: $hasVat,
                         hidden: !$hasVat,
                     )
-                    ->select(
-                        'vat_calc_source',
-                        options: $this->resolveCfgItemOptions('docs.core.vatCalcSources'),
-                        hidden: !$hasVat,
-                    )
 
             ->section(title: 'Zaokrouhlení')
                 ->col()

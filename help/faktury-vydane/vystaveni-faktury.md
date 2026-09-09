@@ -97,6 +97,11 @@ toho, kdo ti kolik dluží. Nebo zkoušíš, co Shipard u vydané faktury umí a
    a celkový součet. Nesouhlasí-li s tím, co čekáš, oprav řádky teď — ne až po
    potvrzení.
 
+   Daň se počítá **jednou ze součtu řádků v každé sazbě**, ne po řádcích —
+   tak to předepisuje zákon. U dokladu v cenách s DPH proto může být základ
+   na řádku o haléř jinak, než kolik by vyšlo z ceny toho řádku samotného;
+   součet za sazbu i celková částka jsou vždy správně.
+
 6. **Dej Potvrdit.** Doklad dostane **číslo** z číselné řady, jako
    **Variabilní symbol** se předplní jeho pořadové číslo a do dokladu se
    zmrazí **Fakturační údaje** — tvoje i odběratelovy údaje v podobě, v jaké

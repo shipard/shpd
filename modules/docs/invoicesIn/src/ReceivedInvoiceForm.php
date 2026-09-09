@@ -135,6 +135,7 @@ class ReceivedInvoiceForm extends DocsHeadsFormBase
                 'vat_calc_source',
                 options: $this->resolveCfgItemOptions('docs.core.vatCalcSources'),
                 hidden: !$hasVat,
+                hint: self::VAT_CALC_SOURCE_HINT,
             )
             ->select(
                 'vat_place',

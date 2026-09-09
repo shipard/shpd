@@ -1493,44 +1493,14 @@ to může být jeden vstup s přepínačem "% / Kč", v datech jsou dva sloupce.
 
 ### 7.4 Výpočet DPH na řádku
 
-Závisí na `vat_mode` na hlavičce:
+Řádkové `vat_base` / `vat_amount` / `vat_total` počítá `DocRowCalculator::computeVat()`
+podle `vat_mode` hlavičky (ceny bez daně / s daní / doklad bez DPH) a podle
+sémantiky DPH kódu (`noPayTax`, samovyměření). Jsou **informativní** — pro tisk
+řádku; autorita dokladu je rekapitulace a řádky se na ni dorovnávají.
 
-```php
-public function calculateRowVat(array &$row, string $vatMode): void
-{
-    if ($row['row_kind'] !== 1 || empty($row['vat_code']) || empty($row['vat_pct'])) {
-        $row['vat_base'] = $row['total_price'] ?? 0;
-        $row['vat_amount'] = 0;
-        $row['vat_total'] = $row['total_price'] ?? 0;
-        return;
-    }
-
-    $totalPrice = (float) $row['total_price'];
-    $pct = (float) $row['vat_pct'];
-
-    if ($vatMode == 0) {
-        // bez DPH
-        $row['vat_base'] = $totalPrice;
-        $row['vat_amount'] = 0;
-        $row['vat_total'] = $totalPrice;
-    } elseif ($vatMode == 1) {
-        // ceny v řádcích jsou bez DPH
-        $row['vat_base'] = $totalPrice;
-        $row['vat_amount'] = round($totalPrice * $pct / 100.0, 2);
-        $row['vat_total'] = round($row['vat_base'] + $row['vat_amount'], 2);
-    } elseif ($vatMode == 2) {
-        // ceny v řádcích jsou s DPH
-        $row['vat_total'] = $totalPrice;
-        $row['vat_base'] = round($totalPrice / (1 + $pct / 100.0), 2);
-        $row['vat_amount'] = round($row['vat_total'] - $row['vat_base'], 2);
-    }
-}
-```
-
-Toto se týká řádkového počítání DPH (`vat_calc_source = 1` z hlavičky).
-V případě `vat_calc_source = 0` (z hlavičky) jsou hodnoty `vat_base`,
-`vat_amount`, `vat_total` na řádku ne plně autoritativní — autoritativní
-je rekapitulace, která se počítá ze součtu základů.
+Pravidla, invarianty a příklady: **[`docs/vat-calculation.md`](vat-calculation.md)**
+§ 2 (režim cen), § 4 (speciální kódy), § 7 (dorovnání řádků na rekapitulaci
+v obou měnách).
 
 ---
 
@@ -1590,129 +1560,31 @@ je rekapitulace, která se počítá ze součtu základů.
 
 ### 8.2 Sestavení v `beforeSave`
 
-Algoritmus:
+Rekapitulaci staví `DocDocument::buildVatRecapitulation()` — seskupí položkové
+řádky per (DPH kód, sazba) a per skupina spočítá základ, daň a celkem. Metodu
+výpočtu vybírá `vat_calc_source` dokladu (`0 z hlavičky` = norma, daň jednou ze
+součtu cen ve sazbě; `1 z řádků` = historický součet řádkových hodnot), autoritu
+rekapitulace `vat_recap_source` (`0 přepočítaná` z řádků, `1 převzatá` = fakt
+z existujícího dokladu). Kód se `reverseVatCode` navíc generuje oddaňovací pár
+(`is_reverse_pair`), který dědí sazbu i daň primární skupiny.
 
-```php
-public function buildVatRecapitulation(array &$data): array
-{
-    $rows = $data['rows'] ?? [];
-    $vatMode = (int) $data['vat_mode'];
-    $exchRate = (float) ($data['exchange_rate'] ?? 1.0);
-    $countryCode = $this->resolveCountryFromVatRegistration($data['vat_registration']);
-    
-    // 1. Group rows by (vat_code, vat_pct), sum base
-    $grouped = [];
-    foreach ($rows as $row) {
-        if ($row['row_kind'] !== 1 || empty($row['vat_code'])) continue;
-        $key = $row['vat_code'] . '|' . $row['vat_pct'];
-        if (!isset($grouped[$key])) {
-            $grouped[$key] = [
-                'vat_code' => $row['vat_code'],
-                'vat_pct'  => (float) $row['vat_pct'],
-                'base'     => 0
-            ];
-        }
-        $grouped[$key]['base'] += (float) ($row['total_price'] ?? 0);
-    }
+Výsledek se ukládá do child tabulky `docs_core_vat_recap` standardním syncem
+přes `TableGateway` (dataKey `vatRecap`).
 
-    // 2. For each group, compute tax + flags from vatCode definition
-    $vatCodes = $this->cfgItem("world.vat.{$countryCode}")['vatCodes'];
-    $recap = [];
-    $sortOrder = 0;
-
-    foreach ($grouped as $entry) {
-        $codeDef = $vatCodes[$entry['vat_code']];
-
-        // Compute primary line
-        $base = round($entry['base'], 2);
-        $tax  = empty($codeDef['noPayTax'])
-            ? round($base * $entry['vat_pct'] / 100, 2)
-            : 0;
-
-        $primary = [
-            'vat_code'  => $entry['vat_code'],
-            'vat_pct'   => $entry['vat_pct'],
-            'base'      => $base,
-            'tax'       => $tax,
-            'total'     => $base + $tax,
-            'sum_base'  => $codeDef['sumBase']  ?? 1,
-            'sum_tax'   => $codeDef['sumTax']   ?? 1,
-            'sum_total' => $codeDef['sumTotal'] ?? 1,
-            'is_reverse_pair' => 0,
-            'sort_order' => $sortOrder++,
-        ];
-
-        // Apply exchange rate to *_dom
-        $primary['base_dom']  = round($base * $exchRate, 2);
-        $primary['tax_dom']   = round($tax  * $exchRate, 2);
-        $primary['total_dom'] = round($primary['total'] * $exchRate, 2);
-
-        $recap[] = $primary;
-
-        // If reverse charge — add paired row (oddanění)
-        if (!empty($codeDef['reverseVatCode'])) {
-            $reverseCode = $codeDef['reverseVatCode'];
-            $reverseDef  = $vatCodes[$reverseCode];
-
-            // Resolve % from time of DUZP for the reverse code
-            $reversePct = $this->resolveVatPct($countryCode, $reverseCode, $data['vat_duzp']);
-            $reverseTax = round($base * $reversePct / 100, 2);
-
-            $paired = [
-                'vat_code'  => $reverseCode,
-                'vat_pct'   => $reversePct,
-                'base'      => $base,
-                'tax'       => $reverseTax,
-                'total'     => $base + $reverseTax,
-                'sum_base'  => $reverseDef['sumBase']  ?? 1,
-                'sum_tax'   => $reverseDef['sumTax']   ?? 1,
-                'sum_total' => $reverseDef['sumTotal'] ?? 1,
-                'is_reverse_pair' => 1,
-                'sort_order' => $sortOrder++,
-            ];
-            $paired['base_dom']  = round($paired['base']  * $exchRate, 2);
-            $paired['tax_dom']   = round($paired['tax']   * $exchRate, 2);
-            $paired['total_dom'] = round($paired['total'] * $exchRate, 2);
-
-            $recap[] = $paired;
-        }
-    }
-
-    return $recap;
-}
-```
-
-Výsledek se pak uloží do child tabulky `docs_core_vat_recap` standardním
-mechanismem (sync přes `TableGateway`). Stará rekapitulace se smaže, nová
-se vloží.
+Pravidla a příklady: **[`docs/vat-calculation.md`](vat-calculation.md)** § 3
+(metody výpočtu), § 4 (speciální kódy), § 5 (autorita rekapitulace).
 
 ### 8.3 Výpočet hlavičkových součtů
 
-Po sestavení rekapitulace se hlavičkové součty vypočtou takto:
+`sumTotals()` sčítá základ, daň a celkem **z rekapitulace** podle flagů
+`sum_base` / `sum_tax` / `sum_total` z definice kódu (oddaňovací pár má všechny
+tři nulové, takže do součtů nevstupuje); řádky mimo rekapitulaci (bez kódu,
+doklad bez DPH) se přičtou z řádkových hodnot. Pak se aplikuje
+`total_rounding_mode` (rozdíl do `total_rounding`) a dopočte domácí měna.
 
-```php
-$data['total_base']   = 0;
-$data['total_vat']    = 0;
-$data['total_amount'] = 0;
-
-foreach ($recap as $r) {
-    if ($r['sum_base'])  $data['total_base']   += $r['base'];
-    if ($r['sum_tax'])   $data['total_vat']    += $r['tax'];
-    if ($r['sum_total']) $data['total_amount'] += $r['total'];
-}
-
-// Apply rounding
-$data['total_amount']    = $this->applyRounding($data['total_amount'], $data['total_rounding_mode']);
-$data['total_rounding'] = ...; // diff caused by rounding
-
-// Convert to home currency
-$data['total_base_dom']   = round($data['total_base']   * $exchRate, 2);
-$data['total_vat_dom']    = round($data['total_vat']    * $exchRate, 2);
-$data['total_amount_dom'] = round($data['total_amount'] * $exchRate, 2);
-```
-
-Flagy `sum_base`/`sum_tax`/`sum_total` zajišťují, že reverse charge páry
-nepřičítají do součtů (oddanění má všechny tři flagy = 0).
+Pravidla a invarianty: **[`docs/vat-calculation.md`](vat-calculation.md)** § 1
+(tři úrovně, jedna autorita), § 6 (zaokrouhlení celkové částky), § 7 (domácí
+měna a dorovnání řádků).
 
 ---
 

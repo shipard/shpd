@@ -36,6 +36,16 @@ use Shipard\Core\Settings\SettingsStore;
  */
 abstract class DocsHeadsFormBase extends TableForm
 {
+    /**
+     * Hint u selectu `vat_calc_source` — sdílený hlavičkou i per-typ
+     * formuláři (FPB má select v hlavičce, FVB v tabu Nastavení).
+     * Vysvětluje volbu, kterou uživatel skoro nikdy nemění: default je
+     * norma, druhá možnost je historický režim (docs/vat-calculation.md § 3).
+     */
+    protected const VAT_CALC_SOURCE_HINT =
+        'Z hlavičky = daň ze součtu řádků v sazbě (norma). '
+        . 'Z řádků = součet řádkových daní (historický režim).';
+
     /** Per-instance cache — viz vatAgendaDisabled(). */
     private ?bool $vatAgendaDisabled = null;
 
@@ -480,6 +490,7 @@ abstract class DocsHeadsFormBase extends TableForm
                     ->select('vat_calc_source',
                         options: $this->resolveCfgItemOptions('docs.core.vatCalcSources'),
                         hidden: !$hasVat,
+                        hint: self::VAT_CALC_SOURCE_HINT,
                     )
                     ->select('vat_place',
                         options: $this->resolveCfgItemOptions('docs.core.vatPlaces'),

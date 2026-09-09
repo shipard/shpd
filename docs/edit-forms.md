@@ -561,11 +561,19 @@ volitelné pole `warnings[]` se stejným tvarem položek jako `details[]`:
 }
 ```
 
-Klíč chybí, když žádné warningy nejsou. Frontend je zatím **nezobrazuje**
-(follow-up až s toast/banner infrastrukturou) — neznámý klíč ignoruje.
-První uživatel: FPB bez bankovního spojení dodavatele
+Klíč chybí, když žádné warningy nejsou. Frontend je zobrazuje ve **žlutém
+banneru** nad obsahem formuláře (`FormEditor` → `warnings` state,
+`form.warnings.bannerTitle`), vedle červeného validačního banneru — stejná
+geometrie, jiné téma, žádné tabové tečky: warning uložení ani přechod stavu
+nebrání. `field` odpovídající sloupci formuláře dostane label pole, ostatní
+(`_form`, id tabu) jdou holé. Banner drží do dalšího pokusu o uložení —
+popisuje stav, který se právě uložil.
+
+Uživatelé: FPB bez bankovního spojení dodavatele
 (`partner_bank_recommended`, dřív blokující `partner_bank_required` — hard
-požadavek se přesune do budoucího platebního flow).
+požadavek se přesune do budoucího platebního flow); převzatá rekapitulace
+DPH proti řádkům dokladu (`rows_recap_mismatch`) a její vnitřní konzistence
+(`vat_recap_inconsistent`, `docs/vat-calculation.md` § 5).
 
 ### Kontrakt `field`
 

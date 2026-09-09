@@ -34,6 +34,11 @@
   // Form-level chyby ze serveru (`_form`, neznámý/prázdný field). Nemají vazbu
   // na konkrétní pole — žijí jen v banneru nad tabbarem. {message, code}.
   let formErrors = $state([]);
+  // Neblokující doporučení serveru z úspěšné save response (`warnings[]`,
+  // docs/edit-forms.md § 8). Záznam JE uložený — banner jen upozorní, že
+  // něco nesedí (např. rekapitulace DPH proti řádkům dokladu). Drží se do
+  // dalšího pokusu o uložení, protože popisuje stav, který se právě uložil.
+  let warnings = $state([]);
   // Map column → {id, primary, secondary} pre-resolved lookup popisů.
   // Při (re)loadu a po recalculate/save nahrazujeme celým státem ze serveru
   // (server vrací autoritativní obraz pro všechna lookup pole — chybějící klíč
@@ -254,6 +259,7 @@
       : await put(`/_ui/form/${table}/save/${currentId}`, sanitizeFormData(formData));
 
     if (res?.success) {
+      captureWarnings(res.data);
       return res.data ?? {};
     }
     if (res?.error?.code === 'VALIDATION_ERROR' && res?.error?.details) {
@@ -328,6 +334,7 @@
       const data = { ...sanitizeFormData(formData), docState: targetState };
       const res = await post(`/_ui/form/${table}/save`, data);
       if (res?.success) {
+        captureWarnings(res.data);
         onSaved?.(res.data);
         if (closeForm) {
           // Zavření obejde dirty check — data byla právě uložena. Bypass je nutný,
@@ -360,6 +367,7 @@
       // generickým „Validace selhala". Teď používá stejný helper jako ostatní větve.
       const res = await put(`/_ui/form/${table}/save/${currentId}`, { docState: targetState });
       if (res?.success) {
+        captureWarnings(res.data);
         onSaved?.(res.data);
         if (closeForm) {
           // Zavření obejde dirty check — data byla právě uložena.
@@ -484,10 +492,29 @@
     switchToErrorTab();
   }
 
-  // Vyčistí oba error state — volá se na začátku každého save/transition pokusu.
+  // Vyčistí validační state — volá se na začátku každého save/transition
+  // pokusu. Warningy patří k předchozímu uložení, takže padají taky.
   function clearValidationErrors() {
     fieldErrors = {};
     formErrors = [];
+    warnings = [];
+  }
+
+  // Warningy z úspěšné odpovědi (uložení i přechod stavu). Klíč v odpovědi
+  // chybí, když žádné nejsou.
+  function captureWarnings(data) {
+    warnings = Array.isArray(data?.warnings) ? data.warnings : [];
+  }
+
+  // Položky banneru warningů: field odpovídající sloupci formuláře dostane
+  // label pole, ostatní (`_form`, id tabu jako `rows`) jdou holé — stejná
+  // logika jako u chyb.
+  function warningEntriesForBanner() {
+    const elMap = buildElementMap();
+    return warnings.map(w => {
+      const el = w.field ? elMap[w.field] : null;
+      return { label: el?.label ?? null, message: w.message ?? '' };
+    });
   }
 
   // Sestaví field-level položky banneru s labelem pole (fallback na column).
@@ -591,6 +618,22 @@
         {/each}
         {#each fieldEntriesForBanner() as { label, message }}
           <li><strong>{label}:</strong> {message}</li>
+        {/each}
+      </ul>
+    </div>
+  {/if}
+
+  <!-- Banner neblokujících doporučení — záznam je uložený, jen něco nesedí.
+       Žije vedle validačního banneru (taky nad tab-contentem), ale žlutě
+       a bez tabových teček: warningy nebrání uložení ani přechodu stavu. -->
+  {#if warnings.length > 0}
+    <div class="shpd-form-editor__warning-banner" role="status">
+      <div class="shpd-form-editor__warning-banner-title">
+        {t('form.warnings.bannerTitle')}
+      </div>
+      <ul class="shpd-form-editor__warning-banner-list">
+        {#each warningEntriesForBanner() as { label, message }}
+          <li>{#if label}<strong>{label}:</strong> {/if}{message}</li>
         {/each}
       </ul>
     </div>
@@ -798,6 +841,39 @@
   }
 
   .shpd-form-editor__validation-banner-list strong {
+    font-weight: 600;
+  }
+
+  /* Banner warningů — stejná geometrie jako validační, jiné téma (žlutá):
+     na první pohled odlišitelné od chyby, která brání uložení. */
+  .shpd-form-editor__warning-banner {
+    margin: var(--shpd-space-md);
+    padding: var(--shpd-space-sm) var(--shpd-space-md);
+    background: var(--shpd-color-warning-soft);
+    border: 1px solid var(--shpd-color-warning);
+    border-radius: var(--shpd-radius-md);
+    color: var(--shpd-color-text);
+    font-size: var(--shpd-font-size-sm);
+    flex-shrink: 0;
+  }
+
+  .shpd-form-editor__warning-banner-title {
+    font-weight: 600;
+    margin-bottom: var(--shpd-space-xs);
+    color: var(--shpd-color-warning);
+  }
+
+  .shpd-form-editor__warning-banner-list {
+    margin: 0;
+    padding-left: var(--shpd-space-lg);
+    list-style: disc;
+  }
+
+  .shpd-form-editor__warning-banner-list li + li {
+    margin-top: 2px;
+  }
+
+  .shpd-form-editor__warning-banner-list strong {
     font-weight: 600;
   }
 </style>

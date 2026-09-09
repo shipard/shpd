@@ -276,6 +276,7 @@ export default {
   'form.moreActions': 'More actions',
   // Neutral title — banner shows for Save as well as Confirm / Repair.
   'form.validation.bannerTitle': 'The form contains errors:',
+  'form.warnings.bannerTitle': 'Saved, but please check:',
 
   // ── Form sub-table ──────────────────────────────────────────────────────
   'subtable.saveFirst': 'Save the record first, then you can add rows.',

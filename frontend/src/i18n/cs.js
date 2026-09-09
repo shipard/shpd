@@ -285,6 +285,7 @@ export default {
   'form.moreActions': 'Další akce',
   // Neutrální nadpis — banner se ukazuje při Uložit i Potvrdit i Opravit.
   'form.validation.bannerTitle': 'Formulář obsahuje chyby:',
+  'form.warnings.bannerTitle': 'Uloženo, ale zkontroluj:',
 
   // ── Form sub-table ──────────────────────────────────────────────────────
   'subtable.saveFirst': 'Nejprve uložte záznam, poté budete moci přidávat záznamy.',

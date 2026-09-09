@@ -127,7 +127,14 @@ class DocumentExporterTest extends TestCase
             $c['dates'],
         );
         $this->assertSame('CZK', $c['currency']);
-        $this->assertSame(['mode' => 'fromBase', 'place' => 'domestic', 'registrationCountry' => 'cz'], $c['vat']);
+        $this->assertSame(
+            [
+                'mode' => 'fromBase', 'place' => 'domestic', 'registrationCountry' => 'cz',
+                'recapSource' => 'computed', 'calcSource' => 'header',
+            ],
+            $c['vat'],
+            'autorita rekapitulace i metoda výpočtu musí přežít round-trip',
+        );
         $this->assertSame(['method' => 'bankTransfer', 'paymentReference' => '2026031', 'constantSymbol' => '0308'], $c['payment']);
         $this->assertSame(['internal' => 'interní'], $c['notes']);
 

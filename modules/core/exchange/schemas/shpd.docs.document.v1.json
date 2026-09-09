@@ -55,7 +55,9 @@
             "properties": {
                 "mode":                { "type": ["string", "null"] },
                 "place":               { "type": ["string", "null"] },
-                "registrationCountry": { "type": ["string", "null"], "pattern": "^[A-Za-z]{2}$" }
+                "registrationCountry": { "type": ["string", "null"], "pattern": "^[A-Za-z]{2}$" },
+                "recapSource":         { "enum": ["computed", "declared", null] },
+                "calcSource":          { "enum": ["header", "rows", null] }
             }
         },
         "payment": {

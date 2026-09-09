@@ -335,6 +335,20 @@
                                                         "null"
                                                     ],
                                                     "pattern": "^[A-Za-z]{2}$"
+                                                },
+                                                "recapSource": {
+                                                    "enum": [
+                                                        "computed",
+                                                        "declared",
+                                                        null
+                                                    ]
+                                                },
+                                                "calcSource": {
+                                                    "enum": [
+                                                        "header",
+                                                        "rows",
+                                                        null
+                                                    ]
                                                 }
                                             }
                                         },

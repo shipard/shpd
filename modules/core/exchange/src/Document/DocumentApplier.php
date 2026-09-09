@@ -66,6 +66,18 @@ class DocumentApplier
     ];
 
     /** Map canonical vat.place → docs_core_heads.vat_place (cfgItem docs.core.vatPlaces). */
+    /** Canonical `vat.recapSource` → docs_core_heads.vat_recap_source. */
+    private const VAT_RECAP_SOURCE_MAP = [
+        'computed' => 0,
+        'declared' => 1,
+    ];
+
+    /** Canonical `vat.calcSource` → docs_core_heads.vat_calc_source. */
+    private const VAT_CALC_SOURCE_MAP = [
+        'header' => 0,
+        'rows'   => 1,
+    ];
+
     private const VAT_PLACE_MAP = [
         'domestic'    => 0,
         'intracom'    => 1,
@@ -247,6 +259,7 @@ class DocumentApplier
         // 2. Semantic checks + resolve. Both contribute to _resolve.issues.
         $issues = $this->documentValidator->validate($canonical);
         $this->appendVatModeIssue($canonical, $issues);
+        $this->appendRecapSourceIssue($canonical, $issues);
         $resolved = $this->resolveAll($canonical, $issues);
         $enriched = $this->withResolve($canonical, $resolved, $issues);
 
@@ -284,6 +297,7 @@ class DocumentApplier
         }
         $validatorIssues = $this->documentValidator->validate($canonical);
         $this->appendVatModeIssue($canonical, $validatorIssues);
+        $this->appendRecapSourceIssue($canonical, $validatorIssues);
 
         // 3. Re-run resolve (fresh DB read; client's _resolve might be stale).
         $resolved = $this->resolveAll($canonical, $validatorIssues);
@@ -1090,6 +1104,13 @@ class DocumentApplier
             $vatMode = $derivedVatMode;
         }
         $vatPlace = self::VAT_PLACE_MAP[(string) ($canonical['vat']['place'] ?? 'domestic')] ?? 0;
+        // Autorita rekapitulace + řádky k převzetí (R3/I4/I7). Přepočítanou
+        // rekapitulaci si DocDocument spočítá z řádků sám, `vatRecap` se pak
+        // do payloadu nedává — prázdný child set by u nového dokladu nic
+        // nezměnil, ale u převzaté je to jediná cesta, jak se data dostanou
+        // do docs_core_vat_recap.
+        $recapSource = $this->resolveRecapSource($canonical);
+        $calcSource = self::VAT_CALC_SOURCE_MAP[(string) ($canonical['vat']['calcSource'] ?? 'header')] ?? 0;
         // Pokladní doklad bez způsobu úhrady = Hotovost (ostatní Převodem).
         $defaultPaymentMethod = $isCashDeskBound ? 'cash' : 'bankTransfer';
         $paymentMethod = self::PAYMENT_METHOD_MAP[(string) ($canonical['payment']['method'] ?? $defaultPaymentMethod)]
@@ -1159,6 +1180,8 @@ class DocumentApplier
             'period_from'          => $canonical['dates']['periodFrom'] ?? null,
             'period_to'            => $canonical['dates']['periodTo'] ?? null,
             'vat_mode'             => $vatMode,
+            'vat_calc_source'      => $calcSource,
+            'vat_recap_source'     => $recapSource['source'],
             'vat_place'            => $vatPlace,
             'vat_registration'    => $vatRegistrationId,
             'doc_currency'         => isset($canonical['currency'])
@@ -1180,6 +1203,7 @@ class DocumentApplier
             'source_extracted_at'  => $this->mapExtractedAt($canonical['source']['extractedAt'] ?? null),
             'docState'             => $targetDocState,
             'rows'                 => $this->transformRows($canonical['rows'] ?? [], $plan, $sideIds),
+            'vatRecap'             => $recapSource['recap'] !== [] ? $recapSource['recap'] : null,
         ];
 
         return array_filter(
@@ -1279,6 +1303,175 @@ class DocumentApplier
         }
 
         return $snap;
+    }
+
+    // ── Autorita rekapitulace DPH (vat.recapSource) ─────────────────────────
+
+    /**
+     * Zdroj rekapitulace pro `docs_core_heads.vat_recap_source` a řádky
+     * rekapitulace k převzetí (`docs/vat-calculation.md` § 5, R3/I4/I7).
+     *
+     * - `vat.recapSource: "declared"` — rekapitulace ze zdroje je fakt
+     *   (import ze starého Shipardu, doklad dodavatele). Bere se, jak
+     *   přišla; jediná podmínka je dohledatelný DPH kód u každého řádku,
+     *   bez něj by nešlo určit ani flagy sčítání (`vat_code` je NOT NULL).
+     *   Vnitřní nesrovnalost **není** důvod k přepočtu — u přenesení daňové
+     *   povinnosti `base + tax ≠ total` platí a je správně; nesrovnalost
+     *   hlásí warning `vat_recap_inconsistent`.
+     * - `"computed"` — spočítat z řádků.
+     * - `null` — odvodí se: u dokladu, který **přijímáme** (`selfParty`
+     *   customer, typicky AI extrakce faktury dodavatele), je převzatá
+     *   tehdy, když rekapitulace je neprázdná, každý řádek projde
+     *   aritmetickou kontrolou a kódy jsou dohledatelné. Jinak přepočítaná.
+     *   U vystavených dokladů vždy přepočítaná — rekapitulaci děláme my.
+     *
+     * @param array<string, mixed> $canonical
+     * @return array{source: int, recap: array<int, array<string, mixed>>, fallback: ?string}
+     */
+    private function resolveRecapSource(array $canonical): array
+    {
+        $computed = ['source' => 0, 'recap' => [], 'fallback' => null];
+        $flag = $canonical['vat']['recapSource'] ?? null;
+        if ($flag !== null && (self::VAT_RECAP_SOURCE_MAP[(string) $flag] ?? null) === 0) {
+            return $computed;
+        }
+        $explicit = (string) ($flag ?? '') === 'declared';
+
+        $entries = $canonical['vatRecap'] ?? null;
+        if (!is_array($entries) || $entries === []) {
+            return $explicit
+                ? ['source' => 0, 'recap' => [], 'fallback' => 'rekapitulace je prázdná']
+                : $computed;
+        }
+
+        // Bez explicitní deklarace přebírá rekapitulaci jen doklad, který
+        // přijímáme — u vystaveného ji počítáme sami.
+        if (!$explicit && (string) ($canonical['selfParty'] ?? '') !== 'customer') {
+            return $computed;
+        }
+
+        $codesByPct = $this->recapCodesFromRows($canonical);
+        $recap = [];
+        foreach ($entries as $entry) {
+            if (!is_array($entry)) {
+                continue;
+            }
+            $pct = (float) ($entry['vatPct'] ?? 0);
+            $code = trim((string) ($entry['vatCode'] ?? ''));
+            if ($code === '') {
+                // I7: ISDOC rekapitulaci kódy nenese — dohledáme je z řádků,
+                // ale jen když je pro sazbu jednoznačný.
+                $code = $codesByPct[(string) $pct] ?? '';
+            }
+            if ($code === '') {
+                return [
+                    'source'   => 0,
+                    'recap'    => [],
+                    'fallback' => sprintf('řádek se sazbou %s %% nemá DPH kód', (string) $pct),
+                ];
+            }
+            if (!$explicit && !$this->recapEntryIsConsistent($entry, $pct)) {
+                return [
+                    'source'   => 0,
+                    'recap'    => [],
+                    'fallback' => sprintf('řádek %s %s %% je vnitřně nekonzistentní', $code, (string) $pct),
+                ];
+            }
+            $recap[] = [
+                'vat_code'        => $code,
+                'vat_pct'         => $pct,
+                'base'            => round((float) ($entry['base'] ?? 0), 2),
+                'tax'             => round((float) ($entry['tax'] ?? 0), 2),
+                'total'           => round((float) ($entry['total'] ?? 0), 2),
+                'is_reverse_pair' => ($entry['isReversePair'] ?? null) === true ? 1 : 0,
+            ];
+        }
+
+        if ($recap === []) {
+            return $explicit
+                ? ['source' => 0, 'recap' => [], 'fallback' => 'rekapitulace je prázdná']
+                : $computed;
+        }
+        return ['source' => 1, 'recap' => $recap, 'fallback' => null];
+    }
+
+    /**
+     * Mapa sazba → DPH kód z položkových řádků, jen pro sazby s jediným
+     * kódem (I7). Slouží rekapitulaci bez kódů (ISDOC).
+     *
+     * @param array<string, mixed> $canonical
+     * @return array<string, string>
+     */
+    private function recapCodesFromRows(array $canonical): array
+    {
+        $byPct = [];
+        foreach ((array) ($canonical['rows'] ?? []) as $row) {
+            if (!is_array($row) || (string) ($row['rowKind'] ?? 'item') !== 'item') {
+                continue;
+            }
+            $code = trim((string) ($row['vat']['code'] ?? ''));
+            if ($code === '') {
+                continue;
+            }
+            $key = (string) (float) ($row['vat']['pct'] ?? 0);
+            $byPct[$key][$code] = true;
+        }
+        $out = [];
+        foreach ($byPct as $key => $codes) {
+            if (count($codes) === 1) {
+                $out[$key] = (string) array_key_first($codes);
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Aritmetika řádku rekapitulace — stejné tolerance jako
+     * {@see DocumentValidator::checkVatRecapArithmetic}. Oddaňovací páry
+     * a nulové sazby projdou vždy (daň je u nich informativní).
+     *
+     * @param array<string, mixed> $entry
+     */
+    private function recapEntryIsConsistent(array $entry, float $pct): bool
+    {
+        if (($entry['isReversePair'] ?? null) === true || $pct === 0.0) {
+            return true;
+        }
+        foreach (['base', 'tax', 'total'] as $key) {
+            if (!isset($entry[$key]) || !is_numeric($entry[$key])) {
+                return false;
+            }
+        }
+        $base  = (float) $entry['base'];
+        $tax   = (float) $entry['tax'];
+        $total = (float) $entry['total'];
+        if (abs($base + $tax - $total) > 0.02) {
+            return false;
+        }
+        return abs($tax - round($base * $pct / 100.0, 2)) <= max(0.05, abs($base) * 0.001);
+    }
+
+    /**
+     * Info issue, když rekapitulace nešla převzít a spočítá se z řádků —
+     * bez něj by uživatel nepoznal, proč je na dokladu jiná rekapitulace
+     * než na předloze.
+     *
+     * @param array<string, mixed> $canonical
+     * @param array<int, array{severity: string, path: string, code: string, message: string}> $issues
+     */
+    private function appendRecapSourceIssue(array $canonical, array &$issues): void
+    {
+        $resolved = $this->resolveRecapSource($canonical);
+        if ($resolved['fallback'] === null) {
+            return;
+        }
+        $issues[] = [
+            'severity' => 'info',
+            'path'     => 'vat.recapSource',
+            'code'     => 'recap_source_computed_fallback',
+            'message'  => 'Rekapitulaci DPH nešlo převzít z dokladu ('
+                . $resolved['fallback'] . ') — spočítá se z řádků.',
+        ];
     }
 
     /**

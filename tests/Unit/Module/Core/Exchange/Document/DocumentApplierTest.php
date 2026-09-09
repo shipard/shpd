@@ -929,6 +929,202 @@ class DocumentApplierTest extends TestCase
         $this->assertSame(0, $data['vat_place']); // domestic
     }
 
+    // ── transform(): autorita rekapitulace DPH (#75, R3/I4/I7) ─────────────
+
+    /**
+     * @param array<string, mixed> $extra
+     * @return array<string, mixed>
+     */
+    private function transformWithRecap(array $extra): array
+    {
+        $applier = $this->buildApplier();
+        $canonical = array_merge([
+            'docType'   => 'invoiceReceived',
+            'selfParty' => 'customer',
+            'dates'     => ['issueDate' => '2026-07-01'],
+        ], $extra);
+
+        return $this->invokeTransform($applier, $canonical);
+    }
+
+    /**
+     * @param array<string, mixed> $extra
+     * @return array<int, array<string, mixed>>
+     */
+    private function recapIssues(array $extra): array
+    {
+        $applier = $this->buildApplier();
+        $canonical = array_merge([
+            'docType'   => 'invoiceReceived',
+            'selfParty' => 'customer',
+            'dates'     => ['issueDate' => '2026-07-01'],
+        ], $extra);
+
+        $issues = [];
+        $ref = new \ReflectionMethod($applier, 'appendRecapSourceIssue');
+        $ref->invokeArgs($applier, [$canonical, &$issues]);
+        return $issues;
+    }
+
+    /** Deklarovaná rekapitulace se uloží 1:1 — je to fakt z dokladu. */
+    public function testDeclaredRecapIsPassedThroughUnchanged(): void
+    {
+        $data = $this->transformWithRecap([
+            'vat'      => ['mode' => 'fromTotal', 'recapSource' => 'declared'],
+            'vatRecap' => [
+                ['vatCode' => 'cz-110', 'vatPct' => 21, 'base' => 90.91, 'tax' => 19.09, 'total' => 110.00],
+            ],
+        ]);
+
+        $this->assertSame(1, $data['vat_recap_source']);
+        $this->assertSame([[
+            'vat_code' => 'cz-110', 'vat_pct' => 21.0,
+            'base' => 90.91, 'tax' => 19.09, 'total' => 110.00,
+            'is_reverse_pair' => 0,
+        ]], $data['vatRecap']);
+        $this->assertSame([], $this->recapIssues([
+            'vat'      => ['recapSource' => 'declared'],
+            'vatRecap' => [
+                ['vatCode' => 'cz-110', 'vatPct' => 21, 'base' => 90.91, 'tax' => 19.09, 'total' => 110.00],
+            ],
+        ]));
+    }
+
+    /**
+     * Deklarovaná rekapitulace s přenesením daňové povinnosti (`base + tax
+     * ≠ total`) se **nesmí** přepočítat — u PDP je to správně a import ze
+     * starého Shipardu na tom stojí.
+     */
+    public function testDeclaredRecapSurvivesReverseChargeArithmetic(): void
+    {
+        $data = $this->transformWithRecap([
+            'vat'      => ['recapSource' => 'declared'],
+            'vatRecap' => [
+                ['vatCode' => 'cz-115', 'vatPct' => 21, 'base' => 1000.00, 'tax' => 210.00, 'total' => 1000.00],
+            ],
+        ]);
+
+        $this->assertSame(1, $data['vat_recap_source']);
+        $this->assertSame(1000.00, $data['vatRecap'][0]['total']);
+    }
+
+    /** I4: přijatý doklad z AI s konzistentní rekapitulací → převzatá. */
+    public function testReceivedDocumentWithConsistentRecapBecomesDeclared(): void
+    {
+        $data = $this->transformWithRecap([
+            'vatRecap' => [
+                ['vatCode' => 'cz-110', 'vatPct' => 21, 'base' => 100.00, 'tax' => 21.00, 'total' => 121.00],
+            ],
+        ]);
+
+        $this->assertSame(1, $data['vat_recap_source']);
+        $this->assertCount(1, $data['vatRecap']);
+    }
+
+    /** I4: nekonzistentní rekapitulace → přepočítaná + info issue. */
+    public function testReceivedDocumentWithInconsistentRecapFallsBackToComputed(): void
+    {
+        $recap = [
+            'vatRecap' => [
+                ['vatCode' => 'cz-110', 'vatPct' => 21, 'base' => 100.00, 'tax' => 12.00, 'total' => 121.00],
+            ],
+        ];
+        $data = $this->transformWithRecap($recap);
+
+        $this->assertSame(0, $data['vat_recap_source']);
+        $this->assertArrayNotHasKey('vatRecap', $data, 'přepočítanou si DocDocument spočítá z řádků');
+
+        $issues = $this->recapIssues($recap);
+        $this->assertCount(1, $issues);
+        $this->assertSame('info', $issues[0]['severity']);
+        $this->assertSame('recap_source_computed_fallback', $issues[0]['code']);
+        $this->assertSame('vat.recapSource', $issues[0]['path']);
+    }
+
+    /** Vystavený doklad rekapitulaci nepřebírá — počítáme ji my. */
+    public function testIssuedDocumentKeepsComputedRecap(): void
+    {
+        $data = $this->transformWithRecap([
+            'docType'   => 'invoiceIssued',
+            'selfParty' => 'supplier',
+            'vatRecap'  => [
+                ['vatCode' => 'cz-210', 'vatPct' => 21, 'base' => 100.00, 'tax' => 21.00, 'total' => 121.00],
+            ],
+        ]);
+
+        $this->assertSame(0, $data['vat_recap_source']);
+        $this->assertArrayNotHasKey('vatRecap', $data);
+    }
+
+    /**
+     * I7: ISDOC rekapitulace kódy nenese — dohledají se z řádků, když je
+     * pro sazbu jednoznačný.
+     */
+    public function testRecapWithoutCodeDerivesItFromRows(): void
+    {
+        $data = $this->transformWithRecap([
+            'vat'      => ['recapSource' => 'declared'],
+            'rows'     => [
+                ['rowKind' => 'item', 'totalPrice' => 100.0, 'vat' => ['code' => 'cz-110', 'pct' => 21]],
+            ],
+            'vatRecap' => [
+                ['vatPct' => 21, 'base' => 100.00, 'tax' => 21.00, 'total' => 121.00],
+            ],
+        ]);
+
+        $this->assertSame(1, $data['vat_recap_source']);
+        $this->assertSame('cz-110', $data['vatRecap'][0]['vat_code']);
+    }
+
+    /** Dvě různé kódy v téže sazbě → kód nejde odvodit, přepočítaná. */
+    public function testRecapWithoutCodeAndAmbiguousRowsFallsBack(): void
+    {
+        $payload = [
+            'vat'      => ['recapSource' => 'declared'],
+            'rows'     => [
+                ['rowKind' => 'item', 'totalPrice' => 100.0, 'vat' => ['code' => 'cz-110', 'pct' => 21]],
+                ['rowKind' => 'item', 'totalPrice' => 100.0, 'vat' => ['code' => 'cz-115', 'pct' => 21]],
+            ],
+            'vatRecap' => [
+                ['vatPct' => 21, 'base' => 200.00, 'tax' => 42.00, 'total' => 242.00],
+            ],
+        ];
+        $data = $this->transformWithRecap($payload);
+
+        $this->assertSame(0, $data['vat_recap_source']);
+        $this->assertSame('recap_source_computed_fallback', $this->recapIssues($payload)[0]['code']);
+    }
+
+    /** Explicitní `computed` rekapitulaci nepřebírá ani u přijatého dokladu. */
+    public function testExplicitComputedWins(): void
+    {
+        $data = $this->transformWithRecap([
+            'vat'      => ['recapSource' => 'computed'],
+            'vatRecap' => [
+                ['vatCode' => 'cz-110', 'vatPct' => 21, 'base' => 100.00, 'tax' => 21.00, 'total' => 121.00],
+            ],
+        ]);
+
+        $this->assertSame(0, $data['vat_recap_source']);
+        $this->assertSame([], $this->recapIssues([
+            'vat'      => ['recapSource' => 'computed'],
+            'vatRecap' => [
+                ['vatCode' => 'cz-110', 'vatPct' => 21, 'base' => 100.00, 'tax' => 21.00, 'total' => 121.00],
+            ],
+        ]));
+    }
+
+    public function testCalcSourceMapsToHeadColumn(): void
+    {
+        $this->assertSame(1, $this->transformWithRecap([
+            'vat' => ['calcSource' => 'rows'],
+        ])['vat_calc_source']);
+        $this->assertSame(0, $this->transformWithRecap([
+            'vat' => ['calcSource' => 'header'],
+        ])['vat_calc_source']);
+        $this->assertSame(0, $this->transformWithRecap([])['vat_calc_source'], 'default = norma');
+    }
+
     // ── transform(): derivace total_rounding_mode ────────────────────────────
 
     /**

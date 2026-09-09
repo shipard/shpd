@@ -97,7 +97,24 @@
             "properties": {
                 "mode":                { "type": ["string", "null"] },
                 "place":               { "type": ["string", "null"] },
-                "registrationCountry": { "type": ["string", "null"], "pattern": "^[A-Za-z]{2}$" }
+                "registrationCountry": { "type": ["string", "null"], "pattern": "^[A-Za-z]{2}$" },
+
+                // Autorita rekapitulace (docs.core.vatRecapSources):
+                //   "declared" = vatRecap je fakt z dokladu, applier ho uloží
+                //                a DocDocument ho nepřepočítá (import, doklad
+                //                dodavatele);
+                //   "computed"  = rekapitulace se spočítá z řádků.
+                // null → applier odvodí: u přijatých dokladů "declared", když
+                // je vatRecap neprázdný, vnitřně konzistentní a kódy jsou
+                // dohledatelné; jinak "computed" + info issue
+                // `recap_source_computed_fallback`.
+                "recapSource":         { "enum": ["computed", "declared", null] },
+
+                // Metoda výpočtu přepočítané rekapitulace
+                // (docs.core.vatCalcSources): "header" = daň jednou ze součtu
+                // cen ve sazbě (norma), "rows" = součet řádkových daní
+                // (historický režim). null → default 0 (z hlavičky).
+                "calcSource":          { "enum": ["header", "rows", null] }
             }
         },
 

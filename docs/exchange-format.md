@@ -204,8 +204,19 @@ Top-level struktura:
                                    //   nedotčený, korekce je v _resolve.issues
                                    //   jako warning `vat_mode_derived`.
     "place": "domestic",          // klíč z docs.core.vatPlaces
-    "registrationCountry": "CZ"   // ISO země — resolver dohledá
+    "registrationCountry": "CZ",  // ISO země — resolver dohledá
                                    //   economy_codebooks_vat_registrations
+    "recapSource": "declared",    // computed | declared | null
+                                   //   Autorita rekapitulace (viz níže).
+                                   //   declared = vatRecap je fakt z dokladu
+                                   //   a DocDocument ho nepřepočítá.
+                                   //   null → applier odvodí.
+    "calcSource": "header"        // header | rows | null
+                                   //   Metoda výpočtu PŘEPOČÍTANÉ
+                                   //   rekapitulace (docs.core.vatCalcSources):
+                                   //   header = daň jednou ze součtu cen
+                                   //   ve sazbě (norma), rows = součet
+                                   //   řádkových daní. null → header.
   },
 
   // ── Payment ──────────────────────────────────────────────────────────────
@@ -265,9 +276,31 @@ Top-level struktura:
 
 ### Pole `vatRecap` a `totals` — vstup vs. autorita
 
-Tato pole jsou v canonical **informativní**. Applier je při uložení
-**přepočítá** přes `DocDocument::beforeSave()` a v DB jsou autoritativní
-vypočtené hodnoty. Důvod, proč jsou v canonical:
+**`vatRecap` je autorita, když doklad říká `vat.recapSource: "declared"`.**
+Applier ho pak uloží tak, jak přišel, a `DocDocument::beforeSave()` ho
+nepřepočítá — dopočte z něj jen domácí měnu, součty hlavičky a flagy
+sčítání z definice kódu (`docs/vat-calculation.md` § 5). To je cesta pro
+import ze starého Shipardu a pro doklad dodavatele: nárok na odpočet je
+částka **z faktury**, i když je haléřově „špatně".
+
+U `"computed"` (a u vystavených dokladů vždy) je `vatRecap` **informativní**
+a v DB je autoritativní hodnota vypočtená z řádků.
+
+**Odvození, když `recapSource` chybí (`null`):** u dokladu, který přijímáme
+(`selfParty: "customer"` — typicky AI extrakce faktury dodavatele), je
+`declared` tehdy, když je rekapitulace neprázdná, každý řádek projde
+aritmetickou kontrolou níže a u každého jde dohledat DPH kód. Jinak
+`computed` + info issue **`recap_source_computed_fallback`** s důvodem —
+bez něj by uživatel nepoznal, proč je na dokladu jiná rekapitulace než na
+předloze. U vystavených dokladů je odvození vždy `computed`.
+
+**DPH kód rekapitulace:** ISDOC ho v rekapitulaci nenese (`TaxSubTotal` má
+jen sazbu a částky), takže ho applier dohledá z položkových řádků — mapa
+sazba → kód, použije se jen pro sazbu s jediným kódem. Bez kódu se
+rekapitulace převzít nedá (`vat_code` je NOT NULL a bez kódu nejdou určit
+flagy sčítání) → `computed` + info issue.
+
+`totals` zůstávají informativní vždy. Důvod, proč jsou obě pole v canonical:
 
 - **UI náhled** — chce je zobrazit (AI extrahovala součty z PDF, uživatel
   je kontroluje).
@@ -283,14 +316,17 @@ vypočtené hodnoty. Důvod, proč jsou v canonical:
   (fromBase → Σ `base`, fromTotal → Σ `total`; fallback `totals`,
   tolerance per-řádkového zaokrouhlení) → warning **`rows_recap_mismatch`**
   na `rows`. Rekapitulace z dokladu je autoritativní — mismatch znamená
-  neúplné či chybně extrahované řádky.
+  neúplné či chybně extrahované řádky. Stejnou kontrolu dělá při uložení
+  i `DocDocument` nad převzatou rekapitulací.
 - **Vnitřní aritmetika rekapitulace** — pro každý řádek recapu musí
   platit `base + tax = total` (±0,02) a `tax = base × pct/100`
   (±max(0,05; |base| × 0,001) — kryje haléře i výpočet koeficientem);
   reverse-charge páry a 0% řádky se přeskakují. Porušení → warning
   **`vat_recap_inconsistent`** na `vatRecap[i]`. Chytá rekapitulaci,
   kterou model dopočítal pozpátku (typicky po chybně určeném režimu DPH)
-  místo opsání z dokladu.
+  místo opsání z dokladu. **Pozor:** u explicitního `declared` je to jen
+  warning, ne důvod k přepočtu — u přenesení daňové povinnosti `base + tax
+  ≠ total` platí a je správně.
 
 `totals.totalRounding` nese zaokrouhlení celkové částky se znaménkem
 (zaokrouhleno dolů = záporné, např. `-0.05`). I ono je informativní —
@@ -711,6 +747,7 @@ Errors blokují `/apply`, warningy jen informují v UI.
 | `rows_recap_mismatch` | warning | Součet položkových řádků neodpovídá rekapitulaci/totals dle efektivního režimu DPH — řádky nejspíš neúplné. |
 | `vat_recap_inconsistent` | warning | Řádek rekapitulace vnitřně nesedí (`base + tax ≠ total` nebo `tax ≠ base × pct`) — recap dopočtený místo opsaného. |
 | `vat_mode_derived` | warning | `DocumentApplier` koriguje `vat_mode` podle `VatModeDerivation` (Σ řádků sedí na total, ne na base — nebo zrcadlově). |
+| `recap_source_computed_fallback` | info | Rekapitulaci nešlo převzít (prázdná, nekonzistentní, nebo bez dohledatelného DPH kódu) — spočítá se z řádků. Zpráva nese důvod. |
 | `vat_mode_suspect` | warning | Řádky vypadají jako ceny s DPH při deklarovaném `fromBase`, ale derivace nemá dost dat na korekci. |
 | `partner_doc_number_missing` | warning | Přijatá faktura cílí na stav ≥ 20 bez čísla dokladu dodavatele. |
 | `row_operation_config_invalid` | warning | Pohyb řádku nejde doplnit — chybná konfigurace rowOperations. |

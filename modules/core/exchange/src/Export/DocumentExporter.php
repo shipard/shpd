@@ -38,6 +38,8 @@ final class DocumentExporter implements RecordExporter
 
     private const VAT_MODE_NAMES = [0 => 'none', 1 => 'fromBase', 2 => 'fromTotal'];
     private const VAT_PLACE_NAMES = [0 => 'domestic', 1 => 'intracom', 2 => 'thirdCountry'];
+    private const VAT_RECAP_SOURCE_NAMES = [0 => 'computed', 1 => 'declared'];
+    private const VAT_CALC_SOURCE_NAMES = [0 => 'header', 1 => 'rows'];
     private const PAYMENT_METHOD_NAMES = [0 => 'cash', 1 => 'bankTransfer', 2 => 'card', 3 => 'cashOnDelivery', 4 => 'setOff'];
     private const PRICE_CALC_MODE_NAMES = [0 => 'fromUnitPrice', 1 => 'fromTotal'];
     private const ROW_KIND_NAMES = [0 => 'text', 1 => 'item', 2 => 'section'];
@@ -202,6 +204,11 @@ final class DocumentExporter implements RecordExporter
                 'mode'                => self::VAT_MODE_NAMES[(int) ($h['vat_mode'] ?? 1)] ?? null,
                 'place'               => self::VAT_PLACE_NAMES[(int) ($h['vat_place'] ?? 0)] ?? null,
                 'registrationCountry' => V::countryLower($h['vat_reg_country'] ?? null),
+                // Autorita rekapitulace a metoda výpočtu — bez nich by
+                // round-trip (dump → seed) změnil doklad s převzatou
+                // rekapitulací na přepočítaný a přepsal částky z dokladu.
+                'recapSource'         => self::VAT_RECAP_SOURCE_NAMES[(int) ($h['vat_recap_source'] ?? 0)] ?? null,
+                'calcSource'          => self::VAT_CALC_SOURCE_NAMES[(int) ($h['vat_calc_source'] ?? 0)] ?? null,
             ],
             'payment'       => [
                 'method'           => self::PAYMENT_METHOD_NAMES[(int) ($h['payment_method'] ?? 1)] ?? null,

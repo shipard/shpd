@@ -61,10 +61,13 @@ class TestableDocsHeadsDocument extends DocsHeadsDocument
         $this->calculateRowVat($row, $vatMode, $vatCodes);
     }
 
-    /** @return array<int, array<string, mixed>> */
-    public function buildVatRecapitulationPub(array &$data): array
+    /**
+     * @param array<int, array<string, mixed>> $rowsOverride
+     * @return array<int, array<string, mixed>>
+     */
+    public function buildVatRecapitulationPub(array &$data, array $rowsOverride = []): array
     {
-        return $this->buildVatRecapitulation($data);
+        return $this->buildVatRecapitulation($data, $rowsOverride);
     }
 
     public function sumTotalsPub(array &$data, array $recap, array $rows = []): void
@@ -82,9 +85,25 @@ class TestableDocsHeadsDocument extends DocsHeadsDocument
         return $this->applyRounding($amount, $mode);
     }
 
-    public function applyDomesticAmountsPub(array &$data, array &$rows, array $recap): void
-    {
-        $this->applyDomesticAmounts($data, $rows, $recap);
+    /** @param array<string, array<string, mixed>>|null $vatCodes */
+    public function applyDomesticAmountsPub(
+        array &$data,
+        array &$rows,
+        array $recap,
+        ?array $vatCodes = null,
+        ?float $tolerance = null,
+    ): void {
+        $this->applyDomesticAmounts($data, $rows, $recap, $vatCodes, $tolerance);
+    }
+
+    /** @param array<int, array<string, mixed>> $recap */
+    public function reconcileRowsToRecapPub(
+        array &$rows,
+        array $recap,
+        string $suffix = '',
+        ?float $tolerance = null,
+    ): void {
+        $this->reconcileRowsToRecap($rows, $recap, $suffix, $tolerance);
     }
 
     /** @return array<int, array<string, mixed>> */

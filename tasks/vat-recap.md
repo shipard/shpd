@@ -1,6 +1,6 @@
 # Task: Rekapitulace DPH — výpočet na úrovni dokladu a převzatá rekapitulace — #75
 
-**Stav:** PRD
+**Stav:** částečně — hotové A1 (dokladová úroveň, obě metody `vat_calc_source`, dorovnání řádků v obou měnách dle I5); zbývá A2 a celý Scope B
 **Issue:** #75 — komentář „Rozhodnutí (2026-09-09)" C1–C6, R1–R6
 **Spec:** `docs/vat-calculation.md` (napsáno předem jako design dokument — **je
 autoritativní**, tento task ho implementuje)
@@ -70,6 +70,22 @@ Před implementací **přečti**:
   U `převzatá` jen do tolerance `max(0,02; 0,01 × počet řádků skupiny)` — nad ni řádky
   zůstanou a vydá se `rows_recap_mismatch`; u `přepočítaná` je rozdíl konstrukčně v mezi.
 
+- **I6 — `1 z řádků` je Σ řádkových hodnot i v mode 1** (spec § 3, rozhodnutí
+  2026-09-09). Dnešní kód počítá v mode 1 daň jako `round(Σ base × pct)`, tedy
+  už dokladovou úrovní — obě metody by pak v mode 1 splývaly a A3 („liší se při
+  více řádcích se zbytky") by nešlo splnit. Historický režim proto sčítá řádkové,
+  samostatně zaokrouhlené `vat_amount`; sémantiku kódu (noPayTax, samovyměření)
+  i režimu nesou už řádkové hodnoty z `calculateRowVat`, takže se v recapu
+  nedopočítává nic. Dopad je jen na doklady s explicitním `vat_calc_source = 1`
+  (default je 0 a importy jdou po Scope B přes převzatou rekapitulaci).
+- **I7 — převzatá rekapitulace vyžaduje dohledatelný DPH kód** (rozhodnutí
+  2026-09-09). ISDOC nese rekapitulaci **bez kódu** (`IsdocReader::mapVatRecap`
+  plní jen `vatPct`/`base`/`tax`/`total`), takže podmínka I4 se rozšiřuje: kód
+  každého řádku musí existovat pro zemi registrace, jinak `přepočítaná`
+  + `recap_source_computed_fallback`. Aby ISDOC o rekapitulaci dodavatele
+  nepřišel, applier kód dohledá z řádků dokladu — mapa `sazba → kód` z řádků,
+  použije se jen když je pro danou sazbu jednoznačná.
+
 ## Scope A — výpočet
 
 ### A1. `buildVatRecapitulation` (C1–C3)
@@ -80,9 +96,10 @@ Před implementací **přečti**:
   vat_rounding_mode)`; mode 2: `total = Σ`, `base = applyRounding(total / (1 + pct/100),
   vat_rounding_mode)`, `tax = round(total − base, 2)`. `noPayTax` / reverse-charge /
   0 % větve beze změny sémantiky (základ = Σ cen, daň dle dnešních pravidel).
-- **`1 z řádků`:** dnešní chování (Σ `vat_base`, Σ `vat_total`, daň rozdílem v mode 2,
-  `round(Σ base × pct)` v mode 1) — vyčlenit do samostatné privátní metody, aby
-  obě větve byly čitelné.
+- **`1 z řádků`:** součet řádkových hodnot — Σ `vat_base`, Σ `vat_amount` (I6);
+  `total` skládá volající ze základu a placené daně. Vyčleněno do samostatné
+  privátní metody (`groupRowVatForRecap` + `recapAmountsFromRows`), aby obě
+  větve byly čitelné.
 - `DocRowCalculator::computeVat` beze změny (řádkové hodnoty zůstávají informativní).
 - **Dorovnání cur (I5):** z kroku 3 `applyDomesticAmounts` vyčlenit čistou metodu
   `reconcileRowsToRecap(array &$rows, array $recap, string $suffix, ?float $tolerance)`

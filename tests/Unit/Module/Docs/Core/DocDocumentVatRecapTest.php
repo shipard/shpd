@@ -284,12 +284,48 @@ class DocDocumentVatRecapTest extends TestCase
     }
 
     /**
-     * Víceřádková skupina v mode 2 se zbytky na obou řádcích: rekapitulace
-     * == součet per-row hodnot přesně (base 102,02 + 561,07; total 123,45
-     * + 678,90), daň rozdílem 139,26 — zdola by vyšlo
-     * round(663,09 × 21 %) = 139,25.
+     * Víceřádková skupina v mode 2 se zbytky na obou řádcích, metoda
+     * `1 z řádků`: rekapitulace == součet per-row hodnot přesně
+     * (base 102,02 + 561,07, daň 21,43 + 117,83). Dokladová úroveň dá jiný
+     * rozpad téže částky — viz zrcadlový test níže.
      */
-    public function testVatInclusiveModeMultiRowGroupSumsRowTotals(): void
+    public function testVatInclusiveModeMultiRowGroupFromRowsSumsRowValues(): void
+    {
+        $doc = $this->buildDoc();
+        $data = [
+            'vat_mode' => 2,
+            'vat_calc_source' => 1,
+            'rows' => [
+                [
+                    'row_kind' => 1, 'vat_code' => 'cz-110', 'vat_pct' => 21,
+                    'total_price' => 123.45,
+                    'vat_base' => 102.02, 'vat_amount' => 21.43, 'vat_total' => 123.45,
+                ],
+                [
+                    'row_kind' => 1, 'vat_code' => 'cz-110', 'vat_pct' => 21,
+                    'total_price' => 678.90,
+                    'vat_base' => 561.07, 'vat_amount' => 117.83, 'vat_total' => 678.90,
+                ],
+            ],
+            'vat_registration' => 1,
+            'vat_duzp' => '2026-05-06',
+            'exchange_rate' => 1.0,
+        ];
+        $recap = $doc->buildVatRecapitulationPub($data);
+
+        $this->assertCount(1, $recap);
+        $this->assertSame(663.09, $recap[0]['base']);
+        $this->assertSame(139.26, $recap[0]['tax']);
+        $this->assertSame(802.35, $recap[0]['total']);
+    }
+
+    /**
+     * Zrcadlo předchozího testu na dokladové úrovni (`vat_calc_source = 0`,
+     * default): základ se počítá jednou ze součtu cen skupiny —
+     * round(802,35 / 1,21) = 663,10, daň rozdílem 139,25. Celková částka je
+     * v obou metodách stejná (802,35), liší se jen rozpad.
+     */
+    public function testVatInclusiveModeMultiRowGroupFromHeaderComputesOnce(): void
     {
         $doc = $this->buildDoc();
         $data = [
@@ -313,9 +349,152 @@ class DocDocumentVatRecapTest extends TestCase
         $recap = $doc->buildVatRecapitulationPub($data);
 
         $this->assertCount(1, $recap);
-        $this->assertSame(663.09, $recap[0]['base']);
-        $this->assertSame(139.26, $recap[0]['tax']);
+        $this->assertSame(663.10, $recap[0]['base']);
+        $this->assertSame(139.25, $recap[0]['tax']);
         $this->assertSame(802.35, $recap[0]['total']);
+    }
+
+    /**
+     * Referenční prodejka z „Hotovo když": 2 × 55,00 s DPH 21 % v cenách
+     * s daní. Dokladová úroveň dá 90,91 / 19,09 / 110,00; součet řádkových
+     * rozpočtů by dal 90,90 / 19,10 (viz metoda `1 z řádků`).
+     */
+    public function testVatInclusiveModeTwoEqualRowsFromHeader(): void
+    {
+        $doc = $this->buildDoc();
+        $rows = [
+            [
+                'row_kind' => 1, 'vat_code' => 'cz-110', 'vat_pct' => 21,
+                'total_price' => 55.00,
+                'vat_base' => 45.45, 'vat_amount' => 9.55, 'vat_total' => 55.00,
+            ],
+            [
+                'row_kind' => 1, 'vat_code' => 'cz-110', 'vat_pct' => 21,
+                'total_price' => 55.00,
+                'vat_base' => 45.45, 'vat_amount' => 9.55, 'vat_total' => 55.00,
+            ],
+        ];
+        $data = [
+            'vat_mode' => 2,
+            'rows' => $rows,
+            'vat_registration' => 1,
+            'vat_duzp' => '2026-05-06',
+            'exchange_rate' => 1.0,
+        ];
+        $recap = $doc->buildVatRecapitulationPub($data);
+
+        $this->assertCount(1, $recap);
+        $this->assertSame(90.91, $recap[0]['base']);
+        $this->assertSame(19.09, $recap[0]['tax']);
+        $this->assertSame(110.00, $recap[0]['total']);
+
+        // Metoda z řádků nad týmiž řádky = jiný rozpad, stejná částka.
+        $dataRows = $data;
+        $dataRows['vat_calc_source'] = 1;
+        $recapRows = $doc->buildVatRecapitulationPub($dataRows);
+        $this->assertSame(90.90, $recapRows[0]['base']);
+        $this->assertSame(19.10, $recapRows[0]['tax']);
+        $this->assertSame(110.00, $recapRows[0]['total']);
+    }
+
+    /**
+     * Mode 1 (ceny bez DPH), jeden řádek: obě metody dají totéž — základ je
+     * cena a daň z ní se počítá jednou tak i tak.
+     */
+    public function testVatExclusiveModeSingleRowBothMethodsAgree(): void
+    {
+        $doc = $this->buildDoc();
+        $row = [
+            'row_kind' => 1, 'vat_code' => 'cz-110', 'vat_pct' => 21,
+            'total_price' => 333.33,
+            'vat_base' => 333.33, 'vat_amount' => 70.0, 'vat_total' => 403.33,
+        ];
+        $base = [
+            'vat_mode' => 1,
+            'rows' => [$row],
+            'vat_registration' => 1,
+            'vat_duzp' => '2026-05-06',
+            'exchange_rate' => 1.0,
+        ];
+
+        $fromHeader = $doc->buildVatRecapitulationPub($base);
+        $fromRowsData = ['vat_calc_source' => 1] + $base;
+        $fromRows = $doc->buildVatRecapitulationPub($fromRowsData);
+
+        $this->assertSame(333.33, $fromHeader[0]['base']);
+        $this->assertSame(70.0, $fromHeader[0]['tax']);
+        $this->assertSame($fromHeader[0]['base'], $fromRows[0]['base']);
+        $this->assertSame($fromHeader[0]['tax'], $fromRows[0]['tax']);
+    }
+
+    /**
+     * Mode 1, víc řádků se zbytky: dokladová úroveň počítá daň ze součtu
+     * (round(299,97 × 21 %) = 62,99), metoda z řádků sčítá tři samostatně
+     * zaokrouhlené daně (3 × 21,00 = 63,00). O ten haléř se metody liší —
+     * proto obě existují.
+     */
+    public function testVatExclusiveModeMultiRowMethodsDiffer(): void
+    {
+        $doc = $this->buildDoc();
+        $rows = [];
+        for ($i = 0; $i < 3; $i++) {
+            $rows[] = [
+                'row_kind' => 1, 'vat_code' => 'cz-110', 'vat_pct' => 21,
+                'total_price' => 99.99,
+                'vat_base' => 99.99, 'vat_amount' => 21.00, 'vat_total' => 120.99,
+            ];
+        }
+        $base = [
+            'vat_mode' => 1,
+            'rows' => $rows,
+            'vat_registration' => 1,
+            'vat_duzp' => '2026-05-06',
+            'exchange_rate' => 1.0,
+        ];
+
+        $fromHeader = $doc->buildVatRecapitulationPub($base);
+        $this->assertSame(299.97, $fromHeader[0]['base']);
+        $this->assertSame(62.99, $fromHeader[0]['tax']);
+        $this->assertSame(362.96, $fromHeader[0]['total']);
+
+        $fromRowsData = ['vat_calc_source' => 1] + $base;
+        $fromRows = $doc->buildVatRecapitulationPub($fromRowsData);
+        $this->assertSame(299.97, $fromRows[0]['base']);
+        $this->assertSame(63.00, $fromRows[0]['tax']);
+        $this->assertSame(362.97, $fromRows[0]['total']);
+    }
+
+    /**
+     * `vat_rounding_mode` na celé jednotky se v dokladové metodě aplikuje
+     * v mode 2 na **základ** (daň je pak rozdíl, aby celková částka zůstala
+     * Σ cen), v mode 1 na **daň**.
+     */
+    public function testVatRoundingModeWholeUnitsAppliesToBaseInModeTwo(): void
+    {
+        $doc = $this->buildDoc();
+        $data = [
+            'vat_mode' => 2,
+            'vat_rounding_mode' => 1,
+            'rows' => [
+                ['row_kind' => 1, 'vat_code' => 'cz-110', 'vat_pct' => 21, 'total_price' => 1746.00],
+            ],
+            'vat_registration' => 1,
+            'vat_duzp' => '2026-05-06',
+            'exchange_rate' => 1.0,
+        ];
+        $recap = $doc->buildVatRecapitulationPub($data);
+
+        // 1746 / 1,21 = 1442,9752 → na celé Kč 1443, daň rozdílem 303
+        $this->assertSame(1443.0, $recap[0]['base']);
+        $this->assertSame(303.0, $recap[0]['tax']);
+        $this->assertSame(1746.0, $recap[0]['total']);
+
+        $data['vat_mode'] = 1;
+        $recapFromBase = $doc->buildVatRecapitulationPub($data);
+        // 1746 × 21 % = 366,66 → na celé Kč 367
+        $this->assertSame(1746.0, $recapFromBase[0]['base']);
+        $this->assertSame(367.0, $recapFromBase[0]['tax']);
+        $this->assertSame(2113.0, $recapFromBase[0]['total']);
     }
 
     /**

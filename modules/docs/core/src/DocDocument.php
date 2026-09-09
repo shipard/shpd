@@ -27,7 +27,8 @@ use Shipard\Module\World\Vat\VatRateResolver;
  *      economy.vat přes beforeSave documentEventHandler — docs.core o nich neví)
  *   5. calculateRowPrice + calculateRowVat for each row
  *   6. buildVatRecapitulation (with reverse charge pairs)
- *   7. sumTotals + apply rounding + apply exchange rate to *_dom
+ *   7. sumTotals + apply rounding + reconcileRowsToRecap (obě měny)
+ *      + apply exchange rate to *_dom
  *   8. processStateTransition (assignNumber {0,10}→{40}, releaseNumber 80→10)
  *   9. maintainSnapshots (buildSnapshots when partner changes / first time)
  *  10. applyPaymentReferenceDefault from sequence_number
@@ -290,7 +291,11 @@ abstract class DocDocument extends Document
 
         $this->sumTotals($data, $recap, $rowsForCompute);
         $this->applyTotalRounding($data);
-        $this->applyDomesticAmounts($data, $rowsForCompute, $recap);
+        // Dorovnání řádků na rekapitulaci v měně dokladu (I5) — v domácí
+        // měně ho dělá applyDomesticAmounts nad už dorovnanými cur hodnotami,
+        // takže při kurzu 1 jsou obě měny shodné.
+        $this->reconcileRowsToRecap($rowsForCompute, $recap);
+        $this->applyDomesticAmounts($data, $rowsForCompute, $recap, $vatCodes);
 
         // Propagate computed values back into the payload child set so the
         // gateway's child sync writes them (covers new rows without id).
@@ -622,6 +627,12 @@ abstract class DocDocument extends Document
     // ── VAT recapitulation ──────────────────────────────────────────────────
 
     /**
+     * Rekapitulace DPH per (kód, sazba) — autorita dokladu (viz
+     * `docs/vat-calculation.md`). Metodu výpočtu vybírá `vat_calc_source`
+     * dokladu: `0 z hlavičky` (norma § 37 odst. 1 ZDPH — daň se počítá
+     * jednou ze součtu řádkových cen ve sazbě) nebo `1 z řádků` (historický
+     * režim — součet řádkových, samostatně zaokrouhlených hodnot).
+     *
      * @param array<int, array<string, mixed>> $rowsOverride Pre-computed rows; falls back to $data['rows'] when empty.
      * @return array<int, array<string, mixed>>
      */
@@ -640,35 +651,12 @@ abstract class DocDocument extends Document
         }
         $vatCodes = $resolved['codes'];
         $vatMode = (int) ($data['vat_mode'] ?? 1);
+        $calcSource = (int) ($data['vat_calc_source'] ?? 0);
 
-        // 1. Group rows by (vat_code, vat_pct), sum base + total
-        $grouped = [];
-        foreach ($rows as $row) {
-            $rowKind = (int) ($row['row_kind'] ?? 1);
-            // A row belongs in the recap when it is an item row with a VAT code.
-            // vat_pct may legitimately be 0 (osvobozeno / 0% codes); filtering
-            // via empty($row['vat_pct']) would drop those rows, so their base
-            // would vanish from the recap and from the document totals.
-            if ($rowKind !== 1 || empty($row['vat_code'])) {
-                continue;
-            }
-            $key = $this->vatGroupKey($row['vat_code'], $row['vat_pct'] ?? 0);
-            if (!isset($grouped[$key])) {
-                $grouped[$key] = [
-                    'vat_code' => (string) $row['vat_code'],
-                    'vat_pct'  => (float) ($row['vat_pct'] ?? 0),
-                    'base'     => 0.0,
-                    'total'    => 0.0,
-                ];
-            }
-            // Use the per-row vat_base/vat_total computed by calculateRowVat(),
-            // which already respect vat_mode. For "Ze základu" (mode 0/1)
-            // vat_base equals total_price; for "Z ceny celkem" (mode 2) it is
-            // the VAT-exclusive base back-calculated from the VAT-inclusive
-            // total_price and vat_total carries the printed row total.
-            $grouped[$key]['base']  += (float) ($row['vat_base'] ?? $row['total_price'] ?? 0);
-            $grouped[$key]['total'] += (float) ($row['vat_total'] ?? $row['total_price'] ?? 0);
-        }
+        // 1. Group rows by (vat_code, vat_pct) — co se sčítá, určuje metoda
+        $grouped = $calcSource === 1
+            ? $this->groupRowVatForRecap($rows)
+            : $this->groupRowPricesForRecap($rows);
 
         // 2. For each group build primary line + optional reverse charge pair
         $recap = [];
@@ -688,30 +676,18 @@ abstract class DocDocument extends Document
             }
             $codeDef = $vatCodes[$code];
 
-            $base = round($entry['base'], 2);
-
             // Samovyměření (kód s reverseVatCode): primární řádek nese
             // spočtenou daň — je to nárok na odpočet (DPH přiznání ř. 43/44)
             // a předloha pro stranu MD v účetnictví. Do total se ale počítá
             // jen daň placená dodavateli, u noPayTax tedy zůstává jen základ.
             $selfAssessed = !empty($codeDef['reverseVatCode'])
                 && isset($vatCodes[(string) $codeDef['reverseVatCode']]);
-            if ($vatMode === 2 && empty($codeDef['noPayTax'])) {
-                // Z ceny celkem: daň rozdílem Σ vat_total − Σ vat_base (§ 37
-                // připouští obojí; součet per-row hodnot garantuje shodu
-                // rekapitulace s řádky vytištěnými na dokladu). Zdola by
-                // zpětný rozpočet se zbytkem dal jinou daň (1442,98 × 21 %
-                // = 303,03 místo 303,02) a doklad by ujel o haléř.
-                // vat_rounding_mode se neaplikuje — daň je rozdíl dvou už
-                // zaokrouhlených částek. noPayTax skupiny zůstávají zdola:
-                // u nich je základ autoritativní z definice (calculateRowVat
-                // drží base = totalPrice i v mode 2) a daň je informativní.
-                $tax = round(round($entry['total'], 2) - $base, 2);
-            } elseif (empty($codeDef['noPayTax']) || $selfAssessed) {
-                $tax = $this->applyRounding($base * $entry['vat_pct'] / 100.0, $vatRoundingMode);
-            } else {
-                $tax = 0.0;
-            }
+
+            $amounts = $calcSource === 1
+                ? $this->recapAmountsFromRows($entry)
+                : $this->recapAmountsFromHeader($entry, $vatMode, $codeDef, $selfAssessed, $vatRoundingMode);
+            $base = $amounts['base'];
+            $tax  = $amounts['tax'];
             $payableTax = empty($codeDef['noPayTax']) ? $tax : 0.0;
 
             $primary = [
@@ -758,6 +734,132 @@ abstract class DocDocument extends Document
         }
 
         return $recap;
+    }
+
+    /**
+     * Seskupení pro metodu `0 z hlavičky`: sčítá **ceny řádků** (`total_price`
+     * po slevě — viz calculateRowPrice). Co cena znamená, řeší `vat_mode`
+     * v recapAmountsFromHeader (mode 1 základ, mode 2 celkem s daní).
+     *
+     * Do rekapitulace patří položkový řádek s DPH kódem; `vat_pct` smí být
+     * legitimně 0 (osvobozeno / 0% kódy), takže filtrovat přes
+     * `empty($row['vat_pct'])` nelze — základ té skupiny by ze recapu
+     * i ze součtů hlavičky zmizel.
+     *
+     * @param array<int, array<string, mixed>> $rows
+     * @return array<string, array{vat_code: string, vat_pct: float, price: float, base: float, tax: float}>
+     */
+    private function groupRowPricesForRecap(array $rows): array
+    {
+        $grouped = [];
+        foreach ($rows as $row) {
+            if ((int) ($row['row_kind'] ?? 1) !== 1 || empty($row['vat_code'])) {
+                continue;
+            }
+            $key = $this->vatGroupKey($row['vat_code'], $row['vat_pct'] ?? 0);
+            $grouped[$key] ??= [
+                'vat_code' => (string) $row['vat_code'],
+                'vat_pct'  => (float) ($row['vat_pct'] ?? 0),
+                'price'    => 0.0,
+                'base'     => 0.0,
+                'tax'      => 0.0,
+            ];
+            $grouped[$key]['price'] += (float) ($row['total_price'] ?? $row['vat_base'] ?? 0);
+        }
+        return $grouped;
+    }
+
+    /**
+     * Seskupení pro historickou metodu `1 z řádků`: sčítá řádkové,
+     * samostatně zaokrouhlené `vat_base` / `vat_amount` (calculateRowVat).
+     * Sémantiku kódu (noPayTax, samovyměření) i režimu už nesou řádkové
+     * hodnoty, takže recapAmountsFromRows je jen jejich součet.
+     *
+     * @param array<int, array<string, mixed>> $rows
+     * @return array<string, array{vat_code: string, vat_pct: float, price: float, base: float, tax: float}>
+     */
+    private function groupRowVatForRecap(array $rows): array
+    {
+        $grouped = [];
+        foreach ($rows as $row) {
+            if ((int) ($row['row_kind'] ?? 1) !== 1 || empty($row['vat_code'])) {
+                continue;
+            }
+            $key = $this->vatGroupKey($row['vat_code'], $row['vat_pct'] ?? 0);
+            $grouped[$key] ??= [
+                'vat_code' => (string) $row['vat_code'],
+                'vat_pct'  => (float) ($row['vat_pct'] ?? 0),
+                'price'    => 0.0,
+                'base'     => 0.0,
+                'tax'      => 0.0,
+            ];
+            $grouped[$key]['base'] += (float) ($row['vat_base'] ?? $row['total_price'] ?? 0);
+            $grouped[$key]['tax']  += (float) ($row['vat_amount'] ?? 0);
+        }
+        return $grouped;
+    }
+
+    /**
+     * Metoda `0 z hlavičky` (norma § 37 odst. 1 ZDPH): daň se počítá **jednou**
+     * ze součtu cen skupiny, ne po řádcích. `vat_rounding_mode` se aplikuje na
+     * dokladové úrovni — v mode 1 na daň, v mode 2 na základ (daň je pak
+     * rozdíl, aby celková částka dokladu byla přesně Σ řádkových cen).
+     *
+     * `noPayTax` (tuzemská PDP, EU pořízení, osvobozená plnění) zůstává zdola:
+     * cena je základ i celkem, daň je informativní nárok na odpočet jen
+     * u samovyměření — i v mode 2, kde by zpětný rozpočet byl chybný
+     * (shodně s DocRowCalculator::computeVat).
+     *
+     * @param array{vat_pct: float, price: float} $entry
+     * @param array<string, mixed> $codeDef
+     * @return array{base: float, tax: float}
+     */
+    private function recapAmountsFromHeader(
+        array $entry,
+        int $vatMode,
+        array $codeDef,
+        bool $selfAssessed,
+        int $vatRoundingMode,
+    ): array {
+        $pct = (float) $entry['vat_pct'];
+        $sum = round((float) $entry['price'], 2);
+
+        if (!empty($codeDef['noPayTax'])) {
+            return [
+                'base' => $sum,
+                'tax'  => $selfAssessed
+                    ? $this->applyRounding($sum * $pct / 100.0, $vatRoundingMode)
+                    : 0.0,
+            ];
+        }
+
+        if ($vatMode === 2) {
+            $base = $this->applyRounding($sum / (1.0 + $pct / 100.0), $vatRoundingMode);
+            return ['base' => $base, 'tax' => round($sum - $base, 2)];
+        }
+
+        return [
+            'base' => $sum,
+            'tax'  => $this->applyRounding($sum * $pct / 100.0, $vatRoundingMode),
+        ];
+    }
+
+    /**
+     * Metoda `1 z řádků` (historický režim — řádek = samostatná účtenka
+     * v jednom pokladním lístku): rekapitulace je součet řádkových hodnot,
+     * jak je spočetl calculateRowVat. Součet už respektuje režim i sémantiku
+     * kódu, takže se tu nic nedopočítává; `total` skládá volající z base
+     * a placené daně.
+     *
+     * @param array{base: float, tax: float} $entry
+     * @return array{base: float, tax: float}
+     */
+    private function recapAmountsFromRows(array $entry): array
+    {
+        return [
+            'base' => round((float) $entry['base'], 2),
+            'tax'  => round((float) $entry['tax'], 2),
+        ];
     }
 
     protected function resolveCountryFromVatRegistration(mixed $vatRegId): ?string
@@ -905,7 +1007,8 @@ abstract class DocDocument extends Document
     }
 
     /**
-     * Domácí měna pro řádky, rekapitulaci a hlavičku — top-down dorovnání.
+     * Domácí měna pro řádky, rekapitulaci a hlavičku + dorovnání řádků
+     * v domácí měně.
      *
      * Závazné jsou head totals: rekapitulace se nedopočítává (base_dom/tax_dom
      * = round(cur × rate) z buildVatRecapitulation), head se sčítá z ní a
@@ -919,13 +1022,23 @@ abstract class DocDocument extends Document
      *
      * total_rounding_dom je odvozený (amount − base − vat), ne kurzový —
      * absorbuje haléřový rozdíl, takže poslední invariant platí konstrukčně.
-     * Při rate = 1 jsou všechny diffy nulové a _dom = kopie cur hodnot.
+     * Dorovnání v měně dokladu dělá {@see reconcileRowsToRecap} už v
+     * beforeSave (I5), takže při rate = 1 jsou diffy tady nulové a _dom je
+     * kopie cur hodnot.
      *
      * @param array<int, array<string, mixed>> $rows Rows after calculateRowPrice/Vat
      * @param array<int, array<string, mixed>> $recap From buildVatRecapitulation
+     * @param array<string, array<string, mixed>>|null $vatCodes Definice kódů
+     *        země dokladu (z resolveVatCodesForDoc); null = dohledá si je sám.
+     * @param float|null $tolerance Mez dorovnání — viz reconcileRowsToRecap.
      */
-    protected function applyDomesticAmounts(array &$data, array &$rows, array $recap): void
-    {
+    protected function applyDomesticAmounts(
+        array &$data,
+        array &$rows,
+        array $recap,
+        ?array $vatCodes = null,
+        ?float $tolerance = null,
+    ): void {
         $exchRate = (float) ($data['exchange_rate'] ?? 1.0);
         if ($exchRate <= 0) {
             $exchRate = 1.0;
@@ -969,9 +1082,49 @@ abstract class DocDocument extends Document
             2,
         );
 
-        // 3. Reconcile rows to recap per (vat_code, vat_pct) group. Reverse
-        //    charge pairs have no document rows — skip them. The rounding
-        //    diff goes to the last row of the group with a nonzero cur value.
+        // 3. Dorovnání řádků na rekapitulaci v domácí měně (v měně dokladu
+        //    proběhlo už v beforeSave — I5).
+        $this->reconcileRowsToRecap($rows, $recap, '_dom', $tolerance);
+
+        // 4. Celkem na řádku z dorovnaných částí
+        $this->finalizeRowVatTotals($rows, $data, $exchRate, $vatCodes);
+    }
+
+    /**
+     * Dorovnání řádkových `vat_base` / `vat_amount` na rekapitulaci per
+     * skupina (kód, sazba) — top-down, v jedné měně (spec `docs/vat-calculation.md`
+     * § 7). Rekapitulace je autorita; řádkové hodnoty jsou z ní odvozené,
+     * takže haléřový rozdíl dokladové metody (i kurzového přepočtu) absorbuje
+     * **poslední řádek skupiny s nenulovou hodnotou v měně dokladu** — cena
+     * řádku (`total_price`) se nikdy nemění, jen odvozený rozpad.
+     *
+     * Nenulovost se v obou průchodech testuje na cur hodnotách: řádek s nulou
+     * v měně dokladu má nulu i v domácí, takže cíl dorovnání je pro obě měny
+     * týž řádek a `vat_total` zůstává konzistentní.
+     *
+     * Oddaňovací páry reverse charge nemají řádky dokladu — přeskakují se.
+     *
+     * @param array<int, array<string, mixed>> $rows Řádky po compute pipeline
+     * @param array<int, array<string, mixed>> $recap Rekapitulace dokladu
+     * @param string $suffix `''` = měna dokladu, `'_dom'` = domácí měna
+     * @param float|null $tolerance Mez dorovnání na skupinu; efektivní mez je
+     *        `max($tolerance, 0,01 × počet řádků skupiny)`. `null` = bez meze
+     *        (přepočítaná rekapitulace — rozdíl je konstrukčně haléřový).
+     *        U převzaté rekapitulace se předává 0,02: větší rozdíl znamená
+     *        chybějící nebo špatně zadané řádky, ty se nedorovnávají a uložení
+     *        vydá `rows_recap_mismatch`.
+     */
+    protected function reconcileRowsToRecap(
+        array &$rows,
+        array $recap,
+        string $suffix = '',
+        ?float $tolerance = null,
+    ): void {
+        $rowBaseKey   = 'vat_base' . $suffix;
+        $rowAmountKey = 'vat_amount' . $suffix;
+        $recapBaseKey = 'base' . $suffix;
+        $recapTaxKey  = 'tax' . $suffix;
+
         foreach ($recap as $r) {
             if (!empty($r['is_reverse_pair'])) {
                 continue;
@@ -980,6 +1133,7 @@ abstract class DocDocument extends Document
 
             $sumBase = 0.0;
             $sumAmount = 0.0;
+            $count = 0;
             $lastIdx = null;
             $lastBaseIdx = null;
             $lastAmountIdx = null;
@@ -990,8 +1144,9 @@ abstract class DocDocument extends Document
                 ) {
                     continue;
                 }
-                $sumBase   += (float) ($row['vat_base_dom'] ?? 0);
-                $sumAmount += (float) ($row['vat_amount_dom'] ?? 0);
+                $sumBase   += (float) ($row[$rowBaseKey] ?? 0);
+                $sumAmount += (float) ($row[$rowAmountKey] ?? 0);
+                $count++;
                 $lastIdx = $i;
                 if ((float) ($row['vat_base'] ?? 0) !== 0.0)   { $lastBaseIdx = $i; }
                 if ((float) ($row['vat_amount'] ?? 0) !== 0.0) { $lastAmountIdx = $i; }
@@ -999,28 +1154,61 @@ abstract class DocDocument extends Document
             if ($lastIdx === null) {
                 continue;
             }
+            $limit = $tolerance === null ? null : max($tolerance, 0.01 * $count);
 
-            $diffBase = round((float) ($r['base_dom'] ?? 0) - $sumBase, 2);
-            if ($diffBase !== 0.0) {
+            $diffBase = round((float) ($r[$recapBaseKey] ?? 0) - $sumBase, 2);
+            if ($diffBase !== 0.0 && ($limit === null || abs($diffBase) <= $limit)) {
                 $t = $lastBaseIdx ?? $lastIdx;
-                $rows[$t]['vat_base_dom'] = round((float) $rows[$t]['vat_base_dom'] + $diffBase, 2);
+                $rows[$t][$rowBaseKey] = round((float) ($rows[$t][$rowBaseKey] ?? 0) + $diffBase, 2);
             }
-            $diffAmount = round((float) ($r['tax_dom'] ?? 0) - $sumAmount, 2);
-            if ($diffAmount !== 0.0) {
+            $diffAmount = round((float) ($r[$recapTaxKey] ?? 0) - $sumAmount, 2);
+            if ($diffAmount !== 0.0 && ($limit === null || abs($diffAmount) <= $limit)) {
                 $t = $lastAmountIdx ?? $lastIdx;
-                $rows[$t]['vat_amount_dom'] = round((float) $rows[$t]['vat_amount_dom'] + $diffAmount, 2);
+                $rows[$t][$rowAmountKey] = round((float) ($rows[$t][$rowAmountKey] ?? 0) + $diffAmount, 2);
             }
         }
+    }
 
-        // 4. Row home-currency totals from the final reconciled parts
+    /**
+     * `vat_total` / `vat_total_dom` řádku po dorovnání obou měn. Politiku
+     * drží {@see DocRowCalculator::computeVat}: celkem řádku je součet částí
+     * jen tam, kde daň je součástí placené ceny (mode 1 s běžným kódem).
+     * U `noPayTax` (tuzemská PDP, EU pořízení, osvobozená plnění) a v mode 2
+     * je autoritou cena řádku — informativní daň se do celkem nepřičítá,
+     * domácí celkem je proto kurzový přepočet celkem v měně dokladu.
+     *
+     * @param array<int, array<string, mixed>> $rows
+     * @param array<string, mixed> $data
+     * @param array<string, array<string, mixed>>|null $vatCodes
+     */
+    private function finalizeRowVatTotals(
+        array &$rows,
+        array $data,
+        float $exchRate,
+        ?array $vatCodes,
+    ): void {
+        $vatMode = (int) ($data['vat_mode'] ?? 1);
+        $vatCodes ??= $this->resolveVatCodesForDoc($data)['codes'] ?? null;
+
         foreach ($rows as &$row) {
             if ((int) ($row['row_kind'] ?? 1) !== 1) {
                 continue;
             }
-            $row['vat_total_dom'] = round(
-                (float) ($row['vat_base_dom'] ?? 0) + (float) ($row['vat_amount_dom'] ?? 0),
-                2,
-            );
+            $codeDef = $vatCodes[(string) ($row['vat_code'] ?? '')] ?? null;
+            $noPayTax = $codeDef !== null && !empty($codeDef['noPayTax']);
+
+            if ($vatMode !== 2 && !$noPayTax) {
+                $row['vat_total'] = round(
+                    (float) ($row['vat_base'] ?? 0) + (float) ($row['vat_amount'] ?? 0),
+                    2,
+                );
+            }
+            $row['vat_total_dom'] = $noPayTax
+                ? round((float) ($row['vat_total'] ?? 0) * $exchRate, 2)
+                : round(
+                    (float) ($row['vat_base_dom'] ?? 0) + (float) ($row['vat_amount_dom'] ?? 0),
+                    2,
+                );
         }
         unset($row);
     }

@@ -141,7 +141,6 @@ class ReceivedInvoiceForm extends DocsHeadsFormBase
                 'vat_recap_source',
                 options: $this->resolveCfgItemOptions('docs.core.vatRecapSources'),
                 hidden: !$hasVat,
-                triggers: 'reload',
                 hint: self::VAT_RECAP_SOURCE_HINT,
             )
             ->select(

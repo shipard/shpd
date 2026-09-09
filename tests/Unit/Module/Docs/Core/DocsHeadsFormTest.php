@@ -455,16 +455,35 @@ class DocsHeadsFormTest extends TestCase
         $this->assertNotNull($this->findElementByType($def, 'recap', 'html'));
     }
 
-    /** Přepínač zdroje rekapitulace musí překreslit formulář (tab recap). */
-    public function testRecapSourceSelectTriggersReload(): void
+    public function testRecapSourceSelectIsInVatSection(): void
     {
         $form = $this->createForm();
         $def = $form->buildFormDefinition(['vat_mode' => 1], true);
 
         $el = $this->findElement($def, 'basic', 'vat_recap_source');
         $this->assertNotNull($el);
-        $this->assertSame('reload', $el->triggers);
         $this->assertFalse($el->hidden);
+        $this->assertStringContainsString('po uložení', (string) $el->hint);
+    }
+
+    /**
+     * Neuložené přepnutí na Převzatou tab ještě nepřepne — sub-tabulka
+     * pracuje s tím, co je v DB, a startovní převzatá rekapitulace vzniká
+     * kopií přepočítané až při uložení (I3).
+     */
+    public function testUnsavedSwitchToDeclaredKeepsOverviewTab(): void
+    {
+        $form = new DocsHeadsForm('docs_core_heads');
+        $db = $this->createMock(DataSourceConnection::class);
+        $db->method('fetchSingle')->willReturn(0);   // v DB je pořád přepočítaná
+        $db->method('fetchAll')->willReturn([]);
+        $form->setDb($db);
+
+        $def = $form->buildFormDefinition(['id' => 1, 'vat_recap_source' => 1], false);
+
+        $tab = $this->findTab($def, 'recap');
+        $this->assertNotSame('subtable', $tab->type);
+        $this->assertNotNull($this->findElementByType($def, 'recap', 'html'));
     }
 
     public function testRecapWithoutRowsShowsEmptyState(): void

@@ -52,7 +52,8 @@ abstract class DocsHeadsFormBase extends TableForm
      */
     protected const VAT_RECAP_SOURCE_HINT =
         'Přepočítaná = vzniká z řádků při každém uložení. '
-        . 'Převzatá = rekapitulace z dokladu, uložení ji nepřepočítá a jde ji upravit.';
+        . 'Převzatá = rekapitulace z dokladu, uložení ji nepřepočítá; '
+        . 'po uložení ji jde upravit v tabu Rekapitulace DPH.';
 
     /** Per-instance cache — viz vatAgendaDisabled(). */
     private ?bool $vatAgendaDisabled = null;
@@ -503,10 +504,6 @@ abstract class DocsHeadsFormBase extends TableForm
                     ->select('vat_recap_source',
                         options: $this->resolveCfgItemOptions('docs.core.vatRecapSources'),
                         hidden: !$hasVat,
-                        // reload: přepnutí mění tab Rekapitulace DPH
-                        // (přepočítaná = přehled, převzatá = editovatelná
-                        // sub-tabulka)
-                        triggers: 'reload',
                         hint: self::VAT_RECAP_SOURCE_HINT,
                     )
                     ->select('vat_place',
@@ -916,11 +913,15 @@ abstract class DocsHeadsFormBase extends TableForm
      *   formulářem (`docs.core.vatRecap`): účetní opisuje, co je na
      *   dokladu, a uložení jí to nepřepíše.
      *
+     * Rozhoduje **uložený** zdroj ({@see storedRecapSource}), ne hodnota
+     * přepínače — sub-tabulka pracuje s tím, co je v DB, a startovní
+     * převzatá rekapitulace vzniká kopií přepočítané až při uložení (I3).
+     *
      * @param array<string, mixed> $data
      */
     protected function buildRecapTab(array $data): FormTab
     {
-        if ((int) ($data['vat_recap_source'] ?? 0) === 1) {
+        if ($this->storedRecapSource($data) === 1) {
             return $this->subtableTab(
                 'recap',
                 'Rekapitulace DPH',
@@ -940,6 +941,30 @@ abstract class DocsHeadsFormBase extends TableForm
                 ->col()
                     ->html($this->renderRecapHtml($data, $recap))
             ->build();
+    }
+
+    /**
+     * Zdroj rekapitulace tak, jak je **uložený**. Neuložená hodnota
+     * z přepínače by tab přepnula dřív, než se v DB objeví jakákoli
+     * převzatá rekapitulace: sub-tabulka by neměla co načíst (endpoint
+     * `/subtable/recap/{id}` staví taby z uloženého záznamu) a přidané
+     * řádky by přepsala kopie přepočítané rekapitulace při uložení.
+     * U nového záznamu a bez DB padá na hodnotu z payloadu — sub-tabulka
+     * u nového záznamu stejně jen vyzve k uložení.
+     *
+     * @param array<string, mixed> $data
+     */
+    protected function storedRecapSource(array $data): int
+    {
+        $payloadValue = (int) ($data['vat_recap_source'] ?? 0);
+        if (empty($data['id']) || $this->db === null) {
+            return $payloadValue;
+        }
+        $stored = $this->db->fetchSingle(
+            'SELECT `vat_recap_source` FROM `docs_core_heads` WHERE `id` = %i',
+            (int) $data['id'],
+        );
+        return $stored === null ? $payloadValue : (int) $stored;
     }
 
     /**

@@ -115,7 +115,9 @@ dle režimu) — signál neúplných nebo špatně zadaných řádků.
   podruhé. Prázdná rekapitulace = fallback na řádky jako dřív.
 - **Rekapitulace se neváže na řádky** — `docs_core_vat_recap` nemá FK na
   řádky, párování při `rows_recap_mismatch` je jen per (kód, sazba).
-- **Editace** ve formuláři: tab „Rekapitulace DPH" je u převzaté sub-tabulka
+- **Editace** ve formuláři: přepnutí na převzatou se projeví **po uložení**
+  (tehdy vznikne kopie přepočítané rekapitulace, kterou jde editovat); tab
+  se řídí uloženou hodnotou, ne přepínačem. Tab „Rekapitulace DPH" je u převzaté sub-tabulka
   nad `docs_core_vat_recap` (`VatRecapForm`, `VatRecapDocument`), u
   přepočítané zůstává přehled ke čtení. Po změně řádku rekapitulace
   přepočítá hlavičku `DocHeadRecomputer` — u převzaté aktualizuje řádky

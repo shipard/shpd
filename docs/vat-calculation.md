@@ -1,9 +1,11 @@
 # Jak se počítá DPH na dokladech
 
-Design dokument (spec) pro `docs.core`. Popisuje pravidla, ne aktuální stav kódu —
-kde se kód liší, platí tento dokument a rozdíl je chyba (#75). Implementace:
+Autoritativní pravidla DPH na dokladu pro `docs.core` — kde se kód liší, platí
+tento dokument a rozdíl je chyba (#75). Implementace:
 `DocDocument::beforeSave` → `calculateRowPrice` / `calculateRowVat` →
-`buildVatRecapitulation` → `sumTotals` / `applyTotalRounding` → `applyDomesticAmounts`.
+`buildVatRecapitulation` (nebo `takeOverVatRecapitulation` u převzaté) →
+`sumTotals` / `applyTotalRounding` → `reconcileRowsToRecap` →
+`applyDomesticAmounts`.
 
 ## 1. Tři úrovně, jedna autorita
 
@@ -44,7 +46,8 @@ Příklad (`mode 2`, 2 řádky à 55,00 s DPH 21 %): `total = 110,00`,
 `base = round(110 / 1,21) = 90,91`, `tax = 19,09`. Součet řádkových rozpočtů by dal
 2 × (45,45 + 9,55) = 90,90 + 19,10 — jiné rozdělení, stejná částka.
 
-**`1 Z řádků`**: rekapitulace = součet **řádkových** `vat_base`/`vat_amount`/`vat_total`.
+**`1 Z řádků`**: rekapitulace = součet **řádkových** `vat_base`/`vat_amount`
+(daň tedy sečtená z per-řádek zaokrouhlených hodnot, v obou režimech cen).
 Historický režim (řádek = samostatná účtenka v jednom pokladním lístku). Ponechán
 pro doklady, kde protistrana počítala po řádcích a my doklad počítáme sami; u
 vydaných faktur a prodejek nedává smysl a časem se z nich odstraní.
@@ -92,6 +95,42 @@ v toleranci `max(0,05; |base| × 0,001)`, `base + tax ≠ total` ± 0,02) — u 
 zviditelní nesrovnalost dodavatele; `rows_recap_mismatch` (Σ řádků ≠ rekapitulace
 dle režimu) — signál neúplných nebo špatně zadaných řádků.
 
+### 5.1 Implementace
+
+- **Přechody zdroje** rozhoduje `DocDocument::useDeclaredRecap()` porovnáním
+  `vat_recap_source` v payloadu se stavem v DB: přepnutí kterýmkoli směrem
+  přegeneruje rekapitulaci z řádků (u `přepočítaná → převzatá` je to ta
+  „kopie startovní převzaté"), uložení už převzatého dokladu ji nechá být.
+  Bez `originalData` (applier, interní přepočet z dětské tabulky) rozhoduje
+  payload: přišla-li rekapitulace, převezme se; u uloženého dokladu se
+  převezme ta v DB.
+- **Normalizace vstupu** (`takeOverVatRecapitulation`): flagy `sum_*` vždy
+  z definice kódu (autorita definice, ne vstupu), `total` se dopočítá jen
+  když ho vstup nenese, `id` řádku se zachovává (child sync `TableGateway`
+  aktualizuje na místě, sub-tabulka ve formuláři neztratí identitu).
+  Neznámý DPH kód je `DomainException` — stejně jako u přepočítané.
+- **Součty hlavičky** se u převzaté berou **jen z rekapitulace**
+  (`headTotalsIncludeRowsOutsideRecap()` = false): řádek s kódem, který
+  v rekapitulaci není (import s jiným mapováním kódů), by se jinak započítal
+  podruhé. Prázdná rekapitulace = fallback na řádky jako dřív.
+- **Rekapitulace se neváže na řádky** — `docs_core_vat_recap` nemá FK na
+  řádky, párování při `rows_recap_mismatch` je jen per (kód, sazba).
+- **Editace** ve formuláři: tab „Rekapitulace DPH" je u převzaté sub-tabulka
+  nad `docs_core_vat_recap` (`VatRecapForm`, `VatRecapDocument`), u
+  přepočítané zůstává přehled ke čtení. Po změně řádku rekapitulace
+  přepočítá hlavičku `DocHeadRecomputer` — u převzaté aktualizuje řádky
+  **na místě** podle `id`, nikdy nemění částky. Účtování jde na přechodu
+  stavu, takže po ruční opravě zaúčtovaného dokladu je potřeba Přeúčtovat.
+- **Výchozí hodnota z výměnného formátu**: `vat.recapSource` (`computed` /
+  `declared`), `vat.calcSource` (`header` / `rows`). Chybějící `recapSource`
+  applier odvodí — u dokladu, který přijímáme, `declared` při neprázdné,
+  aritmeticky konzistentní rekapitulaci s dohledatelnými kódy, jinak
+  `computed` + info issue `recap_source_computed_fallback`. Explicitní
+  `declared` se aritmetikou nepodmiňuje: u přenesení daňové povinnosti
+  `base + tax ≠ total` platí. Rekapitulaci bez kódů (ISDOC) applier doplní
+  z řádků, když je pro sazbu jednoznačný kód. Detaily
+  `docs/exchange-format.md`.
+
 ## 6. Zaokrouhlení celkové částky — `total_rounding_mode`
 
 Až po rekapitulaci: `total_amount` se zaokrouhlí (na celé jednotky, nahoru, dolů,
@@ -115,6 +154,15 @@ měnách — bez dorovnání cur by byl sloupec měny dokladu per doklad rozjet�
 
 Domácí měna: `base_dom`/`tax_dom` rekapitulace = `round(cur × kurz)`; hlavička se
 sčítá z rekapitulace; `total_rounding_dom` absorbuje kurzový zbytek hlavičky.
+
+Implementace: `DocDocument::reconcileRowsToRecap($rows, $recap, $suffix, $tolerance)`
+— jedna metoda, volaná dvakrát (`''` pro měnu dokladu z `beforeSave`, `'_dom'`
+z `applyDomesticAmounts` nad už dorovnanými cur hodnotami, takže při kurzu 1 jsou
+obě měny shodné). Cíl dorovnání se v obou průchodech vybírá podle cur hodnot —
+řádek s nulou v měně dokladu má nulu i v domácí, takže haléř základu i daně
+padne na týž řádek a `vat_total` zůstane konzistentní. `vat_total` po dorovnání
+drží politiku `DocRowCalculator::computeVat`: součet částí jen tam, kde je daň
+součástí placené ceny (mode 1 s běžným kódem), jinak je autoritou cena řádku.
 
 Invarianty (per skupina kód+sazba a per doklad, v cur i dom):
 

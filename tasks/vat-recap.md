@@ -1,6 +1,6 @@
 # Task: Rekapitulace DPH — výpočet na úrovni dokladu a převzatá rekapitulace — #75
 
-**Stav:** částečně — hotové A1 (dokladová úroveň, obě metody `vat_calc_source`, dorovnání řádků v obou měnách dle I5); zbývá A2 a celý Scope B
+**Stav:** částečně — implementace kompletní (6 commitů: dokladová úroveň + obě metody `vat_calc_source` + dorovnání obou měn dle I5, formuláře a docs, sloupec `vat_recap_source` + převzetí + kontroly, editovatelná rekapitulace v sub-tabulce, warningy formuláře ve frontendu, kanonická pole `vat.recapSource`/`calcSource` + applier + exportér). Zbývá ruční proklik UI, task pro starou stranu (B5), reimport 689089 a zlatý test `vat-filings.md`
 **Issue:** #75 — komentář „Rozhodnutí (2026-09-09)" C1–C6, R1–R6
 **Spec:** `docs/vat-calculation.md` (napsáno předem jako design dokument — **je
 autoritativní**, tento task ho implementuje)

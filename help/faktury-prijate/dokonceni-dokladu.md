@@ -109,6 +109,29 @@ Nezaplacená faktura ve V pořádku je normální stav.
 číslo; číslo, které faktuře dal dodavatel, je na dokladu vedené zvlášť
 a podle něj se dohledávají duplicity.
 
+**Rekapitulace DPH z faktury dodavatele se nepřepočítává.** V sekci **DPH**
+je pole **Rekapitulace DPH** se dvěma volbami. **Přepočítaná** znamená, že
+si ji Shipard spočítá z řádků při každém uložení — tak vznikají doklady,
+které vystavuješ ty. **Převzatá** znamená, že platí to, co je na faktuře:
+uložení do ní nesáhne a záložka **Rekapitulace DPH** se dá editovat
+(**Přidat**, **Upravit**, **Smazat** jako u řádků). Nárok na odpočet je
+částka z faktury, i když je dodavatel zaokrouhlil o haléř jinak než my.
+Doklad vytěžený z pošty dostane **Převzatou** sám, když je rekapitulace na
+faktuře úplná a sedí si; jinak **Přepočítanou**.
+
+**Když rekapitulace nesedí na řádky, Shipard to napíše — ale uloží.** Nad
+formulářem se objeví žlutý pruh **Uloženo, ale zkontroluj:** s tím, která
+sazba nesedí. Není to chyba k odmítnutí: nejčastěji chybí řádek, nebo je
+u něj špatná částka. Oprav řádky (rekapitulace zůstane), nebo — když je
+špatně opsaná rekapitulace — uprav rovnou ji. Přepnutím na
+**Přepočítanou** se rekapitulace vytvoří z řádků znovu a přepnutím zpět na
+**Převzatou** ji můžeš dál upravovat.
+
+**Ruční změna rekapitulace u zaúčtovaného dokladu chce Přeúčtovat.** Účetní
+zápis se sám aktualizuje jen při změně stavu dokladu, ne při úpravě řádku
+nebo rekapitulace. Po opravě dej **Přeúčtovat** — stejně jako u chyby
+účtování.
+
 ## Souvisí
 
 - [Kontrola vytěženého dokladu](../posta/kontrola-vytezeni.md) — co dělat
